@@ -239,8 +239,8 @@ def main():
     init_module_registries()
     prepare_local_files_forall()
 
-    # Check for Blackwell GPU incompatibility
-    if TORCH_AVAILABLE:
+    # Check for Blackwell GPU incompatibility (skip in CPU mode)
+    if TORCH_AVAILABLE and not args.cpu:
         from modules.base import torch as _torch
         if hasattr(_torch, 'cuda') and not _torch.cuda.is_available():
             try:
