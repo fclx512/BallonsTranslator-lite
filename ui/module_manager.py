@@ -956,10 +956,21 @@ class ModuleManager(QObject):
             
         if param_content.get('flush', False):
             param_widget: ParamComboBox = param_content['widget']
+            result = module.flush(param_key)
+            if result is None:
+                return
+            if not result:
+                from qtpy.QtWidgets import QMessageBox
+                QMessageBox.warning(
+                    self.parent(),
+                    self.tr("刷新失败"),
+                    self.tr("获取模型列表失败，请检查 API 密钥和地址是否正确配置。"),
+                )
+                return
             param_widget.blockSignals(True)
             current_item = param_widget.currentText()
             param_widget.clear()
-            param_widget.addItems(module.flush(param_key))
+            param_widget.addItems(result)
             param_widget.setCurrentText(current_item)
             param_widget.blockSignals(False)
         elif param_content.get('select_path', False):

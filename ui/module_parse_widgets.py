@@ -230,6 +230,8 @@ class ParamWidget(QWidget):
             widget_idx = 0
             if require_label:
                 param_label = ParamNameLabel(display_param_name)
+                if isinstance(params[param_key], dict) and 'description' in params[param_key]:
+                    param_label.setToolTip(params[param_key]['description'])
                 param_layout.addWidget(param_label, ii, 0)
                 widget_idx = 1
             if param_widget is not None:
