@@ -118,6 +118,68 @@ def commit_hash():
     return stored_commit_hash
 
 
+def _detect_user_torch():
+    """Find user's system Python with GPU PyTorch and inject into sys.path.
+
+    When GPU mode runs with the bundled Python (ballontrans_pylibs_win), the bundled
+    CPU-only torch would load by default. This function locates the user's
+    system-installed PyTorch (with CUDA) and adds its site-packages path
+    with higher priority than the bundled environment.
+    """
+    _current_python = os.path.abspath(sys.executable)
+    _user_python = None
+
+    # Find system python.exe from PATH (exclude the bundled python itself)
+    for _path_dir in os.environ.get('PATH', '').split(os.pathsep):
+        _pexe = os.path.join(_path_dir, 'python.exe')
+        if os.path.exists(_pexe) and os.path.abspath(_pexe) != _current_python:
+            _user_python = _pexe
+            break
+
+    if not _user_python:
+        _user_python = 'python.exe'  # fallback to PATH resolution
+
+    try:
+        _result = subprocess.run(
+            [_user_python, '-c',
+             'import torch; print(torch.__file__); print(torch.cuda.is_available())'],
+            capture_output=True, text=True, timeout=30
+        )
+        if _result.returncode != 0:
+            print('No PyTorch found in user system Python.')
+            return False
+
+        _lines = _result.stdout.strip().split('\n')
+        if len(_lines) < 2 or not _lines[0]:
+            return False
+
+        _torch_path = _lines[0]
+        _cuda_available = _lines[1].strip() == 'True'
+        _site_packages = os.path.dirname(os.path.dirname(_torch_path))
+
+        # Insert user's site-packages before bundled ones to override CPU torch
+        if _site_packages not in sys.path:
+            sys.path.insert(1, _site_packages)
+
+        if _cuda_available:
+            print(f'GPU mode: using user-installed PyTorch with CUDA')
+        else:
+            print(f'Found user PyTorch at: {_torch_path}')
+            print('CUDA is not available in user-installed PyTorch.')
+            print('Consider installing PyTorch with CUDA for GPU acceleration.')
+
+        print(f'  PyTorch: {_torch_path}')
+        print(f'  Site-packages: {_site_packages}')
+        return True
+
+    except subprocess.TimeoutExpired:
+        print('Timeout checking user PyTorch installation.')
+    except Exception as e:
+        print(f'Could not detect user PyTorch: {e}')
+
+    return False
+
+
 BT = None
 APP = None
 
@@ -156,6 +218,22 @@ def main():
 
     APP_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(APP_DIR)
+
+    # GPU mode with bundled Python: detect user's system PyTorch with CUDA
+    if not args.cpu and os.environ.get('BTRANSLATOR_GPU_MODE'):
+        print('GPU mode: detecting user-installed PyTorch with CUDA...')
+        if not _detect_user_torch():
+            print('\n' + '=' * 60)
+            print('PyTorch with CUDA was not found in your system Python.')
+            print('GPU mode requires PyTorch with CUDA support.')
+            print('')
+            print('To install manually:')
+            print('  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124')
+            print('')
+            print('Switching to CPU mode automatically.')
+            print('=' * 60 + '\n')
+            args.cpu = True
+            os.environ['BALLOONTRANS_CPU_ONLY'] = '1'
 
     prepare_environment()
 

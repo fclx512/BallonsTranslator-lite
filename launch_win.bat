@@ -1,9 +1,10 @@
 @echo off
 cd %~dp0
 
-:: Keep system python.exe first (has PyTorch+CUDA); pylibs at end for DLL fallback
-set PATH=%PATH%;%~dp0ballontrans_pylibs_win
-set PYTHON=python.exe
+:: GPU mode - uses embedded Python 3.13 from the portable environment
+:: PyTorch with CUDA will be detected from user's system Python installation
+set PYTHON=%~dp0ballontrans_pylibs_win\python.exe
+set BTRANSLATOR_GPU_MODE=1
 
 set ERROR_REPORTING=FALSE
 
@@ -11,7 +12,7 @@ mkdir tmp 2>NUL
 
 %PYTHON% -c "" >tmp/stdout.txt 2>tmp/stderr.txt
 if %ERRORLEVEL% == 0 goto :launch
-echo Error: Python not found. Please install Python with PyTorch and CUDA.
+echo Error: Embedded Python not found. The portable environment may be corrupted.
 goto :show_stdout_stderr
 
 :launch
