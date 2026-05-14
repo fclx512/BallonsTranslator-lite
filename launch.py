@@ -22,8 +22,15 @@ REQ_WIN = [
 ]
 
 PATH_ROOT=Path(__file__).parent
-PATH_FONTS=str(PATH_ROOT/'fonts')
-FONT_EXTS = {'.ttf','.otf','.ttc','.pfb'}
+
+# Embedded Python's ._pth file overrides sys.path, so ensure project root is in path
+if str(PATH_ROOT) not in sys.path:
+    sys.path.insert(0, str(PATH_ROOT))
+
+# Add portable site-packages to path (provides torchvision and other bundled deps for GPU mode)
+_pylibs_sp = PATH_ROOT / 'ballontrans_pylibs_win' / 'Lib' / 'site-packages'
+if _pylibs_sp.exists() and str(_pylibs_sp) not in sys.path:
+    sys.path.append(str(_pylibs_sp))
 
 IS_WIN7 = "Windows-7" in platform()
 
@@ -48,6 +55,7 @@ parser.add_argument("--frozen", action='store_true', help='run without checking 
 parser.add_argument("--update", action='store_true', help="Update the repository before launching") # Add argument --update
 parser.add_argument("--config_path", default=shared.CONFIG_PATH, help='Config file to use for translation') # Named config_path to avoid conflict with existing name config
 parser.add_argument('--nightly', action='store_true', help="Enable AMD Nightly ROCm")
+parser.add_argument('--cpu', action='store_true', help="Force CPU mode even if PyTorch with CUDA is available")
 args, _ = parser.parse_known_args()
 
 
@@ -132,6 +140,10 @@ def main():
     if args.debug:
         os.environ['BALLOONTRANS_DEBUG'] = '1'
 
+    if args.cpu:
+        os.environ['BALLOONTRANS_CPU_ONLY'] = '1'
+        print('CPU mode forced via --cpu flag')
+
     os.environ['QT_API'] = args.qt_api
 
     commit = commit_hash()
@@ -173,8 +185,7 @@ def main():
                 print("Continuing with the current version.")
 
 
-    from utils.logger import setup_logging, logger as LOGGER
-    from utils.io_utils import find_all_files_recursive
+    from utils.logger import logger as LOGGER
     from utils import config as program_config
 
     from qtpy.QtCore import QTranslator, QLocale, Qt
@@ -197,7 +208,7 @@ def main():
 
     import qtpy
     from qtpy.QtWidgets import QApplication
-    from qtpy.QtGui import QIcon, QFontDatabase, QGuiApplication, QFont
+    from qtpy.QtGui import QIcon, QGuiApplication, QFont
     from qtpy import API, QT_VERSION
 
     LOGGER.info(f'QT_API: {API}, QT Version: {QT_VERSION}')
@@ -213,8 +224,6 @@ def main():
         QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
 
     os.chdir(shared.PROGRAM_PATH)
-
-    setup_logging(shared.LOGGING_PATH)
 
     app_args = sys.argv
     if args.headless or args.headless_continuous:
@@ -268,195 +277,6 @@ def main():
     elif lang not in ('en_US', 'English'):
         LOGGER.warning(f'target display language file {langp} doesnt exist.')
     LOGGER.info(f'set display language to {lang}')
-
-    # Fonts
-    # Load custom fonts if they exist
-    if shared.FLAG_QT6:
-        families_before = set(QFontDatabase.families())
-    else:
-        fdb = QFontDatabase()
-        families_before = set(fdb.families())
-    # 2. 加载自定义字体
-    if osp.exists(PATH_FONTS):
-        for fp in find_all_files_recursive(PATH_FONTS, FONT_EXTS):
-            fnt_idx = QFontDatabase.addApplicationFont(fp)
-            # 无需处理 applicationFontFamilies，让 Qt 内部自行归类合并
-    if sys.platform == 'win32' and args.headless:
-        # font database does not initialise on windows with qpa -offscreen:
-        # whttps://github.com/dmMaze/BallonsTranslator/issues/519
-        from qtpy.QtCore import QStandardPaths
-        font_dir_list = QStandardPaths.standardLocations(QStandardPaths.StandardLocation.FontsLocation)
-        for fd in font_dir_list:
-            fp_list = find_all_files_recursive(fd, FONT_EXTS)
-            for fp in fp_list:
-                fnt_idx = QFontDatabase.addApplicationFont(fp)
-    # 3. 记录加载后的字体家族，通过差集精准提取自定义字体家族
-    if shared.FLAG_QT6:
-        families_after = set(QFontDatabase.families())
-    else:
-        families_after = set(fdb.families())
-    shared.FONT_FAMILIES = families_after
-    
-    raw_custom_families = sorted(list(families_after - families_before))
-     # ===== 智能归并 + 权重排序（不替换别名） =====
-    import re
-    weight_suffixes = [
-        'Thin', 'ExtraLight', 'UltraLight', 'Light', 
-        'Regular', 'Medium', 'SemiBold', 'DemiBold',
-        'Bold', 'ExtraBold', 'UltraBold', 'Black', 'Heavy'
-    ]
-    style_suffixes = ['Italic', 'Oblique']
-    
-    # 用于排序的权重字典（数值越小越靠前，不改变原名称）
-    style_order = {
-        "Thin": 0, "ExtraLight": 10, "UltraLight": 10, "Light": 20, 
-        "Regular": 40, "Normal": 40, "Book": 40, "Medium": 50, 
-        "SemiBold": 60, "DemiBold": 60, "Bold": 70, "ExtraBold": 80, 
-        "UltraBold": 80, "Black": 90, "Heavy": 90,
-        "Italic": 100, "Oblique": 100
-    }
-    
-    def get_sort_key(s):
-        base = s.split()[0]
-        return style_order.get(base, 99)
-    family_alias = {}
-    for raw_fam in raw_custom_families:
-        canonical = raw_fam
-        found = False
-        for w in weight_suffixes:
-            for s in style_suffixes:
-                suffix = f"{w} {s}"
-                if raw_fam.endswith(f" {suffix}"):
-                    canonical = raw_fam[:-len(suffix)-1]
-                    found = True
-                    break
-            if found: break
-        if not found:
-            for w in weight_suffixes:
-                if raw_fam.endswith(f" {w}"):
-                    canonical = raw_fam[:-len(w)-1]
-                    found = True
-                    break
-        if not found:
-            for s in style_suffixes:
-                if raw_fam.endswith(f" {s}"):
-                    canonical = raw_fam[:-len(s)-1]
-                    found = True
-                    break
-        family_alias.setdefault(canonical, []).append(raw_fam)
-    
-    merged_custom_families = []
-    for canonical, raw_list in family_alias.items():
-        merged_custom_families.append(canonical)
-        shared.FONT_FAMILY_ALIAS[canonical] = raw_list
-        
-        merged_styles = []
-        # 1. 收集 Qt 返回的原始样式（不修改名称）
-        for raw_fam in raw_list:
-            if shared.FLAG_QT6:
-                styles = QFontDatabase.styles(raw_fam)
-            else:
-                styles = fdb.styles(raw_fam)
-            for st in styles:
-                if st not in merged_styles:
-                    merged_styles.append(st)
-        
-        # 2. 从子家族名推断缺失的样式（保持原名，不映射别名）
-        for raw_fam in raw_list:
-            for w in weight_suffixes:
-                if raw_fam.endswith(f" {w}"):
-                    if w not in merged_styles:
-                        merged_styles.append(w)
-            for s in style_suffixes:
-                if raw_fam.endswith(f" {s}"):
-                    if s not in merged_styles:
-                        merged_styles.append(s)
-        
-        # 3. 按权重排序
-        merged_styles.sort(key=get_sort_key)
-        shared.FONT_STYLES[canonical] = merged_styles
-    shared.CUSTOM_FONT_FAMILIES = sorted(merged_custom_families)
-    shared.ALL_FONT_FAMILIES = sorted(list((families_after - set(raw_custom_families)) | set(merged_custom_families)))
-    # 4. 为VF字体补充虚拟样式并标记
-    _weight_keywords = ["Thin", "Light", "Bold", "Black", "Medium", "Heavy", 
-                        "SemiBold", "DemiBold", "ExtraBold", "UltraLight", "ExtraLight"]
-    
-    standard_vf_styles = ["Thin", "ExtraLight", "Light", "Regular", "Medium", "SemiBold", "Bold", "ExtraBold", "Black"]
-    
-    for family in shared.CUSTOM_FONT_FAMILIES:
-        styles = shared.FONT_STYLES.get(family, [])
-        # 判断条件：样式很少 + 家族名无字重后缀 -> 可能是VF字体
-        if len(styles) <= 2 and not any(family.endswith(f" {w}") for w in _weight_keywords):
-            virtual_set = set()
-            supplemented = list(styles)
-            for std_s in standard_vf_styles:
-                if std_s not in supplemented:
-                    supplemented.append(std_s)
-                    virtual_set.add(std_s)
-            
-            supplemented.sort(key=get_sort_key)
-            shared.FONT_STYLES[family] = supplemented
-            if virtual_set:
-                shared.VIRTUAL_FONT_STYLES[family] = virtual_set
-    # ===== 归并排序结束 =====
-
-    #  生成 Family 和 Style 映射
-    for family in shared.ALL_FONT_FAMILIES:
-        if family not in shared.FONT_STYLES:
-            if shared.FLAG_QT6:
-                styles = QFontDatabase.styles(family)
-            else:
-                styles = fdb.styles(family)
-            shared.FONT_STYLES[family] = styles
-
-        # ===== 新增：检测可变字体轴并补充虚拟样式 =====
-    try:
-        from fontTools.ttLib import TTFont
-        from fontTools.varLib import instancer
-    except ImportError:
-        TTFont = None
-        LOGGER.warning("fontTools not installed, variable font support disabled")
-    if TTFont is not None and osp.exists(PATH_FONTS):
-        _font_file_to_family = {}  # 文件路径 -> FamilyName 映射
-        # 先建立文件到家族的反向映射
-        for fp in find_all_files_recursive(PATH_FONTS, FONT_EXTS):
-            try:
-                temp_idx = QFontDatabase.addApplicationFont(fp)
-                temp_families = QFontDatabase.applicationFontFamilies(temp_idx)
-                for fam in temp_families:
-                    if fam in shared.CUSTOM_FONT_FAMILIES:
-                        _font_file_to_family[fp] = fam
-            except:
-                pass
-        for fp, family in _font_file_to_family.items():
-            try:
-                tt = TTFont(fp)
-                if 'fvar' in tt:
-                    # 这是一个可变字体
-                    axes = {}
-                    for axis in tt['fvar'].axes:
-                        axes[axis.axisTag] = (axis.minValue, axis.maxValue, axis.defaultValue)
-                    shared.FONT_VARIABLE_AXES[family] = axes
-                    # 如果 Qt 只返回了空或单一样式，为其生成虚拟样式
-                    current_styles = shared.FONT_STYLES.get(family, [])
-                    if len(current_styles) <= 1 and 'wght' in axes:
-                        wght_min, wght_max, wght_default = axes['wght']
-                        # 生成常见的字重节点
-                        virtual_styles = []
-                        weight_names = [
-                            (100, "Thin"), (200, "ExtraLight"), (300, "Light"),
-                            (400, "Regular"), (500, "Medium"), (600, "SemiBold"),
-                            (700, "Bold"), (800, "ExtraBold"), (900, "Black")
-                        ]
-                        for wval, wname in weight_names:
-                            if wght_min <= wval <= wght_max:
-                                virtual_styles.append(wname)
-                        if virtual_styles:
-                            shared.FONT_STYLES[family] = virtual_styles
-                    tt.close()
-            except Exception as e:
-                pass
-    # ===== 新增结束 =====
 
     app_font = QFont('Microsoft YaHei UI')
     if not app_font.exactMatch() or sys.platform == 'darwin':
@@ -535,6 +355,10 @@ def prepare_environment():
         return
 
     if args.frozen:
+        return
+
+    # In CPU mode, all dependencies are bundled in the portable environment
+    if args.cpu:
         return
 
     req_updated = False

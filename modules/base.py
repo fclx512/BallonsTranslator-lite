@@ -262,45 +262,47 @@ AVAILABLE_DEVICES = ['cpu']
 BF16_SUPPORTED = False
 TORCH_DTYPE_MAP = {}
 
-try:
-    os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
-    import torch
-    TORCH_AVAILABLE = True
+os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
 
-    DEFAULT_DEVICE = 'cpu'
-    AVAILABLE_DEVICES = ['cpu']
-    if hasattr(torch, 'cuda') and torch.cuda.is_available():
-        DEFAULT_DEVICE = 'cuda'
-        AVAILABLE_DEVICES.append(DEFAULT_DEVICE)
-    if hasattr(torch, 'xpu')  and torch.xpu.is_available():
-        DEFAULT_DEVICE = 'xpu' if torch.xpu.is_available() else 'cpu'
-        AVAILABLE_DEVICES.append(DEFAULT_DEVICE)
-    if hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        DEFAULT_DEVICE = 'mps'
-        AVAILABLE_DEVICES.append(DEFAULT_DEVICE)
-
+if os.environ.get('BALLOONTRANS_CPU_ONLY') != '1':
     try:
-        import torch_directml
-        if hasattr(torch, 'privateuseone') and torch_directml.device_count() > 0:
-            torch.dml = torch_directml
-            DEFAULT_DEVICE = f'privateuseone:{torch.dml.default_device()}'
-            AVAILABLE_DEVICES += [f"privateuseone:{d}" for d in range(torch.dml.device_count())]
-    except:
+        import torch
+        TORCH_AVAILABLE = True
+
+        DEFAULT_DEVICE = 'cpu'
+        AVAILABLE_DEVICES = ['cpu']
+        if hasattr(torch, 'cuda') and torch.cuda.is_available():
+            DEFAULT_DEVICE = 'cuda'
+            AVAILABLE_DEVICES.append(DEFAULT_DEVICE)
+        if hasattr(torch, 'xpu')  and torch.xpu.is_available():
+            DEFAULT_DEVICE = 'xpu' if torch.xpu.is_available() else 'cpu'
+            AVAILABLE_DEVICES.append(DEFAULT_DEVICE)
+        if hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            DEFAULT_DEVICE = 'mps'
+            AVAILABLE_DEVICES.append(DEFAULT_DEVICE)
+
+        try:
+            import torch_directml
+            if hasattr(torch, 'privateuseone') and torch_directml.device_count() > 0:
+                torch.dml = torch_directml
+                DEFAULT_DEVICE = f'privateuseone:{torch.dml.default_device()}'
+                AVAILABLE_DEVICES += [f"privateuseone:{d}" for d in range(torch.dml.device_count())]
+        except:
+            pass
+
+        BF16_SUPPORTED = False
+        if DEFAULT_DEVICE == 'cuda' and torch.cuda.is_bf16_supported() or DEFAULT_DEVICE == 'xpu' and torch.xpu.is_bf16_supported():
+            BF16_SUPPORTED = True
+        if DEFAULT_DEVICE == 'mps':
+            BF16_SUPPORTED = True
+
+        TORCH_DTYPE_MAP = {
+            'fp32': torch.float32,
+            'fp16': torch.float16,
+            'bf16': torch.bfloat16,
+        }
+    except ImportError:
         pass
-
-    BF16_SUPPORTED = False
-    if DEFAULT_DEVICE == 'cuda' and torch.cuda.is_bf16_supported() or DEFAULT_DEVICE == 'xpu' and torch.xpu.is_bf16_supported():
-        BF16_SUPPORTED = True
-    if DEFAULT_DEVICE == 'mps':
-        BF16_SUPPORTED = True
-
-    TORCH_DTYPE_MAP = {
-        'fp32': torch.float32,
-        'fp16': torch.float16,
-        'bf16': torch.bfloat16,
-    }
-except ImportError:
-    pass
 
 
 def is_nvidia():

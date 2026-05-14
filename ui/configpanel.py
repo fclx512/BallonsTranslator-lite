@@ -340,7 +340,6 @@ class ConfigPanel(Widget):
     save_config = Signal()
     unload_models = Signal()
     reload_textstyle = Signal(bool)
-    show_only_custom_font = Signal(bool)
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -457,9 +456,6 @@ class ConfigPanel(Widget):
         self.let_textstyle_indep_checker, _ = generalConfigPanel.addCheckBox(self.tr('Independent text styles for each projects'))
         self.let_textstyle_indep_checker.stateChanged.connect(self.on_textstyle_indep_changed)
 
-        self.let_show_only_custom_fonts, sublock = generalConfigPanel.addCheckBox(self.tr("Show only custom fonts"))
-        self.let_show_only_custom_fonts.stateChanged.connect(self.on_show_only_custom_fonts)
-
         generalConfigPanel.addTextLabel(label_save)
         self.rst_imgformat_combobox, imsave_sublock = generalConfigPanel.addCombobox(['PNG', 'JPG', 'WEBP', 'JXL'], self.tr('Result image format'))
         self.rst_imgformat_combobox.activated.connect(self.on_rst_imgformat_changed)
@@ -558,10 +554,6 @@ class ConfigPanel(Widget):
     def on_effect_flag_changed(self):
         pcfg.let_fnteffect_flag = self.let_effect_combox.currentIndex()
 
-    def on_show_only_custom_fonts(self):
-        pcfg.let_show_only_custom_fonts_flag = self.let_show_only_custom_fonts.isChecked()
-        self.show_only_custom_font.emit(pcfg.let_show_only_custom_fonts_flag)
-
     def focusOnTranslator(self):
         idx0, idx1 = self.trans_sub_block.idx0, self.trans_sub_block.idx1
         self.configTable.setCurrentItem(idx0, idx1)
@@ -610,6 +602,5 @@ class ConfigPanel(Widget):
         self.rst_imgquality_edit.setText(str(pcfg.imgsave_quality))
         self.load_model_checker.setChecked(pcfg.module.load_model_on_demand)
         self.empty_runcache_checker.setChecked(pcfg.module.empty_runcache)
-        self.let_show_only_custom_fonts.setChecked(pcfg.let_show_only_custom_fonts_flag)
 
         self.blockSignals(False)

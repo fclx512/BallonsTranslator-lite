@@ -200,7 +200,9 @@ class TranslateThread(ModuleThread):
             cfg_module.translator = self.translator.name
         except Exception as e:
             if old_translator is None:
-                old_translator = TRANSLATORS.module_dict['google']('简体中文', 'English', raise_unsupported_lang=False)
+                fallback_name = next(iter(TRANSLATORS.module_dict))
+                fallback_cls = TRANSLATORS.module_dict[fallback_name]
+                old_translator = fallback_cls('简体中文', 'English', raise_unsupported_lang=False)
             self.translator = old_translator
             msg = self.tr('Failed to set translator ') + translator
             create_error_dialog(e, msg, 'FailedSetTranslator')
@@ -209,11 +211,8 @@ class TranslateThread(ModuleThread):
         self.finish_set_module.emit()
 
     def setTranslator(self, translator: str):
-        if translator in ['Sugoi']:
-            self._set_translator(translator)
-        else:
-            self.job = lambda : self._set_translator(translator)
-            self.start()
+        self.job = lambda : self._set_translator(translator)
+        self.start()
 
     def _translate_page(self, page_dict, page_key: str, emit_finished=True):
         page = page_dict[page_key]
@@ -638,7 +637,7 @@ class ModuleManager(QObject):
         self.check_inpaint_fin_timer = QTimer(self)
         self.check_inpaint_fin_timer.timeout.connect(self.check_inpaint_th_finished)
 
-    def setupThread(self, config_panel: ConfigPanel, imgtrans_progress_msgbox: ImgtransProgressMessageBox, ocr_postprocess: Callable = None, translate_preprocess: Callable = None, translate_postprocess: Callable = None):
+    def setupThread(self, config_panel: ConfigPanel, imgtrans_progress_msgbox: ImgtransProgressMessageBox):
         self.textdetect_thread = TextDetectThread()
 
         self.ocr_thread = OCRThread()
@@ -667,12 +666,8 @@ class ModuleManager(QObject):
         translator_panel.addModulesParamWidgets(translator_params)
         translator_panel.translator_changed.connect(self.setTranslator)
         translator_panel.paramwidget_edited.connect(self.on_translatorparam_edited)
-        translator_panel.translateByTextblockBox.checker_changed.connect(self.on_translatebyblock_checker_changed)
-        translator_panel.translateByTextblockBox.checker.setChecked(cfg_module.translate_by_textblock)
-
         from modules.translators.hooks import chs2cht
-        BaseTranslator.register_preprocess_hooks({'keyword_sub': translate_preprocess})
-        BaseTranslator.register_postprocess_hooks({'chs2cht': chs2cht, 'keyword_sub': translate_postprocess})
+        BaseTranslator.register_postprocess_hooks({'chs2cht': chs2cht})
 
         self.inpaint_panel = inpainter_panel = config_panel.inpaint_config_panel
         inpainter_params = merge_config_module_params(cfg_module.inpainter_params, GET_VALID_INPAINTERS(), INPAINTERS.get)
@@ -693,8 +688,6 @@ class ModuleManager(QObject):
         ocr_panel.addModulesParamWidgets(ocr_params)
         ocr_panel.paramwidget_edited.connect(self.on_ocrparam_edited)
         ocr_panel.ocr_changed.connect(self.setOCR)
-        OCRBase.register_postprocess_hooks(ocr_postprocess)
-
         config_panel.unload_models.connect(self.unload_all_models)
 
 
@@ -989,6 +982,3 @@ class ModuleManager(QObject):
         cfg_module.check_need_inpaint = is_checked
         InpainterBase.check_need_inpaint = is_checked
 
-    def on_translatebyblock_checker_changed(self, is_checked: bool):
-        cfg_module.translate_by_textblock = is_checked
-        BaseTranslator.translate_by_textblock = is_checked

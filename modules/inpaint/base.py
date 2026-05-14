@@ -165,61 +165,6 @@ class InpainterBase(BaseModule):
         raise not NotImplementedError
 
 
-@register_inpainter('opencv-tela')
-class OpenCVInpainter(InpainterBase):
-
-    def __init__(self, **params) -> None:
-        super().__init__(**params)
-        self.inpaint_method = lambda img, mask, *args, **kwargs: cv2.inpaint(img, mask, 3, cv2.INPAINT_NS)
-        
-    
-    def _inpaint(self, img: np.ndarray, mask: np.ndarray, textblock_list: List[TextBlock] = None) -> np.ndarray:
-        return self.inpaint_method(img, mask)
-
-    def is_computational_intensive(self) -> bool:
-        return True
-    
-    def is_cpu_intensive(self) -> bool:
-        return True
-
-
-@register_inpainter('patchmatch')
-class PatchmatchInpainter(InpainterBase):
-
-    if sys.platform == 'darwin':
-        download_file_list = [{
-                'url': 'https://github.com/dmMaze/PyPatchMatchInpaint/releases/download/v1.0/macos_arm64_patchmatch_libs.7z',
-                'sha256_pre_calculated': ['843704ab096d3afd8709abe2a2c525ce3a836bb0a629ed1ee9b8f5cee9938310', '849ca84759385d410c9587d69690e668822a3fc376ce2219e583e7e0be5b5e9a'],
-                'files': ['macos_libopencv_world.4.8.0.dylib', 'macos_libpatchmatch_inpaint.dylib'],
-                'save_dir': 'data/libs',
-                'archived_files': 'macos_patchmatch_libs.7z',
-                'archive_sha256_pre_calculated': '9f332c888be0f160dbe9f6d6887eb698a302e62f4c102a0f24359c540d5858ea'
-        }]
-    elif sys.platform == 'win32':
-        download_file_list = [{
-                'url': 'https://github.com/dmMaze/PyPatchMatchInpaint/releases/download/v1.0/windows_patchmatch_libs.7z',
-                'sha256_pre_calculated': ['3b7619caa29dc3352b939de4e9981217a9585a13a756e1101a50c90c100acd8d', '0ba60cfe664c97629daa7e4d05c0888ebfe3edcb3feaf1ed5a14544079c6d7af'],
-                'files': ['opencv_world455.dll', 'patchmatch_inpaint.dll'],
-                'save_dir': 'data/libs',
-                'archived_files': 'windows_patchmatch_libs.7z',
-                'archive_sha256_pre_calculated': 'c991ff61f7cb3efaf8e75d957e62d56ba646083bc25535f913ac65775c16ca65'
-        }]
-
-    def __init__(self, **params) -> None:
-        super().__init__(**params)
-        from . import patch_match
-        self.inpaint_method = lambda img, mask, *args, **kwargs: patch_match.inpaint(img, mask, patch_size=3)
-    
-    def _inpaint(self, img: np.ndarray, mask: np.ndarray, textblock_list: List[TextBlock] = None) -> np.ndarray:
-        return self.inpaint_method(img, mask)
-
-    def is_computational_intensive(self) -> bool:
-        return True
-    
-    def is_cpu_intensive(self) -> bool:
-        return True
-
-
 try:
     import torch
 except ImportError:
@@ -334,7 +279,6 @@ if torch is not None:
 
     from .lama import LamaFourier, load_lama_mpe
 
-    @register_inpainter('lama_mpe')
     class LamaInpainterMPE(InpainterBase):
 
         params = {

@@ -42,24 +42,6 @@ class MITModels(OCRBase):
         super().updateParam(param_key, param_content)
 
 
-from .mit32px import OCR32pxModel
-@register_OCR('mit32px')
-class OCRMIT32px(MITModels):
-
-    params = deepcopy(mit_params)
-    download_file_list = [{
-        'url': 'https://github.com/zyddnys/manga-image-translator/releases/download/beta-0.3/ocr.zip',
-        'files': ['ocr.ckpt'],
-        'sha256_pre_calculated': ['d9f619a9dccce8ce88357d1b17d25f07806f225c033ea42c64e86c45446cfe71'],
-        'save_files': ['data/models/mit32px_ocr.ckpt'],
-        'archived_files': 'ocr.zip',
-        'archive_sha256_pre_calculated': '47405638b96fa2540a5ee841a4cd792f25062c09d9458a973362d40785f95d7a',
-    }]
-
-    def _load_model(self):
-        self.model = OCR32pxModel(r'data/models/mit32px_ocr.ckpt', self.device)
-
-
 from .mit48px_ctc import OCR48pxCTC
 @register_OCR('mit48px_ctc')
 class OCRMIT48pxCTC(MITModels):
@@ -78,18 +60,3 @@ class OCRMIT48pxCTC(MITModels):
         self.model = OCR48pxCTC(r'data/models/mit48pxctc_ocr.ckpt', self.device)
 
 
-from .mit48px import Model48pxOCR
-OCR48PXMODEL_PATH = r'data/models/ocr_ar_48px.ckpt'
-@register_OCR('mit48px')
-class OCRMIT48px(MITModels):
-
-    params = deepcopy(mit_params)
-    download_file_list = [{
-        'url': 'https://github.com/zyddnys/manga-image-translator/releases/download/beta-0.3/',
-        'files': [OCR48PXMODEL_PATH, 'data/alphabet-all-v7.txt'],
-        'sha256_pre_calculated': ['29daa46d080818bb4ab239a518a88338cbccff8f901bef8c9db191a7cb97671d', None],
-        'concatenate_url_filename': 2,
-    }]
-
-    def _load_model(self):
-        self.model = Model48pxOCR(OCR48PXMODEL_PATH, self.device)
