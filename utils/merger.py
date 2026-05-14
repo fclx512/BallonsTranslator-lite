@@ -45,7 +45,7 @@ def dot_product(v1, v2):
 def get_bounding_box(shape):
     """
     根据 shape 计算外接矩形 [x_min, y_min, x_max, y_max]
-    BallonsTranslator 格式：使用 xyxy 字段
+    BallonsTranslator-lite 格式：使用 xyxy 字段
     """
     # BallonsTranslator 直接有 xyxy 字段，这是最准确的
     if 'xyxy' in shape and shape['xyxy']:

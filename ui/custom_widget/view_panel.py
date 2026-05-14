@@ -42,22 +42,16 @@ class ExpandLabel(Widget):
         self.arrowlabel.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         font = self.textlabel.font()
         if size_type == 'normal':
-            if shared.ON_MACOS:
-                font.setPointSize(13)
-            else:
-                font.setPointSizeF(10)
+            font.setPointSizeF(10)
             self.setFixedHeight(26)
             self.arrowlabel.setFixedSize(CHEVRON_SIZE, CHEVRON_SIZE)
         elif size_type == 'small':
-            if shared.ON_MACOS:
-                font.setPointSize(10)
-            else:
-                font.setPointSizeF(8)
+            font.setPointSizeF(8)
             self.setFixedHeight(20)
             self.arrowlabel.setFixedSize(CHEVRON_SIZE_SMALL, CHEVRON_SIZE_SMALL)
         else:
             raise
-            
+
         self.textlabel.setFont(font)
         self.hidelabel = HidePanelButton(self)
         self.hidelabel.setVisible(False)

@@ -102,10 +102,7 @@ class MainWindow(mainwindow_cls):
         if shared.HEADLESS:
             self.run_batch(**exec_args)
 
-        if shared.ON_MACOS:
-            # https://bugreports.qt.io/browse/QTBUG-133215
-            self.hideSystemTitleBar()
-            self.showMaximized()
+        # Windows: apply font & set titlebar
 
     def setStyleSheet(self, styleSheet: str) -> None:
         self.imgtrans_progress_msgbox.setStyleSheet(styleSheet)
@@ -543,7 +540,6 @@ class MainWindow(mainwindow_cls):
     def changeEvent(self, event: QEvent):
         if event.type() == QEvent.Type.WindowStateChange:
             if self.windowState() & Qt.WindowState.WindowMaximized:
-                if not shared.ON_MACOS:
                     self.titleBar.maxBtn.setChecked(True)
         elif event.type() == QEvent.Type.ActivationChange:
             self.canvas.on_activation_changed()
@@ -1586,9 +1582,6 @@ class MainWindow(mainwindow_cls):
             # qprocess seems to fuck up with "\""
             p = "\""+str(Path(current_img_path))+"\""
             subprocess.Popen("explorer.exe /select,"+p, shell=True)
-        elif sys.platform == 'darwin':
-            p = "\""+current_img_path+"\""
-            subprocess.Popen("open -R "+p, shell=True)
 
     def on_set_gsearch_widget(self):
         setup = self.leftBar.globalSearchChecker.isChecked()

@@ -83,7 +83,6 @@ VALID_LANG_SET = set(list(DISPLAY_LANGUAGE_MAP.values()))
 DEFAULT_DISPLAY_LANG = 'English'
 
 USE_PYSIDE6 = False
-ON_MACOS = sys.platform == 'darwin'
 ON_WINDOWS = sys.platform == 'win32'
 HEADLESS = False
 DEBUG = False

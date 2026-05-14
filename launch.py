@@ -7,8 +7,8 @@ import importlib
 import subprocess
 from platform import platform
 
-BRANCH = 'dev'
-VERSION = '1.4.0'
+BRANCH = 'main'
+VERSION = '1.0.0'
 
 python = sys.executable
 git = os.environ.get('GIT', "git")
@@ -54,7 +54,6 @@ parser.add_argument("--export-source-txt", action='store_true', help='save sourc
 parser.add_argument("--frozen", action='store_true', help='run without checking requirements')
 parser.add_argument("--update", action='store_true', help="Update the repository before launching") # Add argument --update
 parser.add_argument("--config_path", default=shared.CONFIG_PATH, help='Config file to use for translation') # Named config_path to avoid conflict with existing name config
-parser.add_argument('--nightly', action='store_true', help="Enable AMD Nightly ROCm")
 parser.add_argument('--cpu', action='store_true', help="Force CPU mode even if PyTorch with CUDA is available")
 args, _ = parser.parse_known_args()
 
@@ -237,9 +236,6 @@ def main():
 
     prepare_environment()
 
-    from utils.zluda_config import enable_zluda_config
-    enable_zluda_config()
-
     if args.update:
         if getattr(sys, 'frozen', False):
             print('Running as app, skipping update.')
@@ -281,7 +277,7 @@ def main():
 
     if sys.platform == 'win32':
         import ctypes
-        myappid = u'BalloonsTranslator' # arbitrary string
+        myappid = u'BallonsTranslatorLite' # arbitrary string
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
     import qtpy
@@ -307,7 +303,7 @@ def main():
     if args.headless or args.headless_continuous:
         app_args = sys.argv + ['-platform', 'offscreen']
     app = QApplication(app_args)
-    app.setApplicationName('BalloonsTranslator')
+    app.setApplicationName('BallonsTranslator-lite')
     app.setApplicationVersion(VERSION)
 
     # import msl.loadlib (required by translators/trans_eztrans) before init QApplication
@@ -357,7 +353,7 @@ def main():
     LOGGER.info(f'set display language to {lang}')
 
     app_font = QFont('Microsoft YaHei UI')
-    if not app_font.exactMatch() or sys.platform == 'darwin':
+    if not app_font.exactMatch():
         app_font = app.font()
     app_font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
     app_font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias | QFont.StyleStrategy.NoSubpixelAntialias)
@@ -386,39 +382,6 @@ def main():
         ballontrans.resetStyleSheet()
     sys.exit(app.exec())
 
-def is_amd_gpu():
-    try:
-        if sys.platform == 'win32':
-            # Windows: use wmic
-            cmd = 'wmic path win32_VideoController get name'
-            output = subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL)
-            return any(keyword in output for keyword in ["AMD", "Radeon"])
-
-        else:
-            return False
-
-    except Exception:
-        return False
-
-def supported_amd_nightly_gpu():
-    try:
-        if sys.platform == 'win32':
-            # Windows: use wmic
-            cmd = 'wmic path win32_VideoController get name'
-            output = subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL)
-
-            if any(keyword in output for keyword in
-                   ["RX 7900", "RX 7800", "RX 7700", "RX 7600", "PRO W7900", "PRO W7800", "PRO W7700"]):
-                return "RDNA3"
-            if any(keyword in output for keyword in
-                   ["RX 9070", "RX 9060"]):
-                return "RDNA4"
-        else:
-            return "None"
-
-    except Exception:
-        return "None"
-
 def prepare_environment():
 
     try:
@@ -446,42 +409,26 @@ def prepare_environment():
                 run_pip(f"install {req}", req)
                 req_updated = True
 
-    if is_amd_gpu():
-        print('AMD GPU: Yes')
-        if args.nightly:
-            amd_nightly_gpu = supported_amd_nightly_gpu()
-            if amd_nightly_gpu == "None":
-                Exception("No AMD Nightly GPU supported")
-            if amd_nightly_gpu == "RDNA3":
-                torch_command = os.environ.get('TORCH_COMMAND',
-                                               "pip install https://repo.radeon.com/rocm/windows/rocm-rel-6.4.4/torch-2.8.0a0%2Bgitfc14c65-cp312-cp312-win_amd64.whl https://repo.radeon.com/rocm/windows/rocm-rel-6.4.4/torchvision-0.24.0a0%2Bc85f008-cp312-cp312-win_amd64.whl https://repo.radeon.com/rocm/windows/rocm-rel-6.4.4/torchaudio-2.6.0a0%2B1a8f621-cp312-cp312-win_amd64.whl")
-            if amd_nightly_gpu == "RDNA4":
-                torch_command = os.environ.get('TORCH_COMMAND',
-                                               "pip install https://repo.radeon.com/rocm/windows/rocm-rel-6.4.4/torch-2.8.0a0%2Bgitfc14c65-cp312-cp312-win_amd64.whl https://repo.radeon.com/rocm/windows/rocm-rel-6.4.4/torchvision-0.24.0a0%2Bc85f008-cp312-cp312-win_amd64.whl https://repo.radeon.com/rocm/windows/rocm-rel-6.4.4/torchaudio-2.6.0a0%2B1a8f621-cp312-cp312-win_amd64.whl")
+    # Detect NVIDIA GPU architecture to pick the right CUDA version
+    _torch_index = "https://download.pytorch.org/whl/cu124"
+    try:
+        _nvsmi = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=10
+        )
+        _gpu_name = _nvsmi.stdout.strip()
+        # Blackwell (RTX 50 series) needs CUDA 12.8+
+        if any(name in _gpu_name for name in ["RTX 5090", "RTX 5080", "RTX 5070", "RTX 5060", "RTX 50"]):
+            _torch_index = "https://download.pytorch.org/whl/nightly/cu128"
+            print(f"Detected Blackwell GPU ({_gpu_name}), using CUDA 12.8+ PyTorch")
         else:
-            # AMD GPU: Cuda 11.8, Pytorch 2.2.2
-            torch_command = os.environ.get('TORCH_COMMAND', "pip install torch==2.2.2 torchvision==0.17.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cu118 --disable-pip-version-check")
+            print(f"Detected GPU: {_gpu_name}")
+    except Exception:
+        pass
+    if "nightly" in _torch_index:
+        torch_command = os.environ.get('TORCH_COMMAND', f"pip install torch torchvision torchaudio --index-url {_torch_index} --disable-pip-version-check")
     else:
-        # Detect NVIDIA GPU architecture to pick the right CUDA version
-        _torch_index = "https://download.pytorch.org/whl/cu124"
-        try:
-            _nvsmi = subprocess.run(
-                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-                capture_output=True, text=True, timeout=10
-            )
-            _gpu_name = _nvsmi.stdout.strip()
-            # Blackwell (RTX 50 series) needs CUDA 12.8+
-            if any(name in _gpu_name for name in ["RTX 5090", "RTX 5080", "RTX 5070", "RTX 5060", "RTX 50"]):
-                _torch_index = "https://download.pytorch.org/whl/nightly/cu128"
-                print(f"Detected Blackwell GPU ({_gpu_name}), using CUDA 12.8+ PyTorch")
-            else:
-                print(f"Detected GPU: {_gpu_name}")
-        except Exception:
-            pass
-        if "nightly" in _torch_index:
-            torch_command = os.environ.get('TORCH_COMMAND', f"pip install torch torchvision torchaudio --index-url {_torch_index} --disable-pip-version-check")
-        else:
-            torch_command = os.environ.get('TORCH_COMMAND', f"pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --index-url {_torch_index} --disable-pip-version-check")
+        torch_command = os.environ.get('TORCH_COMMAND', f"pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --index-url {_torch_index} --disable-pip-version-check")
     if args.reinstall_torch:
         run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch", live=True)
         req_updated = True

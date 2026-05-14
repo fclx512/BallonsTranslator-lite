@@ -403,12 +403,9 @@ class TitleBar(Widget):
         self.translate_page_trigger = translatePageAction.triggered
 
         self.iconLabel = QLabel(self)
-        if not C.ON_MACOS:
-            self.iconLabel.setFixedWidth(LEFTBAR_WIDTH - 12)
-        else:
-            self.iconLabel.setFixedWidth(LEFTBAR_WIDTH + 8)
+        self.iconLabel.setFixedWidth(LEFTBAR_WIDTH - 12)
 
-        self.titleLabel = QLabel('BallonTranslator')
+        self.titleLabel = QLabel('BallonsTranslator-lite')
         self.titleLabel.setObjectName('TitleLabel')
         self.titleLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
@@ -425,8 +422,7 @@ class TitleBar(Widget):
         hlayout.addStretch()
         hlayout.setContentsMargins(0, 0, 0, 0)
 
-        if not C.ON_MACOS:
-            self.minBtn = QPushButton()
+        self.minBtn = QPushButton()
             self.minBtn.setObjectName('minBtn')
             self.minBtn.clicked.connect(self.onMinBtnClicked)
             self.maxBtn = QCheckBox()
@@ -444,7 +440,7 @@ class TitleBar(Widget):
 
     def eventFilter(self, obj, e):
         if obj == self.mainwindow:
-            if e.type() == QEvent.Type.WindowStateChange and not C.ON_MACOS:
+            if e.type() == QEvent.Type.WindowStateChange:
                 self.maxBtn.setChecked(self.mainwindow.isMaximized())
                 return False
 
