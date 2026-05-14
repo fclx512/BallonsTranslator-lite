@@ -104,6 +104,16 @@ def merge_config_module_params(config_params: Dict, module_keys: List, get_modul
             config_params[module_key] = module_params
         else:
             patch_module_params(config_params[module_key], module_params, module_key)
+
+    # Auto-select best available device on each startup,
+    # overriding any stale "cpu" setting from a previous CPU-mode run.
+    if not _force_cpu and DEFAULT_DEVICE != 'cpu':
+        for module_key in module_keys:
+            params = config_params.get(module_key)
+            if params and 'device' in params and isinstance(params['device'], dict):
+                if params['device']['value'] == 'cpu':
+                    params['device']['value'] = DEFAULT_DEVICE
+
     return config_params
 
 

@@ -77,20 +77,8 @@ TRANSLATE_DIR = osp.join(PROGRAM_PATH, 'translate')
 DISPLAY_LANGUAGE_MAP = {
     "English": "English",
     "简体中文": "zh_CN",
-    "Русский": "ru_RU",
-    "Português (Brasil)": "pt_BR",
-    "한국어": "ko_KR",
-    "Español": "es_MX",
-    "Hungarian": "hu_HU",
-    "Français": "fr_FR"
 }
 VALID_LANG_SET = set(list(DISPLAY_LANGUAGE_MAP.values()))
-
-for p in os.listdir(TRANSLATE_DIR):
-    if p.endswith('.qm'):
-        lang = p.replace('.qm', '')
-        if lang not in VALID_LANG_SET:
-            DISPLAY_LANGUAGE_MAP[lang] = lang
 
 DEFAULT_DISPLAY_LANG = 'English'
 
