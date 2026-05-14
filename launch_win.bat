@@ -1,9 +1,8 @@
 @echo off
 cd %~dp0
 
-:: GPU mode - requires system Python with PyTorch+CUDA installed
-:: Other dependencies are provided by the portable environment
-set PATH=%~dp0ballontrans_pylibs_win;%PATH%
+:: Keep system python.exe first (has PyTorch+CUDA); pylibs at end for DLL fallback
+set PATH=%PATH%;%~dp0ballontrans_pylibs_win
 set PYTHON=python.exe
 
 set ERROR_REPORTING=FALSE
