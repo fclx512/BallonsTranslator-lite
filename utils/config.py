@@ -155,6 +155,8 @@ class ProgramConfig(Config):
     imgsave_ext: str = '.png'
     intermediate_imgsave_ext: str = '.png'
     excluded_fonts: List[str] = field(default_factory=lambda: list())
+    max_font_size: int = 200
+    shortcuts: Dict[str, List[str]] = field(default_factory=lambda: dict())
     show_text_style_preset: bool = True
     expand_tstyle_panel: bool = True
     show_text_effect_panel: bool = True

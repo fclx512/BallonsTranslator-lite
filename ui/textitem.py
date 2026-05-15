@@ -1007,6 +1007,8 @@ class TextBlkItem(QGraphicsTextItem):
             self.update()
 
     def setRelFontSize(self, value: float, repaint_background: bool = False, set_selected: bool = False, restore_cursor: bool = False, clip_size: bool = False, **kwargs):
+        from utils.config import pcfg
+        max_pt = px2pt(pcfg.max_font_size)
         self.layout.relayout_on_changed = False
         _, after_kwargs = self._before_set_ffmt(set_selected, restore_cursor)
         doc = self.document()
@@ -1017,7 +1019,7 @@ class TextBlkItem(QGraphicsTextItem):
             while not it.atEnd():
                 fragment = it.fragment()
                 old_font_size = fragment.charFormat().fontPointSize()
-                new_font_size = round(old_font_size * value,2)
+                new_font_size = min(round(old_font_size * value, 2), max_pt)
                 cfmt = fragment.charFormat()
                 cfmt.setFontPointSize(new_font_size)
                 pos1 = fragment.position()
@@ -1039,7 +1041,10 @@ class TextBlkItem(QGraphicsTextItem):
         '''
         value should be point size
         '''
-        
+        from utils.config import pcfg
+        max_pt = px2pt(pcfg.max_font_size)
+        value = min(value, max_pt)
+
         cursor, after_kwargs = self._before_set_ffmt(set_selected=set_selected, restore_cursor=restore_cursor)
         self.layout.relayout_on_changed = False
         if self.fontformat.stroke_width != 0:

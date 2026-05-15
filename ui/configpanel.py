@@ -1,6 +1,6 @@
 from typing import List, Union, Tuple
 
-from qtpy.QtWidgets import QPushButton, QKeySequenceEdit, QLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QTreeView, QWidget, QLabel, QSizePolicy, QSpacerItem, QCheckBox, QSplitter, QScrollArea, QLineEdit, QDialog, QDialogButtonBox, QListWidget, QListWidgetItem, QAbstractItemView
+from qtpy.QtWidgets import QPushButton, QKeySequenceEdit, QLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QTreeView, QWidget, QLabel, QSpinBox, QSizePolicy, QSpacerItem, QCheckBox, QSplitter, QScrollArea, QLineEdit, QDialog, QDialogButtonBox, QListWidget, QListWidgetItem, QAbstractItemView
 from qtpy.QtCore import Qt, Signal, QSize, QEvent, QItemSelection
 from qtpy.QtGui import QStandardItem, QStandardItemModel, QMouseEvent, QFont, QIntValidator, QValidator, QFocusEvent
 
@@ -282,6 +282,209 @@ class TreeModel(QStandardItemModel):
             return super().data(index, role)
 
 
+DEFAULT_SHORTCUTS = {
+    'prev_page': ['A'],
+    'next_page': ['D'],
+    'prev_page_alt': ['PgUp'],
+    'next_page_alt': ['PgDown'],
+    'textedit_mode': ['T'],
+    'textblock_mode': ['W'],
+    'drawboard_mode': ['P'],
+    'zoom_in': ['Ctrl++'],
+    'zoom_out': ['Ctrl+-'],
+    'preview': ['Tab'],
+    'delete_blks': ['Del'],
+    'delete_blks_alt': ['Ctrl+D'],
+    'select_all': ['Ctrl+A'],
+    'bold': ['Ctrl+B'],
+    'italic': ['Ctrl+I'],
+    'underline': ['Ctrl+U'],
+    'undo': ['Ctrl+Z'],
+    'redo': ['Ctrl+Y'],
+    'page_search': ['Ctrl+F'],
+    'global_search': ['Ctrl+G'],
+    'escape': ['Escape'],
+    'space_inpaint': ['Space'],
+    'hand_tool': ['H'],
+    'rect_tool': ['R'],
+    'inpaint_tool': ['J'],
+    'pen_tool': ['B'],
+    'merge_tool': ['Ctrl+Shift+M'],
+}
+
+_ACTION_NAMES = {
+    'prev_page': 'Page ↑', 'next_page': 'Page ↓', 'prev_page_alt': 'Page ↑ (alt)',
+    'next_page_alt': 'Page ↓ (alt)', 'textedit_mode': 'Text Editor', 'textblock_mode': 'Text Block',
+    'drawboard_mode': 'Draw Board', 'zoom_in': 'Zoom In', 'zoom_out': 'Zoom Out',
+    'preview': 'Preview', 'delete_blks': 'Delete', 'delete_blks_alt': 'Delete (alt)',
+    'select_all': 'Select All', 'bold': 'Bold', 'italic': 'Italic', 'underline': 'Underline',
+    'undo': 'Undo', 'redo': 'Redo', 'page_search': 'Page Search', 'global_search': 'Global Search',
+    'escape': 'Escape', 'space_inpaint': 'Inpaint', 'hand_tool': 'Hand Tool',
+    'rect_tool': 'Rect Tool', 'inpaint_tool': 'Inpaint Tool', 'pen_tool': 'Pen Tool',
+    'merge_tool': 'Merge Tool',
+}
+
+
+class _ShortcutPill(QWidget):
+    removed = Signal(object)
+
+    def __init__(self, key_seq: str, parent=None):
+        super().__init__(parent)
+        self.key_seq = key_seq
+        h = QHBoxLayout(self)
+        h.setContentsMargins(4, 1, 1, 1)
+        h.setSpacing(2)
+        lbl = QLabel(key_seq)
+        lbl.setStyleSheet("color: #d4d4d8; font-size: 11px;")
+        h.addWidget(lbl)
+        btn = QPushButton('×')
+        btn.setFixedSize(16, 16)
+        btn.setStyleSheet("QPushButton { border: none; color: #888; font-size: 12px; } QPushButton:hover { color: #f88; }")
+        btn.clicked.connect(lambda: self.removed.emit(self))
+        h.addWidget(btn)
+        self.setStyleSheet("_ShortcutPill { background: #3a3a42; border-radius: 3px; }")
+
+
+class ShortcutEditor(QWidget):
+    shortcut_changed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._cards = {}
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 4, 0, 4)
+        layout.setSpacing(4)
+
+        grid = QGridLayout()
+        grid.setSpacing(6)
+        # Two columns of action cards
+        action_ids = list(DEFAULT_SHORTCUTS.keys())
+        half = (len(action_ids) + 1) // 2
+        left_col = action_ids[:half]
+        right_col = action_ids[half:]
+
+        for row_idx in range(half):
+            for col_idx, action_id in enumerate([left_col, right_col]):
+                if row_idx >= len([left_col, right_col][col_idx]):
+                    continue
+                aid = [left_col, right_col][col_idx][row_idx]
+                card = self._make_card(aid)
+                grid.addWidget(card, row_idx, col_idx)
+
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        layout.addLayout(grid)
+        layout.addStretch()
+
+    def _make_card(self, action_id: str) -> QWidget:
+        card = QWidget()
+        card.setStyleSheet("QWidget { background: #2a2a32; border-radius: 4px; padding: 4px; }")
+        v = QVBoxLayout(card)
+        v.setContentsMargins(6, 3, 4, 3)
+        v.setSpacing(3)
+
+        # Header row: name + reset
+        header = QHBoxLayout()
+        name = QLabel(self.tr(_ACTION_NAMES.get(action_id, action_id)))
+        name.setStyleSheet("font-weight: bold; color: #ccc; border: none; background: transparent;")
+        header.addWidget(name)
+        header.addStretch()
+        reset_btn = QPushButton('↺')
+        reset_btn.setFixedSize(20, 20)
+        reset_btn.setToolTip(self.tr('Reset'))
+        reset_btn.setStyleSheet("QPushButton { border: none; color: #888; background: transparent; } QPushButton:hover { color: #fff; }")
+        reset_btn.clicked.connect(lambda checked=False, aid=action_id: self._reset_card(aid))
+        header.addWidget(reset_btn)
+        v.addLayout(header)
+
+        # Pills row
+        pills_row = QHBoxLayout()
+        pills_row.setSpacing(3)
+        pills_widget = QWidget()
+        pills_widget.setLayout(pills_row)
+        pills_widget.setStyleSheet("background: transparent; border: none;")
+        v.addWidget(pills_widget)
+
+        # "+" add button
+        add_btn = QPushButton('+')
+        add_btn.setFixedSize(24, 20)
+        add_btn.setToolTip(self.tr('Add shortcut'))
+        add_btn.setStyleSheet("QPushButton { border: 1px solid #555; border-radius: 3px; color: #aaa; background: transparent; } QPushButton:hover { border-color: #88f; color: #fff; }")
+        add_btn.clicked.connect(lambda checked=False, aid=action_id, pw=pills_widget: self._add_shortcut(aid, pw))
+        pills_row.addWidget(add_btn)
+        pills_row.addStretch()
+
+        self._cards[action_id] = dict(pills_widget=pills_widget, add_btn=add_btn)
+        self._rebuild_pills(action_id)
+        return card
+
+    def _rebuild_pills(self, action_id: str):
+        info = self._cards[action_id]
+        pw = info['pills_widget']
+        layout = pw.layout()
+        # Remove all pill widgets (keep add_btn and stretch)
+        while layout.count() > 2:
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        keys = pcfg.shortcuts.get(action_id, DEFAULT_SHORTCUTS.get(action_id, []))
+        if not isinstance(keys, list):
+            keys = [keys]
+        for k in reversed(keys):
+            pill = _ShortcutPill(k)
+            pill.removed.connect(lambda p, aid=action_id: self._remove_shortcut(aid, p.key_seq))
+            layout.insertWidget(0, pill)
+
+    def _add_shortcut(self, action_id: str, pills_widget: QWidget):
+        edit = QKeySequenceEdit()
+        edit.setFixedWidth(100)
+        layout = pills_widget.layout()
+        layout.insertWidget(layout.count() - 2, edit)
+        edit.setFocus()
+
+        def on_finished():
+            seq = edit.keySequence().toString()
+            edit.deleteLater()
+            if seq:
+                keys = pcfg.shortcuts.get(action_id, DEFAULT_SHORTCUTS.get(action_id, []))
+                if not isinstance(keys, list):
+                    keys = [keys] if keys else []
+                if seq not in keys:
+                    keys.append(seq)
+                    pcfg.shortcuts[action_id] = keys
+                self._rebuild_pills(action_id)
+                self.shortcut_changed.emit()
+            else:
+                self._rebuild_pills(action_id)
+
+        # Use editingFinished signal
+        edit.editingFinished.connect(on_finished)
+
+    def _remove_shortcut(self, action_id: str, key_seq: str):
+        keys = pcfg.shortcuts.get(action_id, [])
+        if not isinstance(keys, list):
+            keys = [keys] if keys else []
+        if key_seq in keys:
+            keys.remove(key_seq)
+            if keys:
+                pcfg.shortcuts[action_id] = keys
+            elif action_id in pcfg.shortcuts:
+                del pcfg.shortcuts[action_id]
+        self._rebuild_pills(action_id)
+        self.shortcut_changed.emit()
+
+    def _reset_card(self, action_id: str):
+        defaults = DEFAULT_SHORTCUTS.get(action_id, [])
+        pcfg.shortcuts[action_id] = list(defaults)
+        self._rebuild_pills(action_id)
+        self.shortcut_changed.emit()
+
+    def refresh(self):
+        for action_id in self._cards:
+            self._rebuild_pills(action_id)
+
+
 class ConfigTable(QTreeView):
     tableitem_pressed = Signal(int, int)
     def __init__(self, *args, **kwargs) -> None:
@@ -468,10 +671,14 @@ class ConfigPanel(Widget):
             TableItem(label_inpaint, CONFIG_FONTSIZE_TABLE),
             TableItem(label_translator, CONFIG_FONTSIZE_TABLE),
         ])
+        label_feature_test = self.tr('Feature Testing')
+        label_shortcuts = self.tr('Keyboard Shortcuts')
         generalTableItem.appendRows([
             TableItem(label_startup, CONFIG_FONTSIZE_TABLE),
             TableItem(label_typesetting, CONFIG_FONTSIZE_TABLE),
             TableItem(label_save, CONFIG_FONTSIZE_TABLE),
+            TableItem(label_feature_test, CONFIG_FONTSIZE_TABLE),
+            TableItem(label_shortcuts, CONFIG_FONTSIZE_TABLE),
         ])
         
         self.load_model_checker, msublock = checkbox_with_label(self.tr('Load models on demand'), discription=self.tr('Load models on demand to save memory.'))
@@ -581,6 +788,19 @@ class ConfigPanel(Widget):
         self.intermediate_imgformat_combobox, intermediate_imsave_sublock = generalConfigPanel.addCombobox(['PNG', 'JXL'], self.tr('Intermediate image format'))
         self.intermediate_imgformat_combobox.activated.connect(self.on_intermediate_imgformat_changed)
 
+        generalConfigPanel.addTextLabel(label_feature_test)
+        self.max_font_size_edit = QSpinBox()
+        self.max_font_size_edit.setRange(10, 1000)
+        self.max_font_size_edit.setValue(pcfg.max_font_size)
+        self.max_font_size_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
+        self.max_font_size_edit.valueChanged.connect(self.on_max_font_size_changed)
+        max_font_sublock = ConfigSubBlock(self.max_font_size_edit, self.tr('Max Font Size (px)'))
+        generalConfigPanel.addSublock(max_font_sublock)
+
+        generalConfigPanel.addTextLabel(label_shortcuts)
+        self.shortcut_editor = ShortcutEditor(parent=self)
+        generalConfigPanel.addBlockWidget(self.shortcut_editor)
+
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self.configTable)
         splitter.addWidget(self.configContent)
@@ -648,6 +868,9 @@ class ConfigPanel(Widget):
 
     def on_rst_imgformat_changed(self):
         pcfg.imgsave_ext = '.' + self.rst_imgformat_combobox.currentText().lower()
+
+    def on_max_font_size_changed(self, value: int):
+        pcfg.max_font_size = value
 
     def on_intermediate_imgformat_changed(self):
         pcfg.intermediate_imgsave_ext = '.' + self.intermediate_imgformat_combobox.currentText().lower()
@@ -721,5 +944,6 @@ class ConfigPanel(Widget):
         self.rst_imgquality_edit.setText(str(pcfg.imgsave_quality))
         self.load_model_checker.setChecked(pcfg.module.load_model_on_demand)
         self.empty_runcache_checker.setChecked(pcfg.module.empty_runcache)
+        self.max_font_size_edit.setValue(pcfg.max_font_size)
 
         self.blockSignals(False)

@@ -604,7 +604,17 @@ class MainWindow(mainwindow_cls):
         self.page_changing = False
 
     def setupShortcuts(self):
-        self.titleBar.nextpage_trigger.connect(self.shortcutNext) 
+        from utils.config import pcfg
+
+        def _keys(action_id, defaults):
+            keys = pcfg.shortcuts.get(action_id, defaults)
+            if not isinstance(keys, list):
+                keys = [keys] if keys else list(defaults)
+            return keys
+
+        self.shortcut_registry = {}
+
+        self.titleBar.nextpage_trigger.connect(self.shortcutNext)
         self.titleBar.prevpage_trigger.connect(self.shortcutBefore)
         self.titleBar.textedit_trigger.connect(self.shortcutTextedit)
         self.titleBar.drawboard_trigger.connect(self.shortcutDrawboard)
@@ -621,47 +631,42 @@ class MainWindow(mainwindow_cls):
         self.titleBar.darkmode_trigger.connect(self.on_darkmode_triggered)
         self.titleBar.merge_tool_trigger.connect(self.on_open_merge_tool)
 
-        shortcutA = QShortcut(QKeySequence("A"), self)
-        shortcutA.activated.connect(self.shortcutBefore)
-        shortcutPageUp = QShortcut(QKeySequence(QKeySequence.StandardKey.MoveToPreviousPage), self)
-        shortcutPageUp.activated.connect(self.shortcutBefore)
+        def _make_shortcuts(action_id, defaults, slot):
+            lst = []
+            for k in _keys(action_id, defaults):
+                sc = QShortcut(QKeySequence(k), self)
+                sc.activated.connect(slot)
+                lst.append(sc)
+            return lst
 
-        shortcutD = QShortcut(QKeySequence("D"), self)
-        shortcutD.activated.connect(self.shortcutNext)
-        shortcutPageDown = QShortcut(QKeySequence(QKeySequence.StandardKey.MoveToNextPage), self)
-        shortcutPageDown.activated.connect(self.shortcutNext)
+        self.shortcut_registry['prev_page'] = _make_shortcuts('prev_page', ['A'], self.shortcutBefore)
+        self.shortcut_registry['prev_page_alt'] = _make_shortcuts('prev_page_alt', ['PgUp'], self.shortcutBefore)
+        self.shortcut_registry['next_page'] = _make_shortcuts('next_page', ['D'], self.shortcutNext)
+        self.shortcut_registry['next_page_alt'] = _make_shortcuts('next_page_alt', ['PgDown'], self.shortcutNext)
+        self.shortcut_registry['textblock_mode'] = _make_shortcuts('textblock_mode', ['W'], self.shortcutTextblock)
+        self.shortcut_registry['zoom_in'] = _make_shortcuts('zoom_in', ['Ctrl++'], self.canvas.gv.scale_up_signal)
+        self.shortcut_registry['zoom_out'] = _make_shortcuts('zoom_out', ['Ctrl+-'], self.canvas.gv.scale_down_signal)
+        self.shortcut_registry['delete_blks_alt'] = _make_shortcuts('delete_blks_alt', ['Ctrl+D'], self.shortcutCtrlD)
+        self.shortcut_registry['space_inpaint'] = _make_shortcuts('space_inpaint', ['Space'], self.shortcutSpace)
+        self.shortcut_registry['select_all'] = _make_shortcuts('select_all', ['Ctrl+A'], self.shortcutSelectAll)
+        self.shortcut_registry['preview'] = _make_shortcuts('preview', ['Tab'], self.shortcutPreview)
+        self.shortcut_registry['escape'] = _make_shortcuts('escape', ['Escape'], self.shortcutEscape)
+        self.shortcut_registry['bold'] = _make_shortcuts('bold', ['Ctrl+B'], self.shortcutBold)
+        self.shortcut_registry['italic'] = _make_shortcuts('italic', ['Ctrl+I'], self.shortcutItalic)
+        self.shortcut_registry['underline'] = _make_shortcuts('underline', ['Ctrl+U'], self.shortcutUnderline)
+        self.shortcut_registry['delete_blks'] = _make_shortcuts('delete_blks', ['Del'], self.shortcutDelete)
 
-        shortcutTextblock = QShortcut(QKeySequence("W"), self)
-        shortcutTextblock.activated.connect(self.shortcutTextblock)
-        shortcutZoomIn = QShortcut(QKeySequence.StandardKey.ZoomIn, self)
-        shortcutZoomIn.activated.connect(self.canvas.gv.scale_up_signal)
-        shortcutZoomOut = QShortcut(QKeySequence.StandardKey.ZoomOut, self)
-        shortcutZoomOut.activated.connect(self.canvas.gv.scale_down_signal)
-        shortcutCtrlD = QShortcut(QKeySequence("Ctrl+D"), self)
-        shortcutCtrlD.activated.connect(self.shortcutCtrlD)
-        shortcutSpace = QShortcut(QKeySequence("Space"), self)
-        shortcutSpace.activated.connect(self.shortcutSpace)
-        shortcutSelectAll = QShortcut(QKeySequence.StandardKey.SelectAll, self)
-        shortcutSelectAll.activated.connect(self.shortcutSelectAll)
-
-        shortcutEscape = QShortcut(QKeySequence("Escape"), self)
-        shortcutEscape.activated.connect(self.shortcutEscape)
-
-        shortcutBold = QShortcut(QKeySequence.StandardKey.Bold, self)
-        shortcutBold.activated.connect(self.shortcutBold)
-        shortcutItalic = QShortcut(QKeySequence.StandardKey.Italic, self)
-        shortcutItalic.activated.connect(self.shortcutItalic)
-        shortcutUnderline = QShortcut(QKeySequence.StandardKey.Underline, self)
-        shortcutUnderline.activated.connect(self.shortcutUnderline)
-
-        shortcutDelete = QShortcut(QKeySequence.StandardKey.Delete, self)
-        shortcutDelete.activated.connect(self.shortcutDelete)
-
-        drawpanel_shortcuts = {'hand': 'H', 'rect': 'R', 'inpaint': 'J', 'pen': 'B'}
-        for tool_name, shortcut_key in drawpanel_shortcuts.items():
-            shortcut = QShortcut(QKeySequence(shortcut_key), self)
-            shortcut.activated.connect(partial(self.drawingPanel.shortcutSetCurrentToolByName, tool_name))
-            self.drawingPanel.setShortcutTip(tool_name, shortcut_key)
+        drawpanel_info = {'hand': 'hand_tool', 'rect': 'rect_tool', 'inpaint': 'inpaint_tool', 'pen': 'pen_tool'}
+        drawpanel_defs = {'hand_tool': ['H'], 'rect_tool': ['R'], 'inpaint_tool': ['J'], 'pen_tool': ['B']}
+        for tool_name, action_id in drawpanel_info.items():
+            keys = _keys(action_id, drawpanel_defs[action_id])
+            lst = []
+            for k in keys:
+                sc = QShortcut(QKeySequence(k), self)
+                sc.activated.connect(partial(self.drawingPanel.shortcutSetCurrentToolByName, tool_name))
+                lst.append(sc)
+            self.drawingPanel.setShortcutTip(tool_name, keys[0])
+            self.shortcut_registry[action_id] = lst
 
     def shortcutNext(self):
         sender: QShortcut = self.sender()
@@ -988,6 +993,10 @@ class MainWindow(mainwindow_cls):
         cursor.setPosition(start)
         cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
         edit.setTextCursor(cursor)
+
+    def shortcutPreview(self):
+        if self.centralStackWidget.currentIndex() == 0:
+            self.canvas.toggle_preview()
 
     def shortcutEscape(self):
         if self.canvas.search_widget.isVisible():

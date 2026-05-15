@@ -139,13 +139,15 @@ class FontSizeBox(QFrame):
     param_changed = Signal(str, float)
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        from utils.config import pcfg
+        self._max_font_size = pcfg.max_font_size
         self.upBtn = IncrementalBtn(self)
         self.upBtn.setObjectName("FsizeIncrementUp")
         self.downBtn = IncrementalBtn(self)
         self.downBtn.setObjectName("FsizeIncrementDown")
         self.upBtn.clicked.connect(self.onUpBtnClicked)
         self.downBtn.clicked.connect(self.onDownBtnClicked)
-        self.fcombobox = SizeComboBox([1, 1000], 'font_size', self)
+        self.fcombobox = SizeComboBox([1, self._max_font_size], 'font_size', self)
         self.fcombobox.addItems([
             "5", "5.5", "6.5", "7.5", "8", "9", "10", "10.5",
             "11", "12", "14", "16", "18", "20", '22', "26", "28",
@@ -168,6 +170,8 @@ class FontSizeBox(QFrame):
         return self.fcombobox.currentText()
 
     def onUpBtnClicked(self):
+        from utils.config import pcfg
+        max_val = pcfg.max_font_size
         raito = 1.25
         size = self.getFontSize()
         multi_size=False
@@ -178,7 +182,7 @@ class FontSizeBox(QFrame):
         newsize = int(round(size * raito))
         if newsize == size:
             newsize += 1
-        newsize = min(1000, newsize)
+        newsize = min(max_val, newsize)
         if newsize != size:
             if not multi_size:
                 self.param_changed.emit('font_size', newsize)
@@ -511,7 +515,8 @@ class FontFormatPanel(Widget):
         self.familybox.blockSignals(True)
         self.stylebox.blockSignals(True)  # 新增
         
-        font_size = round(font_format.font_size, 1)
+        from utils.config import pcfg
+        font_size = min(round(font_format.font_size, 1), pcfg.max_font_size)
         if int(font_size) == font_size:
             font_size = str(int(font_size))
         else:
