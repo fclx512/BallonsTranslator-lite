@@ -148,6 +148,22 @@ def dump_cache():
     global CACHE_UPDATED
     CACHE_UPDATED = False
 
+def init_font_list():
+    """Enumerate all system fonts using QFontDatabase and populate ALL_FONT_FAMILIES."""
+    from qtpy.QtGui import QFontDatabase
+    families = QFontDatabase.families()
+    # Filter out vertical font variants (prefixed with @ on Windows)
+    families = [f for f in families if not f.startswith('@')]
+    global ALL_FONT_FAMILIES
+    ALL_FONT_FAMILIES = sorted(set(families))
+
+def get_filtered_font_list(excluded=None) -> list:
+    """Return ALL_FONT_FAMILIES minus the excluded font names."""
+    if excluded is None:
+        excluded = []
+    excluded_set = set(excluded)
+    return [f for f in ALL_FONT_FAMILIES if f not in excluded_set]
+
 config_name_to_view_widget = {}
 action_to_view_config_name = {}
 register_view_widget: lambda *args, **kwargs: None

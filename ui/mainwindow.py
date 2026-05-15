@@ -363,10 +363,14 @@ class MainWindow(mainwindow_cls):
         self.configPanel.setupConfig()
         self.configPanel.save_config.connect(self.save_config)
         self.configPanel.reload_textstyle.connect(self.load_textstyle_from_proj_dir)
-        # 无论配置如何，都先确保字体列表已初始化
+        self.configPanel.font_exclusion_changed.connect(self.refresh_font_list_exclusion)
+        # 初始化字体列表（系统字体枚举）
+        shared.init_font_list()
+        # 使用过滤后的字体列表（排除用户已隐藏的字体）
         familybox = self.textPanel.formatpanel.familybox
-        if familybox.count() == 0 and shared.ALL_FONT_FAMILIES:
-            familybox.update_font_list(shared.ALL_FONT_FAMILIES)
+        filtered = shared.get_filtered_font_list(pcfg.excluded_fonts)
+        if familybox.count() == 0 and filtered:
+            familybox.update_font_list(filtered)
 
         textblock_mode = pcfg.imgtrans_textblock
         if pcfg.imgtrans_textedit:
@@ -389,6 +393,18 @@ class MainWindow(mainwindow_cls):
 
         if self.rightComicTransStackPanel.isHidden():
             self.setPaintMode()
+
+
+    def refresh_font_list_exclusion(self):
+        """Re-apply font exclusion filter to the font combobox."""
+        familybox = self.textPanel.formatpanel.familybox
+        current_family = familybox.currentText()
+        filtered = shared.get_filtered_font_list(pcfg.excluded_fonts)
+        familybox.update_font_list(filtered)
+        if current_family in filtered:
+            familybox.setCurrentText(current_family)
+        elif filtered:
+            familybox.setCurrentIndex(0)
 
 
     def setupImgTransUI(self):

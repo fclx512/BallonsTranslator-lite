@@ -453,7 +453,8 @@ class FontFormatPanel(Widget):
         C.active_format = self.global_format
 
         if shared.ALL_FONT_FAMILIES:
-            self.familybox.addItems(shared.ALL_FONT_FAMILIES)
+            from utils.config import pcfg
+            self.familybox.addItems(shared.get_filtered_font_list(pcfg.excluded_fonts))
 
     def global_mode(self):
         return id(C.active_format) == id(self.global_format)

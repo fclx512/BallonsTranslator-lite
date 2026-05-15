@@ -1,6 +1,6 @@
 from typing import List, Union, Tuple
 
-from qtpy.QtWidgets import QPushButton, QKeySequenceEdit, QLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QTreeView, QWidget, QLabel, QSizePolicy, QSpacerItem, QCheckBox, QSplitter, QScrollArea, QLineEdit
+from qtpy.QtWidgets import QPushButton, QKeySequenceEdit, QLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QTreeView, QWidget, QLabel, QSizePolicy, QSpacerItem, QCheckBox, QSplitter, QScrollArea, QLineEdit, QDialog, QDialogButtonBox, QListWidget, QListWidgetItem, QAbstractItemView
 from qtpy.QtCore import Qt, Signal, QSize, QEvent, QItemSelection
 from qtpy.QtGui import QStandardItem, QStandardItemModel, QMouseEvent, QFont, QIntValidator, QValidator, QFocusEvent
 
@@ -335,11 +335,115 @@ class ConfigTable(QTreeView):
             self.tableitem_pressed.emit(idx0, idx1)
 
 
+class FontExcludeDialog(QDialog):
+    """Dialog for selecting which fonts to exclude from the font list."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(self.tr('Font Exclusion'))
+        self.setMinimumSize(700, 500)
+
+        layout = QVBoxLayout(self)
+
+        # Search bar
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText(self.tr('Search fonts...'))
+        self.search_edit.textChanged.connect(self._filter_lists)
+        layout.addWidget(self.search_edit)
+
+        # Side-by-side list widgets
+        lists_layout = QHBoxLayout()
+
+        # Available fonts list
+        left_layout = QVBoxLayout()
+        left_layout.addWidget(QLabel(self.tr('Available Fonts')))
+        self.available_list = QListWidget()
+        self.available_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        left_layout.addWidget(self.available_list)
+        lists_layout.addLayout(left_layout)
+
+        # Center buttons
+        btn_layout = QVBoxLayout()
+        btn_layout.addStretch()
+        self.hide_btn = QPushButton('>')
+        self.hide_btn.setFixedWidth(40)
+        self.hide_btn.setToolTip(self.tr('Hide selected fonts'))
+        self.hide_btn.clicked.connect(self._hide_fonts)
+        btn_layout.addWidget(self.hide_btn)
+        self.show_btn = QPushButton('<')
+        self.show_btn.setFixedWidth(40)
+        self.show_btn.setToolTip(self.tr('Show selected fonts'))
+        self.show_btn.clicked.connect(self._show_fonts)
+        btn_layout.addWidget(self.show_btn)
+        btn_layout.addStretch()
+        lists_layout.addLayout(btn_layout)
+
+        # Excluded fonts list
+        right_layout = QVBoxLayout()
+        right_layout.addWidget(QLabel(self.tr('Hidden Fonts')))
+        self.excluded_list = QListWidget()
+        self.excluded_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        right_layout.addWidget(self.excluded_list)
+        lists_layout.addLayout(right_layout)
+
+        layout.addLayout(lists_layout)
+
+        # OK / Cancel buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+        # Populate lists
+        self._populate_lists()
+
+    def _add_font_item(self, list_widget: QListWidget, font_name: str):
+        """Add a font name to a list widget with its own typeface as preview."""
+        item = QListWidgetItem(font_name)
+        item.setFont(QFont(font_name, 11))
+        list_widget.addItem(item)
+
+    def _populate_lists(self):
+        from utils import shared
+        from utils.config import pcfg
+        self.available_list.clear()
+        self.excluded_list.clear()
+
+        for font in shared.get_filtered_font_list(pcfg.excluded_fonts):
+            self._add_font_item(self.available_list, font)
+
+        for font in pcfg.excluded_fonts:
+            self._add_font_item(self.excluded_list, font)
+
+    def _filter_lists(self):
+        text = self.search_edit.text().lower()
+        for i in range(self.available_list.count()):
+            item = self.available_list.item(i)
+            item.setHidden(bool(text) and text not in item.text().lower())
+        for i in range(self.excluded_list.count()):
+            item = self.excluded_list.item(i)
+            item.setHidden(bool(text) and text not in item.text().lower())
+
+    def _hide_fonts(self):
+        for item in self.available_list.selectedItems():
+            self.available_list.takeItem(self.available_list.row(item))
+            self._add_font_item(self.excluded_list, item.text())
+
+    def _show_fonts(self):
+        for item in self.excluded_list.selectedItems():
+            self.excluded_list.takeItem(self.excluded_list.row(item))
+            self._add_font_item(self.available_list, item.text())
+
+    def get_excluded_fonts(self) -> List[str]:
+        return [self.excluded_list.item(i).text() for i in range(self.excluded_list.count())]
+
+
 class ConfigPanel(Widget):
 
     save_config = Signal()
     unload_models = Signal()
     reload_textstyle = Signal(bool)
+    font_exclusion_changed = Signal()
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -456,6 +560,12 @@ class ConfigPanel(Widget):
         self.let_textstyle_indep_checker, _ = generalConfigPanel.addCheckBox(self.tr('Independent text styles for each projects'))
         self.let_textstyle_indep_checker.stateChanged.connect(self.on_textstyle_indep_changed)
 
+        self.exclude_fonts_btn = QPushButton(self.tr('Exclude Fonts...'), parent=self)
+        self.exclude_fonts_btn.setFixedWidth(CONFIG_COMBOBOX_LONG)
+        self.exclude_fonts_btn.clicked.connect(self.on_exclude_fonts_clicked)
+        btn_sublock = ConfigSubBlock(self.exclude_fonts_btn)
+        generalConfigPanel.addSublock(btn_sublock)
+
         generalConfigPanel.addTextLabel(label_save)
         self.rst_imgformat_combobox, imsave_sublock = generalConfigPanel.addCombobox(['PNG', 'JPG', 'WEBP', 'JXL'], self.tr('Result image format'))
         self.rst_imgformat_combobox.activated.connect(self.on_rst_imgformat_changed)
@@ -526,6 +636,15 @@ class ConfigPanel(Widget):
     def on_textstyle_indep_changed(self):
         pcfg.let_textstyle_indep_flag = self.let_textstyle_indep_checker.isChecked()
         self.reload_textstyle.emit(pcfg.let_textstyle_indep_flag)
+
+    def on_exclude_fonts_clicked(self):
+        dialog = FontExcludeDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            excluded = dialog.get_excluded_fonts()
+            pcfg.excluded_fonts = excluded
+            self.font_exclusion_changed.emit()
+            from utils.config import save_config
+            save_config()
 
     def on_rst_imgformat_changed(self):
         pcfg.imgsave_ext = '.' + self.rst_imgformat_combobox.currentText().lower()

@@ -154,6 +154,7 @@ class ProgramConfig(Config):
     imgsave_quality: int = 100
     imgsave_ext: str = '.png'
     intermediate_imgsave_ext: str = '.png'
+    excluded_fonts: List[str] = field(default_factory=lambda: list())
     show_text_style_preset: bool = True
     expand_tstyle_panel: bool = True
     show_text_effect_panel: bool = True
