@@ -74,8 +74,6 @@ class BaseTranslator(BaseModule):
 
     concate_text = True
     cht_require_convert = False
-    translate_by_textblock = False
-
     _postprocess_hooks = OrderedDict()
     _preprocess_hooks = OrderedDict()
     
@@ -143,7 +141,7 @@ class BaseTranslator(BaseModule):
             return text
 
         is_list = isinstance(text, List)
-        concate_text = is_list and self.concate_text and not self.translate_by_textblock
+        concate_text = is_list and self.concate_text
         text_source = self.textlist2text(text) if concate_text else text
         
         src_is_list = isinstance(text_source, List)
@@ -257,19 +255,3 @@ def transhook_copy_original(translations: List[str] = None, textblocks: List[Tex
 TransNone.register_postprocess_hooks({'copy_original': transhook_copy_original})
 
 
-@register_translator('Copy Source')
-class TransSource(BaseTranslator):
-
-    concate_text = False
-    cht_require_convert = True
-    params: Dict = {
-        'description': 'Return source text as translation'
-    }
-
-    def _setup_translator(self):
-        for k in self.lang_map.keys():
-            self.lang_map[k] = 'dummy language'
-        self.register_preprocess_hooks
-        
-    def _translate(self, src_list: List[str]) -> List[str]:
-        return copy.copy(src_list)

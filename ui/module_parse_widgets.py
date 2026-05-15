@@ -3,7 +3,7 @@ from typing import List, Callable
 from modules import GET_VALID_INPAINTERS, GET_VALID_TEXTDETECTORS, GET_VALID_TRANSLATORS, GET_VALID_OCR, \
     BaseTranslator, DEFAULT_DEVICE, GPUINTENSIVE_SET
 from utils.logger import logger as LOGGER
-from .custom_widget import ConfigComboBox, ParamComboBox, NoBorderPushBtn, ParamNameLabel
+from .custom_widget import ConfigComboBox, ParamComboBox, ParamNameLabel
 from utils.shared import CONFIG_COMBOBOX_LONG, size2width, CONFIG_COMBOBOX_SHORT, CONFIG_COMBOBOX_HEIGHT
 from utils.config import pcfg
 
@@ -190,11 +190,13 @@ class ParamWidget(QWidget):
 
                     if param_key == 'device' and DEFAULT_DEVICE == 'cpu':
                         param_dict['value'] = 'cpu'
-                        for ii, device in enumerate(param_dict['options']):
+                        d_idx = 0
+                        for device in param_dict['options']:
                             if device in GPUINTENSIVE_SET:
                                 model = param_widget.model()
-                                item = model.item(ii, 0)
+                                item = model.item(d_idx, 0)
                                 item.setEnabled(False)
+                            d_idx += 1
                     param_widget.setCurrentText(str(value))
                     param_widget.setEditable(param_dict.get('editable', False))
 
@@ -228,6 +230,8 @@ class ParamWidget(QWidget):
             widget_idx = 0
             if require_label:
                 param_label = ParamNameLabel(display_param_name)
+                if isinstance(params[param_key], dict) and 'description' in params[param_key]:
+                    param_label.setToolTip(params[param_key]['description'])
                 param_layout.addWidget(param_label, ii, 0)
                 widget_idx = 1
             if param_widget is not None:
@@ -367,26 +371,12 @@ class ModuleConfigParseWidget(QWidget):
 
 class TranslatorConfigPanel(ModuleConfigParseWidget):
 
-    show_pre_MT_keyword_window = Signal()
-    show_MT_keyword_window = Signal()
-    show_OCR_keyword_window = Signal()
-
     def __init__(self, module_name, scrollWidget: QWidget = None, *args, **kwargs) -> None:
         super().__init__(module_name, GET_VALID_TRANSLATORS, scrollWidget=scrollWidget, *args, **kwargs)
         self.translator_changed = self.module_changed
-    
+
         self.source_combobox = ConfigComboBox(scrollWidget=scrollWidget)
         self.target_combobox = ConfigComboBox(scrollWidget=scrollWidget)
-        self.replacePreMTkeywordBtn = NoBorderPushBtn(self.tr("Keyword substitution for machine translation source text"), self)
-        self.replacePreMTkeywordBtn.clicked.connect(self.show_pre_MT_keyword_window)
-        self.replacePreMTkeywordBtn.setFixedWidth(500)
-        self.replaceMTkeywordBtn = NoBorderPushBtn(self.tr("Keyword substitution for machine translation"), self)
-        self.replaceMTkeywordBtn.clicked.connect(self.show_MT_keyword_window)
-        self.replaceMTkeywordBtn.setFixedWidth(500)
-        self.replaceOCRkeywordBtn = NoBorderPushBtn(self.tr("Keyword substitution for source text"), self)
-        self.replaceOCRkeywordBtn.clicked.connect(self.show_OCR_keyword_window)
-        self.replaceOCRkeywordBtn.setFixedWidth(500)
-        self.translateByTextblockBox = ParamCheckerBox(self.tr('Translate each text block individually'))
 
         st_layout = QHBoxLayout()
         st_layout.setSpacing(15)
@@ -395,12 +385,8 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
         st_layout.addWidget(self.source_combobox)
         st_layout.addWidget(ParamNameLabel(self.tr('Target')))
         st_layout.addWidget(self.target_combobox)
-        
-        self.vlayout.insertLayout(1, st_layout) 
-        self.vlayout.addWidget(self.translateByTextblockBox)
-        self.vlayout.addWidget(self.replaceOCRkeywordBtn)
-        self.vlayout.addWidget(self.replacePreMTkeywordBtn)
-        self.vlayout.addWidget(self.replaceMTkeywordBtn)
+
+        self.vlayout.insertLayout(1, st_layout)
 
     def finishSetTranslator(self, translator: BaseTranslator):
         self.source_combobox.blockSignals(True)

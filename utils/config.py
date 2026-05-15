@@ -20,9 +20,9 @@ class RunStatus:
 @nested_dataclass
 class ModuleConfig(Config):
     textdetector: str = 'ctd'
-    ocr: str = "mit48px"
+    ocr: str = "mit48px_ctc"
     inpainter: str = 'lama_large_512px'
-    translator: str = "google"
+    translator: str = "None"
     enable_detect: bool = True
     keep_exist_textlines: bool = False
     enable_ocr: bool = True
@@ -36,8 +36,6 @@ class ModuleConfig(Config):
     inpainter_params: Dict = field(default_factory=lambda: dict())
     translate_source: str = '日本語'
     translate_target: str = '简体中文'
-    translate_by_textblock: bool = False
-
     check_need_inpaint: bool = True
     load_model_on_demand: bool = False
     empty_runcache: bool = False
@@ -135,7 +133,6 @@ class ProgramConfig(Config):
     let_family_flag: int = 0
     let_autolayout_flag: bool = True
     let_uppercase_flag: bool = True
-    let_show_only_custom_fonts_flag: bool = False
     let_textstyle_indep_flag: bool = False
     text_styles_path: str = osp.join(shared.DEFAULT_TEXTSTYLE_DIR, 'default.json')
 
@@ -149,20 +146,17 @@ class ProgramConfig(Config):
     gsearch_range: int = 0
 
     darkmode: bool = False
-    textselect_mini_menu: bool = True
     fold_textarea: bool = False
     show_source_text: bool = True
     show_trans_text: bool = True
-    saladict_shortcut: str = "Alt+S"
-    search_url: str = "https://www.google.com/search?q="
-    ocr_sublist: List = field(default_factory=lambda: list())
     restore_ocr_empty: bool = False
-    pre_mt_sublist: List = field(default_factory=lambda: list())
-    mt_sublist: List = field(default_factory=lambda: list())
     display_lang: str = field(default_factory=lambda: shared.DEFAULT_DISPLAY_LANG) # to always apply shared.DEFAULT_DISPLAY_LANG
     imgsave_quality: int = 100
     imgsave_ext: str = '.png'
     intermediate_imgsave_ext: str = '.png'
+    excluded_fonts: List[str] = field(default_factory=lambda: list())
+    max_font_size: int = 200
+    shortcuts: Dict[str, List[str]] = field(default_factory=lambda: dict())
     show_text_style_preset: bool = True
     expand_tstyle_panel: bool = True
     show_text_effect_panel: bool = True

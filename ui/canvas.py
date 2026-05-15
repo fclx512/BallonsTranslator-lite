@@ -252,18 +252,22 @@ class Canvas(QGraphicsScene):
         self.drawingLayer = DrawingLayer()
         self.drawingLayer.setTransformationMode(Qt.TransformationMode.FastTransformation)
         self.textLayer = QGraphicsPixmapItem()
+        self.previewLayer = QGraphicsPixmapItem()
+        self.previewLayer.setVisible(False)
+        self.preview_mode = False
 
         self.inpaintLayer.setAcceptDrops(True)
         self.drawingLayer.setAcceptDrops(True)
         self.textLayer.setAcceptDrops(True)
         self.baseLayer.setAcceptDrops(True)
-        
+
         self.base_pixmap: QPixmap = None
 
         self.addItem(self.baseLayer)
         self.inpaintLayer.setParentItem(self.baseLayer)
         self.drawingLayer.setParentItem(self.baseLayer)
         self.textLayer.setParentItem(self.baseLayer)
+        self.previewLayer.setParentItem(self.baseLayer)
         self.txtblkShapeControl.setParentItem(self.baseLayer)
 
         self.scalefactor_changed.connect(self.onScaleFactorChanged)
@@ -387,7 +391,64 @@ class Canvas(QGraphicsScene):
         self.inpaintLayer.show()
 
         return result
-    
+
+    def toggle_preview(self):
+        self.preview_mode = not self.preview_mode
+        if self.preview_mode:
+            self._enter_preview()
+        else:
+            self._exit_preview()
+
+    def _enter_preview(self):
+        scale_before = self.scale_factor
+        tlayer_opacity_before = self.textLayer.opacity()
+        tlayer_visible = self.textLayer.isVisible()
+        inpaint_visible = self.inpaintLayer.isVisible()
+
+        self.textLayer.setOpacity(1)
+        if not tlayer_visible:
+            self.textLayer.show()
+        if not inpaint_visible:
+            self.inpaintLayer.show()
+
+        # Render at 1:1 scale without changing the viewport
+        if scale_before != 1:
+            self.baseLayer.setScale(1)
+
+        self.clearSelection()
+        if self.txtblkShapeControl.blk_item is not None:
+            blk_item = self.txtblkShapeControl.blk_item
+            if blk_item.is_editting():
+                blk_item.endEdit(keep_focus=False)
+            if blk_item.isSelected():
+                blk_item.setSelected(False)
+
+        result = ndarray2pixmap(self.imgtrans_proj.inpainted_array, return_qimg=False)
+        canvas_sz = self.img_window_size()
+        painter = QPainter(result)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(0, 0, canvas_sz.width(), canvas_sz.height())
+        self.render(painter, rect, rect)
+        painter.end()
+
+        if scale_before != 1:
+            self.baseLayer.setScale(scale_before)
+
+        self.textLayer.setOpacity(tlayer_opacity_before)
+        if not tlayer_visible:
+            self.textLayer.hide()
+        if not inpaint_visible:
+            self.inpaintLayer.hide()
+
+        self.previewLayer.setPixmap(result)
+        self.previewLayer.setVisible(True)
+        self.textLayer.setVisible(False)
+        self.txtblkShapeControl.setVisible(False)
+
+    def _exit_preview(self):
+        self.previewLayer.setVisible(False)
+        self.textLayer.setVisible(True)
+        self.txtblkShapeControl.setVisible(True)
     def updateLayers(self):
         
         if not self.imgtrans_proj.img_valid:

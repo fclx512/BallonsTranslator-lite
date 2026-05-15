@@ -299,17 +299,10 @@ class TitleBar(Widget):
         self.global_search_trigger = globalSearchAction.triggered
         globalSearchAction.setShortcut(QKeySequence('Ctrl+G'))
 
-        replacePreMTkeyword = QAction(self.tr("Keyword substitution for machine translation source text"), self)
-        self.replacePreMTkeyword_trigger = replacePreMTkeyword.triggered
-        replaceMTkeyword = QAction(self.tr("Keyword substitution for machine translation"), self)
-        self.replaceMTkeyword_trigger = replaceMTkeyword.triggered
-        replaceOCRkeyword = QAction(self.tr("Keyword substitution for source text"), self)
-        self.replaceOCRkeyword_trigger = replaceOCRkeyword.triggered
-
         editMenu = QMenu(self.editToolBtn)
         editMenu.addActions([undoAction, redoAction])
         editMenu.addSeparator()
-        editMenu.addActions([pageSearchAction, globalSearchAction, replaceOCRkeyword, replacePreMTkeyword, replaceMTkeyword])
+        editMenu.addActions([pageSearchAction, globalSearchAction])
         self.editToolBtn.setMenu(editMenu)
         self.editToolBtn.setPopupMode(QToolButton.InstantPopup)
 
@@ -410,12 +403,9 @@ class TitleBar(Widget):
         self.translate_page_trigger = translatePageAction.triggered
 
         self.iconLabel = QLabel(self)
-        if not C.ON_MACOS:
-            self.iconLabel.setFixedWidth(LEFTBAR_WIDTH - 12)
-        else:
-            self.iconLabel.setFixedWidth(LEFTBAR_WIDTH + 8)
+        self.iconLabel.setFixedWidth(LEFTBAR_WIDTH - 12)
 
-        self.titleLabel = QLabel('BallonTranslator')
+        self.titleLabel = QLabel('BallonsTranslator-lite')
         self.titleLabel.setObjectName('TitleLabel')
         self.titleLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
@@ -432,26 +422,25 @@ class TitleBar(Widget):
         hlayout.addStretch()
         hlayout.setContentsMargins(0, 0, 0, 0)
 
-        if not C.ON_MACOS:
-            self.minBtn = QPushButton()
-            self.minBtn.setObjectName('minBtn')
-            self.minBtn.clicked.connect(self.onMinBtnClicked)
-            self.maxBtn = QCheckBox()
-            self.maxBtn.setObjectName('maxBtn')
-            self.maxBtn.clicked.connect(self.onMaxBtnClicked)
-            self.maxBtn.setFixedSize(48, 27)
-            self.closeBtn = QPushButton()
-            self.closeBtn.setObjectName('closeBtn')
-            self.closeBtn.clicked.connect(self.closebtn_clicked)
-            hlayout.addWidget(self.minBtn)
-            hlayout.addWidget(self.maxBtn)
-            hlayout.addWidget(self.closeBtn)
-            hlayout.setContentsMargins(0, 0, 0, 0)
-            hlayout.setSpacing(0)
+        self.minBtn = QPushButton()
+        self.minBtn.setObjectName('minBtn')
+        self.minBtn.clicked.connect(self.onMinBtnClicked)
+        self.maxBtn = QCheckBox()
+        self.maxBtn.setObjectName('maxBtn')
+        self.maxBtn.clicked.connect(self.onMaxBtnClicked)
+        self.maxBtn.setFixedSize(48, 27)
+        self.closeBtn = QPushButton()
+        self.closeBtn.setObjectName('closeBtn')
+        self.closeBtn.clicked.connect(self.closebtn_clicked)
+        hlayout.addWidget(self.minBtn)
+        hlayout.addWidget(self.maxBtn)
+        hlayout.addWidget(self.closeBtn)
+        hlayout.setContentsMargins(0, 0, 0, 0)
+        hlayout.setSpacing(0)
 
     def eventFilter(self, obj, e):
         if obj == self.mainwindow:
-            if e.type() == QEvent.Type.WindowStateChange and not C.ON_MACOS:
+            if e.type() == QEvent.Type.WindowStateChange:
                 self.maxBtn.setChecked(self.mainwindow.isMaximized())
                 return False
 

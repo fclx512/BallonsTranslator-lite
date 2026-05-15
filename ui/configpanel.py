@@ -1,6 +1,6 @@
 from typing import List, Union, Tuple
 
-from qtpy.QtWidgets import QPushButton, QKeySequenceEdit, QLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QTreeView, QWidget, QLabel, QSizePolicy, QSpacerItem, QCheckBox, QSplitter, QScrollArea, QLineEdit
+from qtpy.QtWidgets import QPushButton, QKeySequenceEdit, QLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QTreeView, QWidget, QLabel, QSpinBox, QSizePolicy, QSpacerItem, QCheckBox, QSplitter, QScrollArea, QLineEdit, QDialog, QDialogButtonBox, QListWidget, QListWidgetItem, QAbstractItemView
 from qtpy.QtCore import Qt, Signal, QSize, QEvent, QItemSelection
 from qtpy.QtGui import QStandardItem, QStandardItemModel, QMouseEvent, QFont, QIntValidator, QValidator, QFocusEvent
 
@@ -282,6 +282,209 @@ class TreeModel(QStandardItemModel):
             return super().data(index, role)
 
 
+DEFAULT_SHORTCUTS = {
+    'prev_page': ['A'],
+    'next_page': ['D'],
+    'prev_page_alt': ['PgUp'],
+    'next_page_alt': ['PgDown'],
+    'textedit_mode': ['T'],
+    'textblock_mode': ['W'],
+    'drawboard_mode': ['P'],
+    'zoom_in': ['Ctrl++'],
+    'zoom_out': ['Ctrl+-'],
+    'preview': ['Tab'],
+    'delete_blks': ['Del'],
+    'delete_blks_alt': ['Ctrl+D'],
+    'select_all': ['Ctrl+A'],
+    'bold': ['Ctrl+B'],
+    'italic': ['Ctrl+I'],
+    'underline': ['Ctrl+U'],
+    'undo': ['Ctrl+Z'],
+    'redo': ['Ctrl+Y'],
+    'page_search': ['Ctrl+F'],
+    'global_search': ['Ctrl+G'],
+    'escape': ['Escape'],
+    'space_inpaint': ['Space'],
+    'hand_tool': ['H'],
+    'rect_tool': ['R'],
+    'inpaint_tool': ['J'],
+    'pen_tool': ['B'],
+    'merge_tool': ['Ctrl+Shift+M'],
+}
+
+_ACTION_NAMES = {
+    'prev_page': 'Page ↑', 'next_page': 'Page ↓', 'prev_page_alt': 'Page ↑ (alt)',
+    'next_page_alt': 'Page ↓ (alt)', 'textedit_mode': 'Text Editor', 'textblock_mode': 'Text Block',
+    'drawboard_mode': 'Draw Board', 'zoom_in': 'Zoom In', 'zoom_out': 'Zoom Out',
+    'preview': 'Preview', 'delete_blks': 'Delete', 'delete_blks_alt': 'Delete (alt)',
+    'select_all': 'Select All', 'bold': 'Bold', 'italic': 'Italic', 'underline': 'Underline',
+    'undo': 'Undo', 'redo': 'Redo', 'page_search': 'Page Search', 'global_search': 'Global Search',
+    'escape': 'Escape', 'space_inpaint': 'Inpaint', 'hand_tool': 'Hand Tool',
+    'rect_tool': 'Rect Tool', 'inpaint_tool': 'Inpaint Tool', 'pen_tool': 'Pen Tool',
+    'merge_tool': 'Merge Tool',
+}
+
+
+class _ShortcutPill(QWidget):
+    removed = Signal(object)
+
+    def __init__(self, key_seq: str, parent=None):
+        super().__init__(parent)
+        self.key_seq = key_seq
+        h = QHBoxLayout(self)
+        h.setContentsMargins(4, 1, 1, 1)
+        h.setSpacing(2)
+        lbl = QLabel(key_seq)
+        lbl.setStyleSheet("color: #d4d4d8; font-size: 11px;")
+        h.addWidget(lbl)
+        btn = QPushButton('×')
+        btn.setFixedSize(16, 16)
+        btn.setStyleSheet("QPushButton { border: none; color: #888; font-size: 12px; } QPushButton:hover { color: #f88; }")
+        btn.clicked.connect(lambda: self.removed.emit(self))
+        h.addWidget(btn)
+        self.setStyleSheet("_ShortcutPill { background: #3a3a42; border-radius: 3px; }")
+
+
+class ShortcutEditor(QWidget):
+    shortcut_changed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._cards = {}
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 4, 0, 4)
+        layout.setSpacing(4)
+
+        grid = QGridLayout()
+        grid.setSpacing(6)
+        # Two columns of action cards
+        action_ids = list(DEFAULT_SHORTCUTS.keys())
+        half = (len(action_ids) + 1) // 2
+        left_col = action_ids[:half]
+        right_col = action_ids[half:]
+
+        for row_idx in range(half):
+            for col_idx, action_id in enumerate([left_col, right_col]):
+                if row_idx >= len([left_col, right_col][col_idx]):
+                    continue
+                aid = [left_col, right_col][col_idx][row_idx]
+                card = self._make_card(aid)
+                grid.addWidget(card, row_idx, col_idx)
+
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        layout.addLayout(grid)
+        layout.addStretch()
+
+    def _make_card(self, action_id: str) -> QWidget:
+        card = QWidget()
+        card.setStyleSheet("QWidget { background: #2a2a32; border-radius: 4px; padding: 4px; }")
+        v = QVBoxLayout(card)
+        v.setContentsMargins(6, 3, 4, 3)
+        v.setSpacing(3)
+
+        # Header row: name + reset
+        header = QHBoxLayout()
+        name = QLabel(self.tr(_ACTION_NAMES.get(action_id, action_id)))
+        name.setStyleSheet("font-weight: bold; color: #ccc; border: none; background: transparent;")
+        header.addWidget(name)
+        header.addStretch()
+        reset_btn = QPushButton('↺')
+        reset_btn.setFixedSize(20, 20)
+        reset_btn.setToolTip(self.tr('Reset'))
+        reset_btn.setStyleSheet("QPushButton { border: none; color: #888; background: transparent; } QPushButton:hover { color: #fff; }")
+        reset_btn.clicked.connect(lambda checked=False, aid=action_id: self._reset_card(aid))
+        header.addWidget(reset_btn)
+        v.addLayout(header)
+
+        # Pills row
+        pills_row = QHBoxLayout()
+        pills_row.setSpacing(3)
+        pills_widget = QWidget()
+        pills_widget.setLayout(pills_row)
+        pills_widget.setStyleSheet("background: transparent; border: none;")
+        v.addWidget(pills_widget)
+
+        # "+" add button
+        add_btn = QPushButton('+')
+        add_btn.setFixedSize(24, 20)
+        add_btn.setToolTip(self.tr('Add shortcut'))
+        add_btn.setStyleSheet("QPushButton { border: 1px solid #555; border-radius: 3px; color: #aaa; background: transparent; } QPushButton:hover { border-color: #88f; color: #fff; }")
+        add_btn.clicked.connect(lambda checked=False, aid=action_id, pw=pills_widget: self._add_shortcut(aid, pw))
+        pills_row.addWidget(add_btn)
+        pills_row.addStretch()
+
+        self._cards[action_id] = dict(pills_widget=pills_widget, add_btn=add_btn)
+        self._rebuild_pills(action_id)
+        return card
+
+    def _rebuild_pills(self, action_id: str):
+        info = self._cards[action_id]
+        pw = info['pills_widget']
+        layout = pw.layout()
+        # Remove all pill widgets (keep add_btn and stretch)
+        while layout.count() > 2:
+            item = layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        keys = pcfg.shortcuts.get(action_id, DEFAULT_SHORTCUTS.get(action_id, []))
+        if not isinstance(keys, list):
+            keys = [keys]
+        for k in reversed(keys):
+            pill = _ShortcutPill(k)
+            pill.removed.connect(lambda p, aid=action_id: self._remove_shortcut(aid, p.key_seq))
+            layout.insertWidget(0, pill)
+
+    def _add_shortcut(self, action_id: str, pills_widget: QWidget):
+        edit = QKeySequenceEdit()
+        edit.setFixedWidth(100)
+        layout = pills_widget.layout()
+        layout.insertWidget(layout.count() - 2, edit)
+        edit.setFocus()
+
+        def on_finished():
+            seq = edit.keySequence().toString()
+            edit.deleteLater()
+            if seq:
+                keys = pcfg.shortcuts.get(action_id, DEFAULT_SHORTCUTS.get(action_id, []))
+                if not isinstance(keys, list):
+                    keys = [keys] if keys else []
+                if seq not in keys:
+                    keys.append(seq)
+                    pcfg.shortcuts[action_id] = keys
+                self._rebuild_pills(action_id)
+                self.shortcut_changed.emit()
+            else:
+                self._rebuild_pills(action_id)
+
+        # Use editingFinished signal
+        edit.editingFinished.connect(on_finished)
+
+    def _remove_shortcut(self, action_id: str, key_seq: str):
+        keys = pcfg.shortcuts.get(action_id, [])
+        if not isinstance(keys, list):
+            keys = [keys] if keys else []
+        if key_seq in keys:
+            keys.remove(key_seq)
+            if keys:
+                pcfg.shortcuts[action_id] = keys
+            elif action_id in pcfg.shortcuts:
+                del pcfg.shortcuts[action_id]
+        self._rebuild_pills(action_id)
+        self.shortcut_changed.emit()
+
+    def _reset_card(self, action_id: str):
+        defaults = DEFAULT_SHORTCUTS.get(action_id, [])
+        pcfg.shortcuts[action_id] = list(defaults)
+        self._rebuild_pills(action_id)
+        self.shortcut_changed.emit()
+
+    def refresh(self):
+        for action_id in self._cards:
+            self._rebuild_pills(action_id)
+
+
 class ConfigTable(QTreeView):
     tableitem_pressed = Signal(int, int)
     def __init__(self, *args, **kwargs) -> None:
@@ -335,12 +538,115 @@ class ConfigTable(QTreeView):
             self.tableitem_pressed.emit(idx0, idx1)
 
 
+class FontExcludeDialog(QDialog):
+    """Dialog for selecting which fonts to exclude from the font list."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(self.tr('Font Exclusion'))
+        self.setMinimumSize(700, 500)
+
+        layout = QVBoxLayout(self)
+
+        # Search bar
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText(self.tr('Search fonts...'))
+        self.search_edit.textChanged.connect(self._filter_lists)
+        layout.addWidget(self.search_edit)
+
+        # Side-by-side list widgets
+        lists_layout = QHBoxLayout()
+
+        # Available fonts list
+        left_layout = QVBoxLayout()
+        left_layout.addWidget(QLabel(self.tr('Available Fonts')))
+        self.available_list = QListWidget()
+        self.available_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        left_layout.addWidget(self.available_list)
+        lists_layout.addLayout(left_layout)
+
+        # Center buttons
+        btn_layout = QVBoxLayout()
+        btn_layout.addStretch()
+        self.hide_btn = QPushButton('>')
+        self.hide_btn.setFixedWidth(40)
+        self.hide_btn.setToolTip(self.tr('Hide selected fonts'))
+        self.hide_btn.clicked.connect(self._hide_fonts)
+        btn_layout.addWidget(self.hide_btn)
+        self.show_btn = QPushButton('<')
+        self.show_btn.setFixedWidth(40)
+        self.show_btn.setToolTip(self.tr('Show selected fonts'))
+        self.show_btn.clicked.connect(self._show_fonts)
+        btn_layout.addWidget(self.show_btn)
+        btn_layout.addStretch()
+        lists_layout.addLayout(btn_layout)
+
+        # Excluded fonts list
+        right_layout = QVBoxLayout()
+        right_layout.addWidget(QLabel(self.tr('Hidden Fonts')))
+        self.excluded_list = QListWidget()
+        self.excluded_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        right_layout.addWidget(self.excluded_list)
+        lists_layout.addLayout(right_layout)
+
+        layout.addLayout(lists_layout)
+
+        # OK / Cancel buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
+
+        # Populate lists
+        self._populate_lists()
+
+    def _add_font_item(self, list_widget: QListWidget, font_name: str):
+        """Add a font name to a list widget with its own typeface as preview."""
+        item = QListWidgetItem(font_name)
+        item.setFont(QFont(font_name, 11))
+        list_widget.addItem(item)
+
+    def _populate_lists(self):
+        from utils import shared
+        from utils.config import pcfg
+        self.available_list.clear()
+        self.excluded_list.clear()
+
+        for font in shared.get_filtered_font_list(pcfg.excluded_fonts):
+            self._add_font_item(self.available_list, font)
+
+        for font in pcfg.excluded_fonts:
+            self._add_font_item(self.excluded_list, font)
+
+    def _filter_lists(self):
+        text = self.search_edit.text().lower()
+        for i in range(self.available_list.count()):
+            item = self.available_list.item(i)
+            item.setHidden(bool(text) and text not in item.text().lower())
+        for i in range(self.excluded_list.count()):
+            item = self.excluded_list.item(i)
+            item.setHidden(bool(text) and text not in item.text().lower())
+
+    def _hide_fonts(self):
+        for item in self.available_list.selectedItems():
+            self.available_list.takeItem(self.available_list.row(item))
+            self._add_font_item(self.excluded_list, item.text())
+
+    def _show_fonts(self):
+        for item in self.excluded_list.selectedItems():
+            self.excluded_list.takeItem(self.excluded_list.row(item))
+            self._add_font_item(self.available_list, item.text())
+
+    def get_excluded_fonts(self) -> List[str]:
+        return [self.excluded_list.item(i).text() for i in range(self.excluded_list.count())]
+
+
 class ConfigPanel(Widget):
 
     save_config = Signal()
     unload_models = Signal()
     reload_textstyle = Signal(bool)
-    show_only_custom_font = Signal(bool)
+    font_exclusion_changed = Signal()
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -358,19 +664,21 @@ class ConfigPanel(Widget):
         label_startup = self.tr('Startup')
         label_typesetting = self.tr('Typesetting')
         label_save = self.tr('Save')
-        label_saladict = self.tr('SalaDict')
-    
+
         dltableitem.appendRows([
             TableItem(label_text_det, CONFIG_FONTSIZE_TABLE),
             TableItem(label_text_ocr, CONFIG_FONTSIZE_TABLE),
             TableItem(label_inpaint, CONFIG_FONTSIZE_TABLE),
             TableItem(label_translator, CONFIG_FONTSIZE_TABLE),
         ])
+        label_feature_test = self.tr('Feature Testing')
+        label_shortcuts = self.tr('Keyboard Shortcuts')
         generalTableItem.appendRows([
             TableItem(label_startup, CONFIG_FONTSIZE_TABLE),
             TableItem(label_typesetting, CONFIG_FONTSIZE_TABLE),
             TableItem(label_save, CONFIG_FONTSIZE_TABLE),
-            TableItem(label_saladict, CONFIG_FONTSIZE_TABLE),
+            TableItem(label_feature_test, CONFIG_FONTSIZE_TABLE),
+            TableItem(label_shortcuts, CONFIG_FONTSIZE_TABLE),
         ])
         
         self.load_model_checker, msublock = checkbox_with_label(self.tr('Load models on demand'), discription=self.tr('Load models on demand to save memory.'))
@@ -459,8 +767,11 @@ class ConfigPanel(Widget):
         self.let_textstyle_indep_checker, _ = generalConfigPanel.addCheckBox(self.tr('Independent text styles for each projects'))
         self.let_textstyle_indep_checker.stateChanged.connect(self.on_textstyle_indep_changed)
 
-        self.let_show_only_custom_fonts, sublock = generalConfigPanel.addCheckBox(self.tr("Show only custom fonts"))
-        self.let_show_only_custom_fonts.stateChanged.connect(self.on_show_only_custom_fonts)
+        self.exclude_fonts_btn = QPushButton(self.tr('Exclude Fonts...'), parent=self)
+        self.exclude_fonts_btn.setFixedWidth(CONFIG_COMBOBOX_LONG)
+        self.exclude_fonts_btn.clicked.connect(self.on_exclude_fonts_clicked)
+        btn_sublock = ConfigSubBlock(self.exclude_fonts_btn)
+        generalConfigPanel.addSublock(btn_sublock)
 
         generalConfigPanel.addTextLabel(label_save)
         self.rst_imgformat_combobox, imsave_sublock = generalConfigPanel.addCombobox(['PNG', 'JPG', 'WEBP', 'JXL'], self.tr('Result image format'))
@@ -477,25 +788,18 @@ class ConfigPanel(Widget):
         self.intermediate_imgformat_combobox, intermediate_imsave_sublock = generalConfigPanel.addCombobox(['PNG', 'JXL'], self.tr('Intermediate image format'))
         self.intermediate_imgformat_combobox.activated.connect(self.on_intermediate_imgformat_changed)
 
-        generalConfigPanel.addTextLabel(label_saladict)
+        generalConfigPanel.addTextLabel(label_feature_test)
+        self.max_font_size_edit = QSpinBox()
+        self.max_font_size_edit.setRange(10, 1000)
+        self.max_font_size_edit.setValue(pcfg.max_font_size)
+        self.max_font_size_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
+        self.max_font_size_edit.valueChanged.connect(self.on_max_font_size_changed)
+        max_font_sublock = ConfigSubBlock(self.max_font_size_edit, self.tr('Max Font Size (px)'))
+        generalConfigPanel.addSublock(max_font_sublock)
 
-        sublock = ConfigSubBlock(ConfigTextLabel(self.tr("<a href=\"https://github.com/dmMaze/BallonsTranslator/tree/master/doc/saladict.md\">Installation guide</a>"), CONFIG_FONTSIZE_CONTENT - 2), vertical_layout=False)
-        sublock.layout().insertStretch(-1)
-        generalConfigPanel.addSublock(sublock)
-
-        self.selectext_minimenu_checker, _ = generalConfigPanel.addCheckBox(self.tr('Show mini menu when selecting text.'))
-        self.selectext_minimenu_checker.stateChanged.connect(self.on_selectext_minimenu_changed)
-        self.saladict_shortcut = QKeySequenceEdit("ALT+W", self)
-        self.saladict_shortcut.keySequenceChanged.connect(self.on_saladict_shortcut_changed)
-        self.saladict_shortcut.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
-
-        sublock = ConfigSubBlock(self.saladict_shortcut, self.tr("Shortcut"), vertical_layout=False)
-        sublock.layout().insertStretch(-1)
-        generalConfigPanel.addSublock(sublock)
-        self.searchurl_combobox, _ = generalConfigPanel.addCombobox(["https://www.google.com/search?q=", "https://www.bing.com/search?q=", "https://duckduckgo.com/?q=", "https://yandex.com/search/?text=", "http://www.baidu.com/s?wd=", "https://search.yahoo.com/search;?p=", "https://www.urbandictionary.com/define.php?term="], self.tr("Search Engines"), fix_size=False)
-        self.searchurl_combobox.setEditable(True)
-        self.searchurl_combobox.setFixedWidth(CONFIG_COMBOBOX_LONG)
-        self.searchurl_combobox.currentTextChanged.connect(self.on_searchurl_changed)
+        generalConfigPanel.addTextLabel(label_shortcuts)
+        self.shortcut_editor = ShortcutEditor(parent=self)
+        generalConfigPanel.addBlockWidget(self.shortcut_editor)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self.configTable)
@@ -553,26 +857,26 @@ class ConfigPanel(Widget):
         pcfg.let_textstyle_indep_flag = self.let_textstyle_indep_checker.isChecked()
         self.reload_textstyle.emit(pcfg.let_textstyle_indep_flag)
 
+    def on_exclude_fonts_clicked(self):
+        dialog = FontExcludeDialog(self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            excluded = dialog.get_excluded_fonts()
+            pcfg.excluded_fonts = excluded
+            self.font_exclusion_changed.emit()
+            from utils.config import save_config
+            save_config()
+
     def on_rst_imgformat_changed(self):
         pcfg.imgsave_ext = '.' + self.rst_imgformat_combobox.currentText().lower()
+
+    def on_max_font_size_changed(self, value: int):
+        pcfg.max_font_size = value
 
     def on_intermediate_imgformat_changed(self):
         pcfg.intermediate_imgsave_ext = '.' + self.intermediate_imgformat_combobox.currentText().lower()
 
     def on_edit_quality_changed(self, value: str):
         pcfg.imgsave_quality = int(value)
-
-    def on_selectext_minimenu_changed(self):
-        pcfg.textselect_mini_menu = self.selectext_minimenu_checker.isChecked()
-
-    def on_saladict_shortcut_changed(self):
-        kstr = self.saladict_shortcut.keySequence().toString()
-        if kstr:
-            pcfg.saladict_shortcut = self.saladict_shortcut.keySequence().toString()
-
-    def on_searchurl_changed(self):
-        url = self.searchurl_combobox.currentText()
-        pcfg.search_url = url
 
     def on_fontcolor_flag_changed(self):
         pcfg.let_fntcolor_flag = self.let_fntcolor_combox.currentIndex()
@@ -591,10 +895,6 @@ class ConfigPanel(Widget):
 
     def on_effect_flag_changed(self):
         pcfg.let_fnteffect_flag = self.let_effect_combox.currentIndex()
-
-    def on_show_only_custom_fonts(self):
-        pcfg.let_show_only_custom_fonts_flag = self.let_show_only_custom_fonts.isChecked()
-        self.show_only_custom_font.emit(pcfg.let_show_only_custom_fonts_flag)
 
     def focusOnTranslator(self):
         idx0, idx1 = self.trans_sub_block.idx0, self.trans_sub_block.idx1
@@ -636,17 +936,14 @@ class ConfigPanel(Widget):
         self.let_family_combox.setCurrentIndex(pcfg.let_family_flag)
         self.let_writing_mode_combox.setCurrentIndex(pcfg.let_writing_mode_flag)
         self.let_autolayout_checker.setChecked(pcfg.let_autolayout_flag)
-        self.selectext_minimenu_checker.setChecked(pcfg.textselect_mini_menu)
         self.let_uppercase_checker.setChecked(pcfg.let_uppercase_flag)
         self.let_textstyle_indep_checker.setChecked(pcfg.let_textstyle_indep_flag)
-        self.saladict_shortcut.setKeySequence(pcfg.saladict_shortcut)
-        self.searchurl_combobox.setCurrentText(pcfg.search_url)
         self.ocr_config_panel.restoreEmptyOCRChecker.setChecked(pcfg.restore_ocr_empty)
         self.rst_imgformat_combobox.setCurrentText(pcfg.imgsave_ext.replace('.', '').upper())
         self.intermediate_imgformat_combobox.setCurrentText(pcfg.intermediate_imgsave_ext.replace('.', '').upper())
         self.rst_imgquality_edit.setText(str(pcfg.imgsave_quality))
         self.load_model_checker.setChecked(pcfg.module.load_model_on_demand)
         self.empty_runcache_checker.setChecked(pcfg.module.empty_runcache)
-        self.let_show_only_custom_fonts.setChecked(pcfg.let_show_only_custom_fonts_flag)
+        self.max_font_size_edit.setValue(pcfg.max_font_size)
 
         self.blockSignals(False)

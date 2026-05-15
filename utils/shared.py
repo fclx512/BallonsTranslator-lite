@@ -77,28 +77,14 @@ TRANSLATE_DIR = osp.join(PROGRAM_PATH, 'translate')
 DISPLAY_LANGUAGE_MAP = {
     "English": "English",
     "简体中文": "zh_CN",
-    "Русский": "ru_RU",
-    "Português (Brasil)": "pt_BR",
-    "한국어": "ko_KR",
-    "Español": "es_MX",
-    "Hungarian": "hu_HU",
-    "Français": "fr_FR"
 }
 VALID_LANG_SET = set(list(DISPLAY_LANGUAGE_MAP.values()))
-
-for p in os.listdir(TRANSLATE_DIR):
-    if p.endswith('.qm'):
-        lang = p.replace('.qm', '')
-        if lang not in VALID_LANG_SET:
-            DISPLAY_LANGUAGE_MAP[lang] = lang
 
 DEFAULT_DISPLAY_LANG = 'English'
 
 USE_PYSIDE6 = False
-ON_MACOS = sys.platform == 'darwin'
 ON_WINDOWS = sys.platform == 'win32'
 HEADLESS = False
-HEADLESS_CONTINUOUS = False
 DEBUG = False
 args = None
 
@@ -111,7 +97,12 @@ CACHE_UPDATED = False
 check_local_file_hash = True
 
 FONT_FAMILIES: set = None
-CUSTOM_FONTS = []
+CUSTOM_FONT_FAMILIES = []          # 去重后的自定义字体家族名
+ALL_FONT_FAMILIES = []             # 系统+自定义，去重合并，按字母排序
+FONT_STYLES = {}                   # 所有字体的样式映射 { FamilyName: [Style1, Style2...] }
+FONT_FAMILY_ALIAS = {}             # 规范名 -> [原始家族名列表] (用于问题4的归并)
+FONT_VARIABLE_AXES = {}            # { FamilyName: { 'wght': (min, max, default) } } 
+VIRTUAL_FONT_STYLES = {}           # { FamilyName: set("Bold", "Light", ...) } 记录哪些样式是虚拟生成的
 pbar = {}
 runtime_widget_set = set()
 
@@ -156,6 +147,22 @@ def dump_cache():
 
     global CACHE_UPDATED
     CACHE_UPDATED = False
+
+def init_font_list():
+    """Enumerate all system fonts using QFontDatabase and populate ALL_FONT_FAMILIES."""
+    from qtpy.QtGui import QFontDatabase
+    families = QFontDatabase.families()
+    # Filter out vertical font variants (prefixed with @ on Windows)
+    families = [f for f in families if not f.startswith('@')]
+    global ALL_FONT_FAMILIES
+    ALL_FONT_FAMILIES = sorted(set(families))
+
+def get_filtered_font_list(excluded=None) -> list:
+    """Return ALL_FONT_FAMILIES minus the excluded font names."""
+    if excluded is None:
+        excluded = []
+    excluded_set = set(excluded)
+    return [f for f in ALL_FONT_FAMILIES if f not in excluded_set]
 
 config_name_to_view_widget = {}
 action_to_view_config_name = {}

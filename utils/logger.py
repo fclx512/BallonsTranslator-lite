@@ -94,6 +94,6 @@ def setup_logging(logfile_dir: str, max_num_logs=14):
 
 
 logging.setLoggerClass(ColoredLogger)
-logger = logging.getLogger('BallonTranslator')
+logger = logging.getLogger('BallonsTranslator-lite')
 logger.setLevel(logging.DEBUG)
 logger.propagate = False

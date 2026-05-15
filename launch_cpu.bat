@@ -1,10 +1,9 @@
 @echo off
 cd %~dp0
 
-:: GPU mode - uses embedded Python 3.13 from the portable environment
-:: PyTorch with CUDA will be detected from user's system Python installation
+:: CPU mode - uses embedded Python 3.13 from the portable environment
+:: No system Python or PyTorch installation required
 set PYTHON=%~dp0ballontrans_pylibs_win\python.exe
-set BTRANSLATOR_GPU_MODE=1
 
 set ERROR_REPORTING=FALSE
 
@@ -16,7 +15,7 @@ echo Error: Embedded Python not found. The portable environment may be corrupted
 goto :show_stdout_stderr
 
 :launch
-%PYTHON% launch.py %*
+%PYTHON% launch.py --cpu %*
 pause
 exit /b
 
