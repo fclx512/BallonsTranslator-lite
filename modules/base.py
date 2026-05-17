@@ -41,6 +41,8 @@ def patch_module_params(cfg_param, module_params, module_name: str = ''):
     module_key_set = set(module_params.keys())
     for ck in cfg_key_set:
         if ck not in module_key_set:
+            if ck.startswith('_'):
+                continue
             LOGGER.warning(f'Found invalid {module_name} config: {ck}')
             cfg_param.pop(ck)
 
@@ -86,10 +88,12 @@ def patch_module_params(cfg_param, module_params, module_name: str = ''):
                         LOGGER.warning(f'Invalid param value {cparam} for defined dtype: {type(mparam)}, it will be set to default value: {mparam}')
                         cfg_param[mk] = mparam
     
-    cfg_key_list = list(cfg_param.keys())
+    cfg_key_list = [k for k in cfg_param.keys() if not k.startswith('_')]
     module_key_list = list(module_params.keys())
     if cfg_key_list != module_key_list:
+        internal = {k: cfg_param[k] for k in cfg_param if k.startswith('_')}
         new_params = {key: cfg_param[key] for key in module_key_list}
+        new_params.update(internal)
         cfg_param.clear()
         cfg_param.update(new_params)
         module_key_set = set(module_params.keys())

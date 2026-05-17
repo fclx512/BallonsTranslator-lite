@@ -462,6 +462,7 @@ class SakuraTranslator(BaseTranslator):
     def _setup_translator(self):
         self.lang_map['简体中文'] = 'Simplified Chinese'
         self.lang_map['日本語'] = 'Japanese'
+        self.lang_map['Auto Detect'] = 'Auto'
         self.temperature = 0.1
         self.top_p = 0.3
         self.frequency_penalty = 0.05

@@ -46,7 +46,6 @@ else:
 parser.add_argument("--debug", action='store_true')
 parser.add_argument("--requirements", default='requirements.txt')
 parser.add_argument("--headless", action='store_true', help='run without GUI')
-parser.add_argument("--headless_continuous", action='store_true', help='like headless but will not exit after finishing translation, prompts the user for new exec_dirs until user exits the program')
 parser.add_argument("--exec_dirs", default='', help='translation queue (project directories) separated by comma')
 parser.add_argument("--ldpi", default=None, type=float, help='logical dots perinch')
 parser.add_argument("--export-translation-txt", action='store_true', help='save translation to txt file once RUN completed')
@@ -263,15 +262,15 @@ def main():
     from utils import config as program_config
 
     from qtpy.QtCore import QTranslator, QLocale, Qt
+
     shared.args = args
     shared.DEFAULT_DISPLAY_LANG = QLocale.system().name().replace('en_CN', 'zh_CN')
     shared.HEADLESS = args.headless
-    shared.HEADLESS_CONTINUOUS = args.headless_continuous
     shared.load_cache()
     program_config.load_config(args.config_path)
     config = program_config.pcfg
 
-    if args.headless or args.headless_continuous:
+    if args.headless:
         config.module.load_model_on_demand = True
         config.module.empty_runcache = False
 
@@ -300,7 +299,7 @@ def main():
     os.chdir(shared.PROGRAM_PATH)
 
     app_args = sys.argv
-    if args.headless or args.headless_continuous:
+    if args.headless:
         app_args = sys.argv + ['-platform', 'offscreen']
     app = QApplication(app_args)
     app.setApplicationName('BallonsTranslator-lite')
@@ -336,20 +335,21 @@ def main():
             except Exception:
                 pass
 
-    if not args.headless and not args.headless_continuous:
+    if not args.headless:
         ps = QGuiApplication.primaryScreen()
         shared.LDPI = ps.logicalDotsPerInch()
         shared.SCREEN_W = ps.geometry().width()
         shared.SCREEN_H = ps.geometry().height()
 
     lang = config.display_lang
-    langp = osp.join(shared.TRANSLATE_DIR, lang + '.qm')
-    if osp.exists(langp):
+    # Load translations: try .qm first, then supplement with .ts via Python dict
+    qmp = osp.join(shared.TRANSLATE_DIR, lang + '.qm')
+    if osp.exists(qmp):
         translator = QTranslator()
-        translator.load(lang, osp.dirname(osp.abspath(__file__)) + "/translate")
+        translator.load(lang, shared.TRANSLATE_DIR)
         app.installTranslator(translator)
-    elif lang not in ('en_US', 'English'):
-        LOGGER.warning(f'target display language file {langp} doesnt exist.')
+    if lang not in ('en_US', 'English') and not osp.exists(qmp):
+        LOGGER.warning(f'target display language file {qmp} doesnt exist.')
     LOGGER.info(f'set display language to {lang}')
 
     app_font = QFont('Microsoft YaHei UI')
@@ -372,7 +372,7 @@ def main():
     BT = ballontrans
     BT.restart_signal.connect(restart)
 
-    if not args.headless and not args.headless_continuous:
+    if not args.headless:
         if shared.SCREEN_W > 1707 and sys.platform == 'win32':   # higher than 2560 (1440p) / 1.5
             # https://github.com/dmMaze/BallonsTranslator/issues/220
             BT.comicTransSplitter.setHandleWidth(7)
