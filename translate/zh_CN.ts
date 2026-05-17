@@ -439,6 +439,49 @@
         <source>Show only custom fonts</source>
         <translation>只显示 fonts 文件夹下的字体</translation>
     </message>
+    <message>
+        <source>Keyboard Shortcuts</source>
+        <translation>快捷键</translation>
+    </message>
+    <message>
+        <source>Max Font Size (px)</source>
+        <translation>最大字号 (px)</translation>
+    </message>
+    <message>
+        <source>Exclude Fonts...</source>
+        <translation>排除字体...</translation>
+    </message>
+    <message>
+        <source>Intermediate image format</source>
+        <translation>中间图像格式</translation>
+    </message>
+</context>
+<context>
+    <name>FontExcludeDialog</name>
+    <message>
+        <source>Font Exclusion</source>
+        <translation>字体排除</translation>
+    </message>
+    <message>
+        <source>Search fonts...</source>
+        <translation>搜索字体...</translation>
+    </message>
+    <message>
+        <source>Available Fonts</source>
+        <translation>可用字体</translation>
+    </message>
+    <message>
+        <source>Hidden Fonts</source>
+        <translation>隐藏字体</translation>
+    </message>
+    <message>
+        <source>Hide selected fonts</source>
+        <translation>隐藏所选字体</translation>
+    </message>
+    <message>
+        <source>Show selected fonts</source>
+        <translation>显示所选字体</translation>
+    </message>
 </context>
 <context>
     <name>DrawingPanel</name>
@@ -1828,6 +1871,36 @@ Failed: {f}/{t}</source>
         <source>Execution error</source>
         <translation type="obsolete">执行错误</translation>
     </message>
+    <message>
+        <location filename="../ui/io_thread.py" line="20"/>
+        <source>Thread job failed.</source>
+        <translation>线程任务失败。</translation>
+    </message>
+    <message>
+        <location filename="../ui/io_thread.py" line="42"/>
+        <source>Failed to save image.</source>
+        <translation>保存图片失败。</translation>
+    </message>
+    <message>
+        <location filename="../ui/io_thread.py" line="110"/>
+        <source>Failed to export Doc</source>
+        <translation>导出文档失败</translation>
+    </message>
+    <message>
+        <location filename="../ui/io_thread.py" line="146"/>
+        <source>Failed to import Doc</source>
+        <translation>导入文档失败</translation>
+    </message>
+    <message>
+        <location filename="../ui/io_thread.py" line="184"/>
+        <source>Region merge failed</source>
+        <translation>区域合并失败</translation>
+    </message>
+    <message>
+        <location filename="../ui/io_thread.py" line="192"/>
+        <source>Region merge: </source>
+        <translation>区域合并: </translation>
+    </message>
 </context>
 <context>
     <name>TitleBar</name>
@@ -1975,6 +2048,11 @@ Failed: {f}/{t}</source>
         <location filename="../ui/mainwindowbars.py" line="298"/>
         <source>Keyword substitution for machine translation source text</source>
         <translation>替换机翻前文本关键字</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindowbars.py" line="369"/>
+        <source>Region Merge Tool</source>
+        <translation>区域合并工具</translation>
     </message>
 </context>
 <context>
@@ -2433,6 +2511,374 @@ qipao,qipao2</translation>
         <location filename="../ui/merge_dialog.py" line="187"/>
         <source>Cancel</source>
         <translation>取消</translation>
+    </message>
+</context>
+<context>
+    <name>ParamWidget</name>
+    <message>
+        <location filename="../ui/module_parse_widgets.py" line="91"/>
+        <source>Quickly switch between saved profiles</source>
+        <translation>快速切换已保存的配置文件</translation>
+    </message>
+    <message>
+        <location filename="../ui/module_parse_widgets.py" line="95"/>
+        <source>Max requests per minute per API key</source>
+        <translation>每分钟每密钥最大请求数</translation>
+    </message>
+    <message>
+        <location filename="../ui/module_parse_widgets.py" line="99"/>
+        <source>Delay between requests (seconds)</source>
+        <translation>请求间延迟（秒）</translation>
+    </message>
+    <message>
+        <location filename="../ui/module_parse_widgets.py" line="103"/>
+        <source>Retry count on API connection failure</source>
+        <translation>API 连接失败后的重试次数</translation>
+    </message>
+    <message>
+        <location filename="../ui/module_parse_widgets.py" line="107"/>
+        <source>Retry wait time (seconds)</source>
+        <translation>重试等待时间（秒）</translation>
+    </message>
+    <message>
+        <location filename="../ui/module_parse_widgets.py" line="111"/>
+        <source>Retry count on translation count mismatch</source>
+        <translation>翻译数量不匹配时的重试次数</translation>
+    </message>
+    <message>
+        <location filename="../ui/module_parse_widgets.py" line="115"/>
+        <source>Proxy address (e.g. http(s)://user:password@host:port)</source>
+        <translation>代理地址（例如 http(s)://user:password@host:port）</translation>
+    </message>
+    <message>
+        <location filename="../ui/module_parse_widgets.py" line="117"/>
+        <source>Generic OpenAI-compatible API connector. Create profiles to save API settings and switch between configurations.</source>
+        <translation>通用 OpenAI 兼容 API 连接器。创建配置文件保存 API 设置，并在不同配置间自由切换。</translation>
+    </message>
+    <message>
+        <location filename="../modules/base.py" line="352"/>
+        <source>Hardware device for inference (GPU recommended)</source>
+        <translation>推理硬件设备（推荐使用 GPU）</translation>
+    </message>
+    <message>
+        <source>Sakura LLM API server base URL</source>
+        <translation>Sakura LLM API 服务器地址</translation>
+    </message>
+    <message>
+        <source>Path to the Sakura dictionary file (leave empty if not using a dictionary)</source>
+        <translation>Sakura 字典文件路径（不使用字典时留空）</translation>
+    </message>
+    <message>
+        <source>Sakura model version</source>
+        <translation>Sakura 模型版本</translation>
+    </message>
+    <message>
+        <source>Number of retry attempts on API connection failure</source>
+        <translation>API 连接失败后的重试次数</translation>
+    </message>
+    <message>
+        <source>API request timeout in seconds</source>
+        <translation>API 请求超时时间（秒）</translation>
+    </message>
+    <message>
+        <source>Maximum tokens in the model response</source>
+        <translation>模型响应的最大 token 数</translation>
+    </message>
+    <message>
+        <source>Threshold for detecting repeated text in translations</source>
+        <translation>翻译中检测重复文本的阈值</translation>
+    </message>
+    <message>
+        <source>Scale factor applied to detected font size</source>
+        <translation>应用于检测字号的缩放系数</translation>
+    </message>
+    <message>
+        <source>Maximum allowed font size (-1 for unlimited)</source>
+        <translation>最大允许字号（-1 表示不限制）</translation>
+    </message>
+    <message>
+        <source>Minimum allowed font size (-1 for unlimited)</source>
+        <translation>最小允许字号（-1 表示不限制）</translation>
+    </message>
+    <message>
+        <source>Dilation kernel size for text region mask</source>
+        <translation>文字区域蒙版的膨胀核大小</translation>
+    </message>
+    <message>
+        <source>Input image size for text detection (larger = more accurate but slower)</source>
+        <translation>文字检测的输入图像尺寸（越大越精确但越慢）</translation>
+    </message>
+    <message>
+        <source>Maximum parallel batches when rearranging detected text blocks</source>
+        <translation>重排检测文字块时的最大并行批次数</translation>
+    </message>
+    <message>
+        <source>Path to the YSGYolo model checkpoint file</source>
+        <translation>YSGYolo 模型权重文件路径</translation>
+    </message>
+    <message>
+        <source>Merge adjacent text fragments into single text blocks</source>
+        <translation>将相邻文字片段合并为单个文本块</translation>
+    </message>
+    <message>
+        <source>Minimum confidence score for accepting a text detection</source>
+        <translation>接受文字检测的最低置信度</translation>
+    </message>
+    <message>
+        <source>Intersection-over-Union threshold for merging overlapping detection boxes</source>
+        <translation>合并重叠检测框的 IoU 阈值</translation>
+    </message>
+    <message>
+        <source>Input image size for text detection</source>
+        <translation>文字检测的输入图像尺寸</translation>
+    </message>
+    <message>
+        <source>Text region types to detect</source>
+        <translation>要检测的文字区域类型</translation>
+    </message>
+    <message>
+        <source>Assume source text is written vertically (right-to-left)</source>
+        <translation>假定原文为竖排文字（从右到左）</translation>
+    </message>
+    <message>
+        <source>Maximum image dimension for inpainting (larger images are resized)</source>
+        <translation>修复的最大图像尺寸（超出部分将缩放处理）</translation>
+    </message>
+    <message>
+        <source>Model precision (bf16 is faster on supported GPUs, fp32 is more compatible)</source>
+        <translation>模型精度（bf16 在支持的 GPU 上更快，fp32 兼容性更好）</translation>
+    </message>
+    <message>
+        <source>Number of image pixel rows processed per batch (lower = less VRAM)</source>
+        <translation>每批处理的图像像素行数（越小占用显存越少）</translation>
+    </message>
+    <message>
+        <source>Add, edit, or delete API profiles</source>
+        <translation>添加、编辑或删除 API 配置文件</translation>
+    </message>
+    <message>
+        <source>check it if you're running it locally on a single device and encountered a crash due to vram OOM</source>
+        <translation>如果在本地单设备运行时因显存不足崩溃，请勾选此项</translation>
+    </message>
+    <message>
+        <source>Force apply the dictionary regardless of whether the terms appear in the original text
+ DO NOT CHECK THIS IF YOU ARE NOT SURE WHAT IT MEANS</source>
+        <translation>强制应用字典，无论术语是否出现在原文中。如不确定此项含义请勿勾选</translation>
+    </message>
+    <message>
+        <source>Enlarge small kana to normal size</source>
+        <translation>将小假名放大至正常大小</translation>
+    </message>
+    <message>
+        <source>ComicTextDetector</source>
+        <translation>漫画文字检测器</translation>
+    </message>
+    <message>
+        <source>manga-image-translator inpainter</source>
+        <translation>manga-image-translator 图像修复器</translation>
+    </message>
+    <message>
+        <source>Not a OCR, just return original text.</source>
+        <translation>非 OCR 模块，直接返回原始文本</translation>
+    </message>
+    <message>
+        <source>OCRMIT32px</source>
+        <translation>OCRMIT32px 文字识别</translation>
+    </message>
+    <message>
+        <source>OCR using a locally running LM Studio vision model.</source>
+        <translation>使用本地运行的 LM Studio 视觉模型进行 OCR</translation>
+    </message>
+    <message>
+        <source>LM Studio server base URL (default: http://localhost:1234/v1).</source>
+        <translation>LM Studio 服务器地址（默认：http://localhost:1234/v1）</translation>
+    </message>
+    <message>
+        <source>Vision model name loaded in LM Studio (e.g., qwen2-vl-7b, llava-v1.5-7b).</source>
+        <translation>LM Studio 中加载的视觉模型名称（如 qwen2-vl-7b、llava-v1.5-7b）</translation>
+    </message>
+    <message>
+        <source>Language for OCR.</source>
+        <translation>OCR 目标语言</translation>
+    </message>
+    <message>
+        <source>The main prompt for the OCR task. Use {language} placeholder.</source>
+        <translation>OCR 任务的主提示词。使用 {language} 作为占位符</translation>
+    </message>
+    <message>
+        <source>Optional system prompt to guide the model's behavior.</source>
+        <translation>用于引导模型行为的可选系统提示词</translation>
+    </message>
+    <message>
+        <source>Maximum number of tokens in the LLM's response.</source>
+        <translation>LLM 返回的最大 token 数</translation>
+    </message>
+    <message>
+        <source>OCR using various vision-capable LLMs.</source>
+        <translation>使用各种视觉 LLM 进行 OCR</translation>
+    </message>
+    <message>
+        <source>Select the LLM provider.</source>
+        <translation>选择 LLM 服务商</translation>
+    </message>
+    <message>
+        <source>API key to use if multiple keys are not provided.</source>
+        <translation>单一 API 密钥（如填写了多密钥则此项无效）</translation>
+    </message>
+    <message>
+        <source>API keys separated by semicolons (;). Requests will rotate.</source>
+        <translation>多个 API 密钥，用分号 (;) 分隔。请求将轮换使用</translation>
+    </message>
+    <message>
+        <source>Base URL for the API. Leave empty for provider default.</source>
+        <translation>API 基础地址，留空则使用服务商默认地址</translation>
+    </message>
+    <message>
+        <source>Select the model to use.</source>
+        <translation>选择使用的模型</translation>
+    </message>
+    <message>
+        <source>Specify a custom model name to override the selected one.</source>
+        <translation>输入自定义模型名称以覆盖所选模型</translation>
+    </message>
+    <message>
+        <source>Controls image detail level for vision models.</source>
+        <translation>控制视觉模型的图像细节级别</translation>
+    </message>
+    <message>
+        <source>Delay in seconds between requests.</source>
+        <translation>请求间延迟（秒）</translation>
+    </message>
+    <message>
+        <source>Maximum number of requests per minute per key.</source>
+        <translation>每密钥每分钟最大请求数</translation>
+    </message>
+    <message>
+        <source>Return existing translation</source>
+        <translation>返回已有翻译（不翻译）</translation>
+    </message>
+</context>
+<context>
+    <name>ShortcutEditor</name>
+    <message>
+        <source>Reset</source>
+        <translation>重置</translation>
+    </message>
+    <message>
+        <source>Add shortcut</source>
+        <translation>添加快捷键</translation>
+    </message>
+    <message>
+        <source>Select an action to edit shortcuts</source>
+        <translation>选择一个操作以编辑快捷键</translation>
+    </message>
+    <message>
+        <source>Page Up</source>
+        <translation>上一页</translation>
+    </message>
+    <message>
+        <source>Page Down</source>
+        <translation>下一页</translation>
+    </message>
+    <message>
+        <source>Page Up (alt)</source>
+        <translation>上一页 (备选)</translation>
+    </message>
+    <message>
+        <source>Page Down (alt)</source>
+        <translation>下一页 (备选)</translation>
+    </message>
+    <message>
+        <source>Text Editor</source>
+        <translation>编辑模式</translation>
+    </message>
+    <message>
+        <source>Text Block</source>
+        <translation>文字块模式</translation>
+    </message>
+    <message>
+        <source>Draw Board</source>
+        <translation>画板模式</translation>
+    </message>
+    <message>
+        <source>Zoom In</source>
+        <translation>放大</translation>
+    </message>
+    <message>
+        <source>Zoom Out</source>
+        <translation>缩小</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>预览</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>删除</translation>
+    </message>
+    <message>
+        <source>Delete (alt)</source>
+        <translation>删除 (备选)</translation>
+    </message>
+    <message>
+        <source>Select All</source>
+        <translation>全选</translation>
+    </message>
+    <message>
+        <source>Bold</source>
+        <translation>加粗</translation>
+    </message>
+    <message>
+        <source>Italic</source>
+        <translation>斜体</translation>
+    </message>
+    <message>
+        <source>Underline</source>
+        <translation>下划线</translation>
+    </message>
+    <message>
+        <source>Undo</source>
+        <translation>撤销</translation>
+    </message>
+    <message>
+        <source>Redo</source>
+        <translation>重做</translation>
+    </message>
+    <message>
+        <source>Page Search</source>
+        <translation>页面搜索</translation>
+    </message>
+    <message>
+        <source>Global Search</source>
+        <translation>全局搜索</translation>
+    </message>
+    <message>
+        <source>Escape</source>
+        <translation>退出</translation>
+    </message>
+    <message>
+        <source>Inpaint</source>
+        <translation>修复</translation>
+    </message>
+    <message>
+        <source>Hand Tool</source>
+        <translation>拖拽工具</translation>
+    </message>
+    <message>
+        <source>Rect Tool</source>
+        <translation>矩形工具</translation>
+    </message>
+    <message>
+        <source>Inpaint Tool</source>
+        <translation>修复工具</translation>
+    </message>
+    <message>
+        <source>Pen Tool</source>
+        <translation>画笔工具</translation>
+    </message>
+    <message>
+        <source>Merge Tool</source>
+        <translation>合并工具</translation>
     </message>
 </context>
 </TS>
