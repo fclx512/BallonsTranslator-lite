@@ -353,7 +353,8 @@ def DEVICE_SELECTOR(not_supported:list[str]=[]): return deepcopy(
     {
         'type': 'selector',
         'options': [opt for opt in AVAILABLE_DEVICES if all(device not in opt for device in not_supported)],
-        'value': DEFAULT_DEVICE if not any(DEFAULT_DEVICE in device for device in not_supported) else 'cpu'
+        'value': DEFAULT_DEVICE if not any(DEFAULT_DEVICE in device for device in not_supported) else 'cpu',
+        'description': 'Hardware device for inference (GPU recommended)',
     }
 )
 

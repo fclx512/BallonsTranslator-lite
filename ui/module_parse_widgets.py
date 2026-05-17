@@ -144,12 +144,13 @@ class ParamWidget(QWidget):
         layout.addStretch(-1)
 
         if 'description' in params:
-            self.setToolTip(params['description'])
+            self.setToolTip(self.tr(params['description']))
 
         for ii, param_key in enumerate(params):
-            if param_key == 'description' or param_key.startswith('__'):
+            if param_key == 'description' or param_key.startswith('_'):
                 continue
             display_param_name = param_key
+            param_dict = None
 
             require_label = True
             is_str = isinstance(params[param_key], str)
@@ -224,14 +225,15 @@ class ParamWidget(QWidget):
 
                 if param_widget is not None:
                     param_widget.paramwidget_edited.connect(self.on_paramwidget_edited)
-                    if 'description' in param_dict:
-                        param_widget.setToolTip(param_dict['description'])
+
+            if param_widget is not None and param_dict is not None and 'description' in param_dict:
+                param_widget.setToolTip(self.tr(param_dict['description']))
 
             widget_idx = 0
             if require_label:
                 param_label = ParamNameLabel(display_param_name)
-                if isinstance(params[param_key], dict) and 'description' in params[param_key]:
-                    param_label.setToolTip(params[param_key]['description'])
+                if param_dict is not None and 'description' in param_dict:
+                    param_label.setToolTip(self.tr(param_dict['description']))
                 param_layout.addWidget(param_label, ii, 0)
                 widget_idx = 1
             if param_widget is not None:

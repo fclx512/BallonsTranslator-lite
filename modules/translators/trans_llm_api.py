@@ -88,35 +88,35 @@ class LLM_API_Translator(BaseTranslator):
             "type": "selector",
             "options": [],
             "value": "",
-            "description": "快速切换已保存的配置文件",
+            "description": "Quickly switch between saved profiles",
         },
         "max_requests_per_minute": {
             "value": 20,
-            "description": "每分钟每密钥最大请求数",
+            "description": "Max requests per minute per API key",
         },
         "delay": {
             "value": 0.3,
-            "description": "请求间延迟（秒）",
+            "description": "Delay between requests (seconds)",
         },
         "retry_attempts": {
             "value": 3,
-            "description": "API 连接失败后的重试次数",
+            "description": "Retry count on API connection failure",
         },
         "retry_timeout": {
             "value": 15,
-            "description": "重试等待时间（秒）",
+            "description": "Retry wait time (seconds)",
         },
         "invalid_repeat_count": {
             "value": 2,
-            "description": "翻译数量不匹配时的重试次数",
+            "description": "Retry count on translation count mismatch",
         },
         "proxy": {
             "value": "",
-            "description": "代理地址（例如 http(s)://user:password@host:port）",
+            "description": "Proxy address (e.g. http(s)://user:password@host:port)",
         },
         "description": (
-            "通用 OpenAI 兼容 API 连接器。创建配置文件保存 API 设置，"
-            "并在不同配置间自由切换。"
+            "Generic OpenAI-compatible API connector. Create profiles to "
+            "save API settings and switch between configurations."
         ),
     }
 

@@ -376,8 +376,14 @@ class SakuraTranslator(BaseTranslator):
             'description': 'check it if you\'re running it locally on a single device and encountered a crash due to vram OOM',
             'type': 'checkbox',
         },
-        'api baseurl': 'http://127.0.0.1:8080/v1',
-        'dict path': '',
+        'api baseurl': {
+            'value': 'http://127.0.0.1:8080/v1',
+            'description': 'Sakura LLM API server base URL',
+        },
+        'dict path': {
+            'value': '',
+            'description': 'Path to the Sakura dictionary file (leave empty if not using a dictionary)',
+        },
         'version': {
             'type': 'selector',
             'options': [
@@ -385,12 +391,25 @@ class SakuraTranslator(BaseTranslator):
                 '1.0',
                 'galtransl-v1'
             ],
-            'value': '0.9'
+            'value': '0.9',
+            'description': 'Sakura model version',
         },
-        'retry attempts': 3,
-        'timeout': 999,
-        'max tokens': 1024,
-        'repeat detect threshold': 20,
+        'retry attempts': {
+            'value': 3,
+            'description': 'Number of retry attempts on API connection failure',
+        },
+        'timeout': {
+            'value': 999,
+            'description': 'API request timeout in seconds',
+        },
+        'max tokens': {
+            'value': 1024,
+            'description': 'Maximum tokens in the model response',
+        },
+        'repeat detect threshold': {
+            'value': 20,
+            'description': 'Threshold for detecting repeated text in translations',
+        },
         'force apply dict': {
             'value': False,
             'description': 'Force apply the dictionary regardless of whether the terms appear in the original text \n DO NOT CHECK THIS IF YOU ARE NOT SURE WHAT IT MEANS',
@@ -416,23 +435,23 @@ class SakuraTranslator(BaseTranslator):
 
     @property 
     def timeout(self) -> int:
-        return self.params['timeout']
+        return self.get_param_value('timeout')
     
     @property
     def retry_attempts(self) -> int:
-        return self.params['retry attempts']
+        return self.get_param_value('retry attempts')
     
     @property
     def repeat_detect_threshold(self) -> int:
-        return self.params['repeat detect threshold']
+        return self.get_param_value('repeat detect threshold')
 
     @property
     def max_tokens(self) -> int:
-        return self.params['max tokens']
+        return self.get_param_value('max tokens')
 
     @property
     def api_base_raw(self) -> str:
-        return self.params['api baseurl']
+        return self.get_param_value('api baseurl')
 
     @property
     def api_base(self) -> str:
@@ -449,7 +468,7 @@ class SakuraTranslator(BaseTranslator):
 
     @property
     def dict_path(self) -> str:
-        return self.params['dict path']
+        return self.get_param_value('dict path')
 
     @property
     def force_apply_dict(self) -> bool:
@@ -478,10 +497,10 @@ class SakuraTranslator(BaseTranslator):
         super().updateParam(param_key, param_content)
 
         if param_key == 'dict path' or param_key == 'version':
-            self.set_dict_path(self.params['dict path'])
+            self.set_dict_path(self.get_param_value('dict path'))
 
     def set_dict_path(self, path: str):
-        self.params['dict path'] = path
+        self.set_param_value('dict path', path)
         self.sakura_dict = SakuraDict(path, self.logger, self.sakura_version)
         self.logger.debug(f'更新Sakura字典路径为: {path}')
 

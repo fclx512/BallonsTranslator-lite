@@ -9,7 +9,8 @@ mit_params = {
     'chunk_size': {
         'type': 'selector',
         'options': [8, 16, 24, 32],
-        'value': 16
+        'value': 16,
+        'description': 'Number of image pixel rows processed per batch (lower = less VRAM)',
     },
     'device': DEVICE_SELECTOR(not_supported=['privateuseone']),
     'description': 'OCRMIT32px'
