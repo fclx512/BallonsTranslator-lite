@@ -10,8 +10,8 @@ from sympy import true
 from .funcmaps import get_maskseg_method
 from utils.logger import logger as LOGGER
 from utils.registry import Registry
-from utils.imgproc_utils import enlarge_window, get_block_mask
-from utils.io_utils import imread, text_is_empty
+from utils.imgproc_utils import enlarge_window
+from utils.io_utils import imread
 from modules.translators import MissingTranslatorParams
 from modules.base import BaseModule, soft_empty_cache
 from modules import INPAINTERS, TRANSLATORS, TEXTDETECTORS, OCR, \
@@ -368,7 +368,10 @@ class ImgtransThread(QThread):
             self.finish_blktrans.emit(mode, blk_ids)
 
         if mode != 0 and mode < 3:
-            self.translate_thread.module.translate_textblk_lst(blk_list)
+            try:
+                self.translate_thread.module.translate_textblk_lst(blk_list)
+            except Exception as e:
+                create_error_dialog(e, self.tr('Translation Failed.'), 'TranslationFailed')
             self.finish_blktrans.emit(mode, blk_ids)
         if mode > 1:
             im_h, im_w = tgt_img.shape[:2]
@@ -436,7 +439,6 @@ class ImgtransThread(QThread):
             img = self.imgtrans_proj.read_img(imgname)
             mask = blk_list = None
             need_save_mask = False
-            blk_removed: List[TextBlock] = []
             if cfg_module.enable_detect:
                 try:
                     mask, blk_list = self.textdetector.detect(img, self.imgtrans_proj)
@@ -470,41 +472,6 @@ class ImgtransThread(QThread):
                     create_error_dialog(e, self.tr('OCR Failed.'), 'OCRFailed')
                 self.ocr_counter += 1
 
-                if pcfg.restore_ocr_empty:
-                    blk_list_updated = []
-                    for blk in blk_list:
-                        text = blk.get_text()
-                        if text_is_empty(text):
-                            blk_removed.append(blk)
-                        else:
-                            blk_list_updated.append(blk)
-
-                    if len(blk_removed) > 0:
-                        blk_list.clear()
-                        blk_list += blk_list_updated
-                        
-                        if mask is None:
-                            mask = self.imgtrans_proj.load_mask_by_imgname(imgname)
-                        if mask is not None:
-                            inpainted = None
-                            if not cfg_module.enable_inpaint:
-                                inpainted = self.imgtrans_proj.load_inpainted_by_imgname(imgname)
-                            for blk in blk_removed:
-                                xywh = blk.bounding_rect()
-                                blk_mask, xyxy = get_block_mask(xywh, mask, blk.angle)
-                                x1, y1, x2, y2 = xyxy
-                                if blk_mask is not None:
-                                    mask[y1: y2, x1: x2] = 0
-                                    if inpainted is not None:
-                                        mskpnt = np.where(blk_mask)
-                                        inpainted[y1: y2, x1: x2][mskpnt] = img[y1: y2, x1: x2][mskpnt]
-                                    need_save_mask = True
-                            if inpainted is not None and need_save_mask:
-                                self.imgtrans_proj.save_inpainted(imgname, inpainted)
-                            if need_save_mask:
-                                self.imgtrans_proj.save_mask(imgname, mask)
-                                need_save_mask = False
-
                 self.imgtrans_proj.update_page_progress(imgname, RunStatus.FIN_OCR)
                 self.update_ocr_progress.emit(self.ocr_counter)
 
@@ -534,10 +501,6 @@ class ImgtransThread(QThread):
                 self.inpaint_counter += 1
                 self.imgtrans_proj.update_page_progress(imgname, RunStatus.FIN_INPAINT)
                 self.update_inpaint_progress.emit(self.inpaint_counter)
-            else:
-                if len(blk_removed) > 0:
-                    self.imgtrans_proj.load_mask_by_imgname
-        
         if cfg_module.enable_translate and low_vram_trans:
             unload_modules(self, ['textdetector', 'inpainter', 'ocr'])
             for imgname in pages_to_iterate:
@@ -963,8 +926,8 @@ class ModuleManager(QObject):
                 from qtpy.QtWidgets import QMessageBox
                 QMessageBox.warning(
                     self.parent(),
-                    self.tr("刷新失败"),
-                    self.tr("获取模型列表失败，请检查 API 密钥和地址是否正确配置。"),
+                    self.tr("Refresh failed"),
+                    self.tr("Failed to fetch model list. Please check your API key and host configuration."),
                 )
                 return
             param_widget.blockSignals(True)
