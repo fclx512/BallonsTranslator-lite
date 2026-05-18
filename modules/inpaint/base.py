@@ -181,11 +181,12 @@ if torch is not None:
             'inpaint_size': {
                 'type': 'selector',
                 'options': [
-                    1024, 
+                    1024,
                     2048
-                ], 
-                'value': 2048
-            }, 
+                ],
+                'value': 2048,
+                'description': 'Maximum image dimension for inpainting (larger images are resized)',
+            },
             'device': DEVICE_SELECTOR(),
             'description': 'manga-image-translator inpainter'
         }
@@ -285,10 +286,11 @@ if torch is not None:
             'inpaint_size': {
                 'type': 'selector',
                 'options': [
-                    1024, 
+                    1024,
                     2048
-                ], 
-                'value': 2048
+                ],
+                'value': 2048,
+                'description': 'Maximum image dimension for inpainting (larger images are resized)',
             },
             'device': DEVICE_SELECTOR(not_supported=['privateuseone'])
         }
@@ -409,10 +411,11 @@ if torch is not None:
                     512,
                     768,
                     1024,
-                    1536, 
+                    1536,
                     2048
-                ], 
+                ],
                 'value': 1536,
+                'description': 'Maximum image dimension for inpainting (larger images are resized)',
             },
             'device': DEVICE_SELECTOR(not_supported=['privateuseone']),
             'precision': {
@@ -420,9 +423,10 @@ if torch is not None:
                 'options': [
                     'fp32',
                     'bf16'
-                ], 
-                'value': 'bf16' if BF16_SUPPORTED == 'cuda' else 'fp32'
-            }, 
+                ],
+                'value': 'bf16' if BF16_SUPPORTED == 'cuda' else 'fp32',
+                'description': 'Model precision (bf16 is faster on supported GPUs, fp32 is more compatible)',
+            },
         }
 
         download_file_list = [{

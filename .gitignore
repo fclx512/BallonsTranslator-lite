@@ -61,3 +61,5 @@ install_venv.bat
 install-BT.cmd
 download_models.bat
 Ultralytics/settings.json
+CLAUDE.md
+debug

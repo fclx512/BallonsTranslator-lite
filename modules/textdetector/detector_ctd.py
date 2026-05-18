@@ -19,20 +19,34 @@ class ComicTextDetector(TextDetectorBase):
     params = {
         'detect_size': {
             'type': 'selector',
-            'options': [896, 1024, 1152, 1280], 
-            'value': 1280
-        }, 
+            'options': [896, 1024, 1152, 1280],
+            'value': 1280,
+            'description': 'Input image size for text detection (larger = more accurate but slower)',
+        },
         'det_rearrange_max_batches': {
             'type': 'selector',
-            'options': [1, 2, 4, 6, 8, 12, 16, 24, 32], 
-            'value': 4
+            'options': [1, 2, 4, 6, 8, 12, 16, 24, 32],
+            'value': 4,
+            'description': 'Maximum parallel batches when rearranging detected text blocks',
         },
         'device': DEVICE_SELECTOR(),
         'description': 'ComicTextDetector',
-        'font size multiplier': 1.,
-        'font size max': -1,
-        'font size min': -1,
-        'mask dilate size': 2
+        'font size multiplier': {
+            'value': 1.,
+            'description': 'Scale factor applied to detected font size',
+        },
+        'font size max': {
+            'value': -1,
+            'description': 'Maximum allowed font size (-1 for unlimited)',
+        },
+        'font size min': {
+            'value': -1,
+            'description': 'Minimum allowed font size (-1 for unlimited)',
+        },
+        'mask dilate size': {
+            'value': 2,
+            'description': 'Dilation kernel size for text region mask',
+        },
     }
     _load_model_keys = {'model'}
     download_file_list = [{

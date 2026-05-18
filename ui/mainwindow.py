@@ -17,7 +17,6 @@ from utils.text_processing import is_cjk, full_len, half_len
 from utils.textblock import TextBlock, TextAlignment
 from utils import shared
 from utils.message import create_error_dialog, create_info_dialog
-from modules.translators.trans_chatgpt import GPTTranslator
 from modules import GET_VALID_TEXTDETECTORS, GET_VALID_INPAINTERS, GET_VALID_TRANSLATORS, GET_VALID_OCR
 from .misc import parse_stylesheet, set_html_family, QKEY
 from utils.config import ProgramConfig, pcfg, save_config, text_styles, save_text_styles, load_textstyle_from, FontFormat
@@ -563,13 +562,12 @@ class MainWindow(mainwindow_cls):
         super().changeEvent(event)
     
     def retranslateUI(self):
-        # according to https://stackoverflow.com/questions/27635068/how-to-retranslate-dynamically-created-widgets
-        # we got to do it manually ... I'd rather restart the program
         msg = QMessageBox()
         msg.setText(self.tr('Restart to apply changes? \n'))
         msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         ret = msg.exec_()
         if ret == QMessageBox.StandardButton.Yes:
+            self.save_config()
             self.restart_signal.emit()
 
     def save_config(self):
@@ -833,28 +831,28 @@ class MainWindow(mainwindow_cls):
         from qtpy.QtWidgets import QMessageBox
         
         if self.imgtrans_proj.is_empty:
-            QMessageBox.warning(self, "警告", "请先打开一个项目")
+            QMessageBox.warning(self, self.tr("Warning"), self.tr("Please open a project first"))
             return
-        
+
         config = self.merge_dialog.get_config()
-        
+
         if on_current:
             # 对当前文件运行 - 直接在内存中操作，不读写文件
             from utils.textblock import TextBlock
-            
+
             current_img = self.imgtrans_proj.current_img
             if not current_img:
-                QMessageBox.warning(self, "警告", "没有当前文件")
+                QMessageBox.warning(self, self.tr("Warning"), self.tr("No current file"))
                 return
-            
+
             # 直接从内存获取当前页面的文本框
             if current_img not in self.imgtrans_proj.pages:
-                QMessageBox.warning(self, "警告", "当前页面数据不存在")
+                QMessageBox.warning(self, self.tr("Warning"), self.tr("Current page data not found"))
                 return
-            
+
             textblocks = self.imgtrans_proj.pages[current_img]
             if not textblocks:
-                QMessageBox.warning(self, "提示", "当前页面没有文本框")
+                QMessageBox.warning(self, self.tr("Notice"), self.tr("No text blocks on current page"))
                 return
             
             # 将 TextBlock 对象转换为字典格式（merger 需要字典）
@@ -889,28 +887,30 @@ class MainWindow(mainwindow_cls):
                 self.canvas.updateCanvas()
                 self.st_manager.updateSceneTextitems()
                 final_count = len(final_shapes)
-                QMessageBox.information(self, "成功", f"合并完成: 框数 {initial_count} -> {final_count} (减少了 {initial_count - final_count} 个)")
+                QMessageBox.information(self, self.tr("Success"),
+                    self.tr("Merge complete: {initial} -> {final} (reduced by {delta})")
+                    .format(initial=initial_count, final=final_count, delta=initial_count - final_count))
             else:
-                # 提供更详细的提示
                 labels = set(s.get('label', '') for s in initial_shapes)
-                detail_msg = f"未发生任何合并。\n共有 {initial_count} 个文本框。\n标签类型: {', '.join(labels) or '无'}\n\n"
-                detail_msg += "建议：\n"
-                detail_msg += "1. 尝试增大最大间隙值（如 100-200）\n"
-                detail_msg += "2. 降低最小重叠比例（如 50-70%）\n"
-                detail_msg += "3. 取消勾选'启用排除合并的标签'\n"
-                detail_msg += "4. 检查标签是否在黑名单中"
-                QMessageBox.warning(self, "提示", detail_msg)
+                detail_msg = self.tr("No merge occurred.") + "\n"
+                detail_msg += self.tr("Total text blocks: {count}").format(count=initial_count) + "\n"
+                detail_msg += self.tr("Label types: {labels}").format(labels=', '.join(labels) or self.tr('None')) + "\n\n"
+                detail_msg += self.tr("Suggestions:") + "\n"
+                detail_msg += self.tr("1. Try increasing maximum gap (e.g., 100-200)") + "\n"
+                detail_msg += self.tr("2. Lower the minimum overlap ratio (e.g., 50-70%)") + "\n"
+                detail_msg += self.tr("3. Uncheck 'Enable label exclusion (blacklist)'") + "\n"
+                detail_msg += self.tr("4. Check if labels are in the blacklist")
+                QMessageBox.warning(self, self.tr("Notice"), detail_msg)
         else:
             # 对所有文件运行
             img_list = list(self.imgtrans_proj.pages.keys())
             if not img_list:
-                QMessageBox.warning(self, "警告", "项目中没有图片")
+                QMessageBox.warning(self, self.tr("Warning"), self.tr("No images in project"))
                 return
-            
-            # 使用项目的 JSON 文件路径
+
             json_path = self.imgtrans_proj.proj_path
             if not json_path or not osp.exists(json_path):
-                QMessageBox.warning(self, "警告", f"找不到项目 JSON 文件: {json_path}")
+                QMessageBox.warning(self, self.tr("Warning"), self.tr("Project JSON file not found: {path}").format(path=json_path))
                 return
             
             # 使用后台线程执行合并
@@ -962,7 +962,9 @@ class MainWindow(mainwindow_cls):
         
         # 显示结果
         total = success_count + fail_count
-        QMessageBox.information(self, "完成", f"区域合并完成\n成功: {success_count}/{total}\n失败: {fail_count}/{total}")
+        QMessageBox.information(self, self.tr("Done"),
+            self.tr("Region merge complete\nSuccess: {s}/{t}\nFailed: {f}/{t}")
+            .format(s=success_count, f=fail_count, t=total))
 
     def on_req_update_pagetext(self):
         if self.canvas.text_change_unsaved():
@@ -1639,39 +1641,14 @@ class MainWindow(mainwindow_cls):
         self.resetStyleSheet(reverse_icon=True)
         self.save_config()
 
-    def ocr_postprocess(self, textblocks: List[TextBlock], img, ocr_module=None, **kwargs):
-        # 字体检测：在 OCR 完成后按配置执行（按需导入以减少启动开销）
-        try:
-            if pcfg.module.ocr_font_detect:
-                try:
-                    from utils import font_detect
-                    for blk in textblocks:
-                        try:
-                            name, conf = font_detect.detect_font_from_block(img, blk)
-                            blk._detected_font_name = name
-                            blk._detected_font_confidence = float(conf)
-                        except Exception:
-                            blk._detected_font_name = ''
-                            blk._detected_font_confidence = 0.0
-                except Exception:
-                    pass
-        except Exception:
-            pass
 
     def on_copy_src(self):
         blks = self.canvas.selected_text_items()
         if len(blks) == 0:
             return
         
-        if isinstance(self.module_manager.translator, GPTTranslator):
-            src_list = [self.st_manager.pairwidget_list[blk.idx].e_source.toPlainText() for blk in blks]
-            src_txt = ''
-            for (prompt, num_src) in self.module_manager.translator._assemble_prompts(src_list, max_tokens=4294967295):
-                src_txt += prompt
-            src_txt = src_txt.strip()
-        else:
-            src_list = [self.st_manager.pairwidget_list[blk.idx].e_source.toPlainText().strip().replace('\n', ' ') for blk in blks]
-            src_txt = '\n'.join(src_list)
+        src_list = [self.st_manager.pairwidget_list[blk.idx].e_source.toPlainText().strip().replace('\n', ' ') for blk in blks]
+        src_txt = '\n'.join(src_list)
 
         self.st_manager.app_clipborad.setText(src_txt, QClipboard.Mode.Clipboard)
 

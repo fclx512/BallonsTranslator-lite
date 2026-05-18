@@ -32,7 +32,7 @@ class ThreadBase(QThread):
                 self.job()
             except Exception as e:
                 self.on_exec_failed()
-                create_error_dialog(e, self._thread_error_msg, self._thread_exception_type)
+                create_error_dialog(e, self.tr(self._thread_error_msg), self._thread_exception_type)
         self.job = None
 
 class ImgSaveThread(ThreadBase):
@@ -74,7 +74,7 @@ class ImgSaveThread(ThreadBase):
                     self.job()
                 except Exception as e:
                     self.on_exec_failed()
-                    create_error_dialog(e, self._thread_error_msg, self._thread_exception_type)
+                    create_error_dialog(e, self.tr(self._thread_error_msg), self._thread_exception_type)
 
 
 
@@ -181,7 +181,7 @@ class MergeThread(ThreadBase):
     merge_finished = Signal(int, int)  # (成功数, 失败数)
     
     _thread_exception_type = 'MergeThread'
-    _thread_error_msg = '区域合并失败'
+    _thread_error_msg = 'Region merge failed'
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -189,7 +189,7 @@ class MergeThread(ThreadBase):
         self.img_list = []
         self.config = None
         self.stop_requested = False
-        self.progress_bar = ProgressMessageBox('区域合并: ')
+        self.progress_bar = ProgressMessageBox(self.tr('Region merge: '))
     
     def runMerge(self, json_path: str, img_list: list, config: dict):
         """启动合并任务"""

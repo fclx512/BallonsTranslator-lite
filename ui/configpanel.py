@@ -313,8 +313,8 @@ DEFAULT_SHORTCUTS = {
 }
 
 _ACTION_NAMES = {
-    'prev_page': 'Page ↑', 'next_page': 'Page ↓', 'prev_page_alt': 'Page ↑ (alt)',
-    'next_page_alt': 'Page ↓ (alt)', 'textedit_mode': 'Text Editor', 'textblock_mode': 'Text Block',
+    'prev_page': 'Page Up', 'next_page': 'Page Down', 'prev_page_alt': 'Page Up (alt)',
+    'next_page_alt': 'Page Down (alt)', 'textedit_mode': 'Text Editor', 'textblock_mode': 'Text Block',
     'drawboard_mode': 'Draw Board', 'zoom_in': 'Zoom In', 'zoom_out': 'Zoom Out',
     'preview': 'Preview', 'delete_blks': 'Delete', 'delete_blks_alt': 'Delete (alt)',
     'select_all': 'Select All', 'bold': 'Bold', 'italic': 'Italic', 'underline': 'Underline',
@@ -350,31 +350,62 @@ class ShortcutEditor(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._cards = {}
+        self.setMinimumHeight(350)
+        self._pills_info = {}
+        self._current_action_id = None
+        self._current_card = None
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 4, 0, 4)
-        layout.setSpacing(4)
 
-        grid = QGridLayout()
-        grid.setSpacing(6)
-        # Two columns of action cards
-        action_ids = list(DEFAULT_SHORTCUTS.keys())
-        half = (len(action_ids) + 1) // 2
-        left_col = action_ids[:half]
-        right_col = action_ids[half:]
+        splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        for row_idx in range(half):
-            for col_idx, action_id in enumerate([left_col, right_col]):
-                if row_idx >= len([left_col, right_col][col_idx]):
-                    continue
-                aid = [left_col, right_col][col_idx][row_idx]
-                card = self._make_card(aid)
-                grid.addWidget(card, row_idx, col_idx)
+        # Left: action list
+        left = QWidget()
+        left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(2, 2, 2, 2)
+        self.list_widget = QListWidget()
+        self.list_widget.setFixedWidth(190)
+        for aid in DEFAULT_SHORTCUTS.keys():
+            display_name = self.tr(_ACTION_NAMES.get(aid, aid))
+            item = QListWidgetItem(display_name)
+            item.setData(Qt.ItemDataRole.UserRole, aid)
+            self.list_widget.addItem(item)
+        self.list_widget.currentRowChanged.connect(self._on_select)
+        left_layout.addWidget(self.list_widget)
 
-        grid.setColumnStretch(0, 1)
-        grid.setColumnStretch(1, 1)
-        layout.addLayout(grid)
-        layout.addStretch()
+        # Right: editor pane
+        right = QWidget()
+        self.right_layout = QVBoxLayout(right)
+        self.right_layout.setContentsMargins(8, 4, 8, 4)
+        self._placeholder = QLabel(self.tr('Select an action to edit shortcuts'))
+        self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._placeholder.setStyleSheet("color: #888;")
+        self.right_layout.addWidget(self._placeholder)
+
+        splitter.addWidget(left)
+        splitter.addWidget(right)
+        splitter.setSizes([190, 210])
+        layout.addWidget(splitter)
+
+    def _on_select(self, row: int):
+        if row < 0:
+            return
+        item = self.list_widget.item(row)
+        action_id = item.data(Qt.ItemDataRole.UserRole)
+        self._show_action_editor(action_id)
+
+    def _show_action_editor(self, action_id: str):
+        # Remove old card
+        if self._current_card is not None:
+            self.right_layout.removeWidget(self._current_card)
+            self._current_card.deleteLater()
+            self._current_card = None
+        self._placeholder.setVisible(False)
+        self._current_action_id = action_id
+        card = self._make_card(action_id)
+        self._current_card = card
+        self.right_layout.addWidget(card)
 
     def _make_card(self, action_id: str) -> QWidget:
         card = QWidget()
@@ -414,12 +445,12 @@ class ShortcutEditor(QWidget):
         pills_row.addWidget(add_btn)
         pills_row.addStretch()
 
-        self._cards[action_id] = dict(pills_widget=pills_widget, add_btn=add_btn)
+        self._pills_info[action_id] = dict(pills_widget=pills_widget, add_btn=add_btn)
         self._rebuild_pills(action_id)
         return card
 
     def _rebuild_pills(self, action_id: str):
-        info = self._cards[action_id]
+        info = self._pills_info[action_id]
         pw = info['pills_widget']
         layout = pw.layout()
         # Remove all pill widgets (keep add_btn and stretch)
@@ -481,8 +512,8 @@ class ShortcutEditor(QWidget):
         self.shortcut_changed.emit()
 
     def refresh(self):
-        for action_id in self._cards:
-            self._rebuild_pills(action_id)
+        if self._current_action_id is not None:
+            self._rebuild_pills(self._current_action_id)
 
 
 class ConfigTable(QTreeView):
@@ -671,13 +702,11 @@ class ConfigPanel(Widget):
             TableItem(label_inpaint, CONFIG_FONTSIZE_TABLE),
             TableItem(label_translator, CONFIG_FONTSIZE_TABLE),
         ])
-        label_feature_test = self.tr('Feature Testing')
         label_shortcuts = self.tr('Keyboard Shortcuts')
         generalTableItem.appendRows([
             TableItem(label_startup, CONFIG_FONTSIZE_TABLE),
             TableItem(label_typesetting, CONFIG_FONTSIZE_TABLE),
             TableItem(label_save, CONFIG_FONTSIZE_TABLE),
-            TableItem(label_feature_test, CONFIG_FONTSIZE_TABLE),
             TableItem(label_shortcuts, CONFIG_FONTSIZE_TABLE),
         ])
         
@@ -773,6 +802,14 @@ class ConfigPanel(Widget):
         btn_sublock = ConfigSubBlock(self.exclude_fonts_btn)
         generalConfigPanel.addSublock(btn_sublock)
 
+        self.max_font_size_edit = QSpinBox()
+        self.max_font_size_edit.setRange(10, 1000)
+        self.max_font_size_edit.setValue(pcfg.max_font_size)
+        self.max_font_size_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
+        self.max_font_size_edit.valueChanged.connect(self.on_max_font_size_changed)
+        max_font_sublock = ConfigSubBlock(self.max_font_size_edit, self.tr('Max Font Size (px)'))
+        generalConfigPanel.addSublock(max_font_sublock)
+
         generalConfigPanel.addTextLabel(label_save)
         self.rst_imgformat_combobox, imsave_sublock = generalConfigPanel.addCombobox(['PNG', 'JPG', 'WEBP', 'JXL'], self.tr('Result image format'))
         self.rst_imgformat_combobox.activated.connect(self.on_rst_imgformat_changed)
@@ -788,18 +825,10 @@ class ConfigPanel(Widget):
         self.intermediate_imgformat_combobox, intermediate_imsave_sublock = generalConfigPanel.addCombobox(['PNG', 'JXL'], self.tr('Intermediate image format'))
         self.intermediate_imgformat_combobox.activated.connect(self.on_intermediate_imgformat_changed)
 
-        generalConfigPanel.addTextLabel(label_feature_test)
-        self.max_font_size_edit = QSpinBox()
-        self.max_font_size_edit.setRange(10, 1000)
-        self.max_font_size_edit.setValue(pcfg.max_font_size)
-        self.max_font_size_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
-        self.max_font_size_edit.valueChanged.connect(self.on_max_font_size_changed)
-        max_font_sublock = ConfigSubBlock(self.max_font_size_edit, self.tr('Max Font Size (px)'))
-        generalConfigPanel.addSublock(max_font_sublock)
-
         generalConfigPanel.addTextLabel(label_shortcuts)
         self.shortcut_editor = ShortcutEditor(parent=self)
-        generalConfigPanel.addBlockWidget(self.shortcut_editor)
+        shortcut_sublock = generalConfigPanel.addBlockWidget(self.shortcut_editor)
+        shortcut_sublock.layout().addStretch()
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self.configTable)
@@ -938,7 +967,6 @@ class ConfigPanel(Widget):
         self.let_autolayout_checker.setChecked(pcfg.let_autolayout_flag)
         self.let_uppercase_checker.setChecked(pcfg.let_uppercase_flag)
         self.let_textstyle_indep_checker.setChecked(pcfg.let_textstyle_indep_flag)
-        self.ocr_config_panel.restoreEmptyOCRChecker.setChecked(pcfg.restore_ocr_empty)
         self.rst_imgformat_combobox.setCurrentText(pcfg.imgsave_ext.replace('.', '').upper())
         self.intermediate_imgformat_combobox.setCurrentText(pcfg.intermediate_imgsave_ext.replace('.', '').upper())
         self.rst_imgquality_edit.setText(str(pcfg.imgsave_quality))

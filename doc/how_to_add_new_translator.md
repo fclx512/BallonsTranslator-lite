@@ -1,26 +1,44 @@
-[简体中文](../doc/加别的翻译器.md) | English | [pt-BR](../doc/Como_add_um_novo_tradutor.md) | [Русский](../doc/add_translator_ru.md)
+# How to Add a New Translator / OCR / Detector / Inpainter
 
----
+> This guide covers adding new modules to BallonsTranslator-lite.
+> The module system uses a **file-based auto-registration** pattern: create a file with the right name prefix, decorate your class, and it's automatically discovered.
 
-If you know how to to call the target translator api or translation model in python, implement a class in ballontranslator/dl/translators.__init__.py as follows to use it in the app.      
+## 1. Architecture Overview
 
-The following example DummyTranslator is commented out of ballontranslator/dl/translator/__init__.py and can be uncommented to test in the program.
+All modules live under `modules/`:
 
+```
+modules/
+├── translators/    →  trans_*.py    (@register_translator)
+├── ocr/            →  ocr_*.py      (@register_OCR)
+├── textdetector/   →  detector_*.py (@register_textdetector)
+└── inpaint/        →  inpaint_*.py  (@register_inpainter)
 
-``` python
+modules/base.py     →  init_module_registries(), scans files matching the patterns above
+```
 
-# "dummy translator" is the name showed in the app
-@register_translator('dummy translator')
-class DummyTranslator(BaseTranslator):
+To add a module, create a new `.py` file with the correct prefix in the corresponding directory.
+Registration and discovery are handled automatically — no need to edit `__init__.py`.
+
+## 2. Adding a Translator
+
+### 2.1 File location
+
+Create `modules/translators/trans_myengine.py`.
+
+### 2.2 Basic scaffold
+
+```python
+from modules.translators.base import BaseTranslator, register_translator
+from typing import List, Dict
+
+@register_translator('MyEngine')
+class MyEngineTranslator(BaseTranslator):
 
     concate_text = True
 
-    # parameters showed in the config panel. 
-    # keys are parameter names, if value type is str, it will be a text editor(required key)
-    # if value type is dict, you need to spicify the 'type' of the parameter, 
-    # following 'device' is a selector, options a cpu and cuda, default is cpu
     params: Dict = {
-        'api_key': '', 
+        'api_key': '',
         'device': {
             'type': 'selector',
             'options': ['cpu', 'cuda'],
@@ -29,114 +47,98 @@ class DummyTranslator(BaseTranslator):
     }
 
     def _setup_translator(self):
-        '''
-        do the setup here.  
-        keys of lang_map are those languages options showed in the app, 
-        assign corresponding language keys accepted by API to supported languages.  
-        Only the languages supported by the translator are assigned here, this translator only supports Japanese, and English.
-        For a full list of languages see LANGMAP_GLOBAL in translator.__init__
-        '''
         self.lang_map['日本語'] = 'ja'
-        self.lang_map['English'] = 'en'  
-        
+        self.lang_map['English'] = 'en'
+
     def _translate(self, src_list: List[str]) -> List[str]:
-        '''
-        do the translation here.  
-        This translator do nothing but return the original text.
-        '''
-        source = self.lang_map[self.lang_source]
-        target = self.lang_map[self.lang_target]
-        
-        translation = text
-        return translation
-
-    def updateParam(self, param_key: str, param_content):
-        '''
-        required only if some state need to be updated immediately after user change the translator params,
-        for example, if this translator is a pytorch model, you can convert it to cpu/gpu here.
-        '''
-        super().updateParam(param_key, param_content)
-        if param_key == 'device':
-            # get current state from params
-            # self.model.to(self.params['device']['value'])
-            pass
-
-    @property
-    def supported_tgt_list(self) -> List[str]:
-        '''
-        required only if the translator's language supporting is asymmetric, 
-        for example, this translator only supports English -> Japanese, no Japanese -> English.
-        '''
-        return ['English']
-
-    @property
-    def supported_src_list(self) -> List[str]:
-        '''
-        required only if the translator's language supporting is asymmetric.
-        '''
-        return ['日本語']
+        # do translation here
+        return src_list
 ```
 
-First the translator must be decorated with register_translator and inherit from the base class BaseTranslator, the 'dummy translator' passed to the decorator is the name of the translator that will be displayed in the interface, be careful not to rename it with an existing translator.  
-This ```concate_text``` will be explained later, **set it to False if this translator is a offline model or target api accept str list**.  
-``` python
-@register_translator('dummy translator')
-class DummyTranslator(BaseTranslator):  
-    concate_text = True
-```
+### 2.3 Key concepts
 
-If the new translator requires user-configurable parameters, construct a dictionary named params as below, otherwise leave it alone or assign None to it.  
+- `@register_translator('Name')` — the name shown in the UI
+- `params` dict — defines config panel fields (see [config_reference.md](config_reference.md) for full widget type reference)
+- `concate_text = True` — texts are concatenated before `_translate()` (fewer API calls); set to `False` for offline models that accept lists
+- `_setup_translator()` — set up API clients, load models, populate `self.lang_map`
+- `_translate()` — receive source texts, return translations
+- `updateParam()` — optional, react to param changes at runtime (e.g., switching device)
 
-The keys in params is the corresponding parameter names displayed in the interface, if the corresponding value type is str, it will show in app as a text editor, in following example, the api_key be a text editor with an empty default value.  
-The value of the parameter can also be a dictionary, in which case it must be described by 'type', in following example, the 'device' parameter will be shown as a selector in app, valid options are 'cpu' and 'cuda.  
-``` python
-    params: Dict = {
-        'api_key': '', 
-        'device': {
+## 3. Adding an OCR Module
+
+Create `modules/ocr/ocr_myengine.py`:
+
+```python
+from modules.ocr.base import OCRBase, register_OCR, TextBlock
+
+@register_OCR('MyOCR')
+class MyOCREngine(OCRBase):
+
+    params = {
+        'my_param': {
             'type': 'selector',
-            'options': ['cpu', 'cuda'],
-            'value': 'cpu'
-        }
+            'options': [8, 16, 24],
+            'value': 16
+        },
+        'description': 'My custom OCR engine'
     }
-```  
-<p align = "center">
-<img src="./src/new_translator.png">
-</p>
-<p align = "center">
-params displayed in the app's config panel.
-</p>  
 
-Implement ```_setup_translator```: initialized the translator here. 
-
-``` python
-def _setup_translator(self):
-    '''
-    do the setup here.  
-    keys of lang_map are those languages options showed in the app, 
-    assign corresponding language keys accepted by API to supported languages.  
-    Only the languages supported by the translator are assigned here, this translator only supports Japanese, and English.
-    For a full list of languages see LANGMAP_GLOBAL in translator.__init__
-    '''
-    self.lang_map['日本語'] = 'ja'
-    self.lang_map['English'] = 'en'  
+    def _ocr_blk_list(self, img, blk_list):
+        # return updated blk_list with text fields filled
+        pass
 ```
 
-Implement ```_translate```, the following lang_source and lang_target are the languages selected in the interface at this point, you can use the previous lang_map to get the corresponding api language keywords and make a request or process text & feed into model here.  
-If prementioned ```concate_text``` is set to False, input could be str list(all text recognized in a page) or str, else the input could be concated text of a str list (['text1', 'text2'] -> 'text1 \n###\n text2'), set it to True only if this translator is a online api and don't accept str list to make fewer requests.
+## 4. Adding a Text Detector
 
-``` python
-def _translate(self, src_list: List[str]) -> List[str]:
-    '''
-    do the translation here.  
-    This translator do nothing but return the original text.
-    '''
-    source = self.lang_map[self.lang_source]
-    target = self.lang_map[self.lang_target]
-    
-    translation = text
-    return translation
+Create `modules/textdetector/detector_myengine.py`:
+
+```python
+from modules.textdetector.base import TextDetectBase, register_textdetector
+
+@register_textdetector('MyDetector')
+class MyDetector(TextDetectBase):
+
+    params = {
+        'detect_size': {
+            'type': 'selector',
+            'options': [1024, 1280],
+            'value': 1280
+        },
+        'description': 'My text detector'
+    }
+
+    def _detect(self, img, proj):
+        # return (mask, blk_list)
+        pass
 ```
 
-Re-implement ```updateParam```, ```supported_tgt_list```, ```supported_src_list``` if necessary, please refer to their comments for further details.
+## 5. Adding an Inpainter
 
-Once the translator is implemented, it is recommended to test it following the example in tests/test_translators.py.
+Define in `modules/inpaint/base.py` or create a new file if complex:
+
+```python
+from modules.inpaint.base import InpainterBase, register_inpainter
+
+@register_inpainter('MyInpainter')
+class MyInpainter(InpainterBase):
+
+    params = {
+        'inpaint_size': {
+            'type': 'selector',
+            'options': [1024, 2048],
+            'value': 2048
+        },
+        'device': ...
+    }
+
+    def _inpaint(self, img, mask, textblock_list=None):
+        # return inpainted image
+        pass
+```
+
+## 6. i18n Notes
+
+- Module `params` `"description"` fields should be written in **English**
+- Translations are handled by `ParamWidget` in the config panel
+- Add translation entries under `<name>ParamWidget</name>` in `translate/zh_CN.ts`
+- QDialog subclasses in modules (e.g., profile manager) should use standard `self.tr()`

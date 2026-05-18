@@ -28,8 +28,6 @@ class ModuleConfig(Config):
     enable_ocr: bool = True
     enable_translate: bool = True
     enable_inpaint: bool = True
-    # 是否在 OCR 后进行字体检测（默认不启用）
-    ocr_font_detect: bool = False
     textdetector_params: Dict = field(default_factory=lambda: dict())
     ocr_params: Dict = field(default_factory=lambda: dict())
     translator_params: Dict = field(default_factory=lambda: dict())
@@ -149,7 +147,6 @@ class ProgramConfig(Config):
     fold_textarea: bool = False
     show_source_text: bool = True
     show_trans_text: bool = True
-    restore_ocr_empty: bool = False
     display_lang: str = field(default_factory=lambda: shared.DEFAULT_DISPLAY_LANG) # to always apply shared.DEFAULT_DISPLAY_LANG
     imgsave_quality: int = 100
     imgsave_ext: str = '.png'
@@ -191,12 +188,17 @@ class ProgramConfig(Config):
         if 'module' in config_dict:
             module_cfg = config_dict['module']
             trans_params = module_cfg['translator_params']
-            repl_pairs = {'baidu': 'Baidu', 'caiyun': 'Caiyun', 'chatgpt': 'ChatGPT', 'Deepl': 'DeepL', 'papago': 'Papago'}
+            repl_pairs = {'chatgpt': 'ChatGPT'}
             for k, i in repl_pairs.items():
                 if k in trans_params:
                     trans_params[i] = trans_params.pop(k)
             if module_cfg['translator'] in repl_pairs:
                 module_cfg['translator'] = repl_pairs[module_cfg['translator']]
+            # Migrate removed translators
+            if module_cfg['translator'] in ('ChatGPT', 'Gemini'):
+                module_cfg['translator'] = 'LLM_API_Translator'
+            for removed in ('ChatGPT', 'Gemini'):
+                trans_params.pop(removed, None)
 
         return ProgramConfig(**config_dict)
     

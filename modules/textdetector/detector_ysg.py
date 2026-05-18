@@ -41,32 +41,40 @@ class YSGYoloDetector(TextDetectorBase):
             'path_selector': True,
             'path_filter': '*.pt *.ckpt *.pth *.safetensors',
             'size': 'median',
-            'display_name': '模型路径'
+            'display_name': 'Model Path',
+            'description': 'Path to the YSGYolo model checkpoint file',
         },
         'merge text lines': {
-            'display_name': '合并文本行', 'type': 'checkbox', 'value': True
+            'display_name': 'Merge Text Lines', 'type': 'checkbox', 'value': True,
+            'description': 'Merge adjacent text fragments into single text blocks',
         },
         'confidence threshold': {
-            'display_name': '置信度阈值', 'type': 'line_editor', 'value': 0.3
+            'display_name': 'Confidence Threshold', 'type': 'line_editor', 'value': 0.3,
+            'description': 'Minimum confidence score for accepting a text detection',
         },
         'IoU threshold': {
-            'display_name': 'IoU阈值', 'type': 'line_editor', 'value': 0.5
+            'display_name': 'IoU Threshold', 'type': 'line_editor', 'value': 0.5,
+            'description': 'Intersection-over-Union threshold for merging overlapping detection boxes',
         },
         'font size multiplier': {
-            'display_name': '字号乘数', 'type': 'line_editor', 'value': 1.
+            'display_name': 'Font Size Multiplier', 'type': 'line_editor', 'value': 1.,
+            'description': 'Scale factor applied to detected font size',
         },
         'font size max': {
-            'display_name': '最大字号', 'type': 'line_editor', 'value': -1
+            'display_name': 'Max Font Size', 'type': 'line_editor', 'value': -1,
+            'description': 'Maximum allowed font size (-1 for unlimited)',
         },
         'font size min': {
-            'display_name': '最小字号', 'type': 'line_editor', 'value': -1
+            'display_name': 'Min Font Size', 'type': 'line_editor', 'value': -1,
+            'description': 'Minimum allowed font size (-1 for unlimited)',
         },
         'detect size': {
-            'display_name': '检测尺寸', 'type': 'line_editor', 'value': 1024
+            'display_name': 'Detection Size', 'type': 'line_editor', 'value': 1024,
+            'description': 'Input image size for text detection',
         },
         'device': {
             **DEVICE_SELECTOR(),
-            'display_name': '设备'
+            'display_name': 'Device',
         },
         'label': {
             'value': {
@@ -78,14 +86,17 @@ class YSGYoloDetector(TextDetectorBase):
                 'other': True
             },
             'type': 'check_group',
-            'display_name': '标签'
+            'display_name': 'Label',
+            'description': 'Text region types to detect',
         },
         'source text is vertical': {
-            'display_name': '竖排文本', 'type': 'checkbox', 'value': True
+            'display_name': 'Vertical Text', 'type': 'checkbox', 'value': True,
+            'description': 'Assume source text is written vertically (right-to-left)',
         },
         'mask dilate size': {
-            'display_name': '掩码扩张尺寸', 'type': 'line_editor', 'value': 2
-        }
+            'display_name': 'Mask Expansion Size', 'type': 'line_editor', 'value': 2,
+            'description': 'Dilation kernel size for text region mask',
+        },
     }
 
     _load_model_keys = {'model'}
