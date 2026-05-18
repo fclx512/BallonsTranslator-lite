@@ -431,13 +431,21 @@ class ProjImgTrans:
                 inpainted = np.array(inpainted)
         return inpainted
 
-    def get_result_path(self, imgname: str) -> str:
+    def get_result_ext(self, imgname: str) -> str:
+        if pcfg is not None and pcfg.imgsave_auto_format:
+            src_ext = osp.splitext(imgname)[1].lower()
+            if src_ext in {'.jpg', '.jpeg', '.png', '.webp', '.jxl', '.bmp'}:
+                return src_ext
         ext = '.png'
         if pcfg is not None:
-            if pcfg.imgsave_ext not in {'.jpg', '.png', '.webp', '.jxl'}:
-                LOGGER.warning('invalid image saving ext in config.json')
-            else:
+            if pcfg.imgsave_ext in {'.jpg', '.png', '.webp', '.jxl'}:
                 ext = pcfg.imgsave_ext
+            else:
+                LOGGER.warning('invalid image saving ext in config.json')
+        return ext
+
+    def get_result_path(self, imgname: str) -> str:
+        ext = self.get_result_ext(imgname)
         return osp.join(self.result_dir(), osp.splitext(imgname)[0]+ext)
         
     def backup(self):

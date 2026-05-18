@@ -721,6 +721,16 @@ QScrollBar::add-line {
     color: rgba(255, 255, 255, 150);
 }
 
+#PreviewLabel {
+    background: rgba(0, 0, 0, 120);
+    border-radius: 8px;
+    border: 2px solid @accentTranslate;
+    font-size: 16px;
+    padding: 6px 20px;
+    color: @accentTranslate;
+    font-weight: bold;
+}
+
 QLabel#TitleLabel {
     font-size: 13px;
     color: @qwidgetForegroundColor;
@@ -995,18 +1005,25 @@ PanelArea {
 
 PanelGroupBox {
     border: 1px solid @borderColor;
-    margin-top: 6px;
-    background-color : @emptyContentBackgroundColor;
-    border-left: none;
-    border-right: none;
-    border-bottom: none;
+    border-left: 3px solid @borderColor;
     border-radius: 7px;
+    background-color: @emptyContentBackgroundColor;
 }
 
-PanelGroupBox::title {
-    subcontrol-origin: margin;
-    /* left: 12px; */
-    padding: 0px 5px 0px 10px;
+PanelGroupBox#GroupDetect    { border-left-color: @accentDetect; }
+PanelGroupBox#GroupOCR       { border-left-color: @accentOCR; }
+PanelGroupBox#GroupInpaint   { border-left-color: @accentInpaint; }
+PanelGroupBox#GroupTranslate { border-left-color: @accentTranslate; }
+
+QLabel#CardTitle {
+    font-weight: bold;
+    font-size: 20px;
+    padding: 8px 14px 4px 14px;
+    background-color: transparent;
+}
+
+Widget#CardContent {
+    background-color: transparent;
 }
 
 

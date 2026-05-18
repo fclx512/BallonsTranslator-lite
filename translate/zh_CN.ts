@@ -360,6 +360,11 @@
         <translation>结果图格式</translation>
     </message>
     <message>
+        <location filename="../ui/configpanel.py" line="874"/>
+        <source>Auto detect source format</source>
+        <translation>自动匹配源图格式</translation>
+    </message>
+    <message>
         <location filename="../ui/configpanel.py" line="471"/>
         <source>Quality</source>
         <translation>质量</translation>

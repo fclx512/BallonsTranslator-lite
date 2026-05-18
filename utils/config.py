@@ -150,6 +150,7 @@ class ProgramConfig(Config):
     display_lang: str = field(default_factory=lambda: shared.DEFAULT_DISPLAY_LANG) # to always apply shared.DEFAULT_DISPLAY_LANG
     imgsave_quality: int = 100
     imgsave_ext: str = '.png'
+    imgsave_auto_format: bool = False
     intermediate_imgsave_ext: str = '.png'
     excluded_fonts: List[str] = field(default_factory=lambda: list())
     max_font_size: int = 200

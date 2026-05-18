@@ -4,7 +4,7 @@ from qtpy.QtWidgets import QPushButton, QKeySequenceEdit, QLayout, QGridLayout, 
 from qtpy.QtCore import Qt, Signal, QSize, QEvent, QItemSelection
 from qtpy.QtGui import QStandardItem, QStandardItemModel, QMouseEvent, QFont, QIntValidator, QValidator, QFocusEvent
 
-from .custom_widget import ConfigComboBox, Widget
+from .custom_widget import ConfigComboBox, Widget, PanelGroupBox
 from utils.config import pcfg
 from utils import shared as C
 from utils.shared import CONFIG_FONTSIZE_CONTENT, CONFIG_FONTSIZE_HEADER, CONFIG_FONTSIZE_TABLE, CONFIG_COMBOBOX_SHORT, CONFIG_COMBOBOX_LONG, CONFIG_COMBOBOX_MIDEAN
@@ -208,6 +208,35 @@ class ConfigBlock(Widget):
         if target_block is None:
             self.addSublock(sublock)
         return checkbox, sublock
+
+    def addGroupedBlock(self, group_title: str, widget: QWidget, object_name: str = None, name: str = None, discription: str = None) -> ConfigSubBlock:
+        """Add a visually grouped section using PanelGroupBox.
+
+        Replaces addTextLabel + addBlockWidget pattern.
+        group_title is shown in the group box frame; a hidden text label
+        is created alongside for tree-view indexing (backward compatible).
+        """
+        group = PanelGroupBox(group_title)
+        if object_name:
+            group.setObjectName(object_name)
+        group_vlayout = group.contentLayout()
+        group_vlayout.setContentsMargins(8, 4, 8, 6)
+        group_vlayout.setSpacing(0)
+
+        sublock = ConfigSubBlock(widget, name=name, discription=discription)
+        group_vlayout.addWidget(sublock)
+
+        # Hidden label so tree-view highlighting still works
+        label = ConfigTextLabel(group_title, CONFIG_FONTSIZE_HEADER)
+        label.setVisible(False)
+        self.vlayout.addWidget(label)
+        self.label_list.append(label)
+        self.vlayout.addWidget(group)
+
+        sublock.setIdx(self.index, len(self.label_list) - 1)
+        sublock.pressed.connect(lambda idx0, idx1: self.sublock_pressed.emit(idx0, idx1))
+        self.subblock_list.append(sublock)
+        return sublock
 
     def getSubBlockbyIdx(self, idx: int) -> ConfigSubBlock:
         return self.subblock_list[idx]
@@ -710,51 +739,64 @@ class ConfigPanel(Widget):
             TableItem(label_shortcuts, CONFIG_FONTSIZE_TABLE),
         ])
         
+        # === Model management (no tree item needed) ===
+        model_group = PanelGroupBox(self.tr('Models'))
+        model_vlayout = model_group.contentLayout()
+        model_vlayout.setContentsMargins(8, 4, 8, 6)
+        model_vlayout.setSpacing(0)
         self.load_model_checker, msublock = checkbox_with_label(self.tr('Load models on demand'), discription=self.tr('Load models on demand to save memory.'))
         self.load_model_checker.stateChanged.connect(self.on_load_model_changed)
-        dlConfigPanel.vlayout.addWidget(msublock)
+        model_vlayout.addWidget(msublock)
         self.empty_runcache_checker, msublock = checkbox_with_label(self.tr('Empty cache after RUN'), discription=self.tr('Empty cache after RUN to save memory.'))
-        dlConfigPanel.vlayout.addWidget(msublock)
         self.empty_runcache_checker.stateChanged.connect(self.on_runcache_changed)
+        model_vlayout.addWidget(msublock)
         self.unload_model_btn = QPushButton(parent=self)
         self.unload_model_btn.setFixedWidth(500)
         self.unload_model_btn.setText(self.tr('Unload All Models'))
         self.unload_model_btn.clicked.connect(self.unload_models)
         msublock.layout().addWidget(self.unload_model_btn)
+        dlConfigPanel.vlayout.addWidget(model_group)
 
-        dlConfigPanel.addTextLabel(label_text_det)
         self.detect_config_panel = TextDetectConfigPanel(self.tr('Detector'), scrollWidget=self)
-        self.detect_sub_block = dlConfigPanel.addBlockWidget(self.detect_config_panel)
+        self.detect_sub_block = dlConfigPanel.addGroupedBlock(label_text_det, self.detect_config_panel, object_name="GroupDetect")
         self.detect_config_panel.keep_existing_checker.clicked.connect(self.on_keepline_clicked)
 
-        dlConfigPanel.addTextLabel(label_text_ocr)
         self.ocr_config_panel = OCRConfigPanel(self.tr('OCR'), scrollWidget=self)
-        self.ocr_sub_block = dlConfigPanel.addBlockWidget(self.ocr_config_panel)
+        self.ocr_sub_block = dlConfigPanel.addGroupedBlock(label_text_ocr, self.ocr_config_panel, object_name="GroupOCR")
 
-        dlConfigPanel.addTextLabel(label_inpaint)
         self.inpaint_config_panel = InpaintConfigPanel(self.tr('Inpainter'), scrollWidget=self)
-        self.inpaint_sub_block = dlConfigPanel.addBlockWidget(self.inpaint_config_panel)
+        self.inpaint_sub_block = dlConfigPanel.addGroupedBlock(label_inpaint, self.inpaint_config_panel, object_name="GroupInpaint")
 
-        dlConfigPanel.addTextLabel(label_translator)
         self.trans_config_panel = TranslatorConfigPanel(label_translator, scrollWidget=self)
-        self.trans_sub_block = dlConfigPanel.addBlockWidget(self.trans_config_panel)
+        self.trans_sub_block = dlConfigPanel.addGroupedBlock(label_translator, self.trans_config_panel, object_name="GroupTranslate")
 
-        generalConfigPanel.addTextLabel(label_startup)
-        self.open_on_startup_checker, _ = generalConfigPanel.addCheckBox(self.tr('Reopen last project on startup'))
+        # === General: Startup ===
+        startup_widget = QWidget()
+        startup_layout = QVBoxLayout(startup_widget)
+        startup_layout.setContentsMargins(0, 0, 0, 0)
+        self.open_on_startup_checker = QCheckBox(self.tr('Reopen last project on startup'))
         self.open_on_startup_checker.stateChanged.connect(self.on_open_onstartup_changed)
+        startup_layout.addWidget(self.open_on_startup_checker)
+        generalConfigPanel.addGroupedBlock(label_startup, startup_widget, object_name="GroupGeneral")
 
-        generalConfigPanel.addTextLabel(label_typesetting)
         dec_program_str = self.tr('decide by program')
         use_global_str = self.tr('use global setting')
+
+        # Build typesetting wrapper widget
+        ts_widget = QWidget()
+        ts_layout = QVBoxLayout(ts_widget)
+        ts_layout.setContentsMargins(0, 0, 0, 0)
+        ts_layout.setSpacing(0)
 
         global_fntfmt_widget = QWidget()
         global_fntfmt_layout = QGridLayout(global_fntfmt_widget)
         global_fntfmt_layout.setSpacing(0)
         global_fntfmt_widget.setContentsMargins(0, 0, 0, 0)
 
-        b = generalConfigPanel.addBlockWidget(global_fntfmt_widget)
+        b = ConfigSubBlock(global_fntfmt_widget)
         b.layout().setContentsMargins(0, 0, 0, 0)
         b.setContentsMargins(0, 0, 0, 0)
+        ts_layout.addWidget(b)
         self.let_fntsize_combox, sublock = combobox_with_label([dec_program_str, use_global_str], self.tr('Font Size'), parent=self, insert_stretch=True)
         global_fntfmt_layout.addWidget(sublock, 0, 0)
 
@@ -786,21 +828,26 @@ class ConfigPanel(Widget):
 
         global_fntfmt_layout.addItem(QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding), 0, 2)
 
-        self.let_autolayout_checker, sublock = generalConfigPanel.addCheckBox(self.tr('Auto layout'), 
+        self.let_autolayout_checker, al_sublock = checkbox_with_label(
+                self.tr('Auto layout'),
                 discription=self.tr('Split translation into multi-lines according to the extracted balloon region.'))
-
         self.let_autolayout_checker.stateChanged.connect(self.on_autolayout_changed)
-        self.let_uppercase_checker, _ = generalConfigPanel.addCheckBox(self.tr('To uppercase'))
-        self.let_uppercase_checker.stateChanged.connect(self.on_uppercase_changed)
+        ts_layout.addWidget(al_sublock)
 
-        self.let_textstyle_indep_checker, _ = generalConfigPanel.addCheckBox(self.tr('Independent text styles for each projects'))
+        self.let_uppercase_checker, uc_sublock = checkbox_with_label(self.tr('To uppercase'))
+        self.let_uppercase_checker.stateChanged.connect(self.on_uppercase_changed)
+        ts_layout.addWidget(uc_sublock)
+
+        self.let_textstyle_indep_checker, ti_sublock = checkbox_with_label(
+                self.tr('Independent text styles for each projects'))
         self.let_textstyle_indep_checker.stateChanged.connect(self.on_textstyle_indep_changed)
+        ts_layout.addWidget(ti_sublock)
 
         self.exclude_fonts_btn = QPushButton(self.tr('Exclude Fonts...'), parent=self)
         self.exclude_fonts_btn.setFixedWidth(CONFIG_COMBOBOX_LONG)
         self.exclude_fonts_btn.clicked.connect(self.on_exclude_fonts_clicked)
         btn_sublock = ConfigSubBlock(self.exclude_fonts_btn)
-        generalConfigPanel.addSublock(btn_sublock)
+        ts_layout.addWidget(btn_sublock)
 
         self.max_font_size_edit = QSpinBox()
         self.max_font_size_edit.setRange(10, 1000)
@@ -808,26 +855,46 @@ class ConfigPanel(Widget):
         self.max_font_size_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
         self.max_font_size_edit.valueChanged.connect(self.on_max_font_size_changed)
         max_font_sublock = ConfigSubBlock(self.max_font_size_edit, self.tr('Max Font Size (px)'))
-        generalConfigPanel.addSublock(max_font_sublock)
+        ts_layout.addWidget(max_font_sublock)
 
-        generalConfigPanel.addTextLabel(label_save)
-        self.rst_imgformat_combobox, imsave_sublock = generalConfigPanel.addCombobox(['PNG', 'JPG', 'WEBP', 'JXL'], self.tr('Result image format'))
+        # Wrap typesetting in a grouped block
+        generalConfigPanel.addGroupedBlock(label_typesetting, ts_widget, object_name="GroupGeneral")
+
+        # === General: Save ===
+        save_widget = QWidget()
+        save_layout = QVBoxLayout(save_widget)
+        save_layout.setContentsMargins(0, 0, 0, 0)
+        save_layout.setSpacing(0)
+
+        self.rst_imgformat_combobox, imsave_sublock = combobox_with_label(
+                ['PNG', 'JPG', 'WEBP', 'JXL'], self.tr('Result image format'), parent=self)
         self.rst_imgformat_combobox.activated.connect(self.on_rst_imgformat_changed)
+        save_layout.addWidget(imsave_sublock)
+
+        self.rst_autoformat_checker, autoformat_sublock = checkbox_with_label(
+            self.tr('Auto detect source format'))
+        self.rst_autoformat_checker.stateChanged.connect(self.on_autoformat_changed)
+        save_layout.addWidget(autoformat_sublock)
+
         self.rst_imgquality_edit = PercentageLineEdit('100')
         self.rst_imgquality_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
         self.rst_imgquality_edit.finish_edited.connect(self.on_edit_quality_changed)
 
-        sublock = ConfigSubBlock(self.rst_imgquality_edit, self.tr('Quality'), vertical_layout=False)
-        sublock.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
-        sublock.layout().insertStretch(-1)
-        imsave_sublock.layout().addWidget(sublock)
+        quality_sublock = ConfigSubBlock(self.rst_imgquality_edit, self.tr('Quality'), vertical_layout=False)
+        quality_sublock.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
+        quality_sublock.layout().insertStretch(-1)
+        imsave_sublock.layout().addWidget(quality_sublock)
 
-        self.intermediate_imgformat_combobox, intermediate_imsave_sublock = generalConfigPanel.addCombobox(['PNG', 'JXL'], self.tr('Intermediate image format'))
+        self.intermediate_imgformat_combobox, intermediate_imsave_sublock = combobox_with_label(
+                ['PNG', 'JXL'], self.tr('Intermediate image format'), parent=self)
         self.intermediate_imgformat_combobox.activated.connect(self.on_intermediate_imgformat_changed)
+        save_layout.addWidget(intermediate_imsave_sublock)
 
-        generalConfigPanel.addTextLabel(label_shortcuts)
+        generalConfigPanel.addGroupedBlock(label_save, save_widget, object_name="GroupSave")
+
+        # === General: Keyboard Shortcuts ===
         self.shortcut_editor = ShortcutEditor(parent=self)
-        shortcut_sublock = generalConfigPanel.addBlockWidget(self.shortcut_editor)
+        shortcut_sublock = generalConfigPanel.addGroupedBlock(label_shortcuts, self.shortcut_editor)
         shortcut_sublock.layout().addStretch()
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -897,6 +964,10 @@ class ConfigPanel(Widget):
 
     def on_rst_imgformat_changed(self):
         pcfg.imgsave_ext = '.' + self.rst_imgformat_combobox.currentText().lower()
+
+    def on_autoformat_changed(self):
+        pcfg.imgsave_auto_format = self.rst_autoformat_checker.isChecked()
+        self.rst_imgformat_combobox.setEnabled(not pcfg.imgsave_auto_format)
 
     def on_max_font_size_changed(self, value: int):
         pcfg.max_font_size = value
@@ -968,6 +1039,8 @@ class ConfigPanel(Widget):
         self.let_uppercase_checker.setChecked(pcfg.let_uppercase_flag)
         self.let_textstyle_indep_checker.setChecked(pcfg.let_textstyle_indep_flag)
         self.rst_imgformat_combobox.setCurrentText(pcfg.imgsave_ext.replace('.', '').upper())
+        self.rst_autoformat_checker.setChecked(pcfg.imgsave_auto_format)
+        self.rst_imgformat_combobox.setEnabled(not pcfg.imgsave_auto_format)
         self.intermediate_imgformat_combobox.setCurrentText(pcfg.intermediate_imgsave_ext.replace('.', '').upper())
         self.rst_imgquality_edit.setText(str(pcfg.imgsave_quality))
         self.load_model_checker.setChecked(pcfg.module.load_model_on_demand)

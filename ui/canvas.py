@@ -2,9 +2,9 @@ import numpy as np
 from typing import List, Union
 import os
 
-from qtpy.QtWidgets import QApplication, QSlider, QMenu, QGraphicsScene, QGraphicsSceneDragDropEvent , QGraphicsView, QGraphicsSceneDragDropEvent, QGraphicsRectItem, QGraphicsItem, QScrollBar, QGraphicsPixmapItem, QGraphicsSceneMouseEvent, QGraphicsSceneContextMenuEvent, QRubberBand
+from qtpy.QtWidgets import QApplication, QSlider, QMenu, QGraphicsScene, QGraphicsSceneDragDropEvent , QGraphicsView, QGraphicsSceneDragDropEvent, QGraphicsRectItem, QGraphicsItem, QScrollBar, QGraphicsPixmapItem, QGraphicsSceneMouseEvent, QGraphicsSceneContextMenuEvent, QRubberBand, QLabel
 from qtpy.QtCore import Qt, QDateTime, QRectF, QPointF, QPoint, Signal, QSizeF, QEvent
-from qtpy.QtGui import QKeySequence, QPixmap, QImage, QHideEvent, QKeyEvent, QWheelEvent, QResizeEvent, QPainter, QPen, QPainterPath, QCursor, QNativeGestureEvent
+from qtpy.QtGui import QKeySequence, QPixmap, QImage, QHideEvent, QKeyEvent, QWheelEvent, QResizeEvent, QPainter, QPen, QColor, QPainterPath, QCursor, QNativeGestureEvent
 
 try:
     from qtpy.QtWidgets import QUndoStack, QUndoCommand
@@ -150,6 +150,16 @@ class CustomGV(QGraphicsView):
             # issue #908, https://stackoverflow.com/questions/4177720/accepting-drops-on-a-qgraphicsscene
             e.setAccepted(True)
 
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self.canvas is not None and self.canvas.preview_mode:
+            painter = QPainter(self.viewport())
+            pen = QPen(QColor('#e67e22'), 5)
+            painter.setPen(pen)
+            r = self.viewport().rect()
+            painter.drawRect(r.adjusted(2, 2, -3, -3))
+            painter.end()
+
 
 class Canvas(QGraphicsScene):
 
@@ -240,6 +250,13 @@ class Canvas(QGraphicsScene):
         self.scaleFactorLabel.setText('100%')
         self.scaleFactorLabel.gv = self.gv
 
+        self.previewLabel = QLabel(self.gv)
+        self.previewLabel.setObjectName('PreviewLabel')
+        self.previewLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.previewLabel.setText('PREVIEW')
+        self.previewLabel.adjustSize()
+        self.previewLabel.setVisible(False)
+
         self.txtblkShapeControl = TextBlkShapeControl(self.gv)
         
         self.baseLayer = QGraphicsRectItem()
@@ -253,6 +270,7 @@ class Canvas(QGraphicsScene):
         self.drawingLayer.setTransformationMode(Qt.TransformationMode.FastTransformation)
         self.textLayer = QGraphicsPixmapItem()
         self.previewLayer = QGraphicsPixmapItem()
+        self.previewLayer.setTransformationMode(Qt.TransformationMode.SmoothTransformation)
         self.previewLayer.setVisible(False)
         self.preview_mode = False
 
@@ -395,6 +413,9 @@ class Canvas(QGraphicsScene):
     def toggle_preview(self):
         self.preview_mode = not self.preview_mode
         if self.preview_mode:
+            if not self.imgtrans_proj or not self.imgtrans_proj.img_valid:
+                self.preview_mode = False
+                return
             self._enter_preview()
         else:
             self._exit_preview()
@@ -403,7 +424,10 @@ class Canvas(QGraphicsScene):
         scale_before = self.scale_factor
         tlayer_opacity_before = self.textLayer.opacity()
         tlayer_visible = self.textLayer.isVisible()
+        txcontrol_visible = self.txtblkShapeControl.isVisible()
         inpaint_visible = self.inpaintLayer.isVisible()
+        self._tlayer_was_visible = tlayer_visible
+        self._txcontrol_was_visible = txcontrol_visible
 
         self.textLayer.setOpacity(1)
         if not tlayer_visible:
@@ -422,6 +446,9 @@ class Canvas(QGraphicsScene):
                 blk_item.endEdit(keep_focus=False)
             if blk_item.isSelected():
                 blk_item.setSelected(False)
+
+        # Hide shape control BEFORE rendering so it's not captured in the preview
+        self.txtblkShapeControl.setVisible(False)
 
         result = ndarray2pixmap(self.imgtrans_proj.inpainted_array, return_qimg=False)
         canvas_sz = self.img_window_size()
@@ -443,12 +470,21 @@ class Canvas(QGraphicsScene):
         self.previewLayer.setPixmap(result)
         self.previewLayer.setVisible(True)
         self.textLayer.setVisible(False)
-        self.txtblkShapeControl.setVisible(False)
+
+        self.previewLabel.setVisible(True)
+        self.previewLabel.raise_()
+        self.previewLabel.adjustSize()
+
+        self.gv.viewport().update()
 
     def _exit_preview(self):
         self.previewLayer.setVisible(False)
-        self.textLayer.setVisible(True)
-        self.txtblkShapeControl.setVisible(True)
+        if self._txcontrol_was_visible:
+            self.txtblkShapeControl.setVisible(True)
+        if self._tlayer_was_visible:
+            self.textLayer.setVisible(True)
+
+        self.previewLabel.setVisible(False)
     def updateLayers(self):
         
         if not self.imgtrans_proj.img_valid:
@@ -522,6 +558,9 @@ class Canvas(QGraphicsScene):
         pos = self.search_widget.pos()
         pos.setX(x-30)
         self.search_widget.move(pos)
+
+        plw = self.previewLabel.width()
+        self.previewLabel.move((gv_w - plw) // 2, 12)
         
     def onScaleFactorChanged(self):
         self.scaleFactorLabel.setText(f'{self.scale_factor*100:2.0f}%')
@@ -719,6 +758,11 @@ class Canvas(QGraphicsScene):
                     self.rubber_band.setGeometry(QRectF(self.rubber_band_origin, self.rubber_band_origin).normalized())
                     self.rubber_band.show()
                     self.rubber_band.setZValue(1)
+
+        if btn == Qt.MouseButton.LeftButton and self.txtblkShapeControl.isVisible():
+            items_at = self.items(event.scenePos())
+            if not any(isinstance(item, TextBlkItem) for item in items_at):
+                self.txtblkShapeControl.setBlkItem(None)
 
         return super().mousePressEvent(event)
 

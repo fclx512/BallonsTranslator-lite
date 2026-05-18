@@ -203,16 +203,17 @@ class ControlBlockItem(QGraphicsRectItem):
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self.ctrl.reshaping = False
-            if self.drag_mode == self.DRAG_RESHAPE:
+            if self.drag_mode == self.DRAG_RESHAPE and self.ctrl.blk_item is not None:
                 self.ctrl.blk_item.endReshape()
-            if self.drag_mode == self.DRAG_ROTATE:
+            if self.drag_mode == self.DRAG_ROTATE and self.ctrl.blk_item is not None:
                 self.ctrl.blk_item.rotated.emit(self.ctrl.rotation())
             self.drag_mode = self.DRAG_NONE
-            
+
             self.ctrl.previewPixmap.setVisible(False)
             self.ctrl.angleLabel.setVisible(False)
-            self.ctrl.blk_item.update()
-            self.ctrl.updateBoundingRect()
+            if self.ctrl.blk_item is not None:
+                self.ctrl.blk_item.update()
+                self.ctrl.updateBoundingRect()
             return super().mouseReleaseEvent(event)
 
 class TextBlkShapeControl(QGraphicsRectItem):

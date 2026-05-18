@@ -1,7 +1,7 @@
 import os.path as osp
 from typing import List, Union
 
-from qtpy.QtWidgets import QMainWindow, QHBoxLayout, QVBoxLayout, QFileDialog, QLabel, QSizePolicy, QToolBar, QMenu, QSpacerItem, QPushButton, QCheckBox, QToolButton
+from qtpy.QtWidgets import QMainWindow, QHBoxLayout, QVBoxLayout, QFileDialog, QLabel, QSizePolicy, QToolBar, QMenu, QSpacerItem, QPushButton, QCheckBox, QToolButton, QFrame
 from qtpy.QtCore import Qt, Signal, QPoint, QEvent, QSize
 from qtpy.QtGui import QMouseEvent, QKeySequence, QActionGroup, QIcon
 
@@ -677,18 +677,29 @@ class BottomBar(Widget):
         self.hlayout.addWidget(self.textdet_selector)
         self.hlayout.addWidget(self.ocr_selector)
         self.hlayout.addWidget(self.inpaint_selector)
+        # Separator between module selectors and translator
+        sep1 = self._make_vseparator()
+        self.hlayout.addWidget(sep1)
         self.hlayout.addWidget(self.trans_selector)
-        # self.hlayout.addWidget(self.translatorStatusbtn)
-        # self.hlayout.addWidget(self.transTranspageBtn)
-        # self.hlayout.addWidget(self.inpainterStatBtn)
         self.hlayout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
         self.hlayout.addWidget(self.textlayerSlider)
         self.hlayout.addWidget(self.originalSlider)
+        # Separator between sliders and mode toggles
+        sep2 = self._make_vseparator()
+        self.hlayout.addWidget(sep2)
         self.hlayout.addWidget(self.paintChecker)
         self.hlayout.addWidget(self.texteditChecker)
         self.hlayout.addWidget(self.textblockChecker)
         self.hlayout.setContentsMargins(60, 0, 10, WINDOW_BORDER_WIDTH)
 
+
+    @staticmethod
+    def _make_vseparator() -> QFrame:
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.VLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
+        sep.setFixedWidth(8)
+        return sep
 
     def onPaintCheckerPressed(self):
         checked = self.paintChecker.isChecked()

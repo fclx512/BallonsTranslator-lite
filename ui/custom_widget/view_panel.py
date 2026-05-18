@@ -1,4 +1,4 @@
-from qtpy.QtWidgets import QPushButton, QHBoxLayout, QLabel, QGroupBox, QScrollArea, QVBoxLayout, QSizePolicy
+from qtpy.QtWidgets import QPushButton, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QSizePolicy
 from qtpy.QtCore import  Qt, Signal
 from qtpy.QtGui import QFontMetrics, QFontMetrics, QIcon, QMouseEvent
 
@@ -126,8 +126,32 @@ class PanelArea(QScrollArea):
         self.scrollContent.setLayout(layout)
 
 
-class PanelGroupBox(QGroupBox):
-    pass
+class PanelGroupBox(Widget):
+    """Card-style container with a title header and content area.
+
+    Unlike QGroupBox, uses a separate QLabel for the title so CSS
+    background-color never obscures the title text.
+    """
+    def __init__(self, title: str = "", parent=None):
+        super().__init__(parent)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        self.title_label = QLabel(title, self)
+        self.title_label.setObjectName("CardTitle")
+        main_layout.addWidget(self.title_label)
+
+        self.content_area = Widget()
+        self.content_area.setObjectName("CardContent")
+        self._content_layout = QVBoxLayout(self.content_area)
+        self._content_layout.setContentsMargins(8, 4, 8, 6)
+        self._content_layout.setSpacing(0)
+        main_layout.addWidget(self.content_area)
+
+    def contentLayout(self) -> QVBoxLayout:
+        """Return the layout of the content area for adding child widgets."""
+        return self._content_layout
 
 
 class PanelAreaContent(Widget):
