@@ -424,7 +424,7 @@ if torch is not None:
                     'fp32',
                     'bf16'
                 ],
-                'value': 'bf16' if BF16_SUPPORTED == 'cuda' else 'fp32',
+                'value': 'bf16' if DEFAULT_DEVICE == 'cuda' and BF16_SUPPORTED else 'fp32',
                 'description': 'Model precision (bf16 is faster on supported GPUs, fp32 is more compatible)',
             },
         }
