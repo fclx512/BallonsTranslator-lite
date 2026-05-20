@@ -55,6 +55,7 @@ parser.add_argument("--frozen", action='store_true', help='run without checking 
 parser.add_argument("--update", action='store_true', help="Update the repository before launching") # Add argument --update
 parser.add_argument("--config_path", default=shared.CONFIG_PATH, help='Config file to use for translation') # Named config_path to avoid conflict with existing name config
 parser.add_argument('--cpu', action='store_true', help="Force CPU mode even if PyTorch with CUDA is available")
+parser.add_argument('--fluent', action='store_true', help="Use Fluent Design UI (PyQt-Fluent-Widgets)")
 args, _ = parser.parse_known_args()
 
 
@@ -369,20 +370,26 @@ def main():
 
     setup_locks()
 
-    from ui.mainwindow import MainWindow
-    ballontrans = MainWindow(app, config, open_dir=args.proj_dir, **vars(args))
+    if args.fluent and not args.headless:
+        from ui.fluent_window import FluentTranslatorWindow
+        ballontrans = FluentTranslatorWindow(app, config, open_dir=args.proj_dir, **vars(args))
+    else:
+        from ui.mainwindow import MainWindow
+        ballontrans = MainWindow(app, config, open_dir=args.proj_dir, **vars(args))
     global BT
     BT = ballontrans
     BT.restart_signal.connect(restart)
 
     if not args.headless:
-        if shared.SCREEN_W > 1707 and sys.platform == 'win32':   # higher than 2560 (1440p) / 1.5
-            # https://github.com/dmMaze/BallonsTranslator/issues/220
-            BT.comicTransSplitter.setHandleWidth(7)
+        if not args.fluent:
+            if shared.SCREEN_W > 1707 and sys.platform == 'win32':   # higher than 2560 (1440p) / 1.5
+                # https://github.com/dmMaze/BallonsTranslator/issues/220
+                BT.comicTransSplitter.setHandleWidth(7)
 
         ballontrans.setWindowIcon(QIcon(shared.ICON_PATH))
         ballontrans.show()
-        ballontrans.resetStyleSheet()
+        if not args.fluent:
+            ballontrans.resetStyleSheet()
     sys.exit(app.exec())
 
 def prepare_environment():

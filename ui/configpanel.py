@@ -365,15 +365,19 @@ class _ShortcutPill(QWidget):
         h = QHBoxLayout(self)
         h.setContentsMargins(4, 1, 1, 1)
         h.setSpacing(2)
+        from .theme_helpers import shortcut_styles
+        s = shortcut_styles()
         lbl = QLabel(key_seq)
-        lbl.setStyleSheet("color: #d4d4d8; font-size: 11px;")
+        lbl.setStyleSheet(f"color: {s['pill_text']}; font-size: 11px;")
         h.addWidget(lbl)
         btn = QPushButton('×')
         btn.setFixedSize(16, 16)
-        btn.setStyleSheet("QPushButton { border: none; color: #888; font-size: 12px; } QPushButton:hover { color: #f88; }")
+        btn.setStyleSheet(
+            f"QPushButton {{ border: none; color: {s['close_clr']}; font-size: 12px; }}"
+            f"QPushButton:hover {{ color: {s['close_hvr']}; }}")
         btn.clicked.connect(lambda: self.removed.emit(self))
         h.addWidget(btn)
-        self.setStyleSheet("_ShortcutPill { background: #3a3a42; border-radius: 3px; }")
+        self.setStyleSheet(s['pill'])
 
 
 class ShortcutEditor(QWidget):
@@ -411,7 +415,8 @@ class ShortcutEditor(QWidget):
         self.right_layout.setContentsMargins(8, 4, 8, 4)
         self._placeholder = QLabel(self.tr('Select an action to edit shortcuts'))
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._placeholder.setStyleSheet("color: #888;")
+        from .theme_helpers import shortcut_styles
+        self._placeholder.setStyleSheet(f"color: {shortcut_styles()['place_clr']};")
         self.right_layout.addWidget(self._placeholder)
 
         splitter.addWidget(left)
@@ -439,8 +444,10 @@ class ShortcutEditor(QWidget):
         self.right_layout.addWidget(card)
 
     def _make_card(self, action_id: str) -> QWidget:
+        from .theme_helpers import shortcut_styles
+        s = shortcut_styles()
         card = QWidget()
-        card.setStyleSheet("QWidget { background: #2a2a32; border-radius: 4px; padding: 4px; }")
+        card.setStyleSheet(f"QWidget {{ background: {s['card_bg']}; border-radius: 4px; padding: 4px; }}")
         v = QVBoxLayout(card)
         v.setContentsMargins(6, 3, 4, 3)
         v.setSpacing(3)
@@ -448,13 +455,15 @@ class ShortcutEditor(QWidget):
         # Header row: name + reset
         header = QHBoxLayout()
         name = QLabel(self.tr(_ACTION_NAMES.get(action_id, action_id)))
-        name.setStyleSheet("font-weight: bold; color: #ccc; border: none; background: transparent;")
+        name.setStyleSheet(f"font-weight: bold; color: {s['name_clr']}; border: none; background: transparent;")
         header.addWidget(name)
         header.addStretch()
         reset_btn = QPushButton('↺')
         reset_btn.setFixedSize(20, 20)
         reset_btn.setToolTip(self.tr('Reset'))
-        reset_btn.setStyleSheet("QPushButton { border: none; color: #888; background: transparent; } QPushButton:hover { color: #fff; }")
+        reset_btn.setStyleSheet(
+            f"QPushButton {{ border: none; color: {s['btn_clr']}; background: transparent; }}"
+            f"QPushButton:hover {{ color: {s['reset_hvr']}; }}")
         reset_btn.clicked.connect(lambda checked=False, aid=action_id: self._reset_card(aid))
         header.addWidget(reset_btn)
         v.addLayout(header)
@@ -468,10 +477,14 @@ class ShortcutEditor(QWidget):
         v.addWidget(pills_widget)
 
         # "+" add button
+        from .theme_helpers import shortcut_styles
+        s = shortcut_styles()
         add_btn = QPushButton('+')
         add_btn.setFixedSize(24, 20)
         add_btn.setToolTip(self.tr('Add shortcut'))
-        add_btn.setStyleSheet("QPushButton { border: 1px solid #555; border-radius: 3px; color: #aaa; background: transparent; } QPushButton:hover { border-color: #88f; color: #fff; }")
+        add_btn.setStyleSheet(
+            f"QPushButton {{ border: 1px solid {s['add_bdr']}; border-radius: 3px; color: {s['add_clr']}; background: transparent; }}"
+            f"QPushButton:hover {{ border-color: {s['add_hvr_bdr']}; color: {s['add_hvr_clr']}; }}")
         add_btn.clicked.connect(lambda checked=False, aid=action_id, pw=pills_widget: self._add_shortcut(aid, pw))
         pills_row.addWidget(add_btn)
         pills_row.addStretch()

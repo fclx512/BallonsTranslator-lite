@@ -72,9 +72,10 @@ class SliderHandle(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
 
         # draw outer circle
-        isDark = isDarkTheme()
-        painter.setPen(QColor(0, 0, 0, 90 if isDark else 25))
-        painter.setBrush(QColor(69, 69, 69) if isDark else QColor(225, 228, 235))
+        from ui.theme_helpers import slider_colors, is_dark_theme
+        handle_outer, _ = slider_colors()
+        painter.setPen(QColor(0, 0, 0, 90 if is_dark_theme() else 25))
+        painter.setBrush(handle_outer)
         painter.drawEllipse(self.rect().adjusted(1, 1, -1, -1))
 
         # draw inner circle
@@ -152,7 +153,9 @@ class Slider(QSlider):
         painter = QPainter(self)
         painter.setRenderHints(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(255, 255, 255, 115) if isDarkTheme() else QColor(0, 0, 0, 100))
+        from ui.theme_helpers import slider_colors
+        _, groove = slider_colors()
+        painter.setBrush(groove)
 
         if self.orientation() == Qt.Orientation.Horizontal:
             self._drawHorizonGroove(painter)
