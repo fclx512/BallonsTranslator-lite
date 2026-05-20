@@ -8,6 +8,7 @@ from .message import MessageBox, TaskProgressBar, FrameLessMessageBox, ProgressM
 from .flow_layout import FlowLayout
 from .label import FadeLabel, SmallColorPickerLabel, ColorPickerLabel, ConfigClickableLabel, ClickableLabel, CheckableLabel, TextCheckerLabel, ParamNameLabel, SmallParamLabel, SizeControlLabel, SmallSizeControlLabel
 from .slider import PaintQSlider
+from .range_slider import RangeSlider
 from .helper import isDarkTheme, themeColor
 from .push_button import NoBorderPushBtn
 from .checkbox import QFontChecker, AlignmentChecker

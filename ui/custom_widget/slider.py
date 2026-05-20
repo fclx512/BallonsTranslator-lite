@@ -77,8 +77,10 @@ class SliderHandle(QWidget):
         painter.setBrush(QColor(69, 69, 69) if isDark else QColor(225, 228, 235))
         painter.drawEllipse(self.rect().adjusted(1, 1, -1, -1))
 
-        # draw innert circle
-        painter.setBrush(themeColor())
+        # draw inner circle
+        inner_color = themeColor()
+        inner_color.setAlpha(127)
+        painter.setBrush(inner_color)
         painter.drawEllipse(QPoint(11, 11), self.radius, self.radius)
 
 

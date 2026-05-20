@@ -81,7 +81,9 @@ class ConfigTextLabel(QLabel):
         self.setOpenExternalLinks(True)
 
     def setActiveBackground(self):
-        self.setStyleSheet("background-color:rgba(30, 147, 229, 51);")
+        from ui.misc import get_theme_color
+        c = get_theme_color()
+        self.setStyleSheet(f"background-color: rgba{c.red()}, {c.green()}, {c.blue()}, 51);")
 
 
 class ConfigSubBlock(Widget):

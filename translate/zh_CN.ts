@@ -1022,7 +1022,7 @@ All existing translation results will be cleared!</source>
     <message>
         <location filename="../ui/mainwindow.py" line="1239"/>
         <source>Confirmation</source>
-        <translation>确认</translation>
+        <translation>运行</translation>
     </message>
     <message>
         <location filename="../ui/mainwindow.py" line="1344"/>
@@ -1182,6 +1182,26 @@ Failed: {f}/{t}</source>
         <translation>区域合并完成
 成功: {s}/{t}
 失败: {f}/{t}</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line="1426"/>
+        <source>Run</source>
+        <translation>运行</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line="1449"/>
+        <source>All Pages</source>
+        <translation>全部页面</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line="1447"/>
+        <source>Page %1 ~ Page %2 (%3 pages)</source>
+        <translation>第 %1 页 ~ 第 %2 页（共 %3 页）</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line="1465"/>
+        <source>Cancel</source>
+        <translation>取消</translation>
     </message>
 </context>
 <context>

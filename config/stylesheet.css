@@ -49,23 +49,23 @@ QSplitter:handle {
 }
 
 QSplitter::handle:pressed {
-    background: rgb(30, 147, 229)
+    background: @accentPrimary
 }
 
 ConfigSubBlock::hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 SourceTextEdit {
     font-size: 17px;
     background-color: @emptyContentBackgroundColor;
-    border-radius: 5px;
+    border-radius: 4px;
     border-style: none;
 }
 
 TransTextEdit {
     font-size: 17px;
-    border-radius: 5px;
+    border-radius: 4px;
     background-color: @transtexteditBackgroundColor;
 }
 
@@ -89,7 +89,7 @@ QPlainTextEdit {
 }
 
 QPlainTextEdit:focus {
-    border: 1px solid rgb(30, 147, 229);
+    border: 1px solid @accentPrimary;
  }
 
 QComboBox::drop-down {
@@ -97,7 +97,7 @@ QComboBox::drop-down {
 }
 
 QComboBox::hover {
-    border: 1px solid rgb(30, 147, 229);
+    border: 1px solid @accentPrimary;
 }
 
 QComboBox::down-arrow {
@@ -117,7 +117,7 @@ QFontComboBox#FontFamilyBox {
 }
 
 QFontComboBox#FontFamilyBox::hover {
-    border: 1px solid rgb(30, 147, 229);
+    border: 1px solid @accentPrimary;
 }
 
 SizeComboBox {
@@ -130,7 +130,7 @@ SizeComboBox {
 }
 
 SizeComboBox::hover {
-    border: 1px solid rgb(30, 147, 229);
+    border: 1px solid @accentPrimary;
 }
 
 SizeComboBox::down-arrow {
@@ -166,7 +166,7 @@ QGroupBox {
     font-size: 14px;
     border: 1px solid @borderColor;
     margin-top: 9px;
-    border-radius: 6px;
+    border-radius: 4px;
 }
 
 QGroupBox::title {
@@ -192,7 +192,7 @@ ColorPickerLabel {
 }
 
 ColorPickerLabel::hover {
-    border: 2px solid rgb(30, 147, 229);
+    border: 2px solid @accentPrimary;
 }
 
 SmallColorPickerLabel {
@@ -214,11 +214,11 @@ AlignmentChecker::indicator {
 }
 
 AlignmentChecker::indicator:checked {
-    background-color: rgb(30, 147, 229);
+    background-color: @accentPrimary;
 }
 
 AlignmentChecker::indicator:hover {
-    border: 2px solid rgb(30, 147, 229);
+    border: 2px solid @accentPrimary;
 }
 
 AlignmentChecker#AlignLeftChecker::indicator {
@@ -262,16 +262,16 @@ QFontChecker {
 QFontChecker::indicator {
     width: 30px;
     height: 30px;
-    border: 2px solid rgba(30, 147, 229, 0);
+    border: 2px solid transparent;
 }
 
 QFontChecker::indicator::hover {
-    border: 2px solid rgb(30, 147, 229);
+    border: 2px solid @accentPrimary;
 }
 
 QFontChecker::indicator::checked {
-    border: 2px solid rgb(30, 147, 229);
-    background-color: rgb(30, 147, 229);
+    border: 2px solid @accentPrimary;
+    background-color: @accentPrimary;
 }
 
 QFontChecker#FontBoldChecker::indicator {
@@ -348,7 +348,7 @@ QMenu::separator {
 }*/
 
 QMenu::item:selected {
-    background-color: #cad7ed;
+    background-color: @emptyContentBackgroundColor;
 }
 
 QDialog {
@@ -383,11 +383,11 @@ NoBorderPushBtn {
 }
 
 QPushButton::hover {
-    background-color: #cad7ed;
+    background-color: @emptyContentBackgroundColor;
 }
 
 QPushButton:pressed {
-    border: 1px solid royalblue;
+    border: 1px solid @accentPrimary;
 }
 
 QPushButton#minBtn {
@@ -456,7 +456,7 @@ QPushButton#closeBtn::hover {
 }
 
 TextCheckerLabel::hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 QCheckBox#TransChecker::indicator {
@@ -474,7 +474,7 @@ QCheckBox#TransChecker::indicator:checked {
 }
 
 QCheckBox#TransChecker::indicator:hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 QCheckBox#PaintChecker::indicator {
@@ -492,7 +492,7 @@ QCheckBox#PaintChecker::indicator:checked {
 }
 
 QCheckBox#PaintChecker::indicator:hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 QCheckBox#TexteditChecker::indicator {
@@ -510,7 +510,7 @@ QCheckBox#TexteditChecker::indicator:checked {
 }
 
 QCheckBox#TexteditChecker::indicator:hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 QCheckBox#TextblockChecker::indicator{
@@ -524,7 +524,7 @@ QCheckBox#TextblockChecker::indicator{
 }
 
 QCheckBox#TextblockChecker::indicator:hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 QCheckBox#TextblockChecker::indicator:checked{
@@ -649,14 +649,14 @@ QScrollBar:vertical:hover,QScrollBar:horizontal:hover {
 QScrollBar::handle:vertical {
     background: @scrollBarColor;
     width: 10px;
-    /* border-radius: 5px; */
+    /* border-radius: 4px; */
     border: none;
 }
 /*横向滚动条上面的滑块*/
 QScrollBar::handle:horizontal {
     background: @scrollBarColor;
     height: 10px;
-    /* border-radius: 5px; */
+    /* border-radius: 4px; */
     border: none;
 }
 
@@ -749,7 +749,7 @@ QLabel#angleLabel {
 }
 
 .ClickableLabel::hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 .ConfigClickableLabel {
@@ -757,22 +757,22 @@ QLabel#angleLabel {
 }
 
 .ConfigClickableLabel::hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 .ExpandLabel::hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 DrawToolCheckBox::indicator {
     height: 34px;
     width: 34px;
-    border-radius: 6px;
+    border-radius: 4px;
     padding: 6px;
 }
 
 DrawToolCheckBox::indicator:checked {
-    background-color: rgba(30, 147, 229, 80);
+    background-color: @accentPrimary80;
 }
 
 DrawToolCheckBox#DrawHandTool::indicator {
@@ -931,7 +931,7 @@ TitleBarToolBtn {
 }
 
 TitleBarToolBtn::hover {
-    background-color: rgb(30, 147, 229);
+    background-color: @accentPrimary;
     color: whitesmoke;
 }
 
@@ -947,7 +947,7 @@ QProgressBar {
     background-color: @borderColor;
 }
 QProgressBar::chunk {
-    background-color: rgb(30, 147, 229);
+    background-color: @accentPrimary;
 }
 
 
@@ -972,7 +972,7 @@ TextAreaStyleButton#ClearTextStyleButton::hover {
 }
 
 TextAreaStyleButton::hover {
-    background-color: #cad7ed;
+    background-color: @emptyContentBackgroundColor;
 }
 
 HidePanelButton {
@@ -990,14 +990,14 @@ HidePanelButton::hover {
 
 PanelAreaContent {
     background-color : @emptyContentBackgroundColor;
-    border-radius: 7px;
+    border-radius: 4px;
     border: none;
     border-width: 0px;
 }
 
 PanelArea {
     background-color : @emptyContentBackgroundColor;
-    border-radius: 7px;
+    border-radius: 4px;
     border: none;
     border-width: 0px;
 }
@@ -1006,7 +1006,7 @@ PanelArea {
 PanelGroupBox {
     border: 1px solid @borderColor;
     border-left: 3px solid @borderColor;
-    border-radius: 7px;
+    border-radius: 4px;
     background-color: @emptyContentBackgroundColor;
 }
 
@@ -1028,7 +1028,7 @@ Widget#CardContent {
 
 
 TextStyleLabel {
-    border-radius: 7px;
+    border-radius: 4px;
 }
 
 SmallParamLabel {
@@ -1064,20 +1064,20 @@ ArrowLeftButton {
     image: url(icons/arrow-left.svg);
     border: none;
     background-color: rgba(0, 0, 0, 0);
-    border-radius: 7px;
+    border-radius: 4px;
 }
 
 ArrowRightButton {
     image: url(icons/arrow-right.svg);
     border: none;
     background-color: rgba(0, 0, 0, 0);
-    border-radius: 7px;
+    border-radius: 4px;
 }
 
 DeleteStyleButton {
     border: none;
     background-color: rgba(0, 0, 0, 0);
-    border-radius: 7px;
+    border-radius: 4px;
 }
 
 DeleteStyleButton::hover {

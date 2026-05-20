@@ -157,7 +157,9 @@ class TextStyleLabel(Widget):
     def setActive(self, active: bool):
         self.active = active
         if active:
-            self.setStyleSheet("border: 2px solid rgb(30, 147, 229)")
+            from ui.misc import get_theme_color
+            c = get_theme_color()
+            self.setStyleSheet(f"border: 2px solid {c.name()}")
         else:
             self.setStyleSheet("")
 
@@ -222,7 +224,8 @@ class TextStyleLabel(Widget):
                 se = QGraphicsDropShadowEffect()
                 se.setBlurRadius(6)
                 se.setOffset(0, 0)
-                se.setColor(QColor(30, 147, 229))
+                from ui.misc import get_theme_color
+                se.setColor(get_theme_color())
                 self.setGraphicsEffect(se)
             else:
                 self.setGraphicsEffect(None)

@@ -7,6 +7,7 @@ data/models
 data/testpacks/eng_dontupload
 data/testpacks/testpacks
 data/*.png
+data/font_demo_cache.bin
 data/testpacks
 config/textstyles
 release

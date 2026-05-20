@@ -190,9 +190,16 @@ def seg_ch_pkg(text: str):
     if CHSEG is None:
         try:
             import pkuseg
-        except:
-            import spacy_pkuseg as pkuseg
-        CHSEG = pkuseg.pkuseg(postag=True)
+        except ImportError:
+            try:
+                import spacy_pkuseg as pkuseg
+            except ImportError:
+                CHSEG = False
+        if CHSEG is not False:
+            CHSEG = pkuseg.pkuseg(postag=True)
+
+    if CHSEG is False or CHSEG is None:
+        return seg_to_chars(text)
 
     # pkuseg won't work with half-width punctuations
     fullen_text = full_len(text).replace('　', ' ')

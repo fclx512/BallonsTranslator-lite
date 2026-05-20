@@ -26,7 +26,9 @@ einops
 termcolor
 bs4
 qtpy
-spacy-pkuseg
+# spacy-pkuseg  (optional: requires MSVC C++ 14.0+ on Windows for Chinese text segmentation.
+# Install manually if you need improved Chinese word segmentation:
+#   pip install spacy-pkuseg)
 sentencepiece
 ctranslate2
 python-docx

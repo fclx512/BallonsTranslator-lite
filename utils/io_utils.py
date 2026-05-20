@@ -25,6 +25,60 @@ else:
     NP_BOOL_TYPES = (np.bool_, np.bool)
     NP_FLOAT_TYPES = (np.float16, np.float32, np.float64)
 
+def parse_page_range(range_str: str) -> List[int]:
+    """Parse page range string like "1-5,8,10-12" into 0-based int list, deduplicated."""
+    if not range_str or not range_str.strip():
+        return []
+    seen = set()
+    result = []
+    for part in range_str.split(','):
+        part = part.strip()
+        if not part:
+            continue
+        if '-' in part:
+            parts = part.split('-', maxsplit=1)
+            try:
+                start = int(parts[0].strip())
+                end = int(parts[1].strip())
+            except ValueError:
+                raise ValueError(f'Invalid page range: "{part}"')
+            if start < 1 or end < 1:
+                raise ValueError(f'Page numbers must be >= 1, got: "{part}"')
+            if start > end:
+                raise ValueError(f'Start page > end page in "{part}"')
+            for i in range(start, end + 1):
+                idx = i - 1
+                if idx not in seen:
+                    seen.add(idx)
+                    result.append(idx)
+        else:
+            try:
+                page = int(part)
+            except ValueError:
+                raise ValueError(f'Invalid page number: "{part}"')
+            if page < 1:
+                raise ValueError(f'Page numbers must be >= 1, got: {page}')
+            idx = page - 1
+            if idx not in seen:
+                seen.add(idx)
+                result.append(idx)
+    return result
+
+
+def page_names_from_range(proj, range_str: str) -> List[str]:
+    """Convert a page range string to a list of page name strings for the given project."""
+    indices = parse_page_range(range_str)
+    if not indices:
+        return []
+    num_pages = proj.num_pages
+    page_names = []
+    for idx in indices:
+        if idx >= num_pages:
+            raise ValueError(f'Page {idx + 1} is out of bounds (project has {num_pages} pages)')
+        page_names.append(proj.idx2pagename(idx))
+    return page_names
+
+
 def to_dict(obj):
     return json.loads(json.dumps(obj, default=lambda o: o.__dict__, ensure_ascii=False))
 

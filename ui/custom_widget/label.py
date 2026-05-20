@@ -150,7 +150,9 @@ class TextCheckerLabel(QLabel):
     def setCheckState(self, checked: bool):
         self.checked = checked
         if checked:
-            self.setStyleSheet("QLabel { background-color: rgb(30, 147, 229); color: white; }")
+            from ui.misc import get_theme_color
+            c = get_theme_color()
+            self.setStyleSheet(f"QLabel {{ background-color: {c.name()}; color: white; }}")
         else:
             self.setStyleSheet("")
 

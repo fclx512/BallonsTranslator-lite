@@ -8,7 +8,7 @@ import time
 import cv2
 
 from tqdm import tqdm
-from qtpy.QtWidgets import QAction, QFileDialog, QMenu, QHBoxLayout, QVBoxLayout, QApplication, QStackedWidget, QSplitter, QListWidget, QShortcut, QListWidgetItem, QMessageBox, QTextEdit, QPlainTextEdit
+from qtpy.QtWidgets import QAction, QFileDialog, QMenu, QHBoxLayout, QVBoxLayout, QApplication, QStackedWidget, QSplitter, QListWidget, QShortcut, QListWidgetItem, QMessageBox, QTextEdit, QPlainTextEdit, QDialog, QLabel, QPushButton, QCheckBox, QFrame
 from qtpy.QtCore import Qt, QPoint, QSize, QEvent, Signal
 from qtpy.QtGui import QContextMenuEvent, QTextCursor, QGuiApplication, QIcon, QCloseEvent, QKeySequence, QKeyEvent, QPainter, QClipboard, QImage
 
@@ -117,7 +117,7 @@ class MainWindow(mainwindow_cls):
         self.import_doc_thread.fin_io.connect(self.on_fin_import_doc)
 
     def resetStyleSheet(self, reverse_icon: bool = False):
-        theme = 'eva-dark' if pcfg.darkmode else 'eva-light'
+        theme = pcfg.theme_name or ('eva-dark' if pcfg.darkmode else 'eva-light')
         self.setStyleSheet(parse_stylesheet(theme, reverse_icon))
 
     def setupUi(self):
@@ -627,6 +627,7 @@ class MainWindow(mainwindow_cls):
         self.titleBar.importtstyle_trigger.connect(self.import_tstyles)
         self.titleBar.exporttstyle_trigger.connect(self.export_tstyles)
         self.titleBar.darkmode_trigger.connect(self.on_darkmode_triggered)
+        self.titleBar.theme_trigger.connect(self.on_theme_changed)
         self.titleBar.merge_tool_trigger.connect(self.on_open_merge_tool)
 
         def _make_shortcuts(action_id, defaults, slot):
@@ -1415,87 +1416,116 @@ class MainWindow(mainwindow_cls):
             self.set_display_lang(lang)
     
     def run_imgtrans(self):
-        if not self.imgtrans_proj.is_all_pages_no_text and not pcfg.module.keep_exist_textlines:
-            # 创建自定义消息框，添加"继续运行"选项
-            msgBox = QMessageBox(self)
-            msgBox.setIcon(QMessageBox.Question)
-            msgBox.setWindowTitle(self.tr('Confirmation'))
-            msgBox.setText(self.tr('\"Run\" will clear previous results, \"Continue\" will try to run from previous progress'))
-            
-            # 添加三个按钮（直接使用中文）
-            restart_btn = msgBox.addButton(self.tr('Run'), QMessageBox.YesRole)
-            continue_btn = msgBox.addButton(self.tr('Continue'), QMessageBox.AcceptRole)
-            cancel_btn = msgBox.addButton(self.tr('Cancel'), QMessageBox.RejectRole)
-            
-            msgBox.setDefaultButton(continue_btn)
-            msgBox.exec_()
-            
-            clicked_button = msgBox.clickedButton()
-            if clicked_button == cancel_btn:
-                return  # 取消，不执行任何操作
-            elif clicked_button == continue_btn:
-                # 继续运行：只处理没有文本的页面
-                self.on_run_imgtrans(continue_mode=True)
-                return
-            # 如果是 restart_btn，继续执行下面的代码（重新运行）
-        self.on_run_imgtrans()
+        num_pages = self.imgtrans_proj.num_pages
+        if num_pages == 0:
+            return
+
+        from ui.custom_widget import RangeSlider
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(self.tr('Run'))
+        dialog.setMinimumWidth(420)
+        layout = QVBoxLayout(dialog)
+
+        range_frame = QFrame()
+        range_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        range_layout = QVBoxLayout(range_frame)
+
+        slider = RangeSlider(0, num_pages - 1)
+        range_layout.addWidget(slider)
+
+        range_info = QLabel()
+        range_layout.addWidget(range_info)
+
+        def update_range_info():
+            lo = slider.low() + 1
+            hi = slider.high() + 1
+            range_info.setText(self.tr('Page %1 ~ Page %2 (%3 pages)').replace('%1', str(lo)).replace('%2', str(hi)).replace('%3', str(hi - lo + 1)))
+        slider.rangeChanged.connect(lambda a, b: update_range_info())
+
+        all_pages_cb = QCheckBox(self.tr('All Pages'))
+        all_pages_cb.toggled.connect(lambda checked: (
+            slider.set_range(0, num_pages - 1),
+            slider.setEnabled(not checked),
+            update_range_info()
+        ))
+        all_pages_cb.setChecked(True)
+        range_layout.addWidget(all_pages_cb)
+
+        layout.addWidget(range_frame)
+        update_range_info()
+
+        btn_layout = QHBoxLayout()
+        run_btn = QPushButton(self.tr('Run'))
+        cancel_btn = QPushButton(self.tr('Cancel'))
+        btn_layout.addWidget(run_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+        run_btn.clicked.connect(dialog.accept)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        if pcfg.module.all_stages_disabled():
+            run_btn.setEnabled(False)
+
+        if dialog.exec_() != QDialog.DialogCode.Accepted:
+            return
+
+        page_filter = None
+        if not all_pages_cb.isChecked():
+            page_filter = []
+            for i in range(slider.low(), slider.high() + 1):
+                page_filter.append(self.imgtrans_proj.idx2pagename(i))
+
+        self.on_run_imgtrans(page_filter=page_filter)
 
     def run_imgtrans_wo_textstyle_update(self):
         self._run_imgtrans_wo_textstyle_update = True
         self.run_imgtrans()
 
-    def on_run_imgtrans(self, continue_mode=False):
+    def on_run_imgtrans(self, page_filter=None):
         self.backup_blkstyles.clear()
 
         if self.bottomBar.textblockChecker.isChecked():
             self.bottomBar.textblockChecker.click()
 
         all_disabled = pcfg.module.all_stages_disabled()
-        
+
         pages_to_process = []
-        
-        # 继续模式：先检查哪些页面需要处理
-        if continue_mode:
+
+        if page_filter is not None:
+            pages_to_process = list(page_filter)
             for page_name in self.imgtrans_proj.pages:
-                if not self.imgtrans_proj.get_page_progress(page_name):
-                    pages_to_process.append(page_name)
-            if len(pages_to_process) == 0:
-                return
+                self.imgtrans_proj.set_page_progress(page_name, 0)
         else:
             for page_name in self.imgtrans_proj.pages:
                 self.imgtrans_proj.set_page_progress(page_name, 0)
-        
+
         if pcfg.module.enable_detect:
             for page in self.imgtrans_proj.pages:
                 if not pcfg.module.keep_exist_textlines:
                     if not pages_to_process:
-                        # 没有指定pages_to_process，清空所有页面
                         self.imgtrans_proj.pages[page].clear()
         else:
             self.st_manager.updateTextBlkList()
             textblk: TextBlock = None
             for page_name, blklist in self.imgtrans_proj.pages.items():
-                # 如果指定了pages_to_process，跳过不需要处理的页面
                 if pages_to_process and page_name not in pages_to_process:
                     continue
-                    
+
                 ffmt_list = []
                 self.backup_blkstyles.append(ffmt_list)
                 for textblk in blklist:
                     if not pcfg.module.enable_detect:
                         ffmt_list.append(textblk.fontformat.deepcopy())
-                    # 继续模式且没有指定pages_to_process时：跳过已有文本的文本块
-                    if continue_mode and not pages_to_process and textblk.text and len(textblk.text) > 0:
-                        continue
                     if pcfg.module.enable_ocr:
                         textblk.text = []
                         textblk.set_font_colors((0, 0, 0), (0, 0, 0))
                     if pcfg.module.enable_translate or (all_disabled and not self._run_imgtrans_wo_textstyle_update) or pcfg.module.enable_ocr:
                         textblk.rich_text = ''
                     textblk.vertical = textblk.src_is_vertical
-        
-        # 如果有指定pages_to_process或者是continue_mode，则传递页面列表
-        self.module_manager.runImgtransPipeline(pages_to_process if (pages_to_process or continue_mode) else None)
+
+        self.module_manager.runImgtransPipeline(pages_to_process if pages_to_process else None)
 
     def on_transpanel_changed(self):
         self.canvas.editor_index = self.rightComicTransStackPanel.currentIndex()
@@ -1639,6 +1669,14 @@ class MainWindow(mainwindow_cls):
 
     def on_darkmode_triggered(self):
         pcfg.darkmode = self.titleBar.darkModeAction.isChecked()
+        pcfg.theme_name = 'eva-dark' if pcfg.darkmode else 'eva-light'
+        self.resetStyleSheet(reverse_icon=True)
+        self.save_config()
+
+    def on_theme_changed(self, theme_name: str):
+        pcfg.theme_name = theme_name
+        pcfg.darkmode = 'dark' in theme_name
+        self.titleBar.darkModeAction.setChecked(pcfg.darkmode)
         self.resetStyleSheet(reverse_icon=True)
         self.save_config()
 
@@ -1680,6 +1718,7 @@ class MainWindow(mainwindow_cls):
             else:
                 LOGGER.warning(f'target directory {d} does not exist.')
         self.exec_dirs = valid_dirs
+        self.exec_pages = kwargs.get('pages', '').strip() if kwargs.get('pages') else ''
         self.run_next_dir()
 
     def run_next_dir(self):
@@ -1690,11 +1729,22 @@ class MainWindow(mainwindow_cls):
             self.app.quit()
             return
         d = self.exec_dirs.pop(0)
-        
+
         LOGGER.info(f'translating {d} ...')
         self.openDir(d)
+
+        page_filter = None
+        if self.exec_pages:
+            try:
+                from utils.io_utils import page_names_from_range
+                page_filter = page_names_from_range(self.imgtrans_proj, self.exec_pages)
+            except ValueError as e:
+                LOGGER.error(f'Invalid --pages argument: {e}')
+                self.app.quit()
+                return
+
         shared.pbar = {}
-        npages = len(self.imgtrans_proj.pages)
+        npages = len(page_filter) if page_filter else len(self.imgtrans_proj.pages)
         if npages > 0:
             if pcfg.module.enable_detect:
                 shared.pbar['detect'] = tqdm(range(npages), desc="Text Detection")
@@ -1704,7 +1754,7 @@ class MainWindow(mainwindow_cls):
                 shared.pbar['translate'] = tqdm(range(npages), desc="Translation")
             if pcfg.module.enable_inpaint:
                 shared.pbar['inpaint'] = tqdm(range(npages), desc="Inpaint")
-        self.on_run_imgtrans()
+        self.on_run_imgtrans(page_filter=page_filter)
 
     def on_create_errdialog(self, error_msg: str, detail_traceback: str = '', exception_type: str = ''):
         try:

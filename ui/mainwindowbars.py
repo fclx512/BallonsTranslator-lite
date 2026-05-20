@@ -270,6 +270,7 @@ class TitleBar(Widget):
     closebtn_clicked = Signal()
     display_lang_changed = Signal(str)
     enable_module = Signal(int, bool)
+    theme_trigger = Signal(str)
 
     def __init__(self, parent, *args, **kwargs) -> None:
         super().__init__(parent, *args, **kwargs)
@@ -332,12 +333,30 @@ class TitleBar(Widget):
         self.darkModeAction = darkModeAction = QAction(self.tr('Dark Mode'), self)
         darkModeAction.setCheckable(True)
 
+        themeMenu = QMenu(self.tr('Theme'), self)
+        theme_ac_group = QActionGroup(self)
+        theme_ac_group.setExclusive(True)
+        theme_names = ['ember-light', 'ember-dark', 'eva-light', 'eva-dark']
+        theme_labels = [
+            self.tr('Ember Light'), self.tr('Ember Dark'),
+            self.tr('Eva Light'), self.tr('Eva Dark'),
+        ]
+        for tname, tlabel in zip(theme_names, theme_labels):
+            ta = QAction(tlabel, self)
+            ta.setCheckable(True)
+            if tname == pcfg.theme_name:
+                ta.setChecked(True)
+            ta.triggered.connect(lambda checked, tn=tname: self.theme_trigger.emit(tn))
+            theme_ac_group.addAction(ta)
+        themeMenu.addActions(theme_ac_group.actions())
+
         self.viewMenu = viewMenu = QMenu(self.viewToolBtn)
         viewMenu.addMenu(self.displayLanguageMenu)
         viewMenu.addActions([drawBoardAction, texteditAction])
         viewMenu.addSeparator()
         viewMenu.addAction(importTextStyles)
         viewMenu.addAction(exportTextStyles)
+        viewMenu.addMenu(themeMenu)
         viewMenu.addSeparator()
         viewMenu.addAction(darkModeAction)
         self.viewToolBtn.setMenu(viewMenu)

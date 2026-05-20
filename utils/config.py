@@ -144,6 +144,7 @@ class ProgramConfig(Config):
     gsearch_range: int = 0
 
     darkmode: bool = False
+    theme_name: str = ''
     fold_textarea: bool = False
     show_source_text: bool = True
     show_trans_text: bool = True
@@ -253,6 +254,10 @@ def load_config(config_path: str = shared.CONFIG_PATH):
     
     global pcfg
     pcfg.merge(config)
+
+    # Backward compat: migrate old darkmode-only configs to theme_name
+    if not pcfg.theme_name:
+        pcfg.theme_name = 'eva-dark' if pcfg.darkmode else 'eva-light'
 
     p = pcfg.text_styles_path
     if not osp.exists(pcfg.text_styles_path):

@@ -47,6 +47,7 @@ parser.add_argument("--debug", action='store_true')
 parser.add_argument("--requirements", default='requirements.txt')
 parser.add_argument("--headless", action='store_true', help='run without GUI')
 parser.add_argument("--exec_dirs", default='', help='translation queue (project directories) separated by comma')
+parser.add_argument("--pages", default='', type=str, help='Only process specified pages, e.g. "1-5,8,10-12"')
 parser.add_argument("--ldpi", default=None, type=float, help='logical dots perinch')
 parser.add_argument("--export-translation-txt", action='store_true', help='save translation to txt file once RUN completed')
 parser.add_argument("--export-source-txt", action='store_true', help='save source to txt file once RUN completed')
@@ -312,10 +313,12 @@ def main():
     init_module_registries()
     prepare_local_files_forall()
 
-    # Check for Blackwell GPU incompatibility (skip in CPU mode)
+    # Check for Blackwell GPU incompatibility (skip in CPU mode, non-Windows, or no nvidia-smi)
     if TORCH_AVAILABLE and not args.cpu:
+        import shutil
         from modules.base import torch as _torch
-        if hasattr(_torch, 'cuda') and not _torch.cuda.is_available():
+        if hasattr(_torch, 'cuda') and not _torch.cuda.is_available() \
+                and sys.platform == 'win32' and shutil.which('nvidia-smi'):
             try:
                 _nvsmi = subprocess.run(
                     ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
