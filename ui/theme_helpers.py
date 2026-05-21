@@ -1,18 +1,10 @@
-"""Theme-aware color helpers that work with both Fluent and legacy modes."""
+"""Theme-aware color helpers."""
 
 from qtpy.QtGui import QColor
+from utils.config import pcfg
 
 
 def is_dark_theme() -> bool:
-    """Check if the current theme is dark.
-    Works with both qfluentwidgets (--fluent) and legacy modes.
-    """
-    try:
-        from qfluentwidgets import isDarkTheme as _fluent_dark
-        return _fluent_dark()
-    except ImportError:
-        pass
-    from utils.config import pcfg
     return pcfg.darkmode
 
 

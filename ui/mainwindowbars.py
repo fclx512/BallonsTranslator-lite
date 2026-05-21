@@ -262,7 +262,7 @@ class LeftBar(Widget):
                 
 
     def needleftStackWidget(self) -> bool:
-        return self.showPageListLabel.isChecked() or self.globalSearchChecker.isChecked()
+        return self.showPageListLabel.isChecked()
 
 
 class TitleBar(Widget):
@@ -271,7 +271,6 @@ class TitleBar(Widget):
     display_lang_changed = Signal(str)
     enable_module = Signal(int, bool)
     help_about_triggered = Signal()
-    help_check_update_triggered = Signal()
 
     def __init__(self, parent, *args, **kwargs) -> None:
         super().__init__(parent, *args, **kwargs)
@@ -350,19 +349,6 @@ class TitleBar(Widget):
         self.exporttstyle_trigger = exportTextStyles.triggered
         self.darkmode_trigger = darkModeAction.triggered
 
-        self.goToolBtn = TitleBarToolBtn(self)
-        self.goToolBtn.setText(self.tr('Go'))
-        prevPageAction = QAction(self.tr('Previous Page'), self)
-        # prevPageAction.setShortcuts([QKeySequence.StandardKey.MoveToPreviousPage, QKeySequence('A')])
-        nextPageAction = QAction(self.tr('Next Page'), self)
-        # nextPageAction.setShortcuts([QKeySequence.StandardKey.MoveToNextPage, QKeySequence('D')])
-        goMenu = QMenu(self.goToolBtn)
-        goMenu.addActions([prevPageAction, nextPageAction])
-        self.goToolBtn.setMenu(goMenu)
-        self.goToolBtn.setPopupMode(QToolButton.InstantPopup)
-        self.prevpage_trigger = prevPageAction.triggered
-        self.nextpage_trigger = nextPageAction.triggered
-
         # 工具菜单
         self.toolsToolBtn = TitleBarToolBtn(self)
         self.toolsToolBtn.setText(self.tr('Tools'))
@@ -384,12 +370,8 @@ class TitleBar(Widget):
         aboutAction = QAction(self.tr('About'), self)
         self.help_about_triggered = aboutAction.triggered
 
-        checkUpdateAction = QAction(self.tr('Check for Updates'), self)
-        self.help_check_update_triggered = checkUpdateAction.triggered
-
         helpMenu = QMenu(self.helpToolBtn)
         helpMenu.addAction(aboutAction)
-        helpMenu.addAction(checkUpdateAction)
         self.helpToolBtn.setMenu(helpMenu)
         self.helpToolBtn.setPopupMode(QToolButton.InstantPopup)
 
@@ -432,7 +414,6 @@ class TitleBar(Widget):
         hlayout.addWidget(self.iconLabel)
         hlayout.addWidget(self.editToolBtn)
         hlayout.addWidget(self.viewToolBtn)
-        hlayout.addWidget(self.goToolBtn)
         hlayout.addWidget(self.runToolBtn)
         hlayout.addWidget(self.toolsToolBtn)
         hlayout.addWidget(self.helpToolBtn)

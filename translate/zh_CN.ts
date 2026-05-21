@@ -1985,21 +1985,6 @@ Failed: {f}/{t}</source>
         <translation>编辑器</translation>
     </message>
     <message>
-        <location filename="../ui/mainwindowbars.py" line="355"/>
-        <source>Go</source>
-        <translation>转到</translation>
-    </message>
-    <message>
-        <location filename="../ui/mainwindowbars.py" line="356"/>
-        <source>Previous Page</source>
-        <translation>上一页</translation>
-    </message>
-    <message>
-        <location filename="../ui/mainwindowbars.py" line="358"/>
-        <source>Next Page</source>
-        <translation>下一页</translation>
-    </message>
-    <message>
         <location filename="../ui/mainwindowbars.py" line="381"/>
         <source>Run</source>
         <translation>运行</translation>
@@ -2103,11 +2088,6 @@ Failed: {f}/{t}</source>
         <location filename="../ui/mainwindowbars.py" line=""/>
         <source>About</source>
         <translation>关于</translation>
-    </message>
-    <message>
-        <location filename="../ui/mainwindowbars.py" line=""/>
-        <source>Check for Updates</source>
-        <translation>检查更新</translation>
     </message>
 </context>
 <context>
@@ -2960,16 +2940,51 @@ qipao,qipao2</translation>
     </message>
 </context>
 <context>
-    <name>UpdateCheckDialog</name>
+    <name>AboutDialog</name>
     <message>
         <location filename="../ui/update_checker.py" line=""/>
-        <source>Check for Updates</source>
-        <translation>检查更新</translation>
+        <source>About</source>
+        <translation>关于</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Version</source>
+        <translation>版本</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Commit</source>
+        <translation>提交</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Branch</source>
+        <translation>分支</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>OK</source>
+        <translation>确定</translation>
     </message>
     <message>
         <location filename="../ui/update_checker.py" line=""/>
         <source>Cancel</source>
         <translation>取消</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Check for updates</source>
+        <translation>检查更新</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Last checked: {time}</source>
+        <translation>上次检查：{time}</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Check Now</source>
+        <translation>立即检查</translation>
     </message>
     <message>
         <location filename="../ui/update_checker.py" line=""/>
@@ -2983,13 +2998,8 @@ qipao,qipao2</translation>
     </message>
     <message>
         <location filename="../ui/update_checker.py" line=""/>
-        <source>Version {ver} (commit {commit})</source>
-        <translation>版本 {ver} (提交 {commit})</translation>
-    </message>
-    <message>
-        <location filename="../ui/update_checker.py" line=""/>
-        <source>OK</source>
-        <translation>确定</translation>
+        <source>Version {ver} (commit {commit})  |  Last checked: {time}</source>
+        <translation>版本 {ver}（提交 {commit}）|  上次检查：{time}</translation>
     </message>
     <message>
         <location filename="../ui/update_checker.py" line=""/>
@@ -2998,8 +3008,8 @@ qipao,qipao2</translation>
     </message>
     <message>
         <location filename="../ui/update_checker.py" line=""/>
-        <source>Current: {ver} ({cur})  ->  Latest: {latest}</source>
-        <translation>当前：{ver} ({cur})  →  最新：{latest}</translation>
+        <source>Current: {ver} ({cur})  ->  Latest: {latest}  |  Last checked: {time}</source>
+        <translation>当前：{ver} ({cur})  →  最新：{latest}  |  上次检查：{time}</translation>
     </message>
     <message>
         <location filename="../ui/update_checker.py" line=""/>
@@ -3050,34 +3060,6 @@ qipao,qipao2</translation>
         <location filename="../ui/update_checker.py" line=""/>
         <source>Later</source>
         <translation>稍后</translation>
-    </message>
-</context>
-<context>
-    <name>AboutDialog</name>
-    <message>
-        <location filename="../ui/update_checker.py" line=""/>
-        <source>About</source>
-        <translation>关于</translation>
-    </message>
-    <message>
-        <location filename="../ui/update_checker.py" line=""/>
-        <source>Version</source>
-        <translation>版本</translation>
-    </message>
-    <message>
-        <location filename="../ui/update_checker.py" line=""/>
-        <source>Commit</source>
-        <translation>提交</translation>
-    </message>
-    <message>
-        <location filename="../ui/update_checker.py" line=""/>
-        <source>Branch</source>
-        <translation>分支</translation>
-    </message>
-    <message>
-        <location filename="../ui/update_checker.py" line=""/>
-        <source>OK</source>
-        <translation>确定</translation>
     </message>
 </context>
 <context>

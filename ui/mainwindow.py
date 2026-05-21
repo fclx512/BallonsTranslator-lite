@@ -36,7 +36,7 @@ from .framelesswindow import FramelessWindow, FramelessMoveResize
 from .drawing_commands import RunBlkTransCommand
 from . import shared_widget as SW
 from .custom_widget import MessageBox, FrameLessMessageBox, ImgtransProgressMessageBox
-from .update_checker import UpdateCheckDialog, AboutDialog
+from .update_checker import AboutDialog
 
 class PageListView(QListWidget):
 
@@ -153,12 +153,12 @@ class MainWindow(mainwindow_cls):
         self.leftStackWidget = QStackedWidget(self)
         self.leftStackWidget.addWidget(self.pageList)
 
-        self.global_search_widget = GlobalSearchWidget(self.leftStackWidget)
+        self.global_search_widget = GlobalSearchWidget(self.centralStackWidget)
+        self.global_search_widget.setVisible(False)
         self.global_search_widget.req_update_pagetext.connect(self.on_req_update_pagetext)
         self.global_search_widget.req_move_page.connect(self.on_req_move_page)
         self.imsave_thread.img_writed.connect(self.global_search_widget.on_img_writed)
         self.global_search_widget.search_tree.result_item_clicked.connect(self.on_search_result_item_clicked)
-        self.leftStackWidget.addWidget(self.global_search_widget)
 
         self.titleBar = TitleBar(self)
         self.titleBar.closebtn_clicked.connect(self.on_closebtn_clicked)
@@ -225,6 +225,11 @@ class MainWindow(mainwindow_cls):
         self._configAnim = QPropertyAnimation(self.configPanel, b"pos")
         self._configAnim.setDuration(350)
         self._configAnim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        # Search widget as floating overlay (slides in from left)
+        self._searchAnim = QPropertyAnimation(self.global_search_widget, b"pos")
+        self._searchAnim.setDuration(350)
+        self._searchAnim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         mainVBoxLayout = QVBoxLayout(self)
         mainVBoxLayout.addWidget(self.titleBar)
@@ -457,10 +462,53 @@ class MainWindow(mainwindow_cls):
         if self.leftBar.configChecker.isChecked():
             self.leftBar.configChecker.setChecked(False)
 
+    def _showSearchOverlay(self):
+        widget = self.global_search_widget
+        pw = widget.parentWidget()
+        w = widget.sizeHint().width()
+        widget.setGeometry(0, 0, w, pw.height())
+        widget.raise_()
+        widget.show()
+        widget.setFocus()
+
+        # disconnect stale finished connection from a previous hide
+        try:
+            self._searchAnim.finished.disconnect(self._on_search_hidden)
+        except TypeError:
+            pass
+        self._searchAnim.setStartValue(QPoint(-w, 0))
+        self._searchAnim.setEndValue(QPoint(0, 0))
+        self._searchAnim.start()
+
+    def _hideSearchOverlay(self):
+        widget = self.global_search_widget
+        if not widget.isVisible():
+            return
+
+        # disconnect previous finished connection before reconnecting
+        try:
+            self._searchAnim.finished.disconnect(self._on_search_hidden)
+        except TypeError:
+            pass
+        self._searchAnim.finished.connect(self._on_search_hidden,
+                                          Qt.ConnectionType.SingleShotConnection)
+        self._searchAnim.setStartValue(widget.pos())
+        self._searchAnim.setEndValue(QPoint(-widget.width(), 0))
+        self._searchAnim.start()
+
+    def _on_search_hidden(self):
+        self.global_search_widget.hide()
+        if self.leftBar.globalSearchChecker.isChecked():
+            self.leftBar.globalSearchChecker.setChecked(False)
+
     def resizeEvent(self, e):
         super().resizeEvent(e)
         if self.configPanel.isVisible():
             self.configPanel.setGeometry(self.configPanel.parentWidget().rect())
+        if self.global_search_widget.isVisible():
+            pw = self.global_search_widget.parentWidget()
+            sw = self.global_search_widget
+            sw.setGeometry(sw.x(), 0, sw.width(), pw.height())
 
     def set_display_lang(self, lang: str):
         self.retranslateUI()
@@ -579,6 +627,7 @@ class MainWindow(mainwindow_cls):
                 self.leftStackWidget.show()
             if self.leftBar.globalSearchChecker.isChecked():
                 self.leftBar.globalSearchChecker.setChecked(False)
+                self._hideSearchOverlay()
             self.leftStackWidget.setCurrentWidget(self.pageList)
         else:
             self.leftStackWidget.hide()
@@ -658,8 +707,6 @@ class MainWindow(mainwindow_cls):
 
         self.shortcut_registry = {}
 
-        self.titleBar.nextpage_trigger.connect(self.shortcutNext)
-        self.titleBar.prevpage_trigger.connect(self.shortcutBefore)
         self.titleBar.textedit_trigger.connect(self.shortcutTextedit)
         self.titleBar.drawboard_trigger.connect(self.shortcutDrawboard)
         self.titleBar.redo_trigger.connect(self.on_redo)
@@ -675,7 +722,6 @@ class MainWindow(mainwindow_cls):
         self.titleBar.darkmode_trigger.connect(self.on_darkmode_triggered)
         self.titleBar.merge_tool_trigger.connect(self.on_open_merge_tool)
         self.titleBar.help_about_triggered.connect(self.show_about_dialog)
-        self.titleBar.help_check_update_triggered.connect(self.show_update_check_dialog)
 
         def _make_shortcuts(action_id, defaults, slot):
             lst = []
@@ -1762,12 +1808,11 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
     def on_set_gsearch_widget(self):
         setup = self.leftBar.globalSearchChecker.isChecked()
         if setup:
-            if self.leftStackWidget.isHidden():
-                self.leftStackWidget.show()
+            self._hideSearchOverlay()  # stop any running hide animation
             self.leftBar.showPageListLabel.setChecked(False)
-            self.leftStackWidget.setCurrentWidget(self.global_search_widget)
+            self._showSearchOverlay()
         else:
-            self.leftStackWidget.hide()
+            self._hideSearchOverlay()
 
     def on_fin_export_doc(self):
         msg = QMessageBox()
@@ -1928,23 +1973,15 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
     # ── About / Update Check ──────────────────────────────────
 
     def show_about_dialog(self):
-        """Show the About dialog with version info."""
+        """Show the About dialog with version info and update check."""
         import launch
-        commit = launch.commit_hash()
-        short = commit[:8] if commit != '<none>' else '?'
-        dlg = AboutDialog(self, version=launch.VERSION, commit=short, branch=launch.BRANCH)
-        dlg.exec_()
-
-    def show_update_check_dialog(self):
-        """Show the Check for Updates dialog."""
-        import launch
-        dlg = UpdateCheckDialog(
+        dlg = AboutDialog(
             self,
-            git_path=launch.git,
+            version=launch.VERSION,
+            commit=launch.commit_hash(),
             branch=launch.BRANCH,
+            git_path=launch.git,
             repo_path=str(launch.PATH_ROOT),
-            current_version=launch.VERSION,
-            current_commit=launch.commit_hash(),
         )
         dlg.restart_requested.connect(self.restart_signal.emit)
         dlg.exec_()

@@ -6,9 +6,14 @@ Background git operations (fetch + reset --hard) via QThread.
 import subprocess
 import sys
 
+from utils.update_cache import (
+    human_readable_last_check,
+    record_check,
+)
+
 from qtpy.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QProgressBar,
+    QTextEdit, QProgressBar, QFrame,
 )
 from qtpy.QtCore import Qt, QThread, Signal
 
@@ -23,12 +28,14 @@ class UpdateThread(QThread):
     check_complete = Signal(dict)
     update_complete = Signal(dict)
 
-    def __init__(self, git_path, branch, repo_path, mode='check'):
+    def __init__(self, git_path, branch, repo_path, mode='check',
+                 cached_remote_commit=None):
         super().__init__()
         self._git = git_path
         self._branch = branch
         self._repo = repo_path
         self._mode = mode
+        self._cached_remote_commit = cached_remote_commit
 
     # ── helpers ────────────────────────────────────────────────
 
@@ -51,6 +58,8 @@ class UpdateThread(QThread):
     def run(self):
         if self._mode == 'check':
             self._do_check()
+        elif self._mode == 'cached_check':
+            self._do_cached_check()
         elif self._mode == 'update':
             self._do_update()
 
@@ -85,10 +94,10 @@ class UpdateThread(QThread):
             })
             return
 
-        rc, current, _ = self._run(['rev-parse', 'HEAD'])
-        current = current[:8] if rc == 0 else '?'
+        rc, current_full, _ = self._run(['rev-parse', 'HEAD'])
+        current_short = current_full[:8] if rc == 0 else '?'
 
-        rc, latest, _ = self._run(['rev-parse', f'origin/{self._branch}'])
+        rc, latest_full, _ = self._run(['rev-parse', f'origin/{self._branch}'])
         if rc != 0:
             self.check_complete.emit({
                 'status': 'error',
@@ -96,13 +105,14 @@ class UpdateThread(QThread):
             })
             return
 
-        latest_short = latest[:8]
+        latest_short = latest_full[:8]
 
-        if current == latest[:40]:
+        if current_full == latest_full:
             self.check_complete.emit({
                 'status': 'up_to_date',
-                'current_commit': current,
+                'current_commit': current_short,
                 'latest_commit': latest_short,
+                'latest_commit_full': latest_full,
             })
         else:
             rc, log, _ = self._run(
@@ -111,9 +121,55 @@ class UpdateThread(QThread):
             )
             self.check_complete.emit({
                 'status': 'update_available',
-                'current_commit': current,
+                'current_commit': current_short,
                 'latest_commit': latest_short,
+                'latest_commit_full': latest_full,
                 'changelog': log if rc == 0 else '',
+            })
+
+    # ── cached check phase: local-only comparison ──────────────
+
+    def _do_cached_check(self):
+        """Local-only check: compare HEAD against previously cached remote commit.
+        No network call."""
+        rc, _, _ = self._run(['--version'], timeout=10)
+        if rc != 0:
+            self.check_complete.emit({
+                'status': 'error',
+                'error_msg': self.tr(
+                    'Git is not available.\n'
+                    'Please install Git from https://git-scm.com/downloads'),
+            })
+            return
+
+        if getattr(sys, 'frozen', False):
+            self.check_complete.emit({
+                'status': 'error',
+                'error_msg': self.tr(
+                    'Update is not available in portable/exe builds.\n'
+                    'Please download the latest version from GitHub.'),
+            })
+            return
+
+        rc, current_full, _ = self._run(['rev-parse', 'HEAD'])
+        current_short = current_full[:8] if rc == 0 else '?'
+
+        cached = self._cached_remote_commit or ''
+
+        if current_full == cached:
+            self.check_complete.emit({
+                'status': 'up_to_date',
+                'current_commit': current_short,
+                'latest_commit': cached[:8] if cached else '?',
+                'latest_commit_full': cached,
+            })
+        else:
+            self.check_complete.emit({
+                'status': 'update_available',
+                'current_commit': current_short,
+                'latest_commit': cached[:8] if cached else '?',
+                'latest_commit_full': cached,
+                'changelog': '',
             })
 
     # ── update phase: fetch + hard reset ──────────────────────
@@ -139,40 +195,85 @@ class UpdateThread(QThread):
             })
             return
 
-        self.update_complete.emit({'status': 'success'})
+        rc, new_head, _ = self._run(['rev-parse', 'HEAD'])
+        self.update_complete.emit({
+            'status': 'success',
+            'commit': new_head.strip() if rc == 0 else '',
+        })
 
 
-class UpdateCheckDialog(QDialog):
-    """Modal dialog: check → show result → optionally update → restart."""
+class AboutDialog(QDialog):
+    """About dialog with version info and embedded update check section."""
 
     restart_requested = Signal()
 
-    def __init__(self, parent, git_path, branch, repo_path,
-                 current_version, current_commit):
+    def __init__(self, parent, version, commit, branch, git_path=None, repo_path=None):
         super().__init__(parent)
-        self.setWindowTitle(self.tr('Check for Updates'))
-        self.setMinimumWidth(460)
+        self.setWindowTitle(self.tr('About'))
+        self.setMinimumWidth(520)
         self.setModal(True)
 
         self._git_path = git_path
         self._branch = branch
         self._repo_path = repo_path
-        self._version = current_version
-        short = current_commit[:8] if current_commit and current_commit != '<none>' else '?'
-        self._commit = short
-        self._latest_short = ''
-        self._thread = None
-        self._state = 'checking'
 
-        self._build_ui()
-        self._start_check()
+        short = commit[:8] if commit and commit != '<none>' else '?'
+        self._version = version
+        self._commit = short
+        self._full_commit = commit
+        self._latest_short = ''
+        self._latest_full = ''
+        self._thread = None
+        self._state = 'idle'
+
+        self._build_ui(short, branch)
+        self._set_state_idle()
 
     # ── build ──────────────────────────────────────────────────
 
-    def _build_ui(self):
+    def _build_ui(self, short_commit, branch):
         layout = QVBoxLayout(self)
-        layout.setSpacing(12)
-        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(8)
+        layout.setContentsMargins(32, 24, 32, 24)
+
+        # ── About section ──────────────────────────────────────
+
+        title = QLabel('BallonsTranslator-lite')
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet('font-size: 18px; font-weight: bold;')
+        layout.addWidget(title)
+
+        layout.addSpacing(8)
+
+        info = (self.tr('Version') + ': ' + self._version + '<br>' +
+                self.tr('Commit') + ': ' + short_commit + '<br>' +
+                self.tr('Branch') + ': ' + branch)
+        info_label = QLabel(info)
+        info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(info_label)
+
+        layout.addSpacing(8)
+
+        link = QLabel(
+            '<a href="https://github.com/fclx512/BallonsTranslator" '
+            'style="color: #42a5f5;">'
+            'github.com/fclx512/BallonsTranslator</a>')
+        link.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        link.setOpenExternalLinks(True)
+        layout.addWidget(link)
+
+        layout.addSpacing(16)
+
+        # ── Separator ──────────────────────────────────────────
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setFrameShadow(QFrame.Shadow.Sunken)
+        layout.addWidget(sep)
+
+        layout.addSpacing(12)
+
+        # ── Update section ─────────────────────────────────────
 
         self.icon_label = QLabel()
         self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -191,6 +292,7 @@ class UpdateCheckDialog(QDialog):
 
         self.info_label = QLabel()
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.info_label.setWordWrap(True)
         self.info_label.setStyleSheet('color: #888;')
         self.info_label.hide()
         layout.addWidget(self.info_label)
@@ -228,7 +330,28 @@ class UpdateCheckDialog(QDialog):
 
         layout.addLayout(btn_layout)
 
-    # ── state transitions ─────────────────────────────────────
+    # ── idle state ─────────────────────────────────────────────
+
+    def _set_state_idle(self):
+        """Initial state — last-checked time and Check Now button."""
+        self._state = 'idle'
+        self.icon_label.setText('')
+        self.icon_label.setStyleSheet('font-size: 28px;')
+        self.status_label.setText(self.tr('Check for updates'))
+        self.progress_bar.hide()
+        self.info_label.setText(
+            self.tr('Last checked: {time}')
+            .replace('{time}', human_readable_last_check()))
+        self.info_label.setStyleSheet('color: #888;')
+        self.info_label.show()
+        self.changelog_label.hide()
+        self.changelog_text.hide()
+        self.warning_label.hide()
+        self.action_btn.setText(self.tr('Check Now'))
+        self.action_btn.show()
+        self.cancel_btn.setText(self.tr('Cancel'))
+        self.cancel_btn.show()
+        self.cancel_btn.setEnabled(True)
 
     def _set_state_checking(self):
         self._state = 'checking'
@@ -251,11 +374,7 @@ class UpdateCheckDialog(QDialog):
         self.icon_label.setStyleSheet('font-size: 28px; color: #4caf50;')
         self.status_label.setText(self.tr('You are running the latest version.'))
         self.progress_bar.hide()
-        self.info_label.setText(
-            self.tr('Version {ver} (commit {commit})')
-            .replace('{ver}', self._version)
-            .replace('{commit}', self._commit))
-        self.info_label.show()
+        self.info_label.hide()
         self.changelog_label.hide()
         self.changelog_text.hide()
         self.warning_label.hide()
@@ -269,12 +388,7 @@ class UpdateCheckDialog(QDialog):
         self.icon_label.setStyleSheet('font-size: 28px; color: #2196f3;')
         self.status_label.setText(self.tr('A new version is available!'))
         self.progress_bar.hide()
-        self.info_label.setText(
-            self.tr('Current: {ver} ({cur})  ->  Latest: {latest}')
-            .replace('{ver}', self._version)
-            .replace('{cur}', self._commit)
-            .replace('{latest}', self._latest_short))
-        self.info_label.show()
+        self.info_label.hide()
 
         if changelog:
             self.changelog_label.show()
@@ -340,7 +454,7 @@ class UpdateCheckDialog(QDialog):
 
     # ── flow ──────────────────────────────────────────────────
 
-    def _start_check(self):
+    def _on_check_now(self):
         self._set_state_checking()
         self._thread = UpdateThread(
             self._git_path, self._branch, self._repo_path, mode='check')
@@ -349,10 +463,13 @@ class UpdateCheckDialog(QDialog):
 
     def _on_check_complete(self, result):
         status = result['status']
+        self._latest_short = result.get('latest_commit', '')
+        self._latest_full = result.get('latest_commit_full', '')
+        if self._latest_full:
+            record_check(self._latest_full)
         if status == 'up_to_date':
             self._set_state_up_to_date()
         elif status == 'update_available':
-            self._latest_short = result.get('latest_commit', '')
             self._set_state_update_available(result.get('changelog', ''))
         else:
             self._set_state_error(result.get('error_msg', ''))
@@ -367,6 +484,9 @@ class UpdateCheckDialog(QDialog):
 
     def _on_update_complete(self, result):
         if result['status'] == 'success':
+            new_commit = result.get('commit', '')
+            if new_commit:
+                record_check(new_commit)
             self._set_state_restart_prompt()
         else:
             self._set_state_error(result.get('error_msg', ''))
@@ -374,13 +494,14 @@ class UpdateCheckDialog(QDialog):
         self._thread = None
 
     def _on_action(self):
-        if self._state == 'update_available':
+        if self._state == 'idle':
+            self._on_check_now()
+        elif self._state == 'update_available':
             self._start_update()
         elif self._state == 'restart_prompt':
             self.restart_requested.emit()
             self.accept()
         else:
-            # up_to_date or error → dismiss
             self.accept()
 
     def closeEvent(self, event):
@@ -388,51 +509,3 @@ class UpdateCheckDialog(QDialog):
             self._thread.quit()
             self._thread.wait(3000)
         super().closeEvent(event)
-
-
-class AboutDialog(QDialog):
-    """Minimal About dialog — version, commit, branch, GitHub link."""
-
-    def __init__(self, parent, version, commit, branch):
-        super().__init__(parent)
-        self.setWindowTitle(self.tr('About'))
-        self.setFixedSize(340, 210)
-        self.setModal(True)
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(32, 24, 32, 24)
-
-        title = QLabel('BallonsTranslator-lite')
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet('font-size: 18px; font-weight: bold;')
-        layout.addWidget(title)
-
-        layout.addSpacing(8)
-
-        info = (self.tr('Version') + ': ' + version + '<br>' +
-                self.tr('Commit') + ': ' + commit + '<br>' +
-                self.tr('Branch') + ': ' + branch)
-        info_label = QLabel(info)
-        info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(info_label)
-
-        layout.addSpacing(8)
-
-        link = QLabel(
-            '<a href="https://github.com/fclx512/BallonsTranslator" '
-            'style="color: #42a5f5;">'
-            'github.com/fclx512/BallonsTranslator</a>')
-        link.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        link.setOpenExternalLinks(True)
-        layout.addWidget(link)
-
-        layout.addStretch()
-
-        ok_btn = QPushButton(self.tr('OK'))
-        ok_btn.clicked.connect(self.accept)
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-        btn_row.addWidget(ok_btn)
-        btn_row.addStretch()
-        layout.addLayout(btn_row)

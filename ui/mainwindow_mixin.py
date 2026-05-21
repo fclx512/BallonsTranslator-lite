@@ -1,6 +1,5 @@
 """
-Shared business logic for MainWindow and FluentTranslatorWindow.
-Extracted to avoid duplication between legacy (FramelessWindow) and fluent (FluentWindow) modes.
+Shared business logic for MainWindow.
 
 Subclasses must provide these hook methods:
   - _hook_set_title(text='', page_name='', save_state='')

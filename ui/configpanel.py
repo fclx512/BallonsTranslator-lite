@@ -878,18 +878,12 @@ class ConfigPanel(Widget):
 
         self.navList.currentRowChanged.connect(self._on_nav_row_changed)
 
-        # Layout: splitter with nav list | content
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(self.navList)
-        splitter.addWidget(self.configContent)
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-        splitter.setHandleWidth(1)
-
-        main_layout = QVBoxLayout(self)
-        main_layout.addWidget(splitter)
-        main_layout.setSpacing(0)
+        # Layout: fixed horizontal layout with nav list | content (no resize)
+        main_layout = QHBoxLayout(self)
+        main_layout.setSpacing(2)
         main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(self.navList)
+        main_layout.addWidget(self.configContent, 1)
 
     def on_load_model_changed(self):
         pcfg.module.load_model_on_demand = self.load_model_checker.isChecked()
