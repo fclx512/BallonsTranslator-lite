@@ -11,9 +11,22 @@ from utils.config import pcfg
 from utils.logger import logger as LOGGER
 
 
-STYLE_TRANSPAIR_CHECKED = "background-color: rgba(30, 147, 229, 20%);"
-STYLE_TRANSPAIR_BOTTOM = "border-width: 5px; border-bottom-style: solid; border-color: rgb(30, 147, 229);"
-STYLE_TRANSPAIR_TOP = "border-width: 5px; border-top-style: solid; border-color: rgb(30, 147, 229);"
+def _accent_rgb():
+    from ui.misc import get_theme_color
+    c = get_theme_color()
+    return c.red(), c.green(), c.blue()
+
+def _transpair_checked_style():
+    r, g, b = _accent_rgb()
+    return f"background-color: rgba({r}, {g}, {b}, 20%);"
+
+def _transpair_bottom_style():
+    r, g, b = _accent_rgb()
+    return f"border-width: 5px; border-bottom-style: solid; border-color: rgb({r}, {g}, {b});"
+
+def _transpair_top_style():
+    r, g, b = _accent_rgb()
+    return f"border-width: 5px; border-top-style: solid; border-color: rgb({r}, {g}, {b});"
 
 class SourceTextEdit(QTextEdit):
     hover_enter = Signal(int)
@@ -170,7 +183,8 @@ class SourceTextEdit(QTextEdit):
                 se = QGraphicsDropShadowEffect()
                 se.setBlurRadius(12)
                 se.setOffset(0, 0)
-                se.setColor(QColor(30, 147, 229))
+                from ui.misc import get_theme_color
+                se.setColor(get_theme_color())
                 self.setGraphicsEffect(se)
             else:
                 self.setGraphicsEffect(None)
@@ -421,7 +435,7 @@ class TransPairWidget(Widget):
         if self.checked != checked:
             self.checked = checked
             if checked:
-                self.setStyleSheet('TransPairWidget{' + f'{STYLE_TRANSPAIR_CHECKED}' + '}')
+                self.setStyleSheet('TransPairWidget{' + _transpair_checked_style() + '}')
             else:
                 self.setStyleSheet("")
 
@@ -522,14 +536,14 @@ class TextEditListScrollArea(QScrollArea):
     def set_drag_style(self, pos: int, clear_style: bool = False):
         if pos == len(self.pairwidget_list):
             pos -= 1
-            style = STYLE_TRANSPAIR_BOTTOM
+            style = _transpair_bottom_style()
         else:
-            style = STYLE_TRANSPAIR_TOP
+            style = _transpair_top_style()
         if clear_style:
             style = ""
         pw = self.pairwidget_list[pos]
         if pw.checked:
-            style += STYLE_TRANSPAIR_CHECKED
+            style += _transpair_checked_style()
         style = "TransPairWidget{" + style + "}"
         pw.setStyleSheet(style)
     

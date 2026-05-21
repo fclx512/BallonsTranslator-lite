@@ -65,6 +65,12 @@ On first launch, PyTorch and other dependencies will be installed automatically,
 
 GPU mode uses your system's PyTorch installation (with CUDA). If not found, a console notice is shown and it falls back to CPU mode automatically.
 
+> **Note for Windows users:** If you need Chinese text segmentation (better word breaking in Chinese), install `spacy-pkuseg` manually:
+> ```bash
+> pip install spacy-pkuseg
+> ```
+> This package requires **Microsoft Visual C++ 14.0 or greater** (Build Tools with "Desktop development with C++" workload). Without it, Chinese text will still work but use character-level segmentation.
+
 ## Usage
 
 ### One-click translation

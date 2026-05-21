@@ -15,8 +15,13 @@ from .misc import td_pattern, table_pattern
 from .scene_textlayout import VerticalTextDocumentLayout, HorizontalTextDocumentLayout, SceneTextLayout
 from .text_graphical_effect import apply_shadow_effect
 
-TEXTRECT_SHOW_COLOR = QColor(30, 147, 229, 170)
 TEXTRECT_SELECTED_COLOR = QColor(248, 64, 147, 170)
+
+def _textrect_show_color():
+    from ui.misc import get_theme_color
+    c = get_theme_color()
+    c.setAlpha(170)
+    return c
 
 
 class TextBlkItem(QGraphicsTextItem):
@@ -483,7 +488,7 @@ class TextBlkItem(QGraphicsTextItem):
             painter.setPen(pen)
             painter.drawRect(self.unpadRect(br))
         elif draw_rect:
-            pen = QPen(TEXTRECT_SHOW_COLOR, 3 / self.get_scale(), Qt.PenStyle.SolidLine)
+            pen = QPen(_textrect_show_color(), 3 / self.get_scale(), Qt.PenStyle.SolidLine)
             painter.setPen(pen)
             painter.drawRect(self.unpadRect(br))
         painter.restore()

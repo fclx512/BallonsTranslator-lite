@@ -153,57 +153,79 @@ def doc_replace_no_shift(doc: QTextDocument, span_list: List, target: str):
 def hex2rgb(h: str):  # rgb order (PIL)
     return tuple(int(h[1 + i:1 + i + 2], 16) for i in (0, 2, 4))
 
+
+def load_theme_dict() -> Dict:
+    with open(C.THEME_PATH, 'r', encoding='utf8') as f:
+        return json.loads(f.read())
+
+
+def _resolve_theme(theme: str) -> Dict:
+    theme_dict = load_theme_dict()
+    if not theme or theme not in theme_dict:
+        return theme_dict[list(theme_dict.keys())[0]]
+    return theme_dict[theme]
+
+
+def get_theme_color(theme_name: str = '', alpha: int = 255) -> 'QColor':
+    if not theme_name:
+        from utils.config import pcfg
+        theme_name = pcfg.theme_name
+    tgt = _resolve_theme(theme_name)
+    c = QColor(tgt.get('@accentPrimary', '#1e93e5'))
+    if alpha != 255:
+        c.setAlpha(alpha)
+    return c
+
+
 def parse_stylesheet(theme: str = '', reverse_icon: bool = False) -> str:
     if reverse_icon:
-        dark2light = True if theme == 'eva-light' else False
-        reverse_icon_color(dark2light)
+        set_icon_theme(theme)
     with open(C.STYLESHEET_PATH, "r", encoding='utf-8') as f:
         stylesheet = f.read()
-    with open(C.THEME_PATH, 'r', encoding='utf8') as f:
-        theme_dict: Dict = json.loads(f.read())
-    if not theme or theme not in theme_dict:
-        tgt_theme: Dict = theme_dict[list(theme_dict.keys())[0]]
-    else:
-        tgt_theme: Dict = theme_dict[theme]
+    tgt_theme = _resolve_theme(theme)
 
     C.FOREGROUND_FONTCOLOR = hex2rgb(tgt_theme['@qwidgetForegroundColor'])
     C.SLIDERHANDLE_COLOR = hex2rgb(tgt_theme['@sliderHandleColor'])
     for key, val in tgt_theme.items():
-        stylesheet = stylesheet.replace(key, val)
+        if not key.startswith('_'):
+            stylesheet = stylesheet.replace(key, val)
     return stylesheet
 
 
 ICON_DIR = 'icons'
-
-LIGHTFILL_ACTIVE = "fill=\"#697187\""
-LIGHTFILL = "fill=\"#b3b6bf\""
-DARKFILL_ACTIVE = "fill=\"#96a4cd\""
-DARKFILL = "fill=\"#697186\""
-
-ICONREVERSE_DICT_LIGHT2DARK = {LIGHTFILL_ACTIVE: DARKFILL_ACTIVE, LIGHTFILL: DARKFILL}
-ICONREVERSE_DICT_DARK2LIGHT = {DARKFILL_ACTIVE: LIGHTFILL_ACTIVE, DARKFILL: LIGHTFILL}
 ICON_LIST = []
 
-def reverse_icon_color(dark2light: bool = False):
+
+def set_icon_theme(theme_name: str = ''):
     global ICON_LIST
     if not ICON_LIST:
         for filename in os.listdir(ICON_DIR):
-            file_suffix = Path(filename).suffix
-            if file_suffix.lower() != '.svg':
-                continue
-            else:
+            if Path(filename).suffix.lower() == '.svg':
                 ICON_LIST.append(osp.join(ICON_DIR, filename))
 
-    if dark2light:
-        pattern = re.compile(re.escape(DARKFILL) + '|' + re.escape(DARKFILL_ACTIVE))
-        rep_dict = ICONREVERSE_DICT_DARK2LIGHT
-    else:
-        pattern = re.compile(re.escape(LIGHTFILL) + '|' + re.escape(LIGHTFILL_ACTIVE))
-        rep_dict = ICONREVERSE_DICT_LIGHT2DARK
+    theme_dict = load_theme_dict()
+    tgt = _resolve_theme(theme_name)
+    tgt_active = tgt.get('_iconFillActive', '')
+    tgt_normal = tgt.get('_iconFill', '')
+    if not tgt_active or not tgt_normal:
+        return
+
+    # Build replacement map: every known icon fill → target fill
+    replacements = {}
+    all_colors = set()
+    for t in theme_dict.values():
+        if a := t.get('_iconFillActive'):
+            all_colors.add(a)
+            replacements[f'fill="{a}"'] = f'fill="{tgt_active}"'
+        if n := t.get('_iconFill'):
+            all_colors.add(n)
+            replacements[f'fill="{n}"'] = f'fill="{tgt_normal}"'
+
+    pattern = re.compile('|'.join(re.escape(f'fill="{c}"') for c in all_colors))
     for svgpath in ICON_LIST:
         with open(svgpath, "r", encoding="utf-8") as f:
             svg_content = f.read()
-            svg_content = pattern.sub(lambda m:rep_dict[m.group()], svg_content)
+        svg_content = pattern.sub(lambda m: replacements[m.group()], svg_content)
         with open(svgpath, "w", encoding="utf-8") as f:
             f.write(svg_content)
 

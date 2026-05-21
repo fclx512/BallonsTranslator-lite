@@ -6,7 +6,7 @@ from qtpy.QtCore import Qt, QItemSelection, QSize, Signal, QUrl, QModelIndex, QR
 from qtpy.QtGui import QFont, QPainter, QTextCursor, QStandardItemModel, QStandardItem, QAbstractTextDocumentLayout, QColor, QPalette, QTextDocument, QTextCharFormat
 
 from utils.logger import logger as LOGGER
-from .page_search_widget import SearchEditor, HighlightMatched, SEARCHRST_HIGHLIGHT_COLOR
+from .page_search_widget import SearchEditor, HighlightMatched, _search_highlight_color
 from .misc import doc_replace
 from utils.config import pcfg
 from .custom_widget import ProgressMessageBox, Widget, NoBorderPushBtn
@@ -60,7 +60,7 @@ def get_rstitem_renderhtml(text: str, span: Tuple[int, int], font: QFont = None)
     cursor.setPosition(span[0])
     cursor.setPosition(span[1], QTextCursor.MoveMode.KeepAnchor)
     cfmt = QTextCharFormat()
-    cfmt.setBackground(SEARCHRST_HIGHLIGHT_COLOR)
+    cfmt.setBackground(_search_highlight_color())
     cursor.setCharFormat(cfmt)
     html = doc.toHtml()
     cleaned_html = re.findall(r'<body(.*?)>(.*?)</body>', html, re.DOTALL)

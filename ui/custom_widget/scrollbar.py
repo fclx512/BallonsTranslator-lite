@@ -38,7 +38,9 @@ class ScrollBarGroove(QWidget):
         painter.setRenderHints(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)
 
-        painter.setBrush(QColor(0, 0, 0, 30))
+        from ui.theme_helpers import scrollbar_colors
+        groove, _ = scrollbar_colors()
+        painter.setBrush(groove)
         painter.drawRoundedRect(self.rect(), 6, 6)
 
 
@@ -107,9 +109,10 @@ class ScrollBarHandle(QWidget):
         painter.setRenderHints(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)
 
+        from ui.theme_helpers import scrollbar_colors
+        _, handle = scrollbar_colors()
         r = self.width() / 2 if self.orient == Qt.Vertical else self.height() / 2
-        c = QColor(0, 0, 0, 90)
-        painter.setBrush(c)
+        painter.setBrush(handle)
         painter.drawRoundedRect(self.rect(), r, r)
 
 

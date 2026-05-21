@@ -6,5 +6,7 @@ from utils.config import pcfg
 def isDarkTheme():
     return pcfg.darkmode
 
+
 def themeColor():
-    return QColor(30, 147, 229, 127)
+    from ui.misc import get_theme_color
+    return get_theme_color(pcfg.theme_name)

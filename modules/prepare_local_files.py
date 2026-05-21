@@ -27,8 +27,12 @@ def download_and_check_module_files(module_class_list: List[BaseModule] = None):
 def prepare_pkuseg():
     try:
         import pkuseg
-    except:
-        import spacy_pkuseg as pkuseg
+    except ImportError:
+        try:
+            import spacy_pkuseg as pkuseg
+        except ImportError:
+            LOGGER.warning('pkuseg / spacy-pkuseg not available. Chinese text segmentation will fall back to character-level.')
+            return
 
     flist = [
         {
