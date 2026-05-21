@@ -182,3 +182,17 @@ def get_filtered_font_list(excluded=None) -> list:
 config_name_to_view_widget = {}
 action_to_view_config_name = {}
 register_view_widget: lambda *args, **kwargs: None
+
+_themes_cache = None
+
+def get_theme_color(var_name: str) -> str:
+    """Return a CSS variable value from the active theme in themes.json."""
+    global _themes_cache
+    if _themes_cache is None:
+        with open(THEME_PATH, 'r', encoding='utf-8') as f:
+            _themes_cache = json.load(f)
+    from utils.config import pcfg
+    theme_name = 'eva-dark' if pcfg.darkmode else 'eva-light'
+    if theme_name not in _themes_cache:
+        theme_name = list(_themes_cache.keys())[0]
+    return _themes_cache[theme_name].get(var_name, '#888')

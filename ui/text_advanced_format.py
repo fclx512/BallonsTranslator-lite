@@ -4,7 +4,7 @@ from qtpy.QtWidgets import QSizePolicy, QVBoxLayout, QPushButton, QGroupBox, QLa
 from qtpy.QtCore import Signal, Qt
 
 from .custom_widget import SmallColorPickerLabel, SmallParamLabel, PanelArea, SmallSizeControlLabel, SmallSizeComboBox, SmallParamLabel, SmallSizeComboBox, SmallComboBox, TextCheckerLabel
-from utils.fontformat import FontFormat
+from utils.fontformat import FontFormat, PunctuationAlignment
 
 
 class TextShadowGroup(QGroupBox):
@@ -157,6 +157,19 @@ class TextAdvancedFormatPanel(PanelArea):
         linespacing_type_layout.addWidget(linespacing_type_label)
         linespacing_type_layout.addWidget(self.linespacing_type_combobox)
 
+        self.punct_align_combobox = SmallComboBox(
+            parent=self,
+            options=[
+                self.tr("Center"),
+                self.tr("Upper-Right")
+            ]
+        )
+        self.punct_align_combobox.activated.connect(self.on_punct_align_changed)
+        punct_align_label = SmallParamLabel(self.tr('Punctuation Alignment'))
+        punct_align_layout = QHBoxLayout()
+        punct_align_layout.addWidget(punct_align_label)
+        punct_align_layout.addWidget(self.punct_align_combobox)
+
         self.opacity_box = SmallSizeComboBox([0, 1], 'opacity', self, init_value=1.)
         self.opacity_box.setToolTip(self.tr("Set Text Opacity"))
         self.opacity_box.param_changed.connect(self.on_format_changed)
@@ -180,6 +193,7 @@ class TextAdvancedFormatPanel(PanelArea):
         hlayout = QHBoxLayout()
         hlayout.addLayout(linespacing_type_layout)
         hlayout.addLayout(opacity_layout)
+        hlayout.addLayout(punct_align_layout)
         vlayout = QVBoxLayout()
         vlayout.addLayout(hlayout)
         vlayout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -196,9 +210,13 @@ class TextAdvancedFormatPanel(PanelArea):
     def on_linespacing_type_changed(self):
         self.on_format_changed('line_spacing_type', self.linespacing_type_combobox.currentIndex())
 
+    def on_punct_align_changed(self):
+        self.on_format_changed('punctuation_alignment', self.punct_align_combobox.currentIndex())
+
     def set_active_format(self, font_format: FontFormat):
         self.active_format = font_format
         self.linespacing_type_combobox.setCurrentIndex(font_format.line_spacing_type)
+        self.punct_align_combobox.setCurrentIndex(font_format.punctuation_alignment)
 
         self.shadow_group.color_label.setPickerColor(font_format.shadow_color)
         self.shadow_group.strength_box.setValue(font_format.shadow_strength)

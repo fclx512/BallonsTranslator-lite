@@ -1,13 +1,13 @@
 from typing import List, Union, Tuple
 
-from qtpy.QtWidgets import QPushButton, QKeySequenceEdit, QLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QTreeView, QWidget, QLabel, QSpinBox, QSizePolicy, QSpacerItem, QCheckBox, QSplitter, QScrollArea, QLineEdit, QDialog, QDialogButtonBox, QListWidget, QListWidgetItem, QAbstractItemView
-from qtpy.QtCore import Qt, Signal, QSize, QEvent, QItemSelection
-from qtpy.QtGui import QStandardItem, QStandardItemModel, QMouseEvent, QFont, QIntValidator, QValidator, QFocusEvent
+from qtpy.QtWidgets import QPushButton, QKeySequenceEdit, QLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QWidget, QLabel, QSpinBox, QSizePolicy, QSpacerItem, QCheckBox, QSplitter, QScrollArea, QLineEdit, QDialog, QDialogButtonBox, QListWidget, QListWidgetItem, QAbstractItemView
+from qtpy.QtCore import Qt, Signal, QSize
+from qtpy.QtGui import QFont, QIntValidator, QValidator, QFocusEvent
 
 from .custom_widget import ConfigComboBox, Widget, PanelGroupBox
 from utils.config import pcfg
 from utils import shared as C
-from utils.shared import CONFIG_FONTSIZE_CONTENT, CONFIG_FONTSIZE_HEADER, CONFIG_FONTSIZE_TABLE, CONFIG_COMBOBOX_SHORT, CONFIG_COMBOBOX_LONG, CONFIG_COMBOBOX_MIDEAN
+from utils.shared import CONFIG_FONTSIZE_CONTENT, CONFIG_FONTSIZE_HEADER, CONFIG_COMBOBOX_SHORT, CONFIG_COMBOBOX_LONG, CONFIG_COMBOBOX_MIDEAN
 from .module_parse_widgets import InpaintConfigPanel, TextDetectConfigPanel, TranslatorConfigPanel, OCRConfigPanel
 
 class CustomIntValidator(QIntValidator):
@@ -68,6 +68,66 @@ class PercentageLineEdit(QLineEdit):
         return super().focusOutEvent(e)
 
 
+class SectionPill(QPushButton):
+    """Pill-shaped navigation button for a config section in the horizontal nav bar."""
+
+    clicked_section = Signal(object)
+
+    def __init__(self, text: str, target_widget: QWidget,
+                 accent_color: str = None, parent=None):
+        super().__init__(text, parent)
+        self._target = target_widget
+        self.setObjectName("SectionPill")
+        self.setCheckable(True)
+        self.setFlat(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        if accent_color:
+            self.setStyleSheet(
+                f"SectionPill:checked {{ border-color: {accent_color}; "
+                f"background-color: {accent_color}22; }}"
+            )
+        self.clicked.connect(self._on_click)
+
+    def _on_click(self):
+        self.clicked_section.emit(self._target)
+
+
+class ConfigNavBar(QWidget):
+    """Horizontal navigation bar with pill-shaped section buttons."""
+
+    navigate_to_section = Signal(object)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("ConfigNavBar")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(2)
+        layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self._pills = []
+        self._layout = layout
+
+    def addSection(self, text: str, target: QWidget,
+                   object_name: str = None,
+                   accent_color: str = None) -> SectionPill:
+        pill = SectionPill(text, target, accent_color, parent=self)
+        if object_name:
+            pill.setObjectName(object_name)
+        pill.clicked_section.connect(self._on_pill_clicked)
+        self._layout.addWidget(pill)
+        self._pills.append(pill)
+        return pill
+
+    def _on_pill_clicked(self, target: QWidget):
+        for p in self._pills:
+            p.setChecked(p._target is target)
+        self.navigate_to_section.emit(target)
+
+    def activatePillForTarget(self, target: QWidget):
+        for p in self._pills:
+            p.setChecked(p._target is target)
+
+
 class ConfigTextLabel(QLabel):
     def __init__(self, text: str, fontsize: int, font_weight: int = None, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -85,11 +145,8 @@ class ConfigTextLabel(QLabel):
 
 
 class ConfigSubBlock(Widget):
-    pressed = Signal(int, int)
     def __init__(self, widget: Union[QWidget, QLayout], name: str = None, discription: str = None, vertical_layout=True, insert_stretch: bool = False, content_margins = (24, 6, 24, 6)) -> None:
         super().__init__()
-        self.idx0: int = None
-        self.idx1: int = None
         if vertical_layout:
             layout = QVBoxLayout(self)
         else:
@@ -109,14 +166,6 @@ class ConfigSubBlock(Widget):
             layout.addLayout(widget)
         self.widget = widget
         self.setContentsMargins(*content_margins)
-
-    def setIdx(self, idx0: int, idx1: int) -> None:
-        self.idx0 = idx0
-        self.idx1 = idx1
-
-    def enterEvent(self, e: QEvent) -> None:
-        self.pressed.emit(self.idx0, self.idx1)
-        return super().enterEvent(e)
     
 
 def combobox_with_label(sel: List[str], name: str, discription: str = None, vertical_layout: bool = False, target_block: QWidget = None, fix_size: bool = True, parent: QWidget = None, insert_stretch: bool = False) -> Tuple[ConfigComboBox, QWidget]:
@@ -155,7 +204,6 @@ def checkbox_with_label(name: str, discription: str = None, target_block: QWidge
 
 
 class ConfigBlock(Widget):
-    sublock_pressed = Signal(int, int)
 
     def __init__(self, header: str, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -163,7 +211,6 @@ class ConfigBlock(Widget):
         self.vlayout = QVBoxLayout(self)
         self.vlayout.addWidget(self.header)
         self.setContentsMargins(24, 24, 24, 24)
-        self.label_list = []
         self.subblock_list = []
         self.index: int = 0
 
@@ -184,12 +231,9 @@ class ConfigBlock(Widget):
     def addTextLabel(self, text: str = None):
         label = ConfigTextLabel(text, CONFIG_FONTSIZE_HEADER)
         self.vlayout.addWidget(label)
-        self.label_list.append(label)
 
     def addSublock(self, sublock: ConfigSubBlock):
         self.vlayout.addWidget(sublock)
-        sublock.setIdx(self.index, len(self.label_list)-1)
-        sublock.pressed.connect(lambda idx0, idx1: self.sublock_pressed.emit(idx0, idx1))
         self.subblock_list.append(sublock)
 
     def addCombobox(self, sel: List[str], name: str, discription: str = None, vertical_layout: bool = False, target_block: QWidget = None, fix_size: bool = True) -> Tuple[ConfigComboBox, QWidget]:
@@ -210,12 +254,6 @@ class ConfigBlock(Widget):
         return checkbox, sublock
 
     def addGroupedBlock(self, group_title: str, widget: QWidget, object_name: str = None, name: str = None, discription: str = None) -> ConfigSubBlock:
-        """Add a visually grouped section using PanelGroupBox.
-
-        Replaces addTextLabel + addBlockWidget pattern.
-        group_title is shown in the group box frame; a hidden text label
-        is created alongside for tree-view indexing (backward compatible).
-        """
         group = PanelGroupBox(group_title)
         if object_name:
             group.setObjectName(object_name)
@@ -226,15 +264,8 @@ class ConfigBlock(Widget):
         sublock = ConfigSubBlock(widget, name=name, discription=discription)
         group_vlayout.addWidget(sublock)
 
-        # Hidden label so tree-view highlighting still works
-        label = ConfigTextLabel(group_title, CONFIG_FONTSIZE_HEADER)
-        label.setVisible(False)
-        self.vlayout.addWidget(label)
-        self.label_list.append(label)
         self.vlayout.addWidget(group)
-
-        sublock.setIdx(self.index, len(self.label_list) - 1)
-        sublock.pressed.connect(lambda idx0, idx1: self.sublock_pressed.emit(idx0, idx1))
+        sublock.section_widget = group
         self.subblock_list.append(sublock)
         return sublock
 
@@ -256,59 +287,16 @@ class ConfigContent(QScrollArea):
         self.setWidgetResizable(True)
         self.setContentsMargins(0, 0, 0, 0)
         self.vlayout = vlayout
-        self.active_label: ConfigTextLabel = None
 
     def addConfigBlock(self, block: ConfigBlock):
         self.vlayout.addWidget(block)
         self.config_block_list.append(block)
 
-    def setActiveLabel(self, idx0: int, idx1: int):
-        if self.active_label is not None:
-            self.deactiveLabel()
-        block = self.config_block_list[idx0]
-        if idx1 >= 0:
-            self.active_label = block.label_list[idx1]
-        else:
-            self.active_label = block.header
-        self.active_label.setActiveBackground()
+    def scrollToWidget(self, widget: QWidget):
         if C.USE_PYSIDE6:
-            self.ensureWidgetVisible(self.active_label, ymargin=self.active_label.height() * 7)
+            self.ensureWidgetVisible(widget, ymargin=widget.height() * 7)
         else:
-            self.ensureWidgetVisible(self.active_label, yMargin=self.active_label.height() * 7)
-
-    def deactiveLabel(self):
-        if self.active_label is not None:
-            self.active_label.setStyleSheet("")
-            self.active_label = None
-
-
-class TableItem(QStandardItem):
-    def __init__(self, text, fontsize):
-        super().__init__()
-        font = self.font()
-        font.setPointSizeF(fontsize)
-        self.setFont(font)
-        self.setText(text)
-        self.setEditable(False)
-
-    def setBold(self, bold: bool):
-        font = self.font()
-        font.setBold(bold)
-        self.setFont(font)
-
-
-class TreeModel(QStandardItemModel):
-    # https://stackoverflow.com/questions/32229314/pyqt-how-can-i-set-row-heights-of-qtreeview
-    def data(self, index, role):
-        if not index.isValid():
-            return None
-        if role == Qt.ItemDataRole.SizeHintRole:
-            size = QSize()
-            item = self.itemFromIndex(index)
-            size.setHeight(item.font().pointSize()+20)
-            return size
-        else:
-            return super().data(index, role)
+            self.ensureWidgetVisible(widget, yMargin=widget.height() * 7)
 
 
 DEFAULT_SHORTCUTS = {
@@ -545,59 +533,6 @@ class ShortcutEditor(QWidget):
             self._rebuild_pills(self._current_action_id)
 
 
-class ConfigTable(QTreeView):
-    tableitem_pressed = Signal(int, int)
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-        treeModel = TreeModel()
-        self.tm = treeModel
-        self.setModel(treeModel)
-        self.selected: TableItem = None
-        self.last_selected: TableItem = None
-        self.setHeaderHidden(True)
-        self.setMinimumWidth(260)
-
-    def addHeader(self, header: str) -> TableItem:
-        rootNode = self.model().invisibleRootItem()
-        ti = TableItem(header, CONFIG_FONTSIZE_TABLE)
-        rootNode.appendRow(ti)
-        return ti
-
-    def selectionChanged(self, selected: QItemSelection, deselected: QItemSelection) -> None:
-        dis = deselected.indexes()
-        sel = selected.indexes()
-        model = self.model()
-        self.last_selected = model.itemFromIndex(dis[0]) \
-            if len(dis) > 0 else None
-        
-        self.selected = model.itemFromIndex(sel[0]) \
-            if len(sel) > 0 else None
-        for i in deselected.indexes():
-            self.model().itemFromIndex(i).setBold(False)
-        
-        index = self.currentIndex()
-        if index.isValid():
-            self.model().itemFromIndex(index).setBold(True)
-        super().selectionChanged(selected, deselected)
-
-    def setCurrentItem(self, idx0, idx1):
-        index = self.tm.item(idx0, 0).child(idx1).index()
-        self.setCurrentIndex(index)
-
-    def mousePressEvent(self, event: QMouseEvent) -> None:
-        super().mousePressEvent(event)
-        if self.selected is not None:
-            parent = self.selected.parent()
-            if parent is None:
-                idx1 = -1
-                idx0 = self.selected.row()
-            else:
-                idx1 = self.selected.row()
-                idx0 = parent.row()
-            self.tableitem_pressed.emit(idx0, idx1)
-
-
 class FontExcludeDialog(QDialog):
     """Dialog for selecting which fonts to exclude from the font list."""
 
@@ -711,12 +646,13 @@ class ConfigPanel(Widget):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setObjectName("ConfigPanel")
-        self.configTable = ConfigTable()
-        self.configTable.tableitem_pressed.connect(self.onTableItemPressed)
+
+        self.navBar = ConfigNavBar(self)
         self.configContent = ConfigContent()
-        dlConfigPanel, dltableitem = self.addConfigBlock(self.tr('DL Module'))
-        generalConfigPanel, generalTableItem = self.addConfigBlock(self.tr('General'))
-        
+
+        dlConfigPanel = self.addConfigBlock(self.tr('DL Module'))
+        generalConfigPanel = self.addConfigBlock(self.tr('General'))
+
         label_text_det = self.tr('Text Detection')
         label_text_ocr = self.tr('OCR')
         label_inpaint = self.tr('Inpaint')
@@ -724,22 +660,9 @@ class ConfigPanel(Widget):
         label_startup = self.tr('Startup')
         label_typesetting = self.tr('Typesetting')
         label_save = self.tr('Save')
-
-        dltableitem.appendRows([
-            TableItem(label_text_det, CONFIG_FONTSIZE_TABLE),
-            TableItem(label_text_ocr, CONFIG_FONTSIZE_TABLE),
-            TableItem(label_inpaint, CONFIG_FONTSIZE_TABLE),
-            TableItem(label_translator, CONFIG_FONTSIZE_TABLE),
-        ])
         label_shortcuts = self.tr('Keyboard Shortcuts')
-        generalTableItem.appendRows([
-            TableItem(label_startup, CONFIG_FONTSIZE_TABLE),
-            TableItem(label_typesetting, CONFIG_FONTSIZE_TABLE),
-            TableItem(label_save, CONFIG_FONTSIZE_TABLE),
-            TableItem(label_shortcuts, CONFIG_FONTSIZE_TABLE),
-        ])
-        
-        # === Model management (no tree item needed) ===
+
+        # === Model management ===
         model_group = PanelGroupBox(self.tr('Models'))
         model_vlayout = model_group.contentLayout()
         model_vlayout.setContentsMargins(8, 4, 8, 6)
@@ -777,7 +700,7 @@ class ConfigPanel(Widget):
         self.open_on_startup_checker = QCheckBox(self.tr('Reopen last project on startup'))
         self.open_on_startup_checker.stateChanged.connect(self.on_open_onstartup_changed)
         startup_layout.addWidget(self.open_on_startup_checker)
-        generalConfigPanel.addGroupedBlock(label_startup, startup_widget, object_name="GroupGeneral")
+        self.startup_block = generalConfigPanel.addGroupedBlock(label_startup, startup_widget, object_name="GroupGeneral")
 
         dec_program_str = self.tr('decide by program')
         use_global_str = self.tr('use global setting')
@@ -804,7 +727,7 @@ class ConfigPanel(Widget):
         self.let_fntstroke_combox, sublock = combobox_with_label([dec_program_str, use_global_str], self.tr('Stroke Size'), parent=self, insert_stretch=True)
         self.let_fntstroke_combox.activated.connect(self.on_fntstroke_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 0, 1)
-        
+
         self.let_fntcolor_combox, sublock = combobox_with_label([dec_program_str, use_global_str], self.tr('Font Color'), parent=self, insert_stretch=True)
         self.let_fntcolor_combox.activated.connect(self.on_fontcolor_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 1, 0)
@@ -857,8 +780,7 @@ class ConfigPanel(Widget):
         max_font_sublock = ConfigSubBlock(self.max_font_size_edit, self.tr('Max Font Size (px)'))
         ts_layout.addWidget(max_font_sublock)
 
-        # Wrap typesetting in a grouped block
-        generalConfigPanel.addGroupedBlock(label_typesetting, ts_widget, object_name="GroupGeneral")
+        self.typesetting_block = generalConfigPanel.addGroupedBlock(label_typesetting, ts_widget, object_name="GroupGeneral")
 
         # === General: Save ===
         save_widget = QWidget()
@@ -890,25 +812,69 @@ class ConfigPanel(Widget):
         self.intermediate_imgformat_combobox.activated.connect(self.on_intermediate_imgformat_changed)
         save_layout.addWidget(intermediate_imsave_sublock)
 
-        generalConfigPanel.addGroupedBlock(label_save, save_widget, object_name="GroupSave")
+        self.save_block = generalConfigPanel.addGroupedBlock(label_save, save_widget, object_name="GroupSave")
 
         # === General: Keyboard Shortcuts ===
         self.shortcut_editor = ShortcutEditor(parent=self)
-        shortcut_sublock = generalConfigPanel.addGroupedBlock(label_shortcuts, self.shortcut_editor)
-        shortcut_sublock.layout().addStretch()
+        self.shortcut_block = generalConfigPanel.addGroupedBlock(label_shortcuts, self.shortcut_editor)
+        self.shortcut_block.layout().addStretch()
 
+        # === Navigation list (replaces horizontal nav bar) ===
+        self.navList = QListWidget()
+        self.navList.setFixedWidth(180)
+        self.navList.setSpacing(2)
+        self.navList.setFrameShape(QListWidget.NoFrame)
+
+        # Build section list with group headers
+        sections = [
+            ("_header", self.tr("DL MODULE")),
+            (self.detect_sub_block.section_widget, label_text_det),
+            (self.ocr_sub_block.section_widget,    label_text_ocr),
+            (self.inpaint_sub_block.section_widget, label_inpaint),
+            (self.trans_sub_block.section_widget,  label_translator),
+            ("_sep", None),
+            ("_header", self.tr("GENERAL")),
+            (self.startup_block.section_widget,    label_startup),
+            (self.typesetting_block.section_widget, label_typesetting),
+            (self.save_block.section_widget,       label_save),
+            (self.shortcut_block.section_widget,   label_shortcuts),
+        ]
+        self._nav_items = []  # (widget_or_None, row)
+        for target, text in sections:
+            if target == "_header":
+                item = QListWidgetItem(text)
+                item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
+                f = item.font()
+                f.setPointSize(9)
+                f.setBold(True)
+                item.setFont(f)
+                self.navList.addItem(item)
+                self._nav_items.append((None, self.navList.count() - 1))
+            elif target == "_sep":
+                item = QListWidgetItem("")
+                item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
+                item.setSizeHint(QSize(0, 4))
+                self.navList.addItem(item)
+                self._nav_items.append((None, self.navList.count() - 1))
+            else:
+                item = QListWidgetItem(text)
+                self.navList.addItem(item)
+                self._nav_items.append((target, self.navList.count() - 1))
+
+        self.navList.currentRowChanged.connect(self._on_nav_row_changed)
+
+        # Layout: splitter with nav list | content
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(self.configTable)
+        splitter.addWidget(self.navList)
         splitter.addWidget(self.configContent)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 3)
-        hlayout = QHBoxLayout(self)
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setHandleWidth(1)
 
-        hlayout.addWidget(splitter)
-        hlayout.setSpacing(0)
-        hlayout.setContentsMargins(0, 0, 0, 0)
-
-        self.configTable.expandAll()
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(splitter)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
 
     def on_load_model_changed(self):
         pcfg.module.load_model_on_demand = self.load_model_checker.isChecked()
@@ -919,20 +885,11 @@ class ConfigPanel(Widget):
     def on_keepline_clicked(self):
         pcfg.module.keep_exist_textlines = self.detect_config_panel.keep_existing_checker.isChecked()
 
-    def addConfigBlock(self, header: str) -> Tuple[ConfigBlock, TableItem]:
+    def addConfigBlock(self, header: str) -> ConfigBlock:
         cb = ConfigBlock(header, parent=self)
-        cb.sublock_pressed.connect(self.onSublockPressed)
         self.configContent.addConfigBlock(cb)
-        cb.setIndex(len(self.configContent.config_block_list)-1)
-        ti = self.configTable.addHeader(header)
-        return cb, ti
-
-    def onSublockPressed(self, idx0, idx1):
-        self.configTable.setCurrentItem(idx0, idx1)
-        self.configContent.deactiveLabel()
-
-    def onTableItemPressed(self, idx0, idx1):
-        self.configContent.setActiveLabel(idx0, idx1)
+        cb.setIndex(len(self.configContent.config_block_list) - 1)
+        return cb
 
     def on_open_onstartup_changed(self):
         pcfg.open_recent_on_startup = self.open_on_startup_checker.isChecked()
@@ -996,25 +953,43 @@ class ConfigPanel(Widget):
     def on_effect_flag_changed(self):
         pcfg.let_fnteffect_flag = self.let_effect_combox.currentIndex()
 
+    def _on_nav_row_changed(self, row: int):
+        """Scroll config content to the section widget for the selected nav row."""
+        if row < 0 or row >= len(self._nav_items):
+            return
+        target, _ = self._nav_items[row]
+        if target is not None:
+            self.configContent.scrollToWidget(target)
+
+    def _nav_select(self, section_widget) -> int:
+        """Select the nav-list row whose target matches *section_widget*.
+        Returns the row index, or -1 if not found.
+        """
+        for idx, (target, _) in enumerate(self._nav_items):
+            if target is section_widget:
+                self.navList.setCurrentRow(idx)
+                return idx
+        return -1
+
     def focusOnTranslator(self):
-        idx0, idx1 = self.trans_sub_block.idx0, self.trans_sub_block.idx1
-        self.configTable.setCurrentItem(idx0, idx1)
-        self.configTable.tableitem_pressed.emit(idx0, idx1)
+        target = self.trans_sub_block.section_widget
+        self._nav_select(target)
+        self.configContent.scrollToWidget(target)
 
     def focusOnInpaint(self):
-        idx0, idx1 = self.inpaint_sub_block.idx0, self.inpaint_sub_block.idx1
-        self.configTable.setCurrentItem(idx0, idx1)
-        self.configTable.tableitem_pressed.emit(idx0, idx1)
+        target = self.inpaint_sub_block.section_widget
+        self._nav_select(target)
+        self.configContent.scrollToWidget(target)
 
     def focusOnDetect(self):
-        idx0, idx1 = self.detect_sub_block.idx0, self.detect_sub_block.idx1
-        self.configTable.setCurrentItem(idx0, idx1)
-        self.configTable.tableitem_pressed.emit(idx0, idx1)
+        target = self.detect_sub_block.section_widget
+        self._nav_select(target)
+        self.configContent.scrollToWidget(target)
 
     def focusOnOCR(self):
-        idx0, idx1 = self.ocr_sub_block.idx0, self.ocr_sub_block.idx1
-        self.configTable.setCurrentItem(idx0, idx1)
-        self.configTable.tableitem_pressed.emit(idx0, idx1)
+        target = self.ocr_sub_block.section_widget
+        self._nav_select(target)
+        self.configContent.scrollToWidget(target)
 
     def hideEvent(self, e) -> None:
         self.save_config.emit()

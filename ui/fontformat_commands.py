@@ -174,6 +174,13 @@ def ffmt_change_line_spacing_type(param_name: str, values: float, act_ffmt: Font
 
 
 @font_formating(push_undostack=True)
+def ffmt_change_punctuation_alignment(param_name: str, values: int, act_ffmt: FontFormat, is_global: bool, blkitems: List[TextBlkItem], **kwargs):
+    restore_cursor = not is_global
+    for blkitem, value in zip(blkitems, values):
+        blkitem.setPunctuationAlignment(value, restore_cursor=restore_cursor)
+
+
+@font_formating(push_undostack=True)
 def ffmt_change_shadow_offset(param_name: str, values: float, act_ffmt: FontFormat, is_global: bool, blkitems: List[TextBlkItem], **kwargs):
     for blkitem, value in zip(blkitems, values):
         blkitem.setBGAttribute(param_name, value)

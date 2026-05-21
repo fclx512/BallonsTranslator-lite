@@ -1,9 +1,9 @@
 from typing import List, Union, Tuple
 
 import numpy as np
-from qtpy.QtWidgets import QGraphicsOpacityEffect, QLabel, QColorDialog, QMenu
-from qtpy.QtCore import  Qt, QPropertyAnimation, QEasingCurve, Signal
-from qtpy.QtGui import QMouseEvent, QWheelEvent, QColor
+from qtpy.QtWidgets import QGraphicsOpacityEffect, QLabel, QColorDialog, QMenu, QDialog
+from qtpy.QtCore import  Qt, QPropertyAnimation, QEasingCurve, Signal, QRectF
+from qtpy.QtGui import QMouseEvent, QWheelEvent, QColor, QPainter, QPixmap, QBrush, QPen
 
 
 from utils.shared import CONFIG_FONTSIZE_CONTENT
@@ -47,19 +47,20 @@ class ColorPickerLabel(QLabel):
     changingColor = Signal()
     def __init__(self, parent=None, param_name='', *args, **kwargs):
         super().__init__(parent=parent, *args, **kwargs)
-        self.color: QColor = None
+        self.color = QColor(0, 0, 0)
         self.param_name = param_name
+        self._hovered = False
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def mousePressEvent(self, event: QMouseEvent):
-        btn = event.button()
-        if btn == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             self.changingColor.emit()
-            color = QColorDialog.getColor()
-            is_valid = color.isValid()
-            if is_valid:
-                self.setPickerColor(color)
-            self.colorChanged.emit(is_valid)
-        elif btn == Qt.MouseButton.RightButton:
+            from .color_picker import ColorPickerDialog
+            dlg = ColorPickerDialog(self.color, self.window())
+            if dlg.exec_() == QDialog.DialogCode.Accepted:
+                self.setPickerColor(dlg.get_color())
+            self.colorChanged.emit(True)
+        elif event.button() == Qt.MouseButton.RightButton:
             menu = QMenu(self)
             apply_act = menu.addAction(self.tr("Apply Color"))
             rst = menu.exec(event.globalPosition().toPoint())
@@ -72,9 +73,52 @@ class ColorPickerLabel(QLabel):
                 color = np.round(color).astype(np.uint8).tolist()
             color = QColor(*color)
         self.color = color
-        r, g, b, a = color.getRgb()
-        rgba = f'rgba({r}, {g}, {b}, {a})'
-        self.setStyleSheet("background-color: " + rgba)
+        r, g, b = color.red(), color.green(), color.blue()
+        self.setToolTip(f"RGB({r}, {g}, {b})  #{r:02x}{g:02x}{b:02x}".upper())
+        self.update()
+
+    def enterEvent(self, e):
+        self._hovered = True
+        self.update()
+        return super().enterEvent(e)
+
+    def leaveEvent(self, e):
+        self._hovered = False
+        self.update()
+        return super().leaveEvent(e)
+
+    def paintEvent(self, e):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        rect = self.rect().adjusted(2, 2, -2, -2)
+        radius = min(rect.width(), rect.height()) // 3
+        rf = QRectF(rect)
+
+        # Checkerboard background (shows when color has alpha < 255)
+        check = QPixmap(8, 8)
+        check.fill(QColor(255, 255, 255))
+        cp = QPainter(check)
+        cp.fillRect(0, 0, 4, 4, QColor(200, 200, 200))
+        cp.fillRect(4, 4, 4, 4, QColor(200, 200, 200))
+        cp.end()
+        painter.setBrush(QBrush(check))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(rf, radius, radius)
+
+        # Color fill (blends with checkerboard when alpha < 255)
+        painter.setBrush(QBrush(self.color))
+        painter.drawRoundedRect(rf, radius, radius)
+
+        # Border
+        if self._hovered:
+            border_color = QColor(30, 147, 229)
+        else:
+            border_color = QColor(self.color)
+            border_color.setAlpha(120)
+        painter.setPen(QPen(border_color, 1.5))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(rf, radius, radius)
 
     def rgb(self) -> List:
         color = self.color

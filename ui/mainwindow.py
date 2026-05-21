@@ -8,9 +8,9 @@ import time
 import cv2
 
 from tqdm import tqdm
-from qtpy.QtWidgets import QAction, QFileDialog, QMenu, QHBoxLayout, QVBoxLayout, QApplication, QStackedWidget, QSplitter, QListWidget, QShortcut, QListWidgetItem, QMessageBox, QTextEdit, QPlainTextEdit
-from qtpy.QtCore import Qt, QPoint, QSize, QEvent, Signal
-from qtpy.QtGui import QContextMenuEvent, QTextCursor, QGuiApplication, QIcon, QCloseEvent, QKeySequence, QKeyEvent, QPainter, QClipboard, QImage
+from qtpy.QtWidgets import QAction, QFileDialog, QMenu, QHBoxLayout, QVBoxLayout, QApplication, QWidget, QStackedWidget, QSplitter, QListWidget, QShortcut, QListWidgetItem, QMessageBox, QTextEdit, QPlainTextEdit
+from qtpy.QtCore import Qt, QPoint, QSize, QEvent, Signal, QPropertyAnimation, QEasingCurve
+from qtpy.QtGui import QContextMenuEvent, QTextCursor, QGuiApplication, QIcon, QCloseEvent, QKeySequence, QPainter, QClipboard
 
 from utils.logger import logger as LOGGER
 from utils.text_processing import is_cjk, full_len, half_len
@@ -36,6 +36,7 @@ from .framelesswindow import FramelessWindow, FramelessMoveResize
 from .drawing_commands import RunBlkTransCommand
 from . import shared_widget as SW
 from .custom_widget import MessageBox, FrameLessMessageBox, ImgtransProgressMessageBox
+from .update_checker import UpdateCheckDialog, AboutDialog
 
 class PageListView(QListWidget):
 
@@ -123,7 +124,10 @@ class MainWindow(mainwindow_cls):
     def setupUi(self):
         screen_size = QGuiApplication.primaryScreen().geometry().size()
         self.setMinimumWidth(screen_size.width() // 2)
-        self.configPanel = ConfigPanel(self)
+
+        self.centralStackWidget = QStackedWidget(self)
+
+        self.configPanel = ConfigPanel(self.centralStackWidget)
 
         self.leftBar = LeftBar(self)
         self.leftBar.showPageListLabel.clicked.connect(self.pageLabelStateChanged)
@@ -155,9 +159,7 @@ class MainWindow(mainwindow_cls):
         self.imsave_thread.img_writed.connect(self.global_search_widget.on_img_writed)
         self.global_search_widget.search_tree.result_item_clicked.connect(self.on_search_result_item_clicked)
         self.leftStackWidget.addWidget(self.global_search_widget)
-        
-        self.centralStackWidget = QStackedWidget(self)
-        
+
         self.titleBar = TitleBar(self)
         self.titleBar.closebtn_clicked.connect(self.on_closebtn_clicked)
         self.titleBar.display_lang_changed.connect(self.on_display_lang_changed)
@@ -187,7 +189,7 @@ class MainWindow(mainwindow_cls):
 
         self.bottomBar.originalSlider.valueChanged.connect(self.canvas.setOriginalTransparencyBySlider)
         self.bottomBar.textlayerSlider.valueChanged.connect(self.canvas.setTextLayerTransparencyBySlider)
-        
+
         self.drawingPanel = DrawingPanel(self.canvas, self.configPanel.inpaint_config_panel)
         self.textPanel = TextPanel(self.app)
         self.textPanel.formatpanel.foldTextBtn.checkStateChanged.connect(self.fold_textarea)
@@ -216,7 +218,13 @@ class MainWindow(mainwindow_cls):
         self.comicTransSplitter.addWidget(self.rightComicTransStackPanel)
 
         self.centralStackWidget.addWidget(self.comicTransSplitter)
-        self.centralStackWidget.addWidget(self.configPanel)
+
+        # Config panel as floating overlay (not in stack, animates in/out)
+        self.configPanel.setParent(self.centralStackWidget)
+        self.configPanel.setVisible(False)
+        self._configAnim = QPropertyAnimation(self.configPanel, b"pos")
+        self._configAnim.setDuration(350)
+        self._configAnim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         mainVBoxLayout = QVBoxLayout(self)
         mainVBoxLayout.addWidget(self.titleBar)
@@ -407,14 +415,52 @@ class MainWindow(mainwindow_cls):
 
 
     def setupImgTransUI(self):
-        self.centralStackWidget.setCurrentIndex(0)
+        self._hideConfigOverlay()
         if self.leftBar.needleftStackWidget():
             self.leftStackWidget.show()
         else:
             self.leftStackWidget.hide()
 
     def setupConfigUI(self):
-        self.centralStackWidget.setCurrentIndex(1)
+        self._showConfigOverlay()
+
+    def _is_canvas_mode(self) -> bool:
+        """True when canvas is active (config overlay not visible)."""
+        return not (hasattr(self, 'configPanel') and self.configPanel.isVisible())
+
+    def _showConfigOverlay(self):
+        panel = self.configPanel
+        pw = panel.parentWidget()
+        panel.setGeometry(pw.rect())
+        panel.raise_()
+        panel.show()
+        panel.setFocus()
+
+        self._configAnim.setStartValue(QPoint(pw.width(), 0))
+        self._configAnim.setEndValue(QPoint(0, 0))
+        self._configAnim.start()
+
+    def _hideConfigOverlay(self):
+        panel = self.configPanel
+        if not panel.isVisible():
+            return
+        pw = panel.parentWidget()
+
+        self._configAnim.finished.connect(self._on_config_hidden,
+                                          Qt.ConnectionType.SingleShotConnection)
+        self._configAnim.setStartValue(panel.pos())
+        self._configAnim.setEndValue(QPoint(pw.width(), 0))
+        self._configAnim.start()
+
+    def _on_config_hidden(self):
+        self.configPanel.hide()
+        if self.leftBar.configChecker.isChecked():
+            self.leftBar.configChecker.setChecked(False)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self.configPanel.isVisible():
+            self.configPanel.setGeometry(self.configPanel.parentWidget().rect())
 
     def set_display_lang(self, lang: str):
         self.retranslateUI()
@@ -628,6 +674,8 @@ class MainWindow(mainwindow_cls):
         self.titleBar.exporttstyle_trigger.connect(self.export_tstyles)
         self.titleBar.darkmode_trigger.connect(self.on_darkmode_triggered)
         self.titleBar.merge_tool_trigger.connect(self.on_open_merge_tool)
+        self.titleBar.help_about_triggered.connect(self.show_about_dialog)
+        self.titleBar.help_check_update_triggered.connect(self.show_update_check_dialog)
 
         def _make_shortcuts(action_id, defaults, slot):
             lst = []
@@ -672,7 +720,7 @@ class MainWindow(mainwindow_cls):
             if sender.key() == QKEY.Key_D:
                 if self.canvas.editing_textblkitem is not None:
                     return
-        if self.centralStackWidget.currentIndex() == 0:
+        if self._is_canvas_mode():
             focus_widget = self.app.focusWidget()
             if self.st_manager.is_editting():
                 self.st_manager.on_switch_textitem(1)
@@ -692,7 +740,7 @@ class MainWindow(mainwindow_cls):
             if sender.key() == QKEY.Key_A:
                 if self.canvas.editing_textblkitem is not None:
                     return
-        if self.centralStackWidget.currentIndex() == 0:
+        if self._is_canvas_mode():
             focus_widget = self.app.focusWidget()
             if self.st_manager.is_editting():
                 self.st_manager.on_switch_textitem(-1)
@@ -707,20 +755,20 @@ class MainWindow(mainwindow_cls):
                     self.pageList.setCurrentRow(row)
 
     def shortcutTextedit(self):
-        if self.centralStackWidget.currentIndex() == 0:
+        if self._is_canvas_mode():
             self.bottomBar.texteditChecker.click()
 
     def shortcutTextblock(self):
-        if self.centralStackWidget.currentIndex() == 0:
+        if self._is_canvas_mode():
             if self.bottomBar.texteditChecker.isChecked():
                 self.bottomBar.textblockChecker.click()
 
     def shortcutDrawboard(self):
-        if self.centralStackWidget.currentIndex() == 0:
+        if self._is_canvas_mode():
             self.bottomBar.paintChecker.click()
 
     def shortcutCtrlD(self):
-        if self.centralStackWidget.currentIndex() == 0:
+        if self._is_canvas_mode():
             if self.drawingPanel.isVisible():
                 if self.drawingPanel.currentTool == self.drawingPanel.rectTool:
                     self.drawingPanel.rectPanel.delete_btn.click()
@@ -728,12 +776,12 @@ class MainWindow(mainwindow_cls):
                 self.canvas.delete_textblks.emit(0)
 
     def shortcutSelectAll(self):
-        if self.centralStackWidget.currentIndex() == 0:
+        if self._is_canvas_mode():
             if self.textPanel.isVisible():
                 self.st_manager.set_blkitems_selection(True)
 
     def shortcutSpace(self):
-        if self.centralStackWidget.currentIndex() == 0:
+        if self._is_canvas_mode():
             if self.drawingPanel.isVisible():
                 if self.drawingPanel.currentTool == self.drawingPanel.rectTool:
                     self.drawingPanel.rectPanel.inpaint_btn.click()
@@ -997,7 +1045,7 @@ class MainWindow(mainwindow_cls):
         edit.setTextCursor(cursor)
 
     def shortcutPreview(self):
-        if self.centralStackWidget.currentIndex() == 0:
+        if self._is_canvas_mode():
             self.canvas.toggle_preview()
 
     def shortcutEscape(self):
@@ -1415,87 +1463,187 @@ class MainWindow(mainwindow_cls):
             self.set_display_lang(lang)
     
     def run_imgtrans(self):
+        num_pages = self.imgtrans_proj.num_pages
+        if num_pages == 0:
+            return
+
+        page_filter = None
+        if num_pages > 1:
+            from ui.custom_widget import RangeSlider
+            from qtpy.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout,
+                                        QFrame, QLabel, QPushButton, QCheckBox, QSpinBox)
+
+            dialog = QDialog(self)
+            dialog.setWindowTitle(self.tr('Run'))
+            dialog.setMinimumWidth(420)
+            layout = QVBoxLayout(dialog)
+
+            range_frame = QFrame()
+            range_frame.setFrameShape(QFrame.Shape.StyledPanel)
+            range_layout = QVBoxLayout(range_frame)
+
+            # Spinboxes for precise page input (placed above slider)
+            spin_layout = QHBoxLayout()
+            spin_layout.setContentsMargins(0, 0, 0, 0)
+            no_btn_style = '''
+QSpinBox {
+    background: rgba(128,128,128,0.13);
+    border: 1px solid rgba(128,128,128,0.25);
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
+'''
+            start_spin = QSpinBox()
+            start_spin.setRange(1, num_pages)
+            start_spin.setValue(1)
+            start_spin.setFixedWidth(70)
+            start_spin.setStyleSheet(no_btn_style)
+            end_spin = QSpinBox()
+            end_spin.setRange(1, num_pages)
+            end_spin.setValue(num_pages)
+            end_spin.setFixedWidth(70)
+            end_spin.setStyleSheet(no_btn_style)
+
+            spin_layout.addStretch()
+            spin_layout.addWidget(start_spin)
+            spin_layout.addWidget(QLabel(' ~ '))
+            spin_layout.addWidget(end_spin)
+            spin_layout.addStretch()
+            range_layout.addLayout(spin_layout)
+
+            slider = RangeSlider(0, num_pages - 1)
+            range_layout.addWidget(slider)
+
+            range_info = QLabel()
+            range_layout.addWidget(range_info)
+
+            def update_range_info():
+                lo = slider.low() + 1
+                hi = slider.high() + 1
+                range_info.setText(self.tr('Page %1 ~ Page %2 (%3 pages)')
+                                   .replace('%1', str(lo)).replace('%2', str(hi))
+                                   .replace('%3', str(hi - lo + 1)))
+
+            def sync_spinboxes():
+                start_spin.blockSignals(True)
+                end_spin.blockSignals(True)
+                start_spin.setValue(slider.low() + 1)
+                end_spin.setValue(slider.high() + 1)
+                start_spin.blockSignals(False)
+                end_spin.blockSignals(False)
+
+            def on_spinbox_changed():
+                slider.blockSignals(True)
+                slider.set_range(start_spin.value() - 1, end_spin.value() - 1)
+                slider.blockSignals(False)
+                sync_spinboxes()
+                update_range_info()
+
+            start_spin.valueChanged.connect(on_spinbox_changed)
+            end_spin.valueChanged.connect(on_spinbox_changed)
+            slider.rangeChanged.connect(lambda lo, hi: (
+                sync_spinboxes(), update_range_info()
+            ))
+
+            all_pages_cb = QCheckBox(self.tr('All Pages'))
+            all_pages_cb.toggled.connect(lambda checked: (
+                slider.set_range(0, num_pages - 1),
+                slider.setEnabled(not checked),
+                start_spin.setEnabled(not checked),
+                end_spin.setEnabled(not checked),
+                update_range_info()
+            ))
+            all_pages_cb.setChecked(True)
+            range_layout.addWidget(all_pages_cb)
+
+            layout.addWidget(range_frame)
+            update_range_info()
+
+            btn_layout = QHBoxLayout()
+            run_btn = QPushButton(self.tr('Run'))
+            cancel_btn = QPushButton(self.tr('Cancel'))
+            btn_layout.addWidget(run_btn)
+            btn_layout.addWidget(cancel_btn)
+            layout.addLayout(btn_layout)
+
+            run_btn.clicked.connect(dialog.accept)
+            cancel_btn.clicked.connect(dialog.reject)
+
+            if pcfg.module.all_stages_disabled():
+                run_btn.setEnabled(False)
+
+            if dialog.exec_() != QDialog.DialogCode.Accepted:
+                return
+
+            if not all_pages_cb.isChecked():
+                page_filter = []
+                for i in range(slider.low(), slider.high() + 1):
+                    page_filter.append(self.imgtrans_proj.idx2pagename(i))
+
         if not self.imgtrans_proj.is_all_pages_no_text and not pcfg.module.keep_exist_textlines:
-            # 创建自定义消息框，添加"继续运行"选项
             msgBox = QMessageBox(self)
             msgBox.setIcon(QMessageBox.Question)
             msgBox.setWindowTitle(self.tr('Confirmation'))
-            msgBox.setText(self.tr('\"Run\" will clear previous results, \"Continue\" will try to run from previous progress'))
-            
-            # 添加三个按钮（直接使用中文）
-            restart_btn = msgBox.addButton(self.tr('Run'), QMessageBox.YesRole)
-            continue_btn = msgBox.addButton(self.tr('Continue'), QMessageBox.AcceptRole)
+            msgBox.setText(self.tr('Run will clear previous results. Continue?'))
+
+            run_btn = msgBox.addButton(self.tr('Run'), QMessageBox.YesRole)
             cancel_btn = msgBox.addButton(self.tr('Cancel'), QMessageBox.RejectRole)
-            
-            msgBox.setDefaultButton(continue_btn)
+            msgBox.setDefaultButton(run_btn)
             msgBox.exec_()
-            
-            clicked_button = msgBox.clickedButton()
-            if clicked_button == cancel_btn:
-                return  # 取消，不执行任何操作
-            elif clicked_button == continue_btn:
-                # 继续运行：只处理没有文本的页面
-                self.on_run_imgtrans(continue_mode=True)
+
+            if msgBox.clickedButton() == cancel_btn:
                 return
-            # 如果是 restart_btn，继续执行下面的代码（重新运行）
-        self.on_run_imgtrans()
+        self.on_run_imgtrans(page_filter=page_filter)
 
     def run_imgtrans_wo_textstyle_update(self):
         self._run_imgtrans_wo_textstyle_update = True
         self.run_imgtrans()
 
-    def on_run_imgtrans(self, continue_mode=False):
+    def on_run_imgtrans(self, page_filter=None):
         self.backup_blkstyles.clear()
 
         if self.bottomBar.textblockChecker.isChecked():
             self.bottomBar.textblockChecker.click()
 
         all_disabled = pcfg.module.all_stages_disabled()
-        
+
         pages_to_process = []
-        
-        # 继续模式：先检查哪些页面需要处理
-        if continue_mode:
-            for page_name in self.imgtrans_proj.pages:
-                if not self.imgtrans_proj.get_page_progress(page_name):
-                    pages_to_process.append(page_name)
-            if len(pages_to_process) == 0:
-                return
-        else:
-            for page_name in self.imgtrans_proj.pages:
-                self.imgtrans_proj.set_page_progress(page_name, 0)
-        
+        if page_filter is not None:
+            pages_to_process = list(page_filter)
+
+        for page_name in self.imgtrans_proj.pages:
+            if page_filter is not None and page_name not in pages_to_process:
+                continue
+            self.imgtrans_proj.set_page_progress(page_name, 0)
+
         if pcfg.module.enable_detect:
             for page in self.imgtrans_proj.pages:
                 if not pcfg.module.keep_exist_textlines:
                     if not pages_to_process:
-                        # 没有指定pages_to_process，清空所有页面
+                        self.imgtrans_proj.pages[page].clear()
+                    elif page in pages_to_process:
                         self.imgtrans_proj.pages[page].clear()
         else:
             self.st_manager.updateTextBlkList()
             textblk: TextBlock = None
             for page_name, blklist in self.imgtrans_proj.pages.items():
-                # 如果指定了pages_to_process，跳过不需要处理的页面
                 if pages_to_process and page_name not in pages_to_process:
                     continue
-                    
+
                 ffmt_list = []
                 self.backup_blkstyles.append(ffmt_list)
                 for textblk in blklist:
                     if not pcfg.module.enable_detect:
                         ffmt_list.append(textblk.fontformat.deepcopy())
-                    # 继续模式且没有指定pages_to_process时：跳过已有文本的文本块
-                    if continue_mode and not pages_to_process and textblk.text and len(textblk.text) > 0:
-                        continue
                     if pcfg.module.enable_ocr:
                         textblk.text = []
                         textblk.set_font_colors((0, 0, 0), (0, 0, 0))
                     if pcfg.module.enable_translate or (all_disabled and not self._run_imgtrans_wo_textstyle_update) or pcfg.module.enable_ocr:
                         textblk.rich_text = ''
                     textblk.vertical = textblk.src_is_vertical
-        
-        # 如果有指定pages_to_process或者是continue_mode，则传递页面列表
-        self.module_manager.runImgtransPipeline(pages_to_process if (pages_to_process or continue_mode) else None)
+
+        self.module_manager.runImgtransPipeline(pages_to_process if pages_to_process else None)
 
     def on_transpanel_changed(self):
         self.canvas.editor_index = self.rightComicTransStackPanel.currentIndex()
@@ -1680,6 +1828,7 @@ class MainWindow(mainwindow_cls):
             else:
                 LOGGER.warning(f'target directory {d} does not exist.')
         self.exec_dirs = valid_dirs
+        self.exec_pages = kwargs.get('pages', '').strip() if kwargs.get('pages') else ''
         self.run_next_dir()
 
     def run_next_dir(self):
@@ -1690,11 +1839,22 @@ class MainWindow(mainwindow_cls):
             self.app.quit()
             return
         d = self.exec_dirs.pop(0)
-        
+
         LOGGER.info(f'translating {d} ...')
         self.openDir(d)
+
+        page_filter = None
+        if self.exec_pages:
+            try:
+                from utils.io_utils import page_names_from_range
+                page_filter = page_names_from_range(self.imgtrans_proj, self.exec_pages)
+            except ValueError as e:
+                LOGGER.error(f'Invalid --pages argument: {e}')
+                self.app.quit()
+                return
+
         shared.pbar = {}
-        npages = len(self.imgtrans_proj.pages)
+        npages = len(page_filter) if page_filter else len(self.imgtrans_proj.pages)
         if npages > 0:
             if pcfg.module.enable_detect:
                 shared.pbar['detect'] = tqdm(range(npages), desc="Text Detection")
@@ -1704,7 +1864,7 @@ class MainWindow(mainwindow_cls):
                 shared.pbar['translate'] = tqdm(range(npages), desc="Translation")
             if pcfg.module.enable_inpaint:
                 shared.pbar['inpaint'] = tqdm(range(npages), desc="Inpaint")
-        self.on_run_imgtrans()
+        self.on_run_imgtrans(page_filter=page_filter)
 
     def on_create_errdialog(self, error_msg: str, detail_traceback: str = '', exception_type: str = ''):
         try:
@@ -1764,3 +1924,27 @@ class MainWindow(mainwindow_cls):
         action: QAction = d['action']
         action.setChecked(False)
         setattr(pcfg, cfg_name, False)
+
+    # ── About / Update Check ──────────────────────────────────
+
+    def show_about_dialog(self):
+        """Show the About dialog with version info."""
+        import launch
+        commit = launch.commit_hash()
+        short = commit[:8] if commit != '<none>' else '?'
+        dlg = AboutDialog(self, version=launch.VERSION, commit=short, branch=launch.BRANCH)
+        dlg.exec_()
+
+    def show_update_check_dialog(self):
+        """Show the Check for Updates dialog."""
+        import launch
+        dlg = UpdateCheckDialog(
+            self,
+            git_path=launch.git,
+            branch=launch.BRANCH,
+            repo_path=str(launch.PATH_ROOT),
+            current_version=launch.VERSION,
+            current_commit=launch.commit_hash(),
+        )
+        dlg.restart_requested.connect(self.restart_signal.emit)
+        dlg.exec_()

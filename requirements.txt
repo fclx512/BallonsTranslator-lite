@@ -8,49 +8,31 @@ PyQt6>=6.6.1 ; python_version > "3.8"
 PyQt5-Qt5>=5.15.2 ; python_version <= "3.8"
 PyQt5>=5.15.10 ; python_version <= "3.8"
 numpy
-urllib3
-jaconv
 # PyTorch and its dependencies are optional.
 # Install them manually for GPU-accelerated local models:
 #   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 #   pip install transformers diffusers
 ultralytics>=8.4.14
-mecab-python3; sys_platform == 'darwin'
-fugashi
-unidic_lite
 tqdm
 opencv-python>=4.8.1.78; sys_platform == 'win32' or sys_platform == 'linux'
 shapely
 pyclipper
 einops
 termcolor
-bs4
 qtpy
 spacy-pkuseg
-sentencepiece
-ctranslate2
 python-docx
 docx2txt
 piexif
 ordered-set
 opencc-python-reimplemented
 requests
-beautifulsoup4
 colorama
 openai>=2.8.1
 pyyaml
 natsort
+networkx>=3.0
 py7zr
-multivolumefile
 httpx[socks,brotli]
-json5
 pillow-jxl-plugin>=1.3.4
 pywin32; sys_platform == 'win32'
-brotlicffi; sys_platform == 'win32'
-msl-loadlib; sys_platform == 'win32'
-pyobjc-core; sys_platform == 'darwin'
-pyobjc-framework-cocoa; sys_platform == 'darwin'
-pyobjc-framework-coreml; sys_platform == 'darwin'
-pyobjc-framework-quartz; sys_platform == 'darwin'
-pyobjc-framework-vision; sys_platform == 'darwin'
-betterproto

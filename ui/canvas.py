@@ -13,7 +13,7 @@ except:
 
 from .misc import ndarray2pixmap, QKEY, QNUMERIC_KEYS, ARROWKEY2DIRECTION
 from .textitem import TextBlkItem, TextBlock
-from .texteditshapecontrol import TextBlkShapeControl
+from .texteditshapecontrol import ControlBlockItem, TextBlkShapeControl
 from .custom_widget import ScrollBar, FadeLabel
 from .image_edit import ImageEditMode, DrawingLayer, StrokeImgItem
 from .page_search_widget import PageSearchWidget
@@ -761,7 +761,7 @@ class Canvas(QGraphicsScene):
 
         if btn == Qt.MouseButton.LeftButton and self.txtblkShapeControl.isVisible():
             items_at = self.items(event.scenePos())
-            if not any(isinstance(item, TextBlkItem) for item in items_at):
+            if not any(isinstance(item, (TextBlkItem, ControlBlockItem)) for item in items_at):
                 self.txtblkShapeControl.setBlkItem(None)
 
         return super().mousePressEvent(event)

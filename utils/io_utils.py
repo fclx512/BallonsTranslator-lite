@@ -73,6 +73,37 @@ def find_all_imgs(img_dir, abs_path=False, sort=False):
         
     return imglist
 
+def page_names_from_range(proj, pages_str: str):
+    """Parse a page range string like '1-5,7,9-12' into a list of page names.
+
+    Raises ValueError if any page index is out of range.
+    """
+    num_pages = len(proj.pages)
+    page_names = list(proj.pages.keys())
+    natsorted_page_names = natsorted(page_names)
+    name_to_natsort_idx = {name: i for i, name in enumerate(natsorted_page_names)}
+
+    selected = set()
+    parts = [p.strip() for p in pages_str.split(',') if p.strip()]
+    for part in parts:
+        if '-' in part:
+            a, b = part.split('-', 1)
+            start = int(a.strip())
+            end = int(b.strip())
+            if start < 1 or end > num_pages or start > end:
+                raise ValueError(f"Invalid range: {part}")
+            for i in range(start, end + 1):
+                selected.add(natsorted_page_names[i - 1])
+        else:
+            i = int(part)
+            if i < 1 or i > num_pages:
+                raise ValueError(f"Invalid page index: {i}")
+            selected.add(natsorted_page_names[i - 1])
+
+    # Preserve project order
+    return [name for name in page_names if name in selected]
+
+
 def create_thumbnail(img_path, max_width=1000):
     """
     为图像创建缩略图，保持宽高比。

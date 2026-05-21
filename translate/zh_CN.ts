@@ -1544,6 +1544,21 @@ Failed: {f}/{t}</source>
         <source>Opacity</source>
         <translation>不透明度</translation>
     </message>
+    <message>
+        <location filename="../ui/text_advanced_format.py" line="161"/>
+        <source>Center</source>
+        <translation>居中</translation>
+    </message>
+    <message>
+        <location filename="../ui/text_advanced_format.py" line="161"/>
+        <source>Upper-Right</source>
+        <translation>右上</translation>
+    </message>
+    <message>
+        <location filename="../ui/text_advanced_format.py" line="167"/>
+        <source>Punctuation Alignment</source>
+        <translation>标点对齐</translation>
+    </message>
 </context>
 <context>
     <name>TextDetectConfigPanel</name>
@@ -2058,6 +2073,21 @@ Failed: {f}/{t}</source>
         <location filename="../ui/mainwindowbars.py" line="369"/>
         <source>Region Merge Tool</source>
         <translation>区域合并工具</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindowbars.py" line=""/>
+        <source>Help</source>
+        <translation>帮助</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindowbars.py" line=""/>
+        <source>About</source>
+        <translation>关于</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindowbars.py" line=""/>
+        <source>Check for Updates</source>
+        <translation>检查更新</translation>
     </message>
 </context>
 <context>
@@ -2884,6 +2914,188 @@ qipao,qipao2</translation>
     <message>
         <source>Merge Tool</source>
         <translation>合并工具</translation>
+    </message>
+</context>
+<context>
+    <name>MainWindow</name>
+    <message>
+        <location filename="../ui/mainwindow.py" line="1459"/>
+        <source>Page %1 ~ Page %2 (%3 pages)</source>
+        <translation>第%1页 ~ 第%2页 (共%3页)</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line="1471"/>
+        <source>All Pages</source>
+        <translation>全部页面</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line="1476"/>
+        <source>Run</source>
+        <translation>运行</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line="1477"/>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+</context>
+<context>
+    <name>UpdateCheckDialog</name>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Check for Updates</source>
+        <translation>检查更新</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Checking for updates...</source>
+        <translation>正在检查更新...</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>You are running the latest version.</source>
+        <translation>已是最新版本</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Version {ver} (commit {commit})</source>
+        <translation>版本 {ver} (提交 {commit})</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>OK</source>
+        <translation>确定</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>A new version is available!</source>
+        <translation>发现新版本！</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Current: {ver} ({cur})  ->  Latest: {latest}</source>
+        <translation>当前：{ver} ({cur})  →  最新：{latest}</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Recent changes:</source>
+        <translation>最近更新：</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Local changes will be overwritten</source>
+        <translation>本地更改将被覆盖</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Update Now</source>
+        <translation>立即更新</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Updating...</source>
+        <translation>正在更新...</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Working...</source>
+        <translation>处理中...</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Update check failed</source>
+        <translation>检查更新失败</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Update complete!</source>
+        <translation>更新完成！</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Restart to apply changes?</source>
+        <translation>重启以应用更新？</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Restart Now</source>
+        <translation>立即重启</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Later</source>
+        <translation>稍后</translation>
+    </message>
+</context>
+<context>
+    <name>AboutDialog</name>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>About</source>
+        <translation>关于</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Version</source>
+        <translation>版本</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Commit</source>
+        <translation>提交</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Branch</source>
+        <translation>分支</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>OK</source>
+        <translation>确定</translation>
+    </message>
+</context>
+<context>
+    <name>UpdateThread</name>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Git is not available.\nPlease install Git from https://git-scm.com/downloads</source>
+        <translation>未检测到 Git。\n请从 https://git-scm.com/downloads 安装 Git</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Update is not available in portable/exe builds.\nPlease download the latest version from GitHub.</source>
+        <translation>便携版/打包版不支持自动更新。\n请从 GitHub 下载最新版本。</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Failed to contact GitHub.\n{err}</source>
+        <translation>无法连接到 GitHub。\n{err}</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Failed to check remote status.</source>
+        <translation>无法获取远程仓库状态</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Failed to fetch.\n{err}</source>
+        <translation>获取更新失败。\n{err}</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Failed to apply update.\n{err}</source>
+        <translation>应用更新失败。\n{err}</translation>
+    </message>
+    <message>
+        <location filename="../ui/update_checker.py" line=""/>
+        <source>Command timed out</source>
+        <translation>命令超时</translation>
     </message>
 </context>
 </TS>

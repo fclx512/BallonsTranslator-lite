@@ -5,7 +5,6 @@ import os.path as osp
 import numpy as np
 from qtpy.QtCore import QThread, Signal, QObject, QLocale, QTimer
 from qtpy.QtWidgets import QFileDialog
-from sympy import true
 
 from .funcmaps import get_maskseg_method
 from utils.logger import logger as LOGGER

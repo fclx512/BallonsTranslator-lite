@@ -270,6 +270,8 @@ class TitleBar(Widget):
     closebtn_clicked = Signal()
     display_lang_changed = Signal(str)
     enable_module = Signal(int, bool)
+    help_about_triggered = Signal()
+    help_check_update_triggered = Signal()
 
     def __init__(self, parent, *args, **kwargs) -> None:
         super().__init__(parent, *args, **kwargs)
@@ -375,6 +377,22 @@ class TitleBar(Widget):
         self.toolsToolBtn.setMenu(toolsMenu)
         self.toolsToolBtn.setPopupMode(QToolButton.InstantPopup)
 
+        # 帮助菜单
+        self.helpToolBtn = TitleBarToolBtn(self)
+        self.helpToolBtn.setText(self.tr('Help'))
+
+        aboutAction = QAction(self.tr('About'), self)
+        self.help_about_triggered = aboutAction.triggered
+
+        checkUpdateAction = QAction(self.tr('Check for Updates'), self)
+        self.help_check_update_triggered = checkUpdateAction.triggered
+
+        helpMenu = QMenu(self.helpToolBtn)
+        helpMenu.addAction(aboutAction)
+        helpMenu.addAction(checkUpdateAction)
+        self.helpToolBtn.setMenu(helpMenu)
+        self.helpToolBtn.setPopupMode(QToolButton.InstantPopup)
+
         self.runToolBtn = TitleBarToolBtn(self)
         self.runToolBtn.setText(self.tr('Run'))
 
@@ -417,6 +435,7 @@ class TitleBar(Widget):
         hlayout.addWidget(self.goToolBtn)
         hlayout.addWidget(self.runToolBtn)
         hlayout.addWidget(self.toolsToolBtn)
+        hlayout.addWidget(self.helpToolBtn)
         hlayout.addStretch()
         hlayout.addWidget(self.titleLabel)
         hlayout.addStretch()

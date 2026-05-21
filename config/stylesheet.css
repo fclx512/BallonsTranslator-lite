@@ -24,13 +24,6 @@ CustomGV {
     border-width: 1px;
 }
 
-ConfigTable {
-    border-color: @borderColor;
-    border-style: solid;
-    border-width: 1px;
-    background-color: @emptyContentBackgroundColor
-}
-
 ConfigBlock {
     background-color: @emptyContentBackgroundColor
 }
@@ -188,11 +181,6 @@ ColorPickerLabel {
     min-height: 25px;
     min-width: 25px;
     max-width: 25px;
-    border: 2px solid @borderColor;
-}
-
-ColorPickerLabel::hover {
-    border: 2px solid rgb(30, 147, 229);
 }
 
 SmallColorPickerLabel {
@@ -200,7 +188,6 @@ SmallColorPickerLabel {
     min-height: 17px;
     min-width: 17px;
     max-width: 17px;
-    border: 1px solid @borderColor;
 }
 
 AlignmentChecker {
@@ -1024,6 +1011,32 @@ QLabel#CardTitle {
 
 Widget#CardContent {
     background-color: transparent;
+}
+
+/* ── Section Pill Navigation ── */
+ConfigNavBar {
+    background-color: @widgetBackgroundColor;
+    border-bottom: 1px solid @borderColor;
+    min-height: 40px;
+    max-height: 40px;
+}
+
+SectionPill {
+    padding: 5px 14px;
+    margin: 4px 3px;
+    border: 1px solid @borderColor;
+    border-radius: 14px;
+    background-color: @emptyContentBackgroundColor;
+    font-size: 13px;
+    color: @qwidgetForegroundColor;
+}
+SectionPill:hover {
+    border-color: rgb(30, 147, 229);
+    background-color: rgba(30, 147, 229, 20%);
+}
+SectionPill:checked {
+    font-weight: bold;
+    border-width: 2px;
 }
 
 

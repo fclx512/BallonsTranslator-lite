@@ -10,7 +10,7 @@ from functools import lru_cache, cached_property
 
 from .misc import pixmap2ndarray, LruIgnoreArg
 from utils import shared as C
-from utils.fontformat import pt2px, FontFormat, LineSpacingType
+from utils.fontformat import pt2px, FontFormat, LineSpacingType, PunctuationAlignment
 
 def print_transform(tr: QTransform):
     print(f'[[{tr.m11(), tr.m12(), tr.m13()}]\n [{tr.m21(), tr.m22(), tr.m23()}]\n [{tr.m31(), tr.m32(), tr.m33()}]]')
@@ -230,6 +230,9 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
         if self.linespacing_type != linespacing_type:
             self.linespacing_type = linespacing_type
             self.reLayout()
+
+    def setPunctuationAlignment(self, value: int):
+        self.reLayout()
 
     def calculate_line_spacing(self, size: float, line_spacing: float = 1):
         if self.linespacing_type == LineSpacingType.Proportional:
@@ -481,8 +484,11 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                         yoff += space_shift
 
                     if char in PUNSET_ALIGNCENTER:
-                        tbr, br = cfmt.punc_rect(char)
-                        yoff += (tbr.height() + cfmt.font_metrics.descent() - act_rect[3]) / 2
+                        if self.fontformat.punctuation_alignment == PunctuationAlignment.UpperRight:
+                            xoff = -act_rect[0] + (line_width - act_rect[2])
+                        else:
+                            tbr, br = cfmt.punc_rect(char)
+                            yoff += (tbr.height() + cfmt.font_metrics.descent() - act_rect[3]) / 2
 
                 # else:
                 #     empty_spacing = num_lspaces * cfmt.space_width

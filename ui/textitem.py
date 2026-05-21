@@ -961,6 +961,15 @@ class TextBlkItem(QGraphicsTextItem):
             self.update()
         self.is_formatting = False
 
+    def setPunctuationAlignment(self, value: int, repaint_background: bool = True, set_selected: bool = False, restore_cursor: bool = False):
+        self.is_formatting = True
+        self.fontformat.punctuation_alignment = value
+        self.layout.setPunctuationAlignment(value)
+        if repaint_background:
+            self.repaint_background()
+            self.update()
+        self.is_formatting = False
+
     def setLetterSpacing(self, value: float, repaint_background: bool = True, set_selected: bool = False, restore_cursor: bool = False, force=False):
         self.is_formatting = True
         self.fontformat.letter_spacing = value

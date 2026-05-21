@@ -30,6 +30,11 @@ class TextAlignment(enum.IntEnum):
     Right = 2
 
 
+class PunctuationAlignment(enum.IntEnum):
+    Center = 0
+    UpperRight = 1
+
+
 fontweight_qt5_to_qt6 = {0: 100, 12: 200, 25: 300, 50: 400, 57: 500, 63: 600, 75: 700, 81: 800, 87: 900}
 fontweight_qt6_to_qt5 = {100: 0, 200: 12, 300: 25, 400: 50, 500: 57, 600: 63, 700: 75, 800: 81, 900: 87}
 
@@ -83,6 +88,7 @@ class FontFormat(Config):
     gradient_size: float = 1.0
     _style_name: str = ''
     line_spacing_type: int = LineSpacingType.Proportional
+    punctuation_alignment: int = PunctuationAlignment.Center
 
     deprecated_attributes: dict = field(default_factory = lambda: dict())
 
