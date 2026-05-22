@@ -2,7 +2,7 @@ import copy
 import sys
 from typing import List
 
-from qtpy.QtWidgets import QLineEdit, QSizePolicy, QHBoxLayout, QVBoxLayout, QFrame, QFontComboBox, QComboBox, QApplication, QPushButton, QLabel, QGroupBox, QCheckBox, QSlider, QStyledItemDelegate
+from qtpy.QtWidgets import QLineEdit, QSizePolicy, QHBoxLayout, QVBoxLayout, QFrame, QFontComboBox, QComboBox, QApplication, QPushButton, QLabel, QGroupBox, QCheckBox, QSlider, QStyledItemDelegate, QDialog
 from qtpy.QtCore import Signal, Qt
 from qtpy.QtGui import QFocusEvent, QMouseEvent, QTextCursor, QKeyEvent, QFont
 
@@ -363,7 +363,7 @@ class FontFormatPanel(Widget):
         lettersp_hlayout.addWidget(self.letterSpacingLabel)
         lettersp_hlayout.addWidget(self.letterSpacingBox)
         lettersp_hlayout.setSpacing(shared.WIDGET_SPACING_CLOSE)
-        
+
         self.global_fontfmt_str = self.tr("Global Font Format")
         self.textstyle_panel = TextStylePresetPanel(
             self.global_fontfmt_str,
@@ -379,21 +379,10 @@ class FontFormatPanel(Widget):
             config_expand_name='expand_tadvanced_panel',
             on_format_changed=self.on_param_changed
         )
-        color_label = self.textadvancedfmt_panel.shadow_group.color_label
-        color_label.changingColor.connect(self.changingColor)
-        color_label.colorChanged.connect(self.onColorLabelChanged)
-        color_label.apply_color.connect(self.on_apply_color)
+        # wire shadow/gradient trigger buttons to open the dialog
+        self.textadvancedfmt_panel.shadow_btn.clicked.connect(self._on_shadow_btn_clicked)
+        self.textadvancedfmt_panel.gradient_btn.clicked.connect(self._on_gradient_btn_clicked)
 
-        color_label = self.textadvancedfmt_panel.gradient_group.start_picker
-        color_label.changingColor.connect(self.changingColor)
-        color_label.colorChanged.connect(self.onColorLabelChanged)
-        color_label.apply_color.connect(self.on_apply_color)
-        
-        color_label = self.textadvancedfmt_panel.gradient_group.end_picker
-        color_label.changingColor.connect(self.changingColor)
-        color_label.colorChanged.connect(self.onColorLabelChanged)
-        color_label.apply_color.connect(self.on_apply_color)
-        
         self.foldTextBtn = CheckableLabel(self.tr("Unfold"), self.tr("Fold"), False)
         self.familybox.currentTextChanged.connect(self.on_familybox_changed)
         self.foldTextBtn = CheckableLabel(self.tr("Unfold"), self.tr("Fold"), False)
@@ -509,6 +498,34 @@ class FontFormatPanel(Widget):
         else:
             mul = 0.01
         self.lineSpacingBox.setValue(self.lineSpacingBox.value() + delta * mul)
+
+    def _on_shadow_btn_clicked(self):
+        from .shadow_gradient_dialog import ShadowGradientDialog
+        fmt = self.global_format if self.global_mode() else C.active_format
+        text_color = fmt.frgb
+        dlg = ShadowGradientDialog(fmt, tab='shadow', text_color=text_color, parent=self.window())
+        dlg.applied.connect(self._on_shadow_gradient_applied)
+        if dlg.exec_() == QDialog.DialogCode.Accepted:
+            self._on_shadow_gradient_applied(dlg.get_shadow_params(), dlg.get_gradient_params())
+        dlg.applied.disconnect(self._on_shadow_gradient_applied)
+
+    def _on_gradient_btn_clicked(self):
+        from .shadow_gradient_dialog import ShadowGradientDialog
+        fmt = self.global_format if self.global_mode() else C.active_format
+        text_color = fmt.frgb
+        dlg = ShadowGradientDialog(fmt, tab='gradient', text_color=text_color, parent=self.window())
+        dlg.applied.connect(self._on_shadow_gradient_applied)
+        if dlg.exec_() == QDialog.DialogCode.Accepted:
+            self._on_shadow_gradient_applied(dlg.get_shadow_params(), dlg.get_gradient_params())
+        dlg.applied.disconnect(self._on_shadow_gradient_applied)
+
+    def _on_shadow_gradient_applied(self, shadow_params: dict, gradient_params: dict):
+        for param_name, value in shadow_params.items():
+            self.on_param_changed(param_name, value)
+        for param_name, value in gradient_params.items():
+            self.on_param_changed(param_name, value)
+        if self.textadvancedfmt_panel.active_format is not None:
+            self.textadvancedfmt_panel._update_effect_btns(self.textadvancedfmt_panel.active_format)
 
     def set_active_format(self, font_format: FontFormat, multi_size=False):
         C.active_format = font_format

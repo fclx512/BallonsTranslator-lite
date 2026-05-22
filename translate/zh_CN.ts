@@ -601,11 +601,6 @@
         <source>Translation</source>
         <translation>译文</translation>
     </message>
-    <message>
-        <location filename="../ui/text_panel.py" line="348"/>
-        <source>Advanced Text Format</source>
-        <translation>进阶字体格式</translation>
-    </message>
 </context>
 <context>
     <name>GlobalReplaceThead</name>
@@ -1535,49 +1530,137 @@ Failed: {f}/{t}</source>
 <context>
     <name>TextAdvancedFormatPanel</name>
     <message>
-        <location filename="../ui/text_advanced_format.py" line="146"/>
+        <location filename="../ui/text_advanced_format.py" line="0"/>
         <source>Proportional</source>
         <translation>按比例</translation>
     </message>
     <message>
-        <location filename="../ui/text_advanced_format.py" line="146"/>
+        <location filename="../ui/text_advanced_format.py" line="0"/>
         <source>Distance</source>
         <translation>绝对距离</translation>
     </message>
     <message>
-        <location filename="../ui/text_advanced_format.py" line="156"/>
+        <location filename="../ui/text_advanced_format.py" line="0"/>
         <source>Line Spacing Type</source>
         <translation>行距类型</translation>
     </message>
     <message>
-        <location filename="../ui/text_advanced_format.py" line="162"/>
+        <location filename="../ui/text_advanced_format.py" line="0"/>
         <source>Set Text Opacity</source>
         <translation>文本不透明度</translation>
     </message>
     <message>
-        <location filename="../ui/text_advanced_format.py" line="175"/>
-        <source>Shadow</source>
-        <translation>阴影</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="164"/>
+        <location filename="../ui/text_advanced_format.py" line="0"/>
         <source>Opacity</source>
         <translation>不透明度</translation>
     </message>
     <message>
-        <location filename="../ui/text_advanced_format.py" line="161"/>
+        <location filename="../ui/text_advanced_format.py" line="0"/>
         <source>Center</source>
         <translation>居中</translation>
     </message>
     <message>
-        <location filename="../ui/text_advanced_format.py" line="161"/>
+        <location filename="../ui/text_advanced_format.py" line="0"/>
         <source>Upper-Right</source>
         <translation>右上</translation>
     </message>
     <message>
-        <location filename="../ui/text_advanced_format.py" line="167"/>
+        <location filename="../ui/text_advanced_format.py" line="0"/>
         <source>Punctuation Alignment</source>
         <translation>标点对齐</translation>
+    </message>
+    <message>
+        <location filename="../ui/text_advanced_format.py" line="0"/>
+        <source>Shadow</source>
+        <translation>阴影</translation>
+    </message>
+    <message>
+        <location filename="../ui/text_advanced_format.py" line="0"/>
+        <source>Gradient</source>
+        <translation>渐变</translation>
+    </message>
+    <message>
+        <location filename="../ui/text_advanced_format.py" line="0"/>
+        <source>Edit shadow settings</source>
+        <translation>编辑阴影设置</translation>
+    </message>
+    <message>
+        <location filename="../ui/text_advanced_format.py" line="0"/>
+        <source>Edit gradient settings</source>
+        <translation>编辑渐变设置</translation>
+    </message>
+</context>
+<context>
+    <name>ShadowGradientDialog</name>
+    <message>
+        <location filename="../ui/shadow_gradient_dialog.py" line="0"/>
+        <source>Shadow &amp; Gradient</source>
+        <translation>阴影与渐变</translation>
+    </message>
+    <message>
+        <location filename="../ui/shadow_gradient_dialog.py" line="0"/>
+        <source>Shadow</source>
+        <translation>阴影</translation>
+    </message>
+    <message>
+        <location filename="../ui/shadow_gradient_dialog.py" line="0"/>
+        <source>Color</source>
+        <translation>颜色</translation>
+    </message>
+    <message>
+        <location filename="../ui/shadow_gradient_dialog.py" line="0"/>
+        <source>Strength</source>
+        <translation>强度</translation>
+    </message>
+    <message>
+        <location filename="../ui/shadow_gradient_dialog.py" line="0"/>
+        <source>Radius</source>
+        <translation>半径</translation>
+    </message>
+    <message>
+        <location filename="../ui/shadow_gradient_dialog.py" line="0"/>
+        <source>Offset</source>
+        <translation>偏移</translation>
+    </message>
+    <message>
+        <location filename="../ui/shadow_gradient_dialog.py" line="0"/>
+        <source>Gradient</source>
+        <translation>渐变</translation>
+    </message>
+    <message>
+        <location filename="../ui/shadow_gradient_dialog.py" line="0"/>
+        <source>Enable</source>
+        <translation>启用</translation>
+    </message>
+    <message>
+        <location filename="../ui/shadow_gradient_dialog.py" line="0"/>
+        <source>Start Color</source>
+        <translation>颜色1</translation>
+    </message>
+    <message>
+        <location filename="../ui/shadow_gradient_dialog.py" line="0"/>
+        <source>End Color</source>
+        <translation>颜色2</translation>
+    </message>
+    <message>
+        <location filename="../ui/shadow_gradient_dialog.py" line="0"/>
+        <source>Size</source>
+        <translation>范围</translation>
+    </message>
+    <message>
+        <location filename="../ui/shadow_gradient_dialog.py" line="0"/>
+        <source>OK</source>
+        <translation>确定</translation>
+    </message>
+    <message>
+        <location filename="../ui/shadow_gradient_dialog.py" line="0"/>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+    <message>
+        <location filename="../ui/shadow_gradient_dialog.py" line="0"/>
+        <source>Apply</source>
+        <translation>应用</translation>
     </message>
 </context>
 <context>
@@ -1717,92 +1800,6 @@ Failed: {f}/{t}</source>
         <location filename="../ui/text_graphical_effect.py" line="124"/>
         <source>Cancel</source>
         <translation type="obsolete">取消</translation>
-    </message>
-</context>
-<context>
-    <name>TextGradientGroup</name>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="83"/>
-        <source>Gradient</source>
-        <translation>颜色渐变</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="87"/>
-        <source>Start Color</source>
-        <translation>颜色1</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="93"/>
-        <source>End Color</source>
-        <translation>颜色2</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="98"/>
-        <source>Enable</source>
-        <translation>启用</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="102"/>
-        <source>Set Gradient Angle</source>
-        <translation>渐变方向</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="104"/>
-        <source>Angle</source>
-        <translation>方向</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="112"/>
-        <source>Set Gradient Size</source>
-        <translation>渐变范围</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="114"/>
-        <source>Size</source>
-        <translation>范围</translation>
-    </message>
-</context>
-<context>
-    <name>TextShadowGroup</name>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="12"/>
-        <source>Shadow</source>
-        <translation type="obsolete">阴影</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="16"/>
-        <source>Set X offset</source>
-        <translation>X 偏移量</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="26"/>
-        <source>Set Y offset</source>
-        <translation>Y 偏移量</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="38"/>
-        <source>Set Shadow Strength</source>
-        <translation>阴影强度</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="40"/>
-        <source>Strength</source>
-        <translation>强度</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="48"/>
-        <source>Set Shadow Radius</source>
-        <translation>阴影半径</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="50"/>
-        <source>Radius</source>
-        <translation>半径</translation>
-    </message>
-    <message>
-        <location filename="../ui/text_advanced_format.py" line="66"/>
-        <source>Offset</source>
-        <translation>偏移量</translation>
     </message>
 </context>
 <context>
