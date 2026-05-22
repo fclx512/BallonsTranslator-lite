@@ -542,7 +542,7 @@ class GlobalSearchWidget(Widget):
 
     def sizeHint(self) -> QSize:
         size = super().sizeHint()
-        size.setWidth(360)
+        size.setWidth(300)
         return size
 
     def set_document_edited(self):

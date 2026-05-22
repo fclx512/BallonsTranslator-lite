@@ -3097,4 +3097,12 @@ qipao,qipao2</translation>
         <translation>命令超时</translation>
     </message>
 </context>
+<context>
+    <name>TextPanel</name>
+    <message>
+        <location filename="../ui/scenetext_manager.py" line=""/>
+        <source>Font Format</source>
+        <translation>字体样式</translation>
+    </message>
+</context>
 </TS>

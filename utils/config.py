@@ -146,6 +146,7 @@ class ProgramConfig(Config):
     darkmode: bool = False
     theme_name: str = ''
     fold_textarea: bool = False
+    expand_font_format_panel: bool = True
     show_source_text: bool = True
     show_trans_text: bool = True
     display_lang: str = field(default_factory=lambda: shared.DEFAULT_DISPLAY_LANG) # to always apply shared.DEFAULT_DISPLAY_LANG

@@ -17,19 +17,6 @@ class TextAdvancedFormatPanel(PanelArea):
         self.active_format: FontFormat = None
         self.on_format_changed = on_format_changed
 
-        self.linespacing_type_combobox = SmallComboBox(
-            parent=self,
-            options=[
-                self.tr("Proportional"),
-                self.tr("Distance")
-            ]
-        )
-        self.linespacing_type_combobox.activated.connect(self.on_linespacing_type_changed)
-        linespacing_type_label = SmallParamLabel(self.tr('Line Spacing Type'))
-        linespacing_type_layout = QHBoxLayout()
-        linespacing_type_layout.addWidget(linespacing_type_label)
-        linespacing_type_layout.addWidget(self.linespacing_type_combobox)
-
         self.punct_align_combobox = SmallComboBox(
             parent=self,
             options=[
@@ -76,11 +63,25 @@ class TextAdvancedFormatPanel(PanelArea):
         self.scrollContent.after_resized.connect(self.adjuset_size)
 
         hlayout = QHBoxLayout()
-        hlayout.addLayout(linespacing_type_layout)
+        hlayout.setSpacing(8)
         hlayout.addLayout(opacity_layout)
         hlayout.addLayout(punct_align_layout)
+        hlayout.addStretch()
+
+        self.linespacing_type_combobox = SmallComboBox(
+            parent=self,
+            options=[self.tr("Proportional"), self.tr("Distance")]
+        )
+        self.linespacing_type_combobox.activated.connect(self.on_linespacing_type_changed)
+        linespacing_type_label = SmallParamLabel(self.tr('Line Spacing Type'))
+        linespacing_layout = QHBoxLayout()
+        linespacing_layout.addWidget(linespacing_type_label)
+        linespacing_layout.addWidget(self.linespacing_type_combobox)
+        linespacing_layout.addStretch()
+
         vlayout = QVBoxLayout()
         vlayout.addLayout(hlayout)
+        vlayout.addLayout(linespacing_layout)
         vlayout.addLayout(btns_layout)
         vlayout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
@@ -91,16 +92,16 @@ class TextAdvancedFormatPanel(PanelArea):
         TEXT_ADVANCED_PANEL_MAXH = 300
         self.setFixedHeight(min(TEXT_ADVANCED_PANEL_MAXH, self.scrollContent.height()))
 
-    def on_linespacing_type_changed(self):
-        self.on_format_changed('line_spacing_type', self.linespacing_type_combobox.currentIndex())
-
     def on_punct_align_changed(self):
         self.on_format_changed('punctuation_alignment', self.punct_align_combobox.currentIndex())
 
+    def on_linespacing_type_changed(self):
+        self.on_format_changed('line_spacing_type', self.linespacing_type_combobox.currentIndex())
+
     def set_active_format(self, font_format: FontFormat):
         self.active_format = font_format
-        self.linespacing_type_combobox.setCurrentIndex(font_format.line_spacing_type)
         self.punct_align_combobox.setCurrentIndex(font_format.punctuation_alignment)
+        self.linespacing_type_combobox.setCurrentIndex(font_format.line_spacing_type)
         self.opacity_box.setValue(font_format.opacity)
         self._update_effect_btns(font_format)
 

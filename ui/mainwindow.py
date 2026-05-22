@@ -8,7 +8,7 @@ import time
 import cv2
 
 from tqdm import tqdm
-from qtpy.QtWidgets import QAction, QFileDialog, QMenu, QHBoxLayout, QVBoxLayout, QApplication, QWidget, QStackedWidget, QSplitter, QListWidget, QShortcut, QListWidgetItem, QMessageBox, QTextEdit, QPlainTextEdit
+from qtpy.QtWidgets import QAction, QFileDialog, QMenu, QHBoxLayout, QVBoxLayout, QApplication, QWidget, QStackedWidget, QListWidget, QShortcut, QListWidgetItem, QMessageBox, QTextEdit, QPlainTextEdit
 from qtpy.QtCore import Qt, QPoint, QSize, QEvent, Signal, QPropertyAnimation, QEasingCurve
 from qtpy.QtGui import QContextMenuEvent, QTextCursor, QGuiApplication, QIcon, QCloseEvent, QKeySequence, QPainter, QClipboard
 
@@ -150,8 +150,9 @@ class MainWindow(mainwindow_cls):
         self.pageList.setHidden(True)
         self.pageList.currentItemChanged.connect(self.pageListCurrentItemChanged)
 
-        self.leftStackWidget = QStackedWidget(self)
+        self.leftStackWidget = QStackedWidget(self.centralStackWidget)
         self.leftStackWidget.addWidget(self.pageList)
+        self.leftStackWidget.setVisible(False)
 
         self.global_search_widget = GlobalSearchWidget(self.centralStackWidget)
         self.global_search_widget.setVisible(False)
@@ -212,12 +213,16 @@ class MainWindow(mainwindow_cls):
         self.rightComicTransStackPanel.addWidget(self.textPanel)
         self.rightComicTransStackPanel.currentChanged.connect(self.on_transpanel_changed)
 
-        self.comicTransSplitter = QSplitter(Qt.Orientation.Horizontal)
-        self.comicTransSplitter.addWidget(self.leftStackWidget)
-        self.comicTransSplitter.addWidget(self.canvas.gv)
-        self.comicTransSplitter.addWidget(self.rightComicTransStackPanel)
+        # Right panel with fixed width (no splitter drag)
+        self._rightPanelContainer = QWidget()
+        right_layout = QHBoxLayout(self._rightPanelContainer)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+        right_layout.addWidget(self.canvas.gv, 1)
+        right_layout.addWidget(self.rightComicTransStackPanel)
+        self.rightComicTransStackPanel.setFixedWidth(360)
 
-        self.centralStackWidget.addWidget(self.comicTransSplitter)
+        self.centralStackWidget.addWidget(self._rightPanelContainer)
 
         # Config panel as floating overlay (not in stack, animates slide)
         self.configPanel.setParent(self.centralStackWidget)
@@ -231,6 +236,11 @@ class MainWindow(mainwindow_cls):
         self._searchAnim.setDuration(350)
         self._searchAnim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
+        # Page list overlay slides in from left (same style as search panel)
+        self._pageListAnim = QPropertyAnimation(self.leftStackWidget, b"pos")
+        self._pageListAnim.setDuration(350)
+        self._pageListAnim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
         mainVBoxLayout = QVBoxLayout(self)
         mainVBoxLayout.addWidget(self.titleBar)
         mainVBoxLayout.addLayout(mainHLayout)
@@ -241,9 +251,6 @@ class MainWindow(mainwindow_cls):
         mainVBoxLayout.setSpacing(0)
 
         self.mainvlayout = mainVBoxLayout
-        self.comicTransSplitter.setStretchFactor(0, 1)
-        self.comicTransSplitter.setStretchFactor(1, 10)
-        self.comicTransSplitter.setStretchFactor(2, 1)
         self.imgtrans_progress_msgbox = ImgtransProgressMessageBox()
         self.resetStyleSheet()
 
@@ -421,10 +428,24 @@ class MainWindow(mainwindow_cls):
 
     def setupImgTransUI(self):
         self._hideConfigOverlay()
-        if self.leftBar.needleftStackWidget():
-            self.leftStackWidget.show()
-        else:
-            self.leftStackWidget.hide()
+        show = self.leftBar.needleftStackWidget()
+        is_visible = self.leftStackWidget.isVisible()
+        if show and not is_visible:
+            if self.leftBar.globalSearchChecker.isChecked():
+                self.leftBar.globalSearchChecker.setChecked(False)
+                self._hideSearchOverlay()
+            # During window init (window not shown yet), set state without
+            # animating so the overlay doesn't pop in unexpectedly.
+            if self.isVisible():
+                self._showPageListOverlay()
+            else:
+                pw = self.leftStackWidget.parentWidget()
+                self.leftStackWidget.setGeometry(0, 0, self.PAGE_LIST_WIDTH, pw.height())
+                self.leftStackWidget.setCurrentWidget(self.pageList)
+                self.leftStackWidget.raise_()
+                self.leftStackWidget.show()
+        elif not show and is_visible:
+            self._hidePageListOverlay()
 
     def setupConfigUI(self):
         self._showConfigOverlay()
@@ -496,6 +517,41 @@ class MainWindow(mainwindow_cls):
         if self.leftBar.globalSearchChecker.isChecked():
             self.leftBar.globalSearchChecker.setChecked(False)
 
+    PAGE_LIST_WIDTH = 250
+
+    def _showPageListOverlay(self):
+        widget = self.leftStackWidget
+        pw = widget.parentWidget()
+        widget.setGeometry(0, 0, self.PAGE_LIST_WIDTH, pw.height())
+        widget.raise_()
+        widget.setCurrentWidget(self.pageList)
+        widget.show()
+
+        # disconnect stale finished connection from a previous hide
+        try:
+            self._pageListAnim.finished.disconnect(self._on_page_list_hidden)
+        except TypeError:
+            pass
+        self._pageListAnim.setStartValue(QPoint(-self.PAGE_LIST_WIDTH, 0))
+        self._pageListAnim.setEndValue(QPoint(0, 0))
+        self._pageListAnim.start()
+
+    def _hidePageListOverlay(self):
+        widget = self.leftStackWidget
+        if not widget.isVisible():
+            return
+
+        self._pageListAnim.finished.connect(self._on_page_list_hidden,
+                                            Qt.ConnectionType.SingleShotConnection)
+        self._pageListAnim.setStartValue(widget.pos())
+        self._pageListAnim.setEndValue(QPoint(-widget.width(), 0))
+        self._pageListAnim.start()
+
+    def _on_page_list_hidden(self):
+        self.leftStackWidget.hide()
+        if self.leftBar.showPageListLabel.isChecked():
+            self.leftBar.showPageListLabel.setChecked(False)
+
     def resizeEvent(self, e):
         super().resizeEvent(e)
         if self.configPanel.isVisible():
@@ -504,6 +560,9 @@ class MainWindow(mainwindow_cls):
             pw = self.global_search_widget.parentWidget()
             sw = self.global_search_widget
             sw.setGeometry(sw.x(), 0, sw.width(), pw.height())
+        if self.leftStackWidget.isVisible():
+            pw = self.leftStackWidget.parentWidget()
+            self.leftStackWidget.setGeometry(0, 0, self.PAGE_LIST_WIDTH, pw.height())
 
     def set_display_lang(self, lang: str):
         self.retranslateUI()
@@ -618,16 +677,13 @@ class MainWindow(mainwindow_cls):
     def pageLabelStateChanged(self):
         setup = self.leftBar.showPageListLabel.isChecked()
         if setup:
-            if self.leftStackWidget.isHidden():
-                self.leftStackWidget.show()
             if self.leftBar.globalSearchChecker.isChecked():
                 self.leftBar.globalSearchChecker.setChecked(False)
                 self._hideSearchOverlay()
-            self.leftStackWidget.setCurrentWidget(self.pageList)
+            self._showPageListOverlay()
         else:
-            self.leftStackWidget.hide()
+            self._hidePageListOverlay()
         pcfg.show_page_list = setup
-        save_config()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if not self.imgtrans_proj.is_empty:
@@ -708,10 +764,6 @@ class MainWindow(mainwindow_cls):
         self.titleBar.undo_trigger.connect(self.on_undo)
         self.titleBar.page_search_trigger.connect(self.on_page_search)
         self.titleBar.global_search_trigger.connect(self.on_global_search)
-        self.titleBar.run_trigger.connect(self.leftBar.runImgtransBtn.click)
-        self.titleBar.run_woupdate_textstyle_trigger.connect(self.run_imgtrans_wo_textstyle_update)
-        self.titleBar.translate_page_trigger.connect(self.on_transpagebtn_pressed)
-        self.titleBar.enable_module.connect(self.on_enable_module)
         self.titleBar.importtstyle_trigger.connect(self.import_tstyles)
         self.titleBar.exporttstyle_trigger.connect(self.export_tstyles)
         self.titleBar.darkmode_trigger.connect(self.on_darkmode_triggered)
@@ -1601,14 +1653,43 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             layout.addWidget(range_frame)
             update_range_info()
 
+            # Pipeline stages toggles
+            stages_frame = QFrame()
+            stages_frame.setFrameShape(QFrame.Shape.StyledPanel)
+            stages_layout = QVBoxLayout(stages_frame)
+            stages_layout.setContentsMargins(8, 6, 8, 6)
+
+            stage_labels = [
+                self.tr('Enable Text Detection'),
+                self.tr('Enable OCR'),
+                self.tr('Enable Translation'),
+                self.tr('Enable Inpainting'),
+            ]
+            for idx, label in enumerate(stage_labels):
+                cb = QCheckBox(label)
+                cb.setChecked(pcfg.module.stage_enabled(idx))
+                cb.toggled.connect(lambda checked, i=idx: self.on_enable_module(i, checked))
+                stages_layout.addWidget(cb)
+
+            layout.addWidget(stages_frame)
+
+            # Run without update textstyle
+            wo_update_cb = QCheckBox(self.tr('Run without update textstyle'))
+            layout.addWidget(wo_update_cb)
+
             btn_layout = QHBoxLayout()
             run_btn = QPushButton(self.tr('Run'))
             cancel_btn = QPushButton(self.tr('Cancel'))
+            translate_btn = QPushButton(self.tr('Translate current page'))
             btn_layout.addWidget(run_btn)
+            btn_layout.addWidget(translate_btn)
             btn_layout.addWidget(cancel_btn)
             layout.addLayout(btn_layout)
 
             run_btn.clicked.connect(dialog.accept)
+            translate_btn.clicked.connect(
+                lambda: (self.on_transpagebtn_pressed(False), dialog.reject())
+            )
             cancel_btn.clicked.connect(dialog.reject)
 
             if pcfg.module.all_stages_disabled():
@@ -1616,6 +1697,9 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
 
             if dialog.exec_() != QDialog.DialogCode.Accepted:
                 return
+
+            if wo_update_cb.isChecked():
+                self._run_imgtrans_wo_textstyle_update = True
 
             if not all_pages_cb.isChecked():
                 page_filter = []
@@ -1803,7 +1887,12 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
     def on_set_gsearch_widget(self):
         setup = self.leftBar.globalSearchChecker.isChecked()
         if setup:
-            self._hideSearchOverlay()  # stop any running hide animation
+            # stop any running hide animation
+            try:
+                self._searchAnim.finished.disconnect(self._on_search_hidden)
+            except TypeError:
+                pass
+            self._hidePageListOverlay()
             self.leftBar.showPageListLabel.setChecked(False)
             self._showSearchOverlay()
         else:
@@ -1928,6 +2017,14 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
         dialog.show()   # exec_ will block main thread
 
     def setupRegisterWidget(self):
+        # Right panel toggle in View menu
+        self._right_panel_action = QAction(self.tr("Right Panel"), self.titleBar)
+        self._right_panel_action.setCheckable(True)
+        self._right_panel_action.setChecked(True)
+        self._right_panel_action.triggered.connect(
+            lambda visible: self.rightComicTransStackPanel.setVisible(visible))
+        self.titleBar.viewMenu.addAction(self._right_panel_action)
+
         self.titleBar.viewMenu.addSeparator()
         for cfg_name in shared.config_name_to_view_widget:
             d = shared.config_name_to_view_widget[cfg_name]

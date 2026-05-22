@@ -256,10 +256,6 @@ class LeftBar(Widget):
         elif checker_type == 'config':
             if self.configChecker.isChecked():
                 self.imgTransChecker.setChecked(False)
-                self.configChecked.emit()
-            else:
-                self.imgTransChecker.setChecked(True)
-                
 
     def needleftStackWidget(self) -> bool:
         return self.showPageListLabel.isChecked()
@@ -269,7 +265,6 @@ class TitleBar(Widget):
 
     closebtn_clicked = Signal()
     display_lang_changed = Signal(str)
-    enable_module = Signal(int, bool)
     help_about_triggered = Signal()
 
     def __init__(self, parent, *args, **kwargs) -> None:
@@ -375,33 +370,6 @@ class TitleBar(Widget):
         self.helpToolBtn.setMenu(helpMenu)
         self.helpToolBtn.setPopupMode(QToolButton.InstantPopup)
 
-        self.runToolBtn = TitleBarToolBtn(self)
-        self.runToolBtn.setText(self.tr('Run'))
-
-        self.stageActions = stageActions = [
-            QAction(self.tr('Enable Text Dection'), self),
-            QAction(self.tr('Enable OCR'), self),
-            QAction(self.tr('Enable Translation'), self),
-            QAction(self.tr('Enable Inpainting'), self)
-        ]
-        for idx, sa in enumerate(stageActions):
-            sa.setCheckable(True)
-            sa.setChecked(pcfg.module.stage_enabled(idx))
-            sa.triggered.connect(self.stageEnableStateChanged)
-
-        runAction = QAction(self.tr('Run'), self)
-        runWoUpdateTextStyle = QAction(self.tr('Run without update textstyle'), self)
-        translatePageAction = QAction(self.tr('Translate page'), self)
-        runMenu = QMenu(self.runToolBtn)
-        runMenu.addActions(stageActions)
-        runMenu.addSeparator()
-        runMenu.addActions([runAction, runWoUpdateTextStyle, translatePageAction])
-        self.runToolBtn.setMenu(runMenu)
-        self.runToolBtn.setPopupMode(QToolButton.InstantPopup)
-        self.run_trigger = runAction.triggered
-        self.run_woupdate_textstyle_trigger = runWoUpdateTextStyle.triggered
-        self.translate_page_trigger = translatePageAction.triggered
-
         self.iconLabel = QLabel(self)
         self.iconLabel.setFixedWidth(LEFTBAR_WIDTH - 12)
 
@@ -414,7 +382,6 @@ class TitleBar(Widget):
         hlayout.addWidget(self.iconLabel)
         hlayout.addWidget(self.editToolBtn)
         hlayout.addWidget(self.viewToolBtn)
-        hlayout.addWidget(self.runToolBtn)
         hlayout.addWidget(self.toolsToolBtn)
         hlayout.addWidget(self.helpToolBtn)
         hlayout.addStretch()
@@ -445,12 +412,6 @@ class TitleBar(Widget):
                 return False
 
         return super().eventFilter(obj, e)
-
-    def stageEnableStateChanged(self):
-        sender = self.sender()
-        idx= self.stageActions.index(sender)
-        checked = sender.isChecked()
-        self.enable_module.emit(idx, checked)
 
     def mouseDoubleClickEvent(self, e: QMouseEvent) -> None:
         super().mouseDoubleClickEvent(e)

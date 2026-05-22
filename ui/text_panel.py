@@ -47,12 +47,6 @@ class LineEdit(QLineEdit):
                 self.return_pressed_wochange.emit()
 
 
-class IncrementalBtn(QPushButton):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.setFixedSize(13, 13)
-
-
 class AlignmentBtnGroup(QFrame):
     param_changed = Signal(str, int)
     def __init__(self, *args, **kwargs):
@@ -139,15 +133,7 @@ class FontSizeBox(QFrame):
     param_changed = Signal(str, float)
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        from utils.config import pcfg
-        self._max_font_size = pcfg.max_font_size
-        self.upBtn = IncrementalBtn(self)
-        self.upBtn.setObjectName("FsizeIncrementUp")
-        self.downBtn = IncrementalBtn(self)
-        self.downBtn.setObjectName("FsizeIncrementDown")
-        self.upBtn.clicked.connect(self.onUpBtnClicked)
-        self.downBtn.clicked.connect(self.onDownBtnClicked)
-        self.fcombobox = SizeComboBox([1, self._max_font_size], 'font_size', self)
+        self.fcombobox = SizeComboBox([1, 200], 'font_size', self)
         self.fcombobox.addItems([
             "5", "5.5", "6.5", "7.5", "8", "9", "10", "10.5",
             "11", "12", "14", "16", "18", "20", '22', "26", "28",
@@ -156,61 +142,9 @@ class FontSizeBox(QFrame):
         self.fcombobox.param_changed.connect(self.param_changed)
 
         hlayout = QHBoxLayout(self)
-        vlayout = QVBoxLayout()
-        vlayout.addWidget(self.upBtn)
-        vlayout.addWidget(self.downBtn)
-        vlayout.setContentsMargins(0, 0, 0, 0)
-        vlayout.setSpacing(0)
-        hlayout.addLayout(vlayout)
         hlayout.addWidget(self.fcombobox)
-        hlayout.setSpacing(3)
         hlayout.setContentsMargins(0, 0, 0, 0)
 
-    def getFontSize(self) -> str:
-        return self.fcombobox.currentText()
-
-    def onUpBtnClicked(self):
-        from utils.config import pcfg
-        max_val = pcfg.max_font_size
-        raito = 1.25
-        size = self.getFontSize()
-        multi_size=False
-        if "+" in size:
-            size = size.strip("+")
-            multi_size=True
-        size = float(size)
-        newsize = int(round(size * raito))
-        if newsize == size:
-            newsize += 1
-        newsize = min(max_val, newsize)
-        if newsize != size:
-            if not multi_size:
-                self.param_changed.emit('font_size', newsize)
-                self.fcombobox.setCurrentText(str(newsize))
-            else:
-                self.param_changed.emit('rel_font_size', raito)
-                self.fcombobox.setCurrentText(str(newsize)+"+")
-
-    def onDownBtnClicked(self):
-        raito = 0.75
-        size = self.getFontSize()
-        multi_size=False
-        if "+" in size:
-            size = size.strip("+")
-            multi_size=True
-        size = float(size)
-        newsize = int(round(size * raito))
-        if newsize == size:
-            newsize -= 1
-        newsize = max(1, newsize)
-        if newsize != size:
-            if not multi_size:
-                self.param_changed.emit('font_size', newsize)
-                self.fcombobox.setCurrentText(str(newsize))
-            else:
-                self.param_changed.emit('rel_font_size', raito)
-                self.fcombobox.setCurrentText(str(newsize)+"+")
-    
 class FontItemDelegate(QStyledItemDelegate):
     """用于在字体下拉框中用对应的字体渲染预览"""
     def paint(self, painter, option, index):
@@ -383,6 +317,16 @@ class FontFormatPanel(Widget):
         self.textadvancedfmt_panel.shadow_btn.clicked.connect(self._on_shadow_btn_clicked)
         self.textadvancedfmt_panel.gradient_btn.clicked.connect(self._on_gradient_btn_clicked)
 
+        # Remove View menu entries + hide buttons for these two built-in panels
+        # (keep the panels functional; prevent accidental hide via View menu)
+        for cfg in ['show_text_style_preset', 'text_advanced_format_panel']:
+            shared.config_name_to_view_widget.pop(cfg, None)
+        for p in [self.textstyle_panel, self.textadvancedfmt_panel]:
+            hl = p.view_widget.title_label.hidelabel
+            hl.setVisible(False)
+            hl.setMaximumSize(0, 0)
+            hl.setMinimumSize(0, 0)
+
         self.foldTextBtn = CheckableLabel(self.tr("Unfold"), self.tr("Fold"), False)
         self.familybox.currentTextChanged.connect(self.on_familybox_changed)
         self.foldTextBtn = CheckableLabel(self.tr("Unfold"), self.tr("Fold"), False)
@@ -397,29 +341,30 @@ class FontFormatPanel(Widget):
         vl0.setSpacing(0)
         vl0.setContentsMargins(0, 0, 0, 0)
         hl1_font = QHBoxLayout()
-        hl1_font.addWidget(self.familybox, 4)   # 字体框占绝大部分伸缩空间
+        hl1_font.addWidget(self.familybox, 3)   # 字体框占绝大部分伸缩空间
         hl1_font.addWidget(self.stylebox)       # 字重框按内容自适应
         hl1_font.setSpacing(4)
         hl1_font.setContentsMargins(0, 12, 0, 0)
         hl1_size = QHBoxLayout()
+        hl1_size.addWidget(self.colorPicker)
         hl1_size.addWidget(self.fontsizebox)
         hl1_size.addWidget(self.lineSpacingLabel)
         hl1_size.addWidget(self.lineSpacingBox)
+        hl1_size.addWidget(self.letterSpacingLabel)
+        hl1_size.addWidget(self.letterSpacingBox)
         hl1_size.addStretch()  # 防止控件被水平拉伸分散，保持紧凑靠左
         hl1_size.setSpacing(4)
         hl1_size.setContentsMargins(0, 2, 0, 0)
         hl2 = QHBoxLayout()
         hl2.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hl2.addWidget(self.colorPicker)
         hl2.addWidget(self.alignBtnGroup)
         hl2.addWidget(self.formatBtnGroup)
         hl2.addWidget(self.verticalChecker)
         hl2.setSpacing(FONTFORMAT_SPACING)
         hl2.setContentsMargins(0, 0, 0, 0)
         hl3 = QHBoxLayout()
-        hl3.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hl3.setAlignment(Qt.AlignmentFlag.AlignLeft)
         hl3.addLayout(stroke_hlayout)
-        hl3.addLayout(lettersp_hlayout)
         hl3.setContentsMargins(3, 0, 3, 0)
         hl3.setSpacing(13)
         hl4 = QHBoxLayout()

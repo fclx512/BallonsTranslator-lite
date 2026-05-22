@@ -302,10 +302,18 @@ class RearrangeBlksCommand(QUndoCommand):
 class TextPanel(Widget):
     def __init__(self, app: QApplication, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        from .collapsible_section import CollapsibleSection
+
         layout = QVBoxLayout(self)
         self.textEditList = TextEditListScrollArea(self)
         self.formatpanel = FontFormatPanel(app, self)
-        layout.addWidget(self.formatpanel)
+
+        self.format_section = CollapsibleSection(
+            title=self.tr("Font Format"), content=self.formatpanel,
+            parent=self, expanded=True,
+            header_position='top')
+
+        layout.addWidget(self.format_section)
         layout.addWidget(self.textEditList)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(7)
