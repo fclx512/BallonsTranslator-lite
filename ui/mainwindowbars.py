@@ -256,6 +256,9 @@ class LeftBar(Widget):
         elif checker_type == 'config':
             if self.configChecker.isChecked():
                 self.imgTransChecker.setChecked(False)
+                self.configChecked.emit()
+            else:
+                self.imgTransChecker.setChecked(True)
 
     def needleftStackWidget(self) -> bool:
         return self.showPageListLabel.isChecked()

@@ -35,7 +35,7 @@ Rectangle {
         target: root
         property: "x"
         duration: root.slideDuration
-        easing.type: Easing.OutCubic
+        easing.type: Easing.InOutExpo
 
         onFinished: {
             var showing = root.x === 0

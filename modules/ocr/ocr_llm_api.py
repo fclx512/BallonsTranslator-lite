@@ -201,7 +201,7 @@ class LLM_OCR(OCRBase):
         },
         "proxy": {
             "value": "",
-            "description": "Proxy address (e.g., http(s)://user:password@host:port)",
+            "description": "Proxy address (e.g. http(s)://user:password@host:port)",
         },
         "delay": {"value": 1.0, "description": "Delay in seconds between requests."},
         "requests_per_minute": {

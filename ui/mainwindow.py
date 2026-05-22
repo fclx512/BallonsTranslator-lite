@@ -229,17 +229,17 @@ class MainWindow(mainwindow_cls):
         self.configPanel.setVisible(False)
         self._configAnim = QPropertyAnimation(self.configPanel, b"pos")
         self._configAnim.setDuration(350)
-        self._configAnim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._configAnim.setEasingCurve(QEasingCurve.Type.InOutExpo)
 
         # Search widget as floating overlay (slides in from left)
         self._searchAnim = QPropertyAnimation(self.global_search_widget, b"pos")
         self._searchAnim.setDuration(350)
-        self._searchAnim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._searchAnim.setEasingCurve(QEasingCurve.Type.InOutExpo)
 
         # Page list overlay slides in from left (same style as search panel)
         self._pageListAnim = QPropertyAnimation(self.leftStackWidget, b"pos")
         self._pageListAnim.setDuration(350)
-        self._pageListAnim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._pageListAnim.setEasingCurve(QEasingCurve.Type.InOutExpo)
 
         mainVBoxLayout = QVBoxLayout(self)
         mainVBoxLayout.addWidget(self.titleBar)
@@ -1680,16 +1680,11 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             btn_layout = QHBoxLayout()
             run_btn = QPushButton(self.tr('Run'))
             cancel_btn = QPushButton(self.tr('Cancel'))
-            translate_btn = QPushButton(self.tr('Translate current page'))
             btn_layout.addWidget(run_btn)
-            btn_layout.addWidget(translate_btn)
             btn_layout.addWidget(cancel_btn)
             layout.addLayout(btn_layout)
 
             run_btn.clicked.connect(dialog.accept)
-            translate_btn.clicked.connect(
-                lambda: (self.on_transpagebtn_pressed(False), dialog.reject())
-            )
             cancel_btn.clicked.connect(dialog.reject)
 
             if pcfg.module.all_stages_disabled():
@@ -2017,14 +2012,6 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
         dialog.show()   # exec_ will block main thread
 
     def setupRegisterWidget(self):
-        # Right panel toggle in View menu
-        self._right_panel_action = QAction(self.tr("Right Panel"), self.titleBar)
-        self._right_panel_action.setCheckable(True)
-        self._right_panel_action.setChecked(True)
-        self._right_panel_action.triggered.connect(
-            lambda visible: self.rightComicTransStackPanel.setVisible(visible))
-        self.titleBar.viewMenu.addAction(self._right_panel_action)
-
         self.titleBar.viewMenu.addSeparator()
         for cfg_name in shared.config_name_to_view_widget:
             d = shared.config_name_to_view_widget[cfg_name]

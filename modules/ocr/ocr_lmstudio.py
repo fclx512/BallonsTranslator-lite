@@ -175,7 +175,7 @@ class LMStudioOCR(OCRBase):
         },
         "proxy": {
             "value": "",
-            "description": "Proxy address (e.g., http(s)://user:password@host:port)",
+            "description": "Proxy address (e.g. http(s)://user:password@host:port)",
         },
         "delay": {"value": 0.5, "description": "Delay in seconds between requests."},
         "max_response_tokens": {

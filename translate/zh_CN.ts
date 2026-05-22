@@ -102,16 +102,6 @@
         <translation>删除</translation>
     </message>
     <message>
-        <location filename="../ui/canvas.py" line="780"/>
-        <source>Apply font formatting</source>
-        <translation>应用字体格式</translation>
-    </message>
-    <message>
-        <location filename="../ui/canvas.py" line="781"/>
-        <source>Auto layout</source>
-        <translation>自动排版</translation>
-    </message>
-    <message>
         <location filename="../ui/canvas.py" line="765"/>
         <source>Copy</source>
         <translation>复制</translation>
@@ -142,11 +132,6 @@
         <translation>OCR，翻译并抹字</translation>
     </message>
     <message>
-        <location filename="../ui/canvas.py" line="775"/>
-        <source>Delete and Recover removed text</source>
-        <translation>删除并恢复被抹除文字</translation>
-    </message>
-    <message>
         <location filename="../ui/canvas.py" line="782"/>
         <source>Reset Angle</source>
         <translation>角度复位</translation>
@@ -160,11 +145,6 @@
         <location filename="../ui/canvas.py" line="773"/>
         <source>Paste source text</source>
         <translation>粘贴原文</translation>
-    </message>
-    <message>
-        <location filename="../ui/canvas.py" line="789"/>
-        <source>inpaint</source>
-        <translation>抹字</translation>
     </message>
     <message>
         <location filename="../ui/canvas.py" line="783"/>
@@ -430,6 +410,11 @@
         <translation>字体</translation>
     </message>
     <message>
+        <location filename="../ui/configpanel.py" line="681"/>
+        <source>Models</source>
+        <translation>模型管理</translation>
+    </message>
+    <message>
         <location filename="../ui/configpanel.py" line="359"/>
         <source>Typesetting</source>
         <translation>嵌字</translation>
@@ -555,6 +540,16 @@
         <location filename="../ui/text_panel.py" line="303"/>
         <source>Stroke</source>
         <translation>轮廓</translation>
+    </message>
+    <message>
+        <location filename="../ui/text_panel.py" line="311"/>
+        <source>Advanced Text Format</source>
+        <translation>高级文本格式</translation>
+    </message>
+    <message>
+        <location filename="../ui/text_panel.py" line="222"/>
+        <source>Font Style</source>
+        <translation>字体样式</translation>
     </message>
     <message>
         <location filename="../ui/text_panel.py" line="300"/>
@@ -701,32 +696,42 @@
 <context>
     <name>ImgtransProgressMessageBox</name>
     <message>
-        <location filename="../ui/stylewidgets.py" line="159"/>
+        <location filename="../ui/custom_widget/message.py" line="172"/>
         <source>Detecting: </source>
-        <translation type="obsolete">检测: </translation>
+        <translation>检测: </translation>
     </message>
     <message>
-        <location filename="../ui/stylewidgets.py" line="160"/>
+        <location filename="../ui/custom_widget/message.py" line="173"/>
         <source>OCR: </source>
-        <translation type="obsolete">OCR: </translation>
+        <translation>OCR: </translation>
     </message>
     <message>
-        <location filename="../ui/stylewidgets.py" line="161"/>
+        <location filename="../ui/custom_widget/message.py" line="174"/>
         <source>Inpainting: </source>
-        <translation type="obsolete">修复: </translation>
+        <translation>修复: </translation>
     </message>
     <message>
-        <location filename="../ui/stylewidgets.py" line="162"/>
+        <location filename="../ui/custom_widget/message.py" line="175"/>
         <source>Translating: </source>
-        <translation type="obsolete">翻译: </translation>
+        <translation>翻译: </translation>
+    </message>
+    <message>
+        <location filename="../ui/custom_widget/message.py" line="184"/>
+        <source>Stop</source>
+        <translation>停止</translation>
+    </message>
+    <message>
+        <location filename="../ui/custom_widget/message.py" line="198"/>
+        <source>trying to stop...</source>
+        <translation>正在停止...</translation>
     </message>
 </context>
 <context>
     <name>ImgtransThread</name>
     <message>
-        <location filename="../ui/module_manager.py" line="422"/>
+        <location filename="../ui/module_manager.py" line="259"/>
         <source>Translation Failed.</source>
-        <translation type="obsolete">翻译失败.</translation>
+        <translation>翻译失败.</translation>
     </message>
     <message>
         <location filename="../ui/module_manager.py" line="389"/>
@@ -921,8 +926,8 @@
     </message>
     <message>
         <location filename="../ui/mainwindowbars.py" line="143"/>
-        <source>RUN</source>
-        <translation type="unfinished"></translation>
+        <source>Run</source>
+        <translation>运行</translation>
     </message>
     <message>
         <location filename="../ui/mainwindowbars.py" line="104"/>
@@ -1194,9 +1199,39 @@ Failed: {f}/{t}</source>
         <translation>第 %1 页 ~ 第 %2 页（共 %3 页）</translation>
     </message>
     <message>
+        <location filename="../ui/mainwindow.py" line="1663"/>
+        <source>Enable Text Detection</source>
+        <translation>启用文本检测</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line="1664"/>
+        <source>Enable OCR</source>
+        <translation>启用OCR</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line="1665"/>
+        <source>Enable Translation</source>
+        <translation>启用翻译</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line="1666"/>
+        <source>Enable Inpainting</source>
+        <translation>启用修复</translation>
+    </message>
+    <message>
         <location filename="../ui/mainwindow.py" line="1465"/>
         <source>Cancel</source>
         <translation>取消</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line="1676"/>
+        <source>Run without update textstyle</source>
+        <translation>Run且不覆盖已有字体样式</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line="1708"/>
+        <source>Run will clear previous results. Continue?</source>
+        <translation>运行将清除之前的结果，是否继续？</translation>
     </message>
 </context>
 <context>
@@ -1512,6 +1547,14 @@ Failed: {f}/{t}</source>
         <location filename="../ui/drawingpanel.py" line="204"/>
         <source>Use Existing Mask</source>
         <translation>使用区域已有掩膜</translation>
+    </message>
+</context>
+<context>
+    <name>MergeThread</name>
+    <message>
+        <location filename="../ui/io_thread.py" line="192"/>
+        <source>Region merge: </source>
+        <translation>区域合并: </translation>
     </message>
 </context>
 <context>
@@ -2017,29 +2060,14 @@ Failed: {f}/{t}</source>
         <translation>界面语言</translation>
     </message>
     <message>
+        <location filename="../ui/mainwindowbars.py" line="352"/>
+        <source>Tools</source>
+        <translation>工具</translation>
+    </message>
+    <message>
         <location filename="../ui/mainwindowbars.py" line="329"/>
         <source>Drawing Board</source>
         <translation>画板</translation>
-    </message>
-    <message>
-        <location filename="../ui/mainwindowbars.py" line="371"/>
-        <source>Enable Text Dection</source>
-        <translation>启用文本检测</translation>
-    </message>
-    <message>
-        <location filename="../ui/mainwindowbars.py" line="372"/>
-        <source>Enable OCR</source>
-        <translation>启用OCR</translation>
-    </message>
-    <message>
-        <location filename="../ui/mainwindowbars.py" line="373"/>
-        <source>Enable Translation</source>
-        <translation>启用翻译</translation>
-    </message>
-    <message>
-        <location filename="../ui/mainwindowbars.py" line="374"/>
-        <source>Enable Inpainting</source>
-        <translation>启用修复</translation>
     </message>
     <message>
         <location filename="../ui/mainwindowbars.py" line="366"/>
@@ -2055,11 +2083,6 @@ Failed: {f}/{t}</source>
         <location filename="../ui/mainwindowbars.py" line="334"/>
         <source>Export Text Styles</source>
         <translation>导出字体样式</translation>
-    </message>
-    <message>
-        <location filename="../ui/mainwindowbars.py" line="382"/>
-        <source>Run without update textstyle</source>
-        <translation>Run且不覆盖已有字体样式</translation>
     </message>
     <message>
         <location filename="../ui/mainwindowbars.py" line="302"/>
@@ -3103,6 +3126,55 @@ qipao,qipao2</translation>
         <location filename="../ui/scenetext_manager.py" line=""/>
         <source>Font Format</source>
         <translation>字体样式</translation>
+    </message>
+</context>
+<context>
+    <name>ColorPickerDialog</name>
+    <message>
+        <location filename="../ui/custom_widget/color_picker.py" line="277"/>
+        <source>Color Picker</source>
+        <translation>拾色器</translation>
+    </message>
+    <message>
+        <location filename="../ui/custom_widget/color_picker.py" line="404"/>
+        <source>Old</source>
+        <translation>旧</translation>
+    </message>
+    <message>
+        <location filename="../ui/custom_widget/color_picker.py" line="406"/>
+        <source>New</source>
+        <translation>新</translation>
+    </message>
+    <message>
+        <location filename="../ui/custom_widget/color_picker.py" line="419"/>
+        <source>OK</source>
+        <translation>确定</translation>
+    </message>
+    <message>
+        <location filename="../ui/custom_widget/color_picker.py" line="420"/>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+</context>
+<context>
+    <name>ColorPickerLabel</name>
+    <message>
+        <location filename="../ui/custom_widget/label.py" line="68"/>
+        <source>Apply Color</source>
+        <translation>应用颜色</translation>
+    </message>
+</context>
+<context>
+    <name>ParamComboBox</name>
+    <message>
+        <location filename="../ui/custom_widget/combobox.py" line="75"/>
+        <source>Flush</source>
+        <translation>刷新</translation>
+    </message>
+    <message>
+        <location filename="../ui/custom_widget/combobox.py" line="78"/>
+        <source>Select Path</source>
+        <translation>选择路径</translation>
     </message>
 </context>
 </TS>

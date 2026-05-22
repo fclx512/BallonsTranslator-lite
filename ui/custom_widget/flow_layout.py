@@ -35,7 +35,7 @@ class FlowLayout(QLayout):
         self._verticalSpacing = 10
         self._horizontalSpacing = 10
         self.duration = 300
-        self.ease = QEasingCurve.Linear
+        self.ease = QEasingCurve.Type.InOutExpo
         self.needAni = needAni
         self.isTight = isTight
 
@@ -64,7 +64,7 @@ class FlowLayout(QLayout):
         self._anis.append(ani)
         self._aniGroup.addAnimation(ani)
 
-    def setAnimation(self, duration, ease=QEasingCurve.Linear):
+    def setAnimation(self, duration, ease=QEasingCurve.Type.InOutExpo):
         """ set the moving animation
 
         Parameters

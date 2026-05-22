@@ -842,13 +842,13 @@ class ConfigPanel(Widget):
 
         # Build section list with group headers
         sections = [
-            ("_header", self.tr("DL MODULE")),
+            ("_header", self.tr("DL Module")),
             (self.detect_sub_block.section_widget, label_text_det),
             (self.ocr_sub_block.section_widget,    label_text_ocr),
             (self.inpaint_sub_block.section_widget, label_inpaint),
             (self.trans_sub_block.section_widget,  label_translator),
             ("_sep", None),
-            ("_header", self.tr("GENERAL")),
+            ("_header", self.tr("General")),
             (self.startup_block.section_widget,    label_startup),
             (self.typesetting_block.section_widget, label_typesetting),
             (self.save_block.section_widget,       label_save),

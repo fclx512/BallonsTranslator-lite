@@ -9,7 +9,7 @@ QtObject {
     readonly property int fadeSlow: 1200
 
     // Standardized easing curves
-    property var slideEasing: Easing.OutCubic
-    property var fadeOutEasing: Easing.InQuint
-    property var smoothEasing: Easing.InOutQuad
+    property var slideEasing: Easing.InOutExpo
+    property var fadeOutEasing: Easing.InOutExpo
+    property var smoothEasing: Easing.InOutExpo
 }

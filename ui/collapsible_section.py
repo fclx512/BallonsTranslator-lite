@@ -64,7 +64,7 @@ class CollapsibleSection(Widget):
 
         self._anim = QPropertyAnimation(self._content_wrapper, b"maximumHeight")
         self._anim.setDuration(duration)
-        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._anim.setEasingCurve(QEasingCurve.Type.InOutExpo)
         self._anim.finished.connect(self._on_anim_finished)
 
         self._update_arrow()

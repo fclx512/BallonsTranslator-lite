@@ -81,17 +81,7 @@ class SourceTextEdit(QTextEdit):
             
 
     def contextMenuEvent(self, event):
-        menu = self.createStandardContextMenu()
-        menu.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        acts = menu.actions()
-        self.in_acts = True
-        rst = menu.exec_(event.globalPos())
-
-        # future actions orders changes could break these comparsion
-        self.paste_flag = rst == acts[5]
-        if self.paste_flag or rst == acts[3] or rst == acts[6]:
-            self.handle_content_change()
-        self.in_acts = False
+        pass
 
     def on_cursorpos_changed(self) -> None:
         cursor = self.textCursor()

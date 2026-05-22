@@ -873,13 +873,9 @@ class Canvas(QGraphicsScene):
             copy_src_act.setShortcut(QKeySequence("Ctrl+Shift+C"))
             paste_src_act = menu.addAction(self.tr("Paste source text"))
             paste_src_act.setShortcut(QKeySequence("Ctrl+Shift+V"))
-            delete_recover_act = menu.addAction(self.tr("Delete and Recover removed text"))
-            delete_recover_act.setShortcut(QKeySequence("Ctrl+Shift+D"))
 
             menu.addSeparator()
 
-            format_act = menu.addAction(self.tr("Apply font formatting"))
-            layout_act = menu.addAction(self.tr("Auto layout"))
             angle_act = menu.addAction(self.tr("Reset Angle"))
             squeeze_act = menu.addAction(self.tr("Squeeze"))
             menu.addSeparator()
@@ -887,14 +883,11 @@ class Canvas(QGraphicsScene):
             ocr_act = menu.addAction(self.tr("OCR"))
             ocr_translate_act = menu.addAction(self.tr("OCR and translate"))
             ocr_translate_inpaint_act = menu.addAction(self.tr("OCR, translate and inpaint"))
-            inpaint_act = menu.addAction(self.tr("inpaint"))
 
             rst = menu.exec(pos)
             
             if rst == delete_act:
                 self.delete_textblks.emit(0)
-            elif rst == delete_recover_act:
-                self.delete_textblks.emit(1)
             elif rst == copy_act:
                 self.on_copy()
             elif rst == paste_act:
@@ -903,10 +896,6 @@ class Canvas(QGraphicsScene):
                 self.copy_src_signal.emit()
             elif rst == paste_src_act:
                 self.paste_src_signal.emit()
-            elif rst == format_act:
-                self.format_textblks.emit()
-            elif rst == layout_act:
-                self.layout_textblks.emit()
             elif rst == angle_act:
                 self.reset_angle.emit()
             elif rst == squeeze_act:
@@ -919,8 +908,6 @@ class Canvas(QGraphicsScene):
                 self.run_blktrans.emit(1)
             elif rst == ocr_translate_inpaint_act:
                 self.run_blktrans.emit(2)
-            elif rst == inpaint_act:
-                self.run_blktrans.emit(3)
 
     @property
     def have_selected_blkitem(self):
