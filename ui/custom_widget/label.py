@@ -11,6 +11,9 @@ from utils import shared
 
 
 class FadeLabel(QLabel):
+    # QGraphicsOpacityEffect animation — stays widget-based.
+    # Embedded in QGraphicsScene via QGraphicsProxyWidget, so QQuickWidget
+    # is not feasible.  Qt6 RHI (ANGLE/D3D11) provides GPU compositing.
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 

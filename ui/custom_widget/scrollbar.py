@@ -5,6 +5,10 @@ from qtpy.QtGui import QMouseEvent, QPainter, QColor
 class ScrollBarGroove(QWidget):
     """ Scroll bar groove """
 
+    # QGraphicsOpacityEffect animation — stays widget-based.
+    # 150ms fade deep in scrollbar widget hierarchy.  Qt6 RHI provides
+    # GPU compositing for opacity effects.
+
     def __init__(self, orient: Qt.Orientation, parent):
         super().__init__(parent=parent)
         if orient == Qt.Vertical:
@@ -48,6 +52,10 @@ class ScrollBarGroove(QWidget):
 
 class ScrollBarHandle(QWidget):
     """ Scroll bar handle """
+
+    # QGraphicsOpacityEffect auto-fade — stays widget-based.
+    # 300ms fade deep in scrollbar widget hierarchy.  Qt6 RHI provides
+    # GPU compositing for opacity effects.
 
     def __init__(self, orient: Qt.Orientation, parent=None, fadeout: bool = False):
         super().__init__(parent)

@@ -219,7 +219,7 @@ class MainWindow(mainwindow_cls):
 
         self.centralStackWidget.addWidget(self.comicTransSplitter)
 
-        # Config panel as floating overlay (not in stack, animates in/out)
+        # Config panel as floating overlay (not in stack, animates slide)
         self.configPanel.setParent(self.centralStackWidget)
         self.configPanel.setVisible(False)
         self._configAnim = QPropertyAnimation(self.configPanel, b"pos")
@@ -485,11 +485,6 @@ class MainWindow(mainwindow_cls):
         if not widget.isVisible():
             return
 
-        # disconnect previous finished connection before reconnecting
-        try:
-            self._searchAnim.finished.disconnect(self._on_search_hidden)
-        except TypeError:
-            pass
         self._searchAnim.finished.connect(self._on_search_hidden,
                                           Qt.ConnectionType.SingleShotConnection)
         self._searchAnim.setStartValue(widget.pos())

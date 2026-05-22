@@ -27,6 +27,10 @@ def slider_subcontrol_rect(r: QRect, widget: QWidget):
 class SliderHandle(QWidget):
     """ Slider handle """
 
+    # Custom radius QPropertyAnimation — stays widget-based.
+    # 100ms animation on a custom paint property; cost is one small
+    # repaint per frame.  Qt6 RHI provides GPU compositing for paint output.
+
     pressed = Signal()
     released = Signal()
 

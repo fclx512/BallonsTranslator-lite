@@ -11,6 +11,10 @@ class WidgetItem(QWidgetItem):
 class FlowLayout(QLayout):
     """ Flow layout """
 
+    # QParallelAnimationGroup on widget geometry — stays widget-based.
+    # QLayout subclass deeply coupled to widget positioning system.
+    # Qt6 RHI composites the repositioned widgets on GPU after CPU layout calc.
+
     def __init__(self, parent=None, needAni=False, isTight=False):
         """
         Parameters
