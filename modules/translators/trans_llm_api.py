@@ -122,7 +122,6 @@ class LLM_API_Translator(BaseTranslator):
 
     def _setup_translator(self):
         self.lang_map = {
-            "Auto Detect": "Auto",
             "简体中文": "Simplified Chinese",
             "繁體中文": "Traditional Chinese",
             "日本語": "Japanese",
@@ -155,9 +154,22 @@ class LLM_API_Translator(BaseTranslator):
         self.minute_start_time = time.time()
         self.key_usage = {}
         self.client = None
-        # Load profiles from saved params or use defaults
+        self._src_lang_map = {"Auto Detect": "Auto", **self.lang_map}
         self._load_profiles()
         self._refresh_active_profile_options()
+        # Sync profiles to global config so AI chat panel can read them
+        from utils.config import pcfg as _pcfg
+        if self.name not in _pcfg.module.translator_params:
+            _pcfg.module.translator_params[self.name] = {}
+        _pcfg.module.translator_params[self.name].update(self.params)
+
+    @property
+    def supported_src_list(self):
+        return ["Auto Detect"] + self.valid_lang_list
+
+    @property
+    def supported_tgt_list(self):
+        return self.valid_lang_list
 
     # --- Profile Storage ---
 
@@ -425,7 +437,7 @@ class LLM_API_Translator(BaseTranslator):
     # --- Prompt Assembly ---
 
     def _assemble_prompts(self, queries: List[str], to_lang: str):
-        from_lang = self.lang_map.get(self.lang_source, self.lang_source)
+        from_lang = self._src_lang_map.get(self.lang_source, self.lang_source)
         from_lang_display = "the source language" if from_lang == "Auto" else from_lang
         input_elements = [
             {"id": i + 1, "source": query} for i, query in enumerate(queries)

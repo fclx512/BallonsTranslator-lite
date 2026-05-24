@@ -3176,5 +3176,221 @@ qipao,qipao2</translation>
         <source>Select Path</source>
         <translation>选择路径</translation>
     </message>
-</context>
+</context>    <context>
+        <name>AiChatPanel</name>
+        <message>
+            <source>AI Chat</source>
+            <translation>AI 对话</translation>
+        </message>
+        <message>
+            <source>Ready</source>
+            <translation>就绪</translation>
+        </message>
+        <message>
+            <source>Auto</source>
+            <translation>自动</translation>
+        </message>
+        <message>
+            <source>Agent</source>
+            <translation>工具</translation>
+        </message>
+        <message>
+            <source>Chat</source>
+            <translation>聊天</translation>
+        </message>
+        <message>
+            <source>Ask AI... (Enter to send, Shift+Enter for newline)</source>
+            <translation>询问 AI...（Enter 发送，Shift+Enter 换行）</translation>
+        </message>
+        <message>
+            <source>Send</source>
+            <translation>发送</translation>
+        </message>
+        <message>
+            <source>AI Assistant</source>
+            <translation>AI 助手</translation>
+        </message>
+        <message>
+            <source>Modify text blocks, fonts, and styles through natural language.</source>
+            <translation>通过自然语言修改文本块、字体和样式。</translation>
+        </message>
+        <message>
+            <source>List all pages</source>
+            <translation>列出所有页面</translation>
+        </message>
+        <message>
+            <source>Search for &apos;hello&apos;</source>
+            <translation>搜索 &apos;hello&apos;</translation>
+        </message>
+        <message>
+            <source>Make font bold</source>
+            <translation>设为粗体</translation>
+        </message>
+        <message>
+            <source>Translate first page</source>
+            <translation>翻译第一页</translation>
+        </message>
+        <message>
+            <source>Clear Conversation</source>
+            <translation>清除对话</translation>
+        </message>
+        <message>
+            <source>This will permanently delete all {n} messages in this conversation. Continue?</source>
+            <translation>这将永久删除此对话中的所有 {n} 条消息。继续？</translation>
+        </message>
+        <message>
+            <source>AI proposed {n} change(s) on: {fields}</source>
+            <translation>AI 对以下字段提出了 {n} 项变更：{fields}</translation>
+        </message>
+        <message>
+            <source>Page {pid}: {cnt} change(s)</source>
+            <translation>第 {pid} 页：{cnt} 项变更</translation>
+        </message>
+        <message>
+            <source>Accept All</source>
+            <translation>全部接受</translation>
+        </message>
+        <message>
+            <source>Reject All</source>
+            <translation>全部拒绝</translation>
+        </message>
+        <message>
+            <source>Accepted: 0 / {n}</source>
+            <translation>已接受：0 / {n}</translation>
+        </message>
+        <message>
+            <source>Show details &gt;</source>
+            <translation>展开详情 &gt;</translation>
+        </message>
+        <message>
+            <source>Hide details v</source>
+            <translation>收起详情 v</translation>
+        </message>
+        <message>
+            <source>Apply Changes</source>
+            <translation>应用变更</translation>
+        </message>
+        <message>
+            <source>Accepted: {n} / {total}</source>
+            <translation>已接受：{n} / {total}</translation>
+        </message>
+        <message>
+            <source>Thinking...</source>
+            <translation>思考中...</translation>
+        </message>
+        <message>
+            <source>-- Error: {msg} --</source>
+            <translation>-- 错误：{msg} --</translation>
+        </message>
+        <message>
+            <source>Translation Prompt</source>
+            <translation>翻译提示词</translation>
+        </message>
+        <message>
+            <source>Edit the system prompt used when translation mode is active. Use {from_lang} and {to_lang} as placeholders for source/target languages.</source>
+            <translation>编辑翻译模式下使用的系统提示词。使用 {from_lang} 和 {to_lang} 作为源/目标语言占位符。</translation>
+        </message>
+        <message>
+            <source>Reset to Default</source>
+            <translation>恢复默认</translation>
+        </message>
+        <message>
+            <source>Source</source>
+            <translation>原文</translation>
+        </message>
+        <message>
+            <source>Translation</source>
+            <translation>译文</translation>
+        </message>
+        <message>
+            <source>Font</source>
+            <translation>字体</translation>
+        </message>
+        <message>
+            <source>Size</source>
+            <translation>字号</translation>
+        </message>
+        <message>
+            <source>Text Color</source>
+            <translation>文字颜色</translation>
+        </message>
+        <message>
+            <source>BG Color</source>
+            <translation>背景颜色</translation>
+        </message>
+        <message>
+            <source>Bold</source>
+            <translation>粗体</translation>
+        </message>
+        <message>
+            <source>Italic</source>
+            <translation>斜体</translation>
+        </message>
+        <message>
+            <source>Align</source>
+            <translation>对齐</translation>
+        </message>
+        <message>
+            <source>Stroke</source>
+            <translation>描边</translation>
+        </message>
+        <message>
+            <source>Line Spacing</source>
+            <translation>行距</translation>
+        </message>
+        <message>
+            <source>Settings</source>
+            <translation>设置</translation>
+        </message>
+        <message>
+            <source>API Profile</source>
+            <translation>API 配置</translation>
+        </message>
+        <message>
+            <source>Context</source>
+            <translation>上下文</translation>
+        </message>
+        <message>
+            <source>History messages:</source>
+            <translation>历史消息条数：</translation>
+        </message>
+        <message>
+            <source>Auto-compress when exceeding limit</source>
+            <translation>超出限制时自动压缩上下文</translation>
+        </message>
+        <message>
+            <source>Data Read Settings</source>
+            <translation>数据读取设置</translation>
+        </message>
+        <message>
+            <source>Translation mode (lock to source/translation only)</source>
+            <translation>翻译模式（仅读取原文和译文）</translation>
+        </message>
+        <message>
+            <source>Word wrap in chat bubbles</source>
+            <translation>对话气泡自动换行</translation>
+        </message>
+        <message>
+            <source>Edit Translation Prompt...</source>
+            <translation>编辑翻译提示词...</translation>
+        </message>
+        <message>
+            <source>Readable Block Fields</source>
+            <translation>可读取的文本块字段</translation>
+        </message>
+        <message>
+            <source>Select which text block properties the AI can read and modify.</source>
+            <translation>选择 AI 可读取和修改的文本块属性。</translation>
+        </message>
+        <message>
+            <source>Close</source>
+            <translation>关闭</translation>
+        </message>
+        <message>
+            <source>Open a project to start chatting</source>
+            <translation>打开项目以开始对话</translation>
+        </message>
+    </context>
+
+
 </TS>

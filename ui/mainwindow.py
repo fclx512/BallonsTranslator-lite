@@ -9,7 +9,7 @@ import cv2
 
 from tqdm import tqdm
 from qtpy.QtWidgets import QAction, QFileDialog, QMenu, QHBoxLayout, QVBoxLayout, QApplication, QWidget, QStackedWidget, QListWidget, QShortcut, QListWidgetItem, QMessageBox, QTextEdit, QPlainTextEdit
-from qtpy.QtCore import Qt, QPoint, QSize, QEvent, Signal, QPropertyAnimation, QEasingCurve
+from qtpy.QtCore import Qt, QPoint, QSize, QEvent, Signal, QTimer
 from qtpy.QtGui import QContextMenuEvent, QTextCursor, QGuiApplication, QIcon, QCloseEvent, QKeySequence, QPainter, QClipboard
 
 from utils.logger import logger as LOGGER
@@ -21,6 +21,7 @@ from modules import GET_VALID_TEXTDETECTORS, GET_VALID_INPAINTERS, GET_VALID_TRA
 from .misc import parse_stylesheet, set_html_family, QKEY
 from utils.config import ProgramConfig, pcfg, save_config, text_styles, save_text_styles, load_textstyle_from, FontFormat
 from utils.proj_imgtrans import ProjImgTrans
+from utils import proj_compact
 from .canvas import Canvas
 from .configpanel import ConfigPanel
 from .module_manager import ModuleManager
@@ -37,6 +38,9 @@ from .drawing_commands import RunBlkTransCommand
 from . import shared_widget as SW
 from .custom_widget import MessageBox, FrameLessMessageBox, ImgtransProgressMessageBox
 from .update_checker import AboutDialog
+from .overlay_slide import OverlaySlider
+from .ai_chat_panel import AiChatPanel
+from utils.ai_controller import AiController
 
 class PageListView(QListWidget):
 
@@ -213,12 +217,24 @@ class MainWindow(mainwindow_cls):
         self.rightComicTransStackPanel.addWidget(self.textPanel)
         self.rightComicTransStackPanel.currentChanged.connect(self.on_transpanel_changed)
 
-        # Right panel with fixed width (no splitter drag)
+        # Right panel container: AI chat (left, hidden) | canvas | trans stack (right)
         self._rightPanelContainer = QWidget()
         right_layout = QHBoxLayout(self._rightPanelContainer)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
+
+        # Left: AI chat panel (floating overlay, slides in from left)
+        self.aiChatPanel = AiChatPanel()
+        self.aiChatPanel.setParent(self._rightPanelContainer)
+        self.aiChatPanel.setVisible(False)
+        self._aiChatSlide = OverlaySlider(
+            self.aiChatPanel, direction='left', width=480)
+        self._aiChatSlide.on_before_show(self.aiChatPanel.before_show)
+
+        # Middle: canvas (stretches to fill remaining space)
         right_layout.addWidget(self.canvas.gv, 1)
+
+        # Right: trans stack panel (fixed width)
         right_layout.addWidget(self.rightComicTransStackPanel)
         self.rightComicTransStackPanel.setFixedWidth(360)
 
@@ -227,19 +243,26 @@ class MainWindow(mainwindow_cls):
         # Config panel as floating overlay (not in stack, animates slide)
         self.configPanel.setParent(self.centralStackWidget)
         self.configPanel.setVisible(False)
-        self._configAnim = QPropertyAnimation(self.configPanel, b"pos")
-        self._configAnim.setDuration(350)
-        self._configAnim.setEasingCurve(QEasingCurve.Type.InOutExpo)
+        self._configSlide = OverlaySlider(self.configPanel, direction='right')
+        self._configSlide.on_before_show(lambda: self.configPanel.setFocus())
+        self._configSlide.on_after_hide(self._on_config_hidden)
 
         # Search widget as floating overlay (slides in from left)
-        self._searchAnim = QPropertyAnimation(self.global_search_widget, b"pos")
-        self._searchAnim.setDuration(350)
-        self._searchAnim.setEasingCurve(QEasingCurve.Type.InOutExpo)
+        self._searchSlide = OverlaySlider(
+            self.global_search_widget, direction='left',
+            width=lambda: self.global_search_widget.sizeHint().width(),
+        )
+        self._searchSlide.on_before_show(
+            lambda: self.global_search_widget.setFocus())
+        self._searchSlide.on_after_hide(self._on_search_hidden)
 
-        # Page list overlay slides in from left (same style as search panel)
-        self._pageListAnim = QPropertyAnimation(self.leftStackWidget, b"pos")
-        self._pageListAnim.setDuration(350)
-        self._pageListAnim.setEasingCurve(QEasingCurve.Type.InOutExpo)
+        # Page list overlay slides in from left
+        self._pageListSlide = OverlaySlider(
+            self.leftStackWidget, direction='left', width=self.PAGE_LIST_WIDTH,
+        )
+        self._pageListSlide.on_before_show(
+            lambda: self.leftStackWidget.setCurrentWidget(self.pageList))
+        self._pageListSlide.on_after_hide(self._on_page_list_hidden)
 
         mainVBoxLayout = QVBoxLayout(self)
         mainVBoxLayout.addWidget(self.titleBar)
@@ -253,6 +276,105 @@ class MainWindow(mainwindow_cls):
         self.mainvlayout = mainVBoxLayout
         self.imgtrans_progress_msgbox = ImgtransProgressMessageBox()
         self.resetStyleSheet()
+
+        # Wire AI chat signals
+        self._setup_ai_chat()
+
+    def _setup_ai_chat(self):
+        """Create AiController and wire all signals for the AI chat panel."""
+        # Controller
+        self._ai_controller = AiController(
+            proj_getter=lambda: self.imgtrans_proj,
+        )
+        self._ai_controller.settings_path = osp.join(
+            shared.PROGRAM_PATH, 'config', 'ai_chat_config.json'
+        )
+        self._ai_controller.load_ai_settings()
+        self.aiChatPanel.set_controller(self._ai_controller)
+        self.aiChatPanel.set_project_loaded(bool(self.imgtrans_proj.pages))
+
+        # LeftBar toggle → panel show/hide
+        self.leftBar.ai_chat_toggled.connect(self._toggle_ai_chat)
+
+        # Panel → Controller
+        self.aiChatPanel.send_message.connect(self._ai_controller.handle_message)
+        self.aiChatPanel.stop_requested.connect(self._ai_controller.stop)
+        self.aiChatPanel.clear_requested.connect(self._ai_controller.clear_conversation)
+
+        # Apply changes → canvas refresh
+        self.aiChatPanel.apply_changes_requested.connect(
+            self._on_apply_ai_changes)
+
+        # Controller → Panel
+        self._ai_controller.system_message.connect(
+            self.aiChatPanel.add_system_message)
+        self._ai_controller.streaming_started.connect(
+            self.aiChatPanel.start_streaming_response)
+        self._ai_controller.chunk_received.connect(
+            self.aiChatPanel.append_stream_chunk)
+        self._ai_controller.stream_finished.connect(
+            self.aiChatPanel.finish_streaming)
+        self._ai_controller.changes_ready.connect(
+            self.aiChatPanel.set_changes)
+        self._ai_controller.tool_trace_ready.connect(
+            self.aiChatPanel.set_last_tool_trace)
+        self._ai_controller.thinking_started.connect(
+            self.aiChatPanel.show_thinking)
+        self._ai_controller.thinking_finished.connect(
+            self.aiChatPanel.hide_thinking)
+        self._ai_controller.prompt_tokens_estimated.connect(
+            self.aiChatPanel.set_prompt_tokens)
+        self._ai_controller.api_tokens_reconciled.connect(
+            self.aiChatPanel.reconcile_api_tokens)
+        self._ai_controller.status_changed.connect(
+            self.aiChatPanel.update_status)
+        self._ai_controller.conversation_cleared.connect(
+            self.aiChatPanel.on_conversation_cleared)
+        self._ai_controller.error_occurred.connect(
+            self.aiChatPanel.on_error)
+
+    def _toggle_ai_chat(self, visible: bool):
+        if visible:
+            # Hide other left-side overlays
+            if self.leftBar.globalSearchChecker.isChecked():
+                self.leftBar.globalSearchChecker.setChecked(False)
+                self._hideSearchOverlay()
+            if self.leftBar.showPageListLabel.isChecked():
+                self.leftBar.showPageListLabel.setChecked(False)
+                self._hidePageListOverlay()
+            self._aiChatSlide.show()
+        else:
+            self._aiChatSlide.hide()
+
+    def _on_apply_ai_changes(self, changes):
+        """Apply accepted AI changes to the project and refresh the canvas."""
+        if not self.imgtrans_proj or not self.imgtrans_proj.pages:
+            LOGGER.warning("_on_apply_ai_changes: no project loaded")
+            return
+
+        # Convert ChangeItem list → proj_compact modifications dict
+        mods = {
+            "type": "modifications",
+            "changes": [
+                {"id": c.block_id, c.field: c.new_value}
+                for c in changes
+            ]
+        }
+        try:
+            count, warnings = proj_compact.apply_modifications(self.imgtrans_proj, mods)
+            msg = self.tr("Applied {n} change(s) to the project.").format(n=count)
+            if warnings:
+                msg += " " + " ".join(warnings)
+            self.aiChatPanel.add_system_message(msg)
+
+            # Refresh canvas
+            self.canvas.updateCanvas()
+            self.st_manager.updateSceneTextitems()
+        except Exception as e:
+            self.aiChatPanel.add_system_message(
+                self.tr("── Error applying changes: {e} ──").format(e=str(e))
+            )
+            LOGGER.exception("apply_ai_changes failed")
 
     def on_finish_setdetector(self):
         module_manager = self.module_manager
@@ -428,6 +550,9 @@ class MainWindow(mainwindow_cls):
 
     def setupImgTransUI(self):
         self._hideConfigOverlay()
+        # Hide AI chat panel when returning to imgtrans mode
+        if self.leftBar.aiChatChecker.isChecked():
+            self.leftBar.aiChatChecker.setChecked(False)
         show = self.leftBar.needleftStackWidget()
         is_visible = self.leftStackWidget.isVisible()
         if show and not is_visible:
@@ -455,114 +580,43 @@ class MainWindow(mainwindow_cls):
         return not (hasattr(self, 'configPanel') and self.configPanel.isVisible())
 
     def _showConfigOverlay(self):
-        panel = self.configPanel
-        pw = panel.parentWidget()
-        panel.setGeometry(pw.rect())
-        panel.raise_()
-        panel.show()
-        panel.setFocus()
-
-        self._configAnim.setStartValue(QPoint(pw.width(), 0))
-        self._configAnim.setEndValue(QPoint(0, 0))
-        self._configAnim.start()
+        self._configSlide.show()
 
     def _hideConfigOverlay(self):
-        panel = self.configPanel
-        if not panel.isVisible():
-            return
-        pw = panel.parentWidget()
-
-        self._configAnim.finished.connect(self._on_config_hidden,
-                                          Qt.ConnectionType.SingleShotConnection)
-        self._configAnim.setStartValue(panel.pos())
-        self._configAnim.setEndValue(QPoint(pw.width(), 0))
-        self._configAnim.start()
+        self._configSlide.hide()
 
     def _on_config_hidden(self):
-        self.configPanel.hide()
         if self.leftBar.configChecker.isChecked():
             self.leftBar.configChecker.setChecked(False)
 
     def _showSearchOverlay(self):
-        widget = self.global_search_widget
-        pw = widget.parentWidget()
-        w = widget.sizeHint().width()
-        widget.setGeometry(0, 0, w, pw.height())
-        widget.raise_()
-        widget.show()
-        widget.setFocus()
-
-        # disconnect stale finished connection from a previous hide
-        try:
-            self._searchAnim.finished.disconnect(self._on_search_hidden)
-        except TypeError:
-            pass
-        self._searchAnim.setStartValue(QPoint(-w, 0))
-        self._searchAnim.setEndValue(QPoint(0, 0))
-        self._searchAnim.start()
+        self._searchSlide.show()
 
     def _hideSearchOverlay(self):
-        widget = self.global_search_widget
-        if not widget.isVisible():
-            return
-
-        self._searchAnim.finished.connect(self._on_search_hidden,
-                                          Qt.ConnectionType.SingleShotConnection)
-        self._searchAnim.setStartValue(widget.pos())
-        self._searchAnim.setEndValue(QPoint(-widget.width(), 0))
-        self._searchAnim.start()
+        self._searchSlide.hide()
 
     def _on_search_hidden(self):
-        self.global_search_widget.hide()
         if self.leftBar.globalSearchChecker.isChecked():
             self.leftBar.globalSearchChecker.setChecked(False)
 
     PAGE_LIST_WIDTH = 250
 
     def _showPageListOverlay(self):
-        widget = self.leftStackWidget
-        pw = widget.parentWidget()
-        widget.setGeometry(0, 0, self.PAGE_LIST_WIDTH, pw.height())
-        widget.raise_()
-        widget.setCurrentWidget(self.pageList)
-        widget.show()
-
-        # disconnect stale finished connection from a previous hide
-        try:
-            self._pageListAnim.finished.disconnect(self._on_page_list_hidden)
-        except TypeError:
-            pass
-        self._pageListAnim.setStartValue(QPoint(-self.PAGE_LIST_WIDTH, 0))
-        self._pageListAnim.setEndValue(QPoint(0, 0))
-        self._pageListAnim.start()
+        self._pageListSlide.show()
 
     def _hidePageListOverlay(self):
-        widget = self.leftStackWidget
-        if not widget.isVisible():
-            return
-
-        self._pageListAnim.finished.connect(self._on_page_list_hidden,
-                                            Qt.ConnectionType.SingleShotConnection)
-        self._pageListAnim.setStartValue(widget.pos())
-        self._pageListAnim.setEndValue(QPoint(-widget.width(), 0))
-        self._pageListAnim.start()
+        self._pageListSlide.hide()
 
     def _on_page_list_hidden(self):
-        self.leftStackWidget.hide()
         if self.leftBar.showPageListLabel.isChecked():
             self.leftBar.showPageListLabel.setChecked(False)
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
-        if self.configPanel.isVisible():
-            self.configPanel.setGeometry(self.configPanel.parentWidget().rect())
-        if self.global_search_widget.isVisible():
-            pw = self.global_search_widget.parentWidget()
-            sw = self.global_search_widget
-            sw.setGeometry(sw.x(), 0, sw.width(), pw.height())
-        if self.leftStackWidget.isVisible():
-            pw = self.leftStackWidget.parentWidget()
-            self.leftStackWidget.setGeometry(0, 0, self.PAGE_LIST_WIDTH, pw.height())
+        self._configSlide.resize()
+        self._searchSlide.resize()
+        self._pageListSlide.resize()
+        self._aiChatSlide.resize()
 
     def set_display_lang(self, lang: str):
         self.retranslateUI()
@@ -613,6 +667,9 @@ class MainWindow(mainwindow_cls):
             self.st_manager.clearSceneTextitems()
             self.titleBar.setTitleContent(osp.basename(directory))
             self.updatePageList()
+            self.aiChatPanel.set_project_loaded(True)
+            self._ai_controller.history_path = osp.join(directory, 'ai_chat_history.json')
+            self.aiChatPanel.rebuild_from_history(self._ai_controller.messages)
             self.opening_dir = False
         except Exception as e:
             self.opening_dir = False
@@ -654,7 +711,11 @@ class MainWindow(mainwindow_cls):
             self.st_manager.clearSceneTextitems()
             self.leftBar.updateRecentProjList(self.imgtrans_proj.proj_path)
             self.updatePageList()
+            self.aiChatPanel.set_project_loaded(True)
             self.titleBar.setTitleContent(osp.basename(self.imgtrans_proj.proj_path))
+            self._ai_controller.history_path = osp.join(
+                self.imgtrans_proj.proj_path, 'ai_chat_history.json')
+            self.aiChatPanel.rebuild_from_history(self._ai_controller.messages)
             self.opening_dir = False
         except Exception as e:
             self.opening_dir = False
@@ -680,6 +741,8 @@ class MainWindow(mainwindow_cls):
             if self.leftBar.globalSearchChecker.isChecked():
                 self.leftBar.globalSearchChecker.setChecked(False)
                 self._hideSearchOverlay()
+            if self.leftBar.aiChatChecker.isChecked():
+                self.leftBar.aiChatChecker.setChecked(False)
             self._showPageListOverlay()
         else:
             self._hidePageListOverlay()
@@ -1882,13 +1945,10 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
     def on_set_gsearch_widget(self):
         setup = self.leftBar.globalSearchChecker.isChecked()
         if setup:
-            # stop any running hide animation
-            try:
-                self._searchAnim.finished.disconnect(self._on_search_hidden)
-            except TypeError:
-                pass
             self._hidePageListOverlay()
             self.leftBar.showPageListLabel.setChecked(False)
+            if self.leftBar.aiChatChecker.isChecked():
+                self.leftBar.aiChatChecker.setChecked(False)
             self._showSearchOverlay()
         else:
             self._hideSearchOverlay()

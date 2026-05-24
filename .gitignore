@@ -26,6 +26,8 @@ tmp
 logs
 ballontrans_pylibs_win
 config/config.json
+config/ai_chat_config.json
+config/ai_chat.log
 localtmp*
 
 .vscode

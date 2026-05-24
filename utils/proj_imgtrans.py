@@ -623,7 +623,21 @@ class ProjImgTrans:
         self.pages.clear()
         self.pages.update(rst_dict)
         self._pagename2idx = pagename2idx
-        self._idx2pagename = idx2pagename        
+        self._idx2pagename = idx2pagename
+
+    def dump_compact_index(self, include_global_font: bool = True) -> Dict:
+        from .proj_compact import build_index
+        return build_index(self, include_global_font=include_global_font)
+
+    def dump_compact_detail(self, page_indices: List[int],
+                            fields_whitelist = None) -> Dict:
+        from .proj_compact import build_detail
+        return build_detail(self, page_indices, fields_whitelist=fields_whitelist)
+
+    def apply_compact_modifications(self, modifications: Dict,
+                                     metadata: Dict = None):
+        from .proj_compact import apply_modifications
+        return apply_modifications(self, modifications, metadata)
 
 
 def gen_ballon_cuts(cuts_dir: str, imgpath: str, blk_list: List[TextBlock], resize=True) -> Tuple[List[str], List[int]]:

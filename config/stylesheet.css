@@ -1096,3 +1096,622 @@ DeleteStyleButton {
 DeleteStyleButton::hover {
     background-color: #FF605C;
 }
+
+/* ═══════════════════════════════════════════════
+   AI Chat Panel
+   ═══════════════════════════════════════════════ */
+
+#AiChatPanel {
+    background-color: @qwidgetBackgroundColor;
+    border-left: 1px solid @borderColor;
+}
+
+/* ── Title bar ── */
+#AITitleBar {
+    background-color: @widgetBackgroundColor;
+    border-bottom: 1px solid @borderColor;
+}
+#AITitle {
+    font-size: 15px;
+    font-weight: 600;
+    color: @qwidgetForegroundColor;
+    background: transparent;
+}
+#AIStatusBadge {
+    font-size: 10px;
+    padding: 2px 10px;
+    border-radius: 10px;
+    background-color: @borderColor;
+    color: @qwidgetForegroundColor;
+}
+#AIStatusBadgeActive {
+    font-size: 10px;
+    padding: 2px 10px;
+    border-radius: 10px;
+    background-color: @accentTranslate;
+    color: #fff;
+    font-weight: 500;
+}
+#AITokenLabel {
+    font-size: 10px;
+    color: @qwidgetForegroundColor;
+    padding: 2px 8px;
+    background: transparent;
+}
+
+/* ── Idle strip ── */
+#AIIdleStrip {
+    font-size: 11px;
+    color: @qwidgetForegroundColor;
+    background-color: @widgetBackgroundColor;
+    border-bottom: 1px solid @borderColor;
+    padding: 4px 16px;
+}
+
+/* ── Chat area ── */
+#AIChatArea {
+    border: none;
+    background-color: @emptyContentBackgroundColor;
+}
+
+/* ── Message bubbles ── */
+#AISystemMsg {
+    font-size: 12px;
+    color: @qwidgetForegroundColor;
+    background-color: @emptyContentBackgroundColor;
+    border-radius: 12px;
+    padding: 4px 16px;
+}
+
+#AIUserBubble {
+    background: transparent;
+}
+
+#AIUserInner {
+    font-size: 13px;
+    color: @qwidgetForegroundColor;
+    background-color: @widgetBackgroundColor;
+    border: 1px solid @borderColor;
+    border-right: 3px solid @accentPrimary;
+    border-radius: 12px 6px 6px 12px;
+    padding: 10px 14px;
+}
+
+#AIAssistantBubble {
+    font-size: 13px;
+    color: @qwidgetForegroundColor;
+    background: transparent;
+}
+
+#AIAssistantInner {
+    font-size: 13px;
+    background-color: @widgetBackgroundColor;
+    border: 1px solid @borderColor;
+    border-left: 3px solid @accentTranslate;
+    border-radius: 6px 12px 12px 6px;
+    padding: 10px 14px;
+}
+
+
+/* Message timestamp */
+#AIMsgTimestamp {
+    font-size: 10px;
+    color: @qwidgetForegroundColor;
+    opacity: 0.5;
+    padding: 2px 6px;
+}
+
+/* ── Change card (compact summary) ── */
+#AIChangeCard {
+    background-color: @emptyContentBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 10px;
+    margin-top: 6px;
+}
+#AIChangeHeader {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 12px;
+    background-color: @widgetBackgroundColor;
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    border-bottom: 1px solid @borderColor;
+}
+#AIChangePageLine {
+    font-size: 12px;
+    color: @qwidgetForegroundColor;
+    padding: 3px 12px;
+}
+#AIChangeExpandBtn {
+    font-size: 12px;
+    color: @accentTranslate;
+    background: transparent;
+    border: none;
+    border-top: 1px solid @borderColor;
+    padding: 8px 12px;
+    text-align: left;
+}
+#AIChangeExpandBtn:hover {
+    background-color: @widgetBackgroundColor;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+}
+/* ── Token footer in assistant bubble ── */
+#AITokenFooter {
+    font-size: 10px;
+    color: @qwidgetForegroundColor;
+    padding: 2px 4px;
+    margin-top: 4px;
+}
+
+/* ── Thinking indicator (animated dots) ── */
+#AIThinkingDot {
+    min-width: 8px;
+    min-height: 8px;
+    border-radius: 4px;
+    background-color: @accentTranslate;
+}
+
+/* ── Scroll-to-bottom floating button ── */
+#AIScrollBottomBtn {
+    border: 1px solid @borderColor;
+    background-color: @widgetBackgroundColor;
+    color: @qwidgetForegroundColor;
+    font-size: 14px;
+    border-radius: 16px;
+    min-width: 32px;
+    min-height: 32px;
+}
+#AIScrollBottomBtn:hover {
+    background-color: @emptyContentBackgroundColor;
+}
+
+/* ── Settings drawer ── */
+#AISettingsDrawer {
+    background-color: @widgetBackgroundColor;
+    border-left: 1px solid @borderColor;
+}
+#AISettingsHeader {
+    background-color: @widgetBackgroundColor;
+    border-bottom: 1px solid @borderColor;
+    font-size: 14px;
+    font-weight: 600;
+}
+#AISettingsCloseBtn {
+    border: none;
+    background: transparent;
+    font-size: 16px;
+    color: @qwidgetForegroundColor;
+    min-width: 32px;
+    min-height: 32px;
+}
+#AISettingsCloseBtn:hover {
+    background-color: rgba(0,0,0,0.1);
+    border-radius: 8px;
+}
+#AISettingsSection {
+    font-size: 11px;
+    text-transform: uppercase;
+    color: @qwidgetForegroundColor;
+    margin-top: 12px;
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+#AISettingsHint {
+    font-size: 11px;
+    color: @qwidgetForegroundColor;
+    padding: 8px 10px;
+    background-color: @emptyContentBackgroundColor;
+    border-radius: 6px;
+    margin-top: 8px;
+}
+
+/* ── Settings form fields ── */
+#AISettingsField {
+    border: 1px solid @borderColor;
+    background-color: @transtexteditBackgroundColor;
+    color: @qwidgetForegroundColor;
+    font-size: 12px;
+    padding: 3px 6px;
+    border-radius: 4px;
+}
+#AISettingsField:focus {
+    border-color: @accentTranslate;
+}
+
+/* ── Data permission toggles (disabled when translation mode on) ── */
+#AIDataToggle:disabled {
+    color: rgba(128, 128, 128, 0.5);
+}
+#AIDataToggle:disabled::indicator {
+    opacity: 0.35;
+}
+
+/* ── Review dialog ── */
+#AIReviewDialog {
+    background-color: @qwidgetBackgroundColor;
+}
+#AIReviewHeader {
+    background-color: @widgetBackgroundColor;
+    border-bottom: 1px solid @borderColor;
+}
+#AIReviewTitle {
+    font-size: 14px;
+    font-weight: 600;
+}
+#AIReviewBackBtn {
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    color: @accentTranslate;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+#AIReviewBackBtn:hover {
+    background-color: rgba(0,0,0,0.08);
+}
+#AIReviewAcceptAll, #AIReviewRejectAll {
+    padding: 4px 12px;
+    font-size: 12px;
+    border: 1px solid @borderColor;
+    background-color: @emptyContentBackgroundColor;
+    border-radius: 6px;
+    color: @qwidgetForegroundColor;
+}
+#AIReviewAcceptAll:hover, #AIReviewRejectAll:hover {
+    background-color: @borderColor;
+}
+/* ── Summary rows ── */
+#AIReviewSummaryRow {
+    border-bottom: 1px solid @borderColor;
+    background-color: @emptyContentBackgroundColor;
+}
+#AIReviewSummaryRow:hover {
+    background-color: @widgetBackgroundColor;
+}
+#AIReviewSummaryIcon {
+    font-size: 18px;
+}
+#AIReviewSummaryName {
+    font-size: 13px;
+    font-weight: 500;
+    color: @qwidgetForegroundColor;
+}
+#AIReviewSummaryBtn {
+    border: 1px solid @accentTranslate;
+    background: transparent;
+    color: @accentTranslate;
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 6px;
+}
+#AIReviewSummaryBtn:hover {
+    background-color: @accentTranslate;
+    color: #fff;
+}
+/* ── Detail rows ── */
+#AIReviewRow {
+    border-bottom: 1px solid @borderColor;
+}
+#AIReviewId {
+    font-family: monospace;
+    font-size: 11px;
+    color: @qwidgetForegroundColor;
+    font-weight: 600;
+}
+#AIReviewStatusBar {
+    min-width: 4px;
+}
+#AIReviewMeta {
+    font-size: 11px;
+    color: @qwidgetForegroundColor;
+}
+#AIReviewValues {
+    font-size: 12px;
+    color: @qwidgetForegroundColor;
+}
+#AIReviewDiff {
+    font-size: 12px;
+    color: @qwidgetForegroundColor;
+    background-color: @emptyContentBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+    padding: 6px 8px;
+}
+#AIReviewFieldLabel {
+    font-size: 10px;
+    color: @qwidgetForegroundColor;
+    padding: 0;
+    margin: 0;
+}
+#AIReviewOldValue, #AIReviewNewValue {
+    font-size: 12px;
+    color: @qwidgetForegroundColor;
+    background-color: @emptyContentBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding: 4px 6px;
+}
+#AIReviewSrcValue {
+    font-size: 12px;
+    color: @accentTranslate;
+    font-style: italic;
+    background-color: @emptyContentBackgroundColor;
+    border: 1px solid @accentTranslate;
+    border-radius: 4px;
+    padding: 4px 6px;
+}
+#AIReviewCloseBtn {
+    border: none;
+    background: transparent;
+    font-size: 16px;
+    color: @qwidgetForegroundColor;
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 8px;
+}
+#AIReviewCloseBtn:hover {
+    background-color: rgba(0,0,0,0.1);
+}
+#AIReviewActions {
+    border-left: 1px solid @borderColor;
+}
+#AIReviewAccept, #AIReviewReject {
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    color: @qwidgetForegroundColor;
+    min-height: 26px;
+}
+#AIReviewAccept:hover {
+    background-color: rgba(76, 175, 132, 0.15);
+    color: #4caf84;
+}
+#AIReviewReject:hover {
+    background-color: rgba(224, 85, 106, 0.15);
+    color: #e0556a;
+}
+/* ── Page navigation bar ── */
+#AIReviewNavBar {
+    background-color: @widgetBackgroundColor;
+    border-top: 1px solid @borderColor;
+}
+#AIReviewNavBtn {
+    border: 1px solid @borderColor;
+    background: transparent;
+    color: @qwidgetForegroundColor;
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 6px;
+}
+#AIReviewNavBtn:hover {
+    background-color: @emptyContentBackgroundColor;
+}
+#AIReviewNavBtn:disabled {
+    color: rgba(128, 128, 128, 0.4);
+}
+#AIReviewNavInfo {
+    font-size: 12px;
+    color: @qwidgetForegroundColor;
+}
+/* ── Footer ── */
+#AIReviewFooter {
+    background-color: @widgetBackgroundColor;
+    border-top: 1px solid @borderColor;
+}
+#AIReviewStats {
+    font-size: 12px;
+    color: @qwidgetForegroundColor;
+}
+#AIReviewApplyBtn {
+    background-color: @accentTranslate;
+    color: #fff;
+    font-weight: 600;
+    padding: 6px 18px;
+    border-radius: 8px;
+    border: none;
+}
+#AIReviewApplyBtn:hover {
+    background-color: rgb(30, 147, 229);
+}
+#AIReviewApplyBtn:disabled {
+    background-color: @borderColor;
+    color: rgba(128, 128, 128, 0.7);
+}
+
+/* ── Input bar ── */
+#AIInputBar {
+    background-color: @widgetBackgroundColor;
+    border-top: 1px solid @borderColor;
+}
+#AIInput {
+    background-color: @emptyContentBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 12px;
+    font-size: 13px;
+    color: @qwidgetForegroundColor;
+}
+#AIInput:focus {
+    border-color: @accentTranslate;
+}
+#AISendBtn {
+    background-color: @accentTranslate;
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+}
+#AISendBtn:hover {
+    background-color: rgb(30, 147, 229);
+}
+
+/* ── Title bar buttons ── */
+#AIAttachBtn, #AISettingsBtn, #AICloseBtn {
+    border: none;
+    background: transparent;
+    font-size: 16px;
+    color: @qwidgetForegroundColor;
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: 8px;
+}
+#AIAttachBtn:hover, #AISettingsBtn:hover, #AICloseBtn:hover {
+    background-color: rgba(0,0,0,0.1);
+}
+
+/* ── Attachments ── */
+#AIAttachRow {
+    background-color: @widgetBackgroundColor;
+}
+#AIAttachChip {
+    background-color: @emptyContentBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 8px;
+}
+#AIAttachChipLabel {
+    font-size: 12px;
+    color: @qwidgetForegroundColor;
+}
+#AIAttachChipRemove {
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    color: @qwidgetForegroundColor;
+    min-width: 18px;
+    min-height: 18px;
+}
+
+/* ── LeftBar AI Chat checker ── */
+StateChecker#AiChatChecker::indicator {
+    height: 27px;
+    width: 27px;
+    image: url(icons/leftbar_aichat.svg);
+}
+StateChecker#AiChatChecker::indicator:hover {
+    image: url(icons/leftbar_aichat_activate.svg);
+}
+StateChecker#AiChatChecker::indicator:checked {
+    image: url(icons/leftbar_aichat_activate.svg);
+}
+
+/* ── AI Chat: new UX controls ── */
+
+#AIClearBtn {
+    border: none;
+    background: transparent;
+    font-size: 18px;
+    color: @qwidgetForegroundColor;
+    opacity: 0.6;
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: 6px;
+}
+#AIClearBtn:hover {
+    background: rgba(128, 128, 128, 0.15);
+    opacity: 1.0;
+}
+
+#AIModeToggle {
+    font-size: 11px;
+    padding: 2px 4px;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    background: @inputBackgroundColor;
+    color: @textColor;
+}
+
+#AITitleMode {
+    font-size: 11px;
+    padding: 2px 4px;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    background: @inputBackgroundColor;
+    color: @textColor;
+}
+
+#AIStopBtn {
+    border: none;
+    background: #e74c3c;
+    color: #fff;
+    font-size: 16px;
+    border-radius: 8px;
+}
+#AIStopBtn:hover {
+    background: #c0392b;
+}
+
+#AIBubbleCopyBtn {
+    border: none;
+    background: transparent;
+    font-size: 12px;
+    color: @qwidgetForegroundColor;
+    opacity: 0.4;
+    min-width: 24px;
+    min-height: 24px;
+    border-radius: 4px;
+}
+#AIBubbleCopyBtn:hover {
+    opacity: 1.0;
+    background: rgba(128, 128, 128, 0.12);
+}
+
+#AIRegenerateBtn {
+    border: 1px solid @borderColor;
+    background: transparent;
+    color: @textColor;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    margin-left: 10px;
+    margin-right: 56px;
+}
+#AIRegenerateBtn:hover {
+    background: rgba(128, 128, 128, 0.08);
+    border-color: @highlightColor;
+}
+
+#AIThinkingBubble {
+    color: @disabledForegroundColor;
+    font-size: 13px;
+}
+
+#AIWelcomeCard {
+    background: @cardBackgroundColor;
+    border: 1px solid @borderColor;
+    border-top: 3px solid @accentTranslate;
+    border-radius: 0 0 10px 10px;
+    margin: 8px 0;
+}
+
+#AIWelcomeTitle {
+    font-size: 15px;
+    font-weight: bold;
+    color: @textColor;
+}
+
+#AIWelcomeSubtitle {
+    font-size: 12px;
+    color: @disabledForegroundColor;
+    margin-bottom: 4px;
+}
+
+#AIWelcomeChip {
+    border: 1px solid @borderColor;
+    background: @inputBackgroundColor;
+    color: @textColor;
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    text-align: left;
+}
+#AIWelcomeChip:hover {
+    border-color: @highlightColor;
+    background: rgba(128, 128, 128, 0.08);
+}
+
+/* ── Chat message divider ── */
+#AIMsgDivider {
+    min-height: 1px;
+    background-color: @borderColor;
+    margin: 4px 0;
+}
