@@ -21,6 +21,9 @@ from qtpy.QtCore import QObject, Signal, Qt
 
 logger = logging.getLogger('ai_chat')
 
+# Ensure ai_chat logger is configured with file + console handlers
+import utils.ai_logger  # noqa: F401 — triggers get_ai_logger() on import
+
 from .ai_tools import (
     TOOL_DEFINITIONS,
     build_agent_system_prompt,
@@ -164,7 +167,7 @@ class AiController(QObject):
     prompt_tokens_estimated = Signal(int)
     """Rough token count before the API call."""
 
-    api_tokens_reconciled = Signal(int)
+    api_tokens_reconciled = Signal(int, int, int)  # prompt_tokens, completion_tokens, total_tokens
     """Real token count from the API response."""
 
     status_changed = Signal(str, bool)
@@ -395,6 +398,31 @@ class AiController(QObject):
         except (json.JSONDecodeError, OSError):
             pass
 
+        self._sync_token_display()
+
+    def _sync_token_display(self):
+        """Emit token counts to update the panel label."""
+        if self._token_count > 0:
+            logger.info(
+                "_sync_token_display: using stored "
+                "prompt=%d completion=%d token_count=%d",
+                self._prompt_tokens, self._completion_tokens, self._token_count,
+            )
+            self.api_tokens_reconciled.emit(
+                self._prompt_tokens, self._completion_tokens, self._token_count
+            )
+        elif self.messages:
+            total = sum(estimate_tokens(m.content) for m in self.messages)
+            logger.info(
+                "_sync_token_display: estimated from %d messages: %d",
+                len(self.messages), total,
+            )
+            self._token_count = total
+            self.prompt_tokens_estimated.emit(total)
+        else:
+            logger.info("_sync_token_display: empty conversation, emitting 0")
+            self.prompt_tokens_estimated.emit(0)
+
     def _save_history(self):
         """Persist conversation to JSON file."""
         if not self._history_path:
@@ -518,9 +546,11 @@ class AiController(QObject):
             scope = self._context_scope
             if scope == 'auto':
                 index = execute_tool(proj, 'list_pages', {})
+                total = index.get('total_pages', 0)
+                name = index.get('project', '')
                 messages.append({
                     'role': 'system',
-                    'content': f'[项目索引]\n{json.dumps(index, ensure_ascii=False, indent=2)}',
+                    'content': f'[项目概览] 共 {total} 页（{name}）。需查看页面结构时调 list_pages。',
                 })
             elif scope == 'all':
                 index = execute_tool(proj, 'list_pages', {})
@@ -573,10 +603,17 @@ class AiController(QObject):
     ):
         from ui.ai_chat_worker import AiChatWorker
         prompt_tokens = estimate_tokens(json.dumps(messages, ensure_ascii=False))
+        logger.info(
+            "_start_worker: estimate=%d, turns_left=%d, "
+            "current _prompt_tokens=%d, _token_count=%d",
+            prompt_tokens, tool_turns_left,
+            self._prompt_tokens, self._token_count,
+        )
         self._pending_prompt_estimate = prompt_tokens
         self._prompt_tokens += prompt_tokens
         self._token_count += prompt_tokens
-        self.prompt_tokens_estimated.emit(prompt_tokens)
+        # Emit accumulated estimate for consistency
+        self.prompt_tokens_estimated.emit(self._token_count)
         self._worker = AiChatWorker(api_config, messages)
         self._worker.chunk_ready.connect(self._on_chunk)
         self._worker.stream_finished.connect(
@@ -596,13 +633,23 @@ class AiController(QObject):
         self._accumulated_text += chunk
         self.chunk_received.emit(chunk)
 
-    def _on_api_tokens(self, total: int):
+    def _on_api_tokens(self, prompt_tokens: int, completion_tokens: int, total: int):
+        logger.info(
+            "_on_api_tokens: received prompt=%d completion=%d total=%d "
+            "pending_estimate=%d",
+            prompt_tokens, completion_tokens, total, self._pending_prompt_estimate,
+        )
         if self._pending_prompt_estimate > 0:
             self._token_count -= self._pending_prompt_estimate
+            self._prompt_tokens -= self._pending_prompt_estimate
             self._pending_prompt_estimate = 0
         self._token_count += total
-        self._completion_tokens += total
-        self.api_tokens_reconciled.emit(total)
+        self._prompt_tokens += prompt_tokens
+        self._completion_tokens += completion_tokens
+        # Emit accumulated totals — consistent with _sync_token_display on reload
+        self.api_tokens_reconciled.emit(
+            self._prompt_tokens, self._completion_tokens, self._token_count
+        )
 
     def _on_stream_finished(
         self,
@@ -759,6 +806,13 @@ class AiController(QObject):
         self.stream_finished.emit(display_text)
 
         # Record in history
+        logger.info(
+            "_finalize_turn: saving history — "
+            "_prompt_tokens=%d _completion_tokens=%d _token_count=%d "
+            "messages=%d",
+            self._prompt_tokens, self._completion_tokens, self._token_count,
+            len(self.messages) + 2,
+        )
         self.messages.append(ChatMessage(role='user', content=self._last_user_text))
         self.messages.append(ChatMessage(role='assistant', content=display_text,
                                           changes=list(changes)))

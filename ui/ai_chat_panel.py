@@ -631,10 +631,16 @@ class AiChatPanel(QWidget):
             self._status_dot.setObjectName("AIStatusBadge")
 
     def set_prompt_tokens(self, n: int):
-        self._token_label.setText(f"~{n} tok")
+        self._token_label.setText(f"~{n} token")
+        self._token_label.setToolTip(self.tr("~{n} token (estimated)").format(n=n))
 
-    def reconcile_api_tokens(self, n: int):
-        self._token_label.setText(f"{n} tok")
+    def reconcile_api_tokens(self, prompt_tokens: int, completion_tokens: int, total: int):
+        self._token_label.setText(f"{total} token")
+        self._token_label.setToolTip(
+            self.tr("Context: {pt} token\nTool calls: {ct} token").format(
+                pt=prompt_tokens, ct=completion_tokens
+            )
+        )
 
     def on_conversation_cleared(self):
         """Clear all message widgets and show welcome card."""
@@ -644,7 +650,8 @@ class AiChatPanel(QWidget):
         self._clear_messages()
         self._show_welcome_card()
         self.update_status(self.tr("Ready"), False)
-        self._token_label.setText("~0 tok")
+        self._token_label.setText("~0 token")
+        self._token_label.setToolTip("")
 
     def rebuild_from_history(self, messages: list):
         """Rebuild visual bubbles from loaded ChatMessage history."""
@@ -955,7 +962,6 @@ class AiChatPanel(QWidget):
         # Edit translation prompt button (only meaningful with translation mode)
         prompt_btn = QPushButton(self.tr("Edit Translation Prompt..."))
         prompt_btn.setObjectName("AISettingsField")
-        prompt_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         prompt_btn.clicked.connect(self._open_prompt_editor)
         self._trans_mode_cb.toggled.connect(
             lambda checked: prompt_btn.setEnabled(checked)
@@ -986,12 +992,6 @@ class AiChatPanel(QWidget):
         layout.addLayout(grid)
 
         layout.addStretch()
-
-        # ── Close button ────────────────────────────────────
-        close_btn = QPushButton(self.tr("Close"))
-        close_btn.setObjectName("AISettingsCloseBtn")
-        close_btn.clicked.connect(lambda: self._settings_btn.setChecked(False))
-        layout.addWidget(close_btn)
 
         return w
 

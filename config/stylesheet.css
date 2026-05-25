@@ -1277,18 +1277,6 @@ DeleteStyleButton::hover {
     font-size: 14px;
     font-weight: 600;
 }
-#AISettingsCloseBtn {
-    border: none;
-    background: transparent;
-    font-size: 16px;
-    color: @qwidgetForegroundColor;
-    min-width: 32px;
-    min-height: 32px;
-}
-#AISettingsCloseBtn:hover {
-    background-color: rgba(0,0,0,0.1);
-    border-radius: 8px;
-}
 #AISettingsSection {
     font-size: 11px;
     text-transform: uppercase;
@@ -1317,6 +1305,11 @@ DeleteStyleButton::hover {
 }
 #AISettingsField:focus {
     border-color: @accentTranslate;
+}
+#AISettingsField:disabled {
+    background-color: transparent;
+    border-color: rgba(128, 128, 128, 0.3);
+    color: rgba(128, 128, 128, 0.5);
 }
 
 /* ── Data permission toggles (disabled when translation mode on) ── */

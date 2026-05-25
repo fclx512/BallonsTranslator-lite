@@ -28,7 +28,7 @@ class AiChatWorker(QThread):
     chunk_ready = Signal(str)
     stream_finished = Signal(str)
     error_occurred = Signal(str)
-    token_count = Signal(int)
+    token_count = Signal(int, int, int)  # prompt_tokens, completion_tokens, total_tokens
 
     def __init__(
         self,
@@ -112,7 +112,12 @@ class AiChatWorker(QThread):
                             if tc.function.arguments:
                                 entry['function']['arguments'] += tc.function.arguments
                 if getattr(chunk, 'usage', None):
-                    self.token_count.emit(chunk.usage.total_tokens)
+                    usage = chunk.usage
+                    self.token_count.emit(
+                        getattr(usage, 'prompt_tokens', 0),
+                        getattr(usage, 'completion_tokens', 0),
+                        getattr(usage, 'total_tokens', 0),
+                    )
         except openai.APIConnectionError as e:
             logger.error("APIConnectionError: %s", e)
             self.error_occurred.emit(f'连接失败：{e}')
