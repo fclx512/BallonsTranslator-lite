@@ -8,7 +8,7 @@ import time
 import cv2
 
 from tqdm import tqdm
-from qtpy.QtWidgets import QAction, QFileDialog, QMenu, QHBoxLayout, QVBoxLayout, QApplication, QWidget, QStackedWidget, QListWidget, QShortcut, QListWidgetItem, QMessageBox, QTextEdit, QPlainTextEdit
+from qtpy.QtWidgets import QAction, QFileDialog, QMenu, QHBoxLayout, QVBoxLayout, QApplication, QWidget, QStackedWidget, QListWidget, QShortcut, QListWidgetItem, QMessageBox, QTextEdit, QPlainTextEdit, QComboBox, QGridLayout
 from qtpy.QtCore import Qt, QPoint, QSize, QEvent, Signal, QTimer
 from qtpy.QtGui import QContextMenuEvent, QTextCursor, QGuiApplication, QIcon, QCloseEvent, QKeySequence, QPainter, QClipboard
 
@@ -1454,6 +1454,12 @@ class MainWindow(mainwindow_cls):
     def on_imgtrans_pipeline_finished(self):
         self.backup_blkstyles.clear()
         self._run_imgtrans_wo_textstyle_update = False
+        # Restore original translator if temporarily swapped for context-aware run
+        if hasattr(self, '_ctx_batch_restore') and self._ctx_batch_restore:
+            original = self._ctx_batch_restore
+            self._ctx_batch_restore = None
+            self.module_manager.setTranslator(original)
+            LOGGER.info(f'Restored translator to {original} after context-aware run')
         if pcfg.module.empty_runcache and not shared.HEADLESS:
             self.module_manager.unload_all_models()
         if shared.args.export_translation_txt:
@@ -1632,7 +1638,9 @@ class MainWindow(mainwindow_cls):
             dialog = QDialog(self)
             dialog.setWindowTitle(self.tr('Run'))
             dialog.setMinimumWidth(420)
+            dialog.setSizeGripEnabled(False)
             layout = QVBoxLayout(dialog)
+            layout.setSizeConstraint(QVBoxLayout.SetFixedSize)
 
             range_frame = QFrame()
             range_frame.setFrameShape(QFrame.Shape.StyledPanel)
@@ -1728,13 +1736,63 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
                 self.tr('Enable Translation'),
                 self.tr('Enable Inpainting'),
             ]
+            ctx_trans_cb = None
             for idx, label in enumerate(stage_labels):
                 cb = QCheckBox(label)
                 cb.setChecked(pcfg.module.stage_enabled(idx))
                 cb.toggled.connect(lambda checked, i=idx: self.on_enable_module(i, checked))
-                stages_layout.addWidget(cb)
+                if idx == 2:
+                    row = QWidget()
+                    row_layout = QHBoxLayout(row)
+                    row_layout.setContentsMargins(0, 0, 0, 0)
+                    row_layout.addWidget(cb)
+                    ctx_trans_cb = QCheckBox(self.tr('Context Translation (beta)'))
+                    row_layout.addWidget(ctx_trans_cb)
+                    row_layout.addStretch()
+                    stages_layout.addWidget(row)
+                else:
+                    stages_layout.addWidget(cb)
 
             layout.addWidget(stages_frame)
+
+            # AI Chat settings — shown when Context Translation (beta) is checked
+            ai_chat_frame = QFrame()
+            ai_chat_frame.setFrameShape(QFrame.Shape.StyledPanel)
+            ai_grid = QGridLayout(ai_chat_frame)
+            ai_grid.setContentsMargins(8, 6, 8, 6)
+            ai_grid.setSpacing(6)
+
+            ai_title = QLabel(self.tr('AI Chat Settings'))
+            ai_title.setStyleSheet('font-weight: bold;')
+            ai_grid.addWidget(ai_title, 0, 0, 1, 2)
+
+            ai_grid.addWidget(QLabel(self.tr('Context Strategy:')), 1, 0)
+            strategy_combo = QComboBox()
+            strategy_combo.addItems(['full', 'sliding_window', 'progressive_summary'])
+            strategy_combo.setCurrentText('full')
+            ai_grid.addWidget(strategy_combo, 1, 1)
+
+            ai_grid.addWidget(QLabel(self.tr('Batch Size:')), 2, 0)
+            batch_combo = QComboBox()
+            batch_combo.addItems(['1', '3', '5', '10', '20'])
+            batch_combo.setCurrentText('5')
+            ai_grid.addWidget(batch_combo, 2, 1)
+
+            ai_grid.addWidget(QLabel(self.tr('Context Pages:')), 3, 0)
+            pages_spin = QSpinBox()
+            pages_spin.setRange(0, 20)
+            pages_spin.setValue(3)
+            ai_grid.addWidget(pages_spin, 3, 1)
+
+            glossary_cb = QCheckBox(self.tr('Enforce Term Consistency (Glossary)'))
+            glossary_cb.setChecked(True)
+            ai_grid.addWidget(glossary_cb, 4, 0, 1, 2)
+
+            ai_chat_frame.setVisible(False)
+            layout.addWidget(ai_chat_frame)
+
+            ctx_trans_cb.toggled.connect(
+                lambda checked: ai_chat_frame.setVisible(checked and pcfg.module.enable_translate))
 
             # Run without update textstyle
             wo_update_cb = QCheckBox(self.tr('Run without update textstyle'))
@@ -1755,6 +1813,26 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
 
             if dialog.exec_() != QDialog.DialogCode.Accepted:
                 return
+
+            # If Context Translation is enabled, use AI assistant's API + prompt
+            if ctx_trans_cb.isChecked():
+                from modules.translators.context_batch import ContextBatchTranslator
+                self._ctx_batch_restore = cfg_module.translator
+                api_config = self._ai_controller.api_config
+                prompt = self._ai_controller.custom_prompt or ""
+                ctx = ContextBatchTranslator(api_config, prompt)
+                ctx.context_strategy = strategy_combo.currentText()
+                ctx.batch_size = int(batch_combo.currentText())
+                ctx.context_pages = pages_spin.value()
+                ctx.use_glossary = glossary_cb.isChecked()
+                self.module_manager.translate_thread.translator = ctx
+                self.module_manager.translate_thread.module = ctx
+                LOGGER.info(
+                    f'Context batch run: strategy={strategy_combo.currentText()}, '
+                    f'batch={batch_combo.currentText()}, '
+                    f'pages={pages_spin.value()}, '
+                    f'glossary={glossary_cb.isChecked()}'
+                )
 
             if wo_update_cb.isChecked():
                 self._run_imgtrans_wo_textstyle_update = True

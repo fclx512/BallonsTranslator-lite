@@ -64,11 +64,12 @@ DEFAULT_CHAT_SAMPLES = (
 )
 
 SAMPLE_PROFILES = [
-    {"name": "OpenAI", "api_host": "https://api.openai.com/v1", "api_key": "", "model": "gpt-4o", "temperature": 0.1, "top_p": 1.0, "max_tokens": 4096, "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES},
-    {"name": "Gemini", "api_host": "https://generativelanguage.googleapis.com/v1beta/openai", "api_key": "", "model": "gemini-2.5-flash", "temperature": 0.1, "top_p": 1.0, "max_tokens": 4096, "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES},
-    {"name": "OpenRouter", "api_host": "https://openrouter.ai/api/v1", "api_key": "", "model": "", "temperature": 0.1, "top_p": 1.0, "max_tokens": 4096, "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES},
-    {"name": "LM Studio", "api_host": "http://localhost:1234/v1", "api_key": "dummy-key", "model": "", "temperature": 0.1, "top_p": 1.0, "max_tokens": 4096, "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES, "builtin": True},
-    {"name": "Ollama", "api_host": "http://localhost:11434/v1", "api_key": "dummy-key", "model": "", "temperature": 0.1, "top_p": 1.0, "max_tokens": 4096, "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES, "builtin": True},
+    {"name": "OpenAI", "api_host": "https://api.openai.com/v1", "api_key": "", "model": "gpt-4o", "temperature": 0.1, "top_p": 1.0, "max_tokens": "", "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES},
+    {"name": "Gemini", "api_host": "https://generativelanguage.googleapis.com/v1beta/openai", "api_key": "", "model": "gemini-2.5-flash", "temperature": 0.1, "top_p": 1.0, "max_tokens": "", "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES},
+    {"name": "OpenRouter", "api_host": "https://openrouter.ai/api/v1", "api_key": "", "model": "", "temperature": 0.1, "top_p": 1.0, "max_tokens": "", "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES},
+    {"name": "DeepSeek", "api_host": "https://api.deepseek.com/v1", "api_key": "", "model": "", "temperature": 0.1, "top_p": 1.0, "max_tokens": "", "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES, "builtin": True},
+    {"name": "LM Studio", "api_host": "http://localhost:1234/v1", "api_key": "dummy-key", "model": "", "temperature": 0.1, "top_p": 1.0, "max_tokens": "", "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES, "builtin": True},
+    {"name": "Ollama", "api_host": "http://localhost:11434/v1", "api_key": "dummy-key", "model": "", "temperature": 0.1, "top_p": 1.0, "max_tokens": "", "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES, "builtin": True},
 ]
 
 
@@ -210,12 +211,18 @@ class LLM_API_Translator(BaseTranslator):
             self._serialize_profiles()
 
     def _merge_builtin_defaults(self):
-        """Ensure builtin profiles retain default fields from SAMPLE_PROFILES."""
+        """Ensure builtin profiles from SAMPLE_PROFILES exist and have all default fields."""
         default_map = {
             p["name"]: p
             for p in SAMPLE_PROFILES
             if p.get("builtin")
         }
+        existing_names = {p.get("name") for p in self._profiles_data}
+        # Add any new builtin profiles that don't exist yet
+        for name, defaults in default_map.items():
+            if name not in existing_names:
+                self._profiles_data.append(dict(defaults))
+        # Fill missing fields on existing builtin profiles
         for profile in self._profiles_data:
             if profile.get("builtin") and profile["name"] in default_map:
                 defaults = default_map[profile["name"]]
@@ -278,8 +285,15 @@ class LLM_API_Translator(BaseTranslator):
         return float(self._active_profile.get("top_p", 1.0))
 
     @property
-    def max_tokens(self) -> int:
-        return int(self._active_profile.get("max_tokens", 4096))
+    def max_tokens(self) -> Optional[int]:
+        val = self._active_profile.get("max_tokens", "")
+        if not val:
+            return None
+        try:
+            v = int(val)
+            return v if v > 0 else None
+        except (ValueError, TypeError):
+            return None
 
     @property
     def max_rpm(self) -> int:
@@ -530,8 +544,9 @@ class LLM_API_Translator(BaseTranslator):
             "messages": messages,
             "temperature": self.temperature,
             "top_p": self.top_p,
-            "max_tokens": self.max_tokens,
         }
+        if self.max_tokens is not None:
+            api_args["max_tokens"] = self.max_tokens
         rf = profile.get("response_format", "")
         if rf == "json_schema":
             api_args["response_format"] = {
@@ -777,10 +792,7 @@ class ProfileManagerDialog(QDialog):
             p["top_p"] = float(self.topp_edit.text() or "1.0")
         except ValueError:
             p["top_p"] = 1.0
-        try:
-            p["max_tokens"] = int(self.maxtok_edit.text() or "4096")
-        except ValueError:
-            p["max_tokens"] = 4096
+        p["max_tokens"] = self.maxtok_edit.text().strip()
         for key in ["frequency_penalty", "presence_penalty"]:
             edit = self.fp_edit if key == "frequency_penalty" else self.pp_edit
             val = edit.text().strip()
@@ -847,7 +859,7 @@ class ProfileManagerDialog(QDialog):
         self.topp_edit = QLineEdit()
         self.topp_edit.setPlaceholderText("1.0")
         self.maxtok_edit = QLineEdit()
-        self.maxtok_edit.setPlaceholderText("4096")
+        self.maxtok_edit.setPlaceholderText(self.tr("Unlimited (leave empty)"))
         form.addRow(self.tr("Name:"), self.name_edit)
         form.addRow(self.tr("Host:"), self.host_edit)
         form.addRow(self.tr("API Key:"), self.key_edit)
@@ -945,7 +957,7 @@ class ProfileManagerDialog(QDialog):
         self.model_edit.setText(p.get("model", ""))
         self.temp_edit.setText(str(p.get("temperature", "0.1")))
         self.topp_edit.setText(str(p.get("top_p", "1.0")))
-        self.maxtok_edit.setText(str(p.get("max_tokens", "4096")))
+        self.maxtok_edit.setText(str(p.get("max_tokens", "")))
         self.rf_combo.setCurrentText(p.get("response_format", "json_object"))
         self.prompt_template_edit.setPlainText(p.get("prompt_template", ""))
         self.chat_samples_edit.setPlainText(p.get("chat_samples", ""))

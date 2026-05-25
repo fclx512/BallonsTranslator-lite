@@ -1233,6 +1233,31 @@ Failed: {f}/{t}</source>
         <source>Run will clear previous results. Continue?</source>
         <translation>运行将清除之前的结果，是否继续？</translation>
     </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line=""/>
+        <source>AI Chat Settings</source>
+        <translation>AI Chat 设置</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line=""/>
+        <source>Context Strategy:</source>
+        <translation>上下文策略：</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line=""/>
+        <source>Batch Size:</source>
+        <translation>批次大小：</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line=""/>
+        <source>Context Pages:</source>
+        <translation>上下文页数：</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line=""/>
+        <source>Enforce Term Consistency (Glossary)</source>
+        <translation>启用术语一致性（词汇表）</translation>
+    </message>
 </context>
 <context>
     <name>ModuleManager</name>
@@ -2267,6 +2292,10 @@ Failed: {f}/{t}</source>
         <translation>最大 Token 数：</translation>
     </message>
     <message>
+        <source>Unlimited (leave empty)</source>
+        <translation>无限制（留空）</translation>
+    </message>
+    <message>
         <source>Advanced (optional):</source>
         <translation>高级设置（可选）：</translation>
     </message>
@@ -2957,6 +2986,11 @@ qipao,qipao2</translation>
         <location filename="../ui/mainwindow.py" line="1477"/>
         <source>Cancel</source>
         <translation>取消</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line=""/>
+        <source>Context Translation (beta)</source>
+        <translation>上下文翻译 (beta)</translation>
     </message>
 </context>
 <context>

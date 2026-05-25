@@ -791,7 +791,7 @@ class AiChatPanel(QWidget):
                     "api_key": p.get("api_key", ""),
                     "model": p.get("model", ""),
                     "temperature": p.get("temperature", 0.7),
-                    "max_tokens": p.get("max_tokens", 4096),
+                    "max_tokens": p.get("max_tokens", ""),
                 }
                 self._controller.save_ai_settings()
                 return

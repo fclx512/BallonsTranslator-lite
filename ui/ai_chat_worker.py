@@ -51,7 +51,7 @@ class AiChatWorker(QThread):
         api_key = self._api_config.get('api_key', '')
         model = self._api_config.get('model', 'gpt-4o')
         temperature = self._api_config.get('temperature', 0.1)
-        max_tokens = self._api_config.get('max_tokens', 4096)
+        max_tokens = self._api_config.get('max_tokens') or None
         proxy = self._api_config.get('proxy', '')
 
         http_client = None
@@ -76,11 +76,11 @@ class AiChatWorker(QThread):
         msg_count = len(self._messages)
         logger.info("Worker start: model=%s messages=%d max_tokens=%d", model, msg_count, max_tokens)
         try:
+            api_args = dict(model=model, messages=self._messages, temperature=temperature)
+            if max_tokens is not None:
+                api_args["max_tokens"] = max_tokens
             stream = client.chat.completions.create(
-                model=model,
-                messages=self._messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
+                **api_args,
                 stream=True,
                 stream_options={'include_usage': True},
             )

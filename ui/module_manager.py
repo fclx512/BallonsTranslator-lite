@@ -231,6 +231,8 @@ class TranslateThread(ModuleThread):
 
     def runTranslatePipeline(self, imgtrans_proj: ProjImgTrans):
         self.initImgtransPipeline(imgtrans_proj)
+        if hasattr(self.translator, 'set_project'):
+            self.translator.set_project(imgtrans_proj)
         self.job = self._run_translate_pipeline
         self.start()
 
@@ -428,6 +430,9 @@ class ImgtransThread(QThread):
         if self.parallel_trans and cfg_module.enable_translate:
             self.translate_thread.runTranslatePipeline(self.imgtrans_proj)
 
+        if cfg_module.enable_translate and hasattr(self.translator, 'set_project'):
+            self.translator.set_project(self.imgtrans_proj)
+
         for imgname in pages_to_iterate:
             
             # 检查是否请求停止
@@ -513,6 +518,9 @@ class ImgtransThread(QThread):
                 self.translate_counter += 1
                 self.imgtrans_proj.update_page_progress(imgname, RunStatus.FIN_TRANSLATE)
                 self.update_translate_progress.emit(self.translate_counter)
+
+        if cfg_module.enable_translate and hasattr(self.translator, 'finalize'):
+            self.translator.finalize()
 
         if self.stop_requested and (not cfg_module.enable_translate or not self.parallel_trans):
             self.pipeline_stopped.emit()
