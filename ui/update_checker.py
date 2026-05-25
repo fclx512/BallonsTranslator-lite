@@ -46,12 +46,17 @@ class UpdateThread(QThread):
                 [self._git] + args,
                 capture_output=True, text=True, timeout=timeout,
                 cwd=self._repo,
+                encoding='utf-8', errors='replace',
             )
-            return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
+            out = proc.stdout or ''
+            err = proc.stderr or ''
+            return proc.returncode, out.strip(), err.strip()
         except FileNotFoundError:
             return -1, '', ''
         except subprocess.TimeoutExpired:
             return -1, '', self.tr('Command timed out')
+        except (UnicodeDecodeError, ValueError):
+            return -1, '', self.tr('Encoding error')
 
     # ── run dispatch ──────────────────────────────────────────
 
