@@ -58,6 +58,18 @@ class _ChatInputEdit(QPlainTextEdit):
         super().keyPressEvent(event)
 
 
+# ── Chat bubble browser (suppresses internal scrolling) ──────────────────
+
+class _ChatBubbleBrowser(QTextBrowser):
+    """QTextBrowser that suppresses internal scrolling so the parent QScrollArea handles all scroll interaction."""
+
+    def wheelEvent(self, event):
+        event.ignore()
+
+    def scrollContentsBy(self, dx: int, dy: int):
+        pass  # no-op: prevent selection-drag and other internal scrolling
+
+
 # ── AiChatPanel ──────────────────────────────────────────────────────────
 
 class AiChatPanel(QWidget):
@@ -325,7 +337,7 @@ class AiChatPanel(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
-        max_w = min(460, max(200, self.width() - 16))
+        max_w = self._bubble_max_width()
         inner = QLabel()
         inner.setObjectName("AIUserInner")
         inner.setText(text)
@@ -360,8 +372,9 @@ class AiChatPanel(QWidget):
         oul.setSpacing(0)
 
         # Inner visible container: rounded corners, dark background
-        self._streaming_browser = QTextBrowser()
+        self._streaming_browser = _ChatBubbleBrowser()
         self._streaming_browser.setObjectName("AIAssistantInner")
+        self._streaming_browser.setReadOnly(True)
         self._streaming_browser.setFrameShape(QFrame.NoFrame)
         self._streaming_browser.document().setDocumentMargin(0)
         self._streaming_browser.setViewportMargins(0, 0, 0, 0)
@@ -376,7 +389,7 @@ class AiChatPanel(QWidget):
         self._streaming_browser.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        max_w = min(460, max(200, self.width() - 16))
+        max_w = self._bubble_max_width()
         self._streaming_browser.setMaximumWidth(max_w)
         self._streaming_browser.setSizePolicy(
             QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Minimum
@@ -393,10 +406,12 @@ class AiChatPanel(QWidget):
         sb = self._streaming_browser
         sb.setMarkdown(self._streaming_text)
         # Adjust height as content grows
-        expected_w = min(460, max(200, self.width() - 16))
-        vp_w = sb.viewport().width()
-        sb.document().setTextWidth(vp_w if vp_w > 0 else expected_w - 20)
-        sb.setFixedHeight(int(sb.document().size().height()) + 20)
+        expected_w = self._bubble_max_width()
+        css_pad = 10
+        sb.document().setTextWidth(expected_w - 2 * css_pad)
+        sb.setFixedHeight(int(sb.document().size().height()) + 2 * css_pad)
+        # setFixedHeight triggers a WidgetWidth resize that overrides textWidth; restore it
+        sb.document().setTextWidth(expected_w - 2 * css_pad)
         self._scroll_to_bottom()
 
     def finish_streaming(self, full_text: str = ""):
@@ -700,8 +715,9 @@ class AiChatPanel(QWidget):
         oul.setContentsMargins(0, 0, 0, 0)
         oul.setSpacing(0)
 
-        inner = QTextBrowser()
+        inner = _ChatBubbleBrowser()
         inner.setObjectName("AIAssistantInner")
+        inner.setReadOnly(True)
         inner.setFrameShape(QFrame.NoFrame)
         inner.document().setDocumentMargin(0)
         inner.setViewportMargins(0, 0, 0, 0)
@@ -711,8 +727,9 @@ class AiChatPanel(QWidget):
         # Strip [tool]...[/tool] blocks that embed tool-call context for the LLM
         clean = re.sub(r'\[tool\].*?\[/tool\]\s*\n?', '', text, flags=re.DOTALL)
         inner.setMarkdown(clean)
-        max_w = min(460, max(200, self.width() - 16))
+        max_w = self._bubble_max_width()
         inner.setMaximumWidth(max_w)
+        inner.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Minimum)
         css_pad = 10
         # WidgetWidth enables wrapping; set textWidth explicitly so the
         # height is computed from the capped width (not an unbounded one).
@@ -723,8 +740,7 @@ class AiChatPanel(QWidget):
         # textWidth with the (possibly stale) viewport width. Restore it.
         inner.document().setTextWidth(max_w - 2 * css_pad)
 
-        oul.addWidget(inner)
-        oul.addStretch(1)
+        oul.addWidget(inner, 1)
         self._insert_bubble(outer)
 
     def on_error(self, msg: str):
@@ -1237,6 +1253,14 @@ class AiChatPanel(QWidget):
         if sb:
             sb.setValue(sb.maximum())
 
+    def _bubble_max_width(self) -> int:
+        """Max width for bubble inner widgets, from panel's fixed width.
+
+        Uses maximumWidth() (reliably 480 from setFixedWidth) instead of
+        width() which may be unreliable when the panel is hidden.
+        """
+        return min(460, max(200, self.maximumWidth() - 16))
+
     # ── Configuration access (used by AiController) ──────────────
 
     @property
@@ -1248,13 +1272,14 @@ class AiChatPanel(QWidget):
         super().resizeEvent(event)
         # Streaming assistant bubble: update width cap and recalculate height
         if self._streaming_browser:
-            expected_w = min(460, max(200, self.width() - 16))
+            expected_w = self._bubble_max_width()
+            css_pad = 10
             self._streaming_browser.setMaximumWidth(expected_w)
-            vp_w = self._streaming_browser.viewport().width()
-            self._streaming_browser.document().setTextWidth(vp_w if vp_w > 0 else expected_w - 20)
+            self._streaming_browser.document().setTextWidth(expected_w - 2 * css_pad)
             self._streaming_browser.setFixedHeight(
-                int(self._streaming_browser.document().size().height()) + 20
+                int(self._streaming_browser.document().size().height()) + 2 * css_pad
             )
+            self._streaming_browser.document().setTextWidth(expected_w - 2 * css_pad)
         # Reposition settings overlay if visible
         if self._settingsSlide is not None:
             self._settingsSlide.resize()
