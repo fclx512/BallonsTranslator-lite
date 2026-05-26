@@ -1170,11 +1170,10 @@ DeleteStyleButton::hover {
 #AIUserInner {
     font-size: 13px;
     color: @qwidgetForegroundColor;
-    background-color: @widgetBackgroundColor;
-    border: 1px solid @borderColor;
-    border-right: 3px solid @accentPrimary;
-    border-radius: 12px 6px 6px 12px;
-    padding: 10px 14px;
+    background-color: @accentPrimary20;
+    border: none;
+    border-radius: 12px;
+    padding: 10px;
 }
 
 #AIAssistantBubble {
@@ -1185,11 +1184,11 @@ DeleteStyleButton::hover {
 
 #AIAssistantInner {
     font-size: 13px;
-    background-color: @widgetBackgroundColor;
-    border: 1px solid @borderColor;
-    border-left: 3px solid @accentTranslate;
-    border-radius: 6px 12px 12px 6px;
-    padding: 10px 14px;
+    color: @qwidgetForegroundColor;
+    background-color: @bubbleAIBackground;
+    border: none;
+    border-radius: 12px;
+    padding: 10px;
 }
 
 

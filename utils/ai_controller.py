@@ -25,11 +25,11 @@ logger = logging.getLogger('ai_chat')
 import utils.ai_logger  # noqa: F401 — triggers get_ai_logger() on import
 
 from .ai_tools import (
-    TOOL_DEFINITIONS,
     build_agent_system_prompt,
     build_chat_system_prompt,
     detect_mode,
     execute_tool,
+    get_active_tools,
     parse_changes,
     parse_tool_calls,
 )
@@ -194,6 +194,8 @@ class AiController(QObject):
         self._worker: Optional['AiChatWorker'] = None
         self._turn_messages: List[Dict[str, str]] = []
         self._accumulated_text = ''
+        self._intermediate_texts: List[str] = []
+        self._display_steps: List[Dict] = []
         self._last_user_text = ''
         self._current_mode: str = 'chat'
         self._is_running = False
@@ -204,6 +206,7 @@ class AiController(QObject):
         self._prompt_tokens = 0
         self._completion_tokens = 0
         self._pending_prompt_estimate = 0
+        self._pending_tool_traces: List[str] = []
 
         # ─── History persistence ─────────────────────────────────
         self._history_path: str = ''
@@ -236,6 +239,8 @@ class AiController(QObject):
 
         self._last_user_text = user_text
         self._accumulated_text = ''
+        self._intermediate_texts = []
+        self._display_steps = []
         self._is_running = True
         self.status_changed.emit('处理中...', True)
 
@@ -275,6 +280,8 @@ class AiController(QObject):
         self._completion_tokens = 0
         self._pending_prompt_estimate = 0
         self._last_user_text = ''
+        self._pending_tool_traces.clear()
+        self._display_steps.clear()
         self.conversation_cleared.emit()
         self._save_history()
 
@@ -401,6 +408,7 @@ class AiController(QObject):
                     role=m.get('role', ''),
                     content=m.get('content', ''),
                     changes=changes,
+                    segments=m.get('segments', []),
                 ))
             self._token_count = data.get('token_count', 0)
             self._prompt_tokens = data.get('prompt_tokens', 0)
@@ -454,6 +462,7 @@ class AiController(QObject):
                             }
                             for c in (m.changes or [])
                         ],
+                        'segments': m.segments,
                     }
                     for m in self.messages
                 ],
@@ -540,19 +549,23 @@ class AiController(QObject):
             from_lang = getattr(pcfg.module, 'lang_source', '') if hasattr(pcfg, 'module') else ''
             to_lang = getattr(pcfg.module, 'lang_target', '') if hasattr(pcfg, 'module') else ''
             sys_prompt = custom_prompt.replace('{from_lang}', from_lang or 'auto').replace('{to_lang}', to_lang or 'auto')
-            sys_prompt += '\n\n你仍然可以使用工具来读取和修改项目数据。'
         elif mode == 'agent':
+            active_tools = get_active_tools(
+                fields_whitelist=whitelist,
+                translation_mode=is_trans,
+            )
             sys_prompt = build_agent_system_prompt(
                 fields_whitelist=whitelist,
                 translation_mode=is_trans,
+                active_tools=active_tools,
             )
         else:
             sys_prompt = build_chat_system_prompt()
         messages.append({'role': 'system', 'content': sys_prompt})
 
-        # Project data injection (agent mode only)
+        # Project data injection
+        proj = self._proj_getter()
         if mode == 'agent':
-            proj = self._proj_getter()
             scope = self._context_scope
             if scope == 'auto':
                 index = execute_tool(proj, 'list_pages', {})
@@ -591,6 +604,30 @@ class AiController(QObject):
                     'role': 'system',
                     'content': f'[当前页数据]\n{json.dumps(detail, ensure_ascii=False, indent=2)}',
                 })
+        elif mode == 'chat' and proj is not None:
+            # Lightweight context for targeted advice
+            from_lang = getattr(pcfg.module, 'lang_source', '') if hasattr(pcfg, 'module') else ''
+            to_lang = getattr(pcfg.module, 'lang_target', '') if hasattr(pcfg, 'module') else ''
+            try:
+                index = execute_tool(proj, 'list_pages', {})
+                total = index.get('total_pages', 0)
+                name = index.get('project', '')
+            except Exception:
+                total, name = 0, ''
+            lines = ['[项目上下文]']
+            if name:
+                lines.append(f'项目: {name}')
+            if total:
+                lines.append(f'页数: {total}')
+            if from_lang:
+                lines.append(f'源语言: {from_lang}')
+            if to_lang:
+                lines.append(f'目标语言: {to_lang}')
+            if len(lines) > 1:
+                messages.append({
+                    'role': 'system',
+                    'content': '\n'.join(lines),
+                })
 
         # Attachments — inject as system context before history
         for att in self._attachments:
@@ -624,7 +661,7 @@ class AiController(QObject):
         tool_turns_left: int,
     ):
         from ui.ai_chat_worker import AiChatWorker
-        from .ai_tools import TOOL_DEFINITIONS, to_openai_tools
+        from .ai_tools import to_openai_tools
         prompt_tokens = estimate_tokens(json.dumps(messages, ensure_ascii=False))
         logger.info(
             "_start_worker: estimate=%d, turns_left=%d, "
@@ -640,7 +677,11 @@ class AiController(QObject):
 
         tools = None
         if self._current_mode == 'agent':
-            tools = to_openai_tools(TOOL_DEFINITIONS)
+            active = get_active_tools(
+                fields_whitelist=self._fields_whitelist,
+                translation_mode=self._translation_mode,
+            )
+            tools = to_openai_tools(active)
 
         self._worker = AiChatWorker(api_config, messages, tools)
         self._worker.chunk_ready.connect(self._on_chunk)
@@ -689,6 +730,13 @@ class AiController(QObject):
                      len(full_text), tool_turns_left)
         tool_calls = parse_tool_calls(full_text)
         if tool_calls and tool_turns_left > 0:
+            # Save intermediate text BEFORE executing tools so display_steps
+            # preserves the correct visual order: text → tool_trace.
+            turn_text = self._accumulated_text.strip()
+            if turn_text:
+                self._intermediate_texts.append(turn_text)
+                self._display_steps.append({"type": "text", "content": turn_text})
+
             logger.info("_on_stream_finished: %d tool calls found, executing",
                          len(tool_calls))
             tool_results = self._execute_tool_calls_with_results(tool_calls, messages)
@@ -709,12 +757,8 @@ class AiController(QObject):
             if tool_turns_left - 1 > 0:
                 self.system_message.emit(
                     f'── AI 调用了 {len(tool_calls)} 个工具，继续处理... ──')
-                # Flush this turn's visible text as a separate bubble
-                # (if any), then start a fresh bubble for the next turn.
-                turn_text = self._accumulated_text.strip()
-                if turn_text:
-                    self.stream_finished.emit(turn_text)
-                    self.streaming_started.emit()
+                self.stream_finished.emit(turn_text)
+                self.streaming_started.emit()
                 self._accumulated_text = ''
                 self._start_worker(
                     self._api_config, messages,
@@ -779,6 +823,16 @@ class AiController(QObject):
                 }, ensure_ascii=False, indent=2),
             })
         self.tool_trace_ready.emit(trace)
+        # Accumulate traces for persistence in conversation history
+        trace_lines = []
+        for t in trace[-3:]:
+            name = t.get("name", "?")
+            summary = t.get("args_summary", "")
+            line = f"🔧 {name}({summary})"
+            self._pending_tool_traces.append(line)
+            trace_lines.append(line)
+        if trace_lines:
+            self._display_steps.append({"type": "tool_trace", "content": "\n".join(trace_lines)})
         return results
 
     def _finalize_with_changes(self, raw_changes: List[Dict[str, Any]]):
@@ -814,7 +868,14 @@ class AiController(QObject):
                      len(changes_raw) if changes_raw else 0, len(full_text))
         # Prefer accumulated text spanning all tool turns;
         # fall back to stripping tool-call JSON from the last worker output.
-        display_text = self._accumulated_text.strip() or _strip_json_blocks(full_text)
+        if self._intermediate_texts:
+            all_parts = list(self._intermediate_texts)
+            final = self._accumulated_text.strip()
+            if final:
+                all_parts.append(final)
+            display_text = '\n\n'.join(all_parts)
+        else:
+            display_text = self._accumulated_text.strip() or _strip_json_blocks(full_text)
 
         changes: List[ChangeItem] = []
         if changes_raw:
@@ -848,8 +909,23 @@ class AiController(QObject):
             len(self.messages) + 2,
         )
         self.messages.append(ChatMessage(role='user', content=self._last_user_text))
-        self.messages.append(ChatMessage(role='assistant', content=display_text,
-                                          changes=list(changes)))
+        # Build display segments for history reconstruction
+        final_step = self._accumulated_text.strip()
+        if final_step:
+            self._display_steps.append({"type": "text", "content": final_step})
+        segments = list(self._display_steps)
+        self._display_steps.clear()
+        # Embed tool call traces in the assistant message content so the model
+        # sees its own tool usage on subsequent turns. The [tool] block is
+        # stripped when displaying in the UI.
+        tool_traces = '\n'.join(self._pending_tool_traces)
+        self._pending_tool_traces.clear()
+        if tool_traces:
+            stored_content = f"[tool]\n{tool_traces}\n[/tool]\n\n{display_text}"
+        else:
+            stored_content = display_text
+        self.messages.append(ChatMessage(role='assistant', content=stored_content,
+                                          changes=list(changes), segments=segments))
         self._save_history()
 
     @staticmethod

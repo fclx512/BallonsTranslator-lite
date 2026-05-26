@@ -115,10 +115,6 @@ class LLM_API_Translator(BaseTranslator):
             "value": "",
             "description": "Proxy address (e.g. http(s)://user:password@host:port)",
         },
-        "description": (
-            "Generic OpenAI-compatible API connector. Create profiles to "
-            "save API settings and switch between configurations."
-        ),
     }
 
     def _setup_translator(self):

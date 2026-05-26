@@ -234,6 +234,57 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     },
 ]
 
+# ── Tool filtering ────────────────────────────────────────────────────
+
+# Fields each setter tool depends on
+_SETTER_FIELDS: Dict[str, Set[str]] = {
+    "set_font":   {"ff", "fs", "fw", "b", "i"},
+    "set_color":  {"fg", "bg", "sw"},
+    "set_layout": {"a", "ls", "lsp", "v", "lb"},
+}
+
+# Tools hidden in translation mode (style-only operations)
+_TRANSLATION_HIDDEN_TOOLS = {"set_color", "set_layout"}
+
+# Tools always included regardless of mode/whitelist
+_ALWAYS_INCLUDE_TOOLS = {
+    "describe_tool", "list_pages", "read_pages", "search_blocks",
+    "get_config", "get_page_info", "search_replace", "translate_text",
+}
+
+
+def get_active_tools(
+    fields_whitelist: Optional[Set[str]] = None,
+    translation_mode: bool = False,
+) -> List[Dict[str, Any]]:
+    """Return the subset of TOOL_DEFINITIONS relevant to the current mode.
+
+    Filters out:
+    - Tools whose target fields are entirely absent from *fields_whitelist*
+    - Style-only tools (set_color, set_layout) when *translation_mode* is True
+    """
+    if fields_whitelist is None:
+        # All fields enabled — only apply translation mode filter
+        if translation_mode:
+            return [t for t in TOOL_DEFINITIONS
+                    if t["name"] not in _TRANSLATION_HIDDEN_TOOLS]
+        return list(TOOL_DEFINITIONS)
+
+    result = []
+    for t in TOOL_DEFINITIONS:
+        name = t["name"]
+        if name in _ALWAYS_INCLUDE_TOOLS:
+            result.append(t)
+            continue
+        if translation_mode and name in _TRANSLATION_HIDDEN_TOOLS:
+            continue
+        required = _SETTER_FIELDS.get(name)
+        if required and required.isdisjoint(fields_whitelist):
+            continue
+        result.append(t)
+    return result
+
+
 # ── Tool execution ────────────────────────────────────────────────────
 
 class ToolError(Exception):
@@ -635,11 +686,37 @@ def parse_tool_calls(text: str) -> Optional[List[Dict[str, Any]]]:
 
 # ── System prompt ─────────────────────────────────────────────────────
 
+# ── Tool categories for prompt grouping ─────────────────────────────
+
+_TOOL_CATEGORIES = {
+    "信息获取": ("list_pages", "read_pages", "search_blocks", "get_config", "get_page_info"),
+    "批量修改": ("set_font", "set_color", "set_layout", "search_replace"),
+    "辅助":     ("describe_tool", "translate_text"),
+}
+
+
+def _build_tool_index(active_tools: Optional[List[Dict[str, Any]]] = None) -> str:
+    """Build a grouped tool index string from TOOL_DEFINITIONS or a subset."""
+    tools = active_tools if active_tools is not None else TOOL_DEFINITIONS
+    name_to_desc = {t["name"]: t["description"] for t in tools}
+
+    lines = []
+    for cat_name, cat_tools in _TOOL_CATEGORIES.items():
+        entries = [f"  - {n}: {name_to_desc[n]}" for n in cat_tools if n in name_to_desc]
+        if entries:
+            lines.append(f"### {cat_name}")
+            lines.extend(entries)
+    return "\n".join(lines)
+
+
 def build_agent_system_prompt(
     fields_whitelist: Optional[Set[str]] = None,
     translation_mode: bool = False,
+    active_tools: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
-    """Build the system prompt with compact tool index."""
+    """Build the agent system prompt from external template + built-in fallback."""
+
+    from .ai_prompts import get_prompt, get_version
 
     # Field descriptions
     if fields_whitelist is None:
@@ -651,55 +728,17 @@ def build_agent_system_prompt(
         ]
     field_desc = "\n".join(snippets) if snippets else "（仅可读取原文和译文）"
 
-    # Compact tool index (one line per tool)
-    tool_index_lines = []
-    for t in TOOL_DEFINITIONS:
-        name = t["name"]
-        desc = t["description"]
-        tool_index_lines.append(f"- {name}: {desc}")
-    tool_index = "\n".join(tool_index_lines)
+    tool_index = _build_tool_index(active_tools)
+    translation_rules = get_prompt('translation_rules') if translation_mode else ''
+    few_shot = get_prompt('few_shot_examples')
 
-    prompt = f"""你是一个漫画翻译编辑助手，通过工具读取和修改项目文本块。
-
-## 核心原则
-- 直接调用工具获取数据，不要说"无法访问"等否定表述，不要猜测页面内容
-- 页码从 0 开始：第1页=start=0，前N页=end=N-1，X到Y页=start=X-1,end=Y-1
-- 页面索引已在上下文注入，无需调用 list_pages；用 read_pages 读取用户指定的页面
-
-## 数据架构
-项目页面索引见下条系统消息。读取文本 → `read_pages`。
-
-## 可用工具
-
-{tool_index}
-
-调用 `describe_tool` 查看参数详情。
-
-## 工具调用格式
-输出严格 JSON（不要附带其他文字）：
-{{"tool_calls": [{{"name": "工具名", "arguments": {{...}}}}]}}
-可一次调用多个工具，系统执行后返回结果。
-
-## 输出格式
-直接给出回答文本（支持 Markdown）。准备修改时输出 JSON changes：
-{{"changes": [{{"id": "0:0", "trans": "译文"}}, {{"id": "0:3", "fs": 28}}]}}
-只输出需修改的字段；`trans` 必须填译文，严禁填原文。
-批量修改使用 set_font、set_color、set_layout、search_replace。
-
-## 可修改字段
-
-{field_desc}
-
-## 翻译规则
-- 译文填入 `trans`，保留角色语气情感，术语全篇统一
-- 拟声词效果音本地化"""
-    if translation_mode:
-        prompt += """
-
-## 翻译质量标准
-- 目标语言自然流畅，拟声词本地化（ドキドキ→怦怦），术语统一
-- trans 必须填译文，严禁输出原文"""
-
+    template = get_prompt('agent_system')
+    prompt = (template
+              .replace('__TOOL_INDEX__', tool_index)
+              .replace('__FIELD_DESC__', field_desc)
+              .replace('__TRANSLATION_RULES__', translation_rules)
+              .replace('__FEW_SHOT_EXAMPLES__', few_shot))
+    prompt += f'\n[prompt:v{get_version()}]'
     return prompt
 
 
@@ -711,23 +750,8 @@ build_tool_system_prompt = build_agent_system_prompt
 
 def build_chat_system_prompt() -> str:
     """System prompt for general Q&A chat mode (no tools)."""
-    return """你是一个专业的漫画/图片翻译顾问。你可以帮助用户解决以下问题：
-
-- 漫画翻译策略和最佳实践
-- 文化本地化建议（日↔中、日↔英等）
-- 特定语言和术语问题
-- 漫画排版和字体选择建议
-- 漫画翻译工作流程指导
-- 回答关于 BallonsTranslator 应用的一般问题
-
-## 回答准则
-- 简洁但全面
-- 在有用时使用示例
-- 可使用 Markdown 格式（粗体、斜体、列表、代码）
-- 如果不确定，诚实表示
-- 如果用户询问项目数据操作，建议切换到 Agent 模式
-
-当前模式下你没有项目工具访问权限。你只能提供建议和知识性回答。"""
+    from .ai_prompts import get_prompt, get_version
+    return get_prompt('chat_system') + f'\n[prompt:v{get_version()}]'
 
 
 # ── Mode detection ───────────────────────────────────────────────────────

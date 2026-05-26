@@ -30,6 +30,13 @@ class ChatMessage:
     role: str
     content: str
     changes: List[ChangeItem] = field(default_factory=list)
+    segments: List[Dict] = field(default_factory=list)
+    """Display segments for history reconstruction.
+
+    Each element is ``{"type": "text"|"tool_trace", "content": str}``.
+    ``text`` → ``_add_assistant_bubble``, ``tool_trace`` → ``add_system_message``.
+    Empty list = legacy message: strip ``[tool]`` markers and show as one bubble.
+    """
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────

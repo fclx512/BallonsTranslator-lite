@@ -202,37 +202,6 @@ def test_build_detail_empty_page_omitted():
     assert pg["blocks"] == []
 
 
-def test_build_system_prompt_only_trans():
-    """When only 'trans' is enabled, field descriptions only mention 'trans'."""
-    from utils.proj_compact import build_system_prompt
-
-    prompt = build_system_prompt(fields_whitelist={"trans"})
-    assert "trans:" in prompt
-    assert "ff:" not in prompt
-    assert "fs:" not in prompt
-    assert "fw:" not in prompt
-    assert "fg:" not in prompt
-    assert '"changes"' in prompt
-
-
-def test_build_system_prompt_translation_mode():
-    """Translation mode uses the translation template."""
-    from utils.proj_compact import build_system_prompt
-
-    prompt = build_system_prompt(fields_whitelist={"trans"}, translation_mode=True)
-    assert "专业的漫画翻译" in prompt
-    assert "术语在同一项目中保持统一" in prompt
-    assert "trans:" in prompt
-
-
-def test_build_system_prompt_no_fields():
-    """When no modifiable fields are enabled, show a notice."""
-    from utils.proj_compact import build_system_prompt
-
-    prompt = build_system_prompt(fields_whitelist=set())
-    assert "无可用修改字段" in prompt
-
-
 def test_parse_block_id():
     """parse_block_id correctly splits and parses IDs."""
     from utils.proj_compact import parse_block_id

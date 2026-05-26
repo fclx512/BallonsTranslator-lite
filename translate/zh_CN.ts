@@ -2635,11 +2635,6 @@ qipao,qipao2</translation>
         <translation>代理地址（例如 http(s)://user:password@host:port）</translation>
     </message>
     <message>
-        <location filename="../ui/module_parse_widgets.py" line="117"/>
-        <source>Generic OpenAI-compatible API connector. Create profiles to save API settings and switch between configurations.</source>
-        <translation>通用 OpenAI 兼容 API 连接器。创建配置文件保存 API 设置，并在不同配置间自由切换。</translation>
-    </message>
-    <message>
         <location filename="../modules/base.py" line="352"/>
         <source>Hardware device for inference (GPU recommended)</source>
         <translation>推理硬件设备（推荐使用 GPU）</translation>

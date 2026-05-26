@@ -88,31 +88,6 @@ FIELD_PROMPT_SNIPPETS: Dict[str, str] = {
     "lang":  "- lang: 源语言 (ja/eng/unknown)",
 }
 
-SYSTEM_PROMPT_EDIT = (
-    "你是一个漫画翻译编辑助手。你可以读取项目中文本块的原文和译文"
-    "以及字体样式信息。\n"
-    "根据用户的指令，修改译文文本和/或字体样式。\n\n"
-    "输出格式：严格的 JSON。\n"
-    '{{"changes": [{{"id": "页:块", ...}}]}}\n'
-    "只输出需要修改的字段，不要输出未修改的内容。\n\n"
-    "可修改的字段：\n"
-    "{field_descriptions}"
-)
-
-SYSTEM_PROMPT_TRANSLATION = (
-    "你是一个专业的漫画翻译。\n"
-    "你的翻译应当：\n"
-    "- 准确传达原文语义，保留角色语气和情感\n"
-    "- 符合目标语言的自然表达习惯\n"
-    "- 术语在同一项目中保持统一\n"
-    "- 拟声词/效果音做本地化处理\n\n"
-    "输出格式：严格的 JSON。\n"
-    '{{"changes": [{{"id": "页:块", ...}}]}}\n'
-    "只输出需要修改的字段，不要输出未修改的内容。\n\n"
-    "可修改的字段：\n"
-    "{field_descriptions}"
-)
-
 # ── exceptions ───────────────────────────────────────────────────────
 
 class StaleProjectError(Exception):
@@ -279,30 +254,6 @@ def build_paginated_detail(
         chunk_indices = page_indices[i : i + max_pages_per_chunk]
         chunks.append(build_detail(proj, chunk_indices, fields_whitelist=fields_whitelist))
     return chunks
-
-# ── prompt building ──────────────────────────────────────────────────
-
-def build_system_prompt(
-    fields_whitelist: Optional[Set[str]] = None,
-    translation_mode: bool = False,
-) -> str:
-    """Build system prompt dynamically based on enabled fields."""
-    if fields_whitelist is None:
-        # all modifiable fields
-        snippets = list(FIELD_PROMPT_SNIPPETS.values())
-    else:
-        snippets = [
-            v for k, v in FIELD_PROMPT_SNIPPETS.items()
-            if k in fields_whitelist
-        ]
-
-    if snippets:
-        field_descriptions = "\n".join(snippets)
-    else:
-        field_descriptions = "（仅可读取原文和译文，无可用修改字段）"
-
-    template = SYSTEM_PROMPT_TRANSLATION if translation_mode else SYSTEM_PROMPT_EDIT
-    return template.format(field_descriptions=field_descriptions)
 
 # ── ID parsing ───────────────────────────────────────────────────────
 

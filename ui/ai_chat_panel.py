@@ -8,6 +8,7 @@ signals for streaming conversation display.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Dict, List, Optional
 
 from qtpy.QtCore import (
@@ -76,6 +77,7 @@ class AiChatPanel(QWidget):
         self._streaming = False
         self._streaming_text = ""
         self._streaming_browser: Optional[QTextBrowser] = None
+        self._streaming_bubble_widget: Optional[QWidget] = None
         self._controller: Any = None
         self._settings_widget: Optional[QWidget] = None
         self._settingsSlide: Optional[OverlaySlider] = None
@@ -138,7 +140,8 @@ class AiChatPanel(QWidget):
         # Mode selector (Agent / Chat)
         self._title_mode = QComboBox()
         self._title_mode.setObjectName("AITitleMode")
-        self._title_mode.addItems([self.tr("Auto"), self.tr("Agent"), self.tr("Chat")])
+        # Keep these in English — mode names are universal UI terms
+        self._title_mode.addItems(["Auto", "Agent", "Chat"])
         self._title_mode.setFixedWidth(90)
         self._title_mode.currentIndexChanged.connect(self._on_title_mode_changed)
         tl.addWidget(self._title_mode)
@@ -290,6 +293,7 @@ class AiChatPanel(QWidget):
         self._hide_welcome_card()
         self._add_user_bubble(text)
         self._sync_settings_to_controller()
+        self._ensure_api_config_synced()
         self.send_message.emit(text)
 
     def _on_stop(self):
@@ -314,7 +318,7 @@ class AiChatPanel(QWidget):
     # ── Message display ─────────────────────────────────────────
 
     def _add_user_bubble(self, text: str):
-        """Right-aligned user bubble with accent border (no solid background)."""
+        """Right-aligned user bubble with accent-tinted background."""
         container = QWidget()
         container.setObjectName("AIUserBubble")
         lay = QHBoxLayout(container)
@@ -322,24 +326,12 @@ class AiChatPanel(QWidget):
         lay.setSpacing(0)
 
         max_w = min(460, max(200, self.width() - 16))
-        inner = QTextBrowser()
+        inner = QLabel()
         inner.setObjectName("AIUserInner")
-        inner.setPlainText(text)
-        inner.setLineWrapMode(
-            QTextBrowser.LineWrapMode.WidgetWidth if self._word_wrap
-            else QTextBrowser.LineWrapMode.NoWrap
-        )
-        inner.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
+        inner.setText(text)
+        inner.setWordWrap(True)
         inner.setMaximumWidth(max_w)
-        inner.setSizePolicy(
-            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Minimum
-        )
-        # Force document height to match content
-        inner.document().setTextWidth(max_w)
-        inner.document().adjustSize()
-        inner.setFixedHeight(int(inner.document().size().height()) + 24)
+        inner.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
 
         lay.addStretch()
         lay.addWidget(inner)
@@ -367,15 +359,21 @@ class AiChatPanel(QWidget):
         oul.setContentsMargins(0, 0, 0, 0)
         oul.setSpacing(0)
 
-        # Inner visible container: accent left border, rounded corners
+        # Inner visible container: rounded corners, dark background
         self._streaming_browser = QTextBrowser()
         self._streaming_browser.setObjectName("AIAssistantInner")
+        self._streaming_browser.setFrameShape(QFrame.NoFrame)
+        self._streaming_browser.document().setDocumentMargin(0)
+        self._streaming_browser.setViewportMargins(0, 0, 0, 0)
         self._streaming_browser.setOpenExternalLinks(True)
         self._streaming_browser.setLineWrapMode(
             QTextBrowser.LineWrapMode.WidgetWidth if self._word_wrap
             else QTextBrowser.LineWrapMode.NoWrap
         )
         self._streaming_browser.setVerticalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self._streaming_browser.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
         max_w = min(460, max(200, self.width() - 16))
@@ -385,6 +383,7 @@ class AiChatPanel(QWidget):
         )
 
         oul.addWidget(self._streaming_browser, 1)
+        self._streaming_bubble_widget = outer
         self._insert_bubble(outer)
 
     def append_stream_chunk(self, chunk: str):
@@ -394,16 +393,24 @@ class AiChatPanel(QWidget):
         sb = self._streaming_browser
         sb.setMarkdown(self._streaming_text)
         # Adjust height as content grows
-        sb.document().setTextWidth(sb.maximumWidth())
-        sb.setFixedHeight(max(int(sb.document().size().height()) + 16, 36))
+        expected_w = min(460, max(200, self.width() - 16))
+        vp_w = sb.viewport().width()
+        sb.document().setTextWidth(vp_w if vp_w > 0 else expected_w - 20)
+        sb.setFixedHeight(int(sb.document().size().height()) + 20)
         self._scroll_to_bottom()
 
     def finish_streaming(self, full_text: str = ""):
+        # Remove empty streaming bubble that never received content
+        if self._streaming_bubble_widget and not full_text and not self._streaming_text.strip():
+            self._msg_layout.removeWidget(self._streaming_bubble_widget)
+            self._streaming_bubble_widget.deleteLater()
+
         self._streaming = False
         self._stop_btn.setVisible(False)
         self._send_btn.setVisible(True)
         self._on_input_changed()
         self._streaming_browser = None
+        self._streaming_bubble_widget = None
 
     def set_changes(self, changes: List[ChangeItem]):
         """Build an inline change review card (#AIChangeCard) with accept/reject per item."""
@@ -647,6 +654,7 @@ class AiChatPanel(QWidget):
         self._streaming = False
         self._streaming_text = ""
         self._streaming_browser = None
+        self._streaming_bubble_widget = None
         self._clear_messages()
         self._show_welcome_card()
         self.update_status(self.tr("Ready"), False)
@@ -661,7 +669,16 @@ class AiChatPanel(QWidget):
             if m.role == "user":
                 self._add_user_bubble(m.content)
             elif m.role == "assistant":
-                self._add_assistant_bubble(m.content)
+                if m.segments:
+                    for seg in m.segments:
+                        if seg["type"] == "text":
+                            self._add_assistant_bubble(seg["content"])
+                        elif seg["type"] == "tool_trace":
+                            self.add_system_message(seg["content"])
+                else:
+                    # Legacy: no segments — strip [tool] markers and show as one bubble
+                    clean = re.sub(r'\[tool\].*?\[/tool\]\s*\n?', '', m.content, flags=re.DOTALL)
+                    self._add_assistant_bubble(clean)
             elif m.role == "system":
                 self.add_system_message(m.content)
         if self._msg_layout.count() <= 1:  # only the trailing stretch
@@ -669,7 +686,14 @@ class AiChatPanel(QWidget):
         self._scroll_to_bottom()
 
     def _add_assistant_bubble(self, text: str):
-        """Add a completed assistant bubble (static, not streaming)."""
+        """Add a completed assistant bubble (static, not streaming).
+
+        Uses WidgetWidth + explicit textWidth management. WidgetWidth enables
+        automatic text wrapping so long content fits the bubble. The textWidth
+        is set explicitly before computing height, then restored after
+        setFixedHeight (which triggers a WidgetWidth resizeEvent that may
+        otherwise override textWidth with a stale viewport width).
+        """
         outer = QWidget()
         outer.setObjectName("AIAssistantBubble")
         oul = QHBoxLayout(outer)
@@ -678,19 +702,29 @@ class AiChatPanel(QWidget):
 
         inner = QTextBrowser()
         inner.setObjectName("AIAssistantInner")
+        inner.setFrameShape(QFrame.NoFrame)
+        inner.document().setDocumentMargin(0)
+        inner.setViewportMargins(0, 0, 0, 0)
         inner.setOpenExternalLinks(True)
-        inner.setLineWrapMode(
-            QTextBrowser.LineWrapMode.WidgetWidth if self._word_wrap
-            else QTextBrowser.LineWrapMode.NoWrap
-        )
         inner.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        inner.setMarkdown(text)
+        inner.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Strip [tool]...[/tool] blocks that embed tool-call context for the LLM
+        clean = re.sub(r'\[tool\].*?\[/tool\]\s*\n?', '', text, flags=re.DOTALL)
+        inner.setMarkdown(clean)
         max_w = min(460, max(200, self.width() - 16))
         inner.setMaximumWidth(max_w)
-        inner.document().setTextWidth(max_w)
-        inner.setFixedHeight(max(int(inner.document().size().height()) + 16, 36))
+        css_pad = 10
+        # WidgetWidth enables wrapping; set textWidth explicitly so the
+        # height is computed from the capped width (not an unbounded one).
+        inner.setLineWrapMode(QTextBrowser.LineWrapMode.WidgetWidth)
+        inner.document().setTextWidth(max_w - 2 * css_pad)
+        inner.setFixedHeight(int(inner.document().size().height()) + 2 * css_pad)
+        # setFixedHeight triggers a WidgetWidth resizeEvent that overrides
+        # textWidth with the (possibly stale) viewport width. Restore it.
+        inner.document().setTextWidth(max_w - 2 * css_pad)
 
-        oul.addWidget(inner, 1)
+        oul.addWidget(inner)
+        oul.addStretch(1)
         self._insert_bubble(outer)
 
     def on_error(self, msg: str):
@@ -1122,6 +1156,31 @@ class AiChatPanel(QWidget):
 
         self._controller.save_ai_settings()
 
+    def _ensure_api_config_synced(self):
+        """Sync api_config from active translator profile if it's missing host/model.
+
+        This bridges a gap: when the user has a valid translator profile configured
+        but the controller's api_config was never populated (e.g. because the
+        auto-populate in set_controller ran before translator modules were ready),
+        we pull the config here right before sending the request.
+        """
+        if not self._controller:
+            return
+        cfg = self._controller.api_config
+        if cfg.get('api_host') and cfg.get('model'):
+            return  # already valid
+        # First try the profile currently selected in the settings widget
+        if hasattr(self, '_settings_profile') and self._settings_profile.count() > 0:
+            name = self._settings_profile.currentText()
+            if name:
+                self._sync_profile_to_controller(name)
+                if self._controller.api_config.get('api_host') and self._controller.api_config.get('model'):
+                    return
+        # Fall back to the active translator profile
+        active = self._get_active_profile_name()
+        if active:
+            self._sync_profile_to_controller(active)
+
     def set_project_loaded(self, loaded: bool):
         """Enable/disable the input bar based on project state."""
         self._input_edit.setEnabled(loaded)
@@ -1187,15 +1246,15 @@ class AiChatPanel(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        # Limit bubble widths on resize
-        max_bubble_w = max(200, self.width() - 32)
-        for browser in self.findChildren(QTextBrowser):
-            if browser.objectName() == "AIUserBubble":
-                browser.setMaximumWidth(min(400, max_bubble_w))
-        # Streaming inner assistant width
+        # Streaming assistant bubble: update width cap and recalculate height
         if self._streaming_browser:
-            sw = max(200, self.width() - 80)
-            self._streaming_browser.setMaximumWidth(min(400, sw))
+            expected_w = min(460, max(200, self.width() - 16))
+            self._streaming_browser.setMaximumWidth(expected_w)
+            vp_w = self._streaming_browser.viewport().width()
+            self._streaming_browser.document().setTextWidth(vp_w if vp_w > 0 else expected_w - 20)
+            self._streaming_browser.setFixedHeight(
+                int(self._streaming_browser.document().size().height()) + 20
+            )
         # Reposition settings overlay if visible
         if self._settingsSlide is not None:
             self._settingsSlide.resize()

@@ -178,7 +178,23 @@ def find_missing_and_orphans(files):
 
 # ── Main ────────────────────────────────────────────────────────────────
 
+def _reconfigure_stdout():
+    """Windows GBK console can't encode certain Unicode chars (e.g. U+9FFF).
+
+    Reconfigure stdout to UTF-8 so that print() doesn't raise
+    UnicodeEncodeError.  Safe no-op if the stream doesn't support
+    reconfigure (e.g. piped output on Unix).
+    """
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
 def main():
+    _reconfigure_stdout()
+
     parser = argparse.ArgumentParser(description="i18n audit for BallonsTranslator")
     parser.add_argument("--ci", action="store_true", help="Exit non-zero on findings")
     args = parser.parse_args()
