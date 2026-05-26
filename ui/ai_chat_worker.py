@@ -34,11 +34,13 @@ class AiChatWorker(QThread):
         self,
         api_config: Dict[str, Any],
         messages: List[Dict[str, str]],
+        tools: List[Dict[str, Any]] | None = None,
         parent=None,
     ):
         super().__init__(parent)
         self._api_config = api_config
         self._messages = messages
+        self._tools = tools
         self._cancelled = False
         self._tool_call_chunks: Dict[int, Dict[str, Any]] = {}
 
@@ -79,6 +81,8 @@ class AiChatWorker(QThread):
             api_args = dict(model=model, messages=self._messages, temperature=temperature)
             if max_tokens is not None:
                 api_args["max_tokens"] = max_tokens
+            if self._tools:
+                api_args["tools"] = self._tools
             stream = client.chat.completions.create(
                 **api_args,
                 stream=True,
@@ -154,13 +158,17 @@ class AiChatWorker(QThread):
             tool_calls = []
             for idx in sorted(self._tool_call_chunks.keys()):
                 tc = self._tool_call_chunks[idx]
+                fn = tc['function']
+                try:
+                    args = json.loads(fn['arguments']) if fn['arguments'] else {}
+                except json.JSONDecodeError:
+                    args = {}
                 tool_calls.append({
-                    'id': tc['id'],
-                    'type': tc['type'],
-                    'function': tc['function'],
+                    'name': fn['name'],
+                    'arguments': args,
                 })
-                logger.debug("Tool #%d: name=%s args_len=%d",
-                             idx, tc['function']['name'], len(tc['function']['arguments']))
+                logger.debug("Tool #%d: name=%s args=%s",
+                             idx, fn['name'], fn['arguments'][:80])
             tc_json = json.dumps({'tool_calls': tool_calls}, ensure_ascii=False)
             full_text = tc_json + '\n' + full_text
 

@@ -28,13 +28,13 @@ logger = logging.getLogger('ai_chat')
 
 # ── Pydantic models ─────────────────────────────────────────────────────
 
-class _CtxElement(BaseModel):
+class CtxElement(BaseModel):
     id: str = Field(..., description="Block ID in 'page_idx:block_idx' format")
     translation: str = Field(..., description="The translated text")
 
 
-class _CtxResponse(BaseModel):
-    translations: List[_CtxElement]
+class CtxResponse(BaseModel):
+    translations: List[CtxElement]
 
 
 MAX_GLOSSARY = 50
@@ -49,9 +49,10 @@ class ContextBatchTranslator:
     own API config and translation prompt.
     """
 
-    def __init__(self, api_config: dict, translation_prompt: str = ""):
+    def __init__(self, api_config: dict, translation_prompt: str = "", status_callback=None):
         self.api_config = dict(api_config)
         self.translation_prompt = translation_prompt
+        self._status_cb = status_callback
 
         # Runtime state (reset per project via set_project)
         self._proj: Optional["ProjImgTrans"] = None
@@ -62,10 +63,12 @@ class ContextBatchTranslator:
         self._completed: Set[str] = set()
 
         # Run-time params (set by Run dialog)
-        self.context_strategy = "full"
         self.batch_size = 5
         self.context_pages = 3
         self.use_glossary = True
+        self.max_retries = 3
+        self.retry_parse_sleep = 2
+        self.retry_api_sleep = 5
 
     # ── Pipeline interface ────────────────────────────────────────────
 
@@ -121,7 +124,12 @@ class ContextBatchTranslator:
         for tr, blk in zip(translations, textblk_lst):
             blk.translation = tr
 
-    # ── Page resolution ───────────────────────────────────────────────
+    def _status(self, msg: str):
+        logger.info(msg)
+        if self._status_cb:
+            self._status_cb(msg)
+
+    # ── Page resolution ────────────────────────────────────────────────
 
     def _resolve_page(self, blk_list: List["TextBlock"]) -> Optional[str]:
         lid = id(blk_list)
@@ -146,43 +154,38 @@ class ContextBatchTranslator:
     # ── Core contextual translate ─────────────────────────────────────
 
     def _contextual(self, text_list, blk_list, page_key, non_empty):
-        strategy = self.context_strategy
         bs = self.batch_size
         pi = self._page_idx(page_key)
         all_keys = list(self._proj.pages.keys())
         total = len(all_keys)
 
-        # Determine batch
-        if strategy == "full":
-            if total <= bs:
-                batch_keys = all_keys
-                triggers = {all_keys[0]}
-            else:
-                start = (pi // bs) * bs
-                end = min(start + bs, total)
-                batch_keys = all_keys[start:end]
-                triggers = {batch_keys[0]}
-        elif strategy == "progressive_summary":
-            start = (pi // bs) * bs
-            end = min(start + bs, total)
-            batch_keys = all_keys[start:end]
-            triggers = {batch_keys[0]}
-        else:  # sliding_window
-            batch_keys = [page_key]
-            triggers = {page_key}
+        # Group pages into batches of batch_size
+        start = (pi // bs) * bs
+        end = min(start + bs, total)
+        batch_keys = all_keys[start:end]
+        triggers = {batch_keys[0]}
 
-        # Cache hit
+        # Cache hit — for non-trigger pages in the same batch
         if page_key in self._cached:
             return self._apply_cache(blk_list, non_empty, self._cached[page_key])
 
         if page_key not in triggers:
             return self._direct_call(text_list)
 
-        ctx = self._build_ctx(page_key, batch_keys, strategy, all_keys)
+        ctx = self._build_ctx(page_key, batch_keys, all_keys)
         target = self._collect_target(batch_keys)
+
+        ctx_pages = len([c for c in ctx if c.get("type") != "summary"])
+        ctx_blks = sum(len(c.get("blocks", [])) for c in ctx if "blocks" in c)
+        use_summary = total > bs * 4 and self._summaries
+        mode = "summary" if use_summary else ("full" if total <= bs else "window")
+        self._status(f"Context ({mode}): {ctx_pages} pages, {ctx_blks} ref blocks → translating {len(target)} blocks")
+
         messages = self._build_msgs(ctx, target)
 
+        t0 = time.time()
         raw = self._llm_call(messages, len(target))
+        self._status(f"LLM done: {len(target)} translations in {time.time() - t0:.1f}s")
 
         # Cache batch results
         for pname in batch_keys:
@@ -199,7 +202,7 @@ class ContextBatchTranslator:
 
         if self.use_glossary:
             self._update_glossary(blk_list, raw)
-        if strategy == "progressive_summary":
+        if total > bs * 4:
             self._update_summary(start, end, batch_keys)
 
         return self._apply_cache(blk_list, non_empty, self._cached[page_key])
@@ -209,26 +212,21 @@ class ContextBatchTranslator:
 
     # ── Context building ──────────────────────────────────────────────
 
-    def _build_ctx(self, page_key, batch_keys, strategy, all_keys):
+    def _build_ctx(self, page_key, batch_keys, all_keys):
         ctx_win = self.context_pages
         pi = self._page_idx(page_key)
+        total = len(all_keys)
         ctx = []
 
-        if strategy == "sliding_window":
-            indices = range(max(0, pi - ctx_win), min(len(all_keys), pi + ctx_win + 1))
-        elif strategy == "full":
-            bs = self.batch_size
-            batch_start = (pi // bs) * bs
-            indices = range(0, batch_start)
-        else:
-            indices = []
-
+        # Window context: pages within ±ctx_win of the current page
+        indices = range(max(0, pi - ctx_win), min(total, pi + ctx_win + 1))
         for ci in indices:
             if ci == pi or all_keys[ci] in batch_keys:
                 continue
             ctx.append(self._describe(all_keys[ci], ci))
 
-        if strategy == "progressive_summary" and self._summaries:
+        # Summaries for completed batches (only for long projects)
+        if total > self.batch_size * 4 and self._summaries:
             lines = "\n".join(
                 f"  Batch {k}: {v}" for k, v in sorted(self._summaries.items())
             )
@@ -274,9 +272,14 @@ class ContextBatchTranslator:
             sys_prompt = self.translation_prompt.replace("{from_lang}", source).replace("{to_lang}", target)
         else:
             sys_prompt = (
-                f"You are a professional manga/comic translator. "
-                f"Translate from {source} to {target}. "
-                f"Output natural text, preserve character voice, keep terms consistent."
+                f"You are a professional manga/comic translator "
+                f"translating from {source} to {target}.\n"
+                f"Your translations should:\n"
+                f"- Accurately convey the original meaning while preserving character voice and tone\n"
+                f"- Sound natural in {target}\n"
+                f"- Keep terminology consistent — use the same translation for the same term across pages\n"
+                f"- Localize sound effects and onomatopoeia appropriately\n"
+                f"- Pay attention to context blocks for dialogue flow and character relationships"
             )
 
         # Glossary section
@@ -329,6 +332,7 @@ class ContextBatchTranslator:
             return text_list
         user = "Translate these:\n" + "\n".join(parts)
 
+        self._status(f"Direct translate (no context): {len(text_list)} texts")
         result = self._llm_call(
             [{"role": "system", "content": prompt}, {"role": "user", "content": user}],
             len(text_list),
@@ -353,71 +357,77 @@ class ContextBatchTranslator:
         proxy = ac.get("proxy", "")
 
         if not api_key or not api_host:
-            logger.error("ContextBatchTranslator: missing api_key or api_host")
+            logger.error(
+                "ContextBatchTranslator: missing api_key or api_host. "
+                "Configure API in the AI Chat panel before using Context Translation."
+            )
             return {}
 
         http_client = None
         if proxy:
             try:
-                http_client = httpx.Client(
-                    mounts={"http://": httpx.HTTPTransport(proxy=proxy),
-                            "https://": httpx.HTTPTransport(proxy=proxy)}
-                )
+                http_client = httpx.Client(proxy=proxy)
             except Exception:
                 pass
 
         client = openai.OpenAI(api_key=api_key, base_url=api_host, http_client=http_client)
-        schema = _CtxResponse.model_json_schema()
+        try:
+            for attempt in range(self.max_retries):
+                try:
+                    args = dict(model=model, messages=messages, temperature=temperature)
+                    if max_tokens:
+                        args["max_tokens"] = int(max_tokens)
 
-        for attempt in range(3):
-            try:
-                args = dict(model=model, messages=messages, temperature=temperature,
-                            response_format={"type": "json_schema", "json_schema": {"schema": schema}})
-                if max_tokens:
-                    args["max_tokens"] = int(max_tokens)
+                    completion = client.chat.completions.create(**args)
+                    raw = (completion.choices[0].message.content or "") if completion.choices else ""
 
-                completion = client.chat.completions.create(**args)
-                raw = (completion.choices[0].message.content or "") if completion.choices else ""
+                    if not raw:
+                        logger.warning("Empty response, attempt %d/%d", attempt + 1, self.max_retries)
+                        self._status(f"Empty response, retry {attempt + 1}/{self.max_retries}...")
+                        time.sleep(self.retry_parse_sleep)
+                        continue
 
-                if not raw:
-                    logger.warning("Empty response, attempt %d/3", attempt + 1)
-                    time.sleep(2)
-                    continue
+                    # Parse JSON
+                    json_str = raw.strip()
+                    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", json_str, re.DOTALL)
+                    if m:
+                        json_str = m.group(1)
+                    else:
+                        s = json_str.find("{")
+                        e = json_str.rfind("}")
+                        if s != -1 and e > s:
+                            json_str = json_str[s:e + 1]
 
-                # Parse JSON
-                json_str = raw.strip()
-                m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", json_str, re.DOTALL)
-                if m:
-                    json_str = m.group(1)
-                else:
-                    s = json_str.find("{")
-                    e = json_str.rfind("}")
-                    if s != -1 and e > s:
-                        json_str = json_str[s:e + 1]
+                    data = json.loads(json_str)
+                    validated = CtxResponse.model_validate(data)
 
-                data = json.loads(json_str)
-                validated = _CtxResponse.model_validate(data)
+                    if not validated or not validated.translations:
+                        raise ValueError("No translations")
+                    if len(validated.translations) != expected_count:
+                        raise ValueError(f"Expected {expected_count}, got {len(validated.translations)}")
 
-                if not validated or not validated.translations:
-                    raise ValueError("No translations")
-                if len(validated.translations) != expected_count:
-                    raise ValueError(f"Expected {expected_count}, got {len(validated.translations)}")
+                    return {item.id: item.translation for item in validated.translations}
 
-                return {item.id: item.translation for item in validated.translations}
+                except (ValidationError, ValueError) as e:
+                    logger.warning("Parse error (attempt %d/%d): %s", attempt + 1, self.max_retries, e)
+                    self._status(f"Parse error, retry {attempt + 1}/{self.max_retries}...")
+                    time.sleep(self.retry_parse_sleep)
+                except RETRYABLE as e:
+                    logger.warning("API error (attempt %d/%d): %s", attempt + 1, self.max_retries, e)
+                    self._status(f"API error, retry {attempt + 1}/{self.max_retries}...")
+                    time.sleep(self.retry_api_sleep)
 
-            except (ValidationError, ValueError) as e:
-                logger.warning("Parse error (attempt %d/3): %s", attempt + 1, e)
-                time.sleep(2)
-            except RETRYABLE as e:
-                logger.warning("API error (attempt %d/3): %s", attempt + 1, e)
-                time.sleep(5)
+        finally:
+            if http_client is not None:
+                http_client.close()
 
-        logger.error("ContextBatchTranslator: all attempts failed")
+        logger.error("ContextBatchTranslator: all %d attempts failed", self.max_retries)
         return {}
 
     # ── Glossary ──────────────────────────────────────────────────────
 
     def _update_glossary(self, blk_list, raw):
+        prev = len(self._glossary)
         for blk in blk_list:
             src = blk.get_text().strip()
             if not src or len(src) < 2 or len(src) > 30:
@@ -430,6 +440,8 @@ class ContextBatchTranslator:
         if len(self._glossary) > MAX_GLOSSARY:
             items = list(self._glossary.items())
             self._glossary = dict(items[-MAX_GLOSSARY:])
+        if len(self._glossary) != prev:
+            self._status(f"Glossary: {len(self._glossary)} terms")
 
     def _count_src(self, text):
         if self._proj is None:
@@ -450,3 +462,4 @@ class ContextBatchTranslator:
             terms.append("Terms: " + ", ".join(f"{s}→{t}" for s, t in recent))
         summary = f"Pages {batch_start}-{batch_end - 1}: " + "; ".join(terms)
         self._summaries[batch_start] = summary[:MAX_SUMMARY]
+        self._status(f"Summary: pages {batch_start}-{batch_end - 1} ({len(summary)} chars)")

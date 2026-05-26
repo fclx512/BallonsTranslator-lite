@@ -1677,6 +1677,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             range_layout.addLayout(spin_layout)
 
             slider = RangeSlider(0, num_pages - 1)
+            slider.setMinimumWidth(350)
             range_layout.addWidget(slider)
 
             range_info = QLabel()
@@ -1766,11 +1767,10 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             ai_title.setStyleSheet('font-weight: bold;')
             ai_grid.addWidget(ai_title, 0, 0, 1, 2)
 
-            ai_grid.addWidget(QLabel(self.tr('Context Strategy:')), 1, 0)
-            strategy_combo = QComboBox()
-            strategy_combo.addItems(['full', 'sliding_window', 'progressive_summary'])
-            strategy_combo.setCurrentText('full')
-            ai_grid.addWidget(strategy_combo, 1, 1)
+            # Adaptive mode info label — updates based on project page count
+            mode_label = QLabel()
+            mode_label.setStyleSheet('color: #666; font-style: italic;')
+            ai_grid.addWidget(mode_label, 1, 0, 1, 2)
 
             ai_grid.addWidget(QLabel(self.tr('Batch Size:')), 2, 0)
             batch_combo = QComboBox()
@@ -1783,6 +1783,29 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             pages_spin.setRange(0, 20)
             pages_spin.setValue(3)
             ai_grid.addWidget(pages_spin, 3, 1)
+
+            def _update_mode_label():
+                if all_pages_cb.isChecked():
+                    effective = num_pages
+                else:
+                    effective = slider.high() - slider.low() + 1
+                bs = int(batch_combo.currentText())
+                pw = pages_spin.value()
+                if effective == 0:
+                    text = self.tr('Adaptive -- will be determined when Run starts')
+                elif effective <= bs:
+                    text = self.tr('Full context (%1 pages, all previous translations as reference)').replace('%1', str(effective))
+                elif effective <= bs * 4:
+                    text = self.tr('Windowed context (%1 pages, +/-%2 page window)').replace('%1', str(effective)).replace('%2', str(pw))
+                else:
+                    text = self.tr('Windowed + auto-summary (%1 pages, long-form mode)').replace('%1', str(effective))
+                mode_label.setText(text)
+
+            _update_mode_label()
+            batch_combo.currentTextChanged.connect(lambda _: _update_mode_label())
+            pages_spin.valueChanged.connect(lambda _: _update_mode_label())
+            slider.rangeChanged.connect(lambda _lo, _hi: _update_mode_label())
+            all_pages_cb.toggled.connect(lambda _: _update_mode_label())
 
             glossary_cb = QCheckBox(self.tr('Enforce Term Consistency (Glossary)'))
             glossary_cb.setChecked(True)
@@ -1817,19 +1840,22 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             # If Context Translation is enabled, use AI assistant's API + prompt
             if ctx_trans_cb.isChecked():
                 from modules.translators.context_batch import ContextBatchTranslator
-                self._ctx_batch_restore = cfg_module.translator
+
+                def _ctx_status(msg):
+                    bar = self.module_manager.progress_msgbox.translate_bar
+                    bar.updateProgress(bar.progressbar.value(), msg)
+
+                self._ctx_batch_restore = pcfg.module.translator
                 api_config = self._ai_controller.api_config
                 prompt = self._ai_controller.custom_prompt or ""
-                ctx = ContextBatchTranslator(api_config, prompt)
-                ctx.context_strategy = strategy_combo.currentText()
+                ctx = ContextBatchTranslator(api_config, prompt, status_callback=_ctx_status)
                 ctx.batch_size = int(batch_combo.currentText())
                 ctx.context_pages = pages_spin.value()
                 ctx.use_glossary = glossary_cb.isChecked()
                 self.module_manager.translate_thread.translator = ctx
                 self.module_manager.translate_thread.module = ctx
                 LOGGER.info(
-                    f'Context batch run: strategy={strategy_combo.currentText()}, '
-                    f'batch={batch_combo.currentText()}, '
+                    f'Context batch run: batch={batch_combo.currentText()}, '
                     f'pages={pages_spin.value()}, '
                     f'glossary={glossary_cb.isChecked()}'
                 )

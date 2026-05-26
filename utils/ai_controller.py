@@ -106,7 +106,12 @@ def _summarize_result(result: Any) -> str:
 
 
 def _strip_json_blocks(text: str) -> str:
-    """Remove JSON blocks from display text."""
+    """Remove tool-call / changes JSON blocks from display text.
+
+    Only strips top-level JSON objects that contain ``tool_calls`` or
+    ``changes`` keys — arbitrary JSON in the model's natural-language
+    response is left intact.
+    """
     depth = 0
     start = -1
     to_remove = []
@@ -119,8 +124,11 @@ def _strip_json_blocks(text: str) -> str:
             depth -= 1
             if depth == 0 and start >= 0:
                 try:
-                    json.loads(text[start:i + 1])
-                    to_remove.append((start, i + 1))
+                    obj = json.loads(text[start:i + 1])
+                    if isinstance(obj, dict) and (
+                        'tool_calls' in obj or 'changes' in obj
+                    ):
+                        to_remove.append((start, i + 1))
                 except json.JSONDecodeError:
                     pass
     result = []
@@ -187,6 +195,7 @@ class AiController(QObject):
         self._turn_messages: List[Dict[str, str]] = []
         self._accumulated_text = ''
         self._last_user_text = ''
+        self._current_mode: str = 'chat'
         self._is_running = False
 
         # ── Conversation history ─────────────────────────────────
@@ -231,6 +240,7 @@ class AiController(QObject):
         self.status_changed.emit('处理中...', True)
 
         mode = self._resolve_mode(user_text)
+        self._current_mode = mode
         logger.info("handle_message: mode=%s text_len=%d", mode, len(user_text))
         api_config = self._api_config
         if not api_config.get('api_host') or not api_config.get('model'):
@@ -548,9 +558,21 @@ class AiController(QObject):
                 index = execute_tool(proj, 'list_pages', {})
                 total = index.get('total_pages', 0)
                 name = index.get('project', '')
+                # Include compact page index so the model can address specific
+                # pages without an extra list_pages round-trip.
+                page_lines = [f'[项目概览] 共 {total} 页（{name}）']
+                pages = index.get('pages', [])
+                for p in pages[:30]:  # cap at 30 entries
+                    page_lines.append(
+                        f'  [{p["pidx"]}] {p["name"]} '
+                        f'({p.get("w", "?")}x{p.get("h", "?")}, '
+                        f'{p.get("n_blocks", 0)} blocks)'
+                    )
+                if len(pages) > 30:
+                    page_lines.append(f'  ... 还有 {len(pages) - 30} 页，用 read_pages 查看')
                 messages.append({
                     'role': 'system',
-                    'content': f'[项目概览] 共 {total} 页（{name}）。需查看页面结构时调 list_pages。',
+                    'content': '\n'.join(page_lines),
                 })
             elif scope == 'all':
                 index = execute_tool(proj, 'list_pages', {})
@@ -570,6 +592,13 @@ class AiController(QObject):
                     'content': f'[当前页数据]\n{json.dumps(detail, ensure_ascii=False, indent=2)}',
                 })
 
+        # Attachments — inject as system context before history
+        for att in self._attachments:
+            messages.append({
+                'role': 'system',
+                'content': f'[附件: {att["filename"]}]\n{att["content"]}',
+            })
+
         # Conversation history (last N messages, user-configurable; cap at ~8000 chars)
         limit = self._context_message_limit
         texts: List[str] = []
@@ -581,13 +610,6 @@ class AiController(QObject):
                 break
         for m in self.messages[-len(texts):]:
             messages.append({'role': m.role, 'content': m.content})
-
-        # Attachments
-        for att in self._attachments:
-            messages.append({
-                'role': 'system',
-                'content': f'[附件: {att["filename"]}]\n{att["content"]}',
-            })
 
         # User message
         messages.append({'role': 'user', 'content': user_text})
@@ -602,6 +624,7 @@ class AiController(QObject):
         tool_turns_left: int,
     ):
         from ui.ai_chat_worker import AiChatWorker
+        from .ai_tools import TOOL_DEFINITIONS, to_openai_tools
         prompt_tokens = estimate_tokens(json.dumps(messages, ensure_ascii=False))
         logger.info(
             "_start_worker: estimate=%d, turns_left=%d, "
@@ -614,7 +637,12 @@ class AiController(QObject):
         self._token_count += prompt_tokens
         # Emit accumulated estimate for consistency
         self.prompt_tokens_estimated.emit(self._token_count)
-        self._worker = AiChatWorker(api_config, messages)
+
+        tools = None
+        if self._current_mode == 'agent':
+            tools = to_openai_tools(TOOL_DEFINITIONS)
+
+        self._worker = AiChatWorker(api_config, messages, tools)
         self._worker.chunk_ready.connect(self._on_chunk)
         self._worker.stream_finished.connect(
             lambda full: self._on_stream_finished(full, messages, tool_turns_left),
@@ -681,9 +709,13 @@ class AiController(QObject):
             if tool_turns_left - 1 > 0:
                 self.system_message.emit(
                     f'── AI 调用了 {len(tool_calls)} 个工具，继续处理... ──')
-                self.stream_finished.emit(self._accumulated_text)
+                # Flush this turn's visible text as a separate bubble
+                # (if any), then start a fresh bubble for the next turn.
+                turn_text = self._accumulated_text.strip()
+                if turn_text:
+                    self.stream_finished.emit(turn_text)
+                    self.streaming_started.emit()
                 self._accumulated_text = ''
-                self.streaming_started.emit()
                 self._start_worker(
                     self._api_config, messages,
                     tool_turns_left - 1,
@@ -780,7 +812,9 @@ class AiController(QObject):
         changes_raw = parse_changes(full_text)
         logger.info("_finalize_turn: parsed %d changes from %d chars",
                      len(changes_raw) if changes_raw else 0, len(full_text))
-        display_text = _strip_json_blocks(full_text)
+        # Prefer accumulated text spanning all tool turns;
+        # fall back to stripping tool-call JSON from the last worker output.
+        display_text = self._accumulated_text.strip() or _strip_json_blocks(full_text)
 
         changes: List[ChangeItem] = []
         if changes_raw:

@@ -395,7 +395,7 @@ class AiChatPanel(QWidget):
         sb.setMarkdown(self._streaming_text)
         # Adjust height as content grows
         sb.document().setTextWidth(sb.maximumWidth())
-        sb.setFixedHeight(int(sb.document().size().height()) + 4)
+        sb.setFixedHeight(max(int(sb.document().size().height()) + 16, 36))
         self._scroll_to_bottom()
 
     def finish_streaming(self, full_text: str = ""):
@@ -688,7 +688,7 @@ class AiChatPanel(QWidget):
         max_w = min(460, max(200, self.width() - 16))
         inner.setMaximumWidth(max_w)
         inner.document().setTextWidth(max_w)
-        inner.setFixedHeight(int(inner.document().size().height()) + 4)
+        inner.setFixedHeight(max(int(inner.document().size().height()) + 16, 36))
 
         oul.addWidget(inner, 1)
         self._insert_bubble(outer)

@@ -57,7 +57,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         "description": (
             "读取指定页面的详细数据，包括每个文本块的原文(src)、译文(trans)"
             "及字体样式信息。用于获取需要修改的具体内容。"
-            "每次调用建议不超过 20 页以控制数据量。"
+            "只读取用户明确提到的页面，每次不超过 5 页。"
         ),
         "input_schema": {
             "type": "object",
@@ -579,6 +579,21 @@ def execute_tool(
             f"未知工具: {tool_name!r}。可用工具: {', '.join(available)}")
 
 
+def to_openai_tools(tool_defs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Convert Anthropic-style tool definitions (input_schema) to OpenAI format."""
+    tools = []
+    for t in tool_defs:
+        tools.append({
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["input_schema"],
+            },
+        })
+    return tools
+
+
 def parse_tool_calls(text: str) -> Optional[List[Dict[str, Any]]]:
     """Try to extract tool-call JSON from AI response text.
 
@@ -649,9 +664,10 @@ def build_agent_system_prompt(
 ## 核心原则
 - 直接调用工具获取数据，不要说"无法访问"等否定表述，不要猜测页面内容
 - 页码从 0 开始：第1页=start=0，前N页=end=N-1，X到Y页=start=X-1,end=Y-1
+- 页面索引已在上下文注入，无需调用 list_pages；用 read_pages 读取用户指定的页面
 
 ## 数据架构
-项目总页数见下条消息。查看页面结构 → `list_pages`，读取文本 → `read_pages`。
+项目页面索引见下条系统消息。读取文本 → `read_pages`。
 
 ## 可用工具
 

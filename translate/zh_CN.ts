@@ -2992,6 +2992,26 @@ qipao,qipao2</translation>
         <source>Context Translation (beta)</source>
         <translation>上下文翻译 (beta)</translation>
     </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line=""/>
+        <source>Adaptive -- will be determined when Run starts</source>
+        <translation>自适应 — 将在运行时自动确定</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line=""/>
+        <source>Full context (%1 pages, all previous translations as reference)</source>
+        <translation>全量上下文（%1页，使用所有既往翻译作为参考）</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line=""/>
+        <source>Windowed context (%1 pages, +/-%2 page window)</source>
+        <translation>窗口上下文（%1页，±%2页窗口）</translation>
+    </message>
+    <message>
+        <location filename="../ui/mainwindow.py" line=""/>
+        <source>Windowed + auto-summary (%1 pages, long-form mode)</source>
+        <translation>窗口上下文 + 自动摘要（%1页，长篇模式）</translation>
+    </message>
 </context>
 <context>
     <name>AboutDialog</name>

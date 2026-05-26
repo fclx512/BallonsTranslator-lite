@@ -184,7 +184,7 @@ class TranslateThread(ModuleThread):
         old_translator = self.translator
         source, target = cfg_module.translate_source, cfg_module.translate_target
         if self.translator is not None:
-            if self.translator.name == translator:
+            if getattr(self.translator, 'name', None) == translator:
                 return
         
         try:
@@ -578,8 +578,9 @@ class ImgtransThread(QThread):
 def unload_modules(self, module_names):
     model_deleted = False
     for module in module_names:
-        module: BaseModule = getattr(self, module)
-        model_deleted = model_deleted or module.unload_model()
+        module = getattr(self, module)
+        if hasattr(module, 'unload_model'):
+            model_deleted = model_deleted or module.unload_model()
     if model_deleted:
         soft_empty_cache()
 

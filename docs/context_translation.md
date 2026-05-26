@@ -35,26 +35,25 @@ Run 对话框 (mainwindow.py:run_imgtrans)
 
 | 文件 | 用途 |
 |------|------|
-| `modules/translators/context_batch.py` | `ContextBatchTranslator` — 轻量批量翻译器，不含 profile 系统 |
-| `ui/mainwindow.py:1816-1835` | Run 对话框逻辑：读取 AI 助手配置 → 创建翻译器 → 替换管线 |
+| `modules/translators/context_batch.py` | `ContextBatchTranslator` — 轻量批量翻译器，复用 AI 助手配置 |
+| `ui/mainwindow.py:1818-1835` | Run 对话框逻辑：读取 AI 助手配置 → 创建翻译器 → 替换管线 |
 | `ui/mainwindow.py:1457-1462` | 管线完成后的翻译器恢复 |
 | `utils/ai_controller.py` | AI 助手的配置来源（`api_config`、`custom_prompt`） |
 
 ## ContextBatchTranslator 设计
 
+`ContextBatchTranslator` 是一个**独立类**（不注册为 translator 模块，无 `@register_translator` 装饰器），由 Run 对话框在运行时创建，管线完成后销毁。配置完全复用 AI 聊天面板的设置，无需额外的 API profile 管理。
+
 ### 与普通 translator 模块的区别
 
-| 方面 | 普通 translator（如 AI_Chat_Translator） | ContextBatchTranslator |
-|------|-----------------------------------------|------------------------|
-| 注册方式 | `@register_translator` 装饰器 | 不注册，Run 对话框直接实例化 |
-| 配置来源 | `cfg_module.translator_params[name]` — 独立 profile 系统 | AI 助手的 `api_config` + `custom_prompt` |
-| 继承链 | `BaseTranslator → LLM_API_Translator → AI_Chat_Translator` | 独立类，无继承 |
-| 生命周期 | 全局单例（配置面板管理） | 每次 Run 创建，运行后销毁 |
-| API 凭据 | 自己管理 API key 轮换、限速 | 直接读取 AI 助手的已配置凭据 |
+- **注册方式**：不注册，Run 对话框直接实例化（普通模块通过 `@register_translator` 注册为全局单例）
+- **配置来源**：AI 助手的 `api_config` + `custom_prompt`（而非独立的 profile 系统）
+- **继承链**：独立类，无继承（不需要 `BaseTranslator` 的管线上下文）
+- **生命周期**：每次 Run 创建，运行后销毁（而非全局持久）
 
 ### 管线接口
 
-管线只需要三个方法，`ContextBatchTranslator` 全部实现：
+管线只需要三个方法：
 
 ```python
 def set_project(self, proj: ProjImgTrans)    # 注入项目，建立页面索引
@@ -66,15 +65,18 @@ def finalize(self)                             # 清理缓存
 - `low_vram_mode = False`
 - `is_computational_intensive() → True`（强制同步路径，确保页面顺序处理）
 
-### 上下文策略
+### 统一自适应策略
 
-三种策略通过 `context_strategy` 属性控制：
+系统根据项目总页数自动选择最优策略，无需用户手动选择：
 
-| 策略 | 说明 | 适用场景 |
-|------|------|---------|
-| `full` | 整批（≤batch_size 页）一次 API 调用 | 短篇 1-20 页 |
-| `sliding_window` | 每页翻译时，前后 N 页作为上下文 | 中篇 10-50 页 |
-| `progressive_summary` | 每组翻译后压缩摘要，后续批次带上摘要+术语表 | 长篇 50-300+ 页 |
+- **≤ batch_size 页**：全量上下文 — batch 之前的所有页面作为参考
+- **≤ batch_size × 4 页**：窗口上下文 — 当前页 ±`context_pages` 范围内的页面作为参考
+- **\> batch_size × 4 页**：窗口上下文 + 自动摘要 — 窗口之外的已完成批次追加摘要
+
+三个用户可调参数：
+- `batch_size`：每批 API 调用的页数（第一个触发页发起调用，同批其他页读缓存）
+- `context_pages`：上下文窗口半径（始终生效）
+- `use_glossary`：是否启用术语一致性追踪
 
 ### 消息组装
 
@@ -84,16 +86,16 @@ def finalize(self)                             # 清理缓存
 
 ### API 调用
 
-- 使用 `openai.OpenAI` 客户端直连（不走 translator 的 profile 系统）
+- 使用 `openai.OpenAI` 客户端直连
 - `response_format = json_schema` 强制结构化输出（Pydantic 模型 `_CtxResponse`）
 - 重试：解析失败重试 3 次（2s 间隔），API 错误重试 3 次（5s 间隔）
+- 支持 HTTP 代理（通过 `httpx.Client` 配置）
 
 ## 缓存机制
 
 - 按 page_key 缓存翻译结果 `_cached: Dict[str, Dict[int, str]]`
-- `full` 模式下，第一个触发页调用 API，同 batch 的其他页读取缓存
-- `sliding_window` 逐页触发 API，不跨页缓存
-- `progressive_summary` 按 batch 触发 API，同 batch 内缓存
+- 每批第一个触发页调用 API，同 batch 的其他页读取缓存
+- 长篇项目（> batch_size × 4 页）每批翻译后自动生成摘要，窗口外的早先批次以摘要形式注入
 
 ## 术语一致性
 
