@@ -40,6 +40,7 @@ from .custom_widget import MessageBox, FrameLessMessageBox, ImgtransProgressMess
 from .update_checker import AboutDialog
 from .overlay_slide import OverlaySlider
 from .ai_chat_panel import AiChatPanel
+from .ai_change_review import ChangeReviewWindow
 from utils.ai_controller import AiController
 
 class PageListView(QListWidget):
@@ -230,6 +231,7 @@ class MainWindow(mainwindow_cls):
         self._aiChatSlide = OverlaySlider(
             self.aiChatPanel, direction='left', width=480)
         self._aiChatSlide.on_before_show(self.aiChatPanel.before_show)
+        self._changeReviewWindow = None  # created lazily on first use
 
         # Middle: canvas (stretches to fill remaining space)
         right_layout.addWidget(self.canvas.gv, 1)
@@ -305,6 +307,10 @@ class MainWindow(mainwindow_cls):
         self.aiChatPanel.apply_changes_requested.connect(
             self._on_apply_ai_changes)
 
+        # Open standalone change review window
+        self.aiChatPanel.open_review_requested.connect(
+            self._open_change_review)
+
         # Controller → Panel
         self._ai_controller.system_message.connect(
             self.aiChatPanel.add_system_message)
@@ -375,6 +381,20 @@ class MainWindow(mainwindow_cls):
                 self.tr("── Error applying changes: {e} ──").format(e=str(e))
             )
             LOGGER.exception("apply_ai_changes failed")
+
+    def _open_change_review(self, changes, message_index):
+        """Lazily create and show the ChangeReviewWindow."""
+        if self._changeReviewWindow is None:
+            self._changeReviewWindow = ChangeReviewWindow(self)
+            self._changeReviewWindow.apply_changes_requested.connect(
+                self._on_apply_ai_changes
+            )
+        self._changeReviewWindow.load_changes(changes, message_index)
+        if self._changeReviewWindow.isVisible():
+            self._changeReviewWindow.raise_()
+            self._changeReviewWindow.activateWindow()
+        else:
+            self._changeReviewWindow.show()
 
     def on_finish_setdetector(self):
         module_manager = self.module_manager

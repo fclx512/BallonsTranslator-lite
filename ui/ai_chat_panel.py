@@ -9,14 +9,18 @@ from __future__ import annotations
 
 import json
 import re
+
 from typing import Any, Dict, List, Optional
 
 from qtpy.QtCore import (
     Qt,
+    QEvent,
+    QTimer,
     Signal,
 )
 from qtpy.QtGui import QIntValidator, QKeyEvent, QTextCursor
 from qtpy.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -80,6 +84,7 @@ class AiChatPanel(QWidget):
     stop_requested = Signal()
     clear_requested = Signal()
     apply_changes_requested = Signal(list)  # list[ChangeItem] with accepted=True
+    open_review_requested = Signal(list, int)  # list[ChangeItem], message_index
 
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -94,6 +99,13 @@ class AiChatPanel(QWidget):
         self._settings_widget: Optional[QWidget] = None
         self._settingsSlide: Optional[OverlaySlider] = None
         self._word_wrap = True
+        self._typing_indicator: Optional[QLabel] = None
+        self._typing_timer: Optional[QTimer] = None
+        self._typing_dot_count = 0
+        self._bubble_hovered: Optional[QWidget] = None
+        self._bubble_actions: Dict[QWidget, QWidget] = {}
+        self._last_bubble_role: Optional[str] = None
+        self._msg_counter: int = 0
 
         # Start hidden — OverlaySlider manages position; fixed width for bubble sizing
         self.setVisible(False)
@@ -244,8 +256,8 @@ class AiChatPanel(QWidget):
         card = self._welcome_card
         card.setVisible(False)
         cl = QVBoxLayout(card)
-        cl.setContentsMargins(16, 24, 16, 16)
-        cl.setSpacing(8)
+        cl.setContentsMargins(16, 20, 16, 16)
+        cl.setSpacing(6)
 
         title = QLabel(self.tr("AI Assistant"))
         title.setObjectName("AIWelcomeTitle")
@@ -260,22 +272,92 @@ class AiChatPanel(QWidget):
         subtitle.setWordWrap(True)
         cl.addWidget(subtitle)
 
-        cl.addSpacing(12)
+        cl.addSpacing(10)
 
-        chips = [
+        # ── Feature cards row ─────────────────────────────────
+        features = [
+            (self.tr("✏️ Edit"), self.tr("Change text, fonts, colors")),
+            (self.tr("🔍 Search"), self.tr("Find and replace across pages")),
+            (self.tr("🌐 Translate"), self.tr("Translate with context awareness")),
+        ]
+        feat_row = QHBoxLayout()
+        feat_row.setSpacing(6)
+        for feat_title, feat_desc in features:
+            fc = QWidget()
+            fc.setObjectName("AIWelcomeFeature")
+            fl = QVBoxLayout(fc)
+            fl.setContentsMargins(8, 6, 8, 6)
+            fl.setSpacing(2)
+            ft = QLabel(feat_title)
+            ft.setObjectName("AIWelcomeFeatureTitle")
+            fl.addWidget(ft)
+            fd = QLabel(feat_desc)
+            fd.setObjectName("AIWelcomeFeatureDesc")
+            fd.setWordWrap(True)
+            fl.addWidget(fd)
+            feat_row.addWidget(fc)
+        cl.addLayout(feat_row)
+
+        cl.addSpacing(10)
+
+        # ── Suggestion chips ──────────────────────────────────
+        chip_label = QLabel(self.tr("Try asking:"))
+        chip_label.setObjectName("AIWelcomeChipLabel")
+        cl.addWidget(chip_label)
+
+        self._welcome_chips_container = QWidget()
+        self._welcome_chips_container.setObjectName("AIWelcomeChips")
+        self._chips_layout = QVBoxLayout(self._welcome_chips_container)
+        self._chips_layout.setContentsMargins(0, 0, 0, 0)
+        self._chips_layout.setSpacing(6)
+        cl.addWidget(self._welcome_chips_container)
+
+        # Populate default chips
+        self._set_welcome_chips([
             self.tr("List all pages"),
             self.tr("Search for 'hello'"),
             self.tr("Make font bold"),
             self.tr("Translate first page"),
-        ]
-        for chip_text in chips:
+        ])
+
+        cl.addStretch()
+
+    def _set_welcome_chips(self, chip_texts: List[str]):
+        """Replace suggestion chips in the welcome card."""
+        # Clear existing chips
+        while self._chips_layout.count():
+            item = self._chips_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        # Add new chips
+        for chip_text in chip_texts:
             btn = QPushButton(chip_text)
             btn.setObjectName("AIWelcomeChip")
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.clicked.connect(lambda checked, t=chip_text: self._chip_clicked(t))
-            cl.addWidget(btn)
+            self._chips_layout.addWidget(btn)
 
-        cl.addStretch()
+    def set_welcome_chips_from_project(self, project_info: Optional[Dict[str, Any]] = None):
+        """Update welcome card chips based on current project context."""
+        if project_info:
+            total = project_info.get("total_pages", 0)
+            name = project_info.get("project", "")
+            chips = [
+                self.tr("List all pages"),
+                self.tr("Translate first page"),
+                self.tr("Adjust all fonts"),
+            ]
+            if total > 1:
+                chips.append(self.tr("Compare page 1 and 2"))
+            chips.append(self.tr("What can you do?"))
+            self._set_welcome_chips(chips)
+        else:
+            self._set_welcome_chips([
+                self.tr("List all pages"),
+                self.tr("Search for 'hello'"),
+                self.tr("Make font bold"),
+                self.tr("Translate first page"),
+            ])
 
     # ── Panel animation (slide in from left) ────────────────────
 
@@ -329,11 +411,83 @@ class AiChatPanel(QWidget):
 
     # ── Message display ─────────────────────────────────────────
 
+
+    def _make_bubble_footer(self) -> Optional[QWidget]:
+        """Build a small footer label for assistant bubbles (model name)."""
+        if not self._controller:
+            return None
+        model = self._controller.api_config.get("model", "")
+        if not model:
+            return None
+        footer = QLabel(model)
+        footer.setObjectName("AITokenFooter")
+        return footer
+
+    def _install_bubble_actions(self, container: QWidget, text: str):
+        """Add hover-reveal copy/delete action buttons to a bubble container.
+
+        Uses eventFilter on the container to show/hide buttons on Enter/Leave.
+        Buttons positioned top-right of the bubble, layering over its content.
+        """
+        actions = QWidget(container)
+        actions.setObjectName("AIBubbleActions")
+        al = QHBoxLayout(actions)
+        al.setContentsMargins(0, 0, 0, 0)
+        al.setSpacing(2)
+
+        copy_btn = QPushButton("📋")
+        copy_btn.setObjectName("AIBubbleActionBtn")
+        copy_btn.setFixedSize(22, 22)
+        copy_btn.setToolTip(self.tr("Copy"))
+        copy_btn.clicked.connect(
+            lambda: QApplication.clipboard().setText(text)
+        )
+
+        del_btn = QPushButton("✕")
+        del_btn.setObjectName("AIBubbleActionBtn")
+        del_btn.setFixedSize(22, 22)
+        del_btn.setToolTip(self.tr("Delete"))
+        del_btn.clicked.connect(lambda: self._remove_bubble_safe(container))
+
+        al.addWidget(copy_btn)
+        al.addWidget(del_btn)
+        actions.hide()
+
+        container.installEventFilter(self)
+        self._bubble_actions[container] = actions
+        # Initial positioning — subsequent resizes handled in eventFilter
+        actions.move(container.width() - 56, 2)
+        actions.raise_()
+
+    def _remove_bubble_safe(self, container: QWidget):
+        """Remove a bubble widget from layout and clean up."""
+        self._msg_layout.removeWidget(container)
+        self._bubble_actions.pop(container, None)
+        container.deleteLater()
+
+    def eventFilter(self, obj, event):
+        """Show/hide bubble action buttons on hover; keep them positioned on resize."""
+        if event.type() == QEvent.Type.Enter:
+            actions = self._bubble_actions.get(obj)
+            if actions:
+                actions.show()
+                actions.raise_()
+        elif event.type() == QEvent.Type.Leave:
+            actions = self._bubble_actions.get(obj)
+            if actions:
+                actions.hide()
+        elif event.type() == QEvent.Type.Resize:
+            actions = self._bubble_actions.get(obj)
+            if actions:
+                actions.move(obj.width() - 56, 2)
+                actions.raise_()
+        return super().eventFilter(obj, event)
+
     def _add_user_bubble(self, text: str):
-        """Right-aligned user bubble with accent-tinted background."""
+        """Right-aligned user bubble with accent-tinted background and timestamp."""
         container = QWidget()
         container.setObjectName("AIUserBubble")
-        lay = QHBoxLayout(container)
+        lay = QVBoxLayout(container)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
@@ -345,9 +499,17 @@ class AiChatPanel(QWidget):
         inner.setMaximumWidth(max_w)
         inner.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
 
-        lay.addStretch()
-        lay.addWidget(inner)
+        # Bubble row (right-aligned)
+        b_row = QHBoxLayout()
+        b_row.setContentsMargins(0, 0, 0, 0)
+        b_row.setSpacing(0)
+        b_row.addStretch()
+        b_row.addWidget(inner)
+        lay.addLayout(b_row)
+
+        self._install_bubble_actions(container, text)
         self._insert_bubble(container)
+        self._last_bubble_role = "user"
 
     def add_system_message(self, text: str):
         label = QLabel(text)
@@ -355,9 +517,10 @@ class AiChatPanel(QWidget):
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setWordWrap(True)
         self._insert_bubble(label)
+        self._last_bubble_role = "system"
 
     def start_streaming_response(self):
-        """Begin a new assistant bubble (no avatar)."""
+        """Begin a new assistant bubble with typing indicator."""
         self._streaming = True
         self._streaming_text = ""
         self._send_btn.setVisible(False)
@@ -367,7 +530,7 @@ class AiChatPanel(QWidget):
         # Outer container: transparent, left-aligned
         outer = QWidget()
         outer.setObjectName("AIAssistantBubble")
-        oul = QHBoxLayout(outer)
+        oul = QVBoxLayout(outer)
         oul.setContentsMargins(0, 0, 0, 0)
         oul.setSpacing(0)
 
@@ -395,13 +558,59 @@ class AiChatPanel(QWidget):
             QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Minimum
         )
 
-        oul.addWidget(self._streaming_browser, 1)
+        # Bubble row
+        b_row = QHBoxLayout()
+        b_row.setContentsMargins(0, 0, 0, 0)
+        b_row.setSpacing(0)
+        b_row.addWidget(self._streaming_browser, 1)
+        oul.addLayout(b_row)
+
+        # Typing indicator (three pulsing dots)
+        self._typing_indicator = QLabel("● ● ●")
+        self._typing_indicator.setObjectName("AITypingIndicator")
+        self._typing_dot_count = 0
+        self._typing_timer = QTimer(self)
+        self._typing_timer.setInterval(350)
+        self._typing_timer.timeout.connect(self._pulse_typing_dots)
+        self._typing_timer.start()
+        # Add below the browser row
+        ti_row = QHBoxLayout()
+        ti_row.setContentsMargins(8, 4, 0, 4)
+        ti_row.setSpacing(0)
+        ti_row.addWidget(self._typing_indicator)
+        ti_row.addStretch()
+        oul.addLayout(ti_row)
+
+        # Add visual pairing if following a user message
+        if self._last_bubble_role == "user":
+            outer.setObjectName("AIAssistantBubblePaired")
         self._streaming_bubble_widget = outer
         self._insert_bubble(outer)
+        self._last_bubble_role = "assistant"
+
+    def _pulse_typing_dots(self):
+        """Animate the typing indicator: cycle through dot patterns."""
+        self._typing_dot_count = (self._typing_dot_count + 1) % 4
+        dots = ["○ ○ ○", "● ○ ○", "● ● ○", "● ● ●"]
+        if self._typing_indicator:
+            self._typing_indicator.setText(dots[self._typing_dot_count])
+
+    def _cleanup_typing(self):
+        """Stop typing timer and remove indicator."""
+        if self._typing_timer:
+            self._typing_timer.stop()
+            self._typing_timer.deleteLater()
+            self._typing_timer = None
+        if self._typing_indicator:
+            self._typing_indicator.deleteLater()
+            self._typing_indicator = None
 
     def append_stream_chunk(self, chunk: str):
         if not self._streaming or not self._streaming_browser:
             return
+        # Remove typing indicator on first content chunk
+        if self._typing_indicator:
+            self._cleanup_typing()
         self._streaming_text += chunk
         sb = self._streaming_browser
         sb.setMarkdown(self._streaming_text)
@@ -415,6 +624,8 @@ class AiChatPanel(QWidget):
         self._scroll_to_bottom()
 
     def finish_streaming(self, full_text: str = ""):
+        # Clean up typing indicator if streaming ended before content arrived
+        self._cleanup_typing()
         # Remove empty streaming bubble that never received content
         if self._streaming_bubble_widget and not full_text and not self._streaming_text.strip():
             self._msg_layout.removeWidget(self._streaming_bubble_widget)
@@ -426,9 +637,15 @@ class AiChatPanel(QWidget):
         self._on_input_changed()
         self._streaming_browser = None
         self._streaming_bubble_widget = None
+        self._streaming_text = ""
 
-    def set_changes(self, changes: List[ChangeItem]):
-        """Build an inline change review card (#AIChangeCard) with accept/reject per item."""
+    def set_changes(self, changes: List[ChangeItem], auto_open: bool = True):
+        """Build a compact summary card (#AIChangeCard) with a button to open the review window.
+
+        When *auto_open* is True (live response), also emits
+        ``open_review_requested`` so the MainWindow can auto-open the
+        standalone ChangeReviewWindow.
+        """
         if not changes:
             return
 
@@ -461,170 +678,29 @@ class AiChatPanel(QWidget):
             pl.setObjectName("AIChangePageLine")
             cl.addWidget(pl)
 
-        # ── Expandable detail section ──────────────────────────
-        detail_container = QWidget()
-        detail_container.setObjectName("AIReviewDialog")
-        dl = QVBoxLayout(detail_container)
-        dl.setContentsMargins(8, 4, 8, 4)
-        dl.setSpacing(4)
+        # ── Open review button ─────────────────────────────────
+        btn_row = QWidget()
+        brl = QHBoxLayout(btn_row)
+        brl.setContentsMargins(12, 8, 12, 8)
 
-        change_rows: List[tuple] = []  # (ChangeItem, accept_btn, reject_btn)
+        self._msg_counter += 1
+        msg_idx = self._msg_counter
 
-        for i, item in enumerate(changes):
-            # Row container
-            row = QWidget()
-            row.setObjectName("AIReviewRow")
-            rl = QHBoxLayout(row)
-            rl.setContentsMargins(4, 2, 4, 2)
-            rl.setSpacing(4)
-
-            # ID + field
-            id_label = QLabel(item.block_id)
-            id_label.setObjectName("AIReviewId")
-            id_label.setFixedWidth(60)
-            rl.addWidget(id_label)
-
-            field_label = QLabel(item.field)
-            field_label.setObjectName("AIReviewFieldLabel")
-            field_label.setFixedWidth(40)
-            rl.addWidget(field_label)
-
-            # Old → New values
-            old_label = QLabel(str(item.old_value)[:30])
-            old_label.setObjectName("AIReviewOldValue")
-            old_label.setWordWrap(True)
-            rl.addWidget(old_label, 1)
-
-            arrow = QLabel("→")
-            arrow.setObjectName("AIReviewFieldLabel")
-            rl.addWidget(arrow)
-
-            new_label = QLabel(str(item.new_value)[:30])
-            new_label.setObjectName("AIReviewNewValue")
-            new_label.setWordWrap(True)
-            rl.addWidget(new_label, 1)
-
-            # Accept / Reject buttons
-            accept_btn = QPushButton("✓")
-            accept_btn.setObjectName("AIReviewAccept")
-            accept_btn.setFixedSize(28, 28)
-            accept_btn.setCheckable(True)
-            rl.addWidget(accept_btn)
-
-            reject_btn = QPushButton("✗")
-            reject_btn.setObjectName("AIReviewReject")
-            reject_btn.setFixedSize(28, 28)
-            reject_btn.setCheckable(True)
-            rl.addWidget(reject_btn)
-
-            # Wire toggle: only one active at a time
-            def make_toggle(ci: ChangeItem, ab: QPushButton, rb: QPushButton):
-                def on_accept(checked: bool):
-                    ci.accepted = True if checked else None
-                    rb.setChecked(False)
-                    _update_apply_btn()
-
-                def on_reject(checked: bool):
-                    ci.accepted = False if checked else None
-                    ab.setChecked(False)
-                    _update_apply_btn()
-
-                ab.toggled.connect(on_accept)
-                rb.toggled.connect(on_reject)
-
-            make_toggle(item, accept_btn, reject_btn)
-            change_rows.append((item, accept_btn, reject_btn))
-            dl.addWidget(row)
-
-        # ── Batch action bar ──────────────────────────────────
-        action_bar = QWidget()
-        action_bar.setObjectName("AIReviewActions")
-        al = QHBoxLayout(action_bar)
-        al.setContentsMargins(8, 6, 8, 6)
-        al.setSpacing(6)
-
-        accept_all = QPushButton(self.tr("Accept All"))
-        accept_all.setObjectName("AIReviewAcceptAll")
-        accept_all.clicked.connect(
-            lambda: self._set_all_accepted(change_rows, True)
+        open_btn = QPushButton(self.tr("Open in Review Window"))
+        open_btn.setObjectName("AIChangeReviewOpenBtn")
+        open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        open_btn.clicked.connect(
+            lambda: self.open_review_requested.emit(changes, msg_idx)
         )
-
-        reject_all = QPushButton(self.tr("Reject All"))
-        reject_all.setObjectName("AIReviewRejectAll")
-        reject_all.clicked.connect(
-            lambda: self._set_all_accepted(change_rows, False)
-        )
-
-        al.addWidget(accept_all)
-        al.addWidget(reject_all)
-        al.addStretch()
-
-        # Stats label
-        stats_label = QLabel(
-            self.tr("Accepted: 0 / {n}").format(n=n)
-        )
-        stats_label.setObjectName("AIReviewStats")
-        al.addWidget(stats_label)
-
-        detail_container.layout().addWidget(action_bar)
-
-        # ── Expand / collapse toggle ──────────────────────────
-        detail_container.setVisible(False)
-        expand_btn = QPushButton(self.tr("Show details >"))
-        expand_btn.setObjectName("AIChangeExpandBtn")
-        expand_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        def toggle_expand():
-            collapsed = not detail_container.isVisible()
-            detail_container.setVisible(collapsed)
-            expand_btn.setText(
-                self.tr("Hide details v") if collapsed else self.tr("Show details >")
-            )
-
-        expand_btn.clicked.connect(toggle_expand)
-        cl.addWidget(expand_btn)
-
-        # ── Apply button (footer) ─────────────────────────────
-        footer = QWidget()
-        footer.setObjectName("AIReviewFooter")
-        fl = QHBoxLayout(footer)
-        fl.setContentsMargins(8, 6, 8, 6)
-
-        apply_btn = QPushButton(self.tr("Apply Changes"))
-        apply_btn.setObjectName("AIReviewApplyBtn")
-        apply_btn.setEnabled(False)
-        apply_btn.clicked.connect(
-            lambda: self._emit_apply_changes(change_rows)
-        )
-
-        fl.addStretch()
-        fl.addWidget(apply_btn)
-
-        # Closure to update apply button state + stats
-        def _update_apply_btn():
-            accepted_n = sum(1 for c, _, _ in change_rows if c.accepted is True)
-            apply_btn.setEnabled(accepted_n > 0)
-            stats_label.setText(
-                self.tr("Accepted: {n} / {total}").format(n=accepted_n, total=n)
-            )
-
-        dl.addWidget(footer)
-        cl.addWidget(detail_container)
+        brl.addStretch()
+        brl.addWidget(open_btn)
+        brl.addStretch()
+        cl.addWidget(btn_row)
 
         self._insert_bubble(card)
 
-    def _set_all_accepted(self, rows, accepted: bool):
-        """Set all change items to accepted/rejected."""
-        for item, ab, rb in rows:
-            item.accepted = accepted
-            ab.setChecked(accepted)
-            rb.setChecked(not accepted)
-
-    def _emit_apply_changes(self, rows):
-        """Collect accepted changes and emit apply_changes_requested."""
-        accepted = [item for item, _, _ in rows if item.accepted is True]
-        if accepted:
-            self.apply_changes_requested.emit(accepted)
+        if auto_open:
+            self.open_review_requested.emit(changes, msg_idx)
 
     def set_last_tool_trace(self, trace: List[Dict[str, Any]]):
         """Show tool execution trace as system messages."""
@@ -636,8 +712,6 @@ class AiChatPanel(QWidget):
     def show_thinking(self):
         self.update_status(self.tr("Thinking..."), True)
         self._status_dot.setText("●")
-        self._status_dot.setObjectName("AIStatusBadgeActive")
-        self._status_text.setText(self.tr("Thinking..."))
 
     def hide_thinking(self):
         self._status_dot.setText("●")
@@ -653,11 +727,13 @@ class AiChatPanel(QWidget):
             self._status_dot.setObjectName("AIStatusBadge")
 
     def set_prompt_tokens(self, n: int):
-        self._token_label.setText(f"~{n} token")
+        s = '' if n == 1 else 's'
+        self._token_label.setText(f"~{n} token{s}")
         self._token_label.setToolTip(self.tr("~{n} token (estimated)").format(n=n))
 
     def reconcile_api_tokens(self, prompt_tokens: int, completion_tokens: int, total: int):
-        self._token_label.setText(f"{total} token")
+        s = '' if total == 1 else 's'
+        self._token_label.setText(f"{total} token{s}")
         self._token_label.setToolTip(
             self.tr("Context: {pt} token\nTool calls: {ct} token").format(
                 pt=prompt_tokens, ct=completion_tokens
@@ -666,10 +742,13 @@ class AiChatPanel(QWidget):
 
     def on_conversation_cleared(self):
         """Clear all message widgets and show welcome card."""
+        self._cleanup_typing()
         self._streaming = False
         self._streaming_text = ""
         self._streaming_browser = None
         self._streaming_bubble_widget = None
+        self._last_bubble_role = None
+        self._msg_counter = 0
         self._clear_messages()
         self._show_welcome_card()
         self.update_status(self.tr("Ready"), False)
@@ -684,34 +763,48 @@ class AiChatPanel(QWidget):
             if m.role == "user":
                 self._add_user_bubble(m.content)
             elif m.role == "assistant":
+                # Replay display segments (intermediate text / tool traces)
                 if m.segments:
                     for seg in m.segments:
                         if seg["type"] == "text":
                             self._add_assistant_bubble(seg["content"])
                         elif seg["type"] == "tool_trace":
                             self.add_system_message(seg["content"])
-                else:
-                    # Legacy: no segments — strip [tool] markers and show as one bubble
+                elif not m.changes:
+                    # Legacy: no segments, no changes — strip [tool] markers
                     clean = re.sub(r'\[tool\].*?\[/tool\]\s*\n?', '', m.content, flags=re.DOTALL)
-                    self._add_assistant_bubble(clean)
+                    if clean.strip():
+                        self._add_assistant_bubble(clean)
+                # Restore change review card when present
+                if m.changes:
+                    self.set_changes(m.changes, auto_open=False)
             elif m.role == "system":
                 self.add_system_message(m.content)
         if self._msg_layout.count() <= 1:  # only the trailing stretch
             self._show_welcome_card()
         self._scroll_to_bottom()
 
+    COLLAPSE_THRESHOLD = 800
+    COLLAPSE_PREVIEW_LEN = 300
+
     def _add_assistant_bubble(self, text: str):
-        """Add a completed assistant bubble (static, not streaming).
+        """Add a completed assistant bubble with timestamp and optional collapse.
 
         Uses WidgetWidth + explicit textWidth management. WidgetWidth enables
         automatic text wrapping so long content fits the bubble. The textWidth
         is set explicitly before computing height, then restored after
         setFixedHeight (which triggers a WidgetWidth resizeEvent that may
         otherwise override textWidth with a stale viewport width).
+
+        Long messages (>COLLAPSE_THRESHOLD chars) are collapsed by default
+        with a Show-more toggle.
         """
+        # Strip [tool]...[/tool] blocks that embed tool-call context for the LLM
+        full = re.sub(r'\[tool\].*?\[/tool\]\s*\n?', '', text, flags=re.DOTALL)
+
         outer = QWidget()
         outer.setObjectName("AIAssistantBubble")
-        oul = QHBoxLayout(outer)
+        oul = QVBoxLayout(outer)
         oul.setContentsMargins(0, 0, 0, 0)
         oul.setSpacing(0)
 
@@ -724,26 +817,76 @@ class AiChatPanel(QWidget):
         inner.setOpenExternalLinks(True)
         inner.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         inner.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        # Strip [tool]...[/tool] blocks that embed tool-call context for the LLM
-        clean = re.sub(r'\[tool\].*?\[/tool\]\s*\n?', '', text, flags=re.DOTALL)
-        inner.setMarkdown(clean)
-        max_w = self._bubble_max_width()
-        inner.setMaximumWidth(max_w)
-        inner.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Minimum)
-        css_pad = 10
-        # WidgetWidth enables wrapping; set textWidth explicitly so the
-        # height is computed from the capped width (not an unbounded one).
-        inner.setLineWrapMode(QTextBrowser.LineWrapMode.WidgetWidth)
-        inner.document().setTextWidth(max_w - 2 * css_pad)
-        inner.setFixedHeight(int(inner.document().size().height()) + 2 * css_pad)
-        # setFixedHeight triggers a WidgetWidth resizeEvent that overrides
-        # textWidth with the (possibly stale) viewport width. Restore it.
-        inner.document().setTextWidth(max_w - 2 * css_pad)
 
-        oul.addWidget(inner, 1)
+        # Determine collapsed vs full content
+        need_collapse = len(full) > self.COLLAPSE_THRESHOLD
+        preview = (full[:self.COLLAPSE_PREVIEW_LEN] + "\n\n...")
+        is_collapsed = [need_collapse]  # mutable for closure
+
+        def _set_content(content: str):
+            inner.setMarkdown(content)
+            max_w = self._bubble_max_width()
+            inner.setMaximumWidth(max_w)
+            inner.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Minimum)
+            css_pad = 10
+            inner.setLineWrapMode(QTextBrowser.LineWrapMode.WidgetWidth)
+            inner.document().setTextWidth(max_w - 2 * css_pad)
+            inner.setFixedHeight(int(inner.document().size().height()) + 2 * css_pad)
+            inner.document().setTextWidth(max_w - 2 * css_pad)
+
+        _set_content(preview if need_collapse else full)
+
+        # Bubble row
+        b_row = QHBoxLayout()
+        b_row.setContentsMargins(0, 0, 0, 0)
+        b_row.setSpacing(0)
+        b_row.addWidget(inner, 1)
+        oul.addLayout(b_row)
+
+        # Collapse toggle button
+        if need_collapse:
+            toggle_btn = QPushButton(self.tr("Show more ▼"))
+            toggle_btn.setObjectName("AICollapseToggle")
+            toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            toggle_btn.setFixedHeight(24)
+            t_row = QHBoxLayout()
+            t_row.setContentsMargins(4, 0, 0, 0)
+            t_row.setSpacing(0)
+            t_row.addWidget(toggle_btn)
+            t_row.addStretch()
+            oul.addLayout(t_row)
+
+            def _toggle_collapse():
+                if is_collapsed[0]:
+                    _set_content(full)
+                    toggle_btn.setText(self.tr("Show less ▲"))
+                    is_collapsed[0] = False
+                else:
+                    _set_content(preview)
+                    toggle_btn.setText(self.tr("Show more ▼"))
+                    is_collapsed[0] = True
+
+            toggle_btn.clicked.connect(_toggle_collapse)
+
+        # Footer row (model name)
+        footer = self._make_bubble_footer()
+        if footer:
+            ft_row = QHBoxLayout()
+            ft_row.setContentsMargins(4, 0, 0, 0)
+            ft_row.setSpacing(0)
+            ft_row.addWidget(footer)
+            ft_row.addStretch()
+            oul.addLayout(ft_row)
+
+        # Add visual pairing if following a user message
+        if self._last_bubble_role == "user":
+            outer.setObjectName("AIAssistantBubblePaired")
+        self._install_bubble_actions(outer, text)
         self._insert_bubble(outer)
+        self._last_bubble_role = "assistant"
 
     def on_error(self, msg: str):
+        self._cleanup_typing()
         self.add_system_message(self.tr("-- Error: {msg} --").format(msg=msg))
         self._streaming = False
         self._stop_btn.setVisible(False)
@@ -1082,6 +1225,8 @@ class AiChatPanel(QWidget):
             self._settingsSlide.show()
         else:
             self._sync_settings_to_controller()
+            if not self._msg_layout.count():
+                self._show_welcome_card()
             self._settingsSlide.hide()
 
     def _sync_settings_from_controller(self):
@@ -1233,6 +1378,7 @@ class AiChatPanel(QWidget):
 
     def _clear_messages(self):
         """Remove all bubble widgets from the message layout."""
+        self._bubble_actions.clear()
         protected = {self._welcome_card}
         # Collect indices to remove (iterate in reverse to avoid index shift)
         for i in range(self._msg_layout.count() - 1, -1, -1):

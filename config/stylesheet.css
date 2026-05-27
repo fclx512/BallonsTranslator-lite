@@ -1191,14 +1191,22 @@ DeleteStyleButton::hover {
     padding: 10px;
 }
 
-
-/* Message timestamp */
-#AIMsgTimestamp {
-    font-size: 10px;
+/* Paired assistant bubble (follows a user message) */
+#AIAssistantBubblePaired {
+    font-size: 13px;
     color: @qwidgetForegroundColor;
-    opacity: 0.5;
-    padding: 2px 6px;
+    background: transparent;
 }
+#AIAssistantBubblePaired > #AIAssistantInner {
+    font-size: 13px;
+    color: @qwidgetForegroundColor;
+    background-color: @bubbleAIBackground;
+    border: none;
+    border-radius: 12px;
+    padding: 10px;
+    border-left: 3px solid @accentTranslate;
+}
+
 
 /* ── Change card (compact summary) ── */
 #AIChangeCard {
@@ -1331,18 +1339,7 @@ DeleteStyleButton::hover {
     font-size: 14px;
     font-weight: 600;
 }
-#AIReviewBackBtn {
-    border: none;
-    background: transparent;
-    font-size: 13px;
-    color: @accentTranslate;
-    padding: 4px 8px;
-    border-radius: 6px;
-}
-#AIReviewBackBtn:hover {
-    background-color: rgba(0,0,0,0.08);
-}
-#AIReviewAcceptAll, #AIReviewRejectAll {
+#AIReviewAcceptAll {
     padding: 4px 12px;
     font-size: 12px;
     border: 1px solid @borderColor;
@@ -1350,36 +1347,8 @@ DeleteStyleButton::hover {
     border-radius: 6px;
     color: @qwidgetForegroundColor;
 }
-#AIReviewAcceptAll:hover, #AIReviewRejectAll:hover {
+#AIReviewAcceptAll:hover {
     background-color: @borderColor;
-}
-/* ── Summary rows ── */
-#AIReviewSummaryRow {
-    border-bottom: 1px solid @borderColor;
-    background-color: @emptyContentBackgroundColor;
-}
-#AIReviewSummaryRow:hover {
-    background-color: @widgetBackgroundColor;
-}
-#AIReviewSummaryIcon {
-    font-size: 18px;
-}
-#AIReviewSummaryName {
-    font-size: 13px;
-    font-weight: 500;
-    color: @qwidgetForegroundColor;
-}
-#AIReviewSummaryBtn {
-    border: 1px solid @accentTranslate;
-    background: transparent;
-    color: @accentTranslate;
-    font-size: 12px;
-    padding: 4px 12px;
-    border-radius: 6px;
-}
-#AIReviewSummaryBtn:hover {
-    background-color: @accentTranslate;
-    color: #fff;
 }
 /* ── Detail rows ── */
 #AIReviewRow {
@@ -1446,9 +1415,9 @@ DeleteStyleButton::hover {
     background-color: rgba(0,0,0,0.1);
 }
 #AIReviewActions {
-    border-left: 1px solid @borderColor;
+    border-top: 1px solid @borderColor;
 }
-#AIReviewAccept, #AIReviewReject {
+#AIReviewAccept {
     border: none;
     background: transparent;
     font-size: 14px;
@@ -1459,9 +1428,11 @@ DeleteStyleButton::hover {
     background-color: rgba(76, 175, 132, 0.15);
     color: #4caf84;
 }
-#AIReviewReject:hover {
-    background-color: rgba(224, 85, 106, 0.15);
-    color: #e0556a;
+#AIReviewAccept:checked {
+    background-color: rgba(76, 175, 132, 0.25);
+    color: #4caf84;
+    border: 1px solid #4caf84;
+    border-radius: 4px;
 }
 /* ── Page navigation bar ── */
 #AIReviewNavBar {
@@ -1509,6 +1480,53 @@ DeleteStyleButton::hover {
 #AIReviewApplyBtn:disabled {
     background-color: @borderColor;
     color: rgba(128, 128, 128, 0.7);
+}
+
+/* ── Change review window ── */
+#AIChangeReviewWindow {
+    background-color: @qwidgetBackgroundColor;
+}
+#AIReviewTable {
+    background-color: @qwidgetBackgroundColor;
+    alternate-background-color: @emptyContentBackgroundColor;
+    border: none;
+    border-top: 1px solid @borderColor;
+    gridline-color: @borderColor;
+    font-size: 12px;
+    color: @qwidgetForegroundColor;
+}
+#AIReviewTable QHeaderView::section {
+    background-color: @widgetBackgroundColor;
+    color: @qwidgetForegroundColor;
+    padding: 5px 8px;
+    border: none;
+    border-bottom: 1px solid @borderColor;
+    font-size: 11px;
+    font-weight: 600;
+}
+#AIReviewTable QTableWidgetItem {
+    padding: 3px 6px;
+}
+#AIReviewFieldFilter {
+    padding: 3px 8px;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+    background-color: @emptyContentBackgroundColor;
+    color: @qwidgetForegroundColor;
+    font-size: 12px;
+}
+#AIChangeReviewOpenBtn {
+    border: 1px solid @accentTranslate;
+    background: transparent;
+    color: @accentTranslate;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 20px;
+    border-radius: 8px;
+}
+#AIChangeReviewOpenBtn:hover {
+    background-color: @accentTranslate;
+    color: #fff;
 }
 
 /* ── Input bar ── */
@@ -1706,4 +1724,70 @@ StateChecker#AiChatChecker::indicator:checked {
     min-height: 1px;
     background-color: @borderColor;
     margin: 4px 0;
+}
+
+/* ── Welcome card feature cards ── */
+#AIWelcomeFeature {
+    background-color: @widgetBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 8px;
+}
+#AIWelcomeFeatureTitle {
+    font-size: 12px;
+    font-weight: 600;
+    color: @textColor;
+    padding: 0;
+}
+#AIWelcomeFeatureDesc {
+    font-size: 10px;
+    color: @qwidgetForegroundColor;
+    padding: 0;
+}
+#AIWelcomeChipLabel {
+    font-size: 11px;
+    color: @qwidgetForegroundColor;
+    padding: 0;
+    margin-bottom: 2px;
+}
+#AIWelcomeChips {
+    background: transparent;
+}
+
+/* ── Bubble action buttons (hover overlay) ── */
+#AIBubbleActions {
+    background: transparent;
+}
+#AIBubbleActionBtn {
+    font-size: 11px;
+    border: 1px solid @borderColor;
+    background-color: @widgetBackgroundColor;
+    border-radius: 4px;
+    padding: 0;
+    qproperty-flat: true;
+}
+#AIBubbleActionBtn:hover {
+    background-color: @emptyContentBackgroundColor;
+    border-color: @highlightColor;
+}
+
+/* ── Typing indicator (pulsing dots) ── */
+#AITypingIndicator {
+    font-size: 12px;
+    color: @qwidgetForegroundColor;
+    background: transparent;
+    padding: 2px 0;
+}
+
+/* ── Collapse toggle (long message show-more) ── */
+#AICollapseToggle {
+    font-size: 11px;
+    color: @highlightColor;
+    background: transparent;
+    border: none;
+    padding: 0 4px;
+    text-align: left;
+}
+#AICollapseToggle:hover {
+    color: @accentTranslate;
+    text-decoration: underline;
 }

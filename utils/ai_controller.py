@@ -199,6 +199,7 @@ class AiController(QObject):
         self._last_user_text = ''
         self._current_mode: str = 'chat'
         self._is_running = False
+        self._thinking_sent = False
 
         # ── Conversation history ─────────────────────────────────
         self.messages: List[ChatMessage] = []
@@ -671,6 +672,7 @@ class AiController(QObject):
         )
         self._pending_prompt_estimate = prompt_tokens
         self._prompt_tokens += prompt_tokens
+        self._thinking_sent = False
         self._token_count += prompt_tokens
         # Emit accumulated estimate for consistency
         self.prompt_tokens_estimated.emit(self._token_count)
@@ -698,7 +700,9 @@ class AiController(QObject):
         self._worker.start()
 
     def _on_chunk(self, chunk: str):
-        self.thinking_finished.emit()
+        if not self._thinking_sent:
+            self._thinking_sent = True
+            self.thinking_finished.emit()
         self._accumulated_text += chunk
         self.chunk_received.emit(chunk)
 
@@ -757,7 +761,7 @@ class AiController(QObject):
             if tool_turns_left - 1 > 0:
                 self.system_message.emit(
                     f'── AI 调用了 {len(tool_calls)} 个工具，继续处理... ──')
-                self.stream_finished.emit(turn_text)
+                self.stream_finished.emit(_strip_json_blocks(turn_text))
                 self.streaming_started.emit()
                 self._accumulated_text = ''
                 self._start_worker(
@@ -839,6 +843,7 @@ class AiController(QObject):
         """Create ChangeItems from raw change dicts and finish the turn."""
         self._is_running = False
         self.thinking_finished.emit()
+        self.status_changed.emit('待机中', False)
         proj = self._proj_getter()
         changes: List[ChangeItem] = []
         for c in raw_changes:
@@ -857,6 +862,17 @@ class AiController(QObject):
                 ))
         self.changes_ready.emit(changes)
         self.stream_finished.emit('')
+
+        # Persist to conversation history
+        segments = list(self._display_steps)
+        self._display_steps.clear()
+        tool_traces = '\n'.join(self._pending_tool_traces)
+        self._pending_tool_traces.clear()
+        stored = f"[tool]\n{tool_traces}\n[/tool]" if tool_traces else ""
+        self.messages.append(ChatMessage(role='user', content=self._last_user_text))
+        self.messages.append(ChatMessage(role='assistant', content=stored,
+                                          changes=list(changes), segments=segments))
+        self._save_history()
 
     def _finalize_turn(self, full_text: str):
         self._is_running = False
@@ -898,7 +914,9 @@ class AiController(QObject):
                     ))
 
         self.changes_ready.emit(changes)
-        self.stream_finished.emit(display_text)
+        # When changes exist, the change card conveys all user-facing info;
+        # skip the text bubble (which duplicates formatted translations etc.).
+        self.stream_finished.emit('' if changes else display_text)
 
         # Record in history
         logger.info(
@@ -909,10 +927,13 @@ class AiController(QObject):
             len(self.messages) + 2,
         )
         self.messages.append(ChatMessage(role='user', content=self._last_user_text))
-        # Build display segments for history reconstruction
-        final_step = self._accumulated_text.strip()
-        if final_step:
-            self._display_steps.append({"type": "text", "content": final_step})
+        # Build display segments for history reconstruction.
+        # When changes exist, skip the final text step — the change card is the
+        # user-facing output and the raw formatted text is redundant.
+        if not changes:
+            final_step = self._accumulated_text.strip()
+            if final_step:
+                self._display_steps.append({"type": "text", "content": final_step})
         segments = list(self._display_steps)
         self._display_steps.clear()
         # Embed tool call traces in the assistant message content so the model
@@ -932,7 +953,6 @@ class AiController(QObject):
     def _lookup_old_value(proj, block_id: str, field: str) -> str:
         """Read the current project value for a block+field combination."""
         try:
-            from .proj_compact import parse_block_id, _COMPACT_DEF
             pidx, bidx = parse_block_id(block_id)
             if pidx is None or bidx is None:
                 return ''

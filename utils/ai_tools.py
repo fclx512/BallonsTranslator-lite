@@ -240,7 +240,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
 _SETTER_FIELDS: Dict[str, Set[str]] = {
     "set_font":   {"ff", "fs", "fw", "b", "i"},
     "set_color":  {"fg", "bg", "sw"},
-    "set_layout": {"a", "ls", "lsp", "v", "lb"},
+    "set_layout": {"a", "ls", "lsp", "v"},
 }
 
 # Tools hidden in translation mode (style-only operations)
