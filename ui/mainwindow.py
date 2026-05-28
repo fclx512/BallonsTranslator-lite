@@ -834,10 +834,12 @@ class MainWindow(mainwindow_cls):
         from utils.config import pcfg
 
         def _keys(action_id, defaults):
-            keys = pcfg.shortcuts.get(action_id, defaults)
-            if not isinstance(keys, list):
-                keys = [keys] if keys else list(defaults)
-            return keys
+            if action_id in pcfg.shortcuts:
+                keys = pcfg.shortcuts[action_id]
+                if not isinstance(keys, list):
+                    keys = [keys] if keys else []
+                return keys
+            return list(defaults)
 
         self.shortcut_registry = {}
 
@@ -1032,7 +1034,7 @@ class MainWindow(mainwindow_cls):
 
 
     def on_open_merge_tool(self):
-        """打开区域合并工具对话框"""
+        """Open region merge tool dialog"""
         if not hasattr(self, 'merge_dialog') or self.merge_dialog is None:
             from .merge_dialog import MergeDialog
             from qtpy.QtCore import QThread
@@ -1050,7 +1052,7 @@ class MainWindow(mainwindow_cls):
             self.merge_dialog.show()
 
     def run_merge_task(self, on_current=False):
-        """执行区域合并任务"""
+        """Run region merge task"""
         from utils import merger
         from qtpy.QtWidgets import QMessageBox
         
@@ -1141,7 +1143,7 @@ class MainWindow(mainwindow_cls):
             self.run_merge_all_async(json_path, img_list, config)
     
     def run_merge_all_async(self, json_path, img_list, config):
-        """异步执行所有文件的合并"""
+        """Run merge async on all files"""
         from .io_thread import MergeThread
         
         # 创建合并线程（如果不存在）
@@ -1158,18 +1160,18 @@ class MainWindow(mainwindow_cls):
             self.merge_thread.progress_bar.show()
     
     def on_merge_progress(self, current, total):
-        """合并进度更新"""
+        """Merge progress update"""
         progress = int(current / total * 100)
         self.merge_thread.progress_bar.updateTaskProgress(progress, f' {current}/{total}')
     
     def on_merge_stop(self):
-        """停止合并"""
+        """Stop merge"""
         if hasattr(self, 'merge_thread'):
             self.merge_thread.requestStop()
             self.merge_thread.progress_bar.hide()
     
     def on_merge_finished(self, success_count, fail_count):
-        """合并完成"""
+        """Merge complete"""
         self.merge_thread.progress_bar.hide()
         
         # 重新加载整个项目

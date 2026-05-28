@@ -146,7 +146,7 @@ class FontSizeBox(QFrame):
         hlayout.setContentsMargins(0, 0, 0, 0)
 
 class FontItemDelegate(QStyledItemDelegate):
-    """用于在字体下拉框中用对应的字体渲染预览"""
+    """Render font preview in the font combo box using the corresponding font"""
     def paint(self, painter, option, index):
         font_family = index.data(Qt.DisplayRole)
         if isinstance(font_family, str):
@@ -547,7 +547,7 @@ class FontFormatPanel(Widget):
             self.set_globalfmt_title()
 
     def on_familybox_changed(self, family: str):
-        """当家族名改变时，更新样式下拉框"""
+        """Update style combo box when font family changes"""
         self.stylebox.blockSignals(True)
         self.stylebox.clear()
         styles = shared.FONT_STYLES.get(family, [])
@@ -564,10 +564,10 @@ class FontFormatPanel(Widget):
         # 触发格式更新
         self.apply_font_change()
     def on_fontstyle_changed(self, style: str):
-        """当样式改变时，触发格式更新"""
+        """Trigger format update when style changes"""
         self.apply_font_change()
     def apply_font_change(self):
-        """统一的格式应用入口，确保 Family 和 Style 同步发射"""
+        """Unified entry point for applying format changes, syncs Family and Style updates"""
         family = self.familybox.currentText()
         style = self.stylebox.currentText()
 

@@ -180,17 +180,17 @@ class MergeDialog(QDialog):
         self.layout.addLayout(button_layout)
 
     def on_run_current(self):
-        """对当前文件运行合并"""
+        """Run merge on current file"""
         self.run_current_clicked.emit()
         # 不关闭对话框，让用户可以继续调整参数
 
     def on_run_all(self):
-        """对所有文件运行合并"""
+        """Run merge on all files"""
         self.run_all_clicked.emit()
         # 不关闭对话框，让用户可以继续调整参数
 
     def get_config(self):
-        """获取用户配置的合并参数"""
+        """Get user-configured merge params"""
         config = {}
         config["MERGE_MODE"] = self.merge_mode.currentData()
         # Set a default reading direction, as the UI for a global default has been removed.

@@ -1,6 +1,6 @@
 from typing import List, Union, Tuple
 
-from qtpy.QtWidgets import QPushButton, QKeySequenceEdit, QLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QWidget, QLabel, QSpinBox, QSizePolicy, QSpacerItem, QCheckBox, QSplitter, QScrollArea, QLineEdit, QDialog, QDialogButtonBox, QListWidget, QListWidgetItem, QAbstractItemView
+from qtpy.QtWidgets import QPushButton, QKeySequenceEdit, QLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QWidget, QLabel, QSpinBox, QSizePolicy, QSpacerItem, QCheckBox, QScrollArea, QLineEdit, QDialog, QDialogButtonBox, QListWidget, QListWidgetItem, QAbstractItemView, QFrame
 from qtpy.QtCore import Qt, Signal, QSize
 from qtpy.QtGui import QFont, QIntValidator, QValidator, QFocusEvent
 
@@ -9,8 +9,7 @@ from utils.config import pcfg
 from utils import shared as C
 from utils.shared import (CONFIG_FONTSIZE_CONTENT, CONFIG_FONTSIZE_HEADER, CONFIG_COMBOBOX_SHORT, CONFIG_COMBOBOX_LONG,
     CONFIG_COMBOBOX_MIDEAN, CONFIGBLOCK_CONTENT_MARGINS, GROUPBOX_CONTENT_MARGINS, CONFIG_SUBBLOCK_SPACING,
-    LINEEDIT_FIXHEIGHT, NAVLIST_WIDTH, NAVLIST_HEADER_FONTSIZE, SHORTCUT_PILL_FONTSIZE, SHORTCUT_CLOSE_FONTSIZE,
-    SHORTCUT_EDITOR_MINHEIGHT, SHORTCUT_ACTIONLIST_WIDTH, SHORTCUT_KEYSEQ_WIDTH)
+    LINEEDIT_FIXHEIGHT, NAVLIST_WIDTH, NAVLIST_HEADER_FONTSIZE)
 from .module_parse_widgets import InpaintConfigPanel, TextDetectConfigPanel, TranslatorConfigPanel, OCRConfigPanel
 
 class CustomIntValidator(QIntValidator):
@@ -286,29 +285,195 @@ _ACTION_NAMES = {
     'merge_tool': 'Merge Tool',
 }
 
+# Shortcut groups for organized display
+_SHORTCUT_GROUPS = [
+    ('Navigation', ['prev_page', 'next_page', 'prev_page_alt', 'next_page_alt']),
+    ('View', ['zoom_in', 'zoom_out', 'preview']),
+    ('Edit', ['textedit_mode', 'textblock_mode', 'drawboard_mode', 'delete_blks', 'delete_blks_alt',
+              'select_all', 'bold', 'italic', 'underline', 'undo', 'redo']),
+    ('Tools', ['hand_tool', 'rect_tool', 'inpaint_tool', 'pen_tool', 'merge_tool', 'space_inpaint']),
+    ('Search', ['page_search', 'global_search']),
+    ('General', ['escape']),
+]
 
-class _ShortcutPill(QWidget):
-    removed = Signal(object)
 
-    def __init__(self, key_seq: str, parent=None):
+class _ShortcutRow(QWidget):
+    """A row for editing shortcuts of a single action."""
+    shortcut_changed = Signal()
+
+    def __init__(self, action_id: str, parent=None):
         super().__init__(parent)
-        self.key_seq = key_seq
-        h = QHBoxLayout(self)
-        h.setContentsMargins(4, 1, 1, 1)
-        h.setSpacing(2)
+        self.action_id = action_id
+        self._disabled_placeholder = None
+
         from .theme_helpers import shortcut_styles
         s = shortcut_styles()
-        lbl = QLabel(key_seq)
-        lbl.setStyleSheet(f"color: {s['pill_text']}; font-size: {SHORTCUT_PILL_FONTSIZE}px;")
-        h.addWidget(lbl)
-        btn = QPushButton('×')
-        btn.setFixedSize(16, 16)
-        btn.setStyleSheet(
-            f"QPushButton {{ border: none; color: {s['close_clr']}; font-size: {SHORTCUT_CLOSE_FONTSIZE}px; }}"
+
+        h = QHBoxLayout(self)
+        h.setContentsMargins(2, 6, 2, 6)
+        h.setSpacing(6)
+
+        # Action name — left column
+        name = QLabel(self.tr(_ACTION_NAMES.get(action_id, action_id)))
+        name.setStyleSheet(f"color: {s['name_clr']}; background: transparent; border: none;")
+        name.setFixedWidth(140)
+        h.addWidget(name)
+
+        # Shortcuts pills — middle column (stretches)
+        self.shortcuts_widget = QWidget()
+        self.shortcuts_widget.setStyleSheet("background: transparent; border: none;")
+        self.shortcuts_layout = QHBoxLayout(self.shortcuts_widget)
+        self.shortcuts_layout.setContentsMargins(0, 0, 0, 0)
+        self.shortcuts_layout.setSpacing(4)
+        self.shortcuts_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        h.addWidget(self.shortcuts_widget, 1)
+
+        # Buttons — right column
+        btn_container = QWidget()
+        btn_container.setFixedWidth(86)
+        btn_container.setStyleSheet("background: transparent; border: none;")
+        btn_layout = QHBoxLayout(btn_container)
+        btn_layout.setContentsMargins(0, 0, 0, 0)
+        btn_layout.setSpacing(2)
+
+        # Add button
+        self._add_btn = QPushButton('+')
+        self._add_btn.setFixedSize(24, 24)
+        self._add_btn.setToolTip(self.tr('Add shortcut'))
+        self._add_btn.setStyleSheet(
+            f"QPushButton {{ border: 1px solid {s['add_bdr']}; border-radius: 3px; "
+            f"color: {s['add_clr']}; background: transparent; padding: 0px; }}"
+            f"QPushButton:hover {{ border-color: {s['add_hvr_bdr']}; color: {s['add_hvr_clr']}; }}")
+        self._add_btn.clicked.connect(self._add_shortcut)
+        btn_layout.addWidget(self._add_btn)
+
+        # Clear button
+        self._clear_btn = QPushButton('Del')
+        self._clear_btn.setFixedSize(28, 24)
+        self._clear_btn.setToolTip(self.tr('Disable this shortcut'))
+        self._clear_btn.setStyleSheet(
+            f"QPushButton {{ border: none; border-radius: 3px; color: {s['btn_clr']}; "
+            f"background: transparent; padding: 0px; }}"
             f"QPushButton:hover {{ color: {s['close_hvr']}; }}")
-        btn.clicked.connect(lambda: self.removed.emit(self))
-        h.addWidget(btn)
-        self.setStyleSheet(s['pill'])
+        self._clear_btn.clicked.connect(self._clear)
+        btn_layout.addWidget(self._clear_btn)
+
+        # Reset button
+        self._reset_btn = QPushButton('Rst')
+        self._reset_btn.setFixedSize(28, 24)
+        self._reset_btn.setToolTip(self.tr('Reset to Default'))
+        self._reset_btn.setStyleSheet(
+            f"QPushButton {{ border: none; border-radius: 3px; color: {s['btn_clr']}; "
+            f"background: transparent; padding: 0px; }}"
+            f"QPushButton:hover {{ color: {s['reset_hvr']}; }}")
+        self._reset_btn.clicked.connect(self._reset)
+        btn_layout.addWidget(self._reset_btn)
+
+        h.addWidget(btn_container)
+
+        self._rebuild_pills()
+
+    def _get_keys(self) -> list:
+        """Get current shortcut keys respecting explicit empty-list (disabled)."""
+        if self.action_id in pcfg.shortcuts:
+            keys = pcfg.shortcuts[self.action_id]
+            if not isinstance(keys, list):
+                keys = [keys] if keys else []
+            return keys
+        return list(DEFAULT_SHORTCUTS.get(self.action_id, []))
+
+    def _rebuild_pills(self):
+        # Clear existing pills and placeholder
+        while self.shortcuts_layout.count():
+            item = self.shortcuts_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._disabled_placeholder = None
+
+        keys = self._get_keys()
+        if keys:
+            from .theme_helpers import shortcut_styles
+            s = shortcut_styles()
+            for k in keys:
+                # Pill: QFrame container — QFrame selector works reliably in PyQt6
+                frame = QFrame()
+                frame.setFrameShape(QFrame.Shape.NoFrame)
+                fl = QHBoxLayout(frame)
+                fl.setContentsMargins(8, 1, 4, 1)
+                fl.setSpacing(2)
+                lbl = QLabel(k)
+                lbl.setStyleSheet(
+                    f"color: {s['pill_text']}; background: transparent; border: none;")
+                fl.addWidget(lbl)
+                close_btn = QPushButton('x')
+                close_btn.setFixedSize(22, 22)
+                close_btn.setStyleSheet(
+                    f"QPushButton {{ border: none; border-radius: 2px; color: {s['close_clr']}; "
+                    f"background: transparent; padding: 0px; }}"
+                    f"QPushButton:hover {{ color: {s['close_hvr']}; "
+                    f"background: rgba(200,50,50,0.2); }}")
+                close_btn.clicked.connect(lambda checked, ks=k: self._remove_shortcut(ks))
+                fl.addWidget(close_btn)
+                frame.setStyleSheet(
+                    f"QFrame {{ background: {s['pill_bg']}; border-radius: 4px; }}")
+                self.shortcuts_layout.addWidget(frame)
+        else:
+            # Show disabled placeholder
+            from .theme_helpers import shortcut_styles
+            s = shortcut_styles()
+            self._disabled_placeholder = QLabel(self.tr('— None —'))
+            self._disabled_placeholder.setStyleSheet(
+                f"color: {s['disabled_clr']}; background: transparent; font-style: italic;")
+            self.shortcuts_layout.addWidget(self._disabled_placeholder)
+
+    def _add_shortcut(self):
+        edit = QKeySequenceEdit()
+        edit.setFixedWidth(120)
+        edit.setFixedHeight(24)
+        edit.setStyleSheet(
+            "QKeySequenceEdit { padding: 1px 4px; }")
+        self.shortcuts_layout.addWidget(edit)
+        edit.setFocus()
+
+        def on_finished():
+            seq = edit.keySequence().toString()
+            edit.deleteLater()
+            if seq:
+                keys = self._get_keys()
+                if seq not in keys:
+                    keys.append(seq)
+                    pcfg.shortcuts[self.action_id] = keys
+                self._rebuild_pills()
+                self.shortcut_changed.emit()
+            else:
+                self._rebuild_pills()
+
+        edit.editingFinished.connect(on_finished)
+
+    def _remove_shortcut(self, key_seq: str):
+        keys = self._get_keys()
+        if key_seq in keys:
+            keys.remove(key_seq)
+            pcfg.shortcuts[self.action_id] = keys
+        self._rebuild_pills()
+        self.shortcut_changed.emit()
+
+    def _clear(self):
+        pcfg.shortcuts[self.action_id] = []
+        self._rebuild_pills()
+        self.shortcut_changed.emit()
+
+    def _reset(self):
+        defaults = DEFAULT_SHORTCUTS.get(self.action_id, [])
+        if defaults:
+            pcfg.shortcuts[self.action_id] = list(defaults)
+        elif self.action_id in pcfg.shortcuts:
+            del pcfg.shortcuts[self.action_id]
+        self._rebuild_pills()
+        self.shortcut_changed.emit()
+
+    def refresh(self):
+        self._rebuild_pills()
 
 
 class ShortcutEditor(QWidget):
@@ -316,179 +481,91 @@ class ShortcutEditor(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumHeight(SHORTCUT_EDITOR_MINHEIGHT)
-        self._pills_info = {}
-        self._current_action_id = None
-        self._current_card = None
+        self._rows = {}
+        self.setMinimumHeight(200)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 4, 0, 4)
+        layout.setContentsMargins(0, 4, 0, 0)
+        layout.setSpacing(0)
 
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        # Create scroll area for grouped shortcuts
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QScrollArea.NoFrame)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.viewport().setContentsMargins(0, 0, 0, 0)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollBar:vertical {
+                width: 8px;
+                background: transparent;
+            }
+            QScrollBar::handle:vertical {
+                background: #666;
+                border-radius: 4px;
+                min-height: 20px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0;
+            }
+        """)
 
-        # Left: action list
-        left = QWidget()
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(2, 2, 2, 2)
-        self.list_widget = QListWidget()
-        self.list_widget.setFixedWidth(SHORTCUT_ACTIONLIST_WIDTH)
-        for aid in DEFAULT_SHORTCUTS.keys():
-            display_name = self.tr(_ACTION_NAMES.get(aid, aid))
-            item = QListWidgetItem(display_name)
-            item.setData(Qt.ItemDataRole.UserRole, aid)
-            self.list_widget.addItem(item)
-        self.list_widget.currentRowChanged.connect(self._on_select)
-        left_layout.addWidget(self.list_widget)
+        scroll_content = QWidget()
+        self._content_layout = QVBoxLayout(scroll_content)
+        self._content_layout.setContentsMargins(0, 0, 0, 0)
+        self._content_layout.setSpacing(0)
 
-        # Right: editor pane
-        right = QWidget()
-        self.right_layout = QVBoxLayout(right)
-        self.right_layout.setContentsMargins(8, 4, 8, 4)
-        self._placeholder = QLabel(self.tr('Select an action to edit shortcuts'))
-        self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        from .theme_helpers import shortcut_styles
-        self._placeholder.setStyleSheet(f"color: {shortcut_styles()['place_clr']};")
-        self.right_layout.addWidget(self._placeholder)
-
-        splitter.addWidget(left)
-        splitter.addWidget(right)
-        splitter.setSizes([190, 210])
-        layout.addWidget(splitter)
-
-    def _on_select(self, row: int):
-        if row < 0:
-            return
-        item = self.list_widget.item(row)
-        action_id = item.data(Qt.ItemDataRole.UserRole)
-        self._show_action_editor(action_id)
-
-    def _show_action_editor(self, action_id: str):
-        # Remove old card
-        if self._current_card is not None:
-            self.right_layout.removeWidget(self._current_card)
-            self._current_card.deleteLater()
-            self._current_card = None
-        self._placeholder.setVisible(False)
-        self._current_action_id = action_id
-        card = self._make_card(action_id)
-        self._current_card = card
-        self.right_layout.addWidget(card)
-
-    def _make_card(self, action_id: str) -> QWidget:
+        # Build grouped layout
         from .theme_helpers import shortcut_styles
         s = shortcut_styles()
-        card = QWidget()
-        card.setStyleSheet(f"QWidget {{ background: {s['card_bg']}; border-radius: 4px; padding: 4px; }}")
-        v = QVBoxLayout(card)
-        v.setContentsMargins(6, 3, 4, 3)
-        v.setSpacing(3)
 
-        # Header row: name + reset
-        header = QHBoxLayout()
-        name = QLabel(self.tr(_ACTION_NAMES.get(action_id, action_id)))
-        name.setStyleSheet(f"font-weight: bold; color: {s['name_clr']}; border: none; background: transparent;")
-        header.addWidget(name)
-        header.addStretch()
-        reset_btn = QPushButton('↺')
-        reset_btn.setFixedSize(20, 20)
-        reset_btn.setToolTip(self.tr('Reset'))
-        reset_btn.setStyleSheet(
-            f"QPushButton {{ border: none; color: {s['btn_clr']}; background: transparent; }}"
-            f"QPushButton:hover {{ color: {s['reset_hvr']}; }}")
-        reset_btn.clicked.connect(lambda checked=False, aid=action_id: self._reset_card(aid))
-        header.addWidget(reset_btn)
-        v.addLayout(header)
+        for group_name, action_ids in _SHORTCUT_GROUPS:
+            group_box = PanelGroupBox(self.tr(group_name))
+            group_layout = group_box.contentLayout()
 
-        # Pills row
-        pills_row = QHBoxLayout()
-        pills_row.setSpacing(3)
-        pills_widget = QWidget()
-        pills_widget.setLayout(pills_row)
-        pills_widget.setStyleSheet("background: transparent; border: none;")
-        v.addWidget(pills_widget)
+            for idx, action_id in enumerate(action_ids):
+                if idx > 0:
+                    sep = QWidget()
+                    sep.setFixedHeight(1)
+                    sep.setStyleSheet(
+                        f"background: {s['add_bdr']};")
+                    group_layout.addWidget(sep)
+                row = _ShortcutRow(action_id)
+                row.shortcut_changed.connect(self.shortcut_changed)
+                self._rows[action_id] = row
+                group_layout.addWidget(row)
 
-        # "+" add button
-        from .theme_helpers import shortcut_styles
-        s = shortcut_styles()
-        add_btn = QPushButton('+')
-        add_btn.setFixedSize(24, 20)
-        add_btn.setToolTip(self.tr('Add shortcut'))
-        add_btn.setStyleSheet(
-            f"QPushButton {{ border: 1px solid {s['add_bdr']}; border-radius: 3px; color: {s['add_clr']}; background: transparent; }}"
-            f"QPushButton:hover {{ border-color: {s['add_hvr_bdr']}; color: {s['add_hvr_clr']}; }}")
-        add_btn.clicked.connect(lambda checked=False, aid=action_id, pw=pills_widget: self._add_shortcut(aid, pw))
-        pills_row.addWidget(add_btn)
-        pills_row.addStretch()
+            self._content_layout.addWidget(group_box)
+            self._content_layout.addSpacing(6)
 
-        self._pills_info[action_id] = dict(pills_widget=pills_widget, add_btn=add_btn)
-        self._rebuild_pills(action_id)
-        return card
-
-    def _rebuild_pills(self, action_id: str):
-        info = self._pills_info[action_id]
-        pw = info['pills_widget']
-        layout = pw.layout()
-        # Remove all pill widgets (keep add_btn and stretch)
-        while layout.count() > 2:
-            item = layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-        keys = pcfg.shortcuts.get(action_id, DEFAULT_SHORTCUTS.get(action_id, []))
-        if not isinstance(keys, list):
-            keys = [keys]
-        for k in reversed(keys):
-            pill = _ShortcutPill(k)
-            pill.removed.connect(lambda p, aid=action_id: self._remove_shortcut(aid, p.key_seq))
-            layout.insertWidget(0, pill)
-
-    def _add_shortcut(self, action_id: str, pills_widget: QWidget):
-        edit = QKeySequenceEdit()
-        edit.setFixedWidth(SHORTCUT_KEYSEQ_WIDTH)
-        layout = pills_widget.layout()
-        layout.insertWidget(layout.count() - 2, edit)
-        edit.setFocus()
-
-        def on_finished():
-            seq = edit.keySequence().toString()
-            edit.deleteLater()
-            if seq:
-                keys = pcfg.shortcuts.get(action_id, DEFAULT_SHORTCUTS.get(action_id, []))
-                if not isinstance(keys, list):
-                    keys = [keys] if keys else []
-                if seq not in keys:
-                    keys.append(seq)
-                    pcfg.shortcuts[action_id] = keys
-                self._rebuild_pills(action_id)
-                self.shortcut_changed.emit()
-            else:
-                self._rebuild_pills(action_id)
-
-        # Use editingFinished signal
-        edit.editingFinished.connect(on_finished)
-
-    def _remove_shortcut(self, action_id: str, key_seq: str):
-        keys = pcfg.shortcuts.get(action_id, [])
-        if not isinstance(keys, list):
-            keys = [keys] if keys else []
-        if key_seq in keys:
-            keys.remove(key_seq)
-            if keys:
-                pcfg.shortcuts[action_id] = keys
-            elif action_id in pcfg.shortcuts:
-                del pcfg.shortcuts[action_id]
-        self._rebuild_pills(action_id)
-        self.shortcut_changed.emit()
-
-    def _reset_card(self, action_id: str):
-        defaults = DEFAULT_SHORTCUTS.get(action_id, [])
-        pcfg.shortcuts[action_id] = list(defaults)
-        self._rebuild_pills(action_id)
-        self.shortcut_changed.emit()
+        self._content_layout.addStretch()
+        scroll_area.setWidget(scroll_content)
+        layout.addWidget(scroll_area)
 
     def refresh(self):
-        if self._current_action_id is not None:
-            self._rebuild_pills(self._current_action_id)
+        for row in self._rows.values():
+            row.refresh()
+
+
+class ShortcutDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(self.tr('Shortcut Editor'))
+        self.setMinimumSize(560, 480)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.shortcut_editor = ShortcutEditor()
+        self.shortcut_editor.shortcut_changed.connect(self._on_shortcut_changed)
+        layout.addWidget(self.shortcut_editor)
+
+    def _on_shortcut_changed(self):
+        from utils.config import save_config
+        save_config()
 
 
 class FontExcludeDialog(QDialog):
@@ -618,7 +695,7 @@ class ConfigPanel(Widget):
         label_startup = self.tr('Startup')
         label_typesetting = self.tr('Typesetting')
         label_save = self.tr('Save')
-        label_shortcuts = self.tr('Keyboard Shortcuts')
+        label_shortcuts = self.tr('Miscellaneous')
 
         # === Model management ===
         model_group = PanelGroupBox(self.tr('Models'))
@@ -776,10 +853,11 @@ class ConfigPanel(Widget):
 
         self.save_block = generalConfigPanel.addGroupedBlock(label_save, save_widget, object_name="GroupSave")
 
-        # === General: Keyboard Shortcuts ===
-        self.shortcut_editor = ShortcutEditor(parent=self)
-        self.shortcut_block = generalConfigPanel.addGroupedBlock(label_shortcuts, self.shortcut_editor)
-        self.shortcut_block.layout().addStretch()
+        # === General: Miscellaneous (shortcut editor) ===
+        self.shortcut_btn = QPushButton(self.tr('Edit Shortcuts...'), parent=self)
+        self.shortcut_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
+        self.shortcut_btn.clicked.connect(self._open_shortcut_dialog)
+        self.shortcut_block = generalConfigPanel.addGroupedBlock(label_shortcuts, self.shortcut_btn)
 
         # === Navigation list (replaces horizontal nav bar) ===
         self.navList = QListWidget()
@@ -954,6 +1032,10 @@ class ConfigPanel(Widget):
         dialog.exec()
         save_all_profiles(profiles)
         self.profiles_changed.emit()
+
+    def _open_shortcut_dialog(self):
+        dialog = ShortcutDialog(self)
+        dialog.exec()
 
     def hideEvent(self, e) -> None:
         self.save_config.emit()

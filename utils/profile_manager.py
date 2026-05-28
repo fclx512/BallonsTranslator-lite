@@ -260,6 +260,7 @@ try:
         QComboBox, QInputDialog, QTextEdit, QScrollArea, QCheckBox,
         QSpinBox, QDoubleSpinBox,
     )
+    from PyQt6.QtCore import Qt
 except ImportError:
     from PyQt5.QtWidgets import (
         QDialog, QVBoxLayout, QHBoxLayout, QListWidget,
@@ -268,6 +269,7 @@ except ImportError:
         QComboBox, QInputDialog, QTextEdit, QScrollArea, QCheckBox,
         QSpinBox, QDoubleSpinBox,
     )
+    from PyQt5.QtCore import Qt
 
 import httpx
 
@@ -286,6 +288,13 @@ class ProfileManagerDialog(QDialog):
 
     def _is_builtin(self, row: int) -> bool:
         return 0 <= row < len(self._profiles) and self._profiles[row].get("builtin", False)
+
+    def _section_label(self, text: str):
+        """Section divider label: —— text ——"""
+        lbl = QLabel(f"—— {text} ——")
+        lbl.setStyleSheet("font-size: 14px; padding: 8px 0 2px 0;")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        return lbl
 
     def _save_current_form(self):
         row = self._current_row
@@ -376,7 +385,7 @@ class ProfileManagerDialog(QDialog):
         right_layout.setContentsMargins(5, 5, 5, 5)
 
         # Basic Settings
-        right_layout.addWidget(QLabel(self.tr("Basic Settings:")))
+        right_layout.addWidget(self._section_label(self.tr("Basic Settings")))
         form = QFormLayout()
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText(self.tr("e.g., My Custom API"))
@@ -431,7 +440,7 @@ class ProfileManagerDialog(QDialog):
         right_layout.addLayout(conn_form)
 
         # Advanced (optional) — Translation settings
-        right_layout.addWidget(QLabel(self.tr("Translation Settings (optional):")))
+        right_layout.addWidget(self._section_label(self.tr("Translation Settings (optional)")))
         adv_form = QFormLayout()
         self.rf_combo = QComboBox()
         self.rf_combo.addItems(["json_object", "json_schema"])
@@ -458,7 +467,7 @@ class ProfileManagerDialog(QDialog):
         right_layout.addLayout(adv_form)
 
         # OCR Settings
-        right_layout.addWidget(QLabel(self.tr("OCR Settings (optional):")))
+        right_layout.addWidget(self._section_label(self.tr("OCR Settings (optional)")))
         ocr_form = QFormLayout()
         self.ocr_prompt_edit = QTextEdit()
         self.ocr_prompt_edit.setPlaceholderText(

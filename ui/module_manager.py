@@ -349,7 +349,7 @@ class ImgtransThread(QThread):
         self.start()
     
     def requestStop(self):
-        """请求停止当前任务"""
+        """Request stop current task"""
         if self.isRunning():
             self.stop_requested = True
         # 同时停止翻译线程
@@ -747,7 +747,7 @@ class ModuleManager(QObject):
         self.imgtrans_thread.runImgtransPipeline(self.imgtrans_proj, pages_to_process)
     
     def stopImgtransPipeline(self):
-        """停止图像翻译流程"""
+        """Stop image translation pipeline"""
         LOGGER.info('Stopping image translation pipeline...')
         self.imgtrans_thread.requestStop()
 
@@ -853,7 +853,7 @@ class ModuleManager(QObject):
             self.imgtrans_pipeline_finished.emit()
     
     def on_imgtrans_thread_stopped(self):
-        """线程完成时确保关闭进度对话框"""
+        """Thread finished [] ensure progress dialog is closed"""
         # 线程完成了，直接关闭窗口
         self.progress_msgbox.hide()
         self.imgtrans_pipeline_finished.emit()

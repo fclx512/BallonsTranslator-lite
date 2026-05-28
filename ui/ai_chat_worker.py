@@ -124,31 +124,31 @@ class AiChatWorker(QThread):
                     )
         except openai.APIConnectionError as e:
             logger.error("APIConnectionError: %s", e)
-            self.error_occurred.emit(f'连接失败：{e}')
+            self.error_occurred.emit(self.tr("Connection failed: %1").arg(str(e)))
             return
         except openai.RateLimitError:
             logger.warning("RateLimitError")
-            self.error_occurred.emit('API 频率限制，请稍后重试')
+            self.error_occurred.emit(self.tr("API rate limit reached, please try again later."))
             return
         except openai.APITimeoutError:
             logger.error("APITimeoutError")
-            self.error_occurred.emit('请求超时，请检查网络或 API 地址')
+            self.error_occurred.emit(self.tr("Request timed out. Please check your network or API URL."))
             return
         except openai.AuthenticationError:
             logger.error("AuthenticationError")
-            self.error_occurred.emit('API 密钥无效')
+            self.error_occurred.emit(self.tr("Invalid API key."))
             return
         except openai.BadRequestError as e:
             logger.error("BadRequestError (400): %s", e)
-            self.error_occurred.emit(f'请求参数错误 (400): {e}')
+            self.error_occurred.emit(self.tr("Bad request: %1").arg(str(e)))
             return
         except openai.APIStatusError as e:
             logger.error("APIStatusError (%s): %s", e.status_code, e)
-            self.error_occurred.emit(f'API 错误 ({e.status_code}): {e}')
+            self.error_occurred.emit(self.tr("API error (%1): %2").arg(e.status_code).arg(str(e)))
             return
         except Exception as e:
             logger.exception("Unexpected worker error")
-            self.error_occurred.emit(f'未知错误：{e}')
+            self.error_occurred.emit(self.tr("Unexpected error: %1").arg(str(e)))
             return
 
         # Serialize accumulated tool calls into full_text so parse_tool_calls() can find them

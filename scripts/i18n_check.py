@@ -38,9 +38,9 @@ def find_ui_py_files():
 
 
 def find_all_py_files():
-    """All Python files in ui/ and modules/ — for tr-coverage check."""
+    """Python files in ui/, modules/ and utils/ — for tr-coverage check."""
     files = []
-    for scan_dir in ("ui", "modules"):
+    for scan_dir in ("ui", "modules", "utils"):
         dir_path = PROJECT_ROOT / scan_dir
         if dir_path.is_dir():
             files.extend(dir_path.rglob("*.py"))
@@ -71,6 +71,12 @@ def find_hardcoded_chinese(files):
     """Find Chinese characters in string literals not wrapped in self.tr()."""
     issues = []
 
+    # Short strings used in font-metrics / CJK-range checks — not UI text.
+    NON_UI_PATTERNS = frozenset({
+        "一", "鿿", "啊", "木", "木fg", "X木", "X",
+        "简体中文",
+    })
+
     for fpath in files:
         try:
             lines = fpath.read_text(encoding="utf-8").splitlines()
@@ -81,6 +87,12 @@ def find_hardcoded_chinese(files):
             if is_comment_or_docstring(lines, i):
                 continue
 
+            # Skip single-line triple-quoted docstrings (e.g.  """blah""")
+            stripped = line.strip()
+            if (stripped.startswith('"""') and stripped.endswith('"""') and len(stripped) >= 6) \
+               or (stripped.startswith("'''") and stripped.endswith("'''") and len(stripped) >= 6):
+                continue
+
             # Remove portions inside self.tr(...) calls so we don't flag
             # correctly-wrapped strings
             cleaned = TR_CALL_RE.sub("", line)
@@ -89,9 +101,10 @@ def find_hardcoded_chinese(files):
             # Find string literals containing Chinese
             for pat in [r'"([^"]*)"', r"'([^']*)'"]:
                 for m in re.finditer(pat, cleaned):
-                    if has_chinese(m.group(1)):
+                    text = m.group(1)
+                    if has_chinese(text) and text not in NON_UI_PATTERNS:
                         issues.append(
-                            (str(fpath.relative_to(PROJECT_ROOT)), i + 1, m.group(1))
+                            (str(fpath.relative_to(PROJECT_ROOT)), i + 1, text)
                         )
 
     return issues
@@ -170,8 +183,13 @@ def find_missing_and_orphans(files):
     missing = sorted(
         (ctx, s) for ctx, s in all_tr_calls if (ctx, s) not in ts_entries
     )
+    # Filter orphans: exclude format strings (skipped by tr() extractor)
+    # and ParamWidget context (module param descriptions, not tr() calls).
     orphans = sorted(
-        (ctx, s) for ctx, s in ts_entries if (ctx, s) not in all_tr_calls
+        (ctx, s) for ctx, s in ts_entries
+        if (ctx, s) not in all_tr_calls
+        and "{" not in s
+        and ctx != "ParamWidget"
     )
     return missing, orphans
 
