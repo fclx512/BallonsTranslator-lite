@@ -42,12 +42,9 @@ QSplitter:handle {
 }
 
 QSplitter::handle:pressed {
-    background: rgb(30, 147, 229)
+    background: @accentPrimary
 }
 
-ConfigSubBlock::hover {
-    background-color: rgba(30, 147, 229, 20%);
-}
 
 SourceTextEdit {
     font-size: 17px;
@@ -82,7 +79,7 @@ QPlainTextEdit {
 }
 
 QPlainTextEdit:focus {
-    border: 1px solid rgb(30, 147, 229);
+    border: 1px solid @accentPrimary;
  }
 
 QComboBox::drop-down {
@@ -90,7 +87,7 @@ QComboBox::drop-down {
 }
 
 QComboBox::hover {
-    border: 1px solid rgb(30, 147, 229);
+    border: 1px solid @accentPrimary;
 }
 
 QComboBox::down-arrow {
@@ -110,7 +107,7 @@ QFontComboBox#FontFamilyBox {
 }
 
 QFontComboBox#FontFamilyBox::hover {
-    border: 1px solid rgb(30, 147, 229);
+    border: 1px solid @accentPrimary;
 }
 
 SizeComboBox {
@@ -123,7 +120,7 @@ SizeComboBox {
 }
 
 SizeComboBox::hover {
-    border: 1px solid rgb(30, 147, 229);
+    border: 1px solid @accentPrimary;
 }
 
 SizeComboBox::down-arrow {
@@ -201,11 +198,11 @@ AlignmentChecker::indicator {
 }
 
 AlignmentChecker::indicator:checked {
-    background-color: rgb(30, 147, 229);
+    background-color: @accentPrimary;
 }
 
 AlignmentChecker::indicator:hover {
-    border: 2px solid rgb(30, 147, 229);
+    border: 2px solid @accentPrimary;
 }
 
 AlignmentChecker#AlignLeftChecker::indicator {
@@ -249,16 +246,16 @@ QFontChecker {
 QFontChecker::indicator {
     width: 30px;
     height: 30px;
-    border: 2px solid rgba(30, 147, 229, 0);
+    border: 2px solid transparent;
 }
 
 QFontChecker::indicator::hover {
-    border: 2px solid rgb(30, 147, 229);
+    border: 2px solid @accentPrimary;
 }
 
 QFontChecker::indicator::checked {
-    border: 2px solid rgb(30, 147, 229);
-    background-color: rgb(30, 147, 229);
+    border: 2px solid @accentPrimary;
+    background-color: @accentPrimary;
 }
 
 QFontChecker#FontBoldChecker::indicator {
@@ -335,7 +332,7 @@ QMenu::separator {
 }*/
 
 QMenu::item:selected {
-    background-color: #cad7ed;
+    background-color: @hoverBackgroundColor;
 }
 
 QDialog {
@@ -370,7 +367,7 @@ NoBorderPushBtn {
 }
 
 QPushButton::hover {
-    background-color: #cad7ed;
+    background-color: @hoverBackgroundColor;
 }
 
 QPushButton:pressed {
@@ -396,11 +393,9 @@ QPushButton#minBtn::hover {
 
 StatusButton {
     /* max-width: 140px; */
-    max-width: 10800px;
     /* height: 50px; */
     /* min-width: 140px; */
     font-size: 12px;
-    padding-left: 7px;
     padding-left: 7px;
     border: none;
 }
@@ -438,12 +433,12 @@ QPushButton#closeBtn {
 }
 
 QPushButton#closeBtn::hover {
-    background-color: #E81123;
+    background-color: @dangerColor;
     image: url(icons/titlebar_close_activate.svg);
 }
 
 TextCheckerLabel::hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 QCheckBox#TransChecker::indicator {
@@ -461,7 +456,7 @@ QCheckBox#TransChecker::indicator:checked {
 }
 
 QCheckBox#TransChecker::indicator:hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 QCheckBox#PaintChecker::indicator {
@@ -479,7 +474,7 @@ QCheckBox#PaintChecker::indicator:checked {
 }
 
 QCheckBox#PaintChecker::indicator:hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 QCheckBox#TexteditChecker::indicator {
@@ -497,7 +492,7 @@ QCheckBox#TexteditChecker::indicator:checked {
 }
 
 QCheckBox#TexteditChecker::indicator:hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 QCheckBox#TextblockChecker::indicator{
@@ -511,7 +506,7 @@ QCheckBox#TextblockChecker::indicator{
 }
 
 QCheckBox#TextblockChecker::indicator:hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 QCheckBox#TextblockChecker::indicator:checked{
@@ -531,14 +526,6 @@ OpenBtn::hover {
 
 OpenBtn::pressed {
     image: url(icons/openbtn_activate.svg);
-}
-
-QProgressBar {
-    background-color: @emptyContentBackgroundColor;
-    width: 450px;
-    height: 45px;
-    max-width: 450px;
-    max-height: 45px;
 }
 
 ShowPageListChecker::indicator{
@@ -602,11 +589,6 @@ StateChecker#ConfigChecker::indicator:checked
 {
     image: url(icons/leftbar_config_activate.svg);
 }
-
-QProgressBar::chunk {
-    background-color: #b0cbf8;
-}
-
 
 /*https://github.com/PyQt5/PyQt/blob/master/QScrollBar/StyleScrollBar.py*/
 /*纵向滚动条*/
@@ -711,10 +693,10 @@ QScrollBar::add-line {
 #PreviewLabel {
     background: rgba(0, 0, 0, 120);
     border-radius: 8px;
-    border: 2px solid @accentTranslate;
+    border: 2px solid @accentPrimary;
     font-size: 16px;
     padding: 6px 20px;
-    color: @accentTranslate;
+    color: @accentPrimary;
     font-weight: bold;
 }
 
@@ -736,7 +718,7 @@ QLabel#angleLabel {
 }
 
 .ClickableLabel::hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 .ConfigClickableLabel {
@@ -744,11 +726,11 @@ QLabel#angleLabel {
 }
 
 .ConfigClickableLabel::hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 .ExpandLabel::hover {
-    background-color: rgba(30, 147, 229, 20%);
+    background-color: @accentPrimary20;
 }
 
 DrawToolCheckBox::indicator {
@@ -759,7 +741,7 @@ DrawToolCheckBox::indicator {
 }
 
 DrawToolCheckBox::indicator:checked {
-    background-color: rgba(30, 147, 229, 80);
+    background-color: @accentPrimary80;
 }
 
 DrawToolCheckBox#DrawHandTool::indicator {
@@ -918,7 +900,7 @@ TitleBarToolBtn {
 }
 
 TitleBarToolBtn::hover {
-    background-color: rgb(30, 147, 229);
+    background-color: @accentPrimary;
     color: whitesmoke;
 }
 
@@ -934,7 +916,7 @@ QProgressBar {
     background-color: @borderColor;
 }
 QProgressBar::chunk {
-    background-color: rgb(30, 147, 229);
+    background-color: @accentPrimary;
 }
 
 
@@ -955,11 +937,11 @@ TextAreaStyleButton#ClearTextStyleButton {
 }
 
 TextAreaStyleButton#ClearTextStyleButton::hover {
-    background-color: #FF605C;
+    background-color: @dangerColor;
 }
 
 TextAreaStyleButton::hover {
-    background-color: #cad7ed;
+    background-color: @hoverBackgroundColor;
 }
 
 HidePanelButton {
@@ -972,7 +954,7 @@ HidePanelButton {
 }
 
 HidePanelButton::hover {
-    background-color: #FF605C;
+    background-color: @dangerColor;
 }
 
 PanelAreaContent {
@@ -1011,32 +993,6 @@ QLabel#CardTitle {
 
 Widget#CardContent {
     background-color: transparent;
-}
-
-/* ── Section Pill Navigation ── */
-ConfigNavBar {
-    background-color: @widgetBackgroundColor;
-    border-bottom: 1px solid @borderColor;
-    min-height: 40px;
-    max-height: 40px;
-}
-
-SectionPill {
-    padding: 5px 14px;
-    margin: 4px 3px;
-    border: 1px solid @borderColor;
-    border-radius: 14px;
-    background-color: @emptyContentBackgroundColor;
-    font-size: 13px;
-    color: @qwidgetForegroundColor;
-}
-SectionPill:hover {
-    border-color: rgb(30, 147, 229);
-    background-color: rgba(30, 147, 229, 20%);
-}
-SectionPill:checked {
-    font-weight: bold;
-    border-width: 2px;
 }
 
 
@@ -1094,7 +1050,7 @@ DeleteStyleButton {
 }
 
 DeleteStyleButton::hover {
-    background-color: #FF605C;
+    background-color: @dangerColor;
 }
 
 /* ═══════════════════════════════════════════════
@@ -1129,7 +1085,7 @@ DeleteStyleButton::hover {
     padding: 2px 10px;
     border-radius: 10px;
     background-color: @accentTranslate;
-    color: #fff;
+    color: @inverseTextColor;
     font-weight: 500;
 }
 #AITokenLabel {
@@ -1426,12 +1382,12 @@ DeleteStyleButton::hover {
 }
 #AIReviewAccept:hover {
     background-color: rgba(76, 175, 132, 0.15);
-    color: #4caf84;
+    color: @successColor;
 }
 #AIReviewAccept:checked {
     background-color: rgba(76, 175, 132, 0.25);
-    color: #4caf84;
-    border: 1px solid #4caf84;
+    color: @successColor;
+    border: 1px solid @successColor;
     border-radius: 4px;
 }
 /* ── Page navigation bar ── */
@@ -1468,14 +1424,14 @@ DeleteStyleButton::hover {
 }
 #AIReviewApplyBtn {
     background-color: @accentTranslate;
-    color: #fff;
+    color: @inverseTextColor;
     font-weight: 600;
     padding: 6px 18px;
     border-radius: 8px;
     border: none;
 }
 #AIReviewApplyBtn:hover {
-    background-color: rgb(30, 147, 229);
+    background-color: @accentPrimary;
 }
 #AIReviewApplyBtn:disabled {
     background-color: @borderColor;
@@ -1526,7 +1482,7 @@ DeleteStyleButton::hover {
 }
 #AIChangeReviewOpenBtn:hover {
     background-color: @accentTranslate;
-    color: #fff;
+    color: @inverseTextColor;
 }
 
 /* ── Input bar ── */
@@ -1546,13 +1502,13 @@ DeleteStyleButton::hover {
 }
 #AISendBtn {
     background-color: @accentTranslate;
-    color: #fff;
+    color: @inverseTextColor;
     border: none;
     border-radius: 12px;
     font-size: 16px;
 }
 #AISendBtn:hover {
-    background-color: rgb(30, 147, 229);
+    background-color: @accentPrimary;
 }
 
 /* ── Title bar buttons ── */
@@ -1641,13 +1597,13 @@ StateChecker#AiChatChecker::indicator:checked {
 
 #AIStopBtn {
     border: none;
-    background: #e74c3c;
-    color: #fff;
+    background: @dangerColor;
+    color: @inverseTextColor;
     font-size: 16px;
     border-radius: 8px;
 }
 #AIStopBtn:hover {
-    background: #c0392b;
+    background: @dangerColor;
 }
 
 #AIBubbleCopyBtn {

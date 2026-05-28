@@ -43,8 +43,8 @@ def elf_hash(ba: bytes) -> int:
 
 
 def _iso8859_str(s: str) -> bytes:
-    """Encode string as ISO-8859-1 (Latin-1). Raises on non-Latin-1 chars."""
-    return s.encode("latin-1")
+    """Encode string as ISO-8859-1 (Latin-1), replacing non-Latin-1 chars with '?'."""
+    return s.encode("latin-1", errors="replace")
 
 
 def _write_qstring(ds, s: str):

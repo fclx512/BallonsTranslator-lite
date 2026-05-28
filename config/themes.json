@@ -26,6 +26,10 @@
         "@highlightColor": "#e67e22",
         "@disabledForegroundColor": "#9d9d9f",
         "@cardBackgroundColor": "#ebeef5",
+        "@hoverBackgroundColor": "#cad7ed",
+        "@dangerColor": "#E81123",
+        "@successColor": "#4caf84",
+        "@inverseTextColor": "#ffffff",
         "_iconFillActive": "#697187",
         "_iconFill": "#b3b6bf"
     },
@@ -56,6 +60,10 @@
         "@highlightColor": "#f0b27a",
         "@disabledForegroundColor": "#5d6170",
         "@cardBackgroundColor": "#282c34",
+        "@hoverBackgroundColor": "#3a3a52",
+        "@dangerColor": "#FF605C",
+        "@successColor": "#4caf84",
+        "@inverseTextColor": "#ffffff",
         "_iconFillActive": "#96a4cd",
         "_iconFill": "#697186"
     },
@@ -86,6 +94,10 @@
         "@highlightColor": "#D97706",
         "@disabledForegroundColor": "#A8A29E",
         "@cardBackgroundColor": "#F5F5F4",
+        "@hoverBackgroundColor": "#E7E5E4",
+        "@dangerColor": "#DC2626",
+        "@successColor": "#16A34A",
+        "@inverseTextColor": "#ffffff",
         "_iconFillActive": "#57534E",
         "_iconFill": "#A8A29E"
     },
@@ -116,6 +128,10 @@
         "@highlightColor": "#F59E0B",
         "@disabledForegroundColor": "#78716C",
         "@cardBackgroundColor": "#292524",
+        "@hoverBackgroundColor": "#292524",
+        "@dangerColor": "#EF4444",
+        "@successColor": "#22C55E",
+        "@inverseTextColor": "#ffffff",
         "_iconFillActive": "#D6D3D1",
         "_iconFill": "#78716C"
     }

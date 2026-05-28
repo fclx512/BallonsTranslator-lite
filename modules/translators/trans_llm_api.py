@@ -7,21 +7,6 @@ import httpx
 import openai
 from pydantic import BaseModel, Field, ValidationError
 
-try:
-    from PyQt6.QtWidgets import (
-        QDialog, QVBoxLayout, QHBoxLayout, QListWidget,
-        QLineEdit, QPushButton, QLabel, QDialogButtonBox,
-        QFormLayout, QWidget, QSplitter, QMessageBox,
-        QComboBox, QInputDialog, QTextEdit, QScrollArea,
-    )
-except ImportError:
-    from PyQt5.QtWidgets import (
-        QDialog, QVBoxLayout, QHBoxLayout, QListWidget,
-        QLineEdit, QPushButton, QLabel, QDialogButtonBox,
-        QFormLayout, QWidget, QSplitter, QMessageBox,
-        QComboBox, QInputDialog, QTextEdit, QScrollArea,
-    )
-
 from .base import BaseTranslator, register_translator
 
 
@@ -49,29 +34,6 @@ DEFAULT_SYSTEM_PROMPT = (
     '{"translations": [{"id": 1, "translation": "Translated text here."}]}'
 )
 
-DEFAULT_PROMPT_TEMPLATE = (
-    "请将以下 {from_lang} 文本翻译为 {to_lang}：\n"
-    "{input_json}"
-)
-DEFAULT_CHAT_SAMPLES = (
-    "日本語-简体中文:\n"
-    "    source:\n"
-    "        - 二人のちゅーを 目撃した ぼっちちゃん\n"
-    "        - 大好きなお友達には あいさつ代わりに ちゅーするんだって\n"
-    "    target:\n"
-    "        - 小孤独目击了两人的接吻\n"
-    "        - 我听说人们会把亲吻作为与喜爱的朋友打招呼的方式"
-)
-
-SAMPLE_PROFILES = [
-    {"name": "OpenAI", "api_host": "https://api.openai.com/v1", "api_key": "", "model": "gpt-4o", "temperature": 0.1, "top_p": 1.0, "max_tokens": "", "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES},
-    {"name": "Gemini", "api_host": "https://generativelanguage.googleapis.com/v1beta/openai", "api_key": "", "model": "gemini-2.5-flash", "temperature": 0.1, "top_p": 1.0, "max_tokens": "", "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES},
-    {"name": "OpenRouter", "api_host": "https://openrouter.ai/api/v1", "api_key": "", "model": "", "temperature": 0.1, "top_p": 1.0, "max_tokens": "", "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES},
-    {"name": "DeepSeek", "api_host": "https://api.deepseek.com/v1", "api_key": "", "model": "", "temperature": 0.1, "top_p": 1.0, "max_tokens": "", "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES, "builtin": True},
-    {"name": "LM Studio", "api_host": "http://localhost:1234/v1", "api_key": "dummy-key", "model": "", "temperature": 0.1, "top_p": 1.0, "max_tokens": "", "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES, "builtin": True},
-    {"name": "Ollama", "api_host": "http://localhost:11434/v1", "api_key": "dummy-key", "model": "", "temperature": 0.1, "top_p": 1.0, "max_tokens": "", "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES, "builtin": True},
-]
-
 
 @register_translator("LLM_API_Translator")
 class LLM_API_Translator(BaseTranslator):
@@ -79,12 +41,6 @@ class LLM_API_Translator(BaseTranslator):
     cht_require_convert = True
 
     params = {
-        "manage_profiles": {
-            "type": "pushbtn",
-            "value": False,
-            "display_name": "Manage Profiles...",
-            "description": "Add, edit, or delete API profiles",
-        },
         "active_profile": {
             "type": "selector",
             "options": [],
@@ -152,7 +108,7 @@ class LLM_API_Translator(BaseTranslator):
         self.key_usage = {}
         self.client = None
         self._src_lang_map = {"Auto Detect": "Auto", **self.lang_map}
-        self._load_profiles()
+        self._load_profiles_from_shared()
         self._refresh_active_profile_options()
         # Sync profiles to global config so AI chat panel can read them
         from utils.config import pcfg as _pcfg
@@ -168,81 +124,27 @@ class LLM_API_Translator(BaseTranslator):
     def supported_tgt_list(self):
         return self.valid_lang_list
 
-    # --- Profile Storage ---
+    # --- Profile Access (shared storage) ---
 
-    def _profiles_key(self) -> str:
-        return "_profiles_storage"
-
-    def _get_profiles_raw(self) -> str:
-        key = self._profiles_key()
-        if key not in self.params and hasattr(self, 'params'):
-            return ""
-        if key not in self.params:
-            return ""
-        val = self.params[key]
-        if isinstance(val, dict):
-            return val.get("value", "")
-        return val
-
-    def _set_profiles_raw(self, raw: str):
-        key = self._profiles_key()
-        if key not in self.params or not isinstance(self.params[key], dict):
-            self.params[key] = {"value": raw}
-        else:
-            self.params[key]["value"] = raw
-
-    def _load_profiles(self):
-        raw = self._get_profiles_raw()
-        if raw:
-            try:
-                self._profiles_data = json.loads(raw)
-                if not isinstance(self._profiles_data, list):
-                    self._profiles_data = list(SAMPLE_PROFILES)
-                else:
-                    self._merge_builtin_defaults()
-            except (json.JSONDecodeError, TypeError):
-                self._profiles_data = list(SAMPLE_PROFILES)
-        else:
-            self._profiles_data = list(SAMPLE_PROFILES)
-            self._serialize_profiles()
-
-    def _merge_builtin_defaults(self):
-        """Ensure builtin profiles from SAMPLE_PROFILES exist and have all default fields."""
-        default_map = {
-            p["name"]: p
-            for p in SAMPLE_PROFILES
-            if p.get("builtin")
-        }
-        existing_names = {p.get("name") for p in self._profiles_data}
-        # Add any new builtin profiles that don't exist yet
-        for name, defaults in default_map.items():
-            if name not in existing_names:
-                self._profiles_data.append(dict(defaults))
-        # Fill missing fields on existing builtin profiles
-        for profile in self._profiles_data:
-            if profile.get("builtin") and profile["name"] in default_map:
-                defaults = default_map[profile["name"]]
-                for key, val in defaults.items():
-                    if key not in profile:
-                        profile[key] = val
-
-    def _serialize_profiles(self):
-        self._set_profiles_raw(json.dumps(self._profiles_data, ensure_ascii=False))
-
-    def _get_profile_names(self) -> List[str]:
-        return [p.get("name", "") for p in self._profiles_data if p.get("name")]
-
-    def _find_profile(self, name: str) -> Optional[Dict]:
-        for p in self._profiles_data:
-            if p.get("name") == name:
-                return p
-        return None
+    def _load_profiles_from_shared(self):
+        """Load profiles from the shared profile_manager."""
+        from utils.profile_manager import load_profiles
+        self._profiles_data = load_profiles()
 
     def _refresh_active_profile_options(self):
-        names = self._get_profile_names()
+        from utils.profile_manager import get_profile_names
+        names = get_profile_names()
         self.params["active_profile"]["options"] = names
         if names and not self.params["active_profile"].get("value"):
             self.params["active_profile"]["value"] = names[0]
+
+    def _get_profile_names(self) -> List[str]:
+        from utils.profile_manager import get_profile_names
+        return get_profile_names()
+
+    def _find_profile(self, name: str) -> Optional[Dict]:
+        from utils.profile_manager import find_profile
+        return find_profile(name)
 
     # --- Active Profile Accessors ---
 
@@ -293,10 +195,24 @@ class LLM_API_Translator(BaseTranslator):
 
     @property
     def max_rpm(self) -> int:
+        # Check profile first, fall back to top-level param
+        profile_val = self._active_profile.get("requests_per_minute")
+        if profile_val is not None:
+            try:
+                return int(profile_val)
+            except (ValueError, TypeError):
+                pass
         return int(self.get_param_value("max_requests_per_minute"))
 
     @property
     def global_delay(self) -> float:
+        # Check profile first, fall back to top-level param
+        profile_val = self._active_profile.get("delay")
+        if profile_val is not None:
+            try:
+                return float(profile_val)
+            except (ValueError, TypeError):
+                pass
         return float(self.get_param_value("delay"))
 
     @property
@@ -313,6 +229,10 @@ class LLM_API_Translator(BaseTranslator):
 
     @property
     def proxy(self) -> str:
+        # Check profile first, fall back to top-level param
+        profile_val = self._active_profile.get("proxy")
+        if profile_val:
+            return profile_val
         return self.get_param_value("proxy")
 
     # --- API Key Management ---
@@ -350,7 +270,6 @@ class LLM_API_Translator(BaseTranslator):
             if k.strip()
         ]
         if not api_keys and not single_key:
-            # Local endpoints (LM Studio, Ollama) don't need a real key
             if self._is_local_endpoint:
                 return "dummy-key"
             self.logger.error(
@@ -550,8 +469,6 @@ class LLM_API_Translator(BaseTranslator):
                 "json_schema": {"schema": TranslationResponse.model_json_schema()},
             }
         elif self._is_local_endpoint:
-            # Local engines (llama.cpp, LM Studio, Ollama) don't support
-            # "json_object"; use "json_schema" instead.
             api_args["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {"schema": TranslationResponse.model_json_schema()},
@@ -709,10 +626,6 @@ class LLM_API_Translator(BaseTranslator):
     # --- UI Integration ---
 
     def updateParam(self, param_key: str, param_content):
-        if param_key == "manage_profiles":
-            self._open_profile_manager()
-            self._refresh_active_profile_options()
-            return
         super().updateParam(param_key, param_content)
         if param_key == "active_profile":
             self.client = None
@@ -723,298 +636,3 @@ class LLM_API_Translator(BaseTranslator):
             self.minute_start_time = time.time()
             self.last_request_time = 0
 
-    def _open_profile_manager(self):
-        try:
-            from PyQt6.QtWidgets import QApplication
-            parent = QApplication.activeWindow()
-        except ImportError:
-            from PyQt5.QtWidgets import QApplication
-            parent = QApplication.activeWindow()
-        if parent is None:
-            return
-        previous_active = self.get_param_value("active_profile")
-        dialog = ProfileManagerDialog(
-            parent, self._profiles_data,
-            on_changed=lambda: self._serialize_profiles(),
-        )
-        dialog.exec()
-        self._refresh_active_profile_options()
-        if previous_active and self._find_profile(previous_active):
-            self.params["active_profile"]["value"] = previous_active
-        else:
-            names = self._get_profile_names()
-            if names:
-                self.params["active_profile"]["value"] = names[0]
-        # Persist profile changes to disk immediately
-        from utils.config import save_config, pcfg
-        pcfg.module.translator_params[self.name] = self.params
-        save_config()
-
-
-class ProfileManagerDialog(QDialog):
-    def __init__(self, parent, profiles_data: List[Dict], on_changed=None):
-        super().__init__(parent)
-        self._profiles = profiles_data
-        self._on_changed = on_changed
-        self._current_row = -1
-        self.setWindowTitle(self.tr("Manage API Profiles"))
-        self.setMinimumSize(620, 420)
-        self._build_ui()
-
-    def _is_builtin(self, row: int) -> bool:
-        return 0 <= row < len(self._profiles) and self._profiles[row].get("builtin", False)
-
-    def _save_current_form(self):
-        """Write form fields into self._profiles[self._current_row] and persist."""
-        row = self._current_row
-        if row < 0 or row >= len(self._profiles):
-            return
-        p = self._profiles[row]
-        name = self.name_edit.text().strip()
-        if not name:
-            return
-        p["name"] = name
-        p["api_host"] = self.host_edit.text().strip()
-        p["api_key"] = self.key_edit.text().strip()
-        p["model"] = self.model_edit.text().strip()
-        p["response_format"] = self.rf_combo.currentText()
-        p["prompt_template"] = self.prompt_template_edit.toPlainText().strip()
-        p["chat_samples"] = self.chat_samples_edit.toPlainText().strip()
-        try:
-            p["temperature"] = float(self.temp_edit.text() or "0.1")
-        except ValueError:
-            p["temperature"] = 0.1
-        try:
-            p["top_p"] = float(self.topp_edit.text() or "1.0")
-        except ValueError:
-            p["top_p"] = 1.0
-        p["max_tokens"] = self.maxtok_edit.text().strip()
-        for key in ["frequency_penalty", "presence_penalty"]:
-            edit = self.fp_edit if key == "frequency_penalty" else self.pp_edit
-            val = edit.text().strip()
-            if val:
-                try:
-                    p[key] = float(val)
-                except ValueError:
-                    pass
-            elif key in p:
-                del p[key]
-        if self._on_changed:
-            self._on_changed()
-
-    def _build_ui(self):
-        layout = QVBoxLayout(self)
-
-        splitter = QSplitter(self)
-
-        # Left: profile list (fixed width)
-        left_widget = QWidget()
-        left_widget.setFixedWidth(220)
-        left_layout = QVBoxLayout(left_widget)
-        left_layout.setContentsMargins(2, 2, 2, 2)
-        left_layout.addWidget(QLabel(self.tr("Saved Profiles:")))
-        self.list_widget = QListWidget()
-        self.list_widget.currentRowChanged.connect(self._on_select)
-        left_layout.addWidget(self.list_widget, 1)
-
-        # Add / Delete on same row
-        btn_row = QHBoxLayout()
-        btn_row.setContentsMargins(0, 0, 0, 0)
-        self.add_new_btn = QPushButton(self.tr("+ Add"))
-        self.add_new_btn.clicked.connect(self._on_add_new)
-        self.delete_btn = QPushButton(self.tr("Delete"))
-        self.delete_btn.clicked.connect(self._on_delete)
-        btn_row.addWidget(self.add_new_btn, 1)
-        btn_row.addWidget(self.delete_btn, 1)
-        left_layout.addLayout(btn_row)
-
-        # Right: scrollable edit form
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        right_widget = QWidget()
-        right_layout = QVBoxLayout(right_widget)
-        right_layout.setContentsMargins(5, 5, 5, 5)
-
-        # --- Basic fields ---
-        right_layout.addWidget(QLabel(self.tr("Basic Settings:")))
-        form = QFormLayout()
-        self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText(self.tr("e.g., My Custom API"))
-        self.host_edit = QLineEdit()
-        self.host_edit.setPlaceholderText("https://api.example.com/v1")
-        self.key_edit = QLineEdit()
-        self.model_edit = QLineEdit()
-        self.model_edit.setPlaceholderText("gpt-4o, ...")
-        model_row = QHBoxLayout()
-        model_row.addWidget(self.model_edit)
-        fetch_btn = QPushButton(self.tr("Fetch Models"))
-        fetch_btn.clicked.connect(self._on_fetch_models)
-        model_row.addWidget(fetch_btn)
-        self.temp_edit = QLineEdit()
-        self.temp_edit.setPlaceholderText("0.1")
-        self.topp_edit = QLineEdit()
-        self.topp_edit.setPlaceholderText("1.0")
-        self.maxtok_edit = QLineEdit()
-        self.maxtok_edit.setPlaceholderText(self.tr("Unlimited (leave empty)"))
-        form.addRow(self.tr("Name:"), self.name_edit)
-        form.addRow(self.tr("Host:"), self.host_edit)
-        form.addRow(self.tr("API Key:"), self.key_edit)
-        form.addRow(self.tr("Model:"), model_row)
-        form.addRow(self.tr("Temperature:"), self.temp_edit)
-        form.addRow(self.tr("Top P:"), self.topp_edit)
-        form.addRow(self.tr("Max Tokens:"), self.maxtok_edit)
-        right_layout.addLayout(form)
-
-        # --- Advanced fields ---
-        right_layout.addWidget(QLabel(self.tr("Advanced (optional):")))
-        adv_form = QFormLayout()
-        self.rf_combo = QComboBox()
-        self.rf_combo.addItems(["json_object", "json_schema"])
-        self.rf_combo.setCurrentText("json_object")
-        self.prompt_template_edit = QTextEdit()
-        self.prompt_template_edit.setPlaceholderText(
-            self.tr("Translate to {to_lang}:\n{input_json}")
-        )
-        self.prompt_template_edit.setMinimumHeight(100)
-        self.chat_samples_edit = QTextEdit()
-        self.chat_samples_edit.setPlaceholderText(
-            self.tr("{to_lang}-{from_lang}:\n    source:\n        - text1\n    target:\n        - trans1")
-        )
-        self.chat_samples_edit.setMinimumHeight(100)
-        self.fp_edit = QLineEdit()
-        self.fp_edit.setPlaceholderText("0.0")
-        self.pp_edit = QLineEdit()
-        self.pp_edit.setPlaceholderText("0.0")
-        adv_form.addRow(self.tr("Response Format:"), self.rf_combo)
-        adv_form.addRow(self.tr("Prompt Template:"), self.prompt_template_edit)
-        adv_form.addRow(self.tr("Few-Shot Examples:"), self.chat_samples_edit)
-        adv_form.addRow(self.tr("Frequency Penalty:"), self.fp_edit)
-        adv_form.addRow(self.tr("Presence Penalty:"), self.pp_edit)
-        right_layout.addLayout(adv_form)
-        right_layout.addStretch()
-
-        scroll.setWidget(right_widget)
-        splitter.addWidget(left_widget)
-        splitter.addWidget(scroll)
-        splitter.setSizes([200, 480])
-        layout.addWidget(splitter)
-
-        self._refresh_list()
-        self._clear_fields()
-        self._update_delete_button()
-
-    def _refresh_list(self):
-        self.list_widget.blockSignals(True)
-        self.list_widget.clear()
-        for p in self._profiles:
-            label = p.get("name", "")
-            if p.get("builtin"):
-                label += self.tr(" (built-in)")
-            self.list_widget.addItem(label)
-        self.list_widget.blockSignals(False)
-
-    def _clear_fields(self):
-        for edit in [self.name_edit, self.host_edit, self.key_edit, self.model_edit,
-                     self.temp_edit, self.topp_edit, self.maxtok_edit,
-                     self.fp_edit, self.pp_edit, self.prompt_template_edit]:
-            edit.clear()
-        self.chat_samples_edit.clear()
-        self.chat_samples_edit.setPlainText("")
-        self.rf_combo.setCurrentText("json_object")
-
-    def _update_delete_button(self):
-        row = self.list_widget.currentRow()
-        self.delete_btn.setEnabled(not self._is_builtin(row))
-
-    def _on_add_new(self):
-        self._save_current_form()
-        self.list_widget.clearSelection()
-        self._current_row = -1
-        self._clear_fields()
-        self.name_edit.setFocus()
-        self.delete_btn.setEnabled(False)
-        # Create a placeholder entry immediately
-        new_profile = {"name": ""}
-        self._profiles.append(new_profile)
-        if self._on_changed:
-            self._on_changed()
-        self._refresh_list()
-        self.list_widget.setCurrentRow(len(self._profiles) - 1)
-
-    def _on_select(self, row: int):
-        if row < 0 or row >= len(self._profiles):
-            return
-        self._save_current_form()
-        self._current_row = row
-        p = self._profiles[row]
-        self.name_edit.setText(p.get("name", ""))
-        self.host_edit.setText(p.get("api_host", ""))
-        self.key_edit.setText(p.get("api_key", ""))
-        self.model_edit.setText(p.get("model", ""))
-        self.temp_edit.setText(str(p.get("temperature", "0.1")))
-        self.topp_edit.setText(str(p.get("top_p", "1.0")))
-        self.maxtok_edit.setText(str(p.get("max_tokens", "")))
-        self.rf_combo.setCurrentText(p.get("response_format", "json_object"))
-        self.prompt_template_edit.setPlainText(p.get("prompt_template", ""))
-        self.chat_samples_edit.setPlainText(p.get("chat_samples", ""))
-        self.fp_edit.setText(str(p.get("frequency_penalty", "")))
-        self.pp_edit.setText(str(p.get("presence_penalty", "")))
-        self._update_delete_button()
-
-    def _on_fetch_models(self):
-        host = self.host_edit.text().strip()
-        key = self.key_edit.text().strip()
-        if not host or not key:
-            QMessageBox.warning(self, self.tr("Warning"),
-                self.tr("Host and API key are required to fetch the model list."))
-            return
-        try:
-            with httpx.Client() as client:
-                resp = client.get(
-                    f"{host.rstrip('/')}/models",
-                    headers={"Authorization": f"Bearer {key}"},
-                    timeout=10,
-                )
-                if resp.status_code == 200:
-                    models = resp.json().get("data", [])
-                    names = sorted(m["id"] for m in models)
-                    if not names:
-                        QMessageBox.information(self, self.tr("Notice"), self.tr("No models found."))
-                        return
-                    name, ok = QInputDialog.getItem(
-                        self, self.tr("Select Model"), self.tr("Choose a model:"), names, 0, False
-                    )
-                    if ok and name:
-                        self.model_edit.setText(name)
-                else:
-                    QMessageBox.warning(
-                        self, self.tr("Error"),
-                        self.tr("Failed to fetch model list. HTTP {code}").format(code=resp.status_code)
-                    )
-        except Exception as e:
-            QMessageBox.warning(self, self.tr("Error"), self.tr("Failed to fetch model list: {err}").format(err=e))
-
-    def _on_delete(self):
-        row = self.list_widget.currentRow()
-        if row < 0 or row >= len(self._profiles) or self._is_builtin(row):
-            return
-        name = self._profiles[row].get("name", "")
-        reply = QMessageBox.question(
-            self, self.tr("Confirm Delete"),
-            self.tr('Delete profile "{name}"?').format(name=name),
-            QMessageBox.StandardButton.Yes
-            | QMessageBox.StandardButton.No,
-        )
-        if reply != QMessageBox.StandardButton.Yes:
-            return
-        del self._profiles[row]
-        if self._on_changed:
-            self._on_changed()
-        self._current_row = -1
-        self._refresh_list()
-        self._clear_fields()
-        self.delete_btn.setEnabled(False)
-
-    def closeEvent(self, event):
-        self._save_current_form()
-        super().closeEvent(event)

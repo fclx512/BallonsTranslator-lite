@@ -7,7 +7,10 @@ from qtpy.QtGui import QFont, QIntValidator, QValidator, QFocusEvent
 from .custom_widget import ConfigComboBox, Widget, PanelGroupBox
 from utils.config import pcfg
 from utils import shared as C
-from utils.shared import CONFIG_FONTSIZE_CONTENT, CONFIG_FONTSIZE_HEADER, CONFIG_COMBOBOX_SHORT, CONFIG_COMBOBOX_LONG, CONFIG_COMBOBOX_MIDEAN
+from utils.shared import (CONFIG_FONTSIZE_CONTENT, CONFIG_FONTSIZE_HEADER, CONFIG_COMBOBOX_SHORT, CONFIG_COMBOBOX_LONG,
+    CONFIG_COMBOBOX_MIDEAN, CONFIGBLOCK_CONTENT_MARGINS, GROUPBOX_CONTENT_MARGINS, CONFIG_SUBBLOCK_SPACING,
+    LINEEDIT_FIXHEIGHT, NAVLIST_WIDTH, NAVLIST_HEADER_FONTSIZE, SHORTCUT_PILL_FONTSIZE, SHORTCUT_CLOSE_FONTSIZE,
+    SHORTCUT_EDITOR_MINHEIGHT, SHORTCUT_ACTIONLIST_WIDTH, SHORTCUT_KEYSEQ_WIDTH)
 from .module_parse_widgets import InpaintConfigPanel, TextDetectConfigPanel, TranslatorConfigPanel, OCRConfigPanel
 
 class CustomIntValidator(QIntValidator):
@@ -49,7 +52,7 @@ class PercentageLineEdit(QLineEdit):
 
     def __init__(self, default_value: str = '100', parent=None) -> None:
         super().__init__(default_value, parent=parent)
-        validator = CustomIntValidator(0, 101, 3)
+        validator = CustomIntValidator(0, 100, 3)
         self.setValidator(validator)
         self.textEdited.connect(self.on_text_edited)
         self._edited = False
@@ -68,66 +71,6 @@ class PercentageLineEdit(QLineEdit):
         return super().focusOutEvent(e)
 
 
-class SectionPill(QPushButton):
-    """Pill-shaped navigation button for a config section in the horizontal nav bar."""
-
-    clicked_section = Signal(object)
-
-    def __init__(self, text: str, target_widget: QWidget,
-                 accent_color: str = None, parent=None):
-        super().__init__(text, parent)
-        self._target = target_widget
-        self.setObjectName("SectionPill")
-        self.setCheckable(True)
-        self.setFlat(True)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        if accent_color:
-            self.setStyleSheet(
-                f"SectionPill:checked {{ border-color: {accent_color}; "
-                f"background-color: {accent_color}22; }}"
-            )
-        self.clicked.connect(self._on_click)
-
-    def _on_click(self):
-        self.clicked_section.emit(self._target)
-
-
-class ConfigNavBar(QWidget):
-    """Horizontal navigation bar with pill-shaped section buttons."""
-
-    navigate_to_section = Signal(object)
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("ConfigNavBar")
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 4, 8, 4)
-        layout.setSpacing(2)
-        layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self._pills = []
-        self._layout = layout
-
-    def addSection(self, text: str, target: QWidget,
-                   object_name: str = None,
-                   accent_color: str = None) -> SectionPill:
-        pill = SectionPill(text, target, accent_color, parent=self)
-        if object_name:
-            pill.setObjectName(object_name)
-        pill.clicked_section.connect(self._on_pill_clicked)
-        self._layout.addWidget(pill)
-        self._pills.append(pill)
-        return pill
-
-    def _on_pill_clicked(self, target: QWidget):
-        for p in self._pills:
-            p.setChecked(p._target is target)
-        self.navigate_to_section.emit(target)
-
-    def activatePillForTarget(self, target: QWidget):
-        for p in self._pills:
-            p.setChecked(p._target is target)
-
-
 class ConfigTextLabel(QLabel):
     def __init__(self, text: str, fontsize: int, font_weight: int = None, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -143,11 +86,11 @@ class ConfigTextLabel(QLabel):
     def setActiveBackground(self):
         from ui.misc import get_theme_color
         c = get_theme_color()
-        self.setStyleSheet(f"background-color: rgba{c.red()}, {c.green()}, {c.blue()}, 51);")
+        self.setStyleSheet(f"background-color: rgba({c.red()}, {c.green()}, {c.blue()}, 51);")
 
 
 class ConfigSubBlock(Widget):
-    def __init__(self, widget: Union[QWidget, QLayout], name: str = None, discription: str = None, vertical_layout=True, insert_stretch: bool = False, content_margins = (24, 6, 24, 6)) -> None:
+    def __init__(self, widget: Union[QWidget, QLayout], name: str = None, description: str = None, vertical_layout=True, insert_stretch: bool = False, content_margins = (24, 6, 24, 6)) -> None:
         super().__init__()
         if vertical_layout:
             layout = QVBoxLayout(self)
@@ -158,8 +101,8 @@ class ConfigSubBlock(Widget):
             textlabel = ConfigTextLabel(name, CONFIG_FONTSIZE_CONTENT, QFont.Weight.Normal)
             self.name_label = textlabel
             layout.addWidget(textlabel)
-        if discription is not None:
-            layout.addWidget(ConfigTextLabel(discription, CONFIG_FONTSIZE_CONTENT-2))
+        if description is not None:
+            layout.addWidget(ConfigTextLabel(description, CONFIG_FONTSIZE_CONTENT-2))
         if insert_stretch:
             layout.insertStretch(-1)
         if isinstance(widget, QWidget):
@@ -170,28 +113,28 @@ class ConfigSubBlock(Widget):
         self.setContentsMargins(*content_margins)
     
 
-def combobox_with_label(sel: List[str], name: str, discription: str = None, vertical_layout: bool = False, target_block: QWidget = None, fix_size: bool = True, parent: QWidget = None, insert_stretch: bool = False) -> Tuple[ConfigComboBox, QWidget]:
+def combobox_with_label(sel: List[str], name: str, description: str = None, vertical_layout: bool = False, target_block: QWidget = None, fix_size: bool = True, parent: QWidget = None, insert_stretch: bool = False) -> Tuple[ConfigComboBox, QWidget]:
     combox = ConfigComboBox(fix_size=fix_size, scrollWidget=parent)
     combox.addItems(sel)
     if target_block is None:
-        sublock = ConfigSubBlock(combox, name, discription, vertical_layout=vertical_layout, insert_stretch=insert_stretch)
+        sublock = ConfigSubBlock(combox, name, description, vertical_layout=vertical_layout, insert_stretch=insert_stretch)
         sublock.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
-        sublock.layout().setSpacing(20)
+        sublock.layout().setSpacing(CONFIG_SUBBLOCK_SPACING)
         return combox, sublock
     else:
         layout = target_block.layout()
-        layout.addSpacing(20)
+        layout.addSpacing(CONFIG_SUBBLOCK_SPACING)
         layout.addWidget(ConfigTextLabel(name, CONFIG_FONTSIZE_CONTENT, QFont.Weight.Normal))
         layout.addWidget(combox)
         return combox, target_block
     
-def checkbox_with_label(name: str, discription: str = None, target_block: QWidget = None):
+def checkbox_with_label(name: str, description: str = None, target_block: QWidget = None):
     checkbox = QCheckBox()
-    if discription is not None:
+    if description is not None:
         font = checkbox.font()
         font.setPointSizeF(CONFIG_FONTSIZE_CONTENT * 0.8)
         checkbox.setFont(font)
-        checkbox.setText(discription)
+        checkbox.setText(description)
         vertical_layout = True
     else:
         vertical_layout = False
@@ -212,22 +155,22 @@ class ConfigBlock(Widget):
         self.header = ConfigTextLabel(header, CONFIG_FONTSIZE_HEADER)
         self.vlayout = QVBoxLayout(self)
         self.vlayout.addWidget(self.header)
-        self.setContentsMargins(24, 24, 24, 24)
+        self.setContentsMargins(*CONFIGBLOCK_CONTENT_MARGINS)
         self.subblock_list = []
         self.index: int = 0
 
     def setIndex(self, index: int):
         self.index = index
 
-    def addLineEdit(self, name: str = None, discription: str = None, vertical_layout: bool = False):
+    def addLineEdit(self, name: str = None, description: str = None, vertical_layout: bool = False):
         le = QLineEdit()
         le.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
-        le.setFixedHeight(45)
-        sublock = ConfigSubBlock(le, name, discription, vertical_layout)
+        le.setFixedHeight(LINEEDIT_FIXHEIGHT)
+        sublock = ConfigSubBlock(le, name, description, vertical_layout)
         if vertical_layout is False:
             sublock.layout().addItem(QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding))
         self.addSublock(sublock)
-        sublock.layout().setSpacing(20)
+        sublock.layout().setSpacing(CONFIG_SUBBLOCK_SPACING)
         return le, sublock
 
     def addTextLabel(self, text: str = None):
@@ -238,32 +181,32 @@ class ConfigBlock(Widget):
         self.vlayout.addWidget(sublock)
         self.subblock_list.append(sublock)
 
-    def addCombobox(self, sel: List[str], name: str, discription: str = None, vertical_layout: bool = False, target_block: QWidget = None, fix_size: bool = True) -> Tuple[ConfigComboBox, QWidget]:
-        combox, sublock = combobox_with_label(sel, name, discription, vertical_layout, target_block, fix_size, parent=self)
+    def addCombobox(self, sel: List[str], name: str, description: str = None, vertical_layout: bool = False, target_block: QWidget = None, fix_size: bool = True) -> Tuple[ConfigComboBox, QWidget]:
+        combox, sublock = combobox_with_label(sel, name, description, vertical_layout, target_block, fix_size, parent=self)
         if target_block is None:
             self.addSublock(sublock)
         return combox, sublock
 
-    def addBlockWidget(self, widget: Union[QWidget, QLayout], name: str = None, discription: str = None, vertical_layout: bool = False) -> ConfigSubBlock:
-        sublock = ConfigSubBlock(widget, name, discription, vertical_layout)
+    def addBlockWidget(self, widget: Union[QWidget, QLayout], name: str = None, description: str = None, vertical_layout: bool = False) -> ConfigSubBlock:
+        sublock = ConfigSubBlock(widget, name, description, vertical_layout)
         self.addSublock(sublock)
         return sublock
 
-    def addCheckBox(self, name: str, discription: str = None, target_block: ConfigSubBlock = None) -> QCheckBox:
-        checkbox, sublock = checkbox_with_label(name, discription, target_block)
+    def addCheckBox(self, name: str, description: str = None, target_block: ConfigSubBlock = None) -> QCheckBox:
+        checkbox, sublock = checkbox_with_label(name, description, target_block)
         if target_block is None:
             self.addSublock(sublock)
         return checkbox, sublock
 
-    def addGroupedBlock(self, group_title: str, widget: QWidget, object_name: str = None, name: str = None, discription: str = None) -> ConfigSubBlock:
+    def addGroupedBlock(self, group_title: str, widget: QWidget, object_name: str = None, name: str = None, description: str = None) -> ConfigSubBlock:
         group = PanelGroupBox(group_title)
         if object_name:
             group.setObjectName(object_name)
         group_vlayout = group.contentLayout()
-        group_vlayout.setContentsMargins(8, 4, 8, 6)
+        group_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
         group_vlayout.setSpacing(0)
 
-        sublock = ConfigSubBlock(widget, name=name, discription=discription)
+        sublock = ConfigSubBlock(widget, name=name, description=description)
         group_vlayout.addWidget(sublock)
 
         self.vlayout.addWidget(group)
@@ -356,12 +299,12 @@ class _ShortcutPill(QWidget):
         from .theme_helpers import shortcut_styles
         s = shortcut_styles()
         lbl = QLabel(key_seq)
-        lbl.setStyleSheet(f"color: {s['pill_text']}; font-size: 11px;")
+        lbl.setStyleSheet(f"color: {s['pill_text']}; font-size: {SHORTCUT_PILL_FONTSIZE}px;")
         h.addWidget(lbl)
         btn = QPushButton('×')
         btn.setFixedSize(16, 16)
         btn.setStyleSheet(
-            f"QPushButton {{ border: none; color: {s['close_clr']}; font-size: 12px; }}"
+            f"QPushButton {{ border: none; color: {s['close_clr']}; font-size: {SHORTCUT_CLOSE_FONTSIZE}px; }}"
             f"QPushButton:hover {{ color: {s['close_hvr']}; }}")
         btn.clicked.connect(lambda: self.removed.emit(self))
         h.addWidget(btn)
@@ -373,7 +316,7 @@ class ShortcutEditor(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumHeight(350)
+        self.setMinimumHeight(SHORTCUT_EDITOR_MINHEIGHT)
         self._pills_info = {}
         self._current_action_id = None
         self._current_card = None
@@ -388,7 +331,7 @@ class ShortcutEditor(QWidget):
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(2, 2, 2, 2)
         self.list_widget = QListWidget()
-        self.list_widget.setFixedWidth(190)
+        self.list_widget.setFixedWidth(SHORTCUT_ACTIONLIST_WIDTH)
         for aid in DEFAULT_SHORTCUTS.keys():
             display_name = self.tr(_ACTION_NAMES.get(aid, aid))
             item = QListWidgetItem(display_name)
@@ -501,7 +444,7 @@ class ShortcutEditor(QWidget):
 
     def _add_shortcut(self, action_id: str, pills_widget: QWidget):
         edit = QKeySequenceEdit()
-        edit.setFixedWidth(100)
+        edit.setFixedWidth(SHORTCUT_KEYSEQ_WIDTH)
         layout = pills_widget.layout()
         layout.insertWidget(layout.count() - 2, edit)
         edit.setFocus()
@@ -657,12 +600,12 @@ class ConfigPanel(Widget):
     unload_models = Signal()
     reload_textstyle = Signal(bool)
     font_exclusion_changed = Signal()
+    profiles_changed = Signal()
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setObjectName("ConfigPanel")
 
-        self.navBar = ConfigNavBar(self)
         self.configContent = ConfigContent()
 
         dlConfigPanel = self.addConfigBlock(self.tr('DL Module'))
@@ -680,19 +623,23 @@ class ConfigPanel(Widget):
         # === Model management ===
         model_group = PanelGroupBox(self.tr('Models'))
         model_vlayout = model_group.contentLayout()
-        model_vlayout.setContentsMargins(8, 4, 8, 6)
+        model_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
         model_vlayout.setSpacing(0)
-        self.load_model_checker, msublock = checkbox_with_label(self.tr('Load models on demand'), discription=self.tr('Load models on demand to save memory.'))
+        self.load_model_checker, msublock = checkbox_with_label(self.tr('Load models on demand'), description=self.tr('Load models on demand to save memory.'))
         self.load_model_checker.stateChanged.connect(self.on_load_model_changed)
         model_vlayout.addWidget(msublock)
-        self.empty_runcache_checker, msublock = checkbox_with_label(self.tr('Empty cache after RUN'), discription=self.tr('Empty cache after RUN to save memory.'))
+        self.empty_runcache_checker, msublock = checkbox_with_label(self.tr('Empty cache after RUN'), description=self.tr('Empty cache after RUN to save memory.'))
         self.empty_runcache_checker.stateChanged.connect(self.on_runcache_changed)
         model_vlayout.addWidget(msublock)
         self.unload_model_btn = QPushButton(parent=self)
-        self.unload_model_btn.setFixedWidth(500)
+        self.unload_model_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
         self.unload_model_btn.setText(self.tr('Unload All Models'))
         self.unload_model_btn.clicked.connect(self.unload_models)
         msublock.layout().addWidget(self.unload_model_btn)
+        self.manage_profiles_btn = QPushButton(self.tr('Manage API Profiles...'))
+        self.manage_profiles_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
+        self.manage_profiles_btn.clicked.connect(self._open_profile_manager)
+        msublock.layout().addWidget(self.manage_profiles_btn)
         dlConfigPanel.vlayout.addWidget(model_group)
 
         self.detect_config_panel = TextDetectConfigPanel(self.tr('Detector'), scrollWidget=self)
@@ -768,7 +715,7 @@ class ConfigPanel(Widget):
 
         self.let_autolayout_checker, al_sublock = checkbox_with_label(
                 self.tr('Auto layout'),
-                discription=self.tr('Split translation into multi-lines according to the extracted balloon region.'))
+                description=self.tr('Split translation into multi-lines according to the extracted balloon region.'))
         self.let_autolayout_checker.stateChanged.connect(self.on_autolayout_changed)
         ts_layout.addWidget(al_sublock)
 
@@ -836,7 +783,7 @@ class ConfigPanel(Widget):
 
         # === Navigation list (replaces horizontal nav bar) ===
         self.navList = QListWidget()
-        self.navList.setFixedWidth(180)
+        self.navList.setFixedWidth(NAVLIST_WIDTH)
         self.navList.setSpacing(2)
         self.navList.setFrameShape(QListWidget.NoFrame)
 
@@ -860,7 +807,7 @@ class ConfigPanel(Widget):
                 item = QListWidgetItem(text)
                 item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
                 f = item.font()
-                f.setPointSize(9)
+                f.setPointSize(NAVLIST_HEADER_FONTSIZE)
                 f.setBold(True)
                 item.setFont(f)
                 self.navList.addItem(item)
@@ -999,6 +946,14 @@ class ConfigPanel(Widget):
         target = self.ocr_sub_block.section_widget
         self._nav_select(target)
         self.configContent.scrollToWidget(target)
+
+    def _open_profile_manager(self):
+        from utils.profile_manager import ProfileManagerDialog, load_profiles, save_all_profiles
+        profiles = load_profiles()
+        dialog = ProfileManagerDialog(self, profiles, on_changed=lambda: None)
+        dialog.exec()
+        save_all_profiles(profiles)
+        self.profiles_changed.emit()
 
     def hideEvent(self, e) -> None:
         self.save_config.emit()

@@ -929,29 +929,21 @@ class AiChatPanel(QWidget):
                     self._sync_profile_to_controller(active)
 
     def _get_translator_profiles(self) -> List[Dict]:
-        """Read all translator API profiles."""
-        try:
-            params = pcfg.module.translator_params.get("LLM_API_Translator", {})
-            storage = params.get("_profiles_storage", "[]")
-            if isinstance(storage, dict):
-                raw = storage.get("value", "[]")
-            else:
-                raw = storage
-            profiles = json.loads(raw) if isinstance(raw, str) else raw
-            return profiles if isinstance(profiles, list) else []
-        except Exception:
-            return []
+        """Read all API profiles from shared profile storage."""
+        from utils.profile_manager import load_profiles
+        return load_profiles()
 
     def _get_active_profile_name(self) -> str:
         """Return the currently active translator profile name."""
-        try:
-            params = pcfg.module.translator_params.get("LLM_API_Translator", {})
-            active = params.get("active_profile", "")
-            if isinstance(active, dict):
-                return active.get("value", "")
-            return active if isinstance(active, str) else ""
-        except Exception:
+        from utils.profile_manager import get_profile_names
+        from modules.translators.trans_llm_api import LLM_API_Translator
+        params = getattr(LLM_API_Translator, 'params', {})
+        if not params:
             return ""
+        active = params.get("active_profile", {})
+        if isinstance(active, dict):
+            return active.get("value", "")
+        return active if isinstance(active, str) else ""
 
     def _set_active_profile(self, name: str):
         """Set the active translator profile and persist."""
@@ -962,6 +954,11 @@ class AiChatPanel(QWidget):
             ap["value"] = name
         else:
             params["active_profile"] = {"value": name}
+        # Also update the class-level params (shared with the translator instance)
+        from modules.translators.trans_llm_api import LLM_API_Translator
+        cls_ap = LLM_API_Translator.params.get("active_profile", {})
+        if isinstance(cls_ap, dict):
+            cls_ap["value"] = name
         save_config()
 
     def _on_profile_changed(self, index: int):

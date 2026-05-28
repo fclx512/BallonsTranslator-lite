@@ -609,6 +609,7 @@ class ModuleManager(QObject):
         self.check_inpaint_fin_timer.timeout.connect(self.check_inpaint_th_finished)
 
     def setupThread(self, config_panel: ConfigPanel, imgtrans_progress_msgbox: ImgtransProgressMessageBox):
+        self.config_panel = config_panel
         self.textdetect_thread = TextDetectThread()
 
         self.ocr_thread = OCRThread()
@@ -656,9 +657,17 @@ class ModuleManager(QObject):
 
         self.ocr_panel = ocr_panel = config_panel.ocr_config_panel
         ocr_params = merge_config_module_params(cfg_module.ocr_params, GET_VALID_OCR(), OCR.get)
+        # Populate vision profile options for LLM OCR
+        from utils.profile_manager import get_vision_profile_names
+        for mod_key in ("llm_ocr",):
+            if mod_key in ocr_params and isinstance(ocr_params[mod_key], dict):
+                profile_cfg = ocr_params[mod_key].get("profile")
+                if isinstance(profile_cfg, dict):
+                    profile_cfg["options"] = get_vision_profile_names()
         ocr_panel.addModulesParamWidgets(ocr_params)
         ocr_panel.paramwidget_edited.connect(self.on_ocrparam_edited)
         ocr_panel.ocr_changed.connect(self.setOCR)
+        config_panel.profiles_changed.connect(self._on_profiles_changed)
         config_panel.unload_models.connect(self.unload_all_models)
 
 
@@ -921,7 +930,44 @@ class ModuleManager(QObject):
             self.updateModuleSetupParam(self.ocr, param_key, param_content)
             cfg_module.ocr_params[self.ocr.name] = self.ocr.params
 
-    def updateModuleSetupParam(self, 
+    def _on_profiles_changed(self):
+        """Refresh profile-dependent selectors after profiles are edited."""
+        from utils.profile_manager import get_vision_profile_names, get_profile_names
+        # Refresh OCR vision profile options (class-level params)
+        from modules import OCR as _OCR
+        ocr_cls = _OCR.module_dict.get("llm_ocr")
+        if ocr_cls and hasattr(ocr_cls, "params"):
+            profile_cfg = ocr_cls.params.get("profile")
+            if isinstance(profile_cfg, dict):
+                vision_names = get_vision_profile_names()
+                profile_cfg["options"] = vision_names
+                if profile_cfg.get("value", "") not in vision_names:
+                    profile_cfg["value"] = vision_names[0] if vision_names else ""
+        # Refresh translator active_profile options (class-level params)
+        from modules import TRANSLATORS as _TRANS
+        trans_cls = _TRANS.module_dict.get("LLM_API_Translator")
+        if trans_cls and hasattr(trans_cls, "params"):
+            active_cfg = trans_cls.params.get("active_profile")
+            if isinstance(active_cfg, dict):
+                all_names = get_profile_names()
+                active_cfg["options"] = all_names
+                if active_cfg.get("value", "") not in all_names:
+                    active_cfg["value"] = all_names[0] if all_names else ""
+        # Invalidate cached param widgets so they get rebuilt with new options
+        for panel, module_key in [
+            (self.config_panel.ocr_config_panel, "llm_ocr"),
+            (self.config_panel.trans_config_panel, "LLM_API_Translator"),
+        ]:
+            if module_key in panel.param_widget_map:
+                old_widget = panel.param_widget_map[module_key]
+                if old_widget is not None:
+                    old_widget.deleteLater()
+                panel.param_widget_map[module_key] = None
+        # Rebuild param widgets to reflect new options
+        self.config_panel.ocr_config_panel.updateModuleParamWidget()
+        self.config_panel.trans_config_panel.updateModuleParamWidget()
+
+    def updateModuleSetupParam(self,
                                module: Union[InpainterBase, BaseTranslator],
                                param_key: str, param_content: dict):
             

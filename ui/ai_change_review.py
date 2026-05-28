@@ -32,6 +32,37 @@ from qtpy.QtWidgets import (
 from .ai_chat_model import ChangeItem
 
 
+class _ReviewTable(QTableWidget):
+    """QTableWidget that accounts for cell-widget heights in row sizing."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._recalculating = False
+        self.horizontalHeader().sectionResized.connect(self._recalc_row_heights)
+
+    def sizeHintForRow(self, row: int) -> int:
+        height = super().sizeHintForRow(row)
+        for col in range(self.columnCount()):
+            widget = self.cellWidget(row, col)
+            if widget is None:
+                continue
+            col_width = self.columnWidth(col)
+            old_max = widget.maximumWidth()
+            widget.setMaximumWidth(col_width)
+            widget.ensurePolished()
+            hint_h = widget.sizeHint().height()
+            widget.setMaximumWidth(old_max)
+            height = max(height, hint_h)
+        return height
+
+    def _recalc_row_heights(self):
+        if self._recalculating:
+            return
+        self._recalculating = True
+        self.resizeRowsToContents()
+        self._recalculating = False
+
+
 class ChangeReviewWindow(QDialog):
     """Standalone, non-modal dialog for reviewing AI-proposed project changes.
 
@@ -162,7 +193,7 @@ class ChangeReviewWindow(QDialog):
         root.addWidget(nav)
 
         # --- Table (4 columns: Block | Source | Old→New | Accept) ---
-        self._table = QTableWidget()
+        self._table = _ReviewTable()
         self._table.setObjectName("AIReviewTable")
         self._table.setColumnCount(4)
         self._table.setHorizontalHeaderLabels([
@@ -310,9 +341,6 @@ class ChangeReviewWindow(QDialog):
             self._fill_row(i, change)
 
         self._table.setUpdatesEnabled(True)
-        # resize after re-enabling updates so internal layout calcs run
-        for i in range(len(page_changes)):
-            self._table.resizeRowToContents(i)
         self._table.resizeRowsToContents()
 
     def _fill_row(self, row_idx: int, change: ChangeItem):

@@ -37,6 +37,7 @@ class ModuleConfig(Config):
     check_need_inpaint: bool = True
     load_model_on_demand: bool = False
     empty_runcache: bool = False
+    model_profiles: str = ""
     finish_code: int = 15
 
     def get_params(self, module_key: str, for_saving=False) -> dict:
@@ -271,6 +272,10 @@ def load_config(config_path: str = shared.CONFIG_PATH):
                 f.write(json.dumps([],  ensure_ascii=False))
             LOGGER.info(f'New text style file created at {dp}.')
     load_textstyle_from(p)
+
+    # Migrate profiles from old translator storage to new shared location
+    from .profile_manager import migrate_old_profiles
+    migrate_old_profiles()
 
 
 def json_dump_program_config(obj, **kwargs):

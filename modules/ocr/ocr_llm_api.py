@@ -1,4 +1,3 @@
-import re
 import time
 import base64
 import json
@@ -136,46 +135,12 @@ class LLM_OCR(OCRBase):
         "Zulu": "zu",
     }
 
-    popular_models = [
-        "OAI: gpt-4o-mini",
-        "OAI: gpt-4-vision-preview",
-        "OAI: gpt-4o",
-        "OAI: gpt-4",
-        "GGL: gemini-1.5-pro-latest",
-        "GGL: gemini-1.5-flash-latest",
-    ]
-
     params = {
-        "provider": {
+        "profile": {
             "type": "selector",
-            "options": ["OpenAI", "Google", "OpenRouter", "Ollama"],
-            "value": "OpenAI",
-            "description": "Select the LLM provider.",
-        },
-        "api_key": {
+            "options": [],
             "value": "",
-            "description": "API key to use if multiple keys are not provided.",
-        },
-        "multiple_keys": {
-            "type": "editor",
-            "value": "",
-            "description": "API keys separated by semicolons (;). Requests will rotate.",
-        },
-        "endpoint": {
-            "value": "",
-            "description": "Base URL for the API. Leave empty for provider default.",
-        },
-        "model": {
-            "type": "selector",
-            "options": popular_models + [
-                "OLLAMA: (override model field)"
-            ],
-            "value": "OAI: gpt-4o-mini",
-            "description": "Select the model to use.",
-        },
-        "override_model": {
-            "value": "",
-            "description": "Specify a custom model name to override the selected one.",
+            "description": "Select a vision-capable API profile. Manage profiles in Model Management.",
         },
         "language": {
             "type": "selector",
@@ -183,40 +148,12 @@ class LLM_OCR(OCRBase):
             "value": "Japanese",
             "description": "Language for OCR.",
         },
-        "detail_level": {
-            "type": "selector",
-            "options": ["auto", "low", "high"],
-            "value": "auto",
-            "description": "Controls image detail level for vision models.",
-        },
-        "prompt": {
-            "type": "editor",
-            "value": "Perform OCR on the provided manga image snippet. The language is **{language}**.\nRecognize all text, including handwritten sound effects (SFX).\n**CRITICAL INSTRUCTION:** If you see jumbled characters, it is likely vertical text that was read horizontally. First, mentally reconstruct the correct vertical text.\n**OUTPUT FORMATTING:** All recognized text from the image must be consolidated into a **single, continuous horizontal line**. Do not use newlines.\nYour final output must be ONLY the recognized text. No explanations.",
-            "description": "The main prompt for the OCR task. Use {language} placeholder.",
-        },
-        "system_prompt": {
-            "type": "editor",
-            "value": "You are a specialized OCR engine for manga and comics. Your primary function is to accurately extract and consolidate all recognized text from an image into a **single, continuous horizontal line**. You must return only the raw, recognized text. You do not interpret, translate, or explain the content. You are designed to intelligently handle common OCR errors, such as reconstructing jumbled characters that result from misreading vertical text.",
-            "description": "Optional system prompt to guide the model's behavior.",
-        },
-        "proxy": {
-            "value": "",
-            "description": "Proxy address (e.g. http(s)://user:password@host:port)",
-        },
-        "delay": {"value": 1.0, "description": "Delay in seconds between requests."},
-        "requests_per_minute": {
-            "value": 15,
-            "description": "Maximum number of requests per minute per key.",
-        },
-        "max_response_tokens": {
-            "value": 4096,
-            "description": "Maximum number of tokens in the LLM's response.",
-        },
-        "description": "OCR using various vision-capable LLMs.",
+        "description": "OCR using various vision-capable LLMs configured via API profiles.",
     }
 
     def __init__(self, **params) -> None:
         super().__init__(**params)
+        self._load_vision_profiles()
         self.last_request_time = 0
         self.client = None
         self.request_count_minute = 0
@@ -224,52 +161,89 @@ class LLM_OCR(OCRBase):
         self.key_usage = {}
         self.current_key_index = 0
 
-    def _initialize_client(self, api_key_to_use: str):
-        endpoint = self.endpoint
-        provider = self.provider
-        if not endpoint:
-            if provider == "OpenAI":
-                endpoint = "https://api.openai.com/v1"
-            elif provider == "Google":
-                endpoint = "https://generativelanguage.googleapis.com/v1beta/openai"
-            elif provider == "OpenRouter":
-                endpoint = "https://openrouter.ai/api/v1"
-            elif provider == "Ollama":
-                endpoint = "http://localhost:11434/v1"
+    # ── Profile Access ─────────────────────────────────────────────
 
-        http_client = None
-        if self.proxy:
-            try:
-                proxy_mounts = {"all://": httpx.HTTPTransport(proxy=self.proxy)}
-                http_client = httpx.Client(mounts=proxy_mounts)
-            except Exception as e:
-                self.logger.error(f"Failed to initialize proxy '{self.proxy}': {e}.")
+    def _load_vision_profiles(self):
+        """Refresh the profile selector options from shared storage."""
+        from utils.profile_manager import get_vision_profile_names, load_profiles
+        self._all_profiles = load_profiles()
+        names = get_vision_profile_names()
+        self.params["profile"]["options"] = names
+        # Reset selection if current value no longer valid
+        current = self.params["profile"]["value"]
+        if current and current not in names:
+            self.params["profile"]["value"] = names[0] if names else ""
+        elif not current and names:
+            self.params["profile"]["value"] = names[0]
 
-        masked_key = (
-            api_key_to_use[:4] + "..." + api_key_to_use[-4:]
-            if len(api_key_to_use) > 8
-            else api_key_to_use
-        )
-        self.logger.debug(
-            f"Initializing client for {provider} with key {masked_key} at endpoint {endpoint}"
-        )
+    def _get_active_profile(self) -> dict:
+        name = self.get_param_value("profile")
+        if not name:
+            return {}
+        from utils.profile_manager import find_profile
+        return find_profile(name) or {}
 
-        self.client = openai.OpenAI(
-            api_key=api_key_to_use, base_url=endpoint, http_client=http_client
-        )
-
-    # --- Property Getters (similar to translator) ---
-    @property
-    def provider(self) -> str:
-        return self.get_param_value("provider")
+    # ── Connection helpers ─────────────────────────────────────────
 
     @property
-    def api_key(self) -> str:
-        return self.get_param_value("api_key")
+    def _effective_api_host(self) -> str:
+        return (self._get_active_profile().get("api_host") or "").strip()
+
+    @property
+    def _effective_api_key(self) -> str:
+        return self._get_active_profile().get("api_key") or ""
+
+    @property
+    def _effective_model(self) -> str:
+        return self._get_active_profile().get("model") or ""
+
+    @property
+    def _is_local_endpoint(self) -> bool:
+        host = self._effective_api_host
+        return bool(host and ("localhost" in host or "127.0.0.1" in host))
+
+    @property
+    def proxy(self) -> str:
+        return self._get_active_profile().get("proxy") or ""
+
+    @property
+    def requests_per_minute(self) -> int:
+        try:
+            return int(self._get_active_profile().get("requests_per_minute", 0))
+        except (ValueError, TypeError):
+            return 0
+
+    @property
+    def request_delay(self) -> float:
+        try:
+            return float(self._get_active_profile().get("delay", 1.0))
+        except (ValueError, TypeError):
+            return 1.0
+
+    @property
+    def prompt(self) -> str:
+        return self._get_active_profile().get("ocr_prompt", "")
+
+    @property
+    def system_prompt(self) -> str:
+        return self._get_active_profile().get("ocr_system_prompt", "")
+
+    @property
+    def detail_level(self) -> str:
+        return self._get_active_profile().get("ocr_detail_level", "auto")
+
+    @property
+    def max_response_tokens(self) -> int:
+        try:
+            return int(self._get_active_profile().get("ocr_max_response_tokens", 4096))
+        except (ValueError, TypeError):
+            return 4096
+
+    # ── Key Management ─────────────────────────────────────────────
 
     @property
     def multiple_keys_list(self) -> List[str]:
-        keys_str = self.get_param_value("multiple_keys")
+        keys_str = self._get_active_profile().get("multiple_keys", "")
         if not isinstance(keys_str, str):
             return []
         return [
@@ -278,55 +252,58 @@ class LLM_OCR(OCRBase):
             if key.strip()
         ]
 
-    @property
-    def endpoint(self) -> Optional[str]:
-        return self.get_param_value("endpoint") or None
+    def _respect_key_limit(self, key: str) -> bool:
+        rpm = self.requests_per_minute
+        if rpm <= 0:
+            return True
+        now = time.time()
+        count, start_time = self.key_usage.get(key, (0, now))
+        if now - start_time >= 60:
+            count, start_time = 0, now
+        if count >= rpm:
+            wait_time = 60.1 - (now - start_time)
+            if wait_time > 0:
+                self.logger.warning(
+                    f"RPM limit ({rpm}) for key {key[:6]}... reached. Waiting {wait_time:.2f}s."
+                )
+                time.sleep(wait_time)
+            self.key_usage[key] = (0, time.time())
+            return False
+        return True
 
-    @property
-    def model(self) -> str:
-        return self.get_param_value("model")
+    def _select_api_key(self) -> Optional[str]:
+        api_keys = self.multiple_keys_list
+        single_key = self._effective_api_key
+        if not api_keys and not single_key:
+            if self._is_local_endpoint:
+                return "dummy-key"
+            self.logger.error("No API keys provided.")
+            return None
 
-    @property
-    def override_model(self) -> Optional[str]:
-        return self.get_param_value("override_model") or None
+        if not api_keys:
+            if self._respect_key_limit(single_key):
+                now = time.time()
+                count, start_time = self.key_usage.get(single_key, (0, now))
+                self.key_usage[single_key] = (count + 1, start_time)
+                return single_key
+            return None
 
-    @property
-    def language(self) -> str:
-        return self.get_param_value("language")
+        start_index = self.current_key_index
+        for i in range(len(api_keys)):
+            index = (start_index + i) % len(api_keys)
+            key = api_keys[index]
+            if self._respect_key_limit(key):
+                now = time.time()
+                count, start_time = self.key_usage.get(key, (0, now))
+                self.key_usage[key] = (count + 1, start_time)
+                self.current_key_index = (index + 1) % len(api_keys)
+                return key
+        self.logger.error("All API keys are rate-limited.")
+        return None
 
-    @property
-    def detail_level(self) -> str:
-        return self.get_param_value("detail_level")
-
-    @property
-    def prompt(self) -> str:
-        return self.get_param_value("prompt")
-
-    @property
-    def system_prompt(self) -> str:
-        return self.get_param_value("system_prompt")
-
-    @property
-    def proxy(self) -> str:
-        return self.get_param_value("proxy")
-
-    @property
-    def requests_per_minute(self) -> int:
-        return int(self.get_param_value("requests_per_minute"))
-
-    @property
-    def max_response_tokens(self) -> int:
-        return int(self.get_param_value("max_response_tokens"))
-
-    @property
-    def request_delay(self) -> float:
-        try:
-            return float(self.get_param_value("delay"))
-        except (ValueError, TypeError):
-            return 1.0
+    # ── Rate Limiting ──────────────────────────────────────────────
 
     def _respect_delay(self):
-        # This logic is identical to the one in LLM_API_Translator
         current_time = time.time()
         rpm = self.requests_per_minute
         if rpm > 0:
@@ -353,71 +330,52 @@ class LLM_OCR(OCRBase):
         self.last_request_time = time.time()
         self.request_count_minute += 1
 
-    def _respect_key_limit(self, key: str) -> bool:
-        # This logic is identical to the one in LLM_API_Translator
-        rpm = self.requests_per_minute
-        if rpm <= 0:
-            return True
-        now = time.time()
-        count, start_time = self.key_usage.get(key, (0, now))
-        if now - start_time >= 60:
-            count, start_time = 0, now
-        if count >= rpm:
-            wait_time = 60.1 - (now - start_time)
-            if wait_time > 0:
-                self.logger.warning(
-                    f"RPM limit ({rpm}) for key {key[:6]}... reached. Waiting {wait_time:.2f}s."
-                )
-                time.sleep(wait_time)
-            self.key_usage[key] = (0, time.time())
-            return False
-        return True
+    # ── Client Initialization ──────────────────────────────────────
 
-    def _select_api_key(self) -> Optional[str]:
-        # This logic is identical to the one in LLM_API_Translator
-        api_keys = self.multiple_keys_list
-        single_key = self.api_key
-        if not api_keys and not single_key:
-            self.logger.error("No API keys provided.")
-            return None
+    def _initialize_client(self, api_key_to_use: str):
+        endpoint = self._effective_api_host
+        if not endpoint:
+            self.logger.error("No api_host configured in the selected profile.")
+            return
 
-        if not api_keys:
-            if self._respect_key_limit(single_key):
-                now = time.time()
-                count, start_time = self.key_usage.get(single_key, (0, now))
-                self.key_usage[single_key] = (count + 1, start_time)
-                return single_key
-            return None
+        http_client = None
+        if self.proxy:
+            try:
+                proxy_mounts = {"all://": httpx.HTTPTransport(proxy=self.proxy)}
+                http_client = httpx.Client(mounts=proxy_mounts)
+            except Exception as e:
+                self.logger.error(f"Failed to initialize proxy '{self.proxy}': {e}.")
 
-        start_index = self.current_key_index
-        for i in range(len(api_keys)):
-            index = (start_index + i) % len(api_keys)
-            key = api_keys[index]
-            if self._respect_key_limit(key):
-                now = time.time()
-                count, start_time = self.key_usage.get(key, (0, now))
-                self.key_usage[key] = (count + 1, start_time)
-                self.current_key_index = (index + 1) % len(api_keys)
-                return key
-        self.logger.error("All API keys are rate-limited.")
-        return None
+        masked_key = (
+            api_key_to_use[:4] + "..." + api_key_to_use[-4:]
+            if len(api_key_to_use) > 8
+            else api_key_to_use
+        )
+        self.logger.debug(
+            f"Initializing client with key {masked_key} at endpoint {endpoint}"
+        )
+
+        self.client = openai.OpenAI(
+            api_key=api_key_to_use, base_url=endpoint, http_client=http_client
+        )
+
+    # ── OCR ────────────────────────────────────────────────────────
 
     def ocr(self, img_base64: str, prompt_override: str = None) -> str:
-        api_key_to_use = self._select_api_key()
-        
-        if not api_key_to_use:
-            if self.provider in ["LLM Studio", "Ollama"]:
-                api_key_to_use = "dummy-key"
-            else:
-                return "[ERROR: No available API key]"
+        profile = self._get_active_profile()
+        if not profile:
+            return "[ERROR: No profile selected. Select a vision-capable profile in settings.]"
 
-        # Re-initialize client if key is different from the last one used
+        api_key_to_use = self._select_api_key()
+        if not api_key_to_use:
+            return "[ERROR: No available API key]"
+
         if not self.client or self.client.api_key != api_key_to_use:
             self._initialize_client(api_key_to_use)
 
         self._respect_delay()
         try:
-            lang_name = self.language
+            lang_name = self.get_param_value("language")
             prompt_text = (prompt_override or self.prompt).format(language=lang_name)
 
             image_content_part = {
@@ -425,10 +383,9 @@ class LLM_OCR(OCRBase):
                 "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"},
             }
 
-            if self.provider in ["OpenAI", "Google", "OpenRouter"]:
-                detail_setting = self.detail_level
-                if detail_setting in ["low", "high"]:
-                    image_content_part["image_url"]["detail"] = detail_setting
+            detail = self.detail_level
+            if detail in ("low", "high"):
+                image_content_part["image_url"]["detail"] = detail
 
             messages = [
                 {
@@ -442,10 +399,7 @@ class LLM_OCR(OCRBase):
             if self.system_prompt:
                 messages.insert(0, {"role": "system", "content": self.system_prompt})
 
-            model_name = self.override_model or self.model
-            if ": " in model_name:
-                model_name = model_name.split(": ", 1)[1]
-
+            model_name = self._effective_model
             self.logger.debug(f"OCR request with model: {model_name}")
 
             response = self.client.chat.completions.create(
@@ -488,10 +442,8 @@ class LLM_OCR(OCRBase):
 
     def updateParam(self, param_key: str, param_content):
         super().updateParam(param_key, param_content)
-        if param_key in ["api_key", "multiple_keys", "endpoint", "proxy", "provider"]:
-            self.client = None  # Force re-initialization on next call
-        if param_key in ["requests_per_minute", "delay"]:
+        if param_key == "profile":
+            self.client = None
             self.request_count_minute = 0
             self.minute_start_time = time.time()
             self.last_request_time = 0
-            
