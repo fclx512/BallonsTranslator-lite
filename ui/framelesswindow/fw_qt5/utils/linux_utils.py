@@ -5,11 +5,18 @@ import xcffib as xcb
 from PyQt5 import sip
 from PyQt5.QtCore import QPointF, Qt
 from PyQt5.QtX11Extras import QX11Info
-from xcffib.xproto import (ButtonIndex, ButtonMask, ButtonReleaseEvent,
-                           ClientMessageData, ClientMessageEvent, EventMask,
-                           xprotoExtension)
+from xcffib.xproto import (
+    ButtonIndex,
+    ButtonMask,
+    ButtonReleaseEvent,
+    ClientMessageData,
+    ClientMessageEvent,
+    EventMask,
+    xprotoExtension,
+)
 
 from utils import shared
+
 
 class WindowMessage(Enum):
     """ Window message enum class """

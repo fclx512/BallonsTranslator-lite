@@ -1,18 +1,49 @@
-from qtpy.QtWidgets import QVBoxLayout, QHBoxLayout
+from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout
 
-from .scrollbar import ScrollBar
-from .combobox import ComboBox, ConfigComboBox, ParamComboBox, SizeComboBox, SmallComboBox, SmallSizeComboBox
-from .widget import Widget, SeparatorWidget
-from .view_panel import PanelGroupBox, PanelArea, PanelAreaContent, ViewWidget, ExpandLabel
-from .message import MessageBox, TaskProgressBar, FrameLessMessageBox, ProgressMessageBox, ImgtransProgressMessageBox
-from .flow_layout import FlowLayout
-from .label import FadeLabel, SmallColorPickerLabel, ColorPickerLabel, ConfigClickableLabel, ClickableLabel, CheckableLabel, TextCheckerLabel, ParamNameLabel, SmallParamLabel, SizeControlLabel, SmallSizeControlLabel
-from .slider import PaintQSlider, RangeSlider
-from .helper import isDarkTheme, themeColor
-from .push_button import NoBorderPushBtn
-from .checkbox import QFontChecker, AlignmentChecker
-from .color_picker import ColorPickerDialog
+from .checkbox import AlignmentChecker, QFontChecker
 from .clock_dial import ClockDial
+from .color_picker import ColorPickerDialog
+from .combobox import (
+    ComboBox,
+    ConfigComboBox,
+    ParamComboBox,
+    SizeComboBox,
+    SmallComboBox,
+    SmallSizeComboBox,
+)
+from .flow_layout import FlowLayout
+from .helper import isDarkTheme, themeColor
+from .label import (
+    CheckableLabel,
+    ClickableLabel,
+    ColorPickerLabel,
+    ConfigClickableLabel,
+    FadeLabel,
+    ParamNameLabel,
+    SizeControlLabel,
+    SmallColorPickerLabel,
+    SmallParamLabel,
+    SmallSizeControlLabel,
+    TextCheckerLabel,
+)
+from .message import (
+    FrameLessMessageBox,
+    ImgtransProgressMessageBox,
+    MessageBox,
+    ProgressMessageBox,
+    TaskProgressBar,
+)
+from .push_button import NoBorderPushBtn
+from .scrollbar import ScrollBar
+from .slider import PaintQSlider, RangeSlider
+from .view_panel import (
+    ExpandLabel,
+    PanelArea,
+    PanelAreaContent,
+    PanelGroupBox,
+    ViewWidget,
+)
+from .widget import SeparatorWidget, Widget
 
 
 def combobox_with_label(param_name: str = None, size='small', options=None, parent=None, scrollWidget=None, label_alignment=None, vertical_layout=False, editable=False, label=False):

@@ -7,11 +7,11 @@ try:
 except ImportError:
     raise ImportError("PyTorch not available")
 
-import numpy as np
 import math
-import einops
+from typing import List, Optional, Tuple
 
-from typing import List, Tuple, Optional
+import einops
+import numpy as np
 
 from utils.textblock import TextBlock
 
@@ -272,7 +272,7 @@ class ResNet_FeatureExtractor(nn.Module):
 
     def forward(self, input):
         return self.ConvNet(input)
-        
+
 class OCR(nn.Module) :
     def __init__(self, dictionary, max_len):
         super(OCR, self).__init__()
@@ -472,7 +472,7 @@ class OCR48pxCTC:
                 )
             chunck_idx += N
 
-        
+
 
 # def test2() :
 #     with open('alphabet-all-v5.txt', 'r') as fp :

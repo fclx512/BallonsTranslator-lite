@@ -1,12 +1,22 @@
-from typing import Callable, List, Dict
-import time
 import datetime
+import time
+from typing import Callable, Dict, List
 
-from qtpy.QtWidgets import QDialog, QLabel, QHBoxLayout, QVBoxLayout, QMessageBox, QSizePolicy, QProgressBar, QPushButton
-from qtpy.QtGui import  QCloseEvent, QShowEvent
 from qtpy.QtCore import Qt, Signal
+from qtpy.QtGui import QCloseEvent, QShowEvent
+from qtpy.QtWidgets import (
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+)
 
-from utils.shared import remove_from_runtime_widget_set, add_to_runtime_widget_set
+from utils.shared import add_to_runtime_widget_set, remove_from_runtime_widget_set
+
 from .widget import Widget
 
 
@@ -60,7 +70,7 @@ class MessageBox(QMessageBox):
     def closeEvent(self, event: QCloseEvent) -> None:
         self.clear_before_close()
         return super().closeEvent(event)
-    
+
 
 class TaskProgressBar(Widget):
     def __init__(self, description: str = '', verbose=False, *args, **kwargs) -> None:
@@ -75,7 +85,7 @@ class TaskProgressBar(Widget):
 
         self.verbose = verbose
         # if not verbose:
-        
+
         if verbose:
             self.start_time = 0
             self.verbose_label = QLabel(self)
@@ -86,7 +96,7 @@ class TaskProgressBar(Widget):
             layout.addLayout(hl)
         else:
             layout.addWidget(self.textlabel)
-            
+
         layout.addWidget(self.progressbar)
         self.updateProgress(0)
 
@@ -121,12 +131,12 @@ class FrameLessMessageBox(QMessageBox):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        
+
 
 class ProgressMessageBox(QDialog):
     showed = Signal()
     stop_clicked = Signal()
-    
+
     def __init__(self, task_name: str = None, show_stop_btn: bool = True, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
@@ -153,7 +163,7 @@ class ProgressMessageBox(QDialog):
     def setTaskName(self, task_name: str):
         if self.task_progress_bar is not None:
             self.task_progress_bar.description = task_name
-    
+
     def zero_progress(self):
         if self.task_progress_bar is not None:
             self.task_progress_bar.updateProgress(0)
@@ -165,10 +175,10 @@ class ProgressMessageBox(QDialog):
 
 class ImgtransProgressMessageBox(ProgressMessageBox):
     stop_clicked = Signal()
-    
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(None, *args, **kwargs)
-        
+
         self.detect_bar = TaskProgressBar(self.tr('Detecting: '), True, self)
         self.ocr_bar = TaskProgressBar(self.tr('OCR: '), True, self)
         self.inpaint_bar = TaskProgressBar(self.tr('Inpainting: '), True, self)
@@ -179,7 +189,7 @@ class ImgtransProgressMessageBox(ProgressMessageBox):
         layout.addWidget(self.ocr_bar)
         layout.addWidget(self.inpaint_bar)
         layout.addWidget(self.translate_bar)
-        
+
         # 添加停止按钮
         self.stop_button = QPushButton(self.tr('Stop'), self)
         self.stop_button.clicked.connect(self.on_stop_clicked)
@@ -190,7 +200,7 @@ class ImgtransProgressMessageBox(ProgressMessageBox):
         layout.addLayout(button_layout)
 
         self.setFixedWidth(self.sizeHint().width())
-    
+
     def on_stop_clicked(self):
         self.stop_clicked.emit()
         # 重置按钮状态（为下次使用准备）
@@ -209,7 +219,7 @@ class ImgtransProgressMessageBox(ProgressMessageBox):
 
     def updateTranslateProgress(self, value: int, msg: str = ''):
         self.translate_bar.updateProgress(value, msg)
-    
+
     def zero_progress(self):
         self.updateDetectProgress(0)
         self.updateOCRProgress(0)

@@ -1,12 +1,12 @@
-from typing import Union
+import copy
 import enum
 import re
-import copy
+from typing import Union
 
 import numpy as np
 
 from . import shared
-from .structures import Tuple, Union, List, Dict, Config, field, nested_dataclass
+from .structures import Config, List, Union, field, nested_dataclass
 
 
 def pt2px(pt, to_int=False) -> float:
@@ -137,6 +137,6 @@ class FontFormat(Config):
 
     def foreground_color(self):
         return [int(round(x)) for x in self.frgb]
-    
+
     def stroke_color(self):
         return [int(round(x)) for x in self.srgb]

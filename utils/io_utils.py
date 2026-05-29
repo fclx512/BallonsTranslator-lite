@@ -1,19 +1,23 @@
-import json, os, sys, time, io
-import os.path as osp
-from pathlib import Path
-import importlib
-from typing import List, Dict, Callable, Union
 import base64
+import importlib
+import io
+import json
+import os
+import os.path as osp
+import sys
+import time
 import traceback
+from pathlib import Path
+from typing import Callable, Dict, List, Union
 
-from .logger import logger as LOGGER
-import requests
-from PIL import Image
-import PIL
 import cv2
 import numpy as np
-import pillow_jxl
+import PIL
+import requests
 from natsort import natsorted
+from PIL import Image
+
+from .logger import logger as LOGGER
 
 IMG_EXT = ['.bmp', '.jpg', '.png', '.jpeg', '.webp', '.jxl']
 
@@ -124,7 +128,7 @@ def find_all_imgs(img_dir, abs_path=False, sort=False):
 
     if sort:
         imglist = natsorted(imglist)
-        
+
     return imglist
 
 def page_names_from_range(proj, pages_str: str):
@@ -215,13 +219,13 @@ def find_tif_files(img_dir, abs_path=False, sort=False):
 
     if sort:
         imglist = natsorted(imglist)
-        
+
     return imglist
 
 def find_all_files_recursive(tgt_dir: Union[List, str], ext: Union[List, set], exclude_dirs=None):
     if isinstance(tgt_dir, str):
         tgt_dir = [tgt_dir]
-    
+
     if exclude_dirs is None:
         exclude_dirs = set()
 
@@ -233,13 +237,13 @@ def find_all_files_recursive(tgt_dir: Union[List, str], ext: Union[List, set], e
             for f in files:
                 if Path(f).suffix.lower() in ext:
                     filelst.append(osp.join(root, f))
-    
+
     return filelst
 
 def imread(imgpath, read_type=cv2.IMREAD_COLOR, max_retry_limit=5, retry_interval=0.1):
     if not osp.exists(imgpath):
         return None
-    
+
     num_tries = 0
     while True:
         try:
@@ -269,7 +273,7 @@ def imread(imgpath, read_type=cv2.IMREAD_COLOR, max_retry_limit=5, retry_interva
                 return None
             LOGGER.warning(f'PIL.UnidentifiedImageError: failed to read {imgpath}, retries: {num_tries} / {max_retry_limit}')
             time.sleep(retry_interval)
-    
+
     return img
 
 
@@ -285,12 +289,12 @@ def imwrite(img_path, img, ext='.png', quality=100, jxl_encode_effort=3):
 
     if ext != '.webp':
         quality = min(quality, 100) # for webp quality above 100 the lossless compression is used
-    
+
     # Ensure directory exists
     save_dir = osp.dirname(img_path)
     if save_dir and not osp.exists(save_dir):
         os.makedirs(save_dir)
-    
+
     encode_param = None
     if ext in {'.jpg', '.jpeg'}:
         encode_param = [cv2.IMWRITE_JPEG_QUALITY, quality]
@@ -325,10 +329,10 @@ def text_is_empty(text) -> bool:
             t_is_empty = text_is_empty(t)
             if not t_is_empty:
                 return False
-        return True    
+        return True
     elif text is None:
         return True
-    
+
 def empty_func(*args, **kwargs):
     return
 
@@ -343,7 +347,7 @@ def get_module_from_str(module_str: str):
     return importlib.import_module(module_str, package=None)
 
 def build_funcmap(module_str: str, params_names: List[str], func_prefix: str = '', func_suffix: str = '', fallback_func: Callable = None, verbose: bool = True) -> Dict:
-    
+
     if fallback_func is None:
         fallback_func = empty_func
 
@@ -395,7 +399,7 @@ def submit_request(url, data, exist_on_exception=True, auth=None, wait_time = 5)
                     continue
                 else:
                     raise e
-    except Exception as e:
+    except Exception:
         print(traceback.format_exc(), file=sys.stderr)
         if response is not None:
             print('response content: ' + response.text)

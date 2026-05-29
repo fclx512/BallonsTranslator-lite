@@ -1,9 +1,10 @@
-from qtpy.QtWidgets import QWidget, QStyle, QSlider, QStyle, QStyleOptionSlider
-from qtpy.QtCore import  Qt, QPropertyAnimation, QRect, QRectF, Signal, QPoint, Property
-from qtpy.QtGui import QFontMetrics, QMouseEvent, QPainter, QFontMetrics, QColor, QBrush, QPen
+from qtpy.QtCore import Property, QPoint, QPropertyAnimation, QRect, QRectF, Qt, Signal
+from qtpy.QtGui import QBrush, QColor, QFontMetrics, QMouseEvent, QPainter, QPen
+from qtpy.QtWidgets import QSlider, QStyle, QStyleOptionSlider, QWidget
+
+from utils import shared as C
 
 from .helper import isDarkTheme, themeColor
-from utils import shared as C
 
 
 def slider_subcontrol_rect(r: QRect, widget: QWidget):
@@ -76,7 +77,7 @@ class SliderHandle(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
 
         # draw outer circle
-        from ui.theme_helpers import slider_colors, is_dark_theme
+        from ui.theme_helpers import is_dark_theme, slider_colors
         handle_outer, _ = slider_colors()
         painter.setPen(QColor(0, 0, 0, 90 if is_dark_theme() else 25))
         painter.setBrush(handle_outer)
@@ -168,17 +169,17 @@ class Slider(QSlider):
 
         if hasattr(self, 'draw_content') and self.hovering:
             # its a bad idea to display text like this, but I leave it as it is for now
-            
+
             option = QStyleOptionSlider()
             self.initStyleOption(option)
 
             rect = self.style().subControlRect(
                 QStyle.CC_Slider, option, QStyle.SC_SliderHandle, self)
             rect = slider_subcontrol_rect(rect, self)
-            
+
             value = self.value()
             value_str = str(value)
-                
+
             painter.setPen(QColor(*C.SLIDERHANDLE_COLOR,255))
             font = painter.font()
             font.setPointSizeF(8)
@@ -186,7 +187,7 @@ class Slider(QSlider):
             painter.setFont(font)
 
             is_hor = self.orientation() == Qt.Orientation.Horizontal
-            if is_hor: 
+            if is_hor:
                 value_w = fm.boundingRect(value_str).width()
                 dx = self.width() - value_w
             else:
@@ -197,7 +198,7 @@ class Slider(QSlider):
 
             if self.draw_content is not None:
                 painter.drawText(0, dy, self.draw_content, )
-                
+
 
     def _drawHorizonGroove(self, painter: QPainter):
         w, r = self.width(), self.handle.width() / 2

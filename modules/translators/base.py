@@ -1,16 +1,20 @@
+import copy
+import functools
 import urllib.request
-from ordered_set import OrderedSet
-from typing import Dict, List, Union, Set, Callable
-import time, requests, re, uuid, base64, hmac, functools, json, copy
 from collections import OrderedDict
+from typing import Dict, List, Union
 
-from .exceptions import InvalidSourceOrTargetLanguage, TranslatorSetupFailure, MissingTranslatorParams, TranslatorNotValid
-from utils.textblock import TextBlock
-from ..base import BaseModule, DEVICE_SELECTOR
-from utils.registry import Registry
 from utils.io_utils import text_is_empty
 from utils.logger import logger as LOGGER
+from utils.registry import Registry
+from utils.textblock import TextBlock
 
+from ..base import BaseModule, DEVICE_SELECTOR
+from .exceptions import (
+    InvalidSourceOrTargetLanguage,
+    MissingTranslatorParams,
+    TranslatorSetupFailure,
+)
 
 TRANSLATORS = Registry('translators')
 register_translator = TRANSLATORS.register_module
@@ -38,7 +42,7 @@ LANGMAP_GLOBAL = {
     'русский язык': '',
     'Español': '',
     'Türk dili': '',
-    'украї́нська мо́ва': '',  
+    'украї́нська мо́ва': '',
     'Thai': '',
     'Arabic': '',
     'Hindi': '',
@@ -48,12 +52,12 @@ LANGMAP_GLOBAL = {
 
 SYSTEM_LANG = ''
 SYSTEM_LANGMAP = {
-    'zh-CN': '简体中文'        
+    'zh-CN': '简体中文'
 }
 
 
 def check_language_support(check_type: str = 'source'):
-    
+
     def decorator(set_lang_method):
         @functools.wraps(set_lang_method)
         def wrapper(self, lang: str = ''):
@@ -61,7 +65,7 @@ def check_language_support(check_type: str = 'source'):
                 supported_lang_list = self.supported_src_list
             else:
                 supported_lang_list = self.supported_tgt_list
-            if not lang in supported_lang_list:
+            if lang not in supported_lang_list:
                 msg = '\n'.join(supported_lang_list)
                 raise InvalidSourceOrTargetLanguage(f'Invalid {check_type}: {lang}\n', message=msg)
             return set_lang_method(self, lang)
@@ -76,9 +80,9 @@ class BaseTranslator(BaseModule):
     cht_require_convert = False
     _postprocess_hooks = OrderedDict()
     _preprocess_hooks = OrderedDict()
-    
+
     def __init__(self,
-                 lang_source: str, 
+                 lang_source: str,
                  lang_target: str,
                  raise_unsupported_lang: bool = True,
                  **params) -> None:
@@ -92,7 +96,7 @@ class BaseTranslator(BaseModule):
         self.lang_source: str = lang_source
         self.lang_target: str = lang_target
         self.lang_map: Dict = LANGMAP_GLOBAL.copy()
-        
+
         try:
             self.setup_translator()
         except Exception as e:
@@ -100,7 +104,7 @@ class BaseTranslator(BaseModule):
                 raise e
             else:
                 raise TranslatorSetupFailure(e)
-            
+
         # enable traditional chinese by converting from simplified chinese
         if self.cht_require_convert and not self.lang_map['繁體中文']:
             self.lang_map['繁體中文'] = self.lang_map['简体中文']
@@ -143,13 +147,13 @@ class BaseTranslator(BaseModule):
         is_list = isinstance(text, List)
         concate_text = is_list and self.concate_text
         text_source = self.textlist2text(text) if concate_text else text
-        
+
         src_is_list = isinstance(text_source, List)
-        if src_is_list: 
+        if src_is_list:
             text_trans = self._translate(text_source)
         else:
             text_trans = self._translate([text_source])[0]
-        
+
         if text_trans is None:
             if is_list:
                 text_trans = [''] * len(text)
@@ -157,7 +161,7 @@ class BaseTranslator(BaseModule):
                 text_trans = ''
         elif concate_text:
             text_trans = self.text2textlist(text_trans)
-            
+
         if is_list:
             try:
                 assert len(text_trans) == len(text)
@@ -219,7 +223,7 @@ class BaseTranslator(BaseModule):
     @property
     def supported_src_list(self) -> List[str]:
         return self.valid_lang_list
-        
+
     def delay(self) -> float:
         if 'delay' in self.params:
             delay = self.params['delay']
@@ -243,10 +247,10 @@ class TransNone(BaseTranslator):
     def _setup_translator(self):
         for k in self.lang_map.keys():
             self.lang_map[k] = 'dummy language'
-        
+
     def _translate(self, src_list: List[str]) -> List[str]:
         return copy.copy(src_list)
-    
+
 def transhook_copy_original(translations: List[str] = None, textblocks: List[TextBlock] = None, translator: BaseTranslator = None, **kwargs):
     if textblocks is not None and isinstance(translator, TransNone):
         for ii, _ in enumerate(translations):

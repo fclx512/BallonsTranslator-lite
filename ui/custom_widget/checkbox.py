@@ -1,5 +1,6 @@
-from qtpy.QtWidgets import QCheckBox
 from qtpy.QtGui import QMouseEvent
+from qtpy.QtWidgets import QCheckBox
+
 
 class QFontChecker(QCheckBox):
     def __init__(self, *args, **kwargs):

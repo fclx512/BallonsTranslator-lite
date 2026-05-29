@@ -1,11 +1,11 @@
-from utils.io_utils import build_funcmap
-from utils.fontformat import FontFormat
 from utils.config import pcfg
+from utils.fontformat import FontFormat
+from utils.io_utils import build_funcmap
 from utils.textblock_mask import canny_flood, connected_canny_flood, existing_mask
 
 # Build base function map
-handle_ffmt_change = build_funcmap('ui.fontformat_commands', 
-                                     list(FontFormat.params().keys()) + ['rel_font_size'], 
+handle_ffmt_change = build_funcmap('ui.fontformat_commands',
+                                     list(FontFormat.params().keys()) + ['rel_font_size'],
                                      'ffmt_change_', verbose=False)
 
 

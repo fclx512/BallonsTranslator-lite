@@ -1,20 +1,22 @@
+import os
+import os.path as osp
+import sys
+
 import click
 
-import sys, os
-import os.path as osp
 sys.path.append(osp.dirname(osp.dirname(__file__)))
 
 from tqdm import tqdm
 
-from utils.config import load_config
-
+from modules import (
+    MODULETYPE_TO_REGISTRIES,
+    init_textdetector_registries,
+)
+from utils.config import load_config, pcfg
+from utils.io_utils import imwrite
+from utils.proj_imgtrans import ProjImgTrans
 from utils.shared import PROGRAM_PATH
 from utils.textblock import visualize_textblocks
-from utils.proj_imgtrans import ProjImgTrans
-from utils.config import pcfg
-from utils.io_utils import imread, imwrite
-from modules import MODULETYPE_TO_REGISTRIES, init_translator_registries, init_inpainter_registries, init_ocr_registries, init_textdetector_registries
-
 
 os.chdir(PROGRAM_PATH)
 
@@ -59,7 +61,7 @@ def run_detector(proj_dir, detector, config, save_dir):
         vis = visualize_textblocks(proj.img_array, blk_list)
         imwrite(osp.join(save_dir, proj.current_img), vis, ext='.jpg')
         pass
-    
+
 
 
 if __name__ == '__main__':

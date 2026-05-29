@@ -1,10 +1,16 @@
-from typing import List, Callable
+from typing import Callable, List
 
-from qtpy.QtWidgets import QComboBox, QWidget
-from qtpy.QtCore import Signal, Qt
+from qtpy.QtCore import Qt, Signal
 from qtpy.QtGui import QDoubleValidator
+from qtpy.QtWidgets import QComboBox, QWidget
 
-from utils.shared import CONFIG_COMBOBOX_LONG, CONFIG_COMBOBOX_MIDEAN, CONFIG_COMBOBOX_SHORT, CONFIG_COMBOBOX_HEIGHT
+from utils.shared import (
+    CONFIG_COMBOBOX_HEIGHT,
+    CONFIG_COMBOBOX_LONG,
+    CONFIG_COMBOBOX_MIDEAN,
+    CONFIG_COMBOBOX_SHORT,
+)
+
 from .push_button import NoBorderPushBtn
 
 
@@ -25,7 +31,7 @@ class ComboBox(QComboBox):
             return super().wheelEvent(*args, **kwargs)
         else:
             return self.scrollWidget.wheelEvent(*args, **kwargs)
-        
+
 
 class SmallComboBox(ComboBox):
     pass
@@ -70,7 +76,7 @@ class ParamComboBox(ComboBox):
         options = [str(opt) for opt in options]
         self.addItems(options)
         self.currentTextChanged.connect(self.on_select_changed)
-        
+
         if flush_btn:
             self.flush_btn = NoBorderPushBtn(self.tr('Flush'))
             self.flush_btn.clicked.connect(self.flushbtn_clicked)
@@ -83,7 +89,7 @@ class ParamComboBox(ComboBox):
 
 
 class SizeComboBox(QComboBox):
-    
+
     param_changed = Signal(str, float)
     def __init__(self, val_range: List = None, param_name: str = '', parent=None, init_value=None, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)

@@ -1,18 +1,24 @@
 import os
 import os.path as osp
-from typing import Tuple, List
+from typing import List, Tuple
 
 try:
     import torch
 except ImportError:
     raise ImportError("PyTorch not available")
-import numpy as np
 import cv2
+import numpy as np
 
-from .base import register_textdetectors, TextDetectorBase, TextBlock, DEVICE_SELECTOR
-from utils.textblock import mit_merge_textlines, sort_regions, examine_textblk, sort_pnts
 from utils.imgproc_utils import xywh2xyxypoly
 from utils.proj_imgtrans import ProjImgTrans
+from utils.textblock import (
+    examine_textblk,
+    mit_merge_textlines,
+    sort_pnts,
+    sort_regions,
+)
+
+from .base import DEVICE_SELECTOR, TextBlock, TextDetectorBase, register_textdetectors
 
 MODEL_DIR = 'data/models'
 CKPT_LIST = []
@@ -104,7 +110,7 @@ class YSGYoloDetector(TextDetectorBase):
     def __init__(self, **params) -> None:
         super().__init__(**params)
         update_ckpt_list()
-    
+
     def _load_model(self):
         model_path = self.get_param_value('model path')
         if not osp.exists(model_path):
@@ -186,7 +192,7 @@ class YSGYoloDetector(TextDetectorBase):
                 blk.adjust_bbox()
                 examine_textblk(blk, im_w, im_h)
                 blk_list.append(blk)
-        
+
         blk_list = sort_regions(blk_list)
 
         fnt_rsz = self.get_param_value('font size multiplier')
@@ -210,7 +216,7 @@ class YSGYoloDetector(TextDetectorBase):
 
     def updateParam(self, param_key: str, param_content):
         super().updateParam(param_key, param_content)
-        
+
         if param_key == 'model path':
             if hasattr(self, 'model'):
                 del self.model

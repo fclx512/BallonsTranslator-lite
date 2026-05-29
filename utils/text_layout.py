@@ -1,8 +1,10 @@
 from typing import List, Tuple
+
 import numpy as np
 
 from .imgproc_utils import rotate_image
-from .textblock import TextBlock, TextAlignment
+from .textblock import TextAlignment, TextBlock
+
 
 class Line:
 
@@ -63,11 +65,11 @@ def line_is_valid(line: Line, new_len: int, delimiter_len, max_width, words_leng
 
 def layout_lines_aligncenter(
     blk: TextBlock,
-    mask: np.ndarray, 
-    words: List[str], 
+    mask: np.ndarray,
+    words: List[str],
     centroid: List[int],
-    wl_list: List[int], 
-    delimiter_len: int, 
+    wl_list: List[int],
+    delimiter_len: int,
     line_height: int,
     spacing: int = 0,
     delimiter: str = ' ',
@@ -77,7 +79,7 @@ def layout_lines_aligncenter(
     srcline_wlist=None,
     start_from_top=False
 )->List[Line]:
-    
+
     lh_pad = 0
     if blk.line_spacing > 1:
         lh_pad = int(np.ceil(line_height - line_height / blk.line_spacing))
@@ -86,7 +88,7 @@ def layout_lines_aligncenter(
     adjust_x = adjust_y = 0
 
     border_thr = 220
-    
+
     # layout the central line, the center word is approximately aligned with the centroid of the mask
     num_words = len(words)
     len_left, len_right = [], []
@@ -293,16 +295,16 @@ def layout_lines_aligncenter(
                 line = Line(w, pos_x, pos_y, wl, spacing)
                 lines.insert(0, line)
                 line_left_no -= 1
-    
+
     return lines, (adjust_x, adjust_y)
 
 def layout_lines_alignside(
     blk: TextBlock,
-    mask: np.ndarray, 
-    words: List[str], 
+    mask: np.ndarray,
+    words: List[str],
     origin: List[int],
-    wl_list: List[int], 
-    delimiter_len: int, 
+    wl_list: List[int],
+    delimiter_len: int,
     line_height: int,
     spacing: int = 0,
     delimiter: str = ' ',
@@ -366,7 +368,7 @@ def layout_lines_alignside(
 
 def layout_text(
     blk: TextBlock,
-    mask: np.ndarray, 
+    mask: np.ndarray,
     mask_xyxy: List,
     centroid: List,
     words: List[str],
@@ -429,7 +431,7 @@ def layout_text(
         old_h, old_w = mask.shape[:2]
         old_origin = (old_w // 2, old_h // 2)
         rel_cx, rel_cy = centroid[0] - old_origin[0], centroid[1] - old_origin[1]
-        
+
         mask = rotate_image(mask, angle)
         rad = np.deg2rad(angle)
         r_sin, r_cos = np.sin(rad), np.cos(rad)
@@ -437,20 +439,20 @@ def layout_text(
         new_rel_cx =  rel_cy * r_sin + rel_cx * r_cos
 
         shifted_x, shifted_y = new_rel_cx - rel_cx, new_rel_cy - rel_cy
-        
+
         new_h, new_w = mask.shape[:2]
         new_origin = (new_w // 2, new_h // 2)
         new_cx, new_cy = new_origin[0] + new_rel_cx, new_origin[1] + new_rel_cy
         centroid = [int(new_cx), int(new_cy)]
 
     if alignment == TextAlignment.Center:
-        lines, adjust_xy = layout_lines_aligncenter(blk, mask, words, centroid, wl_list, delimiter_len, line_height, spacing, delimiter, 
+        lines, adjust_xy = layout_lines_aligncenter(blk, mask, words, centroid, wl_list, delimiter_len, line_height, spacing, delimiter,
                                          max_central_width, ref_src_lines=ref_src_lines, srcline_wlist=srcline_wlist,
-                                         start_from_top=start_from_top)    
+                                         start_from_top=start_from_top)
     else:
-        lines, adjust_xy = layout_lines_alignside(blk, mask, words, centroid, wl_list, delimiter_len, line_height, spacing, delimiter, False, max_central_width, 
+        lines, adjust_xy = layout_lines_alignside(blk, mask, words, centroid, wl_list, delimiter_len, line_height, spacing, delimiter, False, max_central_width,
                                        ref_src_lines=ref_src_lines, srcline_wlist=srcline_wlist)
-    
+
     concated_text = []
     pos_x_lst, pos_right_lst = [], []
     for line in lines:

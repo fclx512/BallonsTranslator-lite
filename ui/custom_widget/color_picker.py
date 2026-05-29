@@ -3,11 +3,26 @@
 import json
 from pathlib import Path
 
-from qtpy.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
-                             QLabel, QPushButton, QSpinBox, QLineEdit, QWidget)
-from qtpy.QtCore import Qt, Signal, QRectF, QRegularExpression
-from qtpy.QtGui import (QColor, QPainter, QBrush, QPen, QMouseEvent,
-                         QLinearGradient, QPixmap, QRegularExpressionValidator)
+from qtpy.QtCore import QRectF, QRegularExpression, Qt, Signal
+from qtpy.QtGui import (
+    QBrush,
+    QColor,
+    QLinearGradient,
+    QMouseEvent,
+    QPainter,
+    QPen,
+    QRegularExpressionValidator,
+)
+from qtpy.QtWidgets import (
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 # ── Default palette ───────────────────────────────────────
 
@@ -272,6 +287,8 @@ class _PaletteGrid(QWidget):
 class ColorPickerDialog(QDialog):
     """Photoshop-style color picker dialog with editable palette."""
 
+    colorChanging = Signal(QColor)
+
     def __init__(self, current: QColor, parent=None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Color Picker"))
@@ -284,6 +301,7 @@ class ColorPickerDialog(QDialog):
         self._hue = h if h >= 0 else 0.0
         self._sat = s
         self._val = v
+        self._alpha = current.alpha()
 
         self._setup_ui()
         self._sync_all_from_hsv()
@@ -325,6 +343,7 @@ class ColorPickerDialog(QDialog):
         self.r_spin = make_spin(0, 255)
         self.g_spin = make_spin(0, 255)
         self.b_spin = make_spin(0, 255)
+        self.a_spin = make_spin(0, 255)
 
         self.h_spin.setSuffix('°')
         self.s_spin.setSuffix('%')
@@ -336,6 +355,7 @@ class ColorPickerDialog(QDialog):
         self.r_spin.valueChanged.connect(lambda v: self._on_rgb_spin())
         self.g_spin.valueChanged.connect(lambda v: self._on_rgb_spin())
         self.b_spin.valueChanged.connect(lambda v: self._on_rgb_spin())
+        self.a_spin.valueChanged.connect(lambda v: self._on_alpha_spin())
 
         num_col = QVBoxLayout()
         num_col.setSpacing(3)
@@ -357,6 +377,7 @@ class ColorPickerDialog(QDialog):
         num_col.addLayout(lbl_row('R', self.r_spin))
         num_col.addLayout(lbl_row('G', self.g_spin))
         num_col.addLayout(lbl_row('B', self.b_spin))
+        num_col.addLayout(lbl_row('A', self.a_spin))
         num_col.addWidget(QLabel('─' * 4), alignment=Qt.AlignmentFlag.AlignCenter)
 
         hex_row = QHBoxLayout()
@@ -366,7 +387,7 @@ class ColorPickerDialog(QDialog):
         hex_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         hex_row.addWidget(hex_lbl)
         self.hex_edit = QLineEdit()
-        self.hex_edit.setMaxLength(6)
+        self.hex_edit.setMaxLength(8)
         self.hex_edit.setFixedWidth(78)
         self.hex_edit.setStyleSheet('''
             QLineEdit {
@@ -376,7 +397,7 @@ class ColorPickerDialog(QDialog):
                 padding: 2px 4px;
             }
         ''')
-        rx = QRegularExpression('[0-9A-Fa-f]{0,6}')
+        rx = QRegularExpression('[0-9A-Fa-f]{0,8}')
         self.hex_edit.setValidator(QRegularExpressionValidator(rx))
         self.hex_edit.textChanged.connect(self._on_hex_changed)
         hex_row.addWidget(self.hex_edit)
@@ -432,25 +453,30 @@ class ColorPickerDialog(QDialog):
 
     def _block_spins(self, block: bool):
         for s in [self.h_spin, self.s_spin, self.v_spin,
-                  self.r_spin, self.g_spin, self.b_spin]:
+                  self.r_spin, self.g_spin, self.b_spin, self.a_spin]:
             s.blockSignals(block)
         self.hex_edit.blockSignals(block)
 
     def _sync_all_from_hsv(self):
         self._block_spins(True)
-        c = QColor.fromHsvF(self._hue, self._sat, self._val)
+        c = QColor.fromHsvF(self._hue, self._sat, self._val, self._alpha / 255.0)
         self.h_spin.setValue(int(self._hue * 360))
         self.s_spin.setValue(int(self._sat * 100))
         self.v_spin.setValue(int(self._val * 100))
         self.r_spin.setValue(c.red())
         self.g_spin.setValue(c.green())
         self.b_spin.setValue(c.blue())
-        self.hex_edit.setText(c.name()[1:].upper())
+        self.a_spin.setValue(self._alpha)
+        if self._alpha < 255:
+            self.hex_edit.setText(c.name(QColor.NameFormat.HexArgb)[1:].upper())
+        else:
+            self.hex_edit.setText(c.name()[1:].upper())
         self._block_spins(False)
 
         self.square.set_hsv(self._hue, self._sat, self._val)
         self._result = c
         self._new_swatch.set_color(c)
+        self.colorChanging.emit(c)
 
     def _on_square_changed(self):
         self._sat, self._val = self.square.sat_value()
@@ -480,8 +506,12 @@ class ColorPickerDialog(QDialog):
         self.square.set_hsv(self._hue, self._sat, self._val)
         self._sync_all_from_hsv()
 
+    def _on_alpha_spin(self):
+        self._alpha = self.a_spin.value()
+        self._sync_all_from_hsv()
+
     def _on_hex_changed(self, text):
-        if len(text) == 6:
+        if len(text) in (6, 8):
             try:
                 c = QColor('#' + text)
                 if c.isValid():
@@ -489,6 +519,7 @@ class ColorPickerDialog(QDialog):
                     self._hue = h if h >= 0 else 0.0
                     self._sat = s
                     self._val = v
+                    self._alpha = c.alpha()
                     self.hue_slider.set_hue(self._hue)
                     self.square.set_hsv(self._hue, self._sat, self._val)
                     self._sync_all_from_hsv()
@@ -506,6 +537,7 @@ class ColorPickerDialog(QDialog):
         self._hue = h if h >= 0 else 0.0
         self._sat = s
         self._val = v
+        self._alpha = color.alpha()
         self.hue_slider.set_hue(self._hue)
         self.square.set_hsv(self._hue, self._sat, self._val)
         self._sync_all_from_hsv()

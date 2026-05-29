@@ -7,12 +7,12 @@ endpoint with stream=True and emits text deltas in real time.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
-
 import json
 import logging
-import openai
+from typing import Any, Dict, List
+
 import httpx
+import openai
 from qtpy.QtCore import QThread, Signal
 
 logger = logging.getLogger('ai_chat')

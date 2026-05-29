@@ -1,16 +1,54 @@
-from typing import List, Union, Tuple
+from typing import List, Tuple, Union
 
-from qtpy.QtWidgets import QPushButton, QKeySequenceEdit, QLayout, QGridLayout, QHBoxLayout, QVBoxLayout, QWidget, QLabel, QSpinBox, QSizePolicy, QSpacerItem, QCheckBox, QScrollArea, QLineEdit, QDialog, QDialogButtonBox, QListWidget, QListWidgetItem, QAbstractItemView, QFrame
-from qtpy.QtCore import Qt, Signal, QSize
-from qtpy.QtGui import QFont, QIntValidator, QValidator, QFocusEvent
+from qtpy.QtCore import QSize, Qt, Signal
+from qtpy.QtGui import QFocusEvent, QFont, QIntValidator, QValidator
+from qtpy.QtWidgets import (
+    QAbstractItemView,
+    QCheckBox,
+    QDialog,
+    QDialogButtonBox,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QKeySequenceEdit,
+    QLabel,
+    QLayout,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSpacerItem,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
-from .custom_widget import ConfigComboBox, Widget, PanelGroupBox
-from utils.config import pcfg
 from utils import shared as C
-from utils.shared import (CONFIG_FONTSIZE_CONTENT, CONFIG_FONTSIZE_HEADER, CONFIG_COMBOBOX_SHORT, CONFIG_COMBOBOX_LONG,
-    CONFIG_COMBOBOX_MIDEAN, CONFIGBLOCK_CONTENT_MARGINS, GROUPBOX_CONTENT_MARGINS, CONFIG_SUBBLOCK_SPACING,
-    LINEEDIT_FIXHEIGHT, NAVLIST_WIDTH, NAVLIST_HEADER_FONTSIZE)
-from .module_parse_widgets import InpaintConfigPanel, TextDetectConfigPanel, TranslatorConfigPanel, OCRConfigPanel
+from utils.config import pcfg
+from utils.shared import (
+    CONFIG_COMBOBOX_LONG,
+    CONFIG_COMBOBOX_MIDEAN,
+    CONFIG_COMBOBOX_SHORT,
+    CONFIG_FONTSIZE_CONTENT,
+    CONFIG_FONTSIZE_HEADER,
+    CONFIG_SUBBLOCK_SPACING,
+    CONFIGBLOCK_CONTENT_MARGINS,
+    GROUPBOX_CONTENT_MARGINS,
+    LINEEDIT_FIXHEIGHT,
+    NAVLIST_HEADER_FONTSIZE,
+    NAVLIST_WIDTH,
+)
+
+from .custom_widget import ConfigComboBox, PanelGroupBox, Widget
+from .module_parse_widgets import (
+    InpaintConfigPanel,
+    OCRConfigPanel,
+    TextDetectConfigPanel,
+    TranslatorConfigPanel,
+)
+
 
 class CustomIntValidator(QIntValidator):
 
@@ -24,7 +62,7 @@ class CustomIntValidator(QIntValidator):
                 return (QValidator.State.Invalid, s, pos)
             else:
                 return (QValidator.State.Intermediate, s, pos)
-            
+
         s_ori = s
         d = int(s)
         s = str(d)
@@ -110,7 +148,7 @@ class ConfigSubBlock(Widget):
             layout.addLayout(widget)
         self.widget = widget
         self.setContentsMargins(*content_margins)
-    
+
 
 def combobox_with_label(sel: List[str], name: str, description: str = None, vertical_layout: bool = False, target_block: QWidget = None, fix_size: bool = True, parent: QWidget = None, insert_stretch: bool = False) -> Tuple[ConfigComboBox, QWidget]:
     combox = ConfigComboBox(fix_size=fix_size, scrollWidget=parent)
@@ -126,7 +164,7 @@ def combobox_with_label(sel: List[str], name: str, description: str = None, vert
         layout.addWidget(ConfigTextLabel(name, CONFIG_FONTSIZE_CONTENT, QFont.Weight.Normal))
         layout.addWidget(combox)
         return combox, target_block
-    
+
 def checkbox_with_label(name: str, description: str = None, target_block: QWidget = None):
     checkbox = QCheckBox()
     if description is not None:
@@ -144,7 +182,7 @@ def checkbox_with_label(name: str, description: str = None, target_block: QWidge
             sublock.layout().addItem(QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding))
         target_block = sublock
     return checkbox, target_block
-    
+
 
 
 class ConfigBlock(Widget):
@@ -678,6 +716,7 @@ class ConfigPanel(Widget):
     reload_textstyle = Signal(bool)
     font_exclusion_changed = Signal()
     profiles_changed = Signal()
+    theme_changed = Signal()
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -853,11 +892,36 @@ class ConfigPanel(Widget):
 
         self.save_block = generalConfigPanel.addGroupedBlock(label_save, save_widget, object_name="GroupSave")
 
-        # === General: Miscellaneous (shortcut editor) ===
+        # === General: Miscellaneous (theme + shortcut editor) ===
+        misc_widget = QWidget()
+        misc_layout = QVBoxLayout(misc_widget)
+        misc_layout.setContentsMargins(0, 0, 0, 0)
+        misc_layout.setSpacing(8)
+
+        # Theme selector row
+        theme_row = QHBoxLayout()
+        theme_row.setSpacing(6)
+        self.theme_combo = ConfigComboBox()
+        self.theme_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
+        self.theme_combo.activated.connect(self._on_theme_selected)
+        theme_row.addWidget(self.theme_combo)
+
+        self.edit_theme_btn = QPushButton(self.tr('Edit...'), parent=self)
+        self.edit_theme_btn.setFixedWidth(80)
+        self.edit_theme_btn.clicked.connect(self._on_edit_theme)
+        theme_row.addWidget(self.edit_theme_btn)
+        theme_row.addStretch()
+
+        misc_layout.addLayout(theme_row)
+
+        # Shortcut button
         self.shortcut_btn = QPushButton(self.tr('Edit Shortcuts...'), parent=self)
         self.shortcut_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
         self.shortcut_btn.clicked.connect(self._open_shortcut_dialog)
-        self.shortcut_block = generalConfigPanel.addGroupedBlock(label_shortcuts, self.shortcut_btn)
+        misc_layout.addWidget(self.shortcut_btn)
+
+        self.shortcut_block = generalConfigPanel.addGroupedBlock(label_shortcuts, misc_widget)
+        self._refresh_theme_combo()
 
         # === Navigation list (replaces horizontal nav bar) ===
         self.navList = QListWidget()
@@ -1026,7 +1090,11 @@ class ConfigPanel(Widget):
         self.configContent.scrollToWidget(target)
 
     def _open_profile_manager(self):
-        from utils.profile_manager import ProfileManagerDialog, load_profiles, save_all_profiles
+        from utils.profile_manager import (
+            ProfileManagerDialog,
+            load_profiles,
+            save_all_profiles,
+        )
         profiles = load_profiles()
         dialog = ProfileManagerDialog(self, profiles, on_changed=lambda: None)
         dialog.exec()
@@ -1037,10 +1105,153 @@ class ConfigPanel(Widget):
         dialog = ShortcutDialog(self)
         dialog.exec()
 
+    # ── Theme management ──
+
+    def _refresh_theme_combo(self):
+        """Rebuild the theme combo box with all available themes."""
+        from .misc import load_all_themes, load_custom_themes
+        all_themes = load_all_themes()
+        custom_themes = load_custom_themes()
+        current = pcfg.dark_theme if pcfg.darkmode else pcfg.light_theme
+
+        self.theme_combo.clear()
+        for name in all_themes:
+            is_custom = name in custom_themes
+            label = name if is_custom else f'{name} ({self.tr("built-in")})'
+            self.theme_combo.addItem(label, name)
+
+        idx = self.theme_combo.findData(current)
+        if idx >= 0:
+            self.theme_combo.setCurrentIndex(idx)
+
+        self._update_theme_buttons()
+
+    def _update_theme_buttons(self):
+        """Enable/disable Edit/Delete based on whether the selected theme is custom."""
+        from .misc import load_custom_themes
+        theme_name = self.theme_combo.currentData()
+        if not theme_name:
+            return
+        is_custom = theme_name in load_custom_themes()
+        self.edit_theme_btn.setEnabled(True)
+
+    def _on_theme_selected(self):
+        """Apply the selected theme for the current mode."""
+        from .misc import load_all_themes
+        theme_name = self.theme_combo.currentData()
+        if not theme_name:
+            return
+        all_themes = load_all_themes()
+        if theme_name not in all_themes:
+            return
+
+        base = all_themes[theme_name].get('_base', theme_name)
+        is_dark = 'dark' in base.lower()
+        if is_dark:
+            pcfg.dark_theme = theme_name
+        else:
+            pcfg.light_theme = theme_name
+        self.save_config.emit()
+        self._update_theme_buttons()
+        self.theme_changed.emit()
+
+    def _on_new_theme(self):
+        """Clone the currently selected theme and open the editor."""
+        from .misc import load_all_themes
+        from .theme_editor import ThemeEditorDialog
+        theme_name = self.theme_combo.currentData()
+        if not theme_name:
+            return
+
+        all_themes = load_all_themes()
+        source = all_themes.get(theme_name)
+        if not source:
+            return
+
+        base = source.get('_base', theme_name)
+        import random
+        new_name = f'{base}-custom-{random.randint(100, 999)}'
+
+        from .misc import load_custom_themes
+        custom = load_custom_themes()
+        clone = dict(source)
+        clone['_base'] = base
+        custom[new_name] = clone
+        try:
+            import json
+            import os
+            os.makedirs(os.path.dirname(C.CUSTOM_THEME_PATH), exist_ok=True)
+            with open(C.CUSTOM_THEME_PATH, 'w', encoding='utf-8') as f:
+                json.dump(custom, f, indent=4, ensure_ascii=False)
+        except Exception:
+            return
+
+        dlg = ThemeEditorDialog(new_name, self.window(), parent=self)
+        dlg.themeSaved.connect(self._refresh_theme_combo)
+        dlg.themeSaved.connect(self.theme_changed.emit)
+        dlg.exec()
+
+    def _on_edit_theme(self):
+        """Open the theme editor for the selected theme."""
+        from .theme_editor import ThemeEditorDialog
+
+        theme_name = self.theme_combo.currentData()
+        if not theme_name:
+            return
+
+        dlg = ThemeEditorDialog(theme_name, self.window(), parent=self)
+        dlg.themeSaved.connect(self._refresh_theme_combo)
+        dlg.themeSaved.connect(self.theme_changed.emit)
+        dlg.exec()
+
+    def _on_delete_theme(self):
+        """Delete the selected custom theme."""
+        from qtpy.QtWidgets import QMessageBox
+
+        from .misc import load_custom_themes
+
+        theme_name = self.theme_combo.currentData()
+        if not theme_name:
+            return
+
+        custom = load_custom_themes()
+        if theme_name not in custom:
+            return
+
+        reply = QMessageBox.question(
+            self, self.tr('Delete Theme'),
+            self.tr('Delete theme "%s"? This cannot be undone.') % theme_name,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        del custom[theme_name]
+        try:
+            import json
+            with open(C.CUSTOM_THEME_PATH, 'w', encoding='utf-8') as f:
+                json.dump(custom, f, indent=4, ensure_ascii=False)
+        except Exception:
+            return
+
+        # Fall back to built-in if the deleted theme was active
+        if pcfg.dark_theme == theme_name:
+            pcfg.dark_theme = 'eva-dark'
+        if pcfg.light_theme == theme_name:
+            pcfg.light_theme = 'eva-light'
+        self.save_config.emit()
+        self._refresh_theme_combo()
+        self.theme_changed.emit()
+
+    def refresh_theme_ui(self):
+        """Called from outside (e.g. darkmode toggle) to refresh theme combo."""
+        self._refresh_theme_combo()
+
     def hideEvent(self, e) -> None:
         self.save_config.emit()
         return super().hideEvent(e)
-        
+
     def setupConfig(self):
         self.blockSignals(True)
 

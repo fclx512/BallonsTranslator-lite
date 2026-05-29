@@ -1,11 +1,11 @@
 # coding: utf-8
 
-from utils import shared
-
 # coding: utf-8
-from qtpy.QtCore import QObject, QEvent
+from qtpy.QtCore import QEvent, QObject
 from qtpy.QtGui import QColor
 from qtpy.QtWidgets import QWidget
+
+from utils import shared
 
 
 class LinuxMoveResize:

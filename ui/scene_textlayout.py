@@ -1,16 +1,34 @@
 import re
-
-from qtpy.QtCore import Qt, QRectF, QPointF, Signal, QSizeF, QSize
-from qtpy.QtGui import QTextCharFormat, QTextDocument, QPixmap, QImage, QTransform, QPalette, QPainter, QTextFrame, QTextBlock, QAbstractTextDocumentLayout, QTextLayout, QFont, QFontMetricsF, QTextOption, QTextLine, QTextFormat
+from functools import cached_property, lru_cache
+from typing import List
 
 import cv2
 import numpy as np
-from typing import List
-from functools import lru_cache, cached_property
+from qtpy.QtCore import QPointF, QRectF, QSizeF, Qt, Signal
+from qtpy.QtGui import (
+    QAbstractTextDocumentLayout,
+    QFont,
+    QFontMetricsF,
+    QImage,
+    QPainter,
+    QPalette,
+    QPixmap,
+    QTextBlock,
+    QTextCharFormat,
+    QTextDocument,
+    QTextFormat,
+    QTextFrame,
+    QTextLayout,
+    QTextLine,
+    QTextOption,
+    QTransform,
+)
 
-from .misc import pixmap2ndarray, LruIgnoreArg
 from utils import shared as C
-from utils.fontformat import pt2px, FontFormat, LineSpacingType, PunctuationAlignment
+from utils.fontformat import FontFormat, LineSpacingType, PunctuationAlignment, pt2px
+
+from .misc import LruIgnoreArg, pixmap2ndarray
+
 
 def print_transform(tr: QTransform):
     print(f'[[{tr.m11(), tr.m12(), tr.m13()}]\n [{tr.m21(), tr.m22(), tr.m23()}]\n [{tr.m31(), tr.m32(), tr.m33()}]]')
@@ -20,7 +38,7 @@ PUNSET_HALF = {chr(i) for i in range(0x21, 0x7F)}
 
 # https://www.w3.org/TR/2022/DNOTE-clreq-20220801/#tables_of_chinese_punctuation_marks
 # https://www.w3.org/TR/2022/DNOTE-clreq-20220801/#glyphs_sizes_and_positions_in_character_faces_of_punctuation_marks
-PUNSET_PAUSEORSTOP = {'。', '．', '，', '、', '·', '：', '；', '！', '？'}     # dont need to rotate, 
+PUNSET_PAUSEORSTOP = {'。', '．', '，', '、', '·', '：', '；', '！', '？'}     # dont need to rotate,
 PUNSET_ALIGNCENTER = {'。', '．', '，', '、', '·'}
 PUNSET_BRACKETL = {'「', '『', '“', '‘', '（', '《', '〈', '【', '〖', '〔', '［', '｛', '('}
 PUNSET_BRACKETR = {'」', '』', '”', '’', '）', '》', '〉', '】', '〗', '〕', '］', '｝', ')'}
@@ -71,10 +89,10 @@ def punc_actual_rect(line: QTextLine, family: str, size: float, weight: int, ita
     p.end()
     mask = pixmap2ndarray(pixmap, keep_alpha=True)
     if mask is None:
-        print(f'invalid text line!')
+        print('invalid text line!')
         return [0, 0, 1, 1]
     mask = mask[..., -1]
-    
+
     ar = cv2.boundingRect(cv2.findNonZero(mask))
     # if stroke_width != 0:
     ar = np.array(ar, dtype=np.float64)
@@ -145,7 +163,7 @@ class CharFontFormat:
 
 def line_draw_qt6(painter: QPainter, line: QTextLine, x: float, y: float, selected: bool, selection: QAbstractTextDocumentLayout.Selection = None, char_fmt: CharFontFormat = None, char: str = None, line_width: int = None):
     # some how qt6 line.draw doesn't allow pass FormatRange
-    if selected:    
+    if selected:
         qimg = QImage(int(line.naturalTextWidth()), int(line.height()), QImage.Format.Format_ARGB32)
         qimg.fill(Qt.GlobalColor.transparent)
         p = QPainter(qimg)
@@ -203,11 +221,11 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
         self.relayout_on_changed = True
 
         # relative bottom/right
-        self.shrink_height = 0 
+        self.shrink_height = 0
         self.shrink_width = 0
 
         self._doc_text: str = ''
-        
+
         self._is_painting_stroke = False
         self._draw_offset = []
         self.text_padding = 0
@@ -273,7 +291,7 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
         if not self.relayout_on_changed:
             return
         self.reLayoutEverything()
-        
+
     def reLayoutEverything(self):
         self._doc_text = self.document().toPlainText()
         self._max_font_size = -1
@@ -328,7 +346,7 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
 
     def minSize(self):
         return (self.shrink_height + self.text_padding, self.shrink_width + self.text_padding)
-    
+
     def get_char_fontfmt(self, block_number: int, char_idx: int) -> CharFontFormat:
         charidx2frag_map = self._map_charidx2frag[block_number]
         if len(charidx2frag_map) == 0:
@@ -337,7 +355,7 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
             char_idx = len(charidx2frag_map) - 1
         frag_idx = charidx2frag_map[char_idx]
         return self.block_charfmt_lst[block_number][frag_idx]
-    
+
 
 class VerticalTextDocumentLayout(SceneTextLayout):
 
@@ -418,7 +436,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
             layout = block.layout()
             blk_text = block.text()
             blk_text_len = len(blk_text)
-            
+
             line_spaces_lst = self.line_spaces_lst[blk_no]
             char_records = self.per_char_records[blk_no]
 
@@ -436,7 +454,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
 
                 char = blk_text[char_idx]
                 cfmt = self.get_char_fontfmt(blk_no, char_idx)
-                
+
                 line_width = -1
                 if char_idx in char_records:
                     line_width = char_records[char_idx]['line_width']
@@ -478,7 +496,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                     xoff = -act_rect[0] + (line_width - act_rect[2]) / 2
                     # if char in PUNSET_ALIGNTOP:
                     #     yoff = yoff + (cfmt.tbr.height() - act_rect[3]) / 2
-                    
+
                     if num_lspaces > 0:
                         xoff -= space_shift
                         yoff += space_shift
@@ -496,7 +514,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                 #         xshift = max(line.naturalTextWidth() - cfmt.br.width(), 0)
                 #     else:
                 #         xshift = empty_spacing
-                        
+
                 #     xoff = -xshift
                 #     yoff = min(cfmt.br.top() - cfmt.tbr.top(), -cfmt.tbr.top() - line.ascent()) + empty_spacing
 
@@ -524,7 +542,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
             blk_text = block.text()
             blk_text_len = len(blk_text)
             char_records = self.per_char_records[blk_no]
-            
+
             line_spaces_lst = self.line_spaces_lst[blk_no]
 
             if context.cursorPosition >= blpos and context.cursorPosition < blpos + bllen:
@@ -547,7 +565,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                 fm = cfmt.font_metrics
                 selected = False
                 if has_selection:
-                    sel_start = selection.cursor.selectionStart() - blpos 
+                    sel_start = selection.cursor.selectionStart() - blpos
                     sel_end = selection.cursor.selectionEnd() - blpos
                     if char_idx < sel_end and char_idx >= sel_start:
                         selected = True
@@ -557,7 +575,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                     line_width = char_records[char_idx]['line_width']
                 if line_width < 0:
                     line_width = cfmt.tbr.width()
-                
+
                 if char in PUNSET_VERNEEDROTATE:
                     line_x, line_y = line.x(), line.y()
                     y_x = line_y - line_x
@@ -589,8 +607,8 @@ class VerticalTextDocumentLayout(SceneTextLayout):
 
             line = layout.lineForTextPosition(cpos)
             if line.isValid():
-                
-                pos = line.position()                
+
+                pos = line.position()
                 x, y = pos.x(), pos.y()
                 if line.textLength() == 0:
                     fm = QFontMetricsF(block.charFormat().font())
@@ -634,7 +652,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                     line = layout.lineAt(ii)
                     line_xy = line.position()
                     if not line_xy.x() <= x:
-                        continue 
+                        continue
                     if line_top > y:
                         off = min(off, line.textStart())
                     elif line_bottom < y:
@@ -662,7 +680,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                 break
             blk = blk.next()
         return blk.position() + off
-    
+
     def layoutBlock(self, block: QTextBlock):
         doc = self.document()
         ls = self.letter_spacing
@@ -696,7 +714,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
         option = doc.defaultTextOption()
         option.setWrapMode(QTextOption.WrapAnywhere)
         tl.setTextOption(option)
-        
+
         shrink_height = 0
         width_list = []
         line_not_set = []
@@ -712,11 +730,11 @@ class VerticalTextDocumentLayout(SceneTextLayout):
 
             line.setLineWidth(block_width)
             line.setNumColumns(1)
-            
+
             available_height = self.available_height + doc_margin
             text_len = line.textLength()
             end_char = char_idx + text_len >= blk_text_len
-            
+
             if char_idx + text_len > blk_text_len:
                 ypos = ypos_list[-1] if len(ypos_list) > 0 else 0
                 blk_line_spaces.append([0, 0, [ypos], char_idx])
@@ -769,7 +787,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                 cfmt = self.get_char_fontfmt(block_no, char_idx - num_lspaces)
                 tbr_h = cfmt.tbr.height() + cfmt.font_metrics.descent()
                 space_w = cfmt.space_width
-            
+
             if num_lspaces == 0 and tbr_h != 0:
                 ntw = line.naturalTextWidth()
                 shifted = ntw - cfmt.br.width()
@@ -780,16 +798,16 @@ class VerticalTextDocumentLayout(SceneTextLayout):
             for _ in range(num_lspaces):
                 char_yoffset_lst.append(min(available_height - tbr_h, char_yoffset_lst[-1] + space_w))
             blk_line_spaces.append([num_rspaces, num_lspaces, char_yoffset_lst, char_idx - num_lspaces])
-            
+
             char_bottom = char_yoffset_lst[-1] + tbr_h
             out_of_vspace = char_bottom - max(let_sp_offset, 0) > available_height
             if out_of_vspace:
                 # switch to next line
                 if char_idx == 0 and layout_first_block:
                     self.min_height = doc_margin + tbr_h
-                    
+
                 line_y_offset = doc_margin
-                
+
                 char_yoffset_lst[-1] = line_y_offset
                 char_yoffset_lst.append(line_y_offset + tbr_h)
                 for _ in range(num_rspaces):
@@ -807,7 +825,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                     char_yoffset_lst.append(min(char_yoffset_lst[-1] + space_w, available_height))
                 line_bottom = char_yoffset_lst[-1]
                 shrink_height = max(shrink_height, line_bottom)
-            
+
             ypos_list.append(line_y_offset)
             line_not_set.append(line)
             if out_of_vspace or end_char:
@@ -834,7 +852,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                 line_char_ids = []
 
                 x_offset = x_offset - self.calculate_line_spacing(idea_line_width, line_spacing)
-                
+
                 for line, ypos in zip(line_not_set[:-1], ypos_list[:-1]):
                     line.setPosition(QPointF(x_offset, ypos))
                 if out_of_vspace:
@@ -865,7 +883,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
             line_y_offset = max(line_bottom, doc_margin)
             char_idx += text_len - num_lspaces
         tl.endLayout()
-            
+
         self.layout_left = x_offset - self.draw_shifted
         self.shrink_width = max(self.max_width - self.layout_left - doc_margin + 0.01, self.shrink_width)
         self.shrink_height = max(shrink_height + 0.01 - doc_margin, self.shrink_height)
@@ -900,7 +918,7 @@ class HorizontalTextDocumentLayout(SceneTextLayout):
         while block.isValid():
             self.layoutBlock(block)
             block = block.next()
-        
+
         if len(self.y_offset_lst) > 0:
             new_height = self.shrink_height
         else:
@@ -953,13 +971,13 @@ class HorizontalTextDocumentLayout(SceneTextLayout):
         doc = self.document()
         block.clearLayout()
         tl = block.layout()
-        
+
         option = doc.defaultTextOption()
         # maybe an option for it
         option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
         tl.setTextOption(option)
         font = block.charFormat().font()
-        
+
         # fm = QFontMetrics(font)
         doc_margin = self.document().documentMargin()
 
@@ -1015,7 +1033,7 @@ class HorizontalTextDocumentLayout(SceneTextLayout):
 
             if idea_height == -1:
                 idea_height = block_height
-                
+
             line.setPosition(QPointF(doc_margin, y_offset + dy))
             tw = line.naturalTextWidth()
             shrink_width = max(tw, shrink_width)
@@ -1054,7 +1072,7 @@ class HorizontalTextDocumentLayout(SceneTextLayout):
             bllen = block.length()
             selections = []
             for sel in context.selections:
-                selStart = sel.cursor.selectionStart() - blpos 
+                selStart = sel.cursor.selectionStart() - blpos
                 selEnd = sel.cursor.selectionEnd() - blpos
                 if selStart < bllen and selEnd > 0 and selEnd > selStart:
                     o = QTextLayout.FormatRange()
@@ -1076,7 +1094,7 @@ class HorizontalTextDocumentLayout(SceneTextLayout):
             clip = context.clip if context.clip.isValid() else QRectF()
             layout.draw(painter, QPointF(0, 0), selections, clip)
             block = block.next()
-        
+
         if self.foreground_pixmap is not None:
             painter.drawPixmap(0, 0, self.foreground_pixmap)
 

@@ -1,13 +1,12 @@
-from typing import List, Union, Tuple
+from typing import List, Tuple, Union
 
 import numpy as np
-from qtpy.QtWidgets import QGraphicsOpacityEffect, QLabel, QColorDialog, QMenu, QDialog
-from qtpy.QtCore import  Qt, QPropertyAnimation, QEasingCurve, Signal, QRectF
-from qtpy.QtGui import QMouseEvent, QWheelEvent, QColor, QPainter, QPixmap, QBrush, QPen
+from qtpy.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, Signal
+from qtpy.QtGui import QBrush, QColor, QMouseEvent, QPainter, QPen, QPixmap, QWheelEvent
+from qtpy.QtWidgets import QDialog, QGraphicsOpacityEffect, QLabel, QMenu
 
-
-from utils.shared import CONFIG_FONTSIZE_CONTENT
 from utils import shared
+from utils.shared import CONFIG_FONTSIZE_CONTENT
 
 
 class FadeLabel(QLabel):
@@ -130,7 +129,7 @@ class ColorPickerLabel(QLabel):
     def rgba(self) -> List:
         color = self.color
         return (color.red(), color.green(), color.blue(), color.alpha())
-    
+
 
 class SmallColorPickerLabel(ColorPickerLabel):
     pass
@@ -150,12 +149,12 @@ class ClickableLabel(QLabel):
         if e.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
         return super().mousePressEvent(e)
-    
+
 
 class ConfigClickableLabel(ClickableLabel):
     pass
 
-    
+
 class CheckableLabel(QLabel):
 
     checkStateChanged = Signal(bool)
@@ -292,7 +291,7 @@ class SizeControlLabel(QLabel):
                 self.size_ctrl_changed.emit(self.cur_pos - new_pos)
             self.cur_pos = new_pos
         return super().mouseMoveEvent(e)
-    
+
 
 class SmallSizeControlLabel(SizeControlLabel):
     pass

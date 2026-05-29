@@ -1,7 +1,7 @@
+import json
 import re
 import time
-import json
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
 import httpx
 import openai

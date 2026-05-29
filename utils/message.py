@@ -1,5 +1,5 @@
 import traceback
-from typing import Callable, List, Dict
+from typing import Callable, Dict, List
 
 from . import shared
 from .logger import logger as LOGGER
@@ -14,7 +14,7 @@ def create_error_dialog(exception: Exception, error_msg: str = None, exception_t
     '''
 
     detail_traceback = traceback.format_exc()
-    
+
     if exception_type is None:
         exception_type = ''
 

@@ -1,8 +1,13 @@
 from typing import List
+
 import cv2
 import numpy as np
+
+from utils.imgproc_utils import (
+    enlarge_window,
+    union_area,
+)
 from utils.textblock import TextBlock
-from utils.imgproc_utils import draw_connected_labels, expand_textwindow, union_area, enlarge_window
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -80,10 +85,10 @@ def merge_mask_list(mask_list, pred_mask, blk: TextBlock = None, pred_thresh=30,
             line[..., 1] -= text_window[1]
             cv2.fillPoly(linemask, [line], 255)
         linemask = cv2.dilate(linemask, np.ones((3, 3), np.uint8), iterations=3)
-    
+
     if pred_thresh > 0:
         e_size = 1
-        element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * e_size + 1, 2 * e_size + 1),(e_size, e_size))      
+        element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * e_size + 1, 2 * e_size + 1),(e_size, e_size))
         pred_mask = cv2.erode(pred_mask, element, iterations=1)
         _, pred_mask = cv2.threshold(pred_mask, 60, 255, cv2.THRESH_BINARY)
     connectivity = 8

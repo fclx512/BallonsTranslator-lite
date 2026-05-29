@@ -1,12 +1,11 @@
 # 同步更新自manga-image-translator
 
+import json
 import logging
+import os
 import re
 import time
-from typing import List, Dict, Union, Callable
-import time
-import os
-import json
+from typing import Callable, Dict, List, Union
 
 import openai
 
@@ -261,7 +260,7 @@ class SakuraDict():
             except Exception as e:
                 self.logger.warning(f"载入字典失败: {e}")
         return self.dict_str
-    
+
     def get_dict_str_within_text(self, text: str, force_apply_dict: bool = False) -> str:
         """
         获取字典内容字符串，仅保留字典中出现的词条。
@@ -433,14 +432,14 @@ class SakuraTranslator(BaseTranslator):
         '你是一个视觉小说翻译模型，可以通顺地使用给定的术语表以指定的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，注意不要混淆使役态和被动态的主语和宾语，不要擅自添加原文中没有的代词，也不要擅自增加或减少换行。'
     )
 
-    @property 
+    @property
     def timeout(self) -> int:
         return self.get_param_value('timeout')
-    
+
     @property
     def retry_attempts(self) -> int:
         return self.get_param_value('retry attempts')
-    
+
     @property
     def repeat_detect_threshold(self) -> int:
         return self.get_param_value('repeat detect threshold')
@@ -473,7 +472,7 @@ class SakuraTranslator(BaseTranslator):
     @property
     def force_apply_dict(self) -> bool:
         return self.params['force apply dict']['value']
-    
+
     @property
     def do_enlarge_small_kana(self) -> bool:
         return self.params['do enlarge small kana']['value']

@@ -1,18 +1,18 @@
-import base64
-import requests
-import numpy as np
-import cv2
-from typing import Union, List, Tuple
 from collections import OrderedDict
+from typing import List, Tuple
 
-from utils.textblock import TextBlock
+import cv2
+import numpy as np
+
 from utils.proj_imgtrans import ProjImgTrans
-
 from utils.registry import Registry
+from utils.textblock import TextBlock
+
 TEXTDETECTORS = Registry('textdetectors')
 register_textdetectors = TEXTDETECTORS.register_module
 
 from ..base import BaseModule, DEFAULT_DEVICE, DEVICE_SELECTOR
+
 
 class TextDetectorBase(BaseModule):
 
@@ -40,8 +40,8 @@ class TextDetectorBase(BaseModule):
         # TODO: allow processing proj entirely in _detect and yield progress
         if not self.all_model_loaded():
             self.load_model()
-        
-        # All text detectors only support 3 channels input 
+
+        # All text detectors only support 3 channels input
         if img.ndim == 3 and img.shape[2] == 4:
             img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
 

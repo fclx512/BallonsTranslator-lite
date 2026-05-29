@@ -1,6 +1,5 @@
-from qtpy.QtCore import QEasingCurve, QPropertyAnimation, Signal
+from qtpy.QtCore import QEasingCurve, QPropertyAnimation, Qt, Signal
 from qtpy.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout
-from qtpy.QtCore import Qt
 
 from .custom_widget.view_panel import chevron_down, chevron_right
 from .custom_widget.widget import Widget

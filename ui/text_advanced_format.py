@@ -1,10 +1,17 @@
-from typing import Any, Callable
+from typing import Callable
 
-from qtpy.QtWidgets import QSizePolicy, QVBoxLayout, QPushButton, QHBoxLayout
-from qtpy.QtCore import Signal, Qt
+from qtpy.QtCore import Qt, Signal
+from qtpy.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QVBoxLayout
 
-from .custom_widget import SmallParamLabel, PanelArea, SmallSizeControlLabel, SmallSizeComboBox, SmallComboBox
-from utils.fontformat import FontFormat, PunctuationAlignment
+from utils.fontformat import FontFormat
+
+from .custom_widget import (
+    PanelArea,
+    SmallComboBox,
+    SmallParamLabel,
+    SmallSizeComboBox,
+    SmallSizeControlLabel,
+)
 
 
 class TextAdvancedFormatPanel(PanelArea):

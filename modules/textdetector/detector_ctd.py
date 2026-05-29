@@ -1,8 +1,16 @@
-import numpy as np
-import cv2
-from typing import Tuple, List
+from typing import List, Tuple
 
-from .base import register_textdetectors, TextDetectorBase, TextBlock, DEFAULT_DEVICE, DEVICE_SELECTOR, ProjImgTrans
+import cv2
+import numpy as np
+
+from .base import (
+    DEFAULT_DEVICE,
+    DEVICE_SELECTOR,
+    ProjImgTrans,
+    TextBlock,
+    TextDetectorBase,
+    register_textdetectors,
+)
 from .ctd import CTDModel
 
 CTD_ONNX_PATH = 'data/models/comictextdetector.pt.onnx'
@@ -10,7 +18,7 @@ CTD_TORCH_PATH = 'data/models/comictextdetector.pt'
 
 def load_ctd_model(model_path, device, detect_size=1024) -> CTDModel:
     model = CTDModel(model_path, detect_size=detect_size, device=device)
-    
+
     return model
 
 @register_textdetectors('ctd')
@@ -65,7 +73,7 @@ class ComicTextDetector(TextDetectorBase):
     @property
     def device(self):
         return self.params['device']['value']
-    
+
     @property
     def detect_size(self):
         return int(self.params['detect_size']['value'])
@@ -78,7 +86,7 @@ class ComicTextDetector(TextDetectorBase):
 
     def _detect(self, img: np.ndarray, proj: ProjImgTrans) -> Tuple[np.ndarray, List[TextBlock]]:
         _, mask, blk_list = self.model(img)
-        
+
         fnt_rsz = self.get_param_value('font size multiplier')
         fnt_max = self.get_param_value('font size max')
         fnt_min = self.get_param_value('font size min')

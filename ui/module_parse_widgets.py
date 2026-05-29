@@ -1,15 +1,31 @@
-from typing import List, Callable
+from typing import Callable
 
-from modules import GET_VALID_INPAINTERS, GET_VALID_TEXTDETECTORS, GET_VALID_TRANSLATORS, GET_VALID_OCR, \
-    BaseTranslator, DEFAULT_DEVICE, GPUINTENSIVE_SET
-from utils.logger import logger as LOGGER
-from .custom_widget import ConfigComboBox, ParamComboBox, ParamNameLabel
-from utils.shared import CONFIG_COMBOBOX_LONG, size2width, CONFIG_COMBOBOX_SHORT, CONFIG_COMBOBOX_HEIGHT
-from utils.config import pcfg
-
-from qtpy.QtWidgets import QPlainTextEdit, QHBoxLayout, QVBoxLayout, QWidget, QLabel, QCheckBox, QLineEdit, QGridLayout, QPushButton
 from qtpy.QtCore import Qt, Signal
 from qtpy.QtGui import QDoubleValidator
+from qtpy.QtWidgets import (
+    QCheckBox,
+    QGridLayout,
+    QHBoxLayout,
+    QLineEdit,
+    QPlainTextEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
+
+from modules import (
+    DEFAULT_DEVICE,
+    GET_VALID_INPAINTERS,
+    GET_VALID_OCR,
+    GET_VALID_TEXTDETECTORS,
+    GET_VALID_TRANSLATORS,
+    GPUINTENSIVE_SET,
+    BaseTranslator,
+)
+from utils.logger import logger as LOGGER
+from utils.shared import CONFIG_COMBOBOX_HEIGHT, CONFIG_COMBOBOX_LONG, size2width
+
+from .custom_widget import ConfigComboBox, ParamComboBox, ParamNameLabel
 
 
 class ParamCheckGroup(QWidget):
@@ -37,7 +53,7 @@ class ParamCheckGroup(QWidget):
 
 
 class ParamLineEditor(QLineEdit):
-    
+
     paramwidget_edited = Signal(str, str)
     def __init__(self, param_key: str, force_digital, size='short', *args, **kwargs) -> None:
         super().__init__( *args, **kwargs)
@@ -54,7 +70,7 @@ class ParamLineEditor(QLineEdit):
         self.paramwidget_edited.emit(self.param_key, self.text())
 
 class ParamEditor(QPlainTextEdit):
-    
+
     paramwidget_edited = Signal(str, str)
     def __init__(self, param_key: str, *args, **kwargs) -> None:
         super().__init__( *args, **kwargs)
@@ -254,7 +270,7 @@ class ParamWidget(QWidget):
             else:
                 v = params[param_key]
                 raise ValueError(f"Failed to initialize widget for key-value pair: {param_key}-{v}")
-            
+
     def on_flushbtn_clicked(self):
         paramw: ParamComboBox = self.sender()
         content_dict = {'content': '', 'widget': paramw, 'flush': True}
@@ -303,7 +319,7 @@ class ModuleConfigParseWidget(QWidget):
 
         layout = QVBoxLayout(self)
         self.param_widget_map = {}
-        layout.addLayout(p_layout) 
+        layout.addLayout(p_layout)
         layout.addLayout(self.params_layout)
         layout.setSpacing(30)
         self.vlayout = layout
@@ -432,7 +448,7 @@ class TextDetectConfigPanel(ModuleConfigParseWidget):
         self.setDetector = self.setModule
         self.keep_existing_checker = QCheckBox(text=self.tr('Keep Existing Lines'))
         self.p_layout.insertWidget(2, self.keep_existing_checker)
-        
+
 
 class OCRConfigPanel(ModuleConfigParseWidget):
     def __init__(self, module_name: str, scrollWidget: QWidget = None, *args, **kwargs) -> None:

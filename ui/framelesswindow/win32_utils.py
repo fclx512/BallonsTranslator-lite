@@ -1,20 +1,32 @@
 # coding:utf-8
-from ctypes import Structure, byref, sizeof, windll, c_int, c_ulong, c_bool, POINTER, WinDLL, wintypes
-from ctypes.wintypes import DWORD, HWND, LPARAM, RECT, UINT
-from platform import platform
 import sys
 import warnings
+from ctypes import (
+    POINTER,
+    Structure,
+    WinDLL,
+    byref,
+    c_bool,
+    c_int,
+    c_ulong,
+    sizeof,
+    windll,
+    wintypes,
+)
+from ctypes.wintypes import DWORD, HWND, LPARAM, RECT, UINT
+from platform import platform
+from winreg import HKEY_CURRENT_USER, KEY_READ, CloseKey, OpenKey, QueryValueEx
 
-from winreg import OpenKey, HKEY_CURRENT_USER, KEY_READ, QueryValueEx, CloseKey
 import win32api
 import win32con
 import win32gui
 import win32print
-from win32comext.shell import shellcon
-from qtpy.QtCore import QOperatingSystemVersion, QObject, QEvent, qVersion
-from qtpy.QtGui import QGuiApplication, QColor
-from qtpy.QtWidgets import QWidget
 from qtpy import API
+from qtpy.QtCore import QEvent, QObject, QOperatingSystemVersion, qVersion
+from qtpy.QtGui import QColor, QGuiApplication
+from qtpy.QtWidgets import QWidget
+from win32comext.shell import shellcon
+
 USE_PYSIDE6 = API == 'pyside6'
 QT_VERSION = tuple(int(v) for v in qVersion().split('.'))
 

@@ -7,18 +7,16 @@ signals for streaming conversation display.
 
 from __future__ import annotations
 
-import json
 import re
-
 from typing import Any, Dict, List, Optional
 
 from qtpy.QtCore import (
-    Qt,
     QEvent,
+    Qt,
     QTimer,
     Signal,
 )
-from qtpy.QtGui import QIntValidator, QKeyEvent, QTextCursor
+from qtpy.QtGui import QIntValidator, QKeyEvent
 from qtpy.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -35,15 +33,15 @@ from qtpy.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QTextBrowser,
     QVBoxLayout,
     QWidget,
-    QTextBrowser,
-    QMenu,
 )
-from .ai_chat_model import ChangeItem
-from .overlay_slide import OverlaySlider
+
 from utils.config import pcfg
 
+from .ai_chat_model import ChangeItem
+from .overlay_slide import OverlaySlider
 
 # ── Custom QPlainTextEdit that sends on Enter, newline on Shift+Enter ────
 
@@ -98,7 +96,6 @@ class AiChatPanel(QWidget):
         self._controller: Any = None
         self._settings_widget: Optional[QWidget] = None
         self._settingsSlide: Optional[OverlaySlider] = None
-        self._word_wrap = True
         self._typing_indicator: Optional[QLabel] = None
         self._typing_timer: Optional[QTimer] = None
         self._typing_dot_count = 0
@@ -542,10 +539,7 @@ class AiChatPanel(QWidget):
         self._streaming_browser.document().setDocumentMargin(0)
         self._streaming_browser.setViewportMargins(0, 0, 0, 0)
         self._streaming_browser.setOpenExternalLinks(True)
-        self._streaming_browser.setLineWrapMode(
-            QTextBrowser.LineWrapMode.WidgetWidth if self._word_wrap
-            else QTextBrowser.LineWrapMode.NoWrap
-        )
+        self._streaming_browser.setLineWrapMode(QTextBrowser.LineWrapMode.WidgetWidth)
         self._streaming_browser.setVerticalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
@@ -935,7 +929,6 @@ class AiChatPanel(QWidget):
 
     def _get_active_profile_name(self) -> str:
         """Return the currently active translator profile name."""
-        from utils.profile_manager import get_profile_names
         from modules.translators.trans_llm_api import LLM_API_Translator
         params = getattr(LLM_API_Translator, 'params', {})
         if not params:
@@ -993,10 +986,6 @@ class AiChatPanel(QWidget):
         mode_map = {0: "auto", 1: "agent", 2: "chat"}
         self._controller.chat_mode = mode_map.get(index, "auto")
         self._controller.save_ai_settings()
-
-    def _on_word_wrap_toggled(self, checked: bool):
-        """Toggle word wrap in chat bubbles."""
-        self._word_wrap = checked
 
     def _on_context_limit_changed(self):
         """Push context message limit to controller on editing finished."""
@@ -1141,14 +1130,6 @@ class AiChatPanel(QWidget):
         self._trans_mode_cb.toggled.connect(self._on_translation_mode_toggled)
         layout.addWidget(self._trans_mode_cb)
 
-        self._word_wrap_cb = QCheckBox(
-            self.tr("Word wrap in chat bubbles")
-        )
-        self._word_wrap_cb.setObjectName("AIDataToggle")
-        self._word_wrap_cb.setChecked(True)
-        self._word_wrap_cb.toggled.connect(self._on_word_wrap_toggled)
-        layout.addWidget(self._word_wrap_cb)
-
         # Edit translation prompt button (only meaningful with translation mode)
         prompt_btn = QPushButton(self.tr("Edit Translation Prompt..."))
         prompt_btn.setObjectName("AISettingsField")
@@ -1265,9 +1246,6 @@ class AiChatPanel(QWidget):
         # Translation mode
         trans_mode = self._controller.translation_mode if self._controller else False
         self._trans_mode_cb.setChecked(trans_mode)
-
-        # Word wrap
-        self._word_wrap_cb.setChecked(self._word_wrap)
 
         # Context limit
         ctx_limit = self._controller.context_message_limit if self._controller else 20

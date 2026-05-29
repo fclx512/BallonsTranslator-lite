@@ -1,18 +1,32 @@
 import math
-from qtpy.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
-    QPushButton, QSlider, QLabel, QGroupBox, QCheckBox
-)
-from qtpy.QtCore import Qt, Signal, QPointF, QRectF
+
+from qtpy.QtCore import QRectF, Qt, Signal
 from qtpy.QtGui import (
-    QPainter, QPen, QBrush, QColor, QFont, QPixmap, QLinearGradient,
-    QPainterPath
+    QBrush,
+    QColor,
+    QFont,
+    QLinearGradient,
+    QPainter,
+    QPen,
+    QPixmap,
+)
+from qtpy.QtWidgets import (
+    QCheckBox,
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSlider,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
 from utils.fontformat import FontFormat
+
 from .custom_widget.clock_dial import ClockDial
-from .text_graphical_effect import apply_shadow_effect
 from .custom_widget.color_picker import ColorPickerDialog
+from .text_graphical_effect import apply_shadow_effect
 
 
 class ShadowGradientPreview(QWidget):

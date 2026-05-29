@@ -312,6 +312,26 @@
             <location filename="../ui/text_panel.py" line="394" />
             <source>Effect</source>
         </message>
+        <message>
+            <location filename="../ui/configpanel.py" line="1197" />
+            <source>Delete Theme</source>
+            <translation>删除主题</translation>
+        </message>
+        <message>
+            <location filename="../ui/configpanel.py" line="1198" />
+            <source>Delete theme "%s"? This cannot be undone.</source>
+            <translation>删除主题 "%s"？此操作无法撤销。</translation>
+        </message>
+        <message>
+            <location filename="../ui/configpanel.py" line="869" />
+            <source>Edit...</source>
+            <translation>编辑...</translation>
+        </message>
+        <message>
+            <location filename="../ui/configpanel.py" line="864" />
+            <source>built-in</source>
+            <translation>内置</translation>
+        </message>
     </context>
     <context>
         <name>FontExcludeDialog</name>
@@ -480,19 +500,6 @@
             <location filename="../ui/drawingpanel.py" line="353" />
             <source>Mask Opacity</source>
             <translation>掩膜不透明度</translation>
-        </message>
-    </context>
-    <context>
-        <name>ExportDocThread</name>
-        <message>
-            <location filename="../ui/io_thread.py" line="100" />
-            <source>Export as doc...</source>
-            <translation>导出word文档...</translation>
-        </message>
-        <message>
-            <location filename="../ui/io_thread.py" line="106" />
-            <source>Overwrite </source>
-            <translation>覆盖</translation>
         </message>
     </context>
     <context>
@@ -736,19 +743,6 @@
         </message>
     </context>
     <context>
-        <name>ImportDocThread</name>
-        <message>
-            <location filename="../ui/io_thread.py" line="136" />
-            <source>Import doc...</source>
-            <translation>导入word文档...</translation>
-        </message>
-        <message>
-            <location filename="../ui/io_thread.py" line="143" />
-            <source>Import *.docx</source>
-            <translation>导入*.docx</translation>
-        </message>
-    </context>
-    <context>
         <name>InpaintConfigPanel</name>
         <message>
             <location filename="../ui/module_parse_widgets.py" line="426" />
@@ -814,16 +808,6 @@
             <translation>保存项目</translation>
         </message>
         <message>
-            <location filename="../ui/mainwindowbars.py" line="99" />
-            <source>Export as Doc</source>
-            <translation>导出为word文档</translation>
-        </message>
-        <message>
-            <location filename="../ui/mainwindowbars.py" line="101" />
-            <source>Import from Doc</source>
-            <translation>导入word文档</translation>
-        </message>
-        <message>
             <location filename="../ui/mainwindowbars.py" line="117" />
             <source>Open Recent</source>
             <translation>打开最近</translation>
@@ -832,11 +816,6 @@
             <location filename="../ui/mainwindowbars.py" line="237" />
             <source>Select Directory</source>
             <translation>选择文件夹</translation>
-        </message>
-        <message>
-            <location filename="../ui/mainwindowbars.py" line="244" />
-            <source>Import *.docx</source>
-            <translation>导入*.docx</translation>
         </message>
         <message>
             <location filename="../ui/mainwindowbars.py" line="77" />
@@ -849,14 +828,9 @@
             <translation>译文导出为 TXT</translation>
         </message>
         <message>
-            <location filename="../ui/mainwindowbars.py" line="111" />
-            <source>Export translation as markdown</source>
-            <translation>译文导出为 Markdown</translation>
-        </message>
-        <message>
             <location filename="../ui/mainwindowbars.py" line="114" />
-            <source>Import translation from TXT/markdown</source>
-            <translation>从 TXT/Markdown 导入译文</translation>
+            <source>Import translation from TXT</source>
+            <translation>从 TXT 导入译文</translation>
         </message>
         <message>
             <location filename="../ui/mainwindowbars.py" line="143" />
@@ -867,11 +841,6 @@
             <location filename="../ui/mainwindowbars.py" line="104" />
             <source>Export source text as TXT</source>
             <translation>原文导出为 TXT</translation>
-        </message>
-        <message>
-            <location filename="../ui/mainwindowbars.py" line="109" />
-            <source>Export source text as markdown</source>
-            <translation>原文导出为 Markdown</translation>
         </message>
         <message>
             <source>AI Chat</source>
@@ -899,11 +868,6 @@
             <location filename="../ui/mainwindow.py" line="1226" />
             <source>Saving image...</source>
             <translation>保存中...</translation>
-        </message>
-        <message>
-            <location filename="../ui/mainwindow.py" line="1404" />
-            <source>Export to </source>
-            <translation>导出至 </translation>
         </message>
         <message>
             <location filename="../ui/mainwindow.py" line="552" />
@@ -963,7 +927,7 @@
         </message>
         <message>
             <location filename="../ui/mainwindow.py" line="1366" />
-            <source>Imported txt file not fully matched with current project, please make sure source txt file structured like results from "export TXT/markdown"</source>
+            <source>Imported txt file not fully matched with current project, please make sure source txt file structured like results from "export TXT"</source>
             <translation>导入文件当前项目没能完全匹配，请确保导入文件格式和导出文件一致</translation>
         </message>
         <message>
@@ -1643,16 +1607,6 @@ Failed: {f}/{t}</source>
             <translation>保存图片失败。</translation>
         </message>
         <message>
-            <location filename="../ui/io_thread.py" line="110" />
-            <source>Failed to export Doc</source>
-            <translation>导出文档失败</translation>
-        </message>
-        <message>
-            <location filename="../ui/io_thread.py" line="146" />
-            <source>Failed to import Doc</source>
-            <translation>导入文档失败</translation>
-        </message>
-        <message>
             <location filename="../ui/io_thread.py" line="184" />
             <source>Region merge failed</source>
             <translation>区域合并失败</translation>
@@ -1721,24 +1675,9 @@ Failed: {f}/{t}</source>
             <translation>画板</translation>
         </message>
         <message>
-            <location filename="../ui/mainwindowbars.py" line="333" />
-            <source>Import Text Styles</source>
-            <translation>导入字体样式</translation>
-        </message>
-        <message>
-            <location filename="../ui/mainwindowbars.py" line="334" />
-            <source>Export Text Styles</source>
-            <translation>导出字体样式</translation>
-        </message>
-        <message>
             <location filename="../ui/mainwindowbars.py" line="369" />
             <source>Region Merge Tool</source>
             <translation>区域合并工具</translation>
-        </message>
-        <message>
-            <location filename="../ui/mainwindowbars.py" line="" />
-            <source>Help</source>
-            <translation>帮助</translation>
         </message>
         <message>
             <location filename="../ui/mainwindowbars.py" line="" />
@@ -3011,10 +2950,6 @@ Apply them now?</source>
             <translation type="unfinished" />
         </message>
         <message>
-            <source>Export to </source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <source>Failed to export as TEXT file</source>
             <translation type="unfinished" />
         </message>
@@ -3113,6 +3048,89 @@ Apply them now?</source>
         <message>
             <source>Unexpected error: %1</source>
             <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
+        <name>ThemeEditorDialog</name>
+        <message>
+            <location filename="../ui/theme_editor.py" line="183" />
+            <source>Theme Editor</source>
+            <translation>主题编辑器</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="243" />
+            <source>Name:</source>
+            <translation>名称：</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="404" />
+            <source>Based on: </source>
+            <translation>基于：</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="408" />
+            <source>Dark</source>
+            <translation>深色</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="412" />
+            <source>Light</source>
+            <translation>浅色</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="279" />
+            <source>Theme Colors</source>
+            <translation>主题色</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="310" />
+            <source>Apply</source>
+            <translation>应用</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="292" />
+            <source>Advanced Colors</source>
+            <translation>高级颜色</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="326" />
+            <source>Built-in</source>
+            <translation>内置</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="263" />
+            <source>Clone to Edit</source>
+            <translation>克隆并编辑</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="345" />
+            <source>Custom</source>
+            <translation>自定义</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="220" />
+            <source>Delete</source>
+            <translation>删除</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="522" />
+            <source>Delete Theme</source>
+            <translation>删除主题</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="523" />
+            <source>Delete theme "%s"? This cannot be undone.</source>
+            <translation>删除主题"%s"？此操作不可撤销。</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="216" />
+            <source>New...</source>
+            <translation>新建...</translation>
+        </message>
+        <message>
+            <location filename="../ui/theme_editor.py" line="198" />
+            <source>Themes</source>
+            <translation>主题</translation>
         </message>
     </context>
 </TS>

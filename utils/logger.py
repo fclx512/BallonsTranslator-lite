@@ -3,8 +3,8 @@ import logging
 import os
 import os.path as osp
 from glob import glob
-import termcolor
 
+import termcolor
 
 if os.name == "nt":  # Windows
     import colorama

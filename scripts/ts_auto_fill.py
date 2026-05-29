@@ -19,7 +19,6 @@ Usage:
 import argparse
 import re
 import xml.etree.ElementTree as ET
-from collections import Counter
 from io import StringIO
 from pathlib import Path
 

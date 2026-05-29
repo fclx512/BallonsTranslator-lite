@@ -1,4 +1,5 @@
 import math
+
 try:
     import torch
     import torch.nn as nn
@@ -6,9 +7,11 @@ try:
     import torchvision
 except ImportError:
     raise ImportError("PyTorch not available")
+import time
+
 import cv2
 import numpy as np
-import time
+
 
 def scale_img(img, ratio=1.0, same_shape=False, gs=32):  # img(16,3,256,416)
     # scales img(bs,3,y,x) by ratio constrained to gs-multiple

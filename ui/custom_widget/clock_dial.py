@@ -1,10 +1,15 @@
 import math
-from qtpy.QtWidgets import QWidget
-from qtpy.QtCore import Qt, Signal, QPointF, QRectF
+
+from qtpy.QtCore import QPointF, QRectF, Qt, Signal
 from qtpy.QtGui import (
-    QPainter, QPen, QBrush, QColor, QFont, QPainterPath,
-    QLinearGradient, QRadialGradient, QConicalGradient
+    QBrush,
+    QColor,
+    QFont,
+    QPainter,
+    QPen,
+    QRadialGradient,
 )
+from qtpy.QtWidgets import QWidget
 
 
 class ClockDial(QWidget):

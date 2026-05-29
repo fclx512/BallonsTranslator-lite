@@ -1,6 +1,14 @@
-from qtpy.QtWidgets import QLayout, QWidgetItem, QLayoutItem, QWidgetItem, QWidget
-from qtpy.QtCore import QParallelAnimationGroup, Qt, QPropertyAnimation, QEasingCurve, QSize, QRect, QPoint
-from typing import List
+from qtpy.QtCore import (
+    QEasingCurve,
+    QParallelAnimationGroup,
+    QPoint,
+    QPropertyAnimation,
+    QRect,
+    QSize,
+    Qt,
+)
+from qtpy.QtWidgets import QLayout, QWidget, QWidgetItem
+
 
 class WidgetItem(QWidgetItem):
 

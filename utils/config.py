@@ -1,13 +1,15 @@
-import json, os, traceback
-import os.path as osp
 import copy
-from typing import Callable
+import json
+import os
+import os.path as osp
+import traceback
 
 from . import shared
 from .fontformat import FontFormat
-from .structures import List, Dict, Config, field, nested_dataclass
-from .logger import logger as LOGGER
 from .io_utils import json_dump_nested_obj, np, serialize_np
+from .logger import logger as LOGGER
+from .structures import Config, Dict, List, field, nested_dataclass
+
 
 class RunStatus:
     FIN_DET = 1
@@ -69,7 +71,7 @@ class ModuleConfig(Config):
         if to_dict:
             return params.__dict__
         return params
-    
+
     def stage_enabled(self, idx: int):
         if idx == 0:
             return self.enable_detect
@@ -81,7 +83,7 @@ class ModuleConfig(Config):
             return self.enable_inpaint
         else:
             raise Exception(f'not supported stage idx: {idx}')
-        
+
     def all_stages_disabled(self):
         return (self.enable_detect or self.enable_ocr or self.enable_translate or self.enable_inpaint) is False
 
@@ -93,7 +95,7 @@ class ModuleConfig(Config):
             self.enable_ocr * RunStatus.FIN_OCR + \
                 self.enable_translate * RunStatus.FIN_TRANSLATE + \
                     self.enable_inpaint * RunStatus.FIN_INPAINT
-        
+
 
 @nested_dataclass
 class DrawPanelConfig(Config):
@@ -120,7 +122,7 @@ class ProgramConfig(Config):
     imgtrans_textblock: bool = True
     mask_transparency: float = 0.
     original_transparency: float = 0.
-    open_recent_on_startup: bool = True 
+    open_recent_on_startup: bool = True
 
     let_fntsize_flag: int = 0
     let_fntstroke_flag: int = 0
@@ -145,7 +147,8 @@ class ProgramConfig(Config):
     gsearch_range: int = 0
 
     darkmode: bool = False
-    theme_name: str = ''
+    light_theme: str = 'eva-light'
+    dark_theme: str = 'eva-dark'
     fold_textarea: bool = False
     expand_font_format_panel: bool = True
     show_source_text: bool = True
@@ -167,14 +170,14 @@ class ProgramConfig(Config):
 
     @staticmethod
     def load(cfg_path: str):
-        
+
         with open(cfg_path, 'r', encoding='utf8') as f:
             config_dict = json.loads(f.read())
 
         # for backward compatibility
         if 'dl' in config_dict:
             dl = config_dict.pop('dl')
-            if not 'module' in config_dict:
+            if 'module' not in config_dict:
                 if 'textdetector_setup_params' in dl:
                     textdetector_params = dl.pop('textdetector_setup_params')
                     dl['textdetector_params'] = textdetector_params
@@ -205,7 +208,7 @@ class ProgramConfig(Config):
                 trans_params.pop(removed, None)
 
         return ProgramConfig(**config_dict)
-    
+
 
 pcfg = ProgramConfig()
 text_styles: List[FontFormat] = []
@@ -224,7 +227,7 @@ def load_textstyle_from(p: str, raise_exception = False):
             for style in style_list:
                 try:
                     styles_loaded.append(FontFormat(**style))
-                except Exception as e:
+                except Exception:
                     LOGGER.warning(f'Skip invalid text style: {style}')
     except Exception as e:
         LOGGER.error(f'Failed to load text style from {p}: {e}')
@@ -253,13 +256,17 @@ def load_config(config_path: str = shared.CONFIG_PATH):
     else:
         LOGGER.info(f'{shared.CONFIG_PATH} does not exist, new config file will be created.')
         config = ProgramConfig()
-    
+
     global pcfg
     pcfg.merge(config)
 
-    # Backward compat: migrate old darkmode-only configs to theme_name
-    if not pcfg.theme_name:
-        pcfg.theme_name = 'eva-dark' if pcfg.darkmode else 'eva-light'
+    # Backward compat: migrate old theme_name to light_theme/dark_theme
+    if hasattr(pcfg, 'theme_name') and pcfg.theme_name:
+        old = pcfg.theme_name
+        if 'dark' in old.lower():
+            pcfg.dark_theme = old
+        else:
+            pcfg.light_theme = old
 
     p = pcfg.text_styles_path
     if not osp.exists(pcfg.text_styles_path):
@@ -298,7 +305,7 @@ def save_config():
         LOGGER.error(f'Failed save config to {tmp_save_tgt}: {e}')
         LOGGER.error(traceback.format_exc())
         return False
-    
+
     os.replace(tmp_save_tgt, shared.CONFIG_PATH)
     LOGGER.info('Config saved')
     return True

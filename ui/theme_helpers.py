@@ -1,6 +1,7 @@
 """Theme-aware color helpers."""
 
 from qtpy.QtGui import QColor
+
 from utils.config import pcfg
 
 

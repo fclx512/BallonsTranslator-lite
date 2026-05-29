@@ -1,6 +1,6 @@
-import re
 import os.path as osp
-from pathlib import Path
+import re
+
 
 def set_svgcolor(svgpath, savename, color):
     fillcolor = "fill=\"" + color + "\""

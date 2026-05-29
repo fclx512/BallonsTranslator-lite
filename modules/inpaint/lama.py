@@ -5,10 +5,11 @@ try:
     from torch import Tensor
 except ImportError:
     raise ImportError("PyTorch not available")
-import numpy as np
 import cv2
+import numpy as np
 
 from .ffc import FFC_BN_ACT
+
 
 def get_activation(kind='tanh'):
     if kind == 'tanh':
@@ -126,7 +127,7 @@ class FFCResNetGenerator(nn.Module):
         if rel_pos is None:
             return self.model(masked_img)
         else:
-            
+
             x_l, x_g = self.model[:2](masked_img)
             x_l = x_l.to(torch.float32)
             x_l += rel_pos
@@ -259,8 +260,8 @@ class LamaFourier:
         n_blocks = 9
         if large_arch:
             n_blocks = 18
-        
-        self.generator = FFCResNetGenerator(4, 3, add_out_act='sigmoid', 
+
+        self.generator = FFCResNetGenerator(4, 3, add_out_act='sigmoid',
                             n_blocks = n_blocks,
                             init_conv_kwargs={
                             'ratio_gin': 0,
@@ -274,9 +275,9 @@ class LamaFourier:
                             'ratio_gin': 0.75,
                             'ratio_gout': 0.75,
                             'enable_lfu': False
-                        }, 
+                        },
                     )
-        
+
         self.discriminator = NLayerDiscriminator() if build_discriminator else None
         self.inpaint_only = False
         if use_mpe:
@@ -319,7 +320,7 @@ class LamaFourier:
         if self.mpe is not None:
             self.mpe.eval()
         return self
-        
+
 
     def __call__(self, img: Tensor, mask: Tensor, rel_pos=None, direct=None):
 
@@ -340,18 +341,18 @@ class LamaFourier:
         discr_real_pred, discr_real_features = self.discriminator(img)
         discr_fake_pred, discr_fake_features = self.discriminator(predicted_img)
         # fp = discr_fake_pred.detach().mean()
-    
+
         if self.forward_discriminator:
             return  {
-                'predicted_img': predicted_img, 
-                'discr_real_pred': discr_real_pred, 
+                'predicted_img': predicted_img,
+                'discr_real_pred': discr_real_pred,
                 'discr_fake_pred':discr_fake_pred
             }
         else:
             return  {
-                'predicted_img': predicted_img, 
-                'discr_real_features': discr_real_features, 
-                'discr_fake_features': discr_fake_features, 
+                'predicted_img': predicted_img,
+                'discr_real_features': discr_real_features,
+                'discr_fake_features': discr_fake_features,
                 'discr_fake_pred': discr_fake_pred
             }
 
@@ -379,7 +380,7 @@ class LamaFourier:
 
         if mask3.max() > 0:
             # otherwise it will cause infinity loop
-        
+
             while np.sum(1 - mask3) > 0:
                 i += 1
                 mask3_ = cv2.filter2D(mask3, -1, ones_filter)

@@ -1,7 +1,7 @@
-from qtpy.QtCore import Qt
-from qtpy.QtGui import QPixmap, QPixmap
-from qtpy.QtGui import QCursor
 from functools import cached_property
+
+from qtpy.QtCore import Qt
+from qtpy.QtGui import QCursor, QPixmap
 
 
 class RotateCursorList:
@@ -39,11 +39,11 @@ class RotateCursorList:
 
     def __getitem__(self, idx):
         return self.__getattribute__('Cursor' + str(idx))
-        
+
 resizeCursorList = [
-    Qt.CursorShape.SizeFDiagCursor, 
-    Qt.CursorShape.SizeVerCursor, 
-    Qt.CursorShape.SizeBDiagCursor, 
+    Qt.CursorShape.SizeFDiagCursor,
+    Qt.CursorShape.SizeVerCursor,
+    Qt.CursorShape.SizeBDiagCursor,
     Qt.CursorShape.SizeHorCursor
 ]
 rotateCursorList = RotateCursorList()

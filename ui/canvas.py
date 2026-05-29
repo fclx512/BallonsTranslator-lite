@@ -1,25 +1,53 @@
-import numpy as np
-from typing import List, Union
 import os
+from typing import List, Union
 
-from qtpy.QtWidgets import QApplication, QSlider, QMenu, QGraphicsScene, QGraphicsSceneDragDropEvent , QGraphicsView, QGraphicsSceneDragDropEvent, QGraphicsRectItem, QGraphicsItem, QScrollBar, QGraphicsPixmapItem, QGraphicsSceneMouseEvent, QGraphicsSceneContextMenuEvent, QRubberBand, QLabel
-from qtpy.QtCore import Qt, QDateTime, QRectF, QPointF, QPoint, Signal, QSizeF, QEvent
-from qtpy.QtGui import QKeySequence, QPixmap, QImage, QHideEvent, QKeyEvent, QWheelEvent, QResizeEvent, QPainter, QPen, QColor, QPainterPath, QCursor, QNativeGestureEvent
+import numpy as np
+from qtpy.QtCore import QDateTime, QPoint, QPointF, QRectF, QSizeF, Qt, Signal
+from qtpy.QtGui import (
+    QColor,
+    QCursor,
+    QHideEvent,
+    QKeyEvent,
+    QKeySequence,
+    QNativeGestureEvent,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+    QResizeEvent,
+    QWheelEvent,
+)
+from qtpy.QtWidgets import (
+    QApplication,
+    QGraphicsItem,
+    QGraphicsPixmapItem,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsSceneDragDropEvent,
+    QGraphicsSceneMouseEvent,
+    QGraphicsView,
+    QLabel,
+    QMenu,
+    QRubberBand,
+    QScrollBar,
+    QSlider,
+)
 
 try:
-    from qtpy.QtWidgets import QUndoStack, QUndoCommand
+    from qtpy.QtWidgets import QUndoCommand, QUndoStack
 except:
-    from qtpy.QtGui import QUndoStack, QUndoCommand
+    from qtpy.QtGui import QUndoCommand, QUndoStack
 
-from .misc import ndarray2pixmap, QKEY, QNUMERIC_KEYS, ARROWKEY2DIRECTION
-from .textitem import TextBlkItem, TextBlock
-from .texteditshapecontrol import ControlBlockItem, TextBlkShapeControl
-from .custom_widget import ScrollBar, FadeLabel
-from .image_edit import ImageEditMode, DrawingLayer, StrokeImgItem
-from .page_search_widget import PageSearchWidget
 from utils import shared as C
 from utils.config import pcfg
 from utils.proj_imgtrans import ProjImgTrans
+
+from .custom_widget import FadeLabel, ScrollBar
+from .image_edit import DrawingLayer, ImageEditMode, StrokeImgItem
+from .misc import ARROWKEY2DIRECTION, QKEY, QNUMERIC_KEYS, ndarray2pixmap
+from .page_search_widget import PageSearchWidget
+from .texteditshapecontrol import ControlBlockItem, TextBlkShapeControl
+from .textitem import TextBlkItem, TextBlock
 
 CANVAS_SCALE_MAX = 10.0
 CANVAS_SCALE_MIN = 0.01
@@ -55,7 +83,7 @@ class MoveByKeyCommand(QUndoCommand):
         if canmerge:
             self.end_pos_list = other.end_pos_list
         return canmerge
-    
+
     def id(self):
         return 1
 
@@ -111,7 +139,7 @@ class CustomGV(QGraphicsView):
                 if self.canvas.handle_ctrlc():
                     e.accept()
                     return
-                
+
         elif modifiers & Qt.KeyboardModifier.ControlModifier and modifiers & Qt.KeyboardModifier.ShiftModifier:
             if key == QKEY.Key_C:
                 self.canvas.copy_src_signal.emit()
@@ -143,7 +171,7 @@ class CustomGV(QGraphicsView):
                 e.setAccepted(True)
 
         return super().event(e)
-    
+
     def dragMoveEvent(self, e: QGraphicsSceneDragDropEvent):
         super().dragMoveEvent(e)
         if e.mimeData().hasUrls():
@@ -186,7 +214,7 @@ class Canvas(QGraphicsScene):
     scale_tool = Signal(QPointF)
     end_scale_tool = Signal()
     canvas_undostack_changed = Signal()
-    
+
     imgtrans_proj: ProjImgTrans = None
     painting_pen = QPen()
     painting_shape = 0
@@ -223,7 +251,7 @@ class Canvas(QGraphicsScene):
 
         self.gv.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         self.context_menu_requested.connect(self.on_create_contextmenu)
-        
+
         if not C.FLAG_QT6:
             # mitigate https://bugreports.qt.io/browse/QTBUG-93417
             # produce blurred result, saving imgs remain unaffected
@@ -231,7 +259,7 @@ class Canvas(QGraphicsScene):
 
         self.search_widget = PageSearchWidget(self.gv)
         self.search_widget.hide()
-        
+
         self.ctrl_relesed = self.gv.ctrl_released
         self.vscroll_bar = self.gv.verticalScrollBar()
         self.hscroll_bar = self.gv.horizontalScrollBar()
@@ -258,7 +286,7 @@ class Canvas(QGraphicsScene):
         self.previewLabel.setVisible(False)
 
         self.txtblkShapeControl = TextBlkShapeControl(self.gv)
-        
+
         self.baseLayer = QGraphicsRectItem()
         pen = QPen()
         pen.setColor(Qt.GlobalColor.transparent)
@@ -289,7 +317,7 @@ class Canvas(QGraphicsScene):
         self.txtblkShapeControl.setParentItem(self.baseLayer)
 
         self.scalefactor_changed.connect(self.onScaleFactorChanged)
-        self.selectionChanged.connect(self.on_selection_changed)     
+        self.selectionChanged.connect(self.on_selection_changed)
 
         self.stroke_img_item: StrokeImgItem = None
         self.erase_img_key = None
@@ -307,7 +335,7 @@ class Canvas(QGraphicsScene):
 
         self.drop_folder: str = None
         self.block_selection_signal = False
-        
+
         im_rect = QRectF(0, 0, C.SCREEN_W, C.SCREEN_H)
         self.baseLayer.setRect(im_rect)
 
@@ -324,7 +352,7 @@ class Canvas(QGraphicsScene):
         return self.baseLayer.rect().size().toSize()
 
     def dragEnterEvent(self, e: QGraphicsSceneDragDropEvent):
-        
+
         self.drop_folder = None
         if e.mimeData().hasUrls():
             urls = e.mimeData().urls()
@@ -395,7 +423,7 @@ class Canvas(QGraphicsScene):
         rect = QRectF(0, 0, canvas_sz.width(), canvas_sz.height())
         self.render(painter, rect, rect)   #  produce blurred result if target/source rect not specified #320
         painter.end()
-        
+
         if tlayer_opacity_before != 1:
             self.textLayer.setOpacity(tlayer_opacity_before)
         if not tlayer_visible:
@@ -486,12 +514,12 @@ class Canvas(QGraphicsScene):
 
         self.previewLabel.setVisible(False)
     def updateLayers(self):
-        
+
         if not self.imgtrans_proj.img_valid:
             return
-        
+
         inpainted_as_base = self.imgtrans_proj.inpainted_valid
-        
+
         if inpainted_as_base:
             self.base_pixmap = ndarray2pixmap(self.imgtrans_proj.inpainted_array)
 
@@ -553,7 +581,7 @@ class Canvas(QGraphicsScene):
         pos_new = (QPointF(x, y) / 2).toPoint()
         if self.scaleFactorLabel.pos() != pos_new:
             self.scaleFactorLabel.move(pos_new)
-        
+
         x = gv_w - self.search_widget.width()
         pos = self.search_widget.pos()
         pos.setX(x-30)
@@ -561,7 +589,7 @@ class Canvas(QGraphicsScene):
 
         plw = self.previewLabel.width()
         self.previewLabel.move((gv_w - plw) // 2, 12)
-        
+
     def onScaleFactorChanged(self):
         self.scaleFactorLabel.setText(f'{self.scale_factor*100:2.0f}%')
         self.scaleFactorLabel.raise_()
@@ -603,7 +631,7 @@ class Canvas(QGraphicsScene):
             value = QNUMERIC_KEYS[key]
             self.set_active_layer_transparency(value * 10)
         return super().keyPressEvent(event)
-    
+
     def set_active_layer_transparency(self, value: int):
         if self.textEditMode():
             opacity = self.textLayer.opacity() * 100
@@ -660,10 +688,10 @@ class Canvas(QGraphicsScene):
             self.pan_initial_pos = new_pos
             self.hscroll_bar.setValue(int(self.hscroll_bar.value() - delta_pos.x()))
             self.vscroll_bar.setValue(int(self.vscroll_bar.value() - delta_pos.y()))
-            
+
         elif self.creating_textblock:
             self.txtblkShapeControl.setRect(QRectF(self.create_block_origin, event.scenePos() / self.scale_factor).normalized())
-        
+
         elif self.stroke_img_item is not None:
             if self.stroke_img_item.is_painting:
                 pos = self.inpaintLayer.mapFromScene(event.scenePos())
@@ -674,10 +702,10 @@ class Canvas(QGraphicsScene):
                     rect = self.stroke_img_item.lineTo(pos, update=False)
                     if rect is not None:
                         self.drawingLayer.update(rect)
-        
+
         elif self.scale_tool_mode:
             self.scale_tool.emit(event.scenePos())
-        
+
         elif self.rubber_band.isVisible() and self.rubber_band_origin is not None:
             self.rubber_band.setGeometry(QRectF(self.rubber_band_origin, event.scenePos()).normalized())
             sel_path = QPainterPath(self.rubber_band_origin)
@@ -686,9 +714,9 @@ class Canvas(QGraphicsScene):
                 self.setSelectionArea(sel_path, deviceTransform=self.gv.viewportTransform())
             else:
                 self.setSelectionArea(sel_path, Qt.ItemSelectionMode.IntersectsItemBoundingRect, self.gv.viewportTransform())
-        
+
         return super().mouseMoveEvent(event)
-    
+
     @property
     def scale_tool_mode(self):
         return self.drawMode() and self.gv.isVisible() and QApplication.keyboardModifiers() == Qt.KeyboardModifier.AltModifier
@@ -708,7 +736,7 @@ class Canvas(QGraphicsScene):
 
     def handle_ctrlv(self) -> bool:
         if not self.textEditMode():
-            return False        
+            return False
         if self.editing_textblkitem is not None and self.editing_textblkitem.isEditing():
             return False
         self.on_paste()
@@ -716,7 +744,7 @@ class Canvas(QGraphicsScene):
 
     def handle_ctrlc(self):
         if not self.textEditMode():
-            return False        
+            return False
         if self.editing_textblkitem is not None and self.editing_textblkitem.isEditing():
             return False
         self.on_copy()
@@ -732,7 +760,7 @@ class Canvas(QGraphicsScene):
             self.mid_btn_pressed = True
             self.pan_initial_pos = event.screenPos()
             return
-        
+
         if self.imgtrans_proj.img_valid:
             if self.textblock_mode and len(self.selectedItems()) == 0 and self.textEditMode():
                 if btn == Qt.MouseButton.RightButton:
@@ -821,7 +849,7 @@ class Canvas(QGraphicsScene):
 
 
     def setDrawingLayer(self, img: Union[QPixmap, np.ndarray] = None):
-        
+
         self.drawingLayer.clearAllDrawings()
 
         if not self.imgtrans_proj.img_valid:
@@ -885,7 +913,7 @@ class Canvas(QGraphicsScene):
             ocr_translate_inpaint_act = menu.addAction(self.tr("OCR, translate and inpaint"))
 
             rst = menu.exec(pos)
-            
+
             if rst == delete_act:
                 self.delete_textblks.emit(0)
             elif rst == copy_act:
@@ -931,7 +959,7 @@ class Canvas(QGraphicsScene):
         if self.rubber_band.isVisible():
             self.rubber_band.hide()
             self.rubber_band_origin = None
-    
+
     def on_hide_canvas(self):
         self.clear_states()
 

@@ -1,14 +1,17 @@
-from typing import Tuple, List, Dict, Union, Callable
-import numpy as np
-import cv2
 from collections import OrderedDict
+from typing import List, Union
 
-from utils.textblock import TextBlock
+import cv2
+import numpy as np
+
 from utils.registry import Registry
+from utils.textblock import TextBlock
+
 OCR = Registry('OCR')
 register_OCR = OCR.register_module
 
-from ..base import BaseModule, DEFAULT_DEVICE, DEVICE_SELECTOR, LOGGER
+from ..base import BaseModule, DEFAULT_DEVICE, DEVICE_SELECTOR
+
 
 class OCRBase(BaseModule):
 
@@ -41,7 +44,7 @@ class OCRBase(BaseModule):
         for blk in blk_list:
             if self.name != 'none_ocr':
                 blk.text = []
-                
+
         self._ocr_blk_list(img, blk_list, *args, **kwargs)
         for callback_name, callback in self._postprocess_hooks.items():
             callback(textblocks=blk_list, img=img, ocr_module=self)

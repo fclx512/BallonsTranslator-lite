@@ -4,6 +4,7 @@ import inspect
 import warnings
 from functools import partial
 
+
 class Registry:
     """A registry to map strings to classes.
 
@@ -39,7 +40,7 @@ class Registry:
         self._name = name
         self._module_dict = dict()
         self._children = dict()
-        
+
         # self._scope = self.infer_scope() if scope is None else scope
 
         # self.build_func will be set with the following priority:
@@ -191,13 +192,13 @@ class Registry:
             module_name = module_class.__name__
         if isinstance(module_name, str):
             module_name = [module_name]
-            
+
         for name in module_name:
             if not force and name in self._module_dict:
                 raise KeyError(f'{name} is already registered '
                                f'in {self.name}')
             self._module_dict[name] = module_class
-        
+
 
     def deprecated_register_module(self, cls=None, force=False):
         warnings.warn(
@@ -255,7 +256,7 @@ class Registry:
 
         # use it as a normal method: x.register_module(module=SomeClass)
         if module is not None:
-            
+
             self._register_module(
                 module_class=module, module_name=name, force=force)
             return module
@@ -267,6 +268,6 @@ class Registry:
             return cls
 
         return _register
-    
+
     def __getitem__(self, key: str):
         return self.get(key)

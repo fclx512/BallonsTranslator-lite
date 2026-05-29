@@ -1,7 +1,9 @@
-import numpy as np
-import cv2
 import random
-from typing import List, Tuple, Union
+from typing import List, Tuple
+
+import cv2
+import numpy as np
+
 
 def smart_resize(src: np.ndarray, target_size, upscale_interpolation=cv2.INTER_LINEAR, downscale_interpolation=cv2.INTER_AREA):
     h, w = src.shape[:2]
@@ -84,7 +86,7 @@ def rotate_polygons(center, polygons, rotation, new_center=None, to_int=True):
     rotation = np.deg2rad(rotation)
     s, c = np.sin(rotation), np.cos(rotation)
     polygons = polygons.astype(np.float32)
-    
+
     polygons[:, 1::2] -= center[1]
     polygons[:, ::2] -= center[0]
     rotated = np.copy(polygons)
@@ -156,7 +158,7 @@ def resize_keepasp(im, new_shape=640, scaleup=True, interpolation=cv2.INTER_LINE
         else :
             new_w = w
         new_unpad = (new_h, new_w)
-        
+
     if shape[::-1] != new_unpad:  # resize
         im = cv2.resize(im, new_unpad, interpolation=interpolation)
     return im
@@ -175,7 +177,7 @@ def expand_textwindow(img_size, xyxy, expand_r=8, shrink=False):
 
 def enlarge_window(rect, im_w, im_h, ratio=2.5, aspect_ratio=1.0) -> List:
     assert ratio > 1.0
-    
+
     x1, y1, x2, y2 = rect
     w = x2 - x1
     h = y2 - y1
@@ -201,7 +203,7 @@ def draw_connected_labels(num_labels, labels, stats, centroids, names="draw_conn
     max_ind = 0
     if isinstance(num_labels, int):
         num_labels = range(num_labels)
-    
+
     # for ind, lab in enumerate((range(num_labels))):
     for lab in num_labels:
         if skip_background and lab == 0:
@@ -221,7 +223,7 @@ def draw_connected_labels(num_labels, labels, stats, centroids, names="draw_conn
             rect = cv2.minAreaRect(cv2.findNonZero(pix))
             box = np.int0(cv2.boxPoints(rect))
             labdraw = cv2.drawContours(labdraw, [box], 0, randcolor, 2)
-            labdraw = cv2.circle(labdraw, (int(centroids[lab][0]),int(centroids[lab][1])), radius=5, color=(random.randint(0,255), random.randint(0,255), random.randint(0,255)), thickness=-1)                
+            labdraw = cv2.circle(labdraw, (int(centroids[lab][0]),int(centroids[lab][1])), radius=5, color=(random.randint(0,255), random.randint(0,255), random.randint(0,255)), thickness=-1)
 
     cv2.imshow(names, labdraw)
     return labdraw
@@ -238,7 +240,7 @@ def rotate_image(mat: np.ndarray, angle: float) -> np.ndarray:
     rotation_mat = cv2.getRotationMatrix2D(image_center, angle, 1.)
 
     # rotation calculates the cos and sin, taking absolutes of those.
-    abs_cos = abs(rotation_mat[0,0]) 
+    abs_cos = abs(rotation_mat[0,0])
     abs_sin = abs(rotation_mat[0,1])
 
     # find the new width and height bounds
@@ -259,7 +261,7 @@ def color_difference(rgb1: List, rgb2: List) -> float:
     color2 = np.array(rgb2, dtype=np.uint8).reshape(1, 1, 3)
     diff = cv2.cvtColor(color1, cv2.COLOR_RGB2LAB).astype(np.float64) - cv2.cvtColor(color2, cv2.COLOR_RGB2LAB).astype(np.float64)
     diff[..., 0] *= 0.392
-    diff = np.linalg.norm(diff, axis=2) 
+    diff = np.linalg.norm(diff, axis=2)
     return diff.item()
 
 def extract_ballon_region(img: np.ndarray, ballon_rect: List, show_process=False, enlarge_ratio=2.0, cal_region_rect=False) -> Tuple[np.ndarray, int, List]:
@@ -293,7 +295,7 @@ def extract_ballon_region(img: np.ndarray, ballon_rect: List, show_process=False
     cv2.rectangle(detected_edges, (0, 0), (w-1, h-1), WHITE, 1, cv2.LINE_8)
     cons, hiers = cv2.findContours(detected_edges, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
     cv2.rectangle(detected_edges, (0, 0), (w-1, h-1), BLACK, 1, cv2.LINE_8)
-    
+
     ballon_mask, outer_index = np.zeros((h, w), np.uint8), -1
     min_retval = np.inf
     mask = np.zeros((h, w), np.uint8)
@@ -303,7 +305,7 @@ def extract_ballon_region(img: np.ndarray, ballon_rect: List, show_process=False
         rect = cv2.boundingRect(cons[ii])
         if rect[2]*rect[3] < img_area*0.4:
             continue
-        
+
         mask = cv2.drawContours(mask, cons, ii, (255), 2)
         cpmask = np.copy(mask)
         cv2.rectangle(mask, (0, 0), (w-1, h-1), WHITE, 1, cv2.LINE_8)
@@ -318,7 +320,7 @@ def extract_ballon_region(img: np.ndarray, ballon_rect: List, show_process=False
     ballon_mask = 127 - ballon_mask
     ballon_mask = cv2.dilate(ballon_mask, kernel,iterations = 1)
     ballon_area, _, _, rect = cv2.floodFill(ballon_mask, mask=None, seedPoint=seedpnt,  flags=4, newVal=(30), loDiff=(difres, difres, difres), upDiff=(difres, difres, difres))
-    ballon_mask = 30 - ballon_mask    
+    ballon_mask = 30 - ballon_mask
     retval, ballon_mask = cv2.threshold(ballon_mask, 1, 255, cv2.THRESH_BINARY)
     ballon_mask = cv2.bitwise_not(ballon_mask, ballon_mask)
 
@@ -343,7 +345,7 @@ def extract_ballon_region(img: np.ndarray, ballon_rect: List, show_process=False
 def square_pad_resize(img: np.ndarray, tgt_size: int):
     h, w = img.shape[:2]
     pad_h, pad_w = 0, 0
-    
+
     # make square image
     if w < h:
         pad_w = h - w
@@ -357,7 +359,7 @@ def square_pad_resize(img: np.ndarray, tgt_size: int):
         pad_h += pad_size
         pad_w += pad_size
 
-    if pad_h > 0 or pad_w > 0:    
+    if pad_h > 0 or pad_w > 0:
         img = cv2.copyMakeBorder(img, 0, pad_h, 0, pad_w, cv2.BORDER_CONSTANT)
 
     down_scale_ratio = tgt_size / img.shape[0]
@@ -377,10 +379,10 @@ def get_block_mask(xywh: List, mask_array: np.ndarray, angle: int):
         cx, cy = x + int(round(w / 2)), y + int(round(h / 2))
         poly = xywh2xyxypoly(np.array([[x, y, w, h]]))
         poly = rotate_polygons([cx, cy], poly, -angle)
-        
+
         x1, x2 = np.min(poly[..., ::2]), np.max(poly[..., ::2])
         y1, y2 = np.min(poly[..., 1::2]), np.max(poly[..., 1::2])
-        
+
         if x2 < 0 or x2 - x1 < 2 or x1 >= im_w - 1 \
             or y2 < 0 or y2 - y1 < 2 or y1 >= im_h - 1:
             return None, None
@@ -388,7 +390,7 @@ def get_block_mask(xywh: List, mask_array: np.ndarray, angle: int):
             poly[..., ::2] -= cx - int((x2 - x1) / 2)
             poly[..., 1::2] -= cy - int((y2 - y1) / 2)
             itmsk = np.zeros((y2 - y1, x2 - x1), np.uint8)
-            
+
             cv2.fillPoly(itmsk, poly.reshape(-1, 4, 2), color=(255))
             px1, px2, py1, py2 = 0, itmsk.shape[1], 0, itmsk.shape[0]
             if x1 < 0:
@@ -422,4 +424,3 @@ def get_block_mask(xywh: List, mask_array: np.ndarray, angle: int):
             msk = mask_array[y1: y2, x1: x2]
 
     return msk, [x1, y1, x2, y2]
-        

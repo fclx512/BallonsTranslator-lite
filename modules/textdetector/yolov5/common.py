@@ -3,24 +3,15 @@
 Common modules
 """
 
-import json
 import math
-import platform
 import warnings
-from copy import copy
-from pathlib import Path
 
-import cv2
-import numpy as np
-import requests
 try:
     import torch
     import torch.nn as nn
 except ImportError:
     raise ImportError("PyTorch not available")
-from PIL import Image
 
-from .yolov5_utils import make_divisible, initialize_weights, check_anchor_order, fuse_conv_and_bn
 
 def autopad(k, p=None):  # kernel, padding
     # Pad to 'same'

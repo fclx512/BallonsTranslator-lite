@@ -1,13 +1,16 @@
+from collections import namedtuple
+
 import cv2
 import numpy as np
 import pyclipper
 from shapely.geometry import Polygon
-from collections import namedtuple
+
 try:
     import torch
 except ImportError:
     raise ImportError("PyTorch not available")
 import warnings
+
 warnings.filterwarnings('ignore')
 
 
@@ -63,7 +66,7 @@ class SegDetectorRepresenter():
 
         if height is None:
             height = pred.shape[1]
-        if width is None: 
+        if width is None:
             width = pred.shape[2]
 
         for batch_index in range(batch_size):
@@ -517,8 +520,8 @@ def shrink_polygon_py(polygon, shrink_ratio):
 
 
 def shrink_polygon_pyclipper(polygon, shrink_ratio):
-    from shapely.geometry import Polygon
     import pyclipper
+    from shapely.geometry import Polygon
     polygon_shape = Polygon(polygon)
     distance = polygon_shape.area * (1 - np.power(shrink_ratio, 2)) / polygon_shape.length
     subject = [tuple(l) for l in polygon]

@@ -6,7 +6,7 @@ Both the translator and LLM OCR modules read from this shared pool.
 """
 
 import json
-from typing import List, Dict, Optional, Callable
+from typing import Dict, List, Optional
 
 from .config import pcfg, save_config
 from .logger import logger as LOGGER
@@ -253,23 +253,49 @@ def save_all_profiles(profiles: List[Dict]):
 # ── Dialog ──────────────────────────────────────────────────────────
 
 try:
-    from PyQt6.QtWidgets import (
-        QDialog, QVBoxLayout, QHBoxLayout, QListWidget,
-        QLineEdit, QPushButton, QLabel, QFormLayout,
-        QWidget, QSplitter, QMessageBox,
-        QComboBox, QInputDialog, QTextEdit, QScrollArea, QCheckBox,
-        QSpinBox, QDoubleSpinBox,
-    )
     from PyQt6.QtCore import Qt
-except ImportError:
-    from PyQt5.QtWidgets import (
-        QDialog, QVBoxLayout, QHBoxLayout, QListWidget,
-        QLineEdit, QPushButton, QLabel, QFormLayout,
-        QWidget, QSplitter, QMessageBox,
-        QComboBox, QInputDialog, QTextEdit, QScrollArea, QCheckBox,
-        QSpinBox, QDoubleSpinBox,
+    from PyQt6.QtWidgets import (
+        QCheckBox,
+        QComboBox,
+        QDialog,
+        QDoubleSpinBox,
+        QFormLayout,
+        QHBoxLayout,
+        QInputDialog,
+        QLabel,
+        QLineEdit,
+        QListWidget,
+        QMessageBox,
+        QPushButton,
+        QScrollArea,
+        QSpinBox,
+        QSplitter,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
     )
+except ImportError:
     from PyQt5.QtCore import Qt
+    from PyQt5.QtWidgets import (
+        QCheckBox,
+        QComboBox,
+        QDialog,
+        QDoubleSpinBox,
+        QFormLayout,
+        QHBoxLayout,
+        QInputDialog,
+        QLabel,
+        QLineEdit,
+        QListWidget,
+        QMessageBox,
+        QPushButton,
+        QScrollArea,
+        QSpinBox,
+        QSplitter,
+        QTextEdit,
+        QVBoxLayout,
+        QWidget,
+    )
 
 import httpx
 
@@ -292,7 +318,12 @@ class ProfileManagerDialog(QDialog):
     def _section_label(self, text: str):
         """Section divider label: —— text ——"""
         lbl = QLabel(f"—— {text} ——")
-        lbl.setStyleSheet("font-size: 14px; padding: 8px 0 2px 0;")
+        from ui.misc import get_theme_color
+        c = get_theme_color()
+        lbl.setStyleSheet(
+            f"font-size: 14px; padding: 8px 0 2px 0; "
+            f"background-color: rgba({c.red()}, {c.green()}, {c.blue()}, 50);"
+        )
         lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         return lbl
 

@@ -1,26 +1,38 @@
-from qtpy.QtCore import Signal, Qt, QPointF, QSize, QSizeF, QLineF, QRectF
-from qtpy.QtWidgets import QGridLayout, QPushButton, QComboBox, QSizePolicy, QBoxLayout, QCheckBox, QHBoxLayout, QGraphicsView, QStackedWidget, QVBoxLayout, QLabel, QGraphicsPixmapItem, QGraphicsEllipseItem
-from qtpy.QtGui import QPen, QColor, QCursor, QPainter, QPixmap, QBrush, QFontMetrics
+from typing import List, Tuple, Union
 
-from typing import Union, Tuple, List
-import numpy as np
 import cv2
+import numpy as np
+from qtpy.QtCore import QLineF, QPointF, QRectF, QSizeF, Qt, Signal
+from qtpy.QtGui import QBrush, QColor, QCursor, QFontMetrics, QPainter, QPen, QPixmap
+from qtpy.QtWidgets import (
+    QBoxLayout,
+    QCheckBox,
+    QComboBox,
+    QGraphicsEllipseItem,
+    QGraphicsView,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QStackedWidget,
+    QVBoxLayout,
+)
 
-from utils.imgproc_utils import enlarge_window
-from utils.textblock_mask import canny_flood, connected_canny_flood
-from utils.logger import logger
-from utils.config import pcfg
-from .funcmaps import get_maskseg_method
-from .module_manager import ModuleManager
-from .image_edit import ImageEditMode, PenShape, PixmapItem, StrokeImgItem
-from .configpanel import InpaintConfigPanel
-from .custom_widget import Widget, SeparatorWidget, PaintQSlider, ColorPickerLabel
-from .canvas import Canvas
-from .misc import ndarray2pixmap
 from utils.config import DrawPanelConfig, pcfg
-from utils.shared import CONFIG_COMBOBOX_SHORT, CONFIG_COMBOBOX_HEIGHT
+from utils.imgproc_utils import enlarge_window
+from utils.logger import logger
 from utils.logger import logger as LOGGER
+from utils.shared import CONFIG_COMBOBOX_HEIGHT, CONFIG_COMBOBOX_SHORT
+
+from .canvas import Canvas
+from .configpanel import InpaintConfigPanel
+from .custom_widget import ColorPickerLabel, PaintQSlider, SeparatorWidget, Widget
 from .drawing_commands import InpaintUndoCommand, StrokeItemUndoCommand
+from .funcmaps import get_maskseg_method
+from .image_edit import ImageEditMode, PenShape, PixmapItem, StrokeImgItem
+from .misc import ndarray2pixmap
+from .module_manager import ModuleManager
 
 INPAINT_BRUSH_COLOR = QColor(127, 0, 127, 127)
 MAX_PEN_SIZE = 1000
@@ -48,7 +60,7 @@ class ToolNameLabel(QLabel):
         font = self.font()
         font.setPointSizeF(TOOLNAME_POINT_SIZE)
         fmt = QFontMetrics(font)
-        
+
         if fix_width is not None:
             self.setFixedWidth(fix_width)
             text_width = fmt.width(self.text())
@@ -56,7 +68,7 @@ class ToolNameLabel(QLabel):
                 font_size = TOOLNAME_POINT_SIZE * fix_width * 0.95 / text_width
                 font.setPointSizeF(font_size)
         self.setFont(font)
-            
+
 
 class InpaintPanel(Widget):
 
@@ -69,7 +81,7 @@ class InpaintPanel(Widget):
         self.thicknessSlider.setRange(MIN_PEN_SIZE, MAX_PEN_SIZE)
         self.thicknessSlider.valueChanged.connect(self.on_thickness_changed)
         self.thicknessSlider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        
+
         thickness_layout = QHBoxLayout()
         thickness_label = ToolNameLabel(100, self.tr('Thickness'))
         thickness_layout.addWidget(thickness_label)
@@ -132,7 +144,7 @@ class PenConfigPanel(Widget):
 
         self.colorPicker = ColorPickerLabel()
         self.colorPicker.colorChanged.connect(self.on_color_changed)
-        
+
         color_label = ToolNameLabel(None, self.tr('Color'))
         alpha_label = ToolNameLabel(None, self.tr('Alpha'))
         color_layout = QHBoxLayout()
@@ -140,7 +152,7 @@ class PenConfigPanel(Widget):
         color_layout.addWidget(self.colorPicker)
         color_layout.addWidget(alpha_label)
         color_layout.addWidget(self.alphaSlider)
-        
+
         thickness_layout = QHBoxLayout()
         thickness_label = ToolNameLabel(100, self.tr('Thickness'))
         thickness_layout.addWidget(thickness_label)
@@ -202,7 +214,7 @@ class RectPanel(Widget):
         self.methodComboBox.setFixedHeight(CONFIG_COMBOBOX_HEIGHT)
         self.methodComboBox.setFixedWidth(CONFIG_COMBOBOX_SHORT)
         self.methodComboBox.addItems([
-            self.tr('method 1'), 
+            self.tr('method 1'),
             self.tr('method 2'),
             self.tr('Use Existing Mask')
         ])
@@ -244,7 +256,7 @@ class RectPanel(Widget):
     def hideEvent(self, e) -> None:
         self.inpaint_layout.removeWidget(self.inpainter_panel.module_combobox)
         return super().hideEvent(e)
-        
+
     def on_inpaint_seg_method_changed(self):
         pcfg.drawpanel.rectool_method = self.methodComboBox.currentIndex()
 
@@ -287,7 +299,7 @@ class DrawingPanel(Widget):
         border_pen = QPen(INPAINT_BRUSH_COLOR, 3, Qt.PenStyle.DashLine)
         self.inpaint_mask_item: PixmapItem = PixmapItem(border_pen)
         self.scale_circle = QGraphicsEllipseItem()
-        
+
         canvas.finish_painting.connect(self.on_finish_painting)
         canvas.finish_erasing.connect(self.on_finish_erasing)
         canvas.ctrl_relesed.connect(self.on_canvasctrl_released)
@@ -337,7 +349,7 @@ class DrawingPanel(Widget):
             QPen(Qt.GlobalColor.black, 1, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
         self.canvas.erasing_pen = self.erasing_pen = QPen(Qt.GlobalColor.black, 1, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
         self.inpaint_pen = QPen(INPAINT_BRUSH_COLOR, 1, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
-        
+
         # self.setPenToolWidth(10)
         # self.setPenToolColor([0, 0, 0, 127])
 
@@ -472,11 +484,11 @@ class DrawingPanel(Widget):
         self.setPenToolColor(config.pentool_color)
         self.penConfigPanel.thicknessSlider.setValue(int(config.pentool_width))
         self.penConfigPanel.shapeCombobox.setCurrentIndex(config.pentool_shape)
-        
+
         self.setInpaintToolWidth(config.inpainter_width)
         self.inpaintConfigPanel.thicknessSlider.setValue(int(config.inpainter_width))
         self.inpaintConfigPanel.shapeCombobox.setCurrentIndex(config.inpainter_shape)
-        
+
         self.rectPanel.dilate_slider.setValue(config.recttool_dilate_ksize)
         self.rectPanel.autoChecker.setChecked(config.rectool_auto)
         self.rectPanel.methodComboBox.setCurrentIndex(config.rectool_method)
@@ -513,9 +525,9 @@ class DrawingPanel(Widget):
         painter.setPen(pen)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         if draw_shape:
-            shape_rect = QRectF(cursor_center-pen_radius + thickness, 
-                                cursor_center-pen_radius + thickness, 
-                                pen_size - 2*thickness, 
+            shape_rect = QRectF(cursor_center-pen_radius + thickness,
+                                cursor_center-pen_radius + thickness,
+                                pen_size - 2*thickness,
                                 pen_size - 2*thickness)
             if shape == PenShape.Circle:
                 painter.drawEllipse(shape_rect)
@@ -525,7 +537,7 @@ class DrawingPanel(Widget):
                 raise NotImplementedError
             # elif shape == PenShape.Triangle:
                 # painter.drawPolygon
-        cross_left = (map_size  - 1 - cross_size) // 2 
+        cross_left = (map_size  - 1 - cross_size) // 2
         cross_right = map_size - cross_left
 
         pen = QPen(Qt.GlobalColor.white, 5, Qt.PenStyle.SolidLine)
@@ -629,7 +641,7 @@ class DrawingPanel(Widget):
                 self.canvas.stroke_img_item = None
             if rect is not None:
                 self.canvas.push_undo_command(StrokeItemUndoCommand(self.canvas.drawingLayer, rect, qimg, True))
-        
+
 
     def runInpaint(self, inpaint_dict=None):
 
@@ -640,7 +652,7 @@ class DrawingPanel(Widget):
                 logger.warning("inpainting goes wrong")
                 self.clearInpaintItems()
                 return
-                
+
             rect, mask, _ = self.inpaint_stroke.clip(mask_only=True)
             if mask is None:
                 self.clearInpaintItems()
@@ -681,7 +693,7 @@ class DrawingPanel(Widget):
             self.runInpaint()
 
     def on_begin_scale_tool(self, pos: QPointF):
-        
+
         if self.currentTool == self.penTool:
             circle_pen = QPen(self.pentool_pen)
         elif self.currentTool == self.inpaintTool:
@@ -689,7 +701,7 @@ class DrawingPanel(Widget):
         else:
             return
         pen_radius = circle_pen.widthF() / 2 * self.canvas.scale_factor
-        
+
         r, g, b, a = circle_pen.color().getRgb()
 
         circle_pen.setWidth(3)
@@ -703,7 +715,7 @@ class DrawingPanel(Widget):
         self.scale_tool_pos = pos - QPointF(pen_size, pen_size)
         self.canvas.addItem(self.scale_circle)
         self.setCrossCursor()
-        
+
     def setCrossCursor(self):
         self.canvas.gv.setCursor(self.get_pen_cursor(draw_shape=False))
 
@@ -847,8 +859,8 @@ class DrawingPanel(Widget):
             if self.inpaint_mask_item.scene() == self.canvas:
                 self.canvas.removeItem(self.inpaint_mask_item)
             if self.rectTool.isChecked():
-                self.canvas.image_edit_mode = ImageEditMode.RectTool    
-            
+                self.canvas.image_edit_mode = ImageEditMode.RectTool
+
         if self.inpaint_stroke is not None:
             if self.inpaint_stroke.scene() == self.canvas:
                 self.canvas.removeItem(self.inpaint_stroke)

@@ -1,7 +1,5 @@
-from typing import List, Tuple
 import json
-import os.path as osp
-import os
+from typing import List, Tuple
 
 HALF2FULL = {i: i + 0xFEE0 for i in range(0x21, 0x7F)}
 HALF2FULL[0x20] = 0x3000
@@ -118,7 +116,7 @@ def _seg_ch_pkg(text: str) -> List[str]:
             if skip_next:
                 skip_next = False
                 continue
-            
+
             len_word, len_next, len_prev = len(word), -1, -1
             next_valid, prev_valid = False, False
             word_next, tag_next = '', ''
@@ -128,14 +126,14 @@ def _seg_ch_pkg(text: str) -> List[str]:
                 word_next, tag_next = segments[ii + 1]
                 len_next = len(word_next)
                 next_valid = True
-                if tag_next != 'w' and not word_next in PKUSEG_PUNCSET:
+                if tag_next != 'w' and word_next not in PKUSEG_PUNCSET:
                     score_next = PKUSEGSCORES[tag][tag_next]
-            
+
             if ii > 0:
                 word_prev, tag_prev = words[-1], segments[ii - 1][1]
                 len_prev = len(word_prev)
                 prev_valid = True
-                if tag_prev != 'w' and not word_prev[-1] in PKUSEG_PUNCSET:
+                if tag_prev != 'w' and word_prev[-1] not in PKUSEG_PUNCSET:
                     score_prev = PKUSEGSCORES[tag_prev][tag]
 
             append_prev, append_next = False, False
@@ -212,7 +210,7 @@ def seg_ch_pkg(text: str):
     if PKUSEGSCORES is None:
         with open(PKUSEGPATH, 'r', encoding='utf8') as f:
             PKUSEGSCORES = json.loads(f.read())
-    
+
     text_list = text.replace('\n', '').replace('　', ' ').split(' ')
     result_list = []
     for ii, text in enumerate(text_list):
@@ -232,7 +230,7 @@ def seg_ch_pkg(text: str):
 def seg_text(text: str, lang: str) -> Tuple[List, str]:
     delimiter = ''
     if lang in LANGSET_CH:
-        words = seg_ch_pkg(text)    
+        words = seg_ch_pkg(text)
     elif lang in LANGSET_CJK:
         words = seg_to_chars(text)
     else:

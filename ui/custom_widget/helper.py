@@ -1,4 +1,3 @@
-from qtpy.QtGui import QColor
 
 from utils.config import pcfg
 
@@ -9,4 +8,5 @@ def isDarkTheme():
 
 def themeColor():
     from ui.misc import get_theme_color
-    return get_theme_color(pcfg.theme_name)
+    from utils.config import pcfg
+    return get_theme_color(pcfg.dark_theme if pcfg.darkmode else pcfg.light_theme)

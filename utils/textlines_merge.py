@@ -1,17 +1,18 @@
-import itertools
 import functools
-from typing import Tuple, List, ClassVar, Union, Any, Dict, Set
+import itertools
 from collections import Counter
+from typing import List, Set
+
 try:
     functools.cached_property
 except AttributeError: # Supports Python versions below 3.8
     from backports.cached_property import cached_property
     functools.cached_property = cached_property
 
-import numpy as np
-from shapely.geometry import Polygon, MultiPoint
 import cv2
 import networkx as nx
+import numpy as np
+from shapely.geometry import MultiPoint, Polygon
 
 
 class BBox(object):
@@ -42,13 +43,13 @@ class BBox(object):
     @property
     def xywh(self):
         return np.array([self.x, self.y, self.w, self.h], dtype=np.int32)
-    
+
 
 class Quadrilateral(object):
     """
     Helper for storing textlines that contains various helper functions.
     """
-    def __init__(self, pts: np.ndarray, text: str, prob: float, fg_r: int = 0, fg_g: int = 0, fg_b: int = 0, bg_r: int = 0, bg_g: int = 0, bg_b: int = 0):    
+    def __init__(self, pts: np.ndarray, text: str, prob: float, fg_r: int = 0, fg_g: int = 0, fg_b: int = 0, bg_r: int = 0, bg_g: int = 0, bg_b: int = 0):
         self.pts, is_vertical = sort_pnts(pts)
         if is_vertical:
             self.direction = 'v'
@@ -150,7 +151,7 @@ class Quadrilateral(object):
         # cv2.warpPerspective could overflow if image size is too large, better crop it here
         img_croped = img[y1: y2, x1: x2]
 
-        
+
         src_pts[:, 0] -= x1
         src_pts[:, 1] -= y1
 

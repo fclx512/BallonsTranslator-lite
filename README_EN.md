@@ -39,7 +39,7 @@ A lightweight manga/image translation tool based on [BallonsTranslator](https://
 
 - **Theme switcher**: multiple built-in color themes with light/dark mode support
 - **Keyboard shortcuts**: customizable shortcuts with save/load profiles
-- **Export**: Word document export
+- **Export**: Text export (TXT)
 - **Continuous reading**: multi-page reading and translation for long strips
 - **Preview mode**: quick source/translation comparison
 

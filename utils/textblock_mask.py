@@ -1,6 +1,8 @@
+from typing import Tuple
+
 import cv2
 import numpy as np
-from typing import Tuple
+
 from .imgproc_utils import draw_connected_labels
 from .stroke_width_calculator import strokewidth_check
 
@@ -23,7 +25,7 @@ def letter_calculator(img, mask, bground_rgb, show_process=False):
         threshed = 255 - threshed
     threshed = 255 - threshed
 
-    
+
     threshed = cv2.bitwise_and(threshed, mask)
     le_region = np.where(threshed==255)
     mat_region = img[le_region]
@@ -34,9 +36,9 @@ def letter_calculator(img, mask, bground_rgb, show_process=False):
         # cv2.imshow("2xxx", img)
         # cv2.waitKey(0)
         return [-1, -1, -1], threshed
-    
+
     letter_rgb = np.mean(mat_region, axis=0).astype(int).tolist()
-    
+
     if show_process:
         cv2.imshow("thresh", threshed)
         # ocr_protest(threshed)
@@ -46,7 +48,7 @@ def letter_calculator(img, mask, bground_rgb, show_process=False):
         imgcp[le_region] = letter_rgb
         cv2.imshow("letter_img", imgcp)
         # cv2.waitKey(0)
-        
+
     return letter_rgb, threshed
 
 # 预处理让文本颜色提取准确点
@@ -54,7 +56,7 @@ def usm(src):
     # Handle RGBA images by converting to RGB for processing
     if len(src.shape) == 3 and src.shape[2] == 4:
         src = cv2.cvtColor(src, cv2.COLOR_RGBA2RGB)
-        
+
     blur_img = cv2.GaussianBlur(src, (0, 0), 5)
     usm = cv2.addWeighted(src, 1.5, blur_img, -0.5, 0)
     h, w = src.shape[:2]
@@ -104,7 +106,7 @@ def canny_flood(img, show_process=False, inpaint_sdthresh=10, **kwargs):
     BLACK = (0, 0, 0)
     kernel = np.ones((3,3),np.uint8)
     orih, oriw = img.shape[0], img.shape[1]
-    
+
     # Handle RGBA images by converting to RGB for processing
     if len(img.shape) == 3 and img.shape[2] == 4:
         # Convert RGBA to RGB for processing
@@ -140,7 +142,7 @@ def canny_flood(img, show_process=False, inpaint_sdthresh=10, **kwargs):
         rect = cv2.boundingRect(cons[ii])
         if rect[2]*rect[3] < img_area*0.4:
             continue
-        
+
         mask = cv2.drawContours(mask, cons, ii, (255), 2)
         cpmask = np.copy(mask)
         cv2.rectangle(mask, (0, 0), (w-1, h-1), WHITE, 1, cv2.LINE_8)
@@ -155,7 +157,7 @@ def canny_flood(img, show_process=False, inpaint_sdthresh=10, **kwargs):
     ballon_mask = 127 - ballon_mask
     ballon_mask = cv2.dilate(ballon_mask, kernel,iterations = 1)
     outer_area, _, _, rect = cv2.floodFill(ballon_mask, mask=None, seedPoint=seedpnt,  flags=4, newVal=(30), loDiff=(difres, difres, difres), upDiff=(difres, difres, difres))
-    ballon_mask = 30 - ballon_mask    
+    ballon_mask = 30 - ballon_mask
     retval, ballon_mask = cv2.threshold(ballon_mask, 1, 255, cv2.THRESH_BINARY)
     ballon_mask = cv2.bitwise_not(ballon_mask, ballon_mask)
 
@@ -207,13 +209,13 @@ def canny_flood(img, show_process=False, inpaint_sdthresh=10, **kwargs):
         inner_rect = [-1, -1, -1, -1]
     else:
         inner_rect.append(-1)
-    
+
     bground_aver = bground_aver.astype(np.uint8)
     bub_dict = {"rgb": letter_aver,
                 "bground_rgb": bground_aver,
                 "inner_rect": inner_rect,
                 "need_inpaint": need_inpaint}
-    
+
     return mask, ballon_mask, bub_dict
 
 # 输入：文本块roi，分割出文本mask，根据mask计算文本bgr均值和标准差，决定纯色覆盖/inpaint修复
@@ -229,7 +231,7 @@ def connected_canny_flood(img, show_process=False, inpaint_sdthresh=10, apply_st
         connectivity = 4
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(img, connectivity, cv2.CV_16U)
         drawtext = np.zeros((img.shape[0], img.shape[1]), np.uint8)
-        
+
         max_ind = np.argmax(stats[:, 4])
         maxbbox_area, sec_ind = -1, -1
         for ind, stat in enumerate(stats):
@@ -239,7 +241,7 @@ def connected_canny_flood(img, show_process=False, inpaint_sdthresh=10, apply_st
                     maxbbox_area = bbarea
                     sec_ind = ind
         drawtext[np.where(labels==max_ind)] = 255
-        
+
         cv2.rectangle(drawtext, (0, 0), (img.shape[1]-1, img.shape[0]-1), (0, 0, 0), 1, cv2.LINE_8)
         cons, hiers = cv2.findContours(drawtext, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
         img_area = img.shape[0] * img.shape[1]
@@ -250,7 +252,7 @@ def connected_canny_flood(img, show_process=False, inpaint_sdthresh=10, apply_st
         ballon_mask = np.zeros((img.shape[0], img.shape[1]), np.uint8)
         for ind in quali_ind:
             ballon_mask = cv2.drawContours(ballon_mask, cons, ind, (255), 2)
-        
+
         seedpnt = (int(ballon_mask.shape[1]/2), int(ballon_mask.shape[0]/2))
         difres = 10
         retval, _, _, rect = cv2.floodFill(ballon_mask, mask=None, seedPoint=seedpnt,  flags=4, newVal=(127), loDiff=(difres, difres, difres), upDiff=(difres, difres, difres))
@@ -282,7 +284,7 @@ def connected_canny_flood(img, show_process=False, inpaint_sdthresh=10, apply_st
             ret, thresh = cv2.threshold(channel, 1, 255, cv2.THRESH_OTSU+cv2.THRESH_BINARY)
 
             tmp_reverse = False
-            
+
             if np.mean(thresh[outer_cords]) > 160:
                 thresh = 255 - thresh
                 tmp_reverse = True
@@ -305,11 +307,11 @@ def connected_canny_flood(img, show_process=False, inpaint_sdthresh=10, apply_st
                 c_ind = bgr_ind
                 reverse = tmp_reverse
         return c_ind, reverse
-    
+
     channel_index, reverse = ccctest(img)
     chanel = img[:, :, channel_index] if channel_index < 3 else cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
     ret, thresh = cv2.threshold(chanel, 1, 255, cv2.THRESH_OTSU+cv2.THRESH_BINARY)
-    
+
     # reverse to get white text on black bg
     if reverse:
         thresh = 255 - thresh
@@ -326,7 +328,7 @@ def connected_canny_flood(img, show_process=False, inpaint_sdthresh=10, apply_st
     text_mask = cv2.bitwise_and(text_mask, ballon_mask)
     if apply_strokewidth_check > 0:
         text_mask = strokewidth_check(text_mask, labels, num_labels, stats, debug_type=show_process-1)
-        
+
     text_color = textrgb_calculator(img, text_mask, show_process=show_process)
     inner_rect = cv2.boundingRect(cv2.findNonZero(cv2.dilate(text_mask, (3, 3), iterations=1)))
     inner_rect = [ii for ii in inner_rect]
@@ -353,7 +355,7 @@ def connected_canny_flood(img, show_process=False, inpaint_sdthresh=10, apply_st
                 "bground_rgb": bground_aver,
                 "inner_rect": inner_rect,
                 "need_inpaint": need_inpaint}
-    
+
     return mask, ballon_mask, bub_dict
 
 
@@ -370,7 +372,7 @@ def extract_ballon_mask(img: np.ndarray, mask: np.ndarray) -> Tuple[np.ndarray, 
     # Handle RGBA images by converting to RGB for processing
     if len(img.shape) == 3 and img.shape[2] == 4:
         img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
-        
+
     img = cv2.GaussianBlur(img,(3,3),cv2.BORDER_DEFAULT)
     h, w = img.shape[:2]
     text_sum = np.sum(mask)

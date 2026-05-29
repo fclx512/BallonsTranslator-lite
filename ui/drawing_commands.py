@@ -1,16 +1,17 @@
-from qtpy.QtCore import Signal, Qt, QPointF, QSize, QLineF, QDateTime, QRectF, QPoint
-from qtpy.QtGui import QPen, QColor, QCursor, QPainter, QPixmap, QBrush, QFontMetrics, QImage
+from qtpy.QtCore import QDateTime
+from qtpy.QtGui import QImage, QPainter
+
 try:
     from qtpy.QtWidgets import QUndoCommand
 except:
     from qtpy.QtGui import QUndoCommand
 
-from typing import Union, Tuple, List
-import numpy as np
-from utils.logger import logger
+from typing import List, Tuple
 
-from .image_edit import ImageEditMode, PixmapItem, DrawingLayer, StrokeImgItem
+import numpy as np
+
 from .canvas import Canvas, TextBlkItem
+from .image_edit import DrawingLayer
 from .textedit_area import TransPairWidget
 
 
@@ -26,7 +27,7 @@ class StrokeItemUndoCommand(QUndoCommand):
             self.compose_mode = QPainter.CompositionMode.CompositionMode_DestinationOut
         else:
             self.compose_mode = QPainter.CompositionMode.CompositionMode_SourceOver
-        
+
     def undo(self):
         if self.qimg is not None:
             self.target_layer.removeQImage(self.key)
@@ -79,7 +80,7 @@ class InpaintUndoCommand(QUndoCommand):
 class EmptyCommand(QUndoCommand):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-    
+
 
 class RunBlkTransCommand(QUndoCommand):
     def __init__(self, canvas: Canvas, blkitems: List[TextBlkItem], transpairw_list: List[TransPairWidget],  mode: int):

@@ -1,7 +1,7 @@
 # coding:utf-8
 import sys
 import warnings
-from ctypes import POINTER, byref, c_bool, c_int, pointer, sizeof, WinDLL
+from ctypes import POINTER, WinDLL, byref, c_bool, c_int, pointer, sizeof
 from ctypes.wintypes import DWORD, LONG, LPCVOID
 
 import win32api
@@ -9,11 +9,17 @@ import win32con
 import win32gui
 from qtpy.QtGui import QColor
 
-from .win_c_structures import (ACCENT_POLICY, ACCENT_STATE, DWMNCRENDERINGPOLICY,
-                           DWMWINDOWATTRIBUTE, MARGINS,
-                           WINDOWCOMPOSITIONATTRIB,
-                           WINDOWCOMPOSITIONATTRIBDATA, DWM_BLURBEHIND)
-from .win32_utils import isGreaterEqualWin10, isGreaterEqualWin11, IsCompositionEnabled
+from .win32_utils import IsCompositionEnabled, isGreaterEqualWin10, isGreaterEqualWin11
+from .win_c_structures import (
+    ACCENT_POLICY,
+    ACCENT_STATE,
+    DWM_BLURBEHIND,
+    DWMNCRENDERINGPOLICY,
+    DWMWINDOWATTRIBUTE,
+    MARGINS,
+    WINDOWCOMPOSITIONATTRIB,
+    WINDOWCOMPOSITIONATTRIBDATA,
+)
 
 
 class WindowsWindowEffect:

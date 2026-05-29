@@ -1,11 +1,19 @@
-from qtpy.QtWidgets import QPushButton, QHBoxLayout, QLabel, QScrollArea, QVBoxLayout, QSizePolicy
-from qtpy.QtCore import  Qt, Signal
-from qtpy.QtGui import QFontMetrics, QFontMetrics, QIcon, QMouseEvent
+from qtpy.QtCore import Qt, Signal
+from qtpy.QtGui import QFontMetrics, QIcon, QMouseEvent
+from qtpy.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+)
+
+from utils import shared
+from utils.config import pcfg
 
 from .scrollbar import ScrollBar
 from .widget import Widget
-from utils import shared
-from utils.config import pcfg
 
 CHEVRON_SIZE = 20
 CHEVRON_SIZE_SMALL = 14
@@ -65,7 +73,7 @@ class ExpandLabel(Widget):
         layout.setSpacing(1)
         layout.addStretch(-1)
         layout.addWidget(self.hidelabel)
-    
+
         self.expanded = True
         self.setExpand(True)
 
@@ -117,7 +125,7 @@ class PanelArea(QScrollArea):
         if action_name is None:
             action_name = panel_name
         self.view_widget.register_view_widget(
-            config_name=config_name, 
+            config_name=config_name,
             config_expand_name=config_expand_name,
             action_name=action_name
         )
@@ -157,7 +165,7 @@ class PanelGroupBox(Widget):
 class PanelAreaContent(Widget):
 
     after_resized = Signal()
-    
+
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self.after_resized.emit()
@@ -173,7 +181,7 @@ class ViewWidget(Widget):
 
     def __init__(self, content_widget: Widget, panel_name: str = None, parent=None, title_size_type='normal', *args, **kwargs):
         super().__init__(parent=parent, *args, **kwargs)
-        
+
         self.title_label = ExpandLabel(panel_name, self, size_type=title_size_type)
         self.title_label.hidelabel.clicked.connect(self.on_view_hide_btn_clicked)
         self.content_widget = content_widget
@@ -183,13 +191,13 @@ class ViewWidget(Widget):
         layout.addWidget(self.content_widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        
+
         self.title_label.clicked.connect(self.set_expend_area)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
 
     def on_view_hide_btn_clicked(self):
         self.view_hide_btn_clicked.emit(self.config_name)
-    
+
     def register_view_widget(self, config_name: str, config_expand_name: str, action_name: str):
         self.config_name = config_name
         self.config_expand_name = config_expand_name

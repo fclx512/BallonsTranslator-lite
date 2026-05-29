@@ -1,14 +1,13 @@
-import time
 import base64
-import json
-import cv2
-import numpy as np
+import time
 from typing import List, Optional
 
-import openai
+import cv2
 import httpx
+import numpy as np
+import openai
 
-from .base import register_OCR, OCRBase, TextBlock
+from .base import OCRBase, TextBlock, register_OCR
 
 
 @register_OCR("llm_ocr")

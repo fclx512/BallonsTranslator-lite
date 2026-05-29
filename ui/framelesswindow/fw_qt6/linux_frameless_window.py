@@ -1,10 +1,8 @@
 # coding:utf-8
 from qtpy.QtCore import QCoreApplication, QEvent, Qt
-from qtpy.QtGui import QMouseEvent
 from qtpy.QtWidgets import QWidget
 
 # from ..titlebar import TitleBar
-from ..linux_utils import LinuxMoveResize
 from ..linux_window_effect import LinuxWindowEffect
 
 

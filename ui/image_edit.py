@@ -1,10 +1,15 @@
-from typing import Tuple, List, Union
-import numpy as np
-import cv2
+from typing import List, Tuple
 
-from qtpy.QtCore import QRectF, Qt, QPointF, QSize
-from qtpy.QtWidgets import QStyleOptionGraphicsItem, QGraphicsPixmapItem, QWidget, QGraphicsItem
-from qtpy.QtGui import QPen, QPainter, QPixmap, QImage, QBrush
+import cv2
+import numpy as np
+from qtpy.QtCore import QPointF, QRectF, QSize, Qt
+from qtpy.QtGui import QImage, QPainter, QPen, QPixmap
+from qtpy.QtWidgets import (
+    QGraphicsItem,
+    QGraphicsPixmapItem,
+    QStyleOptionGraphicsItem,
+    QWidget,
+)
 
 from .misc import pixmap2ndarray
 
@@ -30,7 +35,7 @@ class StrokeImgItem(QGraphicsItem):
         pen = QPen(pen)
         if shape == PenShape.Rectangle:
             pen.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
-            
+
         self.pen = pen
         self._d = d = pen.widthF()
         self._d_rect = d // 32
@@ -46,7 +51,7 @@ class StrokeImgItem(QGraphicsItem):
             pen.setWidthF(0)
         self.painter.setPen(pen)
         self.painter.setBrush(pen.color())
-        
+
         self.setBoundingRegionGranularity(0)
         self.cur_point = point
         self._br = QRectF(0, 0, size.width(), size.height())

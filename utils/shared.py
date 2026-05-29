@@ -1,8 +1,8 @@
-from typing import Dict
+import json
 import os
 import os.path as osp
-import json
 import sys
+from typing import Dict
 
 ICON_PATH = 'icons/icon.icns'
 
@@ -13,6 +13,7 @@ LIBS_PATH = osp.join(PROGRAM_PATH, 'data/libs')
 
 STYLESHEET_PATH = osp.join(PROGRAM_PATH, 'config/stylesheet.css')
 THEME_PATH = osp.join(PROGRAM_PATH, 'config/themes.json')
+CUSTOM_THEME_PATH = osp.join(PROGRAM_PATH, 'config/custom_themes.json')
 CONFIG_PATH = osp.join(PROGRAM_PATH, 'config/config.json')
 
 DEFAULT_TEXTSTYLE_DIR = osp.join(PROGRAM_PATH, 'config/textstyles')
@@ -24,7 +25,7 @@ CONFIG_FONTSIZE_HEADER = 18
 CONFIG_FONTSIZE_TABLE = 16
 CONFIG_FONTSIZE_CONTENT = 16
 
-CONFIG_COMBOBOX_HEIGHT = 30 
+CONFIG_COMBOBOX_HEIGHT = 30
 CONFIG_COMBOBOX_SHORT = 200
 CONFIG_COMBOBOX_MIDEAN = 332
 CONFIG_COMBOBOX_LONG = 468
@@ -112,7 +113,7 @@ CUSTOM_FONT_FAMILIES = []          # 去重后的自定义字体家族名
 ALL_FONT_FAMILIES = []             # 系统+自定义，去重合并，按字母排序
 FONT_STYLES = {}                   # 所有字体的样式映射 { FamilyName: [Style1, Style2...] }
 FONT_FAMILY_ALIAS = {}             # 规范名 -> [原始家族名列表] (用于问题4的归并)
-FONT_VARIABLE_AXES = {}            # { FamilyName: { 'wght': (min, max, default) } } 
+FONT_VARIABLE_AXES = {}            # { FamilyName: { 'wght': (min, max, default) } }
 VIRTUAL_FONT_STYLES = {}           # { FamilyName: set("Bold", "Light", ...) } 记录哪些样式是虚拟生成的
 pbar = {}
 runtime_widget_set = set()
@@ -148,7 +149,7 @@ def dump_cache():
     global cache_data
     if cache_data is None:
         return
-    
+
     cache_dir = osp.dirname(cache_path)
     if not osp.exists(cache_dir):
         os.makedirs(cache_dir)
@@ -194,16 +195,24 @@ config_name_to_view_widget = {}
 action_to_view_config_name = {}
 register_view_widget: lambda *args, **kwargs: None
 
-_themes_cache = None
+def _load_all_themes() -> dict:
+    """Return merged dict of built-in + custom themes."""
+    themes = {}
+    if osp.exists(THEME_PATH):
+        with open(THEME_PATH, 'r', encoding='utf-8') as f:
+            themes.update(json.load(f))
+    if osp.exists(CUSTOM_THEME_PATH):
+        with open(CUSTOM_THEME_PATH, 'r', encoding='utf-8') as f:
+            themes.update(json.load(f))
+    return themes
 
 def get_theme_color(var_name: str) -> str:
-    """Return a CSS variable value from the active theme in themes.json."""
-    global _themes_cache
-    if _themes_cache is None:
-        with open(THEME_PATH, 'r', encoding='utf-8') as f:
-            _themes_cache = json.load(f)
+    """Return a CSS variable value from the active theme."""
     from utils.config import pcfg
-    theme_name = 'eva-dark' if pcfg.darkmode else 'eva-light'
-    if theme_name not in _themes_cache:
-        theme_name = list(_themes_cache.keys())[0]
-    return _themes_cache[theme_name].get(var_name, '#888')
+    theme_name = pcfg.dark_theme if pcfg.darkmode else pcfg.light_theme
+    themes = _load_all_themes()
+    if theme_name not in themes:
+        theme_name = 'eva-dark' if pcfg.darkmode else 'eva-light'
+    if theme_name not in themes:
+        theme_name = list(themes.keys())[0]
+    return themes[theme_name].get(var_name, '#888')

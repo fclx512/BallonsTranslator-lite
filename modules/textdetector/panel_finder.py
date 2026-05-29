@@ -1,6 +1,6 @@
 """
 Finds panel order for manga page.
->> python .\modules\textdetector\panel_finder.py <path-to-images>
+>> python .\\modules\textdetector\\panel_finder.py <path-to-images>
 """
 import json
 import sys

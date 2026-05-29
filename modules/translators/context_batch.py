@@ -12,15 +12,15 @@ import json
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
 import httpx
 import openai
 from pydantic import BaseModel, Field, ValidationError
 
 if TYPE_CHECKING:
-    from utils.textblock import TextBlock
     from utils.proj_imgtrans import ProjImgTrans
+    from utils.textblock import TextBlock
 
 from utils.config import pcfg
 

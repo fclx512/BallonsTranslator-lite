@@ -1,14 +1,21 @@
-import numpy as np
-import cv2
-from typing import Dict, List
 from collections import OrderedDict
-import sys
+from typing import List
 
+import cv2
+import numpy as np
+
+from utils.imgproc_utils import enlarge_window
 from utils.registry import Registry
 from utils.textblock_mask import extract_ballon_mask
-from utils.imgproc_utils import enlarge_window, smart_resize
 
-from ..base import BaseModule, DEFAULT_DEVICE, soft_empty_cache, DEVICE_SELECTOR, GPUINTENSIVE_SET, TORCH_DTYPE_MAP, BF16_SUPPORTED
+from ..base import (
+    BF16_SUPPORTED,
+    DEFAULT_DEVICE,
+    DEVICE_SELECTOR,
+    TORCH_DTYPE_MAP,
+    BaseModule,
+    soft_empty_cache,
+)
 from ..textdetector import TextBlock
 
 INPAINTERS = Registry('inpainters')
@@ -54,7 +61,7 @@ class InpainterBase(BaseModule):
             if INPAINTERS.module_dict[key] == self.__class__:
                 self.name = key
                 break
-    
+
     def memory_safe_inpaint(self, img: np.ndarray, mask: np.ndarray, textblock_list: List[TextBlock] = None) -> np.ndarray:
         '''
         handle cuda out of memory
@@ -82,10 +89,10 @@ class InpainterBase(BaseModule):
                 raise e
 
     def inpaint(self, img: np.ndarray, mask: np.ndarray, textblock_list: List[TextBlock] = None, check_need_inpaint: bool = False) -> np.ndarray:
-        
+
         if not self.all_model_loaded():
             self.load_model()
-        
+
         # Handle RGBA images by preserving alpha channel
         original_alpha = None
         if len(img.shape) == 3 and img.shape[2] == 4:
@@ -93,7 +100,7 @@ class InpainterBase(BaseModule):
             img_rgb = img[:, :, :3]  # Use only RGB for inpainting
         else:
             img_rgb = img
-        
+
         if not self.inpaint_by_block or textblock_list is None:
             if check_need_inpaint:
                 ballon_msk, non_text_msk = extract_ballon_mask(img_rgb, mask)
@@ -120,10 +127,10 @@ class InpainterBase(BaseModule):
         else:
             im_h, im_w = img_rgb.shape[:2]
             inpainted = np.copy(img_rgb)
-            
+
             # Preserve original mask for transparency analysis
             original_mask = mask.copy()
-            
+
             for blk in textblock_list:
                 xyxy = blk.xyxy
                 xyxy_e = enlarge_window(xyxy, im_w, im_h, ratio=1.7)
@@ -146,12 +153,12 @@ class InpainterBase(BaseModule):
                         # cv2.imshow('ballon', ballon_msk)
                         # cv2.imshow('non_text', non_text_msk)
                         # cv2.waitKey(0)
-                
+
                 if need_inpaint:
                     inpainted[xyxy_e[1]:xyxy_e[3], xyxy_e[0]:xyxy_e[2]] = self.memory_safe_inpaint(im, msk)
 
                 mask[xyxy[1]:xyxy[3], xyxy[0]:xyxy[2]] = 0
-            
+
             # Recombine with alpha if original was RGBA
             if original_alpha is not None:
                 result_alpha = inpaint_handle_alpha_channel(original_alpha, original_mask)
@@ -160,7 +167,7 @@ class InpainterBase(BaseModule):
 
     def _inpaint(self, img: np.ndarray, mask: np.ndarray, textblock_list: List[TextBlock] = None) -> np.ndarray:
         raise NotImplementedError
-    
+
     def moveToDevice(self, device: str, precision: str = None):
         raise not NotImplementedError
 
@@ -171,6 +178,7 @@ except ImportError:
     torch = None
 if torch is not None:
     from utils.imgproc_utils import resize_keepasp
+
     from .aot import AOTGenerator, load_aot_model
 
 
@@ -207,7 +215,7 @@ if torch is not None:
             self.device = self.params['device']['value']
             self.inpaint_size = int(self.params['inpaint_size']['value'])
             self.model: AOTGenerator = None
-        
+
         def _load_model(self):
             AOTMODEL_PATH = 'data/models/aot_inpainter.ckpt'
             self.model = load_aot_model(AOTMODEL_PATH, self.device)
@@ -262,7 +270,7 @@ if torch is not None:
             if new_shape[0] != im_h or new_shape[1] != im_w :
                 img_inpainted = cv2.resize(img_inpainted, (im_w, im_h), interpolation = cv2.INTER_LINEAR)
             img_inpainted = img_inpainted * mask_original + img_original * (1 - mask_original)
-        
+
             return img_inpainted
 
         def updateParam(self, param_key: str, param_content):
@@ -353,7 +361,7 @@ if torch is not None:
 
             im_h, im_w = img.shape[:2]
             img_torch, mask_torch, rel_pos, direct, img_original, mask_original, pad_bottom, pad_right = self.inpaint_preprocess(img, mask)
-        
+
             precision = TORCH_DTYPE_MAP[self.precision]
             if self.device in {'cuda'}:
                 try:
@@ -376,7 +384,7 @@ if torch is not None:
             if new_shape[0] != im_h or new_shape[1] != im_w :
                 img_inpainted = cv2.resize(img_inpainted, (im_w, im_h), interpolation = cv2.INTER_LINEAR)
             img_inpainted = img_inpainted * mask_original + img_original * (1 - mask_original)
-        
+
             return img_inpainted
 
         def updateParam(self, param_key: str, param_content):

@@ -1,5 +1,5 @@
-from qtpy.QtWidgets import QWidget, QFrame
 from qtpy.QtCore import Qt
+from qtpy.QtWidgets import QFrame, QWidget
 
 
 class Widget(QWidget):

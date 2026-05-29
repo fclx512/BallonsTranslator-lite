@@ -1,4 +1,5 @@
-import cv2, os, time
+
+import cv2
 import numpy as np
 
 
@@ -22,7 +23,7 @@ def sw_calculator(mask, canny_img, gradient_x, gradient_y, show_process=False):
 
     cur_pnt_ind = 0
     ray_list = []
-    
+
     while cur_pnt_ind < total_pnt_num:
         start_x, start_y = pnts[1][cur_pnt_ind], pnts[0][cur_pnt_ind]
         ray_arr = [start_x, start_y, -1, -1, -1]
@@ -49,7 +50,7 @@ def sw_calculator(mask, canny_img, gradient_x, gradient_y, show_process=False):
             if ray_arr[2] != -1:
                 ray_list.append(ray_arr)
                 if show_process:
-                    drawborder = cv2.arrowedLine(drawborder, (ray_arr[0], ray_arr[1]), (ray_arr[2], ray_arr[3]), 
+                    drawborder = cv2.arrowedLine(drawborder, (ray_arr[0], ray_arr[1]), (ray_arr[2], ray_arr[3]),
                                                     (0, 255, 0), 1)
 
         cur_pnt_ind += sample_step
@@ -64,11 +65,11 @@ def sw_calculator(mask, canny_img, gradient_x, gradient_y, show_process=False):
 def strokewidth_check(text_mask, labels, num_labels, stats, debug_type=0):
     rays_width = []
     height, width = text_mask.shape[0], text_mask.shape[1]
-    
+
     blur_img = cv2.dilate(text_mask ,(3,3),cv2.BORDER_DEFAULT)
-    
+
     # canny_img = cv2.Canny(cv2.dilate(text_mask, (3,3), 1), 170, 320, L2gradient=True, apertureSize=3)
-    
+
     _, canny_img = cv2.threshold(text_mask, 1, 255, cv2.THRESH_OTSU+cv2.THRESH_BINARY)
     blur2 = blur_img.astype(float) / 255
     gradient_x = cv2.Scharr(blur2, ddepth=-1, dx=1, dy=0)
@@ -97,7 +98,7 @@ def strokewidth_check(text_mask, labels, num_labels, stats, debug_type=0):
             if len(ray_list) != 0:
                 ray_list.sort(key=lambda x: x[4])
                 rays_width.append([int(lab), ray_list[int(len(ray_list)/2)][4]])
-    
+
     if len(rays_width) != 0:
         rays_width = np.array(rays_width)
         mean_width = np.mean(rays_width[:, 1])

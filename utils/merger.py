@@ -4,9 +4,8 @@
 用于合并相邻的文本框区域
 """
 
-import os
-import json
 import copy
+import json
 import math
 
 
@@ -52,7 +51,7 @@ def get_bounding_box(shape):
         xyxy = shape['xyxy']
         if len(xyxy) == 4:
             return [float(xyxy[0]), float(xyxy[1]), float(xyxy[2]), float(xyxy[3])]
-    
+
     # 备用：从 lines 计算
     if 'lines' in shape and len(shape['lines']) > 0:
         # lines 是双层嵌套: [[[x1,y1], [x2,y2], ...]]
@@ -61,7 +60,7 @@ def get_bounding_box(shape):
             x_coords = [float(p[0]) for p in points]
             y_coords = [float(p[1]) for p in points]
             return [min(x_coords), min(y_coords), max(x_coords), max(y_coords)]
-    
+
     return [0, 0, 0, 0]
 
 
@@ -116,14 +115,14 @@ def get_mabr_from_points(points):
 
         if area < min_area:
             min_area = area
-            
+
             angle_radians = math.atan2(axis[1], axis[0])
             if angle_radians < 0:
                 angle_radians += 2 * math.pi
 
             x_c_rot = min_proj_axis + width / 2
             y_c_rot = min_proj_perp + height / 2
-            
+
             center_orig_x = x_c_rot * math.cos(angle_radians) - y_c_rot * math.sin(angle_radians)
             center_orig_y = x_c_rot * math.sin(angle_radians) + y_c_rot * math.cos(angle_radians)
 
@@ -232,14 +231,14 @@ def can_merge_shapes(shape1, shape2, mode, config):
     label1 = shape1.get('label', '')
     label2 = shape2.get('label', '')
     debug = config.get("ADVANCED_MERGE_OPTIONS", {}).get("debug_mode", False)
-    
+
     if not can_labels_merge(label1, label2, config):
         if debug:
             print(f"  ✗ 标签不匹配: '{label1}' vs '{label2}'")
         return False
 
     box1, box2 = get_bounding_box(shape1), get_bounding_box(shape2)
-    
+
     if debug:
         print(f"\n  检查: '{label1}' [{box1[0]:.0f},{box1[1]:.0f},{box1[2]:.0f},{box1[3]:.0f}] <-> '{label2}' [{box2[0]:.0f},{box2[1]:.0f},{box2[2]:.0f},{box2[3]:.0f}]")
 
@@ -258,7 +257,7 @@ def can_merge_shapes(shape1, shape2, mode, config):
 
 def perform_merge(shapes, mode, config):
     debug = config.get("ADVANCED_MERGE_OPTIONS", {}).get("debug_mode", False)
-    
+
     shapes = [shape for shape in shapes if shape is not None]
 
     # BallonsTranslator 没有 shape_type 字段，不需要过滤
@@ -270,7 +269,7 @@ def perform_merge(shapes, mode, config):
         print(f"标签统计: {dict((label, sum(1 for s in shapes if s.get('label')==label)) for label in set(s.get('label') for s in shapes))}")
 
     parent = list(range(len(shapes)))
-    
+
     def find(i):
         if parent[i] == i:
             return i
@@ -294,7 +293,7 @@ def perform_merge(shapes, mode, config):
                     merge_pair_count += 1
                     if debug:
                         print(f"  ✓ 合并: 框{i} + 框{j}")
-    
+
     if debug:
         print(f"共找到 {merge_pair_count} 对可合并的框")
 
@@ -308,14 +307,14 @@ def perform_merge(shapes, mode, config):
     final_shapes = []
     total_merge_count = 0
     output_shape_type = config.get("OUTPUT_SHAPE_TYPE", "rectangle")
-    
+
     for root_index in groups:
         indices = groups[root_index]
         if len(indices) == 1:
             final_shapes.append(shapes[indices[0]])
         else:
             group_shapes = [shapes[i] for i in indices]
-            
+
             final_label = ''
             if group_shapes:
                 temp_label = group_shapes[0].get('label', '')
@@ -342,7 +341,7 @@ def perform_merge(shapes, mode, config):
                     text = ''.join(text)
                 if text:
                     final_description += str(text).strip()
-            
+
             # 获取所有点 - 从 lines 或 xyxy
             all_points = []
             for shape in group_shapes:
@@ -351,15 +350,15 @@ def perform_merge(shapes, mode, config):
                     all_points.extend(points)
                 elif 'xyxy' in shape:
                     xyxy = shape['xyxy']
-                    all_points.extend([[xyxy[0], xyxy[1]], [xyxy[2], xyxy[1]], 
+                    all_points.extend([[xyxy[0], xyxy[1]], [xyxy[2], xyxy[1]],
                                       [xyxy[2], xyxy[3]], [xyxy[0], xyxy[3]]])
-            
+
             if not all_points:
                 continue
 
             merged_shape = copy.deepcopy(group_shapes[0])
             merged_shape['label'] = final_label
-            
+
             # BallonsTranslator 使用 text 字段（数组格式）
             merged_shape['text'] = [final_description] if final_description else []
 
@@ -373,7 +372,7 @@ def perform_merge(shapes, mode, config):
                 all_same_direction = all(s.get('direction') == first_direction for s in group_shapes)
 
                 center_x, center_y, width, height, mab_angle_radians = get_mabr_from_points(all_points)
-                
+
                 final_angle = mab_angle_radians
                 if all_same_direction:
                     final_angle = first_direction if first_direction is not None else 0
@@ -395,19 +394,19 @@ def perform_merge(shapes, mode, config):
                 merged_shape['direction'] = final_angle
             else:
                 # 矩形格式
-                rect_points = [[merged_box[0], merged_box[1]], [merged_box[2], merged_box[1]], 
+                rect_points = [[merged_box[0], merged_box[1]], [merged_box[2], merged_box[1]],
                               [merged_box[2], merged_box[3]], [merged_box[0], merged_box[3]]]
-                
+
                 # 更新坐标 - BallonsTranslator 格式
                 merged_shape['xyxy'] = merged_box
                 merged_shape['lines'] = [rect_points]
-                merged_shape['_bounding_rect'] = [merged_box[0], merged_box[1], 
-                                                   merged_box[2] - merged_box[0], 
+                merged_shape['_bounding_rect'] = [merged_box[0], merged_box[1],
+                                                   merged_box[2] - merged_box[0],
                                                    merged_box[3] - merged_box[1]]
-                
+
                 if 'direction' in merged_shape:
                     merged_shape.pop('direction', None)
-            
+
             final_shapes.append(merged_shape)
             total_merge_count += len(group_shapes) - 1
 
@@ -420,7 +419,7 @@ def process_file(file_path, config):
     仅支持 BallonsTranslator 格式
     """
     debug = config.get("ADVANCED_MERGE_OPTIONS", {}).get("debug_mode", False)
-    
+
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -429,46 +428,46 @@ def process_file(file_path, config):
 
     if 'pages' not in data:
         return False, "不是 BallonsTranslator 格式的 JSON 文件"
-    
+
     # 从配置中获取当前图片名（由主窗口传递）
     img_name = config.get("CURRENT_IMAGE_NAME", None)
-    
+
     if debug:
         print(f"\n{'='*60}")
         print(f"处理文件: {file_path}")
         print(f"当前图片: {img_name}")
         print(f"pages 中的图片数量: {len(data['pages'])}")
-    
+
     # 如果没有指定图片名，尝试从文件路径推断
     if not img_name:
         import os.path as osp
         json_basename = osp.basename(file_path)
         img_name = osp.splitext(json_basename)[0] + '.jpg'
-        
+
         if img_name not in data['pages']:
             for ext in ['.png', '.jpeg', '.webp', '.bmp']:
                 test_name = osp.splitext(json_basename)[0] + ext
                 if test_name in data['pages']:
                     img_name = test_name
                     break
-    
+
     if img_name not in data['pages']:
         available = list(data['pages'].keys())[:5]
         return False, f"在 pages 中找不到图片: {img_name}\n\n可用的图片:\n" + "\n".join(available)
-    
+
     initial_shapes = copy.deepcopy(data['pages'][img_name])
     if not initial_shapes:
         return False, "文件中无标注框"
-    
+
     initial_count = len(initial_shapes)
-    
+
     if debug:
         print(f"找到 {initial_count} 个文本框")
-        print(f"前3个框的信息:")
+        print("前3个框的信息:")
         for i, shape in enumerate(initial_shapes[:3]):
             print(f"  框{i+1}: label={shape.get('label')}, xyxy={shape.get('xyxy')}")
         print(f"{'='*60}\n")
-    
+
     mode = config.get("MERGE_MODE", "NONE")
     if mode == "NONE":
         return False, "合并模式为NONE"
@@ -500,8 +499,8 @@ def process_file(file_path, config):
             "HORIZONTAL_THEN_VERTICAL": "先水平后垂直"
         }
         mode_cn = mode_names.get(mode, mode)
-        
-        debug_info = f"未发生任何合并。\n"
+
+        debug_info = "未发生任何合并。\n"
         debug_info += f"共有 {len(initial_shapes)} 个文本框。\n"
         if len(initial_shapes) > 0:
             labels = set(s.get('label', '') for s in initial_shapes)
@@ -511,7 +510,7 @@ def process_file(file_path, config):
 
     # 写回数据
     data['pages'][img_name] = final_shapes
-    
+
     try:
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)

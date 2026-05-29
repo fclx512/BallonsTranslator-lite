@@ -1,9 +1,11 @@
-from typing import List
-import numpy as np
 from copy import deepcopy
+from typing import List
 
-from .base import DEVICE_SELECTOR, OCRBase, register_OCR, TextBlock
+import numpy as np
+
 from utils.textblock import collect_textblock_regions
+
+from .base import DEVICE_SELECTOR, OCRBase, TextBlock, register_OCR
 
 mit_params = {
     'chunk_size': {
@@ -44,6 +46,8 @@ class MITModels(OCRBase):
 
 
 from .mit48px_ctc import OCR48pxCTC
+
+
 @register_OCR('mit48px_ctc')
 class OCRMIT48pxCTC(MITModels):
 

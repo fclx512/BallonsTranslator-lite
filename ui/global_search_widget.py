@@ -1,20 +1,44 @@
-from typing import List, Union, Tuple, Dict
-import re, time
+import re
+from typing import List, Tuple
 
-from qtpy.QtWidgets import QHBoxLayout, QSizePolicy, QComboBox, QStyledItemDelegate, QLabel, QTreeView, QCheckBox, QStyleOptionViewItem, QVBoxLayout, QStyle, QMessageBox, QStyle,  QApplication, QWidget
-from qtpy.QtCore import Qt, QItemSelection, QSize, Signal, QUrl, QModelIndex, QRectF
-from qtpy.QtGui import QFont, QPainter, QTextCursor, QStandardItemModel, QStandardItem, QAbstractTextDocumentLayout, QColor, QPalette, QTextDocument, QTextCharFormat
+from qtpy.QtCore import QItemSelection, QRectF, QSize, Qt, Signal
+from qtpy.QtGui import (
+    QAbstractTextDocumentLayout,
+    QColor,
+    QFont,
+    QPalette,
+    QStandardItem,
+    QStandardItemModel,
+    QTextCharFormat,
+    QTextCursor,
+    QTextDocument,
+)
+from qtpy.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QSizePolicy,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QTreeView,
+    QVBoxLayout,
+    QWidget,
+)
 
-from utils.logger import logger as LOGGER
-from .page_search_widget import SearchEditor, HighlightMatched, _search_highlight_color
-from .misc import doc_replace
-from utils.config import pcfg
-from .custom_widget import ProgressMessageBox, Widget, NoBorderPushBtn
-from .textitem import TextBlkItem, TextBlock
-from .textedit_area import TransPairWidget, SourceTextEdit
-from .io_thread import ThreadBase
 from utils import shared as C
+from utils.config import pcfg
 from utils.proj_imgtrans import ProjImgTrans
+
+from .custom_widget import NoBorderPushBtn, ProgressMessageBox, Widget
+from .io_thread import ThreadBase
+from .misc import doc_replace
+from .page_search_widget import HighlightMatched, SearchEditor, _search_highlight_color
+from .textedit_area import SourceTextEdit, TransPairWidget
+from .textitem import TextBlkItem, TextBlock
 
 SEARCHRST_FONTSIZE = 10.3
 
@@ -24,16 +48,16 @@ class HTMLDelegate( QStyledItemDelegate ):
         self.doc = QTextDocument()
         self.doc.setUndoRedoEnabled(False)
 
-    def paint(self, painter, option, index):                                                                                                                                                                               
-        
+    def paint(self, painter, option, index):
+
         options = QStyleOptionViewItem(option)
         self.initStyleOption(options, index)
         painter.save()
         self.doc.setDefaultFont(options.font)
         self.doc.setHtml(options.text)
-        
+
         options.text = ''
-        
+
         painter.translate(options.rect.left(), options.rect.top())
 
         clip = QRectF(0, 0, options.rect.width(), options.rect.height())
@@ -153,7 +177,7 @@ class SearchResultTree(QTreeView):
 
     def selectionChanged(self, selected: QItemSelection, deselected: QItemSelection) -> None:
         selected_indexes = selected.indexes()
-        if len(selected_indexes) > 0: 
+        if len(selected_indexes) > 0:
             sel: SearchResultItem = self.sm.itemFromIndex(selected_indexes[0])
             if isinstance(sel, SearchResultItem):
                 self.result_item_clicked.emit(sel.pagename, sel.blk_idx, sel.is_src, sel.start, sel.end)
@@ -171,7 +195,7 @@ class SearchResultTree(QTreeView):
 
     def rowCount(self):
         return self.root_item.rowCount()
-        
+
 
 class GlobalReplaceThead(ThreadBase):
 
@@ -208,7 +232,7 @@ class GlobalReplaceThead(ThreadBase):
         sceneitem_list = {'src': [], 'trans': []}
         background_list = {'src': [], 'trans': []}
         self.target_text = target
-        
+
         for ii in range(row_count):
             page_rst_item: PageSeachResultItem = self.srt.sm.item(ii, 0)
             self.progress_bar.updateTaskProgress(int(ii / row_count * 100))
@@ -216,32 +240,32 @@ class GlobalReplaceThead(ThreadBase):
                 for idx in page_rst_item.blkid2match['src']:
                     src = self.pairwidget_list[idx].e_source
                     sceneitem_list['src'].append({
-                        'edit': src, 
+                        'edit': src,
                         'replace': self.searched_pattern.sub(target, src.toPlainText())
                     })
                 for idx, rstitem_list in page_rst_item.blkid2match['trans'].items():
                     edit = self.pairwidget_list[idx].e_trans
                     item = self.textblk_item_list[idx]
-                    
+
                     sceneitem_list['trans'].append({
-                        'edit': edit, 
+                        'edit': edit,
                         'item': item,
                         'matched_map': [[rstitem.start, rstitem.end] for rstitem in rstitem_list]
                     })
-                    
+
             else:
                 for idx in page_rst_item.blkid2match['src']:
                     blk: TextBlock = self.proj.pages[page_rst_item.pagename][idx]
                     text = blk.get_text()
                     replace = self.searched_pattern.sub(target, text)
                     background_list['src'].append({
-                        'ori': text, 
+                        'ori': text,
                         'replace': replace,
                         'pagename': page_rst_item.pagename,
                         'idx': idx
                     })
                     blk.text = replace
-                
+
                 for idx, rstitem_list in page_rst_item.blkid2match['trans'].items():
                     blk: TextBlock = self.proj.pages[page_rst_item.pagename][idx]
                     ori = blk.translation
@@ -260,7 +284,7 @@ class GlobalReplaceThead(ThreadBase):
                     blk.translation = replace
                     blk.rich_text = replace_html
                     background_list['trans'].append({
-                        'ori': ori, 
+                        'ori': ori,
                         'replace': replace,
                         'ori_html': ori_html,
                         'replace_html': replace_html,
@@ -304,7 +328,7 @@ class GlobalSearchWidget(Widget):
         self.search_editor = SearchEditor(self, commit_latency=-1)
         self.search_editor.setPlaceholderText(self.tr('Find'))
         self.search_editor.enter_pressed.connect(self.commit_search)
-        
+
         self.no_result_str = self.tr('No results found. ')
         self.doc_edited_str = self.tr('Document changed. Press Enter to re-search.')
         self.search_rst_str = self.tr('Found results: ')
@@ -361,7 +385,7 @@ class GlobalSearchWidget(Widget):
         hlayout_bar1 = QHBoxLayout()
         hlayout_bar1.addLayout(hlayout_bar1_0)
         hlayout_bar1.addLayout(hlayout_bar1_1)
-        
+
         hlayout_bar2 = QHBoxLayout()
         hlayout_bar2.addWidget(self.replace_editor)
         hlayout_bar2.addWidget(self.range_label)
@@ -417,8 +441,8 @@ class GlobalSearchWidget(Widget):
             regexr = re.escape(regexr)
         if self.whole_word_toggle.isChecked():
             regexr = r'\b' + target_text + r'\b'
-        
-        try: 
+
+        try:
             return re.compile(regexr, flag)
         except re.error:
             return None
@@ -435,14 +459,14 @@ class GlobalSearchWidget(Widget):
 
         match_src = self.range_combobox.currentIndex() != 0
         match_trans = self.range_combobox.currentIndex() != 1
-        
+
         for pagename, page in self.imgtrans_proj.pages.items():
             page_match_counter = 0
             page_rstitem_list = []
             blkid2match = {'src': {}, 'trans': {}}
             blk: TextBlock
             for ii, blk in enumerate(page):
-                if match_src: 
+                if match_src:
                     rst_span_list, match_counter = match_blk(pattern, blk, match_src=True)
                     if match_counter > 0:
                         rstitem_list = gen_searchitem_list(rst_span_list, blk.get_text(), ii, pagename, is_src=True)
@@ -485,7 +509,7 @@ class GlobalSearchWidget(Widget):
 
         msg = QMessageBox()
         msg.setText(self.tr('Replace all occurrences re-render all pages? It can\'t be undone.'))
-        
+
         msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         ret = msg.exec_()
         if ret == QMessageBox.StandardButton.No:

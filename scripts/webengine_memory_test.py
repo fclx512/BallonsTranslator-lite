@@ -6,9 +6,8 @@ Run: python scripts/webengine_memory_test.py
 Close the window to see the memory report.
 """
 
-import sys
 import os
-import time
+import sys
 
 # ── Memory measurement ──────────────────────────────────────────────
 
@@ -130,9 +129,9 @@ CHAT_HTML = """<!DOCTYPE html>
 
 
 def main():
-    from qtpy.QtWidgets import QApplication
+    from qtpy.QtCore import QTimer
     from qtpy.QtWebEngineWidgets import QWebEngineView
-    from qtpy.QtCore import QTimer, Qt
+    from qtpy.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
 

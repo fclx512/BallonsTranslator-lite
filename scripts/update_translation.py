@@ -3,6 +3,7 @@ import os.path as osp
 from glob import glob
 
 from qtpy.QtCore import QLocale
+
 SYSLANG = QLocale.system().name()
 
 if __name__ == '__main__':
@@ -13,7 +14,7 @@ if __name__ == '__main__':
     cmd = 'pylupdate5 -verbose '+ \
           ' '.join(glob(osp.join(program_dir, 'ui/*.py'))) + \
           ' -ts ' + translate_path
-    
+
     print('target language: ', SYSLANG)
     os.system(cmd)
     print(f'Saved to {translate_path}')

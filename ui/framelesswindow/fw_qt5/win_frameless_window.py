@@ -1,19 +1,17 @@
 # coding:utf-8
-import sys
 from ctypes import cast
 from ctypes.wintypes import LPRECT, MSG
-from platform import platform
 
 import win32api
 import win32con
 import win32gui
-from qtpy.QtCore import Qt, QSize, QRect
-from qtpy.QtGui import QCloseEvent, QCursor
-from qtpy.QtWidgets import QApplication, QWidget, QMainWindow
+from qtpy.QtCore import QRect, QSize, Qt
+from qtpy.QtGui import QCloseEvent
+from qtpy.QtWidgets import QApplication, QWidget
 
 # from ..titlebar import TitleBar
 from .. import win32_utils as win_utils
-from ..win32_utils import Taskbar, isSystemBorderAccentEnabled, getSystemAccentColor
+from ..win32_utils import Taskbar, getSystemAccentColor, isSystemBorderAccentEnabled
 from ..win_c_structures import LPNCCALCSIZE_PARAMS
 from ..win_window_effect import WindowsWindowEffect
 

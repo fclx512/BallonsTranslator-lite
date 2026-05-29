@@ -12,17 +12,16 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import os.path as osp
-import re
 from typing import Any, Callable, Dict, List, Optional, Set
 
-from qtpy.QtCore import QObject, Signal, Qt
+from qtpy.QtCore import QObject, Qt, Signal
 
 logger = logging.getLogger('ai_chat')
 
 # Ensure ai_chat logger is configured with file + console handlers
 import utils.ai_logger  # noqa: F401 — triggers get_ai_logger() on import
+from ui.ai_chat_model import ChangeItem, ChatMessage, estimate_tokens
 
 from .ai_tools import (
     build_agent_system_prompt,
@@ -34,8 +33,7 @@ from .ai_tools import (
     parse_tool_calls,
 )
 from .config import pcfg
-from .proj_compact import FIELD_PROMPT_SNIPPETS, parse_block_id, _COMPACT_DEF
-from ui.ai_chat_model import ChatMessage, ChangeItem, estimate_tokens
+from .proj_compact import _COMPACT_DEF, parse_block_id
 
 MAX_TOOL_TURNS = 10
 
@@ -662,6 +660,7 @@ class AiController(QObject):
         tool_turns_left: int,
     ):
         from ui.ai_chat_worker import AiChatWorker
+
         from .ai_tools import to_openai_tools
         prompt_tokens = estimate_tokens(json.dumps(messages, ensure_ascii=False))
         logger.info(

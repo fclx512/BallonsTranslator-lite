@@ -1,14 +1,16 @@
-from typing import List, Callable, Dict
 import copy
+from typing import Callable, Dict, List
 
 from qtpy.QtGui import QFont
+
 try:
     from qtpy.QtWidgets import QUndoCommand
 except:
     from qtpy.QtGui import QUndoCommand
 
-from . import shared_widget as SW
 from utils.fontformat import FontFormat, px2pt
+
+from . import shared_widget as SW
 from .textitem import TextBlkItem
 
 global_default_set_kwargs = dict(set_selected=False, restore_cursor=False)
@@ -68,7 +70,7 @@ def font_formating(push_undostack: bool = False, is_property = True):
                 if not SW.canvas.hasFocus():
                     SW.canvas.setFocus()
         return wrapper
-    
+
     return func_wrapper
 
 @font_formating()

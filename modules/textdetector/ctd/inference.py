@@ -1,34 +1,47 @@
 import json
-from .basemodel import TextDetBase, TextDetBaseDNN
 import os.path as osp
-from tqdm import tqdm
-import numpy as np
+
 import cv2
+import numpy as np
+from tqdm import tqdm
+
+from .basemodel import TextDetBase, TextDetBaseDNN
+
 try:
     import torch
 except ImportError:
     raise ImportError("PyTorch not available")
 from pathlib import Path
+from typing import Callable, List, Tuple, Union
+
 import einops
 
-from utils.io_utils import find_all_imgs, NumpyEncoder
-from utils.imgproc_utils import letterbox, xyxy2yolo, get_yololabel_strings, square_pad_resize
+from utils.imgproc_utils import (
+    get_yololabel_strings,
+    letterbox,
+    square_pad_resize,
+    xyxy2yolo,
+)
+from utils.io_utils import NumpyEncoder, find_all_imgs
+from utils.textblock import TextBlock, group_output
 
-from ..yolov5.yolov5_utils import non_max_suppression
 from ..db_utils import SegDetectorRepresenter
-from utils.textblock import TextBlock, group_output, mit_merge_textlines
-from .textmask import refine_mask, refine_undetected_mask, REFINEMASK_INPAINT, REFINEMASK_ANNOTATION
-from pathlib import Path
-from typing import Union, List, Tuple, Callable
+from ..yolov5.yolov5_utils import non_max_suppression
+from .textmask import (
+    REFINEMASK_ANNOTATION,
+    REFINEMASK_INPAINT,
+    refine_mask,
+    refine_undetected_mask,
+)
 
 CTD_MODEL_PATH = r'data/models/comictextdetector.pt'
 
 def det_rearrange_forward(
-    img: np.ndarray, 
-    dbnet_batch_forward: Callable[[np.ndarray, str], Tuple[np.ndarray, np.ndarray]], 
-    tgt_size: int = 1280, 
-    max_batch_size: int = 4, 
-    device='cuda', 
+    img: np.ndarray,
+    dbnet_batch_forward: Callable[[np.ndarray, str], Tuple[np.ndarray, np.ndarray]],
+    tgt_size: int = 1280,
+    max_batch_size: int = 4,
+    device='cuda',
     crop_as_square=False, verbose=False):
     '''
     Rearrange image to square batches before feeding into network if following conditions are satisfied: \n
@@ -73,7 +86,7 @@ def det_rearrange_forward(
             patch_lst = einops.rearrange(patch_lst, '(p_num pw_num) ph pw c -> p_num (pw_num pw) ph c', p_num=p_num)
         else:
             patch_lst = einops.rearrange(patch_lst, '(p_num pw_num) ph pw c -> p_num ph (pw_num pw) c', p_num=p_num)
-        
+
         batches = [[]]
         for ii, patch in enumerate(patch_lst):
 
@@ -103,12 +116,12 @@ def det_rearrange_forward(
         return None, None
 
     if verbose:
-        print(f'Input image will be rearranged to square batches before fed into network.\
+        print('Input image will be rearranged to square batches before fed into network.\
             \n Rearranged batches will be saved to result/rearrange_%d.png')
 
     if transpose:
         img = einops.rearrange(img, 'h w c -> w h c')
-    
+
     if crop_as_square:
         pw_num = 1
     else:
@@ -158,7 +171,7 @@ def model2annotations(model_path, img_dir_list, save_dir, save_json=False):
         img_dir_list = [img_dir_list]
     cuda = torch.cuda.is_available()
     device = 'cuda' if cuda else 'cpu'
-    model = TextDetector(model_path=model_path, detect_size=1024, device=device, act='leaky')  
+    model = TextDetector(model_path=model_path, detect_size=1024, device=device, act='leaky')
     imglist = []
     for img_dir in img_dir_list:
         imglist += find_all_imgs(img_dir, abs_path=True)
@@ -209,7 +222,7 @@ def model2annotations(model_path, img_dir_list, save_dir, save_json=False):
 def preprocess_img(img, detect_size=(1024, 1024), device='cpu', bgr2rgb=True, half=False, to_tensor=True):
     if isinstance(detect_size, int):
         detect_size = (detect_size, detect_size)
-    
+
     if bgr2rgb:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img_in, ratio, (dw, dh) = letterbox(img, new_shape=detect_size, auto=False, stride=64)
@@ -262,7 +275,7 @@ class TextDetector:
 
         self.net: Union[TextDetBase, TextDetBaseDNN] = None
         self.backend: str = None
-        
+
         self.detect_size = detect_size
         self.device = device
         self.half = half
@@ -292,7 +305,7 @@ class TextDetector:
         self.load_model(model_path)
 
     def det_batch_forward_ctd(self, batch: np.ndarray, device: str) -> Tuple[np.ndarray, np.ndarray]:
-        
+
         if isinstance(self.net, TextDetBase):
             batch = einops.rearrange(batch.astype(np.float32) / 255., 'n h w c -> n c h w')
             batch = torch.from_numpy(batch).to(device)
@@ -316,7 +329,7 @@ class TextDetector:
 
     @torch.no_grad()
     def __call__(self, img, refine_mode=REFINEMASK_INPAINT, keep_undetected_mask=False) -> Tuple[np.ndarray, np.ndarray, List[TextBlock]]:
-        
+
         detect_size = self.detect_size if not self.backend == 'opencv' else 1024
         im_h, im_w = img.shape[:2]
         lines_map, mask = det_rearrange_forward(img, self.det_batch_forward_ctd, detect_size, self.det_rearrange_max_batches, self.device)

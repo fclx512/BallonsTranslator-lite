@@ -95,7 +95,7 @@ class FourierUnit(nn.Module):
                 ffted = torch.fft.rfftn(x, dim=fft_dim, norm=self.fft_norm)
             except:
                 FFT_OP_SUPPORT = False
-                print(f'FFT OP not supported with this card, try run it with cpu...')
+                print('FFT OP not supported with this card, try run it with cpu...')
         if not FFT_OP_SUPPORT:  # dont use else, it would not be the same
             ffted = torch.fft.rfftn(x.to(device='cpu', dtype=torch.float32), dim=fft_dim, norm=self.fft_norm).to(
                 device=x.device)

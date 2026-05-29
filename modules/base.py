@@ -1,16 +1,15 @@
 import gc
-import os
-import time
-from typing import Dict, List, Callable, Union
-from copy import deepcopy
-from collections import OrderedDict
-import re
 import importlib
+import os
+import re
+import time
+from collections import OrderedDict
+from copy import deepcopy
+from typing import Callable, Dict, List, Union
 
-from utils.logger import logger as LOGGER
 from utils import shared
 from utils.lock import aquire_model_loading_lock, release_model_loading_lock
-
+from utils.logger import logger as LOGGER
 
 GPUINTENSIVE_SET = {'cuda', 'mps', 'xpu', 'privateuseone'}
 
@@ -87,7 +86,7 @@ def patch_module_params(cfg_param, module_params, module_name: str = ''):
                     except ValueError:
                         LOGGER.warning(f'Invalid param value {cparam} for defined dtype: {type(mparam)}, it will be set to default value: {mparam}')
                         cfg_param[mk] = mparam
-    
+
     cfg_key_list = [k for k in cfg_param.keys() if not k.startswith('_')]
     module_key_list = list(module_params.keys())
     if cfg_key_list != module_key_list:
@@ -177,7 +176,7 @@ class BaseModule:
         if isinstance(p, dict):
             return p['value']
         return p
-    
+
     def set_param_value(self, param_key: str, param_value, convert_dtype=True):
         assert self.params is not None and param_key in self.params
         p = self.params[param_key]
@@ -222,7 +221,7 @@ class BaseModule:
         if self.params is not None and 'device' in self.params:
             return True
         return False
-    
+
     def unload_model(self, empty_cache=False):
         model_deleted = False
         if self._load_model_keys is not None:
@@ -235,7 +234,7 @@ class BaseModule:
                         del model
                         setattr(self, k, None)
                         model_deleted = True
-    
+
         if empty_cache and model_deleted:
             soft_empty_cache()
 
@@ -258,14 +257,14 @@ class BaseModule:
             if not hasattr(self, k) or getattr(self, k) is None:
                 return False
         return True
-    
+
     def __del__(self):
         self.unload_model()
 
     @property
     def debug_mode(self):
         return shared.DEBUG
-    
+
     def flush(self, param_key: str):
         return None
 
@@ -364,7 +363,7 @@ MODULE_SCRIPTS = {
     'inpainter': {'module_dir': 'modules/inpaint', 'module_pattern': r'inpaint_(.*?).py'},
     'ocr': {'module_dir': 'modules/ocr', 'module_pattern': r'ocr_(.*?).py'},
 }
-    
+
 def init_module_registries(target_modules=None):
     def _load_module(module_dir: str, module_pattern: str):
         modules = os.listdir(module_dir)

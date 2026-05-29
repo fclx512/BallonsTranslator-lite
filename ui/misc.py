@@ -1,13 +1,16 @@
-import cv2, re, json, os
-from pathlib import Path
-import numpy as np
+import json
+import os
 import os.path as osp
-from qtpy.QtGui import QPixmap,  QColor, QImage, QTextDocument, QTextCursor
-from qtpy.QtCore import Qt, QPointF
+import re
+from pathlib import Path
+
+import cv2
+import numpy as np
+from qtpy.QtCore import QPointF, Qt
+from qtpy.QtGui import QColor, QImage, QPixmap, QTextCursor, QTextDocument
 
 from utils import shared as C
-from utils.structures import Tuple, Union, List, Dict, Config, field, nested_dataclass
-
+from utils.structures import Dict, List, Tuple, Union
 
 QKEY = Qt.Key
 QNUMERIC_KEYS = {QKEY.Key_0:0,QKEY.Key_1:1,QKEY.Key_2:2,QKEY.Key_3:3,QKEY.Key_4:4,QKEY.Key_5:5,QKEY.Key_6:6,QKEY.Key_7:7,QKEY.Key_8:8,QKEY.Key_9:9}
@@ -49,7 +52,7 @@ def pixmap2ndarray(pixmap: Union[QPixmap, QImage], keep_alpha=True):
         byte_str = byte_str.tobytes()
 
     img = np.frombuffer(byte_str, dtype=np.uint8).reshape((w,h,4)).copy()
-    
+
     if keep_alpha:
         return img
     else:
@@ -110,7 +113,7 @@ def set_html_color(html, rgb):
         return color_pattern.sub(f'color:{hex_color};', html)
     else:
         return span_pattern.sub(lambda matched: span_repl_func(matched, hex_color), html)
-    
+
 def set_html_family(html, family):
     return ffamily_pattern.sub(f'font-family:\'{family}\'', html)
 
@@ -159,17 +162,39 @@ def load_theme_dict() -> Dict:
         return json.loads(f.read())
 
 
+def load_custom_themes() -> Dict:
+    if osp.exists(C.CUSTOM_THEME_PATH):
+        with open(C.CUSTOM_THEME_PATH, 'r', encoding='utf8') as f:
+            return json.loads(f.read())
+    return {}
+
+
+def load_all_themes() -> Dict:
+    """Return merged dict of built-in + custom themes (delegates to shared)."""
+    return C._load_all_themes()
+
+
 def _resolve_theme(theme: str) -> Dict:
-    theme_dict = load_theme_dict()
-    if not theme or theme not in theme_dict:
-        return theme_dict[list(theme_dict.keys())[0]]
-    return theme_dict[theme]
+    """Resolve a theme by name. Checks custom themes first, then built-in."""
+    if not theme:
+        from utils.config import pcfg
+        theme = pcfg.dark_theme if pcfg.darkmode else pcfg.light_theme
+    custom = load_custom_themes()
+    if theme in custom:
+        return dict(custom[theme])
+    builtin = load_theme_dict()
+    if theme in builtin:
+        return dict(builtin[theme])
+    # Fallback: first available built-in theme
+    if builtin:
+        return dict(builtin[list(builtin.keys())[0]])
+    return {}
 
 
 def get_theme_color(theme_name: str = '', alpha: int = 255) -> 'QColor':
     if not theme_name:
         from utils.config import pcfg
-        theme_name = pcfg.theme_name
+        theme_name = pcfg.dark_theme if pcfg.darkmode else pcfg.light_theme
     tgt = _resolve_theme(theme_name)
     c = QColor(tgt.get('@accentPrimary', '#1e93e5'))
     if alpha != 255:
@@ -180,10 +205,19 @@ def get_theme_color(theme_name: str = '', alpha: int = 255) -> 'QColor':
 def parse_stylesheet(theme: str = '', reverse_icon: bool = False) -> str:
     if reverse_icon:
         set_icon_theme(theme)
-    with open(C.STYLESHEET_PATH, "r", encoding='utf-8') as f:
-        stylesheet = f.read()
     tgt_theme = _resolve_theme(theme)
+    return build_stylesheet_from_dict(tgt_theme)
 
+
+_stylesheet_cache = ''
+
+def build_stylesheet_from_dict(tgt_theme: Dict) -> str:
+    """Build a stylesheet string from a resolved theme dict (no disk I/O)."""
+    global _stylesheet_cache
+    if not _stylesheet_cache:
+        with open(C.STYLESHEET_PATH, "r", encoding='utf-8') as f:
+            _stylesheet_cache = f.read()
+    stylesheet = _stylesheet_cache
     C.FOREGROUND_FONTCOLOR = hex2rgb(tgt_theme['@qwidgetForegroundColor'])
     C.SLIDERHANDLE_COLOR = hex2rgb(tgt_theme['@sliderHandleColor'])
     for key, val in tgt_theme.items():
@@ -203,7 +237,7 @@ def set_icon_theme(theme_name: str = ''):
             if Path(filename).suffix.lower() == '.svg':
                 ICON_LIST.append(osp.join(ICON_DIR, filename))
 
-    theme_dict = load_theme_dict()
+    theme_dict = load_all_themes()
     tgt = _resolve_theme(theme_name)
     tgt_active = tgt.get('_iconFillActive', '')
     tgt_normal = tgt.get('_iconFill', '')
@@ -234,7 +268,7 @@ def mutate_dict_key(adict: dict, old_key: Union[str, int], new_key: str):
     key_list = list(adict.keys())
     if isinstance(old_key, int):
         old_key = key_list[old_key]
-    
+
     for key in key_list:
         value = adict.pop(key)
         adict[new_key if old_key == key else key] = value

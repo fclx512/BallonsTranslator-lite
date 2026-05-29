@@ -1,20 +1,37 @@
 import copy
-import sys
-from typing import List
 
-from qtpy.QtWidgets import QLineEdit, QSizePolicy, QHBoxLayout, QVBoxLayout, QFrame, QFontComboBox, QComboBox, QApplication, QPushButton, QLabel, QGroupBox, QCheckBox, QSlider, QStyledItemDelegate, QDialog
-from qtpy.QtCore import Signal, Qt
-from qtpy.QtGui import QFocusEvent, QMouseEvent, QTextCursor, QKeyEvent, QFont
+from qtpy.QtCore import Qt, Signal
+from qtpy.QtGui import QFocusEvent, QFont, QKeyEvent, QTextCursor
+from qtpy.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLineEdit,
+    QSizePolicy,
+    QStyledItemDelegate,
+    QVBoxLayout,
+)
 
-
-from utils import shared
 from utils import config as C
-from utils.fontformat import FontFormat, px2pt, LineSpacingType
-from .custom_widget import Widget, ColorPickerLabel, ClickableLabel, CheckableLabel, TextCheckerLabel, AlignmentChecker, QFontChecker, SizeComboBox, SizeControlLabel
-from .textitem import TextBlkItem
+from utils import shared
+from utils.fontformat import FontFormat, LineSpacingType
+
+from . import funcmaps as FM
+from .custom_widget import (
+    AlignmentChecker,
+    CheckableLabel,
+    ColorPickerLabel,
+    QFontChecker,
+    SizeComboBox,
+    SizeControlLabel,
+    TextCheckerLabel,
+    Widget,
+)
 from .text_advanced_format import TextAdvancedFormatPanel
 from .text_style_presets import TextStylePresetPanel
-from . import funcmaps as FM
+from .textitem import TextBlkItem
 
 
 class LineEdit(QLineEdit):
@@ -84,7 +101,7 @@ class AlignmentBtnGroup(QFrame):
             self.alignLeftChecker.setChecked(False)
             self.alignRightChecker.setChecked(False)
             self.param_changed.emit('alignment', 1)
-    
+
     def setAlignment(self, alignment: int):
         if alignment == 0:
             self.alignLeftChecker.setChecked(True)
@@ -127,7 +144,7 @@ class FormatGroupBtn(QFrame):
 
     def setUnderline(self):
         self.param_changed.emit('underline', self.underlineBtn.isChecked())
-    
+
 
 class FontSizeBox(QFrame):
     param_changed = Signal(str, float)
@@ -165,7 +182,7 @@ class FontFamilyComboBox(QComboBox):  # 改为继承 QComboBox
         self.emit_if_focused = emit_if_focused
         self.return_pressed = False
         self.setItemDelegate(FontItemDelegate())
-        
+
     def apply_fontfamily(self):
         ffamily = self.currentText()
         # ===== 新增：处理归并映射 =====
@@ -198,7 +215,7 @@ class FontFamilyComboBox(QComboBox):  # 改为继承 QComboBox
 
 
 class FontFormatPanel(Widget):
-    
+
     textblk_item: TextBlkItem = None
     text_cursor: QTextCursor = None
     global_format: FontFormat = None
@@ -230,7 +247,7 @@ class FontFormatPanel(Widget):
         self.fontsizebox.setObjectName("FontSizeBox")
         self.fontsizebox.fcombobox.setToolTip(self.tr("Change font size"))
         self.fontsizebox.param_changed.connect(self.on_param_changed)
-        
+
         self.lineSpacingLabel = SizeControlLabel(self, direction=1, transparent_bg=False)
         self.lineSpacingLabel.setObjectName("lineSpacingLabel")
         self.lineSpacingLabel.size_ctrl_changed.connect(self.onLineSpacingCtrlChanged)
@@ -240,7 +257,7 @@ class FontFormatPanel(Widget):
         self.lineSpacingBox.addItems(["1.0", "1.1", "1.2"])
         self.lineSpacingBox.setToolTip(self.tr("Change line spacing"))
         self.lineSpacingBox.param_changed.connect(self.on_param_changed)
-        
+
         self.colorPicker = ColorPickerLabel(self, param_name='frgb')
         self.colorPicker.setToolTip(self.tr("Change font color"))
         self.colorPicker.changingColor.connect(self.changingColor)
@@ -269,7 +286,7 @@ class FontFormatPanel(Widget):
         self.fontStrokeLabel.setFont(font)
         self.fontStrokeLabel.size_ctrl_changed.connect(self.strokeWidthBox.changeByDelta)
         self.fontStrokeLabel.btn_released.connect(lambda : self.on_param_changed('stroke_width', self.strokeWidthBox.value()))
-        
+
         self.strokeColorPicker = ColorPickerLabel(self, param_name='srgb')
         self.strokeColorPicker.setToolTip(self.tr("Change stroke color"))
         self.strokeColorPicker.changingColor.connect(self.changingColor)
@@ -396,7 +413,7 @@ class FontFormatPanel(Widget):
 
     def global_mode(self):
         return id(C.active_format) == id(self.global_format)
-    
+
     def active_text_style_label(self):
         return self.textstyle_panel.active_text_style_label
 
@@ -476,7 +493,7 @@ class FontFormatPanel(Widget):
         C.active_format = font_format
         self.familybox.blockSignals(True)
         self.stylebox.blockSignals(True)  # 新增
-        
+
         from utils.config import pcfg
         font_size = min(round(font_format.font_size, 1), pcfg.max_font_size)
         if int(font_size) == font_size:
@@ -487,7 +504,7 @@ class FontFormatPanel(Widget):
             font_size += "+"
         self.fontsizebox.fcombobox.setCurrentText(font_size)
         self.familybox.setCurrentText(font_format.font_family)
-        
+
         # 【新增】回显 Style
         styles = shared.FONT_STYLES.get(font_format.font_family, [])
         self.stylebox.clear()
@@ -508,7 +525,7 @@ class FontFormatPanel(Widget):
         self.formatBtnGroup.underlineBtn.setChecked(font_format.underline)
         self.formatBtnGroup.italicBtn.setChecked(font_format.italic)
         self.alignBtnGroup.setAlignment(font_format.alignment)
-        
+
         self.familybox.blockSignals(False)
         self.stylebox.blockSignals(False)  # 新增
         self.textadvancedfmt_panel.set_active_format(font_format)
@@ -552,7 +569,7 @@ class FontFormatPanel(Widget):
         self.stylebox.clear()
         styles = shared.FONT_STYLES.get(family, [])
         self.stylebox.addItems(styles)
-        
+
         # 尝试默认选中 Regular
         idx = self.stylebox.findText("Regular")
         if idx < 0 and len(styles) > 0:
@@ -560,7 +577,7 @@ class FontFormatPanel(Widget):
         if idx >= 0:
             self.stylebox.setCurrentIndex(idx)
         self.stylebox.blockSignals(False)
-        
+
         # 触发格式更新
         self.apply_font_change()
     def on_fontstyle_changed(self, style: str):
@@ -599,7 +616,7 @@ class FontFormatPanel(Widget):
                 self.textblk_item = None
                 self.set_active_format(self.global_format, multi_select)
                 self.set_globalfmt_title()
-            
+
         else:
             if not self.restoring_textblk:
                 blk_fmt = textblk_item.get_fontformat()

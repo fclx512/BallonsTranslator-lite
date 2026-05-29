@@ -6,16 +6,22 @@ Background git operations (fetch + reset --hard) via QThread.
 import subprocess
 import sys
 
+from qtpy.QtCore import Qt, QThread, Signal
+from qtpy.QtWidgets import (
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+)
+
 from utils.update_cache import (
     human_readable_last_check,
     record_check,
 )
-
-from qtpy.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTextEdit, QProgressBar, QFrame,
-)
-from qtpy.QtCore import Qt, QThread, Signal
 
 
 class UpdateThread(QThread):

@@ -1,6 +1,23 @@
-from qtpy.QtWidgets import QApplication, QAbstractScrollArea, QGraphicsOpacityEffect, QWidget, QVBoxLayout, QHBoxLayout
-from qtpy.QtCore import QEvent, Qt, QPropertyAnimation, QTimer, Signal, QPoint, Property, QAbstractAnimation
-from qtpy.QtGui import QMouseEvent, QPainter, QColor
+from qtpy.QtCore import (
+    Property,
+    QAbstractAnimation,
+    QEvent,
+    QPoint,
+    QPropertyAnimation,
+    Qt,
+    QTimer,
+    Signal,
+)
+from qtpy.QtGui import QMouseEvent, QPainter
+from qtpy.QtWidgets import (
+    QAbstractScrollArea,
+    QApplication,
+    QGraphicsOpacityEffect,
+    QHBoxLayout,
+    QVBoxLayout,
+    QWidget,
+)
+
 
 class ScrollBarGroove(QWidget):
     """ Scroll bar groove """
@@ -80,12 +97,12 @@ class ScrollBarHandle(QWidget):
             self.anime_timer.timeout.connect(self.start_fade_animation)
         else:
             fixsize = 3
-         
+
         if orient == Qt.Vertical:
             self.setFixedWidth(fixsize)
         else:
             self.setFixedHeight(fixsize)
-        
+
         self.fadeout = fadeout
 
     def start_fade_animation(self):

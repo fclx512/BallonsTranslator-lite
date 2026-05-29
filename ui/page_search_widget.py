@@ -1,14 +1,35 @@
-from qtpy.QtWidgets import QHBoxLayout, QComboBox, QTextEdit, QLabel, QPlainTextEdit, QCheckBox, QVBoxLayout,  QGraphicsDropShadowEffect, QWidget
-from qtpy.QtCore import Qt, QTimer, Signal
-from qtpy.QtGui import QKeyEvent, QTextCursor, QHideEvent, QInputMethodEvent, QFontMetrics, QColor, QShowEvent, QSyntaxHighlighter, QTextCharFormat
-
-from typing import List, Union, Tuple, Dict
 import re
+from typing import Dict, List, Tuple
+
+from qtpy.QtCore import Qt, QTimer, Signal
+from qtpy.QtGui import (
+    QColor,
+    QFontMetrics,
+    QHideEvent,
+    QInputMethodEvent,
+    QKeyEvent,
+    QShowEvent,
+    QSyntaxHighlighter,
+    QTextCharFormat,
+    QTextCursor,
+)
+from qtpy.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QGraphicsDropShadowEffect,
+    QHBoxLayout,
+    QLabel,
+    QPlainTextEdit,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 from utils.config import pcfg
-from .custom_widget import Widget, ClickableLabel
+
+from .custom_widget import ClickableLabel, Widget
+from .textedit_area import SourceTextEdit, TransPairWidget, TransTextEdit
 from .textitem import TextBlkItem
-from .textedit_area import TransPairWidget, SourceTextEdit, TransTextEdit
 
 CURRENT_TEXT_COLOR = QColor(244, 249, 28)
 
@@ -41,7 +62,7 @@ class HighlightMatched(QSyntaxHighlighter):
 
     def __init__(self, edit: SourceTextEdit, matched_map: dict = None):
         super().__init__(edit.document())
-        
+
         self.case_sensitive = False
         self.whole_word = False
         if matched_map is None:
@@ -211,7 +232,7 @@ class PageSearchWidget(Widget):
         self.search_editor = SearchEditor(self, commit_latency=-1)
         self.search_editor.setPlaceholderText(self.tr('Find'))
         self.search_editor.height_changed.connect(self.on_editor_height_changed)
-        
+
         self.no_result_str = self.tr('No result')
         self.result_counter_label = QLabel(self.no_result_str)
         self.result_counter_label.setMaximumHeight(32)
@@ -275,7 +296,7 @@ class PageSearchWidget(Widget):
         hlayout_bar1 = QHBoxLayout()
         hlayout_bar1.addLayout(hlayout_bar1_0)
         hlayout_bar1.addLayout(hlayout_bar1_1)
-        
+
         hlayout_bar2 = QHBoxLayout()
         hlayout_bar2.addWidget(self.replace_editor)
         hlayout_bar2.addWidget(self.replace_btn)
@@ -306,7 +327,7 @@ class PageSearchWidget(Widget):
         self.search_editor.shift_enter_pressed.connect(self.on_prev_search_result)
 
         self.adjustSize()
-        
+
 
     def on_close_button_clicked(self):
         self.hide()
@@ -368,7 +389,7 @@ class PageSearchWidget(Widget):
 
         delta_count = counter - self.search_counter_list[idx]
         self.counter_sum += delta_count
-        
+
         is_current_edit = False
         before_current = False
         if edit == self.current_edit:
@@ -379,7 +400,7 @@ class PageSearchWidget(Widget):
         if counter > 0:
             self.search_counter_list[idx] = counter
             if is_current_edit:
-                cursor_end = self.current_cursor.selectionEnd() 
+                cursor_end = self.current_cursor.selectionEnd()
                 if cursor_end not in matched_map:
                     matched = self.get_prev_match(cursor_end)
                     if matched is None:
@@ -501,7 +522,7 @@ class PageSearchWidget(Widget):
         return self.get_result_edit_index(self.current_edit)
 
     def setCurrentEditor(self, edit: SourceTextEdit):
-        
+
         if type(edit) == SourceTextEdit and self.range_combobox.currentIndex() == 0 \
             or type(edit) == TransPairWidget and self.range_combobox.currentIndex() == 1:
             edit = None
@@ -526,7 +547,7 @@ class PageSearchWidget(Widget):
         else:
             self.current_cursor = None
             self.current_highlighter = None
-        
+
         self.updateCounterText()
         self.highlight_current_text(old_idx)
 
@@ -535,10 +556,10 @@ class PageSearchWidget(Widget):
         text = self.search_editor.toPlainText()
         if intro_cursor or cursor.selectedText() != text:
             cursor.clearSelection()
-            
+
         matched_map = self.current_highlighter.matched_map
         matched: Matched
-        
+
         if not cursor.hasSelection():
             if backward:
                 matched: Matched = matched_map[list(matched_map.keys())[-1]]

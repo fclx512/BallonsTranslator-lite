@@ -1,12 +1,28 @@
-from qtpy.QtWidgets import QDialog, QVBoxLayout, QGroupBox, QFormLayout, QComboBox, QLineEdit, QPlainTextEdit, QCheckBox, QSpinBox, QLabel, QRadioButton, QButtonGroup, QHBoxLayout, QPushButton
-from qtpy.QtCore import Signal, Qt
-from qtpy.QtWidgets import QSizePolicy
+from qtpy.QtCore import Qt, Signal
+from qtpy.QtWidgets import (
+    QButtonGroup,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPlainTextEdit,
+    QPushButton,
+    QRadioButton,
+    QSizePolicy,
+    QSpinBox,
+    QVBoxLayout,
+)
+
 
 class MergeDialog(QDialog):
     # 定义信号：当用户点击运行按钮时发出
     run_current_clicked = Signal()  # 对当前文件运行
     run_all_clicked = Signal()  # 对所有文件运行
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Region Merge Tool Settings"))
@@ -54,7 +70,7 @@ class MergeDialog(QDialog):
         reading_order_layout.addRow(self.tr("Left-to-Right (LTR) labels:"), self.ltr_labels_edit)
         reading_order_layout.addRow(self.tr("Right-to-Left (RTL) labels:"), self.rtl_labels_edit)
         reading_order_layout.addRow(self.tr("Top-to-Bottom (TTB) labels:"), self.ttb_labels_edit)
-        
+
         self.layout.addWidget(reading_order_group)
 
         # --- Labeling Rules --- #
@@ -166,17 +182,17 @@ class MergeDialog(QDialog):
         self.run_current_button = QPushButton(self.tr("Run on Current File"))
         self.run_all_button = QPushButton(self.tr("Run on All Files"))
         self.cancel_button = QPushButton(self.tr("Cancel"))
-        
+
         button_layout.addWidget(self.run_current_button)
         button_layout.addWidget(self.run_all_button)
         button_layout.addWidget(self.cancel_button)
         button_layout.addStretch()
-        
+
         # 连接按钮信号
         self.run_current_button.clicked.connect(self.on_run_current)
         self.run_all_button.clicked.connect(self.on_run_all)
         self.cancel_button.clicked.connect(self.reject)
-        
+
         self.layout.addLayout(button_layout)
 
     def on_run_current(self):

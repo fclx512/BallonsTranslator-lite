@@ -9,25 +9,38 @@ Subclasses must provide these hook methods:
   - _hook_is_translation_page() -> bool
 """
 
-import os, os.path as osp, re, sys, subprocess, time, traceback
-from typing import List, Union
+import os
+import os.path as osp
+import re
+import subprocess
+import sys
+import time
+import traceback
 from pathlib import Path
+from typing import List, Union
 
-from qtpy.QtWidgets import QFileDialog, QMessageBox, QListWidgetItem
-from qtpy.QtCore import Qt, Signal, QPoint
-from qtpy.QtGui import QTextCursor, QIcon, QPainter, QClipboard
+from qtpy.QtCore import QPoint
+from qtpy.QtGui import QClipboard, QIcon, QPainter, QTextCursor
+from qtpy.QtWidgets import QFileDialog, QListWidgetItem, QMessageBox
 
-from utils.logger import logger as LOGGER
-from utils.text_processing import is_cjk, full_len, half_len
-from utils.textblock import TextBlock, TextAlignment
 from utils import shared
+from utils.config import (
+    FontFormat,
+    load_textstyle_from,
+    pcfg,
+    save_config,
+    save_text_styles,
+    text_styles,
+)
+from utils.logger import logger as LOGGER
 from utils.message import create_error_dialog, create_info_dialog
-from utils.config import pcfg, save_config, text_styles, save_text_styles, load_textstyle_from, FontFormat
-from .textedit_area import SourceTextEdit, TransTextEdit
-from .scenetext_manager import PasteSrcItemsCommand
+from utils.text_processing import full_len, half_len, is_cjk
+from utils.textblock import TextAlignment, TextBlock
+
 from .custom_widget import MessageBox
-from .textedit_commands import GlobalRepalceAllCommand
 from .drawing_commands import RunBlkTransCommand
+from .scenetext_manager import PasteSrcItemsCommand
+from .textedit_commands import GlobalRepalceAllCommand
 
 
 class MainWindowMixin:
@@ -36,7 +49,7 @@ class MainWindowMixin:
     Expects the subclass to have these attributes:
       canvas, imgtrans_proj, st_manager, pageList, bottomBar, drawingPanel,
       textPanel, rightComicTransStackPanel, leftStackWidget, global_search_widget,
-      configPanel, module_manager, imsave_thread, export_doc_thread, import_doc_thread,
+      configPanel, module_manager, imsave_thread,
       imgtrans_progress_msgbox, app, backup_blkstyles, _run_imgtrans_wo_textstyle_update,
       save_on_page_changed, opening_dir, page_changing
     """
@@ -520,8 +533,17 @@ class MainWindowMixin:
         if num_pages == 0:
             return
 
+        from qtpy.QtWidgets import (
+            QCheckBox,
+            QDialog,
+            QFrame,
+            QHBoxLayout,
+            QLabel,
+            QPushButton,
+            QVBoxLayout,
+        )
+
         from ui.custom_widget import RangeSlider
-        from qtpy.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QFrame, QLabel, QPushButton, QCheckBox
 
         dialog = QDialog(self)
         dialog.setWindowTitle(self.tr('Run'))
@@ -681,14 +703,6 @@ class MainWindowMixin:
 
     # ── Export / Import ─────────────────────────────────────
 
-    def on_export_doc(self):
-        if self.canvas.text_change_unsaved():
-            self.st_manager.updateTextBlkList()
-        self.export_doc_thread.exportAsDoc(self.imgtrans_proj)
-
-    def on_import_doc(self):
-        self.import_doc_thread.importDoc(self.imgtrans_proj)
-
     def on_export_txt(self, dump_target, suffix='.txt'):
         try:
             self.imgtrans_proj.dump_txt(dump_target=dump_target, suffix=suffix)
@@ -720,7 +734,7 @@ class MainWindowMixin:
                 msg = self.tr(
                     'Imported txt file not fully matched with current project, '
                     'please make sure source txt file structured like results from '
-                    '\"export TXT/markdown\"')
+                    '\"export TXT\"')
                 if len(match_rst['missing_pages']) > 0:
                     msg += '\n' + self.tr('Missing pages: ') + '\n'
                     msg += '\n'.join(match_rst['missing_pages'])
@@ -739,14 +753,6 @@ class MainWindowMixin:
 
         except Exception as e:
             create_error_dialog(e, self.tr('Failed to import translation from ') + selected_file)
-
-    def on_fin_export_doc(self):
-        msg = QMessageBox()
-        msg.setText(self.tr('Export to ') + self.imgtrans_proj.doc_path())
-        msg.exec_()
-
-    def on_fin_import_doc(self):
-        self.st_manager.updateSceneTextitems()
 
     # ── Search ──────────────────────────────────────────────
 

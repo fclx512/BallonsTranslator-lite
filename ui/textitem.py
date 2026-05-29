@@ -1,18 +1,38 @@
-import math, re
+import math
+from typing import List, Tuple, Union
+
 import numpy as np
-from typing import List, Union, Tuple
+from qtpy.QtCore import QPointF, QRectF, Qt, Signal
+from qtpy.QtGui import (
+    QColor,
+    QFont,
+    QInputMethodEvent,
+    QKeyEvent,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+    QTextCharFormat,
+    QTextCursor,
+    QTextDocument,
+)
+from qtpy.QtWidgets import (
+    QGraphicsItem,
+    QGraphicsSceneHoverEvent,
+    QGraphicsSceneMouseEvent,
+    QGraphicsTextItem,
+    QStyle,
+    QStyleOptionGraphicsItem,
+    QWidget,
+)
 
-from qtpy.QtWidgets import QGraphicsItem, QWidget, QGraphicsSceneHoverEvent, QGraphicsTextItem, QStyleOptionGraphicsItem, QStyle, QGraphicsSceneMouseEvent
-from qtpy.QtCore import Qt, QRect, QRectF, QPointF, Signal, QSizeF
-from qtpy.QtGui import (QGradient, QKeyEvent, QFont, QTextCursor, QPixmap, QPainterPath, QTextDocument, 
-                       QInputMethodEvent, QPainter, QPen, QColor, QTextCharFormat, QTextDocument, QLinearGradient, 
-                       QBrush, QPalette, QAbstractTextDocumentLayout)
+from utils.fontformat import FontFormat, pt2px, px2pt
+from utils.imgproc_utils import xywh2xyxypoly
+from utils.textblock import FontFormat, TextAlignment, TextBlock
 
-from utils.textblock import TextBlock, FontFormat, TextAlignment, LineSpacingType
-from utils.imgproc_utils import xywh2xyxypoly, rotate_polygons
-from utils.fontformat import FontFormat, px2pt, pt2px
-from .misc import td_pattern, table_pattern
-from .scene_textlayout import VerticalTextDocumentLayout, HorizontalTextDocumentLayout, SceneTextLayout
+from .misc import table_pattern, td_pattern
+from .scene_textlayout import HorizontalTextDocumentLayout, VerticalTextDocumentLayout
 from .text_graphical_effect import apply_shadow_effect
 
 TEXTRECT_SELECTED_COLOR = QColor(248, 64, 147, 170)
@@ -53,9 +73,9 @@ class TextBlkItem(QGraphicsTextItem):
         self.draw_rect = show_rect
         self._display_rect: QRectF = QRectF(0, 0, 1, 1)
         self.old_ffmt_values = None
-        
+
         self.idx = idx
-        
+
         self.background_pixmap: QPixmap = None
         self.stroke_qcolor = QColor(0, 0, 0)
         self.oldPos = QPointF()
@@ -89,12 +109,12 @@ class TextBlkItem(QGraphicsTextItem):
         else:
             self.pre_editing = True
         super().inputMethodEvent(e)
-        
+
     def is_editting(self):
         return self.textInteractionFlags() == Qt.TextInteractionFlag.TextEditorInteraction
 
     def on_content_changed(self):
-        if (self.hasFocus() or self.is_formatting) and not self.pre_editing and not self.block_change_signal:   
+        if (self.hasFocus() or self.is_formatting) and not self.pre_editing and not self.block_change_signal:
             # self.content_changed.emit(self)
             if not self.in_redo_undo:
                 undo_steps = self.document().availableUndoSteps()
@@ -178,14 +198,14 @@ class TextBlkItem(QGraphicsTextItem):
         if not paint_shadow and not paint_stroke or empty:
             self.background_pixmap = None
             return
-        
+
         self.repainting = True
         font_size = self.layout.max_font_size(to_px=True)
         target_map = QPixmap(self.boundingRect().size().toSize())
         target_map.fill(Qt.GlobalColor.transparent)
         painter = QPainter(target_map)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        
+
         if paint_stroke:
             self.paint_stroke(painter)
         else:
@@ -204,7 +224,7 @@ class TextBlkItem(QGraphicsTextItem):
         painter.end()
         self.background_pixmap = target_map
         self.repainting = False
-        
+
     def docSizeChanged(self):
         self.setCenterTransform()
         self.doc_size_changed.emit(self.idx)
@@ -221,10 +241,10 @@ class TextBlkItem(QGraphicsTextItem):
             blk.lines = xywh2xyxypoly(xywh).reshape(-1, 4, 2).tolist()
         self.setVertical(blk.vertical)
         self.setRect(blk.bounding_rect())
-        
+
         if blk.angle != 0:
             self.setRotation(blk.angle)
-        
+
         set_char_fmt = False
         if blk.translation:
             set_char_fmt = True
@@ -271,14 +291,14 @@ class TextBlkItem(QGraphicsTextItem):
         p = self.padding()
         P = p * 2
         return QRectF(rect.x() - p, rect.y() - p, rect.width() + P, rect.height() + P)
-    
+
     def unpadRect(self, rect: QRectF) -> QRectF:
         p = -self.padding()
         P = p * 2
         return QRectF(rect.x() - p, rect.y() - p, rect.width() + P, rect.height() + P)
 
     def setRect(self, rect: Union[List, QRectF], padding=True, repaint=True) -> None:
-        
+
         if isinstance(rect, List):
             rect = QRectF(*rect)
         if padding:
@@ -375,19 +395,19 @@ class TextBlkItem(QGraphicsTextItem):
 
         if valid_layout:
             rect = self.rect() if self.layout is not None else None
-        
+
         self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
         doc.documentLayout().blockSignals(True)
         if vertical:
             layout = VerticalTextDocumentLayout(doc, self.fontformat)
         else:
             layout = HorizontalTextDocumentLayout(doc, self.fontformat)
-        
+
         self.layout = layout
         doc.setDocumentLayout(layout)
         layout.size_enlarged.connect(self.on_document_enlarged)
         layout.documentSizeChanged.connect(self.docSizeChanged)
-        
+
         if valid_layout:
             layout.setMaxSize(rect.width(), rect.height())
             self.setCenterTransform()
@@ -461,7 +481,7 @@ class TextBlkItem(QGraphicsTextItem):
         # subpixel antialiasing is enabled for super().paint upon drawing on some non-transparent background https://github.com/dmMaze/BallonsTranslator/issues/919
         # which can be avoided by calling super().paint first, but it results in disappeared background in editting mode
         # so the checking logic lies here
-        
+
         if self.is_editting():
             self._draw_accessories(painter)
 
@@ -477,7 +497,7 @@ class TextBlkItem(QGraphicsTextItem):
     def _draw_accessories(self, painter: QPainter):
         br = self.boundingRect()
         painter.save()
-        
+
         if self.background_pixmap is not None:
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
             painter.drawPixmap(br.toRect(), self.background_pixmap)
@@ -542,7 +562,7 @@ class TextBlkItem(QGraphicsTextItem):
                 it += 1
             block = block.next()
         return False
-    
+
     def minFontSize(self, to_px=True):
         doc = self.document()
         block = doc.firstBlock()
@@ -564,13 +584,13 @@ class TextBlkItem(QGraphicsTextItem):
             self.startEdit(pos=event.pos())
         else:
             super().mouseDoubleClickEvent(event)
-        
+
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
-        super().mouseMoveEvent(event)  
+        super().mouseMoveEvent(event)
         if self.textInteractionFlags() != Qt.TextInteractionFlag.TextEditorInteraction:
             self.moving.emit(self)
 
-    # QT 5.15.x causing segmentation fault 
+    # QT 5.15.x causing segmentation fault
     def contextMenuEvent(self, event):
         return super().contextMenuEvent(event)
 
@@ -644,7 +664,7 @@ class TextBlkItem(QGraphicsTextItem):
         cursor.movePosition(QTextCursor.MoveOperation.Start)
         format = cursor.charFormat()
         font = self.document().defaultFont()
-        
+
         font.setFamily(ffmat.font_family)
         font.setPointSizeF(ffmat.size_pt)
         font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
@@ -688,26 +708,26 @@ class TextBlkItem(QGraphicsTextItem):
         if set_stroke_width:
             self.setStrokeWidth(ffmat.stroke_width, repaint_background=False)
         self.setOpacity(ffmat.opacity)
-        
+
         alignment_qt_flag = [Qt.AlignmentFlag.AlignLeft, Qt.AlignmentFlag.AlignCenter, Qt.AlignmentFlag.AlignRight][ffmat.alignment]
         doc = self.document()
         op = doc.defaultTextOption()
         op.setAlignment(alignment_qt_flag)
         doc.setDefaultTextOption(op)
-        
+
         if ffmat.vertical:
             self.setLetterSpacing(ffmat.letter_spacing)
         self.setLineSpacing(ffmat.line_spacing)
-        
+
         # Preserve gradient properties
         self.fontformat.gradient_enabled = ffmat.gradient_enabled
         self.fontformat.gradient_start_color = ffmat.gradient_start_color
         self.fontformat.gradient_end_color = ffmat.gradient_end_color
         self.fontformat.gradient_angle = ffmat.gradient_angle
         self.fontformat.gradient_size = ffmat.gradient_size
-        
+
         self.fontformat.merge(ffmat)
-        
+
         if self.fontformat.gradient_enabled:
             self.update()
 
@@ -752,7 +772,7 @@ class TextBlkItem(QGraphicsTextItem):
         return cursor, dict(cursor_pos=cursor_pos, has_set_all=has_set_all)
 
     def _after_set_ffmt(self, cursor: QTextCursor, repaint_background: bool, restore_cursor: bool, cursor_pos: Tuple, has_set_all: bool):
-        
+
         if restore_cursor:
             if cursor_pos is not None:
                 pos1, pos2 = cursor_pos
@@ -782,35 +802,35 @@ class TextBlkItem(QGraphicsTextItem):
 
     def _doc_set_font_family(self, value: str, style_name: str, cursor: QTextCursor):
         from utils import shared
-        
+
         actual_family = value
         actual_style = style_name
         is_merged_family = False  # 标记是否回退到了带字重后缀的原始家族名
-        
+
         # 处理归并后的家族名，映射回 Qt 能识别的原始名
         if value in shared.FONT_FAMILY_ALIAS:
             raw_list = shared.FONT_FAMILY_ALIAS[value]
             matched_raw = None
-            
+
             # 精确匹配：选择 Bold 时，优先找名为 "XXX Bold" 的原始家族
             if style_name:
                 for raw_fam in raw_list:
                     if raw_fam.endswith(f" {style_name}"):
                         matched_raw = raw_fam
                         break
-            
+
             # 常规匹配：选择 Regular 时，优先找没有字重后缀的原始家族
             if matched_raw is None and style_name in ("Regular", "Normal", ""):
                 for raw_fam in raw_list:
-                    if raw_fam == value or not any(raw_fam.endswith(f" {s}") for s in 
+                    if raw_fam == value or not any(raw_fam.endswith(f" {s}") for s in
                         ["Thin", "Light", "Bold", "Black", "Italic", "Oblique", "Medium", "SemiBold", "DemiBold", "Heavy", "ExtraLight", "ExtraBold"]):
                         matched_raw = raw_fam
                         break
-            
+
             # 兜底：使用列表中的第一个
             if matched_raw is None and raw_list:
                 matched_raw = raw_list[0]
-                
+
             if matched_raw is not None:
                 actual_family = matched_raw
                 if actual_family != value:
@@ -829,7 +849,7 @@ class TextBlkItem(QGraphicsTextItem):
             it = block.begin()
             while not it.atEnd():
                 fragment = it.fragment()
-                
+
                 frag_start = fragment.position()
                 frag_end = frag_start + fragment.length()
                 pos2 = min(frag_end, sel_end)
@@ -838,10 +858,10 @@ class TextBlkItem(QGraphicsTextItem):
                     cfmt = fragment.charFormat()
                     under_line = cfmt.fontUnderline()
                     cfont = cfmt.font()
-                    
+
                     font = QFont(actual_family, cfont.pointSize(), cfont.weight(), cfont.italic())
                     font.setPointSizeF(cfont.pointSizeF())
-                    
+
                     # 样式名到 Qt Weight 枚举的映射
                     _style_to_qt_weight = {
                         "Thin": QFont.Weight.Thin, "ExtraLight": QFont.Weight.ExtraLight,
@@ -853,10 +873,10 @@ class TextBlkItem(QGraphicsTextItem):
                         "UltraBold": QFont.Weight.ExtraBold, "Black": QFont.Weight.Black,
                         "Heavy": QFont.Weight.Black
                     }
-                    
+
                     # 决定传给 Qt 的最终 StyleName
                     final_style_name = actual_style
-                    
+
                     if is_merged_family:
                         # 情况A：归并字体(如"尚古圆体 Bold")，Family已包含字重
                         # 此时 setStyleName 必须为空或 "Regular"，否则 Qt 会找不到实例
@@ -867,18 +887,18 @@ class TextBlkItem(QGraphicsTextItem):
                         if is_virtual:
                             # 情况B：VF字体的虚拟样式(如思源黑体+Bold)，Qt中没有这个实例
                             final_style_name = ""
-                            
+
                     font.setStyleName(final_style_name)
-                    
+
                     # 驱动数值字重（对 VF 字体和中间字重至关重要）
                     if actual_style in _style_to_qt_weight:
                         font.setWeight(_style_to_qt_weight[actual_style])
                         # 根据字重设置 Bold 状态，防止被默认逻辑覆盖
                         font.setBold(actual_style in ("Bold", "ExtraBold", "UltraBold", "Black", "Heavy", "SemiBold", "DemiBold", "Medium"))
-                    
+
                     font.setWordSpacing(cfont.wordSpacing())
                     font.setLetterSpacing(cfont.letterSpacingType(), cfont.letterSpacing())
-                
+
                     cfmt.setFont(font)
                     cfmt.setFont(font)
                     cfmt.setFontUnderline(under_line)
@@ -933,14 +953,14 @@ class TextBlkItem(QGraphicsTextItem):
         rad = math.radians(angle)
         dx = math.cos(rad)
         dy = math.sin(rad)
-        
+
         # Set gradient points with size adjustment
         rect = self.boundingRect()
         center = rect.center()
         radius = max(rect.width(), rect.height()) * fontformat.gradient_size
         gradient.setStart(center.x() - dx * radius, center.y() - dy * radius)
         gradient.setFinalStop(center.x() + dx * radius, center.y() + dy * radius)
-        
+
         # Set gradient colors
         start_color = QColor(*fontformat.gradient_start_color)
         end_color = QColor(*fontformat.gradient_end_color)
@@ -1008,7 +1028,7 @@ class TextBlkItem(QGraphicsTextItem):
         self.update()
 
     def setStrokeWidth(self, stroke_width: float, padding=True, repaint_background=True, restore_cursor=False, **kwargs):
-        
+
         cursor, after_kwargs = self._before_set_ffmt(set_selected=False, restore_cursor=restore_cursor)
 
         self.fontformat.stroke_width = stroke_width
@@ -1049,7 +1069,7 @@ class TextBlkItem(QGraphicsTextItem):
             self.squeezeBoundingRect(True, repaint=False)
 
         self._after_set_ffmt(cursor, repaint_background, restore_cursor, **after_kwargs)
-        
+
 
     def setFontSize(self, value: float, repaint_background: bool = False, set_selected: bool = False, restore_cursor: bool = False, clip_size: bool = False, **kwargs):
         '''
@@ -1095,7 +1115,7 @@ class TextBlkItem(QGraphicsTextItem):
 
     def get_char_fmts(self) -> List[QTextCharFormat]:
         cursor = self.textCursor()
-        
+
         cursor.movePosition(QTextCursor.MoveOperation.Start)
         char_fmts = []
         while True:
@@ -1167,7 +1187,7 @@ class TextBlkItem(QGraphicsTextItem):
         if hasattr(self.scene(), 'scale_factor'):
             scale = self.scene().scale_factor
         return scale
-            
+
     def set_size(self, w: float, h: float, set_layout_maxsize=False, set_blk_size=True):
         '''
         rotation invariant
@@ -1185,7 +1205,7 @@ class TextBlkItem(QGraphicsTextItem):
         self.setCenterTransform()
         pos_shift = oc - self.sceneBoundingRect().center()
         pos_shift = pos_shift / self.scene_scale_factor()
-        
+
         align_c = align_tl = align_tr = False
         if self.fontformat.vertical:
             align_tr = True

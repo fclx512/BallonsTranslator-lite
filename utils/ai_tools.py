@@ -10,16 +10,17 @@ which pages it needs to read based on the user's natural-language query.
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger('ai_chat')
 
-from .proj_compact import (
-    build_index, build_detail, build_paginated_detail,
-    compact_block, FIELD_PROMPT_SNIPPETS,
-    _COMPACT_DEF, _FONT_CLASS_DEFAULTS, _get_font_default, _is_default,
-)
 from .config import pcfg
+from .proj_compact import (
+    FIELD_PROMPT_SNIPPETS,
+    build_detail,
+    build_index,
+    build_paginated_detail,
+)
 
 # ── Tool definitions ──────────────────────────────────────────────────
 

@@ -1,12 +1,22 @@
 import math
 
 import numpy as np
-from qtpy.QtWidgets import QGraphicsPixmapItem, QGraphicsItem, QWidget, QGraphicsSceneHoverEvent, QLabel, QStyleOptionGraphicsItem, QGraphicsSceneMouseEvent, QGraphicsRectItem
-from qtpy.QtCore import Qt, QRect, QRectF, QPointF, QPoint
-from qtpy.QtGui import QPainter, QPen, QColor
+from qtpy.QtCore import QPoint, QPointF, QRectF, Qt
+from qtpy.QtGui import QColor, QPainter, QPen
+from qtpy.QtWidgets import (
+    QGraphicsItem,
+    QGraphicsPixmapItem,
+    QGraphicsRectItem,
+    QGraphicsSceneHoverEvent,
+    QGraphicsSceneMouseEvent,
+    QLabel,
+    QStyleOptionGraphicsItem,
+    QWidget,
+)
 
-from utils.imgproc_utils import xywh2xyxypoly, rotate_polygons
-from .cursor import rotateCursorList, resizeCursorList
+from utils.imgproc_utils import xywh2xyxypoly
+
+from .cursor import resizeCursorList, rotateCursorList
 from .textitem import TextBlkItem
 
 CBEDGE_WIDTH = 30
@@ -53,7 +63,7 @@ class ControlBlockItem(QGraphicsRectItem):
         self.edge_width = edge_width
         self.visible_len = self.edge_width / 2
         self.block_shift_value = self.edge_width * 0.75
-        self.pen_width = edge_width / CBEDGE_WIDTH * 2 
+        self.pen_width = edge_width / CBEDGE_WIDTH * 2
         offset = self.edge_width * ctrlidx_to_visiblebox[self.idx]
         self.visible_rect = QRectF(offset[0], offset[1], self.visible_len, self.visible_len)
         hitbox = ctrlidx_to_hitbox[self.idx]
@@ -71,7 +81,7 @@ class ControlBlockItem(QGraphicsRectItem):
             painter.setPen(QPen(QColor(75, 125, 0), self.pen_width, Qt.PenStyle.SolidLine, Qt.SquareCap))
             painter.drawRect(self.boundingRect())
 
-    def hoverEnterEvent(self, event: QGraphicsSceneHoverEvent) -> None:        
+    def hoverEnterEvent(self, event: QGraphicsSceneHoverEvent) -> None:
         return super().hoverEnterEvent(event)
 
     # def hoverLeaveEvent(self, event: QGraphicsSceneHoverEvent) -> None:
@@ -115,7 +125,7 @@ class ControlBlockItem(QGraphicsRectItem):
                 rotate_vec = event.scenePos() - self.ctrl.sceneBoundingRect().center()
                 self.updateAngleLabelPos()
                 rotation = np.rad2deg(math.atan2(rotate_vec.y(), rotate_vec.x()))
-                self.rotate_start = - rotation + self.ctrl.rotation() 
+                self.rotate_start = - rotation + self.ctrl.rotation()
         event.accept()
 
     def updateAngleLabelPos(self):
@@ -136,7 +146,7 @@ class ControlBlockItem(QGraphicsRectItem):
         blk_item = self.ctrl.blk_item
         if blk_item is None:
             return
-        if self.drag_mode == self.DRAG_RESHAPE:    
+        if self.drag_mode == self.DRAG_RESHAPE:
             block_group = self.ctrl.ctrlblock_group
             crect = self.ctrl.rect()
             pos_x, pos_y = 0, 0
@@ -176,7 +186,7 @@ class ControlBlockItem(QGraphicsRectItem):
                 else:   # idx == 7
                     pos_x = min(self.pos().x(), oppo_pos.x())
                     crect.setX(pos_x+self.block_shift_value)
-            
+
             self.ctrl.setRect(crect)
             scale = self.ctrl.current_scale
             new_center = self.ctrl.sceneBoundingRect().center()
@@ -199,7 +209,7 @@ class ControlBlockItem(QGraphicsRectItem):
     def get_angle_idx(self, angle) -> int:
         idx = int((angle + 22.5) % 360 / 45)
         return idx
-    
+
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self.ctrl.reshaping = False
@@ -217,17 +227,17 @@ class ControlBlockItem(QGraphicsRectItem):
             return super().mouseReleaseEvent(event)
 
 class TextBlkShapeControl(QGraphicsRectItem):
-    blk_item : TextBlkItem = None 
+    blk_item : TextBlkItem = None
     ctrl_block: ControlBlockItem = None
     reshaping: bool = False
-    
+
     def __init__(self, parent) -> None:
         super().__init__()
         self.gv = parent
         self.ctrlblock_group = [
             ControlBlockItem(self, idx) for idx in range(8)
         ]
-        
+
         self.previewPixmap = QGraphicsPixmapItem(self)
         self.previewPixmap.setVisible(False)
         pen = QPen(QColor(69, 71, 87), 2, Qt.PenStyle.SolidLine)
@@ -253,7 +263,7 @@ class TextBlkShapeControl(QGraphicsRectItem):
             if self.blk_item.isEditing():
                 self.blk_item.endEdit()
             self.blk_item.update()
-            
+
         self.blk_item = blk_item
         if blk_item is None:
             self.hide()
@@ -274,7 +284,7 @@ class TextBlkShapeControl(QGraphicsRectItem):
         self.setPos(abr.x(), abr.y())
         self.setAngle(self.blk_item.angle)
 
-    def setRect(self, *args): 
+    def setRect(self, *args):
         super().setRect(*args)
         self.updateControlBlocks()
 

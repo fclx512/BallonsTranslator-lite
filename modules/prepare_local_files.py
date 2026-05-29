@@ -1,11 +1,12 @@
-from typing import Union, List
-import os.path as osp
 import os
+import os.path as osp
+from typing import List
 
-from . import INPAINTERS, TEXTDETECTORS, OCR, TRANSLATORS
-from .base import BaseModule, LOGGER
 import utils.shared as shared
 from utils.download_util import download_and_check_files
+
+from . import INPAINTERS, OCR, TEXTDETECTORS, TRANSLATORS
+from .base import LOGGER, BaseModule
 
 
 def download_and_check_module_files(module_class_list: List[BaseModule] = None):

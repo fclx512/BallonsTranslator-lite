@@ -1,14 +1,36 @@
-from typing import List, Union
+from typing import List
 
-from qtpy.QtWidgets import QStackedWidget, QSizePolicy, QTextEdit, QScrollArea, QGraphicsDropShadowEffect, QVBoxLayout, QApplication, QHBoxLayout, QSizePolicy, QLabel, QLineEdit
-from qtpy.QtCore import Signal, Qt, QMimeData, QEvent, QPoint, QSize
-from qtpy.QtGui import QIntValidator, QColor, QFocusEvent, QInputMethodEvent, QDragEnterEvent, QDropEvent, QKeyEvent, QTextCursor, QMouseEvent, QDrag, QPixmap, QKeySequence
 import numpy as np
+from qtpy.QtCore import QEvent, QMimeData, QPoint, QSize, Qt, Signal
+from qtpy.QtGui import (
+    QDrag,
+    QDragEnterEvent,
+    QDropEvent,
+    QFocusEvent,
+    QInputMethodEvent,
+    QIntValidator,
+    QKeyEvent,
+    QMouseEvent,
+    QPixmap,
+    QTextCursor,
+)
+from qtpy.QtWidgets import (
+    QApplication,
+    QGraphicsDropShadowEffect,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QScrollArea,
+    QSizePolicy,
+    QStackedWidget,
+    QTextEdit,
+    QVBoxLayout,
+)
 
-from .custom_widget import ScrollBar, Widget, SeparatorWidget
-from .textitem import TextBlock
-from utils.config import pcfg
 from utils.logger import logger as LOGGER
+
+from .custom_widget import ScrollBar, SeparatorWidget, Widget
+from .textitem import TextBlock
 
 
 def _accent_rgb():
@@ -78,7 +100,7 @@ class SourceTextEdit(QTextEdit):
         else:
             self.min_height = 45
             self.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
-            
+
 
     def contextMenuEvent(self, event):
         pass
@@ -129,23 +151,23 @@ class SourceTextEdit(QTextEdit):
             self.text_content_changed = False
             if not self.highlighting:
                 self.text_changed.emit()
-                
+
         if self.hasFocus() and not self.pre_editing and not self.highlighting and not self.in_acts:
             self.handle_content_change()
 
     def handle_content_change(self):
         if not self.in_redo_undo:
-            
+
             change_from = self.change_from
             added_text = ''
-            
+
             if self.paste_flag:
                 self.paste_flag = False
                 cursor = self.textCursor()
                 cursor.setPosition(change_from)
                 cursor.setPosition(self.textCursor().position(), QTextCursor.MoveMode.KeepAnchor)
                 added_text = cursor.selectedText()
-            
+
             else:
                 if self.input_method_from != -1:
                     added_text = self.input_method_text
@@ -154,7 +176,7 @@ class SourceTextEdit(QTextEdit):
                 elif self.change_added > 0:
                     cursor = self.textCursor()
                     cursor.setPosition(change_from)
-                    cursor.setPosition(change_from + self.change_added, QTextCursor.MoveMode.KeepAnchor) 
+                    cursor.setPosition(change_from + self.change_added, QTextCursor.MoveMode.KeepAnchor)
                     added_text = cursor.selectedText()
 
             undo_steps = self.document().availableUndoSteps()
@@ -258,7 +280,7 @@ class SourceTextEdit(QTextEdit):
         cursor.select(QTextCursor.SelectionType.Document)
         cursor.insertText(text)
 
-        
+
 class TransTextEdit(SourceTextEdit):
     pass
 
@@ -266,7 +288,7 @@ class TransTextEdit(SourceTextEdit):
 class RowIndexEditor(QLineEdit):
 
     focus_out = Signal()
-    
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setValidator(QIntValidator())
@@ -280,11 +302,11 @@ class RowIndexEditor(QLineEdit):
     def minimumSizeHint(self):
         size = super().minimumSizeHint()
         return QSize(1, size.height())
-    
+
     def sizeHint(self):
         size = super().sizeHint()
         return QSize(1, size.height())
-    
+
 
 class RowIndexLabel(QStackedWidget):
 
@@ -329,8 +351,8 @@ class RowIndexLabel(QStackedWidget):
             idx = int(idx_str)
             self.lineedit.setReadOnly(True)
             self.submmit_idx.emit(idx)
-            
-        except Exception as e:
+
+        except Exception:
             LOGGER.warning(f'Invalid index str: {idx}')
 
     def mouseDoubleClickEvent(self, e: QMouseEvent) -> None:
@@ -352,7 +374,7 @@ class RowIndexLabel(QStackedWidget):
     def mousePressEvent(self, e: QMouseEvent) -> None:
         e.ignore()
         return super().mousePressEvent(e)
- 
+
 
 class TransPairWidget(Widget):
 
@@ -398,14 +420,14 @@ class TransPairWidget(Widget):
         if isinstance(e.source(), TransPairWidget):
             e.accept()
         return super().dragEnterEvent(e)
-    
+
     def handle_drag(self, pos: QPoint):
         y = pos.y()
         to_pos = self.idx
         if y > self.size().height() / 2:
             to_pos += 1
         self.drag_move.emit(to_pos)
-    
+
     def dragMoveEvent(self, e: QDragEnterEvent) -> None:
         if isinstance(e.source(), TransPairWidget):
             e.accept()
@@ -522,7 +544,7 @@ class TextEditListScrollArea(QScrollArea):
             pass
 
         return super().mouseMoveEvent(e)
-    
+
     def set_drag_style(self, pos: int, clear_style: bool = False):
         if pos == len(self.pairwidget_list):
             pos -= 1
@@ -536,7 +558,7 @@ class TextEditListScrollArea(QScrollArea):
             style += _transpair_checked_style()
         style = "TransPairWidget{" + style + "}"
         pw.setStyleSheet(style)
-    
+
     def clearDrag(self):
         self.drag_to_pos = -1
         if self.drag is not None:
@@ -545,7 +567,7 @@ class TextEditListScrollArea(QScrollArea):
             except RuntimeError:
                 pass
             self.drag = None
-    
+
     def handle_drag_pos(self, to_pos: int):
         if self.drag_to_pos != to_pos:
             if self.drag_to_pos is not None:
@@ -563,7 +585,7 @@ class TextEditListScrollArea(QScrollArea):
             num_drags = len(self.checked_list)
             if num_pw < 2 or num_drags == num_pw:
                 return
-            
+
             tgt_pos = to_pos
             drags = []
             for pw in self.checked_list:
@@ -601,7 +623,7 @@ class TextEditListScrollArea(QScrollArea):
         if src_idx == tgt_idx:
             return
         ids_ori, ids_tgt = [src_idx], [tgt_idx]
-        
+
         if src_idx < tgt_idx:
             for idx in range(src_idx+1, tgt_idx+1):
                 ids_ori.append(idx)
@@ -628,7 +650,7 @@ class TextEditListScrollArea(QScrollArea):
     def on_widget_checkstate_changed(self, pwc: TransPairWidget, shift_pressed: bool, ctrl_pressed: bool):
         if self.drag is not None:
             return
-        
+
         idx = pwc.idx
         if shift_pressed:
             checked = True
@@ -669,7 +691,7 @@ class TextEditListScrollArea(QScrollArea):
                     checked = True
             if checked:
                 new_check_list.append(idx)
-        
+
         new_check_set = set(new_check_list)
         check_changed = False
         for oidx in old_idx_set:
@@ -684,7 +706,7 @@ class TextEditListScrollArea(QScrollArea):
                 check_changed = True
                 pw._set_checked_state(True)
             self.checked_list.append(pw)
-            
+
         num_new = len(new_check_list)
         if num_new == 0:
             self.sel_anchor_widget = None
@@ -733,11 +755,11 @@ class TextEditListScrollArea(QScrollArea):
                 widget._set_checked_state(False)
                 self.checked_list.remove(widget)
         self.vlayout.removeWidget(widget)
-    
+
     def focusOutEvent(self, e: QFocusEvent) -> None:
         self.focus_out.emit()
         super().focusOutEvent(e)
-    
+
     def setFoldTextarea(self, fold: bool):
         for pw in self.pairwidget_list:
             pw.e_trans.setFold(fold)

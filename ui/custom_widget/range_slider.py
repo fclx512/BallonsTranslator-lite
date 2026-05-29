@@ -1,6 +1,6 @@
+from qtpy.QtCore import QPoint, QRect, QRectF, Qt, Signal
+from qtpy.QtGui import QColor, QMouseEvent, QPainter
 from qtpy.QtWidgets import QWidget
-from qtpy.QtCore import Qt, QRect, QRectF, QPoint, Signal
-from qtpy.QtGui import QMouseEvent, QPainter, QColor
 
 from .helper import isDarkTheme, themeColor
 

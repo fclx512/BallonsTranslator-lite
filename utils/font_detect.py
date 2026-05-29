@@ -1,9 +1,7 @@
-import os
-import hashlib
 import logging
+import os
 import sys
-from typing import Tuple
-from typing import Dict
+from typing import Dict, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -14,17 +12,15 @@ except ImportError:
 
 try:
     import torch.nn as nn
-    from torchvision import models
     from PIL import Image
-    from torchvision import transforms
-except Exception as e:
+    from torchvision import models, transforms
+except Exception:
     nn = None
     models = None
     Image = None
     transforms = None
 
-from utils import shared
-from utils import download_util
+from utils import download_util, shared
 
 MODEL_REL_PATH = os.path.join('data', 'models', 'YuzuMarker.FontDetection', 'name=4x-epoch=18-step=368676.ckpt')
 MODEL_URL = 'https://huggingface.co/gyrojeff/YuzuMarker.FontDetection/resolve/main/name=4x-epoch=18-step=368676.ckpt'
@@ -93,11 +89,11 @@ def prepare_fonts(cache_path: str = None):
         if cache_path and os.path.exists(cache_path):
             if YUZUMARKER_DIR not in sys.path:
                 sys.path.insert(0, YUZUMARKER_DIR)
-            
+
             with open(cache_path, 'rb') as f:
                 import pickle
                 font_objects = pickle.load(f)
-                
+
                 # Convert font objects to their path strings
                 font_list = []
                 for font_obj in font_objects:
@@ -106,7 +102,7 @@ def prepare_fonts(cache_path: str = None):
                     else:
                         # Fallback: if the object doesn't have path attribute, keep the original object
                         font_list.append(font_obj)
-                
+
                 return font_list
         else:
             pass
@@ -152,7 +148,7 @@ class FontDetector:
                 os.makedirs(model_dir, exist_ok=True)
                 logger.info(f'Downloading font detection model to {self.model_path}...')
                 _download_file(MODEL_URL, self.model_path)
-                logger.info(f'Model download completed')
+                logger.info('Model download completed')
             except Exception as e:
                 logger.error(f'Failed to download model: {e}')
                 raise
@@ -173,10 +169,10 @@ class FontDetector:
             return
         try:
             self.ensure_model()
-            
+
             # Load the checkpoint
             checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=False)
-            
+
             # Extract state dict
             if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
                 raw_sd = checkpoint["state_dict"]
@@ -184,10 +180,10 @@ class FontDetector:
                 raw_sd = checkpoint
             else:
                 raw_sd = checkpoint
-                
+
             # Clean state dict keys
             clean_sd = _clean_state_dict_keys(raw_sd)
-            
+
             # Create ResNet50 model
             self.model = models.resnet50(pretrained=False)
             # Modify the final layer based on the expected number of font classes
@@ -197,12 +193,12 @@ class FontDetector:
                 if 'fc.weight' in key:
                     num_classes = value.shape[0]
                     break
-            
+
             if num_classes is not None:
                 self.model.fc = nn.Linear(self.model.fc.in_features, num_classes)
             else:
                 logger.warning("Could not determine number of classes from state dict, using default")
-                
+
             # If so, remove the prefix to match the model architecture
             if any(key.startswith('model.') for key in clean_sd.keys()):
                 new_clean_sd = {}
@@ -213,7 +209,7 @@ class FontDetector:
                     else:
                         new_clean_sd[key] = value
                 clean_sd = new_clean_sd
-        
+
             # Load the state dict
             try:
                 self.model.load_state_dict(clean_sd, strict=True)
@@ -221,7 +217,7 @@ class FontDetector:
                 logger.warning(f"Strict load failed: {e}")
                 logger.info("Attempting load with strict=False")
                 self.model.load_state_dict(clean_sd, strict=False)
-            
+
             self.model.to(self.device)
             self.model.eval()
 
@@ -234,7 +230,7 @@ class FontDetector:
 
             # simple transform
             self.transform = transforms.Compose([
-                transforms.Resize((self.input_size, self.input_size)), 
+                transforms.Resize((self.input_size, self.input_size)),
                 transforms.ToTensor()
             ])
         except Exception as e:
@@ -259,7 +255,7 @@ class FontDetector:
             t = self.transform(pil).unsqueeze(0).to(self.device)
             with torch.no_grad():
                 out = self.model(t)
-                
+
                 # The model may have more outputs than actual fonts, so we only consider the first FONT_COUNT
                 font_count = min(6150, out.shape[1])  # Use the smaller of 6150 or actual output size
                 probs = out[0][:font_count].softmax(dim=0)
@@ -303,7 +299,6 @@ def detect_font_from_block(img, blk) -> Tuple[str, float]:
         else:
             region = img[y1:y2, x1:x2]
         # if region too small, resize with padding
-        import cv2
         h, w = region.shape[:2]
         if h == 0 or w == 0:
             logger.warning(f"Region has zero size (h={h}, w={w}), using full image")

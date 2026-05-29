@@ -1,21 +1,21 @@
+import errno
+import hashlib
 import math
 import os
-import errno
-import traceback
+import os.path as osp
 import re
 import shutil
-import os.path as osp
-from typing import List, Union, Optional, Any
-import hashlib
-from dataclasses import dataclass, field, is_dataclass
-import tempfile
-import uuid
-from urllib.request import Request, urlopen
 import ssl
+import tempfile
+import traceback
+import uuid
+from dataclasses import dataclass
+from typing import List, Optional, Union
+from urllib.request import Request, urlopen
 
 import requests
-from tqdm import tqdm
 from py7zr import pack_7zarchive, unpack_7zarchive
+from tqdm import tqdm
 
 from . import shared
 from .logger import logger as LOGGER
@@ -216,7 +216,7 @@ def check_local_file(local_file: str, sha256_precal: str = None, cache_hash: boo
             if cache_hash:
                 shared.cache_data[local_file] = sha256_calculated
                 shared.CACHE_UPDATED = True
-    
+
     return file_exists, valid_hash, sha256_calculated
 
 
@@ -243,17 +243,17 @@ class DownloadContext:
 DOWNLOAD_CONTEXT = DownloadContext()
 
 
-def try_download_files(url: str, 
-                        files: List[str], 
-                        save_files = List[str], 
-                        sha256_pre_calculated: List[str] = None, 
+def try_download_files(url: str,
+                        files: List[str],
+                        save_files = List[str],
+                        sha256_pre_calculated: List[str] = None,
                         concatenate_url_filename: int = 0,
                         cache_hash: bool = False,
                         download_method: str = '',
                         gdrive_file_id: str = None):
-    
+
     all_successful = True
-    
+
     for file, savep, sha256_precal in zip(files, save_files, sha256_pre_calculated):
         save_dir = osp.dirname(savep)
         if not osp.exists(save_dir):
@@ -265,7 +265,7 @@ def try_download_files(url: str,
                 continue
             else:
                 LOGGER.warning(f'Mismatch between local file {savep} and pre-calculated hash: "{sha256_calculated}" <-> "{sha256_precal.lower()}", it will be redownloaded...')
-        
+
         try:
             if concatenate_url_filename == 1:
                 download_url = url + file
@@ -290,21 +290,21 @@ def try_download_files(url: str,
             all_successful = False
             LOGGER.error(err_msg)
             LOGGER.error(f'Failed downloading {file} from {download_url}, please manually save it to {savep}')
-    
+
     return all_successful
 
 
-def download_and_check_files(url: str, 
-                        files: Union[str, List], 
-                        save_files = None, 
-                        sha256_pre_calculated: Union[str, List] = None, 
-                        concatenate_url_filename: int = 0, 
-                        archived_files: List = None, 
+def download_and_check_files(url: str,
+                        files: Union[str, List],
+                        save_files = None,
+                        sha256_pre_calculated: Union[str, List] = None,
+                        concatenate_url_filename: int = 0,
+                        archived_files: List = None,
                         archive_sha256_pre_calculated: Union[str, List] = None,
                         save_dir: str = None,
                         download_method: str = 'torch_hub',
                         gdrive_file_id: str = None):
-        
+
     def _wrap_up_checkinputs(files: Union[str, List], save_files: Union[str, List] = None, sha256_pre_calculated: Union[str, List] = None, save_dir: str = None):
         '''
         ensure they're lists with equal length
@@ -337,8 +337,8 @@ def download_and_check_files(url: str,
             if not file_exists or not valid_hash:
                 return False
         return True
-    
-        
+
+
     files, save_files, sha256_pre_calculated = _wrap_up_checkinputs(files, save_files, sha256_pre_calculated, save_dir)
 
     if archived_files is None:
@@ -347,7 +347,7 @@ def download_and_check_files(url: str,
     # handle archived
     if _all_valid(save_files, sha256_pre_calculated):
         return [], None
-    
+
     if isinstance(archived_files, str):
         archived_files = [archived_files]
 
@@ -357,7 +357,7 @@ def download_and_check_files(url: str,
     archive_downloaded = try_download_files(url, archived_files, tmp_downloaded_archives, archive_sha256_pre_calculated, concatenate_url_filename, cache_hash=False, download_method=download_method, gdrive_file_id=gdrive_file_id)
     if not archive_downloaded:
         return False
-    
+
     # extract archived
     archivep = tmp_downloaded_archives[0] # todo: support multi-volume
     extract_dir = osp.join(shared.cache_dir, 'tmp_extract')

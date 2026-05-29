@@ -1,4 +1,5 @@
 from typing import List, Optional
+
 try:
     import torch
     import torch.nn as nn
@@ -6,9 +7,7 @@ try:
 except ImportError:
     raise ImportError("PyTorch not available")
 import numpy as np
-import cv2
 
-from utils.imgproc_utils import resize_keepasp
 
 def relu_nf(x) :
 	return F.relu(x) * 1.7139588594436646
@@ -52,7 +51,7 @@ class ScaledWSConv2d(nn.Conv2d):
 			var * fan_in, torch.tensor(self.eps).to(var.device))) * self.gain.view_as(var).to(var.device)
 		shift = mean * scale
 		return self.weight * scale - shift
-		
+
 	def forward(self, x):
 		return F.conv2d(x, self.get_weight(), self.bias,
 			self.stride, self.padding,
@@ -87,7 +86,7 @@ class ScaledWSTransposeConv2d(nn.ConvTranspose2d):
 			var * fan_in, torch.tensor(self.eps).to(var.device))) * self.gain.view_as(var).to(var.device)
 		shift = mean * scale
 		return self.weight * scale - shift
-		
+
 	def forward(self, x, output_size: Optional[List[int]] = None):
 		output_padding = self._output_padding(
 			input, output_size, self.stride, self.padding, self.kernel_size, self.dilation)
@@ -150,7 +149,7 @@ class AOTBlock(nn.Module):
 		self.rates = rates
 		for i, rate in enumerate(rates):
 			self.__setattr__(
-				'block{}'.format(str(i).zfill(2)), 
+				'block{}'.format(str(i).zfill(2)),
 				nn.Sequential(
 					nn.ReflectionPad2d(rate),
 					nn.Conv2d(dim, dim//4, 3, padding=0, dilation=rate),
@@ -193,6 +192,8 @@ class ResBlockDis(nn.Module):
 		x = self.conv2(F.leaky_relu(self.bn2(x), 0.2))
 		return sc + x
 from torch.nn.utils import spectral_norm
+
+
 class Discriminator(nn.Module) :
 	def __init__(self, in_ch = 3, in_planes = 64, blocks = [2, 2, 2], alpha = 0.2) :
 		super(Discriminator, self).__init__()
