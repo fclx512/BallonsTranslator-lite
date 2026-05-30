@@ -563,6 +563,8 @@ class MainWindow(mainwindow_cls):
         self.configPanel.reload_textstyle.connect(self.load_textstyle_from_proj_dir)
         self.configPanel.font_exclusion_changed.connect(self.refresh_font_list_exclusion)
         self.configPanel.theme_changed.connect(self._on_theme_config_changed)
+        self.configPanel.shortcuts_changed.connect(self.refreshShortcuts)
+        self.configPanel.presets_changed.connect(self._on_presets_changed)
         # 初始化字体列表（系统字体枚举）
         shared.init_font_list()
         # 使用过滤后的字体列表（排除用户已隐藏的字体）
@@ -605,6 +607,10 @@ class MainWindow(mainwindow_cls):
         elif filtered:
             familybox.setCurrentIndex(0)
 
+    def _on_presets_changed(self):
+        self.textPanel.formatpanel.reload_presets()
+        if hasattr(self.textPanel.formatpanel, 'textadvancedfmt_panel'):
+            self.textPanel.formatpanel.textadvancedfmt_panel.reload_presets()
 
     def setupImgTransUI(self):
         self._hideConfigOverlay()
@@ -869,16 +875,6 @@ class MainWindow(mainwindow_cls):
         self.page_changing = False
 
     def setupShortcuts(self):
-        from utils.config import pcfg
-
-        def _keys(action_id, defaults):
-            if action_id in pcfg.shortcuts:
-                keys = pcfg.shortcuts[action_id]
-                if not isinstance(keys, list):
-                    keys = [keys] if keys else []
-                return keys
-            return list(defaults)
-
         self.shortcut_registry = {}
 
         self.titleBar.textedit_trigger.connect(self.shortcutTextedit)
@@ -891,41 +887,74 @@ class MainWindow(mainwindow_cls):
         self.titleBar.merge_tool_trigger.connect(self.on_open_merge_tool)
         self.titleBar.help_about_triggered.connect(self.show_about_dialog)
 
-        def _make_shortcuts(action_id, defaults, slot):
-            lst = []
-            for k in _keys(action_id, defaults):
-                sc = QShortcut(QKeySequence(k), self)
-                sc.activated.connect(slot)
-                lst.append(sc)
-            return lst
+        self._install_shortcuts()
 
-        self.shortcut_registry['prev_page'] = _make_shortcuts('prev_page', ['A'], self.shortcutBefore)
-        self.shortcut_registry['prev_page_alt'] = _make_shortcuts('prev_page_alt', ['PgUp'], self.shortcutBefore)
-        self.shortcut_registry['next_page'] = _make_shortcuts('next_page', ['D'], self.shortcutNext)
-        self.shortcut_registry['next_page_alt'] = _make_shortcuts('next_page_alt', ['PgDown'], self.shortcutNext)
-        self.shortcut_registry['textblock_mode'] = _make_shortcuts('textblock_mode', ['W'], self.shortcutTextblock)
-        self.shortcut_registry['zoom_in'] = _make_shortcuts('zoom_in', ['Ctrl++'], self.canvas.gv.scale_up_signal)
-        self.shortcut_registry['zoom_out'] = _make_shortcuts('zoom_out', ['Ctrl+-'], self.canvas.gv.scale_down_signal)
-        self.shortcut_registry['delete_blks_alt'] = _make_shortcuts('delete_blks_alt', ['Ctrl+D'], self.shortcutCtrlD)
-        self.shortcut_registry['space_inpaint'] = _make_shortcuts('space_inpaint', ['Space'], self.shortcutSpace)
-        self.shortcut_registry['select_all'] = _make_shortcuts('select_all', ['Ctrl+A'], self.shortcutSelectAll)
-        self.shortcut_registry['preview'] = _make_shortcuts('preview', ['Tab'], self.shortcutPreview)
-        self.shortcut_registry['escape'] = _make_shortcuts('escape', ['Escape'], self.shortcutEscape)
-        self.shortcut_registry['bold'] = _make_shortcuts('bold', ['Ctrl+B'], self.shortcutBold)
-        self.shortcut_registry['italic'] = _make_shortcuts('italic', ['Ctrl+I'], self.shortcutItalic)
-        self.shortcut_registry['underline'] = _make_shortcuts('underline', ['Ctrl+U'], self.shortcutUnderline)
-        self.shortcut_registry['delete_blks'] = _make_shortcuts('delete_blks', ['Del'], self.shortcutDelete)
+    def _get_shortcut_keys(self, action_id, defaults):
+        """Resolve shortcut keys: user config overrides defaults."""
+        from utils.config import pcfg
+        if action_id in pcfg.shortcuts:
+            keys = pcfg.shortcuts[action_id]
+            if not isinstance(keys, list):
+                keys = [keys] if keys else []
+            return keys
+        return list(defaults)
+
+    def _make_shortcuts(self, action_id, defaults, slot):
+        lst = []
+        for k in self._get_shortcut_keys(action_id, defaults):
+            sc = QShortcut(QKeySequence(k), self)
+            sc.activated.connect(slot)
+            lst.append(sc)
+        return lst
+
+    def refreshShortcuts(self):
+        """Rebuild all QShortcut objects from current pcfg.shortcuts (live update after editing)."""
+        for lst in self.shortcut_registry.values():
+            for sc in lst:
+                sc.deleteLater()
+        self.shortcut_registry.clear()
+        self._install_shortcuts()
+
+    def _install_shortcuts(self):
+        """Create all QShortcut objects from current config (used at init + refresh)."""
+
+        self.shortcut_registry['prev_page'] = self._make_shortcuts('prev_page', ['A'], self.shortcutBefore)
+        self.shortcut_registry['prev_page_alt'] = self._make_shortcuts('prev_page_alt', ['PgUp'], self.shortcutBefore)
+        self.shortcut_registry['next_page'] = self._make_shortcuts('next_page', ['D'], self.shortcutNext)
+        self.shortcut_registry['next_page_alt'] = self._make_shortcuts('next_page_alt', ['PgDown'], self.shortcutNext)
+        self.shortcut_registry['textblock_mode'] = self._make_shortcuts('textblock_mode', ['W'], self.shortcutTextblock)
+        self.shortcut_registry['zoom_in'] = self._make_shortcuts('zoom_in', ['Ctrl++'], self.canvas.gv.scale_up_signal)
+        self.shortcut_registry['zoom_out'] = self._make_shortcuts('zoom_out', ['Ctrl+-'], self.canvas.gv.scale_down_signal)
+        self.shortcut_registry['delete_blks_alt'] = self._make_shortcuts('delete_blks_alt', ['Ctrl+D'], self.shortcutCtrlD)
+        self.shortcut_registry['space_inpaint'] = self._make_shortcuts('space_inpaint', ['Space'], self.shortcutSpace)
+        self.shortcut_registry['select_all'] = self._make_shortcuts('select_all', ['Ctrl+A'], self.shortcutSelectAll)
+        self.shortcut_registry['preview'] = self._make_shortcuts('preview', ['Tab'], self.shortcutPreview)
+        self.shortcut_registry['escape'] = self._make_shortcuts('escape', ['Escape'], self.shortcutEscape)
+        self.shortcut_registry['bold'] = self._make_shortcuts('bold', ['Ctrl+B'], self.shortcutBold)
+        self.shortcut_registry['italic'] = self._make_shortcuts('italic', ['Ctrl+I'], self.shortcutItalic)
+        self.shortcut_registry['underline'] = self._make_shortcuts('underline', ['Ctrl+U'], self.shortcutUnderline)
+        self.shortcut_registry['delete_blks'] = self._make_shortcuts('delete_blks', ['Del'], self.shortcutDelete)
+
+        # Wire up actions that were previously only available via hardcoded TitleBar QAction shortcuts
+        self.shortcut_registry['textedit_mode'] = self._make_shortcuts('textedit_mode', ['T'], self.shortcutTextedit)
+        self.shortcut_registry['drawboard_mode'] = self._make_shortcuts('drawboard_mode', ['P'], self.shortcutDrawboard)
+        self.shortcut_registry['undo'] = self._make_shortcuts('undo', ['Ctrl+Z'], self.on_undo)
+        self.shortcut_registry['redo'] = self._make_shortcuts('redo', ['Ctrl+Y'], self.on_redo)
+        self.shortcut_registry['page_search'] = self._make_shortcuts('page_search', ['Ctrl+F'], self.on_page_search)
+        self.shortcut_registry['global_search'] = self._make_shortcuts('global_search', ['Ctrl+G'], self.on_global_search)
+        self.shortcut_registry['merge_tool'] = self._make_shortcuts('merge_tool', ['Ctrl+Shift+M'], self.on_open_merge_tool)
 
         drawpanel_info = {'hand': 'hand_tool', 'rect': 'rect_tool', 'inpaint': 'inpaint_tool', 'pen': 'pen_tool'}
         drawpanel_defs = {'hand_tool': ['H'], 'rect_tool': ['R'], 'inpaint_tool': ['J'], 'pen_tool': ['B']}
         for tool_name, action_id in drawpanel_info.items():
-            keys = _keys(action_id, drawpanel_defs[action_id])
+            keys = self._get_shortcut_keys(action_id, drawpanel_defs[action_id])
             lst = []
             for k in keys:
                 sc = QShortcut(QKeySequence(k), self)
                 sc.activated.connect(partial(self.drawingPanel.shortcutSetCurrentToolByName, tool_name))
                 lst.append(sc)
-            self.drawingPanel.setShortcutTip(tool_name, keys[0])
+            if keys:
+                self.drawingPanel.setShortcutTip(tool_name, keys[0])
             self.shortcut_registry[action_id] = lst
 
     def shortcutNext(self):

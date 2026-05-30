@@ -717,6 +717,8 @@ class ConfigPanel(Widget):
     font_exclusion_changed = Signal()
     profiles_changed = Signal()
     theme_changed = Signal()
+    shortcuts_changed = Signal()
+    presets_changed = Signal()
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -857,6 +859,34 @@ class ConfigPanel(Widget):
         self.max_font_size_edit.valueChanged.connect(self.on_max_font_size_changed)
         max_font_sublock = ConfigSubBlock(self.max_font_size_edit, self.tr('Max Font Size (px)'))
         ts_layout.addWidget(max_font_sublock)
+
+        # --- Preset values for font format combo boxes ---
+        self._preset_editors = {}
+        def _make_preset_row(label: str, config_key: str):
+            """Build a label + comma-separated QLineEdit row for a preset list."""
+            row = QHBoxLayout()
+            row.setSpacing(6)
+            lbl = QLabel(label)
+            lbl.setFixedWidth(110)
+            row.addWidget(lbl)
+            edit = QLineEdit()
+            edit.setText(', '.join(str(v) for v in getattr(pcfg, config_key)))
+            edit.setPlaceholderText(self.tr('comma-separated values'))
+            row.addWidget(edit, 1)
+            sublock = ConfigSubBlock(row)
+            ts_layout.addWidget(sublock)
+            self._preset_editors[config_key] = edit
+            edit.editingFinished.connect(lambda k=config_key, e=edit: self._on_preset_edited(k, e))
+
+        preset_header = QLabel(self.tr('Combo Box Presets'))
+        preset_header.setStyleSheet('font-weight: bold; padding: 8px 0 0 24px;')
+        ts_layout.addWidget(preset_header)
+
+        _make_preset_row(self.tr('Font Size:'), 'font_size_presets')
+        _make_preset_row(self.tr('Line Spacing:'), 'line_spacing_presets')
+        _make_preset_row(self.tr('Letter Spacing:'), 'letter_spacing_presets')
+        _make_preset_row(self.tr('Stroke Width:'), 'stroke_width_presets')
+        _make_preset_row(self.tr('Opacity:'), 'opacity_presets')
 
         self.typesetting_block = generalConfigPanel.addGroupedBlock(label_typesetting, ts_widget, object_name="GroupGeneral")
 
@@ -1027,6 +1057,23 @@ class ConfigPanel(Widget):
     def on_max_font_size_changed(self, value: int):
         pcfg.max_font_size = value
 
+    def _on_preset_edited(self, config_key: str, editor: QLineEdit):
+        raw = editor.text()
+        parts = [p.strip() for p in raw.split(',') if p.strip()]
+        values = []
+        for p in parts:
+            try:
+                values.append(float(p))
+            except ValueError:
+                pass
+        if values:
+            setattr(pcfg, config_key, values)
+            from utils.config import save_config
+            save_config()
+            self.presets_changed.emit()
+        else:
+            editor.setText(', '.join(str(v) for v in getattr(pcfg, config_key)))
+
     def on_intermediate_imgformat_changed(self):
         pcfg.intermediate_imgsave_ext = '.' + self.intermediate_imgformat_combobox.currentText().lower()
 
@@ -1104,6 +1151,7 @@ class ConfigPanel(Widget):
     def _open_shortcut_dialog(self):
         dialog = ShortcutDialog(self)
         dialog.exec()
+        self.shortcuts_changed.emit()
 
     # ── Theme management ──
 

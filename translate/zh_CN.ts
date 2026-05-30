@@ -332,6 +332,34 @@
             <source>built-in</source>
             <translation>内置</translation>
         </message>
+        <message>
+            <source>Combo Box Presets</source>
+            <translation>下拉框预设值</translation>
+        </message>
+        <message>
+            <source>Font Size:</source>
+            <translation>字号：</translation>
+        </message>
+        <message>
+            <source>Letter Spacing:</source>
+            <translation>字间距：</translation>
+        </message>
+        <message>
+            <source>Line Spacing:</source>
+            <translation>行距：</translation>
+        </message>
+        <message>
+            <source>Opacity:</source>
+            <translation>不透明度：</translation>
+        </message>
+        <message>
+            <source>Stroke Width:</source>
+            <translation>描边宽度：</translation>
+        </message>
+        <message>
+            <source>comma-separated values</source>
+            <translation>逗号分隔的数值</translation>
+        </message>
     </context>
     <context>
         <name>FontExcludeDialog</name>

@@ -151,11 +151,7 @@ class FontSizeBox(QFrame):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.fcombobox = SizeComboBox([1, 200], 'font_size', self)
-        self.fcombobox.addItems([
-            "5", "5.5", "6.5", "7.5", "8", "9", "10", "10.5",
-            "11", "12", "14", "16", "18", "20", '22', "26", "28",
-            "36", "48", "56", "72", "93", "123", "163"
-        ])
+        self.fcombobox.addItems([str(v) for v in C.pcfg.font_size_presets])
         self.fcombobox.param_changed.connect(self.param_changed)
 
         hlayout = QHBoxLayout(self)
@@ -254,7 +250,7 @@ class FontFormatPanel(Widget):
         self.lineSpacingLabel.btn_released.connect(lambda : self.on_param_changed('line_spacing', self.lineSpacingBox.value()))
 
         self.lineSpacingBox = SizeComboBox([0, 100], 'line_spacing', self)
-        self.lineSpacingBox.addItems(["1.0", "1.1", "1.2"])
+        self.lineSpacingBox.addItems([str(v) for v in C.pcfg.line_spacing_presets])
         self.lineSpacingBox.setToolTip(self.tr("Change line spacing"))
         self.lineSpacingBox.param_changed.connect(self.on_param_changed)
 
@@ -275,7 +271,7 @@ class FontFormatPanel(Widget):
         self.verticalChecker.clicked.connect(lambda : self.on_param_changed('vertical', self.verticalChecker.isChecked()))
 
         self.strokeWidthBox = SizeComboBox([0, 10], 'stroke_width', self)
-        self.strokeWidthBox.addItems(["0.1"])
+        self.strokeWidthBox.addItems([str(v) for v in C.pcfg.stroke_width_presets])
         self.strokeWidthBox.setToolTip(self.tr("Change stroke width"))
         self.strokeWidthBox.param_changed.connect(self.on_param_changed)
 
@@ -300,7 +296,7 @@ class FontFormatPanel(Widget):
         stroke_hlayout.setSpacing(shared.WIDGET_SPACING_CLOSE)
 
         self.letterSpacingBox = SizeComboBox([0, 10], "letter_spacing", self)
-        self.letterSpacingBox.addItems(["0.0"])
+        self.letterSpacingBox.addItems([str(v) for v in C.pcfg.letter_spacing_presets])
         self.letterSpacingBox.setToolTip(self.tr("Change letter spacing"))
         self.letterSpacingBox.setMinimumWidth(int(self.letterSpacingBox.height() * 2.5))
         self.letterSpacingBox.param_changed.connect(self.on_param_changed)
@@ -539,6 +535,37 @@ class FontFormatPanel(Widget):
             valid_title = self.textstyle_panel.elidedText(title)
             self.textstyle_panel.setTitle(valid_title)
 
+    def reload_presets(self):
+        """Reload dropdown items from pcfg preset lists, preserving current values."""
+        from utils.config import pcfg
+
+        self.fcombobox.blockSignals(True)
+        cur = self.fcombobox.value()
+        self.fcombobox.clear()
+        self.fcombobox.addItems([str(v) for v in pcfg.font_size_presets])
+        self.fcombobox.setValue(cur)
+        self.fcombobox.blockSignals(False)
+
+        self.lineSpacingBox.blockSignals(True)
+        cur = self.lineSpacingBox.value()
+        self.lineSpacingBox.clear()
+        self.lineSpacingBox.addItems([str(v) for v in pcfg.line_spacing_presets])
+        self.lineSpacingBox.setValue(cur)
+        self.lineSpacingBox.blockSignals(False)
+
+        self.letterSpacingBox.blockSignals(True)
+        cur = self.letterSpacingBox.value()
+        self.letterSpacingBox.clear()
+        self.letterSpacingBox.addItems([str(v) for v in pcfg.letter_spacing_presets])
+        self.letterSpacingBox.setValue(cur)
+        self.letterSpacingBox.blockSignals(False)
+
+        self.strokeWidthBox.blockSignals(True)
+        cur = self.strokeWidthBox.value()
+        self.strokeWidthBox.clear()
+        self.strokeWidthBox.addItems([str(v) for v in pcfg.stroke_width_presets])
+        self.strokeWidthBox.setValue(cur)
+        self.strokeWidthBox.blockSignals(False)
 
     def deactivate_style_label(self):
         if self.active_text_style_label() is not None:

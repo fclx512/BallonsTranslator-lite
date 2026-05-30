@@ -3,6 +3,7 @@ from typing import Callable
 from qtpy.QtCore import Qt, Signal
 from qtpy.QtWidgets import QHBoxLayout, QPushButton, QSizePolicy, QVBoxLayout
 
+from utils import config as C
 from utils.fontformat import FontFormat
 
 from .custom_widget import (
@@ -38,6 +39,7 @@ class TextAdvancedFormatPanel(PanelArea):
         punct_align_layout.addWidget(self.punct_align_combobox)
 
         self.opacity_box = SmallSizeComboBox([0, 1], 'opacity', self, init_value=1.)
+        self.opacity_box.addItems([str(v) for v in C.pcfg.opacity_presets])
         self.opacity_box.setToolTip(self.tr("Set Text Opacity"))
         self.opacity_box.param_changed.connect(self.on_format_changed)
         self.opacity_label = SmallSizeControlLabel(self, direction=1, text=self.tr('Opacity'), alignment=Qt.AlignmentFlag.AlignCenter)
@@ -111,6 +113,14 @@ class TextAdvancedFormatPanel(PanelArea):
         self.linespacing_type_combobox.setCurrentIndex(font_format.line_spacing_type)
         self.opacity_box.setValue(font_format.opacity)
         self._update_effect_btns(font_format)
+
+    def reload_presets(self):
+        cur = self.opacity_box.value()
+        self.opacity_box.blockSignals(True)
+        self.opacity_box.clear()
+        self.opacity_box.addItems([str(v) for v in C.pcfg.opacity_presets])
+        self.opacity_box.setValue(cur)
+        self.opacity_box.blockSignals(False)
 
     def _update_effect_btns(self, font_format: FontFormat):
         base = ("QPushButton { border: 1px solid palette(mid); border-radius: 4px; "

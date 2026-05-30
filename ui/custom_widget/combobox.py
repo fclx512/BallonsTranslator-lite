@@ -1,7 +1,7 @@
 from typing import Callable, List
 
 from qtpy.QtCore import Qt, Signal
-from qtpy.QtGui import QDoubleValidator
+from qtpy.QtGui import QDoubleValidator, QWheelEvent
 from qtpy.QtWidgets import QComboBox, QWidget
 
 from utils.shared import (
@@ -97,6 +97,7 @@ class SizeComboBox(QComboBox):
         self.editTextChanged.connect(self.on_text_changed)
         self.activated.connect(self.on_current_index_changed)
         self.setEditable(True)
+        self.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.min_val = val_range[0]
         self.max_val = val_range[1]
         validator = QDoubleValidator()
@@ -109,6 +110,12 @@ class SizeComboBox(QComboBox):
         self._value = 0
         if init_value is not None:
             self.setValue(init_value)
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        if self.hasFocus():
+            super().wheelEvent(event)
+        else:
+            event.ignore()
 
     def on_text_changed(self):
         if self.hasFocus():
