@@ -15,6 +15,7 @@ from .misc import pixmap2ndarray
 
 SIZE_MAX = 2147483647
 
+
 class ImageEditMode:
     NONE = 0
     HandTool = 0
@@ -22,13 +23,22 @@ class ImageEditMode:
     PenTool = 2
     RectTool = 3
 
+
 class PenShape:
     Circle = 0
     Rectangle = 1
     Triangle = 2
 
+
 class StrokeImgItem(QGraphicsItem):
-    def __init__(self, pen: QPen, point: QPointF, size: QSize, format: QImage.Format = QImage.Format.Format_ARGB32, shape=PenShape.Circle):
+    def __init__(
+        self,
+        pen: QPen,
+        point: QPointF,
+        size: QSize,
+        format: QImage.Format = QImage.Format.Format_ARGB32,
+        shape=PenShape.Circle,
+    ):
         super().__init__()
         self._img = QImage(size, format)
         self._img.fill(Qt.GlobalColor.transparent)
@@ -71,10 +81,12 @@ class StrokeImgItem(QGraphicsItem):
         self.painter.end()
         self.is_painting = False
 
-    def clip(self, mask_only=False, format=QImage.Format.Format_ARGB32_Premultiplied) -> Tuple[List, np.ndarray, QImage]:
+    def clip(
+        self, mask_only=False, format=QImage.Format.Format_ARGB32_Premultiplied
+    ) -> Tuple[List, np.ndarray, QImage]:
         img_array = pixmap2ndarray(self._img, True)
         ar = cv2.boundingRect(cv2.findNonZero(img_array[..., -1]))
-        img_array = img_array[ar[1]: ar[1] + ar[3], ar[0]: ar[0] + ar[2]]
+        img_array = img_array[ar[1] : ar[1] + ar[3], ar[0] : ar[0] + ar[2]]
         if not (ar[2] > 0 and ar[3] > 0):
             return None, None, None
         if mask_only:
@@ -111,7 +123,7 @@ class StrokeImgItem(QGraphicsItem):
 
     def lineTo(self, new_pnt: QPointF, update=True) -> QRectF:
         delta = self.cur_point - new_pnt
-        delta_w, delta_h = abs(delta.x()),  abs(delta.y())
+        delta_w, delta_h = abs(delta.x()), abs(delta.y())
         rect = None
         if delta_w + delta_h > 1:
             min_x = min(self.cur_point.x(), new_pnt.x()) - self._r
@@ -125,7 +137,9 @@ class StrokeImgItem(QGraphicsItem):
                 self.update(rect)
         return rect
 
-    def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: QWidget) -> None:
+    def paint(
+        self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: QWidget
+    ) -> None:
         painter.drawImage(0, 0, self._img)
 
 
@@ -134,7 +148,9 @@ class PixmapItem(QGraphicsPixmapItem):
         super().__init__(*args, **kwargs)
         self.border_pen = border_pen
 
-    def paint(self, painter: QPainter, option: 'QStyleOptionGraphicsItem', widget: QWidget) -> None:
+    def paint(
+        self, painter: QPainter, option: "QStyleOptionGraphicsItem", widget: QWidget
+    ) -> None:
         pen = painter.pen()
         painter.setPen(self.border_pen)
         painter.drawRect(self.boundingRect())
@@ -143,7 +159,6 @@ class PixmapItem(QGraphicsPixmapItem):
 
 
 class DrawingLayer(QGraphicsPixmapItem):
-
     def __init__(self):
         super().__init__()
         self.qimg_dict = {}
@@ -152,7 +167,7 @@ class DrawingLayer(QGraphicsPixmapItem):
 
     def addQImage(self, x: int, y: int, qimg: QImage, compose_mode, key: str):
         self.qimg_dict[key] = qimg
-        self.drawing_items_info[key] = {'pos': [x, y], 'compose': compose_mode}
+        self.drawing_items_info[key] = {"pos": [x, y], "compose": compose_mode}
         self.update()
 
     def removeQImage(self, key: str):
@@ -160,7 +175,9 @@ class DrawingLayer(QGraphicsPixmapItem):
             self.qimg_dict.pop(key)
             self.drawing_items_info.pop(key)
 
-    def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: QWidget):
+    def paint(
+        self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: QWidget
+    ):
         pixmap = self.pixmap()
         if pixmap.isNull():
             self.drawed_pixmap = None
@@ -171,8 +188,8 @@ class DrawingLayer(QGraphicsPixmapItem):
             item = self.qimg_dict[key]
             info = self.drawing_items_info[key]
             if isinstance(item, QImage):
-                p.setCompositionMode(info['compose'])
-                p.drawImage(info['pos'][0], info['pos'][1], item)
+                p.setCompositionMode(info["compose"])
+                p.drawImage(info["pos"][0], info["pos"][1], item)
         p.end()
         painter.drawPixmap(self.offset(), pixmap)
         self.drawed_pixmap = pixmap

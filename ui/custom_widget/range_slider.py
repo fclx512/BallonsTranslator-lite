@@ -75,31 +75,31 @@ class RangeSlider(QWidget):
             low_rect = self._handle_rect(self._low)
             high_rect = self._handle_rect(self._high)
             if high_rect.contains(int(e.pos().x()), int(e.pos().y())):
-                self._dragging = 'high'
+                self._dragging = "high"
                 self._drag_start_val = self._high
             elif low_rect.contains(int(e.pos().x()), int(e.pos().y())):
-                self._dragging = 'low'
+                self._dragging = "low"
                 self._drag_start_val = self._low
             else:
                 # click on groove - move nearest handle
                 click_val = self._pos_to_value(e.pos().x())
                 if abs(click_val - self._low) <= abs(click_val - self._high):
                     self._low = click_val
-                    self._dragging = 'low'
+                    self._dragging = "low"
                 else:
                     self._high = click_val
-                    self._dragging = 'high'
+                    self._dragging = "high"
                 self.update()
                 self.rangeChanged.emit(self._low, self._high)
 
     def mouseMoveEvent(self, e: QMouseEvent):
-        if self._dragging == 'low':
+        if self._dragging == "low":
             new_low = self._pos_to_value(e.pos().x())
             if new_low <= self._high:
                 self._low = new_low
                 self.update()
                 self.rangeChanged.emit(self._low, self._high)
-        elif self._dragging == 'high':
+        elif self._dragging == "high":
             new_high = self._pos_to_value(e.pos().x())
             if new_high >= self._low:
                 self._high = new_high
@@ -123,11 +123,26 @@ class RangeSlider(QWidget):
         # background groove
         painter.setPen(Qt.PenStyle.NoPen)
         if disabled:
-            base = QColor(160, 160, 160, 60) if not isDarkTheme() else QColor(60, 60, 60, 60)
+            base = (
+                QColor(160, 160, 160, 60)
+                if not isDarkTheme()
+                else QColor(60, 60, 60, 60)
+            )
         else:
-            base = QColor(200, 200, 200, 120) if not isDarkTheme() else QColor(80, 80, 80, 150)
+            base = (
+                QColor(200, 200, 200, 120)
+                if not isDarkTheme()
+                else QColor(80, 80, 80, 150)
+            )
         painter.setBrush(base)
-        painter.drawRoundedRect(groove_start, cy - self._groove_height // 2, groove_w, self._groove_height, 2, 2)
+        painter.drawRoundedRect(
+            groove_start,
+            cy - self._groove_height // 2,
+            groove_w,
+            self._groove_height,
+            2,
+            2,
+        )
 
         # highlighted range
         low_x = self._value_to_pos(self._low)
@@ -136,24 +151,43 @@ class RangeSlider(QWidget):
         if disabled:
             hl_color = QColor(128, 128, 128, 80)
         painter.setBrush(hl_color)
-        painter.drawRoundedRect(QRectF(low_x, cy - self._groove_height // 2, high_x - low_x, self._groove_height), 2, 2)
+        painter.drawRoundedRect(
+            QRectF(
+                low_x,
+                cy - self._groove_height // 2,
+                high_x - low_x,
+                self._groove_height,
+            ),
+            2,
+            2,
+        )
 
         # handles
-        for val, label in [(self._low, str(self._low + 1)), (self._high, str(self._high + 1))]:
+        for val, label in [
+            (self._low, str(self._low + 1)),
+            (self._high, str(self._high + 1)),
+        ]:
             cx = int(self._value_to_pos(val))
             # outer
             outer_color = QColor(128, 128, 128, 120) if disabled else themeColor()
-            painter.setBrush(QColor(200, 200, 200) if disabled else QColor(255, 255, 255))
+            painter.setBrush(
+                QColor(200, 200, 200) if disabled else QColor(255, 255, 255)
+            )
             painter.setPen(outer_color)
-            painter.drawEllipse(QPoint(cx, cy), self._handle_radius, self._handle_radius)
+            painter.drawEllipse(
+                QPoint(cx, cy), self._handle_radius, self._handle_radius
+            )
             # inner dot
             painter.setPen(Qt.PenStyle.NoPen)
             dot_color = QColor(128, 128, 128, 120) if disabled else themeColor()
             painter.setBrush(dot_color)
             painter.drawEllipse(QPoint(cx, cy), 4, 4)
             # label below
-            label_color = QColor(128, 128, 128, 120) if disabled else (
-                QColor(255, 255, 255) if isDarkTheme() else QColor(60, 60, 60))
+            label_color = (
+                QColor(128, 128, 128, 120)
+                if disabled
+                else (QColor(255, 255, 255) if isDarkTheme() else QColor(60, 60, 60))
+            )
             painter.setPen(label_color)
             font = painter.font()
             font.setPixelSize(9)

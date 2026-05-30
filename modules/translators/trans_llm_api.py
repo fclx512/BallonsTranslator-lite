@@ -24,13 +24,13 @@ class TranslationResponse(BaseModel):
 
 
 DEFAULT_SYSTEM_PROMPT = (
-    'You are an expert translator. Your task is to accurately translate '
-    'the given text snippets. You MUST provide the output strictly in the '
-    'specified JSON format, without any additional explanations or markdown '
-    'formatting. The JSON object must have a single key \'translations\', '
-    'which is a list of objects, each with an \'id\' (integer) and a '
-    '\'translation\' (string).\n\n'
-    'Example Output Schema:\n'
+    "You are an expert translator. Your task is to accurately translate "
+    "the given text snippets. You MUST provide the output strictly in the "
+    "specified JSON format, without any additional explanations or markdown "
+    "formatting. The JSON object must have a single key 'translations', "
+    "which is a list of objects, each with an 'id' (integer) and a "
+    "'translation' (string).\n\n"
+    "Example Output Schema:\n"
     '{"translations": [{"id": 1, "translation": "Translated text here."}]}'
 )
 
@@ -112,6 +112,7 @@ class LLM_API_Translator(BaseTranslator):
         self._refresh_active_profile_options()
         # Sync profiles to global config so AI chat panel can read them
         from utils.config import pcfg as _pcfg
+
         if self.name not in _pcfg.module.translator_params:
             _pcfg.module.translator_params[self.name] = {}
         _pcfg.module.translator_params[self.name].update(self.params)
@@ -129,10 +130,12 @@ class LLM_API_Translator(BaseTranslator):
     def _load_profiles_from_shared(self):
         """Load profiles from the shared profile_manager."""
         from utils.profile_manager import load_profiles
+
         self._profiles_data = load_profiles()
 
     def _refresh_active_profile_options(self):
         from utils.profile_manager import get_profile_names
+
         names = get_profile_names()
         self.params["active_profile"]["options"] = names
         if names and not self.params["active_profile"].get("value"):
@@ -140,10 +143,12 @@ class LLM_API_Translator(BaseTranslator):
 
     def _get_profile_names(self) -> List[str]:
         from utils.profile_manager import get_profile_names
+
         return get_profile_names()
 
     def _find_profile(self, name: str) -> Optional[Dict]:
         from utils.profile_manager import find_profile
+
         return find_profile(name)
 
     # --- Active Profile Accessors ---
@@ -325,9 +330,7 @@ class LLM_API_Translator(BaseTranslator):
     def _initialize_client(self, api_key: str) -> bool:
         endpoint = self._effective_api_host
         if not endpoint:
-            self.logger.error(
-                "No api_host configured in the active profile."
-            )
+            self.logger.error("No api_host configured in the active profile.")
             return False
 
         proxy = self.proxy
@@ -342,11 +345,7 @@ class LLM_API_Translator(BaseTranslator):
             except Exception as e:
                 self.logger.error(f"Failed to initialize proxy '{proxy}': {e}")
 
-        masked_key = (
-            api_key[:4] + "..." + api_key[-4:]
-            if len(api_key) > 8
-            else api_key
-        )
+        masked_key = api_key[:4] + "..." + api_key[-4:] if len(api_key) > 8 else api_key
         self.logger.debug(
             f"Initializing client with key {masked_key} at endpoint {endpoint}"
         )
@@ -403,6 +402,7 @@ class LLM_API_Translator(BaseTranslator):
             return []
         try:
             import yaml
+
             samples = yaml.load(samples_text, Loader=yaml.FullLoader)
         except Exception:
             return []
@@ -413,17 +413,16 @@ class LLM_API_Translator(BaseTranslator):
         tgt_list = samples[src_tgt].get("target", [])
         if not src_list or not tgt_list:
             return []
-        input_elems = [
-            {"id": i + 1, "source": s} for i, s in enumerate(src_list)
-        ]
-        output_elems = [
-            {"id": i + 1, "translation": t} for i, t in enumerate(tgt_list)
-        ]
+        input_elems = [{"id": i + 1, "source": s} for i, s in enumerate(src_list)]
+        output_elems = [{"id": i + 1, "translation": t} for i, t in enumerate(tgt_list)]
         return [
             {"role": "user", "content": json.dumps(input_elems, ensure_ascii=False)},
-            {"role": "assistant", "content": json.dumps(
-                {"translations": output_elems}, ensure_ascii=False
-            )},
+            {
+                "role": "assistant",
+                "content": json.dumps(
+                    {"translations": output_elems}, ensure_ascii=False
+                ),
+            },
         ]
 
     # --- API Call ---
@@ -443,9 +442,11 @@ class LLM_API_Translator(BaseTranslator):
 
         profile = self._active_profile
         system_prompt = (
-            profile.get("system_prompt") or
-            ("system_prompt" in self.params and self.get_param_value("system_prompt")) or
-            DEFAULT_SYSTEM_PROMPT
+            profile.get("system_prompt")
+            or (
+                "system_prompt" in self.params and self.get_param_value("system_prompt")
+            )
+            or DEFAULT_SYSTEM_PROMPT
         )
         messages = [
             {"role": "system", "content": system_prompt},
@@ -527,8 +528,7 @@ class LLM_API_Translator(BaseTranslator):
                     k.isdigit() for k in simple_data.keys()
                 ):
                     fixed_translations = [
-                        {"id": int(k), "translation": v}
-                        for k, v in simple_data.items()
+                        {"id": int(k), "translation": v} for k, v in simple_data.items()
                     ]
                 elif isinstance(simple_data, list):
                     fixed_translations = simple_data
@@ -602,7 +602,9 @@ class LLM_API_Translator(BaseTranslator):
                         f"Attempt {mismatch_retry}/{self.invalid_repeat_count}."
                     )
                     if mismatch_retry >= self.invalid_repeat_count:
-                        self.logger.error("Failed to get correct translation structure.")
+                        self.logger.error(
+                            "Failed to get correct translation structure."
+                        )
                         translations.extend(["[ERROR: Structure Mismatch]"] * num_src)
                         break
                     time.sleep(self.retry_timeout / 2)
@@ -635,4 +637,3 @@ class LLM_API_Translator(BaseTranslator):
             self.request_count_minute = 0
             self.minute_start_time = time.time()
             self.last_request_time = 0
-

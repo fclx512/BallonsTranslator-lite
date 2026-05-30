@@ -30,13 +30,16 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
+
 def check_deps():
     """Check which tools are available."""
     deps = {}
     for mod in ("ruff", "pytest"):
         r = subprocess.run(
             [sys.executable or "python3", "-m", mod, "--version"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         deps[mod] = r.returncode == 0
     return deps
@@ -51,7 +54,9 @@ def install_deps(deps: dict[str, bool]):
     print(f"  安装: {' '.join(missing)}")
     r = subprocess.run(
         [sys.executable or "python3", "-m", "pip", "install", *missing],
-        capture_output=True, text=True, timeout=120,
+        capture_output=True,
+        text=True,
+        timeout=120,
     )
     if r.returncode == 0:
         print("  ✓ 安装成功")
@@ -63,8 +68,11 @@ def install_deps(deps: dict[str, bool]):
 def run(cmd: list[str], cwd: str = None, timeout: int = 120) -> tuple[int, str, str]:
     try:
         r = subprocess.run(
-            cmd, cwd=cwd or str(ROOT),
-            capture_output=True, text=True, timeout=timeout,
+            cmd,
+            cwd=cwd or str(ROOT),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
         return r.returncode, r.stdout, r.stderr
     except FileNotFoundError:
@@ -82,6 +90,7 @@ def section(title: str):
 
 
 # ── Check functions ──────────────────────────────────────────────────────
+
 
 def check_i18n(ci: bool) -> int:
     section("i18n — 国际化检查")
@@ -102,7 +111,12 @@ def compile_qm() -> int:
     if not ts_path.exists():
         print(f"  ✗ 未找到 {ts_path}")
         return 1
-    cmd = [sys.executable or "python3", "scripts/qm_compile.py", str(ts_path), str(qm_path)]
+    cmd = [
+        sys.executable or "python3",
+        "scripts/qm_compile.py",
+        str(ts_path),
+        str(qm_path),
+    ]
     code, out, err = run(cmd)
     print(f"  {out.strip()}")
     if err.strip():
@@ -176,14 +190,19 @@ def print_summary(results: dict[str, tuple[int, float]]):
 
 # ── Main ─────────────────────────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="BallonsTranslator-lite 一键质量检查",
         epilog="示例: python check_all.py  |  python check_all.py --fix  |  python check_all.py --install",
     )
-    parser.add_argument("--quick", action="store_true", help="快速模式：pytest 遇错即停")
+    parser.add_argument(
+        "--quick", action="store_true", help="快速模式：pytest 遇错即停"
+    )
     parser.add_argument("--fix", action="store_true", help="自动修复 ruff 可修复问题")
-    parser.add_argument("--ci", action="store_true", help="CI 模式：遇到问题 exit non-zero")
+    parser.add_argument(
+        "--ci", action="store_true", help="CI 模式：遇到问题 exit non-zero"
+    )
     parser.add_argument("--skip-tests", action="store_true", help="跳过 pytest")
     parser.add_argument("--skip-ruff", action="store_true", help="跳过 ruff")
     parser.add_argument("--install", action="store_true", help="安装缺失的依赖后退出")
@@ -202,7 +221,7 @@ def main():
         if args.install:
             install_deps(deps)
             return
-        print(f"  跳过 ruff 和 pytest 检查（使用 --install 安装依赖）")
+        print("  跳过 ruff 和 pytest 检查（使用 --install 安装依赖）")
         args.skip_ruff = args.skip_ruff or not deps["ruff"]
         args.skip_tests = args.skip_tests or not deps["pytest"]
     else:
@@ -234,4 +253,5 @@ def main():
 
 if __name__ == "__main__":
     import os
+
     main()

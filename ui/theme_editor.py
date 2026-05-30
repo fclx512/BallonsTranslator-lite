@@ -36,59 +36,73 @@ from .misc import (
 )
 
 PRIMARY_COLOR_KEYS = [
-    '@accentPrimary',
-    '@accentDetect',
-    '@accentOCR',
-    '@accentInpaint',
-    '@accentTranslate',
-    '@highlightColor',
-    '@dangerColor',
-    '@successColor',
+    "@accentPrimary",
+    "@accentDetect",
+    "@accentOCR",
+    "@accentInpaint",
+    "@accentTranslate",
+    "@highlightColor",
+    "@dangerColor",
+    "@successColor",
 ]
 
 COLOR_DISPLAY_NAMES = {
-    '@accentPrimary': 'Primary Accent',
-    '@accentDetect': 'Detection',
-    '@accentOCR': 'OCR',
-    '@accentInpaint': 'Inpaint',
-    '@accentTranslate': 'Translate',
-    '@highlightColor': 'Highlight',
-    '@dangerColor': 'Danger',
-    '@successColor': 'Success',
+    "@accentPrimary": "Primary Accent",
+    "@accentDetect": "Detection",
+    "@accentOCR": "OCR",
+    "@accentInpaint": "Inpaint",
+    "@accentTranslate": "Translate",
+    "@highlightColor": "Highlight",
+    "@dangerColor": "Danger",
+    "@successColor": "Success",
     # Advanced keys
-    '@borderColor': 'Border',
-    '@qwidgetForegroundColor': 'Foreground',
-    '@qwidgetBackgroundColor': 'Widget Background',
-    '@widgetBackgroundColor': 'Background',
-    '@emptyContentBackgroundColor': 'Empty Content Background',
-    '@bubbleAIBackground': 'AI Bubble Background',
-    '@titleBarColor': 'Title Bar',
-    '@pushBtnBackgroundColor': 'Button Background',
-    '@noboderPushBtnBackgroundColor': 'Borderless Button',
-    '@transtexteditBackgroundColor': 'Text Edit Background',
-    '@sliderHandleColor': 'Slider Handle',
-    '@scrollBarBackground': 'Scrollbar Background',
-    '@scrollBarColor': 'Scrollbar',
-    '@scrollBarHoverColor': 'Scrollbar Hover',
-    '@textColor': 'Text',
-    '@inputBackgroundColor': 'Input Background',
-    '@disabledForegroundColor': 'Disabled Foreground',
-    '@cardBackgroundColor': 'Card Background',
-    '@hoverBackgroundColor': 'Hover Background',
-    '@inverseTextColor': 'Inverse Text',
-    '@accentPrimary20': 'Primary Accent 20%',
-    '@accentPrimary80': 'Primary Accent 80%',
+    "@borderColor": "Border",
+    "@qwidgetForegroundColor": "Foreground",
+    "@qwidgetBackgroundColor": "Widget Background",
+    "@widgetBackgroundColor": "Background",
+    "@emptyContentBackgroundColor": "Empty Content Background",
+    "@bubbleAIBackground": "AI Bubble Background",
+    "@titleBarColor": "Title Bar",
+    "@pushBtnBackgroundColor": "Button Background",
+    "@noboderPushBtnBackgroundColor": "Borderless Button",
+    "@transtexteditBackgroundColor": "Text Edit Background",
+    "@sliderHandleColor": "Slider Handle",
+    "@scrollBarBackground": "Scrollbar Background",
+    "@scrollBarColor": "Scrollbar",
+    "@scrollBarHoverColor": "Scrollbar Hover",
+    "@textColor": "Text",
+    "@inputBackgroundColor": "Input Background",
+    "@disabledForegroundColor": "Disabled Foreground",
+    "@cardBackgroundColor": "Card Background",
+    "@hoverBackgroundColor": "Hover Background",
+    "@inverseTextColor": "Inverse Text",
+    "@accentPrimary20": "Primary Accent 20%",
+    "@accentPrimary80": "Primary Accent 80%",
 }
 
 ADVANCED_COLOR_KEYS = [
-    '@borderColor', '@qwidgetForegroundColor', '@qwidgetBackgroundColor',
-    '@widgetBackgroundColor', '@emptyContentBackgroundColor', '@bubbleAIBackground',
-    '@titleBarColor', '@pushBtnBackgroundColor', '@noboderPushBtnBackgroundColor',
-    '@transtexteditBackgroundColor', '@sliderHandleColor',
-    '@scrollBarBackground', '@scrollBarColor', '@scrollBarHoverColor',
-    '@textColor', '@inputBackgroundColor', '@disabledForegroundColor',
-    '@cardBackgroundColor', '@hoverBackgroundColor', '@inverseTextColor',
-    '@accentPrimary20', '@accentPrimary80',
+    "@borderColor",
+    "@qwidgetForegroundColor",
+    "@qwidgetBackgroundColor",
+    "@widgetBackgroundColor",
+    "@emptyContentBackgroundColor",
+    "@bubbleAIBackground",
+    "@titleBarColor",
+    "@pushBtnBackgroundColor",
+    "@noboderPushBtnBackgroundColor",
+    "@transtexteditBackgroundColor",
+    "@sliderHandleColor",
+    "@scrollBarBackground",
+    "@scrollBarColor",
+    "@scrollBarHoverColor",
+    "@textColor",
+    "@inputBackgroundColor",
+    "@disabledForegroundColor",
+    "@cardBackgroundColor",
+    "@hoverBackgroundColor",
+    "@inverseTextColor",
+    "@accentPrimary20",
+    "@accentPrimary80",
 ]
 
 ALL_COLOR_KEYS = PRIMARY_COLOR_KEYS + ADVANCED_COLOR_KEYS
@@ -108,7 +122,9 @@ class _ThemeSwatch(QPushButton):
         self._color = QColor(color)
         r, g, b, a = color.red(), color.green(), color.blue(), color.alpha()
         if a < 255:
-            self.setToolTip(f"RGBA({r}, {g}, {b}, {a})  #{r:02x}{g:02x}{b:02x}{a:02x}".upper())
+            self.setToolTip(
+                f"RGBA({r}, {g}, {b}, {a})  #{r:02x}{g:02x}{b:02x}{a:02x}".upper()
+            )
         else:
             self.setToolTip(f"RGB({r}, {g}, {b})  #{r:02x}{g:02x}{b:02x}".upper())
         self.update()
@@ -129,6 +145,7 @@ class _ThemeSwatch(QPushButton):
 
     def paintEvent(self, e):
         from qtpy.QtGui import QBrush, QPainter, QPen, QPixmap
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect().adjusted(2, 2, -2, -2)
@@ -144,7 +161,9 @@ class _ThemeSwatch(QPushButton):
             painter.drawTiledPixmap(rect, check)
 
         painter.setBrush(QBrush(self._color))
-        pen_color = QColor(255, 255, 255, 200) if self._hovered else QColor(128, 128, 128, 100)
+        pen_color = (
+            QColor(255, 255, 255, 200) if self._hovered else QColor(128, 128, 128, 100)
+        )
         painter.setPen(QPen(pen_color, 1.5 if self._hovered else 1))
         painter.drawRoundedRect(rf, 4, 4)
         painter.end()
@@ -163,7 +182,7 @@ class ThemeEditorDialog(QDialog):
         self._all_themes = self._load_all()
         self._builtin_names = list(load_theme_dict().keys())
 
-        self._current_name = ''
+        self._current_name = ""
         self._working_theme: Dict = {}
         self._original_theme: Dict = {}
         self._is_builtin = False
@@ -188,7 +207,7 @@ class ThemeEditorDialog(QDialog):
         c = QColor(val)
         if c.isValid():
             return c
-        return QColor('#000000')
+        return QColor("#000000")
 
     @staticmethod
     def _color_to_str(c: QColor) -> str:
@@ -200,7 +219,7 @@ class ThemeEditorDialog(QDialog):
     # ── UI setup ─────────────────────────────────────────────
 
     def _setup_ui(self):
-        self.setWindowTitle(self.tr('Theme Editor'))
+        self.setWindowTitle(self.tr("Theme Editor"))
         self.setMinimumSize(800, 550)
         self.resize(820, 600)
 
@@ -215,7 +234,7 @@ class ThemeEditorDialog(QDialog):
         left_layout.setContentsMargins(8, 8, 4, 8)
         left_layout.setSpacing(4)
 
-        header = QLabel(self.tr('Themes'))
+        header = QLabel(self.tr("Themes"))
         f = header.font()
         f.setBold(True)
         header.setFont(f)
@@ -233,11 +252,11 @@ class ThemeEditorDialog(QDialog):
         # New / Delete buttons
         btn_row = QHBoxLayout()
         btn_row.setSpacing(4)
-        self._new_btn = QPushButton(self.tr('New...'))
+        self._new_btn = QPushButton(self.tr("New..."))
         self._new_btn.clicked.connect(self._on_new_theme)
         btn_row.addWidget(self._new_btn)
 
-        self._delete_btn = QPushButton(self.tr('Delete'))
+        self._delete_btn = QPushButton(self.tr("Delete"))
         self._delete_btn.clicked.connect(self._on_delete_theme)
         self._delete_btn.setEnabled(False)
         btn_row.addWidget(self._delete_btn)
@@ -260,7 +279,7 @@ class ThemeEditorDialog(QDialog):
         # Theme name row
         name_row = QHBoxLayout()
         name_row.setSpacing(8)
-        name_row.addWidget(QLabel(self.tr('Name:')))
+        name_row.addWidget(QLabel(self.tr("Name:")))
         self._name_edit = QLineEdit()
         self._name_edit.setFixedWidth(220)
         self._name_edit.textChanged.connect(self._on_name_changed)
@@ -274,13 +293,13 @@ class ThemeEditorDialog(QDialog):
         self._badge.setFixedWidth(50)
         self._badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._badge.setStyleSheet(
-            'QLabel { border-radius: 8px; padding: 2px 6px; font-weight: bold; }'
+            "QLabel { border-radius: 8px; padding: 2px 6px; font-weight: bold; }"
         )
         name_row.addWidget(self._badge)
         right_layout.addLayout(name_row)
 
         # "Clone to Edit" button (only for built-in)
-        self._clone_btn = QPushButton(self.tr('Clone to Edit'))
+        self._clone_btn = QPushButton(self.tr("Clone to Edit"))
         self._clone_btn.setFixedWidth(140)
         self._clone_btn.clicked.connect(self._on_clone)
         self._clone_btn.setVisible(False)
@@ -296,7 +315,7 @@ class ThemeEditorDialog(QDialog):
         scroll_layout.setSpacing(12)
 
         # Primary colors
-        primary_header = QLabel(self.tr('Theme Colors'))
+        primary_header = QLabel(self.tr("Theme Colors"))
         f = primary_header.font()
         f.setBold(True)
         primary_header.setFont(f)
@@ -309,7 +328,7 @@ class ThemeEditorDialog(QDialog):
         scroll_layout.addLayout(self._primary_grid)
 
         # Advanced colors
-        adv_header = QLabel(self.tr('Advanced Colors'))
+        adv_header = QLabel(self.tr("Advanced Colors"))
         f = adv_header.font()
         f.setBold(True)
         adv_header.setFont(f)
@@ -327,7 +346,9 @@ class ThemeEditorDialog(QDialog):
 
         # Bottom buttons
         btn_box = QDialogButtonBox(self)
-        self._apply_btn = btn_box.addButton(self.tr('Apply'), QDialogButtonBox.ButtonRole.ApplyRole)
+        self._apply_btn = btn_box.addButton(
+            self.tr("Apply"), QDialogButtonBox.ButtonRole.ApplyRole
+        )
         btn_box.addButton(QDialogButtonBox.StandardButton.Ok)
         btn_box.addButton(QDialogButtonBox.StandardButton.Cancel)
         btn_box.accepted.connect(self._on_ok)
@@ -343,7 +364,7 @@ class ThemeEditorDialog(QDialog):
         self._theme_list.clear()
 
         # Built-in section
-        header_item = QListWidgetItem(self.tr('Built-in'))
+        header_item = QListWidgetItem(self.tr("Built-in"))
         header_item.setFlags(Qt.ItemFlag.NoItemFlags)
         f = header_item.font()
         f.setBold(True)
@@ -351,18 +372,18 @@ class ThemeEditorDialog(QDialog):
         self._theme_list.addItem(header_item)
 
         for name in sorted(self._builtin_names):
-            item = QListWidgetItem(f'  {name}')
+            item = QListWidgetItem(f"  {name}")
             item.setData(Qt.ItemDataRole.UserRole, name)
             self._theme_list.addItem(item)
 
         # Separator
-        sep_item = QListWidgetItem('')
+        sep_item = QListWidgetItem("")
         sep_item.setFlags(Qt.ItemFlag.NoItemFlags)
         sep_item.setSizeHint(sep_item.sizeHint() * 0.3)
         self._theme_list.addItem(sep_item)
 
         # Custom section
-        custom_header = QListWidgetItem(self.tr('Custom'))
+        custom_header = QListWidgetItem(self.tr("Custom"))
         custom_header.setFlags(Qt.ItemFlag.NoItemFlags)
         f = custom_header.font()
         f.setBold(True)
@@ -371,7 +392,7 @@ class ThemeEditorDialog(QDialog):
 
         custom_names = sorted(set(self._all_themes.keys()) - set(self._builtin_names))
         for name in custom_names:
-            item = QListWidgetItem(f'  {name}')
+            item = QListWidgetItem(f"  {name}")
             item.setData(Qt.ItemDataRole.UserRole, name)
             self._theme_list.addItem(item)
 
@@ -390,7 +411,7 @@ class ThemeEditorDialog(QDialog):
 
             hex_lbl = QLabel()
             hex_lbl.setFixedWidth(90)
-            hex_lbl.setStyleSheet('QLabel { font-family: monospace; }')
+            hex_lbl.setStyleSheet("QLabel { font-family: monospace; }")
             grid.addWidget(hex_lbl, row, 2)
 
             self._swatches.append((key, swatch, hex_lbl))
@@ -405,6 +426,7 @@ class ThemeEditorDialog(QDialog):
                     hex_label = hl
                     break
             self._open_color_picker(key, swatch, hex_label)
+
         return on_clicked
 
     # ── Theme selection ──────────────────────────────────────
@@ -420,19 +442,19 @@ class ThemeEditorDialog(QDialog):
         self._original_theme = dict(self._working_theme)
         self._dirty = False
 
-        base = self._working_theme.get('_base', name)
-        self._base_label.setText(self.tr('Based on: ') + base)
+        base = self._working_theme.get("_base", name)
+        self._base_label.setText(self.tr("Based on: ") + base)
 
-        is_dark = 'dark' in base.lower()
+        is_dark = "dark" in base.lower()
         if is_dark:
-            self._badge.setText(self.tr('Dark'))
+            self._badge.setText(self.tr("Dark"))
             self._badge.setStyleSheet(
-                'QLabel { background: #44403C; color: #D6D3D1; border-radius: 8px; padding: 2px 6px; font-weight: bold; }'
+                "QLabel { background: #44403C; color: #D6D3D1; border-radius: 8px; padding: 2px 6px; font-weight: bold; }"
             )
         else:
-            self._badge.setText(self.tr('Light'))
+            self._badge.setText(self.tr("Light"))
             self._badge.setStyleSheet(
-                'QLabel { background: #E7E5E4; color: #57534E; border-radius: 8px; padding: 2px 6px; font-weight: bold; }'
+                "QLabel { background: #E7E5E4; color: #57534E; border-radius: 8px; padding: 2px 6px; font-weight: bold; }"
             )
 
         # Update UI state
@@ -450,10 +472,10 @@ class ThemeEditorDialog(QDialog):
 
     def _refresh_swatches(self):
         for key, swatch, hex_label in self._swatches:
-            val = self._working_theme.get(key, '#000000')
+            val = self._working_theme.get(key, "#000000")
             color = self._parse_color(val)
             swatch.setColor(color)
-            hex_label.setText(val.upper() if val else '#000000')
+            hex_label.setText(val.upper() if val else "#000000")
 
     # ── List selection ───────────────────────────────────────
 
@@ -484,7 +506,7 @@ class ThemeEditorDialog(QDialog):
 
     def _open_color_picker(self, key: str, swatch: _ThemeSwatch, hex_label: QLabel):
         current = swatch.color
-        pre_edit = self._working_theme.get(key, '')
+        pre_edit = self._working_theme.get(key, "")
 
         dlg = ColorPickerDialog(current, self)
         dlg.colorChanging.connect(lambda c: self._preview_color(key, c, hex_label))
@@ -515,14 +537,14 @@ class ThemeEditorDialog(QDialog):
 
     def _on_clone(self):
         """Clone the current built-in theme as a new custom theme."""
-        base = self._working_theme.get('_base', self._current_name)
-        new_name = f'{base}-custom-{random.randint(100, 999)}'
+        base = self._working_theme.get("_base", self._current_name)
+        new_name = f"{base}-custom-{random.randint(100, 999)}"
         while new_name in self._all_themes:
-            new_name = f'{base}-custom-{random.randint(100, 999)}'
+            new_name = f"{base}-custom-{random.randint(100, 999)}"
 
         custom = load_custom_themes()
         clone = dict(self._working_theme)
-        clone['_base'] = base
+        clone["_base"] = base
         custom[new_name] = clone
         self._save_custom_json(custom)
         self._all_themes[new_name] = clone
@@ -543,10 +565,11 @@ class ThemeEditorDialog(QDialog):
             return
 
         reply = QMessageBox.question(
-            self, self.tr('Delete Theme'),
+            self,
+            self.tr("Delete Theme"),
             self.tr('Delete theme "%s"? This cannot be undone.') % self._current_name,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
@@ -560,7 +583,7 @@ class ThemeEditorDialog(QDialog):
         self._dirty = False
 
         # Fall back to a built-in theme
-        fallback = self._builtin_names[0] if self._builtin_names else ''
+        fallback = self._builtin_names[0] if self._builtin_names else ""
         self._rebuild_theme_list()
         self._select_theme(fallback)
         self._select_list_item(fallback)
@@ -581,7 +604,7 @@ class ThemeEditorDialog(QDialog):
             del custom[self._current_name]
 
         theme_data = dict(self._working_theme)
-        theme_data['_base'] = self._working_theme.get('_base', self._current_name)
+        theme_data["_base"] = self._working_theme.get("_base", self._current_name)
         custom[name] = theme_data
 
         self._save_custom_json(custom)
@@ -597,7 +620,7 @@ class ThemeEditorDialog(QDialog):
         self._rebuild_theme_list()
 
         # Update active theme config
-        is_dark = 'dark' in self._working_theme.get('_base', self._current_name).lower()
+        is_dark = "dark" in self._working_theme.get("_base", self._current_name).lower()
         if is_dark:
             pcfg.dark_theme = name
         else:
@@ -608,10 +631,10 @@ class ThemeEditorDialog(QDialog):
     def _save_custom_json(data: Dict):
         try:
             os.makedirs(os.path.dirname(C.CUSTOM_THEME_PATH), exist_ok=True)
-            with open(C.CUSTOM_THEME_PATH, 'w', encoding='utf-8') as f:
+            with open(C.CUSTOM_THEME_PATH, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4, ensure_ascii=False)
         except Exception as e:
-            QMessageBox.warning(None, 'Error', f'Failed to save custom themes: {e}')
+            QMessageBox.warning(None, "Error", f"Failed to save custom themes: {e}")
 
     def _on_apply(self):
         if self._dirty and self._save_to_disk():

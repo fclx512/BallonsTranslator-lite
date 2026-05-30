@@ -33,8 +33,10 @@ from .textitem import TextBlkItem
 
 CURRENT_TEXT_COLOR = QColor(244, 249, 28)
 
+
 def _search_highlight_color():
     from ui.misc import get_theme_color
+
     c = get_theme_color()
     c.setAlpha(60)
     return c
@@ -59,7 +61,6 @@ def match_text(pattern: re.Pattern, text: str) -> Tuple[int, Dict]:
 
 
 class HighlightMatched(QSyntaxHighlighter):
-
     def __init__(self, edit: SourceTextEdit, matched_map: dict = None):
         super().__init__(edit.document())
 
@@ -137,7 +138,16 @@ class SearchEditor(QPlainTextEdit):
     commit = Signal()
     enter_pressed = Signal()
     shift_enter_pressed = Signal()
-    def __init__(self, parent: QWidget = None, original_height: int = 32, commit_latency: int = -1, shift_enter_prev: bool = True, *args, **kwargs):
+
+    def __init__(
+        self,
+        parent: QWidget = None,
+        original_height: int = 32,
+        commit_latency: int = -1,
+        shift_enter_prev: bool = True,
+        *args,
+        **kwargs,
+    ):
         super().__init__(parent, *args, **kwargs)
         self.original_height = original_height
         self.commit_latency = commit_latency
@@ -196,7 +206,7 @@ class SearchEditor(QPlainTextEdit):
         return super().hideEvent(e)
 
     def inputMethodEvent(self, e: QInputMethodEvent) -> None:
-        if e.preeditString() == '':
+        if e.preeditString() == "":
             self.pre_editing = False
             if self.commit_timer is not None:
                 self.commit_timer.start(self.commit_latency)
@@ -208,7 +218,6 @@ class SearchEditor(QPlainTextEdit):
 
 
 class PageSearchWidget(Widget):
-
     search = Signal()
     replace_all = Signal()
     replace_one = Signal()
@@ -230,53 +239,55 @@ class PageSearchWidget(Widget):
         self.update_cursor_on_insert = True
 
         self.search_editor = SearchEditor(self, commit_latency=-1)
-        self.search_editor.setPlaceholderText(self.tr('Find'))
+        self.search_editor.setPlaceholderText(self.tr("Find"))
         self.search_editor.height_changed.connect(self.on_editor_height_changed)
 
-        self.no_result_str = self.tr('No result')
+        self.no_result_str = self.tr("No result")
         self.result_counter_label = QLabel(self.no_result_str)
         self.result_counter_label.setMaximumHeight(32)
         self.prev_match_btn = ClickableLabel(None, self)
-        self.prev_match_btn.setObjectName('PrevMatchBtn')
+        self.prev_match_btn.setObjectName("PrevMatchBtn")
         self.prev_match_btn.clicked.connect(self.on_prev_search_result)
-        self.prev_match_btn.setToolTip(self.tr('Previous Match (Shift+Enter)'))
+        self.prev_match_btn.setToolTip(self.tr("Previous Match (Shift+Enter)"))
 
         self.next_match_btn = ClickableLabel(None, self)
-        self.next_match_btn.setObjectName('NextMatchBtn')
+        self.next_match_btn.setObjectName("NextMatchBtn")
         self.next_match_btn.clicked.connect(self.on_next_search_result)
-        self.next_match_btn.setToolTip(self.tr('Next Match (Enter)'))
+        self.next_match_btn.setToolTip(self.tr("Next Match (Enter)"))
 
         self.case_sensitive_toggle = QCheckBox(self)
-        self.case_sensitive_toggle.setObjectName('CaseSensitiveToggle')
-        self.case_sensitive_toggle.setToolTip(self.tr('Match Case'))
+        self.case_sensitive_toggle.setObjectName("CaseSensitiveToggle")
+        self.case_sensitive_toggle.setToolTip(self.tr("Match Case"))
         self.case_sensitive_toggle.clicked.connect(self.on_case_clicked)
 
         self.whole_word_toggle = QCheckBox(self)
-        self.whole_word_toggle.setObjectName('WholeWordToggle')
-        self.whole_word_toggle.setToolTip(self.tr('Match Whole Word'))
+        self.whole_word_toggle.setObjectName("WholeWordToggle")
+        self.whole_word_toggle.setToolTip(self.tr("Match Whole Word"))
         self.whole_word_toggle.clicked.connect(self.on_whole_word_clicked)
 
         self.regex_toggle = QCheckBox(self)
-        self.regex_toggle.setObjectName('RegexToggle')
-        self.regex_toggle.setToolTip(self.tr('Use Regular Expression'))
+        self.regex_toggle.setObjectName("RegexToggle")
+        self.regex_toggle.setToolTip(self.tr("Use Regular Expression"))
         self.regex_toggle.clicked.connect(self.on_regex_clicked)
 
         self.range_combobox = QComboBox(self)
-        self.range_combobox.addItems([self.tr('Translation'), self.tr('Source'), self.tr('All')])
+        self.range_combobox.addItems(
+            [self.tr("Translation"), self.tr("Source"), self.tr("All")]
+        )
         self.range_combobox.currentIndexChanged.connect(self.on_range_changed)
         self.range_label = QLabel(self)
-        self.range_label.setText(self.tr('Range'))
+        self.range_label.setText(self.tr("Range"))
 
         self.replace_editor = SearchEditor(self)
-        self.replace_editor.setPlaceholderText(self.tr('Replace'))
+        self.replace_editor.setPlaceholderText(self.tr("Replace"))
         self.replace_btn = ClickableLabel(None, self)
-        self.replace_btn.setObjectName('ReplaceBtn')
+        self.replace_btn.setObjectName("ReplaceBtn")
         self.replace_btn.clicked.connect(self.on_replace_btn_clicked)
-        self.replace_btn.setToolTip(self.tr('Replace'))
+        self.replace_btn.setToolTip(self.tr("Replace"))
         self.replace_all_btn = ClickableLabel(None, self)
-        self.replace_all_btn.setObjectName('ReplaceAllBtn')
+        self.replace_all_btn.setObjectName("ReplaceAllBtn")
         self.replace_all_btn.clicked.connect(self.on_replaceall_btn_clicked)
-        self.replace_all_btn.setToolTip(self.tr('Replace All'))
+        self.replace_all_btn.setToolTip(self.tr("Replace All"))
 
         hlayout_bar1_0 = QHBoxLayout()
         hlayout_bar1_0.addWidget(self.search_editor)
@@ -290,7 +301,9 @@ class PageSearchWidget(Widget):
         hlayout_bar1_1.addWidget(self.regex_toggle)
         hlayout_bar1_1.addWidget(self.prev_match_btn)
         hlayout_bar1_1.addWidget(self.next_match_btn)
-        hlayout_bar1_1.setAlignment(hlayout_bar1_1.alignment() | Qt.AlignmentFlag.AlignTop)
+        hlayout_bar1_1.setAlignment(
+            hlayout_bar1_1.alignment() | Qt.AlignmentFlag.AlignTop
+        )
         hlayout_bar1_1.setSpacing(5)
 
         hlayout_bar1 = QHBoxLayout()
@@ -312,8 +325,8 @@ class PageSearchWidget(Widget):
 
         self.search_editor.commit.connect(self.on_commit_search)
         self.close_btn = ClickableLabel(None, self)
-        self.close_btn.setObjectName('SearchCloseBtn')
-        self.close_btn.setToolTip(self.tr('Close (Escape)'))
+        self.close_btn.setObjectName("SearchCloseBtn")
+        self.close_btn.setToolTip(self.tr("Close (Escape)"))
         self.close_btn.clicked.connect(self.on_close_button_clicked)
         hlayout_bar1_1.addWidget(self.close_btn)
         e = QGraphicsDropShadowEffect(self)
@@ -328,7 +341,6 @@ class PageSearchWidget(Widget):
 
         self.adjustSize()
 
-
     def on_close_button_clicked(self):
         self.hide()
 
@@ -339,10 +351,12 @@ class PageSearchWidget(Widget):
     def showEvent(self, e: QShowEvent) -> None:
         self.search_editor.setFocus()
         cursor = self.search_editor.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End, QTextCursor.MoveMode.KeepAnchor)
+        cursor.movePosition(
+            QTextCursor.MoveOperation.End, QTextCursor.MoveMode.KeepAnchor
+        )
         self.search_editor.setTextCursor(cursor)
         text = self.search_editor.toPlainText()
-        if text != '':
+        if text != "":
             self.on_commit_search()
         return super().showEvent(e)
 
@@ -407,15 +421,17 @@ class PageSearchWidget(Widget):
                         self.setCurrentEditor(self.current_edit)
                     else:
                         self.current_cursor.setPosition(matched.start)
-                        self.current_cursor.setPosition(matched.end, QTextCursor.MoveMode.KeepAnchor)
+                        self.current_cursor.setPosition(
+                            matched.end, QTextCursor.MoveMode.KeepAnchor
+                        )
                         self.result_pos = matched_map[matched.end].local_no
                         if idx > 0:
-                            self.result_pos += sum(self.search_counter_list[ :idx])
+                            self.result_pos += sum(self.search_counter_list[:idx])
                         self.highlight_current_text()
                 else:
                     self.result_pos = matched_map[cursor_end].local_no
                     if idx > 0:
-                        self.result_pos += sum(self.search_counter_list[ :idx])
+                        self.result_pos += sum(self.search_counter_list[:idx])
                     self.highlight_current_text()
             elif before_current:
                 self.result_pos += delta_count
@@ -450,7 +466,7 @@ class PageSearchWidget(Widget):
             return
 
         text = self.search_editor.toPlainText()
-        if text == '':
+        if text == "":
             self.updateCounterText()
             return
 
@@ -483,7 +499,7 @@ class PageSearchWidget(Widget):
     def get_regex_pattern(self) -> re.Pattern:
         target_text = self.search_editor.toPlainText()
         regexr = target_text
-        if target_text == '':
+        if target_text == "":
             return None
 
         flag = re.DOTALL
@@ -492,7 +508,7 @@ class PageSearchWidget(Widget):
         if not self.regex_toggle.isChecked():
             regexr = re.escape(regexr)
         if self.whole_word_toggle.isChecked():
-            regexr = r'\b' + target_text + r'\b'
+            regexr = r"\b" + target_text + r"\b"
 
         return re.compile(regexr, flag)
 
@@ -523,8 +539,12 @@ class PageSearchWidget(Widget):
 
     def setCurrentEditor(self, edit: SourceTextEdit):
 
-        if type(edit) == SourceTextEdit and self.range_combobox.currentIndex() == 0 \
-            or type(edit) == TransPairWidget and self.range_combobox.currentIndex() == 1:
+        if (
+            type(edit) == SourceTextEdit
+            and self.range_combobox.currentIndex() == 0
+            or type(edit) == TransPairWidget
+            and self.range_combobox.currentIndex() == 1
+        ):
             edit = None
 
         old_idx = self.current_edit_index()
@@ -543,7 +563,7 @@ class PageSearchWidget(Widget):
             matched: Matched = matched_map[self.current_cursor.selectionEnd()]
             self.result_pos = matched.local_no
             if idx > 0:
-                self.result_pos += sum(self.search_counter_list[ :idx])
+                self.result_pos += sum(self.search_counter_list[:idx])
         else:
             self.current_cursor = None
             self.current_highlighter = None
@@ -596,7 +616,9 @@ class PageSearchWidget(Widget):
         if self.current_cursor is None or len(self.search_rstedit_list) == 0:
             self.result_counter_label.setText(self.no_result_str)
         else:
-            self.result_counter_label.setText(f'{self.result_pos + 1} of {self.counter_sum}')
+            self.result_counter_label.setText(
+                f"{self.result_pos + 1} of {self.counter_sum}"
+            )
 
     def clean_current_selection(self):
         cursor = self.current_edit.textCursor()
@@ -647,7 +669,9 @@ class PageSearchWidget(Widget):
             self.updateCurrentCursor(intro_cursor=True, backward=step < 0)
         else:
             self.current_cursor.setPosition(moved_matched.start)
-            self.current_cursor.setPosition(moved_matched.end, QTextCursor.MoveMode.KeepAnchor)
+            self.current_cursor.setPosition(
+                moved_matched.end, QTextCursor.MoveMode.KeepAnchor
+            )
 
         self.highlight_current_text(old_idx)
         return cursor_reset
@@ -658,7 +682,9 @@ class PageSearchWidget(Widget):
 
         idx = self.current_edit_index()
         if idx != -1:
-            self.highlighter_list[idx].set_current_span(self.current_cursor.selectionStart(), self.current_cursor.selectionEnd())
+            self.highlighter_list[idx].set_current_span(
+                self.current_cursor.selectionStart(), self.current_cursor.selectionEnd()
+            )
 
         if old_idx != -1 and old_idx != idx:
             self.highlighter_list[old_idx].set_current_span(-1, -1)
@@ -725,12 +751,16 @@ class PageSearchWidget(Widget):
         if not self.isVisible() or edit.pre_editing or edit in self.search_rstedit_list:
             return
 
-        if type(edit) == SourceTextEdit and self.range_combobox.currentIndex() == 0 \
-            or type(edit) == TransPairWidget and self.range_combobox.currentIndex() == 1:
+        if (
+            type(edit) == SourceTextEdit
+            and self.range_combobox.currentIndex() == 0
+            or type(edit) == TransPairWidget
+            and self.range_combobox.currentIndex() == 1
+        ):
             return
 
         text = self.search_editor.toPlainText()
-        if text == '':
+        if text == "":
             return
 
         found_counter, match_map = self._match_text(edit.toPlainText())

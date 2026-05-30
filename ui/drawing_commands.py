@@ -16,7 +16,9 @@ from .textedit_area import TransPairWidget
 
 
 class StrokeItemUndoCommand(QUndoCommand):
-    def __init__(self, target_layer: DrawingLayer, rect: Tuple[int], qimg: QImage, erasing=False):
+    def __init__(
+        self, target_layer: DrawingLayer, rect: Tuple[int], qimg: QImage, erasing=False
+    ):
         super().__init__()
         self.qimg = qimg
         self.x = rect[0]
@@ -35,18 +37,31 @@ class StrokeItemUndoCommand(QUndoCommand):
 
     def redo(self):
         if self.qimg is not None:
-            self.target_layer.addQImage(self.x, self.y, self.qimg, self.compose_mode, self.key)
+            self.target_layer.addQImage(
+                self.x, self.y, self.qimg, self.compose_mode, self.key
+            )
             self.target_layer.scene().update()
 
 
 class InpaintUndoCommand(QUndoCommand):
-    def __init__(self, canvas: Canvas, inpainted: np.ndarray, mask: np.ndarray, inpaint_rect: List[int], merge_existing_mask=False):
+    def __init__(
+        self,
+        canvas: Canvas,
+        inpainted: np.ndarray,
+        mask: np.ndarray,
+        inpaint_rect: List[int],
+        merge_existing_mask=False,
+    ):
         super().__init__()
         self.canvas = canvas
         img_array = self.canvas.imgtrans_proj.inpainted_array
         mask_array = self.canvas.imgtrans_proj.mask_array
-        img_view = img_array[inpaint_rect[1]: inpaint_rect[3], inpaint_rect[0]: inpaint_rect[2]]
-        mask_view = mask_array[inpaint_rect[1]: inpaint_rect[3], inpaint_rect[0]: inpaint_rect[2]]
+        img_view = img_array[
+            inpaint_rect[1] : inpaint_rect[3], inpaint_rect[0] : inpaint_rect[2]
+        ]
+        mask_view = mask_array[
+            inpaint_rect[1] : inpaint_rect[3], inpaint_rect[0] : inpaint_rect[2]
+        ]
         self.undo_img = np.copy(img_view)
         self.undo_mask = np.copy(mask_view)
         self.redo_img = inpainted
@@ -60,8 +75,12 @@ class InpaintUndoCommand(QUndoCommand):
         inpaint_rect = self.inpaint_rect
         img_array = self.canvas.imgtrans_proj.inpainted_array
         mask_array = self.canvas.imgtrans_proj.mask_array
-        img_view = img_array[inpaint_rect[1]: inpaint_rect[3], inpaint_rect[0]: inpaint_rect[2]]
-        mask_view = mask_array[inpaint_rect[1]: inpaint_rect[3], inpaint_rect[0]: inpaint_rect[2]]
+        img_view = img_array[
+            inpaint_rect[1] : inpaint_rect[3], inpaint_rect[0] : inpaint_rect[2]
+        ]
+        mask_view = mask_array[
+            inpaint_rect[1] : inpaint_rect[3], inpaint_rect[0] : inpaint_rect[2]
+        ]
         img_view[:] = self.redo_img
         mask_view[:] = self.redo_mask
         self.canvas.updateLayers()
@@ -70,8 +89,12 @@ class InpaintUndoCommand(QUndoCommand):
         inpaint_rect = self.inpaint_rect
         img_array = self.canvas.imgtrans_proj.inpainted_array
         mask_array = self.canvas.imgtrans_proj.mask_array
-        img_view = img_array[inpaint_rect[1]: inpaint_rect[3], inpaint_rect[0]: inpaint_rect[2]]
-        mask_view = mask_array[inpaint_rect[1]: inpaint_rect[3], inpaint_rect[0]: inpaint_rect[2]]
+        img_view = img_array[
+            inpaint_rect[1] : inpaint_rect[3], inpaint_rect[0] : inpaint_rect[2]
+        ]
+        mask_view = mask_array[
+            inpaint_rect[1] : inpaint_rect[3], inpaint_rect[0] : inpaint_rect[2]
+        ]
         img_view[:] = self.undo_img
         mask_view[:] = self.undo_mask
         self.canvas.updateLayers()
@@ -83,7 +106,13 @@ class EmptyCommand(QUndoCommand):
 
 
 class RunBlkTransCommand(QUndoCommand):
-    def __init__(self, canvas: Canvas, blkitems: List[TextBlkItem], transpairw_list: List[TransPairWidget],  mode: int):
+    def __init__(
+        self,
+        canvas: Canvas,
+        blkitems: List[TextBlkItem],
+        transpairw_list: List[TransPairWidget],
+        mode: int,
+    ):
         super().__init__()
 
         self.empty_command = None
@@ -101,9 +130,11 @@ class RunBlkTransCommand(QUndoCommand):
                     trs = blkitem.blk.translation
                     transpairw.e_trans.setPlainTextAndKeepUndoStack(trs)
                     blkitem.setPlainTextAndKeepUndoStack(trs)
-                blkitem.blk.rich_text = ''
+                blkitem.blk.rich_text = ""
                 if mode >= 0:
-                    transpairw.e_source.setPlainTextAndKeepUndoStack(blkitem.blk.get_text())
+                    transpairw.e_source.setPlainTextAndKeepUndoStack(
+                        blkitem.blk.get_text()
+                    )
 
         self.canvas = canvas
         self.mode = mode
@@ -126,13 +157,19 @@ class RunBlkTransCommand(QUndoCommand):
                     self.redo_img_list.append(None)
                     self.inpaint_rect_lst.append(None)
                 else:
-                    inpaint_rect = inpainted_dict['inpaint_rect']
-                    img_view = img_array[inpaint_rect[1]: inpaint_rect[3], inpaint_rect[0]: inpaint_rect[2]]
-                    mask_view = mask_array[inpaint_rect[1]: inpaint_rect[3], inpaint_rect[0]: inpaint_rect[2]]
+                    inpaint_rect = inpainted_dict["inpaint_rect"]
+                    img_view = img_array[
+                        inpaint_rect[1] : inpaint_rect[3],
+                        inpaint_rect[0] : inpaint_rect[2],
+                    ]
+                    mask_view = mask_array[
+                        inpaint_rect[1] : inpaint_rect[3],
+                        inpaint_rect[0] : inpaint_rect[2],
+                    ]
                     self.undo_img_list.append(np.copy(img_view))
                     self.undo_mask_list.append(np.copy(mask_view))
-                    self.redo_img_list.append(inpainted_dict['inpainted'])
-                    self.redo_mask_list.append(inpainted_dict['mask'])
+                    self.redo_img_list.append(inpainted_dict["inpainted"])
+                    self.redo_mask_list.append(inpainted_dict["mask"])
                     self.inpaint_rect_lst.append(inpaint_rect)
                     self.num_inpainted += 1
 
@@ -144,11 +181,17 @@ class RunBlkTransCommand(QUndoCommand):
         if self.mode > 1 and self.num_inpainted > 0:
             img_array = self.canvas.imgtrans_proj.inpainted_array
             mask_array = self.canvas.imgtrans_proj.mask_array
-            for inpaint_rect, redo_img, redo_mask in zip(self.inpaint_rect_lst, self.redo_img_list, self.redo_mask_list):
+            for inpaint_rect, redo_img, redo_mask in zip(
+                self.inpaint_rect_lst, self.redo_img_list, self.redo_mask_list
+            ):
                 if inpaint_rect is None:
                     continue
-                img_view = img_array[inpaint_rect[1]: inpaint_rect[3], inpaint_rect[0]: inpaint_rect[2]]
-                mask_view = mask_array[inpaint_rect[1]: inpaint_rect[3], inpaint_rect[0]: inpaint_rect[2]]
+                img_view = img_array[
+                    inpaint_rect[1] : inpaint_rect[3], inpaint_rect[0] : inpaint_rect[2]
+                ]
+                mask_view = mask_array[
+                    inpaint_rect[1] : inpaint_rect[3], inpaint_rect[0] : inpaint_rect[2]
+                ]
                 img_view[:] = redo_img
                 mask_view[:] = redo_mask
             self.canvas.updateLayers()
@@ -173,11 +216,17 @@ class RunBlkTransCommand(QUndoCommand):
         if self.mode > 1 and self.num_inpainted > 0:
             img_array = self.canvas.imgtrans_proj.inpainted_array
             mask_array = self.canvas.imgtrans_proj.mask_array
-            for inpaint_rect, undo_img, undo_mask in zip(self.inpaint_rect_lst, self.undo_img_list, self.undo_mask_list):
+            for inpaint_rect, undo_img, undo_mask in zip(
+                self.inpaint_rect_lst, self.undo_img_list, self.undo_mask_list
+            ):
                 if inpaint_rect is None:
                     continue
-                img_view = img_array[inpaint_rect[1]: inpaint_rect[3], inpaint_rect[0]: inpaint_rect[2]]
-                mask_view = mask_array[inpaint_rect[1]: inpaint_rect[3], inpaint_rect[0]: inpaint_rect[2]]
+                img_view = img_array[
+                    inpaint_rect[1] : inpaint_rect[3], inpaint_rect[0] : inpaint_rect[2]
+                ]
+                mask_view = mask_array[
+                    inpaint_rect[1] : inpaint_rect[3], inpaint_rect[0] : inpaint_rect[2]
+                ]
                 img_view[:] = undo_img
                 mask_view[:] = undo_mask
             self.canvas.updateLayers()

@@ -6,6 +6,7 @@ class QFontChecker(QCheckBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+
 class AlignmentChecker(QCheckBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

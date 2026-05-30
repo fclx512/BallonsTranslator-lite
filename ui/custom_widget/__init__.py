@@ -46,12 +46,22 @@ from .view_panel import (
 from .widget import SeparatorWidget, Widget
 
 
-def combobox_with_label(param_name: str = None, size='small', options=None, parent=None, scrollWidget=None, label_alignment=None, vertical_layout=False, editable=False, label=False):
-    combobox_cls = SmallComboBox if size == 'small' else ComboBox
+def combobox_with_label(
+    param_name: str = None,
+    size="small",
+    options=None,
+    parent=None,
+    scrollWidget=None,
+    label_alignment=None,
+    vertical_layout=False,
+    editable=False,
+    label=False,
+):
+    combobox_cls = SmallComboBox if size == "small" else ComboBox
     combobox = combobox_cls(options=options, parent=parent, scrollWidget=scrollWidget)
     combobox.setEditable(editable)
     if label is None:
-        label_cls = SmallParamLabel if size == 'small' else ParamNameLabel
+        label_cls = SmallParamLabel if size == "small" else ParamNameLabel
         label = label_cls(param_name=param_name, alignment=label_alignment)
     if vertical_layout:
         layout = QVBoxLayout()

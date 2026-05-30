@@ -1,0 +1,10 @@
+[tool.ruff]
+target-version = "py313"
+exclude = ["ballontrans_pylibs_win"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
+
+# __init__.py 中导入再导出是标准做法，不报 F401
+per-file-ignores = {"__init__.py" = ["F401"]}

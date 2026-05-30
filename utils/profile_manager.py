@@ -13,10 +13,7 @@ from .logger import logger as LOGGER
 
 # ── Default values ──────────────────────────────────────────────────
 
-DEFAULT_PROMPT_TEMPLATE = (
-    "请将以下 {from_lang} 文本翻译为 {to_lang}：\n"
-    "{input_json}"
-)
+DEFAULT_PROMPT_TEMPLATE = "请将以下 {from_lang} 文本翻译为 {to_lang}：\n{input_json}"
 DEFAULT_CHAT_SAMPLES = (
     "日本語-简体中文:\n"
     "    source:\n"
@@ -47,59 +44,119 @@ DEFAULT_OCR_SYSTEM_PROMPT = (
 
 SAMPLE_PROFILES = [
     {
-        "name": "OpenAI", "builtin": False, "vision_support": True,
-        "api_host": "https://api.openai.com/v1", "api_key": "", "model": "gpt-4o",
-        "temperature": 0.1, "top_p": 1.0, "max_tokens": "",
-        "proxy": "", "requests_per_minute": 20, "delay": 0.3,
+        "name": "OpenAI",
+        "builtin": False,
+        "vision_support": True,
+        "api_host": "https://api.openai.com/v1",
+        "api_key": "",
+        "model": "gpt-4o",
+        "temperature": 0.1,
+        "top_p": 1.0,
+        "max_tokens": "",
+        "proxy": "",
+        "requests_per_minute": 20,
+        "delay": 0.3,
         "response_format": "json_object",
-        "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES,
-        "frequency_penalty": "", "presence_penalty": "",
-        "ocr_prompt": DEFAULT_OCR_PROMPT, "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
-        "ocr_detail_level": "auto", "ocr_max_response_tokens": 4096,
+        "prompt_template": DEFAULT_PROMPT_TEMPLATE,
+        "chat_samples": DEFAULT_CHAT_SAMPLES,
+        "frequency_penalty": "",
+        "presence_penalty": "",
+        "ocr_prompt": DEFAULT_OCR_PROMPT,
+        "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
+        "ocr_detail_level": "auto",
+        "ocr_max_response_tokens": 4096,
     },
     {
-        "name": "OpenRouter", "builtin": False, "vision_support": True,
-        "api_host": "https://openrouter.ai/api/v1", "api_key": "", "model": "",
-        "temperature": 0.1, "top_p": 1.0, "max_tokens": "",
-        "proxy": "", "requests_per_minute": 20, "delay": 0.3,
+        "name": "OpenRouter",
+        "builtin": False,
+        "vision_support": True,
+        "api_host": "https://openrouter.ai/api/v1",
+        "api_key": "",
+        "model": "",
+        "temperature": 0.1,
+        "top_p": 1.0,
+        "max_tokens": "",
+        "proxy": "",
+        "requests_per_minute": 20,
+        "delay": 0.3,
         "response_format": "json_object",
-        "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES,
-        "frequency_penalty": "", "presence_penalty": "",
-        "ocr_prompt": DEFAULT_OCR_PROMPT, "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
-        "ocr_detail_level": "auto", "ocr_max_response_tokens": 4096,
+        "prompt_template": DEFAULT_PROMPT_TEMPLATE,
+        "chat_samples": DEFAULT_CHAT_SAMPLES,
+        "frequency_penalty": "",
+        "presence_penalty": "",
+        "ocr_prompt": DEFAULT_OCR_PROMPT,
+        "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
+        "ocr_detail_level": "auto",
+        "ocr_max_response_tokens": 4096,
     },
     {
-        "name": "DeepSeek", "builtin": True, "vision_support": False,
-        "api_host": "https://api.deepseek.com/v1", "api_key": "", "model": "",
-        "temperature": 0.1, "top_p": 1.0, "max_tokens": "",
-        "proxy": "", "requests_per_minute": 20, "delay": 0.3,
+        "name": "DeepSeek",
+        "builtin": True,
+        "vision_support": False,
+        "api_host": "https://api.deepseek.com/v1",
+        "api_key": "",
+        "model": "",
+        "temperature": 0.1,
+        "top_p": 1.0,
+        "max_tokens": "",
+        "proxy": "",
+        "requests_per_minute": 20,
+        "delay": 0.3,
         "response_format": "json_object",
-        "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES,
-        "frequency_penalty": "", "presence_penalty": "",
-        "ocr_prompt": DEFAULT_OCR_PROMPT, "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
-        "ocr_detail_level": "auto", "ocr_max_response_tokens": 4096,
+        "prompt_template": DEFAULT_PROMPT_TEMPLATE,
+        "chat_samples": DEFAULT_CHAT_SAMPLES,
+        "frequency_penalty": "",
+        "presence_penalty": "",
+        "ocr_prompt": DEFAULT_OCR_PROMPT,
+        "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
+        "ocr_detail_level": "auto",
+        "ocr_max_response_tokens": 4096,
     },
     {
-        "name": "LM Studio", "builtin": True, "vision_support": True,
-        "api_host": "http://localhost:1234/v1", "api_key": "dummy-key", "model": "",
-        "temperature": 0.1, "top_p": 1.0, "max_tokens": "",
-        "proxy": "", "requests_per_minute": 20, "delay": 0.3,
+        "name": "LM Studio",
+        "builtin": True,
+        "vision_support": True,
+        "api_host": "http://localhost:1234/v1",
+        "api_key": "dummy-key",
+        "model": "",
+        "temperature": 0.1,
+        "top_p": 1.0,
+        "max_tokens": "",
+        "proxy": "",
+        "requests_per_minute": 20,
+        "delay": 0.3,
         "response_format": "json_object",
-        "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES,
-        "frequency_penalty": "", "presence_penalty": "",
-        "ocr_prompt": DEFAULT_OCR_PROMPT, "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
-        "ocr_detail_level": "auto", "ocr_max_response_tokens": 4096,
+        "prompt_template": DEFAULT_PROMPT_TEMPLATE,
+        "chat_samples": DEFAULT_CHAT_SAMPLES,
+        "frequency_penalty": "",
+        "presence_penalty": "",
+        "ocr_prompt": DEFAULT_OCR_PROMPT,
+        "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
+        "ocr_detail_level": "auto",
+        "ocr_max_response_tokens": 4096,
     },
     {
-        "name": "Ollama", "builtin": True, "vision_support": True,
-        "api_host": "http://localhost:11434/v1", "api_key": "dummy-key", "model": "",
-        "temperature": 0.1, "top_p": 1.0, "max_tokens": "",
-        "proxy": "", "requests_per_minute": 20, "delay": 0.3,
+        "name": "Ollama",
+        "builtin": True,
+        "vision_support": True,
+        "api_host": "http://localhost:11434/v1",
+        "api_key": "dummy-key",
+        "model": "",
+        "temperature": 0.1,
+        "top_p": 1.0,
+        "max_tokens": "",
+        "proxy": "",
+        "requests_per_minute": 20,
+        "delay": 0.3,
         "response_format": "json_object",
-        "prompt_template": DEFAULT_PROMPT_TEMPLATE, "chat_samples": DEFAULT_CHAT_SAMPLES,
-        "frequency_penalty": "", "presence_penalty": "",
-        "ocr_prompt": DEFAULT_OCR_PROMPT, "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
-        "ocr_detail_level": "auto", "ocr_max_response_tokens": 4096,
+        "prompt_template": DEFAULT_PROMPT_TEMPLATE,
+        "chat_samples": DEFAULT_CHAT_SAMPLES,
+        "frequency_penalty": "",
+        "presence_penalty": "",
+        "ocr_prompt": DEFAULT_OCR_PROMPT,
+        "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
+        "ocr_detail_level": "auto",
+        "ocr_max_response_tokens": 4096,
     },
 ]
 
@@ -107,14 +164,27 @@ SAMPLE_PROFILES = [
 # ── Profile Manager ─────────────────────────────────────────────────
 
 PROFILE_FIELDS = [
-    "name", "builtin", "vision_support",
-    "api_host", "api_key", "model",
-    "temperature", "top_p", "max_tokens",
-    "proxy", "requests_per_minute", "delay",
+    "name",
+    "builtin",
+    "vision_support",
+    "api_host",
+    "api_key",
+    "model",
+    "temperature",
+    "top_p",
+    "max_tokens",
+    "proxy",
+    "requests_per_minute",
+    "delay",
     "response_format",
-    "prompt_template", "chat_samples",
-    "frequency_penalty", "presence_penalty",
-    "ocr_prompt", "ocr_system_prompt", "ocr_detail_level", "ocr_max_response_tokens",
+    "prompt_template",
+    "chat_samples",
+    "frequency_penalty",
+    "presence_penalty",
+    "ocr_prompt",
+    "ocr_system_prompt",
+    "ocr_detail_level",
+    "ocr_max_response_tokens",
 ]
 
 
@@ -151,7 +221,9 @@ def migrate_old_profiles():
         pcfg.module.model_profiles = json.dumps(migrated, ensure_ascii=False)
         # Clean up old storage
         old_storage.pop("_profiles_storage", None)
-        LOGGER.info(f"Migrated {len(migrated)} profiles from translator storage to model_profiles.")
+        LOGGER.info(
+            f"Migrated {len(migrated)} profiles from translator storage to model_profiles."
+        )
     except (json.JSONDecodeError, TypeError, Exception) as e:
         LOGGER.warning(f"Failed to migrate old profiles: {e}")
 
@@ -252,50 +324,27 @@ def save_all_profiles(profiles: List[Dict]):
 
 # ── Dialog ──────────────────────────────────────────────────────────
 
-try:
-    from PyQt6.QtCore import Qt
-    from PyQt6.QtWidgets import (
-        QCheckBox,
-        QComboBox,
-        QDialog,
-        QDoubleSpinBox,
-        QFormLayout,
-        QHBoxLayout,
-        QInputDialog,
-        QLabel,
-        QLineEdit,
-        QListWidget,
-        QMessageBox,
-        QPushButton,
-        QScrollArea,
-        QSpinBox,
-        QSplitter,
-        QTextEdit,
-        QVBoxLayout,
-        QWidget,
-    )
-except ImportError:
-    from PyQt5.QtCore import Qt
-    from PyQt5.QtWidgets import (
-        QCheckBox,
-        QComboBox,
-        QDialog,
-        QDoubleSpinBox,
-        QFormLayout,
-        QHBoxLayout,
-        QInputDialog,
-        QLabel,
-        QLineEdit,
-        QListWidget,
-        QMessageBox,
-        QPushButton,
-        QScrollArea,
-        QSpinBox,
-        QSplitter,
-        QTextEdit,
-        QVBoxLayout,
-        QWidget,
-    )
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDoubleSpinBox,
+    QFormLayout,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QSplitter,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
 import httpx
 
@@ -313,12 +362,15 @@ class ProfileManagerDialog(QDialog):
         self._build_ui()
 
     def _is_builtin(self, row: int) -> bool:
-        return 0 <= row < len(self._profiles) and self._profiles[row].get("builtin", False)
+        return 0 <= row < len(self._profiles) and self._profiles[row].get(
+            "builtin", False
+        )
 
     def _section_label(self, text: str):
         """Section divider label: —— text ——"""
         lbl = QLabel(f"—— {text} ——")
         from ui.misc import get_theme_color
+
         c = get_theme_color()
         lbl.setStyleSheet(
             f"font-size: 14px; padding: 8px 0 2px 0; "
@@ -431,10 +483,12 @@ class ProfileManagerDialog(QDialog):
         fetch_btn.clicked.connect(self._on_fetch_models)
         model_row.addWidget(fetch_btn)
         self.vision_check = QCheckBox(self.tr("Vision support (for OCR)"))
-        self.vision_check.setToolTip(self.tr(
-            "Enable this for models that can process images. "
-            "Vision-capable profiles will appear in the OCR model selector."
-        ))
+        self.vision_check.setToolTip(
+            self.tr(
+                "Enable this for models that can process images. "
+                "Vision-capable profiles will appear in the OCR model selector."
+            )
+        )
         self.temp_edit = QLineEdit()
         self.temp_edit.setPlaceholderText("0.1")
         self.topp_edit = QLineEdit()
@@ -471,7 +525,9 @@ class ProfileManagerDialog(QDialog):
         right_layout.addLayout(conn_form)
 
         # Advanced (optional) — Translation settings
-        right_layout.addWidget(self._section_label(self.tr("Translation Settings (optional)")))
+        right_layout.addWidget(
+            self._section_label(self.tr("Translation Settings (optional)"))
+        )
         adv_form = QFormLayout()
         self.rf_combo = QComboBox()
         self.rf_combo.addItems(["json_object", "json_schema"])
@@ -483,7 +539,9 @@ class ProfileManagerDialog(QDialog):
         self.prompt_template_edit.setMinimumHeight(80)
         self.chat_samples_edit = QTextEdit()
         self.chat_samples_edit.setPlaceholderText(
-            self.tr("{to_lang}-{from_lang}:\n    source:\n        - text1\n    target:\n        - trans1")
+            self.tr(
+                "{to_lang}-{from_lang}:\n    source:\n        - text1\n    target:\n        - trans1"
+            )
         )
         self.chat_samples_edit.setMinimumHeight(80)
         self.fp_edit = QLineEdit()
@@ -545,10 +603,21 @@ class ProfileManagerDialog(QDialog):
         self.list_widget.blockSignals(False)
 
     def _clear_fields(self):
-        for edit in [self.name_edit, self.host_edit, self.key_edit, self.model_edit,
-                     self.temp_edit, self.topp_edit, self.maxtok_edit,
-                     self.fp_edit, self.pp_edit, self.prompt_template_edit,
-                     self.proxy_edit, self.ocr_prompt_edit, self.ocr_sysprompt_edit]:
+        for edit in [
+            self.name_edit,
+            self.host_edit,
+            self.key_edit,
+            self.model_edit,
+            self.temp_edit,
+            self.topp_edit,
+            self.maxtok_edit,
+            self.fp_edit,
+            self.pp_edit,
+            self.prompt_template_edit,
+            self.proxy_edit,
+            self.ocr_prompt_edit,
+            self.ocr_sysprompt_edit,
+        ]:
             edit.clear()
         self.chat_samples_edit.clear()
         self.chat_samples_edit.setPlainText("")
@@ -619,8 +688,11 @@ class ProfileManagerDialog(QDialog):
         host = self.host_edit.text().strip()
         key = self.key_edit.text().strip()
         if not host or not key:
-            QMessageBox.warning(self, self.tr("Warning"),
-                self.tr("Host and API key are required to fetch the model list."))
+            QMessageBox.warning(
+                self,
+                self.tr("Warning"),
+                self.tr("Host and API key are required to fetch the model list."),
+            )
             return
         try:
             with httpx.Client() as client:
@@ -633,20 +705,34 @@ class ProfileManagerDialog(QDialog):
                     models = resp.json().get("data", [])
                     names = sorted(m["id"] for m in models)
                     if not names:
-                        QMessageBox.information(self, self.tr("Notice"), self.tr("No models found."))
+                        QMessageBox.information(
+                            self, self.tr("Notice"), self.tr("No models found.")
+                        )
                         return
                     name, ok = QInputDialog.getItem(
-                        self, self.tr("Select Model"), self.tr("Choose a model:"), names, 0, False
+                        self,
+                        self.tr("Select Model"),
+                        self.tr("Choose a model:"),
+                        names,
+                        0,
+                        False,
                     )
                     if ok and name:
                         self.model_edit.setText(name)
                 else:
                     QMessageBox.warning(
-                        self, self.tr("Error"),
-                        self.tr("Failed to fetch model list. HTTP {code}").format(code=resp.status_code)
+                        self,
+                        self.tr("Error"),
+                        self.tr("Failed to fetch model list. HTTP {code}").format(
+                            code=resp.status_code
+                        ),
                     )
         except Exception as e:
-            QMessageBox.warning(self, self.tr("Error"), self.tr("Failed to fetch model list: {err}").format(err=e))
+            QMessageBox.warning(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to fetch model list: {err}").format(err=e),
+            )
 
     def _on_delete(self):
         row = self.list_widget.currentRow()
@@ -654,10 +740,10 @@ class ProfileManagerDialog(QDialog):
             return
         name = self._profiles[row].get("name", "")
         reply = QMessageBox.question(
-            self, self.tr("Confirm Delete"),
+            self,
+            self.tr("Confirm Delete"),
             self.tr('Delete profile "{name}"?').format(name=name),
-            QMessageBox.StandardButton.Yes
-            | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
             return

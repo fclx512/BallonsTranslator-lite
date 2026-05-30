@@ -22,9 +22,9 @@ from .textblock import FontFormat, TextBlock
 
 
 def get_last_modified_file(file_prefix, exts, ext_fallback=None):
-    '''
+    """
     get last modified file from files sharing same prefix
-    '''
+    """
     latest_time = -1
     latest_f = None
     for ext in exts:
@@ -40,36 +40,39 @@ def get_last_modified_file(file_prefix, exts, ext_fallback=None):
     return latest_f
 
 
-page_start_pattern = re.compile(r'^###\s+', re.MULTILINE)
-text_blkid_start_pattern = re.compile(r'^\d+\.', re.MULTILINE)
+page_start_pattern = re.compile(r"^###\s+", re.MULTILINE)
+text_blkid_start_pattern = re.compile(r"^\d+\.", re.MULTILINE)
+
 
 def parse_txt_translation(file_path: str):
-    with open(file_path, 'r', encoding='utf8') as f:
+    with open(file_path, "r", encoding="utf8") as f:
         content = f.read()
     page_start = None
     page_list = []
     for matched in page_start_pattern.finditer(content):
         start, end = matched.span()
         if page_start is not None:
-            page_list.append({'page_content': content[page_start: start]})
+            page_list.append({"page_content": content[page_start:start]})
         page_start = start
     if page_start is not None:
-        page_list.append({'page_content': content[page_start:]})
+        page_list.append({"page_content": content[page_start:]})
 
     for page_dict in page_list:
-        page_content = page_dict['page_content']
-        page_dict['page_name'] = page_start_pattern.sub('', page_content.split('\n')[0]).strip()
+        page_content = page_dict["page_content"]
+        page_dict["page_name"] = page_start_pattern.sub(
+            "", page_content.split("\n")[0]
+        ).strip()
         blkid_start = blkid_end = None
         blk_list = []
         for matched in text_blkid_start_pattern.finditer(page_content):
             start, end = matched.span()
             if blkid_start is not None:
-                blk_list.append(page_content[blkid_end: start].strip())
+                blk_list.append(page_content[blkid_end:start].strip())
             blkid_start = start
             blkid_end = end
         if blkid_start is not None:
             blk_list.append(page_content[blkid_end:].strip())
-        page_dict['blk_list'] = blk_list
+        page_dict["blk_list"] = blk_list
 
     return page_list
 
@@ -84,9 +87,8 @@ class TextBlkEncoder(NumpyEncoder):
 
 
 class ProjImgTrans:
-
     def __init__(self, directory: str = None):
-        self.type = 'imgtrans'
+        self.type = "imgtrans"
         self.directory: str = None
         self.pages: Dict[str, List[TextBlock]] = {}
         self._pagename2idx = {}
@@ -115,12 +117,12 @@ class ProjImgTrans:
         return -1
 
     def proj_name(self) -> str:
-        return self.type+'_'+osp.basename(self.directory)
+        return self.type + "_" + osp.basename(self.directory)
 
     def load(self, directory: str, json_path: str = None) -> bool:
         self.directory = directory
         if json_path is None:
-            self.proj_path = osp.join(self.directory, self.proj_name() + '.json')
+            self.proj_path = osp.join(self.directory, self.proj_name() + ".json")
         else:
             self.proj_path = json_path
         new_proj = False
@@ -129,7 +131,7 @@ class ProjImgTrans:
             self.new_project()
         else:
             try:
-                with open(self.proj_path, 'r', encoding='utf8') as f:
+                with open(self.proj_path, "r", encoding="utf8") as f:
                     proj_dict = json.loads(f.read())
             except Exception as e:
                 raise ProjectLoadFailureException(e)
@@ -142,13 +144,13 @@ class ProjImgTrans:
         return new_proj
 
     def mask_dir(self):
-        return osp.join(self.directory, 'mask')
+        return osp.join(self.directory, "mask")
 
     def inpainted_dir(self):
-        return osp.join(self.directory, 'inpainted')
+        return osp.join(self.directory, "inpainted")
 
     def result_dir(self):
-        return osp.join(self.directory, 'result')
+        return osp.join(self.directory, "result")
 
     def load_from_dict(self, proj_dict: dict):
         self.set_current_img(None)
@@ -157,12 +159,16 @@ class ProjImgTrans:
             self._pagename2idx = {}
             self._idx2pagename = {}
             self.not_found_pages = {}
-            page_dict = proj_dict['pages']
+            page_dict = proj_dict["pages"]
             not_found_pages = list(page_dict.keys())
-            found_pages = find_all_imgs(img_dir=self.directory, abs_path=False, sort=True)
+            found_pages = find_all_imgs(
+                img_dir=self.directory, abs_path=False, sort=True
+            )
             for ii, imname in enumerate(found_pages):
                 if imname in page_dict:
-                    self.pages[imname] = [TextBlock(**blk_dict) for blk_dict in page_dict[imname]]
+                    self.pages[imname] = [
+                        TextBlock(**blk_dict) for blk_dict in page_dict[imname]
+                    ]
                     not_found_pages.remove(imname)
                 else:
                     self.pages[imname] = []
@@ -170,12 +176,14 @@ class ProjImgTrans:
                 self._pagename2idx[imname] = ii
                 self._idx2pagename[ii] = imname
             for imname in not_found_pages:
-                self.not_found_pages[imname] = [TextBlock(**blk_dict) for blk_dict in page_dict[imname]]
+                self.not_found_pages[imname] = [
+                    TextBlock(**blk_dict) for blk_dict in page_dict[imname]
+                ]
         except Exception as e:
             raise ProjectNotSupportedException(e)
 
-        if 'image_info' in proj_dict:
-            self._image_info = proj_dict['image_info']
+        if "image_info" in proj_dict:
+            self._image_info = proj_dict["image_info"]
         else:
             self._image_info = {}
 
@@ -183,18 +191,19 @@ class ProjImgTrans:
             if p not in self._image_info:
                 self._image_info[p] = {}
             img_info = self._image_info[p]
-            if 'finish_code' not in img_info:
+            if "finish_code" not in img_info:
                 page_blklist = self.pages[p]
-                has_empty_blk = len(page_blklist) == 0 or \
-                    any(not blk.text or len(blk.text) == 0 for blk in page_blklist)
+                has_empty_blk = len(page_blklist) == 0 or any(
+                    not blk.text or len(blk.text) == 0 for blk in page_blklist
+                )
                 if has_empty_blk:
-                    img_info['finish_code'] = 0
+                    img_info["finish_code"] = 0
                 else:
-                    img_info['finish_code'] = RunStatus.FIN_ALL
+                    img_info["finish_code"] = RunStatus.FIN_ALL
 
         set_img_failed = False
-        if 'current_img' in proj_dict:
-            current_img = proj_dict['current_img']
+        if "current_img" in proj_dict:
+            current_img = proj_dict["current_img"]
             try:
                 self.set_current_img(current_img)
             except ImgnameNotInProjectException:
@@ -207,14 +216,14 @@ class ProjImgTrans:
                 self.set_current_img_byidx(0)
 
     def get_page_progress(self, pagename: str):
-        fin_code = self._image_info[pagename]['finish_code']
+        fin_code = self._image_info[pagename]["finish_code"]
         return (fin_code & pcfg.module.finish_code) == pcfg.module.finish_code
 
     def set_page_progress(self, pagename, code):
-        self._image_info[pagename]['finish_code'] = code
+        self._image_info[pagename]["finish_code"] = code
 
     def update_page_progress(self, pagename, code):
-        self._image_info[pagename]['finish_code'] |= code
+        self._image_info[pagename]["finish_code"] |= code
 
     def load_translation_from_txt(self, file_path: str):
         page_list = parse_txt_translation(file_path)
@@ -223,7 +232,7 @@ class ProjImgTrans:
         unexpected_pages = []
         matched_pages = []
         for page_dict in page_list:
-            page_name = page_dict['page_name']
+            page_name = page_dict["page_name"]
             if page_name in self.pages:
                 matched_pages.append(page_name)
             else:
@@ -231,14 +240,16 @@ class ProjImgTrans:
                 continue
             blklist = self.pages[page_name]
             n_blk = len(blklist)
-            src_blk_list = page_dict['blk_list']
+            src_blk_list = page_dict["blk_list"]
             n_src_blk = len(src_blk_list)
             if n_src_blk != n_blk:
-                LOGGER.warning(f'Unmatched text blocks in {page_name}, number of text blocks in this page vs source file: {n_blk}-{n_src_blk}')
+                LOGGER.warning(
+                    f"Unmatched text blocks in {page_name}, number of text blocks in this page vs source file: {n_blk}-{n_src_blk}"
+                )
                 unmatched_pages.append(page_name)
             for blkid in range(min(n_blk, n_src_blk)):
                 blk = blklist[blkid]
-                blk.rich_text = ''
+                blk.rich_text = ""
                 blk.translation = src_blk_list[blkid]
 
         matched_pages = set(matched_pages)
@@ -247,8 +258,17 @@ class ProjImgTrans:
                 if page_name not in matched_pages:
                     missing_pages.append(page_name)
 
-        all_matched = len(missing_pages) == 0 and len(unmatched_pages) == 0 and len(unexpected_pages) == 0
-        return all_matched, {'missing_pages': missing_pages, 'unmatched_pages': unmatched_pages, 'unexpected_pages': unexpected_pages, 'matched_pages': matched_pages}
+        all_matched = (
+            len(missing_pages) == 0
+            and len(unmatched_pages) == 0
+            and len(unexpected_pages) == 0
+        )
+        return all_matched, {
+            "missing_pages": missing_pages,
+            "unmatched_pages": unmatched_pages,
+            "unexpected_pages": unexpected_pages,
+            "matched_pages": matched_pages,
+        }
 
     def load_from_json(self, json_path: str):
         old_dir = self.directory
@@ -319,35 +339,37 @@ class ProjImgTrans:
             self.pages[imgname] = []
             self._pagename2idx[imgname] = ii
             self._idx2pagename[ii] = imgname
-            self._image_info[imgname] = {'finish_code': 0}
+            self._image_info[imgname] = {"finish_code": 0}
         self.set_current_img_byidx(0)
         self.save()
 
     def save(self, keep_exist_as_backup=False):
         if not osp.exists(self.directory):
             raise ProjectDirNotExistException
-        tmp_save_tgt = self.proj_path + '.tmp'
+        tmp_save_tgt = self.proj_path + ".tmp"
         try:
             with open(tmp_save_tgt, "w", encoding="utf-8") as f:
-                f.write(json.dumps(self.to_dict(), ensure_ascii=False, cls=TextBlkEncoder))
+                f.write(
+                    json.dumps(self.to_dict(), ensure_ascii=False, cls=TextBlkEncoder)
+                )
         except:
-            raise Exception(f'Failed to write {self.to_dict()}')
+            raise Exception(f"Failed to write {self.to_dict()}")
         if osp.exists(self.proj_path) and keep_exist_as_backup:
-            os.replace(self.proj_path, self.proj_path + '.backup')
+            os.replace(self.proj_path, self.proj_path + ".backup")
             os.replace(tmp_save_tgt, self.proj_path)
         else:
             os.replace(tmp_save_tgt, self.proj_path)
-        LOGGER.debug(f'project saved to {self.proj_path}')
+        LOGGER.debug(f"project saved to {self.proj_path}")
 
     def to_dict(self) -> Dict:
         pages = self.pages.copy()
         pages.update(self.not_found_pages)
         image_info = self._image_info.copy()
         return {
-            'directory': self.directory,
-            'pages': pages,
-            'current_img': self.current_img,
-            'image_info': image_info,
+            "directory": self.directory,
+            "pages": pages,
+            "current_img": self.current_img,
+            "image_info": image_info,
         }
 
     def read_img(self, imgname: str) -> np.ndarray:
@@ -356,14 +378,18 @@ class ProjImgTrans:
         img_path = osp.join(self.directory, imgname)
         img = imread(img_path)
         h, w = img.shape[:2]
-        self._image_info[imgname].update({'width': w, 'height': h})
+        self._image_info[imgname].update({"width": w, "height": h})
         return img
 
     def save_mask(self, img_name, mask: np.ndarray):
         imwrite(self.get_mask_path(img_name), mask, ext=pcfg.intermediate_imgsave_ext)
 
     def save_inpainted(self, img_name, inpainted: np.ndarray):
-        imwrite(self.get_inpainted_path(img_name), inpainted, ext=pcfg.intermediate_imgsave_ext)
+        imwrite(
+            self.get_inpainted_path(img_name),
+            inpainted,
+            ext=pcfg.intermediate_imgsave_ext,
+        )
 
     def current_img_path(self) -> str:
         if self.current_img is None:
@@ -376,9 +402,11 @@ class ProjImgTrans:
 
         fileprefix = osp.join(self.mask_dir(), osp.splitext(imgname)[0])
         if get_last_modified:
-            p = get_last_modified_file(fileprefix, ['.jxl', '.png'], ext_fallback=pcfg.intermediate_imgsave_ext)
+            p = get_last_modified_file(
+                fileprefix, [".jxl", ".png"], ext_fallback=pcfg.intermediate_imgsave_ext
+            )
         else:
-            p = fileprefix+pcfg.intermediate_imgsave_ext
+            p = fileprefix + pcfg.intermediate_imgsave_ext
 
         return p
 
@@ -395,14 +423,18 @@ class ProjImgTrans:
 
         fileprefix = osp.join(self.inpainted_dir(), osp.splitext(imgname)[0])
         if get_last_modified:
-            p = get_last_modified_file(fileprefix, ['.jxl', '.png'], ext_fallback=pcfg.intermediate_imgsave_ext)
+            p = get_last_modified_file(
+                fileprefix, [".jxl", ".png"], ext_fallback=pcfg.intermediate_imgsave_ext
+            )
         else:
-            p = fileprefix+pcfg.intermediate_imgsave_ext
+            p = fileprefix + pcfg.intermediate_imgsave_ext
 
         if not osp.exists(p) and shared.FUZZY_MATCH_IMAGE_NAME:
             if self._fuzzy_inpainted_list is None:
                 if osp.exists(self.inpainted_dir()):
-                    self._fuzzy_inpainted_list = find_all_imgs(self.inpainted_dir(), sort=True)
+                    self._fuzzy_inpainted_list = find_all_imgs(
+                        self.inpainted_dir(), sort=True
+                    )
                 else:
                     self._fuzzy_inpainted_list = []
             pidx = self.pagename2idx(imgname)
@@ -410,7 +442,9 @@ class ProjImgTrans:
                 return osp.join(self.inpainted_dir(), self._fuzzy_inpainted_list[pidx])
         return p
 
-    def load_inpainted_by_imgname(self, imgname: str, scale_to_src: bool = True) -> np.ndarray:
+    def load_inpainted_by_imgname(
+        self, imgname: str, scale_to_src: bool = True
+    ) -> np.ndarray:
         inpainted = None
         mp = self.get_inpainted_path(imgname, get_last_modified=True)
         if mp is not None and osp.exists(mp):
@@ -422,26 +456,28 @@ class ProjImgTrans:
                 h, w = i.height, i.width
             ih, iw = inpainted.shape[:2]
             if ih != h or iw != w:
-                inpainted = Image.fromarray(inpainted).resize((w, h), resample=Image.Resampling.LANCZOS)
+                inpainted = Image.fromarray(inpainted).resize(
+                    (w, h), resample=Image.Resampling.LANCZOS
+                )
                 inpainted = np.array(inpainted)
         return inpainted
 
     def get_result_ext(self, imgname: str) -> str:
         if pcfg is not None and pcfg.imgsave_auto_format:
             src_ext = osp.splitext(imgname)[1].lower()
-            if src_ext in {'.jpg', '.jpeg', '.png', '.webp', '.jxl', '.bmp'}:
+            if src_ext in {".jpg", ".jpeg", ".png", ".webp", ".jxl", ".bmp"}:
                 return src_ext
-        ext = '.png'
+        ext = ".png"
         if pcfg is not None:
-            if pcfg.imgsave_ext in {'.jpg', '.png', '.webp', '.jxl'}:
+            if pcfg.imgsave_ext in {".jpg", ".png", ".webp", ".jxl"}:
                 ext = pcfg.imgsave_ext
             else:
-                LOGGER.warning('invalid image saving ext in config.json')
+                LOGGER.warning("invalid image saving ext in config.json")
         return ext
 
     def get_result_path(self, imgname: str) -> str:
         ext = self.get_result_ext(imgname)
-        return osp.join(self.result_dir(), osp.splitext(imgname)[0]+ext)
+        return osp.join(self.result_dir(), osp.splitext(imgname)[0] + ext)
 
     def backup(self):
         raise NotImplementedError
@@ -483,27 +519,28 @@ class ProjImgTrans:
         else:
             return None
 
-
     def dump_txt_path(self, dump_target, suffix):
-        save_path = osp.join(self.directory, self.proj_name() + f'_{dump_target}{suffix}')
+        save_path = osp.join(
+            self.directory, self.proj_name() + f"_{dump_target}{suffix}"
+        )
         return save_path
 
-    def dump_txt(self, dump_target: str, suffix='.txt'):
+    def dump_txt(self, dump_target: str, suffix=".txt"):
         save_path = self.dump_txt_path(dump_target, suffix=suffix)
         text_all = []
-        assert dump_target in {'source', 'translation'}
-        assert suffix in {'.txt', '.md'}
+        assert dump_target in {"source", "translation"}
+        assert suffix in {".txt", ".md"}
         for page_name, blk_list in self.pages.items():
-            text_in_page = ['### ' + page_name]
+            text_in_page = ["### " + page_name]
             for ii, blk in enumerate(blk_list):
-                if dump_target == 'translation':
+                if dump_target == "translation":
                     text = blk.translation.strip()
-                elif dump_target == 'source':
+                elif dump_target == "source":
                     text = blk.get_text().strip()
-                text_in_page.append(f'{ii + 1}. {text}')
-            text_all.append('\n\n'.join(text_in_page))
-        with open(save_path, 'w', encoding='utf8') as f:
-            f.write('\n\n\n'.join(text_all))
+                text_in_page.append(f"{ii + 1}. {text}")
+            text_all.append("\n\n".join(text_in_page))
+        with open(save_path, "w", encoding="utf8") as f:
+            f.write("\n\n\n".join(text_all))
 
     def merge_from_proj_dict(self, tgt_dict: Dict) -> Dict:
         if self.pages is None:
@@ -530,16 +567,17 @@ class ProjImgTrans:
 
     def dump_compact_index(self, include_global_font: bool = True) -> Dict:
         from .proj_compact import build_index
+
         return build_index(self, include_global_font=include_global_font)
 
-    def dump_compact_detail(self, page_indices: List[int],
-                            fields_whitelist = None) -> Dict:
+    def dump_compact_detail(
+        self, page_indices: List[int], fields_whitelist=None
+    ) -> Dict:
         from .proj_compact import build_detail
+
         return build_detail(self, page_indices, fields_whitelist=fields_whitelist)
 
-    def apply_compact_modifications(self, modifications: Dict,
-                                     metadata: Dict = None):
+    def apply_compact_modifications(self, modifications: Dict, metadata: Dict = None):
         from .proj_compact import apply_modifications
+
         return apply_modifications(self, modifications, metadata)
-
-

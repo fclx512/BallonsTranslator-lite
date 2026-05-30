@@ -1,4 +1,3 @@
-
 try:
     import torch
     import torch.nn as nn
@@ -11,34 +10,58 @@ import numpy as np
 from .ffc import FFC_BN_ACT
 
 
-def get_activation(kind='tanh'):
-    if kind == 'tanh':
+def get_activation(kind="tanh"):
+    if kind == "tanh":
         return nn.Tanh()
-    if kind == 'sigmoid':
+    if kind == "sigmoid":
         return nn.Sigmoid()
     if kind is False:
         return nn.Identity()
-    raise ValueError(f'Unknown activation kind {kind}')
+    raise ValueError(f"Unknown activation kind {kind}")
+
 
 class FFCResnetBlock(nn.Module):
-    def __init__(self, dim, padding_type, norm_layer, activation_layer=nn.ReLU, dilation=1,
-                 inline=False, **conv_kwargs):
+    def __init__(
+        self,
+        dim,
+        padding_type,
+        norm_layer,
+        activation_layer=nn.ReLU,
+        dilation=1,
+        inline=False,
+        **conv_kwargs,
+    ):
         super().__init__()
-        self.conv1 = FFC_BN_ACT(dim, dim, kernel_size=3, padding=dilation, dilation=dilation,
-                                norm_layer=norm_layer,
-                                activation_layer=activation_layer,
-                                padding_type=padding_type,
-                                **conv_kwargs)
-        self.conv2 = FFC_BN_ACT(dim, dim, kernel_size=3, padding=dilation, dilation=dilation,
-                                norm_layer=norm_layer,
-                                activation_layer=activation_layer,
-                                padding_type=padding_type,
-                                **conv_kwargs)
+        self.conv1 = FFC_BN_ACT(
+            dim,
+            dim,
+            kernel_size=3,
+            padding=dilation,
+            dilation=dilation,
+            norm_layer=norm_layer,
+            activation_layer=activation_layer,
+            padding_type=padding_type,
+            **conv_kwargs,
+        )
+        self.conv2 = FFC_BN_ACT(
+            dim,
+            dim,
+            kernel_size=3,
+            padding=dilation,
+            dilation=dilation,
+            norm_layer=norm_layer,
+            activation_layer=activation_layer,
+            padding_type=padding_type,
+            **conv_kwargs,
+        )
         self.inline = inline
 
     def forward(self, x):
         if self.inline:
-            x_l, x_g = x[:, :-self.conv1.ffc.global_in_num], x[:, -self.conv1.ffc.global_in_num:]
+            x_l, x_g = (
+                x[:, : -self.conv1.ffc.global_in_num],
+                x[:, -self.conv1.ffc.global_in_num :],
+            )
         else:
             x_l, x_g = x if type(x) is tuple else (x, 0)
 
@@ -65,40 +88,76 @@ class ConcatTupleLayer(nn.Module):
 
 
 class FFCResNetGenerator(nn.Module):
-    def __init__(self, input_nc=4, output_nc=3, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d,
-                 padding_type='reflect', activation_layer=nn.ReLU,
-                 up_norm_layer=nn.BatchNorm2d, up_activation=nn.ReLU(True),
-                 init_conv_kwargs={}, downsample_conv_kwargs={}, resnet_conv_kwargs={}, spatial_transform_kwargs={},
-                 add_out_act=True, max_features=1024, out_ffc=False, out_ffc_kwargs={}):
-        assert (n_blocks >= 0)
+    def __init__(
+        self,
+        input_nc=4,
+        output_nc=3,
+        ngf=64,
+        n_downsampling=3,
+        n_blocks=9,
+        norm_layer=nn.BatchNorm2d,
+        padding_type="reflect",
+        activation_layer=nn.ReLU,
+        up_norm_layer=nn.BatchNorm2d,
+        up_activation=nn.ReLU(True),
+        init_conv_kwargs={},
+        downsample_conv_kwargs={},
+        resnet_conv_kwargs={},
+        spatial_transform_kwargs={},
+        add_out_act=True,
+        max_features=1024,
+        out_ffc=False,
+        out_ffc_kwargs={},
+    ):
+        assert n_blocks >= 0
         super().__init__()
 
-        model = [nn.ReflectionPad2d(3),
-                 FFC_BN_ACT(input_nc, ngf, kernel_size=7, padding=0, norm_layer=norm_layer,
-                            activation_layer=activation_layer, **init_conv_kwargs)]
+        model = [
+            nn.ReflectionPad2d(3),
+            FFC_BN_ACT(
+                input_nc,
+                ngf,
+                kernel_size=7,
+                padding=0,
+                norm_layer=norm_layer,
+                activation_layer=activation_layer,
+                **init_conv_kwargs,
+            ),
+        ]
 
         ### downsample
         for i in range(n_downsampling):
-            mult = 2 ** i
+            mult = 2**i
             if i == n_downsampling - 1:
                 cur_conv_kwargs = dict(downsample_conv_kwargs)
-                cur_conv_kwargs['ratio_gout'] = resnet_conv_kwargs.get('ratio_gin', 0)
+                cur_conv_kwargs["ratio_gout"] = resnet_conv_kwargs.get("ratio_gin", 0)
             else:
                 cur_conv_kwargs = downsample_conv_kwargs
-            model += [FFC_BN_ACT(min(max_features, ngf * mult),
-                                 min(max_features, ngf * mult * 2),
-                                 kernel_size=3, stride=2, padding=1,
-                                 norm_layer=norm_layer,
-                                 activation_layer=activation_layer,
-                                 **cur_conv_kwargs)]
+            model += [
+                FFC_BN_ACT(
+                    min(max_features, ngf * mult),
+                    min(max_features, ngf * mult * 2),
+                    kernel_size=3,
+                    stride=2,
+                    padding=1,
+                    norm_layer=norm_layer,
+                    activation_layer=activation_layer,
+                    **cur_conv_kwargs,
+                )
+            ]
 
-        mult = 2 ** n_downsampling
+        mult = 2**n_downsampling
         feats_num_bottleneck = min(max_features, ngf * mult)
 
         ### resnet blocks
         for i in range(n_blocks):
-            cur_resblock = FFCResnetBlock(feats_num_bottleneck, padding_type=padding_type, activation_layer=activation_layer,
-                                          norm_layer=norm_layer, **resnet_conv_kwargs)
+            cur_resblock = FFCResnetBlock(
+                feats_num_bottleneck,
+                padding_type=padding_type,
+                activation_layer=activation_layer,
+                norm_layer=norm_layer,
+                **resnet_conv_kwargs,
+            )
             model += [cur_resblock]
 
         model += [ConcatTupleLayer()]
@@ -106,20 +165,37 @@ class FFCResNetGenerator(nn.Module):
         ### upsample
         for i in range(n_downsampling):
             mult = 2 ** (n_downsampling - i)
-            model += [nn.ConvTranspose2d(min(max_features, ngf * mult),
-                                         min(max_features, int(ngf * mult / 2)),
-                                         kernel_size=3, stride=2, padding=1, output_padding=1),
-                      up_norm_layer(min(max_features, int(ngf * mult / 2))),
-                      up_activation]
+            model += [
+                nn.ConvTranspose2d(
+                    min(max_features, ngf * mult),
+                    min(max_features, int(ngf * mult / 2)),
+                    kernel_size=3,
+                    stride=2,
+                    padding=1,
+                    output_padding=1,
+                ),
+                up_norm_layer(min(max_features, int(ngf * mult / 2))),
+                up_activation,
+            ]
 
         if out_ffc:
-            model += [FFCResnetBlock(ngf, padding_type=padding_type, activation_layer=activation_layer,
-                                     norm_layer=norm_layer, inline=True, **out_ffc_kwargs)]
+            model += [
+                FFCResnetBlock(
+                    ngf,
+                    padding_type=padding_type,
+                    activation_layer=activation_layer,
+                    norm_layer=norm_layer,
+                    inline=True,
+                    **out_ffc_kwargs,
+                )
+            ]
 
-        model += [nn.ReflectionPad2d(3),
-                  nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0)]
+        model += [
+            nn.ReflectionPad2d(3),
+            nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0),
+        ]
         if add_out_act:
-            model.append(get_activation('tanh' if add_out_act is True else add_out_act))
+            model.append(get_activation("tanh" if add_out_act is True else add_out_act))
         self.model = nn.Sequential(*model)
 
     def forward(self, img, mask, rel_pos=None, direct=None) -> Tensor:
@@ -127,7 +203,6 @@ class FFCResNetGenerator(nn.Module):
         if rel_pos is None:
             return self.model(masked_img)
         else:
-
             x_l, x_g = self.model[:2](masked_img)
             x_l = x_l.to(torch.float32)
             x_l += rel_pos
@@ -136,14 +211,24 @@ class FFCResNetGenerator(nn.Module):
 
 
 class NLayerDiscriminator(nn.Module):
-    def __init__(self, input_nc=3, ndf=64, n_layers=4, norm_layer=nn.BatchNorm2d,):
+    def __init__(
+        self,
+        input_nc=3,
+        ndf=64,
+        n_layers=4,
+        norm_layer=nn.BatchNorm2d,
+    ):
         super().__init__()
         self.n_layers = n_layers
 
         kw = 4
-        padw = int(np.ceil((kw-1.0)/2))
-        sequence = [[nn.Conv2d(input_nc, ndf, kernel_size=kw, stride=2, padding=padw),
-                     nn.LeakyReLU(0.2, True)]]
+        padw = int(np.ceil((kw - 1.0) / 2))
+        sequence = [
+            [
+                nn.Conv2d(input_nc, ndf, kernel_size=kw, stride=2, padding=padw),
+                nn.LeakyReLU(0.2, True),
+            ]
+        ]
 
         nf = ndf
         for n in range(1, n_layers):
@@ -154,7 +239,7 @@ class NLayerDiscriminator(nn.Module):
             cur_model += [
                 nn.Conv2d(nf_prev, nf, kernel_size=kw, stride=2, padding=padw),
                 norm_layer(nf),
-                nn.LeakyReLU(0.2, True)
+                nn.LeakyReLU(0.2, True),
             ]
             sequence.append(cur_model)
 
@@ -165,25 +250,26 @@ class NLayerDiscriminator(nn.Module):
         cur_model += [
             nn.Conv2d(nf_prev, nf, kernel_size=kw, stride=1, padding=padw),
             norm_layer(nf),
-            nn.LeakyReLU(0.2, True)
+            nn.LeakyReLU(0.2, True),
         ]
         sequence.append(cur_model)
 
         sequence += [[nn.Conv2d(nf, 1, kernel_size=kw, stride=1, padding=padw)]]
 
         for n in range(len(sequence)):
-            setattr(self, 'model'+str(n), nn.Sequential(*sequence[n]))
+            setattr(self, "model" + str(n), nn.Sequential(*sequence[n]))
 
     def get_all_activations(self, x):
         res = [x]
         for n in range(self.n_layers + 2):
-            model = getattr(self, 'model' + str(n))
+            model = getattr(self, "model" + str(n))
             res.append(model(res[-1]))
         return res[1:]
 
     def forward(self, x):
         act = self.get_all_activations(x)
         return act[-1], act[:-1]
+
 
 def set_requires_grad(module, value):
     for param in module.parameters():
@@ -205,7 +291,10 @@ class MaskedSinusoidalPositionalEmbedding(nn.Embedding):
         """
         n_pos, dim = out.shape
         position_enc = np.array(
-            [[pos / np.power(10000, 2 * (j // 2) / dim) for j in range(dim)] for pos in range(n_pos)]
+            [
+                [pos / np.power(10000, 2 * (j // 2) / dim) for j in range(dim)]
+                for pos in range(n_pos)
+            ]
         )
         out.requires_grad = False  # set early to avoid an error in pytorch-1.8+
         sentinel = dim // 2 if dim % 2 == 0 else (dim // 2) + 1
@@ -238,45 +327,59 @@ class MultiLabelEmbedding(nn.Module):
 class MPE(nn.Module):
     def __init__(self):
         super().__init__()
-        self.rel_pos_emb = MaskedSinusoidalPositionalEmbedding(num_embeddings=128,
-                                                                embedding_dim=64)
+        self.rel_pos_emb = MaskedSinusoidalPositionalEmbedding(
+            num_embeddings=128, embedding_dim=64
+        )
         self.direct_emb = MultiLabelEmbedding(num_positions=4, embedding_dim=64)
-        self.alpha5 = nn.Parameter(torch.tensor(0, dtype=torch.float32), requires_grad=True)
-        self.alpha6 = nn.Parameter(torch.tensor(0, dtype=torch.float32), requires_grad=True)
+        self.alpha5 = nn.Parameter(
+            torch.tensor(0, dtype=torch.float32), requires_grad=True
+        )
+        self.alpha6 = nn.Parameter(
+            torch.tensor(0, dtype=torch.float32), requires_grad=True
+        )
 
     def forward(self, rel_pos=None, direct=None):
         b, h, w = rel_pos.shape
         rel_pos = rel_pos.reshape(b, h * w)
-        rel_pos_emb = self.rel_pos_emb(rel_pos).reshape(b, h, w, -1).permute(0, 3, 1, 2) * self.alpha5
+        rel_pos_emb = (
+            self.rel_pos_emb(rel_pos).reshape(b, h, w, -1).permute(0, 3, 1, 2)
+            * self.alpha5
+        )
         direct = direct.reshape(b, h * w, 4).to(torch.float32)
-        direct_emb = self.direct_emb(direct).reshape(b, h, w, -1).permute(0, 3, 1, 2) * self.alpha6
+        direct_emb = (
+            self.direct_emb(direct).reshape(b, h, w, -1).permute(0, 3, 1, 2)
+            * self.alpha6
+        )
         return rel_pos_emb, direct_emb
 
 
 class LamaFourier:
-    def __init__(self, build_discriminator=True, use_mpe=False, large_arch: bool = False) -> None:
+    def __init__(
+        self, build_discriminator=True, use_mpe=False, large_arch: bool = False
+    ) -> None:
         # super().__init__()
 
         n_blocks = 9
         if large_arch:
             n_blocks = 18
 
-        self.generator = FFCResNetGenerator(4, 3, add_out_act='sigmoid',
-                            n_blocks = n_blocks,
-                            init_conv_kwargs={
-                            'ratio_gin': 0,
-                            'ratio_gout': 0,
-                            'enable_lfu': False
-                        }, downsample_conv_kwargs={
-                            'ratio_gin': 0,
-                            'ratio_gout': 0,
-                            'enable_lfu': False
-                        }, resnet_conv_kwargs={
-                            'ratio_gin': 0.75,
-                            'ratio_gout': 0.75,
-                            'enable_lfu': False
-                        },
-                    )
+        self.generator = FFCResNetGenerator(
+            4,
+            3,
+            add_out_act="sigmoid",
+            n_blocks=n_blocks,
+            init_conv_kwargs={"ratio_gin": 0, "ratio_gout": 0, "enable_lfu": False},
+            downsample_conv_kwargs={
+                "ratio_gin": 0,
+                "ratio_gout": 0,
+                "enable_lfu": False,
+            },
+            resnet_conv_kwargs={
+                "ratio_gin": 0.75,
+                "ratio_gout": 0.75,
+                "enable_lfu": False,
+            },
+        )
 
         self.discriminator = NLayerDiscriminator() if build_discriminator else None
         self.inpaint_only = False
@@ -321,7 +424,6 @@ class LamaFourier:
             self.mpe.eval()
         return self
 
-
     def __call__(self, img: Tensor, mask: Tensor, rel_pos=None, direct=None):
 
         if self.mpe is not None:
@@ -337,23 +439,22 @@ class LamaFourier:
             predicted_img = predicted_img.detach()
             img.requires_grad = True
 
-
         discr_real_pred, discr_real_features = self.discriminator(img)
         discr_fake_pred, discr_fake_features = self.discriminator(predicted_img)
         # fp = discr_fake_pred.detach().mean()
 
         if self.forward_discriminator:
-            return  {
-                'predicted_img': predicted_img,
-                'discr_real_pred': discr_real_pred,
-                'discr_fake_pred':discr_fake_pred
+            return {
+                "predicted_img": predicted_img,
+                "discr_real_pred": discr_real_pred,
+                "discr_fake_pred": discr_fake_pred,
             }
         else:
-            return  {
-                'predicted_img': predicted_img,
-                'discr_real_features': discr_real_features,
-                'discr_fake_features': discr_fake_features,
-                'discr_fake_pred': discr_fake_pred
+            return {
+                "predicted_img": predicted_img,
+                "discr_real_features": discr_real_features,
+                "discr_fake_features": discr_fake_features,
+                "discr_fake_pred": discr_fake_pred,
             }
 
     def load_masked_position_encoding(self, mask):
@@ -373,7 +474,7 @@ class LamaFourier:
         mask[mask > 0] = 255
         h, w = mask.shape[0:2]
         mask3 = mask.copy()
-        mask3 = 1. - (mask3 / 255.0)
+        mask3 = 1.0 - (mask3 / 255.0)
         pos = np.zeros((h, w), dtype=np.int32)
         direct = np.zeros((h, w, 4), dtype=np.int32)
         i = 0
@@ -416,18 +517,25 @@ class LamaFourier:
         rel_pos = np.clip(rel_pos, 0, pos_num - 1)
 
         if ori_w != w or ori_h != h:
-            rel_pos = cv2.resize(rel_pos, (ori_w, ori_h), interpolation=cv2.INTER_NEAREST)
+            rel_pos = cv2.resize(
+                rel_pos, (ori_w, ori_h), interpolation=cv2.INTER_NEAREST
+            )
             rel_pos[ori_mask == 0] = 0
             direct = cv2.resize(direct, (ori_w, ori_h), interpolation=cv2.INTER_NEAREST)
             direct[ori_mask == 0, :] = 0
 
         return rel_pos, abs_pos, direct
 
-def load_lama_mpe(model_path, device, use_mpe=True, large_arch: bool = False) -> LamaFourier:
-    model = LamaFourier(build_discriminator=False, use_mpe=use_mpe, large_arch=large_arch)
-    sd = torch.load(model_path, map_location = 'cpu')
-    model.generator.load_state_dict(sd['gen_state_dict'])
+
+def load_lama_mpe(
+    model_path, device, use_mpe=True, large_arch: bool = False
+) -> LamaFourier:
+    model = LamaFourier(
+        build_discriminator=False, use_mpe=use_mpe, large_arch=large_arch
+    )
+    sd = torch.load(model_path, map_location="cpu")
+    model.generator.load_state_dict(sd["gen_state_dict"])
     if use_mpe:
-        model.mpe.load_state_dict(sd['str_state_dict'])
+        model.mpe.load_state_dict(sd["str_state_dict"])
     model.eval().to(device)
     return model

@@ -3,10 +3,8 @@
 packaging>=23.0
 pydantic>=2.0
 pillow>=10.0
-PyQt6-Qt6>=6.6.2 ; python_version > "3.8"
-PyQt6>=6.6.1 ; python_version > "3.8"
-PyQt5-Qt5>=5.15.2 ; python_version <= "3.8"
-PyQt5>=5.15.10 ; python_version <= "3.8"
+PyQt6-Qt6>=6.6.2
+PyQt6>=6.6.1
 numpy
 # PyTorch and its dependencies are optional.
 # Install them manually for GPU-accelerated local models:
@@ -21,11 +19,8 @@ einops
 termcolor
 qtpy
 spacy-pkuseg
-python-docx
-docx2txt
-piexif
-ordered-set
 opencc-python-reimplemented
+click
 requests
 colorama
 openai>=2.8.1

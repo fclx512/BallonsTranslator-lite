@@ -22,13 +22,17 @@ except Exception:
 
 from utils import download_util, shared
 
-MODEL_REL_PATH = os.path.join('data', 'models', 'YuzuMarker.FontDetection', 'name=4x-epoch=18-step=368676.ckpt')
-MODEL_URL = 'https://huggingface.co/gyrojeff/YuzuMarker.FontDetection/resolve/main/name=4x-epoch=18-step=368676.ckpt'
-MODEL_SHA256 = '4544568829be10a98653a2c965f82fb229d5e02146578ccb3402518d9c022b1a'
-CACHE_REL_PATH = os.path.join('data','font_demo_cache.bin')
+MODEL_REL_PATH = os.path.join(
+    "data", "models", "YuzuMarker.FontDetection", "name=4x-epoch=18-step=368676.ckpt"
+)
+MODEL_URL = "https://huggingface.co/gyrojeff/YuzuMarker.FontDetection/resolve/main/name=4x-epoch=18-step=368676.ckpt"
+MODEL_SHA256 = "4544568829be10a98653a2c965f82fb229d5e02146578ccb3402518d9c022b1a"
+CACHE_REL_PATH = os.path.join("data", "font_demo_cache.bin")
 
 # Add the YuzuMarker.FontDetection directory to the Python path so we can import font_dataset
-YUZUMARKER_DIR = os.path.join(shared.PROGRAM_PATH, 'data', 'models', 'YuzuMarker.FontDetection')
+YUZUMARKER_DIR = os.path.join(
+    shared.PROGRAM_PATH, "data", "models", "YuzuMarker.FontDetection"
+)
 if YUZUMARKER_DIR not in sys.path:
     sys.path.insert(0, YUZUMARKER_DIR)
 
@@ -64,10 +68,12 @@ def _download_file(url: str, dst: str) -> None:
         logger.info(f"Model successfully downloaded to {dst}")
     except Exception as e:
         logger.error(f"Download failed: {e}")
-        raise RuntimeError(f'Download failed: {e}')
+        raise RuntimeError(f"Download failed: {e}")
 
 
-def _clean_state_dict_keys(state_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+def _clean_state_dict_keys(
+    state_dict: Dict[str, torch.Tensor],
+) -> Dict[str, torch.Tensor]:
     new_sd = {}
     for k, v in state_dict.items():
         new_k = k
@@ -83,6 +89,7 @@ def _clean_state_dict_keys(state_dict: Dict[str, torch.Tensor]) -> Dict[str, tor
         new_sd[new_k] = v
     return new_sd
 
+
 def prepare_fonts(cache_path: str = None):
     """Load font list from cache file"""
     try:
@@ -90,14 +97,15 @@ def prepare_fonts(cache_path: str = None):
             if YUZUMARKER_DIR not in sys.path:
                 sys.path.insert(0, YUZUMARKER_DIR)
 
-            with open(cache_path, 'rb') as f:
+            with open(cache_path, "rb") as f:
                 import pickle
+
                 font_objects = pickle.load(f)
 
                 # Convert font objects to their path strings
                 font_list = []
                 for font_obj in font_objects:
-                    if hasattr(font_obj, 'path'):
+                    if hasattr(font_obj, "path"):
                         font_list.append(font_obj.path)
                     else:
                         # Fallback: if the object doesn't have path attribute, keep the original object
@@ -119,12 +127,13 @@ def prepare_fonts(cache_path: str = None):
     # Return a default font list if cache is not available
     return []
 
+
 class FontDetector:
     _instance = None
 
-    def __init__(self, device: str = 'cpu', input_size: int = 512):
+    def __init__(self, device: str = "cpu", input_size: int = 512):
         if torch is None or models is None:
-            raise RuntimeError('Torch or torchvision is not available')
+            raise RuntimeError("Torch or torchvision is not available")
         self.device = torch.device(device)
         self.input_size = input_size
         self.model = None
@@ -133,7 +142,7 @@ class FontDetector:
         self.cache_path = os.path.join(shared.PROGRAM_PATH, CACHE_REL_PATH)
 
     @classmethod
-    def get_instance(cls) -> 'FontDetector':
+    def get_instance(cls) -> "FontDetector":
         if cls._instance is None:
             cls._instance = FontDetector()
         return cls._instance
@@ -141,16 +150,18 @@ class FontDetector:
     def ensure_model(self):
         # ensure model file exists, otherwise download
         if not os.path.exists(self.model_path):
-            logger.info(f'Model file does not exist at {self.model_path}, preparing to download')
+            logger.info(
+                f"Model file does not exist at {self.model_path}, preparing to download"
+            )
             try:
                 # create dir
                 model_dir = os.path.dirname(self.model_path)
                 os.makedirs(model_dir, exist_ok=True)
-                logger.info(f'Downloading font detection model to {self.model_path}...')
+                logger.info(f"Downloading font detection model to {self.model_path}...")
                 _download_file(MODEL_URL, self.model_path)
-                logger.info('Model download completed')
+                logger.info("Model download completed")
             except Exception as e:
-                logger.error(f'Failed to download model: {e}')
+                logger.error(f"Failed to download model: {e}")
                 raise
         else:
             pass
@@ -158,10 +169,10 @@ class FontDetector:
         try:
             sha = _sha256_of_file(self.model_path)
             if sha != MODEL_SHA256:
-                logger.warning('Model sha256 mismatch: %s != %s', sha, MODEL_SHA256)
+                logger.warning("Model sha256 mismatch: %s != %s", sha, MODEL_SHA256)
         except Exception as e:
-            logger.error(f'Failed to compute model sha256: {e}')
-            logger.exception('Exception details:')
+            logger.error(f"Failed to compute model sha256: {e}")
+            logger.exception("Exception details:")
             raise
 
     def load(self):
@@ -171,12 +182,16 @@ class FontDetector:
             self.ensure_model()
 
             # Load the checkpoint
-            checkpoint = torch.load(self.model_path, map_location=self.device, weights_only=False)
+            checkpoint = torch.load(
+                self.model_path, map_location=self.device, weights_only=False
+            )
 
             # Extract state dict
             if isinstance(checkpoint, dict) and "state_dict" in checkpoint:
                 raw_sd = checkpoint["state_dict"]
-            elif isinstance(checkpoint, dict) and all(isinstance(v, torch.Tensor) for v in checkpoint.values()):
+            elif isinstance(checkpoint, dict) and all(
+                isinstance(v, torch.Tensor) for v in checkpoint.values()
+            ):
                 raw_sd = checkpoint
             else:
                 raw_sd = checkpoint
@@ -190,20 +205,22 @@ class FontDetector:
             # We'll determine the number of classes from the loaded weights
             num_classes = None
             for key, value in clean_sd.items():
-                if 'fc.weight' in key:
+                if "fc.weight" in key:
                     num_classes = value.shape[0]
                     break
 
             if num_classes is not None:
                 self.model.fc = nn.Linear(self.model.fc.in_features, num_classes)
             else:
-                logger.warning("Could not determine number of classes from state dict, using default")
+                logger.warning(
+                    "Could not determine number of classes from state dict, using default"
+                )
 
             # If so, remove the prefix to match the model architecture
-            if any(key.startswith('model.') for key in clean_sd.keys()):
+            if any(key.startswith("model.") for key in clean_sd.keys()):
                 new_clean_sd = {}
                 for key, value in clean_sd.items():
-                    if key.startswith('model.'):
+                    if key.startswith("model."):
                         new_key = key[6:]  # Remove 'model.' prefix
                         new_clean_sd[new_key] = value
                     else:
@@ -229,10 +246,12 @@ class FontDetector:
                 self.font_list = prepare_fonts()
 
             # simple transform
-            self.transform = transforms.Compose([
-                transforms.Resize((self.input_size, self.input_size)),
-                transforms.ToTensor()
-            ])
+            self.transform = transforms.Compose(
+                [
+                    transforms.Resize((self.input_size, self.input_size)),
+                    transforms.ToTensor(),
+                ]
+            )
         except Exception as e:
             logger.error(f"Error loading font detector: {e}")
             logger.exception("Exception details:")
@@ -249,15 +268,18 @@ class FontDetector:
             return "UNKNOWN", 0.0
         try:
             import cv2
+
             # convert to RGB PIL Image
             img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-            pil = Image.fromarray(img_rgb).convert('RGB')
+            pil = Image.fromarray(img_rgb).convert("RGB")
             t = self.transform(pil).unsqueeze(0).to(self.device)
             with torch.no_grad():
                 out = self.model(t)
 
                 # The model may have more outputs than actual fonts, so we only consider the first FONT_COUNT
-                font_count = min(6150, out.shape[1])  # Use the smaller of 6150 or actual output size
+                font_count = min(
+                    6150, out.shape[1]
+                )  # Use the smaller of 6150 or actual output size
                 probs = out[0][:font_count].softmax(dim=0)
                 top_idx = int(probs.argmax().cpu().item())
                 conf = float(probs[top_idx].cpu().item())
@@ -267,10 +289,10 @@ class FontDetector:
                 font_path = self.font_list[top_idx]
                 font_name = os.path.splitext(os.path.basename(font_path))[0]
             else:
-                font_name = f'font_{top_idx}'
+                font_name = f"font_{top_idx}"
 
             if conf < 0.6:
-                return 'UNKNOWN', 0.0
+                return "UNKNOWN", 0.0
             return font_name, conf
         except Exception as e:
             logger.error(f"Error during font detection: {e}")
@@ -287,7 +309,9 @@ def detect_font_from_block(img, blk) -> Tuple[str, float]:
         try:
             x, y, w, h = blk.bounding_rect()
         except Exception as e:
-            logger.warning(f"Could not get bounding rect from block: {e}, using full image as fallback")
+            logger.warning(
+                f"Could not get bounding rect from block: {e}, using full image as fallback"
+            )
             # fallback to full image
             x, y, w, h = 0, 0, img.shape[1], img.shape[0]
         x2 = min(img.shape[1], x + w)

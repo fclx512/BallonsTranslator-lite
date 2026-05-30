@@ -24,11 +24,11 @@ class ClockDial(QWidget):
     distanceChanged = Signal(float)
     valueChanged = Signal()
 
-    def __init__(self, mode='shadow', parent=None):
+    def __init__(self, mode="shadow", parent=None):
         super().__init__(parent)
         self._mode = mode
         self._angle = 135.0  # degrees, 0=right, clockwise
-        self._distance = 0.5 if mode == 'shadow' else 1.0
+        self._distance = 0.5 if mode == "shadow" else 1.0
         self._color = QColor(0, 0, 0)
         self._dragging = False
         self._hovered = False
@@ -39,7 +39,7 @@ class ClockDial(QWidget):
 
     def setMode(self, mode: str):
         self._mode = mode
-        if mode == 'gradient':
+        if mode == "gradient":
             self._distance = 1.0
         self.update()
 
@@ -82,7 +82,7 @@ class ClockDial(QWidget):
         rect = self._dial_rect()
         cx, cy = rect.center().x(), rect.center().y()
         max_r = rect.width() / 2.0 - 6.0
-        r = max_r * self._distance if self._mode == 'shadow' else max_r
+        r = max_r * self._distance if self._mode == "shadow" else max_r
         rad = math.radians(self._angle)
         hx = cx + r * math.cos(rad)
         hy = cy - r * math.sin(rad)
@@ -98,7 +98,7 @@ class ClockDial(QWidget):
         r = math.sqrt(dx * dx + dy * dy)
         if r < 2.0:
             return self._angle, 0.0
-        if self._mode == 'gradient':
+        if self._mode == "gradient":
             dist = 1.0
         else:
             dist = max(0.0, min(1.0, r / max_r))
@@ -154,7 +154,7 @@ class ClockDial(QWidget):
             p.drawText(QRectF(lx, ly, 20, 12), Qt.AlignmentFlag.AlignCenter, str(deg))
 
         # dashed inner circle (shadow mode)
-        if self._mode == 'shadow':
+        if self._mode == "shadow":
             pen = QPen(QColor(170, 170, 170), 0.8, Qt.PenStyle.DashLine)
             pen.setDashPattern([4, 4])
             p.setPen(pen)
@@ -174,7 +174,9 @@ class ClockDial(QWidget):
 
         # handle
         handle_r = 7.0
-        handle_color = self._color.lighter(130) if self._dragging or self._hovered else self._color
+        handle_color = (
+            self._color.lighter(130) if self._dragging or self._hovered else self._color
+        )
         p.setPen(QPen(handle_color.darker(150), 1.5))
         p.setBrush(QBrush(handle_color))
         p.drawEllipse(hpos, handle_r, handle_r)
@@ -194,8 +196,10 @@ class ClockDial(QWidget):
         else:
             # hover detection
             hpos = self._handle_pos()
-            d = math.sqrt((event.position().x() - hpos.x()) ** 2 +
-                          (event.position().y() - hpos.y()) ** 2)
+            d = math.sqrt(
+                (event.position().x() - hpos.x()) ** 2
+                + (event.position().y() - hpos.y()) ** 2
+            )
             was_hovered = self._hovered
             self._hovered = d < 12.0
             if was_hovered != self._hovered:
@@ -222,4 +226,5 @@ class ClockDial(QWidget):
 
     def minimumSizeHint(self):
         from qtpy.QtCore import QSize
+
         return QSize(160, 160)

@@ -11,10 +11,12 @@ import sys
 
 # ── Memory measurement ──────────────────────────────────────────────
 
+
 def get_memory_mb():
     """Return current process RSS in MB. Uses psutil if available."""
     try:
         import psutil
+
         p = psutil.Process(os.getpid())
         return p.memory_info().rss / (1024 * 1024)
     except ImportError:
@@ -150,19 +152,21 @@ def main():
     def on_load_finished(ok):
         after_load_mb = get_memory_mb()
         delta = after_load_mb - baseline_mb
-        print(f"Memory after page loaded:       {format_mem(after_load_mb)}  (Δ +{delta:.1f} MB)")
+        print(
+            f"Memory after page loaded:       {format_mem(after_load_mb)}  (Δ +{delta:.1f} MB)"
+        )
 
         # --- Simulate streaming: append text to the streaming bubble ---
         streaming_chunks = [
             "\n    <p>下面再补充一个实际例子：</p>\n",
-            '    <pre><code>def timer(func):\n'
-            '    import time\n'
-            '    def wrapper(*args, **kwargs):\n'
-            '        start = time.time()\n'
-            '        result = func(*args, **kwargs)\n'
+            "    <pre><code>def timer(func):\n"
+            "    import time\n"
+            "    def wrapper(*args, **kwargs):\n"
+            "        start = time.time()\n"
+            "        result = func(*args, **kwargs)\n"
             '        print(f"{func.__name__} took {time.time()-start:.2f}s")\n'
-            '        return result\n'
-            '    return wrapper</code></pre>\n',
+            "        return result\n"
+            "    return wrapper</code></pre>\n",
             "    <p>使用时只需要在函数定义前加上 <code>@timer</code> 即可自动计时。</p>\n",
         ]
 
@@ -171,9 +175,13 @@ def main():
                 # Done — final memory reading
                 final_mb = get_memory_mb()
                 total_delta = final_mb - baseline_mb
-                print(f"Memory after 3 streaming chunks: {format_mem(final_mb)}  (Δ +{total_delta:.1f} MB)")
+                print(
+                    f"Memory after 3 streaming chunks: {format_mem(final_mb)}  (Δ +{total_delta:.1f} MB)"
+                )
                 print()
-                print("=== Keep the window open to observe steady-state memory in Task Manager ===")
+                print(
+                    "=== Keep the window open to observe steady-state memory in Task Manager ==="
+                )
                 print("Close the WebEngine window to exit and see final report.")
                 return
 

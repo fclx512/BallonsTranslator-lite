@@ -39,33 +39,34 @@ class WINDOWCOMPOSITIONATTRIB(Enum):
 
 
 class ACCENT_STATE(Enum):
-    """ Client area status enumeration class """
+    """Client area status enumeration class"""
+
     ACCENT_DISABLED = 0
     ACCENT_ENABLE_GRADIENT = 1
     ACCENT_ENABLE_TRANSPARENTGRADIENT = 2
-    ACCENT_ENABLE_BLURBEHIND = 3           # Aero effect
-    ACCENT_ENABLE_ACRYLICBLURBEHIND = 4    # Acrylic effect
-    ACCENT_ENABLE_HOSTBACKDROP = 5         # Mica effect
+    ACCENT_ENABLE_BLURBEHIND = 3  # Aero effect
+    ACCENT_ENABLE_ACRYLICBLURBEHIND = 4  # Acrylic effect
+    ACCENT_ENABLE_HOSTBACKDROP = 5  # Mica effect
     ACCENT_INVALID_STATE = 6
 
 
 class ACCENT_POLICY(Structure):
-    """ Specific attributes of client area """
+    """Specific attributes of client area"""
 
     _fields_ = [
-        ("AccentState",     DWORD),
-        ("AccentFlags",     DWORD),
-        ("GradientColor",   DWORD),
-        ("AnimationId",     DWORD),
+        ("AccentState", DWORD),
+        ("AccentFlags", DWORD),
+        ("GradientColor", DWORD),
+        ("AnimationId", DWORD),
     ]
 
 
 class WINDOWCOMPOSITIONATTRIBDATA(Structure):
     _fields_ = [
-        ("Attribute",   DWORD),
+        ("Attribute", DWORD),
         # Pointer() receives any ctypes type and returns a pointer type
-        ("Data",        POINTER(ACCENT_POLICY)),
-        ("SizeOfData",  ULONG),
+        ("Data", POINTER(ACCENT_POLICY)),
+        ("SizeOfData", ULONG),
     ]
 
 
@@ -106,40 +107,37 @@ class DWMWINDOWATTRIBUTE(Enum):
 
 class MARGINS(Structure):
     _fields_ = [
-        ("cxLeftWidth",     c_int),
-        ("cxRightWidth",    c_int),
-        ("cyTopHeight",     c_int),
-        ("cyBottomHeight",  c_int),
+        ("cxLeftWidth", c_int),
+        ("cxRightWidth", c_int),
+        ("cyTopHeight", c_int),
+        ("cyBottomHeight", c_int),
     ]
 
 
 class MINMAXINFO(Structure):
     _fields_ = [
-        ("ptReserved",      POINT),
-        ("ptMaxSize",       POINT),
-        ("ptMaxPosition",   POINT),
-        ("ptMinTrackSize",  POINT),
-        ("ptMaxTrackSize",  POINT),
+        ("ptReserved", POINT),
+        ("ptMaxSize", POINT),
+        ("ptMaxPosition", POINT),
+        ("ptMinTrackSize", POINT),
+        ("ptMaxTrackSize", POINT),
     ]
 
 
 class PWINDOWPOS(Structure):
     _fields_ = [
-        ('hWnd',            HWND),
-        ('hwndInsertAfter', HWND),
-        ('x',               c_int),
-        ('y',               c_int),
-        ('cx',              c_int),
-        ('cy',              c_int),
-        ('flags',           UINT)
+        ("hWnd", HWND),
+        ("hwndInsertAfter", HWND),
+        ("x", c_int),
+        ("y", c_int),
+        ("cx", c_int),
+        ("cy", c_int),
+        ("flags", UINT),
     ]
 
 
 class NCCALCSIZE_PARAMS(Structure):
-    _fields_ = [
-        ('rgrc', RECT*3),
-        ('lppos', POINTER(PWINDOWPOS))
-    ]
+    _fields_ = [("rgrc", RECT * 3), ("lppos", POINTER(PWINDOWPOS))]
 
 
 LPNCCALCSIZE_PARAMS = POINTER(NCCALCSIZE_PARAMS)
@@ -147,8 +145,8 @@ LPNCCALCSIZE_PARAMS = POINTER(NCCALCSIZE_PARAMS)
 
 class DWM_BLURBEHIND(Structure):
     _fields_ = [
-        ('dwFlags',                DWORD),
-        ('fEnable',                BOOL),
-        ('hRgnBlur',               HRGN),
-        ('fTransitionOnMaximized', BOOL),
+        ("dwFlags", DWORD),
+        ("fEnable", BOOL),
+        ("hRgnBlur", HRGN),
+        ("fTransitionOnMaximized", BOOL),
     ]

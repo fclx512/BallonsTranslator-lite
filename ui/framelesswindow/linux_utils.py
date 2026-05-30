@@ -9,16 +9,16 @@ from utils import shared
 
 
 class LinuxMoveResize:
-    """ Tool class for moving and resizing window """
+    """Tool class for moving and resizing window"""
 
     @classmethod
     def startSystemMove(cls, window, globalPos):
-        """ move window """
+        """move window"""
         window.windowHandle().startSystemMove()
 
     @classmethod
     def starSystemResize(cls, window, globalPos, edges):
-        """ resize window
+        """resize window
 
         Parameters
         ----------
@@ -44,7 +44,7 @@ class LinuxMoveResize:
 
 
 def getSystemAccentColor():
-    """ get the accent color of system
+    """get the accent color of system
 
     Returns
     -------
@@ -55,7 +55,7 @@ def getSystemAccentColor():
 
 
 class LinuxScreenCaptureFilter(QObject):
-    """ Filter for screen capture """
+    """Filter for screen capture"""
 
     def __init__(self, parent: QWidget):
         super().__init__(parent)
@@ -69,5 +69,5 @@ class LinuxScreenCaptureFilter(QObject):
         return super().eventFilter(watched, event)
 
     def setScreenCaptureEnabled(self, enabled: bool):
-        """ Set screen capture enabled """
+        """Set screen capture enabled"""
         self.isScreenCaptureEnabled = enabled

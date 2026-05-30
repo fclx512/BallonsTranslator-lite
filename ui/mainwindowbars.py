@@ -38,12 +38,11 @@ if C.FLAG_QT6:
 else:
     from qtpy.QtWidgets import QAction
 
-class ShowPageListChecker(QCheckBox):
-    ...
+
+class ShowPageListChecker(QCheckBox): ...
 
 
-class OpenBtn(QToolButton):
-    ...
+class OpenBtn(QToolButton): ...
 
 
 class StatusButton(QPushButton):
@@ -57,7 +56,10 @@ class TitleBarToolBtn(QToolButton):
 class StateChecker(QCheckBox):
     checked = Signal(str)
     unchecked = Signal(str)
-    def __init__(self, checker_type: str, uncheckable: bool = False, *args, **kwargs) -> None:
+
+    def __init__(
+        self, checker_type: str, uncheckable: bool = False, *args, **kwargs
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.checker_type = checker_type
         self.uncheckable = uncheckable
@@ -78,6 +80,7 @@ class StateChecker(QCheckBox):
             else:
                 self.unchecked.emit(self.checker_type)
 
+
 class LeftBar(Widget):
     recent_proj_list = []
     imgTransChecked = Signal()
@@ -87,6 +90,7 @@ class LeftBar(Widget):
     open_json_proj = Signal(str)
     save_proj = Signal()
     save_config = Signal()
+
     def __init__(self, mainwindow, *args, **kwargs) -> None:
         super().__init__(mainwindow, *args, **kwargs)
         self.mainwindow: QMainWindow = mainwindow
@@ -96,23 +100,23 @@ class LeftBar(Widget):
         self.showPageListLabel = ShowPageListChecker()
 
         self.globalSearchChecker = QCheckBox()
-        self.globalSearchChecker.setObjectName('GlobalSearchChecker')
-        self.globalSearchChecker.setToolTip(self.tr('Global Search (Ctrl+G)'))
+        self.globalSearchChecker.setObjectName("GlobalSearchChecker")
+        self.globalSearchChecker.setToolTip(self.tr("Global Search (Ctrl+G)"))
 
-        self.imgTransChecker = StateChecker('imgtrans')
-        self.imgTransChecker.setObjectName('ImgTransChecker')
+        self.imgTransChecker = StateChecker("imgtrans")
+        self.imgTransChecker.setObjectName("ImgTransChecker")
         self.imgTransChecker.checked.connect(self.stateCheckerChanged)
 
-        self.aiChatChecker = StateChecker('aichat', uncheckable=True)
-        self.aiChatChecker.setObjectName('AiChatChecker')
-        self.aiChatChecker.setToolTip(self.tr('AI Chat'))
-        self.aiChatChecker.checked.connect(
-            lambda typ: self.ai_chat_toggled.emit(True))
+        self.aiChatChecker = StateChecker("aichat", uncheckable=True)
+        self.aiChatChecker.setObjectName("AiChatChecker")
+        self.aiChatChecker.setToolTip(self.tr("AI Chat"))
+        self.aiChatChecker.checked.connect(lambda typ: self.ai_chat_toggled.emit(True))
         self.aiChatChecker.unchecked.connect(
-            lambda typ: self.ai_chat_toggled.emit(False))
+            lambda typ: self.ai_chat_toggled.emit(False)
+        )
 
-        self.configChecker = StateChecker('config', uncheckable=True)
-        self.configChecker.setObjectName('ConfigChecker')
+        self.configChecker = StateChecker("config", uncheckable=True)
+        self.configChecker.setObjectName("ConfigChecker")
         self.configChecker.checked.connect(self.stateCheckerChanged)
         self.configChecker.unchecked.connect(self.stateCheckerChanged)
 
@@ -132,7 +136,9 @@ class LeftBar(Widget):
         actionExportTranslationTxt = QAction(self.tr("Export translation as TXT"), self)
         self.export_trans_txt = actionExportTranslationTxt.triggered
 
-        actionImportTranslationTxt = QAction(self.tr("Import translation from TXT"), self)
+        actionImportTranslationTxt = QAction(
+            self.tr("Import translation from TXT"), self
+        )
         self.import_trans_txt = actionImportTranslationTxt.triggered
 
         self.recentMenu = QMenu(self.tr("Open Recent"), self)
@@ -141,12 +147,14 @@ class LeftBar(Widget):
         openMenu.addActions([actionOpenFolder, actionOpenProj])
         openMenu.addMenu(self.recentMenu)
         openMenu.addSeparator()
-        openMenu.addActions([
-            actionSaveProj,
-            actionExportSrcTxt,
-            actionExportTranslationTxt,
-            actionImportTranslationTxt,
-        ])
+        openMenu.addActions(
+            [
+                actionSaveProj,
+                actionExportSrcTxt,
+                actionExportTranslationTxt,
+                actionImportTranslationTxt,
+            ]
+        )
         self.openBtn = OpenBtn()
         self.openBtn.setFixedSize(LEFTBTN_WIDTH, LEFTBTN_WIDTH)
         self.openBtn.setMenu(openMenu)
@@ -157,8 +165,8 @@ class LeftBar(Widget):
         openBtnToolBar.addWidget(self.openBtn)
 
         self.runImgtransBtn = QPushButton()
-        self.runImgtransBtn.setObjectName('RunButton')
-        self.runImgtransBtn.setText(self.tr('Run'))
+        self.runImgtransBtn.setObjectName("RunButton")
+        self.runImgtransBtn.setText(self.tr("Run"))
         font = self.runImgtransBtn.font()
         font.setPixelSize(10)
         self.runImgtransBtn.setFont(font)
@@ -175,7 +183,9 @@ class LeftBar(Widget):
         vlayout.addItem(QSpacerItem(0, 0, QSizePolicy.Minimum, QSizePolicy.Expanding))
         vlayout.addWidget(self.configChecker)
         vlayout.addWidget(self.runImgtransBtn)
-        vlayout.setContentsMargins(padding, LEFTBTN_WIDTH // 2, padding, LEFTBTN_WIDTH // 2)
+        vlayout.setContentsMargins(
+            padding, LEFTBTN_WIDTH // 2, padding, LEFTBTN_WIDTH // 2
+        )
         vlayout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         vlayout.setSpacing(LEFTBTN_WIDTH * 3 // 4)
         self.setGeometry(0, 0, 300, 500)
@@ -205,7 +215,7 @@ class LeftBar(Widget):
         else:
             topAction = actionlist[0]
         for proj in proj_list[::-1]:
-            try:    # remove duplicated
+            try:  # remove duplicated
                 idx = self.recent_proj_list.index(proj)
                 if idx == 0:
                     continue
@@ -256,22 +266,28 @@ class LeftBar(Widget):
                     break
 
         dialog = QFileDialog()
-        folder_path = str(dialog.getExistingDirectory(self, self.tr("Select Directory"), d))
+        folder_path = str(
+            dialog.getExistingDirectory(self, self.tr("Select Directory"), d)
+        )
         if osp.exists(folder_path):
             self.updateRecentProjList(folder_path)
             self.open_dir.emit(folder_path)
 
     def onOpenProj(self):
         dialog = QFileDialog()
-        json_path = str(dialog.getOpenFileUrl(self.parent(), self.tr('Open Project ... *.json'), filter="*.json")[0].toLocalFile())
+        json_path = str(
+            dialog.getOpenFileUrl(
+                self.parent(), self.tr("Open Project ... *.json"), filter="*.json"
+            )[0].toLocalFile()
+        )
         if osp.exists(json_path):
             self.open_json_proj.emit(json_path)
 
     def stateCheckerChanged(self, checker_type: str):
-        if checker_type == 'imgtrans':
+        if checker_type == "imgtrans":
             self.configChecker.setChecked(False)
             self.imgTransChecked.emit()
-        elif checker_type == 'config':
+        elif checker_type == "config":
             if self.configChecker.isChecked():
                 self.imgTransChecker.setChecked(False)
                 self.configChecked.emit()
@@ -283,33 +299,32 @@ class LeftBar(Widget):
 
 
 class TitleBar(Widget):
-
     closebtn_clicked = Signal()
     display_lang_changed = Signal(str)
     help_about_triggered = Signal()
 
     def __init__(self, parent, *args, **kwargs) -> None:
         super().__init__(parent, *args, **kwargs)
-        self.mainwindow : QMainWindow = parent
+        self.mainwindow: QMainWindow = parent
         self.mainwindow.installEventFilter(self)
         self.mPos: QPoint = None
         self.normalsize = False
-        self.proj_name = ''
-        self.page_name = ''
-        self.save_state = ''
+        self.proj_name = ""
+        self.page_name = ""
+        self.save_state = ""
         self.setFixedHeight(TITLEBAR_HEIGHT)
         self.setMouseTracking(True)
 
         self.editToolBtn = TitleBarToolBtn(self)
-        self.editToolBtn.setText(self.tr('Edit'))
+        self.editToolBtn.setText(self.tr("Edit"))
 
-        undoAction = QAction(self.tr('Undo'), self)
+        undoAction = QAction(self.tr("Undo"), self)
         self.undo_trigger = undoAction.triggered
-        redoAction = QAction(self.tr('Redo'), self)
+        redoAction = QAction(self.tr("Redo"), self)
         self.redo_trigger = redoAction.triggered
-        pageSearchAction = QAction(self.tr('Search'), self)
+        pageSearchAction = QAction(self.tr("Search"), self)
         self.page_search_trigger = pageSearchAction.triggered
-        globalSearchAction = QAction(self.tr('Global Search'), self)
+        globalSearchAction = QAction(self.tr("Global Search"), self)
         self.global_search_trigger = globalSearchAction.triggered
 
         editMenu = QMenu(self.editToolBtn)
@@ -320,7 +335,7 @@ class TitleBar(Widget):
         self.editToolBtn.setPopupMode(QToolButton.InstantPopup)
 
         self.viewToolBtn = TitleBarToolBtn(self)
-        self.viewToolBtn.setText(self.tr('View'))
+        self.viewToolBtn.setText(self.tr("View"))
 
         self.displayLanguageMenu = QMenu(self.tr("Display Language"), self)
         self.lang_ac_group = lang_ac_group = QActionGroup(self)
@@ -336,9 +351,9 @@ class TitleBar(Widget):
             lang_actions.append(la)
         self.displayLanguageMenu.addActions(lang_actions)
 
-        drawBoardAction = QAction(self.tr('Drawing Board'), self)
-        texteditAction = QAction(self.tr('Text Editor'), self)
-        self.darkModeAction = darkModeAction = QAction(self.tr('Dark Mode'), self)
+        drawBoardAction = QAction(self.tr("Drawing Board"), self)
+        texteditAction = QAction(self.tr("Text Editor"), self)
+        self.darkModeAction = darkModeAction = QAction(self.tr("Dark Mode"), self)
         darkModeAction.setCheckable(True)
 
         self.viewMenu = viewMenu = QMenu(self.viewToolBtn)
@@ -354,10 +369,10 @@ class TitleBar(Widget):
 
         # 工具菜单
         self.toolsToolBtn = TitleBarToolBtn(self)
-        self.toolsToolBtn.setText(self.tr('Tools'))
+        self.toolsToolBtn.setText(self.tr("Tools"))
 
         # 区域合并工具
-        mergeToolAction = QAction(self.tr('Region Merge Tool'), self)
+        mergeToolAction = QAction(self.tr("Region Merge Tool"), self)
         self.merge_tool_trigger = mergeToolAction.triggered
 
         toolsMenu = QMenu(self.toolsToolBtn)
@@ -367,14 +382,14 @@ class TitleBar(Widget):
 
         # 关于
         self.helpToolBtn = TitleBarToolBtn(self)
-        self.helpToolBtn.setText(self.tr('About'))
+        self.helpToolBtn.setText(self.tr("About"))
         self.helpToolBtn.clicked.connect(self.help_about_triggered.emit)
 
         self.iconLabel = QLabel(self)
         self.iconLabel.setFixedWidth(LEFTBAR_WIDTH - 12)
 
-        self.titleLabel = QLabel('BallonsTranslator-lite')
-        self.titleLabel.setObjectName('TitleLabel')
+        self.titleLabel = QLabel("BallonsTranslator-lite")
+        self.titleLabel.setObjectName("TitleLabel")
         self.titleLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         hlayout = QHBoxLayout(self)
@@ -390,14 +405,14 @@ class TitleBar(Widget):
         hlayout.setContentsMargins(0, 0, 0, 0)
 
         self.minBtn = QPushButton()
-        self.minBtn.setObjectName('minBtn')
+        self.minBtn.setObjectName("minBtn")
         self.minBtn.clicked.connect(self.onMinBtnClicked)
         self.maxBtn = QCheckBox()
-        self.maxBtn.setObjectName('maxBtn')
+        self.maxBtn.setObjectName("maxBtn")
         self.maxBtn.clicked.connect(self.onMaxBtnClicked)
         self.maxBtn.setFixedSize(48, 27)
         self.closeBtn = QPushButton()
-        self.closeBtn.setObjectName('closeBtn')
+        self.closeBtn.setObjectName("closeBtn")
         self.closeBtn.clicked.connect(self.closebtn_clicked)
         hlayout.addWidget(self.minBtn)
         hlayout.addWidget(self.maxBtn)
@@ -434,8 +449,10 @@ class TitleBar(Widget):
         else:
             g_pos = event.globalPos()
         if event.button() == Qt.MouseButton.LeftButton:
-            if not self.mainwindow.isMaximized() and \
-                event.pos().y() < WINDOW_BORDER_WIDTH:
+            if (
+                not self.mainwindow.isMaximized()
+                and event.pos().y() < WINDOW_BORDER_WIDTH
+            ):
                 pass
             else:
                 self.mPos = event.pos()
@@ -462,22 +479,24 @@ class TitleBar(Widget):
         self.mPos = None
         return super().leaveEvent(e)
 
-    def setTitleContent(self, proj_name: str = None, page_name: str = None, save_state: str = None):
+    def setTitleContent(
+        self, proj_name: str = None, page_name: str = None, save_state: str = None
+    ):
         max_proj_len = 50
         max_page_len = 50
         if proj_name is not None:
             if len(proj_name) > max_proj_len:
-                proj_name = proj_name[:max_proj_len-3] + '...'
+                proj_name = proj_name[: max_proj_len - 3] + "..."
             self.proj_name = proj_name
         if page_name is not None:
             if len(page_name) > max_page_len:
-                page_name = page_name[:max_page_len-3] + '...'
+                page_name = page_name[: max_page_len - 3] + "..."
             self.page_name = page_name
         if save_state is not None:
             self.save_state = save_state
-        title = self.proj_name + ' - ' + self.page_name
-        if self.save_state != '':
-            title += ' - '  + self.save_state
+        title = self.proj_name + " - " + self.page_name
+        if self.save_state != "":
+            title += " - " + self.save_state
         self.titleLabel.setText(title)
 
 
@@ -485,11 +504,10 @@ class SmallConfigPutton(QPushButton):
     pass
 
 
-CFG_ICON  = QIcon('icons/leftbar_config_activate.svg')
+CFG_ICON = QIcon("icons/leftbar_config_activate.svg")
 
 
 class SelectionWithConfigWidget(Widget):
-
     cfg_clicked = Signal()
 
     def __init__(self, selector_name: str, add_cfg_btn=True, *args, **kwargs) -> None:
@@ -538,16 +556,15 @@ class SelectionWithConfigWidget(Widget):
 
 
 class TranslatorSelectionWidget(Widget):
-
     cfg_clicked = Signal()
 
     def __init__(self) -> None:
         super().__init__()
-        label = ConfigClickableLabel(text=self.tr('Translate'))
+        label = ConfigClickableLabel(text=self.tr("Translate"))
         label.clicked.connect(self.cfg_clicked)
-        label_src = ConfigClickableLabel(text=self.tr('Source'))
+        label_src = ConfigClickableLabel(text=self.tr("Source"))
         label_src.clicked.connect(self.cfg_clicked)
-        label_tgt = ConfigClickableLabel(text=self.tr('Target'))
+        label_tgt = ConfigClickableLabel(text=self.tr("Target"))
         label_tgt.clicked.connect(self.cfg_clicked)
 
         self.selector = SmallComboBox()
@@ -595,9 +612,7 @@ class TranslatorSelectionWidget(Widget):
         self.blockSignals(False)
 
 
-
 class BottomBar(Widget):
-
     textedit_checkchanged = Signal()
     paintmode_checkchanged = Signal()
     textblock_checkchanged = Signal()
@@ -608,29 +623,33 @@ class BottomBar(Widget):
         self.setMouseTracking(True)
         self.mainwindow = mainwindow
 
-        self.textdet_selector = SelectionWithConfigWidget(self.tr('Text Detector'))
-        self.ocr_selector = SelectionWithConfigWidget(self.tr('OCR'))
-        self.inpaint_selector = SelectionWithConfigWidget(self.tr('Inpaint'))
+        self.textdet_selector = SelectionWithConfigWidget(self.tr("Text Detector"))
+        self.ocr_selector = SelectionWithConfigWidget(self.tr("OCR"))
+        self.inpaint_selector = SelectionWithConfigWidget(self.tr("Inpaint"))
         self.trans_selector = TranslatorSelectionWidget()
 
         self.hlayout = QHBoxLayout(self)
         self.paintChecker = QCheckBox()
-        self.paintChecker.setObjectName('PaintChecker')
-        self.paintChecker.setToolTip(self.tr('Enable/disable paint mode'))
+        self.paintChecker.setObjectName("PaintChecker")
+        self.paintChecker.setToolTip(self.tr("Enable/disable paint mode"))
         self.paintChecker.clicked.connect(self.onPaintCheckerPressed)
         self.texteditChecker = QCheckBox()
-        self.texteditChecker.setObjectName('TexteditChecker')
-        self.texteditChecker.setToolTip(self.tr('Enable/disable text edit mode'))
+        self.texteditChecker.setObjectName("TexteditChecker")
+        self.texteditChecker.setToolTip(self.tr("Enable/disable text edit mode"))
         self.texteditChecker.clicked.connect(self.onTextEditCheckerPressed)
         self.textblockChecker = QCheckBox()
-        self.textblockChecker.setObjectName('TextblockChecker')
+        self.textblockChecker.setObjectName("TextblockChecker")
         self.textblockChecker.clicked.connect(self.onTextblockCheckerClicked)
 
-        self.originalSlider = PaintQSlider(self.tr("Original image opacity"), Qt.Orientation.Horizontal, self)
+        self.originalSlider = PaintQSlider(
+            self.tr("Original image opacity"), Qt.Orientation.Horizontal, self
+        )
         self.originalSlider.setFixedWidth(150)
         self.originalSlider.setRange(0, 100)
 
-        self.textlayerSlider = PaintQSlider(self.tr("Text layer opacity"), Qt.Orientation.Horizontal, self)
+        self.textlayerSlider = PaintQSlider(
+            self.tr("Text layer opacity"), Qt.Orientation.Horizontal, self
+        )
         self.textlayerSlider.setFixedWidth(150)
         self.textlayerSlider.setValue(100)
         self.textlayerSlider.setRange(0, 100)
@@ -642,7 +661,9 @@ class BottomBar(Widget):
         sep1 = self._make_vseparator()
         self.hlayout.addWidget(sep1)
         self.hlayout.addWidget(self.trans_selector)
-        self.hlayout.addSpacerItem(QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        self.hlayout.addSpacerItem(
+            QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        )
         self.hlayout.addWidget(self.textlayerSlider)
         self.hlayout.addWidget(self.originalSlider)
         # Separator between sliders and mode toggles
@@ -652,7 +673,6 @@ class BottomBar(Widget):
         self.hlayout.addWidget(self.texteditChecker)
         self.hlayout.addWidget(self.textblockChecker)
         self.hlayout.setContentsMargins(60, 0, 10, WINDOW_BORDER_WIDTH)
-
 
     @staticmethod
     def _make_vseparator() -> QFrame:

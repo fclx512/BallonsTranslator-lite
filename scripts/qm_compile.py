@@ -10,13 +10,29 @@ from io import BytesIO
 from pathlib import Path
 
 # --- Constants from Qt source ---
-MAGIC = bytes([
-    0x3c, 0xb8, 0x64, 0x18, 0xca, 0xef, 0x9c, 0x95,
-    0xcd, 0x21, 0x1c, 0xbf, 0x60, 0xa1, 0xbd, 0xdd,
-])
+MAGIC = bytes(
+    [
+        0x3C,
+        0xB8,
+        0x64,
+        0x18,
+        0xCA,
+        0xEF,
+        0x9C,
+        0x95,
+        0xCD,
+        0x21,
+        0x1C,
+        0xBF,
+        0x60,
+        0xA1,
+        0xBD,
+        0xDD,
+    ]
+)
 
 # Section type tags
-SECTION_LANGUAGE = 0xa7
+SECTION_LANGUAGE = 0xA7
 SECTION_HASHES = 0x42
 SECTION_MESSAGES = 0x69
 
@@ -33,9 +49,9 @@ def elf_hash(ba: bytes) -> int:
     h = 0
     for b in ba:
         h = (h << 4) + b
-        g = h & 0xf0000000
+        g = h & 0xF0000000
         if g:
-            h ^= (g >> 24)
+            h ^= g >> 24
         h &= ~g
     if h == 0:
         h = 1
@@ -101,8 +117,8 @@ def compile_ts(ts_path: str, qm_path: str):
 
     # --- Build Messages section byte array ---
     msg_buf = BytesIO()
-    offsets: list[int] = []       # byte offset within msg_buf
-    hashes: list[int] = []        # ELF hash of (source + comment)
+    offsets: list[int] = []  # byte offset within msg_buf
+    hashes: list[int] = []  # ELF hash of (source + comment)
     # We don't use comments, so hash is just of source text
     elfs: list[int] = []
 
@@ -172,6 +188,7 @@ def compile_ts(ts_path: str, qm_path: str):
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) < 3:
         print("Usage: qm_compile.py input.ts output.qm")
         sys.exit(1)

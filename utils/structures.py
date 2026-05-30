@@ -1,13 +1,13 @@
-from typing import Dict, List, Tuple, Union
 
 import copy
 import inspect
 import os
 from dataclasses import dataclass, field, is_dataclass
+from typing import Dict, List, Tuple, Union
 
 
 def get_annotations(obj):
-    if hasattr(obj, '__annotations__'):
+    if hasattr(obj, "__annotations__"):
         return obj.__annotations__
     else:
         return inspect.get_annotations(obj)
@@ -16,10 +16,11 @@ def get_annotations(obj):
 # decorator to wrap original __init__
 # https://www.geeksforgeeks.org/creating-nested-dataclass-objects-in-python/
 def nested_dataclass(*args, **dataclass_kwargs):
-    '''
+    """
     nested dataclass support \n
-    also ignore extra arguments 
-    '''
+    also ignore extra arguments
+    """
+
     def wrapper(check_class):
 
         # passing class to investigate
@@ -28,7 +29,7 @@ def nested_dataclass(*args, **dataclass_kwargs):
 
         def __init__(self, *args, **kwargs):
 
-            store_deprecated = 'deprecated_attributes' in get_annotations(self)
+            store_deprecated = "deprecated_attributes" in get_annotations(self)
             deprecated = {}
             for name in list(kwargs.keys()):
                 if name not in get_annotations(self):
@@ -43,13 +44,14 @@ def nested_dataclass(*args, **dataclass_kwargs):
 
                 if is_dataclass(ft) and isinstance(value, dict):
                     obj = ft(**value)
-                    kwargs[name]= obj
+                    kwargs[name] = obj
 
             if len(deprecated) > 0:
-                kwargs['deprecated_attributes'] = deprecated
+                kwargs["deprecated_attributes"] = deprecated
 
             o_init(self, *args, **kwargs)
-        check_class.__init__=__init__
+
+        check_class.__init__ = __init__
 
         return check_class
 
@@ -58,9 +60,10 @@ def nested_dataclass(*args, **dataclass_kwargs):
 
 @dataclass
 class Config:
-
     def update(self, key: str, value):
-        assert key in get_annotations(self), f'type object \'{self.__class__.__name__}\' has no attribute {key}'
+        assert key in get_annotations(self), (
+            f"type object '{self.__class__.__name__}' has no attribute {key}"
+        )
         self.__setattr__(key, value)
 
     @classmethod
@@ -68,7 +71,9 @@ class Config:
         return set(list(cls.__annotations__))
 
     def __getitem__(self, key: str):
-        assert key in get_annotations(self), f'type object \'{self.__class__.__name__}\' has no attribute {key}'
+        assert key in get_annotations(self), (
+            f"type object '{self.__class__.__name__}' has no attribute {key}"
+        )
         return self.__getattribute__(key)
 
     def __setitem__(self, key: str, value):

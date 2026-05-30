@@ -20,7 +20,7 @@ from qtpy.QtWidgets import (
 
 
 class ScrollBarGroove(QWidget):
-    """ Scroll bar groove """
+    """Scroll bar groove"""
 
     # QGraphicsOpacityEffect animation — stays widget-based.
     # 150ms fade deep in scrollbar widget hierarchy.  Qt6 RHI provides
@@ -40,7 +40,7 @@ class ScrollBarGroove(QWidget):
             self.layout().setContentsMargins(3, 0, 3, 0)
 
         self.opacityEffect = QGraphicsOpacityEffect(self)
-        self.opacityAni = QPropertyAnimation(self.opacityEffect, b'opacity', self)
+        self.opacityAni = QPropertyAnimation(self.opacityEffect, b"opacity", self)
         self.setGraphicsEffect(self.opacityEffect)
         self.opacityEffect.setOpacity(0)
 
@@ -60,6 +60,7 @@ class ScrollBarGroove(QWidget):
         painter.setPen(Qt.NoPen)
 
         from ui.theme_helpers import scrollbar_colors
+
         groove, _ = scrollbar_colors()
         painter.setBrush(groove)
         painter.drawRoundedRect(self.rect(), 6, 6)
@@ -67,8 +68,9 @@ class ScrollBarGroove(QWidget):
 
 # ScrollBarHandle, ScrollBar and FlowLayout are modified from https://github.com/zhiyiYo/PyQt-Fluent-Widgets/blob/master/qfluentwidgets/components/widgets/scroll_bar.py
 
+
 class ScrollBarHandle(QWidget):
-    """ Scroll bar handle """
+    """Scroll bar handle"""
 
     # QGraphicsOpacityEffect auto-fade — stays widget-based.
     # 300ms fade deep in scrollbar widget hierarchy.  Qt6 RHI provides
@@ -87,7 +89,7 @@ class ScrollBarHandle(QWidget):
                 targetObject=effect,
                 duration=300,
                 startValue=1.0,
-                endValue=0.,
+                endValue=0.0,
             )
             # self.fadeAnimation.setEasingCurve(QEasingCurve.Type.InQuint)
             self.fadeAnimation.finished.connect(self.hide)
@@ -118,16 +120,16 @@ class ScrollBarHandle(QWidget):
             self.show()
         if self.fadeAnimation.state() == QAbstractAnimation.State.Running:
             self.fadeAnimation.stop()
-        if self.effect.opacity() != 1.:
-            self.effect.setOpacity(1.)
+        if self.effect.opacity() != 1.0:
+            self.effect.setOpacity(1.0)
 
     def stopFadeout(self):
         if self.fadeAnimation.state() == QAbstractAnimation.State.Running:
             self.fadeAnimation.stop()
         self.anime_timer.stop()
         self.show()
-        if self.effect.opacity() != 1.:
-            self.effect.setOpacity(1.)
+        if self.effect.opacity() != 1.0:
+            self.effect.setOpacity(1.0)
 
     def paintEvent(self, e):
         painter = QPainter(self)
@@ -135,6 +137,7 @@ class ScrollBarHandle(QWidget):
         painter.setPen(Qt.NoPen)
 
         from ui.theme_helpers import scrollbar_colors
+
         _, handle = scrollbar_colors()
         r = self.width() / 2 if self.orient == Qt.Vertical else self.height() / 2
         painter.setBrush(handle)
@@ -142,7 +145,7 @@ class ScrollBarHandle(QWidget):
 
 
 class ScrollBar(QWidget):
-    """ Fluent scroll bar """
+    """Fluent scroll bar"""
 
     rangeChanged = Signal(tuple)
     valueChanged = Signal(int)
@@ -150,7 +153,9 @@ class ScrollBar(QWidget):
     sliderReleased = Signal()
     sliderMoved = Signal()
 
-    def __init__(self, orient: Qt.Orientation, parent: QAbstractScrollArea, fadeout: bool = False):
+    def __init__(
+        self, orient: Qt.Orientation, parent: QAbstractScrollArea, fadeout: bool = False
+    ):
         super().__init__(parent)
         self.groove = ScrollBarGroove(orient, self)
         self.handle = ScrollBarHandle(orient, self, fadeout)
@@ -175,10 +180,14 @@ class ScrollBar(QWidget):
 
         if orient == Qt.Vertical:
             self.partnerBar = parent.verticalScrollBar()
-            QAbstractScrollArea.setVerticalScrollBarPolicy(parent, Qt.ScrollBarAlwaysOff)
+            QAbstractScrollArea.setVerticalScrollBarPolicy(
+                parent, Qt.ScrollBarAlwaysOff
+            )
         else:
             self.partnerBar = parent.horizontalScrollBar()
-            QAbstractScrollArea.setHorizontalScrollBarPolicy(parent, Qt.ScrollBarAlwaysOff)
+            QAbstractScrollArea.setHorizontalScrollBarPolicy(
+                parent, Qt.ScrollBarAlwaysOff
+            )
 
         self.__initWidget(parent)
 
@@ -289,7 +298,7 @@ class ScrollBar(QWidget):
             self.sliderReleased.emit()
 
     def expand(self):
-        """ expand scroll bar """
+        """expand scroll bar"""
         if self._isExpanded or not self.isEnter:
             return
 
@@ -297,7 +306,7 @@ class ScrollBar(QWidget):
         self.groove.fadeIn()
 
     def collapse(self):
-        """ collapse scroll bar """
+        """collapse scroll bar"""
         if not self._isExpanded or self.isEnter:
             return
 
@@ -430,7 +439,7 @@ class ScrollBar(QWidget):
         self._adjustHandlePos()
 
     def setForceHidden(self, isHidden: bool):
-        """ whether to force the scrollbar to be hidden """
+        """whether to force the scrollbar to be hidden"""
         self._isForceHidden = isHidden
         self.setVisible(self.maximum() > 0 and not isHidden)
 

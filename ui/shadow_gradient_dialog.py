@@ -46,9 +46,19 @@ class ShadowGradientPreview(QWidget):
         self.text_color = [0, 0, 0]
         self.setMinimumHeight(90)
 
-    def set_params(self, shadow_radius, shadow_strength, shadow_color, shadow_offset,
-                   gradient_enabled, gradient_start, gradient_end, gradient_angle, gradient_size,
-                   text_color=None):
+    def set_params(
+        self,
+        shadow_radius,
+        shadow_strength,
+        shadow_color,
+        shadow_offset,
+        gradient_enabled,
+        gradient_start,
+        gradient_end,
+        gradient_angle,
+        gradient_size,
+        text_color=None,
+    ):
         self.shadow_radius = shadow_radius
         self.shadow_strength = shadow_strength
         self.shadow_color = shadow_color
@@ -85,6 +95,7 @@ class ShadowGradientPreview(QWidget):
 
         # compute font pixel size for shadow/offset scaling (matches repaint_background)
         from utils.fontformat import pt2px
+
         font_size_px = pt2px(24)
 
         fm = p.fontMetrics()
@@ -99,7 +110,9 @@ class ShadowGradientPreview(QWidget):
         tp.setRenderHint(QPainter.RenderHint.Antialiasing)
         tp.setFont(font)
         tp.setPen(QPen(QColor(*[int(c) for c in self.text_color])))
-        tp.drawText(QRectF(0, 0, text_w, text_h), Qt.AlignmentFlag.AlignCenter, preview_text)
+        tp.drawText(
+            QRectF(0, 0, text_w, text_h), Qt.AlignmentFlag.AlignCenter, preview_text
+        )
         tp.end()
 
         # compute offset for center placement
@@ -112,7 +125,9 @@ class ShadowGradientPreview(QWidget):
             r = int(round(self.shadow_radius * font_size_px))
             sx = int(self.shadow_offset[0] * font_size_px)
             sy = int(self.shadow_offset[1] * font_size_px)
-            shadow_pm, _ = apply_shadow_effect(text_pixmap, self.shadow_color, self.shadow_strength, r)
+            shadow_pm, _ = apply_shadow_effect(
+                text_pixmap, self.shadow_color, self.shadow_strength, r
+            )
             p.drawPixmap(ox + sx, oy + sy, shadow_pm)
 
         # gradient or flat color text
@@ -124,14 +139,18 @@ class ShadowGradientPreview(QWidget):
             cy = h / 2
             size = max(w, h) * self.gradient_size
             # match get_text_gradient: setStart(cx-dx*r, cy-dy*r), setFinalStop(cx+dx*r, cy+dy*r)
-            grad = QLinearGradient(cx - dx * size, cy - dy * size,
-                                   cx + dx * size, cy + dy * size)
+            grad = QLinearGradient(
+                cx - dx * size, cy - dy * size, cx + dx * size, cy + dy * size
+            )
             grad.setColorAt(0, QColor(*[int(c) for c in self.gradient_start]))
             grad.setColorAt(1, QColor(*[int(c) for c in self.gradient_end]))
             p.setPen(QPen(QBrush(grad), 0))
             p.setFont(font)
-            p.drawText(QRectF(ox, oy, text_w, text_h),
-                       Qt.AlignmentFlag.AlignCenter, preview_text)
+            p.drawText(
+                QRectF(ox, oy, text_w, text_h),
+                Qt.AlignmentFlag.AlignCenter,
+                preview_text,
+            )
         else:
             # flat text on top
             p.drawPixmap(ox, oy, text_pixmap)
@@ -146,7 +165,11 @@ class ColorButton(QPushButton):
 
     def __init__(self, color, parent=None):
         super().__init__(parent)
-        self._color = list(color) if isinstance(color, (list, tuple)) else [color.red(), color.green(), color.blue()]
+        self._color = (
+            list(color)
+            if isinstance(color, (list, tuple))
+            else [color.red(), color.green(), color.blue()]
+        )
         self.setFixedSize(32, 22)
         self.clicked.connect(self._pick)
         self._update_style()
@@ -181,7 +204,9 @@ class ShadowGradientDialog(QDialog):
 
     applied = Signal(dict, dict)
 
-    def __init__(self, font_format: FontFormat, tab='shadow', text_color=None, parent=None):
+    def __init__(
+        self, font_format: FontFormat, tab="shadow", text_color=None, parent=None
+    ):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Shadow & Gradient"))
         self.setFixedSize(520, 520)
@@ -204,7 +229,7 @@ class ShadowGradientDialog(QDialog):
         self.tabs = QTabWidget()
         self._setup_shadow_tab(fmt)
         self._setup_gradient_tab(fmt)
-        self.tabs.setCurrentIndex(0 if initial_tab == 'shadow' else 1)
+        self.tabs.setCurrentIndex(0 if initial_tab == "shadow" else 1)
         self.tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tabs)
 
@@ -236,7 +261,7 @@ class ShadowGradientDialog(QDialog):
         hlayout.setSpacing(12)
 
         # left: clock dial
-        self.shadow_dial = ClockDial(mode='shadow')
+        self.shadow_dial = ClockDial(mode="shadow")
         self.shadow_dial.setColor(fmt.shadow_color)
         self.shadow_dial.setMinimumSize(170, 170)
 
@@ -252,7 +277,9 @@ class ShadowGradientDialog(QDialog):
 
         self.shadow_dial.valueChanged.connect(self._on_shadow_dial_changed)
         self.shadow_dial.angleChanged.connect(lambda a: self._on_shadow_value_changed())
-        self.shadow_dial.distanceChanged.connect(lambda d: self._on_shadow_value_changed())
+        self.shadow_dial.distanceChanged.connect(
+            lambda d: self._on_shadow_value_changed()
+        )
         hlayout.addWidget(self.shadow_dial)
 
         # right: controls
@@ -309,11 +336,13 @@ class ShadowGradientDialog(QDialog):
         hlayout.setSpacing(12)
 
         # left: clock dial
-        self.gradient_dial = ClockDial(mode='gradient')
+        self.gradient_dial = ClockDial(mode="gradient")
         self.gradient_dial.setColor(fmt.gradient_start_color)
         self.gradient_dial.setMinimumSize(170, 170)
         self.gradient_dial.setAngle(fmt.gradient_angle)
-        self.gradient_dial.angleChanged.connect(lambda a: self._on_gradient_value_changed())
+        self.gradient_dial.angleChanged.connect(
+            lambda a: self._on_gradient_value_changed()
+        )
         hlayout.addWidget(self.gradient_dial)
 
         # right: controls
@@ -434,19 +463,19 @@ class ShadowGradientDialog(QDialog):
 
     def get_shadow_params(self) -> dict:
         return {
-            'shadow_radius': self._shadow_radius(),
-            'shadow_strength': self._shadow_strength(),
-            'shadow_color': self._shadow_color,
-            'shadow_offset': self._shadow_offset(),
+            "shadow_radius": self._shadow_radius(),
+            "shadow_strength": self._shadow_strength(),
+            "shadow_color": self._shadow_color,
+            "shadow_offset": self._shadow_offset(),
         }
 
     def get_gradient_params(self) -> dict:
         return {
-            'gradient_enabled': self.gradient_enable_cb.isChecked(),
-            'gradient_start_color': self._gradient_start,
-            'gradient_end_color': self._gradient_end,
-            'gradient_angle': self.gradient_dial.angle(),
-            'gradient_size': self._gradient_size(),
+            "gradient_enabled": self.gradient_enable_cb.isChecked(),
+            "gradient_start_color": self._gradient_start,
+            "gradient_end_color": self._gradient_end,
+            "gradient_angle": self.gradient_dial.angle(),
+            "gradient_size": self._gradient_size(),
         }
 
     # ── Buttons ─────────────────────────────────────────────

@@ -28,7 +28,7 @@ TR_CALL_RE = re.compile(r'self\.tr\("((?:[^"\\]|\\.)*)"\)')
 TR_CALL_SQ_RE = re.compile(r"self\.tr\('((?:[^'\\]|\\.)*)'\)")
 
 # Match a class definition: class ClassName(...) or class ClassName:
-CLASS_RE = re.compile(r'^\s*class\s+(\w+)\s*[(:]')
+CLASS_RE = re.compile(r"^\s*class\s+(\w+)\s*[(:]")
 
 
 def find_ui_py_files():
@@ -67,15 +67,24 @@ def has_chinese(text):
 
 # ── Check 1: Hardcoded Chinese (ui/ only) ───────────────────────────────
 
+
 def find_hardcoded_chinese(files):
     """Find Chinese characters in string literals not wrapped in self.tr()."""
     issues = []
 
     # Short strings used in font-metrics / CJK-range checks — not UI text.
-    NON_UI_PATTERNS = frozenset({
-        "一", "鿿", "啊", "木", "木fg", "X木", "X",
-        "简体中文",
-    })
+    NON_UI_PATTERNS = frozenset(
+        {
+            "一",
+            "鿿",
+            "啊",
+            "木",
+            "木fg",
+            "X木",
+            "X",
+            "简体中文",
+        }
+    )
 
     for fpath in files:
         try:
@@ -89,8 +98,15 @@ def find_hardcoded_chinese(files):
 
             # Skip single-line triple-quoted docstrings (e.g.  """blah""")
             stripped = line.strip()
-            if (stripped.startswith('"""') and stripped.endswith('"""') and len(stripped) >= 6) \
-               or (stripped.startswith("'''") and stripped.endswith("'''") and len(stripped) >= 6):
+            if (
+                stripped.startswith('"""')
+                and stripped.endswith('"""')
+                and len(stripped) >= 6
+            ) or (
+                stripped.startswith("'''")
+                and stripped.endswith("'''")
+                and len(stripped) >= 6
+            ):
                 continue
 
             # Remove portions inside self.tr(...) calls so we don't flag
@@ -111,6 +127,7 @@ def find_hardcoded_chinese(files):
 
 
 # ── Check 2 & 3: tr() .ts coverage ──────────────────────────────────
+
 
 def extract_context_and_tr_calls(content):
     """Parse a .py file: return list of (context_class, tr_string)."""
@@ -180,21 +197,19 @@ def find_missing_and_orphans(files):
         for ctx, s in extract_context_and_tr_calls(content):
             all_tr_calls.add((ctx, s))
 
-    missing = sorted(
-        (ctx, s) for ctx, s in all_tr_calls if (ctx, s) not in ts_entries
-    )
+    missing = sorted((ctx, s) for ctx, s in all_tr_calls if (ctx, s) not in ts_entries)
     # Filter orphans: exclude format strings (skipped by tr() extractor)
     # and ParamWidget context (module param descriptions, not tr() calls).
     orphans = sorted(
-        (ctx, s) for ctx, s in ts_entries
-        if (ctx, s) not in all_tr_calls
-        and "{" not in s
-        and ctx != "ParamWidget"
+        (ctx, s)
+        for ctx, s in ts_entries
+        if (ctx, s) not in all_tr_calls and "{" not in s and ctx != "ParamWidget"
     )
     return missing, orphans
 
 
 # ── Main ────────────────────────────────────────────────────────────────
+
 
 def _reconfigure_stdout():
     """Windows GBK console can't encode certain Unicode chars (e.g. U+9FFF).
@@ -227,7 +242,7 @@ def main():
         exit_code |= 1
         print(f"\n[HARDCODED CHINESE] {len(hc)} string(s) outside self.tr():")
         for fname, lineno, text in hc:
-            print(f"  {fname}:{lineno}  \"{text}\"")
+            print(f'  {fname}:{lineno}  "{text}"')
     else:
         print("\n[HARDCODED CHINESE] None found.")
 
@@ -237,19 +252,23 @@ def main():
 
     if missing:
         exit_code |= 2
-        print(f"\n[MISSING .ts ENTRIES] {len(missing)} self.tr() call(s) without "
-              f"a matching <message> in zh_CN.ts:")
+        print(
+            f"\n[MISSING .ts ENTRIES] {len(missing)} self.tr() call(s) without "
+            f"a matching <message> in zh_CN.ts:"
+        )
         for ctx, s in missing:
-            print(f"  [{ctx}] \"{s}\"")
+            print(f'  [{ctx}] "{s}"')
     else:
         print("\n[MISSING .ts ENTRIES] All self.tr() calls have .ts entries.")
 
     if orphans:
         exit_code |= 4
-        print(f"\n[ORPHAN .ts ENTRIES] {len(orphans)} active .ts entry(ies) with no "
-              f"matching self.tr() call:")
+        print(
+            f"\n[ORPHAN .ts ENTRIES] {len(orphans)} active .ts entry(ies) with no "
+            f"matching self.tr() call:"
+        )
         for ctx, s in orphans:
-            print(f"  [{ctx}] \"{s}\"")
+            print(f'  [{ctx}] "{s}"')
     else:
         print("\n[ORPHAN .ts ENTRIES] None found.")
 

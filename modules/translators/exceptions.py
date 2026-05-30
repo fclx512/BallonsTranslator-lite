@@ -27,8 +27,11 @@ class InvalidSourceOrTargetLanguage(BaseError):
 class RequestError(Exception):
     """exception thrown if an error occurred during the request call, e.g a connection problem."""
 
-    def __init__(self, message="Request exception can happen due to an api connection error. "
-                               "Please check your connection and try again"):
+    def __init__(
+        self,
+        message="Request exception can happen due to an api connection error. "
+        "Please check your connection and try again",
+    ):
         self.message = message
 
     def __str__(self):

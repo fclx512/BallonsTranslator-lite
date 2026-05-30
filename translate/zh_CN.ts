@@ -220,11 +220,6 @@
             <translation>质量</translation>
         </message>
         <message>
-            <location filename="../ui/configpanel.py" line="452" />
-            <source>Split translation into multi-lines according to the extracted balloon region.</source>
-            <translation>自动断句并分行</translation>
-        </message>
-        <message>
             <location filename="../ui/configpanel.py" line="443" />
             <source>Writing-mode</source>
             <translation>书写方向</translation>
@@ -412,114 +407,6 @@
         <message>
             <source>Reset to Default</source>
             <translation>恢复默认</translation>
-        </message>
-        <message>
-            <source>Page Up</source>
-            <translation>上一页</translation>
-        </message>
-        <message>
-            <source>Page Down</source>
-            <translation>下一页</translation>
-        </message>
-        <message>
-            <source>Page Up (alt)</source>
-            <translation>上一页 (备选)</translation>
-        </message>
-        <message>
-            <source>Page Down (alt)</source>
-            <translation>下一页 (备选)</translation>
-        </message>
-        <message>
-            <source>Text Editor</source>
-            <translation>编辑模式</translation>
-        </message>
-        <message>
-            <source>Text Block</source>
-            <translation>文字块模式</translation>
-        </message>
-        <message>
-            <source>Draw Board</source>
-            <translation>画板模式</translation>
-        </message>
-        <message>
-            <source>Zoom In</source>
-            <translation>放大</translation>
-        </message>
-        <message>
-            <source>Zoom Out</source>
-            <translation>缩小</translation>
-        </message>
-        <message>
-            <source>Preview</source>
-            <translation>预览</translation>
-        </message>
-        <message>
-            <source>Delete</source>
-            <translation>删除</translation>
-        </message>
-        <message>
-            <source>Delete (alt)</source>
-            <translation>删除 (备选)</translation>
-        </message>
-        <message>
-            <source>Select All</source>
-            <translation>全选</translation>
-        </message>
-        <message>
-            <source>Bold</source>
-            <translation>加粗</translation>
-        </message>
-        <message>
-            <source>Italic</source>
-            <translation>斜体</translation>
-        </message>
-        <message>
-            <source>Underline</source>
-            <translation>下划线</translation>
-        </message>
-        <message>
-            <source>Undo</source>
-            <translation>撤销</translation>
-        </message>
-        <message>
-            <source>Redo</source>
-            <translation>重做</translation>
-        </message>
-        <message>
-            <source>Page Search</source>
-            <translation>页面搜索</translation>
-        </message>
-        <message>
-            <source>Global Search</source>
-            <translation>全局搜索</translation>
-        </message>
-        <message>
-            <source>Escape</source>
-            <translation>退出</translation>
-        </message>
-        <message>
-            <source>Inpaint</source>
-            <translation>修复</translation>
-        </message>
-        <message>
-            <source>Hand Tool</source>
-            <translation>拖拽工具</translation>
-        </message>
-        <message>
-            <source>Rect Tool</source>
-            <translation>矩形工具</translation>
-        </message>
-        <message>
-            <source>Inpaint Tool</source>
-            <translation>修复工具</translation>
-        </message>
-        <message>
-            <source>Pen Tool</source>
-            <translation>画笔工具</translation>
-        </message>
-        <message>
-            <source>Merge Tool</source>
-            <translation>合并工具</translation>
         </message>
     </context>
     <context>
@@ -764,19 +651,6 @@
             <source>Inpainting Failed.</source>
             <translation>修复失败</translation>
         </message>
-        <message>
-            <location filename="../ui/module_manager.py" line="241" />
-            <source> is required for </source>
-            <translation>是翻译器必填项</translation>
-        </message>
-    </context>
-    <context>
-        <name>InpaintConfigPanel</name>
-        <message>
-            <location filename="../ui/module_parse_widgets.py" line="426" />
-            <source>Let the program decide whether it is necessary to use the selected inpaint method.</source>
-            <translation>由程序决定是否调用修复方法</translation>
-        </message>
     </context>
     <context>
         <name>InpaintPanel</name>
@@ -807,7 +681,7 @@
         </message>
         <message>
             <source>Triangle</source>
-            <translation type="unfinished" />
+            <translation>三角形</translation>
         </message>
     </context>
     <context>
@@ -872,7 +746,7 @@
         </message>
         <message>
             <source>AI Chat</source>
-            <translation type="unfinished" />
+            <translation>AI 聊天</translation>
         </message>
     </context>
     <context>
@@ -952,11 +826,6 @@
             <location filename="../ui/mainwindow.py" line="1364" />
             <source>Translation imported and matched successfully.</source>
             <translation>译文已导入且匹配成功</translation>
-        </message>
-        <message>
-            <location filename="../ui/mainwindow.py" line="1366" />
-            <source>Imported txt file not fully matched with current project, please make sure source txt file structured like results from "export TXT"</source>
-            <translation>导入文件当前项目没能完全匹配，请确保导入文件格式和导出文件一致</translation>
         </message>
         <message>
             <location filename="../ui/mainwindow.py" line="1368" />
@@ -1189,18 +1058,8 @@ Failed: {f}/{t}</source>
         </message>
         <message>
             <location filename="../ui/mainwindow.py" line="" />
-            <source>Full context (%1 pages, all previous translations as reference)</source>
-            <translation>全量上下文（%1页，使用所有既往翻译作为参考）</translation>
-        </message>
-        <message>
-            <location filename="../ui/mainwindow.py" line="" />
             <source>Windowed context (%1 pages, +/-%2 page window)</source>
             <translation>窗口上下文（%1页，±%2页窗口）</translation>
-        </message>
-        <message>
-            <location filename="../ui/mainwindow.py" line="" />
-            <source>Windowed + auto-summary (%1 pages, long-form mode)</source>
-            <translation>窗口上下文 + 自动摘要（%1页，长篇模式）</translation>
         </message>
         <message>
             <source>Applied {n} change(s) to the project.</source>
@@ -1222,11 +1081,6 @@ Failed: {f}/{t}</source>
             <location filename="../ui/module_manager.py" line="929" />
             <source>Refresh failed</source>
             <translation>刷新失败</translation>
-        </message>
-        <message>
-            <location filename="../ui/module_manager.py" line="930" />
-            <source>Failed to fetch model list. Please check your API key and host configuration.</source>
-            <translation>获取模型列表失败，请检查 API 密钥和地址是否正确配置。</translation>
         </message>
     </context>
     <context>
@@ -1344,7 +1198,7 @@ Failed: {f}/{t}</source>
         </message>
         <message>
             <source>Triangle</source>
-            <translation type="unfinished" />
+            <translation>三角形</translation>
         </message>
     </context>
     <context>
@@ -1623,29 +1477,6 @@ Failed: {f}/{t}</source>
         </message>
     </context>
     <context>
-        <name>ThreadBase</name>
-        <message>
-            <location filename="../ui/io_thread.py" line="20" />
-            <source>Thread job failed.</source>
-            <translation>线程任务失败。</translation>
-        </message>
-        <message>
-            <location filename="../ui/io_thread.py" line="42" />
-            <source>Failed to save image.</source>
-            <translation>保存图片失败。</translation>
-        </message>
-        <message>
-            <location filename="../ui/io_thread.py" line="184" />
-            <source>Region merge failed</source>
-            <translation>区域合并失败</translation>
-        </message>
-        <message>
-            <location filename="../ui/io_thread.py" line="192" />
-            <source>Region merge: </source>
-            <translation>区域合并: </translation>
-        </message>
-    </context>
-    <context>
         <name>TitleBar</name>
         <message>
             <location filename="../ui/mainwindowbars.py" line="283" />
@@ -1896,10 +1727,6 @@ Failed: {f}/{t}</source>
             <translation>视觉支持（用于 OCR）</translation>
         </message>
         <message>
-            <source>Enable this for models that can process images. Vision-capable profiles will appear in the OCR model selector.</source>
-            <translation>为能够处理图像的模型启用此选项。支持视觉的配置文件将出现在 OCR 模型选择器中。</translation>
-        </message>
-        <message>
             <source>Connection &amp; Rate Limiting:</source>
             <translation>连接与速率限制：</translation>
         </message>
@@ -2085,17 +1912,6 @@ Failed: {f}/{t}</source>
             <location filename="../ui/merge_dialog.py" line="103" />
             <source>Merge only within specific label groups</source>
             <translation>仅在特定标签组内合并</translation>
-        </message>
-        <message>
-            <location filename="../ui/merge_dialog.py" line="105" />
-            <source>One group per line, labels separated by commas
-e.g.:
-balloon,balloon2
-qipao,qipao2</source>
-            <translation>每行一个分组, 组内标签用逗号分隔
-例如:
-balloon,balloon2
-qipao,qipao2</translation>
         </message>
         <message>
             <location filename="../ui/merge_dialog.py" line="119" />
@@ -2540,16 +2356,6 @@ qipao,qipao2</translation>
         <name>UpdateThread</name>
         <message>
             <location filename="../ui/update_checker.py" line="" />
-            <source>Git is not available.\nPlease install Git from https://git-scm.com/downloads</source>
-            <translation>未检测到 Git。\n请从 https://git-scm.com/downloads 安装 Git</translation>
-        </message>
-        <message>
-            <location filename="../ui/update_checker.py" line="" />
-            <source>Update is not available in portable/exe builds.\nPlease download the latest version from GitHub.</source>
-            <translation>便携版/打包版不支持自动更新。\n请从 GitHub 下载最新版本。</translation>
-        </message>
-        <message>
-            <location filename="../ui/update_checker.py" line="" />
             <source>Failed to contact GitHub.\n{err}</source>
             <translation>无法连接到 GitHub。\n{err}</translation>
         </message>
@@ -2575,7 +2381,7 @@ qipao,qipao2</translation>
         </message>
         <message>
             <source>Encoding error</source>
-            <translation type="unfinished" />
+            <translation>编码错误</translation>
         </message>
     </context>
     <context>
@@ -2794,10 +2600,6 @@ qipao,qipao2</translation>
             <translation>翻译模式（仅读取原文和译文）</translation>
         </message>
         <message>
-            <source>Word wrap in chat bubbles</source>
-            <translation>对话气泡自动换行</translation>
-        </message>
-        <message>
             <source>Edit Translation Prompt...</source>
             <translation>编辑翻译提示词...</translation>
         </message>
@@ -2899,30 +2701,6 @@ Tool calls: {ct} token</source>
             <translation>下一处  ▶</translation>
         </message>
         <message>
-            <source>Go to page:</source>
-            <translation>跳转到页：</translation>
-        </message>
-        <message>
-            <source>Go</source>
-            <translation>跳转</translation>
-        </message>
-        <message>
-            <source>Block</source>
-            <translation>文本块</translation>
-        </message>
-        <message>
-            <source>Source</source>
-            <translation>原文</translation>
-        </message>
-        <message>
-            <source>Old  →  New</source>
-            <translation>旧  →  新</translation>
-        </message>
-        <message>
-            <source>Accept All</source>
-            <translation>全部接受</translation>
-        </message>
-        <message>
             <source>Accept Page</source>
             <translation>接受本页</translation>
         </message>
@@ -2933,14 +2711,6 @@ Tool calls: {ct} token</source>
         <message>
             <source>Page {pid} ({cnt} changes)</source>
             <translation>第 {pid} 页（{cnt} 项变更）</translation>
-        </message>
-        <message>
-            <source>Page</source>
-            <translation>第</translation>
-        </message>
-        <message>
-            <source>Accept this change</source>
-            <translation>接受此项变更</translation>
         </message>
         <message>
             <source>Accepted: {n} / {total}</source>
@@ -2959,123 +2729,120 @@ Apply them now?</source>
 立即应用吗？</translation>
         </message>
         <message>
-            <source>Accept All</source>
-            <translation>全部接受</translation>
-        </message>
-        <message>
-            <source>Apply Changes</source>
-            <translation>应用变更</translation>
+            <source>Reject Page</source>
+            <translation>拒绝本页</translation>
         </message>
     </context>
     <context>
         <name>MainWindowMixin</name>
         <message>
             <source>All Pages</source>
-            <translation type="unfinished" />
+            <translation>全部页面</translation>
         </message>
         <message>
             <source>Cancel</source>
-            <translation type="unfinished" />
+            <translation>取消</translation>
         </message>
         <message>
             <source>Failed to export as TEXT file</source>
-            <translation type="unfinished" />
+            <translation>导出为 TEXT 文件失败</translation>
         </message>
         <message>
             <source>Failed to import translation from </source>
-            <translation type="unfinished" />
+            <translation>从以下位置导入译文失败：</translation>
         </message>
         <message>
             <source>Failed to load project </source>
-            <translation type="unfinished" />
+            <translation>加载项目失败：</translation>
         </message>
         <message>
             <source>Failed to load project from</source>
-            <translation type="unfinished" />
+            <translation>从以下位置加载项目失败：</translation>
         </message>
         <message>
             <source>Import *.md/*.txt</source>
-            <translation type="unfinished" />
+            <translation>导入 *.md/*.txt</translation>
         </message>
         <message>
             <source>Import Text Styles</source>
-            <translation type="unfinished" />
+            <translation>导入字体样式</translation>
         </message>
         <message>
             <source>Missing pages: </source>
-            <translation type="unfinished" />
+            <translation>缺失页面：</translation>
         </message>
         <message>
             <source>Page %1 ~ Page %2 (%3 pages)</source>
-            <translation type="unfinished" />
+            <translation>第 %1 页 ~ 第 %2 页（共 %3 页）</translation>
         </message>
         <message>
             <source>Restart to apply changes? 
 </source>
-            <translation type="unfinished" />
+            <translation>重启以应用更改？
+</translation>
         </message>
         <message>
             <source>Run</source>
-            <translation type="unfinished" />
+            <translation>运行</translation>
         </message>
         <message>
             <source>Save Text Styles</source>
-            <translation type="unfinished" />
+            <translation>保存字体样式</translation>
         </message>
         <message>
             <source>Text file exported to </source>
-            <translation type="unfinished" />
+            <translation>文本文件已导出至：</translation>
         </message>
         <message>
             <source>Translation imported and matched successfully.</source>
-            <translation type="unfinished" />
+            <translation>译文导入并匹配成功。</translation>
         </message>
         <message>
             <source>Unexpected pages: </source>
-            <translation type="unfinished" />
+            <translation>多余页面：</translation>
         </message>
         <message>
             <source>Unmatched pages: </source>
-            <translation type="unfinished" />
+            <translation>未匹配页面：</translation>
         </message>
         <message>
             <source>saved</source>
-            <translation type="unfinished" />
+            <translation>已保存</translation>
         </message>
         <message>
             <source>unsaved</source>
-            <translation type="unfinished" />
+            <translation>未保存</translation>
         </message>
     </context>
     <context>
         <name>AiChatWorker</name>
         <message>
             <source>API error (%1): %2</source>
-            <translation type="unfinished" />
+            <translation>API 错误（%1）：%2</translation>
         </message>
         <message>
             <source>API rate limit reached, please try again later.</source>
-            <translation type="unfinished" />
+            <translation>API 频率限制已达，请稍后重试。</translation>
         </message>
         <message>
             <source>Bad request: %1</source>
-            <translation type="unfinished" />
+            <translation>错误请求：%1</translation>
         </message>
         <message>
             <source>Connection failed: %1</source>
-            <translation type="unfinished" />
+            <translation>连接失败：%1</translation>
         </message>
         <message>
             <source>Invalid API key.</source>
-            <translation type="unfinished" />
+            <translation>无效的 API 密钥。</translation>
         </message>
         <message>
             <source>Request timed out. Please check your network or API URL.</source>
-            <translation type="unfinished" />
+            <translation>请求超时。请检查您的网络或 API URL。</translation>
         </message>
         <message>
             <source>Unexpected error: %1</source>
-            <translation type="unfinished" />
+            <translation>意外错误：%1</translation>
         </message>
     </context>
     <context>
@@ -3159,6 +2926,37 @@ Apply them now?</source>
             <location filename="../ui/theme_editor.py" line="198" />
             <source>Themes</source>
             <translation>主题</translation>
+        </message>
+    </context>
+    <context>
+        <name>_ChangeCard</name>
+        <message>
+            <source>(Style only)</source>
+            <translation>仅样式</translation>
+        </message>
+        <message>
+            <source>Accept changes for this block</source>
+            <translation>接受此文本块的变更</translation>
+        </message>
+        <message>
+            <source>New: </source>
+            <translation>新：</translation>
+        </message>
+        <message>
+            <source>Old: </source>
+            <translation>旧：</translation>
+        </message>
+        <message>
+            <source>Reject changes for this block</source>
+            <translation>拒绝此文本块的变更</translation>
+        </message>
+        <message>
+            <source>Style</source>
+            <translation>样式</translation>
+        </message>
+        <message>
+            <source>Translation</source>
+            <translation>译文</translation>
         </message>
     </context>
 </TS>

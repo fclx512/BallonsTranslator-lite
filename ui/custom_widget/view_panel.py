@@ -18,19 +18,29 @@ from .widget import Widget
 CHEVRON_SIZE = 20
 CHEVRON_SIZE_SMALL = 14
 
+
 def chevron_down():
-    return QIcon(r'icons/chevron-down.svg').pixmap(CHEVRON_SIZE, CHEVRON_SIZE, mode=QIcon.Mode.Normal)
+    return QIcon(r"icons/chevron-down.svg").pixmap(
+        CHEVRON_SIZE, CHEVRON_SIZE, mode=QIcon.Mode.Normal
+    )
+
 
 def chevron_right():
-    return QIcon(r'icons/chevron-right.svg').pixmap(CHEVRON_SIZE, CHEVRON_SIZE, mode=QIcon.Mode.Normal)
+    return QIcon(r"icons/chevron-right.svg").pixmap(
+        CHEVRON_SIZE, CHEVRON_SIZE, mode=QIcon.Mode.Normal
+    )
+
 
 def chevron_down_small():
-    return QIcon(r'icons/chevron-down.svg').pixmap(CHEVRON_SIZE_SMALL, CHEVRON_SIZE_SMALL, mode=QIcon.Mode.Normal)
+    return QIcon(r"icons/chevron-down.svg").pixmap(
+        CHEVRON_SIZE_SMALL, CHEVRON_SIZE_SMALL, mode=QIcon.Mode.Normal
+    )
+
 
 def chevron_right_small():
-    return QIcon(r'icons/chevron-right.svg').pixmap(CHEVRON_SIZE_SMALL, CHEVRON_SIZE_SMALL, mode=QIcon.Mode.Normal)
-
-
+    return QIcon(r"icons/chevron-right.svg").pixmap(
+        CHEVRON_SIZE_SMALL, CHEVRON_SIZE_SMALL, mode=QIcon.Mode.Normal
+    )
 
 
 class HidePanelButton(QPushButton):
@@ -38,10 +48,9 @@ class HidePanelButton(QPushButton):
 
 
 class ExpandLabel(Widget):
-
     clicked = Signal()
 
-    def __init__(self, text=None, parent=None, size_type='normal', *args, **kwargs):
+    def __init__(self, text=None, parent=None, size_type="normal", *args, **kwargs):
         super().__init__(parent=parent, *args, **kwargs)
         self.size_type = size_type
         self.textlabel = QLabel(self)
@@ -49,11 +58,11 @@ class ExpandLabel(Widget):
         self.arrowlabel = QLabel(self)
         self.arrowlabel.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         font = self.textlabel.font()
-        if size_type == 'normal':
+        if size_type == "normal":
             font.setPointSizeF(10)
             self.setFixedHeight(26)
             self.arrowlabel.setFixedSize(CHEVRON_SIZE, CHEVRON_SIZE)
-        elif size_type == 'small':
+        elif size_type == "small":
             font.setPointSizeF(8)
             self.setFixedHeight(20)
             self.arrowlabel.setFixedSize(CHEVRON_SIZE_SMALL, CHEVRON_SIZE_SMALL)
@@ -100,12 +109,19 @@ class ExpandLabel(Widget):
         return super().mousePressEvent(e)
 
 
-
 class PanelArea(QScrollArea):
-    def __init__(self, panel_name: str, config_name: str, config_expand_name: str, action_name: str = None):
+    def __init__(
+        self,
+        panel_name: str,
+        config_name: str,
+        config_expand_name: str,
+        action_name: str = None,
+    ):
         super().__init__()
         self.scrollContent = PanelAreaContent()
-        self.scrollContent.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        self.scrollContent.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum
+        )
         self.setWidget(self.scrollContent)
         self.setWidgetResizable(True)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
@@ -127,7 +143,7 @@ class PanelArea(QScrollArea):
         self.view_widget.register_view_widget(
             config_name=config_name,
             config_expand_name=config_expand_name,
-            action_name=action_name
+            action_name=action_name,
         )
 
     def setContentLayout(self, layout):
@@ -140,6 +156,7 @@ class PanelGroupBox(Widget):
     Unlike QGroupBox, uses a separate QLabel for the title so CSS
     background-color never obscures the title text.
     """
+
     def __init__(self, title: str = "", parent=None):
         super().__init__(parent)
         main_layout = QVBoxLayout(self)
@@ -163,7 +180,6 @@ class PanelGroupBox(Widget):
 
 
 class PanelAreaContent(Widget):
-
     after_resized = Signal()
 
     def resizeEvent(self, event) -> None:
@@ -172,14 +188,21 @@ class PanelAreaContent(Widget):
 
 
 class ViewWidget(Widget):
-
-    config_name: str = ''
-    config_expand_name: str = ''
-    action_name: str = ''
+    config_name: str = ""
+    config_expand_name: str = ""
+    action_name: str = ""
     view_hide_btn_clicked = Signal(str)
     expend_changed = Signal()
 
-    def __init__(self, content_widget: Widget, panel_name: str = None, parent=None, title_size_type='normal', *args, **kwargs):
+    def __init__(
+        self,
+        content_widget: Widget,
+        panel_name: str = None,
+        parent=None,
+        title_size_type="normal",
+        *args,
+        **kwargs,
+    ):
         super().__init__(parent=parent, *args, **kwargs)
 
         self.title_label = ExpandLabel(panel_name, self, size_type=title_size_type)
@@ -198,7 +221,9 @@ class ViewWidget(Widget):
     def on_view_hide_btn_clicked(self):
         self.view_hide_btn_clicked.emit(self.config_name)
 
-    def register_view_widget(self, config_name: str, config_expand_name: str, action_name: str):
+    def register_view_widget(
+        self, config_name: str, config_expand_name: str, action_name: str
+    ):
         self.config_name = config_name
         self.config_expand_name = config_expand_name
         self.action_name = action_name
@@ -218,7 +243,9 @@ class ViewWidget(Widget):
 
     def elidedText(self, text: str):
         fm = QFontMetrics(self.title_label.font())
-        return fm.elidedText(text, Qt.TextElideMode.ElideRight, self.content_widget.width() - 40)
+        return fm.elidedText(
+            text, Qt.TextElideMode.ElideRight, self.content_widget.width() - 40
+        )
 
     def title(self) -> str:
         return self.title_label.textlabel.text()

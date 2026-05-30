@@ -27,7 +27,7 @@ TS_FILE = PROJECT_ROOT / "translate" / "zh_CN.ts"
 
 TR_CALL_RE = re.compile(r'self\.tr\("((?:[^"\\]|\\.)*)"\)')
 TR_CALL_SQ_RE = re.compile(r"self\.tr\('((?:[^'\\]|\\.)*)'\)")
-CLASS_RE = re.compile(r'^\s*class\s+(\w+)\s*[(:]')
+CLASS_RE = re.compile(r"^\s*class\s+(\w+)\s*[(:]")
 
 # Contexts whose translations come from module param descriptions,
 # loaded via self.tr(variable_name) — regex scanner cannot detect them.
@@ -180,15 +180,18 @@ def main():
         description="Synchronize zh_CN.ts with self.tr() calls in source code."
     )
     parser.add_argument(
-        "--fill-missing", action="store_true",
+        "--fill-missing",
+        action="store_true",
         help="Add missing entries as type='unfinished'.",
     )
     parser.add_argument(
-        "--prune", action="store_true",
+        "--prune",
+        action="store_true",
         help="Remove orphan entries.",
     )
     parser.add_argument(
-        "--apply", action="store_true",
+        "--apply",
+        action="store_true",
         help="Actually write changes (without this, dry-run only).",
     )
     args = parser.parse_args()
@@ -215,10 +218,9 @@ def main():
     # ── 3. Compute missing and orphan sets ─────────────────────────────
     missing = sorted(all_tr - ts_entries)
     orphans = sorted(
-        (ctx, s) for ctx, s in ts_entries
-        if (ctx, s) not in all_tr
-        and "{" not in s
-        and ctx not in PARAM_CONTEXTS
+        (ctx, s)
+        for ctx, s in ts_entries
+        if (ctx, s) not in all_tr and "{" not in s and ctx not in PARAM_CONTEXTS
     )
 
     # ── Report ─────────────────────────────────────────────────────────
@@ -279,7 +281,9 @@ def main():
         print(f"  >> Recompile: python scripts/qm_compile.py {TS_FILE.name} {qm.name}")
     else:
         if not args.apply and not args.fill_missing and not args.prune:
-            print("\nDry-run. Pass --apply, --fill-missing, or --prune to write changes.")
+            print(
+                "\nDry-run. Pass --apply, --fill-missing, or --prune to write changes."
+            )
         else:
             print("\nNothing to do.")
 

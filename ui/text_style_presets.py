@@ -42,10 +42,9 @@ class DeleteStyleButton(QPushButton):
 
 
 class StyleLabel(QLineEdit):
-
     edit_finished = Signal()
 
-    def __init__(self, style_name: str = None, parent = None):
+    def __init__(self, style_name: str = None, parent=None):
         super().__init__(parent=parent)
 
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
@@ -75,13 +74,18 @@ class StyleLabel(QLineEdit):
 
 
 class TextStyleLabel(Widget):
-
     style_name_edited = Signal()
     delete_btn_clicked = Signal()
     stylelabel_activated = Signal(bool)
     apply_fontfmt = Signal(FontFormat)
 
-    def __init__(self, style_name: str = '', parent: Widget = None, fontfmt: FontFormat = None, active_stylename_edited: Signal = None):
+    def __init__(
+        self,
+        style_name: str = "",
+        parent: Widget = None,
+        fontfmt: FontFormat = None,
+        active_stylename_edited: Signal = None,
+    ):
         super().__init__(parent=parent)
         self._double_clicked = False
         self.active = False
@@ -101,24 +105,28 @@ class TextStyleLabel(Widget):
         self.stylelabel.edit_finished.connect(self.on_style_name_edited)
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
 
-        self.setToolTip(self.tr('Click to set as Global format. Double click to edit name.'))
+        self.setToolTip(
+            self.tr("Click to set as Global format. Double click to edit name.")
+        )
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         BTN_SIZE = 14
         self.colorw = colorw = QLabel(parent=self)
         self.colorw.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.colorw.setStyleSheet("border-radius: 7px; border: none; background-color: rgba(0, 0, 0, 0);")
+        self.colorw.setStyleSheet(
+            "border-radius: 7px; border: none; background-color: rgba(0, 0, 0, 0);"
+        )
         d = int(BTN_SIZE * 2)
         self.colorw.setFixedSize(d, d)
 
         self.apply_btn = ArrowLeftButton(parent=self)
         self.apply_btn.setFixedSize(d, BTN_SIZE)
-        self.apply_btn.setToolTip(self.tr('Apply Text Style'))
+        self.apply_btn.setToolTip(self.tr("Apply Text Style"))
         self.apply_btn.clicked.connect(self.on_applybtn_clicked)
         self.update_btn = ArrowRightButton(parent=self)
         self.update_btn.setFixedSize(d, BTN_SIZE)
         self.update_btn.clicked.connect(self.on_updatebtn_clicked)
-        self.update_btn.setToolTip(self.tr('Update from active style'))
+        self.update_btn.setToolTip(self.tr("Update from active style"))
         applyw = Widget(parent=self)
         applyw.setStyleSheet("border-radius: 7px; border: none")
         applylayout = QVBoxLayout(applyw)
@@ -166,7 +174,7 @@ class TextStyleLabel(Widget):
         if len(updated_keys) > 0:
             save_text_styles()
 
-        preview_keys = {'font_family', 'frgb', 'srgb', 'stroke_width'}
+        preview_keys = {"font_family", "frgb", "srgb", "stroke_width"}
         for k in updated_keys:
             if k in preview_keys:
                 self.updatePreview()
@@ -176,6 +184,7 @@ class TextStyleLabel(Widget):
         self.active = active
         if active:
             from ui.misc import get_theme_color
+
             c = get_theme_color()
             self.setStyleSheet(f"border: 2px solid {c.name()}")
         else:
@@ -213,7 +222,7 @@ class TextStyleLabel(Widget):
             painter.drawRoundedRect(draw_rect, draw_radius, draw_radius)
             draw_radius = draw_radius * 0.66
             offset = d / 2 - draw_radius
-            draw_rect = QRectF(offset, offset, draw_radius*2, draw_radius*2)
+            draw_rect = QRectF(offset, offset, draw_radius * 2, draw_radius * 2)
 
         r, g, b = self.fontfmt.frgb
         color = QColor(r, g, b, 255)
@@ -243,6 +252,7 @@ class TextStyleLabel(Widget):
                 se.setBlurRadius(6)
                 se.setOffset(0, 0)
                 from ui.misc import get_theme_color
+
                 se.setColor(get_theme_color())
                 self.setGraphicsEffect(se)
             else:
@@ -253,13 +263,15 @@ class TextStyleLabel(Widget):
     def enterEvent(self, event) -> None:
         self.setHoverEffect(True)
         self.leftstack.setCurrentIndex(1)
-        self.delete_btn.setStyleSheet("image: url(icons/titlebar_close.svg); border: none")
+        self.delete_btn.setStyleSheet(
+            "image: url(icons/titlebar_close.svg); border: none"
+        )
         return super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
         self.setHoverEffect(False)
         self.leftstack.setCurrentIndex(0)
-        self.delete_btn.setStyleSheet("image: \"none\"; border: none")
+        self.delete_btn.setStyleSheet('image: "none"; border: none')
         return super().leaveEvent(event)
 
     def on_style_name_edited(self):
@@ -281,7 +293,6 @@ class TextAreaStyleButton(QPushButton):
 
 
 class TextStylePresetPanel(PanelArea):
-
     entered = False
     active_text_style_label_changed = Signal()
     apply_fontfmt = Signal(FontFormat)
@@ -294,7 +305,7 @@ class TextStylePresetPanel(PanelArea):
 
         self.active_text_style_label: TextStyleLabel = None
         self.flayout = FlowLayout()
-        self.default_preset_name = self.tr('Style')
+        self.default_preset_name = self.tr("Style")
 
         self.new_btn = TextAreaStyleButton()
         self.new_btn.setObjectName("NewTextStyleButton")
@@ -310,15 +321,17 @@ class TextStylePresetPanel(PanelArea):
         self.flayout.addWidget(self.clear_btn)
         self.setContentLayout(self.flayout)
 
-    def on_newbtn_clicked(self, clicked = None):
+    def on_newbtn_clicked(self, clicked=None):
         textstylelabel = self.new_textstyle_label()
         textstylelabel.startEdit(select_all=True)
         self.resizeToContent()
 
-    def on_clearbtn_clicked(self, clicked = None):
+    def on_clearbtn_clicked(self, clicked=None):
         msg = QMessageBox()
-        msg.setText(self.tr('Remove all styles?'))
-        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg.setText(self.tr("Remove all styles?"))
+        msg.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
         ret = msg.exec_()
         if ret == QMessageBox.StandardButton.Yes:
             self.clearStyles()
@@ -333,10 +346,12 @@ class TextStylePresetPanel(PanelArea):
         if preset_name is None:
             sno = str(self.count() + 1)
             if len(sno) < 2:
-                preset_name = self.default_preset_name + ' ' + sno
+                preset_name = self.default_preset_name + " " + sno
             else:
                 preset_name = self.default_preset_name + sno
-        textstylelabel = TextStyleLabel(preset_name, active_stylename_edited=self.active_stylename_edited)
+        textstylelabel = TextStyleLabel(
+            preset_name, active_stylename_edited=self.active_stylename_edited
+        )
         textstylelabel.stylelabel_activated.connect(self.on_stylelabel_activated)
         textstylelabel.delete_btn_clicked.connect(self.on_deletebtn_clicked)
         textstylelabel.apply_fontfmt.connect(self.apply_fontfmt)
@@ -347,7 +362,9 @@ class TextStylePresetPanel(PanelArea):
 
     def resizeToContent(self):
         TEXTSTYLEAREA_MAXH = 200
-        self.setFixedHeight(min(TEXTSTYLEAREA_MAXH, self.flayout.heightForWidth(self.width())))
+        self.setFixedHeight(
+            min(TEXTSTYLEAREA_MAXH, self.flayout.heightForWidth(self.width()))
+        )
 
     def resizeEvent(self, e):
         self.resizeToContent()
@@ -393,7 +410,9 @@ class TextStylePresetPanel(PanelArea):
                 w.deleteLater()
 
     def _add_style_label(self, fontfmt: FontFormat):
-        textstylelabel = TextStyleLabel(fontfmt=fontfmt, active_stylename_edited=self.active_stylename_edited)
+        textstylelabel = TextStyleLabel(
+            fontfmt=fontfmt, active_stylename_edited=self.active_stylename_edited
+        )
         textstylelabel.delete_btn_clicked.connect(self.on_deletebtn_clicked)
         textstylelabel.stylelabel_activated.connect(self.on_stylelabel_activated)
         textstylelabel.apply_fontfmt.connect(self.apply_fontfmt)
@@ -444,7 +463,7 @@ class TextStylePresetPanel(PanelArea):
             self.clear_btn.hide()
             self.resizeToContent()
 
-    def setStyles(self, styles: List[FontFormat], save_styles = False):
+    def setStyles(self, styles: List[FontFormat], save_styles=False):
         self._clear_styles()
         for style in styles:
             self._add_style_label(style)
@@ -457,11 +476,11 @@ class TextStylePresetPanel(PanelArea):
     def contextMenuEvent(self, e: QContextMenuEvent):
         menu = QMenu()
 
-        new_act = menu.addAction(self.tr('New Text Style'))
-        removeall_act = menu.addAction(self.tr('Remove all'))
+        new_act = menu.addAction(self.tr("New Text Style"))
+        removeall_act = menu.addAction(self.tr("Remove all"))
         menu.addSeparator()
-        import_act = menu.addAction(self.tr('Import Text Styles'))
-        export_act = menu.addAction(self.tr('Export Text Styles'))
+        import_act = menu.addAction(self.tr("Import Text Styles"))
+        export_act = menu.addAction(self.tr("Export Text Styles"))
 
         rst = menu.exec_(e.globalPos())
 

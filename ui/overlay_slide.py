@@ -34,7 +34,7 @@ class OverlaySlider(QObject):
     def __init__(
         self,
         widget,
-        direction: str = 'left',
+        direction: str = "left",
         duration: int = 350,
         width: Optional[Union[int, Callable[[], int]]] = None,
     ):
@@ -73,7 +73,7 @@ class OverlaySlider(QObject):
             return
 
         ow = self._resolve_width(pw)
-        if self._direction == 'left':
+        if self._direction == "left":
             start_x = -ow
             widget.setGeometry(0, 0, ow, pw.height())
         else:
@@ -96,11 +96,14 @@ class OverlaySlider(QObject):
             return
         widget = self._widget
         pw = widget.parentWidget()
-        end_x = -widget.width() if self._direction == 'left' else (pw.width() if pw else 0)
+        end_x = (
+            -widget.width() if self._direction == "left" else (pw.width() if pw else 0)
+        )
 
         self._disconnect_finished()
-        self._anim.finished.connect(self._on_hidden,
-                                    Qt.ConnectionType.SingleShotConnection)
+        self._anim.finished.connect(
+            self._on_hidden, Qt.ConnectionType.SingleShotConnection
+        )
         self._anim.setStartValue(widget.pos())
         self._anim.setEndValue(QPoint(end_x, 0))
         self._anim.start()
@@ -114,8 +117,10 @@ class OverlaySlider(QObject):
             return
         ow = self._resolve_width(pw)
         self._widget.setGeometry(
-            0 if self._direction == 'left' else pw.width() - ow,
-            0, ow, pw.height(),
+            0 if self._direction == "left" else pw.width() - ow,
+            0,
+            ow,
+            pw.height(),
         )
 
     # ── Internals ───────────────────────────────────────────────────

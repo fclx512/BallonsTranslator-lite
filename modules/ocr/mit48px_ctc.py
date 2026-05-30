@@ -23,15 +23,18 @@ class PositionalEncoding(nn.Module):
 
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        div_term = torch.exp(
+            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+        )
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0)
-        self.register_buffer('pe', pe)
+        self.register_buffer("pe", pe)
 
-    def forward(self, x, offset = 0):
-        x = x + self.pe[:, offset: offset + x.size(1), :]
+    def forward(self, x, offset=0):
+        x = x + self.pe[:, offset : offset + x.size(1), :]
         return x
+
 
 class CustomTransformerEncoderLayer(nn.Module):
     r"""TransformerEncoderLayer is made up of self-attn and feedforward network.
@@ -60,15 +63,27 @@ class CustomTransformerEncoderLayer(nn.Module):
         >>> src = torch.rand(32, 10, 512)
         >>> out = encoder_layer(src)
     """
-    __constants__ = ['batch_first', 'norm_first']
 
-    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, activation="gelu",
-                 layer_norm_eps=1e-5, batch_first=False, norm_first=False,
-                 device=None, dtype=None) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+    __constants__ = ["batch_first", "norm_first"]
+
+    def __init__(
+        self,
+        d_model,
+        nhead,
+        dim_feedforward=2048,
+        dropout=0.1,
+        activation="gelu",
+        layer_norm_eps=1e-5,
+        batch_first=False,
+        norm_first=False,
+        device=None,
+        dtype=None,
+    ) -> None:
+        factory_kwargs = {"device": device, "dtype": dtype}
         super(CustomTransformerEncoderLayer, self).__init__()
-        self.self_attn = nn.MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=batch_first,
-                                            **factory_kwargs)
+        self.self_attn = nn.MultiheadAttention(
+            d_model, nhead, dropout=dropout, batch_first=batch_first, **factory_kwargs
+        )
         # Implementation of Feedforward model
         self.linear1 = nn.Linear(d_model, dim_feedforward, **factory_kwargs)
         self.dropout = nn.Dropout(dropout)
@@ -79,16 +94,22 @@ class CustomTransformerEncoderLayer(nn.Module):
         self.norm2 = nn.LayerNorm(d_model, eps=layer_norm_eps, **factory_kwargs)
         self.dropout1 = nn.Dropout(dropout)
         self.dropout2 = nn.Dropout(dropout)
-        self.pe = PositionalEncoding(d_model, max_len = 3072)
+        self.pe = PositionalEncoding(d_model, max_len=3072)
 
         self.activation = F.gelu
 
     def __setstate__(self, state):
-        if 'activation' not in state:
-            state['activation'] = F.relu
+        if "activation" not in state:
+            state["activation"] = F.relu
         super(CustomTransformerEncoderLayer, self).__setstate__(state)
 
-    def forward(self, src: torch.Tensor, src_mask: Optional[torch.Tensor] = None, src_key_padding_mask: Optional[torch.Tensor] = None, is_causal = None) -> torch.Tensor:
+    def forward(
+        self,
+        src: torch.Tensor,
+        src_mask: Optional[torch.Tensor] = None,
+        src_key_padding_mask: Optional[torch.Tensor] = None,
+        is_causal=None,
+    ) -> torch.Tensor:
         r"""Pass the input through the encoder layer.
         Args:
             src: the sequence to the encoder layer (required).
@@ -111,12 +132,20 @@ class CustomTransformerEncoderLayer(nn.Module):
         return x
 
     # self-attention block
-    def _sa_block(self, x: torch.Tensor,
-                  attn_mask: Optional[torch.Tensor], key_padding_mask: Optional[torch.Tensor]) -> torch.Tensor:
-        x = self.self_attn(self.pe(x), self.pe(x), x, # no PE for value
-                           attn_mask=attn_mask,
-                           key_padding_mask=key_padding_mask,
-                           need_weights=False)[0]
+    def _sa_block(
+        self,
+        x: torch.Tensor,
+        attn_mask: Optional[torch.Tensor],
+        key_padding_mask: Optional[torch.Tensor],
+    ) -> torch.Tensor:
+        x = self.self_attn(
+            self.pe(x),
+            self.pe(x),
+            x,  # no PE for value
+            attn_mask=attn_mask,
+            key_padding_mask=key_padding_mask,
+            need_weights=False,
+        )[0]
         return self.dropout1(x)
 
     # feed forward block
@@ -126,44 +155,96 @@ class CustomTransformerEncoderLayer(nn.Module):
 
 
 class ResNet(nn.Module):
-
     def __init__(self, input_channel, output_channel, block, layers):
         super(ResNet, self).__init__()
 
-        self.output_channel_block = [int(output_channel / 4), int(output_channel / 2), output_channel, output_channel]
+        self.output_channel_block = [
+            int(output_channel / 4),
+            int(output_channel / 2),
+            output_channel,
+            output_channel,
+        ]
 
         self.inplanes = int(output_channel / 8)
-        self.conv0_1 = nn.Conv2d(input_channel, int(output_channel / 8),
-                                 kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv0_1 = nn.Conv2d(
+            input_channel,
+            int(output_channel / 8),
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=False,
+        )
         self.bn0_1 = nn.BatchNorm2d(int(output_channel / 8))
-        self.conv0_2 = nn.Conv2d(int(output_channel / 8), self.inplanes,
-                                 kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv0_2 = nn.Conv2d(
+            int(output_channel / 8),
+            self.inplanes,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=False,
+        )
 
         self.maxpool1 = nn.AvgPool2d(kernel_size=2, stride=2, padding=0)
         self.layer1 = self._make_layer(block, self.output_channel_block[0], layers[0])
         self.bn1 = nn.BatchNorm2d(self.output_channel_block[0])
-        self.conv1 = nn.Conv2d(self.output_channel_block[0], self.output_channel_block[
-                               0], kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(
+            self.output_channel_block[0],
+            self.output_channel_block[0],
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=False,
+        )
 
         self.maxpool2 = nn.AvgPool2d(kernel_size=2, stride=2, padding=0)
-        self.layer2 = self._make_layer(block, self.output_channel_block[1], layers[1], stride=1)
+        self.layer2 = self._make_layer(
+            block, self.output_channel_block[1], layers[1], stride=1
+        )
         self.bn2 = nn.BatchNorm2d(self.output_channel_block[1])
-        self.conv2 = nn.Conv2d(self.output_channel_block[1], self.output_channel_block[
-                               1], kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv2 = nn.Conv2d(
+            self.output_channel_block[1],
+            self.output_channel_block[1],
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=False,
+        )
 
         self.maxpool3 = nn.AvgPool2d(kernel_size=2, stride=(2, 1), padding=(0, 1))
-        self.layer3 = self._make_layer(block, self.output_channel_block[2], layers[2], stride=1)
+        self.layer3 = self._make_layer(
+            block, self.output_channel_block[2], layers[2], stride=1
+        )
         self.bn3 = nn.BatchNorm2d(self.output_channel_block[2])
-        self.conv3 = nn.Conv2d(self.output_channel_block[2], self.output_channel_block[
-                               2], kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv3 = nn.Conv2d(
+            self.output_channel_block[2],
+            self.output_channel_block[2],
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=False,
+        )
 
-        self.layer4 = self._make_layer(block, self.output_channel_block[3], layers[3], stride=1)
+        self.layer4 = self._make_layer(
+            block, self.output_channel_block[3], layers[3], stride=1
+        )
         self.bn4_1 = nn.BatchNorm2d(self.output_channel_block[3])
-        self.conv4_1 = nn.Conv2d(self.output_channel_block[3], self.output_channel_block[
-                                 3], kernel_size=3, stride=(2, 1), padding=(1, 1), bias=False)
+        self.conv4_1 = nn.Conv2d(
+            self.output_channel_block[3],
+            self.output_channel_block[3],
+            kernel_size=3,
+            stride=(2, 1),
+            padding=(1, 1),
+            bias=False,
+        )
         self.bn4_2 = nn.BatchNorm2d(self.output_channel_block[3])
-        self.conv4_2 = nn.Conv2d(self.output_channel_block[3], self.output_channel_block[
-                                 3], kernel_size=3, stride=1, padding=0, bias=False)
+        self.conv4_2 = nn.Conv2d(
+            self.output_channel_block[3],
+            self.output_channel_block[3],
+            kernel_size=3,
+            stride=1,
+            padding=0,
+            bias=False,
+        )
         self.bn4_3 = nn.BatchNorm2d(self.output_channel_block[3])
 
     def _make_layer(self, block, planes, blocks, stride=1):
@@ -171,8 +252,13 @@ class ResNet(nn.Module):
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 nn.BatchNorm2d(self.inplanes),
-                nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
+                nn.Conv2d(
+                    self.inplanes,
+                    planes * block.expansion,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False,
+                ),
             )
 
         layers = []
@@ -209,7 +295,6 @@ class ResNet(nn.Module):
 
         x = self.layer4(x)
 
-
         x = self.bn4_1(x)
         x = F.relu(x)
         x = self.conv4_1(x)
@@ -219,6 +304,7 @@ class ResNet(nn.Module):
         x = self.bn4_3(x)
 
         return x
+
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -234,8 +320,9 @@ class BasicBlock(nn.Module):
 
     def _conv3x3(self, in_planes, out_planes, stride=1):
         "3x3 convolution with padding"
-        return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                         padding=1, bias=False)
+        return nn.Conv2d(
+            in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False
+        )
 
     def forward(self, x):
         residual = x
@@ -253,163 +340,206 @@ class BasicBlock(nn.Module):
 
         return out + residual
 
+
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     """3x3 convolution with padding"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=dilation, groups=groups, bias=False, dilation=dilation)
+    return nn.Conv2d(
+        in_planes,
+        out_planes,
+        kernel_size=3,
+        stride=stride,
+        padding=dilation,
+        groups=groups,
+        bias=False,
+        dilation=dilation,
+    )
 
 
 def conv1x1(in_planes, out_planes, stride=1):
     """1x1 convolution"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
+
 class ResNet_FeatureExtractor(nn.Module):
-    """ FeatureExtractor of FAN (http://openaccess.thecvf.com/content_ICCV_2017/papers/Cheng_Focusing_Attention_Towards_ICCV_2017_paper.pdf) """
+    """FeatureExtractor of FAN (http://openaccess.thecvf.com/content_ICCV_2017/papers/Cheng_Focusing_Attention_Towards_ICCV_2017_paper.pdf)"""
 
     def __init__(self, input_channel, output_channel=128):
         super(ResNet_FeatureExtractor, self).__init__()
-        self.ConvNet = ResNet(input_channel, output_channel, BasicBlock, [4, 6, 8, 6, 3])
+        self.ConvNet = ResNet(
+            input_channel, output_channel, BasicBlock, [4, 6, 8, 6, 3]
+        )
 
     def forward(self, input):
         return self.ConvNet(input)
 
-class OCR(nn.Module) :
+
+class OCR(nn.Module):
     def __init__(self, dictionary, max_len):
         super(OCR, self).__init__()
         self.max_len = max_len
         self.dictionary = dictionary
         self.dict_size = len(dictionary)
         self.backbone = ResNet_FeatureExtractor(3, 320)
-        enc = CustomTransformerEncoderLayer(320, 8, 320 * 4, dropout=0.05,batch_first=True,norm_first=True)
+        enc = CustomTransformerEncoderLayer(
+            320, 8, 320 * 4, dropout=0.05, batch_first=True, norm_first=True
+        )
         self.encoders = nn.TransformerEncoder(enc, 3)
-        self.char_pred_norm = nn.Sequential(nn.LayerNorm(320), nn.Dropout(0.1), nn.GELU())
+        self.char_pred_norm = nn.Sequential(
+            nn.LayerNorm(320), nn.Dropout(0.1), nn.GELU()
+        )
         self.char_pred = nn.Linear(320, self.dict_size)
         self.color_pred1 = nn.Sequential(nn.Linear(320, 6))
 
-    def forward(self,
-        img: torch.FloatTensor
-        ) :
+    def forward(self, img: torch.FloatTensor):
         feats = self.backbone(img).squeeze(2)
         feats = self.encoders(feats.permute(0, 2, 1))
         pred_char_logits = self.char_pred(self.char_pred_norm(feats))
         pred_color_values = self.color_pred1(feats)
         return pred_char_logits, pred_color_values
 
-    def decode(self, img: torch.Tensor, img_widths: List[int], blank, verbose = False) -> List[List[Tuple[str, float, int, int, int, int, int, int]]] :
+    def decode(
+        self, img: torch.Tensor, img_widths: List[int], blank, verbose=False
+    ) -> List[List[Tuple[str, float, int, int, int, int, int, int]]]:
         N, C, H, W = img.shape
         assert H == 48 and C == 3
         feats = self.backbone(img).squeeze(2)
         feats = self.encoders(feats.permute(0, 2, 1))
         pred_char_logits = self.char_pred(self.char_pred_norm(feats))
         pred_color_values = self.color_pred1(feats)
-        return self.decode_ctc_top1(pred_char_logits, pred_color_values, blank, verbose = verbose)
+        return self.decode_ctc_top1(
+            pred_char_logits, pred_color_values, blank, verbose=verbose
+        )
 
-    def decode_ctc_top1(self, pred_char_logits, pred_color_values, blank, verbose = False) -> List[List[Tuple[str, float, int, int, int, int, int, int]]] :
+    def decode_ctc_top1(
+        self, pred_char_logits, pred_color_values, blank, verbose=False
+    ) -> List[List[Tuple[str, float, int, int, int, int, int, int]]]:
         pred_chars: List[List[Tuple[str, float, int, int, int, int, int, int]]] = []
-        for _ in range(pred_char_logits.size(0)) :
+        for _ in range(pred_char_logits.size(0)):
             pred_chars.append([])
         logprobs = pred_char_logits.log_softmax(2)
         _, preds_index = logprobs.max(2)
         preds_index = preds_index.cpu()
         pred_color_values = pred_color_values.cpu().clamp_(0, 1)
-        for b in range(pred_char_logits.size(0)) :
-            if verbose :
-                print('------------------------------')
+        for b in range(pred_char_logits.size(0)):
+            if verbose:
+                print("------------------------------")
             last_ch = blank
-            for t in range(pred_char_logits.size(1)) :
+            for t in range(pred_char_logits.size(1)):
                 pred_ch = preds_index[b, t]
-                if pred_ch != last_ch and pred_ch != blank :
+                if pred_ch != last_ch and pred_ch != blank:
                     lp = logprobs[b, t, pred_ch].item()
-                    if verbose :
-                        if lp < math.log(0.9) :
+                    if verbose:
+                        if lp < math.log(0.9):
                             top5 = torch.topk(logprobs[b, t], 5)
                             top5_idx = top5.indices
                             top5_val = top5.values
-                            r = ''
-                            for i in range(5) :
-                                r += f'{self.dictionary[top5_idx[i]]}: {math.exp(top5_val[i])}, '
+                            r = ""
+                            for i in range(5):
+                                r += f"{self.dictionary[top5_idx[i]]}: {math.exp(top5_val[i])}, "
                             print(r)
-                        else :
-                            print(f'{self.dictionary[pred_ch]}: {math.exp(lp)}')
-                    pred_chars[b].append((
-                        pred_ch,
-                        lp,
-                        pred_color_values[b, t][0].item(),
-                        pred_color_values[b, t][1].item(),
-                        pred_color_values[b, t][2].item(),
-                        pred_color_values[b, t][3].item(),
-                        pred_color_values[b, t][4].item(),
-                        pred_color_values[b, t][5].item()
-                    ))
+                        else:
+                            print(f"{self.dictionary[pred_ch]}: {math.exp(lp)}")
+                    pred_chars[b].append(
+                        (
+                            pred_ch,
+                            lp,
+                            pred_color_values[b, t][0].item(),
+                            pred_color_values[b, t][1].item(),
+                            pred_color_values[b, t][2].item(),
+                            pred_color_values[b, t][3].item(),
+                            pred_color_values[b, t][4].item(),
+                            pred_color_values[b, t][5].item(),
+                        )
+                    )
                 last_ch = pred_ch
         return pred_chars
 
-    def eval_ocr(self, input_lengths, target_lengths, pred_char_logits, pred_color_values, gt_char_index, gt_color_values, blank, blank1) :
+    def eval_ocr(
+        self,
+        input_lengths,
+        target_lengths,
+        pred_char_logits,
+        pred_color_values,
+        gt_char_index,
+        gt_color_values,
+        blank,
+        blank1,
+    ):
         correct_char = 0
         total_char = 0
         color_diff = 0
         color_diff_dom = 0
         _, preds_index = pred_char_logits.max(2)
         pred_chars = torch.zeros_like(gt_char_index).cpu()
-        for b in range(pred_char_logits.size(0)) :
+        for b in range(pred_char_logits.size(0)):
             last_ch = blank
             i = 0
-            for t in range(input_lengths[b]) :
+            for t in range(input_lengths[b]):
                 pred_ch = preds_index[b, t]
-                if pred_ch != last_ch and pred_ch != blank :
+                if pred_ch != last_ch and pred_ch != blank:
                     total_char += 1
-                    if gt_char_index[b, i] == pred_ch :
+                    if gt_char_index[b, i] == pred_ch:
                         correct_char += 1
-                        if pred_ch != blank1 :
-                            color_diff += ((pred_color_values[b, t] - gt_color_values[b, i]).abs().mean() * 255.0).item()
+                        if pred_ch != blank1:
+                            color_diff += (
+                                (pred_color_values[b, t] - gt_color_values[b, i])
+                                .abs()
+                                .mean()
+                                * 255.0
+                            ).item()
                             color_diff_dom += 1
                     pred_chars[b, i] = pred_ch
                     i += 1
-                    if i >= gt_color_values.size(1) or i >= gt_char_index.size(1) :
+                    if i >= gt_color_values.size(1) or i >= gt_char_index.size(1):
                         break
                 last_ch = pred_ch
-        return correct_char / (total_char + 1), color_diff / (color_diff_dom + 1), pred_chars
+        return (
+            correct_char / (total_char + 1),
+            color_diff / (color_diff_dom + 1),
+            pred_chars,
+        )
 
 
 def chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), n):
-        yield lst[i:i + n]
+        yield lst[i : i + n]
 
-class AvgMeter() :
-    def __init__(self) :
+
+class AvgMeter:
+    def __init__(self):
         self.reset()
 
-    def reset(self) :
+    def reset(self):
         self.sum = 0
         self.count = 0
 
-    def __call__(self, val = None) :
-        if val is not None :
+    def __call__(self, val=None):
+        if val is not None:
             self.sum += val
             self.count += 1
-        if self.count > 0 :
+        if self.count > 0:
             return self.sum / self.count
-        else :
+        else:
             return 0
 
-class OCR48pxCTC:
 
-    def __init__(self, model_path: str, device='cpu'):
-        with open('data/alphabet-all-v5.txt', 'r', encoding = 'utf-8') as fp :
+class OCR48pxCTC:
+    def __init__(self, model_path: str, device="cpu"):
+        with open("data/alphabet-all-v5.txt", "r", encoding="utf-8") as fp:
             dictionary = [s[:-1] for s in fp.readlines()]
         self.device = device
         self.text_height = 48
         self.maxwidth = 8100
 
         model = OCR(dictionary, 768)
-        sd = torch.load(model_path, map_location = 'cpu')
-        del sd['encoders.layers.0.pe.pe']
-        del sd['encoders.layers.1.pe.pe']
-        del sd['encoders.layers.2.pe.pe']
-        model.load_state_dict(sd['model'] if 'model' in sd else sd, strict=False)
+        sd = torch.load(model_path, map_location="cpu")
+        del sd["encoders.layers.0.pe.pe"]
+        del sd["encoders.layers.1.pe.pe"]
+        del sd["encoders.layers.2.pe.pe"]
+        model.load_state_dict(sd["model"] if "model" in sd else sd, strict=False)
         model.eval()
-        if self.device != 'cpu' :
+        if self.device != "cpu":
             model = model.to(self.device)
         self.net = model
 
@@ -418,29 +548,35 @@ class OCR48pxCTC:
         self.device = device
 
     @torch.no_grad()
-    def __call__(self, textblk_lst: List[TextBlock], regions: List[np.ndarray], textblk_lst_indices: List, chunk_size = 16) -> None:
+    def __call__(
+        self,
+        textblk_lst: List[TextBlock],
+        regions: List[np.ndarray],
+        textblk_lst_indices: List,
+        chunk_size=16,
+    ) -> None:
 
         perm = range(len(regions))
         chunck_idx = 0
-        for indices in chunks(perm, chunk_size) :
+        for indices in chunks(perm, chunk_size):
             N = len(indices)
             widths = [regions[i].shape[1] for i in indices]
             # max_width = 4 * (max(widths) + 7) // 4
             max_width = (4 * (max(widths) + 7) // 4) + 128
-            region = np.zeros((N, self.text_height, max_width, 3), dtype = np.uint8)
-            for i, idx in enumerate(indices) :
+            region = np.zeros((N, self.text_height, max_width, 3), dtype=np.uint8)
+            for i, idx in enumerate(indices):
                 W = regions[idx].shape[1]
-                region[i, :, : W, :] = regions[idx]
+                region[i, :, :W, :] = regions[idx]
             images = (torch.from_numpy(region).float() - 127.5) / 127.5
-            images = einops.rearrange(images, 'N H W C -> N C H W')
-            if self.device != 'cpu':
+            images = einops.rearrange(images, "N H W C -> N C H W")
+            if self.device != "cpu":
                 images = images.to(self.device)
-            with torch.inference_mode() :
+            with torch.inference_mode():
                 texts = self.net.decode(images, widths, 0)
-            for i, single_line in enumerate(texts) :
-                if not single_line :
+            for i, single_line in enumerate(texts):
+                if not single_line:
                     continue
-                textblk = textblk_lst[textblk_lst_indices[i+chunck_idx]]
+                textblk = textblk_lst[textblk_lst_indices[i + chunck_idx]]
                 cur_texts = []
                 total_fr = AvgMeter()
                 total_fg = AvgMeter()
@@ -449,13 +585,13 @@ class OCR48pxCTC:
                 total_bg = AvgMeter()
                 total_bb = AvgMeter()
                 total_logprob = AvgMeter()
-                for (chid, logprob, fr, fg, fb, br, bg, bb) in single_line :
+                for chid, logprob, fr, fg, fb, br, bg, bb in single_line:
                     ch = self.net.dictionary[chid]
-                    if ch == '<SP>' :
-                        ch = ' '
+                    if ch == "<SP>":
+                        ch = " "
                     cur_texts.append(ch)
                     total_logprob(logprob)
-                    if ch != ' ' :
+                    if ch != " ":
                         total_fr(int(fr * 255))
                         total_fg(int(fg * 255))
                         total_fb(int(fb * 255))
@@ -463,15 +599,14 @@ class OCR48pxCTC:
                         total_bg(int(bg * 255))
                         total_bb(int(bb * 255))
                 prob = np.exp(total_logprob())
-                if prob < 0.3 :
+                if prob < 0.3:
                     continue
-                textblk.text.append(''.join(cur_texts))
+                textblk.text.append("".join(cur_texts))
                 textblk.update_font_colors(
                     [int(total_fr()), int(total_fg()), int(total_fb())],
-                    [int(total_br()), int(total_bg()), int(total_bb())]
+                    [int(total_br()), int(total_bg()), int(total_bb())],
                 )
             chunck_idx += N
-
 
 
 # def test2() :

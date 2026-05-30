@@ -24,9 +24,10 @@ if TYPE_CHECKING:
 
 from utils.config import pcfg
 
-logger = logging.getLogger('ai_chat')
+logger = logging.getLogger("ai_chat")
 
 # ── Pydantic models ─────────────────────────────────────────────────────
+
 
 class CtxElement(BaseModel):
     id: str = Field(..., description="Block ID in 'page_idx:block_idx' format")
@@ -49,7 +50,9 @@ class ContextBatchTranslator:
     own API config and translation prompt.
     """
 
-    def __init__(self, api_config: dict, translation_prompt: str = "", status_callback=None):
+    def __init__(
+        self, api_config: dict, translation_prompt: str = "", status_callback=None
+    ):
         self.api_config = dict(api_config)
         self.translation_prompt = translation_prompt
         self._status_cb = status_callback
@@ -179,7 +182,9 @@ class ContextBatchTranslator:
         ctx_blks = sum(len(c.get("blocks", [])) for c in ctx if "blocks" in c)
         use_summary = total > bs * 4 and self._summaries
         mode = "summary" if use_summary else ("full" if total <= bs else "window")
-        self._status(f"Context ({mode}): {ctx_pages} pages, {ctx_blks} ref blocks → translating {len(target)} blocks")
+        self._status(
+            f"Context ({mode}): {ctx_pages} pages, {ctx_blks} ref blocks → translating {len(target)} blocks"
+        )
 
         messages = self._build_msgs(ctx, target)
 
@@ -231,9 +236,13 @@ class ContextBatchTranslator:
                 f"  Batch {k}: {v}" for k, v in sorted(self._summaries.items())
             )
             if lines:
-                ctx.insert(0, {"type": "summary", "text": (
-                    "=== SUMMARY OF PREVIOUS PAGES ===\n" + lines
-                )})
+                ctx.insert(
+                    0,
+                    {
+                        "type": "summary",
+                        "text": ("=== SUMMARY OF PREVIOUS PAGES ===\n" + lines),
+                    },
+                )
 
         return ctx
 
@@ -258,18 +267,22 @@ class ContextBatchTranslator:
             for bidx, blk in enumerate(self._proj.pages[pname]):
                 src = blk.get_text()
                 if src.strip():
-                    result.append({"id": f"{pi}:{bidx}", "pidx": pi, "bidx": bidx, "src": src})
+                    result.append(
+                        {"id": f"{pi}:{bidx}", "pidx": pi, "bidx": bidx, "src": src}
+                    )
         return result
 
     # ── Message assembly ──────────────────────────────────────────────
 
     def _build_msgs(self, ctx_pages, target_blocks):
-        source = pcfg.module.translate_source if hasattr(pcfg, 'module') else "auto"
-        target = pcfg.module.translate_target if hasattr(pcfg, 'module') else "auto"
+        source = pcfg.module.translate_source if hasattr(pcfg, "module") else "auto"
+        target = pcfg.module.translate_target if hasattr(pcfg, "module") else "auto"
 
         # System prompt — use assistant's translation prompt if available
         if self.translation_prompt:
-            sys_prompt = self.translation_prompt.replace("{from_lang}", source).replace("{to_lang}", target)
+            sys_prompt = self.translation_prompt.replace("{from_lang}", source).replace(
+                "{to_lang}", target
+            )
         else:
             sys_prompt = (
                 f"You are a professional manga/comic translator "
@@ -290,7 +303,7 @@ class ContextBatchTranslator:
             sys_prompt += "\n\n" + "\n".join(lines)
 
         sys_prompt += (
-            '\n\nOutput strict JSON: '
+            "\n\nOutput strict JSON: "
             '{"translations": [{"id": "page:block", "translation": "..."}, ...]}'
         )
 
@@ -321,10 +334,15 @@ class ContextBatchTranslator:
 
     def _direct_call(self, text_list: List[str]) -> List[str]:
         """Fallback: translate a plain list of strings with no context."""
-        source = pcfg.module.translate_source if hasattr(pcfg, 'module') else "auto"
-        target = pcfg.module.translate_target if hasattr(pcfg, 'module') else "auto"
-        prompt = self.translation_prompt.replace("{from_lang}", source).replace("{to_lang}", target) if self.translation_prompt else \
-            f"Translate from {source} to {target}. Return JSON array of strings."
+        source = pcfg.module.translate_source if hasattr(pcfg, "module") else "auto"
+        target = pcfg.module.translate_target if hasattr(pcfg, "module") else "auto"
+        prompt = (
+            self.translation_prompt.replace("{from_lang}", source).replace(
+                "{to_lang}", target
+            )
+            if self.translation_prompt
+            else f"Translate from {source} to {target}. Return JSON array of strings."
+        )
         prompt += '\nReturn JSON: {"translations": ["...", ...]}'
 
         parts = [f'  [{i}] "{t}"' for i, t in enumerate(text_list) if t.strip()]
@@ -344,9 +362,12 @@ class ContextBatchTranslator:
 
     def _llm_call(self, messages, expected_count):
         RETRYABLE = (
-            openai.RateLimitError, openai.APIConnectionError,
-            openai.APITimeoutError, openai.InternalServerError,
-            openai.APIStatusError, httpx.RequestError,
+            openai.RateLimitError,
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            openai.InternalServerError,
+            openai.APIStatusError,
+            httpx.RequestError,
         )
         ac = self.api_config
         api_key = ac.get("api_key", "")
@@ -370,7 +391,9 @@ class ContextBatchTranslator:
             except Exception:
                 pass
 
-        client = openai.OpenAI(api_key=api_key, base_url=api_host, http_client=http_client)
+        client = openai.OpenAI(
+            api_key=api_key, base_url=api_host, http_client=http_client
+        )
         try:
             for attempt in range(self.max_retries):
                 try:
@@ -379,24 +402,36 @@ class ContextBatchTranslator:
                         args["max_tokens"] = int(max_tokens)
 
                     completion = client.chat.completions.create(**args)
-                    raw = (completion.choices[0].message.content or "") if completion.choices else ""
+                    raw = (
+                        (completion.choices[0].message.content or "")
+                        if completion.choices
+                        else ""
+                    )
 
                     if not raw:
-                        logger.warning("Empty response, attempt %d/%d", attempt + 1, self.max_retries)
-                        self._status(f"Empty response, retry {attempt + 1}/{self.max_retries}...")
+                        logger.warning(
+                            "Empty response, attempt %d/%d",
+                            attempt + 1,
+                            self.max_retries,
+                        )
+                        self._status(
+                            f"Empty response, retry {attempt + 1}/{self.max_retries}..."
+                        )
                         time.sleep(self.retry_parse_sleep)
                         continue
 
                     # Parse JSON
                     json_str = raw.strip()
-                    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", json_str, re.DOTALL)
+                    m = re.search(
+                        r"```(?:json)?\s*(\{.*?\})\s*```", json_str, re.DOTALL
+                    )
                     if m:
                         json_str = m.group(1)
                     else:
                         s = json_str.find("{")
                         e = json_str.rfind("}")
                         if s != -1 and e > s:
-                            json_str = json_str[s:e + 1]
+                            json_str = json_str[s : e + 1]
 
                     data = json.loads(json_str)
                     validated = CtxResponse.model_validate(data)
@@ -404,17 +439,35 @@ class ContextBatchTranslator:
                     if not validated or not validated.translations:
                         raise ValueError("No translations")
                     if len(validated.translations) != expected_count:
-                        raise ValueError(f"Expected {expected_count}, got {len(validated.translations)}")
+                        raise ValueError(
+                            f"Expected {expected_count}, got {len(validated.translations)}"
+                        )
 
-                    return {item.id: item.translation for item in validated.translations}
+                    return {
+                        item.id: item.translation for item in validated.translations
+                    }
 
                 except (ValidationError, ValueError) as e:
-                    logger.warning("Parse error (attempt %d/%d): %s", attempt + 1, self.max_retries, e)
-                    self._status(f"Parse error, retry {attempt + 1}/{self.max_retries}...")
+                    logger.warning(
+                        "Parse error (attempt %d/%d): %s",
+                        attempt + 1,
+                        self.max_retries,
+                        e,
+                    )
+                    self._status(
+                        f"Parse error, retry {attempt + 1}/{self.max_retries}..."
+                    )
                     time.sleep(self.retry_parse_sleep)
                 except RETRYABLE as e:
-                    logger.warning("API error (attempt %d/%d): %s", attempt + 1, self.max_retries, e)
-                    self._status(f"API error, retry {attempt + 1}/{self.max_retries}...")
+                    logger.warning(
+                        "API error (attempt %d/%d): %s",
+                        attempt + 1,
+                        self.max_retries,
+                        e,
+                    )
+                    self._status(
+                        f"API error, retry {attempt + 1}/{self.max_retries}..."
+                    )
                     time.sleep(self.retry_api_sleep)
 
         finally:
@@ -462,4 +515,6 @@ class ContextBatchTranslator:
             terms.append("Terms: " + ", ".join(f"{s}→{t}" for s, t in recent))
         summary = f"Pages {batch_start}-{batch_end - 1}: " + "; ".join(terms)
         self._summaries[batch_start] = summary[:MAX_SUMMARY]
-        self._status(f"Summary: pages {batch_start}-{batch_end - 1} ({len(summary)} chars)")
+        self._status(
+            f"Summary: pages {batch_start}-{batch_end - 1} ({len(summary)} chars)"
+        )

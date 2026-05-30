@@ -12,7 +12,7 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, Set
 
-logger = logging.getLogger('ai_chat')
+logger = logging.getLogger("ai_chat")
 
 from .config import pcfg
 from .proj_compact import (
@@ -100,9 +100,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     },
     {
         "name": "get_config",
-        "description": (
-            "读取项目的全局配置，包括默认字体、源语言、目标语言等。"
-        ),
+        "description": ("读取项目的全局配置，包括默认字体、源语言、目标语言等。"),
         "input_schema": {
             "type": "object",
             "properties": {},
@@ -111,9 +109,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     },
     {
         "name": "get_page_info",
-        "description": (
-            "获取指定页面的图片尺寸和元信息（不包含文本内容）。"
-        ),
+        "description": ("获取指定页面的图片尺寸和元信息（不包含文本内容）。"),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -152,9 +148,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     },
     {
         "name": "set_color",
-        "description": (
-            "批量设置文本块的颜色属性，包括文字颜色、轮廓颜色和轮廓宽度。"
-        ),
+        "description": ("批量设置文本块的颜色属性，包括文字颜色、轮廓颜色和轮廓宽度。"),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -171,9 +165,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     },
     {
         "name": "set_layout",
-        "description": (
-            "批量设置文本块的排版参数，包括对齐方式、行距、字距、竖排。"
-        ),
+        "description": ("批量设置文本块的排版参数，包括对齐方式、行距、字距、竖排。"),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -191,9 +183,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     },
     {
         "name": "search_replace",
-        "description": (
-            "在指定字段中搜索并替换文本。可用于批量修正术语。"
-        ),
+        "description": ("在指定字段中搜索并替换文本。可用于批量修正术语。"),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -239,8 +229,8 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
 
 # Fields each setter tool depends on
 _SETTER_FIELDS: Dict[str, Set[str]] = {
-    "set_font":   {"ff", "fs", "fw", "b", "i"},
-    "set_color":  {"fg", "bg", "sw"},
+    "set_font": {"ff", "fs", "fw", "b", "i"},
+    "set_color": {"fg", "bg", "sw"},
     "set_layout": {"a", "ls", "lsp", "v"},
 }
 
@@ -249,8 +239,14 @@ _TRANSLATION_HIDDEN_TOOLS = {"set_color", "set_layout"}
 
 # Tools always included regardless of mode/whitelist
 _ALWAYS_INCLUDE_TOOLS = {
-    "describe_tool", "list_pages", "read_pages", "search_blocks",
-    "get_config", "get_page_info", "search_replace", "translate_text",
+    "describe_tool",
+    "list_pages",
+    "read_pages",
+    "search_blocks",
+    "get_config",
+    "get_page_info",
+    "search_replace",
+    "translate_text",
 }
 
 
@@ -267,8 +263,11 @@ def get_active_tools(
     if fields_whitelist is None:
         # All fields enabled — only apply translation mode filter
         if translation_mode:
-            return [t for t in TOOL_DEFINITIONS
-                    if t["name"] not in _TRANSLATION_HIDDEN_TOOLS]
+            return [
+                t
+                for t in TOOL_DEFINITIONS
+                if t["name"] not in _TRANSLATION_HIDDEN_TOOLS
+            ]
         return list(TOOL_DEFINITIONS)
 
     result = []
@@ -287,6 +286,7 @@ def get_active_tools(
 
 
 # ── Tool execution ────────────────────────────────────────────────────
+
 
 class ToolError(Exception):
     """Tool execution error (reported back to AI, not fatal)."""
@@ -320,7 +320,9 @@ def _execute_read_pages(
     # Paginate if too many pages
     if len(indices) > 20:
         chunks = build_paginated_detail(
-            proj, indices, max_pages_per_chunk=20,
+            proj,
+            indices,
+            max_pages_per_chunk=20,
             fields_whitelist=fields_whitelist,
         )
         result: Dict[str, Any] = {
@@ -354,23 +356,33 @@ def _execute_search_blocks(proj, query: str, field: str = "both") -> Dict[str, A
                 pos = src.lower().find(query_lower)
                 start = max(0, pos - 15)
                 end_val = min(len(src), pos + len(query) + 15)
-                snippet = ("..." if start > 0 else "") + src[start:end_val] + ("..." if end_val < len(src) else "")
+                snippet = (
+                    ("..." if start > 0 else "")
+                    + src[start:end_val]
+                    + ("..." if end_val < len(src) else "")
+                )
             elif field in ("trans", "both") and query_lower in trans.lower():
                 match = True
                 matched_in = "trans"
                 pos = trans.lower().find(query_lower)
                 start = max(0, pos - 15)
                 end_val = min(len(trans), pos + len(query) + 15)
-                snippet = ("..." if start > 0 else "") + trans[start:end_val] + ("..." if end_val < len(trans) else "")
+                snippet = (
+                    ("..." if start > 0 else "")
+                    + trans[start:end_val]
+                    + ("..." if end_val < len(trans) else "")
+                )
 
             if match:
-                results.append({
-                    "id": f"{pidx}:{bidx}",
-                    "page": pidx,
-                    "page_name": pname,
-                    "field": matched_in,
-                    "snippet": snippet,
-                })
+                results.append(
+                    {
+                        "id": f"{pidx}:{bidx}",
+                        "page": pidx,
+                        "page_name": pname,
+                        "field": matched_in,
+                        "snippet": snippet,
+                    }
+                )
 
     return {
         "type": "search_results",
@@ -394,8 +406,8 @@ def _execute_get_config(proj) -> Dict[str, Any]:
             "bg": gf.srgb if isinstance(gf.srgb, list) else list(gf.srgb),
             "b": gf.bold,
         },
-        "source_lang": getattr(pcfg, 'source_lang', ''),
-        "target_lang": getattr(pcfg, 'target_lang', ''),
+        "source_lang": getattr(pcfg, "source_lang", ""),
+        "target_lang": getattr(pcfg, "target_lang", ""),
     }
 
 
@@ -406,12 +418,14 @@ def _execute_get_page_info(proj, start: int, end: int = -1) -> Dict[str, Any]:
     for pidx in indices:
         pname = proj.idx2pagename(pidx)
         info = proj._image_info.get(pname, {})
-        pages.append({
-            "pidx": pidx,
-            "name": pname,
-            "w": info.get("width", 0),
-            "h": info.get("height", 0),
-        })
+        pages.append(
+            {
+                "pidx": pidx,
+                "name": pname,
+                "w": info.get("width", 0),
+                "h": info.get("height", 0),
+            }
+        )
     return {"type": "page_info", "pages": pages}
 
 
@@ -424,14 +438,21 @@ def _resolve_ids(proj, ids_str: str) -> List[str]:
     return [pid.strip() for pid in ids_str.split(",")]
 
 
-def _generate_modification_tool_result(proj, changes: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _generate_modification_tool_result(
+    proj, changes: List[Dict[str, Any]]
+) -> Dict[str, Any]:
     """Wrap a list of property changes into a modification-type result."""
     return {"type": "modifications", "changes": changes}
 
 
 def _execute_set_font(
-    proj, ids: str, ff: str = None, fs: float = None,
-    fw: int = None, b: bool = None, i: bool = None,
+    proj,
+    ids: str,
+    ff: str = None,
+    fs: float = None,
+    fw: int = None,
+    b: bool = None,
+    i: bool = None,
 ) -> Dict[str, Any]:
     """Execute set_font tool — returns modifications dict."""
     blk_ids = _resolve_ids(proj, ids)
@@ -454,8 +475,11 @@ def _execute_set_font(
 
 
 def _execute_set_color(
-    proj, ids: str, fg: List[int] = None,
-    bg: List[int] = None, sw: float = None,
+    proj,
+    ids: str,
+    fg: List[int] = None,
+    bg: List[int] = None,
+    sw: float = None,
 ) -> Dict[str, Any]:
     """Execute set_color tool."""
     blk_ids = _resolve_ids(proj, ids)
@@ -474,8 +498,12 @@ def _execute_set_color(
 
 
 def _execute_set_layout(
-    proj, ids: str, a: int = None, ls: float = None,
-    lsp: float = None, v: bool = None,
+    proj,
+    ids: str,
+    a: int = None,
+    ls: float = None,
+    lsp: float = None,
+    v: bool = None,
 ) -> Dict[str, Any]:
     """Execute set_layout tool."""
     blk_ids = _resolve_ids(proj, ids)
@@ -496,7 +524,10 @@ def _execute_set_layout(
 
 
 def _execute_search_replace(
-    proj, query: str, replacement: str, field: str,
+    proj,
+    query: str,
+    replacement: str,
+    field: str,
 ) -> Dict[str, Any]:
     """Execute search_replace tool."""
     query_lower = query.lower()
@@ -517,7 +548,9 @@ def _execute_search_replace(
 
 
 def _execute_translate_text(
-    texts: List[str], source_lang: str = "", target_lang: str = "",
+    texts: List[str],
+    source_lang: str = "",
+    target_lang: str = "",
 ) -> Dict[str, Any]:
     """Execute translate_text tool — returns the input for the LLM to translate.
 
@@ -531,7 +564,7 @@ def _execute_translate_text(
         "target_lang": target_lang or "zh",
         "hint": (
             "请在最终回答的 changes 数组中为每个文本输出翻译。"
-            "格式: {\"changes\": [{\"id\": \"translate:0\", \"trans\": \"译文\"}, ...]}"
+            '格式: {"changes": [{"id": "translate:0", "trans": "译文"}, ...]}'
         ),
     }
 
@@ -627,22 +660,23 @@ def execute_tool(
         )
     else:
         available = [t["name"] for t in TOOL_DEFINITIONS]
-        raise ToolError(
-            f"未知工具: {tool_name!r}。可用工具: {', '.join(available)}")
+        raise ToolError(f"未知工具: {tool_name!r}。可用工具: {', '.join(available)}")
 
 
 def to_openai_tools(tool_defs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Convert Anthropic-style tool definitions (input_schema) to OpenAI format."""
     tools = []
     for t in tool_defs:
-        tools.append({
-            "type": "function",
-            "function": {
-                "name": t["name"],
-                "description": t["description"],
-                "parameters": t["input_schema"],
-            },
-        })
+        tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": t["name"],
+                    "description": t["description"],
+                    "parameters": t["input_schema"],
+                },
+            }
+        )
     return tools
 
 
@@ -657,14 +691,14 @@ def parse_tool_calls(text: str) -> Optional[List[Dict[str, Any]]]:
     depth = 0
     start = -1
     for i, ch in enumerate(text):
-        if ch == '{':
+        if ch == "{":
             if depth == 0:
                 start = i
             depth += 1
-        elif ch == '}':
+        elif ch == "}":
             depth -= 1
             if depth == 0 and start >= 0:
-                candidates.append(text[start:i + 1])
+                candidates.append(text[start : i + 1])
 
     for cand in candidates:
         try:
@@ -674,11 +708,13 @@ def parse_tool_calls(text: str) -> Optional[List[Dict[str, Any]]]:
         if isinstance(obj, dict) and "tool_calls" in obj:
             calls = obj["tool_calls"]
             if isinstance(calls, list) and all(
-                isinstance(c, dict) and "name" in c and "arguments" in c
-                for c in calls
+                isinstance(c, dict) and "name" in c and "arguments" in c for c in calls
             ):
-                logger.debug("parse_tool_calls: found %d calls in %d candidates",
-                             len(calls), len(candidates))
+                logger.debug(
+                    "parse_tool_calls: found %d calls in %d candidates",
+                    len(calls),
+                    len(candidates),
+                )
                 return calls
 
     logger.debug("parse_tool_calls: no tool calls in %d candidates", len(candidates))
@@ -690,9 +726,15 @@ def parse_tool_calls(text: str) -> Optional[List[Dict[str, Any]]]:
 # ── Tool categories for prompt grouping ─────────────────────────────
 
 _TOOL_CATEGORIES = {
-    "信息获取": ("list_pages", "read_pages", "search_blocks", "get_config", "get_page_info"),
+    "信息获取": (
+        "list_pages",
+        "read_pages",
+        "search_blocks",
+        "get_config",
+        "get_page_info",
+    ),
     "批量修改": ("set_font", "set_color", "set_layout", "search_replace"),
-    "辅助":     ("describe_tool", "translate_text"),
+    "辅助": ("describe_tool", "translate_text"),
 }
 
 
@@ -703,7 +745,9 @@ def _build_tool_index(active_tools: Optional[List[Dict[str, Any]]] = None) -> st
 
     lines = []
     for cat_name, cat_tools in _TOOL_CATEGORIES.items():
-        entries = [f"  - {n}: {name_to_desc[n]}" for n in cat_tools if n in name_to_desc]
+        entries = [
+            f"  - {n}: {name_to_desc[n]}" for n in cat_tools if n in name_to_desc
+        ]
         if entries:
             lines.append(f"### {cat_name}")
             lines.extend(entries)
@@ -724,22 +768,22 @@ def build_agent_system_prompt(
         snippets = list(FIELD_PROMPT_SNIPPETS.values())
     else:
         snippets = [
-            v for k, v in FIELD_PROMPT_SNIPPETS.items()
-            if k in fields_whitelist
+            v for k, v in FIELD_PROMPT_SNIPPETS.items() if k in fields_whitelist
         ]
     field_desc = "\n".join(snippets) if snippets else "（仅可读取原文和译文）"
 
     tool_index = _build_tool_index(active_tools)
-    translation_rules = get_prompt('translation_rules') if translation_mode else ''
-    few_shot = get_prompt('few_shot_examples')
+    translation_rules = get_prompt("translation_rules") if translation_mode else ""
+    few_shot = get_prompt("few_shot_examples")
 
-    template = get_prompt('agent_system')
-    prompt = (template
-              .replace('__TOOL_INDEX__', tool_index)
-              .replace('__FIELD_DESC__', field_desc)
-              .replace('__TRANSLATION_RULES__', translation_rules)
-              .replace('__FEW_SHOT_EXAMPLES__', few_shot))
-    prompt += f'\n[prompt:v{get_version()}]'
+    template = get_prompt("agent_system")
+    prompt = (
+        template.replace("__TOOL_INDEX__", tool_index)
+        .replace("__FIELD_DESC__", field_desc)
+        .replace("__TRANSLATION_RULES__", translation_rules)
+        .replace("__FEW_SHOT_EXAMPLES__", few_shot)
+    )
+    prompt += f"\n[prompt:v{get_version()}]"
     return prompt
 
 
@@ -749,35 +793,43 @@ build_tool_system_prompt = build_agent_system_prompt
 
 # ── Chat system prompt ───────────────────────────────────────────────────
 
+
 def build_chat_system_prompt() -> str:
     """System prompt for general Q&A chat mode (no tools)."""
     from .ai_prompts import get_prompt, get_version
-    return get_prompt('chat_system') + f'\n[prompt:v{get_version()}]'
+
+    return get_prompt("chat_system") + f"\n[prompt:v{get_version()}]"
 
 
 # ── Mode detection ───────────────────────────────────────────────────────
 
 _AGENT_PATTERNS: List[re.Pattern] = [
-    re.compile(p, re.IGNORECASE) for p in [
-        r'翻译', r'翻訳', r'translat',
-        r'修改', r'変更', r'modify|change|edit|update',
-        r'字体', r'font',
-        r'颜色|色彩|color|colour',
-        r'样式|style',
-        r'对齐|alignment|layout',
-        r'页面|页码|第.*页|page',
-        r'文本块|文字块|block',
-        r'\d+[-–—至到]\d+',
-        r'全部|所有|整个',
-        r'搜索|查找|search|find',
-        r'调整|设置|apply|set',
-        r'拟声|象声|onomatopoeia',
-        r'原文|译文|source|target',
-        r'看看|查看|瞧瞧',
-        r'列出|显示|展示|\bshow\b|\blist\b',
-        r'打开.*页|打开.*项目',
-        r'\bread\b',
-        r'帮我|给我',
+    re.compile(p, re.IGNORECASE)
+    for p in [
+        r"翻译",
+        r"翻訳",
+        r"translat",
+        r"修改",
+        r"変更",
+        r"modify|change|edit|update",
+        r"字体",
+        r"font",
+        r"颜色|色彩|color|colour",
+        r"样式|style",
+        r"对齐|alignment|layout",
+        r"页面|页码|第.*页|page",
+        r"文本块|文字块|block",
+        r"\d+[-–—至到]\d+",
+        r"全部|所有|整个",
+        r"搜索|查找|search|find",
+        r"调整|设置|apply|set",
+        r"拟声|象声|onomatopoeia",
+        r"原文|译文|source|target",
+        r"看看|查看|瞧瞧",
+        r"列出|显示|展示|\bshow\b|\blist\b",
+        r"打开.*页|打开.*项目",
+        r"\bread\b",
+        r"帮我|给我",
     ]
 ]
 
@@ -786,44 +838,62 @@ def detect_mode(user_text: str) -> str:
     """Return 'agent' if user text looks like a project operation, else 'chat'."""
     for pat in _AGENT_PATTERNS:
         if pat.search(user_text):
-            return 'agent'
-    return 'chat'
+            return "agent"
+    return "chat"
 
 
 # ── Changes parsing ──────────────────────────────────────────────────────
 
+
 def parse_changes(text: str) -> Optional[List[Dict[str, Any]]]:
     """Extract {"changes": [...]} from AI response text.
 
-    Returns the list of change dicts, or None if no changes block found.
+    Collects ALL valid changes blocks found in the text and merges them
+    by block id, so that changes split across multiple blocks (e.g. style
+    in one block, translation in another) are combined into one dict per id.
+
+    Returns the merged list of change dicts, or None if none found.
     Each change dict should have at least 'id' and one modifiable field.
     """
     candidates = []
     depth = 0
     start = -1
     for i, ch in enumerate(text):
-        if ch == '{':
+        if ch == "{":
             if depth == 0:
                 start = i
             depth += 1
-        elif ch == '}':
+        elif ch == "}":
             depth -= 1
             if depth == 0 and start >= 0:
-                candidates.append(text[start:i + 1])
+                candidates.append(text[start : i + 1])
 
+    merged_by_id: Dict[str, Dict[str, Any]] = {}
+    found_any = False
     for cand in candidates:
         try:
             obj = json.loads(cand)
         except json.JSONDecodeError:
             continue
-        if isinstance(obj, dict) and 'changes' in obj:
-            changes = obj['changes']
+        if isinstance(obj, dict) and "changes" in obj:
+            changes = obj["changes"]
             if isinstance(changes, list) and all(
-                isinstance(c, dict) and 'id' in c for c in changes
+                isinstance(c, dict) and "id" in c for c in changes
             ):
-                logger.debug("parse_changes: found %d changes in %d candidates",
-                             len(changes), len(candidates))
-                return changes
+                for c in changes:
+                    cid = c.get("id", "")
+                    if cid:
+                        merged_by_id.setdefault(cid, {}).update(c)
+                found_any = True
+
+    if found_any:
+        result = list(merged_by_id.values())
+        logger.debug(
+            "parse_changes: merged %d change(s) from %d block(s)",
+            sum(len(c) - 1 for c in result),
+            len(result),
+        )
+        return result
 
     logger.debug("parse_changes: no changes in %d candidates", len(candidates))
     return None

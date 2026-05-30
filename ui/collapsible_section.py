@@ -17,8 +17,15 @@ class CollapsibleSection(Widget):
 
     toggled = Signal(bool)
 
-    def __init__(self, title, content, parent=None, duration=350, expanded=True,
-                 header_position='top'):
+    def __init__(
+        self,
+        title,
+        content,
+        parent=None,
+        duration=350,
+        expanded=True,
+        header_position="top",
+    ):
         super().__init__(parent)
         self._expanded = expanded
         self._content = content
@@ -54,7 +61,7 @@ class CollapsibleSection(Widget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(2)
 
-        if header_position == 'top':
+        if header_position == "top":
             main_layout.addWidget(self._header_widget)
             main_layout.addWidget(self._content_wrapper)
         else:
@@ -84,7 +91,11 @@ class CollapsibleSection(Widget):
 
         if expand:
             self._content_wrapper.show()
-            target = self._cached_height if self._cached_height > 0 else self._content.sizeHint().height()
+            target = (
+                self._cached_height
+                if self._cached_height > 0
+                else self._content.sizeHint().height()
+            )
             self._anim.setStartValue(0)
             self._anim.setEndValue(target)
         else:

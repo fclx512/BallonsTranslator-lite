@@ -13,7 +13,7 @@ import logging
 import os.path as osp
 from typing import Dict, Optional
 
-logger = logging.getLogger('ai_chat')
+logger = logging.getLogger("ai_chat")
 
 # ── Built-in defaults (zh) ──────────────────────────────────────────────
 
@@ -32,9 +32,12 @@ __TOOL_INDEX__
 1. 每次用户请求，先判断是否需要查询数据 → 使用工具函数读取，得到数据后给出回答 + changes
 2. 少量修改 → 在回答后输出 changes JSON：
 {"changes": [{"id": "0:0", "trans": "译文"}, {"id": "0:3", "fs": 28}]}
-3. 批量修改优先使用 set_font、set_color、set_layout、search_replace
+3. 批量样式修改优先使用 set_font、set_color、set_layout、search_replace
 4. 只输出需修改的字段，不要输出未修改的内容
-5. 每一轮都按上述规则使用工具。你的工具调用记录会保留在上下文中供参考
+5. 如果用户要求同时修改译文和样式（如字体、粗体、颜色等），**同一个 block 的多种修改必须放在同一个 change 对象中**：
+{"changes": [{"id": "0:0", "trans": "译文", "b": true, "fs": 28}]}
+6. 工具调用和 changes JSON 互补：工具批量改样式，changes JSON 逐块改译文，两者可在同一轮同时产出
+7. 每一轮都按上述规则使用工具。你的工具调用记录会保留在上下文中供参考
 
 ## 可修改字段
 
@@ -58,9 +61,12 @@ __TOOL_INDEX__
 1. For each user request, first decide if you need data → use the tool function to read it, then answer with changes
 2. Few modifications → output changes JSON at the end of your reply:
 {"changes": [{"id": "0:0", "trans": "Hello"}, {"id": "0:3", "fs": 28}]}
-3. For batch edits, prefer set_font, set_color, set_layout, search_replace
+3. For batch style edits, prefer set_font, set_color, set_layout, search_replace
 4. Only output fields that need changing; skip unchanged fields
-5. Follow these rules on every turn. Your tool call records are preserved in context for reference
+5. When the user asks to modify BOTH translation AND style (font, bold, color, etc.) for the same block, **combine all fields into a single change object**:
+{"changes": [{"id": "0:0", "trans": "Hello", "b": true, "fs": 28}]}
+6. Tool calls and changes JSON are complementary: use tools for batch style edits, changes JSON for per-block translation edits — both can be produced in the same turn
+7. Follow these rules on every turn. Your tool call records are preserved in context for reference
 
 ## Modifiable Fields
 
@@ -128,7 +134,13 @@ _FEW_SHOT_ZH = """## 示例
 例2 改样式：用户"把标题字号改成36"
 → tool_calls: {"tool_calls": [{"name": "search_blocks", "arguments": {"query": "标题"}}]}
 ← 系统返回匹配块 [{"id": "0:2", "src": "第1话 标题"}]
-好的，找到第0页的标题块。→ changes: {"changes": [{"id": "0:2", "fs": 36}]}"""
+好的，找到第0页的标题块。→ changes: {"changes": [{"id": "0:2", "fs": 36}]}
+
+例3 混合修改：用户"把第1页的对话译成中文并全部加粗"
+→ tool_calls: {"tool_calls": [{"name": "read_pages", "arguments": {"start": 0, "end": 0}}]}
+← 系统返回页面数据（2个文本块，当前译文为空）
+好的，以下是翻译并加粗的结果。→ changes:
+{"changes": [{"id": "0:0", "trans": "前情提要", "b": true}, {"id": "0:1", "trans": "某个少女的故事", "b": true}]}"""
 
 _FEW_SHOT_EN = """## Examples
 
@@ -140,15 +152,21 @@ Ex1 Translation: User "translate first 3 pages"
 Ex2 Styling: User "make the title font size 36"
 → tool_calls: {"tool_calls": [{"name": "search_blocks", "arguments": {"query": "title"}}]}
 ← System returns match [{"id": "0:2", "src": "Chapter 1 Title"}]
-Found the title block on page 0. → changes: {"changes": [{"id": "0:2", "fs": 36}]}"""
+Found the title block on page 0. → changes: {"changes": [{"id": "0:2", "fs": 36}]}
+
+Ex3 Mixed: User "translate the dialogue on page 1 into English and make it bold"
+→ tool_calls: {"tool_calls": [{"name": "read_pages", "arguments": {"start": 0, "end": 0}}]}
+← System returns page data (2 blocks, no existing translation)
+Here is the translation with bold applied. → changes:
+{"changes": [{"id": "0:0", "trans": "Previously on...", "b": true}, {"id": "0:1", "trans": "A story of a girl", "b": true}]}"""
 
 # ── Defaults dict (used as fallback) ────────────────────────────────────
 
 _BUILTIN_DEFAULTS: Dict[str, Dict[str, str]] = {
-    "agent_system":       {"zh": _AGENT_SYSTEM_ZH,       "en": _AGENT_SYSTEM_EN},
-    "chat_system":        {"zh": _CHAT_SYSTEM_ZH,        "en": _CHAT_SYSTEM_EN},
-    "translation_rules":  {"zh": _TRANSLATION_RULES_ZH,  "en": _TRANSLATION_RULES_EN},
-    "few_shot_examples":  {"zh": _FEW_SHOT_ZH,           "en": _FEW_SHOT_EN},
+    "agent_system": {"zh": _AGENT_SYSTEM_ZH, "en": _AGENT_SYSTEM_EN},
+    "chat_system": {"zh": _CHAT_SYSTEM_ZH, "en": _CHAT_SYSTEM_EN},
+    "translation_rules": {"zh": _TRANSLATION_RULES_ZH, "en": _TRANSLATION_RULES_EN},
+    "few_shot_examples": {"zh": _FEW_SHOT_ZH, "en": _FEW_SHOT_EN},
 }
 
 # ── Runtime cache ───────────────────────────────────────────────────────
@@ -161,17 +179,19 @@ def _prompts_file_path() -> str:
     global _prompts_path
     if _prompts_path is None:
         from . import shared
-        _prompts_path = osp.join(shared.PROGRAM_PATH, 'config', 'prompts.json')
+
+        _prompts_path = osp.join(shared.PROGRAM_PATH, "config", "prompts.json")
     return _prompts_path
 
 
 def get_active_lang() -> str:
     """Return 'zh' or 'en' based on the current app display language."""
     from . import shared
-    lang = getattr(shared, 'DEFAULT_DISPLAY_LANG', 'English')
-    if isinstance(lang, str) and lang.startswith('zh'):
-        return 'zh'
-    return 'en'
+
+    lang = getattr(shared, "DEFAULT_DISPLAY_LANG", "English")
+    if isinstance(lang, str) and lang.startswith("zh"):
+        return "zh"
+    return "en"
 
 
 def load_prompts(force_reload: bool = False) -> Dict:
@@ -194,14 +214,14 @@ def load_prompts(force_reload: bool = False) -> Dict:
     path = _prompts_file_path()
     try:
         if osp.exists(path):
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, "r", encoding="utf-8") as f:
                 external = json.load(f)
-            version = external.get('version', 0)
+            version = external.get("version", 0)
             logger.info("Loaded prompts.json v%d from %s", version, path)
             # Merge each template key
             for key in _BUILTIN_DEFAULTS:
                 if key in external:
-                    for lang in ('zh', 'en'):
+                    for lang in ("zh", "en"):
                         if lang in external[key] and external[key][lang]:
                             merged[key][lang] = external[key][lang]
     except (json.JSONDecodeError, OSError) as e:
@@ -230,8 +250,8 @@ def get_version() -> int:
     try:
         path = _prompts_file_path()
         if osp.exists(path):
-            with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f).get('version', 0)
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f).get("version", 0)
     except Exception:
         pass
     return 0

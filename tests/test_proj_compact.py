@@ -1,13 +1,14 @@
 """Tests for utils/proj_compact.py — AI-friendly compact project representation."""
 
-import sys, os, json, copy
+import copy
+import os
 import os.path as osp
-from typing import Dict, List
+import sys
 
 APP_ROOT = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path.insert(0, APP_ROOT)
 os.chdir(APP_ROOT)
-os.environ['QT_API'] = 'pyqt6'
+os.environ["QT_API"] = "pyqt6"
 
 
 def _make_mock_proj():
@@ -35,10 +36,20 @@ def _make_mock_proj():
         translation="你好",
         src_is_vertical=False,
         label=None,
-        fontformat={"font_family": "尙古圆体SC", "font_size": 32.0, "stroke_width": 0.2,
-                    "frgb": [251, 66, 126], "srgb": [255, 255, 255],
-                    "bold": True, "italic": False, "alignment": 1, "vertical": False,
-                    "font_weight": 700, "line_spacing": 1.2, "letter_spacing": 1.1},
+        fontformat={
+            "font_family": "尙古圆体SC",
+            "font_size": 32.0,
+            "stroke_width": 0.2,
+            "frgb": [251, 66, 126],
+            "srgb": [255, 255, 255],
+            "bold": True,
+            "italic": False,
+            "alignment": 1,
+            "vertical": False,
+            "font_weight": 700,
+            "line_spacing": 1.2,
+            "letter_spacing": 1.1,
+        },
     )
     blk1 = TextBlock(
         xyxy=[500, 100, 700, 300],
@@ -48,10 +59,20 @@ def _make_mock_proj():
         translation="嘿！",
         src_is_vertical=False,
         label="balloon",
-        fontformat={"font_family": "Arial", "font_size": 24.0, "stroke_width": 0.0,
-                    "frgb": [0, 0, 0], "srgb": [0, 0, 0],
-                    "bold": False, "italic": True, "alignment": 0, "vertical": False,
-                    "font_weight": 400, "line_spacing": 1.2, "letter_spacing": 1.15},
+        fontformat={
+            "font_family": "Arial",
+            "font_size": 24.0,
+            "stroke_width": 0.0,
+            "frgb": [0, 0, 0],
+            "srgb": [0, 0, 0],
+            "bold": False,
+            "italic": True,
+            "alignment": 0,
+            "vertical": False,
+            "font_weight": 400,
+            "line_spacing": 1.2,
+            "letter_spacing": 1.15,
+        },
     )
     blk2 = TextBlock(
         xyxy=[800, 50, 1000, 250],
@@ -80,6 +101,7 @@ def _make_mock_proj():
 # Tests
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_compact_block_excludes_geometry():
     """Geometry fields (xyxy, lines, _bounding_rect) are NOT in compact output."""
     from utils.proj_compact import compact_block
@@ -92,7 +114,15 @@ def test_compact_block_excludes_geometry():
         translation="测试",
     )
     cd = compact_block(blk, "0:0")
-    for geo_key in ("xyxy", "lines", "_bounding_rect", "angle", "distance", "vec", "norm"):
+    for geo_key in (
+        "xyxy",
+        "lines",
+        "_bounding_rect",
+        "angle",
+        "distance",
+        "vec",
+        "norm",
+    ):
         assert geo_key not in cd, f"{geo_key} should be excluded"
     assert cd["id"] == "0:0"
     assert cd["trans"] == "测试"
@@ -108,15 +138,28 @@ def test_compact_block_excludes_render_effects():
         text=["abc"],
         translation="xyz",
         fontformat={
-            "shadow_radius": 5.0, "shadow_strength": 0.5,
-            "gradient_enabled": True, "gradient_angle": 45.0,
-            "opacity": 0.8, "underline": True,
-        }
+            "shadow_radius": 5.0,
+            "shadow_strength": 0.5,
+            "gradient_enabled": True,
+            "gradient_angle": 45.0,
+            "opacity": 0.8,
+            "underline": True,
+        },
     )
     cd = compact_block(blk, "0:0")
-    for fx_key in ("shadow_radius", "shadow_strength", "shadow_color", "shadow_offset",
-                    "gradient_enabled", "gradient_start_color", "gradient_end_color",
-                    "gradient_angle", "gradient_size", "opacity", "underline"):
+    for fx_key in (
+        "shadow_radius",
+        "shadow_strength",
+        "shadow_color",
+        "shadow_offset",
+        "gradient_enabled",
+        "gradient_start_color",
+        "gradient_end_color",
+        "gradient_angle",
+        "gradient_size",
+        "opacity",
+        "underline",
+    ):
         assert fx_key not in cd, f"{fx_key} should be excluded"
 
 
@@ -134,7 +177,9 @@ def test_compact_block_omits_font_defaults():
     cd = compact_block(blk, "0:0")
     # font fields at defaults should be absent
     for font_key in ("ff", "fs", "fw", "fg", "bg", "b", "i", "sw"):
-        assert font_key not in cd, f"{font_key} (default) should be omitted, got {cd.get(font_key)}"
+        assert font_key not in cd, (
+            f"{font_key} (default) should be omitted, got {cd.get(font_key)}"
+        )
 
 
 def test_fields_whitelist():
@@ -246,7 +291,10 @@ def test_apply_modifications_translation():
     proj = _make_mock_proj()
     from utils.proj_compact import apply_modifications
 
-    mod = {"type": "modifications", "changes": [{"id": "0:0", "trans": "こんにちは世界！"}]}
+    mod = {
+        "type": "modifications",
+        "changes": [{"id": "0:0", "trans": "こんにちは世界！"}],
+    }
     changed, warnings = apply_modifications(proj, mod)
     assert changed == 1
     assert warnings == []
@@ -272,7 +320,10 @@ def test_sparse_patch_leaves_other_fields_unchanged():
     from utils.proj_compact import apply_modifications
 
     original_blk = copy.deepcopy(proj.pages["01.jpg"][0])
-    mod = {"type": "modifications", "changes": [{"id": "0:0", "trans": "only translation changed"}]}
+    mod = {
+        "type": "modifications",
+        "changes": [{"id": "0:0", "trans": "only translation changed"}],
+    }
     apply_modifications(proj, mod)
 
     blk = proj.pages["01.jpg"][0]
@@ -286,7 +337,7 @@ def test_sparse_patch_leaves_other_fields_unchanged():
 def test_invalid_block_id_raises():
     """Invalid block ID raises InvalidModificationError."""
     proj = _make_mock_proj()
-    from utils.proj_compact import apply_modifications, InvalidModificationError
+    from utils.proj_compact import InvalidModificationError, apply_modifications
 
     mod = {"type": "modifications", "changes": [{"id": "999:999", "trans": "x"}]}
     try:
@@ -299,7 +350,7 @@ def test_invalid_block_id_raises():
 def test_stale_project_raises():
     """Stale hash mismatch raises StaleProjectError."""
     proj = _make_mock_proj()
-    from utils.proj_compact import apply_modifications, StaleProjectError
+    from utils.proj_compact import StaleProjectError, apply_modifications
 
     mod = {"type": "modifications", "changes": [{"id": "0:0", "trans": "x"}]}
     metadata = {"hash": "deadbeef"}  # wrong hash
@@ -313,15 +364,21 @@ def test_stale_project_raises():
 def test_roundtrip():
     """Full roundtrip: export detail → apply modification → verify."""
     proj = _make_mock_proj()
-    from utils.proj_compact import build_detail, generate_project_hash, apply_modifications
+    from utils.proj_compact import (
+        apply_modifications,
+        build_detail,
+    )
 
     detail = build_detail(proj, [0])
     proj_hash = detail["meta"]["hash"]
 
     # Simulate AI response based on the detail
-    mod = {"type": "modifications", "changes": [
-        {"id": "0:0", "trans": "roundtrip test", "fs": 36},
-    ]}
+    mod = {
+        "type": "modifications",
+        "changes": [
+            {"id": "0:0", "trans": "roundtrip test", "fs": 36},
+        ],
+    }
 
     changed, warnings = apply_modifications(proj, mod, metadata=detail["meta"])
     assert changed == 1
@@ -356,7 +413,10 @@ def test_proj_imgtrans_delegation():
     assert len(detail["pages"][0]["blocks"]) == 2
 
     changed, _ = proj.apply_compact_modifications(
-        {"type": "modifications", "changes": [{"id": "0:1", "trans": "delegation test"}]}
+        {
+            "type": "modifications",
+            "changes": [{"id": "0:1", "trans": "delegation test"}],
+        }
     )
     assert changed == 1
     assert proj.pages["01.jpg"][1].translation == "delegation test"
@@ -368,7 +428,8 @@ if __name__ == "__main__":
     import traceback
 
     tests = [
-        fn for name, fn in sorted(globals().items())
+        fn
+        for name, fn in sorted(globals().items())
         if name.startswith("test_") and callable(fn)
     ]
 

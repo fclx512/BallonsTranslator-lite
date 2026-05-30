@@ -15,7 +15,7 @@ import httpx
 import openai
 from qtpy.QtCore import QThread, Signal
 
-logger = logging.getLogger('ai_chat')
+logger = logging.getLogger("ai_chat")
 
 
 class AiChatWorker(QThread):
@@ -28,7 +28,9 @@ class AiChatWorker(QThread):
     chunk_ready = Signal(str)
     stream_finished = Signal(str)
     error_occurred = Signal(str)
-    token_count = Signal(int, int, int)  # prompt_tokens, completion_tokens, total_tokens
+    token_count = Signal(
+        int, int, int
+    )  # prompt_tokens, completion_tokens, total_tokens
 
     def __init__(
         self,
@@ -49,36 +51,46 @@ class AiChatWorker(QThread):
         self._cancelled = True
 
     def run(self):
-        api_host = self._api_config.get('api_host', '')
-        api_key = self._api_config.get('api_key', '')
-        model = self._api_config.get('model', 'gpt-4o')
-        temperature = self._api_config.get('temperature', 0.1)
-        max_tokens = self._api_config.get('max_tokens') or None
-        proxy = self._api_config.get('proxy', '')
+        api_host = self._api_config.get("api_host", "")
+        api_key = self._api_config.get("api_key", "")
+        model = self._api_config.get("model", "gpt-4o")
+        temperature = self._api_config.get("temperature", 0.1)
+        max_tokens_raw = self._api_config.get("max_tokens")
+        max_tokens = int(max_tokens_raw) if max_tokens_raw else None
+        proxy = self._api_config.get("proxy", "")
 
         http_client = None
         if proxy:
             try:
                 http_client = httpx.Client(
                     mounts={
-                        'http://': httpx.HTTPTransport(proxy=proxy),
-                        'https://': httpx.HTTPTransport(proxy=proxy),
+                        "http://": httpx.HTTPTransport(proxy=proxy),
+                        "https://": httpx.HTTPTransport(proxy=proxy),
                     }
                 )
             except Exception:
                 pass
 
         client = openai.OpenAI(
-            api_key=api_key or 'dummy-key',
+            api_key=api_key or "dummy-key",
             base_url=api_host,
             http_client=http_client,
         )
 
-        full_text = ''
+        full_text = ""
         msg_count = len(self._messages)
-        logger.info("Worker start: model=%s messages=%d max_tokens=%d", model, msg_count, max_tokens)
+        logger.info(
+            "Worker start: model=%s messages=%d max_tokens=%d",
+            model,
+            msg_count,
+            max_tokens,
+        )
         try:
-            api_args = dict(model=model, messages=self._messages, temperature=temperature)
+            api_args = dict(
+                model=model,
+                messages=self._messages,
+                temperature=temperature,
+            )
             if max_tokens is not None:
                 api_args["max_tokens"] = max_tokens
             if self._tools:
@@ -86,11 +98,14 @@ class AiChatWorker(QThread):
             stream = client.chat.completions.create(
                 **api_args,
                 stream=True,
-                stream_options={'include_usage': True},
+                stream_options={"include_usage": True},
             )
             for chunk in stream:
                 if self._cancelled:
-                    logger.info("Worker cancelled mid-stream (received %d chars)", len(full_text))
+                    logger.info(
+                        "Worker cancelled mid-stream (received %d chars)",
+                        len(full_text),
+                    )
                     break
                 delta = chunk.choices[0].delta if chunk.choices else None
                 if delta is None:
@@ -103,24 +118,24 @@ class AiChatWorker(QThread):
                         idx = tc.index
                         if idx not in self._tool_call_chunks:
                             self._tool_call_chunks[idx] = {
-                                'id': tc.id or '',
-                                'type': tc.type or 'function',
-                                'function': {'name': '', 'arguments': ''},
+                                "id": tc.id or "",
+                                "type": tc.type or "function",
+                                "function": {"name": "", "arguments": ""},
                             }
                         entry = self._tool_call_chunks[idx]
                         if tc.id:
-                            entry['id'] = tc.id
+                            entry["id"] = tc.id
                         if tc.function:
                             if tc.function.name:
-                                entry['function']['name'] += tc.function.name
+                                entry["function"]["name"] += tc.function.name
                             if tc.function.arguments:
-                                entry['function']['arguments'] += tc.function.arguments
-                if getattr(chunk, 'usage', None):
+                                entry["function"]["arguments"] += tc.function.arguments
+                if getattr(chunk, "usage", None):
                     usage = chunk.usage
                     self.token_count.emit(
-                        getattr(usage, 'prompt_tokens', 0),
-                        getattr(usage, 'completion_tokens', 0),
-                        getattr(usage, 'total_tokens', 0),
+                        getattr(usage, "prompt_tokens", 0),
+                        getattr(usage, "completion_tokens", 0),
+                        getattr(usage, "total_tokens", 0),
                     )
         except openai.APIConnectionError as e:
             logger.error("APIConnectionError: %s", e)
@@ -128,11 +143,15 @@ class AiChatWorker(QThread):
             return
         except openai.RateLimitError:
             logger.warning("RateLimitError")
-            self.error_occurred.emit(self.tr("API rate limit reached, please try again later."))
+            self.error_occurred.emit(
+                self.tr("API rate limit reached, please try again later.")
+            )
             return
         except openai.APITimeoutError:
             logger.error("APITimeoutError")
-            self.error_occurred.emit(self.tr("Request timed out. Please check your network or API URL."))
+            self.error_occurred.emit(
+                self.tr("Request timed out. Please check your network or API URL.")
+            )
             return
         except openai.AuthenticationError:
             logger.error("AuthenticationError")
@@ -144,7 +163,9 @@ class AiChatWorker(QThread):
             return
         except openai.APIStatusError as e:
             logger.error("APIStatusError (%s): %s", e.status_code, e)
-            self.error_occurred.emit(self.tr("API error (%1): %2").arg(e.status_code).arg(str(e)))
+            self.error_occurred.emit(
+                self.tr("API error (%1): %2").arg(e.status_code).arg(str(e))
+            )
             return
         except Exception as e:
             logger.exception("Unexpected worker error")
@@ -158,21 +179,31 @@ class AiChatWorker(QThread):
             tool_calls = []
             for idx in sorted(self._tool_call_chunks.keys()):
                 tc = self._tool_call_chunks[idx]
-                fn = tc['function']
+                fn = tc["function"]
                 try:
-                    args = json.loads(fn['arguments']) if fn['arguments'] else {}
+                    args = json.loads(fn["arguments"]) if fn["arguments"] else {}
                 except json.JSONDecodeError:
                     args = {}
-                tool_calls.append({
-                    'name': fn['name'],
-                    'arguments': args,
-                })
-                logger.debug("Tool #%d: name=%s args=%s",
-                             idx, fn['name'], fn['arguments'][:80])
-            tc_json = json.dumps({'tool_calls': tool_calls}, ensure_ascii=False)
-            full_text = tc_json + '\n' + full_text
+                tool_calls.append(
+                    {
+                        "name": fn["name"],
+                        "arguments": args,
+                    }
+                )
+                logger.debug(
+                    "Tool #%d: name=%s args=%s", idx, fn["name"], fn["arguments"][:80]
+                )
+            tc_json = json.dumps({"tool_calls": tool_calls}, ensure_ascii=False)
+            full_text = tc_json + "\n" + full_text
 
-        logger.info("Worker finished: text_len=%d tool_calls=%d",
-                     len(full_text) - (full_text.index('\n') + 1 if '\n' in full_text and self._tool_call_chunks else 0),
-                     len(self._tool_call_chunks))
+        logger.info(
+            "Worker finished: text_len=%d tool_calls=%d",
+            len(full_text)
+            - (
+                full_text.index("\n") + 1
+                if "\n" in full_text and self._tool_call_chunks
+                else 0
+            ),
+            len(self._tool_call_chunks),
+        )
         self.stream_finished.emit(full_text)

@@ -51,14 +51,13 @@ from .module_parse_widgets import (
 
 
 class CustomIntValidator(QIntValidator):
-
-    def __init__(self, bottom: int, top: int, ndigits: int = None, parent = None):
+    def __init__(self, bottom: int, top: int, ndigits: int = None, parent=None):
         super().__init__(bottom=bottom, top=top, parent=parent)
         self.ndigits = ndigits
 
     def validate(self, s: str, pos: int) -> object:
         if not s.isnumeric():
-            if s != '':
+            if s != "":
                 return (QValidator.State.Invalid, s, pos)
             else:
                 return (QValidator.State.Intermediate, s, pos)
@@ -74,7 +73,7 @@ class CustomIntValidator(QIntValidator):
             pos -= ndel
         else:
             if d > self.top():
-                if s[-1] == '0':
+                if s[-1] == "0":
                     d = self.top()
                 else:
                     d = d % self.top()
@@ -84,10 +83,9 @@ class CustomIntValidator(QIntValidator):
 
 
 class PercentageLineEdit(QLineEdit):
-
     finish_edited = Signal(str)
 
-    def __init__(self, default_value: str = '100', parent=None) -> None:
+    def __init__(self, default_value: str = "100", parent=None) -> None:
         super().__init__(default_value, parent=parent)
         validator = CustomIntValidator(0, 100, 3)
         self.setValidator(validator)
@@ -101,7 +99,7 @@ class PercentageLineEdit(QLineEdit):
         if self._edited:
             text = self.text()
             if not text.isnumeric():
-                text = '100'
+                text = "100"
                 self.setText(text)
             self.finish_edited.emit(text)
 
@@ -109,7 +107,9 @@ class PercentageLineEdit(QLineEdit):
 
 
 class ConfigTextLabel(QLabel):
-    def __init__(self, text: str, fontsize: int, font_weight: int = None, *args, **kwargs) -> None:
+    def __init__(
+        self, text: str, fontsize: int, font_weight: int = None, *args, **kwargs
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.setText(text)
         font = self.font()
@@ -122,12 +122,23 @@ class ConfigTextLabel(QLabel):
 
     def setActiveBackground(self):
         from ui.misc import get_theme_color
+
         c = get_theme_color()
-        self.setStyleSheet(f"background-color: rgba({c.red()}, {c.green()}, {c.blue()}, 51);")
+        self.setStyleSheet(
+            f"background-color: rgba({c.red()}, {c.green()}, {c.blue()}, 51);"
+        )
 
 
 class ConfigSubBlock(Widget):
-    def __init__(self, widget: Union[QWidget, QLayout], name: str = None, description: str = None, vertical_layout=True, insert_stretch: bool = False, content_margins = (24, 6, 24, 6)) -> None:
+    def __init__(
+        self,
+        widget: Union[QWidget, QLayout],
+        name: str = None,
+        description: str = None,
+        vertical_layout=True,
+        insert_stretch: bool = False,
+        content_margins=(24, 6, 24, 6),
+    ) -> None:
         super().__init__()
         if vertical_layout:
             layout = QVBoxLayout(self)
@@ -135,11 +146,13 @@ class ConfigSubBlock(Widget):
             layout = QHBoxLayout(self)
         self.name = name
         if name is not None:
-            textlabel = ConfigTextLabel(name, CONFIG_FONTSIZE_CONTENT, QFont.Weight.Normal)
+            textlabel = ConfigTextLabel(
+                name, CONFIG_FONTSIZE_CONTENT, QFont.Weight.Normal
+            )
             self.name_label = textlabel
             layout.addWidget(textlabel)
         if description is not None:
-            layout.addWidget(ConfigTextLabel(description, CONFIG_FONTSIZE_CONTENT-2))
+            layout.addWidget(ConfigTextLabel(description, CONFIG_FONTSIZE_CONTENT - 2))
         if insert_stretch:
             layout.insertStretch(-1)
         if isinstance(widget, QWidget):
@@ -150,22 +163,42 @@ class ConfigSubBlock(Widget):
         self.setContentsMargins(*content_margins)
 
 
-def combobox_with_label(sel: List[str], name: str, description: str = None, vertical_layout: bool = False, target_block: QWidget = None, fix_size: bool = True, parent: QWidget = None, insert_stretch: bool = False) -> Tuple[ConfigComboBox, QWidget]:
+def combobox_with_label(
+    sel: List[str],
+    name: str,
+    description: str = None,
+    vertical_layout: bool = False,
+    target_block: QWidget = None,
+    fix_size: bool = True,
+    parent: QWidget = None,
+    insert_stretch: bool = False,
+) -> Tuple[ConfigComboBox, QWidget]:
     combox = ConfigComboBox(fix_size=fix_size, scrollWidget=parent)
     combox.addItems(sel)
     if target_block is None:
-        sublock = ConfigSubBlock(combox, name, description, vertical_layout=vertical_layout, insert_stretch=insert_stretch)
+        sublock = ConfigSubBlock(
+            combox,
+            name,
+            description,
+            vertical_layout=vertical_layout,
+            insert_stretch=insert_stretch,
+        )
         sublock.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
         sublock.layout().setSpacing(CONFIG_SUBBLOCK_SPACING)
         return combox, sublock
     else:
         layout = target_block.layout()
         layout.addSpacing(CONFIG_SUBBLOCK_SPACING)
-        layout.addWidget(ConfigTextLabel(name, CONFIG_FONTSIZE_CONTENT, QFont.Weight.Normal))
+        layout.addWidget(
+            ConfigTextLabel(name, CONFIG_FONTSIZE_CONTENT, QFont.Weight.Normal)
+        )
         layout.addWidget(combox)
         return combox, target_block
 
-def checkbox_with_label(name: str, description: str = None, target_block: QWidget = None):
+
+def checkbox_with_label(
+    name: str, description: str = None, target_block: QWidget = None
+):
     checkbox = QCheckBox()
     if description is not None:
         font = checkbox.font()
@@ -179,14 +212,16 @@ def checkbox_with_label(name: str, description: str = None, target_block: QWidge
     if target_block is None:
         sublock = ConfigSubBlock(checkbox, name, vertical_layout=vertical_layout)
         if vertical_layout is False:
-            sublock.layout().addItem(QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding))
+            sublock.layout().addItem(
+                QSpacerItem(
+                    0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+                )
+            )
         target_block = sublock
     return checkbox, target_block
 
 
-
 class ConfigBlock(Widget):
-
     def __init__(self, header: str, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.header = ConfigTextLabel(header, CONFIG_FONTSIZE_HEADER)
@@ -199,13 +234,19 @@ class ConfigBlock(Widget):
     def setIndex(self, index: int):
         self.index = index
 
-    def addLineEdit(self, name: str = None, description: str = None, vertical_layout: bool = False):
+    def addLineEdit(
+        self, name: str = None, description: str = None, vertical_layout: bool = False
+    ):
         le = QLineEdit()
         le.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
         le.setFixedHeight(LINEEDIT_FIXHEIGHT)
         sublock = ConfigSubBlock(le, name, description, vertical_layout)
         if vertical_layout is False:
-            sublock.layout().addItem(QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding))
+            sublock.layout().addItem(
+                QSpacerItem(
+                    0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+                )
+            )
         self.addSublock(sublock)
         sublock.layout().setSpacing(CONFIG_SUBBLOCK_SPACING)
         return le, sublock
@@ -218,24 +259,49 @@ class ConfigBlock(Widget):
         self.vlayout.addWidget(sublock)
         self.subblock_list.append(sublock)
 
-    def addCombobox(self, sel: List[str], name: str, description: str = None, vertical_layout: bool = False, target_block: QWidget = None, fix_size: bool = True) -> Tuple[ConfigComboBox, QWidget]:
-        combox, sublock = combobox_with_label(sel, name, description, vertical_layout, target_block, fix_size, parent=self)
+    def addCombobox(
+        self,
+        sel: List[str],
+        name: str,
+        description: str = None,
+        vertical_layout: bool = False,
+        target_block: QWidget = None,
+        fix_size: bool = True,
+    ) -> Tuple[ConfigComboBox, QWidget]:
+        combox, sublock = combobox_with_label(
+            sel, name, description, vertical_layout, target_block, fix_size, parent=self
+        )
         if target_block is None:
             self.addSublock(sublock)
         return combox, sublock
 
-    def addBlockWidget(self, widget: Union[QWidget, QLayout], name: str = None, description: str = None, vertical_layout: bool = False) -> ConfigSubBlock:
+    def addBlockWidget(
+        self,
+        widget: Union[QWidget, QLayout],
+        name: str = None,
+        description: str = None,
+        vertical_layout: bool = False,
+    ) -> ConfigSubBlock:
         sublock = ConfigSubBlock(widget, name, description, vertical_layout)
         self.addSublock(sublock)
         return sublock
 
-    def addCheckBox(self, name: str, description: str = None, target_block: ConfigSubBlock = None) -> QCheckBox:
+    def addCheckBox(
+        self, name: str, description: str = None, target_block: ConfigSubBlock = None
+    ) -> QCheckBox:
         checkbox, sublock = checkbox_with_label(name, description, target_block)
         if target_block is None:
             self.addSublock(sublock)
         return checkbox, sublock
 
-    def addGroupedBlock(self, group_title: str, widget: QWidget, object_name: str = None, name: str = None, description: str = None) -> ConfigSubBlock:
+    def addGroupedBlock(
+        self,
+        group_title: str,
+        widget: QWidget,
+        object_name: str = None,
+        name: str = None,
+        description: str = None,
+    ) -> ConfigSubBlock:
         group = PanelGroupBox(group_title)
         if object_name:
             group.setObjectName(object_name)
@@ -282,61 +348,104 @@ class ConfigContent(QScrollArea):
 
 
 DEFAULT_SHORTCUTS = {
-    'prev_page': ['A'],
-    'next_page': ['D'],
-    'prev_page_alt': ['PgUp'],
-    'next_page_alt': ['PgDown'],
-    'textedit_mode': ['T'],
-    'textblock_mode': ['W'],
-    'drawboard_mode': ['P'],
-    'zoom_in': ['Ctrl++'],
-    'zoom_out': ['Ctrl+-'],
-    'preview': ['Tab'],
-    'delete_blks': ['Del'],
-    'delete_blks_alt': ['Ctrl+D'],
-    'select_all': ['Ctrl+A'],
-    'bold': ['Ctrl+B'],
-    'italic': ['Ctrl+I'],
-    'underline': ['Ctrl+U'],
-    'undo': ['Ctrl+Z'],
-    'redo': ['Ctrl+Y'],
-    'page_search': ['Ctrl+F'],
-    'global_search': ['Ctrl+G'],
-    'escape': ['Escape'],
-    'space_inpaint': ['Space'],
-    'hand_tool': ['H'],
-    'rect_tool': ['R'],
-    'inpaint_tool': ['J'],
-    'pen_tool': ['B'],
-    'merge_tool': ['Ctrl+Shift+M'],
+    "prev_page": ["A"],
+    "next_page": ["D"],
+    "prev_page_alt": ["PgUp"],
+    "next_page_alt": ["PgDown"],
+    "textedit_mode": ["T"],
+    "textblock_mode": ["W"],
+    "drawboard_mode": ["P"],
+    "zoom_in": ["Ctrl++"],
+    "zoom_out": ["Ctrl+-"],
+    "preview": ["Tab"],
+    "delete_blks": ["Del"],
+    "delete_blks_alt": ["Ctrl+D"],
+    "select_all": ["Ctrl+A"],
+    "bold": ["Ctrl+B"],
+    "italic": ["Ctrl+I"],
+    "underline": ["Ctrl+U"],
+    "undo": ["Ctrl+Z"],
+    "redo": ["Ctrl+Y"],
+    "page_search": ["Ctrl+F"],
+    "global_search": ["Ctrl+G"],
+    "escape": ["Escape"],
+    "space_inpaint": ["Space"],
+    "hand_tool": ["H"],
+    "rect_tool": ["R"],
+    "inpaint_tool": ["J"],
+    "pen_tool": ["B"],
+    "merge_tool": ["Ctrl+Shift+M"],
 }
 
 _ACTION_NAMES = {
-    'prev_page': 'Page Up', 'next_page': 'Page Down', 'prev_page_alt': 'Page Up (alt)',
-    'next_page_alt': 'Page Down (alt)', 'textedit_mode': 'Text Editor', 'textblock_mode': 'Text Block',
-    'drawboard_mode': 'Draw Board', 'zoom_in': 'Zoom In', 'zoom_out': 'Zoom Out',
-    'preview': 'Preview', 'delete_blks': 'Delete', 'delete_blks_alt': 'Delete (alt)',
-    'select_all': 'Select All', 'bold': 'Bold', 'italic': 'Italic', 'underline': 'Underline',
-    'undo': 'Undo', 'redo': 'Redo', 'page_search': 'Page Search', 'global_search': 'Global Search',
-    'escape': 'Escape', 'space_inpaint': 'Inpaint', 'hand_tool': 'Hand Tool',
-    'rect_tool': 'Rect Tool', 'inpaint_tool': 'Inpaint Tool', 'pen_tool': 'Pen Tool',
-    'merge_tool': 'Merge Tool',
+    "prev_page": "Page Up",
+    "next_page": "Page Down",
+    "prev_page_alt": "Page Up (alt)",
+    "next_page_alt": "Page Down (alt)",
+    "textedit_mode": "Text Editor",
+    "textblock_mode": "Text Block",
+    "drawboard_mode": "Draw Board",
+    "zoom_in": "Zoom In",
+    "zoom_out": "Zoom Out",
+    "preview": "Preview",
+    "delete_blks": "Delete",
+    "delete_blks_alt": "Delete (alt)",
+    "select_all": "Select All",
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "undo": "Undo",
+    "redo": "Redo",
+    "page_search": "Page Search",
+    "global_search": "Global Search",
+    "escape": "Escape",
+    "space_inpaint": "Inpaint",
+    "hand_tool": "Hand Tool",
+    "rect_tool": "Rect Tool",
+    "inpaint_tool": "Inpaint Tool",
+    "pen_tool": "Pen Tool",
+    "merge_tool": "Merge Tool",
 }
 
 # Shortcut groups for organized display
 _SHORTCUT_GROUPS = [
-    ('Navigation', ['prev_page', 'next_page', 'prev_page_alt', 'next_page_alt']),
-    ('View', ['zoom_in', 'zoom_out', 'preview']),
-    ('Edit', ['textedit_mode', 'textblock_mode', 'drawboard_mode', 'delete_blks', 'delete_blks_alt',
-              'select_all', 'bold', 'italic', 'underline', 'undo', 'redo']),
-    ('Tools', ['hand_tool', 'rect_tool', 'inpaint_tool', 'pen_tool', 'merge_tool', 'space_inpaint']),
-    ('Search', ['page_search', 'global_search']),
-    ('General', ['escape']),
+    ("Navigation", ["prev_page", "next_page", "prev_page_alt", "next_page_alt"]),
+    ("View", ["zoom_in", "zoom_out", "preview"]),
+    (
+        "Edit",
+        [
+            "textedit_mode",
+            "textblock_mode",
+            "drawboard_mode",
+            "delete_blks",
+            "delete_blks_alt",
+            "select_all",
+            "bold",
+            "italic",
+            "underline",
+            "undo",
+            "redo",
+        ],
+    ),
+    (
+        "Tools",
+        [
+            "hand_tool",
+            "rect_tool",
+            "inpaint_tool",
+            "pen_tool",
+            "merge_tool",
+            "space_inpaint",
+        ],
+    ),
+    ("Search", ["page_search", "global_search"]),
+    ("General", ["escape"]),
 ]
 
 
 class _ShortcutRow(QWidget):
     """A row for editing shortcuts of a single action."""
+
     shortcut_changed = Signal()
 
     def __init__(self, action_id: str, parent=None):
@@ -345,6 +454,7 @@ class _ShortcutRow(QWidget):
         self._disabled_placeholder = None
 
         from .theme_helpers import shortcut_styles
+
         s = shortcut_styles()
 
         h = QHBoxLayout(self)
@@ -353,7 +463,9 @@ class _ShortcutRow(QWidget):
 
         # Action name — left column
         name = QLabel(self.tr(_ACTION_NAMES.get(action_id, action_id)))
-        name.setStyleSheet(f"color: {s['name_clr']}; background: transparent; border: none;")
+        name.setStyleSheet(
+            f"color: {s['name_clr']}; background: transparent; border: none;"
+        )
         name.setFixedWidth(140)
         h.addWidget(name)
 
@@ -375,35 +487,38 @@ class _ShortcutRow(QWidget):
         btn_layout.setSpacing(2)
 
         # Add button
-        self._add_btn = QPushButton('+')
+        self._add_btn = QPushButton("+")
         self._add_btn.setFixedSize(24, 24)
-        self._add_btn.setToolTip(self.tr('Add shortcut'))
+        self._add_btn.setToolTip(self.tr("Add shortcut"))
         self._add_btn.setStyleSheet(
             f"QPushButton {{ border: 1px solid {s['add_bdr']}; border-radius: 3px; "
             f"color: {s['add_clr']}; background: transparent; padding: 0px; }}"
-            f"QPushButton:hover {{ border-color: {s['add_hvr_bdr']}; color: {s['add_hvr_clr']}; }}")
+            f"QPushButton:hover {{ border-color: {s['add_hvr_bdr']}; color: {s['add_hvr_clr']}; }}"
+        )
         self._add_btn.clicked.connect(self._add_shortcut)
         btn_layout.addWidget(self._add_btn)
 
         # Clear button
-        self._clear_btn = QPushButton('Del')
+        self._clear_btn = QPushButton("Del")
         self._clear_btn.setFixedSize(28, 24)
-        self._clear_btn.setToolTip(self.tr('Disable this shortcut'))
+        self._clear_btn.setToolTip(self.tr("Disable this shortcut"))
         self._clear_btn.setStyleSheet(
             f"QPushButton {{ border: none; border-radius: 3px; color: {s['btn_clr']}; "
             f"background: transparent; padding: 0px; }}"
-            f"QPushButton:hover {{ color: {s['close_hvr']}; }}")
+            f"QPushButton:hover {{ color: {s['close_hvr']}; }}"
+        )
         self._clear_btn.clicked.connect(self._clear)
         btn_layout.addWidget(self._clear_btn)
 
         # Reset button
-        self._reset_btn = QPushButton('Rst')
+        self._reset_btn = QPushButton("Rst")
         self._reset_btn.setFixedSize(28, 24)
-        self._reset_btn.setToolTip(self.tr('Reset to Default'))
+        self._reset_btn.setToolTip(self.tr("Reset to Default"))
         self._reset_btn.setStyleSheet(
             f"QPushButton {{ border: none; border-radius: 3px; color: {s['btn_clr']}; "
             f"background: transparent; padding: 0px; }}"
-            f"QPushButton:hover {{ color: {s['reset_hvr']}; }}")
+            f"QPushButton:hover {{ color: {s['reset_hvr']}; }}"
+        )
         self._reset_btn.clicked.connect(self._reset)
         btn_layout.addWidget(self._reset_btn)
 
@@ -431,6 +546,7 @@ class _ShortcutRow(QWidget):
         keys = self._get_keys()
         if keys:
             from .theme_helpers import shortcut_styles
+
             s = shortcut_styles()
             for k in keys:
                 # Pill: QFrame container — QFrame selector works reliably in PyQt6
@@ -441,35 +557,41 @@ class _ShortcutRow(QWidget):
                 fl.setSpacing(2)
                 lbl = QLabel(k)
                 lbl.setStyleSheet(
-                    f"color: {s['pill_text']}; background: transparent; border: none;")
+                    f"color: {s['pill_text']}; background: transparent; border: none;"
+                )
                 fl.addWidget(lbl)
-                close_btn = QPushButton('x')
+                close_btn = QPushButton("x")
                 close_btn.setFixedSize(22, 22)
                 close_btn.setStyleSheet(
                     f"QPushButton {{ border: none; border-radius: 2px; color: {s['close_clr']}; "
                     f"background: transparent; padding: 0px; }}"
                     f"QPushButton:hover {{ color: {s['close_hvr']}; "
-                    f"background: rgba(200,50,50,0.2); }}")
-                close_btn.clicked.connect(lambda checked, ks=k: self._remove_shortcut(ks))
+                    f"background: rgba(200,50,50,0.2); }}"
+                )
+                close_btn.clicked.connect(
+                    lambda checked, ks=k: self._remove_shortcut(ks)
+                )
                 fl.addWidget(close_btn)
                 frame.setStyleSheet(
-                    f"QFrame {{ background: {s['pill_bg']}; border-radius: 4px; }}")
+                    f"QFrame {{ background: {s['pill_bg']}; border-radius: 4px; }}"
+                )
                 self.shortcuts_layout.addWidget(frame)
         else:
             # Show disabled placeholder
             from .theme_helpers import shortcut_styles
+
             s = shortcut_styles()
-            self._disabled_placeholder = QLabel(self.tr('— None —'))
+            self._disabled_placeholder = QLabel(self.tr("— None —"))
             self._disabled_placeholder.setStyleSheet(
-                f"color: {s['disabled_clr']}; background: transparent; font-style: italic;")
+                f"color: {s['disabled_clr']}; background: transparent; font-style: italic;"
+            )
             self.shortcuts_layout.addWidget(self._disabled_placeholder)
 
     def _add_shortcut(self):
         edit = QKeySequenceEdit()
         edit.setFixedWidth(120)
         edit.setFixedHeight(24)
-        edit.setStyleSheet(
-            "QKeySequenceEdit { padding: 1px 4px; }")
+        edit.setStyleSheet("QKeySequenceEdit { padding: 1px 4px; }")
         self.shortcuts_layout.addWidget(edit)
         edit.setFocus()
 
@@ -558,6 +680,7 @@ class ShortcutEditor(QWidget):
 
         # Build grouped layout
         from .theme_helpers import shortcut_styles
+
         s = shortcut_styles()
 
         for group_name, action_ids in _SHORTCUT_GROUPS:
@@ -568,8 +691,7 @@ class ShortcutEditor(QWidget):
                 if idx > 0:
                     sep = QWidget()
                     sep.setFixedHeight(1)
-                    sep.setStyleSheet(
-                        f"background: {s['add_bdr']};")
+                    sep.setStyleSheet(f"background: {s['add_bdr']};")
                     group_layout.addWidget(sep)
                 row = _ShortcutRow(action_id)
                 row.shortcut_changed.connect(self.shortcut_changed)
@@ -591,7 +713,7 @@ class ShortcutEditor(QWidget):
 class ShortcutDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(self.tr('Shortcut Editor'))
+        self.setWindowTitle(self.tr("Shortcut Editor"))
         self.setMinimumSize(560, 480)
 
         layout = QVBoxLayout(self)
@@ -603,6 +725,7 @@ class ShortcutDialog(QDialog):
 
     def _on_shortcut_changed(self):
         from utils.config import save_config
+
         save_config()
 
 
@@ -611,14 +734,14 @@ class FontExcludeDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(self.tr('Font Exclusion'))
+        self.setWindowTitle(self.tr("Font Exclusion"))
         self.setMinimumSize(700, 500)
 
         layout = QVBoxLayout(self)
 
         # Search bar
         self.search_edit = QLineEdit()
-        self.search_edit.setPlaceholderText(self.tr('Search fonts...'))
+        self.search_edit.setPlaceholderText(self.tr("Search fonts..."))
         self.search_edit.textChanged.connect(self._filter_lists)
         layout.addWidget(self.search_edit)
 
@@ -627,23 +750,25 @@ class FontExcludeDialog(QDialog):
 
         # Available fonts list
         left_layout = QVBoxLayout()
-        left_layout.addWidget(QLabel(self.tr('Available Fonts')))
+        left_layout.addWidget(QLabel(self.tr("Available Fonts")))
         self.available_list = QListWidget()
-        self.available_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.available_list.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection
+        )
         left_layout.addWidget(self.available_list)
         lists_layout.addLayout(left_layout)
 
         # Center buttons
         btn_layout = QVBoxLayout()
         btn_layout.addStretch()
-        self.hide_btn = QPushButton('>')
+        self.hide_btn = QPushButton(">")
         self.hide_btn.setFixedWidth(40)
-        self.hide_btn.setToolTip(self.tr('Hide selected fonts'))
+        self.hide_btn.setToolTip(self.tr("Hide selected fonts"))
         self.hide_btn.clicked.connect(self._hide_fonts)
         btn_layout.addWidget(self.hide_btn)
-        self.show_btn = QPushButton('<')
+        self.show_btn = QPushButton("<")
         self.show_btn.setFixedWidth(40)
-        self.show_btn.setToolTip(self.tr('Show selected fonts'))
+        self.show_btn.setToolTip(self.tr("Show selected fonts"))
         self.show_btn.clicked.connect(self._show_fonts)
         btn_layout.addWidget(self.show_btn)
         btn_layout.addStretch()
@@ -651,16 +776,20 @@ class FontExcludeDialog(QDialog):
 
         # Excluded fonts list
         right_layout = QVBoxLayout()
-        right_layout.addWidget(QLabel(self.tr('Hidden Fonts')))
+        right_layout.addWidget(QLabel(self.tr("Hidden Fonts")))
         self.excluded_list = QListWidget()
-        self.excluded_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.excluded_list.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection
+        )
         right_layout.addWidget(self.excluded_list)
         lists_layout.addLayout(right_layout)
 
         layout.addLayout(lists_layout)
 
         # OK / Cancel buttons
-        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
@@ -677,6 +806,7 @@ class FontExcludeDialog(QDialog):
     def _populate_lists(self):
         from utils import shared
         from utils.config import pcfg
+
         self.available_list.clear()
         self.excluded_list.clear()
 
@@ -706,11 +836,12 @@ class FontExcludeDialog(QDialog):
             self._add_font_item(self.available_list, item.text())
 
     def get_excluded_fonts(self) -> List[str]:
-        return [self.excluded_list.item(i).text() for i in range(self.excluded_list.count())]
+        return [
+            self.excluded_list.item(i).text() for i in range(self.excluded_list.count())
+        ]
 
 
 class ConfigPanel(Widget):
-
     save_config = Signal()
     unload_models = Signal()
     reload_textstyle = Signal(bool)
@@ -726,64 +857,92 @@ class ConfigPanel(Widget):
 
         self.configContent = ConfigContent()
 
-        dlConfigPanel = self.addConfigBlock(self.tr('DL Module'))
-        generalConfigPanel = self.addConfigBlock(self.tr('General'))
+        dlConfigPanel = self.addConfigBlock(self.tr("DL Module"))
+        generalConfigPanel = self.addConfigBlock(self.tr("General"))
 
-        label_text_det = self.tr('Text Detection')
-        label_text_ocr = self.tr('OCR')
-        label_inpaint = self.tr('Inpaint')
-        label_translator = self.tr('Translator')
-        label_startup = self.tr('Startup')
-        label_typesetting = self.tr('Typesetting')
-        label_save = self.tr('Save')
-        label_shortcuts = self.tr('Miscellaneous')
+        label_text_det = self.tr("Text Detection")
+        label_text_ocr = self.tr("OCR")
+        label_inpaint = self.tr("Inpaint")
+        label_translator = self.tr("Translator")
+        label_startup = self.tr("Startup")
+        label_typesetting = self.tr("Typesetting")
+        label_save = self.tr("Save")
+        label_shortcuts = self.tr("Miscellaneous")
 
         # === Model management ===
-        model_group = PanelGroupBox(self.tr('Models'))
+        model_group = PanelGroupBox(self.tr("Models"))
         model_vlayout = model_group.contentLayout()
         model_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
         model_vlayout.setSpacing(0)
-        self.load_model_checker, msublock = checkbox_with_label(self.tr('Load models on demand'), description=self.tr('Load models on demand to save memory.'))
+        self.load_model_checker, msublock = checkbox_with_label(
+            self.tr("Load models on demand"),
+            description=self.tr("Load models on demand to save memory."),
+        )
         self.load_model_checker.stateChanged.connect(self.on_load_model_changed)
         model_vlayout.addWidget(msublock)
-        self.empty_runcache_checker, msublock = checkbox_with_label(self.tr('Empty cache after RUN'), description=self.tr('Empty cache after RUN to save memory.'))
+        self.empty_runcache_checker, msublock = checkbox_with_label(
+            self.tr("Empty cache after RUN"),
+            description=self.tr("Empty cache after RUN to save memory."),
+        )
         self.empty_runcache_checker.stateChanged.connect(self.on_runcache_changed)
         model_vlayout.addWidget(msublock)
         self.unload_model_btn = QPushButton(parent=self)
         self.unload_model_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
-        self.unload_model_btn.setText(self.tr('Unload All Models'))
+        self.unload_model_btn.setText(self.tr("Unload All Models"))
         self.unload_model_btn.clicked.connect(self.unload_models)
         msublock.layout().addWidget(self.unload_model_btn)
-        self.manage_profiles_btn = QPushButton(self.tr('Manage API Profiles...'))
+        self.manage_profiles_btn = QPushButton(self.tr("Manage API Profiles..."))
         self.manage_profiles_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
         self.manage_profiles_btn.clicked.connect(self._open_profile_manager)
         msublock.layout().addWidget(self.manage_profiles_btn)
         dlConfigPanel.vlayout.addWidget(model_group)
 
-        self.detect_config_panel = TextDetectConfigPanel(self.tr('Detector'), scrollWidget=self)
-        self.detect_sub_block = dlConfigPanel.addGroupedBlock(label_text_det, self.detect_config_panel, object_name="GroupDetect")
-        self.detect_config_panel.keep_existing_checker.clicked.connect(self.on_keepline_clicked)
+        self.detect_config_panel = TextDetectConfigPanel(
+            self.tr("Detector"), scrollWidget=self
+        )
+        self.detect_sub_block = dlConfigPanel.addGroupedBlock(
+            label_text_det, self.detect_config_panel, object_name="GroupDetect"
+        )
+        self.detect_config_panel.keep_existing_checker.clicked.connect(
+            self.on_keepline_clicked
+        )
 
-        self.ocr_config_panel = OCRConfigPanel(self.tr('OCR'), scrollWidget=self)
-        self.ocr_sub_block = dlConfigPanel.addGroupedBlock(label_text_ocr, self.ocr_config_panel, object_name="GroupOCR")
+        self.ocr_config_panel = OCRConfigPanel(self.tr("OCR"), scrollWidget=self)
+        self.ocr_sub_block = dlConfigPanel.addGroupedBlock(
+            label_text_ocr, self.ocr_config_panel, object_name="GroupOCR"
+        )
 
-        self.inpaint_config_panel = InpaintConfigPanel(self.tr('Inpainter'), scrollWidget=self)
-        self.inpaint_sub_block = dlConfigPanel.addGroupedBlock(label_inpaint, self.inpaint_config_panel, object_name="GroupInpaint")
+        self.inpaint_config_panel = InpaintConfigPanel(
+            self.tr("Inpainter"), scrollWidget=self
+        )
+        self.inpaint_sub_block = dlConfigPanel.addGroupedBlock(
+            label_inpaint, self.inpaint_config_panel, object_name="GroupInpaint"
+        )
 
-        self.trans_config_panel = TranslatorConfigPanel(label_translator, scrollWidget=self)
-        self.trans_sub_block = dlConfigPanel.addGroupedBlock(label_translator, self.trans_config_panel, object_name="GroupTranslate")
+        self.trans_config_panel = TranslatorConfigPanel(
+            label_translator, scrollWidget=self
+        )
+        self.trans_sub_block = dlConfigPanel.addGroupedBlock(
+            label_translator, self.trans_config_panel, object_name="GroupTranslate"
+        )
 
         # === General: Startup ===
         startup_widget = QWidget()
         startup_layout = QVBoxLayout(startup_widget)
         startup_layout.setContentsMargins(0, 0, 0, 0)
-        self.open_on_startup_checker = QCheckBox(self.tr('Reopen last project on startup'))
-        self.open_on_startup_checker.stateChanged.connect(self.on_open_onstartup_changed)
+        self.open_on_startup_checker = QCheckBox(
+            self.tr("Reopen last project on startup")
+        )
+        self.open_on_startup_checker.stateChanged.connect(
+            self.on_open_onstartup_changed
+        )
         startup_layout.addWidget(self.open_on_startup_checker)
-        self.startup_block = generalConfigPanel.addGroupedBlock(label_startup, startup_widget, object_name="GroupGeneral")
+        self.startup_block = generalConfigPanel.addGroupedBlock(
+            label_startup, startup_widget, object_name="GroupGeneral"
+        )
 
-        dec_program_str = self.tr('decide by program')
-        use_global_str = self.tr('use global setting')
+        dec_program_str = self.tr("decide by program")
+        use_global_str = self.tr("use global setting")
 
         # Build typesetting wrapper widget
         ts_widget = QWidget()
@@ -800,53 +959,109 @@ class ConfigPanel(Widget):
         b.layout().setContentsMargins(0, 0, 0, 0)
         b.setContentsMargins(0, 0, 0, 0)
         ts_layout.addWidget(b)
-        self.let_fntsize_combox, sublock = combobox_with_label([dec_program_str, use_global_str], self.tr('Font Size'), parent=self, insert_stretch=True)
+        self.let_fntsize_combox, sublock = combobox_with_label(
+            [dec_program_str, use_global_str],
+            self.tr("Font Size"),
+            parent=self,
+            insert_stretch=True,
+        )
         global_fntfmt_layout.addWidget(sublock, 0, 0)
 
         self.let_fntsize_combox.activated.connect(self.on_fntsize_flag_changed)
-        self.let_fntstroke_combox, sublock = combobox_with_label([dec_program_str, use_global_str], self.tr('Stroke Size'), parent=self, insert_stretch=True)
+        self.let_fntstroke_combox, sublock = combobox_with_label(
+            [dec_program_str, use_global_str],
+            self.tr("Stroke Size"),
+            parent=self,
+            insert_stretch=True,
+        )
         self.let_fntstroke_combox.activated.connect(self.on_fntstroke_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 0, 1)
 
-        self.let_fntcolor_combox, sublock = combobox_with_label([dec_program_str, use_global_str], self.tr('Font Color'), parent=self, insert_stretch=True)
+        self.let_fntcolor_combox, sublock = combobox_with_label(
+            [dec_program_str, use_global_str],
+            self.tr("Font Color"),
+            parent=self,
+            insert_stretch=True,
+        )
         self.let_fntcolor_combox.activated.connect(self.on_fontcolor_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 1, 0)
-        self.let_fnt_scolor_combox, sublock = combobox_with_label([dec_program_str, use_global_str], self.tr('Stroke Color'), parent=self, insert_stretch=True)
+        self.let_fnt_scolor_combox, sublock = combobox_with_label(
+            [dec_program_str, use_global_str],
+            self.tr("Stroke Color"),
+            parent=self,
+            insert_stretch=True,
+        )
         self.let_fnt_scolor_combox.activated.connect(self.on_font_scolor_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 1, 1)
 
-        self.let_effect_combox, sublock = combobox_with_label([dec_program_str, use_global_str], self.tr('Effect'), parent=self, insert_stretch=True)
+        self.let_effect_combox, sublock = combobox_with_label(
+            [dec_program_str, use_global_str],
+            self.tr("Effect"),
+            parent=self,
+            insert_stretch=True,
+        )
         self.let_effect_combox.activated.connect(self.on_effect_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 2, 0)
-        self.let_alignment_combox, sublock = combobox_with_label([dec_program_str, use_global_str], self.tr('Alignment'), parent=self, insert_stretch=True)
+        self.let_alignment_combox, sublock = combobox_with_label(
+            [dec_program_str, use_global_str],
+            self.tr("Alignment"),
+            parent=self,
+            insert_stretch=True,
+        )
         self.let_alignment_combox.activated.connect(self.on_alignment_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 2, 1)
 
-        self.let_writing_mode_combox, sublock = combobox_with_label([dec_program_str, use_global_str], self.tr('Writing-mode'), parent=self, insert_stretch=True)
-        self.let_writing_mode_combox.activated.connect(self.on_writing_mode_flag_changed)
+        self.let_writing_mode_combox, sublock = combobox_with_label(
+            [dec_program_str, use_global_str],
+            self.tr("Writing-mode"),
+            parent=self,
+            insert_stretch=True,
+        )
+        self.let_writing_mode_combox.activated.connect(
+            self.on_writing_mode_flag_changed
+        )
         global_fntfmt_layout.addWidget(sublock, 3, 0)
-        self.let_family_combox, sublock = combobox_with_label([self.tr('Keep existing'), self.tr('Always use global setting')], self.tr('Font Family'), parent=self, insert_stretch=True)
+        self.let_family_combox, sublock = combobox_with_label(
+            [self.tr("Keep existing"), self.tr("Always use global setting")],
+            self.tr("Font Family"),
+            parent=self,
+            insert_stretch=True,
+        )
         self.let_family_combox.activated.connect(self.on_family_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 3, 1)
 
-        global_fntfmt_layout.addItem(QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding), 0, 2)
+        global_fntfmt_layout.addItem(
+            QSpacerItem(
+                0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            ),
+            0,
+            2,
+        )
 
         self.let_autolayout_checker, al_sublock = checkbox_with_label(
-                self.tr('Auto layout'),
-                description=self.tr('Split translation into multi-lines according to the extracted balloon region.'))
+            self.tr("Auto layout"),
+            description=self.tr(
+                "Split translation into multi-lines according to the extracted balloon region."
+            ),
+        )
         self.let_autolayout_checker.stateChanged.connect(self.on_autolayout_changed)
         ts_layout.addWidget(al_sublock)
 
-        self.let_uppercase_checker, uc_sublock = checkbox_with_label(self.tr('To uppercase'))
+        self.let_uppercase_checker, uc_sublock = checkbox_with_label(
+            self.tr("To uppercase")
+        )
         self.let_uppercase_checker.stateChanged.connect(self.on_uppercase_changed)
         ts_layout.addWidget(uc_sublock)
 
         self.let_textstyle_indep_checker, ti_sublock = checkbox_with_label(
-                self.tr('Independent text styles for each projects'))
-        self.let_textstyle_indep_checker.stateChanged.connect(self.on_textstyle_indep_changed)
+            self.tr("Independent text styles for each projects")
+        )
+        self.let_textstyle_indep_checker.stateChanged.connect(
+            self.on_textstyle_indep_changed
+        )
         ts_layout.addWidget(ti_sublock)
 
-        self.exclude_fonts_btn = QPushButton(self.tr('Exclude Fonts...'), parent=self)
+        self.exclude_fonts_btn = QPushButton(self.tr("Exclude Fonts..."), parent=self)
         self.exclude_fonts_btn.setFixedWidth(CONFIG_COMBOBOX_LONG)
         self.exclude_fonts_btn.clicked.connect(self.on_exclude_fonts_clicked)
         btn_sublock = ConfigSubBlock(self.exclude_fonts_btn)
@@ -857,11 +1072,14 @@ class ConfigPanel(Widget):
         self.max_font_size_edit.setValue(pcfg.max_font_size)
         self.max_font_size_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
         self.max_font_size_edit.valueChanged.connect(self.on_max_font_size_changed)
-        max_font_sublock = ConfigSubBlock(self.max_font_size_edit, self.tr('Max Font Size (px)'))
+        max_font_sublock = ConfigSubBlock(
+            self.max_font_size_edit, self.tr("Max Font Size (px)")
+        )
         ts_layout.addWidget(max_font_sublock)
 
         # --- Preset values for font format combo boxes ---
         self._preset_editors = {}
+
         def _make_preset_row(label: str, config_key: str):
             """Build a label + comma-separated QLineEdit row for a preset list."""
             row = QHBoxLayout()
@@ -870,25 +1088,29 @@ class ConfigPanel(Widget):
             lbl.setFixedWidth(110)
             row.addWidget(lbl)
             edit = QLineEdit()
-            edit.setText(', '.join(str(v) for v in getattr(pcfg, config_key)))
-            edit.setPlaceholderText(self.tr('comma-separated values'))
+            edit.setText(", ".join(str(v) for v in getattr(pcfg, config_key)))
+            edit.setPlaceholderText(self.tr("comma-separated values"))
             row.addWidget(edit, 1)
             sublock = ConfigSubBlock(row)
             ts_layout.addWidget(sublock)
             self._preset_editors[config_key] = edit
-            edit.editingFinished.connect(lambda k=config_key, e=edit: self._on_preset_edited(k, e))
+            edit.editingFinished.connect(
+                lambda k=config_key, e=edit: self._on_preset_edited(k, e)
+            )
 
-        preset_header = QLabel(self.tr('Combo Box Presets'))
-        preset_header.setStyleSheet('font-weight: bold; padding: 8px 0 0 24px;')
+        preset_header = QLabel(self.tr("Combo Box Presets"))
+        preset_header.setStyleSheet("font-weight: bold; padding: 8px 0 0 24px;")
         ts_layout.addWidget(preset_header)
 
-        _make_preset_row(self.tr('Font Size:'), 'font_size_presets')
-        _make_preset_row(self.tr('Line Spacing:'), 'line_spacing_presets')
-        _make_preset_row(self.tr('Letter Spacing:'), 'letter_spacing_presets')
-        _make_preset_row(self.tr('Stroke Width:'), 'stroke_width_presets')
-        _make_preset_row(self.tr('Opacity:'), 'opacity_presets')
+        _make_preset_row(self.tr("Font Size:"), "font_size_presets")
+        _make_preset_row(self.tr("Line Spacing:"), "line_spacing_presets")
+        _make_preset_row(self.tr("Letter Spacing:"), "letter_spacing_presets")
+        _make_preset_row(self.tr("Stroke Width:"), "stroke_width_presets")
+        _make_preset_row(self.tr("Opacity:"), "opacity_presets")
 
-        self.typesetting_block = generalConfigPanel.addGroupedBlock(label_typesetting, ts_widget, object_name="GroupGeneral")
+        self.typesetting_block = generalConfigPanel.addGroupedBlock(
+            label_typesetting, ts_widget, object_name="GroupGeneral"
+        )
 
         # === General: Save ===
         save_widget = QWidget()
@@ -897,30 +1119,41 @@ class ConfigPanel(Widget):
         save_layout.setSpacing(0)
 
         self.rst_imgformat_combobox, imsave_sublock = combobox_with_label(
-                ['PNG', 'JPG', 'WEBP', 'JXL'], self.tr('Result image format'), parent=self)
+            ["PNG", "JPG", "WEBP", "JXL"], self.tr("Result image format"), parent=self
+        )
         self.rst_imgformat_combobox.activated.connect(self.on_rst_imgformat_changed)
         save_layout.addWidget(imsave_sublock)
 
         self.rst_autoformat_checker, autoformat_sublock = checkbox_with_label(
-            self.tr('Auto detect source format'))
+            self.tr("Auto detect source format")
+        )
         self.rst_autoformat_checker.stateChanged.connect(self.on_autoformat_changed)
         save_layout.addWidget(autoformat_sublock)
 
-        self.rst_imgquality_edit = PercentageLineEdit('100')
+        self.rst_imgquality_edit = PercentageLineEdit("100")
         self.rst_imgquality_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
         self.rst_imgquality_edit.finish_edited.connect(self.on_edit_quality_changed)
 
-        quality_sublock = ConfigSubBlock(self.rst_imgquality_edit, self.tr('Quality'), vertical_layout=False)
+        quality_sublock = ConfigSubBlock(
+            self.rst_imgquality_edit, self.tr("Quality"), vertical_layout=False
+        )
         quality_sublock.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
         quality_sublock.layout().insertStretch(-1)
         imsave_sublock.layout().addWidget(quality_sublock)
 
-        self.intermediate_imgformat_combobox, intermediate_imsave_sublock = combobox_with_label(
-                ['PNG', 'JXL'], self.tr('Intermediate image format'), parent=self)
-        self.intermediate_imgformat_combobox.activated.connect(self.on_intermediate_imgformat_changed)
+        self.intermediate_imgformat_combobox, intermediate_imsave_sublock = (
+            combobox_with_label(
+                ["PNG", "JXL"], self.tr("Intermediate image format"), parent=self
+            )
+        )
+        self.intermediate_imgformat_combobox.activated.connect(
+            self.on_intermediate_imgformat_changed
+        )
         save_layout.addWidget(intermediate_imsave_sublock)
 
-        self.save_block = generalConfigPanel.addGroupedBlock(label_save, save_widget, object_name="GroupSave")
+        self.save_block = generalConfigPanel.addGroupedBlock(
+            label_save, save_widget, object_name="GroupSave"
+        )
 
         # === General: Miscellaneous (theme + shortcut editor) ===
         misc_widget = QWidget()
@@ -936,7 +1169,7 @@ class ConfigPanel(Widget):
         self.theme_combo.activated.connect(self._on_theme_selected)
         theme_row.addWidget(self.theme_combo)
 
-        self.edit_theme_btn = QPushButton(self.tr('Edit...'), parent=self)
+        self.edit_theme_btn = QPushButton(self.tr("Edit..."), parent=self)
         self.edit_theme_btn.setFixedWidth(80)
         self.edit_theme_btn.clicked.connect(self._on_edit_theme)
         theme_row.addWidget(self.edit_theme_btn)
@@ -945,12 +1178,14 @@ class ConfigPanel(Widget):
         misc_layout.addLayout(theme_row)
 
         # Shortcut button
-        self.shortcut_btn = QPushButton(self.tr('Edit Shortcuts...'), parent=self)
+        self.shortcut_btn = QPushButton(self.tr("Edit Shortcuts..."), parent=self)
         self.shortcut_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
         self.shortcut_btn.clicked.connect(self._open_shortcut_dialog)
         misc_layout.addWidget(self.shortcut_btn)
 
-        self.shortcut_block = generalConfigPanel.addGroupedBlock(label_shortcuts, misc_widget)
+        self.shortcut_block = generalConfigPanel.addGroupedBlock(
+            label_shortcuts, misc_widget
+        )
         self._refresh_theme_combo()
 
         # === Navigation list (replaces horizontal nav bar) ===
@@ -963,15 +1198,15 @@ class ConfigPanel(Widget):
         sections = [
             ("_header", self.tr("DL Module")),
             (self.detect_sub_block.section_widget, label_text_det),
-            (self.ocr_sub_block.section_widget,    label_text_ocr),
+            (self.ocr_sub_block.section_widget, label_text_ocr),
             (self.inpaint_sub_block.section_widget, label_inpaint),
-            (self.trans_sub_block.section_widget,  label_translator),
+            (self.trans_sub_block.section_widget, label_translator),
             ("_sep", None),
             ("_header", self.tr("General")),
-            (self.startup_block.section_widget,    label_startup),
+            (self.startup_block.section_widget, label_startup),
             (self.typesetting_block.section_widget, label_typesetting),
-            (self.save_block.section_widget,       label_save),
-            (self.shortcut_block.section_widget,   label_shortcuts),
+            (self.save_block.section_widget, label_save),
+            (self.shortcut_block.section_widget, label_shortcuts),
         ]
         self._nav_items = []  # (widget_or_None, row)
         for target, text in sections:
@@ -1011,7 +1246,9 @@ class ConfigPanel(Widget):
         pcfg.module.empty_runcache = self.empty_runcache_checker.isChecked()
 
     def on_keepline_clicked(self):
-        pcfg.module.keep_exist_textlines = self.detect_config_panel.keep_existing_checker.isChecked()
+        pcfg.module.keep_exist_textlines = (
+            self.detect_config_panel.keep_existing_checker.isChecked()
+        )
 
     def addConfigBlock(self, header: str) -> ConfigBlock:
         cb = ConfigBlock(header, parent=self)
@@ -1045,10 +1282,11 @@ class ConfigPanel(Widget):
             pcfg.excluded_fonts = excluded
             self.font_exclusion_changed.emit()
             from utils.config import save_config
+
             save_config()
 
     def on_rst_imgformat_changed(self):
-        pcfg.imgsave_ext = '.' + self.rst_imgformat_combobox.currentText().lower()
+        pcfg.imgsave_ext = "." + self.rst_imgformat_combobox.currentText().lower()
 
     def on_autoformat_changed(self):
         pcfg.imgsave_auto_format = self.rst_autoformat_checker.isChecked()
@@ -1059,7 +1297,7 @@ class ConfigPanel(Widget):
 
     def _on_preset_edited(self, config_key: str, editor: QLineEdit):
         raw = editor.text()
-        parts = [p.strip() for p in raw.split(',') if p.strip()]
+        parts = [p.strip() for p in raw.split(",") if p.strip()]
         values = []
         for p in parts:
             try:
@@ -1069,13 +1307,16 @@ class ConfigPanel(Widget):
         if values:
             setattr(pcfg, config_key, values)
             from utils.config import save_config
+
             save_config()
             self.presets_changed.emit()
         else:
-            editor.setText(', '.join(str(v) for v in getattr(pcfg, config_key)))
+            editor.setText(", ".join(str(v) for v in getattr(pcfg, config_key)))
 
     def on_intermediate_imgformat_changed(self):
-        pcfg.intermediate_imgsave_ext = '.' + self.intermediate_imgformat_combobox.currentText().lower()
+        pcfg.intermediate_imgsave_ext = (
+            "." + self.intermediate_imgformat_combobox.currentText().lower()
+        )
 
     def on_edit_quality_changed(self, value: str):
         pcfg.imgsave_quality = int(value)
@@ -1142,6 +1383,7 @@ class ConfigPanel(Widget):
             load_profiles,
             save_all_profiles,
         )
+
         profiles = load_profiles()
         dialog = ProfileManagerDialog(self, profiles, on_changed=lambda: None)
         dialog.exec()
@@ -1158,6 +1400,7 @@ class ConfigPanel(Widget):
     def _refresh_theme_combo(self):
         """Rebuild the theme combo box with all available themes."""
         from .misc import load_all_themes, load_custom_themes
+
         all_themes = load_all_themes()
         custom_themes = load_custom_themes()
         current = pcfg.dark_theme if pcfg.darkmode else pcfg.light_theme
@@ -1165,7 +1408,7 @@ class ConfigPanel(Widget):
         self.theme_combo.clear()
         for name in all_themes:
             is_custom = name in custom_themes
-            label = name if is_custom else f'{name} ({self.tr("built-in")})'
+            label = name if is_custom else f"{name} ({self.tr('built-in')})"
             self.theme_combo.addItem(label, name)
 
         idx = self.theme_combo.findData(current)
@@ -1177,6 +1420,7 @@ class ConfigPanel(Widget):
     def _update_theme_buttons(self):
         """Enable/disable Edit/Delete based on whether the selected theme is custom."""
         from .misc import load_custom_themes
+
         theme_name = self.theme_combo.currentData()
         if not theme_name:
             return
@@ -1186,6 +1430,7 @@ class ConfigPanel(Widget):
     def _on_theme_selected(self):
         """Apply the selected theme for the current mode."""
         from .misc import load_all_themes
+
         theme_name = self.theme_combo.currentData()
         if not theme_name:
             return
@@ -1193,8 +1438,8 @@ class ConfigPanel(Widget):
         if theme_name not in all_themes:
             return
 
-        base = all_themes[theme_name].get('_base', theme_name)
-        is_dark = 'dark' in base.lower()
+        base = all_themes[theme_name].get("_base", theme_name)
+        is_dark = "dark" in base.lower()
         if is_dark:
             pcfg.dark_theme = theme_name
         else:
@@ -1207,6 +1452,7 @@ class ConfigPanel(Widget):
         """Clone the currently selected theme and open the editor."""
         from .misc import load_all_themes
         from .theme_editor import ThemeEditorDialog
+
         theme_name = self.theme_combo.currentData()
         if not theme_name:
             return
@@ -1216,20 +1462,23 @@ class ConfigPanel(Widget):
         if not source:
             return
 
-        base = source.get('_base', theme_name)
+        base = source.get("_base", theme_name)
         import random
-        new_name = f'{base}-custom-{random.randint(100, 999)}'
+
+        new_name = f"{base}-custom-{random.randint(100, 999)}"
 
         from .misc import load_custom_themes
+
         custom = load_custom_themes()
         clone = dict(source)
-        clone['_base'] = base
+        clone["_base"] = base
         custom[new_name] = clone
         try:
             import json
             import os
+
             os.makedirs(os.path.dirname(C.CUSTOM_THEME_PATH), exist_ok=True)
-            with open(C.CUSTOM_THEME_PATH, 'w', encoding='utf-8') as f:
+            with open(C.CUSTOM_THEME_PATH, "w", encoding="utf-8") as f:
                 json.dump(custom, f, indent=4, ensure_ascii=False)
         except Exception:
             return
@@ -1267,10 +1516,11 @@ class ConfigPanel(Widget):
             return
 
         reply = QMessageBox.question(
-            self, self.tr('Delete Theme'),
+            self,
+            self.tr("Delete Theme"),
             self.tr('Delete theme "%s"? This cannot be undone.') % theme_name,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
+            QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
@@ -1278,16 +1528,17 @@ class ConfigPanel(Widget):
         del custom[theme_name]
         try:
             import json
-            with open(C.CUSTOM_THEME_PATH, 'w', encoding='utf-8') as f:
+
+            with open(C.CUSTOM_THEME_PATH, "w", encoding="utf-8") as f:
                 json.dump(custom, f, indent=4, ensure_ascii=False)
         except Exception:
             return
 
         # Fall back to built-in if the deleted theme was active
         if pcfg.dark_theme == theme_name:
-            pcfg.dark_theme = 'eva-dark'
+            pcfg.dark_theme = "eva-dark"
         if pcfg.light_theme == theme_name:
-            pcfg.light_theme = 'eva-light'
+            pcfg.light_theme = "eva-light"
         self.save_config.emit()
         self._refresh_theme_combo()
         self.theme_changed.emit()
@@ -1306,7 +1557,9 @@ class ConfigPanel(Widget):
         if pcfg.open_recent_on_startup:
             self.open_on_startup_checker.setChecked(True)
 
-        self.detect_config_panel.keep_existing_checker.setChecked(pcfg.module.keep_exist_textlines)
+        self.detect_config_panel.keep_existing_checker.setChecked(
+            pcfg.module.keep_exist_textlines
+        )
         self.let_effect_combox.setCurrentIndex(pcfg.let_fnteffect_flag)
         self.let_fntsize_combox.setCurrentIndex(pcfg.let_fntsize_flag)
         self.let_fntstroke_combox.setCurrentIndex(pcfg.let_fntstroke_flag)
@@ -1318,10 +1571,14 @@ class ConfigPanel(Widget):
         self.let_autolayout_checker.setChecked(pcfg.let_autolayout_flag)
         self.let_uppercase_checker.setChecked(pcfg.let_uppercase_flag)
         self.let_textstyle_indep_checker.setChecked(pcfg.let_textstyle_indep_flag)
-        self.rst_imgformat_combobox.setCurrentText(pcfg.imgsave_ext.replace('.', '').upper())
+        self.rst_imgformat_combobox.setCurrentText(
+            pcfg.imgsave_ext.replace(".", "").upper()
+        )
         self.rst_autoformat_checker.setChecked(pcfg.imgsave_auto_format)
         self.rst_imgformat_combobox.setEnabled(not pcfg.imgsave_auto_format)
-        self.intermediate_imgformat_combobox.setCurrentText(pcfg.intermediate_imgsave_ext.replace('.', '').upper())
+        self.intermediate_imgformat_combobox.setCurrentText(
+            pcfg.intermediate_imgsave_ext.replace(".", "").upper()
+        )
         self.rst_imgquality_edit.setText(str(pcfg.imgsave_quality))
         self.load_model_checker.setChecked(pcfg.module.load_model_on_demand)
         self.empty_runcache_checker.setChecked(pcfg.module.empty_runcache)

@@ -2,6 +2,7 @@
 Finds panel order for manga page.
 >> python .\\modules\textdetector\\panel_finder.py <path-to-images>
 """
+
 import json
 import sys
 from pathlib import Path
@@ -400,6 +401,7 @@ def save_panel_text_order(path: Path | str):
         img_out = draw_bboxes(img, text_bboxes, panel_bboxes)
         img_out.save(pth_out / k)
 
+
 def reorder_text_block_data(path: Path | str):
     path = Path(path)
     path_json = path / (f"imgtrans_{path.stem}" + ".json")
@@ -423,7 +425,7 @@ def reorder_text_block_data(path: Path | str):
 
     data["pages"] = pages_reordered
 
-    with open(path_json, 'w', encoding="utf8") as f:
+    with open(path_json, "w", encoding="utf8") as f:
         json.dump(data, f)
 
 

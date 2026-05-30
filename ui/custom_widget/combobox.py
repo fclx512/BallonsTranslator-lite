@@ -15,9 +15,13 @@ from .push_button import NoBorderPushBtn
 
 
 class ComboBox(QComboBox):
-
     # https://stackoverflow.com/questions/3241830/qt-how-to-disable-mouse-scrolling-of-qcombobox
-    def __init__(self, parent: QWidget = None, scrollWidget: QWidget = None, options: List[str] = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget = None,
+        scrollWidget: QWidget = None,
+        options: List[str] = None,
+    ) -> None:
         super().__init__(parent)
         self.scrollWidget = scrollWidget
         if options is not None:
@@ -38,8 +42,9 @@ class SmallComboBox(ComboBox):
 
 
 class ConfigComboBox(ComboBox):
-
-    def __init__(self, fix_size=True, scrollWidget: QWidget = None, *args, **kwargs) -> None:
+    def __init__(
+        self, fix_size=True, scrollWidget: QWidget = None, *args, **kwargs
+    ) -> None:
         super().__init__(scrollWidget, *args, **kwargs)
         self.fix_size = fix_size
         self.adjustSize()
@@ -68,7 +73,18 @@ class ParamComboBox(ComboBox):
     paramwidget_edited = Signal(str, str)
     flushbtn_clicked = Signal()
     pathbtn_clicked = Signal()
-    def __init__(self, param_key: str, options: List[str], size=CONFIG_COMBOBOX_SHORT, scrollWidget: QWidget = None, flush_btn: bool = False, path_selector: bool = False, *args, **kwargs) -> None:
+
+    def __init__(
+        self,
+        param_key: str,
+        options: List[str],
+        size=CONFIG_COMBOBOX_SHORT,
+        scrollWidget: QWidget = None,
+        flush_btn: bool = False,
+        path_selector: bool = False,
+        *args,
+        **kwargs,
+    ) -> None:
         super().__init__(scrollWidget=scrollWidget, *args, **kwargs)
         self.param_key = param_key
         self.setFixedWidth(size)
@@ -78,10 +94,10 @@ class ParamComboBox(ComboBox):
         self.currentTextChanged.connect(self.on_select_changed)
 
         if flush_btn:
-            self.flush_btn = NoBorderPushBtn(self.tr('Flush'))
+            self.flush_btn = NoBorderPushBtn(self.tr("Flush"))
             self.flush_btn.clicked.connect(self.flushbtn_clicked)
         if path_selector:
-            self.path_select_btn = NoBorderPushBtn(self.tr('Select Path'))
+            self.path_select_btn = NoBorderPushBtn(self.tr("Select Path"))
             self.path_select_btn.clicked.connect(self.pathbtn_clicked)
 
     def on_select_changed(self):
@@ -89,9 +105,17 @@ class ParamComboBox(ComboBox):
 
 
 class SizeComboBox(QComboBox):
-
     param_changed = Signal(str, float)
-    def __init__(self, val_range: List = None, param_name: str = '', parent=None, init_value=None, *args, **kwargs) -> None:
+
+    def __init__(
+        self,
+        val_range: List = None,
+        param_name: str = "",
+        parent=None,
+        init_value=None,
+        *args,
+        **kwargs,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.param_name = param_name
         self.editTextChanged.connect(self.on_text_changed)
@@ -138,7 +162,7 @@ class SizeComboBox(QComboBox):
         value = min(self.max_val, max(self.min_val, value))
         self.setCurrentText(str(round(value, 2)))
 
-    def changeByDelta(self, delta: float, multiplier = 0.01):
+    def changeByDelta(self, delta: float, multiplier=0.01):
         if isinstance(multiplier, Callable):
             multiplier = multiplier()
         self.setValue(self.value() + delta * multiplier)

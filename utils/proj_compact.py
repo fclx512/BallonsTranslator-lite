@@ -16,93 +16,98 @@ from .textblock import TextBlock
 
 # compact_key → (TextBlock getter attr, FontFormat attr for default comparison)
 _COMPACT_DEF: Dict[str, Tuple[str, Optional[str]]] = {
-    "src":  ("text",        None),
-    "trans":("translation", None),
-    "lang": ("language",    None),
-    "v":    ("src_is_vertical", None),
-    "lb":   ("label",       None),
-    "ff":   ("font_family",     "font_family"),
-    "fs":   ("font_size",       "font_size"),
-    "fw":   ("font_weight",     "font_weight"),
-    "fg":   ("fg_colors",       "frgb"),
-    "bg":   ("bg_colors",       "srgb"),
-    "b":    ("bold",            "bold"),
-    "i":    ("italic",          "italic"),
-    "a":    ("alignment",       "alignment"),
-    "sw":   ("stroke_width",    "stroke_width"),
-    "ls":   ("line_spacing",    "line_spacing"),
-    "lsp":  ("letter_spacing",  "letter_spacing"),
+    "src": ("text", None),
+    "trans": ("translation", None),
+    "lang": ("language", None),
+    "v": ("src_is_vertical", None),
+    "lb": ("label", None),
+    "ff": ("font_family", "font_family"),
+    "fs": ("font_size", "font_size"),
+    "fw": ("font_weight", "font_weight"),
+    "fg": ("fg_colors", "frgb"),
+    "bg": ("bg_colors", "srgb"),
+    "b": ("bold", "bold"),
+    "i": ("italic", "italic"),
+    "a": ("alignment", "alignment"),
+    "sw": ("stroke_width", "stroke_width"),
+    "ls": ("line_spacing", "line_spacing"),
+    "lsp": ("letter_spacing", "letter_spacing"),
 }
 
 # FontFormat class-level defaults — compact output omits fields matching these.
 _FONT_CLASS_DEFAULTS: Dict[str, Any] = {
-    "font_family":     "Microsoft YaHei UI",
-    "font_size":       24.0,
-    "stroke_width":    0.0,
-    "frgb":            [0, 0, 0],
-    "srgb":            [0, 0, 0],
-    "bold":            False,
-    "italic":          False,
-    "alignment":       0,
-    "vertical":        False,
-    "font_weight":     None,
-    "line_spacing":    1.2,
-    "letter_spacing":  1.15,
+    "font_family": "Microsoft YaHei UI",
+    "font_size": 24.0,
+    "stroke_width": 0.0,
+    "frgb": [0, 0, 0],
+    "srgb": [0, 0, 0],
+    "bold": False,
+    "italic": False,
+    "alignment": 0,
+    "vertical": False,
+    "font_weight": None,
+    "line_spacing": 1.2,
+    "letter_spacing": 1.15,
 }
 
 # compact_key → TextBlock attribute name for applying modifications
 _MOD_ATTR_MAP: Dict[str, str] = {
     "trans": "translation",
-    "lang":  "language",
-    "v":     "src_is_vertical",
-    "lb":    "label",
-    "ff":    "font_family",
-    "fs":    "font_size",
-    "fw":    "font_weight",
-    "fg":    "fg_colors",
-    "bg":    "bg_colors",
-    "b":     "bold",
-    "i":     "italic",
-    "a":     "alignment",
-    "sw":    "stroke_width",
-    "ls":    "line_spacing",
-    "lsp":   "letter_spacing",
+    "lang": "language",
+    "v": "src_is_vertical",
+    "lb": "label",
+    "ff": "font_family",
+    "fs": "font_size",
+    "fw": "font_weight",
+    "fg": "fg_colors",
+    "bg": "bg_colors",
+    "b": "bold",
+    "i": "italic",
+    "a": "alignment",
+    "sw": "stroke_width",
+    "ls": "line_spacing",
+    "lsp": "letter_spacing",
 }
 
 # compact_key → one-line prompt description snippet
 FIELD_PROMPT_SNIPPETS: Dict[str, str] = {
     "trans": "- trans: 译文文本",
-    "ff":    "- ff: 字体名称",
-    "fs":    "- fs: 字号（像素）",
-    "fw":    "- fw: 字重（100-900，400=常规，700=粗体）",
-    "fg":    "- fg: 文字颜色 [R, G, B]",
-    "bg":    "- bg: 轮廓颜色 [R, G, B]",
-    "b":     "- b: 粗体 (true/false)",
-    "i":     "- i: 斜体 (true/false)",
-    "a":     "- a: 对齐 (0=左/1=中/2=右)",
-    "sw":    "- sw: 轮廓宽度（0=无轮廓）",
-    "ls":    "- ls: 行距（1.0=单倍，1.2=默认）",
-    "lsp":   "- lsp: 字距",
-    "v":     "- v: 竖排 (true/false)",
-    "lb":    "- lb: 气泡类型标签",
-    "lang":  "- lang: 源语言 (ja/eng/unknown)",
+    "ff": "- ff: 字体名称",
+    "fs": "- fs: 字号（像素）",
+    "fw": "- fw: 字重（100-900，400=常规，700=粗体）",
+    "fg": "- fg: 文字颜色 [R, G, B]",
+    "bg": "- bg: 轮廓颜色 [R, G, B]",
+    "b": "- b: 粗体 (true/false)",
+    "i": "- i: 斜体 (true/false)",
+    "a": "- a: 对齐 (0=左/1=中/2=右)",
+    "sw": "- sw: 轮廓宽度（0=无轮廓）",
+    "ls": "- ls: 行距（1.0=单倍，1.2=默认）",
+    "lsp": "- lsp: 字距",
+    "v": "- v: 竖排 (true/false)",
+    "lb": "- lb: 气泡类型标签",
+    "lang": "- lang: 源语言 (ja/eng/unknown)",
 }
 
 # ── exceptions ───────────────────────────────────────────────────────
 
+
 class StaleProjectError(Exception):
     """项目在 AI 读取后被用户修改，hash 不匹配，拒绝应用修改。"""
+
 
 class InvalidModificationError(Exception):
     """AI 返回的 modification JSON 格式不合法。"""
 
+
 # ── helpers ──────────────────────────────────────────────────────────
+
 
 def _get_font_default(fmt_attr: str, global_font: Optional[FontFormat]) -> Any:
     """Return the comparison default for *fmt_attr*."""
     if global_font is not None and hasattr(global_font, fmt_attr):
         return getattr(global_font, fmt_attr)
     return _FONT_CLASS_DEFAULTS.get(fmt_attr)
+
 
 def _is_default(value: Any, default: Any) -> bool:
     """Value equals its default (handles lists)."""
@@ -112,7 +117,9 @@ def _is_default(value: Any, default: Any) -> bool:
         return value == default
     return value == default
 
+
 # ── compact serialization ────────────────────────────────────────────
+
 
 def compact_block(
     blk: TextBlock,
@@ -133,7 +140,11 @@ def compact_block(
             value = getattr(blk, blk_attr)
 
         # skip empty / None
-        if value is None or value == "" or (isinstance(value, list) and len(value) == 0):
+        if (
+            value is None
+            or value == ""
+            or (isinstance(value, list) and len(value) == 0)
+        ):
             continue
 
         # for font fields, skip if matching default
@@ -145,6 +156,7 @@ def compact_block(
         result[ckey] = value
 
     return result
+
 
 def build_index(proj, include_global_font: bool = True) -> Dict[str, Any]:
     """Build tier-1 index view."""
@@ -191,10 +203,11 @@ def build_index(proj, include_global_font: bool = True) -> Dict[str, Any]:
             "fw": gf.font_weight,
             "fg": gf.frgb if isinstance(gf.frgb, list) else list(gf.frgb),
             "bg": gf.srgb if isinstance(gf.srgb, list) else list(gf.srgb),
-            "b":  gf.bold,
+            "b": gf.bold,
         }
 
     return result
+
 
 def build_detail(
     proj,
@@ -216,18 +229,24 @@ def build_detail(
         blocks = []
         for bidx, blk in enumerate(blklist):
             blk_id = f"{pidx}:{bidx}"
-            cd = compact_block(blk, blk_id, global_font=pcfg.global_fontformat,
-                              fields_whitelist=fields_whitelist)
+            cd = compact_block(
+                blk,
+                blk_id,
+                global_font=pcfg.global_fontformat,
+                fields_whitelist=fields_whitelist,
+            )
             if "src" in cd or "trans" in cd:
                 blocks.append(cd)
 
-        page_entries.append({
-            "pidx": pidx,
-            "name": pname,
-            "w": w,
-            "h": h,
-            "blocks": blocks,
-        })
+        page_entries.append(
+            {
+                "pidx": pidx,
+                "name": pname,
+                "w": w,
+                "h": h,
+                "blocks": blocks,
+            }
+        )
 
     result: Dict[str, Any] = {
         "type": "detail",
@@ -242,6 +261,7 @@ def build_detail(
 
     return result
 
+
 def build_paginated_detail(
     proj,
     page_indices: List[int],
@@ -252,10 +272,14 @@ def build_paginated_detail(
     chunks = []
     for i in range(0, len(page_indices), max_pages_per_chunk):
         chunk_indices = page_indices[i : i + max_pages_per_chunk]
-        chunks.append(build_detail(proj, chunk_indices, fields_whitelist=fields_whitelist))
+        chunks.append(
+            build_detail(proj, chunk_indices, fields_whitelist=fields_whitelist)
+        )
     return chunks
 
+
 # ── ID parsing ───────────────────────────────────────────────────────
+
 
 def parse_block_id(block_id: str) -> Tuple[int, int]:
     """Parse "pidx:bidx" → (page_index, block_index)."""
@@ -266,6 +290,7 @@ def parse_block_id(block_id: str) -> Tuple[int, int]:
         return int(parts[0]), int(parts[1])
     except (ValueError, TypeError) as e:
         raise ValueError(f"invalid block id: {block_id!r}") from e
+
 
 def expand_block_ids(id_str: str, proj) -> List[str]:
     """Expand "0:*" or "0:0,0:1" to a flat list of block ids."""
@@ -283,7 +308,9 @@ def expand_block_ids(id_str: str, proj) -> List[str]:
             result.append(part)
     return result
 
+
 # ── project hash ─────────────────────────────────────────────────────
+
 
 def generate_project_hash(proj) -> str:
     """Fast hash of project structure (page names + block counts + text lengths)."""
@@ -297,7 +324,9 @@ def generate_project_hash(proj) -> str:
             h.update(str(len(blk.translation or "")).encode())
     return h.hexdigest()[:8]
 
+
 # ── modification validation & application ────────────────────────────
+
 
 def validate_modifications(proj, modifications: Dict[str, Any]) -> List[str]:
     """Validate modification dict. Returns list of error messages (empty = valid)."""
@@ -340,6 +369,7 @@ def validate_modifications(proj, modifications: Dict[str, Any]) -> List[str]:
                 errors.append(f"change[{i}]: unknown field {ckey!r}")
 
     return errors
+
 
 def apply_modifications(
     proj,

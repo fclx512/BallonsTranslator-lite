@@ -26,19 +26,45 @@ from qtpy.QtWidgets import (
 
 # ── Default palette ───────────────────────────────────────
 
-_PALETTE_FILE = Path(__file__).parent.parent.parent / 'config' / 'palette.json'
+_PALETTE_FILE = Path(__file__).parent.parent.parent / "config" / "palette.json"
 
 _DEFAULT_PALETTE = [
-    '#000000', '#434343', '#6B6B6B', '#969696', '#C2C2C2', '#E0E0E0', '#F5F5F5', '#FFFFFF',
-    '#ff0000', '#cc3300', '#ff6600', '#ff9900', '#ffcc00', '#ffff00', '#99cc00', '#66cc00',
-    '#33cc33', '#00cc66', '#009999', '#006699', '#0033cc', '#0000ff', '#3333ff', '#6633cc',
-    '#9933cc', '#cc33cc', '#ff3399', '#ff6699', '#cc6666', '#996633',
+    "#000000",
+    "#434343",
+    "#6B6B6B",
+    "#969696",
+    "#C2C2C2",
+    "#E0E0E0",
+    "#F5F5F5",
+    "#FFFFFF",
+    "#ff0000",
+    "#cc3300",
+    "#ff6600",
+    "#ff9900",
+    "#ffcc00",
+    "#ffff00",
+    "#99cc00",
+    "#66cc00",
+    "#33cc33",
+    "#00cc66",
+    "#009999",
+    "#006699",
+    "#0033cc",
+    "#0000ff",
+    "#3333ff",
+    "#6633cc",
+    "#9933cc",
+    "#cc33cc",
+    "#ff3399",
+    "#ff6699",
+    "#cc6666",
+    "#996633",
 ]
 
 _SWATCH_SIZE = 20
 _SWATCH_GAP = 2
 
-_NO_BTN_STYLE = '''
+_NO_BTN_STYLE = """
 QSpinBox {
     background: rgba(128,128,128,0.13);
     border: 1px solid rgba(128,128,128,0.25);
@@ -53,14 +79,15 @@ QSpinBox::disabled {
     background: transparent;
     border: 1px solid rgba(128,128,128,0.1);
 }
-'''
+"""
 
 # ── Palette I/O ───────────────────────────────────────────
+
 
 def _load_palette():
     try:
         if _PALETTE_FILE.exists():
-            data = json.loads(_PALETTE_FILE.read_text(encoding='utf-8'))
+            data = json.loads(_PALETTE_FILE.read_text(encoding="utf-8"))
             if isinstance(data, list) and all(isinstance(s, str) for s in data):
                 return [QColor(c) for c in data if QColor(c).isValid()]
     except Exception:
@@ -72,11 +99,13 @@ def _save_palette(colors):
     try:
         _PALETTE_FILE.parent.mkdir(parents=True, exist_ok=True)
         data = [c.name(QColor.NameFormat.HexRgb) for c in colors]
-        _PALETTE_FILE.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+        _PALETTE_FILE.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     except Exception:
         pass
 
+
 # ── Widgets ───────────────────────────────────────────────
+
 
 class _ColorSquare(QWidget):
     """2D saturation-value field at a fixed hue."""
@@ -165,8 +194,15 @@ class _HueSlider(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
         grad = QLinearGradient(0, 0, 0, h)
-        for pos, hue in [(0.0, 0.0), (1/6, 1/6), (2/6, 2/6), (3/6, 3/6),
-                         (4/6, 4/6), (5/6, 5/6), (1.0, 1.0)]:
+        for pos, hue in [
+            (0.0, 0.0),
+            (1 / 6, 1 / 6),
+            (2 / 6, 2 / 6),
+            (3 / 6, 3 / 6),
+            (4 / 6, 4 / 6),
+            (5 / 6, 5 / 6),
+            (1.0, 1.0),
+        ]:
             grad.setColorAt(pos, QColor.fromHsvF(hue, 1.0, 1.0))
         p.fillRect(2, 0, w - 4, h, grad)
 
@@ -225,15 +261,20 @@ class _PaletteGrid(QWidget):
     def _update_size(self):
         self._rows = (len(self._colors) + self._cols - 1) // self._cols
         cell = _SWATCH_SIZE + _SWATCH_GAP
-        self.setFixedSize(self._cols * cell + _SWATCH_GAP,
-                          self._rows * cell + _SWATCH_GAP)
+        self.setFixedSize(
+            self._cols * cell + _SWATCH_GAP, self._rows * cell + _SWATCH_GAP
+        )
 
     def _cell_rect(self, idx):
         cell = _SWATCH_SIZE + _SWATCH_GAP
         col = idx % self._cols
         row = idx // self._cols
-        return QRectF(_SWATCH_GAP + col * cell, _SWATCH_GAP + row * cell,
-                      _SWATCH_SIZE, _SWATCH_SIZE)
+        return QRectF(
+            _SWATCH_GAP + col * cell,
+            _SWATCH_GAP + row * cell,
+            _SWATCH_SIZE,
+            _SWATCH_SIZE,
+        )
 
     def _idx_at(self, pos):
         for i in range(len(self._colors)):
@@ -283,6 +324,7 @@ class _PaletteGrid(QWidget):
 
 
 # ── Dialog ────────────────────────────────────────────────
+
 
 class ColorPickerDialog(QDialog):
     """Photoshop-style color picker dialog with editable palette."""
@@ -345,13 +387,13 @@ class ColorPickerDialog(QDialog):
         self.b_spin = make_spin(0, 255)
         self.a_spin = make_spin(0, 255)
 
-        self.h_spin.setSuffix('°')
-        self.s_spin.setSuffix('%')
-        self.v_spin.setSuffix('%')
+        self.h_spin.setSuffix("°")
+        self.s_spin.setSuffix("%")
+        self.v_spin.setSuffix("%")
 
-        self.h_spin.valueChanged.connect(lambda v: self._on_hsv_spin('h', v / 360.0))
-        self.s_spin.valueChanged.connect(lambda v: self._on_hsv_spin('s', v / 100.0))
-        self.v_spin.valueChanged.connect(lambda v: self._on_hsv_spin('v', v / 100.0))
+        self.h_spin.valueChanged.connect(lambda v: self._on_hsv_spin("h", v / 360.0))
+        self.s_spin.valueChanged.connect(lambda v: self._on_hsv_spin("s", v / 100.0))
+        self.v_spin.valueChanged.connect(lambda v: self._on_hsv_spin("v", v / 100.0))
         self.r_spin.valueChanged.connect(lambda v: self._on_rgb_spin())
         self.g_spin.valueChanged.connect(lambda v: self._on_rgb_spin())
         self.b_spin.valueChanged.connect(lambda v: self._on_rgb_spin())
@@ -365,39 +407,43 @@ class ColorPickerDialog(QDialog):
             r.setSpacing(4)
             lbl = QLabel(label)
             lbl.setFixedWidth(14)
-            lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            lbl.setAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
             r.addWidget(lbl)
             r.addWidget(widget)
             return r
 
-        num_col.addLayout(lbl_row('H', self.h_spin))
-        num_col.addLayout(lbl_row('S', self.s_spin))
-        num_col.addLayout(lbl_row('V', self.v_spin))
-        num_col.addWidget(QLabel('─' * 4), alignment=Qt.AlignmentFlag.AlignCenter)
-        num_col.addLayout(lbl_row('R', self.r_spin))
-        num_col.addLayout(lbl_row('G', self.g_spin))
-        num_col.addLayout(lbl_row('B', self.b_spin))
-        num_col.addLayout(lbl_row('A', self.a_spin))
-        num_col.addWidget(QLabel('─' * 4), alignment=Qt.AlignmentFlag.AlignCenter)
+        num_col.addLayout(lbl_row("H", self.h_spin))
+        num_col.addLayout(lbl_row("S", self.s_spin))
+        num_col.addLayout(lbl_row("V", self.v_spin))
+        num_col.addWidget(QLabel("─" * 4), alignment=Qt.AlignmentFlag.AlignCenter)
+        num_col.addLayout(lbl_row("R", self.r_spin))
+        num_col.addLayout(lbl_row("G", self.g_spin))
+        num_col.addLayout(lbl_row("B", self.b_spin))
+        num_col.addLayout(lbl_row("A", self.a_spin))
+        num_col.addWidget(QLabel("─" * 4), alignment=Qt.AlignmentFlag.AlignCenter)
 
         hex_row = QHBoxLayout()
         hex_row.setSpacing(4)
-        hex_lbl = QLabel('#')
+        hex_lbl = QLabel("#")
         hex_lbl.setFixedWidth(14)
-        hex_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        hex_lbl.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         hex_row.addWidget(hex_lbl)
         self.hex_edit = QLineEdit()
         self.hex_edit.setMaxLength(8)
         self.hex_edit.setFixedWidth(78)
-        self.hex_edit.setStyleSheet('''
+        self.hex_edit.setStyleSheet("""
             QLineEdit {
                 background: rgba(128,128,128,0.13);
                 border: 1px solid rgba(128,128,128,0.25);
                 border-radius: 4px;
                 padding: 2px 4px;
             }
-        ''')
-        rx = QRegularExpression('[0-9A-Fa-f]{0,8}')
+        """)
+        rx = QRegularExpression("[0-9A-Fa-f]{0,8}")
         self.hex_edit.setValidator(QRegularExpressionValidator(rx))
         self.hex_edit.textChanged.connect(self._on_hex_changed)
         hex_row.addWidget(self.hex_edit)
@@ -422,9 +468,9 @@ class ColorPickerDialog(QDialog):
         self._new_swatch = _SwatchLabel(self._result, self)
         self._old_swatch.setFixedSize(40, 24)
         self._new_swatch.setFixedSize(40, 24)
-        swatch_col.addWidget(QLabel(self.tr('Old')))
+        swatch_col.addWidget(QLabel(self.tr("Old")))
         swatch_col.addWidget(self._old_swatch)
-        swatch_col.addWidget(QLabel(self.tr('New')))
+        swatch_col.addWidget(QLabel(self.tr("New")))
         swatch_col.addWidget(self._new_swatch)
         bottom.addLayout(swatch_col)
 
@@ -437,8 +483,8 @@ class ColorPickerDialog(QDialog):
 
         btn_col = QVBoxLayout()
         btn_col.setSpacing(6)
-        ok_btn = QPushButton(self.tr('OK'))
-        cancel_btn = QPushButton(self.tr('Cancel'))
+        ok_btn = QPushButton(self.tr("OK"))
+        cancel_btn = QPushButton(self.tr("Cancel"))
         ok_btn.setFixedWidth(80)
         cancel_btn.setFixedWidth(80)
         ok_btn.clicked.connect(self.accept)
@@ -452,8 +498,15 @@ class ColorPickerDialog(QDialog):
     # ── Sync ──────────────────────────────────────────────
 
     def _block_spins(self, block: bool):
-        for s in [self.h_spin, self.s_spin, self.v_spin,
-                  self.r_spin, self.g_spin, self.b_spin, self.a_spin]:
+        for s in [
+            self.h_spin,
+            self.s_spin,
+            self.v_spin,
+            self.r_spin,
+            self.g_spin,
+            self.b_spin,
+            self.a_spin,
+        ]:
             s.blockSignals(block)
         self.hex_edit.blockSignals(block)
 
@@ -487,12 +540,12 @@ class ColorPickerDialog(QDialog):
         self._sync_all_from_hsv()
 
     def _on_hsv_spin(self, channel, value):
-        if channel == 'h':
+        if channel == "h":
             self._hue = value
             self.hue_slider.set_hue(value)
-        elif channel == 's':
+        elif channel == "s":
             self._sat = value
-        elif channel == 'v':
+        elif channel == "v":
             self._val = value
         self._sync_all_from_hsv()
 
@@ -513,7 +566,7 @@ class ColorPickerDialog(QDialog):
     def _on_hex_changed(self, text):
         if len(text) in (6, 8):
             try:
-                c = QColor('#' + text)
+                c = QColor("#" + text)
                 if c.isValid():
                     h, s, v, a = c.getHsvF()
                     self._hue = h if h >= 0 else 0.0

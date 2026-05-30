@@ -91,16 +91,17 @@ from .update_checker import AboutDialog
 
 
 class PageListView(QListWidget):
-
     reveal_file = Signal()
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.setIconSize(QSize(shared.PAGELIST_THUMBNAIL_SIZE, shared.PAGELIST_THUMBNAIL_SIZE))
+        self.setIconSize(
+            QSize(shared.PAGELIST_THUMBNAIL_SIZE, shared.PAGELIST_THUMBNAIL_SIZE)
+        )
 
     def contextMenuEvent(self, e: QContextMenuEvent):
         menu = QMenu()
-        reveal_act = menu.addAction(self.tr('Reveal in File Explorer'))
+        reveal_act = menu.addAction(self.tr("Reveal in File Explorer"))
         rst = menu.exec_(e.globalPos())
 
         if rst == reveal_act:
@@ -108,9 +109,11 @@ class PageListView(QListWidget):
 
         return super().contextMenuEvent(e)
 
-mainwindow_cls = Widget if shared.HEADLESS else FramelessWindow
-class MainWindow(mainwindow_cls):
 
+mainwindow_cls = Widget if shared.HEADLESS else FramelessWindow
+
+
+class MainWindow(mainwindow_cls):
     imgtrans_proj: ProjImgTrans = ProjImgTrans()
     save_on_page_changed = True
     opening_dir = False
@@ -121,7 +124,9 @@ class MainWindow(mainwindow_cls):
     create_errdialog = Signal(str, str, str)
     create_infodialog = Signal(dict)
 
-    def __init__(self, app: QApplication, config: ProgramConfig, open_dir='', **exec_args) -> None:
+    def __init__(
+        self, app: QApplication, config: ProgramConfig, open_dir="", **exec_args
+    ) -> None:
         super().__init__()
 
         shared.create_errdialog_in_mainthread = self.create_errdialog.emit
@@ -143,7 +148,7 @@ class MainWindow(mainwindow_cls):
         FramelessMoveResize.toggleMaxState(self)
         self.setAcceptDrops(True)
 
-        if open_dir != '' and osp.exists(open_dir):
+        if open_dir != "" and osp.exists(open_dir):
             self.OpenProj(open_dir)
         elif pcfg.open_recent_on_startup:
             if len(self.leftBar.recent_proj_list) > 0:
@@ -183,8 +188,12 @@ class MainWindow(mainwindow_cls):
         self.leftBar.open_dir.connect(self.OpenProj)
         self.leftBar.open_json_proj.connect(self.openJsonProj)
         self.leftBar.save_proj.connect(self.manual_save)
-        self.leftBar.export_src_txt.connect(lambda : self.on_export_txt(dump_target='source'))
-        self.leftBar.export_trans_txt.connect(lambda : self.on_export_txt(dump_target='translation'))
+        self.leftBar.export_src_txt.connect(
+            lambda: self.on_export_txt(dump_target="source")
+        )
+        self.leftBar.export_trans_txt.connect(
+            lambda: self.on_export_txt(dump_target="translation")
+        )
         self.leftBar.import_trans_txt.connect(self.on_import_trans_txt)
 
         self.pageList = PageListView()
@@ -198,10 +207,14 @@ class MainWindow(mainwindow_cls):
 
         self.global_search_widget = GlobalSearchWidget(self.centralStackWidget)
         self.global_search_widget.setVisible(False)
-        self.global_search_widget.req_update_pagetext.connect(self.on_req_update_pagetext)
+        self.global_search_widget.req_update_pagetext.connect(
+            self.on_req_update_pagetext
+        )
         self.global_search_widget.req_move_page.connect(self.on_req_move_page)
         self.imsave_thread.img_writed.connect(self.global_search_widget.on_img_writed)
-        self.global_search_widget.search_tree.result_item_clicked.connect(self.on_search_result_item_clicked)
+        self.global_search_widget.search_tree.result_item_clicked.connect(
+            self.on_search_result_item_clicked
+        )
 
         self.titleBar = TitleBar(self)
         self.titleBar.closebtn_clicked.connect(self.on_closebtn_clicked)
@@ -230,30 +243,53 @@ class MainWindow(mainwindow_cls):
         self.canvas.copy_src_signal.connect(self.on_copy_src)
         self.canvas.paste_src_signal.connect(self.on_paste_src)
 
-        self.bottomBar.originalSlider.valueChanged.connect(self.canvas.setOriginalTransparencyBySlider)
-        self.bottomBar.textlayerSlider.valueChanged.connect(self.canvas.setTextLayerTransparencyBySlider)
+        self.bottomBar.originalSlider.valueChanged.connect(
+            self.canvas.setOriginalTransparencyBySlider
+        )
+        self.bottomBar.textlayerSlider.valueChanged.connect(
+            self.canvas.setTextLayerTransparencyBySlider
+        )
 
-        self.drawingPanel = DrawingPanel(self.canvas, self.configPanel.inpaint_config_panel)
+        self.drawingPanel = DrawingPanel(
+            self.canvas, self.configPanel.inpaint_config_panel
+        )
         self.textPanel = TextPanel(self.app)
-        self.textPanel.formatpanel.foldTextBtn.checkStateChanged.connect(self.fold_textarea)
-        self.textPanel.formatpanel.sourceBtn.checkStateChanged.connect(self.show_source_text)
-        self.textPanel.formatpanel.transBtn.checkStateChanged.connect(self.show_trans_text)
-        self.textPanel.formatpanel.textstyle_panel.export_style.connect(self.export_tstyles)
-        self.textPanel.formatpanel.textstyle_panel.import_style.connect(self.import_tstyles)
+        self.textPanel.formatpanel.foldTextBtn.checkStateChanged.connect(
+            self.fold_textarea
+        )
+        self.textPanel.formatpanel.sourceBtn.checkStateChanged.connect(
+            self.show_source_text
+        )
+        self.textPanel.formatpanel.transBtn.checkStateChanged.connect(
+            self.show_trans_text
+        )
+        self.textPanel.formatpanel.textstyle_panel.export_style.connect(
+            self.export_tstyles
+        )
+        self.textPanel.formatpanel.textstyle_panel.import_style.connect(
+            self.import_tstyles
+        )
 
-
-        SW.st_manager = self.st_manager = SceneTextManager(self.app, self, self.canvas, self.textPanel)
+        SW.st_manager = self.st_manager = SceneTextManager(
+            self.app, self, self.canvas, self.textPanel
+        )
         self.st_manager.new_textblk.connect(self.canvas.search_widget.on_new_textblk)
         self.canvas.search_widget.pairwidget_list = self.st_manager.pairwidget_list
         self.canvas.search_widget.textblk_item_list = self.st_manager.textblk_item_list
-        self.canvas.search_widget.replace_one.connect(self.st_manager.on_page_replace_one)
-        self.canvas.search_widget.replace_all.connect(self.st_manager.on_page_replace_all)
+        self.canvas.search_widget.replace_one.connect(
+            self.st_manager.on_page_replace_one
+        )
+        self.canvas.search_widget.replace_all.connect(
+            self.st_manager.on_page_replace_all
+        )
 
         # comic trans pannel
         self.rightComicTransStackPanel = QStackedWidget(self)
         self.rightComicTransStackPanel.addWidget(self.drawingPanel)
         self.rightComicTransStackPanel.addWidget(self.textPanel)
-        self.rightComicTransStackPanel.currentChanged.connect(self.on_transpanel_changed)
+        self.rightComicTransStackPanel.currentChanged.connect(
+            self.on_transpanel_changed
+        )
 
         # Right panel container: AI chat (left, hidden) | canvas | trans stack (right)
         self._rightPanelContainer = QWidget()
@@ -265,8 +301,7 @@ class MainWindow(mainwindow_cls):
         self.aiChatPanel = AiChatPanel()
         self.aiChatPanel.setParent(self._rightPanelContainer)
         self.aiChatPanel.setVisible(False)
-        self._aiChatSlide = OverlaySlider(
-            self.aiChatPanel, direction='left', width=480)
+        self._aiChatSlide = OverlaySlider(self.aiChatPanel, direction="left", width=480)
         self._aiChatSlide.on_before_show(self.aiChatPanel.before_show)
         self._changeReviewWindow = None  # created lazily on first use
 
@@ -282,25 +317,28 @@ class MainWindow(mainwindow_cls):
         # Config panel as floating overlay (not in stack, animates slide)
         self.configPanel.setParent(self.centralStackWidget)
         self.configPanel.setVisible(False)
-        self._configSlide = OverlaySlider(self.configPanel, direction='right')
+        self._configSlide = OverlaySlider(self.configPanel, direction="right")
         self._configSlide.on_before_show(lambda: self.configPanel.setFocus())
         self._configSlide.on_after_hide(self._on_config_hidden)
 
         # Search widget as floating overlay (slides in from left)
         self._searchSlide = OverlaySlider(
-            self.global_search_widget, direction='left',
+            self.global_search_widget,
+            direction="left",
             width=lambda: self.global_search_widget.sizeHint().width(),
         )
-        self._searchSlide.on_before_show(
-            lambda: self.global_search_widget.setFocus())
+        self._searchSlide.on_before_show(lambda: self.global_search_widget.setFocus())
         self._searchSlide.on_after_hide(self._on_search_hidden)
 
         # Page list overlay slides in from left
         self._pageListSlide = OverlaySlider(
-            self.leftStackWidget, direction='left', width=self.PAGE_LIST_WIDTH,
+            self.leftStackWidget,
+            direction="left",
+            width=self.PAGE_LIST_WIDTH,
         )
         self._pageListSlide.on_before_show(
-            lambda: self.leftStackWidget.setCurrentWidget(self.pageList))
+            lambda: self.leftStackWidget.setCurrentWidget(self.pageList)
+        )
         self._pageListSlide.on_after_hide(self._on_page_list_hidden)
 
         mainVBoxLayout = QVBoxLayout(self)
@@ -326,7 +364,7 @@ class MainWindow(mainwindow_cls):
             proj_getter=lambda: self.imgtrans_proj,
         )
         self._ai_controller.settings_path = osp.join(
-            shared.PROGRAM_PATH, 'config', 'ai_chat_config.json'
+            shared.PROGRAM_PATH, "config", "ai_chat_config.json"
         )
         self._ai_controller.load_ai_settings()
         self.aiChatPanel.set_controller(self._ai_controller)
@@ -341,40 +379,35 @@ class MainWindow(mainwindow_cls):
         self.aiChatPanel.clear_requested.connect(self._ai_controller.clear_conversation)
 
         # Apply changes → canvas refresh
-        self.aiChatPanel.apply_changes_requested.connect(
-            self._on_apply_ai_changes)
+        self.aiChatPanel.apply_changes_requested.connect(self._on_apply_ai_changes)
 
         # Open standalone change review window
-        self.aiChatPanel.open_review_requested.connect(
-            self._open_change_review)
+        self.aiChatPanel.open_review_requested.connect(self._open_change_review)
 
         # Controller → Panel
-        self._ai_controller.system_message.connect(
-            self.aiChatPanel.add_system_message)
+        self._ai_controller.system_message.connect(self.aiChatPanel.add_system_message)
         self._ai_controller.streaming_started.connect(
-            self.aiChatPanel.start_streaming_response)
-        self._ai_controller.chunk_received.connect(
-            self.aiChatPanel.append_stream_chunk)
-        self._ai_controller.stream_finished.connect(
-            self.aiChatPanel.finish_streaming)
-        self._ai_controller.changes_ready.connect(
-            self.aiChatPanel.set_changes)
+            self.aiChatPanel.start_streaming_response
+        )
+        self._ai_controller.chunk_received.connect(self.aiChatPanel.append_stream_chunk)
+        self._ai_controller.stream_finished.connect(self.aiChatPanel.finish_streaming)
+        self._ai_controller.changes_ready.connect(self.aiChatPanel.set_changes)
         self._ai_controller.tool_trace_ready.connect(
-            self.aiChatPanel.set_last_tool_trace)
-        self._ai_controller.thinking_started.connect(
-            self.aiChatPanel.show_thinking)
-        self._ai_controller.thinking_finished.connect(
-            self.aiChatPanel.hide_thinking)
+            self.aiChatPanel.set_last_tool_trace
+        )
+        self._ai_controller.thinking_started.connect(self.aiChatPanel.show_thinking)
+        self._ai_controller.thinking_finished.connect(self.aiChatPanel.hide_thinking)
         self._ai_controller.prompt_tokens_estimated.connect(
-            self.aiChatPanel.set_prompt_tokens)
+            self.aiChatPanel.set_prompt_tokens
+        )
         self._ai_controller.api_tokens_reconciled.connect(
-            self.aiChatPanel.reconcile_api_tokens)
-        self._ai_controller.status_changed.connect(
-            self.aiChatPanel.update_status)
+            self.aiChatPanel.reconcile_api_tokens
+        )
+        self._ai_controller.status_changed.connect(self.aiChatPanel.update_status)
         self._ai_controller.conversation_cleared.connect(
-            self.aiChatPanel.on_conversation_cleared)
-        self._ai_controller.error_occurred.connect(
-            self.aiChatPanel.on_error)
+            self.aiChatPanel.on_conversation_cleared
+        )
+        self._ai_controller.error_occurred.connect(self.aiChatPanel.on_error)
 
     def _toggle_ai_chat(self, visible: bool):
         if visible:
@@ -398,10 +431,7 @@ class MainWindow(mainwindow_cls):
         # Convert ChangeItem list → proj_compact modifications dict
         mods = {
             "type": "modifications",
-            "changes": [
-                {"id": c.block_id, c.field: c.new_value}
-                for c in changes
-            ]
+            "changes": [{"id": c.block_id, c.field: c.new_value} for c in changes],
         }
         try:
             count, warnings = proj_compact.apply_modifications(self.imgtrans_proj, mods)
@@ -440,7 +470,7 @@ class MainWindow(mainwindow_cls):
             pcfg.module.textdetector = name
             self.configPanel.detect_config_panel.setDetector(name)
             self.bottomBar.textdet_selector.setSelectedValue(name)
-            LOGGER.info('Text detector set to {}'.format(name))
+            LOGGER.info("Text detector set to {}".format(name))
 
     def on_finish_setocr(self):
         module_manager = self.module_manager
@@ -449,7 +479,7 @@ class MainWindow(mainwindow_cls):
             pcfg.module.ocr = name
             self.configPanel.ocr_config_panel.setOCR(name)
             self.bottomBar.ocr_selector.setSelectedValue(name)
-            LOGGER.info('OCR set to {}'.format(name))
+            LOGGER.info("OCR set to {}".format(name))
 
     def on_finish_setinpainter(self):
         module_manager = self.module_manager
@@ -458,7 +488,7 @@ class MainWindow(mainwindow_cls):
             pcfg.module.inpainter = name
             self.configPanel.inpaint_config_panel.setInpainter(name)
             self.bottomBar.inpaint_selector.setSelectedValue(name)
-            LOGGER.info('Inpainter set to {}'.format(name))
+            LOGGER.info("Inpainter set to {}".format(name))
 
     def on_finish_settranslator(self):
         module_manager = self.module_manager
@@ -468,9 +498,9 @@ class MainWindow(mainwindow_cls):
             pcfg.module.translator = name
             self.bottomBar.trans_selector.finishSetTranslator(translator)
             self.configPanel.trans_config_panel.finishSetTranslator(translator)
-            LOGGER.info('Translator set to {}'.format(name))
+            LOGGER.info("Translator set to {}".format(name))
         else:
-            LOGGER.error('invalid translator')
+            LOGGER.error("invalid translator")
 
     def on_enable_module(self, idx, checked):
         if idx == 0:
@@ -493,26 +523,44 @@ class MainWindow(mainwindow_cls):
         self.bottomBar.trans_selector.selector.addItems(GET_VALID_TRANSLATORS())
         self.bottomBar.ocr_selector.selector.addItems(GET_VALID_OCR())
         self.bottomBar.textdet_selector.selector.addItems(GET_VALID_TEXTDETECTORS())
-        self.bottomBar.textdet_selector.selector.currentTextChanged.connect(self.on_textdet_changed)
+        self.bottomBar.textdet_selector.selector.currentTextChanged.connect(
+            self.on_textdet_changed
+        )
         self.bottomBar.inpaint_selector.selector.addItems(GET_VALID_INPAINTERS())
-        self.bottomBar.inpaint_selector.selector.currentTextChanged.connect(self.on_inpaint_changed)
+        self.bottomBar.inpaint_selector.selector.currentTextChanged.connect(
+            self.on_inpaint_changed
+        )
         self.bottomBar.trans_selector.cfg_clicked.connect(self.to_trans_config)
-        self.bottomBar.trans_selector.selector.currentTextChanged.connect(self.on_trans_changed)
-        self.bottomBar.trans_selector.tgt_selector.currentTextChanged.connect(self.on_trans_tgt_changed)
-        self.bottomBar.trans_selector.src_selector.currentTextChanged.connect(self.on_trans_src_changed)
+        self.bottomBar.trans_selector.selector.currentTextChanged.connect(
+            self.on_trans_changed
+        )
+        self.bottomBar.trans_selector.tgt_selector.currentTextChanged.connect(
+            self.on_trans_tgt_changed
+        )
+        self.bottomBar.trans_selector.src_selector.currentTextChanged.connect(
+            self.on_trans_src_changed
+        )
         self.bottomBar.textdet_selector.cfg_clicked.connect(self.to_detect_config)
         self.bottomBar.inpaint_selector.cfg_clicked.connect(self.to_inpaint_config)
         self.bottomBar.ocr_selector.cfg_clicked.connect(self.to_ocr_config)
-        self.bottomBar.ocr_selector.selector.currentTextChanged.connect(self.on_ocr_changed)
+        self.bottomBar.ocr_selector.selector.currentTextChanged.connect(
+            self.on_ocr_changed
+        )
         self.bottomBar.textdet_selector.setVisible(pcfg.module.enable_detect)
         self.bottomBar.ocr_selector.setVisible(pcfg.module.enable_ocr)
         self.bottomBar.trans_selector.setVisible(pcfg.module.enable_translate)
         self.bottomBar.inpaint_selector.setVisible(pcfg.module.enable_inpaint)
 
-        self.configPanel.trans_config_panel.target_combobox.currentTextChanged.connect(self.on_trans_tgt_changed)
-        self.configPanel.trans_config_panel.source_combobox.currentTextChanged.connect(self.on_trans_src_changed)
+        self.configPanel.trans_config_panel.target_combobox.currentTextChanged.connect(
+            self.on_trans_tgt_changed
+        )
+        self.configPanel.trans_config_panel.source_combobox.currentTextChanged.connect(
+            self.on_trans_src_changed
+        )
 
-        self.drawingPanel.maskTransperancySlider.setValue(int(pcfg.mask_transparency * 100))
+        self.drawingPanel.maskTransperancySlider.setValue(
+            int(pcfg.mask_transparency * 100)
+        )
         self.leftBar.initRecentProjMenu(pcfg.recent_proj_list)
         self.leftBar.showPageListLabel.setChecked(pcfg.show_page_list)
         self.updatePageList()
@@ -532,15 +580,27 @@ class MainWindow(mainwindow_cls):
 
         self.module_manager = module_manager = ModuleManager(self.imgtrans_proj)
         module_manager.finish_translate_page.connect(self.finishTranslatePage)
-        module_manager.imgtrans_pipeline_finished.connect(self.on_imgtrans_pipeline_finished)
+        module_manager.imgtrans_pipeline_finished.connect(
+            self.on_imgtrans_pipeline_finished
+        )
         module_manager.page_trans_finished.connect(self.on_pagtrans_finished)
         module_manager.setupThread(self.configPanel, self.imgtrans_progress_msgbox)
-        module_manager.progress_msgbox.showed.connect(self.on_imgtrans_progressbox_showed)
+        module_manager.progress_msgbox.showed.connect(
+            self.on_imgtrans_progressbox_showed
+        )
         module_manager.blktrans_pipeline_finished.connect(self.on_blktrans_finished)
-        module_manager.imgtrans_thread.post_process_mask = self.drawingPanel.rectPanel.post_process_mask
-        module_manager.inpaint_thread.finish_set_module.connect(self.on_finish_setinpainter)
-        module_manager.translate_thread.finish_set_module.connect(self.on_finish_settranslator)
-        module_manager.textdetect_thread.finish_set_module.connect(self.on_finish_setdetector)
+        module_manager.imgtrans_thread.post_process_mask = (
+            self.drawingPanel.rectPanel.post_process_mask
+        )
+        module_manager.inpaint_thread.finish_set_module.connect(
+            self.on_finish_setinpainter
+        )
+        module_manager.translate_thread.finish_set_module.connect(
+            self.on_finish_settranslator
+        )
+        module_manager.textdetect_thread.finish_set_module.connect(
+            self.on_finish_setdetector
+        )
         module_manager.ocr_thread.finish_set_module.connect(self.on_finish_setocr)
         module_manager.setTextDetector()
         module_manager.setOCR()
@@ -555,13 +615,19 @@ class MainWindow(mainwindow_cls):
         self.drawingPanel.initDLModule(module_manager)
 
         self.global_search_widget.imgtrans_proj = self.imgtrans_proj
-        self.global_search_widget.setupReplaceThread(self.st_manager.pairwidget_list, self.st_manager.textblk_item_list)
-        self.global_search_widget.replace_thread.finished.connect(self.on_global_replace_finished)
+        self.global_search_widget.setupReplaceThread(
+            self.st_manager.pairwidget_list, self.st_manager.textblk_item_list
+        )
+        self.global_search_widget.replace_thread.finished.connect(
+            self.on_global_replace_finished
+        )
 
         self.configPanel.setupConfig()
         self.configPanel.save_config.connect(self.save_config)
         self.configPanel.reload_textstyle.connect(self.load_textstyle_from_proj_dir)
-        self.configPanel.font_exclusion_changed.connect(self.refresh_font_list_exclusion)
+        self.configPanel.font_exclusion_changed.connect(
+            self.refresh_font_list_exclusion
+        )
         self.configPanel.theme_changed.connect(self._on_theme_config_changed)
         self.configPanel.shortcuts_changed.connect(self.refreshShortcuts)
         self.configPanel.presets_changed.connect(self._on_presets_changed)
@@ -595,7 +661,6 @@ class MainWindow(mainwindow_cls):
         if self.rightComicTransStackPanel.isHidden():
             self.setPaintMode()
 
-
     def refresh_font_list_exclusion(self):
         """Re-apply font exclusion filter to the font combobox."""
         familybox = self.textPanel.formatpanel.familybox
@@ -609,7 +674,7 @@ class MainWindow(mainwindow_cls):
 
     def _on_presets_changed(self):
         self.textPanel.formatpanel.reload_presets()
-        if hasattr(self.textPanel.formatpanel, 'textadvancedfmt_panel'):
+        if hasattr(self.textPanel.formatpanel, "textadvancedfmt_panel"):
             self.textPanel.formatpanel.textadvancedfmt_panel.reload_presets()
 
     def setupImgTransUI(self):
@@ -629,7 +694,9 @@ class MainWindow(mainwindow_cls):
                 self._showPageListOverlay()
             else:
                 pw = self.leftStackWidget.parentWidget()
-                self.leftStackWidget.setGeometry(0, 0, self.PAGE_LIST_WIDTH, pw.height())
+                self.leftStackWidget.setGeometry(
+                    0, 0, self.PAGE_LIST_WIDTH, pw.height()
+                )
                 self.leftStackWidget.setCurrentWidget(self.pageList)
                 self.leftStackWidget.raise_()
                 self.leftStackWidget.show()
@@ -641,7 +708,7 @@ class MainWindow(mainwindow_cls):
 
     def _is_canvas_mode(self) -> bool:
         """True when canvas is active (config overlay not visible)."""
-        return not (hasattr(self, 'configPanel') and self.configPanel.isVisible())
+        return not (hasattr(self, "configPanel") and self.configPanel.isVisible())
 
     def _showConfigOverlay(self):
         self._configSlide.show()
@@ -696,9 +763,9 @@ class MainWindow(mainwindow_cls):
 
     def load_textstyle_from_proj_dir(self, from_proj=False):
         if from_proj:
-            text_style_path = osp.join(self.imgtrans_proj.directory, 'textstyles.json')
+            text_style_path = osp.join(self.imgtrans_proj.directory, "textstyles.json")
         else:
-            text_style_path = 'config/textstyles/default.json'
+            text_style_path = "config/textstyles/default.json"
         if osp.exists(text_style_path):
             load_textstyle_from(text_style_path)
             self.textPanel.formatpanel.textstyle_panel.setStyles(text_styles)
@@ -732,12 +799,14 @@ class MainWindow(mainwindow_cls):
             self.titleBar.setTitleContent(osp.basename(directory))
             self.updatePageList()
             self.aiChatPanel.set_project_loaded(True)
-            self._ai_controller.history_path = osp.join(directory, 'ai_chat_history.json')
+            self._ai_controller.history_path = osp.join(
+                directory, "ai_chat_history.json"
+            )
             self.aiChatPanel.rebuild_from_history(self._ai_controller.messages)
             self.opening_dir = False
         except Exception as e:
             self.opening_dir = False
-            create_error_dialog(e, self.tr('Failed to load project ') + directory)
+            create_error_dialog(e, self.tr("Failed to load project ") + directory)
             return
 
     def generate_tif_thumbnails(self, directory: str):
@@ -746,6 +815,7 @@ class MainWindow(mainwindow_cls):
         """
         try:
             from utils.io_utils import create_thumbnail, find_tif_files
+
             # 查找目录中的所有TIF文件
             tif_files = find_tif_files(directory)
 
@@ -778,12 +848,13 @@ class MainWindow(mainwindow_cls):
             self.aiChatPanel.set_project_loaded(True)
             self.titleBar.setTitleContent(osp.basename(self.imgtrans_proj.proj_path))
             self._ai_controller.history_path = osp.join(
-                self.imgtrans_proj.proj_path, 'ai_chat_history.json')
+                self.imgtrans_proj.proj_path, "ai_chat_history.json"
+            )
             self.aiChatPanel.rebuild_from_history(self._ai_controller.messages)
             self.opening_dir = False
         except Exception as e:
             self.opening_dir = False
-            create_error_dialog(e, self.tr('Failed to load project from') + json_path)
+            create_error_dialog(e, self.tr("Failed to load project from") + json_path)
 
     def updatePageList(self):
         if self.pageList.count() != 0:
@@ -791,10 +862,11 @@ class MainWindow(mainwindow_cls):
         if len(self.imgtrans_proj.pages) >= shared.PAGELIST_THUMBNAIL_MAXNUM:
             item_func = lambda imgname: QListWidgetItem(imgname)
         else:
-            item_func = lambda imgname:\
-                QListWidgetItem(QIcon(osp.join(self.imgtrans_proj.directory, imgname)), imgname)
+            item_func = lambda imgname: QListWidgetItem(
+                QIcon(osp.join(self.imgtrans_proj.directory, imgname)), imgname
+            )
         for imgname in self.imgtrans_proj.pages:
-            lstitem =  item_func(imgname)
+            lstitem = item_func(imgname)
             self.pageList.addItem(lstitem)
             if imgname == self.imgtrans_proj.current_img:
                 self.pageList.setCurrentItem(lstitem)
@@ -828,7 +900,7 @@ class MainWindow(mainwindow_cls):
     def changeEvent(self, event: QEvent):
         if event.type() == QEvent.Type.WindowStateChange:
             if self.windowState() & Qt.WindowState.WindowMaximized:
-                    self.titleBar.maxBtn.setChecked(True)
+                self.titleBar.maxBtn.setChecked(True)
         elif event.type() == QEvent.Type.ActivationChange:
             self.canvas.on_activation_changed()
 
@@ -836,8 +908,10 @@ class MainWindow(mainwindow_cls):
 
     def retranslateUI(self):
         msg = QMessageBox()
-        msg.setText(self.tr('Restart to apply changes? \n'))
-        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg.setText(self.tr("Restart to apply changes? \n"))
+        msg.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
         ret = msg.exec_()
         if ret == QMessageBox.StandardButton.Yes:
             self.save_config()
@@ -856,7 +930,13 @@ class MainWindow(mainwindow_cls):
             if not save_rst_only:
                 save_proj = True
 
-            self.saveCurrentPage(update_scene_text, save_proj, restore_interface=True, save_rst_only=save_rst_only, keep_exist_as_backup=keep_exist_as_backup)
+            self.saveCurrentPage(
+                update_scene_text,
+                save_proj,
+                restore_interface=True,
+                save_rst_only=save_rst_only,
+                keep_exist_as_backup=keep_exist_as_backup,
+            )
 
     def pageListCurrentItemChanged(self):
         item = self.pageList.currentItem()
@@ -892,6 +972,7 @@ class MainWindow(mainwindow_cls):
     def _get_shortcut_keys(self, action_id, defaults):
         """Resolve shortcut keys: user config overrides defaults."""
         from utils.config import pcfg
+
         if action_id in pcfg.shortcuts:
             keys = pcfg.shortcuts[action_id]
             if not isinstance(keys, list):
@@ -918,40 +999,98 @@ class MainWindow(mainwindow_cls):
     def _install_shortcuts(self):
         """Create all QShortcut objects from current config (used at init + refresh)."""
 
-        self.shortcut_registry['prev_page'] = self._make_shortcuts('prev_page', ['A'], self.shortcutBefore)
-        self.shortcut_registry['prev_page_alt'] = self._make_shortcuts('prev_page_alt', ['PgUp'], self.shortcutBefore)
-        self.shortcut_registry['next_page'] = self._make_shortcuts('next_page', ['D'], self.shortcutNext)
-        self.shortcut_registry['next_page_alt'] = self._make_shortcuts('next_page_alt', ['PgDown'], self.shortcutNext)
-        self.shortcut_registry['textblock_mode'] = self._make_shortcuts('textblock_mode', ['W'], self.shortcutTextblock)
-        self.shortcut_registry['zoom_in'] = self._make_shortcuts('zoom_in', ['Ctrl++'], self.canvas.gv.scale_up_signal)
-        self.shortcut_registry['zoom_out'] = self._make_shortcuts('zoom_out', ['Ctrl+-'], self.canvas.gv.scale_down_signal)
-        self.shortcut_registry['delete_blks_alt'] = self._make_shortcuts('delete_blks_alt', ['Ctrl+D'], self.shortcutCtrlD)
-        self.shortcut_registry['space_inpaint'] = self._make_shortcuts('space_inpaint', ['Space'], self.shortcutSpace)
-        self.shortcut_registry['select_all'] = self._make_shortcuts('select_all', ['Ctrl+A'], self.shortcutSelectAll)
-        self.shortcut_registry['preview'] = self._make_shortcuts('preview', ['Tab'], self.shortcutPreview)
-        self.shortcut_registry['escape'] = self._make_shortcuts('escape', ['Escape'], self.shortcutEscape)
-        self.shortcut_registry['bold'] = self._make_shortcuts('bold', ['Ctrl+B'], self.shortcutBold)
-        self.shortcut_registry['italic'] = self._make_shortcuts('italic', ['Ctrl+I'], self.shortcutItalic)
-        self.shortcut_registry['underline'] = self._make_shortcuts('underline', ['Ctrl+U'], self.shortcutUnderline)
-        self.shortcut_registry['delete_blks'] = self._make_shortcuts('delete_blks', ['Del'], self.shortcutDelete)
+        self.shortcut_registry["prev_page"] = self._make_shortcuts(
+            "prev_page", ["A"], self.shortcutBefore
+        )
+        self.shortcut_registry["prev_page_alt"] = self._make_shortcuts(
+            "prev_page_alt", ["PgUp"], self.shortcutBefore
+        )
+        self.shortcut_registry["next_page"] = self._make_shortcuts(
+            "next_page", ["D"], self.shortcutNext
+        )
+        self.shortcut_registry["next_page_alt"] = self._make_shortcuts(
+            "next_page_alt", ["PgDown"], self.shortcutNext
+        )
+        self.shortcut_registry["textblock_mode"] = self._make_shortcuts(
+            "textblock_mode", ["W"], self.shortcutTextblock
+        )
+        self.shortcut_registry["zoom_in"] = self._make_shortcuts(
+            "zoom_in", ["Ctrl++"], self.canvas.gv.scale_up_signal
+        )
+        self.shortcut_registry["zoom_out"] = self._make_shortcuts(
+            "zoom_out", ["Ctrl+-"], self.canvas.gv.scale_down_signal
+        )
+        self.shortcut_registry["delete_blks_alt"] = self._make_shortcuts(
+            "delete_blks_alt", ["Ctrl+D"], self.shortcutCtrlD
+        )
+        self.shortcut_registry["space_inpaint"] = self._make_shortcuts(
+            "space_inpaint", ["Space"], self.shortcutSpace
+        )
+        self.shortcut_registry["select_all"] = self._make_shortcuts(
+            "select_all", ["Ctrl+A"], self.shortcutSelectAll
+        )
+        self.shortcut_registry["preview"] = self._make_shortcuts(
+            "preview", ["Tab"], self.shortcutPreview
+        )
+        self.shortcut_registry["escape"] = self._make_shortcuts(
+            "escape", ["Escape"], self.shortcutEscape
+        )
+        self.shortcut_registry["bold"] = self._make_shortcuts(
+            "bold", ["Ctrl+B"], self.shortcutBold
+        )
+        self.shortcut_registry["italic"] = self._make_shortcuts(
+            "italic", ["Ctrl+I"], self.shortcutItalic
+        )
+        self.shortcut_registry["underline"] = self._make_shortcuts(
+            "underline", ["Ctrl+U"], self.shortcutUnderline
+        )
+        self.shortcut_registry["delete_blks"] = self._make_shortcuts(
+            "delete_blks", ["Del"], self.shortcutDelete
+        )
 
         # Wire up actions that were previously only available via hardcoded TitleBar QAction shortcuts
-        self.shortcut_registry['textedit_mode'] = self._make_shortcuts('textedit_mode', ['T'], self.shortcutTextedit)
-        self.shortcut_registry['drawboard_mode'] = self._make_shortcuts('drawboard_mode', ['P'], self.shortcutDrawboard)
-        self.shortcut_registry['undo'] = self._make_shortcuts('undo', ['Ctrl+Z'], self.on_undo)
-        self.shortcut_registry['redo'] = self._make_shortcuts('redo', ['Ctrl+Y'], self.on_redo)
-        self.shortcut_registry['page_search'] = self._make_shortcuts('page_search', ['Ctrl+F'], self.on_page_search)
-        self.shortcut_registry['global_search'] = self._make_shortcuts('global_search', ['Ctrl+G'], self.on_global_search)
-        self.shortcut_registry['merge_tool'] = self._make_shortcuts('merge_tool', ['Ctrl+Shift+M'], self.on_open_merge_tool)
+        self.shortcut_registry["textedit_mode"] = self._make_shortcuts(
+            "textedit_mode", ["T"], self.shortcutTextedit
+        )
+        self.shortcut_registry["drawboard_mode"] = self._make_shortcuts(
+            "drawboard_mode", ["P"], self.shortcutDrawboard
+        )
+        self.shortcut_registry["undo"] = self._make_shortcuts(
+            "undo", ["Ctrl+Z"], self.on_undo
+        )
+        self.shortcut_registry["redo"] = self._make_shortcuts(
+            "redo", ["Ctrl+Y"], self.on_redo
+        )
+        self.shortcut_registry["page_search"] = self._make_shortcuts(
+            "page_search", ["Ctrl+F"], self.on_page_search
+        )
+        self.shortcut_registry["global_search"] = self._make_shortcuts(
+            "global_search", ["Ctrl+G"], self.on_global_search
+        )
+        self.shortcut_registry["merge_tool"] = self._make_shortcuts(
+            "merge_tool", ["Ctrl+Shift+M"], self.on_open_merge_tool
+        )
 
-        drawpanel_info = {'hand': 'hand_tool', 'rect': 'rect_tool', 'inpaint': 'inpaint_tool', 'pen': 'pen_tool'}
-        drawpanel_defs = {'hand_tool': ['H'], 'rect_tool': ['R'], 'inpaint_tool': ['J'], 'pen_tool': ['B']}
+        drawpanel_info = {
+            "hand": "hand_tool",
+            "rect": "rect_tool",
+            "inpaint": "inpaint_tool",
+            "pen": "pen_tool",
+        }
+        drawpanel_defs = {
+            "hand_tool": ["H"],
+            "rect_tool": ["R"],
+            "inpaint_tool": ["J"],
+            "pen_tool": ["B"],
+        }
         for tool_name, action_id in drawpanel_info.items():
             keys = self._get_shortcut_keys(action_id, drawpanel_defs[action_id])
             lst = []
             for k in keys:
                 sc = QShortcut(QKeySequence(k), self)
-                sc.activated.connect(partial(self.drawingPanel.shortcutSetCurrentToolByName, tool_name))
+                sc.activated.connect(
+                    partial(self.drawingPanel.shortcutSetCurrentToolByName, tool_name)
+                )
                 lst.append(sc)
             if keys:
                 self.drawingPanel.setShortcutTip(tool_name, keys[0])
@@ -968,7 +1107,9 @@ class MainWindow(mainwindow_cls):
             if self.st_manager.is_editting():
                 self.st_manager.on_switch_textitem(1)
             elif isinstance(focus_widget, (SourceTextEdit, TransTextEdit)):
-                self.st_manager.on_switch_textitem(1, current_editing_widget=focus_widget)
+                self.st_manager.on_switch_textitem(
+                    1, current_editing_widget=focus_widget
+                )
             else:
                 index = self.pageList.currentIndex()
                 page_count = self.pageList.count()
@@ -988,7 +1129,9 @@ class MainWindow(mainwindow_cls):
             if self.st_manager.is_editting():
                 self.st_manager.on_switch_textitem(-1)
             elif isinstance(focus_widget, (SourceTextEdit, TransTextEdit)):
-                self.st_manager.on_switch_textitem(-1, current_editing_widget=focus_widget)
+                self.st_manager.on_switch_textitem(
+                    -1, current_editing_widget=focus_widget
+                )
             else:
                 index = self.pageList.currentIndex()
                 page_count = self.pageList.count()
@@ -1054,7 +1197,7 @@ class MainWindow(mainwindow_cls):
     def on_page_search(self):
         if self.canvas.gv.isVisible():
             fo = self.app.focusObject()
-            sel_text = ''
+            sel_text = ""
             tgt_edit = None
             blkitem = self.canvas.editing_textblkitem
             if fo == self.canvas.gv and blkitem is not None:
@@ -1066,7 +1209,7 @@ class MainWindow(mainwindow_cls):
                     tgt_edit = fo
             se = self.canvas.search_widget.search_editor
             se.setFocus()
-            if sel_text != '':
+            if sel_text != "":
                 se.setPlainText(sel_text)
                 cursor = se.textCursor()
                 cursor.select(QTextCursor.SelectionType.Document)
@@ -1081,7 +1224,7 @@ class MainWindow(mainwindow_cls):
             if not self.leftBar.globalSearchChecker.isChecked():
                 self.leftBar.globalSearchChecker.click()
             fo = self.app.focusObject()
-            sel_text = ''
+            sel_text = ""
             blkitem = self.canvas.editing_textblkitem
             if fo == self.canvas.gv and blkitem is not None:
                 sel_text = blkitem.textCursor().selectedText()
@@ -1089,7 +1232,7 @@ class MainWindow(mainwindow_cls):
                 sel_text = fo.textCursor().selectedText()
             se = self.global_search_widget.search_editor
             se.setFocus()
-            if sel_text != '':
+            if sel_text != "":
                 se.setPlainText(sel_text)
                 cursor = se.textCursor()
                 cursor.select(QTextCursor.SelectionType.Document)
@@ -1097,17 +1240,18 @@ class MainWindow(mainwindow_cls):
 
                 self.global_search_widget.commit_search()
 
-
     def on_open_merge_tool(self):
         """Open region merge tool dialog"""
-        if not hasattr(self, 'merge_dialog') or self.merge_dialog is None:
-
-
+        if not hasattr(self, "merge_dialog") or self.merge_dialog is None:
             from .merge_dialog import MergeDialog
 
             self.merge_dialog = MergeDialog(self)
-            self.merge_dialog.run_current_clicked.connect(lambda: self.run_merge_task(on_current=True))
-            self.merge_dialog.run_all_clicked.connect(lambda: self.run_merge_task(on_current=False))
+            self.merge_dialog.run_current_clicked.connect(
+                lambda: self.run_merge_task(on_current=True)
+            )
+            self.merge_dialog.run_all_clicked.connect(
+                lambda: self.run_merge_task(on_current=False)
+            )
 
         if self.merge_dialog.isVisible():
             self.merge_dialog.raise_()
@@ -1122,7 +1266,9 @@ class MainWindow(mainwindow_cls):
         from utils import merger
 
         if self.imgtrans_proj.is_empty:
-            QMessageBox.warning(self, self.tr("Warning"), self.tr("Please open a project first"))
+            QMessageBox.warning(
+                self, self.tr("Warning"), self.tr("Please open a project first")
+            )
             return
 
         config = self.merge_dialog.get_config()
@@ -1133,17 +1279,23 @@ class MainWindow(mainwindow_cls):
 
             current_img = self.imgtrans_proj.current_img
             if not current_img:
-                QMessageBox.warning(self, self.tr("Warning"), self.tr("No current file"))
+                QMessageBox.warning(
+                    self, self.tr("Warning"), self.tr("No current file")
+                )
                 return
 
             # 直接从内存获取当前页面的文本框
             if current_img not in self.imgtrans_proj.pages:
-                QMessageBox.warning(self, self.tr("Warning"), self.tr("Current page data not found"))
+                QMessageBox.warning(
+                    self, self.tr("Warning"), self.tr("Current page data not found")
+                )
                 return
 
             textblocks = self.imgtrans_proj.pages[current_img]
             if not textblocks:
-                QMessageBox.warning(self, self.tr("Notice"), self.tr("No text blocks on current page"))
+                QMessageBox.warning(
+                    self, self.tr("Notice"), self.tr("No text blocks on current page")
+                )
                 return
 
             # 将 TextBlock 对象转换为字典格式（merger 需要字典）
@@ -1155,53 +1307,91 @@ class MainWindow(mainwindow_cls):
 
             # 在内存中执行合并
             if mode == "VERTICAL":
-                final_shapes, count = merger.perform_merge(initial_shapes, "VERTICAL", config)
+                final_shapes, count = merger.perform_merge(
+                    initial_shapes, "VERTICAL", config
+                )
                 total_merged += count
             elif mode == "HORIZONTAL":
-                final_shapes, count = merger.perform_merge(initial_shapes, "HORIZONTAL", config)
+                final_shapes, count = merger.perform_merge(
+                    initial_shapes, "HORIZONTAL", config
+                )
                 total_merged += count
             elif mode == "VERTICAL_THEN_HORIZONTAL":
                 temp, count1 = merger.perform_merge(initial_shapes, "VERTICAL", config)
                 final_shapes, count2 = merger.perform_merge(temp, "HORIZONTAL", config)
-                total_merged += (count1 + count2)
+                total_merged += count1 + count2
             elif mode == "HORIZONTAL_THEN_VERTICAL":
-                temp, count1 = merger.perform_merge(initial_shapes, "HORIZONTAL", config)
+                temp, count1 = merger.perform_merge(
+                    initial_shapes, "HORIZONTAL", config
+                )
                 final_shapes, count2 = merger.perform_merge(temp, "VERTICAL", config)
-                total_merged += (count1 + count2)
+                total_merged += count1 + count2
             else:
                 final_shapes = initial_shapes
 
             if total_merged > 0:
                 # 将字典转回 TextBlock 对象并更新内存
-                self.imgtrans_proj.pages[current_img] = [TextBlock(**blk_dict) for blk_dict in final_shapes]
+                self.imgtrans_proj.pages[current_img] = [
+                    TextBlock(**blk_dict) for blk_dict in final_shapes
+                ]
                 # 刷新画布
                 self.canvas.updateCanvas()
                 self.st_manager.updateSceneTextitems()
                 final_count = len(final_shapes)
-                QMessageBox.information(self, self.tr("Success"),
-                    self.tr("Merge complete: {initial} -> {final} (reduced by {delta})")
-                    .format(initial=initial_count, final=final_count, delta=initial_count - final_count))
+                QMessageBox.information(
+                    self,
+                    self.tr("Success"),
+                    self.tr(
+                        "Merge complete: {initial} -> {final} (reduced by {delta})"
+                    ).format(
+                        initial=initial_count,
+                        final=final_count,
+                        delta=initial_count - final_count,
+                    ),
+                )
             else:
-                labels = set(s.get('label', '') for s in initial_shapes)
+                labels = set(s.get("label", "") for s in initial_shapes)
                 detail_msg = self.tr("No merge occurred.") + "\n"
-                detail_msg += self.tr("Total text blocks: {count}").format(count=initial_count) + "\n"
-                detail_msg += self.tr("Label types: {labels}").format(labels=', '.join(labels) or self.tr('None')) + "\n\n"
+                detail_msg += (
+                    self.tr("Total text blocks: {count}").format(count=initial_count)
+                    + "\n"
+                )
+                detail_msg += (
+                    self.tr("Label types: {labels}").format(
+                        labels=", ".join(labels) or self.tr("None")
+                    )
+                    + "\n\n"
+                )
                 detail_msg += self.tr("Suggestions:") + "\n"
-                detail_msg += self.tr("1. Try increasing maximum gap (e.g., 100-200)") + "\n"
-                detail_msg += self.tr("2. Lower the minimum overlap ratio (e.g., 50-70%)") + "\n"
-                detail_msg += self.tr("3. Uncheck 'Enable label exclusion (blacklist)'") + "\n"
+                detail_msg += (
+                    self.tr("1. Try increasing maximum gap (e.g., 100-200)") + "\n"
+                )
+                detail_msg += (
+                    self.tr("2. Lower the minimum overlap ratio (e.g., 50-70%)") + "\n"
+                )
+                detail_msg += (
+                    self.tr("3. Uncheck 'Enable label exclusion (blacklist)'") + "\n"
+                )
                 detail_msg += self.tr("4. Check if labels are in the blacklist")
                 QMessageBox.warning(self, self.tr("Notice"), detail_msg)
         else:
             # 对所有文件运行
             img_list = list(self.imgtrans_proj.pages.keys())
             if not img_list:
-                QMessageBox.warning(self, self.tr("Warning"), self.tr("No images in project"))
+                QMessageBox.warning(
+                    self, self.tr("Warning"), self.tr("No images in project")
+                )
                 return
 
             json_path = self.imgtrans_proj.proj_path
             if not json_path or not osp.exists(json_path):
-                QMessageBox.warning(self, self.tr("Warning"), self.tr("Project JSON file not found: {path}").format(path=json_path))
+                QMessageBox.warning(
+                    self,
+                    self.tr("Warning"),
+                    self.tr("Project JSON file not found: {path}").format(
+                        path=json_path
+                    ),
+                )
                 return
 
             # 使用后台线程执行合并
@@ -1212,7 +1402,7 @@ class MainWindow(mainwindow_cls):
         from .io_thread import MergeThread
 
         # 创建合并线程（如果不存在）
-        if not hasattr(self, 'merge_thread'):
+        if not hasattr(self, "merge_thread"):
             self.merge_thread = MergeThread()
             self.merge_thread.progress_changed.connect(self.on_merge_progress)
             self.merge_thread.merge_finished.connect(self.on_merge_finished)
@@ -1227,11 +1417,13 @@ class MainWindow(mainwindow_cls):
     def on_merge_progress(self, current, total):
         """Merge progress update"""
         progress = int(current / total * 100)
-        self.merge_thread.progress_bar.updateTaskProgress(progress, f' {current}/{total}')
+        self.merge_thread.progress_bar.updateTaskProgress(
+            progress, f" {current}/{total}"
+        )
 
     def on_merge_stop(self):
         """Stop merge"""
-        if hasattr(self, 'merge_thread'):
+        if hasattr(self, "merge_thread"):
             self.merge_thread.requestStop()
             self.merge_thread.progress_bar.hide()
 
@@ -1253,9 +1445,13 @@ class MainWindow(mainwindow_cls):
 
         # 显示结果
         total = success_count + fail_count
-        QMessageBox.information(self, self.tr("Done"),
-            self.tr("Region merge complete\nSuccess: {s}/{t}\nFailed: {f}/{t}")
-            .format(s=success_count, f=fail_count, t=total))
+        QMessageBox.information(
+            self,
+            self.tr("Done"),
+            self.tr("Region merge complete\nSuccess: {s}/{t}\nFailed: {f}/{t}").format(
+                s=success_count, f=fail_count, t=total
+            ),
+        )
 
     def on_req_update_pagetext(self):
         if self.canvas.text_change_unsaved():
@@ -1275,7 +1471,9 @@ class MainWindow(mainwindow_cls):
         self.pageList.setCurrentRow(self.imgtrans_proj.pagename2idx(page_name))
         self.save_on_page_changed = ori_save
 
-    def on_search_result_item_clicked(self, pagename: str, blk_idx: int, is_src: bool, start: int, end: int):
+    def on_search_result_item_clicked(
+        self, pagename: str, blk_idx: int, is_src: bool, start: int, end: int
+    ):
         idx = self.imgtrans_proj.pagename2idx(pagename)
         self.pageList.setCurrentRow(idx)
         pw = self.st_manager.pairwidget_list[blk_idx]
@@ -1294,7 +1492,10 @@ class MainWindow(mainwindow_cls):
     def shortcutEscape(self):
         if self.canvas.search_widget.isVisible():
             self.canvas.search_widget.hide()
-        elif self.canvas.editing_textblkitem is not None and self.canvas.editing_textblkitem.isEditing():
+        elif (
+            self.canvas.editing_textblkitem is not None
+            and self.canvas.editing_textblkitem.isEditing()
+        ):
             self.canvas.editing_textblkitem.endEdit()
 
     def setPaintMode(self):
@@ -1332,12 +1533,26 @@ class MainWindow(mainwindow_cls):
         self.st_manager.showTextblkItemRect(mode)
 
     def manual_save(self):
-        if self.leftBar.imgTransChecker.isChecked()\
-            and self.imgtrans_proj.directory is not None:
-            LOGGER.debug('Manually saving...')
-            self.saveCurrentPage(update_scene_text=True, save_proj=True, restore_interface=True, save_rst_only=False)
+        if (
+            self.leftBar.imgTransChecker.isChecked()
+            and self.imgtrans_proj.directory is not None
+        ):
+            LOGGER.debug("Manually saving...")
+            self.saveCurrentPage(
+                update_scene_text=True,
+                save_proj=True,
+                restore_interface=True,
+                save_rst_only=False,
+            )
 
-    def saveCurrentPage(self, update_scene_text=True, save_proj=True, restore_interface=False, save_rst_only=False, keep_exist_as_backup=False):
+    def saveCurrentPage(
+        self,
+        update_scene_text=True,
+        save_proj=True,
+        restore_interface=False,
+        save_rst_only=False,
+        keep_exist_as_backup=False,
+    ):
 
         if not self.imgtrans_proj.img_valid:
             return
@@ -1376,26 +1591,47 @@ class MainWindow(mainwindow_cls):
                     mask_path = self.imgtrans_proj.get_mask_path()
                     mask_array = self.imgtrans_proj.mask_array
                     if mask_array is not None:
-                        self.imsave_thread.saveImg(mask_path, mask_array, save_params={'ext': pcfg.intermediate_imgsave_ext})
+                        self.imsave_thread.saveImg(
+                            mask_path,
+                            mask_array,
+                            save_params={"ext": pcfg.intermediate_imgsave_ext},
+                        )
                     inpainted_path = self.imgtrans_proj.get_inpainted_path()
                     if self.canvas.drawingLayer.drawed():
                         inpainted = self.canvas.base_pixmap.copy()
                         painter = QPainter(inpainted)
-                        painter.drawPixmap(0, 0, self.canvas.drawingLayer.get_drawed_pixmap())
+                        painter.drawPixmap(
+                            0, 0, self.canvas.drawingLayer.get_drawed_pixmap()
+                        )
                         painter.end()
                     else:
                         inpainted = self.imgtrans_proj.inpainted_array
                     if inpainted is not None:
-                        self.imsave_thread.saveImg(inpainted_path, inpainted, save_params={'ext': pcfg.intermediate_imgsave_ext}, keep_alpha=self.imgtrans_proj.current_has_alpha())
+                        self.imsave_thread.saveImg(
+                            inpainted_path,
+                            inpainted,
+                            save_params={"ext": pcfg.intermediate_imgsave_ext},
+                            keep_alpha=self.imgtrans_proj.current_has_alpha(),
+                        )
             except Exception as e:
                 LOGGER.error(f"Failed to save project files: {e}")
 
         # Render the final result image properly
         try:
             img = self.canvas.render_result_img()
-            imsave_path = self.imgtrans_proj.get_result_path(self.imgtrans_proj.current_img)
-            imsave_ext = self.imgtrans_proj.get_result_ext(self.imgtrans_proj.current_img)
-            self.imsave_thread.saveImg(imsave_path, img, self.imgtrans_proj.current_img, save_params={'ext': imsave_ext, 'quality': pcfg.imgsave_quality}, keep_alpha=self.imgtrans_proj.current_has_alpha())
+            imsave_path = self.imgtrans_proj.get_result_path(
+                self.imgtrans_proj.current_img
+            )
+            imsave_ext = self.imgtrans_proj.get_result_ext(
+                self.imgtrans_proj.current_img
+            )
+            self.imsave_thread.saveImg(
+                imsave_path,
+                img,
+                self.imgtrans_proj.current_img,
+                save_params={"ext": imsave_ext, "quality": pcfg.imgsave_quality},
+                keep_alpha=self.imgtrans_proj.current_has_alpha(),
+            )
             self.canvas.setProjSaveState(False)
             self.canvas.update_saved_undostep()
 
@@ -1506,7 +1742,6 @@ class MainWindow(mainwindow_cls):
 
         self.translateBlkitemList(blkitem_list, -1)
 
-
     def translateBlkitemList(self, blkitem_list: List, mode: int) -> bool:
 
         tgt_img = self.imgtrans_proj.img_array
@@ -1525,14 +1760,23 @@ class MainWindow(mainwindow_cls):
         for blkitem in blkitem_list:
             blk: TextBlock = blkitem.blk
             blk._bounding_rect = blkitem.absBoundingRect()
-            blk.text = self.st_manager.pairwidget_list[blkitem.idx].e_source.toPlainText()
+            blk.text = self.st_manager.pairwidget_list[
+                blkitem.idx
+            ].e_source.toPlainText()
             blk_ids.append(blkitem.idx)
-            blk.set_lines_by_xywh(blk._bounding_rect, angle=-blk.angle, x_range=[0, im_w-1], y_range=[0, im_h-1], adjust_bbox=True)
+            blk.set_lines_by_xywh(
+                blk._bounding_rect,
+                angle=-blk.angle,
+                x_range=[0, im_w - 1],
+                y_range=[0, im_h - 1],
+                adjust_bbox=True,
+            )
             blk_list.append(blk)
 
-        self.module_manager.runBlktransPipeline(blk_list, tgt_img, mode, blk_ids, tgt_mask = tgt_mask)
+        self.module_manager.runBlktransPipeline(
+            blk_list, tgt_img, mode, blk_ids, tgt_mask=tgt_mask
+        )
         return True
-
 
     def finishTranslatePage(self, page_key):
         if page_key == self.imgtrans_proj.current_img:
@@ -1542,17 +1786,17 @@ class MainWindow(mainwindow_cls):
         self.backup_blkstyles.clear()
         self._run_imgtrans_wo_textstyle_update = False
         # Restore original translator if temporarily swapped for context-aware run
-        if hasattr(self, '_ctx_batch_restore') and self._ctx_batch_restore:
+        if hasattr(self, "_ctx_batch_restore") and self._ctx_batch_restore:
             original = self._ctx_batch_restore
             self._ctx_batch_restore = None
             self.module_manager.setTranslator(original)
-            LOGGER.info(f'Restored translator to {original} after context-aware run')
+            LOGGER.info(f"Restored translator to {original} after context-aware run")
         if pcfg.module.empty_runcache and not shared.HEADLESS:
             self.module_manager.unload_all_models()
         if shared.args.export_translation_txt:
-            self.on_export_txt('translation')
+            self.on_export_txt("translation")
         if shared.args.export_source_txt:
-            self.on_export_txt('source')
+            self.on_export_txt("source")
         if shared.HEADLESS:
             self.run_next_dir()
 
@@ -1565,7 +1809,9 @@ class MainWindow(mainwindow_cls):
                     blk.translation = full_len(blk.translation)
                 else:
                     blk.translation = half_len(blk.translation)
-                    blk.translation = re.sub(r'([?.!"])\s+', r'\1', blk.translation)    # remove spaces following punctuations
+                    blk.translation = re.sub(
+                        r'([?.!"])\s+', r"\1", blk.translation
+                    )  # remove spaces following punctuations
         else:
             for blk in blk_list:
                 if blk.vertical:
@@ -1580,7 +1826,9 @@ class MainWindow(mainwindow_cls):
     def on_pagtrans_finished(self, page_index: int):
         blk_list = self.imgtrans_proj.get_blklist_byidx(page_index)
         ffmt_list = None
-        if len(self.backup_blkstyles) == self.imgtrans_proj.num_pages and len(self.backup_blkstyles[page_index]) == len(blk_list):
+        if len(self.backup_blkstyles) == self.imgtrans_proj.num_pages and len(
+            self.backup_blkstyles[page_index]
+        ) == len(blk_list):
             ffmt_list: List[FontFormat] = self.backup_blkstyles[page_index]
 
         self.postprocess_translations(blk_list)
@@ -1597,15 +1845,20 @@ class MainWindow(mainwindow_cls):
         gf = self.textPanel.formatpanel.global_format
 
         inpaint_only = pcfg.module.enable_inpaint
-        inpaint_only = inpaint_only and not (pcfg.module.enable_detect or pcfg.module.enable_ocr or pcfg.module.enable_translate)
+        inpaint_only = inpaint_only and not (
+            pcfg.module.enable_detect
+            or pcfg.module.enable_ocr
+            or pcfg.module.enable_translate
+        )
 
         if not inpaint_only:
             for ii, blk in enumerate(blk_list):
                 if self._run_imgtrans_wo_textstyle_update and ffmt_list is not None:
                     blk.fontformat.merge(ffmt_list[ii])
                 else:
-                    if override_fnt_size or \
-                        blk.font_size < 0:  # fall back to global font size if font size is not valid, it will be set to -1 for detected blocks
+                    if (
+                        override_fnt_size or blk.font_size < 0
+                    ):  # fall back to global font size if font size is not valid, it will be set to -1 for detected blocks
                         blk.font_size = gf.font_size
                     elif blk._detected_font_size > 0 and not pcfg.module.enable_detect:
                         blk.font_size = blk._detected_font_size
@@ -1632,7 +1885,9 @@ class MainWindow(mainwindow_cls):
                     if override_font_family or blk.font_family is None:
                         blk.font_family = gf.font_family
                         if blk.rich_text:
-                            blk.rich_text = set_html_family(blk.rich_text, gf.font_family)
+                            blk.rich_text = set_html_family(
+                                blk.rich_text, gf.font_family
+                            )
 
                     blk.line_spacing = gf.line_spacing
                     blk.letter_spacing = gf.letter_spacing
@@ -1640,11 +1895,17 @@ class MainWindow(mainwindow_cls):
                     blk.bold = gf.bold
                     blk.underline = gf.underline
                     sw = blk.stroke_width
-                    if sw > 0 and pcfg.module.enable_ocr and pcfg.module.enable_detect and not override_fnt_size:
+                    if (
+                        sw > 0
+                        and pcfg.module.enable_ocr
+                        and pcfg.module.enable_detect
+                        and not override_fnt_size
+                    ):
                         blk.font_size = blk.font_size / (1 + sw)
 
-            self.st_manager.auto_textlayout_flag = pcfg.let_autolayout_flag and \
-                (pcfg.module.enable_detect or pcfg.module.enable_translate)
+            self.st_manager.auto_textlayout_flag = pcfg.let_autolayout_flag and (
+                pcfg.module.enable_detect or pcfg.module.enable_translate
+            )
 
         if page_index != self.pageList.currentIndex().row():
             self.pageList.setCurrentRow(page_index)
@@ -1666,7 +1927,7 @@ class MainWindow(mainwindow_cls):
         self.saveCurrentPage(False, False)
 
     def on_savestate_changed(self, unsaved: bool):
-        save_state = self.tr('unsaved') if unsaved else self.tr('saved')
+        save_state = self.tr("unsaved") if unsaved else self.tr("saved")
         self.titleBar.setTitleContent(save_state=save_state)
 
     def on_textstack_changed(self):
@@ -1687,20 +1948,23 @@ class MainWindow(mainwindow_cls):
         pairw_list = []
         for blk in blkitem_list:
             pairw_list.append(self.st_manager.pairwidget_list[blk.idx])
-        self.canvas.push_undo_command(RunBlkTransCommand(self.canvas, blkitem_list, pairw_list, mode))
+        self.canvas.push_undo_command(
+            RunBlkTransCommand(self.canvas, blkitem_list, pairw_list, mode)
+        )
 
     def on_imgtrans_progressbox_showed(self):
         msg_size = self.module_manager.progress_msgbox.size()
         size = self.size()
-        p = self.mapToGlobal(QPoint(size.width() - msg_size.width(),
-                                    size.height() - msg_size.height()))
+        p = self.mapToGlobal(
+            QPoint(size.width() - msg_size.width(), size.height() - msg_size.height())
+        )
         self.module_manager.progress_msgbox.move(p)
 
     def on_closebtn_clicked(self):
         if self.imsave_thread.isRunning():
             self.imsave_thread.finished.connect(self.close)
             mb = FrameLessMessageBox()
-            mb.setText(self.tr('Saving image...'))
+            mb.setText(self.tr("Saving image..."))
             self.imsave_thread.finished.connect(mb.close)
             mb.exec()
             return
@@ -1732,7 +1996,7 @@ class MainWindow(mainwindow_cls):
             from ui.custom_widget import RangeSlider
 
             dialog = QDialog(self)
-            dialog.setWindowTitle(self.tr('Run'))
+            dialog.setWindowTitle(self.tr("Run"))
             dialog.setMinimumWidth(420)
             dialog.setSizeGripEnabled(False)
             layout = QVBoxLayout(dialog)
@@ -1745,7 +2009,7 @@ class MainWindow(mainwindow_cls):
             # Spinboxes for precise page input (placed above slider)
             spin_layout = QHBoxLayout()
             spin_layout.setContentsMargins(0, 0, 0, 0)
-            no_btn_style = '''
+            no_btn_style = """
 QSpinBox {
     background: rgba(128,128,128,0.13);
     border: 1px solid rgba(128,128,128,0.25);
@@ -1753,7 +2017,7 @@ QSpinBox {
     padding: 2px 4px;
 }
 QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
-'''
+"""
             start_spin = QSpinBox()
             start_spin.setRange(1, num_pages)
             start_spin.setValue(1)
@@ -1767,7 +2031,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
 
             spin_layout.addStretch()
             spin_layout.addWidget(start_spin)
-            spin_layout.addWidget(QLabel(' ~ '))
+            spin_layout.addWidget(QLabel(" ~ "))
             spin_layout.addWidget(end_spin)
             spin_layout.addStretch()
             range_layout.addLayout(spin_layout)
@@ -1782,9 +2046,12 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             def update_range_info():
                 lo = slider.low() + 1
                 hi = slider.high() + 1
-                range_info.setText(self.tr('Page %1 ~ Page %2 (%3 pages)')
-                                   .replace('%1', str(lo)).replace('%2', str(hi))
-                                   .replace('%3', str(hi - lo + 1)))
+                range_info.setText(
+                    self.tr("Page %1 ~ Page %2 (%3 pages)")
+                    .replace("%1", str(lo))
+                    .replace("%2", str(hi))
+                    .replace("%3", str(hi - lo + 1))
+                )
 
             def sync_spinboxes():
                 start_spin.blockSignals(True)
@@ -1803,18 +2070,20 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
 
             start_spin.valueChanged.connect(on_spinbox_changed)
             end_spin.valueChanged.connect(on_spinbox_changed)
-            slider.rangeChanged.connect(lambda lo, hi: (
-                sync_spinboxes(), update_range_info()
-            ))
+            slider.rangeChanged.connect(
+                lambda lo, hi: (sync_spinboxes(), update_range_info())
+            )
 
-            all_pages_cb = QCheckBox(self.tr('All Pages'))
-            all_pages_cb.toggled.connect(lambda checked: (
-                slider.set_range(0, num_pages - 1),
-                slider.setEnabled(not checked),
-                start_spin.setEnabled(not checked),
-                end_spin.setEnabled(not checked),
-                update_range_info()
-            ))
+            all_pages_cb = QCheckBox(self.tr("All Pages"))
+            all_pages_cb.toggled.connect(
+                lambda checked: (
+                    slider.set_range(0, num_pages - 1),
+                    slider.setEnabled(not checked),
+                    start_spin.setEnabled(not checked),
+                    end_spin.setEnabled(not checked),
+                    update_range_info(),
+                )
+            )
             all_pages_cb.setChecked(True)
             range_layout.addWidget(all_pages_cb)
 
@@ -1828,22 +2097,24 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             stages_layout.setContentsMargins(8, 6, 8, 6)
 
             stage_labels = [
-                self.tr('Enable Text Detection'),
-                self.tr('Enable OCR'),
-                self.tr('Enable Translation'),
-                self.tr('Enable Inpainting'),
+                self.tr("Enable Text Detection"),
+                self.tr("Enable OCR"),
+                self.tr("Enable Translation"),
+                self.tr("Enable Inpainting"),
             ]
             ctx_trans_cb = None
             for idx, label in enumerate(stage_labels):
                 cb = QCheckBox(label)
                 cb.setChecked(pcfg.module.stage_enabled(idx))
-                cb.toggled.connect(lambda checked, i=idx: self.on_enable_module(i, checked))
+                cb.toggled.connect(
+                    lambda checked, i=idx: self.on_enable_module(i, checked)
+                )
                 if idx == 2:
                     row = QWidget()
                     row_layout = QHBoxLayout(row)
                     row_layout.setContentsMargins(0, 0, 0, 0)
                     row_layout.addWidget(cb)
-                    ctx_trans_cb = QCheckBox(self.tr('Context Translation (beta)'))
+                    ctx_trans_cb = QCheckBox(self.tr("Context Translation (beta)"))
                     row_layout.addWidget(ctx_trans_cb)
                     row_layout.addStretch()
                     stages_layout.addWidget(row)
@@ -1859,22 +2130,22 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             ai_grid.setContentsMargins(8, 6, 8, 6)
             ai_grid.setSpacing(6)
 
-            ai_title = QLabel(self.tr('AI Chat Settings'))
-            ai_title.setStyleSheet('font-weight: bold;')
+            ai_title = QLabel(self.tr("AI Chat Settings"))
+            ai_title.setStyleSheet("font-weight: bold;")
             ai_grid.addWidget(ai_title, 0, 0, 1, 2)
 
             # Adaptive mode info label — updates based on project page count
             mode_label = QLabel()
-            mode_label.setStyleSheet('color: #666; font-style: italic;')
+            mode_label.setStyleSheet("color: #666; font-style: italic;")
             ai_grid.addWidget(mode_label, 1, 0, 1, 2)
 
-            ai_grid.addWidget(QLabel(self.tr('Batch Size:')), 2, 0)
+            ai_grid.addWidget(QLabel(self.tr("Batch Size:")), 2, 0)
             batch_combo = QComboBox()
-            batch_combo.addItems(['1', '3', '5', '10', '20'])
-            batch_combo.setCurrentText('5')
+            batch_combo.addItems(["1", "3", "5", "10", "20"])
+            batch_combo.setCurrentText("5")
             ai_grid.addWidget(batch_combo, 2, 1)
 
-            ai_grid.addWidget(QLabel(self.tr('Context Pages:')), 3, 0)
+            ai_grid.addWidget(QLabel(self.tr("Context Pages:")), 3, 0)
             pages_spin = QSpinBox()
             pages_spin.setRange(0, 20)
             pages_spin.setValue(3)
@@ -1888,13 +2159,21 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
                 bs = int(batch_combo.currentText())
                 pw = pages_spin.value()
                 if effective == 0:
-                    text = self.tr('Adaptive -- will be determined when Run starts')
+                    text = self.tr("Adaptive -- will be determined when Run starts")
                 elif effective <= bs:
-                    text = self.tr('Full context (%1 pages, all previous translations as reference)').replace('%1', str(effective))
+                    text = self.tr(
+                        "Full context (%1 pages, all previous translations as reference)"
+                    ).replace("%1", str(effective))
                 elif effective <= bs * 4:
-                    text = self.tr('Windowed context (%1 pages, +/-%2 page window)').replace('%1', str(effective)).replace('%2', str(pw))
+                    text = (
+                        self.tr("Windowed context (%1 pages, +/-%2 page window)")
+                        .replace("%1", str(effective))
+                        .replace("%2", str(pw))
+                    )
                 else:
-                    text = self.tr('Windowed + auto-summary (%1 pages, long-form mode)').replace('%1', str(effective))
+                    text = self.tr(
+                        "Windowed + auto-summary (%1 pages, long-form mode)"
+                    ).replace("%1", str(effective))
                 mode_label.setText(text)
 
             _update_mode_label()
@@ -1903,7 +2182,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             slider.rangeChanged.connect(lambda _lo, _hi: _update_mode_label())
             all_pages_cb.toggled.connect(lambda _: _update_mode_label())
 
-            glossary_cb = QCheckBox(self.tr('Enforce Term Consistency (Glossary)'))
+            glossary_cb = QCheckBox(self.tr("Enforce Term Consistency (Glossary)"))
             glossary_cb.setChecked(True)
             ai_grid.addWidget(glossary_cb, 4, 0, 1, 2)
 
@@ -1911,15 +2190,18 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             layout.addWidget(ai_chat_frame)
 
             ctx_trans_cb.toggled.connect(
-                lambda checked: ai_chat_frame.setVisible(checked and pcfg.module.enable_translate))
+                lambda checked: ai_chat_frame.setVisible(
+                    checked and pcfg.module.enable_translate
+                )
+            )
 
             # Run without update textstyle
-            wo_update_cb = QCheckBox(self.tr('Run without update textstyle'))
+            wo_update_cb = QCheckBox(self.tr("Run without update textstyle"))
             layout.addWidget(wo_update_cb)
 
             btn_layout = QHBoxLayout()
-            run_btn = QPushButton(self.tr('Run'))
-            cancel_btn = QPushButton(self.tr('Cancel'))
+            run_btn = QPushButton(self.tr("Run"))
+            cancel_btn = QPushButton(self.tr("Cancel"))
             btn_layout.addWidget(run_btn)
             btn_layout.addWidget(cancel_btn)
             layout.addLayout(btn_layout)
@@ -1944,16 +2226,18 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
                 self._ctx_batch_restore = pcfg.module.translator
                 api_config = self._ai_controller.api_config
                 prompt = self._ai_controller.custom_prompt or ""
-                ctx = ContextBatchTranslator(api_config, prompt, status_callback=_ctx_status)
+                ctx = ContextBatchTranslator(
+                    api_config, prompt, status_callback=_ctx_status
+                )
                 ctx.batch_size = int(batch_combo.currentText())
                 ctx.context_pages = pages_spin.value()
                 ctx.use_glossary = glossary_cb.isChecked()
                 self.module_manager.translate_thread.translator = ctx
                 self.module_manager.translate_thread.module = ctx
                 LOGGER.info(
-                    f'Context batch run: batch={batch_combo.currentText()}, '
-                    f'pages={pages_spin.value()}, '
-                    f'glossary={glossary_cb.isChecked()}'
+                    f"Context batch run: batch={batch_combo.currentText()}, "
+                    f"pages={pages_spin.value()}, "
+                    f"glossary={glossary_cb.isChecked()}"
                 )
 
             if wo_update_cb.isChecked():
@@ -1964,14 +2248,17 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
                 for i in range(slider.low(), slider.high() + 1):
                     page_filter.append(self.imgtrans_proj.idx2pagename(i))
 
-        if not self.imgtrans_proj.is_all_pages_no_text and not pcfg.module.keep_exist_textlines:
+        if (
+            not self.imgtrans_proj.is_all_pages_no_text
+            and not pcfg.module.keep_exist_textlines
+        ):
             msgBox = QMessageBox(self)
             msgBox.setIcon(QMessageBox.Question)
-            msgBox.setWindowTitle(self.tr('Confirmation'))
-            msgBox.setText(self.tr('Run will clear previous results. Continue?'))
+            msgBox.setWindowTitle(self.tr("Confirmation"))
+            msgBox.setText(self.tr("Run will clear previous results. Continue?"))
 
-            run_btn = msgBox.addButton(self.tr('Run'), QMessageBox.YesRole)
-            cancel_btn = msgBox.addButton(self.tr('Cancel'), QMessageBox.RejectRole)
+            run_btn = msgBox.addButton(self.tr("Run"), QMessageBox.YesRole)
+            cancel_btn = msgBox.addButton(self.tr("Cancel"), QMessageBox.RejectRole)
             msgBox.setDefaultButton(run_btn)
             msgBox.exec_()
 
@@ -2022,11 +2309,17 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
                     if pcfg.module.enable_ocr:
                         textblk.text = []
                         textblk.set_font_colors((0, 0, 0), (0, 0, 0))
-                    if pcfg.module.enable_translate or (all_disabled and not self._run_imgtrans_wo_textstyle_update) or pcfg.module.enable_ocr:
-                        textblk.rich_text = ''
+                    if (
+                        pcfg.module.enable_translate
+                        or (all_disabled and not self._run_imgtrans_wo_textstyle_update)
+                        or pcfg.module.enable_ocr
+                    ):
+                        textblk.rich_text = ""
                     textblk.vertical = textblk.src_is_vertical
 
-        self.module_manager.runImgtransPipeline(pages_to_process if pages_to_process else None)
+        self.module_manager.runImgtransPipeline(
+            pages_to_process if pages_to_process else None
+        )
 
     def on_transpanel_changed(self):
         self.canvas.editor_index = self.rightComicTransStackPanel.currentIndex()
@@ -2036,38 +2329,42 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
 
     def import_tstyles(self):
         ddir = osp.dirname(pcfg.text_styles_path)
-        p = QFileDialog.getOpenFileName(self, self.tr("Import Text Styles"), ddir, None, "(.json)")
+        p = QFileDialog.getOpenFileName(
+            self, self.tr("Import Text Styles"), ddir, None, "(.json)"
+        )
         if not isinstance(p, str):
             p = p[0]
-        if p == '':
+        if p == "":
             return
         try:
             load_textstyle_from(p, raise_exception=True)
             save_config()
             self.textPanel.formatpanel.textstyle_panel.setStyles(text_styles)
         except Exception as e:
-            create_error_dialog(e, self.tr(f'Failed to load from {p}'))
+            create_error_dialog(e, self.tr(f"Failed to load from {p}"))
 
     def export_tstyles(self):
         ddir = osp.dirname(pcfg.text_styles_path)
-        savep = QFileDialog.getSaveFileName(self, self.tr("Save Text Styles"), ddir, None, "(.json)")
+        savep = QFileDialog.getSaveFileName(
+            self, self.tr("Save Text Styles"), ddir, None, "(.json)"
+        )
         if not isinstance(savep, str):
             savep = savep[0]
-        if savep == '':
+        if savep == "":
             return
         suffix = Path(savep).suffix
-        if suffix != '.json':
-            if suffix == '':
-                savep = savep + '.json'
+        if suffix != ".json":
+            if suffix == "":
+                savep = savep + ".json"
             else:
-                savep = savep.replace(suffix, '.json')
+                savep = savep.replace(suffix, ".json")
         oldp = pcfg.text_styles_path
         try:
             pcfg.text_styles_path = savep
             save_text_styles(raise_exception=True)
             save_config()
         except Exception as e:
-            create_error_dialog(e, self.tr(f'Failed save to {savep}'))
+            create_error_dialog(e, self.tr(f"Failed save to {savep}"))
             pcfg.text_styles_path = oldp
 
     def fold_textarea(self, fold: bool):
@@ -2082,41 +2379,54 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
         pcfg.show_trans_text = show
         self.textPanel.textEditList.setTransVisible(show)
 
-    def on_export_txt(self, dump_target, suffix='.txt'):
+    def on_export_txt(self, dump_target, suffix=".txt"):
         try:
             self.imgtrans_proj.dump_txt(dump_target=dump_target, suffix=suffix)
-            create_info_dialog(self.tr('Text file exported to ') + self.imgtrans_proj.dump_txt_path(dump_target, suffix))
+            create_info_dialog(
+                self.tr("Text file exported to ")
+                + self.imgtrans_proj.dump_txt_path(dump_target, suffix)
+            )
         except Exception as e:
-            create_error_dialog(e, self.tr('Failed to export as TEXT file'))
+            create_error_dialog(e, self.tr("Failed to export as TEXT file"))
 
     def on_import_trans_txt(self):
         try:
-            selected_file = ''
+            selected_file = ""
             dialog = QFileDialog()
-            selected_file = str(dialog.getOpenFileUrl(self.parent(), self.tr('Import *.md/*.txt'), filter="*.txt *.md *.TXT *.MD")[0].toLocalFile())
+            selected_file = str(
+                dialog.getOpenFileUrl(
+                    self.parent(),
+                    self.tr("Import *.md/*.txt"),
+                    filter="*.txt *.md *.TXT *.MD",
+                )[0].toLocalFile()
+            )
             if not osp.exists(selected_file):
                 return
 
-            all_matched, match_rst = self.imgtrans_proj.load_translation_from_txt(selected_file)
-            matched_pages = match_rst['matched_pages']
+            all_matched, match_rst = self.imgtrans_proj.load_translation_from_txt(
+                selected_file
+            )
+            matched_pages = match_rst["matched_pages"]
 
             if self.imgtrans_proj.current_img in matched_pages:
                 self.canvas.clear_undostack(update_saved_step=True)
                 self.st_manager.updateSceneTextitems()
 
             if all_matched:
-                msg = self.tr('Translation imported and matched successfully.')
+                msg = self.tr("Translation imported and matched successfully.")
             else:
-                msg = self.tr('Imported txt file not fully matched with current project, please make sure source txt file structured like results from \"export TXT\"')
-                if len(match_rst['missing_pages']) > 0:
-                    msg += '\n' + self.tr('Missing pages: ') + '\n'
-                    msg += '\n'.join(match_rst['missing_pages'])
-                if len(match_rst['unexpected_pages']) > 0:
-                    msg += '\n' + self.tr('Unexpected pages: ') + '\n'
-                    msg += '\n'.join(match_rst['unexpected_pages'])
-                if len(match_rst['unmatched_pages']) > 0:
-                    msg += '\n' + self.tr('Unmatched pages: ') + '\n'
-                    msg += '\n'.join(match_rst['unmatched_pages'])
+                msg = self.tr(
+                    'Imported txt file not fully matched with current project, please make sure source txt file structured like results from "export TXT"'
+                )
+                if len(match_rst["missing_pages"]) > 0:
+                    msg += "\n" + self.tr("Missing pages: ") + "\n"
+                    msg += "\n".join(match_rst["missing_pages"])
+                if len(match_rst["unexpected_pages"]) > 0:
+                    msg += "\n" + self.tr("Unexpected pages: ") + "\n"
+                    msg += "\n".join(match_rst["unexpected_pages"])
+                if len(match_rst["unmatched_pages"]) > 0:
+                    msg += "\n" + self.tr("Unmatched pages: ") + "\n"
+                    msg += "\n".join(match_rst["unmatched_pages"])
                 msg = msg.strip()
 
             for pagename in matched_pages:
@@ -2125,14 +2435,16 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             create_info_dialog(msg)
 
         except Exception as e:
-            create_error_dialog(e, self.tr('Failed to import translation from ') + selected_file)
+            create_error_dialog(
+                e, self.tr("Failed to import translation from ") + selected_file
+            )
 
     def on_reveal_file(self):
         current_img_path = self.imgtrans_proj.current_img_path()
-        if sys.platform == 'win32':
+        if sys.platform == "win32":
             # qprocess seems to fuck up with "\""
-            p = "\""+str(Path(current_img_path))+"\""
-            subprocess.Popen("explorer.exe /select,"+p, shell=True)
+            p = '"' + str(Path(current_img_path)) + '"'
+            subprocess.Popen("explorer.exe /select," + p, shell=True)
 
     def on_set_gsearch_widget(self):
         setup = self.leftBar.globalSearchChecker.isChecked()
@@ -2148,7 +2460,12 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
     def on_global_replace_finished(self):
         rt = self.global_search_widget.replace_thread
         self.canvas.push_text_command(
-            GlobalRepalceAllCommand(rt.sceneitem_list, rt.background_list, rt.target_text, self.imgtrans_proj)
+            GlobalRepalceAllCommand(
+                rt.sceneitem_list,
+                rt.background_list,
+                rt.target_text,
+                self.imgtrans_proj,
+            )
         )
         rt.sceneitem_list = None
         rt.background_list = None
@@ -2162,14 +2479,19 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
     def _on_theme_config_changed(self):
         self.resetStyleSheet(reverse_icon=True)
 
-
     def on_copy_src(self):
         blks = self.canvas.selected_text_items()
         if len(blks) == 0:
             return
 
-        src_list = [self.st_manager.pairwidget_list[blk.idx].e_source.toPlainText().strip().replace('\n', ' ') for blk in blks]
-        src_txt = '\n'.join(src_list)
+        src_list = [
+            self.st_manager.pairwidget_list[blk.idx]
+            .e_source.toPlainText()
+            .strip()
+            .replace("\n", " ")
+            for blk in blks
+        ]
+        src_txt = "\n".join(src_list)
 
         self.st_manager.app_clipborad.setText(src_txt, QClipboard.Mode.Clipboard)
 
@@ -2178,8 +2500,10 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
         if len(blks) == 0:
             return
 
-        src_widget_list = [self.st_manager.pairwidget_list[blk.idx].e_source for blk in blks]
-        text_list = self.st_manager.app_clipborad.text().split('\n')
+        src_widget_list = [
+            self.st_manager.pairwidget_list[blk.idx].e_source for blk in blks
+        ]
+        text_list = self.st_manager.app_clipborad.text().split("\n")
 
         n_paragraph = min(len(src_widget_list), len(text_list))
         if n_paragraph < 1:
@@ -2192,36 +2516,37 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
 
     def run_batch(self, exec_dirs: Union[List, str], **kwargs):
         if not isinstance(exec_dirs, List):
-            exec_dirs = exec_dirs.split(',')
+            exec_dirs = exec_dirs.split(",")
         valid_dirs = []
         for d in exec_dirs:
             if osp.exists(d):
                 valid_dirs.append(d)
             else:
-                LOGGER.warning(f'target directory {d} does not exist.')
+                LOGGER.warning(f"target directory {d} does not exist.")
         self.exec_dirs = valid_dirs
-        self.exec_pages = kwargs.get('pages', '').strip() if kwargs.get('pages') else ''
+        self.exec_pages = kwargs.get("pages", "").strip() if kwargs.get("pages") else ""
         self.run_next_dir()
 
     def run_next_dir(self):
         if len(self.exec_dirs) == 0:
             while self.imsave_thread.isRunning():
                 time.sleep(0.1)
-            LOGGER.info('finished translating all dirs, quit app...')
+            LOGGER.info("finished translating all dirs, quit app...")
             self.app.quit()
             return
         d = self.exec_dirs.pop(0)
 
-        LOGGER.info(f'translating {d} ...')
+        LOGGER.info(f"translating {d} ...")
         self.openDir(d)
 
         page_filter = None
         if self.exec_pages:
             try:
                 from utils.io_utils import page_names_from_range
+
                 page_filter = page_names_from_range(self.imgtrans_proj, self.exec_pages)
             except ValueError as e:
-                LOGGER.error(f'Invalid --pages argument: {e}')
+                LOGGER.error(f"Invalid --pages argument: {e}")
                 self.app.quit()
                 return
 
@@ -2229,71 +2554,75 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
         npages = len(page_filter) if page_filter else len(self.imgtrans_proj.pages)
         if npages > 0:
             if pcfg.module.enable_detect:
-                shared.pbar['detect'] = tqdm(range(npages), desc="Text Detection")
+                shared.pbar["detect"] = tqdm(range(npages), desc="Text Detection")
             if pcfg.module.enable_ocr:
-                shared.pbar['ocr'] = tqdm(range(npages), desc="OCR")
+                shared.pbar["ocr"] = tqdm(range(npages), desc="OCR")
             if pcfg.module.enable_translate:
-                shared.pbar['translate'] = tqdm(range(npages), desc="Translation")
+                shared.pbar["translate"] = tqdm(range(npages), desc="Translation")
             if pcfg.module.enable_inpaint:
-                shared.pbar['inpaint'] = tqdm(range(npages), desc="Inpaint")
+                shared.pbar["inpaint"] = tqdm(range(npages), desc="Inpaint")
         self.on_run_imgtrans(page_filter=page_filter)
 
-    def on_create_errdialog(self, error_msg: str, detail_traceback: str = '', exception_type: str = ''):
+    def on_create_errdialog(
+        self, error_msg: str, detail_traceback: str = "", exception_type: str = ""
+    ):
         try:
-            if exception_type != '':
+            if exception_type != "":
                 shared.showed_exception.add(exception_type)
             err = QMessageBox()
             err.setText(error_msg)
             err.setDetailedText(detail_traceback)
             err.exec()
-            if exception_type != '':
+            if exception_type != "":
                 shared.showed_exception.remove(exception_type)
         except:
             if exception_type in shared.showed_exception:
                 shared.showed_exception.remove(exception_type)
-            LOGGER.error('Failed to create error dialog')
+            LOGGER.error("Failed to create error dialog")
             LOGGER.error(traceback.format_exc())
 
     def on_create_infodialog(self, info_dict: dict):
         QMessageBox.StandardButton.NoButton
         dialog = MessageBox(**info_dict)
-        dialog.show()   # exec_ will block main thread
+        dialog.show()  # exec_ will block main thread
 
     def setupRegisterWidget(self):
         self.titleBar.viewMenu.addSeparator()
         for cfg_name in shared.config_name_to_view_widget:
             d = shared.config_name_to_view_widget[cfg_name]
-            widget: ViewWidget = d['widget']
+            widget: ViewWidget = d["widget"]
             action = QAction(widget.action_name, self.titleBar)
             action.setCheckable(True)
             visible = getattr(pcfg, cfg_name)
             action.setChecked(visible)
             action.triggered.connect(self.action_set_view_visible)
             self.titleBar.viewMenu.addAction(action)
-            d['action'] = action
+            d["action"] = action
             shared.action_to_view_config_name[action] = cfg_name
-            widget.set_expend_area(expend=getattr(pcfg, widget.config_expand_name), set_config=False)
+            widget.set_expend_area(
+                expend=getattr(pcfg, widget.config_expand_name), set_config=False
+            )
             widget.view_hide_btn_clicked.connect(self.on_hide_view_widget)
             widget.setVisible(visible)
 
     def register_view_widget(self, widget: ViewWidget):
         assert widget.config_name not in shared.config_name_to_view_widget
-        d = {'widget': widget}
+        d = {"widget": widget}
         shared.config_name_to_view_widget[widget.config_name] = d
 
     def action_set_view_visible(self):
         action: QAction = self.sender()
         show = action.isChecked()
         cfg_name = shared.action_to_view_config_name[action]
-        widget: ViewWidget = shared.config_name_to_view_widget[cfg_name]['widget']
+        widget: ViewWidget = shared.config_name_to_view_widget[cfg_name]["widget"]
         widget.setVisible(show)
         setattr(pcfg, cfg_name, show)
 
     def on_hide_view_widget(self, cfg_name: str):
         d = shared.config_name_to_view_widget[cfg_name]
-        widget: ViewWidget = d['widget']
+        widget: ViewWidget = d["widget"]
         widget.setVisible(False)
-        action: QAction = d['action']
+        action: QAction = d["action"]
         action.setChecked(False)
         setattr(pcfg, cfg_name, False)
 
@@ -2302,6 +2631,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
     def show_about_dialog(self):
         """Show the About dialog with version info and update check."""
         import launch
+
         dlg = AboutDialog(
             self,
             version=launch.VERSION,

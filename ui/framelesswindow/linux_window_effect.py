@@ -3,13 +3,15 @@ from qtpy.QtGui import QColor
 
 
 class LinuxWindowEffect:
-    """ Linux window effect """
+    """Linux window effect"""
 
     def __init__(self, window):
         self.window = window
 
-    def setAcrylicEffect(self, hWnd, gradientColor="F2F2F230", isEnableShadow=True, animationId=0):
-        """ set acrylic effect for window
+    def setAcrylicEffect(
+        self, hWnd, gradientColor="F2F2F230", isEnableShadow=True, animationId=0
+    ):
+        """set acrylic effect for window
 
         Parameter
         ----------
@@ -28,7 +30,7 @@ class LinuxWindowEffect:
         pass
 
     def setBorderAccentColor(self, hWnd, color: QColor):
-        """ Set the border color of the window
+        """Set the border color of the window
 
         Parameters
         ----------
@@ -41,7 +43,7 @@ class LinuxWindowEffect:
         pass
 
     def removeBorderAccentColor(self, hWnd):
-        """ Remove the border color of the window
+        """Remove the border color of the window
 
         Parameters
         ----------
@@ -51,7 +53,7 @@ class LinuxWindowEffect:
         pass
 
     def setMicaEffect(self, hWnd, isDarkMode=False, isAlt=False):
-        """ Add mica effect to the window (Win11 only)
+        """Add mica effect to the window (Win11 only)
 
         Parameters
         ----------
@@ -67,7 +69,7 @@ class LinuxWindowEffect:
         pass
 
     def setAeroEffect(self, hWnd):
-        """ add Aero effect to the window
+        """add Aero effect to the window
 
         Parameter
         ----------
@@ -77,7 +79,7 @@ class LinuxWindowEffect:
         pass
 
     def setTransparentEffect(self, hWnd):
-        """ set transparent effect for window
+        """set transparent effect for window
 
         Parameters
         ----------
@@ -87,7 +89,7 @@ class LinuxWindowEffect:
         pass
 
     def removeBackgroundEffect(self, hWnd):
-        """ Remove background effect
+        """Remove background effect
 
         Parameters
         ----------
@@ -97,7 +99,7 @@ class LinuxWindowEffect:
         pass
 
     def addShadowEffect(self, hWnd):
-        """ add shadow to window
+        """add shadow to window
 
         Parameter
         ----------
@@ -107,7 +109,7 @@ class LinuxWindowEffect:
         pass
 
     def addMenuShadowEffect(self, hWnd):
-        """ add shadow to menu
+        """add shadow to menu
 
         Parameter
         ----------
@@ -118,7 +120,7 @@ class LinuxWindowEffect:
 
     @staticmethod
     def removeMenuShadowEffect(hWnd):
-        """ Remove shadow from pop-up menu
+        """Remove shadow from pop-up menu
 
         Parameters
         ----------
@@ -128,7 +130,7 @@ class LinuxWindowEffect:
         pass
 
     def removeShadowEffect(self, hWnd):
-        """ Remove shadow from the window
+        """Remove shadow from the window
 
         Parameters
         ----------
@@ -139,7 +141,7 @@ class LinuxWindowEffect:
 
     @staticmethod
     def addWindowAnimation(hWnd):
-        """ Enables the maximize and minimize animation of the window
+        """Enables the maximize and minimize animation of the window
 
         Parameters
         ----------
@@ -150,7 +152,7 @@ class LinuxWindowEffect:
 
     @staticmethod
     def disableMaximizeButton(hWnd):
-        """ Disable the maximize button of window
+        """Disable the maximize button of window
 
         Parameters
         ----------
@@ -159,7 +161,7 @@ class LinuxWindowEffect:
         """
 
     def enableBlurBehindWindow(self, hWnd):
-        """ enable the blur effect behind the whole client
+        """enable the blur effect behind the whole client
 
         Parameters
         ----------

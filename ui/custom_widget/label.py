@@ -25,7 +25,7 @@ class FadeLabel(QLabel):
             targetObject=effect,
             duration=1200,
             startValue=1.0,
-            endValue=0.,
+            endValue=0.0,
         )
         self.fadeAnimation.setEasingCurve(QEasingCurve.Type.InOutExpo)
         self.fadeAnimation.finished.connect(self.hide)
@@ -47,7 +47,8 @@ class ColorPickerLabel(QLabel):
     colorChanged = Signal(bool)
     apply_color = Signal(str, tuple)
     changingColor = Signal()
-    def __init__(self, parent=None, param_name='', *args, **kwargs):
+
+    def __init__(self, parent=None, param_name="", *args, **kwargs):
         super().__init__(parent=parent, *args, **kwargs)
         self.color = QColor(0, 0, 0)
         self.param_name = param_name
@@ -58,6 +59,7 @@ class ColorPickerLabel(QLabel):
         if event.button() == Qt.MouseButton.LeftButton:
             self.changingColor.emit()
             from .color_picker import ColorPickerDialog
+
             dlg = ColorPickerDialog(self.color, self.window())
             if dlg.exec_() == QDialog.DialogCode.Accepted:
                 self.setPickerColor(dlg.get_color())
@@ -135,9 +137,7 @@ class SmallColorPickerLabel(ColorPickerLabel):
     pass
 
 
-
 class ClickableLabel(QLabel):
-
     clicked = Signal()
 
     def __init__(self, text=None, parent=None, *args, **kwargs):
@@ -156,10 +156,16 @@ class ConfigClickableLabel(ClickableLabel):
 
 
 class CheckableLabel(QLabel):
-
     checkStateChanged = Signal(bool)
 
-    def __init__(self, checked_text: str, unchecked_text: str, default_checked: bool = False, *args, **kwargs):
+    def __init__(
+        self,
+        checked_text: str,
+        unchecked_text: str,
+        default_checked: bool = False,
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.checked_text = checked_text
         self.unchecked_text = unchecked_text
@@ -186,6 +192,7 @@ class CheckableLabel(QLabel):
 
 class TextCheckerLabel(QLabel):
     checkStateChanged = Signal(bool)
+
     def __init__(self, text: str, checked: bool = False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setText(text)
@@ -197,8 +204,11 @@ class TextCheckerLabel(QLabel):
         self.checked = checked
         if checked:
             from ui.misc import get_theme_color
+
             c = get_theme_color()
-            self.setStyleSheet(f"QLabel {{ background-color: {c.name()}; color: white; }}")
+            self.setStyleSheet(
+                f"QLabel {{ background-color: {c.name()}; color: white; }}"
+            )
         else:
             self.setStyleSheet("")
 
@@ -212,27 +222,31 @@ class TextCheckerLabel(QLabel):
 
 
 class ParamNameLabel(QLabel):
-    def __init__(self, param_name: str, alignment = None, *args, **kwargs) -> None:
+    def __init__(self, param_name: str, alignment=None, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         if alignment is None:
-            self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            self.setAlignment(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
         else:
             self.setAlignment(alignment)
 
         font = self.font()
-        font.setPointSizeF(CONFIG_FONTSIZE_CONTENT-2)
+        font.setPointSizeF(CONFIG_FONTSIZE_CONTENT - 2)
         self.setFont(font)
         self.setText(param_name)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
 
 
 class SmallParamLabel(QLabel):
-    def __init__(self, param_name: str, alignment = None, *args, **kwargs) -> None:
+    def __init__(self, param_name: str, alignment=None, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         if alignment is None:
-            self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            self.setAlignment(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
         else:
             self.setAlignment(alignment)
 
@@ -241,11 +255,12 @@ class SmallParamLabel(QLabel):
 
 
 class SizeControlLabel(QLabel):
-
     btn_released = Signal()
     size_ctrl_changed = Signal(int)
 
-    def __init__(self, parent=None, direction=0, text='', alignment=None, transparent_bg=True):
+    def __init__(
+        self, parent=None, direction=0, text="", alignment=None, transparent_bg=True
+    ):
         super().__init__(parent)
         if text:
             self.setText(text)

@@ -165,6 +165,7 @@ class LLM_OCR(OCRBase):
     def _load_vision_profiles(self):
         """Refresh the profile selector options from shared storage."""
         from utils.profile_manager import get_vision_profile_names, load_profiles
+
         self._all_profiles = load_profiles()
         names = get_vision_profile_names()
         self.params["profile"]["options"] = names
@@ -180,6 +181,7 @@ class LLM_OCR(OCRBase):
         if not name:
             return {}
         from utils.profile_manager import find_profile
+
         return find_profile(name) or {}
 
     # ── Connection helpers ─────────────────────────────────────────

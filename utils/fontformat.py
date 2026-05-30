@@ -11,12 +11,13 @@ from .structures import Config, List, Union, field, nested_dataclass
 
 def pt2px(pt, to_int=False) -> float:
     if to_int:
-        return int(round(pt * shared.LDPI / 72.))
+        return int(round(pt * shared.LDPI / 72.0))
     else:
-        return pt * shared.LDPI / 72.
+        return pt * shared.LDPI / 72.0
+
 
 def px2pt(px) -> float:
-    return px / shared.LDPI * 72.
+    return px / shared.LDPI * 72.0
 
 
 class LineSpacingType(enum.IntEnum):
@@ -35,16 +36,37 @@ class PunctuationAlignment(enum.IntEnum):
     UpperRight = 1
 
 
-fontweight_qt5_to_qt6 = {0: 100, 12: 200, 25: 300, 50: 400, 57: 500, 63: 600, 75: 700, 81: 800, 87: 900}
-fontweight_qt6_to_qt5 = {100: 0, 200: 12, 300: 25, 400: 50, 500: 57, 600: 63, 700: 75, 800: 81, 900: 87}
+fontweight_qt5_to_qt6 = {
+    0: 100,
+    12: 200,
+    25: 300,
+    50: 400,
+    57: 500,
+    63: 600,
+    75: 700,
+    81: 800,
+    87: 900,
+}
+fontweight_qt6_to_qt5 = {
+    100: 0,
+    200: 12,
+    300: 25,
+    400: 50,
+    500: 57,
+    600: 63,
+    700: 75,
+    800: 81,
+    900: 87,
+}
 
-fontweight_pattern = re.compile(r'font-weight:(\d+)', re.DOTALL)
+fontweight_pattern = re.compile(r"font-weight:(\d+)", re.DOTALL)
+
 
 def fix_fontweight_qt(weight: Union[str, int]):
 
     def _fix_html_fntweight(matched):
         weight = int(matched.group(1))
-        return f'font-weight:{fix_fontweight_qt(weight)}'
+        return f"font-weight:{fix_fontweight_qt(weight)}"
 
     if weight is None:
         return None
@@ -56,16 +78,19 @@ def fix_fontweight_qt(weight: Union[str, int]):
             if weight in fontweight_qt6_to_qt5:
                 weight = fontweight_qt6_to_qt5[weight]
     if isinstance(weight, str):
-        weight = fontweight_pattern.sub(lambda matched: _fix_html_fntweight(matched), weight)
+        weight = fontweight_pattern.sub(
+            lambda matched: _fix_html_fntweight(matched), weight
+        )
     return weight
 
 
 @nested_dataclass
 class FontFormat(Config):
-
-    font_family: str = shared.DEFAULT_FONT_FAMILY # to always apply shared.DEFAULT_FONT_FAMILY
+    font_family: str = (
+        shared.DEFAULT_FONT_FAMILY
+    )  # to always apply shared.DEFAULT_FONT_FAMILY
     font_size: float = 24
-    stroke_width: float = 0.
+    stroke_width: float = 0.0
     frgb: List = field(default_factory=lambda: [0, 0, 0])
     srgb: List = field(default_factory=lambda: [0, 0, 0])
     bold: bool = False
@@ -76,21 +101,21 @@ class FontFormat(Config):
     font_weight: int = None
     line_spacing: float = 1.2
     letter_spacing: float = 1.15
-    opacity: float = 1.
-    shadow_radius: float = 0.
-    shadow_strength: float = 1.
+    opacity: float = 1.0
+    shadow_radius: float = 0.0
+    shadow_strength: float = 1.0
     shadow_color: List = field(default_factory=lambda: [0, 0, 0])
-    shadow_offset: List = field(default_factory=lambda: [0., 0.])
+    shadow_offset: List = field(default_factory=lambda: [0.0, 0.0])
     gradient_enabled: bool = False
     gradient_start_color: List = field(default_factory=lambda: [0, 0, 0])
     gradient_end_color: List = field(default_factory=lambda: [255, 255, 255])
-    gradient_angle: float = 0.
+    gradient_angle: float = 0.0
     gradient_size: float = 1.0
-    _style_name: str = ''
+    _style_name: str = ""
     line_spacing_type: int = LineSpacingType.Proportional
     punctuation_alignment: int = PunctuationAlignment.Center
 
-    deprecated_attributes: dict = field(default_factory = lambda: dict())
+    deprecated_attributes: dict = field(default_factory=lambda: dict())
 
     @property
     def size_pt(self):
@@ -99,12 +124,12 @@ class FontFormat(Config):
     def __post_init__(self):
         da = self.deprecated_attributes
         if len(da) > 0:
-            if 'size' in da:
-                self.font_size = pt2px(da['size'])
-            if 'weight' in da:
-                self.font_weight = da['weight']
-            if 'family' in da:
-                self.font_family = da['family']
+            if "size" in da:
+                self.font_size = pt2px(da["size"])
+            if "weight" in da:
+                self.font_weight = da["weight"]
+            if "family" in da:
+                self.font_family = da["family"]
 
         self.font_weight = fix_fontweight_qt(self.font_weight)
         self.deprecated_attributes = {}
@@ -123,7 +148,7 @@ class FontFormat(Config):
             if not hasattr(self, key):
                 continue
             if compare:
-                if key != '_style_name':
+                if key != "_style_name":
                     if isinstance(target[key], np.ndarray):
                         is_diff = np.any(self[key] != target[key])
                     else:

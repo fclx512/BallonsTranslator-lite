@@ -7,8 +7,9 @@ from qtpy.QtGui import QColor, QImage, QPixmap
 from .misc import ndarray2pixmap, pixmap2ndarray
 
 
-def apply_shadow_effect(img: Union[QPixmap, QImage, np.ndarray], color: QColor, strength=1.0, radius=21) -> Tuple[
-    QPixmap, np.ndarray, np.ndarray]:
+def apply_shadow_effect(
+    img: Union[QPixmap, QImage, np.ndarray], color: QColor, strength=1.0, radius=21
+) -> Tuple[QPixmap, np.ndarray, np.ndarray]:
     if isinstance(color, QColor):
         color = [color.red(), color.green(), color.blue()]
 

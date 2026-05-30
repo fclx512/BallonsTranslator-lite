@@ -21,23 +21,23 @@ def get_ai_logger() -> logging.Logger:
     if _logger is not None:
         return _logger
 
-    _logger = logging.getLogger('ai_chat')
+    _logger = logging.getLogger("ai_chat")
     _logger.setLevel(logging.DEBUG)
     _logger.propagate = False  # don't bubble to root logger
 
     fmt = logging.Formatter(
-        '%(asctime)s [%(levelname)-5s] %(name)s | %(message)s',
-        datefmt='%H:%M:%S',
+        "%(asctime)s [%(levelname)-5s] %(name)s | %(message)s",
+        datefmt="%H:%M:%S",
     )
 
     # File handler — write next to config.json
-    log_dir = os.path.join(os.path.dirname(__file__), '..', 'config')
+    log_dir = os.path.join(os.path.dirname(__file__), "..", "config")
     os.makedirs(log_dir, exist_ok=True)
     fh = RotatingFileHandler(
-        os.path.join(log_dir, 'ai_chat.log'),
+        os.path.join(log_dir, "ai_chat.log"),
         maxBytes=5 * 1024 * 1024,
         backupCount=3,
-        encoding='utf-8',
+        encoding="utf-8",
     )
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(fmt)

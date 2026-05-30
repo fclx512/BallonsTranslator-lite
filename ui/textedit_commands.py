@@ -18,7 +18,13 @@ from .texteditshapecontrol import TextBlkShapeControl
 from .textitem import TextBlkItem, TextBlock
 
 
-def propagate_user_edit(src_edit: Union[TransTextEdit, TextBlkItem], target_edit: Union[TransTextEdit, TextBlkItem], pos: int, added_text: str, joint_previous: bool = False):
+def propagate_user_edit(
+    src_edit: Union[TransTextEdit, TextBlkItem],
+    target_edit: Union[TransTextEdit, TextBlkItem],
+    pos: int,
+    added_text: str,
+    joint_previous: bool = False,
+):
     ori_count = target_edit.document().characterCount()
     new_count = src_edit.document().characterCount()
     removed = ori_count + len(added_text) - new_count
@@ -68,7 +74,12 @@ class MoveBlkItemsCommand(QUndoCommand):
 
 
 class ApplyFontformatCommand(QUndoCommand):
-    def __init__(self, items: List[TextBlkItem], trans_widget_lst: List[TransTextEdit], fontformat: FontFormat):
+    def __init__(
+        self,
+        items: List[TextBlkItem],
+        trans_widget_lst: List[TransTextEdit],
+        fontformat: FontFormat,
+    ):
         super(ApplyFontformatCommand, self).__init__()
         self.items = items
         self.old_html_lst = []
@@ -87,7 +98,13 @@ class ApplyFontformatCommand(QUndoCommand):
             edit.document().clearUndoRedoStacks()
 
     def undo(self):
-        for rect, item, html, fmt, edit in zip(self.old_rect_lst, self.items, self.old_html_lst, self.old_fmt_lst, self.trans_widget_lst):
+        for rect, item, html, fmt, edit in zip(
+            self.old_rect_lst,
+            self.items,
+            self.old_html_lst,
+            self.old_fmt_lst,
+            self.trans_widget_lst,
+        ):
             item.setHtml(html)
             item.set_fontformat(fmt)
             item.setRect(rect)
@@ -120,7 +137,9 @@ class ReshapeItemCommand(QUndoCommand):
 
 
 class RotateItemCommand(QUndoCommand):
-    def __init__(self, item: TextBlkItem, new_angle: float, shape_ctrl: TextBlkShapeControl):
+    def __init__(
+        self, item: TextBlkItem, new_angle: float, shape_ctrl: TextBlkShapeControl
+    ):
         super(RotateItemCommand, self).__init__()
         self.item = item
         self.old_angle = item.rotation()
@@ -130,13 +149,19 @@ class RotateItemCommand(QUndoCommand):
     def redo(self):
         self.item.setRotation(self.new_angle)
         self.item.blk.angle = self.new_angle
-        if self.shape_ctrl.blk_item == self.item and self.shape_ctrl.rotation() != self.new_angle:
+        if (
+            self.shape_ctrl.blk_item == self.item
+            and self.shape_ctrl.rotation() != self.new_angle
+        ):
             self.shape_ctrl.setRotation(self.new_angle)
 
     def undo(self):
         self.item.setRotation(self.old_angle)
         self.item.blk.angle = self.old_angle
-        if self.shape_ctrl.blk_item == self.item and self.shape_ctrl.rotation() != self.old_angle:
+        if (
+            self.shape_ctrl.blk_item == self.item
+            and self.shape_ctrl.rotation() != self.old_angle
+        ):
             self.shape_ctrl.setRotation(self.old_angle)
 
     def mergeWith(self, command: QUndoCommand):
@@ -148,7 +173,13 @@ class RotateItemCommand(QUndoCommand):
 
 
 class AutoLayoutCommand(QUndoCommand):
-    def __init__(self, items: List[TextBlkItem], old_rect_lst: List, old_html_lst: List, trans_widget_lst: List[TransTextEdit]):
+    def __init__(
+        self,
+        items: List[TextBlkItem],
+        old_rect_lst: List,
+        old_html_lst: List,
+        trans_widget_lst: List[TransTextEdit],
+    ):
         super(AutoLayoutCommand, self).__init__()
         self.items = items
         self.old_html_lst = old_html_lst
@@ -165,18 +196,22 @@ class AutoLayoutCommand(QUndoCommand):
         self.counter += 1
         if self.counter <= 1:
             return
-        for item, trans_widget, html, rect  in zip(self.items, self.trans_widget_lst, self.new_html_lst, self.new_rect_lst):
+        for item, trans_widget, html, rect in zip(
+            self.items, self.trans_widget_lst, self.new_html_lst, self.new_rect_lst
+        ):
             trans_widget.setPlainText(item.toPlainText())
-            item.setPlainText('')
+            item.setPlainText("")
             item.setRect(rect, repaint=False)
             item.setHtml(html)
             if item.fontformat.letter_spacing != 1:
                 item.setLetterSpacing(item.fontformat.letter_spacing, force=True)
 
     def undo(self):
-        for item, trans_widget, html, rect  in zip(self.items, self.trans_widget_lst, self.old_html_lst, self.old_rect_lst):
+        for item, trans_widget, html, rect in zip(
+            self.items, self.trans_widget_lst, self.old_html_lst, self.old_rect_lst
+        ):
             trans_widget.setPlainText(item.toPlainText())
-            item.setPlainText('')
+            item.setPlainText("")
             item.setRect(rect, repaint=False)
             item.setHtml(html)
             if item.fontformat.letter_spacing != 1:
@@ -201,6 +236,7 @@ class SqueezeCommand(QUndoCommand):
             blk.setRect(rect, repaint=True)
             if blk.under_ctrl:
                 self.ctrl.updateBoundingRect()
+
 
 class ResetAngleCommand(QUndoCommand):
     def __init__(self, blkitem_lst: List[TextBlkItem], ctrl: TextBlkShapeControl):
@@ -228,8 +264,15 @@ class ResetAngleCommand(QUndoCommand):
             if self.ctrl.blk_item == blk:
                 self.ctrl.setAngle(angle)
 
+
 class TextItemEditCommand(QUndoCommand):
-    def __init__(self, blkitem: TextBlkItem, trans_edit: TransTextEdit, num_steps: int, formatpanel=None):
+    def __init__(
+        self,
+        blkitem: TextBlkItem,
+        trans_edit: TransTextEdit,
+        num_steps: int,
+        formatpanel=None,
+    ):
         super(TextItemEditCommand, self).__init__()
         self.op_counter = 0
         self.edit = trans_edit
@@ -260,7 +303,9 @@ class TextItemEditCommand(QUndoCommand):
 
         if self.is_formatting and self.blkitem == self.formatpanel.textblk_item:
             multi_size = not self.blkitem.isEditing() and self.blkitem.isMultiFontSize()
-            self.formatpanel.set_active_format(self.blkitem.get_fontformat(), multi_size)
+            self.formatpanel.set_active_format(
+                self.blkitem.get_fontformat(), multi_size
+            )
 
         if self.edit is not None and not self.is_formatting:
             self.edit.redo()
@@ -277,14 +322,21 @@ class TextItemEditCommand(QUndoCommand):
 
         if self.is_formatting and self.blkitem == self.formatpanel.textblk_item:
             multi_size = not self.blkitem.isEditing() and self.blkitem.isMultiFontSize()
-            self.formatpanel.set_active_format(self.blkitem.get_fontformat(), multi_size)
+            self.formatpanel.set_active_format(
+                self.blkitem.get_fontformat(), multi_size
+            )
 
         if self.edit is not None:
             self.edit.undo()
 
 
 class TextEditCommand(QUndoCommand):
-    def __init__(self, edit: Union[SourceTextEdit, TransTextEdit], num_steps: int, blkitem: TextBlkItem) -> None:
+    def __init__(
+        self,
+        edit: Union[SourceTextEdit, TransTextEdit],
+        num_steps: int,
+        blkitem: TextBlkItem,
+    ) -> None:
         super().__init__()
         # TODO: remove it for transtextedit
         self.edit = edit
@@ -324,21 +376,27 @@ class PageReplaceOneCommand(QUndoCommand):
         if self.sw.current_edit is not None and self.sw.isVisible():
             move = self.sw.move_cursor(1)
             if move == 0:
-                self.sw.result_pos = min(self.sw.counter_sum - 1, self.sw.result_pos + 1)
+                self.sw.result_pos = min(
+                    self.sw.counter_sum - 1, self.sw.result_pos + 1
+                )
             else:
                 self.sw.result_pos = 0
 
         if not self.edit_is_src:
             cursor = self.blkitem.textCursor()
             cursor.setPosition(self.sel_start)
-            cursor.setPosition(self.sel_start+self.ori_len, QTextCursor.MoveMode.KeepAnchor)
+            cursor.setPosition(
+                self.sel_start + self.ori_len, QTextCursor.MoveMode.KeepAnchor
+            )
             cursor.beginEditBlock()
             cursor.insertText(self.reptxt)
             cursor.endEditBlock()
 
         self.rep_cursor = self.edit.textCursor()
         self.rep_cursor.setPosition(self.sel_start)
-        self.rep_cursor.setPosition(self.sel_start+self.ori_len, QTextCursor.MoveMode.KeepAnchor)
+        self.rep_cursor.setPosition(
+            self.sel_start + self.ori_len, QTextCursor.MoveMode.KeepAnchor
+        )
         self.rep_cursor.insertText(self.reptxt)
         self.edit.updateUndoSteps()
 
@@ -350,7 +408,9 @@ class PageReplaceOneCommand(QUndoCommand):
         if self.sw.current_edit is not None and self.sw.isVisible():
             move = self.sw.move_cursor(1)
             if move == 0:
-                self.sw.result_pos = min(self.sw.counter_sum - 1, self.sw.result_pos + 1)
+                self.sw.result_pos = min(
+                    self.sw.counter_sum - 1, self.sw.result_pos + 1
+                )
             else:
                 self.sw.result_pos = 0
 
@@ -374,7 +434,6 @@ class PageReplaceOneCommand(QUndoCommand):
 
 
 class PageReplaceAllCommand(QUndoCommand):
-
     def __init__(self, search_widget: PageSearchWidget) -> None:
         super().__init__()
         self.op_counter = 0
@@ -383,7 +442,9 @@ class PageReplaceAllCommand(QUndoCommand):
         self.rstedit_list: List[SourceTextEdit] = []
         self.blkitem_list: List[TextBlkItem] = []
         curpos_list: List[List[Matched]] = []
-        for edit, highlighter in zip(self.sw.search_rstedit_list, self.sw.highlighter_list):
+        for edit, highlighter in zip(
+            self.sw.search_rstedit_list, self.sw.highlighter_list
+        ):
             self.rstedit_list.append(edit)
             curpos_list.append(list(highlighter.matched_map.values()))
 
@@ -417,33 +478,39 @@ class PageReplaceAllCommand(QUndoCommand):
 
 
 class GlobalRepalceAllCommand(QUndoCommand):
-    def __init__(self, sceneitem_list: dict, background_list: dict, target_text: str, proj: ProjImgTrans) -> None:
+    def __init__(
+        self,
+        sceneitem_list: dict,
+        background_list: dict,
+        target_text: str,
+        proj: ProjImgTrans,
+    ) -> None:
         super().__init__()
         self.op_counter = -1
         self.target_text = target_text
         self.proj = proj
-        self.trans_list = sceneitem_list['trans']
-        self.src_list = sceneitem_list['src']
-        self.btrans_list = background_list['trans']
-        self.bsrc_list = background_list['src']
+        self.trans_list = sceneitem_list["trans"]
+        self.src_list = sceneitem_list["src"]
+        self.btrans_list = background_list["trans"]
+        self.bsrc_list = background_list["src"]
 
         for trans_dict in self.trans_list:
-            edit: TransTextEdit = trans_dict['edit']
-            item: TextBlkItem = trans_dict['item']
-            matched_map = trans_dict['matched_map']
+            edit: TransTextEdit = trans_dict["edit"]
+            item: TextBlkItem = trans_dict["item"]
+            matched_map = trans_dict["matched_map"]
             sel_list = doc_replace(edit.document(), matched_map, target_text)
 
             doc_replace_no_shift(item.document(), sel_list, target_text)
             item.updateUndoSteps()
             item.updateUndoSteps()
 
-            trans_dict.pop('matched_map')
+            trans_dict.pop("matched_map")
 
         for src_dict in self.src_list:
-            edit: SourceTextEdit = src_dict['edit']
-            edit.setPlainTextAndKeepUndoStack(src_dict['replace'])
+            edit: SourceTextEdit = src_dict["edit"]
+            edit.setPlainTextAndKeepUndoStack(src_dict["replace"])
             edit.updateUndoSteps()
-            src_dict.pop('replace')
+            src_dict.pop("replace")
 
     def redo(self):
         if self.op_counter == 0:
@@ -451,47 +518,52 @@ class GlobalRepalceAllCommand(QUndoCommand):
             return
 
         for trans_dict in self.trans_list:
-            edit: TransTextEdit = trans_dict['edit']
-            item: TextBlkItem = trans_dict['item']
+            edit: TransTextEdit = trans_dict["edit"]
+            item: TextBlkItem = trans_dict["item"]
             edit.redo()
             item.redo()
 
         for src_dict in self.src_list:
-            edit: SourceTextEdit = src_dict['edit']
+            edit: SourceTextEdit = src_dict["edit"]
             edit.redo()
 
         for trans_dict in self.btrans_list:
-            blk: TextBlock = self.proj.pages[trans_dict['pagename']][trans_dict['idx']]
-            blk.translation = trans_dict['replace']
-            blk.rich_text = trans_dict['replace_html']
+            blk: TextBlock = self.proj.pages[trans_dict["pagename"]][trans_dict["idx"]]
+            blk.translation = trans_dict["replace"]
+            blk.rich_text = trans_dict["replace_html"]
 
         for src_dict in self.bsrc_list:
-            blk: TextBlock = self.proj.pages[src_dict['pagename']][src_dict['idx']]
-            blk.text = src_dict['replace']
+            blk: TextBlock = self.proj.pages[src_dict["pagename"]][src_dict["idx"]]
+            blk.text = src_dict["replace"]
 
     def undo(self):
         for trans_dict in self.trans_list:
-            edit: TransTextEdit = trans_dict['edit']
-            item: TextBlkItem = trans_dict['item']
+            edit: TransTextEdit = trans_dict["edit"]
+            item: TextBlkItem = trans_dict["item"]
             edit.undo()
             item.undo()
 
         for src_dict in self.src_list:
-            edit: SourceTextEdit = src_dict['edit']
+            edit: SourceTextEdit = src_dict["edit"]
             edit.undo()
 
         for trans_dict in self.btrans_list:
-            blk: TextBlock = self.proj.pages[trans_dict['pagename']][trans_dict['idx']]
-            blk.translation = trans_dict['ori']
-            blk.rich_text = trans_dict['ori_html']
+            blk: TextBlock = self.proj.pages[trans_dict["pagename"]][trans_dict["idx"]]
+            blk.translation = trans_dict["ori"]
+            blk.rich_text = trans_dict["ori_html"]
 
         for src_dict in self.src_list:
-            blk: TextBlock = self.proj.pages[src_dict['pagename']][src_dict['idx']]
-            blk.text = src_dict['ori']
+            blk: TextBlock = self.proj.pages[src_dict["pagename"]][src_dict["idx"]]
+            blk.text = src_dict["ori"]
 
 
 class MultiPasteCommand(QUndoCommand):
-    def __init__(self, text_list: Union[str, List], blkitems: List[TextBlkItem], etrans: List[TransTextEdit]) -> None:
+    def __init__(
+        self,
+        text_list: Union[str, List],
+        blkitems: List[TextBlkItem],
+        etrans: List[TransTextEdit],
+    ) -> None:
         super().__init__()
         self.op_counter = -1
         self.blkitems = blkitems

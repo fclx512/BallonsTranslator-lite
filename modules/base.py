@@ -11,9 +11,12 @@ from utils import shared
 from utils.lock import aquire_model_loading_lock, release_model_loading_lock
 from utils.logger import logger as LOGGER
 
-GPUINTENSIVE_SET = {'cuda', 'mps', 'xpu', 'privateuseone'}
+GPUINTENSIVE_SET = {"cuda", "mps", "xpu", "privateuseone"}
 
-def register_hooks(hooks_registered: OrderedDict, callbacks: Union[List, Callable, Dict]):
+
+def register_hooks(
+    hooks_registered: OrderedDict, callbacks: Union[List, Callable, Dict]
+):
     if callbacks is None:
         return
     if isinstance(callbacks, (Dict, OrderedDict)):
@@ -25,46 +28,46 @@ def register_hooks(hooks_registered: OrderedDict, callbacks: Union[List, Callabl
         if isinstance(callbacks, Callable):
             callbacks = [callbacks]
         for callback in callbacks:
-            hk = 'hook_' + str(nhooks).zfill(2)
+            hk = "hook_" + str(nhooks).zfill(2)
             while True:
                 if hk not in hooks_registered:
                     break
-                hk = hk + '_' + str(time.time_ns())
+                hk = hk + "_" + str(time.time_ns())
             hooks_registered[hk] = callback
             nhooks += 1
 
 
-def patch_module_params(cfg_param, module_params, module_name: str = ''):
+def patch_module_params(cfg_param, module_params, module_name: str = ""):
     # cfg_param = config_params[module_key]
     cfg_key_set = set(cfg_param.keys())
     module_key_set = set(module_params.keys())
     for ck in cfg_key_set:
         if ck not in module_key_set:
-            if ck.startswith('_'):
+            if ck.startswith("_"):
                 continue
-            LOGGER.warning(f'Found invalid {module_name} config: {ck}')
+            LOGGER.warning(f"Found invalid {module_name} config: {ck}")
             cfg_param.pop(ck)
 
     for mk in module_key_set:
         if mk not in cfg_key_set:
-            if not mk.startswith('__') and mk != 'description':
-                LOGGER.info(f'Found new {module_name} config: {mk}')
+            if not mk.startswith("__") and mk != "description":
+                LOGGER.info(f"Found new {module_name} config: {mk}")
             cfg_param[mk] = module_params[mk]
         else:
             mparam = module_params[mk]
             cparam = cfg_param[mk]
             if isinstance(mparam, dict):
-                tgt_type = mparam.get('data_type', type(mparam['value']))
+                tgt_type = mparam.get("data_type", type(mparam["value"]))
                 if isinstance(cparam, dict):
-                    if 'value' in cparam:
-                        v = cparam['value']
-                    elif isinstance(mparam['value'], dict):
-                        for k in mparam['value']:
+                    if "value" in cparam:
+                        v = cparam["value"]
+                    elif isinstance(mparam["value"], dict):
+                        for k in mparam["value"]:
                             if k in cparam:
-                                mparam['value'][k] = cparam[k]
-                        v = mparam['value']
+                                mparam["value"][k] = cparam[k]
+                        v = mparam["value"]
                     else:
-                        v = mparam['value']
+                        v = mparam["value"]
                 else:
                     v = cparam
                 valid = True
@@ -73,34 +76,40 @@ def patch_module_params(cfg_param, module_params, module_name: str = ''):
                         v = tgt_type(v)
                     except:
                         valid = False
-                        LOGGER.warning(f'Invalid param value {v} for defined dtype: {tgt_type}, it will be set to default value: {mparam}')
+                        LOGGER.warning(
+                            f"Invalid param value {v} for defined dtype: {tgt_type}, it will be set to default value: {mparam}"
+                        )
                 if valid:
-                    mparam['value'] = v
+                    mparam["value"] = v
                 cfg_param[mk] = mparam
             else:
                 if type(cparam) != type(mparam):
                     if not isinstance(mparam, dict) and isinstance(cparam, dict):
-                        cparam = cparam['value']
+                        cparam = cparam["value"]
                     try:
                         cfg_param[mk] = type(mparam)(cparam)
                     except ValueError:
-                        LOGGER.warning(f'Invalid param value {cparam} for defined dtype: {type(mparam)}, it will be set to default value: {mparam}')
+                        LOGGER.warning(
+                            f"Invalid param value {cparam} for defined dtype: {type(mparam)}, it will be set to default value: {mparam}"
+                        )
                         cfg_param[mk] = mparam
 
-    cfg_key_list = [k for k in cfg_param.keys() if not k.startswith('_')]
+    cfg_key_list = [k for k in cfg_param.keys() if not k.startswith("_")]
     module_key_list = list(module_params.keys())
     if cfg_key_list != module_key_list:
-        internal = {k: cfg_param[k] for k in cfg_param if k.startswith('_')}
+        internal = {k: cfg_param[k] for k in cfg_param if k.startswith("_")}
         new_params = {key: cfg_param[key] for key in module_key_list}
         new_params.update(internal)
         cfg_param.clear()
         cfg_param.update(new_params)
         module_key_set = set(module_params.keys())
-    cfg_param['__param_patched'] = True
+    cfg_param["__param_patched"] = True
     return cfg_param
 
 
-def merge_config_module_params(config_params: Dict, module_keys: List, get_module: Callable) -> Dict:
+def merge_config_module_params(
+    config_params: Dict, module_keys: List, get_module: Callable
+) -> Dict:
     for module_key in module_keys:
         module_params = get_module(module_key).params
         if module_key not in config_params or config_params[module_key] is None:
@@ -110,12 +119,12 @@ def merge_config_module_params(config_params: Dict, module_keys: List, get_modul
 
     # Auto-select best available device on each startup,
     # overriding any stale "cpu" setting from a previous CPU-mode run.
-    if not _force_cpu and DEFAULT_DEVICE != 'cpu':
+    if not _force_cpu and DEFAULT_DEVICE != "cpu":
         for module_key in module_keys:
             params = config_params.get(module_key)
-            if params and 'device' in params and isinstance(params['device'], dict):
-                if params['device']['value'] == 'cpu':
-                    params['device']['value'] = DEFAULT_DEVICE
+            if params and "device" in params and isinstance(params["device"], dict):
+                if params["device"]["value"] == "cpu":
+                    params["device"]["value"] = DEFAULT_DEVICE
 
     return config_params
 
@@ -124,15 +133,16 @@ def standardize_module_params(params):
     if params is None:
         return
     for k, v in params.items():
-        if not isinstance(v, dict) and k not in {'description'}:  # remember to exclude special keys here
-            v = {'value': v}
-        if isinstance(v, dict) and 'data_type' not in v:
-            v['data_type'] = type(v['value'])
+        if not isinstance(v, dict) and k not in {
+            "description"
+        }:  # remember to exclude special keys here
+            v = {"value": v}
+        if isinstance(v, dict) and "data_type" not in v:
+            v["data_type"] = type(v["value"])
         params[k] = v
 
 
 class BaseModule:
-
     params: Dict = None
     logger = LOGGER
 
@@ -146,7 +156,7 @@ class BaseModule:
 
     def __init__(self, **params) -> None:
         standardize_module_params(self.params)
-        if self.params is not None and '__param_patched' not in params:
+        if self.params is not None and "__param_patched" not in params:
             params = patch_module_params(params, self.params, self)
         if params:
             if self.params is None:
@@ -174,7 +184,7 @@ class BaseModule:
         assert self.params is not None and param_key in self.params
         p = self.params[param_key]
         if isinstance(p, dict):
-            return p['value']
+            return p["value"]
         return p
 
     def set_param_value(self, param_key: str, param_value, convert_dtype=True):
@@ -183,18 +193,22 @@ class BaseModule:
         if isinstance(p, dict):
             if convert_dtype:
                 try:
-                    val_type = p.get('data_type', type(p['value']))
+                    val_type = p.get("data_type", type(p["value"]))
                     param_value = val_type(param_value)
                 except ValueError:
-                    dtype = type(p['value'])
-                    self.logger.warning(f'Invalid param value {param_value} for defined dtype: {dtype}')
-            p['value'] = param_value
+                    dtype = type(p["value"])
+                    self.logger.warning(
+                        f"Invalid param value {param_value} for defined dtype: {dtype}"
+                    )
+            p["value"] = param_value
         else:
             if convert_dtype:
                 try:
                     param_value = type(p)(param_value)
                 except ValueError:
-                    self.logger.warning(f'Invalid param value {param_value} for defined dtype: {type(p)}, revert to original value {p}')
+                    self.logger.warning(
+                        f"Invalid param value {param_value} for defined dtype: {type(p)}, revert to original value {p}"
+                    )
                     param_value = p
             self.params[param_key] = param_value
 
@@ -203,22 +217,22 @@ class BaseModule:
 
     @property
     def low_vram_mode(self):
-        if 'low vram mode' in self.params:
-            return self.get_param_value('low vram mode')
+        if "low vram mode" in self.params:
+            return self.get_param_value("low vram mode")
         return False
 
-    def is_cpu_intensive(self)->bool:
-        if self.params is not None and 'device' in self.params:
-            return self.params['device']['value'] == 'cpu'
+    def is_cpu_intensive(self) -> bool:
+        if self.params is not None and "device" in self.params:
+            return self.params["device"]["value"] == "cpu"
         return False
 
     def is_gpu_intensive(self) -> bool:
-        if self.params is not None and 'device' in self.params:
-            return self.params['device']['value'] in GPUINTENSIVE_SET
+        if self.params is not None and "device" in self.params:
+            return self.params["device"]["value"] in GPUINTENSIVE_SET
         return False
 
     def is_computational_intensive(self) -> bool:
-        if self.params is not None and 'device' in self.params:
+        if self.params is not None and "device" in self.params:
             return True
         return False
 
@@ -229,7 +243,7 @@ class BaseModule:
                 if hasattr(self, k):
                     model = getattr(self, k)
                     if model is not None:
-                        if hasattr(model, 'unload_model'):
+                        if hasattr(model, "unload_model"):
                             model.unload_model(empty_cache=False)
                         del model
                         setattr(self, k, None)
@@ -268,69 +282,83 @@ class BaseModule:
     def flush(self, param_key: str):
         return None
 
+
 TORCH_AVAILABLE = False
 torch = None
-DEFAULT_DEVICE = 'cpu'
-AVAILABLE_DEVICES = ['cpu']
+DEFAULT_DEVICE = "cpu"
+AVAILABLE_DEVICES = ["cpu"]
 BF16_SUPPORTED = False
 TORCH_DTYPE_MAP = {}
 
-os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
-_force_cpu = os.environ.get('BALLOONTRANS_CPU_ONLY') == '1'
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+_force_cpu = os.environ.get("BALLOONTRANS_CPU_ONLY") == "1"
 
 try:
     import torch
+
     TORCH_AVAILABLE = True
 
-    DEFAULT_DEVICE = 'cpu'
-    AVAILABLE_DEVICES = ['cpu']
+    DEFAULT_DEVICE = "cpu"
+    AVAILABLE_DEVICES = ["cpu"]
 
     if not _force_cpu:
-        if hasattr(torch, 'cuda') and torch.cuda.is_available():
-            DEFAULT_DEVICE = 'cuda'
+        if hasattr(torch, "cuda") and torch.cuda.is_available():
+            DEFAULT_DEVICE = "cuda"
             AVAILABLE_DEVICES.append(DEFAULT_DEVICE)
-        if hasattr(torch, 'xpu') and torch.xpu.is_available():
-            DEFAULT_DEVICE = 'xpu'
+        if hasattr(torch, "xpu") and torch.xpu.is_available():
+            DEFAULT_DEVICE = "xpu"
             AVAILABLE_DEVICES.append(DEFAULT_DEVICE)
-        if hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-            DEFAULT_DEVICE = 'mps'
+        if (
+            hasattr(torch, "backends")
+            and hasattr(torch.backends, "mps")
+            and torch.backends.mps.is_available()
+        ):
+            DEFAULT_DEVICE = "mps"
             AVAILABLE_DEVICES.append(DEFAULT_DEVICE)
 
         try:
             import torch_directml
-            if hasattr(torch, 'privateuseone') and torch_directml.device_count() > 0:
+
+            if hasattr(torch, "privateuseone") and torch_directml.device_count() > 0:
                 torch.dml = torch_directml
-                DEFAULT_DEVICE = f'privateuseone:{torch.dml.default_device()}'
-                AVAILABLE_DEVICES += [f"privateuseone:{d}" for d in range(torch.dml.device_count())]
+                DEFAULT_DEVICE = f"privateuseone:{torch.dml.default_device()}"
+                AVAILABLE_DEVICES += [
+                    f"privateuseone:{d}" for d in range(torch.dml.device_count())
+                ]
         except:
             pass
 
     BF16_SUPPORTED = False
     if _force_cpu:
         pass
-    elif DEFAULT_DEVICE == 'cuda' and torch.cuda.is_bf16_supported() or DEFAULT_DEVICE == 'xpu' and torch.xpu.is_bf16_supported():
+    elif (
+        DEFAULT_DEVICE == "cuda"
+        and torch.cuda.is_bf16_supported()
+        or DEFAULT_DEVICE == "xpu"
+        and torch.xpu.is_bf16_supported()
+    ):
         BF16_SUPPORTED = True
-    if DEFAULT_DEVICE == 'mps':
+    if DEFAULT_DEVICE == "mps":
         BF16_SUPPORTED = True
 
     TORCH_DTYPE_MAP = {
-        'fp32': torch.float32,
-        'fp16': torch.float16,
-        'bf16': torch.bfloat16,
+        "fp32": torch.float32,
+        "fp16": torch.float16,
+        "bf16": torch.bfloat16,
     }
 except ImportError:
     pass
 
 
 def is_nvidia():
-    if TORCH_AVAILABLE and DEFAULT_DEVICE == 'cuda':
+    if TORCH_AVAILABLE and DEFAULT_DEVICE == "cuda":
         if torch.version.cuda:
             return True
     return False
 
 
 def is_intel():
-    if TORCH_AVAILABLE and DEFAULT_DEVICE == 'xpu':
+    if TORCH_AVAILABLE and DEFAULT_DEVICE == "xpu":
         if torch.version.xpu:
             return True
     return False
@@ -339,45 +367,63 @@ def is_intel():
 def soft_empty_cache():
     gc.collect()
     if TORCH_AVAILABLE:
-        if DEFAULT_DEVICE == 'cuda':
+        if DEFAULT_DEVICE == "cuda":
             torch.cuda.empty_cache()
             torch.cuda.ipc_collect()
-        elif DEFAULT_DEVICE == 'xpu':
-           torch.xpu.empty_cache()
-        elif DEFAULT_DEVICE == 'mps':
+        elif DEFAULT_DEVICE == "xpu":
+            torch.xpu.empty_cache()
+        elif DEFAULT_DEVICE == "mps":
             torch.mps.empty_cache()
 
 
-def DEVICE_SELECTOR(not_supported:list[str]=[]): return deepcopy(
-    {
-        'type': 'selector',
-        'options': [opt for opt in AVAILABLE_DEVICES if all(device not in opt for device in not_supported)],
-        'value': DEFAULT_DEVICE if not any(DEFAULT_DEVICE in device for device in not_supported) else 'cpu',
-        'description': 'Hardware device for inference (GPU recommended)',
-    }
-)
+def DEVICE_SELECTOR(not_supported: list[str] = []):
+    return deepcopy(
+        {
+            "type": "selector",
+            "options": [
+                opt
+                for opt in AVAILABLE_DEVICES
+                if all(device not in opt for device in not_supported)
+            ],
+            "value": DEFAULT_DEVICE
+            if not any(DEFAULT_DEVICE in device for device in not_supported)
+            else "cpu",
+            "description": "Hardware device for inference (GPU recommended)",
+        }
+    )
+
 
 MODULE_SCRIPTS = {
-    'translator': {'module_dir': 'modules/translators', 'module_pattern': r'trans_(.*?).py'},
-    'textdetector': {'module_dir': 'modules/textdetector', 'module_pattern': r'detector_(.*?).py'},
-    'inpainter': {'module_dir': 'modules/inpaint', 'module_pattern': r'inpaint_(.*?).py'},
-    'ocr': {'module_dir': 'modules/ocr', 'module_pattern': r'ocr_(.*?).py'},
+    "translator": {
+        "module_dir": "modules/translators",
+        "module_pattern": r"trans_(.*?).py",
+    },
+    "textdetector": {
+        "module_dir": "modules/textdetector",
+        "module_pattern": r"detector_(.*?).py",
+    },
+    "inpainter": {
+        "module_dir": "modules/inpaint",
+        "module_pattern": r"inpaint_(.*?).py",
+    },
+    "ocr": {"module_dir": "modules/ocr", "module_pattern": r"ocr_(.*?).py"},
 }
+
 
 def init_module_registries(target_modules=None):
     def _load_module(module_dir: str, module_pattern: str):
         modules = os.listdir(module_dir)
         pattern = re.compile(module_pattern)
-        module_path = module_dir.replace('/', '.')
-        if not module_path.endswith('.'):
-            module_path += '.'
+        module_path = module_dir.replace("/", ".")
+        if not module_path.endswith("."):
+            module_path += "."
         for module_name in modules:
             if pattern.match(module_name) is not None:
                 try:
-                    module = module_path + module_name.replace('.py', '')
+                    module = module_path + module_name.replace(".py", "")
                     importlib.import_module(module)
                 except Exception as e:
-                    LOGGER.warning(f'Failed to import {module}: {e}')
+                    LOGGER.warning(f"Failed to import {module}: {e}")
 
     if target_modules is None:
         target_modules = MODULE_SCRIPTS
@@ -389,17 +435,16 @@ def init_module_registries(target_modules=None):
 
 
 def init_textdetector_registries():
-    init_module_registries('textdetector')
+    init_module_registries("textdetector")
 
 
 def init_inpainter_registries():
-    init_module_registries('inpainter')
+    init_module_registries("inpainter")
 
 
 def init_ocr_registries():
-    init_module_registries('ocr')
+    init_module_registries("ocr")
 
 
 def init_translator_registries():
-    init_module_registries('translator')
-
+    init_module_registries("translator")

@@ -44,7 +44,7 @@ def package_version(name: str) -> Optional[Version]:
 
 
 def _nonblank(text):
-    return text and not text.startswith('#')
+    return text and not text.startswith("#")
 
 
 @functools.singledispatch
@@ -81,7 +81,7 @@ def drop_comment(line):
     >>> drop_comment('https://example.com/foo#bar')
     'https://example.com/foo#bar'
     """
-    return line.partition(' #')[0]
+    return line.partition(" #")[0]
 
 
 def join_continuation(lines):
@@ -105,7 +105,7 @@ def join_continuation(lines):
     """
     lines = iter(lines)
     for item in lines:
-        while item.endswith('\\'):
+        while item.endswith("\\"):
             try:  # pragma: no cover
                 item = item[:-2].strip() + next(lines)
             except StopIteration:
@@ -127,10 +127,12 @@ def load_req_file(requirements_file: str) -> List[str]:
         ['packaging>=21.3', 'setuptools>=50.0']
     """
     with pathlib.Path(requirements_file).open() as reqfile:
-        return list(map(
-            lambda x: str(Requirement(x)),
-            join_continuation(map(drop_comment, yield_lines(reqfile)))
-        ))
+        return list(
+            map(
+                lambda x: str(Requirement(x)),
+                join_continuation(map(drop_comment, yield_lines(reqfile))),
+            )
+        )
 
 
 def pip(*args, silent: bool = False):
@@ -149,23 +151,25 @@ def pip(*args, silent: bool = False):
         >>> pip('-V', silent=True)  # nothing will be printed
     """
     process = subprocess.run(
-        [sys.executable, '-m', 'pip', *args],
+        [sys.executable, "-m", "pip", *args],
         stdin=sys.stdin if not silent else None,
         stdout=sys.stdout if not silent else subprocess.PIPE,
         stderr=sys.stderr if not silent else subprocess.PIPE,
     )
-    assert not process.returncode, f'Error when calling {process.args!r}{os.linesep}' \
-                                   f'Error Code - {process.returncode}{os.linesep}' \
-                                   f'Stdout:{os.linesep}' \
-                                   f'{process.stdout.decode()}{os.linesep}' \
-                                   f'{os.linesep}' \
-                                   f'Stderr:{os.linesep}' \
-                                   f'{process.stderr.decode()}{os.linesep}'
+    assert not process.returncode, (
+        f"Error when calling {process.args!r}{os.linesep}"
+        f"Error Code - {process.returncode}{os.linesep}"
+        f"Stdout:{os.linesep}"
+        f"{process.stdout.decode()}{os.linesep}"
+        f"{os.linesep}"
+        f"Stderr:{os.linesep}"
+        f"{process.stderr.decode()}{os.linesep}"
+    )
     process.check_returncode()
 
 
-def _yield_reqs_to_install(req: Requirement, current_extra: str = ''):
-    if req.marker and not req.marker.evaluate({'extra': current_extra}):
+def _yield_reqs_to_install(req: Requirement, current_extra: str = ""):
+    if req.marker and not req.marker.evaluate({"extra": current_extra}):
         return
 
     try:
@@ -174,12 +178,16 @@ def _yield_reqs_to_install(req: Requirement, current_extra: str = ''):
         yield req
     else:
         if req.specifier.contains(version, prereleases=True):
-            for child_req in (importlib_metadata.metadata(req.name).get_all('Requires-Dist') or []):
+            for child_req in (
+                importlib_metadata.metadata(req.name).get_all("Requires-Dist") or []
+            ):
                 child_req_obj = Requirement(child_req)
 
                 need_check, ext = False, None
                 for extra in req.extras:
-                    if child_req_obj.marker and child_req_obj.marker.evaluate({'extra': extra}):
+                    if child_req_obj.marker and child_req_obj.marker.evaluate(
+                        {"extra": extra}
+                    ):
                         need_check = True
                         ext = extra
                         break
@@ -238,7 +246,9 @@ def check_req_file(requirements_file: str) -> bool:
     return check_reqs(load_req_file(requirements_file))
 
 
-def pip_install(reqs: List[str], silent: bool = False, force: bool = False, user: bool = False):
+def pip_install(
+    reqs: List[str], silent: bool = False, force: bool = False, user: bool = False
+):
     """
     Overview:
         Pip install requirements with code.
@@ -265,10 +275,15 @@ def pip_install(reqs: List[str], silent: bool = False, force: bool = False, user
         Requirement already satisfied: numpy>=1.10.0 in ./venv/lib/python3.7/site-packages (1.21.6)
     """
     if force or not check_reqs(reqs):
-        pip('install', *(('--user',) if user else ()), *reqs, silent=silent)
+        pip("install", *(("--user",) if user else ()), *reqs, silent=silent)
 
 
-def pip_install_req_file(requirements_file: str, silent: bool = False, force: bool = False, user: bool = False):
+def pip_install_req_file(
+    requirements_file: str,
+    silent: bool = False,
+    force: bool = False,
+    user: bool = False,
+):
     """
     Overview:
         Pip install requirements from file with code.
@@ -286,4 +301,10 @@ def pip_install_req_file(requirements_file: str, silent: bool = False, force: bo
         >>> pip_install_req_file('requirements.txt')  # pip install -r requirements.txt
     """
     if force or not check_req_file(requirements_file):
-        pip('install', *(('--user',) if user else ()), '-r', requirements_file, silent=silent)
+        pip(
+            "install",
+            *(("--user",) if user else ()),
+            "-r",
+            requirements_file,
+            silent=silent,
+        )

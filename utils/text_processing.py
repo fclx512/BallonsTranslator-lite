@@ -8,37 +8,56 @@ FULL2HALF = dict((i + 0xFEE0, i) for i in range(0x21, 0x7F))
 FULL2HALF[0x3000] = 0x20
 FULL2HALF[0x3002] = 0x2E
 
-LANGSET_CJK = {'简体中文', '繁體中文', '日本語'}
-LANGSET_CH = {'简体中文', '繁體中文'}
+LANGSET_CJK = {"简体中文", "繁體中文", "日本語"}
+LANGSET_CH = {"简体中文", "繁體中文"}
 
-PUNSET_RIGHT_ENG = {'.', '?', '!', ':', ';', ')', '}', "\""}
-PUNCTUATION_L = {'「', '『', '【', '《', '〈', '〔', '［', '｛', '（', '(', '[', '{', '“', '‘'}
+PUNSET_RIGHT_ENG = {".", "?", "!", ":", ";", ")", "}", '"'}
+PUNCTUATION_L = {
+    "「",
+    "『",
+    "【",
+    "《",
+    "〈",
+    "〔",
+    "［",
+    "｛",
+    "（",
+    "(",
+    "[",
+    "{",
+    "“",
+    "‘",
+}
 
-PKUSEG_PUNCSET = {' ', '.', '　'}
-PKUSEGPATH = r'data/pkusegscores.json'
+PKUSEG_PUNCSET = {" ", ".", "　"}
+PKUSEGPATH = r"data/pkusegscores.json"
 PKUSEGSCORES = None
 CHSEG = None
+
 
 def full_len(s: str):
     """
     Convert all ASCII characters to their full-width counterpart.
-    https://stackoverflow.com/questions/2422177/python-how-can-i-replace-full-width-characters-with-half-width-characters 
+    https://stackoverflow.com/questions/2422177/python-how-can-i-replace-full-width-characters-with-half-width-characters
     """
     return s.translate(HALF2FULL)
 
+
 def half_len(s):
-    '''
+    """
     Convert full-width characters to ASCII counterpart
-    '''
+    """
     return s.translate(FULL2HALF)
 
+
 def seg_to_chars(text: str) -> List[str]:
-    text = text.replace('\n', '')
+    text = text.replace("\n", "")
     return [c for c in text]
 
+
 def seg_eng(text: str) -> List[str]:
-    text = text.replace('  ', ' ').replace(' .', '.').replace('\n', ' ')
-    processed_text = ''
+    text = text.replace("  ", " ").replace(" .", ".").replace("\n", " ")
+    processed_text = ""
 
     # dumb way to insure spaces between words
     text_len = len(text)
@@ -46,13 +65,13 @@ def seg_eng(text: str) -> List[str]:
         if c in PUNSET_RIGHT_ENG and ii < text_len - 1:
             next_c = text[ii + 1]
             if next_c.isalpha() or next_c.isnumeric():
-                processed_text += c + ' '
+                processed_text += c + " "
             else:
                 processed_text += c
         else:
             processed_text += c
 
-    word_list = processed_text.split(' ')
+    word_list = processed_text.split(" ")
     word_num = len(word_list)
     if word_num <= 1:
         return word_list
@@ -83,9 +102,9 @@ def seg_eng(text: str) -> List[str]:
                 append_left = cond_prev
 
             if append_left:
-                words[-1] = words[-1] + ' ' + word
+                words[-1] = words[-1] + " " + word
             elif append_right:
-                words.append(word + ' ' + word_list[ii + 1])
+                words.append(word + " " + word_list[ii + 1])
                 skip_next = True
             else:
                 words.append(word)
@@ -93,11 +112,12 @@ def seg_eng(text: str) -> List[str]:
         words.append(word)
     return words
 
+
 def _seg_ch_pkg(text: str) -> List[str]:
 
-    if text == ' ':
-        return [' ']
-    elif text == '':
+    if text == " ":
+        return [" "]
+    elif text == "":
         return []
 
     segments = CHSEG.cut(text)
@@ -119,29 +139,29 @@ def _seg_ch_pkg(text: str) -> List[str]:
 
             len_word, len_next, len_prev = len(word), -1, -1
             next_valid, prev_valid = False, False
-            word_next, tag_next = '', ''
-            word_prev, tag_prev = '', ''
+            word_next, tag_next = "", ""
+            word_prev, tag_prev = "", ""
             score_next, score_prev = 0, 0
             if ii < num_segments - 1:
                 word_next, tag_next = segments[ii + 1]
                 len_next = len(word_next)
                 next_valid = True
-                if tag_next != 'w' and word_next not in PKUSEG_PUNCSET:
+                if tag_next != "w" and word_next not in PKUSEG_PUNCSET:
                     score_next = PKUSEGSCORES[tag][tag_next]
 
             if ii > 0:
                 word_prev, tag_prev = words[-1], segments[ii - 1][1]
                 len_prev = len(word_prev)
                 prev_valid = True
-                if tag_prev != 'w' and word_prev[-1] not in PKUSEG_PUNCSET:
+                if tag_prev != "w" and word_prev[-1] not in PKUSEG_PUNCSET:
                     score_prev = PKUSEGSCORES[tag_prev][tag]
 
             append_prev, append_next = False, False
 
-            if tag == 'w' or word in PKUSEG_PUNCSET:  # puntuation
+            if tag == "w" or word in PKUSEG_PUNCSET:  # puntuation
                 if word in PUNCTUATION_L:
                     append_next = next_valid
-                elif len_word  <= 1:
+                elif len_word <= 1:
                     append_prev = prev_valid
             else:
                 next_valid = score_next > 0 and len_next < max_concat_len
@@ -178,9 +198,10 @@ def _seg_ch_pkg(text: str) -> List[str]:
                 words.append(word)
                 tags.append([tag])
     except Exception as e:
-        print('exp at line: ', text)
+        print("exp at line: ", text)
         raise e
     return words
+
 
 def seg_ch_pkg(text: str):
 
@@ -200,7 +221,7 @@ def seg_ch_pkg(text: str):
         return seg_to_chars(text)
 
     # pkuseg won't work with half-width punctuations
-    fullen_text = full_len(text).replace('　', ' ')
+    fullen_text = full_len(text).replace("　", " ")
     cvt_back = False
     if fullen_text != text:
         cvt_back = True
@@ -208,10 +229,10 @@ def seg_ch_pkg(text: str):
 
     global PKUSEGSCORES
     if PKUSEGSCORES is None:
-        with open(PKUSEGPATH, 'r', encoding='utf8') as f:
+        with open(PKUSEGPATH, "r", encoding="utf8") as f:
             PKUSEGSCORES = json.loads(f.read())
 
-    text_list = text.replace('\n', '').replace('　', ' ').split(' ')
+    text_list = text.replace("\n", "").replace("　", " ").split(" ")
     result_list = []
     for ii, text in enumerate(text_list):
         words = None
@@ -219,7 +240,7 @@ def seg_ch_pkg(text: str):
             words = _seg_ch_pkg(text)
         if words is not None:
             if ii > 0:
-                words[0] = ' ' + words[0]
+                words[0] = " " + words[0]
             result_list.extend(words)
 
     if cvt_back:
@@ -227,16 +248,18 @@ def seg_ch_pkg(text: str):
         result_list = [half_len(word) for word in result_list]
     return result_list
 
+
 def seg_text(text: str, lang: str) -> Tuple[List, str]:
-    delimiter = ''
+    delimiter = ""
     if lang in LANGSET_CH:
         words = seg_ch_pkg(text)
     elif lang in LANGSET_CJK:
         words = seg_to_chars(text)
     else:
         words = seg_eng(text)
-        delimiter = ' '
+        delimiter = " "
     return words, delimiter
+
 
 def is_cjk(lang: str) -> bool:
     return lang in LANGSET_CJK

@@ -23,7 +23,7 @@ from .win_c_structures import (
 
 
 class WindowsWindowEffect:
-    """ Windows window effect """
+    """Windows window effect"""
 
     def __init__(self, window):
         self.window = window
@@ -55,8 +55,10 @@ class WindowsWindowEffect:
         self.winCompAttrData.SizeOfData = sizeof(self.accentPolicy)
         self.winCompAttrData.Data = pointer(self.accentPolicy)
 
-    def setAcrylicEffect(self, hWnd, gradientColor="F2F2F299", enableShadow=True, animationId=0):
-        """ Add the acrylic effect to the window
+    def setAcrylicEffect(
+        self, hWnd, gradientColor="F2F2F299", enableShadow=True, animationId=0
+    ):
+        """Add the acrylic effect to the window
 
         Parameters
         ----------
@@ -77,11 +79,13 @@ class WindowsWindowEffect:
             return
 
         hWnd = int(hWnd)
-        gradientColor = ''.join(gradientColor[i:i+2] for i in range(6, -1, -2))
+        gradientColor = "".join(gradientColor[i : i + 2] for i in range(6, -1, -2))
         gradientColor = DWORD(int(gradientColor, base=16))
         animationId = DWORD(animationId)
         accentFlags = DWORD(0x20 | 0x40 | 0x80 | 0x100) if enableShadow else DWORD(0)
-        self.accentPolicy.AccentState = ACCENT_STATE.ACCENT_ENABLE_ACRYLICBLURBEHIND.value
+        self.accentPolicy.AccentState = (
+            ACCENT_STATE.ACCENT_ENABLE_ACRYLICBLURBEHIND.value
+        )
         self.accentPolicy.GradientColor = gradientColor
         self.accentPolicy.AccentFlags = accentFlags
         self.accentPolicy.AnimationId = animationId
@@ -89,7 +93,7 @@ class WindowsWindowEffect:
         self.SetWindowCompositionAttribute(hWnd, pointer(self.winCompAttrData))
 
     def setBorderAccentColor(self, hWnd, color: QColor):
-        """ Set the border color of the window
+        """Set the border color of the window
 
         Parameters
         ----------
@@ -103,14 +107,13 @@ class WindowsWindowEffect:
             return
 
         hWnd = int(hWnd)
-        colorref =  DWORD(color.red() | (color.green() << 8) | (color.blue() << 16))
-        self.DwmSetWindowAttribute(hWnd,
-                                   DWMWINDOWATTRIBUTE.DWMWA_BORDER_COLOR.value,
-                                   byref(colorref),
-                                   4)
+        colorref = DWORD(color.red() | (color.green() << 8) | (color.blue() << 16))
+        self.DwmSetWindowAttribute(
+            hWnd, DWMWINDOWATTRIBUTE.DWMWA_BORDER_COLOR.value, byref(colorref), 4
+        )
 
     def removeBorderAccentColor(self, hWnd):
-        """ Remove the border color of the window
+        """Remove the border color of the window
 
         Parameters
         ----------
@@ -121,13 +124,15 @@ class WindowsWindowEffect:
             return
 
         hWnd = int(hWnd)
-        self.DwmSetWindowAttribute(hWnd,
-                                   DWMWINDOWATTRIBUTE.DWMWA_BORDER_COLOR.value,
-                                   byref(DWORD(0xFFFFFFFF)),
-                                   4)
+        self.DwmSetWindowAttribute(
+            hWnd,
+            DWMWINDOWATTRIBUTE.DWMWA_BORDER_COLOR.value,
+            byref(DWORD(0xFFFFFFFF)),
+            4,
+        )
 
     def setMicaEffect(self, hWnd, isDarkMode=False, isAlt=False):
-        """ Add the mica effect to the window (Win11 only)
+        """Add the mica effect to the window (Win11 only)
 
         Parameters
         ----------
@@ -154,18 +159,30 @@ class WindowsWindowEffect:
         self.SetWindowCompositionAttribute(hWnd, pointer(self.winCompAttrData))
 
         if isDarkMode:
-            self.winCompAttrData.Attribute = WINDOWCOMPOSITIONATTRIB.WCA_USEDARKMODECOLORS.value
+            self.winCompAttrData.Attribute = (
+                WINDOWCOMPOSITIONATTRIB.WCA_USEDARKMODECOLORS.value
+            )
             self.SetWindowCompositionAttribute(hWnd, pointer(self.winCompAttrData))
 
         if sys.getwindowsversion().build < 22523:
             self.DwmSetWindowAttribute(hWnd, 1029, byref(c_int(1)), 4)
         else:
-            self.DwmSetWindowAttribute(hWnd, DWMWINDOWATTRIBUTE.DWMWA_SYSTEMBACKDROP_TYPE.value, byref(c_int(4 if isAlt else 2)), 4)
+            self.DwmSetWindowAttribute(
+                hWnd,
+                DWMWINDOWATTRIBUTE.DWMWA_SYSTEMBACKDROP_TYPE.value,
+                byref(c_int(4 if isAlt else 2)),
+                4,
+            )
 
-        self.DwmSetWindowAttribute(hWnd, DWMWINDOWATTRIBUTE.DWMWA_USE_IMMERSIVE_DARK_MODE.value, byref(c_int(1*isDarkMode)), 4)
+        self.DwmSetWindowAttribute(
+            hWnd,
+            DWMWINDOWATTRIBUTE.DWMWA_USE_IMMERSIVE_DARK_MODE.value,
+            byref(c_int(1 * isDarkMode)),
+            4,
+        )
 
     def setAeroEffect(self, hWnd):
-        """ Add the aero effect to the window
+        """Add the aero effect to the window
 
         Parameters
         ----------
@@ -178,7 +195,7 @@ class WindowsWindowEffect:
         self.SetWindowCompositionAttribute(hWnd, pointer(self.winCompAttrData))
 
     def removeBackgroundEffect(self, hWnd):
-        """ Remove background effect
+        """Remove background effect
 
         Parameters
         ----------
@@ -191,7 +208,7 @@ class WindowsWindowEffect:
 
     @staticmethod
     def moveWindow(hWnd):
-        """ Move the window
+        """Move the window
 
         Parameters
         ----------
@@ -205,7 +222,7 @@ class WindowsWindowEffect:
         )
 
     def addShadowEffect(self, hWnd):
-        """ Add DWM shadow to window
+        """Add DWM shadow to window
 
         Parameters
         ----------
@@ -220,7 +237,7 @@ class WindowsWindowEffect:
         self.DwmExtendFrameIntoClientArea(hWnd, byref(margins))
 
     def addMenuShadowEffect(self, hWnd):
-        """ Add DWM shadow to menu
+        """Add DWM shadow to menu
 
         Parameters
         ----------
@@ -241,7 +258,7 @@ class WindowsWindowEffect:
         self.DwmExtendFrameIntoClientArea(hWnd, byref(margins))
 
     def removeShadowEffect(self, hWnd):
-        """ Remove DWM shadow from the window
+        """Remove DWM shadow from the window
 
         Parameters
         ----------
@@ -258,7 +275,7 @@ class WindowsWindowEffect:
 
     @staticmethod
     def removeMenuShadowEffect(hWnd):
-        """ Remove shadow from pop-up menu
+        """Remove shadow from pop-up menu
 
         Parameters
         ----------
@@ -272,7 +289,7 @@ class WindowsWindowEffect:
 
     @staticmethod
     def addWindowAnimation(hWnd):
-        """ Enables the maximize and minimize animation of the window
+        """Enables the maximize and minimize animation of the window
 
         Parameters
         ----------
@@ -294,7 +311,7 @@ class WindowsWindowEffect:
 
     @staticmethod
     def disableMaximizeButton(hWnd):
-        """ Disable the maximize button of window
+        """Disable the maximize button of window
 
         Parameters
         ----------
@@ -310,7 +327,7 @@ class WindowsWindowEffect:
         )
 
     def enableBlurBehindWindow(self, hWnd):
-        """ enable the blur effect behind the whole client
+        """enable the blur effect behind the whole client
 
         Parameters
         ----------

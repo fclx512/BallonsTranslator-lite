@@ -19,15 +19,27 @@ from PIL import Image
 
 from .logger import logger as LOGGER
 
-IMG_EXT = ['.bmp', '.jpg', '.png', '.jpeg', '.webp', '.jxl']
+IMG_EXT = [".bmp", ".jpg", ".png", ".jpeg", ".webp", ".jxl"]
 
-NP_INT_TYPES = (np.int_, np.int8, np.int16, np.int32, np.int64, np.uint, np.uint8, np.uint16, np.uint32, np.uint64)
-if int(np.version.full_version.split('.')[0]) == 1:
+NP_INT_TYPES = (
+    np.int_,
+    np.int8,
+    np.int16,
+    np.int32,
+    np.int64,
+    np.uint,
+    np.uint8,
+    np.uint16,
+    np.uint32,
+    np.uint64,
+)
+if int(np.version.full_version.split(".")[0]) == 1:
     NP_BOOL_TYPES = (np.bool_, np.bool8)
     NP_FLOAT_TYPES = (np.float_, np.float16, np.float32, np.float64)
 else:
     NP_BOOL_TYPES = (np.bool_, np.bool)
     NP_FLOAT_TYPES = (np.float16, np.float32, np.float64)
+
 
 def parse_page_range(range_str: str) -> List[int]:
     """Parse page range string like "1-5,8,10-12" into 0-based int list, deduplicated."""
@@ -35,12 +47,12 @@ def parse_page_range(range_str: str) -> List[int]:
         return []
     seen = set()
     result = []
-    for part in range_str.split(','):
+    for part in range_str.split(","):
         part = part.strip()
         if not part:
             continue
-        if '-' in part:
-            parts = part.split('-', maxsplit=1)
+        if "-" in part:
+            parts = part.split("-", maxsplit=1)
             try:
                 start = int(parts[0].strip())
                 end = int(parts[1].strip())
@@ -61,7 +73,7 @@ def parse_page_range(range_str: str) -> List[int]:
             except ValueError:
                 raise ValueError(f'Invalid page number: "{part}"')
             if page < 1:
-                raise ValueError(f'Page numbers must be >= 1, got: {page}')
+                raise ValueError(f"Page numbers must be >= 1, got: {page}")
             idx = page - 1
             if idx not in seen:
                 seen.add(idx)
@@ -78,13 +90,16 @@ def page_names_from_range(proj, range_str: str) -> List[str]:
     page_names = []
     for idx in indices:
         if idx >= num_pages:
-            raise ValueError(f'Page {idx + 1} is out of bounds (project has {num_pages} pages)')
+            raise ValueError(
+                f"Page {idx + 1} is out of bounds (project has {num_pages} pages)"
+            )
         page_names.append(proj.idx2pagename(idx))
     return page_names
 
 
 def to_dict(obj):
     return json.loads(json.dumps(obj, default=lambda o: o.__dict__, ensure_ascii=False))
+
 
 def serialize_np(obj):
     if isinstance(obj, np.ndarray):
@@ -98,12 +113,15 @@ def serialize_np(obj):
             return int(obj)
     return obj
 
+
 def json_dump_nested_obj(obj, **kwargs):
     def _default(obj):
         if isinstance(obj, (np.ndarray, np.ScalarType)):
             return serialize_np(obj)
         return obj.__dict__
+
     return json.dumps(obj, default=lambda o: _default(o), ensure_ascii=False, **kwargs)
+
 
 # https://stackoverflow.com/questions/26646362/numpy-array-is-not-json-serializable
 class NumpyEncoder(json.JSONEncoder):
@@ -112,6 +130,7 @@ class NumpyEncoder(json.JSONEncoder):
             return serialize_np(obj)
         return json.JSONEncoder.default(self, obj)
 
+
 def find_all_imgs(img_dir, abs_path=False, sort=False):
     imglist = []
     for filename in os.listdir(img_dir):
@@ -119,7 +138,7 @@ def find_all_imgs(img_dir, abs_path=False, sort=False):
         if file_suffix.lower() not in IMG_EXT:
             continue
         # 额外检查：确保不包含原始TIF文件，但可以包含预览图
-        if file_suffix.lower() in ['.tif', '.tiff']:
+        if file_suffix.lower() in [".tif", ".tiff"]:
             continue
         if abs_path:
             imglist.append(osp.join(img_dir, filename))
@@ -130,6 +149,7 @@ def find_all_imgs(img_dir, abs_path=False, sort=False):
         imglist = natsorted(imglist)
 
     return imglist
+
 
 def page_names_from_range(proj, pages_str: str):
     """Parse a page range string like '1-5,7,9-12' into a list of page names.
@@ -142,10 +162,10 @@ def page_names_from_range(proj, pages_str: str):
     name_to_natsort_idx = {name: i for i, name in enumerate(natsorted_page_names)}
 
     selected = set()
-    parts = [p.strip() for p in pages_str.split(',') if p.strip()]
+    parts = [p.strip() for p in pages_str.split(",") if p.strip()]
     for part in parts:
-        if '-' in part:
-            a, b = part.split('-', 1)
+        if "-" in part:
+            a, b = part.split("-", 1)
             start = int(a.strip())
             end = int(b.strip())
             if start < 1 or end > num_pages or start > end:
@@ -181,8 +201,8 @@ def create_thumbnail(img_path, max_width=1000):
             # 获取原始尺寸
             original_width, original_height = img.size
             # 如果原图tif是黑白位图转换为灰度
-            if img.mode == '1':
-                img = img.convert('L')
+            if img.mode == "1":
+                img = img.convert("L")
             # 计算缩放比例并确定新尺寸
             scale_factor = max_width / original_width
             new_width = max_width
@@ -196,7 +216,7 @@ def create_thumbnail(img_path, max_width=1000):
             thumb_path = base_path.parent / f"{base_path.stem}_thumb.jpg"
 
             # 保存为 JPEG 格式，质量设为 95，启用优化
-            thumbnail.save(thumb_path, 'JPEG', quality=95, optimize=True)
+            thumbnail.save(thumb_path, "JPEG", quality=95, optimize=True)
 
             LOGGER.info(f"Thumbnail created: {thumb_path}")
             return True
@@ -204,6 +224,8 @@ def create_thumbnail(img_path, max_width=1000):
     except Exception as e:
         LOGGER.error(f"Failed to create thumbnail for {img_path}: {e}")
         return False
+
+
 def find_tif_files(img_dir, abs_path=False, sort=False):
     """
     查找目录中的TIF文件，用于生成预览图
@@ -211,7 +233,7 @@ def find_tif_files(img_dir, abs_path=False, sort=False):
     imglist = []
     for filename in os.listdir(img_dir):
         file_suffix = Path(filename).suffix.lower()
-        if file_suffix in ['.tif', '.tiff']:
+        if file_suffix in [".tif", ".tiff"]:
             if abs_path:
                 imglist.append(osp.join(img_dir, filename))
             else:
@@ -222,7 +244,10 @@ def find_tif_files(img_dir, abs_path=False, sort=False):
 
     return imglist
 
-def find_all_files_recursive(tgt_dir: Union[List, str], ext: Union[List, set], exclude_dirs=None):
+
+def find_all_files_recursive(
+    tgt_dir: Union[List, str], ext: Union[List, set], exclude_dirs=None
+):
     if isinstance(tgt_dir, str):
         tgt_dir = [tgt_dir]
 
@@ -240,6 +265,7 @@ def find_all_files_recursive(tgt_dir: Union[List, str], ext: Union[List, set], e
 
     return filelst
 
+
 def imread(imgpath, read_type=cv2.IMREAD_COLOR, max_retry_limit=5, retry_interval=0.1):
     if not osp.exists(imgpath):
         return None
@@ -248,12 +274,12 @@ def imread(imgpath, read_type=cv2.IMREAD_COLOR, max_retry_limit=5, retry_interva
     while True:
         try:
             img = Image.open(imgpath)
-            if img.mode == 'CMYK':
-                img = img.convert('RGB')
-            elif img.mode == 'P':
-                img = img.convert('RGBA')
+            if img.mode == "CMYK":
+                img = img.convert("RGB")
+            elif img.mode == "P":
+                img = img.convert("RGBA")
             if read_type == cv2.IMREAD_GRAYSCALE:
-                img = img.convert('L')
+                img = img.convert("L")
             img = np.array(img)
             if read_type != cv2.IMREAD_GRAYSCALE:
                 if img.ndim == 3 and img.shape[-1] == 1:
@@ -271,24 +297,28 @@ def imread(imgpath, read_type=cv2.IMREAD_COLOR, max_retry_limit=5, retry_interva
             if max_retry_limit is not None and num_tries >= max_retry_limit:
                 LOGGER.exception(e)
                 return None
-            LOGGER.warning(f'PIL.UnidentifiedImageError: failed to read {imgpath}, retries: {num_tries} / {max_retry_limit}')
+            LOGGER.warning(
+                f"PIL.UnidentifiedImageError: failed to read {imgpath}, retries: {num_tries} / {max_retry_limit}"
+            )
             time.sleep(retry_interval)
 
     return img
 
 
-def imwrite(img_path, img, ext='.png', quality=100, jxl_encode_effort=3):
+def imwrite(img_path, img, ext=".png", quality=100, jxl_encode_effort=3):
     # cv2 writing is faster than PIL
     suffix = Path(img_path).suffix
     ext = ext.lower()
     assert ext in IMG_EXT
-    if suffix != '':
+    if suffix != "":
         img_path = img_path.replace(suffix, ext)
     else:
         img_path += ext
 
-    if ext != '.webp':
-        quality = min(quality, 100) # for webp quality above 100 the lossless compression is used
+    if ext != ".webp":
+        quality = min(
+            quality, 100
+        )  # for webp quality above 100 the lossless compression is used
 
     # Ensure directory exists
     save_dir = osp.dirname(img_path)
@@ -296,15 +326,19 @@ def imwrite(img_path, img, ext='.png', quality=100, jxl_encode_effort=3):
         os.makedirs(save_dir)
 
     encode_param = None
-    if ext in {'.jpg', '.jpeg'}:
+    if ext in {".jpg", ".jpeg"}:
         encode_param = [cv2.IMWRITE_JPEG_QUALITY, quality]
-    elif ext == '.webp':
+    elif ext == ".webp":
         encode_param = [cv2.IMWRITE_WEBP_QUALITY, quality]
-    if ext == '.jxl':
+    if ext == ".jxl":
         # jxl_encode_effort: https://github.com/Isotr0py/pillow-jpegxl-plugin/issues/23
         # higher values theoretically produce smaller files at the expense of time, 3 seems to strike a balance
-        lossless = quality > 99 # quality=100, lossless=False seems to result in larger file compared with lossless=True
-        Image.fromarray(img).save(img_path, quality=quality, lossless=lossless, effort=jxl_encode_effort)
+        lossless = (
+            quality > 99
+        )  # quality=100, lossless=False seems to result in larger file compared with lossless=True
+        Image.fromarray(img).save(
+            img_path, quality=quality, lossless=lossless, effort=jxl_encode_effort
+        )
         return
     else:
         if len(img.shape) == 3:
@@ -320,9 +354,10 @@ def show_img_by_dict(imgdicts):
         cv2.imshow(keyname, imgdicts[keyname])
     cv2.waitKey(0)
 
+
 def text_is_empty(text) -> bool:
     if isinstance(text, str):
-        if text.strip() == '':
+        if text.strip() == "":
             return True
     if isinstance(text, list):
         for t in text:
@@ -333,8 +368,10 @@ def text_is_empty(text) -> bool:
     elif text is None:
         return True
 
+
 def empty_func(*args, **kwargs):
     return
+
 
 def get_obj_from_str(string, reload=False):
     module, cls = string.rsplit(".", 1)
@@ -343,10 +380,19 @@ def get_obj_from_str(string, reload=False):
         importlib.reload(module_imp)
     return getattr(importlib.import_module(module, package=None), cls)
 
+
 def get_module_from_str(module_str: str):
     return importlib.import_module(module_str, package=None)
 
-def build_funcmap(module_str: str, params_names: List[str], func_prefix: str = '', func_suffix: str = '', fallback_func: Callable = None, verbose: bool = True) -> Dict:
+
+def build_funcmap(
+    module_str: str,
+    params_names: List[str],
+    func_prefix: str = "",
+    func_suffix: str = "",
+    fallback_func: Callable = None,
+    verbose: bool = True,
+) -> Dict:
 
     if fallback_func is None:
         fallback_func = empty_func
@@ -355,19 +401,21 @@ def build_funcmap(module_str: str, params_names: List[str], func_prefix: str = '
 
     funcmap = {}
     for param in params_names:
-        tgt_func = f'{func_prefix}{param}{func_suffix}'
+        tgt_func = f"{func_prefix}{param}{func_suffix}"
         try:
             tgt_func = getattr(module, tgt_func)
         except Exception as e:
             if verbose:
-                print(f'failed to import {tgt_func} from {module_str}: {e}')
+                print(f"failed to import {tgt_func} from {module_str}: {e}")
             tgt_func = fallback_func
         funcmap[param] = tgt_func
 
     return funcmap
 
+
 def _b64encode(x: bytes) -> str:
     return base64.b64encode(x).decode("utf-8")
+
 
 def img2b64(img):
     """
@@ -376,14 +424,16 @@ def img2b64(img):
     if isinstance(img, np.ndarray):
         img = Image.fromarray(img)
     buffered = io.BytesIO()
-    img.save(buffered, format='PNG')
+    img.save(buffered, format="PNG")
     return _b64encode(buffered.getvalue())
+
 
 def save_encoded_image(b64_image: str, output_path: str):
     with open(output_path, "wb") as image_file:
         image_file.write(base64.b64decode(b64_image))
 
-def submit_request(url, data, exist_on_exception=True, auth=None, wait_time = 5):
+
+def submit_request(url, data, exist_on_exception=True, auth=None, wait_time=5):
     response = None
     try:
         while True:
@@ -394,7 +444,7 @@ def submit_request(url, data, exist_on_exception=True, auth=None, wait_time = 5)
             except Exception as e:
                 if wait_time > 0:
                     print(traceback.format_exc(), file=sys.stderr)
-                    print(f'sleep {wait_time} sec...')
+                    print(f"sleep {wait_time} sec...")
                     time.sleep(wait_time)
                     continue
                 else:
@@ -402,7 +452,7 @@ def submit_request(url, data, exist_on_exception=True, auth=None, wait_time = 5)
     except Exception:
         print(traceback.format_exc(), file=sys.stderr)
         if response is not None:
-            print('response content: ' + response.text)
+            print("response content: " + response.text)
         if exist_on_exception:
             exit()
     return response

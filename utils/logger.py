@@ -8,6 +8,7 @@ import termcolor
 
 if os.name == "nt":  # Windows
     import colorama
+
     colorama.init()
 
 
@@ -47,12 +48,11 @@ class ColoredFormatter(logging.Formatter):
             record.lineno2 = termcolor.colored(record.lineno, color="cyan")
         return logging.Formatter.format(self, record)
 
-FORMAT = (
-    "[%(levelname2)s] %(module2)s:%(funcName2)s:%(lineno2)s - %(message2)s"
-)
+
+FORMAT = "[%(levelname2)s] %(module2)s:%(funcName2)s:%(lineno2)s - %(message2)s"
+
 
 class ColoredLogger(logging.Logger):
-
     def __init__(self, name):
         logging.Logger.__init__(self, name, logging.WARNING)
 
@@ -70,7 +70,7 @@ def setup_logging(logfile_dir: str, max_num_logs=14):
     if not osp.exists(logfile_dir):
         os.makedirs(logfile_dir)
     else:
-        old_logs = glob(osp.join(logfile_dir, '*.log'))
+        old_logs = glob(osp.join(logfile_dir, "*.log"))
         old_logs.sort()
         n_log = len(old_logs)
         if n_log >= max_num_logs:
@@ -81,9 +81,9 @@ def setup_logging(logfile_dir: str, max_num_logs=14):
             except Exception as e:
                 logger.error(e)
 
-    logfilename = datetime.datetime.now().strftime('_%Y_%m_%d-%H_%M_%S.log')
+    logfilename = datetime.datetime.now().strftime("_%Y_%m_%d-%H_%M_%S.log")
     logfilep = osp.join(logfile_dir, logfilename)
-    fh = logging.FileHandler(logfilep, mode='w', encoding='utf-8')
+    fh = logging.FileHandler(logfilep, mode="w", encoding="utf-8")
     fh.setFormatter(
         logging.Formatter(
             ("[%(levelname)s] %(module)s:%(funcName)s:%(lineno)s - %(message)s")
@@ -94,6 +94,6 @@ def setup_logging(logfile_dir: str, max_num_logs=14):
 
 
 logging.setLoggerClass(ColoredLogger)
-logger = logging.getLogger('BallonsTranslator-lite')
+logger = logging.getLogger("BallonsTranslator-lite")
 logger.setLevel(logging.DEBUG)
 logger.propagate = False

@@ -45,6 +45,7 @@ from .overlay_slide import OverlaySlider
 
 # ── Custom QPlainTextEdit that sends on Enter, newline on Shift+Enter ────
 
+
 class _ChatInputEdit(QPlainTextEdit):
     """Text edit that captures Enter to send, Shift+Enter for newline."""
 
@@ -62,6 +63,7 @@ class _ChatInputEdit(QPlainTextEdit):
 
 # ── Chat bubble browser (suppresses internal scrolling) ──────────────────
 
+
 class _ChatBubbleBrowser(QTextBrowser):
     """QTextBrowser that suppresses internal scrolling so the parent QScrollArea handles all scroll interaction."""
 
@@ -73,6 +75,7 @@ class _ChatBubbleBrowser(QTextBrowser):
 
 
 # ── AiChatPanel ──────────────────────────────────────────────────────────
+
 
 class AiChatPanel(QWidget):
     """Left-side slide-in chat panel — title bar, message list, input bar."""
@@ -310,12 +313,14 @@ class AiChatPanel(QWidget):
         cl.addWidget(self._welcome_chips_container)
 
         # Populate default chips
-        self._set_welcome_chips([
-            self.tr("List all pages"),
-            self.tr("Search for 'hello'"),
-            self.tr("Make font bold"),
-            self.tr("Translate first page"),
-        ])
+        self._set_welcome_chips(
+            [
+                self.tr("List all pages"),
+                self.tr("Search for 'hello'"),
+                self.tr("Make font bold"),
+                self.tr("Translate first page"),
+            ]
+        )
 
         cl.addStretch()
 
@@ -334,7 +339,9 @@ class AiChatPanel(QWidget):
             btn.clicked.connect(lambda checked, t=chip_text: self._chip_clicked(t))
             self._chips_layout.addWidget(btn)
 
-    def set_welcome_chips_from_project(self, project_info: Optional[Dict[str, Any]] = None):
+    def set_welcome_chips_from_project(
+        self, project_info: Optional[Dict[str, Any]] = None
+    ):
         """Update welcome card chips based on current project context."""
         if project_info:
             total = project_info.get("total_pages", 0)
@@ -349,12 +356,14 @@ class AiChatPanel(QWidget):
             chips.append(self.tr("What can you do?"))
             self._set_welcome_chips(chips)
         else:
-            self._set_welcome_chips([
-                self.tr("List all pages"),
-                self.tr("Search for 'hello'"),
-                self.tr("Make font bold"),
-                self.tr("Translate first page"),
-            ])
+            self._set_welcome_chips(
+                [
+                    self.tr("List all pages"),
+                    self.tr("Search for 'hello'"),
+                    self.tr("Make font bold"),
+                    self.tr("Translate first page"),
+                ]
+            )
 
     # ── Panel animation (slide in from left) ────────────────────
 
@@ -394,7 +403,8 @@ class AiChatPanel(QWidget):
         """Confirm before clearing all conversation history."""
         if self._controller and self._controller.messages:
             reply = QMessageBox.question(
-                self, self.tr("Clear Conversation"),
+                self,
+                self.tr("Clear Conversation"),
                 self.tr(
                     "This will permanently delete all {n} messages "
                     "in this conversation. Continue?"
@@ -407,7 +417,6 @@ class AiChatPanel(QWidget):
         self.clear_requested.emit()
 
     # ── Message display ─────────────────────────────────────────
-
 
     def _make_bubble_footer(self) -> Optional[QWidget]:
         """Build a small footer label for assistant bubbles (model name)."""
@@ -436,9 +445,7 @@ class AiChatPanel(QWidget):
         copy_btn.setObjectName("AIBubbleActionBtn")
         copy_btn.setFixedSize(22, 22)
         copy_btn.setToolTip(self.tr("Copy"))
-        copy_btn.clicked.connect(
-            lambda: QApplication.clipboard().setText(text)
-        )
+        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(text))
 
         del_btn = QPushButton("✕")
         del_btn.setObjectName("AIBubbleActionBtn")
@@ -621,7 +628,11 @@ class AiChatPanel(QWidget):
         # Clean up typing indicator if streaming ended before content arrived
         self._cleanup_typing()
         # Remove empty streaming bubble that never received content
-        if self._streaming_bubble_widget and not full_text and not self._streaming_text.strip():
+        if (
+            self._streaming_bubble_widget
+            and not full_text
+            and not self._streaming_text.strip()
+        ):
             self._msg_layout.removeWidget(self._streaming_bubble_widget)
             self._streaming_bubble_widget.deleteLater()
 
@@ -721,12 +732,14 @@ class AiChatPanel(QWidget):
             self._status_dot.setObjectName("AIStatusBadge")
 
     def set_prompt_tokens(self, n: int):
-        s = '' if n == 1 else 's'
+        s = "" if n == 1 else "s"
         self._token_label.setText(f"~{n} token{s}")
         self._token_label.setToolTip(self.tr("~{n} token (estimated)").format(n=n))
 
-    def reconcile_api_tokens(self, prompt_tokens: int, completion_tokens: int, total: int):
-        s = '' if total == 1 else 's'
+    def reconcile_api_tokens(
+        self, prompt_tokens: int, completion_tokens: int, total: int
+    ):
+        s = "" if total == 1 else "s"
         self._token_label.setText(f"{total} token{s}")
         self._token_label.setToolTip(
             self.tr("Context: {pt} token\nTool calls: {ct} token").format(
@@ -766,7 +779,9 @@ class AiChatPanel(QWidget):
                             self.add_system_message(seg["content"])
                 elif not m.changes:
                     # Legacy: no segments, no changes — strip [tool] markers
-                    clean = re.sub(r'\[tool\].*?\[/tool\]\s*\n?', '', m.content, flags=re.DOTALL)
+                    clean = re.sub(
+                        r"\[tool\].*?\[/tool\]\s*\n?", "", m.content, flags=re.DOTALL
+                    )
                     if clean.strip():
                         self._add_assistant_bubble(clean)
                 # Restore change review card when present
@@ -794,7 +809,7 @@ class AiChatPanel(QWidget):
         with a Show-more toggle.
         """
         # Strip [tool]...[/tool] blocks that embed tool-call context for the LLM
-        full = re.sub(r'\[tool\].*?\[/tool\]\s*\n?', '', text, flags=re.DOTALL)
+        full = re.sub(r"\[tool\].*?\[/tool\]\s*\n?", "", text, flags=re.DOTALL)
 
         outer = QWidget()
         outer.setObjectName("AIAssistantBubble")
@@ -814,14 +829,16 @@ class AiChatPanel(QWidget):
 
         # Determine collapsed vs full content
         need_collapse = len(full) > self.COLLAPSE_THRESHOLD
-        preview = (full[:self.COLLAPSE_PREVIEW_LEN] + "\n\n...")
+        preview = full[: self.COLLAPSE_PREVIEW_LEN] + "\n\n..."
         is_collapsed = [need_collapse]  # mutable for closure
 
         def _set_content(content: str):
             inner.setMarkdown(content)
             max_w = self._bubble_max_width()
             inner.setMaximumWidth(max_w)
-            inner.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Minimum)
+            inner.setSizePolicy(
+                QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Minimum
+            )
             css_pad = 10
             inner.setLineWrapMode(QTextBrowser.LineWrapMode.WidgetWidth)
             inner.document().setTextWidth(max_w - 2 * css_pad)
@@ -891,17 +908,17 @@ class AiChatPanel(QWidget):
     # ── Settings ──────────────────────────────────────────────────
 
     FIELD_LABELS = {
-        'src':   '',
-        'trans': '',
-        'ff':    '',
-        'fs':    '',
-        'fg':    '',
-        'bg':    '',
-        'b':     '',
-        'i':     '',
-        'a':     '',
-        'sw':    '',
-        'ls':    '',
+        "src": "",
+        "trans": "",
+        "ff": "",
+        "fs": "",
+        "fg": "",
+        "bg": "",
+        "b": "",
+        "i": "",
+        "a": "",
+        "sw": "",
+        "ls": "",
     }
 
     def set_controller(self, controller: Any):
@@ -911,13 +928,13 @@ class AiChatPanel(QWidget):
         if controller:
             mode_map = {"auto": 0, "agent": 1, "chat": 2}
             self._title_mode.blockSignals(True)
-            self._title_mode.setCurrentIndex(
-                mode_map.get(controller.chat_mode, 0)
-            )
+            self._title_mode.setCurrentIndex(mode_map.get(controller.chat_mode, 0))
             self._title_mode.blockSignals(False)
 
             # Auto-populate api_config from active translator profile on first use
-            if not controller.api_config.get('api_host') or not controller.api_config.get('model'):
+            if not controller.api_config.get(
+                "api_host"
+            ) or not controller.api_config.get("model"):
                 active = self._get_active_profile_name()
                 if active:
                     self._sync_profile_to_controller(active)
@@ -925,12 +942,14 @@ class AiChatPanel(QWidget):
     def _get_translator_profiles(self) -> List[Dict]:
         """Read all API profiles from shared profile storage."""
         from utils.profile_manager import load_profiles
+
         return load_profiles()
 
     def _get_active_profile_name(self) -> str:
         """Return the currently active translator profile name."""
         from modules.translators.trans_llm_api import LLM_API_Translator
-        params = getattr(LLM_API_Translator, 'params', {})
+
+        params = getattr(LLM_API_Translator, "params", {})
         if not params:
             return ""
         active = params.get("active_profile", {})
@@ -941,6 +960,7 @@ class AiChatPanel(QWidget):
     def _set_active_profile(self, name: str):
         """Set the active translator profile and persist."""
         from utils.config import save_config
+
         params = pcfg.module.translator_params.get("LLM_API_Translator", {})
         ap = params.get("active_profile", "")
         if isinstance(ap, dict):
@@ -949,6 +969,7 @@ class AiChatPanel(QWidget):
             params["active_profile"] = {"value": name}
         # Also update the class-level params (shared with the translator instance)
         from modules.translators.trans_llm_api import LLM_API_Translator
+
         cls_ap = LLM_API_Translator.params.get("active_profile", {})
         if isinstance(cls_ap, dict):
             cls_ap["value"] = name
@@ -995,7 +1016,9 @@ class AiChatPanel(QWidget):
             value = int(self._context_limit_edit.text())
             self._controller.context_message_limit = value
         except ValueError:
-            self._context_limit_edit.setText(str(self._controller.context_message_limit))
+            self._context_limit_edit.setText(
+                str(self._controller.context_message_limit)
+            )
 
     @staticmethod
     def _default_translation_prompt() -> str:
@@ -1022,22 +1045,28 @@ class AiChatPanel(QWidget):
         layout = QVBoxLayout(dlg)
         layout.setSpacing(8)
 
-        label = QLabel(self.tr(
-            "Edit the system prompt used when translation mode is active. "
-            "Use {from_lang} and {to_lang} as placeholders for source/target languages."
-        ))
+        label = QLabel(
+            self.tr(
+                "Edit the system prompt used when translation mode is active. "
+                "Use {from_lang} and {to_lang} as placeholders for source/target languages."
+            )
+        )
         label.setWordWrap(True)
         layout.addWidget(label)
 
         editor = QPlainTextEdit()
         editor.setObjectName("AIPromptEditor")
-        editor.setPlainText(self._controller.custom_prompt or self._default_translation_prompt())
+        editor.setPlainText(
+            self._controller.custom_prompt or self._default_translation_prompt()
+        )
         editor.setMinimumHeight(200)
         layout.addWidget(editor, 1)
 
         btn_row = QHBoxLayout()
         reset_btn = QPushButton(self.tr("Reset to Default"))
-        reset_btn.clicked.connect(lambda: editor.setPlainText(self._default_translation_prompt()))
+        reset_btn.clicked.connect(
+            lambda: editor.setPlainText(self._default_translation_prompt())
+        )
         btn_row.addWidget(reset_btn)
         btn_row.addStretch()
 
@@ -1060,20 +1089,22 @@ class AiChatPanel(QWidget):
         w.setVisible(False)
 
         # Lazy-init translatable field labels
-        if not self.FIELD_LABELS['src']:
-            self.FIELD_LABELS.update({
-                'src':   self.tr("Source"),
-                'trans': self.tr("Translation"),
-                'ff':    self.tr("Font"),
-                'fs':    self.tr("Size"),
-                'fg':    self.tr("Text Color"),
-                'bg':    self.tr("BG Color"),
-                'b':     self.tr("Bold"),
-                'i':     self.tr("Italic"),
-                'a':     self.tr("Align"),
-                'sw':    self.tr("Stroke"),
-                'ls':    self.tr("Line Spacing"),
-            })
+        if not self.FIELD_LABELS["src"]:
+            self.FIELD_LABELS.update(
+                {
+                    "src": self.tr("Source"),
+                    "trans": self.tr("Translation"),
+                    "ff": self.tr("Font"),
+                    "fs": self.tr("Size"),
+                    "fg": self.tr("Text Color"),
+                    "bg": self.tr("BG Color"),
+                    "b": self.tr("Bold"),
+                    "i": self.tr("Italic"),
+                    "a": self.tr("Align"),
+                    "sw": self.tr("Stroke"),
+                    "ls": self.tr("Line Spacing"),
+                }
+            )
 
         layout = QVBoxLayout(w)
         layout.setContentsMargins(8, 4, 8, 8)
@@ -1145,7 +1176,9 @@ class AiChatPanel(QWidget):
         misc_label.setObjectName("AISettingsSection")
         layout.addWidget(misc_label)
 
-        hint = QLabel(self.tr("Select which text block properties the AI can read and modify."))
+        hint = QLabel(
+            self.tr("Select which text block properties the AI can read and modify.")
+        )
         hint.setObjectName("AISettingsHint")
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -1174,14 +1207,14 @@ class AiChatPanel(QWidget):
                 key for key, cb in self._field_cbs.items() if cb.isChecked()
             }
             for key, cb in self._field_cbs.items():
-                if key in ('src', 'trans'):
+                if key in ("src", "trans"):
                     cb.setChecked(True)
                 else:
                     cb.setChecked(False)
                 cb.setEnabled(False)
         else:
             # Restore previous whitelist state
-            prev = getattr(self, '_field_wl_before_trans', None)
+            prev = getattr(self, "_field_wl_before_trans", None)
             for key, cb in self._field_cbs.items():
                 cb.setEnabled(True)
                 if prev is not None:
@@ -1193,7 +1226,8 @@ class AiChatPanel(QWidget):
             self._settings_widget = self._build_settings_widget()
             self._settings_widget.setParent(self._scroll_area)
             self._settingsSlide = OverlaySlider(
-                self._settings_widget, direction='right',
+                self._settings_widget,
+                direction="right",
                 width=lambda: self._scroll_area.width(),
             )
 
@@ -1209,7 +1243,7 @@ class AiChatPanel(QWidget):
 
     def _sync_settings_from_controller(self):
         """Read controller + translator config into the settings form."""
-        if not hasattr(self, '_trans_mode_cb'):
+        if not hasattr(self, "_trans_mode_cb"):
             return  # settings widget not built yet
         # Populate profile dropdown from translator profiles
         self._settings_profile.blockSignals(True)
@@ -1258,16 +1292,16 @@ class AiChatPanel(QWidget):
         self._auto_compress_cb.setChecked(auto_compress)
 
         # Field whitelist
-        wl = self._controller.fields_whitelist if self._controller else {'src', 'trans'}
+        wl = self._controller.fields_whitelist if self._controller else {"src", "trans"}
         for key, cb in self._field_cbs.items():
             cb.setChecked(key in wl)
-            cb.setEnabled(not trans_mode or key in ('src', 'trans'))
+            cb.setEnabled(not trans_mode or key in ("src", "trans"))
 
     def _sync_settings_to_controller(self):
         """Write settings form values back to the controller."""
         if not self._controller:
             return
-        if not hasattr(self, '_trans_mode_cb'):
+        if not hasattr(self, "_trans_mode_cb"):
             return  # settings widget not built yet; controller defaults are correct
 
         # api_config is kept in sync via _on_profile_changed / _sync_profile_to_controller
@@ -1277,14 +1311,16 @@ class AiChatPanel(QWidget):
 
         # context limit (also pushed immediately via _on_context_limit_changed)
         try:
-            self._controller.context_message_limit = int(self._context_limit_edit.text())
+            self._controller.context_message_limit = int(
+                self._context_limit_edit.text()
+            )
         except ValueError:
             pass
         self._controller.auto_compress = self._auto_compress_cb.isChecked()
 
         # fields_whitelist
         if self._trans_mode_cb.isChecked():
-            self._controller.fields_whitelist = {'src', 'trans'}
+            self._controller.fields_whitelist = {"src", "trans"}
         else:
             self._controller.fields_whitelist = {
                 key for key, cb in self._field_cbs.items() if cb.isChecked()
@@ -1303,14 +1339,16 @@ class AiChatPanel(QWidget):
         if not self._controller:
             return
         cfg = self._controller.api_config
-        if cfg.get('api_host') and cfg.get('model'):
+        if cfg.get("api_host") and cfg.get("model"):
             return  # already valid
         # First try the profile currently selected in the settings widget
-        if hasattr(self, '_settings_profile') and self._settings_profile.count() > 0:
+        if hasattr(self, "_settings_profile") and self._settings_profile.count() > 0:
             name = self._settings_profile.currentText()
             if name:
                 self._sync_profile_to_controller(name)
-                if self._controller.api_config.get('api_host') and self._controller.api_config.get('model'):
+                if self._controller.api_config.get(
+                    "api_host"
+                ) and self._controller.api_config.get("model"):
                     return
         # Fall back to the active translator profile
         active = self._get_active_profile_name()
@@ -1320,7 +1358,9 @@ class AiChatPanel(QWidget):
     def set_project_loaded(self, loaded: bool):
         """Enable/disable the input bar based on project state."""
         self._input_edit.setEnabled(loaded)
-        self._send_btn.setEnabled(loaded and bool(self._input_edit.toPlainText().strip()))
+        self._send_btn.setEnabled(
+            loaded and bool(self._input_edit.toPlainText().strip())
+        )
         if not loaded:
             self._input_edit.setPlaceholderText(
                 self.tr("Open a project to start chatting")
@@ -1346,9 +1386,7 @@ class AiChatPanel(QWidget):
 
     def _insert_bubble(self, bubble_widget: QWidget):
         """Insert a bubble widget before the trailing stretch."""
-        self._msg_layout.insertWidget(
-            self._msg_layout.count() - 1, bubble_widget
-        )
+        self._msg_layout.insertWidget(self._msg_layout.count() - 1, bubble_widget)
         self._scroll_to_bottom()
 
     def _clear_messages(self):

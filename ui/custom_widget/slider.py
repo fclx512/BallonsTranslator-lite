@@ -26,7 +26,7 @@ def slider_subcontrol_rect(r: QRect, widget: QWidget):
 
 
 class SliderHandle(QWidget):
-    """ Slider handle """
+    """Slider handle"""
 
     # Custom radius QPropertyAnimation — stays widget-based.
     # 100ms animation on a custom paint property; cost is one small
@@ -39,7 +39,7 @@ class SliderHandle(QWidget):
         super().__init__(parent=parent)
         self.setFixedSize(22, 22)
         self._radius = 5
-        self.radiusAni = QPropertyAnimation(self, b'radius', self)
+        self.radiusAni = QPropertyAnimation(self, b"radius", self)
         self.radiusAni.setDuration(100)
 
     @Property(int)
@@ -78,6 +78,7 @@ class SliderHandle(QWidget):
 
         # draw outer circle
         from ui.theme_helpers import is_dark_theme, slider_colors
+
         handle_outer, _ = slider_colors()
         painter.setPen(QColor(0, 0, 0, 90 if is_dark_theme() else 25))
         painter.setBrush(handle_outer)
@@ -91,7 +92,7 @@ class SliderHandle(QWidget):
 
 
 class Slider(QSlider):
-    """ A slider can be clicked
+    """A slider can be clicked
 
     modified from https://github.com/zhiyiYo/PyQt-Fluent-Widgets
 
@@ -136,7 +137,11 @@ class Slider(QSlider):
 
     @property
     def grooveLength(self):
-        l = self.width() if self.orientation() == Qt.Orientation.Horizontal else self.height()
+        l = (
+            self.width()
+            if self.orientation() == Qt.Orientation.Horizontal
+            else self.height()
+        )
         return l - self.handle.width()
 
     def _adjustHandlePos(self):
@@ -159,6 +164,7 @@ class Slider(QSlider):
         painter.setRenderHints(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
         from ui.theme_helpers import slider_colors
+
         _, groove = slider_colors()
         painter.setBrush(groove)
 
@@ -167,20 +173,21 @@ class Slider(QSlider):
         else:
             self._drawVerticalGroove(painter)
 
-        if hasattr(self, 'draw_content') and self.hovering:
+        if hasattr(self, "draw_content") and self.hovering:
             # its a bad idea to display text like this, but I leave it as it is for now
 
             option = QStyleOptionSlider()
             self.initStyleOption(option)
 
             rect = self.style().subControlRect(
-                QStyle.CC_Slider, option, QStyle.SC_SliderHandle, self)
+                QStyle.CC_Slider, option, QStyle.SC_SliderHandle, self
+            )
             rect = slider_subcontrol_rect(rect, self)
 
             value = self.value()
             value_str = str(value)
 
-            painter.setPen(QColor(*C.SLIDERHANDLE_COLOR,255))
+            painter.setPen(QColor(*C.SLIDERHANDLE_COLOR, 255))
             font = painter.font()
             font.setPointSizeF(8)
             fm = QFontMetrics(font)
@@ -197,30 +204,41 @@ class Slider(QSlider):
             painter.drawText(dx, dy, value_str)
 
             if self.draw_content is not None:
-                painter.drawText(0, dy, self.draw_content, )
-
+                painter.drawText(
+                    0,
+                    dy,
+                    self.draw_content,
+                )
 
     def _drawHorizonGroove(self, painter: QPainter):
         w, r = self.width(), self.handle.width() / 2
-        painter.drawRoundedRect(QRectF(r, r-2, w-r*2, 4), 2, 2)
+        painter.drawRoundedRect(QRectF(r, r - 2, w - r * 2, 4), 2, 2)
 
         if self.maximum() - self.minimum() == 0:
             return
 
         painter.setBrush(themeColor())
-        aw = (self.value() - self.minimum()) / (self.maximum() - self.minimum()) * (w - r*2)
-        painter.drawRoundedRect(QRectF(r, r-2, aw, 4), 2, 2)
+        aw = (
+            (self.value() - self.minimum())
+            / (self.maximum() - self.minimum())
+            * (w - r * 2)
+        )
+        painter.drawRoundedRect(QRectF(r, r - 2, aw, 4), 2, 2)
 
     def _drawVerticalGroove(self, painter: QPainter):
         h, r = self.height(), self.handle.width() / 2
-        painter.drawRoundedRect(QRectF(r-2, r, 4, h-2*r), 2, 2)
+        painter.drawRoundedRect(QRectF(r - 2, r, 4, h - 2 * r), 2, 2)
 
         if self.maximum() - self.minimum() == 0:
             return
 
         painter.setBrush(themeColor())
-        ah = (self.value() - self.minimum()) / (self.maximum() - self.minimum()) * (h - r*2)
-        painter.drawRoundedRect(QRectF(r-2, r, 4, ah), 2, 2)
+        ah = (
+            (self.value() - self.minimum())
+            / (self.maximum() - self.minimum())
+            * (h - r * 2)
+        )
+        painter.drawRoundedRect(QRectF(r - 2, r, 4, ah), 2, 2)
 
     def resizeEvent(self, e):
         self._adjustHandlePos()
@@ -237,10 +255,11 @@ class Slider(QSlider):
 
 
 class PaintQSlider(Slider):
-
     mouse_released = Signal()
 
-    def __init__(self, draw_content = None, orientation=Qt.Orientation.Horizontal, *args, **kwargs):
+    def __init__(
+        self, draw_content=None, orientation=Qt.Orientation.Horizontal, *args, **kwargs
+    ):
         super().__init__(orientation, *args, **kwargs)
         self.draw_content = draw_content
         self.pressed: bool = False
@@ -273,7 +292,7 @@ class RangeSlider(QWidget):
         self.setFixedHeight(44)
         self.setMouseTracking(True)
         self._dragging = None  # 'low', 'high', or None
-        self._hovered = None   # 'low', 'high', or None
+        self._hovered = None  # 'low', 'high', or None
 
     def low(self) -> int:
         return self._low
@@ -310,8 +329,12 @@ class RangeSlider(QWidget):
         return QPoint(x, self.height() // 2)
 
     def _grooveRect(self) -> QRect:
-        return QRect(self._handle_size // 2, (self.height() - self._groove_height) // 2,
-                     self.width() - self._handle_size, self._groove_height)
+        return QRect(
+            self._handle_size // 2,
+            (self.height() - self._groove_height) // 2,
+            self.width() - self._handle_size,
+            self._groove_height,
+        )
 
     def _handleRect(self, value: int) -> QRect:
         c = self._handleCenter(value)
@@ -327,16 +350,16 @@ class RangeSlider(QWidget):
 
         threshold = self._handle_size
         if low_dist <= threshold and low_dist <= high_dist:
-            self._dragging = 'low'
+            self._dragging = "low"
         elif high_dist <= threshold:
-            self._dragging = 'high'
+            self._dragging = "high"
         else:
             v = self._posToValue(event.position().x())
             if abs(v - self._low) <= abs(v - self._high):
-                self._dragging = 'low'
+                self._dragging = "low"
                 self._low = max(self._min, min(v, self._high))
             else:
-                self._dragging = 'high'
+                self._dragging = "high"
                 self._high = min(self._max, max(v, self._low))
             self.rangeChanged.emit(self._low, self._high)
             self.update()
@@ -350,9 +373,9 @@ class RangeSlider(QWidget):
         thresh = self._handle_size // 2
         hovered = None
         if (pos - low_center).manhattanLength() <= thresh:
-            hovered = 'low'
+            hovered = "low"
         elif (pos - high_center).manhattanLength() <= thresh:
-            hovered = 'high'
+            hovered = "high"
         if hovered != self._hovered:
             self._hovered = hovered
             self.update()
@@ -360,13 +383,13 @@ class RangeSlider(QWidget):
         if self._dragging is None:
             return
         v = self._posToValue(event.position().x())
-        if self._dragging == 'low':
+        if self._dragging == "low":
             v = max(self._min, min(v, self._high))
             if v != self._low:
                 self._low = v
                 self.rangeChanged.emit(self._low, self._high)
                 self.update()
-        elif self._dragging == 'high':
+        elif self._dragging == "high":
             v = min(self._max, max(v, self._low))
             if v != self._high:
                 self._high = v
@@ -412,18 +435,23 @@ class RangeSlider(QWidget):
             painter.drawRoundedRect(active, 3, 3)
 
         # Handles
-        for val, is_hovered in ((self._low, self._hovered == 'low'),
-                                (self._high, self._hovered == 'high')):
+        for val, is_hovered in (
+            (self._low, self._hovered == "low"),
+            (self._high, self._hovered == "high"),
+        ):
             center = self._handleCenter(val)
             hs = self._handle_size
-            outer_rect = QRect(center.x() - hs // 2 + 1, center.y() - hs // 2 + 1,
-                               hs - 2, hs - 2)
+            outer_rect = QRect(
+                center.x() - hs // 2 + 1, center.y() - hs // 2 + 1, hs - 2, hs - 2
+            )
 
             if enabled:
                 # Outer ring — slightly larger on hover
                 ring_size = 7 if is_hovered else 5
                 painter.setPen(QPen(QColor(0, 0, 0, 60), 1))
-                painter.setBrush(QColor(55, 55, 55) if isDark else QColor(230, 233, 240))
+                painter.setBrush(
+                    QColor(55, 55, 55) if isDark else QColor(230, 233, 240)
+                )
                 painter.drawEllipse(outer_rect)
 
                 # Inner colored dot
@@ -433,5 +461,7 @@ class RangeSlider(QWidget):
             else:
                 # Disabled: muted outline, no fill dot
                 painter.setPen(QPen(QColor(128, 128, 128, 80), 1))
-                painter.setBrush(QColor(100, 100, 100, 40) if isDark else QColor(200, 200, 200, 50))
+                painter.setBrush(
+                    QColor(100, 100, 100, 40) if isDark else QColor(200, 200, 200, 50)
+                )
                 painter.drawEllipse(outer_rect)
