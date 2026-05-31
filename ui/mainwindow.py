@@ -299,7 +299,7 @@ class MainWindow(mainwindow_cls):
 
         # Left: AI chat panel (floating overlay, slides in from left)
         self.aiChatPanel = AiChatPanel()
-        self.aiChatPanel.setParent(self._rightPanelContainer)
+        self.aiChatPanel.setParent(self.centralStackWidget)
         self.aiChatPanel.setVisible(False)
         self._aiChatSlide = OverlaySlider(self.aiChatPanel, direction="left", width=480)
         self._aiChatSlide.on_before_show(self.aiChatPanel.before_show)
@@ -628,7 +628,6 @@ class MainWindow(mainwindow_cls):
         self.configPanel.font_exclusion_changed.connect(
             self.refresh_font_list_exclusion
         )
-        self.configPanel.theme_changed.connect(self._on_theme_config_changed)
         self.configPanel.shortcuts_changed.connect(self.refreshShortcuts)
         self.configPanel.presets_changed.connect(self._on_presets_changed)
         # 初始化字体列表（系统字体枚举）
@@ -2473,11 +2472,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
     def on_darkmode_triggered(self):
         pcfg.darkmode = self.titleBar.darkModeAction.isChecked()
         self.resetStyleSheet(reverse_icon=True)
-        self.configPanel.refresh_theme_ui()
         self.save_config()
-
-    def _on_theme_config_changed(self):
-        self.resetStyleSheet(reverse_icon=True)
 
     def on_copy_src(self):
         blks = self.canvas.selected_text_items()

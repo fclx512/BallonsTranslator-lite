@@ -609,12 +609,12 @@ class FontFormatPanel(Widget):
         """Reload dropdown items from pcfg preset lists, preserving current values."""
         from utils.config import pcfg
 
-        self.fcombobox.blockSignals(True)
-        cur = self.fcombobox.value()
-        self.fcombobox.clear()
-        self.fcombobox.addItems([str(v) for v in pcfg.font_size_presets])
-        self.fcombobox.setValue(cur)
-        self.fcombobox.blockSignals(False)
+        self.fontsizebox.fcombobox.blockSignals(True)
+        cur = self.fontsizebox.fcombobox.value()
+        self.fontsizebox.fcombobox.clear()
+        self.fontsizebox.fcombobox.addItems([str(v) for v in pcfg.font_size_presets])
+        self.fontsizebox.fcombobox.setValue(cur)
+        self.fontsizebox.fcombobox.blockSignals(False)
 
         self.lineSpacingBox.blockSignals(True)
         cur = self.lineSpacingBox.value()

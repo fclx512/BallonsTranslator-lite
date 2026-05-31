@@ -190,6 +190,8 @@ class AiChatPanel(QWidget):
         self._scroll_area.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
+        # Ensure the viewport does not show a default white background
+        self._scroll_area.viewport().setAutoFillBackground(True)
 
         self._msg_container = QWidget()
         self._msg_layout = QVBoxLayout(self._msg_container)

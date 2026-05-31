@@ -165,6 +165,11 @@
             <translation>横排自动排版</translation>
         </message>
         <message>
+            <location filename="../ui/configpanel.py" line="1043" />
+            <source>Split translation into multi-lines according to the extracted balloon region.</source>
+            <translation>根据提取的对话框区域将译文分割为多行</translation>
+        </message>
+        <message>
             <location filename="../ui/configpanel.py" line="456" />
             <source>To uppercase</source>
             <translation>小写转大写</translation>
@@ -286,6 +291,18 @@
         <message>
             <source>Edit Shortcuts...</source>
             <translation>快捷键编辑...</translation>
+        </message>
+        <message>
+            <source>Auto (match display)</source>
+            <translation>自动（匹配显示器）</translation>
+        </message>
+        <message>
+            <source>Off (no animation)</source>
+            <translation>关闭（无动画）</translation>
+        </message>
+        <message>
+            <source>Animation</source>
+            <translation>动画</translation>
         </message>
         <message>
             <source>Max Font Size (px)</source>
@@ -1405,6 +1422,14 @@ Failed: {f}/{t}</source>
             <location filename="../ui/shadow_gradient_dialog.py" line="0" />
             <source>Apply</source>
             <translation>应用</translation>
+        </message>
+    </context>
+    <context>
+        <name>InpaintConfigPanel</name>
+        <message>
+            <location filename="../ui/module_parse_widgets.py" line="487" />
+            <source>Let the program decide whether it is necessary to use the selected inpaint method.</source>
+            <translation>由程序决定是否有必要使用选定的图像修复方法</translation>
         </message>
     </context>
     <context>
@@ -2843,89 +2868,6 @@ Apply them now?</source>
         <message>
             <source>Unexpected error: %1</source>
             <translation>意外错误：%1</translation>
-        </message>
-    </context>
-    <context>
-        <name>ThemeEditorDialog</name>
-        <message>
-            <location filename="../ui/theme_editor.py" line="183" />
-            <source>Theme Editor</source>
-            <translation>主题编辑器</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="243" />
-            <source>Name:</source>
-            <translation>名称：</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="404" />
-            <source>Based on: </source>
-            <translation>基于：</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="408" />
-            <source>Dark</source>
-            <translation>深色</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="412" />
-            <source>Light</source>
-            <translation>浅色</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="279" />
-            <source>Theme Colors</source>
-            <translation>主题色</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="310" />
-            <source>Apply</source>
-            <translation>应用</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="292" />
-            <source>Advanced Colors</source>
-            <translation>高级颜色</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="326" />
-            <source>Built-in</source>
-            <translation>内置</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="263" />
-            <source>Clone to Edit</source>
-            <translation>克隆并编辑</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="345" />
-            <source>Custom</source>
-            <translation>自定义</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="220" />
-            <source>Delete</source>
-            <translation>删除</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="522" />
-            <source>Delete Theme</source>
-            <translation>删除主题</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="523" />
-            <source>Delete theme "%s"? This cannot be undone.</source>
-            <translation>删除主题"%s"？此操作不可撤销。</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="216" />
-            <source>New...</source>
-            <translation>新建...</translation>
-        </message>
-        <message>
-            <location filename="../ui/theme_editor.py" line="198" />
-            <source>Themes</source>
-            <translation>主题</translation>
         </message>
     </context>
     <context>

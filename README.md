@@ -1,164 +1,135 @@
 # BallonsTranslator-lite
 
-注意：本项目正处于高频重构阶段，README暂时由ai撰写，代码改动频繁且幅度较大，可能无法同步说明所有修改。待重构稳定后将人工更新文档。
+[简体中文](README.md) | [English](README_EN.md)
 
+<!-- SCREENSHOT: 主界面全景 -->
 
-基于 [BallonsTranslator](https://github.com/dmMaze/BallonsTranslator) 的轻量化漫画/图片翻译工具，保留完整嵌字管线，大幅削减体积与冗余模块，支持纯 CPU 离线运行。
+基于 [BallonsTranslator](https://github.com/dmMaze/BallonsTranslator) 的轻量化漫画/图片翻译工具。
 
-## 功能特性
+> **注意**：项目正处于高频重构阶段，说明可能不是最新。如有出入以实际行为为准。
 
-### 翻译管线
+---
 
-- **一键翻译管线**：文字检测 → OCR → 翻译 → 修图（抹字）→ 译文嵌字回填，支持批量处理与页面范围选择
-- **纯 CPU 离线运行**：捆绑 CPU 版 PyTorch，无需 GPU 即可运行本地模型。GPU 模式下自动检测用户系统已安装的 PyTorch（含 CUDA），未安装时自动退回 CPU
+## 关于本项目
 
-### 图像编辑
+[BallonsTranslator](https://github.com/dmMaze/BallonsTranslator) 的多页嵌字管线效率很高，这是 fork 它的原因。但上游在长期维护中积累了相当多个人看来实用性下降的功能，选择多不等于好用。
 
-- **修复画笔**：涂抹需要抹除的文字区域
-- **选区工具**：矩形选区、套索选区，批量抹除
-- **蒙版编辑**：手动调整文字区域蒙版
+本分支做的事：**保留核心嵌字能力，砍掉理解成本高的东西，优化交互体验**
 
-### 文字排版
+### 精简内容
 
-- **所见即所得**：画布上直接编辑译文，支持字体、字号、颜色、描边、对齐、行距、字间距等调整
-- **投影/渐变**：PS 风格钟表盘控件，直观调节投影角度、距离、模糊度和渐变方向
-- **字体样式预设**：保存和复用字体风格配置，支持局部覆盖（仅应用部分属性）
-- **字体筛选**：排除不常用字体，精简字体列表
+**翻译器**：上游有翻译接口繁多，但在非实时场景下传统机翻质量已经明显落后于大模型。已改版为一个统一化便于编辑的 LLM API 和一个离线备选（Sakura）。
 
-### 搜索替换
+**OCR**：同理，质量差/老旧的方案挂在菜单里不是多个选择，是多个坑。有些或许不错，但部署基本都过分复杂/体积大且没有达到100%准确率。故只保留了本地 MIT48px-CTC 和可选的 LLM API OCR。
 
-- **页面内搜索**：当前页面查找替换
-- **全局搜索**：左侧滑入面板，跨页面搜索（全文/原文/译文）
-- **跨页批量替换**：一键替换所有页面中的匹配文本
+**修图**：保留了适用性相对较好的 lama_large_512px 和性能开销低的 AOT 。其余管线删减理由同上，依赖重、体积大，边际收益太低。
 
-### AI 助手
+**辅助功能**：查词、关键词替换、无头模式——使用频率极低，或者交互逻辑独立一套，维护成本和实际收益不成比例。这些功能的存在本身会分散对核心流程的注意力，删掉对普通用户而言是净收益。
 
-- **自然语言交互**：通过聊天面板用自然语言操控项目，支持修改译文、调整样式、查询文字块等操作
-- 支持 OpenAI 兼容 API，模型与参数均可配置
+### 交互
 
-### 其他
+按照个人理解优化了部分流程和操作交互，目前（5/31）暂没有精力详细描述，后续会更新文档以及讲解视频。
 
-- **主题切换**：内置多套配色主题，支持浅色/深色模式
-- **键盘快捷键**：可自定义快捷键，支持保存/加载快捷键配置
-- **导出**：支持导出文本文件 (TXT)
-- **条漫阅读**：多页连续阅读与翻译
-- **页面预览模式**：快速预览原文/译文对照
+### 硬件
 
-## 模块清单
+捆绑 CPU 版 PyTorch，没有独显也能跑完整管线。有 GPU 自动检测架构代际，无需手动配环境。RTX 50 系列自动切 CUDA 12.8+ nightly，旧卡同样识别并提示合适的 CUDA 版本。
 
-### 文字检测
+本项目含模型、CPU PyTorch 和保证所有功能正常运行的依赖库总共约 **1.8 GB**。支持压缩打包快速切换设备运行
+理论上是可以去掉模型和CPU PyTorch实现更极限的精简运行的，但背景修复没有合适的处理方案无法跑通流程故没有细化该需求
 
-| 模块 | 说明 |
-|------|------|
-| CTD (默认) | CNN 文字检测，快速准确 |
-| YSG | YOLO-based 文字检测 |
-
-### OCR
-
-| 模块 | 说明 |
-|------|------|
-| MIT48px-CTC (默认) | 本地 OCR，无需 GPU |
-| LLM API OCR | 调用视觉大模型 API 进行 OCR |
-| LM Studio | 本地 LM Studio 接入 |
-| None | 关闭 OCR（手动输入原文） |
-
-### 翻译
-
-| 模块 | 说明 |
-|------|------|
-| LLM API | 通用大模型 API 翻译接口，支持 OpenAI 兼容协议 |
-| Sakura | Sakura 翻译模型 |
-
-### 修图（Inpainting）
-
-| 模块 | 说明 |
-|------|------|
-| LaMa 512px (默认) | 效果最好，抹字干净 |
-| AOT | 轻量快速，占用低 |
-
-## 精简说明
-
-相对于上游 [BallonsTranslator](https://github.com/dmMaze/BallonsTranslator)，本分支主要做了以下精简：
-
-- **翻译器**：移除了百度、彩云、DeepL、DeepLX、Google、有道、Papago、Sugoi、M2M100、Yandex 等翻译引擎（非即时场景下机翻已不适合与大模型竞争）
-  - 保留并新增主流大模型 API 翻译接口（注意：国内某些 API 服务商存在安全围栏，会拒绝敏感内容输入）
-- **OCR 引擎**：移除了 PaddleOCR、Google Vision、Bing Lens、macOS/Windows 原生 OCR、Manga OCR、OneOCR、Stariver 等不常用或效果较差的接口
-  - 本地 OCR 方案使用 MIT48px-CTC，保留 LLM API OCR 和 LM Studio 接入
-- **修图**：移除了 Flux Inpaint 管线（依赖重、体积大）和其他无明显优势的模型，保留效果最好的 LaMa 512px、轻量的 AOT
-- **其他**：移除 Saladict 查词集成、关键词替换子面板、连续无头模式、系统 HuggingFace 缓存选项等
-- **依赖**：精简 requirements.txt，移除 keyboard、deeplx、saladict 等非必要依赖
-
-完整项目包括模型、依赖库以及 CPU 版 PyTorch 约 **1.8 GB**，可快速打包移动。
 
 ## 快速开始
 
-> 注意：上游项目支持 macOS 和 AMD 显卡，因缺少设备测试，本分支只面向 Windows CUDA / CPU 环境。
-> 项目附带上游的 macOS 构建脚本可自行测试可行性（`scripts/build-macos-app.sh`、`scripts/macos-build-script-arm64.sh`），因上条理由故无法提供技术支持
-
-不要下载微软商店版的 Python。WindowsApps 目录会留下 `python.exe` 占位符，即使卸载后仍会触发跳转。若已安装，请在搜索引擎检索 `Python 打开 Windows 商店` 寻找处理教程。
-
 ### Windows 一键启动
 
-1. 下载源码，解压到本地目录
-2. 运行 `launch_win.bat`（GPU 模式）或 `launch_cpu.bat`（纯 CPU 模式）
-3. 首次启动会自动下载模型文件，请保持网络畅通
+1. 下载源码，解压到目录
+2. 运行启动脚本：
+   - `launch_win_update.bat` — GPU 模式，启动前自动检查更新（推荐）
+   - `launch_win.bat` — GPU 模式，跳过更新检查
+   - `launch_cpu.bat` — 纯 CPU 模式，跳过更新检查
+3. 首次启动自动下载模型文件（约 700 MB），保持网络畅通
+
+因网络问题无法正常下载依赖和模型的移步至网盘：
+[google盘](https://drive.google.com/drive/folders/1WJXjcQt7UzHvRpH3QfwcOokL8Fm7l0zT?usp=sharing)
+[123盘](https://1815181720.share.123865.com/123pan/sKBtVv-Zs1Vd)
+使用方法：将下载后的两个压缩包解压至项目根目录
+解压后示意：
+
+BallonsTranslator-lite/
+├── ballontrans_pylibs_win/
+└── data/
 
 ### 源码运行
 
 ```bash
-git clone https://github.com/dmMaze/BallonsTranslator-lite.git
+git clone https://github.com/fclx512/BallonsTranslator-lite.git
 cd BallonsTranslator-lite
 
-# GPU 模式（自动检测系统 PyTorch + CUDA，未安装则退回 CPU）
+# GPU 模式：自动检测系统 PyTorch + CUDA，未安装则退回 CPU
 python launch.py
 
-# CPU 模式（强制使用捆绑的 CPU 版 PyTorch）
+# CPU 模式：强制使用 CPU
 python launch.py --cpu
 
 # 更新代码
 python launch.py --update
 ```
 
-首次运行会自动安装 PyTorch 等依赖并下载模型文件（约 700MB）。若下载失败，需手动将 `data` 目录放置到项目根目录。
+> 上游支持 macOS 和 AMD 显卡，因缺少设备测试，本分支只面向 Windows CUDA / CPU 环境。
 
-GPU 模式会自动检测用户系统 Python 中已安装的 PyTorch（需含 CUDA）。若检测到 RTX 50 系列（Blackwell）GPU，会自动切换至 CUDA 12.8+ nightly 版本。
+---
 
-## 使用说明
+## 功能概览
 
-### 基本流程
+待施工……
 
-1. 打开包含漫画/图片的文件夹
-2. 在配置面板中选择源语言和目标语言
-3. 点击"Run"按钮，等待管线执行完成
-4. 在画布上双击文字块编辑不满意的译文
+## 模块一览
 
-### 译文编辑
+| 阶段 | 可用模块 |
+|------|----------|
+| 文字检测 | CTD（默认）、YSG |
+| OCR | MIT48px-CTC（默认）、LLM API OCR、LM Studio、关闭 OCR |
+| 翻译 | LLM API（OpenAI 兼容）、Sakura |
+| 修图 | LaMa 512px（默认）、AOT |
 
-- 双击画布上的文字块进入编辑模式
-- 右侧字体面板调整字体、字号、颜色、描边等属性
-- 可保存文字样式为预设，快速应用
+> 想添加自己的模块？参见 [模块开发指南](docs/how_to_add_new_translator.md)
 
-### 修图工具
+---
 
-- 使用修复画笔涂抹需要恢复的区域
-- 使用矩形/套索工具框选需要批量清除的区域
+## 常见问题
 
-## FAQ
+**RTX 50 系列 CUDA 不可用？**
 
-**PyTorch + CUDA 没检测到？**
-确认系统 Python 已安装 PyTorch with CUDA：
-
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-```
-
-**RTX 50 GPU CUDA 不可用？**
-Blackwell 架构需要 CUDA 12.8+，应用已自动使用 nightly 版本。手动重装：
+Blackwell 架构需要 CUDA 12.8+。手动重装：
 
 ```bash
 pip uninstall torch torchvision torchaudio ultralytics -y
 python launch.py --reinstall-torch
 ```
 
+**老显卡（GTX 10 系列等）CUDA 不可用？**
+
+Maxwell/Pascal 等旧架构建议尝试 CUDA 11.8：
+
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```
+
+Kepler（GTX 6xx / 7xx）可能不被 PyTorch 2.x 支持，建议 CPU 模式：`python launch.py --cpu`
+
 **如何更新？**
-在项目根目录运行 `python launch.py --update`。
+
+- 便携版用户：使用 `launch_win_update.bat` 启动，每次自动检查 GitHub 更新，有新版时下载并在下次启动应用。无需 git。
+- 源码运行用户：`python launch.py --update`（优先 git pull，无 git 时自动回退到直接下载）
+- 或在软件中点击关于→检查更新
+
+**快捷键怎么自定义？**
+
+参见 [快捷键指南](docs/shortcuts.md)
+
+---
+
+## 致谢
+
+- [BallonsTranslator](https://github.com/dmMaze/BallonsTranslator) — 上游项目
+- 项目使用的所有开源模型和库

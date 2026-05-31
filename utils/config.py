@@ -210,6 +210,7 @@ class ProgramConfig(Config):
     opacity_presets: List[float] = field(
         default_factory=lambda: [1.0, 0.8, 0.6, 0.4, 0.2]
     )
+    animation_fps: int = 0  # 0=auto, 30=30fps, 60=60fps, -1=disabled
     show_text_style_preset: bool = True
     expand_tstyle_panel: bool = True
     show_text_effect_panel: bool = True

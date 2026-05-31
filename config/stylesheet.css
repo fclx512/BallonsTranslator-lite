@@ -301,6 +301,13 @@ QListWidget {
     border-width: 1px;
 }
 
+/* ── Config panel nav list ─────────────────────────────────── */
+#ConfigNavList {
+    border: none;
+    background: @emptyContentBackgroundColor;
+    outline: none;
+}
+
 QAction {
     min-height: 66px;
 }
@@ -1107,6 +1114,9 @@ DeleteStyleButton::hover {
 /* ── Chat area ── */
 #AIChatArea {
     border: none;
+    background-color: @emptyContentBackgroundColor;
+}
+#AIChatArea > QWidget {
     background-color: @emptyContentBackgroundColor;
 }
 

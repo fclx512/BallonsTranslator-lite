@@ -1,7 +1,7 @@
 from typing import List, Tuple, Union
 
-from qtpy.QtCore import QSize, Qt, Signal
-from qtpy.QtGui import QFocusEvent, QFont, QIntValidator, QValidator
+from qtpy.QtCore import QEasingCurve, QElapsedTimer, QPoint, QSize, Qt, QTimer, Signal
+from qtpy.QtGui import QColor, QFocusEvent, QFont, QGuiApplication, QIntValidator, QPainter, QValidator
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -18,14 +18,16 @@ from qtpy.QtWidgets import (
     QListWidgetItem,
     QPushButton,
     QScrollArea,
+    QScrollBar,
     QSizePolicy,
     QSpacerItem,
     QSpinBox,
+    QStyledItemDelegate,
+    QStyle,
     QVBoxLayout,
     QWidget,
 )
 
-from utils import shared as C
 from utils.config import pcfg
 from utils.shared import (
     CONFIG_COMBOBOX_LONG,
@@ -38,6 +40,7 @@ from utils.shared import (
     GROUPBOX_CONTENT_MARGINS,
     LINEEDIT_FIXHEIGHT,
     NAVLIST_HEADER_FONTSIZE,
+    NAVLIST_ITEM_FONTSIZE,
     NAVLIST_WIDTH,
 )
 
@@ -321,6 +324,261 @@ class ConfigBlock(Widget):
         return self.subblock_list[idx]
 
 
+def _scroll_interval() -> int:
+    """Determine timer interval (ms) based on animation_fps or display refresh."""
+    fps = pcfg.animation_fps
+    if fps > 0:
+        return int(round(1000.0 / fps))
+    try:
+        app = QGuiApplication.instance()
+        if app is None:
+            return 8
+        screens = app.screens()
+        if not screens:
+            return 8
+        hz = screens[0].refreshRate()
+        if hz <= 0:
+            return 8
+        interval = int(round(1000.0 / (hz + 10)))
+        return max(4, min(interval, 16))
+    except Exception:
+        return 8
+
+
+class NavItemDelegate(QStyledItemDelegate):
+    """Paints item backgrounds through QPainter so text
+    rendering stays on the native DirectWrite path (no stylesheet override)."""
+
+    _hover_bg: "QColor | None" = None
+    _text_clr: "QColor | None" = None
+
+    @classmethod
+    def invalidate_colors(cls):
+        cls._hover_bg = None
+        cls._text_clr = None
+
+    @classmethod
+    def _ensure_colors(cls):
+        if cls._hover_bg is not None:
+            return
+        from ui.misc import load_all_themes
+        from utils.config import pcfg
+
+        themes = load_all_themes()
+        tn = pcfg.dark_theme if pcfg.darkmode else pcfg.light_theme
+        t = themes.get(tn, {})
+        cls._hover_bg = QColor(t.get("@hoverBackgroundColor", "#cad7ed"))
+        cls._text_clr = QColor(t.get("@textColor", "#5d5d5f"))
+
+    def paint(self, painter, option, index):
+        self._ensure_colors()
+
+        painter.save()
+        rect = option.rect
+
+        is_selected = option.state & QStyle.StateFlag.State_Selected
+        is_hovered = option.state & QStyle.StateFlag.State_MouseOver
+
+        # Background — solid fill matching original stylesheet
+        if is_selected or is_hovered:
+            painter.fillRect(rect, self._hover_bg)
+
+        # Text — draw through native style so DirectWrite handles it
+        text = index.data(Qt.ItemDataRole.DisplayRole)
+        if text:
+            font = index.data(Qt.ItemDataRole.FontRole)
+            if font is None or not isinstance(font, QFont):
+                font = option.font
+            painter.setFont(font)
+            painter.setPen(self._text_clr)
+            # Indent sub-items (selectable) more than headers (non-selectable)
+            left_pad = 32 if (index.flags() & Qt.ItemFlag.ItemIsSelectable) else 16
+            painter.drawText(
+                rect.adjusted(left_pad, 0, -8, 0),
+                Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextSingleLine,
+                text,
+            )
+
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        base = super().sizeHint(option, index)
+        base.setHeight(max(base.height(), 34))
+        return base
+
+
+class NavList(QListWidget):
+    """QListWidget with WinUI‑style animated accent indicator bar."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setItemDelegate(NavItemDelegate(self))
+
+        self._indicator_y = 0.0
+        self._anim_from = 0.0
+        self._anim_to = 0.0
+        self._animating = False
+        self._duration = 200
+        self._easing = QEasingCurve(QEasingCurve.Type.OutCubic)
+        self._anim_timer = QTimer(self)
+        self._anim_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._anim_timer.timeout.connect(self._tick)
+        self._elapsed = QElapsedTimer()
+
+    def setCurrentRow(self, row):
+        old_row = self.currentRow()
+        super().setCurrentRow(row)
+        self._on_selection_changed(old_row, row)
+
+    def _on_selection_changed(self, old_row, new_row):
+        if old_row < 0 or new_row < 0:
+            return
+        old_item = self.item(old_row)
+        new_item = self.item(new_row)
+        if not old_item or not new_item:
+            return
+        old_rect = self.visualItemRect(old_item)
+        new_rect = self.visualItemRect(new_item)
+        if old_rect.isValid() and new_rect.isValid():
+            self._start_indicator_anim(
+                old_rect.y() + old_rect.height() / 2.0,
+                new_rect.y() + new_rect.height() / 2.0,
+            )
+
+    def _start_indicator_anim(self, from_y: float, to_y: float):
+        self._anim_from = from_y
+        self._anim_to = to_y
+        self._indicator_y = from_y
+
+        if pcfg.animation_fps < 0:
+            self._indicator_y = to_y
+            self.viewport().update()
+            return
+
+        self._animating = True
+        self._elapsed.start()
+        self._anim_timer.start(_scroll_interval())
+
+    def _tick(self):
+        elapsed = self._elapsed.elapsed()
+        progress = min(elapsed / self._duration, 1.0)
+        eased = self._easing.valueForProgress(progress)
+        self._indicator_y = self._anim_from + (
+            self._anim_to - self._anim_from
+        ) * eased
+        self.viewport().update()
+        if progress >= 1.0:
+            self._anim_timer.stop()
+            self._animating = False
+            self._indicator_y = self._anim_to
+            self.viewport().update()
+
+    def _sync_indicator(self):
+        """Snap indicator to current item (no animation)."""
+        row = self.currentRow()
+        if row < 0:
+            return
+        item = self.item(row)
+        if not item:
+            return
+        r = self.visualItemRect(item)
+        if r.isValid() and r.height() > 0:
+            self._indicator_y = r.y() + r.height() / 2.0
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+
+        # Lazy‑init indicator position on first real paint
+        if self._indicator_y == 0.0:
+            self._sync_indicator()
+
+        painter = QPainter(self.viewport())
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        from ui.misc import get_theme_color
+
+        accent = get_theme_color(alpha=200)
+        painter.setBrush(accent)
+        painter.setPen(Qt.NoPen)
+
+        indicator_h = 20
+        y = int(round(self._indicator_y - indicator_h / 2.0))
+        painter.drawRoundedRect(0, y, 3, indicator_h, 1, 1)
+
+
+class AnimatedScrollBar(QScrollBar):
+    """Vertical scrollbar with timer‑based handle brightness on hover."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setOrientation(Qt.Orientation.Vertical)
+
+        self._factor = 0.0       # 0 = normal, 1 = fully hovered
+        self._factor_start = 0.0
+        self._factor_end = 0.0
+        self._animating = False
+        self._timer = QTimer(self)
+        self._timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._timer.timeout.connect(self._tick)
+        self._elapsed = QElapsedTimer()
+        self._duration = 150
+        self._easing = QEasingCurve(QEasingCurve.Type.OutCubic)
+
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self._sync_style()
+
+    # ── Hover events ────────────────────────────────────────────
+
+    def enterEvent(self, event):
+        self._start_anim(1.0)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._start_anim(0.0)
+        super().leaveEvent(event)
+
+    # ── Animation ───────────────────────────────────────────────
+
+    def _start_anim(self, target: float):
+        if pcfg.animation_fps < 0:
+            self._factor = target
+            self._sync_style()
+            return
+        self._factor_start = self._factor
+        self._factor_end = target
+        self._elapsed.start()
+        if not self._animating:
+            self._animating = True
+            self._timer.start(_scroll_interval())
+
+    def _tick(self):
+        elapsed = self._elapsed.elapsed()
+        progress = min(elapsed / self._duration, 1.0)
+        eased = self._easing.valueForProgress(progress)
+        self._factor = self._factor_start + (
+            self._factor_end - self._factor_start
+        ) * eased
+        self._sync_style()
+        if progress >= 1.0:
+            self._timer.stop()
+            self._animating = False
+
+    def _sync_style(self):
+        f = self._factor
+        r = int(102 + 51 * f)  # #666 → #999
+        g = int(102 + 51 * f)
+        b = int(102 + 51 * f)
+        self.setStyleSheet(
+            f"QScrollBar:vertical {{"
+            f"  width: 8px; background: transparent; margin: 0; }}"
+            f"QScrollBar::handle:vertical {{"
+            f"  background: rgb({r},{g},{b});"
+            f"  border-radius: 4px; min-height: 20px; }}"
+            f"QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{"
+            f"  height: 0; }}"
+        )
+
+
 class ConfigContent(QScrollArea):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -336,15 +594,92 @@ class ConfigContent(QScrollArea):
         self.setContentsMargins(0, 0, 0, 0)
         self.vlayout = vlayout
 
+        self.setVerticalScrollBar(AnimatedScrollBar(self))
+
+        self._scroll_timer = QTimer(self)
+        self._scroll_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._scroll_timer.timeout.connect(self._update_scroll)
+        self._scroll_elapsed = QElapsedTimer()
+        self._scroll_start_y = 0
+        self._scroll_end_y = 0
+        self._scroll_duration = 350
+        self._scroll_easing = QEasingCurve(QEasingCurve.Type.InOutExpo)
+        self._animating_scroll = False
+
     def addConfigBlock(self, block: ConfigBlock):
         self.vlayout.addWidget(block)
         self.config_block_list.append(block)
 
     def scrollToWidget(self, widget: QWidget):
-        if C.USE_PYSIDE6:
-            self.ensureWidgetVisible(widget, ymargin=widget.height() * 7)
+        if self._animating_scroll:
+            self._scroll_timer.stop()
+            self._animating_scroll = False
+            self.verticalScrollBar().setValue(self._scroll_end_y)
+
+        target = widget.mapTo(self.widget(), QPoint(0, 0)).y()
+        vh = self.viewport().height()
+        target -= int(vh * 0.15)
+        sb = self.verticalScrollBar()
+        target = max(0, min(target, sb.maximum()))
+
+        if pcfg.animation_fps < 0:
+            sb.setValue(target)
+            return
+
+        self._scroll_start_y = sb.value()
+        self._scroll_end_y = target
+        self._scroll_duration = 350
+        self._scroll_elapsed.start()
+        self._animating_scroll = True
+        self._scroll_timer.start(_scroll_interval())
+
+    def wheelEvent(self, event):
+        delta = event.angleDelta().y()
+        if delta == 0:
+            event.accept()
+            return
+
+        sb = self.verticalScrollBar()
+        direction = 1 if delta > 0 else -1
+
+        if pcfg.animation_fps < 0:
+            sb.setValue(sb.value() - delta * 100 // 120)
+            event.accept()
+            return
+
+        offset = direction * 100
+        if self._animating_scroll:
+            self._scroll_end_y = max(0, min(
+                self._scroll_end_y - offset, sb.maximum()
+            ))
         else:
-            self.ensureWidgetVisible(widget, yMargin=widget.height() * 7)
+            self._scroll_easing.setType(QEasingCurve.Type.OutCubic)
+            self._scroll_start_y = sb.value()
+            self._scroll_end_y = max(0, min(
+                self._scroll_start_y - offset, sb.maximum()
+            ))
+            self._scroll_duration = 150
+            self._scroll_elapsed.start()
+            self._animating_scroll = True
+            self._scroll_timer.start(_scroll_interval())
+
+        event.accept()
+
+    def _update_scroll(self):
+        elapsed = self._scroll_elapsed.elapsed()
+        progress = min(elapsed / self._scroll_duration, 1.0)
+        eased = self._scroll_easing.valueForProgress(progress)
+
+        current = int(round(
+            self._scroll_start_y + (self._scroll_end_y - self._scroll_start_y) * eased
+        ))
+        self.verticalScrollBar().setValue(current)
+
+        if progress >= 1.0:
+            self._scroll_timer.stop()
+            self._animating_scroll = False
+            # Trigger final sync so nav matches settled scroll position
+            self.verticalScrollBar().valueChanged.emit(self.verticalScrollBar().value())
 
 
 DEFAULT_SHORTCUTS = {
@@ -847,7 +1182,6 @@ class ConfigPanel(Widget):
     reload_textstyle = Signal(bool)
     font_exclusion_changed = Signal()
     profiles_changed = Signal()
-    theme_changed = Signal()
     shortcuts_changed = Signal()
     presets_changed = Signal()
 
@@ -1155,27 +1489,29 @@ class ConfigPanel(Widget):
             label_save, save_widget, object_name="GroupSave"
         )
 
-        # === General: Miscellaneous (theme + shortcut editor) ===
+        # === General: Miscellaneous (shortcut editor + animation) ===
         misc_widget = QWidget()
         misc_layout = QVBoxLayout(misc_widget)
         misc_layout.setContentsMargins(0, 0, 0, 0)
         misc_layout.setSpacing(8)
 
-        # Theme selector row
-        theme_row = QHBoxLayout()
-        theme_row.setSpacing(6)
-        self.theme_combo = ConfigComboBox()
-        self.theme_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
-        self.theme_combo.activated.connect(self._on_theme_selected)
-        theme_row.addWidget(self.theme_combo)
-
-        self.edit_theme_btn = QPushButton(self.tr("Edit..."), parent=self)
-        self.edit_theme_btn.setFixedWidth(80)
-        self.edit_theme_btn.clicked.connect(self._on_edit_theme)
-        theme_row.addWidget(self.edit_theme_btn)
-        theme_row.addStretch()
-
-        misc_layout.addLayout(theme_row)
+        # Animation mode
+        anim_row = QHBoxLayout()
+        anim_row.setSpacing(6)
+        anim_label = QLabel(self.tr("Animation"))
+        anim_row.addWidget(anim_label)
+        self.anim_combo = ConfigComboBox()
+        self.anim_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
+        self.anim_combo.addItems([
+            self.tr("Auto (match display)"),
+            "60 FPS",
+            "30 FPS",
+            self.tr("Off (no animation)"),
+        ])
+        self.anim_combo.activated.connect(self._on_anim_mode_changed)
+        anim_row.addWidget(self.anim_combo)
+        anim_row.addStretch()
+        misc_layout.addLayout(anim_row)
 
         # Shortcut button
         self.shortcut_btn = QPushButton(self.tr("Edit Shortcuts..."), parent=self)
@@ -1186,13 +1522,13 @@ class ConfigPanel(Widget):
         self.shortcut_block = generalConfigPanel.addGroupedBlock(
             label_shortcuts, misc_widget
         )
-        self._refresh_theme_combo()
 
         # === Navigation list (replaces horizontal nav bar) ===
-        self.navList = QListWidget()
+        self.navList = NavList()
         self.navList.setFixedWidth(NAVLIST_WIDTH)
         self.navList.setSpacing(2)
         self.navList.setFrameShape(QListWidget.NoFrame)
+        self.navList.setObjectName("ConfigNavList")
 
         # Build section list with group headers
         sections = [
@@ -1213,8 +1549,8 @@ class ConfigPanel(Widget):
             if target == "_header":
                 item = QListWidgetItem(text)
                 item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
-                f = item.font()
-                f.setPointSize(NAVLIST_HEADER_FONTSIZE)
+                f = QFont()
+                f.setPixelSize(NAVLIST_HEADER_FONTSIZE)
                 f.setBold(True)
                 item.setFont(f)
                 self.navList.addItem(item)
@@ -1222,15 +1558,27 @@ class ConfigPanel(Widget):
             elif target == "_sep":
                 item = QListWidgetItem("")
                 item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
-                item.setSizeHint(QSize(0, 4))
+                item.setSizeHint(QSize(0, 16))
                 self.navList.addItem(item)
                 self._nav_items.append((None, self.navList.count() - 1))
             else:
                 item = QListWidgetItem(text)
+                f = QFont()
+                f.setPixelSize(NAVLIST_ITEM_FONTSIZE)
+                item.setFont(f)
                 self.navList.addItem(item)
                 self._nav_items.append((target, self.navList.count() - 1))
 
         self.navList.currentRowChanged.connect(self._on_nav_row_changed)
+        self.configContent.verticalScrollBar().valueChanged.connect(
+            self._on_content_scrolled
+        )
+
+        # Select first section by default
+        for first_target, first_row in self._nav_items:
+            if first_target is not None:
+                self.navList.setCurrentRow(first_row)
+                break
 
         # Layout: fixed horizontal layout with nav list | content (no resize)
         main_layout = QHBoxLayout(self)
@@ -1347,6 +1695,32 @@ class ConfigPanel(Widget):
         if target is not None:
             self.configContent.scrollToWidget(target)
 
+    def _on_content_scrolled(self, value: int):
+        """Auto-sync nav selection to the section visible at viewport top.
+        Skips during animation to avoid flickering; final sync fires after
+        animation settles via _update_scroll.
+        """
+        if self.configContent._animating_scroll:
+            return
+        content = self.configContent
+        vp_top = value + 1
+
+        best_idx = -1
+        for i, (target, _) in enumerate(self._nav_items):
+            if target is None:
+                continue
+            widget_top = target.mapTo(content.widget(), QPoint(0, 0)).y()
+            if widget_top > vp_top:
+                break
+            best_idx = i
+
+        if best_idx >= 0:
+            row = self._nav_items[best_idx][1]
+            if self.navList.currentRow() != row:
+                self.navList.blockSignals(True)
+                self.navList.setCurrentRow(row)
+                self.navList.blockSignals(False)
+
     def _nav_select(self, section_widget) -> int:
         """Select the nav-list row whose target matches *section_widget*.
         Returns the row index, or -1 if not found.
@@ -1395,157 +1769,13 @@ class ConfigPanel(Widget):
         dialog.exec()
         self.shortcuts_changed.emit()
 
-    # ── Theme management ──
+    def _on_anim_mode_changed(self):
+        idx = self.anim_combo.currentIndex()
+        mapping = {0: 0, 1: 60, 2: 30, 3: -1}
+        pcfg.animation_fps = mapping.get(idx, 0)
+        from utils.config import save_config
 
-    def _refresh_theme_combo(self):
-        """Rebuild the theme combo box with all available themes."""
-        from .misc import load_all_themes, load_custom_themes
-
-        all_themes = load_all_themes()
-        custom_themes = load_custom_themes()
-        current = pcfg.dark_theme if pcfg.darkmode else pcfg.light_theme
-
-        self.theme_combo.clear()
-        for name in all_themes:
-            is_custom = name in custom_themes
-            label = name if is_custom else f"{name} ({self.tr('built-in')})"
-            self.theme_combo.addItem(label, name)
-
-        idx = self.theme_combo.findData(current)
-        if idx >= 0:
-            self.theme_combo.setCurrentIndex(idx)
-
-        self._update_theme_buttons()
-
-    def _update_theme_buttons(self):
-        """Enable/disable Edit/Delete based on whether the selected theme is custom."""
-        from .misc import load_custom_themes
-
-        theme_name = self.theme_combo.currentData()
-        if not theme_name:
-            return
-        is_custom = theme_name in load_custom_themes()
-        self.edit_theme_btn.setEnabled(True)
-
-    def _on_theme_selected(self):
-        """Apply the selected theme for the current mode."""
-        from .misc import load_all_themes
-
-        theme_name = self.theme_combo.currentData()
-        if not theme_name:
-            return
-        all_themes = load_all_themes()
-        if theme_name not in all_themes:
-            return
-
-        base = all_themes[theme_name].get("_base", theme_name)
-        is_dark = "dark" in base.lower()
-        if is_dark:
-            pcfg.dark_theme = theme_name
-        else:
-            pcfg.light_theme = theme_name
-        self.save_config.emit()
-        self._update_theme_buttons()
-        self.theme_changed.emit()
-
-    def _on_new_theme(self):
-        """Clone the currently selected theme and open the editor."""
-        from .misc import load_all_themes
-        from .theme_editor import ThemeEditorDialog
-
-        theme_name = self.theme_combo.currentData()
-        if not theme_name:
-            return
-
-        all_themes = load_all_themes()
-        source = all_themes.get(theme_name)
-        if not source:
-            return
-
-        base = source.get("_base", theme_name)
-        import random
-
-        new_name = f"{base}-custom-{random.randint(100, 999)}"
-
-        from .misc import load_custom_themes
-
-        custom = load_custom_themes()
-        clone = dict(source)
-        clone["_base"] = base
-        custom[new_name] = clone
-        try:
-            import json
-            import os
-
-            os.makedirs(os.path.dirname(C.CUSTOM_THEME_PATH), exist_ok=True)
-            with open(C.CUSTOM_THEME_PATH, "w", encoding="utf-8") as f:
-                json.dump(custom, f, indent=4, ensure_ascii=False)
-        except Exception:
-            return
-
-        dlg = ThemeEditorDialog(new_name, self.window(), parent=self)
-        dlg.themeSaved.connect(self._refresh_theme_combo)
-        dlg.themeSaved.connect(self.theme_changed.emit)
-        dlg.exec()
-
-    def _on_edit_theme(self):
-        """Open the theme editor for the selected theme."""
-        from .theme_editor import ThemeEditorDialog
-
-        theme_name = self.theme_combo.currentData()
-        if not theme_name:
-            return
-
-        dlg = ThemeEditorDialog(theme_name, self.window(), parent=self)
-        dlg.themeSaved.connect(self._refresh_theme_combo)
-        dlg.themeSaved.connect(self.theme_changed.emit)
-        dlg.exec()
-
-    def _on_delete_theme(self):
-        """Delete the selected custom theme."""
-        from qtpy.QtWidgets import QMessageBox
-
-        from .misc import load_custom_themes
-
-        theme_name = self.theme_combo.currentData()
-        if not theme_name:
-            return
-
-        custom = load_custom_themes()
-        if theme_name not in custom:
-            return
-
-        reply = QMessageBox.question(
-            self,
-            self.tr("Delete Theme"),
-            self.tr('Delete theme "%s"? This cannot be undone.') % theme_name,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if reply != QMessageBox.StandardButton.Yes:
-            return
-
-        del custom[theme_name]
-        try:
-            import json
-
-            with open(C.CUSTOM_THEME_PATH, "w", encoding="utf-8") as f:
-                json.dump(custom, f, indent=4, ensure_ascii=False)
-        except Exception:
-            return
-
-        # Fall back to built-in if the deleted theme was active
-        if pcfg.dark_theme == theme_name:
-            pcfg.dark_theme = "eva-dark"
-        if pcfg.light_theme == theme_name:
-            pcfg.light_theme = "eva-light"
-        self.save_config.emit()
-        self._refresh_theme_combo()
-        self.theme_changed.emit()
-
-    def refresh_theme_ui(self):
-        """Called from outside (e.g. darkmode toggle) to refresh theme combo."""
-        self._refresh_theme_combo()
+        save_config()
 
     def hideEvent(self, e) -> None:
         self.save_config.emit()
@@ -1583,5 +1813,8 @@ class ConfigPanel(Widget):
         self.load_model_checker.setChecked(pcfg.module.load_model_on_demand)
         self.empty_runcache_checker.setChecked(pcfg.module.empty_runcache)
         self.max_font_size_edit.setValue(pcfg.max_font_size)
+
+        anim_idx = {0: 0, 60: 1, 30: 2, -1: 3}.get(pcfg.animation_fps, 0)
+        self.anim_combo.setCurrentIndex(anim_idx)
 
         self.blockSignals(False)

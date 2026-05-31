@@ -1,166 +1,155 @@
 # BallonsTranslator-lite
 
-> **Note**: This project is under active refactoring. The README is AI-generated and may not reflect all recent changes. A manual update will follow once the codebase stabilizes.
+[简体中文](README.md) | [English](README_EN.md)
 
-A lightweight manga/image translation tool based on [BallonsTranslator](https://github.com/dmMaze/BallonsTranslator). Preserves the full lettering pipeline with drastically reduced size and redundant modules removed. Supports fully offline CPU inference.
+<!-- SCREENSHOT: Main interface overview -->
 
-## Features
+A lightweight manga/comic translation tool based on [BallonsTranslator](https://github.com/dmMaze/BallonsTranslator).
 
-### Translation Pipeline
+> **Note**: This project is under active refactoring. The README may not reflect all recent changes — when in doubt, the actual behavior takes precedence.
 
-- **One-click pipeline**: text detection → OCR → translation → inpainting → typesetting, with batch processing and page range selection
-- **Offline CPU inference**: bundled CPU-only PyTorch, no GPU required. GPU mode auto-detects system PyTorch with CUDA, falls back to CPU if unavailable
+---
 
-### Image Editing
+## About This Project
 
-- **Inpainting brush**: paint over text regions to remove
-- **Selection tools**: rectangle and lasso selection for batch removal
-- **Mask editing**: manually adjust text region masks
+BallonsTranslator was a full-featured open-source lettering tool covering numerous translation engines, OCR backends, and inpainting pipelines. But more features meant a steeper learning curve — new users faced a dozen translator options and OCR engines with little guidance on what to pick, while most of them had already been superseded by LLM-based translation in everyday use.
 
-### Typesetting
+This fork exists to **keep the full lettering pipeline while drastically lowering the barrier to entry**:
 
-- **WYSIWYG editing**: edit translations directly on canvas with font, size, color, stroke, alignment, line spacing, letter spacing controls
-- **Shadow & gradient**: PS-style clock dial for intuitive control over shadow angle, distance, blur, and gradient direction
-- **Text style presets**: save and reuse font style configurations, with partial override support
-- **Font filtering**: exclude unused fonts to streamline the font list
+### Streamlined modules
 
-### Search & Replace
+Dozens of translators (Baidu, Caiyun, DeepL, Google, Youdao, Papago…) and OCR engines (PaddleOCR, Google Vision, Bing Lens…) were removed — traditional machine translation no longer competes with LLMs for non-real-time scenarios, and low-quality OCR engines only add noise. Fewer choices means a cleaner config panel and less decision fatigue.
 
-- **Page search**: find and replace within the current page
-- **Global search**: slide-in panel with cross-page search (full text / source / translation)
-- **Batch replace**: replace matching text across all pages at once
+Heavy inpainting pipelines like Flux Inpaint were dropped in favor of LaMa (best quality) and AOT (lightweight). Features like Saladict dictionary lookup, keyword substitution, and headless mode — which added complexity without daily utility — were removed as well.
 
-### AI Assistant
+### Simplified interaction
 
-- **Natural language interaction**: control the project via chat panel — modify translations, adjust styles, query text blocks, etc.
-- OpenAI-compatible API with configurable model and parameters
+The UI and interaction flow have been reworked to be more intuitive. Specifics are covered in the workflow section and video tutorials rather than listed here.
 
-### Other
+### Lower hardware requirements
 
-- **Theme switcher**: multiple built-in color themes with light/dark mode support
-- **Keyboard shortcuts**: customizable shortcuts with save/load profiles
-- **Export**: Text export (TXT)
-- **Continuous reading**: multi-page reading and translation for long strips
-- **Preview mode**: quick source/translation comparison
+Bundled CPU-only PyTorch means the full translation pipeline runs without an NVIDIA GPU. GPU architecture is auto-detected and matched to the appropriate CUDA version — no manual environment setup needed.
 
-## Module Inventory
+### Bottom line
 
-### Text Detection
+The complete project (models + CPU PyTorch) is approximately **1.8 GB** and easy to package for portability.
 
-| Module | Description |
-|------|------|
-| CTD (default) | CNN-based text detection, fast and accurate |
-| YSG | YOLO-based text detection |
-
-### OCR
-
-| Module | Description |
-|------|------|
-| MIT48px-CTC (default) | Local OCR, no GPU required |
-| LLM API OCR | Vision-capable LLM API for OCR |
-| LM Studio | Local LM Studio integration |
-| None | Disable OCR (manual text input) |
-
-### Translation
-
-| Module | Description |
-|------|------|
-| LLM API | Generic LLM API translator, OpenAI-compatible protocol |
-| Sakura | Sakura translation model |
-
-### Inpainting
-
-| Module | Description |
-|------|------|
-| LaMa 512px (default) | Best quality, clean removal |
-| AOT | Lightweight and fast, low resource usage |
-
-## What's Stripped
-
-Compared to upstream [BallonsTranslator](https://github.com/dmMaze/BallonsTranslator), this fork:
-
-- **Translators**: removed Baidu, Caiyun, DeepL, DeepLX, Google, Youdao, Papago, Sugoi, M2M100, Yandex and others (traditional MT no longer competes with LLMs for non-real-time scenarios)
-  - Kept and added mainstream LLM API translators (note: some domestic API providers apply content filters that may reject sensitive input)
-- **OCR engines**: removed PaddleOCR, Google Vision, Bing Lens, macOS/Windows native OCR, Manga OCR, OneOCR, Stariver and other rarely-used or low-quality engines
-  - Local OCR defaults to MIT48px-CTC; LLM API OCR and LM Studio integration retained
-- **Inpainting**: removed Flux Inpaint pipeline (heavy dependencies, large size) and other models with no clear advantage; kept LaMa 512px (best quality) and AOT (lightweight)
-- **Other removals**: Saladict dictionary integration, keyword substitution panel, continuous headless mode, system HuggingFace cache option
-- **Dependencies**: trimmed requirements.txt, removed keyboard, deeplx, saladict and other unnecessary packages
-
-The complete project including models, dependencies, and CPU PyTorch is approximately **1.8 GB** and can be easily packaged for portability.
+---
 
 ## Quick Start
 
-> Note: The upstream project supports macOS and AMD GPUs, but lacking test hardware, this fork targets Windows CUDA / CPU only.
-> Upstream macOS build scripts are included for your own testing (`scripts/build-macos-app.sh`, `scripts/macos-build-script-arm64.sh`); no technical support is provided for the reasons above.
-
-Do NOT use the Microsoft Store version of Python. The WindowsApps directory leaves a `python.exe` placeholder that causes redirects even after uninstalling. If you already installed it, search for "Python opens Windows Store" for solutions.
-
-### Windows Quick Launch
+### Windows One-Click
 
 1. Download the source code and extract to a local directory
-2. Run `launch_win.bat` (GPU mode) or `launch_cpu.bat` (CPU-only mode)
-3. Model files will be downloaded automatically on first launch — keep your internet connection active
+2. Run a launch script:
+   - `launch_win_update.bat` — GPU mode, auto-checks for updates on each launch (recommended)
+   - `launch_win.bat` — GPU mode, skips update check
+   - `launch_cpu.bat` — CPU-only mode, skips update check
+3. Model files (~700 MB) are downloaded automatically on first launch — keep your internet connection active
 
 ### Run from Source
 
 ```bash
-git clone https://github.com/dmMaze/BallonsTranslator-lite.git
+git clone https://github.com/fclx512/BallonsTranslator-lite.git
 cd BallonsTranslator-lite
 
-# GPU mode (auto-detects system PyTorch + CUDA, falls back to CPU)
+# GPU mode: auto-detects system PyTorch + CUDA, falls back to CPU
 python launch.py
 
-# CPU mode (force bundled CPU PyTorch)
+# CPU mode: force CPU-only
 python launch.py --cpu
 
-# Update
+# Update code
 python launch.py --update
 ```
 
-On first launch, PyTorch and other dependencies will be installed automatically, and model files (~700MB) will be downloaded. If the download fails, place the `data` directory in the project root manually.
+Dependencies and model files are installed automatically on first launch. If auto-download fails, place the `data` directory in the project root manually.
 
-GPU mode auto-detects PyTorch with CUDA from your system Python. If an RTX 50 series (Blackwell) GPU is detected, it automatically switches to CUDA 12.8+ nightly builds.
+GPU mode auto-detects NVIDIA GPU architecture (Kepler through Blackwell) and selects the appropriate CUDA version. RTX 50 series (Blackwell) auto-switches to CUDA 12.8+ nightly; older cards receive generation-appropriate recommendations.
 
-## Usage
+> The upstream supports macOS and AMD GPUs, but lacking test hardware this fork targets Windows CUDA / CPU only.
 
-### Basic Workflow
+---
 
-1. Open a folder containing manga/comic images
-2. Configure source and target languages in the settings panel
-3. Click "Run" and wait for the pipeline to finish
-4. Double-click text blocks on the canvas to edit unsatisfactory translations
+## Feature Overview
 
-### Text Editing
+(Detailed workflow is covered in video tutorials.)
 
-- Double-click a text block on the canvas to enter edit mode
-- Adjust font, size, color, stroke and other properties in the right-side font panel
-- Save text styles as presets for quick reuse
+**One-click translation pipeline** — text detection → OCR → translation → inpainting → typesetting, fully automatic
 
-### Inpainting Tools
+<!-- SCREENSHOT: Before/after pipeline comparison -->
 
-- Use the inpainting brush to paint over areas to be restored
-- Use rectangle/lasso tools to select regions for batch removal
+**Typesetting** — double-click any text block on the canvas to edit. Font, size, stroke color, alignment, line spacing, shadow and gradient are all adjustable. Style presets let you apply consistent formatting across pages
+
+<!-- SCREENSHOT: Canvas editing with effects -->
+
+**Inpainting** — brush tool for targeted text removal, rectangle/lasso selection for batch clearing, and mask editing for fine control
+
+<!-- SCREENSHOT: Before/after inpainting comparison -->
+
+**AI assistant** — modify translations and styles through natural language in the chat panel. Changes are reviewed item by item before being applied
+
+<!-- SCREENSHOT: AI chat panel + review window -->
+
+**Search & replace** — within a page or across pages, search source text and/or translations with batch replace
+
+**Customization** — multiple color themes (light/dark), rebindable keyboard shortcuts
+
+---
+
+## Module Reference
+
+| Stage | Available Modules |
+|-------|------------------|
+| Text Detection | CTD (default), YSG |
+| OCR | MIT48px-CTC (default), LLM API OCR, LM Studio, Disabled |
+| Translation | LLM API (OpenAI-compatible), Sakura |
+| Inpainting | LaMa 512px (default), AOT |
+
+> Want to add your own module? See [Module Developer Guide](docs/how_to_add_new_translator.md)
+
+---
 
 ## FAQ
 
 **PyTorch + CUDA not detected?**
-Ensure your system Python has PyTorch with CUDA installed:
+
+Make sure your system Python has CUDA-enabled PyTorch:
 
 ```bash
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
-**RTX 50 GPU CUDA not available?**
-Blackwell architecture requires CUDA 12.8+. The app auto-switches to nightly builds. To manually reinstall:
+**RTX 50 series CUDA not available?**
+
+Blackwell requires CUDA 12.8+. Manually reinstall:
 
 ```bash
 pip uninstall torch torchvision torchaudio ultralytics -y
 python launch.py --reinstall-torch
 ```
 
+**Older GPUs (GTX 10 series, etc.) — CUDA not available?**
+
+Maxwell/Pascal and other older architectures may work better with CUDA 11.8:
+
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```
+
+Kepler (GTX 6xx / 7xx) may not be supported by PyTorch 2.x — use CPU mode: `python launch.py --cpu`
+
 **How to update?**
-Run `python launch.py --update` in the project root directory.
+
+- Portable users: use `launch_win_update.bat` — auto-checks GitHub for updates on every launch and applies them on next restart. No git required.
+- Source users: `python launch.py --update` (prefers `git pull`, falls back to direct download if git is unavailable)
+- Or click About → Check for Updates in the app.
+
+**How to customize shortcuts?**
+
+See [Shortcuts Guide](docs/shortcuts.md)
+
+---
 
 ## Acknowledgement
 
