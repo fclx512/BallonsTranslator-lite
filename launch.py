@@ -9,7 +9,7 @@ from pathlib import Path
 from platform import platform
 
 BRANCH = "main"
-VERSION = "beta-20260531-01"
+VERSION = "beta-20260601-01"
 
 python = sys.executable
 git = os.environ.get("GIT", "git")

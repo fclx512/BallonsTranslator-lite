@@ -425,6 +425,142 @@
             <source>Reset to Default</source>
             <translation>恢复默认</translation>
         </message>
+        <!-- Action name labels in shortcut editor rows -->
+        <message>
+            <source>Page Up</source>
+            <translation>上一页</translation>
+        </message>
+        <message>
+            <source>Page Down</source>
+            <translation>下一页</translation>
+        </message>
+        <message>
+            <source>Page Up (alt)</source>
+            <translation>上一页（备用）</translation>
+        </message>
+        <message>
+            <source>Page Down (alt)</source>
+            <translation>下一页（备用）</translation>
+        </message>
+        <message>
+            <source>Text Editor</source>
+            <translation>文本编辑</translation>
+        </message>
+        <message>
+            <source>Text Block</source>
+            <translation>文本块</translation>
+        </message>
+        <message>
+            <source>Draw Board</source>
+            <translation>画板</translation>
+        </message>
+        <message>
+            <source>Zoom In</source>
+            <translation>放大</translation>
+        </message>
+        <message>
+            <source>Zoom Out</source>
+            <translation>缩小</translation>
+        </message>
+        <message>
+            <source>Preview</source>
+            <translation>预览</translation>
+        </message>
+        <message>
+            <source>Delete</source>
+            <translation>删除</translation>
+        </message>
+        <message>
+            <source>Delete (alt)</source>
+            <translation>删除（备用）</translation>
+        </message>
+        <message>
+            <source>Select All</source>
+            <translation>全选</translation>
+        </message>
+        <message>
+            <source>Bold</source>
+            <translation>粗体</translation>
+        </message>
+        <message>
+            <source>Italic</source>
+            <translation>斜体</translation>
+        </message>
+        <message>
+            <source>Underline</source>
+            <translation>下划线</translation>
+        </message>
+        <message>
+            <source>Undo</source>
+            <translation>撤销</translation>
+        </message>
+        <message>
+            <source>Redo</source>
+            <translation>重做</translation>
+        </message>
+        <message>
+            <source>Page Search</source>
+            <translation>页面搜索</translation>
+        </message>
+        <message>
+            <source>Global Search</source>
+            <translation>全局搜索</translation>
+        </message>
+        <message>
+            <source>Escape</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <source>Inpaint</source>
+            <translation>局部修复</translation>
+        </message>
+        <message>
+            <source>Hand Tool</source>
+            <translation>手型工具</translation>
+        </message>
+        <message>
+            <source>Rect Tool</source>
+            <translation>矩形工具</translation>
+        </message>
+        <message>
+            <source>Inpaint Tool</source>
+            <translation>修复工具</translation>
+        </message>
+        <message>
+            <source>Pen Tool</source>
+            <translation>画笔工具</translation>
+        </message>
+        <message>
+            <source>Merge Tool</source>
+            <translation>合并工具</translation>
+        </message>
+    </context>
+    <context>
+        <name>ShortcutEditor</name>
+        <message>
+            <source>Navigation</source>
+            <translation>导航</translation>
+        </message>
+        <message>
+            <source>View</source>
+            <translation>视图</translation>
+        </message>
+        <message>
+            <source>Edit</source>
+            <translation>编辑</translation>
+        </message>
+        <message>
+            <source>Tools</source>
+            <translation>工具</translation>
+        </message>
+        <message>
+            <source>Search</source>
+            <translation>搜索</translation>
+        </message>
+        <message>
+            <source>General</source>
+            <translation>通用</translation>
+        </message>
     </context>
     <context>
         <name>DrawingPanel</name>

@@ -317,7 +317,14 @@ class MainWindow(mainwindow_cls):
         # Config panel as floating overlay (not in stack, animates slide)
         self.configPanel.setParent(self.centralStackWidget)
         self.configPanel.setVisible(False)
-        self._configSlide = OverlaySlider(self.configPanel, direction="right")
+        self._configSlide = OverlaySlider(
+            self.configPanel,
+            direction="right",
+            duration=500,
+            split_mode=True,
+            split_left_widget=self.configPanel.navList,
+            split_right_widget=self.configPanel.configContent,
+        )
         self._configSlide.on_before_show(lambda: self.configPanel.setFocus())
         self._configSlide.on_after_hide(self._on_config_hidden)
 

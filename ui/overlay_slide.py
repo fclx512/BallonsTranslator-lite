@@ -130,14 +130,39 @@ class OverlaySlider(QObject):
         direction: str = "left",
         duration: int = 350,
         width: Optional[Union[int, Callable[[], int]]] = None,
+        *,
+        split_mode: bool = False,
+        split_left_widget: Optional[QWidget] = None,
+        split_right_widget: Optional[QWidget] = None,
     ):
         super().__init__(widget)
+        if split_mode and (split_left_widget is None or split_right_widget is None):
+            raise ValueError(
+                "split_mode=True requires split_left_widget and split_right_widget"
+            )
         self._widget = widget
         self._direction = direction
         self._width = width
         self._duration = duration
         self._before_show: list[Callable] = []
         self._after_hide: list[Callable] = []
+
+        # Split-mode fields
+        self._split_mode = split_mode
+        self._split_left_widget = split_left_widget
+        self._split_right_widget = split_right_widget
+        self._nav_start_x: int = 0
+        self._nav_end_x: int = 0
+        self._nav_current_x: int = 0
+        self._nav_anim_start_x: int = 0
+        self._nav_anim_end_x: int = 0
+        self._nav_layer_id: Optional[str] = None
+        self._content_start_x: int = 0
+        self._content_end_x: int = 0
+        self._content_current_x: int = 0
+        self._content_anim_start_x: int = 0
+        self._content_anim_end_x: int = 0
+        self._content_layer_id: Optional[str] = None
 
         self._easing = QEasingCurve(QEasingCurve.Type.InOutExpo)
         self._timer = QTimer(self)
@@ -146,7 +171,7 @@ class OverlaySlider(QObject):
 
         self._elapsed = QElapsedTimer()
 
-        # Animation segment
+        # Animation segment (single-layer mode)
         self._start_x: int = 0
         self._end_x: int = 0
         self._current_x: int = 0
@@ -204,6 +229,56 @@ class OverlaySlider(QObject):
                 cb()
             return
 
+        # ── Split mode ────────────────────────────────────────────
+        if self._split_mode:
+            # Place panel at final position and render children for grab
+            widget.setGeometry(0, 0, ow, pw.height())
+            widget.show()
+            widget.raise_()
+            widget.layout().activate()
+
+            nav_pm = self._split_left_widget.grab()
+            content_pm = self._split_right_widget.grab()
+
+            # Move off-screen (don't hide — hideEvent would trigger
+            # ConfigPanel.save_config prematurely).
+            widget.move(pw.width(), 0)
+
+            nav_w = self._split_left_widget.width()
+            spacing = widget.layout().spacing() if widget.layout() else 0
+
+            for cb in self._before_show:
+                cb()
+
+            self._shared = _SharedOverlay.acquire(pw, ow)
+            OverlaySlider._next_z += 1
+            z = OverlaySlider._next_z
+            self._nav_layer_id = f"{z}_nav"
+            self._content_layer_id = f"{z}_content"
+            self._shared.add_layer(self._nav_layer_id, nav_pm, -nav_w, z)
+            self._shared.add_layer(self._content_layer_id, content_pm, ow, z)
+
+            # NavList: off-screen left ➔ final position (0)
+            self._nav_anim_start_x = -nav_w
+            self._nav_anim_end_x = 0
+            self._nav_start_x = -nav_w
+            self._nav_end_x = 0
+            self._nav_current_x = -nav_w
+
+            # ConfigContent: off-screen right ➔ final position (nav_w + spacing)
+            target_content_x = nav_w + spacing
+            self._content_anim_start_x = ow
+            self._content_anim_end_x = target_content_x
+            self._content_start_x = ow
+            self._content_end_x = target_content_x
+            self._content_current_x = ow
+
+            self._on_finished = None
+            self._hiding = False
+            self._start_animation()
+            return
+
+        # ── Single-layer mode (original) ──────────────────────────
         start_x = -ow if self._direction == "left" else pw.width()
         widget.setGeometry(start_x, 0, ow, pw.height())
 
@@ -254,6 +329,52 @@ class OverlaySlider(QObject):
         widget = self._widget
         pw = widget.parentWidget()
         ow = self._resolve_width(pw)
+
+        # ── Split mode ────────────────────────────────────────────
+        if self._split_mode:
+            # Ensure panel is fully shown so children render for grab
+            widget.setGeometry(0, 0, ow, pw.height())
+            widget.show()
+            widget.raise_()
+            widget.layout().activate()
+
+            nav_pm = self._split_left_widget.grab()
+            content_pm = self._split_right_widget.grab()
+            widget.hide()
+
+            nav_w = self._split_left_widget.width()
+            spacing = widget.layout().spacing() if widget.layout() else 0
+            content_rest_x = nav_w + spacing
+
+            self._shared = _SharedOverlay.acquire(pw, ow)
+            OverlaySlider._next_z += 1
+            z = OverlaySlider._next_z
+            self._nav_layer_id = f"{z}_nav"
+            self._content_layer_id = f"{z}_content"
+            self._shared.add_layer(self._nav_layer_id, nav_pm, 0, z)
+            self._shared.add_layer(self._content_layer_id, content_pm,
+                                   content_rest_x, z)
+
+            # NavList: visible (0) ➔ off-screen left (-nav_w)
+            self._nav_anim_start_x = 0
+            self._nav_anim_end_x = -nav_w
+            self._nav_start_x = 0
+            self._nav_end_x = -nav_w
+            self._nav_current_x = 0
+
+            # ConfigContent: visible (content_rest_x) ➔ off-screen right (ow)
+            self._content_anim_start_x = content_rest_x
+            self._content_anim_end_x = ow
+            self._content_start_x = content_rest_x
+            self._content_end_x = ow
+            self._content_current_x = content_rest_x
+
+            self._on_finished = self._on_hidden
+            self._hiding = True
+            self._start_animation()
+            return
+
+        # ── Single-layer mode (original) ──────────────────────────
         end_x = -ow if self._direction == "left" else pw.width()
 
         # Render visible panel, then move off-screen so bg stays clean
@@ -283,10 +404,13 @@ class OverlaySlider(QObject):
             self._shared.resize_for_parent()
         elif self._widget.isVisible():
             ow = self._resolve_width(pw)
-            self._widget.setGeometry(
-                0 if self._direction == "left" else pw.width() - ow,
-                0, ow, pw.height(),
-            )
+            if self._split_mode:
+                self._widget.setGeometry(0, 0, ow, pw.height())
+            else:
+                self._widget.setGeometry(
+                    0 if self._direction == "left" else pw.width() - ow,
+                    0, ow, pw.height(),
+                )
 
     # ── Internals ───────────────────────────────────────────────────
 
@@ -299,9 +423,28 @@ class OverlaySlider(QObject):
 
     def _reverse(self, toward_start: bool):
         """Smoothly reverse the running animation."""
-        self._start_x = self._current_x
-        self._end_x = self._anim_start_x if toward_start else self._anim_end_x
-        self._anim_start_x, self._anim_end_x = self._anim_end_x, self._anim_start_x
+        if self._split_mode:
+            # NavList reversal
+            self._nav_start_x = self._nav_current_x
+            self._nav_end_x = (
+                self._nav_anim_start_x if toward_start else self._nav_anim_end_x
+            )
+            self._nav_anim_start_x, self._nav_anim_end_x = (
+                self._nav_anim_end_x, self._nav_anim_start_x
+            )
+            # ConfigContent reversal
+            self._content_start_x = self._content_current_x
+            self._content_end_x = (
+                self._content_anim_start_x if toward_start
+                else self._content_anim_end_x
+            )
+            self._content_anim_start_x, self._content_anim_end_x = (
+                self._content_anim_end_x, self._content_anim_start_x
+            )
+        else:
+            self._start_x = self._current_x
+            self._end_x = self._anim_start_x if toward_start else self._anim_end_x
+            self._anim_start_x, self._anim_end_x = self._anim_end_x, self._anim_start_x
         self._elapsed.start()
 
     def _cancel_current(self):
@@ -310,29 +453,58 @@ class OverlaySlider(QObject):
         self._animating = False
         self._on_finished = None
 
-        if self._shared is not None and self._layer_id is not None:
-            self._shared.remove_layer(self._layer_id)
-            self._layer_id = None
+        if self._shared is not None:
+            if self._split_mode:
+                if self._nav_layer_id:
+                    self._shared.remove_layer(self._nav_layer_id)
+                    self._nav_layer_id = None
+                if self._content_layer_id:
+                    self._shared.remove_layer(self._content_layer_id)
+                    self._content_layer_id = None
+            else:
+                if self._layer_id is not None:
+                    self._shared.remove_layer(self._layer_id)
+                    self._layer_id = None
+                    self._panel_pm = None
             self._shared = None
             self._panel_pm = None
 
     def _cleanup_animation(self):
         """Remove layer and, for show animations, restore the real widget."""
         if not self._hiding:
-            # Show finished — place real widget BEFORE removing the
-            # overlay layer so there is no moment where neither the
-            # overlay composition nor the real widget covers the area.
-            self._widget.setGeometry(
-                self._current_x, 0,
-                self._widget.width(), self._widget.height(),
-            )
-            self._widget.show()
-            self._widget.raise_()
+            if self._split_mode:
+                # Place panel at final position and show real widget
+                self._widget.setGeometry(
+                    0, 0,
+                    self._widget.width(), self._widget.height(),
+                )
+                self._widget.show()
+                self._widget.raise_()
+            else:
+                # Show finished — place real widget BEFORE removing the
+                # overlay layer so there is no moment where neither the
+                # overlay composition nor the real widget covers the area.
+                self._widget.setGeometry(
+                    self._current_x, 0,
+                    self._widget.width(), self._widget.height(),
+                )
+                self._widget.show()
+                self._widget.raise_()
 
-        if self._shared is not None and self._layer_id is not None:
+        if self._shared is not None:
             pw = self._shared.parentWidget()
-            self._shared.remove_layer(self._layer_id)
-            self._layer_id = None
+            if self._split_mode:
+                if self._nav_layer_id:
+                    self._shared.remove_layer(self._nav_layer_id)
+                    self._nav_layer_id = None
+                if self._content_layer_id:
+                    self._shared.remove_layer(self._content_layer_id)
+                    self._content_layer_id = None
+            else:
+                if self._layer_id is not None:
+                    self._shared.remove_layer(self._layer_id)
+                    self._layer_id = None
+                    self._panel_pm = None
             self._shared = None
             self._panel_pm = None
             # Force the parent to repaint the region the overlay covered
@@ -373,14 +545,31 @@ class OverlaySlider(QObject):
         progress = min(elapsed / self._duration, 1.0) if self._duration > 0 else 1.0
         eased = self._easing.valueForProgress(progress)
 
-        self._current_x = int(round(
-            self._start_x + (self._end_x - self._start_x) * eased
-        ))
-
-        if self._shared is not None and self._layer_id is not None:
+        if self._split_mode and self._shared is not None:
+            nav_x = int(round(
+                self._nav_start_x
+                + (self._nav_end_x - self._nav_start_x) * eased
+            ))
+            content_x = int(round(
+                self._content_start_x
+                + (self._content_end_x - self._content_start_x) * eased
+            ))
+            if self._nav_layer_id:
+                self._shared.update_layer(self._nav_layer_id, nav_x)
+            if self._content_layer_id:
+                self._shared.update_layer(self._content_layer_id, content_x)
+            self._nav_current_x = nav_x
+            self._content_current_x = content_x
+        elif self._shared is not None and self._layer_id is not None:
+            self._current_x = int(round(
+                self._start_x + (self._end_x - self._start_x) * eased
+            ))
             self._shared.update_layer(self._layer_id, self._current_x)
         else:
             # Fallback: animate real widget directly
+            self._current_x = int(round(
+                self._start_x + (self._end_x - self._start_x) * eased
+            ))
             self._widget.move(self._current_x, 0)
             self._widget.raise_()
 
