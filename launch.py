@@ -239,7 +239,8 @@ def _detect_user_torch():
 
         print(f"  PyTorch: {_torch_path}")
         print(f"  Site-packages: {_site_packages}")
-        return True
+
+        return _cuda_available
 
     except subprocess.TimeoutExpired:
         print("Timeout checking user PyTorch installation.")

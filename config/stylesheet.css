@@ -308,6 +308,51 @@ QListWidget {
     outline: none;
 }
 
+/* ── Font Style Manager ────────────────────────────────────── */
+#FontStyleManager {
+    background: @widgetBackgroundColor;
+}
+
+#StyleList {
+    border: none;
+    border-right: 1px solid @borderColor;
+    background: @emptyContentBackgroundColor;
+    outline: none;
+}
+
+#StyleList::item {
+    padding: 0px;
+    border: none;
+}
+
+#StyleList::item:selected {
+    background: @hoverBackgroundColor;
+}
+
+#StyleDetail {
+    border: none;
+    background: @widgetBackgroundColor;
+}
+
+#StylePreviewLabel {
+    border-radius: 4px;
+    padding: 8px;
+}
+
+#StyleBlockList {
+    border: 1px solid @borderColor;
+    background: @emptyContentBackgroundColor;
+    alternate-background-color: @widgetBackgroundColor;
+}
+
+#StyleBlockList::item {
+    padding: 3px 6px;
+}
+
+#StyleBlockList::item:hover {
+    background: @hoverBackgroundColor;
+}
+
 QAction {
     min-height: 66px;
 }
@@ -595,6 +640,22 @@ StateChecker#ConfigChecker::indicator:hover
 StateChecker#ConfigChecker::indicator:checked
 {
     image: url(icons/leftbar_config_activate.svg);
+}
+
+StateChecker#StyleMgrChecker::indicator{
+    height: 27px;
+    width: 27px;
+    image: url(icons/leftbar_stylemgr.svg);
+}
+
+StateChecker#StyleMgrChecker::indicator:hover
+{
+    image: url(icons/leftbar_stylemgr_activate.svg);
+}
+
+StateChecker#StyleMgrChecker::indicator:checked
+{
+    image: url(icons/leftbar_stylemgr_activate.svg);
 }
 
 /*https://github.com/PyQt5/PyQt/blob/master/QScrollBar/StyleScrollBar.py*/

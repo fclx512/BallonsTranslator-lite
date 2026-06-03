@@ -67,6 +67,7 @@ from . import shared_widget as SW
 from .ai_change_review import ChangeReviewWindow
 from .ai_chat_panel import AiChatPanel
 from .canvas import Canvas
+from .fontstyle_manager import FontStyleManager
 from .configpanel import ConfigPanel
 from .custom_widget import (
     FrameLessMessageBox,
@@ -184,6 +185,7 @@ class MainWindow(mainwindow_cls):
         self.leftBar.showPageListLabel.clicked.connect(self.pageLabelStateChanged)
         self.leftBar.imgTransChecked.connect(self.setupImgTransUI)
         self.leftBar.configChecked.connect(self.setupConfigUI)
+        self.leftBar.styleMgrChecked.connect(self.showStyleManager)
         self.leftBar.globalSearchChecker.clicked.connect(self.on_set_gsearch_widget)
         self.leftBar.open_dir.connect(self.OpenProj)
         self.leftBar.open_json_proj.connect(self.openJsonProj)
@@ -328,6 +330,26 @@ class MainWindow(mainwindow_cls):
         self._configSlide.on_before_show(lambda: self.configPanel.setFocus())
         self._configSlide.on_after_hide(self._on_config_hidden)
 
+        # Font Style Manager as floating overlay (slides in from right)
+        self.fontStyleManager = FontStyleManager(self.centralStackWidget)
+        self.fontStyleManager.setVisible(False)
+        self._styleMgrSlide = OverlaySlider(
+            self.fontStyleManager,
+            direction="right",
+            duration=500,
+            split_mode=True,
+            split_left_widget=self.fontStyleManager.styleList,
+            split_right_widget=self.fontStyleManager.detailContent,
+        )
+        self._styleMgrSlide.on_before_show(
+            lambda: self.fontStyleManager.refresh(self.imgtrans_proj,
+                                                   self.st_manager)
+        )
+        self._styleMgrSlide.on_after_hide(self._on_stylemgr_hidden)
+        self.fontStyleManager.navigate_to_block.connect(
+            self._on_stylemgr_navigate
+        )
+
         # Search widget as floating overlay (slides in from left)
         self._searchSlide = OverlaySlider(
             self.global_search_widget,
@@ -425,6 +447,11 @@ class MainWindow(mainwindow_cls):
             if self.leftBar.showPageListLabel.isChecked():
                 self.leftBar.showPageListLabel.setChecked(False)
                 self._hidePageListOverlay()
+            # Hide other right-side floating overlays
+            if self.fontStyleManager.isVisible():
+                self.leftBar.styleMgrChecker.setChecked(False)
+            if self.configPanel.isVisible():
+                self.leftBar.configChecker.setChecked(False)
             self._aiChatSlide.show()
         else:
             self._aiChatSlide.hide()
@@ -688,6 +715,9 @@ class MainWindow(mainwindow_cls):
         # Hide AI chat panel when returning to imgtrans mode
         if self.leftBar.aiChatChecker.isChecked():
             self.leftBar.aiChatChecker.setChecked(False)
+        # Hide Font Style Manager when returning to imgtrans mode
+        if self.fontStyleManager.isVisible():
+            self.leftBar.styleMgrChecker.setChecked(False)
         show = self.leftBar.needleftStackWidget()
         is_visible = self.leftStackWidget.isVisible()
         if show and not is_visible:
@@ -717,6 +747,11 @@ class MainWindow(mainwindow_cls):
         return not (hasattr(self, "configPanel") and self.configPanel.isVisible())
 
     def _showConfigOverlay(self):
+        # Close other floating overlays before showing config
+        if self.fontStyleManager.isVisible():
+            self.leftBar.styleMgrChecker.setChecked(False)
+        if self.aiChatPanel.isVisible():
+            self.leftBar.aiChatChecker.setChecked(False)
         self._configSlide.show()
 
     def _hideConfigOverlay(self):
@@ -725,6 +760,55 @@ class MainWindow(mainwindow_cls):
     def _on_config_hidden(self):
         if self.leftBar.configChecker.isChecked():
             self.leftBar.configChecker.setChecked(False)
+
+    def showStyleManager(self):
+        """Toggle the Font Style Manager overlay."""
+        if self.fontStyleManager.isVisible():
+            self._styleMgrSlide.hide()
+        else:
+            # Close other floating overlays before showing
+            if self.configPanel.isVisible():
+                self.leftBar.configChecker.setChecked(False)
+            if self.aiChatPanel.isVisible():
+                self.leftBar.aiChatChecker.setChecked(False)
+            if self.leftBar.globalSearchChecker.isChecked():
+                self.leftBar.globalSearchChecker.setChecked(False)
+                self._hideSearchOverlay()
+            if self.leftBar.showPageListLabel.isChecked():
+                self.leftBar.showPageListLabel.setChecked(False)
+                self._hidePageListOverlay()
+            self._styleMgrSlide.show()
+
+    def _on_stylemgr_hidden(self):
+        if self.leftBar.styleMgrChecker.isChecked():
+            self.leftBar.styleMgrChecker.setChecked(False)
+
+    def _on_stylemgr_navigate(self, pagename: str, block_idx: int):
+        """Switch to *pagename* and select *block_idx* on the canvas."""
+        proj = self.imgtrans_proj
+        if pagename not in proj.pages:
+            return
+        # Switch page if needed
+        if proj.current_img != pagename:
+            if self.save_on_page_changed:
+                self.conditional_save()
+            proj.set_current_img(pagename)
+            self.canvas.clear_undostack(update_saved_step=True)
+            self.canvas.updateCanvas()
+            self.st_manager.updateSceneTextitems()
+            self.titleBar.setTitleContent(page_name=pagename)
+            self.module_manager.handle_page_changed()
+            self.drawingPanel.handle_page_changed()
+        # Select the block
+        try:
+            tbi = self.st_manager.textblk_item_list[block_idx]
+            # Clear existing selection
+            for item in self.canvas.selected_text_items():
+                item.setSelected(False)
+            tbi.setSelected(True)
+            self.canvas.gv.centerOn(tbi)
+        except (IndexError, AttributeError):
+            pass
 
     def _showSearchOverlay(self):
         self._searchSlide.show()
@@ -754,6 +838,7 @@ class MainWindow(mainwindow_cls):
         self._searchSlide.resize()
         self._pageListSlide.resize()
         self._aiChatSlide.resize()
+        self._styleMgrSlide.resize()
 
     def set_display_lang(self, lang: str):
         self.retranslateUI()
@@ -971,6 +1056,7 @@ class MainWindow(mainwindow_cls):
         self.titleBar.global_search_trigger.connect(self.on_global_search)
         self.titleBar.darkmode_trigger.connect(self.on_darkmode_triggered)
         self.titleBar.merge_tool_trigger.connect(self.on_open_merge_tool)
+        self.titleBar.stylemgr_trigger.connect(self.showStyleManager)
         self.titleBar.help_about_triggered.connect(self.show_about_dialog)
 
         self._install_shortcuts()

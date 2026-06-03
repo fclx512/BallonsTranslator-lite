@@ -85,6 +85,7 @@ class LeftBar(Widget):
     recent_proj_list = []
     imgTransChecked = Signal()
     configChecked = Signal()
+    styleMgrChecked = Signal()
     ai_chat_toggled = Signal(bool)
     open_dir = Signal(str)
     open_json_proj = Signal(str)
@@ -113,6 +114,16 @@ class LeftBar(Widget):
         self.aiChatChecker.checked.connect(lambda typ: self.ai_chat_toggled.emit(True))
         self.aiChatChecker.unchecked.connect(
             lambda typ: self.ai_chat_toggled.emit(False)
+        )
+
+        self.styleMgrChecker = StateChecker("stylemgr", uncheckable=True)
+        self.styleMgrChecker.setObjectName("StyleMgrChecker")
+        self.styleMgrChecker.setToolTip(self.tr("Font Style Manager"))
+        self.styleMgrChecker.checked.connect(
+            lambda typ: self.styleMgrChecked.emit()
+        )
+        self.styleMgrChecker.unchecked.connect(
+            lambda typ: self.styleMgrChecked.emit()
         )
 
         self.configChecker = StateChecker("config", uncheckable=True)
@@ -180,6 +191,7 @@ class LeftBar(Widget):
         vlayout.addWidget(self.globalSearchChecker)
         vlayout.addWidget(self.imgTransChecker)
         vlayout.addWidget(self.aiChatChecker)
+        vlayout.addWidget(self.styleMgrChecker)
         vlayout.addItem(QSpacerItem(0, 0, QSizePolicy.Minimum, QSizePolicy.Expanding))
         vlayout.addWidget(self.configChecker)
         vlayout.addWidget(self.runImgtransBtn)
@@ -353,12 +365,14 @@ class TitleBar(Widget):
 
         drawBoardAction = QAction(self.tr("Drawing Board"), self)
         texteditAction = QAction(self.tr("Text Editor"), self)
+        styleMgrAction = QAction(self.tr("Font Style Manager"), self)
+        self.stylemgr_trigger = styleMgrAction.triggered
         self.darkModeAction = darkModeAction = QAction(self.tr("Dark Mode"), self)
         darkModeAction.setCheckable(True)
 
         self.viewMenu = viewMenu = QMenu(self.viewToolBtn)
         viewMenu.addMenu(self.displayLanguageMenu)
-        viewMenu.addActions([drawBoardAction, texteditAction])
+        viewMenu.addActions([drawBoardAction, texteditAction, styleMgrAction])
         viewMenu.addSeparator()
         viewMenu.addAction(darkModeAction)
         self.viewToolBtn.setMenu(viewMenu)

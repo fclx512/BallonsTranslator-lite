@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE TS>
+<?xml version='1.0' encoding='utf-8'?>
 <TS version="2.1" language="zh_CN" sourcelanguage="en">
     <context>
         <name>BottomBar</name>
@@ -425,7 +424,6 @@
             <source>Reset to Default</source>
             <translation>恢复默认</translation>
         </message>
-        <!-- Action name labels in shortcut editor rows -->
         <message>
             <source>Page Up</source>
             <translation>上一页</translation>
@@ -900,6 +898,10 @@
         <message>
             <source>AI Chat</source>
             <translation>AI 聊天</translation>
+        </message>
+        <message>
+            <source>Font Style Manager</source>
+            <translation>字体样式管理器</translation>
         </message>
     </context>
     <context>
@@ -1703,6 +1705,10 @@ Failed: {f}/{t}</source>
             <location filename="../ui/mainwindowbars.py" line="" />
             <source>About</source>
             <translation>关于</translation>
+        </message>
+        <message>
+            <source>Font Style Manager</source>
+            <translation>字体样式管理器</translation>
         </message>
     </context>
     <context>
@@ -3035,6 +3041,157 @@ Apply them now?</source>
         <message>
             <source>Translation</source>
             <translation>译文</translation>
+        </message>
+    </context>
+    <context>
+        <name>StyleDetail</name>
+        <message>
+            <source>(default)</source>
+            <translation>（默认）</translation>
+        </message>
+        <message>
+            <source>Alignment</source>
+            <translation>对齐</translation>
+        </message>
+        <message>
+            <source>Apply</source>
+            <translation>应用</translation>
+        </message>
+        <message>
+            <source>Batch Edit</source>
+            <translation>批量编辑</translation>
+        </message>
+        <message>
+            <source>Blocks Using This Style</source>
+            <translation>使用此样式的文本框</translation>
+        </message>
+        <message>
+            <source>Bold</source>
+            <translation>粗体</translation>
+        </message>
+        <message>
+            <source>Center</source>
+            <translation>居中</translation>
+        </message>
+        <message>
+            <source>Change alignment</source>
+            <translation>修改对齐方式</translation>
+        </message>
+        <message>
+            <source>Change font flags</source>
+            <translation>修改字体标志</translation>
+        </message>
+        <message>
+            <source>Change stroke</source>
+            <translation>修改描边</translation>
+        </message>
+        <message>
+            <source>Change text color</source>
+            <translation>修改文字颜色</translation>
+        </message>
+        <message>
+            <source>Effects</source>
+            <translation>特效</translation>
+        </message>
+        <message>
+            <source>Flags</source>
+            <translation>标志</translation>
+        </message>
+        <message>
+            <source>Font</source>
+            <translation>字体</translation>
+        </message>
+        <message>
+            <source>Font Family</source>
+            <translation>字体家族</translation>
+        </message>
+        <message>
+            <source>Font Size</source>
+            <translation>字号</translation>
+        </message>
+        <message>
+            <source>Foreground</source>
+            <translation>前景色</translation>
+        </message>
+        <message>
+            <source>Gradient</source>
+            <translation>渐变</translation>
+        </message>
+        <message>
+            <source>Horizontal</source>
+            <translation>横排</translation>
+        </message>
+        <message>
+            <source>Italic</source>
+            <translation>斜体</translation>
+        </message>
+        <message>
+            <source>Layout</source>
+            <translation>排版</translation>
+        </message>
+        <message>
+            <source>Left</source>
+            <translation>左对齐</translation>
+        </message>
+        <message>
+            <source>None</source>
+            <translation>无</translation>
+        </message>
+        <message>
+            <source>Pick Stroke Color</source>
+            <translation>选择描边颜色</translation>
+        </message>
+        <message>
+            <source>Pick Text Color</source>
+            <translation>选择文字颜色</translation>
+        </message>
+        <message>
+            <source>Properties</source>
+            <translation>属性</translation>
+        </message>
+        <message>
+            <source>Right</source>
+            <translation>右对齐</translation>
+        </message>
+        <message>
+            <source>Shadow</source>
+            <translation>阴影</translation>
+        </message>
+        <message>
+            <source>Size</source>
+            <translation>大小</translation>
+        </message>
+        <message>
+            <source>Spacing</source>
+            <translation>间距</translation>
+        </message>
+        <message>
+            <source>Stroke</source>
+            <translation>描边</translation>
+        </message>
+        <message>
+            <source>Style</source>
+            <translation>样式</translation>
+        </message>
+        <message>
+            <source>Text Color</source>
+            <translation>文字颜色</translation>
+        </message>
+        <message>
+            <source>Underline</source>
+            <translation>下划线</translation>
+        </message>
+        <message>
+            <source>Vertical</source>
+            <translation>竖排</translation>
+        </message>
+        <message>
+            <source>Weight</source>
+            <translation>字重</translation>
+        </message>
+        <message>
+            <source>Width:</source>
+            <translation>宽度：</translation>
         </message>
     </context>
 </TS>
