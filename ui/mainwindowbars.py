@@ -389,8 +389,14 @@ class TitleBar(Widget):
         mergeToolAction = QAction(self.tr("Region Merge Tool"), self)
         self.merge_tool_trigger = mergeToolAction.triggered
 
+        # PSD 导出
+        psdExportAction = QAction(self.tr("Export as PSD…"), self)
+        self.psd_export_triggered = psdExportAction.triggered
+
         toolsMenu = QMenu(self.toolsToolBtn)
         toolsMenu.addAction(mergeToolAction)
+        toolsMenu.addSeparator()
+        toolsMenu.addAction(psdExportAction)
         self.toolsToolBtn.setMenu(toolsMenu)
         self.toolsToolBtn.setPopupMode(QToolButton.InstantPopup)
 

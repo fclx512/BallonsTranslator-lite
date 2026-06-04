@@ -371,6 +371,26 @@
             <source>comma-separated values</source>
             <translation>逗号分隔的数值</translation>
         </message>
+        <message>
+            <source>Photoshop path</source>
+            <translation>Photoshop 路径</translation>
+        </message>
+        <message>
+            <source>Optional — Photoshop.exe path for COM detection</source>
+            <translation>可选 — Photoshop.exe 路径，用于 COM 检测</translation>
+        </message>
+        <message>
+            <source>Browse</source>
+            <translation>浏览</translation>
+        </message>
+        <message>
+            <source>Select Photoshop executable</source>
+            <translation>选择 Photoshop 可执行文件</translation>
+        </message>
+        <message>
+            <source>Photoshop executable (Photoshop.exe);;Executables (*.exe);;All files (*)</source>
+            <translation>Photoshop 可执行文件 (Photoshop.exe);;可执行文件 (*.exe);;所有文件 (*)</translation>
+        </message>
     </context>
     <context>
         <name>FontExcludeDialog</name>
@@ -1224,6 +1244,37 @@ Failed: {f}/{t}</source>
             <source>── Error applying changes: {e} ──</source>
             <translation>── 应用变更时出错：{e} ──</translation>
         </message>
+        <message>
+            <location filename="../ui/mainwindow.py" line="" />
+            <source>Exported </source>
+            <translation>已导出 </translation>
+        </message>
+        <message>
+            <location filename="../ui/mainwindow.py" line="" />
+            <source> PSD(s).
+
+Output:
+</source>
+            <translation> 个 PSD 文件。
+
+输出目录：
+</translation>
+        </message>
+        <message>
+            <location filename="../ui/mainwindow.py" line="" />
+            <source> ExtendScript(s).
+
+Open Photoshop → File → Scripts → Browse to run each .jsx.
+
+Output:
+</source>
+            <translation> 个 ExtendScript。
+
+打开 Photoshop → 文件 → 脚本 → 浏览以运行每个 .jsx 文件。
+
+输出目录：
+</translation>
+        </message>
     </context>
     <context>
         <name>ModuleManager</name>
@@ -1705,6 +1756,11 @@ Failed: {f}/{t}</source>
             <location filename="../ui/mainwindowbars.py" line="" />
             <source>About</source>
             <translation>关于</translation>
+        </message>
+        <message>
+            <location filename="../ui/mainwindowbars.py" line="" />
+            <source>Export as PSD…</source>
+            <translation>导出为 PSD…</translation>
         </message>
         <message>
             <source>Font Style Manager</source>
@@ -3041,6 +3097,211 @@ Apply them now?</source>
         <message>
             <source>Translation</source>
             <translation>译文</translation>
+        </message>
+    </context>
+    <context>
+        <name>PsdExportDialog</name>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Export PSD</source>
+            <translation>导出 PSD</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Page Range</source>
+            <translation>页码范围</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>All Pages</source>
+            <translation>全部页面</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Export Method</source>
+            <translation>导出方式</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Photoshop COM</source>
+            <translation>Photoshop COM</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>ExtendScript (.jsx)</source>
+            <translation>ExtendScript (.jsx)</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Output Directory</source>
+            <translation>输出目录</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Select output directory...</source>
+            <translation>选择输出目录...</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Browse</source>
+            <translation>浏览</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Layers</source>
+            <translation>图层</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Include mask as reference layer</source>
+            <translation>包含遮罩参考层</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Lock background layer</source>
+            <translation>锁定背景层</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Font Compatibility</source>
+            <translation>字体兼容性</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Export</source>
+            <translation>导出</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>detected</source>
+            <translation>已检测</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>not available</source>
+            <translation>不可用</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>One-click export — get PSD directly</source>
+            <translation>一键导出，直接生成 PSD</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Photoshop will launch (or connect to a running instance) on this machine, create text layers, and save as PSD. No extra steps required.
+
+Requires: Photoshop installed on this computer
+Best for: same-machine translation &amp; editing, quick turnaround</source>
+            <translation>Photoshop 将在此机器上自动启动（或连接到已运行的实例），创建可编辑文字图层并保存为 PSD。无需额外步骤。
+
+前提：此计算机需安装 Photoshop
+适合：翻译与修图在同一台机器、追求效率</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Generate script — flexible execution</source>
+            <translation>生成脚本，灵活执行</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Exports a .jsx script + image files. Run the script on any machine with Photoshop to generate the PSD. No Photoshop dependency at export time.
+
+Requires: Photoshop when running the script
+Best for: cross-machine workflows, no PS on translation machine</source>
+            <translation>导出 .jsx 脚本 + 图片素材。在任意装有 Photoshop 的机器上运行脚本即可生成 PSD。导出时不依赖本机是否安装 PS。
+
+前提：运行脚本时需要 Photoshop
+适合：翻译机未安装 PS、跨机器协作、想手动编辑脚本</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>No text blocks in project.</source>
+            <translation>项目中无文字块。</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>⚠  </source>
+            <translation>⚠  </translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source> font(s) may need manual adjustment in Photoshop: </source>
+            <translation> 个字体可能需要在 Photoshop 中手动调整：</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>✓ All fonts have known PS mappings.</source>
+            <translation>✓ 所有字体均有已知的 PS 映射。</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Page </source>
+            <translation>第 </translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Select Output Directory</source>
+            <translation>选择输出目录</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Photoshop executable path (optional)...</source>
+            <translation>Photoshop 可执行文件路径（可选）...</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Detect</source>
+            <translation>检测</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>detected via custom path</source>
+            <translation>通过自定义路径检测到</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Invalid path</source>
+            <translation>路径无效</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>The specified Photoshop.exe does not exist. Please check the path.</source>
+            <translation>指定的 Photoshop.exe 不存在，请检查路径。</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Detecting...</source>
+            <translation>检测中...</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Trying to launch Photoshop from the specified path...</source>
+            <translation>正在尝试从指定路径启动 Photoshop...</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Select Photoshop executable</source>
+            <translation>选择 Photoshop 可执行文件</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Photoshop executable (Photoshop.exe);;Executables (*.exe);;All files (*)</source>
+            <translation>Photoshop 可执行文件 (Photoshop.exe);;可执行文件 (*.exe);;所有文件 (*)</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Photoshop not found</source>
+            <translation>未找到 Photoshop</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Auto-detection of Photoshop failed. Set the executable path in Settings → Miscellaneous, then restart the export dialog.</source>
+            <translation>自动检测 Photoshop 失败。请在设置 → 杂项中设置可执行文件路径，然后重新打开导出对话框。</translation>
         </message>
     </context>
     <context>

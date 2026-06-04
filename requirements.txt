@@ -1,4 +1,10 @@
-# To install pytorch cuda (gpu) version, please look https://pytorch.org/
+# ==============================================================================
+# Project dependencies -- installed by launch.py via pip install -r requirements.txt
+# Canonical declaration: pyproject.toml -> [project].dependencies (PEP 621).
+# Optional GPU packages (torch, transformers, etc.) are listed in
+# pyproject.toml [project.optional-dependencies].gpu -- install those manually.
+# ==============================================================================
+# GPU PyTorch: https://pytorch.org/
 
 packaging>=23.0
 pydantic>=2.0

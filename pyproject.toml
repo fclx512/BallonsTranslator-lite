@@ -1,3 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "BallonsTranslator-lite"
+description = "漫画/图片翻译工具 — 文字检测 → OCR → 翻译 → 图像修复 → 文字渲染"
+requires-python = ">=3.10"
+dependencies = [
+  "click",
+  "colorama",
+  "einops",
+  "httpx[socks,brotli]",
+  "natsort",
+  "networkx>=3.0",
+  "numpy",
+  "openai>=2.8.1",
+  "opencc-python-reimplemented",
+  "opencv-python>=4.8.1.78; sys_platform == 'win32' or sys_platform == 'linux'",
+  "packaging>=23.0",
+  "pillow>=10.0",
+  "pillow-jxl-plugin>=1.3.4",
+  "py7zr",
+  "pyclipper",
+  "pydantic>=2.0",
+  "PyQt6>=6.6.1",
+  "PyQt6-Qt6>=6.6.2",
+  "pywin32; sys_platform == 'win32'",
+  "pyyaml",
+  "qtpy",
+  "requests",
+  "shapely",
+  "spacy-pkuseg",
+  "termcolor",
+  "tqdm",
+  "ultralytics>=8.4.14",
+]
+
+[project.optional-dependencies]
+gpu = ["torch", "torchvision", "transformers", "diffusers"]
+
 [tool.ruff]
 target-version = "py313"
 exclude = ["ballontrans_pylibs_win"]

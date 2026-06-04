@@ -262,3 +262,71 @@ class MergeThread(ThreadBase):
                 LOGGER.error(f"Failed to write JSON file: {e}")
 
         self.merge_finished.emit(success_count, fail_count)
+
+
+class PsdExportThread(ThreadBase):
+    """PSD export background thread — keeps the GUI responsive during COM calls."""
+
+    page_done = Signal(str, str)  # (page_name, output_path)
+    page_failed = Signal(str, str)  # (page_name, error_message)
+    export_finished = Signal(int)  # success_count
+
+    _thread_exception_type = "PsdExportThread"
+    _thread_error_msg = "PSD export failed"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.exporter = None
+        self.proj = None
+        self.pages_to_export = []
+        self.options = None
+        self.stop_requested = False
+
+    def run_export(self, exporter, proj, pages_to_export, options):
+        """Start the export in a background thread.
+
+        Args:
+            exporter: ``AbstractPsdExporter`` instance (COM already connected).
+            proj: ``ProjImgTrans`` instance.
+            pages_to_export: list of page names.
+            options: ``ExportOptions``.
+        """
+        if self.isRunning():
+            return False
+        self.exporter = exporter
+        self.proj = proj
+        self.pages_to_export = list(pages_to_export)
+        self.options = options
+        self.stop_requested = False
+        self.job = self._run_export
+        self.start()
+        return True
+
+    def request_stop(self):
+        self.stop_requested = True
+
+    def _run_export(self):
+        try:
+            success = 0
+            total = len(self.pages_to_export)
+            for idx, page_name in enumerate(self.pages_to_export):
+                if self.stop_requested:
+                    LOGGER.info(
+                        "PSD export stopped by user after %d/%d pages", idx, total
+                    )
+                    break
+                try:
+                    out_path = self.exporter.export_page(
+                        self.proj, page_name, self.options
+                    )
+                    LOGGER.info("[%d/%d] %s", idx + 1, total, out_path)
+                    success += 1
+                    self.page_done.emit(page_name, out_path)
+                except Exception as e:
+                    msg = str(e)
+                    LOGGER.error("PSD export failed for %s: %s", page_name, msg)
+                    self.page_failed.emit(page_name, msg)
+        finally:
+            self.exporter.cleanup()
+
+        self.export_finished.emit(success)

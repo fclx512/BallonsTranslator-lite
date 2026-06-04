@@ -85,6 +85,7 @@ from .mainwindowbars import BottomBar, LeftBar, TitleBar
 from .misc import QKEY, parse_stylesheet, set_html_family
 from .module_manager import ModuleManager
 from .overlay_slide import OverlaySlider
+from .psd_export_dialog import PsdExportDialog
 from .scenetext_manager import PasteSrcItemsCommand, SceneTextManager, TextPanel
 from .textedit_area import SourceTextEdit, TransTextEdit
 from .textedit_commands import GlobalRepalceAllCommand
@@ -1058,6 +1059,7 @@ class MainWindow(mainwindow_cls):
         self.titleBar.merge_tool_trigger.connect(self.on_open_merge_tool)
         self.titleBar.stylemgr_trigger.connect(self.showStyleManager)
         self.titleBar.help_about_triggered.connect(self.show_about_dialog)
+        self.titleBar.psd_export_triggered.connect(self.on_export_psd)
 
         self._install_shortcuts()
 
@@ -2092,7 +2094,6 @@ class MainWindow(mainwindow_cls):
             dialog.setMinimumWidth(420)
             dialog.setSizeGripEnabled(False)
             layout = QVBoxLayout(dialog)
-            layout.setSizeConstraint(QVBoxLayout.SetFixedSize)
 
             range_frame = QFrame()
             range_frame.setFrameShape(QFrame.Shape.StyledPanel)
@@ -2228,6 +2229,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
 
             # Adaptive mode info label — updates based on project page count
             mode_label = QLabel()
+            mode_label.setWordWrap(True)
             mode_label.setStyleSheet("color: #666; font-style: italic;")
             ai_grid.addWidget(mode_label, 1, 0, 1, 2)
 
@@ -2434,6 +2436,80 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             self.textPanel.formatpanel.textstyle_panel.setStyles(text_styles)
         except Exception as e:
             create_error_dialog(e, self.tr(f"Failed to load from {p}"))
+
+    def on_export_psd(self):
+        """Open the PSD export dialog and run the chosen export method."""
+        dialog = PsdExportDialog(self.imgtrans_proj, parent=self)
+        if not dialog.exec():
+            return
+
+        options = dialog.get_options()
+        blk_lists = self.imgtrans_proj.pages
+        pages_to_export = options.page_filter or list(blk_lists.keys())
+        if not pages_to_export:
+            return
+
+        total_pages = len(blk_lists)
+        filtered = len(pages_to_export)
+        if filtered < total_pages:
+            LOGGER.info(
+                "PSD export: %d/%d pages (filter: %s .. %s)",
+                filtered,
+                total_pages,
+                pages_to_export[0],
+                pages_to_export[-1],
+            )
+        else:
+            LOGGER.info("PSD export: all %d pages", total_pages)
+
+        from utils.psd_exporter import create_exporter
+
+        exporter = create_exporter()
+
+        # Store result context for the completion handler
+        self._psd_result = {
+            "output_dir": options.output_dir,
+            "success": 0,
+        }
+
+        from .custom_widget import ProgressMessageBox
+        from .io_thread import PsdExportThread
+
+        self._psd_thread = PsdExportThread()
+        self._psd_thread.page_done.connect(self._on_psd_page_done)
+        self._psd_thread.page_failed.connect(self._on_psd_page_failed)
+        self._psd_thread.export_finished.connect(self._on_psd_export_finished)
+
+        self._psd_progress = ProgressMessageBox(self.tr("PSD Export"))
+        self._psd_progress.zero_progress()
+        self._psd_progress.stop_clicked.connect(self._psd_thread.request_stop)
+        self._psd_progress.show()
+
+        self._psd_thread.run_export(
+            exporter, self.imgtrans_proj, pages_to_export, options
+        )
+
+    def _on_psd_page_done(self, page_name: str, out_path: str):
+        self._psd_result["success"] += 1
+
+    def _on_psd_page_failed(self, page_name: str, error_msg: str):
+        pass
+
+    def _on_psd_export_finished(self, success_count: int):
+        self._psd_progress.hide()
+        exporter = self._psd_thread.exporter
+        exporter.cleanup()
+
+        result = self._psd_result
+        if result["success"] == 0:
+            return
+
+        create_info_dialog(
+            self.tr("Exported ")
+            + str(result["success"])
+            + self.tr(" ExtendScript(s).\n\nOpen Photoshop → File → Scripts → Browse to run each .jsx.\n\nOutput:\n")
+            + result["output_dir"]
+        )
 
     def export_tstyles(self):
         ddir = osp.dirname(pcfg.text_styles_path)
