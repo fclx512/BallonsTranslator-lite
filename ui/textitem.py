@@ -251,12 +251,24 @@ class TextBlkItem(QGraphicsTextItem):
                 int(self.fontformat.shadow_offset[0] * font_size),
                 int(self.fontformat.shadow_offset[1] * font_size),
             )
-            shadow_map, img_array = apply_shadow_effect(
-                target_map,
-                self.fontformat.shadow_color,
-                self.fontformat.shadow_strength,
-                r,
-            )
+            if paint_stroke:
+                # Generate shadow from text-only alpha mask (exclude stroke).
+                # PS drop shadow only shadows glyphs, not strokes — match that.
+                text_only = self._render_text_only()
+                shadow_map, _ = apply_shadow_effect(
+                    text_only,
+                    self.fontformat.shadow_color,
+                    self.fontformat.shadow_strength,
+                    r,
+                )
+            else:
+                # No stroke — target_map is already text-only
+                shadow_map, _ = apply_shadow_effect(
+                    target_map,
+                    self.fontformat.shadow_color,
+                    self.fontformat.shadow_strength,
+                    r,
+                )
             cm = painter.compositionMode()
             painter.setCompositionMode(
                 QPainter.CompositionMode.CompositionMode_DestinationOver
@@ -267,6 +279,20 @@ class TextBlkItem(QGraphicsTextItem):
         painter.end()
         self.background_pixmap = target_map
         self.repainting = False
+
+    def _render_text_only(self) -> QPixmap:
+        """Render text content without stroke into a fresh transparent pixmap.
+
+        Used to generate shadows from the text alpha mask only, matching PS
+        behavior where drop shadow does not include stroke area.
+        """
+        pm = QPixmap(self.boundingRect().size().toSize())
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        self.document().drawContents(p)
+        p.end()
+        return pm
 
     def docSizeChanged(self):
         self.setCenterTransform()

@@ -17,8 +17,6 @@ class ExportOptions:
 
     output_dir: str
     page_filter: Optional[List[str]] = None  # None = all pages
-    include_mask_layer: bool = True
-    lock_background: bool = True
 
 
 class AbstractPsdExporter(ABC):

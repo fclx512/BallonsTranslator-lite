@@ -2470,6 +2470,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
         self._psd_result = {
             "output_dir": options.output_dir,
             "success": 0,
+            "total": len(pages_to_export),
         }
 
         from .custom_widget import ProgressMessageBox
@@ -2491,24 +2492,27 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
 
     def _on_psd_page_done(self, page_name: str, out_path: str):
         self._psd_result["success"] += 1
+        # Update progress bar
+        total = self._psd_result.get("total", 1)
+        done = self._psd_result["success"]
+        pct = int(done / total * 100)
+        self._psd_progress.updateTaskProgress(pct, f"  ({done}/{total})")
 
     def _on_psd_page_failed(self, page_name: str, error_msg: str):
         pass
 
     def _on_psd_export_finished(self, success_count: int):
         self._psd_progress.hide()
-        exporter = self._psd_thread.exporter
-        exporter.cleanup()
+        # Cleanup is handled by PsdExportThread._run_export's finally block
 
-        result = self._psd_result
-        if result["success"] == 0:
+        if success_count == 0:
             return
 
         create_info_dialog(
             self.tr("Exported ")
-            + str(result["success"])
+            + str(success_count)
             + self.tr(" ExtendScript(s).\n\nOpen Photoshop → File → Scripts → Browse to run each .jsx.\n\nOutput:\n")
-            + result["output_dir"]
+            + self._psd_result["output_dir"]
         )
 
     def export_tstyles(self):

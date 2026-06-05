@@ -56,64 +56,52 @@ function makeSolidColor(r, g, b) {
     return c;
 }
 
-function applyStroke(layer, sizePx, colorRGB) {
+function applyLayerEffects(layer, strokeSize, strokeColor, shadowOpacity, shadowBlur, shadowDistance, shadowColor, shadowAngle) {
     try {
-        var desc = new ActionDescriptor();
-        var ref = new ActionReference();
-        ref.putEnumerated(charIDToTypeID("Lyr "), charIDToTypeID("Ordn"), charIDToTypeID("Trgt"));
-        desc.putReference(charIDToTypeID("null"), ref);
-        // Enable layer FX
-        var fxDesc = new ActionDescriptor();
-        var fxRef = new ActionReference();
-        fxRef.putProperty(charIDToTypeID("Prpr"), stringIDToTypeID("layerEffects"));
-        fxRef.putEnumerated(charIDToTypeID("Lyr "), charIDToTypeID("Ordn"), charIDToTypeID("Trgt"));
-        fxDesc.putReference(charIDToTypeID("null"), fxRef);
+        var hasStroke = strokeSize > 0;
+        var hasShadow = shadowOpacity > 0 && shadowBlur > 0;
+        if (!hasStroke && !hasShadow) return;
 
-        // Stroke
-        var strokeDesc = new ActionDescriptor();
-        strokeDesc.putBoolean(stringIDToTypeID("enabled"), true);
-        strokeDesc.putEnumerated(stringIDToTypeID("style"), stringIDToTypeID("frameStyle"), stringIDToTypeID("outsetFrame"));
-        strokeDesc.putUnitDouble(stringIDToTypeID("size"), charIDToTypeID("#Pxl"), sizePx);
-        var sc = new ActionDescriptor();
-        sc.putDouble(charIDToTypeID("Rd  "), colorRGB[0]);
-        sc.putDouble(charIDToTypeID("Grn "), colorRGB[1]);
-        sc.putDouble(charIDToTypeID("Bl  "), colorRGB[2]);
-        strokeDesc.putObject(stringIDToTypeID("color"), charIDToTypeID("RGBC"), sc);
-        fxDesc.putObject(stringIDToTypeID("frameFX"), stringIDToTypeID("frameFX"), strokeDesc);
-
-        executeAction(charIDToTypeID("setd"), fxDesc, DialogModes.NO);
-    } catch(e) {}
-}
-
-function applyDropShadow(layer, opacityPct, blurPx, distancePx, colorRGB, angleDeg) {
-    try {
         var desc = new ActionDescriptor();
         var ref = new ActionReference();
         ref.putEnumerated(charIDToTypeID("Lyr "), charIDToTypeID("Ordn"), charIDToTypeID("Trgt"));
         desc.putReference(charIDToTypeID("null"), ref);
 
-        var fxDesc = new ActionDescriptor();
-        var fxRef = new ActionReference();
-        fxRef.putProperty(charIDToTypeID("Prpr"), stringIDToTypeID("layerEffects"));
-        fxRef.putEnumerated(charIDToTypeID("Lyr "), charIDToTypeID("Ordn"), charIDToTypeID("Trgt"));
-        fxDesc.putReference(charIDToTypeID("null"), fxRef);
+        var layerEffects = new ActionDescriptor();
 
-        var shadowDesc = new ActionDescriptor();
-        shadowDesc.putBoolean(stringIDToTypeID("enabled"), true);
-        shadowDesc.putEnumerated(stringIDToTypeID("mode"), charIDToTypeID("BlnM"), charIDToTypeID("Mltp"));
-        shadowDesc.putUnitDouble(stringIDToTypeID("opacity"), charIDToTypeID("#Prc"), opacityPct);
-        shadowDesc.putBoolean(stringIDToTypeID("useGlobalAngle"), false);
-        shadowDesc.putUnitDouble(stringIDToTypeID("localLightingAngle"), charIDToTypeID("#Ang"), angleDeg);
-        shadowDesc.putUnitDouble(stringIDToTypeID("blur"), charIDToTypeID("#Pxl"), blurPx);
-        shadowDesc.putUnitDouble(stringIDToTypeID("distance"), charIDToTypeID("#Pxl"), distancePx);
-        var sc = new ActionDescriptor();
-        sc.putDouble(charIDToTypeID("Rd  "), colorRGB[0]);
-        sc.putDouble(charIDToTypeID("Grn "), colorRGB[1]);
-        sc.putDouble(charIDToTypeID("Bl  "), colorRGB[2]);
-        shadowDesc.putObject(stringIDToTypeID("color"), charIDToTypeID("RGBC"), sc);
-        fxDesc.putObject(stringIDToTypeID("dropShadow"), stringIDToTypeID("dropShadow"), shadowDesc);
+        if (hasStroke) {
+            var strokeDesc = new ActionDescriptor();
+            strokeDesc.putBoolean(stringIDToTypeID("enabled"), true);
+            strokeDesc.putEnumerated(stringIDToTypeID("style"), stringIDToTypeID("frameStyle"), stringIDToTypeID("outsetFrame"));
+            strokeDesc.putUnitDouble(stringIDToTypeID("size"), charIDToTypeID("#Pxl"), strokeSize);
+            var sc = new ActionDescriptor();
+            sc.putDouble(charIDToTypeID("Rd  "), strokeColor[0]);
+            sc.putDouble(charIDToTypeID("Grn "), strokeColor[1]);
+            sc.putDouble(charIDToTypeID("Bl  "), strokeColor[2]);
+            strokeDesc.putObject(stringIDToTypeID("color"), charIDToTypeID("RGBC"), sc);
+            layerEffects.putObject(stringIDToTypeID("frameFX"), stringIDToTypeID("frameFX"), strokeDesc);
+        }
 
-        executeAction(charIDToTypeID("setd"), fxDesc, DialogModes.NO);
+        if (hasShadow) {
+            var shadowDesc = new ActionDescriptor();
+            shadowDesc.putBoolean(stringIDToTypeID("enabled"), true);
+            shadowDesc.putEnumerated(stringIDToTypeID("mode"), charIDToTypeID("BlnM"), charIDToTypeID("Mltp"));
+            shadowDesc.putUnitDouble(stringIDToTypeID("opacity"), charIDToTypeID("#Prc"), shadowOpacity);
+            shadowDesc.putBoolean(stringIDToTypeID("useGlobalAngle"), false);
+            shadowDesc.putUnitDouble(stringIDToTypeID("localLightingAngle"), charIDToTypeID("#Ang"), shadowAngle);
+            shadowDesc.putUnitDouble(stringIDToTypeID("angle"), charIDToTypeID("#Ang"), shadowAngle);
+            shadowDesc.putUnitDouble(stringIDToTypeID("blur"), charIDToTypeID("#Pxl"), shadowBlur);
+            shadowDesc.putUnitDouble(stringIDToTypeID("distance"), charIDToTypeID("#Pxl"), shadowDistance);
+            var sc = new ActionDescriptor();
+            sc.putDouble(charIDToTypeID("Rd  "), shadowColor[0]);
+            sc.putDouble(charIDToTypeID("Grn "), shadowColor[1]);
+            sc.putDouble(charIDToTypeID("Bl  "), shadowColor[2]);
+            shadowDesc.putObject(stringIDToTypeID("color"), charIDToTypeID("RGBC"), sc);
+            layerEffects.putObject(stringIDToTypeID("dropShadow"), stringIDToTypeID("dropShadow"), shadowDesc);
+        }
+
+        desc.putObject(charIDToTypeID("T   "), stringIDToTypeID("layerEffects"), layerEffects);
+        executeAction(charIDToTypeID("setd"), desc, DialogModes.NO);
     } catch(e) {}
 }
 
@@ -140,9 +128,13 @@ for (var i = 0; i < layers.length; i++) {
 
     var ti = artLayer.textItem;
 
-    // Orientation must be set BEFORE contents for reliable vertical text
+    // Point Text — more reliable for both orientations than Paragraph Text,
+    // and allows precise positioning (paragraph text auto-wraps at unknown bounds).
+    try { ti.kind = TextType.POINT_TEXT; } catch(e) {}
+
+    // Direction must be set BEFORE contents for reliable vertical text
     if (lyr.vertical) {
-        try { ti.orientation = 2; } catch(e) {}   // Orientation.VERTICAL
+        try { ti.direction = Direction.VERTICAL; } catch(e) {}
     }
 
     ti.contents = lyr.text;
@@ -161,26 +153,21 @@ for (var i = 0; i < layers.length; i++) {
     if (lyr.italic) try { ti.fauxItalic = true; } catch(e) {}
     if (lyr.underline) try { ti.underline = true; } catch(e) {}
 
-    // Alignment — PsJustification: psLeft=1, psCenter=2, psRight=3
-    var alignMap = {0: 1, 1: 2, 2: 3};
-    try { ti.justification = alignMap[lyr.alignment] || 1; } catch(e) {}
+    // Alignment — Justification.LEFT (1), Justification.CENTER (2), Justification.RIGHT (3)
+    var alignMap = {0: Justification.LEFT, 1: Justification.CENTER, 2: Justification.RIGHT};
+    try { ti.justification = alignMap[lyr.alignment] || Justification.LEFT; } catch(e) {}
 
-    // Position
-    try { ti.position = [lyr.x, lyr.y]; } catch(e) {}
+    // Position — horizontal uses [left_edge, baseline_y], vertical uses [column_right, top]
+    try { ti.position = [lyr.pos_x, lyr.pos_y]; } catch(e) {}
 
     // Layer opacity
     if (lyr.opacity < 1.0) {
         try { artLayer.opacity = lyr.opacity * 100; } catch(e) {}
     }
 
-    // Stroke effect
-    if (lyr.stroke_size > 0) {
-        applyStroke(artLayer, lyr.stroke_size, lyr.stroke_color);
-    }
-
-    // Drop shadow
-    if (lyr.shadow_blur > 0 && lyr.shadow_opacity > 0) {
-        applyDropShadow(artLayer, lyr.shadow_opacity, lyr.shadow_blur, lyr.shadow_distance, lyr.shadow_color, lyr.shadow_angle);
+    // Layer effects (stroke + drop shadow in one Action Manager call)
+    if (lyr.stroke_size > 0 || (lyr.shadow_blur > 0 && lyr.shadow_opacity > 0)) {
+        applyLayerEffects(artLayer, lyr.stroke_size, lyr.stroke_color, lyr.shadow_opacity, lyr.shadow_blur, lyr.shadow_distance, lyr.shadow_color, lyr.shadow_angle);
     }
 }
 
@@ -299,22 +286,42 @@ class PsJsxExporter(AbstractPsdExporter):
             if not blk.translation:
                 continue
             ff = blk.fontformat
-            x1, y1, _x2, _y2 = blk.xyxy
+            x1, y1, x2, y2 = blk.xyxy
 
             # Resolve font (static map only — no PS font list available)
             resolved, _ = resolve_font_name(ff.font_family, ps_available=None)
 
-            # Font size in points, corrected for the source image's actual DPI.
-            # ff.font_size is stored in logical pixels (96 DPI); PS expects points.
+            # Font size in points — correct for source image's DPI.
+            # ff.font_size is in image pixels (from text detection), so
+            #   size_pt = image_px * 72 / image_dpi   gives the right point size.
             size_pt = ff.font_size * 72.0 / dpi
 
-            # Shadow angle from offset direction
-            ox, oy = ff.shadow_offset
-            shadow_angle = (math.degrees(math.atan2(oy, ox)) % 360) if ff.shadow_radius > 0 else 0
+            # Position:
+            #   - Horizontal: PS expects [left_edge, baseline_y].
+            #     Shift y below the visual top by ~82% of font height (font-dependent).
+            #   - Vertical:   PS expects [column_right_edge, top_of_first_char],
+            #     because CJK vertical text flows columns right-to-left.
+            if ff.vertical:
+                pos_x = x2
+                pos_y = y1
+            else:
+                pos_x = x1
+                pos_y = y1 + ff.font_size * 0.82
 
-            # Shadow distance: offset magnitude proportional to font size
+            # Shadow angle — PS Action Manager interprets this as the LIGHT angle
+            # (where the light comes from). The shadow falls in the opposite direction
+            # from the offset, so we add 180° to convert shadow-direction → light-direction.
+            # PS convention: 0°=right, counterclockwise (standard math) for #Ang unit.
+            ox, oy = ff.shadow_offset
+            shadow_angle = (
+                (math.degrees(math.atan2(-oy, ox)) + 180) % 360
+                if ff.shadow_radius > 0
+                else 0
+            )
+
+            # Shadow distance — match in-app rendering: offset * font_size (unitless ratio × font height)
             shadow_distance = (
-                math.hypot(ox, oy) * ff.font_size * 0.1
+                math.hypot(ox, oy) * ff.font_size
                 if ff.shadow_radius > 0
                 else 0
             )
@@ -331,8 +338,8 @@ class PsJsxExporter(AbstractPsdExporter):
                     "underline": ff.underline,
                     "alignment": ff.alignment,
                     "vertical": ff.vertical,
-                    "x": x1,
-                    "y": y1,
+                    "pos_x": pos_x,
+                    "pos_y": pos_y,
                     "opacity": ff.opacity,
                     # stroke
                     "stroke_size": (

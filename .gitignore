@@ -69,3 +69,5 @@ CLAUDE.md
 .claude/
 config/custom_themes.json
 debug
+.agents/
+skills-lock.json

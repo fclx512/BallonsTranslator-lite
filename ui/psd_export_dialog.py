@@ -60,8 +60,6 @@ class PsdExportDialog(QDialog):
         return ExportOptions(
             output_dir=self._dir_edit.text(),
             page_filter=page_filter,
-            include_mask_layer=self._mask_cb.isChecked(),
-            lock_background=self._lock_bg_cb.isChecked(),
         )
 
     # ------------------------------------------------------------------
@@ -158,15 +156,6 @@ class PsdExportDialog(QDialog):
 
         # ---- separator --------------------------------------------------
         layout.addWidget(self._make_separator())
-
-        # ---- layers -----------------------------------------------------
-        layout.addWidget(self._make_section_label(self.tr("Layers")))
-        self._mask_cb = QCheckBox(self.tr("Include mask as reference layer"))
-        self._mask_cb.setChecked(True)
-        self._lock_bg_cb = QCheckBox(self.tr("Lock background layer"))
-        self._lock_bg_cb.setChecked(True)
-        layout.addWidget(self._mask_cb)
-        layout.addWidget(self._lock_bg_cb)
 
         # ---- separator --------------------------------------------------
         layout.addWidget(self._make_separator())
