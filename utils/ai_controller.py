@@ -13,15 +13,14 @@ from __future__ import annotations
 import json
 import logging
 import os.path as osp
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set
 
 from qtpy.QtCore import QObject, Qt, Signal
 
-logger = logging.getLogger("ai_chat")
-
-# Ensure ai_chat logger is configured with file + console handlers
-import utils.ai_logger  # noqa: F401 — triggers get_ai_logger() on import
 from ui.ai_chat_model import ChangeItem, ChatMessage, estimate_tokens
+
+if TYPE_CHECKING:
+    from ui.ai_chat_worker import AiChatWorker
 
 from .ai_tools import (
     build_agent_system_prompt,
@@ -34,6 +33,11 @@ from .ai_tools import (
 )
 from .config import pcfg
 from .proj_compact import _COMPACT_DEF, parse_block_id
+
+logger = logging.getLogger("ai_chat")
+
+# Ensure ai_chat logger is configured with file + console handlers
+import utils.ai_logger  # noqa: E402, F401 — triggers get_ai_logger() on import
 
 MAX_TOOL_TURNS = 10
 

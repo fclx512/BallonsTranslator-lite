@@ -252,15 +252,15 @@ class MergeDialog(QDialog):
         # Parse per-label directions from the new QLineEdits
         per_label_directions = {}
         for label in [
-            l.strip() for l in self.ltr_labels_edit.text().split(",") if l.strip()
+            label.strip() for label in self.ltr_labels_edit.text().split(",") if label.strip()
         ]:
             per_label_directions[label] = "LTR"
         for label in [
-            l.strip() for l in self.rtl_labels_edit.text().split(",") if l.strip()
+            label.strip() for label in self.rtl_labels_edit.text().split(",") if label.strip()
         ]:
             per_label_directions[label] = "RTL"
         for label in [
-            l.strip() for l in self.ttb_labels_edit.text().split(",") if l.strip()
+            label.strip() for label in self.ttb_labels_edit.text().split(",") if label.strip()
         ]:
             per_label_directions[label] = "TTB"
         config["PER_LABEL_DIRECTIONS"] = per_label_directions
@@ -269,7 +269,7 @@ class MergeDialog(QDialog):
         if self.enable_exclude_labels.isChecked():
             excluded = self.exclude_labels.text().strip()
             config["LABELS_TO_EXCLUDE_FROM_MERGE"] = set(
-                l.strip() for l in excluded.split(",") if l.strip()
+                label.strip() for label in excluded.split(",") if label.strip()
             )
         else:
             config["LABELS_TO_EXCLUDE_FROM_MERGE"] = set()
@@ -280,7 +280,7 @@ class MergeDialog(QDialog):
             groups = []
             for line in groups_text.split("\n"):
                 if line.strip():
-                    groups.append([l.strip() for l in line.split(",")])
+                    groups.append([label.strip() for label in line.split(",")])
             config["SPECIFIC_MERGE_GROUPS"] = groups
             config["REQUIRE_SAME_LABEL"] = False  # This is disabled in UI
         else:

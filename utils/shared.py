@@ -134,9 +134,12 @@ def remove_from_runtime_widget_set(widget):
 showed_exception = set()
 
 # it will be set to ui.mainwindow.create_errdialog.emit after UI initialized
-create_errdialog_in_mainthread = lambda *args, **kwargs: None
+def create_errdialog_in_mainthread(*args, **kwargs) -> None:
+    return None
 
-create_infodialog_in_mainthread = lambda *args, **kwargs: None
+
+def create_infodialog_in_mainthread(*args, **kwargs) -> None:
+    return None
 
 
 def load_cache():
@@ -146,7 +149,7 @@ def load_cache():
             try:
                 with open(cache_path, "r", encoding="utf8") as file:
                     cache_data = json.load(file)
-            except:
+            except Exception:
                 print(f"cached file {cache_path} is invalid")
                 cache_data = {}
         else:

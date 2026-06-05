@@ -15,7 +15,7 @@ from qtpy.QtWidgets import QApplication, QGraphicsItem, QWidget
 
 try:
     from qtpy.QtWidgets import QUndoCommand
-except:
+except ImportError:
     from qtpy.QtGui import QUndoCommand
 
 from utils import shared
@@ -187,7 +187,7 @@ class DeleteBlkItemsCommand(QUndoCommand):
             for mskpnt, inpaint_rect, redo_img in zip(
                 self.mask_pnts, self.inpaint_rect_lst, self.redo_img_list
             ):
-                if mskpnt == None:
+                if mskpnt is None:
                     continue
                 x1, y1, x2, y2 = inpaint_rect
                 img_array[y1:y2, x1:x2][mskpnt] = redo_img[mskpnt]
@@ -225,7 +225,7 @@ class DeleteBlkItemsCommand(QUndoCommand):
             for mskpnt, inpaint_rect, undo_img in zip(
                 self.mask_pnts, self.inpaint_rect_lst, self.undo_img_list
             ):
-                if mskpnt == None:
+                if mskpnt is None:
                     continue
                 x1, y1, x2, y2 = inpaint_rect
                 img_array[y1:y2, x1:x2][mskpnt] = undo_img[mskpnt]
@@ -515,7 +515,7 @@ class SceneTextManager(QObject):
         for textblock in self.imgtrans_proj.current_block_list():
             if textblock.font_family is None or textblock.font_family.strip() == "":
                 textblock.font_family = self.formatpanel.familybox.currentText()
-            blk_item = self.addTextBlock(textblock)
+            self.addTextBlock(textblock)
         if self.auto_textlayout_flag:
             self.updateTextBlkList()
 
@@ -857,7 +857,8 @@ class SceneTextManager(QObject):
         blk_font.setLetterSpacing(
             QFont.SpacingType.PercentageSpacing, fmt.letter_spacing * 100
         )
-        text_size_func = lambda text: get_text_size(QFontMetricsF(blk_font), text)
+        def text_size_func(text):
+            return get_text_size(QFontMetricsF(blk_font), text)
 
         restore_charfmts = False
         if text is None:
@@ -1160,7 +1161,7 @@ class SceneTextManager(QObject):
 
     def on_push_edit_stack(self, num_steps: int):
         edit: Union[TransTextEdit, SourceTextEdit] = self.sender()
-        is_trans = type(edit) == TransTextEdit
+        is_trans = type(edit) is TransTextEdit
         blkitem = self.textblk_item_list[edit.idx] if is_trans else None
         self.canvas.push_undo_command(
             TextEditCommand(edit, num_steps, blkitem), update_pushed_step=not is_trans
@@ -1288,7 +1289,6 @@ class SceneTextManager(QObject):
 
 def get_text_size(fm: QFontMetricsF, text: str) -> Tuple[int, int]:
     brt = fm.tightBoundingRect(text)
-    br = fm.boundingRect(text)
     return int(np.ceil(fm.horizontalAdvance(text))), int(np.ceil(brt.height()))
 
 

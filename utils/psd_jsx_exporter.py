@@ -13,7 +13,7 @@ import math
 import os
 import shutil
 from string import Template
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Set, Tuple
 
 from .font_mapping import QT_TO_PS_FONT_MAP, resolve_font_name
 from .proj_imgtrans import ProjImgTrans

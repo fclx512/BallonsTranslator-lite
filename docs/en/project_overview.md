@@ -65,7 +65,10 @@ BallonsTranslator-lite/
 ├── translate/
 │   ├── zh_CN.ts               Chinese translation source
 │   └── zh_CN.qm               Compiled translation
-└── docs/                      Design documents
+├── docs/
+│   ├── README.md              Documentation structure
+│   ├── en/                    English docs
+│   └── zh/                    Chinese docs
 ```
 
 ---

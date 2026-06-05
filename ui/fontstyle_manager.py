@@ -14,17 +14,13 @@ from typing import Dict, List, Tuple
 import numpy as np
 from qtpy.QtCore import QRect, QSize, Qt, Signal
 from qtpy.QtGui import (
-    QBrush,
     QColor,
     QFont,
     QFontMetrics,
-    QMouseEvent,
     QPainter,
     QPen,
-    QPixmap,
 )
 from qtpy.QtWidgets import (
-    QAbstractItemDelegate,
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -37,9 +33,8 @@ from qtpy.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
-    QSpinBox,
-    QStyledItemDelegate,
     QStyle,
+    QStyledItemDelegate,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -47,7 +42,6 @@ from qtpy.QtWidgets import (
 )
 
 from utils import shared
-from utils.config import pcfg
 from utils.fontformat import (
     FontFormat,
     px2pt,

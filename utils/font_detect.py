@@ -3,6 +3,8 @@ import os
 import sys
 from typing import Dict, Tuple
 
+from utils import download_util, shared
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -19,8 +21,6 @@ except Exception:
     models = None
     Image = None
     transforms = None
-
-from utils import download_util, shared
 
 MODEL_REL_PATH = os.path.join(
     "data", "models", "YuzuMarker.FontDetection", "name=4x-epoch=18-step=368676.ckpt"

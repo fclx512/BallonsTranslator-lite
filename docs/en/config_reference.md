@@ -209,9 +209,9 @@
 
 | 显示名 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
-| Result image format | 下拉框 | PNG | 导出结果图片格式：PNG / JPG / WEBP / JXL |
+| Result image format | 下拉框 | PNG | 导出结果图片格式：PNG / JPG / WEBP |
 | Quality | 输入框(百分比) | 100 | 图片质量（仅对 JPG/WEBP 等有损格式有效） |
-| Intermediate image format | 下拉框 | PNG | 管线中间过程的图像缓存格式：PNG / JXL |
+| Intermediate image format | 下拉框 | PNG | 管线中间过程的图像缓存格式：PNG |
 
 ### 4. 功能测试 (Feature Testing)
 

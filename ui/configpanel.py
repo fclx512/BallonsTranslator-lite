@@ -1,7 +1,15 @@
 from typing import List, Tuple, Union
 
 from qtpy.QtCore import QEasingCurve, QElapsedTimer, QPoint, QSize, Qt, QTimer, Signal
-from qtpy.QtGui import QColor, QFocusEvent, QFont, QGuiApplication, QIntValidator, QPainter, QValidator
+from qtpy.QtGui import (
+    QColor,
+    QFocusEvent,
+    QFont,
+    QGuiApplication,
+    QIntValidator,
+    QPainter,
+    QValidator,
+)
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -22,8 +30,8 @@ from qtpy.QtWidgets import (
     QSizePolicy,
     QSpacerItem,
     QSpinBox,
-    QStyledItemDelegate,
     QStyle,
+    QStyledItemDelegate,
     QVBoxLayout,
     QWidget,
 )
@@ -1452,8 +1460,9 @@ class ConfigPanel(Widget):
         save_layout.setContentsMargins(0, 0, 0, 0)
         save_layout.setSpacing(0)
 
+        # JXL removed from options: pillow-jxl-plugin compatibility issues, see docs/en/jxl_issues.md
         self.rst_imgformat_combobox, imsave_sublock = combobox_with_label(
-            ["PNG", "JPG", "WEBP", "JXL"], self.tr("Result image format"), parent=self
+            ["PNG", "JPG", "WEBP"], self.tr("Result image format"), parent=self
         )
         self.rst_imgformat_combobox.activated.connect(self.on_rst_imgformat_changed)
         save_layout.addWidget(imsave_sublock)
@@ -1475,9 +1484,10 @@ class ConfigPanel(Widget):
         quality_sublock.layout().insertStretch(-1)
         imsave_sublock.layout().addWidget(quality_sublock)
 
+        # JXL removed from options: pillow-jxl-plugin compatibility + imwrite lacks error handling, see docs/en/jxl_issues.md
         self.intermediate_imgformat_combobox, intermediate_imsave_sublock = (
             combobox_with_label(
-                ["PNG", "JXL"], self.tr("Intermediate image format"), parent=self
+                ["PNG"], self.tr("Intermediate image format"), parent=self
             )
         )
         self.intermediate_imgformat_combobox.activated.connect(

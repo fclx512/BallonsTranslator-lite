@@ -1,10 +1,9 @@
+import importlib.util
 import os
 import os.path as osp
 from typing import List, Tuple
 
-try:
-    import torch
-except ImportError:
+if importlib.util.find_spec("torch") is None:
     raise ImportError("PyTorch not available")
 import cv2
 import numpy as np

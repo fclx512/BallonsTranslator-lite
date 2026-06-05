@@ -58,8 +58,6 @@ def resolve_font_name(
     3. Case-insensitive fuzzy match against *ps_available*.
     4. Fall back to the original *qt_family* (PS will use its default if missing).
     """
-    exact = False
-
     # 1. Direct match (case-insensitive) in available PS fonts.
     if ps_available:
         key = normalize_font_name(qt_family)

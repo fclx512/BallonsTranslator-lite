@@ -24,22 +24,20 @@ from modules import (
 )
 from modules.base import soft_empty_cache
 from modules.translators import MissingTranslatorParams
-from utils.imgproc_utils import enlarge_window
-from utils.logger import logger as LOGGER
-from utils.registry import Registry
-
-from .funcmaps import get_maskseg_method
-
-modules.translators.SYSTEM_LANG = QLocale.system().name()
 from utils import shared
 from utils.config import RunStatus, pcfg
+from utils.imgproc_utils import enlarge_window
+from utils.logger import logger as LOGGER
 from utils.message import create_error_dialog, create_info_dialog
 from utils.proj_imgtrans import ProjImgTrans
+from utils.registry import Registry
 from utils.textblock import TextBlock, sort_regions
 
 from .configpanel import ConfigPanel
 from .custom_widget import ImgtransProgressMessageBox, ParamComboBox
+from .funcmaps import get_maskseg_method
 
+modules.translators.SYSTEM_LANG = QLocale.system().name()
 cfg_module = pcfg.module
 
 

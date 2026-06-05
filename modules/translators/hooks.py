@@ -2,9 +2,9 @@ from typing import List
 
 import opencc
 
-CHS2CHT_CONVERTER = None
-
 from .base import BaseTranslator, TextBlock
+
+CHS2CHT_CONVERTER = None
 
 
 def chs2cht(

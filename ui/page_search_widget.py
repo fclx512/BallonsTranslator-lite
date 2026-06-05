@@ -540,9 +540,9 @@ class PageSearchWidget(Widget):
     def setCurrentEditor(self, edit: SourceTextEdit):
 
         if (
-            type(edit) == SourceTextEdit
+            type(edit) is SourceTextEdit
             and self.range_combobox.currentIndex() == 0
-            or type(edit) == TransPairWidget
+            or type(edit) is TransPairWidget
             and self.range_combobox.currentIndex() == 1
         ):
             edit = None
@@ -752,9 +752,9 @@ class PageSearchWidget(Widget):
             return
 
         if (
-            type(edit) == SourceTextEdit
+            type(edit) is SourceTextEdit
             and self.range_combobox.currentIndex() == 0
-            or type(edit) == TransPairWidget
+            or type(edit) is TransPairWidget
             and self.range_combobox.currentIndex() == 1
         ):
             return
@@ -771,7 +771,7 @@ class PageSearchWidget(Widget):
                 if e.idx < edit.idx:
                     insert_idx += 1
                 elif e.idx == edit.idx:
-                    if type(edit) == TransTextEdit:
+                    if type(edit) is TransTextEdit:
                         insert_idx += 1
 
             self.search_counter_list.insert(insert_idx, found_counter)

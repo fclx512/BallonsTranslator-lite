@@ -8,6 +8,29 @@ Both the translator and LLM OCR modules read from this shared pool.
 import json
 from typing import Dict, List, Optional
 
+import httpx
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDoubleSpinBox,
+    QFormLayout,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSpinBox,
+    QSplitter,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
 from .config import pcfg, save_config
 from .logger import logger as LOGGER
 
@@ -321,33 +344,7 @@ def save_all_profiles(profiles: List[Dict]):
     _save_profiles(profiles)
     save_config()
 
-
-# ── Dialog ──────────────────────────────────────────────────────────
-
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import (
-    QCheckBox,
-    QComboBox,
-    QDialog,
-    QDoubleSpinBox,
-    QFormLayout,
-    QHBoxLayout,
-    QInputDialog,
-    QLabel,
-    QLineEdit,
-    QListWidget,
-    QMessageBox,
-    QPushButton,
-    QScrollArea,
-    QSpinBox,
-    QSplitter,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
-
-import httpx
-
+# ── Dialog ──
 
 class ProfileManagerDialog(QDialog):
     """Unified dialog to manage API profiles for both translation and OCR."""

@@ -5,7 +5,7 @@ from qtpy.QtGui import QTextCursor
 
 try:
     from qtpy.QtWidgets import QUndoCommand
-except:
+except ImportError:
     from qtpy.QtGui import QUndoCommand
 
 from utils.fontformat import FontFormat
@@ -370,7 +370,7 @@ class PageReplaceOneCommand(QUndoCommand):
         self.oritxt = self.sw.current_cursor.selectedText()
         self.ori_len = len(self.oritxt)
         self.edit: Union[SourceTextEdit, TransTextEdit] = self.sw.current_edit
-        self.edit_is_src = type(self.edit) == SourceTextEdit
+        self.edit_is_src = type(self.edit) is SourceTextEdit
         self.blkitem = self.sw.textblk_item_list[self.sw.current_edit.idx]
 
         if self.sw.current_edit is not None and self.sw.isVisible():
@@ -450,7 +450,7 @@ class PageReplaceAllCommand(QUndoCommand):
 
         replace = self.sw.replace_editor.toPlainText()
         for edit, curpos_lst in zip(self.rstedit_list, curpos_list):
-            redo_blk = type(edit) == TransTextEdit
+            redo_blk = type(edit) is TransTextEdit
             if redo_blk:
                 blkitem = self.sw.textblk_item_list[edit.idx]
                 self.blkitem_list.append(blkitem)

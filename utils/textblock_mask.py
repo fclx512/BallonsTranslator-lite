@@ -6,7 +6,9 @@ import numpy as np
 from .imgproc_utils import draw_connected_labels
 from .stroke_width_calculator import strokewidth_check
 
-opencv_inpaint = lambda img, mask: cv2.inpaint(img, mask, 3, cv2.INPAINT_NS)
+
+def opencv_inpaint(img, mask):
+    return cv2.inpaint(img, mask, 3, cv2.INPAINT_NS)
 
 
 def show_img_by_dict(imgdicts):
@@ -146,7 +148,7 @@ def canny_flood(img, show_process=False, inpaint_sdthresh=10, **kwargs):
 
     cv2.rectangle(detected_edges, (0, 0), (w - 1, h - 1), BLACK, 1, cv2.LINE_8)
 
-    ballon_mask, outer_index = np.zeros((h, w), np.uint8), -1
+    ballon_mask = np.zeros((h, w), np.uint8)
 
     min_retval = np.inf
     mask = np.zeros((h, w), np.uint8)
@@ -290,13 +292,12 @@ def connected_canny_flood(
         drawtext = np.zeros((img.shape[0], img.shape[1]), np.uint8)
 
         max_ind = np.argmax(stats[:, 4])
-        maxbbox_area, sec_ind = -1, -1
+        maxbbox_area = -1
         for ind, stat in enumerate(stats):
             if ind != max_ind:
                 bbarea = stat[2] * stat[3]
                 if bbarea > maxbbox_area:
                     maxbbox_area = bbarea
-                    sec_ind = ind
         drawtext[np.where(labels == max_ind)] = 255
 
         cv2.rectangle(

@@ -3,12 +3,14 @@ import json
 import os
 import os.path as osp
 import traceback
+from dataclasses import field
+from typing import Dict, List
 
 from . import shared
 from .fontformat import FontFormat
 from .io_utils import json_dump_nested_obj, np, serialize_np
 from .logger import logger as LOGGER
-from .structures import Config, Dict, List, field, nested_dataclass
+from .structures import Config, nested_dataclass
 
 
 class RunStatus:

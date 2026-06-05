@@ -1,7 +1,8 @@
 import copy
 import math
 import re
-from typing import Callable, List
+from dataclasses import field
+from typing import Callable, Dict, List, Union
 
 import cv2
 import numpy as np
@@ -10,7 +11,7 @@ from shapely.geometry import Polygon
 from .fontformat import FontFormat, TextAlignment, fix_fontweight_qt
 from .imgproc_utils import color_difference, rotate_polygons, union_area, xywh2xyxypoly
 from .split_text_region import split_textblock as split_text_region
-from .structures import Dict, List, Union, field, nested_dataclass
+from .structures import nested_dataclass
 from .textblock_mask import canny_flood
 from .textlines_merge import Quadrilateral, merge_bboxes_text_region, sort_pnts
 
@@ -507,6 +508,8 @@ class TextBlock:
                 self.bg_colors = np.array(self.bg_colors, dtype=np.float32)
             self.fg_colors += fg_colors / nlines
             self.bg_colors += bg_colors / nlines
+            np.clip(self.fg_colors, 0, 255, out=self.fg_colors)
+            np.clip(self.bg_colors, 0, 255, out=self.bg_colors)
 
     def get_font_colors(self, bgr=False):
 

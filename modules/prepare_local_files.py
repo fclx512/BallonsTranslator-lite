@@ -87,7 +87,5 @@ def prepare_local_files_forall():
     # download files required by detect, ocr, inpaint and translators
     download_and_check_module_files()
 
-    prepare_pkuseg()
-
     if shared.CACHE_UPDATED:
         shared.dump_cache()

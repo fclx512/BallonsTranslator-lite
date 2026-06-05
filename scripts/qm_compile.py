@@ -118,7 +118,6 @@ def compile_ts(ts_path: str, qm_path: str):
     # --- Build Messages section byte array ---
     msg_buf = BytesIO()
     offsets: list[int] = []  # byte offset within msg_buf
-    hashes: list[int] = []  # ELF hash of (source + comment)
     # We don't use comments, so hash is just of source text
     elfs: list[int] = []
 

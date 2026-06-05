@@ -7,10 +7,14 @@ import numpy as np
 from utils.registry import Registry
 from utils.textblock import TextBlock
 
+from ..base import (
+    DEFAULT_DEVICE,  # noqa: F401 — re-exported for OCR modules
+    DEVICE_SELECTOR,  # noqa: F401 — re-exported for OCR modules
+    BaseModule,
+)
+
 OCR = Registry("OCR")
 register_OCR = OCR.register_module
-
-from ..base import BaseModule, DEFAULT_DEVICE, DEVICE_SELECTOR  # noqa: F401
 
 
 class OCRBase(BaseModule):

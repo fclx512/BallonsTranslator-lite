@@ -72,9 +72,9 @@ def det_rearrange_forward(
                 rel_t = rel_step_list[pidx]
                 t = int(round(rel_t * _h))
                 b = min(t + _psize, _h)
-                l = jj * _pw
-                r = l + _pw
-                tgtmap[..., t:b, :] += p[..., : b - t, l:r]
+                left = jj * _pw
+                r = left + _pw
+                tgtmap[..., t:b, :] += p[..., : b - t, left:r]
                 if pidx > 0:
                     interleave = _psize - _step
                     tgtmap[..., t : t + interleave, :] /= 2.0

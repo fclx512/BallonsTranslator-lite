@@ -522,7 +522,6 @@ def layout_text(
             if len(srcline_wlist) == 2:
                 start_from_top = True
             else:
-                nw = len(srcline_wlist)
                 # nl = min(nw // 2, 2)
                 nl = 1
                 sum_top = sum(srcline_wlist[:nl])

@@ -67,7 +67,6 @@ from . import shared_widget as SW
 from .ai_change_review import ChangeReviewWindow
 from .ai_chat_panel import AiChatPanel
 from .canvas import Canvas
-from .fontstyle_manager import FontStyleManager
 from .configpanel import ConfigPanel
 from .custom_widget import (
     FrameLessMessageBox,
@@ -78,6 +77,7 @@ from .custom_widget import (
 )
 from .drawing_commands import RunBlkTransCommand
 from .drawingpanel import DrawingPanel
+from .fontstyle_manager import FontStyleManager
 from .framelesswindow import FramelessMoveResize, FramelessWindow
 from .global_search_widget import GlobalSearchWidget
 from .io_thread import ImgSaveThread
@@ -853,7 +853,7 @@ class MainWindow(mainwindow_cls):
         if pcfg.let_textstyle_indep_flag and not shared.HEADLESS:
             self.load_textstyle_from_proj_dir(from_proj=True)
 
-    def load_textstyle_from_proj_dir(self, from_proj=False):
+    def load_textstyle_from_proj_dir(self, from_proj=False, only_custom: bool = False):
         if from_proj:
             text_style_path = osp.join(self.imgtrans_proj.directory, "textstyles.json")
         else:
@@ -951,12 +951,13 @@ class MainWindow(mainwindow_cls):
     def updatePageList(self):
         if self.pageList.count() != 0:
             self.pageList.clear()
-        if len(self.imgtrans_proj.pages) >= shared.PAGELIST_THUMBNAIL_MAXNUM:
-            item_func = lambda imgname: QListWidgetItem(imgname)
-        else:
-            item_func = lambda imgname: QListWidgetItem(
-                QIcon(osp.join(self.imgtrans_proj.directory, imgname)), imgname
-            )
+        def item_func(imgname):
+            if len(self.imgtrans_proj.pages) >= shared.PAGELIST_THUMBNAIL_MAXNUM:
+                return QListWidgetItem(imgname)
+            else:
+                return QListWidgetItem(
+                    QIcon(osp.join(self.imgtrans_proj.directory, imgname)), imgname
+                )
         for imgname in self.imgtrans_proj.pages:
             lstitem = item_func(imgname)
             self.pageList.addItem(lstitem)
@@ -1534,7 +1535,7 @@ class MainWindow(mainwindow_cls):
                 self.imgtrans_proj.set_current_img(current_img)
                 self.canvas.updateCanvas()
                 self.st_manager.updateSceneTextitems()
-        except:
+        except Exception:
             pass
 
         # 显示结果
@@ -2743,7 +2744,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             err.exec()
             if exception_type != "":
                 shared.showed_exception.remove(exception_type)
-        except:
+        except Exception:
             if exception_type in shared.showed_exception:
                 shared.showed_exception.remove(exception_type)
             LOGGER.error("Failed to create error dialog")

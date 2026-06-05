@@ -370,7 +370,6 @@ def test_roundtrip():
     )
 
     detail = build_detail(proj, [0])
-    proj_hash = detail["meta"]["hash"]
 
     # Simulate AI response based on the detail
     mod = {

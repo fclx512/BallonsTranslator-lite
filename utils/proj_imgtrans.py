@@ -352,7 +352,7 @@ class ProjImgTrans:
                 f.write(
                     json.dumps(self.to_dict(), ensure_ascii=False, cls=TextBlkEncoder)
                 )
-        except:
+        except Exception:
             raise Exception(f"Failed to write {self.to_dict()}")
         if osp.exists(self.proj_path) and keep_exist_as_backup:
             os.replace(self.proj_path, self.proj_path + ".backup")
@@ -465,10 +465,12 @@ class ProjImgTrans:
     def get_result_ext(self, imgname: str) -> str:
         if pcfg is not None and pcfg.imgsave_auto_format:
             src_ext = osp.splitext(imgname)[1].lower()
+            # .jxl kept in auto-format list for backward compat with existing source images
             if src_ext in {".jpg", ".jpeg", ".png", ".webp", ".jxl", ".bmp"}:
                 return src_ext
         ext = ".png"
         if pcfg is not None:
+            # .jxl disabled in UI (see docs/en/jxl_issues.md), kept for existing configs
             if pcfg.imgsave_ext in {".jpg", ".png", ".webp", ".jxl"}:
                 ext = pcfg.imgsave_ext
             else:

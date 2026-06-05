@@ -79,7 +79,6 @@ def _write_local_sha(sha: str):
 
 def _download_and_extract():
     """Download repo zip and extract to _update/. Returns True on success."""
-    root = _project_root()
     upd = _update_dir()
 
     print("  Downloading update...")

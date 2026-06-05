@@ -1,8 +1,8 @@
 """PSD export dialog — page range selector + export config."""
 
-from typing import Dict, List, Optional, Set
+from typing import List, Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -18,8 +18,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from utils.psd_exporter import ExportOptions
 from utils.proj_imgtrans import ProjImgTrans
+from utils.psd_exporter import ExportOptions
 
 from .custom_widget.slider import RangeSlider
 

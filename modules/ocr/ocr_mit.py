@@ -6,6 +6,7 @@ import numpy as np
 from utils.textblock import collect_textblock_regions
 
 from .base import DEVICE_SELECTOR, OCRBase, TextBlock, register_OCR
+from .mit48px_ctc import OCR48pxCTC
 
 mit_params = {
     "chunk_size": {
@@ -64,9 +65,6 @@ class MITModels(OCRBase):
         ):
             self.model.to(param_content)
         super().updateParam(param_key, param_content)
-
-
-from .mit48px_ctc import OCR48pxCTC
 
 
 @register_OCR("mit48px_ctc")

@@ -3,7 +3,7 @@ from qtpy.QtGui import QImage, QPainter
 
 try:
     from qtpy.QtWidgets import QUndoCommand
-except:
+except ImportError:
     from qtpy.QtGui import QUndoCommand
 
 from typing import List, Tuple

@@ -155,7 +155,7 @@ class SizeComboBox(QComboBox):
             val = float(txt)
             self._value = val
             return val
-        except:
+        except (ValueError, TypeError):
             return self._value
 
     def setValue(self, value: float):

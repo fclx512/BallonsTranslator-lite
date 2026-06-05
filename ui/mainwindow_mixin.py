@@ -148,12 +148,13 @@ class MainWindowMixin:
     def updatePageList(self):
         if self.pageList.count() != 0:
             self.pageList.clear()
-        if len(self.imgtrans_proj.pages) >= shared.PAGELIST_THUMBNAIL_MAXNUM:
-            item_func = lambda imgname: QListWidgetItem(imgname)
-        else:
-            item_func = lambda imgname: QListWidgetItem(
-                QIcon(osp.join(self.imgtrans_proj.directory, imgname)), imgname
-            )
+        def item_func(imgname):
+            if len(self.imgtrans_proj.pages) >= shared.PAGELIST_THUMBNAIL_MAXNUM:
+                return QListWidgetItem(imgname)
+            else:
+                return QListWidgetItem(
+                    QIcon(osp.join(self.imgtrans_proj.directory, imgname)), imgname
+                )
         for imgname in self.imgtrans_proj.pages:
             lstitem = item_func(imgname)
             self.pageList.addItem(lstitem)
@@ -1080,7 +1081,7 @@ class MainWindowMixin:
             err.exec()
             if exception_type != "":
                 shared.showed_exception.remove(exception_type)
-        except:
+        except Exception:
             if exception_type in shared.showed_exception:
                 shared.showed_exception.remove(exception_type)
             LOGGER.error("Failed to create error dialog")

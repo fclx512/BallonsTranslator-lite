@@ -10,13 +10,12 @@ from qtpy.QtCore import QRect, QSize, Qt
 from qtpy.QtGui import QCloseEvent
 from qtpy.QtWidgets import QApplication, QWidget
 
-installed_version = QT_VERSION
-
-# from ..titlebar import TitleBar
 from .. import win32_utils as win_utils
 from ..win32_utils import Taskbar, getSystemAccentColor, isSystemBorderAccentEnabled
 from ..win_c_structures import LPNCCALCSIZE_PARAMS
 from ..win_window_effect import WindowsWindowEffect
+
+installed_version = QT_VERSION
 
 
 class WindowsFramelessWindowBase:

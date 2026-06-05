@@ -2,8 +2,7 @@
 import copy
 import inspect
 import os
-from dataclasses import dataclass, field, is_dataclass
-from typing import Dict, List, Tuple, Union
+from dataclasses import dataclass, is_dataclass
 
 
 def get_annotations(obj):

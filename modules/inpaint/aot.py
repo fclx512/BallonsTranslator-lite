@@ -7,6 +7,7 @@ try:
 except ImportError:
     raise ImportError("PyTorch not available")
 import numpy as np
+from torch.nn.utils import spectral_norm
 
 
 def relu_nf(x):
@@ -280,9 +281,6 @@ class ResBlockDis(nn.Module):
         x = self.conv1(F.leaky_relu(self.bn1(x), 0.2))
         x = self.conv2(F.leaky_relu(self.bn2(x), 0.2))
         return sc + x
-
-
-from torch.nn.utils import spectral_norm
 
 
 class Discriminator(nn.Module):

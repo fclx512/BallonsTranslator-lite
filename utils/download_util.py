@@ -306,7 +306,7 @@ def try_download_files(
                     f'Mismatch between newly downloaded {savep} and pre-calculated hash: "{sha256_calculated}" <-> "{sha256_precal.lower()}"'
                 )
 
-        except:
+        except Exception:
             err_msg = traceback.format_exc()
             all_successful = False
             LOGGER.error(err_msg)

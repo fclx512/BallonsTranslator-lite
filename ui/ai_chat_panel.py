@@ -347,7 +347,6 @@ class AiChatPanel(QWidget):
         """Update welcome card chips based on current project context."""
         if project_info:
             total = project_info.get("total_pages", 0)
-            name = project_info.get("project", "")
             chips = [
                 self.tr("List all pages"),
                 self.tr("Translate first page"),

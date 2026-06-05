@@ -4,7 +4,6 @@ import cv2
 import numpy as np
 
 from .base import (
-    DEFAULT_DEVICE,
     DEVICE_SELECTOR,
     ProjImgTrans,
     TextBlock,
@@ -72,9 +71,6 @@ class ComicTextDetector(TextDetectorBase):
             "concatenate_url_filename": 2,
         }
     ]
-
-    device = DEFAULT_DEVICE
-    detect_size = 1024
 
     def __init__(self, **params) -> None:
         super().__init__(**params)

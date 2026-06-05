@@ -106,7 +106,7 @@ GPU mode auto-detects NVIDIA GPU architecture (Kepler through Blackwell) and sel
 | Translation | LLM API (OpenAI-compatible), Sakura |
 | Inpainting | LaMa 512px (default), AOT |
 
-> Want to add your own module? See [Module Developer Guide](docs/how_to_add_new_translator.md)
+> Want to add your own module? See [Module Developer Guide](docs/en/how_to_add_new_translator.md)
 
 ---
 
@@ -147,7 +147,7 @@ Kepler (GTX 6xx / 7xx) may not be supported by PyTorch 2.x — use CPU mode: `py
 
 **How to customize shortcuts?**
 
-See [Shortcuts Guide](docs/shortcuts.md)
+See [Shortcuts Guide](docs/en/shortcuts.md)
 
 ---
 

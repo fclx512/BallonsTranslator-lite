@@ -8,10 +8,14 @@ from utils.proj_imgtrans import ProjImgTrans
 from utils.registry import Registry
 from utils.textblock import TextBlock
 
+from ..base import (
+    DEFAULT_DEVICE,  # noqa: F401 — re-exported for detector modules
+    DEVICE_SELECTOR,  # noqa: F401 — re-exported for detector modules
+    BaseModule,
+)
+
 TEXTDETECTORS = Registry("textdetectors")
 register_textdetectors = TEXTDETECTORS.register_module
-
-from ..base import BaseModule, DEFAULT_DEVICE, DEVICE_SELECTOR  # noqa: F401
 
 
 class TextDetectorBase(BaseModule):

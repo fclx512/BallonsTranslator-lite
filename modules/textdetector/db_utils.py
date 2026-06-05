@@ -1,4 +1,3 @@
-from collections import namedtuple
 
 import cv2
 import numpy as np
@@ -299,13 +298,8 @@ class DetectionIoUEvaluator(object):
 
         matchedSum = 0
 
-        Rectangle = namedtuple("Rectangle", "xmin ymin xmax ymax")
-
         numGlobalCareGt = 0
         numGlobalCareDet = 0
-
-        arrGlobalConfidences = []
-        arrGlobalMatches = []
 
         recall = 0
         precision = 0
@@ -328,9 +322,6 @@ class DetectionIoUEvaluator(object):
 
         pairs = []
         detMatchedNums = []
-
-        arrSampleConfidences = []
-        arrSampleMatch = []
 
         evaluationLog = ""
 
@@ -592,7 +583,7 @@ def shrink_polygon_pyclipper(polygon, shrink_ratio):
     distance = (
         polygon_shape.area * (1 - np.power(shrink_ratio, 2)) / polygon_shape.length
     )
-    subject = [tuple(l) for l in polygon]
+    subject = [tuple(pt) for pt in polygon]
     padding = pyclipper.PyclipperOffset()
     padding.AddPath(subject, pyclipper.JT_ROUND, pyclipper.ET_CLOSEDPOLYGON)
     shrinked = padding.Execute(-distance)
@@ -716,7 +707,7 @@ class MakeBorderMap:
             * (1 - np.power(self.shrink_ratio, 2))
             / polygon_shape.length
         )
-        subject = [tuple(l) for l in polygon]
+        subject = [tuple(pt) for pt in polygon]
         padding = pyclipper.PyclipperOffset()
         padding.AddPath(subject, pyclipper.JT_ROUND, pyclipper.ET_CLOSEDPOLYGON)
 

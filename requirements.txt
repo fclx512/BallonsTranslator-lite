@@ -24,7 +24,6 @@ pyclipper
 einops
 termcolor
 qtpy
-spacy-pkuseg
 opencc-python-reimplemented
 click
 requests

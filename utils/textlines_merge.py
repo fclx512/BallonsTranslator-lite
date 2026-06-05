@@ -234,11 +234,9 @@ class Quadrilateral(object):
     def is_axis_aligned(self) -> bool:
         [l1a, l1b, l2a, l2b] = [a.astype(np.float32) for a in self.structure]
         v1 = l1b - l1a
-        v2 = l2b - l2a
         e1 = np.array([0, 1])
         e2 = np.array([1, 0])
         unit_vector_1 = v1 / np.linalg.norm(v1)
-        unit_vector_2 = v2 / np.linalg.norm(v2)
         if (
             abs(np.dot(unit_vector_1, e1)) < 1e-2
             or abs(np.dot(unit_vector_1, e2)) < 1e-2

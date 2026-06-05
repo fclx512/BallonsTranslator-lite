@@ -35,7 +35,7 @@ from qtpy.QtWidgets import (
 
 try:
     from qtpy.QtWidgets import QUndoCommand, QUndoStack
-except:
+except ImportError:
     from qtpy.QtGui import QUndoCommand, QUndoStack
 
 from utils import shared as C

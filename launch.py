@@ -8,6 +8,19 @@ import sys
 from pathlib import Path
 from platform import platform
 
+PATH_ROOT = Path(__file__).parent
+
+# Embedded Python's ._pth file overrides sys.path, so ensure project root is in path
+# before any project-local imports (e.g. utils.*)
+if str(PATH_ROOT) not in sys.path:
+    sys.path.insert(0, str(PATH_ROOT))
+
+_pylibs_sp = PATH_ROOT / "ballontrans_pylibs_win" / "Lib" / "site-packages"
+if _pylibs_sp.exists() and str(_pylibs_sp) not in sys.path:
+    sys.path.append(str(_pylibs_sp))
+
+import utils.shared as shared
+
 BRANCH = "main"
 VERSION = "beta-20260605-01"
 
@@ -21,20 +34,7 @@ _gpu_info_cache = None
 
 REQ_WIN = ["pywin32"]
 
-PATH_ROOT = Path(__file__).parent
-
-# Embedded Python's ._pth file overrides sys.path, so ensure project root is in path
-if str(PATH_ROOT) not in sys.path:
-    sys.path.insert(0, str(PATH_ROOT))
-
-# Add portable site-packages to path (provides torchvision and other bundled deps for GPU mode)
-_pylibs_sp = PATH_ROOT / "ballontrans_pylibs_win" / "Lib" / "site-packages"
-if _pylibs_sp.exists() and str(_pylibs_sp) not in sys.path:
-    sys.path.append(str(_pylibs_sp))
-
 IS_WIN7 = "Windows-7" in platform()
-
-import utils.shared as shared  # Earlier import of shared to use default for config_path argument
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -529,8 +529,7 @@ def main():
                     print(f"Direct download also failed: {e2}")
                 print("Continuing with the current version.")
 
-    from qtpy.QtCore import QLocale, Qt, QTranslator
-    from qtpy.QtCore import QEvent, QObject
+    from qtpy.QtCore import QEvent, QLocale, QObject, Qt, QTranslator
     from qtpy.QtWidgets import QComboBox
 
     from utils import config as program_config
@@ -694,9 +693,8 @@ def main():
 
 def prepare_environment():
 
-    try:
-        import packaging
-    except ModuleNotFoundError:
+    import importlib.util
+    if importlib.util.find_spec("packaging") is None:
         run_pip("install packaging", "install packaging")
 
     from utils.package import check_req_file, check_reqs

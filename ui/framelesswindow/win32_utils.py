@@ -27,10 +27,10 @@ from qtpy.QtGui import QColor, QGuiApplication
 from qtpy.QtWidgets import QWidget
 from win32comext.shell import shellcon
 
+from utils import shared
+
 USE_PYSIDE6 = API == "pyside6"
 QT_VERSION = tuple(int(v) for v in qVersion().split("."))
-
-from utils import shared
 
 
 def getSystemAccentColor():
@@ -66,7 +66,7 @@ def isSystemBorderAccentEnabled():
         CloseKey(key)
 
         return bool(value)
-    except:
+    except Exception:
         return False
 
 

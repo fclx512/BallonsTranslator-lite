@@ -137,12 +137,12 @@ class Slider(QSlider):
 
     @property
     def grooveLength(self):
-        l = (
+        length = (
             self.width()
             if self.orientation() == Qt.Orientation.Horizontal
             else self.height()
         )
-        return l - self.handle.width()
+        return length - self.handle.width()
 
     def _adjustHandlePos(self):
         total = max(self.maximum() - self.minimum(), 1)

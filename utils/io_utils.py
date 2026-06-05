@@ -19,6 +19,22 @@ from PIL import Image
 
 from .logger import logger as LOGGER
 
+# Ensure JXL codec is registered if pillow-jxl-plugin is installed
+# JXL codec registration — currently disabled in UI due to compatibility issues.
+# See docs/en/jxl_issues.md for details. If re-enabling, fix imwrite error handling first.
+try:
+    import pillow_jxl  # noqa: F401 — registers JXL codec with Pillow
+except ImportError:
+    pass
+
+# Bypass ultralytics' broken Image.open monkey-patch. It catches ALL exceptions
+# and blindly tries to pip-install pi-heif — including for unrelated formats like
+# .jxl — which fails forever in the embedded Python (no pip module).
+try:
+    from ultralytics.utils.patches import _image_open as _pil_image_open
+except ImportError:
+    _pil_image_open = Image.open
+
 IMG_EXT = [".bmp", ".jpg", ".png", ".jpeg", ".webp", ".jxl"]
 
 NP_INT_TYPES = (
@@ -79,22 +95,6 @@ def parse_page_range(range_str: str) -> List[int]:
                 seen.add(idx)
                 result.append(idx)
     return result
-
-
-def page_names_from_range(proj, range_str: str) -> List[str]:
-    """Convert a page range string to a list of page name strings for the given project."""
-    indices = parse_page_range(range_str)
-    if not indices:
-        return []
-    num_pages = proj.num_pages
-    page_names = []
-    for idx in indices:
-        if idx >= num_pages:
-            raise ValueError(
-                f"Page {idx + 1} is out of bounds (project has {num_pages} pages)"
-            )
-        page_names.append(proj.idx2pagename(idx))
-    return page_names
 
 
 def to_dict(obj):
@@ -159,7 +159,6 @@ def page_names_from_range(proj, pages_str: str):
     num_pages = len(proj.pages)
     page_names = list(proj.pages.keys())
     natsorted_page_names = natsorted(page_names)
-    name_to_natsort_idx = {name: i for i, name in enumerate(natsorted_page_names)}
 
     selected = set()
     parts = [p.strip() for p in pages_str.split(",") if p.strip()]
@@ -266,14 +265,50 @@ def find_all_files_recursive(
     return filelst
 
 
+def _imread_jxl_fallback(imgpath, read_type):
+    """Try to read a .jxl file with cv2 if PIL can't handle it."""
+    try:
+        img = cv2.imread(imgpath, read_type)
+    except cv2.error:
+        return None
+    if img is not None:
+        if read_type != cv2.IMREAD_GRAYSCALE:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        return img
+    return None
+
+
 def imread(imgpath, read_type=cv2.IMREAD_COLOR, max_retry_limit=5, retry_interval=0.1):
     if not osp.exists(imgpath):
         return None
 
+    suffix = Path(imgpath).suffix.lower()
+
+    # JXL: try PIL once, fall back to cv2 on failure. No retries — if the JXL
+    # codec can't decode a fully-written file, retrying won't help.
+    # JXL read path — kept for backward compatibility with existing .jxl cache files.
+    # See docs/en/jxl_issues.md for known decode failures.
+    if suffix == ".jxl":
+        if ".jxl" in Image.EXTENSION:
+            try:
+                img = _pil_image_open(imgpath)
+            except PIL.UnidentifiedImageError:
+                img = None
+            if img is not None:
+                if read_type == cv2.IMREAD_GRAYSCALE:
+                    img = img.convert("L")
+                return np.array(img)
+        img = _imread_jxl_fallback(imgpath, read_type)
+        if img is not None:
+            LOGGER.info(f"JXL opened via cv2 fallback: {imgpath}")
+        else:
+            LOGGER.warning(f"JXL format not supported, cannot read: {imgpath}")
+        return img
+
     num_tries = 0
     while True:
         try:
-            img = Image.open(imgpath)
+            img = _pil_image_open(imgpath)  # bypass ultralytics' broken Image.open patch
             if img.mode == "CMYK":
                 img = img.convert("RGB")
             elif img.mode == "P":
@@ -298,7 +333,7 @@ def imread(imgpath, read_type=cv2.IMREAD_COLOR, max_retry_limit=5, retry_interva
                 LOGGER.exception(e)
                 return None
             LOGGER.warning(
-                f"PIL.UnidentifiedImageError: failed to read {imgpath}, retries: {num_tries} / {max_retry_limit}"
+                f"Failed to read {imgpath}: {e}, retries: {num_tries} / {max_retry_limit}"
             )
             time.sleep(retry_interval)
 
@@ -330,17 +365,28 @@ def imwrite(img_path, img, ext=".png", quality=100, jxl_encode_effort=3):
         encode_param = [cv2.IMWRITE_JPEG_QUALITY, quality]
     elif ext == ".webp":
         encode_param = [cv2.IMWRITE_WEBP_QUALITY, quality]
+    # JXL save path — NOT currently reachable from UI (JXL disabled in configpanel).
+    # WARNING: no try/except here; a failed encode can leave a 0-byte or corrupt file.
+    # If re-enabling JXL, wrap this in try/except with PNG fallback. See docs/en/jxl_issues.md.
     if ext == ".jxl":
-        # jxl_encode_effort: https://github.com/Isotr0py/pillow-jpegxl-plugin/issues/23
-        # higher values theoretically produce smaller files at the expense of time, 3 seems to strike a balance
-        lossless = (
-            quality > 99
-        )  # quality=100, lossless=False seems to result in larger file compared with lossless=True
-        Image.fromarray(img).save(
-            img_path, quality=quality, lossless=lossless, effort=jxl_encode_effort
+        if ".jxl" in Image.EXTENSION:
+            lossless = quality > 99
+            Image.fromarray(img).save(
+                img_path,
+                quality=quality,
+                lossless=lossless,
+                effort=jxl_encode_effort,
+            )
+            return
+        # JXL not supported by Pillow — fall back to PNG
+        LOGGER.warning(
+            "JXL format not supported by Pillow, falling back to PNG. "
+            "Install pillow-jxl-plugin for JXL support."
         )
-        return
-    else:
+        ext = ".png"
+        img_path = str(Path(img_path).with_suffix(ext))
+
+    if ext != ".jxl":  # handles both non-JXL and JXL-fallback
         if len(img.shape) == 3:
             if img.shape[-1] == 3:
                 img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)

@@ -14,12 +14,21 @@ from .ocr import OCR, OCRBase
 from .textdetector import TEXTDETECTORS, TextDetectorBase
 from .translators import TRANSLATORS, BaseTranslator
 
-GET_VALID_TEXTDETECTORS = lambda: list(TEXTDETECTORS.module_dict.keys())
-GET_VALID_TRANSLATORS = lambda: list(TRANSLATORS.module_dict.keys())
-GET_VALID_INPAINTERS = lambda: list(INPAINTERS.module_dict.keys())
-GET_VALID_OCR = lambda: (
-    [k for k in list(OCR.module_dict.keys()) if k != "none_ocr"] + ["none_ocr"]
-)
+
+def GET_VALID_TEXTDETECTORS() -> list:
+    return list(TEXTDETECTORS.module_dict.keys())
+
+
+def GET_VALID_TRANSLATORS() -> list:
+    return list(TRANSLATORS.module_dict.keys())
+
+
+def GET_VALID_INPAINTERS() -> list:
+    return list(INPAINTERS.module_dict.keys())
+
+
+def GET_VALID_OCR() -> list:
+    return [k for k in list(OCR.module_dict.keys()) if k != "none_ocr"] + ["none_ocr"]
 
 
 MODULETYPE_TO_REGISTRIES = {

@@ -443,7 +443,6 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
 
     def updateDocumentMargin(self, margin):
         doc_margin = self.document().documentMargin()
-        dm = margin - doc_margin
         doc_margin *= 2
         self.document().setDocumentMargin(margin)
         margin *= 2
@@ -805,7 +804,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
             blk_no = block.blockNumber()
             layout = block.layout()
             if context.cursorPosition < -1:
-                cpos = layout.preeditAreaPosition() - (cpos + 2)
+                cpos = layout.preeditAreaPosition() - (blpos + 2)
             else:
                 cpos = context.cursorPosition - blpos
 
@@ -1349,9 +1348,9 @@ class HorizontalTextDocumentLayout(SceneTextLayout):
                     and block.contains(sel.cursor.position())
                 ):
                     o = QTextLayout.FormatRange()
-                    l = layout.lineForTextPosition(sel.cursor.position() - blpos)
-                    o.start = l.textStart()
-                    o.length = l.textLength()
+                    line = layout.lineForTextPosition(sel.cursor.position() - blpos)
+                    o.start = line.textStart()
+                    o.length = line.textLength()
                     if o.start + o.length == bllen - 1:
                         ++o.length
                     o.format = sel.format
@@ -1369,7 +1368,7 @@ class HorizontalTextDocumentLayout(SceneTextLayout):
             bllen = block.length()
             layout = block.layout()
             if context.cursorPosition < -1:
-                cpos = layout.preeditAreaPosition() - (cpos + 2)
+                cpos = layout.preeditAreaPosition() - (blpos + 2)
             else:
                 cpos = context.cursorPosition - blpos
             layout.drawCursor(painter, QPointF(0, 0), cpos, 1)

@@ -5,7 +5,7 @@ from qtpy.QtGui import QFont
 
 try:
     from qtpy.QtWidgets import QUndoCommand
-except:
+except ImportError:
     from qtpy.QtGui import QUndoCommand
 
 from utils.fontformat import FontFormat, px2pt

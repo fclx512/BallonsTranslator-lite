@@ -12,8 +12,6 @@ import logging
 import re
 from typing import Any, Dict, List, Optional, Set
 
-logger = logging.getLogger("ai_chat")
-
 from .config import pcfg
 from .proj_compact import (
     FIELD_PROMPT_SNIPPETS,
@@ -21,6 +19,8 @@ from .proj_compact import (
     build_index,
     build_paginated_detail,
 )
+
+logger = logging.getLogger("ai_chat")
 
 # ── Tool definitions ──────────────────────────────────────────────────
 

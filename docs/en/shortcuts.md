@@ -5,7 +5,7 @@
 快捷键系统由三层构成：
 
 ```
-DEFAULT_SHORTCUTS (configpanel.py:284)     ← 默认值定义
+DEFAULT_SHORTCUTS (configpanel.py:693)     ← 默认值定义
         ↓
 pcfg.shortcuts (config.json)               ← 用户自定义覆盖
         ↓
@@ -18,7 +18,7 @@ MainWindow._install_shortcuts() (mainwindow.py)  ← QShortcut 注册
 
 ### 1. 在 DEFAULT_SHORTCUTS 中定义默认键
 
-文件：[ui/configpanel.py](ui/configpanel.py) 第 284 行
+文件：[ui/configpanel.py](ui/configpanel.py) 第 693 行
 
 ```python
 DEFAULT_SHORTCUTS = {

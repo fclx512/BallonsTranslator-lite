@@ -104,7 +104,7 @@ class FourierUnit(nn.Module):
                 align_corners=False,
             )
 
-        r_size = x.size()
+
         # (batch, c, h, w/2+1, 2)
         fft_dim = (-3, -2, -1) if self.ffc3d else (-2, -1)
 
@@ -115,7 +115,7 @@ class FourierUnit(nn.Module):
         if FFT_OP_SUPPORT:
             try:
                 ffted = torch.fft.rfftn(x, dim=fft_dim, norm=self.fft_norm)
-            except:
+            except Exception:
                 FFT_OP_SUPPORT = False
                 print("FFT OP not supported with this card, try run it with cpu...")
         if not FFT_OP_SUPPORT:  # dont use else, it would not be the same

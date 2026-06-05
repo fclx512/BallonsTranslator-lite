@@ -92,7 +92,7 @@ python launch.py --update
 | 翻译 | LLM API（OpenAI 兼容）、Sakura |
 | 修图 | LaMa 512px（默认）、AOT |
 
-> 想添加自己的模块？参见 [模块开发指南](docs/how_to_add_new_translator.md)
+> 想添加自己的模块？参见 [模块开发指南](docs/zh/how_to_add_new_translator.md)
 
 ---
 
@@ -125,7 +125,7 @@ Kepler（GTX 6xx / 7xx）可能不被 PyTorch 2.x 支持，建议 CPU 模式：`
 
 **快捷键怎么自定义？**
 
-参见 [快捷键指南](docs/shortcuts.md)
+参见 [快捷键指南](docs/zh/shortcuts.md)
 
 ---
 

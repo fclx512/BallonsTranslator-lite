@@ -71,10 +71,10 @@ def patch_module_params(cfg_param, module_params, module_name: str = ""):
                 else:
                     v = cparam
                 valid = True
-                if tgt_type != type(v):
+                if tgt_type is not type(v):
                     try:
                         v = tgt_type(v)
-                    except:
+                    except (ValueError, TypeError):
                         valid = False
                         LOGGER.warning(
                             f"Invalid param value {v} for defined dtype: {tgt_type}, it will be set to default value: {mparam}"
@@ -83,7 +83,7 @@ def patch_module_params(cfg_param, module_params, module_name: str = ""):
                     mparam["value"] = v
                 cfg_param[mk] = mparam
             else:
-                if type(cparam) != type(mparam):
+                if type(cparam) is not type(mparam):
                     if not isinstance(mparam, dict) and isinstance(cparam, dict):
                         cparam = cparam["value"]
                     try:
@@ -325,7 +325,7 @@ try:
                 AVAILABLE_DEVICES += [
                     f"privateuseone:{d}" for d in range(torch.dml.device_count())
                 ]
-        except:
+        except Exception:
             pass
 
     BF16_SUPPORTED = False

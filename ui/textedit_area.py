@@ -572,7 +572,7 @@ class TextEditListScrollArea(QScrollArea):
             pixmap = QPixmap(w.size())
             w.render(pixmap)
             drag.setPixmap(pixmap)
-            ac = drag.exec(Qt.DropAction.MoveAction)
+            drag.exec(Qt.DropAction.MoveAction)
             self.drag = None
             if self.drag_to_pos != -1:
                 self.set_drag_style(self.drag_to_pos, True)

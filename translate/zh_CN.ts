@@ -1275,6 +1275,11 @@ Output:
 输出目录：
 </translation>
         </message>
+        <message>
+            <location filename="../ui/mainwindow.py" line="2485" />
+            <source>PSD Export</source>
+            <translation>PSD 导出</translation>
+        </message>
     </context>
     <context>
         <name>ModuleManager</name>

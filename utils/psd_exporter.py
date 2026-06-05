@@ -5,8 +5,8 @@ One concrete strategy:
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from dataclasses import dataclass
+from typing import List, Optional, Set, Tuple
 
 from .proj_imgtrans import ProjImgTrans
 

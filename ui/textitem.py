@@ -29,7 +29,7 @@ from qtpy.QtWidgets import (
 
 from utils.fontformat import FontFormat, pt2px, px2pt
 from utils.imgproc_utils import xywh2xyxypoly
-from utils.textblock import FontFormat, TextAlignment, TextBlock
+from utils.textblock import TextAlignment, TextBlock
 
 from .misc import table_pattern, td_pattern
 from .scene_textlayout import HorizontalTextDocumentLayout, VerticalTextDocumentLayout
@@ -111,7 +111,7 @@ class TextBlkItem(QGraphicsTextItem):
         self.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
 
     def inputMethodEvent(self, e: QInputMethodEvent):
-        if self.pre_editing == False:
+        if not self.pre_editing:
             cursor = self.textCursor()
             self.input_method_from = cursor.selectionStart()
         if e.preeditString() == "":
@@ -1485,7 +1485,7 @@ class TextBlkItem(QGraphicsTextItem):
             else:
                 align_c = True
 
-        if align_c:
+        if align_c or align_tl:
             pass
         else:
             dw, dh = (w - old_w) / 2, (h - old_h) / 2

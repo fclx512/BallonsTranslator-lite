@@ -215,6 +215,9 @@ def seg_ch_pkg(text: str):
             except ImportError:
                 CHSEG = False
         if CHSEG is not False:
+            from modules.prepare_local_files import prepare_pkuseg
+
+            prepare_pkuseg()
             CHSEG = pkuseg.pkuseg(postag=True)
 
     if CHSEG is False or CHSEG is None:

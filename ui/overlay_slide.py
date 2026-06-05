@@ -16,7 +16,6 @@ from qtpy.QtWidgets import QWidget
 
 from utils.config import pcfg
 
-
 # ═══════════════════════════════════════════════════════════════════
 # Shared composited overlay (one per parent widget)
 # ═══════════════════════════════════════════════════════════════════

@@ -108,7 +108,7 @@ def split_step1(span, span_list, thresh=None, sumby_yaxis=None):
 
 
 def shrink_span_list(src_img, span_list, shrink_vert_space=True, shrink_hor_space=True):
-    height, width = src_img.shape[0], src_img.shape[1]
+    width = src_img.shape[1]
 
     sum_spacing = 0
     if shrink_vert_space:
@@ -200,7 +200,7 @@ def plot_mapresult(sumbyvector, xlength, span_list=None, thresh=None):
                     y=tr * sumbyvector.mean(), xmin=0, xmax=xlength, linestyles="--"
                 )
         plt.show()
-    except:
+    except Exception:
         pass
 
 
@@ -214,7 +214,6 @@ def crop_img(img, crop_ratio=0.2, clip_width=True, dilate=False):
     area = moments["m00"]
     if area != 0:
         mean_x = int(round(moments["m10"] / area))
-        mean_y = int(round(moments["m01"] / area))
         crop_r = int(round(crop_ratio * w))
         if clip_width:
             crop_x0 = np.clip(mean_x - crop_r, 0, w)
@@ -304,18 +303,16 @@ def split_textblock(
     return valid_span_list, vars
 
 
-# def tessocr_img2text(img, lang):
-#     img = Image.fromarray(img)
-#     if re.findall("vert", lang):
-#         psm = PSM.SINGLE_BLOCK_VERT_TEXT
-#     else:
-#         psm = PSM.SINGLE_LINE
-#     return tesserocr.image_to_text(img, psm=psm, lang=lang, path=TESSDATA_PATH)
+def tessocr_img2text(img, lang):
+    import re
 
-# def tessocr_img2text(img, lang):
-#     psm = "5" if re.findall("vert", lang) else "7"
-#     config = r'--tessdata-dir "models\tessdata" --psm ' + psm
-#     return pytesseract.image_to_string(img, lang=lang, config=config)
+    import pytesseract
+    from PIL import Image
+
+    img = Image.fromarray(img)
+    psm = "5" if re.findall("vert", lang) else "7"
+    config = r'--tessdata-dir "models\tessdata" --psm ' + psm
+    return pytesseract.image_to_string(img, lang=lang, config=config)
 
 
 def textspan2list(span_list):
@@ -336,7 +333,6 @@ def manga_split(img, bbox=None, show_process=False, clip_width=False) -> list[Te
 
     if bbox is None:
         bbox = [0, 0, im.shape[1], im.shape[0]]
-    bboxes = [bbox]
 
     span_list, _ = split_textblock(
         im,

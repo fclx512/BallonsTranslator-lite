@@ -3,6 +3,7 @@ import os
 import os.path as osp
 import re
 from pathlib import Path
+from typing import Dict, List, Tuple, Union
 
 import cv2
 import numpy as np
@@ -10,7 +11,6 @@ from qtpy.QtCore import QPointF, Qt
 from qtpy.QtGui import QColor, QImage, QPixmap, QTextCursor, QTextDocument
 
 from utils import shared as C
-from utils.structures import Dict, List, Tuple, Union
 
 QKEY = Qt.Key
 QNUMERIC_KEYS = {
