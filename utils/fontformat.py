@@ -107,6 +107,7 @@ class FontFormat(Config):
     shadow_strength: float = 1.0
     shadow_color: List = field(default_factory=lambda: [0, 0, 0])
     shadow_offset: List = field(default_factory=lambda: [0.0, 0.0])
+    shadow_include_stroke: bool = False
     gradient_enabled: bool = False
     gradient_start_color: List = field(default_factory=lambda: [0, 0, 0])
     gradient_end_color: List = field(default_factory=lambda: [255, 255, 255])

@@ -1,0 +1,163 @@
+<h2>方案 C · 全景总览</h2>
+<p class="subtitle">常规 (General) 下的最终结构：Project / Typesetting / Interface 三组</p>
+
+<div class="section">
+  <h3>左侧导航变化</h3>
+</div>
+
+<div class="split">
+  <div class="mockup" style="flex: 1;">
+    <div class="mockup-header">当前导航</div>
+    <div class="mockup-body" style="font-size: 13px; padding: 10px 16px;">
+      <div style="color: #888; font-weight: bold; margin-bottom: 4px;">DL Module</div>
+      <div style="padding-left: 12px; color: #bbb;">Text Detection</div>
+      <div style="padding-left: 12px; color: #bbb;">OCR</div>
+      <div style="padding-left: 12px; color: #bbb;">Inpaint</div>
+      <div style="padding-left: 12px; color: #bbb;">Translator</div>
+      <div style="height: 12px;"></div>
+      <div style="color: #888; font-weight: bold; margin-bottom: 4px;">General</div>
+      <div style="padding-left: 12px; color: #bbb;">Startup</div>
+      <div style="padding-left: 12px; color: #f96;">Typesetting ← 16+ 控件</div>
+      <div style="padding-left: 12px; color: #bbb;">Save</div>
+      <div style="padding-left: 12px; color: #bbb;">Miscellaneous</div>
+      <div style="font-size: 11px; color: #888; margin-top: 6px;">General 下共 4 项</div>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; padding: 10px; font-size: 28px; color: #58a;">→</div>
+
+  <div class="mockup" style="flex: 1;">
+    <div class="mockup-header" style="color: #8f8;">改后导航</div>
+    <div class="mockup-body" style="font-size: 13px; padding: 10px 16px;">
+      <div style="color: #888; font-weight: bold; margin-bottom: 4px;">DL Module</div>
+      <div style="padding-left: 12px; color: #bbb;">Text Detection</div>
+      <div style="padding-left: 12px; color: #bbb;">OCR</div>
+      <div style="padding-left: 12px; color: #bbb;">Inpaint</div>
+      <div style="padding-left: 12px; color: #bbb;">Translator</div>
+      <div style="height: 12px;"></div>
+      <div style="color: #888; font-weight: bold; margin-bottom: 4px;">General</div>
+      <div style="padding-left: 12px; color: #8f8;">Project ← Startup + Save 合并</div>
+      <div style="padding-left: 12px; color: #fb4;">Typesetting ← 拆出 Presets</div>
+      <div style="padding-left: 12px; color: #8f8;">Interface ← Misc + Presets</div>
+      <div style="font-size: 11px; color: #8f8; margin-top: 6px;">General 下减为 3 项</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>三组合并视图</h3>
+</div>
+
+<div style="font-size: 13px; max-width: 680px; margin: 0 auto;">
+
+  <!-- PROJECT -->
+  <div style="border: 1px solid #555; border-left: 3px solid #58a; border-radius: 7px; padding: 10px; margin-bottom: 14px;">
+    <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 8px;">Project</div>
+    <div style="font-size: 12px; padding: 4px;">
+      <label style="display: flex; align-items: center; gap: 8px; margin: 3px 0;"><input type="checkbox" checked> Reopen last project on startup</label>
+      <div style="border-top: 1px solid #444; margin: 8px 0;"></div>
+      <div style="font-size: 12px; color: #999; margin-bottom: 4px;">Output</div>
+      <div style="display: flex; align-items: center; gap: 10px; margin: 4px 0;">
+        Format <select style="padding: 2px 6px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>PNG</option></select>
+        <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox"> Auto detect</label>
+        Quality <input type="text" value="100" style="width: 44px;padding: 2px 4px;background:#333;border:1px solid #555;color:#ccc;text-align:center;">
+      </div>
+      <div style="margin-top: 4px; font-size: 12px;">Intermediate <select style="padding: 2px 6px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>PNG</option></select></div>
+    </div>
+  </div>
+
+  <!-- TYPESETTING -->
+  <div style="border: 1px solid #555; border-left: 3px solid #a85; border-radius: 7px; padding: 10px; margin-bottom: 14px;">
+    <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 10px;">Typesetting</div>
+
+    <div style="background: #252525; border: 1px solid #444; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px;">
+      <div style="font-size: 12px; color: #999; margin-bottom: 6px;">Default font format (when not set per-textblock):</div>
+      <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+        <tr><td style="padding: 2px 6px; text-align: right; color: #bbb;">Font Size</td><td><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program</option></select></td>
+        <td style="padding: 2px 6px; text-align: right; color: #bbb;">Stroke</td><td><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program</option></select></td></tr>
+        <tr><td style="padding: 2px 6px; text-align: right; color: #bbb;">Font Color</td><td><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program</option></select></td>
+        <td style="padding: 2px 6px; text-align: right; color: #bbb;">Stroke Color</td><td><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program</option></select></td></tr>
+        <tr><td style="padding: 2px 6px; text-align: right; color: #bbb;">Effect</td><td><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program</option></select></td>
+        <td style="padding: 2px 6px; text-align: right; color: #bbb;">Alignment</td><td><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program</option></select></td></tr>
+        <tr><td style="padding: 2px 6px; text-align: right; color: #bbb;">Writing</td><td><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program</option></select></td>
+        <td style="padding: 2px 6px; text-align: right; color: #bbb;">Font Family</td><td><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Keep exist</option></select></td></tr>
+      </table>
+    </div>
+
+    <div style="font-size: 12px; color: #999; margin-bottom: 4px;">Text formatting</div>
+    <div style="padding: 2px 4px; font-size: 12px;">
+      <label><input type="checkbox" checked> Auto layout</label>
+      <label style="margin-left: 16px;"><input type="checkbox" checked> To uppercase</label>
+      <label style="margin-left: 16px;"><input type="checkbox"> Independent text styles</label>
+    </div>
+    <div style="margin-top: 8px; display: flex; align-items: center; gap: 16px;">
+      <button style="padding: 5px 16px; background: #444; color: #ccc; border: 1px solid #555; border-radius: 4px; font-size: 12px;">Exclude Fonts...</button>
+      <span style="font-size: 12px; color: #bbb;">Max Font Size <input type="text" value="200" style="width: 50px; padding: 2px 4px; background: #333; border: 1px solid #555; color: #ccc; text-align: center;"> px</span>
+    </div>
+  </div>
+
+  <!-- INTERFACE -->
+  <div style="border: 1px solid #555; border-left: 3px solid #888; border-radius: 7px; padding: 10px;">
+    <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 8px;">Interface</div>
+
+    <div style="font-size: 12px; color: #999; margin-bottom: 4px;">Behavior</div>
+    <div style="display: flex; align-items: center; gap: 10px; margin: 4px 0;">
+      <span style="font-size: 13px; color: #bbb;">Animation</span>
+      <select style="padding: 3px 8px; background: #333; color: #ccc; border: 1px solid #555; font-size: 12px;"><option>Auto (match display)</option></select>
+    </div>
+    <button style="margin: 6px 0; padding: 5px 16px; background: #444; color: #ccc; border: 1px solid #555; border-radius: 4px; font-size: 12px;">Edit Shortcuts...</button>
+
+    <div style="border-top: 1px solid #444; margin-top: 10px; padding-top: 8px;">
+      <div style="font-size: 12px; color: #999; margin-bottom: 6px;">Combo Box Presets</div>
+      <table style="width: 100%; font-size: 11px;">
+        <tr><td style="padding: 2px 8px; text-align: right; color: #bbb;">Font Size</td><td><input type="text" value="5, 5.5, 6.5, 7.5, ..." style="width:100%;padding:2px 4px;background:#333;border:1px solid #555;color:#ccc;"></td></tr>
+        <tr><td style="padding: 2px 8px; text-align: right; color: #bbb;">Line Spacing</td><td><input type="text" value="..." style="width:100%;padding:2px 4px;background:#333;border:1px solid #555;color:#ccc;"></td></tr>
+        <tr><td style="padding: 2px 8px; text-align: right; color: #bbb;">Letter Spacing</td><td><input type="text" value="..." style="width:100%;padding:2px 4px;background:#333;border:1px solid #555;color:#ccc;"></td></tr>
+        <tr><td style="padding: 2px 8px; text-align: right; color: #bbb;">Stroke Width</td><td><input type="text" value="..." style="width:100%;padding:2px 4px;background:#333;border:1px solid #555;color:#ccc;"></td></tr>
+        <tr><td style="padding: 2px 8px; text-align: right; color: #bbb;">Opacity</td><td><input type="text" value="..." style="width:100%;padding:2px 4px;background:#333;border:1px solid #555;color:#ccc;"></td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 20px;">
+  <h3>改动汇总</h3>
+</div>
+
+<table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+  <tr style="border-bottom: 1px solid #444;">
+    <th style="text-align: left; padding: 6px 10px; color: #aaa;">区域</th>
+    <th style="text-align: left; padding: 6px 10px; color: #aaa;">变更类型</th>
+    <th style="text-align: left; padding: 6px 10px; color: #aaa;">影响文件</th>
+  </tr>
+  <tr style="border-bottom: 1px solid #333;">
+    <td style="padding: 6px 10px;">Startup + Save → Project</td>
+    <td style="padding: 6px 10px; color: #fb4;">合并分组</td>
+    <td style="padding: 6px 10px;"><code>ui/configpanel.py</code></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #333;">
+    <td style="padding: 6px 10px;">Typesetting 委托网格 + 容器</td>
+    <td style="padding: 6px 10px; color: #fb4;">视觉包装</td>
+    <td style="padding: 6px 10px;"><code>ui/configpanel.py</code> + 可能 <code>config/stylesheet.css</code></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #333;">
+    <td style="padding: 6px 10px;">Typesetting 移除 Presets</td>
+    <td style="padding: 6px 10px; color: #fb4;">内容迁移</td>
+    <td style="padding: 6px 10px;"><code>ui/configpanel.py</code></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #333;">
+    <td style="padding: 6px 10px;">Misc → Interface + 收纳 Presets</td>
+    <td style="padding: 6px 10px; color: #fb4;">重命名 + 内容迁移</td>
+    <td style="padding: 6px 10px;"><code>ui/configpanel.py</code></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #333;">
+    <td style="padding: 6px 10px;">导航列表</td>
+    <td style="padding: 6px 10px; color: #fb4;">4 项 → 3 项，标签改名</td>
+    <td style="padding: 6px 10px;"><code>ui/configpanel.py</code></td>
+  </tr>
+  <tr>
+    <td style="padding: 6px 10px;">i18n 翻译</td>
+    <td style="padding: 6px 10px; color: #8f8;">新增 "Project" / "Interface" 字符串  </td>
+    <td style="padding: 6px 10px;"><code>translate/zh_CN.ts</code></td>
+  </tr>
+</table>

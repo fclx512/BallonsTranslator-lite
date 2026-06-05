@@ -202,6 +202,10 @@ class OverlaySlider(QObject):
         return self._widget.isVisible()
 
     def show(self):
+        # Already animating toward show — nothing to do
+        if self._animating and not self._hiding:
+            return
+
         # Reverse a running hide animation
         if self._animating and self._hiding:
             self._reverse(toward_start=True)
@@ -299,6 +303,15 @@ class OverlaySlider(QObject):
         self._start_animation()
 
     def hide(self):
+        # Already animating toward hide — nothing to do
+        if self._animating and self._hiding:
+            # If the widget was already hidden, just cancel the animation
+            if not self._widget.isVisible():
+                self._cancel_current()
+                for cb in self._after_hide:
+                    cb()
+            return
+
         # No-animation mode — immediate hide
         if pcfg.animation_fps < 0:
             self._cancel_current()
@@ -312,14 +325,6 @@ class OverlaySlider(QObject):
             self._reverse(toward_start=True)
             self._on_finished = self._on_hidden
             self._hiding = True
-            return
-
-        # Hide animation was interrupted mid-reversal — clean up immediately
-        if self._animating and not self._widget.isVisible():
-            self._cancel_current()
-            self._widget.hide()
-            for cb in self._after_hide:
-                cb()
             return
 
         if not self._widget.isVisible():

@@ -22,7 +22,7 @@ if _pylibs_sp.exists() and str(_pylibs_sp) not in sys.path:
 import utils.shared as shared
 
 BRANCH = "main"
-VERSION = "beta-20260605-01"
+VERSION = "beta-20260605-02"
 
 python = sys.executable
 git = os.environ.get("GIT", "git")

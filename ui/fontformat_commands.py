@@ -378,6 +378,7 @@ def ffmt_change_gradient_enabled(
 ffmt_change_shadow_radius = ffmt_change_shadow_offset
 ffmt_change_shadow_strength = ffmt_change_shadow_offset
 ffmt_change_shadow_color = ffmt_change_shadow_offset
+ffmt_change_shadow_include_stroke = ffmt_change_shadow_offset
 
 ffmt_change_gradient_start_color = ffmt_change_gradient_enabled
 ffmt_change_gradient_end_color = ffmt_change_gradient_enabled

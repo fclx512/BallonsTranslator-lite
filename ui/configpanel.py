@@ -1206,10 +1206,9 @@ class ConfigPanel(Widget):
         label_text_ocr = self.tr("OCR")
         label_inpaint = self.tr("Inpaint")
         label_translator = self.tr("Translator")
-        label_startup = self.tr("Startup")
+        label_project = self.tr("Project")
         label_typesetting = self.tr("Typesetting")
-        label_save = self.tr("Save")
-        label_shortcuts = self.tr("Miscellaneous")
+        label_interface = self.tr("Interface")
 
         # === Model management ===
         model_group = PanelGroupBox(self.tr("Models"))
@@ -1268,29 +1267,108 @@ class ConfigPanel(Widget):
             label_translator, self.trans_config_panel, object_name="GroupTranslate"
         )
 
-        # === General: Startup ===
-        startup_widget = QWidget()
-        startup_layout = QVBoxLayout(startup_widget)
-        startup_layout.setContentsMargins(0, 0, 0, 0)
+        # === General: Project (startup + save merged) ===
+        project_widget = QWidget()
+        project_layout = QVBoxLayout(project_widget)
+        project_layout.setContentsMargins(0, 0, 0, 0)
+        project_layout.setSpacing(0)
+
+        # Startup
         self.open_on_startup_checker = QCheckBox(
             self.tr("Reopen last project on startup")
         )
         self.open_on_startup_checker.stateChanged.connect(
             self.on_open_onstartup_changed
         )
-        startup_layout.addWidget(self.open_on_startup_checker)
-        self.startup_block = generalConfigPanel.addGroupedBlock(
-            label_startup, startup_widget, object_name="GroupGeneral"
+        project_layout.addWidget(self.open_on_startup_checker)
+
+        # Output section label
+        output_label = ConfigTextLabel(
+            self.tr("Output"), CONFIG_FONTSIZE_CONTENT - 2
+        )
+        project_layout.addWidget(output_label)
+
+        # JXL removed from options: pillow-jxl-plugin compatibility issues
+        self.rst_imgformat_combobox, imsave_sublock = combobox_with_label(
+            ["PNG", "JPG", "WEBP"], self.tr("Result image format"), parent=self
+        )
+        self.rst_imgformat_combobox.activated.connect(self.on_rst_imgformat_changed)
+        project_layout.addWidget(imsave_sublock)
+
+        self.rst_autoformat_checker, autoformat_sublock = checkbox_with_label(
+            self.tr("Auto detect source format")
+        )
+        self.rst_autoformat_checker.stateChanged.connect(self.on_autoformat_changed)
+        project_layout.addWidget(autoformat_sublock)
+
+        self.rst_imgquality_edit = PercentageLineEdit("100")
+        self.rst_imgquality_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
+        self.rst_imgquality_edit.finish_edited.connect(self.on_edit_quality_changed)
+
+        quality_sublock = ConfigSubBlock(
+            self.rst_imgquality_edit, self.tr("Quality"), vertical_layout=False
+        )
+        quality_sublock.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
+        quality_sublock.layout().insertStretch(-1)
+        imsave_sublock.layout().addWidget(quality_sublock)
+
+        # JXL removed from options
+        self.intermediate_imgformat_combobox, intermediate_imsave_sublock = (
+            combobox_with_label(
+                ["PNG"], self.tr("Intermediate image format"), parent=self
+            )
+        )
+        self.intermediate_imgformat_combobox.activated.connect(
+            self.on_intermediate_imgformat_changed
+        )
+        project_layout.addWidget(intermediate_imsave_sublock)
+
+        self.project_block = generalConfigPanel.addGroupedBlock(
+            label_project, project_widget, object_name="GroupGeneral"
         )
 
         dec_program_str = self.tr("decide by program")
         use_global_str = self.tr("use global setting")
+
+        self._preset_editors = {}
+
+        def _make_preset_row(label: str, config_key: str, target_layout: QVBoxLayout):
+            """Build a label + comma-separated QLineEdit row for a preset list."""
+            row = QHBoxLayout()
+            row.setSpacing(6)
+            lbl = QLabel(label)
+            lbl.setFixedWidth(110)
+            row.addWidget(lbl)
+            edit = QLineEdit()
+            edit.setText(", ".join(str(v) for v in getattr(pcfg, config_key)))
+            edit.setPlaceholderText(self.tr("comma-separated values"))
+            row.addWidget(edit, 1)
+            sublock = ConfigSubBlock(row)
+            target_layout.addWidget(sublock)
+            self._preset_editors[config_key] = edit
+            edit.editingFinished.connect(
+                lambda k=config_key, e=edit: self._on_preset_edited(k, e)
+            )
 
         # Build typesetting wrapper widget
         ts_widget = QWidget()
         ts_layout = QVBoxLayout(ts_widget)
         ts_layout.setContentsMargins(0, 0, 0, 0)
         ts_layout.setSpacing(0)
+
+        # Compact container for font format delegation grid
+        delegation_frame = QFrame()
+        delegation_frame.setObjectName("CompactDelegationFrame")
+        delegation_layout = QVBoxLayout(delegation_frame)
+        delegation_layout.setContentsMargins(12, 8, 12, 8)
+        delegation_layout.setSpacing(4)
+
+        # Context label
+        delegation_label = ConfigTextLabel(
+            self.tr("Default font format (when not set per-textblock):"),
+            CONFIG_FONTSIZE_CONTENT - 2,
+        )
+        delegation_layout.addWidget(delegation_label)
 
         global_fntfmt_widget = QWidget()
         global_fntfmt_layout = QGridLayout(global_fntfmt_widget)
@@ -1300,22 +1378,27 @@ class ConfigPanel(Widget):
         b = ConfigSubBlock(global_fntfmt_widget)
         b.layout().setContentsMargins(0, 0, 0, 0)
         b.setContentsMargins(0, 0, 0, 0)
-        ts_layout.addWidget(b)
+        delegation_layout.addWidget(b)
+
+        DELEGATION_COMBO_WIDTH = 140
+
         self.let_fntsize_combox, sublock = combobox_with_label(
             [dec_program_str, use_global_str],
             self.tr("Font Size"),
             parent=self,
             insert_stretch=True,
         )
+        self.let_fntsize_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
+        self.let_fntsize_combox.activated.connect(self.on_fntsize_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 0, 0)
 
-        self.let_fntsize_combox.activated.connect(self.on_fntsize_flag_changed)
         self.let_fntstroke_combox, sublock = combobox_with_label(
             [dec_program_str, use_global_str],
             self.tr("Stroke Size"),
             parent=self,
             insert_stretch=True,
         )
+        self.let_fntstroke_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
         self.let_fntstroke_combox.activated.connect(self.on_fntstroke_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 0, 1)
 
@@ -1325,6 +1408,7 @@ class ConfigPanel(Widget):
             parent=self,
             insert_stretch=True,
         )
+        self.let_fntcolor_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
         self.let_fntcolor_combox.activated.connect(self.on_fontcolor_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 1, 0)
         self.let_fnt_scolor_combox, sublock = combobox_with_label(
@@ -1333,6 +1417,7 @@ class ConfigPanel(Widget):
             parent=self,
             insert_stretch=True,
         )
+        self.let_fnt_scolor_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
         self.let_fnt_scolor_combox.activated.connect(self.on_font_scolor_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 1, 1)
 
@@ -1342,6 +1427,7 @@ class ConfigPanel(Widget):
             parent=self,
             insert_stretch=True,
         )
+        self.let_effect_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
         self.let_effect_combox.activated.connect(self.on_effect_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 2, 0)
         self.let_alignment_combox, sublock = combobox_with_label(
@@ -1350,6 +1436,7 @@ class ConfigPanel(Widget):
             parent=self,
             insert_stretch=True,
         )
+        self.let_alignment_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
         self.let_alignment_combox.activated.connect(self.on_alignment_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 2, 1)
 
@@ -1359,6 +1446,7 @@ class ConfigPanel(Widget):
             parent=self,
             insert_stretch=True,
         )
+        self.let_writing_mode_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
         self.let_writing_mode_combox.activated.connect(
             self.on_writing_mode_flag_changed
         )
@@ -1369,6 +1457,7 @@ class ConfigPanel(Widget):
             parent=self,
             insert_stretch=True,
         )
+        self.let_family_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
         self.let_family_combox.activated.connect(self.on_family_flag_changed)
         global_fntfmt_layout.addWidget(sublock, 3, 1)
 
@@ -1379,6 +1468,14 @@ class ConfigPanel(Widget):
             0,
             2,
         )
+
+        ts_layout.addWidget(delegation_frame)
+
+        # Text formatting sub-label
+        fmt_label = ConfigTextLabel(
+            self.tr("Text formatting"), CONFIG_FONTSIZE_CONTENT - 2
+        )
+        ts_layout.addWidget(fmt_label)
 
         self.let_autolayout_checker, al_sublock = checkbox_with_label(
             self.tr("Auto layout"),
@@ -1419,91 +1516,23 @@ class ConfigPanel(Widget):
         )
         ts_layout.addWidget(max_font_sublock)
 
-        # --- Preset values for font format combo boxes ---
-        self._preset_editors = {}
-
-        def _make_preset_row(label: str, config_key: str):
-            """Build a label + comma-separated QLineEdit row for a preset list."""
-            row = QHBoxLayout()
-            row.setSpacing(6)
-            lbl = QLabel(label)
-            lbl.setFixedWidth(110)
-            row.addWidget(lbl)
-            edit = QLineEdit()
-            edit.setText(", ".join(str(v) for v in getattr(pcfg, config_key)))
-            edit.setPlaceholderText(self.tr("comma-separated values"))
-            row.addWidget(edit, 1)
-            sublock = ConfigSubBlock(row)
-            ts_layout.addWidget(sublock)
-            self._preset_editors[config_key] = edit
-            edit.editingFinished.connect(
-                lambda k=config_key, e=edit: self._on_preset_edited(k, e)
-            )
-
-        preset_header = QLabel(self.tr("Combo Box Presets"))
-        preset_header.setStyleSheet("font-weight: bold; padding: 8px 0 0 24px;")
-        ts_layout.addWidget(preset_header)
-
-        _make_preset_row(self.tr("Font Size:"), "font_size_presets")
-        _make_preset_row(self.tr("Line Spacing:"), "line_spacing_presets")
-        _make_preset_row(self.tr("Letter Spacing:"), "letter_spacing_presets")
-        _make_preset_row(self.tr("Stroke Width:"), "stroke_width_presets")
-        _make_preset_row(self.tr("Opacity:"), "opacity_presets")
-
         self.typesetting_block = generalConfigPanel.addGroupedBlock(
             label_typesetting, ts_widget, object_name="GroupGeneral"
         )
 
-        # === General: Save ===
-        save_widget = QWidget()
-        save_layout = QVBoxLayout(save_widget)
-        save_layout.setContentsMargins(0, 0, 0, 0)
-        save_layout.setSpacing(0)
+        # === Save controls moved into Project group above ===
 
-        # JXL removed from options: pillow-jxl-plugin compatibility issues, see docs/en/jxl_issues.md
-        self.rst_imgformat_combobox, imsave_sublock = combobox_with_label(
-            ["PNG", "JPG", "WEBP"], self.tr("Result image format"), parent=self
+        # === General: Interface (animation + shortcuts + presets) ===
+        interface_widget = QWidget()
+        interface_layout = QVBoxLayout(interface_widget)
+        interface_layout.setContentsMargins(0, 0, 0, 0)
+        interface_layout.setSpacing(0)
+
+        # Behavior sub-label
+        behavior_label = ConfigTextLabel(
+            self.tr("Behavior"), CONFIG_FONTSIZE_CONTENT - 2
         )
-        self.rst_imgformat_combobox.activated.connect(self.on_rst_imgformat_changed)
-        save_layout.addWidget(imsave_sublock)
-
-        self.rst_autoformat_checker, autoformat_sublock = checkbox_with_label(
-            self.tr("Auto detect source format")
-        )
-        self.rst_autoformat_checker.stateChanged.connect(self.on_autoformat_changed)
-        save_layout.addWidget(autoformat_sublock)
-
-        self.rst_imgquality_edit = PercentageLineEdit("100")
-        self.rst_imgquality_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
-        self.rst_imgquality_edit.finish_edited.connect(self.on_edit_quality_changed)
-
-        quality_sublock = ConfigSubBlock(
-            self.rst_imgquality_edit, self.tr("Quality"), vertical_layout=False
-        )
-        quality_sublock.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
-        quality_sublock.layout().insertStretch(-1)
-        imsave_sublock.layout().addWidget(quality_sublock)
-
-        # JXL removed from options: pillow-jxl-plugin compatibility + imwrite lacks error handling, see docs/en/jxl_issues.md
-        self.intermediate_imgformat_combobox, intermediate_imsave_sublock = (
-            combobox_with_label(
-                ["PNG"], self.tr("Intermediate image format"), parent=self
-            )
-        )
-        self.intermediate_imgformat_combobox.activated.connect(
-            self.on_intermediate_imgformat_changed
-        )
-        save_layout.addWidget(intermediate_imsave_sublock)
-
-        self.save_block = generalConfigPanel.addGroupedBlock(
-            label_save, save_widget, object_name="GroupSave"
-        )
-
-        # === General: Miscellaneous (shortcut editor + animation) ===
-        misc_widget = QWidget()
-        misc_layout = QVBoxLayout(misc_widget)
-        misc_layout.setContentsMargins(0, 0, 0, 0)
-        misc_layout.setSpacing(8)
+        interface_layout.addWidget(behavior_label)
 
         # Animation mode
         anim_row = QHBoxLayout()
@@ -1521,16 +1550,34 @@ class ConfigPanel(Widget):
         self.anim_combo.activated.connect(self._on_anim_mode_changed)
         anim_row.addWidget(self.anim_combo)
         anim_row.addStretch()
-        misc_layout.addLayout(anim_row)
+        interface_layout.addLayout(anim_row)
 
         # Shortcut button
         self.shortcut_btn = QPushButton(self.tr("Edit Shortcuts..."), parent=self)
         self.shortcut_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
         self.shortcut_btn.clicked.connect(self._open_shortcut_dialog)
-        misc_layout.addWidget(self.shortcut_btn)
+        interface_layout.addWidget(self.shortcut_btn)
 
-        self.shortcut_block = generalConfigPanel.addGroupedBlock(
-            label_shortcuts, misc_widget
+        # Combo Box Presets (moved from Typesetting)
+        preset_header = QLabel(self.tr("Combo Box Presets"))
+        preset_header.setStyleSheet("font-weight: bold; padding: 12px 0 4px 24px;")
+        interface_layout.addWidget(preset_header)
+
+        # Helper label
+        preset_hint = ConfigTextLabel(
+            self.tr("Comma-separated values — used in font format panel dropdowns."),
+            CONFIG_FONTSIZE_CONTENT - 3,
+        )
+        interface_layout.addWidget(preset_hint)
+
+        _make_preset_row(self.tr("Font Size:"), "font_size_presets", interface_layout)
+        _make_preset_row(self.tr("Line Spacing:"), "line_spacing_presets", interface_layout)
+        _make_preset_row(self.tr("Letter Spacing:"), "letter_spacing_presets", interface_layout)
+        _make_preset_row(self.tr("Stroke Width:"), "stroke_width_presets", interface_layout)
+        _make_preset_row(self.tr("Opacity:"), "opacity_presets", interface_layout)
+
+        self.interface_block = generalConfigPanel.addGroupedBlock(
+            label_interface, interface_widget, object_name="GroupGeneral"
         )
 
         # === Navigation list (replaces horizontal nav bar) ===
@@ -1549,10 +1596,9 @@ class ConfigPanel(Widget):
             (self.trans_sub_block.section_widget, label_translator),
             ("_sep", None),
             ("_header", self.tr("General")),
-            (self.startup_block.section_widget, label_startup),
+            (self.project_block.section_widget, label_project),
             (self.typesetting_block.section_widget, label_typesetting),
-            (self.save_block.section_widget, label_save),
-            (self.shortcut_block.section_widget, label_shortcuts),
+            (self.interface_block.section_widget, label_interface),
         ]
         self._nav_items = []  # (widget_or_None, row)
         for target, text in sections:

@@ -134,10 +134,10 @@ def discover_styles(proj) -> List[StyleEntry]:
 class StyleListDelegate(QStyledItemDelegate):
     """Paint a compact style card: color swatch + font name + size + count."""
 
-    ITEM_HEIGHT = 52
-    SWATCH_SIZE = 14
-    PADDING_H = 10
-    PADDING_V = 6
+    ITEM_HEIGHT = 44
+    SWATCH_SIZE = 12
+    PADDING_H = 8
+    PADDING_V = 4
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -320,7 +320,7 @@ class _PropertyRow(QWidget):
     def __init__(self, label: str, parent=None):
         super().__init__(parent)
         self._label = QLabel(label)
-        self._label.setFixedWidth(120)
+        self._label.setFixedWidth(100)
         self._value = QLabel()
         self._value.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
@@ -328,8 +328,8 @@ class _PropertyRow(QWidget):
         self._value.setWordWrap(True)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 1, 0, 1)
-        layout.setSpacing(8)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
         layout.addWidget(self._label)
         layout.addWidget(self._value, 1)
 
@@ -356,13 +356,13 @@ class StyleDetail(QScrollArea):
         # Container
         container = QWidget()
         self._layout = QVBoxLayout(container)
-        self._layout.setSpacing(8)
-        self._layout.setContentsMargins(16, 12, 16, 12)
+        self._layout.setSpacing(4)
+        self._layout.setContentsMargins(12, 8, 12, 8)
 
         # ── 3a. Header ────────────────────────────────────────────
         self._preview_label = QLabel("Aa Bb Gg")
         self._preview_label.setObjectName("StylePreviewLabel")
-        self._preview_label.setFixedHeight(48)
+        self._preview_label.setFixedHeight(36)
         self._preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._layout.addWidget(self._preview_label)
 
@@ -411,11 +411,8 @@ class StyleDetail(QScrollArea):
         self._family_combo.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        self._family_apply = QPushButton(self.tr("Apply"))
-        self._family_apply.clicked.connect(self._apply_family)
         self._layout.addLayout(
-            _labeled_control(self.tr("Font Family"), self._family_combo,
-                             self._family_apply)
+            _labeled_control(self.tr("Font Family"), self._family_combo)
         )
 
         # Font size
@@ -423,14 +420,11 @@ class StyleDetail(QScrollArea):
         self._size_spin.setRange(1, 999)
         self._size_spin.setDecimals(1)
         self._size_spin.setSuffix(" px")
-        self._size_apply = QPushButton(self.tr("Apply"))
-        self._size_apply.clicked.connect(self._apply_size)
         self._layout.addLayout(
-            _labeled_control(self.tr("Font Size"), self._size_spin,
-                             self._size_apply)
+            _labeled_control(self.tr("Font Size"), self._size_spin)
         )
 
-        # Bold / Italic / Underline
+        # Bold / Italic / Underline / Vertical
         flags_widget = QWidget()
         flags_layout = QHBoxLayout(flags_widget)
         flags_layout.setContentsMargins(0, 0, 0, 0)
@@ -443,10 +437,8 @@ class StyleDetail(QScrollArea):
         flags_layout.addWidget(self._underline_cb)
         flags_layout.addWidget(self._vertical_cb)
         flags_layout.addStretch()
-        self._flags_apply = QPushButton(self.tr("Apply"))
-        self._flags_apply.clicked.connect(self._apply_flags)
         self._layout.addLayout(
-            _labeled_control(self.tr("Flags"), flags_widget, self._flags_apply)
+            _labeled_control(self.tr("Flags"), flags_widget)
         )
 
         # Foreground color
@@ -454,8 +446,6 @@ class StyleDetail(QScrollArea):
         self._fg_btn.setFixedSize(24, 24)
         self._fg_btn.clicked.connect(self._pick_fg)
         self._fg_label = QLabel()
-        self._fg_apply = QPushButton(self.tr("Apply"))
-        self._fg_apply.clicked.connect(self._apply_fg)
         fg_w = QWidget()
         fg_lay = QHBoxLayout(fg_w)
         fg_lay.setContentsMargins(0, 0, 0, 0)
@@ -463,7 +453,7 @@ class StyleDetail(QScrollArea):
         fg_lay.addWidget(self._fg_label)
         fg_lay.addStretch()
         self._layout.addLayout(
-            _labeled_control(self.tr("Text Color"), fg_w, self._fg_apply)
+            _labeled_control(self.tr("Text Color"), fg_w)
         )
 
         # Stroke color + width
@@ -476,8 +466,6 @@ class StyleDetail(QScrollArea):
         self._stroke_spin.setDecimals(1)
         self._stroke_spin.setSuffix(" px")
         self._stroke_spin.setFixedWidth(80)
-        self._stroke_apply = QPushButton(self.tr("Apply"))
-        self._stroke_apply.clicked.connect(self._apply_stroke)
         stroke_w = QWidget()
         stroke_lay = QHBoxLayout(stroke_w)
         stroke_lay.setContentsMargins(0, 0, 0, 0)
@@ -487,7 +475,7 @@ class StyleDetail(QScrollArea):
         stroke_lay.addWidget(self._stroke_spin)
         stroke_lay.addStretch()
         self._layout.addLayout(
-            _labeled_control(self.tr("Stroke"), stroke_w, self._stroke_apply)
+            _labeled_control(self.tr("Stroke"), stroke_w)
         )
 
         # Alignment
@@ -495,12 +483,16 @@ class StyleDetail(QScrollArea):
         self._align_combo.addItems([
             self.tr("Left"), self.tr("Center"), self.tr("Right")
         ])
-        self._align_apply = QPushButton(self.tr("Apply"))
-        self._align_apply.clicked.connect(self._apply_alignment)
         self._layout.addLayout(
-            _labeled_control(self.tr("Alignment"), self._align_combo,
-                             self._align_apply)
+            _labeled_control(self.tr("Alignment"), self._align_combo)
         )
+
+        # ── Single Apply All button ──────────────────────────────
+        self._apply_all_btn = QPushButton(self.tr("Apply Changes"))
+        self._apply_all_btn.setObjectName("StyleApplyAllBtn")
+        self._apply_all_btn.clicked.connect(self._apply_all)
+        self._layout.addSpacing(6)
+        self._layout.addWidget(self._apply_all_btn)
 
         self._layout.addWidget(_Separator())
 
@@ -737,46 +729,34 @@ class StyleDetail(QScrollArea):
         except AttributeError:
             pass
 
-    def _apply_family(self):
+    def _apply_all(self):
+        """Apply all batch controls at once."""
+        if self._entry is None:
+            return
+
         family = self._family_combo.currentText()
-        if not family or self._entry is None:
+        if not family:
             return
-        changes = self._make_change_dict({"font_family": family})
-        self._push_command(
-            changes,
-            self.tr("Change font family to {f}").format(f=family),
-        )
-        # Update local entry
-        self._entry.fontformat.font_family = family
-        self.show_entry(self._entry)
 
-    def _apply_size(self):
-        size = self._size_spin.value()
-        if self._entry is None:
-            return
-        changes = self._make_change_dict({"font_size": size})
-        self._push_command(
-            changes,
-            self.tr("Change font size to {s}px").format(s=size),
-        )
-        self._entry.fontformat.font_size = size
-        self.show_entry(self._entry)
-
-    def _apply_flags(self):
-        if self._entry is None:
-            return
-        changes = self._make_change_dict({
+        override = {
+            "font_family": family,
+            "font_size": self._size_spin.value(),
             "bold": self._bold_cb.isChecked(),
             "italic": self._italic_cb.isChecked(),
             "underline": self._underline_cb.isChecked(),
             "vertical": self._vertical_cb.isChecked(),
-        })
-        self._push_command(changes, self.tr("Change font flags"))
+            "frgb": list(self._pending_fg),
+            "srgb": list(self._pending_stroke_color),
+            "stroke_width": self._stroke_spin.value(),
+            "alignment": self._align_combo.currentIndex(),
+        }
+
+        changes = self._make_change_dict(override)
+        self._push_command(changes, self.tr("Batch edit font style"))
+        # Update local entry
         ffmt = self._entry.fontformat
-        ffmt.bold = self._bold_cb.isChecked()
-        ffmt.italic = self._italic_cb.isChecked()
-        ffmt.underline = self._underline_cb.isChecked()
-        ffmt.vertical = self._vertical_cb.isChecked()
+        for k, v in override.items():
+            setattr(ffmt, k, v)
         self.show_entry(self._entry)
 
     def _pick_fg(self):
@@ -797,14 +777,6 @@ class StyleDetail(QScrollArea):
                 f"rgb({c.red()}, {c.green()}, {c.blue()})"
             )
 
-    def _apply_fg(self):
-        if self._entry is None:
-            return
-        changes = self._make_change_dict({"frgb": list(self._pending_fg)})
-        self._push_command(changes, self.tr("Change text color"))
-        self._entry.fontformat.frgb = list(self._pending_fg)
-        self.show_entry(self._entry)
-
     def _pick_stroke_color(self):
         if self._entry is None:
             return
@@ -822,27 +794,6 @@ class StyleDetail(QScrollArea):
             self._stroke_color_label.setText(
                 f"rgb({c.red()}, {c.green()}, {c.blue()})"
             )
-
-    def _apply_stroke(self):
-        if self._entry is None:
-            return
-        changes = self._make_change_dict({
-            "srgb": list(self._pending_stroke_color),
-            "stroke_width": self._stroke_spin.value(),
-        })
-        self._push_command(changes, self.tr("Change stroke"))
-        self._entry.fontformat.srgb = list(self._pending_stroke_color)
-        self._entry.fontformat.stroke_width = self._stroke_spin.value()
-        self.show_entry(self._entry)
-
-    def _apply_alignment(self):
-        if self._entry is None:
-            return
-        align = self._align_combo.currentIndex()
-        changes = self._make_change_dict({"alignment": align})
-        self._push_command(changes, self.tr("Change alignment"))
-        self._entry.fontformat.alignment = align
-        self.show_entry(self._entry)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -865,12 +816,12 @@ def _labeled_control(
     lbl = QLabel(label)
     lbl.setFixedWidth(100)
     layout = QHBoxLayout()
-    layout.setContentsMargins(0, 2, 0, 2)
-    layout.setSpacing(8)
+    layout.setContentsMargins(0, 1, 0, 1)
+    layout.setSpacing(6)
     layout.addWidget(lbl)
     layout.addWidget(control, 1)
     if action_btn is not None:
-        action_btn.setFixedWidth(60)
+        action_btn.setFixedWidth(52)
         layout.addWidget(action_btn)
     return layout
 

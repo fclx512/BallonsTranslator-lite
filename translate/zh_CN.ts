@@ -391,6 +391,34 @@
             <source>Photoshop executable (Photoshop.exe);;Executables (*.exe);;All files (*)</source>
             <translation>Photoshop 可执行文件 (Photoshop.exe);;可执行文件 (*.exe);;所有文件 (*)</translation>
         </message>
+        <message>
+            <source>Project</source>
+            <translation>项目</translation>
+        </message>
+        <message>
+            <source>Interface</source>
+            <translation>界面</translation>
+        </message>
+        <message>
+            <source>Output</source>
+            <translation>输出</translation>
+        </message>
+        <message>
+            <source>Default font format (when not set per-textblock):</source>
+            <translation>默认字体格式（当未按文本块设置时）：</translation>
+        </message>
+        <message>
+            <source>Text formatting</source>
+            <translation>文本格式</translation>
+        </message>
+        <message>
+            <source>Behavior</source>
+            <translation>行为</translation>
+        </message>
+        <message>
+            <source>Comma-separated values — used in font format panel dropdowns.</source>
+            <translation>逗号分隔的值 — 用于字体格式面板下拉选项。</translation>
+        </message>
     </context>
     <context>
         <name>FontExcludeDialog</name>
@@ -1587,17 +1615,27 @@ Output:
             <source>Enable</source>
             <translation>启用</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/shadow_gradient_dialog.py" line="0" />
             <source>Start Color</source>
             <translation>颜色1</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/shadow_gradient_dialog.py" line="0" />
             <source>End Color</source>
             <translation>颜色2</translation>
         </message>
         <message>
+            <location filename="../ui/shadow_gradient_dialog.py" line="0" />
+            <source>Scale</source>
+            <translation>缩放</translation>
+        </message>
+        <message>
+            <location filename="../ui/shadow_gradient_dialog.py" line="0" />
+            <source>↔ Reverse</source>
+            <translation>↔ 互换</translation>
+        </message>
+        <message type="obsolete">
             <location filename="../ui/shadow_gradient_dialog.py" line="0" />
             <source>Size</source>
             <translation>范围</translation>
@@ -1616,6 +1654,25 @@ Output:
             <location filename="../ui/shadow_gradient_dialog.py" line="0" />
             <source>Apply</source>
             <translation>应用</translation>
+        </message>
+        <message>
+            <source>Include stroke in shadow</source>
+            <translation>阴影包含描边</translation>
+        </message>
+        <message>
+            <source>Note: PSD export uses Photoshop's native drop shadow (glyph-only), regardless of this setting.</source>
+            <translation>注意：PSD 导出将使用 Photoshop 原生投影（仅字形），不受此设置影响。</translation>
+        </message>
+        <message>
+            <source>(global)</source>
+            <translation>（全局生效）</translation>
+        </message>
+    </context>
+    <context>
+        <name>ShadowGradientPreview</name>
+        <message>
+            <source>Background color</source>
+            <translation>背景颜色</translation>
         </message>
     </context>
     <context>

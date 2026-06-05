@@ -7,7 +7,7 @@ import time
 import traceback
 from functools import partial
 from pathlib import Path
-from typing import List, Union
+from typing import List, Optional, Union
 
 from qtpy.QtCore import QEvent, QPoint, QSize, Qt, Signal
 from qtpy.QtGui import (
@@ -77,7 +77,6 @@ from .custom_widget import (
 )
 from .drawing_commands import RunBlkTransCommand
 from .drawingpanel import DrawingPanel
-from .fontstyle_manager import FontStyleManager
 from .framelesswindow import FramelessMoveResize, FramelessWindow
 from .global_search_widget import GlobalSearchWidget
 from .io_thread import ImgSaveThread
@@ -186,7 +185,6 @@ class MainWindow(mainwindow_cls):
         self.leftBar.showPageListLabel.clicked.connect(self.pageLabelStateChanged)
         self.leftBar.imgTransChecked.connect(self.setupImgTransUI)
         self.leftBar.configChecked.connect(self.setupConfigUI)
-        self.leftBar.styleMgrChecked.connect(self.showStyleManager)
         self.leftBar.globalSearchChecker.clicked.connect(self.on_set_gsearch_widget)
         self.leftBar.open_dir.connect(self.OpenProj)
         self.leftBar.open_json_proj.connect(self.openJsonProj)
@@ -331,25 +329,8 @@ class MainWindow(mainwindow_cls):
         self._configSlide.on_before_show(lambda: self.configPanel.setFocus())
         self._configSlide.on_after_hide(self._on_config_hidden)
 
-        # Font Style Manager as floating overlay (slides in from right)
-        self.fontStyleManager = FontStyleManager(self.centralStackWidget)
-        self.fontStyleManager.setVisible(False)
-        self._styleMgrSlide = OverlaySlider(
-            self.fontStyleManager,
-            direction="right",
-            duration=500,
-            split_mode=True,
-            split_left_widget=self.fontStyleManager.styleList,
-            split_right_widget=self.fontStyleManager.detailContent,
-        )
-        self._styleMgrSlide.on_before_show(
-            lambda: self.fontStyleManager.refresh(self.imgtrans_proj,
-                                                   self.st_manager)
-        )
-        self._styleMgrSlide.on_after_hide(self._on_stylemgr_hidden)
-        self.fontStyleManager.navigate_to_block.connect(
-            self._on_stylemgr_navigate
-        )
+        # Font Style Manager — opened as a dialog from Tools menu
+        self._styleMgrDialog: Optional[QDialog] = None
 
         # Search widget as floating overlay (slides in from left)
         self._searchSlide = OverlaySlider(
@@ -449,8 +430,6 @@ class MainWindow(mainwindow_cls):
                 self.leftBar.showPageListLabel.setChecked(False)
                 self._hidePageListOverlay()
             # Hide other right-side floating overlays
-            if self.fontStyleManager.isVisible():
-                self.leftBar.styleMgrChecker.setChecked(False)
             if self.configPanel.isVisible():
                 self.leftBar.configChecker.setChecked(False)
             self._aiChatSlide.show()
@@ -716,9 +695,6 @@ class MainWindow(mainwindow_cls):
         # Hide AI chat panel when returning to imgtrans mode
         if self.leftBar.aiChatChecker.isChecked():
             self.leftBar.aiChatChecker.setChecked(False)
-        # Hide Font Style Manager when returning to imgtrans mode
-        if self.fontStyleManager.isVisible():
-            self.leftBar.styleMgrChecker.setChecked(False)
         show = self.leftBar.needleftStackWidget()
         is_visible = self.leftStackWidget.isVisible()
         if show and not is_visible:
@@ -749,8 +725,6 @@ class MainWindow(mainwindow_cls):
 
     def _showConfigOverlay(self):
         # Close other floating overlays before showing config
-        if self.fontStyleManager.isVisible():
-            self.leftBar.styleMgrChecker.setChecked(False)
         if self.aiChatPanel.isVisible():
             self.leftBar.aiChatChecker.setChecked(False)
         self._configSlide.show()
@@ -762,27 +736,38 @@ class MainWindow(mainwindow_cls):
         if self.leftBar.configChecker.isChecked():
             self.leftBar.configChecker.setChecked(False)
 
-    def showStyleManager(self):
-        """Toggle the Font Style Manager overlay."""
-        if self.fontStyleManager.isVisible():
-            self._styleMgrSlide.hide()
-        else:
-            # Close other floating overlays before showing
-            if self.configPanel.isVisible():
-                self.leftBar.configChecker.setChecked(False)
-            if self.aiChatPanel.isVisible():
-                self.leftBar.aiChatChecker.setChecked(False)
-            if self.leftBar.globalSearchChecker.isChecked():
-                self.leftBar.globalSearchChecker.setChecked(False)
-                self._hideSearchOverlay()
-            if self.leftBar.showPageListLabel.isChecked():
-                self.leftBar.showPageListLabel.setChecked(False)
-                self._hidePageListOverlay()
-            self._styleMgrSlide.show()
+    def on_open_fontstyle_manager(self):
+        """Open Font Style Manager as a standalone dialog."""
+        if self._styleMgrDialog is not None and self._styleMgrDialog.isVisible():
+            self._styleMgrDialog.raise_()
+            self._styleMgrDialog.activateWindow()
+            return
 
-    def _on_stylemgr_hidden(self):
-        if self.leftBar.styleMgrChecker.isChecked():
-            self.leftBar.styleMgrChecker.setChecked(False)
+        from qtpy.QtWidgets import QDialog, QVBoxLayout
+
+        from .fontstyle_manager import FontStyleManager
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(self.tr("Font Style Manager"))
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.destroyed.connect(self._on_stylemgr_dialog_destroyed)
+
+        fsm = FontStyleManager(dialog)
+        fsm.set_project(self.imgtrans_proj, self.st_manager)
+        fsm.refresh()
+        fsm.navigate_to_block.connect(self._on_stylemgr_navigate)
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(fsm)
+
+        dialog.resize(800, 540)
+        dialog.setMinimumSize(640, 400)
+        self._styleMgrDialog = dialog
+        dialog.show()
+
+    def _on_stylemgr_dialog_destroyed(self):
+        self._styleMgrDialog = None
 
     def _on_stylemgr_navigate(self, pagename: str, block_idx: int):
         """Switch to *pagename* and select *block_idx* on the canvas."""
@@ -839,7 +824,6 @@ class MainWindow(mainwindow_cls):
         self._searchSlide.resize()
         self._pageListSlide.resize()
         self._aiChatSlide.resize()
-        self._styleMgrSlide.resize()
 
     def set_display_lang(self, lang: str):
         self.retranslateUI()
@@ -1058,7 +1042,7 @@ class MainWindow(mainwindow_cls):
         self.titleBar.global_search_trigger.connect(self.on_global_search)
         self.titleBar.darkmode_trigger.connect(self.on_darkmode_triggered)
         self.titleBar.merge_tool_trigger.connect(self.on_open_merge_tool)
-        self.titleBar.stylemgr_trigger.connect(self.showStyleManager)
+        self.titleBar.stylemgr_trigger.connect(self.on_open_fontstyle_manager)
         self.titleBar.help_about_triggered.connect(self.show_about_dialog)
         self.titleBar.psd_export_triggered.connect(self.on_export_psd)
 

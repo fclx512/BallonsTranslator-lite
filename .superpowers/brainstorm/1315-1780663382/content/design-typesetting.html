@@ -1,0 +1,145 @@
+<h2>方案 C · Typesetting 组设计</h2>
+<p class="subtitle">核心改动：委托网格加紧凑容器 + 移除预设区（移至 Interface）</p>
+
+<div class="section">
+  <h3>当前 vs 改后</h3>
+</div>
+
+<div class="split">
+  <div class="mockup" style="flex: 1.2;">
+    <div class="mockup-header">当前 Typesetting（16+ 控件，无视觉层次）</div>
+    <div class="mockup-body" style="font-size: 11px; max-height: 500px; overflow-y: auto;">
+      <div style="border: 1px solid #555; border-radius: 6px; padding: 8px;">
+        <div style="color: #f96; font-size: 10px; margin-bottom: 4px;">4×2 网格 — 8 个下拉框平铺</div>
+        <table style="width:100%; border-collapse: collapse;">
+          <tr><td style="padding: 2px;">Font Size</td><td><select style="width:100%;padding:1px;font-size:10px;"><option>decide by program</option></select></td>
+          <td style="padding: 2px;">Stroke Size</td><td><select style="width:100%;padding:1px;font-size:10px;"><option>decide by program</option></select></td></tr>
+          <tr><td style="padding: 2px;">Font Color</td><td><select style="width:100%;padding:1px;font-size:10px;"><option>decide by program</option></select></td>
+          <td style="padding: 2px;">Stroke Color</td><td><select style="width:100%;padding:1px;font-size:10px;"><option>decide by program</option></select></td></tr>
+          <tr><td style="padding: 2px;">Effect</td><td><select style="width:100%;padding:1px;font-size:10px;"><option>decide by program</option></select></td>
+          <td style="padding: 2px;">Alignment</td><td><select style="width:100%;padding:1px;font-size:10px;"><option>decide by program</option></select></td></tr>
+          <tr><td style="padding: 2px;">Writing</td><td><select style="width:100%;padding:1px;font-size:10px;"><option>decide by program</option></select></td>
+          <td style="padding: 2px;">Font Family</td><td><select style="width:100%;padding:1px;font-size:10px;"><option>Keep existing</option></select></td></tr>
+        </table>
+        <hr style="border-color:#444; margin: 6px 0;">
+        <div style="color: #f96; font-size: 10px; margin-bottom: 4px;">3 checkboxes + 按钮 + spinbox + 5 行预设</div>
+        <div style="font-size: 10px;">
+          <div><input type="checkbox" checked> Auto layout</div>
+          <div><input type="checkbox" checked> To uppercase</div>
+          <div><input type="checkbox"> Independent text styles</div>
+          <button style="margin:4px 0;font-size:10px;">Exclude Fonts...</button>
+          <div>Max Font Size <input type="text" value="200" style="width:40px;font-size:10px;"></div>
+          <div style="font-weight:bold; margin-top:6px;">Combo Box Presets</div>
+          <div style="color:#888;">[5 preset 行]</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; padding: 10px; font-size: 28px; color: #58a;">→</div>
+
+  <div class="mockup" style="flex: 1.2;">
+    <div class="mockup-header" style="color: #8f8;">改后 Typesetting（层次分明，预设移除）</div>
+    <div class="mockup-body" style="font-size: 12px;">
+
+      <div style="border: 1px solid #555; border-left: 3px solid #a85; border-radius: 7px; padding: 12px;">
+        <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 12px;">Typesetting</div>
+
+        <!-- Compact delegation panel -->
+        <div style="background: #252525; border: 1px solid #444; border-radius: 6px; padding: 10px 14px; margin-bottom: 12px;">
+          <div style="font-size: 12px; color: #999; margin-bottom: 8px;">Default font format (when not set per-textblock):</div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+            <tr>
+              <td style="padding: 3px 6px; text-align: right; width: 25%; color: #bbb;">Font Size</td>
+              <td style="width: 25%;"><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program ▾</option><option>Global ▾</option></select></td>
+              <td style="padding: 3px 6px; text-align: right; width: 25%; color: #bbb;">Stroke</td>
+              <td style="width: 25%;"><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program ▾</option><option>Global ▾</option></select></td>
+            </tr>
+            <tr>
+              <td style="padding: 3px 6px; text-align: right; color: #bbb;">Font Color</td>
+              <td><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program ▾</option><option>Global ▾</option></select></td>
+              <td style="padding: 3px 6px; text-align: right; color: #bbb;">Stroke Color</td>
+              <td><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program ▾</option><option>Global ▾</option></select></td>
+            </tr>
+            <tr>
+              <td style="padding: 3px 6px; text-align: right; color: #bbb;">Effect</td>
+              <td><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program ▾</option><option>Global ▾</option></select></td>
+              <td style="padding: 3px 6px; text-align: right; color: #bbb;">Alignment</td>
+              <td><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program ▾</option><option>Global ▾</option></select></td>
+            </tr>
+            <tr>
+              <td style="padding: 3px 6px; text-align: right; color: #bbb;">Writing</td>
+              <td><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program ▾</option><option>Global ▾</option></select></td>
+              <td style="padding: 3px 6px; text-align: right; color: #bbb;">Font Family</td>
+              <td><select style="width:100%;padding:2px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Keep exist ▾</option><option>Global ▾</option></select></td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Behavior checkboxes -->
+        <div style="padding: 2px 4px;">
+          <div style="font-size: 12px; color: #999; margin-bottom: 6px;">Text formatting</div>
+          <label style="display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 12px;">
+            <input type="checkbox" checked> Auto layout
+            <span style="color: #888; font-size: 10px;">(split into multi-lines)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 12px;">
+            <input type="checkbox" checked> To uppercase
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 12px;">
+            <input type="checkbox"> Independent text styles per project
+          </label>
+        </div>
+
+        <!-- Font management -->
+        <div style="margin-top: 8px; padding: 2px 4px; display: flex; align-items: center; gap: 16px;">
+          <button style="padding: 5px 16px; background: #444; color: #ccc; border: 1px solid #555; border-radius: 4px; font-size: 12px;">Exclude Fonts...</button>
+          <span style="font-size: 12px; color: #bbb;">Max Font Size <input type="text" value="200" style="width: 56px; padding: 3px 6px; background: #333; border: 1px solid #555; color: #ccc; text-align: center;"> px</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>改动明细</h3>
+</div>
+
+<table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+  <tr style="border-bottom: 1px solid #444;">
+    <th style="text-align: left; padding: 6px 10px; color: #aaa;">区域</th>
+    <th style="text-align: left; padding: 6px 10px; color: #aaa;">改动</th>
+    <th style="text-align: left; padding: 6px 10px; color: #aaa;">Qt 实现</th>
+  </tr>
+  <tr style="border-bottom: 1px solid #333;">
+    <td style="padding: 6px 10px;">委托网格</td>
+    <td style="padding: 6px 10px; color: #fb4;">包入紧凑容器，加引导文字</td>
+    <td style="padding: 6px 10px;"><code>QFrame</code> + CSS <code>border-radius</code> + 背景色区分</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #333;">
+    <td style="padding: 6px 10px;">下拉框宽度</td>
+    <td style="padding: 6px 10px; color: #8f8;">缩小（选项仅 2 个）</td>
+    <td style="padding: 6px 10px;">从 <code>SHORT</code> 缩短至 ~140px</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #333;">
+    <td style="padding: 6px 10px;">排版行为区</td>
+    <td style="padding: 6px 10px; color: #8f8;">加"Text formatting"子标签</td>
+    <td style="padding: 6px 10px;"><code>ConfigTextLabel</code> 作为视觉分隔</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #333;">
+    <td style="padding: 6px 10px;">Combo Box Presets</td>
+    <td style="padding: 6px 10px; color: #fb4;">整块移除</td>
+    <td style="padding: 6px 10px;">移至 Interface 组</td>
+  </tr>
+  <tr>
+    <td style="padding: 6px 10px;">导航标签</td>
+    <td style="padding: 6px 10px; color: #8f8;">保持 "Typesetting"</td>
+    <td style="padding: 6px 10px;">不变</td>
+  </tr>
+</table>
+
+<div class="pros-cons">
+  <div class="pros"><h4>优点</h4><ul><li>委托网格被容器"框住"，视觉上像一个功能块而非散落控件</li><li>预设区移除后 Typesetting 信息密度大幅降低</li><li>子标签（"Default font format" / "Text formatting"）提供层次引导</li></ul></div>
+  <div class="cons"><h4>缺点</h4><ul><li>仍保留 8 个下拉框 — 但这是功能性需要，无法进一步削减</li></ul></div>
+</div>

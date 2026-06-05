@@ -514,7 +514,11 @@ class FontFormatPanel(Widget):
         fmt = self.global_format if self.global_mode() else C.active_format
         text_color = fmt.frgb
         dlg = ShadowGradientDialog(
-            fmt, tab="shadow", text_color=text_color, parent=self.window()
+            fmt,
+            tab="shadow",
+            text_color=text_color,
+            shadow_include_stroke=self.global_format.shadow_include_stroke,
+            parent=self.window(),
         )
         dlg.applied.connect(self._on_shadow_gradient_applied)
         if dlg.exec_() == QDialog.DialogCode.Accepted:
@@ -529,7 +533,11 @@ class FontFormatPanel(Widget):
         fmt = self.global_format if self.global_mode() else C.active_format
         text_color = fmt.frgb
         dlg = ShadowGradientDialog(
-            fmt, tab="gradient", text_color=text_color, parent=self.window()
+            fmt,
+            tab="gradient",
+            text_color=text_color,
+            shadow_include_stroke=self.global_format.shadow_include_stroke,
+            parent=self.window(),
         )
         dlg.applied.connect(self._on_shadow_gradient_applied)
         if dlg.exec_() == QDialog.DialogCode.Accepted:
@@ -539,10 +547,29 @@ class FontFormatPanel(Widget):
         dlg.applied.disconnect(self._on_shadow_gradient_applied)
 
     def _on_shadow_gradient_applied(self, shadow_params: dict, gradient_params: dict):
+        # Handle shadow_include_stroke separately — it must apply to ALL text blocks
+        # on the current page, not just selected ones. This is a project-wide toggle
+        # (no local/per-block mode) consistent with PS behavior.
+        include_stroke = shadow_params.pop("shadow_include_stroke", None)
+
         for param_name, value in shadow_params.items():
             self.on_param_changed(param_name, value)
         for param_name, value in gradient_params.items():
             self.on_param_changed(param_name, value)
+
+        if include_stroke is not None:
+            # Always propagate to all text items on the scene
+            from .shared_widget import canvas as SW_canvas
+            from .textitem import TextBlkItem
+
+            for item in SW_canvas.items():
+                if isinstance(item, TextBlkItem):
+                    item.setBGAttribute("shadow_include_stroke", include_stroke)
+                    item.update()
+
+            # Always persist to global format (project-wide toggle).
+            self.global_format.shadow_include_stroke = include_stroke
+
         if self.textadvancedfmt_panel.active_format is not None:
             self.textadvancedfmt_panel._update_effect_btns(
                 self.textadvancedfmt_panel.active_format
@@ -645,11 +672,27 @@ class FontFormatPanel(Widget):
         """
         merge activate textstyle into global format
         """
+        _GRADIENT_FIELDS = {
+            "gradient_enabled",
+            "gradient_start_color",
+            "gradient_end_color",
+            "gradient_angle",
+            "gradient_size",
+        }
         active_text_style_label = self.active_text_style_label()
         if active_text_style_label is not None:
+            # Save gradient fields before merge — gradient is a per-text-block
+            # visual effect, not a global default. Text styles should not
+            # accidentally enable gradient in the global config.
+            saved = {
+                k: copy.deepcopy(getattr(self.global_format, k))
+                for k in _GRADIENT_FIELDS
+            }
             updated_keys = self.global_format.merge(
                 active_text_style_label.fontfmt, compare=True
             )
+            for k, v in saved.items():
+                setattr(self.global_format, k, v)
             if self.global_mode() and len(updated_keys) > 0:
                 self.set_active_format(self.global_format)
             self.set_globalfmt_title()

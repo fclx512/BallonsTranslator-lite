@@ -336,7 +336,12 @@ QListWidget {
 
 #StylePreviewLabel {
     border-radius: 4px;
-    padding: 8px;
+    padding: 4px;
+}
+
+#StyleApplyAllBtn {
+    padding: 8px 24px;
+    font-weight: bold;
 }
 
 #StyleBlockList {
@@ -640,22 +645,6 @@ StateChecker#ConfigChecker::indicator:hover
 StateChecker#ConfigChecker::indicator:checked
 {
     image: url(icons/leftbar_config_activate.svg);
-}
-
-StateChecker#StyleMgrChecker::indicator{
-    height: 27px;
-    width: 27px;
-    image: url(icons/leftbar_stylemgr.svg);
-}
-
-StateChecker#StyleMgrChecker::indicator:hover
-{
-    image: url(icons/leftbar_stylemgr_activate.svg);
-}
-
-StateChecker#StyleMgrChecker::indicator:checked
-{
-    image: url(icons/leftbar_stylemgr_activate.svg);
 }
 
 /*https://github.com/PyQt5/PyQt/blob/master/QScrollBar/StyleScrollBar.py*/
@@ -1814,4 +1803,10 @@ StateChecker#AiChatChecker::indicator:checked {
 #AICollapseToggle:hover {
     color: @accentTranslate;
     text-decoration: underline;
+}
+
+#CompactDelegationFrame {
+    background-color: @widgetBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
 }

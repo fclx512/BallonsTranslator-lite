@@ -1,0 +1,237 @@
+<h2>三种重组方案对比</h2>
+<p class="subtitle">约束：左侧导航 ≤ 4 项；Qt 可实现；不为"无家可归"项创建空组</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>合并弱组 · 四变三</h3>
+      <p>Startup 并入 Save 改称"Project"；Misc 改为"Interface"收容动画+快捷键+预设；Typesetting 不变</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>策略/行为分离 · 四变四</h3>
+      <p>Typesetting 拆为"Font Policy"（4×2 委托网格）和"Typography"（其余排版行为）；Save+Startup 合并；Misc 保留</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>推荐：三组 + 紧凑控件</h3>
+      <p>Project / Typesetting / Interface 三组。Typesetting 内用紧凑开关替 4×2 下拉网格，预设区移入 Interface</p>
+    </div>
+  </div>
+</div>
+
+<hr style="border-color:#444; margin: 20px 0;">
+
+<div class="section">
+  <h3>方案 A — 合并弱组，控件不变</h3>
+  <p class="subtitle">最大优点：改动最小。但 Typesetting 仍然拥挤。</p>
+</div>
+
+<div style="font-size: 13px; max-width: 640px; margin: 0 auto;">
+
+  <div style="border: 1px solid #555; border-left: 3px solid #888; border-radius: 7px; padding: 10px; margin-bottom: 14px;">
+    <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 4px;">Project</div>
+    <div style="font-size: 11px; color: #999; margin-bottom: 8px;">原 Startup + Save 合并</div>
+    <div style="font-size: 12px; padding: 6px;">
+      <label style="display: flex; align-items: center; gap: 8px; margin: 4px 0;"><input type="checkbox"> Reopen last project on startup</label>
+      <hr style="border-color: #444; margin: 6px 0;">
+      <div style="display: flex; align-items: center; gap: 8px; margin: 4px 0;">Result format <select style="padding: 2px;background:#333;color:#ccc;border:1px solid #555;"><option>PNG</option></select></div>
+      <label style="display: flex; align-items: center; gap: 8px; margin: 4px 0;"><input type="checkbox"> Auto detect source format</label>
+      <div style="margin: 4px 0;">Quality <input type="text" value="100" style="width: 50px;padding: 2px;background:#333;border:1px solid #555;color:#ccc;"></div>
+      <div style="margin: 4px 0;">Intermediate format <select style="padding: 2px;background:#333;color:#ccc;border:1px solid #555;"><option>PNG</option></select></div>
+    </div>
+  </div>
+
+  <div style="border: 1px solid #555; border-left: 3px solid #888; border-radius: 7px; padding: 10px; margin-bottom: 14px;">
+    <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 4px;">Typesetting</div>
+    <div style="font-size: 11px; color: #f96; margin-bottom: 8px;">内容不变，仍然 16+ 项</div>
+    <div style="font-size: 12px; padding: 4px; color: #aaa;">
+      [4×2 委托网格] + [3 checkboxes] + [按钮] + [spinbox] + [5 preset 行]
+    </div>
+  </div>
+
+  <div style="border: 1px solid #555; border-left: 3px solid #888; border-radius: 7px; padding: 10px;">
+    <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 4px;">Interface</div>
+    <div style="font-size: 11px; color: #999; margin-bottom: 8px;">原 Misc + Presets 移入</div>
+    <div style="font-size: 12px; padding: 6px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin: 4px 0;">Animation <select style="padding: 2px;background:#333;color:#ccc;border:1px solid #555;"><option>Auto (match display)</option></select></div>
+      <button style="margin: 6px 0; padding: 4px 12px; background: #444; color: #ccc; border: 1px solid #555; border-radius: 3px; font-size: 11px;">Edit Shortcuts...</button>
+      <div style="font-size: 11px; font-weight: bold; color: #ccc; margin-top: 8px; padding-top: 4px; border-top: 1px solid #444;">Combo Box Presets</div>
+      <div style="font-size: 10px; color: #999;">[5 行预设编辑]</div>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>优点</h4><ul><li>改动最小，代码量最少</li><li>"Miscellaneous"有了体面的名字</li><li>左侧仍为 3 项（更少）</li></ul></div>
+  <div class="cons"><h4>缺点</h4><ul><li>Typesetting 拥挤问题未解决</li><li>4×2 下拉网格视觉疲劳依旧</li></ul></div>
+</div>
+
+<hr style="border-color:#444; margin: 20px 0;">
+
+<div class="section">
+  <h3>方案 B — Typesetting 拆分</h3>
+  <p class="subtitle">将委托策略与排版行为分开，每组内容更聚焦。</p>
+</div>
+
+<div style="font-size: 13px; max-width: 640px; margin: 0 auto;">
+
+  <div style="border: 1px solid #555; border-left: 3px solid #888; border-radius: 7px; padding: 10px; margin-bottom: 14px;">
+    <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 4px;">Project</div>
+    <div style="font-size: 11px; color: #999;">Startup + Save 合并（同方案 A）</div>
+    <div style="font-size: 12px; padding: 6px;">
+      <label style="display: flex; align-items: center; gap: 8px; margin: 4px 0;"><input type="checkbox"> Reopen last project on startup</label>
+      <div style="margin: 4px 0;">Result format <select style="padding: 2px;background:#333;color:#ccc;border:1px solid #555;"><option>PNG</option></select> | Quality <input type="text" value="100" style="width: 42px;padding: 2px;background:#333;border:1px solid #555;color:#ccc;"></div>
+      <label style="display: flex; align-items: center; gap: 8px; margin: 4px 0;"><input type="checkbox"> Auto detect format</label>
+    </div>
+  </div>
+
+  <div style="border: 1px solid #555; border-left: 3px solid #58a; border-radius: 7px; padding: 10px; margin-bottom: 14px;">
+    <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 4px;">Font Policy</div>
+    <div style="font-size: 11px; color: #999; margin-bottom: 8px;">仅放 "decide by program / use global" 的字体委托网格</div>
+    <div style="font-size: 11px; color: #fb4; margin-bottom: 4px;">4×2 Grid → 紧凑双列表：</div>
+    <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+      <tr>
+        <td style="padding: 3px 6px; width: 40%;">Font Size</td>
+        <td><select style="width: 100%;padding: 2px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>decide by program</option></select></td>
+        <td style="padding: 3px 6px; width: 40%;">Stroke Size</td>
+        <td><select style="width: 100%;padding: 2px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>decide by program</option></select></td>
+      </tr>
+      <tr>
+        <td style="padding: 3px 6px;">Font Color</td>
+        <td><select style="width: 100%;padding: 2px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>decide by program</option></select></td>
+        <td style="padding: 3px 6px;">Stroke Color</td>
+        <td><select style="width: 100%;padding: 2px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>decide by program</option></select></td>
+      </tr>
+      <tr>
+        <td style="padding: 3px 6px;">Effect</td>
+        <td><select style="width: 100%;padding: 2px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>decide by program</option></select></td>
+        <td style="padding: 3px 6px;">Alignment</td>
+        <td><select style="width: 100%;padding: 2px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>decide by program</option></select></td>
+      </tr>
+      <tr>
+        <td style="padding: 3px 6px;">Writing-mode</td>
+        <td><select style="width: 100%;padding: 2px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>decide by program</option></select></td>
+        <td style="padding: 3px 6px;">Font Family</td>
+        <td><select style="width: 100%;padding: 2px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Keep existing</option></select></td>
+      </tr>
+    </table>
+  </div>
+
+  <div style="border: 1px solid #555; border-left: 3px solid #58a; border-radius: 7px; padding: 10px; margin-bottom: 14px;">
+    <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 4px;">Typography</div>
+    <div style="font-size: 11px; color: #999; margin-bottom: 8px;">排版行为 + 字体管理</div>
+    <div style="font-size: 12px; padding: 6px;">
+      <label style="display: flex; align-items: center; gap: 8px; margin: 3px 0;"><input type="checkbox" checked> Auto layout</label>
+      <label style="display: flex; align-items: center; gap: 8px; margin: 3px 0;"><input type="checkbox" checked> To uppercase</label>
+      <label style="display: flex; align-items: center; gap: 8px; margin: 3px 0;"><input type="checkbox"> Independent text styles</label>
+      <div style="margin: 6px 0; display: flex; align-items: center; gap: 12px;">
+        <button style="padding: 4px 12px; background: #444; color: #ccc; border: 1px solid #555; border-radius: 3px; font-size: 11px;">Exclude Fonts...</button>
+        <span style="font-size: 12px;">Max Font Size <input type="text" value="200" style="width: 50px; padding: 2px; background: #333; border: 1px solid #555; color: #ccc;"></span>
+      </div>
+    </div>
+  </div>
+
+  <div style="border: 1px solid #555; border-left: 3px solid #888; border-radius: 7px; padding: 10px;">
+    <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 4px;">Interface</div>
+    <div style="font-size: 11px; color: #999;">动画 + 快捷键 + 预设（同方案 A）</div>
+    <div style="font-size: 12px; padding: 6px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin: 4px 0;">Animation <select style="padding: 2px;background:#333;color:#ccc;border:1px solid #555;"><option>Auto</option></select></div>
+      <button style="margin: 4px 0; padding: 4px 12px; background: #444; color: #ccc; border: 1px solid #555; border-radius: 3px; font-size: 11px;">Edit Shortcuts...</button>
+      <div style="font-size: 11px; font-weight: bold; margin-top: 6px;">Combo Box Presets</div>
+      <div style="font-size: 10px; color: #999;">[5 preset 编辑行]</div>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>优点</h4><ul><li>每组内容聚焦，语义清晰</li><li>Typesetting 一拆为二，不再拥挤</li></ul></div>
+  <div class="cons"><h4>缺点</h4><ul><li>左侧导航多 1 项（4 项→5 项），用户担心数量过多</li><li>"Font Policy"这个名字对普通用户不够直观</li></ul></div>
+</div>
+
+<hr style="border-color:#444; margin: 20px 0;">
+
+<div class="section">
+  <h3>方案 C — 推荐：三组 + 紧凑控件</h3>
+  <p class="subtitle" style="color: #8f8;">保持 3 组（左侧导航最简），用更紧凑的控件减少 Typesetting 视觉压力</p>
+</div>
+
+<div style="font-size: 13px; max-width: 640px; margin: 0 auto;">
+
+  <div style="border: 1px solid #555; border-left: 3px solid #888; border-radius: 7px; padding: 10px; margin-bottom: 14px;">
+    <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 4px;">Project</div>
+    <div style="font-size: 11px; color: #999; margin-bottom: 6px;">启动行为 + 输出设置</div>
+    <div style="font-size: 12px; padding: 4px;">
+      <label style="display: flex; align-items: center; gap: 8px; margin: 3px 0;"><input type="checkbox"> Reopen last project on startup</label>
+      <div style="margin: 5px 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <span>Output <select style="padding: 2px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>PNG</option><option>JPG</option><option>WEBP</option></select></span>
+        <label style="display: flex; align-items: center; gap: 4px; font-size: 11px;"><input type="checkbox"> Auto</label>
+        <span>Quality <input type="text" value="100" style="width: 42px;padding: 2px;background:#333;border:1px solid #555;color:#ccc;font-size:11px;"></span>
+      </div>
+    </div>
+  </div>
+
+  <div style="border: 1px solid #555; border-left: 3px solid #a85; border-radius: 7px; padding: 10px; margin-bottom: 14px;">
+    <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 4px;">Typesetting</div>
+    <div style="font-size: 11px; color: #a85; margin-bottom: 10px;">字体委托策略改用紧凑开关 — 视觉压力减半</div>
+
+    <!-- Compact toggle grid replacing the 4x2 dropdown grid -->
+    <div style="background: #222; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
+      <div style="font-size: 11px; color: #999; margin-bottom: 8px;">当未手动设置时，使用：</div>
+      <div style="display: grid; grid-template-columns: 1fr 120px 1fr 120px; gap: 4px 10px; font-size: 12px;">
+        <!-- Row headers and toggles -->
+        <span style="text-align: right; padding: 2px 0;">Font&nbsp;Size</span>
+        <select style="padding: 1px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;grid-column:2;"><option>Program ▾</option></select>
+        <span style="text-align: right; padding: 2px 0;">Stroke</span>
+        <select style="padding: 1px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;grid-column:4;"><option>Program ▾</option></select>
+
+        <span style="text-align: right; padding: 2px 0;">Font&nbsp;Color</span>
+        <select style="padding: 1px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program ▾</option></select>
+        <span style="text-align: right; padding: 2px 0;">Stroke&nbsp;Color</span>
+        <select style="padding: 1px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program ▾</option></select>
+
+        <span style="text-align: right; padding: 2px 0;">Effect</span>
+        <select style="padding: 1px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program ▾</option></select>
+        <span style="text-align: right; padding: 2px 0;">Alignment</span>
+        <select style="padding: 1px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program ▾</option></select>
+
+        <span style="text-align: right; padding: 2px 0;">Writing</span>
+        <select style="padding: 1px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Program ▾</option></select>
+        <span style="text-align: right; padding: 2px 0;">Font&nbsp;Family</span>
+        <select style="padding: 1px 4px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Keep exist ▾</option></select>
+      </div>
+    </div>
+
+    <hr style="border-color: #444; margin: 8px 0;">
+    <div style="font-size: 12px; padding: 4px;">
+      <label style="display: flex; align-items: center; gap: 8px; margin: 3px 0;"><input type="checkbox" checked> Auto layout</label>
+      <label style="display: flex; align-items: center; gap: 8px; margin: 3px 0;"><input type="checkbox" checked> To uppercase</label>
+      <label style="display: flex; align-items: center; gap: 8px; margin: 3px 0;"><input type="checkbox"> Independent text styles</label>
+      <div style="margin: 6px 0; display: flex; align-items: center; gap: 12px;">
+        <button style="padding: 4px 12px; background: #444; color: #ccc; border: 1px solid #555; border-radius: 3px; font-size: 11px;">Exclude Fonts...</button>
+        <span style="font-size: 12px;">Max Font Size <input type="text" value="200" style="width: 50px; padding: 2px; background: #333; border: 1px solid #555; color: #ccc;"> px</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="border: 1px solid #555; border-left: 3px solid #888; border-radius: 7px; padding: 10px;">
+    <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 4px;">Interface</div>
+    <div style="font-size: 11px; color: #999; margin-bottom: 6px;">界面行为 + 控件预设</div>
+    <div style="font-size: 12px; padding: 4px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin: 4px 0;">Animation <select style="padding: 2px;background:#333;color:#ccc;border:1px solid #555;font-size:11px;"><option>Auto (match display)</option></select></div>
+      <button style="margin: 6px 0; padding: 4px 12px; background: #444; color: #ccc; border: 1px solid #555; border-radius: 3px; font-size: 11px;">Edit Shortcuts...</button>
+      <div style="font-size: 11px; font-weight: bold; color: #ccc; margin-top: 8px; padding-top: 4px; border-top: 1px solid #444;">Combo Box Presets</div>
+      <div style="font-size: 10px; color: #999;">[5 行预设值编辑]</div>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>优点</h4><ul><li>左侧仅 3 项，最简洁</li><li>Typesetting 用紧凑面板包装委托网格，视觉压力减半</li><li>"Project"语义涵盖启动+保存，"Interface"涵盖动画+快捷键+预设</li></ul></div>
+  <div class="cons"><h4>缺点</h4><ul><li>Typesetting 仍相对较重（但比现状好很多）</li><li>"Interface"组稍显杂（但比 "Miscellaneous" 语义明确）</li></ul></div>
+</div>

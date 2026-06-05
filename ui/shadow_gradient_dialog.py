@@ -1,12 +1,14 @@
 import math
 
-from qtpy.QtCore import QRectF, Qt, Signal
+from qtpy.QtCore import QPointF, QRectF, Qt, Signal
 from qtpy.QtGui import (
     QBrush,
     QColor,
     QFont,
+    QFontMetrics,
     QLinearGradient,
     QPainter,
+    QPainterPath,
     QPen,
     QPixmap,
 )
@@ -30,7 +32,9 @@ from .text_graphical_effect import apply_shadow_effect
 
 
 class ShadowGradientPreview(QWidget):
-    """Live preview of shadow/gradient effect on sample text."""
+    """Live preview of shadow/gradient effect on sample text with solid bg."""
+
+    bg_color_changed = Signal(list)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -44,7 +48,43 @@ class ShadowGradientPreview(QWidget):
         self.gradient_angle = 0.0
         self.gradient_size = 1.0
         self.text_color = [0, 0, 0]
+        self.stroke_width = 0.0
+        self.stroke_color = [0, 0, 0]
+        self.shadow_include_stroke = False
+        self._preview_text = "Preview"
+        self._bg_color = [128, 128, 128]  # PS 50% gray default
         self.setMinimumHeight(90)
+
+        # corner color swatch button for background
+        self.bg_btn = QPushButton(self)
+        self.bg_btn.setFixedSize(22, 22)
+        self.bg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.bg_btn.setToolTip(self.tr("Background color"))
+        self.bg_btn.clicked.connect(self._pick_bg_color)
+        self._update_bg_btn_style()
+
+    def _update_bg_btn_style(self):
+        r, g, b = [int(c) for c in self._bg_color]
+        self.bg_btn.setStyleSheet(
+            f"QPushButton {{ background-color: rgb({r},{g},{b}); "
+            f"border: 2px solid #555; border-radius: 3px; }}"
+            f"QPushButton:hover {{ border-color: #fff; }}"
+        )
+
+    def _pick_bg_color(self):
+        c = QColor(*[int(v) for v in self._bg_color])
+        dlg = ColorPickerDialog(c, self.window())
+        if dlg.exec_() == QDialog.DialogCode.Accepted:
+            picked = dlg.get_color()
+            self._bg_color = [picked.red(), picked.green(), picked.blue()]
+            self._update_bg_btn_style()
+            self.bg_color_changed.emit(self._bg_color)
+            self.update()
+
+    def resizeEvent(self, event):
+        bs = 22
+        self.bg_btn.move(self.width() - bs - 4, self.height() - bs - 4)
+        super().resizeEvent(event)
 
     def set_params(
         self,
@@ -58,6 +98,9 @@ class ShadowGradientPreview(QWidget):
         gradient_angle,
         gradient_size,
         text_color=None,
+        stroke_width=None,
+        stroke_color=None,
+        shadow_include_stroke=None,
     ):
         self.shadow_radius = shadow_radius
         self.shadow_strength = shadow_strength
@@ -70,6 +113,12 @@ class ShadowGradientPreview(QWidget):
         self.gradient_size = gradient_size
         if text_color is not None:
             self.text_color = text_color
+        if stroke_width is not None:
+            self.stroke_width = stroke_width
+        if stroke_color is not None:
+            self.stroke_color = stroke_color
+        if shadow_include_stroke is not None:
+            self.shadow_include_stroke = shadow_include_stroke
         self.update()
 
     def paintEvent(self, event):
@@ -78,84 +127,117 @@ class ShadowGradientPreview(QWidget):
 
         w, h = self.width(), self.height()
 
-        # checkerboard background
-        cs = 8
-        for row in range(0, h, cs):
-            for col in range(0, w, cs):
-                is_white = ((row // cs) + (col // cs)) % 2 == 0
-                c = QColor(220, 220, 220) if is_white else QColor(255, 255, 255)
-                p.fillRect(col, row, cs, cs, c)
-
-        # draw sample text
-        preview_text = "Preview"
-        font = QFont()
-        font.setPointSizeF(24)
-        font.setBold(True)
-        p.setFont(font)
+        # solid background (default PS 50% gray)
+        c = QColor(*[int(v) for v in self._bg_color])
+        p.fillRect(0, 0, w, h, c)
 
         # compute font pixel size for shadow/offset scaling (matches repaint_background)
         from utils.fontformat import pt2px
 
         font_size_px = pt2px(24)
 
-        fm = p.fontMetrics()
-        text_rect = fm.boundingRect(preview_text)
-        text_w = text_rect.width() + 20
-        text_h = text_rect.height() + 20
+        # compute text brush: gradient or flat color
+        if self.gradient_enabled:
+            rad = math.radians(self.gradient_angle)
+            dx = math.cos(rad)
+            dy = math.sin(rad)
+            text_w = w
+            text_h = h
+            cx = text_w / 2
+            cy = text_h / 2
+            size_val = max(text_w, text_h) * self.gradient_size
+            grad = QLinearGradient(
+                cx - dx * size_val,
+                cy - dy * size_val,
+                cx + dx * size_val,
+                cy + dy * size_val,
+            )
+            grad.setColorAt(0, QColor(*[int(c) for c in self.gradient_start]))
+            grad.setColorAt(1, QColor(*[int(c) for c in self.gradient_end]))
+            fill_brush = QBrush(grad)
+        else:
+            fill_brush = QBrush(QColor(*[int(c) for c in self.text_color]))
 
-        # render text to pixmap
-        text_pixmap = QPixmap(text_w, text_h)
-        text_pixmap.fill(Qt.GlobalColor.transparent)
-        tp = QPainter(text_pixmap)
-        tp.setRenderHint(QPainter.RenderHint.Antialiasing)
-        tp.setFont(font)
-        tp.setPen(QPen(QColor(*[int(c) for c in self.text_color])))
-        tp.drawText(
-            QRectF(0, 0, text_w, text_h), Qt.AlignmentFlag.AlignCenter, preview_text
-        )
-        tp.end()
+        # render text with stroke for display
+        display_pm = self._render_text_pixmap(include_stroke=True, fill_brush=fill_brush)
+
+        # shadow source (always uses flat fill — only the alpha mask matters for shadow)
+        shadow_src_pm = self._render_text_pixmap(include_stroke=self.shadow_include_stroke)
 
         # compute offset for center placement
-        ox = int((w - text_w) / 2)
-        oy = int((h - text_h) / 2)
+        ox = int((w - display_pm.width()) / 2)
+        oy = int((h - display_pm.height()) / 2)
 
-        # shadow (scale by font pixel size, matching repaint_background)
+        # shadow
         shadow_enabled = self.shadow_radius > 0 and self.shadow_strength > 0
         if shadow_enabled:
             r = int(round(self.shadow_radius * font_size_px))
             sx = int(self.shadow_offset[0] * font_size_px)
             sy = int(self.shadow_offset[1] * font_size_px)
             shadow_pm, _ = apply_shadow_effect(
-                text_pixmap, self.shadow_color, self.shadow_strength, r
+                shadow_src_pm, self.shadow_color, self.shadow_strength, r
             )
             p.drawPixmap(ox + sx, oy + sy, shadow_pm)
 
-        # gradient or flat color text
-        if self.gradient_enabled:
-            rad = math.radians(self.gradient_angle)
-            dx = math.cos(rad)
-            dy = math.sin(rad)
-            cx = w / 2
-            cy = h / 2
-            size = max(w, h) * self.gradient_size
-            # match get_text_gradient: setStart(cx-dx*r, cy-dy*r), setFinalStop(cx+dx*r, cy+dy*r)
-            grad = QLinearGradient(
-                cx - dx * size, cy - dy * size, cx + dx * size, cy + dy * size
-            )
-            grad.setColorAt(0, QColor(*[int(c) for c in self.gradient_start]))
-            grad.setColorAt(1, QColor(*[int(c) for c in self.gradient_end]))
-            p.setPen(QPen(QBrush(grad), 0))
-            p.setFont(font)
-            p.drawText(
-                QRectF(ox, oy, text_w, text_h),
-                Qt.AlignmentFlag.AlignCenter,
-                preview_text,
-            )
-        else:
-            # flat text on top
-            p.drawPixmap(ox, oy, text_pixmap)
+        # gradient or flat color text (always with stroke for display)
+        p.drawPixmap(ox, oy, display_pm)
 
         p.end()
+
+    def _render_text_pixmap(self, include_stroke=True, fill_brush=None) -> QPixmap:
+        """Render preview text into a transparent pixmap.
+
+        Args:
+            include_stroke: If True, renders stroke outline when stroke_width > 0.
+                            If False, text-only (used for PS-compatible shadow source).
+            fill_brush: QBrush for text fill. If None, uses self.text_color (flat).
+        """
+        font = QFont()
+        font.setPointSizeF(24)
+        font.setBold(True)
+
+        fm = QFontMetrics(font)
+        text_rect = fm.boundingRect(self._preview_text)
+        text_w = text_rect.width() + 20
+        text_h = text_rect.height() + 20
+
+        pm = QPixmap(text_w, text_h)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setFont(font)
+
+        if fill_brush is None:
+            fill_brush = QBrush(QColor(*[int(c) for c in self.text_color]))
+
+        if self.stroke_width > 0 and include_stroke:
+            # Path-based stroke+fill rendering to match main app behavior
+            from utils.fontformat import pt2px
+
+            path = QPainterPath()
+            # center text baseline in pixmap
+            x = (text_w - text_rect.width()) / 2 - text_rect.x()
+            y = (text_h + fm.ascent()) / 2
+            path.addText(x, y, font, self._preview_text)
+            sw = pt2px(24) * self.stroke_width
+            pen = QPen(
+                QColor(*[int(c) for c in self.stroke_color]),
+                sw,
+                Qt.PenStyle.SolidLine,
+                Qt.PenCapStyle.RoundCap,
+                Qt.PenJoinStyle.RoundJoin,
+            )
+            p.strokePath(path, pen)
+            p.fillPath(path, fill_brush)
+        else:
+            p.setPen(QPen(fill_brush, 0))
+            p.drawText(
+                QRectF(0, 0, text_w, text_h),
+                Qt.AlignmentFlag.AlignCenter,
+                self._preview_text,
+            )
+        p.end()
+        return pm
 
 
 class ColorButton(QPushButton):
@@ -199,13 +281,113 @@ class ColorButton(QPushButton):
             self.set_color(dlg.get_color())
 
 
+class GradientBar(QWidget):
+    """PS-style clickable gradient bar with start/end color stops."""
+
+    startColorChanged = Signal(list)
+    endColorChanged = Signal(list)
+
+    def __init__(self, start_color, end_color, parent=None):
+        super().__init__(parent)
+        self._start = list(start_color)
+        self._end = list(end_color)
+        self.setFixedHeight(40)
+        self.setMinimumWidth(160)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def setStartColor(self, color):
+        self._start = list(color)
+        self.update()
+
+    def setEndColor(self, color):
+        self._end = list(color)
+        self.update()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        w, h = self.width(), self.height()
+        bar_h = 22
+        bar_y = (h - bar_h) / 2
+        stop_r = 7
+
+        # gradient bar
+        bar_rect = QRectF(4, bar_y, w - 8, bar_h)
+        path = QPainterPath()
+        path.addRoundedRect(bar_rect, 4, 4)
+
+        grad = QLinearGradient(bar_rect.topLeft(), bar_rect.topRight())
+        grad.setColorAt(0, QColor(*[int(c) for c in self._start]))
+        grad.setColorAt(1, QColor(*[int(c) for c in self._end]))
+        p.fillPath(path, QBrush(grad))
+        p.setPen(QPen(QColor(90, 90, 90), 1))
+        p.drawPath(path)
+
+        # stop positions
+        stop_y = bar_rect.center().y()
+        self._stop_lx = bar_rect.left() + stop_r + 6
+        self._stop_rx = bar_rect.right() - stop_r - 6
+
+        # start stop
+        p.setPen(QPen(QColor(255, 255, 255), 2))
+        p.setBrush(QBrush(QColor(*[int(c) for c in self._start])))
+        p.drawEllipse(QPointF(self._stop_lx, stop_y), stop_r, stop_r)
+
+        # end stop
+        p.setBrush(QBrush(QColor(*[int(c) for c in self._end])))
+        p.drawEllipse(QPointF(self._stop_rx, stop_y), stop_r, stop_r)
+
+        # store hit zone for click detection (margin = stop_r + 4)
+        self._stop_area = stop_r + 4
+
+        p.end()
+
+    def mousePressEvent(self, event):
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        pos = event.position()
+        if hasattr(self, "_stop_lx") and hasattr(self, "_stop_area"):
+            d = self._stop_area
+            # check distance to left / right stop centers
+            lx = self._stop_lx
+            rx = self._stop_rx
+            dy = self.height() / 2 - pos.y()
+            dxl = lx - pos.x()
+            dxr = rx - pos.x()
+            if abs(dxl) < d and abs(dy) < d:
+                self._pick_color(is_start=True)
+            elif abs(dxr) < d and abs(dy) < d:
+                self._pick_color(is_start=False)
+
+    def _pick_color(self, is_start=True):
+        current = self._start if is_start else self._end
+        c = QColor(*[int(v) for v in current])
+        dlg = ColorPickerDialog(c, self.window())
+        if dlg.exec_() == QDialog.DialogCode.Accepted:
+            picked = dlg.get_color()
+            rgb = [picked.red(), picked.green(), picked.blue()]
+            if is_start:
+                self._start = rgb
+                self.startColorChanged.emit(rgb)
+            else:
+                self._end = rgb
+                self.endColorChanged.emit(rgb)
+            self.update()
+
+
 class ShadowGradientDialog(QDialog):
     """PS-style dialog for shadow and gradient settings with live preview."""
 
     applied = Signal(dict, dict)
 
     def __init__(
-        self, font_format: FontFormat, tab="shadow", text_color=None, parent=None
+        self,
+        font_format: FontFormat,
+        tab="shadow",
+        text_color=None,
+        shadow_include_stroke=None,
+        parent=None,
     ):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Shadow & Gradient"))
@@ -215,6 +397,13 @@ class ShadowGradientDialog(QDialog):
         self._gradient_start = list(font_format.gradient_start_color)
         self._gradient_end = list(font_format.gradient_end_color)
         self._text_color = text_color if text_color else list(font_format.frgb)
+        self._stroke_width = font_format.stroke_width
+        self._stroke_color = list(font_format.srgb)
+        self._shadow_include_stroke = (
+            shadow_include_stroke
+            if shadow_include_stroke is not None
+            else font_format.shadow_include_stroke
+        )
 
         self._setup_ui(font_format, tab)
 
@@ -299,7 +488,7 @@ class ShadowGradientDialog(QDialog):
         ctrl.addWidget(QLabel(self.tr("Strength")))
         self.strength_slider = QSlider(Qt.Orientation.Horizontal)
         self.strength_slider.setRange(0, 100)
-        self.strength_slider.setValue(int(fmt.shadow_strength / 3.0 * 100))
+        self.strength_slider.setValue(int(fmt.shadow_strength * 100))
         self.strength_slider.setFixedWidth(150)
         self.strength_slider.valueChanged.connect(self._on_shadow_value_changed)
         self.strength_label = QLabel(f"{fmt.shadow_strength:.2f}")
@@ -312,7 +501,7 @@ class ShadowGradientDialog(QDialog):
         ctrl.addWidget(QLabel(self.tr("Radius")))
         self.radius_slider = QSlider(Qt.Orientation.Horizontal)
         self.radius_slider.setRange(0, 100)
-        self.radius_slider.setValue(int(fmt.shadow_radius / 2.0 * 100))
+        self.radius_slider.setValue(int(fmt.shadow_radius * 100))
         self.radius_slider.setFixedWidth(150)
         self.radius_slider.valueChanged.connect(self._on_shadow_value_changed)
         self.radius_label = QLabel(f"{fmt.shadow_radius:.2f}")
@@ -325,6 +514,25 @@ class ShadowGradientDialog(QDialog):
         ctrl.addWidget(QLabel(self.tr("Offset")))
         self.offset_xy_label = QLabel(f"X: {ox:.2f}  Y: {oy:.2f}")
         ctrl.addWidget(self.offset_xy_label)
+
+        # include stroke in shadow
+        ctrl.addSpacing(4)
+        cb_row = QHBoxLayout()
+        self.include_stroke_cb = QCheckBox(self.tr("Include stroke in shadow"))
+        self.include_stroke_cb.setChecked(self._shadow_include_stroke)
+        self.include_stroke_cb.toggled.connect(self._update_preview)
+        cb_row.addWidget(self.include_stroke_cb)
+        global_lbl = QLabel(self.tr("(global)"))
+        global_lbl.setStyleSheet("color: gray; font-size: 11px;")
+        cb_row.addWidget(global_lbl)
+        cb_row.addStretch()
+        ctrl.addLayout(cb_row)
+        ps_note = QLabel(
+            self.tr("Note: PSD export uses Photoshop's native drop shadow (glyph-only), regardless of this setting.")
+        )
+        ps_note.setWordWrap(True)
+        ps_note.setStyleSheet("color: gray; font-size: 11px;")
+        ctrl.addWidget(ps_note)
 
         ctrl.addStretch()
         hlayout.addLayout(ctrl)
@@ -355,35 +563,35 @@ class ShadowGradientDialog(QDialog):
         self.gradient_enable_cb.toggled.connect(self._on_gradient_value_changed)
         ctrl.addWidget(self.gradient_enable_cb)
 
-        # start color
-        sc_row = QHBoxLayout()
-        sc_row.addWidget(QLabel(self.tr("Start Color")))
-        self.gradient_start_btn = ColorButton(fmt.gradient_start_color)
-        self.gradient_start_btn.colorChanged.connect(self._on_gradient_start_changed)
-        sc_row.addWidget(self.gradient_start_btn)
-        sc_row.addStretch()
-        ctrl.addLayout(sc_row)
+        # PS-style gradient bar (clickable stops at each end)
+        self.gradient_bar = GradientBar(
+            fmt.gradient_start_color, fmt.gradient_end_color
+        )
+        self.gradient_bar.startColorChanged.connect(self._on_gradient_start_changed)
+        self.gradient_bar.endColorChanged.connect(self._on_gradient_end_changed)
+        ctrl.addWidget(self.gradient_bar)
 
-        # end color
-        ec_row = QHBoxLayout()
-        ec_row.addWidget(QLabel(self.tr("End Color")))
-        self.gradient_end_btn = ColorButton(fmt.gradient_end_color)
-        self.gradient_end_btn.colorChanged.connect(self._on_gradient_end_changed)
-        ec_row.addWidget(self.gradient_end_btn)
-        ec_row.addStretch()
-        ctrl.addLayout(ec_row)
+        # reverse button
+        rev_row = QHBoxLayout()
+        rev_row.addStretch()
+        reverse_btn = QPushButton(self.tr("↔ Reverse"))
+        reverse_btn.setFixedWidth(100)
+        reverse_btn.clicked.connect(self._on_reverse_clicked)
+        rev_row.addWidget(reverse_btn)
+        rev_row.addStretch()
+        ctrl.addLayout(rev_row)
 
-        # size
-        ctrl.addWidget(QLabel(self.tr("Size")))
-        self.size_slider = QSlider(Qt.Orientation.Horizontal)
-        self.size_slider.setRange(50, 200)  # 0.5 to 2.0
-        self.size_slider.setValue(int(fmt.gradient_size * 100))
-        self.size_slider.setFixedWidth(150)
-        self.size_slider.valueChanged.connect(self._on_gradient_value_changed)
-        self.size_label = QLabel(f"{fmt.gradient_size:.2f}")
+        # scale (PS terminology)
+        ctrl.addWidget(QLabel(self.tr("Scale")))
+        self.scale_slider = QSlider(Qt.Orientation.Horizontal)
+        self.scale_slider.setRange(50, 200)  # 0.5 to 2.0
+        self.scale_slider.setValue(int(fmt.gradient_size * 100))
+        self.scale_slider.setFixedWidth(150)
+        self.scale_slider.valueChanged.connect(self._on_gradient_value_changed)
+        self.scale_label = QLabel(f"{fmt.gradient_size:.2f}")
         szr = QHBoxLayout()
-        szr.addWidget(self.size_slider)
-        szr.addWidget(self.size_label)
+        szr.addWidget(self.scale_slider)
+        szr.addWidget(self.scale_label)
         ctrl.addLayout(szr)
 
         ctrl.addStretch()
@@ -393,10 +601,10 @@ class ShadowGradientDialog(QDialog):
     # ── Shadow handlers ─────────────────────────────────────
 
     def _shadow_strength(self):
-        return self.strength_slider.value() / 100.0 * 3.0
+        return self.strength_slider.value() / 100.0
 
     def _shadow_radius(self):
-        return self.radius_slider.value() / 100.0 * 2.0
+        return self.radius_slider.value() / 100.0
 
     def _shadow_offset(self):
         angle = self.shadow_dial.angle()
@@ -424,10 +632,18 @@ class ShadowGradientDialog(QDialog):
     # ── Gradient handlers ───────────────────────────────────
 
     def _gradient_size(self):
-        return self.size_slider.value() / 100.0
+        return self.scale_slider.value() / 100.0
 
     def _on_gradient_value_changed(self, *args):
-        self.size_label.setText(f"{self._gradient_size():.2f}")
+        self.scale_label.setText(f"{self._gradient_size():.2f}")
+        self._update_preview()
+
+    def _on_reverse_clicked(self):
+        self._gradient_start, self._gradient_end = self._gradient_end, self._gradient_start
+        self.gradient_bar.setStartColor(self._gradient_start)
+        self.gradient_bar.setEndColor(self._gradient_end)
+        if self.tabs.currentIndex() == 1:
+            self.gradient_dial.setColor(self._gradient_start)
         self._update_preview()
 
     def _on_gradient_start_changed(self, color):
@@ -457,6 +673,9 @@ class ShadowGradientDialog(QDialog):
             gradient_angle=self.gradient_dial.angle(),
             gradient_size=self._gradient_size(),
             text_color=self._text_color,
+            stroke_width=self._stroke_width,
+            stroke_color=self._stroke_color,
+            shadow_include_stroke=self.include_stroke_cb.isChecked(),
         )
 
     # ── Result accessors ────────────────────────────────────
@@ -467,6 +686,7 @@ class ShadowGradientDialog(QDialog):
             "shadow_strength": self._shadow_strength(),
             "shadow_color": self._shadow_color,
             "shadow_offset": self._shadow_offset(),
+            "shadow_include_stroke": self.include_stroke_cb.isChecked(),
         }
 
     def get_gradient_params(self) -> dict:

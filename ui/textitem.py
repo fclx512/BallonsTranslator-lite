@@ -252,15 +252,24 @@ class TextBlkItem(QGraphicsTextItem):
                 int(self.fontformat.shadow_offset[1] * font_size),
             )
             if paint_stroke:
-                # Generate shadow from text-only alpha mask (exclude stroke).
-                # PS drop shadow only shadows glyphs, not strokes — match that.
-                text_only = self._render_text_only()
-                shadow_map, _ = apply_shadow_effect(
-                    text_only,
-                    self.fontformat.shadow_color,
-                    self.fontformat.shadow_strength,
-                    r,
-                )
+                if self.fontformat.shadow_include_stroke:
+                    # Shadow includes stroke area — use target_map (glyph + stroke)
+                    shadow_map, _ = apply_shadow_effect(
+                        target_map,
+                        self.fontformat.shadow_color,
+                        self.fontformat.shadow_strength,
+                        r,
+                    )
+                else:
+                    # Generate shadow from text-only alpha mask (exclude stroke).
+                    # PS drop shadow only shadows glyphs, not strokes — match that.
+                    text_only = self._render_text_only()
+                    shadow_map, _ = apply_shadow_effect(
+                        text_only,
+                        self.fontformat.shadow_color,
+                        self.fontformat.shadow_strength,
+                        r,
+                    )
             else:
                 # No stroke — target_map is already text-only
                 shadow_map, _ = apply_shadow_effect(
@@ -1398,6 +1407,7 @@ class TextBlkItem(QGraphicsTextItem):
         self.fontformat.shadow_strength = fmt.shadow_strength
         self.fontformat.shadow_color = fmt.shadow_color
         self.fontformat.shadow_offset = fmt.shadow_offset
+        self.fontformat.shadow_include_stroke = fmt.shadow_include_stroke
         if self.fontformat.shadow_radius > 0:
             self.setPadding(self.layout.max_font_size(to_px=True))
         if repaint:

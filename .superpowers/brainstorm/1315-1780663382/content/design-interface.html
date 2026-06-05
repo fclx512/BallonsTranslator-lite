@@ -1,0 +1,127 @@
+<h2>方案 C · Interface 组设计</h2>
+<p class="subtitle">收纳原 Miscellaneous（动画+快捷键）+ 从 Typesetting 迁入的 Combo Box Presets</p>
+
+<div class="split">
+  <div class="mockup" style="flex: 1;">
+    <div class="mockup-header">当前：Miscellaneous（稀疏）+ Presets 混在 Typesetting</div>
+    <div class="mockup-body" style="font-size: 11px;">
+      <div style="border: 1px solid #555; border-left: 3px solid #888; border-radius: 7px; padding: 8px; margin-bottom: 10px;">
+        <div style="font-weight: bold; font-size: 14px; color: #ccc;">Miscellaneous</div>
+        <div style="padding: 6px;">
+          <div>Animation <select style="font-size:10px;"><option>Auto</option></select></div>
+          <button style="margin-top:6px;font-size:10px;">Edit Shortcuts...</button>
+        </div>
+      </div>
+      <div style="border: 1px solid #555; border-radius: 6px; padding: 6px;">
+        <div style="font-size:10px; color:#f96;">↓ Presets 当前嵌在 Typesetting 内部</div>
+        <div style="font-size:10px;color:#888;">Font Size / Line Spacing / Letter Spacing / Stroke Width / Opacity</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; padding: 10px; font-size: 28px; color: #58a;">→</div>
+
+  <div class="mockup" style="flex: 1;">
+    <div class="mockup-header" style="color: #8f8;">改后：Interface — 统一收纳界面定制项</div>
+    <div class="mockup-body" style="font-size: 13px;">
+
+      <div style="border: 1px solid #555; border-left: 3px solid #888; border-radius: 7px; padding: 12px;">
+        <div style="font-weight: bold; font-size: 17px; color: #ccc; margin-bottom: 12px;">Interface</div>
+
+        <!-- Behavior section -->
+        <div style="padding: 4px;">
+          <div style="font-size: 12px; color: #999; margin-bottom: 6px;">Behavior</div>
+
+          <div style="display: flex; align-items: center; gap: 10px; margin: 4px 0;">
+            <span style="font-size: 13px; color: #bbb;">Animation</span>
+            <select style="padding: 3px 8px; background: #333; color: #ccc; border: 1px solid #555; font-size: 12px; min-width: 180px;">
+              <option>Auto (match display)</option>
+              <option>60 FPS</option>
+              <option>30 FPS</option>
+              <option>Off (no animation)</option>
+            </select>
+          </div>
+
+          <button style="margin: 8px 0; padding: 6px 20px; background: #444; color: #ccc; border: 1px solid #555; border-radius: 4px; font-size: 12px;">
+            Edit Shortcuts...
+          </button>
+        </div>
+
+        <!-- Presets section -->
+        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #444;">
+          <div style="font-size: 12px; color: #999; margin-bottom: 8px;">Combo Box Presets</div>
+
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+            <tr>
+              <td style="padding: 4px 8px; width: 120px; color: #bbb; text-align: right;">Font Size</td>
+              <td><input type="text" value="5, 5.5, 6.5, 7.5, 8, 9, 10, ..." style="width: 100%; padding: 3px 6px; background: #333; border: 1px solid #555; color: #ccc; font-size: 11px;"></td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 8px; color: #bbb; text-align: right;">Line Spacing</td>
+              <td><input type="text" value="..." style="width: 100%; padding: 3px 6px; background: #333; border: 1px solid #555; color: #ccc; font-size: 11px;"></td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 8px; color: #bbb; text-align: right;">Letter Spacing</td>
+              <td><input type="text" value="..." style="width: 100%; padding: 3px 6px; background: #333; border: 1px solid #555; color: #ccc; font-size: 11px;"></td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 8px; color: #bbb; text-align: right;">Stroke Width</td>
+              <td><input type="text" value="..." style="width: 100%; padding: 3px 6px; background: #333; border: 1px solid #555; color: #ccc; font-size: 11px;"></td>
+            </tr>
+            <tr>
+              <td style="padding: 4px 8px; color: #bbb; text-align: right;">Opacity</td>
+              <td><input type="text" value="..." style="width: 100%; padding: 3px 6px; background: #333; border: 1px solid #555; color: #ccc; font-size: 11px;"></td>
+            </tr>
+          </table>
+
+          <div style="font-size: 10px; color: #888; margin-top: 6px; padding: 4px;">
+            逗号分隔的数值，应用于主界面字体格式面板的下拉预设。
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>改动明细</h3>
+</div>
+
+<table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+  <tr style="border-bottom: 1px solid #444;">
+    <th style="text-align: left; padding: 6px 10px; color: #aaa;">区域</th>
+    <th style="text-align: left; padding: 6px 10px; color: #aaa;">改动</th>
+    <th style="text-align: left; padding: 6px 10px; color: #aaa;">Qt 实现</th>
+  </tr>
+  <tr style="border-bottom: 1px solid #333;">
+    <td style="padding: 6px 10px;">分组名</td>
+    <td style="padding: 6px 10px; color: #fb4;">"Miscellaneous" → "Interface"</td>
+    <td style="padding: 6px 10px;"><code>PanelGroupBox("Interface")</code></td>
+  </tr>
+  <tr style="border-bottom: 1px solid #333;">
+    <td style="padding: 6px 10px;">动画 + 快捷键</td>
+    <td style="padding: 6px 10px; color: #8f8;">无变化，仅重命名分组</td>
+    <td style="padding: 6px 10px;">保持原控件 + 原信号连接</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #333;">
+    <td style="padding: 6px 10px;">Combo Box Presets</td>
+    <td style="padding: 6px 10px; color: #fb4;">从 Typesetting 迁入</td>
+    <td style="padding: 6px 10px;">移 5 行 <code>_make_preset_row</code> 调用至此组</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #333;">
+    <td style="padding: 6px 10px;">子标签</td>
+    <td style="padding: 6px 10px; color: #8f8;">新增 "Behavior" / "Combo Box Presets"</td>
+    <td style="padding: 6px 10px;"><code>ConfigTextLabel</code> 两个</td>
+  </tr>
+  <tr>
+    <td style="padding: 6px 10px;">导航标签</td>
+    <td style="padding: 6px 10px; color: #fb4;">"Miscellaneous" → "Interface"</td>
+    <td style="padding: 6px 10px;">NavList item 改名</td>
+  </tr>
+</table>
+
+<div class="pros-cons">
+  <div class="pros"><h4>优点</h4><ul><li>三个"无家可归"项合并为语义清晰的组：界面行为 + 控件定制</li><li>Presets 不再突兀地嵌在排版参数中</li><li>"Interface" 名副其实</li></ul></div>
+  <div class="cons"><h4>缺点</h4><ul><li>Behavior 和 Presets 是两个不同维度的概念，但用一个横线+子标签区分已足够</li></ul></div>
+</div>
