@@ -419,6 +419,18 @@
             <source>Comma-separated values — used in font format panel dropdowns.</source>
             <translation>逗号分隔的值 — 用于字体格式面板下拉选项。</translation>
         </message>
+        <message>
+            <source>Check Dependencies...</source>
+            <translation>检查依赖...</translation>
+        </message>
+        <message>
+            <source>Check Models...</source>
+            <translation>检查模型...</translation>
+        </message>
+        <message>
+            <source>Network Settings...</source>
+            <translation>网络设置...</translation>
+        </message>
     </context>
     <context>
         <name>FontExcludeDialog</name>
@@ -1308,6 +1320,22 @@ Output:
             <source>PSD Export</source>
             <translation>PSD 导出</translation>
         </message>
+        <message>
+            <source>Font Style Manager</source>
+            <translation>字体样式管理器</translation>
+        </message>
+        <message>
+            <source>Full context (%1 pages, all previous translations as reference)</source>
+            <translation>完整上下文（%1 页，参考之前所有翻译）</translation>
+        </message>
+        <message>
+            <source>Windowed + auto-summary (%1 pages, long-form mode)</source>
+            <translation>窗口 + 自动摘要（%1 页，长文模式）</translation>
+        </message>
+        <message>
+            <source>Imported txt file not fully matched with current project, please make sure source txt file structured like results from "export TXT"</source>
+            <translation>导入的 txt 文件未与当前项目完全匹配，请确保源 txt 文件结构与"导出 TXT"结果格式一致</translation>
+        </message>
     </context>
     <context>
         <name>ModuleManager</name>
@@ -1320,6 +1348,10 @@ Output:
             <location filename="../ui/module_manager.py" line="929" />
             <source>Refresh failed</source>
             <translation>刷新失败</translation>
+        </message>
+        <message>
+            <source>Failed to fetch model list. Please check your API key and host configuration.</source>
+            <translation>获取模型列表失败，请检查 API 密钥和主机配置。</translation>
         </message>
     </context>
     <context>
@@ -2273,6 +2305,16 @@ Output:
             <source>Cancel</source>
             <translation>取消</translation>
         </message>
+        <message>
+            <source>One group per line, labels separated by commas
+e.g.:
+balloon,balloon2
+qipao,qipao2</source>
+            <translation>每行一个分组，标签以逗号分隔
+例如：
+balloon,balloon2
+qipao,qipao2</translation>
+        </message>
     </context>
     <context>
         <name>ParamWidget</name>
@@ -3183,12 +3225,12 @@ Apply them now?</source>
             <source>Export Method</source>
             <translation>导出方式</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Photoshop COM</source>
             <translation>Photoshop COM</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>ExtendScript (.jsx)</source>
             <translation>ExtendScript (.jsx)</translation>
@@ -3208,17 +3250,17 @@ Apply them now?</source>
             <source>Browse</source>
             <translation>浏览</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Layers</source>
             <translation>图层</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Include mask as reference layer</source>
             <translation>包含遮罩参考层</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Lock background layer</source>
             <translation>锁定背景层</translation>
@@ -3238,22 +3280,22 @@ Apply them now?</source>
             <source>Cancel</source>
             <translation>取消</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>detected</source>
             <translation>已检测</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>not available</source>
             <translation>不可用</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>One-click export — get PSD directly</source>
             <translation>一键导出，直接生成 PSD</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Photoshop will launch (or connect to a running instance) on this machine, create text layers, and save as PSD. No extra steps required.
 
@@ -3271,14 +3313,16 @@ Best for: same-machine translation &amp; editing, quick turnaround</source>
         </message>
         <message>
             <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Exports a .jsx script + image files. Run the script on any machine with Photoshop to generate the PSD. No Photoshop dependency at export time.
+            <source>Exports a .jsx script + image files. Run the script on any machine with Photoshop to generate the PSD.
 
-Requires: Photoshop when running the script
-Best for: cross-machine workflows, no PS on translation machine</source>
-            <translation>导出 .jsx 脚本 + 图片素材。在任意装有 Photoshop 的机器上运行脚本即可生成 PSD。导出时不依赖本机是否安装 PS。
+No Photoshop dependency at export time.
 
-前提：运行脚本时需要 Photoshop
-适合：翻译机未安装 PS、跨机器协作、想手动编辑脚本</translation>
+Open Photoshop → File → Scripts → Browse → select the .jsx file.</source>
+            <translation>导出 .jsx 脚本 + 图片素材。在任意装有 Photoshop 的机器上运行脚本即可生成 PSD。
+
+导出时不依赖本机是否安装 PS。
+
+打开 Photoshop → 文件 → 脚本 → 浏览 → 选择 .jsx 文件运行。</translation>
         </message>
         <message>
             <location filename="../ui/psd_export_dialog.py" line="" />
@@ -3310,57 +3354,57 @@ Best for: cross-machine workflows, no PS on translation machine</source>
             <source>Select Output Directory</source>
             <translation>选择输出目录</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Photoshop executable path (optional)...</source>
             <translation>Photoshop 可执行文件路径（可选）...</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Detect</source>
             <translation>检测</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>detected via custom path</source>
             <translation>通过自定义路径检测到</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Invalid path</source>
             <translation>路径无效</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>The specified Photoshop.exe does not exist. Please check the path.</source>
             <translation>指定的 Photoshop.exe 不存在，请检查路径。</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Detecting...</source>
             <translation>检测中...</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Trying to launch Photoshop from the specified path...</source>
             <translation>正在尝试从指定路径启动 Photoshop...</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Select Photoshop executable</source>
             <translation>选择 Photoshop 可执行文件</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Photoshop executable (Photoshop.exe);;Executables (*.exe);;All files (*)</source>
             <translation>Photoshop 可执行文件 (Photoshop.exe);;可执行文件 (*.exe);;所有文件 (*)</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Photoshop not found</source>
             <translation>未找到 Photoshop</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Auto-detection of Photoshop failed. Set the executable path in Settings → Miscellaneous, then restart the export dialog.</source>
             <translation>自动检测 Photoshop 失败。请在设置 → 杂项中设置可执行文件路径，然后重新打开导出对话框。</translation>
@@ -3515,6 +3559,254 @@ Best for: cross-machine workflows, no PS on translation machine</source>
         <message>
             <source>Width:</source>
             <translation>宽度：</translation>
+        </message>
+        <message>
+            <source>Apply Changes</source>
+            <translation>应用更改</translation>
+        </message>
+        <message>
+            <source>Batch edit font style</source>
+            <translation>批量编辑字体样式</translation>
+        </message>
+    </context>
+    <context>
+        <name>DependencyDialog</name>
+        <message>
+            <source>Dependencies</source>
+            <translation>依赖检查</translation>
+        </message>
+        <message>
+            <source>Close</source>
+            <translation>关闭</translation>
+        </message>
+        <message>
+            <source>Refresh</source>
+            <translation>刷新</translation>
+        </message>
+        <message>
+            <source>Install Missing</source>
+            <translation>安装缺失依赖</translation>
+        </message>
+        <message>
+            <source>Install All (incl. GPU)</source>
+            <translation>全部安装（含 GPU）</translation>
+        </message>
+        <message>
+            <source>Package</source>
+            <translation>包名</translation>
+        </message>
+        <message>
+            <source>Version</source>
+            <translation>版本</translation>
+        </message>
+        <message>
+            <source>Type</source>
+            <translation>类型</translation>
+        </message>
+        <message>
+            <source>Status</source>
+            <translation>状态</translation>
+        </message>
+        <message>
+            <source>Installed</source>
+            <translation>已安装</translation>
+        </message>
+        <message>
+            <source>Missing</source>
+            <translation>缺失</translation>
+        </message>
+        <message>
+            <source>Version mismatch</source>
+            <translation>版本不匹配</translation>
+        </message>
+    </context>
+    <context>
+        <name>ModelCheckDialog</name>
+        <message>
+            <source>Model Files</source>
+            <translation>模型文件</translation>
+        </message>
+        <message>
+            <source>Model</source>
+            <translation>模型</translation>
+        </message>
+        <message>
+            <source>Category</source>
+            <translation>类别</translation>
+        </message>
+        <message>
+            <source>Status</source>
+            <translation>状态</translation>
+        </message>
+        <message>
+            <source>Source / Notes</source>
+            <translation>来源 / 备注</translation>
+        </message>
+        <message>
+            <source>Installed</source>
+            <translation>已安装</translation>
+        </message>
+        <message>
+            <source>Missing</source>
+            <translation>缺失</translation>
+        </message>
+        <message>
+            <source>Hash mismatch</source>
+            <translation>哈希不匹配</translation>
+        </message>
+        <message>
+            <source>No source / User-provided</source>
+            <translation>无来源 / 用户自备</translation>
+        </message>
+        <message>
+            <source>Refresh</source>
+            <translation>刷新</translation>
+        </message>
+        <message>
+            <source>Close</source>
+            <translation>关闭</translation>
+        </message>
+        <message>
+            <source>Text Detection</source>
+            <translation>文本检测</translation>
+        </message>
+        <message>
+            <source>OCR</source>
+            <translation>OCR</translation>
+        </message>
+        <message>
+            <source>Inpainting</source>
+            <translation>图像修复</translation>
+        </message>
+        <message>
+            <source>Translator</source>
+            <translation>翻译</translation>
+        </message>
+        <message>
+            <source>Utility</source>
+            <translation>工具类</translation>
+        </message>
+        <message>
+            <source>No {category} models installed — {desc}</source>
+            <translation>未安装{category}模型 — {desc}</translation>
+        </message>
+        <message>
+            <source>text detection requires a local model file.</source>
+            <translation>文本检测需要本地模型文件</translation>
+        </message>
+        <message>
+            <source>OCR requires a local model file.</source>
+            <translation>OCR 需要本地模型文件</translation>
+        </message>
+        <message>
+            <source>inpainting requires a local model file (no online service available).</source>
+            <translation>图像修复需要本地模型文件（无在线服务可用）</translation>
+        </message>
+        <message>
+            <source>most translators use remote APIs and don't need local models.</source>
+            <translation>翻译器大多使用远程 API，无需本地模型</translation>
+        </message>
+        <message>
+            <source>utility models are optional extras.</source>
+            <translation>工具类模型为可选附加组件</translation>
+        </message>
+        <message>
+            <source>{installed}/{total} {category} models ready, {missing} missing</source>
+            <translation>{category}模型 {installed}/{total} 就绪，{missing} 缺失</translation>
+        </message>
+        <message>
+            <source>All {category} models ready</source>
+            <translation>{category}模型已全部就绪</translation>
+        </message>
+        <message>
+            <source>{installed}/{total} model files on disk</source>
+            <translation>已安装 {installed}/{total} 个模型文件</translation>
+        </message>
+        <message>
+            <source>No public download source. Obtain from community cloud drive.</source>
+            <translation>无公开下载源。请从社区云盘获取。</translation>
+        </message>
+    </context>
+    <context>
+        <name>NetworkSettingsDialog</name>
+        <message>
+            <source>Network &amp; Mirror Settings</source>
+            <translation>网络与镜像设置</translation>
+        </message>
+        <message>
+            <source>Software Updates &amp; Model Downloads — from GitHub</source>
+            <translation>软件更新与模型下载 — 来自 GitHub</translation>
+        </message>
+        <message>
+            <source>Uses official GitHub servers. This covers both software update checks and most AI model file downloads (text detection, OCR, inpainting).</source>
+            <translation>使用官方 GitHub 服务器。涵盖软件更新检查和大多数 AI 模型文件下载（文本检测、OCR、图像修复）。</translation>
+        </message>
+        <message>
+            <source>Gitclone mirror — recommended for users in China who experience slow or failed downloads.</source>
+            <translation>Gitclone 镜像 — 推荐给下载慢或下载失败的中国大陆用户</translation>
+        </message>
+        <message>
+            <source>Python Package Installation — from PyPI</source>
+            <translation>Python 包安装 — 来自 PyPI</translation>
+        </message>
+        <message>
+            <source>Installs Python packages from the official PyPI index. Reliable worldwide.</source>
+            <translation>从官方 PyPI 索引安装 Python 包。全球范围内稳定可靠。</translation>
+        </message>
+        <message>
+            <source>Tsinghua mirror — one of the fastest PyPI mirrors in China.</source>
+            <translation>清华大学镜像 — 国内最快的 PyPI 镜像之一</translation>
+        </message>
+        <message>
+            <source>Aliyun mirror — maintained by Alibaba Cloud, good coverage.</source>
+            <translation>阿里云镜像 — 由阿里云维护，覆盖全面</translation>
+        </message>
+        <message>
+            <source>USTC mirror — maintained by University of Science and Technology of China.</source>
+            <translation>中科大镜像 — 由中国科学技术大学维护</translation>
+        </message>
+        <message>
+            <source>Advanced</source>
+            <translation>高级设置</translation>
+        </message>
+        <message>
+            <source>Extra pip index (for PyTorch, etc.):</source>
+            <translation>额外 pip 索引（用于 PyTorch 等）：</translation>
+        </message>
+        <message>
+            <source>Custom HuggingFace endpoint (advanced):</source>
+            <translation>自定义 HuggingFace 镜像地址（高级）：</translation>
+        </message>
+        <message>
+            <source>These are only needed if you use a custom Python environment or want to override the HuggingFace download path for the few models hosted there (font detection, LaMa inpainter).</source>
+            <translation>仅当使用自定义 Python 环境或需要覆盖少数托管在 HuggingFace 上的模型（字体检测、LaMa 修复）的下载路径时才需要。</translation>
+        </message>
+        <message>
+            <source>Pick the first option (Official) for each category if you are not experiencing network issues.</source>
+            <translation>如果没有网络问题，请选择每项的第一个选项（官方）。</translation>
+        </message>
+        <message>
+            <source>Reset to defaults</source>
+            <translation>恢复默认</translation>
+        </message>
+        <message>
+            <source>Quick setup for China</source>
+            <translation>国内快速设置</translation>
+        </message>
+        <message>
+            <source>Save</source>
+            <translation>保存</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+    </context>
+    <context>
+        <name>_SourceRow</name>
+        <message>
+            <source>Enter custom mirror URL...</source>
+            <translation>输入自定义镜像 URL...</translation>
         </message>
     </context>
 </TS>

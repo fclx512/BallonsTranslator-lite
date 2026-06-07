@@ -120,9 +120,22 @@ class DrawPanelConfig(Config):
 
 
 @nested_dataclass
+class MirrorConfig(Config):
+    """Mirror/registry settings for domestic users.
+
+    Empty strings = use default (official) sources.
+    """
+    pip_index_url: str = ""
+    pip_extra_index_url: str = ""
+    hf_endpoint: str = ""
+    github_mirror: str = ""
+
+
+@nested_dataclass
 class ProgramConfig(Config):
     module: ModuleConfig = field(default_factory=lambda: ModuleConfig())
     drawpanel: DrawPanelConfig = field(default_factory=lambda: DrawPanelConfig())
+    mirror: MirrorConfig = field(default_factory=lambda: MirrorConfig())
     global_fontformat: FontFormat = field(default_factory=lambda: FontFormat())
     recent_proj_list: List = field(default_factory=lambda: list())
     show_page_list: bool = False

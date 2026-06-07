@@ -250,3 +250,37 @@ proj_compact.py (项目序列化)
 - **文字**：基础字号 13px，标签启用自动换行
 - **间距**：兄弟 widget 之间 6-8px，容器外边距 12px
 - **分隔线**：细 QFrame 线条，高度 1-2px
+
+---
+
+## 8. 未来 / 计划工作
+
+### 8.1 发版打包与更新器
+
+面向非技术用户的稳定版发布管线计划。Phase 1（uv 迁移）和 Phase 2（按需依赖、镜像支持）已完成，Phase 3（打包）待实施。
+
+分发方式：
+
+- PyInstaller `--onedir` 文件夹打包
+- 嵌入式 Python 环境（参考 `ballontrans_pylibs_win` 便携环境的经验）
+- 通过 GitHub Releases 分发
+- 增量更新：仅替换 `modules/`、`utils/`、`ui/`、`launch.py`，不替换 Python 环境
+
+更新机制（计划步骤）：
+
+1. 语义版本号替代 beta 版本占位符
+2. `version.json` 生成脚本
+3. `Updater` 类：检查 → 下载 → 校验 → 备份 → 回滚
+4. 更新对话框 UI
+5. CI 工作流自动打包
+
+**参考：** `docs/zh/lessons_learned.md` §5（已完成依赖管理改动）。
+
+### 8.2 UI 改进（待办列表）
+
+- 设置面板中增加主题选择器（目前无主题切换 UI）
+- 面板宽度自适应（当前硬编码 360px/480px 改为可调）
+- OverlayManager 统一管理覆盖面板
+- AI 聊天工具进度显示与错误重试
+- 变更审查表格列宽自适应
+- 项目加载（openDir）时显示 `QProgressBar`

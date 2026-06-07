@@ -154,6 +154,12 @@ class BaseModule:
 
     _load_model_keys: set = None
 
+    # Optional extra pip packages this module needs beyond what is
+    # declared in pyproject.toml.  Each entry is a PEP 508 requirement
+    # string (e.g. ``"torch>=2.0"``).  Checked & auto-installed on
+    # first ``load_model()`` call via :meth:`ensure_dependencies`.
+    requires_packages: List[str] = []
+
     def __init__(self, **params) -> None:
         standardize_module_params(self.params)
         if self.params is not None and "__param_patched" not in params:
@@ -255,11 +261,90 @@ class BaseModule:
         return model_deleted
 
     def load_model(self):
-        # TODO: check and download files & inform UIs
+        # Ensure extra pip packages are installed first
+        self.ensure_dependencies()
+        # Ensure model files are downloaded before loading
+        self._ensure_model_files()
         aquire_model_loading_lock()
         self._load_model()
         release_model_loading_lock()
         return
+
+    def _ensure_model_files(self):
+        """Download declared model files if they are missing on disk.
+
+        This replaces the old startup-time forced download in
+        ``prepare_local_files_forall()`` — files are now fetched on
+        demand when a module is first loaded.
+        """
+        if not self.download_file_list:
+            return
+        from utils.download_util import download_and_check_files
+
+        for dl_entry in self.download_file_list:
+            ok = download_and_check_files(**dl_entry)
+            if not ok:
+                self.logger.warning(
+                    f"Failed to download model files for {self.__class__.__name__}. "
+                    "Some features may be unavailable."
+                )
+
+        # Persist hash cache so subsequent checks skip re-calculation
+        if shared.CACHE_UPDATED:
+            shared.dump_cache()
+
+    def ensure_dependencies(self):
+        """Check and auto-install extra pip packages declared in
+        ``requires_packages``.
+
+        Only packages NOT already satisfied are installed.  Uses uv if
+        available, falls back to pip.
+        """
+        if not self.requires_packages:
+            return
+        try:
+            from packaging.requirements import Requirement
+            from packaging.utils import canonicalize_name
+            import importlib.metadata as importlib_metadata
+        except (ImportError, ModuleNotFoundError):
+            return  # packaging itself missing — shouldn't happen
+
+        missing: list[str] = []
+        for req_str in self.requires_packages:
+            req = Requirement(req_str)
+            try:
+                dist = importlib_metadata.distribution(
+                    canonicalize_name(req.name)
+                )
+                if not req.specifier.contains(dist.version, prereleases=True):
+                    missing.append(req_str)
+            except importlib_metadata.PackageNotFoundError:
+                missing.append(req_str)
+
+        if not missing:
+            return
+
+        import subprocess, sys
+
+        python = sys.executable
+        # Prefer uv, fall back to pip
+        try:
+            subprocess.run(
+                [python, "-m", "uv", "pip", "install", *missing, "--prefer-binary"],
+                capture_output=True, timeout=300, check=True,
+            )
+            self.logger.info(f"Auto-installed extra deps for {self.__class__.__name__}: {missing}")
+        except Exception:
+            try:
+                subprocess.run(
+                    [python, "-m", "pip", "install", *missing, "--prefer-binary"],
+                    capture_output=True, timeout=300, check=True,
+                )
+                self.logger.info(f"Auto-installed extra deps (via pip) for {self.__class__.__name__}: {missing}")
+            except Exception as e:
+                self.logger.warning(
+                    f"Failed to auto-install extra deps for {self.__class__.__name__}: {e}"
+                )
 
     def _load_model(self):
         return

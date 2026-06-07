@@ -1,8 +1,7 @@
+import argparse
 import os
 import os.path as osp
 import sys
-
-import click
 
 sys.path.append(osp.dirname(osp.dirname(__file__)))
 
@@ -21,11 +20,6 @@ from utils.textblock import visualize_textblocks
 os.chdir(PROGRAM_PATH)
 
 
-@click.group()
-def cli():
-    """text detector testing scripts."""
-
-
 def init_module(module_type: str, module_name: str):
     assert module_type in MODULETYPE_TO_REGISTRIES
     module_cls = MODULETYPE_TO_REGISTRIES[module_type].get(module_name)
@@ -34,11 +28,6 @@ def init_module(module_type: str, module_name: str):
     return module_cls(**module_params)
 
 
-@cli.command("run_detector")
-@click.option("--proj_dir")
-@click.option("--detector", default=None)
-@click.option("--config", default="config/config.json")
-@click.option("--save_dir", default="tmp/test_ctd")
 def run_detector(proj_dir, detector, config, save_dir):
 
     init_textdetector_registries()
@@ -62,4 +51,17 @@ def run_detector(proj_dir, detector, config, save_dir):
 
 
 if __name__ == "__main__":
-    cli()
+    parser = argparse.ArgumentParser(description="text detector testing scripts.")
+    sub = parser.add_subparsers(dest="command")
+
+    p = sub.add_parser("run_detector")
+    p.add_argument("--proj_dir", required=True)
+    p.add_argument("--detector", default=None)
+    p.add_argument("--config", default="config/config.json")
+    p.add_argument("--save_dir", default="tmp/test_ctd")
+
+    args = parser.parse_args()
+    if args.command == "run_detector":
+        run_detector(args.proj_dir, args.detector, args.config, args.save_dir)
+    else:
+        parser.print_help()

@@ -9,8 +9,8 @@ import json
 from typing import Dict, List, Optional
 
 import httpx
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import (
+from qtpy.QtCore import Qt
+from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,

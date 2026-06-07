@@ -59,8 +59,18 @@ def elf_hash(ba: bytes) -> int:
 
 
 def _iso8859_str(s: str) -> bytes:
-    """Encode string as ISO-8859-1 (Latin-1), replacing non-Latin-1 chars with '?'."""
-    return s.encode("latin-1", errors="replace")
+    """Encode string as UTF-8 — replaces the original Latin-1 approach.
+
+    The original Latin-1 encoding with ``errors="replace"`` silently
+    converted em dashes, arrows, and other non-Latin-1 characters
+    to ``?``, which broke runtime translation lookup because Qt's
+    ``QTranslator`` computes its hash over UTF-8 bytes of the source
+    text — a hash computed over Latin-1 bytes (with ``?`` in place of
+    ``—`` etc.) never matches the caller's ``self.tr("…")`` string.
+
+    Using UTF-8 everywhere keeps hashing and comparison consistent.
+    """
+    return s.encode("utf-8")
 
 
 def _write_qstring(ds, s: str):

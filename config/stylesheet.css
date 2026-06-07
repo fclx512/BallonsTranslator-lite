@@ -431,6 +431,12 @@ QPushButton:pressed {
     border: 1px solid royalblue;
 }
 
+QPushButton:disabled {
+    background-color: @emptyContentBackgroundColor;
+    color: rgba(128, 128, 128, 0.5);
+    border: 1px solid rgba(128, 128, 128, 0.25);
+}
+
 QPushButton#minBtn {
     border-radius: 0px;
     background-color: rgba(0, 0, 0, 0);

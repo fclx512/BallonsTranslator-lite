@@ -130,29 +130,50 @@ def find_hardcoded_chinese(files):
 
 
 def extract_context_and_tr_calls(content):
-    """Parse a .py file: return list of (context_class, tr_string)."""
-    lines = content.splitlines()
+    """Parse a .py file: return list of (context_class, tr_string).
+
+    Handles ``self.tr("...")``, ``self.tr('...')``, and multi-line
+    variants where the string body is on a different line from the
+    ``tr(`` call (e.g. ``self.tr(\\n    "text"\\n)``).
+
+    *Implicit* Python string concatenation across continuation lines
+    is *not* supported (e.g. ``self.tr("part1 " "part2")``) — keep
+    the whole translatable string as a single literal if you want it
+    detected by this checker.
+    """
+    # Build a position-index of class definitions so we can assign
+    # each tr() call to its enclosing class (regardless of line breaks).
+    class_positions = []  # (byte_offset, class_name)
+    for m in re.finditer(r"^\s*class\s+(\w+)\s*[(:]", content, re.MULTILINE):
+        class_positions.append((m.start(), m.group(1)))
+
+    def _context_for(pos):
+        for cp, cn in reversed(class_positions):
+            if cp < pos:
+                return cn
+        return "Unknown"
+
     results = []
-    current_class = None
+    # Multi-line regex — DOTALL so \s matches newlines, allowing
+    # self.tr(\n  "string"\n) to be captured.
+    tr_re = re.compile(
+        r'self\.tr\(\s*("(?:[^"\\]|\\.)*")\s*\)', re.DOTALL
+    )
+    tr_sq_re = re.compile(
+        r"self\.tr\(\s*('(?:[^'\\]|\\.)*')\s*\)", re.DOTALL
+    )
 
-    for line in lines:
-        m = CLASS_RE.match(line)
-        if m:
-            current_class = m.group(1)
-            continue
-
-        for tr_re in (TR_CALL_RE, TR_CALL_SQ_RE):
-            for m in tr_re.finditer(line):
-                s = m.group(1)
-                # Unescape common escape sequences
-                s = s.replace('\\"', '"').replace("\\'", "'")
-                s = s.replace("\\\\", "\\")
-                s = s.replace("\\n", "\n").replace("\\t", "\t")
-                # Skip format strings and variable references
-                if "{" in s:
-                    continue
-                ctx = current_class or "Unknown"
-                results.append((ctx, s))
+    for tr_regex in (tr_re, tr_sq_re):
+        for m in tr_regex.finditer(content):
+            s = m.group(1)[1:-1]  # strip surrounding quotes
+            s = s.replace('\\"', '"').replace("\\'", "'")
+            s = s.replace("\\\\", "\\")
+            s = s.replace("\\n", "\n").replace("\\t", "\t")
+            # Skip format strings containing placeholders
+            if "{" in s:
+                continue
+            ctx = _context_for(m.start())
+            results.append((ctx, s))
 
     return results
 
@@ -172,6 +193,11 @@ def extract_ts_entries(ts_path):
                 source_elem = msg.find("source")
                 trans_elem = msg.find("translation")
                 if source_elem is None or source_elem.text is None:
+                    continue
+                # Skip entries where *either* <message> or <translation>
+                # carries type="obsolete" (the standard puts it on <message>,
+                # but lupdate sometimes puts it on <translation>).
+                if msg.get("type") == "obsolete":
                     continue
                 if trans_elem is not None and trans_elem.get("type") == "obsolete":
                     continue

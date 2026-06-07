@@ -1236,6 +1236,18 @@ class ConfigPanel(Widget):
         self.manage_profiles_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
         self.manage_profiles_btn.clicked.connect(self._open_profile_manager)
         msublock.layout().addWidget(self.manage_profiles_btn)
+        self.network_settings_btn = QPushButton(self.tr("Network Settings..."))
+        self.network_settings_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
+        self.network_settings_btn.clicked.connect(self._open_network_settings)
+        msublock.layout().addWidget(self.network_settings_btn)
+        self.dep_check_btn = QPushButton(self.tr("Check Dependencies..."))
+        self.dep_check_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
+        self.dep_check_btn.clicked.connect(self._open_dependency_check)
+        msublock.layout().addWidget(self.dep_check_btn)
+        self.model_check_btn = QPushButton(self.tr("Check Models..."))
+        self.model_check_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
+        self.model_check_btn.clicked.connect(self._open_model_check)
+        msublock.layout().addWidget(self.model_check_btn)
         dlConfigPanel.vlayout.addWidget(model_group)
 
         self.detect_config_panel = TextDetectConfigPanel(
@@ -1819,6 +1831,24 @@ class ConfigPanel(Widget):
         dialog.exec()
         save_all_profiles(profiles)
         self.profiles_changed.emit()
+
+    def _open_network_settings(self):
+        from ui.network_settings_dialog import NetworkSettingsDialog
+
+        dialog = NetworkSettingsDialog(self)
+        dialog.exec()
+
+    def _open_dependency_check(self):
+        from ui.dependency_dialog import DependencyDialog
+
+        dialog = DependencyDialog(self)
+        dialog.exec()
+
+    def _open_model_check(self):
+        from ui.model_check_dialog import ModelCheckDialog
+
+        dialog = ModelCheckDialog(self)
+        dialog.exec()
 
     def _open_shortcut_dialog(self):
         dialog = ShortcutDialog(self)

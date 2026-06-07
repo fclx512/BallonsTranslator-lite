@@ -142,6 +142,20 @@ def download_url_to_file(
         ... )
 
     """
+    from utils.mirror import maybe_mirror_url
+
+    # Apply mirror config lazily (config may not be loaded yet at import time)
+    try:
+        from utils.config import pcfg
+
+        url = maybe_mirror_url(
+            url,
+            hf_endpoint=pcfg.mirror.hf_endpoint,
+            github_mirror=pcfg.mirror.github_mirror,
+        )
+    except (ImportError, AttributeError, RuntimeError):
+        pass
+
     original_ctx = ssl._create_default_https_context
     ssl._create_default_https_context = ssl._create_unverified_context  # https://stackoverflow.com/questions/50236117/scraping-ssl-certificate-verify-failed-error-for-http-en-wikipedia-org
 

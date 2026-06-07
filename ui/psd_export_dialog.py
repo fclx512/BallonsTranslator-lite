@@ -2,9 +2,9 @@
 
 from typing import List, Optional
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import (
+from qtpy.QtCore import Qt
+from qtpy.QtGui import QFont
+from qtpy.QtWidgets import (
     QCheckBox,
     QDialog,
     QFileDialog,
@@ -130,10 +130,7 @@ class PsdExportDialog(QDialog):
         title_lbl = QLabel(self.tr("Generate script — flexible execution"))
         title_lbl.setFont(QFont(self.font().family(), weight=QFont.Weight.Bold))
         body_lbl = QLabel(self.tr(
-            "Exports a .jsx script + image files. Run the script on any machine "
-            "with Photoshop to generate the PSD.\n\n"
-            "No Photoshop dependency at export time.\n\n"
-            "Open Photoshop → File → Scripts → Browse → select the .jsx file."
+            "Exports a .jsx script + image files. Run the script on any machine with Photoshop to generate the PSD.\n\nNo Photoshop dependency at export time.\n\nOpen Photoshop → File → Scripts → Browse → select the .jsx file."
         ))
         body_lbl.setWordWrap(True)
         card_layout.addWidget(title_lbl)

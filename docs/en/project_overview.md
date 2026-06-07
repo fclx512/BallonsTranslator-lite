@@ -250,3 +250,39 @@ The existing UI uses these visual patterns:
 - **Text**: 13px base size, word-wrap enabled on labels
 - **Spacing**: 6-8px between sibling widgets, 12px margins on containers
 - **Dividers**: thin QFrame lines, 1-2px height
+
+---
+
+## 8. Future / Planned Work
+
+### 8.1 Release Packaging & Updater
+
+A planned build pipeline for distributing stable releases to non-technical users.
+Phase 1 (uv migration) and Phase 2 (on-demand deps, mirror support) are complete;
+Phase 3 (packaging) is pending.
+
+Distribution approach:
+
+- PyInstaller `--onedir` folder packaging
+- Embedded Python environment (referencing `ballontrans_pylibs_win` portable env experience)
+- GitHub Releases for distribution
+- Incremental updates: only replace `modules/`, `utils/`, `ui/`, `launch.py` — not the Python environment
+
+Update mechanism (planned steps):
+
+1. Semantic versioning replacing beta version placeholder in `launch.py`
+2. `version.json` generation script
+3. `Updater` class: check → download → verify → backup → rollback
+4. Update dialog UI for user-initiated checks
+5. CI workflow for automated packaging
+
+**See also:** `docs/en/lessons_learned.md` §5 (completed dependency management changes).
+
+### 8.2 UI Improvements (Backlog)
+
+- Theme selector UI in settings (currently no UI entry for theme switching)
+- Panel width adaptive (fixed 360px/480px widths to become adjustable)
+- OverlayManager for centralized overlay panel orchestration
+- AI chat tool progress display and error retry
+- Change review table column width adaptive
+- `QProgressBar` for project loading (openDir)

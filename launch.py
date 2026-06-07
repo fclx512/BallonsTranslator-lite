@@ -22,7 +22,7 @@ if _pylibs_sp.exists() and str(_pylibs_sp) not in sys.path:
 import utils.shared as shared
 
 BRANCH = "main"
-VERSION = "beta-20260605-02"
+VERSION = "beta-20260607-01"
 
 python = sys.executable
 git = os.environ.get("GIT", "git")
@@ -143,6 +143,45 @@ def run_pip(args, desc=None):
     index_url_line = f" --index-url {index_url}" if index_url != "" else ""
     return run(
         f'"{python}" -m pip {args} --prefer-binary{index_url_line} --disable-pip-version-check --no-warn-script-location',
+        desc=f"Installing {desc}",
+        errdesc=f"Couldn't install {desc}",
+        live=True,
+    )
+
+
+UV_AVAILABLE = False
+
+
+def ensure_uv():
+    """Ensure uv is installed. Bootstraps via pip if missing."""
+    global UV_AVAILABLE
+    if skip_install or getattr(sys, "frozen", False):
+        return False
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "uv", "--version"],
+            capture_output=True, timeout=10,
+        )
+        UV_AVAILABLE = True
+        return True
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+    try:
+        print("Installing uv package manager...")
+        run_pip("install uv", "uv")
+        UV_AVAILABLE = True
+        return True
+    except Exception:
+        print("Warning: uv not available, falling back to pip")
+        return False
+
+
+def run_uv(args, desc=None):
+    if skip_install:
+        return
+    index_url_line = f" --index-url {index_url}" if index_url != "" else ""
+    return run(
+        f'"{python}" -m uv pip install {args} --prefer-binary{index_url_line} --disable-pip-version-check',
         desc=f"Installing {desc}",
         errdesc=f"Couldn't install {desc}",
         live=True,
@@ -485,6 +524,30 @@ def main():
             args.cpu = True
             os.environ["BALLOONTRANS_CPU_ONLY"] = "1"
 
+    # ── Early config load: mirror settings needed before deps/update ──
+    from utils import config as program_config
+    from utils.logger import logger as LOGGER
+
+    shared.args = args
+    shared.HEADLESS = args.headless
+    shared.load_cache()
+    program_config.load_config(args.config_path)
+    config = program_config.pcfg
+
+    # Apply mirror/registry settings from config BEFORE prepare_environment
+    # and --update so pip/uv use the correct index and update checks use mirrors.
+    from utils.mirror import patch_hf_env
+    if config.mirror.pip_index_url:
+        os.environ.setdefault("INDEX_URL", config.mirror.pip_index_url)
+    if config.mirror.pip_extra_index_url:
+        os.environ.setdefault("UV_EXTRA_INDEX_URL", config.mirror.pip_extra_index_url)
+    if config.mirror.hf_endpoint:
+        patch_hf_env(config.mirror.hf_endpoint)
+    if config.mirror.github_mirror:
+        os.environ.setdefault("GITHUB_MIRROR", config.mirror.github_mirror)
+    # Re-read index_url so run_uv / run_pip pick it up
+    index_url = os.environ.get("INDEX_URL", "")
+
     prepare_environment()
 
     if args.update:
@@ -532,15 +595,7 @@ def main():
     from qtpy.QtCore import QEvent, QLocale, QObject, Qt, QTranslator
     from qtpy.QtWidgets import QComboBox
 
-    from utils import config as program_config
-    from utils.logger import logger as LOGGER
-
-    shared.args = args
     shared.DEFAULT_DISPLAY_LANG = QLocale.system().name().replace("en_CN", "zh_CN")
-    shared.HEADLESS = args.headless
-    shared.load_cache()
-    program_config.load_config(args.config_path)
-    config = program_config.pcfg
 
     if args.headless:
         config.module.load_model_on_demand = True
@@ -596,10 +651,8 @@ def main():
     # import msl.loadlib (required by translators/trans_eztrans) before init QApplication
     # yield QWindowsContext: OleInitialize() failed on py3.10,
     from modules.base import TORCH_AVAILABLE, init_module_registries
-    from modules.prepare_local_files import prepare_local_files_forall
 
     init_module_registries()
-    prepare_local_files_forall()
 
     # Check for GPU architecture incompatibility (skip in CPU mode)
     if TORCH_AVAILABLE and not args.cpu:
@@ -710,11 +763,17 @@ def prepare_environment():
     if args.cpu:
         return
 
+    # Bootstrap uv (fast installer) — falls back to pip if uv can't be installed
+    ensure_uv()
+
+    # Use uv for all subsequent package operations
+    _pip = run_uv if UV_AVAILABLE else run_pip
+
     req_updated = False
     if sys.platform == "win32":
         for req in REQ_WIN:
             if not check_reqs([req]):
-                run_pip(f"install {req}", req)
+                _pip(f"install {req}", req)
                 req_updated = True
 
     # Detect NVIDIA GPU architecture to pick the right CUDA version
@@ -730,12 +789,12 @@ def prepare_environment():
     if "nightly" in _torch_index:
         torch_command = os.environ.get(
             "TORCH_COMMAND",
-            f"pip install torch torchvision torchaudio --index-url {_torch_index} --disable-pip-version-check",
+            f"uv pip install torch torchvision torchaudio --index-url {_torch_index}",
         )
     else:
         torch_command = os.environ.get(
             "TORCH_COMMAND",
-            f"pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --index-url {_torch_index} --disable-pip-version-check",
+            f"uv pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --index-url {_torch_index}",
         )
     if args.reinstall_torch:
         run(
@@ -747,7 +806,7 @@ def prepare_environment():
         req_updated = True
 
     if not check_req_file(args.requirements):
-        run_pip(f"install -r {args.requirements}", "requirements")
+        _pip(f"install -r {args.requirements}", "requirements")
         req_updated = True
 
     if req_updated:

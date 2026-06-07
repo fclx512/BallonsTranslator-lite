@@ -22,9 +22,21 @@ from urllib.request import Request, urlopen
 REPO_OWNER = "fclx512"
 REPO_NAME = "BallonsTranslator-lite"
 BRANCH = "main"
-API_URL = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/commits/{BRANCH}"
-ZIP_URL = f"https://github.com/{REPO_OWNER}/{REPO_NAME}/archive/refs/heads/{BRANCH}.zip"
 CHECK_TIMEOUT = 15  # seconds
+
+# GitHub mirror support (set via env var, e.g. https://gitclone.com)
+_GITHUB_MIRROR = os.environ.get("GITHUB_MIRROR", "").rstrip("/")
+if _GITHUB_MIRROR:
+    _GH = _GITHUB_MIRROR
+    _API = _GITHUB_MIRROR.replace("//github.com", "//api.github.com")
+    if _API == _GITHUB_MIRROR:
+        _API = f"https://api.{_GITHUB_MIRROR.removeprefix('https://')}"
+else:
+    _GH = "https://github.com"
+    _API = "https://api.github.com"
+
+API_URL = f"{_API}/repos/{REPO_OWNER}/{REPO_NAME}/commits/{BRANCH}"
+ZIP_URL = f"{_GH}/{REPO_OWNER}/{REPO_NAME}/archive/refs/heads/{BRANCH}.zip"
 
 # Marker file written after successful download
 UPDATE_DIR = "_update"
