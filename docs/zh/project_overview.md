@@ -32,43 +32,89 @@
 
 ```
 BallonsTranslator-lite/
-├── launch.py                  入口点
-├── modules/                   管线模块（OCR、翻译器、检测器、修复器）
-│   ├── base.py                BaseModule、模块发现、设备检测
-│   ├── textdetector/          文字检测模块
-│   ├── ocr/                   OCR 模块
-│   ├── translators/           翻译模块
-│   └── inpaint/               图像修复模块
+├── launch.py                      入口点
+├── launch_cpu.bat                 仅 CPU 启动脚本
+├── launch_win.bat                 Windows 启动脚本
+├── launch_win_update.bat          Windows 更新后启动脚本
+├── modules/                       管线模块（启动时通过装饰器自注册）
+│   ├── base.py                    BaseModule、模块发现、设备检测
+│   ├── prepare_local_files.py     本地预下载模型文件校验
+│   ├── textdetector/              文字检测（ctd / yolov5）
+│   ├── ocr/                       OCR（mit48px / llm_api / none）
+│   ├── translators/               翻译（llm_api / sakura）+ 上下文批处理 / hooks
+│   └── inpaint/                   图像修复（lama / aot / ffc）
 ├── utils/
-│   ├── config.py              ProgramConfig 数据类、加载/保存
-│   ├── proj_imgtrans.py       项目管理（页面、文字块、撤销栈）
-│   ├── textblock.py           核心数据单元（坐标、原文、译文、字体、遮罩）
-│   ├── registry.py            模块注册装饰器模式
-│   ├── ai_controller.py       AI 助手控制器（基于信号，无 widget 耦合）
-│   ├── ai_tools.py            AI 工具执行
-│   ├── ai_prompts.py          LLM 提示词模板
-│   └── proj_compact.py        项目序列化（用于 LLM 上下文）
+│   ├── config.py                  ProgramConfig 数据类、加载/保存
+│   ├── proj_imgtrans.py           项目管理（页面、文字块、撤销栈）
+│   ├── textblock.py               核心数据单元（坐标、原文、译文、字体、遮罩）
+│   ├── textblock_mask.py          文字块蒙版生成
+│   ├── registry.py                模块注册装饰器模式
+│   ├── structures.py              nested_dataclass / Config / Dict 基类
+│   ├── shared.py                  路径常量（PROGRAM_PATH、CONFIG_PATH 等）
+│   ├── profile_manager.py         LLM API 配置（翻译器/OCR 共用）
+│   ├── ai_controller.py           AI 助手控制器（基于信号，无 widget 耦合）
+│   ├── ai_tools.py                AI 工具执行
+│   ├── ai_prompts.py              LLM 提示词模板
+│   ├── ai_logger.py               AI 对话日志
+│   ├── proj_compact.py            项目序列化（用于 LLM 上下文）
+│   ├── font_detect.py / font_mapping.py / fontformat.py    字体检测与映射
+│   ├── psd_exporter.py / psd_jsx_exporter.py                PSD 导出
+│   ├── text_layout.py / text_processing.py / textlines_merge.py  排版工具
+│   ├── imgproc_utils.py / io_utils.py / download_util.py    图像 I/O 与下载
+│   ├── update_cache.py / mirror.py                          更新缓存与镜像
+│   ├── message.py / exceptions.py / lock.py / logger.py     基础设施
+│   └── merger.py / split_text_region.py / stroke_width_calculator.py  杂项工具
 ├── ui/
-│   ├── mainwindow.py          主窗口
-│   ├── io_thread.py           管线编排
-│   ├── scene_textlayout.py    画布文字渲染
-│   ├── overlay_slide.py       OverlaySlider — 滑入/滑出动画辅助工具
-│   ├── ai_chat_panel.py       AI 聊天滑入面板
-│   ├── ai_chat_model.py       ChangeItem、ChatMessage 数据类（无 Qt 依赖）
-│   ├── ai_chat_worker.py      LLM API 调用线程
-│   ├── ai_change_review.py    变更审查对话框（独立窗口）
-│   └── misc.py                共享工具函数
+│   ├── mainwindow.py              主窗口
+│   ├── mainwindow_mixin.py        MainWindow 业务逻辑 mixin
+│   ├── mainwindowbars.py          标题栏 / 左侧栏 / 底部栏
+│   ├── configpanel.py             配置面板、快捷键编辑
+│   ├── canvas.py                  画布核心
+│   ├── scene_textlayout.py        画布文字渲染
+│   ├── textitem.py                画布文字项
+│   ├── io_thread.py               管线编排（检测 → OCR → 翻译 → 修复）
+│   ├── overlay_slide.py           OverlaySlider — 滑入/滑出动画辅助工具
+│   ├── ai_chat_panel.py           AI 聊天滑入面板
+│   ├── ai_chat_model.py           ChangeItem、ChatMessage 数据类（无 Qt）
+│   ├── ai_chat_worker.py          LLM API 调用线程
+│   ├── ai_change_review.py        变更审查对话框（独立窗口）
+│   ├── text_panel.py              文本编辑面板
+│   ├── textedit_area.py / textedit_commands.py    文本编辑区域与命令
+│   ├── text_advanced_format.py / text_graphical_effect.py  格式/效果面板
+│   ├── text_style_presets.py / fontstyle_manager.py        字体样式预设管理
+│   ├── global_search_widget.py / page_search_widget.py     搜索功能
+│   ├── update_checker.py          应用内更新检查器 + About 对话框
+│   ├── theme_helpers.py           主题感知颜色辅助
+│   ├── image_edit.py / drawingpanel.py / drawing_commands.py   绘图编辑
+│   ├── module_manager.py          模块管理器
+│   ├── dependency_dialog.py / model_check_dialog.py    依赖/模型检查
+│   ├── network_settings_dialog.py / psd_export_dialog.py   设置对话框
+│   ├── misc.py / shared_widget.py / collapsible_section.py  共享 UI 工具
+│   ├── merge_dialog.py / shadow_gradient_dialog.py          合并/阴影
+│   ├── cursor.py / funcmaps.py / scene_textlayout.py ...    其他
+│   ├── custom_widget/             自定义 widget 库（按钮、滑块、组合框等）
+│   └── framelesswindow/           无边框窗口实现（Win/Linux）
 ├── config/
-│   ├── stylesheet.css         全局样式表，含 @variable 占位符
-│   ├── themes.json            主题定义
-│   └── textstyles/            字体样式预设
+│   ├── stylesheet.css             全局样式表，含 @variable 占位符
+│   ├── themes.json                主题定义
+│   ├── custom_themes.json         用户自定义主题
+│   ├── textstyles/                字体样式预设
+│   └── config.json.example        配置模板（config.json 已 gitignore）
 ├── translate/
-│   ├── zh_CN.ts               中文翻译源文件
-│   └── zh_CN.qm               编译后的翻译文件
+│   ├── zh_CN.ts                   中文翻译源文件
+│   └── zh_CN.qm                   编译后的翻译文件
+├── scripts/
+│   ├── qm_compile.py / i18n_check.py         i18n 工具
+│   ├── download_models.bat / check_update.py 模型下载与更新
+│   └── run_module.py / check_all.py          模块运行与检查
+├── tests/
+│   ├── ui/                         UI 测试
+│   └── test_proj_compact.py        序列化测试
 ├── docs/
-│   ├── README.md              文档结构说明
-│   ├── en/                    英文文档
-│   └── zh/                    中文文档
+│   ├── README.md                   文档结构说明
+│   ├── en/                         英文文档
+│   └── zh/                         中文文档
+└── data/                           运行时数据（分词模型等）
 ```
 
 ---
@@ -257,30 +303,31 @@ proj_compact.py (项目序列化)
 
 ### 8.1 发版打包与更新器
 
-面向非技术用户的稳定版发布管线计划。Phase 1（uv 迁移）和 Phase 2（按需依赖、镜像支持）已完成，Phase 3（打包）待实施。
+面向非技术用户的稳定版发布管线计划。Phase 1（uv 迁移）和 Phase 2（按需依赖、镜像支持）已完成，
+Phase 3（打包）仍待实施。
 
 分发方式：
 
-- PyInstaller `--onedir` 文件夹打包
+- PyInstaller `--onedir` 文件夹打包（待实施）
 - 嵌入式 Python 环境（参考 `ballontrans_pylibs_win` 便携环境的经验）
 - 通过 GitHub Releases 分发
 - 增量更新：仅替换 `modules/`、`utils/`、`ui/`、`launch.py`，不替换 Python 环境
 
-更新机制（计划步骤）：
+**已实现：**
 
-1. 语义版本号替代 beta 版本占位符
+- 基于 git 的应用内更新：`ui/update_checker.py` 提供 `UpdateThread`（git fetch + reset --hard）和 `AboutDialog`（内含更新检查/应用流程，含进度条与变更日志展示）
+- `utils/update_cache.py` 缓存远程提交记录以支持离线检查
+- `launch_win_update.bat` 更新后启动脚本
+
+**仍待实施：**
+
+1. 语义版本号替代 `launch.py` 中的 beta 日期占位符
 2. `version.json` 生成脚本
-3. `Updater` 类：检查 → 下载 → 校验 → 备份 → 回滚
-4. 更新对话框 UI
-5. CI 工作流自动打包
+3. CI 工作流自动化打包（PyInstaller `--onedir`）
+4. 非 git 环境（便携版 exe）的更新支持
 
 **参考：** `docs/zh/lessons_learned.md` §5（已完成依赖管理改动）。
 
 ### 8.2 UI 改进（待办列表）
 
-- 设置面板中增加主题选择器（目前无主题切换 UI）
-- 面板宽度自适应（当前硬编码 360px/480px 改为可调）
-- OverlayManager 统一管理覆盖面板
-- AI 聊天工具进度显示与错误重试
-- 变更审查表格列宽自适应
-- 项目加载（openDir）时显示 `QProgressBar`
+（当前无待办项。）

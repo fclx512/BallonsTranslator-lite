@@ -32,43 +32,89 @@ Built with **PyQt6**, runs on Windows/macOS/Linux.
 
 ```
 BallonsTranslator-lite/
-├── launch.py                  Entry point
-├── modules/                   Pipeline modules (OCR, translators, detectors, inpainters)
-│   ├── base.py                BaseModule, module discovery, device detection
-│   ├── textdetector/          Text detection modules
-│   ├── ocr/                   OCR modules
-│   ├── translators/           Translation modules
-│   └── inpaint/               Image inpainting modules
+├── launch.py                      Entry point
+├── launch_cpu.bat                 CPU-only launch script
+├── launch_win.bat                 Windows launch script
+├── launch_win_update.bat          Post-update launch script
+├── modules/                       Pipeline modules (auto-registered via decorators at startup)
+│   ├── base.py                    BaseModule, module discovery, device detection
+│   ├── prepare_local_files.py     Pre-download model file validation
+│   ├── textdetector/              Text detection (ctd / yolov5)
+│   ├── ocr/                       OCR (mit48px / llm_api / none)
+│   ├── translators/               Translation (llm_api / sakura) + context batching / hooks
+│   └── inpaint/                   Image inpainting (lama / aot / ffc)
 ├── utils/
-│   ├── config.py              ProgramConfig dataclass, load/save
-│   ├── proj_imgtrans.py       Project management (pages, text blocks, undo stack)
-│   ├── textblock.py           Core data unit (coordinates, src, trans, font, mask)
-│   ├── registry.py            Module registration decorator pattern
-│   ├── ai_controller.py       AI assistant controller (signal-based, no widget coupling)
-│   ├── ai_tools.py            AI tool execution
-│   ├── ai_prompts.py          LLM prompt templates
-│   └── proj_compact.py        Project serialization for LLM context
+│   ├── config.py                  ProgramConfig dataclass, load/save
+│   ├── proj_imgtrans.py           Project management (pages, text blocks, undo stack)
+│   ├── textblock.py               Core data unit (coordinates, src, trans, font, mask)
+│   ├── textblock_mask.py          Text block mask generation
+│   ├── registry.py                Module registration decorator pattern
+│   ├── structures.py              nested_dataclass / Config / Dict base classes
+│   ├── shared.py                  Path constants (PROGRAM_PATH, CONFIG_PATH, etc.)
+│   ├── profile_manager.py         LLM API profile manager (translator/OCR shared)
+│   ├── ai_controller.py           AI assistant controller (signal-based, no widget coupling)
+│   ├── ai_tools.py                AI tool execution
+│   ├── ai_prompts.py              LLM prompt templates
+│   ├── ai_logger.py               AI conversation logging
+│   ├── proj_compact.py            Project serialization for LLM context
+│   ├── font_detect.py / font_mapping.py / fontformat.py    Font detection & mapping
+│   ├── psd_exporter.py / psd_jsx_exporter.py               PSD export
+│   ├── text_layout.py / text_processing.py / textlines_merge.py   Layout utilities
+│   ├── imgproc_utils.py / io_utils.py / download_util.py   Image I/O & downloads
+│   ├── update_cache.py / mirror.py                         Update cache & mirror support
+│   ├── message.py / exceptions.py / lock.py / logger.py    Infrastructure
+│   └── merger.py / split_text_region.py / stroke_width_calculator.py   Miscellaneous
 ├── ui/
-│   ├── mainwindow.py          Main window
-│   ├── io_thread.py           Pipeline orchestration
-│   ├── scene_textlayout.py    Canvas text rendering
-│   ├── overlay_slide.py       OverlaySlider — slide-in/out animation helper
-│   ├── ai_chat_panel.py       AI chat slide-in panel
-│   ├── ai_chat_model.py       ChangeItem, ChatMessage dataclasses (no Qt)
-│   ├── ai_chat_worker.py      LLM API call thread
-│   ├── ai_change_review.py    Change review dialog (standalone window)
-│   └── misc.py                Shared utilities
+│   ├── mainwindow.py              Main window
+│   ├── mainwindow_mixin.py        MainWindow business logic mixin
+│   ├── mainwindowbars.py          Title bar / Left bar / Bottom bar
+│   ├── configpanel.py             Config panel, shortcut editor
+│   ├── canvas.py                  Canvas core
+│   ├── scene_textlayout.py        Canvas text rendering
+│   ├── textitem.py                Canvas text items
+│   ├── io_thread.py               Pipeline orchestration (detect → OCR → translate → inpaint)
+│   ├── overlay_slide.py           OverlaySlider — slide-in/out animation helper
+│   ├── ai_chat_panel.py           AI chat slide-in panel
+│   ├── ai_chat_model.py           ChangeItem, ChatMessage dataclasses (no Qt)
+│   ├── ai_chat_worker.py          LLM API call thread
+│   ├── ai_change_review.py        Change review dialog (standalone window)
+│   ├── text_panel.py              Text editing panel
+│   ├── textedit_area.py / textedit_commands.py    Text editing area & commands
+│   ├── text_advanced_format.py / text_graphical_effect.py   Format/effect panels
+│   ├── text_style_presets.py / fontstyle_manager.py         Font style presets management
+│   ├── global_search_widget.py / page_search_widget.py      Search widgets
+│   ├── update_checker.py          In-app update checker + About dialog
+│   ├── theme_helpers.py           Theme-aware color helpers
+│   ├── image_edit.py / drawingpanel.py / drawing_commands.py   Drawing/editing
+│   ├── module_manager.py          Module manager
+│   ├── dependency_dialog.py / model_check_dialog.py    Dependency/model checks
+│   ├── network_settings_dialog.py / psd_export_dialog.py     Settings dialogs
+│   ├── misc.py / shared_widget.py / collapsible_section.py   Shared UI utilities
+│   ├── merge_dialog.py / shadow_gradient_dialog.py           Merge/shadow
+│   ├── cursor.py / funcmaps.py                               Other
+│   ├── custom_widget/             Custom widget library (buttons, sliders, combos, etc.)
+│   └── framelesswindow/           Frameless window implementation (Win/Linux)
 ├── config/
-│   ├── stylesheet.css         Global stylesheet with @variable placeholders
-│   ├── themes.json            Theme definitions
-│   └── textstyles/            Font style presets
+│   ├── stylesheet.css             Global stylesheet with @variable placeholders
+│   ├── themes.json                Theme definitions
+│   ├── custom_themes.json         User custom themes
+│   ├── textstyles/                Font style presets
+│   └── config.json.example        Config template (config.json is gitignored)
 ├── translate/
-│   ├── zh_CN.ts               Chinese translation source
-│   └── zh_CN.qm               Compiled translation
+│   ├── zh_CN.ts                   Chinese translation source
+│   └── zh_CN.qm                   Compiled translation
+├── scripts/
+│   ├── qm_compile.py / i18n_check.py            i18n tooling
+│   ├── download_models.bat / check_update.py    Model download & updates
+│   └── run_module.py / check_all.py             Module runner & checks
+├── tests/
+│   ├── ui/                        UI tests
+│   └── test_proj_compact.py       Serialization tests
 ├── docs/
-│   ├── README.md              Documentation structure
-│   ├── en/                    English docs
-│   └── zh/                    Chinese docs
+│   ├── README.md                  Documentation structure
+│   ├── en/                        English docs
+│   └── zh/                        Chinese docs
+└── data/                          Runtime data (tokenizer models, etc.)
 ```
 
 ---
@@ -263,26 +309,26 @@ Phase 3 (packaging) is pending.
 
 Distribution approach:
 
-- PyInstaller `--onedir` folder packaging
+- PyInstaller `--onedir` folder packaging (pending)
 - Embedded Python environment (referencing `ballontrans_pylibs_win` portable env experience)
 - GitHub Releases for distribution
 - Incremental updates: only replace `modules/`, `utils/`, `ui/`, `launch.py` — not the Python environment
 
-Update mechanism (planned steps):
+**Implemented:**
 
-1. Semantic versioning replacing beta version placeholder in `launch.py`
+- Git-based in-app update: `ui/update_checker.py` provides `UpdateThread` (git fetch + reset --hard) and `AboutDialog` (full update check/apply flow with progress bar and changelog)
+- `utils/update_cache.py` caches remote commit for offline check support
+- `launch_win_update.bat` post-update launch script
+
+**Still pending:**
+
+1. Semantic versioning replacing beta date placeholder in `launch.py`
 2. `version.json` generation script
-3. `Updater` class: check → download → verify → backup → rollback
-4. Update dialog UI for user-initiated checks
-5. CI workflow for automated packaging
+3. CI workflow for automated packaging (PyInstaller `--onedir`)
+4. Update support for non-git environments (portable exe builds)
 
 **See also:** `docs/en/lessons_learned.md` §5 (completed dependency management changes).
 
 ### 8.2 UI Improvements (Backlog)
 
-- Theme selector UI in settings (currently no UI entry for theme switching)
-- Panel width adaptive (fixed 360px/480px widths to become adjustable)
-- OverlayManager for centralized overlay panel orchestration
-- AI chat tool progress display and error retry
-- Change review table column width adaptive
-- `QProgressBar` for project loading (openDir)
+(None at this time.)

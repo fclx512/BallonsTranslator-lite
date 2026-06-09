@@ -924,8 +924,13 @@ class TextBlkItem(QGraphicsTextItem):
         self.repainting = True
         cursor = self.textCursor()
         cursor.select(QTextCursor.SelectionType.Document)
+        self.layout.relayout_on_changed = False
         self._doc_set_font_family(value, style_name, cursor)
+        self.layout.relayout_on_changed = True
+        self.layout.reLayoutEverything()
         self.repainting = False
+        if repaint_background:
+            self.repaint_background()
         self.update()
         self.fontformat.font_family = value
         if style_name:

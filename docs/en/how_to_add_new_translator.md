@@ -11,8 +11,8 @@ All modules live under `modules/`:
 modules/
 ├── translators/    →  trans_*.py    (@register_translator)
 ├── ocr/            →  ocr_*.py      (@register_OCR)
-├── textdetector/   →  detector_*.py (@register_textdetector)
-└── inpaint/        →  inpaint_*.py  (@register_inpainter)
+├── textdetector/   →  detector_*.py (@register_textdetectors)  ⚠️ note the plural 's'
+└── inpaint/        →  modules defined in base.py (@register_inpainter)
 
 modules/base.py     →  init_module_registries(), scans files matching the patterns above
 ```
@@ -64,6 +64,19 @@ class MyEngineTranslator(BaseTranslator):
 - `_translate()` — receive source texts, return translations
 - `updateParam()` — optional, react to param changes at runtime (e.g., switching device)
 
+### 2.4 Optional: auto-installing pip dependencies
+
+If your module needs extra pip packages (not in the project's `pyproject.toml`), declare `requires_packages` and they'll be auto-installed on first `load_model()`:
+
+```python
+class MyEngineTranslator(BaseTranslator):
+    requires_packages: List[str] = [
+        "some-package>=1.0",
+    ]
+```
+
+Uses PEP 508 format; prefers `uv`, falls back to `pip`. Also supported on OCR, detector, and inpainter modules.
+
 ## 3. Adding an OCR Module
 
 Create `modules/ocr/ocr_myengine.py`:
@@ -93,9 +106,9 @@ class MyOCREngine(OCRBase):
 Create `modules/textdetector/detector_myengine.py`:
 
 ```python
-from modules.textdetector.base import TextDetectBase, register_textdetector
+from modules.textdetector.base import TextDetectBase, register_textdetectors
 
-@register_textdetector('MyDetector')
+@register_textdetectors('MyDetector')
 class MyDetector(TextDetectBase):
 
     params = {
@@ -114,7 +127,7 @@ class MyDetector(TextDetectBase):
 
 ## 5. Adding an Inpainter
 
-Define in `modules/inpaint/base.py` or create a new file if complex:
+Inpainter modules are defined inside `modules/inpaint/base.py` (see `AOTInpainter` / `LamaLarge` for reference):
 
 ```python
 from modules.inpaint.base import InpainterBase, register_inpainter
@@ -135,6 +148,8 @@ class MyInpainter(InpainterBase):
         # return inpainted image
         pass
 ```
+
+> **Note**: Inpainters don't currently use the `inpaint_*.py` file-discovery pattern; they're decorated with `@register_inpainter` inside `base.py`. If you create a separate `.py` file, make sure `base.py` imports it.
 
 ## 6. i18n Notes
 

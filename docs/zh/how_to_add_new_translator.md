@@ -11,8 +11,8 @@
 modules/
 ├── translators/    →  trans_*.py    (@register_translator)
 ├── ocr/            →  ocr_*.py      (@register_OCR)
-├── textdetector/   →  detector_*.py (@register_textdetector)
-└── inpaint/        →  inpaint_*.py  (@register_inpainter)
+├── textdetector/   →  detector_*.py (@register_textdetectors)  ⚠️ 注意复数 s
+└── inpaint/        →  模块定义在 base.py 内 (@register_inpainter)
 
 modules/base.py     →  init_module_registries(), 扫描匹配上述模式的文件
 ```
@@ -64,6 +64,19 @@ class MyEngineTranslator(BaseTranslator):
 - `_translate()` — 接收源文本，返回翻译结果
 - `updateParam()` — 可选，在运行时响应参数变化（例如切换 device）
 
+### 2.4 可选：自动安装 pip 依赖
+
+如果模块需要额外的 pip 包（不在项目 `pyproject.toml` 中），声明 `requires_packages` 即可在首次 `load_model()` 时自动安装：
+
+```python
+class MyEngineTranslator(BaseTranslator):
+    requires_packages: List[str] = [
+        "some-package>=1.0",
+    ]
+```
+
+支持 PEP 508 格式，优先使用 `uv`，回退到 `pip`。其他模块类型（OCR、检测器、修复器）也同样支持此字段。
+
 ## 3. 添加 OCR 模块
 
 创建 `modules/ocr/ocr_myengine.py`：
@@ -93,9 +106,9 @@ class MyOCREngine(OCRBase):
 创建 `modules/textdetector/detector_myengine.py`：
 
 ```python
-from modules.textdetector.base import TextDetectBase, register_textdetector
+from modules.textdetector.base import TextDetectBase, register_textdetectors
 
-@register_textdetector('MyDetector')
+@register_textdetectors('MyDetector')
 class MyDetector(TextDetectBase):
 
     params = {
@@ -114,7 +127,7 @@ class MyDetector(TextDetectBase):
 
 ## 5. 添加修复器
 
-在 `modules/inpaint/base.py` 中定义，或如果逻辑复杂则创建新文件：
+修复器模块定义在 `modules/inpaint/base.py` 中（参考 `AOTInpainter` / `LamaLarge` 的写法）：
 
 ```python
 from modules.inpaint.base import InpainterBase, register_inpainter
@@ -135,6 +148,8 @@ class MyInpainter(InpainterBase):
         # 返回修复后的图像
         pass
 ```
+
+> **注意**：修复器目前不走 `inpaint_*.py` 文件自动发现，而是在 `base.py` 内用 `@register_inpainter` 装饰类。如果你创建独立的 `.py` 文件，需要确保 `base.py` 将其 import 进来。
 
 ## 6. i18n 注意事项
 

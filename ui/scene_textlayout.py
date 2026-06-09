@@ -819,7 +819,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                         self.line_spaces_lst[blk_no][line.lineNumber()]
                     )
                     yidx = cpos - line_pos
-                    if yidx >= 0 < len(char_yoffset_lst):
+                    if 0 <= yidx < len(char_yoffset_lst):
                         y = char_yoffset_lst[yidx]
 
                 painter.setCompositionMode(

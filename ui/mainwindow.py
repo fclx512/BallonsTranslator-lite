@@ -32,6 +32,7 @@ from qtpy.QtWidgets import (
     QMenu,
     QMessageBox,
     QPlainTextEdit,
+    QProgressDialog,
     QShortcut,
     QStackedWidget,
     QTextEdit,
@@ -867,10 +868,31 @@ class MainWindow(mainwindow_cls):
     def openDir(self, directory: str):
         try:
             self.opening_dir = True
-            # 在加载项目前检查并生成TIF文件的预览图
-            self.generate_tif_thumbnails(directory)
-            # 重新加载项目，此时应该只加载预览图
+
+            # Show indeterminate progress dialog for project loading
+            progress = QProgressDialog(
+                self.tr("Loading project..."), "", 0, 0, self
+            )
+            progress.setWindowTitle(self.tr("Loading"))
+            progress.setWindowModality(Qt.WindowModality.WindowModal)
+            progress.setCancelButton(None)
+            progress.setMinimumDuration(0)
+            progress.show()
+            QApplication.processEvents()
+
+            # Generate TIF thumbnails (may take time for large TIF directories)
+            self.generate_tif_thumbnails(directory, progress)
+
+            # Load the project JSON data
+            progress.setLabelText(self.tr("Reading project data..."))
+            progress.setMinimumDuration(0)
+            QApplication.processEvents()
             self.imgtrans_proj.load(directory)
+
+            # UI update phase
+            progress.setLabelText(self.tr("Updating interface..."))
+            progress.setMinimumDuration(0)
+            QApplication.processEvents()
             self.st_manager.clearSceneTextitems()
             self.titleBar.setTitleContent(osp.basename(directory))
             self.updatePageList()
@@ -880,12 +902,15 @@ class MainWindow(mainwindow_cls):
             )
             self.aiChatPanel.rebuild_from_history(self._ai_controller.messages)
             self.opening_dir = False
+            progress.close()
         except Exception as e:
             self.opening_dir = False
             create_error_dialog(e, self.tr("Failed to load project ") + directory)
             return
 
-    def generate_tif_thumbnails(self, directory: str):
+    def generate_tif_thumbnails(
+        self, directory: str, progress: "QProgressDialog | None" = None
+    ):
         """
         为目录中的TIF文件生成预览图，并确保只加载预览图
         """
@@ -894,17 +919,33 @@ class MainWindow(mainwindow_cls):
 
             # 查找目录中的所有TIF文件
             tif_files = find_tif_files(directory)
+            if not tif_files:
+                return
 
-            # 为每个TIF文件生成预览图
+            # 统计需要生成预览图的TIF文件
+            pending = []
             for tif_file in tif_files:
                 tif_path = osp.join(directory, tif_file)
-                # 检查是否已经存在对应的预览图
                 base_path = Path(tif_path)
                 thumb_path = base_path.parent / f"{base_path.stem}_thumb.jpg"
-
-                # 如果预览图不存在，则生成预览图
                 if not osp.exists(thumb_path):
-                    create_thumbnail(tif_path, max_width=1000)
+                    pending.append(tif_path)
+
+            if not pending:
+                return
+
+            # 切换到确定进度模式
+            if progress is not None:
+                progress.setRange(0, len(pending))
+                progress.setLabelText(self.tr("Generating TIF thumbnails..."))
+                progress.setMinimumDuration(0)
+
+            # 逐个生成预览图
+            for i, tif_path in enumerate(pending):
+                create_thumbnail(tif_path, max_width=1000)
+                if progress is not None:
+                    progress.setValue(i + 1)
+                    QApplication.processEvents()
 
         except Exception as e:
             LOGGER.error(f"Failed to generate TIF thumbnails: {e}")
