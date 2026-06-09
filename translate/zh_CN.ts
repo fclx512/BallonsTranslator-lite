@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="utf-8"?>
 <TS version="2.1" language="zh_CN" sourcelanguage="en">
     <context>
         <name>BottomBar</name>
@@ -139,11 +139,6 @@
             <translation>常规</translation>
         </message>
         <message>
-            <location filename="../ui/configpanel.py" line="358" />
-            <source>Startup</source>
-            <translation>启动</translation>
-        </message>
-        <message>
             <location filename="../ui/configpanel.py" line="406" />
             <source>Reopen last project on startup</source>
             <translation>启动时打开上次项目</translation>
@@ -172,11 +167,6 @@
             <location filename="../ui/configpanel.py" line="456" />
             <source>To uppercase</source>
             <translation>小写转大写</translation>
-        </message>
-        <message>
-            <location filename="../ui/configpanel.py" line="360" />
-            <source>Save</source>
-            <translation>保存</translation>
         </message>
         <message>
             <location filename="../ui/configpanel.py" line="421" />
@@ -284,10 +274,6 @@
             <translation>在每个项目下建立独立的字体样式</translation>
         </message>
         <message>
-            <source>Miscellaneous</source>
-            <translation>杂项</translation>
-        </message>
-        <message>
             <source>Edit Shortcuts...</source>
             <translation>快捷键编辑...</translation>
         </message>
@@ -324,26 +310,6 @@
             <source>Effect</source>
         </message>
         <message>
-            <location filename="../ui/configpanel.py" line="1197" />
-            <source>Delete Theme</source>
-            <translation>删除主题</translation>
-        </message>
-        <message>
-            <location filename="../ui/configpanel.py" line="1198" />
-            <source>Delete theme "%s"? This cannot be undone.</source>
-            <translation>删除主题 "%s"？此操作无法撤销。</translation>
-        </message>
-        <message>
-            <location filename="../ui/configpanel.py" line="869" />
-            <source>Edit...</source>
-            <translation>编辑...</translation>
-        </message>
-        <message>
-            <location filename="../ui/configpanel.py" line="864" />
-            <source>built-in</source>
-            <translation>内置</translation>
-        </message>
-        <message>
             <source>Combo Box Presets</source>
             <translation>下拉框预设值</translation>
         </message>
@@ -370,26 +336,6 @@
         <message>
             <source>comma-separated values</source>
             <translation>逗号分隔的数值</translation>
-        </message>
-        <message>
-            <source>Photoshop path</source>
-            <translation>Photoshop 路径</translation>
-        </message>
-        <message>
-            <source>Optional — Photoshop.exe path for COM detection</source>
-            <translation>可选 — Photoshop.exe 路径，用于 COM 检测</translation>
-        </message>
-        <message>
-            <source>Browse</source>
-            <translation>浏览</translation>
-        </message>
-        <message>
-            <source>Select Photoshop executable</source>
-            <translation>选择 Photoshop 可执行文件</translation>
-        </message>
-        <message>
-            <source>Photoshop executable (Photoshop.exe);;Executables (*.exe);;All files (*)</source>
-            <translation>Photoshop 可执行文件 (Photoshop.exe);;可执行文件 (*.exe);;所有文件 (*)</translation>
         </message>
         <message>
             <source>Project</source>
@@ -431,7 +377,7 @@
             <source>Network Settings...</source>
             <translation>网络设置...</translation>
         </message>
-    </context>
+    <message><source>Punctuation Position</source><translation type="unfinished" /></message><message><source>Simplified Chinese</source><translation type="unfinished" /></message><message><source>Traditional Chinese</source><translation type="unfinished" /></message></context>
     <context>
         <name>FontExcludeDialog</name>
         <message>
@@ -484,142 +430,10 @@
             <source>Reset to Default</source>
             <translation>恢复默认</translation>
         </message>
-        <message>
-            <source>Page Up</source>
-            <translation>上一页</translation>
-        </message>
-        <message>
-            <source>Page Down</source>
-            <translation>下一页</translation>
-        </message>
-        <message>
-            <source>Page Up (alt)</source>
-            <translation>上一页（备用）</translation>
-        </message>
-        <message>
-            <source>Page Down (alt)</source>
-            <translation>下一页（备用）</translation>
-        </message>
-        <message>
-            <source>Text Editor</source>
-            <translation>文本编辑</translation>
-        </message>
-        <message>
-            <source>Text Block</source>
-            <translation>文本块</translation>
-        </message>
-        <message>
-            <source>Draw Board</source>
-            <translation>画板</translation>
-        </message>
-        <message>
-            <source>Zoom In</source>
-            <translation>放大</translation>
-        </message>
-        <message>
-            <source>Zoom Out</source>
-            <translation>缩小</translation>
-        </message>
-        <message>
-            <source>Preview</source>
-            <translation>预览</translation>
-        </message>
-        <message>
-            <source>Delete</source>
-            <translation>删除</translation>
-        </message>
-        <message>
-            <source>Delete (alt)</source>
-            <translation>删除（备用）</translation>
-        </message>
-        <message>
-            <source>Select All</source>
-            <translation>全选</translation>
-        </message>
-        <message>
-            <source>Bold</source>
-            <translation>粗体</translation>
-        </message>
-        <message>
-            <source>Italic</source>
-            <translation>斜体</translation>
-        </message>
-        <message>
-            <source>Underline</source>
-            <translation>下划线</translation>
-        </message>
-        <message>
-            <source>Undo</source>
-            <translation>撤销</translation>
-        </message>
-        <message>
-            <source>Redo</source>
-            <translation>重做</translation>
-        </message>
-        <message>
-            <source>Page Search</source>
-            <translation>页面搜索</translation>
-        </message>
-        <message>
-            <source>Global Search</source>
-            <translation>全局搜索</translation>
-        </message>
-        <message>
-            <source>Escape</source>
-            <translation>取消</translation>
-        </message>
-        <message>
-            <source>Inpaint</source>
-            <translation>局部修复</translation>
-        </message>
-        <message>
-            <source>Hand Tool</source>
-            <translation>手型工具</translation>
-        </message>
-        <message>
-            <source>Rect Tool</source>
-            <translation>矩形工具</translation>
-        </message>
-        <message>
-            <source>Inpaint Tool</source>
-            <translation>修复工具</translation>
-        </message>
-        <message>
-            <source>Pen Tool</source>
-            <translation>画笔工具</translation>
-        </message>
-        <message>
-            <source>Merge Tool</source>
-            <translation>合并工具</translation>
-        </message>
-    </context>
+        </context>
     <context>
         <name>ShortcutEditor</name>
-        <message>
-            <source>Navigation</source>
-            <translation>导航</translation>
-        </message>
-        <message>
-            <source>View</source>
-            <translation>视图</translation>
-        </message>
-        <message>
-            <source>Edit</source>
-            <translation>编辑</translation>
-        </message>
-        <message>
-            <source>Tools</source>
-            <translation>工具</translation>
-        </message>
-        <message>
-            <source>Search</source>
-            <translation>搜索</translation>
-        </message>
-        <message>
-            <source>General</source>
-            <translation>通用</translation>
-        </message>
-    </context>
+        </context>
     <context>
         <name>DrawingPanel</name>
         <message>
@@ -959,11 +773,7 @@
             <source>AI Chat</source>
             <translation>AI 聊天</translation>
         </message>
-        <message>
-            <source>Font Style Manager</source>
-            <translation>字体样式管理器</translation>
-        </message>
-    </context>
+        </context>
     <context>
         <name>MainWindow</name>
         <message>
@@ -1291,17 +1101,6 @@ Failed: {f}/{t}</source>
         </message>
         <message>
             <location filename="../ui/mainwindow.py" line="" />
-            <source> PSD(s).
-
-Output:
-</source>
-            <translation> 个 PSD 文件。
-
-输出目录：
-</translation>
-        </message>
-        <message>
-            <location filename="../ui/mainwindow.py" line="" />
             <source> ExtendScript(s).
 
 Open Photoshop → File → Scripts → Browse to run each .jsx.
@@ -1336,7 +1135,7 @@ Output:
             <source>Imported txt file not fully matched with current project, please make sure source txt file structured like results from "export TXT"</source>
             <translation>导入的 txt 文件未与当前项目完全匹配，请确保源 txt 文件结构与"导出 TXT"结果格式一致</translation>
         </message>
-    </context>
+    <message><source>Generating TIF thumbnails...</source><translation type="unfinished" /></message><message><source>Loading</source><translation type="unfinished" /></message><message><source>Loading project...</source><translation type="unfinished" /></message><message><source>Reading project data...</source><translation type="unfinished" /></message><message><source>Updating interface...</source><translation type="unfinished" /></message></context>
     <context>
         <name>ModuleManager</name>
         <message>
@@ -1568,21 +1367,6 @@ Output:
             <location filename="../ui/text_advanced_format.py" line="0" />
             <source>Opacity</source>
             <translation>不透明度</translation>
-        </message>
-        <message>
-            <location filename="../ui/text_advanced_format.py" line="0" />
-            <source>Center</source>
-            <translation>居中</translation>
-        </message>
-        <message>
-            <location filename="../ui/text_advanced_format.py" line="0" />
-            <source>Upper-Right</source>
-            <translation>右上</translation>
-        </message>
-        <message>
-            <location filename="../ui/text_advanced_format.py" line="0" />
-            <source>Punctuation Alignment</source>
-            <translation>标点对齐</translation>
         </message>
         <message>
             <location filename="../ui/text_advanced_format.py" line="0" />
@@ -3421,10 +3205,6 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <translation>对齐</translation>
         </message>
         <message>
-            <source>Apply</source>
-            <translation>应用</translation>
-        </message>
-        <message>
             <source>Batch Edit</source>
             <translation>批量编辑</translation>
         </message>
@@ -3439,22 +3219,6 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         <message>
             <source>Center</source>
             <translation>居中</translation>
-        </message>
-        <message>
-            <source>Change alignment</source>
-            <translation>修改对齐方式</translation>
-        </message>
-        <message>
-            <source>Change font flags</source>
-            <translation>修改字体标志</translation>
-        </message>
-        <message>
-            <source>Change stroke</source>
-            <translation>修改描边</translation>
-        </message>
-        <message>
-            <source>Change text color</source>
-            <translation>修改文字颜色</translation>
         </message>
         <message>
             <source>Effects</source>
@@ -3665,26 +3429,6 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         <message>
             <source>Close</source>
             <translation>关闭</translation>
-        </message>
-        <message>
-            <source>Text Detection</source>
-            <translation>文本检测</translation>
-        </message>
-        <message>
-            <source>OCR</source>
-            <translation>OCR</translation>
-        </message>
-        <message>
-            <source>Inpainting</source>
-            <translation>图像修复</translation>
-        </message>
-        <message>
-            <source>Translator</source>
-            <translation>翻译</translation>
-        </message>
-        <message>
-            <source>Utility</source>
-            <translation>工具类</translation>
         </message>
         <message>
             <source>No {category} models installed — {desc}</source>

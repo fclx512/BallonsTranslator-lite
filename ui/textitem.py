@@ -206,10 +206,13 @@ class TextBlkItem(QGraphicsTextItem):
                 it += 1
             block = block.next()
 
+        from utils.config import pcfg
         layout = (
-            VerticalTextDocumentLayout(doc, self.fontformat)
+            VerticalTextDocumentLayout(doc, self.fontformat,
+                punctuation_position=pcfg.punctuation_position)
             if self.fontformat.vertical
-            else HorizontalTextDocumentLayout(doc, self.fontformat)
+            else HorizontalTextDocumentLayout(doc, self.fontformat,
+                punctuation_position=pcfg.punctuation_position)
         )
         layout._draw_offset = self.layout._draw_offset
         layout._is_painting_stroke = True
@@ -483,10 +486,13 @@ class TextBlkItem(QGraphicsTextItem):
 
         self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
         doc.documentLayout().blockSignals(True)
+        from utils.config import pcfg
         if vertical:
-            layout = VerticalTextDocumentLayout(doc, self.fontformat)
+            layout = VerticalTextDocumentLayout(doc, self.fontformat,
+                punctuation_position=pcfg.punctuation_position)
         else:
-            layout = HorizontalTextDocumentLayout(doc, self.fontformat)
+            layout = HorizontalTextDocumentLayout(doc, self.fontformat,
+                punctuation_position=pcfg.punctuation_position)
 
         self.layout = layout
         doc.setDocumentLayout(layout)
@@ -1204,9 +1210,11 @@ class TextBlkItem(QGraphicsTextItem):
         set_selected: bool = False,
         restore_cursor: bool = False,
     ):
+        """Deprecated: punctuation alignment is now a global setting.
+        Kept for backward compatibility. Updates global config and layout."""
         self.is_formatting = True
         self.fontformat.punctuation_alignment = value
-        self.layout.setPunctuationAlignment(value)
+        self.layout.setPunctuationPosition(value)
         if repaint_background:
             self.repaint_background()
             self.update()

@@ -10,7 +10,6 @@ from pathlib import Path
 
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
-
 from qtpy.QtCore import QThread, Signal
 from qtpy.QtGui import QColor
 from qtpy.QtWidgets import (

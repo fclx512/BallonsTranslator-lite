@@ -7,7 +7,6 @@ are collapsed behind a checkbox.
 
 import os
 
-from qtpy.QtCore import Qt
 from qtpy.QtWidgets import (
     QComboBox,
     QDialog,

@@ -10,7 +10,6 @@ YAGNI note: this scans ``download_file_list`` on each registered module
 """
 
 import os.path as osp
-from pathlib import Path
 
 from qtpy.QtCore import Qt, QUrl
 from qtpy.QtGui import QColor, QDesktopServices, QFont
@@ -27,7 +26,6 @@ from qtpy.QtWidgets import (
 
 from utils import shared
 from utils.download_util import check_local_file
-from utils.logger import logger as LOGGER
 
 # ── Known modules that carry extra files outside download_file_list ──
 # Translations for labels are applied at render time via self.tr().

@@ -7,7 +7,7 @@ from dataclasses import field
 from typing import Dict, List
 
 from . import shared
-from .fontformat import FontFormat
+from .fontformat import FontFormat, PunctuationPosition
 from .io_utils import json_dump_nested_obj, np, serialize_np
 from .logger import logger as LOGGER
 from .structures import Config, nested_dataclass
@@ -154,6 +154,7 @@ class ProgramConfig(Config):
     let_alignment_flag: int = 0
     let_writing_mode_flag: int = 0
     let_family_flag: int = 0
+    punctuation_position: int = PunctuationPosition.Simplified
     let_autolayout_flag: bool = True
     let_uppercase_flag: bool = True
     let_textstyle_indep_flag: bool = False

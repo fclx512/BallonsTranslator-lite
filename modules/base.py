@@ -303,9 +303,10 @@ class BaseModule:
         if not self.requires_packages:
             return
         try:
+            import importlib.metadata as importlib_metadata
+
             from packaging.requirements import Requirement
             from packaging.utils import canonicalize_name
-            import importlib.metadata as importlib_metadata
         except (ImportError, ModuleNotFoundError):
             return  # packaging itself missing — shouldn't happen
 
@@ -324,7 +325,8 @@ class BaseModule:
         if not missing:
             return
 
-        import subprocess, sys
+        import subprocess
+        import sys
 
         python = sys.executable
         # Prefer uv, fall back to pip

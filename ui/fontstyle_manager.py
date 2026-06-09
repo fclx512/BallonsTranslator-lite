@@ -76,7 +76,6 @@ _SIGNATURE_FIELDS = [
     "gradient_angle",
     "gradient_size",
     "line_spacing_type",
-    "punctuation_alignment",
 ]
 
 

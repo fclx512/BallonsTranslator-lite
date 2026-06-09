@@ -25,7 +25,13 @@ from qtpy.QtGui import (
 )
 
 from utils import shared as C
-from utils.fontformat import FontFormat, LineSpacingType, PunctuationAlignment, pt2px
+from utils.fontformat import (
+    FontFormat,
+    LineSpacingType,
+    PunctuationAlignment,
+    PunctuationPosition,
+    pt2px,
+)
 
 from .misc import LruIgnoreArg, pixmap2ndarray
 
@@ -359,7 +365,8 @@ def line_draw_qt5(
 class SceneTextLayout(QAbstractTextDocumentLayout):
     size_enlarged = Signal()
 
-    def __init__(self, doc: QTextDocument, fontformat: FontFormat) -> None:
+    def __init__(self, doc: QTextDocument, fontformat: FontFormat,
+                 punctuation_position: int = PunctuationAlignment.Traditional) -> None:
         super().__init__(doc)
         self.max_height = 0
         self.max_width = 0
@@ -369,6 +376,7 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
         self.letter_spacing = fontformat.letter_spacing
         self.linespacing_type = fontformat.line_spacing_type
         self.fontformat = fontformat
+        self.punctuation_position = punctuation_position
 
         self.x_offset_lst = []
         self.y_offset_lst = []
@@ -416,7 +424,13 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
             self.reLayout()
 
     def setPunctuationAlignment(self, value: int):
-        self.reLayout()
+        """Deprecated: set punctuation_position directly via setPunctuationPosition."""
+        self.setPunctuationPosition(value)
+
+    def setPunctuationPosition(self, value: int):
+        if self.punctuation_position != value:
+            self.punctuation_position = value
+            self.reLayout()
 
     def calculate_line_spacing(self, size: float, line_spacing: float = 1):
         if self.linespacing_type == LineSpacingType.Proportional:
@@ -532,8 +546,9 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
 
 
 class VerticalTextDocumentLayout(SceneTextLayout):
-    def __init__(self, doc: QTextDocument, fontformat: FontFormat):
-        super().__init__(doc, fontformat)
+    def __init__(self, doc: QTextDocument, fontformat: FontFormat,
+                 punctuation_position: int = PunctuationAlignment.Traditional):
+        super().__init__(doc, fontformat, punctuation_position)
 
         self.line_spaces_lst = []
         self.min_height = 0
@@ -685,10 +700,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                         yoff += space_shift
 
                     if char in PUNSET_ALIGNCENTER:
-                        if (
-                            self.fontformat.punctuation_alignment
-                            == PunctuationAlignment.UpperRight
-                        ):
+                        if self.punctuation_position == PunctuationPosition.Simplified:
                             xoff = -act_rect[0] + (line_width - act_rect[2])
                         else:
                             tbr, br = cfmt.punc_rect(char)
@@ -1147,8 +1159,9 @@ class VerticalTextDocumentLayout(SceneTextLayout):
 
 
 class HorizontalTextDocumentLayout(SceneTextLayout):
-    def __init__(self, doc: QTextDocument, fontformat: FontFormat):
-        super().__init__(doc, fontformat)
+    def __init__(self, doc: QTextDocument, fontformat: FontFormat,
+                 punctuation_position: int = PunctuationAlignment.Traditional):
+        super().__init__(doc, fontformat, punctuation_position)
         self.need_ideal_height = True
 
     def reLayout(self):

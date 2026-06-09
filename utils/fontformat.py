@@ -32,9 +32,13 @@ class TextAlignment(enum.IntEnum):
     Right = 2
 
 
-class PunctuationAlignment(enum.IntEnum):
-    Center = 0
-    UpperRight = 1
+class PunctuationPosition(enum.IntEnum):
+    Traditional = 0  # 繁体中文/日文：横排居中 / 竖排居中 (matches old Center=0)
+    Simplified = 1   # 简体中文：横排底部 / 竖排右上 (matches old UpperRight=1)
+
+
+# Deprecated alias — kept for backward compatibility with old serialized data
+PunctuationAlignment = PunctuationPosition
 
 
 fontweight_qt5_to_qt6 = {
@@ -115,7 +119,9 @@ class FontFormat(Config):
     gradient_size: float = 1.0
     _style_name: str = ""
     line_spacing_type: int = LineSpacingType.Proportional
-    punctuation_alignment: int = PunctuationAlignment.Center
+    # Deprecated: now a global setting (ProgramConfig.punctuation_position).
+    # Kept for backward compatibility with old config/textstyles files.
+    punctuation_alignment: int = PunctuationPosition.Traditional  # 0 = old Center
 
     deprecated_attributes: dict = field(default_factory=lambda: dict())
 

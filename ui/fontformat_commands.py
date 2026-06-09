@@ -335,7 +335,7 @@ def ffmt_change_line_spacing_type(
         blkitem.setLineSpacingType(value, restore_cursor=restore_cursor)
 
 
-@font_formating(push_undostack=True)
+@font_formating(push_undostack=False)
 def ffmt_change_punctuation_alignment(
     param_name: str,
     values: int,
@@ -344,9 +344,9 @@ def ffmt_change_punctuation_alignment(
     blkitems: List[TextBlkItem],
     **kwargs,
 ):
-    restore_cursor = not is_global
-    for blkitem, value in zip(blkitems, values):
-        blkitem.setPunctuationAlignment(value, restore_cursor=restore_cursor)
+    """Deprecated: punctuation alignment is now a global setting (ConfigPanel).
+    This function is a no-op kept for backward compatibility with funcmaps."""
+    pass
 
 
 @font_formating(push_undostack=True)

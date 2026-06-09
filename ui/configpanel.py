@@ -13,6 +13,7 @@ from qtpy.QtGui import (
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFrame,
@@ -1512,6 +1513,21 @@ class ConfigPanel(Widget):
         )
         ts_layout.addWidget(ti_sublock)
 
+        # Punctuation Position
+        self.punctuation_position_combo = QComboBox()
+        self.punctuation_position_combo.addItems(
+            [self.tr("Traditional Chinese"), self.tr("Simplified Chinese")]
+        )
+        self.punctuation_position_combo.setCurrentIndex(pcfg.punctuation_position)
+        self.punctuation_position_combo.setFixedWidth(CONFIG_COMBOBOX_LONG)
+        self.punctuation_position_combo.currentIndexChanged.connect(
+            self.on_punctuation_position_changed
+        )
+        punct_pos_sublock = ConfigSubBlock(
+            self.punctuation_position_combo, self.tr("Punctuation Position")
+        )
+        ts_layout.addWidget(punct_pos_sublock)
+
         self.exclude_fonts_btn = QPushButton(self.tr("Exclude Fonts..."), parent=self)
         self.exclude_fonts_btn.setFixedWidth(CONFIG_COMBOBOX_LONG)
         self.exclude_fonts_btn.clicked.connect(self.on_exclude_fonts_clicked)
@@ -1711,6 +1727,22 @@ class ConfigPanel(Widget):
     def on_max_font_size_changed(self, value: int):
         pcfg.max_font_size = value
 
+    def on_punctuation_position_changed(self, index: int):
+        pcfg.punctuation_position = index
+        self._apply_punctuation_settings()
+
+    def _apply_punctuation_settings(self):
+        """Apply punctuation_position to ALL existing text items."""
+        from .shared_widget import canvas as sw_canvas
+        from .textitem import TextBlkItem
+        if sw_canvas is None:
+            return
+        for item in sw_canvas.items():
+            if isinstance(item, TextBlkItem):
+                item.layout.setPunctuationPosition(pcfg.punctuation_position)
+                item.repaint_background()
+                item.update()
+
     def _on_preset_edited(self, config_key: str, editor: QLineEdit):
         raw = editor.text()
         parts = [p.strip() for p in raw.split(",") if p.strip()]
@@ -1899,6 +1931,7 @@ class ConfigPanel(Widget):
         self.load_model_checker.setChecked(pcfg.module.load_model_on_demand)
         self.empty_runcache_checker.setChecked(pcfg.module.empty_runcache)
         self.max_font_size_edit.setValue(pcfg.max_font_size)
+        self.punctuation_position_combo.setCurrentIndex(pcfg.punctuation_position)
 
         anim_idx = {0: 0, 60: 1, 30: 2, -1: 3}.get(pcfg.animation_fps, 0)
         self.anim_combo.setCurrentIndex(anim_idx)

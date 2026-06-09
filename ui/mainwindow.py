@@ -24,6 +24,7 @@ from qtpy.QtWidgets import (
     QAction,
     QApplication,
     QComboBox,
+    QDialog,
     QFileDialog,
     QGridLayout,
     QHBoxLayout,

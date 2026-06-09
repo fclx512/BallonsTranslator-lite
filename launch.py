@@ -19,10 +19,10 @@ _pylibs_sp = PATH_ROOT / "ballontrans_pylibs_win" / "Lib" / "site-packages"
 if _pylibs_sp.exists() and str(_pylibs_sp) not in sys.path:
     sys.path.append(str(_pylibs_sp))
 
-import utils.shared as shared
+import utils.shared as shared  # noqa: E402
 
 BRANCH = "main"
-VERSION = "beta-20260607-01"
+VERSION = "beta-20260609-01"
 
 python = sys.executable
 git = os.environ.get("GIT", "git")
@@ -546,7 +546,7 @@ def main():
     if config.mirror.github_mirror:
         os.environ.setdefault("GITHUB_MIRROR", config.mirror.github_mirror)
     # Re-read index_url so run_uv / run_pip pick it up
-    index_url = os.environ.get("INDEX_URL", "")
+    os.environ.get("INDEX_URL", "")
 
     prepare_environment()
 
