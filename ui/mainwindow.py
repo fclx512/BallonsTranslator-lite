@@ -2377,13 +2377,15 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
 
         from utils.psd_exporter import create_exporter
 
-        exporter = create_exporter()
+        LOGGER.info("PSD export method: %s", options.export_method)
+        exporter = create_exporter(method=options.export_method)
 
         # Store result context for the completion handler
         self._psd_result = {
             "output_dir": options.output_dir,
             "success": 0,
             "total": len(pages_to_export),
+            "export_method": options.export_method,
         }
 
         from .custom_widget import ProgressMessageBox
@@ -2421,12 +2423,22 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
         if success_count == 0:
             return
 
-        create_info_dialog(
-            self.tr("Exported ")
-            + str(success_count)
-            + self.tr(" ExtendScript(s).\n\nOpen Photoshop → File → Scripts → Browse to run each .jsx.\n\nOutput:\n")
-            + self._psd_result["output_dir"]
-        )
+        method = self._psd_result.get("export_method", "binary")
+        if method == "binary":
+            msg = (
+                self.tr("Exported ")
+                + str(success_count)
+                + self.tr(" PSD file(s).\n\nOutput:\n")
+                + self._psd_result["output_dir"]
+            )
+        else:
+            msg = (
+                self.tr("Exported ")
+                + str(success_count)
+                + self.tr(" ExtendScript(s).\n\nOpen Photoshop → File → Scripts → Browse to run each .jsx.\n\nOutput:\n")
+                + self._psd_result["output_dir"]
+            )
+        create_info_dialog(msg)
 
     def export_tstyles(self):
         ddir = osp.dirname(pcfg.text_styles_path)

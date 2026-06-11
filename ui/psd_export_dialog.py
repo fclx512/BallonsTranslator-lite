@@ -6,6 +6,7 @@ from qtpy.QtCore import Qt
 from qtpy.QtGui import QFont
 from qtpy.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QFileDialog,
     QFrame,
@@ -57,9 +58,12 @@ class PsdExportDialog(QDialog):
                 self._proj.idx2pagename(i) for i in range(lo, hi + 1)
             ]
 
+        method = self._method_cb.currentData() or "binary"
+
         return ExportOptions(
             output_dir=self._dir_edit.text(),
             page_filter=page_filter,
+            export_method=method,
         )
 
     # ------------------------------------------------------------------
@@ -116,26 +120,24 @@ class PsdExportDialog(QDialog):
         # ---- separator --------------------------------------------------
         layout.addWidget(self._make_separator())
 
-        # ---- export method info -----------------------------------------
+        # ---- export method -----------------------------------------
         layout.addWidget(self._make_section_label(self.tr("Export Method")))
 
-        self._card_frame = QFrame()
-        self._card_frame.setFrameShape(QFrame.Shape.StyledPanel)
-        self._card_frame.setStyleSheet(
-            "QFrame { background: palette(window); border: 1px solid palette(midlight); "
-            "border-radius: 4px; padding: 10px; }"
-        )
-        card_layout = QVBoxLayout(self._card_frame)
-        card_layout.setContentsMargins(12, 10, 12, 10)
-        title_lbl = QLabel(self.tr("Generate script — flexible execution"))
-        title_lbl.setFont(QFont(self.font().family(), weight=QFont.Weight.Bold))
-        body_lbl = QLabel(self.tr(
-            "Exports a .jsx script + image files. Run the script on any machine with Photoshop to generate the PSD.\n\nNo Photoshop dependency at export time.\n\nOpen Photoshop → File → Scripts → Browse → select the .jsx file."
+        self._method_cb = QComboBox()
+        self._method_cb.addItem(self.tr("Binary PSD (direct)"), "binary")
+        self._method_cb.addItem(self.tr("ExtendScript (.jsx) — needs Photoshop"), "jsx")
+        self._method_cb.currentIndexChanged.connect(self._on_method_changed)
+        layout.addWidget(self._method_cb)
+
+        self._method_info = QLabel(self.tr(
+            "Generates a .psd file directly — no Photoshop dependency.\n"
+            "Text layers are editable in Photoshop (TySh + EngineData)."
         ))
-        body_lbl.setWordWrap(True)
-        card_layout.addWidget(title_lbl)
-        card_layout.addWidget(body_lbl)
-        layout.addWidget(self._card_frame)
+        self._method_info.setWordWrap(True)
+        self._method_info.setStyleSheet(
+            "color: palette(text); padding: 4px 0;"
+        )
+        layout.addWidget(self._method_info)
 
         # ---- separator --------------------------------------------------
         layout.addWidget(self._make_separator())
@@ -182,6 +184,21 @@ class PsdExportDialog(QDialog):
         self._slider.rangeChanged.connect(lambda *a: self._update_range_info())
         self._start_spin.valueChanged.connect(self._on_spinbox_changed)
         self._end_spin.valueChanged.connect(self._on_spinbox_changed)
+
+    # ------------------------------------------------------------------
+    # internal — method change
+    # ------------------------------------------------------------------
+
+    def _on_method_changed(self, index: int):
+        method = self._method_cb.itemData(index)
+        if method == "binary":
+            self._method_info.setText(
+                self.tr("Generates a .psd file directly — no Photoshop dependency.\nText layers are editable in Photoshop (TySh + EngineData).")
+            )
+        else:
+            self._method_info.setText(
+                self.tr("Exports a .jsx script + image files. Run the script on any machine with Photoshop to generate the PSD.\n\nNo Photoshop dependency at export time.\n\nOpen Photoshop → File → Scripts → Browse → select the .jsx file.")
+            )
 
     # ------------------------------------------------------------------
     # internal — font warning

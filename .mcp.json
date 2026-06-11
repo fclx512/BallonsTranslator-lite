@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "anysearch": {
+      "type": "streamable-http",
+      "url": "https://api.anysearch.com/mcp",
+      "headers": {
+        "Authorization": "Bearer as_sk_3d4c415a10a4a69782b7bf48b58633ed"
+      }
+    }
+  }
+}

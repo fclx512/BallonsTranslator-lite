@@ -1129,6 +1129,17 @@ Output:
 </translation>
         </message>
         <message>
+            <location filename="../ui/mainwindow.py" line="" />
+            <source> PSD file(s).
+
+Output:
+</source>
+            <translation> 个 PSD 文件。
+
+输出目录：
+</translation>
+        </message>
+        <message>
             <location filename="../ui/mainwindow.py" line="2485" />
             <source>PSD Export</source>
             <translation>PSD 导出</translation>
@@ -3032,6 +3043,23 @@ Apply them now?</source>
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>ExtendScript (.jsx)</source>
             <translation>ExtendScript (.jsx)</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Binary PSD (direct)</source>
+            <translation>二进制 PSD（直接导出）</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>ExtendScript (.jsx) — needs Photoshop</source>
+            <translation>ExtendScript (.jsx) — 需要 Photoshop</translation>
+        </message>
+        <message>
+            <location filename="../ui/psd_export_dialog.py" line="" />
+            <source>Generates a .psd file directly — no Photoshop dependency.
+Text layers are editable in Photoshop (TySh + EngineData).</source>
+            <translation>直接生成 .psd 文件，无需 Photoshop。
+文字图层在 Photoshop 中可编辑（TySh + EngineData）。</translation>
         </message>
         <message>
             <location filename="../ui/psd_export_dialog.py" line="" />

@@ -17,6 +17,7 @@ class ExportOptions:
 
     output_dir: str
     page_filter: Optional[List[str]] = None  # None = all pages
+    export_method: str = "binary"  # "binary" or "jsx"
 
 
 class AbstractPsdExporter(ABC):
@@ -67,8 +68,23 @@ class AbstractPsdExporter(ABC):
         return families
 
 
-def create_exporter() -> AbstractPsdExporter:
-    """Factory — returns a PsJsxExporter."""
-    from .psd_jsx_exporter import PsJsxExporter
+def create_exporter(method: str = "binary") -> AbstractPsdExporter:
+    """Factory — returns an exporter for the given *method*.
 
-    return PsJsxExporter()
+    Args:
+        method: ``"binary"`` for direct PSD (default), ``"jsx"`` for
+            ExtendScript generation.
+
+    Raises:
+        ValueError: On unknown *method*.
+    """
+    if method == "binary":
+        from .psd_binary_exporter import PsBinaryExporter
+
+        return PsBinaryExporter()
+    elif method == "jsx":
+        from .psd_jsx_exporter import PsJsxExporter
+
+        return PsJsxExporter()
+    else:
+        raise ValueError(f"Unknown PSD export method: {method}")
