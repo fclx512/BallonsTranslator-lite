@@ -6,6 +6,7 @@ from qtpy.QtCore import QPointF, QRectF, Qt, Signal
 from qtpy.QtGui import (
     QColor,
     QFont,
+    QFontMetrics,
     QInputMethodEvent,
     QKeyEvent,
     QLinearGradient,
@@ -592,6 +593,7 @@ class TextBlkItem(QGraphicsTextItem):
             painter.setCompositionMode(
                 QPainter.CompositionMode.CompositionMode_SourceOver
             )
+            self._draw_seq_badge(painter)
 
     def _draw_accessories(self, painter: QPainter):
         br = self.boundingRect()
@@ -614,6 +616,50 @@ class TextBlkItem(QGraphicsTextItem):
             )
             painter.setPen(pen)
             painter.drawRect(self.unpadRect(br))
+        painter.restore()
+
+    def _draw_seq_badge(self, painter: QPainter):
+        """Draw sequence number badge at top-left corner of content area."""
+        scale = self.get_scale()
+        font_size = max(6, 11 / scale)
+
+        content_rect = self.unpadRect(self.boundingRect())
+
+        font = QFont()
+        font.setBold(True)
+        font.setPixelSize(int(font_size))
+
+        seq_text = str(self.idx + 1)
+
+        fm = QFontMetrics(font)
+        text_w = fm.horizontalAdvance(seq_text) + 8
+        text_h = fm.height() + 4
+
+        badge_rect = QRectF(
+            content_rect.x(),
+            content_rect.y(),
+            text_w,
+            text_h,
+        )
+
+        painter.save()
+
+        if self.isSelected():
+            from ui.misc import get_theme_color
+
+            bg = get_theme_color()
+            bg.setAlpha(200)
+        else:
+            bg = QColor(0, 0, 0, 170)
+
+        painter.setBrush(bg)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(badge_rect, 3, 3)
+
+        painter.setPen(Qt.GlobalColor.white)
+        painter.setFont(font)
+        painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, seq_text)
+
         painter.restore()
 
     def startEdit(self, pos: QPointF = None) -> None:

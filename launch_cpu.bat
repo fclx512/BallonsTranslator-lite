@@ -1,45 +1,36 @@
 @echo off
-cd %~dp0
+cd /d "%~dp0"
 
-:: CPU mode - uses embedded Python 3.13 from the portable environment
-:: No system Python or PyTorch installation required
-set PYTHON=%~dp0ballontrans_pylibs_win\python.exe
+:: ============================================
+::  BallonsTranslator-lite Launcher (CPU mode)
+:: ============================================
+:: - Uses embedded Python if available
+:: - Falls back to system Python otherwise
+:: - Always runs in CPU mode (no GPU required)
+:: ============================================
 
-set ERROR_REPORTING=FALSE
+set "PYTHON=%~dp0ballontrans_pylibs_win\python.exe"
 
-mkdir tmp 2>NUL
-
-%PYTHON% -c "" >tmp/stdout.txt 2>tmp/stderr.txt
+:: Try embedded Python first (full package users)
+"%PYTHON%" -c "" >nul 2>nul
 if %ERRORLEVEL% == 0 goto :launch
-echo Error: Embedded Python not found. The portable environment may be corrupted.
-goto :show_stdout_stderr
+
+:: Fall back to system Python (lightweight/GitHub users)
+where python >nul 2>nul
+if %ERRORLEVEL% == 0 (
+    set "PYTHON=python"
+    echo [INFO] Using system Python (first launch will install dependencies)
+    goto :launch
+)
+
+:: No Python found at all
+echo [ERROR] Python not found.
+echo.
+echo Please download the full package from the link in README.md,
+echo or install Python 3.10+ from https://python.org
+pause
+exit /b 1
 
 :launch
-%PYTHON% launch.py --cpu %*
-pause
-exit /b
-
-
-:show_stdout_stderr
-
-echo.
-echo exit code: %errorlevel%
-
-for /f %%i in ("tmp\stdout.txt") do set size=%%~zi
-if %size% equ 0 goto :show_stderr
-echo.
-echo stdout:
-type tmp\stdout.txt
-
-:show_stderr
-for /f %%i in ("tmp\stderr.txt") do set size=%%~zi
-if %size% equ 0 goto :endofscript
-echo.
-echo stderr:
-type tmp\stderr.txt
-
-:endofscript
-
-echo.
-echo Launch unsuccessful. Exiting.
+"%PYTHON%" launch.py --cpu %*
 pause

@@ -39,13 +39,9 @@ dependencies = [
 gpu = ["torch", "torchvision", "transformers", "diffusers"]
 mcp = ["mcp>=1.0.0"]
 
-[tool.uv]
-# uv is the primary package manager for this project.
-# See launch.py for the bootstrap flow (uv auto-installed if missing).
-
 [tool.ruff]
 target-version = "py310"
-exclude = ["ballontrans_pylibs_win", "modules/textdetector/yolov5"]
+exclude = ["modules/textdetector/yolov5"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
@@ -54,12 +50,7 @@ ignore = ["E501"]
 # __init__.py 中导入再导出是标准做法，不报 F401
 per-file-ignores = {"__init__.py" = ["F401"]}
 
-[tool.basedpyright]
-typeCheckingMode = "basic"
-pythonVersion = "3.10"
-exclude = ["ballontrans_pylibs_win", "modules/textdetector/yolov5"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--tb=short"
-norecursedirs = ["ballontrans_pylibs_win", ".git", "node_modules"]
+norecursedirs = [".git", "node_modules"]

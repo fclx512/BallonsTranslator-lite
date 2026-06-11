@@ -1764,6 +1764,11 @@ class MainWindow(mainwindow_cls):
     def on_imgtrans_pipeline_finished(self):
         self.backup_blkstyles.clear()
         self._run_imgtrans_wo_textstyle_update = False
+        # Restore original translator if temporarily swapped for context-aware run
+        if hasattr(self, "_ctx_batch_restore") and self._ctx_batch_restore:
+            original = self._ctx_batch_restore
+            self._ctx_batch_restore = None
+            self.module_manager.setTranslator(original)
         if pcfg.module.empty_runcache and not shared.HEADLESS:
             self.module_manager.unload_all_models()
         if shared.args.export_translation_txt:
@@ -1957,8 +1962,10 @@ class MainWindow(mainwindow_cls):
         if num_pages > 1:
             from qtpy.QtWidgets import (
                 QCheckBox,
+                QComboBox,
                 QDialog,
                 QFrame,
+                QGridLayout,
                 QHBoxLayout,
                 QLabel,
                 QPushButton,
@@ -2074,15 +2081,114 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
                 self.tr("Enable Translation"),
                 self.tr("Enable Inpainting"),
             ]
+            ctx_trans_cb = None
             for idx, label in enumerate(stage_labels):
                 cb = QCheckBox(label)
                 cb.setChecked(pcfg.module.stage_enabled(idx))
                 cb.toggled.connect(
                     lambda checked, i=idx: self.on_enable_module(i, checked)
                 )
-                stages_layout.addWidget(cb)
+                if idx == 2:
+                    row = QWidget()
+                    row_layout = QHBoxLayout(row)
+                    row_layout.setContentsMargins(0, 0, 0, 0)
+                    row_layout.addWidget(cb)
+                    ctx_trans_cb = QCheckBox(self.tr("Context Translation (beta)"))
+                    row_layout.addWidget(ctx_trans_cb)
+                    row_layout.addStretch()
+                    stages_layout.addWidget(row)
+                else:
+                    stages_layout.addWidget(cb)
 
             layout.addWidget(stages_frame)
+
+            # AI Chat settings — shown when Context Translation (beta) is checked
+            ai_chat_frame = QFrame()
+            ai_chat_frame.setFrameShape(QFrame.Shape.StyledPanel)
+            ai_grid = QGridLayout(ai_chat_frame)
+            ai_grid.setContentsMargins(8, 6, 8, 6)
+            ai_grid.setSpacing(6)
+
+            ai_title = QLabel(self.tr("AI Chat Settings"))
+            ai_title.setStyleSheet("font-weight: bold;")
+            ai_grid.addWidget(ai_title, 0, 0, 1, 2)
+
+            # Adaptive mode info label — updates based on project page count
+            mode_label = QLabel()
+            mode_label.setStyleSheet("color: #666; font-style: italic;")
+            ai_grid.addWidget(mode_label, 1, 0, 1, 2)
+
+            ai_grid.addWidget(QLabel(self.tr("Batch Size:")), 2, 0)
+            batch_combo = QComboBox()
+            batch_combo.addItems(["1", "3", "5", "10", "20"])
+            batch_combo.setCurrentText("5")
+            ai_grid.addWidget(batch_combo, 2, 1)
+
+            ai_grid.addWidget(QLabel(self.tr("Context Pages:")), 3, 0)
+            pages_spin = QSpinBox()
+            pages_spin.setRange(0, 20)
+            pages_spin.setValue(3)
+            ai_grid.addWidget(pages_spin, 3, 1)
+
+            def _update_mode_label():
+                if all_pages_cb.isChecked():
+                    effective = num_pages
+                else:
+                    effective = slider.high() - slider.low() + 1
+                bs = int(batch_combo.currentText())
+                pw = pages_spin.value()
+                if effective == 0:
+                    text = self.tr(
+                        "Adaptive -- will be determined when Run starts"
+                    )
+                elif effective <= bs:
+                    text = (
+                        self.tr(
+                            "Full context (%1 pages, all previous "
+                            "translations as reference)"
+                        )
+                        .replace("%1", str(effective))
+                    )
+                elif effective <= bs * 4:
+                    text = (
+                        self.tr(
+                            "Windowed context (%1 pages, +/-%2 page window)"
+                        )
+                        .replace("%1", str(effective))
+                        .replace("%2", str(pw))
+                    )
+                else:
+                    text = (
+                        self.tr(
+                            "Windowed + auto-summary (%1 pages, "
+                            "long-form mode)"
+                        )
+                        .replace("%1", str(effective))
+                    )
+                mode_label.setText(text)
+
+            _update_mode_label()
+            batch_combo.currentTextChanged.connect(
+                lambda _: _update_mode_label()
+            )
+            pages_spin.valueChanged.connect(
+                lambda _: _update_mode_label()
+            )
+            slider.rangeChanged.connect(
+                lambda _lo, _hi: _update_mode_label()
+            )
+            all_pages_cb.toggled.connect(lambda _: _update_mode_label())
+
+            glossary_cb = QCheckBox(self.tr("Enforce Term Consistency (Glossary)"))
+            glossary_cb.setChecked(True)
+            ai_grid.addWidget(glossary_cb, 4, 0, 1, 2)
+
+            ai_chat_frame.setVisible(False)
+            layout.addWidget(ai_chat_frame)
+
+            ctx_trans_cb.toggled.connect(
+                lambda checked: ai_chat_frame.setVisible(checked)
+            )
 
             # Run without update textstyle
             wo_update_cb = QCheckBox(self.tr("Run without update textstyle"))
@@ -2103,6 +2209,43 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
 
             if dialog.exec_() != QDialog.DialogCode.Accepted:
                 return
+
+            # If Context Translation is enabled, use current translator's profile
+            if ctx_trans_cb.isChecked():
+                translator = self.module_manager.translator
+                if hasattr(translator, "_active_profile"):
+                    profile = translator._active_profile
+                    if profile:
+                        from modules.translators.context_batch import (
+                            ContextBatchTranslator,
+                        )
+
+                        def _ctx_status(msg):
+                            bar = (
+                                self.module_manager.progress_msgbox.translate_bar
+                            )
+                            bar.updateProgress(
+                                bar.progressbar.value(), msg
+                            )
+
+                        self._ctx_batch_restore = pcfg.module.translator
+                        ctx = ContextBatchTranslator(
+                            api_config={
+                                "api_host": profile.get("api_host", ""),
+                                "api_key": profile.get("api_key", ""),
+                                "model": profile.get("model", "gpt-4o"),
+                                "temperature": profile.get("temperature", 0.1),
+                                "max_tokens": profile.get("max_tokens", ""),
+                                "proxy": profile.get("proxy", ""),
+                            },
+                            translation_prompt=profile.get("prompt_template", ""),
+                            status_callback=_ctx_status,
+                        )
+                        ctx.batch_size = int(batch_combo.currentText())
+                        ctx.context_pages = pages_spin.value()
+                        ctx.use_glossary = glossary_cb.isChecked()
+                        self.module_manager.translate_thread.translator = ctx
+                        self.module_manager.translate_thread.module = ctx
 
             if wo_update_cb.isChecked():
                 self._run_imgtrans_wo_textstyle_update = True

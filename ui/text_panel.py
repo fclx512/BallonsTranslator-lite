@@ -781,4 +781,4 @@ class FontFormatPanel(Widget):
                     not textblk_item.isEditing() and textblk_item.isMultiFontSize()
                 )
                 self.set_active_format(blk_fmt, multi_size)
-                self.textstyle_panel.setTitle(f"TextBlock #{textblk_item.idx}")
+                self.textstyle_panel.setTitle(f"TextBlock #{textblk_item.idx + 1}")

@@ -1,16 +1,21 @@
 from typing import List
 
 import numpy as np
-from qtpy.QtCore import QEvent, QMimeData, QPoint, QPropertyAnimation, QSize, Qt, Signal
+from qtpy.QtCore import QEvent, QMimeData, QPoint, QPropertyAnimation, QRectF, QSize, Qt, Signal
 from qtpy.QtGui import (
+    QColor,
     QDrag,
     QDragEnterEvent,
     QDropEvent,
     QFocusEvent,
+    QFont,
+    QFontMetrics,
     QInputMethodEvent,
     QIntValidator,
     QKeyEvent,
     QMouseEvent,
+    QPainter,
+    QPixmap,
     QTextCursor,
 )
 from qtpy.QtWidgets import (
@@ -586,6 +591,30 @@ class TextEditListScrollArea(QScrollArea):
             drag = self.drag = QDrag(w)
             mime = QMimeData()
             drag.setMimeData(mime)
+
+            # Drag indicator: "Sel N" badge
+            if self.checked_list:
+                text = f"Sel {len(self.checked_list)}"
+                font = QFont()
+                font.setBold(True)
+                font.setPixelSize(12)
+                fm = QFontMetrics(font)
+                tw = fm.horizontalAdvance(text) + 12
+                th = fm.height() + 8
+                pm = QPixmap(int(tw), int(th))
+                pm.fill(Qt.GlobalColor.transparent)
+                p = QPainter(pm)
+                p.setRenderHint(QPainter.RenderHint.Antialiasing)
+                p.setBrush(QColor(0, 0, 0, 180))
+                p.setPen(Qt.PenStyle.NoPen)
+                p.drawRoundedRect(0, 0, int(tw), int(th), 4, 4)
+                p.setPen(Qt.GlobalColor.white)
+                p.setFont(font)
+                p.drawText(QRectF(0, 0, tw, th), Qt.AlignmentFlag.AlignCenter, text)
+                p.end()
+                drag.setPixmap(pm)
+                drag.setHotSpot(QPoint(int(tw) // 2, int(th) // 2))
+
             drag.exec(Qt.DropAction.MoveAction)
             self.drag = None
             if self.drag_to_pos != -1:

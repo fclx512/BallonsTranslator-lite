@@ -1,18 +1,15 @@
 __pycache__
+.coverage
+.coverage.*
 local_*
 inpainted
 mask
 result
 data/models
-data/testpacks/eng_dontupload
-data/testpacks/testpacks
 data/*.png
 data/font_demo_cache.bin
-data/testpacks
 config/textstyles
 release
-libs
-icons
 .btrans_cache
 
 tmp.py

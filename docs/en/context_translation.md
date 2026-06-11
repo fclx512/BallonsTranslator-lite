@@ -11,8 +11,8 @@ Run 对话框 (mainwindow.py:run_imgtrans)
     │
     ├─ 勾选 "上下文翻译 (beta)"
     │      │
-    │      ├─ 读取 AI 助手的 api_config (host/key/model/temp/proxy)
-    │      ├─ 读取 AI 助手的自定义翻译提示词 (custom_prompt)
+    │      ├─ 读取当前翻译器 profile 的 api_config (host/key/model/temp/proxy)
+    │      ├─ 读取 profile 的 prompt_template 作为翻译提示词
     │      │
     │      └─ 创建 ContextBatchTranslator 实例
     │             ├─ 注入上下文策略参数
@@ -35,10 +35,10 @@ Run 对话框 (mainwindow.py:run_imgtrans)
 
 | 文件 | 用途 |
 |------|------|
-| `modules/translators/context_batch.py` | `ContextBatchTranslator` — 轻量批量翻译器，复用 AI 助手配置 |
-| `ui/mainwindow.py:1818-1835` | Run 对话框逻辑：读取 AI 助手配置 → 创建翻译器 → 替换管线 |
-| `ui/mainwindow.py:1457-1462` | 管线完成后的翻译器恢复 |
-| `utils/ai_controller.py` | AI 助手的配置来源（`api_config`、`custom_prompt`） |
+| `modules/translators/context_batch.py` | `ContextBatchTranslator` — 轻量批量翻译器，复用当前翻译器 profile |
+| `ui/mainwindow.py` | Run 对话框逻辑：读取当前翻译器 profile → 创建翻译器 → 替换管线 |
+| `ui/mainwindow.py` | 管线完成后的翻译器恢复 |
+| `utils/profile_manager.py` | profile 存储与管理 |
 
 ## ContextBatchTranslator 设计
 
@@ -103,12 +103,14 @@ def finalize(self)                             # 清理缓存
 - 术语表最多 50 条，超出时淘汰最早条目
 - 每次 API 调用时注入 system prompt（"Term consistency guide"）
 
-## AI 助手配置关联
+## Config Source
 
-上下文翻译的 API 配置**完全复用 AI 聊天面板**的设置：
+The context translation API configuration **fully reuses the current translator's** `active_profile`:
 
-1. 用户在 AI 聊天面板设置中选择 API Profile → 写入 `config/ai_chat_config.json`
-2. `AiController` 加载该文件，`api_config` 和 `custom_prompt` 作为属性暴露
-3. Run 对话框通过 `self._ai_controller.api_config` / `self._ai_controller.custom_prompt` 读取
+1. User selects an API Profile in the `LLM_API_Translator` settings → saved in `config/config.json`
+2. `profile_manager` manages all profiles centrally; `LLM_API_Translator._active_profile` returns the active profile
+3. Run dialog reads config via `self.module_manager.translator._active_profile`
+4. Uses `api_host`/`api_key`/`model`/`temperature` from the profile to initialize the OpenAI client
+5. Uses the profile's `prompt_template` as the context translation prompt template
 
-因此用户只需在 AI 聊天面板配好 API，即可在 Run 对话框中使用上下文翻译，无需额外配置。
+This means users only need to configure their API Profile in the translator settings to use context translation in the Run dialog — no extra setup required.

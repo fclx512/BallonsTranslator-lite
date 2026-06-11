@@ -6,6 +6,7 @@ cd %~dp0
 :: If you prefer to skip update checks, use launch_win.bat instead.
 
 set PYTHON=%~dp0ballontrans_pylibs_win\python.exe
+set PYTHON_FALLBACK=python
 set BTRANSLATOR_GPU_MODE=1
 set ERROR_REPORTING=FALSE
 
@@ -49,7 +50,14 @@ if exist "_update\ready" (
 :check_python
 %PYTHON% -c "" >tmp/stdout.txt 2>tmp/stderr.txt
 if %ERRORLEVEL% == 0 goto :check_update
-echo Error: Embedded Python not found. The portable environment may be corrupted.
+:: Embedded Python not found — fall back to system Python
+where %PYTHON_FALLBACK% >nul 2>nul
+if %ERRORLEVEL% == 0 (
+    set PYTHON=%PYTHON_FALLBACK%
+    echo [INFO] Using system Python (requires PyTorch with CUDA for GPU)
+    goto :check_update
+)
+echo [ERROR] Python not found. Please download the full package from README.md.
 goto :show_stdout_stderr
 
 :: ── Phase 3: Check for new updates (download only, does not apply) ──
