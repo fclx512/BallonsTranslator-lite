@@ -5,6 +5,7 @@ import re
 import time
 from collections import OrderedDict
 from copy import deepcopy
+from pathlib import Path
 from typing import Callable, Dict, List, Union
 
 from utils import shared
@@ -112,10 +113,13 @@ def merge_config_module_params(
 ) -> Dict:
     for module_key in module_keys:
         module_params = get_module(module_key).params
+        if module_params is None:
+            module_params = {}
         if module_key not in config_params or config_params[module_key] is None:
             config_params[module_key] = module_params
         else:
-            patch_module_params(config_params[module_key], module_params, module_key)
+            if module_params:
+                patch_module_params(config_params[module_key], module_params, module_key)
 
     # Auto-select best available device on each startup,
     # overriding any stale "cpu" setting from a previous CPU-mode run.
@@ -480,24 +484,16 @@ def DEVICE_SELECTOR(not_supported: list[str] = []):
     )
 
 
-MODULE_SCRIPTS = {
-    "translator": {
-        "module_dir": "modules/translators",
-        "module_pattern": r"trans_(.*?).py",
-    },
-    "textdetector": {
-        "module_dir": "modules/textdetector",
-        "module_pattern": r"detector_(.*?).py",
-    },
-    "inpainter": {
-        "module_dir": "modules/inpaint",
-        "module_pattern": r"inpaint_(.*?).py",
-    },
-    "ocr": {"module_dir": "modules/ocr", "module_pattern": r"ocr_(.*?).py"},
-}
+MODULE_ROOT = Path(__file__).resolve().parent
+
+from utils.registries import MODULE_SCRIPTS  # noqa: E402 — single source of truth
 
 
-def init_module_registries(target_modules=None):
+def import_module_registries(target_modules=None):
+    """Eagerly import all module files — kept as a fallback for debugging only.
+
+    The normal startup path uses ``init_module_registries()`` (lazy/AST-based).
+    """
     def _load_module(module_dir: str, module_pattern: str):
         modules = os.listdir(module_dir)
         pattern = re.compile(module_pattern)
@@ -519,6 +515,17 @@ def init_module_registries(target_modules=None):
 
     for k in target_modules:
         _load_module(**MODULE_SCRIPTS[k])
+
+
+def init_module_registries(target_modules=None):
+    """Startup entry point — registers lightweight ModuleSpecs via AST scanning.
+
+    Real module imports are deferred until the user selects a module in the UI
+    (via ``Registry.resolve_module()``).
+    """
+    from utils.lazy_registry import init_lazy_module_registries
+
+    init_lazy_module_registries(target_modules)
 
 
 def init_textdetector_registries():

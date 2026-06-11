@@ -4,7 +4,7 @@ from typing import List, Union
 import cv2
 import numpy as np
 
-from utils.registry import Registry
+from utils.registries import OCR
 from utils.textblock import TextBlock
 
 from ..base import (
@@ -13,7 +13,6 @@ from ..base import (
     BaseModule,
 )
 
-OCR = Registry("OCR")
 register_OCR = OCR.register_module
 
 

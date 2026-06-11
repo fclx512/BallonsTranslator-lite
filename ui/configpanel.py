@@ -1185,6 +1185,76 @@ class FontExcludeDialog(QDialog):
         ]
 
 
+class MCPInfoDialog(QDialog):
+    """Informational dialog about the MCP Server feature."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(self.tr("MCP Server Setup"))
+        self.setMinimumSize(520, 360)
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        # Title
+        title = QLabel(self.tr("MCP Server"))
+        f = title.font()
+        f.setPointSize(f.pointSize() + 4)
+        f.setBold(True)
+        title.setFont(f)
+        layout.addWidget(title)
+
+        # Description
+        desc = QLabel(
+            self.tr("MCP (Model Context Protocol) allows external AI agents such as Claude Code to read and edit BallonsTranslator project data directly through tool calls — no GUI needed.")
+        )
+        desc.setWordWrap(True)
+        layout.addWidget(desc)
+
+        # How to use
+        steps_title = QLabel(self.tr("Quick start:"))
+        sf = steps_title.font()
+        sf.setBold(True)
+        steps_title.setFont(sf)
+        layout.addWidget(steps_title)
+
+        steps = QLabel(
+            self.tr("1. Install:  pip install -e \".[mcp]\"\n2. Add a config entry in .claude/settings.json\n3. Run Claude Code in the project directory\n4. Ask it to open your project and edit text blocks")
+        )
+        steps.setWordWrap(True)
+        layout.addWidget(steps)
+
+        # Doc link
+        doc_hint = QLabel(
+            self.tr("Full user guide available at docs/zh/mcp_user_guide.md")
+        )
+        doc_hint.setWordWrap(True)
+        doc_hint.setStyleSheet("color: #888; font-size: 12px;")
+        layout.addWidget(doc_hint)
+
+        layout.addStretch()
+
+        # Buttons
+        btn_row = QHBoxLayout()
+        open_guide_btn = QPushButton(self.tr("Open User Guide"))
+        open_guide_btn.clicked.connect(self._open_guide)
+        btn_row.addWidget(open_guide_btn)
+        btn_row.addStretch()
+        close_btn = QPushButton(self.tr("Close"))
+        close_btn.clicked.connect(self.accept)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+    def _open_guide(self):
+        import webbrowser
+        from pathlib import Path
+        from utils.shared import PROGRAM_PATH
+
+        guide = Path(PROGRAM_PATH) / "docs" / "zh" / "mcp_user_guide.md"
+        if guide.exists():
+            webbrowser.open(guide.as_uri())
+
+
 class ConfigPanel(Widget):
     save_config = Signal()
     unload_models = Signal()
@@ -1237,18 +1307,6 @@ class ConfigPanel(Widget):
         self.manage_profiles_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
         self.manage_profiles_btn.clicked.connect(self._open_profile_manager)
         msublock.layout().addWidget(self.manage_profiles_btn)
-        self.network_settings_btn = QPushButton(self.tr("Network Settings..."))
-        self.network_settings_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
-        self.network_settings_btn.clicked.connect(self._open_network_settings)
-        msublock.layout().addWidget(self.network_settings_btn)
-        self.dep_check_btn = QPushButton(self.tr("Check Dependencies..."))
-        self.dep_check_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
-        self.dep_check_btn.clicked.connect(self._open_dependency_check)
-        msublock.layout().addWidget(self.dep_check_btn)
-        self.model_check_btn = QPushButton(self.tr("Check Models..."))
-        self.model_check_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
-        self.model_check_btn.clicked.connect(self._open_model_check)
-        msublock.layout().addWidget(self.model_check_btn)
         dlConfigPanel.vlayout.addWidget(model_group)
 
         self.detect_config_panel = TextDetectConfigPanel(
@@ -1608,6 +1666,48 @@ class ConfigPanel(Widget):
             label_interface, interface_widget, object_name="GroupGeneral"
         )
 
+        # === Environment (network, deps, models, diagnostic) ===
+        label_environment = self.tr("Environment")
+        env_widget = QWidget()
+        env_layout = QVBoxLayout(env_widget)
+        env_layout.setContentsMargins(0, 0, 0, 0)
+        env_layout.setSpacing(6)
+
+        # Helper: add a button row (label + button) to env_layout
+        def _env_button(text, slot):
+            btn = QPushButton(text)
+            btn.setMinimumHeight(34)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.clicked.connect(slot)
+            env_layout.addWidget(btn)
+            return btn
+
+        self.env_network_btn = _env_button(
+            self.tr("Network & Mirror Settings..."),
+            self._open_network_settings,
+        )
+        self.env_dep_btn = _env_button(
+            self.tr("Check Dependencies..."),
+            self._open_dependency_check,
+        )
+        self.env_models_btn = _env_button(
+            self.tr("Check Model Files..."),
+            self._open_model_check,
+        )
+        self.env_diag_btn = _env_button(
+            self.tr("Run System Diagnostic..."),
+            self._open_system_diagnostic,
+        )
+        self.env_mcp_btn = _env_button(
+            self.tr("MCP Server Info..."),
+            self._open_mcp_info,
+        )
+
+        env_layout.addStretch()
+        self.env_block = generalConfigPanel.addGroupedBlock(
+            label_environment, env_widget, object_name="GroupGeneral"
+        )
+
         # === Navigation list (replaces horizontal nav bar) ===
         self.navList = NavList()
         self.navList.setFixedWidth(NAVLIST_WIDTH)
@@ -1627,6 +1727,7 @@ class ConfigPanel(Widget):
             (self.project_block.section_widget, label_project),
             (self.typesetting_block.section_widget, label_typesetting),
             (self.interface_block.section_widget, label_interface),
+            (self.env_block.section_widget, label_environment),
         ]
         self._nav_items = []  # (widget_or_None, row)
         for target, text in sections:
@@ -1880,6 +1981,16 @@ class ConfigPanel(Widget):
         from ui.model_check_dialog import ModelCheckDialog
 
         dialog = ModelCheckDialog(self)
+        dialog.exec()
+
+    def _open_system_diagnostic(self):
+        from ui.system_diagnostic_dialog import SystemDiagnosticDialog
+
+        dialog = SystemDiagnosticDialog(self)
+        dialog.exec()
+
+    def _open_mcp_info(self):
+        dialog = MCPInfoDialog(self)
         dialog.exec()
 
     def _open_shortcut_dialog(self):

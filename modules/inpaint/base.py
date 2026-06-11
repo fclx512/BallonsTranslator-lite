@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 
 from utils.imgproc_utils import enlarge_window
-from utils.registry import Registry
+from utils.registries import INPAINTERS
 from utils.textblock_mask import extract_ballon_mask
 
 from ..base import (
@@ -18,7 +18,6 @@ from ..base import (
 )
 from ..textdetector import TextBlock
 
-INPAINTERS = Registry("inpainters")
 register_inpainter = INPAINTERS.register_module
 
 

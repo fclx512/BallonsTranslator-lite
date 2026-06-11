@@ -1,7 +1,7 @@
 from typing import List
 
 import numpy as np
-from qtpy.QtCore import QEvent, QMimeData, QPoint, QSize, Qt, Signal
+from qtpy.QtCore import QEvent, QMimeData, QPoint, QPropertyAnimation, QSize, Qt, Signal
 from qtpy.QtGui import (
     QDrag,
     QDragEnterEvent,
@@ -11,12 +11,13 @@ from qtpy.QtGui import (
     QIntValidator,
     QKeyEvent,
     QMouseEvent,
-    QPixmap,
     QTextCursor,
 )
 from qtpy.QtWidgets import (
     QApplication,
+    QFrame,
     QGraphicsDropShadowEffect,
+    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -33,28 +34,9 @@ from .custom_widget import ScrollBar, SeparatorWidget, Widget
 from .textitem import TextBlock
 
 
-def _accent_rgb():
-    from ui.misc import get_theme_color
-
-    c = get_theme_color()
-    return c.red(), c.green(), c.blue()
-
-
-def _transpair_checked_style():
-    r, g, b = _accent_rgb()
-    return f"background-color: rgba({r}, {g}, {b}, 20%);"
-
-
-def _transpair_bottom_style():
-    r, g, b = _accent_rgb()
-    return f"border-width: 5px; border-bottom-style: solid; border-color: rgb({r}, {g}, {b});"
-
-
-def _transpair_top_style():
-    r, g, b = _accent_rgb()
-    return (
-        f"border-width: 5px; border-top-style: solid; border-color: rgb({r}, {g}, {b});"
-    )
+# Styling moved to config/stylesheet.css with dynamic property selectors.
+# TransPairWidget card states (checked, hover, drag) are now controlled
+# via setProperty() + unpolish/polish, not setStyleSheet().
 
 
 class SourceTextEdit(QTextEdit):
@@ -415,6 +397,8 @@ class TransPairWidget(Widget):
         self.textblock = textblock
         self.idx = idx
         self.checked = False
+        self._is_hovered = False
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         vlayout = QVBoxLayout()
         vlayout.setAlignment(Qt.AlignTop)
         vlayout.addWidget(self.e_source)
@@ -426,7 +410,21 @@ class TransPairWidget(Widget):
         self.setContentsMargins(0, 0, 0, 0)
         vlayout.setContentsMargins(0, spacing, spacing, spacing)
 
+        # Left accent bar for checked-state indicator
+        self.accent_bar = QFrame(self)
+        self.accent_bar.setObjectName("accentBar")
+        self.accent_bar.setFixedWidth(3)
+        # Color is set via stylesheet (TransPairWidget #accentBar) so theme
+        # switching updates it automatically — no hardcoded setStyleSheet here.
+        self._accent_effect = QGraphicsOpacityEffect(self.accent_bar)
+        self._accent_effect.setOpacity(0.0)
+        self.accent_bar.setGraphicsEffect(self._accent_effect)
+        self.accent_bar.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+
         hlayout = QHBoxLayout(self)
+        hlayout.addWidget(self.accent_bar)
         hlayout.addWidget(self.idx_label)
         hlayout.addLayout(vlayout)
         hlayout.setContentsMargins(0, 0, 0, 0)
@@ -468,12 +466,31 @@ class TransPairWidget(Widget):
         """
         if self.checked != checked:
             self.checked = checked
-            if checked:
-                self.setStyleSheet(
-                    "TransPairWidget{" + _transpair_checked_style() + "}"
-                )
-            else:
-                self.setStyleSheet("")
+            # Use dynamic property so stylesheet rules can style the card
+            self.setProperty("checked", checked)
+            self.style().unpolish(self)
+            self.style().polish(self)
+
+            # Animate accent bar opacity (stop any running animation first)
+            if (
+                hasattr(self, "_accent_ani")
+                and self._accent_ani is not None
+            ):
+                self._accent_ani.stop()
+            old = self._accent_effect
+            self._accent_ani = QPropertyAnimation(old, b"opacity", self)
+            self._accent_ani.setDuration(150)
+            self._accent_ani.setStartValue(old.opacity())
+            self._accent_ani.setEndValue(1.0 if checked else 0.0)
+            self._accent_ani.start()
+
+    def enterEvent(self, event):
+        self._is_hovered = True
+        return super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._is_hovered = False
+        return super().leaveEvent(event)
 
     def update_checkstate_by_mousevent(self, e: QMouseEvent):
         if e.button() == Qt.MouseButton.LeftButton:
@@ -524,7 +541,7 @@ class TextEditListScrollArea(QScrollArea):
         vlayout = QVBoxLayout(self.scrollContent)
         vlayout.setContentsMargins(0, 0, 3, 0)
         vlayout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        vlayout.setSpacing(0)
+        vlayout.setSpacing(6)
         vlayout.addStretch(1)
         self.setWidgetResizable(True)
         self.vlayout = vlayout
@@ -569,9 +586,6 @@ class TextEditListScrollArea(QScrollArea):
             drag = self.drag = QDrag(w)
             mime = QMimeData()
             drag.setMimeData(mime)
-            pixmap = QPixmap(w.size())
-            w.render(pixmap)
-            drag.setPixmap(pixmap)
             drag.exec(Qt.DropAction.MoveAction)
             self.drag = None
             if self.drag_to_pos != -1:
@@ -584,18 +598,22 @@ class TextEditListScrollArea(QScrollArea):
     def set_drag_style(self, pos: int, clear_style: bool = False):
         if pos == len(self.pairwidget_list):
             pos -= 1
-            style = _transpair_bottom_style()
+            drag_val = "bottom"
         else:
-            style = _transpair_top_style()
+            drag_val = "top"
         if clear_style:
-            style = ""
+            drag_val = ""
         pw = self.pairwidget_list[pos]
-        if pw.checked:
-            style += _transpair_checked_style()
-        style = "TransPairWidget{" + style + "}"
-        pw.setStyleSheet(style)
+        pw.setProperty("dragPos", drag_val)
+        pw.style().unpolish(pw)
+        pw.style().polish(pw)
 
     def clearDrag(self):
+        if self.drag_to_pos != -1 and self.drag_to_pos < len(self.pairwidget_list):
+            pw = self.pairwidget_list[self.drag_to_pos]
+            pw.setProperty("dragPos", "")
+            pw.style().unpolish(pw)
+            pw.style().polish(pw)
         self.drag_to_pos = -1
         if self.drag is not None:
             try:

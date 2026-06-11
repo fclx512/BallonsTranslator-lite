@@ -80,7 +80,7 @@ class ModuleThread(QThread):
                     )
                     return
             module: Union[TextDetectorBase, BaseTranslator, InpainterBase, OCRBase] = (
-                self.module_register.module_dict[module_name]
+                self.module_register.resolve_module(module_name)
             )
             params = cfg_module.get_params(self.module_key).get(module_name)
             if params is not None:
@@ -212,7 +212,7 @@ class TranslateThread(ModuleThread):
 
         try:
             params = cfg_module.translator_params[translator]
-            translator_module: BaseTranslator = TRANSLATORS.module_dict[translator]
+            translator_module: BaseTranslator = TRANSLATORS.resolve_module(translator)
             if params is not None:
                 self.translator = translator_module(
                     source, target, raise_unsupported_lang=False, **params
@@ -227,7 +227,7 @@ class TranslateThread(ModuleThread):
         except Exception as e:
             if old_translator is None:
                 fallback_name = next(iter(TRANSLATORS.module_dict))
-                fallback_cls = TRANSLATORS.module_dict[fallback_name]
+                fallback_cls = TRANSLATORS.resolve_module(fallback_name)
                 old_translator = fallback_cls(
                     "简体中文", "English", raise_unsupported_lang=False
                 )

@@ -21,6 +21,8 @@ if _pylibs_sp.exists() and str(_pylibs_sp) not in sys.path:
 
 import utils.shared as shared  # noqa: E402
 
+from utils.env_diagnostic import detect_gpu_info
+
 BRANCH = "main"
 VERSION = "beta-20260609-01"
 
@@ -30,7 +32,6 @@ skip_install = False
 index_url = os.environ.get("INDEX_URL", "")
 QT_APIS = ["pyqt6", "pyside6", "pyqt5", "pyside2"]
 stored_commit_hash = None
-_gpu_info_cache = None
 
 REQ_WIN = ["pywin32"]
 
@@ -255,7 +256,7 @@ def _detect_user_torch():
         else:
             print(f"Found user PyTorch at: {_torch_path}")
             print("CUDA is not available in user-installed PyTorch.")
-            _gpu_info = _detect_gpu_info()
+            _gpu_info = detect_gpu_info()
             if _gpu_info:
                 _gen = _gpu_info["generation"]
                 if _gen == "Kepler":
@@ -287,167 +288,6 @@ def _detect_user_torch():
         print(f"Could not detect user PyTorch: {e}")
 
     return False
-
-
-def _detect_gpu_info():
-    """Detect NVIDIA GPU via nvidia-smi and return architecture info.
-
-    Returns a dict with keys: name, generation, recommended_cuda, torch_index, message.
-    Returns None if no NVIDIA GPU is detected. Result is cached (nvidia-smi runs once).
-    """
-    global _gpu_info_cache
-    if _gpu_info_cache is not None:
-        return _gpu_info_cache
-
-    try:
-        _nvsmi = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if _nvsmi.returncode != 0 or not _nvsmi.stdout.strip():
-            _gpu_info_cache = None
-            return None
-        _gpu_name = _nvsmi.stdout.strip()
-    except Exception:
-        _gpu_info_cache = None
-        return None
-
-    name_upper = _gpu_name.upper()
-
-    # 1) Blackwell — RTX 50 series, needs CUDA 12.8+ nightly
-    if any(
-        n in name_upper
-        for n in ["RTX 5090", "RTX 5080", "RTX 5070", "RTX 5060", "RTX 50"]
-    ):
-        info = dict(
-            name=_gpu_name,
-            generation="Blackwell",
-            recommended_cuda="12.8+",
-            torch_index="https://download.pytorch.org/whl/nightly/cu128",
-            message=(
-                f"Detected Blackwell GPU ({_gpu_name}) — "
-                "requires CUDA 12.8+ (nightly PyTorch build)."
-            ),
-        )
-        _gpu_info_cache = info
-        return info
-
-    # 2) Try to extract series number from consumer GPU names
-    m = re.search(r"(?:RTX|GTX)\s*(\d+)", name_upper)
-    if m:
-        model = m.group(1)
-        series = int(model[:2]) if len(model) == 4 else int(model[0])
-
-        if series >= 40:
-            info = dict(
-                name=_gpu_name,
-                generation="Ada Lovelace",
-                recommended_cuda="12.4",
-                torch_index="https://download.pytorch.org/whl/cu124",
-                message=(
-                    f"Detected Ada Lovelace GPU ({_gpu_name}) — "
-                    "CUDA 12.4 recommended."
-                ),
-            )
-        elif series >= 30:
-            info = dict(
-                name=_gpu_name,
-                generation="Ampere",
-                recommended_cuda="12.4",
-                torch_index="https://download.pytorch.org/whl/cu124",
-                message=f"Detected Ampere GPU ({_gpu_name}) — CUDA 12.4 recommended.",
-            )
-        elif series >= 20 or series == 16:
-            info = dict(
-                name=_gpu_name,
-                generation="Turing",
-                recommended_cuda="12.4",
-                torch_index="https://download.pytorch.org/whl/cu124",
-                message=(
-                    f"Detected Turing GPU ({_gpu_name}) — "
-                    "CUDA 12.4 is supported."
-                ),
-            )
-        elif series >= 10:
-            # Pascal — GTX 10 series. CUDA 12.4 works but older drivers
-            # may only support CUDA 11.x; flag cu118 as fallback.
-            info = dict(
-                name=_gpu_name,
-                generation="Pascal",
-                recommended_cuda="11.8 / 12.4",
-                torch_index="https://download.pytorch.org/whl/cu124",
-                message=(
-                    f"Detected Pascal GPU ({_gpu_name}) — older architecture.\n"
-                    "  CUDA 12.4 is supported. If you have an older NVIDIA driver\n"
-                    "  and CUDA 12.4 fails, try CUDA 11.8 instead:\n"
-                    "    pip uninstall torch torchvision torchaudio -y\n"
-                    "    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118"
-                ),
-            )
-        elif series >= 8:
-            # Maxwell — GTX 8xx / 9xx
-            info = dict(
-                name=_gpu_name,
-                generation="Maxwell",
-                recommended_cuda="11.8",
-                torch_index="https://download.pytorch.org/whl/cu118",
-                message=(
-                    f"Detected Maxwell GPU ({_gpu_name}) — older architecture.\n"
-                    "  CUDA 11.8 recommended. If it fails, try CPU mode:\n"
-                    "    python launch.py --cpu\n"
-                    "  Or install CUDA 11.8 PyTorch:\n"
-                    "    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118"
-                ),
-            )
-        else:
-            # Kepler — GTX 6xx / 7xx, very old
-            info = dict(
-                name=_gpu_name,
-                generation="Kepler",
-                recommended_cuda="N/A",
-                torch_index=None,
-                message=(
-                    f"Detected Kepler GPU ({_gpu_name}) — very old architecture.\n"
-                    "  PyTorch 2.x may not support this GPU.\n"
-                    "  Consider using CPU mode: python launch.py --cpu"
-                ),
-            )
-        _gpu_info_cache = info
-        return info
-
-    # 3) Titan variants without RTX/GTX prefix
-    if "TITAN RTX" in name_upper:
-        info = dict(
-            name=_gpu_name,
-            generation="Turing",
-            recommended_cuda="12.4",
-            torch_index="https://download.pytorch.org/whl/cu124",
-            message=f"Detected Turing GPU ({_gpu_name}) — CUDA 12.4 is supported.",
-        )
-    elif "TITAN" in name_upper:
-        info = dict(
-            name=_gpu_name,
-            generation="Titan (legacy)",
-            recommended_cuda="11.8",
-            torch_index="https://download.pytorch.org/whl/cu118",
-            message=(
-                f"Detected legacy Titan GPU ({_gpu_name}) — older architecture.\n"
-                "  CUDA 11.8 recommended."
-            ),
-        )
-    else:
-        info = dict(
-            name=_gpu_name,
-            generation="Unknown",
-            recommended_cuda="12.4",
-            torch_index="https://download.pytorch.org/whl/cu124",
-            message=f"Detected GPU: {_gpu_name}",
-        )
-
-    _gpu_info_cache = info
-    return info
 
 
 BT = None
@@ -496,7 +336,7 @@ def main():
     if not args.cpu and os.environ.get("BTRANSLATOR_GPU_MODE"):
         print("GPU mode: detecting user-installed PyTorch with CUDA...")
         if not _detect_user_torch():
-            _gpu_info = _detect_gpu_info()
+            _gpu_info = detect_gpu_info()
             print("\n" + "=" * 60)
             print("PyTorch with CUDA was not found in your system Python.")
             if _gpu_info and _gpu_info["generation"] == "Kepler":
@@ -546,7 +386,7 @@ def main():
     if config.mirror.github_mirror:
         os.environ.setdefault("GITHUB_MIRROR", config.mirror.github_mirror)
     # Re-read index_url so run_uv / run_pip pick it up
-    os.environ.get("INDEX_URL", "")
+    index_url = os.environ.get("INDEX_URL", "")
 
     prepare_environment()
 
@@ -648,54 +488,19 @@ def main():
 
     app.installEventFilter(_ComboBoxWheelFilter(app))
 
-    # import msl.loadlib (required by translators/trans_eztrans) before init QApplication
-    # yield QWindowsContext: OleInitialize() failed on py3.10,
-    from modules.base import TORCH_AVAILABLE, init_module_registries
+    from utils.lazy_registry import init_lazy_module_registries
 
-    init_module_registries()
+    init_lazy_module_registries()
 
-    # Check for GPU architecture incompatibility (skip in CPU mode)
-    if TORCH_AVAILABLE and not args.cpu:
-        from modules.base import torch as _torch
-
-        if hasattr(_torch, "cuda") and not _torch.cuda.is_available():
-            _gpu_info = _detect_gpu_info()
-            if _gpu_info:
-                _gen = _gpu_info["generation"]
-                _name = _gpu_info["name"]
-                print("\n" + "=" * 60)
-                print(
-                    f"NOTE: GPU detected ({_name}, {_gen})"
-                    " but CUDA is not available in the loaded PyTorch."
-                )
-                if _gen == "Blackwell":
-                    print(
-                        "\nBlackwell requires CUDA 12.8+ (nightly build).\n"
-                        "To fix:\n"
-                        "  pip uninstall torch torchvision torchaudio ultralytics -y\n"
-                        "  python launch.py --reinstall-torch"
-                    )
-                elif _gen == "Kepler":
-                    print(
-                        "\nPyTorch 2.x may not support Kepler GPUs.\n"
-                        "Consider using CPU mode: python launch.py --cpu"
-                    )
-                elif _gen in ("Maxwell", "Pascal"):
-                    print(
-                        "\nThis older GPU may need CUDA 11.8.\n"
-                        "Try:\n"
-                        "  pip install torch torchvision torchaudio"
-                        " --index-url https://download.pytorch.org/whl/cu118"
-                    )
-                else:
-                    _idx = _gpu_info.get("torch_index",
-                                         "https://download.pytorch.org/whl/cu124")
-                    print(
-                        "\nInstall CUDA PyTorch:\n"
-                        f"  pip install torch torchvision torchaudio"
-                        f" --index-url {_idx}"
-                    )
-                print("=" * 60 + "\n")
+    # TORCH_AVAILABLE check — only used for prepare_environment decision.
+    # The user can run a full GPU / CUDA diagnostic from Settings → Environment.
+    TORCH_AVAILABLE = False
+    if not args.cpu:
+        try:
+            import importlib.util
+            TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
+        except ModuleNotFoundError:
+            pass
 
     if not args.headless:
         ps = QGuiApplication.primaryScreen()
@@ -778,7 +583,7 @@ def prepare_environment():
 
     # Detect NVIDIA GPU architecture to pick the right CUDA version
     _torch_index = "https://download.pytorch.org/whl/cu124"
-    _gpu_info = _detect_gpu_info()
+    _gpu_info = detect_gpu_info()
     if _gpu_info:
         print(_gpu_info["message"])
         if _gpu_info["torch_index"]:

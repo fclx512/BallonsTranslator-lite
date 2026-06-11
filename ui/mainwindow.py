@@ -49,7 +49,6 @@ from modules import (
     GET_VALID_TRANSLATORS,
 )
 from utils import proj_compact, shared
-from utils.ai_controller import AiController
 from utils.config import (
     FontFormat,
     ProgramConfig,
@@ -66,8 +65,6 @@ from utils.text_processing import full_len, half_len, is_cjk
 from utils.textblock import TextAlignment, TextBlock
 
 from . import shared_widget as SW
-from .ai_change_review import ChangeReviewWindow
-from .ai_chat_panel import AiChatPanel
 from .canvas import Canvas
 from .configpanel import ConfigPanel
 from .custom_widget import (
@@ -294,19 +291,11 @@ class MainWindow(mainwindow_cls):
             self.on_transpanel_changed
         )
 
-        # Right panel container: AI chat (left, hidden) | canvas | trans stack (right)
+        # Right panel container: canvas | trans stack (right)
         self._rightPanelContainer = QWidget()
         right_layout = QHBoxLayout(self._rightPanelContainer)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
-
-        # Left: AI chat panel (floating overlay, slides in from left)
-        self.aiChatPanel = AiChatPanel()
-        self.aiChatPanel.setParent(self.centralStackWidget)
-        self.aiChatPanel.setVisible(False)
-        self._aiChatSlide = OverlaySlider(self.aiChatPanel, direction="left", width=480)
-        self._aiChatSlide.on_before_show(self.aiChatPanel.before_show)
-        self._changeReviewWindow = None  # created lazily on first use
 
         # Middle: canvas (stretches to fill remaining space)
         right_layout.addWidget(self.canvas.gv, 1)
@@ -366,118 +355,6 @@ class MainWindow(mainwindow_cls):
         self.mainvlayout = mainVBoxLayout
         self.imgtrans_progress_msgbox = ImgtransProgressMessageBox()
         self.resetStyleSheet()
-
-        # Wire AI chat signals
-        self._setup_ai_chat()
-
-    def _setup_ai_chat(self):
-        """Create AiController and wire all signals for the AI chat panel."""
-        # Controller
-        self._ai_controller = AiController(
-            proj_getter=lambda: self.imgtrans_proj,
-        )
-        self._ai_controller.settings_path = osp.join(
-            shared.PROGRAM_PATH, "config", "ai_chat_config.json"
-        )
-        self._ai_controller.load_ai_settings()
-        self.aiChatPanel.set_controller(self._ai_controller)
-        self.aiChatPanel.set_project_loaded(bool(self.imgtrans_proj.pages))
-
-        # LeftBar toggle → panel show/hide
-        self.leftBar.ai_chat_toggled.connect(self._toggle_ai_chat)
-
-        # Panel → Controller
-        self.aiChatPanel.send_message.connect(self._ai_controller.handle_message)
-        self.aiChatPanel.stop_requested.connect(self._ai_controller.stop)
-        self.aiChatPanel.clear_requested.connect(self._ai_controller.clear_conversation)
-
-        # Apply changes → canvas refresh
-        self.aiChatPanel.apply_changes_requested.connect(self._on_apply_ai_changes)
-
-        # Open standalone change review window
-        self.aiChatPanel.open_review_requested.connect(self._open_change_review)
-
-        # Controller → Panel
-        self._ai_controller.system_message.connect(self.aiChatPanel.add_system_message)
-        self._ai_controller.streaming_started.connect(
-            self.aiChatPanel.start_streaming_response
-        )
-        self._ai_controller.chunk_received.connect(self.aiChatPanel.append_stream_chunk)
-        self._ai_controller.stream_finished.connect(self.aiChatPanel.finish_streaming)
-        self._ai_controller.changes_ready.connect(self.aiChatPanel.set_changes)
-        self._ai_controller.tool_trace_ready.connect(
-            self.aiChatPanel.set_last_tool_trace
-        )
-        self._ai_controller.thinking_started.connect(self.aiChatPanel.show_thinking)
-        self._ai_controller.thinking_finished.connect(self.aiChatPanel.hide_thinking)
-        self._ai_controller.prompt_tokens_estimated.connect(
-            self.aiChatPanel.set_prompt_tokens
-        )
-        self._ai_controller.api_tokens_reconciled.connect(
-            self.aiChatPanel.reconcile_api_tokens
-        )
-        self._ai_controller.status_changed.connect(self.aiChatPanel.update_status)
-        self._ai_controller.conversation_cleared.connect(
-            self.aiChatPanel.on_conversation_cleared
-        )
-        self._ai_controller.error_occurred.connect(self.aiChatPanel.on_error)
-
-    def _toggle_ai_chat(self, visible: bool):
-        if visible:
-            # Hide other left-side overlays
-            if self.leftBar.globalSearchChecker.isChecked():
-                self.leftBar.globalSearchChecker.setChecked(False)
-                self._hideSearchOverlay()
-            if self.leftBar.showPageListLabel.isChecked():
-                self.leftBar.showPageListLabel.setChecked(False)
-                self._hidePageListOverlay()
-            # Hide other right-side floating overlays
-            if self.configPanel.isVisible():
-                self.leftBar.configChecker.setChecked(False)
-            self._aiChatSlide.show()
-        else:
-            self._aiChatSlide.hide()
-
-    def _on_apply_ai_changes(self, changes):
-        """Apply accepted AI changes to the project and refresh the canvas."""
-        if not self.imgtrans_proj or not self.imgtrans_proj.pages:
-            LOGGER.warning("_on_apply_ai_changes: no project loaded")
-            return
-
-        # Convert ChangeItem list → proj_compact modifications dict
-        mods = {
-            "type": "modifications",
-            "changes": [{"id": c.block_id, c.field: c.new_value} for c in changes],
-        }
-        try:
-            count, warnings = proj_compact.apply_modifications(self.imgtrans_proj, mods)
-            msg = self.tr("Applied {n} change(s) to the project.").format(n=count)
-            if warnings:
-                msg += " " + " ".join(warnings)
-            self.aiChatPanel.add_system_message(msg)
-
-            # Refresh canvas
-            self.canvas.updateCanvas()
-            self.st_manager.updateSceneTextitems()
-        except Exception as e:
-            self.aiChatPanel.add_system_message(
-                self.tr("── Error applying changes: {e} ──").format(e=str(e))
-            )
-            LOGGER.exception("apply_ai_changes failed")
-
-    def _open_change_review(self, changes, message_index):
-        """Lazily create and show the ChangeReviewWindow."""
-        if self._changeReviewWindow is None:
-            self._changeReviewWindow = ChangeReviewWindow(self)
-            self._changeReviewWindow.apply_changes_requested.connect(
-                self._on_apply_ai_changes
-            )
-        self._changeReviewWindow.load_changes(changes, message_index)
-        if self._changeReviewWindow.isVisible():
-            self._changeReviewWindow.raise_()
-            self._changeReviewWindow.activateWindow()
-        else:
-            self._changeReviewWindow.show()
 
     def on_finish_setdetector(self):
         module_manager = self.module_manager
@@ -694,9 +571,6 @@ class MainWindow(mainwindow_cls):
 
     def setupImgTransUI(self):
         self._hideConfigOverlay()
-        # Hide AI chat panel when returning to imgtrans mode
-        if self.leftBar.aiChatChecker.isChecked():
-            self.leftBar.aiChatChecker.setChecked(False)
         show = self.leftBar.needleftStackWidget()
         is_visible = self.leftStackWidget.isVisible()
         if show and not is_visible:
@@ -726,9 +600,6 @@ class MainWindow(mainwindow_cls):
         return not (hasattr(self, "configPanel") and self.configPanel.isVisible())
 
     def _showConfigOverlay(self):
-        # Close other floating overlays before showing config
-        if self.aiChatPanel.isVisible():
-            self.leftBar.aiChatChecker.setChecked(False)
         self._configSlide.show()
 
     def _hideConfigOverlay(self):
@@ -825,7 +696,6 @@ class MainWindow(mainwindow_cls):
         self._configSlide.resize()
         self._searchSlide.resize()
         self._pageListSlide.resize()
-        self._aiChatSlide.resize()
 
     def set_display_lang(self, lang: str):
         self.retranslateUI()
@@ -897,11 +767,6 @@ class MainWindow(mainwindow_cls):
             self.st_manager.clearSceneTextitems()
             self.titleBar.setTitleContent(osp.basename(directory))
             self.updatePageList()
-            self.aiChatPanel.set_project_loaded(True)
-            self._ai_controller.history_path = osp.join(
-                directory, "ai_chat_history.json"
-            )
-            self.aiChatPanel.rebuild_from_history(self._ai_controller.messages)
             self.opening_dir = False
             progress.close()
         except Exception as e:
@@ -963,12 +828,7 @@ class MainWindow(mainwindow_cls):
             self.st_manager.clearSceneTextitems()
             self.leftBar.updateRecentProjList(self.imgtrans_proj.proj_path)
             self.updatePageList()
-            self.aiChatPanel.set_project_loaded(True)
             self.titleBar.setTitleContent(osp.basename(self.imgtrans_proj.proj_path))
-            self._ai_controller.history_path = osp.join(
-                self.imgtrans_proj.proj_path, "ai_chat_history.json"
-            )
-            self.aiChatPanel.rebuild_from_history(self._ai_controller.messages)
             self.opening_dir = False
         except Exception as e:
             self.opening_dir = False
@@ -996,8 +856,6 @@ class MainWindow(mainwindow_cls):
             if self.leftBar.globalSearchChecker.isChecked():
                 self.leftBar.globalSearchChecker.setChecked(False)
                 self._hideSearchOverlay()
-            if self.leftBar.aiChatChecker.isChecked():
-                self.leftBar.aiChatChecker.setChecked(False)
             self._showPageListOverlay()
         else:
             self._hidePageListOverlay()
@@ -1906,12 +1764,6 @@ class MainWindow(mainwindow_cls):
     def on_imgtrans_pipeline_finished(self):
         self.backup_blkstyles.clear()
         self._run_imgtrans_wo_textstyle_update = False
-        # Restore original translator if temporarily swapped for context-aware run
-        if hasattr(self, "_ctx_batch_restore") and self._ctx_batch_restore:
-            original = self._ctx_batch_restore
-            self._ctx_batch_restore = None
-            self.module_manager.setTranslator(original)
-            LOGGER.info(f"Restored translator to {original} after context-aware run")
         if pcfg.module.empty_runcache and not shared.HEADLESS:
             self.module_manager.unload_all_models()
         if shared.args.export_translation_txt:
@@ -2222,99 +2074,15 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
                 self.tr("Enable Translation"),
                 self.tr("Enable Inpainting"),
             ]
-            ctx_trans_cb = None
             for idx, label in enumerate(stage_labels):
                 cb = QCheckBox(label)
                 cb.setChecked(pcfg.module.stage_enabled(idx))
                 cb.toggled.connect(
                     lambda checked, i=idx: self.on_enable_module(i, checked)
                 )
-                if idx == 2:
-                    row = QWidget()
-                    row_layout = QHBoxLayout(row)
-                    row_layout.setContentsMargins(0, 0, 0, 0)
-                    row_layout.addWidget(cb)
-                    ctx_trans_cb = QCheckBox(self.tr("Context Translation (beta)"))
-                    row_layout.addWidget(ctx_trans_cb)
-                    row_layout.addStretch()
-                    stages_layout.addWidget(row)
-                else:
-                    stages_layout.addWidget(cb)
+                stages_layout.addWidget(cb)
 
             layout.addWidget(stages_frame)
-
-            # AI Chat settings — shown when Context Translation (beta) is checked
-            ai_chat_frame = QFrame()
-            ai_chat_frame.setFrameShape(QFrame.Shape.StyledPanel)
-            ai_grid = QGridLayout(ai_chat_frame)
-            ai_grid.setContentsMargins(8, 6, 8, 6)
-            ai_grid.setSpacing(6)
-
-            ai_title = QLabel(self.tr("AI Chat Settings"))
-            ai_title.setStyleSheet("font-weight: bold;")
-            ai_grid.addWidget(ai_title, 0, 0, 1, 2)
-
-            # Adaptive mode info label — updates based on project page count
-            mode_label = QLabel()
-            mode_label.setWordWrap(True)
-            mode_label.setStyleSheet("color: #666; font-style: italic;")
-            ai_grid.addWidget(mode_label, 1, 0, 1, 2)
-
-            ai_grid.addWidget(QLabel(self.tr("Batch Size:")), 2, 0)
-            batch_combo = QComboBox()
-            batch_combo.addItems(["1", "3", "5", "10", "20"])
-            batch_combo.setCurrentText("5")
-            ai_grid.addWidget(batch_combo, 2, 1)
-
-            ai_grid.addWidget(QLabel(self.tr("Context Pages:")), 3, 0)
-            pages_spin = QSpinBox()
-            pages_spin.setRange(0, 20)
-            pages_spin.setValue(3)
-            ai_grid.addWidget(pages_spin, 3, 1)
-
-            def _update_mode_label():
-                if all_pages_cb.isChecked():
-                    effective = num_pages
-                else:
-                    effective = slider.high() - slider.low() + 1
-                bs = int(batch_combo.currentText())
-                pw = pages_spin.value()
-                if effective == 0:
-                    text = self.tr("Adaptive -- will be determined when Run starts")
-                elif effective <= bs:
-                    text = self.tr(
-                        "Full context (%1 pages, all previous translations as reference)"
-                    ).replace("%1", str(effective))
-                elif effective <= bs * 4:
-                    text = (
-                        self.tr("Windowed context (%1 pages, +/-%2 page window)")
-                        .replace("%1", str(effective))
-                        .replace("%2", str(pw))
-                    )
-                else:
-                    text = self.tr(
-                        "Windowed + auto-summary (%1 pages, long-form mode)"
-                    ).replace("%1", str(effective))
-                mode_label.setText(text)
-
-            _update_mode_label()
-            batch_combo.currentTextChanged.connect(lambda _: _update_mode_label())
-            pages_spin.valueChanged.connect(lambda _: _update_mode_label())
-            slider.rangeChanged.connect(lambda _lo, _hi: _update_mode_label())
-            all_pages_cb.toggled.connect(lambda _: _update_mode_label())
-
-            glossary_cb = QCheckBox(self.tr("Enforce Term Consistency (Glossary)"))
-            glossary_cb.setChecked(True)
-            ai_grid.addWidget(glossary_cb, 4, 0, 1, 2)
-
-            ai_chat_frame.setVisible(False)
-            layout.addWidget(ai_chat_frame)
-
-            ctx_trans_cb.toggled.connect(
-                lambda checked: ai_chat_frame.setVisible(
-                    checked and pcfg.module.enable_translate
-                )
-            )
 
             # Run without update textstyle
             wo_update_cb = QCheckBox(self.tr("Run without update textstyle"))
@@ -2335,31 +2103,6 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
 
             if dialog.exec_() != QDialog.DialogCode.Accepted:
                 return
-
-            # If Context Translation is enabled, use AI assistant's API + prompt
-            if ctx_trans_cb.isChecked():
-                from modules.translators.context_batch import ContextBatchTranslator
-
-                def _ctx_status(msg):
-                    bar = self.module_manager.progress_msgbox.translate_bar
-                    bar.updateProgress(bar.progressbar.value(), msg)
-
-                self._ctx_batch_restore = pcfg.module.translator
-                api_config = self._ai_controller.api_config
-                prompt = self._ai_controller.custom_prompt or ""
-                ctx = ContextBatchTranslator(
-                    api_config, prompt, status_callback=_ctx_status
-                )
-                ctx.batch_size = int(batch_combo.currentText())
-                ctx.context_pages = pages_spin.value()
-                ctx.use_glossary = glossary_cb.isChecked()
-                self.module_manager.translate_thread.translator = ctx
-                self.module_manager.translate_thread.module = ctx
-                LOGGER.info(
-                    f"Context batch run: batch={batch_combo.currentText()}, "
-                    f"pages={pages_spin.value()}, "
-                    f"glossary={glossary_cb.isChecked()}"
-                )
 
             if wo_update_cb.isChecked():
                 self._run_imgtrans_wo_textstyle_update = True
@@ -2650,8 +2393,6 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
         if setup:
             self._hidePageListOverlay()
             self.leftBar.showPageListLabel.setChecked(False)
-            if self.leftBar.aiChatChecker.isChecked():
-                self.leftBar.aiChatChecker.setChecked(False)
             self._showSearchOverlay()
         else:
             self._hideSearchOverlay()

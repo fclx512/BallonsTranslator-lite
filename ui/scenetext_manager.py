@@ -2,7 +2,17 @@ import copy
 from typing import List, Tuple, Union
 
 import numpy as np
-from qtpy.QtCore import QObject, QPointF, QRectF, Qt, Signal
+from qtpy.QtCore import (
+    QAbstractAnimation,
+    QEasingCurve,
+    QObject,
+    QParallelAnimationGroup,
+    QPointF,
+    QPropertyAnimation,
+    QRectF,
+    Qt,
+    Signal,
+)
 from qtpy.QtGui import (
     QClipboard,
     QFont,
@@ -11,7 +21,7 @@ from qtpy.QtGui import (
     QTextCharFormat,
     QTextCursor,
 )
-from qtpy.QtWidgets import QApplication, QGraphicsItem, QWidget
+from qtpy.QtWidgets import QApplication, QGraphicsItem, QLabel, QWidget
 
 try:
     from qtpy.QtWidgets import QUndoCommand
@@ -1223,7 +1233,49 @@ class SceneTextManager(QObject):
             self.textEditList.clearAllSelected()
 
     def on_rearrange_blks(self, mv_map: Tuple[np.ndarray]):
+        edit_list = self.textEditList
+
+        # Capture pre-reorder state: position + visual snapshot for every widget
+        pre_state = []
+        for w in edit_list.pairwidget_list:
+            pre_state.append((w, w.pos(), w.size(), w.grab()))
+
+        # Execute reorder (sync — calls RearraneBlksCommand.redo() immediately)
         self.canvas.push_undo_command(RearrangeBlksCommand(mv_map, self))
+
+        # Find widgets that actually moved and build ghost overlay slides
+        scroll_content = edit_list.scrollContent
+        anim_group = QParallelAnimationGroup()
+        ghosts = []
+
+        for w, old_pos, old_size, snapshot in pre_state:
+            new_pos = w.pos()
+            if old_pos == new_pos:
+                continue
+            ghost = QLabel(scroll_content)
+            ghost.setPixmap(snapshot)
+            ghost.setFixedSize(old_size)
+            ghost.move(old_pos)
+            ghost.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            ghost.show()
+            ghosts.append(ghost)
+
+            anim = QPropertyAnimation(ghost, b"pos")
+            anim.setDuration(150)
+            anim.setStartValue(old_pos)
+            anim.setEndValue(new_pos)
+            anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+            anim_group.addAnimation(anim)
+
+        if not ghosts:
+            return
+
+        def cleanup():
+            for g in ghosts:
+                g.deleteLater()
+
+        anim_group.finished.connect(cleanup)
+        anim_group.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
 
     def updateTextBlkItemIdx(self, sel_ids: set = None):
         for ii, blk_item in enumerate(self.textblk_item_list):

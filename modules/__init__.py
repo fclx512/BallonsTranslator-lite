@@ -14,6 +14,8 @@ from .ocr import OCR, OCRBase
 from .textdetector import TEXTDETECTORS, TextDetectorBase
 from .translators import TRANSLATORS, BaseTranslator
 
+from utils.registries import MODULETYPE_TO_REGISTRIES  # noqa: E402 — single source of truth
+
 
 def GET_VALID_TEXTDETECTORS() -> list:
     return list(TEXTDETECTORS.module_dict.keys())
@@ -29,13 +31,5 @@ def GET_VALID_INPAINTERS() -> list:
 
 def GET_VALID_OCR() -> list:
     return [k for k in list(OCR.module_dict.keys()) if k != "none_ocr"] + ["none_ocr"]
-
-
-MODULETYPE_TO_REGISTRIES = {
-    "textdetector": TEXTDETECTORS,
-    "ocr": OCR,
-    "inpainter": INPAINTERS,
-    "translator": TRANSLATORS,
-}
 
 # TODO: use manga-image-translator as backend...

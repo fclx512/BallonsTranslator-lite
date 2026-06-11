@@ -1,3 +1,10 @@
+# Deprecation Notice
+
+> The in-app AI chat assistant has been **removed** and replaced by an **MCP server** (`mcp_server/`).
+> See [MCP Integration Guide](mcp_integration.md) for the new architecture.
+>
+> The documentation below describes the old architecture for historical reference only.
+
 # 1. Architecture Overview
 
 ## 1.1 Layered Design

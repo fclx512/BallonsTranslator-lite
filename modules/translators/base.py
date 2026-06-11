@@ -6,7 +6,7 @@ from typing import Dict, List, Union
 
 from utils.io_utils import text_is_empty
 from utils.logger import logger as LOGGER
-from utils.registry import Registry
+from utils.registries import TRANSLATORS
 from utils.textblock import TextBlock
 
 from ..base import BaseModule
@@ -16,7 +16,6 @@ from .exceptions import (
     TranslatorSetupFailure,
 )
 
-TRANSLATORS = Registry("translators")
 register_translator = TRANSLATORS.register_module
 
 PROXY = urllib.request.getproxies()

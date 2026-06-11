@@ -47,7 +47,9 @@ except ModuleNotFoundError:
 def _load_declared_deps() -> list[tuple[str, str]]:
     """Parse pyproject.toml and return (req_str, type) pairs.
 
-    *type* is ``"core"`` or ``"gpu"``.
+    *type* is ``"core"`` for mandatory deps, or the optional-dependency
+    group name (e.g. ``"gpu"``, ``"mcp"``) for optional groups.
+    Automatically discovers all groups — no hardcoded list needed.
     """
     pp = Path(shared.PROGRAM_PATH) / "pyproject.toml"
     if not pp.exists() or tomllib is None:
@@ -59,26 +61,37 @@ def _load_declared_deps() -> list[tuple[str, str]]:
     deps: list[tuple[str, str]] = []
     for dep in data.get("project", {}).get("dependencies", []):
         deps.append((dep, "core"))
-    for dep in (
-        data.get("project", {})
-        .get("optional-dependencies", {})
-        .get("gpu", [])
+    for group_name, group_deps in (
+        data.get("project", {}).get("optional-dependencies", {}).items()
     ):
-        deps.append((dep, "gpu"))
+        for dep in group_deps:
+            deps.append((dep, group_name))
     return deps
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
-_DEP_TYPE_META = {
+_DEP_TYPE_META: dict[str, tuple[str, QColor]] = {
     "core": ("Core", QColor("#4a9eff")),
-    "gpu": ("GPU (optional)", QColor("#9b59b6")),
 }
+
+# Palette cycled for optional-dependency groups discovered dynamically
+_OPT_GROUP_COLORS = [
+    QColor("#9b59b6"),  # purple
+    QColor("#e67e22"),  # orange
+    QColor("#1abc9c"),  # teal
+    QColor("#2ecc71"),  # green
+    QColor("#f39c12"),  # yellow
+    QColor("#e74c3c"),  # red
+    QColor("#3498db"),  # blue
+]
+_OPT_GROUP_META: dict[str, tuple[str, QColor]] = {}
 
 _STATUS_COLORS = {
     "installed": QColor("#27ae60"),
     "missing": QColor("#e74c3c"),
     "mismatch": QColor("#f39c12"),
+    "skipped": QColor("#95a5a6"),
 }
 
 
@@ -91,8 +104,17 @@ def _installed_version(req_name: str) -> str:
 
 
 def _check_req(req_str: str) -> tuple[str, str]:
-    """Return (status, version) for a requirement string."""
+    """Return (status, version) for a requirement string.
+
+    Status is one of ``"installed"``, ``"missing"``, ``"mismatch"``, or
+    ``"skipped"`` — the last means an environment marker (e.g. OS or Python
+    version guard) evaluated to False in the current runtime, so the dep
+    is *correctly* absent and should not be flagged.
+    """
     req = Requirement(req_str)
+    # Evaluate environment markers — skip if not applicable
+    if req.marker and not req.marker.evaluate():
+        return "skipped", ""
     ver = _installed_version(req.name)
     if not ver:
         return "missing", ver
@@ -112,14 +134,39 @@ class _InstallWorker(QThread):
     def __init__(self, reqs: list[str], parent=None):
         super().__init__(parent)
         self.reqs = reqs
+        self._install_cmd = self._detect_installer()
+
+    @staticmethod
+    def _strip_marker(req_str: str) -> str:
+        """Strip environment markers so pip never mis-evaluates them on CLI.
+
+        ``"tomli; python_version < '3.11'"`` → ``"tomli"``
+        ``"opencv-python>=4.10.0.84; sys_platform == 'win32'"`` → ``"opencv-python>=4.10.0.84"``
+        """
+        req = Requirement(req_str)
+        return f"{req.name}{req.specifier}" if req.specifier else req.name
+
+    @staticmethod
+    def _detect_installer() -> list[str]:
+        """Return the best available pip-compatible installer command."""
+        python = sys.executable
+        try:
+            subprocess.run(
+                [python, "-m", "uv", "--version"],
+                capture_output=True,
+                timeout=5,
+                check=True,
+            )
+            return [python, "-m", "uv", "pip", "install", "--prefer-binary"]
+        except Exception:
+            return [python, "-m", "pip", "install"]
 
     def run(self):
-        python = sys.executable
         total = len(self.reqs)
         for i, req in enumerate(self.reqs):
             try:
                 subprocess.run(
-                    [python, "-m", "uv", "pip", "install", req, "--prefer-binary"],
+                    [*self._install_cmd, self._strip_marker(req)],
                     capture_output=True,
                     timeout=300,
                     check=True,
@@ -182,11 +229,11 @@ class DependencyDialog(QDialog):
         self.refresh_btn.clicked.connect(self._refresh)
         self.install_missing_btn = QPushButton(self.tr("Install Missing"))
         self.install_missing_btn.clicked.connect(
-            lambda: self._install_missing(include_gpu=False)
+            lambda: self._install_missing(include_optional=False)
         )
-        self.install_all_btn = QPushButton(self.tr("Install All (incl. GPU)"))
+        self.install_all_btn = QPushButton(self.tr("Install All (incl. optional)"))
         self.install_all_btn.clicked.connect(
-            lambda: self._install_missing(include_gpu=True)
+            lambda: self._install_missing(include_optional=True)
         )
         btn_row.addWidget(self.refresh_btn)
         btn_row.addWidget(self.install_missing_btn)
@@ -199,15 +246,32 @@ class DependencyDialog(QDialog):
 
     # ── Refresh ───────────────────────────────────────────────────────
 
+    @staticmethod
+    def _get_type_meta(dep_type: str) -> tuple[str, QColor]:
+        """Return (display_label, color) for a dependency type.
+
+        Core is always known; optional groups are auto-assigned a colour
+        on first encounter so new groups need no code change.
+        """
+        if dep_type in _DEP_TYPE_META:
+            return _DEP_TYPE_META[dep_type]
+        if dep_type not in _OPT_GROUP_META:
+            idx = len(_OPT_GROUP_META)
+            display = dep_type.replace("_", " ").title()
+            colour = _OPT_GROUP_COLORS[idx % len(_OPT_GROUP_COLORS)]
+            _OPT_GROUP_META[dep_type] = (display, colour)
+        return _OPT_GROUP_META[dep_type]
+
     def _refresh(self):
         self.table.setRowCount(0)
+        _OPT_GROUP_META.clear()
         raw = _load_declared_deps()
         self._data = []
 
         installed_count = 0
         for req_str, dep_type in raw:
             status, ver = _check_req(req_str)
-            type_label, _ = _DEP_TYPE_META.get(dep_type, (dep_type, QColor("#888")))
+            type_label, _ = self._get_type_meta(dep_type)
             self._data.append((req_str, type_label, status, ver, dep_type))
             if status == "installed":
                 installed_count += 1
@@ -221,10 +285,13 @@ class DependencyDialog(QDialog):
             self.table.insertRow(row)
             pkg_name = Requirement(req_str).name
 
-            self.table.setItem(row, 0, QTableWidgetItem(pkg_name))
+            name_item = QTableWidgetItem(pkg_name)
+            if status == "skipped":
+                name_item.setForeground(QColor("#95a5a6"))
+            self.table.setItem(row, 0, name_item)
 
             type_item = QTableWidgetItem(type_label)
-            _, type_color = _DEP_TYPE_META.get(dep_type, ("", QColor("#888")))
+            _, type_color = self._get_type_meta(dep_type)
             type_item.setForeground(type_color)
             self.table.setItem(row, 1, type_item)
 
@@ -232,30 +299,49 @@ class DependencyDialog(QDialog):
                 "installed": self.tr("Installed"),
                 "missing": self.tr("Missing"),
                 "mismatch": self.tr("Version mismatch"),
+                "skipped": self.tr("Not needed"),
             }.get(status, status)
             status_item = QTableWidgetItem(status_text)
             status_item.setForeground(_STATUS_COLORS.get(status, QColor("#888")))
             self.table.setItem(row, 2, status_item)
 
-            self.table.setItem(row, 3, QTableWidgetItem(ver or "—"))
+            # Version cell; for skipped deps show the marker as tooltip
+            ver_item = QTableWidgetItem(ver or "—")
+            if status == "skipped":
+                ver_item.setForeground(QColor("#95a5a6"))
+                # Extract marker text from original req_str for transparency
+                marker_str = Requirement(req_str).marker
+                if marker_str:
+                    ver_item.setToolTip(
+                        self.tr("Only needed when: {marker}").format(marker=str(marker_str))
+                    )
+            self.table.setItem(row, 3, ver_item)
 
-        total = len(self._data)
+        total = sum(1 for d in self._data if d[2] != "skipped")
         missing = sum(1 for d in self._data if d[2] in ("missing", "mismatch"))
-        self.summary_label.setText(
-            self.tr("{installed}/{total} installed, {missing} missing or mismatched").format(
-                installed=installed_count, total=total, missing=missing
+        skipped = sum(1 for d in self._data if d[2] == "skipped")
+        if skipped:
+            self.summary_label.setText(
+                self.tr("{installed}/{total} installed, {missing} missing, {skipped} skipped (not needed here)").format(
+                    installed=installed_count, total=total, missing=missing, skipped=skipped
+                )
             )
-        )
+        else:
+            self.summary_label.setText(
+                self.tr("{installed}/{total} installed, {missing} missing or mismatched").format(
+                    installed=installed_count, total=total, missing=missing
+                )
+            )
         self.install_missing_btn.setEnabled(missing > 0)
 
     # ── Install ───────────────────────────────────────────────────────
 
-    def _install_missing(self, include_gpu=False):
+    def _install_missing(self, include_optional=False):
         missing = [
             d[0]
             for d in self._data
             if d[2] in ("missing", "mismatch")
-            and (include_gpu or d[4] != "gpu")
+            and (include_optional or d[4] == "core")
         ]
         if not missing:
             return

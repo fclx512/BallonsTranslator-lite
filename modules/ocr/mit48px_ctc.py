@@ -383,7 +383,7 @@ class OCR(nn.Module):
         enc = CustomTransformerEncoderLayer(
             320, 8, 320 * 4, dropout=0.05, batch_first=True, norm_first=True
         )
-        self.encoders = nn.TransformerEncoder(enc, 3)
+        self.encoders = nn.TransformerEncoder(enc, 3, enable_nested_tensor=False)
         self.char_pred_norm = nn.Sequential(
             nn.LayerNorm(320), nn.Dropout(0.1), nn.GELU()
         )

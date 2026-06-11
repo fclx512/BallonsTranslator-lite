@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 
 from utils.proj_imgtrans import ProjImgTrans
-from utils.registry import Registry
+from utils.registries import TEXTDETECTORS
 from utils.textblock import TextBlock
 
 from ..base import (
@@ -14,7 +14,6 @@ from ..base import (
     BaseModule,
 )
 
-TEXTDETECTORS = Registry("textdetectors")
 register_textdetectors = TEXTDETECTORS.register_module
 
 

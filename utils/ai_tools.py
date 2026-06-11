@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Optional, Set
 
 from .config import pcfg
 from .proj_compact import (
-    FIELD_PROMPT_SNIPPETS,
     build_detail,
     build_index,
     build_paginated_detail,
@@ -719,127 +718,6 @@ def parse_tool_calls(text: str) -> Optional[List[Dict[str, Any]]]:
 
     logger.debug("parse_tool_calls: no tool calls in %d candidates", len(candidates))
     return None
-
-
-# ── System prompt ─────────────────────────────────────────────────────
-
-# ── Tool categories for prompt grouping ─────────────────────────────
-
-_TOOL_CATEGORIES = {
-    "信息获取": (
-        "list_pages",
-        "read_pages",
-        "search_blocks",
-        "get_config",
-        "get_page_info",
-    ),
-    "批量修改": ("set_font", "set_color", "set_layout", "search_replace"),
-    "辅助": ("describe_tool", "translate_text"),
-}
-
-
-def _build_tool_index(active_tools: Optional[List[Dict[str, Any]]] = None) -> str:
-    """Build a grouped tool index string from TOOL_DEFINITIONS or a subset."""
-    tools = active_tools if active_tools is not None else TOOL_DEFINITIONS
-    name_to_desc = {t["name"]: t["description"] for t in tools}
-
-    lines = []
-    for cat_name, cat_tools in _TOOL_CATEGORIES.items():
-        entries = [
-            f"  - {n}: {name_to_desc[n]}" for n in cat_tools if n in name_to_desc
-        ]
-        if entries:
-            lines.append(f"### {cat_name}")
-            lines.extend(entries)
-    return "\n".join(lines)
-
-
-def build_agent_system_prompt(
-    fields_whitelist: Optional[Set[str]] = None,
-    translation_mode: bool = False,
-    active_tools: Optional[List[Dict[str, Any]]] = None,
-) -> str:
-    """Build the agent system prompt from external template + built-in fallback."""
-
-    from .ai_prompts import get_prompt, get_version
-
-    # Field descriptions
-    if fields_whitelist is None:
-        snippets = list(FIELD_PROMPT_SNIPPETS.values())
-    else:
-        snippets = [
-            v for k, v in FIELD_PROMPT_SNIPPETS.items() if k in fields_whitelist
-        ]
-    field_desc = "\n".join(snippets) if snippets else "（仅可读取原文和译文）"
-
-    tool_index = _build_tool_index(active_tools)
-    translation_rules = get_prompt("translation_rules") if translation_mode else ""
-    few_shot = get_prompt("few_shot_examples")
-
-    template = get_prompt("agent_system")
-    prompt = (
-        template.replace("__TOOL_INDEX__", tool_index)
-        .replace("__FIELD_DESC__", field_desc)
-        .replace("__TRANSLATION_RULES__", translation_rules)
-        .replace("__FEW_SHOT_EXAMPLES__", few_shot)
-    )
-    prompt += f"\n[prompt:v{get_version()}]"
-    return prompt
-
-
-# Backward-compatible alias
-build_tool_system_prompt = build_agent_system_prompt
-
-
-# ── Chat system prompt ───────────────────────────────────────────────────
-
-
-def build_chat_system_prompt() -> str:
-    """System prompt for general Q&A chat mode (no tools)."""
-    from .ai_prompts import get_prompt, get_version
-
-    return get_prompt("chat_system") + f"\n[prompt:v{get_version()}]"
-
-
-# ── Mode detection ───────────────────────────────────────────────────────
-
-_AGENT_PATTERNS: List[re.Pattern] = [
-    re.compile(p, re.IGNORECASE)
-    for p in [
-        r"翻译",
-        r"翻訳",
-        r"translat",
-        r"修改",
-        r"変更",
-        r"modify|change|edit|update",
-        r"字体",
-        r"font",
-        r"颜色|色彩|color|colour",
-        r"样式|style",
-        r"对齐|alignment|layout",
-        r"页面|页码|第.*页|page",
-        r"文本块|文字块|block",
-        r"\d+[-–—至到]\d+",
-        r"全部|所有|整个",
-        r"搜索|查找|search|find",
-        r"调整|设置|apply|set",
-        r"拟声|象声|onomatopoeia",
-        r"原文|译文|source|target",
-        r"看看|查看|瞧瞧",
-        r"列出|显示|展示|\bshow\b|\blist\b",
-        r"打开.*页|打开.*项目",
-        r"\bread\b",
-        r"帮我|给我",
-    ]
-]
-
-
-def detect_mode(user_text: str) -> str:
-    """Return 'agent' if user text looks like a project operation, else 'chat'."""
-    for pat in _AGENT_PATTERNS:
-        if pat.search(user_text):
-            return "agent"
-    return "chat"
 
 
 # ── Changes parsing ──────────────────────────────────────────────────────

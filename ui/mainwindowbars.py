@@ -85,7 +85,6 @@ class LeftBar(Widget):
     recent_proj_list = []
     imgTransChecked = Signal()
     configChecked = Signal()
-    ai_chat_toggled = Signal(bool)
     open_dir = Signal(str)
     open_json_proj = Signal(str)
     save_proj = Signal()
@@ -106,14 +105,6 @@ class LeftBar(Widget):
         self.imgTransChecker = StateChecker("imgtrans")
         self.imgTransChecker.setObjectName("ImgTransChecker")
         self.imgTransChecker.checked.connect(self.stateCheckerChanged)
-
-        self.aiChatChecker = StateChecker("aichat", uncheckable=True)
-        self.aiChatChecker.setObjectName("AiChatChecker")
-        self.aiChatChecker.setToolTip(self.tr("AI Chat"))
-        self.aiChatChecker.checked.connect(lambda typ: self.ai_chat_toggled.emit(True))
-        self.aiChatChecker.unchecked.connect(
-            lambda typ: self.ai_chat_toggled.emit(False)
-        )
 
         self.configChecker = StateChecker("config", uncheckable=True)
         self.configChecker.setObjectName("ConfigChecker")
@@ -179,7 +170,6 @@ class LeftBar(Widget):
         vlayout.addWidget(self.showPageListLabel)
         vlayout.addWidget(self.globalSearchChecker)
         vlayout.addWidget(self.imgTransChecker)
-        vlayout.addWidget(self.aiChatChecker)
         vlayout.addItem(QSpacerItem(0, 0, QSizePolicy.Minimum, QSizePolicy.Expanding))
         vlayout.addWidget(self.configChecker)
         vlayout.addWidget(self.runImgtransBtn)

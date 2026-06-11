@@ -369,15 +369,29 @@
             <source>Check Dependencies...</source>
             <translation>检查依赖...</translation>
         </message>
-        <message>
-            <source>Check Models...</source>
-            <translation>检查模型...</translation>
+
+
+    <message><source>Punctuation Position</source><translation type="unfinished" /></message><message><source>Simplified Chinese</source><translation type="unfinished" /></message><message><source>Traditional Chinese</source><translation type="unfinished" /></message>        <message>
+            <source>Run System Diagnostic...</source>
+            <translation>运行系统诊断...</translation>
         </message>
         <message>
-            <source>Network Settings...</source>
-            <translation>网络设置...</translation>
+            <source>Check Model Files...</source>
+            <translation>检查模型文件...</translation>
         </message>
-    <message><source>Punctuation Position</source><translation type="unfinished" /></message><message><source>Simplified Chinese</source><translation type="unfinished" /></message><message><source>Traditional Chinese</source><translation type="unfinished" /></message></context>
+        <message>
+            <source>Environment</source>
+            <translation>环境</translation>
+        </message>
+        <message>
+            <source>Network &amp; Mirror Settings...</source>
+            <translation>网络与镜像设置...</translation>
+        </message>
+        <message>
+            <source>MCP Server Info...</source>
+            <translation>MCP 服务器信息...</translation>
+        </message>
+</context>
     <context>
         <name>FontExcludeDialog</name>
         <message>
@@ -3352,8 +3366,8 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <translation>安装缺失依赖</translation>
         </message>
         <message>
-            <source>Install All (incl. GPU)</source>
-            <translation>全部安装（含 GPU）</translation>
+            <source>Install All (incl. optional)</source>
+            <translation>全部安装（含可选依赖）</translation>
         </message>
         <message>
             <source>Package</source>
@@ -3382,6 +3396,22 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         <message>
             <source>Version mismatch</source>
             <translation>版本不匹配</translation>
+        </message>
+        <message>
+            <source>Not needed</source>
+            <translation>不需要</translation>
+        </message>
+        <message>
+            <source>Only needed when: {marker}</source>
+            <translation>仅在以下条件需要：{marker}</translation>
+        </message>
+        <message>
+            <source>{installed}/{total} installed, {missing} missing, {skipped} skipped (not needed here)</source>
+            <translation>{installed}/{total} 已安装，{missing} 缺失，{skipped} 不适用</translation>
+        </message>
+        <message>
+            <source>{installed}/{total} installed, {missing} missing or mismatched</source>
+            <translation>{installed}/{total} 已安装，{missing} 缺失或不匹配</translation>
         </message>
     </context>
     <context>
@@ -3551,6 +3581,66 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         <message>
             <source>Enter custom mirror URL...</source>
             <translation>输入自定义镜像 URL...</translation>
+        </message>
+    </context>
+    <context>
+        <name>SystemDiagnosticDialog</name>
+        <message>
+            <source>System Diagnostic</source>
+            <translation>系统诊断</translation>
+        </message>
+        <message>
+            <source>Run Diagnostic</source>
+            <translation>运行诊断</translation>
+        </message>
+        <message>
+            <source>Click "Run Diagnostic" to check your system.</source>
+            <translation>点击“运行诊断”以检查系统环境。</translation>
+        </message>
+            <message>
+            <source>Close</source>
+            <translation>关闭</translation>
+        </message>
+</context>
+    <context>
+        <name>MCPInfoDialog</name>
+        <message>
+            <source>MCP Server Setup</source>
+            <translation>MCP 服务器设置</translation>
+        </message>
+        <message>
+            <source>MCP Server</source>
+            <translation>MCP 服务器</translation>
+        </message>
+        <message>
+            <source>MCP (Model Context Protocol) allows external AI agents such as Claude Code to read and edit BallonsTranslator project data directly through tool calls — no GUI needed.</source>
+            <translation>MCP（模型上下文协议）允许 Claude Code 等外部 AI 代理通过工具调用直接读取和修改 BallonsTranslator 项目数据，无需启动 GUI。</translation>
+        </message>
+        <message>
+            <source>Quick start:</source>
+            <translation>快速开始：</translation>
+        </message>
+        <message>
+            <source>1. Install:  pip install -e &quot;.[mcp]&quot;
+2. Add a config entry in .claude/settings.json
+3. Run Claude Code in the project directory
+4. Ask it to open your project and edit text blocks</source>
+            <translation>1. 安装：pip install -e &quot;.[mcp]&quot;
+2. 在 .claude/settings.json 中添加配置条目
+3. 在项目目录中运行 Claude Code
+4. 让它打开你的项目并编辑文字块</translation>
+        </message>
+        <message>
+            <source>Full user guide available at docs/zh/mcp_user_guide.md</source>
+            <translation>完整用户指南见 docs/zh/mcp_user_guide.md</translation>
+        </message>
+        <message>
+            <source>Open User Guide</source>
+            <translation>打开用户指南</translation>
+        </message>
+        <message>
+            <source>Close</source>
+            <translation>关闭</translation>
         </message>
     </context>
 </TS>
