@@ -22,6 +22,7 @@ from qtpy.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
 from utils import shared
@@ -181,13 +182,14 @@ class _InstallWorker(QThread):
 # ── Dialog ────────────────────────────────────────────────────────────
 
 
-class DependencyDialog(QDialog):
-    """Visual dependency list with install status and one-click install."""
+class DependencyPanel(QWidget):
+    """Visual dependency list with install status and one-click install.
+
+    Embeddable in a dialog or tab widget.
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(self.tr("Dependencies"))
-        self.setMinimumSize(640, 420)
         self._data: list[tuple[str, str, str, str, str]] = []
         self._build_ui()
         self._refresh()
@@ -239,9 +241,6 @@ class DependencyDialog(QDialog):
         btn_row.addWidget(self.install_missing_btn)
         btn_row.addWidget(self.install_all_btn)
         btn_row.addStretch()
-        close_btn = QPushButton(self.tr("Close"))
-        close_btn.clicked.connect(self.accept)
-        btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
 
     # ── Refresh ───────────────────────────────────────────────────────
@@ -371,3 +370,16 @@ class DependencyDialog(QDialog):
         self.install_missing_btn.setEnabled(True)
         self.install_all_btn.setEnabled(True)
         self.refresh_btn.setEnabled(True)
+
+
+class DependencyDialog(QDialog):
+    """Dialog wrapper for DependencyPanel (backward-compatible)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(self.tr("Dependencies"))
+        self.setMinimumSize(640, 420)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.panel = DependencyPanel(self)
+        layout.addWidget(self.panel)

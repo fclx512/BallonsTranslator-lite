@@ -365,20 +365,14 @@
             <source>Comma-separated values — used in font format panel dropdowns.</source>
             <translation>逗号分隔的值 — 用于字体格式面板下拉选项。</translation>
         </message>
-        <message>
-            <source>Check Dependencies...</source>
-            <translation>检查依赖...</translation>
-        </message>
+
 
 
     <message><source>Punctuation Position</source><translation type="unfinished" /></message><message><source>Simplified Chinese</source><translation type="unfinished" /></message><message><source>Traditional Chinese</source><translation type="unfinished" /></message>        <message>
             <source>Run System Diagnostic...</source>
             <translation>运行系统诊断...</translation>
         </message>
-        <message>
-            <source>Check Model Files...</source>
-            <translation>检查模型文件...</translation>
-        </message>
+
         <message>
             <source>Environment</source>
             <translation>环境</translation>
@@ -390,6 +384,10 @@
         <message>
             <source>MCP Server Info...</source>
             <translation>MCP 服务器信息...</translation>
+        </message>
+        <message>
+            <source>Tools...</source>
+            <translation>工具检查...</translation>
         </message>
 </context>
     <context>
@@ -2364,6 +2362,26 @@ qipao,qipao2</translation>
             <source>Return existing translation</source>
             <translation>返回已有翻译（不翻译）</translation>
         </message>
+        <message>
+            <source>PP-OCRv6 model scale (medium / small / tiny)</source>
+            <translation>PP-OCRv6 模型档位（medium / small / tiny）</translation>
+        </message>
+        <message>
+            <source>Language — 'ch' covers Chinese + English</source>
+            <translation>语言 — 'ch' 覆盖中文 + 英文</translation>
+        </message>
+        <message>
+            <source>Enable text direction classification</source>
+            <translation>启用文字方向分类</translation>
+        </message>
+        <message>
+            <source>GPU memory limit in MB (subprocess mode only)</source>
+            <translation>GPU 显存限制（MB，仅子进程模式下生效）</translation>
+        </message>
+        <message>
+            <source>PP-OCRv6 — Baidu's latest OCR (medium/small/tiny, 50 languages)</source>
+            <translation>PP-OCRv6 — 百度最新 OCR（medium/small/tiny，支持 50 种语言）</translation>
+        </message>
     </context>
     <context>
         <name>AboutDialog</name>
@@ -3377,15 +3395,14 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
     </context>
     <context>
         <name>DependencyDialog</name>
-        <message>
+<message>
             <source>Dependencies</source>
             <translation>依赖检查</translation>
         </message>
-        <message>
-            <source>Close</source>
-            <translation>关闭</translation>
-        </message>
-        <message>
+        </context>
+        <context>
+        <name>DependencyPanel</name>
+<message>
             <source>Refresh</source>
             <translation>刷新</translation>
         </message>
@@ -3441,13 +3458,20 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <source>{installed}/{total} installed, {missing} missing or mismatched</source>
             <translation>{installed}/{total} 已安装，{missing} 缺失或不匹配</translation>
         </message>
-    </context>
+        </context>
     <context>
         <name>ModelCheckDialog</name>
         <message>
             <source>Model Files</source>
             <translation>模型文件</translation>
         </message>
+        <message>
+            <source>Close</source>
+            <translation>关闭</translation>
+        </message>
+        </context>
+    <context>
+        <name>ModelCheckPanel</name>
         <message>
             <source>Model</source>
             <translation>模型</translation>
@@ -3483,10 +3507,6 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         <message>
             <source>Refresh</source>
             <translation>刷新</translation>
-        </message>
-        <message>
-            <source>Close</source>
-            <translation>关闭</translation>
         </message>
         <message>
             <source>No {category} models installed — {desc}</source>
@@ -3527,6 +3547,29 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         <message>
             <source>No public download source. Obtain from community cloud drive.</source>
             <translation>无公开下载源。请从社区云盘获取。</translation>
+        </message>
+        <message>
+            <source>Auto-downloaded by PaddleOCR on first use</source>
+            <translation>由 PaddleOCR 首次使用时自动下载</translation>
+        </message>
+        <message>
+            <source>PP-OCRv6 models are auto-downloaded by PaddleOCR on first use.</source>
+            <translation>PP-OCRv6 模型由 PaddleOCR 首次使用时自动下载。</translation>
+        </message>
+        </context>
+    <context>
+        <name>ToolsDialog</name>
+        <message>
+            <source>Tools</source>
+            <translation>工具检查</translation>
+        </message>
+        <message>
+            <source>Check Dependencies</source>
+            <translation>检查依赖</translation>
+        </message>
+        <message>
+            <source>Check Model Files</source>
+            <translation>检查模型文件</translation>
         </message>
     </context>
     <context>

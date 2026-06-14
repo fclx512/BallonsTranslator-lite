@@ -38,6 +38,7 @@ dependencies = [
 [project.optional-dependencies]
 gpu = ["torch", "torchvision", "transformers", "diffusers"]
 mcp = ["mcp>=1.0.0"]
+paddle = ["paddleocr>=3.7.0"]
 
 [tool.ruff]
 target-version = "py310"

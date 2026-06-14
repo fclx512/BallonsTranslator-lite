@@ -1,11 +1,8 @@
 {
   "mcpServers": {
-    "anysearch": {
+    "tavily": {
       "type": "streamable-http",
-      "url": "https://api.anysearch.com/mcp",
-      "headers": {
-        "Authorization": "Bearer as_sk_3d4c415a10a4a69782b7bf48b58633ed"
-      }
+      "url": "https://mcp.tavily.com/mcp/?tavilyApiKey=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"
     }
   }
 }

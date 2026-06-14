@@ -1686,13 +1686,9 @@ class ConfigPanel(Widget):
             self.tr("Network & Mirror Settings..."),
             self._open_network_settings,
         )
-        self.env_dep_btn = _env_button(
-            self.tr("Check Dependencies..."),
-            self._open_dependency_check,
-        )
-        self.env_models_btn = _env_button(
-            self.tr("Check Model Files..."),
-            self._open_model_check,
+        self.env_tools_btn = _env_button(
+            self.tr("Tools..."),
+            self._open_tools_dialog,
         )
         self.env_diag_btn = _env_button(
             self.tr("Run System Diagnostic..."),
@@ -1971,16 +1967,10 @@ class ConfigPanel(Widget):
         dialog = NetworkSettingsDialog(self)
         dialog.exec()
 
-    def _open_dependency_check(self):
-        from ui.dependency_dialog import DependencyDialog
+    def _open_tools_dialog(self):
+        from ui.tools_dialog import ToolsDialog
 
-        dialog = DependencyDialog(self)
-        dialog.exec()
-
-    def _open_model_check(self):
-        from ui.model_check_dialog import ModelCheckDialog
-
-        dialog = ModelCheckDialog(self)
+        dialog = ToolsDialog(self)
         dialog.exec()
 
     def _open_system_diagnostic(self):

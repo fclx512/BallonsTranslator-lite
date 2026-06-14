@@ -212,48 +212,56 @@ def _detect_user_torch():
     with higher priority than the bundled environment.
     """
     _current_python = os.path.abspath(sys.executable)
-    _user_python = None
+    _candidates: list[str] = []
+    _seen: set[str] = set()
 
-    # Find system python.exe from PATH (exclude the bundled python itself)
+    # Collect all python*.exe from PATH directories (excluding bundled python)
     for _path_dir in os.environ.get("PATH", "").split(os.pathsep):
-        _pexe = os.path.join(_path_dir, "python.exe")
-        if os.path.exists(_pexe) and os.path.abspath(_pexe) != _current_python:
-            _user_python = _pexe
-            break
+        for _name in ("python.exe", "python3.exe", "python3.13.exe"):
+            _pexe = os.path.join(_path_dir, _name)
+            _norm = os.path.abspath(_pexe)
+            if os.path.exists(_pexe) and _norm != _current_python and _norm not in _seen:
+                _candidates.append(_pexe)
+                _seen.add(_norm)
 
-    if not _user_python:
-        _user_python = "python.exe"  # fallback to PATH resolution
+    # Fallback: let OS resolve python.exe on PATH
+    _candidates.append("python.exe")
 
-    try:
-        _result = subprocess.run(
-            [
-                _user_python,
-                "-c",
-                "import torch; print(torch.__file__); print(torch.cuda.is_available())",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if _result.returncode != 0:
-            print("No PyTorch found in user system Python.")
-            return False
+    # Try each candidate until we find one with CUDA torch
+    for _idx, _user_python in enumerate(_candidates):
+        try:
+            _result = subprocess.run(
+                [
+                    _user_python,
+                    "-c",
+                    "import torch; print(torch.__file__); print(torch.cuda.is_available())",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if _result.returncode != 0:
+                continue
 
-        _lines = _result.stdout.strip().split("\n")
-        if len(_lines) < 2 or not _lines[0]:
-            return False
+            _lines = _result.stdout.strip().split("\n")
+            if len(_lines) < 2 or not _lines[0]:
+                continue
 
-        _torch_path = _lines[0]
-        _cuda_available = _lines[1].strip() == "True"
-        _site_packages = os.path.dirname(os.path.dirname(_torch_path))
+            _torch_path = _lines[0]
+            _cuda_available = _lines[1].strip() == "True"
+            _site_packages = os.path.dirname(os.path.dirname(_torch_path))
 
-        # Insert user's site-packages before bundled ones to override CPU torch
-        if _site_packages not in sys.path:
-            sys.path.insert(1, _site_packages)
+            # Insert user's site-packages before bundled ones to override CPU torch
+            if _site_packages not in sys.path:
+                sys.path.insert(1, _site_packages)
 
-        if _cuda_available:
-            print("GPU mode: using user-installed PyTorch with CUDA")
-        else:
+            if _cuda_available:
+                print("GPU mode: using user-installed PyTorch with CUDA")
+                print(f"  PyTorch: {_torch_path}")
+                print(f"  Site-packages: {_site_packages}")
+                return True
+
+            # Found torch but CUDA not available — keep this candidate for diagnosis
             print(f"Found user PyTorch at: {_torch_path}")
             print("CUDA is not available in user-installed PyTorch.")
             _gpu_info = detect_gpu_info()
@@ -276,17 +284,17 @@ def _detect_user_torch():
                     )
             else:
                 print("Consider installing PyTorch with CUDA for GPU acceleration.")
+            print(f"  PyTorch: {_torch_path}")
+            print(f"  Site-packages: {_site_packages}")
+            return False
 
-        print(f"  PyTorch: {_torch_path}")
-        print(f"  Site-packages: {_site_packages}")
+        except subprocess.TimeoutExpired:
+            continue
+        except Exception:
+            continue
 
-        return _cuda_available
-
-    except subprocess.TimeoutExpired:
-        print("Timeout checking user PyTorch installation.")
-    except Exception as e:
-        print(f"Could not detect user PyTorch: {e}")
-
+    # No candidate had torch at all
+    print("No PyTorch found in user system Python.")
     return False
 
 
@@ -363,6 +371,30 @@ def main():
             print("=" * 60 + "\n")
             args.cpu = True
             os.environ["BALLOONTRANS_CPU_ONLY"] = "1"
+
+    # ── Auto-detect Windows system proxy ──
+    if os.name == "nt" and not os.environ.get("HTTP_PROXY"):
+        try:
+            import platform
+            if platform.system() == "Windows":
+                import winreg
+                with winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER,
+                    r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+                ) as key:
+                    enabled = winreg.QueryValueEx(key, "ProxyEnable")[0]
+                    server = winreg.QueryValueEx(key, "ProxyServer")[0]
+                    if enabled and server:
+                        if not server.startswith("http://"):
+                            server = f"http://{server}"
+                        os.environ.setdefault("HTTP_PROXY", server)
+                        os.environ.setdefault("HTTPS_PROXY", server)
+                        os.environ.setdefault("http_proxy", server)
+                        os.environ.setdefault("https_proxy", server)
+                        os.environ.setdefault("NO_PROXY", "localhost,127.0.0.1,.local")
+                        print(f"Auto-detected system proxy: {server}")
+        except Exception:
+            pass  # non-fatal — user can set env vars manually
 
     # ── Early config load: mirror settings needed before deps/update ──
     from utils import config as program_config

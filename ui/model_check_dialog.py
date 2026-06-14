@@ -9,6 +9,7 @@ YAGNI note: this scans ``download_file_list`` on each registered module
 *class* — it never instantiates a module or loads a model into memory.
 """
 
+import os
 import os.path as osp
 
 from qtpy.QtCore import Qt, QUrl
@@ -22,6 +23,7 @@ from qtpy.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
 from utils import shared
@@ -49,6 +51,132 @@ _EXTRA_FILES: list[dict] = [
         "note_key": "ysgyolo_note",
     },
 ]
+
+# ── PaddleOCR cache check ─────────────────────────────────────────────
+
+
+def _scan_paddleocr_cache() -> dict[str, str]:
+    """Return a dict mapping model key → status for PP-OCRv6 models.
+
+    PaddleOCR stores downloaded models under ``~/.paddleocr/whl/`` and
+    PaddleX caches them under ``~/.paddlex/official_models/``.  We check
+    both.
+    """
+    results: dict[str, str] = {}
+
+    # Classic PaddleOCR cache path
+    cache_dir = osp.expanduser("~/.paddleocr/whl")
+    if osp.isdir(cache_dir):
+        for root, dirs, files in os.walk(cache_dir):
+            rel = osp.relpath(root, cache_dir)
+            if "PP-OCRv6" in rel and any(
+                f.endswith((".pdmodel", ".pdiparams", ".onnx")) for f in files
+            ):
+                parts = rel.replace("\\", "/").split("/")
+                if len(parts) >= 2:
+                    key = f"{parts[-2]}/{parts[-1]}"
+                else:
+                    key = parts[-1]
+                results[key] = "installed"
+
+    # PaddleX cache path (used by paddleocr 3.7+)
+    paddlex_dir = osp.expanduser("~/.paddlex/official_models")
+    if osp.isdir(paddlex_dir):
+        for entry in os.listdir(paddlex_dir):
+            if not entry.startswith("PP-OCRv6"):
+                continue
+            model_dir = osp.join(paddlex_dir, entry)
+            if not osp.isdir(model_dir):
+                continue
+            if any(f.endswith((".pdmodel", ".pdiparams", ".onnx")) for f in os.listdir(model_dir)):
+                results[entry] = "installed"
+
+    return results
+
+
+_PPOCR_MODELS = [
+    {
+        "module": "paddleocr_v6 — Detection (medium)",
+        "type": "ocr",
+        "file": "PP-OCRv6_medium_det",
+        "source": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det",
+        "sha256": None,
+        "note": "",
+        "source_only": True,
+    },
+    {
+        "module": "paddleocr_v6 — Detection (small)",
+        "type": "ocr",
+        "file": "PP-OCRv6_small_det",
+        "source": "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det",
+        "sha256": None,
+        "note": "",
+        "source_only": True,
+    },
+    {
+        "module": "paddleocr_v6 — Detection (tiny)",
+        "type": "ocr",
+        "file": "PP-OCRv6_tiny_det",
+        "source": "https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det",
+        "sha256": None,
+        "note": "",
+        "source_only": True,
+    },
+    {
+        "module": "paddleocr_v6 — Recognition (medium)",
+        "type": "ocr",
+        "file": "PP-OCRv6_medium_rec",
+        "source": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec",
+        "sha256": None,
+        "note": "",
+        "source_only": True,
+    },
+    {
+        "module": "paddleocr_v6 — Recognition (small)",
+        "type": "ocr",
+        "file": "PP-OCRv6_small_rec",
+        "source": "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec",
+        "sha256": None,
+        "note": "",
+        "source_only": True,
+    },
+    {
+        "module": "paddleocr_v6 — Recognition (tiny)",
+        "type": "ocr",
+        "file": "PP-OCRv6_tiny_rec",
+        "source": "https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec",
+        "sha256": None,
+        "note": "",
+        "source_only": True,
+    },
+]
+
+
+def _build_paddleocr_custom_checks():
+    """Attach ``_custom_check`` callables to ``_PPOCR_MODELS`` entries."""
+    cache = _scan_paddleocr_cache()
+
+    for entry in _PPOCR_MODELS:
+        model_key = entry["file"]  # e.g. "PP-OCRv6_medium_det"
+        _key = model_key  # capture for closure
+
+        def _make_check(key: str = _key):
+            return lambda: "installed" if any(
+                key in k for k in cache
+            ) else "missing"
+
+        entry["_custom_check"] = _make_check()
+        # note intentionally empty so the source URL is shown as a clickable link;
+        # the explanatory text goes in a tooltip set during _refresh.
+        entry["note"] = ""
+
+
+_build_paddleocr_custom_checks()
+
+# ── PP-OCRv6 models (auto-downloaded by PaddleOCR) ──────────────────
+# These are appended dynamically so _scan_module_models picks them up.
+_EXTRA_FILES.extend(_PPOCR_MODELS)
+
 
 _TYPE_LABEL = {
     "textdetector": "Text Detection",
@@ -188,7 +316,12 @@ def _scan_module_models() -> list[dict]:
 
 def _check_entry(entry: dict) -> str:
     """Return ``"installed"`` or ``"missing"``."""
-    fpath = osp.join(shared.PROGRAM_PATH, entry["file"])
+    if entry.get("source_only"):
+        # Informational entry — no single file to check; use custom logic.
+        return entry.get("_custom_check", lambda: "missing")()
+    fpath = entry["file"]
+    if not osp.isabs(fpath):
+        fpath = osp.join(shared.PROGRAM_PATH, fpath)
     if not osp.exists(fpath):
         return "missing"
     if entry["sha256"]:
@@ -219,14 +352,12 @@ class _HeaderRowItem(QTableWidgetItem):
 # ── Dialog ───────────────────────────────────────────────────────────
 
 
-class ModelCheckDialog(QDialog):
+class ModelCheckPanel(QWidget):
     """Model file inventory — what's installed, what's missing, and where
-    to get it."""
+    to get it. Embeddable in a dialog or tab widget."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(self.tr("Model Files"))
-        self.setMinimumSize(760, 500)
         self._entries: list[dict] = []
         self._build_ui()
         self._refresh()
@@ -281,9 +412,6 @@ class ModelCheckDialog(QDialog):
         refresh_btn.clicked.connect(self._refresh)
         btn_row.addWidget(refresh_btn)
         btn_row.addStretch()
-        close_btn = QPushButton(self.tr("Close"))
-        close_btn.clicked.connect(self.accept)
-        btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
 
     # ── Refresh ───────────────────────────────────────────────────────
@@ -340,9 +468,15 @@ class ModelCheckDialog(QDialog):
 
                 self.table.insertRow(row)
 
-                # Name — filename only
+                # Name — filename only (for source_only entries, the file
+                # field is a readable label rather than a real path)
                 name_item = QTableWidgetItem(osp.basename(entry["file"]))
-                name_item.setToolTip(entry["file"])
+                if entry.get("source_only"):
+                    name_item.setToolTip(
+                        self.tr("Auto-downloaded by PaddleOCR on first use")
+                    )
+                else:
+                    name_item.setToolTip(entry["file"])
                 self.table.setItem(row, 0, name_item)
 
                 # Category — sub-type within group (module key) in lighter
@@ -384,6 +518,14 @@ class ModelCheckDialog(QDialog):
                     src_item.setToolTip(text)  # full URL as tooltip
                     # Store full URL so _on_cell_clicked can open it
                     src_item.setData(Qt.ItemDataRole.UserRole, text)
+                    # For source_only entries, append the auto-download note
+                    if entry.get("source_only"):
+                        src_item.setToolTip(
+                            text + "\n\n" + self.tr(
+                                "PP-OCRv6 models are auto-downloaded "
+                                "by PaddleOCR on first use."
+                            )
+                        )
                 self.table.setItem(row, 3, src_item)
 
                 row += 1
@@ -464,3 +606,24 @@ class ModelCheckDialog(QDialog):
         url = item.data(Qt.ItemDataRole.UserRole)
         if url:
             QDesktopServices.openUrl(QUrl(url))
+
+
+class ModelCheckDialog(QDialog):
+    """Dialog wrapper for ModelCheckPanel (backward-compatible)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(self.tr("Model Files"))
+        self.setMinimumSize(760, 500)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.panel = ModelCheckPanel(self)
+        layout.addWidget(self.panel)
+
+        # Close button in the dialog footer
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        close_btn = QPushButton(self.tr("Close"))
+        close_btn.clicked.connect(self.accept)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
