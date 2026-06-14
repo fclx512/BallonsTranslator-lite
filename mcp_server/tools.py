@@ -12,15 +12,22 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from utils.ai_tools import execute_tool, ToolError
-
 from mcp_server.project_manager import (
-    get_active_project,
-    get_state,
-    open_project as pm_open_project,
-    save_project as pm_save_project,
     close_project as pm_close_project,
 )
+from mcp_server.project_manager import (
+    get_active_project,
+)
+from mcp_server.project_manager import (
+    get_state as pm_get_state,
+)
+from mcp_server.project_manager import (
+    open_project as pm_open_project,
+)
+from mcp_server.project_manager import (
+    save_project as pm_save_project,
+)
+from utils.ai_tools import ToolError, execute_tool
 
 logger = logging.getLogger("mcp_server.tools")
 
@@ -54,7 +61,9 @@ def register_all_tools(mcp: FastMCP) -> None:
             result = pm_open_project(directory)
             return json.dumps(result, ensure_ascii=False, indent=2)
         except Exception as e:
-            return json.dumps({"error": f"Failed to open project: {e}"}, ensure_ascii=False)
+            return json.dumps(
+                {"error": f"Failed to open project: {e}"}, ensure_ascii=False
+            )
 
     @mcp.tool()
     def save_project() -> str:
@@ -77,7 +86,7 @@ def register_all_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     def get_state() -> str:
         """获取当前服务器状态：项目是否打开、路径、页面数等。"""
-        result = get_state()
+        result = pm_get_state()
         return json.dumps(result, ensure_ascii=False, indent=2)
 
     # ── Read tools ──────────────────────────────────────────────────
@@ -218,7 +227,9 @@ def register_all_tools(mcp: FastMCP) -> None:
         return _run("set_layout", **kwargs)
 
     @mcp.tool()
-    def search_replace(query: str, replacement: str, field: Optional[str] = None) -> str:
+    def search_replace(
+        query: str, replacement: str, field: Optional[str] = None
+    ) -> str:
         """在指定字段中搜索并替换文本。
 
         Args:

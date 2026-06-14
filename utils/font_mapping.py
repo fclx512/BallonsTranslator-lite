@@ -95,7 +95,9 @@ def _fuzzy_match(target: str, candidates: Set[str]) -> Optional[str]:
     # Fall back to sequence matcher.
     if not norm_to_orig:
         return None
-    matches = difflib.get_close_matches(target_norm, list(norm_to_orig), n=1, cutoff=0.6)
+    matches = difflib.get_close_matches(
+        target_norm, list(norm_to_orig), n=1, cutoff=0.6
+    )
     if matches:
         return norm_to_orig[matches[0]]
     return None

@@ -101,9 +101,7 @@ def encode_image_rle(
             out.extend(struct.pack(">H", length))
         out.extend(data)
 
-        encoded.append(
-            EncodedChannel(channel_id=channel.psd_id(), data=bytes(out))
-        )
+        encoded.append(EncodedChannel(channel_id=channel.psd_id(), data=bytes(out)))
 
     return encoded
 

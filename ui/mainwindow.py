@@ -23,10 +23,8 @@ from qtpy.QtGui import (
 from qtpy.QtWidgets import (
     QAction,
     QApplication,
-    QComboBox,
     QDialog,
     QFileDialog,
-    QGridLayout,
     QHBoxLayout,
     QListWidget,
     QListWidgetItem,
@@ -48,7 +46,7 @@ from modules import (
     GET_VALID_TEXTDETECTORS,
     GET_VALID_TRANSLATORS,
 )
-from utils import proj_compact, shared
+from utils import shared
 from utils.config import (
     FontFormat,
     ProgramConfig,
@@ -741,9 +739,7 @@ class MainWindow(mainwindow_cls):
             self.opening_dir = True
 
             # Show indeterminate progress dialog for project loading
-            progress = QProgressDialog(
-                self.tr("Loading project..."), "", 0, 0, self
-            )
+            progress = QProgressDialog(self.tr("Loading project..."), "", 0, 0, self)
             progress.setWindowTitle(self.tr("Loading"))
             progress.setWindowModality(Qt.WindowModality.WindowModal)
             progress.setCancelButton(None)
@@ -837,6 +833,7 @@ class MainWindow(mainwindow_cls):
     def updatePageList(self):
         if self.pageList.count() != 0:
             self.pageList.clear()
+
         def item_func(imgname):
             if len(self.imgtrans_proj.pages) >= shared.PAGELIST_THUMBNAIL_MAXNUM:
                 return QListWidgetItem(imgname)
@@ -844,6 +841,7 @@ class MainWindow(mainwindow_cls):
                 return QListWidgetItem(
                     QIcon(osp.join(self.imgtrans_proj.directory, imgname)), imgname
                 )
+
         for imgname in self.imgtrans_proj.pages:
             lstitem = item_func(imgname)
             self.pageList.addItem(lstitem)
@@ -2138,45 +2136,28 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
                 bs = int(batch_combo.currentText())
                 pw = pages_spin.value()
                 if effective == 0:
-                    text = self.tr(
-                        "Adaptive -- will be determined when Run starts"
-                    )
+                    text = self.tr("Adaptive -- will be determined when Run starts")
                 elif effective <= bs:
-                    text = (
-                        self.tr(
-                            "Full context (%1 pages, all previous "
-                            "translations as reference)"
-                        )
-                        .replace("%1", str(effective))
-                    )
+                    text = self.tr(
+                        "Full context (%1 pages, all previous "
+                        "translations as reference)"
+                    ).replace("%1", str(effective))
                 elif effective <= bs * 4:
                     text = (
-                        self.tr(
-                            "Windowed context (%1 pages, +/-%2 page window)"
-                        )
+                        self.tr("Windowed context (%1 pages, +/-%2 page window)")
                         .replace("%1", str(effective))
                         .replace("%2", str(pw))
                     )
                 else:
-                    text = (
-                        self.tr(
-                            "Windowed + auto-summary (%1 pages, "
-                            "long-form mode)"
-                        )
-                        .replace("%1", str(effective))
-                    )
+                    text = self.tr(
+                        "Windowed + auto-summary (%1 pages, long-form mode)"
+                    ).replace("%1", str(effective))
                 mode_label.setText(text)
 
             _update_mode_label()
-            batch_combo.currentTextChanged.connect(
-                lambda _: _update_mode_label()
-            )
-            pages_spin.valueChanged.connect(
-                lambda _: _update_mode_label()
-            )
-            slider.rangeChanged.connect(
-                lambda _lo, _hi: _update_mode_label()
-            )
+            batch_combo.currentTextChanged.connect(lambda _: _update_mode_label())
+            pages_spin.valueChanged.connect(lambda _: _update_mode_label())
+            slider.rangeChanged.connect(lambda _lo, _hi: _update_mode_label())
             all_pages_cb.toggled.connect(lambda _: _update_mode_label())
 
             glossary_cb = QCheckBox(self.tr("Enforce Term Consistency (Glossary)"))
@@ -2221,12 +2202,8 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
                         )
 
                         def _ctx_status(msg):
-                            bar = (
-                                self.module_manager.progress_msgbox.translate_bar
-                            )
-                            bar.updateProgress(
-                                bar.progressbar.value(), msg
-                            )
+                            bar = self.module_manager.progress_msgbox.translate_bar
+                            bar.updateProgress(bar.progressbar.value(), msg)
 
                         self._ctx_batch_restore = pcfg.module.translator
                         ctx = ContextBatchTranslator(
@@ -2435,7 +2412,9 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             msg = (
                 self.tr("Exported ")
                 + str(success_count)
-                + self.tr(" ExtendScript(s).\n\nOpen Photoshop → File → Scripts → Browse to run each .jsx.\n\nOutput:\n")
+                + self.tr(
+                    " ExtendScript(s).\n\nOpen Photoshop → File → Scripts → Browse to run each .jsx.\n\nOutput:\n"
+                )
                 + self._psd_result["output_dir"]
             )
         create_info_dialog(msg)

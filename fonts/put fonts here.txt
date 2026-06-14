@@ -1,5 +1,0 @@
-将你的字体文件(.ttf, .otf, .ttc 等)放入此目录。程序启动时会自动加载。
-
-Place your font files (.ttf, .otf, .ttc, etc.) in this directory. The application will load them automatically on startup.
-
-支持的语言 / Supported languages: 简体中文, 繁體中文, 日本語, English, 한국어

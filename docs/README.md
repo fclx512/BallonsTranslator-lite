@@ -1,77 +1,39 @@
 # BallonsTranslator-lite 文档
 
-本目录包含项目的中英文文档，按语言分为两个子目录。
+文档以中文为主，部分文档有对应英文版（已归档删除）。如需英文版，可借助 AI 翻译中文文档阅读。
 
 ## 目录结构
 
 ```
 docs/
-├── README.md          ← 本文件（中英双语说明）
-├── en/                ← 英文文档
-│   ├── config_reference.md
-│   ├── shortcuts.md
-│   └── ...
-└── zh/                ← 中文文档
-    ├── config_reference.md
-    ├── shortcuts.md
-    └── ...
+├── README.md           ← 本文件
+├── 项目概述.md         ← 项目架构概述
+├── 配置参考.md         ← 配置参数参考
+├── 快捷键.md           ← 快捷键指南
+├── 国际化.md           ← 国际化指南
+├── 模块开发指南.md     ← 模块开发指南
+├── 上下文翻译.md       ← 上下文翻译
+├── PP-OCRv6模块参考.md ← PP-OCRv6 ONNX OCR 模块
+├── 标点对齐.md         ← 竖排标点对齐
+├── 字体局部覆盖.md     ← 字体局部覆盖
+├── 经验教训.md         ← 经验教训记录
+├── MCP集成指南.md      ← MCP 开发者集成指南
+└── MCP用户指南.md      ← MCP 用户使用指南
 ```
 
 ## 文档列表
 
-| 文件 | en/ | zh/ | 说明 |
-|------|:---:|:---:|------|
-| `config_reference.md` | ✅ | ✅ | 配置参数参考 |
-| `shortcuts.md` | ✅ | ✅ | 快捷键指南 |
-| `how_to_add_new_translator.md` | ✅ | ✅ | 模块开发指南 |
-| `project_overview.md` | ✅ | ✅ | 项目架构概述 + 未来计划 |
-| `punctuation_alignment.md` | ✅ | ✅ | 标点对齐方案 |
-| `context_translation.md` | ✅ | ✅ | 上下文翻译 |
-| `i18n.md` | ✅ | ✅ | 国际化（i18n） |
-| `ai_assistant_architecture.md` | ✅ | ✅ | AI 助手底层架构 |
-| `font_style_local_override.md` | ✅ | ✅ | 字体样式局部覆盖技术总结 |
-| `lessons_learned.md` | ✅ | ✅ | 开发经验教训与问题记录 |
-
-## 添加新文档
-
-添加新文档时，请同时在 `en/` 和 `zh/` 中各放一份，使用相同文件名。
-
----
-
-# BallonsTranslator-lite Documentation
-
-This directory contains project documentation in both Chinese and English, organized by language.
-
-## Directory Structure
-
-```
-docs/
-├── README.md          ← This file (bilingual)
-├── en/                ← English docs
-│   ├── config_reference.md
-│   ├── shortcuts.md
-│   └── ...
-└── zh/                ← Chinese docs
-    ├── config_reference.md
-    ├── shortcuts.md
-    └── ...
-```
-
-## Document Index
-
-| File | en/ | zh/ | Description |
-|------|:---:|:---:|-------------|
-| `config_reference.md` | ✅ | ✅ | Configuration reference |
-| `shortcuts.md` | ✅ | ✅ | Keyboard shortcuts guide |
-| `how_to_add_new_translator.md` | ✅ | ✅ | Module development guide |
-| `project_overview.md` | ✅ | ✅ | Project architecture + future roadmap |
-| `punctuation_alignment.md` | ✅ | ✅ | Punctuation alignment |
-| `context_translation.md` | ✅ | ✅ | Context translation |
-| `i18n.md` | ✅ | ✅ | Internationalization |
-| `ai_assistant_architecture.md` | ✅ | ✅ | AI assistant architecture |
-| `font_style_local_override.md` | ✅ | ✅ | Font style local override |
-| `lessons_learned.md` | ✅ | ✅ | Development lessons & technical records |
-
-## Adding New Docs
-
-When adding a new document, place copies in both `en/` and `zh/` with the same filename.
+| 文件 | 说明 |
+|------|------|
+| `配置参考.md` | 配置参数参考（DL 模块 + 通用设置 + params 字典） |
+| `快捷键.md` | 快捷键系统架构与添加步骤 |
+| `国际化.md` | 国际化（i18n）指南 |
+| `项目概述.md` | 项目架构概述 |
+| `模块开发指南.md` | 模块开发指南（翻译器/OCR/检测器/修复器） |
+| `上下文翻译.md` | 上下文翻译技术文档 |
+| `PP-OCRv6模块参考.md` | PP-OCRv6 ONNX OCR 模块参考 |
+| `标点对齐.md` | 竖排标点对齐方案 |
+| `字体局部覆盖.md` | 字体样式局部覆盖方案 |
+| `经验教训.md` | 开发经验教训与问题记录 |
+| `MCP集成指南.md` | MCP 服务器开发者集成指南 |
+| `MCP用户指南.md` | MCP 用户使用指南 |

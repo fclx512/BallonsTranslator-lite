@@ -1,8 +1,6 @@
 import argparse
-import importlib
 import os
 import os.path as osp
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -20,11 +18,10 @@ if _pylibs_sp.exists() and str(_pylibs_sp) not in sys.path:
     sys.path.append(str(_pylibs_sp))
 
 import utils.shared as shared  # noqa: E402
-
-from utils.env_diagnostic import detect_gpu_info
+from utils.env_diagnostic import detect_gpu_info  # noqa: E402
 
 BRANCH = "main"
-VERSION = "beta-20260611-01"
+VERSION = "beta-20260614"
 
 python = sys.executable
 git = os.environ.get("GIT", "git")
@@ -53,6 +50,7 @@ else:
 parser.add_argument("--debug", action="store_true")
 parser.add_argument("--requirements", default="requirements.txt")
 parser.add_argument("--headless", action="store_true", help="run without GUI")
+parser.add_argument("--no-venv", action="store_true", help="skip auto-venv creation for Store Python")
 parser.add_argument(
     "--exec_dirs",
     default="",
@@ -91,15 +89,6 @@ parser.add_argument(
     help="Force CPU mode even if PyTorch with CUDA is available",
 )
 args, _ = parser.parse_known_args()
-
-
-def is_installed(package):
-    try:
-        spec = importlib.util.find_spec(package)
-    except ModuleNotFoundError:
-        return False
-
-    return spec is not None
 
 
 def run(command, desc=None, errdesc=None, custom_env=None, live=False):
@@ -153,27 +142,43 @@ def run_pip(args, desc=None):
 UV_AVAILABLE = False
 
 
+def _uv_available():
+    """Check if uv is available in the target Python interpreter."""
+    try:
+        r = subprocess.run(
+            [sys.executable, "-m", "uv", "--version"],
+            capture_output=True,
+            timeout=10,
+        )
+        return r.returncode == 0
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return False
+
+
 def ensure_uv():
     """Ensure uv is installed. Bootstraps via pip if missing."""
     global UV_AVAILABLE
     if skip_install or getattr(sys, "frozen", False):
         return False
-    try:
-        subprocess.run(
-            [sys.executable, "-m", "uv", "--version"],
-            capture_output=True, timeout=10,
-        )
+
+    if _uv_available():
         UV_AVAILABLE = True
         return True
-    except (subprocess.SubprocessError, FileNotFoundError):
-        pass
+
     try:
         print("Installing uv package manager...")
         run_pip("install uv", "uv")
-        UV_AVAILABLE = True
-        return True
     except Exception:
         print("Warning: uv not available, falling back to pip")
+        return False
+
+    # Verify uv actually works after installation
+    if _uv_available():
+        UV_AVAILABLE = True
+        return True
+    else:
+        print("Warning: uv installed but not functional, falling back to pip")
+        UV_AVAILABLE = False
         return False
 
 
@@ -182,7 +187,7 @@ def run_uv(args, desc=None):
         return
     index_url_line = f" --index-url {index_url}" if index_url != "" else ""
     return run(
-        f'"{python}" -m uv pip install {args} --prefer-binary{index_url_line} --disable-pip-version-check',
+        f'"{python}" -m uv pip {args} --prefer-binary{index_url_line} --disable-pip-version-check',
         desc=f"Installing {desc}",
         errdesc=f"Couldn't install {desc}",
         live=True,
@@ -220,7 +225,11 @@ def _detect_user_torch():
         for _name in ("python.exe", "python3.exe", "python3.13.exe"):
             _pexe = os.path.join(_path_dir, _name)
             _norm = os.path.abspath(_pexe)
-            if os.path.exists(_pexe) and _norm != _current_python and _norm not in _seen:
+            if (
+                os.path.exists(_pexe)
+                and _norm != _current_python
+                and _norm not in _seen
+            ):
                 _candidates.append(_pexe)
                 _seen.add(_norm)
 
@@ -234,7 +243,8 @@ def _detect_user_torch():
                 [
                     _user_python,
                     "-c",
-                    "import torch; print(torch.__file__); print(torch.cuda.is_available())",
+                    "import torch; print(torch.__file__); print(torch.cuda.is_available()); "
+                    "import sys; print('.'.join(map(str, sys.version_info[:2])))",
                 ],
                 capture_output=True,
                 text=True,
@@ -244,12 +254,24 @@ def _detect_user_torch():
                 continue
 
             _lines = _result.stdout.strip().split("\n")
-            if len(_lines) < 2 or not _lines[0]:
+            if len(_lines) < 3 or not _lines[0]:
                 continue
 
             _torch_path = _lines[0]
             _cuda_available = _lines[1].strip() == "True"
+            _torch_py_version = _lines[2].strip()
             _site_packages = os.path.dirname(os.path.dirname(_torch_path))
+
+            # Skip if the torch was installed for a different Python version —
+            # injecting incompatible C extensions (numpy, torch, etc.) will crash.
+            _our_version = ".".join(map(str, sys.version_info[:2]))
+            if _torch_py_version != _our_version:
+                print(
+                    f"  Skipping PyTorch at {_torch_path}"
+                    f" (built for Python {_torch_py_version},"
+                    f" running Python {_our_version})"
+                )
+                continue
 
             # Insert user's site-packages before bundled ones to override CPU torch
             if _site_packages not in sys.path:
@@ -299,7 +321,88 @@ def _detect_user_torch():
 
 
 BT = None
-APP = None
+
+
+def _ensure_module_fallback():
+    """If torch / onnxruntime are not available, fall back to no-model modules.
+
+    Preserves ModuleConfig defaults while ensuring the app starts when the
+    user hasn't installed model dependencies yet.
+
+    ============== =============== ===================== ==============
+    Module type    Needs torch?    Needs onnxruntime?    Fallback
+    ============== =============== ===================== ==============
+    textdetector   yes (all)       no                    ``none``
+    inpainter      yes (all)       no                    ``none``
+    mit48px_ctc    yes             no                    ``none_ocr``
+    paddleocr_v6   no              yes                   ``none_ocr``
+    llm_ocr        no              no                    *(never)*
+    translator     no              no                    *(never)*
+    ============== =============== ===================== ==============
+    """
+    try:
+        import torch  # noqa: F401
+
+        _has_torch = True
+    except ImportError:
+        _has_torch = False
+
+    try:
+        import onnxruntime  # noqa: F401
+
+        _has_onnx = True
+    except ImportError:
+        _has_onnx = False
+
+    if _has_torch and _has_onnx:
+        return  # everything available
+
+    from utils.config import pcfg
+
+    changed = []
+
+    # ── Text detector: all real detectors need torch ──
+    if not _has_torch and pcfg.module.textdetector not in ("none",):
+        _old = pcfg.module.textdetector
+        pcfg.module.textdetector = "none"
+        changed.append(f"textdetector: {_old} → none")
+
+    # ── OCR: selective fallback depending on what's missing ──
+    _ocr = pcfg.module.ocr
+    if _ocr not in ("none_ocr", "llm_ocr"):
+        if _ocr == "mit48px_ctc" and not _has_torch:
+            pcfg.module.ocr = "none_ocr"
+            changed.append("OCR: mit48px_ctc → none_ocr")
+        elif _ocr == "paddleocr_v6_onnx" and not _has_onnx:
+            pcfg.module.ocr = "none_ocr"
+            changed.append("OCR: paddleocr_v6_onnx → none_ocr (onnxruntime missing)")
+
+    # ── Inpainter: all real inpainters need torch ──
+    if not _has_torch and pcfg.module.inpainter not in ("none",):
+        _old = pcfg.module.inpainter
+        pcfg.module.inpainter = "none"
+        changed.append(f"inpainter: {_old} → none")
+
+    if changed:
+        _missing = []
+        if not _has_torch:
+            _missing.append("PyTorch")
+        if not _has_onnx:
+            _missing.append("onnxruntime")
+        print(
+            f"{', '.join(_missing)} not available"
+            " — automatically switched to no-model modules:"
+        )
+        for c in changed:
+            print(f"  {c}")
+        if not _has_torch:
+            print("  Install PyTorch to enable local models, then restart.")
+        if not _has_onnx:
+            print(
+                "  Install onnxruntime (or onnxruntime-gpu) + onnxocr"
+                " to enable PP-OCRv6 ONNX, then restart."
+            )
+        print()
 
 
 def restart():
@@ -333,12 +436,38 @@ def main():
 
     print("Python version: ", sys.version)
     print("Python executable: ", sys.executable)
-    print(f"Version: {VERSION}")
-    print(f"Branch: {BRANCH}")
-    print(f"Commit hash: {commit}")
 
     APP_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(APP_DIR)
+
+    # ── Microsoft Store Python: auto-create local .venv ──────────────────
+    # Store Python lives in a read-only system directory
+    # (Program Files\WindowsApps) where pip/uv cannot install packages.
+    # Detect it and redirect into a project-local venv.
+    if not args.no_venv and (
+        "WindowsApps" in sys.executable or "PythonSoftwareFoundation" in sys.executable
+    ):
+        _venv_dir = os.path.join(APP_DIR, ".venv")
+        _venv_python = os.path.join(_venv_dir, "Scripts", "python.exe")
+        if not os.path.isfile(_venv_python):
+            print("Microsoft Store Python detected — creating local virtual environment...")
+            try:
+                subprocess.run(
+                    [sys.executable, "-m", "venv", _venv_dir],
+                    check=True, capture_output=True, timeout=60,
+                )
+                print(f"  Virtual environment created at {_venv_dir}")
+            except Exception as _e:
+                print(f"  Warning: failed to create venv ({_e})")
+                print("  Continuing with system Python — some operations may fail.")
+                _venv_python = None  # Don't re-exec
+        if _venv_python and os.path.isfile(_venv_python):
+            print(f"  Switching to virtual environment Python...")
+            os.execv(_venv_python, [_venv_python] + sys.argv)
+
+    print(f"Version: {VERSION}")
+    print(f"Branch: {BRANCH}")
+    print(f"Commit hash: {commit}")
 
     # GPU mode with bundled Python: detect user's system PyTorch with CUDA
     if not args.cpu and os.environ.get("BTRANSLATOR_GPU_MODE"):
@@ -348,9 +477,7 @@ def main():
             print("\n" + "=" * 60)
             print("PyTorch with CUDA was not found in your system Python.")
             if _gpu_info and _gpu_info["generation"] == "Kepler":
-                print(
-                    "Your Kepler GPU may not be supported by PyTorch 2.x."
-                )
+                print("Your Kepler GPU may not be supported by PyTorch 2.x.")
                 print("CPU mode will be used instead.")
             else:
                 print("GPU mode requires PyTorch with CUDA support.")
@@ -376,8 +503,10 @@ def main():
     if os.name == "nt" and not os.environ.get("HTTP_PROXY"):
         try:
             import platform
+
             if platform.system() == "Windows":
                 import winreg
+
                 with winreg.OpenKey(
                     winreg.HKEY_CURRENT_USER,
                     r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
@@ -409,6 +538,7 @@ def main():
     # Apply mirror/registry settings from config BEFORE prepare_environment
     # and --update so pip/uv use the correct index and update checks use mirrors.
     from utils.mirror import patch_hf_env
+
     if config.mirror.pip_index_url:
         os.environ.setdefault("INDEX_URL", config.mirror.pip_index_url)
     if config.mirror.pip_extra_index_url:
@@ -418,6 +548,7 @@ def main():
     if config.mirror.github_mirror:
         os.environ.setdefault("GITHUB_MIRROR", config.mirror.github_mirror)
     # Re-read index_url so run_uv / run_pip pick it up
+    global index_url
     index_url = os.environ.get("INDEX_URL", "")
 
     prepare_environment()
@@ -454,7 +585,8 @@ def main():
                 try:
                     _check_script = osp.join(
                         osp.dirname(osp.abspath(__file__)),
-                        "scripts", "check_update.py",
+                        "scripts",
+                        "check_update.py",
                     )
                     subprocess.run(
                         [python, _check_script],
@@ -463,6 +595,11 @@ def main():
                 except Exception as e2:
                     print(f"Direct download also failed: {e2}")
                 print("Continuing with the current version.")
+
+    # ── No-model fallback: if torch is still unavailable after
+    #     prepare_environment(), switch to "none" modules so the app
+    #     remains usable without manual config changes. ──
+    _ensure_module_fallback()
 
     from qtpy.QtCore import QEvent, QLocale, QObject, Qt, QTranslator
     from qtpy.QtWidgets import QComboBox
@@ -524,16 +661,6 @@ def main():
 
     init_lazy_module_registries()
 
-    # TORCH_AVAILABLE check — only used for prepare_environment decision.
-    # The user can run a full GPU / CUDA diagnostic from Settings → Environment.
-    TORCH_AVAILABLE = False
-    if not args.cpu:
-        try:
-            import importlib.util
-            TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
-        except ModuleNotFoundError:
-            pass
-
     if not args.headless:
         ps = QGuiApplication.primaryScreen()
         shared.LDPI = ps.logicalDotsPerInch()
@@ -583,7 +710,15 @@ def main():
 
 def prepare_environment():
 
+    # When using the bundled portable Python (ballontrans_pylibs_win),
+    # all dependencies are pre-installed — skip package management.
+    # This portably-distributed Python does not have pip or uv.
+    if "ballontrans_pylibs_win" in sys.executable:
+        print("Running from portable Python environment, skip dependency installation")
+        return
+
     import importlib.util
+
     if importlib.util.find_spec("packaging") is None:
         run_pip("install packaging", "install packaging")
 

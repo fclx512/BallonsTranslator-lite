@@ -1,5 +1,10 @@
 """Standalone update checker — downloads latest source from GitHub.
 
+Two update modes:
+  1. Manifest delta (preferred): downloads remote manifest.json, compares with
+     local, downloads only changed/new files, records deleted files.
+  2. Full ZIP (fallback): downloads the entire repo as a zip archive.
+
 No project imports (runs before launch.py, outside the app environment).
 Requires only stdlib.
 
@@ -37,24 +42,34 @@ else:
 
 API_URL = f"{_API}/repos/{REPO_OWNER}/{REPO_NAME}/commits/{BRANCH}"
 ZIP_URL = f"{_GH}/{REPO_OWNER}/{REPO_NAME}/archive/refs/heads/{BRANCH}.zip"
+# Raw file base URL for manifest-based delta updates
+RAW_URL = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}"
 
 # Marker file written after successful download
 UPDATE_DIR = "_update"
 READY_MARKER = "ready"
 LAST_SHA_FILE = "last_sha"
+DELETED_LIST = "deleted.txt"
+FILES_SUBDIR = "files"
 
 
-def _project_root():
+def _project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def _update_dir():
+def _update_dir() -> Path:
     return _project_root() / UPDATE_DIR
 
 
 def _http_get(url: str) -> tuple:
     """Return (response_bytes, headers_dict) or raise."""
-    req = Request(url, headers={"User-Agent": f"{REPO_NAME}/update-check", "Accept": "application/vnd.github+json"})
+    req = Request(
+        url,
+        headers={
+            "User-Agent": f"{REPO_NAME}/update-check",
+            "Accept": "application/vnd.github+json",
+        },
+    )
     with urlopen(req, timeout=CHECK_TIMEOUT) as resp:
         return resp.read(), dict(resp.headers)
 
@@ -89,11 +104,127 @@ def _write_local_sha(sha: str):
     (upd / LAST_SHA_FILE).write_text(sha, encoding="utf-8")
 
 
+def _read_local_manifest() -> dict | None:
+    """Read local manifest.json, return None if missing or invalid."""
+    p = _project_root() / "manifest.json"
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return None
+
+
+# ── Manifest-based delta update ─────────────────────────────────────
+
+
+def _download_manifest_update(remote_sha: str) -> bool:
+    """Download changed files via manifest comparison.
+
+    Returns True if the delta was prepared, False if it should fall back to ZIP.
+    """
+    # Step 1: Download remote manifest
+    manifest_url = f"{RAW_URL}/manifest.json"
+    print("  Downloading remote manifest...")
+    try:
+        data, _ = _http_get(manifest_url)
+        remote_manifest: dict = json.loads(data)
+    except Exception as e:
+        print(f"  Manifest download failed ({e}), falling back to ZIP...")
+        return False
+
+    remote_files: dict[str, str] = remote_manifest.get("files", {})
+    if not remote_files:
+        print("  Remote manifest has no files, falling back to ZIP...")
+        return False
+
+    # Step 2: Compare with local manifest
+    local_manifest = _read_local_manifest()
+    local_files: dict[str, str] = (
+        local_manifest.get("files", {}) if local_manifest else {}
+    )
+
+    changed = []
+    deleted = []
+    for path, remote_hash in remote_files.items():
+        local_hash = local_files.get(path)
+        if local_hash != remote_hash:
+            changed.append(path)
+
+    for path in local_files:
+        if path not in remote_files:
+            deleted.append(path)
+
+    if not changed and not deleted:
+        print("  Files unchanged (manifest match).")
+        # Still record the SHA so we don't re-check
+        return True
+
+    # Threshold: if too many files changed, fall back to single ZIP download
+    # to avoid hundreds of individual HTTP requests.
+    DELTA_THRESHOLD = 50
+    if len(changed) > DELTA_THRESHOLD:
+        print(
+            f"  {len(changed)} files changed — exceeds threshold ({DELTA_THRESHOLD}), "
+            "falling back to full ZIP download..."
+        )
+        return False
+
+    print(f"  Changed: {len(changed)}, Deleted: {len(deleted)}")
+
+    # Step 3: Download changed files
+    upd = _update_dir()
+    files_dir = upd / FILES_SUBDIR
+
+    # Clean any partial previous delta
+    if files_dir.exists():
+        shutil.rmtree(files_dir, ignore_errors=True)
+    files_dir.mkdir(parents=True, exist_ok=True)
+
+    downloaded = 0
+    failed = []
+    for path in changed:
+        dest = files_dir / path
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        file_url = f"{RAW_URL}/{path}"
+        try:
+            data, _ = _http_get(file_url)
+            dest.write_bytes(data)
+            downloaded += 1
+        except Exception as e:
+            failed.append(path)
+            print(f"  Failed to download {path}: {e}")
+
+    if failed:
+        print(f"  Warning: {len(failed)} files failed to download")
+        # Continue anyway — the update will be partial
+
+    print(f"  Downloaded {downloaded}/{len(changed)} files")
+
+    # Step 4: Write deleted list
+    if deleted:
+        (upd / DELETED_LIST).write_text("\n".join(deleted) + "\n", encoding="utf-8")
+
+    # Step 5: Write ready marker
+    (upd / READY_MARKER).touch()
+
+    # Step 6: Copy remote manifest for the applying step
+    (upd / "manifest.json").write_text(
+        json.dumps(remote_manifest, indent=2), encoding="utf-8"
+    )
+
+    print(f"  Delta prepared in {upd}")
+    return True
+
+
+# ── Full ZIP fallback ──────────────────────────────────────────────
+
+
 def _download_and_extract():
-    """Download repo zip and extract to _update/. Returns True on success."""
+    """Download entire repo ZIP and extract to _update/. Returns True on success."""
     upd = _update_dir()
 
-    print("  Downloading update...")
+    print("  Downloading full repository ZIP...")
     try:
         zip_data, _ = _http_get(ZIP_URL)
     except Exception as e:
@@ -111,8 +242,7 @@ def _download_and_extract():
         with zipfile.ZipFile(tmp_zip, "r") as zf:
             zf.extractall(extract_to)
 
-        # GitHub zip wraps everything in a single top-level dir, e.g.
-        # BallonsTranslator-lite-main/.  Find it and move contents into _update/.
+        # GitHub zip wraps everything in a single top-level dir
         items = os.listdir(extract_to)
         top_dirs = [d for d in items if os.path.isdir(os.path.join(extract_to, d))]
         if len(top_dirs) == 1:
@@ -131,6 +261,9 @@ def _download_and_extract():
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ── Main check-and-download ───────────────────────────────────────
 
 
 def check_and_download() -> str:
@@ -153,9 +286,17 @@ def check_and_download() -> str:
         return "UP_TO_DATE"
 
     print(f"  New version available ({remote_sha[:8]}...).")
+
+    # Try manifest-based delta first
+    if _download_manifest_update(remote_sha):
+        _write_local_sha(remote_sha)
+        print("  Delta update downloaded. Restart to apply.")
+        return "UPDATE_DOWNLOADED"
+
+    # Fall back to full ZIP
     if _download_and_extract():
         _write_local_sha(remote_sha)
-        print("  Update downloaded. Restart to apply.")
+        print("  Full update downloaded. Restart to apply.")
         return "UPDATE_DOWNLOADED"
     else:
         return "DOWNLOAD_FAILED"
@@ -173,7 +314,6 @@ def main():
         status = "ERROR"
 
     # Always exit 0 — update failure should never block launch
-    # The bat file reads stdout to decide what to do
     print(f"STATUS: {status}")
     sys.exit(0)
 

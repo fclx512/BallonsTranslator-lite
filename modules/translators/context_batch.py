@@ -14,15 +14,15 @@ import json
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
 import httpx
 import openai
 from pydantic import BaseModel, Field, ValidationError
 
 if TYPE_CHECKING:
-    from utils.textblock import TextBlock
     from utils.proj_imgtrans import ProjImgTrans
+    from utils.textblock import TextBlock
 
 from utils.config import pcfg
 
@@ -195,11 +195,7 @@ class ContextBatchTranslator:
         ctx_pages = len([c for c in ctx if c.get("type") != "summary"])
         ctx_blks = sum(len(c.get("blocks", [])) for c in ctx if "blocks" in c)
         use_summary = total > bs * 4 and self._summaries
-        mode = (
-            "summary"
-            if use_summary
-            else ("full" if total <= bs else "window")
-        )
+        mode = "summary" if use_summary else ("full" if total <= bs else "window")
         self._status(
             f"Context ({mode}): {ctx_pages} pages, {ctx_blks} ref blocks"
             f" → translating {len(target)} blocks"
@@ -209,9 +205,7 @@ class ContextBatchTranslator:
 
         t0 = time.time()
         raw = self._llm_call(messages, len(target))
-        self._status(
-            f"LLM done: {len(target)} translations in {time.time() - t0:.1f}s"
-        )
+        self._status(f"LLM done: {len(target)} translations in {time.time() - t0:.1f}s")
 
         # Cache batch results
         for pname in batch_keys:
@@ -254,8 +248,7 @@ class ContextBatchTranslator:
         # Summaries for completed batches (only for long projects)
         if total > self.batch_size * 4 and self._summaries:
             lines = "\n".join(
-                f"  Batch {k}: {v}"
-                for k, v in sorted(self._summaries.items())
+                f"  Batch {k}: {v}" for k, v in sorted(self._summaries.items())
             )
             if lines:
                 ctx.insert(
@@ -311,23 +304,13 @@ class ContextBatchTranslator:
     # ── Message assembly ──────────────────────────────────────────────
 
     def _build_msgs(self, ctx_pages, target_blocks):
-        source = (
-            pcfg.module.translate_source
-            if hasattr(pcfg, "module")
-            else "auto"
-        )
-        target = (
-            pcfg.module.translate_target
-            if hasattr(pcfg, "module")
-            else "auto"
-        )
+        source = pcfg.module.translate_source if hasattr(pcfg, "module") else "auto"
+        target = pcfg.module.translate_target if hasattr(pcfg, "module") else "auto"
 
         # System prompt — use profile's prompt_template if available
         if self.translation_prompt:
-            sys_prompt = (
-                self.translation_prompt.replace("{from_lang}", source).replace(
-                    "{to_lang}", target
-                )
+            sys_prompt = self.translation_prompt.replace("{from_lang}", source).replace(
+                "{to_lang}", target
             )
         else:
             sys_prompt = (
@@ -352,7 +335,7 @@ class ContextBatchTranslator:
             sys_prompt += "\n\n" + "\n".join(lines)
 
         sys_prompt += (
-            '\n\nOutput strict JSON: '
+            "\n\nOutput strict JSON: "
             '{"translations": [{"id": "page:block", "translation": "..."}, ...]}'
         )
 
@@ -375,9 +358,7 @@ class ContextBatchTranslator:
                     parts.append(line)
 
         parts.append("\n=== TRANSLATE THESE ===")
-        parts.extend(
-            f'  [{b["id"]}] "{b["src"]}"' for b in target_blocks
-        )
+        parts.extend(f'  [{b["id"]}] "{b["src"]}"' for b in target_blocks)
         messages.append({"role": "user", "content": "\n".join(parts)})
         return messages
 
@@ -385,39 +366,24 @@ class ContextBatchTranslator:
 
     def _direct_call(self, text_list: List[str]) -> List[str]:
         """Fallback: translate a plain list of strings with no context."""
-        source = (
-            pcfg.module.translate_source
-            if hasattr(pcfg, "module")
-            else "auto"
-        )
-        target = (
-            pcfg.module.translate_target
-            if hasattr(pcfg, "module")
-            else "auto"
-        )
+        source = pcfg.module.translate_source if hasattr(pcfg, "module") else "auto"
+        target = pcfg.module.translate_target if hasattr(pcfg, "module") else "auto"
         if self.translation_prompt:
-            prompt = (
-                self.translation_prompt.replace("{from_lang}", source).replace(
-                    "{to_lang}", target
-                )
+            prompt = self.translation_prompt.replace("{from_lang}", source).replace(
+                "{to_lang}", target
             )
         else:
             prompt = (
-                f"Translate from {source} to {target}. "
-                f"Return JSON array of strings."
+                f"Translate from {source} to {target}. Return JSON array of strings."
             )
         prompt += '\nReturn JSON: {"translations": ["...", ...]}'
 
-        parts = [
-            f'  [{i}] "{t}"' for i, t in enumerate(text_list) if t.strip()
-        ]
+        parts = [f'  [{i}] "{t}"' for i, t in enumerate(text_list) if t.strip()]
         if not parts:
             return text_list
         user = "Translate these:\n" + "\n".join(parts)
 
-        self._status(
-            f"Direct translate (no context): {len(text_list)} texts"
-        )
+        self._status(f"Direct translate (no context): {len(text_list)} texts")
         result = self._llm_call(
             [
                 {"role": "system", "content": prompt},
@@ -490,8 +456,7 @@ class ContextBatchTranslator:
                             self.max_retries,
                         )
                         self._status(
-                            f"Empty response, retry {attempt + 1}"
-                            f"/{self.max_retries}..."
+                            f"Empty response, retry {attempt + 1}/{self.max_retries}..."
                         )
                         time.sleep(self.retry_parse_sleep)
                         continue
@@ -523,8 +488,7 @@ class ContextBatchTranslator:
                         )
 
                     return {
-                        item.id: item.translation
-                        for item in validated.translations
+                        item.id: item.translation for item in validated.translations
                     }
 
                 except (ValidationError, ValueError) as e:
@@ -535,8 +499,7 @@ class ContextBatchTranslator:
                         e,
                     )
                     self._status(
-                        f"Parse error, retry {attempt + 1}"
-                        f"/{self.max_retries}..."
+                        f"Parse error, retry {attempt + 1}/{self.max_retries}..."
                     )
                     time.sleep(self.retry_parse_sleep)
                 except RETRYABLE as e:
@@ -547,8 +510,7 @@ class ContextBatchTranslator:
                         e,
                     )
                     self._status(
-                        f"API error, retry {attempt + 1}"
-                        f"/{self.max_retries}..."
+                        f"API error, retry {attempt + 1}/{self.max_retries}..."
                     )
                     time.sleep(self.retry_api_sleep)
         finally:
@@ -596,14 +558,9 @@ class ContextBatchTranslator:
         terms = []
         if self._glossary:
             recent = list(self._glossary.items())[-10:]
-            terms.append(
-                "Terms: " + ", ".join(f"{s}→{t}" for s, t in recent)
-            )
-        summary = (
-            f"Pages {batch_start}-{batch_end - 1}: " + "; ".join(terms)
-        )
+            terms.append("Terms: " + ", ".join(f"{s}→{t}" for s, t in recent))
+        summary = f"Pages {batch_start}-{batch_end - 1}: " + "; ".join(terms)
         self._summaries[batch_start] = summary[:MAX_SUMMARY]
         self._status(
-            f"Summary: pages {batch_start}-{batch_end - 1} "
-            f"({len(summary)} chars)"
+            f"Summary: pages {batch_start}-{batch_end - 1} ({len(summary)} chars)"
         )

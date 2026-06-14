@@ -39,7 +39,7 @@ class ModuleSpec:
     key: str
     import_path: str
     class_name: str
-    module_type: str = ''
+    module_type: str = ""
     params: Dict = None
     download_file_list: List = None
     download_file_on_load: bool = False
@@ -47,7 +47,7 @@ class ModuleSpec:
     supported_src_list: List[str] = None
     supported_tgt_list: List[str] = None
     available: bool = True
-    availability_error: str = ''
+    availability_error: str = ""
     resolved_class: type = None
 
     def resolve(self):
@@ -56,18 +56,18 @@ class ModuleSpec:
         if not self.available:
             raise LazyModuleError(
                 self.availability_error
-                or f'{self.key} is not available on this platform.'
+                or f"{self.key} is not available on this platform."
             )
         try:
             module = importlib.import_module(self.import_path)
             self.resolved_class = getattr(module, self.class_name)
-            setattr(self.resolved_class, '_module_spec', self)
+            setattr(self.resolved_class, "_module_spec", self)
             return self.resolved_class
         except ModuleNotFoundError as e:
             missing = e.name or str(e)
             raise LazyModuleError(
                 f'Module "{self.key}" requires Python package "{missing}". '
-                f'Install the dependency before selecting this module.'
+                f"Install the dependency before selecting this module."
             ) from e
         except Exception as e:
             raise LazyModuleError(
@@ -275,7 +275,7 @@ class Registry:
             if isinstance(existing, ModuleSpec):
                 # A lazy spec can be replaced by the real class after import.
                 existing.resolved_class = module_class
-                setattr(module_class, '_module_spec', existing)
+                setattr(module_class, "_module_spec", existing)
                 self._module_dict[name] = module_class
                 continue
             if not force and name in self._module_dict:
@@ -284,7 +284,7 @@ class Registry:
 
     def register_lazy_module(self, spec: ModuleSpec, force=False):
         if not isinstance(spec, ModuleSpec):
-            raise TypeError(f'spec must be a ModuleSpec, but got {type(spec)}')
+            raise TypeError(f"spec must be a ModuleSpec, but got {type(spec)}")
         existing = self._module_dict.get(spec.key)
         if not force and existing is not None:
             if (
@@ -293,14 +293,11 @@ class Registry:
                 and existing.class_name == spec.class_name
             ):
                 return spec
-            if (
-                inspect.isclass(existing)
-                and existing.__name__ == spec.class_name
-            ):
+            if inspect.isclass(existing) and existing.__name__ == spec.class_name:
                 spec.resolved_class = existing
-                setattr(existing, '_module_spec', spec)
+                setattr(existing, "_module_spec", spec)
                 return spec
-            raise KeyError(f'{spec.key} is already registered in {self.name}')
+            raise KeyError(f"{spec.key} is already registered in {self.name}")
         self._module_dict[spec.key] = spec
         return spec
 
@@ -317,7 +314,7 @@ class Registry:
         if isinstance(module, ModuleSpec):
             return module
         if inspect.isclass(module):
-            spec = getattr(module, '_module_spec', None)
+            spec = getattr(module, "_module_spec", None)
             if isinstance(spec, ModuleSpec):
                 spec.resolved_class = module
                 return spec
@@ -325,19 +322,17 @@ class Registry:
                 key=key,
                 import_path=module.__module__,
                 class_name=module.__name__,
-                params=deepcopy(getattr(module, 'params', None)),
+                params=deepcopy(getattr(module, "params", None)),
                 download_file_list=deepcopy(
-                    getattr(module, 'download_file_list', None)
+                    getattr(module, "download_file_list", None)
                 ),
-                download_file_on_load=getattr(
-                    module, 'download_file_on_load', False
-                ),
-                dependencies=deepcopy(getattr(module, 'dependencies', [])),
+                download_file_on_load=getattr(module, "download_file_on_load", False),
+                dependencies=deepcopy(getattr(module, "dependencies", [])),
                 supported_src_list=deepcopy(
-                    getattr(module, 'supported_src_list', None)
+                    getattr(module, "supported_src_list", None)
                 ),
                 supported_tgt_list=deepcopy(
-                    getattr(module, 'supported_tgt_list', None)
+                    getattr(module, "supported_tgt_list", None)
                 ),
                 resolved_class=module,
             )
@@ -350,7 +345,7 @@ class Registry:
         module = self.get(key)
         if module is None:
             return None
-        return deepcopy(getattr(module, 'params', None))
+        return deepcopy(getattr(module, "params", None))
 
     def deprecated_register_module(self, cls=None, force=False):
         warnings.warn(

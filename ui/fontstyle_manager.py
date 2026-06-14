@@ -130,6 +130,7 @@ def discover_styles(proj) -> List[StyleEntry]:
 # StyleList (left panel)
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class StyleListDelegate(QStyledItemDelegate):
     """Paint a compact style card: color swatch + font name + size + count."""
 
@@ -192,14 +193,18 @@ class StyleListDelegate(QStyledItemDelegate):
         font.setPixelSize(12)
         painter.setFont(font)
 
-        text_color = option.palette.highlightedText().color() if is_selected \
+        text_color = (
+            option.palette.highlightedText().color()
+            if is_selected
             else option.palette.text().color()
+        )
         painter.setPen(text_color)
 
         name_text = f"{ffmt.font_family}  {ffmt.font_size:.0f}px"
         fm = QFontMetrics(font)
-        name_elided = fm.elidedText(name_text, Qt.TextElideMode.ElideRight,
-                                     rect.width() - text_x - 60)
+        name_elided = fm.elidedText(
+            name_text, Qt.TextElideMode.ElideRight, rect.width() - text_x - 60
+        )
         painter.drawText(text_x, y_mid - 3, name_elided)
 
         # ── Subtitle line: style flags ────────────────────────────
@@ -218,8 +223,11 @@ class StyleListDelegate(QStyledItemDelegate):
         sub_font = QFont()
         sub_font.setPixelSize(10)
         painter.setFont(sub_font)
-        sub_color = QColor(160, 160, 160) if not is_selected else \
-            option.palette.highlightedText().color()
+        sub_color = (
+            QColor(160, 160, 160)
+            if not is_selected
+            else option.palette.highlightedText().color()
+        )
         painter.setPen(sub_color)
 
         sub_text = "  ".join(sub_parts) if sub_parts else ""
@@ -251,7 +259,7 @@ class StyleListDelegate(QStyledItemDelegate):
 class StyleList(QListWidget):
     """Left panel: scrollable list of unique styles."""
 
-    style_selected = Signal(str)       # signature
+    style_selected = Signal(str)  # signature
     style_right_clicked = Signal(str)  # signature
 
     def __init__(self, parent=None):
@@ -301,6 +309,7 @@ class StyleList(QListWidget):
 # ═══════════════════════════════════════════════════════════════════════
 # StyleDetail (right panel)
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class _SectionHeader(QLabel):
     """Bold label used as a section divider."""
@@ -419,9 +428,7 @@ class StyleDetail(QScrollArea):
         self._size_spin.setRange(1, 999)
         self._size_spin.setDecimals(1)
         self._size_spin.setSuffix(" px")
-        self._layout.addLayout(
-            _labeled_control(self.tr("Font Size"), self._size_spin)
-        )
+        self._layout.addLayout(_labeled_control(self.tr("Font Size"), self._size_spin))
 
         # Bold / Italic / Underline / Vertical
         flags_widget = QWidget()
@@ -436,9 +443,7 @@ class StyleDetail(QScrollArea):
         flags_layout.addWidget(self._underline_cb)
         flags_layout.addWidget(self._vertical_cb)
         flags_layout.addStretch()
-        self._layout.addLayout(
-            _labeled_control(self.tr("Flags"), flags_widget)
-        )
+        self._layout.addLayout(_labeled_control(self.tr("Flags"), flags_widget))
 
         # Foreground color
         self._fg_btn = QPushButton()
@@ -451,9 +456,7 @@ class StyleDetail(QScrollArea):
         fg_lay.addWidget(self._fg_btn)
         fg_lay.addWidget(self._fg_label)
         fg_lay.addStretch()
-        self._layout.addLayout(
-            _labeled_control(self.tr("Text Color"), fg_w)
-        )
+        self._layout.addLayout(_labeled_control(self.tr("Text Color"), fg_w))
 
         # Stroke color + width
         self._stroke_color_btn = QPushButton()
@@ -473,15 +476,13 @@ class StyleDetail(QScrollArea):
         stroke_lay.addWidget(QLabel(self.tr("Width:")))
         stroke_lay.addWidget(self._stroke_spin)
         stroke_lay.addStretch()
-        self._layout.addLayout(
-            _labeled_control(self.tr("Stroke"), stroke_w)
-        )
+        self._layout.addLayout(_labeled_control(self.tr("Stroke"), stroke_w))
 
         # Alignment
         self._align_combo = QComboBox()
-        self._align_combo.addItems([
-            self.tr("Left"), self.tr("Center"), self.tr("Right")
-        ])
+        self._align_combo.addItems(
+            [self.tr("Left"), self.tr("Center"), self.tr("Right")]
+        )
         self._layout.addLayout(
             _labeled_control(self.tr("Alignment"), self._align_combo)
         )
@@ -541,8 +542,9 @@ class StyleDetail(QScrollArea):
         self._preview_label.setStyleSheet(ss)
 
         self._header_info.setText(
-            self.tr("Applied to {n} blocks across {p} pages")
-            .format(n=entry.count, p=entry.page_count)
+            self.tr("Applied to {n} blocks across {p} pages").format(
+                n=entry.count, p=entry.page_count
+            )
         )
 
         # Property summary
@@ -551,9 +553,7 @@ class StyleDetail(QScrollArea):
             f"{ffmt.font_size:.1f} px  ({px2pt(ffmt.font_size):.1f} pt)"
         )
         wt = ffmt.font_weight
-        self._prop_weight.set_value(
-            str(wt) if wt is not None else self.tr("(default)")
-        )
+        self._prop_weight.set_value(str(wt) if wt is not None else self.tr("(default)"))
         style_parts = []
         if ffmt.bold:
             style_parts.append(self.tr("Bold"))
@@ -562,18 +562,14 @@ class StyleDetail(QScrollArea):
         if ffmt.underline:
             style_parts.append(self.tr("Underline"))
         self._prop_style.set_value(", ".join(style_parts) or self.tr("None"))
-        self._prop_foreground.set_value(
-            f"rgb({fg[0]}, {fg[1]}, {fg[2]})"
-        )
+        self._prop_foreground.set_value(f"rgb({fg[0]}, {fg[1]}, {fg[2]})")
         if ffmt.stroke_width > 0:
             self._prop_stroke.set_value(
-                f"rgb({bg[0]}, {bg[1]}, {bg[2]})  /  "
-                f"{ffmt.stroke_width:.1f} px"
+                f"rgb({bg[0]}, {bg[1]}, {bg[2]})  /  {ffmt.stroke_width:.1f} px"
             )
         else:
             self._prop_stroke.set_value(self.tr("None"))
-        align_names = {0: self.tr("Left"), 1: self.tr("Center"),
-                       2: self.tr("Right")}
+        align_names = {0: self.tr("Left"), 1: self.tr("Center"), 2: self.tr("Right")}
         self._prop_alignment.set_value(
             align_names.get(ffmt.alignment, str(ffmt.alignment))
         )
@@ -581,8 +577,9 @@ class StyleDetail(QScrollArea):
             self.tr("Vertical") if ffmt.vertical else self.tr("Horizontal")
         )
         self._prop_spacing.set_value(
-            self.tr("Line: {ls}  Letter: {lsp}")
-            .format(ls=ffmt.line_spacing, lsp=ffmt.letter_spacing)
+            self.tr("Line: {ls}  Letter: {lsp}").format(
+                ls=ffmt.line_spacing, lsp=ffmt.letter_spacing
+            )
         )
         eff_parts: List[str] = []
         if ffmt.shadow_radius > 0:
@@ -669,8 +666,9 @@ class StyleDetail(QScrollArea):
             page_item = QTreeWidgetItem()
             page_item.setText(0, f"{pname}  ({len(bidx_list)})")
             page_item.setFlags(page_item.flags() | Qt.ItemFlag.ItemIsEnabled)
-            page_item.setData(0, Qt.ItemDataRole.UserRole,
-                              {"type": "page", "pagename": pname})
+            page_item.setData(
+                0, Qt.ItemDataRole.UserRole, {"type": "page", "pagename": pname}
+            )
 
             for bidx in sorted(bidx_list):
                 blk = self._proj.pages[pname][bidx]
@@ -679,12 +677,14 @@ class StyleDetail(QScrollArea):
                     preview = " ".join(str(t) for t in preview)
                 preview = str(preview)[:60]
                 blk_item = QTreeWidgetItem()
-                blk_item.setText(0,
-                                 self.tr("Block #{n}:  \"{t}\"")
-                                 .format(n=bidx, t=preview))
-                blk_item.setData(0, Qt.ItemDataRole.UserRole,
-                                 {"type": "block", "pagename": pname,
-                                  "block_idx": bidx})
+                blk_item.setText(
+                    0, self.tr('Block #{n}:  "{t}"').format(n=bidx, t=preview)
+                )
+                blk_item.setData(
+                    0,
+                    Qt.ItemDataRole.UserRole,
+                    {"type": "block", "pagename": pname, "block_idx": bidx},
+                )
                 page_item.addChild(blk_item)
 
             self._block_tree.addTopLevelItem(page_item)
@@ -707,12 +707,14 @@ class StyleDetail(QScrollArea):
             setattr(new_ffmt, k, v)
         changes = []
         for pname, bidx in self._entry.blocks:
-            changes.append({
-                "pagename": pname,
-                "block_idx": bidx,
-                "old_ffmt": old_ffmt.deepcopy(),
-                "new_ffmt": new_ffmt.deepcopy(),
-            })
+            changes.append(
+                {
+                    "pagename": pname,
+                    "block_idx": bidx,
+                    "old_ffmt": old_ffmt.deepcopy(),
+                    "new_ffmt": new_ffmt.deepcopy(),
+                }
+            )
         return changes
 
     def _push_command(self, changes: List[Dict], description: str = ""):
@@ -720,6 +722,7 @@ class StyleDetail(QScrollArea):
         if not changes:
             return
         from .fontstyle_manager_commands import BatchFontformatCommand
+
         cmd = BatchFontformatCommand(
             self._proj, self._scene_manager, changes, description
         )
@@ -763,7 +766,8 @@ class StyleDetail(QScrollArea):
             return
         fg = self._pending_fg
         c = QColorDialog.getColor(
-            QColor(int(fg[0]), int(fg[1]), int(fg[2])), self,
+            QColor(int(fg[0]), int(fg[1]), int(fg[2])),
+            self,
             self.tr("Pick Text Color"),
         )
         if c.isValid():
@@ -772,16 +776,15 @@ class StyleDetail(QScrollArea):
                 f"background-color: rgb({c.red()},{c.green()},{c.blue()}); "
                 f"border: 1px solid #888; border-radius: 3px;"
             )
-            self._fg_label.setText(
-                f"rgb({c.red()}, {c.green()}, {c.blue()})"
-            )
+            self._fg_label.setText(f"rgb({c.red()}, {c.green()}, {c.blue()})")
 
     def _pick_stroke_color(self):
         if self._entry is None:
             return
         sc = self._pending_stroke_color
         c = QColorDialog.getColor(
-            QColor(int(sc[0]), int(sc[1]), int(sc[2])), self,
+            QColor(int(sc[0]), int(sc[1]), int(sc[2])),
+            self,
             self.tr("Pick Stroke Color"),
         )
         if c.isValid():
@@ -790,14 +793,13 @@ class StyleDetail(QScrollArea):
                 f"background-color: rgb({c.red()},{c.green()},{c.blue()}); "
                 f"border: 1px solid #888; border-radius: 3px;"
             )
-            self._stroke_color_label.setText(
-                f"rgb({c.red()}, {c.green()}, {c.blue()})"
-            )
+            self._stroke_color_label.setText(f"rgb({c.red()}, {c.green()}, {c.blue()})")
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class _Separator(QFrame):
     """Horizontal line separator."""
@@ -828,6 +830,7 @@ def _labeled_control(
 # ═══════════════════════════════════════════════════════════════════════
 # FontStyleManager — top-level container
 # ═══════════════════════════════════════════════════════════════════════
+
 
 class FontStyleManager(QWidget):
     """Left-right split panel: style list + style detail.
@@ -868,8 +871,10 @@ class FontStyleManager(QWidget):
 
         # ── Empty state ───────────────────────────────────────────
         self._empty_label = QLabel(
-            self.tr("No text blocks in the project.\n"
-                    "Run detection + OCR to populate text blocks.")
+            self.tr(
+                "No text blocks in the project.\n"
+                "Run detection + OCR to populate text blocks."
+            )
         )
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._empty_label.setWordWrap(True)

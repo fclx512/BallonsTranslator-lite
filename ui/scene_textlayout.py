@@ -365,8 +365,12 @@ def line_draw_qt5(
 class SceneTextLayout(QAbstractTextDocumentLayout):
     size_enlarged = Signal()
 
-    def __init__(self, doc: QTextDocument, fontformat: FontFormat,
-                 punctuation_position: int = PunctuationAlignment.Traditional) -> None:
+    def __init__(
+        self,
+        doc: QTextDocument,
+        fontformat: FontFormat,
+        punctuation_position: int = PunctuationAlignment.Traditional,
+    ) -> None:
         super().__init__(doc)
         self.max_height = 0
         self.max_width = 0
@@ -546,8 +550,12 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
 
 
 class VerticalTextDocumentLayout(SceneTextLayout):
-    def __init__(self, doc: QTextDocument, fontformat: FontFormat,
-                 punctuation_position: int = PunctuationAlignment.Traditional):
+    def __init__(
+        self,
+        doc: QTextDocument,
+        fontformat: FontFormat,
+        punctuation_position: int = PunctuationAlignment.Traditional,
+    ):
         super().__init__(doc, fontformat, punctuation_position)
 
         self.line_spaces_lst = []
@@ -1159,8 +1167,12 @@ class VerticalTextDocumentLayout(SceneTextLayout):
 
 
 class HorizontalTextDocumentLayout(SceneTextLayout):
-    def __init__(self, doc: QTextDocument, fontformat: FontFormat,
-                 punctuation_position: int = PunctuationAlignment.Traditional):
+    def __init__(
+        self,
+        doc: QTextDocument,
+        fontformat: FontFormat,
+        punctuation_position: int = PunctuationAlignment.Traditional,
+    ):
         super().__init__(doc, fontformat, punctuation_position)
         self.need_ideal_height = True
 

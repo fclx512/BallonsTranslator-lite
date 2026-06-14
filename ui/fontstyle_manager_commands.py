@@ -51,7 +51,7 @@ class BatchFontformatCommand(QUndoCommand):
 
         # For current-page blocks we need to capture pre-change state
         # from live TextBlkItem instances so we can restore HTML + rect.
-        self._old_html: Dict[str, str] = {}    # key = "{pagename}:{idx}"
+        self._old_html: Dict[str, str] = {}  # key = "{pagename}:{idx}"
         self._old_rect: Dict[str, object] = {}
         self._old_fmt: Dict[str, FontFormat] = {}
 
@@ -121,6 +121,7 @@ class BatchFontformatCommand(QUndoCommand):
 
 
 # ── module helpers ───────────────────────────────────────────────────
+
 
 def _find_blk_item(scene_manager, block_idx: int):
     """Return the TextBlkItem for *block_idx* on the current page, or None."""

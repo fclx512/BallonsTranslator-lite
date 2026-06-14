@@ -148,6 +148,7 @@ class MainWindowMixin:
     def updatePageList(self):
         if self.pageList.count() != 0:
             self.pageList.clear()
+
         def item_func(imgname):
             if len(self.imgtrans_proj.pages) >= shared.PAGELIST_THUMBNAIL_MAXNUM:
                 return QListWidgetItem(imgname)
@@ -155,6 +156,7 @@ class MainWindowMixin:
                 return QListWidgetItem(
                     QIcon(osp.join(self.imgtrans_proj.directory, imgname)), imgname
                 )
+
         for imgname in self.imgtrans_proj.pages:
             lstitem = item_func(imgname)
             self.pageList.addItem(lstitem)

@@ -321,14 +321,12 @@ class PsJsxExporter(AbstractPsdExporter):
 
             # Shadow distance — match in-app rendering: offset * font_size (unitless ratio × font height)
             shadow_distance = (
-                math.hypot(ox, oy) * ff.font_size
-                if ff.shadow_radius > 0
-                else 0
+                math.hypot(ox, oy) * ff.font_size if ff.shadow_radius > 0 else 0
             )
 
             layers.append(
                 {
-                    "name": f"text_{idx:02d}_{blk.translation[:20].replace(chr(10),' ').replace(chr(13),'')}",
+                    "name": f"text_{idx:02d}_{blk.translation[:20].replace(chr(10), ' ').replace(chr(13), '')}",
                     "text": blk.translation,
                     "font": resolved,
                     "size_pt": size_pt,
@@ -347,7 +345,9 @@ class PsJsxExporter(AbstractPsdExporter):
                         if ff.stroke_width > 0
                         else 0
                     ),
-                    "stroke_color": ff.stroke_color() if ff.stroke_width > 0 else [0, 0, 0],
+                    "stroke_color": ff.stroke_color()
+                    if ff.stroke_width > 0
+                    else [0, 0, 0],
                     # shadow
                     "shadow_blur": (
                         max(ff.shadow_radius * ff.font_size, 0.5)
@@ -355,9 +355,7 @@ class PsJsxExporter(AbstractPsdExporter):
                         else 0
                     ),
                     "shadow_opacity": (
-                        int(ff.shadow_strength * 100)
-                        if ff.shadow_strength > 0
-                        else 0
+                        int(ff.shadow_strength * 100) if ff.shadow_strength > 0 else 0
                     ),
                     "shadow_distance": shadow_distance,
                     "shadow_color": ff.shadow_color,

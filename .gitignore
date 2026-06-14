@@ -48,8 +48,7 @@ pip
 *.aff
 *.exc
 
-fonts/*
-!fonts/put fonts here.txt
+# fonts 目录已弃用，lite 版本不再需要
 
 #venv and autoinstaller folders
 aria2c

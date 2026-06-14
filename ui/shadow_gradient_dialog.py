@@ -159,10 +159,14 @@ class ShadowGradientPreview(QWidget):
             fill_brush = QBrush(QColor(*[int(c) for c in self.text_color]))
 
         # render text with stroke for display
-        display_pm = self._render_text_pixmap(include_stroke=True, fill_brush=fill_brush)
+        display_pm = self._render_text_pixmap(
+            include_stroke=True, fill_brush=fill_brush
+        )
 
         # shadow source (always uses flat fill — only the alpha mask matters for shadow)
-        shadow_src_pm = self._render_text_pixmap(include_stroke=self.shadow_include_stroke)
+        shadow_src_pm = self._render_text_pixmap(
+            include_stroke=self.shadow_include_stroke
+        )
 
         # compute offset for center placement
         ox = int((w - display_pm.width()) / 2)
@@ -528,7 +532,9 @@ class ShadowGradientDialog(QDialog):
         cb_row.addStretch()
         ctrl.addLayout(cb_row)
         ps_note = QLabel(
-            self.tr("Note: PSD export uses Photoshop's native drop shadow (glyph-only), regardless of this setting.")
+            self.tr(
+                "Note: PSD export uses Photoshop's native drop shadow (glyph-only), regardless of this setting."
+            )
         )
         ps_note.setWordWrap(True)
         ps_note.setStyleSheet("color: gray; font-size: 11px;")
@@ -639,7 +645,10 @@ class ShadowGradientDialog(QDialog):
         self._update_preview()
 
     def _on_reverse_clicked(self):
-        self._gradient_start, self._gradient_end = self._gradient_end, self._gradient_start
+        self._gradient_start, self._gradient_end = (
+            self._gradient_end,
+            self._gradient_start,
+        )
         self.gradient_bar.setStartColor(self._gradient_start)
         self.gradient_bar.setEndColor(self._gradient_end)
         if self.tabs.currentIndex() == 1:

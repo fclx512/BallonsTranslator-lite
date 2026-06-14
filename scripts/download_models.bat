@@ -87,8 +87,7 @@ echo ============================================
 echo  所有模型下载完成！
 echo ============================================
 echo.
-echo 现在可以运行 launch_win.bat 启动应用（GPU模式）
-echo 或运行 launch_cpu.bat 启动应用（CPU模式）
+echo 现在可以运行 launch.bat 启动应用（会自动检测 GPU 或 CPU 模式）
 echo.
 
 pause

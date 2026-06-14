@@ -12,8 +12,8 @@ Usage:
 
 import argparse
 import logging
-import sys
 import os
+import sys
 
 # Ensure project root is on sys.path so utils.* imports resolve
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -48,6 +48,7 @@ def main():
 
     # Build and run the MCP server
     from mcp.server.fastmcp import FastMCP
+
     from mcp_server.tools import register_all_tools
 
     mcp = FastMCP("ballonstranslator-mcp")

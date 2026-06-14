@@ -72,12 +72,12 @@ class InpainterBase(BaseModule):
         try:
             return self._inpaint(img, mask, textblock_list)
         except Exception as e:
-            if DEFAULT_DEVICE == "cuda" and isinstance(e, torch.cuda.OutOfMemoryError):
+            if DEFAULT_DEVICE == "cuda" and isinstance(e, TorchOOMError):
                 soft_empty_cache()
                 try:
                     return self._inpaint(img, mask, textblock_list)
                 except Exception as ee:
-                    if isinstance(ee, torch.cuda.OutOfMemoryError):
+                    if isinstance(ee, TorchOOMError):
                         self.logger.warning(
                             f"CUDA out of memory while calling {self.name}, fall back to cpu...\n\
                                             if running into it frequently, consider lowering the inpaint_size"
@@ -191,8 +191,11 @@ class InpainterBase(BaseModule):
 
 try:
     import torch
-except ImportError:
+
+    TorchOOMError = torch.cuda.OutOfMemoryError
+except (ImportError, AttributeError):
     torch = None
+    TorchOOMError = type("_NoTorchOOM", (Exception,), {})
 if torch is not None:
     from utils.imgproc_utils import resize_keepasp
 

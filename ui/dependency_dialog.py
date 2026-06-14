@@ -201,12 +201,14 @@ class DependencyPanel(QWidget):
 
         # Table
         self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels([
-            self.tr("Package"),
-            self.tr("Type"),
-            self.tr("Status"),
-            self.tr("Version"),
-        ])
+        self.table.setHorizontalHeaderLabels(
+            [
+                self.tr("Package"),
+                self.tr("Type"),
+                self.tr("Status"),
+                self.tr("Version"),
+            ]
+        )
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.Stretch
@@ -312,7 +314,9 @@ class DependencyPanel(QWidget):
                 marker_str = Requirement(req_str).marker
                 if marker_str:
                     ver_item.setToolTip(
-                        self.tr("Only needed when: {marker}").format(marker=str(marker_str))
+                        self.tr("Only needed when: {marker}").format(
+                            marker=str(marker_str)
+                        )
                     )
             self.table.setItem(row, 3, ver_item)
 
@@ -321,15 +325,20 @@ class DependencyPanel(QWidget):
         skipped = sum(1 for d in self._data if d[2] == "skipped")
         if skipped:
             self.summary_label.setText(
-                self.tr("{installed}/{total} installed, {missing} missing, {skipped} skipped (not needed here)").format(
-                    installed=installed_count, total=total, missing=missing, skipped=skipped
+                self.tr(
+                    "{installed}/{total} installed, {missing} missing, {skipped} skipped (not needed here)"
+                ).format(
+                    installed=installed_count,
+                    total=total,
+                    missing=missing,
+                    skipped=skipped,
                 )
             )
         else:
             self.summary_label.setText(
-                self.tr("{installed}/{total} installed, {missing} missing or mismatched").format(
-                    installed=installed_count, total=total, missing=missing
-                )
+                self.tr(
+                    "{installed}/{total} installed, {missing} missing or mismatched"
+                ).format(installed=installed_count, total=total, missing=missing)
             )
         self.install_missing_btn.setEnabled(missing > 0)
 
@@ -339,8 +348,7 @@ class DependencyPanel(QWidget):
         missing = [
             d[0]
             for d in self._data
-            if d[2] in ("missing", "mismatch")
-            and (include_optional or d[4] == "core")
+            if d[2] in ("missing", "mismatch") and (include_optional or d[4] == "core")
         ]
         if not missing:
             return

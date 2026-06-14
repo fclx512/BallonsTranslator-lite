@@ -1,7 +1,7 @@
 import math
 
 import numpy as np
-from qtpy.QtCore import QPoint, QPointF, QRectF, Qt
+from qtpy.QtCore import QPoint, QPointF, QRectF, Qt, QTimer
 from qtpy.QtGui import QColor, QPainter, QPen
 from qtpy.QtWidgets import (
     QGraphicsItem,
@@ -69,6 +69,12 @@ class ControlBlockItem(QGraphicsRectItem):
             | QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
         )
         self.updateEdgeWidth(CBEDGE_WIDTH)
+
+        # Debounce timer: throttles expensive blk_item.setRect during drag resize
+        self._resize_timer = QTimer()
+        self._resize_timer.setSingleShot(True)
+        self._resize_timer.timeout.connect(self._apply_resize)
+        self._pending_rect = None
 
     def updateEdgeWidth(self, edge_width: float):
         self.edge_width = edge_width
@@ -228,7 +234,10 @@ class ControlBlockItem(QGraphicsRectItem):
                 new_center.y() / scale - crect.height() / 2,
             )
             rect = QRectF(new_xy.x(), new_xy.y(), crect.width(), crect.height())
-            blk_item.setRect(rect)
+            # Throttle: defer expensive layout + pixmap rebuild to timer
+            self._pending_rect = rect
+            if not self._resize_timer.isActive():
+                self._resize_timer.start(30)
 
         elif self.drag_mode == self.DRAG_ROTATE:  # rotating
             rotate_vec = event.scenePos() - self.ctrl.sceneBoundingRect().center()
@@ -246,10 +255,28 @@ class ControlBlockItem(QGraphicsRectItem):
         idx = int((angle + 22.5) % 360 / 45)
         return idx
 
+    def _apply_resize(self):
+        """Timer callback: apply the latest pending resize rect with layout but no pixmap rebuild."""
+        if self._pending_rect is not None and self.ctrl.blk_item is not None:
+            rect = self._pending_rect
+            self._pending_rect = None
+            # Layout only — skip repaint_background, keep pixmap null so paint falls
+            # through to native QTextDocument render during drag
+            self.ctrl.blk_item.setRect(rect, repaint=False)
+            self.ctrl.blk_item._full_pixmap = None
+            self.ctrl.blk_item._full_pixmap_dirty = True
+            self.ctrl.blk_item.update()
+
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self.ctrl.reshaping = False
             if self.drag_mode == self.DRAG_RESHAPE and self.ctrl.blk_item is not None:
+                # Ensure pending resize is applied before endReshape rebuilds pixmap
+                self._resize_timer.stop()
+                if self._pending_rect is not None:
+                    rect = self._pending_rect
+                    self._pending_rect = None
+                    self.ctrl.blk_item.setRect(rect)  # repaint=True, does final layout
                 self.ctrl.blk_item.endReshape()
             if self.drag_mode == self.DRAG_ROTATE and self.ctrl.blk_item is not None:
                 self.ctrl.blk_item.rotated.emit(self.ctrl.rotation())

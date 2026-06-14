@@ -38,15 +38,12 @@ class TextAdvancedFormatPanel(PanelArea):
             self,
             direction=1,
             text=self.tr("Opacity"),
-            alignment=Qt.AlignmentFlag.AlignCenter,
+            alignment=Qt.AlignmentFlag.AlignLeft,
         )
         self.opacity_label.size_ctrl_changed.connect(self.opacity_box.changeByDelta)
         self.opacity_label.btn_released.connect(
             lambda: self.on_format_changed("opacity", self.opacity_box.value())
         )
-        opacity_layout = QHBoxLayout()
-        opacity_layout.addWidget(self.opacity_label)
-        opacity_layout.addWidget(self.opacity_box)
 
         # shadow / gradient trigger buttons (replaces old inline groups)
         btn_style = (
@@ -79,14 +76,18 @@ class TextAdvancedFormatPanel(PanelArea):
             self.on_linespacing_type_changed
         )
         linespacing_type_label = SmallParamLabel(self.tr("Line Spacing Type"))
-        linespacing_layout = QHBoxLayout()
-        linespacing_layout.addWidget(linespacing_type_label)
-        linespacing_layout.addWidget(self.linespacing_type_combobox)
-        linespacing_layout.addStretch()
+
+        # Combine opacity and line spacing type on the same row
+        combo_layout = QHBoxLayout()
+        combo_layout.addWidget(self.opacity_label)
+        combo_layout.addWidget(self.opacity_box)
+        combo_layout.addSpacing(16)
+        combo_layout.addWidget(linespacing_type_label)
+        combo_layout.addWidget(self.linespacing_type_combobox)
+        combo_layout.addStretch()
 
         vlayout = QVBoxLayout()
-        vlayout.addLayout(opacity_layout)
-        vlayout.addLayout(linespacing_layout)
+        vlayout.addLayout(combo_layout)
         vlayout.addLayout(btns_layout)
         vlayout.setAlignment(Qt.AlignmentFlag.AlignTop)
 

@@ -104,7 +104,6 @@ class FourierUnit(nn.Module):
                 align_corners=False,
             )
 
-
         # (batch, c, h, w/2+1, 2)
         fft_dim = (-3, -2, -1) if self.ffc3d else (-2, -1)
 

@@ -113,9 +113,7 @@ def _validate_id(value: str) -> None:
     if not value:
         raise PsdDescriptorError("descriptor IDs must not be empty")
     if not value.isascii():
-        raise PsdDescriptorError(
-            f"descriptor IDs must be ASCII: {value!r}"
-        )
+        raise PsdDescriptorError(f"descriptor IDs must be ASCII: {value!r}")
 
 
 def _validate_key(value: str) -> None:

@@ -150,11 +150,15 @@ class TestPackBits:
         img = np.zeros((1, 4, 4), dtype=np.uint8)
         img[0, :, :] = [10, 20, 30, 255]
         channels = encode_image_rle(
-            img, [ChannelId.Red, ChannelId.Green, ChannelId.Blue, ChannelId.Alpha], "test"
+            img,
+            [ChannelId.Red, ChannelId.Green, ChannelId.Blue, ChannelId.Alpha],
+            "test",
         )
         assert len(channels) == 4
         for ch, expected_val in zip(channels, [10, 20, 30, 255]):
-            assert ch.data[2:] == bytes([0xFD, expected_val]), f"Channel {ch.channel_id}"
+            assert ch.data[2:] == bytes([0xFD, expected_val]), (
+                f"Channel {ch.channel_id}"
+            )
 
     def test_multi_row(self):
         """2-row image → 2 row length entries."""
@@ -180,7 +184,9 @@ class TestPackBits:
 class TestDescriptor:
     def test_version_16(self):
         w = PsdBinaryWriter()
-        desc = DescriptorObject("", "Test").with_item("key", DescriptorValue.integer(42))
+        desc = DescriptorObject("", "Test").with_item(
+            "key", DescriptorValue.integer(42)
+        )
         write_versioned_descriptor(w, desc)
         assert w.to_bytes()[:4] == b"\x00\x00\x00\x10"
 
@@ -197,7 +203,10 @@ class TestDescriptor:
             .with_item("Txt ", DescriptorValue.text("HELLO"))
             .with_item("Ornt", DescriptorValue.enum("Ornt", "Hrzn"))
             .with_item("TextIndex", DescriptorValue.integer(1))
-            .with_item("bounds", DescriptorValue.object(bounds_descriptor("bounds", 1, 2, 3, 4)))
+            .with_item(
+                "bounds",
+                DescriptorValue.object(bounds_descriptor("bounds", 1, 2, 3, 4)),
+            )
         )
         write_versioned_descriptor(w, desc)
         data = w.to_bytes()
@@ -206,14 +215,18 @@ class TestDescriptor:
 
     def test_raw_value(self):
         w = PsdBinaryWriter()
-        desc = DescriptorObject("", "Test").with_item("data", DescriptorValue.raw(b"\x00\x01\x02"))
+        desc = DescriptorObject("", "Test").with_item(
+            "data", DescriptorValue.raw(b"\x00\x01\x02")
+        )
         write_versioned_descriptor(w, desc)
         data = w.to_bytes()
         assert b"tdta" in data
 
     def test_double_value(self):
         w = PsdBinaryWriter()
-        desc = DescriptorObject("", "Test").with_item("val", DescriptorValue.double(3.14))
+        desc = DescriptorObject("", "Test").with_item(
+            "val", DescriptorValue.double(3.14)
+        )
         write_versioned_descriptor(w, desc)
         data = w.to_bytes()
         assert b"doub" in data
@@ -261,7 +274,12 @@ class TestEngineData:
             box_height=32.0,
         )
         data = encode_engine_data(spec)
-        for expected in [b"/EngineDict", b"/FontSet", b"/RunLengthArray", b"/FontSize 14.0"]:
+        for expected in [
+            b"/EngineDict",
+            b"/FontSet",
+            b"/RunLengthArray",
+            b"/FontSize 14.0",
+        ]:
             assert expected in data, f"Missing: {expected}"
 
     def test_engine_data_utf16_bom(self):
@@ -396,7 +414,9 @@ class TestBinaryExporter:
         from utils.psd_binary_exporter import PsBinaryExporter
 
         exporter = PsBinaryExporter()
-        result = exporter.export_page(proj, "page001.png", ExportOptions(output_dir=tmpdir))
+        result = exporter.export_page(
+            proj, "page001.png", ExportOptions(output_dir=tmpdir)
+        )
 
         with open(result, "rb") as f:
             data = f.read()
@@ -412,7 +432,9 @@ class TestBinaryExporter:
         from utils.psd_binary_exporter import PsBinaryExporter
 
         exporter = PsBinaryExporter()
-        result = exporter.export_page(proj, "page001.png", ExportOptions(output_dir=tmpdir))
+        result = exporter.export_page(
+            proj, "page001.png", ExportOptions(output_dir=tmpdir)
+        )
 
         with open(result, "rb") as f:
             data = f.read()
@@ -425,7 +447,9 @@ class TestBinaryExporter:
         from utils.psd_binary_exporter import PsBinaryExporter
 
         exporter = PsBinaryExporter()
-        result = exporter.export_page(proj, "page001.png", ExportOptions(output_dir=tmpdir))
+        result = exporter.export_page(
+            proj, "page001.png", ExportOptions(output_dir=tmpdir)
+        )
 
         with open(result, "rb") as f:
             data = f.read()
@@ -438,7 +462,9 @@ class TestBinaryExporter:
         from utils.psd_binary_exporter import PsBinaryExporter
 
         exporter = PsBinaryExporter()
-        result = exporter.export_page(proj, "page001.png", ExportOptions(output_dir=tmpdir))
+        result = exporter.export_page(
+            proj, "page001.png", ExportOptions(output_dir=tmpdir)
+        )
 
         with open(result, "rb") as f:
             data = f.read()
@@ -461,7 +487,9 @@ class TestBinaryExporter:
         from utils.psd_binary_exporter import PsBinaryExporter
 
         exporter = PsBinaryExporter()
-        result = exporter.export_page(proj, "page001.png", ExportOptions(output_dir=tmpdir))
+        result = exporter.export_page(
+            proj, "page001.png", ExportOptions(output_dir=tmpdir)
+        )
 
         with open(result, "rb") as f:
             data = f.read()
@@ -496,7 +524,9 @@ class TestBinaryExporter:
         from utils.psd_binary_exporter import PsBinaryExporter
 
         exporter = PsBinaryExporter()
-        result = exporter.export_page(proj, "page001.png", ExportOptions(output_dir=tmpdir))
+        result = exporter.export_page(
+            proj, "page001.png", ExportOptions(output_dir=tmpdir)
+        )
 
         with open(result, "rb") as f:
             data = f.read()
@@ -522,7 +552,9 @@ class TestBinaryExporter:
         from utils.psd_binary_exporter import PsBinaryExporter
 
         exporter = PsBinaryExporter()
-        result = exporter.export_page(proj, "page001.png", ExportOptions(output_dir=tmpdir))
+        result = exporter.export_page(
+            proj, "page001.png", ExportOptions(output_dir=tmpdir)
+        )
 
         with open(result, "rb") as f:
             data = f.read()

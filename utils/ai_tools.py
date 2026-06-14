@@ -9,7 +9,6 @@ which pages it needs to read based on the user's natural-language query.
 
 import json
 import logging
-import re
 from typing import Any, Dict, List, Optional, Set
 
 from .config import pcfg

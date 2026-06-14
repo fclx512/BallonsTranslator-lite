@@ -45,9 +45,8 @@
 
 1. 下载源码，解压到目录
 2. 运行启动脚本：
-   - `launch_win_update.bat` — GPU 模式，启动前自动检查更新（推荐）
-   - `launch_win.bat` — GPU 模式，跳过更新检查
-   - `launch_cpu.bat` — 纯 CPU 模式，跳过更新检查
+   - `launch.bat` — 自动检测 GPU/CPU 模式，Git 用户自动检查更新（推荐）
+   - `launch.bat --cpu` — 强制 CPU 模式
 3. 首次启动自动下载模型文件（约 700 MB），保持网络畅通
 
 因网络问题无法正常下载依赖和模型的移步至网盘：[google盘](https://drive.google.com/drive/folders/1WJXjcQt7UzHvRpH3QfwcOokL8Fm7l0zT?usp=sharing)[123盘](https://1815181720.share.123865.com/123pan/sKBtVv-Zs1Vd)
@@ -92,7 +91,7 @@ python launch.py --update
 | 翻译 | LLM API（OpenAI 兼容）、Sakura |
 | 修图 | LaMa 512px（默认）、AOT |
 
-> 想添加自己的模块？参见 [模块开发指南](docs/zh/how_to_add_new_translator.md)
+> 想添加自己的模块？参见 [模块开发指南](docs/模块开发指南.md)
 
 ---
 
@@ -119,13 +118,13 @@ Kepler（GTX 6xx / 7xx）可能不被 PyTorch 2.x 支持，建议 CPU 模式：`
 
 **如何更新？**
 
-- 便携版用户：使用 `launch_win_update.bat` 启动，每次自动检查 GitHub 更新，有新版时下载并在下次启动应用。无需 git
-- 源码运行用户：`python launch.py --update`（优先 git pull，无 git 时自动回退到直接下载）
+- 便携版用户：使用 `launch.bat` 启动（ZIP 发行版自动检查 GitHub 更新，有新版时下载并在下次启动应用）。无需 git
+- 源码运行用户：`launch.bat --update`（Git 用户走 git pull，ZIP 用户走直接下载）
 - 或在软件中点击关于→检查更新
 
 **快捷键怎么自定义？**
 
-参见 [快捷键指南](docs/zh/shortcuts.md)
+参见 [快捷键指南](docs/快捷键.md)
 
 ---
 

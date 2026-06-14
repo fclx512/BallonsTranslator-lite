@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
 <TS version="2.1" language="zh_CN" sourcelanguage="en">
     <context>
         <name>BottomBar</name>
@@ -157,11 +158,6 @@
             <location filename="../ui/configpanel.py" line="452" />
             <source>Auto layout</source>
             <translation>横排自动排版</translation>
-        </message>
-        <message>
-            <location filename="../ui/configpanel.py" line="1043" />
-            <source>Split translation into multi-lines according to the extracted balloon region.</source>
-            <translation>根据提取的对话框区域将译文分割为多行</translation>
         </message>
         <message>
             <location filename="../ui/configpanel.py" line="456" />
@@ -365,14 +361,22 @@
             <source>Comma-separated values — used in font format panel dropdowns.</source>
             <translation>逗号分隔的值 — 用于字体格式面板下拉选项。</translation>
         </message>
-
-
-
-    <message><source>Punctuation Position</source><translation type="unfinished" /></message><message><source>Simplified Chinese</source><translation type="unfinished" /></message><message><source>Traditional Chinese</source><translation type="unfinished" /></message>        <message>
+        <message>
+            <source>Punctuation Position</source>
+            <translation>标点位置</translation>
+        </message>
+        <message>
+            <source>Centered (Traditional Chinese / Japanese)</source>
+            <translation>居中（繁体中文/日文排版）</translation>
+        </message>
+        <message>
+            <source>Edge-aligned (Simplified Chinese)</source>
+            <translation>靠边（简体中文排版）</translation>
+        </message>
+        <message>
             <source>Run System Diagnostic...</source>
             <translation>运行系统诊断...</translation>
         </message>
-
         <message>
             <source>Environment</source>
             <translation>环境</translation>
@@ -389,7 +393,11 @@
             <source>Tools...</source>
             <translation>工具检查...</translation>
         </message>
-</context>
+        <message>
+            <source>Split translation into multi-lines according to the extracted balloon region.</source>
+            <translation>根据提取的对话框区域将译文分割为多行</translation>
+        </message>
+    </context>
     <context>
         <name>FontExcludeDialog</name>
         <message>
@@ -442,10 +450,7 @@
             <source>Reset to Default</source>
             <translation>恢复默认</translation>
         </message>
-        </context>
-    <context>
-        <name>ShortcutEditor</name>
-        </context>
+    </context>
     <context>
         <name>DrawingPanel</name>
         <message>
@@ -781,11 +786,7 @@
             <source>Export source text as TXT</source>
             <translation>原文导出为 TXT</translation>
         </message>
-        <message>
-            <source>AI Chat</source>
-            <translation>AI 聊天</translation>
-        </message>
-        </context>
+    </context>
     <context>
         <name>MainWindow</name>
         <message>
@@ -1113,21 +1114,6 @@ Failed: {f}/{t}</source>
         </message>
         <message>
             <location filename="../ui/mainwindow.py" line="" />
-            <source> ExtendScript(s).
-
-Open Photoshop → File → Scripts → Browse to run each .jsx.
-
-Output:
-</source>
-            <translation> 个 ExtendScript。
-
-打开 Photoshop → 文件 → 脚本 → 浏览以运行每个 .jsx 文件。
-
-输出目录：
-</translation>
-        </message>
-        <message>
-            <location filename="../ui/mainwindow.py" line="" />
             <source> PSD file(s).
 
 Output:
@@ -1147,18 +1133,48 @@ Output:
             <translation>字体样式管理器</translation>
         </message>
         <message>
-            <source>Full context (%1 pages, all previous translations as reference)</source>
-            <translation>完整上下文（%1 页，参考之前所有翻译）</translation>
+            <source>Generating TIF thumbnails...</source>
+            <translation>正在生成 TIF 缩略图...</translation>
         </message>
         <message>
-            <source>Windowed + auto-summary (%1 pages, long-form mode)</source>
-            <translation>窗口 + 自动摘要（%1 页，长文模式）</translation>
+            <source>Loading</source>
+            <translation>加载中</translation>
+        </message>
+        <message>
+            <source>Loading project...</source>
+            <translation>正在加载项目...</translation>
+        </message>
+        <message>
+            <source>Reading project data...</source>
+            <translation>正在读取项目数据...</translation>
+        </message>
+        <message>
+            <source>Updating interface...</source>
+            <translation>正在更新界面...</translation>
+        </message>
+        <message>
+            <source> ExtendScript(s).
+
+Open Photoshop → File → Scripts → Browse to run each .jsx.
+
+Output:
+</source>
+            <translation> 个 ExtendScript。
+
+打开 Photoshop → 文件 → 脚本 → 浏览以运行每个 .jsx 文件。
+
+输出目录：
+</translation>
         </message>
         <message>
             <source>Imported txt file not fully matched with current project, please make sure source txt file structured like results from "export TXT"</source>
             <translation>导入的 txt 文件未与当前项目完全匹配，请确保源 txt 文件结构与"导出 TXT"结果格式一致</translation>
         </message>
-    <message><source>Generating TIF thumbnails...</source><translation type="unfinished" /></message><message><source>Loading</source><translation type="unfinished" /></message><message><source>Loading project...</source><translation type="unfinished" /></message><message><source>Reading project data...</source><translation type="unfinished" /></message><message><source>Updating interface...</source><translation type="unfinished" /></message></context>
+        <message>
+            <source>Windowed + auto-summary (%1 pages, long-form mode)</source>
+            <translation>窗口 + 自动摘要（%1 页，长文模式）</translation>
+        </message>
+    </context>
     <context>
         <name>ModuleManager</name>
         <message>
@@ -1454,16 +1470,6 @@ Output:
             <source>Enable</source>
             <translation>启用</translation>
         </message>
-        <message type="obsolete">
-            <location filename="../ui/shadow_gradient_dialog.py" line="0" />
-            <source>Start Color</source>
-            <translation>颜色1</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/shadow_gradient_dialog.py" line="0" />
-            <source>End Color</source>
-            <translation>颜色2</translation>
-        </message>
         <message>
             <location filename="../ui/shadow_gradient_dialog.py" line="0" />
             <source>Scale</source>
@@ -1473,11 +1479,6 @@ Output:
             <location filename="../ui/shadow_gradient_dialog.py" line="0" />
             <source>↔ Reverse</source>
             <translation>↔ 互换</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/shadow_gradient_dialog.py" line="0" />
-            <source>Size</source>
-            <translation>范围</translation>
         </message>
         <message>
             <location filename="../ui/shadow_gradient_dialog.py" line="0" />
@@ -1499,12 +1500,12 @@ Output:
             <translation>阴影包含描边</translation>
         </message>
         <message>
-            <source>Note: PSD export uses Photoshop's native drop shadow (glyph-only), regardless of this setting.</source>
-            <translation>注意：PSD 导出将使用 Photoshop 原生投影（仅字形），不受此设置影响。</translation>
-        </message>
-        <message>
             <source>(global)</source>
             <translation>（全局生效）</translation>
+        </message>
+        <message>
+            <source>Note: PSD export uses Photoshop's native drop shadow (glyph-only), regardless of this setting.</source>
+            <translation>注意：PSD 导出将使用 Photoshop 原生投影（仅字形），不受此设置影响。</translation>
         </message>
     </context>
     <context>
@@ -1512,14 +1513,6 @@ Output:
         <message>
             <source>Background color</source>
             <translation>背景颜色</translation>
-        </message>
-    </context>
-    <context>
-        <name>InpaintConfigPanel</name>
-        <message>
-            <location filename="../ui/module_parse_widgets.py" line="487" />
-            <source>Let the program decide whether it is necessary to use the selected inpaint method.</source>
-            <translation>由程序决定是否有必要使用选定的图像修复方法</translation>
         </message>
     </context>
     <context>
@@ -2371,8 +2364,8 @@ qipao,qipao2</translation>
             <translation>语言 — 'ch' 覆盖中文 + 英文</translation>
         </message>
         <message>
-            <source>Enable text direction classification</source>
-            <translation>启用文字方向分类</translation>
+            <source>Enable text line orientation detection (needed for vertical Japanese text in manga)</source>
+            <translation>启用文字行方向检测（竖排日文漫画需要此项）</translation>
         </message>
         <message>
             <source>GPU memory limit in MB (subprocess mode only)</source>
@@ -2381,6 +2374,34 @@ qipao,qipao2</translation>
         <message>
             <source>PP-OCRv6 — Baidu's latest OCR (medium/small/tiny, 50 languages)</source>
             <translation>PP-OCRv6 — 百度最新 OCR（medium/small/tiny，支持 50 种语言）</translation>
+        </message>
+        <message>
+            <source>Detection score threshold (lower = more detections)</source>
+            <translation>检测分数阈值（越低检测越多）</translation>
+        </message>
+        <message>
+            <source>Detection box threshold (lower = more boxes)</source>
+            <translation>检测框阈值（越低框越多）</translation>
+        </message>
+        <message>
+            <source>Detection box unclip ratio (higher = looser boxes)</source>
+            <translation>检测框扩展系数（越高框越松）</translation>
+        </message>
+        <message>
+            <source>Maximum candidate detection boxes</source>
+            <translation>最大候选检测框数</translation>
+        </message>
+        <message>
+            <source>Reading order: ltr=left-to-right, rtl=right-to-left (manga), auto=detect</source>
+            <translation>阅读顺序：ltr=从左到右，rtl=从右到左（漫画），auto=自动检测</translation>
+        </message>
+        <message>
+            <source>Recognition batch size (higher = faster, more VRAM)</source>
+            <translation>识别批次大小（越高越快，占用显存更多）</translation>
+        </message>
+        <message>
+            <source>PP-OCRv6 ONNX — latest Baidu OCR via ONNX Runtime (no PaddlePaddle)</source>
+            <translation>PP-OCRv6 ONNX — 通过 ONNX Runtime 运行百度最新 OCR（无需 PaddlePaddle）</translation>
         </message>
     </context>
     <context>
@@ -2598,50 +2619,6 @@ qipao,qipao2</translation>
     <context>
         <name>AiChatPanel</name>
         <message>
-            <source>AI Chat</source>
-            <translation>AI 对话</translation>
-        </message>
-        <message>
-            <source>Ready</source>
-            <translation>就绪</translation>
-        </message>
-        <message>
-            <source>Ask AI... (Enter to send, Shift+Enter for newline)</source>
-            <translation>询问 AI...（Enter 发送，Shift+Enter 换行）</translation>
-        </message>
-        <message>
-            <source>Send</source>
-            <translation>发送</translation>
-        </message>
-        <message>
-            <source>AI Assistant</source>
-            <translation>AI 助手</translation>
-        </message>
-        <message>
-            <source>Modify text blocks, fonts, and styles through natural language.</source>
-            <translation>通过自然语言修改文本块、字体和样式。</translation>
-        </message>
-        <message>
-            <source>List all pages</source>
-            <translation>列出所有页面</translation>
-        </message>
-        <message>
-            <source>Search for 'hello'</source>
-            <translation>搜索 'hello'</translation>
-        </message>
-        <message>
-            <source>Make font bold</source>
-            <translation>设为粗体</translation>
-        </message>
-        <message>
-            <source>Translate first page</source>
-            <translation>翻译第一页</translation>
-        </message>
-        <message>
-            <source>Clear Conversation</source>
-            <translation>清除对话</translation>
-        </message>
-        <message>
             <source>This will permanently delete all {n} messages in this conversation. Continue?</source>
             <translation>这将永久删除此对话中的所有 {n} 条消息。继续？</translation>
         </message>
@@ -2662,164 +2639,12 @@ qipao,qipao2</translation>
             <translation>已接受：{n} / {total}</translation>
         </message>
         <message>
-            <source>Thinking...</source>
-            <translation>思考中...</translation>
-        </message>
-        <message>
             <source>-- Error: {msg} --</source>
             <translation>-- 错误：{msg} --</translation>
         </message>
         <message>
-            <source>Translation Prompt</source>
-            <translation>翻译提示词</translation>
-        </message>
-        <message>
             <source>Edit the system prompt used when translation mode is active. Use {from_lang} and {to_lang} as placeholders for source/target languages.</source>
             <translation>编辑翻译模式下使用的系统提示词。使用 {from_lang} 和 {to_lang} 作为源/目标语言占位符。</translation>
-        </message>
-        <message>
-            <source>Reset to Default</source>
-            <translation>恢复默认</translation>
-        </message>
-        <message>
-            <source>Source</source>
-            <translation>原文</translation>
-        </message>
-        <message>
-            <source>Translation</source>
-            <translation>译文</translation>
-        </message>
-        <message>
-            <source>Font</source>
-            <translation>字体</translation>
-        </message>
-        <message>
-            <source>Size</source>
-            <translation>字号</translation>
-        </message>
-        <message>
-            <source>Text Color</source>
-            <translation>文字颜色</translation>
-        </message>
-        <message>
-            <source>BG Color</source>
-            <translation>背景颜色</translation>
-        </message>
-        <message>
-            <source>Bold</source>
-            <translation>粗体</translation>
-        </message>
-        <message>
-            <source>Italic</source>
-            <translation>斜体</translation>
-        </message>
-        <message>
-            <source>Align</source>
-            <translation>对齐</translation>
-        </message>
-        <message>
-            <source>Stroke</source>
-            <translation>描边</translation>
-        </message>
-        <message>
-            <source>Line Spacing</source>
-            <translation>行距</translation>
-        </message>
-        <message>
-            <source>Settings</source>
-            <translation>设置</translation>
-        </message>
-        <message>
-            <source>API Profile</source>
-            <translation>API 配置</translation>
-        </message>
-        <message>
-            <source>Context</source>
-            <translation>上下文</translation>
-        </message>
-        <message>
-            <source>History messages:</source>
-            <translation>历史消息条数：</translation>
-        </message>
-        <message>
-            <source>Auto-compress when exceeding limit</source>
-            <translation>超出限制时自动压缩上下文</translation>
-        </message>
-        <message>
-            <source>Data Read Settings</source>
-            <translation>数据读取设置</translation>
-        </message>
-        <message>
-            <source>Translation mode (lock to source/translation only)</source>
-            <translation>翻译模式（仅读取原文和译文）</translation>
-        </message>
-        <message>
-            <source>Edit Translation Prompt...</source>
-            <translation>编辑翻译提示词...</translation>
-        </message>
-        <message>
-            <source>Readable Block Fields</source>
-            <translation>可读取的文本块字段</translation>
-        </message>
-        <message>
-            <source>Select which text block properties the AI can read and modify.</source>
-            <translation>选择 AI 可读取和修改的文本块属性。</translation>
-        </message>
-        <message>
-            <source>Open a project to start chatting</source>
-            <translation>打开项目以开始对话</translation>
-        </message>
-        <message>
-            <source>✏️ Edit</source>
-            <translation>✏️ 编辑</translation>
-        </message>
-        <message>
-            <source>Change text, fonts, colors</source>
-            <translation>修改文本、字体和颜色</translation>
-        </message>
-        <message>
-            <source>🔍 Search</source>
-            <translation>🔍 搜索</translation>
-        </message>
-        <message>
-            <source>Find and replace across pages</source>
-            <translation>跨页面查找和替换</translation>
-        </message>
-        <message>
-            <source>🌐 Translate</source>
-            <translation>🌐 翻译</translation>
-        </message>
-        <message>
-            <source>Translate with context awareness</source>
-            <translation>结合上下文翻译</translation>
-        </message>
-        <message>
-            <source>Try asking:</source>
-            <translation>试试问：</translation>
-        </message>
-        <message>
-            <source>Adjust all fonts</source>
-            <translation>调整所有字体</translation>
-        </message>
-        <message>
-            <source>Compare page 1 and 2</source>
-            <translation>比较第 1 页和第 2 页</translation>
-        </message>
-        <message>
-            <source>What can you do?</source>
-            <translation>我能做什么？</translation>
-        </message>
-        <message>
-            <source>Copy</source>
-            <translation>复制</translation>
-        </message>
-        <message>
-            <source>Delete</source>
-            <translation>删除</translation>
-        </message>
-        <message>
-            <source>Open in Review Window</source>
-            <translation>在审阅窗口中打开</translation>
         </message>
         <message>
             <source>~{n} token (estimated)</source>
@@ -2831,37 +2656,9 @@ Tool calls: {ct} token</source>
             <translation>上下文：{pt} token
 工具调用：{ct} token</translation>
         </message>
-        <message>
-            <source>Show more ▼</source>
-            <translation>展开 ▼</translation>
-        </message>
-        <message>
-            <source>Show less ▲</source>
-            <translation>收起 ▲</translation>
-        </message>
     </context>
     <context>
         <name>ChangeReviewWindow</name>
-        <message>
-            <source>AI Change Review</source>
-            <translation>AI 变更审阅</translation>
-        </message>
-        <message>
-            <source>◀  Prev</source>
-            <translation>◀  上一处</translation>
-        </message>
-        <message>
-            <source>Next  ▶</source>
-            <translation>下一处  ▶</translation>
-        </message>
-        <message>
-            <source>Accept Page</source>
-            <translation>接受本页</translation>
-        </message>
-        <message>
-            <source>Apply Changes</source>
-            <translation>应用变更</translation>
-        </message>
         <message>
             <source>Page {pid} ({cnt} changes)</source>
             <translation>第 {pid} 页（{cnt} 项变更）</translation>
@@ -2871,20 +2668,12 @@ Tool calls: {ct} token</source>
             <translation>已接受：{n} / {total}</translation>
         </message>
         <message>
-            <source>Unapplied Changes</source>
-            <translation>未应用的变更</translation>
-        </message>
-        <message>
             <source>You have {n} accepted change(s) that have not been applied.
 
 Apply them now?</source>
             <translation>您有 {n} 项已接受但尚未应用的变更。
 
 立即应用吗？</translation>
-        </message>
-        <message>
-            <source>Reject Page</source>
-            <translation>拒绝本页</translation>
         </message>
     </context>
     <context>
@@ -2969,68 +2758,6 @@ Apply them now?</source>
         </message>
     </context>
     <context>
-        <name>AiChatWorker</name>
-        <message>
-            <source>API error (%1): %2</source>
-            <translation>API 错误（%1）：%2</translation>
-        </message>
-        <message>
-            <source>API rate limit reached, please try again later.</source>
-            <translation>API 频率限制已达，请稍后重试。</translation>
-        </message>
-        <message>
-            <source>Bad request: %1</source>
-            <translation>错误请求：%1</translation>
-        </message>
-        <message>
-            <source>Connection failed: %1</source>
-            <translation>连接失败：%1</translation>
-        </message>
-        <message>
-            <source>Invalid API key.</source>
-            <translation>无效的 API 密钥。</translation>
-        </message>
-        <message>
-            <source>Request timed out. Please check your network or API URL.</source>
-            <translation>请求超时。请检查您的网络或 API URL。</translation>
-        </message>
-        <message>
-            <source>Unexpected error: %1</source>
-            <translation>意外错误：%1</translation>
-        </message>
-    </context>
-    <context>
-        <name>_ChangeCard</name>
-        <message>
-            <source>(Style only)</source>
-            <translation>仅样式</translation>
-        </message>
-        <message>
-            <source>Accept changes for this block</source>
-            <translation>接受此文本块的变更</translation>
-        </message>
-        <message>
-            <source>New: </source>
-            <translation>新：</translation>
-        </message>
-        <message>
-            <source>Old: </source>
-            <translation>旧：</translation>
-        </message>
-        <message>
-            <source>Reject changes for this block</source>
-            <translation>拒绝此文本块的变更</translation>
-        </message>
-        <message>
-            <source>Style</source>
-            <translation>样式</translation>
-        </message>
-        <message>
-            <source>Translation</source>
-            <translation>译文</translation>
-        </message>
-    </context>
-    <context>
         <name>PsdExportDialog</name>
         <message>
             <location filename="../ui/psd_export_dialog.py" line="" />
@@ -3052,16 +2779,6 @@ Apply them now?</source>
             <source>Export Method</source>
             <translation>导出方式</translation>
         </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Photoshop COM</source>
-            <translation>Photoshop COM</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>ExtendScript (.jsx)</source>
-            <translation>ExtendScript (.jsx)</translation>
-        </message>
         <message>
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Binary PSD (direct)</source>
@@ -3071,13 +2788,6 @@ Apply them now?</source>
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>ExtendScript (.jsx) — needs Photoshop</source>
             <translation>ExtendScript (.jsx) — 需要 Photoshop</translation>
-        </message>
-        <message>
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Generates a .psd file directly — no Photoshop dependency.
-Text layers are editable in Photoshop (TySh + EngineData).</source>
-            <translation>直接生成 .psd 文件，无需 Photoshop。
-文字图层在 Photoshop 中可编辑（TySh + EngineData）。</translation>
         </message>
         <message>
             <location filename="../ui/psd_export_dialog.py" line="" />
@@ -3094,21 +2804,6 @@ Text layers are editable in Photoshop (TySh + EngineData).</source>
             <source>Browse</source>
             <translation>浏览</translation>
         </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Layers</source>
-            <translation>图层</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Include mask as reference layer</source>
-            <translation>包含遮罩参考层</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Lock background layer</source>
-            <translation>锁定背景层</translation>
-        </message>
         <message>
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Font Compatibility</source>
@@ -3123,50 +2818,6 @@ Text layers are editable in Photoshop (TySh + EngineData).</source>
             <location filename="../ui/psd_export_dialog.py" line="" />
             <source>Cancel</source>
             <translation>取消</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>detected</source>
-            <translation>已检测</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>not available</source>
-            <translation>不可用</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>One-click export — get PSD directly</source>
-            <translation>一键导出，直接生成 PSD</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Photoshop will launch (or connect to a running instance) on this machine, create text layers, and save as PSD. No extra steps required.
-
-Requires: Photoshop installed on this computer
-Best for: same-machine translation &amp; editing, quick turnaround</source>
-            <translation>Photoshop 将在此机器上自动启动（或连接到已运行的实例），创建可编辑文字图层并保存为 PSD。无需额外步骤。
-
-前提：此计算机需安装 Photoshop
-适合：翻译与修图在同一台机器、追求效率</translation>
-        </message>
-        <message>
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Generate script — flexible execution</source>
-            <translation>生成脚本，灵活执行</translation>
-        </message>
-        <message>
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Exports a .jsx script + image files. Run the script on any machine with Photoshop to generate the PSD.
-
-No Photoshop dependency at export time.
-
-Open Photoshop → File → Scripts → Browse → select the .jsx file.</source>
-            <translation>导出 .jsx 脚本 + 图片素材。在任意装有 Photoshop 的机器上运行脚本即可生成 PSD。
-
-导出时不依赖本机是否安装 PS。
-
-打开 Photoshop → 文件 → 脚本 → 浏览 → 选择 .jsx 文件运行。</translation>
         </message>
         <message>
             <location filename="../ui/psd_export_dialog.py" line="" />
@@ -3198,60 +2849,23 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <source>Select Output Directory</source>
             <translation>选择输出目录</translation>
         </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Photoshop executable path (optional)...</source>
-            <translation>Photoshop 可执行文件路径（可选）...</translation>
+        <message>
+            <source>Exports a .jsx script + image files. Run the script on any machine with Photoshop to generate the PSD.
+
+No Photoshop dependency at export time.
+
+Open Photoshop → File → Scripts → Browse → select the .jsx file.</source>
+            <translation>导出 .jsx 脚本 + 图片素材。在任意装有 Photoshop 的机器上运行脚本即可生成 PSD。
+
+导出时不依赖本机是否安装 PS。
+
+打开 Photoshop → 文件 → 脚本 → 浏览 → 选择 .jsx 文件运行。</translation>
         </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Detect</source>
-            <translation>检测</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>detected via custom path</source>
-            <translation>通过自定义路径检测到</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Invalid path</source>
-            <translation>路径无效</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>The specified Photoshop.exe does not exist. Please check the path.</source>
-            <translation>指定的 Photoshop.exe 不存在，请检查路径。</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Detecting...</source>
-            <translation>检测中...</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Trying to launch Photoshop from the specified path...</source>
-            <translation>正在尝试从指定路径启动 Photoshop...</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Select Photoshop executable</source>
-            <translation>选择 Photoshop 可执行文件</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Photoshop executable (Photoshop.exe);;Executables (*.exe);;All files (*)</source>
-            <translation>Photoshop 可执行文件 (Photoshop.exe);;可执行文件 (*.exe);;所有文件 (*)</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Photoshop not found</source>
-            <translation>未找到 Photoshop</translation>
-        </message>
-        <message type="obsolete">
-            <location filename="../ui/psd_export_dialog.py" line="" />
-            <source>Auto-detection of Photoshop failed. Set the executable path in Settings → Miscellaneous, then restart the export dialog.</source>
-            <translation>自动检测 Photoshop 失败。请在设置 → 杂项中设置可执行文件路径，然后重新打开导出对话框。</translation>
+        <message>
+            <source>Generates a .psd file directly — no Photoshop dependency.
+Text layers are editable in Photoshop (TySh + EngineData).</source>
+            <translation>直接生成 .psd 文件，无需 Photoshop。
+文字图层在 Photoshop 中可编辑（TySh + EngineData）。</translation>
         </message>
     </context>
     <context>
@@ -3395,14 +3009,14 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
     </context>
     <context>
         <name>DependencyDialog</name>
-<message>
+        <message>
             <source>Dependencies</source>
             <translation>依赖检查</translation>
         </message>
-        </context>
-        <context>
+    </context>
+    <context>
         <name>DependencyPanel</name>
-<message>
+        <message>
             <source>Refresh</source>
             <translation>刷新</translation>
         </message>
@@ -3458,7 +3072,7 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <source>{installed}/{total} installed, {missing} missing or mismatched</source>
             <translation>{installed}/{total} 已安装，{missing} 缺失或不匹配</translation>
         </message>
-        </context>
+    </context>
     <context>
         <name>ModelCheckDialog</name>
         <message>
@@ -3469,41 +3083,9 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <source>Close</source>
             <translation>关闭</translation>
         </message>
-        </context>
+    </context>
     <context>
         <name>ModelCheckPanel</name>
-        <message>
-            <source>Model</source>
-            <translation>模型</translation>
-        </message>
-        <message>
-            <source>Category</source>
-            <translation>类别</translation>
-        </message>
-        <message>
-            <source>Status</source>
-            <translation>状态</translation>
-        </message>
-        <message>
-            <source>Source / Notes</source>
-            <translation>来源 / 备注</translation>
-        </message>
-        <message>
-            <source>Installed</source>
-            <translation>已安装</translation>
-        </message>
-        <message>
-            <source>Missing</source>
-            <translation>缺失</translation>
-        </message>
-        <message>
-            <source>Hash mismatch</source>
-            <translation>哈希不匹配</translation>
-        </message>
-        <message>
-            <source>No source / User-provided</source>
-            <translation>无来源 / 用户自备</translation>
-        </message>
         <message>
             <source>Refresh</source>
             <translation>刷新</translation>
@@ -3511,26 +3093,6 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         <message>
             <source>No {category} models installed — {desc}</source>
             <translation>未安装{category}模型 — {desc}</translation>
-        </message>
-        <message>
-            <source>text detection requires a local model file.</source>
-            <translation>文本检测需要本地模型文件</translation>
-        </message>
-        <message>
-            <source>OCR requires a local model file.</source>
-            <translation>OCR 需要本地模型文件</translation>
-        </message>
-        <message>
-            <source>inpainting requires a local model file (no online service available).</source>
-            <translation>图像修复需要本地模型文件（无在线服务可用）</translation>
-        </message>
-        <message>
-            <source>most translators use remote APIs and don't need local models.</source>
-            <translation>翻译器大多使用远程 API，无需本地模型</translation>
-        </message>
-        <message>
-            <source>utility models are optional extras.</source>
-            <translation>工具类模型为可选附加组件</translation>
         </message>
         <message>
             <source>{installed}/{total} {category} models ready, {missing} missing</source>
@@ -3545,18 +3107,22 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <translation>已安装 {installed}/{total} 个模型文件</translation>
         </message>
         <message>
+            <source>Deselect All</source>
+            <translation>取消全选</translation>
+        </message>
+        <message>
+            <source>Download Selected</source>
+            <translation>下载选中项</translation>
+        </message>
+        <message>
+            <source>Select All</source>
+            <translation>全选</translation>
+        </message>
+        <message>
             <source>No public download source. Obtain from community cloud drive.</source>
             <translation>无公开下载源。请从社区云盘获取。</translation>
         </message>
-        <message>
-            <source>Auto-downloaded by PaddleOCR on first use</source>
-            <translation>由 PaddleOCR 首次使用时自动下载</translation>
-        </message>
-        <message>
-            <source>PP-OCRv6 models are auto-downloaded by PaddleOCR on first use.</source>
-            <translation>PP-OCRv6 模型由 PaddleOCR 首次使用时自动下载。</translation>
-        </message>
-        </context>
+    </context>
     <context>
         <name>ToolsDialog</name>
         <message>
@@ -3583,32 +3149,8 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <translation>软件更新与模型下载 — 来自 GitHub</translation>
         </message>
         <message>
-            <source>Uses official GitHub servers. This covers both software update checks and most AI model file downloads (text detection, OCR, inpainting).</source>
-            <translation>使用官方 GitHub 服务器。涵盖软件更新检查和大多数 AI 模型文件下载（文本检测、OCR、图像修复）。</translation>
-        </message>
-        <message>
-            <source>Gitclone mirror — recommended for users in China who experience slow or failed downloads.</source>
-            <translation>Gitclone 镜像 — 推荐给下载慢或下载失败的中国大陆用户</translation>
-        </message>
-        <message>
             <source>Python Package Installation — from PyPI</source>
             <translation>Python 包安装 — 来自 PyPI</translation>
-        </message>
-        <message>
-            <source>Installs Python packages from the official PyPI index. Reliable worldwide.</source>
-            <translation>从官方 PyPI 索引安装 Python 包。全球范围内稳定可靠。</translation>
-        </message>
-        <message>
-            <source>Tsinghua mirror — one of the fastest PyPI mirrors in China.</source>
-            <translation>清华大学镜像 — 国内最快的 PyPI 镜像之一</translation>
-        </message>
-        <message>
-            <source>Aliyun mirror — maintained by Alibaba Cloud, good coverage.</source>
-            <translation>阿里云镜像 — 由阿里云维护，覆盖全面</translation>
-        </message>
-        <message>
-            <source>USTC mirror — maintained by University of Science and Technology of China.</source>
-            <translation>中科大镜像 — 由中国科学技术大学维护</translation>
         </message>
         <message>
             <source>Advanced</source>
@@ -3621,14 +3163,6 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         <message>
             <source>Custom HuggingFace endpoint (advanced):</source>
             <translation>自定义 HuggingFace 镜像地址（高级）：</translation>
-        </message>
-        <message>
-            <source>These are only needed if you use a custom Python environment or want to override the HuggingFace download path for the few models hosted there (font detection, LaMa inpainter).</source>
-            <translation>仅当使用自定义 Python 环境或需要覆盖少数托管在 HuggingFace 上的模型（字体检测、LaMa 修复）的下载路径时才需要。</translation>
-        </message>
-        <message>
-            <source>Pick the first option (Official) for each category if you are not experiencing network issues.</source>
-            <translation>如果没有网络问题，请选择每项的第一个选项（官方）。</translation>
         </message>
         <message>
             <source>Reset to defaults</source>
@@ -3645,6 +3179,38 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         <message>
             <source>Cancel</source>
             <translation>取消</translation>
+        </message>
+        <message>
+            <source>Aliyun mirror — maintained by Alibaba Cloud, good coverage.</source>
+            <translation>阿里云镜像 — 由阿里云维护，覆盖全面</translation>
+        </message>
+        <message>
+            <source>Gitclone mirror — recommended for users in China who experience slow or failed downloads.</source>
+            <translation>Gitclone 镜像 — 推荐给下载慢或下载失败的中国大陆用户</translation>
+        </message>
+        <message>
+            <source>Installs Python packages from the official PyPI index. Reliable worldwide.</source>
+            <translation>从官方 PyPI 索引安装 Python 包。全球范围内稳定可靠。</translation>
+        </message>
+        <message>
+            <source>Pick the first option (Official) for each category if you are not experiencing network issues.</source>
+            <translation>如果没有网络问题，请选择每项的第一个选项（官方）。</translation>
+        </message>
+        <message>
+            <source>These are only needed if you use a custom Python environment or want to override the HuggingFace download path for the few models hosted there (font detection, LaMa inpainter).</source>
+            <translation>仅当使用自定义 Python 环境或需要覆盖少数托管在 HuggingFace 上的模型（字体检测、LaMa 修复）的下载路径时才需要。</translation>
+        </message>
+        <message>
+            <source>Tsinghua mirror — one of the fastest PyPI mirrors in China.</source>
+            <translation>清华大学镜像 — 国内最快的 PyPI 镜像之一</translation>
+        </message>
+        <message>
+            <source>USTC mirror — maintained by University of Science and Technology of China.</source>
+            <translation>中科大镜像 — 由中国科学技术大学维护</translation>
+        </message>
+        <message>
+            <source>Uses official GitHub servers. This covers both software update checks and most AI model file downloads (text detection, OCR, inpainting).</source>
+            <translation>使用官方 GitHub 服务器。涵盖软件更新检查和大多数 AI 模型文件下载（文本检测、OCR、图像修复）。</translation>
         </message>
     </context>
     <context>
@@ -3668,11 +3234,11 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <source>Click "Run Diagnostic" to check your system.</source>
             <translation>点击“运行诊断”以检查系统环境。</translation>
         </message>
-            <message>
+        <message>
             <source>Close</source>
             <translation>关闭</translation>
         </message>
-</context>
+    </context>
     <context>
         <name>MCPInfoDialog</name>
         <message>
@@ -3684,26 +3250,12 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <translation>MCP 服务器</translation>
         </message>
         <message>
-            <source>MCP (Model Context Protocol) allows external AI agents such as Claude Code to read and edit BallonsTranslator project data directly through tool calls — no GUI needed.</source>
-            <translation>MCP（模型上下文协议）允许 Claude Code 等外部 AI 代理通过工具调用直接读取和修改 BallonsTranslator 项目数据，无需启动 GUI。</translation>
-        </message>
-        <message>
             <source>Quick start:</source>
             <translation>快速开始：</translation>
         </message>
         <message>
-            <source>1. Install:  pip install -e &quot;.[mcp]&quot;
-2. Add a config entry in .claude/settings.json
-3. Run Claude Code in the project directory
-4. Ask it to open your project and edit text blocks</source>
-            <translation>1. 安装：pip install -e &quot;.[mcp]&quot;
-2. 在 .claude/settings.json 中添加配置条目
-3. 在项目目录中运行 Claude Code
-4. 让它打开你的项目并编辑文字块</translation>
-        </message>
-        <message>
-            <source>Full user guide available at docs/zh/mcp_user_guide.md</source>
-            <translation>完整用户指南见 docs/zh/mcp_user_guide.md</translation>
+            <source>Full user guide available at docs/MCP用户指南.md</source>
+            <translation>完整用户指南见 docs/MCP用户指南.md</translation>
         </message>
         <message>
             <source>Open User Guide</source>
@@ -3712,6 +3264,85 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         <message>
             <source>Close</source>
             <translation>关闭</translation>
+        </message>
+        <message>
+            <source>1. Install:  pip install -e ".[mcp]"
+2. Add a config entry in .claude/settings.json
+3. Run Claude Code in the project directory
+4. Ask it to open your project and edit text blocks</source>
+            <translation>1. 安装：pip install -e ".[mcp]"
+2. 在 .claude/settings.json 中添加配置条目
+3. 在项目目录中运行 Claude Code
+4. 让它打开你的项目并编辑文字块</translation>
+        </message>
+        <message>
+            <source>MCP (Model Context Protocol) allows external AI agents such as Claude Code to read and edit BallonsTranslator project data directly through tool calls — no GUI needed.</source>
+            <translation>MCP（模型上下文协议）允许 Claude Code 等外部 AI 代理通过工具调用直接读取和修改 BallonsTranslator 项目数据，无需启动 GUI。</translation>
+        </message>
+    </context>
+    <context>
+        <name>CategoryCard</name>
+        <message>
+            <source>Auto-downloaded by PaddleOCR on first use</source>
+            <translation>由 PaddleOCR 首次使用时自动下载</translation>
+        </message>
+        <message>
+            <source>File</source>
+            <translation>文件</translation>
+        </message>
+        <message>
+            <source>Hash mismatch</source>
+            <translation>哈希不匹配</translation>
+        </message>
+        <message>
+            <source>Installed</source>
+            <translation>已安装</translation>
+        </message>
+        <message>
+            <source>Missing</source>
+            <translation>缺失</translation>
+        </message>
+        <message>
+            <source>No model files declared for this stage.</source>
+            <translation>此阶段未声明任何模型文件。</translation>
+        </message>
+        <message>
+            <source>No source / User-provided</source>
+            <translation>无来源 / 用户自备</translation>
+        </message>
+        <message>
+            <source>Source / Notes</source>
+            <translation>来源 / 备注</translation>
+        </message>
+        <message>
+            <source>Status</source>
+            <translation>状态</translation>
+        </message>
+    </context>
+    <context>
+        <name>StatusDot</name>
+        <message>
+            <source>All ready</source>
+            <translation>全部就绪</translation>
+        </message>
+        <message>
+            <source>No files ready</source>
+            <translation>无文件就绪</translation>
+        </message>
+        <message>
+            <source>No model files for this category</source>
+            <translation>此类别无模型文件</translation>
+        </message>
+        <message>
+            <source>Some files missing</source>
+            <translation>部分文件缺失</translation>
+        </message>
+    </context>
+    <context>
+        <name>InpaintConfigPanel</name>
+        <message>
+            <source>Let the program decide whether it is necessary to use the selected inpaint method.</source>
+            <translation>由程序决定是否有必要使用选定的图像修复方法</translation>
         </message>
     </context>
 </TS>

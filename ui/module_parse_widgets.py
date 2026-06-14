@@ -363,22 +363,58 @@ class ModuleConfigParseWidget(QWidget):
         self.visibleWidget: QWidget = None
         self.module_dict: dict = {}
 
-    def addModulesParamWidgets(self, module_dict: dict):
+    def addModulesParamWidgets(
+        self, module_dict: dict, dep_notes: dict[str, str] = None
+    ):
+        """Populate the module combobox.
+
+        ``dep_notes`` is an optional ``{module_name: description_or_None}`` dict.
+        Modules with a non-None description are grouped under a "needs deps"
+        separator and get a tooltip showing what dependencies they require.
+        """
         invalid_module_keys = []
         valid_modulekeys = self.get_valid_module_keys()
 
         num_widgets_before = len(self.param_widget_map)
 
+        # Categorise: skip → normal → needs-deps
+        skip_keys: list[str] = []
+        normal_keys: list[str] = []
+        dep_keys: list[str] = []
         for module in module_dict:
             if module not in valid_modulekeys:
                 invalid_module_keys.append(module)
                 continue
-
             if module in self.param_widget_map:
                 LOGGER.warning(f"duplicated module key: {module}")
                 continue
+            if module.startswith("none") or module.startswith("None"):
+                skip_keys.append(module)
+            elif dep_notes and module in dep_notes and dep_notes[module]:
+                dep_keys.append(module)
+            else:
+                normal_keys.append(module)
 
+        # Build combobox: skip → separator → normal + needs-deps (merged)
+        for module in skip_keys:
             self.module_combobox.addItem(module)
+
+        remaining = normal_keys + dep_keys
+        if remaining:
+            self.module_combobox.insertSeparator(self.module_combobox.count())
+            for module in remaining:
+                self.module_combobox.addItem(module)
+                if module in dep_keys:
+                    hint = dep_notes.get(module, "")
+                    if hint:
+                        idx = self.module_combobox.count() - 1
+                        self.module_combobox.setItemData(
+                            idx, hint, Qt.ItemDataRole.ToolTipRole
+                        )
+
+        # Register param slots for all modules (keyed by module name)
+        ordered_module_keys = skip_keys + normal_keys + dep_keys
+        for module in ordered_module_keys:
             params = module_dict[module]
             if params is not None:
                 self.param_widget_map[module] = None

@@ -252,15 +252,21 @@ class MergeDialog(QDialog):
         # Parse per-label directions from the new QLineEdits
         per_label_directions = {}
         for label in [
-            label.strip() for label in self.ltr_labels_edit.text().split(",") if label.strip()
+            label.strip()
+            for label in self.ltr_labels_edit.text().split(",")
+            if label.strip()
         ]:
             per_label_directions[label] = "LTR"
         for label in [
-            label.strip() for label in self.rtl_labels_edit.text().split(",") if label.strip()
+            label.strip()
+            for label in self.rtl_labels_edit.text().split(",")
+            if label.strip()
         ]:
             per_label_directions[label] = "RTL"
         for label in [
-            label.strip() for label in self.ttb_labels_edit.text().split(",") if label.strip()
+            label.strip()
+            for label in self.ttb_labels_edit.text().split(",")
+            if label.strip()
         ]:
             per_label_directions[label] = "TTB"
         config["PER_LABEL_DIRECTIONS"] = per_label_directions

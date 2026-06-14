@@ -1,7 +1,16 @@
 from typing import List
 
 import numpy as np
-from qtpy.QtCore import QEvent, QMimeData, QPoint, QPropertyAnimation, QRectF, QSize, Qt, Signal
+from qtpy.QtCore import (
+    QEvent,
+    QMimeData,
+    QPoint,
+    QPropertyAnimation,
+    QRectF,
+    QSize,
+    Qt,
+    Signal,
+)
 from qtpy.QtGui import (
     QColor,
     QDrag,
@@ -37,7 +46,6 @@ from utils.logger import logger as LOGGER
 
 from .custom_widget import ScrollBar, SeparatorWidget, Widget
 from .textitem import TextBlock
-
 
 # Styling moved to config/stylesheet.css with dynamic property selectors.
 # TransPairWidget card states (checked, hover, drag) are now controlled
@@ -477,10 +485,7 @@ class TransPairWidget(Widget):
             self.style().polish(self)
 
             # Animate accent bar opacity (stop any running animation first)
-            if (
-                hasattr(self, "_accent_ani")
-                and self._accent_ani is not None
-            ):
+            if hasattr(self, "_accent_ani") and self._accent_ani is not None:
                 self._accent_ani.stop()
             old = self._accent_effect
             self._accent_ani = QPropertyAnimation(old, b"opacity", self)

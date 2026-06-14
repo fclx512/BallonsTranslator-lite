@@ -133,6 +133,7 @@ def remove_from_runtime_widget_set(widget):
 
 showed_exception = set()
 
+
 # it will be set to ui.mainwindow.create_errdialog.emit after UI initialized
 def create_errdialog_in_mainthread(*args, **kwargs) -> None:
     return None

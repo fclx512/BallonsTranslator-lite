@@ -6,13 +6,11 @@ Environment section in the config panel (and at startup where needed).
 
 import importlib.metadata
 import importlib.util
-import os
 import platform
 import re
 import subprocess
 import sys
 from typing import Optional
-
 
 # ── GPU detection ──────────────────────────────────────────────────────────
 
@@ -79,8 +77,7 @@ def detect_gpu_info() -> Optional[dict]:
                 recommended_cuda="12.4",
                 torch_index="https://download.pytorch.org/whl/cu124",
                 message=(
-                    f"Detected Ada Lovelace GPU ({_gpu_name}) — "
-                    "CUDA 12.4 recommended."
+                    f"Detected Ada Lovelace GPU ({_gpu_name}) — CUDA 12.4 recommended."
                 ),
             )
         elif series >= 30:
@@ -98,8 +95,7 @@ def detect_gpu_info() -> Optional[dict]:
                 recommended_cuda="12.4",
                 torch_index="https://download.pytorch.org/whl/cu124",
                 message=(
-                    f"Detected Turing GPU ({_gpu_name}) — "
-                    "CUDA 12.4 is supported."
+                    f"Detected Turing GPU ({_gpu_name}) — CUDA 12.4 is supported."
                 ),
             )
         elif series >= 10:
@@ -192,8 +188,12 @@ def check_torch() -> dict:
          "version": str | None,
          "import_error": str | None}
     """
-    result = {"available": False, "cuda_available": False,
-              "version": None, "import_error": None}
+    result = {
+        "available": False,
+        "cuda_available": False,
+        "version": None,
+        "import_error": None,
+    }
 
     spec = importlib.util.find_spec("torch")
     if spec is None:
@@ -249,6 +249,7 @@ def check_mcp() -> dict:
 
     try:
         import mcp_server.main  # noqa: F401
+
         result["server_loadable"] = True
     except ImportError:
         pass

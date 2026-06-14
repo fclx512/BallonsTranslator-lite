@@ -11,6 +11,7 @@ from qtpy.QtCore import (
     QPropertyAnimation,
     QRectF,
     Qt,
+    QTimer,  # zoom rebuild debounce
     Signal,
 )
 from qtpy.QtGui import (
@@ -431,6 +432,11 @@ class SceneTextManager(QObject):
 
         self.prev_blkitem: TextBlkItem = None
 
+        # Debounced pixmap cache rebuild after view zoom
+        self._rebuild_timer = QTimer()
+        self._rebuild_timer.setSingleShot(True)
+        self._rebuild_timer.timeout.connect(self._rebuild_item_caches)
+
     def on_switch_textitem(
         self,
         switch_delta: int,
@@ -506,6 +512,16 @@ class SceneTextManager(QObject):
 
     def adjustSceneTextRect(self):
         self.txtblkShapeControl.updateBoundingRect()
+        # Debounced pixmap cache rebuild after zoom — avoids repeated
+        # rebuilds during pinch/scroll zoom gestures.
+        self._rebuild_timer.start(100)
+
+    def _rebuild_item_caches(self):
+        """Rebuild full pixmap caches for all text items after zoom."""
+        for blk_item in self.textblk_item_list:
+            blk_item._invalidate_cache()
+            blk_item._build_full_pixmap()
+            blk_item.update()
 
     def clearSceneTextitems(self):
         self.hovering_transwidget = None
@@ -867,6 +883,7 @@ class SceneTextManager(QObject):
         blk_font.setLetterSpacing(
             QFont.SpacingType.PercentageSpacing, fmt.letter_spacing * 100
         )
+
         def text_size_func(text):
             return get_text_size(QFontMetricsF(blk_font), text)
 

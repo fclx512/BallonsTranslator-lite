@@ -18,16 +18,13 @@ Usage:
 
 import argparse
 import re
+import sys
 import xml.etree.ElementTree as ET
 from io import StringIO
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TS_FILE = PROJECT_ROOT / "translate" / "zh_CN.ts"
-
-TR_CALL_RE = re.compile(r'self\.tr\("((?:[^"\\]|\\.)*)"\)')
-TR_CALL_SQ_RE = re.compile(r"self\.tr\('((?:[^'\\]|\\.)*)'\)")
-CLASS_RE = re.compile(r"^\s*class\s+(\w+)\s*[(:]")
 
 # Contexts whose translations come from module param descriptions,
 # loaded via self.tr(variable_name) — regex scanner cannot detect them.
@@ -47,23 +44,41 @@ def _find_py_files():
 
 
 def _extract_tr_calls(content: str):
-    """Yield (context_class, tr_string) from Python source."""
-    lines = content.splitlines()
-    current_class = None
-    for line in lines:
-        m = CLASS_RE.match(line)
-        if m:
-            current_class = m.group(1)
-            continue
-        for tr_re in (TR_CALL_RE, TR_CALL_SQ_RE):
-            for m in tr_re.finditer(line):
-                s = m.group(1)
-                s = s.replace('\\"', '"').replace("\\'", "'")
-                s = s.replace("\\\\", "\\")
-                s = s.replace("\\n", "\n").replace("\\t", "\t")
-                if "{" in s:
-                    continue
-                yield (current_class or "Unknown", s)
+    """Yield (context_class, tr_string) from Python source.
+
+    Handles single-line ``self.tr("...")`` and multi-line variants
+    where the string body is on a different line (e.g.
+    ``self.tr(\\n    "text"\\n)``) via DOTALL regex.
+
+    *Implicit* Python string concatenation across continuation lines
+    is *not* supported (e.g. ``self.tr("part1 " "part2")``) — keep
+    the whole translatable string as a single literal.
+    """
+    # Build position-index of class definitions
+    class_positions = []  # (byte_offset, class_name)
+    for m in re.finditer(r"^\s*class\s+(\w+)\s*[(:]", content, re.MULTILINE):
+        class_positions.append((m.start(), m.group(1)))
+
+    def _context_for(pos):
+        for cp, cn in reversed(class_positions):
+            if cp < pos:
+                return cn
+        return "Unknown"
+
+    # DOTALL so \s matches newlines, capturing self.tr(\n  "string"\n)
+    tr_re = re.compile(r'self\.tr\(\s*("(?:[^"\\]|\\.)*")\s*\)', re.DOTALL)
+    tr_sq_re = re.compile(r"self\.tr\(\s*('(?:[^'\\]|\\.)*')\s*\)", re.DOTALL)
+
+    for tr_regex in (tr_re, tr_sq_re):
+        for m in tr_regex.finditer(content):
+            s = m.group(1)[1:-1]  # strip surrounding quotes
+            s = s.replace('\\"', '"').replace("\\'", "'")
+            s = s.replace("\\\\", "\\")
+            s = s.replace("\\n", "\n").replace("\\t", "\t")
+            if "{" in s:
+                continue
+            ctx = _context_for(m.start())
+            yield (ctx, s)
 
 
 def _gather_tr_calls():
@@ -175,7 +190,17 @@ def _write_ts(tree, path):
 # ── main ────────────────────────────────────────────────────────────────
 
 
+def _reconfigure_stdout():
+    """Windows GBK console can't encode certain Unicode chars."""
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
 def main():
+    _reconfigure_stdout()
     parser = argparse.ArgumentParser(
         description="Synchronize zh_CN.ts with self.tr() calls in source code."
     )

@@ -83,6 +83,7 @@ def find_hardcoded_chinese(files):
             "X木",
             "X",
             "简体中文",
+            "MCP用户指南.md",  # file path, not UI text
         }
     )
 
@@ -156,12 +157,8 @@ def extract_context_and_tr_calls(content):
     results = []
     # Multi-line regex — DOTALL so \s matches newlines, allowing
     # self.tr(\n  "string"\n) to be captured.
-    tr_re = re.compile(
-        r'self\.tr\(\s*("(?:[^"\\]|\\.)*")\s*\)', re.DOTALL
-    )
-    tr_sq_re = re.compile(
-        r"self\.tr\(\s*('(?:[^'\\]|\\.)*')\s*\)", re.DOTALL
-    )
+    tr_re = re.compile(r'self\.tr\(\s*("(?:[^"\\]|\\.)*")\s*\)', re.DOTALL)
+    tr_sq_re = re.compile(r"self\.tr\(\s*('(?:[^'\\]|\\.)*')\s*\)", re.DOTALL)
 
     for tr_regex in (tr_re, tr_sq_re):
         for m in tr_regex.finditer(content):

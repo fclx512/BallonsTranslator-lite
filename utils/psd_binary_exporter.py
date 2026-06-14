@@ -51,7 +51,9 @@ class TextLayerMetadata:
     index: int
     text: str
     bounds: Tuple[float, float, float, float]  # left, top, right, bottom
-    transform: Tuple[float, float, float, float, float, float]  # [cos, sin, -sin, cos, tx, ty]
+    transform: Tuple[
+        float, float, float, float, float, float
+    ]  # [cos, sin, -sin, cos, tx, ty]
     orientation: TextOrientation
     justification: TextJustification
     font_index: int
@@ -109,7 +111,11 @@ class PsBinaryExporter(AbstractPsdExporter):
         with PILImage.open(src_path) as pil_img:
             width, height = pil_img.size
             dpi_info = pil_img.info.get("dpi")
-            dpi = max(dpi_info[0], dpi_info[1], 72.0) if dpi_info and len(dpi_info) >= 2 else 96.0
+            dpi = (
+                max(dpi_info[0], dpi_info[1], 72.0)
+                if dpi_info and len(dpi_info) >= 2
+                else 96.0
+            )
 
         self._validate_dimensions(width, height, page_name)
 
@@ -117,7 +123,9 @@ class PsBinaryExporter(AbstractPsdExporter):
         layers_bottom_to_top = self._collect_layers(proj, page_name, dpi)
 
         # 3. Build merged composite
-        composite = self._merged_composite(proj, page_name, layers_bottom_to_top, width, height)
+        composite = self._merged_composite(
+            proj, page_name, layers_bottom_to_top, width, height
+        )
 
         # 4. Assemble PSD binary
         psd = PsdBinaryWriter()
@@ -155,7 +163,9 @@ class PsBinaryExporter(AbstractPsdExporter):
     @staticmethod
     def _validate_dimensions(width: int, height: int, name: str) -> None:
         if width <= 0 or height <= 0:
-            raise ValueError(f"Zero or negative dimensions for {name}: {width}x{height}")
+            raise ValueError(
+                f"Zero or negative dimensions for {name}: {width}x{height}"
+            )
         if width > 30000 or height > 30000:
             raise ValueError(
                 f"PSD only supports dimensions up to 30000x30000, "
@@ -165,13 +175,13 @@ class PsBinaryExporter(AbstractPsdExporter):
     @staticmethod
     def _write_header(w: PsdBinaryWriter, width: int, height: int) -> None:
         w.write_signature("8BPS")
-        w.write_u16(1)       # version
-        w.write_zeroes(6)    # reserved
-        w.write_u16(4)       # channels (RGBA)
+        w.write_u16(1)  # version
+        w.write_zeroes(6)  # reserved
+        w.write_u16(4)  # channels (RGBA)
         w.write_u32(height)
         w.write_u32(width)
-        w.write_u16(8)       # bits/channel
-        w.write_u16(3)       # color mode (RGB)
+        w.write_u16(8)  # bits/channel
+        w.write_u16(3)  # color mode (RGB)
 
     # ------------------------------------------------------------------
     # Layer collection
@@ -192,40 +202,48 @@ class PsBinaryExporter(AbstractPsdExporter):
         )
 
         src_pixels = self._load_image_rgba(src_path)
-        layers.append(ExportLayer(
-            id=1,
-            name="Original Image",
-            left=0, top=0,
-            pixels=src_pixels,
-            hidden=has_inpainted,
-        ))
+        layers.append(
+            ExportLayer(
+                id=1,
+                name="Original Image",
+                left=0,
+                top=0,
+                pixels=src_pixels,
+                hidden=has_inpainted,
+            )
+        )
 
         # --- Inpainted ---
         inpainted_path = proj.get_inpainted_path(page_name, get_last_modified=True)
         if os.path.exists(inpainted_path):
             inpainted_pixels = self._load_image_rgba(inpainted_path)
-            layers.append(ExportLayer(
-                id=2,
-                name="Inpainted",
-                left=0, top=0,
-                pixels=inpainted_pixels,
-                hidden=False,
-            ))
+            layers.append(
+                ExportLayer(
+                    id=2,
+                    name="Inpainted",
+                    left=0,
+                    top=0,
+                    pixels=inpainted_pixels,
+                    hidden=False,
+                )
+            )
 
         # --- Segmentation Mask ---
         mask_path = os.path.join(
-            proj.mask_dir(),
-            os.path.splitext(page_name)[0] + ".png"
+            proj.mask_dir(), os.path.splitext(page_name)[0] + ".png"
         )
         if os.path.exists(mask_path):
             mask_pixels = self._load_grayscale_as_rgba(mask_path)
-            layers.append(ExportLayer(
-                id=len(layers) + 1,
-                name="Segmentation Mask",
-                left=0, top=0,
-                pixels=mask_pixels,
-                hidden=True,
-            ))
+            layers.append(
+                ExportLayer(
+                    id=len(layers) + 1,
+                    name="Segmentation Mask",
+                    left=0,
+                    top=0,
+                    pixels=mask_pixels,
+                    hidden=True,
+                )
+            )
 
         # --- Text layers ---
         blk_list = proj.pages.get(page_name, [])
@@ -259,15 +277,22 @@ class PsBinaryExporter(AbstractPsdExporter):
         for blk in blk_list:
             if not blk.translation:
                 continue
-            resolved, _ = resolve_font_name(blk.fontformat.font_family, ps_available=None)
+            resolved, _ = resolve_font_name(
+                blk.fontformat.font_family, ps_available=None
+            )
             if resolved not in seen:
                 seen.add(resolved)
                 font_set.append(resolved)
         return font_set or ["ArialMT"]
 
     def _text_layer(
-        self, blk, index: int, dpi: float, font_set: List[str],
-        proj: ProjImgTrans, page_name: str,
+        self,
+        blk,
+        index: int,
+        dpi: float,
+        font_set: List[str],
+        proj: ProjImgTrans,
+        page_name: str,
     ) -> ExportLayer:
         """Build a single text ExportLayer from a TextBlock."""
         x1, y1, x2, y2 = blk.xyxy
@@ -292,10 +317,16 @@ class PsBinaryExporter(AbstractPsdExporter):
         size_pt = ff.font_size * 72.0 / dpi
 
         # Orientation
-        orientation = TextOrientation.Vertical if ff.vertical else TextOrientation.Horizontal
+        orientation = (
+            TextOrientation.Vertical if ff.vertical else TextOrientation.Horizontal
+        )
 
         # Justification
-        just_map = {0: TextJustification.Left, 1: TextJustification.Center, 2: TextJustification.Right}
+        just_map = {
+            0: TextJustification.Left,
+            1: TextJustification.Center,
+            2: TextJustification.Right,
+        }
         justification = just_map.get(ff.alignment, TextJustification.Left)
 
         # Color: RGBA
@@ -306,9 +337,12 @@ class PsBinaryExporter(AbstractPsdExporter):
         # Transform: rotation matrix
         angle_rad = math.radians(blk.angle)
         transform = (
-            math.cos(angle_rad), math.sin(angle_rad),
-            -math.sin(angle_rad), math.cos(angle_rad),
-            float(x1), float(y1),
+            math.cos(angle_rad),
+            math.sin(angle_rad),
+            -math.sin(angle_rad),
+            math.cos(angle_rad),
+            float(x1),
+            float(y1),
         )
 
         meta = TextLayerMetadata(
@@ -330,8 +364,9 @@ class PsBinaryExporter(AbstractPsdExporter):
 
         return ExportLayer(
             id=0,
-            name=f"TL {index:03d} {blk.translation[:20].replace(chr(10),' ')}",
-            left=left, top=top,
+            name=f"TL {index:03d} {blk.translation[:20].replace(chr(10), ' ')}",
+            left=left,
+            top=top,
             pixels=pixels,
             hidden=False,
             text=meta,
@@ -355,9 +390,14 @@ class PsBinaryExporter(AbstractPsdExporter):
 
     @staticmethod
     def _crop_from_result(
-        proj: ProjImgTrans, page_name: str,
-        left: int, top: int, right: int, bottom: int,
-        width: int, height: int,
+        proj: ProjImgTrans,
+        page_name: str,
+        left: int,
+        top: int,
+        right: int,
+        bottom: int,
+        width: int,
+        height: int,
     ) -> np.ndarray:
         """Crop a text block region from the page's rendered result image.
 
@@ -389,7 +429,7 @@ class PsBinaryExporter(AbstractPsdExporter):
 
             # Pad to full size in case the crop was smaller than expected
             out = np.zeros((height, width, 4), dtype=np.uint8)
-            out[:cropped.shape[0], :cropped.shape[1]] = cropped
+            out[: cropped.shape[0], : cropped.shape[1]] = cropped
             return out
 
         except Exception:
@@ -405,7 +445,7 @@ class PsBinaryExporter(AbstractPsdExporter):
         rgba[:, :, 0] = gray  # R
         rgba[:, :, 1] = gray  # G
         rgba[:, :, 2] = gray  # B
-        rgba[:, :, 3] = 255   # A
+        rgba[:, :, 3] = 255  # A
         return rgba
 
     # ------------------------------------------------------------------
@@ -466,7 +506,11 @@ class PsBinaryExporter(AbstractPsdExporter):
         extra_data_list: List[bytes] = []
 
         for layer in layers:
-            pix = layer.pixels if layer.pixels is not None else np.zeros((1, 1, 4), dtype=np.uint8)
+            pix = (
+                layer.pixels
+                if layer.pixels is not None
+                else np.zeros((1, 1, 4), dtype=np.uint8)
+            )
             channels = encode_image_rle(
                 pix,
                 [ChannelId.Red, ChannelId.Green, ChannelId.Blue, ChannelId.Alpha],
@@ -478,7 +522,11 @@ class PsBinaryExporter(AbstractPsdExporter):
 
         # Write layer records
         for layer, channels, extra in zip(layers, encoded_layers, extra_data_list):
-            pix = layer.pixels if layer.pixels is not None else np.zeros((1, 1, 4), dtype=np.uint8)
+            pix = (
+                layer.pixels
+                if layer.pixels is not None
+                else np.zeros((1, 1, 4), dtype=np.uint8)
+            )
             h, w = pix.shape[:2]
 
             top = layer.top
@@ -499,9 +547,9 @@ class PsBinaryExporter(AbstractPsdExporter):
             layer_info.write_signature("8BIM")
             layer_info.write_signature("norm")
             layer_info.write_u8(255)  # opacity
-            layer_info.write_u8(0)    # clipping
+            layer_info.write_u8(0)  # clipping
             layer_info.write_u8(0x0A if layer.hidden else 0x08)  # flags
-            layer_info.write_u8(0)    # filler
+            layer_info.write_u8(0)  # filler
             layer_info.write_u32(len(extra))
             layer_info.write_bytes(extra)
 
@@ -554,7 +602,9 @@ class PsBinaryExporter(AbstractPsdExporter):
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _write_image_data(writer: PsdBinaryWriter, pixels: np.ndarray, name: str) -> None:
+    def _write_image_data(
+        writer: PsdBinaryWriter, pixels: np.ndarray, name: str
+    ) -> None:
         """Write the merged composite image data section.
 
         Unlike per-layer channels, the image data section groups all row
@@ -564,7 +614,9 @@ class PsBinaryExporter(AbstractPsdExporter):
         writer.write_u16(1)  # compression = RLE
 
         channels = encode_image_rle(
-            pixels, [ChannelId.Red, ChannelId.Green, ChannelId.Blue, ChannelId.Alpha], name,
+            pixels,
+            [ChannelId.Red, ChannelId.Green, ChannelId.Blue, ChannelId.Alpha],
+            name,
         )
 
         row_len_bytes = height * 2  # u16 per row per channel
@@ -607,19 +659,21 @@ def _luni_body(name: str) -> bytes:
 
 def _tysh_body(meta: TextLayerMetadata) -> bytes:
     """Build the ``TySh`` (type tool info) section for an editable text layer."""
-    engine_data = encode_engine_data(TextEngineSpec(
-        text=meta.text,
-        font_index=meta.font_index,
-        font_set=meta.font_set,
-        font_size=meta.font_size,
-        color=meta.color,
-        faux_bold=meta.faux_bold,
-        faux_italic=meta.faux_italic,
-        orientation=meta.orientation,
-        justification=meta.justification,
-        box_width=meta.box_width,
-        box_height=meta.box_height,
-    ))
+    engine_data = encode_engine_data(
+        TextEngineSpec(
+            text=meta.text,
+            font_index=meta.font_index,
+            font_set=meta.font_set,
+            font_size=meta.font_size,
+            color=meta.color,
+            faux_bold=meta.faux_bold,
+            faux_italic=meta.faux_italic,
+            orientation=meta.orientation,
+            justification=meta.justification,
+            box_width=meta.box_width,
+            box_height=meta.box_height,
+        )
+    )
 
     b = meta.bounds
     fbounds = bounds_descriptor("bounds", b[0], b[1], b[2], b[3])
@@ -646,9 +700,10 @@ def _tysh_body(meta: TextLayerMetadata) -> bytes:
         .with_item("warpPerspective", DescriptorValue.double(0.0))
         .with_item("warpPerspectiveOther", DescriptorValue.double(0.0))
         .with_item("warpRotate", DescriptorValue.enum("Ornt", ornt_value))
-        .with_item("bounds", DescriptorValue.object(
-            bounds_descriptor("bounds", b[0], b[1], b[2], b[3])
-        ))
+        .with_item(
+            "bounds",
+            DescriptorValue.object(bounds_descriptor("bounds", b[0], b[1], b[2], b[3])),
+        )
     )
 
     body = PsdBinaryWriter()
@@ -657,7 +712,7 @@ def _tysh_body(meta: TextLayerMetadata) -> bytes:
         body.write_f64(v)
     body.write_i16(50)  # descriptor version
     write_versioned_descriptor(body, text_descriptor)
-    body.write_i16(1)   # warp version
+    body.write_i16(1)  # warp version
     write_versioned_descriptor(body, warp_descriptor)
     # Bounds: Top, Left, Bottom, Right (f32)
     body.write_f32(b[1])  # Top
@@ -672,9 +727,7 @@ def _tysh_body(meta: TextLayerMetadata) -> bytes:
     return bytes(result)
 
 
-def _overlay(
-    canvas: np.ndarray, layer: np.ndarray, left: int, top: int
-) -> None:
+def _overlay(canvas: np.ndarray, layer: np.ndarray, left: int, top: int) -> None:
     """Overlay a layer onto the canvas with alpha compositing."""
     if layer is None or layer.size == 0:
         return
@@ -711,7 +764,10 @@ def _overlay(
     for c in range(3):
         result[:, :, c] = np.where(
             mask,
-            (src[:, :, c] * src_alpha[:, :, 0] + dst[:, :, c] * dst_alpha[:, :, 0] * (1.0 - src_alpha[:, :, 0]))
+            (
+                src[:, :, c] * src_alpha[:, :, 0]
+                + dst[:, :, c] * dst_alpha[:, :, 0] * (1.0 - src_alpha[:, :, 0])
+            )
             / out_alpha[:, :, 0],
             0,
         )

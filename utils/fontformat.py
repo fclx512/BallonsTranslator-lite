@@ -34,7 +34,7 @@ class TextAlignment(enum.IntEnum):
 
 class PunctuationPosition(enum.IntEnum):
     Traditional = 0  # 繁体中文/日文：横排居中 / 竖排居中 (matches old Center=0)
-    Simplified = 1   # 简体中文：横排底部 / 竖排右上 (matches old UpperRight=1)
+    Simplified = 1  # 简体中文：横排底部 / 竖排右上 (matches old UpperRight=1)
 
 
 # Deprecated alias — kept for backward compatibility with old serialized data

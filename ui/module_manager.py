@@ -1,4 +1,6 @@
+import importlib
 import os.path as osp
+import sys
 import time
 from typing import List, Union
 
@@ -39,6 +41,44 @@ from .funcmaps import get_maskseg_method
 
 modules.translators.SYSTEM_LANG = QLocale.system().name()
 cfg_module = pcfg.module
+
+
+def _build_dep_notes(registry: Registry) -> dict[str, str]:
+    """Build ``{module_name: dependency_hint_or_None}`` for ComboBox grouping.
+
+    Checks each registered module's ``requires_packages`` and
+    ``download_file_list``.  Returns a dict where:
+    - ``None`` / missing means no extra dependencies
+    - a non-empty string describes what's needed (shown as tooltip)
+    """
+    notes: dict[str, str] = {}
+    for name in registry.module_dict:
+        cls = registry.get(name)
+        parts: list[str] = []
+        pkgs = getattr(cls, "requires_packages", None) or []
+        for pkg in pkgs:
+            if "torch" in pkg.lower():
+                parts.append("PyTorch")
+            elif "paddle" in pkg.lower():
+                parts.append("PaddlePaddle")
+            else:
+                # Strip version specifiers for display
+                pkg_name = (
+                    pkg.split(">")[0].split("<")[0].split("=")[0].split("[")[0].strip()
+                )
+                if pkg_name:
+                    parts.append(pkg_name)
+        dfl = getattr(cls, "download_file_list", None) or []
+        n_models = 0
+        for dl_entry in dfl:
+            raw = dl_entry.get("files") or []
+            if isinstance(raw, str):
+                raw = [raw]
+            n_models += len(raw)
+        if n_models:
+            parts.append(f"{n_models} model file{'s' if n_models > 1 else ''}")
+        notes[name] = ", ".join(parts) if parts else None
+    return notes
 
 
 class ModuleThread(QThread):
@@ -680,6 +720,236 @@ def unload_modules(self, module_names):
         soft_empty_cache()
 
 
+def _ensure_module_deps(
+    module_cls,
+    parent_widget,
+) -> bool:
+    """Check module dependencies and show an install dialog if anything is
+    missing.  Returns ``True`` if all deps are satisfied (or the user chose to
+    skip), ``False`` if the module class is invalid.
+
+    ``module_cls`` may be a class or a ``ModuleSpec`` — both are handled.
+
+    The dialog shows:
+    - Python packages that need installing (from ``requires_packages``)
+    - Model files that need downloading (from ``download_file_list``)
+    - "Install all" / "Later" buttons
+    """
+    from utils.registry import ModuleSpec
+
+    is_spec = isinstance(module_cls, ModuleSpec)
+
+    # Resolve to actual class for attribute access, but keep ModuleSpec
+    # name for the dialog so the user sees the registration key.
+    mod_name = module_cls.key if is_spec else getattr(module_cls, "__name__", "?")
+    actual_cls = module_cls.resolve() if is_spec else module_cls
+
+    pkgs = getattr(actual_cls, "requires_packages", None) or []
+    dfl = getattr(actual_cls, "download_file_list", None) or []
+
+    # Check which packages are already installed
+    missing_pkgs: list[str] = []
+    if pkgs:
+        try:
+            import importlib.metadata as importlib_metadata
+
+            from packaging.requirements import Requirement
+            from packaging.utils import canonicalize_name
+        except ImportError:
+            missing_pkgs = list(pkgs)
+        else:
+            for req_str in pkgs:
+                try:
+                    req = Requirement(req_str)
+                    dist = importlib_metadata.distribution(canonicalize_name(req.name))
+                    if not req.specifier.contains(dist.version, prereleases=True):
+                        missing_pkgs.append(req_str)
+                except importlib_metadata.PackageNotFoundError:
+                    missing_pkgs.append(req_str)
+
+    # Check which model files are already on disk.
+    # Use ``save_files`` (actual on-disk paths) when available, falling
+    # back to ``files`` (archive-internal names).
+    missing_model_labels: list[str] = []
+    for dl_entry in dfl:
+        check_paths = dl_entry.get("save_files") or dl_entry.get("files") or []
+        if isinstance(check_paths, str):
+            check_paths = [check_paths]
+        for fpath in check_paths:
+            if not osp.isabs(fpath):
+                fpath = osp.join(shared.PROGRAM_PATH, fpath)
+            if not osp.exists(fpath):
+                label = dl_entry.get("url", osp.basename(fpath))
+                missing_model_labels.append(label)
+                break  # one line per entry
+
+    if not missing_pkgs and not missing_model_labels:
+        return True  # everything already present
+
+    # ── Build and show the install dialog ──
+    from qtpy.QtWidgets import (
+        QApplication,
+        QDialog,
+        QHBoxLayout,
+        QLabel,
+        QProgressBar,
+        QPushButton,
+        QVBoxLayout,
+    )
+
+    class _InstallDialog(QDialog):
+        def __init__(self, mod_name, pkgs, models, parent=None):
+            super().__init__(parent)
+            self._installed = False
+            self.setWindowTitle(
+                parent.tr("Install Dependencies") if parent else "Install Dependencies"
+            )
+            self.setMinimumWidth(480)
+            layout = QVBoxLayout(self)
+
+            layout.addWidget(
+                QLabel(
+                    (
+                        parent.tr('Module "{name}" requires additional dependencies:')
+                        if parent
+                        else 'Module "{name}" requires additional dependencies:'
+                    ).format(name=mod_name)
+                )
+            )
+
+            if pkgs:
+                pkg_label = QLabel(
+                    (parent.tr("Python packages:") if parent else "Python packages:")
+                )
+                pkg_label.setStyleSheet("font-weight: bold; margin-top: 8px;")
+                layout.addWidget(pkg_label)
+                for p in pkgs:
+                    layout.addWidget(QLabel(f"  • {p}"))
+
+            if models:
+                model_label = QLabel(
+                    (
+                        parent.tr("Model files to download:")
+                        if parent
+                        else "Model files to download:"
+                    )
+                )
+                model_label.setStyleSheet("font-weight: bold; margin-top: 8px;")
+                layout.addWidget(model_label)
+                for m in models:
+                    layout.addWidget(QLabel(f"  • {m}"))
+
+            layout.addSpacing(12)
+
+            if parent:
+                layout.addWidget(
+                    QLabel(
+                        parent.tr(
+                            "Network restricted? Open Settings → Mirror Config to configure download sources."
+                        )
+                    )
+                )
+
+            # Progress bar (hidden until install starts)
+            self._progress = QProgressBar()
+            self._progress.setVisible(False)
+            layout.addWidget(self._progress)
+
+            # Buttons
+            btn_row = QHBoxLayout()
+            self._install_btn = QPushButton(
+                parent.tr("Install All") if parent else "Install All"
+            )
+            self._install_btn.clicked.connect(self._do_install)
+            btn_row.addWidget(self._install_btn)
+
+            self._skip_btn = QPushButton(parent.tr("Later") if parent else "Later")
+            self._skip_btn.clicked.connect(self.reject)
+            btn_row.addWidget(self._skip_btn)
+            layout.addLayout(btn_row)
+
+        def _do_install(self):
+            self._install_btn.setEnabled(False)
+            self._skip_btn.setEnabled(False)
+            self._progress.setVisible(True)
+            self._progress.setRange(0, 0)  # indeterminate
+            QApplication.processEvents()
+
+            success = True
+            # 1. Install Python packages
+            if missing_pkgs:
+                try:
+                    python = sys.executable
+                    import subprocess
+
+                    # Prefer uv, fall back to pip
+                    try:
+                        subprocess.run(
+                            [
+                                python,
+                                "-m",
+                                "uv",
+                                "pip",
+                                "install",
+                                *missing_pkgs,
+                                "--prefer-binary",
+                            ],
+                            capture_output=True,
+                            timeout=300,
+                            check=True,
+                        )
+                    except Exception:
+                        subprocess.run(
+                            [
+                                python,
+                                "-m",
+                                "pip",
+                                "install",
+                                *missing_pkgs,
+                                "--prefer-binary",
+                            ],
+                            capture_output=True,
+                            timeout=300,
+                            check=True,
+                        )
+                    self._progress.setValue(50)
+                except Exception as e:
+                    LOGGER.warning(f"Package install failed: {e}")
+                    success = False
+
+            # 2. Download model files
+            if success and missing_model_labels:
+                from utils.download_util import download_and_check_files
+
+                for dl_entry in dfl:
+                    ok = download_and_check_files(**dl_entry)
+                    if not ok:
+                        LOGGER.warning(
+                            f"Model download failed: {dl_entry.get('url', '?')}"
+                        )
+                        success = False
+
+            self._progress.setValue(100)
+            if success:
+                self._installed = True
+                self.accept()
+            else:
+                self._install_btn.setText(
+                    self.parent().tr("Retry") if self.parent() else "Retry"
+                )
+                self._install_btn.setEnabled(True)
+                self._skip_btn.setEnabled(True)
+                self._progress.setVisible(False)
+
+    dlg = _InstallDialog(
+        mod_name,
+        missing_pkgs,
+        missing_model_labels,
+        parent_widget,
+    )
+    return dlg.exec() == QDialog.DialogCode.Accepted and dlg._installed
+
+
 class ModuleManager(QObject):
     imgtrans_proj: ProjImgTrans = None
 
@@ -751,7 +1021,9 @@ class ModuleManager(QObject):
         translator_params = merge_config_module_params(
             cfg_module.translator_params, GET_VALID_TRANSLATORS(), TRANSLATORS.get
         )
-        translator_panel.addModulesParamWidgets(translator_params)
+        translator_panel.addModulesParamWidgets(
+            translator_params, _build_dep_notes(TRANSLATORS)
+        )
         translator_panel.translator_changed.connect(self.setTranslator)
         translator_panel.paramwidget_edited.connect(self.on_translatorparam_edited)
         from modules.translators.hooks import chs2cht
@@ -762,7 +1034,9 @@ class ModuleManager(QObject):
         inpainter_params = merge_config_module_params(
             cfg_module.inpainter_params, GET_VALID_INPAINTERS(), INPAINTERS.get
         )
-        inpainter_panel.addModulesParamWidgets(inpainter_params)
+        inpainter_panel.addModulesParamWidgets(
+            inpainter_params, _build_dep_notes(INPAINTERS)
+        )
         inpainter_panel.paramwidget_edited.connect(self.on_inpainterparam_edited)
         inpainter_panel.inpainter_changed.connect(self.setInpainter)
         inpainter_panel.needInpaintChecker.checker_changed.connect(
@@ -776,7 +1050,9 @@ class ModuleManager(QObject):
         textdetector_params = merge_config_module_params(
             cfg_module.textdetector_params, GET_VALID_TEXTDETECTORS(), TEXTDETECTORS.get
         )
-        textdetector_panel.addModulesParamWidgets(textdetector_params)
+        textdetector_panel.addModulesParamWidgets(
+            textdetector_params, _build_dep_notes(TEXTDETECTORS)
+        )
         textdetector_panel.paramwidget_edited.connect(self.on_textdetectorparam_edited)
         textdetector_panel.detector_changed.connect(self.setTextDetector)
 
@@ -792,7 +1068,7 @@ class ModuleManager(QObject):
                 profile_cfg = ocr_params[mod_key].get("profile")
                 if isinstance(profile_cfg, dict):
                     profile_cfg["options"] = get_vision_profile_names()
-        ocr_panel.addModulesParamWidgets(ocr_params)
+        ocr_panel.addModulesParamWidgets(ocr_params, _build_dep_notes(OCR))
         ocr_panel.paramwidget_edited.connect(self.on_ocrparam_edited)
         ocr_panel.ocr_changed.connect(self.setOCR)
         config_panel.profiles_changed.connect(self._on_profiles_changed)
@@ -1010,6 +1286,9 @@ class ModuleManager(QObject):
     def setTranslator(self, translator: str = None):
         if translator is None:
             translator = cfg_module.translator
+        cls = TRANSLATORS.get(translator)
+        if cls and not _ensure_module_deps(cls, self.parent()):
+            return
         if self.translate_thread.isRunning():
             LOGGER.warning("Terminating a running translation thread.")
             self.translate_thread.terminate()
@@ -1035,11 +1314,23 @@ class ModuleManager(QObject):
             self.check_inpaint_fin_timer.start(300)
             return
 
+        cls = INPAINTERS.get(inpainter)
+        if cls and not _ensure_module_deps(cls, self.parent()):
+            return
+
         self.inpaint_thread.setInpainter(inpainter)
 
     def setTextDetector(self, textdetector: str = None):
         if textdetector is None:
             textdetector = cfg_module.textdetector
+        cls = TEXTDETECTORS.get(textdetector)
+        if cls and not _ensure_module_deps(cls, self.parent()):
+            return
+        # Refresh param widget after dep install so dynamic model lists
+        # (e.g. ysgyolo's CKPT_LIST) are picked up.
+        self._refresh_module_widget(
+            self.config_panel.detect_config_panel, textdetector, cls
+        )
         if self.textdetect_thread.isRunning():
             LOGGER.warning("Terminating a running text detection thread.")
             self.textdetect_thread.terminate()
@@ -1048,6 +1339,9 @@ class ModuleManager(QObject):
     def setOCR(self, ocr: str = None):
         if ocr is None:
             ocr = cfg_module.ocr
+        cls = OCR.get(ocr)
+        if cls and not _ensure_module_deps(cls, self.parent()):
+            return
         if self.ocr_thread.isRunning():
             LOGGER.warning("Terminating a running OCR thread.")
             self.ocr_thread.terminate()
@@ -1164,6 +1458,30 @@ class ModuleManager(QObject):
                 param_widget.setCurrentText(p)
         else:
             module.updateParam(param_key, param_content["content"])
+
+    def _refresh_module_widget(self, panel, module_name, cls):
+        """Refresh a module's param widget after its dependencies were installed.
+
+        Calls module-level refresh hooks (e.g. ``update_ckpt_list()`` for
+        ysgyolo) then invalidates the cached ``ParamWidget`` so it is rebuilt
+        with current options on next render.
+        """
+        # 1. Call module-level refresh hooks if they exist
+        mod_name = getattr(cls, "__module__", None)
+        if mod_name:
+            try:
+                py_mod = importlib.import_module(mod_name)
+                if hasattr(py_mod, "update_ckpt_list"):
+                    py_mod.update_ckpt_list()
+            except Exception:
+                pass
+        # 2. Invalidate cached ParamWidget so it gets rebuilt
+        if module_name in panel.param_widget_map:
+            old = panel.param_widget_map[module_name]
+            if old is not None:
+                old.deleteLater()
+            panel.param_widget_map[module_name] = None
+        panel.updateModuleParamWidget()
 
     def handle_page_changed(self):
         if not self.imgtrans_thread.isRunning():

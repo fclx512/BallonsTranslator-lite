@@ -344,7 +344,9 @@ def save_all_profiles(profiles: List[Dict]):
     _save_profiles(profiles)
     save_config()
 
+
 # ── Dialog ──
+
 
 class ProfileManagerDialog(QDialog):
     """Unified dialog to manage API profiles for both translation and OCR."""

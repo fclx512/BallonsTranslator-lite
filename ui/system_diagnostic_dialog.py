@@ -14,7 +14,6 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
 )
 
-
 # ── Worker thread ──────────────────────────────────────────────────────────
 
 
@@ -48,11 +47,9 @@ class SystemDiagnosticDialog(QDialog):
         # Text output
         self.output = QPlainTextEdit()
         self.output.setReadOnly(True)
-        self.output.setStyleSheet(
-            "font-family: Consolas, monospace; font-size: 13px;"
-        )
+        self.output.setStyleSheet("font-family: Consolas, monospace; font-size: 13px;")
         self.output.setPlaceholderText(
-            self.tr("Click \"Run Diagnostic\" to check your system.")
+            self.tr('Click "Run Diagnostic" to check your system.')
         )
         layout.addWidget(self.output, 1)
 

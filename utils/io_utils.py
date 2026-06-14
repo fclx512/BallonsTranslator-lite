@@ -21,7 +21,7 @@ from .logger import logger as LOGGER
 
 # Ensure JXL codec is registered if pillow-jxl-plugin is installed
 # JXL codec registration — currently disabled in UI due to compatibility issues.
-# See docs/en/lessons_learned.md §4.1 for details. If re-enabling, fix imwrite error handling first.
+# See docs/经验教训.md §4.1 for details. If re-enabling, fix imwrite error handling first.
 try:
     import pillow_jxl  # noqa: F401 — registers JXL codec with Pillow
 except ImportError:
@@ -287,7 +287,7 @@ def imread(imgpath, read_type=cv2.IMREAD_COLOR, max_retry_limit=5, retry_interva
     # JXL: try PIL once, fall back to cv2 on failure. No retries — if the JXL
     # codec can't decode a fully-written file, retrying won't help.
     # JXL read path — kept for backward compatibility with existing .jxl cache files.
-    # See docs/en/lessons_learned.md §4.1 for known decode failures.
+    # See docs/经验教训.md §4.1 for known decode failures.
     if suffix == ".jxl":
         if ".jxl" in Image.EXTENSION:
             try:
@@ -308,7 +308,9 @@ def imread(imgpath, read_type=cv2.IMREAD_COLOR, max_retry_limit=5, retry_interva
     num_tries = 0
     while True:
         try:
-            img = _pil_image_open(imgpath)  # bypass ultralytics' broken Image.open patch
+            img = _pil_image_open(
+                imgpath
+            )  # bypass ultralytics' broken Image.open patch
             if img.mode == "CMYK":
                 img = img.convert("RGB")
             elif img.mode == "P":
@@ -367,7 +369,7 @@ def imwrite(img_path, img, ext=".png", quality=100, jxl_encode_effort=3):
         encode_param = [cv2.IMWRITE_WEBP_QUALITY, quality]
     # JXL save path — NOT currently reachable from UI (JXL disabled in configpanel).
     # WARNING: no try/except here; a failed encode can leave a 0-byte or corrupt file.
-    # If re-enabling JXL, wrap this in try/except with PNG fallback. See docs/en/lessons_learned.md §4.1.
+    # If re-enabling JXL, wrap this in try/except with PNG fallback. See docs/经验教训.md §4.1.
     if ext == ".jxl":
         if ".jxl" in Image.EXTENSION:
             lossless = quality > 99

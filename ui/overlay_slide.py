@@ -20,6 +20,7 @@ from utils.config import pcfg
 # Shared composited overlay (one per parent widget)
 # ═══════════════════════════════════════════════════════════════════
 
+
 class _SharedOverlay(QWidget):
     """Per-parent overlay painting background + panel layers.
 
@@ -86,8 +87,7 @@ class _SharedOverlay(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.drawPixmap(0, 0, self._bg)
-        for _, (pm, x, _) in sorted(self._layers.items(),
-                                    key=lambda kv: kv[1][2]):
+        for _, (pm, x, _) in sorted(self._layers.items(), key=lambda kv: kv[1][2]):
             painter.drawPixmap(x, 0, pm)
 
     def resize_for_parent(self):
@@ -119,6 +119,7 @@ class _SharedOverlay(QWidget):
 # ═══════════════════════════════════════════════════════════════════
 # Public slider
 # ═══════════════════════════════════════════════════════════════════
+
 
 class OverlaySlider(QObject):
     _next_z: int = 0
@@ -356,8 +357,9 @@ class OverlaySlider(QObject):
             self._nav_layer_id = f"{z}_nav"
             self._content_layer_id = f"{z}_content"
             self._shared.add_layer(self._nav_layer_id, nav_pm, 0, z)
-            self._shared.add_layer(self._content_layer_id, content_pm,
-                                   content_rest_x, z)
+            self._shared.add_layer(
+                self._content_layer_id, content_pm, content_rest_x, z
+            )
 
             # NavList: visible (0) ➔ off-screen left (-nav_w)
             self._nav_anim_start_x = 0
@@ -388,8 +390,7 @@ class OverlaySlider(QObject):
         self._shared = _SharedOverlay.acquire(pw, ow)
         OverlaySlider._next_z += 1
         self._layer_id = str(OverlaySlider._next_z)
-        self._shared.add_layer(self._layer_id, self._panel_pm, 0,
-                               OverlaySlider._next_z)
+        self._shared.add_layer(self._layer_id, self._panel_pm, 0, OverlaySlider._next_z)
         widget.hide()
 
         self._anim_start_x = 0
@@ -413,7 +414,9 @@ class OverlaySlider(QObject):
             else:
                 self._widget.setGeometry(
                     0 if self._direction == "left" else pw.width() - ow,
-                    0, ow, pw.height(),
+                    0,
+                    ow,
+                    pw.height(),
                 )
 
     # ── Internals ───────────────────────────────────────────────────
@@ -434,16 +437,17 @@ class OverlaySlider(QObject):
                 self._nav_anim_start_x if toward_start else self._nav_anim_end_x
             )
             self._nav_anim_start_x, self._nav_anim_end_x = (
-                self._nav_anim_end_x, self._nav_anim_start_x
+                self._nav_anim_end_x,
+                self._nav_anim_start_x,
             )
             # ConfigContent reversal
             self._content_start_x = self._content_current_x
             self._content_end_x = (
-                self._content_anim_start_x if toward_start
-                else self._content_anim_end_x
+                self._content_anim_start_x if toward_start else self._content_anim_end_x
             )
             self._content_anim_start_x, self._content_anim_end_x = (
-                self._content_anim_end_x, self._content_anim_start_x
+                self._content_anim_end_x,
+                self._content_anim_start_x,
             )
         else:
             self._start_x = self._current_x
@@ -479,8 +483,10 @@ class OverlaySlider(QObject):
             if self._split_mode:
                 # Place panel at final position and show real widget
                 self._widget.setGeometry(
-                    0, 0,
-                    self._widget.width(), self._widget.height(),
+                    0,
+                    0,
+                    self._widget.width(),
+                    self._widget.height(),
                 )
                 self._widget.show()
                 self._widget.raise_()
@@ -489,8 +495,10 @@ class OverlaySlider(QObject):
                 # overlay layer so there is no moment where neither the
                 # overlay composition nor the real widget covers the area.
                 self._widget.setGeometry(
-                    self._current_x, 0,
-                    self._widget.width(), self._widget.height(),
+                    self._current_x,
+                    0,
+                    self._widget.width(),
+                    self._widget.height(),
                 )
                 self._widget.show()
                 self._widget.raise_()
@@ -550,14 +558,15 @@ class OverlaySlider(QObject):
         eased = self._easing.valueForProgress(progress)
 
         if self._split_mode and self._shared is not None:
-            nav_x = int(round(
-                self._nav_start_x
-                + (self._nav_end_x - self._nav_start_x) * eased
-            ))
-            content_x = int(round(
-                self._content_start_x
-                + (self._content_end_x - self._content_start_x) * eased
-            ))
+            nav_x = int(
+                round(self._nav_start_x + (self._nav_end_x - self._nav_start_x) * eased)
+            )
+            content_x = int(
+                round(
+                    self._content_start_x
+                    + (self._content_end_x - self._content_start_x) * eased
+                )
+            )
             if self._nav_layer_id:
                 self._shared.update_layer(self._nav_layer_id, nav_x)
             if self._content_layer_id:
@@ -565,15 +574,15 @@ class OverlaySlider(QObject):
             self._nav_current_x = nav_x
             self._content_current_x = content_x
         elif self._shared is not None and self._layer_id is not None:
-            self._current_x = int(round(
-                self._start_x + (self._end_x - self._start_x) * eased
-            ))
+            self._current_x = int(
+                round(self._start_x + (self._end_x - self._start_x) * eased)
+            )
             self._shared.update_layer(self._layer_id, self._current_x)
         else:
             # Fallback: animate real widget directly
-            self._current_x = int(round(
-                self._start_x + (self._end_x - self._start_x) * eased
-            ))
+            self._current_x = int(
+                round(self._start_x + (self._end_x - self._start_x) * eased)
+            )
             self._widget.move(self._current_x, 0)
             self._widget.raise_()
 

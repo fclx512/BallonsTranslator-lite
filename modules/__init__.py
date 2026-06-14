@@ -1,3 +1,7 @@
+from utils.registries import (
+    MODULETYPE_TO_REGISTRIES,  # noqa: E402 — single source of truth
+)
+
 from .base import (
     DEFAULT_DEVICE,
     GPUINTENSIVE_SET,
@@ -14,8 +18,6 @@ from .ocr import OCR, OCRBase
 from .textdetector import TEXTDETECTORS, TextDetectorBase
 from .translators import TRANSLATORS, BaseTranslator
 
-from utils.registries import MODULETYPE_TO_REGISTRIES  # noqa: E402 — single source of truth
-
 
 def GET_VALID_TEXTDETECTORS() -> list:
     return list(TEXTDETECTORS.module_dict.keys())
@@ -30,6 +32,9 @@ def GET_VALID_INPAINTERS() -> list:
 
 
 def GET_VALID_OCR() -> list:
-    return [k for k in list(OCR.module_dict.keys()) if k != "none_ocr"] + ["none_ocr"]
+    # Exclude deprecated modules and move none_ocr to end
+    exclude = {"none_ocr", "paddleocr_v6"}
+    return [k for k in list(OCR.module_dict.keys()) if k not in exclude] + ["none_ocr"]
+
 
 # TODO: use manga-image-translator as backend...

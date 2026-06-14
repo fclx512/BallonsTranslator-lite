@@ -38,23 +38,23 @@ def _package_version(package_name):
 
 
 def _torch_package_backend():
-    version = _package_version('torch')
+    version = _package_version("torch")
     if version is None:
         return None
-    if sys.platform == 'darwin':
-        return 'mps'
-    if '+' not in version:
+    if sys.platform == "darwin":
+        return "mps"
+    if "+" not in version:
         return None
-    local_version = version.split('+', 1)[1].lower()
-    if local_version.startswith(('cu', 'rocm')):
-        return 'cuda'
-    if local_version.startswith('xpu'):
-        return 'xpu'
+    local_version = version.split("+", 1)[1].lower()
+    if local_version.startswith(("cu", "rocm")):
+        return "cuda"
+    if local_version.startswith("xpu"):
+        return "xpu"
     return None
 
 
 def _candidate_device_options():
-    options = ['cpu']
+    options = ["cpu"]
     backend = _torch_package_backend()
     if backend is not None:
         options.append(backend)
@@ -62,26 +62,27 @@ def _candidate_device_options():
 
 
 def _preferred_device_value(options):
-    preferred = ['mps'] if sys.platform == 'darwin' else ['cuda', 'xpu']
+    preferred = ["mps"] if sys.platform == "darwin" else ["cuda", "xpu"]
     for device in preferred:
         if device in options:
             return device
-    if 'cpu' in options:
-        return 'cpu'
-    return options[0] if options else 'cpu'
+    if "cpu" in options:
+        return "cpu"
+    return options[0] if options else "cpu"
 
 
 def _device_selector(not_supported=None):
     if not_supported is None:
         not_supported = []
     options = _candidate_device_options()
-    options = [opt for opt in options
-               if all(device not in opt for device in not_supported)]
+    options = [
+        opt for opt in options if all(device not in opt for device in not_supported)
+    ]
     return {
-        'type': 'selector',
-        'options': options,
-        'value': _preferred_device_value(options),
-        '__device_not_supported': not_supported,
+        "type": "selector",
+        "options": options,
+        "value": _preferred_device_value(options),
+        "__device_not_supported": not_supported,
     }
 
 
@@ -110,7 +111,7 @@ class SafeEval:
             return UNKNOWN
 
     def visit(self, node):
-        method = 'visit_' + node.__class__.__name__
+        method = "visit_" + node.__class__.__name__
         visitor = getattr(self, method, None)
         if visitor is None:
             return UNKNOWN
@@ -122,7 +123,7 @@ class SafeEval:
     def visit_Name(self, node):
         if node.id in self.env:
             return self.env[node.id]
-        if node.id == 'None':
+        if node.id == "None":
             return None
         return UNKNOWN
 
@@ -260,7 +261,7 @@ class SafeEval:
         if value is UNKNOWN:
             if isinstance(node.value, ast.Name):
                 root = node.value.id
-                if root == 'sys' and node.attr == 'platform':
+                if root == "sys" and node.attr == "platform":
                     return sys.platform
             return UNKNOWN
         return getattr(value, node.attr, UNKNOWN)
@@ -271,40 +272,40 @@ class SafeEval:
         if any(arg is UNKNOWN for arg in args):
             return UNKNOWN
 
-        if func_name == 'DEVICE_SELECTOR':
+        if func_name == "DEVICE_SELECTOR":
             not_supported = args[0] if args else []
             for kw in node.keywords:
-                if kw.arg == 'not_supported':
+                if kw.arg == "not_supported":
                     not_supported = self.visit(kw.value)
                     if not_supported is UNKNOWN:
                         not_supported = []
             return _device_selector(not_supported)
-        if func_name in {'deepcopy', 'copy.deepcopy'} and len(args) == 1:
+        if func_name in {"deepcopy", "copy.deepcopy"} and len(args) == 1:
             return deepcopy(args[0])
-        if func_name == 'list' and len(args) == 1:
+        if func_name == "list" and len(args) == 1:
             return list(args[0])
-        if func_name == 'tuple' and len(args) == 1:
+        if func_name == "tuple" and len(args) == 1:
             return tuple(args[0])
-        if func_name == 'set' and len(args) == 1:
+        if func_name == "set" and len(args) == 1:
             return set(args[0])
-        if func_name == 'str' and len(args) == 1:
+        if func_name == "str" and len(args) == 1:
             return str(args[0])
-        if func_name == 'int' and len(args) == 1:
+        if func_name == "int" and len(args) == 1:
             return int(args[0])
-        if func_name == 'float' and len(args) == 1:
+        if func_name == "float" and len(args) == 1:
             return float(args[0])
-        if func_name == 'platform.system':
+        if func_name == "platform.system":
             return platform.system()
-        if func_name == 'platform.mac_ver':
+        if func_name == "platform.mac_ver":
             return platform.mac_ver()
-        if func_name == 'platform.version':
+        if func_name == "platform.version":
             return platform.version()
-        if func_name in {'os.path.join', 'osp.join'}:
+        if func_name in {"os.path.join", "osp.join"}:
             return os.path.join(*args)
         # Fallback: handle method calls on previously-evaluated objects
         # e.g. lang_map.keys() where lang_map is a dict in the environment.
-        if '.' in func_name:
-            obj_name, _, method_name = func_name.rpartition('.')
+        if "." in func_name:
+            obj_name, _, method_name = func_name.rpartition(".")
             if obj_name in self.env:
                 obj = self.env[obj_name]
                 method = getattr(obj, method_name, None)
@@ -321,8 +322,8 @@ def _call_name(node) -> str:
         return node.id
     if isinstance(node, ast.Attribute):
         parent = _call_name(node.value)
-        return f'{parent}.{node.attr}' if parent else node.attr
-    return ''
+        return f"{parent}.{node.attr}" if parent else node.attr
+    return ""
 
 
 def _module_name_from_path(path: str) -> str:
@@ -335,10 +336,10 @@ def _module_name_from_path(path: str) -> str:
     path_obj = Path(path).resolve()
     try:
         rel_path = path_obj.relative_to(PACKAGE_ROOT)
-        return '.'.join(rel_path.with_suffix('').parts)
+        return ".".join(rel_path.with_suffix("").parts)
     except ValueError:
-        module_name = path.replace(os.sep, '.').replace('/', '.')
-        if module_name.endswith('.py'):
+        module_name = path.replace(os.sep, ".").replace("/", ".")
+        if module_name.endswith(".py"):
             module_name = module_name[:-3]
         return module_name
 
@@ -355,9 +356,11 @@ def _decorator_key(node, module_type: str, env: Dict[str, Any]) -> Optional[str]
 
 
 def _assign_name(node):
-    if (isinstance(node, ast.Assign)
-            and len(node.targets) == 1
-            and isinstance(node.targets[0], ast.Name)):
+    if (
+        isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+    ):
         return node.targets[0].id, node.value
     if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
         return node.target.id, node.value
@@ -374,8 +377,9 @@ def _walk_assignments(stmts: Iterable[ast.stmt], env: Dict[str, Any]):
                 env[name] = value
 
 
-def _collect_class_attrs(class_node: ast.ClassDef,
-                         env: Dict[str, Any]) -> Dict[str, Any]:
+def _collect_class_attrs(
+    class_node: ast.ClassDef, env: Dict[str, Any]
+) -> Dict[str, Any]:
     """Collect class-level metadata without executing the class body."""
     attrs = {}
     class_env = env.copy()
@@ -388,8 +392,12 @@ def _collect_class_attrs(class_node: ast.ClassDef,
                 value = evaluator.eval(value_node)
                 if value is not UNKNOWN:
                     class_env[name] = value
-                    if name in {'params', 'download_file_list',
-                                'download_file_on_load', 'dependencies'}:
+                    if name in {
+                        "params",
+                        "download_file_list",
+                        "download_file_on_load",
+                        "dependencies",
+                    }:
                         attrs[name] = value
             elif isinstance(node, ast.If):
                 cond = evaluator.eval(node.test)
@@ -400,12 +408,12 @@ def _collect_class_attrs(class_node: ast.ClassDef,
                 else:
                     walk(node.body)
                     walk(node.orelse)
+
     walk(class_node.body)
     return attrs
 
 
-def _collect_translator_langs(class_node: ast.ClassDef,
-                              env: Dict[str, Any]):
+def _collect_translator_langs(class_node: ast.ClassDef, env: Dict[str, Any]):
     """Infer translator language lists from simple class metadata."""
     langs = []
     src = tgt = None
@@ -414,51 +422,70 @@ def _collect_translator_langs(class_node: ast.ClassDef,
 
     for node in class_node.body:
         name, value_node = _assign_name(node)
-        if name == 'cht_require_convert' and value_node is not None:
+        if name == "cht_require_convert" and value_node is not None:
             value = evaluator.eval(value_node)
             if isinstance(value, bool):
                 cht_require_convert = value
 
         if isinstance(node, ast.FunctionDef):
-            if node.name in {'supported_src_list', 'supported_tgt_list'}:
+            if node.name in {"supported_src_list", "supported_tgt_list"}:
                 value = _return_list(node, env)
-                if node.name == 'supported_src_list':
+                if node.name == "supported_src_list":
                     src = value
                 else:
                     tgt = value
-            if node.name == '_setup_translator':
+            if node.name == "_setup_translator":
                 for child in ast.walk(node):
-                    if (not isinstance(child, ast.Assign)
-                            or len(child.targets) != 1):
+                    if not isinstance(child, ast.Assign) or len(child.targets) != 1:
                         continue
                     target = child.targets[0]
                     if not isinstance(target, ast.Subscript):
                         continue
                     if not isinstance(target.value, ast.Attribute):
                         continue
-                    if target.value.attr != 'lang_map':
+                    if target.value.attr != "lang_map":
                         continue
                     key = evaluator.eval(target.slice)
                     value = evaluator.eval(child.value)
-                    if (isinstance(key, str)
-                            and value not in {'', None, UNKNOWN}
-                            and key not in langs):
+                    if (
+                        isinstance(key, str)
+                        and value not in {"", None, UNKNOWN}
+                        and key not in langs
+                    ):
                         langs.append(key)
 
-    if class_node.name in {'TransNone', 'TransSource'}:
+    if class_node.name in {"TransNone", "TransSource"}:
         _BASE_TRANSLATOR_LANGS = [
-            'Auto', '简体中文', '繁體中文', '日本語', 'English',
-            '한국어', 'Tiếng Việt', 'čeština', 'Nederlands', 'Français',
-            'Deutsch', 'magyar nyelv', 'Italiano', 'Polski', 'Português',
-            'Brazilian Portuguese', 'limba română', 'русский язык',
-            'Español', 'Türk dili', 'украї́нська мо́ва', 'Thai',
-            'Arabic', 'Hindi', 'Malayalam', 'Tamil',
+            "Auto",
+            "简体中文",
+            "繁體中文",
+            "日本語",
+            "English",
+            "한국어",
+            "Tiếng Việt",
+            "čeština",
+            "Nederlands",
+            "Français",
+            "Deutsch",
+            "magyar nyelv",
+            "Italiano",
+            "Polski",
+            "Português",
+            "Brazilian Portuguese",
+            "limba română",
+            "русский язык",
+            "Español",
+            "Türk dili",
+            "украї́нська мо́ва",
+            "Thai",
+            "Arabic",
+            "Hindi",
+            "Malayalam",
+            "Tamil",
         ]
         langs = _BASE_TRANSLATOR_LANGS
-    if (cht_require_convert
-            and '简体中文' in langs
-            and '繁體中文' not in langs):
-        langs.append('繁體中文')
+    if cht_require_convert and "简体中文" in langs and "繁體中文" not in langs:
+        langs.append("繁體中文")
     if src is None:
         src = langs or None
     if tgt is None:
@@ -497,19 +524,19 @@ def _scan_file(path: str, module_type: str) -> List[ModuleSpec]:
         'cpu'
     """
 
-    with open(path, 'r', encoding='utf8') as f:
+    with open(path, "r", encoding="utf8") as f:
         source = f.read()
     tree = ast.parse(source, filename=path)
     module_path = _module_name_from_path(path)
     specs = []
     env = {
-        'sys': sys,
-        'platform': platform,
-        'DEFAULT_DEVICE': 'cpu',
-        'BF16_SUPPORTED': False,
-        'True': True,
-        'False': False,
-        'None': None,
+        "sys": sys,
+        "platform": platform,
+        "DEFAULT_DEVICE": "cpu",
+        "BF16_SUPPORTED": False,
+        "True": True,
+        "False": False,
+        "None": None,
     }
 
     def walk(stmts):
@@ -526,22 +553,22 @@ def _scan_file(path: str, module_type: str) -> List[ModuleSpec]:
                     continue
                 attrs = _collect_class_attrs(node, env)
                 src = tgt = None
-                if module_type == 'translator':
+                if module_type == "translator":
                     src, tgt = _collect_translator_langs(node, env)
-                specs.append(ModuleSpec(
-                    key=key,
-                    import_path=module_path,
-                    class_name=node.name,
-                    module_type=module_type,
-                    params=attrs.get('params'),
-                    download_file_list=attrs.get('download_file_list'),
-                    download_file_on_load=attrs.get(
-                        'download_file_on_load', False
-                    ),
-                    dependencies=deepcopy(attrs.get('dependencies', [])),
-                    supported_src_list=src,
-                    supported_tgt_list=tgt,
-                ))
+                specs.append(
+                    ModuleSpec(
+                        key=key,
+                        import_path=module_path,
+                        class_name=node.name,
+                        module_type=module_type,
+                        params=attrs.get("params"),
+                        download_file_list=attrs.get("download_file_list"),
+                        download_file_on_load=attrs.get("download_file_on_load", False),
+                        dependencies=deepcopy(attrs.get("dependencies", [])),
+                        supported_src_list=src,
+                        supported_tgt_list=tgt,
+                    )
+                )
             elif isinstance(node, ast.If):
                 cond = evaluator.eval(node.test)
                 if cond is True:
@@ -566,12 +593,12 @@ def init_lazy_module_registries(target_modules=None):
         >>> OCR.get_spec('mit48px').resolved_class is None  # doctest: +SKIP
         True
     """
-    from utils.registries import MODULETYPE_TO_REGISTRIES, MODULE_SCRIPTS
+    from utils.registries import MODULE_SCRIPTS, MODULETYPE_TO_REGISTRIES
 
     def _module_files(module_type: str) -> List[str]:
         script = MODULE_SCRIPTS[module_type]
-        module_dir = script['module_dir']
-        pattern = re.compile(script['module_pattern'])
+        module_dir = script["module_dir"]
+        pattern = re.compile(script["module_pattern"])
 
         # Resolve relative path against the project root.
         search_dir = module_dir
@@ -601,7 +628,8 @@ def init_lazy_module_registries(target_modules=None):
                 specs = _scan_file(path, module_type)
             except Exception as e:
                 import warnings as _w
-                _w.warn(f'Lazy-registry scan failed for {path}: {e}')
+
+                _w.warn(f"Lazy-registry scan failed for {path}: {e}")
                 continue
             for spec in specs:
                 registry.register_lazy_module(spec)

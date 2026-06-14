@@ -125,6 +125,7 @@ class MirrorConfig(Config):
 
     Empty strings = use default (official) sources.
     """
+
     pip_index_url: str = ""
     pip_extra_index_url: str = ""
     hf_endpoint: str = ""

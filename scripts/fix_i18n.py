@@ -40,7 +40,7 @@ ORPHANS: dict[str, set[str]] = {
         'Delete theme "%s"? This cannot be undone.',
         "Edit...",
         "Miscellaneous",
-        'Optional — Photoshop.exe path for COM detection',
+        "Optional — Photoshop.exe path for COM detection",
         "Photoshop executable (Photoshop.exe);;Executables (*.exe);;All files (*)",
         "Photoshop path",
         "Save",
@@ -52,7 +52,7 @@ ORPHANS: dict[str, set[str]] = {
         "Font Style Manager",
     },
     "MainWindow": {
-        ' PSD(s).\n\nOutput:\n',
+        " PSD(s).\n\nOutput:\n",
     },
     "ModelCheckDialog": {
         "Inpainting",
@@ -206,7 +206,7 @@ def main():
 
         for src_text in missing_sources:
             if normalize(src_text) in existing:
-                print(f"  [skip] already exists: [{ctx_name}] \"{src_text}\"")
+                print(f'  [skip] already exists: [{ctx_name}] "{src_text}"')
                 continue
 
             # Create new <message> element
@@ -217,7 +217,7 @@ def main():
             trans.text = ""
             trans.set("type", "unfinished")
             added_count += 1
-            print(f"  [add] [{ctx_name}] \"{src_text}\"")
+            print(f'  [add] [{ctx_name}] "{src_text}"')
 
     # ── Write back ──
     # ET writes <translation type="unfinished"/> as <translation type="unfinished" />

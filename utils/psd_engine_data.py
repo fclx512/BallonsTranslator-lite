@@ -123,125 +123,380 @@ def encode_engine_data(spec: TextEngineSpec) -> bytes:
 
     # Build each paragraph run entry (one per paragraph)
     par_run_array = [
-        _EV.dict([
-            ("ParagraphSheet", _EV.dict([
-                ("DefaultStyleSheet", _EV.int(0)),
-                ("Properties", _EV.dict(par_props)),
-            ])),
-            ("Adjustments", _EV.dict([
-                ("Axis", _EV.array([
-                    _EV.float(1.0), _EV.float(0.0), _EV.float(1.0),
-                ])),
-                ("XY", _EV.array([
-                    _EV.float(0.0), _EV.float(0.0),
-                ])),
-            ])),
-        ])
+        _EV.dict(
+            [
+                (
+                    "ParagraphSheet",
+                    _EV.dict(
+                        [
+                            ("DefaultStyleSheet", _EV.int(0)),
+                            ("Properties", _EV.dict(par_props)),
+                        ]
+                    ),
+                ),
+                (
+                    "Adjustments",
+                    _EV.dict(
+                        [
+                            (
+                                "Axis",
+                                _EV.array(
+                                    [
+                                        _EV.float(1.0),
+                                        _EV.float(0.0),
+                                        _EV.float(1.0),
+                                    ]
+                                ),
+                            ),
+                            (
+                                "XY",
+                                _EV.array(
+                                    [
+                                        _EV.float(0.0),
+                                        _EV.float(0.0),
+                                    ]
+                                ),
+                            ),
+                        ]
+                    ),
+                ),
+            ]
+        )
         for _ in par_lengths
     ]
 
-    root = _EV.dict([
-        ("EngineDict", _EV.dict([
-            ("Editor", _EV.dict([
-                ("Text", _EV.string(text)),
-            ])),
-            ("ParagraphRun", _EV.dict([
-                ("DefaultRunData", _EV.dict([
-                    ("ParagraphSheet", _EV.dict([
-                        ("DefaultStyleSheet", _EV.int(0)),
-                        ("Properties", _EV.dict([])),
-                    ])),
-                    ("Adjustments", _EV.dict([
-                        ("Axis", _EV.array([
-                            _EV.float(1.0), _EV.float(0.0), _EV.float(1.0),
-                        ])),
-                        ("XY", _EV.array([
-                            _EV.float(0.0), _EV.float(0.0),
-                        ])),
-                    ])),
-                ])),
-                ("RunArray", _EV.array(par_run_array)),
-                ("RunLengthArray", _EV.array([
-                    _EV.int(length) for length in par_lengths
-                ])),
-                ("IsJoinable", _EV.int(1)),
-            ])),
-            ("StyleRun", _EV.dict([
-                ("DefaultRunData", _EV.dict([
-                    ("StyleSheet", _EV.dict([
-                        ("StyleSheetData", _EV.dict([])),
-                    ])),
-                ])),
-                ("RunArray", _EV.array([
-                    _EV.dict([
-                        ("StyleSheet", _EV.dict([
-                            ("StyleSheetData", _EV.dict(style_run)),
-                        ])),
-                    ]),
-                ])),
-                ("RunLengthArray", _EV.array([
-                    _EV.int(total_len),
-                ])),
-                ("IsJoinable", _EV.int(2)),
-            ])),
-            ("GridInfo", _EV.dict([
-                ("GridIsOn", _EV.bool(False)),
-                ("ShowGrid", _EV.bool(False)),
-                ("GridSize", _EV.float(18.0)),
-                ("GridLeading", _EV.float(22.0)),
-                ("GridColor", _EV.dict(_color_type_values([0, 0, 255, 255]))),
-                ("GridLeadingFillColor", _EV.dict(_color_type_values([0, 0, 255, 255]))),
-                ("AlignLineHeightToGridFlags", _EV.bool(False)),
-            ])),
-            ("AntiAlias", _EV.int(4)),
-            ("UseFractionalGlyphWidths", _EV.bool(True)),
-            ("Rendered", _EV.dict([
-                ("Version", _EV.int(1)),
-                ("Shapes", _EV.dict([
-                    ("WritingDirection", _EV.int(writing_dir)),
-                    ("Children", _EV.array([
-                        _EV.dict([
-                            ("ShapeType", _EV.int(1)),
-                            ("Procession", _EV.int(procession)),
-                            ("Lines", _EV.dict([
-                                ("WritingDirection", _EV.int(writing_dir)),
-                                ("Children", _EV.array([])),
-                            ])),
-                            ("Cookie", _EV.dict([
-                                ("Photoshop", _EV.dict([
-                                    ("ShapeType", _EV.int(1)),
-                                    ("BoxBounds", _EV.array([
-                                        _EV.float(0.0),
-                                        _EV.float(0.0),
-                                        _EV.float(spec.box_width),
-                                        _EV.float(spec.box_height),
-                                    ])),
-                                    ("Base", _EV.dict([
-                                        ("ShapeType", _EV.int(1)),
-                                        ("TransformPoint0", _EV.array([
-                                            _EV.float(1.0), _EV.float(0.0),
-                                        ])),
-                                        ("TransformPoint1", _EV.array([
-                                            _EV.float(0.0), _EV.float(1.0),
-                                        ])),
-                                        ("TransformPoint2", _EV.array([
-                                            _EV.float(0.0), _EV.float(0.0),
-                                        ])),
-                                    ])),
-                                ])),
-                            ])),
-                        ]),
-                    ])),
-                ])),
-            ])),
-        ])),
-        ("ResourceDict", _EV.dict(_resource_dict(
-            font_set_arr, par_props, base_ss,
-        ))),
-        ("DocumentResources", _EV.dict(_resource_dict(
-            font_set_arr, par_props, base_ss,
-        ))),
-    ])
+    root = _EV.dict(
+        [
+            (
+                "EngineDict",
+                _EV.dict(
+                    [
+                        (
+                            "Editor",
+                            _EV.dict(
+                                [
+                                    ("Text", _EV.string(text)),
+                                ]
+                            ),
+                        ),
+                        (
+                            "ParagraphRun",
+                            _EV.dict(
+                                [
+                                    (
+                                        "DefaultRunData",
+                                        _EV.dict(
+                                            [
+                                                (
+                                                    "ParagraphSheet",
+                                                    _EV.dict(
+                                                        [
+                                                            (
+                                                                "DefaultStyleSheet",
+                                                                _EV.int(0),
+                                                            ),
+                                                            (
+                                                                "Properties",
+                                                                _EV.dict([]),
+                                                            ),
+                                                        ]
+                                                    ),
+                                                ),
+                                                (
+                                                    "Adjustments",
+                                                    _EV.dict(
+                                                        [
+                                                            (
+                                                                "Axis",
+                                                                _EV.array(
+                                                                    [
+                                                                        _EV.float(1.0),
+                                                                        _EV.float(0.0),
+                                                                        _EV.float(1.0),
+                                                                    ]
+                                                                ),
+                                                            ),
+                                                            (
+                                                                "XY",
+                                                                _EV.array(
+                                                                    [
+                                                                        _EV.float(0.0),
+                                                                        _EV.float(0.0),
+                                                                    ]
+                                                                ),
+                                                            ),
+                                                        ]
+                                                    ),
+                                                ),
+                                            ]
+                                        ),
+                                    ),
+                                    ("RunArray", _EV.array(par_run_array)),
+                                    (
+                                        "RunLengthArray",
+                                        _EV.array(
+                                            [_EV.int(length) for length in par_lengths]
+                                        ),
+                                    ),
+                                    ("IsJoinable", _EV.int(1)),
+                                ]
+                            ),
+                        ),
+                        (
+                            "StyleRun",
+                            _EV.dict(
+                                [
+                                    (
+                                        "DefaultRunData",
+                                        _EV.dict(
+                                            [
+                                                (
+                                                    "StyleSheet",
+                                                    _EV.dict(
+                                                        [
+                                                            (
+                                                                "StyleSheetData",
+                                                                _EV.dict([]),
+                                                            ),
+                                                        ]
+                                                    ),
+                                                ),
+                                            ]
+                                        ),
+                                    ),
+                                    (
+                                        "RunArray",
+                                        _EV.array(
+                                            [
+                                                _EV.dict(
+                                                    [
+                                                        (
+                                                            "StyleSheet",
+                                                            _EV.dict(
+                                                                [
+                                                                    (
+                                                                        "StyleSheetData",
+                                                                        _EV.dict(
+                                                                            style_run
+                                                                        ),
+                                                                    ),
+                                                                ]
+                                                            ),
+                                                        ),
+                                                    ]
+                                                ),
+                                            ]
+                                        ),
+                                    ),
+                                    (
+                                        "RunLengthArray",
+                                        _EV.array(
+                                            [
+                                                _EV.int(total_len),
+                                            ]
+                                        ),
+                                    ),
+                                    ("IsJoinable", _EV.int(2)),
+                                ]
+                            ),
+                        ),
+                        (
+                            "GridInfo",
+                            _EV.dict(
+                                [
+                                    ("GridIsOn", _EV.bool(False)),
+                                    ("ShowGrid", _EV.bool(False)),
+                                    ("GridSize", _EV.float(18.0)),
+                                    ("GridLeading", _EV.float(22.0)),
+                                    (
+                                        "GridColor",
+                                        _EV.dict(_color_type_values([0, 0, 255, 255])),
+                                    ),
+                                    (
+                                        "GridLeadingFillColor",
+                                        _EV.dict(_color_type_values([0, 0, 255, 255])),
+                                    ),
+                                    ("AlignLineHeightToGridFlags", _EV.bool(False)),
+                                ]
+                            ),
+                        ),
+                        ("AntiAlias", _EV.int(4)),
+                        ("UseFractionalGlyphWidths", _EV.bool(True)),
+                        (
+                            "Rendered",
+                            _EV.dict(
+                                [
+                                    ("Version", _EV.int(1)),
+                                    (
+                                        "Shapes",
+                                        _EV.dict(
+                                            [
+                                                (
+                                                    "WritingDirection",
+                                                    _EV.int(writing_dir),
+                                                ),
+                                                (
+                                                    "Children",
+                                                    _EV.array(
+                                                        [
+                                                            _EV.dict(
+                                                                [
+                                                                    (
+                                                                        "ShapeType",
+                                                                        _EV.int(1),
+                                                                    ),
+                                                                    (
+                                                                        "Procession",
+                                                                        _EV.int(
+                                                                            procession
+                                                                        ),
+                                                                    ),
+                                                                    (
+                                                                        "Lines",
+                                                                        _EV.dict(
+                                                                            [
+                                                                                (
+                                                                                    "WritingDirection",
+                                                                                    _EV.int(
+                                                                                        writing_dir
+                                                                                    ),
+                                                                                ),
+                                                                                (
+                                                                                    "Children",
+                                                                                    _EV.array(
+                                                                                        []
+                                                                                    ),
+                                                                                ),
+                                                                            ]
+                                                                        ),
+                                                                    ),
+                                                                    (
+                                                                        "Cookie",
+                                                                        _EV.dict(
+                                                                            [
+                                                                                (
+                                                                                    "Photoshop",
+                                                                                    _EV.dict(
+                                                                                        [
+                                                                                            (
+                                                                                                "ShapeType",
+                                                                                                _EV.int(
+                                                                                                    1
+                                                                                                ),
+                                                                                            ),
+                                                                                            (
+                                                                                                "BoxBounds",
+                                                                                                _EV.array(
+                                                                                                    [
+                                                                                                        _EV.float(
+                                                                                                            0.0
+                                                                                                        ),
+                                                                                                        _EV.float(
+                                                                                                            0.0
+                                                                                                        ),
+                                                                                                        _EV.float(
+                                                                                                            spec.box_width
+                                                                                                        ),
+                                                                                                        _EV.float(
+                                                                                                            spec.box_height
+                                                                                                        ),
+                                                                                                    ]
+                                                                                                ),
+                                                                                            ),
+                                                                                            (
+                                                                                                "Base",
+                                                                                                _EV.dict(
+                                                                                                    [
+                                                                                                        (
+                                                                                                            "ShapeType",
+                                                                                                            _EV.int(
+                                                                                                                1
+                                                                                                            ),
+                                                                                                        ),
+                                                                                                        (
+                                                                                                            "TransformPoint0",
+                                                                                                            _EV.array(
+                                                                                                                [
+                                                                                                                    _EV.float(
+                                                                                                                        1.0
+                                                                                                                    ),
+                                                                                                                    _EV.float(
+                                                                                                                        0.0
+                                                                                                                    ),
+                                                                                                                ]
+                                                                                                            ),
+                                                                                                        ),
+                                                                                                        (
+                                                                                                            "TransformPoint1",
+                                                                                                            _EV.array(
+                                                                                                                [
+                                                                                                                    _EV.float(
+                                                                                                                        0.0
+                                                                                                                    ),
+                                                                                                                    _EV.float(
+                                                                                                                        1.0
+                                                                                                                    ),
+                                                                                                                ]
+                                                                                                            ),
+                                                                                                        ),
+                                                                                                        (
+                                                                                                            "TransformPoint2",
+                                                                                                            _EV.array(
+                                                                                                                [
+                                                                                                                    _EV.float(
+                                                                                                                        0.0
+                                                                                                                    ),
+                                                                                                                    _EV.float(
+                                                                                                                        0.0
+                                                                                                                    ),
+                                                                                                                ]
+                                                                                                            ),
+                                                                                                        ),
+                                                                                                    ]
+                                                                                                ),
+                                                                                            ),
+                                                                                        ]
+                                                                                    ),
+                                                                                ),
+                                                                            ]
+                                                                        ),
+                                                                    ),
+                                                                ]
+                                                            ),
+                                                        ]
+                                                    ),
+                                                ),
+                                            ]
+                                        ),
+                                    ),
+                                ]
+                            ),
+                        ),
+                    ]
+                ),
+            ),
+            (
+                "ResourceDict",
+                _EV.dict(
+                    _resource_dict(
+                        font_set_arr,
+                        par_props,
+                        base_ss,
+                    )
+                ),
+            ),
+            (
+                "DocumentResources",
+                _EV.dict(
+                    _resource_dict(
+                        font_set_arr,
+                        par_props,
+                        base_ss,
+                    )
+                ),
+            ),
+        ]
+    )
 
     out = bytearray()
     _write_value(out, root, 0, False, None)
@@ -292,15 +547,36 @@ def _paragraph_properties(justification: TextJustification) -> List[Tuple[str, _
         ("PostHyphen", _EV.int(2)),
         ("ConsecutiveHyphens", _EV.int(8)),
         ("Zone", _EV.float(36.0)),
-        ("WordSpacing", _EV.array([
-            _EV.float(0.8), _EV.float(1.0), _EV.float(1.33),
-        ])),
-        ("LetterSpacing", _EV.array([
-            _EV.float(0.0), _EV.float(0.0), _EV.float(0.0),
-        ])),
-        ("GlyphSpacing", _EV.array([
-            _EV.float(1.0), _EV.float(1.0), _EV.float(1.0),
-        ])),
+        (
+            "WordSpacing",
+            _EV.array(
+                [
+                    _EV.float(0.8),
+                    _EV.float(1.0),
+                    _EV.float(1.33),
+                ]
+            ),
+        ),
+        (
+            "LetterSpacing",
+            _EV.array(
+                [
+                    _EV.float(0.0),
+                    _EV.float(0.0),
+                    _EV.float(0.0),
+                ]
+            ),
+        ),
+        (
+            "GlyphSpacing",
+            _EV.array(
+                [
+                    _EV.float(1.0),
+                    _EV.float(1.0),
+                    _EV.float(1.0),
+                ]
+            ),
+        ),
         ("AutoLeading", _EV.float(1.2)),
         ("LeadingType", _EV.int(0)),
         ("Hanging", _EV.bool(False)),
@@ -369,61 +645,90 @@ def _resource_dict(
 ) -> List[Tuple[str, _EV]]:
     """Build the shared ``/ResourceDict`` / ``/DocumentResources`` subtree."""
     return [
-        ("KinsokuSet", _EV.array([
-            _EV.dict([
-                ("Name", _EV.string("PhotoshopKinsokuHard")),
-                ("NoStart", _EV.string(
-                    "、。，．・：；？！"
-                    "ー―’”）〕］｝〉"
-                    "》」』】ヽヾゝゞ々"
-                    "ぁぃぅぇぉっゃゅょ"
-                    "ゎァィゥェォッャュ"
-                    "ョヮヵヶ゛゜?!)"
-                    "]},.:;℃℉¢％‰"
-                )),
-                ("NoEnd", _EV.string(
-                    "‘“（〔［｛〈《「"
-                    "『【([{￥＄£＠§〒＃"
-                )),
-                ("Keep", _EV.string("―‥")),
-                ("Hanging", _EV.string("、。.,")),
-            ]),
-            _EV.dict([
-                ("Name", _EV.string("PhotoshopKinsokuSoft")),
-                ("NoStart", _EV.string(
-                    "、。，．・：；？！"
-                    "’”）〕］｝〉》」"
-                    "』】ヽヾゝゞ々"
-                )),
-                ("NoEnd", _EV.string(
-                    "‘“（〔［｛〈《「"
-                    "『【"
-                )),
-                ("Keep", _EV.string("―‥")),
-                ("Hanging", _EV.string("、。.,")),
-            ]),
-        ])),
-        ("MojiKumiSet", _EV.array([
-            _EV.dict([("InternalName", _EV.string("Photoshop6MojiKumiSet1"))]),
-            _EV.dict([("InternalName", _EV.string("Photoshop6MojiKumiSet2"))]),
-            _EV.dict([("InternalName", _EV.string("Photoshop6MojiKumiSet3"))]),
-            _EV.dict([("InternalName", _EV.string("Photoshop6MojiKumiSet4"))]),
-        ])),
+        (
+            "KinsokuSet",
+            _EV.array(
+                [
+                    _EV.dict(
+                        [
+                            ("Name", _EV.string("PhotoshopKinsokuHard")),
+                            (
+                                "NoStart",
+                                _EV.string(
+                                    "、。，．・：；？！"
+                                    "ー―’”）〕］｝〉"
+                                    "》」』】ヽヾゝゞ々"
+                                    "ぁぃぅぇぉっゃゅょ"
+                                    "ゎァィゥェォッャュ"
+                                    "ョヮヵヶ゛゜?!)"
+                                    "]},.:;℃℉¢％‰"
+                                ),
+                            ),
+                            (
+                                "NoEnd",
+                                _EV.string("‘“（〔［｛〈《「『【([{￥＄£＠§〒＃"),
+                            ),
+                            ("Keep", _EV.string("―‥")),
+                            ("Hanging", _EV.string("、。.,")),
+                        ]
+                    ),
+                    _EV.dict(
+                        [
+                            ("Name", _EV.string("PhotoshopKinsokuSoft")),
+                            (
+                                "NoStart",
+                                _EV.string(
+                                    "、。，．・：；？！’”）〕］｝〉》」』】ヽヾゝゞ々"
+                                ),
+                            ),
+                            ("NoEnd", _EV.string("‘“（〔［｛〈《「『【")),
+                            ("Keep", _EV.string("―‥")),
+                            ("Hanging", _EV.string("、。.,")),
+                        ]
+                    ),
+                ]
+            ),
+        ),
+        (
+            "MojiKumiSet",
+            _EV.array(
+                [
+                    _EV.dict([("InternalName", _EV.string("Photoshop6MojiKumiSet1"))]),
+                    _EV.dict([("InternalName", _EV.string("Photoshop6MojiKumiSet2"))]),
+                    _EV.dict([("InternalName", _EV.string("Photoshop6MojiKumiSet3"))]),
+                    _EV.dict([("InternalName", _EV.string("Photoshop6MojiKumiSet4"))]),
+                ]
+            ),
+        ),
         ("TheNormalStyleSheet", _EV.int(0)),
         ("TheNormalParagraphSheet", _EV.int(0)),
-        ("ParagraphSheetSet", _EV.array([
-            _EV.dict([
-                ("Name", _EV.string("Normal RGB")),
-                ("DefaultStyleSheet", _EV.int(0)),
-                ("Properties", _EV.dict(paragraph_properties)),
-            ]),
-        ])),
-        ("StyleSheetSet", _EV.array([
-            _EV.dict([
-                ("Name", _EV.string("Normal RGB")),
-                ("StyleSheetData", _EV.dict(style_sheet)),
-            ]),
-        ])),
+        (
+            "ParagraphSheetSet",
+            _EV.array(
+                [
+                    _EV.dict(
+                        [
+                            ("Name", _EV.string("Normal RGB")),
+                            ("DefaultStyleSheet", _EV.int(0)),
+                            ("Properties", _EV.dict(paragraph_properties)),
+                        ]
+                    ),
+                ]
+            ),
+        ),
+        (
+            "StyleSheetSet",
+            _EV.array(
+                [
+                    _EV.dict(
+                        [
+                            ("Name", _EV.string("Normal RGB")),
+                            ("StyleSheetData", _EV.dict(style_sheet)),
+                        ]
+                    ),
+                ]
+            ),
+        ),
         ("FontSet", _EV.array(font_set)),
         ("SuperscriptSize", _EV.float(0.583)),
         ("SuperscriptPosition", _EV.float(0.333)),
@@ -434,12 +739,14 @@ def _resource_dict(
 
 
 def _font_descriptor(name: str) -> _EV:
-    return _EV.dict([
-        ("Name", _EV.string(name)),
-        ("Script", _EV.int(0)),
-        ("FontType", _EV.int(0)),
-        ("Synthetic", _EV.int(0)),
-    ])
+    return _EV.dict(
+        [
+            ("Name", _EV.string(name)),
+            ("Script", _EV.int(0)),
+            ("FontType", _EV.int(0)),
+            ("Synthetic", _EV.int(0)),
+        ]
+    )
 
 
 def _color_type_values(color: Tuple[int, int, int, int]) -> List[Tuple[str, _EV]]:
@@ -447,12 +754,17 @@ def _color_type_values(color: Tuple[int, int, int, int]) -> List[Tuple[str, _EV]
     r, g, b, a = color
     return [
         ("Type", _EV.int(1)),
-        ("Values", _EV.array([
-            _EV.float(a / 255.0),
-            _EV.float(r / 255.0),
-            _EV.float(g / 255.0),
-            _EV.float(b / 255.0),
-        ])),
+        (
+            "Values",
+            _EV.array(
+                [
+                    _EV.float(a / 255.0),
+                    _EV.float(r / 255.0),
+                    _EV.float(g / 255.0),
+                    _EV.float(b / 255.0),
+                ]
+            ),
+        ),
     ]
 
 
@@ -460,15 +772,37 @@ def _color_type_values(color: Tuple[int, int, int, int]) -> List[Tuple[str, _EV]
 # Serialization
 # ======================================================================
 
-_FLOAT_KEYS = frozenset({
-    "Axis", "XY", "Zone", "WordSpacing", "FirstLineIndent",
-    "GlyphSpacing", "StartIndent", "EndIndent", "SpaceBefore",
-    "SpaceAfter", "LetterSpacing", "Values", "GridSize", "GridLeading",
-    "PointBase", "BoxBounds", "TransformPoint0", "TransformPoint1",
-    "TransformPoint2", "FontSize", "Leading", "HorizontalScale",
-    "VerticalScale", "BaselineShift", "Tsume", "OutlineWidth",
-    "AutoLeading",
-})
+_FLOAT_KEYS = frozenset(
+    {
+        "Axis",
+        "XY",
+        "Zone",
+        "WordSpacing",
+        "FirstLineIndent",
+        "GlyphSpacing",
+        "StartIndent",
+        "EndIndent",
+        "SpaceBefore",
+        "SpaceAfter",
+        "LetterSpacing",
+        "Values",
+        "GridSize",
+        "GridLeading",
+        "PointBase",
+        "BoxBounds",
+        "TransformPoint0",
+        "TransformPoint1",
+        "TransformPoint2",
+        "FontSize",
+        "Leading",
+        "HorizontalScale",
+        "VerticalScale",
+        "BaselineShift",
+        "Tsume",
+        "OutlineWidth",
+        "AutoLeading",
+    }
+)
 
 
 def _serialize_float(value: float, key: Optional[str]) -> str:
@@ -584,7 +918,7 @@ def _write_ps_string(out: bytearray, text: str) -> None:
     escaped) + ``)``.
     """
     out.append(ord("("))
-    out.extend(b"\xFE\xFF")
+    out.extend(b"\xfe\xff")
     for unit in text.encode("utf-16-be"):
         _write_escaped_byte(out, unit)
     out.append(ord(")"))

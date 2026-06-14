@@ -472,9 +472,7 @@ class NavList(QListWidget):
         elapsed = self._elapsed.elapsed()
         progress = min(elapsed / self._duration, 1.0)
         eased = self._easing.valueForProgress(progress)
-        self._indicator_y = self._anim_from + (
-            self._anim_to - self._anim_from
-        ) * eased
+        self._indicator_y = self._anim_from + (self._anim_to - self._anim_from) * eased
         self.viewport().update()
         if progress >= 1.0:
             self._anim_timer.stop()
@@ -522,7 +520,7 @@ class AnimatedScrollBar(QScrollBar):
         super().__init__(parent)
         self.setOrientation(Qt.Orientation.Vertical)
 
-        self._factor = 0.0       # 0 = normal, 1 = fully hovered
+        self._factor = 0.0  # 0 = normal, 1 = fully hovered
         self._factor_start = 0.0
         self._factor_end = 0.0
         self._animating = False
@@ -564,9 +562,9 @@ class AnimatedScrollBar(QScrollBar):
         elapsed = self._elapsed.elapsed()
         progress = min(elapsed / self._duration, 1.0)
         eased = self._easing.valueForProgress(progress)
-        self._factor = self._factor_start + (
-            self._factor_end - self._factor_start
-        ) * eased
+        self._factor = (
+            self._factor_start + (self._factor_end - self._factor_start) * eased
+        )
         self._sync_style()
         if progress >= 1.0:
             self._timer.stop()
@@ -658,15 +656,13 @@ class ConfigContent(QScrollArea):
 
         offset = direction * 100
         if self._animating_scroll:
-            self._scroll_end_y = max(0, min(
-                self._scroll_end_y - offset, sb.maximum()
-            ))
+            self._scroll_end_y = max(0, min(self._scroll_end_y - offset, sb.maximum()))
         else:
             self._scroll_easing.setType(QEasingCurve.Type.OutCubic)
             self._scroll_start_y = sb.value()
-            self._scroll_end_y = max(0, min(
-                self._scroll_start_y - offset, sb.maximum()
-            ))
+            self._scroll_end_y = max(
+                0, min(self._scroll_start_y - offset, sb.maximum())
+            )
             self._scroll_duration = 150
             self._scroll_elapsed.start()
             self._animating_scroll = True
@@ -679,9 +675,12 @@ class ConfigContent(QScrollArea):
         progress = min(elapsed / self._scroll_duration, 1.0)
         eased = self._scroll_easing.valueForProgress(progress)
 
-        current = int(round(
-            self._scroll_start_y + (self._scroll_end_y - self._scroll_start_y) * eased
-        ))
+        current = int(
+            round(
+                self._scroll_start_y
+                + (self._scroll_end_y - self._scroll_start_y) * eased
+            )
+        )
         self.verticalScrollBar().setValue(current)
 
         if progress >= 1.0:
@@ -1206,7 +1205,9 @@ class MCPInfoDialog(QDialog):
 
         # Description
         desc = QLabel(
-            self.tr("MCP (Model Context Protocol) allows external AI agents such as Claude Code to read and edit BallonsTranslator project data directly through tool calls — no GUI needed.")
+            self.tr(
+                "MCP (Model Context Protocol) allows external AI agents such as Claude Code to read and edit BallonsTranslator project data directly through tool calls — no GUI needed."
+            )
         )
         desc.setWordWrap(True)
         layout.addWidget(desc)
@@ -1219,14 +1220,16 @@ class MCPInfoDialog(QDialog):
         layout.addWidget(steps_title)
 
         steps = QLabel(
-            self.tr("1. Install:  pip install -e \".[mcp]\"\n2. Add a config entry in .claude/settings.json\n3. Run Claude Code in the project directory\n4. Ask it to open your project and edit text blocks")
+            self.tr(
+                '1. Install:  pip install -e ".[mcp]"\n2. Add a config entry in .claude/settings.json\n3. Run Claude Code in the project directory\n4. Ask it to open your project and edit text blocks'
+            )
         )
         steps.setWordWrap(True)
         layout.addWidget(steps)
 
         # Doc link
         doc_hint = QLabel(
-            self.tr("Full user guide available at docs/zh/mcp_user_guide.md")
+            self.tr("Full user guide available at docs/MCP用户指南.md")
         )
         doc_hint.setWordWrap(True)
         doc_hint.setStyleSheet("color: #888; font-size: 12px;")
@@ -1248,9 +1251,10 @@ class MCPInfoDialog(QDialog):
     def _open_guide(self):
         import webbrowser
         from pathlib import Path
+
         from utils.shared import PROGRAM_PATH
 
-        guide = Path(PROGRAM_PATH) / "docs" / "zh" / "mcp_user_guide.md"
+        guide = Path(PROGRAM_PATH) / "docs" / "MCP用户指南.md"
         if guide.exists():
             webbrowser.open(guide.as_uri())
 
@@ -1281,33 +1285,43 @@ class ConfigPanel(Widget):
         label_typesetting = self.tr("Typesetting")
         label_interface = self.tr("Interface")
 
-        # === Model management ===
-        model_group = PanelGroupBox(self.tr("Models"))
-        model_vlayout = model_group.contentLayout()
-        model_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
-        model_vlayout.setSpacing(0)
-        self.load_model_checker, msublock = checkbox_with_label(
+        # === Models group ===
+        models_group = PanelGroupBox(self.tr("Models"))
+        models_vlayout = models_group.contentLayout()
+        models_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
+        models_vlayout.setSpacing(4)
+
+        self.load_model_checker, cb_block = checkbox_with_label(
             self.tr("Load models on demand"),
             description=self.tr("Load models on demand to save memory."),
         )
-        self.load_model_checker.stateChanged.connect(self.on_load_model_changed)
-        model_vlayout.addWidget(msublock)
-        self.empty_runcache_checker, msublock = checkbox_with_label(
+        models_vlayout.addWidget(cb_block)
+
+        self.empty_runcache_checker, cb_block2 = checkbox_with_label(
             self.tr("Empty cache after RUN"),
             description=self.tr("Empty cache after RUN to save memory."),
         )
+        models_vlayout.addWidget(cb_block2)
+
+        self.load_model_checker.stateChanged.connect(self.on_load_model_changed)
         self.empty_runcache_checker.stateChanged.connect(self.on_runcache_changed)
-        model_vlayout.addWidget(msublock)
-        self.unload_model_btn = QPushButton(parent=self)
-        self.unload_model_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
-        self.unload_model_btn.setText(self.tr("Unload All Models"))
-        self.unload_model_btn.clicked.connect(self.unload_models)
-        msublock.layout().addWidget(self.unload_model_btn)
-        self.manage_profiles_btn = QPushButton(self.tr("Manage API Profiles..."))
-        self.manage_profiles_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
-        self.manage_profiles_btn.clicked.connect(self._open_profile_manager)
-        msublock.layout().addWidget(self.manage_profiles_btn)
-        dlConfigPanel.vlayout.addWidget(model_group)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(6)
+        btn_row.setContentsMargins(24, 4, 24, 4)
+
+        unload_btn = QPushButton(self.tr("Unload All Models"))
+        unload_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
+        unload_btn.clicked.connect(self.unload_models)
+        btn_row.addWidget(unload_btn)
+
+        profiles_btn = QPushButton(self.tr("Manage API Profiles..."))
+        profiles_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
+        profiles_btn.clicked.connect(self._open_profile_manager)
+        btn_row.addWidget(profiles_btn)
+
+        models_vlayout.addLayout(btn_row)
+        dlConfigPanel.vlayout.addWidget(models_group)
 
         self.detect_config_panel = TextDetectConfigPanel(
             self.tr("Detector"), scrollWidget=self
@@ -1354,9 +1368,7 @@ class ConfigPanel(Widget):
         project_layout.addWidget(self.open_on_startup_checker)
 
         # Output section label
-        output_label = ConfigTextLabel(
-            self.tr("Output"), CONFIG_FONTSIZE_CONTENT - 2
-        )
+        output_label = ConfigTextLabel(self.tr("Output"), CONFIG_FONTSIZE_CONTENT - 2)
         project_layout.addWidget(output_label)
 
         # JXL removed from options: pillow-jxl-plugin compatibility issues
@@ -1574,7 +1586,7 @@ class ConfigPanel(Widget):
         # Punctuation Position
         self.punctuation_position_combo = QComboBox()
         self.punctuation_position_combo.addItems(
-            [self.tr("Traditional Chinese"), self.tr("Simplified Chinese")]
+            [self.tr("Centered (Traditional Chinese / Japanese)"), self.tr("Edge-aligned (Simplified Chinese)")]
         )
         self.punctuation_position_combo.setCurrentIndex(pcfg.punctuation_position)
         self.punctuation_position_combo.setFixedWidth(CONFIG_COMBOBOX_LONG)
@@ -1627,12 +1639,14 @@ class ConfigPanel(Widget):
         anim_row.addWidget(anim_label)
         self.anim_combo = ConfigComboBox()
         self.anim_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
-        self.anim_combo.addItems([
-            self.tr("Auto (match display)"),
-            "60 FPS",
-            "30 FPS",
-            self.tr("Off (no animation)"),
-        ])
+        self.anim_combo.addItems(
+            [
+                self.tr("Auto (match display)"),
+                "60 FPS",
+                "30 FPS",
+                self.tr("Off (no animation)"),
+            ]
+        )
         self.anim_combo.activated.connect(self._on_anim_mode_changed)
         anim_row.addWidget(self.anim_combo)
         anim_row.addStretch()
@@ -1657,9 +1671,15 @@ class ConfigPanel(Widget):
         interface_layout.addWidget(preset_hint)
 
         _make_preset_row(self.tr("Font Size:"), "font_size_presets", interface_layout)
-        _make_preset_row(self.tr("Line Spacing:"), "line_spacing_presets", interface_layout)
-        _make_preset_row(self.tr("Letter Spacing:"), "letter_spacing_presets", interface_layout)
-        _make_preset_row(self.tr("Stroke Width:"), "stroke_width_presets", interface_layout)
+        _make_preset_row(
+            self.tr("Line Spacing:"), "line_spacing_presets", interface_layout
+        )
+        _make_preset_row(
+            self.tr("Letter Spacing:"), "letter_spacing_presets", interface_layout
+        )
+        _make_preset_row(
+            self.tr("Stroke Width:"), "stroke_width_presets", interface_layout
+        )
         _make_preset_row(self.tr("Opacity:"), "opacity_presets", interface_layout)
 
         self.interface_block = generalConfigPanel.addGroupedBlock(
@@ -1832,6 +1852,7 @@ class ConfigPanel(Widget):
         """Apply punctuation_position to ALL existing text items."""
         from .shared_widget import canvas as sw_canvas
         from .textitem import TextBlkItem
+
         if sw_canvas is None:
             return
         for item in sw_canvas.items():

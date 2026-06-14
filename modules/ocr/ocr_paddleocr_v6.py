@@ -153,9 +153,7 @@ class PaddleOCRv6(OCRBase):
                 "subprocess for CUDA isolation."
             )
         else:
-            self.logger.info(
-                "PyTorch is on CPU → PaddleOCR runs in-process."
-            )
+            self.logger.info("PyTorch is on CPU → PaddleOCR runs in-process.")
 
     def all_model_loaded(self):
         try:
@@ -237,9 +235,7 @@ class PaddleOCRv6(OCRBase):
     # ── TextBlock matching ──────────────────────────────────────────────
 
     @staticmethod
-    def _match_results_to_blocks(
-        raw_result: list, blk_list: List[TextBlock]
-    ):
+    def _match_results_to_blocks(raw_result: list, blk_list: List[TextBlock]):
         """Assign recognised text to TextBlocks via centre-point matching.
 
         PaddleOCR predict() returns a list of dicts (one per page) with
@@ -299,7 +295,11 @@ class PaddleOCRv6(OCRBase):
         if not raw:
             return ""
         page = raw[0]
-        res = page.get("res") if hasattr(page, "get") else (page if isinstance(page, dict) else {})
+        res = (
+            page.get("res")
+            if hasattr(page, "get")
+            else (page if isinstance(page, dict) else {})
+        )
         if not res:
             return ""
         texts = res.get("rec_texts", []) if isinstance(res, dict) else []

@@ -54,9 +54,7 @@ class PsdExportDialog(QDialog):
         if not all_pages:
             lo = self._slider.low()
             hi = self._slider.high()
-            page_filter = [
-                self._proj.idx2pagename(i) for i in range(lo, hi + 1)
-            ]
+            page_filter = [self._proj.idx2pagename(i) for i in range(lo, hi + 1)]
 
         method = self._method_cb.currentData() or "binary"
 
@@ -129,14 +127,14 @@ class PsdExportDialog(QDialog):
         self._method_cb.currentIndexChanged.connect(self._on_method_changed)
         layout.addWidget(self._method_cb)
 
-        self._method_info = QLabel(self.tr(
-            "Generates a .psd file directly — no Photoshop dependency.\n"
-            "Text layers are editable in Photoshop (TySh + EngineData)."
-        ))
-        self._method_info.setWordWrap(True)
-        self._method_info.setStyleSheet(
-            "color: palette(text); padding: 4px 0;"
+        self._method_info = QLabel(
+            self.tr(
+                "Generates a .psd file directly — no Photoshop dependency.\n"
+                "Text layers are editable in Photoshop (TySh + EngineData)."
+            )
         )
+        self._method_info.setWordWrap(True)
+        self._method_info.setStyleSheet("color: palette(text); padding: 4px 0;")
         layout.addWidget(self._method_info)
 
         # ---- separator --------------------------------------------------
@@ -193,11 +191,15 @@ class PsdExportDialog(QDialog):
         method = self._method_cb.itemData(index)
         if method == "binary":
             self._method_info.setText(
-                self.tr("Generates a .psd file directly — no Photoshop dependency.\nText layers are editable in Photoshop (TySh + EngineData).")
+                self.tr(
+                    "Generates a .psd file directly — no Photoshop dependency.\nText layers are editable in Photoshop (TySh + EngineData)."
+                )
             )
         else:
             self._method_info.setText(
-                self.tr("Exports a .jsx script + image files. Run the script on any machine with Photoshop to generate the PSD.\n\nNo Photoshop dependency at export time.\n\nOpen Photoshop → File → Scripts → Browse → select the .jsx file.")
+                self.tr(
+                    "Exports a .jsx script + image files. Run the script on any machine with Photoshop to generate the PSD.\n\nNo Photoshop dependency at export time.\n\nOpen Photoshop → File → Scripts → Browse → select the .jsx file."
+                )
             )
 
     # ------------------------------------------------------------------
@@ -226,14 +228,10 @@ class PsdExportDialog(QDialog):
                 + str(len(unknown))
                 + self.tr(" font(s) may need manual adjustment in Photoshop: ")
                 + ", ".join(unknown[:5])
-                + (
-                    "..." if len(unknown) > 5 else ""
-                )
+                + ("..." if len(unknown) > 5 else "")
             )
         else:
-            self._font_label.setText(
-                self.tr("✓ All fonts have known PS mappings.")
-            )
+            self._font_label.setText(self.tr("✓ All fonts have known PS mappings."))
 
     # ------------------------------------------------------------------
     # internal — page range sync
@@ -268,9 +266,7 @@ class PsdExportDialog(QDialog):
         lo = self._slider.low() + 1
         hi = self._slider.high() + 1
         count = hi - lo + 1
-        self._range_label.setText(
-            self.tr("Page ") + f"{lo} ~ {hi}  ({count} pages)"
-        )
+        self._range_label.setText(self.tr("Page ") + f"{lo} ~ {hi}  ({count} pages)")
 
     def _on_all_toggled(self, checked: bool):
         self._slider.setEnabled(not checked)

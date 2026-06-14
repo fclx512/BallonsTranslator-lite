@@ -47,9 +47,7 @@ def get_active_project() -> ProjImgTrans:
         RuntimeError: If no project has been opened yet.
     """
     if _active_project is None:
-        raise RuntimeError(
-            "No project is currently open. Call open_project first."
-        )
+        raise RuntimeError("No project is currently open. Call open_project first.")
     return _active_project
 
 

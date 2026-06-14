@@ -470,7 +470,7 @@ class ProjImgTrans:
                 return src_ext
         ext = ".png"
         if pcfg is not None:
-            # .jxl disabled in UI (see docs/en/lessons_learned.md §4.1), kept for existing configs
+            # .jxl disabled in UI (see docs/经验教训.md §4.1), kept for existing configs
             if pcfg.imgsave_ext in {".jpg", ".png", ".webp", ".jxl"}:
                 ext = pcfg.imgsave_ext
             else:

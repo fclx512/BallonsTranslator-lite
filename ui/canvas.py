@@ -434,16 +434,28 @@ class Canvas(QGraphicsScene):
             if blk_item.isSelected():
                 blk_item.setSelected(False)
 
+        # Hide sequence badges before rendering the result image
+        for item in self.textLayer.childItems():
+            if isinstance(item, TextBlkItem):
+                item._hide_badge = True
+
         result = ndarray2pixmap(self.imgtrans_proj.inpainted_array, return_qimg=True)
         canvas_sz = self.img_window_size()
         painter = QPainter(result)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
 
         rect = QRectF(0, 0, canvas_sz.width(), canvas_sz.height())
         self.render(
             painter, rect, rect
         )  #  produce blurred result if target/source rect not specified #320
         painter.end()
+
+        # Restore badge visibility after rendering
+        for item in self.textLayer.childItems():
+            if isinstance(item, TextBlkItem):
+                item._hide_badge = False
 
         if tlayer_opacity_before != 1:
             self.textLayer.setOpacity(tlayer_opacity_before)
@@ -503,6 +515,8 @@ class Canvas(QGraphicsScene):
         canvas_sz = self.img_window_size()
         painter = QPainter(result)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         rect = QRectF(0, 0, canvas_sz.width(), canvas_sz.height())
         self.render(painter, rect, rect)
         painter.end()

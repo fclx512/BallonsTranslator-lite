@@ -131,6 +131,7 @@ class YSGYoloDetector(TextDetectorBase):
         update_ckpt_list()
 
     def _load_model(self):
+        update_ckpt_list()  # refresh model list in case files were downloaded after init
         model_path = self.get_param_value("model path")
         if not osp.exists(model_path):
             global CKPT_LIST

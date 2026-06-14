@@ -119,7 +119,9 @@ def merge_config_module_params(
             config_params[module_key] = module_params
         else:
             if module_params:
-                patch_module_params(config_params[module_key], module_params, module_key)
+                patch_module_params(
+                    config_params[module_key], module_params, module_key
+                )
 
     # Auto-select best available device on each startup,
     # overriding any stale "cpu" setting from a previous CPU-mode run.
@@ -318,9 +320,7 @@ class BaseModule:
         for req_str in self.requires_packages:
             req = Requirement(req_str)
             try:
-                dist = importlib_metadata.distribution(
-                    canonicalize_name(req.name)
-                )
+                dist = importlib_metadata.distribution(canonicalize_name(req.name))
                 if not req.specifier.contains(dist.version, prereleases=True):
                     missing.append(req_str)
             except importlib_metadata.PackageNotFoundError:
@@ -337,16 +337,24 @@ class BaseModule:
         try:
             subprocess.run(
                 [python, "-m", "uv", "pip", "install", *missing, "--prefer-binary"],
-                capture_output=True, timeout=300, check=True,
+                capture_output=True,
+                timeout=300,
+                check=True,
             )
-            self.logger.info(f"Auto-installed extra deps for {self.__class__.__name__}: {missing}")
+            self.logger.info(
+                f"Auto-installed extra deps for {self.__class__.__name__}: {missing}"
+            )
         except Exception:
             try:
                 subprocess.run(
                     [python, "-m", "pip", "install", *missing, "--prefer-binary"],
-                    capture_output=True, timeout=300, check=True,
+                    capture_output=True,
+                    timeout=300,
+                    check=True,
                 )
-                self.logger.info(f"Auto-installed extra deps (via pip) for {self.__class__.__name__}: {missing}")
+                self.logger.info(
+                    f"Auto-installed extra deps (via pip) for {self.__class__.__name__}: {missing}"
+                )
             except Exception as e:
                 self.logger.warning(
                     f"Failed to auto-install extra deps for {self.__class__.__name__}: {e}"
@@ -494,6 +502,7 @@ def import_module_registries(target_modules=None):
 
     The normal startup path uses ``init_module_registries()`` (lazy/AST-based).
     """
+
     def _load_module(module_dir: str, module_pattern: str):
         modules = os.listdir(module_dir)
         pattern = re.compile(module_pattern)

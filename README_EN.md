@@ -42,9 +42,8 @@ The complete project (models + CPU PyTorch) is approximately **1.8 GB** and easy
 
 1. Download the source code and extract to a local directory
 2. Run a launch script:
-   - `launch_win_update.bat` — GPU mode, auto-checks for updates on each launch (recommended)
-   - `launch_win.bat` — GPU mode, skips update check
-   - `launch_cpu.bat` — CPU-only mode, skips update check
+   - `launch.bat` — auto-detects GPU/CPU mode; Git users get automatic update checks (recommended)
+   - `launch.bat --cpu` — force CPU-only mode
 3. Model files (~700 MB) are downloaded automatically on first launch — keep your internet connection active
 
 ### Run from Source
@@ -106,7 +105,7 @@ GPU mode auto-detects NVIDIA GPU architecture (Kepler through Blackwell) and sel
 | Translation | LLM API (OpenAI-compatible), Sakura |
 | Inpainting | LaMa 512px (default), AOT |
 
-> Want to add your own module? See [Module Developer Guide](docs/en/how_to_add_new_translator.md)
+> Want to add your own module? See [Module Developer Guide](docs/模块开发指南.md)
 
 ---
 
@@ -141,13 +140,13 @@ Kepler (GTX 6xx / 7xx) may not be supported by PyTorch 2.x — use CPU mode: `py
 
 **How to update?**
 
-- Portable users: use `launch_win_update.bat` — auto-checks GitHub for updates on every launch and applies them on next restart. No git required.
-- Source users: `python launch.py --update` (prefers `git pull`, falls back to direct download if git is unavailable)
+- Portable users: use `launch.bat` — auto-detects Git/ZIP mode; ZIP builds check for updates on each launch and apply on restart. No git required.
+- Source users: `launch.bat --update` (Git mode uses `git pull`; ZIP mode downloads directly)
 - Or click About → Check for Updates in the app.
 
 **How to customize shortcuts?**
 
-See [Shortcuts Guide](docs/en/shortcuts.md)
+See [Shortcuts Guide](docs/快捷键.md)
 
 ---
 

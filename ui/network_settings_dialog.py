@@ -75,9 +75,7 @@ class _SourceRow(QWidget):
         layout.addWidget(self.explanation)
 
         self.custom_field = QLineEdit()
-        self.custom_field.setPlaceholderText(
-            self.tr("Enter custom mirror URL...")
-        )
+        self.custom_field.setPlaceholderText(self.tr("Enter custom mirror URL..."))
         self.custom_field.setMinimumHeight(34)
         self.custom_field.setVisible(False)
         layout.addWidget(self.custom_field)
@@ -118,7 +116,6 @@ class _SourceRow(QWidget):
 
 
 class NetworkSettingsDialog(QDialog):
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Network & Mirror Settings"))
@@ -133,9 +130,9 @@ class NetworkSettingsDialog(QDialog):
         layout.setSpacing(12)
 
         # ── Updates & Model Downloads (GitHub) ──
-        layout.addWidget(QLabel(
-            self.tr("Software Updates & Model Downloads — from GitHub")
-        ))
+        layout.addWidget(
+            QLabel(self.tr("Software Updates & Model Downloads — from GitHub"))
+        )
         self._row_updates = _SourceRow(
             _PRESETS_UPDATES,
             desc_official=self.tr(
@@ -151,9 +148,7 @@ class NetworkSettingsDialog(QDialog):
         layout.addWidget(self._row_updates)
 
         # ── Python Package Installation (pip) ──
-        layout.addWidget(QLabel(
-            self.tr("Python Package Installation — from PyPI")
-        ))
+        layout.addWidget(QLabel(self.tr("Python Package Installation — from PyPI")))
         self._row_packages = _SourceRow(
             _PRESETS_PACKAGES,
             desc_official=self.tr(
@@ -275,14 +270,10 @@ class NetworkSettingsDialog(QDialog):
         m.github_mirror = self._row_updates.get_value()
         m.pip_index_url = self._row_packages.get_value()
         m.pip_extra_index_url = (
-            self._extra_input.text().strip()
-            if self._adv_group.isChecked()
-            else ""
+            self._extra_input.text().strip() if self._adv_group.isChecked() else ""
         )
         m.hf_endpoint = (
-            self._hf_input.text().strip()
-            if self._adv_group.isChecked()
-            else ""
+            self._hf_input.text().strip() if self._adv_group.isChecked() else ""
         )
 
         # Apply env vars
