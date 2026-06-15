@@ -2,7 +2,7 @@
 
 ## 概述
 
-`paddleocr_v6_onnx` 是 BallonsTranslator-lite 的 OCR 模块，通过 **ONNX Runtime** 运行 PP-OCRv6（medium）模型，彻底摆脱 PaddlePaddle 框架依赖（省 ~400MB）及其与 PyTorch 的 CUDA context 冲突。
+`paddleocr_v6_onnx` 是 BallonsTranslator-lite 的 OCR 模块，通过 **ONNX Runtime** 运行 PP-OCRv6 medium 模型，彻底摆脱 PaddlePaddle 框架依赖（省 ~400MB）及其与 PyTorch 的 CUDA context 冲突。
 
 **模块文件：** `modules/ocr/ocr_onnx.py`
 
@@ -28,16 +28,18 @@ pip install onnxocr --no-deps
 
 ## 模型文件
 
-两个 ONNX 模型在首次使用时自动从 HuggingFace 下载：
+medium 模型在首次使用时自动下载（共 2 个 ONNX 文件 + 1 个字典文件）：
 
-| 文件 | 大小 | 来源 |
-|------|------|--------|
-| `data/models/ppocrv6_onnx/det.onnx` | 62 MB | PP-OCRv6 medium 检测模型 |
-| `data/models/ppocrv6_onnx/rec.onnx` | 73 MB | PP-OCRv6 medium 识别模型 |
+### 文件列表
 
-**字符字典：** `data/models/ppocrv6_onnx/ppocrv6_dict_proper.txt`（18,708 字符）
+| 文件 | 大小 | 参数 | 来源 |
+|------|------|------|------|
+| `data/models/ppocrv6_onnx/medium/det.onnx` | 60 MB | 22M | HuggingFace — PP-OCRv6 medium 检测模型 |
+| `data/models/ppocrv6_onnx/medium/rec.onnx` | 74 MB | 19.2M | HuggingFace — PP-OCRv6 medium 识别模型 |
+| `data/models/ppocrv6_onnx/ppocrv6_dict_proper.txt` | 18 KB | 18,708 字符 | GitHub raw — 字符字典 |
 
 HuggingFace 来源：
+
 - <https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_onnx>
 - <https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx>
 
@@ -49,6 +51,7 @@ HuggingFace 来源：
 |--------|------|--------|------|
 | `device` | 下拉框 | 自动 | `cpu` / `cuda` |
 | `lang` | 下拉框 | `ch` | 语言（ch, en, japan, korean, french 等 12 种） |
+| `model_size` | 下拉框 | `medium` | 模型尺寸（仅 medium） |
 | `det_db_thresh` | 浮点数 | **0.2** | 检测得分阈值（越低检出越多） |
 | `det_db_box_thresh` | 浮点数 | **0.45** | 检测框阈值（越低框越多） |
 | `det_db_unclip_ratio` | 浮点数 | **1.4** | 检测框扩展系数（越大框越松） |
@@ -117,8 +120,9 @@ pip install onnxruntime-gpu --prefer-binary
 
 ```
 data/models/ppocrv6_onnx/
-├── det.onnx                    62 MB — DB 检测模型
-├── rec.onnx                    73 MB — SVTR_LCNet 识别模型
+├── medium/
+│   ├── det.onnx                 60 MB — DB 检测模型
+│   └── rec.onnx                 74 MB — SVTR_LCNet 识别模型
 └── ppocrv6_dict_proper.txt    18,708 字符 — 字符字典
 
 modules/ocr/

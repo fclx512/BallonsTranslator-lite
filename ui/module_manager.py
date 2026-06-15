@@ -854,52 +854,190 @@ def _ensure_module_deps(
 
     # ── Build and show the install dialog ──
     from qtpy.QtWidgets import (
-        QApplication,
         QDialog,
         QHBoxLayout,
         QLabel,
+        QPlainTextEdit,
         QProgressBar,
         QPushButton,
         QVBoxLayout,
     )
 
+    # ── Background install worker ──
+    class _InstallWorker(QThread):
+        """Install Python packages and download model files in a background thread."""
+        status = Signal(str)         # current operation text
+        log_line = Signal(str)       # log message
+        finished_with_result = Signal(bool)  # overall success
+
+        def __init__(self, mod_name, missing_pkgs, dfl, parent=None):
+            super().__init__(parent)
+            self.mod_name = mod_name
+            self.missing_pkgs = missing_pkgs
+            self.dfl = dfl  # raw download_file_list from the module
+
+        def run(self):
+            import subprocess
+            import shutil
+
+            success = True
+            has_hf_no_mirror = self._check_hf_no_mirror()
+            failure_reason = ""  # human-readable summary for the dialog
+
+            # 1. Install Python packages
+            if self.missing_pkgs:
+                self.status.emit(
+                    "Step 1/2: Installing Python packages…"
+                )
+                self.log_line.emit(
+                    ">> Packages: " + ", ".join(self.missing_pkgs)
+                )
+
+                python = sys.executable
+                _uv_avail = (
+                    subprocess.run(
+                        [python, "-m", "uv", "--version"],
+                        capture_output=True, check=False,
+                    ).returncode == 0
+                )
+                _runners = []
+                if _uv_avail:
+                    _runners.append([python, "-m", "uv", "pip", "install"])
+                _runners.append([python, "-m", "pip", "install"])
+
+                def _pip_install(pkgs, *, no_deps=False):
+                    cmd_extra = (
+                        ["--no-deps"]
+                        if no_deps
+                        else ["--prefer-binary", "--timeout", "30"]
+                    )
+                    bases = _runners if not no_deps else _runners[::-1]
+                    for runner in bases:
+                        try:
+                            subprocess.run(
+                                [*runner, *pkgs, *cmd_extra],
+                                timeout=300, check=True,
+                            )
+                            return True
+                        except Exception:
+                            continue
+                    sys_py = shutil.which("python")
+                    if sys_py and osp.realpath(sys_py) != osp.realpath(python):
+                        try:
+                            subprocess.run(
+                                [sys_py, "-m", "pip", "install",
+                                 *pkgs, "--prefer-binary", "--timeout", "30"],
+                                timeout=300, check=True,
+                            )
+                            return True
+                        except Exception:
+                            pass
+                    return False
+
+                for pkg in self.missing_pkgs:
+                    self.status.emit(f"Installing {pkg}…")
+                    self.log_line.emit(f">> Installing {pkg} …")
+                    if not _pip_install([pkg]):
+                        self.log_line.emit(
+                            f">> Package '{pkg}' failed with deps, retrying --no-deps …"
+                        )
+                        if not _pip_install([pkg], no_deps=True):
+                            self.log_line.emit(f">> FAILED: {pkg}")
+                            success = False
+                            failure_code = f"pip_failed:{pkg}"
+                            break
+
+                if success:
+                    self.log_line.emit(">> Package installation complete.")
+
+            # 2. Download model files
+            if success and self.dfl:
+                self.status.emit("Step 2/2: Downloading model files…")
+                for dl_entry in self.dfl:
+                    url = dl_entry.get("url", "?")
+                    fname = osp.basename(url) or url
+                    self.status.emit(f"Downloading {fname}…")
+                    self.log_line.emit(f">> Downloading: {fname}")
+                    self.log_line.emit(f"   from: {url}")
+                    try:
+                        from utils.download_util import download_and_check_files
+
+                        ok = download_and_check_files(**dl_entry)
+                    except Exception as e:
+                        self.log_line.emit(f">> Error: {e}")
+                        ok = False
+                    if ok:
+                        self.log_line.emit(f">> Downloaded: {fname}")
+                    else:
+                        self.log_line.emit(f">> FAILED: {fname}")
+                        success = False
+                        failure_code = self._classify_network_error(url, has_hf_no_mirror)
+
+            self.finished_with_result.emit(success)
+            # Emit any failure code after finished_with_result so the dialog
+            # can display it on the next signal dispatch. We store it on self.
+            self._failure_code = failure_code
+
+        # ── helpers run in the worker thread (no Qt calls) ──
+
+        def _check_hf_no_mirror(self):
+            """Return True if there are HF URLs but no mirror configured."""
+            if not self.dfl:
+                return False
+            try:
+                from utils.config import pcfg
+
+                if pcfg.mirror.hf_endpoint:
+                    return False
+                for dl_entry in self.dfl:
+                    url = dl_entry.get("url", "")
+                    if "huggingface.co" in url:
+                        return True
+            except Exception:
+                pass
+            return False
+
+        def _classify_network_error(self, url, has_hf_no_mirror):
+            """Return a short error code for the dialog to translate."""
+            if "huggingface.co" in url and has_hf_no_mirror:
+                return "network_hf_no_mirror"
+            if "huggingface.co" in url:
+                return "network_hf"
+            if "github.com" in url or "github" in url:
+                return "network_github"
+            return "network_other"
+
     class _InstallDialog(QDialog):
-        def __init__(self, mod_name, pkgs, models, parent=None):
+        def __init__(self, mod_name, pkgs, models, dfl, parent=None):
             super().__init__(parent)
             self._installed = False
+            self._worker = None
+            self._dfl = dfl
             self.setWindowTitle(
                 self.tr("Install Dependencies")
             )
-            self.setMinimumWidth(480)
+            self.setMinimumWidth(520)
+            self.setMinimumHeight(400)
             layout = QVBoxLayout(self)
 
+            # ── Info section ──
             layout.addWidget(
                 QLabel(
-                    (
-                        self.tr('Module "{name}" requires additional dependencies:')
-                        if parent
-                        else 'Module "{name}" requires additional dependencies:'
-                    ).format(name=mod_name)
+                    self.tr('Module "{name}" needs extra dependencies:').format(
+                        name=mod_name
+                    )
                 )
             )
 
             if pkgs:
-                pkg_label = QLabel(
-                    (self.tr("Python packages:"))
-                )
+                pkg_label = QLabel(self.tr("Python packages:"))
                 pkg_label.setStyleSheet("font-weight: bold; margin-top: 8px;")
                 layout.addWidget(pkg_label)
                 for p in pkgs:
                     layout.addWidget(QLabel(f"  • {p}"))
 
             if models:
-                model_label = QLabel(
-                    (
-                        self.tr("Model files to download:")
-                        if parent
-                        else "Model files to download:"
-                    )
-                )
+                model_label = QLabel(self.tr("Model files to download:"))
                 model_label.setStyleSheet("font-weight: bold; margin-top: 8px;")
                 layout.addWidget(model_label)
                 for m in models:
@@ -921,74 +1059,62 @@ def _ensure_module_deps(
 
             if _has_hf_no_mirror:
                 _hf_warn = QLabel(
-                    (
-                        self.tr(
-                            '⚠ HuggingFace model detected but <b>no mirror configured</b>.<br>'
-                            'Open <b>Settings → Mirror Config</b> and set '
-                            '<tt>hf_endpoint</tt> to <tt>https://hf-mirror.com</tt>,<br>'
-                            'or the download may be extremely slow / fail in China.'
-                        )
-                        if parent
-                        else (
-                            '⚠ HuggingFace model detected but no mirror configured.\n'
-                            'Open Settings → Mirror Config and set hf_endpoint\n'
-                            'to https://hf-mirror.com, or the download may fail.'
-                        )
+                    self.tr(
+                        '⚠ HuggingFace model detected but <b>no mirror configured</b>.<br>'
+                        'Open <b>Settings → Mirror Config</b> and set '
+                        '<tt>hf_endpoint</tt> to <tt>https://hf-mirror.com</tt>.<br>'
+                        'Without a mirror, downloads will likely fail from China.'
                     )
                 )
+                _hf_warn.setWordWrap(True)
                 _hf_warn.setStyleSheet(
                     "color: #cc5500; background: #fff3cd; border: 1px solid #cc5500; "
                     "border-radius: 4px; padding: 8px; margin-top: 4px;"
                 )
-                _hf_warn.setWordWrap(True)
                 layout.addWidget(_hf_warn)
             else:
-                # Generic network hint (not HF-specific)
-                if parent:
-                    layout.addWidget(
-                        QLabel(
-                            self.tr(
-                                "Network restricted? Open Settings → Mirror Config to configure download sources."
-                            )
+                layout.addWidget(
+                    QLabel(
+                        self.tr(
+                            "Network restricted? Open Settings → Mirror Config to configure download sources."
                         )
                     )
-
-            # Freeze notice (hidden until install starts)
-            self._freeze_notice = QLabel(
-                (self.tr(
-                    '⏳ <b>Installation may take a while.</b>'
-                    '<br>The window may become unresponsive during this time.'
-                    '<br>Please do <b>not</b> close or restart the app.'
                 )
-                 if parent
-                 else (
-                     '⏳ Installation may take a while.\n'
-                     'The window may become unresponsive.\n'
-                     'Please do not close or restart the app.'
-                 ))
-            )
-            self._freeze_notice.setWordWrap(True)
-            self._freeze_notice.setAlignment(Qt.AlignCenter)
-            self._freeze_notice.setStyleSheet(
-                "color: #856404; background: #fff3cd; border: 1px solid #ffc107; "
-                "border-radius: 4px; padding: 12px; margin-top: 8px;"
-                "font-size: 12px;"
-            )
-            self._freeze_notice.setVisible(False)
-            layout.addWidget(self._freeze_notice)
 
-            # Status label (hidden until install starts)
+            # ── Status label ──
             self._status_label = QLabel()
             self._status_label.setVisible(False)
             self._status_label.setWordWrap(True)
             layout.addWidget(self._status_label)
 
-            # Progress bar (hidden until install starts)
+            # ── Progress bar (indeterminate during work) ──
             self._progress = QProgressBar()
             self._progress.setVisible(False)
             layout.addWidget(self._progress)
 
-            # Buttons
+            # ── Log area (scrollable) ──
+            self._log_area = QPlainTextEdit()
+            self._log_area.setVisible(False)
+            self._log_area.setReadOnly(True)
+            self._log_area.setMaximumBlockCount(200)
+            self._log_area.setStyleSheet(
+                "color: #555; font-size: 11px; background: #f5f5f5; "
+                "border: 1px solid #ddd; border-radius: 3px; padding: 4px;"
+            )
+            self._log_area.setFixedHeight(120)
+            layout.addWidget(self._log_area)
+
+            # ── Error hint label (shown on failure) ──
+            self._error_hint = QLabel()
+            self._error_hint.setVisible(False)
+            self._error_hint.setWordWrap(True)
+            self._error_hint.setStyleSheet(
+                "color: #a00; font-size: 12px; background: #fff0f0; "
+                "border: 1px solid #e88; border-radius: 4px; padding: 8px;"
+            )
+            layout.addWidget(self._error_hint)
+
+            # ── Buttons ──
             btn_row = QHBoxLayout()
             self._install_btn = QPushButton(
                 self.tr("Install All")
@@ -1003,8 +1129,7 @@ def _ensure_module_deps(
 
         def closeEvent(self, event):
             """Prevent accidental close during installation."""
-            if not self._install_btn.isEnabled():
-                # Install in progress — user must wait or kill from terminal
+            if self._worker and self._worker.isRunning():
                 event.ignore()
                 return
             event.accept()
@@ -1012,148 +1137,99 @@ def _ensure_module_deps(
         def _do_install(self):
             self._install_btn.setEnabled(False)
             self._skip_btn.setEnabled(False)
+            self._error_hint.setVisible(False)
+
+            # Indeterminate progress bar — we show what's happening via status label
             self._progress.setVisible(True)
-            self._progress.setRange(0, 0)  # indeterminate
-            self._freeze_notice.setVisible(True)
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-            QApplication.processEvents()
+            self._progress.setRange(0, 0)
             self._status_label.setVisible(True)
+            self._status_label.setText(
+                self.tr("Starting…")
+            )
+            self._log_area.setVisible(True)
+            self._log_area.clear()
 
-            print("\n" + "=" * 60)
-            print(f"  Installing dependencies for module: {mod_name}")
-            print("=" * 60)
+            self._worker = _InstallWorker(
+                mod_name, missing_pkgs, self._dfl, self,
+            )
+            self._worker.status.connect(self._on_worker_status)
+            self._worker.log_line.connect(self._on_worker_log)
+            self._worker.finished_with_result.connect(self._on_worker_finished)
+            self._worker.start()
 
-            success = True
-            # 1. Install Python packages
-            if missing_pkgs:
-                self._status_label.setText(
-                    "Installing Python packages…" if not self.parent()
-                    else self.tr("Installing Python packages…")
-                )
-                QApplication.processEvents()
-                print(f"\n>> Installing Python packages: {', '.join(missing_pkgs)}\n")
-                try:
-                    import subprocess
-                    import shutil
+        def _on_worker_status(self, text):
+            # Translate known fixed-status strings
+            _map = {
+                "Step 1/2: Installing Python packages…": self.tr(
+                    "Step 1/2: Installing Python packages…"
+                ),
+                "Step 2/2: Downloading model files…": self.tr(
+                    "Step 2/2: Downloading model files…"
+                ),
+            }
+            self._status_label.setText(_map.get(text, text))
 
-                    python = sys.executable
+        def _on_worker_log(self, line):
+            self._log_area.appendPlainText(line)
+            # Auto-scroll to bottom
+            sb = self._log_area.verticalScrollBar()
+            sb.setValue(sb.maximum())
+            LOGGER.info(line)
 
-                    # Check if python -m uv is available to avoid noisy errors
-                    _uv_avail = (
-                        subprocess.run(
-                            [python, "-m", "uv", "--version"],
-                            capture_output=True,
-                            check=False,
-                        ).returncode
-                        == 0
-                    )
-                    _runners = []
-                    if _uv_avail:
-                        _runners.append([python, "-m", "uv", "pip", "install"])
-                    _runners.append([python, "-m", "pip", "install"])
-
-                    def _pip_install(pkgs, *, no_deps=False):
-                        """Run pip install (prefer uv, fall back to pip)."""
-                        cmd_extra = (
-                            ["--no-deps"]
-                            if no_deps
-                            else ["--prefer-binary", "--timeout", "30"]
-                        )
-                        bases = _runners if not no_deps else _runners[::-1]
-                        # When using --no-deps, try pip first (uv may not support it)
-                        for runner in bases:
-                            try:
-                                subprocess.run(
-                                    [*runner, *pkgs, *cmd_extra],
-                                    timeout=300,
-                                    check=True,
-                                )
-                                return True
-                            except Exception:
-                                continue
-                        # Final fallback: system python pip (bundled may lack some pkgs)
-                        sys_py = shutil.which("python")
-                        if sys_py and osp.realpath(sys_py) != osp.realpath(python):
-                            try:
-                                subprocess.run(
-                                    [sys_py, "-m", "pip", "install",
-                                     *pkgs, "--prefer-binary", "--timeout", "30"],
-                                    timeout=300,
-                                    check=True,
-                                )
-                                return True
-                            except Exception:
-                                pass
-                        return False
-
-                    # Install each package individually so we can fall back
-                    # to --no-deps per-package (e.g. onnxocr declares
-                    # numpy<2.0.0 but bundled env has numpy 2.x).
-                    for pkg in missing_pkgs:
-                        if not _pip_install([pkg]):
-                            print(f">>   Package '{pkg}' failed with deps, retrying --no-deps …")
-                            if not _pip_install([pkg], no_deps=True):
-                                raise RuntimeError(f"Failed to install: {pkg}")
-
-                    print(">> Package installation complete.")
-                    self._progress.setValue(50)
-                except Exception as e:
-                    print(f">> Package install FAILED: {e}")
-                    LOGGER.warning(f"Package install failed: {e}")
-                    success = False
-
-            # 2. Download model files
-            if success and missing_model_labels:
-                from utils.download_util import download_and_check_files
-
-                for dl_entry in dfl:
-                    url = dl_entry.get("url", "?")
-                    fname = osp.basename(url) or url
-                    print(f"\n>> Downloading model: {fname}")
-                    print(f"   From: {url}")
-                    self._status_label.setText(
-                        (self.tr("Downloading {name} …").format(name=fname)
-                         if self.parent()
-                         else f"Downloading {fname} …")
-                    )
-                    QApplication.processEvents()
-                    try:
-                        ok = download_and_check_files(**dl_entry)
-                    except Exception as e:
-                        print(f">> Download error: {e}")
-                        LOGGER.warning(
-                            f"Model download failed: {url} — {e}"
-                        )
-                        ok = False
-                    if ok:
-                        print(f">> Successfully downloaded: {fname}")
-                    else:
-                        print(f">> Failed to download: {fname}")
-                        LOGGER.warning(
-                            f"Model download failed: {url}"
-                        )
-                        success = False
-
-            self._progress.setValue(100)
-            QApplication.restoreOverrideCursor()
+        def _on_worker_finished(self, success):
             if success:
-                print("\n✓ All dependencies installed successfully!\n")
                 self._installed = True
                 self.accept()
             else:
-                print("\n✗ Some dependencies failed to install.")
-                print("  Check the log output above for details.\n")
-                self._install_btn.setText(
-                    self.tr("Retry")
+                self._progress.setVisible(False)
+                self._log_area.setStyleSheet(
+                    "color: #a00; font-size: 11px; background: #fff0f0; "
+                    "border: 1px solid #e88; border-radius: 3px; padding: 4px;"
                 )
+                # Show user-friendly error hint (translated)
+                code = getattr(self._worker, "_failure_code", "")
+                hint = self._format_error_hint(code)
+                if hint:
+                    self._error_hint.setText(hint)
+                    self._error_hint.setVisible(True)
+                self._install_btn.setText(self.tr("Retry"))
                 self._install_btn.setEnabled(True)
                 self._skip_btn.setEnabled(True)
-                self._progress.setVisible(False)
+
+        def _format_error_hint(self, code):
+            """Return a translated, user-friendly error message for *code*."""
+            if code.startswith("pip_failed:"):
+                pkg = code.split(":", 1)[1]
+                return self.tr(
+                    'Failed to install Python package "{pkg}".\n'
+                    "Check the log above for details."
+                ).format(pkg=pkg)
+            return {
+                "network_hf_no_mirror": self.tr(
+                    "Download failed — HuggingFace is not accessible from your network.\n"
+                    'Go to Settings → Mirror Config, set hf_endpoint to https://hf-mirror.com,\n'
+                    "then click Retry."
+                ),
+                "network_hf": self.tr(
+                    "Download failed — HuggingFace may be blocked in your region.\n"
+                    "Go to Settings → Mirror Config to configure a mirror, then Retry."
+                ),
+                "network_github": self.tr(
+                    "Download failed — GitHub may not be reachable.\n"
+                    "Go to Settings → Mirror Config to set up a mirror, then Retry."
+                ),
+                "network_other": self.tr(
+                    "Download failed — check your network connection.\n"
+                    "If you are in a restricted region, try setting up a download mirror\n"
+                    "in Settings → Mirror Config, then click Retry."
+                ),
+            }.get(code, "")
 
     dlg = _InstallDialog(
         mod_name,
         missing_pkgs,
         missing_model_labels,
+        dfl,  # raw download_file_list for the worker
         parent_widget,
     )
     return dlg.exec() == QDialog.DialogCode.Accepted and dlg._installed

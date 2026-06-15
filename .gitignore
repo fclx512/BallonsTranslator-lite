@@ -5,7 +5,9 @@ local_*
 inpainted
 mask
 result
-data/models
+data/models/*
+!data/models/ppocrv6_onnx/
+!data/models/ppocrv6_onnx/ppocrv6_dict_proper.txt
 data/*.png
 data/font_demo_cache.bin
 config/textstyles

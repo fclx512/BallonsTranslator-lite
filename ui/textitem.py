@@ -498,6 +498,18 @@ class TextBlkItem(QGraphicsTextItem):
         if repaint:
             self.repaint_background()
 
+    def setRectFast(self, rect):
+        """Fast geometry update during drag resize — skip expensive layout.
+
+        Updates position and bounding rect immediately to keep visual sync
+        with the control frame. Full text layout (setMaxSize) is deferred
+        to the debounced _apply_resize timer.
+        """
+        padded = self.padRect(rect)
+        self.prepareGeometryChange()
+        self._display_rect = QRectF(0, 0, padded.width(), padded.height())
+        self.setPos(padded.topLeft())
+
     def documentSize(self):
         return self.layout.documentSize()
 

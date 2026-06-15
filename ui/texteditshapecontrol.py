@@ -239,6 +239,10 @@ class ControlBlockItem(QGraphicsRectItem):
             if not self._resize_timer.isActive():
                 self._resize_timer.start(30)
 
+            # Immediate geometry update keeps text block synced with control frame,
+            # eliminating the visual offset that creates a "fake box" flicker.
+            blk_item.setRectFast(rect)
+
         elif self.drag_mode == self.DRAG_ROTATE:  # rotating
             rotate_vec = event.scenePos() - self.ctrl.sceneBoundingRect().center()
             rotation = np.rad2deg(math.atan2(rotate_vec.y(), rotate_vec.x()))

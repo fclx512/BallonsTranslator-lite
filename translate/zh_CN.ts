@@ -3495,9 +3495,9 @@ Please download the latest version from GitHub.</source>
         <translation>安装依赖</translation>
     </message>
     <message>
-        <location filename="..\ui\module_manager.py" line="879" />
-        <source>Module "{name}" requires additional dependencies:</source>
-        <translation>模块 "{name}" 需要额外的依赖项：</translation>
+        <location filename="..\ui\module_manager.py" line="995" />
+        <source>Module "{name}" needs extra dependencies:</source>
+        <translation>模块 "{name}" 需要额外依赖：</translation>
     </message>
     <message>
         <location filename="..\ui\module_manager.py" line="888" />
@@ -3510,19 +3510,14 @@ Please download the latest version from GitHub.</source>
         <translation>要下载的模型文件：</translation>
     </message>
     <message>
-        <location filename="..\ui\module_manager.py" line="925" />
-        <source>⚠ HuggingFace model detected but &lt;b&gt;no mirror configured&lt;/b&gt;.&lt;br&gt;Open &lt;b&gt;Settings → Mirror Config&lt;/b&gt; and set &lt;tt&gt;hf_endpoint&lt;/tt&gt; to &lt;tt&gt;https://hf-mirror.com&lt;/tt&gt;,&lt;br&gt;or the download may be extremely slow / fail in China.</source>
-        <translation>⚠ 检测到 HuggingFace 模型但&lt;b&gt;未配置镜像&lt;/b&gt;。&lt;br&gt;请打开&lt;b&gt;设置 → 镜像配置&lt;/b&gt;并将 &lt;tt&gt;hf_endpoint&lt;/tt&gt; 设为 &lt;tt&gt;https://hf-mirror.com&lt;/tt&gt;，&lt;br&gt;否则下载可能极慢或失败。</translation>
+        <location filename="..\ui\module_manager.py" line="1027" />
+        <source>⚠ HuggingFace model detected but &lt;b&gt;no mirror configured&lt;/b&gt;.&lt;br&gt;Open &lt;b&gt;Settings → Mirror Config&lt;/b&gt; and set &lt;tt&gt;hf_endpoint&lt;/tt&gt; to &lt;tt&gt;https://hf-mirror.com&lt;/tt&gt;.&lt;br&gt;Without a mirror, downloads will likely fail from China.</source>
+        <translation>⚠ 检测到 HuggingFace 模型但&lt;b&gt;未配置镜像&lt;/b&gt;。&lt;br&gt;请打开&lt;b&gt;设置 → 镜像配置&lt;/b&gt;并设置 &lt;tt&gt;hf_endpoint&lt;/tt&gt; 为 &lt;tt&gt;https://hf-mirror.com&lt;/tt&gt;。&lt;br&gt;不配置镜像的话下载在中国很可能失败。</translation>
     </message>
     <message>
         <location filename="..\ui\module_manager.py" line="950" />
         <source>Network restricted? Open Settings → Mirror Config to configure download sources.</source>
         <translation>网络受限？打开设置 → 镜像配置来配置下载源。</translation>
-    </message>
-    <message>
-        <location filename="..\ui\module_manager.py" line="958" />
-        <source>⏳ &lt;b&gt;Installation may take a while.&lt;/b&gt;&lt;br&gt;The window may become unresponsive during this time.&lt;br&gt;Please do &lt;b&gt;not&lt;/b&gt; close or restart the app.</source>
-        <translation>⏳ &lt;b&gt;安装需要一些时间。&lt;/b&gt;&lt;br&gt;期间窗口可能会暂时无响应。&lt;br&gt;请&lt;b&gt;不要&lt;/b&gt;关闭或重启程序。</translation>
     </message>
     <message>
         <location filename="..\ui\module_manager.py" line="994" />
@@ -3535,19 +3530,63 @@ Please download the latest version from GitHub.</source>
         <translation>稍后</translation>
     </message>
     <message>
-        <location filename="..\ui\module_manager.py" line="1031" />
-        <source>Installing Python packages…</source>
-        <translation>正在安装 Python 包……</translation>
-    </message>
-    <message>
-        <location filename="..\ui\module_manager.py" line="1115" />
-        <source>Downloading {name} …</source>
-        <translation>正在下载 {name} ……</translation>
-    </message>
-    <message>
         <location filename="..\ui\module_manager.py" line="1147" />
         <source>Retry</source>
         <translation>重试</translation>
+    </message>
+    <message>
+        <location filename="..\ui\module_manager.py" line="1060" />
+        <source>Starting…</source>
+        <translation>正在开始……</translation>
+    </message>
+    <message>
+        <location filename="..\ui\module_manager.py" line="1182" />
+        <source>Step 1/2: Installing Python packages…</source>
+        <translation>第 1/2 步：正在安装 Python 包……</translation>
+    </message>
+    <message>
+        <location filename="..\ui\module_manager.py" line="1183" />
+        <source>Step 2/2: Downloading model files…</source>
+        <translation>第 2/2 步：正在下载模型文件……</translation>
+    </message>
+    <message>
+        <location filename="..\ui\module_manager.py" line="1205" />
+        <source>Failed to install Python package "{pkg}".
+Check the log above for details.</source>
+        <translation>安装 Python 包 "{pkg}" 失败。
+查看上方日志了解详情。</translation>
+    </message>
+    <message>
+        <location filename="..\ui\module_manager.py" line="1210" />
+        <source>Download failed — HuggingFace is not accessible from your network.
+Go to Settings → Mirror Config, set hf_endpoint to https://hf-mirror.com,
+then click Retry.</source>
+        <translation>下载失败——当前网络无法访问 HuggingFace。
+请前往 设置 → 镜像配置，将 hf_endpoint 设为 https://hf-mirror.com，
+然后点击重试。</translation>
+    </message>
+    <message>
+        <location filename="..\ui\module_manager.py" line="1215" />
+        <source>Download failed — HuggingFace may be blocked in your region.
+Go to Settings → Mirror Config to configure a mirror, then Retry.</source>
+        <translation>下载失败——HuggingFace 可能在您的地区被限制。
+请前往 设置 → 镜像配置 配置镜像源，然后重试。</translation>
+    </message>
+    <message>
+        <location filename="..\ui\module_manager.py" line="1219" />
+        <source>Download failed — GitHub may not be reachable.
+Go to Settings → Mirror Config to set up a mirror, then Retry.</source>
+        <translation>下载失败——GitHub 可能无法访问。
+请前往 设置 → 镜像配置 配置镜像源，然后重试。</translation>
+    </message>
+    <message>
+        <location filename="..\ui\module_manager.py" line="1223" />
+        <source>Download failed — check your network connection.
+If you are in a restricted region, try setting up a download mirror
+in Settings → Mirror Config, then click Retry.</source>
+        <translation>下载失败——请检查您的网络连接。
+如果您所在地区网络受限，请前往 设置 → 镜像配置
+配置镜像源，然后点击重试。</translation>
     </message>
 </context><context>
     <name>_ShortcutRow</name>

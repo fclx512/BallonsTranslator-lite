@@ -1,11 +1,11 @@
 """PP-OCRv6 ONNX Runtime OCR module for BallonsTranslator-lite.
 
-Uses ``ONNXPaddleOcr`` from the ``onnxocr`` package to run PP-OCRv6 models
-via ONNX Runtime.  Avoids the PaddlePaddle framework dependency (~400 MB)
+Uses ``ONNXPaddleOcr`` from the ``onnxocr`` package to run PP-OCRv6 medium
+models via ONNX Runtime.  Avoids the PaddlePaddle framework dependency (~400 MB)
 and its CUDA context conflict with PyTorch.
 
-Model files (det.onnx + rec.onnx) are bundled under ``data/models/ppocrv6_onnx/``.
-On first use they are auto-downloaded from HuggingFace.
+The medium model is bundled under ``data/models/ppocrv6_onnx/medium/`` and
+auto-downloaded on first use.
 """
 
 import os
@@ -28,6 +28,12 @@ _MODEL_DIR = osp.join("data", "models", "ppocrv6_onnx")
 class PaddleOCRv6ONNX(OCRBase):
     params = {
         "device": DEVICE_SELECTOR(),
+        "model_size": {
+            "type": "selector",
+            "options": ["medium"],
+            "value": "medium",
+            "description": "Model size: medium (34.5M, most accurate)",
+        },
         "lang": {
             "type": "selector",
             "options": [
@@ -73,7 +79,7 @@ class PaddleOCRv6ONNX(OCRBase):
             "value": 6,
             "description": "Recognition batch size (higher = faster, more VRAM)",
         },
-        "description": "PP-OCRv6 ONNX — latest Baidu OCR via ONNX Runtime (no PaddlePaddle)",
+        "description": "PP-OCRv6 ONNX — medium model via ONNX Runtime (no PaddlePaddle)",
     }
 
     requires_packages = ["onnxruntime", "onnxocr"]
@@ -82,13 +88,19 @@ class PaddleOCRv6ONNX(OCRBase):
     # because the lazy AST scanner (SafeEval) cannot resolve string
     # interpolation or osp.join at scan time.
     download_file_list = [
+        # ── medium ──
         {
             "url": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_onnx/resolve/main/inference.onnx",
-            "files": "data/models/ppocrv6_onnx/det.onnx",
+            "files": "data/models/ppocrv6_onnx/medium/det.onnx",
         },
         {
             "url": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx/resolve/main/inference.onnx",
-            "files": "data/models/ppocrv6_onnx/rec.onnx",
+            "files": "data/models/ppocrv6_onnx/medium/rec.onnx",
+        },
+        # ── shared dictionary ──
+        {
+            "url": "https://raw.githubusercontent.com/FCLX152/BallonsTranslator-lite/main/data/models/ppocrv6_onnx/ppocrv6_dict_proper.txt",
+            "files": "data/models/ppocrv6_onnx/ppocrv6_dict_proper.txt",
         },
     ]
 
@@ -102,7 +114,8 @@ class PaddleOCRv6ONNX(OCRBase):
 
     @staticmethod
     def _model_path(name: str) -> str:
-        return osp.abspath(osp.join(_MODEL_DIR, name))
+        """Resolve path to a model file in the ``medium`` subdirectory."""
+        return osp.abspath(osp.join(_MODEL_DIR, "medium", name))
 
     # ── Detection sorting for reading order ─────────────────────────────
 
@@ -236,18 +249,18 @@ class PaddleOCRv6ONNX(OCRBase):
 
         det_path = self._model_path("det.onnx")
         rec_path = self._model_path("rec.onnx")
-        dict_path = self._model_path("ppocrv6_dict_proper.txt")
+        dict_path = osp.abspath(osp.join(_MODEL_DIR, "ppocrv6_dict_proper.txt"))
 
         # Validate model files exist (helpful error if download failed)
         for p, label in [
-            (det_path, "det.onnx"),
-            (rec_path, "rec.onnx"),
+            (det_path, "medium/det.onnx"),
+            (rec_path, "medium/rec.onnx"),
             (dict_path, "dict"),
         ]:
             if not osp.isfile(p):
                 raise FileNotFoundError(
                     f"PP-OCRv6 ONNX model file not found: {p}\n\n"
-                    "Try restarting the app so model files are auto-downloaded, "
+                    "Try restarting the app so model files are auto-downloaded,\n"
                     "or download them manually from:\n"
                     "  https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_onnx\n"
                     "  https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx"
