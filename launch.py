@@ -335,7 +335,6 @@ def _ensure_module_fallback():
     textdetector   yes (all)       no                    ``none``
     inpainter      yes (all)       no                    ``none``
     mit48px_ctc    yes             no                    ``none_ocr``
-    paddleocr_v6   no              yes                   ``none_ocr``
     llm_ocr        no              no                    *(never)*
     translator     no              no                    *(never)*
     ============== =============== ===================== ==============

@@ -32,8 +32,8 @@ def GET_VALID_INPAINTERS() -> list:
 
 
 def GET_VALID_OCR() -> list:
-    # Exclude deprecated modules and move none_ocr to end
-    exclude = {"none_ocr", "paddleocr_v6"}
+    # Move none_ocr to end
+    exclude = {"none_ocr"}
     return [k for k in list(OCR.module_dict.keys()) if k not in exclude] + ["none_ocr"]
 
 

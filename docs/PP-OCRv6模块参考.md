@@ -122,12 +122,10 @@ data/models/ppocrv6_onnx/
 └── ppocrv6_dict_proper.txt    18,708 字符 — 字符字典
 
 modules/ocr/
-├── ocr_onnx.py                 ← 本模块 (paddleocr_v6_onnx)
-└── ocr_paddleocr_v6.py         ← 旧 PaddlePaddle 版（已废弃）
+└── ocr_onnx.py                 ← 本模块 (paddleocr_v6_onnx)
+
+> **已移除：** 旧 PaddlePaddle 版（`ocr_paddleocr_v6.py`）已在 2026-06-15 清理——PaddlePaddle 依赖过重，不再安装。
+>
 ```
 
 ---
-
-## 参考
-
-- `modules/ocr/ocr_paddleocr_v6.py` — 旧版 PaddlePaddle 模块（废弃，保留供参考）

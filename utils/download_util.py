@@ -121,7 +121,11 @@ def save_response_content(response, destination, file_size=None, chunk_size=3276
 
 
 def download_url_to_file(
-    url: str, dst: str, hash_prefix: Optional[str] = None, progress: bool = True
+    url: str,
+    dst: str,
+    hash_prefix: Optional[str] = None,
+    progress: bool = True,
+    timeout: float = 30.0,
 ) -> None:
     r"""Download object at the given URL to a local path.
 
@@ -132,6 +136,7 @@ def download_url_to_file(
             Default: None
         progress (bool, optional): whether or not to display a progress bar to stderr
             Default: True
+        timeout (float, optional): Connection/read timeout in seconds. Default: 30.0
 
     Example:
         >>> # xdoctest: +REQUIRES(env:TORCH_DOCTEST_HUB)
@@ -161,7 +166,7 @@ def download_url_to_file(
 
     file_size = None
     req = Request(url, headers={"User-Agent": "torch.hub"})
-    u = urlopen(req)
+    u = urlopen(req, timeout=timeout)
     meta = u.info()
     if hasattr(meta, "getheaders"):
         content_length = meta.getheaders("Content-Length")

@@ -96,7 +96,6 @@ class InpaintPanel(Widget):
             [
                 self.tr("Circle"),
                 self.tr("Rectangle"),
-                # self.tr('Triangle')
             ]
         )
         self.shapeChanged = self.shapeCombobox.currentIndexChanged
@@ -170,7 +169,6 @@ class PenConfigPanel(Widget):
             [
                 self.tr("Circle"),
                 self.tr("Rectangle"),
-                # self.tr('Triangle')
             ]
         )
         self.shapeChanged = self.shapeCombobox.currentIndexChanged

@@ -38,7 +38,6 @@ dependencies = [
 gpu = ["torch", "torchvision", "transformers", "diffusers", "ultralytics>=8.4.14"]
 mcp = ["mcp>=1.0.0"]
 onnx = ["onnxruntime-gpu", "onnxocr"]
-paddle = ["paddleocr>=3.7.0"]
 
 [tool.ruff]
 target-version = "py310"

@@ -5,7 +5,7 @@ import time
 from typing import List, Union
 
 import numpy as np
-from qtpy.QtCore import QLocale, QObject, QThread, QTimer, Signal
+from qtpy.QtCore import Qt, QLocale, QObject, QThread, QTimer, Signal
 from qtpy.QtWidgets import QFileDialog
 
 import modules
@@ -465,14 +465,27 @@ class ImgtransThread(QThread):
     ):
         if mode >= 0 and mode < 3:
             try:
-                self.ocr_thread.module.run_ocr(tgt_img, blk_list, split_textblk=True)
+                ocr_mod = self.ocr_thread.module
+                if ocr_mod is None:
+                    LOGGER.warning(
+                        "OCR module not loaded, skipping OCR in blktrans"
+                    )
+                else:
+                    ocr_mod.run_ocr(tgt_img, blk_list, split_textblk=True)
             except Exception as e:
                 create_error_dialog(e, self.tr("OCR Failed."), "OCRFailed")
             self.finish_blktrans.emit(mode, blk_ids)
 
         if mode != 0 and mode < 3:
             try:
-                self.translate_thread.module.translate_textblk_lst(blk_list)
+                trans_mod = self.translate_thread.module
+                if trans_mod is None:
+                    LOGGER.warning(
+                        "Translator module not loaded, "
+                        "skipping translate in blktrans"
+                    )
+                else:
+                    trans_mod.translate_textblk_lst(blk_list)
             except Exception as e:
                 create_error_dialog(
                     e, self.tr("Translation Failed."), "TranslationFailed"
@@ -494,13 +507,21 @@ class ImgtransThread(QThread):
                     )
                     mask = self.post_process_mask(inpaint_mask_array)
                     if mask.sum() > 0:
-                        inpainted = self.inpaint_thread.inpainter.inpaint(im, mask)
-                        blk.region_inpaint_dict = {
-                            "img": im,
-                            "mask": mask,
-                            "inpaint_rect": [x1, y1, x2, y2],
-                            "inpainted": inpainted,
-                        }
+                        if self.inpaint_thread.inpainter is None:
+                            LOGGER.warning(
+                                "Inpainter not loaded, "
+                                "skipping inpaint in blktrans"
+                            )
+                        else:
+                            inpainted = (
+                                self.inpaint_thread.inpainter.inpaint(im, mask)
+                            )
+                            blk.region_inpaint_dict = {
+                                "img": im,
+                                "mask": mask,
+                                "inpaint_rect": [x1, y1, x2, y2],
+                                "inpainted": inpainted,
+                            }
                     self.finish_blktrans_stage.emit(
                         "inpaint", int((ii + 1) * progress_prod)
                     )
@@ -592,10 +613,15 @@ class ImgtransThread(QThread):
                 )
 
             if cfg_module.enable_ocr:
-                try:
-                    self.ocr.run_ocr(img, blk_list)
-                except Exception as e:
-                    create_error_dialog(e, self.tr("OCR Failed."), "OCRFailed")
+                if self.ocr is None:
+                    LOGGER.warning("OCR module not loaded, skipping OCR stage")
+                else:
+                    try:
+                        self.ocr.run_ocr(img, blk_list)
+                    except Exception as e:
+                        create_error_dialog(
+                            e, self.tr("OCR Failed."), "OCRFailed"
+                        )
                 self.ocr_counter += 1
 
                 self.imgtrans_proj.update_page_progress(imgname, RunStatus.FIN_OCR)
@@ -609,22 +635,38 @@ class ImgtransThread(QThread):
                 if self.parallel_trans:
                     self.translate_thread.push_pagekey_queue(imgname)
                 elif not low_vram_trans:
-                    self.translator.translate_textblk_lst(blk_list)
-                    self.translate_counter += 1
-                    self.update_translate_progress.emit(self.translate_counter)
+                    if self.translator is None:
+                        LOGGER.warning(
+                            "Translator not loaded, skipping translate stage"
+                        )
+                    else:
+                        self.translator.translate_textblk_lst(blk_list)
+                        self.translate_counter += 1
+                        self.update_translate_progress.emit(self.translate_counter)
 
             if cfg_module.enable_inpaint:
                 if mask is None:
                     mask = self.imgtrans_proj.load_mask_by_imgname(imgname)
 
                 if mask is not None:
-                    try:
-                        inpainted = self.inpainter.inpaint(img, mask, blk_list)
-                        self.imgtrans_proj.save_inpainted(imgname, inpainted)
-                    except Exception as e:
-                        create_error_dialog(
-                            e, self.tr("Inpainting Failed."), "InpaintFailed"
+                    if self.inpainter is None:
+                        LOGGER.warning(
+                            "Inpainter not loaded, skipping inpaint stage"
                         )
+                    else:
+                        try:
+                            inpainted = self.inpainter.inpaint(
+                                img, mask, blk_list
+                            )
+                            self.imgtrans_proj.save_inpainted(
+                                imgname, inpainted
+                            )
+                        except Exception as e:
+                            create_error_dialog(
+                                e,
+                                self.tr("Inpainting Failed."),
+                                "InpaintFailed",
+                            )
 
                 self.inpaint_counter += 1
                 self.imgtrans_proj.update_page_progress(imgname, RunStatus.FIN_INPAINT)
@@ -638,12 +680,19 @@ class ImgtransThread(QThread):
                     break
 
                 blk_list = self.imgtrans_proj.pages[imgname]
-                self.translator.translate_textblk_lst(blk_list)
-                self.translate_counter += 1
-                self.imgtrans_proj.update_page_progress(
-                    imgname, RunStatus.FIN_TRANSLATE
-                )
-                self.update_translate_progress.emit(self.translate_counter)
+                if self.translator is None:
+                    LOGGER.warning(
+                        "Translator not loaded, skipping low-vram translate"
+                    )
+                else:
+                    self.translator.translate_textblk_lst(blk_list)
+                    self.translate_counter += 1
+                    self.imgtrans_proj.update_page_progress(
+                        imgname, RunStatus.FIN_TRANSLATE
+                    )
+                    self.update_translate_progress.emit(
+                        self.translate_counter
+                    )
 
         if cfg_module.enable_translate and hasattr(self.translator, "finalize"):
             self.translator.finalize()
@@ -742,7 +791,24 @@ def _ensure_module_deps(
     # Resolve to actual class for attribute access, but keep ModuleSpec
     # name for the dialog so the user sees the registration key.
     mod_name = module_cls.key if is_spec else getattr(module_cls, "__name__", "?")
-    actual_cls = module_cls.resolve() if is_spec else module_cls
+    try:
+        actual_cls = module_cls.resolve() if is_spec else module_cls
+    except Exception as e:
+        LOGGER.error(
+            "Failed to resolve module '%s' (import_path=%s): %s",
+            mod_name,
+            getattr(module_cls, "import_path", "?"),
+            e,
+        )
+        create_error_dialog(
+            e,
+            (
+                f"Failed to load module '{mod_name}'.\n"
+                "The module file may be corrupted or missing critical dependencies.\n"
+                "Please check the log for details."
+            ),
+        )
+        return False
 
     pkgs = getattr(actual_cls, "requires_packages", None) or []
     dfl = getattr(actual_cls, "download_file_list", None) or []
@@ -802,7 +868,7 @@ def _ensure_module_deps(
             super().__init__(parent)
             self._installed = False
             self.setWindowTitle(
-                parent.tr("Install Dependencies") if parent else "Install Dependencies"
+                self.tr("Install Dependencies")
             )
             self.setMinimumWidth(480)
             layout = QVBoxLayout(self)
@@ -810,7 +876,7 @@ def _ensure_module_deps(
             layout.addWidget(
                 QLabel(
                     (
-                        parent.tr('Module "{name}" requires additional dependencies:')
+                        self.tr('Module "{name}" requires additional dependencies:')
                         if parent
                         else 'Module "{name}" requires additional dependencies:'
                     ).format(name=mod_name)
@@ -819,7 +885,7 @@ def _ensure_module_deps(
 
             if pkgs:
                 pkg_label = QLabel(
-                    (parent.tr("Python packages:") if parent else "Python packages:")
+                    (self.tr("Python packages:"))
                 )
                 pkg_label.setStyleSheet("font-weight: bold; margin-top: 8px;")
                 layout.addWidget(pkg_label)
@@ -829,7 +895,7 @@ def _ensure_module_deps(
             if models:
                 model_label = QLabel(
                     (
-                        parent.tr("Model files to download:")
+                        self.tr("Model files to download:")
                         if parent
                         else "Model files to download:"
                     )
@@ -841,14 +907,81 @@ def _ensure_module_deps(
 
             layout.addSpacing(12)
 
-            if parent:
-                layout.addWidget(
-                    QLabel(
-                        parent.tr(
-                            "Network restricted? Open Settings → Mirror Config to configure download sources."
+            # Detect HuggingFace URLs with no mirror configured → show warning
+            _has_hf_no_mirror = False
+            if models:
+                try:
+                    if not pcfg.mirror.hf_endpoint:
+                        for m in models:
+                            if "huggingface.co" in m:
+                                _has_hf_no_mirror = True
+                                break
+                except Exception:
+                    pass
+
+            if _has_hf_no_mirror:
+                _hf_warn = QLabel(
+                    (
+                        self.tr(
+                            '⚠ HuggingFace model detected but <b>no mirror configured</b>.<br>'
+                            'Open <b>Settings → Mirror Config</b> and set '
+                            '<tt>hf_endpoint</tt> to <tt>https://hf-mirror.com</tt>,<br>'
+                            'or the download may be extremely slow / fail in China.'
+                        )
+                        if parent
+                        else (
+                            '⚠ HuggingFace model detected but no mirror configured.\n'
+                            'Open Settings → Mirror Config and set hf_endpoint\n'
+                            'to https://hf-mirror.com, or the download may fail.'
                         )
                     )
                 )
+                _hf_warn.setStyleSheet(
+                    "color: #cc5500; background: #fff3cd; border: 1px solid #cc5500; "
+                    "border-radius: 4px; padding: 8px; margin-top: 4px;"
+                )
+                _hf_warn.setWordWrap(True)
+                layout.addWidget(_hf_warn)
+            else:
+                # Generic network hint (not HF-specific)
+                if parent:
+                    layout.addWidget(
+                        QLabel(
+                            self.tr(
+                                "Network restricted? Open Settings → Mirror Config to configure download sources."
+                            )
+                        )
+                    )
+
+            # Freeze notice (hidden until install starts)
+            self._freeze_notice = QLabel(
+                (self.tr(
+                    '⏳ <b>Installation may take a while.</b>'
+                    '<br>The window may become unresponsive during this time.'
+                    '<br>Please do <b>not</b> close or restart the app.'
+                )
+                 if parent
+                 else (
+                     '⏳ Installation may take a while.\n'
+                     'The window may become unresponsive.\n'
+                     'Please do not close or restart the app.'
+                 ))
+            )
+            self._freeze_notice.setWordWrap(True)
+            self._freeze_notice.setAlignment(Qt.AlignCenter)
+            self._freeze_notice.setStyleSheet(
+                "color: #856404; background: #fff3cd; border: 1px solid #ffc107; "
+                "border-radius: 4px; padding: 12px; margin-top: 8px;"
+                "font-size: 12px;"
+            )
+            self._freeze_notice.setVisible(False)
+            layout.addWidget(self._freeze_notice)
+
+            # Status label (hidden until install starts)
+            self._status_label = QLabel()
+            self._status_label.setVisible(False)
+            self._status_label.setWordWrap(True)
+            layout.addWidget(self._status_label)
 
             # Progress bar (hidden until install starts)
             self._progress = QProgressBar()
@@ -858,62 +991,114 @@ def _ensure_module_deps(
             # Buttons
             btn_row = QHBoxLayout()
             self._install_btn = QPushButton(
-                parent.tr("Install All") if parent else "Install All"
+                self.tr("Install All")
             )
             self._install_btn.clicked.connect(self._do_install)
             btn_row.addWidget(self._install_btn)
 
-            self._skip_btn = QPushButton(parent.tr("Later") if parent else "Later")
+            self._skip_btn = QPushButton(self.tr("Later"))
             self._skip_btn.clicked.connect(self.reject)
             btn_row.addWidget(self._skip_btn)
             layout.addLayout(btn_row)
+
+        def closeEvent(self, event):
+            """Prevent accidental close during installation."""
+            if not self._install_btn.isEnabled():
+                # Install in progress — user must wait or kill from terminal
+                event.ignore()
+                return
+            event.accept()
 
         def _do_install(self):
             self._install_btn.setEnabled(False)
             self._skip_btn.setEnabled(False)
             self._progress.setVisible(True)
             self._progress.setRange(0, 0)  # indeterminate
+            self._freeze_notice.setVisible(True)
+            QApplication.setOverrideCursor(Qt.WaitCursor)
             QApplication.processEvents()
+            self._status_label.setVisible(True)
+
+            print("\n" + "=" * 60)
+            print(f"  Installing dependencies for module: {mod_name}")
+            print("=" * 60)
 
             success = True
             # 1. Install Python packages
             if missing_pkgs:
+                self._status_label.setText(
+                    "Installing Python packages…" if not self.parent()
+                    else self.tr("Installing Python packages…")
+                )
+                QApplication.processEvents()
+                print(f"\n>> Installing Python packages: {', '.join(missing_pkgs)}\n")
                 try:
-                    python = sys.executable
                     import subprocess
+                    import shutil
 
-                    # Prefer uv, fall back to pip
-                    try:
+                    python = sys.executable
+
+                    # Check if python -m uv is available to avoid noisy errors
+                    _uv_avail = (
                         subprocess.run(
-                            [
-                                python,
-                                "-m",
-                                "uv",
-                                "pip",
-                                "install",
-                                *missing_pkgs,
-                                "--prefer-binary",
-                            ],
+                            [python, "-m", "uv", "--version"],
                             capture_output=True,
-                            timeout=300,
-                            check=True,
+                            check=False,
+                        ).returncode
+                        == 0
+                    )
+                    _runners = []
+                    if _uv_avail:
+                        _runners.append([python, "-m", "uv", "pip", "install"])
+                    _runners.append([python, "-m", "pip", "install"])
+
+                    def _pip_install(pkgs, *, no_deps=False):
+                        """Run pip install (prefer uv, fall back to pip)."""
+                        cmd_extra = (
+                            ["--no-deps"]
+                            if no_deps
+                            else ["--prefer-binary", "--timeout", "30"]
                         )
-                    except Exception:
-                        subprocess.run(
-                            [
-                                python,
-                                "-m",
-                                "pip",
-                                "install",
-                                *missing_pkgs,
-                                "--prefer-binary",
-                            ],
-                            capture_output=True,
-                            timeout=300,
-                            check=True,
-                        )
+                        bases = _runners if not no_deps else _runners[::-1]
+                        # When using --no-deps, try pip first (uv may not support it)
+                        for runner in bases:
+                            try:
+                                subprocess.run(
+                                    [*runner, *pkgs, *cmd_extra],
+                                    timeout=300,
+                                    check=True,
+                                )
+                                return True
+                            except Exception:
+                                continue
+                        # Final fallback: system python pip (bundled may lack some pkgs)
+                        sys_py = shutil.which("python")
+                        if sys_py and osp.realpath(sys_py) != osp.realpath(python):
+                            try:
+                                subprocess.run(
+                                    [sys_py, "-m", "pip", "install",
+                                     *pkgs, "--prefer-binary", "--timeout", "30"],
+                                    timeout=300,
+                                    check=True,
+                                )
+                                return True
+                            except Exception:
+                                pass
+                        return False
+
+                    # Install each package individually so we can fall back
+                    # to --no-deps per-package (e.g. onnxocr declares
+                    # numpy<2.0.0 but bundled env has numpy 2.x).
+                    for pkg in missing_pkgs:
+                        if not _pip_install([pkg]):
+                            print(f">>   Package '{pkg}' failed with deps, retrying --no-deps …")
+                            if not _pip_install([pkg], no_deps=True):
+                                raise RuntimeError(f"Failed to install: {pkg}")
+
+                    print(">> Package installation complete.")
                     self._progress.setValue(50)
                 except Exception as e:
+                    print(f">> Package install FAILED: {e}")
                     LOGGER.warning(f"Package install failed: {e}")
                     success = False
 
@@ -922,20 +1107,44 @@ def _ensure_module_deps(
                 from utils.download_util import download_and_check_files
 
                 for dl_entry in dfl:
-                    ok = download_and_check_files(**dl_entry)
-                    if not ok:
+                    url = dl_entry.get("url", "?")
+                    fname = osp.basename(url) or url
+                    print(f"\n>> Downloading model: {fname}")
+                    print(f"   From: {url}")
+                    self._status_label.setText(
+                        (self.tr("Downloading {name} …").format(name=fname)
+                         if self.parent()
+                         else f"Downloading {fname} …")
+                    )
+                    QApplication.processEvents()
+                    try:
+                        ok = download_and_check_files(**dl_entry)
+                    except Exception as e:
+                        print(f">> Download error: {e}")
                         LOGGER.warning(
-                            f"Model download failed: {dl_entry.get('url', '?')}"
+                            f"Model download failed: {url} — {e}"
+                        )
+                        ok = False
+                    if ok:
+                        print(f">> Successfully downloaded: {fname}")
+                    else:
+                        print(f">> Failed to download: {fname}")
+                        LOGGER.warning(
+                            f"Model download failed: {url}"
                         )
                         success = False
 
             self._progress.setValue(100)
+            QApplication.restoreOverrideCursor()
             if success:
+                print("\n✓ All dependencies installed successfully!\n")
                 self._installed = True
                 self.accept()
             else:
+                print("\n✗ Some dependencies failed to install.")
+                print("  Check the log output above for details.\n")
                 self._install_btn.setText(
-                    self.parent().tr("Retry") if self.parent() else "Retry"
+                    self.tr("Retry")
                 )
                 self._install_btn.setEnabled(True)
                 self._skip_btn.setEnabled(True)
@@ -1288,6 +1497,10 @@ class ModuleManager(QObject):
             translator = cfg_module.translator
         cls = TRANSLATORS.get(translator)
         if cls and not _ensure_module_deps(cls, self.parent()):
+            if self.translator is not None:
+                self.config_panel.trans_config_panel.setModule(
+                    self.translator.name
+                )
             return
         if self.translate_thread.isRunning():
             LOGGER.warning("Terminating a running translation thread.")
@@ -1316,6 +1529,10 @@ class ModuleManager(QObject):
 
         cls = INPAINTERS.get(inpainter)
         if cls and not _ensure_module_deps(cls, self.parent()):
+            if self.inpainter is not None:
+                self.config_panel.inpaint_config_panel.setModule(
+                    self.inpainter.name
+                )
             return
 
         self.inpaint_thread.setInpainter(inpainter)
@@ -1325,6 +1542,10 @@ class ModuleManager(QObject):
             textdetector = cfg_module.textdetector
         cls = TEXTDETECTORS.get(textdetector)
         if cls and not _ensure_module_deps(cls, self.parent()):
+            if self.textdetector is not None:
+                self.config_panel.detect_config_panel.setModule(
+                    self.textdetector.name
+                )
             return
         # Refresh param widget after dep install so dynamic model lists
         # (e.g. ysgyolo's CKPT_LIST) are picked up.
@@ -1341,6 +1562,8 @@ class ModuleManager(QObject):
             ocr = cfg_module.ocr
         cls = OCR.get(ocr)
         if cls and not _ensure_module_deps(cls, self.parent()):
+            if self.ocr is not None:
+                self.config_panel.ocr_config_panel.setModule(self.ocr.name)
             return
         if self.ocr_thread.isRunning():
             LOGGER.warning("Terminating a running OCR thread.")

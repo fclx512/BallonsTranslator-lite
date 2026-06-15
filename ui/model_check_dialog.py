@@ -6,7 +6,6 @@ a ``QTableWidget`` with checkbox, filename, status, and source columns.
 All colours adapt to dark/light mode via ``pcfg.darkmode``.
 """
 
-import os
 import os.path as osp
 
 from qtpy.QtCore import Qt, QUrl
@@ -42,111 +41,6 @@ _EXTRA_FILES: list[dict] = [
         "note_key": "ysgyolo_note",
     },
 ]
-
-# ── PaddleOCR cache check ─────────────────────────────────────────────
-
-
-def _scan_paddleocr_cache() -> dict[str, str]:
-    """Return a dict mapping model key → status for PP-OCRv6 models."""
-    results: dict[str, str] = {}
-    cache_dir = osp.expanduser("~/.paddleocr/whl")
-    if osp.isdir(cache_dir):
-        for root, dirs, files in os.walk(cache_dir):
-            rel = osp.relpath(root, cache_dir)
-            if "PP-OCRv6" in rel and any(
-                f.endswith((".pdmodel", ".pdiparams", ".onnx")) for f in files
-            ):
-                parts = rel.replace("\\", "/").split("/")
-                key = f"{parts[-2]}/{parts[-1]}" if len(parts) >= 2 else parts[-1]
-                results[key] = "installed"
-    paddlex_dir = osp.expanduser("~/.paddlex/official_models")
-    if osp.isdir(paddlex_dir):
-        for entry in os.listdir(paddlex_dir):
-            if not entry.startswith("PP-OCRv6"):
-                continue
-            model_dir = osp.join(paddlex_dir, entry)
-            if not osp.isdir(model_dir):
-                continue
-            if any(
-                f.endswith((".pdmodel", ".pdiparams", ".onnx"))
-                for f in os.listdir(model_dir)
-            ):
-                results[entry] = "installed"
-    return results
-
-
-_PPOCR_MODELS = [
-    {
-        "module": "paddleocr_v6 — Detection (medium)",
-        "type": "ocr",
-        "file": "PP-OCRv6_medium_det",
-        "source": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det",
-        "sha256": None,
-        "note": "",
-        "source_only": True,
-    },
-    {
-        "module": "paddleocr_v6 — Detection (small)",
-        "type": "ocr",
-        "file": "PP-OCRv6_small_det",
-        "source": "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det",
-        "sha256": None,
-        "note": "",
-        "source_only": True,
-    },
-    {
-        "module": "paddleocr_v6 — Detection (tiny)",
-        "type": "ocr",
-        "file": "PP-OCRv6_tiny_det",
-        "source": "https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det",
-        "sha256": None,
-        "note": "",
-        "source_only": True,
-    },
-    {
-        "module": "paddleocr_v6 — Recognition (medium)",
-        "type": "ocr",
-        "file": "PP-OCRv6_medium_rec",
-        "source": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec",
-        "sha256": None,
-        "note": "",
-        "source_only": True,
-    },
-    {
-        "module": "paddleocr_v6 — Recognition (small)",
-        "type": "ocr",
-        "file": "PP-OCRv6_small_rec",
-        "source": "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec",
-        "sha256": None,
-        "note": "",
-        "source_only": True,
-    },
-    {
-        "module": "paddleocr_v6 — Recognition (tiny)",
-        "type": "ocr",
-        "file": "PP-OCRv6_tiny_rec",
-        "source": "https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_rec",
-        "sha256": None,
-        "note": "",
-        "source_only": True,
-    },
-]
-
-
-def _build_paddleocr_custom_checks():
-    cache = _scan_paddleocr_cache()
-    for entry in _PPOCR_MODELS:
-        model_key = entry["file"]
-
-        def _make_check(key: str = model_key):
-            return lambda: "installed" if any(key in k for k in cache) else "missing"
-
-        entry["_custom_check"] = _make_check()
-        entry["note"] = ""
-
-
-_build_paddleocr_custom_checks()
-_EXTRA_FILES.extend(_PPOCR_MODELS)
 
 # Pipeline display order and labels
 _TYPE_ORDER = ["textdetector", "ocr", "inpainter"]

@@ -83,11 +83,11 @@ class PaddleOCRv6ONNX(OCRBase):
     # interpolation or osp.join at scan time.
     download_file_list = [
         {
-            "url": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_onnx/resolve/main/det.onnx",
+            "url": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_onnx/resolve/main/inference.onnx",
             "files": "data/models/ppocrv6_onnx/det.onnx",
         },
         {
-            "url": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx/resolve/main/rec.onnx",
+            "url": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx/resolve/main/inference.onnx",
             "files": "data/models/ppocrv6_onnx/rec.onnx",
         },
     ]
