@@ -135,7 +135,7 @@ class _InstallWorker(QThread):
     def __init__(self, reqs: list[str], parent=None):
         super().__init__(parent)
         self.reqs = reqs
-        self._install_cmd = self._detect_installer()
+        self._install_cmd, self._using_uv = self._detect_installer()
 
     @staticmethod
     def _strip_marker(req_str: str) -> str:
@@ -148,8 +148,12 @@ class _InstallWorker(QThread):
         return f"{req.name}{req.specifier}" if req.specifier else req.name
 
     @staticmethod
-    def _detect_installer() -> list[str]:
-        """Return the best available pip-compatible installer command."""
+    def _detect_installer() -> tuple[list[str], bool]:
+        """Return (cmd_base, using_uv) for the best available installer.
+
+        uv is preferred when available, but we must NOT pass pip-specific
+        flags (``--prefer-binary``) to it — uv doesn't support them.
+        """
         python = sys.executable
         try:
             subprocess.run(
@@ -158,23 +162,39 @@ class _InstallWorker(QThread):
                 timeout=5,
                 check=True,
             )
-            return [python, "-m", "uv", "pip", "install", "--prefer-binary"]
+            return [python, "-m", "uv", "pip", "install"], True
         except Exception:
-            return [python, "-m", "pip", "install"]
+            return [python, "-m", "pip", "install"], False
 
     def run(self):
         total = len(self.reqs)
+        pip_fallback = [sys.executable, "-m", "pip", "install", "--prefer-binary"]
         for i, req in enumerate(self.reqs):
+            stripped = self._strip_marker(req)
+            success = False
+            # Try preferred installer first
             try:
                 subprocess.run(
-                    [*self._install_cmd, self._strip_marker(req)],
+                    [*self._install_cmd, stripped],
                     capture_output=True,
                     timeout=300,
                     check=True,
                 )
-                self.finished_one.emit(req, True)
+                success = True
             except Exception:
-                self.finished_one.emit(req, False)
+                # If uv failed, fall back to pip
+                if self._using_uv:
+                    try:
+                        subprocess.run(
+                            [*pip_fallback, stripped],
+                            capture_output=True,
+                            timeout=300,
+                            check=True,
+                        )
+                        success = True
+                    except Exception:
+                        pass
+            self.finished_one.emit(req, success)
             self.progress.emit(i + 1, total)
         self.all_done.emit()
 

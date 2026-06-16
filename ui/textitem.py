@@ -30,6 +30,7 @@ from qtpy.QtWidgets import (
 
 from utils.fontformat import FontFormat, pt2px, px2pt
 from utils.imgproc_utils import xywh2xyxypoly
+from utils.text_alignment import SNAP_THRESHOLD, compute_snap
 from utils.textblock import TextAlignment, TextBlock
 
 from .misc import table_pattern, td_pattern
@@ -892,6 +893,9 @@ class TextBlkItem(QGraphicsTextItem):
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         super().mouseMoveEvent(event)
         if self.textInteractionFlags() != Qt.TextInteractionFlag.TextEditorInteraction:
+            canvas = self.scene()
+            if canvas.alignment_enabled:
+                self._apply_snap()
             self.moving.emit(self)
 
     # QT 5.15.x causing segmentation fault
@@ -908,7 +912,35 @@ class TextBlkItem(QGraphicsTextItem):
         if event.button() == Qt.MouseButton.LeftButton:
             if self.oldPos != self.pos():
                 self.moved.emit()
+        self.scene().clear_snap_guides()
         super().mouseReleaseEvent(event)
+
+    def _apply_snap(self):
+        """Check alignment to nearby text blocks and snap position."""
+        canvas = self.scene()
+        my_rect = self.absBoundingRect()
+
+        # Collect content rects of all other TextBlkItem instances
+        target_rects = []
+        for child in canvas.textLayer.childItems():
+            if isinstance(child, TextBlkItem) and child is not self:
+                target_rects.append(child.absBoundingRect())
+
+        if not target_rects:
+            canvas.clear_snap_guides()
+            return
+
+        threshold = SNAP_THRESHOLD / canvas.scale_factor
+        adj_x, adj_y, guides = compute_snap(my_rect, target_rects, threshold)
+
+        if adj_x != my_rect[0] or adj_y != my_rect[1]:
+            pad = self.padding()
+            self.setPos(QPointF(adj_x - pad, adj_y - pad))
+
+        if guides:
+            canvas.set_snap_guides(guides)
+        else:
+            canvas.clear_snap_guides()
 
     def hoverMoveEvent(self, event: QGraphicsSceneHoverEvent) -> None:
         self.hover_move.emit(self.idx)

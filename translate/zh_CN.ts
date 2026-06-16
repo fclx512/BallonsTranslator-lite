@@ -211,6 +211,56 @@
         <source>OCR, translate and inpaint</source>
         <translation>OCR，翻译并抹字</translation>
     </message>
+    <message>
+        <location filename="..\ui\canvas.py" line="1037" />
+        <source>Align</source>
+        <translation>对齐</translation>
+    </message>
+    <message>
+        <location filename="..\ui\canvas.py" line="1040" />
+        <source>Align Left Edges</source>
+        <translation>左边缘对齐</translation>
+    </message>
+    <message>
+        <location filename="..\ui\canvas.py" line="1041" />
+        <source>Align Right Edges</source>
+        <translation>右边缘对齐</translation>
+    </message>
+    <message>
+        <location filename="..\ui\canvas.py" line="1042" />
+        <source>Align Top Edges</source>
+        <translation>顶边缘对齐</translation>
+    </message>
+    <message>
+        <location filename="..\ui\canvas.py" line="1043" />
+        <source>Align Bottom Edges</source>
+        <translation>底边缘对齐</translation>
+    </message>
+    <message>
+        <location filename="..\ui\canvas.py" line="1045" />
+        <source>Align Horizontal Centers</source>
+        <translation>水平中心对齐</translation>
+    </message>
+    <message>
+        <location filename="..\ui\canvas.py" line="1046" />
+        <source>Align Vertical Centers</source>
+        <translation>垂直中心对齐</translation>
+    </message>
+    <message>
+        <location filename="..\ui\canvas.py" line="1048" />
+        <source>Distribute Horizontally</source>
+        <translation>水平分布</translation>
+    </message>
+    <message>
+        <location filename="..\ui\canvas.py" line="1049" />
+        <source>Distribute Vertically</source>
+        <translation>垂直分布</translation>
+    </message>
+    <message>
+        <location filename="..\ui\canvas.py" line="1051" />
+        <source>Snap Alignment</source>
+        <translation>吸附对齐</translation>
+    </message>
 </context><context>
     <name>CategoryCard</name>
     <message>

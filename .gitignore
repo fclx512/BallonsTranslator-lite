@@ -1,3 +1,5 @@
+.build_cache/
+.superpowers/
 __pycache__
 .coverage
 .coverage.*

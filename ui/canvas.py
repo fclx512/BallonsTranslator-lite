@@ -2,7 +2,7 @@ import os
 from typing import List, Union
 
 import numpy as np
-from qtpy.QtCore import QDateTime, QPoint, QPointF, QRectF, QSizeF, Qt, Signal
+from qtpy.QtCore import QDateTime, QLineF, QPoint, QPointF, QRectF, QSizeF, Qt, Signal
 from qtpy.QtGui import (
     QColor,
     QCursor,
@@ -198,6 +198,57 @@ class CustomGV(QGraphicsView):
             painter.end()
 
 
+class SnapGuideItem(QGraphicsItem):
+    """Transient overlay that draws snap guide lines during text-block drag.
+
+    Placed on the textLayer with a high Z value so it renders on top
+    of all TextBlkItem instances.  Managed by Canvas — created once at
+    init time, updated via :meth:`set_guides`, cleared on mouse release.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._guides: List[QLineF] = []
+        self._pen = QPen(QColor(255, 0, 255), 0)  # magenta, cosmetic
+        self._pen.setStyle(Qt.PenStyle.DashLine)
+        self.setZValue(100)
+        self.hide()
+
+    def set_guides(self, guides: List[QLineF]):
+        """Replace guide lines and show the item (or hide if empty)."""
+        old_rect = self.boundingRect() if self._guides else QRectF()
+        self.prepareGeometryChange()
+        self._guides = guides
+        if guides:
+            self.show()
+            self.update()
+        else:
+            self.hide()
+        # Expand the dirty region so old *and* new guide areas redraw
+        if old_rect.isValid():
+            self.scene().update(old_rect)
+
+    def clear_guides(self):
+        """Convenience: set_guides with an empty list."""
+        self.set_guides([])
+
+    def boundingRect(self) -> QRectF:
+        if not self._guides:
+            return QRectF()
+        r = QRectF()
+        for line in self._guides:
+            r = r.united(QRectF(line.p1(), line.p2()))
+        # Add tiny margin so the cosmetic pen is not clipped
+        return r.adjusted(-2, -2, 2, 2)
+
+    def paint(self, painter: QPainter, option, widget=None):
+        if not self._guides:
+            return
+        painter.setPen(self._pen)
+        for line in self._guides:
+            painter.drawLine(line)
+
+
 class Canvas(QGraphicsScene):
     scalefactor_changed = Signal()
     end_create_textblock = Signal(QRectF)
@@ -235,6 +286,7 @@ class Canvas(QGraphicsScene):
     drop_open_folder = Signal(str)
     context_menu_requested = Signal(QPoint, bool)
     incanvas_selection_changed = Signal()
+    align_textblks = Signal(str)
     switch_text_item = Signal(int, QKeyEvent)
 
     def __init__(self, parent=None):
@@ -242,6 +294,8 @@ class Canvas(QGraphicsScene):
         self.scale_factor = 1.0
         self.text_transparency = 0
         self.textblock_mode = False
+        self.alignment_enabled = True
+        self.snap_guide_item = SnapGuideItem()
         self.creating_textblock = False
         self.create_block_origin: QPointF = None
         self.editing_textblkitem: TextBlkItem = None
@@ -329,6 +383,9 @@ class Canvas(QGraphicsScene):
         self.textLayer.setParentItem(self.baseLayer)
         self.previewLayer.setParentItem(self.baseLayer)
         self.txtblkShapeControl.setParentItem(self.baseLayer)
+
+        self.addItem(self.snap_guide_item)
+        self.snap_guide_item.setParentItem(self.textLayer)
 
         self.scalefactor_changed.connect(self.onScaleFactorChanged)
         self.selectionChanged.connect(self.on_selection_changed)
@@ -803,6 +860,14 @@ class Canvas(QGraphicsScene):
             sel_textitems.sort(key=lambda x: x.idx)
         return sel_textitems
 
+    def clear_snap_guides(self):
+        """Clear all snap guide lines."""
+        self.snap_guide_item.clear_guides()
+
+    def set_snap_guides(self, guides: List[QLineF]):
+        """Set snap guide lines through the overlay item."""
+        self.snap_guide_item.set_guides(guides)
+
     def handle_ctrlv(self) -> bool:
         if not self.textEditMode():
             return False
@@ -1005,7 +1070,31 @@ class Canvas(QGraphicsScene):
 
             angle_act = menu.addAction(self.tr("Reset Angle"))
             squeeze_act = menu.addAction(self.tr("Squeeze"))
+
             menu.addSeparator()
+
+            # --- Alignment submenu ---
+            n_selected = len(self.selected_text_items())
+            align_menu = menu.addMenu(self.tr("Align"))
+            align_menu.setEnabled(n_selected >= 2)
+
+            align_left_act = align_menu.addAction(self.tr("Align Left Edges"))
+            align_right_act = align_menu.addAction(self.tr("Align Right Edges"))
+            align_top_act = align_menu.addAction(self.tr("Align Top Edges"))
+            align_bottom_act = align_menu.addAction(self.tr("Align Bottom Edges"))
+            align_menu.addSeparator()
+            align_hc_act = align_menu.addAction(self.tr("Align Horizontal Centers"))
+            align_vc_act = align_menu.addAction(self.tr("Align Vertical Centers"))
+            align_menu.addSeparator()
+            dist_h_act = align_menu.addAction(self.tr("Distribute Horizontally"))
+            dist_v_act = align_menu.addAction(self.tr("Distribute Vertically"))
+
+            snap_act = menu.addAction(self.tr("Snap Alignment"))
+            snap_act.setCheckable(True)
+            snap_act.setChecked(self.alignment_enabled)
+
+            menu.addSeparator()
+
             translate_act = menu.addAction(self.tr("translate"))
             ocr_act = menu.addAction(self.tr("OCR"))
             ocr_translate_act = menu.addAction(self.tr("OCR and translate"))
@@ -1029,6 +1118,24 @@ class Canvas(QGraphicsScene):
                 self.reset_angle.emit()
             elif rst == squeeze_act:
                 self.squeeze_blk.emit()
+            elif rst == align_left_act:
+                self.align_textblks.emit("left")
+            elif rst == align_right_act:
+                self.align_textblks.emit("right")
+            elif rst == align_top_act:
+                self.align_textblks.emit("top")
+            elif rst == align_bottom_act:
+                self.align_textblks.emit("bottom")
+            elif rst == align_hc_act:
+                self.align_textblks.emit("hcenter")
+            elif rst == align_vc_act:
+                self.align_textblks.emit("vcenter")
+            elif rst == dist_h_act:
+                self.align_textblks.emit("dist_h")
+            elif rst == dist_v_act:
+                self.align_textblks.emit("dist_v")
+            elif rst == snap_act:
+                self.alignment_enabled = snap_act.isChecked()
             elif rst == translate_act:
                 self.run_blktrans.emit(-1)
             elif rst == ocr_act:

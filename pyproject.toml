@@ -4,6 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "BallonsTranslator-lite"
+version = "0.2.0"
 description = "漫画/图片翻译工具 — 文字检测 → OCR → 翻译 → 图像修复 → 文字渲染"
 requires-python = ">=3.10"
 dependencies = [

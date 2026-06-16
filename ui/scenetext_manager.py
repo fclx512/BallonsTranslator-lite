@@ -62,6 +62,16 @@ from .textedit_commands import (
     propagate_user_edit,
 )
 from .textitem import TextBlkItem, TextBlock
+from utils.text_alignment import (
+    align_bottom,
+    align_horizontal_center,
+    align_left,
+    align_right,
+    align_top,
+    align_vertical_center,
+    distribute_horizontal,
+    distribute_vertical,
+)
 
 
 class CreateItemCommand(QUndoCommand):
@@ -406,6 +416,7 @@ class SceneTextManager(QObject):
         self.canvas.layout_textblks.connect(self.onAutoLayoutTextblks)
         self.canvas.reset_angle.connect(self.onResetAngle)
         self.canvas.squeeze_blk.connect(self.onSqueezeBlk)
+        self.canvas.align_textblks.connect(self.onAlignTextBlks)
         self.canvas.incanvas_selection_changed.connect(
             self.on_incanvas_selection_changed
         )
@@ -839,6 +850,41 @@ class SceneTextManager(QObject):
         if len(selected_blks) > 0:
             self.canvas.push_undo_command(
                 SqueezeCommand(selected_blks, self.txtblkShapeControl)
+            )
+
+    def onAlignTextBlks(self, operation: str):
+        """Handle batch alignment operations from context menu."""
+        selected_blks = self.canvas.selected_text_items()
+        if len(selected_blks) < 2:
+            return
+
+        op_map = {
+            "left": align_left,
+            "right": align_right,
+            "top": align_top,
+            "bottom": align_bottom,
+            "hcenter": align_horizontal_center,
+            "vcenter": align_vertical_center,
+            "dist_h": distribute_horizontal,
+            "dist_v": distribute_vertical,
+        }
+        fn = op_map.get(operation)
+        if fn is None:
+            return
+
+        new_positions = fn(selected_blks)
+        if not new_positions:
+            return
+
+        moved = []
+        for item, new_pos in new_positions.items():
+            item.oldPos = item.pos()
+            item.setPos(new_pos)
+            moved.append(item)
+
+        if moved:
+            self.canvas.push_undo_command(
+                MoveBlkItemsCommand(moved, self.txtblkShapeControl)
             )
 
     def on_incanvas_selection_changed(self):

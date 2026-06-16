@@ -906,16 +906,18 @@ def _ensure_module_deps(
                 _runners.append([python, "-m", "pip", "install"])
 
                 def _pip_install(pkgs, *, no_deps=False):
-                    cmd_extra = (
-                        ["--no-deps"]
-                        if no_deps
-                        else ["--prefer-binary", "--timeout", "30"]
-                    )
                     bases = _runners if not no_deps else _runners[::-1]
                     for runner in bases:
+                        is_uv = "uv" in runner
+                        extra = []
+                        if no_deps:
+                            extra = ["--no-deps"]
+                        elif not is_uv:
+                            # pip supports --prefer-binary / --timeout; uv does not
+                            extra = ["--prefer-binary", "--timeout", "30"]
                         try:
                             subprocess.run(
-                                [*runner, *pkgs, *cmd_extra],
+                                [*runner, *pkgs, *extra],
                                 timeout=300, check=True,
                             )
                             return True
