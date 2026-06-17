@@ -24,7 +24,7 @@ class RunStatus:
 @nested_dataclass
 class ModuleConfig(Config):
     textdetector: str = "ctd"
-    ocr: str = "mit48px_ctc"
+    ocr: str = "none_ocr"
     inpainter: str = "lama_large_512px"
     translator: str = "None"
     enable_detect: bool = True

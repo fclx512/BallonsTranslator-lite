@@ -411,9 +411,30 @@ class MainWindow(mainwindow_cls):
     def setupConfig(self):
 
         self.bottomBar.originalSlider.setValue(int(pcfg.original_transparency * 100))
-        self.bottomBar.trans_selector.selector.addItems(GET_VALID_TRANSLATORS())
-        self.bottomBar.ocr_selector.selector.addItems(GET_VALID_OCR())
-        self.bottomBar.textdet_selector.selector.addItems(GET_VALID_TEXTDETECTORS())
+        trans_items = list(GET_VALID_TRANSLATORS())
+        none_items = [x for x in trans_items if x.startswith("none") or x.startswith("None")]
+        other_items = [x for x in trans_items if x not in none_items]
+        self.bottomBar.trans_selector.selector.addItems(none_items)
+        if other_items:
+            self.bottomBar.trans_selector.selector.insertSeparator(len(none_items))
+            self.bottomBar.trans_selector.selector.addItems(other_items)
+        self.bottomBar.trans_selector.selector.setCurrentText(pcfg.module.translator)
+        ocr_items = list(GET_VALID_OCR())
+        none_items = [x for x in ocr_items if x.startswith("none") or x.startswith("None")]
+        other_items = [x for x in ocr_items if x not in none_items]
+        self.bottomBar.ocr_selector.selector.addItems(none_items)
+        if other_items:
+            self.bottomBar.ocr_selector.selector.insertSeparator(len(none_items))
+            self.bottomBar.ocr_selector.selector.addItems(other_items)
+        self.bottomBar.ocr_selector.setSelectedValue(pcfg.module.ocr)
+        td_items = list(GET_VALID_TEXTDETECTORS())
+        none_items = [x for x in td_items if x.startswith("none") or x.startswith("None")]
+        other_items = [x for x in td_items if x not in none_items]
+        self.bottomBar.textdet_selector.selector.addItems(none_items)
+        if other_items:
+            self.bottomBar.textdet_selector.selector.insertSeparator(len(none_items))
+            self.bottomBar.textdet_selector.selector.addItems(other_items)
+        self.bottomBar.textdet_selector.setSelectedValue(pcfg.module.textdetector)
         self.bottomBar.textdet_selector.selector.currentTextChanged.connect(
             self.on_textdet_changed
         )
@@ -2113,6 +2134,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
 
             # Adaptive mode info label — updates based on project page count
             mode_label = QLabel()
+            mode_label.setWordWrap(True)
             mode_label.setStyleSheet("color: #666; font-style: italic;")
             ai_grid.addWidget(mode_label, 1, 0, 1, 2)
 

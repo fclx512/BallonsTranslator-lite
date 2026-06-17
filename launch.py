@@ -353,8 +353,12 @@ def _ensure_module_fallback():
     except ImportError:
         _has_onnx = False
 
-    if _has_torch and _has_onnx:
-        return  # everything available
+    try:
+        import onnxocr  # noqa: F401
+
+        _has_onnxocr = True
+    except ImportError:
+        _has_onnxocr = False
 
     from utils.config import pcfg
 
@@ -366,15 +370,13 @@ def _ensure_module_fallback():
         pcfg.module.textdetector = "none"
         changed.append(f"textdetector: {_old} → none")
 
-    # ── OCR: selective fallback depending on what's missing ──
+    # ── OCR: force none_ocr as default to avoid model-missing errors ──
+    # Any "real" OCR model needs model files on disk which may not be present
+    # at startup; user can switch manually via the bottom-bar dropdown.
     _ocr = pcfg.module.ocr
     if _ocr not in ("none_ocr", "llm_ocr"):
-        if _ocr == "mit48px_ctc" and not _has_torch:
-            pcfg.module.ocr = "none_ocr"
-            changed.append("OCR: mit48px_ctc → none_ocr")
-        elif _ocr == "paddleocr_v6_onnx" and not _has_onnx:
-            pcfg.module.ocr = "none_ocr"
-            changed.append("OCR: paddleocr_v6_onnx → none_ocr (onnxruntime missing)")
+        pcfg.module.ocr = "none_ocr"
+        changed.append(f"OCR: {_ocr} → none_ocr (forced default)")
 
     # ── Inpainter: all real inpainters need torch ──
     if not _has_torch and pcfg.module.inpainter not in ("none",):
@@ -388,6 +390,8 @@ def _ensure_module_fallback():
             _missing.append("PyTorch")
         if not _has_onnx:
             _missing.append("onnxruntime")
+        if not _has_onnxocr:
+            _missing.append("onnxocr")
         print(
             f"{', '.join(_missing)} not available"
             " — automatically switched to no-model modules:"
@@ -398,9 +402,121 @@ def _ensure_module_fallback():
             print("  Install PyTorch to enable local models, then restart.")
         if not _has_onnx:
             print(
-                "  Install onnxruntime (or onnxruntime-gpu) + onnxocr"
+                "  Install onnxruntime (or onnxruntime-gpu)"
                 " to enable PP-OCRv6 ONNX, then restart."
             )
+        if not _has_onnxocr:
+            print(
+                "  Install onnxocr to enable PP-OCRv6 ONNX, then restart."
+            )
+        print()
+
+
+def _ensure_model_files_fallback():
+    """Check if declared model files exist for the currently configured
+    detection / OCR / inpainting modules, and whether required Python
+    packages are importable.
+
+    If **all** model files for a module are missing on disk (e.g. after a
+    directory restructure), silently fall back to the corresponding "none"
+    module so the app starts without a blocking dependency dialog.  Also
+    falls back if the module declares ``requires_packages`` and they aren't
+    importable.  The user can later re-download files via the Model Files
+    panel.
+
+    This function is intended to be called **after**
+    ``init_lazy_module_registries()`` so that ``download_file_list``
+    attributes are accessible.
+    """
+    import importlib
+    import os.path as osp
+
+    from utils.config import pcfg
+    from utils import shared
+
+    # Lazy-import registries (safe after init_lazy_module_registries)
+    try:
+        from modules import INPAINTERS, OCR, TEXTDETECTORS
+    except Exception:
+        return
+
+    _REGISTRIES = {
+        "textdetector": (TEXTDETECTORS, "none"),
+        "ocr": (OCR, "none_ocr"),
+        "inpainter": (INPAINTERS, "none"),
+    }
+    changed = []
+
+    for _type, (_registry, _fallback) in _REGISTRIES.items():
+        _cfg_key = _type  # e.g. "textdetector", "ocr", "inpainter"
+        _module_name = getattr(pcfg.module, _cfg_key, "")
+        if not _module_name or _module_name.startswith("none") or _module_name == "llm_ocr":
+            continue
+
+        _spec = _registry.get(_module_name)
+        if not _spec:
+            continue
+
+        # ── Check requires_packages by resolving the spec ────────
+        # This does a real import, only for the currently configured
+        # module — acceptable at startup.
+        _req_pkgs = []
+        try:
+            _resolved = _spec.resolve()
+            _req_pkgs = getattr(_resolved, "requires_packages", None) or []
+        except Exception:
+            pass  # can't resolve → skip package check, still try model file check
+
+        _missing_pkg = None
+        for _pkg_req in _req_pkgs:
+            _pkg_name = _pkg_req.split(">=")[0].split("==")[0].split("!=")[0].strip()
+            try:
+                importlib.import_module(_pkg_name)
+            except ImportError:
+                _missing_pkg = _pkg_req
+                break
+
+        if _missing_pkg:
+            setattr(pcfg.module, _cfg_key, _fallback)
+            changed.append(
+                f"{_type}: {_module_name} → {_fallback} (package {_missing_pkg} missing)"
+            )
+            continue
+
+        # ── Check model files on disk ────────────────────────────
+        _dfl = getattr(_spec, "download_file_list", None) or []
+        if not _dfl:
+            continue
+
+        # Check that **every** download entry has at least one file on disk.
+        # For multi-entry modules (e.g. ppocrv6_onnx has separate entries for
+        # det.onnx, rec.onnx, dict.txt), a single dict file is not enough.
+        _all_entries_ok = True
+        for _dl_entry in _dfl:
+            _paths = _dl_entry.get("save_files") or _dl_entry.get("files") or []
+            if isinstance(_paths, str):
+                _paths = [_paths]
+            _entry_has_file = False
+            for _fpath in _paths:
+                if not osp.isabs(_fpath):
+                    _fpath = osp.join(shared.PROGRAM_PATH, _fpath)
+                if osp.exists(_fpath):
+                    _entry_has_file = True
+                    break
+            if not _entry_has_file:
+                _all_entries_ok = False
+                break
+
+        if not _all_entries_ok:
+            setattr(pcfg.module, _cfg_key, _fallback)
+            changed.append(
+                f"{_type}: {_module_name} → {_fallback} (model files missing)"
+            )
+
+    if changed:
+        print("Model files not found — automatically switched to no-model modules:")
+        for c in changed:
+            print(f"  {c}")
         print()
 
 
@@ -659,6 +775,9 @@ def main():
     from utils.lazy_registry import init_lazy_module_registries
 
     init_lazy_module_registries()
+
+    # Check model file existence (registries are now available)
+    _ensure_model_files_fallback()
 
     if not args.headless:
         ps = QGuiApplication.primaryScreen()

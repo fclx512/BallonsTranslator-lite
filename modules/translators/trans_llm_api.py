@@ -477,10 +477,10 @@ class LLM_API_Translator(BaseTranslator):
         else:
             api_args["response_format"] = {"type": "json_object"}
         fp = profile.get("frequency_penalty")
-        if fp is not None:
+        if fp:
             api_args["frequency_penalty"] = float(fp)
         pp = profile.get("presence_penalty")
-        if pp is not None:
+        if pp:
             api_args["presence_penalty"] = float(pp)
 
         try:

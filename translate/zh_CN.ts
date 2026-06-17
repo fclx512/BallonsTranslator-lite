@@ -1420,7 +1420,7 @@ Failed: {f}/{t}</source>
     <message>
         <location filename="..\ui\mainwindow.py" line="2141" />
         <source>Full context (%1 pages, all previous translations as reference)</source>
-        <translation type="unfinished" />
+        <translation>全文上下文（%1页，以之前所有翻译为参考）</translation>
     </message>
     <message>
         <location filename="..\ui\mainwindow.py" line="2147" />

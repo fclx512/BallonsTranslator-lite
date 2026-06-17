@@ -4,6 +4,49 @@
 
 ---
 
+---
+
+## 2026-06-17
+
+### 底部快捷栏模块排序统一
+
+**问题：** 底部快捷栏的下拉列表顺序与设置面板不一致。设置面板始终将 `none*` 模块排在最前加分隔线，再排其余模块；底部快捷栏则直接按 registry 插入顺序排列。此外 OCR 默认选中 `paddleocr_v6_onnx`，启动时若模型文件缺失会出错。
+
+**修复：**
+
+1. **排序统一** — `setupConfig()` 中三个底部选择器（翻译器、OCR、文本检测）均改为：`none*` 模块 → 分隔线 → 其余模块，与设置面板的 `ModuleConfigParseWidget.addModulesParamWidgets()` 分组逻辑一致。
+2. **默认值矫正** — `launch.py` 中 OCR 启动回退逻辑从"选择性检测已知模块依赖"简化为：只要预存值不是 `none_ocr`/`llm_ocr`，强制重置为 `none_ocr`，避免模型缺失导致的启动错误。
+3. **初始选中** — 文本检测和翻译器原先在 `setupConfig` 中没有显式设置选中值，依赖后台线程完成后才更新；现统一在列表填充后即从 `pcfg` 读取当前值设置选中项。
+
+**涉及文件：**
+- `ui/mainwindow.py` (L411-460)
+- `launch.py` (L373-379)
+
+### DeepSeek 翻译报"结构不匹配"修复
+
+**问题：** DeepSeek API 翻译时总提示 `[ERROR: Structure Mismatch]`，实际 API 调用从未发出。
+
+**根因：** `modules/translators/trans_llm_api.py` 中 `frequency_penalty` / `presence_penalty` 用 `if fp is not None:` 判空，但 DeepSeek 内置 profile 中这两个字段是空字符串 `""`，`"" is not None` 为 `True`，`float("")` 抛出 `ValueError`。错误在 `_request_translation` 的 try 块外，被 `_translate` 的 `except ValueError` 接住，误判为"翻译结构不匹配"重试 2 次后失败。
+
+**修复：** `if fp is not None:` → `if fp:`（空字符串是 falsy），跳过空值转换。
+
+**涉及文件：**
+- `modules/translators/trans_llm_api.py` (L479-484)
+
+### Run 对话框上下文策略描述自动换行 + 补全翻译
+
+**问题：** 启用"上下文翻译（beta）"后，展开的策略描述文本因 `mode_label` 未开启 `setWordWrap` 横向撑开窗口，影响上方页数选择横条；且"Full context..."字符串翻译遗漏。
+
+**修复：**
+1. `ui/mainwindow.py` — `mode_label` 添加 `setWordWrap(True)`，文本纵向增高不横向撑开
+2. `translate/zh_CN.ts` — 补全"全文上下文（%1页，以之前所有翻译为参考）"
+
+**涉及文件：**
+- `ui/mainwindow.py` (L2137)
+- `translate/zh_CN.ts` / `.qm`
+
+---
+
 ## 2026-06-16
 
 ### PS 风格文本框对齐功能（Smart Guides + 批量对齐）
@@ -39,18 +82,6 @@
 **涉及文件：**
 - `ui/module_manager.py` (L908-937)
 - `ui/dependency_dialog.py` (L150-198)
-
----
-
-### 上游 v1.5.0 分析
-
-dmMaze/BallonsTranslator v1.5.0（2026-06-14 发布）分析：
-
-- `lazy_registry.py` — AST 扫描模块文件获取元数据，不 import 实际代码。`ModuleSpec.resolve()` 仅在用户选中模块时才真正导入
-- `core_requirements.py` — 启动时 probe 核心 import，缺失则自动 pip install
-- `requirements.txt` 零 ML 依赖（仅有 PyQt6、numpy、opencv-python 等基础包）
-
-本分支已有 `ModuleSpec` 系统，方向一致，无需大改。
 
 ---
 

@@ -32,9 +32,7 @@ def GET_VALID_INPAINTERS() -> list:
 
 
 def GET_VALID_OCR() -> list:
-    # Move none_ocr to end
-    exclude = {"none_ocr"}
-    return [k for k in list(OCR.module_dict.keys()) if k not in exclude] + ["none_ocr"]
+    return list(OCR.module_dict.keys())
 
 
 # TODO: use manga-image-translator as backend...
