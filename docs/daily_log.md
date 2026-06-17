@@ -4,9 +4,46 @@
 
 ---
 
+## 2026-06-17
+
+### 快捷键面板翻译缺失修复 + CLAUDE.md 入库
+
+**问题：** 设置中的快捷键编辑面板（`ShortcutEditor` / `_ShortcutRow`）部分文字显示为英文。根因是 `_ACTION_NAMES`（28个动作名）和 `_SHORTCUT_GROUPS`（6个分组名）的 ts 条目从未添加到 `translate/zh_CN.ts` 中——这些字符串通过 `self.tr(variable)` 间接调用，i18n_check 只将它们标记为 orphan 而不报错，容易被忽略。
+
+**修复：**
+1. 补全 `_ShortcutRow` 上下文 28 条动作名翻译（"Page Up"、"Zoom In"、"Bold" 等）
+2. 新建 `ShortcutEditor` 上下文 6 条分组名翻译（"Navigation"、"View"、"Edit" 等）
+3. 重新编译 `zh_CN.qm`
+4. CLAUDE.md 的 i18n 节添加说明：`self.tr(variable)` 间接调用的翻译需手动维护
+
+**CLAUDE.md 入库决策：** 从 `.gitignore` 移除 CLAUDE.md，提交到仓库实现多设备 git 同步。个人偏好走 `~/.claude/CLAUDE.md`。
+
 ---
 
-## 2026-06-17
+## 2026-06-17（续）
+
+### PSD 二进制导出 — UnitFloat 顺序修复 + 文字栅格化根治
+
+**问题：** `utils/psd_descriptor.py` 的 `_write_descriptor_value` 中 UnitFloat 的字段顺序写反了。PS 规范要求 `UntF` → unit_id(`#Pnt`/`#Pxl`) → `f64(value)`，代码却写了 `UntF` → f64 → unit_id。这是导致所有 PSD 导出文字层在 PS 中栅格化（不可编辑）的根本原因。
+
+**修复：** `psd_descriptor.py:213-221` 交换 `write_f64(value)` 和 `write_signature(unit_id)` 的顺序。
+
+**连带修复（第 2 轮）：**
+- TySh 描述符从 8 项增至 9 项（加 `TxMg`）
+- `AntA` 枚举值改为 `AnCr`
+- bounds 单位从 `#Pxl` 改为 `#Pnt`
+- 新增 `unit_points()` / `unit_float()` 方法
+
+**验证：** 50 个测试通过；横排/竖排文字、中/英文、含 `0x5C` 反斜杠字节的字体名均可在 PS 中编辑。唯特定项目数据仍栅格化（原因未明，无法复现）。
+
+**涉及文件：** `utils/psd_descriptor.py`、`utils/psd_engine_data.py`、`utils/psd_binary_exporter.py`、`docs/psd_binary_export.md`
+
+**涉及文件：**
+- `translate/zh_CN.ts` / `.qm`
+- `CLAUDE.md`
+- `.gitignore`
+
+---
 
 ### 底部快捷栏模块排序统一
 

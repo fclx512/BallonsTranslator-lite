@@ -27,6 +27,7 @@ from utils.psd_engine_data import (
     TextJustification,
     TextOrientation,
     _normalize_text,
+    _paragraph_run_lengths,
     _serialize_float,
     _utf16_len,
     encode_engine_data,
@@ -340,6 +341,37 @@ class TestEngineData:
         data = encode_engine_data(spec)
         # A=128/255=0.50196..., R=255/255=1.0
         assert b"/FillColor" in data
+
+    def test_paragraph_run_lengths_single_line(self):
+        """Single paragraph run length includes the ``\\r`` terminator."""
+        text = "Hello\r"
+        lengths = _paragraph_run_lengths(text)
+        assert lengths == [6], f"Expected [6], got {lengths}"
+        assert sum(lengths) == _utf16_len(text)
+
+    def test_paragraph_run_lengths_multi_line(self):
+        """Multi-paragraph run lengths each include their ``\\r``."""
+        text = "Hello\rWorld\r"
+        lengths = _paragraph_run_lengths(text)
+        assert lengths == [6, 6], f"Expected [6, 6], got {lengths}"
+        assert sum(lengths) == _utf16_len(text)
+
+    def test_paragraph_run_lengths_cjk(self):
+        """CJK characters (3 UTF-16 code units as surrogate pairs) are counted correctly."""
+        text = "😊\r"
+        lengths = _paragraph_run_lengths(text)
+        assert lengths == [3], f"Expected [3], got {lengths}"
+        assert sum(lengths) == _utf16_len(text)
+
+    def test_paragraph_run_lengths_match_total(self):
+        """Paragraph run lengths must sum to total text UTF-16 length for realistic inputs."""
+        for input_text in ["Hello", "Line1\nLine2", "你好世界", "", "A\nB\nC"]:
+            norm = _normalize_text(input_text)
+            lengths = _paragraph_run_lengths(norm)
+            total = _utf16_len(norm)
+            assert sum(lengths) == total, (
+                f"Sum {sum(lengths)} != total {total} for {input_text!r}"
+            )
 
 
 # ======================================================================

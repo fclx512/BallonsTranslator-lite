@@ -676,8 +676,8 @@ def _tysh_body(meta: TextLayerMetadata) -> bytes:
     )
 
     b = meta.bounds
-    fbounds = bounds_descriptor("bounds", b[0], b[1], b[2], b[3])
-    fbounding_box = bounds_descriptor("boundingBox", b[0], b[1], b[2], b[3])
+    fbounds = bounds_descriptor("bounds", b[0], b[1], b[2], b[3], unit="Pnt")
+    fbounding_box = bounds_descriptor("boundingBox", b[0], b[1], b[2], b[3], unit="Pnt")
 
     ornt_value = "Hrzn" if meta.orientation == TextOrientation.Horizontal else "Vrtc"
 
@@ -686,7 +686,8 @@ def _tysh_body(meta: TextLayerMetadata) -> bytes:
         .with_item("Txt ", DescriptorValue.text(meta.text))
         .with_item("textGridding", DescriptorValue.enum("textGridding", "None"))
         .with_item("Ornt", DescriptorValue.enum("Ornt", ornt_value))
-        .with_item("AntA", DescriptorValue.enum("Annt", "antiAliasSharp"))
+        .with_item("AntA", DescriptorValue.enum("Annt", "AnCr"))
+        .with_item("TxMg", DescriptorValue.enum("TxMg", "TxNM"))
         .with_item("bounds", DescriptorValue.object(fbounds))
         .with_item("boundingBox", DescriptorValue.object(fbounding_box))
         .with_item("TextIndex", DescriptorValue.integer(meta.index))

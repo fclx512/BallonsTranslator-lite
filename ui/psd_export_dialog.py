@@ -134,7 +134,7 @@ class PsdExportDialog(QDialog):
             )
         )
         self._method_info.setWordWrap(True)
-        self._method_info.setStyleSheet("color: palette(text); padding: 4px 0;")
+        self._method_info.setStyleSheet("padding: 4px 0;")
         layout.addWidget(self._method_info)
 
         # ---- separator --------------------------------------------------

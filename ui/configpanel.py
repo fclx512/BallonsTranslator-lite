@@ -718,6 +718,7 @@ DEFAULT_SHORTCUTS = {
     "inpaint_tool": ["J"],
     "pen_tool": ["B"],
     "merge_tool": ["Ctrl+Shift+M"],
+    "quick_symbol": [],
 }
 
 _ACTION_NAMES = {
@@ -748,6 +749,7 @@ _ACTION_NAMES = {
     "inpaint_tool": "Inpaint Tool",
     "pen_tool": "Pen Tool",
     "merge_tool": "Merge Tool",
+    "quick_symbol": "Quick Symbol",
 }
 
 # Shortcut groups for organized display
@@ -779,6 +781,7 @@ _SHORTCUT_GROUPS = [
             "pen_tool",
             "merge_tool",
             "space_inpaint",
+            "quick_symbol",
         ],
     ),
     ("Search", ["page_search", "global_search"]),
@@ -1232,7 +1235,7 @@ class MCPInfoDialog(QDialog):
             self.tr("Full user guide available at docs/MCP用户指南.md")
         )
         doc_hint.setWordWrap(True)
-        doc_hint.setStyleSheet("color: #888; font-size: 12px;")
+        doc_hint.setStyleSheet("font-size: 12px;")
         layout.addWidget(doc_hint)
 
         layout.addStretch()

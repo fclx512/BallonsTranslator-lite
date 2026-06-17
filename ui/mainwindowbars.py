@@ -371,12 +371,17 @@ class TitleBar(Widget):
         psdExportAction = QAction(self.tr("Export as PSD…"), self)
         self.psd_export_triggered = psdExportAction.triggered
 
+        # Quick Symbol dialog
+        quickSymbolAction = QAction(self.tr("Quick Symbol"), self)
+        self.quick_symbol_trigger = quickSymbolAction.triggered
+
         toolsMenu = QMenu(self.toolsToolBtn)
         toolsMenu.addAction(mergeToolAction)
         toolsMenu.addSeparator()
         toolsMenu.addAction(self._styleMgrAction)
         toolsMenu.addSeparator()
         toolsMenu.addAction(psdExportAction)
+        toolsMenu.addAction(quickSymbolAction)
         self.toolsToolBtn.setMenu(toolsMenu)
         self.toolsToolBtn.setPopupMode(QToolButton.InstantPopup)
 

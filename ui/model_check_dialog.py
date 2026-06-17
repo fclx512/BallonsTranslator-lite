@@ -281,7 +281,7 @@ class CategoryCard(QFrame):
         title_layout.addWidget(self.summary_label, 1)
 
         self.expand_icon = QLabel("▼")
-        self.expand_icon.setStyleSheet("color: #999; font-size: 10px;")
+        self.expand_icon.setStyleSheet("font-size: 10px;")
         title_layout.addWidget(self.expand_icon)
 
         layout.addWidget(self.title_bar)

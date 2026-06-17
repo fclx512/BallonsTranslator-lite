@@ -3660,10 +3660,183 @@ in Settings → Mirror Config, then click Retry.</source>
         <source>— None —</source>
         <translation>— 无 —</translation>
     </message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Page Up</source>
+	    <translation>上一页</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Page Down</source>
+	    <translation>下一页</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Page Up (alt)</source>
+	    <translation>上一页 (备选)</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Page Down (alt)</source>
+	    <translation>下一页 (备选)</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Text Editor</source>
+	    <translation>文本编辑</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Text Block</source>
+	    <translation>选框模式</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Draw Board</source>
+	    <translation>画板模式</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Zoom In</source>
+	    <translation>放大</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Zoom Out</source>
+	    <translation>缩小</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Preview</source>
+	    <translation>预览</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Delete</source>
+	    <translation>删除</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Delete (alt)</source>
+	    <translation>删除 (备选)</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Select All</source>
+	    <translation>全选</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Bold</source>
+	    <translation>粗体</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Italic</source>
+	    <translation>斜体</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Underline</source>
+	    <translation>下划线</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Undo</source>
+	    <translation>撤销</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Redo</source>
+	    <translation>重做</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Page Search</source>
+	    <translation>页面查找</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Global Search</source>
+	    <translation>全局查找</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Escape</source>
+	    <translation>取消</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Inpaint</source>
+	    <translation>修复</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Hand Tool</source>
+	    <translation>抓手工具</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Rect Tool</source>
+	    <translation>矩形工具</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Inpaint Tool</source>
+	    <translation>修复笔刷</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Pen Tool</source>
+	    <translation>画笔工具</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Merge Tool</source>
+	    <translation>合并工具</translation>
+	</message>
+	<message>
+	    <location filename="..\\ui\\configpanel.py" line="808" />
+	    <source>Quick Symbol</source>
+	    <translation>快捷符号</translation>
+	</message>
+</context><context>
+    <name>ShortcutEditor</name>
+    <!-- GROUP NAMES for shortcut display in ShortcutEditor line 1030 (self.tr(group_name)) -->
+    <message>
+        <location filename="..\\ui\\configpanel.py" line="1030" />
+        <source>Navigation</source>
+        <translation>导航</translation>
+    </message>
+    <message>
+        <location filename="..\\ui\\configpanel.py" line="1030" />
+        <source>View</source>
+        <translation>视图</translation>
+    </message>
+    <message>
+        <location filename="..\\ui\\configpanel.py" line="1030" />
+        <source>Edit</source>
+        <translation>编辑</translation>
+    </message>
+    <message>
+        <location filename="..\\ui\\configpanel.py" line="1030" />
+        <source>Tools</source>
+        <translation>工具</translation>
+    </message>
+    <message>
+        <location filename="..\\ui\\configpanel.py" line="1030" />
+        <source>Search</source>
+        <translation>搜索</translation>
+    </message>
+    <message>
+        <location filename="..\\ui\\configpanel.py" line="1030" />
+        <source>General</source>
+        <translation>通用</translation>
+    </message>
 </context><context>
     <name>_SourceRow</name>
     <message>
-        <location filename="..\ui\network_settings_dialog.py" line="78" />
+        <location filename="..\\ui\\network_settings_dialog.py" line="78" />
         <source>Enter custom mirror URL...</source>
         <translation>输入自定义镜像 URL...</translation>
     </message>

@@ -321,6 +321,9 @@ class MainWindow(mainwindow_cls):
         # Font Style Manager — opened as a dialog from Tools menu
         self._styleMgrDialog: Optional[QDialog] = None
 
+        # Quick Symbol dialog
+        self._quickSymbolDialog: Optional[QDialog] = None
+
         # Search widget as floating overlay (slides in from left)
         self._searchSlide = OverlaySlider(
             self.global_search_widget,
@@ -964,6 +967,7 @@ class MainWindow(mainwindow_cls):
         self.titleBar.stylemgr_trigger.connect(self.on_open_fontstyle_manager)
         self.titleBar.help_about_triggered.connect(self.show_about_dialog)
         self.titleBar.psd_export_triggered.connect(self.on_export_psd)
+        self.titleBar.quick_symbol_trigger.connect(self.on_open_quick_symbol)
 
         self._install_shortcuts()
 
@@ -1067,6 +1071,9 @@ class MainWindow(mainwindow_cls):
         )
         self.shortcut_registry["merge_tool"] = self._make_shortcuts(
             "merge_tool", ["Ctrl+Shift+M"], self.on_open_merge_tool
+        )
+        self.shortcut_registry["quick_symbol"] = self._make_shortcuts(
+            "quick_symbol", [], self.on_open_quick_symbol
         )
 
         drawpanel_info = {
@@ -1256,6 +1263,25 @@ class MainWindow(mainwindow_cls):
             self.merge_dialog.activateWindow()
         else:
             self.merge_dialog.show()
+
+    def on_open_quick_symbol(self):
+        """Open the Quick Symbol dialog as a floating always-on-top window."""
+        if self._quickSymbolDialog is not None and self._quickSymbolDialog.isVisible():
+            self._quickSymbolDialog.raise_()
+            self._quickSymbolDialog.activateWindow()
+            return
+
+        if self._quickSymbolDialog is None:
+            from .quick_symbol_dialog import QuickSymbolDialog
+
+            dlg = QuickSymbolDialog(self)
+            dlg.destroyed.connect(self._on_quick_symbol_destroyed)
+            self._quickSymbolDialog = dlg
+
+        self._quickSymbolDialog.show()
+
+    def _on_quick_symbol_destroyed(self):
+        self._quickSymbolDialog = None
 
     def run_merge_task(self, on_current=False):
         """Run region merge task"""
@@ -2135,7 +2161,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             # Adaptive mode info label — updates based on project page count
             mode_label = QLabel()
             mode_label.setWordWrap(True)
-            mode_label.setStyleSheet("color: #666; font-style: italic;")
+            mode_label.setStyleSheet("font-style: italic;")
             ai_grid.addWidget(mode_label, 1, 0, 1, 2)
 
             ai_grid.addWidget(QLabel(self.tr("Batch Size:")), 2, 0)

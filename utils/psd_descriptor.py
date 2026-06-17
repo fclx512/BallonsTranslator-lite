@@ -89,9 +89,19 @@ class DescriptorValue:
         return DescriptorValue("double", f)
 
     @staticmethod
+    def unit_float(f: float, unit_id: str) -> DescriptorValue:
+        """Generic unit float with a 4-byte unit ID (e.g. ``#Pnt``, ``#Pxl``)."""
+        return DescriptorValue("unit_pixels", (f, unit_id))
+
+    @staticmethod
     def unit_pixels(f: float) -> DescriptorValue:
         """PSD pixel-unit value."""
-        return DescriptorValue("unit_pixels", f)
+        return DescriptorValue("unit_pixels", (f, "#Pxl"))
+
+    @staticmethod
+    def unit_points(f: float) -> DescriptorValue:
+        """PSD points-unit value (used in TySh text-layer bounds)."""
+        return DescriptorValue("unit_pixels", (f, "#Pnt"))
 
     @staticmethod
     def raw(data: bytes) -> DescriptorValue:
@@ -140,14 +150,21 @@ def bounds_descriptor(
     top: float,
     right: float,
     bottom: float,
+    unit: str = "Pxl",
 ) -> DescriptorObject:
-    """Create a bounds descriptor with the four pixel-unit edges."""
+    """Create a bounds descriptor with the four edges in *unit* (default pixels)."""
+    if unit == "Pxl":
+        mk = DescriptorValue.unit_pixels
+    elif unit == "Pnt":
+        mk = DescriptorValue.unit_points
+    else:
+        mk = lambda v: DescriptorValue.unit_float(v, f"#{unit}")
     return (
         DescriptorObject("", class_id)
-        .with_item("Left", DescriptorValue.unit_pixels(left))
-        .with_item("Top ", DescriptorValue.unit_pixels(top))
-        .with_item("Rght", DescriptorValue.unit_pixels(right))
-        .with_item("Btom", DescriptorValue.unit_pixels(bottom))
+        .with_item("Left", mk(left))
+        .with_item("Top ", mk(top))
+        .with_item("Rght", mk(right))
+        .with_item("Btom", mk(bottom))
     )
 
 
@@ -195,8 +212,13 @@ def _write_descriptor_value(
 
     elif tag == "unit_pixels":
         writer.write_signature("UntF")
-        writer.write_signature("#Pxl")
-        writer.write_f64(payload)
+        if isinstance(payload, tuple):
+            value, unit_id = payload
+        else:
+            value = payload
+            unit_id = "#Pxl"
+        writer.write_signature(unit_id)
+        writer.write_f64(value)
 
     elif tag == "raw":
         writer.write_signature("tdta")

@@ -320,7 +320,7 @@ def encode_engine_data(spec: TextEngineSpec) -> bytes:
                                 ]
                             ),
                         ),
-                        ("AntiAlias", _EV.int(4)),
+                        ("AntiAlias", _EV.int(1)),
                         ("UseFractionalGlyphWidths", _EV.bool(True)),
                         (
                             "Rendered",
@@ -343,7 +343,7 @@ def encode_engine_data(spec: TextEngineSpec) -> bytes:
                                                                 [
                                                                     (
                                                                         "ShapeType",
-                                                                        _EV.int(1),
+                                                                        _EV.int(0),
                                                                     ),
                                                                     (
                                                                         "Procession",
@@ -381,26 +381,7 @@ def encode_engine_data(spec: TextEngineSpec) -> bytes:
                                                                                             (
                                                                                                 "ShapeType",
                                                                                                 _EV.int(
-                                                                                                    1
-                                                                                                ),
-                                                                                            ),
-                                                                                            (
-                                                                                                "BoxBounds",
-                                                                                                _EV.array(
-                                                                                                    [
-                                                                                                        _EV.float(
-                                                                                                            0.0
-                                                                                                        ),
-                                                                                                        _EV.float(
-                                                                                                            0.0
-                                                                                                        ),
-                                                                                                        _EV.float(
-                                                                                                            spec.box_width
-                                                                                                        ),
-                                                                                                        _EV.float(
-                                                                                                            spec.box_height
-                                                                                                        ),
-                                                                                                    ]
+                                                                                                    0
                                                                                                 ),
                                                                                             ),
                                                                                             (
@@ -410,7 +391,7 @@ def encode_engine_data(spec: TextEngineSpec) -> bytes:
                                                                                                         (
                                                                                                             "ShapeType",
                                                                                                             _EV.int(
-                                                                                                                1
+                                                                                                                0
                                                                                                             ),
                                                                                                         ),
                                                                                                         (
@@ -498,7 +479,7 @@ def encode_engine_data(spec: TextEngineSpec) -> bytes:
         ]
     )
 
-    out = bytearray()
+    out = bytearray(b"\n\n")
     _write_value(out, root, 0, False, None)
     out.append(ord("\n"))
     return bytes(out)
@@ -516,11 +497,17 @@ def _normalize_text(text: str) -> str:
 
 
 def _paragraph_run_lengths(text: str) -> List[int]:
-    """Return UTF-16 code-unit counts per paragraph (split on ``\\r``)."""
-    lengths: List[int] = []
-    for run in text.split("\r"):
-        lengths.append(_utf16_len(run))
-    return lengths
+    """Return UTF-16 code-unit counts per paragraph (each including its ``\\r`` terminator).
+
+    Equivalent to Rust's ``str::split_inclusive('\\r')`` — the ``\\r``
+    delimiter is counted as part of each paragraph run.
+    """
+    parts = text.split("\r")
+    # normalize_text() always appends a trailing \r, so the last split
+    # segment is always empty — drop it.
+    if parts and parts[-1] == "":
+        parts.pop()
+    return [_utf16_len(part + "\r") for part in parts]
 
 
 def _utf16_len(text: str) -> int:
@@ -811,6 +798,9 @@ def _serialize_float(value: float, key: Optional[str]) -> str:
     Known float-keys always produce decimal notation (e.g. ``14.0``,
     ``1.33333``).  Other keys use integer notation (e.g. ``1``) when
     the value has no fractional part.  Trailing zeros are stripped.
+
+    Values in ``(-1, 1)`` omit the leading zero (e.g. ``.8``) to match
+    Photoshop's convention.
     """
     is_float = (key in _FLOAT_KEYS) or (value % 1.0 != 0.0)
 
@@ -822,6 +812,12 @@ def _serialize_float(value: float, key: Optional[str]) -> str:
         # Strip trailing zeros (but keep at least one digit after dot)
         while formatted.endswith("0") and len(formatted) > formatted.index(".") + 2:
             formatted = formatted[:-1]
+    # Photoshop convention: drop leading zero for values in (-1, 1)
+    # but keep ``0.0`` as-is.
+    if formatted.startswith("0.") and formatted != "0.0":
+        formatted = formatted[1:]
+    elif formatted.startswith("-0."):
+        formatted = "-" + formatted[2:]
     return formatted
 
 
@@ -865,7 +861,7 @@ def _write_value(
             # Multi-line array
             out.extend(b"[\n")
             for item in items:
-                _write_value(out, item, indent + 1, False, key)
+                _write_value(out, item, indent, False, key)
                 out.append(ord("\n"))
             _write_indent(out, indent)
             out.extend(b"]")
@@ -874,6 +870,7 @@ def _write_value(
         entries: List[Tuple[str, _EV]] = payload
         if in_property:
             out.append(ord("\n"))
+            _write_indent(out, indent)
         else:
             _write_indent(out, indent)
         out.extend(b"<<\n")

@@ -527,7 +527,7 @@ class ShadowGradientDialog(QDialog):
         self.include_stroke_cb.toggled.connect(self._update_preview)
         cb_row.addWidget(self.include_stroke_cb)
         global_lbl = QLabel(self.tr("(global)"))
-        global_lbl.setStyleSheet("color: gray; font-size: 11px;")
+        global_lbl.setStyleSheet("font-size: 11px;")
         cb_row.addWidget(global_lbl)
         cb_row.addStretch()
         ctrl.addLayout(cb_row)
@@ -537,7 +537,7 @@ class ShadowGradientDialog(QDialog):
             )
         )
         ps_note.setWordWrap(True)
-        ps_note.setStyleSheet("color: gray; font-size: 11px;")
+        ps_note.setStyleSheet("font-size: 11px;")
         ctrl.addWidget(ps_note)
 
         ctrl.addStretch()

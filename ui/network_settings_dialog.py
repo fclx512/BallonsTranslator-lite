@@ -71,7 +71,7 @@ class _SourceRow(QWidget):
 
         self.explanation = QLabel()
         self.explanation.setWordWrap(True)
-        self.explanation.setStyleSheet("color: #888; font-size: 12px; padding: 2px 0;")
+        self.explanation.setStyleSheet("font-size: 12px; padding: 2px 0;")
         layout.addWidget(self.explanation)
 
         self.custom_field = QLineEdit()
@@ -196,7 +196,7 @@ class NetworkSettingsDialog(QDialog):
             )
         )
         hint_adv.setWordWrap(True)
-        hint_adv.setStyleSheet("color: #888; font-size: 12px;")
+        hint_adv.setStyleSheet("font-size: 12px;")
         adv.addWidget(hint_adv)
 
         layout.addWidget(self._adv_group)
@@ -209,7 +209,7 @@ class NetworkSettingsDialog(QDialog):
                 "Pick the first option (Official) for each category if you are not experiencing network issues."
             )
         )
-        hint.setStyleSheet("color: #999; font-size: 12px;")
+        hint.setStyleSheet("font-size: 12px;")
         layout.addWidget(hint)
 
         # ── Utility buttons row (small, bottom-left) ──
