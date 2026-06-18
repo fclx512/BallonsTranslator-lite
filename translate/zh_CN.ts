@@ -261,6 +261,11 @@
         <source>Snap Alignment</source>
         <translation>吸附对齐</translation>
     </message>
+	    <message>
+	        <location filename="..\ui\canvas.py" line="350" />
+	        <source>PREVIEW</source>
+	        <translation>预览</translation>
+	    </message>
 </context><context>
     <name>CategoryCard</name>
     <message>
@@ -1559,6 +1564,16 @@ Output:
         <source>Failed to import translation from </source>
         <translation>从目标文件导入失败 </translation>
     </message>
+	    <message>
+	        <location filename="..\ui\mainwindow.py" />
+	        <source>No movable text blocks found</source>
+	        <translation>未找到可移动的文字块</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\mainwindow.py" />
+	        <source>No pages in project</source>
+	        <translation>项目中无页面</translation>
+	    </message>
 </context><context>
     <name>MainWindowMixin</name>
     <message>
@@ -3429,6 +3444,16 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         <source>About</source>
         <translation>关于</translation>
     </message>
+	    <message>
+	        <location filename="..\ui\mainwindowbars.py" />
+	        <source>Advanced Alignment</source>
+	        <translation>高级对齐</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\mainwindowbars.py" />
+	        <source>Quick Symbol</source>
+	        <translation>快捷符号</translation>
+	    </message>
 </context><context>
     <name>ToolsDialog</name>
     <message>
@@ -3800,6 +3825,11 @@ in Settings → Mirror Config, then click Retry.</source>
 	    <source>Quick Symbol</source>
 	    <translation>快捷符号</translation>
 	</message>
+		<message>
+		    <location filename="..\ui\configpanel.py" line="808" />
+		    <source>Advanced Alignment</source>
+		    <translation>高级对齐</translation>
+		</message>
 </context><context>
     <name>ShortcutEditor</name>
     <!-- GROUP NAMES for shortcut display in ShortcutEditor line 1030 (self.tr(group_name)) -->
@@ -3840,4 +3870,102 @@ in Settings → Mirror Config, then click Retry.</source>
         <source>Enter custom mirror URL...</source>
         <translation>输入自定义镜像 URL...</translation>
     </message>
-</context></TS>
+</context>	<context>
+	    <name>PointAlignDialog</name>
+	    <message>
+	        <location filename="..\ui\point_align_dialog.py" line="34" />
+	        <source>Advanced Alignment</source>
+	        <translation>高级对齐</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\point_align_dialog.py" line="44" />
+	        <source>Target Position</source>
+	        <translation>目标位置</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\point_align_dialog.py" line="49" />
+	        <source>Y:</source>
+	        <translation>Y：</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\point_align_dialog.py" line="55" />
+	        <source>Pick</source>
+	        <translation>拾取</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\point_align_dialog.py" line="65" />
+	        <source>Alignment Mode</source>
+	        <translation>对齐模式</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\point_align_dialog.py" line="67" />
+	        <source>Align Top Edges</source>
+	        <translation>顶边缘对齐</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\point_align_dialog.py" line="68" />
+	        <source>Align Centers</source>
+	        <translation>居中对齐</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\point_align_dialog.py" line="69" />
+	        <source>Align Bottom Edges</source>
+	        <translation>底边缘对齐</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\point_align_dialog.py" line="81" />
+	        <source>Apply To</source>
+	        <translation>应用到</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\point_align_dialog.py" line="89" />
+	        <source>All Pages</source>
+	        <translation>所有页面</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\point_align_dialog.py" line="99" />
+	        <source>OK</source>
+	        <translation>确定</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\point_align_dialog.py" line="100" />
+	        <source>Cancel</source>
+	        <translation>取消</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\point_align_dialog.py" line="147" />
+	        <source>Page %1 ~ Page %2 (%3 pages)</source>
+	        <translation>第%1页 ~ 第%2页（共%3页）</translation>
+	    </message>
+	</context>
+
+	<context>
+	    <name>QuickSymbolDialog</name>
+	    <message>
+	        <location filename="..\ui\quick_symbol_dialog.py" line="39" />
+	        <source>Quick Symbol</source>
+	        <translation>快捷符号</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\quick_symbol_dialog.py" line="59" />
+	        <source>Quotes</source>
+	        <translation>引号类</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\quick_symbol_dialog.py" line="59" />
+	        <source>Punctuation</source>
+	        <translation>标点类</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\quick_symbol_dialog.py" line="59" />
+	        <source>Decoratives</source>
+	        <translation>装饰类</translation>
+	    </message>
+	    <message>
+	        <location filename="..\ui\quick_symbol_dialog.py" line="59" />
+	        <source>Other</source>
+	        <translation>其他</translation>
+	    </message>
+	</context>
+
+</TS>

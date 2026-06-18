@@ -20,6 +20,7 @@ from qtpy.QtGui import (
 from qtpy.QtWidgets import (
     QApplication,
     QGraphicsItem,
+    QGraphicsLineItem,
     QGraphicsPixmapItem,
     QGraphicsRectItem,
     QGraphicsScene,
@@ -287,6 +288,7 @@ class Canvas(QGraphicsScene):
     context_menu_requested = Signal(QPoint, bool)
     incanvas_selection_changed = Signal()
     align_textblks = Signal(str)
+    y_picked = Signal(int)
     switch_text_item = Signal(int, QKeyEvent)
 
     def __init__(self, parent=None):
@@ -297,6 +299,8 @@ class Canvas(QGraphicsScene):
         self.alignment_enabled = True
         self.snap_guide_item = SnapGuideItem()
         self.creating_textblock = False
+        self.y_picking = False
+        self.y_pick_line = None
         self.create_block_origin: QPointF = None
         self.editing_textblkitem: TextBlkItem = None
 
@@ -343,7 +347,7 @@ class Canvas(QGraphicsScene):
         self.previewLabel = QLabel(self.gv)
         self.previewLabel.setObjectName("PreviewLabel")
         self.previewLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.previewLabel.setText("PREVIEW")
+        self.previewLabel.setText(self.tr("PREVIEW"))
         self.previewLabel.adjustSize()
         self.previewLabel.setVisible(False)
 
@@ -792,6 +796,13 @@ class Canvas(QGraphicsScene):
         return textblk_created
 
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        if self.y_picking and self.y_pick_line is not None:
+            y = event.scenePos().y()
+            scene_w = max(self.sceneRect().width() or 2000, 2000)
+            self.y_pick_line.setLine(0, y, scene_w, y)
+            self.y_pick_line.show()
+            return
+
         if self.mid_btn_pressed:
             new_pos = event.screenPos()
             delta_pos = new_pos - self.pan_initial_pos
@@ -860,6 +871,45 @@ class Canvas(QGraphicsScene):
             sel_textitems.sort(key=lambda x: x.idx)
         return sel_textitems
 
+    # ── Y-pick mode (for Advanced Alignment) ──────────────────
+
+    def enter_y_pick_mode(self):
+        """Enter Y coordinate picking mode — a dashed horizontal line follows the cursor."""
+        self.y_picking = True
+        self.gv.setCursor(Qt.CursorShape.CrossCursor)
+        self.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
+        # Create a scene‑wide horizontal dashed line (initially at origin)
+        scene_w = max(self.sceneRect().width() or 2000, 2000)
+        self.y_pick_line = QGraphicsLineItem()
+        pen = QPen(QColor(255, 0, 255), 0)  # magenta, cosmetic
+        pen.setStyle(Qt.PenStyle.DashLine)
+        self.y_pick_line.setPen(pen)
+        self.y_pick_line.setZValue(200)  # above everything
+        self.y_pick_line.setLine(0, 0, scene_w, 0)
+        self.addItem(self.y_pick_line)
+        self.y_pick_line.hide()
+
+    def exit_y_pick_mode(self):
+        """Exit Y picking mode and clean up the guide line.
+
+        Does NOT restore drag mode — call :meth:`restore_drag_mode`
+        after the dialog fully closes so mouse events settle.
+        """
+        self.y_picking = False
+        self.gv.unsetCursor()
+        if self.y_pick_line is not None:
+            self.removeItem(self.y_pick_line)
+            self.y_pick_line = None
+
+    def restore_drag_mode(self):
+        """Restore the normal ScrollHandDrag panning mode."""
+        self.gv.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+
+    def is_y_picking(self) -> bool:
+        return self.y_picking
+
+    # ── Snap guides ────────────────────────────────────────────
+
     def clear_snap_guides(self):
         """Clear all snap guide lines."""
         self.snap_guide_item.clear_guides()
@@ -896,6 +946,13 @@ class Canvas(QGraphicsScene):
 
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         btn = event.button()
+
+        # Y‑picking mode — capture scene Y on any click
+        if self.y_picking and btn == Qt.MouseButton.LeftButton:
+            y_val = round(event.scenePos().y())
+            self.y_picked.emit(y_val)
+            return
+
         if btn == Qt.MouseButton.MiddleButton:
             self.mid_btn_pressed = True
             self.pan_initial_pos = event.screenPos()

@@ -719,6 +719,7 @@ DEFAULT_SHORTCUTS = {
     "pen_tool": ["B"],
     "merge_tool": ["Ctrl+Shift+M"],
     "quick_symbol": [],
+    "advanced_align": [],
 }
 
 _ACTION_NAMES = {
@@ -750,6 +751,7 @@ _ACTION_NAMES = {
     "pen_tool": "Pen Tool",
     "merge_tool": "Merge Tool",
     "quick_symbol": "Quick Symbol",
+    "advanced_align": "Advanced Alignment",
 }
 
 # Shortcut groups for organized display
@@ -782,6 +784,7 @@ _SHORTCUT_GROUPS = [
             "merge_tool",
             "space_inpaint",
             "quick_symbol",
+            "advanced_align",
         ],
     ),
     ("Search", ["page_search", "global_search"]),

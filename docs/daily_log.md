@@ -4,6 +4,40 @@
 
 ---
 
+## 2026-06-18
+
+### 高级对齐功能实现 + 修复
+
+**需求：** 工具菜单新增"高级对齐"，用户指定 Y 坐标后将选定页面内非旋转文本框的上边/垂直中心/下边对齐到该 Y 值，仅调整垂直位置，支持拾取 Y 值和撤销。
+
+**实现（第1轮）：**
+1. `utils/point_alignment.py` — **新增**，纯计算函数 `compute_offsets()`，基于 `_bounding_rect`/`xyxy` 计算 dy
+2. `ui/point_align_dialog.py` — **新增**，对话框 UI（Y 输入 + 拾取按钮 + 对齐单选 + RangeSlider 范围选择 + 全页复选框）
+3. `ui/canvas.py` — 添加 Y 拾取模式：y_picking 标志、y_pick_line（洋红虚线跟随鼠标）、y_picked 信号、exit_y_pick_mode()/restore_drag_mode()
+4. `ui/mainwindowbars.py` — "工具"菜单增加 "Advanced Alignment" 条目
+5. `ui/mainwindow.py` — **新增** `_PointAlignCommand`（QUndoCommand，跨页数据+当前页视觉撤销）、`on_open_advanced_align()`（QEventLoop 避免 hide() 取消模态）、`execute_advanced_align()`
+6. `ui/configpanel.py` — 注册 `advanced_align` 快捷键（默认无）
+
+**修复（第2轮）：**
+- 拾取值应用后无响应 — 根因：dialog.hide() 在 exec_() 中导致 Qt 返回 Rejected。改用 show() + QEventLoop 替代 exec_()
+- 对话框关闭后画布拖拽残留 — exit_y_pick_mode() 不恢复 ScrollHandDrag，统一在 on_accepted/on_rejected 中调用 restore_drag_mode()
+- "All Pages" 默认勾选时横条未禁用 — setChecked(True) 移到 toggled.connect() 之后
+- 规范设计文档 `docs/superpowers/specs/2026-06-18-point-alignment-design.md` 删除
+
+### 工具栏与对话框 i18n 补全
+
+**问题：** 工具栏和工具对话框中有多处硬编码英文未包裹 self.tr() 或 ts 条目缺失：Quick Symbol 分组名、高级对齐窗口标签、画布 PREVIEW 提示、快捷键 "Advanced Alignment" 等。
+
+**修复：**
+1. `ui/quick_symbol_dialog.py` — 分组名 `self.tr(group_name)` 包裹
+2. `ui/point_align_dialog.py` — `QLabel("Y:")` → `self.tr("Y:")`
+3. `ui/canvas.py` — `"PREVIEW"` → `self.tr("PREVIEW")`
+4. `translate/zh_CN.ts` — 补全 PointAlignDialog、QuickSymbolDialog、TitleBar、_ShortcutRow、MainWindow 等 20+ 条目；重新编译 zh_CN.qm
+
+**涉及文件（两次改动合并）：** `ui/mainwindow.py`、`ui/canvas.py`、`ui/point_align_dialog.py`、`ui/mainwindowbars.py`、`ui/configpanel.py`、`utils/point_alignment.py`、`ui/quick_symbol_dialog.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
 ## 2026-06-17
 
 ### 快捷键面板翻译缺失修复 + CLAUDE.md 入库

@@ -9,7 +9,12 @@ from functools import partial
 from pathlib import Path
 from typing import List, Optional, Union
 
-from qtpy.QtCore import QEvent, QPoint, QSize, Qt, Signal
+from qtpy.QtCore import QEvent, QEventLoop, QPoint, QPointF, QSize, Qt, Signal
+
+try:
+    from qtpy.QtWidgets import QUndoCommand
+except ImportError:
+    from qtpy.QtGui import QUndoCommand
 from qtpy.QtGui import (
     QClipboard,
     QCloseEvent,
@@ -106,6 +111,42 @@ class PageListView(QListWidget):
             self.reveal_file.emit()
 
         return super().contextMenuEvent(e)
+
+
+class _PointAlignCommand(QUndoCommand):
+    """Undo command for batch point alignment across pages.
+
+    Stores old/new ``_bounding_rect`` for every affected TextBlock,
+    and for current-page items also old/new scene positions so the
+    visual state stays in sync.
+    """
+
+    def __init__(self, canvas, data_changes, item_changes=None):
+        super().__init__("Advanced Alignment")
+        self.canvas = canvas
+        # (TextBlock, [old_x, old_y, old_w, old_h], [new_x, new_y, new_w, new_h])
+        self.data_changes = list(data_changes)
+        # (TextBlkItem, old_QPointF, new_QPointF)  —  current-page items
+        self.item_changes = list(item_changes or [])
+
+    def _apply_data(self, changes):
+        for blk, old_br, new_br in changes:
+            blk._bounding_rect = list(new_br)
+
+    def _apply_items(self, changes):
+        for item, old_pos, new_pos in changes:
+            item.oldPos = item.pos()
+            item.setPos(new_pos)
+
+    def redo(self):
+        self._apply_data(self.data_changes)
+        self._apply_items(self.item_changes)
+
+    def undo(self):
+        rev_data = [(blk, new_br, old_br) for blk, old_br, new_br in self.data_changes]
+        rev_items = [(item, new_pos, old_pos) for item, old_pos, new_pos in self.item_changes]
+        self._apply_data(rev_data)
+        self._apply_items(rev_items)
 
 
 mainwindow_cls = Widget if shared.HEADLESS else FramelessWindow
@@ -968,6 +1009,7 @@ class MainWindow(mainwindow_cls):
         self.titleBar.help_about_triggered.connect(self.show_about_dialog)
         self.titleBar.psd_export_triggered.connect(self.on_export_psd)
         self.titleBar.quick_symbol_trigger.connect(self.on_open_quick_symbol)
+        self.titleBar.adv_align_trigger.connect(self.on_open_advanced_align)
 
         self._install_shortcuts()
 
@@ -1074,6 +1116,9 @@ class MainWindow(mainwindow_cls):
         )
         self.shortcut_registry["quick_symbol"] = self._make_shortcuts(
             "quick_symbol", [], self.on_open_quick_symbol
+        )
+        self.shortcut_registry["advanced_align"] = self._make_shortcuts(
+            "advanced_align", [], self.on_open_advanced_align
         )
 
         drawpanel_info = {
@@ -1282,6 +1327,166 @@ class MainWindow(mainwindow_cls):
 
     def _on_quick_symbol_destroyed(self):
         self._quickSymbolDialog = None
+
+    def on_open_advanced_align(self):
+        """Open Advanced Alignment dialog."""
+        num_pages = self.imgtrans_proj.num_pages
+        if num_pages == 0:
+            from qtpy.QtWidgets import QMessageBox
+
+            QMessageBox.warning(
+                self, self.tr("Warning"), self.tr("No pages in project")
+            )
+            return
+
+        from .point_align_dialog import PointAlignDialog
+
+        dialog = PointAlignDialog(num_pages, self)
+        canvas = self.canvas
+
+        # Use QEventLoop instead of exec_() so hide() during Y-pick
+        # doesn't cause exec_() to return Rejected (Qt behavior:
+        # hide() on a modal dialog during exec_() returns Rejected).
+        _picking = False
+        _accepted = False
+        loop = QEventLoop()
+
+        def on_pick_y():
+            """Dialog 'Pick' button clicked — enter canvas Y-pick mode."""
+            nonlocal _picking
+            if _picking:
+                return
+            _picking = True
+            dialog.hide()
+            canvas.enter_y_pick_mode()
+
+        def on_y_picked(y_val: int):
+            """Canvas emitted a Y value — restore dialog after event unwind."""
+            nonlocal _picking
+            if not _picking:
+                return
+            _picking = False
+            canvas.exit_y_pick_mode()  # keeps NoDrag — drag restored in on_accepted/on_rejected
+            dialog.set_picked_y(y_val)
+            # Defer show() so mouseReleaseEvent can unwind normally
+            from qtpy.QtCore import QTimer
+            QTimer.singleShot(0, dialog.show)
+
+        def on_accepted():
+            nonlocal _accepted
+            _accepted = True
+            if _picking:
+                canvas.exit_y_pick_mode()
+            canvas.restore_drag_mode()
+            loop.quit()
+
+        def on_rejected():
+            """Dialog cancelled — ensure canvas is clean."""
+            if _picking:
+                canvas.exit_y_pick_mode()
+            canvas.restore_drag_mode()
+            loop.quit()
+
+        dialog.pick_y_clicked.connect(on_pick_y)
+        canvas.y_picked.connect(on_y_picked)
+        dialog.accepted.connect(on_accepted)
+        dialog.rejected.connect(on_rejected)
+
+        # Show modeless (not modal) — hide() during pick won't cancel it
+        dialog.show()
+        loop.exec_()
+
+        if not _accepted:
+            return
+
+        target_y = dialog.target_y()
+        mode = dialog.alignment_mode()
+        raw_filter = dialog.page_filter()
+
+        # Resolve page filter
+        if raw_filter is None:
+            page_filter = None
+        else:
+            lo, hi = raw_filter
+            page_filter = [
+                self.imgtrans_proj.idx2pagename(i) for i in range(lo, hi + 1)
+            ]
+
+        self.execute_advanced_align(page_filter, target_y, mode)
+
+    def execute_advanced_align(self, page_filter, target_y, mode):
+        """Apply point alignment across pages.
+
+        Args:
+            page_filter: ``None`` (all pages) or ``List[str]`` of page names.
+            target_y: Target Y coordinate in scene space.
+            mode: ``"top"`` | ``"center"`` | ``"bottom"``.
+        """
+        proj = self.imgtrans_proj
+        canvas = self.canvas
+        st_mgr = self.st_manager
+
+        page_names = (
+            list(proj.pages.keys()) if page_filter is None else page_filter
+        )
+
+        # ── 1. Compute offsets for every non-rotated block ─────
+        data_changes = []  # (TextBlock, old_br, new_br, dy)
+
+        for pname in page_names:
+            for blk in proj.pages.get(pname, []):
+                if blk.angle != 0:
+                    continue
+
+                if blk._bounding_rect is not None:
+                    x, y, w, h = blk._bounding_rect
+                else:
+                    x1, y1, x2, y2 = blk.xyxy
+                    x, y, w, h = x1, y1, x2 - x1, y2 - y1
+
+                if mode == "top":
+                    dy = target_y - y
+                elif mode == "center":
+                    dy = target_y - (y + h / 2.0)
+                elif mode == "bottom":
+                    dy = target_y - (y + h)
+                else:
+                    continue
+
+                if abs(dy) < 0.5:
+                    continue
+
+                old_br = (
+                    blk._bounding_rect[:]
+                    if blk._bounding_rect is not None
+                    else [x, y, w, h]
+                )
+                new_br = [x, y + dy, w, h]
+                data_changes.append((blk, old_br, new_br, dy))
+
+        if not data_changes:
+            create_info_dialog(self.tr("No movable text blocks found"))
+            return
+
+        # ── 2. Build current-page item changes ────────────────
+        item_changes = []
+        if st_mgr is not None and canvas is not None:
+            # Use identity (is) comparison — TextBlock is unhashable
+            for item in st_mgr.textblk_item_list:
+                for blk, old_br, new_br, dy in data_changes:
+                    if item.blk is blk:
+                        old_pos = item.pos()
+                        new_pos = old_pos + QPointF(0, dy)
+                        item.oldPos = old_pos
+                        item.setPos(new_pos)
+                        item_changes.append((item, old_pos, new_pos))
+                        break
+
+        # ── 3. Push undo command (applies data + visual) ──────
+        # Strip dy from data_changes for the command
+        cmd_data = [(blk, old_br, new_br) for blk, old_br, new_br, dy in data_changes]
+        cmd = _PointAlignCommand(canvas, cmd_data, item_changes)
+        canvas.push_undo_command(cmd)
 
     def run_merge_task(self, on_current=False):
         """Run region merge task"""

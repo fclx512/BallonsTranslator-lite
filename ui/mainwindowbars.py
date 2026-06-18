@@ -375,6 +375,10 @@ class TitleBar(Widget):
         quickSymbolAction = QAction(self.tr("Quick Symbol"), self)
         self.quick_symbol_trigger = quickSymbolAction.triggered
 
+        # Advanced Alignment
+        advAlignAction = QAction(self.tr("Advanced Alignment"), self)
+        self.adv_align_trigger = advAlignAction.triggered
+
         toolsMenu = QMenu(self.toolsToolBtn)
         toolsMenu.addAction(mergeToolAction)
         toolsMenu.addSeparator()
@@ -382,6 +386,7 @@ class TitleBar(Widget):
         toolsMenu.addSeparator()
         toolsMenu.addAction(psdExportAction)
         toolsMenu.addAction(quickSymbolAction)
+        toolsMenu.addAction(advAlignAction)
         self.toolsToolBtn.setMenu(toolsMenu)
         self.toolsToolBtn.setPopupMode(QToolButton.InstantPopup)
 

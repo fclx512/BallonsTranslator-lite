@@ -56,7 +56,7 @@ class QuickSymbolDialog(QDialog):
         layout.setSpacing(6)
 
         for group_name, symbols in self._GROUPS:
-            label = QLabel(group_name)
+            label = QLabel(self.tr(group_name))
             label.setStyleSheet("font-weight: bold; font-size: 11px;")
             layout.addWidget(label)
 
