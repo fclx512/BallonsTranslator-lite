@@ -468,6 +468,44 @@ QPushButton:disabled {
     border: 1px solid rgba(128, 128, 128, 0.25);
 }
 
+/* ── Radio buttons (dark‑theme support) ────────────────────── */
+/* Native rendering ignores the dark palette on Windows, so we
+   explicitly draw the indicator circle ourselves.               */
+QRadioButton {
+    color: @qwidgetForegroundColor;
+    spacing: 6px;
+}
+
+QRadioButton::indicator {
+    width: 14px;
+    height: 14px;
+    border: 2px solid @borderColor;
+    border-radius: 9px;
+    background: @emptyContentBackgroundColor;
+}
+
+QRadioButton::indicator:checked {
+    background: @accentPrimary;
+    border: 2px solid @accentPrimary;
+}
+
+QRadioButton::indicator:hover {
+    border: 2px solid @accentPrimary;
+}
+
+QRadioButton::indicator:disabled {
+    border: 2px solid @disabledForegroundColor;
+}
+
+/* ── Plain checkboxes (dark‑theme support) ─────────────────── */
+/* Only the text/color rules live here — icon‑based checkboxes
+   (#TransChecker / #PaintChecker / etc.) have their own rules
+   and are NOT affected by the indicator styling below.        */
+QCheckBox {
+    color: @qwidgetForegroundColor;
+    spacing: 6px;
+}
+
 QPushButton#minBtn {
     border-radius: 0px;
     background-color: rgba(0, 0, 0, 0);

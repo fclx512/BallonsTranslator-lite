@@ -4,6 +4,38 @@
 
 ---
 
+## 2026-06-19
+
+### 高级对齐扩展 X 轴对齐
+
+**需求：** 高级对齐支持 X 轴（左/中/右），与 Y 轴互斥选择。
+
+**改动：**
+1. `utils/point_alignment.py` — 新增 `_blk_x_bounds()`；`compute_offsets()` 加 `axis` 参数分发 X/Y 计算
+2. `ui/point_align_dialog.py` — 顶部加 Axis 单选（X 轴/Y 轴），切换时动态更新坐标标签（X:/Y:）和对齐模式单选按钮文字（左/中/右 ↔ 顶/中/底）。信号 `pick_y_clicked` → `pick_clicked`，方法 `target_y()` → `target_value()`，`set_picked_y()` → `set_picked_value()`
+3. `ui/canvas.py` — 泛化拾取模式：移除 `y_picking`/`y_pick_line`/`y_picked`，改为 `_pick_axis`/`_pick_line`/`position_picked`。`enter_y_pick_mode()` → `enter_pick_mode(axis)`，X 轴时画垂直品红线
+4. `ui/mainwindow.py` — `on_open_advanced_align`/`execute_advanced_align` 加 `axis` 参数，视觉偏移方向随轴变化（`QPointF(dx,0)`/`QPointF(0,dy)`）
+5. `translate/zh_CN.ts` — PointAlignDialog 新增 7 条翻译；重新编译 qm
+
+**涉及文件：** `utils/point_alignment.py`、`ui/point_align_dialog.py`、`ui/canvas.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+### 移除 PP-OCRv6 字典的冗余下载条目
+
+**问题：** `ppocrv6_dict_proper.txt` 已在仓库中通过 git 跟踪，但被列在 `download_file_list` 中，URL 指向本仓库（循环下载），且地址无效。
+
+**修复：** 移除 `modules/ocr/ocr_onnx.py` 中 `# ── shared dictionary ──` 对应的字典下载条目。文件已由 git 同步，无需额外下载。
+
+**涉及文件：** `modules/ocr/ocr_onnx.py`
+
+### 修复 QRadioButton 暗色模式下不可见
+
+**问题：** Qt 原生单选框渲染忽略 Windows 暗色调色板，indicator 圆圈无显式样式，在暗色背景下难以辨识。
+**修复：** 在 `config/stylesheet.css` 中添加 `QRadioButton::indicator` 完整样式（边框、底色、选中态/悬停态/禁用态），配套 `QCheckBox` 文本颜色与间距基础样式。
+
+**涉及文件：** `config/stylesheet.css`
+
+---
+
 ## 2026-06-18
 
 ### 高级对齐功能实现 + 修复

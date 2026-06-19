@@ -288,7 +288,7 @@ class Canvas(QGraphicsScene):
     context_menu_requested = Signal(QPoint, bool)
     incanvas_selection_changed = Signal()
     align_textblks = Signal(str)
-    y_picked = Signal(int)
+    position_picked = Signal(int)
     switch_text_item = Signal(int, QKeyEvent)
 
     def __init__(self, parent=None):
@@ -299,8 +299,8 @@ class Canvas(QGraphicsScene):
         self.alignment_enabled = True
         self.snap_guide_item = SnapGuideItem()
         self.creating_textblock = False
-        self.y_picking = False
-        self.y_pick_line = None
+        self._pick_axis = None  # "x" | "y" | None — canvas coordinate pick mode
+        self._pick_line = None
         self.create_block_origin: QPointF = None
         self.editing_textblkitem: TextBlkItem = None
 
@@ -796,11 +796,15 @@ class Canvas(QGraphicsScene):
         return textblk_created
 
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
-        if self.y_picking and self.y_pick_line is not None:
-            y = event.scenePos().y()
+        if self._pick_axis is not None and self._pick_line is not None:
+            pos = event.scenePos()
             scene_w = max(self.sceneRect().width() or 2000, 2000)
-            self.y_pick_line.setLine(0, y, scene_w, y)
-            self.y_pick_line.show()
+            scene_h = max(self.sceneRect().height() or 2000, 2000)
+            if self._pick_axis == "y":
+                self._pick_line.setLine(0, pos.y(), scene_w, pos.y())
+            else:
+                self._pick_line.setLine(pos.x(), 0, pos.x(), scene_h)
+            self._pick_line.show()
             return
 
         if self.mid_btn_pressed:
@@ -871,42 +875,50 @@ class Canvas(QGraphicsScene):
             sel_textitems.sort(key=lambda x: x.idx)
         return sel_textitems
 
-    # ── Y-pick mode (for Advanced Alignment) ──────────────────
+    # ── Coordinate pick mode (for Advanced Alignment) ─────────
 
-    def enter_y_pick_mode(self):
-        """Enter Y coordinate picking mode — a dashed horizontal line follows the cursor."""
-        self.y_picking = True
+    def enter_pick_mode(self, axis: str):
+        """Enter coordinate picking mode on the given axis.
+
+        Args:
+            axis: ``"x"`` for vertical line (picks X), ``"y"`` for horizontal (picks Y).
+        """
+        self._pick_axis = axis
         self.gv.setCursor(Qt.CursorShape.CrossCursor)
         self.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
-        # Create a scene‑wide horizontal dashed line (initially at origin)
         scene_w = max(self.sceneRect().width() or 2000, 2000)
-        self.y_pick_line = QGraphicsLineItem()
+        scene_h = max(self.sceneRect().height() or 2000, 2000)
+        self._pick_line = QGraphicsLineItem()
         pen = QPen(QColor(255, 0, 255), 0)  # magenta, cosmetic
         pen.setStyle(Qt.PenStyle.DashLine)
-        self.y_pick_line.setPen(pen)
-        self.y_pick_line.setZValue(200)  # above everything
-        self.y_pick_line.setLine(0, 0, scene_w, 0)
-        self.addItem(self.y_pick_line)
-        self.y_pick_line.hide()
+        self._pick_line.setPen(pen)
+        self._pick_line.setZValue(200)  # above everything
+        if axis == "y":
+            self._pick_line.setLine(0, 0, scene_w, 0)
+        else:
+            self._pick_line.setLine(0, 0, 0, scene_h)
+        self.addItem(self._pick_line)
+        self._pick_line.hide()
 
-    def exit_y_pick_mode(self):
-        """Exit Y picking mode and clean up the guide line.
+    def exit_pick_mode(self):
+        """Exit coordinate picking mode and clean up the guide line.
 
         Does NOT restore drag mode — call :meth:`restore_drag_mode`
         after the dialog fully closes so mouse events settle.
         """
-        self.y_picking = False
+        self._pick_axis = None
         self.gv.unsetCursor()
-        if self.y_pick_line is not None:
-            self.removeItem(self.y_pick_line)
-            self.y_pick_line = None
+        if self._pick_line is not None:
+            self.removeItem(self._pick_line)
+            self._pick_line = None
 
     def restore_drag_mode(self):
         """Restore the normal ScrollHandDrag panning mode."""
         self.gv.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
 
-    def is_y_picking(self) -> bool:
-        return self.y_picking
+    def is_picking(self) -> bool:
+        """Return whether we are in coordinate picking mode."""
+        return self._pick_axis is not None
 
     # ── Snap guides ────────────────────────────────────────────
 
@@ -947,10 +959,11 @@ class Canvas(QGraphicsScene):
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         btn = event.button()
 
-        # Y‑picking mode — capture scene Y on any click
-        if self.y_picking and btn == Qt.MouseButton.LeftButton:
-            y_val = round(event.scenePos().y())
-            self.y_picked.emit(y_val)
+        # Coordinate picking mode — capture scene X or Y on any click
+        if self._pick_axis is not None and btn == Qt.MouseButton.LeftButton:
+            pos = event.scenePos()
+            val = round(pos.y() if self._pick_axis == "y" else pos.x())
+            self.position_picked.emit(val)
             return
 
         if btn == Qt.MouseButton.MiddleButton:

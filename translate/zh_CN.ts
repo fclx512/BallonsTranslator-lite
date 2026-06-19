@@ -3937,7 +3937,37 @@ in Settings → Mirror Config, then click Retry.</source>
 	        <source>Page %1 ~ Page %2 (%3 pages)</source>
 	        <translation>第%1页 ~ 第%2页（共%3页）</translation>
 	    </message>
-	</context>
+			    <message>
+		        <location filename="..\\ui\\point_align_dialog.py" line="58" />
+		        <source>Alignment Axis</source>
+		        <translation>对齐轴</translation>
+		    </message>
+		    <message>
+		        <location filename="..\\ui\\point_align_dialog.py" line="61" />
+		        <source>X Axis</source>
+		        <translation>X 轴</translation>
+		    </message>
+		    <message>
+		        <location filename="..\\ui\\point_align_dialog.py" line="62" />
+		        <source>Y Axis</source>
+		        <translation>Y 轴</translation>
+		    </message>
+		    <message>
+		        <location filename="..\\ui\\point_align_dialog.py" line="93" />
+		        <source>X:</source>
+		        <translation>X：</translation>
+		    </message>
+		    <message>
+		        <location filename="..\\ui\\point_align_dialog.py" line="93" />
+		        <source>Align Left Edges</source>
+		        <translation>左边缘对齐</translation>
+		    </message>
+		    <message>
+		        <location filename="..\\ui\\point_align_dialog.py" line="95" />
+		        <source>Align Right Edges</source>
+		        <translation>右边缘对齐</translation>
+		    </message>
+		</context>
 
 	<context>
 	    <name>QuickSymbolDialog</name>

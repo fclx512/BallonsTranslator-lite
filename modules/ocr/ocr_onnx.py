@@ -97,11 +97,6 @@ class PaddleOCRv6ONNX(OCRBase):
             "url": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx/resolve/main/inference.onnx",
             "files": "data/models/ppocrv6_onnx/medium/rec.onnx",
         },
-        # ── shared dictionary ──
-        {
-            "url": "https://raw.githubusercontent.com/FCLX152/BallonsTranslator-lite/main/data/models/ppocrv6_onnx/ppocrv6_dict_proper.txt",
-            "files": "data/models/ppocrv6_onnx/ppocrv6_dict_proper.txt",
-        },
     ]
 
     _load_model_keys = {"_onnx_ocr"}

@@ -1344,30 +1344,30 @@ class MainWindow(mainwindow_cls):
         dialog = PointAlignDialog(num_pages, self)
         canvas = self.canvas
 
-        # Use QEventLoop instead of exec_() so hide() during Y-pick
+        # Use QEventLoop instead of exec_() so hide() during pick
         # doesn't cause exec_() to return Rejected (Qt behavior:
         # hide() on a modal dialog during exec_() returns Rejected).
         _picking = False
         _accepted = False
         loop = QEventLoop()
 
-        def on_pick_y():
-            """Dialog 'Pick' button clicked — enter canvas Y-pick mode."""
+        def on_pick():
+            """Dialog 'Pick' button clicked — enter canvas pick mode."""
             nonlocal _picking
             if _picking:
                 return
             _picking = True
             dialog.hide()
-            canvas.enter_y_pick_mode()
+            canvas.enter_pick_mode(dialog.alignment_axis())
 
-        def on_y_picked(y_val: int):
-            """Canvas emitted a Y value — restore dialog after event unwind."""
+        def on_position_picked(val: int):
+            """Canvas emitted a coordinate — restore dialog after event unwind."""
             nonlocal _picking
             if not _picking:
                 return
             _picking = False
-            canvas.exit_y_pick_mode()  # keeps NoDrag — drag restored in on_accepted/on_rejected
-            dialog.set_picked_y(y_val)
+            canvas.exit_pick_mode()  # keeps NoDrag — drag restored in on_accepted/on_rejected
+            dialog.set_picked_value(val)
             # Defer show() so mouseReleaseEvent can unwind normally
             from qtpy.QtCore import QTimer
             QTimer.singleShot(0, dialog.show)
@@ -1376,19 +1376,19 @@ class MainWindow(mainwindow_cls):
             nonlocal _accepted
             _accepted = True
             if _picking:
-                canvas.exit_y_pick_mode()
+                canvas.exit_pick_mode()
             canvas.restore_drag_mode()
             loop.quit()
 
         def on_rejected():
             """Dialog cancelled — ensure canvas is clean."""
             if _picking:
-                canvas.exit_y_pick_mode()
+                canvas.exit_pick_mode()
             canvas.restore_drag_mode()
             loop.quit()
 
-        dialog.pick_y_clicked.connect(on_pick_y)
-        canvas.y_picked.connect(on_y_picked)
+        dialog.pick_clicked.connect(on_pick)
+        canvas.position_picked.connect(on_position_picked)
         dialog.accepted.connect(on_accepted)
         dialog.rejected.connect(on_rejected)
 
@@ -1399,7 +1399,8 @@ class MainWindow(mainwindow_cls):
         if not _accepted:
             return
 
-        target_y = dialog.target_y()
+        target = dialog.target_value()
+        axis = dialog.alignment_axis()
         mode = dialog.alignment_mode()
         raw_filter = dialog.page_filter()
 
@@ -1412,15 +1413,17 @@ class MainWindow(mainwindow_cls):
                 self.imgtrans_proj.idx2pagename(i) for i in range(lo, hi + 1)
             ]
 
-        self.execute_advanced_align(page_filter, target_y, mode)
+        self.execute_advanced_align(page_filter, target, mode, axis)
 
-    def execute_advanced_align(self, page_filter, target_y, mode):
+    def execute_advanced_align(self, page_filter, target, mode, axis):
         """Apply point alignment across pages.
 
         Args:
             page_filter: ``None`` (all pages) or ``List[str]`` of page names.
-            target_y: Target Y coordinate in scene space.
-            mode: ``"top"`` | ``"center"`` | ``"bottom"``.
+            target: Target coordinate in scene space (X or Y).
+            mode: ``"top"``|``"center"``|``"bottom"`` (Y), or
+                  ``"left"``|``"center"``|``"right"`` (X).
+            axis: ``"x"`` or ``"y"``.
         """
         proj = self.imgtrans_proj
         canvas = self.canvas
@@ -1431,7 +1434,7 @@ class MainWindow(mainwindow_cls):
         )
 
         # ── 1. Compute offsets for every non-rotated block ─────
-        data_changes = []  # (TextBlock, old_br, new_br, dy)
+        data_changes = []  # (TextBlock, old_br, new_br, delta)
 
         for pname in page_names:
             for blk in proj.pages.get(pname, []):
@@ -1444,16 +1447,26 @@ class MainWindow(mainwindow_cls):
                     x1, y1, x2, y2 = blk.xyxy
                     x, y, w, h = x1, y1, x2 - x1, y2 - y1
 
-                if mode == "top":
-                    dy = target_y - y
-                elif mode == "center":
-                    dy = target_y - (y + h / 2.0)
-                elif mode == "bottom":
-                    dy = target_y - (y + h)
-                else:
-                    continue
+                if axis == "y":
+                    if mode == "top":
+                        delta = target - y
+                    elif mode == "center":
+                        delta = target - (y + h / 2.0)
+                    elif mode == "bottom":
+                        delta = target - (y + h)
+                    else:
+                        continue
+                else:  # axis == "x"
+                    if mode == "left":
+                        delta = target - x
+                    elif mode == "center":
+                        delta = target - (x + w / 2.0)
+                    elif mode == "right":
+                        delta = target - (x + w)
+                    else:
+                        continue
 
-                if abs(dy) < 0.5:
+                if abs(delta) < 0.5:
                     continue
 
                 old_br = (
@@ -1461,8 +1474,11 @@ class MainWindow(mainwindow_cls):
                     if blk._bounding_rect is not None
                     else [x, y, w, h]
                 )
-                new_br = [x, y + dy, w, h]
-                data_changes.append((blk, old_br, new_br, dy))
+                if axis == "y":
+                    new_br = [x, y + delta, w, h]
+                else:
+                    new_br = [x + delta, y, w, h]
+                data_changes.append((blk, old_br, new_br, delta))
 
         if not data_changes:
             create_info_dialog(self.tr("No movable text blocks found"))
@@ -1473,18 +1489,21 @@ class MainWindow(mainwindow_cls):
         if st_mgr is not None and canvas is not None:
             # Use identity (is) comparison — TextBlock is unhashable
             for item in st_mgr.textblk_item_list:
-                for blk, old_br, new_br, dy in data_changes:
+                for blk, old_br, new_br, delta in data_changes:
                     if item.blk is blk:
                         old_pos = item.pos()
-                        new_pos = old_pos + QPointF(0, dy)
+                        if axis == "y":
+                            new_pos = old_pos + QPointF(0, delta)
+                        else:
+                            new_pos = old_pos + QPointF(delta, 0)
                         item.oldPos = old_pos
                         item.setPos(new_pos)
                         item_changes.append((item, old_pos, new_pos))
                         break
 
         # ── 3. Push undo command (applies data + visual) ──────
-        # Strip dy from data_changes for the command
-        cmd_data = [(blk, old_br, new_br) for blk, old_br, new_br, dy in data_changes]
+        # Strip delta from data_changes for the command
+        cmd_data = [(blk, old_br, new_br) for blk, old_br, new_br, delta in data_changes]
         cmd = _PointAlignCommand(canvas, cmd_data, item_changes)
         canvas.push_undo_command(cmd)
 
