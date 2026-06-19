@@ -38,7 +38,9 @@ dependencies = [
 [project.optional-dependencies]
 gpu = ["torch", "torchvision", "transformers", "diffusers", "ultralytics>=8.4.14"]
 mcp = ["mcp>=1.0.0"]
-onnx = ["onnxruntime-gpu", "onnxocr"]
+# 注意: onnxocr 未列在此处因为它声明了 numpy<2.0.0 约束。
+# 模块自身的 requires_packages 会通过 --no-deps 机制安装它。
+onnx = ["onnxruntime-gpu"]
 
 [tool.ruff]
 target-version = "py310"

@@ -407,7 +407,10 @@ def _ensure_module_fallback():
             )
         if not _has_onnxocr:
             print(
-                "  Install onnxocr to enable PP-OCRv6 ONNX, then restart."
+                "  Install onnxocr (use --no-deps to avoid numpy<2 conflict):"
+            )
+            print(
+                "    pip install onnxocr --no-deps   # numpy >= 2 compatible"
             )
         print()
 

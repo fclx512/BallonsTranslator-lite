@@ -881,6 +881,7 @@ def _ensure_module_deps(
             import shutil
 
             success = True
+            failure_code = None
             has_hf_no_mirror = self._check_hf_no_mirror()
             failure_reason = ""  # human-readable summary for the dialog
 
