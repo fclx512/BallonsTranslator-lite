@@ -986,6 +986,7 @@ class MainWindow(mainwindow_cls):
                 self.conditional_save()
             self.imgtrans_proj.set_current_img(item.text())
             self.canvas.clear_undostack(update_saved_step=True)
+            self.canvas._fit_to_window = self.opening_dir or pcfg.fit_window_on_page_switch
             self.canvas.updateCanvas()
             self.st_manager.updateSceneTextitems()
             self.titleBar.setTitleContent(page_name=self.imgtrans_proj.current_img)

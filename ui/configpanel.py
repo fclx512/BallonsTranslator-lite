@@ -1630,13 +1630,30 @@ class ConfigPanel(Widget):
         interface_widget = QWidget()
         interface_layout = QVBoxLayout(interface_widget)
         interface_layout.setContentsMargins(0, 0, 0, 0)
-        interface_layout.setSpacing(0)
+        interface_layout.setSpacing(8)
 
         # Behavior sub-label
         behavior_label = ConfigTextLabel(
             self.tr("Behavior"), CONFIG_FONTSIZE_CONTENT - 2
         )
         interface_layout.addWidget(behavior_label)
+
+        # Fit image to window on open
+        self.fit_window_checker = QCheckBox(
+            self.tr("Fit image to window when opening")
+        )
+        self.fit_window_checker.stateChanged.connect(self.on_fit_window_changed)
+        interface_layout.addWidget(self.fit_window_checker)
+
+        # Sub-option: also fit on page switch
+        self.fit_window_page_checker = QCheckBox(
+            self.tr("Also fit when switching pages")
+        )
+        self.fit_window_page_checker.stateChanged.connect(
+            self.on_fit_window_page_changed
+        )
+        self.fit_window_page_checker.setVisible(False)
+        interface_layout.addWidget(self.fit_window_page_checker)
 
         # Animation mode
         anim_row = QHBoxLayout()
@@ -1799,6 +1816,14 @@ class ConfigPanel(Widget):
 
     def on_runcache_changed(self):
         pcfg.module.empty_runcache = self.empty_runcache_checker.isChecked()
+
+    def on_fit_window_changed(self):
+        checked = self.fit_window_checker.isChecked()
+        pcfg.open_image_fit_window = checked
+        self.fit_window_page_checker.setVisible(checked)
+
+    def on_fit_window_page_changed(self):
+        pcfg.fit_window_on_page_switch = self.fit_window_page_checker.isChecked()
 
     def on_keepline_clicked(self):
         pcfg.module.keep_exist_textlines = (
@@ -2060,6 +2085,10 @@ class ConfigPanel(Widget):
         self.empty_runcache_checker.setChecked(pcfg.module.empty_runcache)
         self.max_font_size_edit.setValue(pcfg.max_font_size)
         self.punctuation_position_combo.setCurrentIndex(pcfg.punctuation_position)
+
+        self.fit_window_checker.setChecked(pcfg.open_image_fit_window)
+        self.fit_window_page_checker.setVisible(pcfg.open_image_fit_window)
+        self.fit_window_page_checker.setChecked(pcfg.fit_window_on_page_switch)
 
         anim_idx = {0: 0, 60: 1, 30: 2, -1: 3}.get(pcfg.animation_fps, 0)
         self.anim_combo.setCurrentIndex(anim_idx)

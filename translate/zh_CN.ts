@@ -603,6 +603,16 @@
         <translation>行为</translation>
     </message>
     <message>
+        <location filename="..\ui\configpanel.py" line="1643" />
+        <source>Fit image to window when opening</source>
+        <translation>打开时适配图像到窗口</translation>
+    </message>
+    <message>
+        <location filename="..\ui\configpanel.py" line="1650" />
+        <source>Also fit when switching pages</source>
+        <translation>切换页面时也适配</translation>
+    </message>
+    <message>
         <location filename="..\ui\configpanel.py" line="1638" />
         <source>Animation</source>
         <translation>动画</translation>

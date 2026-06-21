@@ -1,6 +1,53 @@
 # 每日开发日志
 
-> 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。
+> 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。按照从新到旧的顺序撰写。
+
+## 2026-06-21
+
+### 动画控制补充：FadeLabel + CollapsibleSection
+
+**需求：** 设置面板"动画"项（`pcfg.animation_fps`）此前只控制了 `OverlaySlider`/`IndicatorListWidget`/`ConfigContent` 等 UI 面板动画，漏掉了两处画面感明显且有性能影响的动画。
+
+**改动：**
+1. `ui/custom_widget/label.py` — `FadeLabel.startFadeAnimation()`：动画关闭时跳过 1200ms 淡出，改为全不透明度瞬显、1.2s 后直接隐藏（`hide_timer`）。快速连续缩放时 timer 自动刷新，不会误隐藏。
+2. `ui/collapsible_section.py` — `CollapsibleSection.setExpanded()`：动画关闭时直接调用 `_apply_final_state()` 跳转到展开/收起终态，跳过 350ms 的 layout 过渡动画。
+
+**涉及文件：**
+- `ui/custom_widget/label.py`
+- `ui/collapsible_section.py`
+
+### PP-OCRv6 检测/识别分离
+
+**背景：** 原 `ocr_onnx.py` 通过 `ONNXPaddleOcr` 同时处理文字检测和识别，在实际管线中检测阶段由 `textdetector` 独立完成，OCR 阶段只需识别。两者耦合导致管线职责重叠。
+
+**改动：**
+1. `modules/ocr/ocr_onnx.py` — 重构为纯识别模式（recognition-only）：移除检测参数（`det_db_thresh`、`det_db_box_thresh`、`det_db_unclip_ratio`、`max_candidates`、`reading_order`）、移除 `det.onnx` 模型下载和加载、移除中心点匹配逻辑；改为直接使用 `TextRecognizer` 对 `blk.lines` 裁剪区域做批量识别，单次 batched call。
+2. `modules/textdetector/detector_paddlev6.py` — **新增**，PP-OCRv6 DBNet 文字检测器，通过 `TextDetector` 独立提供检测功能，与识别模块解耦。
+
+**涉及文件：**
+- `modules/ocr/ocr_onnx.py`
+- `modules/textdetector/detector_paddlev6.py`
+
+### 移除 OCR 启动强制覆盖
+
+**需求：** 此前 `launch.py` 在启动时将所有非 `none_ocr`/`llm_ocr` 的 OCR 模块强制重置为 `none_ocr`（避免本地模型文件缺失导致崩溃）。现在改为信任用户配置：无配置时默认 `none_ocr`（模块默认值），有用户配置时原样保留。
+
+**改动：** 移除 `launch.py` 中 OCR 强制覆盖代码块，替换为注释说明。
+
+**涉及文件：**
+- `launch.py`
+
+### 打开图片时自适应窗口选项
+
+**需求：** 设置面板 Interface 下新增"打开图片时自适应窗口"开关，开启后以 95% 比例自动适配视口；子选项控制切换页面时是否同样自适应（默认关，保持当前缩放）。
+
+**改动：**
+1. `utils/config.py` — `ProgramConfig` 新增 `open_image_fit_window`（主开关）、`fit_window_on_page_switch`（切换页面时也自适应）
+2. `ui/canvas.py` — 新增 `_fitToWindow()` 方法计算适配比例；`updateCanvas()` 根据配置和标志决定是否自适应；新增 `_fit_to_window` 标志供 MainWindow 设置
+3. `ui/mainwindow.py` — `pageListCurrentItemChanged` 中根据 `opening_dir` 和配置设置标志
+4. `ui/configpanel.py` — Interface 区段加两个 QCheckBox，子选项随主开关显隐；`interface_layout.setSpacing(0)` → `setSpacing(8)` 修复挤在一起的问题
+
+**涉及文件：** `utils/config.py`、`ui/canvas.py`、`ui/mainwindow.py`、`ui/configpanel.py`
 
 ---
 
@@ -70,137 +117,3 @@
 
 ---
 
-## 2026-06-17
-
-### 快捷键面板翻译缺失修复 + CLAUDE.md 入库
-
-**问题：** 设置中的快捷键编辑面板（`ShortcutEditor` / `_ShortcutRow`）部分文字显示为英文。根因是 `_ACTION_NAMES`（28个动作名）和 `_SHORTCUT_GROUPS`（6个分组名）的 ts 条目从未添加到 `translate/zh_CN.ts` 中——这些字符串通过 `self.tr(variable)` 间接调用，i18n_check 只将它们标记为 orphan 而不报错，容易被忽略。
-
-**修复：**
-1. 补全 `_ShortcutRow` 上下文 28 条动作名翻译（"Page Up"、"Zoom In"、"Bold" 等）
-2. 新建 `ShortcutEditor` 上下文 6 条分组名翻译（"Navigation"、"View"、"Edit" 等）
-3. 重新编译 `zh_CN.qm`
-4. CLAUDE.md 的 i18n 节添加说明：`self.tr(variable)` 间接调用的翻译需手动维护
-
-**CLAUDE.md 入库决策：** 从 `.gitignore` 移除 CLAUDE.md，提交到仓库实现多设备 git 同步。个人偏好走 `~/.claude/CLAUDE.md`。
-
----
-
-## 2026-06-17（续）
-
-### PSD 二进制导出 — UnitFloat 顺序修复 + 文字栅格化根治
-
-**问题：** `utils/psd_descriptor.py` 的 `_write_descriptor_value` 中 UnitFloat 的字段顺序写反了。PS 规范要求 `UntF` → unit_id(`#Pnt`/`#Pxl`) → `f64(value)`，代码却写了 `UntF` → f64 → unit_id。这是导致所有 PSD 导出文字层在 PS 中栅格化（不可编辑）的根本原因。
-
-**修复：** `psd_descriptor.py:213-221` 交换 `write_f64(value)` 和 `write_signature(unit_id)` 的顺序。
-
-**连带修复（第 2 轮）：**
-- TySh 描述符从 8 项增至 9 项（加 `TxMg`）
-- `AntA` 枚举值改为 `AnCr`
-- bounds 单位从 `#Pxl` 改为 `#Pnt`
-- 新增 `unit_points()` / `unit_float()` 方法
-
-**验证：** 50 个测试通过；横排/竖排文字、中/英文、含 `0x5C` 反斜杠字节的字体名均可在 PS 中编辑。唯特定项目数据仍栅格化（原因未明，无法复现）。
-
-**涉及文件：** `utils/psd_descriptor.py`、`utils/psd_engine_data.py`、`utils/psd_binary_exporter.py`、`docs/psd_binary_export.md`
-
-**涉及文件：**
-- `translate/zh_CN.ts` / `.qm`
-- `CLAUDE.md`
-- `.gitignore`
-
----
-
-### 底部快捷栏模块排序统一
-
-**问题：** 底部快捷栏的下拉列表顺序与设置面板不一致。设置面板始终将 `none*` 模块排在最前加分隔线，再排其余模块；底部快捷栏则直接按 registry 插入顺序排列。此外 OCR 默认选中 `paddleocr_v6_onnx`，启动时若模型文件缺失会出错。
-
-**修复：**
-
-1. **排序统一** — `setupConfig()` 中三个底部选择器（翻译器、OCR、文本检测）均改为：`none*` 模块 → 分隔线 → 其余模块，与设置面板的 `ModuleConfigParseWidget.addModulesParamWidgets()` 分组逻辑一致。
-2. **默认值矫正** — `launch.py` 中 OCR 启动回退逻辑从"选择性检测已知模块依赖"简化为：只要预存值不是 `none_ocr`/`llm_ocr`，强制重置为 `none_ocr`，避免模型缺失导致的启动错误。
-3. **初始选中** — 文本检测和翻译器原先在 `setupConfig` 中没有显式设置选中值，依赖后台线程完成后才更新；现统一在列表填充后即从 `pcfg` 读取当前值设置选中项。
-
-**涉及文件：**
-- `ui/mainwindow.py` (L411-460)
-- `launch.py` (L373-379)
-
-### DeepSeek 翻译报"结构不匹配"修复
-
-**问题：** DeepSeek API 翻译时总提示 `[ERROR: Structure Mismatch]`，实际 API 调用从未发出。
-
-**根因：** `modules/translators/trans_llm_api.py` 中 `frequency_penalty` / `presence_penalty` 用 `if fp is not None:` 判空，但 DeepSeek 内置 profile 中这两个字段是空字符串 `""`，`"" is not None` 为 `True`，`float("")` 抛出 `ValueError`。错误在 `_request_translation` 的 try 块外，被 `_translate` 的 `except ValueError` 接住，误判为"翻译结构不匹配"重试 2 次后失败。
-
-**修复：** `if fp is not None:` → `if fp:`（空字符串是 falsy），跳过空值转换。
-
-**涉及文件：**
-- `modules/translators/trans_llm_api.py` (L479-484)
-
-### Run 对话框上下文策略描述自动换行 + 补全翻译
-
-**问题：** 启用"上下文翻译（beta）"后，展开的策略描述文本因 `mode_label` 未开启 `setWordWrap` 横向撑开窗口，影响上方页数选择横条；且"Full context..."字符串翻译遗漏。
-
-**修复：**
-1. `ui/mainwindow.py` — `mode_label` 添加 `setWordWrap(True)`，文本纵向增高不横向撑开
-2. `translate/zh_CN.ts` — 补全"全文上下文（%1页，以之前所有翻译为参考）"
-
-**涉及文件：**
-- `ui/mainwindow.py` (L2137)
-- `translate/zh_CN.ts` / `.qm`
-
----
-
-## 2026-06-16
-
-### PS 风格文本框对齐功能（Smart Guides + 批量对齐）
-
-**需求：** 画布区文本框添加 PS 风格对齐——拖拽时吸附到相邻块边缘/中心并显示品红参考线，选中多块后右键菜单执行批量对齐/分布操作。可开关。
-
-**实现：**
-
-1. **Smart Guides（默认开启）：** `TextBlkItem.mouseMoveEvent` → `_apply_snap()` → `compute_snap()` 计算吸附位置 → `setPos` 吸附 + `SnapGuideItem` 渲染品红虚线。参考线最初用 `drawForeground()` 但因 Qt 只绘 dirty 区域导致不稳定，改为独立 `QGraphicsItem`（Z=100）后稳定。
-
-2. **批量对齐/分布：** 右键菜单 "Align" 子菜单（8 操作）→ `align_textblks` Signal → `SceneTextManager.onAlignTextBlks()` → 复用 `MoveBlkItemsCommand` undo。
-
-3. **开关：** 右键菜单 "Snap Alignment" toggle → `Canvas.alignment_enabled`。
-
-**涉及文件：**
-- `utils/text_alignment.py` — 新增，纯计算（`compute_snap`, `align_*`, `distribute_*`）
-- `ui/canvas.py` — 新增 `SnapGuideItem`、`align_textblks` Signal、context menu、开关
-- `ui/textitem.py` — `mouseMoveEvent`/`mouseReleaseEvent` 中接入吸附逻辑
-- `ui/scenetext_manager.py` — `onAlignTextBlks()` handler
-- `translate/zh_CN.ts` / `.qm` — 新增 10 条翻译
-
----
-
-### uv `--prefer-binary` Bug 修复验证
-
-**问题：** `ui/module_manager.py` 和 `ui/dependency_dialog.py` 中 uv runner 错误地传递了 `--prefer-binary` 参数，而 uv 不支持此参数。
-
-**修复：**
-1. `_pip_install()` 分离 `is_uv` 判断，uv runner 干净无 `--prefer-binary`/`--timeout`
-2. `_detect_installer()` 返回 `(cmd_base, using_uv)` 二元组，uv 命令不含 `--prefer-binary`
-3. uv 失败后自动 fallback 到 pip
-
-**涉及文件：**
-- `ui/module_manager.py` (L908-937)
-- `ui/dependency_dialog.py` (L150-198)
-
----
-
-### 便携包构建系统设计实现
-
-**架构：三层分发**
-- Layer 1 — 便携包 (15.2 MB ZIP)：Python 3.12 embeddable + 应用代码 + `requirements_core.txt` + `run.bat`
-- Layer 2 — OCR 模型包（待实现）：onnxruntime + onnxocr + PP-OCRv6 模型
-- Layer 3 — GPU 增强包（待实现）：PyTorch + CUDA + ultralytics/diffusers
-
-**新建文件：**
-- `scripts/build_portable.py` — 8 步构建脚本
-- `.github/workflows/build-portable.yml` — GitHub Actions CI
-- `config/requirements_core.txt` — 核心依赖列表（构建时从 pyproject.toml 自动生成）
-- `pyproject.toml` — 添加 `version = "0.2.0"`
-
-**注意：** `release/` 和 `.build_cache/` 应加入 `.gitignore`。
-
----

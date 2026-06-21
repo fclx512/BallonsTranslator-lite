@@ -1,7 +1,7 @@
 from typing import List, Tuple, Union
 
 import numpy as np
-from qtpy.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, Signal
+from qtpy.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, QTimer, Signal
 from qtpy.QtGui import QBrush, QColor, QMouseEvent, QPainter, QPen, QPixmap, QWheelEvent
 from qtpy.QtWidgets import QDialog, QGraphicsOpacityEffect, QLabel, QMenu
 
@@ -29,10 +29,22 @@ class FadeLabel(QLabel):
         )
         self.fadeAnimation.setEasingCurve(QEasingCurve.Type.InOutExpo)
         self.fadeAnimation.finished.connect(self.hide)
+        self.hide_timer = QTimer(self)
+        self.hide_timer.setSingleShot(True)
+        self.hide_timer.timeout.connect(self.hide)
         self.setHidden(True)
         self.gv = None
 
     def startFadeAnimation(self):
+        from utils.config import pcfg
+
+        if pcfg.animation_fps < 0:
+            self.show()
+            self.fadeAnimation.stop()
+            self.graphicsEffect().setOpacity(1.0)
+            self.hide_timer.start(1200)
+            return
+        self.hide_timer.stop()
         self.show()
         self.fadeAnimation.stop()
         self.fadeAnimation.start()

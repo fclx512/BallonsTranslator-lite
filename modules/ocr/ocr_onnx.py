@@ -1,11 +1,11 @@
-"""PP-OCRv6 ONNX Runtime OCR module for BallonsTranslator-lite.
+"""PP-OCRv6 ONNX Runtime OCR module — recognition‑only mode.
 
-Uses ``ONNXPaddleOcr`` from the ``onnxocr`` package to run PP-OCRv6 medium
-models via ONNX Runtime.  Avoids the PaddlePaddle framework dependency (~400 MB)
-and its CUDA context conflict with PyTorch.
+Uses ``TextRecognizer`` from the ``onnxocr`` package to run PP-OCRv6
+recognition via ONNX Runtime.  Operates on pre‑detected text blocks
+(cropped regions), *not* the full image.
 
-The medium model is bundled under ``data/models/ppocrv6_onnx/medium/`` and
-auto-downloaded on first use.
+The recognition model is bundled under ``data/models/ppocrv6_onnx/medium/``
+and auto‑downloaded on first use.
 """
 
 import os
@@ -19,6 +19,7 @@ from modules.ocr.base import DEVICE_SELECTOR, OCRBase, TextBlock, register_OCR
 # ── Paths ────────────────────────────────────────────────────────────────────
 
 _MODEL_DIR = osp.join("data", "models", "ppocrv6_onnx")
+_MODEL_SIZE = "medium"
 
 
 # ── Module registration ──────────────────────────────────────────────────────
@@ -30,56 +31,15 @@ class PaddleOCRv6ONNX(OCRBase):
         "device": DEVICE_SELECTOR(),
         "model_size": {
             "type": "selector",
-            "options": ["medium"],
-            "value": "medium",
-            "description": "Model size: medium (34.5M, most accurate)",
-        },
-        "lang": {
-            "type": "selector",
-            "options": [
-                "ch",
-                "en",
-                "japan",
-                "korean",
-                "french",
-                "german",
-                "italian",
-                "spanish",
-                "portuguese",
-                "russian",
-                "arabic",
-                "tamil",
-            ],
-            "value": "ch",
-            "description": "Language — 'ch' covers Chinese + English",
-        },
-        "det_db_thresh": {
-            "value": 0.2,
-            "description": "Detection score threshold (lower = more detections)",
-        },
-        "det_db_box_thresh": {
-            "value": 0.45,
-            "description": "Detection box threshold (lower = more boxes)",
-        },
-        "det_db_unclip_ratio": {
-            "value": 1.4,
-            "description": "Detection box unclip ratio (higher = looser boxes)",
-        },
-        "max_candidates": {
-            "value": 3000,
-            "description": "Maximum candidate detection boxes",
-        },
-        "reading_order": {
-            "type": "selector",
-            "options": ["auto", "ltr", "rtl"],
-            "value": "auto",
-            "description": "Reading order: ltr=left-to-right, rtl=right-to-left (manga), auto=detect",
+            "options": [_MODEL_SIZE],
+            "value": _MODEL_SIZE,
+            "description": "Model size (only medium available)",
         },
         "rec_batch_num": {
             "value": 6,
             "description": "Recognition batch size (higher = faster, more VRAM)",
         },
-        "description": "PP-OCRv6 ONNX — medium model via ONNX Runtime (no PaddlePaddle)",
+        "description": "PP-OCRv6 ONNX recognition-only — crops text blocks then recognizes via ONNX Runtime",
     }
 
     requires_packages = ["onnxruntime", "onnxocr"]
@@ -88,90 +48,30 @@ class PaddleOCRv6ONNX(OCRBase):
     # because the lazy AST scanner (SafeEval) cannot resolve string
     # interpolation or osp.join at scan time.
     download_file_list = [
-        # ── medium ──
-        {
-            "url": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_onnx/resolve/main/inference.onnx",
-            "files": "data/models/ppocrv6_onnx/medium/det.onnx",
-        },
         {
             "url": "https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx/resolve/main/inference.onnx",
             "files": "data/models/ppocrv6_onnx/medium/rec.onnx",
         },
     ]
 
-    _load_model_keys = {"_onnx_ocr"}
+    _load_model_keys = {"recognizer"}
 
     def __init__(self, **params):
         super().__init__(**params)
-        self._onnx_ocr = None
+        self.recognizer = None
 
     # ── Model path helpers ───────────────────────────────────────────────
 
     @staticmethod
     def _model_path(name: str) -> str:
-        """Resolve path to a model file in the ``medium`` subdirectory."""
-        return osp.abspath(osp.join(_MODEL_DIR, "medium", name))
-
-    # ── Detection sorting for reading order ─────────────────────────────
-
-    def _sort_detections(self, detections: list) -> list:
-        """Sort OCR detections according to ``reading_order``.
-
-        Returns a new sorted list.  Each detection is ``[box, (text, score)]``
-        where ``box`` is a 4×2 list ``[[x1,y1],[x2,y2],[x3,y3],[x4,y4]]``.
-        """
-        if not detections:
-            return detections
-
-        order = self.get_param_value("reading_order")
-
-        # Compute centre point for each detection
-        centres = []
-        for det in detections:
-            if len(det) < 1:
-                continue
-            box = np.array(det[0], dtype=np.float32)
-            cx = float(box[:, 0].mean())
-            cy = float(box[:, 1].mean())
-            centres.append((cx, cy))
-
-        if not centres:
-            return detections
-
-        # Auto-detect: if most boxes are tall → vertical (RTL)
-        if order == "auto":
-            tall = 0
-            for det in detections:
-                if len(det) < 1:
-                    continue
-                box = np.array(det[0], dtype=np.float32)
-                w = float(box[:, 0].max() - box[:, 0].min())
-                h = float(box[:, 1].max() - box[:, 1].min())
-                if h > w:
-                    tall += 1
-            order = "rtl" if tall > len(detections) // 2 else "ltr"
-
-        # Create index-sorted list so we never lose detections
-        if order == "rtl":
-            # Right-to-left: sort by x descending, then y ascending
-            sorted_indices = sorted(
-                range(len(detections)),
-                key=lambda i: (-centres[i][0], centres[i][1]),
-            )
-        else:
-            # Left-to-right (default): sort by y ascending, then x ascending
-            sorted_indices = sorted(
-                range(len(detections)),
-                key=lambda i: (centres[i][1], centres[i][0]),
-            )
-
-        return [detections[i] for i in sorted_indices]
+        """Resolve path to a model file in the model-size subdirectory."""
+        return osp.abspath(osp.join(_MODEL_DIR, _MODEL_SIZE, name))
 
     # ── Device / param updates ──────────────────────────────────────────
 
     def updateParam(self, param_key: str, param_content):
         super().updateParam(param_key, param_content)
-        self._onnx_ocr = None  # force re-init on next call
+        self.recognizer = None  # force re-init on next call
 
     # ── Model lifecycle ─────────────────────────────────────────────────
 
@@ -194,10 +94,11 @@ class PaddleOCRv6ONNX(OCRBase):
             os.add_dll_directory(lib_dir)
 
     def _load_model(self):
-        """Initialise the OnnxOCR engine.
+        """Initialise the OnnxOCR recognizer.
 
         Called by ``BaseModule.load_model()`` after dependency & model-file
-        checks have passed.
+        checks have passed.  Only loads the recognition model (``rec.onnx``);
+        text detection is handled by a separate detector module.
         """
         # 1. Add PyTorch's bundled CUDA 12.x runtime DLLs to the DLL search
         #    path.  onnxruntime-gpu needs ``cublasLt64_12.dll`` etc. at runtime,
@@ -212,8 +113,6 @@ class PaddleOCRv6ONNX(OCRBase):
         #    (203 ms vs. 11.6 ms with EXHAUSTIVE).
         import onnxruntime as _ort
 
-        # Warn early if user selected CUDA but onnxruntime-gpu is not installed.
-        # The import succeeds with onnxruntime (CPU), but providers will lack CUDA.
         _providers = _ort.get_available_providers()
         _use_gpu = self.get_param_value("device") == "cuda"
         if _use_gpu and "CUDAExecutionProvider" not in _providers:
@@ -240,15 +139,14 @@ class PaddleOCRv6ONNX(OCRBase):
 
         _pb.PredictBase.get_onnx_session = _patched_session
 
-        from onnxocr.onnx_paddleocr import ONNXPaddleOcr
+        # 3. Create the recognizer directly — no detector involved.
+        from onnxocr.predict_rec import TextRecognizer
 
-        det_path = self._model_path("det.onnx")
+        import argparse
+
         rec_path = self._model_path("rec.onnx")
         dict_path = osp.abspath(osp.join(_MODEL_DIR, "ppocrv6_dict_proper.txt"))
-
-        # Validate model files exist (helpful error if download failed)
         for p, label in [
-            (det_path, "medium/det.onnx"),
             (rec_path, "medium/rec.onnx"),
             (dict_path, "dict"),
         ]:
@@ -257,27 +155,21 @@ class PaddleOCRv6ONNX(OCRBase):
                     f"PP-OCRv6 ONNX model file not found: {p}\n\n"
                     "Try restarting the app so model files are auto-downloaded,\n"
                     "or download them manually from:\n"
-                    "  https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_onnx\n"
                     "  https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_rec_onnx"
                 )
 
-        device = self.get_param_value("device")
-        use_gpu = device == "cuda"
-
-        self._onnx_ocr = ONNXPaddleOcr(
-            det_model_dir=det_path,
+        args = argparse.Namespace(
+            rec_algorithm="SVTR_LCNet",
             rec_model_dir=rec_path,
-            rec_char_dict_path=dict_path,
-            use_angle_cls=False,
-            det_db_thresh=self.get_param_value("det_db_thresh"),
-            det_db_box_thresh=self.get_param_value("det_db_box_thresh"),
-            det_db_unclip_ratio=self.get_param_value("det_db_unclip_ratio"),
-            max_candidates=self.get_param_value("max_candidates"),
-            use_gpu=use_gpu,
+            rec_image_shape="3, 48, 320",
             rec_batch_num=self.get_param_value("rec_batch_num"),
-            drop_score=0.5,
+            max_text_length=25,
+            rec_char_dict_path=dict_path,
             use_space_char=True,
+            use_gpu=_use_gpu,
+            drop_score=0.5,
         )
+        self.recognizer = TextRecognizer(args)
 
         # 4. On GPU, CUDA kernel caches are per-shape — any change to the
         #    batch dimension *or* the spatial width invalidates the cache
@@ -287,21 +179,20 @@ class PaddleOCRv6ONNX(OCRBase):
         #    destroying the cache across calls.
         #
         #    Two-part fix:
-        #      a) Force ``resize_norm_img`` to *always* pad to ``rec_image_shape``
-        #         width (320) — wide crops get clamped, which is fine because the
-        #         model was trained at this width.
+        #      a) Force ``resize_norm_img`` to *always* pad to
+        #         ``rec_image_shape`` width (320) — wide crops get clamped,
+        #         which is fine because the model was trained at this width.
         #      b) Pad the last batch to ``rec_batch_num`` entries so the batch
         #         dimension never changes either.
-        if use_gpu:
-            _orig_resize = self._onnx_ocr.text_recognizer.resize_norm_img
+        if _use_gpu:
+            _orig_resize = self.recognizer.resize_norm_img
 
             def _fixed_resize(img, max_wh_ratio):
                 result = _orig_resize(img, max_wh_ratio)
-                # result shape: (C, H, W) — clamp W to rec_image_shape[2]
-                import numpy as _np
-
                 _, _, fixed_w = (3, 48, 320)  # rec_image_shape
                 if result.shape[2] != fixed_w:
+                    import numpy as _np
+
                     fixed = _np.zeros(
                         (result.shape[0], result.shape[1], fixed_w), dtype=_np.float32
                     )
@@ -310,17 +201,15 @@ class PaddleOCRv6ONNX(OCRBase):
                     result = fixed
                 return result
 
-            self._onnx_ocr.text_recognizer.resize_norm_img = _fixed_resize
+            self.recognizer.resize_norm_img = _fixed_resize
 
-            self._onnx_ocr.text_recognizer.__class__.__call__ = (
-                self._make_uniform_batch_rec(
-                    self._onnx_ocr.text_recognizer,
-                    self.get_param_value("rec_batch_num"),
-                )
+            self.recognizer.__class__.__call__ = self._make_uniform_batch_rec(
+                self.recognizer,
+                self.get_param_value("rec_batch_num"),
             )
 
     def unload_model(self, empty_cache=False):
-        self._onnx_ocr = None
+        self.recognizer = None
 
     # ── GPU uniform-batch patch ─────────────────────────────────────────
 
@@ -352,74 +241,57 @@ class PaddleOCRv6ONNX(OCRBase):
 
         return _patched
 
-    # ── OCR ─────────────────────────────────────────────────────────────
-
-    def _ocr_image(self, img: np.ndarray) -> list:
-        """Run OnnxOCR on the full image; return raw result list.
-
-        Returns the old PaddleOCR-style format::
-
-            [[[box, (text, score)], ...]]
-
-        where ``box`` is a 4×2 list of corner points
-        ``[[x1,y1], [x2,y2], [x3,y3], [x4,y4]]``.
-        """
-        if self._onnx_ocr is None:
-            self.load_model()
-        return self._onnx_ocr.ocr(img)
-
-    def _match_results_to_blocks(self, raw_result: list, blk_list: List[TextBlock]):
-        """Assign recognised text to TextBlocks via centre-point matching.
-
-        OnnxOCR returns the old PaddleOCR format where each detection is
-        ``[box, (text, score)]``.  The box centre point is tested against
-        each TextBlock's axis-aligned bounding box.
-        """
-        if not raw_result or not raw_result[0]:
-            return
-
-        detections = self._sort_detections(raw_result[0])
-
-        assigned: dict[int, list[str]] = {i: [] for i in range(len(blk_list))}
-        blk_boxes = [blk.xyxy for blk in blk_list]
-
-        for det in detections:
-            if len(det) < 2:
-                continue
-            box, (text, score) = det
-            if not text or float(score) < 0.3:
-                continue
-
-            poly = np.array(box, dtype=np.float32)
-            cx = float(poly[:, 0].mean())
-            cy = float(poly[:, 1].mean())
-
-            for idx, (x1, y1, x2, y2) in enumerate(blk_boxes):
-                if x1 <= cx <= x2 and y1 <= cy <= y2:
-                    assigned[idx].append(text)
-                    break
-
-        for idx, texts in assigned.items():
-            if texts:
-                blk_list[idx].text = texts
-
-    # ── OCRBase interface ───────────────────────────────────────────────
+    # ── OCRBase interface — crop-based recognition ──────────────────────
 
     def _ocr_blk_list(
         self, img: np.ndarray, blk_list: List[TextBlock], *args, **kwargs
     ):
-        raw = self._ocr_image(img)
-        self._match_results_to_blocks(raw, blk_list)
+        """Recognise text in pre‑detected blocks by cropping each polygon.
+
+        Iterates each ``TextBlock.lines``, crops the region from the source
+        image using perspective-correct cropping, and runs the ONNX
+        recognizer on all crops in a single batched call.
+        """
+        if not blk_list:
+            return
+
+        if self.recognizer is None:
+            self.load_model()
+
+        from onnxocr.utils import get_rotate_crop_image
+
+        # Collect all line crops alongside their block index
+        all_crops: list[np.ndarray] = []
+        crop_to_blk: list[int] = []  # parallel: blk index for each crop
+
+        for blk_idx, blk in enumerate(blk_list):
+            for line in blk.lines:
+                poly = np.array(line, dtype=np.float32)
+                crop = get_rotate_crop_image(img, poly)
+                all_crops.append(crop)
+                crop_to_blk.append(blk_idx)
+
+        if not all_crops:
+            return
+
+        # Single batched call to the recognizer
+        rec_results = self.recognizer(all_crops)
+
+        # Group recognised text back to each block
+        block_texts: list[list[str]] = [[] for _ in range(len(blk_list))]
+        for i, blk_idx in enumerate(crop_to_blk):
+            if i < len(rec_results):
+                text, score = rec_results[i]
+                if text and score >= 0.3:
+                    block_texts[blk_idx].append(text)
+
+        for blk_idx, texts in enumerate(block_texts):
+            if texts:
+                blk_list[blk_idx].text = texts
 
     def ocr_img(self, img: np.ndarray) -> str:
-        raw = self._ocr_image(img)
-        if not raw or not raw[0]:
-            return ""
-        texts = []
-        for det in self._sort_detections(raw[0]):
-            if len(det) < 2:
-                continue
-            _, (text, _) = det
-            if text:
-                texts.append(text)
-        return "\n".join(texts)
+        self.logger.warning(
+            "ocr_img() is not supported in recognition-only mode — "
+            "use a text detector + OCR pipeline instead."
+        )
+        return ""

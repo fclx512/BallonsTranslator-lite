@@ -103,6 +103,12 @@ class CollapsibleSection(Widget):
             self._anim.setStartValue(self._cached_height)
             self._anim.setEndValue(0)
 
+        from utils.config import pcfg
+
+        if pcfg.animation_fps < 0:
+            self._apply_final_state()
+            return
+
         if animated:
             self._anim.start()
         else:

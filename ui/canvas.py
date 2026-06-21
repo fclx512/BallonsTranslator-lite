@@ -410,6 +410,7 @@ class Canvas(QGraphicsScene):
 
         self.drop_folder: str = None
         self.block_selection_signal = False
+        self._fit_to_window = True  # fit-to-window flag, set by MainWindow before updateCanvas()
 
         im_rect = QRectF(0, 0, C.SCREEN_W, C.SCREEN_H)
         self.baseLayer.setRect(im_rect)
@@ -673,6 +674,30 @@ class Canvas(QGraphicsScene):
         if scale_changed:
             self.adjustScrollBar(self.gv.horizontalScrollBar(), factor)
             self.adjustScrollBar(self.gv.verticalScrollBar(), factor)
+            self.scalefactor_changed.emit()
+        self.setSceneRect(
+            0,
+            0,
+            self.baseLayer.sceneBoundingRect().width(),
+            self.baseLayer.sceneBoundingRect().height(),
+        )
+
+    def _fitToWindow(self):
+        """Scale image to fit viewport with a small margin."""
+        view_w = self.gv.geometry().width()
+        view_h = self.gv.geometry().height()
+        img_w = self.baseLayer.rect().width()
+        img_h = self.baseLayer.rect().height()
+        if img_w <= 0 or img_h <= 0:
+            return
+        margin = 0.95
+        fit_scale = min(view_w / img_w, view_h / img_h) * margin
+        fit_scale = np.clip(fit_scale, CANVAS_SCALE_MIN, CANVAS_SCALE_MAX)
+        scale_changed = self.scale_factor != fit_scale
+        self.scale_factor = fit_scale
+        self.baseLayer.setScale(self.scale_factor)
+        self.txtblkShapeControl.updateScale(self.scale_factor)
+        if scale_changed:
             self.scalefactor_changed.emit()
         self.setSceneRect(
             0,
@@ -1073,9 +1098,11 @@ class Canvas(QGraphicsScene):
 
             im_rect = pixmap.rect()
             self.baseLayer.setRect(QRectF(im_rect))
-            if im_rect != self.sceneRect():
-                self.setSceneRect(0, 0, im_rect.width(), im_rect.height())
-            self.scaleImage(1)
+            if pcfg.open_image_fit_window and self._fit_to_window:
+                self._fitToWindow()
+            else:
+                self.scaleImage(1)
+            self._fit_to_window = False  # reset after use
 
         self.setDrawingLayer()
 

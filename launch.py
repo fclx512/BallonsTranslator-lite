@@ -21,7 +21,7 @@ import utils.shared as shared  # noqa: E402
 from utils.env_diagnostic import detect_gpu_info  # noqa: E402
 
 BRANCH = "main"
-VERSION = "beta-20260617"
+VERSION = "beta-20260621"
 
 python = sys.executable
 git = os.environ.get("GIT", "git")
@@ -370,13 +370,9 @@ def _ensure_module_fallback():
         pcfg.module.textdetector = "none"
         changed.append(f"textdetector: {_old} → none")
 
-    # ── OCR: force none_ocr as default to avoid model-missing errors ──
-    # Any "real" OCR model needs model files on disk which may not be present
-    # at startup; user can switch manually via the bottom-bar dropdown.
-    _ocr = pcfg.module.ocr
-    if _ocr not in ("none_ocr", "llm_ocr"):
-        pcfg.module.ocr = "none_ocr"
-        changed.append(f"OCR: {_ocr} → none_ocr (forced default)")
+    # ── OCR: rely on config default (none_ocr) or user's saved choice ──
+    # Previously this block forcibly reset non-none/non-llm OCR modules back
+    # to none_ocr; now we trust whatever the user configured.
 
     # ── Inpainter: all real inpainters need torch ──
     if not _has_torch and pcfg.module.inpainter not in ("none",):

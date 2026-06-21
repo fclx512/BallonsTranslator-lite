@@ -228,6 +228,8 @@ class ProgramConfig(Config):
         default_factory=lambda: [1.0, 0.8, 0.6, 0.4, 0.2]
     )
     animation_fps: int = 0  # 0=auto, 30=30fps, 60=60fps, -1=disabled
+    open_image_fit_window: bool = False
+    fit_window_on_page_switch: bool = False
     show_text_style_preset: bool = True
     expand_tstyle_panel: bool = True
     show_text_effect_panel: bool = True
