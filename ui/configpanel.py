@@ -31,6 +31,7 @@ from qtpy.QtWidgets import (
     QSizePolicy,
     QSpacerItem,
     QSpinBox,
+    QStackedWidget,
     QStyle,
     QStyledItemDelegate,
     QVBoxLayout,
@@ -1267,6 +1268,28 @@ class MCPInfoDialog(QDialog):
             webbrowser.open(guide.as_uri())
 
 
+class _DeadLayout:
+    """No-op layout target: addWidget(head_widget) registers it as a page."""
+
+    def addWidget(self, widget):
+        ConfigPanel._active_panel._add_page(widget)
+
+
+class _DeadBlock:
+    """Stands in for the old ConfigBlock during paged layout. Sections built
+    here are registered as pages on the active ConfigPanel's pageStack."""
+
+    def __init__(self, header: str):
+        self.header = header
+        self.vlayout = _DeadLayout()
+        self.subblock_list = []
+
+    def addGroupedBlock(self, group_title, widget, object_name=None, name=None, description=None):
+        return ConfigPanel._active_panel._add_grouped_page(
+            group_title, widget, object_name, name, description
+        )
+
+
 class ConfigPanel(Widget):
     save_config = Signal()
     unload_models = Signal()
@@ -1276,14 +1299,26 @@ class ConfigPanel(Widget):
     shortcuts_changed = Signal()
     presets_changed = Signal()
 
+    # Active instance used by _DeadBlock/_DeadLayout to find the page stack
+    # during __init__ construction.
+    _active_panel: "ConfigPanel | None" = None
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setObjectName("ConfigPanel")
+        ConfigPanel._active_panel = self
+        self._modal_ref = None  # OverlayModal, injected by MainWindow
 
-        self.configContent = ConfigContent()
-
-        dlConfigPanel = self.addConfigBlock(self.tr("DL Module"))
-        generalConfigPanel = self.addConfigBlock(self.tr("General"))
+        # Right-hand side is now a page stack: each nav item switches a page
+        # (no long scroll). ``configContent`` is kept as a back-compat alias
+        # for ``pageStack`` to minimize external direct-access churn.
+        self.pageStack = QStackedWidget()
+        self.configContent = self.pageStack
+        # Map: section_widget (PanelGroupBox) -> page index in pageStack
+        self._page_index: dict = {}
+        # Dead blocks retained for compatibility; sections live in pageStack
+        dlConfigPanel = _DeadBlock(self.tr("DL Module"))
+        generalConfigPanel = _DeadBlock(self.tr("General"))
 
         label_text_det = self.tr("Text Detection")
         label_text_ocr = self.tr("OCR")
@@ -1295,6 +1330,7 @@ class ConfigPanel(Widget):
 
         # === Models group ===
         models_group = PanelGroupBox(self.tr("Models"))
+        self.models_group = models_group
         models_vlayout = models_group.contentLayout()
         models_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
         models_vlayout.setSpacing(4)
@@ -1314,27 +1350,18 @@ class ConfigPanel(Widget):
         self.load_model_checker.stateChanged.connect(self.on_load_model_changed)
         self.empty_runcache_checker.stateChanged.connect(self.on_runcache_changed)
 
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(6)
-        btn_row.setContentsMargins(24, 4, 24, 4)
-
         unload_btn = QPushButton(self.tr("Unload All Models"))
-        unload_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
         unload_btn.clicked.connect(self.unload_models)
-        btn_row.addWidget(unload_btn)
+        models_vlayout.addWidget(unload_btn)
 
         profiles_btn = QPushButton(self.tr("Manage API Profiles..."))
-        profiles_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
         profiles_btn.clicked.connect(self._open_profile_manager)
-        btn_row.addWidget(profiles_btn)
-
-        models_vlayout.addLayout(btn_row)
-        dlConfigPanel.vlayout.addWidget(models_group)
+        models_vlayout.addWidget(profiles_btn)
 
         self.detect_config_panel = TextDetectConfigPanel(
             self.tr("Detector"), scrollWidget=self
         )
-        self.detect_sub_block = dlConfigPanel.addGroupedBlock(
+        detect_group, self.detect_sub_block = self._build_grouped_widget(
             label_text_det, self.detect_config_panel, object_name="GroupDetect"
         )
         self.detect_config_panel.keep_existing_checker.clicked.connect(
@@ -1342,23 +1369,47 @@ class ConfigPanel(Widget):
         )
 
         self.ocr_config_panel = OCRConfigPanel(self.tr("OCR"), scrollWidget=self)
-        self.ocr_sub_block = dlConfigPanel.addGroupedBlock(
+        ocr_group, self.ocr_sub_block = self._build_grouped_widget(
             label_text_ocr, self.ocr_config_panel, object_name="GroupOCR"
         )
 
         self.inpaint_config_panel = InpaintConfigPanel(
             self.tr("Inpainter"), scrollWidget=self
         )
-        self.inpaint_sub_block = dlConfigPanel.addGroupedBlock(
+        inpaint_group, self.inpaint_sub_block = self._build_grouped_widget(
             label_inpaint, self.inpaint_config_panel, object_name="GroupInpaint"
         )
 
         self.trans_config_panel = TranslatorConfigPanel(
             label_translator, scrollWidget=self
         )
-        self.trans_sub_block = dlConfigPanel.addGroupedBlock(
+        trans_group, self.trans_sub_block = self._build_grouped_widget(
             label_translator, self.trans_config_panel, object_name="GroupTranslate"
         )
+
+        # === Combined DL Module pipeline page ===
+        dl_container = QWidget()
+        dl_layout = QVBoxLayout(dl_container)
+        dl_layout.setContentsMargins(0, 0, 0, 0)
+        dl_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        dl_layout.addWidget(models_group)
+        dl_layout.addWidget(detect_group)
+        dl_layout.addWidget(ocr_group)
+        dl_layout.addWidget(inpaint_group)
+        dl_layout.addWidget(trans_group)
+
+        self._dl_combined_widget = dl_container
+        self._add_page(dl_container)
+        idx = self._page_index[id(dl_container)]
+        self._dl_scroll_area = self.pageStack.widget(idx)
+
+        self._dl_section_widgets = {
+            "models": models_group,
+            "detect": detect_group,
+            "ocr": ocr_group,
+            "inpaint": inpaint_group,
+            "trans": trans_group,
+        }
 
         # === General: Project (startup + save merged) ===
         project_widget = QWidget()
@@ -1779,11 +1830,7 @@ class ConfigPanel(Widget):
 
         # Build section list with group headers
         sections = [
-            ("_header", self.tr("DL Module")),
-            (self.detect_sub_block.section_widget, label_text_det),
-            (self.ocr_sub_block.section_widget, label_text_ocr),
-            (self.inpaint_sub_block.section_widget, label_inpaint),
-            (self.trans_sub_block.section_widget, label_translator),
+            (self._dl_combined_widget, self.tr("Pipeline")),
             ("_sep", None),
             ("_header", self.tr("General")),
             (self.project_block.section_widget, label_project),
@@ -1817,22 +1864,19 @@ class ConfigPanel(Widget):
                 self._nav_items.append((target, self.navList.count() - 1))
 
         self.navList.currentRowChanged.connect(self._on_nav_row_changed)
-        self.configContent.verticalScrollBar().valueChanged.connect(
-            self._on_content_scrolled
-        )
 
-        # Select first section by default
+        # Select first selectable section by default (Models)
         for first_target, first_row in self._nav_items:
             if first_target is not None:
                 self.navList.setCurrentRow(first_row)
                 break
 
-        # Layout: fixed horizontal layout with nav list | content (no resize)
+        # Layout: fixed horizontal layout with nav list | page stack
         main_layout = QHBoxLayout(self)
         main_layout.setSpacing(2)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(self.navList)
-        main_layout.addWidget(self.configContent, 1)
+        main_layout.addWidget(self.pageStack, 1)
 
     def on_load_model_changed(self):
         pcfg.module.load_model_on_demand = self.load_model_checker.isChecked()
@@ -1853,11 +1897,75 @@ class ConfigPanel(Widget):
             self.detect_config_panel.keep_existing_checker.isChecked()
         )
 
-    def addConfigBlock(self, header: str) -> ConfigBlock:
-        cb = ConfigBlock(header, parent=self)
-        self.configContent.addConfigBlock(cb)
-        cb.setIndex(len(self.configContent.config_block_list) - 1)
-        return cb
+    def addConfigBlock(self, header: str) -> _DeadBlock:
+        # Legacy shim — sections are now pages. Returned block's
+        # addGroupedBlock/vlayout route into this panel's pageStack.
+        return _DeadBlock(header)
+
+    def _wrap_page(self, content: QWidget) -> QScrollArea:
+        """Wrap a section widget into a scrollable page container."""
+        area = QScrollArea()
+        area.setWidgetResizable(True)
+        area.setContentsMargins(0, 0, 0, 0)
+        area.setFrameShape(QFrame.Shape.NoFrame)
+        area.setVerticalScrollBar(AnimatedScrollBar(area))
+        page = QWidget()
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(*CONFIGBLOCK_CONTENT_MARGINS)
+        lay.setAlignment(Qt.AlignmentFlag.AlignTop)
+        lay.addWidget(content)
+        area.setWidget(page)
+        return area
+
+    def _add_page(self, content: QWidget) -> int:
+        """Register a bare widget (e.g. the Models group) as a page."""
+        area = self._wrap_page(content)
+        idx = self.pageStack.addWidget(area)
+        self._page_index[id(content)] = idx
+        return idx
+
+    def _add_grouped_page(
+        self, group_title, widget, object_name=None, name=None, description=None
+    ) -> ConfigSubBlock:
+        """Replacement for legacy ConfigBlock.addGroupedBlock: build a
+        PanelGroupBox ``group`` whose section_widget becomes a page."""
+        group = PanelGroupBox(group_title)
+        if object_name:
+            group.setObjectName(object_name)
+        group_vlayout = group.contentLayout()
+        group_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
+        group_vlayout.setSpacing(0)
+
+        sublock = ConfigSubBlock(widget, name=name, description=description)
+        group_vlayout.addWidget(sublock)
+
+        idx = self._add_page(group)
+        sublock.section_widget = group
+        self.subblock_list = getattr(self, "subblock_list", [])
+        # keep a reference list of sublocks for parity with legacy blocks
+        if not hasattr(self, "_all_subblocks"):
+            self._all_subblocks = []
+        self._all_subblocks.append(sublock)
+        return sublock
+
+    def _build_grouped_widget(
+        self, group_title, widget, object_name=None, name=None, description=None
+    ):
+        """Build a PanelGroupBox + ConfigSubBlock without registering as a
+        separate page. Returns (group_box, subblock) for use in combined pages."""
+        group = PanelGroupBox(group_title)
+        if object_name:
+            group.setObjectName(object_name)
+        group_vlayout = group.contentLayout()
+        group_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
+        group_vlayout.setSpacing(0)
+        sublock = ConfigSubBlock(widget, name=name, description=description)
+        group_vlayout.addWidget(sublock)
+        sublock.section_widget = group
+        if not hasattr(self, "_all_subblocks"):
+            self._all_subblocks = []
+        self._all_subblocks.append(sublock)
+        return group, sublock
 
     def on_open_onstartup_changed(self):
         pcfg.open_recent_on_startup = self.open_on_startup_checker.isChecked()
@@ -1880,7 +1988,7 @@ class ConfigPanel(Widget):
 
     def on_exclude_fonts_clicked(self):
         dialog = FontExcludeDialog(self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
+        if self._run_modal_dialog(dialog) == QDialog.DialogCode.Accepted:
             excluded = dialog.get_excluded_fonts()
             pcfg.excluded_fonts = excluded
             self.font_exclusion_changed.emit()
@@ -1960,38 +2068,15 @@ class ConfigPanel(Widget):
         pcfg.let_fnteffect_flag = self.let_effect_combox.currentIndex()
 
     def _on_nav_row_changed(self, row: int):
-        """Scroll config content to the section widget for the selected nav row."""
+        """Switch page stack to the section for the selected nav row."""
         if row < 0 or row >= len(self._nav_items):
             return
         target, _ = self._nav_items[row]
-        if target is not None:
-            self.configContent.scrollToWidget(target)
-
-    def _on_content_scrolled(self, value: int):
-        """Auto-sync nav selection to the section visible at viewport top.
-        Skips during animation to avoid flickering; final sync fires after
-        animation settles via _update_scroll.
-        """
-        if self.configContent._animating_scroll:
+        if target is None:
             return
-        content = self.configContent
-        vp_top = value + 1
-
-        best_idx = -1
-        for i, (target, _) in enumerate(self._nav_items):
-            if target is None:
-                continue
-            widget_top = target.mapTo(content.widget(), QPoint(0, 0)).y()
-            if widget_top > vp_top:
-                break
-            best_idx = i
-
-        if best_idx >= 0:
-            row = self._nav_items[best_idx][1]
-            if self.navList.currentRow() != row:
-                self.navList.blockSignals(True)
-                self.navList.setCurrentRow(row)
-                self.navList.blockSignals(False)
+        idx = self._page_index.get(id(target))
+        if idx is not None:
+            self.pageStack.setCurrentIndex(idx)
 
     def _nav_select(self, section_widget) -> int:
         """Select the nav-list row whose target matches *section_widget*.
@@ -2003,25 +2088,34 @@ class ConfigPanel(Widget):
                 return idx
         return -1
 
+    def _focus_on_dl_section(self, section_key: str):
+        """Navigate to the combined DL pipeline page and scroll to a section."""
+        self._nav_select(self._dl_combined_widget)
+        widget = self._dl_section_widgets.get(section_key)
+        if widget is not None:
+            self._dl_scroll_area.ensureWidgetVisible(widget, 0, 100)
+
     def focusOnTranslator(self):
-        target = self.trans_sub_block.section_widget
-        self._nav_select(target)
-        self.configContent.scrollToWidget(target)
+        self._focus_on_dl_section("trans")
 
     def focusOnInpaint(self):
-        target = self.inpaint_sub_block.section_widget
-        self._nav_select(target)
-        self.configContent.scrollToWidget(target)
+        self._focus_on_dl_section("inpaint")
 
     def focusOnDetect(self):
-        target = self.detect_sub_block.section_widget
-        self._nav_select(target)
-        self.configContent.scrollToWidget(target)
+        self._focus_on_dl_section("detect")
 
     def focusOnOCR(self):
-        target = self.ocr_sub_block.section_widget
-        self._nav_select(target)
-        self.configContent.scrollToWidget(target)
+        self._focus_on_dl_section("ocr")
+
+    def _run_modal_dialog(self, dialog) -> int:
+        """Run a child QDialog while disabling the backdrop's click-to-close
+        so the config modal isn't dismissed by stray scrim clicks."""
+        if self._modal_ref is not None:
+            self._modal_ref.set_backdrop_closable(False)
+        result = dialog.exec()
+        if self._modal_ref is not None:
+            self._modal_ref.set_backdrop_closable(True)
+        return result
 
     def _open_profile_manager(self):
         from utils.profile_manager import (
@@ -2032,7 +2126,7 @@ class ConfigPanel(Widget):
 
         profiles = load_profiles()
         dialog = ProfileManagerDialog(self, profiles, on_changed=lambda: None)
-        dialog.exec()
+        self._run_modal_dialog(dialog)
         save_all_profiles(profiles)
         self.profiles_changed.emit()
 
@@ -2040,27 +2134,27 @@ class ConfigPanel(Widget):
         from ui.network_settings_dialog import NetworkSettingsDialog
 
         dialog = NetworkSettingsDialog(self)
-        dialog.exec()
+        self._run_modal_dialog(dialog)
 
     def _open_tools_dialog(self):
         from ui.tools_dialog import ToolsDialog
 
         dialog = ToolsDialog(self)
-        dialog.exec()
+        self._run_modal_dialog(dialog)
 
     def _open_system_diagnostic(self):
         from ui.system_diagnostic_dialog import SystemDiagnosticDialog
 
         dialog = SystemDiagnosticDialog(self)
-        dialog.exec()
+        self._run_modal_dialog(dialog)
 
     def _open_mcp_info(self):
         dialog = MCPInfoDialog(self)
-        dialog.exec()
+        self._run_modal_dialog(dialog)
 
     def _open_shortcut_dialog(self):
         dialog = ShortcutDialog(self)
-        dialog.exec()
+        self._run_modal_dialog(dialog)
         self.shortcuts_changed.emit()
 
     def _on_anim_mode_changed(self):

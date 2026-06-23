@@ -373,6 +373,11 @@
             <translation>常规</translation>
         </message>
         <message>
+            <location filename="..\ui\configpanel.py" line="1833" />
+            <source>Pipeline</source>
+            <translation>管线</translation>
+        </message>
+        <message>
             <location filename="..\ui\configpanel.py" line="1280" />
             <source>Text Detection</source>
             <translation>文本检测</translation>

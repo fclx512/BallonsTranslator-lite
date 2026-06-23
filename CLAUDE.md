@@ -41,7 +41,8 @@ modules/
 | `ui/text_panel.py` | 文本编辑面板 |
 | `ui/io_thread.py` | 管线编排（检测→OCR→翻译→修复） |
 | `ui/scene_textlayout.py` | 画布文字渲染 |
-| `ui/overlay_slide.py` | `OverlaySlider` — 覆盖面板滑入滑出动画 |
+| `ui/overlay_modal.py` | `OverlayModal` — 中心淡入/淡出模态（scrim 覆盖中央画布区，ConfigPanel 用它） |
+| `ui/overlay_slide.py` | `OverlaySlider` — 覆盖面板滑入滑出动画（GlobalSearchWidget、PageList 用它） |
 | `config/` | `config.json`(gitignore), `stylesheet.css`, `themes.json`, `custom_themes.json`, `textstyles/` |
 | `scripts/` | `run_module.py`, `qm_compile.py`, `i18n_check.py` |
 
@@ -63,6 +64,8 @@ modules/
 - **除非用户要求，否则不提交。** 改动先展示审查。
 - **"提交" = `git add -A`** — 暂存工作区全部修改（含未跟踪文件）。
 - **提交聚合原则：** 工作完成后，用 `git reset --soft <基准>` + `git commit` 将同批次逻辑相关的多个提交聚合为一个原子提交再推送。避免给远端推送碎片化小提交。聚合前先向用户确认消息内容。
+- **禁止 `git commit --amend`：** amend 会重写 commit hash。如果旧 hash 已被推送（包括 git GUI 自动推送），本地与远程历史分叉，`git pull` 必然产生多余的 merge 提交。要修改已推送的 commit，用 `git reset --soft <基准>` + 重提交 + `git push --force-with-lease`，且须先经用户同意。
+- **禁止在 commit 信息中添加 AI 署名。** 作者只为 `提交者自己`，不添加 `Co-Authored-By` 或任何其他协作署名行。
 
 ## i18n 翻译
 
@@ -102,8 +105,8 @@ modules/
 
 ## 动画系统
 
-`ui/overlay_slide.py` 的 `OverlaySlider`（duration 350ms, easing `InOutExpo`）。`MainWindow` 中为 ConfigPanel、GlobalSearchWidget、PageList 各创建一个实例。`StateChecker`（`QCheckBox` 子类）实现 LeftBar 面板互斥切换。
+`ui/overlay_modal.py` 的 `OverlayModal`（中心淡入/淡出 + 压暗 scrim，scrim 仅覆盖 `centralStackWidget`；ConfigPanel 用它，duration 350ms, easing `InOutExpo`，`pcfg.animation_fps<0` 跳过）与 `ui/overlay_slide.py` 的 `OverlaySlider`（侧滑滑入；GlobalSearchWidget、PageList 用它）。`MainWindow` 中分别为 ConfigPanel（`_configModal`）、GlobalSearchWidget、PageList 各创建一个实例。`StateChecker`（`QCheckBox` 子类）实现 LeftBar 面板互斥切换。ConfigPanel 现为**内部分页**（`QStackedWidget`），NavList 点击切页而非滚动；子 `QDialog` 打开时经 `_run_modal_dialog` 暂停 backdrop 点击。
 
 ## 开发日志
 
-功能增删或修复经用户确认无误后，在 [`docs/daily_log.md`](docs/daily_log.md) 写简要记录。格式参照已有条目：日期标题 → 问题/需求描述 → 改动要点 → 涉及文件列表。每条之间用 `---` 分隔。仅保留最近 7 天记录。
+功能增删或修复经用户确认无误后，在 [`docs/daily_log.md`](docs/daily_log.md) 写简要记录。格式参照已有条目：日期标题 → 问题/需求描述 → 改动要点 → 涉及文件列表。每条之间用 `---` 分隔。仅保留最近 3 天记录。

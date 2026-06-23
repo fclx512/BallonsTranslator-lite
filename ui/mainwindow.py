@@ -85,6 +85,7 @@ from .io_thread import ImgSaveThread
 from .mainwindowbars import BottomBar, LeftBar, TitleBar
 from .misc import QKEY, parse_stylesheet, set_html_family
 from .module_manager import ModuleManager
+from .overlay_modal import OverlayModal
 from .overlay_slide import OverlaySlider
 from .psd_export_dialog import PsdExportDialog
 from .scenetext_manager import PasteSrcItemsCommand, SceneTextManager, TextPanel
@@ -343,19 +344,19 @@ class MainWindow(mainwindow_cls):
 
         self.centralStackWidget.addWidget(self._rightPanelContainer)
 
-        # Config panel as floating overlay (not in stack, animates slide)
+        # Config panel as floating modal overlay (centered over the canvas region;
+        # scrim only dims centralStackWidget, left bar / bottom bar / title bar
+        # stay interactive).
         self.configPanel.setParent(self.centralStackWidget)
         self.configPanel.setVisible(False)
-        self._configSlide = OverlaySlider(
+        self._configModal = OverlayModal(
             self.configPanel,
-            direction="right",
-            duration=500,
-            split_mode=True,
-            split_left_widget=self.configPanel.navList,
-            split_right_widget=self.configPanel.configContent,
+            self.centralStackWidget,
+            duration=350,
         )
-        self._configSlide.on_before_show(lambda: self.configPanel.setFocus())
-        self._configSlide.on_after_hide(self._on_config_hidden)
+        self.configPanel._modal_ref = self._configModal
+        self._configModal.on_before_show(lambda: self.configPanel.setFocus())
+        self._configModal.on_after_hide(self._on_config_hidden)
 
         # Font Style Manager — opened as a dialog from Tools menu
         self._styleMgrDialog: Optional[QDialog] = None
@@ -661,10 +662,10 @@ class MainWindow(mainwindow_cls):
         return not (hasattr(self, "configPanel") and self.configPanel.isVisible())
 
     def _showConfigOverlay(self):
-        self._configSlide.show()
+        self._configModal.show()
 
     def _hideConfigOverlay(self):
-        self._configSlide.hide()
+        self._configModal.hide()
 
     def _on_config_hidden(self):
         if self.leftBar.configChecker.isChecked():
@@ -754,7 +755,7 @@ class MainWindow(mainwindow_cls):
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
-        self._configSlide.resize()
+        self._configModal.resize()
         self._searchSlide.resize()
         self._pageListSlide.resize()
 
