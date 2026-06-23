@@ -720,6 +720,7 @@ DEFAULT_SHORTCUTS = {
     "merge_tool": ["Ctrl+Shift+M"],
     "quick_symbol": [],
     "advanced_align": [],
+    "toggle_original_opacity": [],
 }
 
 _ACTION_NAMES = {
@@ -752,12 +753,13 @@ _ACTION_NAMES = {
     "merge_tool": "Merge Tool",
     "quick_symbol": "Quick Symbol",
     "advanced_align": "Advanced Alignment",
+    "toggle_original_opacity": "Toggle Original Opacity",
 }
 
 # Shortcut groups for organized display
 _SHORTCUT_GROUPS = [
     ("Navigation", ["prev_page", "next_page", "prev_page_alt", "next_page_alt"]),
-    ("View", ["zoom_in", "zoom_out", "preview"]),
+    ("View", ["zoom_in", "zoom_out", "preview", "toggle_original_opacity"]),
     (
         "Edit",
         [
@@ -1704,6 +1706,27 @@ class ConfigPanel(Widget):
             self.tr("Stroke Width:"), "stroke_width_presets", interface_layout
         )
         _make_preset_row(self.tr("Opacity:"), "opacity_presets", interface_layout)
+
+        # ── Original Opacity Toggle ──────────────────────────────────
+        toggle_header = QLabel(self.tr("Original Opacity Toggle"))
+        toggle_header.setStyleSheet("font-weight: bold; padding: 12px 0 4px 24px;")
+        interface_layout.addWidget(toggle_header)
+
+        toggle_row = QHBoxLayout()
+        toggle_row.setSpacing(6)
+        toggle_lbl = QLabel(self.tr("Toggle Preset (%):"))
+        toggle_lbl.setFixedWidth(110)
+        toggle_row.addWidget(toggle_lbl)
+        self.orig_opacity_toggle_spin = QSpinBox()
+        self.orig_opacity_toggle_spin.setRange(0, 99)
+        self.orig_opacity_toggle_spin.setValue(pcfg.original_transparency_preset)
+        self.orig_opacity_toggle_spin.valueChanged.connect(
+            lambda v: setattr(pcfg, "original_transparency_preset", v)
+        )
+        toggle_row.addWidget(self.orig_opacity_toggle_spin, 1)
+        toggle_row.addStretch()
+        togglesublock = ConfigSubBlock(toggle_row)
+        interface_layout.addWidget(togglesublock)
 
         self.interface_block = generalConfigPanel.addGroupedBlock(
             label_interface, interface_widget, object_name="GroupGeneral"

@@ -145,6 +145,7 @@ class ProgramConfig(Config):
     imgtrans_textblock: bool = True
     mask_transparency: float = 0.0
     original_transparency: float = 0.0
+    original_transparency_preset: int = 20
     open_recent_on_startup: bool = True
 
     let_fntsize_flag: int = 0

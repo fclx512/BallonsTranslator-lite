@@ -277,8 +277,6 @@ class MainWindow(mainwindow_cls):
         self.canvas.textstack_changed.connect(self.on_textstack_changed)
         self.canvas.run_blktrans.connect(self.on_run_blktrans)
         self.canvas.drop_open_folder.connect(self.dropOpenDir)
-        self.canvas.originallayer_trans_slider = self.bottomBar.originalSlider
-        self.canvas.textlayer_trans_slider = self.bottomBar.textlayerSlider
         self.canvas.copy_src_signal.connect(self.on_copy_src)
         self.canvas.paste_src_signal.connect(self.on_paste_src)
 
@@ -1121,6 +1119,9 @@ class MainWindow(mainwindow_cls):
         self.shortcut_registry["advanced_align"] = self._make_shortcuts(
             "advanced_align", [], self.on_open_advanced_align
         )
+        self.shortcut_registry["toggle_original_opacity"] = self._make_shortcuts(
+            "toggle_original_opacity", [], self.shortcutToggleOriginalOpacity
+        )
 
         drawpanel_info = {
             "hand": "hand_tool",
@@ -1203,6 +1204,15 @@ class MainWindow(mainwindow_cls):
     def shortcutDrawboard(self):
         if self._is_canvas_mode():
             self.bottomBar.paintChecker.click()
+
+    def shortcutToggleOriginalOpacity(self):
+        if not self._is_canvas_mode():
+            return
+        preset = pcfg.original_transparency_preset / 100
+        current = pcfg.original_transparency
+        target = preset if current > preset else 1.0
+        self.bottomBar.originalSlider.setValue(int(target * 100))
+        self.canvas.setOriginalTransparency(target)
 
     def shortcutCtrlD(self):
         if self._is_canvas_mode():
@@ -2039,6 +2049,10 @@ class MainWindow(mainwindow_cls):
             original = self._ctx_batch_restore
             self._ctx_batch_restore = None
             self.module_manager.setTranslator(original)
+        # Close context translation log window if open
+        if hasattr(self, "_ctx_log_dialog") and self._ctx_log_dialog is not None:
+            self._ctx_log_dialog.close()
+            self._ctx_log_dialog = None
         if pcfg.module.empty_runcache and not shared.HEADLESS:
             self.module_manager.unload_all_models()
         if shared.args.export_translation_txt:
@@ -2477,6 +2491,8 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
                         def _ctx_status(msg):
                             bar = self.module_manager.progress_msgbox.translate_bar
                             bar.updateProgress(bar.progressbar.value(), msg)
+                            if hasattr(self, "_ctx_log_dialog") and self._ctx_log_dialog:
+                                self._ctx_log_dialog.append(msg)
 
                         self._ctx_batch_restore = pcfg.module.translator
                         ctx = ContextBatchTranslator(
@@ -2491,6 +2507,19 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
                             translation_prompt=profile.get("prompt_template", ""),
                             status_callback=_ctx_status,
                         )
+
+                        # Create/show the context translation log window
+                        if (
+                            hasattr(self, "_ctx_log_dialog")
+                            and self._ctx_log_dialog is not None
+                        ):
+                            self._ctx_log_dialog.close()
+                            self._ctx_log_dialog = None
+                        from ui.context_log_dialog import ContextLogDialog
+
+                        self._ctx_log_dialog = ContextLogDialog(self)
+                        self._ctx_log_dialog.show()
+
                         ctx.batch_size = int(batch_combo.currentText())
                         ctx.context_pages = pages_spin.value()
                         ctx.use_glossary = glossary_cb.isChecked()

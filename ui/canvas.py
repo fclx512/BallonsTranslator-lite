@@ -31,7 +31,6 @@ from qtpy.QtWidgets import (
     QMenu,
     QRubberBand,
     QScrollBar,
-    QSlider,
 )
 
 try:
@@ -45,7 +44,7 @@ from utils.proj_imgtrans import ProjImgTrans
 
 from .custom_widget import FadeLabel, ScrollBar
 from .image_edit import DrawingLayer, ImageEditMode, StrokeImgItem
-from .misc import ARROWKEY2DIRECTION, QKEY, QNUMERIC_KEYS, ndarray2pixmap
+from .misc import ARROWKEY2DIRECTION, QKEY, ndarray2pixmap
 from .page_search_widget import PageSearchWidget
 from .texteditshapecontrol import ControlBlockItem, TextBlkShapeControl
 from .textitem import TextBlkItem, TextBlock
@@ -415,9 +414,6 @@ class Canvas(QGraphicsScene):
         im_rect = QRectF(0, 0, C.SCREEN_W, C.SCREEN_H)
         self.baseLayer.setRect(im_rect)
 
-        self.textlayer_trans_slider: QSlider = None
-        self.originallayer_trans_slider: QSlider = None
-
     def on_switch_item(self, switch_delta: int, key_event: QKeyEvent = None):
         if self.textEditMode():
             self.switch_text_item.emit(switch_delta, key_event)
@@ -762,19 +758,7 @@ class Canvas(QGraphicsScene):
                 self.push_undo_command(cmd)
                 event.setAccepted(True)
                 return
-        elif key in QNUMERIC_KEYS:
-            value = QNUMERIC_KEYS[key]
-            self.set_active_layer_transparency(value * 10)
         return super().keyPressEvent(event)
-
-    def set_active_layer_transparency(self, value: int):
-        if self.textEditMode():
-            opacity = self.textLayer.opacity() * 100
-            if value == 0 and opacity == 0:
-                value = 100
-            self.textlayer_trans_slider.setValue(value)
-            self.originallayer_trans_slider.setValue(100 - value)
-            self.updateLayers()
 
     def addStrokeImageItem(self, pos: QPointF, pen: QPen, erasing: bool = False):
         if self.stroke_img_item is not None:

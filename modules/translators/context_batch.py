@@ -196,9 +196,13 @@ class ContextBatchTranslator:
         ctx_blks = sum(len(c.get("blocks", [])) for c in ctx if "blocks" in c)
         use_summary = total > bs * 4 and self._summaries
         mode = "summary" if use_summary else ("full" if total <= bs else "window")
+        batch_idx = (pi // bs) + 1
+        total_batches = (total + bs - 1) // bs
         self._status(
-            f"Context ({mode}): {ctx_pages} pages, {ctx_blks} ref blocks"
-            f" → translating {len(target)} blocks"
+            f"────────────────────────────────────────\n"
+            f"Batch {batch_idx}/{total_batches} · Pages {start}-{end-1} · {mode}\n"
+            f"Context: {ctx_pages} pages, {ctx_blks} ref blocks\n"
+            f"→ translating {len(target)} blocks"
         )
 
         messages = self._build_msgs(ctx, target)
@@ -206,6 +210,13 @@ class ContextBatchTranslator:
         t0 = time.time()
         raw = self._llm_call(messages, len(target))
         self._status(f"LLM done: {len(target)} translations in {time.time() - t0:.1f}s")
+
+        # Log per-block results
+        elapsed = time.time() - t0
+        for blk in target:
+            tr_text = raw.get(blk["id"], blk["src"])
+            self._status(f'  [{blk["id"]}] "{blk["src"]}" → "{tr_text}"')
+        self._status(f"✓ {elapsed:.1f}s, {len(target)} blocks translated")
 
         # Cache batch results
         for pname in batch_keys:
@@ -307,25 +318,31 @@ class ContextBatchTranslator:
         source = pcfg.module.translate_source if hasattr(pcfg, "module") else "auto"
         target = pcfg.module.translate_target if hasattr(pcfg, "module") else "auto"
 
-        # System prompt — use profile's prompt_template if available
-        if self.translation_prompt:
-            sys_prompt = self.translation_prompt.replace("{from_lang}", source).replace(
-                "{to_lang}", target
-            )
-        else:
-            sys_prompt = (
-                f"You are a professional manga/comic translator "
-                f"translating from {source} to {target}.\n"
-                f"Your translations should:\n"
-                f"- Accurately convey the original meaning while preserving "
-                f"character voice and tone\n"
-                f"- Sound natural in {target}\n"
-                f"- Keep terminology consistent — use the same translation "
-                f"for the same term across pages\n"
-                f"- Localize sound effects and onomatopoeia appropriately\n"
-                f"- Pay attention to context blocks for dialogue flow and "
-                f"character relationships"
-            )
+        # System prompt — always use dedicated context prompt, NOT profile's
+        # prompt_template (which is designed for simple batch translation and
+        # lacks any context-awareness instructions).
+        sys_prompt = (
+            f"You are a professional manga/comic translator "
+            f"translating from {source} to {target}.\n\n"
+            f"The user message contains two sections:\n"
+            f"1. === CONTEXT (nearby pages) === — Pages near the current text, "
+            f"already translated for reference.\n"
+            f"   [done] = fully translated with both source and translation shown;\n"
+            f"   [raw]  = source text only, not yet translated.\n"
+            f"   Use these to maintain consistency in character names, "
+            f"terminology, and dialogue tone.\n\n"
+            f"2. === TRANSLATE THESE === — The text blocks that need translation now.\n\n"
+            f"RULES:\n"
+            f"- Keep character names and terms consistent with the CONTEXT "
+            f"translations.\n"
+            f"- Match the speaking style and tone established in the CONTEXT.\n"
+            f"- Use surrounding dialogue to disambiguate pronouns and implied "
+            f"subjects.\n"
+            f"- Localize sound effects and onomatopoeia appropriately.\n"
+            f"- Output ONLY valid JSON with no extra text.\n\n"
+            f"Output strict JSON:\n"
+            '{"translations": [{"id": "page:block", "translation": "..."}, ...]}'
+        )
 
         # Glossary section
         if self.use_glossary and self._glossary:
@@ -333,11 +350,6 @@ class ContextBatchTranslator:
             for s, t in list(self._glossary.items())[:MAX_GLOSSARY]:
                 lines.append(f'  "{s}" → "{t}"')
             sys_prompt += "\n\n" + "\n".join(lines)
-
-        sys_prompt += (
-            "\n\nOutput strict JSON: "
-            '{"translations": [{"id": "page:block", "translation": "..."}, ...]}'
-        )
 
         messages = [{"role": "system", "content": sys_prompt}]
 

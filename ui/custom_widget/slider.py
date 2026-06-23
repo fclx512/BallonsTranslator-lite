@@ -243,6 +243,16 @@ class Slider(QSlider):
     def resizeEvent(self, e):
         self._adjustHandlePos()
 
+    def keyPressEvent(self, e):
+        key = e.key()
+        # Block number key responses — QSlider's built-in page-stepping
+        # is acceptable, but 0-9 mapping to proportional values is
+        # meaningless here and conflicts with other shortcuts.
+        if Qt.Key.Key_0 <= key <= Qt.Key.Key_9:
+            e.ignore()
+            return
+        super().keyPressEvent(e)
+
     def enterEvent(self, event) -> None:
         self.hovering = True
         self.update()
