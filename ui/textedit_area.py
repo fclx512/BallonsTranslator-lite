@@ -293,6 +293,22 @@ class SourceTextEdit(QTextEdit):
         cursor.select(QTextCursor.SelectionType.Document)
         cursor.insertText(text)
 
+    def insert_external_text(self, text: str):
+        """Insert text from outside (e.g. QuickSymbolDialog).
+
+        Normal keyboard input relies on the widget having focus to propagate
+        changes. When an external dialog inserts text, the widget may not have
+        focus, so this method manually sets change tracking state and forces
+        propagation to the canvas text item.
+        """
+        cursor = self.textCursor()
+        change_from = cursor.position()
+        cursor.insertText(text)
+        self.setTextCursor(cursor)
+        self.change_from = change_from
+        self.change_added = len(text)
+        self.handle_content_change()
+
 
 class TransTextEdit(SourceTextEdit):
     pass

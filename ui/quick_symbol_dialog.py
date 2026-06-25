@@ -94,6 +94,11 @@ class QuickSymbolDialog(QDialog):
 
         target = self._last_text_focus or QApplication.focusWidget()
         if isinstance(target, (QTextEdit, QPlainTextEdit)):
-            cursor = target.textCursor()
-            cursor.insertText(symbol)
-            target.setTextCursor(cursor)
+            # Use SourceTextEdit's dedicated method if available, so the canvas
+            # text item updates in real-time even without widget focus.
+            if hasattr(target, "insert_external_text"):
+                target.insert_external_text(symbol)
+            else:
+                cursor = target.textCursor()
+                cursor.insertText(symbol)
+                target.setTextCursor(cursor)

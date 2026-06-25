@@ -783,35 +783,31 @@ def _ensure_module_deps(
     - Python packages that need installing (from ``requires_packages``)
     - Model files that need downloading (from ``download_file_list``)
     - "Install all" / "Later" buttons
+
+    IMPORTANT: ``ModuleSpec`` metadata (``download_file_list``,
+    ``dependencies``) is used directly **without** resolving/importing the
+    module.  Resolving would trigger heavy C-extension imports (torch, cv2)
+    on the **main thread** and freeze the UI for several seconds — only
+    resolve if the dialog actually needs to install something.
     """
     from utils.registry import ModuleSpec
 
     is_spec = isinstance(module_cls, ModuleSpec)
 
-    # Resolve to actual class for attribute access, but keep ModuleSpec
-    # name for the dialog so the user sees the registration key.
+    # Keep ModuleSpec name for the dialog so the user sees the registration key.
     mod_name = module_cls.key if is_spec else getattr(module_cls, "__name__", "?")
-    try:
-        actual_cls = module_cls.resolve() if is_spec else module_cls
-    except Exception as e:
-        LOGGER.error(
-            "Failed to resolve module '%s' (import_path=%s): %s",
-            mod_name,
-            getattr(module_cls, "import_path", "?"),
-            e,
-        )
-        create_error_dialog(
-            e,
-            (
-                f"Failed to load module '{mod_name}'.\n"
-                "The module file may be corrupted or missing critical dependencies.\n"
-                "Please check the log for details."
-            ),
-        )
-        return False
 
-    pkgs = getattr(actual_cls, "requires_packages", None) or []
-    dfl = getattr(actual_cls, "download_file_list", None) or []
+    # ── Read metadata without resolving ──────────────────────────────
+    # ModuleSpec stores ``dependencies`` (like ``requires_packages``)
+    # and ``download_file_list`` from the AST scan.
+    if is_spec:
+        pkgs = getattr(module_cls, "dependencies", None) or []
+        dfl = getattr(module_cls, "download_file_list", None) or []
+        actual_cls = None  # resolved later only if needed
+    else:
+        pkgs = getattr(module_cls, "requires_packages", None) or []
+        dfl = getattr(module_cls, "download_file_list", None) or []
+        actual_cls = module_cls
 
     # Check which packages are already installed
     missing_pkgs: list[str] = []
@@ -851,6 +847,29 @@ def _ensure_module_deps(
 
     if not missing_pkgs and not missing_model_labels:
         return True  # everything already present
+
+    # --- Lazy resolve: only import the module if we actually need to
+    # install something.  The resolve() call does a real Python import
+    # (torch, cv2 etc.) --- keep it off the happy path. ----------
+    if is_spec and actual_cls is None:
+        try:
+            actual_cls = module_cls.resolve()
+        except Exception as e:
+            LOGGER.error(
+                "Failed to resolve module '%s' (import_path=%s): %s",
+                mod_name,
+                getattr(module_cls, "import_path", "?"),
+                e,
+            )
+            create_error_dialog(
+                e,
+                (
+                    f"Failed to load module '{mod_name}'.\n"
+                    "The module file may be corrupted or missing critical dependencies.\n"
+                    "Please check the log for details."
+                ),
+            )
+            return False
 
     # ── Build and show the install dialog ──
     from qtpy.QtWidgets import (
