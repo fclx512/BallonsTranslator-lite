@@ -1116,6 +1116,19 @@ PanelGroupBox#GroupOCR       { border-left-color: @accentOCR; }
 PanelGroupBox#GroupInpaint   { border-left-color: @accentInpaint; }
 PanelGroupBox#GroupTranslate { border-left-color: @accentTranslate; }
 
+/* Config-panel pages: drop the full frame (no longer needed after the paged
+   refactor), but keep the 3px left accent stripe per DL stage. */
+PanelGroupBox[cfgPage="true"] {
+    border: none;
+    border-left: 3px solid @borderColor;
+    border-radius: 0px;
+    background-color: transparent;
+}
+PanelGroupBox#GroupDetect[cfgPage="true"]    { border-left-color: @accentDetect; }
+PanelGroupBox#GroupOCR[cfgPage="true"]       { border-left-color: @accentOCR; }
+PanelGroupBox#GroupInpaint[cfgPage="true"]   { border-left-color: @accentInpaint; }
+PanelGroupBox#GroupTranslate[cfgPage="true"] { border-left-color: @accentTranslate; }
+
 QLabel#CardTitle {
     font-weight: bold;
     font-size: 20px;

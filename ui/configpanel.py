@@ -435,25 +435,34 @@ class NavList(QListWidget):
         self._anim_timer.timeout.connect(self._tick)
         self._elapsed = QElapsedTimer()
 
-    def setCurrentRow(self, row):
-        old_row = self.currentRow()
-        super().setCurrentRow(row)
-        self._on_selection_changed(old_row, row)
+        # Indicator is driven by currentRowChanged, which fires for BOTH user
+        # clicks (Qt's internal selection-model path) and programmatic
+        # setCurrentRow. Overriding setCurrentRow does not catch clicks.
+        self.currentRowChanged.connect(self._on_row_changed)
 
-    def _on_selection_changed(self, old_row, new_row):
-        if old_row < 0 or new_row < 0:
+    def _on_row_changed(self, new_row: int):
+        """Animate the accent indicator to the newly selected row.
+
+        Skips header/separator rows (non-selectable items) so the indicator
+        never parks on a label. Uses the current indicator position as the
+        animation start, so it slides from wherever it currently is.
+        """
+        if new_row < 0:
             return
-        old_item = self.item(old_row)
-        new_item = self.item(new_row)
-        if not old_item or not new_item:
+        item = self.item(new_row)
+        if item is None:
             return
-        old_rect = self.visualItemRect(old_item)
-        new_rect = self.visualItemRect(new_item)
-        if old_rect.isValid() and new_rect.isValid():
-            self._start_indicator_anim(
-                old_rect.y() + old_rect.height() / 2.0,
-                new_rect.y() + new_rect.height() / 2.0,
-            )
+        # Skip non-selectable items (group headers / separators).
+        if not (item.flags() & Qt.ItemFlag.ItemIsSelectable):
+            return
+        new_rect = self.visualItemRect(item)
+        if not new_rect.isValid() or new_rect.height() <= 0:
+            return
+        target_y = new_rect.y() + new_rect.height() / 2.0
+        # If the indicator has not been placed yet (lazy-init via paintEvent),
+        # snap instead of animating from 0.0.
+        from_y = self._indicator_y if self._indicator_y != 0.0 else target_y
+        self._start_indicator_anim(from_y, target_y)
 
     def _start_indicator_anim(self, from_y: float, to_y: float):
         self._anim_from = from_y
@@ -1331,6 +1340,7 @@ class ConfigPanel(Widget):
         # === Models group ===
         models_group = PanelGroupBox(self.tr("Models"))
         self.models_group = models_group
+        models_group.setProperty("cfgPage", True)
         models_vlayout = models_group.contentLayout()
         models_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
         models_vlayout.setSpacing(4)
@@ -1914,6 +1924,11 @@ class ConfigPanel(Widget):
         lay.setContentsMargins(*CONFIGBLOCK_CONTENT_MARGINS)
         lay.setAlignment(Qt.AlignmentFlag.AlignTop)
         lay.addWidget(content)
+        # Keep the content at its natural height instead of letting the
+        # scroll area stretch a single short group to the full page height.
+        content.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
+        )
         area.setWidget(page)
         return area
 
@@ -1932,6 +1947,7 @@ class ConfigPanel(Widget):
         group = PanelGroupBox(group_title)
         if object_name:
             group.setObjectName(object_name)
+        group.setProperty("cfgPage", True)
         group_vlayout = group.contentLayout()
         group_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
         group_vlayout.setSpacing(0)
@@ -1956,6 +1972,7 @@ class ConfigPanel(Widget):
         group = PanelGroupBox(group_title)
         if object_name:
             group.setObjectName(object_name)
+        group.setProperty("cfgPage", True)
         group_vlayout = group.contentLayout()
         group_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
         group_vlayout.setSpacing(0)
