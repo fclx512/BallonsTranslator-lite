@@ -1010,6 +1010,9 @@ class MainWindow(mainwindow_cls):
         self.titleBar.psd_export_triggered.connect(self.on_export_psd)
         self.titleBar.quick_symbol_trigger.connect(self.on_open_quick_symbol)
         self.titleBar.adv_align_trigger.connect(self.on_open_advanced_align)
+        self.titleBar.normalize_breaks_triggered.connect(
+            self.on_open_normalize_breaks_dialog
+        )
 
         self._install_shortcuts()
 
@@ -1426,6 +1429,40 @@ class MainWindow(mainwindow_cls):
             ]
 
         self.execute_advanced_align(page_filter, target, mode, axis)
+
+    def on_open_normalize_breaks_dialog(self):
+        """打开批量整理换行对话框。"""
+        if self.imgtrans_proj.num_pages == 0:
+            from qtpy.QtWidgets import QMessageBox
+
+            QMessageBox.warning(
+                self, self.tr("Warning"), self.tr("No pages in project")
+            )
+            return
+        # 刷新当前页 live 文档到 blk.translation，确保读到最新的换行
+        self.st_manager.updateTextBlkList()
+        from .normalize_breaks_dialog import NormalizeBreaksDialog
+
+        dlg = NormalizeBreaksDialog(
+            self.imgtrans_proj, self.st_manager, self
+        )
+        if dlg.exec() == QDialog.Accepted:
+            changes = dlg.get_changes()
+            if not changes:
+                return
+            from .textedit_commands import NormalizeBreaksCommand
+
+            cmd = NormalizeBreaksCommand(self.imgtrans_proj, self.st_manager, changes)
+            self.canvas.push_undo_command(cmd)
+            from qtpy.QtWidgets import QMessageBox
+
+            QMessageBox.information(
+                self,
+                self.tr("批量整理换行"),
+                self.tr("已整理 {} 块 / 跳过 {} 块（竖排）").format(
+                    dlg.processed_count, dlg.skipped_count
+                ),
+            )
 
     def execute_advanced_align(self, page_filter, target, mode, axis):
         """Apply point alignment across pages.

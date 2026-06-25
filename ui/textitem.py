@@ -917,13 +917,17 @@ class TextBlkItem(QGraphicsTextItem):
 
     def _apply_snap(self):
         """Check alignment to nearby text blocks and snap position."""
+        # Rotated text blocks are custom-designed — skip alignment
+        if self.angle != 0:
+            return
+
         canvas = self.scene()
         my_rect = self.absBoundingRect()
 
-        # Collect content rects of all other TextBlkItem instances
+        # Collect content rects of all other non-rotated TextBlkItem instances
         target_rects = []
         for child in canvas.textLayer.childItems():
-            if isinstance(child, TextBlkItem) and child is not self:
+            if isinstance(child, TextBlkItem) and child is not self and child.angle == 0:
                 target_rects.append(child.absBoundingRect())
 
         if not target_rects:

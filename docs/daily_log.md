@@ -4,6 +4,40 @@
 
 ## 2026-06-25
 
+### 译文软换行整理工具
+
+**问题/需求：** LLM 翻译被动模仿原文换行，往译文塞 `\n` 导致排版炸裂、撑破文本框。半自动校对流程需快速清理无意义换行：无引号整段压空格交排版器重排，`「」` 块内换行清空、块间单换行分隔（每句独占一行）。
+
+**修复（右键菜单不显示 + 批量无效果）：**
+1. 右键菜单看不到——根因：`ui/canvas.py` 的 `gv.setContextMenuPolicy(NoContextMenu)` 阻止 `contextMenuEvent` 传到 QGraphicsItem，`TextBlkItem.contextMenuEvent` 是死代码。项目所有画布右键菜单走 `mouseReleaseEvent` → `context_menu_requested` → `canvas.on_create_contextmenu`。改为在该画布级菜单的 Squeeze 项后加"整理换行"/"整理换行并收缩框"，仅对选中的横排块启用，经新增 `canvas.normalize_break_requested(bool)` 信号 → `SceneTextManager.on_normalize_break`（仿 `onSqueezeBlk`）；删除 textitem 里的死代码与 `normalize_break_requested` 信号、还原 `contextMenuEvent`。
+2. 批量执行无效果——根因：当前页 live 文档里的换行只在 `QTextDocument`，`blk.translation` 是过时值（仅翻页/翻译前 `updateTextBlkList` 才同步）。批量前 `on_open_normalize_breaks_dialog` 缺刷新，`normalize_softbreaks` 读到无换行的旧值就跳过。打开对话框前补调 `self.st_manager.updateTextBlkList()`；`on_normalize_break` 同样先刷新再遍历选中块。
+
+**改动：**
+1. `utils/text_normalize.py`（新建）— 纯函数 `normalize_softbreaks`：按最外层 `「」` 分块，无引号/引号内换行压单空格，引号块之间 plain 段删换行紧贴、两相邻引号块间补单个 `\n`，嵌套取最外层配对，幂等。无 Qt 依赖。
+2. `utils/text_normalize_test.py`（新建）— 10 条手动运行测试，全部 PASS。
+3. `ui/textedit_commands.py` — 新增 `NormalizeBreaksCommand`：仿 `BatchFontformatCommand` 范式，`__init__` 时对当前页 live item 捕获旧 HTML/rect/fontformat，redo 写新文本（清 `rich_text` 交排版器）+ `set_fontformat` 刷新 + 可选 `squeezeBoundingRect`，undo 用 `setHtml` 全量还原 + 清 e_trans undo 栈；非当前页只写 `blk.translation`/`rich_text`。squeeze 并入命令保证一次 Ctrl+Z 全回退。
+4. `ui/canvas.py` — 新增 `normalize_break_requested(bool)` 信号；`on_create_contextmenu` 在 Squeeze 项后加"整理换行"/"整理换行并收缩框"，仅对选中的横排块启用（无选中或全竖排则禁用）。
+5. `ui/scenetext_manager.py` — 连接 `normalize_break_requested`，新增 `on_normalize_break(squeeze)`：先 `updateTextBlkList()` 刷新当前页 live 文档，再遍历选中横排块构造 `NormalizeBreaksCommand` 推栈（仿 `onSqueezeBlk`）；移除 `addTextBlkItem` 对死信号 `normalize_break_requested` 的连接。
+6. `ui/mainwindowbars.py` — Tools 菜单加"批量整理换行…"动作（仿 Quick Symbol）。
+7. `ui/mainwindow.py` — 连槽 `on_open_normalize_breaks_dialog`：无页时警告，否则先 `updateTextBlkList()` 刷新当前页再弹 `NormalizeBreaksDialog`，应用后 `QMessageBox` 报告处理数/跳过数。
+8. `ui/textitem.py` — 还原 `contextMenuEvent` 为 `super()`（原自定义版是死代码），移除 `normalize_break_requested` 信号与 `QMenu` 导入。
+9. `ui/normalize_breaks_dialog.py`（新建）— 批量对话框：全部页切换 + 页码复选框列表 + 可选自动收缩框，内置竖排跳过过滤。
+10. `translate/zh_CN.ts` / `translate/zh_CN.qm` — 新增 `TextBlkItem`/`NormalizeBreaksDialog` 两个 context 及 `TitleBar`/`MainWindow` 新条目；qm 用 utf-8 编译，验证无 Latin-1 污染。
+
+**涉及文件：** `utils/text_normalize.py`、`utils/text_normalize_test.py`、`ui/textedit_commands.py`、`ui/textitem.py`、`ui/scenetext_manager.py`、`ui/mainwindowbars.py`、`ui/mainwindow.py`、`ui/normalize_breaks_dialog.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+**已知 bug（待排查）：** 执行整理换行后无视觉反馈——选中的含换行译文块在操作后文档结构已变（`setPlainTextAndKeepUndoStack` 已写入）、文档 `blockCount` 已减，但画布上显示的文本没有肉眼可见变化。推测 `repaint_background` 或 `set_fontformat` 刷新时机/力度不够，或 TextBlkItem 的虚拟文本布局缓存（`_display_rect`/`layout`）未被新文档触发重算。待 UI 侧排查。
+
+### CTD 检测器选中后窗口无响应修复
+
+**问题/需求：** 从下拉栏选中 CTD 检测器后主窗口卡死（终端无报错）。根因是 `_ensure_module_deps()` 在**主线程**调用了 `ModuleSpec.resolve()` → `importlib.import_module("modules.textdetector.detector_ctd")`，触发 torch、cv2、einops 等重型 C 扩展导入，Windows 下会堵塞事件循环数秒。
+
+**改动：**
+1. `ui/module_manager.py` — `_ensure_module_deps()` 对 `ModuleSpec` 使用 AST 扫描缓存的 `dependencies` / `download_file_list` 直接检查，不再在主线程 resolve/import 模块；仅当依赖确实缺失、需要弹出安装对话框时才懒加载。
+
+**涉及文件：** `ui/module_manager.py`
+
+
 ### 设置面板样式残留修复：焦点框跟随 + 移除多余包裹框
 
 **问题/需求：** 设置面板在 `11ecc36` 从卷轴式重构为分页后出现两处样式残留：(1) NavList 左侧代码绘制的蓝色焦点指示器只在「管线」旁显示，点其他导航项不跟随；(2) 分页内包裹设置项的 PanelGroupBox 框已不再需要，且被强制拉伸到设置窗口高度。另需审视分页排布并产出建议文档。
@@ -16,7 +50,28 @@
 
 **涉及文件：** `ui/configpanel.py`、`config/stylesheet.css`、`docs/设置面板排布建议.md`
 
+
+### 旋转文本框跳过拖动吸附对齐
+
+**问题/需求：** 有旋转角度的文本框（`angle != 0`）是定制型手动排布，不应该在拖动时触发吸附对齐逻辑，且旋转状态下计算对齐没有实际意义。
+
+**改动：**
+`ui/textitem.py` — `_apply_snap()` 开头早返（拖动块自身有角度不吸附），收集目标框时跳过 `child.angle != 0` 的旋转块。
+
+**涉及文件：** `ui/textitem.py`
+
 ---
+
+### 快速符号面板插入失焦修复
+
+**问题/需求：** `QuickSymbolDialog` 插入符号时直接用 `cursor.insertText(symbol)`，但目标 `SourceTextEdit` 可能没有焦点，导致画布文本框看不到插入内容。
+
+**改动：**
+1. `ui/textedit_area.py` — 新增 `insert_external_text()` 方法，手动设置 change tracking 状态并调用 `handle_content_change()` 强制传播到画布
+2. `ui/quick_symbol_dialog.py` — 对目标使用 `insert_external_text`（若可用），否则回退旧路径
+
+**涉及文件：** `ui/textedit_area.py`、`ui/quick_symbol_dialog.py`
+
 
 ### 静态摸排：选中多个文本框右键翻译偶发报错
 

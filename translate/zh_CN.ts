@@ -1619,6 +1619,16 @@ Output:
             <source>No pages in project</source>
             <translation>项目中无页面</translation>
         </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>批量整理换行</source>
+            <translation>批量整理换行</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>已整理 {} 块 / 跳过 {} 块（竖排）</source>
+            <translation>已整理 {} 块 / 跳过 {} 块（竖排）</translation>
+        </message>
     </context>
     <context>
         <name>MainWindowMixin</name>
@@ -3525,6 +3535,11 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <source>Quick Symbol</source>
             <translation>快捷符号</translation>
         </message>
+        <message>
+            <location filename="..\ui\mainwindowbars.py" />
+            <source>批量整理换行…</source>
+            <translation>批量整理换行…</translation>
+        </message>
     </context>
     <context>
         <name>ToolsDialog</name>
@@ -4092,6 +4107,57 @@ in Settings → Mirror Config, then click Retry.</source>
             <location filename="..\ui\context_log_dialog.py" line="36" />
             <source>Clear</source>
             <translation>清空</translation>
+        </message>
+    </context>
+    <context>
+        <name>TextBlkItem</name>
+        <message>
+            <location filename="..\ui\textitem.py" />
+            <source>整理换行</source>
+            <translation>整理换行</translation>
+        </message>
+        <message>
+            <location filename="..\ui\textitem.py" />
+            <source>整理换行并收缩框</source>
+            <translation>整理换行并收缩框</translation>
+        </message>
+    </context>
+    <context>
+        <name>NormalizeBreaksDialog</name>
+        <message>
+            <location filename="..\ui\normalize_breaks_dialog.py" />
+            <source>批量整理换行</source>
+            <translation>批量整理换行</translation>
+        </message>
+        <message>
+            <location filename="..\ui\normalize_breaks_dialog.py" />
+            <source>全部页</source>
+            <translation>全部页</translation>
+        </message>
+        <message>
+            <location filename="..\ui\normalize_breaks_dialog.py" />
+            <source>完成后自动收缩框</source>
+            <translation>完成后自动收缩框</translation>
+        </message>
+        <message>
+            <location filename="..\ui\normalize_breaks_dialog.py" />
+            <source>应用</source>
+            <translation>应用</translation>
+        </message>
+        <message>
+            <location filename="..\ui\normalize_breaks_dialog.py" />
+            <source>取消</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <location filename="..\ui\normalize_breaks_dialog.py" />
+            <source>第</source>
+            <translation>第</translation>
+        </message>
+        <message>
+            <location filename="..\ui\normalize_breaks_dialog.py" />
+            <source>页</source>
+            <translation>页</translation>
         </message>
     </context>
 </TS>

@@ -266,6 +266,8 @@ class Canvas(QGraphicsScene):
     layout_textblks = Signal()
     reset_angle = Signal()
     squeeze_blk = Signal()
+    # 请求整理换行：squeeze=True 时同时收缩框
+    normalize_break_requested = Signal(bool)
 
     run_blktrans = Signal(int)
 
@@ -1152,6 +1154,14 @@ class Canvas(QGraphicsScene):
             angle_act = menu.addAction(self.tr("Reset Angle"))
             squeeze_act = menu.addAction(self.tr("Squeeze"))
 
+            # 整理换行：仅对选中的横排块可用
+            selected = self.selected_text_items()
+            norm_enabled = any(not b.blk.vertical for b in selected)
+            norm_act = menu.addAction(self.tr("整理换行"))
+            norm_sq_act = menu.addAction(self.tr("整理换行并收缩框"))
+            norm_act.setEnabled(norm_enabled)
+            norm_sq_act.setEnabled(norm_enabled)
+
             menu.addSeparator()
 
             # --- Alignment submenu ---
@@ -1199,6 +1209,10 @@ class Canvas(QGraphicsScene):
                 self.reset_angle.emit()
             elif rst == squeeze_act:
                 self.squeeze_blk.emit()
+            elif rst == norm_act:
+                self.normalize_break_requested.emit(False)
+            elif rst == norm_sq_act:
+                self.normalize_break_requested.emit(True)
             elif rst == align_left_act:
                 self.align_textblks.emit("left")
             elif rst == align_right_act:

@@ -589,3 +589,127 @@ class MultiPasteCommand(QUndoCommand):
         for blkitem, etran in zip(self.blkitems, self.etrans):
             blkitem.undo()
             etran.undo()
+
+
+class NormalizeBreaksCommand(QUndoCommand):
+    """整理换行的 undo 命令。一次 push，Ctrl+Z 全部回退。
+
+    跨页批量应用 ``normalize_softbreaks``：当前页经 live ``TextBlkItem``
+    写新文本，其它页只写 ``blk.translation``（redo 时清空 ``rich_text`` 交排版器重排）
+    squeeze 并入命令，保证一次 Ctrl+Z 连同收缩一起回退。
+    """
+
+    def __init__(
+        self,
+        proj: ProjImgTrans,
+        scene_manager,
+        changes: List[dict],
+    ):
+        """Args:
+            changes: 每项 ``{pagename, block_idx, old_translation, old_rich_text,
+                new_text, squeeze}``。当前页块额外存 ``old_html``/``old_rect``/``old_ffmt``。
+        """
+        super().__init__()
+        self.proj = proj
+        self.sm = scene_manager
+        self.changes = changes
+        self._first_redo = True
+
+        current_pname = proj.current_img
+        for ch in changes:
+            if ch["pagename"] != current_pname:
+                continue
+            item = _find_blk_item_in(scene_manager, ch["block_idx"])
+            if item is None:
+                continue
+            ch["old_html"] = item.toHtml()
+            ch["old_rect"] = item.absBoundingRect(qrect=True)
+            ch["old_ffmt"] = item.get_fontformat()
+
+    def redo(self):
+        if self._first_redo:
+            self._first_redo = False
+            return
+        self._apply("new")
+
+    def undo(self):
+        self._apply("old")
+
+    def _apply(self, which: str):
+        """``which='new'``: 应用新文本；``which='old'``: 还原旧文本。"""
+        current_pname = self.proj.current_img
+        sm = self.sm
+        for ch in self.changes:
+            pname = ch["pagename"]
+            bidx = ch["block_idx"]
+            blk = self.proj.pages[pname][bidx]
+            if pname != current_pname:
+                # 非当前页：只改数据，无 live item
+                if which == "new":
+                    blk.translation = ch["new_text"]
+                    blk.rich_text = ""
+                else:
+                    blk.translation = ch["old_translation"]
+                    blk.rich_text = ch["old_rich_text"]
+                continue
+
+            # 当前页：通过 live item 写
+            item = _find_blk_item_in(sm, bidx)
+            if item is None:
+                # 防御：item 不在就只改数据
+                if which == "new":
+                    blk.translation = ch["new_text"]
+                    blk.rich_text = ""
+                else:
+                    blk.translation = ch["old_translation"]
+                    blk.rich_text = ch["old_rich_text"]
+                continue
+
+            if which == "new":
+                blk.translation = ch["new_text"]
+                blk.rich_text = ""
+                item.setPlainTextAndKeepUndoStack(ch["new_text"])
+                # 新文本结构可能变了，重应用当前 char format 保证样式不丢
+                item.set_fontformat(item.get_fontformat(), set_char_format=True,
+                                    set_stroke_width=False, set_effect=False)
+                if ch.get("squeeze", False):
+                    item.squeezeBoundingRect(repaint=True)
+                else:
+                    item.repaint_background()
+                # 同步右侧 e_trans
+                try:
+                    pairw = sm.pairwidget_list[bidx]
+                    if pairw is not None:
+                        pairw.e_trans.setPlainTextAndKeepUndoStack(ch["new_text"])
+                        pairw.e_trans.document().clearUndoRedoStacks()
+                except Exception:
+                    pass
+            else:
+                blk.translation = ch["old_translation"]
+                blk.rich_text = ch["old_rich_text"]
+                item.setHtml(ch["old_html"])
+                item.set_fontformat(ch["old_ffmt"])
+                if ch.get("old_rect") is not None:
+                    item.setRect(ch["old_rect"])
+                else:
+                    item.repaint_background()
+                try:
+                    pairw = sm.pairwidget_list[bidx]
+                    if pairw is not None:
+                        pairw.e_trans.setPlainTextAndKeepUndoStack(
+                            ch["old_translation"]
+                        )
+                        pairw.e_trans.document().clearUndoRedoStacks()
+                except Exception:
+                    pass
+
+
+def _find_blk_item_in(scene_manager, block_idx: int):
+    """Return the live ``TextBlkItem`` for *block_idx* on the current page, or None."""
+    try:
+        tbi_list = scene_manager.textblk_item_list
+        if 0 <= block_idx < len(tbi_list):
+            return tbi_list[block_idx]
+    except Exception:
+        pass
+    return None
