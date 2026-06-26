@@ -8,11 +8,24 @@
 
 本分支是减法导向的 fork：精简优先，不添加未被要求的功能；交互路径越短越好。
 
+## 开发动作规范
+
+> 面向有能力但缺谨慎后训练的模型。响应快不是少思考的理由——宁可慢一步把动作做对。原则在前，动手在后。
+
+- **动手前先对齐**：非平凡改动前，先用一两句话陈述打算改哪、为什么、影响面，再调工具。探索阶段（读代码 figuring out）不边读边改。trivial（typo、单行）例外，别为小事啰嗦。
+- **复现驱动**：修 bug 先写能复现的最小用例或加日志确认现象，**看到它失败**，再改；改完同一用例必须变绿。禁止凭"应该是这里"开枪就改。
+- **读真实代码，别读假设**：改动前先 `Read` 实际实现与**调用方**。一个函数被谁调用、调用者依赖什么返回值/副作用顺序，比函数本身更能决定能否安全改。禁止按函数名、注释、类型签名脑补行为。
+- **证据先于断言**：声称"完成 / 修复 / 通过"前先跑验证命令（`python scripts/i18n_check.py`、测试、启动 app 看一眼）。无法验证时明说"我无法验证，需要你跑"，**绝不**把不确定包装成确定。
+- **区分事实与推测**：汇报时明确标注哪些是已读代码确认的、哪些是推断。给出推断的前提条件（"若 X 是单线程调用，则……否则需考虑……"），让用户能在假设错时打断。
+- **暴露分歧，不默行**：多种合理解释并存时停下来给选项 + 推荐。禁止挑一个解释闷头干完整条路。
+- **手术刀改动**：每行改动能直接追溯到本次需求。顺手改格式、顺手重命名、顺手加参数都是负债。看到范围外的死代码/坏味道，**说一声，不删**。本分支是减法 fork，能删 > 能复用 > 能写。
+- **不可逆 / 对外动作先确认**：`git commit`、`git push`、删文件、改 `config.json`、发外网请求、写文档发布——先确认再动。（git 细则见下《Git 规则》。）
+
 ## 架构
 
 每个管线阶段使用注册器模式（`utils/registry.py`），模块通过装饰器自注册：
 
-```
+```text
 modules/
   textdetector/  →  detector_*.py  (@register_textdetector)
   ocr/           →  ocr_*.py       (@register_ocr)
@@ -26,7 +39,7 @@ modules/
 ## 关键文件
 
 | 路径 | 用途 |
-|------|------|
+| ------ | ------ |
 | `launch.py` | 入口，命令行参数，PyTorch 设备 |
 | `utils/proj_imgtrans.py` | 项目管理（页面、文字块、撤销栈） |
 | `utils/textblock.py` | 核心数据单元（坐标、原文、译文、字体、遮罩） |
@@ -56,6 +69,7 @@ modules/
 - 模块声明 `params: Dict` 自动渲染为 UI 表单。以 `_` 开头的 key 为内部参数，save/load 时保留。
 
 全局配置 `pcfg`（`utils/config.py:279`）是模块级单例：
+
 - 改 `pcfg` 后须显式调用 `save_config()`。仅 `closeEvent` 和 `ConfigPanel.hideEvent` 触发自动保存。
 - 启动顺序：`launch.py` 先 `load_config()` 再 `init_module_registries()`。
 
@@ -81,23 +95,7 @@ modules/
 - 模块参数 `description` 用英文，翻译放 `<context><name>ParamWidget</name></context>`。
 - 无需翻译：日志、LLM prompt、字体测试字符、语言映射字典。
 - 常见问题：source 大小写不一致；context 放错；`type="obsolete"`。批量编辑 ts 用 Python 脚本直接操作文本。
-- **⚠️ QM 编码陷阱**：`scripts/qm_compile.py` 旧版用 `latin-1` 编码，会把 `—`、`→`、`⚠`、`✓` 等非 Latin-1 字符静默替换成 `?`，导致 Qt 哈希查找失败、翻译回退为英文。如 `self.tr()` 正确但运行时仍显英文，检查 qm 被污染：
-
-  ```bash
-  python -c "
-  import struct
-  d=open('translate/zh_CN.qm','rb').read(); p=16
-  while p<len(d):
-    t,l=d[p],struct.unpack('>I',d[p+1:p+5])[0]
-    if t==0x69:  # SECTION_MESSAGES
-      raw=d[p+5:p+5+l]
-      for kw in [b'? recommended',b'? from',b'? Model']:
-        if kw in raw: print('WARN: corrupted, recompile!'); break
-      break
-    p+=5+l"
-  ```
-
-  修复：确保 `_iso8859_str()` 用 `"utf-8"` 编码，然后重新编译 qm。
+- **⚠️ QM 编码陷阱**：`scripts/qm_compile.py` 旧版用 `latin-1` 编码，会把 `—`/`→`/`⚠`/`✓` 等非 Latin-1 字符静默替换成 `?`，导致 Qt 哈希查找失败、翻译回退为英文。`self.tr()` 正确但运行时仍显英文 → 查 qm 是否被污染，确保 `_iso8859_str()` 用 `"utf-8"` 后重新编译。诊断脚本与细节见 [`docs/i18n.md`](docs/i18n.md)「常见问题」。
 
 ## 快捷键系统
 
