@@ -2049,6 +2049,8 @@ class MainWindow(mainwindow_cls):
         if len(blkitem_list) < 1:
             return False
 
+        self._blktrans_at_page = self.imgtrans_proj.current_img
+
         self.global_search_widget.set_document_edited()
 
         im_h, im_w = tgt_img.shape[:2]
@@ -2243,10 +2245,20 @@ class MainWindow(mainwindow_cls):
         if len(blk_ids) < 1:
             return
 
-        blkitem_list = [self.st_manager.textblk_item_list[idx] for idx in blk_ids]
+        # Guard: page may have changed during async translation
+        if getattr(self, '_blktrans_at_page', None) != self.imgtrans_proj.current_img:
+            return
+
+        item_list = self.st_manager.textblk_item_list
+        if any(idx >= len(item_list) for idx in blk_ids):
+            return
+
+        blkitem_list = [item_list[idx] for idx in blk_ids]
 
         pairw_list = []
         for blk in blkitem_list:
+            if blk.idx >= len(self.st_manager.pairwidget_list):
+                return
             pairw_list.append(self.st_manager.pairwidget_list[blk.idx])
         self.canvas.push_undo_command(
             RunBlkTransCommand(self.canvas, blkitem_list, pairw_list, mode)

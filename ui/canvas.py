@@ -1157,8 +1157,8 @@ class Canvas(QGraphicsScene):
             # 整理换行：仅对选中的横排块可用
             selected = self.selected_text_items()
             norm_enabled = any(not b.blk.vertical for b in selected)
-            norm_act = menu.addAction(self.tr("整理换行"))
-            norm_sq_act = menu.addAction(self.tr("整理换行并收缩框"))
+            norm_act = menu.addAction(self.tr("Normalize Breaks"))
+            norm_sq_act = menu.addAction(self.tr("Normalize Breaks and Shrink"))
             norm_act.setEnabled(norm_enabled)
             norm_sq_act.setEnabled(norm_enabled)
 

@@ -474,7 +474,6 @@ class ImgtransThread(QThread):
                     ocr_mod.run_ocr(tgt_img, blk_list, split_textblk=True)
             except Exception as e:
                 create_error_dialog(e, self.tr("OCR Failed."), "OCRFailed")
-            self.finish_blktrans.emit(mode, blk_ids)
 
         if mode != 0 and mode < 3:
             try:
@@ -490,41 +489,45 @@ class ImgtransThread(QThread):
                 create_error_dialog(
                     e, self.tr("Translation Failed."), "TranslationFailed"
                 )
-            self.finish_blktrans.emit(mode, blk_ids)
         if mode > 1:
             im_h, im_w = tgt_img.shape[:2]
             progress_prod = 100.0 / len(blk_list) if len(blk_list) > 0 else 0
-            for ii, blk in enumerate(blk_list):
-                xyxy = enlarge_window(blk.xyxy, im_w, im_h)
-                xyxy = np.array(xyxy)
-                x1, y1, x2, y2 = xyxy.astype(np.int64)
-                blk.region_inpaint_dict = None
-                if y2 - y1 > 2 and x2 - x1 > 2:
-                    im = np.copy(tgt_img[y1:y2, x1:x2])
-                    maskseg_method = get_maskseg_method()
-                    inpaint_mask_array, ballon_mask, bub_dict = maskseg_method(
-                        im, mask=tgt_mask[y1:y2, x1:x2]
-                    )
-                    mask = self.post_process_mask(inpaint_mask_array)
-                    if mask.sum() > 0:
-                        if self.inpaint_thread.inpainter is None:
-                            LOGGER.warning(
-                                "Inpainter not loaded, "
-                                "skipping inpaint in blktrans"
-                            )
-                        else:
-                            inpainted = (
-                                self.inpaint_thread.inpainter.inpaint(im, mask)
-                            )
-                            blk.region_inpaint_dict = {
-                                "img": im,
-                                "mask": mask,
-                                "inpaint_rect": [x1, y1, x2, y2],
-                                "inpainted": inpainted,
-                            }
+            try:
+                for ii, blk in enumerate(blk_list):
+                    xyxy = enlarge_window(blk.xyxy, im_w, im_h)
+                    xyxy = np.array(xyxy)
+                    x1, y1, x2, y2 = xyxy.astype(np.int64)
+                    blk.region_inpaint_dict = None
+                    if y2 - y1 > 2 and x2 - x1 > 2:
+                        im = np.copy(tgt_img[y1:y2, x1:x2])
+                        maskseg_method = get_maskseg_method()
+                        inpaint_mask_array, ballon_mask, bub_dict = maskseg_method(
+                            im, mask=tgt_mask[y1:y2, x1:x2]
+                        )
+                        mask = self.post_process_mask(inpaint_mask_array)
+                        if mask.sum() > 0:
+                            if self.inpaint_thread.inpainter is None:
+                                LOGGER.warning(
+                                    "Inpainter not loaded, "
+                                    "skipping inpaint in blktrans"
+                                )
+                            else:
+                                inpainted = (
+                                    self.inpaint_thread.inpainter.inpaint(im, mask)
+                                )
+                                blk.region_inpaint_dict = {
+                                    "img": im,
+                                    "mask": mask,
+                                    "inpaint_rect": [x1, y1, x2, y2],
+                                    "inpainted": inpainted,
+                                }
                     self.finish_blktrans_stage.emit(
                         "inpaint", int((ii + 1) * progress_prod)
                     )
+            except Exception as e:
+                create_error_dialog(
+                    e, self.tr("Inpaint Failed."), "InpaintFailed"
+                )
         self.finish_blktrans.emit(mode, blk_ids)
 
     def _imgtrans_pipeline(self):

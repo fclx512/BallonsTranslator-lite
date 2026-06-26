@@ -12,7 +12,9 @@ from qtpy.QtGui import (
 )
 from qtpy.QtWidgets import (
     QAbstractItemView,
+    QAbstractSpinBox,
     QCheckBox,
+    QGraphicsOpacityEffect,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -145,9 +147,10 @@ class ConfigTextLabel(QLabel):
 class ConfigSubBlock(Widget):
     def __init__(
         self,
-        widget: Union[QWidget, QLayout],
+        widget: Union[QWidget, QLayout] = None,
         name: str = None,
         description: str = None,
+        note: str = None,
         vertical_layout=True,
         insert_stretch: bool = False,
         content_margins=(24, 6, 24, 6),
@@ -158,7 +161,27 @@ class ConfigSubBlock(Widget):
         else:
             layout = QHBoxLayout(self)
         self.name = name
-        if name is not None:
+        self._note_text = note
+        if name is not None and note is not None:
+            # Name row: label + ? button
+            name_row = QWidget()
+            name_row_layout = QHBoxLayout(name_row)
+            name_row_layout.setContentsMargins(0, 0, 0, 0)
+            name_row_layout.setSpacing(4)
+            textlabel = ConfigTextLabel(
+                name, CONFIG_FONTSIZE_CONTENT, QFont.Weight.Normal
+            )
+            self.name_label = textlabel
+            name_row_layout.addWidget(textlabel)
+            self._note_btn = QPushButton("?")
+            self._note_btn.setFixedSize(20, 20)
+            self._note_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._note_btn.clicked.connect(self._show_note_popup)
+            self._style_note_btn()
+            name_row_layout.addWidget(self._note_btn)
+            name_row_layout.addStretch()
+            layout.addWidget(name_row)
+        elif name is not None:
             textlabel = ConfigTextLabel(
                 name, CONFIG_FONTSIZE_CONTENT, QFont.Weight.Normal
             )
@@ -168,18 +191,42 @@ class ConfigSubBlock(Widget):
             layout.addWidget(ConfigTextLabel(description, CONFIG_FONTSIZE_CONTENT - 2))
         if insert_stretch:
             layout.insertStretch(-1)
-        if isinstance(widget, QWidget):
-            layout.addWidget(widget)
-        else:
-            layout.addLayout(widget)
+        if widget is not None:
+            if isinstance(widget, QWidget):
+                layout.addWidget(widget)
+            else:
+                layout.addLayout(widget)
         self.widget = widget
         self.setContentsMargins(*content_margins)
+
+    def _style_note_btn(self):
+        """Apply theme-accent styling to the ? note button."""
+        from ui.misc import get_theme_color
+
+        c = get_theme_color()
+        r, g, b = c.red(), c.green(), c.blue()
+        self._note_btn.setStyleSheet(
+            f"QPushButton {{"
+            f"  border: 1px solid rgba({r},{g},{b},128);"
+            f"  border-radius: 10px;"
+            f"  font-size: 12px; font-weight: bold; padding: 0px;"
+            f"  color: rgb({r},{g},{b}); background: transparent;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  background: rgba({r},{g},{b},40);"
+            f"}}"
+        )
+
+    def _show_note_popup(self):
+        self._note_popup = ConfigNotePopup(self._note_btn, self._note_text)
+        self._note_popup.show()
 
 
 def combobox_with_label(
     sel: List[str],
     name: str,
     description: str = None,
+    note: str = None,
     vertical_layout: bool = False,
     target_block: QWidget = None,
     fix_size: bool = True,
@@ -193,6 +240,7 @@ def combobox_with_label(
             combox,
             name,
             description,
+            note=note,
             vertical_layout=vertical_layout,
             insert_stretch=insert_stretch,
         )
@@ -210,7 +258,7 @@ def combobox_with_label(
 
 
 def checkbox_with_label(
-    name: str, description: str = None, target_block: QWidget = None
+    name: str, description: str = None, note: str = None, target_block: QWidget = None
 ):
     checkbox = QCheckBox()
     if description is not None:
@@ -223,7 +271,7 @@ def checkbox_with_label(
         vertical_layout = False
 
     if target_block is None:
-        sublock = ConfigSubBlock(checkbox, name, vertical_layout=vertical_layout)
+        sublock = ConfigSubBlock(checkbox, name, note=note, vertical_layout=vertical_layout)
         if vertical_layout is False:
             sublock.layout().addItem(
                 QSpacerItem(
@@ -353,6 +401,71 @@ def _scroll_interval() -> int:
         return max(4, min(interval, 16))
     except Exception:
         return 8
+
+
+class ConfigNotePopup(QFrame):
+    """Floating popup for ConfigSubBlock notes. Anchors to a ? button and
+    auto-closes on focus loss via Qt.Popup flag."""
+
+    _DURATION = 200
+
+    def __init__(self, anchor: QWidget, text: str):
+        super().__init__(
+            None, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setAutoFillBackground(True)
+        self.setObjectName("ConfigNotePopup")
+        self._anchor = anchor
+        self._anim_timer = QTimer(self)
+        self._anim_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._anim_timer.timeout.connect(self._tick)
+        self._elapsed = QElapsedTimer()
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 10, 14, 10)
+        label = QLabel(text)
+        label.setWordWrap(True)
+        label.setMaximumWidth(320)
+        label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextBrowserInteraction
+        )
+        layout.addWidget(label)
+
+        self._effect = QGraphicsOpacityEffect(self)
+        self._effect.setOpacity(0.0)
+        self.setGraphicsEffect(self._effect)
+
+    def show(self):
+        # Position: to the left of anchor, vertically centered
+        btn_global = self._anchor.mapToGlobal(QPoint(0, 0))
+        btn_h = self._anchor.height()
+        self.adjustSize()
+        pw = self.sizeHint().width()
+        ph = self.sizeHint().height()
+        x = btn_global.x() - pw - 12
+        y = btn_global.y() + (btn_h - ph) // 2
+        screen = QGuiApplication.primaryScreen().availableGeometry()
+        if x < screen.left():
+            x = btn_global.x() + self._anchor.width() + 12
+        y = max(screen.top(), min(y, screen.bottom() - ph))
+        self.move(x, y)
+
+        super().show()
+        if pcfg.animation_fps < 0:
+            self._effect.setOpacity(1.0)
+            return
+        self._elapsed.start()
+        self._anim_timer.start(_scroll_interval())
+
+    def _tick(self):
+        elapsed = self._elapsed.elapsed()
+        progress = min(elapsed / self._DURATION, 1.0)
+        eased = QEasingCurve(QEasingCurve.Type.OutCubic).valueForProgress(progress)
+        self._effect.setOpacity(eased)
+        if progress >= 1.0:
+            self._anim_timer.stop()
+            self._effect.setOpacity(1.0)
 
 
 class NavItemDelegate(QStyledItemDelegate):
@@ -1341,38 +1454,77 @@ class ConfigPanel(Widget):
         models_group = PanelGroupBox(self.tr("Models"))
         self.models_group = models_group
         models_group.setProperty("cfgPage", True)
+        models_group.setObjectName("GroupModels")
         models_vlayout = models_group.contentLayout()
         models_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
-        models_vlayout.setSpacing(4)
+        models_vlayout.setSpacing(8)
 
-        self.load_model_checker, cb_block = checkbox_with_label(
-            self.tr("Load models on demand"),
-            description=self.tr("Load models on demand to save memory."),
+        # -- Model Loading section --
+        loading_header = ConfigSubBlock(name=self.tr("Model Loading"))
+        models_vlayout.addWidget(loading_header)
+
+        # Load on demand
+        self.load_model_checker = QCheckBox()
+        font = self.load_model_checker.font()
+        font.setPointSizeF(CONFIG_FONTSIZE_CONTENT * 0.8)
+        self.load_model_checker.setFont(font)
+        self.load_model_checker.setText(self.tr("Load models on demand to save memory."))
+        cb_block = ConfigSubBlock(
+            self.load_model_checker,
+            name=self.tr("Load models on demand"),
+            note=self.tr("When enabled, models are loaded only on first use instead of at startup. Reduces initial memory and launch time. Recommended for systems with limited GPU memory."),
         )
         models_vlayout.addWidget(cb_block)
 
-        self.empty_runcache_checker, cb_block2 = checkbox_with_label(
-            self.tr("Empty cache after RUN"),
-            description=self.tr("Empty cache after RUN to save memory."),
+        # Empty cache
+        self.empty_runcache_checker = QCheckBox()
+        font = self.empty_runcache_checker.font()
+        font.setPointSizeF(CONFIG_FONTSIZE_CONTENT * 0.8)
+        self.empty_runcache_checker.setFont(font)
+        self.empty_runcache_checker.setText(self.tr("Empty cache after RUN to save memory."))
+        cb_block2 = ConfigSubBlock(
+            self.empty_runcache_checker,
+            name=self.tr("Empty cache after RUN"),
+            note=self.tr("Clears intermediate inference data after each pipeline run. Frees GPU/CPU memory between runs. Useful when working with large projects or limited hardware."),
         )
         models_vlayout.addWidget(cb_block2)
 
         self.load_model_checker.stateChanged.connect(self.on_load_model_changed)
         self.empty_runcache_checker.stateChanged.connect(self.on_runcache_changed)
 
+        # -- Management section --
+        mgmt_header = ConfigSubBlock(name=self.tr("Management"))
+        models_vlayout.addWidget(mgmt_header)
+
         unload_btn = QPushButton(self.tr("Unload All Models"))
+        unload_btn.setObjectName("ConfigButton")
         unload_btn.clicked.connect(self.unload_models)
-        models_vlayout.addWidget(unload_btn)
+        unload_sublock = ConfigSubBlock(
+            unload_btn,
+            name=self.tr("Unload models"),
+            note=self.tr("Immediately releases all loaded models from memory. Use this to free GPU/CPU resources without restarting the application."),
+        )
+        models_vlayout.addWidget(unload_sublock)
 
         profiles_btn = QPushButton(self.tr("Manage API Profiles..."))
+        profiles_btn.setObjectName("ConfigButton")
         profiles_btn.clicked.connect(self._open_profile_manager)
-        models_vlayout.addWidget(profiles_btn)
+        profiles_sublock = ConfigSubBlock(
+            profiles_btn,
+            name=self.tr("API profiles"),
+            note=self.tr("Configure API credentials and endpoints for online translators, OCR services, and AI features. Supports multiple profiles for different services or accounts."),
+        )
+        models_vlayout.addWidget(profiles_sublock)
+
+        # Register Models as its own page
+        self._add_page(models_group)
 
         self.detect_config_panel = TextDetectConfigPanel(
             self.tr("Detector"), scrollWidget=self
         )
         detect_group, self.detect_sub_block = self._build_grouped_widget(
-            label_text_det, self.detect_config_panel, object_name="GroupDetect"
+            label_text_det, self.detect_config_panel, object_name="GroupDetect",
+            note=self.tr("Select the text detection engine. Different detectors offer varying accuracy and speed. Some engines may require additional model downloads on first use."),
         )
         self.detect_config_panel.keep_existing_checker.clicked.connect(
             self.on_keepline_clicked
@@ -1380,21 +1532,24 @@ class ConfigPanel(Widget):
 
         self.ocr_config_panel = OCRConfigPanel(self.tr("OCR"), scrollWidget=self)
         ocr_group, self.ocr_sub_block = self._build_grouped_widget(
-            label_text_ocr, self.ocr_config_panel, object_name="GroupOCR"
+            label_text_ocr, self.ocr_config_panel, object_name="GroupOCR",
+            note=self.tr("Select the OCR (Optical Character Recognition) engine. This stage extracts text from detected text regions in the image."),
         )
 
         self.inpaint_config_panel = InpaintConfigPanel(
             self.tr("Inpainter"), scrollWidget=self
         )
         inpaint_group, self.inpaint_sub_block = self._build_grouped_widget(
-            label_inpaint, self.inpaint_config_panel, object_name="GroupInpaint"
+            label_inpaint, self.inpaint_config_panel, object_name="GroupInpaint",
+            note=self.tr("Select the image inpainting engine. After erasing text regions, the inpainter fills the background. Quality varies by image complexity and engine capability."),
         )
 
         self.trans_config_panel = TranslatorConfigPanel(
             label_translator, scrollWidget=self
         )
         trans_group, self.trans_sub_block = self._build_grouped_widget(
-            label_translator, self.trans_config_panel, object_name="GroupTranslate"
+            label_translator, self.trans_config_panel, object_name="GroupTranslate",
+            note=self.tr("Select the translation engine. Online translators require an API profile with credentials configured under Models > API Profiles."),
         )
 
         # === Combined DL Module pipeline page ===
@@ -1402,7 +1557,6 @@ class ConfigPanel(Widget):
         dl_layout = QVBoxLayout(dl_container)
         dl_layout.setContentsMargins(0, 0, 0, 0)
         dl_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        dl_layout.addWidget(models_group)
         dl_layout.addWidget(detect_group)
         dl_layout.addWidget(ocr_group)
         dl_layout.addWidget(inpaint_group)
@@ -1414,7 +1568,6 @@ class ConfigPanel(Widget):
         self._dl_scroll_area = self.pageStack.widget(idx)
 
         self._dl_section_widgets = {
-            "models": models_group,
             "detect": detect_group,
             "ocr": ocr_group,
             "inpaint": inpaint_group,
@@ -1434,21 +1587,28 @@ class ConfigPanel(Widget):
         self.open_on_startup_checker.stateChanged.connect(
             self.on_open_onstartup_changed
         )
-        project_layout.addWidget(self.open_on_startup_checker)
+        startup_sublock = ConfigSubBlock(
+            self.open_on_startup_checker, name=self.tr("Startup"),
+            note=self.tr("Reopen the last project automatically when the application starts. Saves time when continuing work on the same project."),
+        )
+        project_layout.addWidget(startup_sublock)
 
         # Output section label
-        output_label = ConfigTextLabel(self.tr("Output"), CONFIG_FONTSIZE_CONTENT - 2)
-        project_layout.addWidget(output_label)
+        output_header = ConfigSubBlock(name=self.tr("Output"))
+        project_layout.addWidget(output_header)
 
         # JXL removed from options: pillow-jxl-plugin compatibility issues
         self.rst_imgformat_combobox, imsave_sublock = combobox_with_label(
-            ["PNG", "JPG", "WEBP"], self.tr("Result image format"), parent=self
+            ["PNG", "JPG", "WEBP"], self.tr("Result image format"),
+            note=self.tr("Choose the output format for translated images. PNG offers lossless quality. JPG and WEBP produce smaller files with some quality loss."),
+            parent=self,
         )
         self.rst_imgformat_combobox.activated.connect(self.on_rst_imgformat_changed)
         project_layout.addWidget(imsave_sublock)
 
         self.rst_autoformat_checker, autoformat_sublock = checkbox_with_label(
-            self.tr("Auto detect source format")
+            self.tr("Auto detect source format"),
+            note=self.tr("When enabled, the output format automatically matches the source image format. Overrides the format selected above."),
         )
         self.rst_autoformat_checker.stateChanged.connect(self.on_autoformat_changed)
         project_layout.addWidget(autoformat_sublock)
@@ -1458,7 +1618,9 @@ class ConfigPanel(Widget):
         self.rst_imgquality_edit.finish_edited.connect(self.on_edit_quality_changed)
 
         quality_sublock = ConfigSubBlock(
-            self.rst_imgquality_edit, self.tr("Quality"), vertical_layout=False
+            self.rst_imgquality_edit, self.tr("Quality"),
+            note=self.tr("Output image quality (0-100). Higher values give better quality but larger file sizes. Applies to JPG and WEBP only."),
+            vertical_layout=False,
         )
         quality_sublock.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
         quality_sublock.layout().insertStretch(-1)
@@ -1467,7 +1629,9 @@ class ConfigPanel(Widget):
         # JXL removed from options
         self.intermediate_imgformat_combobox, intermediate_imsave_sublock = (
             combobox_with_label(
-                ["PNG"], self.tr("Intermediate image format"), parent=self
+                ["PNG"], self.tr("Intermediate image format"),
+                note=self.tr("Format used for intermediate processing data. PNG is the default lossless option to preserve quality during processing."),
+                parent=self,
             )
         )
         self.intermediate_imgformat_combobox.activated.connect(
@@ -1621,31 +1785,36 @@ class ConfigPanel(Widget):
             2,
         )
 
-        ts_layout.addWidget(delegation_frame)
+        delegation_sublock = ConfigSubBlock(
+            delegation_frame, name=self.tr("Default Font Format"),
+            note=self.tr("Configure the fallback font format for text blocks without their own formatting. Each attribute can be delegated separately."),
+        )
+        ts_layout.addWidget(delegation_sublock)
 
         # Text formatting sub-label
-        fmt_label = ConfigTextLabel(
-            self.tr("Text formatting"), CONFIG_FONTSIZE_CONTENT - 2
-        )
-        ts_layout.addWidget(fmt_label)
+        fmt_header = ConfigSubBlock(name=self.tr("Text formatting"))
+        ts_layout.addWidget(fmt_header)
 
         self.let_autolayout_checker, al_sublock = checkbox_with_label(
             self.tr("Auto layout"),
             description=self.tr(
                 "Split translation into multi-lines according to the extracted balloon region."
             ),
+            note=self.tr("Automatically split translated text into multiple lines matching the shape of the detected balloon or text region."),
         )
         self.let_autolayout_checker.stateChanged.connect(self.on_autolayout_changed)
         ts_layout.addWidget(al_sublock)
 
         self.let_uppercase_checker, uc_sublock = checkbox_with_label(
-            self.tr("To uppercase")
+            self.tr("To uppercase"),
+            note=self.tr("Convert all translated text to uppercase. Useful for certain typographic styles or all-caps conventions."),
         )
         self.let_uppercase_checker.stateChanged.connect(self.on_uppercase_changed)
         ts_layout.addWidget(uc_sublock)
 
         self.let_textstyle_indep_checker, ti_sublock = checkbox_with_label(
-            self.tr("Independent text styles for each projects")
+            self.tr("Independent text styles for each projects"),
+            note=self.tr("When enabled, each project maintains its own text style settings independently instead of using shared global styles."),
         )
         self.let_textstyle_indep_checker.stateChanged.connect(
             self.on_textstyle_indep_changed
@@ -1663,23 +1832,29 @@ class ConfigPanel(Widget):
             self.on_punctuation_position_changed
         )
         punct_pos_sublock = ConfigSubBlock(
-            self.punctuation_position_combo, self.tr("Punctuation Position")
+            self.punctuation_position_combo, self.tr("Punctuation Position"),
+            note=self.tr("Choose punctuation alignment: Centered (traditional CJK style in Traditional Chinese and Japanese) or Edge-aligned (modern Simplified Chinese style)."),
         )
         ts_layout.addWidget(punct_pos_sublock)
 
         self.exclude_fonts_btn = QPushButton(self.tr("Exclude Fonts..."), parent=self)
-        self.exclude_fonts_btn.setFixedWidth(CONFIG_COMBOBOX_LONG)
+        self.exclude_fonts_btn.setObjectName("ConfigButton")
         self.exclude_fonts_btn.clicked.connect(self.on_exclude_fonts_clicked)
-        btn_sublock = ConfigSubBlock(self.exclude_fonts_btn)
+        btn_sublock = ConfigSubBlock(
+            self.exclude_fonts_btn, name=self.tr("Font Exclusion"),
+            note=self.tr("Hide selected fonts from all font selection dropdowns. Useful for filtering out unusable or decorative fonts."),
+        )
         ts_layout.addWidget(btn_sublock)
 
         self.max_font_size_edit = QSpinBox()
+        self.max_font_size_edit.setButtonSymbols(QAbstractSpinBox.NoButtons)
         self.max_font_size_edit.setRange(10, 1000)
         self.max_font_size_edit.setValue(pcfg.max_font_size)
         self.max_font_size_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
         self.max_font_size_edit.valueChanged.connect(self.on_max_font_size_changed)
         max_font_sublock = ConfigSubBlock(
-            self.max_font_size_edit, self.tr("Max Font Size (px)")
+            self.max_font_size_edit, self.tr("Max Font Size (px)"),
+            note=self.tr("Maximum allowed font size in pixels. Text that would render larger than this limit is scaled down automatically."),
         )
         ts_layout.addWidget(max_font_sublock)
 
@@ -1696,17 +1871,19 @@ class ConfigPanel(Widget):
         interface_layout.setSpacing(8)
 
         # Behavior sub-label
-        behavior_label = ConfigTextLabel(
-            self.tr("Behavior"), CONFIG_FONTSIZE_CONTENT - 2
-        )
-        interface_layout.addWidget(behavior_label)
+        behavior_header = ConfigSubBlock(name=self.tr("Behavior"))
+        interface_layout.addWidget(behavior_header)
 
         # Fit image to window on open
         self.fit_window_checker = QCheckBox(
             self.tr("Fit image to window when opening")
         )
         self.fit_window_checker.stateChanged.connect(self.on_fit_window_changed)
-        interface_layout.addWidget(self.fit_window_checker)
+        fit_win_sublock = ConfigSubBlock(
+            self.fit_window_checker, name=self.tr("Window Fit"),
+            note=self.tr("Automatically scale the image to fit the window when opening a project. Avoids manual zooming on every file open."),
+        )
+        interface_layout.addWidget(fit_win_sublock)
 
         # Sub-option: also fit on page switch
         self.fit_window_page_checker = QCheckBox(
@@ -1716,14 +1893,16 @@ class ConfigPanel(Widget):
             self.on_fit_window_page_changed
         )
         self.fit_window_page_checker.setVisible(False)
-        interface_layout.addWidget(self.fit_window_page_checker)
+        self._fit_page_sublock = ConfigSubBlock(self.fit_window_page_checker)
+        self._fit_page_sublock.setVisible(False)
+        interface_layout.addWidget(self._fit_page_sublock)
 
         # Animation mode
-        anim_row = QHBoxLayout()
-        anim_row.setSpacing(6)
-        anim_label = QLabel(self.tr("Animation"))
-        anim_row.addWidget(anim_label)
-        self.anim_combo = ConfigComboBox()
+        anim_widget = QWidget()
+        anim_row_layout = QHBoxLayout(anim_widget)
+        anim_row_layout.setContentsMargins(0, 0, 0, 0)
+        anim_row_layout.setSpacing(6)
+        self.anim_combo = ConfigComboBox(scrollWidget=self)
         self.anim_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
         self.anim_combo.addItems(
             [
@@ -1734,27 +1913,40 @@ class ConfigPanel(Widget):
             ]
         )
         self.anim_combo.activated.connect(self._on_anim_mode_changed)
-        anim_row.addWidget(self.anim_combo)
-        anim_row.addStretch()
-        interface_layout.addLayout(anim_row)
+        anim_row_layout.addWidget(self.anim_combo)
+        anim_row_layout.addStretch()
+        anim_sublock = ConfigSubBlock(
+            anim_widget, name=self.tr("Animation"),
+            note=self.tr("Controls UI transition smoothness. Auto matches the display refresh rate. Select a specific FPS to cap GPU usage. Off disables all animations."),
+            vertical_layout=False,
+        )
+        interface_layout.addWidget(anim_sublock)
 
         # Shortcut button
         self.shortcut_btn = QPushButton(self.tr("Edit Shortcuts..."), parent=self)
-        self.shortcut_btn.setFixedWidth(CONFIG_COMBOBOX_LONG + 32)
+        self.shortcut_btn.setObjectName("ConfigButton")
         self.shortcut_btn.clicked.connect(self._open_shortcut_dialog)
-        interface_layout.addWidget(self.shortcut_btn)
+        shortcut_sublock = ConfigSubBlock(
+            self.shortcut_btn, name=self.tr("Shortcuts"),
+            note=self.tr("Customize keyboard shortcuts for all actions. Click a shortcut pill to remove it. Use the + button to record a new key combination."),
+        )
+        interface_layout.addWidget(shortcut_sublock)
 
         # Combo Box Presets (moved from Typesetting)
         preset_header = QLabel(self.tr("Combo Box Presets"))
-        preset_header.setStyleSheet("font-weight: bold; padding: 12px 0 4px 24px;")
-        interface_layout.addWidget(preset_header)
+        preset_header.setStyleSheet("font-weight: bold;")
+        preset_header_sublock = ConfigSubBlock(
+            preset_header, content_margins=(24, 12, 24, 4)
+        )
+        interface_layout.addWidget(preset_header_sublock)
 
         # Helper label
         preset_hint = ConfigTextLabel(
             self.tr("Comma-separated values — used in font format panel dropdowns."),
             CONFIG_FONTSIZE_CONTENT - 3,
         )
-        interface_layout.addWidget(preset_hint)
+        preset_hint_sublock = ConfigSubBlock(preset_hint)
+        interface_layout.addWidget(preset_hint_sublock)
 
         _make_preset_row(self.tr("Font Size:"), "font_size_presets", interface_layout)
         _make_preset_row(
@@ -1770,8 +1962,11 @@ class ConfigPanel(Widget):
 
         # ── Original Opacity Toggle ──────────────────────────────────
         toggle_header = QLabel(self.tr("Original Opacity Toggle"))
-        toggle_header.setStyleSheet("font-weight: bold; padding: 12px 0 4px 24px;")
-        interface_layout.addWidget(toggle_header)
+        toggle_header.setStyleSheet("font-weight: bold;")
+        toggle_header_sublock = ConfigSubBlock(
+            toggle_header, content_margins=(24, 12, 24, 4)
+        )
+        interface_layout.addWidget(toggle_header_sublock)
 
         toggle_row = QHBoxLayout()
         toggle_row.setSpacing(6)
@@ -1779,6 +1974,7 @@ class ConfigPanel(Widget):
         toggle_lbl.setFixedWidth(110)
         toggle_row.addWidget(toggle_lbl)
         self.orig_opacity_toggle_spin = QSpinBox()
+        self.orig_opacity_toggle_spin.setButtonSymbols(QAbstractSpinBox.NoButtons)
         self.orig_opacity_toggle_spin.setRange(0, 99)
         self.orig_opacity_toggle_spin.setValue(pcfg.original_transparency_preset)
         self.orig_opacity_toggle_spin.valueChanged.connect(
@@ -1786,7 +1982,10 @@ class ConfigPanel(Widget):
         )
         toggle_row.addWidget(self.orig_opacity_toggle_spin, 1)
         toggle_row.addStretch()
-        togglesublock = ConfigSubBlock(toggle_row)
+        togglesublock = ConfigSubBlock(
+            toggle_row, name=self.tr("Toggle Preset"),
+            note=self.tr("Background opacity level when using the Original Opacity toggle shortcut. Lower values show more of the original image beneath the translation."),
+        )
         interface_layout.addWidget(togglesublock)
 
         self.interface_block = generalConfigPanel.addGroupedBlock(
@@ -1801,29 +2000,39 @@ class ConfigPanel(Widget):
         env_layout.setSpacing(6)
 
         # Helper: add a button row (label + button) to env_layout
-        def _env_button(text, slot):
+        def _env_button(text, slot, name=None, note=None):
             btn = QPushButton(text)
+            btn.setObjectName("ConfigButton")
             btn.setMinimumHeight(34)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.clicked.connect(slot)
-            env_layout.addWidget(btn)
+            btn_sublock = ConfigSubBlock(btn, name=name, note=note)
+            env_layout.addWidget(btn_sublock)
             return btn
 
         self.env_network_btn = _env_button(
             self.tr("Network & Mirror Settings..."),
             self._open_network_settings,
+            name=self.tr("Network"),
+            note=self.tr("Configure network proxies, mirror servers, and download sources. Useful for systems behind firewalls or in restricted environments."),
         )
         self.env_tools_btn = _env_button(
             self.tr("Tools..."),
             self._open_tools_dialog,
+            name=self.tr("Tools"),
+            note=self.tr("Access utility tools for managing dependencies, downloading models, and other maintenance tasks."),
         )
         self.env_diag_btn = _env_button(
             self.tr("Run System Diagnostic..."),
             self._open_system_diagnostic,
+            name=self.tr("Diagnostic"),
+            note=self.tr("Run a comprehensive system diagnostic. Collects environment info, package versions, and hardware details for troubleshooting."),
         )
         self.env_mcp_btn = _env_button(
             self.tr("MCP Server Info..."),
             self._open_mcp_info,
+            name=self.tr("MCP Server"),
+            note=self.tr("Learn about the MCP (Model Context Protocol) server. Allows external AI agents to read and edit project data programmatically."),
         )
 
         env_layout.addStretch()
@@ -1840,6 +2049,8 @@ class ConfigPanel(Widget):
 
         # Build section list with group headers
         sections = [
+            ("_header", self.tr("DL Module")),
+            (self.models_group, self.tr("Models")),
             (self._dl_combined_widget, self.tr("Pipeline")),
             ("_sep", None),
             ("_header", self.tr("General")),
@@ -1898,6 +2109,7 @@ class ConfigPanel(Widget):
         checked = self.fit_window_checker.isChecked()
         pcfg.open_image_fit_window = checked
         self.fit_window_page_checker.setVisible(checked)
+        self._fit_page_sublock.setVisible(checked)
 
     def on_fit_window_page_changed(self):
         pcfg.fit_window_on_page_switch = self.fit_window_page_checker.isChecked()
@@ -1965,7 +2177,7 @@ class ConfigPanel(Widget):
         return sublock
 
     def _build_grouped_widget(
-        self, group_title, widget, object_name=None, name=None, description=None
+        self, group_title, widget, object_name=None, name=None, description=None, note=None
     ):
         """Build a PanelGroupBox + ConfigSubBlock without registering as a
         separate page. Returns (group_box, subblock) for use in combined pages."""
@@ -1976,7 +2188,7 @@ class ConfigPanel(Widget):
         group_vlayout = group.contentLayout()
         group_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
         group_vlayout.setSpacing(0)
-        sublock = ConfigSubBlock(widget, name=name, description=description)
+        sublock = ConfigSubBlock(widget, name=name, description=description, note=note)
         group_vlayout.addWidget(sublock)
         sublock.section_widget = group
         if not hasattr(self, "_all_subblocks"):

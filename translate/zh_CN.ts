@@ -268,6 +268,16 @@
             <source>PREVIEW</source>
             <translation>预览</translation>
         </message>
+        <message>
+            <location filename="..\ui\canvas.py" line="1160" />
+            <source>Normalize Breaks</source>
+            <translation>整理换行</translation>
+        </message>
+        <message>
+            <location filename="..\ui\canvas.py" line="1161" />
+            <source>Normalize Breaks and Shrink</source>
+            <translation>整理换行并收缩框</translation>
+        </message>
     </context>
     <context>
         <name>CategoryCard</name>
@@ -417,6 +427,41 @@
             <location filename="..\ui\configpanel.py" line="1289" />
             <source>Models</source>
             <translation>模型管理</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="1300" />
+            <source>Startup</source>
+            <translation>启动</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="1300" />
+            <source>Output</source>
+            <translation>输出</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="1300" />
+            <source>Default Font Format</source>
+            <translation>默认字体格式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="1300" />
+            <source>Text formatting</source>
+            <translation>文本格式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="1300" />
+            <source>Behavior</source>
+            <translation>行为</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="1300" />
+            <source>Window Fit</source>
+            <translation>窗口适配</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="1300" />
+            <source>Shortcuts</source>
+            <translation>快捷键</translation>
         </message>
         <message>
             <location filename="..\ui\configpanel.py" line="1295" />
@@ -710,6 +755,164 @@
         <message>
             <source>Toggle Preset (%):</source>
             <translation>切换预设 (%):</translation>
+        </message>
+        <message>
+            <source>Model Loading</source>
+            <translation>模型加载</translation>
+        </message>
+        <message>
+            <source>Management</source>
+            <translation>管理</translation>
+        </message>
+        <message>
+            <source>Unload models</source>
+            <translation>卸载模型</translation>
+        </message>
+        <message>
+            <source>API profiles</source>
+            <translation>API 配置</translation>
+        </message>
+        <message>
+            <source>When enabled, models are loaded only on first use instead of at startup. Reduces initial memory and launch time. Recommended for systems with limited GPU memory.</source>
+            <translation>启用后，模型仅在首次使用时加载而非启动时加载。减少初始内存占用和启动时间。建议 GPU 内存有限的系统开启。</translation>
+        </message>
+        <message>
+            <source>Clears intermediate inference data after each pipeline run. Frees GPU/CPU memory between runs. Useful when working with large projects or limited hardware.</source>
+            <translation>每次管线运行后清除中间推理数据。释放 GPU/CPU 内存。处理大型项目或硬件资源有限时有用。</translation>
+        </message>
+        <message>
+            <source>Immediately releases all loaded models from memory. Use this to free GPU/CPU resources without restarting the application.</source>
+            <translation>立即从内存中释放所有已加载的模型。无需重启应用即可释放 GPU/CPU 资源。</translation>
+        </message>
+        <message>
+            <source>Configure API credentials and endpoints for online translators, OCR services, and AI features. Supports multiple profiles for different services or accounts.</source>
+            <translation>配置在线翻译器、OCR 服务和 AI 功能的 API 密钥与端点。支持为不同服务或账户设置多个配置。</translation>
+        </message>
+        <!-- Pipeline note -->
+        <message>
+            <source>Select the text detection engine. Different detectors offer varying accuracy and speed. Some engines may require additional model downloads on first use.</source>
+            <translation>选择文本检测引擎。不同检测器提供不同的精度和速度。部分引擎首次使用可能需要额外下载模型。</translation>
+        </message>
+        <message>
+            <source>Select the OCR (Optical Character Recognition) engine. This stage extracts text from detected text regions in the image.</source>
+            <translation>选择 OCR（光学字符识别）引擎。该阶段从图像中检测到的文本区域提取文字。</translation>
+        </message>
+        <message>
+            <source>Select the image inpainting engine. After erasing text regions, the inpainter fills the background. Quality varies by image complexity and engine capability.</source>
+            <translation>选择图像修复引擎。擦除文本区域后，修复工具填充背景。质量因图像复杂度和引擎能力而异。</translation>
+        </message>
+        <message>
+            <source>Select the translation engine. Online translators require an API profile with credentials configured under Models &gt; API Profiles.</source>
+            <translation>选择翻译引擎。在线翻译器需要先在"模型管理 > API 配置"中设置 API 密钥。</translation>
+        </message>
+        <!-- Project note -->
+        <message>
+            <source>Reopen the last project automatically when the application starts. Saves time when continuing work on the same project.</source>
+            <translation>启动时自动打开上次使用的项目。继续处理同一项目时节省时间。</translation>
+        </message>
+        <message>
+            <source>Choose the output format for translated images. PNG offers lossless quality. JPG and WEBP produce smaller files with some quality loss.</source>
+            <translation>选择翻译后图像的输出格式。PNG 提供无损质量。JPG 和 WEBP 文件更小但有一定质量损失。</translation>
+        </message>
+        <message>
+            <source>When enabled, the output format automatically matches the source image format. Overrides the format selected above.</source>
+            <translation>启用后，输出格式自动匹配源图像格式，覆盖上方选择的格式。</translation>
+        </message>
+        <message>
+            <source>Output image quality (0-100). Higher values give better quality but larger file sizes. Applies to JPG and WEBP only.</source>
+            <translation>输出图像质量（0-100）。数值越高质量越好但文件越大。仅适用于 JPG 和 WEBP 格式。</translation>
+        </message>
+        <message>
+            <source>Format used for intermediate processing data. PNG is the default lossless option to preserve quality during processing.</source>
+            <translation>中间处理数据使用的格式。PNG 是默认无损选项，可在处理过程中保持质量。</translation>
+        </message>
+        <!-- Typesetting notes -->
+        <message>
+            <source>Configure the fallback font format for text blocks without their own formatting. Each attribute can be delegated separately.</source>
+            <translation>配置未单独设置格式的文本块的默认字体格式。每个属性可分别委托。</translation>
+        </message>
+        <message>
+            <source>Automatically split translated text into multiple lines matching the shape of the detected balloon or text region.</source>
+            <translation>根据检测到的对话框或文本区域形状，自动将译文分割为多行。</translation>
+        </message>
+        <message>
+            <source>Convert all translated text to uppercase. Useful for certain typographic styles or all-caps conventions.</source>
+            <translation>将所有译文转换为大写。适用于特定排版样式或全大写惯例。</translation>
+        </message>
+        <message>
+            <source>When enabled, each project maintains its own text style settings independently instead of using shared global styles.</source>
+            <translation>启用后，每个项目独立维护自己的文本样式设置，而非使用共享的全局样式。</translation>
+        </message>
+        <message>
+            <source>Choose punctuation alignment: Centered (traditional CJK style in Traditional Chinese and Japanese) or Edge-aligned (modern Simplified Chinese style).</source>
+            <translation>选择标点对齐方式：居中（繁体中文/日文传统排版）或靠边（现代简体中文排版）。</translation>
+        </message>
+        <message>
+            <source>Hide selected fonts from all font selection dropdowns. Useful for filtering out unusable or decorative fonts.</source>
+            <translation>从所有字体选择下拉框中隐藏所选字体。用于过滤掉无法使用或装饰性字体。</translation>
+        </message>
+        <message>
+            <source>Maximum allowed font size in pixels. Text that would render larger than this limit is scaled down automatically.</source>
+            <translation>允许的最大字号（像素）。超出此限制的文本会自动缩小。</translation>
+        </message>
+        <!-- Interface notes -->
+        <message>
+            <source>Automatically scale the image to fit the window when opening a project. Avoids manual zooming on every file open.</source>
+            <translation>打开项目时自动缩放图像以适配窗口。避免每次打开文件都需要手动缩放。</translation>
+        </message>
+        <message>
+            <source>Controls UI transition smoothness. Auto matches the display refresh rate. Select a specific FPS to cap GPU usage. Off disables all animations.</source>
+            <translation>控制 UI 过渡动画的流畅度。自动模式匹配显示器刷新率。选择指定 FPS 可限制 GPU 占用。关闭则禁用所有动画。</translation>
+        </message>
+        <message>
+            <source>Customize keyboard shortcuts for all actions. Click a shortcut pill to remove it. Use the + button to record a new key combination.</source>
+            <translation>自定义所有操作的键盘快捷键。点击快捷键标签可移除。使用 + 按钮录制新的组合键。</translation>
+        </message>
+        <message>
+            <source>Background opacity level when using the Original Opacity toggle shortcut. Lower values show more of the original image beneath the translation.</source>
+            <translation>使用原图不透明度切换快捷键时的背景透明度。数值越低，译文下方的原图显示越多。</translation>
+        </message>
+        <!-- Environment notes -->
+        <message>
+            <source>Configure network proxies, mirror servers, and download sources. Useful for systems behind firewalls or in restricted environments.</source>
+            <translation>配置网络代理、镜像服务器和下载源。适用于防火墙后或受限网络环境中的系统。</translation>
+        </message>
+        <message>
+            <source>Access utility tools for managing dependencies, downloading models, and other maintenance tasks.</source>
+            <translation>访问用于管理依赖、下载模型和其他维护任务的工具。</translation>
+        </message>
+        <message>
+            <source>Run a comprehensive system diagnostic. Collects environment info, package versions, and hardware details for troubleshooting.</source>
+            <translation>运行全面的系统诊断。收集环境信息、软件包版本和硬件详情，用于故障排查。</translation>
+        </message>
+        <message>
+            <source>Learn about the MCP (Model Context Protocol) server. Allows external AI agents to read and edit project data programmatically.</source>
+            <translation>了解 MCP（模型上下文协议）服务器。允许外部 AI 代理以编程方式读取和编辑项目数据。</translation>
+        </message>
+        <!-- New names -->
+        <message>
+            <source>Font Exclusion</source>
+            <translation>字体排除</translation>
+        </message>
+        <message>
+            <source>Toggle Preset</source>
+            <translation>切换预设</translation>
+        </message>
+        <message>
+            <source>Network</source>
+            <translation>网络</translation>
+        </message>
+        <message>
+            <source>Diagnostic</source>
+            <translation>诊断</translation>
+        </message>
+        <message>
+            <source>MCP Server</source>
+            <translation>MCP 服务器</translation>
+        </message>
+        <message>
+            <source>Tools</source>
+            <translation>工具</translation>
         </message>
     </context>
     <context>
@@ -1079,6 +1282,11 @@ Run detection + OCR to populate text blocks.</source>
         <message>
             <location filename="..\ui\module_manager.py" line="667" />
             <source>Inpainting Failed.</source>
+            <translation>修复失败</translation>
+        </message>
+        <message>
+            <location filename="..\ui\module_manager.py" />
+            <source>Inpaint Failed.</source>
             <translation>修复失败</translation>
         </message>
     </context>
@@ -3537,7 +3745,7 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" />
-            <source>批量整理换行…</source>
+            <source>Batch Normalize Breaks…</source>
             <translation>批量整理换行…</translation>
         </message>
     </context>
@@ -4110,54 +4318,36 @@ in Settings → Mirror Config, then click Retry.</source>
         </message>
     </context>
     <context>
-        <name>TextBlkItem</name>
-        <message>
-            <location filename="..\ui\textitem.py" />
-            <source>整理换行</source>
-            <translation>整理换行</translation>
-        </message>
-        <message>
-            <location filename="..\ui\textitem.py" />
-            <source>整理换行并收缩框</source>
-            <translation>整理换行并收缩框</translation>
-        </message>
-    </context>
-    <context>
         <name>NormalizeBreaksDialog</name>
         <message>
             <location filename="..\ui\normalize_breaks_dialog.py" />
-            <source>批量整理换行</source>
+            <source>Batch Normalize Breaks</source>
             <translation>批量整理换行</translation>
         </message>
         <message>
             <location filename="..\ui\normalize_breaks_dialog.py" />
-            <source>全部页</source>
+            <source>All Pages</source>
             <translation>全部页</translation>
         </message>
         <message>
             <location filename="..\ui\normalize_breaks_dialog.py" />
-            <source>完成后自动收缩框</source>
+            <source>Auto-shrink after completion</source>
             <translation>完成后自动收缩框</translation>
         </message>
         <message>
             <location filename="..\ui\normalize_breaks_dialog.py" />
-            <source>应用</source>
+            <source>Apply</source>
             <translation>应用</translation>
         </message>
         <message>
             <location filename="..\ui\normalize_breaks_dialog.py" />
-            <source>取消</source>
+            <source>Cancel</source>
             <translation>取消</translation>
         </message>
         <message>
             <location filename="..\ui\normalize_breaks_dialog.py" />
-            <source>第</source>
-            <translation>第</translation>
-        </message>
-        <message>
-            <location filename="..\ui\normalize_breaks_dialog.py" />
-            <source>页</source>
-            <translation>页</translation>
+            <source>Page %1 — %2</source>
+            <translation>第 %1 页 — %2</translation>
         </message>
     </context>
 </TS>

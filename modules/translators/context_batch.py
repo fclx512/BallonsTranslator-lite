@@ -239,6 +239,17 @@ class ContextBatchTranslator:
         return self._apply_cache(blk_list, non_empty, self._cached[page_key])
 
     def _apply_cache(self, blk_list, non_empty, cache):
+        if self._proj is not None:
+            page_key = self._resolve_page(blk_list)
+            if page_key in self._proj.pages:
+                id_to_bidx = {
+                    id(b): i for i, b in enumerate(self._proj.pages[page_key])
+                }
+                return [
+                    cache.get(id_to_bidx.get(id(blk_list[idx]), idx),
+                              blk_list[idx].get_text())
+                    for idx in non_empty
+                ]
         return [cache.get(idx, blk_list[idx].get_text()) for idx in non_empty]
 
     # ── Context building ──────────────────────────────────────────────

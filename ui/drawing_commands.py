@@ -158,20 +158,28 @@ class RunBlkTransCommand(QUndoCommand):
                     self.inpaint_rect_lst.append(None)
                 else:
                     inpaint_rect = inpainted_dict["inpaint_rect"]
-                    img_view = img_array[
-                        inpaint_rect[1] : inpaint_rect[3],
-                        inpaint_rect[0] : inpaint_rect[2],
-                    ]
-                    mask_view = mask_array[
-                        inpaint_rect[1] : inpaint_rect[3],
-                        inpaint_rect[0] : inpaint_rect[2],
-                    ]
-                    self.undo_img_list.append(np.copy(img_view))
-                    self.undo_mask_list.append(np.copy(mask_view))
-                    self.redo_img_list.append(inpainted_dict["inpainted"])
-                    self.redo_mask_list.append(inpainted_dict["mask"])
-                    self.inpaint_rect_lst.append(inpaint_rect)
-                    self.num_inpainted += 1
+                    try:
+                        img_view = img_array[
+                            inpaint_rect[1] : inpaint_rect[3],
+                            inpaint_rect[0] : inpaint_rect[2],
+                        ]
+                        mask_view = mask_array[
+                            inpaint_rect[1] : inpaint_rect[3],
+                            inpaint_rect[0] : inpaint_rect[2],
+                        ]
+                        self.undo_img_list.append(np.copy(img_view))
+                        self.undo_mask_list.append(np.copy(mask_view))
+                        self.redo_img_list.append(inpainted_dict["inpainted"])
+                        self.redo_mask_list.append(inpainted_dict["mask"])
+                        self.inpaint_rect_lst.append(inpaint_rect)
+                        self.num_inpainted += 1
+                    except (IndexError, ValueError):
+                        # Page may have changed during async translation
+                        self.undo_img_list.append(None)
+                        self.undo_mask_list.append(None)
+                        self.redo_mask_list.append(None)
+                        self.redo_img_list.append(None)
+                        self.inpaint_rect_lst.append(None)
 
     def redo(self) -> None:
 

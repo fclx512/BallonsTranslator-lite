@@ -380,7 +380,7 @@ class TitleBar(Widget):
         self.adv_align_trigger = advAlignAction.triggered
 
         # 批量整理换行
-        normalizeBreaksAction = QAction(self.tr("批量整理换行…"), self)
+        normalizeBreaksAction = QAction(self.tr("Batch Normalize Breaks…"), self)
         self.normalize_breaks_triggered = normalizeBreaksAction.triggered
 
         toolsMenu = QMenu(self.toolsToolBtn)

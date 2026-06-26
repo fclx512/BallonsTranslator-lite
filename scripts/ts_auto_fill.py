@@ -26,9 +26,9 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TS_FILE = PROJECT_ROOT / "translate" / "zh_CN.ts"
 
-# Contexts whose translations come from module param descriptions,
-# loaded via self.tr(variable_name) — regex scanner cannot detect them.
-PARAM_CONTEXTS = frozenset({"ParamWidget"})
+# Contexts whose translations are loaded via self.tr(variable_name) or
+# self.tr(_ACTION_NAMES[id]) — regex scanner cannot match the values.
+PARAM_CONTEXTS = frozenset({"ParamWidget", "_ShortcutRow", "ShortcutEditor"})
 
 
 # ── helpers ─────────────────────────────────────────────────────────────

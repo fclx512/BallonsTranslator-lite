@@ -37,11 +37,11 @@ class NormalizeBreaksDialog(QDialog):
         self._populate_pages()
 
     def _setup_ui(self):
-        self.setWindowTitle(self.tr("批量整理换行"))
+        self.setWindowTitle(self.tr("Batch Normalize Breaks"))
         self.setMinimumWidth(400)
         layout = QVBoxLayout(self)
 
-        self.all_check = QCheckBox(self.tr("全部页"), self)
+        self.all_check = QCheckBox(self.tr("All Pages"), self)
         self.all_check.setChecked(True)
         self.all_check.toggled.connect(self._on_all_toggled)
         layout.addWidget(self.all_check)
@@ -55,13 +55,13 @@ class NormalizeBreaksDialog(QDialog):
         self.scroll.setWidget(self.page_container)
         layout.addWidget(self.scroll, stretch=1)
 
-        self.squeeze_check = QCheckBox(self.tr("完成后自动收缩框"), self)
+        self.squeeze_check = QCheckBox(self.tr("Auto-shrink after completion"), self)
         self.squeeze_check.setChecked(False)
         layout.addWidget(self.squeeze_check)
 
         btn_layout = QHBoxLayout()
-        apply_btn = QPushButton(self.tr("应用"), self)
-        cancel_btn = QPushButton(self.tr("取消"), self)
+        apply_btn = QPushButton(self.tr("Apply"), self)
+        cancel_btn = QPushButton(self.tr("Cancel"), self)
         apply_btn.clicked.connect(self._on_apply)
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addStretch()
@@ -73,7 +73,7 @@ class NormalizeBreaksDialog(QDialog):
         self.page_checks = []
         for i in range(self.proj.num_pages):
             pname = self.proj.idx2pagename(i)
-            cb = QCheckBox(f"{self.tr('第')} {i} {self.tr('页')} — {pname}", self)
+            cb = QCheckBox(self.tr("Page %1 — %2").replace("%1", str(i)).replace("%2", pname), self)
             cb.setEnabled(False)  # 默认全部页勾选 → 禁用列表
             self.page_layout.addWidget(cb)
             self.page_checks.append(cb)

@@ -17,6 +17,13 @@ ConfigTextLabel {
     background-color : @emptyContentBackgroundColor;
 }
 
+ConfigNotePopup {
+    background-color: @widgetBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+    padding: 4px;
+}
+
 CustomGV {
     background-color: @emptyContentBackgroundColor;
     border-color: @borderColor;
@@ -423,6 +430,10 @@ QMenu::item:selected {
     background-color: @hoverBackgroundColor;
 }
 
+QMenu::item:disabled {
+    color: @disabledForegroundColor;
+}
+
 QDialog {
     font-size: 14px;
     background-color: @widgetBackgroundColor;
@@ -447,6 +458,10 @@ QPushButton {
 
 QPushButton#RunButton {
     font-size: 12px;
+}
+
+QPushButton#ConfigButton {
+    max-width: 280px;
 }
 
 NoBorderPushBtn {

@@ -1,6 +1,6 @@
 # 每日开发日志
 
-> 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。按照从新到旧的顺序撰写。
+> 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。按照时间顺序撰写。
 
 ## 2026-06-25
 
@@ -25,8 +25,6 @@
 10. `translate/zh_CN.ts` / `translate/zh_CN.qm` — 新增 `TextBlkItem`/`NormalizeBreaksDialog` 两个 context 及 `TitleBar`/`MainWindow` 新条目；qm 用 utf-8 编译，验证无 Latin-1 污染。
 
 **涉及文件：** `utils/text_normalize.py`、`utils/text_normalize_test.py`、`ui/textedit_commands.py`、`ui/textitem.py`、`ui/scenetext_manager.py`、`ui/mainwindowbars.py`、`ui/mainwindow.py`、`ui/normalize_breaks_dialog.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
-
-**已知 bug（待排查）：** 执行整理换行后无视觉反馈——选中的含换行译文块在操作后文档结构已变（`setPlainTextAndKeepUndoStack` 已写入）、文档 `blockCount` 已减，但画布上显示的文本没有肉眼可见变化。推测 `repaint_background` 或 `set_fontformat` 刷新时机/力度不够，或 TextBlkItem 的虚拟文本布局缓存（`_display_rect`/`layout`）未被新文档触发重算。待 UI 侧排查。
 
 ### CTD 检测器选中后窗口无响应修复
 
@@ -72,87 +70,133 @@
 
 **涉及文件：** `ui/textedit_area.py`、`ui/quick_symbol_dialog.py`
 
+---
 
-### 静态摸排：选中多个文本框右键翻译偶发报错
+## 2026-06-26
 
-**问题/需求：** 用户反馈在画布选中**多个文本框**后右键翻译（`run_blktrans`，mode=-1 纯翻译 / 0 OCR / 1 OCR+翻译 / 2 全流程），有时报错。无可用复现案例，本次仅做静态代码摸排，未改动代码，记录候选根因与修复方案待有测试案例时验证。
+### 译文软换行整理：无视觉反馈与批量窗口闪退修复
 
-**调用链（已核实）：** 画布右键菜单 `run_blktrans` 信号 → `MainWindow.on_run_blktrans`（`ui/mainwindow.py:2200`）→ `translateBlkitemList`（`ui/mainwindow.py:2005`，把选中的 `TextBlkItem` 转成 `blk_list`+`blk_ids`，`blk_ids` 为各 `blkitem.idx` 的快照）→ `ModuleManager.runBlktransPipeline`（`ui/module_manager.py:1456`，`terminateRunningThread` 后 `progress_msgbox.show`）→ `ImgtransThread.runBlktransPipeline`（`ui/module_manager.py:445`）后台线程执行 `_blktrans_pipeline`（`ui/module_manager.py:458`）→ 完成后 `finish_blktrans` 信号 → `ModuleManager.on_finish_blktrans`（`ui/module_manager.py:1488`）→ `blktrans_pipeline_finished` 信号 → `MainWindow.on_blktrans_finished`（`ui/mainwindow.py:2204`）。注意 `ui/mainwindow_mixin.py` 里的同名方法是死代码（`MainWindow` 未继承 `MainWindowMixin`），实际生效的是 `mainwindow.py` 版本。
+**问题/需求：** 右键菜单"整理换行"和批量对话框操作后无任何视觉反馈，批量窗口打开即崩。
 
-**候选根因（按崩溃概率排序）：**
+**修复：**
+1. `ui/textedit_commands.py` — `NormalizeBreaksCommand._first_redo` 初始值 `True` → `False`。根因：`QUndoStack.push()` 自动调用 `redo()`，但 `_first_redo=True` 跳过了首次调用，构造器只捕获旧状态不应用新文本，导致文本从未被修改。改为 `False` 让 push 时的 redo 正常执行 `_apply("new")` 写新文本 + 触发重绘。
+2. `ui/normalize_breaks_dialog.py` — `self.tr("Page %1 — %2").arg(i).arg(pname)` → `.replace("%1", str(i)).replace("%2", pname)`。根因：PyQt6 的 `tr()` 返回 Python `str`，没有 `.arg()` 方法，其余文件均用 `.replace()` 模式。
+3. `config/stylesheet.css` — 新增 `QMenu::item:disabled { color: @disabledForegroundColor; }`。根因：深色主题下 `QMenu::item` 自定义了样式但缺 `:disabled` 规则，全竖排选中时菜单项被禁用但外观无区分。
 
-1. **`on_blktrans_finished` 索引越界（最可能命中用户"报错"）** — `ui/mainwindow.py:2209` `blkitem_list = [self.st_manager.textblk_item_list[idx] for idx in blk_ids]`。`textblk_item_list` 是**当前页**的文本框列表，`updateSceneTextitems`（`ui/scenetext_manager.py:548`，切页面时调）会先 `clearSceneTextitems` 清空再按新页文本框重建（`scenetext_manager.py:540-546`），`blk.idx` 是页内序号。翻译在后台线程异步执行，`finish_blktrans` 跨线程默认 `QueuedConnection` 排队到主线程；若翻译运行期间用户切了页面（多选翻译耗时长，切页概率高），`textblk_item_list` 已换批，原 `blk_ids` 会指向**不同文本框**或越界 → `IndexError`。`pairwidget_list[blk.idx]`（`mainwindow.py:2213`）同理。`terminateRunningThread`（`module_manager.py:1408`）用 `quit()`，无法中断已运行的同步 `_blktrans_pipeline`，竞态窗口敞开。
-2. **`RunBlkTransCommand` 用当前页 `inpainted_array` 配触发页坐标** — `ui/drawing_commands.py:147-168`：`__init__` 新鲜读取 `self.canvas.imgtrans_proj.inpainted_array`（当前页），而 `inpaint_rect` 来自后台线程在**触发翻译时页面**上的 `blk.xyxy` 计算（`module_manager.py:497-524`）。`set_current_img`（`utils/proj_imgtrans.py:295`）切页面会替换 `inpainted_array`/`mask_array`。若 mode=2（含修复）翻译期间切到尺寸更小的页面，`img_array[inpaint_rect[1]:inpaint_rect[3], ...]` numpy 切片越界 → `IndexError`。仅 mode=2 命中。
-3. **`_blktrans_pipeline` inpaint 循环无 try/except** — `ui/module_manager.py:494-528` 的 inpaint 循环外无异常保护（OCR/翻译段有 `try/except create_error_dialog`）。若 `maskseg_method` 或 `tgt_mask[y1:y2, ...]` 切片越界，异常会上抛终止线程且**不发 `finish_blktrans`**，进度框可能卡住。
-4. **`_blktrans_pipeline` 重复发射 `finish_blktrans`（放大器，本身非 crash）** — `ui/module_manager.py:477 / 493 / 528` 三处 `emit`，528 为末尾无条件发射。mode=-1 发 2 次、mode=0 发 2 次、mode=1/2 发 3 次。每次触发 `on_blktrans_finished` → `push_undo_command(RunBlkTransCommand(...))` 重新写回译文 + 推撤销命令，**污染撤销栈**；mode=2 时中间一次 emit 发生在 inpaint 数据未就绪阶段，`RunBlkTransCommand.__init__` 读 `region_inpaint_dict` 可能读到 None/陈旧值（`drawing_commands.py:150-152`）。多次 emit 把 #1/#2 的竞态窗口放大 2-3 倍。需确认三处 emit 是否为有意"分阶段刷新进度条"——若是，不能简单删 477/493。
-5. **`ContextBatchTranslator._apply_cache` 子集索引错位（结果不对，非 crash）** — `modules/translators/context_batch.py:241` `cache.get(idx, blk_list[idx].get_text())`：`non_empty` 是传入**子集**的局部索引（`context_batch.py:120`），`cache` key 是整页 `bidx`（`context_batch.py:222-229` 经 `_collect_target` 扫整页）。整页翻译二者相等所以一直没暴露；只在 `ctx` 残留于 `translate_thread.module`（Run 对话框用上下文翻译后未 restore 时右键翻译，restore 仅在 `on_imgtrans_pipeline_finished:2049` 触发，`runBlktrans` 路径不触发）+ 子集首块恰好匹配某页首块时命中，译文错位/回退为原文。命中条件苛刻，且表现为译文不对而非报错。
-
-**待验证 / 候选修复（未实施）：**
-
-- 针对根因 #1：`on_blktrans_finished` 解引用 `blk_ids` 前校验 `textblk_item_list` 与触发时同源（校验页码未变 / `idx` 仍在范围内 / 失败则忽略本次 emit）；或后台线程捕获并附带页码快照，主线程比对不一致则丢弃回调。
-- 针对 #2：`RunBlkTransCommand` 改用触发时页面的 `inpainted_array`（由 `translateBlkitemList`/`_blktrans_pipeline` 传入引用），而非实时读 `self.canvas.imgtrans_proj`。
-- 针对 #4：先确认三处 emit 的设计意图；若确为冗余则只在 528 末尾发一次；若 477/493 为进度条刷新，改为只发 `finish_blktrans_stage`（进度）不发 `finish_blktrans`（完成）。
-- 针对 #5：若决定保留 `runBlktrans` 下走 `ctx` 的可能，`_apply_cache` 改用整页 `bidx` 寻址（需让 `translate_textblk_lst` 把 `bidx` 透传进来），或在 `runBlktrans` 路径下 `ctx._proj` 非 None 也走 `_direct_call`。
-- **需测试案例验证的项：** ①多选翻译期间切页面是否复现 #1 的 `IndexError`；②mode=2 多选 + 切小尺寸页面是否复现 #2；③重复 emit 在单选 vs 多选下撤销栈的实际表现（确认 #4 是否真的影响撤销）；④用过上下文翻译后立即右键多选翻译，看是否走 `ctx` 并触发 #5。
-
-**涉及文件（仅摸排，未改动）：** `ui/mainwindow.py`、`ui/module_manager.py`、`ui/scenetext_manager.py`、`ui/drawing_commands.py`、`utils/proj_imgtrans.py`、`modules/translators/context_batch.py`、`modules/translators/base.py`
+**涉及文件：** `ui/textedit_commands.py`、`ui/normalize_breaks_dialog.py`、`config/stylesheet.css`
 
 ---
 
-## 2026-06-23
+### 多选右键翻译偶发报错 — 五项候选根因修复
 
-### 自动化模组分页合并为单页管线 + 按钮换行
+**问题/需求：** 选中多个文本框后右键翻译（`run_blktrans`），偶发报错/行为异常。静态摸排产出 5 项候选根因，本次逐项修复。
 
-**问题/需求：** 自动化模组（DL Module）原拆为 Models / Text Detection / OCR / Inpaint / Translator 5 个独立分页，功能属于同一流程但需切换查看，操作路径长。同时 Models 页内按钮水平排列占用过宽。
+**修正说明：** 根因 #1（翻译期间切页面致索引越界）和 #2（修复期间切页面致 numpy 切片越界）的前提是管线运行期间页面可切换——实际管线执行时右下进度提示框**禁用交互**，无法切页，此场景不成立。修复代码作为防御性保留，不影响正常路径。
 
 **改动：**
-1. `ui/configpanel.py` — 新增 `_build_grouped_widget()` 构建 PanelGroupBox 但不注册为独立页面；5 个 PanelGroupBox 合并到同一容器（`dl_container`），一次 `_add_page` 注册为单页；NavList 移除 5 子项、DL Module 标题行和 Models 行，改为 1 个"管线"可选项；`_on_nav_row_changed` 清理 `models_group` 特判；`focusOn*` 统一导航到管线页 + `ensureWidgetVisible` 自动滚动到对应 section
-2. 按钮换行：去掉 `QHBoxLayout` 和固定宽度，两按钮直接纵向加入 `models_vlayout`
-3. `translate/zh_CN.ts` — ConfigPanel context 新增 `"Pipeline" → "管线"`
+
+1. **`ui/module_manager.py` — 精简 `finish_blktrans` 为单次 emit**（针对根因 #4）
+   - 移除非末尾的两处冗余 `self.finish_blktrans.emit`（原 OCR 后 line 477 / 翻译后 line 493）
+   - 保留末尾（现 line 535）唯一一次 finish emit，各阶段进度改由 `finish_blktrans_stage` 传递
+   - **效果：** 消除 `on_blktrans_finished` 回调被多次触发的撤销栈污染，每种模式均只推 1 次 `RunBlkTransCommand`
+
+2. **`ui/module_manager.py` — inpaint 循环异常保护**（针对根因 #3）
+   - inpaint `for` 循环包裹 `try/except Exception`，异常时弹出错误对话框
+   - **效果：** inpaint 抛异常时 finish_blktrans 仍正常发射，进度框不卡死
+
+3. **`ui/mainwindow.py` — `on_blktrans_finished` 防御性守卫**（针对根因 #1）
+   - `translateBlkitemList` 记录调用时的 `current_img` 页码
+   - `on_blktrans_finished` 校验页码一致性 + `blk_ids`/`blk.idx` 全部在范围内
+   - **效果：** 任何导致回调过时的路径（即便非交互导致）均被静默忽略
+
+4. **`ui/drawing_commands.py` — `RunBlkTransCommand` numpy 切片防护**（针对根因 #2）
+   - `__init__` 中的 `img_array[rect]` / `mask_array[rect]` 包裹 `try/except (IndexError, ValueError)`
+   - **效果：** 页尺寸变更等极端场景下不因 numpy 切片越界崩溃
+
+5. **`modules/translators/context_batch.py` — `_apply_cache` 子集索引修复**（针对根因 #5）
+   - `_apply_cache` 通过 `id(blk)` 在 `self._proj.pages[page_key]` 中查找真实的页级 `bidx`，替代原先传入的子集局部索引
+   - **效果：** 上下文翻译缓存残留时，选中子集块不再查错位缓存（译文不再回退为原文）
+
+6. **`translate/zh_CN.ts` / `translate/zh_CN.qm`** — 新增 `ImgtransThread` 上下文 `"Inpaint Failed."` 条目，qm 编译 784 条无 Latin-1 污染
+
+**涉及文件：** `ui/mainwindow.py`、`ui/drawing_commands.py`、`ui/module_manager.py`、`modules/translators/context_batch.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+**已验证：** 代码阅读验证通过；i18n_check 仅余预知的 orphan 假阳性与历史遗漏（`[Canvas]` 两条目、`[TextBlkItem]` 两条目、`_ShortcutRow` 批量条目）
+
+---
+
+### i18n 修复：中文 tr() source 改为英文
+
+**问题/需求：** 06-25 新增的「整理换行」功能多处将中文直接作为 `self.tr("中文")` 参数，导致切英文界面时菜单项仍显中文；i18n_check 报 missing；`[TextBlkItem]` 旧代码的 ts 条目也需清理。
+
+**改动：**
+1. `ui/canvas.py` — `"整理换行"`→`"Normalize Breaks"`、`"整理换行并收缩框"`→`"Normalize Breaks and Shrink"`
+2. `ui/mainwindowbars.py` — `"批量整理换行…"`→`"Batch Normalize Breaks…"`
+3. `ui/normalize_breaks_dialog.py` — 7 处 `self.tr("中文")` 全部改为英文 source，其中 `"第"`/`"页"` 合并为 `"Page %1 — %2"` Qt arg 模式
+4. `translate/zh_CN.ts` — **Canvas** +2 条、**TitleBar** 更新 source、**NormalizeBreaksDialog** 替换 7 条 source、**TextBlkItem** 删除 2 条过时条目
+5. `translate/zh_CN.qm` — 重新编译，783 条无 Latin-1 污染
+
+**涉及文件：** `ui/canvas.py`、`ui/mainwindowbars.py`、`ui/normalize_breaks_dialog.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+**已验证：** `i18n_check` — HARDCODED_CHINESE 无、MISSING 清零、orphan 59 条均为已知假阳性（变量调用/多行隐式拼接，运行时正常）
+
+---
+
+### Models 页样式实验 + ConfigNotePopup 备注浮层投产
+
+**问题/需求：** 2026-06-26 建的 `ConfigSubBlock.note` + `ConfigNotePopup` 基础设施处于零消费者状态，需绑定首个实际用例。选 Models 页做样式试验。
+
+**改动：**
+
+1. `ui/configpanel.py` — Models 页重构：
+   - 间距 `setSpacing(4)`→`8`
+   - 新增加载/管理两组内部分组标题（`ConfigSubBlock` name-only）
+   - Checkbox 改手动 `ConfigSubBlock` 构造（替代 `checkbox_with_label()`），启用 `note` 参数→? 按钮+弹出浮层
+   - 按钮（Unload / Profiles）加 `name` + `note`，围入 Management 分组
+   - `PanelGroupBox` 加 `objectName="GroupModels"` 为未来色条预留
+   - import 补 `QGraphicsOpacityEffect`
+
+2. **ConfigNotePopup 调试修复：**
+   - `_show_note_popup` 中 popup 存为 `self._note_popup`（原局部变量被 GC 回收致点击无响应）
+   - 移除 `destroyed.connect`（连点竞态：旧 popup GC→`_destroy_note_popup` 置 Null→新点击 AttributeError）
+   - 构造器加 `setAutoFillBackground(True)`（FramelessWindowHint 下背景不自动填充，暗主题显黑方块）
+
+3. `config/stylesheet.css` — 新增 `ConfigNotePopup` 规则（背景色+边框+圆角+padding）
+
+4. `translate/zh_CN.ts` — ConfigPanel context 新增 8 条（4 分组标签 + 4 备注文本），qm 编译 798 条
+
+**涉及文件：** `ui/configpanel.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+**已验证：** 离屏测试—类构造/导入/PageStack 6 页/导航全切/备注浮层弹出与快速连点均通过；i18n—0 missing。样式初版可用但需后续打磨。
+
+---
+
+### ConfigNotePopup 备注系统全量铺开
+
+**问题/需求：** Models 页试验后，需将备注系统推广至所有设置项。28 个设置项需要备注文本、6 个无名称项需补 name 标签，全部需 i18n。
+
+**改动：**
+
+1. `ui/configpanel.py` — 辅助函数新增 `note` 参数：
+   - `combobox_with_label()`、`checkbox_with_label()`、`_build_grouped_widget()` 加 `note` 透传
+   - `_env_button()` 改接受 `name` + `note`
+
+2. `ui/configpanel.py` — 28 项备注全覆盖：
+
+   | 页 | 项 |
+   |---|---|
+   | Pipeline (4) | Detection / OCR / Inpaint / Translator 阶段说明 |
+   | Project (5) | 启动 / 结果格式 / 自动匹配 / 质量 / 中间格式 |
+   | Typesetting (7) | 默认字体 / 自动排版 / 大写 / 独立样式 / 标点位置 / 排除字体 / 最大字号 |
+   | Interface (4) | 窗口适配 / 动画 / 快捷键 / 切换预设 |
+   | Environment (4) | 网络 / 工具 / 诊断 / MCP |
+
+3. `ui/configpanel.py` — 6 项补 name 标签：Font Exclusion、Toggle Preset、Network、Tools、Diagnostic、MCP Server（此前有按钮/输入框但无 name label）。
+
+4. `translate/zh_CN.ts` — ConfigPanel context 新增 30 条 `<message>`（24 备注 + 6 名称），全部含中文翻译
+
+5. `translate/zh_CN.qm` — 重新编译，798→828 条
 
 **涉及文件：** `ui/configpanel.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
 
----
-
-### 设置面板重构：侧滑单页长卷轴 → 中心淡入分页模态
-
-**问题/需求：** 设置面板原为单页长卷轴（NavList ↔ ConfigContent 双向联动滚动），所有 section 堆叠一页，复杂功能下方说明注释易与他项混淆、注释难加。目标：NavList 大标题纯分隔不可选、小标题成为独立分页（右侧 `QStackedWidget`），取消右侧滑入改为中央覆层淡入淡出 + 压暗 scrim（仅覆盖中央画布区，左栏/底栏/标题栏仍可点）；遵从 `pcfg.animation_fps`；关闭时一次性保存不变。
-
-**改动：**
-1. `ui/overlay_modal.py` — **新增** `OverlayModal`：scrim（`_Scrim`，rgba 0.55 覆盖 cover_widget）+ panel `QGraphicsOpacityEffect` opacity 淡入淡出，`QEasingCurve.InOutExpo`，`pcfg.animation_fps<0` 或 duration<=0 跳过；`on_before_show`/`on_after_hide` 回调、`set_backdrop_closable(bool)`（子对话框打开时暂停点击关闭）、`is_visible`、反转、`resize()` 居中；panel 固定 1000×700（cover 较小则按其缩）。
-2. `ui/configpanel.py` — ConfigContent 长卷轴 → `QStackedWidget`（`self.pageStack`，`self.configContent` 作兼容别名）；引入 `_DeadBlock`/`_DeadLayout` 将原有 `dlConfigPanel`/`generalConfigPanel.addGroupedBlock` 与 `vlayout.addWidget` 路由到 pageStack（`_add_page`/`_add_grouped_page`/`_wrap_page` 每页包成 `QScrollArea`+`AnimatedScrollBar`）；新增 **Models 首页**（`self.models_group`）；NavList 加 Models 行（DL Module: Models/Detect/OCR/Inpaint/Translator，General: Project/Typesetting/Interface/Environment）；`_on_nav_row_changed` 改 `pageStack.setCurrentIndex`（经 `_page_index`），删除 `_on_content_scrolled`/`scrollToWidget` 调用与 `_on_content_scrolled`；`focusOn*` 改为 `_nav_select` 切页；`addConfigBlock` 改 shim 返回 `_DeadBlock`；新增 `_run_modal_dialog` 包裹全部子对话框 `dialog.exec()`，前后切换 backdrop closable；注入 `self._modal_ref`。
-3. `ui/mainwindow.py` — `_configSlide = OverlaySlider(split_mode=True)` → `_configModal = OverlayModal(self.configPanel, self.centralStackWidget, duration=350)`；注入 `configPanel._modal_ref`；`_showConfigOverlay`/`_hideConfigOverlay`/`resizeEvent` 改用 `_configModal.show/hide/resize`。
-4. 现缩/离屏测试：MainWindow 构造成功、modal 显隐正常（无动画与 60fps 动画两条路径）、scrim 外部点击关闭、backdrop 暂停后点击不关闭、focusOnOCR→page idx 2、hideEvent 仍触发 save_config；每页 QScrollArea 可滚动；qm 编译 770 条且无 `?` 污染；`i18n_check` 仅余已知 `_ShortcutRow` orphan 假阳性。
-5. `CLAUDE.md` — 关键文件表新增 `overlay_modal.py`、`overlay_slide` 描述收敛为 GlobalSearch/PageList；动画章节改写 ConfigPanel 分页/模态现状；开发日志 "7 天"→"3 天"。
-
-**涉及文件：** `ui/overlay_modal.py`（新）、`ui/configpanel.py`、`ui/mainwindow.py`、`CLAUDE.md`
-
----
-
-### 上下文翻译提示词修复 + 日志窗口
-
-**问题：** 上下文翻译效果差，根因是 `ContextBatchTranslator._build_msgs()` 错误地使用了 profile 的 `prompt_template`（"请将以下 {from_lang} 文本翻译为 {to_lang}"）作为 system prompt，完全没有上下文感知指令。同时，进度条标签（89 字符截断）无法展示翻译过程详情。
-
-**改动：**
-1. `modules/translators/context_batch.py` — `_build_msgs()` 放弃使用 `self.translation_prompt`，改为始终使用专门为上下文翻译设计的 system prompt，明确描述 `=== CONTEXT ===`/`=== TRANSLATE THESE ===` 双区格式、`[done]`/`[raw]` 含义、术语一致/语气衔接/代词消歧等规则；`_contextual()` 增加逐批详细 `_status()` 调用（batch header、上下文统计、逐条原文→译文、耗时）
-2. `ui/context_log_dialog.py` — **新增**，非模态 `QPlainTextEdit` 窗口，显示上下文翻译过程详情，支持自动滚底、Clear 按钮，翻译期间可操作主窗口
-3. `ui/mainwindow.py` — 创建 `ContextBatchTranslator` 时同时创建/显示 `ContextLogDialog`，`_ctx_status` 回调同时发给进度条和日志窗口，pipeline 结束时自动关闭
-4. `translate/zh_CN.ts` — 新增 `ContextLogDialog` 上下文 2 条翻译
-
-**涉及文件：** `modules/translators/context_batch.py`、`ui/context_log_dialog.py`（新）、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
-
----
-
-### 禁用数字键不透明度调整 + 原图不透明度切换功能
-
-**问题：** 焦点在画布时，数字键 0-9 会按比例调整嵌字层/原图层不透明度（canvas.py 中 `keyPressEvent` 的 `QNUMERIC_KEYS` 分支），功能意义不明且占用过多键位。同时 `Slider` 类缺少 `keyPressEvent` 覆盖，QSlider 内建的数字键映射在滑块聚焦时也可能误触。
-
-**改动：**
-1. `ui/canvas.py` — 移除 `QNUMERIC_KEYS` 导入、`keyPressEvent` 中的数字键分支（`set_active_layer_transparency`）、相关的 slider 类型注解和死方法；`set_active_layer_transparency` 联动两个滑块互为 100-complement 的逻辑一并删除
-2. `ui/custom_widget/slider.py` — `Slider.keyPressEvent` 新增加，拦截 0-9 键位防止未来焦点误触
-3. `ui/mainwindow.py` — 移除已无用的 `originallayer_trans_slider`/`textlayer_trans_slider` 引用赋值；新增 `shortcutToggleOriginalOpacity` 方法（预设值 ↔ 100% 切换，同时更新 slider 手柄位置）
-4. `utils/config.py` — 新增 `original_transparency_preset: int = 20`
-5. `ui/configpanel.py` — 注册 `toggle_original_opacity` 快捷键（默认无绑定，View 组）；Interface 区段新增 QSpinBox 设置预设值（0-99）
-6. `translate/zh_CN.ts`、`translate/zh_CN.qm` — 新增 3 条翻译（`"Toggle Original Opacity"`、`"Original Opacity Toggle"`、`"Toggle Preset (%)"`）
-
-**涉及文件：** `ui/canvas.py`、`ui/custom_widget/slider.py`、`ui/mainwindow.py`、`utils/config.py`、`ui/configpanel.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+**已验证：** `py_compile` 语法通过；`i18n_check` — 0 missing、0 hardcoded Chinese、59 条 orphan 全为已知假阳性（与改造前一致）

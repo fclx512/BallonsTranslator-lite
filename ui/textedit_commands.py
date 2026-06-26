@@ -613,7 +613,7 @@ class NormalizeBreaksCommand(QUndoCommand):
         self.proj = proj
         self.sm = scene_manager
         self.changes = changes
-        self._first_redo = True
+        self._first_redo = False
 
         current_pname = proj.current_img
         for ch in changes:
