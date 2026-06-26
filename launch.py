@@ -21,7 +21,7 @@ import utils.shared as shared  # noqa: E402
 from utils.env_diagnostic import detect_gpu_info  # noqa: E402
 
 BRANCH = "main"
-VERSION = "beta-20260621"
+VERSION = "beta-0.1.0"
 
 python = sys.executable
 git = os.environ.get("GIT", "git")

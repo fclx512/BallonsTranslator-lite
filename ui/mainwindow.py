@@ -773,6 +773,8 @@ class MainWindow(mainwindow_cls):
 
     def load_textstyle_from_proj_dir(self, from_proj=False, only_custom: bool = False):
         if from_proj:
+            if self.imgtrans_proj.directory is None:
+                return
             text_style_path = osp.join(self.imgtrans_proj.directory, "textstyles.json")
         else:
             text_style_path = "config/textstyles/default.json"
@@ -2681,6 +2683,8 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
 
     def on_export_psd(self):
         """Open the PSD export dialog and run the chosen export method."""
+        if self.imgtrans_proj.directory is None:
+            return
         dialog = PsdExportDialog(self.imgtrans_proj, parent=self)
         if not dialog.exec():
             return
@@ -2808,6 +2812,8 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
         self.textPanel.textEditList.setTransVisible(show)
 
     def on_export_txt(self, dump_target, suffix=".txt"):
+        if self.imgtrans_proj.directory is None:
+            return
         try:
             self.imgtrans_proj.dump_txt(dump_target=dump_target, suffix=suffix)
             create_info_dialog(
@@ -2868,6 +2874,8 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             )
 
     def on_reveal_file(self):
+        if self.imgtrans_proj.directory is None:
+            return
         current_img_path = self.imgtrans_proj.current_img_path()
         if sys.platform == "win32":
             # qprocess seems to fuck up with "\""

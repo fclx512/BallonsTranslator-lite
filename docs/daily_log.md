@@ -200,3 +200,17 @@
 **涉及文件：** `ui/configpanel.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
 
 **已验证：** `py_compile` 语法通过；`i18n_check` — 0 missing、0 hardcoded Chinese、59 条 orphan 全为已知假阳性（与改造前一致）
+
+---
+
+### 未打开项目时操作闪退修复
+
+**问题/需求：** 未打开项目时点击"在每个项目下建立独立的字体样式"复选框导致崩溃。排查发现另有 3 处 UI 入口也无 `directory` 守卫。
+
+**修复：**
+1. `load_textstyle_from_proj_dir` — `from_proj=True` 时加 `directory is None` 守卫（复选框 toggle 后 emit signal 调用此路径）
+2. `on_reveal_file` — 页面列表右键"在文件管理器中显示"（无 try-except，直接崩溃）
+3. `on_export_psd` — 标题栏 PSD 导出菜单（打开空对话框后操作异常）
+4. `on_export_txt` — 左侧栏导出 TXT（已有 try-except 不崩溃，但迷惑报错）
+
+**涉及文件：** `ui/mainwindow.py`

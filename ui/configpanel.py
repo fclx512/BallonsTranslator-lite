@@ -427,6 +427,9 @@ class ConfigNotePopup(QFrame):
         label = QLabel(text)
         label.setWordWrap(True)
         label.setMaximumWidth(320)
+        font = label.font()
+        font.setPointSize(font.pointSize() - 2)
+        label.setFont(font)
         label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextBrowserInteraction
         )
