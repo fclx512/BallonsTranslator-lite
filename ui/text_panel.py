@@ -21,12 +21,10 @@ from utils.fontformat import FontFormat, LineSpacingType
 from . import funcmaps as FM
 from .custom_widget import (
     AlignmentChecker,
-    CheckableLabel,
     ColorPickerLabel,
     QFontChecker,
     SizeComboBox,
     SizeControlLabel,
-    TextCheckerLabel,
     Widget,
 )
 from .text_advanced_format import TextAdvancedFormatPanel
@@ -382,11 +380,7 @@ class FontFormatPanel(Widget):
             hl.setMaximumSize(0, 0)
             hl.setMinimumSize(0, 0)
 
-        self.foldTextBtn = CheckableLabel(self.tr("Unfold"), self.tr("Fold"), False)
         self.familybox.currentTextChanged.connect(self.on_familybox_changed)
-        self.foldTextBtn = CheckableLabel(self.tr("Unfold"), self.tr("Fold"), False)
-        self.sourceBtn = TextCheckerLabel(self.tr("Source"))
-        self.transBtn = TextCheckerLabel(self.tr("Translation"))
 
         FONTFORMAT_SPACING = 6
 
@@ -422,23 +416,11 @@ class FontFormatPanel(Widget):
         hl3.addLayout(stroke_hlayout)
         hl3.setContentsMargins(3, 0, 3, 0)
         hl3.setSpacing(13)
-        hl4 = QHBoxLayout()
-        hl4.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hl4.addWidget(self.foldTextBtn)
-        hl4.addWidget(self.sourceBtn)
-        hl4.addWidget(self.transBtn)
-        hl4.setStretch(0, 1)
-        hl4.setStretch(1, 1)
-        hl4.setStretch(2, 1)
-        hl4.setContentsMargins(0, 12, 0, 0)
-        hl4.setSpacing(0)
-
         self.vlayout.addLayout(vl0)
         self.vlayout.addLayout(hl1_font)  # 字体家族+样式行
         self.vlayout.addLayout(hl1_size)  # 字号+行距行
         self.vlayout.addLayout(hl2)
         self.vlayout.addLayout(hl3)
-        self.vlayout.addLayout(hl4)
         self.vlayout.setContentsMargins(0, 0, 7, 0)
         self.vlayout.setSpacing(0)
 

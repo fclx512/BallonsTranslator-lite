@@ -292,13 +292,13 @@ class MainWindow(mainwindow_cls):
             self.canvas, self.configPanel.inpaint_config_panel
         )
         self.textPanel = TextPanel(self.app)
-        self.textPanel.formatpanel.foldTextBtn.checkStateChanged.connect(
+        self.textPanel.foldTextBtn.checkStateChanged.connect(
             self.fold_textarea
         )
-        self.textPanel.formatpanel.sourceBtn.checkStateChanged.connect(
+        self.textPanel.sourceBtn.checkStateChanged.connect(
             self.show_source_text
         )
-        self.textPanel.formatpanel.transBtn.checkStateChanged.connect(
+        self.textPanel.transBtn.checkStateChanged.connect(
             self.show_trans_text
         )
         self.textPanel.formatpanel.textstyle_panel.export_style.connect(
@@ -526,9 +526,9 @@ class MainWindow(mainwindow_cls):
 
         self.rightComicTransStackPanel.setHidden(True)
         self.st_manager.setTextEditMode(False)
-        self.st_manager.formatpanel.foldTextBtn.setChecked(pcfg.fold_textarea)
-        self.st_manager.formatpanel.transBtn.setCheckState(pcfg.show_trans_text)
-        self.st_manager.formatpanel.sourceBtn.setCheckState(pcfg.show_source_text)
+        self.textPanel.foldTextBtn.setChecked(pcfg.fold_textarea)
+        self.textPanel.transBtn.setCheckState(pcfg.show_trans_text)
+        self.textPanel.sourceBtn.setCheckState(pcfg.show_source_text)
         self.fold_textarea(pcfg.fold_textarea)
         self.show_trans_text(pcfg.show_trans_text)
         self.show_source_text(pcfg.show_source_text)

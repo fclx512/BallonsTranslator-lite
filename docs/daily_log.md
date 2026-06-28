@@ -2,73 +2,121 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。按照时间顺序撰写。
 
-## 2026-06-25
+## 2026-06-28
 
-### 译文软换行整理工具
+### JXL 重新激活
 
-**问题/需求：** LLM 翻译被动模仿原文换行，往译文塞 `\n` 导致排版炸裂、撑破文本框。半自动校对流程需快速清理无意义换行：无引号整段压空格交排版器重排，`「」` 块内换行清空、块间单换行分隔（每句独占一行）。
-
-**修复（右键菜单不显示 + 批量无效果）：**
-1. 右键菜单看不到——根因：`ui/canvas.py` 的 `gv.setContextMenuPolicy(NoContextMenu)` 阻止 `contextMenuEvent` 传到 QGraphicsItem，`TextBlkItem.contextMenuEvent` 是死代码。项目所有画布右键菜单走 `mouseReleaseEvent` → `context_menu_requested` → `canvas.on_create_contextmenu`。改为在该画布级菜单的 Squeeze 项后加"整理换行"/"整理换行并收缩框"，仅对选中的横排块启用，经新增 `canvas.normalize_break_requested(bool)` 信号 → `SceneTextManager.on_normalize_break`（仿 `onSqueezeBlk`）；删除 textitem 里的死代码与 `normalize_break_requested` 信号、还原 `contextMenuEvent`。
-2. 批量执行无效果——根因：当前页 live 文档里的换行只在 `QTextDocument`，`blk.translation` 是过时值（仅翻页/翻译前 `updateTextBlkList` 才同步）。批量前 `on_open_normalize_breaks_dialog` 缺刷新，`normalize_softbreaks` 读到无换行的旧值就跳过。打开对话框前补调 `self.st_manager.updateTextBlkList()`；`on_normalize_break` 同样先刷新再遍历选中块。
+**问题/需求：** 上游 JXL 格式正常可用，本分支因 `pillow-jxl-plugin` 与 Pillow 11+ 不兼容而封存。现清理封存状态并锁定依赖版本。
 
 **改动：**
-1. `utils/text_normalize.py`（新建）— 纯函数 `normalize_softbreaks`：按最外层 `「」` 分块，无引号/引号内换行压单空格，引号块之间 plain 段删换行紧贴、两相邻引号块间补单个 `\n`，嵌套取最外层配对，幂等。无 Qt 依赖。
-2. `utils/text_normalize_test.py`（新建）— 10 条手动运行测试，全部 PASS。
-3. `ui/textedit_commands.py` — 新增 `NormalizeBreaksCommand`：仿 `BatchFontformatCommand` 范式，`__init__` 时对当前页 live item 捕获旧 HTML/rect/fontformat，redo 写新文本（清 `rich_text` 交排版器）+ `set_fontformat` 刷新 + 可选 `squeezeBoundingRect`，undo 用 `setHtml` 全量还原 + 清 e_trans undo 栈；非当前页只写 `blk.translation`/`rich_text`。squeeze 并入命令保证一次 Ctrl+Z 全回退。
-4. `ui/canvas.py` — 新增 `normalize_break_requested(bool)` 信号；`on_create_contextmenu` 在 Squeeze 项后加"整理换行"/"整理换行并收缩框"，仅对选中的横排块启用（无选中或全竖排则禁用）。
-5. `ui/scenetext_manager.py` — 连接 `normalize_break_requested`，新增 `on_normalize_break(squeeze)`：先 `updateTextBlkList()` 刷新当前页 live 文档，再遍历选中横排块构造 `NormalizeBreaksCommand` 推栈（仿 `onSqueezeBlk`）；移除 `addTextBlkItem` 对死信号 `normalize_break_requested` 的连接。
-6. `ui/mainwindowbars.py` — Tools 菜单加"批量整理换行…"动作（仿 Quick Symbol）。
-7. `ui/mainwindow.py` — 连槽 `on_open_normalize_breaks_dialog`：无页时警告，否则先 `updateTextBlkList()` 刷新当前页再弹 `NormalizeBreaksDialog`，应用后 `QMessageBox` 报告处理数/跳过数。
-8. `ui/textitem.py` — 还原 `contextMenuEvent` 为 `super()`（原自定义版是死代码），移除 `normalize_break_requested` 信号与 `QMenu` 导入。
-9. `ui/normalize_breaks_dialog.py`（新建）— 批量对话框：全部页切换 + 页码复选框列表 + 可选自动收缩框，内置竖排跳过过滤。
-10. `translate/zh_CN.ts` / `translate/zh_CN.qm` — 新增 `TextBlkItem`/`NormalizeBreaksDialog` 两个 context 及 `TitleBar`/`MainWindow` 新条目；qm 用 utf-8 编译，验证无 Latin-1 污染。
+1. `requirements.txt` / `config/requirements_core.txt` / `pyproject.toml` / `scripts/build_portable.py` — Pillow 约束 `>=11.0` → `>=10.0,<11`
+2. `ui/configpanel.py` — JXL 恢复到结果格式（PNG/JPG/WEBP/JXL）和中间格式（PNG/JXL）选择器
+3. `utils/io_utils.py` — `imwrite` JXL 路径加 try/except 失败回退 PNG；清理封存注释
+4. `utils/proj_imgtrans.py` — 清除 JXL 封存注释
+5. `docs/经验教训.md` — §4.1 更新为 ✅ 已重新激活
 
-**涉及文件：** `utils/text_normalize.py`、`utils/text_normalize_test.py`、`ui/textedit_commands.py`、`ui/textitem.py`、`ui/scenetext_manager.py`、`ui/mainwindowbars.py`、`ui/mainwindow.py`、`ui/normalize_breaks_dialog.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
-
-### CTD 检测器选中后窗口无响应修复
-
-**问题/需求：** 从下拉栏选中 CTD 检测器后主窗口卡死（终端无报错）。根因是 `_ensure_module_deps()` 在**主线程**调用了 `ModuleSpec.resolve()` → `importlib.import_module("modules.textdetector.detector_ctd")`，触发 torch、cv2、einops 等重型 C 扩展导入，Windows 下会堵塞事件循环数秒。
-
-**改动：**
-1. `ui/module_manager.py` — `_ensure_module_deps()` 对 `ModuleSpec` 使用 AST 扫描缓存的 `dependencies` / `download_file_list` 直接检查，不再在主线程 resolve/import 模块；仅当依赖确实缺失、需要弹出安装对话框时才懒加载。
-
-**涉及文件：** `ui/module_manager.py`
-
-
-### 设置面板样式残留修复：焦点框跟随 + 移除多余包裹框
-
-**问题/需求：** 设置面板在 `11ecc36` 从卷轴式重构为分页后出现两处样式残留：(1) NavList 左侧代码绘制的蓝色焦点指示器只在「管线」旁显示，点其他导航项不跟随；(2) 分页内包裹设置项的 PanelGroupBox 框已不再需要，且被强制拉伸到设置窗口高度。另需审视分页排布并产出建议文档。
-
-**改动：**
-1. `ui/configpanel.py` — NavList 焦点指示器改由 `currentRowChanged` 信号驱动：移除 `setCurrentRow` 覆盖（Qt 用户点击走 `QItemSelectionModel` 不触发该覆盖，原路径失效），新增 `_on_row_changed(new_row)` 挂到 `currentRowChanged`，跳过不可选的标题/分隔项，以当前 `_indicator_y` 为动画起点平滑滑到新行（保留 `_sync_indicator` 懒初始化兜底）。
-2. `ui/configpanel.py` — 分页内 group 去 PanelGroupBox 多余框：`models_group`、`_build_grouped_widget`、`_add_grouped_page` 三处构造点给 group 设 `setProperty("cfgPage", True)`（用 dynamic property 避免覆盖 `GroupDetect` 等 objectName 影响阶段色条选择器）；`_wrap_page` 给被包裹 content 设垂直 `Fixed` 策略防短页被拉满。
-3. `config/stylesheet.css` — 追加 `PanelGroupBox[cfgPage="true"]` 选择器：去 1px 外框 + 背景 + 圆角，**保留左侧 3px 阶段色条**；四条 `PanelGroupBox#GroupXxx[cfgPage="true"]` 复合选择器覆盖 detect/ocr/inpaint/trans 阶段配色。快捷键编辑器内 PanelGroupBox 默认框不受影响。
-4. `docs/设置面板排布建议.md` — 新建排布审视建议文档（管线页体量失衡、阶段配色不一致、环境页留白、Models 按钮宽度、NavList 标题交互五点，未改结构，列出供决策）。
-
-**涉及文件：** `ui/configpanel.py`、`config/stylesheet.css`、`docs/设置面板排布建议.md`
-
-
-### 旋转文本框跳过拖动吸附对齐
-
-**问题/需求：** 有旋转角度的文本框（`angle != 0`）是定制型手动排布，不应该在拖动时触发吸附对齐逻辑，且旋转状态下计算对齐没有实际意义。
-
-**改动：**
-`ui/textitem.py` — `_apply_snap()` 开头早返（拖动块自身有角度不吸附），收集目标框时跳过 `child.angle != 0` 的旋转块。
-
-**涉及文件：** `ui/textitem.py`
+**涉及文件：** `requirements.txt`、`config/requirements_core.txt`、`pyproject.toml`、`scripts/build_portable.py`、`ui/configpanel.py`、`utils/io_utils.py`、`utils/proj_imgtrans.py`、`docs/经验教训.md`
 
 ---
 
-### 快速符号面板插入失焦修复
+### 画布区右侧文本按钮移出字体折叠区
 
-**问题/需求：** `QuickSymbolDialog` 插入符号时直接用 `cursor.insertText(symbol)`，但目标 `SourceTextEdit` 可能没有焦点，导致画布文本框看不到插入内容。
+**问题/需求：** `foldTextBtn`（折叠文本框）、`sourceBtn`（原文）、`transBtn`（译文）被包在 `CollapsibleSection`（字体样式）内，折叠字体样式时一并收纳。希望在收纳字体样式时这三个按钮仍然显示。
 
 **改动：**
-1. `ui/textedit_area.py` — 新增 `insert_external_text()` 方法，手动设置 change tracking 状态并调用 `handle_content_change()` 强制传播到画布
-2. `ui/quick_symbol_dialog.py` — 对目标使用 `insert_external_text`（若可用），否则回退旧路径
+1. `ui/text_panel.py` — `FontFormatPanel` 中移除三个按钮的定义和 hl4 布局，清理不再使用的 import
+2. `ui/scenetext_manager.py` — `TextPanel` 新增三个按钮，置于 `format_section` 与 `textEditList` 之间
+3. `ui/mainwindow.py` — 更新所有引用路径（`formatpanel.xxx` → 直指 `self.textPanel.xxx`）
+4. `translate/zh_CN.ts` + `.qm` — 将 4 条翻译从 `FontFormatPanel` 上下文迁移到 `TextPanel` 上下文
 
-**涉及文件：** `ui/textedit_area.py`、`ui/quick_symbol_dialog.py`
+---
+
+### 删除快捷键面板 hover 备注 + 「原图不透明度」更名为「原文对照」
+
+**问题/需求：** ① 快捷键面板的 `ConfigSubBlock` 带 `note` 备注，样式纯黑框不可用，界面简单无需备注。② 「原图不透明度」名称冗长，改「原文对照」更简洁准确地表达快速对照原图的目的。
+
+**改动：**
+1. `ui/configpanel.py` — ShortcutEditor 的 ConfigSubBlock 移除 `note` 参数；`_ACTION_NAMES`、settings 各标签统一从 "Original Opacity Toggle" 等改为 "Original Compare" / "Preset"
+2. `ui/mainwindowbars.py` — 底部栏 `originalSlider` 工具提示从 "Original image opacity" 改为 "Original Compare"
+3. `translate/zh_CN.ts` + `.qm` — 更新 7 条 source/translation，删除 1 条 shortcut note 条目
+
+---
+
+### 下拉框预设值默认值调整
+
+**需求：** 字号大小使用 Photoshop 预置尺寸（排除 300px）；轮廓宽度改为用户个人配置值。
+
+**改动：**
+1. `utils/config.py` — `font_size_presets` 默认值改为 PS 标准尺寸列表（6→240，21 项）；`stroke_width_presets` 改为 `[0.1, 0.15, 0.2, 1.0]`
+2. `config/config.json` — `font_size_presets` 同步更新为 PS 尺寸
+
+---
+
+### 设置面板左侧导航同步上游外观
+
+**问题/需求：** 上游左侧导航列表文字渲染平滑（DirectWrite），本分支自定义 `NavItemDelegate` 用 `painter.drawText()` 走 GDI 路径，文字锯齿明显。且导航项背景色 #21252B 与右侧面板 #282C34 不一致。希望同步上游样式的同时保留 accent indicator 动画。
+
+**改动：**
+
+1. **`config/stylesheet.css`** — 移除 `ConfigBlock`、`ConfigSubBlock`、`ConfigTextLabel` 的 `@emptyContentBackgroundColor`（#21252B），注释掉使其继承 `Widget` 的 `@widgetBackgroundColor`（#282C34），与右侧面板色一致。
+2. **`ui/configpanel.py`** — 新增 `TableItem`(QStandardItem)、`TreeModel`(QStandardItemModel)、`ConfigTable`(QTreeView) 三个类，端口自上游。替换原 `NavItemDelegate` + `NavList`（QListWidget）。
+   - 禁用折叠（`setItemsExpandable(False)` + `setRootIsDecorated(False)`）但保留树状缩进（`setIndentation(20)`）
+   - `expandAll()` 确保子项展开
+   - 选中加粗逻辑来自上游 `ConfigTable.selectionChanged()`
+   - accent indicator 动画从旧 `NavList.paintEvent()` 移植到 `ConfigTable.paintEvent()`
+3. **`utils/shared.py`** — 删除不再使用的 `NAVLIST_HEADER_FONTSIZE`、`NAVLIST_ITEM_FONTSIZE`
+
+**涉及文件：** `config/stylesheet.css`、`ui/configpanel.py`、`utils/shared.py`
+
+---
+
+### 设置面板样式打磨：字号同步上游 + 导航列表内边距 + 移除双指示器
+
+**问题/需求：** 多项视觉问题：① 设置面板字号比上游大（16pt vs 13pt）需要同步；② 导航列表项无内边距，文本贴窗口边缘；③ 选中项同时显示两个指示器（上游的默认 QTreeView 高亮 + 本 fork 的 accent 竖条动画），且 accent 竖条在边缘 x=0 不好看；④ 点击后加粗状态无法自动清除（header 被误加粗且 never un-bold）。
+
+**改动：**
+
+1. **`utils/shared.py`** — `CONFIG_FONTSIZE_HEADER 18→15`、`CONFIG_FONTSIZE_TABLE 16→13`、`CONFIG_FONTSIZE_CONTENT 16→13`，与上游一致。
+2. **`config/stylesheet.css`** —
+   - 新增 `#ConfigNavList::item` padding（左 14px / 右 10px / 上下 5px），文本不再贴左边缘
+   - 新增 `#ConfigNavList::item:selected { background: transparent; color: @qwidgetForegroundColor; }`，抑制 Win11 QTreeView 默认选中高亮色块和文字变色（Win10 无此问题），仅保留加粗表示选中
+3. **`ui/configpanel.py` — ConfigTable 瘦身**：
+   - 删除 `paintEvent`、`_on_selection_changed`、`_start_indicator_anim`、`_tick`、`_sync_indicator` 及全部动画状态变量（accent 竖条指示器）
+   - `selectionChanged` 加 `item.isSelectable()` 守卫，防止 header 项被误设加粗后永远无法清除
+
+**涉及文件：** `utils/shared.py`、`config/stylesheet.css`、`ui/configpanel.py`
+
+---
+
+### 设置面板淡入动画掉帧修复：缓存快照替代实时栅格化
+
+**问题/需求：** 打开项目后点击设置面板，`OverlayModal` 的淡入动画掉帧明显。
+
+**根因：** `QGraphicsOpacityEffect.setOpacity()` 每帧将整个 ConfigPanel（六页近百控件）全量渲染到离屏 buffer。定时器在高刷屏上以 ~6ms 间隔（~166fps）触发，远超单帧渲染预算。打开项目后 canvas 有图像/文字块，paint 争抢更严重。
+
+**改动：** `ui/overlay_modal.py` — 缓存快照策略：
+
+- `show()` 时先将面板渲染一次（`grab()` → QPixmap），随即隐藏真面板
+- 用一个 QLabel 承载截图，对此 QLabel 做 QGraphicsOpacityEffect 动画（单图，无 widget 树，≈0 开销）
+- 动画结束 → 销毁 QLabel，显示真面板
+- 真面板渲染从 ~44 帧/350ms 降为 2 帧（1 次截取 + 1 次最终显示）
+- 定时器锁定 60fps 上限（`max(16, ...)`），消除高刷屏上的无意义空转
+- hide/反向/清理分支均适配缓存场景；`resize()` 兼容缓存可见期间的重定位
+
+**涉及文件：** `ui/overlay_modal.py`
+
+---
+
+### 设置面板视觉打磨：导航列表顶部间距 + 无描述复选框防裁剪
+
+**问题/需求：** 设置面板左侧导航列表顶部紧贴窗口边缘，无呼吸空间；部分纯复选框（如"To uppercase"，无 description 文字）指示器被水平布局挤压裁剪。
+
+**改动：**
+
+1. **`config/stylesheet.css`** — `#ConfigNavList` 加 `padding-top: 8px`，列表首项不再紧贴上边缘（此前 `main_layout.setContentsMargins(0,0,0,0)` 无顶部内边距，样式表 `::item` padding 仅作用于项内部）
+2. **`ui/configpanel.py` — `checkbox_with_label()`** — 无 `description` 参数时（纯复选框，如 `let_uppercase_checker`），设 `checkbox.setMinimumWidth(24)`，确保 HBoxLayout 中仅显示指示器的复选框有足够水平空间
+
+**涉及文件：** `config/stylesheet.css`、`ui/configpanel.py`
 
 ---
 

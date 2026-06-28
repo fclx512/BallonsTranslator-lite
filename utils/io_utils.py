@@ -19,9 +19,9 @@ from PIL import Image
 
 from .logger import logger as LOGGER
 
-# Ensure JXL codec is registered if pillow-jxl-plugin is installed
-# JXL codec registration — currently disabled in UI due to compatibility issues.
-# See docs/经验教训.md §4.1 for details. If re-enabling, fix imwrite error handling first.
+# JXL codec registration via pillow-jxl-plugin (optional, auto-detected at runtime)
+# Read path: PIL first → cv2 fallback. Write path: PIL → PNG fallback on error.
+# Relies on pillow-jxl-plugin registering the ".jxl" codec with Pillow's Image.EXTENSION.
 try:
     import pillow_jxl  # noqa: F401 — registers JXL codec with Pillow
 except ImportError:
@@ -286,8 +286,8 @@ def imread(imgpath, read_type=cv2.IMREAD_COLOR, max_retry_limit=5, retry_interva
 
     # JXL: try PIL once, fall back to cv2 on failure. No retries — if the JXL
     # codec can't decode a fully-written file, retrying won't help.
-    # JXL read path — kept for backward compatibility with existing .jxl cache files.
-    # See docs/经验教训.md §4.1 for known decode failures.
+    # cv2 fallback handles edge cases where pillow-jxl-plugin codec is registered
+    # but fails on specific files (e.g. grayscale/lossless variants).
     if suffix == ".jxl":
         if ".jxl" in Image.EXTENSION:
             try:
@@ -367,24 +367,27 @@ def imwrite(img_path, img, ext=".png", quality=100, jxl_encode_effort=3):
         encode_param = [cv2.IMWRITE_JPEG_QUALITY, quality]
     elif ext == ".webp":
         encode_param = [cv2.IMWRITE_WEBP_QUALITY, quality]
-    # JXL save path — NOT currently reachable from UI (JXL disabled in configpanel).
-    # WARNING: no try/except here; a failed encode can leave a 0-byte or corrupt file.
-    # If re-enabling JXL, wrap this in try/except with PNG fallback. See docs/经验教训.md §4.1.
+    # JXL save path — wrapped in try/except with PNG fallback on failure.
     if ext == ".jxl":
         if ".jxl" in Image.EXTENSION:
             lossless = quality > 99
-            Image.fromarray(img).save(
-                img_path,
-                quality=quality,
-                lossless=lossless,
-                effort=jxl_encode_effort,
+            try:
+                Image.fromarray(img).save(
+                    img_path,
+                    quality=quality,
+                    lossless=lossless,
+                    effort=jxl_encode_effort,
+                )
+                return
+            except Exception:
+                LOGGER.exception(
+                    f"JXL encode failed for {img_path}, falling back to PNG"
+                )
+        else:
+            LOGGER.warning(
+                "JXL format not supported by Pillow, falling back to PNG. "
+                "Install pillow-jxl-plugin for JXL support."
             )
-            return
-        # JXL not supported by Pillow — fall back to PNG
-        LOGGER.warning(
-            "JXL format not supported by Pillow, falling back to PNG. "
-            "Install pillow-jxl-plugin for JXL support."
-        )
         ext = ".png"
         img_path = str(Path(img_path).with_suffix(ext))
 

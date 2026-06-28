@@ -13,9 +13,9 @@ Widget {
 }
 
 
-ConfigTextLabel {
+/* ConfigTextLabel {
     background-color : @emptyContentBackgroundColor;
-}
+} */
 
 ConfigNotePopup {
     background-color: @widgetBackgroundColor;
@@ -31,13 +31,8 @@ CustomGV {
     border-width: 1px;
 }
 
-ConfigBlock {
-    background-color: @emptyContentBackgroundColor
-}
-
-ConfigSubBlock {
-    background-color: @emptyContentBackgroundColor
-}
+/* ConfigBlock, ConfigSubBlock 继承 Widget 的 @widgetBackgroundColor (#282C34)，
+   不与右侧面板产生色差。上游未单独定义，此处保持一致。 */
 
 SearchResultTree {
     border-style: none;
@@ -344,7 +339,19 @@ QListWidget {
     border: none;
     background: @emptyContentBackgroundColor;
     outline: none;
+    padding-top: 8px;
 }
+
+#ConfigNavList::item {
+    padding: 5px 10px 5px 14px;
+}
+
+#ConfigNavList::item:selected {
+    background: transparent;
+    border: none;
+    color: @qwidgetForegroundColor;
+}
+
 
 /* ── Font Style Manager ────────────────────────────────────── */
 #FontStyleManager {
@@ -512,10 +519,7 @@ QRadioButton::indicator:disabled {
     border: 2px solid @disabledForegroundColor;
 }
 
-/* ── Plain checkboxes (dark‑theme support) ─────────────────── */
-/* Only the text/color rules live here — icon‑based checkboxes
-   (#TransChecker / #PaintChecker / etc.) have their own rules
-   and are NOT affected by the indicator styling below.        */
+/* ── Plain checkboxes ─────────────────────────────────────────── */
 QCheckBox {
     color: @qwidgetForegroundColor;
     spacing: 6px;

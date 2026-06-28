@@ -658,7 +658,7 @@ class BottomBar(Widget):
         self.textblockChecker.clicked.connect(self.onTextblockCheckerClicked)
 
         self.originalSlider = PaintQSlider(
-            self.tr("Original image opacity"), Qt.Orientation.Horizontal, self
+            self.tr("Original Compare"), Qt.Orientation.Horizontal, self
         )
         self.originalSlider.setFixedWidth(150)
         self.originalSlider.setRange(0, 100)

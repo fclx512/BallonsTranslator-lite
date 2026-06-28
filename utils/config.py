@@ -190,30 +190,20 @@ class ProgramConfig(Config):
     shortcuts: Dict[str, List[str]] = field(default_factory=lambda: dict())
     font_size_presets: List[float] = field(
         default_factory=lambda: [
-            5,
-            5.5,
-            6.5,
-            7.5,
+            6,
             8,
-            9,
             10,
-            10.5,
-            11,
             12,
             14,
-            16,
             18,
-            20,
-            22,
-            26,
-            28,
+            24,
+            30,
             36,
             48,
-            56,
+            60,
             72,
-            93,
-            123,
-            163,
+            96,
+            120,
         ]
     )
     line_spacing_presets: List[float] = field(
@@ -223,7 +213,7 @@ class ProgramConfig(Config):
         default_factory=lambda: [0.0, 0.5, 1.0, 1.5, 2.0]
     )
     stroke_width_presets: List[float] = field(
-        default_factory=lambda: [0.1, 0.5, 1.0, 2.0, 3.0]
+        default_factory=lambda: [0.1, 0.15, 0.2, 1.0]
     )
     opacity_presets: List[float] = field(
         default_factory=lambda: [1.0, 0.8, 0.6, 0.4, 0.2]

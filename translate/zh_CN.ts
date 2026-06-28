@@ -147,8 +147,8 @@
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" line="645" />
-            <source>Original image opacity</source>
-            <translation>原图不透明度</translation>
+            <source>Original Compare</source>
+            <translation>原文对照</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" line="651" />
@@ -749,12 +749,12 @@
             <translation>MCP 服务器信息...</translation>
         </message>
         <message>
-            <source>Original Opacity Toggle</source>
-            <translation>原图不透明度开关</translation>
+            <source>Original Compare</source>
+            <translation>原文对照</translation>
         </message>
         <message>
-            <source>Toggle Preset (%):</source>
-            <translation>切换预设 (%):</translation>
+            <source>Preset (%):</source>
+            <translation>预设 (%):</translation>
         </message>
         <message>
             <source>Model Loading</source>
@@ -865,12 +865,8 @@
             <translation>控制 UI 过渡动画的流畅度。自动模式匹配显示器刷新率。选择指定 FPS 可限制 GPU 占用。关闭则禁用所有动画。</translation>
         </message>
         <message>
-            <source>Customize keyboard shortcuts for all actions. Click a shortcut pill to remove it. Use the + button to record a new key combination.</source>
-            <translation>自定义所有操作的键盘快捷键。点击快捷键标签可移除。使用 + 按钮录制新的组合键。</translation>
-        </message>
-        <message>
-            <source>Background opacity level when using the Original Opacity toggle shortcut. Lower values show more of the original image beneath the translation.</source>
-            <translation>使用原图不透明度切换快捷键时的背景透明度。数值越低，译文下方的原图显示越多。</translation>
+            <source>Background opacity level when using the Original Compare shortcut. Lower values show more of the original image beneath the translation.</source>
+            <translation>使用原文对照快捷键时的基础透明度。数值越低，译文下方的原图显示越多。</translation>
         </message>
         <!-- Environment notes -->
         <message>
@@ -895,8 +891,8 @@
             <translation>字体排除</translation>
         </message>
         <message>
-            <source>Toggle Preset</source>
-            <translation>切换预设</translation>
+            <source>Preset</source>
+            <translation>预设</translation>
         </message>
         <message>
             <source>Network</source>
@@ -1098,28 +1094,6 @@
             <location filename="..\ui\text_panel.py" line="362" />
             <source>Advanced Text Format</source>
             <translation>高级文本格式</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_panel.py" line="387" />
-            <location filename="..\ui\text_panel.py" line="385" />
-            <source>Unfold</source>
-            <translation>展开</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_panel.py" line="387" />
-            <location filename="..\ui\text_panel.py" line="385" />
-            <source>Fold</source>
-            <translation>折叠</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_panel.py" line="388" />
-            <source>Source</source>
-            <translation>原文</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_panel.py" line="389" />
-            <source>Translation</source>
-            <translation>译文</translation>
         </message>
     </context>
     <context>
@@ -3589,9 +3563,29 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
     <context>
         <name>TextPanel</name>
         <message>
-            <location filename="..\ui\scenetext_manager.py" line="368" />
+            <location filename="..\ui\scenetext_manager.py" line="380" />
             <source>Font Format</source>
             <translation>字体样式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\scenetext_manager.py" line="389" />
+            <source>Unfold</source>
+            <translation>展开</translation>
+        </message>
+        <message>
+            <location filename="..\ui\scenetext_manager.py" line="389" />
+            <source>Fold</source>
+            <translation>折叠</translation>
+        </message>
+        <message>
+            <location filename="..\ui\scenetext_manager.py" line="390" />
+            <source>Source</source>
+            <translation>原文</translation>
+        </message>
+        <message>
+            <location filename="..\ui\scenetext_manager.py" line="391" />
+            <source>Translation</source>
+            <translation>译文</translation>
         </message>
     </context>
     <context>
@@ -4133,8 +4127,8 @@ in Settings → Mirror Config, then click Retry.</source>
         </message>
         <message>
             <location filename="..\ui\configpanel.py" line="756" />
-            <source>Toggle Original Opacity</source>
-            <translation>切换原图不透明度</translation>
+            <source>Toggle Original Compare</source>
+            <translation>切换原文对照</translation>
         </message>
     </context>
     <context>

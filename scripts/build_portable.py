@@ -187,7 +187,7 @@ def _parse_core_deps(project_root: Path) -> list[str]:
             "numpy",
             "opencv-python>=4.10.0.84",
             "packaging>=23.0",
-            "pillow>=11.0",
+            "pillow>=10.0,<11",
             "qtpy",
             "requests",
             "httpx[socks,brotli]",

@@ -22,7 +22,9 @@ from qtpy.QtGui import (
     QTextCharFormat,
     QTextCursor,
 )
-from qtpy.QtWidgets import QApplication, QGraphicsItem, QLabel, QWidget
+from qtpy.QtWidgets import QApplication, QGraphicsItem, QHBoxLayout, QLabel, QWidget
+
+from .custom_widget import CheckableLabel, TextCheckerLabel
 
 try:
     from qtpy.QtWidgets import QUndoCommand
@@ -383,6 +385,20 @@ class TextPanel(Widget):
         )
 
         layout.addWidget(self.format_section)
+        self.textToolBar = QHBoxLayout()
+        self.foldTextBtn = CheckableLabel(self.tr("Unfold"), self.tr("Fold"), False)
+        self.sourceBtn = TextCheckerLabel(self.tr("Source"))
+        self.transBtn = TextCheckerLabel(self.tr("Translation"))
+        self.textToolBar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.textToolBar.addWidget(self.foldTextBtn)
+        self.textToolBar.addWidget(self.sourceBtn)
+        self.textToolBar.addWidget(self.transBtn)
+        self.textToolBar.setStretch(0, 1)
+        self.textToolBar.setStretch(1, 1)
+        self.textToolBar.setStretch(2, 1)
+        self.textToolBar.setContentsMargins(0, 12, 0, 0)
+        self.textToolBar.setSpacing(0)
+        layout.addLayout(self.textToolBar)
         layout.addWidget(self.textEditList)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(7)

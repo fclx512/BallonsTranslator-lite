@@ -1,6 +1,6 @@
 from typing import List, Tuple, Union
 
-from qtpy.QtCore import QEasingCurve, QElapsedTimer, QPoint, QSize, Qt, QTimer, Signal
+from qtpy.QtCore import QEasingCurve, QElapsedTimer, QItemSelection, QPoint, QSize, Qt, QTimer, Signal
 from qtpy.QtGui import (
     QColor,
     QFocusEvent,
@@ -8,6 +8,8 @@ from qtpy.QtGui import (
     QGuiApplication,
     QIntValidator,
     QPainter,
+    QStandardItem,
+    QStandardItemModel,
     QValidator,
 )
 from qtpy.QtWidgets import (
@@ -35,7 +37,7 @@ from qtpy.QtWidgets import (
     QSpinBox,
     QStackedWidget,
     QStyle,
-    QStyledItemDelegate,
+    QTreeView,
     QVBoxLayout,
     QWidget,
 )
@@ -47,12 +49,11 @@ from utils.shared import (
     CONFIG_COMBOBOX_SHORT,
     CONFIG_FONTSIZE_CONTENT,
     CONFIG_FONTSIZE_HEADER,
+    CONFIG_FONTSIZE_TABLE,
     CONFIG_SUBBLOCK_SPACING,
     CONFIGBLOCK_CONTENT_MARGINS,
     GROUPBOX_CONTENT_MARGINS,
     LINEEDIT_FIXHEIGHT,
-    NAVLIST_HEADER_FONTSIZE,
-    NAVLIST_ITEM_FONTSIZE,
     NAVLIST_WIDTH,
 )
 
@@ -268,6 +269,7 @@ def checkbox_with_label(
         checkbox.setText(description)
         vertical_layout = True
     else:
+        checkbox.setMinimumWidth(24)
         vertical_layout = False
 
     if target_block is None:
@@ -471,172 +473,114 @@ class ConfigNotePopup(QFrame):
             self._effect.setOpacity(1.0)
 
 
-class NavItemDelegate(QStyledItemDelegate):
-    """Paints item backgrounds through QPainter so text
-    rendering stays on the native DirectWrite path (no stylesheet override)."""
+class TableItem(QStandardItem):
+    """Item for the nav tree.  Ported from upstream with font-size support."""
 
-    _hover_bg: "QColor | None" = None
-    _text_clr: "QColor | None" = None
+    def __init__(self, text, fontsize, section_key=None, target_widget=None):
+        super().__init__()
+        font = self.font()
+        font.setPointSizeF(fontsize)
+        self.setFont(font)
+        self.setText(text)
+        self.setEditable(False)
+        if section_key is not None:
+            self.setData(section_key, Qt.ItemDataRole.UserRole)
+        if target_widget is not None:
+            self.setData(id(target_widget), Qt.ItemDataRole.UserRole + 1)
 
-    @classmethod
-    def invalidate_colors(cls):
-        cls._hover_bg = None
-        cls._text_clr = None
-
-    @classmethod
-    def _ensure_colors(cls):
-        if cls._hover_bg is not None:
-            return
-        from ui.misc import load_all_themes
-        from utils.config import pcfg
-
-        themes = load_all_themes()
-        tn = pcfg.dark_theme if pcfg.darkmode else pcfg.light_theme
-        t = themes.get(tn, {})
-        cls._hover_bg = QColor(t.get("@hoverBackgroundColor", "#cad7ed"))
-        cls._text_clr = QColor(t.get("@textColor", "#5d5d5f"))
-
-    def paint(self, painter, option, index):
-        self._ensure_colors()
-
-        painter.save()
-        rect = option.rect
-
-        is_selected = option.state & QStyle.StateFlag.State_Selected
-        is_hovered = option.state & QStyle.StateFlag.State_MouseOver
-
-        # Background — solid fill matching original stylesheet
-        if is_selected or is_hovered:
-            painter.fillRect(rect, self._hover_bg)
-
-        # Text — draw through native style so DirectWrite handles it
-        text = index.data(Qt.ItemDataRole.DisplayRole)
-        if text:
-            font = index.data(Qt.ItemDataRole.FontRole)
-            if font is None or not isinstance(font, QFont):
-                font = option.font
-            painter.setFont(font)
-            painter.setPen(self._text_clr)
-            # Indent sub-items (selectable) more than headers (non-selectable)
-            left_pad = 32 if (index.flags() & Qt.ItemFlag.ItemIsSelectable) else 16
-            painter.drawText(
-                rect.adjusted(left_pad, 0, -8, 0),
-                Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextSingleLine,
-                text,
-            )
-
-        painter.restore()
-
-    def sizeHint(self, option, index):
-        base = super().sizeHint(option, index)
-        base.setHeight(max(base.height(), 34))
-        return base
+    def setBold(self, bold: bool):
+        font = self.font()
+        font.setBold(bold)
+        self.setFont(font)
 
 
-class NavList(QListWidget):
-    """QListWidget with WinUI‑style animated accent indicator bar."""
+class TreeModel(QStandardItemModel):
+    """Provides size hints matching upstream's row height calculation."""
+
+    # https://stackoverflow.com/questions/32229314/pyqt-how-can-i-set-row-heights-of-qtreeview
+    def data(self, index, role):
+        if not index.isValid():
+            return None
+        if role == Qt.ItemDataRole.SizeHintRole:
+            size = QSize()
+            item = self.itemFromIndex(index)
+            size.setHeight(item.font().pointSize() + 14)
+            return size
+        else:
+            return super().data(index, role)
+
+
+class ConfigTable(QTreeView):
+    """Upstream-style navigation tree.
+
+    Ported from upstream's ``ConfigTable``, with expand/collapse disabled
+    for a flat-list appearance.  Selection is indicated by bold text.
+    """
+
+    section_pressed = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setItemDelegate(NavItemDelegate(self))
 
-        self._indicator_y = 0.0
-        self._anim_from = 0.0
-        self._anim_to = 0.0
-        self._animating = False
-        self._duration = 200
-        self._easing = QEasingCurve(QEasingCurve.Type.OutCubic)
-        self._anim_timer = QTimer(self)
-        self._anim_timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self._anim_timer.timeout.connect(self._tick)
-        self._elapsed = QElapsedTimer()
+        treeModel = TreeModel()
+        self.setModel(treeModel)
+        self.selected: TableItem = None
+        self.setHeaderHidden(True)
+        self.setMinimumWidth(NAVLIST_WIDTH)
+        self.setMaximumWidth(NAVLIST_WIDTH)
+        self.section_items = {}
 
-        # Indicator is driven by currentRowChanged, which fires for BOTH user
-        # clicks (Qt's internal selection-model path) and programmatic
-        # setCurrentRow. Overriding setCurrentRow does not catch clicks.
-        self.currentRowChanged.connect(self._on_row_changed)
+        # Flat-list appearance — no expand/collapse arrows or interaction
+        self.setItemsExpandable(False)
+        self.setRootIsDecorated(False)
+        self.setIndentation(20)
+        self.setFrameShape(QFrame.Shape.NoFrame)
 
-    def _on_row_changed(self, new_row: int):
-        """Animate the accent indicator to the newly selected row.
+    def addHeader(self, header: str) -> TableItem:
+        rootNode = self.model().invisibleRootItem()
+        ti = TableItem(header, CONFIG_FONTSIZE_TABLE + 3)
+        ti.setSelectable(False)
+        rootNode.appendRow(ti)
+        return ti
 
-        Skips header/separator rows (non-selectable items) so the indicator
-        never parks on a label. Uses the current indicator position as the
-        animation start, so it slides from wherever it currently is.
-        """
-        if new_row < 0:
-            return
-        item = self.item(new_row)
-        if item is None:
-            return
-        # Skip non-selectable items (group headers / separators).
-        if not (item.flags() & Qt.ItemFlag.ItemIsSelectable):
-            return
-        new_rect = self.visualItemRect(item)
-        if not new_rect.isValid() or new_rect.height() <= 0:
-            return
-        target_y = new_rect.y() + new_rect.height() / 2.0
-        # If the indicator has not been placed yet (lazy-init via paintEvent),
-        # snap instead of animating from 0.0.
-        from_y = self._indicator_y if self._indicator_y != 0.0 else target_y
-        self._start_indicator_anim(from_y, target_y)
+    def addSection(self, parent: TableItem, text: str, section_key: str, target_widget=None) -> TableItem:
+        item = TableItem(text, CONFIG_FONTSIZE_TABLE, section_key, target_widget)
+        parent.appendRow(item)
+        self.section_items[section_key] = item
+        return item
 
-    def _start_indicator_anim(self, from_y: float, to_y: float):
-        self._anim_from = from_y
-        self._anim_to = to_y
-        self._indicator_y = from_y
+    def selectionChanged(self, selected: QItemSelection, deselected: QItemSelection):
+        sel = selected.indexes()
+        model = self.model()
 
-        if pcfg.animation_fps < 0:
-            self._indicator_y = to_y
-            self.viewport().update()
-            return
+        self.selected = model.itemFromIndex(sel[0]) if len(sel) > 0 else None
+        for i in deselected.indexes():
+            item = self.model().itemFromIndex(i)
+            if item is not None:
+                item.setBold(False)
 
-        self._animating = True
-        self._elapsed.start()
-        self._anim_timer.start(_scroll_interval())
+        index = self.currentIndex()
+        if index.isValid():
+            item = self.model().itemFromIndex(index)
+            if item is not None and item.isSelectable():
+                item.setBold(True)
+                section_key = item.data(Qt.ItemDataRole.UserRole)
+                if section_key is not None:
+                    self.section_pressed.emit(section_key)
 
-    def _tick(self):
-        elapsed = self._elapsed.elapsed()
-        progress = min(elapsed / self._duration, 1.0)
-        eased = self._easing.valueForProgress(progress)
-        self._indicator_y = self._anim_from + (self._anim_to - self._anim_from) * eased
-        self.viewport().update()
-        if progress >= 1.0:
-            self._anim_timer.stop()
-            self._animating = False
-            self._indicator_y = self._anim_to
-            self.viewport().update()
+        super().selectionChanged(selected, deselected)
 
-    def _sync_indicator(self):
-        """Snap indicator to current item (no animation)."""
-        row = self.currentRow()
-        if row < 0:
-            return
-        item = self.item(row)
-        if not item:
-            return
-        r = self.visualItemRect(item)
-        if r.isValid() and r.height() > 0:
-            self._indicator_y = r.y() + r.height() / 2.0
+    def setCurrentSection(self, section_key: str):
+        item = self.section_items.get(section_key)
+        if item is not None and self.currentIndex() != item.index():
+            self.setCurrentIndex(item.index())
 
-    def paintEvent(self, event):
-        super().paintEvent(event)
-
-        # Lazy‑init indicator position on first real paint
-        if self._indicator_y == 0.0:
-            self._sync_indicator()
-
-        painter = QPainter(self.viewport())
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        from ui.misc import get_theme_color
-
-        accent = get_theme_color(alpha=200)
-        painter.setBrush(accent)
-        painter.setPen(Qt.NoPen)
-
-        indicator_h = 20
-        y = int(round(self._indicator_y - indicator_h / 2.0))
-        painter.drawRoundedRect(0, y, 3, indicator_h, 1, 1)
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        if self.selected is not None:
+            section_key = self.selected.data(Qt.ItemDataRole.UserRole)
+            if section_key is not None:
+                self.section_pressed.emit(section_key)
 
 
 class AnimatedScrollBar(QScrollBar):
@@ -879,7 +823,7 @@ _ACTION_NAMES = {
     "merge_tool": "Merge Tool",
     "quick_symbol": "Quick Symbol",
     "advanced_align": "Advanced Alignment",
-    "toggle_original_opacity": "Toggle Original Opacity",
+    "toggle_original_opacity": "Toggle Original Compare",
 }
 
 # Shortcut groups for organized display
@@ -1600,10 +1544,9 @@ class ConfigPanel(Widget):
         output_header = ConfigSubBlock(name=self.tr("Output"))
         project_layout.addWidget(output_header)
 
-        # JXL removed from options: pillow-jxl-plugin compatibility issues
         self.rst_imgformat_combobox, imsave_sublock = combobox_with_label(
-            ["PNG", "JPG", "WEBP"], self.tr("Result image format"),
-            note=self.tr("Choose the output format for translated images. PNG offers lossless quality. JPG and WEBP produce smaller files with some quality loss."),
+            ["PNG", "JPG", "WEBP", "JXL"], self.tr("Result image format"),
+            note=self.tr("Choose the output format for translated images. PNG offers lossless quality. JPG and WEBP produce smaller files with some quality loss. JXL offers high compression efficiency with lossless option."),
             parent=self,
         )
         self.rst_imgformat_combobox.activated.connect(self.on_rst_imgformat_changed)
@@ -1629,11 +1572,10 @@ class ConfigPanel(Widget):
         quality_sublock.layout().insertStretch(-1)
         imsave_sublock.layout().addWidget(quality_sublock)
 
-        # JXL removed from options
         self.intermediate_imgformat_combobox, intermediate_imsave_sublock = (
             combobox_with_label(
-                ["PNG"], self.tr("Intermediate image format"),
-                note=self.tr("Format used for intermediate processing data. PNG is the default lossless option to preserve quality during processing."),
+                ["PNG", "JXL"], self.tr("Intermediate image format"),
+                note=self.tr("Format used for intermediate processing data. PNG is the default lossless option. JXL offers better compression for mask and inpainted images."),
                 parent=self,
             )
         )
@@ -1931,7 +1873,6 @@ class ConfigPanel(Widget):
         self.shortcut_btn.clicked.connect(self._open_shortcut_dialog)
         shortcut_sublock = ConfigSubBlock(
             self.shortcut_btn, name=self.tr("Shortcuts"),
-            note=self.tr("Customize keyboard shortcuts for all actions. Click a shortcut pill to remove it. Use the + button to record a new key combination."),
         )
         interface_layout.addWidget(shortcut_sublock)
 
@@ -1963,8 +1904,8 @@ class ConfigPanel(Widget):
         )
         _make_preset_row(self.tr("Opacity:"), "opacity_presets", interface_layout)
 
-        # ── Original Opacity Toggle ──────────────────────────────────
-        toggle_header = QLabel(self.tr("Original Opacity Toggle"))
+        # ── Original Compare ───────────────────────────────────
+        toggle_header = QLabel(self.tr("Original Compare"))
         toggle_header.setStyleSheet("font-weight: bold;")
         toggle_header_sublock = ConfigSubBlock(
             toggle_header, content_margins=(24, 12, 24, 4)
@@ -1973,7 +1914,7 @@ class ConfigPanel(Widget):
 
         toggle_row = QHBoxLayout()
         toggle_row.setSpacing(6)
-        toggle_lbl = QLabel(self.tr("Toggle Preset (%):"))
+        toggle_lbl = QLabel(self.tr("Preset (%):"))
         toggle_lbl.setFixedWidth(110)
         toggle_row.addWidget(toggle_lbl)
         self.orig_opacity_toggle_spin = QSpinBox()
@@ -1986,8 +1927,8 @@ class ConfigPanel(Widget):
         toggle_row.addWidget(self.orig_opacity_toggle_spin, 1)
         toggle_row.addStretch()
         togglesublock = ConfigSubBlock(
-            toggle_row, name=self.tr("Toggle Preset"),
-            note=self.tr("Background opacity level when using the Original Opacity toggle shortcut. Lower values show more of the original image beneath the translation."),
+            toggle_row, name=self.tr("Preset"),
+            note=self.tr("Background opacity level when using the Original Compare shortcut. Lower values show more of the original image beneath the translation."),
         )
         interface_layout.addWidget(togglesublock)
 
@@ -2043,63 +1984,43 @@ class ConfigPanel(Widget):
             label_environment, env_widget, object_name="GroupGeneral"
         )
 
-        # === Navigation list (replaces horizontal nav bar) ===
-        self.navList = NavList()
-        self.navList.setFixedWidth(NAVLIST_WIDTH)
-        self.navList.setSpacing(2)
-        self.navList.setFrameShape(QListWidget.NoFrame)
-        self.navList.setObjectName("ConfigNavList")
+        # === Navigation tree (upstream-style) ===
+        self.configTable = ConfigTable()
+        self.configTable.setObjectName("ConfigNavList")
+        self.configTable.section_pressed.connect(self._on_nav_section_pressed)
 
-        # Build section list with group headers
-        sections = [
-            ("_header", self.tr("DL Module")),
-            (self.models_group, self.tr("Models")),
-            (self._dl_combined_widget, self.tr("Pipeline")),
-            ("_sep", None),
-            ("_header", self.tr("General")),
-            (self.project_block.section_widget, label_project),
-            (self.typesetting_block.section_widget, label_typesetting),
-            (self.interface_block.section_widget, label_interface),
-            (self.env_block.section_widget, label_environment),
-        ]
-        self._nav_items = []  # (widget_or_None, row)
-        for target, text in sections:
-            if target == "_header":
-                item = QListWidgetItem(text)
-                item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
-                f = QFont()
-                f.setPixelSize(NAVLIST_HEADER_FONTSIZE)
-                f.setBold(True)
-                item.setFont(f)
-                self.navList.addItem(item)
-                self._nav_items.append((None, self.navList.count() - 1))
-            elif target == "_sep":
-                item = QListWidgetItem("")
-                item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
-                item.setSizeHint(QSize(0, 16))
-                self.navList.addItem(item)
-                self._nav_items.append((None, self.navList.count() - 1))
-            else:
-                item = QListWidgetItem(text)
-                f = QFont()
-                f.setPixelSize(NAVLIST_ITEM_FONTSIZE)
-                item.setFont(f)
-                self.navList.addItem(item)
-                self._nav_items.append((target, self.navList.count() - 1))
+        # Build section tree with group headers
+        module_header = self.configTable.addHeader(self.tr("DL Module"))
+        self.configTable.addSection(module_header, self.tr("Models"), "models", self.models_group)
+        self.configTable.addSection(module_header, self.tr("Pipeline"), "pipeline", self._dl_combined_widget)
 
-        self.navList.currentRowChanged.connect(self._on_nav_row_changed)
+        general_header = self.configTable.addHeader(self.tr("General"))
+        self.configTable.addSection(general_header, label_project, "project", self.project_block.section_widget)
+        self.configTable.addSection(general_header, label_typesetting, "typesetting", self.typesetting_block.section_widget)
+        self.configTable.addSection(general_header, label_interface, "interface", self.interface_block.section_widget)
+        self.configTable.addSection(general_header, label_environment, "environment", self.env_block.section_widget)
 
-        # Select first selectable section by default (Models)
-        for first_target, first_row in self._nav_items:
-            if first_target is not None:
-                self.navList.setCurrentRow(first_row)
-                break
+        # Expand all headers so children are visible
+        self.configTable.expandAll()
 
-        # Layout: fixed horizontal layout with nav list | page stack
+        # Map: section_key -> widget for page switching
+        self._nav_section_to_widget = {
+            "models": self.models_group,
+            "pipeline": self._dl_combined_widget,
+            "project": self.project_block.section_widget,
+            "typesetting": self.typesetting_block.section_widget,
+            "interface": self.interface_block.section_widget,
+            "environment": self.env_block.section_widget,
+        }
+
+        # Select first section by default
+        self.configTable.setCurrentSection("models")
+
+        # Layout: fixed horizontal layout with nav tree | page stack
         main_layout = QHBoxLayout(self)
         main_layout.setSpacing(2)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(self.navList)
+        main_layout.addWidget(self.configTable)
         main_layout.addWidget(self.pageStack, 1)
 
     def on_load_model_changed(self):
@@ -2299,31 +2220,23 @@ class ConfigPanel(Widget):
     def on_effect_flag_changed(self):
         pcfg.let_fnteffect_flag = self.let_effect_combox.currentIndex()
 
-    def _on_nav_row_changed(self, row: int):
-        """Switch page stack to the section for the selected nav row."""
-        if row < 0 or row >= len(self._nav_items):
+    def _on_nav_section_pressed(self, section_key: str):
+        """Switch page stack to the section for the selected nav item."""
+        widget = self._nav_section_to_widget.get(section_key)
+        if widget is None:
             return
-        target, _ = self._nav_items[row]
-        if target is None:
-            return
-        idx = self._page_index.get(id(target))
+        idx = self._page_index.get(id(widget))
         if idx is not None:
             self.pageStack.setCurrentIndex(idx)
 
-    def _nav_select(self, section_widget) -> int:
-        """Select the nav-list row whose target matches *section_widget*.
-        Returns the row index, or -1 if not found.
-        """
-        for idx, (target, _) in enumerate(self._nav_items):
-            if target is section_widget:
-                self.navList.setCurrentRow(idx)
-                return idx
-        return -1
+    def _nav_select(self, section_key: str):
+        """Select the nav-tree section by key."""
+        self.configTable.setCurrentSection(section_key)
 
-    def _focus_on_dl_section(self, section_key: str):
+    def _focus_on_dl_section(self, dl_key: str):
         """Navigate to the combined DL pipeline page and scroll to a section."""
-        self._nav_select(self._dl_combined_widget)
-        widget = self._dl_section_widgets.get(section_key)
+        self._nav_select("pipeline")
+        widget = self._dl_section_widgets.get(dl_key)
         if widget is not None:
             self._dl_scroll_area.ensureWidgetVisible(widget, 0, 100)
 
