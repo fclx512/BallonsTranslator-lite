@@ -2,6 +2,64 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。按照时间顺序撰写。
 
+## 2026-06-30
+
+### 文本框序号徽标显隐开关
+
+**问题/需求：** 画布文本框左上角的顺序徽标（`_draw_seq_badge`）在小字体场景会遮挡内容，需要设置开关控制显隐。
+
+**改动：**
+
+1. `utils/config.py` — `ProgramConfig` 新增 `show_seq_badge: bool = True` 字段
+2. `ui/textitem.py` — `_draw_seq_badge` 增加 `pcfg.show_seq_badge` 检查
+3. `ui/configpanel.py` — Interface 区新增 "Show sequence number on text blocks" 复选框 + `seq_badge_changed` 信号 + 槽函数
+4. `ui/mainwindow.py` — 连接信号，遍历画布 TextBlkItem 调用 `update()` 即时刷新
+5. `translate/zh_CN.ts` + `.qm` — 新增 3 条翻译（标签/分组名/备注说明），已编译
+
+**涉及文件：** `utils/config.py`、`ui/textitem.py`、`ui/configpanel.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+### 新增 AI 快捷参考文档
+
+**改动：** `docs/新增设置项路线参考.md` — 记录 5 层实施路线（Config → Render → UI → Signal → Translation），含关键文件速查、代码片段、验证清单。
+
+---
+
+### 无字图配对工具深度改造
+
+**问题/需求：** 漫画汉化中修图最耗时且质量不稳定，图源自带无字版时需工具辅助配对。现有配对工具交互繁琐，需改进为高效的手动匹配流程。
+
+**改动：**
+
+1. **拖拽交互增强** — `ImageSlot` 新增 `_drag_over` 标志位 + `_update_style()`，拖拽经过时显示青色描边反馈；`dragMoveEvent`/`dragLeaveEvent`/`dropEvent` 组合确保提示正常消失；Ctrl+拖拽走 `QDrag.exec_(CopyAction)` 实现复制而非移动。
+
+2. **差分剧情底图共享** — 多选槽位后右键「设置为同一底图」，将首选的 `image_path`/`original_name` 复制到其余选中槽，保留各自 `display_name`；`shared_label` 标记共享底图的槽位。
+
+3. **导入方式扩展** — 支持多选文件导入（`QFileDialog.getOpenFileNames`），按序填充空槽；导入文件夹保持顺序填充，不做用户不可预期的自动匹配。
+
+4. **导出改进** — `QProgressDialog` 进度条 + 覆盖前 `QMessageBox.question` 确认；导出完成仅状态栏提示，不弹无关对话框。
+
+5. **预览弹窗增强** — `PreviewDialog._render_diff()` 用 `QPainter.CompositionMode_Difference` 实现差异叠加模式，`_toggle_diff()` 切换并排/差异视图。
+
+6. **快捷键速查** — `ShortcutDialog` 类 + F1/`?` 弹出快捷键面板。
+
+7. **工具栏精简** — 去除了自动匹配（`auto_match`、`SequenceMatcher`），重排为 `[打开有字图] [导入无字图] [选择文件] [导出到notext] [更多 ▼]` 五按钮布局。
+
+8. **窗口持久化** — `_load_persist`/`_save_persist` 读写 `tools/.sort_history.json`，保存上次文件夹路径和窗口几何；`closeEvent` 清理 `_thumbnail_cache`。
+
+**涉及文件：** `tools/无字图配对工具.py`
+
+> 本脚本由群友提供原始代码与使用授权，在此表示感谢🙏
+
+---
+
+### 主项目无字图工具入口
+
+TitleBar Tools 菜单新增「Pair No-text Images…」启动配对工具，`subprocess.Popen` 调用。
+
+**涉及文件：** `ui/mainwindowbars.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
 ## 2026-06-28
 
 ### JXL 重新激活

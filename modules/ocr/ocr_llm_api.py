@@ -403,11 +403,24 @@ class LLM_OCR(OCRBase):
             model_name = self._effective_model
             self.logger.debug(f"OCR request with model: {model_name}")
 
-            response = self.client.chat.completions.create(
+            ocr_args = dict(
                 model=model_name,
                 messages=messages,
                 max_tokens=self.max_response_tokens,
             )
+            re_val = profile.get("reasoning_effort", "")
+            if re_val:
+                from utils.reasoning_params import build_reasoning_kwargs
+
+                ocr_args.update(
+                    build_reasoning_kwargs(
+                        api_host=profile.get("api_host", ""),
+                        effort=re_val,
+                        model=model_name,
+                    )
+                )
+
+            response = self.client.chat.completions.create(**ocr_args)
 
             if response.choices and response.choices[0].message.content:
                 full_text = (

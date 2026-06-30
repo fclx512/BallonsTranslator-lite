@@ -70,6 +70,7 @@ from utils.textblock import TextAlignment, TextBlock
 from . import shared_widget as SW
 from .canvas import Canvas
 from .configpanel import ConfigPanel
+from .textitem import TextBlkItem
 from .custom_widget import (
     FrameLessMessageBox,
     ImgtransProgressMessageBox,
@@ -259,6 +260,7 @@ class MainWindow(mainwindow_cls):
         self.titleBar = TitleBar(self)
         self.titleBar.closebtn_clicked.connect(self.on_closebtn_clicked)
         self.titleBar.display_lang_changed.connect(self.on_display_lang_changed)
+        self.titleBar.launch_notext_tool.connect(self.on_launch_notext_tool)
         self.bottomBar = BottomBar(self)
         self.bottomBar.textedit_checkchanged.connect(self.setTextEditMode)
         self.bottomBar.paintmode_checkchanged.connect(self.setPaintMode)
@@ -585,6 +587,7 @@ class MainWindow(mainwindow_cls):
         )
         self.configPanel.shortcuts_changed.connect(self.refreshShortcuts)
         self.configPanel.presets_changed.connect(self._on_presets_changed)
+        self.configPanel.seq_badge_changed.connect(self._on_seq_badge_changed)
         # 初始化字体列表（系统字体枚举）
         shared.init_font_list()
         # 使用过滤后的字体列表（排除用户已隐藏的字体）
@@ -630,6 +633,14 @@ class MainWindow(mainwindow_cls):
         self.textPanel.formatpanel.reload_presets()
         if hasattr(self.textPanel.formatpanel, "textadvancedfmt_panel"):
             self.textPanel.formatpanel.textadvancedfmt_panel.reload_presets()
+
+    def _on_seq_badge_changed(self):
+        """Force canvas text items to repaint so seq badge appears/disappears."""
+        if not self.canvas:
+            return
+        for item in self.canvas.textLayer.childItems():
+            if isinstance(item, TextBlkItem):
+                item.update()
 
     def setupImgTransUI(self):
         self._hideConfigOverlay()
@@ -2555,6 +2566,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
                                 "temperature": profile.get("temperature", 0.1),
                                 "max_tokens": profile.get("max_tokens", ""),
                                 "proxy": profile.get("proxy", ""),
+                                "reasoning_effort": profile.get("reasoning_effort", ""),
                             },
                             translation_prompt=profile.get("prompt_template", ""),
                             status_callback=_ctx_status,
@@ -2607,6 +2619,12 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
     def run_imgtrans_wo_textstyle_update(self):
         self._run_imgtrans_wo_textstyle_update = True
         self.run_imgtrans()
+
+    def on_launch_notext_tool(self):
+        tool_path = osp.join(shared.PROGRAM_PATH, "tools", "无字图配对工具.py")
+        if not osp.exists(tool_path):
+            return
+        subprocess.Popen([sys.executable, tool_path])
 
     def on_run_imgtrans(self, page_filter=None):
         self.backup_blkstyles.clear()

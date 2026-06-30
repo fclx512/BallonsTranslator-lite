@@ -463,6 +463,17 @@ class LLM_API_Translator(BaseTranslator):
         }
         if self.max_tokens is not None:
             api_args["max_tokens"] = self.max_tokens
+        reasoning_kw = profile.get("reasoning_effort", "")
+        if reasoning_kw:
+            from utils.reasoning_params import build_reasoning_kwargs
+
+            api_args.update(
+                build_reasoning_kwargs(
+                    api_host=profile.get("api_host", ""),
+                    effort=reasoning_kw,
+                    model=self._effective_model,
+                )
+            )
         rf = profile.get("response_format", "")
         if rf == "json_schema":
             api_args["response_format"] = {

@@ -159,6 +159,7 @@ class ProgramConfig(Config):
     punctuation_position: int = PunctuationPosition.Simplified
     let_autolayout_flag: bool = True
     let_uppercase_flag: bool = True
+    use_notext_images: bool = True
     let_textstyle_indep_flag: bool = False
     text_styles_path: str = osp.join(shared.DEFAULT_TEXTSTYLE_DIR, "default.json")
 
@@ -227,6 +228,7 @@ class ProgramConfig(Config):
     expand_teffect_panel: bool = True
     text_advanced_format_panel: bool = True
     expand_tadvanced_panel: bool = True
+    show_seq_badge: bool = True
 
     @staticmethod
     def load(cfg_path: str):

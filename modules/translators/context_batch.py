@@ -464,6 +464,15 @@ class ContextBatchTranslator:
                     )
                     if max_tokens:
                         args["max_tokens"] = int(max_tokens)
+                    re = self.api_config.get("reasoning_effort", "")
+                    if re:
+                        from utils.reasoning_params import build_reasoning_kwargs
+
+                        args.update(
+                            build_reasoning_kwargs(
+                                api_host=api_host, effort=re, model=model
+                            )
+                        )
 
                     completion = client.chat.completions.create(**args)
                     raw = (

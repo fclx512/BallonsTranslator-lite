@@ -69,6 +69,7 @@ Ultralytics/settings.json
 # CLAUDE.md
 .claude/
 config/custom_themes.json
+tools/*.history.json
 debug
 .agents/
 skills-lock.json

@@ -80,6 +80,7 @@ SAMPLE_PROFILES = [
         "requests_per_minute": 20,
         "delay": 0.3,
         "response_format": "json_object",
+        "reasoning_effort": "",
         "prompt_template": DEFAULT_PROMPT_TEMPLATE,
         "chat_samples": DEFAULT_CHAT_SAMPLES,
         "frequency_penalty": "",
@@ -103,6 +104,7 @@ SAMPLE_PROFILES = [
         "requests_per_minute": 20,
         "delay": 0.3,
         "response_format": "json_object",
+        "reasoning_effort": "",
         "prompt_template": DEFAULT_PROMPT_TEMPLATE,
         "chat_samples": DEFAULT_CHAT_SAMPLES,
         "frequency_penalty": "",
@@ -126,6 +128,7 @@ SAMPLE_PROFILES = [
         "requests_per_minute": 20,
         "delay": 0.3,
         "response_format": "json_object",
+        "reasoning_effort": "",
         "prompt_template": DEFAULT_PROMPT_TEMPLATE,
         "chat_samples": DEFAULT_CHAT_SAMPLES,
         "frequency_penalty": "",
@@ -149,6 +152,7 @@ SAMPLE_PROFILES = [
         "requests_per_minute": 20,
         "delay": 0.3,
         "response_format": "json_object",
+        "reasoning_effort": "",
         "prompt_template": DEFAULT_PROMPT_TEMPLATE,
         "chat_samples": DEFAULT_CHAT_SAMPLES,
         "frequency_penalty": "",
@@ -172,6 +176,7 @@ SAMPLE_PROFILES = [
         "requests_per_minute": 20,
         "delay": 0.3,
         "response_format": "json_object",
+        "reasoning_effort": "",
         "prompt_template": DEFAULT_PROMPT_TEMPLATE,
         "chat_samples": DEFAULT_CHAT_SAMPLES,
         "frequency_penalty": "",
@@ -200,6 +205,7 @@ PROFILE_FIELDS = [
     "requests_per_minute",
     "delay",
     "response_format",
+    "reasoning_effort",
     "prompt_template",
     "chat_samples",
     "frequency_penalty",
@@ -401,6 +407,7 @@ class ProfileManagerDialog(QDialog):
         except (ValueError, TypeError):
             p["delay"] = 0.3
         p["response_format"] = self.rf_combo.currentText()
+        p["reasoning_effort"] = self.reasoning_combo.currentData() or ""
         p["prompt_template"] = self.prompt_template_edit.toPlainText().strip()
         p["chat_samples"] = self.chat_samples_edit.toPlainText().strip()
         try:
@@ -494,6 +501,26 @@ class ProfileManagerDialog(QDialog):
         self.topp_edit.setPlaceholderText("1.0")
         self.maxtok_edit = QLineEdit()
         self.maxtok_edit.setPlaceholderText(self.tr("Unlimited (leave empty)"))
+        self.reasoning_combo = QComboBox()
+        items = [
+            (self.tr("默认"), ""),
+            ("none", "none"),
+            ("low", "low"),
+            ("medium", "medium"),
+            ("high", "high"),
+            ("xhigh", "xhigh"),
+            ("max", "max"),
+        ]
+        for display, data in items:
+            self.reasoning_combo.addItem(display, data)
+        self.reasoning_combo.setToolTip(
+            self.tr(
+                "Override the model's reasoning/thinking effort.\n"
+                "Leave as \"default\" to let the API decide.\n"
+                "This maps automatically to each provider's native parameter\n"
+                "(OpenAI reasoning_effort, Claude output_config.effort, etc.)."
+            )
+        )
         form.addRow(self.tr("Name:"), self.name_edit)
         form.addRow(self.tr("Host:"), self.host_edit)
         form.addRow(self.tr("API Key:"), self.key_edit)
@@ -502,6 +529,7 @@ class ProfileManagerDialog(QDialog):
         form.addRow(self.tr("Temperature:"), self.temp_edit)
         form.addRow(self.tr("Top P:"), self.topp_edit)
         form.addRow(self.tr("Max Tokens:"), self.maxtok_edit)
+        form.addRow(self.tr("Reasoning Effort:"), self.reasoning_combo)
         right_layout.addLayout(form)
 
         # Connection & Rate Limiting
@@ -622,6 +650,7 @@ class ProfileManagerDialog(QDialog):
         self.chat_samples_edit.setPlainText("")
         self.vision_check.setChecked(False)
         self.rf_combo.setCurrentText("json_object")
+        self.reasoning_combo.setCurrentIndex(0)  # 默认
         self.ocr_detail_combo.setCurrentText("auto")
         self.rpm_spin.setValue(20)
         self.delay_spin.setValue(0.3)
@@ -669,6 +698,9 @@ class ProfileManagerDialog(QDialog):
         self.topp_edit.setText(str(p.get("top_p", "1.0")))
         self.maxtok_edit.setText(str(p.get("max_tokens", "")))
         self.rf_combo.setCurrentText(p.get("response_format", "json_object"))
+        re_val = p.get("reasoning_effort", "")
+        re_idx = self.reasoning_combo.findData(re_val)
+        self.reasoning_combo.setCurrentIndex(re_idx if re_idx >= 0 else 0)
         self.prompt_template_edit.setPlainText(p.get("prompt_template", ""))
         self.chat_samples_edit.setPlainText(p.get("chat_samples", ""))
         self.fp_edit.setText(str(p.get("frequency_penalty", "")))

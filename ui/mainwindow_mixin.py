@@ -39,6 +39,7 @@ from utils.textblock import TextAlignment, TextBlock
 
 from .custom_widget import MessageBox
 from .drawing_commands import RunBlkTransCommand
+from .misc import ndarray2pixmap
 from .scenetext_manager import PasteSrcItemsCommand
 from .textedit_commands import GlobalRepalceAllCommand
 
@@ -245,15 +246,18 @@ class MainWindowMixin:
                             save_params={"ext": pcfg.intermediate_imgsave_ext},
                         )
                     inpainted_path = self.imgtrans_proj.get_inpainted_path()
+                    proj = self.imgtrans_proj
+                    base_arr = proj.notext_array if (proj.notext_array is not None) else proj.inpainted_array
                     if self.canvas.drawingLayer.drawed():
-                        inpainted = self.canvas.base_pixmap.copy()
-                        painter = QPainter(inpainted)
+                        base_pixmap = ndarray2pixmap(base_arr)
+                        painter = QPainter(base_pixmap)
                         painter.drawPixmap(
                             0, 0, self.canvas.drawingLayer.get_drawed_pixmap()
                         )
                         painter.end()
+                        inpainted = base_pixmap
                     else:
-                        inpainted = self.imgtrans_proj.inpainted_array
+                        inpainted = base_arr
                     if inpainted is not None:
                         self.imsave_thread.saveImg(
                             inpainted_path,

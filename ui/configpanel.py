@@ -1367,6 +1367,7 @@ class ConfigPanel(Widget):
     profiles_changed = Signal()
     shortcuts_changed = Signal()
     presets_changed = Signal()
+    seq_badge_changed = Signal()
 
     # Active instance used by _DeadBlock/_DeadLayout to find the page stack
     # during __init__ construction.
@@ -1932,6 +1933,18 @@ class ConfigPanel(Widget):
         )
         interface_layout.addWidget(togglesublock)
 
+        # Show sequence badge on text blocks
+        self.seq_badge_checker = QCheckBox(
+            self.tr("Show sequence number on text blocks")
+        )
+        self.seq_badge_checker.setChecked(pcfg.show_seq_badge)
+        self.seq_badge_checker.stateChanged.connect(self.on_seq_badge_changed)
+        seq_badge_sublock = ConfigSubBlock(
+            self.seq_badge_checker, name=self.tr("Sequence Badge"),
+            note=self.tr("Displays the block sequence number at the top-left corner of each text block on the canvas. Disable to avoid occlusion when working with small fonts."),
+        )
+        interface_layout.addWidget(seq_badge_sublock)
+
         self.interface_block = generalConfigPanel.addGroupedBlock(
             label_interface, interface_widget, object_name="GroupGeneral"
         )
@@ -2037,6 +2050,10 @@ class ConfigPanel(Widget):
 
     def on_fit_window_page_changed(self):
         pcfg.fit_window_on_page_switch = self.fit_window_page_checker.isChecked()
+
+    def on_seq_badge_changed(self):
+        pcfg.show_seq_badge = self.seq_badge_checker.isChecked()
+        self.seq_badge_changed.emit()
 
     def on_keepline_clicked(self):
         pcfg.module.keep_exist_textlines = (

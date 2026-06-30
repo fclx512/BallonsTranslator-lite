@@ -269,6 +269,11 @@
             <translation>预览</translation>
         </message>
         <message>
+            <location filename="..\ui\canvas.py" line="348" />
+            <source>No-text BG</source>
+            <translation>无字图</translation>
+        </message>
+        <message>
             <location filename="..\ui\canvas.py" line="1160" />
             <source>Normalize Breaks</source>
             <translation>整理换行</translation>
@@ -909,6 +914,18 @@
         <message>
             <source>Tools</source>
             <translation>工具</translation>
+        </message>
+        <message>
+            <source>Show sequence number on text blocks</source>
+            <translation>在文本框上显示序号</translation>
+        </message>
+        <message>
+            <source>Sequence Badge</source>
+            <translation>序号徽标</translation>
+        </message>
+        <message>
+            <source>Displays the block sequence number at the top-left corner of each text block on the canvas. Disable to avoid occlusion when working with small fonts.</source>
+            <translation>在画布每个文本框左上角显示该块的序号。处理小字体时关闭可避免遮挡。</translation>
         </message>
     </context>
     <context>
@@ -2982,6 +2999,27 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <source>Delete profile "{name}"?</source>
             <translation>确认删除配置文件"{name}"？</translation>
         </message>
+        <message>
+            <location filename="..\utils\profile_manager.py" />
+            <source>Reasoning Effort:</source>
+            <translation>思考强度：</translation>
+        </message>
+        <message>
+            <location filename="..\utils\profile_manager.py" />
+            <source>默认</source>
+            <translation>默认</translation>
+        </message>
+        <message>
+            <location filename="..\utils\profile_manager.py" />
+            <source>Override the model's reasoning/thinking effort.
+Leave as "default" to let the API decide.
+This maps automatically to each provider's native parameter
+(OpenAI reasoning_effort, Claude output_config.effort, etc.).</source>
+            <translation>覆写模型的推理/思考强度。
+选择"默认"则由 API 自行决定。
+该值会自动映射到各厂商的原生参数
+（OpenAI reasoning_effort、Claude output_config.effort 等）。</translation>
+        </message>
     </context>
     <context>
         <name>PsdExportDialog</name>
@@ -3741,6 +3779,11 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <location filename="..\ui\mainwindowbars.py" />
             <source>Batch Normalize Breaks…</source>
             <translation>批量整理换行…</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindowbars.py" line="387" />
+            <source>Pair No-text Images…</source>
+            <translation>配对无字图…</translation>
         </message>
     </context>
     <context>

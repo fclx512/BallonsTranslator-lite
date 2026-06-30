@@ -383,6 +383,10 @@ class TitleBar(Widget):
         normalizeBreaksAction = QAction(self.tr("Batch Normalize Breaks…"), self)
         self.normalize_breaks_triggered = normalizeBreaksAction.triggered
 
+        # 无字图配对工具
+        noTextToolAction = QAction(self.tr("Pair No-text Images…"), self)
+        self.launch_notext_tool = noTextToolAction.triggered
+
         toolsMenu = QMenu(self.toolsToolBtn)
         toolsMenu.addAction(mergeToolAction)
         toolsMenu.addSeparator()
@@ -393,6 +397,8 @@ class TitleBar(Widget):
         toolsMenu.addAction(advAlignAction)
         toolsMenu.addSeparator()
         toolsMenu.addAction(normalizeBreaksAction)
+        toolsMenu.addSeparator()
+        toolsMenu.addAction(noTextToolAction)
         self.toolsToolBtn.setMenu(toolsMenu)
         self.toolsToolBtn.setPopupMode(QToolButton.InstantPopup)
 

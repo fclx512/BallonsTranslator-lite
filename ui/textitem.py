@@ -770,7 +770,8 @@ class TextBlkItem(QGraphicsTextItem):
 
     def _draw_seq_badge(self, painter: QPainter):
         """Draw sequence number badge at top-left corner of content area."""
-        if self._hide_badge:
+        from utils.config import pcfg
+        if self._hide_badge or not pcfg.show_seq_badge:
             return
         scale = self.get_scale()
         font_size = max(6, 11 / scale)

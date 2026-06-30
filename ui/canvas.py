@@ -352,6 +352,17 @@ class Canvas(QGraphicsScene):
         self.previewLabel.adjustSize()
         self.previewLabel.setVisible(False)
 
+        self.notextLabel = QLabel(self.gv)
+        self.notextLabel.setObjectName("NotextLabel")
+        self.notextLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.notextLabel.setText(self.tr("No-text BG"))
+        self.notextLabel.setStyleSheet(
+            "background: rgba(39, 174, 96, 180); color: white; "
+            "padding: 2px 8px; border-radius: 4px; font-size: 11px;"
+        )
+        self.notextLabel.adjustSize()
+        self.notextLabel.setVisible(False)
+
         self.txtblkShapeControl = TextBlkShapeControl(self.gv)
 
         self.baseLayer = QGraphicsRectItem()
@@ -499,7 +510,9 @@ class Canvas(QGraphicsScene):
             if isinstance(item, TextBlkItem):
                 item._hide_badge = True
 
-        result = ndarray2pixmap(self.imgtrans_proj.inpainted_array, return_qimg=True)
+        proj = self.imgtrans_proj
+        base = proj.notext_array if (proj.notext_array is not None) else proj.inpainted_array
+        result = ndarray2pixmap(base, return_qimg=True)
         canvas_sz = self.img_window_size()
         painter = QPainter(result)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -571,7 +584,9 @@ class Canvas(QGraphicsScene):
         # Hide shape control BEFORE rendering so it's not captured in the preview
         self.txtblkShapeControl.setVisible(False)
 
-        result = ndarray2pixmap(self.imgtrans_proj.inpainted_array, return_qimg=False)
+        proj = self.imgtrans_proj
+        base = proj.notext_array if (proj.notext_array is not None) else proj.inpainted_array
+        result = ndarray2pixmap(base, return_qimg=False)
         canvas_sz = self.img_window_size()
         painter = QPainter(result)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -640,6 +655,10 @@ class Canvas(QGraphicsScene):
 
         painter.end()
         self.inpaintLayer.setPixmap(pixmap)
+
+        self.notextLabel.setVisible(
+            pcfg.use_notext_images and self.imgtrans_proj.notext_array is not None
+        )
 
     def setMaskTransparency(self, transparency: float):
         pcfg.mask_transparency = transparency
@@ -720,6 +739,9 @@ class Canvas(QGraphicsScene):
 
         plw = self.previewLabel.width()
         self.previewLabel.move((gv_w - plw) // 2, 12)
+
+        nlw = self.notextLabel.width()
+        self.notextLabel.move((gv_w - nlw) // 2, 48)
 
     def onScaleFactorChanged(self):
         self.scaleFactorLabel.setText(f"{self.scale_factor * 100:2.0f}%")
