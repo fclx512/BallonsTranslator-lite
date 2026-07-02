@@ -29,10 +29,34 @@ rem ---- 1. Python discovery (embedded -> py launcher -> python3 -> python PATH)
 
 rem Option A: bundled/embedded Python (full release package)
 set "PYTHON=%~dp0ballontrans_pylibs_win\python.exe"
-"%PYTHON%" -c "" >nul 2>nul
-if %ERRORLEVEL% == 0 (
-    echo [OK] Using embedded Python: %PYTHON%
-    goto :python_found
+if exist "%PYTHON%" (
+    "%PYTHON%" -c "" >nul 2>&1
+    if %ERRORLEVEL% == 0 (
+        echo [OK] Using embedded Python: %PYTHON%
+        goto :python_found
+    ) else (
+        echo [WARN] Found embedded Python at %PYTHON%
+        echo [WARN]   but it failed to run (exit code: %ERRORLEVEL%^).
+        echo [WARN]   Common causes:
+        echo [WARN]     - Missing VC++ Redistributable 2015-2022
+        echo [WARN]       Download: https://aka.ms/vs/17/release/vc_redist.x64.exe
+        echo [WARN]     - Windows blocked the .exe file
+        echo [WARN]       Right-click python.exe ^> Properties ^> "Unblock"
+        echo [WARN]     - Corrupted download or wrong architecture (32-bit vs 64-bit)
+        echo.
+    )
+) else (
+    echo [WARN] Embedded Python not found at: %PYTHON%
+    echo [WARN]   Expected directory structure:
+    echo [WARN]     BallonsTranslator-lite\
+    echo [WARN]     ├── launch.bat
+    echo [WARN]     ├── launch.py
+    echo [WARN]     └── ballontrans_pylibs_win\
+    echo [WARN]             └── python.exe
+    echo [WARN]   If you downloaded the dependency package, make sure
+    echo [WARN]   the folder is named exactly "ballontrans_pylibs_win"
+    echo [WARN]   and placed in the project root directory.
+    echo.
 )
 
 rem Option B: Python launcher (most reliable for officially-installed Python)
@@ -80,10 +104,31 @@ if %ERRORLEVEL% == 0 (
 )
 
 rem No Python found at all
-echo [ERROR] Python not found.
+echo [ERROR] ============================================================
+echo [ERROR]  Python could not be found or started.
+echo [ERROR] ============================================================
 echo.
-echo Please download the full package from the link in README.md,
-echo or install Python 3.10+ from https://python.org
+echo    Locations checked:
+echo      1. ballontrans_pylibs_win\python.exe (embedded/distributed)
+echo      2. py launcher ^(requires Python 3.10+^)
+echo      3. python3 on PATH
+echo      4. python on PATH
+echo.
+echo    Common causes:
+echo      - Missing VC++ Redistributable 2015-2022 (needed by embedded Python)
+echo        Download: https://aka.ms/vs/17/release/vc_redist.x64.exe
+echo.
+echo      - ballontrans_pylibs_win not in the right location or wrong name
+echo        Expected:
+echo          BallonsTranslator-lite\ballontrans_pylibs_win\python.exe
+echo.
+echo      - Windows blocked the downloaded .exe file (mark-of-the-web)
+echo        Right-click ballontrans_pylibs_win\python.exe ^> Properties
+echo        ^> Check "Unblock" if present, then Apply.
+echo.
+echo      - Python 3.10+ not installed (if not using embedded Python)
+echo        Download from: https://python.org
+echo.
 pause
 exit /b 1
 

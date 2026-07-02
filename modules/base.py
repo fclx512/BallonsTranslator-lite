@@ -333,10 +333,10 @@ class BaseModule:
         import sys
 
         python = sys.executable
-        # Prefer uv, fall back to pip
+        # Prefer uv (does NOT support pip-specific --prefer-binary), fall back to pip
         try:
             subprocess.run(
-                [python, "-m", "uv", "pip", "install", *missing, "--prefer-binary"],
+                [python, "-m", "uv", "pip", "install", *missing],
                 capture_output=True,
                 timeout=300,
                 check=True,

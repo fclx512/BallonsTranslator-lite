@@ -584,14 +584,8 @@ class TranslatorSelectionWidget(Widget):
         super().__init__()
         label = ConfigClickableLabel(text=self.tr("Translate"))
         label.clicked.connect(self.cfg_clicked)
-        label_src = ConfigClickableLabel(text=self.tr("Source"))
-        label_src.clicked.connect(self.cfg_clicked)
-        label_tgt = ConfigClickableLabel(text=self.tr("Target"))
-        label_tgt.clicked.connect(self.cfg_clicked)
 
         self.selector = SmallComboBox()
-        self.src_selector = SmallComboBox()
-        self.tgt_selector = SmallComboBox()
         self.cfg_btn = SmallConfigPutton()
         self.cfg_btn.clicked.connect(self.cfg_clicked)
 
@@ -599,10 +593,6 @@ class TranslatorSelectionWidget(Widget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(label)
         layout.addWidget(self.selector)
-        layout.addWidget(label_src)
-        layout.addWidget(self.src_selector)
-        layout.addWidget(label_tgt)
-        layout.addWidget(self.tgt_selector)
         layout.addWidget(self.cfg_btn)
         layout.setSpacing(1)
 
@@ -617,21 +607,13 @@ class TranslatorSelectionWidget(Widget):
         return super().leaveEvent(event)
 
     def blockSignals(self, block: bool):
-        self.src_selector.blockSignals(block)
-        self.tgt_selector.blockSignals(block)
         self.selector.blockSignals(block)
         super().blockSignals(block)
 
     def finishSetTranslator(self, translator: BaseTranslator):
-        self.blockSignals(True)
-        self.src_selector.clear()
-        self.tgt_selector.clear()
-        self.src_selector.addItems(translator.supported_src_list)
-        self.tgt_selector.addItems(translator.supported_tgt_list)
+        self.selector.blockSignals(True)
         self.selector.setCurrentText(translator.name)
-        self.src_selector.setCurrentText(translator.lang_source)
-        self.tgt_selector.setCurrentText(translator.lang_target)
-        self.blockSignals(False)
+        self.selector.blockSignals(False)
 
 
 class BottomBar(Widget):

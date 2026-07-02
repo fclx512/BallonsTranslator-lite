@@ -34,12 +34,14 @@ class ParamCheckGroup(QWidget):
     def __init__(self, param_key, check_group: dict, parent=None) -> None:
         super().__init__(parent=parent)
         self.param_key = param_key
-        layout = QHBoxLayout(self)
+        layout = QGridLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         self.label2widget = {}
-        for k, v in check_group.items():
+        ncols = 3
+        for ii, (k, v) in enumerate(check_group.items()):
             checker = QCheckBox(text=k, parent=self)
             checker.setChecked(v)
-            layout.addWidget(checker)
+            layout.addWidget(checker, ii // ncols, ii % ncols)
             self.label2widget[k] = checker
             checker.clicked.connect(self.on_checker_clicked)
 

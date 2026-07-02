@@ -491,12 +491,6 @@ class MainWindow(mainwindow_cls):
         self.bottomBar.trans_selector.selector.currentTextChanged.connect(
             self.on_trans_changed
         )
-        self.bottomBar.trans_selector.tgt_selector.currentTextChanged.connect(
-            self.on_trans_tgt_changed
-        )
-        self.bottomBar.trans_selector.src_selector.currentTextChanged.connect(
-            self.on_trans_src_changed
-        )
         self.bottomBar.textdet_selector.cfg_clicked.connect(self.to_detect_config)
         self.bottomBar.inpaint_selector.cfg_clicked.connect(self.to_inpaint_config)
         self.bottomBar.ocr_selector.cfg_clicked.connect(self.to_ocr_config)
@@ -2010,11 +2004,6 @@ class MainWindow(mainwindow_cls):
             combobox.blockSignals(True)
             combobox.setCurrentText(text)
             combobox.blockSignals(False)
-        combobox = self.bottomBar.trans_selector.src_selector
-        if sender != combobox:
-            combobox.blockSignals(True)
-            combobox.setCurrentText(text)
-            combobox.blockSignals(False)
 
     def on_trans_tgt_changed(self):
         sender = self.sender()
@@ -2024,11 +2013,6 @@ class MainWindow(mainwindow_cls):
             translator.set_target(text)
         pcfg.module.translate_target = text
         combobox = self.configPanel.trans_config_panel.target_combobox
-        if sender != combobox:
-            combobox.blockSignals(True)
-            combobox.setCurrentText(text)
-            combobox.blockSignals(False)
-        combobox = self.bottomBar.trans_selector.tgt_selector
         if sender != combobox:
             combobox.blockSignals(True)
             combobox.setCurrentText(text)

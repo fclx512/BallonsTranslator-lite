@@ -30,18 +30,6 @@ from utils.config import pcfg
 from utils.download_util import check_local_file
 from utils.logger import logger as LOGGER
 
-# ── Known modules that carry extra files outside download_file_list ──
-_EXTRA_FILES: list[dict] = [
-    {
-        "module": "ysgyolo",
-        "type": "textdetector",
-        "file": "data/models/ysgyolo_1.2_OS1.0.pt",
-        "source": "",
-        "sha256": None,
-        "note_key": "ysgyolo_note",
-    },
-]
-
 # Pipeline display order and labels
 _TYPE_ORDER = ["textdetector", "ocr", "inpainter"]
 _TYPE_LABEL = {
@@ -146,9 +134,6 @@ def _scan_module_models() -> list[dict]:
                         "note_key": "",
                         "_dl_kwargs": dl_entry,
                     })
-
-    for extra in _EXTRA_FILES:
-        entries.append(dict(extra))
     return entries
 
 
@@ -497,13 +482,6 @@ class ModelCheckPanel(QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        # Resolve translatable notes
-        for entry in _EXTRA_FILES:
-            if entry.get("note_key") == "ysgyolo_note":
-                entry["note"] = self.tr(
-                    "No public download source. Obtain from community cloud drive."
-                )
-
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)

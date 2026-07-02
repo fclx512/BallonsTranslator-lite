@@ -1,3 +1,12 @@
+"""
+YSG-YOLO 文字检测模块
+
+原作者仓库:
+  - HuggingFace 模型下载: https://huggingface.co/YSGforMTL/YSGYoloDetector
+  - GitHub 训练源码:     https://github.com/lhj5426/YSG
+  - Telegram 频道:       https://t.me/yinshuguan
+"""
+
 import importlib.util
 import os
 import os.path as osp
@@ -30,7 +39,7 @@ def update_ckpt_list():
     CKPT_LIST.clear()
     for p in os.listdir(MODEL_DIR):
         if p.startswith("ysgyolo") or p.startswith("ultralyticsyolo"):
-            CKPT_LIST.append(osp.join(MODEL_DIR, p).replace("\\", "/"))
+            CKPT_LIST.append(p)
 
 
 update_ckpt_list()
@@ -42,12 +51,12 @@ class YSGYoloDetector(TextDetectorBase):
         "model path": {
             "type": "selector",
             "options": CKPT_LIST,
-            "value": "data/models/ysgyolo_1.2_OS1.0.pt",
+            "value": "ysgyolo_yolo26_2.0.pt",
             "editable": True,
             "flush_btn": True,
             "path_selector": True,
             "path_filter": "*.pt *.ckpt *.pth *.safetensors",
-            "size": "median",
+            "size": "short",
             "display_name": "Model Path",
             "description": "Path to the YSGYolo model checkpoint file",
         },
@@ -125,6 +134,13 @@ class YSGYoloDetector(TextDetectorBase):
     }
 
     _load_model_keys = {"model"}
+    download_file_list = [
+        {
+            "url": "https://huggingface.co/YSGforMTL/YSGYoloDetector/resolve/main/",
+            "files": "data/models/ysgyolo_yolo26_2.0.pt",
+            "concatenate_url_filename": 2,
+        },
+    ]
 
     def __init__(self, **params) -> None:
         super().__init__(**params)
@@ -133,24 +149,30 @@ class YSGYoloDetector(TextDetectorBase):
     def _load_model(self):
         update_ckpt_list()  # refresh model list in case files were downloaded after init
         model_path = self.get_param_value("model path")
-        if not osp.exists(model_path):
+        # If it's a bare filename (preset), prepend MODEL_DIR; otherwise use as-is (custom path)
+        if not osp.isabs(model_path) and not model_path.startswith(MODEL_DIR):
+            full_path = osp.join(MODEL_DIR, model_path).replace("\\", "/")
+        else:
+            full_path = model_path
+        if not osp.exists(full_path):
             global CKPT_LIST
-            df_model_path = model_path
+            df_model_path = full_path
             for p in CKPT_LIST:
-                if osp.exists(p):
-                    df_model_path = p
+                candidate = osp.join(MODEL_DIR, p).replace("\\", "/")
+                if osp.exists(candidate):
+                    df_model_path = candidate
                     break
             self.logger.warning(
-                f"{model_path} does not exist, try fall back to default value {df_model_path}"
+                f"{model_path} does not exist, try fall back to default value {osp.basename(df_model_path)}"
             )
-            model_path = df_model_path
+            full_path = df_model_path
 
-        if "rtdetr" in os.path.basename(model_path):
+        if "rtdetr" in os.path.basename(full_path):
             from ultralytics import RTDETR as MODEL
         else:
             from ultralytics import YOLO as MODEL
         if not hasattr(self, "model") or self.model is None:
-            self.model = MODEL(model_path).to(device=self.get_param_value("device"))
+            self.model = MODEL(full_path).to(device=self.get_param_value("device"))
 
     def get_valid_labels(self):
         return [k for k, v in self.params["label"]["value"].items() if v]

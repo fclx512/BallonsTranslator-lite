@@ -187,7 +187,7 @@ def run_uv(args, desc=None):
         return
     index_url_line = f" --index-url {index_url}" if index_url != "" else ""
     return run(
-        f'"{python}" -m uv pip {args} --prefer-binary{index_url_line} --disable-pip-version-check',
+        f'"{python}" -m uv pip {args}{index_url_line} --disable-pip-version-check',
         desc=f"Installing {desc}",
         errdesc=f"Couldn't install {desc}",
         live=True,
@@ -850,6 +850,11 @@ def prepare_environment():
 
     # In CPU mode, all dependencies are bundled in the portable environment
     if args.cpu:
+        return
+
+    # Conda environment detected — user manages deps themselves
+    if os.environ.get("CONDA_PREFIX") or os.environ.get("CONDA_DEFAULT_ENV"):
+        print("Conda environment detected, skip dependency installation")
         return
 
     # Bootstrap uv (fast installer) — falls back to pip if uv can't be installed
