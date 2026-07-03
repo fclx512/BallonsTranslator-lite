@@ -96,3 +96,39 @@ TitleBar Tools 菜单新增「Pair No-text Images…」启动配对工具，`sub
 **涉及文件：** `ui/mainwindowbars.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
 
 ---
+
+## 2026-07-03
+
+### 分发包降级 Python 3.12 + GPU 检测改进
+
+**问题/需求：** 当前分发的 `ballontrans_pylibs_win/` 是用 Python 3.13 构建的。用户若安装 Python 3.12 + CUDA torch，捆绑的 3.13 无法注入 3.12 的 C 扩展（`.pyd` 版本绑死），导致 `_detect_user_torch()` 跳过用户的 CUDA torch，降级到 CPU 模式。
+
+**改动：**
+
+1. **`launch.py` `_detect_user_torch()` PATH 搜索动态化** — 原硬编码 `("python.exe", "python3.exe", "python3.13.exe")` 改为 `Path(_path_dir).glob("python*.exe")`，自动覆盖所有版本号后缀，无需手动维护。
+
+2. **`launch.py` 版本不匹配追踪 + 提示** — 版本不匹配时不再静默跳过：记录找到的 CUDA torch 信息，循环结束后输出包含解决方向的诊断信息（指明分发包 Python 版本不匹配，给出重建命令）。
+
+3. **`scripts/build_portable.py` 确认默认 `3.12.4`** — 构建脚本已默认 Python 3.12，CI（`build-portable.yml`）也已用 `3.12`。重新运行 `python scripts/build_portable.py` 即可产出 3.12 的分发包。
+
+**不处理的方案：**
+- re-exec 到系统 Python：用户不接受（依赖安装会占用 C 盘系统 site-packages）
+- `sympy`：可选传递依赖，项目代码零引用，无需处理
+
+**涉及文件：** `launch.py`
+
+---
+
+### ballontrans_pylibs_win 重建为 Python 3.12 + 依赖库文档
+
+**问题/需求：** 代码侧就绪后需要实际重建 `ballontrans_pylibs_win/`。原 3.13 环境不含 torch，本次新增 CPU torch + ultralytics + onnxruntime 以保证所有模块在 CPU 模式下功能可用（GPU 仍靠系统 CUDA torch 自动注入）。
+
+**改动：**
+
+1. **重建 `ballontrans_pylibs_win/`** — 删除旧的 Python 3.13 embeddable 环境，从 `python-3.12.4-embed-amd64.zip` 重新搭建；安装 `requirements_core.txt` 核心依赖 + CPU torch（`--index-url cpu`）+ ultralytics + onnxruntime/onnxocr
+
+2. **`docs/依赖库说明.md`** — 新文档记录包列表、体积分析（~1.0 GB → ~1.6 GB 的膨胀原因为首次引入 torch CPU 529 MB + 传递依赖）、手动安装步骤（网络/安全机制失败时的 fallback）、多机同步说明
+
+**体积说明：** 膨胀非 Python 版本切换导致。旧环境不含 torch，新增 torch CPU（529 MB）+ ultralytics + sympy（74 MB）/ matplotlib（33 MB）等传递依赖合计约 +600 MB。
+
+**涉及文件：** `docs/依赖库说明.md`

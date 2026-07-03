@@ -221,20 +221,25 @@ def _detect_user_torch():
     _seen: set[str] = set()
 
     # Collect all python*.exe from PATH directories (excluding bundled python)
+    # Use glob to cover all versions without hardcoding version numbers.
     for _path_dir in os.environ.get("PATH", "").split(os.pathsep):
-        for _name in ("python.exe", "python3.exe", "python3.13.exe"):
-            _pexe = os.path.join(_path_dir, _name)
-            _norm = os.path.abspath(_pexe)
-            if (
-                os.path.exists(_pexe)
-                and _norm != _current_python
-                and _norm not in _seen
-            ):
-                _candidates.append(_pexe)
+        if not os.path.isdir(_path_dir):
+            continue
+        for _pexe in Path(_path_dir).glob("python*.exe"):
+            _name = _pexe.name.lower()
+            if _name == "pythonw.exe":
+                continue  # windowed variant, skip
+            _norm = os.path.abspath(str(_pexe))
+            if _norm != _current_python and _norm not in _seen:
+                _candidates.append(str(_pexe))
                 _seen.add(_norm)
 
     # Fallback: let OS resolve python.exe on PATH
     _candidates.append("python.exe")
+
+    # Track the best candidate for a version-mismatch summary
+    _version_mismatch_had_cuda = False
+    _version_mismatch_py: str | None = None
 
     # Try each candidate until we find one with CUDA torch
     for _idx, _user_python in enumerate(_candidates):
@@ -271,6 +276,10 @@ def _detect_user_torch():
                     f" (built for Python {_torch_py_version},"
                     f" running Python {_our_version})"
                 )
+                if _cuda_available:
+                    if not _version_mismatch_had_cuda:
+                        _version_mismatch_py = _torch_py_version
+                        _version_mismatch_had_cuda = True
                 continue
 
             # Insert user's site-packages before bundled ones to override CPU torch
@@ -315,8 +324,22 @@ def _detect_user_torch():
         except Exception:
             continue
 
-    # No candidate had torch at all
-    print("No PyTorch found in user system Python.")
+    # No candidate had torch at all — or all had version mismatch
+    if _version_mismatch_had_cuda:
+        print(
+            f"\n  Found your CUDA PyTorch (Python {_version_mismatch_py})"
+            f" but the bundled Python ({_our_version}) doesn't match."
+        )
+        print(
+            "  C extensions (.pyd) are tied to a specific Python minor version"
+            " and cannot be mixed."
+        )
+        print(f"  → To fix, rebuild ballontrans_pylibs_win with Python {_version_mismatch_py}:")
+        print(f"      python scripts/build_portable.py")
+        print(f"  → Or install Python {_our_version} and reinstall CUDA PyTorch on it.")
+        print()
+    else:
+        print("No PyTorch found in user system Python.")
     return False
 
 
