@@ -491,8 +491,7 @@ class ProfileManagerDialog(QDialog):
         self.vision_check = QCheckBox(self.tr("Vision support (for OCR)"))
         self.vision_check.setToolTip(
             self.tr(
-                "Enable this for models that can process images. "
-                "Vision-capable profiles will appear in the OCR model selector."
+                "Enable this for models that can process images. Vision-capable profiles will appear in the OCR model selector."
             )
         )
         self.temp_edit = QLineEdit()
@@ -515,10 +514,7 @@ class ProfileManagerDialog(QDialog):
             self.reasoning_combo.addItem(display, data)
         self.reasoning_combo.setToolTip(
             self.tr(
-                "Override the model's reasoning/thinking effort.\n"
-                "Leave as \"default\" to let the API decide.\n"
-                "This maps automatically to each provider's native parameter\n"
-                "(OpenAI reasoning_effort, Claude output_config.effort, etc.)."
+                "Override the model's reasoning/thinking effort.\nLeave as \"default\" to let the API decide.\nThis maps automatically to each provider's native parameter\n(OpenAI reasoning_effort, Claude output_config.effort, etc.)."
             )
         )
         form.addRow(self.tr("Name:"), self.name_edit)

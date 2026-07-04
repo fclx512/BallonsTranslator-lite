@@ -872,8 +872,7 @@ class FontStyleManager(QWidget):
         # ── Empty state ───────────────────────────────────────────
         self._empty_label = QLabel(
             self.tr(
-                "No text blocks in the project.\n"
-                "Run detection + OCR to populate text blocks."
+                "No text blocks in the project.\nRun detection + OCR to populate text blocks."
             )
         )
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)

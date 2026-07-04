@@ -2473,8 +2473,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
                     text = self.tr("Adaptive -- will be determined when Run starts")
                 elif effective <= bs:
                     text = self.tr(
-                        "Full context (%1 pages, all previous "
-                        "translations as reference)"
+                        "Full context (%1 pages, all previous translations as reference)"
                     ).replace("%1", str(effective))
                 elif effective <= bs * 4:
                     text = (

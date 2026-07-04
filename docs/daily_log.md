@@ -2,6 +2,40 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。按照时间顺序撰写。
 
+## 2026-07-04
+
+### 縦中横（竖内横排）功能验证修复：多 run 标志丢失、横排居中错位、配置面板闪退
+
+**问题/需求：** 已实现的「竖排文本框内连续 `[A-Za-z0-9]` run 在长度 ≤ 阈值时正立横排」功能经验证存在三类问题：
+1. 多 run 块（如 `第1話2Aい`）整列不响应阈值调整、仍逐字 90° 旋转，导致短串与下方字符重叠
+2. 横排 run 向右偏移：run 越长越往右探、可见地窜入相邻列；表象为「只在 2 字 run 时恰好居中」，实为横排 line 定位基准错误
+3. 设置面板拖动「Vertical Latin/Digits Length」滑块时必触发 `TypeError` 闪退
+
+**改动：**
+
+1. `ui/configpanel.py:1787` — `PaintQSlider(Qt.Orientation.Horizontal)` 改为 `PaintQSlider()`。`PaintQSlider.__init__` 首参为 `draw_content`（额外文字标签），误把 Orientation 枚举喂入；鼠标悬停时 `painter.drawText(0, dy, self.draw_content)` 收到枚举触发 `TypeError`。改为空参与其他 PaintQSlider 用法一致
+
+2. `ui/scene_textlayout.py` `layoutBlock` —— 删除 `pending_tatechuyoko` 单变量「延迟还原」机制（该机制会让非末尾 run 标志在 flush 时被普通 `{line_width}` 覆盖丢失，且不换列短文本会在循环末尾 `pending=None` 清空前根本不触发还原）。改为 run 分流成功时**立即**写 `char_records[char_idx] = {"line_width": run_w, "tatechuyoko": True}`；两处 flush 覆盖点（普通列结束 `for cidx in line_char_ids`、末列结束 `end_char_id`）加守卫 `if not char_records.get(cidx, {}).get("tatechuyoko")` 跳过已带标志字符。效果：列内任意多 run 全部保住横排标志
+
+3. `ui/scene_textlayout.py` `updateDrawOffsets` 横排居中 —— 旧算法 `xoff = -act_rect[0] + (col_w - act_rect[2])/2` 只把 run **第一个字符**居中到列，后续字符从起点往右平延（1 字/2 字恰好看着居中，3 字起明显右探）。改为 `xoff = (cfmt.tbr.width() - line_width)/2 - act_rect[0]`，让整段 run 中点对齐列中点；`line_width`（run 横宽）仍保留给 `line_draw` 做选中裁剪矩形用
+
+**验证：** 用户实机验收通过 —— `第1話2Aい` 三处 run 全部正立横排；`あabい`/`あabcい` 等不同长度 run 均在列内居中、不再右探；横排向邻列偏移消除。另：AIGDT 字体竖排模式把小写字母映射为三角形装饰字形，属字体自身问题（换常规字体解决），非代码问题。
+
+**遗留：** `layoutBlock` `if num_lspaces == 0` 分支把 run 横宽-单字宽塞进 `self.draw_shifted`，进而影响 `layout_left`（块边界左偏），大字号下可能触发 `size_enlarged` 重排。本次未动 —— 该项为块级缩放，与本次修复的 per-run 定位不同根，需大字号实测确认尚有异常才跟进
+
+### i18n 全面检查：隐式拼接修复、缺失/过期条目清理
+
+**问题/需求：** 项目多处 `self.tr()` 存在 Python 隐式字符串拼接（`"part1 " "part2"`），正则扫描器无法识别导致误报 orphan；新功能（JXL 格式、纵中横）的 4 条翻译缺失；移除的底部栏语言选择器、旧 ConfigPanel 备注残留过期 orphan。
+
+**改动：**
+
+1. **隐式拼接修复（6 文件）** — `ui/mainwindow.py`、`ui/mainwindow_mixin.py`、`ui/fontstyle_manager.py`、`ui/model_check_dialog.py`、`ui/update_checker.py`、`ui/module_manager.py`、`utils/profile_manager.py` 中所有跨行 `"a" "b"` 合并为单字面量
+2. **i18n_check.py** — 硬编码中文白名单添加 `"无字图配对工具.py"`（文件路径误报）
+3. **zh_CN.ts** — 添加 4 条缺失条目（JXL 格式描述 2 条、纵中横备注 2 条）+ 翻译；清理 16 条真 orphan；恢复 11 条间接调用条目（PointAlignDialog/QuickSymbolDialog）；补充 6 条未完成翻译
+4. **编译验证** — `.qm` 重新编译，834 条翻译；`i18n_check.py` 硬编码中文 0、缺失 0、仅余 47 条已文档化的间接调用 orphan（退出码 4 可接受）
+
+**涉及文件：** `scripts/i18n_check.py`、`ui/mainwindow.py`、`ui/mainwindow_mixin.py`、`ui/fontstyle_manager.py`、`ui/model_check_dialog.py`、`ui/update_checker.py`、`ui/module_manager.py`、`utils/profile_manager.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
 ## 2026-07-02
 
 ### 底部栏精简：移除翻译源/目标语言选择器

@@ -88,8 +88,7 @@ class UpdateThread(QThread):
                 {
                     "status": "error",
                     "error_msg": self.tr(
-                        "Git is not available.\n"
-                        "Please install Git from https://git-scm.com/downloads"
+                        "Git is not available.\nPlease install Git from https://git-scm.com/downloads"
                     ),
                 }
             )
@@ -100,8 +99,7 @@ class UpdateThread(QThread):
                 {
                     "status": "error",
                     "error_msg": self.tr(
-                        "Update is not available in portable/exe builds.\n"
-                        "Please download the latest version from GitHub."
+                        "Update is not available in portable/exe builds.\nPlease download the latest version from GitHub."
                     ),
                 }
             )
@@ -169,8 +167,7 @@ class UpdateThread(QThread):
                 {
                     "status": "error",
                     "error_msg": self.tr(
-                        "Git is not available.\n"
-                        "Please install Git from https://git-scm.com/downloads"
+                        "Git is not available.\nPlease install Git from https://git-scm.com/downloads"
                     ),
                 }
             )
@@ -181,8 +178,7 @@ class UpdateThread(QThread):
                 {
                     "status": "error",
                     "error_msg": self.tr(
-                        "Update is not available in portable/exe builds.\n"
-                        "Please download the latest version from GitHub."
+                        "Update is not available in portable/exe builds.\nPlease download the latest version from GitHub."
                     ),
                 }
             )

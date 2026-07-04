@@ -815,9 +815,7 @@ class MainWindowMixin:
                 msg = self.tr("Translation imported and matched successfully.")
             else:
                 msg = self.tr(
-                    "Imported txt file not fully matched with current project, "
-                    "please make sure source txt file structured like results from "
-                    '"export TXT"'
+                    "Imported txt file not fully matched with current project, please make sure source txt file structured like results from \"export TXT\""
                 )
                 if len(match_rst["missing_pages"]) > 0:
                     msg += "\n" + self.tr("Missing pages: ") + "\n"

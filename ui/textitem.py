@@ -219,11 +219,17 @@ class TextBlkItem(QGraphicsTextItem):
 
         layout = (
             VerticalTextDocumentLayout(
-                doc, self.fontformat, punctuation_position=pcfg.punctuation_position
+                doc,
+                self.fontformat,
+                punctuation_position=pcfg.punctuation_position,
+                tatechuyoko_threshold=pcfg.tatechuyoko_threshold,
             )
             if self.fontformat.vertical
             else HorizontalTextDocumentLayout(
-                doc, self.fontformat, punctuation_position=pcfg.punctuation_position
+                doc,
+                self.fontformat,
+                punctuation_position=pcfg.punctuation_position,
+                tatechuyoko_threshold=pcfg.tatechuyoko_threshold,
             )
         )
         layout._draw_offset = self.layout._draw_offset
@@ -604,11 +610,17 @@ class TextBlkItem(QGraphicsTextItem):
 
         if vertical:
             layout = VerticalTextDocumentLayout(
-                doc, self.fontformat, punctuation_position=pcfg.punctuation_position
+                doc,
+                self.fontformat,
+                punctuation_position=pcfg.punctuation_position,
+                tatechuyoko_threshold=pcfg.tatechuyoko_threshold,
             )
         else:
             layout = HorizontalTextDocumentLayout(
-                doc, self.fontformat, punctuation_position=pcfg.punctuation_position
+                doc,
+                self.fontformat,
+                punctuation_position=pcfg.punctuation_position,
+                tatechuyoko_threshold=pcfg.tatechuyoko_threshold,
             )
 
         self.layout = layout

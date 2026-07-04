@@ -1085,10 +1085,7 @@ def _ensure_module_deps(
             if _has_hf_no_mirror:
                 _hf_warn = QLabel(
                     self.tr(
-                        '⚠ HuggingFace model detected but <b>no mirror configured</b>.<br>'
-                        'Open <b>Settings → Mirror Config</b> and set '
-                        '<tt>hf_endpoint</tt> to <tt>https://hf-mirror.com</tt>.<br>'
-                        'Without a mirror, downloads will likely fail from China.'
+                        '⚠ HuggingFace model detected but <b>no mirror configured</b>.<br>Open <b>Settings → Mirror Config</b> and set <tt>hf_endpoint</tt> to <tt>https://hf-mirror.com</tt>.<br>Without a mirror, downloads will likely fail from China.'
                     )
                 )
                 _hf_warn.setWordWrap(True)
@@ -1226,27 +1223,20 @@ def _ensure_module_deps(
             if code.startswith("pip_failed:"):
                 pkg = code.split(":", 1)[1]
                 return self.tr(
-                    'Failed to install Python package "{pkg}".\n'
-                    "Check the log above for details."
+                    'Failed to install Python package "{pkg}".\nCheck the log above for details.'
                 ).format(pkg=pkg)
             return {
                 "network_hf_no_mirror": self.tr(
-                    "Download failed — HuggingFace is not accessible from your network.\n"
-                    'Go to Settings → Mirror Config, set hf_endpoint to https://hf-mirror.com,\n'
-                    "then click Retry."
+                    "Download failed — HuggingFace is not accessible from your network.\nGo to Settings → Mirror Config, set hf_endpoint to https://hf-mirror.com,\nthen click Retry."
                 ),
                 "network_hf": self.tr(
-                    "Download failed — HuggingFace may be blocked in your region.\n"
-                    "Go to Settings → Mirror Config to configure a mirror, then Retry."
+                    "Download failed — HuggingFace may be blocked in your region.\nGo to Settings → Mirror Config to configure a mirror, then Retry."
                 ),
                 "network_github": self.tr(
-                    "Download failed — GitHub may not be reachable.\n"
-                    "Go to Settings → Mirror Config to set up a mirror, then Retry."
+                    "Download failed — GitHub may not be reachable.\nGo to Settings → Mirror Config to set up a mirror, then Retry."
                 ),
                 "network_other": self.tr(
-                    "Download failed — check your network connection.\n"
-                    "If you are in a restricted region, try setting up a download mirror\n"
-                    "in Settings → Mirror Config, then click Retry."
+                    "Download failed — check your network connection.\nIf you are in a restricted region, try setting up a download mirror\nin Settings → Mirror Config, then click Retry."
                 ),
             }.get(code, "")
 

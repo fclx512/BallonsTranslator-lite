@@ -497,9 +497,7 @@ class ModelCheckPanel(QWidget):
         # Placeholder shown when no cards exist (before first refresh / empty)
         self._placeholder = QLabel(
             self.tr(
-                "No model data yet.\n"
-                "Configure modules in Settings, then click Refresh to scan "
-                "for model files."
+                "No model data yet.\nConfigure modules in Settings, then click Refresh to scan for model files."
             )
         )
         self._placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)

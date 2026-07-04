@@ -57,7 +57,7 @@ from utils.shared import (
     NAVLIST_WIDTH,
 )
 
-from .custom_widget import ConfigComboBox, PanelGroupBox, Widget
+from .custom_widget import ConfigComboBox, PanelGroupBox, PaintQSlider, Widget
 from .module_parse_widgets import (
     InpaintConfigPanel,
     OCRConfigPanel,
@@ -1783,6 +1783,20 @@ class ConfigPanel(Widget):
         )
         ts_layout.addWidget(punct_pos_sublock)
 
+        # Vertical Latin/Digits Length (tate-chuyoko)
+        self.tatechuyoko_slider = PaintQSlider()
+        self.tatechuyoko_slider.setRange(0, 5)
+        self.tatechuyoko_slider.setValue(pcfg.tatechuyoko_threshold)
+        self.tatechuyoko_slider.setFixedWidth(CONFIG_COMBOBOX_LONG)
+        self.tatechuyoko_slider.valueChanged.connect(
+            self.on_tatechuyoko_threshold_changed
+        )
+        tatechuyoko_sublock = ConfigSubBlock(
+            self.tatechuyoko_slider, self.tr("Vertical Latin/Digits Length"),
+            note=self.tr("In vertical text, consecutive Latin letters/digits up to this length are displayed upright (tate-chuyoko). 0 disables; longer runs fall back to per-character rotation."),
+        )
+        ts_layout.addWidget(tatechuyoko_sublock)
+
         self.exclude_fonts_btn = QPushButton(self.tr("Exclude Fonts..."), parent=self)
         self.exclude_fonts_btn.setObjectName("ConfigButton")
         self.exclude_fonts_btn.clicked.connect(self.on_exclude_fonts_clicked)
@@ -2180,6 +2194,27 @@ class ConfigPanel(Widget):
         pcfg.punctuation_position = index
         self._apply_punctuation_settings()
 
+    def on_tatechuyoko_threshold_changed(self, value: int):
+        pcfg.tatechuyoko_threshold = value
+        self._apply_tatechuyoko_settings()
+
+    def _apply_tatechuyoko_settings(self):
+        """Apply tatechuyoko_threshold to ALL existing text items."""
+        from .shared_widget import canvas as sw_canvas
+        from .textitem import TextBlkItem
+
+        if sw_canvas is None:
+            return
+        for item in sw_canvas.items():
+            if isinstance(item, TextBlkItem):
+                # 强制整体重排，不能走 setPunctuationPosition 那种增量
+                layout = item.layout
+                if layout is not None and hasattr(layout, "tatechuyoko_threshold"):
+                    layout.tatechuyoko_threshold = pcfg.tatechuyoko_threshold
+                    layout.reLayout()
+                item.repaint_background()
+                item.update()
+
     def _apply_punctuation_settings(self):
         """Apply punctuation_position to ALL existing text items."""
         from .shared_widget import canvas as sw_canvas
@@ -2364,6 +2399,7 @@ class ConfigPanel(Widget):
         self.empty_runcache_checker.setChecked(pcfg.module.empty_runcache)
         self.max_font_size_edit.setValue(pcfg.max_font_size)
         self.punctuation_position_combo.setCurrentIndex(pcfg.punctuation_position)
+        self.tatechuyoko_slider.setValue(pcfg.tatechuyoko_threshold)
 
         self.fit_window_checker.setChecked(pcfg.open_image_fit_window)
         self.fit_window_page_checker.setVisible(pcfg.open_image_fit_window)

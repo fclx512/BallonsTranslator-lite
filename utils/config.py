@@ -157,6 +157,7 @@ class ProgramConfig(Config):
     let_writing_mode_flag: int = 0
     let_family_flag: int = 0
     punctuation_position: int = PunctuationPosition.Simplified
+    tatechuyoko_threshold: int = 3
     let_autolayout_flag: bool = True
     let_uppercase_flag: bool = True
     use_notext_images: bool = True

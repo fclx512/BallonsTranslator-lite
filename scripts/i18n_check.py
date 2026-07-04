@@ -84,6 +84,7 @@ def find_hardcoded_chinese(files):
             "X",
             "简体中文",
             "MCP用户指南.md",  # file path, not UI text
+            "无字图配对工具.py",  # file path, not UI text
         }
     )
 

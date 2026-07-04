@@ -106,6 +106,21 @@ vertical_force_aligncentel_pattern = re.compile(
     + r"⁁⁂⁇⁈⁉⁊⁋⁎※⁑⁒⁕⁖⁘⁙⁛⁜‼‽]"
 )
 
+TATECHUYOKO_PATTERN = re.compile(r"[A-Za-z0-9]+")
+
+
+def find_tatechuyoko_runs(blk_text: str, threshold: int) -> dict:
+    """Return {run_start_char_idx: run_len} for consecutive [A-Za-z0-9] runs
+    whose length <= threshold. Returns {} when threshold <= 0 (feature disabled)."""
+    if threshold <= 0:
+        return {}
+    runs = {}
+    for m in TATECHUYOKO_PATTERN.finditer(blk_text):
+        length = m.end() - m.start()
+        if length <= threshold:
+            runs[m.start()] = length
+    return runs
+
 
 @lru_cache
 def vertical_force_aligncentel(char: str) -> bool:
@@ -370,6 +385,7 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
         doc: QTextDocument,
         fontformat: FontFormat,
         punctuation_position: int = PunctuationAlignment.Traditional,
+        tatechuyoko_threshold: int = 0,
     ) -> None:
         super().__init__(doc)
         self.max_height = 0
@@ -381,6 +397,7 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
         self.linespacing_type = fontformat.line_spacing_type
         self.fontformat = fontformat
         self.punctuation_position = punctuation_position
+        self.tatechuyoko_threshold = tatechuyoko_threshold
 
         self.x_offset_lst = []
         self.y_offset_lst = []
@@ -555,8 +572,11 @@ class VerticalTextDocumentLayout(SceneTextLayout):
         doc: QTextDocument,
         fontformat: FontFormat,
         punctuation_position: int = PunctuationAlignment.Traditional,
+        tatechuyoko_threshold: int = 0,
     ):
-        super().__init__(doc, fontformat, punctuation_position)
+        super().__init__(
+            doc, fontformat, punctuation_position, tatechuyoko_threshold
+        )
 
         self.line_spaces_lst = []
         self.min_height = 0
@@ -652,8 +672,9 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                 cfmt = self.get_char_fontfmt(blk_no, char_idx)
 
                 line_width = -1
+                tatechuyoko_rec = char_records.get(char_idx, {})
                 if char_idx in char_records:
-                    line_width = char_records[char_idx]["line_width"]
+                    line_width = tatechuyoko_rec["line_width"]
                 if line_width < 0:
                     line_width = cfmt.tbr.width()
 
@@ -661,7 +682,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                 if num_lspaces > 0:
                     space_shift = num_lspaces * cfmt.space_width
 
-                if char in PUNSET_VERNEEDROTATE:
+                if char in PUNSET_VERNEEDROTATE and not tatechuyoko_rec.get("tatechuyoko"):
                     char = blk_text[char_idx]
                     if char.isalpha():
                         xoff = 0
@@ -699,7 +720,16 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                             cfmt.br.top() - cfmt.tbr.top(),
                             -cfmt.tbr.top() - line.ascent(),
                         )
-                    xoff = -act_rect[0] + (line_width - act_rect[2]) / 2
+                    # tate-chuyoko run centers within its single-char column, not
+                    # its full run width — line_width (run width) is only for the
+                    # selection clip in line_draw.
+                    if tatechuyoko_rec.get("tatechuyoko"):
+                        # Center the *whole run* (line_width) inside the column
+                        # (cfmt.tbr.width()); using act_rect[2] (one char) would
+                        # only center the first char and let the rest extend right.
+                        xoff = (cfmt.tbr.width() - line_width) / 2 - act_rect[0]
+                    else:
+                        xoff = -act_rect[0] + (line_width - act_rect[2]) / 2
                     # if char in PUNSET_ALIGNTOP:
                     #     yoff = yoff + (cfmt.tbr.height() - act_rect[3]) / 2
 
@@ -782,12 +812,15 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                         selected = True
 
                 line_width = -1
+                tatechuyoko_rec = char_records.get(char_idx, {})
                 if char_idx in char_records:
-                    line_width = char_records[char_idx]["line_width"]
+                    line_width = tatechuyoko_rec["line_width"]
                 if line_width < 0:
                     line_width = cfmt.tbr.width()
 
-                if char in PUNSET_VERNEEDROTATE:
+                if char in PUNSET_VERNEEDROTATE and not tatechuyoko_rec.get(
+                    "tatechuyoko"
+                ):
                     line_x, line_y = line.x(), line.y()
                     y_x = line_y - line_x
                     y_p_x = line_y + line_x
@@ -962,6 +995,8 @@ class VerticalTextDocumentLayout(SceneTextLayout):
         char_records = {}
         line_char_ids = []
 
+        tatechuyoko_runs = find_tatechuyoko_runs(blk_text, self.tatechuyoko_threshold)
+
         while True:
             line = tl.createLine()
             if not line.isValid():
@@ -989,6 +1024,33 @@ class VerticalTextDocumentLayout(SceneTextLayout):
             char_idx += num_lspaces
             single_char_h = None
 
+            is_tatechuyoko = False
+            run_len = tatechuyoko_runs.get(char_idx, 0)
+            if run_len > 0:
+                # Re-pack this line to hold the whole run, then verify Qt accepted it.
+                line.setNumColumns(run_len)
+                run_text_len = line.textLength()
+                if run_text_len != run_len:
+                    # Qt refused the full run — fall back to per-char rotation.
+                    line.setNumColumns(1)
+                    text_len = line.textLength()
+                    num_lspaces = text_len - len(
+                        blk_text[char_idx : char_idx + text_len].lstrip()
+                    )
+                    num_rspaces = text_len - len(
+                        blk_text[char_idx : char_idx + text_len].rstrip()
+                    )
+                else:
+                    text_len = run_len
+                    num_lspaces = 0
+                    num_rspaces = 0
+                    end_char = char_idx + text_len >= blk_text_len
+                    is_tatechuyoko = True
+                    char_records[char_idx] = {
+                        "line_width": line.naturalTextWidth(),
+                        "tatechuyoko": True,
+                    }
+
             if char_idx < blk_text_len:
                 cfmt = self.get_char_fontfmt(block_no, char_idx)
                 space_shift = 0
@@ -1000,7 +1062,7 @@ class VerticalTextDocumentLayout(SceneTextLayout):
 
                 tbr_h = cfmt.tbr.height() + let_sp_offset
                 char = blk_text[char_idx]
-                if char in PUNSET_VERNEEDROTATE:
+                if char in PUNSET_VERNEEDROTATE and not is_tatechuyoko:
                     tbr, br = cfmt.punc_rect(char)
                     single_char_h = tbr.width()
                     tbr_h = tbr.width() * text_len
@@ -1100,7 +1162,8 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                     line_char_ids = [char_idx]
                 end_char_id = line_char_ids[-1]
                 for cidx in line_char_ids:
-                    char_records[cidx] = {"line_width": idea_line_width}
+                    if not char_records.get(cidx, {}).get("tatechuyoko"):
+                        char_records[cidx] = {"line_width": idea_line_width}
                 line_char_ids = []
 
                 x_offset = x_offset - self.calculate_line_spacing(
@@ -1116,7 +1179,8 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                                 end_w, line_spacing
                             )
                         end_line.setPosition(QPointF(x_offset, end_ypos))
-                        char_records[end_char_id] = {"line_width": end_w}
+                        if not char_records.get(end_char_id, {}).get("tatechuyoko"):
+                            char_records[end_char_id] = {"line_width": end_w}
                     else:
                         line_not_set = [end_line]
                         ypos_list = [end_ypos]
@@ -1172,8 +1236,11 @@ class HorizontalTextDocumentLayout(SceneTextLayout):
         doc: QTextDocument,
         fontformat: FontFormat,
         punctuation_position: int = PunctuationAlignment.Traditional,
+        tatechuyoko_threshold: int = 0,
     ):
-        super().__init__(doc, fontformat, punctuation_position)
+        super().__init__(
+            doc, fontformat, punctuation_position, tatechuyoko_threshold
+        )
         self.need_ideal_height = True
 
     def reLayout(self):

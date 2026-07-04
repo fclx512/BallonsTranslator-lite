@@ -793,7 +793,6 @@
             <source>Configure API credentials and endpoints for online translators, OCR services, and AI features. Supports multiple profiles for different services or accounts.</source>
             <translation>配置在线翻译器、OCR 服务和 AI 功能的 API 密钥与端点。支持为不同服务或账户设置多个配置。</translation>
         </message>
-        <!-- Pipeline note -->
         <message>
             <source>Select the text detection engine. Different detectors offer varying accuracy and speed. Some engines may require additional model downloads on first use.</source>
             <translation>选择文本检测引擎。不同检测器提供不同的精度和速度。部分引擎首次使用可能需要额外下载模型。</translation>
@@ -808,16 +807,11 @@
         </message>
         <message>
             <source>Select the translation engine. Online translators require an API profile with credentials configured under Models &gt; API Profiles.</source>
-            <translation>选择翻译引擎。在线翻译器需要先在"模型管理 > API 配置"中设置 API 密钥。</translation>
+            <translation>选择翻译引擎。在线翻译器需要先在"模型管理 &gt; API 配置"中设置 API 密钥。</translation>
         </message>
-        <!-- Project note -->
         <message>
             <source>Reopen the last project automatically when the application starts. Saves time when continuing work on the same project.</source>
             <translation>启动时自动打开上次使用的项目。继续处理同一项目时节省时间。</translation>
-        </message>
-        <message>
-            <source>Choose the output format for translated images. PNG offers lossless quality. JPG and WEBP produce smaller files with some quality loss.</source>
-            <translation>选择翻译后图像的输出格式。PNG 提供无损质量。JPG 和 WEBP 文件更小但有一定质量损失。</translation>
         </message>
         <message>
             <source>When enabled, the output format automatically matches the source image format. Overrides the format selected above.</source>
@@ -827,11 +821,6 @@
             <source>Output image quality (0-100). Higher values give better quality but larger file sizes. Applies to JPG and WEBP only.</source>
             <translation>输出图像质量（0-100）。数值越高质量越好但文件越大。仅适用于 JPG 和 WEBP 格式。</translation>
         </message>
-        <message>
-            <source>Format used for intermediate processing data. PNG is the default lossless option to preserve quality during processing.</source>
-            <translation>中间处理数据使用的格式。PNG 是默认无损选项，可在处理过程中保持质量。</translation>
-        </message>
-        <!-- Typesetting notes -->
         <message>
             <source>Configure the fallback font format for text blocks without their own formatting. Each attribute can be delegated separately.</source>
             <translation>配置未单独设置格式的文本块的默认字体格式。每个属性可分别委托。</translation>
@@ -860,7 +849,6 @@
             <source>Maximum allowed font size in pixels. Text that would render larger than this limit is scaled down automatically.</source>
             <translation>允许的最大字号（像素）。超出此限制的文本会自动缩小。</translation>
         </message>
-        <!-- Interface notes -->
         <message>
             <source>Automatically scale the image to fit the window when opening a project. Avoids manual zooming on every file open.</source>
             <translation>打开项目时自动缩放图像以适配窗口。避免每次打开文件都需要手动缩放。</translation>
@@ -873,7 +861,6 @@
             <source>Background opacity level when using the Original Compare shortcut. Lower values show more of the original image beneath the translation.</source>
             <translation>使用原文对照快捷键时的基础透明度。数值越低，译文下方的原图显示越多。</translation>
         </message>
-        <!-- Environment notes -->
         <message>
             <source>Configure network proxies, mirror servers, and download sources. Useful for systems behind firewalls or in restricted environments.</source>
             <translation>配置网络代理、镜像服务器和下载源。适用于防火墙后或受限网络环境中的系统。</translation>
@@ -890,7 +877,6 @@
             <source>Learn about the MCP (Model Context Protocol) server. Allows external AI agents to read and edit project data programmatically.</source>
             <translation>了解 MCP（模型上下文协议）服务器。允许外部 AI 代理以编程方式读取和编辑项目数据。</translation>
         </message>
-        <!-- New names -->
         <message>
             <source>Font Exclusion</source>
             <translation>字体排除</translation>
@@ -926,6 +912,22 @@
         <message>
             <source>Displays the block sequence number at the top-left corner of each text block on the canvas. Disable to avoid occlusion when working with small fonts.</source>
             <translation>在画布每个文本框左上角显示该块的序号。处理小字体时关闭可避免遮挡。</translation>
+        </message>
+        <message>
+            <source>Choose the output format for translated images. PNG offers lossless quality. JPG and WEBP produce smaller files with some quality loss. JXL offers high compression efficiency with lossless option.</source>
+            <translation>选择翻译后图像的输出格式。PNG 提供无损质量。JPG 和 WEBP 文件更小但有一定质量损失。JXL 提供高压缩效率，支持无损选项。</translation>
+        </message>
+        <message>
+            <source>Format used for intermediate processing data. PNG is the default lossless option. JXL offers better compression for mask and inpainted images.</source>
+            <translation>中间处理数据使用的格式。PNG 是默认无损选项。JXL 为遮罩和修复图像提供更好的压缩率。</translation>
+        </message>
+        <message>
+            <source>In vertical text, consecutive Latin letters/digits up to this length are displayed upright (tate-chuyoko). 0 disables; longer runs fall back to per-character rotation.</source>
+            <translation>竖排文本中，不超过此长度的连续拉丁字母/数字将正立横排显示（縦中横）。设为 0 禁用；更长的连续串回退为逐字旋转。</translation>
+        </message>
+        <message>
+            <source>Vertical Latin/Digits Length</source>
+            <translation>竖排拉丁/数字横排长度</translation>
         </message>
     </context>
     <context>
@@ -1119,7 +1121,8 @@
             <location filename="..\ui\fontstyle_manager.py" line="874" />
             <source>No text blocks in the project.
 Run detection + OCR to populate text blocks.</source>
-            <translation type="unfinished" />
+            <translation>项目中无文字块。
+请先运行文本检测 + OCR 以填充文字块。</translation>
         </message>
     </context>
     <context>
@@ -2178,11 +2181,6 @@ qipao,qipao2</translation>
     <context>
         <name>ModelCheckPanel</name>
         <message>
-            <location filename="..\ui\model_check_dialog.py" line="609" />
-            <source>No public download source. Obtain from community cloud drive.</source>
-            <translation>无公开下载源。请从社区云盘获取。</translation>
-        </message>
-        <message>
             <location filename="..\ui\model_check_dialog.py" line="627" />
             <source>No model data yet.
 Configure modules in Settings, then click Refresh to scan for model files.</source>
@@ -2786,7 +2784,7 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
         <message>
             <location filename="..\utils\profile_manager.py" line="486" />
             <source>Enable this for models that can process images. Vision-capable profiles will appear in the OCR model selector.</source>
-            <translation type="unfinished" />
+            <translation>启用此选项适用于能处理图像的模型。支持视觉功能的配置将出现在 OCR 模型选择器中。</translation>
         </message>
         <message>
             <location filename="..\utils\profile_manager.py" line="496" />
@@ -3838,16 +3836,6 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <source>Translate</source>
             <translation>翻译</translation>
         </message>
-        <message>
-            <location filename="..\ui\mainwindowbars.py" line="565" />
-            <source>Source</source>
-            <translation>源语言</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindowbars.py" line="567" />
-            <source>Target</source>
-            <translation>目标语言</translation>
-        </message>
     </context>
     <context>
         <name>UpdateThread</name>
@@ -3866,14 +3854,16 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <location filename="..\ui\update_checker.py" line="90" />
             <source>Git is not available.
 Please install Git from https://git-scm.com/downloads</source>
-            <translation type="unfinished" />
+            <translation>Git 不可用。
+请从 https://git-scm.com/downloads 安装 Git</translation>
         </message>
         <message>
             <location filename="..\ui\update_checker.py" line="183" />
             <location filename="..\ui\update_checker.py" line="102" />
             <source>Update is not available in portable/exe builds.
 Please download the latest version from GitHub.</source>
-            <translation type="unfinished" />
+            <translation>便携版/exe 版本不支持自动更新。
+请从 GitHub 下载最新版本。</translation>
         </message>
         <message>
             <location filename="..\ui\update_checker.py" line="115" />
@@ -4228,11 +4218,6 @@ in Settings → Mirror Config, then click Retry.</source>
             <translation>目标位置</translation>
         </message>
         <message>
-            <location filename="..\ui\point_align_dialog.py" line="49" />
-            <source>Y:</source>
-            <translation>Y：</translation>
-        </message>
-        <message>
             <location filename="..\ui\point_align_dialog.py" line="55" />
             <source>Pick</source>
             <translation>拾取</translation>
@@ -4241,21 +4226,6 @@ in Settings → Mirror Config, then click Retry.</source>
             <location filename="..\ui\point_align_dialog.py" line="65" />
             <source>Alignment Mode</source>
             <translation>对齐模式</translation>
-        </message>
-        <message>
-            <location filename="..\ui\point_align_dialog.py" line="67" />
-            <source>Align Top Edges</source>
-            <translation>顶边缘对齐</translation>
-        </message>
-        <message>
-            <location filename="..\ui\point_align_dialog.py" line="68" />
-            <source>Align Centers</source>
-            <translation>居中对齐</translation>
-        </message>
-        <message>
-            <location filename="..\ui\point_align_dialog.py" line="69" />
-            <source>Align Bottom Edges</source>
-            <translation>底边缘对齐</translation>
         </message>
         <message>
             <location filename="..\ui\point_align_dialog.py" line="81" />
@@ -4298,19 +4268,32 @@ in Settings → Mirror Config, then click Retry.</source>
             <translation>Y 轴</translation>
         </message>
         <message>
-            <location filename="..\\ui\\point_align_dialog.py" line="93" />
-            <source>X:</source>
-            <translation>X：</translation>
-        </message>
-        <message>
-            <location filename="..\\ui\\point_align_dialog.py" line="93" />
             <source>Align Left Edges</source>
             <translation>左边缘对齐</translation>
         </message>
         <message>
-            <location filename="..\\ui\\point_align_dialog.py" line="95" />
+            <source>Align Centers</source>
+            <translation>中心对齐</translation>
+        </message>
+        <message>
             <source>Align Right Edges</source>
             <translation>右边缘对齐</translation>
+        </message>
+        <message>
+            <source>Align Top Edges</source>
+            <translation>顶边缘对齐</translation>
+        </message>
+        <message>
+            <source>Align Bottom Edges</source>
+            <translation>底边缘对齐</translation>
+        </message>
+        <message>
+            <source>X:</source>
+            <translation>X:</translation>
+        </message>
+        <message>
+            <source>Y:</source>
+            <translation>Y:</translation>
         </message>
     </context>
     <context>
@@ -4321,22 +4304,18 @@ in Settings → Mirror Config, then click Retry.</source>
             <translation>快捷符号</translation>
         </message>
         <message>
-            <location filename="..\ui\quick_symbol_dialog.py" line="59" />
             <source>Quotes</source>
-            <translation>引号类</translation>
+            <translation>引号</translation>
         </message>
         <message>
-            <location filename="..\ui\quick_symbol_dialog.py" line="59" />
             <source>Punctuation</source>
-            <translation>标点类</translation>
+            <translation>标点</translation>
         </message>
         <message>
-            <location filename="..\ui\quick_symbol_dialog.py" line="59" />
             <source>Decoratives</source>
-            <translation>装饰类</translation>
+            <translation>装饰</translation>
         </message>
         <message>
-            <location filename="..\ui\quick_symbol_dialog.py" line="59" />
             <source>Other</source>
             <translation>其他</translation>
         </message>
