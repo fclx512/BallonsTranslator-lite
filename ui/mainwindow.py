@@ -219,7 +219,7 @@ class MainWindow(mainwindow_cls):
 
         self.centralStackWidget = QStackedWidget(self)
 
-        self.configPanel = ConfigPanel(self.centralStackWidget)
+        self.configPanel = ConfigPanel(self)
 
         self.leftBar = LeftBar(self)
         self.leftBar.showPageListLabel.clicked.connect(self.pageLabelStateChanged)
@@ -346,10 +346,9 @@ class MainWindow(mainwindow_cls):
 
         self.centralStackWidget.addWidget(self._rightPanelContainer)
 
-        # Config panel as floating modal overlay (centered over the canvas region;
-        # scrim only dims centralStackWidget, left bar / bottom bar / title bar
-        # stay interactive).
-        self.configPanel.setParent(self.centralStackWidget)
+        # Config panel as independent OS window (Qt.Tool — no taskbar
+        # entry).  Scrim only dims centralStackWidget; left bar / bottom
+        # bar / title bar stay interactive.
         self.configPanel.setVisible(False)
         self._configModal = OverlayModal(
             self.configPanel,

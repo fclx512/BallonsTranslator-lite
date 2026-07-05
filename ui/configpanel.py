@@ -1376,6 +1376,10 @@ class ConfigPanel(Widget):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setObjectName("ConfigPanel")
+        # Independent OS window with standard title bar, no taskbar entry (Qt.Tool).
+        self.setWindowFlags(Qt.WindowType.Tool)
+        self.setWindowTitle(self.tr("Settings"))
+        self.setMinimumSize(700, 450)
         ConfigPanel._active_panel = self
         self._modal_ref = None  # OverlayModal, injected by MainWindow
 
@@ -2361,6 +2365,12 @@ class ConfigPanel(Widget):
         from utils.config import save_config
 
         save_config()
+
+    def closeEvent(self, e) -> None:
+        """Window close (Alt+F4 / system menu) → delegate to modal hide."""
+        if self._modal_ref is not None:
+            self._modal_ref.hide()
+        e.accept()
 
     def hideEvent(self, e) -> None:
         self.save_config.emit()

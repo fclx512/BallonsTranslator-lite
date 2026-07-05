@@ -621,7 +621,6 @@ class SceneTextManager(QObject):
         pair_widget.e_trans.focus_out.connect(self.on_pairw_focusout)
         pair_widget.drag_move.connect(self.textEditList.handle_drag_pos)
         pair_widget.pw_drop.connect(self.textEditList.on_pw_dropped)
-        pair_widget.idx_edited.connect(self.textEditList.on_idx_edited)
 
         self.new_textblk.emit(blk_item.idx)
         return blk_item

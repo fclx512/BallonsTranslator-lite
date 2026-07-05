@@ -7,7 +7,6 @@ from qtpy.QtCore import (
     QPoint,
     QPropertyAnimation,
     QRectF,
-    QSize,
     Qt,
     Signal,
 )
@@ -20,7 +19,6 @@ from qtpy.QtGui import (
     QFont,
     QFontMetrics,
     QInputMethodEvent,
-    QIntValidator,
     QKeyEvent,
     QMouseEvent,
     QPainter,
@@ -34,15 +32,12 @@ from qtpy.QtWidgets import (
     QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QScrollArea,
     QSizePolicy,
-    QStackedWidget,
     QTextEdit,
     QVBoxLayout,
 )
 
-from utils.logger import logger as LOGGER
 
 from .custom_widget import ScrollBar, SeparatorWidget, Widget
 from .textitem import TextBlock
@@ -314,99 +309,18 @@ class TransTextEdit(SourceTextEdit):
     pass
 
 
-class RowIndexEditor(QLineEdit):
-    focus_out = Signal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent=parent)
-        self.setValidator(QIntValidator())
-        self.setReadOnly(True)
-        self.setTextMargins(0, 0, 0, 0)
-
-    def focusOutEvent(self, e: QFocusEvent) -> None:
-        super().focusOutEvent(e)
-        self.focus_out.emit()
-
-    def minimumSizeHint(self):
-        size = super().minimumSizeHint()
-        return QSize(1, size.height())
-
-    def sizeHint(self):
-        size = super().sizeHint()
-        return QSize(1, size.height())
-
-
-class RowIndexLabel(QStackedWidget):
-    submmit_idx = Signal(int)
+class RowIndexLabel(QLabel):
+    """Read-only label for text block index. No editing — display only."""
 
     def __init__(self, text: str = None, parent=None):
-        super().__init__(parent=parent)
-        self.lineedit = RowIndexEditor(parent=self)
-        self.lineedit.focus_out.connect(self.on_lineedit_focusout)
-
-        self.show_label = QLabel(self)
-        self.text = self.show_label.text
-
-        self.addWidget(self.show_label)
-        self.addWidget(self.lineedit)
-        self.setCurrentIndex(0)
-
-        if text is not None:
-            self.setText(text)
+        super().__init__(str(text) if text is not None else "", parent=parent)
         self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
-
-    def setText(self, text):
-        if isinstance(text, int):
-            text = str(text)
-        self.show_label.setText(text)
-        self.lineedit.setText(text)
-
-    def keyPressEvent(self, e: QKeyEvent) -> None:
-        super().keyPressEvent(e)
-
-        key = e.key()
-        if key == Qt.Key.Key_Return:
-            self.try_update_idx()
-
-    def try_update_idx(self):
-        idx_str = self.lineedit.text().strip()
-        if not idx_str:
-            return
-        if self.text() == idx_str:
-            return
-        try:
-            idx = int(idx_str)
-            self.lineedit.setReadOnly(True)
-            self.submmit_idx.emit(idx)
-
-        except Exception:
-            LOGGER.warning(f"Invalid index str: {idx}")
-
-    def mouseDoubleClickEvent(self, e: QMouseEvent) -> None:
-        self.startEdit()
-        return super().mouseDoubleClickEvent(e)
-
-    def startEdit(self) -> None:
-        self.setCurrentIndex(1)
-        self.lineedit.setReadOnly(False)
-        self.lineedit.setFocus()
-
-    def on_lineedit_focusout(self):
-        edited = not self.lineedit.isReadOnly()
-        self.lineedit.setReadOnly(True)
-        self.setCurrentIndex(0)
-        if edited:
-            self.try_update_idx()
-
-    def mousePressEvent(self, e: QMouseEvent) -> None:
-        e.ignore()
-        return super().mousePressEvent(e)
+        self.setContentsMargins(0, 0, 0, 0)
 
 
 class TransPairWidget(Widget):
     check_state_changed = Signal(object, bool, bool)
     drag_move = Signal(int)
-    idx_edited = Signal(int, int)
     pw_drop = Signal()
 
     def __init__(
@@ -420,9 +334,7 @@ class TransPairWidget(Widget):
         super().__init__(*args, **kwargs)
         self.e_source = SourceTextEdit(idx, self, fold)
         self.e_trans = TransTextEdit(idx, self, fold)
-        self.idx_label = RowIndexLabel(idx, self)
-        self.idx_label.setText(str(idx + 1).zfill(2))  # showed index start from 1!
-        self.submmit_idx = self.idx_label.submmit_idx.connect(self.on_idx_edited)
+        self.idx_label = RowIndexLabel(str(idx + 1).zfill(2), self)  # read-only index
         self.textblock = textblock
         self.idx = idx
         self.checked = False
@@ -460,10 +372,6 @@ class TransPairWidget(Widget):
         hlayout.setSpacing(spacing)
 
         self.setAcceptDrops(True)
-
-    def on_idx_edited(self, new_idx: int):
-        new_idx -= 1
-        self.idx_edited.emit(self.idx, new_idx)
 
     def dragEnterEvent(self, e: QDragEnterEvent) -> None:
         if isinstance(e.source(), TransPairWidget):
@@ -717,25 +625,6 @@ class TextEditListScrollArea(QScrollArea):
                     drags_tgt.append(ii)
 
             self.rearrange_blks.emit((drags_ori, drags_tgt))
-
-    def on_idx_edited(self, src_idx: int, tgt_idx: int):
-        src_idx_ori = tgt_idx
-        tgt_idx = max(min(tgt_idx, len(self.pairwidget_list) - 1), 0)
-        if src_idx_ori != tgt_idx:
-            self.pairwidget_list[src_idx].idx_label.setText(str(src_idx + 1).zfill(2))
-        if src_idx == tgt_idx:
-            return
-        ids_ori, ids_tgt = [src_idx], [tgt_idx]
-
-        if src_idx < tgt_idx:
-            for idx in range(src_idx + 1, tgt_idx + 1):
-                ids_ori.append(idx)
-                ids_tgt.append(idx - 1)
-        else:
-            for idx in range(tgt_idx, src_idx):
-                ids_ori.append(idx)
-                ids_tgt.append(idx + 1)
-        self.rearrange_blks.emit((ids_ori, ids_tgt, (tgt_idx, src_idx)))
 
     def addPairWidget(self, pairwidget: TransPairWidget):
         self.vlayout.insertWidget(pairwidget.idx, pairwidget)

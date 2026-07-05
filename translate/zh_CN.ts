@@ -376,6 +376,11 @@
     <context>
         <name>ConfigPanel</name>
         <message>
+            <location filename="..\ui\configpanel.py" line="1382" />
+            <source>Settings</source>
+            <translation>设置</translation>
+        </message>
+        <message>
             <location filename="..\ui\configpanel.py" line="1736" />
             <location filename="..\ui\configpanel.py" line="1277" />
             <source>DL Module</source>
@@ -3017,6 +3022,51 @@ This maps automatically to each provider's native parameter
 选择"默认"则由 API 自行决定。
 该值会自动映射到各厂商的原生参数
 （OpenAI reasoning_effort、Claude output_config.effort 等）。</translation>
+        </message>
+    </context>
+    <context>
+        <name>ProfileManagerDialog</name>
+        <message>
+            <source>Test</source>
+            <translation>测试连接</translation>
+        </message>
+        <message>
+            <source>Host is required.</source>
+            <translation>需要填写地址。</translation>
+        </message>
+        <message>
+            <source>A valid API key is required to test the connection.</source>
+            <translation>需要填写有效的 API 密钥才能测试连接。</translation>
+        </message>
+        <message>
+            <source>Connection Successful</source>
+            <translation>连接成功</translation>
+        </message>
+        <message>
+            <source>Connected! API is reachable and credentials are valid.</source>
+            <translation>连接成功！API 可达且凭据有效。</translation>
+        </message>
+        <message>
+            <source>Connection Failed</source>
+            <translation>连接失败</translation>
+        </message>
+        <message>
+            <source>HTTP {code}: {text}</source>
+            <translation>HTTP {code}：{text}</translation>
+        </message>
+        <message>
+            <source>Could not connect to {host}.
+Please check the URL and your network.</source>
+            <translation>无法连接到 {host}.
+请检查地址和网络。</translation>
+        </message>
+        <message>
+            <source>Connection timed out. Check the URL and network.</source>
+            <translation>连接超时。请检查地址和网络。</translation>
+        </message>
+        <message>
+            <source>Error: {err}</source>
+            <translation>错误：{err}</translation>
         </message>
     </context>
     <context>

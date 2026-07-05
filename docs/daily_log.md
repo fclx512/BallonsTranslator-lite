@@ -2,6 +2,70 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。按照时间顺序撰写。
 
+## 2026-07-05
+
+### 获取模型列表对话框添加搜索筛选栏
+
+**问题/需求：** 管理 API 配置文件 → 获取模型列表中，模型数量多时「获取模型列表」弹窗为纯单选下拉列表，无搜索功能，在大模型列表（如 OpenRouter 数百个模型）中定位困难。
+
+**改动：**
+
+1. `utils/profile_manager.py` — 新增 `FilterableListDialog` 类（搜索栏 + 可筛选 `QListWidget` + 双击/按钮确认）；`_on_fetch_models()` 中原 `QInputDialog.getItem` 替换为 `FilterableListDialog`，输入即筛选（大小写不敏感），搜索栏自动获取焦点
+
+**涉及文件：** `utils/profile_manager.py`
+
+---
+
+### API 配置文件管理新增测试连接功能
+
+**问题/需求：** ProfileManagerDialog 已有「Fetch Models」间接做连接测试，但需要独立的一键测试连接功能，且要求 Host 和 API Key 均必填才发送请求。
+
+**改动：**
+
+1. `utils/profile_manager.py` — Host 输入框行新增「Test」按钮；新增 `_on_test_connection()` 方法，先校验 Host 和 Key 非空，再用 `GET {host}/models` 验证连通性，区分 HTTP 错误/连接失败/超时等场景分别给出中文提示；支持读取 profile 的 proxy 设置
+2. `translate/zh_CN.ts` — 新增 10 条翻译条目，已编译（844 条）
+
+**涉及文件：** `utils/profile_manager.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+### 画布序号徽标固定 100% 不透明度 + 启动闪退修复
+
+**问题/需求：** ① 画布文本框左上角的序号徽标跟随文本框不透明度变化，用户希望始终 100% 显示；② 闪退：`RowIndexLabel` 调用 `setTextMargins`（QLabel 无此方法），启动时报 `AttributeError`。
+
+**改动：**
+
+1. `ui/textitem.py:811` — `_draw_seq_badge` 中 `painter.save()` 后加 `painter.setOpacity(1.0)`，徽标不受文本框 `setOpacity` 影响
+2. `ui/textedit_area.py:318` — `self.setTextMargins` → `self.setContentsMargins`
+
+**涉及文件：** `ui/textitem.py`、`ui/textedit_area.py`
+
+---
+
+### 设置面板改为独立 OS 窗口
+
+**问题/需求：** ConfigPanel 内嵌在 `centralStackWidget` 中，复杂 widget 树与 canvas 在同一渲染表面，已打开项目时显示设置面板仍有明显掉帧。
+
+**改动：**
+
+1. `ui/configpanel.py` — 窗口标志改为 `Qt.WindowType.Tool`（标准标题栏 + 无任务栏入口）；`setWindowTitle("Settings")` + `setMinimumSize(700, 450)` 允许用户拖拽调整大小
+2. `ui/overlay_modal.py` — 重写：panel 不再作为 `cover_widget` 子 widget，改为独立 OS 窗口；移除缓存截图动画机制（`_cache`/`_cache_effect`/`_swap_to_real_panel`/`_cleanup_cache`），改用 `setWindowOpacity()`（DWM 合成，无每帧 render-to-texture）；`setFixedSize`→`resize`，允许自由调整；`_center_window()` 用 `mapToGlobal` 映射到屏幕坐标
+3. `ui/mainwindow.py` — ConfigPanel 创建 parent 改为 `self`（MainWindow），移除冗余 `setParent`
+4. `translate/zh_CN.ts` + `zh_CN.qm` — 新增 `"Settings" → "设置"` 翻译，重新编译（845 条）
+
+**涉及文件：** `ui/configpanel.py`、`ui/overlay_modal.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+**问题/需求：** 画布右侧文本编辑列表中，左侧的顺序编号（`RowIndexLabel`）双击可切换到 `QLineEdit` 编辑模式，用户修改后导致序号显示错乱。
+
+**改动：**
+
+1. `ui/textedit_area.py` — `RowIndexLabel` 从 `QStackedWidget(QLabel + QLineEdit)` 简化为 `QLabel` 子类，保留 `setSizePolicy(Maximum, Maximum)` 维持原尺寸表现；移除 `mouseDoubleClickEvent`/`startEdit`/`keyPressEvent`/`try_update_idx` 等整条编辑信号链；清理不再使用的 import
+2. `ui/scenetext_manager.py` — 移除 `pair_widget.idx_edited` 死连接
+
+**涉及文件：** `ui/textedit_area.py`、`ui/scenetext_manager.py`
+
+---
+
 ## 2026-07-04
 
 ### 縦中横（竖内横排）功能验证修复：多 run 标志丢失、横排居中错位、配置面板闪退

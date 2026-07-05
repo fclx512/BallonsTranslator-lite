@@ -17,7 +17,6 @@ from qtpy.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -351,6 +350,59 @@ def save_all_profiles(profiles: List[Dict]):
     save_config()
 
 
+# ── Filterable List Dialog ──
+
+
+class FilterableListDialog(QDialog):
+    """Dialog with search bar + scrollable list. Returns selected item text."""
+
+    def __init__(self, parent, title: str, items: List[str]):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setMinimumSize(420, 500)
+        self.selected = ""
+        self._all_items = list(items)
+
+        layout = QVBoxLayout(self)
+
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText(self.tr("Search..."))
+        self.search_edit.textChanged.connect(self._filter)
+        layout.addWidget(self.search_edit)
+
+        self.list_widget = QListWidget()
+        self.list_widget.addItems(self._all_items)
+        self.list_widget.itemDoubleClicked.connect(self._accept_selection)
+        layout.addWidget(self.list_widget, 1)
+
+        btn_row = QHBoxLayout()
+        ok_btn = QPushButton(self.tr("OK"))
+        ok_btn.clicked.connect(self._accept_selection)
+        cancel_btn = QPushButton(self.tr("Cancel"))
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addStretch()
+        btn_row.addWidget(ok_btn)
+        btn_row.addWidget(cancel_btn)
+        layout.addLayout(btn_row)
+
+        # Focus search bar so user can type immediately
+        self.search_edit.setFocus()
+
+    def _filter(self, text: str):
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if not text:
+                item.setHidden(False)
+            else:
+                item.setHidden(text.lower() not in item.text().lower())
+
+    def _accept_selection(self):
+        selected = self.list_widget.selectedItems()
+        if selected:
+            self.selected = selected[0].text()
+        self.accept()
+
+
 # ── Dialog ──
 
 
@@ -478,8 +530,13 @@ class ProfileManagerDialog(QDialog):
         form = QFormLayout()
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText(self.tr("e.g., My Custom API"))
+        host_row = QHBoxLayout()
         self.host_edit = QLineEdit()
         self.host_edit.setPlaceholderText("https://api.example.com/v1")
+        test_btn = QPushButton(self.tr("Test"))
+        test_btn.clicked.connect(self._on_test_connection)
+        host_row.addWidget(self.host_edit, 1)
+        host_row.addWidget(test_btn)
         self.key_edit = QLineEdit()
         self.model_edit = QLineEdit()
         self.model_edit.setPlaceholderText("gpt-4o, ...")
@@ -518,7 +575,7 @@ class ProfileManagerDialog(QDialog):
             )
         )
         form.addRow(self.tr("Name:"), self.name_edit)
-        form.addRow(self.tr("Host:"), self.host_edit)
+        form.addRow(self.tr("Host:"), host_row)
         form.addRow(self.tr("API Key:"), self.key_edit)
         form.addRow(self.tr("Model:"), model_row)
         form.addRow("", self.vision_check)
@@ -736,16 +793,11 @@ class ProfileManagerDialog(QDialog):
                             self, self.tr("Notice"), self.tr("No models found.")
                         )
                         return
-                    name, ok = QInputDialog.getItem(
-                        self,
-                        self.tr("Select Model"),
-                        self.tr("Choose a model:"),
-                        names,
-                        0,
-                        False,
+                    dlg = FilterableListDialog(
+                        self, self.tr("Select Model"), names
                     )
-                    if ok and name:
-                        self.model_edit.setText(name)
+                    if dlg.exec() == QDialog.DialogCode.Accepted and dlg.selected:
+                        self.model_edit.setText(dlg.selected)
                 else:
                     QMessageBox.warning(
                         self,
@@ -759,6 +811,74 @@ class ProfileManagerDialog(QDialog):
                 self,
                 self.tr("Error"),
                 self.tr("Failed to fetch model list: {err}").format(err=e),
+            )
+
+    def _on_test_connection(self):
+        host = self.host_edit.text().strip()
+        key = self.key_edit.text().strip()
+        if not host:
+            QMessageBox.warning(
+                self,
+                self.tr("Warning"),
+                self.tr("Host is required."),
+            )
+            return
+        if not key:
+            QMessageBox.warning(
+                self,
+                self.tr("Warning"),
+                self.tr("A valid API key is required to test the connection."),
+            )
+            return
+        # Determine proxy from the current profile
+        proxy = ""
+        row = self._current_row
+        if 0 <= row < len(self._profiles):
+            proxy = self._profiles[row].get("proxy", "")
+        try:
+            client_kwargs = {"timeout": 10}
+            if proxy:
+                client_kwargs["proxy"] = proxy
+            with httpx.Client(**client_kwargs) as client:
+                resp = client.get(
+                    f"{host.rstrip('/')}/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                )
+                if resp.status_code == 200:
+                    QMessageBox.information(
+                        self,
+                        self.tr("Connection Successful"),
+                        self.tr(
+                            "Connected! API is reachable and credentials are valid."
+                        ),
+                    )
+                else:
+                    QMessageBox.warning(
+                        self,
+                        self.tr("Connection Failed"),
+                        self.tr("HTTP {code}: {text}").format(
+                            code=resp.status_code, text=resp.text[:200]
+                        ),
+                    )
+        except httpx.ConnectError:
+            QMessageBox.warning(
+                self,
+                self.tr("Connection Failed"),
+                self.tr(
+                    "Could not connect to {host}.\nPlease check the URL and your network."
+                ).format(host=host),
+            )
+        except httpx.TimeoutException:
+            QMessageBox.warning(
+                self,
+                self.tr("Connection Failed"),
+                self.tr("Connection timed out. Check the URL and network."),
+            )
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                self.tr("Connection Failed"),
+                self.tr("Error: {err}").format(err=e),
             )
 
     def _on_delete(self):

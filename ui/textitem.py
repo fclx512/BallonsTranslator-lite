@@ -808,6 +808,7 @@ class TextBlkItem(QGraphicsTextItem):
         )
 
         painter.save()
+        painter.setOpacity(1.0)
 
         if self.isSelected():
             from ui.misc import get_theme_color
