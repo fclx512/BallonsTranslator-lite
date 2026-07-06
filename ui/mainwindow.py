@@ -512,7 +512,9 @@ class MainWindow(mainwindow_cls):
             int(pcfg.mask_transparency * 100)
         )
         self.leftBar.initRecentProjMenu(pcfg.recent_proj_list)
-        self.leftBar.showPageListLabel.setChecked(pcfg.show_page_list)
+        # 启动时默认关闭页面列表，不还原上一次的配置状态
+        pcfg.show_page_list = False
+        self.leftBar.showPageListLabel.setChecked(False)
         self.updatePageList()
         self.leftBar.save_config.connect(self.save_config)
         self.leftBar.imgTransChecker.setChecked(True)
@@ -1132,6 +1134,18 @@ class MainWindow(mainwindow_cls):
         self.shortcut_registry["toggle_original_opacity"] = self._make_shortcuts(
             "toggle_original_opacity", [], self.shortcutToggleOriginalOpacity
         )
+        self.shortcut_registry["move_up"] = self._make_shortcuts(
+            "move_up", [], self.shortcutMoveUp
+        )
+        self.shortcut_registry["move_down"] = self._make_shortcuts(
+            "move_down", [], self.shortcutMoveDown
+        )
+        self.shortcut_registry["move_top"] = self._make_shortcuts(
+            "move_top", [], self.shortcutMoveTop
+        )
+        self.shortcut_registry["move_bottom"] = self._make_shortcuts(
+            "move_bottom", [], self.shortcutMoveBottom
+        )
 
         drawpanel_info = {
             "hand": "hand_tool",
@@ -1223,6 +1237,25 @@ class MainWindow(mainwindow_cls):
         target = preset if current > preset else 1.0
         self.bottomBar.originalSlider.setValue(int(target * 100))
         self.canvas.setOriginalTransparency(target)
+
+    def _reorder_move(self, mode: str):
+        if not self._is_canvas_mode() or not self.canvas.textEditMode():
+            return
+        if not self.st_manager.textEditList.checked_list:
+            return
+        self.st_manager.textEditList.move_selected(mode)
+
+    def shortcutMoveUp(self):
+        self._reorder_move("up")
+
+    def shortcutMoveDown(self):
+        self._reorder_move("down")
+
+    def shortcutMoveTop(self):
+        self._reorder_move("top")
+
+    def shortcutMoveBottom(self):
+        self._reorder_move("bottom")
 
     def shortcutCtrlD(self):
         if self._is_canvas_mode():

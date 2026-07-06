@@ -283,6 +283,46 @@
             <source>Normalize Breaks and Shrink</source>
             <translation>整理换行并收缩框</translation>
         </message>
+        <message>
+            <location filename="..\ui\canvas.py" line="1190" />
+            <source>Reorder</source>
+            <translation>重排</translation>
+        </message>
+        <message>
+            <location filename="..\ui\canvas.py" line="1192" />
+            <source>Move Up</source>
+            <translation>上移</translation>
+        </message>
+        <message>
+            <location filename="..\ui\canvas.py" line="1193" />
+            <source>Move Down</source>
+            <translation>下移</translation>
+        </message>
+        <message>
+            <location filename="..\ui\canvas.py" line="1194" />
+            <source>Move to Top</source>
+            <translation>移到顶部</translation>
+        </message>
+        <message>
+            <location filename="..\ui\canvas.py" line="1195" />
+            <source>Move to Bottom</source>
+            <translation>移到底部</translation>
+        </message>
+        <message>
+            <location filename="..\ui\canvas.py" line="1197" />
+            <source>Move to Position...</source>
+            <translation>移动到位置…</translation>
+        </message>
+        <message>
+            <location filename="..\ui\canvas.py" line="1271" />
+            <source>Move to Position</source>
+            <translation>移动到位置</translation>
+        </message>
+        <message>
+            <location filename="..\ui\canvas.py" line="1272" />
+            <source>Target position (1-%1):</source>
+            <translation>目标位置 (1-%1)：</translation>
+        </message>
     </context>
     <context>
         <name>CategoryCard</name>
@@ -4213,6 +4253,26 @@ in Settings → Mirror Config, then click Retry.</source>
             <source>Toggle Original Compare</source>
             <translation>切换原文对照</translation>
         </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="783" />
+            <source>Move Up</source>
+            <translation>上移</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="784" />
+            <source>Move Down</source>
+            <translation>下移</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="785" />
+            <source>Move to Top</source>
+            <translation>移到顶部</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="786" />
+            <source>Move to Bottom</source>
+            <translation>移到底部</translation>
+        </message>
     </context>
     <context>
         <name>ShortcutEditor</name>
@@ -4235,6 +4295,11 @@ in Settings → Mirror Config, then click Retry.</source>
             <location filename="..\\ui\\configpanel.py" line="1030" />
             <source>Tools</source>
             <translation>工具</translation>
+        </message>
+        <message>
+            <location filename="..\\ui\\configpanel.py" line="1030" />
+            <source>Reorder</source>
+            <translation>重排</translation>
         </message>
         <message>
             <location filename="..\\ui\\configpanel.py" line="1030" />

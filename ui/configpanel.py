@@ -8,6 +8,7 @@ from qtpy.QtGui import (
     QGuiApplication,
     QIntValidator,
     QPainter,
+    QShortcut,
     QStandardItem,
     QStandardItemModel,
     QValidator,
@@ -791,6 +792,10 @@ DEFAULT_SHORTCUTS = {
     "quick_symbol": [],
     "advanced_align": [],
     "toggle_original_opacity": [],
+    "move_up": [],
+    "move_down": [],
+    "move_top": [],
+    "move_bottom": [],
 }
 
 _ACTION_NAMES = {
@@ -824,6 +829,10 @@ _ACTION_NAMES = {
     "quick_symbol": "Quick Symbol",
     "advanced_align": "Advanced Alignment",
     "toggle_original_opacity": "Toggle Original Compare",
+    "move_up": "Move Up",
+    "move_down": "Move Down",
+    "move_top": "Move to Top",
+    "move_bottom": "Move to Bottom",
 }
 
 # Shortcut groups for organized display
@@ -859,6 +868,7 @@ _SHORTCUT_GROUPS = [
             "advanced_align",
         ],
     ),
+    ("Reorder", ["move_up", "move_down", "move_top", "move_bottom"]),
     ("Search", ["page_search", "global_search"]),
     ("General", ["escape"]),
 ]
@@ -1376,8 +1386,8 @@ class ConfigPanel(Widget):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setObjectName("ConfigPanel")
-        # Independent OS window with standard title bar, no taskbar entry (Qt.Tool).
-        self.setWindowFlags(Qt.WindowType.Tool)
+        # Independent OS window with standard dialog title bar, no taskbar entry.
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint)
         self.setWindowTitle(self.tr("Settings"))
         self.setMinimumSize(700, 450)
         ConfigPanel._active_panel = self
@@ -2054,6 +2064,10 @@ class ConfigPanel(Widget):
         main_layout.addWidget(self.configTable)
         main_layout.addWidget(self.pageStack, 1)
 
+        # Esc closes the settings window
+        esc_shortcut = QShortcut(Qt.Key.Key_Escape, self)
+        esc_shortcut.activated.connect(self._close_via_esc)
+
     def on_load_model_changed(self):
         pcfg.module.load_model_on_demand = self.load_model_checker.isChecked()
 
@@ -2365,6 +2379,11 @@ class ConfigPanel(Widget):
         from utils.config import save_config
 
         save_config()
+
+    def _close_via_esc(self) -> None:
+        """Esc → delegate to modal hide."""
+        if self._modal_ref is not None:
+            self._modal_ref.hide()
 
     def closeEvent(self, e) -> None:
         """Window close (Alt+F4 / system menu) → delegate to modal hide."""

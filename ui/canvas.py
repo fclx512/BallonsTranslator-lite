@@ -27,6 +27,7 @@ from qtpy.QtWidgets import (
     QGraphicsSceneDragDropEvent,
     QGraphicsSceneMouseEvent,
     QGraphicsView,
+    QInputDialog,
     QLabel,
     QMenu,
     QRubberBand,
@@ -268,6 +269,8 @@ class Canvas(QGraphicsScene):
     squeeze_blk = Signal()
     # 请求整理换行：squeeze=True 时同时收缩框
     normalize_break_requested = Signal(bool)
+
+    reorder_textblks = Signal(str, int)
 
     run_blktrans = Signal(int)
 
@@ -1178,11 +1181,33 @@ class Canvas(QGraphicsScene):
 
             # 整理换行：仅对选中的横排块可用
             selected = self.selected_text_items()
+            n_total = sum(
+                1 for it in self.textLayer.childItems() if isinstance(it, TextBlkItem)
+            )
             norm_enabled = any(not b.blk.vertical for b in selected)
             norm_act = menu.addAction(self.tr("Normalize Breaks"))
             norm_sq_act = menu.addAction(self.tr("Normalize Breaks and Shrink"))
             norm_act.setEnabled(norm_enabled)
             norm_sq_act.setEnabled(norm_enabled)
+
+            menu.addSeparator()
+
+            # --- Reorder submenu (only meaningful in textpanel list context) ---
+            n_sel = len(selected)
+            reorder_menu = menu.addMenu(self.tr("Reorder"))
+            reorder_menu.setEnabled(0 < n_sel < n_total)
+            mv_up_act = reorder_menu.addAction(self.tr("Move Up"))
+            mv_down_act = reorder_menu.addAction(self.tr("Move Down"))
+            mv_top_act = reorder_menu.addAction(self.tr("Move to Top"))
+            mv_bottom_act = reorder_menu.addAction(self.tr("Move to Bottom"))
+            reorder_menu.addSeparator()
+            mv_pos_act = reorder_menu.addAction(self.tr("Move to Position..."))
+            first_sel_idx = min(b.idx for b in selected) if selected else -1
+            last_sel_idx = max(b.idx for b in selected) if selected else -1
+            mv_up_act.setEnabled(n_sel > 0 and first_sel_idx > 0)
+            mv_down_act.setEnabled(n_sel > 0 and last_sel_idx < n_total - 1)
+            mv_top_act.setEnabled(n_sel > 0 and first_sel_idx > 0)
+            mv_bottom_act.setEnabled(n_sel > 0 and last_sel_idx < n_total - 1)
 
             menu.addSeparator()
 
@@ -1235,6 +1260,25 @@ class Canvas(QGraphicsScene):
                 self.normalize_break_requested.emit(False)
             elif rst == norm_sq_act:
                 self.normalize_break_requested.emit(True)
+            elif rst == mv_up_act:
+                self.reorder_textblks.emit("up", 0)
+            elif rst == mv_down_act:
+                self.reorder_textblks.emit("down", 0)
+            elif rst == mv_top_act:
+                self.reorder_textblks.emit("top", 0)
+            elif rst == mv_bottom_act:
+                self.reorder_textblks.emit("bottom", 0)
+            elif rst == mv_pos_act:
+                pos, ok = QInputDialog.getInt(
+                    self.gv,
+                    self.tr("Move to Position"),
+                    self.tr("Target position (1-%1):").replace("%1", str(n_total)),
+                    1,
+                    1,
+                    n_total,
+                )
+                if ok:
+                    self.reorder_textblks.emit("to_pos", pos)
             elif rst == align_left_act:
                 self.align_textblks.emit("left")
             elif rst == align_right_act:

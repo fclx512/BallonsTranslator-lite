@@ -448,6 +448,7 @@ class SceneTextManager(QObject):
             self.on_transwidget_selection_changed
         )
         self.textEditList.rearrange_blks.connect(self.on_rearrange_blks)
+        self.canvas.reorder_textblks.connect(self.textEditList.move_selected)
         self.formatpanel = textpanel.formatpanel
         self.formatpanel.textstyle_panel.apply_fontfmt.connect(self.onFormatTextblks)
 

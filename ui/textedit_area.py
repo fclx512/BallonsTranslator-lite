@@ -626,6 +626,79 @@ class TextEditListScrollArea(QScrollArea):
 
             self.rearrange_blks.emit((drags_ori, drags_tgt))
 
+    def _emit_rearrange_from_perm(self, result_list):
+        """Compute (drags_ori, drags_tgt) from a permutation list (each entry = old idx
+        at that position), emit rearrange_blks so on_rearrange_blks -> RearrangeBlksCommand
+        runs through the same path as drag-drop. Items unchanged are filtered out, so
+        unchanged blocks stay out of tgt_ids (updateTextBlkItemIdx won't touch them).
+        """
+        drags_ori, drags_tgt = [], []
+        for ii, idx in enumerate(result_list):
+            if ii != idx:
+                drags_ori.append(idx)
+                drags_tgt.append(ii)
+        if drags_ori:
+            self.rearrange_blks.emit((drags_ori, drags_tgt))
+
+    def move_selected(self, mode: str, to_pos: int = None):
+        """Reorder selected widgets as a group. Called by ReorderContent buttons / Go.
+
+        mode: "up" / "down" / "top" / "bottom" / "to_pos"
+        to_pos: 1-based, only for "to_pos"
+
+        整组移动语义：选中块从列表取出后作为一个连续整体,插入到目标位置之前。
+        记 result_list[i] = 移动后应在 result 第 i 位的旧 idx。建构方式
+        ``others[:insert_at] + sel_idxs + others[insert_at:]``，其中
+        ``insert_at`` 同时也是 group 在 result 中的起始 0-based 位置。
+        """
+        n = len(self.pairwidget_list)
+        sel_idxs = sorted(pw.idx for pw in self.checked_list)
+        num_sel = len(sel_idxs)
+        if n < 2 or num_sel == 0 or num_sel == n:
+            return
+
+        sel_set = set(sel_idxs)
+        first_sel, last_sel = sel_idxs[0], sel_idxs[-1]
+        others = [i for i in range(n) if i not in sel_set]
+
+        if mode == "top":
+            if first_sel == 0:
+                return
+            insert_at = 0
+        elif mode == "bottom":
+            if last_sel == n - 1:
+                return
+            insert_at = len(others)
+        elif mode == "up":
+            if first_sel == 0:
+                return
+            insert_at = first_sel - 1
+        elif mode == "down":
+            if first_sel + num_sel >= n:
+                return
+            insert_at = first_sel + 1
+        elif mode == "to_pos":
+            # to_pos (1-based) = "插到第 to_pos 块之前". 第 to_pos 块 0-based idx = to_pos-1.
+            target_idx = to_pos - 1
+            if target_idx < 0 or target_idx >= n:
+                return
+            if target_idx in sel_set:
+                return
+            # group 起始 result 位置 = target_idx 之前的非选中数量 = others 中 target_idx 的下标
+            insert_at = target_idx - sum(1 for s in sel_idxs if s < target_idx)
+        else:
+            return
+
+        if insert_at < 0:
+            insert_at = 0
+        if insert_at > len(others):
+            insert_at = len(others)
+
+        result_list = others[:insert_at] + sel_idxs + others[insert_at:]
+        if len(result_list) != n:
+            return
+        self._emit_rearrange_from_perm(result_list)
+
     def addPairWidget(self, pairwidget: TransPairWidget):
         self.vlayout.insertWidget(pairwidget.idx, pairwidget)
         pairwidget.check_state_changed.connect(self.on_widget_checkstate_changed)
