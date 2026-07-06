@@ -2,6 +2,26 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。按照时间顺序撰写。
 
+## 2026-07-06
+
+### 文本框重排面板（撤回记录 — 现状已完整记录，改动已回滚）
+
+**需求：** 右侧 TextPanel 中新增可折叠「重排文本框」面板 + 4 个键盘快捷键，替代仅靠拖拽重排。
+
+**改动文件（5 文件，+285 行）：**
+
+1. `ui/textedit_area.py` — 新增 `TextEditListScrollArea.move_selected()`（支持 up/down/top/bottom/to_pos 五种移动，全排列 diff 确保索引正确）；新增 `ReorderContent` 控件：Row1 = ▲▼⏫⏬ QToolButton，Row2 = sel_info_label + Pos 输入 + Go 按钮；连接 `selection_changed` 信号实时更新 UI
+2. `ui/scenetext_manager.py` — `TextPanel` 在切换行下方插入 `CollapsibleSection`（`expanded=False`，默认折叠）；`on_rearrange_blks()` 中 reorder 后 emit `selection_changed` 刷新选择信息
+3. `ui/configpanel.py` — `DEFAULT_SHORTCUTS`/`_ACTION_NAMES`/`_SHORTCUT_GROUPS` 新增 4 项（move_up/move_down/move_top/move_bottom）
+4. `ui/mainwindow.py` — `_install_shortcuts()` 注册 4 个快捷键 + 对应 handler 方法
+5. `translate/zh_CN.ts` — `TextPanel` 上下文新增 `"Reorder Text Blocks" → "重排文本框"`
+
+**撤回原因：** 实机验证发现三个问题：① i18n 理解偏差（面板标题未走 `self.tr`）；② 快捷键触发重排后索引未完整更新（`updateTextBlkItemIdx` 只更新 tgt 位置，被挤占项索引标签错乱）；③ 重排后 `selection_changed` 未 emit 导致 `sel_info_label` 未刷新。已修复 (前 3 个 commit 包含修正) 后决定整体回滚到另一台设备继续排查。
+
+**涉及文件：** `ui/textedit_area.py`、`ui/scenetext_manager.py`、`ui/configpanel.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`
+
+---
+
 ## 2026-07-05
 
 ### 获取模型列表对话框添加搜索筛选栏
