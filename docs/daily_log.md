@@ -4,15 +4,58 @@
 
 ## 2026-07-07
 
-### 设置面板窗口样式改为标准 Dialog + Esc 关闭
+### 系统诊断 dialog 信号导航接入
 
-**需求：** 设置面板关闭按钮与正常 Windows 窗口样式不同（原 `Qt.WindowType.Tool` 产生小号 Tool 窗口标题栏），且不支持按 Esc 关闭。
+**问题/需求：** 系统诊断 dialog 的跳转按钮（[Settings →]、[Details →]、[Check →]）需打通到 ConfigPanel 的对应页面/Tab。
 
 **改动：**
-- `ui/configpanel.py` — 窗口标志从 `Qt.WindowType.Tool` 改为 `Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint`，获得标准 Windows 对话框标题栏和关闭按钮
-- `ui/configpanel.py` — `__init__` 末尾添加 `QShortcut(Qt.Key.Key_Escape)` → `_close_via_esc()` → `OverlayModal.hide()`（淡出动画关闭）
+- `ui/configpanel.py` — `_open_system_diagnostic` 接入 `open_tools_requested` → ToolsDialog 自动切 Tab、`open_settings_requested` → `_focus_on_dl_section` 跳管线页；`_open_tools_dialog` 增加 `tab_hint` 参数
+- `ui/system_diagnostic_dialog.py` — 新增 `open_tools_requested`/`open_settings_requested` 信号
 
-**涉及文件：** `ui/configpanel.py`
+**涉及文件：** `ui/configpanel.py`、`ui/system_diagnostic_dialog.py`
+
+---
+
+### 系统诊断工具 v2（卡片式）— 完整重写
+
+**需求：** 原诊断对话框仅纯文本信息转储，无法直观识别问题也无法操作。需要改为可交互的健康检查面板，支持管线模块功能测试和问题跳转。
+
+**改动：**
+
+1. **`utils/env_diagnostic.py`** — 新增 `check_module_status()`（遍历四大模块注册表，检测当前配置模块的加载状态）；`test_module_functional()`（四步测试：解析类 → 源码/模型文件 → 实例化 → API 连通性测试或设备状态）；`dependency_summary()`（快速依赖总览供卡片摘要用）
+
+2. **`ui/system_diagnostic_dialog.py`** — 完全重写：
+   - `_Card` 卡片组件（`QGroupBox` flat，圆角边框）
+   - 四张卡片：运行环境（Python 版本/启动路径/OS）、GPU 状态（显卡/PyTorch CUDA/onnxruntime）、管线模块（每模块加载状态 + [Test] 按钮 + 错误行内展示 + [Settings →] 跳转）、依赖检查（摘要 + [Details →][Check →] 跳转 ToolsDialog）
+   - 测试日志仅保留一个实例、每次点击刷新替换
+   - `_ModuleTestWorker` 后台线程执行测试
+
+3. **`ui/configpanel.py`** — `_open_system_diagnostic` 接入信号导航
+
+**已知待改进（下轮）：**
+- 配色暗色模式适配需实机验证
+- 测试按钮缺实时进度反馈
+- 翻译器 API 测试依赖 `httpx`，当前可能未声明在 `pyproject.toml` 中
+
+**涉及文件：** `utils/env_diagnostic.py`、`ui/system_diagnostic_dialog.py`、`ui/configpanel.py`
+
+---
+
+### Pipeline 测试功能设计计划
+
+**需求：** 当前诊断测试只做导入+实例化检查，不触发真实推理。需要一张项目内置测试图跑完整管线，让用户获得切实反馈（检测框数、OCR 识别率、翻译返回、修复效果）。
+
+**产出：**
+- `docs/pipeline_test_计划.md` — 完整设计方案，涵盖 manifest 场景清单、PipelineTestRunner、TestPreviewWindow 预览图窗、暗色模式修复
+
+**讨论要点：**
+- 测试图存放 `assets/test_scenes/`，manifest 管理场景-阶段映射
+- 用户勾选阶段，系统自动匹配测试图，无需感知图片路径
+- 纯翻译走文本文件，不弹图窗
+- 有画面效果的阶段可打开预览窗口（检测框叠加 / 修前修后切换 / OCR 对比表）
+- 等待用户制作测试图后实施
+
+**涉及文件：** `docs/pipeline_test_计划.md`
 
 ---
 
@@ -26,8 +69,6 @@
 - `ui/canvas.py:1198` — `reorder_menu.setEnabled(is_textpanel and 0 < n_sel < n_total)` → `setEnabled(0 < n_sel < n_total)`
 
 **涉及文件：** `ui/canvas.py`
-
----
 
 ### 文本框重排面板（撤回记录 — 现状已完整记录，改动已回滚）
 
@@ -145,39 +186,3 @@
 2. `ui/scenetext_manager.py` — 移除 `pair_widget.idx_edited` 死连接
 
 **涉及文件：** `ui/textedit_area.py`、`ui/scenetext_manager.py`
-
----
-
-## 2026-07-04
-
-### 縦中横（竖内横排）功能验证修复：多 run 标志丢失、横排居中错位、配置面板闪退
-
-**问题/需求：** 已实现的「竖排文本框内连续 `[A-Za-z0-9]` run 在长度 ≤ 阈值时正立横排」功能经验证存在三类问题：
-1. 多 run 块（如 `第1話2Aい`）整列不响应阈值调整、仍逐字 90° 旋转，导致短串与下方字符重叠
-2. 横排 run 向右偏移：run 越长越往右探、可见地窜入相邻列；表象为「只在 2 字 run 时恰好居中」，实为横排 line 定位基准错误
-3. 设置面板拖动「Vertical Latin/Digits Length」滑块时必触发 `TypeError` 闪退
-
-**改动：**
-
-1. `ui/configpanel.py:1787` — `PaintQSlider(Qt.Orientation.Horizontal)` 改为 `PaintQSlider()`。`PaintQSlider.__init__` 首参为 `draw_content`（额外文字标签），误把 Orientation 枚举喂入；鼠标悬停时 `painter.drawText(0, dy, self.draw_content)` 收到枚举触发 `TypeError`。改为空参与其他 PaintQSlider 用法一致
-
-2. `ui/scene_textlayout.py` `layoutBlock` —— 删除 `pending_tatechuyoko` 单变量「延迟还原」机制（该机制会让非末尾 run 标志在 flush 时被普通 `{line_width}` 覆盖丢失，且不换列短文本会在循环末尾 `pending=None` 清空前根本不触发还原）。改为 run 分流成功时**立即**写 `char_records[char_idx] = {"line_width": run_w, "tatechuyoko": True}`；两处 flush 覆盖点（普通列结束 `for cidx in line_char_ids`、末列结束 `end_char_id`）加守卫 `if not char_records.get(cidx, {}).get("tatechuyoko")` 跳过已带标志字符。效果：列内任意多 run 全部保住横排标志
-
-3. `ui/scene_textlayout.py` `updateDrawOffsets` 横排居中 —— 旧算法 `xoff = -act_rect[0] + (col_w - act_rect[2])/2` 只把 run **第一个字符**居中到列，后续字符从起点往右平延（1 字/2 字恰好看着居中，3 字起明显右探）。改为 `xoff = (cfmt.tbr.width() - line_width)/2 - act_rect[0]`，让整段 run 中点对齐列中点；`line_width`（run 横宽）仍保留给 `line_draw` 做选中裁剪矩形用
-
-**验证：** 用户实机验收通过 —— `第1話2Aい` 三处 run 全部正立横排；`あabい`/`あabcい` 等不同长度 run 均在列内居中、不再右探；横排向邻列偏移消除。另：AIGDT 字体竖排模式把小写字母映射为三角形装饰字形，属字体自身问题（换常规字体解决），非代码问题。
-
-**遗留：** `layoutBlock` `if num_lspaces == 0` 分支把 run 横宽-单字宽塞进 `self.draw_shifted`，进而影响 `layout_left`（块边界左偏），大字号下可能触发 `size_enlarged` 重排。本次未动 —— 该项为块级缩放，与本次修复的 per-run 定位不同根，需大字号实测确认尚有异常才跟进
-
-### i18n 全面检查：隐式拼接修复、缺失/过期条目清理
-
-**问题/需求：** 项目多处 `self.tr()` 存在 Python 隐式字符串拼接（`"part1 " "part2"`），正则扫描器无法识别导致误报 orphan；新功能（JXL 格式、纵中横）的 4 条翻译缺失；移除的底部栏语言选择器、旧 ConfigPanel 备注残留过期 orphan。
-
-**改动：**
-
-1. **隐式拼接修复（6 文件）** — `ui/mainwindow.py`、`ui/mainwindow_mixin.py`、`ui/fontstyle_manager.py`、`ui/model_check_dialog.py`、`ui/update_checker.py`、`ui/module_manager.py`、`utils/profile_manager.py` 中所有跨行 `"a" "b"` 合并为单字面量
-2. **i18n_check.py** — 硬编码中文白名单添加 `"无字图配对工具.py"`（文件路径误报）
-3. **zh_CN.ts** — 添加 4 条缺失条目（JXL 格式描述 2 条、纵中横备注 2 条）+ 翻译；清理 16 条真 orphan；恢复 11 条间接调用条目（PointAlignDialog/QuickSymbolDialog）；补充 6 条未完成翻译
-4. **编译验证** — `.qm` 重新编译，834 条翻译；`i18n_check.py` 硬编码中文 0、缺失 0、仅余 47 条已文档化的间接调用 orphan（退出码 4 可接受）
-
-**涉及文件：** `scripts/i18n_check.py`、`ui/mainwindow.py`、`ui/mainwindow_mixin.py`、`ui/fontstyle_manager.py`、`ui/model_check_dialog.py`、`ui/update_checker.py`、`ui/module_manager.py`、`utils/profile_manager.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`

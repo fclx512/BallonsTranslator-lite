@@ -2351,16 +2351,27 @@ class ConfigPanel(Widget):
         dialog = NetworkSettingsDialog(self)
         self._run_modal_dialog(dialog)
 
-    def _open_tools_dialog(self):
+    def _open_tools_dialog(self, tab_hint: str = ""):
         from ui.tools_dialog import ToolsDialog
 
         dialog = ToolsDialog(self)
+        if tab_hint == "models":
+            dialog.tabs.setCurrentIndex(1)
+        else:
+            dialog.tabs.setCurrentIndex(0)  # deps tab
         self._run_modal_dialog(dialog)
 
     def _open_system_diagnostic(self):
         from ui.system_diagnostic_dialog import SystemDiagnosticDialog
 
         dialog = SystemDiagnosticDialog(self)
+
+        # When diagnostic says "jump to tools", open ToolsDialog with the right tab
+        dialog.open_tools_requested.connect(self._open_tools_dialog)
+
+        # When diagnostic says "jump to module settings", navigate pipeline page
+        dialog.open_settings_requested.connect(self._focus_on_dl_section)
+
         self._run_modal_dialog(dialog)
 
     def _open_mcp_info(self):

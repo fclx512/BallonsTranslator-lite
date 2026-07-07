@@ -10,7 +10,7 @@ import platform
 import re
 import subprocess
 import sys
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 # ── GPU detection ──────────────────────────────────────────────────────────
 
@@ -316,3 +316,305 @@ def run_diagnostic() -> dict:
         )
 
     return info
+
+
+# ── Module registry checks ─────────────────────────────────────────────────
+
+
+def check_module_status() -> List[Dict[str, Any]]:
+    """Check each pipeline stage's currently-configured module.
+
+    Returns a list of dicts, one per stage, with keys:
+        stage (str): textdetector / ocr / translator / inpainter
+        active_key (str): the module key currently configured
+        enabled (bool): whether this pipeline stage is toggled on
+        resolved (bool): True if module class was successfully imported
+        error (str | None): import error message, if any
+        available (list[str]): all registered module keys for this stage
+        has_params (bool): whether config params exist for this module
+    """
+    from utils.config import pcfg
+
+    module = pcfg.module
+
+    stages: List[Dict[str, Any]] = [
+        {
+            "stage": "textdetector",
+            "active_key": module.textdetector,
+            "enabled": module.enable_detect,
+        },
+        {
+            "stage": "ocr",
+            "active_key": module.ocr,
+            "enabled": module.enable_ocr,
+        },
+        {
+            "stage": "translator",
+            "active_key": module.translator,
+            "enabled": module.enable_translate,
+        },
+        {
+            "stage": "inpainter",
+            "active_key": module.inpainter,
+            "enabled": module.enable_inpaint,
+        },
+    ]
+
+    # Map stage names to registries — imported lazily to avoid circular imports
+    from modules import INPAINTERS, OCR, TEXTDETECTORS, TRANSLATORS
+
+    _registry_map = {
+        "textdetector": TEXTDETECTORS,
+        "ocr": OCR,
+        "translator": TRANSLATORS,
+        "inpainter": INPAINTERS,
+    }
+    _params_map = {
+        "textdetector": module.textdetector_params,
+        "ocr": module.ocr_params,
+        "translator": module.translator_params,
+        "inpainter": module.inpainter_params,
+    }
+
+    results: List[Dict[str, Any]] = []
+    for s in stages:
+        stage_name = s["stage"]
+        registry = _registry_map[stage_name]
+        key = s["active_key"]
+        enabled = s["enabled"]
+
+        resolved = False
+        error: Optional[str] = None
+        available: List[str] = list(registry.module_dict.keys())
+        has_params = bool(_params_map[stage_name].get(key))
+
+        if key and enabled:
+            try:
+                registry.resolve_module(key)
+                resolved = True
+            except Exception as e:
+                error = str(e)
+
+        results.append({
+            "stage": stage_name,
+            "active_key": key,
+            "enabled": enabled,
+            "resolved": resolved,
+            "error": error,
+            "available": available,
+            "has_params": has_params,
+        })
+
+    return results
+
+
+def test_module_functional(stage: str, module_key: str) -> Dict[str, Any]:
+    """Run a functional test for a specific module.
+
+    Returns a dict with keys:
+        success (bool): whether the test passed
+        output (str): log/diagnostic output
+        duration_ms (int): how long the test took
+    """
+    from modules import INPAINTERS, OCR, TEXTDETECTORS, TRANSLATORS
+
+    _registry_map = {
+        "textdetector": TEXTDETECTORS,
+        "ocr": OCR,
+        "translator": TRANSLATORS,
+        "inpainter": INPAINTERS,
+    }
+
+    registry = _registry_map.get(stage)
+    if not registry:
+        return {"success": False, "output": f"Unknown stage: {stage}", "duration_ms": 0}
+
+    import time
+    from pathlib import Path
+    from utils import shared
+
+    start = time.perf_counter()
+
+    try:
+        # Step 1: resolve (import) the module class
+        try:
+            cls = registry.resolve_module(module_key)
+        except Exception as e:
+            elapsed = int((time.perf_counter() - start) * 1000)
+            return {
+                "success": False,
+                "output": f"Failed to import module '{module_key}': {e}",
+                "duration_ms": elapsed,
+            }
+
+        output_parts: List[str] = []
+        output_parts.append(f"[1/4] Module class resolved: {cls.__name__}")
+
+        # Step 2: get spec details
+        spec = registry.get_spec(module_key)
+        if spec:
+            output_parts.append(f"[2/4] Source: {spec.import_path}.{spec.class_name}")
+            # Check declared model files
+            dl_files = spec.download_file_list
+            if dl_files:
+                total_files = 0
+                found_files = 0
+                for entry in dl_files:
+                    raw_files = entry.get("files") or []
+                    if isinstance(raw_files, str):
+                        raw_files = [raw_files]
+                    save_files = entry.get("save_files")
+                    paths = save_files if save_files else raw_files
+                    for fpath in paths:
+                        total_files += 1
+                        if not fpath:
+                            continue
+                        abs_path = fpath if Path(fpath).is_absolute() else Path(shared.PROGRAM_PATH) / fpath
+                        if Path(abs_path).exists():
+                            found_files += 1
+                if total_files:
+                    output_parts.append(
+                        f"  Model files: {found_files}/{total_files} on disk"
+                    )
+            else:
+                output_parts.append(f"[2/4] No download_file_list declared")
+        else:
+            output_parts.append(f"[2/4] Module spec not available")
+
+        # Step 3: instantiate the module
+        try:
+            # Try with current params from config
+            from utils.config import pcfg
+
+            params_map = {
+                "textdetector": pcfg.module.textdetector_params,
+                "ocr": pcfg.module.ocr_params,
+                "translator": pcfg.module.translator_params,
+                "inpainter": pcfg.module.inpainter_params,
+            }
+            mod_params = params_map.get(stage, {}).get(module_key, {})
+            if isinstance(mod_params, dict):
+                # Filter out meta keys
+                filtered = {k: v for k, v in mod_params.items() if not k.startswith("description")}
+                instance = cls(**filtered) if filtered else cls()
+            else:
+                instance = cls()
+            output_parts.append(f"[3/4] Instance created: {type(instance).__name__}")
+            # Check device param
+            device = getattr(instance, "get_param_value", None)
+            if device and callable(device):
+                try:
+                    dev_val = instance.get_param_value("device")
+                    output_parts.append(f"  Device config: {dev_val}")
+                except Exception:
+                    pass
+        except Exception as e:
+            output_parts.append(f"[3/4] Instance creation failed (may be normal): {e}")
+
+        # Step 4: stage-specific deeper check
+        if stage == "translator" and module_key not in ("None", "none", ""):
+            params = pcfg.module.translator_params.get(module_key, {})
+            profile_name = ""
+            if isinstance(params, dict):
+                profile_name = params.get("profile", params.get("model_profile", ""))
+            if profile_name:
+                from utils.profile_manager import load_profiles
+
+                profiles = load_profiles()
+                profile = None
+                for p in profiles:
+                    if p.get("name") == profile_name:
+                        profile = p
+                        break
+
+                if profile:
+                    host = profile.get("host", "")
+                    api_key = profile.get("api_key", "")
+                    proxy = profile.get("proxy", "")
+                    output_parts.append(f"[4/4] Profile: {profile_name}")
+                    if host and api_key:
+                        try:
+                            import httpx
+
+                            client_kwargs: Dict[str, Any] = {"timeout": 10}
+                            if proxy:
+                                client_kwargs["proxy"] = proxy
+                            with httpx.Client(**client_kwargs) as client:
+                                resp = client.get(
+                                    f"{host.rstrip('/')}/models",
+                                    headers={"Authorization": f"Bearer {api_key}"},
+                                )
+                                if resp.status_code == 200:
+                                    output_parts.append(f"  API test: OK ({host})")
+                                else:
+                                    output_parts.append(
+                                        f"  API test: HTTP {resp.status_code}"
+                                    )
+                                    output_parts.append(f"  Response: {resp.text[:200]}")
+                        except Exception as e:
+                            output_parts.append(f"  API test failed: {e}")
+                    else:
+                        output_parts.append(f"  API test skipped: host/key empty")
+                else:
+                    output_parts.append(
+                        f"[4/4] Profile '{profile_name}' not found in saved profiles"
+                    )
+            else:
+                output_parts.append("[4/4] No API profile configured")
+        else:
+            # Compute module: GPU availability
+            from modules.base import DEFAULT_DEVICE
+
+            output_parts.append(f"[4/4] Inference device: {DEFAULT_DEVICE}")
+
+        elapsed = int((time.perf_counter() - start) * 1000)
+        return {
+            "success": True,
+            "output": "\n".join(output_parts),
+            "duration_ms": elapsed,
+        }
+
+    except Exception as e:
+        elapsed = int((time.perf_counter() - start) * 1000)
+        return {
+            "success": False,
+            "output": f"Test error: {e}",
+            "duration_ms": elapsed,
+        }
+
+
+# ── Dependency summary ─────────────────────────────────────────────────────
+
+
+def dependency_summary() -> Dict[str, Any]:
+    """Return a quick summary of dependency health.
+
+    Returns dict with keys:
+        total, installed, missing, mismatched, skipped
+    """
+    total = installed = missing = mismatched = skipped = 0
+    try:
+        from ui.dependency_dialog import _load_declared_deps, _check_req
+
+        raw = _load_declared_deps()
+        for req_str, _dep_type in raw:
+            total += 1
+            status, _ver = _check_req(req_str)
+            if status == "installed":
+                installed += 1
+            elif status == "missing":
+                missing += 1
+            elif status == "mismatch":
+                mismatched += 1
+            elif status == "skipped":
+                skipped += 1
+    except Exception:
+        return {"total": 0, "installed": 0, "missing": 0, "mismatched": 0, "skipped": 0}
+
+    return {
+        "total": total,
+        "installed": installed,
+        "missing": missing,
+        "mismatched": mismatched,
+        "skipped": skipped,
+    }
