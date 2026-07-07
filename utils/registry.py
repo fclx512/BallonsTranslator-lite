@@ -49,6 +49,7 @@ class ModuleSpec:
     available: bool = True
     availability_error: str = ""
     resolved_class: type = None
+    metadata_warnings: List[str] = field(default_factory=list)
 
     def resolve(self):
         if self.resolved_class is not None:

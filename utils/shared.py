@@ -97,6 +97,8 @@ DEFAULT_DISPLAY_LANG = "English"
 
 USE_PYSIDE6 = False
 ON_WINDOWS = sys.platform == "win32"
+ON_MACOS = sys.platform == "darwin"
+ON_LINUX = sys.platform.startswith("linux")
 HEADLESS = False
 DEBUG = False
 args = None

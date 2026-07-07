@@ -21,7 +21,7 @@ import utils.shared as shared  # noqa: E402
 from utils.env_diagnostic import detect_gpu_info  # noqa: E402
 
 BRANCH = "main"
-VERSION = "beta-0.1.0"
+from utils.version import APP_VERSION as VERSION  # single source: pyproject.toml
 
 python = sys.executable
 git = os.environ.get("GIT", "git")
@@ -478,6 +478,25 @@ def main():
 
     os.environ["QT_API"] = args.qt_api
 
+    # Preload MSVC runtime DLLs before PyQt6 registers its Qt bin directory
+    # (which can make later PyTorch DLL resolution pick up the wrong version).
+    # Best-effort; safe to ignore on non-Windows or if VC runtime is unavailable.
+    if sys.platform == "win32":
+        _msvc_loaded = False
+        for _dll in ("vcruntime140.dll", "msvcp140.dll", "vcruntime140_1.dll"):
+            try:
+                import ctypes
+
+                ctypes.CDLL(_dll)
+                _msvc_loaded = True
+            except OSError:
+                if _dll == "msvcp140.dll":
+                    print(
+                        "Microsoft Visual C++ Redistributable is not installed or "
+                        "not visible to this process. Deep learning modules may "
+                        "fail to load until the x64 VC runtime is installed."
+                    )
+
     commit = commit_hash()
 
     print("Python version: ", sys.version)
@@ -582,6 +601,12 @@ def main():
     shared.HEADLESS = args.headless
     shared.load_cache()
 
+    # Auto-detect network mirrors on first run (before config load, so the
+    # written mirrors are picked up immediately).
+    from utils.network_mirrors import auto_fill_mirrors
+
+    auto_fill_mirrors(shared.CONFIG_PATH)
+
     # Auto-detect system display language (only applies on first launch,
     # before any saved config.json exists — subsequent launches use the
     # persisted display_lang from config.json instead).
@@ -611,6 +636,12 @@ def main():
     index_url = os.environ.get("INDEX_URL", "")
 
     prepare_environment()
+
+    # Check that essential packages are importable before proceeding to Qt init.
+    # Non-fatal — only prints warnings for missing packages.
+    from utils.core_requirements import warn_missing_core_imports
+
+    warn_missing_core_imports()
 
     if args.update:
         if getattr(sys, "frozen", False):

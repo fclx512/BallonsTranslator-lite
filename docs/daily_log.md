@@ -107,6 +107,22 @@
 
 ---
 
+### 上游启动逻辑合并（6 批）
+
+**改动：**
+
+1. `utils/lazy_registry.py` — SafeEval 增强（`platform.machine()`、`shared.ON_WINDOWS/ON_MACOS/ON_LINUX`）；`_collect_translator_langs` 支持 `lang_map.update()` 和 `self.lang_map={...}` 完整赋值；`metadata_warnings` 追踪；`validate_lazy_module_specs` 诊断函数
+2. `utils/registry.py` — ModuleSpec 新增 `metadata_warnings: List[str]`
+3. `utils/shared.py` — 新增 `ON_MACOS`、`ON_LINUX` 常量
+4. `utils/core_requirements.py` — 新增：启动时核心依赖 probe（qtpy、numpy、PIL 等），非侵入式提示而非自动安装
+5. `utils/network_mirrors.py` — 新增：首次运行自动检测中国 locale/时区，写入 HuggingFace/PyPI 镜像到 config.json
+6. `utils/version.py` — 新增：从 pyproject.toml 读取版本号（`0.2.0`），消除 launch.py 硬编码
+7. `launch.py` — MSVC 运行时预加载（qtpy 导入前）、core_requirements 集成、网络镜像自动检测、版本号改为动态读取
+
+**涉及文件：** `launch.py`、`utils/lazy_registry.py`、`utils/registry.py`、`utils/shared.py`、`utils/core_requirements.py`（新）、`utils/network_mirrors.py`（新）、`utils/version.py`（新）
+
+---
+
 ## 2026-07-06
 
 ### 文本框重排——画布右键菜单解除禁用
