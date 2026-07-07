@@ -6,7 +6,6 @@ from typing import Dict, List
 
 import cv2
 import numpy as np
-from PIL import Image
 
 from . import shared
 from .config import RunStatus, pcfg
@@ -461,6 +460,7 @@ class ProjImgTrans:
             if imgname == self.current_img and self.img_array is not None:
                 h, w = self.img_array.shape[:2]
             else:
+                from PIL import Image
                 i = Image.open(osp.join(self.directory, imgname))
                 h, w = i.height, i.width
             ih, iw = inpainted.shape[:2]
@@ -499,6 +499,7 @@ class ProjImgTrans:
         h, w = self.img_array.shape[:2]
         ih, iw = notext.shape[:2]
         if ih != h or iw != w:
+            from PIL import Image
             notext = Image.fromarray(notext).resize(
                 (w, h), resample=Image.Resampling.LANCZOS
             )

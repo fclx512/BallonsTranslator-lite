@@ -207,9 +207,10 @@ if defined CHECK_UPDATE_FLAG (
 
 rem ---- 5. GPU auto-detection (skip if --cpu is set) ----
 rem     Checks onnxruntime CUDA provider first, then falls back to
-rem     nvidia-smi (hardware check).  If either succeeds, launch.py
-rem     will try _detect_user_torch() to find the system Python's
-rem     CUDA-capable PyTorch.
+rem     nvidia-smi (hardware check).  If either succeeds, set
+rem     BTRANSLATOR_GPU_MODE so launch.py knows an NVIDIA GPU is
+rem     available.  launch.py decides whether the current Python
+rem     environment can use it (no cross-Python ABI injection).
 if defined CPU_FLAG goto :skip_gpu_check
 
 set "GPU_DETECTED="

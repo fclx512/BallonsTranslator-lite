@@ -209,137 +209,46 @@ def commit_hash():
 
 
 def _detect_user_torch():
-    """Find user's system Python with GPU PyTorch and inject into sys.path.
+    """Check if the current Python process has CUDA-capable PyTorch.
 
-    When GPU mode runs with the bundled Python (ballontrans_pylibs_win), the bundled
-    CPU-only torch would load by default. This function locates the user's
-    system-installed PyTorch (with CUDA) and adds its site-packages path
-    with higher priority than the bundled environment.
+    Unlike the old implementation, this does NOT search other Pythons on
+    the system.  It only checks ``import torch`` within the current process,
+    then verifies with ``torch.cuda.is_available()``.
+
+    Returns:
+        True if CUDA-capable PyTorch is available in the current process.
+        False otherwise.
     """
-    _current_python = os.path.abspath(sys.executable)
-    _candidates: list[str] = []
-    _seen: set[str] = set()
+    try:
+        import torch
+    except ImportError:
+        print("  PyTorch not installed in this Python environment.")
+        return False
 
-    # Collect all python*.exe from PATH directories (excluding bundled python)
-    # Use glob to cover all versions without hardcoding version numbers.
-    for _path_dir in os.environ.get("PATH", "").split(os.pathsep):
-        if not os.path.isdir(_path_dir):
-            continue
-        for _pexe in Path(_path_dir).glob("python*.exe"):
-            _name = _pexe.name.lower()
-            if _name == "pythonw.exe":
-                continue  # windowed variant, skip
-            _norm = os.path.abspath(str(_pexe))
-            if _norm != _current_python and _norm not in _seen:
-                _candidates.append(str(_pexe))
-                _seen.add(_norm)
+    if torch.cuda.is_available():
+        print("  CUDA PyTorch available: " + str(torch.__file__))
+        return True
 
-    # Fallback: let OS resolve python.exe on PATH
-    _candidates.append("python.exe")
-
-    # Track the best candidate for a version-mismatch summary
-    _version_mismatch_had_cuda = False
-    _version_mismatch_py: str | None = None
-
-    # Try each candidate until we find one with CUDA torch
-    for _idx, _user_python in enumerate(_candidates):
-        try:
-            _result = subprocess.run(
-                [
-                    _user_python,
-                    "-c",
-                    "import torch; print(torch.__file__); print(torch.cuda.is_available()); "
-                    "import sys; print('.'.join(map(str, sys.version_info[:2])))",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=30,
+    # torch exists but CUDA not available
+    print("  PyTorch found but CUDA is not available.")
+    _gpu_info = detect_gpu_info()
+    if _gpu_info:
+        _gen = _gpu_info["generation"]
+        if _gen == "Kepler":
+            print("  PyTorch 2.x may not support your Kepler GPU.")
+        elif _gen == "Blackwell":
+            print(
+                "  Blackwell GPU requires CUDA 12.8+.\n"
+                "    If using the one-click bundle, run install_cuda.bat.\n"
+                "    Otherwise: pip install torch --index-url https://download.pytorch.org/whl/nightly/cu128"
             )
-            if _result.returncode != 0:
-                continue
-
-            _lines = _result.stdout.strip().split("\n")
-            if len(_lines) < 3 or not _lines[0]:
-                continue
-
-            _torch_path = _lines[0]
-            _cuda_available = _lines[1].strip() == "True"
-            _torch_py_version = _lines[2].strip()
-            _site_packages = os.path.dirname(os.path.dirname(_torch_path))
-
-            # Skip if the torch was installed for a different Python version —
-            # injecting incompatible C extensions (numpy, torch, etc.) will crash.
-            _our_version = ".".join(map(str, sys.version_info[:2]))
-            if _torch_py_version != _our_version:
-                print(
-                    f"  Skipping PyTorch at {_torch_path}"
-                    f" (built for Python {_torch_py_version},"
-                    f" running Python {_our_version})"
-                )
-                if _cuda_available:
-                    if not _version_mismatch_had_cuda:
-                        _version_mismatch_py = _torch_py_version
-                        _version_mismatch_had_cuda = True
-                continue
-
-            # Insert user's site-packages before bundled ones to override CPU torch
-            if _site_packages not in sys.path:
-                sys.path.insert(1, _site_packages)
-
-            if _cuda_available:
-                print("GPU mode: using user-installed PyTorch with CUDA")
-                print(f"  PyTorch: {_torch_path}")
-                print(f"  Site-packages: {_site_packages}")
-                return True
-
-            # Found torch but CUDA not available — keep this candidate for diagnosis
-            print(f"Found user PyTorch at: {_torch_path}")
-            print("CUDA is not available in user-installed PyTorch.")
-            _gpu_info = detect_gpu_info()
-            if _gpu_info:
-                _gen = _gpu_info["generation"]
-                if _gen == "Kepler":
-                    print(
-                        "  PyTorch 2.x may not support your Kepler GPU."
-                        " Consider CPU mode instead."
-                    )
-                elif _gen == "Blackwell":
-                    print(
-                        "  Blackwell GPU requires CUDA 12.8+. Reinstall PyTorch:\n"
-                        "    python launch.py --reinstall-torch"
-                    )
-                else:
-                    print(
-                        f"  Recommended CUDA {_gpu_info['recommended_cuda']}"
-                        f" for your {_gen} GPU."
-                    )
-            else:
-                print("Consider installing PyTorch with CUDA for GPU acceleration.")
-            print(f"  PyTorch: {_torch_path}")
-            print(f"  Site-packages: {_site_packages}")
-            return False
-
-        except subprocess.TimeoutExpired:
-            continue
-        except Exception:
-            continue
-
-    # No candidate had torch at all — or all had version mismatch
-    if _version_mismatch_had_cuda:
-        print(
-            f"\n  Found your CUDA PyTorch (Python {_version_mismatch_py})"
-            f" but the bundled Python ({_our_version}) doesn't match."
-        )
-        print(
-            "  C extensions (.pyd) are tied to a specific Python minor version"
-            " and cannot be mixed."
-        )
-        print(f"  → To fix, rebuild ballontrans_pylibs_win with Python {_version_mismatch_py}:")
-        print(f"      python scripts/build_portable.py")
-        print(f"  → Or install Python {_our_version} and reinstall CUDA PyTorch on it.")
-        print()
+        else:
+            print(
+                f"  Recommended CUDA {_gpu_info['recommended_cuda']}"
+                f" for your {_gen} GPU."
+            )
     else:
-        print("No PyTorch found in user system Python.")
+        print("  Consider installing PyTorch with CUDA for GPU acceleration.")
     return False
 
 
@@ -606,35 +515,38 @@ def main():
     print(f"Branch: {BRANCH}")
     print(f"Commit hash: {commit}")
 
-    # GPU mode with bundled Python: detect user's system PyTorch with CUDA
-    if not args.cpu and os.environ.get("BTRANSLATOR_GPU_MODE"):
-        print("GPU mode: detecting user-installed PyTorch with CUDA...")
-        if not _detect_user_torch():
-            _gpu_info = detect_gpu_info()
-            print("\n" + "=" * 60)
-            print("PyTorch with CUDA was not found in your system Python.")
-            if _gpu_info and _gpu_info["generation"] == "Kepler":
-                print("Your Kepler GPU may not be supported by PyTorch 2.x.")
-                print("CPU mode will be used instead.")
+    # ── GPU / CPU decision ────────────────────────────────────────────
+    # Path A (one-click bundle embedded Python): BTRANSLATOR_GPU_MODE is
+    #   set by launch.bat when NVIDIA GPU is detected.  We check whether
+    #   this embedded Python itself has CUDA-capable torch (user ran
+    #   install_cuda.bat).  If not → friendly hint + automatic CPU mode.
+    #
+    # Path B (user's own Python, or source run): BTRANSLATOR_GPU_MODE
+    #   may or may not be set.  _detect_user_torch() checks the current
+    #   process — if the user's Python has CUDA torch it works; if not,
+    #   fall back to CPU.
+    if not args.cpu:
+        _gpu_requested = os.environ.get("BTRANSLATOR_GPU_MODE") == "1"
+        if _gpu_requested:
+            print("NVIDIA GPU detected — checking CUDA PyTorch availability...")
+
+        if _gpu_requested or "ballontrans_pylibs_win" not in sys.executable:
+            # Path A (GPU requested) or Path B (user Python):
+            #   check if current Python has CUDA torch
+            if _detect_user_torch():
+                print("GPU mode: enabled")
             else:
-                print("GPU mode requires PyTorch with CUDA support.")
-                if _gpu_info and _gpu_info["torch_index"]:
-                    print(
-                        f"\nTo install for your {_gpu_info['generation']}"
-                        f" GPU ({_gpu_info['name']}):\n"
-                        f"  pip install torch torchvision torchaudio"
-                        f" --index-url {_gpu_info['torch_index']}"
-                    )
-                else:
-                    print(
-                        "\nTo install manually:\n"
-                        "  pip install torch torchvision torchaudio"
-                        " --index-url https://download.pytorch.org/whl/cu124"
-                    )
-            print("\nSwitching to CPU mode automatically.")
-            print("=" * 60 + "\n")
-            args.cpu = True
-            os.environ["BALLOONTRANS_CPU_ONLY"] = "1"
+                _is_embedded = "ballontrans_pylibs_win" in sys.executable
+                if _is_embedded:
+                    print("\n" + "=" * 60)
+                    print("CUDA PyTorch not found in the bundled Python environment.")
+                    print("To enable GPU acceleration, run: install_cuda.bat")
+                    print("Or continue with CPU mode (no action needed).")
+                    print("=" * 60 + "\n")
+                print("Switching to CPU mode automatically.")
+                args.cpu = True
+                os.environ["BALLOONTRANS_CPU_ONLY"] = "1"
+        # else: Path A without GPU requested → CPU mode by default
 
     # ── Auto-detect Windows system proxy ──
     if os.name == "nt" and not os.environ.get("HTTP_PROXY"):
