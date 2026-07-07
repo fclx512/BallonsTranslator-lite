@@ -728,6 +728,21 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                         # (cfmt.tbr.width()); using act_rect[2] (one char) would
                         # only center the first char and let the rest extend right.
                         xoff = (cfmt.tbr.width() - line_width) / 2 - act_rect[0]
+                        # Proportional correction for right-side bearing of the
+                        # last character.  Scales with font size automatically.
+                        xoff += cfmt.tbr.width() * 0.06  # ~1.4px @ 24pt, ~2.9px @ 48pt
+
+                        # Clamp to block boundaries: prevent edge clipping at
+                        # the first/last column without expanding max_width
+                        # (which would break stroke/shadow alignment).
+                        # line_width (naturalTextWidth) gives the reliable
+                        # horizontal extent even in vertical layout.
+                        _dl = line.x() + xoff
+                        if _dl < 0:
+                            xoff -= _dl
+                        _dl = line.x() + xoff
+                        if _dl + line_width > self.max_width:
+                            xoff -= (_dl + line_width - self.max_width)
                     else:
                         xoff = -act_rect[0] + (line_width - act_rect[2]) / 2
                     # if char in PUNSET_ALIGNTOP:

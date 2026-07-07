@@ -9,7 +9,7 @@ from functools import partial
 from pathlib import Path
 from typing import List, Optional, Union
 
-from qtpy.QtCore import QEvent, QEventLoop, QPoint, QPointF, QSize, Qt, Signal
+from qtpy.QtCore import QEasingCurve, QElapsedTimer, QEvent, QEventLoop, QPoint, QPointF, QSize, Qt, QTimer, Signal
 
 try:
     from qtpy.QtWidgets import QUndoCommand
@@ -87,7 +87,6 @@ from .mainwindowbars import BottomBar, LeftBar, TitleBar
 from .misc import QKEY, parse_stylesheet, set_html_family
 from .module_manager import ModuleManager
 from .overlay_modal import OverlayModal
-from .overlay_slide import OverlaySlider
 from .psd_export_dialog import PsdExportDialog
 from .scenetext_manager import PasteSrcItemsCommand, SceneTextManager, TextPanel
 from .textedit_area import SourceTextEdit, TransTextEdit
@@ -242,11 +241,13 @@ class MainWindow(mainwindow_cls):
         self.pageList.setHidden(True)
         self.pageList.currentItemChanged.connect(self.pageListCurrentItemChanged)
 
-        self.leftStackWidget = QStackedWidget(self.centralStackWidget)
+        # Left panels: PageList & GlobalSearch are now embedded in the main
+        # layout so they push the canvas right when shown, not overlay on top.
+        self.leftStackWidget = QStackedWidget(self)
         self.leftStackWidget.addWidget(self.pageList)
         self.leftStackWidget.setVisible(False)
 
-        self.global_search_widget = GlobalSearchWidget(self.centralStackWidget)
+        self.global_search_widget = GlobalSearchWidget(self)
         self.global_search_widget.setVisible(False)
         self.global_search_widget.req_update_pagetext.connect(
             self.on_req_update_pagetext
@@ -268,6 +269,8 @@ class MainWindow(mainwindow_cls):
 
         mainHLayout = QHBoxLayout()
         mainHLayout.addWidget(self.leftBar)
+        mainHLayout.addWidget(self.leftStackWidget)
+        mainHLayout.addWidget(self.global_search_widget)
         mainHLayout.addWidget(self.centralStackWidget)
         mainHLayout.setContentsMargins(0, 0, 0, 0)
         mainHLayout.setSpacing(0)
@@ -365,25 +368,10 @@ class MainWindow(mainwindow_cls):
         # Quick Symbol dialog
         self._quickSymbolDialog: Optional[QDialog] = None
 
-        # Search widget as floating overlay (slides in from left)
-        self._searchSlide = OverlaySlider(
-            self.global_search_widget,
-            direction="left",
-            width=lambda: self.global_search_widget.sizeHint().width(),
-        )
-        self._searchSlide.on_before_show(lambda: self.global_search_widget.setFocus())
-        self._searchSlide.on_after_hide(self._on_search_hidden)
-
-        # Page list overlay slides in from left
-        self._pageListSlide = OverlaySlider(
-            self.leftStackWidget,
-            direction="left",
-            width=self.PAGE_LIST_WIDTH,
-        )
-        self._pageListSlide.on_before_show(
-            lambda: self.leftStackWidget.setCurrentWidget(self.pageList)
-        )
-        self._pageListSlide.on_after_hide(self._on_page_list_hidden)
+        # Left panels are embedded in the layout – no OverlaySlider needed.
+        # Width animation is driven by _animate_panel_for / _animate_panel_hide.
+        self._panel_anim: dict[int, QTimer] = {}
+        self._panel_anim_data: dict[int, dict] = {}
 
         mainVBoxLayout = QVBoxLayout(self)
         mainVBoxLayout.addWidget(self.titleBar)
@@ -650,13 +638,11 @@ class MainWindow(mainwindow_cls):
             if self.isVisible():
                 self._showPageListOverlay()
             else:
-                pw = self.leftStackWidget.parentWidget()
-                self.leftStackWidget.setGeometry(
-                    0, 0, self.PAGE_LIST_WIDTH, pw.height()
-                )
+                # Window not yet shown — set final width directly,
+                # no animation needed. Layout handles positioning.
                 self.leftStackWidget.setCurrentWidget(self.pageList)
-                self.leftStackWidget.raise_()
-                self.leftStackWidget.show()
+                self.leftStackWidget.setFixedWidth(self.PAGE_LIST_WIDTH)
+                self.leftStackWidget.setVisible(True)
         elif not show and is_visible:
             self._hidePageListOverlay()
 
@@ -737,23 +723,122 @@ class MainWindow(mainwindow_cls):
         except (IndexError, AttributeError):
             pass
 
+    # ── Layout-based panel animation (push canvas, do not overlay) ──
+
+    PAGE_LIST_WIDTH = 250
+    SEARCH_WIDTH = 300
+
+    def _animate_panel_width(self, widget, target_max_w, on_finished=None):
+        """Animate a panel's width between collapsed and expanded.
+
+        Uses setFixedWidth() to override layout sizing during the animation,
+        keeping the panel at the animated width.  At the end of expansion the
+        fixed-width constraint stays (the panel locks to its natural width);
+        at the end of collapse the widget is hidden and the constraint is
+        released.
+        """
+        wid = id(widget)
+
+        # Cancel any running animation on this widget
+        if wid in self._panel_anim:
+            self._panel_anim[wid].stop()
+        anim_data = self._panel_anim_data.pop(wid, {})
+        if anim_data and "timer" in anim_data:
+            anim_data["timer"].stop()
+
+        # Skip if already at target width (defensive — prevents bounce)
+        if abs(widget.width() - target_max_w) < 2 and (
+            widget.isVisible() if target_max_w > 0 else not widget.isVisible()
+        ):
+            return
+
+        expanding = target_max_w > 0
+
+        # No-animation mode — jump straight to final state
+        if pcfg.animation_fps < 0:
+            if expanding:
+                widget.setFixedWidth(target_max_w)
+                widget.setVisible(True)
+            else:
+                widget.setVisible(False)
+            if on_finished:
+                on_finished()
+            return
+
+        # Determine start width
+        if expanding:
+            from_w = widget.width() if widget.isVisible() else 0
+            # Jump to "almost collapsed" before expanding
+            widget.setFixedWidth(max(from_w, 1))
+            widget.setVisible(True)
+        else:
+            from_w = widget.width()
+
+        timer = QTimer(self)
+        timer.setTimerType(Qt.TimerType.PreciseTimer)
+
+        data = {
+            "widget": widget,
+            "timer": timer,
+            "elapsed": QElapsedTimer(),
+            "from_w": from_w,
+            "to_w": target_max_w if expanding else 1,
+            "duration": 350,
+            "expanding": expanding,
+            "on_finished": on_finished,
+        }
+
+        def tick():
+            d = self._panel_anim_data.get(wid)
+            if not d:
+                return
+            elapsed = d["elapsed"].elapsed()
+            progress = min(elapsed / d["duration"], 1.0)
+            eased = QEasingCurve(QEasingCurve.Type.InOutExpo).valueForProgress(progress)
+            w = int(round(d["from_w"] + (d["to_w"] - d["from_w"]) * eased))
+            d["widget"].setFixedWidth(w)
+            if progress >= 1.0:
+                timer.stop()
+                self._panel_anim.pop(wid, None)
+                self._panel_anim_data.pop(wid, None)
+                if d["expanding"]:
+                    # Lock to final natural width
+                    d["widget"].setFixedWidth(d["to_w"])
+                else:
+                    # Fully collapsed — hide and release constraint
+                    d["widget"].setVisible(False)
+                if d["on_finished"]:
+                    d["on_finished"]()
+
+        timer.timeout.connect(tick)
+        fps = pcfg.animation_fps
+        interval = int(round(1000.0 / fps)) if fps > 0 else 8
+        timer.start(interval)
+        data["elapsed"].start()
+        self._panel_anim[wid] = timer
+        self._panel_anim_data[wid] = data
+
     def _showSearchOverlay(self):
-        self._searchSlide.show()
+        self.global_search_widget.setFocus()
+        self._animate_panel_width(self.global_search_widget, self.SEARCH_WIDTH)
 
     def _hideSearchOverlay(self):
-        self._searchSlide.hide()
+        self._animate_panel_width(
+            self.global_search_widget, 0, on_finished=self._on_search_hidden
+        )
 
     def _on_search_hidden(self):
         if self.leftBar.globalSearchChecker.isChecked():
             self.leftBar.globalSearchChecker.setChecked(False)
 
-    PAGE_LIST_WIDTH = 250
-
     def _showPageListOverlay(self):
-        self._pageListSlide.show()
+        self.leftStackWidget.setCurrentWidget(self.pageList)
+        self._animate_panel_width(self.leftStackWidget, self.PAGE_LIST_WIDTH)
 
     def _hidePageListOverlay(self):
-        self._pageListSlide.hide()
+        self._animate_panel_width(
+            self.leftStackWidget, 0, on_finished=self._on_page_list_hidden
+        )
 
     def _on_page_list_hidden(self):
         if self.leftBar.showPageListLabel.isChecked():
@@ -762,8 +847,6 @@ class MainWindow(mainwindow_cls):
     def resizeEvent(self, e):
         super().resizeEvent(e)
         self._configModal.resize()
-        self._searchSlide.resize()
-        self._pageListSlide.resize()
 
     def set_display_lang(self, lang: str):
         self.retranslateUI()

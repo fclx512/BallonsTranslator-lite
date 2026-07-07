@@ -4,6 +4,38 @@
 
 ## 2026-07-07
 
+### 全新启动时自动读取系统语言
+
+**问题/需求：** 全新启动（无 `config.json`）时始终显示英文界面，而非用户系统语言（如中文 Windows 应显示中文）。
+
+**根因：** `launch.py` 中 `load_config()` 先执行创建 `ProgramConfig()`（其 `display_lang` 默认值取自 `shared.DEFAULT_DISPLAY_LANG`），而后才检测 `QLocale.system()` 并更新 `shared.DEFAULT_DISPLAY_LANG`——此时 `pcfg` 已固定为 `"English"`。
+
+**改动：**
+
+- `launch.py` — 将系统语言检测提前到 `load_config()` 之前，使首次启动时 `ProgramConfig().display_lang` 直接继承正确的系统语言（如 `"zh_CN"`）而非 `"English"`；同时增加 `VALID_LANG_SET` 校验，不支持的 locale 回退为英文
+- 已有 `config.json` 时不受影响——`display_lang` 从文件中读取，覆盖默认值
+
+**涉及文件：** `launch.py`
+
+### 左侧面板展开改为推 canvas 而非遮挡
+
+**问题/需求：** PageList 和全局搜索展开时以 OverlaySlider 浮动在 `centralStackWidget` 上，遮挡画布左侧图片内容。
+
+**改动：**
+
+- `ui/mainwindow.py` — 将 `leftStackWidget`（PageList）和 `global_search_widget` 从 `centralStackWidget` 的浮层子控件改为嵌入 `mainHLayout`（leftBar 与 centralStackWidget 之间）；移除两个 `OverlaySlider` 实例，替换为 `_animate_panel_width()`（timer + `setFixedWidth` 动画，350ms InOutExpo）；展开时直接推 canvas 右移，零遮挡；`setupImgTransUI` 同步简化
+
+**涉及文件：** `ui/mainwindow.py`
+
+**问题/需求：** 竖排文本框的縦中横（tate-chu-yoko）数字/字母存在两个外观问题：（1）横排字符视觉上轻微偏左；（2）文本框边缘的横排数字被边框裁剪。
+
+**改动：**
+- `ui/scene_textlayout.py` — `updateDrawOffsets` 中 tate-chu-yoko 分支：添加比例修正值 `xoff += cfmt.tbr.width() * 0.06` 补偿末字右 bearing（替代无法适应字号的固定值）；添加基于 `line_width`（naturalTextWidth）的边界 clamp，在绘制偏移层将 edge 列的溢出拉回 `[0, max_width]` 可见区内，避免裁剪且不干扰描边/阴影对齐
+
+**涉及文件：** `ui/scene_textlayout.py`
+
+---
+
 ### 系统诊断 dialog 信号导航接入
 
 **问题/需求：** 系统诊断 dialog 的跳转按钮（[Settings →]、[Details →]、[Check →]）需打通到 ConfigPanel 的对应页面/Tab。
@@ -56,6 +88,22 @@
 - 等待用户制作测试图后实施
 
 **涉及文件：** `docs/pipeline_test_计划.md`
+
+---
+
+### pylibs 依赖目录比对与裁减
+
+**需求：** 旧版依赖目录 `ballontrans_pylibs_win（旧/）（Python 3.13）` 与新目录（Python 3.12）存在大量差异，需比对后处理不一致项。
+
+**改动：**
+
+- `_scripts/diff_pylibs.py` — 新增目录对比脚本（文件数/大小/哈希/分类差异报告）
+- 从新版 `ballontrans_pylibs_win` 中卸载 **polars**（~176 MB，ultralytics 传递依赖但非必需）
+- 重新安装 **spacy-pkuseg==1.0.1**（旧版有、新版缺失）
+- 删除旧版目录 `ballontrans_pylibs_win（旧/）`（~1.1 GB, 33k+ 文件）
+- `docs/依赖库说明.md` — 更新包列表和体积说明
+
+**涉及文件：** `_scripts/diff_pylibs.py`、`_scripts/pylibs_diff_report.md`、`docs/依赖库说明.md`
 
 ---
 
@@ -186,3 +234,14 @@
 2. `ui/scenetext_manager.py` — 移除 `pair_widget.idx_edited` 死连接
 
 **涉及文件：** `ui/textedit_area.py`、`ui/scenetext_manager.py`
+
+---
+
+### onTextBlkItemSizeChanged IndexError 修复
+
+**问题/需求：** 偶发 `IndexError: list index out of range`，位置 `scenetext_manager.py:683 onTextBlkItemSizeChanged`。根因：批量删除/重排 `textblk_item_list` 期间（如 `deleteTextblkItemList` 循环中），`canvas.removeItem()` 触发的场景重排导致剩余 `TextBlkItem` 发出 `doc_size_changed`，携带的是旧 `idx`，但此时列表已缩短尚未调用 `updateTextBlkItemIdx()`，索引越界。
+
+**改动：**
+- `ui/scenetext_manager.py:682` — `onTextBlkItemSizeChanged` 开头加 `if idx >= len(self.textblk_item_list): return` 边界守卫，与其姊妹方法（`on_textedit_redo`、`on_pairw_focusout` 等）保持一致模式
+
+**涉及文件：** `ui/scenetext_manager.py`

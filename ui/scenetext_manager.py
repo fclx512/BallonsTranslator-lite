@@ -680,6 +680,8 @@ class SceneTextManager(QObject):
         self.canvas.block_selection_signal = False
 
     def onTextBlkItemSizeChanged(self, idx: int):
+        if idx >= len(self.textblk_item_list):
+            return
         blk_item = self.textblk_item_list[idx]
         if not self.txtblkShapeControl.reshaping:
             if self.txtblkShapeControl.blk_item == blk_item:

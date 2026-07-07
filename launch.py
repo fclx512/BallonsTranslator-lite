@@ -581,6 +581,16 @@ def main():
     shared.args = args
     shared.HEADLESS = args.headless
     shared.load_cache()
+
+    # Auto-detect system display language (only applies on first launch,
+    # before any saved config.json exists — subsequent launches use the
+    # persisted display_lang from config.json instead).
+    from qtpy.QtCore import QLocale
+    _sys_lang = QLocale.system().name().replace("en_CN", "zh_CN")
+    if _sys_lang not in shared.VALID_LANG_SET:
+        _sys_lang = "English"
+    shared.DEFAULT_DISPLAY_LANG = _sys_lang
+
     program_config.load_config(args.config_path)
     config = program_config.pcfg
 
@@ -652,8 +662,6 @@ def main():
 
     from qtpy.QtCore import QEvent, QLocale, QObject, Qt, QTranslator
     from qtpy.QtWidgets import QComboBox
-
-    shared.DEFAULT_DISPLAY_LANG = QLocale.system().name().replace("en_CN", "zh_CN")
 
     if args.headless:
         config.module.load_model_on_demand = True
