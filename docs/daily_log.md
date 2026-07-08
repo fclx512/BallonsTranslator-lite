@@ -77,6 +77,31 @@
 
 **需求：** 当前诊断测试只做导入+实例化检查，不触发真实推理。需要一张项目内置测试图跑完整管线，让用户获得切实反馈（检测框数、OCR 识别率、翻译返回、修复效果）。
 
+---
+
+## 2026-07-08
+
+### 启动流程重划：launch.bat 只找 Python，依赖由 launch.py 统一处理
+
+**需求：** 用户反馈 git clone 后双击 `launch.bat` 因系统 Python 无 numpy 直接崩溃。经分析，`launch.py` 在导入 `utils.config`（→ `utils.fontformat` → `import numpy`）时崩溃，而 `prepare_environment()`（负责自动装依赖）在第 638 行未跑到。
+
+**场景划分确认：**
+
+| 场景 | 用户 | Python | 依赖来源 |
+|---|---|---|---|
+| A（一键包） | 小白 | `ballontrans_pylibs_win\python.exe` | 预装在嵌入式 Python |
+| B（Git 克隆） | 有经验的用户 | 系统 Python（`py`/`python3`/`python`） | 用户自行安装，或 `launch.py` 按需装 |
+
+**改动：**
+
+- `launch.bat` — 去掉所有依赖检查和引导逻辑，`:python_found` 后直接进 Git/ZIP 检测 → GPU 检测 → 启动。bat 职责缩减为只找 Python + 启动
+- ~~`install_deps.bat`~~ — 创建后又删除（采纳上游意见：不暴露依赖库给用户，bat 环境坑多且难跨平台测试）
+- `launch.py` — `prepare_environment()` 上移到 `from utils import config` 之前，使依赖安装在 numpy 被触发前完成。嵌入式 Python 路径早返（首行 `"ballontrans_pylibs_win" in sys.executable`），不影响场景 A
+
+**涉及文件：** `launch.bat`、`launch.py`
+
+---
+
 **产出：**
 - `docs/pipeline_test_计划.md` — 完整设计方案，涵盖 manifest 场景清单、PipelineTestRunner、TestPreviewWindow 预览图窗、暗色模式修复
 
@@ -275,3 +300,26 @@
 - `install_cuda.bat` — GPU 检测改用单行 Python + `nvidia-smi --query-gpu=compute_cap` 获取计算能力（CC 主版本号），按 CC 映射 CUDA 版本（CC≥10→cu132, CC≥9→cu130, CC≥8→cu126, CC≥7→cu124, CC≥6→cu118），无需硬编码 GPU 型号；去掉版本固定，`-U` 自动升级为 CUDA variant；移除 `torchaudio`；添加 `INSTALL_MODE`（replace/manual）方便环境共存；纯 ASCII + CRLF 行尾；安装成功提示末尾附加 polars 无警告说明，避免用户误解
 
 **涉及文件：** `install_cuda.bat`
+
+---
+
+### `from PIL import Image` 崩溃修复 —— Scenario B 系统 Python broken PIL 深层探测
+
+**问题/需求：** Scenario B（git clone + 系统 Python）测试中，`prepare_environment()` 依赖检查通过但启动仍崩溃在 `from utils import config` → `io_utils.from PIL import Image`（`ImportError: cannot import name 'Image' from 'PIL' (unknown location)`）。
+
+**根因：** `check_req_file("requirements.txt")` 只校验 `packaging` 元数据版本（PIL metadata 完好，版本检查通过），不会检测子模块是否可实际导入。`warn_missing_core_imports()` 的 `("PIL", ())` 探针也只检查 `import PIL`——包存在所以不报错。但 `PIL.Image` 子模块因安装损坏（"unknown location" 表示 PIL 包残缺或 `PIL.py` 文件污染命名空间）实际不可用，触发崩溃。
+
+**改动：**
+
+1. `launch.py:615-627` — `warn_missing_core_imports()` 与 `from utils import config` 之间插入深层导入验证：`try: from PIL import Image`，失败时 `pip install --force-reinstall pillow` 强制修复
+2. `utils/core_requirements.py` — 从 `CORE_IMPORT_PROBES` 移除 `("PIL", ())`（无法检测子模块），改为在 `warn_missing_core_imports()` 内单独做 `import PIL.Image` 深层探测
+
+**涉及文件：** `launch.py`、`utils/core_requirements.py`
+
+---
+
+### 深层探测修复验证通过
+
+**测试结果：** 修改后启动，`prepare_environment()` 的 `check_req_file` 版本检查通过（如预期），紧接着深层探测 `from PIL import Image` 正确检测到子模块损坏，触发 "[WARN] Some core packages are installed but broken. Forcing reinstall ..." → `pip install --force-reinstall pillow` 强制重装。依赖库恢复后再次启动正常。
+
+**涉及文件：** `launch.py`、`utils/core_requirements.py`

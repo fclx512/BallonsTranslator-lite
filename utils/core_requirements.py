@@ -24,7 +24,10 @@ from typing import Iterable, List, Tuple
 CORE_IMPORT_PROBES: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
     ("qtpy", ()),
     ("numpy", ()),
-    ("PIL", ()),
+    # PIL is NOT probed here — PIL.Image is a submodule that isn't loaded by
+    # import PIL alone.  The standard (module, attr) check with ("PIL", ())
+    # would pass even if PIL.Image is broken.  Instead a deep submodule probe
+    # is done in warn_missing_core_imports().
     ("requests", ()),
     ("tqdm", ()),
     ("termcolor", ()),
@@ -74,6 +77,13 @@ def warn_missing_core_imports(
     Non-fatal — always returns without raising.
     """
     failures = check_core_imports(probes)
+
+    # Deep probe PIL.Image (a submodule, not loaded by import PIL alone)
+    try:
+        import PIL.Image  # noqa: F401
+    except Exception as e:
+        failures.append(f"  PIL.Image: {e}")
+
     if failures:
         print("―" * 50)
         print("Some core Python packages could not be imported.")

@@ -593,13 +593,43 @@ def main():
         except Exception:
             pass  # non-fatal — user can set env vars manually
 
-    # ── Early config load: mirror settings needed before deps/update ──
-    from utils import config as program_config
+    # ── Basic logging and shared state (stdlib only, no third-party deps) ──
     from utils.logger import logger as LOGGER
 
     shared.args = args
     shared.HEADLESS = args.headless
     shared.load_cache()
+
+    # ── Install missing dependencies first ──
+    #     This must run BEFORE importing utils.config (which triggers numpy
+    #     via utils.fontformat).  On fresh clones where system Python is used
+    #     without the embedded bundle, numpy/PyQt6 aren't installed yet.
+    prepare_environment()
+
+    # Check that essential packages are importable before proceeding to Qt init.
+    # Non-fatal — only prints warnings for missing packages.
+    from utils.core_requirements import warn_missing_core_imports
+
+    warn_missing_core_imports()
+
+    # ── Deep probe: some packages may satisfy metadata checks yet be broken ──
+    #     Check the actual submodule imports the app uses and force-reinstall
+    #     any that fail.  This must run BEFORE from utils import config, which
+    #     cascades into io_utils → from PIL import Image.
+    _BROKEN = []
+    try:
+        from PIL import Image  # noqa: F401
+    except Exception:
+        _BROKEN.append("pillow")
+
+    if _BROKEN:
+        print("[WARN] Some core packages are installed but broken. Forcing reinstall ...")
+        _pip = run_uv if UV_AVAILABLE else run_pip
+        for _pkg in _BROKEN:
+            _pip(f"install --force-reinstall {_pkg}", f"force-reinstall {_pkg}")
+
+    # ── Config and mirror setup (requires numpy/PyQt6) ──
+    from utils import config as program_config
 
     # Auto-detect network mirrors on first run (before config load, so the
     # written mirrors are picked up immediately).
@@ -619,8 +649,8 @@ def main():
     program_config.load_config(args.config_path)
     config = program_config.pcfg
 
-    # Apply mirror/registry settings from config BEFORE prepare_environment
-    # and --update so pip/uv use the correct index and update checks use mirrors.
+    # Apply mirror/registry settings from config so pip/uv use the correct
+    # index and update checks use mirrors.
     from utils.mirror import patch_hf_env
 
     if config.mirror.pip_index_url:
@@ -634,14 +664,6 @@ def main():
     # Re-read index_url so run_uv / run_pip pick it up
     global index_url
     index_url = os.environ.get("INDEX_URL", "")
-
-    prepare_environment()
-
-    # Check that essential packages are importable before proceeding to Qt init.
-    # Non-fatal — only prints warnings for missing packages.
-    from utils.core_requirements import warn_missing_core_imports
-
-    warn_missing_core_imports()
 
     if args.update:
         if getattr(sys, "frozen", False):
