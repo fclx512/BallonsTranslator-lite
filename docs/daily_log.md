@@ -261,3 +261,17 @@
 - `ui/scenetext_manager.py:682` — `onTextBlkItemSizeChanged` 开头加 `if idx >= len(self.textblk_item_list): return` 边界守卫，与其姊妹方法（`on_textedit_redo`、`on_pairw_focusout` 等）保持一致模式
 
 **涉及文件：** `ui/scenetext_manager.py`
+
+---
+
+## 2026-07-08
+
+### install_cuda.bat 重写
+
+**问题/需求：** 安装 CUDA PyTorch 脚本存在多个错误：① GPU 检测用多行 Python `-c`，cmd 逐行解析为独立命令导致 `'import' is not recognized`；② 硬编码 `torch==2.7.1` 与 `cu124` 索引不匹配（cu124 仅到 torch 2.6.0）；③ `torchaudio` 在 cu132 索引中不存在导致 pip 安装失败；④ 文件保存为 LF 行尾 + Unicode 字符（`─` `→`），Windows cmd 完全无法解析。
+
+**改动：**
+
+- `install_cuda.bat` — GPU 检测改用单行 Python + `nvidia-smi --query-gpu=compute_cap` 获取计算能力（CC 主版本号），按 CC 映射 CUDA 版本（CC≥10→cu132, CC≥9→cu130, CC≥8→cu126, CC≥7→cu124, CC≥6→cu118），无需硬编码 GPU 型号；去掉版本固定，`-U` 自动升级为 CUDA variant；移除 `torchaudio`；添加 `INSTALL_MODE`（replace/manual）方便环境共存；纯 ASCII + CRLF 行尾；安装成功提示末尾附加 polars 无警告说明，避免用户误解
+
+**涉及文件：** `install_cuda.bat`
