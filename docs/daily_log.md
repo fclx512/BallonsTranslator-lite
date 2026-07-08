@@ -337,3 +337,21 @@
 - `ui/mainwindow.py` — 新增 `help_mcp_triggered` 信号连接和 `show_mcp_info_dialog()` handler
 
 **涉及文件：** `ui/configpanel.py`、`ui/mainwindowbars.py`、`ui/mainwindow.py`
+
+---
+
+### 依赖安装后重启对齐上游 + 依赖完整性审计 + 缺包阻断
+
+**问题/需求：** `prepare_environment()` 安装缺失依赖后不重启，`warn_missing_core_imports()` 只打印不阻断，导致安装失败或 skipping 时在 `import numpy` 处以 `ModuleNotFoundError` 硬崩，用户得不到友好指引。
+
+**根因：** `prepare_environment()` 的 skipping 路径（portable Python、conda、frozen、CPU mode）有 5 条静默 return，安装后无 `os.execv` 重启，`importlib.reload(site)` 不足以让 native 扩展模块在新进程中生效。上游（dmMaze/BallonsTranslator）用 `ensure_core_requirements()` + `restart()` 模式规避此问题。
+
+**改动：**
+
+1. `launch.py:prepare_environment()` — 返回类型改为 `-> bool`；所有 skipping 路径改为 `return False`；`requirements.txt` 安装后改为 `return True` 触发重启；非重启类安装（pywin32、`--reinstall-torch`）保留 `importlib.reload(site)`
+2. `launch.py:main()` — 安装检查段重构：`prepare_environment()` 返回 `True` 时调用 `restart()`（`os.execv`）；`warn_missing_core_imports()` 改为阻断——缺包时 `sys.exit(1)` + 中文指引"请运行 pip install -r requirements.txt"；broken PIL 深层探测保留，force-reinstall 后 + `restart()`
+3. `utils/core_requirements.py` — 无改动（已有 `warn_missing_core_imports()` 返回值 `List[str]` 满足阻断需求）
+4. 依赖完整性审计：扫描全项目第三方导入（`utils/`、`ui/`、`modules/`、`launch.py`、`mcp_server/`），确认所有被使用的第三方包均在 `pyproject.toml` 声明，无遗漏
+5. `tests/test_dependency_startup.py` — 新增 8 个测试，覆盖 `warn_missing_core_imports` 探测、`prepare_environment` 结构、`sys.exit` 阻断路径、bundled env 早退场景
+
+**涉及文件：** `launch.py`、`tests/test_dependency_startup.py`

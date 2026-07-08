@@ -604,18 +604,28 @@ def main():
     #     This must run BEFORE importing utils.config (which triggers numpy
     #     via utils.fontformat).  On fresh clones where system Python is used
     #     without the embedded bundle, numpy/PyQt6 aren't installed yet.
-    prepare_environment()
+    #     Restart if anything was installed — gives a clean process where newly-
+    #     installed packages are importable without stale module state.
+    if prepare_environment():
+        print("核心依赖已安装，正在重启以加载新环境...")
+        restart()
 
-    # Check that essential packages are importable before proceeding to Qt init.
-    # Non-fatal — only prints warnings for missing packages.
+    # ── Verify core imports after potential restart ──
     from utils.core_requirements import warn_missing_core_imports
 
-    warn_missing_core_imports()
+    missing = warn_missing_core_imports()
+    if missing:
+        print()
+        print("❌ 缺少核心依赖，无法启动。")
+        print("   请运行以下命令安装依赖：")
+        print(f"   pip install -r {args.requirements}")
+        sys.exit(1)
 
     # ── Deep probe: some packages may satisfy metadata checks yet be broken ──
     #     Check the actual submodule imports the app uses and force-reinstall
-    #     any that fail.  This must run BEFORE from utils import config, which
-    #     cascades into io_utils → from PIL import Image.
+    #     any that fail.  This runs AFTER the core-imports check so the more
+    #     common case (package entirely missing) is handled first with a clear
+    #     message above.
     _BROKEN = []
     try:
         from PIL import Image  # noqa: F401
@@ -627,6 +637,7 @@ def main():
         _pip = run_uv if UV_AVAILABLE else run_pip
         for _pkg in _BROKEN:
             _pip(f"install --force-reinstall {_pkg}", f"force-reinstall {_pkg}")
+        restart()
 
     # ── Config and mirror setup (requires numpy/PyQt6) ──
     from utils import config as program_config
@@ -821,14 +832,15 @@ def main():
     sys.exit(app.exec())
 
 
-def prepare_environment():
+def prepare_environment() -> bool:
+    """Install missing dependencies. Returns True if a restart is needed."""
 
     # When using the bundled portable Python (ballontrans_pylibs_win),
     # all dependencies are pre-installed — skip package management.
     # This portably-distributed Python does not have pip or uv.
     if "ballontrans_pylibs_win" in sys.executable:
         print("Running from portable Python environment, skip dependency installation")
-        return
+        return False
 
     import importlib.util
 
@@ -839,19 +851,19 @@ def prepare_environment():
 
     if getattr(sys, "frozen", False):
         print("Running as app, skip dependency installation")
-        return
+        return False
 
     if args.frozen:
-        return
+        return False
 
     # In CPU mode, all dependencies are bundled in the portable environment
     if args.cpu:
-        return
+        return False
 
     # Conda environment detected — user manages deps themselves
     if os.environ.get("CONDA_PREFIX") or os.environ.get("CONDA_DEFAULT_ENV"):
         print("Conda environment detected, skip dependency installation")
-        return
+        return False
 
     # Bootstrap uv (fast installer) — falls back to pip if uv can't be installed
     ensure_uv()
@@ -895,14 +907,21 @@ def prepare_environment():
         )
         req_updated = True
 
+    # Core requirements file — triggers restart if installed, giving newly
+    # installed packages a clean import state (parallels upstream's
+    # ensure_core_requirements → restart pattern).
     if not check_req_file(args.requirements):
         _pip(f"install -r {args.requirements}", "requirements")
-        req_updated = True
+        return True
 
+    # Non-restart updates: pywin32, torch reinstall — these don't need a
+    # restart because they affect later module loads, not startup imports.
     if req_updated:
         import site
 
         importlib.reload(site)
+
+    return False
 
 
 if __name__ == "__main__":
