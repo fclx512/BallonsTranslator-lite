@@ -27,6 +27,8 @@ CORE_IMPORT_PROBES: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
     ("PIL", ()),
     ("requests", ()),
     ("tqdm", ()),
+    ("termcolor", ()),
+    ("colorama", ()),
 )
 
 

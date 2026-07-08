@@ -1,15 +1,24 @@
 import datetime
+import functools
 import logging
 import os
 import os.path as osp
 from glob import glob
 
-import termcolor
+try:
+    import termcolor
+
+    _HAS_TERMCOLOR = True
+except ImportError:
+    _HAS_TERMCOLOR = False
 
 if os.name == "nt":  # Windows
-    import colorama
+    try:
+        import colorama
 
-    colorama.init()
+        colorama.init()
+    except ImportError:
+        pass
 
 
 COLORS = {
@@ -28,17 +37,17 @@ class ColoredFormatter(logging.Formatter):
 
     def format(self, record):
         levelname = record.levelname
-        if self.use_color and levelname in COLORS:
+        use_color = self.use_color and _HAS_TERMCOLOR and levelname in COLORS
 
-            def colored(text):
-                return termcolor.colored(
-                    text,
-                    color=COLORS[levelname],
-                    attrs={"bold": True},
-                )
+        if use_color:
+            _colored = functools.partial(
+                termcolor.colored,
+                color=COLORS[levelname],
+                attrs={"bold": True},
+            )
 
-            record.levelname2 = colored("{:<7}".format(record.levelname))
-            record.message2 = colored(record.getMessage())
+            record.levelname2 = _colored("{:<7}".format(record.levelname))
+            record.message2 = _colored(record.getMessage())
 
             asctime2 = datetime.datetime.fromtimestamp(record.created)
             record.asctime2 = termcolor.colored(asctime2, color="green")
@@ -46,6 +55,14 @@ class ColoredFormatter(logging.Formatter):
             record.module2 = termcolor.colored(record.module, color="cyan")
             record.funcName2 = termcolor.colored(record.funcName, color="cyan")
             record.lineno2 = termcolor.colored(record.lineno, color="cyan")
+        else:
+            record.levelname2 = "{:<7}".format(record.levelname)
+            record.message2 = record.getMessage()
+            asctime2 = datetime.datetime.fromtimestamp(record.created)
+            record.asctime2 = asctime2
+            record.module2 = record.module
+            record.funcName2 = record.funcName
+            record.lineno2 = record.lineno
         return logging.Formatter.format(self, record)
 
 

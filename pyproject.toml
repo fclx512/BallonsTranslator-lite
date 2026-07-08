@@ -30,6 +30,7 @@ dependencies = [
   "qtpy",
   "requests",
   "shapely",
+  "spacy-pkuseg",
   "termcolor",
   "tomli; python_version < '3.11'",
   "tqdm",
