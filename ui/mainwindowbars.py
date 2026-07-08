@@ -292,6 +292,7 @@ class TitleBar(Widget):
     closebtn_clicked = Signal()
     display_lang_changed = Signal(str)
     help_about_triggered = Signal()
+    help_mcp_triggered = Signal()
 
     def __init__(self, parent, *args, **kwargs) -> None:
         super().__init__(parent, *args, **kwargs)
@@ -402,10 +403,21 @@ class TitleBar(Widget):
         self.toolsToolBtn.setMenu(toolsMenu)
         self.toolsToolBtn.setPopupMode(QToolButton.InstantPopup)
 
-        # 关于
+        # 帮助菜单（关于、MCP 等）
+        aboutAction = QAction(self.tr("About BallonsTranslator-lite"), self)
+        self.help_about_triggered = aboutAction.triggered
+
+        mcpAction = QAction(self.tr("MCP Server Info…"), self)
+        self.help_mcp_triggered = mcpAction.triggered
+
         self.helpToolBtn = TitleBarToolBtn(self)
-        self.helpToolBtn.setText(self.tr("About"))
-        self.helpToolBtn.clicked.connect(self.help_about_triggered.emit)
+        self.helpToolBtn.setText(self.tr("Help"))
+        helpMenu = QMenu(self.helpToolBtn)
+        helpMenu.addAction(aboutAction)
+        helpMenu.addSeparator()
+        helpMenu.addAction(mcpAction)
+        self.helpToolBtn.setMenu(helpMenu)
+        self.helpToolBtn.setPopupMode(QToolButton.InstantPopup)
 
         self.iconLabel = QLabel(self)
         self.iconLabel.setFixedWidth(LEFTBAR_WIDTH - 12)

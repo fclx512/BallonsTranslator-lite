@@ -1478,6 +1478,16 @@ class ConfigPanel(Widget):
         )
         models_vlayout.addWidget(profiles_sublock)
 
+        network_btn = QPushButton(self.tr("Network & Mirror Settings..."))
+        network_btn.setObjectName("ConfigButton")
+        network_btn.clicked.connect(self._open_network_settings)
+        network_sublock = ConfigSubBlock(
+            network_btn,
+            name=self.tr("Network"),
+            note=self.tr("Configure network proxies, mirror servers, and download sources. Useful for systems behind firewalls or in restricted environments."),
+        )
+        models_vlayout.addWidget(network_sublock)
+
         # Register Models as its own page
         self._add_page(models_group)
 
@@ -1977,54 +1987,6 @@ class ConfigPanel(Widget):
             label_interface, interface_widget, object_name="GroupGeneral"
         )
 
-        # === Environment (network, deps, models, diagnostic) ===
-        label_environment = self.tr("Environment")
-        env_widget = QWidget()
-        env_layout = QVBoxLayout(env_widget)
-        env_layout.setContentsMargins(0, 0, 0, 0)
-        env_layout.setSpacing(6)
-
-        # Helper: add a button row (label + button) to env_layout
-        def _env_button(text, slot, name=None, note=None):
-            btn = QPushButton(text)
-            btn.setObjectName("ConfigButton")
-            btn.setMinimumHeight(34)
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.clicked.connect(slot)
-            btn_sublock = ConfigSubBlock(btn, name=name, note=note)
-            env_layout.addWidget(btn_sublock)
-            return btn
-
-        self.env_network_btn = _env_button(
-            self.tr("Network & Mirror Settings..."),
-            self._open_network_settings,
-            name=self.tr("Network"),
-            note=self.tr("Configure network proxies, mirror servers, and download sources. Useful for systems behind firewalls or in restricted environments."),
-        )
-        self.env_tools_btn = _env_button(
-            self.tr("Tools..."),
-            self._open_tools_dialog,
-            name=self.tr("Tools"),
-            note=self.tr("Access utility tools for managing dependencies, downloading models, and other maintenance tasks."),
-        )
-        self.env_diag_btn = _env_button(
-            self.tr("Run System Diagnostic..."),
-            self._open_system_diagnostic,
-            name=self.tr("Diagnostic"),
-            note=self.tr("Run a comprehensive system diagnostic. Collects environment info, package versions, and hardware details for troubleshooting."),
-        )
-        self.env_mcp_btn = _env_button(
-            self.tr("MCP Server Info..."),
-            self._open_mcp_info,
-            name=self.tr("MCP Server"),
-            note=self.tr("Learn about the MCP (Model Context Protocol) server. Allows external AI agents to read and edit project data programmatically."),
-        )
-
-        env_layout.addStretch()
-        self.env_block = generalConfigPanel.addGroupedBlock(
-            label_environment, env_widget, object_name="GroupGeneral"
-        )
-
         # === Navigation tree (upstream-style) ===
         self.configTable = ConfigTable()
         self.configTable.setObjectName("ConfigNavList")
@@ -2039,7 +2001,6 @@ class ConfigPanel(Widget):
         self.configTable.addSection(general_header, label_project, "project", self.project_block.section_widget)
         self.configTable.addSection(general_header, label_typesetting, "typesetting", self.typesetting_block.section_widget)
         self.configTable.addSection(general_header, label_interface, "interface", self.interface_block.section_widget)
-        self.configTable.addSection(general_header, label_environment, "environment", self.env_block.section_widget)
 
         # Expand all headers so children are visible
         self.configTable.expandAll()
@@ -2051,7 +2012,6 @@ class ConfigPanel(Widget):
             "project": self.project_block.section_widget,
             "typesetting": self.typesetting_block.section_widget,
             "interface": self.interface_block.section_widget,
-            "environment": self.env_block.section_widget,
         }
 
         # Select first section by default
@@ -2349,33 +2309,6 @@ class ConfigPanel(Widget):
         from ui.network_settings_dialog import NetworkSettingsDialog
 
         dialog = NetworkSettingsDialog(self)
-        self._run_modal_dialog(dialog)
-
-    def _open_tools_dialog(self, tab_hint: str = ""):
-        from ui.tools_dialog import ToolsDialog
-
-        dialog = ToolsDialog(self)
-        if tab_hint == "models":
-            dialog.tabs.setCurrentIndex(1)
-        else:
-            dialog.tabs.setCurrentIndex(0)  # deps tab
-        self._run_modal_dialog(dialog)
-
-    def _open_system_diagnostic(self):
-        from ui.system_diagnostic_dialog import SystemDiagnosticDialog
-
-        dialog = SystemDiagnosticDialog(self)
-
-        # When diagnostic says "jump to tools", open ToolsDialog with the right tab
-        dialog.open_tools_requested.connect(self._open_tools_dialog)
-
-        # When diagnostic says "jump to module settings", navigate pipeline page
-        dialog.open_settings_requested.connect(self._focus_on_dl_section)
-
-        self._run_modal_dialog(dialog)
-
-    def _open_mcp_info(self):
-        dialog = MCPInfoDialog(self)
         self._run_modal_dialog(dialog)
 
     def _open_shortcut_dialog(self):

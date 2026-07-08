@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE TS>
+<?xml version='1.0' encoding='utf-8'?>
 <TS version="2.1" language="zh_CN" sourcelanguage="en">
     <context>
         <name>AboutDialog</name>
@@ -774,29 +773,9 @@
             <translation>不透明度：</translation>
         </message>
         <message>
-            <location filename="..\ui\configpanel.py" line="1690" />
-            <source>Environment</source>
-            <translation>环境</translation>
-        </message>
-        <message>
             <location filename="..\ui\configpanel.py" line="1706" />
             <source>Network &amp; Mirror Settings...</source>
             <translation>网络与镜像设置...</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1710" />
-            <source>Tools...</source>
-            <translation>工具检查...</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1714" />
-            <source>Run System Diagnostic...</source>
-            <translation>运行系统诊断...</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1718" />
-            <source>MCP Server Info...</source>
-            <translation>MCP 服务器信息...</translation>
         </message>
         <message>
             <source>Original Compare</source>
@@ -907,22 +886,6 @@
             <translation>使用原文对照快捷键时的基础透明度。数值越低，译文下方的原图显示越多。</translation>
         </message>
         <message>
-            <source>Configure network proxies, mirror servers, and download sources. Useful for systems behind firewalls or in restricted environments.</source>
-            <translation>配置网络代理、镜像服务器和下载源。适用于防火墙后或受限网络环境中的系统。</translation>
-        </message>
-        <message>
-            <source>Access utility tools for managing dependencies, downloading models, and other maintenance tasks.</source>
-            <translation>访问用于管理依赖、下载模型和其他维护任务的工具。</translation>
-        </message>
-        <message>
-            <source>Run a comprehensive system diagnostic. Collects environment info, package versions, and hardware details for troubleshooting.</source>
-            <translation>运行全面的系统诊断。收集环境信息、软件包版本和硬件详情，用于故障排查。</translation>
-        </message>
-        <message>
-            <source>Learn about the MCP (Model Context Protocol) server. Allows external AI agents to read and edit project data programmatically.</source>
-            <translation>了解 MCP（模型上下文协议）服务器。允许外部 AI 代理以编程方式读取和编辑项目数据。</translation>
-        </message>
-        <message>
             <source>Font Exclusion</source>
             <translation>字体排除</translation>
         </message>
@@ -933,18 +896,6 @@
         <message>
             <source>Network</source>
             <translation>网络</translation>
-        </message>
-        <message>
-            <source>Diagnostic</source>
-            <translation>诊断</translation>
-        </message>
-        <message>
-            <source>MCP Server</source>
-            <translation>MCP 服务器</translation>
-        </message>
-        <message>
-            <source>Tools</source>
-            <translation>工具</translation>
         </message>
         <message>
             <source>Show sequence number on text blocks</source>
@@ -974,7 +925,7 @@
             <source>Vertical Latin/Digits Length</source>
             <translation>竖排拉丁/数字横排长度</translation>
         </message>
-    </context>
+    <message><source>Configure network proxies, mirror servers, and download sources. Useful for systems behind firewalls or in restricted environments.</source><translation>配置网络代理、镜像服务器和下载源。适用于防火墙后或受限网络环境的系统。</translation></message></context>
     <context>
         <name>DependencyDialog</name>
         <message>
@@ -3849,11 +3800,6 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <translation>导出为 PSD…</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindowbars.py" line="385" />
-            <source>About</source>
-            <translation>关于</translation>
-        </message>
-        <message>
             <location filename="..\ui\mainwindowbars.py" />
             <source>Advanced Alignment</source>
             <translation>高级对齐</translation>
@@ -3873,7 +3819,7 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <source>Pair No-text Images…</source>
             <translation>配对无字图…</translation>
         </message>
-    </context>
+    <message><source>Help</source><translation>帮助</translation></message><message><source>About BallonsTranslator-lite</source><translation>关于 BallonsTranslator-lite</translation></message><message><source>MCP Server Info…</source><translation>MCP 服务器信息…</translation></message></context>
     <context>
         <name>ToolsDialog</name>
         <message>

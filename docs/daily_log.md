@@ -323,3 +323,17 @@
 **测试结果：** 修改后启动，`prepare_environment()` 的 `check_req_file` 版本检查通过（如预期），紧接着深层探测 `from PIL import Image` 正确检测到子模块损坏，触发 "[WARN] Some core packages are installed but broken. Forcing reinstall ..." → `pip install --force-reinstall pillow` 强制重装。依赖库恢复后再次启动正常。
 
 **涉及文件：** `launch.py`、`utils/core_requirements.py`
+
+---
+
+### 删除 Environment 设置页 + About 改为 Help 菜单
+
+**需求：** 采纳上游建议，取消依赖/模型检查可视化功能。原先 Environment 页的 Tools（工具检查）和 Diagnostic（系统诊断）均为精简对象，该页只剩 Network 和 MCP 两个有用功能，不足以独立成页。
+
+**改动：**
+
+- `ui/configpanel.py` — 删除整个 Environment 页（含 `_env_button` helper、4 个按钮、block 注册、nav 树条目和 widget 映射）；Network & Mirror Settings 按钮移至 Models > Management 区（接在 API Profiles 后）；删除死方法 `_open_tools_dialog`、`_open_system_diagnostic`、`_open_mcp_info`
+- `ui/mainwindowbars.py` — About 按钮改为 Help 菜单（QToolButton + QMenu），包含 "About BallonsTranslator-lite" 和 "MCP Server Info…" 两项，分隔线预留扩展位
+- `ui/mainwindow.py` — 新增 `help_mcp_triggered` 信号连接和 `show_mcp_info_dialog()` handler
+
+**涉及文件：** `ui/configpanel.py`、`ui/mainwindowbars.py`、`ui/mainwindow.py`
