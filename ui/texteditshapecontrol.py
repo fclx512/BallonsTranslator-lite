@@ -260,16 +260,30 @@ class ControlBlockItem(QGraphicsRectItem):
         return idx
 
     def _apply_resize(self):
-        """Timer callback: apply the latest pending resize rect with layout but no pixmap rebuild."""
+        """Timer callback: apply the latest pending resize rect.
+
+        Rebuilds whichever decoration cache is active so decorations
+        stay correct during drag.  Without this, background_pixmap
+        (Crisp) or _full_pixmap (Smooth) stays at the pre-drag size
+        → stroke/shadow are drawn deformed or invisible.
+        """
         if self._pending_rect is not None and self.ctrl.blk_item is not None:
             rect = self._pending_rect
             self._pending_rect = None
-            # Layout only — skip repaint_background, keep pixmap null so paint falls
-            # through to native QTextDocument render during drag
-            self.ctrl.blk_item.setRect(rect, repaint=False)
-            self.ctrl.blk_item._full_pixmap = None
-            self.ctrl.blk_item._full_pixmap_dirty = True
-            self.ctrl.blk_item.update()
+            blk_item = self.ctrl.blk_item
+            blk_item.setRect(rect, repaint=False)
+            if blk_item._use_full_pixmap:
+                # Smooth + decorations_on: rebuild full pixmap (text + stroke + shadow)
+                blk_item._build_full_pixmap()
+            elif blk_item.background_pixmap is not None:
+                # Crisp + decorations_on: rebuild background pixmap (stroke + shadow)
+                blk_item.repaint_background()
+            else:
+                # Decorations hidden during drag — keep pixmap null so paint
+                # falls through to native QTextDocument render
+                blk_item._full_pixmap = None
+                blk_item._full_pixmap_dirty = True
+            blk_item.update()
 
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton:

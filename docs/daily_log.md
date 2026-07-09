@@ -27,9 +27,47 @@
 
 **涉及文件：** `utils/config.py`、`ui/configpanel.py`、`ui/textitem.py`、`ui/scenetext_manager.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
 
-**已知问题（待修复）：**
-- 矢量（Crisp）模式下拖拽时描边/阴影变形且松手后不自动复原（`background_pixmap` 尺寸未跟随拖拽更新，`endReshape` 未重建装饰层）
-- 位图（Smooth）模式下拖拽装饰功能项无效——无论开关，拖拽中始终不显示描边/阴影（`startReshape` 中清除了 `background_pixmap`）
+**← 修复：拖拽期间装饰层变形/不可见**
+
+**根因：** `background_pixmap`（Crisp）/ `_full_pixmap`（Smooth）在拖拽期间被冻结在旧尺寸，`_apply_resize`（30ms throttle）只更新 layout 尺寸不重建缓存；松手时 `mouseReleaseEvent` 与 timer 间的 `_pending_rect` 竞争导致 `setRect(repaint=True)` 可能被跳过。
+
+**改动：**
+
+1. **`ui/textitem.py:501-507`** — `endReshape()` Crisp 分支新增 `self.repaint_background()`，确保松手时装饰层在最终尺寸重建
+2. **`ui/texteditshapecontrol.py:262-286`** — `_apply_resize()` 按缓存路径三选一：`_use_full_pixmap=True` → `_build_full_pixmap()`（Smooth）；`background_pixmap` 非空 → `repaint_background()`（Crisp）；均空 → 旧逻辑（无装饰模式）
+
+**涉及文件：** `ui/textitem.py`、`ui/texteditshapecontrol.py`
+
+---
+
+### 设置备注弹出框引入 RichText HTML 排版
+
+**问题：** 设置面板中的备注内容较长且纯文本无层级，在 320px 宽弹窗内显示为连续文字墙，扫读困难。受限于设计取向，备注框不宜增大。
+
+**改动：**
+
+1. **`ui/configpanel.py:433`** — `ConfigNotePopup` 新增 `label.setTextFormat(Qt.RichText)`，QLabel 加载 HTML 渲染
+
+2. **`ui/configpanel.py`** — 28 条 `note=self.tr(...)` 字符串全部改为 HTML 结构：
+   - 外层 `<p>` 包裹（段落分隔）
+   - `<b>` 加粗关键术语（引擎名、模式名、功能名）
+   - `<code>` 显示参数值（如 `0-100`）
+   - `<br/>` 列表式内容换行（格式对比、模式选项）
+   - 同步精简文案：无信息量从句删除，保留信息密度
+
+3. **`translate/zh_CN.ts` + `zh_CN.qm`** — 28 条 source + translation 同步更新为 HTML 结构，qm 重新编译（858 条）
+
+**涉及文件：** `ui/configpanel.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+### 新增 post-edit 缩进检查脚本
+
+**问题：** Edit 工具在替换多行代码时偶发混入 tab 字符导致 `IndentationError`，之前手动排查耗时。
+
+**改动：** `scripts/check_syntax.py`（新） — 检查三项：`compile()` 语法编译、tab 字符检测、UTF-8 BOM。默认扫描 `ui/` + `utils/`，也支持指定单文件。编辑后顺手跑 `python scripts/check_syntax.py` 即可。
+
+**涉及文件：** `scripts/check_syntax.py`（新）
 
 ---
 

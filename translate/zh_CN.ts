@@ -802,88 +802,88 @@
             <translation>API 配置</translation>
         </message>
         <message>
-            <source>When enabled, models are loaded only on first use instead of at startup. Reduces initial memory and launch time. Recommended for systems with limited GPU memory.</source>
-            <translation>启用后，模型仅在首次使用时加载而非启动时加载。减少初始内存占用和启动时间。建议 GPU 内存有限的系统开启。</translation>
+            <source>&lt;p&gt;When enabled, models are loaded only on &lt;b&gt;first use&lt;/b&gt; instead of at startup. Reduces initial memory and launch time. Recommended for systems with limited GPU memory.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;启用后，模型仅在&lt;b&gt;首次使用&lt;/b&gt;时加载而非启动时加载。减少初始内存占用和启动时间。建议 GPU 内存有限的系统开启。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Clears intermediate inference data after each pipeline run. Frees GPU/CPU memory between runs. Useful when working with large projects or limited hardware.</source>
-            <translation>每次管线运行后清除中间推理数据。释放 GPU/CPU 内存。处理大型项目或硬件资源有限时有用。</translation>
+            <source>&lt;p&gt;Clears intermediate inference data after each pipeline run. Frees &lt;b&gt;GPU/CPU memory&lt;/b&gt; between runs. Useful when working with large projects or limited hardware.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;每次管线运行后清除中间推理数据。释放&lt;b&gt; GPU/CPU 内存&lt;/b&gt;。处理大型项目或硬件资源有限时有用。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Immediately releases all loaded models from memory. Use this to free GPU/CPU resources without restarting the application.</source>
-            <translation>立即从内存中释放所有已加载的模型。无需重启应用即可释放 GPU/CPU 资源。</translation>
+            <source>&lt;p&gt;Immediately releases all loaded models from memory. Use this to free &lt;b&gt;GPU/CPU resources&lt;/b&gt; without restarting the application.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;立即从内存中释放所有已加载的模型。无需重启应用即可释放&lt;b&gt; GPU/CPU 资源&lt;/b&gt;。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Configure API credentials and endpoints for online translators, OCR services, and AI features. Supports multiple profiles for different services or accounts.</source>
-            <translation>配置在线翻译器、OCR 服务和 AI 功能的 API 密钥与端点。支持为不同服务或账户设置多个配置。</translation>
+            <source>&lt;p&gt;Configure API credentials and endpoints for online translators, OCR services, and AI features. Supports &lt;b&gt;multiple profiles&lt;/b&gt; for different services or accounts.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;配置在线翻译器、OCR 服务和 AI 功能的 API 密钥与端点。支持为不同服务或账户设置&lt;b&gt;多个配置&lt;/b&gt;。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Select the text detection engine. Different detectors offer varying accuracy and speed. Some engines may require additional model downloads on first use.</source>
-            <translation>选择文本检测引擎。不同检测器提供不同的精度和速度。部分引擎首次使用可能需要额外下载模型。</translation>
+            <source>&lt;p&gt;Select the &lt;b&gt;text detection engine&lt;/b&gt;. Different detectors offer varying accuracy and speed. Some engines may require additional model downloads on first use.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;选择&lt;b&gt;文本检测引擎&lt;/b&gt;。不同检测器提供不同的精度和速度。部分引擎首次使用可能需要额外下载模型。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Select the OCR (Optical Character Recognition) engine. This stage extracts text from detected text regions in the image.</source>
-            <translation>选择 OCR（光学字符识别）引擎。该阶段从图像中检测到的文本区域提取文字。</translation>
+            <source>&lt;p&gt;Select the &lt;b&gt;OCR&lt;/b&gt; (Optical Character Recognition) engine. This stage extracts text from detected text regions in the image.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;选择&lt;b&gt; OCR&lt;/b&gt;（光学字符识别）引擎。该阶段从图像中检测到的文本区域提取文字。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Select the image inpainting engine. After erasing text regions, the inpainter fills the background. Quality varies by image complexity and engine capability.</source>
-            <translation>选择图像修复引擎。擦除文本区域后，修复工具填充背景。质量因图像复杂度和引擎能力而异。</translation>
+            <source>&lt;p&gt;Select the &lt;b&gt;image inpainting engine&lt;/b&gt;. After erasing text regions, the inpainter fills the background. Quality varies by image complexity and engine capability.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;选择&lt;b&gt;图像修复引擎&lt;/b&gt;。擦除文本区域后，修复工具填充背景。质量因图像复杂度和引擎能力而异。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Select the translation engine. Online translators require an API profile with credentials configured under Models &gt; API Profiles.</source>
-            <translation>选择翻译引擎。在线翻译器需要先在"模型管理 &gt; API 配置"中设置 API 密钥。</translation>
+            <source>&lt;p&gt;Select the &lt;b&gt;translation engine&lt;/b&gt;. Online translators require an API profile with credentials configured under &lt;b&gt;Models &gt; API Profiles&lt;/b&gt;.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;选择&lt;b&gt;翻译引擎&lt;/b&gt;。在线翻译器需要先在&lt;b&gt;模型管理 &gt; API 配置&lt;/b&gt;中设置 API 密钥。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Reopen the last project automatically when the application starts. Saves time when continuing work on the same project.</source>
-            <translation>启动时自动打开上次使用的项目。继续处理同一项目时节省时间。</translation>
+            <source>&lt;p&gt;Reopen the last project automatically when the application starts. Saves time when continuing work on the same project.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;启动时自动打开上次使用的项目。继续处理同一项目时节省时间。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>When enabled, the output format automatically matches the source image format. Overrides the format selected above.</source>
-            <translation>启用后，输出格式自动匹配源图像格式，覆盖上方选择的格式。</translation>
+            <source>&lt;p&gt;When enabled, the output format automatically matches the &lt;b&gt;source image format&lt;/b&gt;. Overrides the format selected above.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;启用后，输出格式自动匹配&lt;b&gt;源图像格式&lt;/b&gt;，覆盖上方选择的格式。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Output image quality (0-100). Higher values give better quality but larger file sizes. Applies to JPG and WEBP only.</source>
-            <translation>输出图像质量（0-100）。数值越高质量越好但文件越大。仅适用于 JPG 和 WEBP 格式。</translation>
+            <source>&lt;p&gt;Output image quality (&lt;code&gt;0-100&lt;/code&gt;). Higher values give better quality but larger file sizes. Applies to &lt;b&gt;JPG&lt;/b&gt; and &lt;b&gt;WEBP&lt;/b&gt; only.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;输出图像质量（&lt;code&gt;0-100&lt;/code&gt;）。数值越高质量越好但文件越大。仅适用于&lt;b&gt; JPG&lt;/b&gt; 和&lt;b&gt; WEBP&lt;/b&gt; 格式。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Configure the fallback font format for text blocks without their own formatting. Each attribute can be delegated separately.</source>
-            <translation>配置未单独设置格式的文本块的默认字体格式。每个属性可分别委托。</translation>
+            <source>&lt;p&gt;Configure the fallback font format for text blocks without their own formatting. Each attribute can be &lt;b&gt;delegated&lt;/b&gt; separately.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;配置未单独设置格式的文本块的默认字体格式。每个属性可分别&lt;b&gt;委托&lt;/b&gt;。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Automatically split translated text into multiple lines matching the shape of the detected balloon or text region.</source>
-            <translation>根据检测到的对话框或文本区域形状，自动将译文分割为多行。</translation>
+            <source>&lt;p&gt;Automatically split translated text into multiple lines matching the shape of the detected balloon or text region.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;根据检测到的对话框或文本区域形状，自动将译文分割为多行。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Convert all translated text to uppercase. Useful for certain typographic styles or all-caps conventions.</source>
-            <translation>将所有译文转换为大写。适用于特定排版样式或全大写惯例。</translation>
+            <source>&lt;p&gt;Convert all translated text to uppercase. Useful for certain &lt;b&gt;typographic styles&lt;/b&gt; or all-caps conventions.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;将所有译文转换为大写。适用于特定&lt;b&gt;排版样式&lt;/b&gt;或全大写惯例。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>When enabled, each project maintains its own text style settings independently instead of using shared global styles.</source>
-            <translation>启用后，每个项目独立维护自己的文本样式设置，而非使用共享的全局样式。</translation>
+            <source>&lt;p&gt;When enabled, each project maintains its own &lt;b&gt;text style settings&lt;/b&gt; independently instead of using shared global styles.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;启用后，每个项目独立维护自己的&lt;b&gt;文本样式设置&lt;/b&gt;，而非使用共享的全局样式。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Choose punctuation alignment: Centered (traditional CJK style in Traditional Chinese and Japanese) or Edge-aligned (modern Simplified Chinese style).</source>
-            <translation>选择标点对齐方式：居中（繁体中文/日文传统排版）或靠边（现代简体中文排版）。</translation>
+            <source>&lt;p&gt;Choose punctuation alignment:&lt;/p&gt;&lt;p&gt;&lt;b&gt;Centered&lt;/b&gt; — traditional CJK style (Traditional Chinese / Japanese)&lt;br/&gt;&lt;b&gt;Edge-aligned&lt;/b&gt; — modern style (Simplified Chinese)&lt;/p&gt;</source>
+            <translation>&lt;p&gt;选择标点对齐方式：&lt;/p&gt;&lt;p&gt;&lt;b&gt;居中&lt;/b&gt; — 传统 CJK 排版（繁体中文 / 日文）&lt;br/&gt;&lt;b&gt;靠边&lt;/b&gt; — 现代排版（简体中文）&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Hide selected fonts from all font selection dropdowns. Useful for filtering out unusable or decorative fonts.</source>
-            <translation>从所有字体选择下拉框中隐藏所选字体。用于过滤掉无法使用或装饰性字体。</translation>
+            <source>&lt;p&gt;Hide selected fonts from all font selection dropdowns. Useful for filtering out &lt;b&gt;unusable or decorative&lt;/b&gt; fonts.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;从所有字体选择下拉框中隐藏所选字体。用于过滤掉&lt;b&gt;无法使用或装饰性&lt;/b&gt;字体。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Maximum allowed font size in pixels. Text that would render larger than this limit is scaled down automatically.</source>
-            <translation>允许的最大字号（像素）。超出此限制的文本会自动缩小。</translation>
+            <source>&lt;p&gt;Maximum allowed font size in pixels. Text that would render larger than this limit is &lt;b&gt;scaled down&lt;/b&gt; automatically.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;允许的最大字号（像素）。超出此限制的文本会自动&lt;b&gt;缩小&lt;/b&gt;。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Automatically scale the image to fit the window when opening a project. Avoids manual zooming on every file open.</source>
-            <translation>打开项目时自动缩放图像以适配窗口。避免每次打开文件都需要手动缩放。</translation>
+            <source>&lt;p&gt;Automatically scale the image to fit the window when opening a project. Avoids &lt;b&gt;manual zooming&lt;/b&gt; on every file open.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;打开项目时自动缩放图像以适配窗口。避免每次打开文件都需要&lt;b&gt;手动缩放&lt;/b&gt;。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Controls UI transition smoothness. Auto matches the display refresh rate. Select a specific FPS to cap GPU usage. Off disables all animations.</source>
-            <translation>控制 UI 过渡动画的流畅度。自动模式匹配显示器刷新率。选择指定 FPS 可限制 GPU 占用。关闭则禁用所有动画。</translation>
+            <source>&lt;p&gt;Controls UI transition smoothness:&lt;/p&gt;&lt;p&gt;&lt;b&gt;Auto&lt;/b&gt; — matches display refresh rate&lt;br/&gt;&lt;b&gt;Specific FPS&lt;/b&gt; — cap GPU usage&lt;br/&gt;&lt;b&gt;Off&lt;/b&gt; — disables all animations&lt;/p&gt;</source>
+            <translation>&lt;p&gt;控制 UI 过渡动画的流畅度：&lt;/p&gt;&lt;p&gt;&lt;b&gt;自动&lt;/b&gt; — 匹配显示器刷新率&lt;br/&gt;&lt;b&gt;指定 FPS&lt;/b&gt; — 限制 GPU 占用&lt;br/&gt;&lt;b&gt;关闭&lt;/b&gt; — 禁用所有动画&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Background opacity level when using the Original Compare shortcut. Lower values show more of the original image beneath the translation.</source>
-            <translation>使用原文对照快捷键时的基础透明度。数值越低，译文下方的原图显示越多。</translation>
+            <source>&lt;p&gt;Background opacity level when using the &lt;b&gt;Original Compare&lt;/b&gt; shortcut. Lower values show more of the original image beneath the translation.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;使用&lt;b&gt;原文对照&lt;/b&gt;快捷键时的背景透明度。数值越低，译文下方的原图显示越多。&lt;/p&gt;</translation>
         </message>
         <message>
             <source>Font Exclusion</source>
@@ -906,26 +906,27 @@
             <translation>序号徽标</translation>
         </message>
         <message>
-            <source>Displays the block sequence number at the top-left corner of each text block on the canvas. Disable to avoid occlusion when working with small fonts.</source>
-            <translation>在画布每个文本框左上角显示该块的序号。处理小字体时关闭可避免遮挡。</translation>
+            <source>&lt;p&gt;Displays the block &lt;b&gt;sequence number&lt;/b&gt; at the top-left corner of each text block on the canvas. Disable to avoid occlusion when working with small fonts.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;在画布每个文本框左上角显示该块的&lt;b&gt;序号&lt;/b&gt;。处理小字体时关闭可避免遮挡。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Choose the output format for translated images. PNG offers lossless quality. JPG and WEBP produce smaller files with some quality loss. JXL offers high compression efficiency with lossless option.</source>
-            <translation>选择翻译后图像的输出格式。PNG 提供无损质量。JPG 和 WEBP 文件更小但有一定质量损失。JXL 提供高压缩效率，支持无损选项。</translation>
+            <source>&lt;p&gt;Choose the output format for translated images:&lt;/p&gt;&lt;p&gt;&lt;b&gt;PNG&lt;/b&gt; — lossless quality&lt;br/&gt;&lt;b&gt;JPG / WEBP&lt;/b&gt; — smaller files, some quality loss&lt;br/&gt;&lt;b&gt;JXL&lt;/b&gt; — high compression efficiency with lossless option&lt;/p&gt;</source>
+            <translation>&lt;p&gt;选择翻译后图像的输出格式：&lt;/p&gt;&lt;p&gt;&lt;b&gt;PNG&lt;/b&gt; — 无损质量&lt;br/&gt;&lt;b&gt;JPG / WEBP&lt;/b&gt; — 文件更小，有一定质量损失&lt;br/&gt;&lt;b&gt;JXL&lt;/b&gt; — 高压缩效率，支持无损选项&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Format used for intermediate processing data. PNG is the default lossless option. JXL offers better compression for mask and inpainted images.</source>
-            <translation>中间处理数据使用的格式。PNG 是默认无损选项。JXL 为遮罩和修复图像提供更好的压缩率。</translation>
+            <source>&lt;p&gt;Format used for intermediate processing data:&lt;/p&gt;&lt;p&gt;&lt;b&gt;PNG&lt;/b&gt; — default lossless option&lt;br/&gt;&lt;b&gt;JXL&lt;/b&gt; — better compression for mask and inpainted images&lt;/p&gt;</source>
+            <translation>&lt;p&gt;中间处理数据使用的格式：&lt;/p&gt;&lt;p&gt;&lt;b&gt;PNG&lt;/b&gt; — 默认无损选项&lt;br/&gt;&lt;b&gt;JXL&lt;/b&gt; — 为遮罩和修复图像提供更好的压缩率&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>In vertical text, consecutive Latin letters/digits up to this length are displayed upright (tate-chuyoko). 0 disables; longer runs fall back to per-character rotation.</source>
-            <translation>竖排文本中，不超过此长度的连续拉丁字母/数字将正立横排显示（縦中横）。设为 0 禁用；更长的连续串回退为逐字旋转。</translation>
+            <source>&lt;p&gt;In vertical text, consecutive Latin letters/digits up to this length are displayed upright (&lt;b&gt;tate-chuyoko&lt;/b&gt;). &lt;code&gt;0&lt;/code&gt; disables; longer runs fall back to per-character rotation.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;竖排文本中，不超过此长度的连续拉丁字母/数字将正立横排显示（&lt;b&gt;縦中横&lt;/b&gt;）。设为 &lt;code&gt;0&lt;/code&gt; 禁用；更长的连续串回退为逐字旋转。&lt;/p&gt;</translation>
         </message>
         <message>
             <source>Vertical Latin/Digits Length</source>
             <translation>竖排拉丁/数字横排长度</translation>
         </message>
-    <message><source>Configure network proxies, mirror servers, and download sources. Useful for systems behind firewalls or in restricted environments.</source><translation>配置网络代理、镜像服务器和下载源。适用于防火墙后或受限网络环境的系统。</translation></message>
+    <message><source>&lt;p&gt;Configure network proxies, mirror servers, and download sources. Useful for systems behind &lt;b&gt;firewalls&lt;/b&gt; or in restricted environments.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;配置网络代理、镜像服务器和下载源。适用于&lt;b&gt;防火墙&lt;/b&gt;后或受限网络环境的系统。&lt;/p&gt;</translation></message>
         <message>
             <source>Performance</source>
             <translation>性能表现</translation>
@@ -943,8 +944,8 @@
 	            <translation>流畅（位图缓存）</translation>
 	        </message>
 	        <message>
-	            <source>Controls how text is drawn on the canvas. Crisp — text is always rendered as vector paths, sharp at any zoom, but dragging large blocks may lag. Smooth — text is pre-rendered into a bitmap cache for smooth drag/scroll; text may appear slightly blurred briefly after zooming until the cache rebuilds.</source>
-	            <translation>控制画布上文本的绘制方式。清晰——文本始终以矢量路径渲染，任何缩放下都锐利，但拖拽大块文字时可能卡顿。流畅——文本预先渲染到位图缓存中，拖拽/滚动丝滑；缩放后缓存重建前文字可能短暂模糊。</translation>
+	            <source>&lt;p&gt;Controls how text is drawn on the canvas:&lt;/p&gt;&lt;p&gt;&lt;b&gt;Crisp (always vector)&lt;/b&gt; — sharp at any zoom, but dragging large blocks may lag&lt;br/&gt;&lt;b&gt;Smooth (bitmap cache)&lt;/b&gt; — smooth drag/scroll; text may blur briefly after zoom until cache rebuilds&lt;/p&gt;</source>
+	            <translation>&lt;p&gt;控制画布上文本的绘制方式：&lt;/p&gt;&lt;p&gt;&lt;b&gt;清晰（始终矢量）&lt;/b&gt; — 任何缩放下都锐利，但拖拽大块文字时可能卡顿&lt;br/&gt;&lt;b&gt;流畅（位图缓存）&lt;/b&gt; — 拖拽/滚动丝滑；缩放后缓存重建前文字可能短暂模糊&lt;/p&gt;</translation>
 	        </message>
 	        <message>
 	            <source>Show decorations while resizing</source>
@@ -955,8 +956,8 @@
 	            <translation>拖拽装饰</translation>
 	        </message>
 	        <message>
-	            <source>When checked, text stroke and shadow remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.</source>
-	            <translation>勾选后，拖拽或调整文本框时描边和阴影保持可见。取消勾选可在调整大小时获得最高帧率。</translation>
+	            <source>&lt;p&gt;When checked, &lt;b&gt;text stroke and shadow&lt;/b&gt; remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.&lt;/p&gt;</source>
+	            <translation>&lt;p&gt;勾选后，拖拽或调整文本框时&lt;b&gt;描边和阴影&lt;/b&gt;保持可见。取消勾选可在调整大小时获得最高帧率。&lt;/p&gt;</translation>
 	        </message>
     </context>
     <context>

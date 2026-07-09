@@ -430,6 +430,7 @@ class ConfigNotePopup(QFrame):
         label = QLabel(text)
         label.setWordWrap(True)
         label.setMaximumWidth(320)
+        label.setTextFormat(Qt.TextFormat.RichText)
         font = label.font()
         font.setPointSize(font.pointSize() - 2)
         label.setFont(font)
@@ -1436,7 +1437,7 @@ class ConfigPanel(Widget):
         cb_block = ConfigSubBlock(
             self.load_model_checker,
             name=self.tr("Load models on demand"),
-            note=self.tr("When enabled, models are loaded only on first use instead of at startup. Reduces initial memory and launch time. Recommended for systems with limited GPU memory."),
+            note=self.tr("<p>When enabled, models are loaded only on <b>first use</b> instead of at startup. Reduces initial memory and launch time. Recommended for systems with limited GPU memory.</p>"),
         )
         models_vlayout.addWidget(cb_block)
 
@@ -1449,7 +1450,7 @@ class ConfigPanel(Widget):
         cb_block2 = ConfigSubBlock(
             self.empty_runcache_checker,
             name=self.tr("Empty cache after RUN"),
-            note=self.tr("Clears intermediate inference data after each pipeline run. Frees GPU/CPU memory between runs. Useful when working with large projects or limited hardware."),
+            note=self.tr("<p>Clears intermediate inference data after each pipeline run. Frees <b>GPU/CPU memory</b> between runs. Useful when working with large projects or limited hardware.</p>"),
         )
         models_vlayout.addWidget(cb_block2)
 
@@ -1466,7 +1467,7 @@ class ConfigPanel(Widget):
         unload_sublock = ConfigSubBlock(
             unload_btn,
             name=self.tr("Unload models"),
-            note=self.tr("Immediately releases all loaded models from memory. Use this to free GPU/CPU resources without restarting the application."),
+            note=self.tr("<p>Immediately releases all loaded models from memory. Use this to free <b>GPU/CPU resources</b> without restarting the application.</p>"),
         )
         models_vlayout.addWidget(unload_sublock)
 
@@ -1476,7 +1477,7 @@ class ConfigPanel(Widget):
         profiles_sublock = ConfigSubBlock(
             profiles_btn,
             name=self.tr("API profiles"),
-            note=self.tr("Configure API credentials and endpoints for online translators, OCR services, and AI features. Supports multiple profiles for different services or accounts."),
+            note=self.tr("<p>Configure API credentials and endpoints for online translators, OCR services, and AI features. Supports <b>multiple profiles</b> for different services or accounts.</p>"),
         )
         models_vlayout.addWidget(profiles_sublock)
 
@@ -1486,7 +1487,7 @@ class ConfigPanel(Widget):
         network_sublock = ConfigSubBlock(
             network_btn,
             name=self.tr("Network"),
-            note=self.tr("Configure network proxies, mirror servers, and download sources. Useful for systems behind firewalls or in restricted environments."),
+            note=self.tr("<p>Configure network proxies, mirror servers, and download sources. Useful for systems behind <b>firewalls</b> or in restricted environments.</p>"),
         )
         models_vlayout.addWidget(network_sublock)
 
@@ -1498,7 +1499,7 @@ class ConfigPanel(Widget):
         )
         detect_group, self.detect_sub_block = self._build_grouped_widget(
             label_text_det, self.detect_config_panel, object_name="GroupDetect",
-            note=self.tr("Select the text detection engine. Different detectors offer varying accuracy and speed. Some engines may require additional model downloads on first use."),
+            note=self.tr("<p>Select the <b>text detection engine</b>. Different detectors offer varying accuracy and speed. Some engines may require additional model downloads on first use.</p>"),
         )
         self.detect_config_panel.keep_existing_checker.clicked.connect(
             self.on_keepline_clicked
@@ -1507,7 +1508,7 @@ class ConfigPanel(Widget):
         self.ocr_config_panel = OCRConfigPanel(self.tr("OCR"), scrollWidget=self)
         ocr_group, self.ocr_sub_block = self._build_grouped_widget(
             label_text_ocr, self.ocr_config_panel, object_name="GroupOCR",
-            note=self.tr("Select the OCR (Optical Character Recognition) engine. This stage extracts text from detected text regions in the image."),
+            note=self.tr("<p>Select the <b>OCR</b> (Optical Character Recognition) engine. This stage extracts text from detected text regions in the image.</p>"),
         )
 
         self.inpaint_config_panel = InpaintConfigPanel(
@@ -1515,7 +1516,7 @@ class ConfigPanel(Widget):
         )
         inpaint_group, self.inpaint_sub_block = self._build_grouped_widget(
             label_inpaint, self.inpaint_config_panel, object_name="GroupInpaint",
-            note=self.tr("Select the image inpainting engine. After erasing text regions, the inpainter fills the background. Quality varies by image complexity and engine capability."),
+            note=self.tr("<p>Select the <b>image inpainting engine</b>. After erasing text regions, the inpainter fills the background. Quality varies by image complexity and engine capability.</p>"),
         )
 
         self.trans_config_panel = TranslatorConfigPanel(
@@ -1523,7 +1524,7 @@ class ConfigPanel(Widget):
         )
         trans_group, self.trans_sub_block = self._build_grouped_widget(
             label_translator, self.trans_config_panel, object_name="GroupTranslate",
-            note=self.tr("Select the translation engine. Online translators require an API profile with credentials configured under Models > API Profiles."),
+            note=self.tr("<p>Select the <b>translation engine</b>. Online translators require an API profile with credentials configured under <b>Models > API Profiles</b>.</p>"),
         )
 
         # === Combined DL Module pipeline page ===
@@ -1563,7 +1564,7 @@ class ConfigPanel(Widget):
         )
         startup_sublock = ConfigSubBlock(
             self.open_on_startup_checker, name=self.tr("Startup"),
-            note=self.tr("Reopen the last project automatically when the application starts. Saves time when continuing work on the same project."),
+            note=self.tr("<p>Reopen the last project automatically when the application starts. Saves time when continuing work on the same project.</p>"),
         )
         project_layout.addWidget(startup_sublock)
 
@@ -1573,7 +1574,7 @@ class ConfigPanel(Widget):
 
         self.rst_imgformat_combobox, imsave_sublock = combobox_with_label(
             ["PNG", "JPG", "WEBP", "JXL"], self.tr("Result image format"),
-            note=self.tr("Choose the output format for translated images. PNG offers lossless quality. JPG and WEBP produce smaller files with some quality loss. JXL offers high compression efficiency with lossless option."),
+            note=self.tr("<p>Choose the output format for translated images:</p><p><b>PNG</b> — lossless quality<br/><b>JPG / WEBP</b> — smaller files, some quality loss<br/><b>JXL</b> — high compression efficiency with lossless option</p>"),
             parent=self,
         )
         self.rst_imgformat_combobox.activated.connect(self.on_rst_imgformat_changed)
@@ -1581,7 +1582,7 @@ class ConfigPanel(Widget):
 
         self.rst_autoformat_checker, autoformat_sublock = checkbox_with_label(
             self.tr("Auto detect source format"),
-            note=self.tr("When enabled, the output format automatically matches the source image format. Overrides the format selected above."),
+            note=self.tr("<p>When enabled, the output format automatically matches the <b>source image format</b>. Overrides the format selected above.</p>"),
         )
         self.rst_autoformat_checker.stateChanged.connect(self.on_autoformat_changed)
         project_layout.addWidget(autoformat_sublock)
@@ -1592,7 +1593,7 @@ class ConfigPanel(Widget):
 
         quality_sublock = ConfigSubBlock(
             self.rst_imgquality_edit, self.tr("Quality"),
-            note=self.tr("Output image quality (0-100). Higher values give better quality but larger file sizes. Applies to JPG and WEBP only."),
+            note=self.tr("<p>Output image quality (<code>0-100</code>). Higher values give better quality but larger file sizes. Applies to <b>JPG</b> and <b>WEBP</b> only.</p>"),
             vertical_layout=False,
         )
         quality_sublock.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -1602,7 +1603,7 @@ class ConfigPanel(Widget):
         self.intermediate_imgformat_combobox, intermediate_imsave_sublock = (
             combobox_with_label(
                 ["PNG", "JXL"], self.tr("Intermediate image format"),
-                note=self.tr("Format used for intermediate processing data. PNG is the default lossless option. JXL offers better compression for mask and inpainted images."),
+                note=self.tr("<p>Format used for intermediate processing data:</p><p><b>PNG</b> — default lossless option<br/><b>JXL</b> — better compression for mask and inpainted images</p>"),
                 parent=self,
             )
         )
@@ -1759,7 +1760,7 @@ class ConfigPanel(Widget):
 
         delegation_sublock = ConfigSubBlock(
             delegation_frame, name=self.tr("Default Font Format"),
-            note=self.tr("Configure the fallback font format for text blocks without their own formatting. Each attribute can be delegated separately."),
+            note=self.tr("<p>Configure the fallback font format for text blocks without their own formatting. Each attribute can be <b>delegated</b> separately.</p>"),
         )
         ts_layout.addWidget(delegation_sublock)
 
@@ -1772,21 +1773,21 @@ class ConfigPanel(Widget):
             description=self.tr(
                 "Split translation into multi-lines according to the extracted balloon region."
             ),
-            note=self.tr("Automatically split translated text into multiple lines matching the shape of the detected balloon or text region."),
+            note=self.tr("<p>Automatically split translated text into multiple lines matching the shape of the detected balloon or text region.</p>"),
         )
         self.let_autolayout_checker.stateChanged.connect(self.on_autolayout_changed)
         ts_layout.addWidget(al_sublock)
 
         self.let_uppercase_checker, uc_sublock = checkbox_with_label(
             self.tr("To uppercase"),
-            note=self.tr("Convert all translated text to uppercase. Useful for certain typographic styles or all-caps conventions."),
+            note=self.tr("<p>Convert all translated text to uppercase. Useful for certain <b>typographic styles</b> or all-caps conventions.</p>"),
         )
         self.let_uppercase_checker.stateChanged.connect(self.on_uppercase_changed)
         ts_layout.addWidget(uc_sublock)
 
         self.let_textstyle_indep_checker, ti_sublock = checkbox_with_label(
             self.tr("Independent text styles for each projects"),
-            note=self.tr("When enabled, each project maintains its own text style settings independently instead of using shared global styles."),
+            note=self.tr("<p>When enabled, each project maintains its own <b>text style settings</b> independently instead of using shared global styles.</p>"),
         )
         self.let_textstyle_indep_checker.stateChanged.connect(
             self.on_textstyle_indep_changed
@@ -1805,7 +1806,7 @@ class ConfigPanel(Widget):
         )
         punct_pos_sublock = ConfigSubBlock(
             self.punctuation_position_combo, self.tr("Punctuation Position"),
-            note=self.tr("Choose punctuation alignment: Centered (traditional CJK style in Traditional Chinese and Japanese) or Edge-aligned (modern Simplified Chinese style)."),
+            note=self.tr("<p>Choose punctuation alignment:</p><p><b>Centered</b> — traditional CJK style (Traditional Chinese / Japanese)<br/><b>Edge-aligned</b> — modern style (Simplified Chinese)</p>"),
         )
         ts_layout.addWidget(punct_pos_sublock)
 
@@ -1819,7 +1820,7 @@ class ConfigPanel(Widget):
         )
         tatechuyoko_sublock = ConfigSubBlock(
             self.tatechuyoko_slider, self.tr("Vertical Latin/Digits Length"),
-            note=self.tr("In vertical text, consecutive Latin letters/digits up to this length are displayed upright (tate-chuyoko). 0 disables; longer runs fall back to per-character rotation."),
+            note=self.tr("<p>In vertical text, consecutive Latin letters/digits up to this length are displayed upright (<b>tate-chuyoko</b>). <code>0</code> disables; longer runs fall back to per-character rotation.</p>"),
         )
         ts_layout.addWidget(tatechuyoko_sublock)
 
@@ -1828,7 +1829,7 @@ class ConfigPanel(Widget):
         self.exclude_fonts_btn.clicked.connect(self.on_exclude_fonts_clicked)
         btn_sublock = ConfigSubBlock(
             self.exclude_fonts_btn, name=self.tr("Font Exclusion"),
-            note=self.tr("Hide selected fonts from all font selection dropdowns. Useful for filtering out unusable or decorative fonts."),
+            note=self.tr("<p>Hide selected fonts from all font selection dropdowns. Useful for filtering out <b>unusable or decorative</b> fonts.</p>"),
         )
         ts_layout.addWidget(btn_sublock)
 
@@ -1840,7 +1841,7 @@ class ConfigPanel(Widget):
         self.max_font_size_edit.valueChanged.connect(self.on_max_font_size_changed)
         max_font_sublock = ConfigSubBlock(
             self.max_font_size_edit, self.tr("Max Font Size (px)"),
-            note=self.tr("Maximum allowed font size in pixels. Text that would render larger than this limit is scaled down automatically."),
+            note=self.tr("<p>Maximum allowed font size in pixels. Text that would render larger than this limit is <b>scaled down</b> automatically.</p>"),
         )
         ts_layout.addWidget(max_font_sublock)
 
@@ -1867,7 +1868,7 @@ class ConfigPanel(Widget):
         self.fit_window_checker.stateChanged.connect(self.on_fit_window_changed)
         fit_win_sublock = ConfigSubBlock(
             self.fit_window_checker, name=self.tr("Window Fit"),
-            note=self.tr("Automatically scale the image to fit the window when opening a project. Avoids manual zooming on every file open."),
+            note=self.tr("<p>Automatically scale the image to fit the window when opening a project. Avoids <b>manual zooming</b> on every file open.</p>"),
         )
         interface_layout.addWidget(fit_win_sublock)
 
@@ -1944,7 +1945,7 @@ class ConfigPanel(Widget):
         toggle_row.addStretch()
         togglesublock = ConfigSubBlock(
             toggle_row, name=self.tr("Preset"),
-            note=self.tr("Background opacity level when using the Original Compare shortcut. Lower values show more of the original image beneath the translation."),
+            note=self.tr("<p>Background opacity level when using the <b>Original Compare</b> shortcut. Lower values show more of the original image beneath the translation.</p>"),
         )
         interface_layout.addWidget(togglesublock)
 
@@ -1956,7 +1957,7 @@ class ConfigPanel(Widget):
         self.seq_badge_checker.stateChanged.connect(self.on_seq_badge_changed)
         seq_badge_sublock = ConfigSubBlock(
             self.seq_badge_checker, name=self.tr("Sequence Badge"),
-            note=self.tr("Displays the block sequence number at the top-left corner of each text block on the canvas. Disable to avoid occlusion when working with small fonts."),
+            note=self.tr("<p>Displays the block <b>sequence number</b> at the top-left corner of each text block on the canvas. Disable to avoid occlusion when working with small fonts.</p>"),
         )
         interface_layout.addWidget(seq_badge_sublock)
 
@@ -1990,7 +1991,7 @@ class ConfigPanel(Widget):
         anim_row_layout.addStretch()
         anim_sublock = ConfigSubBlock(
             anim_widget, name=self.tr("Animation"),
-            note=self.tr("Controls UI transition smoothness. Auto matches the display refresh rate. Select a specific FPS to cap GPU usage. Off disables all animations."),
+            note=self.tr("<p>Controls UI transition smoothness:</p><p><b>Auto</b> — matches display refresh rate<br/><b>Specific FPS</b> — cap GPU usage<br/><b>Off</b> — disables all animations</p>"),
             vertical_layout=False,
         )
         perf_layout.addWidget(anim_sublock)
@@ -2011,7 +2012,7 @@ class ConfigPanel(Widget):
         render_row_layout.addStretch()
         render_sublock = ConfigSubBlock(
             render_widget, name=self.tr("Text Rendering"),
-            note=self.tr("Controls how text is drawn on the canvas. Crisp — text is always rendered as vector paths, sharp at any zoom, but dragging large blocks may lag. Smooth — text is pre-rendered into a bitmap cache for smooth drag/scroll; text may appear slightly blurred briefly after zooming until the cache rebuilds."),
+            note=self.tr("<p>Controls how text is drawn on the canvas:</p><p><b>Crisp (always vector)</b> — sharp at any zoom, but dragging large blocks may lag<br/><b>Smooth (bitmap cache)</b> — smooth drag/scroll; text may blur briefly after zoom until cache rebuilds</p>"),
             vertical_layout=False,
         )
         perf_layout.addWidget(render_sublock)
@@ -2022,7 +2023,7 @@ class ConfigPanel(Widget):
         self.drag_decorations_checker.toggled.connect(self._on_decorations_during_drag_changed)
         decor_sublock = ConfigSubBlock(
             self.drag_decorations_checker, name=self.tr("Drag Decorations"),
-            note=self.tr("When checked, text stroke and shadow remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize."),
+            note=self.tr("<p>When checked, <b>text stroke and shadow</b> remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.</p>"),
             vertical_layout=False,
         )
         perf_layout.addWidget(decor_sublock)

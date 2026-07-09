@@ -500,6 +500,11 @@ class TextBlkItem(QGraphicsTextItem):
             self._build_full_pixmap()
         else:  # Crisp mode — no pixmap path
             self._use_full_pixmap = False
+            # Rebuild background_pixmap at final drag size.
+            # Without this, the stale pre-drag bitmap persists if
+            # mouseReleaseEvent skipped setRect(repaint=True) because
+            # _pending_rect was already consumed by the timer.
+            self.repaint_background()
         self.reshaped.emit(self)
         self.reshaping = False
 
