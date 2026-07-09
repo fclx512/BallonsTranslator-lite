@@ -1378,6 +1378,7 @@ class ConfigPanel(Widget):
     shortcuts_changed = Signal()
     presets_changed = Signal()
     seq_badge_changed = Signal()
+    text_rendering_changed = Signal()
 
     # Active instance used by _DeadBlock/_DeadLayout to find the page stack
     # during __init__ construction.
@@ -1410,6 +1411,7 @@ class ConfigPanel(Widget):
         label_translator = self.tr("Translator")
         label_project = self.tr("Project")
         label_typesetting = self.tr("Typesetting")
+        label_performance = self.tr("Performance")
         label_interface = self.tr("Interface")
 
         # === Models group ===
@@ -1881,31 +1883,6 @@ class ConfigPanel(Widget):
         self._fit_page_sublock.setVisible(False)
         interface_layout.addWidget(self._fit_page_sublock)
 
-        # Animation mode
-        anim_widget = QWidget()
-        anim_row_layout = QHBoxLayout(anim_widget)
-        anim_row_layout.setContentsMargins(0, 0, 0, 0)
-        anim_row_layout.setSpacing(6)
-        self.anim_combo = ConfigComboBox(scrollWidget=self)
-        self.anim_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
-        self.anim_combo.addItems(
-            [
-                self.tr("Auto (match display)"),
-                "60 FPS",
-                "30 FPS",
-                self.tr("Off (no animation)"),
-            ]
-        )
-        self.anim_combo.activated.connect(self._on_anim_mode_changed)
-        anim_row_layout.addWidget(self.anim_combo)
-        anim_row_layout.addStretch()
-        anim_sublock = ConfigSubBlock(
-            anim_widget, name=self.tr("Animation"),
-            note=self.tr("Controls UI transition smoothness. Auto matches the display refresh rate. Select a specific FPS to cap GPU usage. Off disables all animations."),
-            vertical_layout=False,
-        )
-        interface_layout.addWidget(anim_sublock)
-
         # Shortcut button
         self.shortcut_btn = QPushButton(self.tr("Edit Shortcuts..."), parent=self)
         self.shortcut_btn.setObjectName("ConfigButton")
@@ -1987,6 +1964,73 @@ class ConfigPanel(Widget):
             label_interface, interface_widget, object_name="GroupGeneral"
         )
 
+        # === General: Performance ===
+        perf_widget = QWidget()
+        perf_layout = QVBoxLayout(perf_widget)
+        perf_layout.setContentsMargins(0, 0, 0, 0)
+        perf_layout.setSpacing(8)
+
+        # Animation mode (moved from Interface)
+        anim_widget = QWidget()
+        anim_row_layout = QHBoxLayout(anim_widget)
+        anim_row_layout.setContentsMargins(0, 0, 0, 0)
+        anim_row_layout.setSpacing(6)
+        self.anim_combo = ConfigComboBox(scrollWidget=self)
+        self.anim_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
+        self.anim_combo.addItems(
+            [
+                self.tr("Auto (match display)"),
+                "60 FPS",
+                "30 FPS",
+                self.tr("Off (no animation)"),
+            ]
+        )
+        self.anim_combo.activated.connect(self._on_anim_mode_changed)
+        anim_row_layout.addWidget(self.anim_combo)
+        anim_row_layout.addStretch()
+        anim_sublock = ConfigSubBlock(
+            anim_widget, name=self.tr("Animation"),
+            note=self.tr("Controls UI transition smoothness. Auto matches the display refresh rate. Select a specific FPS to cap GPU usage. Off disables all animations."),
+            vertical_layout=False,
+        )
+        perf_layout.addWidget(anim_sublock)
+
+        # Text rendering mode: vector vs bitmap cache
+        render_widget = QWidget()
+        render_row_layout = QHBoxLayout(render_widget)
+        render_row_layout.setContentsMargins(0, 0, 0, 0)
+        render_row_layout.setSpacing(6)
+        self.text_rendering_combo = ConfigComboBox(scrollWidget=self)
+        self.text_rendering_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
+        self.text_rendering_combo.addItems([
+            self.tr("Crisp (always vector)"),
+            self.tr("Smooth (bitmap cache)"),
+        ])
+        self.text_rendering_combo.activated.connect(self._on_text_rendering_changed)
+        render_row_layout.addWidget(self.text_rendering_combo)
+        render_row_layout.addStretch()
+        render_sublock = ConfigSubBlock(
+            render_widget, name=self.tr("Text Rendering"),
+            note=self.tr("Controls how text is drawn on the canvas. Crisp — text is always rendered as vector paths, sharp at any zoom, but dragging large blocks may lag. Smooth — text is pre-rendered into a bitmap cache for smooth drag/scroll; text may appear slightly blurred briefly after zooming until the cache rebuilds."),
+            vertical_layout=False,
+        )
+        perf_layout.addWidget(render_sublock)
+
+        # Show decorations during drag/resize
+        self.drag_decorations_checker = QCheckBox(self.tr("Show decorations while resizing"))
+        self.drag_decorations_checker.setChecked(pcfg.show_decorations_during_drag)
+        self.drag_decorations_checker.toggled.connect(self._on_decorations_during_drag_changed)
+        decor_sublock = ConfigSubBlock(
+            self.drag_decorations_checker, name=self.tr("Drag Decorations"),
+            note=self.tr("When checked, text stroke and shadow remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize."),
+            vertical_layout=False,
+        )
+        perf_layout.addWidget(decor_sublock)
+
+        self.performance_block = generalConfigPanel.addGroupedBlock(
+            label_performance, perf_widget, object_name="GroupGeneral"
+        )
+
         # === Navigation tree (upstream-style) ===
         self.configTable = ConfigTable()
         self.configTable.setObjectName("ConfigNavList")
@@ -2000,6 +2044,7 @@ class ConfigPanel(Widget):
         general_header = self.configTable.addHeader(self.tr("General"))
         self.configTable.addSection(general_header, label_project, "project", self.project_block.section_widget)
         self.configTable.addSection(general_header, label_typesetting, "typesetting", self.typesetting_block.section_widget)
+        self.configTable.addSection(general_header, label_performance, "performance", self.performance_block.section_widget)
         self.configTable.addSection(general_header, label_interface, "interface", self.interface_block.section_widget)
 
         # Expand all headers so children are visible
@@ -2011,6 +2056,7 @@ class ConfigPanel(Widget):
             "pipeline": self._dl_combined_widget,
             "project": self.project_block.section_widget,
             "typesetting": self.typesetting_block.section_widget,
+            "performance": self.performance_block.section_widget,
             "interface": self.interface_block.section_widget,
         }
 
@@ -2320,9 +2366,13 @@ class ConfigPanel(Widget):
         idx = self.anim_combo.currentIndex()
         mapping = {0: 0, 1: 60, 2: 30, 3: -1}
         pcfg.animation_fps = mapping.get(idx, 0)
-        from utils.config import save_config
 
-        save_config()
+    def _on_text_rendering_changed(self):
+        pcfg.text_rendering = self.text_rendering_combo.currentIndex()
+        self.text_rendering_changed.emit()
+
+    def _on_decorations_during_drag_changed(self, checked: bool):
+        pcfg.show_decorations_during_drag = checked
 
     def _close_via_esc(self) -> None:
         """Esc → delegate to modal hide."""
@@ -2380,5 +2430,8 @@ class ConfigPanel(Widget):
 
         anim_idx = {0: 0, 60: 1, 30: 2, -1: 3}.get(pcfg.animation_fps, 0)
         self.anim_combo.setCurrentIndex(anim_idx)
+
+        self.text_rendering_combo.setCurrentIndex(pcfg.text_rendering)
+        self.drag_decorations_checker.setChecked(pcfg.show_decorations_during_drag)
 
         self.blockSignals(False)

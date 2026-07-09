@@ -4,6 +4,35 @@
 
 ## 2026-07-09
 
+### 设置面板新增 Performance 页（Text Rendering + Drag Decorations）
+
+**需求：** 画布文本框性能优化策略全部硬编码，用户无法按需调节。需新增 Performance 设置页，集中控制影响帧率的参数。
+
+**改动：**
+
+1. **`utils/config.py`** — 替换 4 个旧字段（`canvas_render_quality`、`canvas_cache_mode`、`canvas_drag_preview`、`zoom_rebuild_delay`）为 2 个新字段：`text_rendering: int`（0=Crisp always vector, 1=Smooth bitmap cache）、`show_decorations_during_drag: bool`
+
+2. **`ui/configpanel.py`** — 新增 Performance 设置页（Animation FPS + Text Rendering 二选一 + Drag Decorations 复选框）；Animation 从 Interface 页移入；移除旧的 Canvas Rendering 3 档、Drag Preview 2 档、Zoom Rebuild Delay spinbox；新增 `text_rendering_changed` 信号；handler 去掉 `save_config()` 重复落盘
+
+3. **`ui/textitem.py`** — 全面接入新字段：
+   - `__init__`：Crisp 模式设 `NoCache` + `_use_full_pixmap=False`
+   - `repaint_background()`、`_render_text_only()`、`_build_full_pixmap()`：`SmoothPixmapTransform` 仅 Crisp 模式启用
+   - `set_fontformat()`：字体微调策略按模式切换
+   - `startReshape()`：装饰开启时 Smooth 走全位图（`_use_full_pixmap=True`），Crisp 保留 `background_pixmap`
+   - `endReshape()`：仅 Smooth 模式恢复位图缓存
+
+4. **`ui/scenetext_manager.py`** — `on_transwidget_focus_in/out` 按 `text_rendering` 条件切换 cache 模式
+
+5. **`ui/mainwindow.py`** — 新增 `text_rendering_changed` 信号连接 + `_on_text_rendering_changed` handler 即时刷新所有文本框
+
+**涉及文件：** `utils/config.py`、`ui/configpanel.py`、`ui/textitem.py`、`ui/scenetext_manager.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+**已知问题（待修复）：**
+- 矢量（Crisp）模式下拖拽时描边/阴影变形且松手后不自动复原（`background_pixmap` 尺寸未跟随拖拽更新，`endReshape` 未重建装饰层）
+- 位图（Smooth）模式下拖拽装饰功能项无效——无论开关，拖拽中始终不显示描边/阴影（`startReshape` 中清除了 `background_pixmap`）
+
+---
+
 ### 核心依赖自动安装 + 启动时序修复（看齐上游）
 
 **问题：** 用户反馈系统 Python 启动时缺少核心依赖（qtpy、numpy 等），提示 `pip install -r requirements.txt` 后退出。根因：GPU 检测到 NVIDIA 显卡但 PyTorch 未装 → 自动 `args.cpu = True` → `prepare_environment()` 的 `if args.cpu: return` 跳过全部依赖安装 → 核心依赖缺失。

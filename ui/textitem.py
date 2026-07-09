@@ -118,6 +118,12 @@ class TextBlkItem(QGraphicsTextItem):
         self.setBoundingRegionGranularity(0)
         self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable)
         self.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
+        # Crisp mode: always vector rendering (NoCache + no pixmap path)
+        from utils.config import pcfg
+
+        if pcfg.text_rendering == 0:  # Crisp (always vector)
+            self.setCacheMode(QGraphicsItem.CacheMode.NoCache)
+            self._use_full_pixmap = False
 
     def inputMethodEvent(self, e: QInputMethodEvent):
         if not self.pre_editing:
@@ -469,15 +475,31 @@ class TextBlkItem(QGraphicsTextItem):
     def startReshape(self):
         self.oldRect = self.absBoundingRect(qrect=True)
         self.reshaping = True
-        self._skip_pixmap_rebuild = True
-        self._use_full_pixmap = False
-        self.background_pixmap = None  # hide stroke/shadow during drag resize
+        from utils.config import pcfg
+        if pcfg.show_decorations_during_drag:
+            if pcfg.text_rendering == 1:  # Smooth — use full pixmap (has decorations)
+                self.background_pixmap = None
+                self._skip_pixmap_rebuild = True
+                self._use_full_pixmap = True
+            else:  # Crisp — keep existing background_pixmap, native render
+                self._skip_pixmap_rebuild = True
+                self._use_full_pixmap = False
+                # background_pixmap kept intact — decorations stay visible
+        else:
+            # Hide decorations — native text only, no compositing overhead
+            self.background_pixmap = None
+            self._skip_pixmap_rebuild = True
+            self._use_full_pixmap = False
 
     def endReshape(self):
         self._skip_pixmap_rebuild = False
-        self._use_full_pixmap = True
-        self._invalidate_cache()
-        self._build_full_pixmap()
+        from utils.config import pcfg
+        if pcfg.text_rendering == 1:  # Smooth mode — restore pixmap cache
+            self._use_full_pixmap = True
+            self._invalidate_cache()
+            self._build_full_pixmap()
+        else:  # Crisp mode — no pixmap path
+            self._use_full_pixmap = False
         self.reshaped.emit(self)
         self.reshaping = False
 

@@ -221,6 +221,10 @@ class ProgramConfig(Config):
         default_factory=lambda: [1.0, 0.8, 0.6, 0.4, 0.2]
     )
     animation_fps: int = 0  # 0=auto, 30=30fps, 60=60fps, -1=disabled
+
+    # ── Performance settings ─────────────────────────────────
+    text_rendering: int = 1  # 0=Crisp(always vector), 1=Smooth(bitmap cache)
+    show_decorations_during_drag: bool = False
     open_image_fit_window: bool = False
     fit_window_on_page_switch: bool = False
     show_text_style_preset: bool = True

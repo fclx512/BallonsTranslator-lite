@@ -925,7 +925,40 @@
             <source>Vertical Latin/Digits Length</source>
             <translation>竖排拉丁/数字横排长度</translation>
         </message>
-    <message><source>Configure network proxies, mirror servers, and download sources. Useful for systems behind firewalls or in restricted environments.</source><translation>配置网络代理、镜像服务器和下载源。适用于防火墙后或受限网络环境的系统。</translation></message></context>
+    <message><source>Configure network proxies, mirror servers, and download sources. Useful for systems behind firewalls or in restricted environments.</source><translation>配置网络代理、镜像服务器和下载源。适用于防火墙后或受限网络环境的系统。</translation></message>
+        <message>
+            <source>Performance</source>
+            <translation>性能表现</translation>
+        </message>
+	        <message>
+	            <source>Text Rendering</source>
+	            <translation>文本渲染模式</translation>
+	        </message>
+	        <message>
+	            <source>Crisp (always vector)</source>
+	            <translation>清晰（始终矢量）</translation>
+	        </message>
+	        <message>
+	            <source>Smooth (bitmap cache)</source>
+	            <translation>流畅（位图缓存）</translation>
+	        </message>
+	        <message>
+	            <source>Controls how text is drawn on the canvas. Crisp — text is always rendered as vector paths, sharp at any zoom, but dragging large blocks may lag. Smooth — text is pre-rendered into a bitmap cache for smooth drag/scroll; text may appear slightly blurred briefly after zooming until the cache rebuilds.</source>
+	            <translation>控制画布上文本的绘制方式。清晰——文本始终以矢量路径渲染，任何缩放下都锐利，但拖拽大块文字时可能卡顿。流畅——文本预先渲染到位图缓存中，拖拽/滚动丝滑；缩放后缓存重建前文字可能短暂模糊。</translation>
+	        </message>
+	        <message>
+	            <source>Show decorations while resizing</source>
+	            <translation>调整大小时显示描边和阴影</translation>
+	        </message>
+	        <message>
+	            <source>Drag Decorations</source>
+	            <translation>拖拽装饰</translation>
+	        </message>
+	        <message>
+	            <source>When checked, text stroke and shadow remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.</source>
+	            <translation>勾选后，拖拽或调整文本框时描边和阴影保持可见。取消勾选可在调整大小时获得最高帧率。</translation>
+	        </message>
+    </context>
     <context>
         <name>DependencyDialog</name>
         <message>

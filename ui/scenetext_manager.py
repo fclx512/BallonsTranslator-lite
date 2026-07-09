@@ -1223,7 +1223,9 @@ class SceneTextManager(QObject):
             blk_item = self.textblk_item_list[idx]
             sender = self.sender()
             if isinstance(sender, TransTextEdit):
-                blk_item.setCacheMode(QGraphicsItem.CacheMode.NoCache)
+                # Smooth mode: switch to vector during editing; Crisp mode is already NoCache
+                if pcfg.text_rendering == 1:  # Smooth (bitmap cache)
+                    blk_item.setCacheMode(QGraphicsItem.CacheMode.NoCache)
             self.canvas.gv.ensureVisible(blk_item)
             self.txtblkShapeControl.setBlkItem(blk_item)
 
@@ -1234,7 +1236,9 @@ class SceneTextManager(QObject):
         sender = self.sender()
         if isinstance(sender, TransTextEdit) and idx < len(self.textblk_item_list):
             blk_item = self.textblk_item_list[idx]
-            blk_item.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
+            # Smooth mode: restore bitmap cache after editing; Crisp mode stays NoCache
+            if pcfg.text_rendering == 1:  # Smooth (bitmap cache)
+                blk_item.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
 
     def on_textedit_undo(self):
         self.canvas.undo_textedit()

@@ -33,6 +33,7 @@ from qtpy.QtWidgets import (
     QApplication,
     QDialog,
     QFileDialog,
+    QGraphicsItem,
     QHBoxLayout,
     QListWidget,
     QListWidgetItem,
@@ -620,6 +621,7 @@ class MainWindow(mainwindow_cls):
         self.configPanel.shortcuts_changed.connect(self.refreshShortcuts)
         self.configPanel.presets_changed.connect(self._on_presets_changed)
         self.configPanel.seq_badge_changed.connect(self._on_seq_badge_changed)
+        self.configPanel.text_rendering_changed.connect(self._on_text_rendering_changed)
         # 初始化字体列表（系统字体枚举）
         shared.init_font_list()
         # 使用过滤后的字体列表（排除用户已隐藏的字体）
@@ -672,6 +674,22 @@ class MainWindow(mainwindow_cls):
             return
         for item in self.canvas.textLayer.childItems():
             if isinstance(item, TextBlkItem):
+                item.update()
+
+    def _on_text_rendering_changed(self):
+        """Apply text rendering mode to all existing text items immediately."""
+        if not self.canvas:
+            return
+        for item in self.canvas.textLayer.childItems():
+            if isinstance(item, TextBlkItem):
+                if pcfg.text_rendering == 0:  # Crisp
+                    item.setCacheMode(QGraphicsItem.CacheMode.NoCache)
+                    item._use_full_pixmap = False
+                else:  # Smooth
+                    item.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
+                    item._use_full_pixmap = True
+                    item._invalidate_cache()
+                    item._build_full_pixmap()
                 item.update()
 
     def setupImgTransUI(self):
