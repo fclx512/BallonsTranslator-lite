@@ -9,7 +9,7 @@ from functools import partial
 from pathlib import Path
 from typing import List, Optional, Union
 
-from qtpy.QtCore import QEasingCurve, QElapsedTimer, QEvent, QEventLoop, QPoint, QPointF, QSize, Qt, QTimer, Signal
+from qtpy.QtCore import QEasingCurve, QElapsedTimer, QEvent, QEventLoop, QPoint, QPointF, QRect, QSize, Qt, QTimer, Signal
 
 try:
     from qtpy.QtWidgets import QUndoCommand
@@ -18,11 +18,14 @@ except ImportError:
 from qtpy.QtGui import (
     QClipboard,
     QCloseEvent,
+    QColor,
     QContextMenuEvent,
     QGuiApplication,
     QIcon,
+    QImageReader,
     QKeySequence,
     QPainter,
+    QPixmap,
     QTextCursor,
 )
 from qtpy.QtWidgets import (
@@ -95,6 +98,7 @@ from .update_checker import AboutDialog
 from .configpanel import MCPInfoDialog
 
 
+
 class PageListView(QListWidget):
     reveal_file = Signal()
 
@@ -164,6 +168,50 @@ class MainWindow(mainwindow_cls):
     restart_signal = Signal()
     create_errdialog = Signal(str, str, str)
     create_infodialog = Signal(dict)
+
+    _notext_dot_icon: "QIcon | None" = None
+
+    @staticmethod
+    def _make_badged_icon(imgpath: str, thumb_size: int) -> "QIcon":
+        """Load an image at thumbnail size and add a green dot badge."""
+        reader = QImageReader(imgpath)
+        reader.setScaledSize(QSize(thumb_size, thumb_size))
+        img = reader.read()
+        if img.isNull():
+            return QIcon(imgpath)
+        pixmap = QPixmap.fromImage(img)
+        # Paint green dot badge at top-right corner
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        dot_size = 8
+        margin = 2
+        # White border ring for contrast
+        painter.setBrush(QColor(255, 255, 255))
+        r = QRect(pixmap.width() - dot_size - margin, margin, dot_size, dot_size)
+        painter.drawEllipse(r.adjusted(-1, -1, 1, 1))
+        # Green fill (matches canvas notextLabel)
+        painter.setBrush(QColor(39, 174, 96))
+        painter.drawEllipse(r)
+        painter.end()
+        return QIcon(pixmap)
+
+    @staticmethod
+    def _get_notext_dot_icon() -> "QIcon":
+        """Return a small green dot icon for text-only list items (cached)."""
+        if MainWindow._notext_dot_icon is None:
+            pixmap = QPixmap(14, 14)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(255, 255, 255))
+            painter.drawEllipse(0, 0, 14, 14)
+            painter.setBrush(QColor(39, 174, 96))
+            painter.drawEllipse(1, 1, 12, 12)
+            painter.end()
+            MainWindow._notext_dot_icon = QIcon(pixmap)
+        return MainWindow._notext_dot_icon
 
     def __init__(
         self, app: QApplication, config: ProgramConfig, open_dir="", **exec_args
@@ -990,16 +1038,30 @@ class MainWindow(mainwindow_cls):
         if self.pageList.count() != 0:
             self.pageList.clear()
 
-        def item_func(imgname):
-            if len(self.imgtrans_proj.pages) >= shared.PAGELIST_THUMBNAIL_MAXNUM:
-                return QListWidgetItem(imgname)
-            else:
-                return QListWidgetItem(
-                    QIcon(osp.join(self.imgtrans_proj.directory, imgname)), imgname
-                )
+        use_thumbnails = len(self.imgtrans_proj.pages) < shared.PAGELIST_THUMBNAIL_MAXNUM
 
         for imgname in self.imgtrans_proj.pages:
-            lstitem = item_func(imgname)
+            has_notext = (
+                pcfg.use_notext_images
+                and self.imgtrans_proj.get_notext_path(imgname) is not None
+            )
+
+            if use_thumbnails:
+                imgpath = osp.join(self.imgtrans_proj.directory, imgname)
+                if has_notext:
+                    lstitem = QListWidgetItem(
+                        self._make_badged_icon(
+                            imgpath, shared.PAGELIST_THUMBNAIL_SIZE
+                        ),
+                        imgname,
+                    )
+                else:
+                    lstitem = QListWidgetItem(QIcon(imgpath), imgname)
+            else:
+                lstitem = QListWidgetItem(imgname)
+                if has_notext:
+                    lstitem.setIcon(self._get_notext_dot_icon())
+
             self.pageList.addItem(lstitem)
             if imgname == self.imgtrans_proj.current_img:
                 self.pageList.setCurrentItem(lstitem)

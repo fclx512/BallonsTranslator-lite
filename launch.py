@@ -30,8 +30,6 @@ index_url = os.environ.get("INDEX_URL", "")
 QT_APIS = ["pyqt6", "pyside6", "pyqt5", "pyside2"]
 stored_commit_hash = None
 
-REQ_WIN = ["pywin32"]
-
 IS_WIN7 = "Windows-7" in platform()
 
 parser = argparse.ArgumentParser()
@@ -534,6 +532,16 @@ def main():
     print(f"Branch: {BRANCH}")
     print(f"Commit hash: {commit}")
 
+    # ── Ensure core requirements before GPU detection ─────────────────
+    #     Must run BEFORE the GPU/CPU decision so that numpy, qtpy, etc.
+    #     are available regardless of CPU mode.  If packages are missing,
+    #     auto-install them and restart.
+    from utils.core_requirements import ensure_core_requirements
+
+    if ensure_core_requirements(APP_DIR):
+        restart()
+        return
+
     # ── GPU / CPU decision ────────────────────────────────────────────
     # Path A (one-click bundle embedded Python): BTRANSLATOR_GPU_MODE is
     #   set by launch.bat when NVIDIA GPU is detected.  We check whether
@@ -833,61 +841,44 @@ def main():
 
 
 def prepare_environment() -> bool:
-    """Install missing dependencies. Returns True if a restart is needed."""
+    """GPU / torch dependency setup.
 
-    # When using the bundled portable Python (ballontrans_pylibs_win),
-    # all dependencies are pre-installed — skip package management.
-    # This portably-distributed Python does not have pip or uv.
+    Core requirements (numpy, qtpy, ...) are already handled by
+    ``ensure_core_requirements()`` earlier in ``main()``.
+
+    This function only handles the ``--reinstall-torch`` flag for
+    force-reinstalling PyTorch with the appropriate CUDA version.
+    Returns False (no restart needed from this function).
+    """
+
+    # Bundled portable Python manages its own dependencies
     if "ballontrans_pylibs_win" in sys.executable:
-        print("Running from portable Python environment, skip dependency installation")
         return False
 
-    import importlib.util
-
-    if importlib.util.find_spec("packaging") is None:
-        run_pip("install packaging", "install packaging")
-
-    from utils.package import check_req_file, check_reqs
-
     if getattr(sys, "frozen", False):
-        print("Running as app, skip dependency installation")
         return False
 
     if args.frozen:
         return False
 
-    # In CPU mode, all dependencies are bundled in the portable environment
-    if args.cpu:
+    # --reinstall-torch is only meaningful for non-embedded Python
+    if not args.reinstall_torch:
         return False
 
-    # Conda environment detected — user manages deps themselves
-    if os.environ.get("CONDA_PREFIX") or os.environ.get("CONDA_DEFAULT_ENV"):
-        print("Conda environment detected, skip dependency installation")
-        return False
-
-    # Bootstrap uv (fast installer) — falls back to pip if uv can't be installed
+    # Bootstrap uv (fast installer) — falls back to pip if unavailable
     ensure_uv()
 
-    # Use uv for all subsequent package operations
-    _pip = run_uv if UV_AVAILABLE else run_pip
-
-    req_updated = False
-    if sys.platform == "win32":
-        for req in REQ_WIN:
-            if not check_reqs([req]):
-                _pip(f"install {req}", req)
-                req_updated = True
-
     # Detect NVIDIA GPU architecture to pick the right CUDA version
-    _torch_index = "https://download.pytorch.org/whl/cu124"
     _gpu_info = detect_gpu_info()
     if _gpu_info:
         print(_gpu_info["message"])
-        if _gpu_info["torch_index"]:
-            _torch_index = _gpu_info["torch_index"]
-        else:
+        if not _gpu_info["torch_index"]:
             # torch_index is None → GPU too old for CUDA PyTorch (e.g. Kepler)
             print("  Skipping CUDA PyTorch setup for this GPU.")
+            return False
+
+    _torch_index = (_gpu_info or {}).get("torch_index") or "https://download.pytorch.org/whl/cu124"
+
     if "nightly" in _torch_index:
         torch_command = os.environ.get(
             "TORCH_COMMAND",
@@ -898,28 +889,18 @@ def prepare_environment() -> bool:
             "TORCH_COMMAND",
             f"uv pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --index-url {_torch_index}",
         )
-    if args.reinstall_torch:
-        run(
-            f'"{python}" -m {torch_command}',
-            "Installing torch and torchvision",
-            "Couldn't install torch",
-            live=True,
-        )
-        req_updated = True
 
-    # Core requirements file — triggers restart if installed, giving newly
-    # installed packages a clean import state (parallels upstream's
-    # ensure_core_requirements → restart pattern).
-    if not check_req_file(args.requirements):
-        _pip(f"install -r {args.requirements}", "requirements")
-        return True
+    run(
+        f'"{python}" -m {torch_command}',
+        "Installing torch and torchvision",
+        "Couldn't install torch",
+        live=True,
+    )
 
-    # Non-restart updates: pywin32, torch reinstall — these don't need a
-    # restart because they affect later module loads, not startup imports.
-    if req_updated:
-        import site
+    import importlib
+    import site
 
-        importlib.reload(site)
+    importlib.reload(site)
 
     return False
 

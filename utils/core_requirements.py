@@ -1,37 +1,39 @@
-"""Lightweight core-dependency probe for startup robustness.
+"""Core-dependency probe for startup robustness.
 
-Checks whether essential Python packages are importable *before* the app
-attempts to use them.  Unlike the upstream ``ballontranslator``, this
-implementation **never auto-installs** or restarts — it only logs clear
-guidance so the user can resolve the issue (or the one-click bundle already
-has everything).
+Two entry points:
 
-Exported interface
-------------------
-``warn_missing_core_imports()`` -> List[str]
-    Probe the package list and return descriptions of any failures.
+``ensure_core_requirements()``
+    Auto-installs missing core packages and returns ``True`` if a restart is
+    needed.  Called early in ``launch.py``, **before** Qt / config init.
 
-``CORE_IMPORT_PROBES``
-    The probe list, importable for inspection / extension.
+``warn_missing_core_imports()``
+    Lightweight secondary check that only prints warnings.  Called after
+    ``prepare_environment()`` as a safety net.
 """
 
 import importlib
+import os
 import sys
-from typing import Iterable, List, Tuple
+from pathlib import Path
+from typing import Callable, Iterable, List, Optional, Tuple
+
+from utils.package_installer import install as _install_packages
 
 # (module_name, (required_attr, …))
 #  — attr tuple is empty when merely importing the module suffices.
 CORE_IMPORT_PROBES: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
+    ("packaging", ()),
     ("qtpy", ()),
+    ("qtpy.QtCore", ("Qt",)),
     ("numpy", ()),
-    # PIL is NOT probed here — PIL.Image is a submodule that isn't loaded by
-    # import PIL alone.  The standard (module, attr) check with ("PIL", ())
-    # would pass even if PIL.Image is broken.  Instead a deep submodule probe
-    # is done in warn_missing_core_imports().
+    ("PIL", ()),
+    ("pillow_jxl", ()),
     ("requests", ()),
     ("tqdm", ()),
     ("termcolor", ()),
     ("colorama", ()),
+    ("natsort", ()),
+    ("cv2", ("IMREAD_COLOR", "IMREAD_GRAYSCALE", "cvtColor")),
 )
 
 
@@ -42,7 +44,7 @@ def _platform_probes() -> Tuple[Tuple[str, Tuple[str, ...]], ...]:
 
 
 def check_core_imports(
-    probes: Iterable[Tuple[str, Tuple[str, ...]]] = None,
+    probes: Optional[Iterable[Tuple[str, Tuple[str, ...]]]] = None,
 ) -> List[str]:
     """Return human-readable descriptions of packages that cannot be imported.
 
@@ -68,13 +70,102 @@ def check_core_imports(
     return failures
 
 
+def _drop_probe_modules(
+    probes: Iterable[Tuple[str, Tuple[str, ...]]],
+):
+    """Remove failed probe modules from sys.modules so a future re-import
+    actually re-executes the real code after installation."""
+    for module_name, _ in probes:
+        root = module_name.split(".", 1)[0]
+        for loaded_name in list(sys.modules):
+            if loaded_name == root or loaded_name.startswith(root + "."):
+                sys.modules.pop(loaded_name, None)
+    importlib.invalidate_caches()
+
+
+def ensure_core_requirements(
+    repo_root: str = "",
+    requirements_file: str = "",
+    backend: str = "auto",
+    env: Optional[dict] = None,
+    force: bool = False,
+    progress_callback: Optional[Callable[[dict], None]] = None,
+) -> bool:
+    """Check core imports and auto-install any missing packages.
+
+    Returns ``True`` if packages were installed (caller should restart
+    the process so the new packages are fully loaded).  Returns ``False``
+    if everything is already satisfied.
+
+    When installation fails, prints an error and returns ``False`` instead
+    of raising — the app continues with warnings so the user can manually
+    ``pip install -r requirements.txt``.
+    """
+    if getattr(sys, "frozen", False):
+        return False
+
+    repo_path = Path(repo_root or Path(__file__).resolve().parent.parent)
+    req_path = (
+        Path(requirements_file)
+        if requirements_file
+        else repo_path / "requirements.txt"
+    )
+
+    probes = tuple(CORE_IMPORT_PROBES) + _platform_probes()
+    failures = check_core_imports(probes)
+    if not force and not failures:
+        return False
+
+    print("―" * 50)
+    print("Some core Python packages could not be imported.")
+    print("The application may not work correctly until they are installed.")
+    if failures:
+        print()
+        print("Missing packages:")
+        for f in failures:
+            print(f)
+    print()
+    print(f"Installing core requirements from {req_path}...")
+    print("―" * 50)
+
+    result = _install_packages(
+        requirements_file=str(req_path),
+        backend=backend,
+        env=env or os.environ.copy(),
+        progress_callback=progress_callback,
+    )
+
+    if not result.ok:
+        print()
+        print("!" * 50)
+        print("Failed to install core Python requirements.")
+        print(f"  Command: {result.command_text}")
+        print(f"  Exit code: {result.returncode}")
+        if result.stderr:
+            print(f"  Error: {result.stderr[:1000]}")
+        print()
+        print("Please run manually:")
+        print(f"  pip install -r {req_path}")
+        print("!" * 50)
+        print()
+        return False
+
+    _drop_probe_modules(probes)
+    print()
+    print("Core Python requirements installed successfully.")
+    print("Restarting to load new packages...")
+    return True
+
+
 def warn_missing_core_imports(
-    probes: Iterable[Tuple[str, Tuple[str, ...]]] = None,
+    probes: Optional[Iterable[Tuple[str, Iterable[str]]]] = None,
 ) -> List[str]:
     """Check core imports and print warnings if any are missing.
 
+    Non-fatal — always returns without raising.  This is a secondary check
+    that runs after ``prepare_environment()``; it only warns, never installs.
+
     Returns the list of failure descriptions (empty = everything is fine).
-    Non-fatal — always returns without raising.
     """
     failures = check_core_imports(probes)
 
@@ -102,4 +193,5 @@ def warn_missing_core_imports(
             print("  pip install -r requirements.txt")
         print("―" * 50)
         print()
+
     return failures

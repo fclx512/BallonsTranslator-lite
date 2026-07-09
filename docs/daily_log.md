@@ -2,6 +2,61 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。按照时间顺序撰写。
 
+## 2026-07-09
+
+### 核心依赖自动安装 + 启动时序修复（看齐上游）
+
+**问题：** 用户反馈系统 Python 启动时缺少核心依赖（qtpy、numpy 等），提示 `pip install -r requirements.txt` 后退出。根因：GPU 检测到 NVIDIA 显卡但 PyTorch 未装 → 自动 `args.cpu = True` → `prepare_environment()` 的 `if args.cpu: return` 跳过全部依赖安装 → 核心依赖缺失。
+
+**上游参考：** dmMaze/BallonsTranslator `easy_install` 分支已将核心依赖管理重构为 `ensure_core_requirements()`（`utils/core_requirements.py`）+ `package_installer.py` 结构化安装后端。核心依赖在 GPU 检测之前自动安装，装完重启。
+
+**改动：**
+
+1. **`utils/package_installer.py`（新）** — 移植上游的结构化安装后端：`InstallResult` 数据类、`resolve_backend()` 自动选 uv/pip、`build_install_command()` 不用 `shell=True`、`install()` 统一入口流式输出
+
+2. **`utils/core_requirements.py`（重写）** — 加入 `ensure_core_requirements()`：
+   - 探针列表扩充至上游水准：packaging、qtpy、numpy、PIL、cv2、natsort、win32api 等
+   - 任一探针失败 → 自动 `pip install -r requirements.txt` → 成功则清理 sys.modules 缓存后返回 True（触发 restart）
+   - 安装失败只打印错误不阻塞启动
+   - 保留 `warn_missing_core_imports()` 作为 Qt 初始化后的二次验证
+
+3. **`launch.py`** — `ensure_core_requirements()` 调用移至 GPU 检测之前，解决 `args.cpu` 自动 fallback 误杀依赖安装的 bug；`prepare_environment()` 精简为仅处理 `--reinstall-torch`；移除已无用的 `REQ_WIN`
+
+**涉及文件：** `utils/package_installer.py`（新）、`utils/core_requirements.py`、`launch.py`
+
+---
+
+### 画布状态标签样式统一 + 无字图绿点徽标
+
+**需求：** Preview 和 No-text BG 两个状态标签大小不统一，且未在画布缩放/模式切换时动态排布。页表列表项缺少无字图标记。
+
+**改动：**
+
+- `ui/canvas.py` — `_layout_status_labels()` 新方法统一两个标签宽度（取较宽者），动态堆叠定位（preview 在上、notext 在下，preview 隐藏时 notext 上移）；preview/notext 标签 padding/font-size 增大、圆角加粗；preview/notext 切换和 `updateLayers` 时均重排
+- `ui/mainwindow.py` — 页表列表项支持无字图标记：缩略图模式在右上角绘制绿点角标（`_make_badged_icon`），纯文本模式显示小绿点图标（`_get_notext_dot_icon`）；`_notext_dot_icon` 类缓存避免重复绘制
+
+**涉及文件：** `ui/canvas.py`、`ui/mainwindow.py`
+
+---
+
+### 无字图配对工具 bugfix
+
+**问题：** 保存无字图时引用 `display_name` 字段可能为 `None`，导致导出路径异常。
+
+**改动：** `tools/无字图配对工具.py:1253` — `base = s['display_name'] or Path(...).stem` → `base = Path(...).stem`，始终用源文件名
+
+**涉及文件：** `tools/无字图配对工具.py`
+
+---
+
+### CLAUDE.md → AGENTS.md
+
+`CLAUDE.md` 被删除，新增 `AGENTS.md`（内容相近）。.zcode/ 配置目录出现。未追溯确切触发动作，属工具链自动更新。
+
+**涉及文件：** `CLAUDE.md`（删）、`AGENTS.md`（新）、`.zcode/`（新）
+
+---
+
 ## 2026-07-07
 
 ### 全新启动时自动读取系统语言

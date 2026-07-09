@@ -352,6 +352,10 @@ class Canvas(QGraphicsScene):
         self.previewLabel.setObjectName("PreviewLabel")
         self.previewLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.previewLabel.setText(self.tr("PREVIEW"))
+        self.previewLabel.setStyleSheet(
+            "background: rgba(230, 126, 34, 200); color: white; "
+            "padding: 4px 12px; border-radius: 6px; font-size: 15px;"
+        )
         self.previewLabel.adjustSize()
         self.previewLabel.setVisible(False)
 
@@ -361,10 +365,11 @@ class Canvas(QGraphicsScene):
         self.notextLabel.setText(self.tr("No-text BG"))
         self.notextLabel.setStyleSheet(
             "background: rgba(39, 174, 96, 180); color: white; "
-            "padding: 2px 8px; border-radius: 4px; font-size: 11px;"
+            "padding: 4px 12px; border-radius: 6px; font-size: 15px;"
         )
         self.notextLabel.adjustSize()
         self.notextLabel.setVisible(False)
+        self._layout_status_labels()
 
         self.txtblkShapeControl = TextBlkShapeControl(self.gv)
 
@@ -614,7 +619,8 @@ class Canvas(QGraphicsScene):
 
         self.previewLabel.setVisible(True)
         self.previewLabel.raise_()
-        self.previewLabel.adjustSize()
+        self.notextLabel.raise_()
+        self._layout_status_labels()
 
         self.gv.viewport().update()
 
@@ -626,6 +632,7 @@ class Canvas(QGraphicsScene):
             self.textLayer.setVisible(True)
 
         self.previewLabel.setVisible(False)
+        self._layout_status_labels()
 
     def updateLayers(self):
 
@@ -662,6 +669,7 @@ class Canvas(QGraphicsScene):
         self.notextLabel.setVisible(
             pcfg.use_notext_images and self.imgtrans_proj.notext_array is not None
         )
+        self._layout_status_labels()
 
     def setMaskTransparency(self, transparency: float):
         pcfg.mask_transparency = transparency
@@ -726,6 +734,26 @@ class Canvas(QGraphicsScene):
             self.baseLayer.sceneBoundingRect().height(),
         )
 
+    def _layout_status_labels(self):
+        """Unify label sizes and position them dynamically in top-left corner."""
+        # Re-adjust to content (text length may vary by i18n)
+        self.previewLabel.adjustSize()
+        self.notextLabel.adjustSize()
+
+        # Both labels take the wider one's width for visual consistency
+        w = max(self.previewLabel.width(), self.notextLabel.width())
+        if w > 0:
+            self.previewLabel.setFixedWidth(w)
+            self.notextLabel.setFixedWidth(w)
+
+        # Dynamic positioning: preview on top, notext below; when preview
+        # is hidden, notext moves up to fill the space.
+        self.previewLabel.move(8, 8)
+        if self.previewLabel.isVisible():
+            self.notextLabel.move(8, 8 + self.previewLabel.height() + 4)
+        else:
+            self.notextLabel.move(8, 8)
+
     def onViewResized(self):
         gv_w, gv_h = self.gv.geometry().width(), self.gv.geometry().height()
 
@@ -740,11 +768,7 @@ class Canvas(QGraphicsScene):
         pos.setX(x - 30)
         self.search_widget.move(pos)
 
-        plw = self.previewLabel.width()
-        self.previewLabel.move((gv_w - plw) // 2, 12)
-
-        nlw = self.notextLabel.width()
-        self.notextLabel.move((gv_w - nlw) // 2, 48)
+        self._layout_status_labels()
 
     def onScaleFactorChanged(self):
         self.scaleFactorLabel.setText(f"{self.scale_factor * 100:2.0f}%")

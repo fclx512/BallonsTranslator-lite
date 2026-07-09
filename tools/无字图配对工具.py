@@ -1250,7 +1250,7 @@ class MainWindow(QMainWindow):
             if not os.path.exists(src):
                 continue
             ext = Path(src).suffix
-            base = s['display_name'] or Path(self.text_images[idx]).stem
+            base = Path(self.text_images[idx]).stem
             if base in name_cnt:
                 name_cnt[base] += 1
                 dest = f"{base}_{name_cnt[base]}{ext}"
