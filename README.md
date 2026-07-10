@@ -2,61 +2,77 @@
 
 [简体中文](README.md) | [English](README_EN.md)
 
-<!-- SCREENSHOT: 主界面全景 -->
-
-基于 [BallonsTranslator](https://github.com/dmMaze/BallonsTranslator) 的轻量化漫画/图片翻译工具
-
-> **注意**：项目正处于高频重构阶段，说明可能不是最新。如有出入以实际行为为准
+基于 [BallonsTranslator](https://github.com/dmMaze/BallonsTranslator) 的精简分支，专注漫画/图片翻译核心管线。
 
 ---
 
-## 关于本项目
+## 与本家差异
 
-[BallonsTranslator](https://github.com/dmMaze/BallonsTranslator) 的多页嵌字管线效率很高，这是 fork 它的原因。但上游在长期维护中积累了相当多个人看来实用性下降的功能，选择多不等于好用
+### 模块精简
 
-本分支做的事：**保留核心嵌字能力，砍掉理解成本高的东西，优化交互体验**
+当前可用模块（与上游对比）：
 
-### 精简内容
+| 管线阶段 | lite 可用模块 | 上游额外模块（lite 未包含） |
+|---------|--------------|--------------------------|
+| 文字检测 | CTD、YSG | 同 |
+| OCR | MIT48px-CTC、LLM API OCR、LM Studio、关闭 | PaddleOCR、Google Vision、Bing Lens 等 |
+| 翻译 | LLM API（OpenAI 兼容）、Sakura | Baidu、Caiyun、DeepL、Google、Youdao、Papago 等传统机翻 |
+| 修图 | LaMa 512px、AOT、Lama MPE | — |
 
-**翻译器**：上游翻译接口繁多，但在非实时场景下传统机翻质量已经明显落后于大模型。已改版为一个统一化便于编辑的 LLM API 和一个离线备选（Sakura）
+其他已精简功能：
+- 查词（Saladict）
+- 关键词替换
+- 无头模式
 
-**OCR**：同理，质量差/老旧的方案挂在菜单里不是多个选择，是多个坑。有些或许不错，但部署基本都过分复杂/体积大且没有达到100%准确率。故只保留了本地 MIT48px-CTC 和可选的 LLM API OCR
+### 交互差异
 
-**修图**：保留了适用性相对较好的 lama_large_512px 和性能开销低的 AOT 。其余管线删减理由同上，依赖重、体积大，边际收益太低
+| 项目 | lite | 上游 |
+|------|------|------|
+| 设置面板 | 内部分页 + 中心模态（OverlayModal），遮罩仅覆盖中央画布区 | 右侧长卷轴滚动面板 |
+| 左侧面板（PageList/全局搜索） | 展开时推 canvas 右移，零遮挡 | 浮层遮挡画布 |
+| 关于页面 | Help 菜单（关于 + MCP 信息） | 独立 About 对话框 |
+| 文本框重排 | 右键菜单 + 快捷键 | 面板操作 |
 
-**辅助功能**：查词、关键词替换、无头模式——使用频率极低，或者交互逻辑独立一套，维护成本和实际收益不成比例。简而言之，我个人的使用流程中用不到
+### 部署差异
 
-### 交互
+- **捆绑 CPU PyTorch**：无 NVIDIA 显卡也可运行完整管线
+- **GPU 自动检测**：自动识别显卡架构代际，匹配 CUDA 版本（RTX 50 系列自动切 CUDA 12.8+）
+- **嵌入式 Python 环境**：`ballontrans_pylibs_win/` 自包含 Python 3.12 + 全部依赖，不依赖系统 Python
+- **不支持跨 Python ABI 注入 torch**：不再尝试在不同 Python 版本间共享 site-packages
 
-按照个人理解优化了部分流程和操作交互，目前（5/31）暂没有精力详细描述，后续会更新文档以及讲解视频
+> 上游有 macOS 和 AMD 显卡支持。本分支因缺少测试设备，仅面向 Windows x64 CUDA / CPU 环境。
 
-### 硬件
+---
 
-捆绑 CPU 版 PyTorch，没有独显也能跑完整管线。有 GPU 自动检测架构代际，无需手动配环境。RTX 50 系列自动切 CUDA 12.8+ nightly，旧卡同样识别并提示合适的 CUDA 版本
+## 部署
 
-本项目含模型、CPU PyTorch 和保证所有功能正常运行的依赖库总共约 **1.8 GB**。支持压缩打包快速切换设备运行
+### 系统要求
 
-项目理论上是可以去掉模型和CPU PyTorch实现更极限的精简运行的，但背景修复没有合适的处理方案无法跑通流程故没有细化该需求
-
-
-## 快速开始
+- **操作系统**：Windows 10+ x64
+- **显卡**：可选（NVIDIA GPU 加速支持，纯 CPU 可运行）
+- **磁盘空间**：约 **2.1 GB**（含模型文件 ~700 MB、嵌入式 Python 环境 ~1.4 GB）
+- **VC++ 运行时**：[VC++ Redistributable 2015-2022](https://aka.ms/vs/17/release/vc_redist.x64.exe)（embedded Python 依赖）
 
 ### Windows 一键启动
 
-1. 下载源码，解压到目录
+1. 下载源码（ZIP 或 git clone），解压到本地目录
 2. 运行启动脚本：
-   - `launch.bat` — 自动检测 GPU/CPU 模式，Git 用户自动检查更新（推荐）
+   - `launch.bat` — 自动检测 GPU/CPU 模式（推荐）
    - `launch.bat --cpu` — 强制 CPU 模式
 3. 首次启动自动下载模型文件（约 700 MB），保持网络畅通
 
-因网络问题无法正常下载依赖和模型的移步至网盘：[google盘](https://drive.google.com/drive/folders/1WJXjcQt7UzHvRpH3QfwcOokL8Fm7l0zT?usp=sharing)[123盘](https://1815181720.share.123865.com/123pan/sKBtVv-Zs1Vd)
+网络问题无法下载的，可从网盘获取完整包：
 
-使用方法：将下载后的两个压缩包解压至项目根目录
-解压后示意：
+- [Google Drive](https://drive.google.com/drive/folders/1WJXjcQt7UzHvRpH3QfwcOokL8Fm7l0zT?usp=sharing) （更新有可能延迟，优先选择123盘）
+- [123 云盘](https://1815181720.share.123865.com/123pan/sKBtVv-Zs1Vd)
 
+使用方法：将下载后的压缩包解压至项目根目录，得到：
+
+```
 BallonsTranslator-lite/
-├── ballontrans_pylibs_win/
-└── data/
+├── ballontrans_pylibs_win/   # 嵌入式 Python 环境
+└── data/                     # 模型文件
+```
 
 ### 源码运行
 
@@ -74,57 +90,72 @@ python launch.py --cpu
 python launch.py --update
 ```
 
-> 上游支持 macOS 和 AMD 显卡，因缺少设备测试，本分支只面向 Windows CUDA / CPU 环境
+首次启动自动安装依赖。如自动安装失败，可手动执行：
 
----
+```bash
+pip install -r requirements.txt
+```
 
-## 功能概览
+### 模型下载
 
-待施工……
+模型文件在首次启动时自动下载。如需手动准备，将模型文件放入 `data/models/` 目录。
 
-## 模块一览
+### GPU 加速
 
-| 阶段 | 可用模块 |
-|------|----------|
-| 文字检测 | CTD（默认）、YSG |
-| OCR | MIT48px-CTC（默认）、LLM API OCR、LM Studio、关闭 OCR |
-| 翻译 | LLM API（OpenAI 兼容）、Sakura |
-| 修图 | LaMa 512px（默认）、AOT |
+#### 一键包用户（嵌入式 Python）
 
-> 想添加自己的模块？参见 [模块开发指南](docs/模块开发指南.md)
+运行 `install_cuda.bat` 将 CUDA PyTorch 安装到嵌入式 Python 环境：
 
----
+```cmd
+install_cuda.bat
+```
 
-## 常见问题
+脚本自动检测 GPU 计算能力并选择对应 CUDA 版本（支持10系以上，更老的架构性能较低故不做一键下载支持，请自行测试兼容性）
 
-**RTX 50 系列 CUDA 不可用？**
+#### 源码运行用户
 
-Blackwell 架构需要 CUDA 12.8+。手动重装：
+确保系统 Python 已安装 CUDA 版 PyTorch：
+
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+```
+
+**RTX 50 系列（Blackwell）** 需要 CUDA 12.8+：
 
 ```bash
 pip uninstall torch torchvision torchaudio ultralytics -y
 python launch.py --reinstall-torch
 ```
 
-**老显卡（GTX 10 系列等）CUDA 不可用？**
-
-Maxwell/Pascal 等旧架构建议尝试 CUDA 11.8：
+**老显卡（GTX 10 系列等）** 建议 CUDA 11.8：
 
 ```bash
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
 
-Kepler（GTX 6xx / 7xx）可能不被 PyTorch 2.x 支持，建议 CPU 模式：`python launch.py --cpu`
+**Kepler（GTX 6xx / 7xx）** 不被 PyTorch 2.x 支持，请使用 CPU 模式：`python launch.py --cpu`
 
-**如何更新？**
+### 更新
 
-- 便携版用户：使用 `launch.bat` 启动（ZIP 发行版自动检查 GitHub 更新，有新版时下载并在下次启动应用）。无需 git
-- 源码运行用户：`launch.bat --update`（Git 用户走 git pull，ZIP 用户走直接下载）
-- 或在软件中点击关于→检查更新
+- **ZIP 发行版用户**：`launch.bat` 启动时自动检查 GitHub 更新，新版在下次启动时应用
+- **Git 用户**：
+  - 使用启动脚本：`launch.bat --update`
+  - 直接运行 Python：`python launch.py --update`
+- **应用内**：Help → About → 检查更新
 
-**快捷键怎么自定义？**
+## 常见问题
+
+**如何自定义快捷键？**
 
 参见 [快捷键指南](docs/快捷键.md)
+
+**如何添加翻译 API？**
+
+在设置面板 → Models → API Profiles 中配置。
+
+**MCP 如何使用？**
+
+参见 [MCP 用户指南](docs/MCP用户指南.md)
 
 ---
 

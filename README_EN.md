@@ -2,49 +2,76 @@
 
 [简体中文](README.md) | [English](README_EN.md)
 
-<!-- SCREENSHOT: Main interface overview -->
-
-A lightweight manga/comic translation tool based on [BallonsTranslator](https://github.com/dmMaze/BallonsTranslator).
-
-> **Note**: This project is under active refactoring. The README may not reflect all recent changes — when in doubt, the actual behavior takes precedence.
+A lightweight fork of [BallonsTranslator](https://github.com/dmMaze/BallonsTranslator) focused on the core manga/comic translation pipeline.
 
 ---
 
-## About This Project
+## Differences from Upstream
 
-BallonsTranslator was a full-featured open-source lettering tool covering numerous translation engines, OCR backends, and inpainting pipelines. But more features meant a steeper learning curve — new users faced a dozen translator options and OCR engines with little guidance on what to pick, while most of them had already been superseded by LLM-based translation in everyday use.
+### Module Selection
 
-This fork exists to **keep the full lettering pipeline while drastically lowering the barrier to entry**:
+Available modules in lite vs. upstream:
 
-### Streamlined modules
+| Stage | lite Modules | Upstream-Only Modules (not in lite) |
+|-------|-------------|--------------------------------------|
+| Text Detection | CTD, YSG | Same |
+| OCR | MIT48px-CTC, LLM API OCR, LM Studio, Disabled | PaddleOCR, Google Vision, Bing Lens, etc. |
+| Translation | LLM API (OpenAI-compatible), Sakura | Baidu, Caiyun, DeepL, Google, Youdao, Papago, etc. |
+| Inpainting | LaMa 512px, AOT, Lama MPE | — |
 
-Dozens of translators (Baidu, Caiyun, DeepL, Google, Youdao, Papago…) and OCR engines (PaddleOCR, Google Vision, Bing Lens…) were removed — traditional machine translation no longer competes with LLMs for non-real-time scenarios, and low-quality OCR engines only add noise. Fewer choices means a cleaner config panel and less decision fatigue.
+Other streamlined features:
+- Saladict dictionary lookup
+- Keyword substitution
+- Headless mode
 
-Heavy inpainting pipelines like Flux Inpaint were dropped in favor of LaMa (best quality) and AOT (lightweight). Features like Saladict dictionary lookup, keyword substitution, and headless mode — which added complexity without daily utility — were removed as well.
+### Interaction Changes
 
-### Simplified interaction
+| Item | lite | Upstream |
+|------|------|----------|
+| Settings panel | Internal tabbed pages + center modal (OverlayModal), scrim covers canvas only | Right-side long scroll panel |
+| Left panels (PageList/Global Search) | Push canvas to the right when expanded, zero occlusion | Overlay on top of canvas |
+| About page | Help menu (About + MCP info) | Standalone About dialog |
+| Text block reordering | Context menu + keyboard shortcuts | Panel-based |
 
-The UI and interaction flow have been reworked to be more intuitive. Specifics are covered in the workflow section and video tutorials rather than listed here.
+### Deployment Differences
 
-### Lower hardware requirements
+- **Bundled CPU PyTorch**: Full pipeline runs without an NVIDIA GPU
+- **Auto GPU detection**: Detects GPU architecture generation and matches CUDA version (RTX 50 series auto-switches to CUDA 12.8+)
+- **Embedded Python environment**: `ballontrans_pylibs_win/` is a self-contained Python 3.12 environment with all dependencies, no system Python required
+- **No cross-Python ABI torch injection**: No longer attempts to share site-packages across different Python versions
 
-Bundled CPU-only PyTorch means the full translation pipeline runs without an NVIDIA GPU. GPU architecture is auto-detected and matched to the appropriate CUDA version — no manual environment setup needed.
-
-### Bottom line
-
-The complete project (models + CPU PyTorch) is approximately **1.8 GB** and easy to package for portability.
+> The upstream supports macOS and AMD GPUs. This fork targets Windows x64 CUDA/CPU only, due to lack of test hardware.
 
 ---
 
-## Quick Start
+## Deployment
+
+### System Requirements
+
+- **OS**: Windows 10+ x64
+- **GPU**: Optional (NVIDIA GPU provides acceleration, CPU-only works)
+- **Disk Space**: ~**2.1 GB** (models ~700 MB + embedded Python ~1.4 GB)
+- **VC++ Runtime**: [VC++ Redistributable 2015-2022](https://aka.ms/vs/17/release/vc_redist.x64.exe) (required by embedded Python)
 
 ### Windows One-Click
 
-1. Download the source code and extract to a local directory
-2. Run a launch script:
-   - `launch.bat` — auto-detects GPU/CPU mode; Git users get automatic update checks (recommended)
+1. Download the source (ZIP or git clone) and extract to a local directory
+2. Run the launch script:
+   - `launch.bat` — auto-detects GPU/CPU mode (recommended)
    - `launch.bat --cpu` — force CPU-only mode
-3. Model files (~700 MB) are downloaded automatically on first launch — keep your internet connection active
+3. Model files (~700 MB) download automatically on first launch — keep your internet connection active
+
+If downloads fail due to network issues, get the full package from cloud storage:
+
+- [Google Drive](https://drive.google.com/drive/folders/1WJXjcQt7UzHvRpH3QfwcOokL8Fm7l0zT?usp=sharing)
+
+Extract the downloaded archives into the project root:
+
+```
+BallonsTranslator-lite/
+├── ballontrans_pylibs_win/   # Embedded Python environment
+└── data/                     # Model files
+```
 
 ### Run from Source
 
@@ -62,91 +89,72 @@ python launch.py --cpu
 python launch.py --update
 ```
 
-Dependencies and model files are installed automatically on first launch. If auto-download fails, place the `data` directory in the project root manually.
+Dependencies install automatically on first launch. If auto-install fails:
 
-GPU mode auto-detects NVIDIA GPU architecture (Kepler through Blackwell) and selects the appropriate CUDA version. RTX 50 series (Blackwell) auto-switches to CUDA 12.8+ nightly; older cards receive generation-appropriate recommendations.
+```bash
+pip install -r requirements.txt
+```
 
-> The upstream supports macOS and AMD GPUs, but lacking test hardware this fork targets Windows CUDA / CPU only.
+### Model Download
 
----
+Models download automatically on first launch. For manual setup, place model files in `data/models/`.
 
-## Feature Overview
+### GPU Acceleration
 
-(Detailed workflow is covered in video tutorials.)
+#### Portable Users (embedded Python)
 
-**One-click translation pipeline** — text detection → OCR → translation → inpainting → typesetting, fully automatic
+Run `install_cuda.bat` to install CUDA PyTorch into the embedded Python environment:
 
-<!-- SCREENSHOT: Before/after pipeline comparison -->
+```cmd
+install_cuda.bat
+```
 
-**Typesetting** — double-click any text block on the canvas to edit. Font, size, stroke color, alignment, line spacing, shadow and gradient are all adjustable. Style presets let you apply consistent formatting across pages
+The script auto-detects GPU compute capability and selects the appropriate CUDA version.
 
-<!-- SCREENSHOT: Canvas editing with effects -->
+#### Source Users
 
-**Inpainting** — brush tool for targeted text removal, rectangle/lasso selection for batch clearing, and mask editing for fine control
-
-<!-- SCREENSHOT: Before/after inpainting comparison -->
-
-**AI assistant** — modify translations and styles through natural language in the chat panel. Changes are reviewed item by item before being applied
-
-<!-- SCREENSHOT: AI chat panel + review window -->
-
-**Search & replace** — within a page or across pages, search source text and/or translations with batch replace
-
-**Customization** — multiple color themes (light/dark), rebindable keyboard shortcuts
-
----
-
-## Module Reference
-
-| Stage | Available Modules |
-|-------|------------------|
-| Text Detection | CTD (default), YSG |
-| OCR | MIT48px-CTC (default), LLM API OCR, LM Studio, Disabled |
-| Translation | LLM API (OpenAI-compatible), Sakura |
-| Inpainting | LaMa 512px (default), AOT |
-
-> Want to add your own module? See [Module Developer Guide](docs/模块开发指南.md)
-
----
-
-## FAQ
-
-**PyTorch + CUDA not detected?**
-
-Make sure your system Python has CUDA-enabled PyTorch:
+Ensure your system Python has CUDA-enabled PyTorch:
 
 ```bash
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 
-**RTX 50 series CUDA not available?**
-
-Blackwell requires CUDA 12.8+. Manually reinstall:
+**RTX 50 series (Blackwell)** requires CUDA 12.8+:
 
 ```bash
 pip uninstall torch torchvision torchaudio ultralytics -y
 python launch.py --reinstall-torch
 ```
 
-**Older GPUs (GTX 10 series, etc.) — CUDA not available?**
-
-Maxwell/Pascal and other older architectures may work better with CUDA 11.8:
+**Older GPUs (GTX 10 series, etc.)** may work better with CUDA 11.8:
 
 ```bash
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
 
-Kepler (GTX 6xx / 7xx) may not be supported by PyTorch 2.x — use CPU mode: `python launch.py --cpu`
+**Kepler (GTX 6xx / 7xx)** is not supported by PyTorch 2.x — use CPU mode: `python launch.py --cpu`
 
-**How to update?**
+### Updating
 
-- Portable users: use `launch.bat` — auto-detects Git/ZIP mode; ZIP builds check for updates on each launch and apply on restart. No git required.
-- Source users: `launch.bat --update` (Git mode uses `git pull`; ZIP mode downloads directly)
-- Or click About → Check for Updates in the app.
+- **ZIP distribution users**: `launch.bat` checks for GitHub updates on each launch and applies them on restart
+- **Git users**:
+  - Using batch script: `launch.bat --update`
+  - Running Python directly: `python launch.py --update`
+- **In-app**: Help → About → Check for Updates
 
-**How to customize shortcuts?**
+## FAQ
+
+**How to customize keyboard shortcuts?**
 
 See [Shortcuts Guide](docs/快捷键.md)
+
+**How to configure translation API?**
+
+Settings → Models → API Profiles.
+
+**How to use MCP?**
+
+See [MCP User Guide](docs/MCP用户指南.md)
 
 ---
 

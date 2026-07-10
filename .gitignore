@@ -70,6 +70,7 @@ Ultralytics/settings.json
 .claude/
 config/custom_themes.json
 tools/*.history.json
+tools/.sort_history.json
 debug
 .agents/
 .zcode/
