@@ -1,17 +1,21 @@
 from typing import Callable
 
 from qtpy.QtCore import Qt, Signal
-from qtpy.QtGui import QDoubleValidator
+from qtpy.QtGui import QDoubleValidator, QFont
 from qtpy.QtWidgets import (
     QCheckBox,
     QGridLayout,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QPlainTextEdit,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
+
+from utils.shared import CONFIG_FONTSIZE_CONTENT
 
 from modules import (
     DEFAULT_DEVICE,
@@ -40,6 +44,7 @@ class ParamCheckGroup(QWidget):
         ncols = 3
         for ii, (k, v) in enumerate(check_group.items()):
             checker = QCheckBox(text=k, parent=self)
+            checker.setObjectName('ParamCheckBox')
             checker.setChecked(v)
             layout.addWidget(checker, ii // ncols, ii % ncols)
             self.label2widget[k] = checker
@@ -107,6 +112,7 @@ class ParamCheckerBox(QWidget):
         super().__init__(*args, **kwargs)
         self.param_key = param_key
         self.checker = QCheckBox()
+        self.checker.setObjectName('ParamCheckBox')
         name_label = ParamNameLabel(param_key)
         hlayout = QHBoxLayout(self)
         hlayout.addWidget(name_label)
@@ -126,6 +132,7 @@ class ParamCheckBox(QCheckBox):
 
     def __init__(self, param_key: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.setObjectName('ParamCheckBox')
         self.param_key = param_key
         self.stateChanged.connect(self.on_checker_changed)
 
@@ -156,8 +163,10 @@ class ParamPushButton(QPushButton):
 class ParamWidget(QWidget):
     paramwidget_edited = Signal(str, dict)
 
-    def __init__(self, params, scrollWidget: QWidget = None, *args, **kwargs) -> None:
+    def __init__(self, params, scrollWidget: QWidget = None, exclude_keys=None, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        self._exclude_keys = set(exclude_keys or [])
         layout = QHBoxLayout(self)
         self.param_layout = param_layout = QGridLayout()
         param_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -170,7 +179,7 @@ class ParamWidget(QWidget):
             self.setToolTip(self.tr(params["description"]))
 
         for ii, param_key in enumerate(params):
-            if param_key == "description" or param_key.startswith("_"):
+            if param_key == "description" or param_key.startswith("_") or param_key in self._exclude_keys:
                 continue
             display_param_name = param_key
             param_dict = None
@@ -271,6 +280,24 @@ class ParamWidget(QWidget):
                 param_label = ParamNameLabel(display_param_name)
                 if param_dict is not None and "description" in param_dict:
                     param_label.setToolTip(self.tr(param_dict["description"]))
+
+                # label_above: place label above widget spanning full grid width.
+                # Used for long-form editors (chat sample, prompts, etc.).
+                if (
+                    param_dict is not None
+                    and param_dict.get("label_above", False)
+                    and param_widget is not None
+                ):
+                    row_widget = QWidget()
+                    row_widget.setObjectName("ParamLabelAboveRow")
+                    row_layout = QVBoxLayout(row_widget)
+                    row_layout.setContentsMargins(0, 0, 0, 0)
+                    row_layout.setSpacing(4)
+                    row_layout.addWidget(param_label)
+                    row_layout.addWidget(param_widget)
+                    param_layout.addWidget(row_widget, ii, 0, 1, 2)
+                    continue
+
                 param_layout.addWidget(param_label, ii, 0)
                 widget_idx = 1
             if param_widget is not None:
@@ -359,7 +386,7 @@ class ModuleConfigParseWidget(QWidget):
         self.param_widget_map = {}
         layout.addLayout(p_layout)
         layout.addLayout(self.params_layout)
-        layout.setSpacing(30)
+        layout.setSpacing(14)
         self.vlayout = layout
 
         self.visibleWidget: QWidget = None
@@ -462,6 +489,16 @@ class ModuleConfigParseWidget(QWidget):
 
 
 class TranslatorConfigPanel(ModuleConfigParseWidget):
+    """Translator configuration panel.
+
+    Extends the base module panel with:
+    - Source / target language selectors.
+    - Dedicated ``active_profile`` section (extracted from ParamWidget for
+      visual prominence) when the selected translator supports it.
+    """
+
+    navigate_to_llm_profile = Signal()
+
     def __init__(
         self, module_name, scrollWidget: QWidget = None, *args, **kwargs
     ) -> None:
@@ -474,6 +511,7 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
         )
         self.translator_changed = self.module_changed
 
+        # ── Source / Target languages ────────────────────────────
         self.source_combobox = ConfigComboBox(scrollWidget=scrollWidget)
         self.target_combobox = ConfigComboBox(scrollWidget=scrollWidget)
 
@@ -488,6 +526,48 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
         st_layout.addWidget(self.target_combobox)
 
         self.vlayout.insertLayout(1, st_layout)
+
+        # ── Active Profile section ───────────────────────────────
+        profile_section = QWidget()
+        ps_layout = QVBoxLayout(profile_section)
+        ps_layout.setContentsMargins(24, 6, 24, 6)
+        ps_layout.setSpacing(4)
+
+        # Section header label
+        ps_header = QLabel(self.tr("API Profile"))
+        hfont = ps_header.font()
+        hfont.setPointSizeF(CONFIG_FONTSIZE_CONTENT)
+        hfont.setWeight(QFont.Weight.Normal)
+        ps_header.setFont(hfont)
+        ps_layout.addWidget(ps_header)
+
+        # Combo + button row
+        profile_row = QHBoxLayout()
+        profile_row.setSpacing(6)
+
+        self._profile_combo = ConfigComboBox(scrollWidget=scrollWidget)
+        self._profile_combo.setFixedWidth(CONFIG_COMBOBOX_LONG)
+        self._profile_combo.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
+        )
+
+        manage_btn = QPushButton(self.tr("Manage…"))
+        manage_btn.setObjectName("ConfigButton")
+        manage_btn.clicked.connect(self._on_manage_profiles)
+
+        profile_row.addWidget(self._profile_combo)
+        profile_row.addWidget(manage_btn)
+        profile_row.addStretch()
+
+        ps_layout.addLayout(profile_row)
+
+        self.vlayout.insertWidget(2, profile_section)
+        self._profile_section = profile_section
+        self._profile_section.setVisible(False)
+
+        self._profile_combo.currentTextChanged.connect(self._on_profile_changed)
+
+    # ── Public ───────────────────────────────────────────────────
 
     def finishSetTranslator(self, translator: BaseTranslator):
         self.source_combobox.blockSignals(True)
@@ -506,6 +586,64 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
         self.source_combobox.blockSignals(False)
         self.target_combobox.blockSignals(False)
         self.module_combobox.blockSignals(False)
+
+    # ── Overrides ────────────────────────────────────────────────
+
+    def updateModuleParamWidget(self):
+        """Filter out ``active_profile`` — handled by dedicated section."""
+        module = self.module_combobox.currentText()
+        if self.visibleWidget is not None:
+            self.visibleWidget.hide()
+
+        self._refresh_profile_section()
+
+        if module in self.param_widget_map:
+            widget = self.param_widget_map[module]
+            if widget is None:
+                params = self.module_dict[module]
+                filtered = {
+                    k: v for k, v in params.items() if k != "active_profile"
+                }
+                widget = ParamWidget(
+                    filtered, scrollWidget=self, exclude_keys={"active_profile"}
+                )
+                widget.paramwidget_edited.connect(self.paramwidget_edited)
+                self.param_widget_map[module] = widget
+                self.params_layout.addWidget(widget)
+            else:
+                widget.show()
+            self.visibleWidget = widget
+
+    # ── Profile section ──────────────────────────────────────────
+
+    def _refresh_profile_section(self):
+        """Show/hide and populate the profile combo for the current translator."""
+        module = self.module_combobox.currentText()
+        params = self.module_dict.get(module)
+        has_profile = bool(params and "active_profile" in params)
+        self._profile_section.setVisible(has_profile)
+        if not has_profile:
+            return
+
+        active_cfg = params["active_profile"]
+        options = active_cfg.get("options", [])
+        value = active_cfg.get("value", "")
+        self._profile_combo.blockSignals(True)
+        self._profile_combo.clear()
+        self._profile_combo.addItems(options)
+        self._profile_combo.setCurrentText(value)
+        self._profile_combo.blockSignals(False)
+
+    def _on_profile_changed(self, profile_name: str):
+        """Emit param change through the standard path so module_manager
+        persists it and updates the translator instance."""
+        if profile_name:
+            self.paramwidget_edited.emit(
+                "active_profile", {"content": profile_name}
+            )
+
+    def _on_manage_profiles(self):
+        self.navigate_to_llm_profile.emit()
 
 
 class InpaintConfigPanel(ModuleConfigParseWidget):
@@ -551,6 +689,7 @@ class TextDetectConfigPanel(ModuleConfigParseWidget):
         self.detector_changed = self.module_changed
         self.setDetector = self.setModule
         self.keep_existing_checker = QCheckBox(text=self.tr("Keep Existing Lines"))
+        self.keep_existing_checker.setObjectName('ParamCheckBox')
         self.p_layout.insertWidget(2, self.keep_existing_checker)
 
 

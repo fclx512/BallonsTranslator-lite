@@ -152,9 +152,13 @@
         <message>
             <location filename="..\ui\mainwindowbars.py" line="651" />
             <source>Text layer opacity</source>
-            <translation>嵌字层不透明度</translation>
-        </message>
-    </context>
+		            <translation>嵌字层不透明度</translation>
+		        </message>
+		        <message>
+		            <source>Translator</source>
+		            <translation>翻译器</translation>
+		        </message>
+		    </context>
     <context>
         <name>Canvas</name>
         <message>
@@ -957,9 +961,25 @@
 	        </message>
 	        <message>
 	            <source>&lt;p&gt;When checked, &lt;b&gt;text stroke and shadow&lt;/b&gt; remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.&lt;/p&gt;</source>
-	            <translation>&lt;p&gt;勾选后，拖拽或调整文本框时&lt;b&gt;描边和阴影&lt;/b&gt;保持可见。取消勾选可在调整大小时获得最高帧率。&lt;/p&gt;</translation>
-	        </message>
-    </context>
+		            <translation>&lt;p&gt;勾选后，拖拽或调整文本框时&lt;b&gt;描边和阴影&lt;/b&gt;保持可见。取消勾选可在调整大小时获得最高帧率。&lt;/p&gt;</translation>
+		        </message>
+		        <message>
+		            <source>Modules</source>
+		            <translation>模块</translation>
+		        </message>
+		        <message>
+		            <source>Module Actions</source>
+		            <translation>模块操作</translation>
+		        </message>
+		        <message>
+		            <source>LLM Profile</source>
+		            <translation>LLM 配置</translation>
+		        </message>
+		        <message>
+		            <source>&lt;p&gt;Select the &lt;b&gt;translation engine&lt;/b&gt;. Online translators require an API profile with credentials configured under &lt;b&gt;LLM Profile&lt;/b&gt;.&lt;/p&gt;</source>
+		            <translation>&lt;p&gt;选择&lt;b&gt;翻译引擎&lt;/b&gt;。在线翻译器需要在&lt;b&gt;LLM 配置&lt;/b&gt;中配置 API 凭据。&lt;/p&gt;</translation>
+		        </message>
+	    </context>
     <context>
         <name>DependencyDialog</name>
         <message>
@@ -4459,6 +4479,325 @@ in Settings → Mirror Config, then click Retry.</source>
             <location filename="..\ui\normalize_breaks_dialog.py" />
             <source>Page %1 — %2</source>
             <translation>第 %1 页 — %2</translation>
+        </message>
+    </context>
+    <context>
+        <name>ProfileManagerWidget</name>
+        <message>
+            <source> (built-in)</source>
+            <translation>（内置）</translation>
+        </message>
+        <message>
+            <source>+ Add</source>
+            <translation>+ 新增</translation>
+        </message>
+        <message>
+            <source>A valid API key is required to test the connection.</source>
+            <translation>需要填写有效的 API 密钥才能测试连接。</translation>
+        </message>
+        <message>
+            <source>API Key:</source>
+            <translation>密钥：</translation>
+        </message>
+        <message>
+            <source>All built-in profiles already exist.</source>
+            <translation>所有内置配置文件已存在。</translation>
+        </message>
+        <message>
+            <source>Basic Settings</source>
+            <translation>基本设置</translation>
+        </message>
+        <message>
+            <source>Confirm Delete</source>
+            <translation>确认删除</translation>
+        </message>
+        <message>
+            <source>Connected! API is reachable and credentials are valid.</source>
+            <translation>连接成功！API 可达且凭据有效。</translation>
+        </message>
+        <message>
+            <source>Connection &amp; Rate Limiting:</source>
+            <translation>连接与速率限制：</translation>
+        </message>
+        <message>
+            <source>Connection Failed</source>
+            <translation>连接失败</translation>
+        </message>
+        <message>
+            <source>Connection Successful</source>
+            <translation>连接成功</translation>
+        </message>
+        <message>
+            <source>Connection timed out. Check the URL and network.</source>
+            <translation>连接超时。请检查地址和网络。</translation>
+        </message>
+        <message>
+            <source>Delay (s):</source>
+            <translation>延迟（秒）：</translation>
+        </message>
+        <message>
+            <source>Delete</source>
+            <translation>删除</translation>
+        </message>
+        <message>
+            <source>Delete profile "{name}"?</source>
+            <translation>确认删除配置文件"{name}"？</translation>
+        </message>
+        <message>
+            <source>Detail Level:</source>
+            <translation>细节级别：</translation>
+        </message>
+        <message>
+            <source>Error</source>
+            <translation>错误</translation>
+        </message>
+        <message>
+            <source>Error: {err}</source>
+            <translation>错误：{err}</translation>
+        </message>
+        <message>
+            <source>Failed to fetch model list: {err}</source>
+            <translation>获取模型列表失败：{err}</translation>
+        </message>
+        <message>
+            <source>Failed to fetch model list. HTTP {code}</source>
+            <translation>获取模型列表失败。HTTP {code}</translation>
+        </message>
+        <message>
+            <source>Fetch Models</source>
+            <translation>获取模型列表</translation>
+        </message>
+        <message>
+            <source>Few-Shot Examples:</source>
+            <translation>少样本示例：</translation>
+        </message>
+        <message>
+            <source>Frequency Penalty:</source>
+            <translation>频率惩罚：</translation>
+        </message>
+        <message>
+            <source>Host and API key are required to fetch the model list.</source>
+            <translation>需要填写地址和密钥才能获取模型列表。</translation>
+        </message>
+        <message>
+            <source>Host is required.</source>
+            <translation>需要填写地址。</translation>
+        </message>
+        <message>
+            <source>Host:</source>
+            <translation>地址：</translation>
+        </message>
+        <message>
+            <source>HTTP {code}: {text}</source>
+            <translation>HTTP {code}：{text}</translation>
+        </message>
+        <message>
+            <source>Max Tokens:</source>
+            <translation>最大 Token 数：</translation>
+        </message>
+        <message>
+            <source>Model:</source>
+            <translation>模型：</translation>
+        </message>
+        <message>
+            <source>Name:</source>
+            <translation>名称：</translation>
+        </message>
+        <message>
+            <source>New Profile</source>
+            <translation>新建配置文件</translation>
+        </message>
+        <message>
+            <source>No Change</source>
+            <translation>无变化</translation>
+        </message>
+        <message>
+            <source>No models found.</source>
+            <translation>未找到模型。</translation>
+        </message>
+        <message>
+            <source>Notice</source>
+            <translation>提示</translation>
+        </message>
+        <message>
+            <source>OCR Prompt:</source>
+            <translation>OCR 提示词：</translation>
+        </message>
+        <message>
+            <source>OCR Settings (optional)</source>
+            <translation>OCR 设置（可选）</translation>
+        </message>
+        <message>
+            <source>OCR System Prompt:</source>
+            <translation>OCR 系统提示词：</translation>
+        </message>
+        <message>
+            <source>Optional system prompt for OCR.</source>
+            <translation>OCR 的可选系统提示词。</translation>
+        </message>
+        <message>
+            <source>Presence Penalty:</source>
+            <translation>存在惩罚：</translation>
+        </message>
+        <message>
+            <source>Profile:</source>
+            <translation>配置：</translation>
+        </message>
+        <message>
+            <source>Prompt Template:</source>
+            <translation>提示词模板：</translation>
+        </message>
+        <message>
+            <source>Proxy:</source>
+            <translation>代理：</translation>
+        </message>
+        <message>
+            <source>Reasoning Effort:</source>
+            <translation>思考强度：</translation>
+        </message>
+        <message>
+            <source>Requests/min:</source>
+            <translation>请求数/分钟：</translation>
+        </message>
+        <message>
+            <source>Response Format:</source>
+            <translation>响应格式：</translation>
+        </message>
+        <message>
+            <source>Restore Builtins</source>
+            <translation>恢复内置配置</translation>
+        </message>
+        <message>
+            <source>Restored</source>
+            <translation>已恢复</translation>
+        </message>
+        <message>
+            <source>Restored {n} built-in profile(s).</source>
+            <translation>已恢复 {n} 个内置配置。</translation>
+        </message>
+        <message>
+            <source>Select Model</source>
+            <translation>选择模型</translation>
+        </message>
+        <message>
+            <source>Temperature:</source>
+            <translation>温度：</translation>
+        </message>
+        <message>
+            <source>Test</source>
+            <translation>测试连接</translation>
+        </message>
+        <message>
+            <source>Top P:</source>
+            <translation>Top P：</translation>
+        </message>
+        <message>
+            <source>Translation Settings (optional)</source>
+            <translation>翻译设置（可选）</translation>
+        </message>
+        <message>
+            <source>Unlimited (leave empty)</source>
+            <translation>无限制（留空）</translation>
+        </message>
+        <message>
+            <source>Vision support (for OCR)</source>
+            <translation>视觉支持（用于 OCR）</translation>
+        </message>
+        <message>
+            <source>Warning</source>
+            <translation>警告</translation>
+        </message>
+        <message>
+            <source>e.g., My Custom API</source>
+            <translation>例如：我的自定义 API</translation>
+        </message>
+        <message>
+            <source>0 = unlimited</source>
+            <translation>0 = 无限制</translation>
+        </message>
+        <message>
+            <source>默认</source>
+            <translation>默认</translation>
+        </message>
+        <message>
+            <source>Enable this for models that can process images. Vision-capable profiles will appear in the OCR model selector.</source>
+            <translation>启用此选项适用于能处理图像的模型。支持视觉功能的配置将出现在 OCR 模型选择器中。</translation>
+        </message>
+        <message>
+            <source>Override the model's reasoning/thinking effort.
+Leave as "default" to let the API decide.
+This maps automatically to each provider's native parameter
+(OpenAI reasoning_effort, Claude output_config.effort, etc.).</source>
+            <translation>覆写模型的推理/思考强度。
+选择"默认"则由 API 自行决定。
+该值会自动映射到各厂商的原生参数
+（OpenAI reasoning_effort、Claude output_config.effort 等）。</translation>
+        </message>
+        <message>
+            <source>Translate to {to_lang}:
+{input_json}</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>{to_lang}-{from_lang}:
+    source:
+        - text1
+    target:
+        - trans1</source>
+            <translation>{to_lang}-{from_lang}：
+    source：
+        - text1
+    target：
+        - trans1</translation>
+        </message>
+        <message>
+            <source>OCR prompt with {language} placeholder.</source>
+            <translation>使用 {language} 占位符的 OCR 提示词。</translation>
+        </message>
+    </context>
+    <context>
+        <name>FilterableListDialog</name>
+        <message>
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <source>OK</source>
+            <translation>确定</translation>
+        </message>
+        <message>
+            <source>Search...</source>
+            <translation>搜索...</translation>
+        </message>
+    </context>
+    <context>
+        <name>ModuleThread</name>
+        <message>
+            <source>Creating module</source>
+            <translation>正在创建模块</translation>
+        </message>
+        <message>
+            <source>Importing module</source>
+            <translation>正在导入模块</translation>
+        </message>
+        <message>
+            <source>Installing packages</source>
+            <translation>正在安装依赖</translation>
+        </message>
+        <message>
+            <source>Loading model</source>
+            <translation>正在加载模型</translation>
+        </message>
+        <message>
+            <source>Module task failed.</source>
+            <translation>模块任务失败。</translation>
+        </message>
+    </context>
+    <context>
+        <name>ProgressMessageBox</name>
+        <message>
+            <source>Stop</source>
+            <translation>停止</translation>
         </message>
     </context>
 </TS>

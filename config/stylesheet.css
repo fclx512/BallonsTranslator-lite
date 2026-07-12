@@ -6,6 +6,7 @@ QWidget {
 
 SeparatorWidget {
     border-color: @borderColor;
+    color: @borderColor;
 }
 
 Widget {
@@ -99,6 +100,71 @@ QComboBox::down-arrow {
     padding-right: 13px;
 }
 
+/* ── Config panel content inputs (underline style) ──────────── */
+/* Upstream reference: BallonsTranslator/resources/stylesheet.css:59-110 */
+ConfigContent QLineEdit,
+ConfigContent QComboBox,
+ConfigContent QPlainTextEdit {
+    border: none;
+    border-bottom: 1px solid @borderColor;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+ConfigContent QLineEdit,
+ConfigContent QComboBox {
+    height: 26px;
+}
+
+ConfigContent QLineEdit {
+    padding: 0px 8px;
+}
+
+ConfigContent QComboBox {
+    padding-left: 8px;
+}
+
+ConfigContent QPlainTextEdit {
+    padding: 4px 8px;
+}
+
+ConfigContent QLineEdit:focus,
+ConfigContent QComboBox:hover,
+ConfigContent QComboBox:focus,
+ConfigContent QPlainTextEdit:focus {
+    border-bottom: 1px solid @accentPrimary;
+}
+
+ConfigContent QComboBox::drop-down {
+    border: none;
+}
+
+/* ConfigContent buttons (upstream ref: stylesheet.css:171-182) */
+ConfigContent QPushButton {
+    min-height: 26px;
+    max-height: 26px;
+    height: 26px;
+    padding: 1px 10px;
+    font-size: 13px;
+    border-radius: 4px;
+}
+
+ConfigContent NoBorderPushBtn {
+    border: none;
+}
+
+/* ConfigContent inline row (upstream ref: stylesheet.css:184-186) */
+ConfigContent QWidget#ConfigInlineRow {
+    background-color: @emptyContentBackgroundColor;
+}
+
+/* ConfigContent label / checkbox font size (upstream ref: stylesheet.css:188-192) */
+ConfigContent QLabel#ParamFieldLabel,
+ConfigContent QLabel#ParamLabelAboveLabel,
+ConfigContent QCheckBox {
+    font-size: 13px;
+}
+
 QFontComboBox#FontFamilyBox {
     width: 106px;
     height: 26px;
@@ -167,6 +233,30 @@ QGroupBox::title {
     padding: 0px 5px 0px 5px;
 }
 
+/* Checkable QGroupBox title checkbox indicator */
+QGroupBox::indicator {
+    width: 13px;
+    height: 13px;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    background-color: @inputBackgroundColor;
+}
+
+QGroupBox::indicator:hover {
+    border: 1px solid @accentPrimary;
+}
+
+QGroupBox::indicator:checked {
+    border: 1px solid @borderColor;
+    background-color: @inputBackgroundColor;
+    image: url(icons/checkbox_checked.svg);
+}
+
+QGroupBox::indicator:disabled {
+    border: 1px solid @borderColor;
+    background-color: @emptyContentBackgroundColor;
+}
+
 QLabel#letterSpacingLabel {
     image: url(icons/fontfmt_letterspacing.svg);
     max-width: 28px;
@@ -175,11 +265,24 @@ QLabel#letterSpacingLabel {
     min-height: 28px;
 }
 
+QLabel#fontAngleLabel {
+    image: url(icons/rotation.svg);
+    max-width: 25px;
+    max-height: 25px;
+    min-width: 25px;
+    min-height: 25px;
+}
+
 ColorPickerLabel {
     max-height: 25px;
     min-height: 25px;
     min-width: 25px;
     max-width: 25px;
+    border: 2px solid @borderColor;
+}
+
+ColorPickerLabel::hover {
+    border: 2px solid @accentPrimary;
 }
 
 SmallColorPickerLabel {
@@ -187,6 +290,7 @@ SmallColorPickerLabel {
     min-height: 17px;
     min-width: 17px;
     max-width: 17px;
+    border: 1px solid @borderColor;
 }
 
 AlignmentChecker {
@@ -407,34 +511,53 @@ QAction {
     min-height: 66px;
 }
 
+/* ── Menu styling (upstream ref: stylesheet.css:778-823) ───── */
 QMenu {
+    border: none;
+    border-radius: 8px;
+    padding: 5px;
     background-color: @emptyContentBackgroundColor;
-    margin: 0px; /* some spacing around the menu */
+    color: @qwidgetForegroundColor;
+    font-size: 13px;
 }
 
 QMenu::item {
-    height: 28px;
+    height: 26px;
     min-width: 128px;
     margin: 0px;
     background-color: @emptyContentBackgroundColor;
-    padding-left: 20px;
-    padding-right: 20px;
+    color: @qwidgetForegroundColor;
+    padding-left: 7px;
+    padding-right: 26px;
+    border-radius: 5px;
 }
 
 QMenu::separator {
-    height: 5px;
-    /* background: lightblue; */
-    margin-left: 12px;
-    margin-right: 12px;
+    height: 1px;
+    background-color: @borderColor;
+    margin: 5px 12px;
 }
 
-/* QMenu::item {
-    background-color: @emptyContentBackgroundColor;
-    min-height: 100px;
-}*/
+QMenu::indicator {
+    width: 18px;
+    height: 18px;
+    margin-left: 2px;
+    margin-right: 5px;
+    subcontrol-origin: padding;
+    subcontrol-position: right center;
+    right: 6px;
+}
+
+QMenu::indicator:unchecked {
+    image: none;
+}
+
+QMenu::indicator:checked {
+    image: none;
+}
 
 QMenu::item:selected {
-    background-color: @hoverBackgroundColor;
+    background-color: @accentPrimary20;
 }
 
 QMenu::item:disabled {
@@ -525,6 +648,61 @@ QCheckBox {
     spacing: 6px;
 }
 
+/* Checkbox indicator (ConfigCheckBox in settings, ParamCheckBox in module params) */
+QCheckBox#ConfigCheckBox::indicator,
+QCheckBox#ParamCheckBox::indicator {
+    width: 13px;
+    height: 13px;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    background-color: @inputBackgroundColor;
+}
+
+QCheckBox#ConfigCheckBox::indicator:hover,
+QCheckBox#ParamCheckBox::indicator:hover {
+    border: 1px solid @accentPrimary;
+}
+
+QCheckBox#ConfigCheckBox::indicator:checked,
+QCheckBox#ParamCheckBox::indicator:checked {
+    border: 1px solid @borderColor;
+    background-color: @inputBackgroundColor;
+    image: url(icons/checkbox_checked.svg);
+}
+
+QCheckBox#ConfigCheckBox::indicator:disabled,
+QCheckBox#ParamCheckBox::indicator:disabled {
+    border: 1px solid @borderColor;
+    background-color: @emptyContentBackgroundColor;
+}
+
+/* ── Dialog checkboxes ────────────────────────────────────────── */
+/* Catch-all for QCheckBox inside any QDialog that doesn't have a
+   specific objectName-based style. Icon toggle checkboxes (TransChecker,
+   PaintChecker, etc.) live outside QDialogs, so they are unaffected. */
+QDialog QCheckBox::indicator {
+    width: 13px;
+    height: 13px;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    background-color: @inputBackgroundColor;
+}
+
+QDialog QCheckBox::indicator:hover {
+    border: 1px solid @accentPrimary;
+}
+
+QDialog QCheckBox::indicator:checked {
+    border: 1px solid @borderColor;
+    background-color: @inputBackgroundColor;
+    image: url(icons/checkbox_checked.svg);
+}
+
+QDialog QCheckBox::indicator:disabled {
+    border: 1px solid @borderColor;
+    background-color: @emptyContentBackgroundColor;
+}
+
 QPushButton#minBtn {
     border-radius: 0px;
     background-color: rgba(0, 0, 0, 0);
@@ -590,6 +768,44 @@ QPushButton#closeBtn::hover {
 
 TextCheckerLabel::hover {
     background-color: @accentPrimary20;
+}
+
+/* ── Bottom bar module selection tool button ───────────────── │
+ * Upstream reference: BallonsTranslator/resources/stylesheet.css:952-976
+ * Used by ModuleSelectionWidget (future feature).             */
+QToolButton#BottomBarModuleToolButton {
+    min-height: 22px;
+    padding: 1px 24px 1px 8px;
+    border: none;
+    border-radius: 5px;
+    background-color: rgba(0, 0, 0, 0);
+    color: @qwidgetForegroundColor;
+    font-size: 13px;
+}
+
+QToolButton#BottomBarModuleToolButton:hover,
+QToolButton#BottomBarModuleToolButton:pressed,
+QToolButton#BottomBarModuleToolButton:open {
+    border: none;
+    background-color: @accentPrimary20;
+}
+
+QToolButton#BottomBarModuleToolButton::menu-indicator {
+    image: url(icons/combobox_arrow.svg);
+    width: 11px;
+    height: 11px;
+    subcontrol-origin: padding;
+    subcontrol-position: right center;
+    right: 8px;
+}
+
+/* ── Menu section labels (used in ModuleSelectionWidget menus) ─ */
+QLabel#MenuSectionLabel {
+    min-height: 20px;
+    padding: 6px 7px 2px 7px;
+    background-color: @emptyContentBackgroundColor;
+    color: @qwidgetForegroundColor;
+    font-size: 13px;
 }
 
 QCheckBox#TransChecker::indicator {
@@ -955,6 +1171,11 @@ QScrollArea {
     border-color: @borderColor;
     border-style: solid;
     border-width: 1px;
+}
+
+/* ConfigContent is inside a splitter inside the settings dialog — no outer border needed */
+QScrollArea#ConfigContent {
+    border: none;
 }
 
 TextEditListScrollArea {

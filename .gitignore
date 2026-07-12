@@ -35,6 +35,8 @@ localtmp*
 .vscode
 .VSCodeCounter
 .idea
+.backup/
+docs/.obsidian/
 *.zip
 *.ipynb
 *.dll

@@ -97,6 +97,21 @@ modules/
 - 常见问题：source 大小写不一致；context 放错；`type="obsolete"`。批量编辑 ts 用 Python 脚本直接操作文本。
 - **⚠️ QM 编码陷阱**：`scripts/qm_compile.py` 旧版用 `latin-1` 编码，会把 `—`/`→`/`⚠`/`✓` 等非 Latin-1 字符静默替换成 `?`，导致 Qt 哈希查找失败、翻译回退为英文。`self.tr()` 正确但运行时仍显英文 → 查 qm 是否被污染，确保 `_iso8859_str()` 用 `"utf-8"` 后重新编译。诊断脚本与细节见 [`docs/i18n.md`](docs/i18n.md)「常见问题」。
 
+## 测试流程
+
+改代码后按以下顺序验证，避免遗漏回归：
+
+1. **语法检查**（必做）：`./ballontrans_pylibs_win/python.exe scripts/check_syntax.py <改动的文件...>`
+   - 检查 Python 语法编译 + tab 字符 + UTF-8 BOM
+2. **i18n 检查**（涉及 UI 字符串时必做）：`./ballontrans_pylibs_win/python.exe scripts/i18n_check.py`
+   - 新增 `self.tr()` 必须在 `translate/zh_CN.ts` 对应 `<context>` 中有 `<message>`
+   - 编译：`./ballontrans_pylibs_win/python.exe scripts/qm_compile.py translate/zh_CN.ts translate/zh_CN.qm`
+3. **启动冒烟测试**（修改了 `profile_manager.py` / `configpanel.py` / `launch.py` 等初始化代码时必做）：`./ballontrans_pylibs_win/python.exe tests/test_startup_imports.py`
+   - 模拟关键导入链，捕捉 `NameError` / `ImportError`（如漏 import `QFrame`）
+   - 包含 `ProfileManagerWidget` 实例化测试（offscreen QApplication）
+4. **启动 app 目视确认**（可选，但推荐）：双击 `launch.bat` 或 `python launch.py`
+   - 确认导航、页面切换、新功能视觉效果正常
+
 ## 快捷键系统
 
 定义在 `ui/configpanel.py` 的 `DEFAULT_SHORTCUTS`/`_ACTION_NAMES`，`_SHORTCUT_GROUPS` 分组。安装/刷新见 `ui/mainwindow.py` 的 `_install_shortcuts()`/`refreshShortcuts()`。用户配置持久化在 `pcfg.shortcuts`（`config.json`）。详见 `docs/快捷键.md`。

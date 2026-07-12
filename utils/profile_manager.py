@@ -16,6 +16,7 @@ from qtpy.QtWidgets import (
     QDialog,
     QDoubleSpinBox,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -29,6 +30,8 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from qtpy.QtCore import Signal
 
 from .config import pcfg, save_config
 from .logger import logger as LOGGER
@@ -546,6 +549,7 @@ class ProfileManagerDialog(QDialog):
         fetch_btn.clicked.connect(self._on_fetch_models)
         model_row.addWidget(fetch_btn)
         self.vision_check = QCheckBox(self.tr("Vision support (for OCR)"))
+        self.vision_check.setObjectName('ConfigCheckBox')
         self.vision_check.setToolTip(
             self.tr(
                 "Enable this for models that can process images. Vision-capable profiles will appear in the OCR model selector."
@@ -905,3 +909,597 @@ class ProfileManagerDialog(QDialog):
     def closeEvent(self, event):
         self._save_current_form()
         super().closeEvent(event)
+
+
+# ── Inline widget for page use ──
+
+
+class ProfileManagerWidget(QWidget):
+    """Inline profile manager widget for use inside ConfigPanel pages.
+
+    Features a top toolbar (profile combo + action buttons) and a scrollable
+    edit form. Auto-saves on profile switch / add / delete / hide.
+    """
+
+    profiles_changed = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._profiles = load_profiles()
+        self._current_idx = -1
+        self._suppress_save = False  # prevent recursive saves during form population
+        self._build_ui()
+
+    # ── helpers ──
+
+    def _section_label(self, text: str):
+        lbl = QLabel(f"—— {text} ——")
+        from ui.misc import get_theme_color
+
+        c = get_theme_color()
+        lbl.setStyleSheet(
+            f"font-size: 14px; padding: 8px 0 2px 0; "
+            f"background-color: rgba({c.red()}, {c.green()}, {c.blue()}, 50);"
+        )
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        return lbl
+
+    def _is_builtin(self, idx: int) -> bool:
+        return 0 <= idx < len(self._profiles) and self._profiles[idx].get(
+            "builtin", False
+        )
+
+    def _save_current_form(self):
+        if self._suppress_save:
+            return
+        idx = self._current_idx
+        if idx < 0 or idx >= len(self._profiles):
+            return
+        p = self._profiles[idx]
+        name = self.name_edit.text().strip()
+        if not name:
+            return
+        p["name"] = name
+        p["vision_support"] = self.vision_check.isChecked()
+        p["api_host"] = self.host_edit.text().strip()
+        p["api_key"] = self.key_edit.text().strip()
+        p["model"] = self.model_edit.text().strip()
+        p["proxy"] = self.proxy_edit.text().strip()
+        try:
+            p["requests_per_minute"] = int(self.rpm_spin.value())
+        except (ValueError, TypeError):
+            p["requests_per_minute"] = 20
+        try:
+            p["delay"] = float(self.delay_spin.value())
+        except (ValueError, TypeError):
+            p["delay"] = 0.3
+        p["response_format"] = self.rf_combo.currentText()
+        p["reasoning_effort"] = self.reasoning_combo.currentData() or ""
+        p["prompt_template"] = self.prompt_template_edit.toPlainText().strip()
+        p["chat_samples"] = self.chat_samples_edit.toPlainText().strip()
+        try:
+            p["temperature"] = float(self.temp_edit.text() or "0.1")
+        except ValueError:
+            p["temperature"] = 0.1
+        try:
+            p["top_p"] = float(self.topp_edit.text() or "1.0")
+        except ValueError:
+            p["top_p"] = 1.0
+        p["max_tokens"] = self.maxtok_edit.text().strip()
+        for key in ["frequency_penalty", "presence_penalty"]:
+            edit = self.fp_edit if key == "frequency_penalty" else self.pp_edit
+            val = edit.text().strip()
+            if val:
+                try:
+                    p[key] = float(val)
+                except ValueError:
+                    pass
+            elif key in p:
+                del p[key]
+        # OCR-specific fields
+        p["ocr_prompt"] = self.ocr_prompt_edit.toPlainText().strip()
+        p["ocr_system_prompt"] = self.ocr_sysprompt_edit.toPlainText().strip()
+        p["ocr_detail_level"] = self.ocr_detail_combo.currentText()
+        try:
+            p["ocr_max_response_tokens"] = int(self.ocr_maxtok_spin.value())
+        except (ValueError, TypeError):
+            p["ocr_max_response_tokens"] = 4096
+
+    def _persist(self):
+        """Write current profiles to config and notify listeners."""
+        save_all_profiles(self._profiles)
+        self.profiles_changed.emit()
+
+    # ── build UI ──
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # ── Toolbar ──
+        toolbar = QWidget()
+        toolbar.setObjectName("ConfigContent")
+        toolbar.setFixedHeight(42)
+        tlay = QHBoxLayout(toolbar)
+        tlay.setContentsMargins(12, 4, 12, 4)
+        tlay.setSpacing(8)
+
+        tlay.addWidget(QLabel(self.tr("Profile:")))
+        self.profile_combo = QComboBox()
+        self.profile_combo.setMinimumWidth(200)
+        self.profile_combo.currentIndexChanged.connect(self._on_combo_select)
+        tlay.addWidget(self.profile_combo)
+
+        self.add_btn = QPushButton(self.tr("+ Add"))
+        self.add_btn.setObjectName("ConfigButton")
+        self.add_btn.setFixedHeight(28)
+        self.add_btn.clicked.connect(self._on_add)
+        tlay.addWidget(self.add_btn)
+
+        self.delete_btn = QPushButton(self.tr("Delete"))
+        self.delete_btn.setObjectName("ConfigButton")
+        self.delete_btn.setFixedHeight(28)
+        self.delete_btn.clicked.connect(self._on_delete)
+        tlay.addWidget(self.delete_btn)
+
+        restore_btn = QPushButton(self.tr("Restore Builtins"))
+        restore_btn.setObjectName("ConfigButton")
+        restore_btn.setFixedHeight(28)
+        restore_btn.clicked.connect(self._on_restore_builtins)
+        tlay.addWidget(restore_btn)
+
+        tlay.addStretch()
+        layout.addWidget(toolbar)
+
+        # ── Separator line ──
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("color: @borderColor;")
+        sep.setFixedHeight(1)
+        layout.addWidget(sep)
+
+        # ── Scrollable form ──
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        form_widget = QWidget()
+        form_layout = QVBoxLayout(form_widget)
+        form_layout.setContentsMargins(24, 16, 24, 24)
+        form_layout.setSpacing(6)
+
+        # Basic Settings
+        form_layout.addWidget(self._section_label(self.tr("Basic Settings")))
+        basic_form = QFormLayout()
+        basic_form.setSpacing(8)
+
+        self.name_edit = QLineEdit()
+        self.name_edit.setPlaceholderText(self.tr("e.g., My Custom API"))
+        host_row = QHBoxLayout()
+        self.host_edit = QLineEdit()
+        self.host_edit.setPlaceholderText("https://api.example.com/v1")
+        test_btn = QPushButton(self.tr("Test"))
+        test_btn.setObjectName("ConfigButton")
+        test_btn.setFixedHeight(28)
+        test_btn.clicked.connect(self._on_test_connection)
+        host_row.addWidget(self.host_edit, 1)
+        host_row.addWidget(test_btn)
+        self.key_edit = QLineEdit()
+        self.model_edit = QLineEdit()
+        self.model_edit.setPlaceholderText("gpt-4o, ...")
+        model_row = QHBoxLayout()
+        model_row.addWidget(self.model_edit)
+        fetch_btn = QPushButton(self.tr("Fetch Models"))
+        fetch_btn.setObjectName("ConfigButton")
+        fetch_btn.setFixedHeight(28)
+        fetch_btn.clicked.connect(self._on_fetch_models)
+        model_row.addWidget(fetch_btn)
+        self.vision_check = QCheckBox(self.tr("Vision support (for OCR)"))
+        self.vision_check.setObjectName('ConfigCheckBox')
+        self.vision_check.setToolTip(
+            self.tr(
+                "Enable this for models that can process images. "
+                "Vision-capable profiles will appear in the OCR model selector."
+            )
+        )
+        self.temp_edit = QLineEdit()
+        self.temp_edit.setPlaceholderText("0.1")
+        self.topp_edit = QLineEdit()
+        self.topp_edit.setPlaceholderText("1.0")
+        self.maxtok_edit = QLineEdit()
+        self.maxtok_edit.setPlaceholderText(self.tr("Unlimited (leave empty)"))
+        self.reasoning_combo = QComboBox()
+        items = [
+            (self.tr("默认"), ""),
+            ("none", "none"),
+            ("low", "low"),
+            ("medium", "medium"),
+            ("high", "high"),
+            ("xhigh", "xhigh"),
+            ("max", "max"),
+        ]
+        for display, data in items:
+            self.reasoning_combo.addItem(display, data)
+        self.reasoning_combo.setToolTip(
+            self.tr(
+                "Override the model's reasoning/thinking effort.\n"
+                'Leave as "default" to let the API decide.\n'
+                "This maps automatically to each provider's native parameter\n"
+                "(OpenAI reasoning_effort, Claude output_config.effort, etc.)."
+            )
+        )
+        basic_form.addRow(self.tr("Name:"), self.name_edit)
+        basic_form.addRow(self.tr("Host:"), host_row)
+        basic_form.addRow(self.tr("API Key:"), self.key_edit)
+        basic_form.addRow(self.tr("Model:"), model_row)
+        basic_form.addRow("", self.vision_check)
+        basic_form.addRow(self.tr("Temperature:"), self.temp_edit)
+        basic_form.addRow(self.tr("Top P:"), self.topp_edit)
+        basic_form.addRow(self.tr("Max Tokens:"), self.maxtok_edit)
+        basic_form.addRow(self.tr("Reasoning Effort:"), self.reasoning_combo)
+        form_layout.addLayout(basic_form)
+
+        # Connection & Rate Limiting
+        form_layout.addWidget(
+            QLabel(self.tr("Connection & Rate Limiting:"))
+        )
+        conn_form = QFormLayout()
+        conn_form.setSpacing(8)
+        self.proxy_edit = QLineEdit()
+        self.proxy_edit.setPlaceholderText("http://user:pass@host:port")
+        self.rpm_spin = QSpinBox()
+        self.rpm_spin.setRange(0, 10000)
+        self.rpm_spin.setValue(20)
+        self.rpm_spin.setToolTip(self.tr("0 = unlimited"))
+        self.delay_spin = QDoubleSpinBox()
+        self.delay_spin.setRange(0, 60)
+        self.delay_spin.setSingleStep(0.1)
+        self.delay_spin.setDecimals(2)
+        self.delay_spin.setValue(0.3)
+        conn_form.addRow(self.tr("Proxy:"), self.proxy_edit)
+        conn_form.addRow(self.tr("Requests/min:"), self.rpm_spin)
+        conn_form.addRow(self.tr("Delay (s):"), self.delay_spin)
+        form_layout.addLayout(conn_form)
+
+        # Translation Settings (optional)
+        form_layout.addWidget(
+            self._section_label(self.tr("Translation Settings (optional)"))
+        )
+        adv_form = QFormLayout()
+        adv_form.setSpacing(8)
+        self.rf_combo = QComboBox()
+        self.rf_combo.addItems(["json_object", "json_schema"])
+        self.rf_combo.setCurrentText("json_object")
+        self.prompt_template_edit = QTextEdit()
+        self.prompt_template_edit.setPlaceholderText(
+            self.tr("Translate to {to_lang}:\n{input_json}")
+        )
+        self.prompt_template_edit.setMinimumHeight(80)
+        self.chat_samples_edit = QTextEdit()
+        self.chat_samples_edit.setPlaceholderText(
+            self.tr(
+                "{to_lang}-{from_lang}:\n    source:\n        - text1\n    target:\n        - trans1"
+            )
+        )
+        self.chat_samples_edit.setMinimumHeight(80)
+        self.fp_edit = QLineEdit()
+        self.fp_edit.setPlaceholderText("0.0")
+        self.pp_edit = QLineEdit()
+        self.pp_edit.setPlaceholderText("0.0")
+        adv_form.addRow(self.tr("Response Format:"), self.rf_combo)
+        adv_form.addRow(self.tr("Prompt Template:"), self.prompt_template_edit)
+        adv_form.addRow(self.tr("Few-Shot Examples:"), self.chat_samples_edit)
+        adv_form.addRow(self.tr("Frequency Penalty:"), self.fp_edit)
+        adv_form.addRow(self.tr("Presence Penalty:"), self.pp_edit)
+        form_layout.addLayout(adv_form)
+
+        # OCR Settings
+        form_layout.addWidget(
+            self._section_label(self.tr("OCR Settings (optional)"))
+        )
+        ocr_form = QFormLayout()
+        ocr_form.setSpacing(8)
+        self.ocr_prompt_edit = QTextEdit()
+        self.ocr_prompt_edit.setPlaceholderText(
+            self.tr("OCR prompt with {language} placeholder.")
+        )
+        self.ocr_prompt_edit.setMinimumHeight(80)
+        self.ocr_sysprompt_edit = QTextEdit()
+        self.ocr_sysprompt_edit.setPlaceholderText(
+            self.tr("Optional system prompt for OCR.")
+        )
+        self.ocr_sysprompt_edit.setMinimumHeight(60)
+        self.ocr_detail_combo = QComboBox()
+        self.ocr_detail_combo.addItems(["auto", "low", "high"])
+        self.ocr_detail_combo.setCurrentText("auto")
+        self.ocr_maxtok_spin = QSpinBox()
+        self.ocr_maxtok_spin.setRange(64, 131072)
+        self.ocr_maxtok_spin.setValue(4096)
+        ocr_form.addRow(self.tr("OCR Prompt:"), self.ocr_prompt_edit)
+        ocr_form.addRow(self.tr("OCR System Prompt:"), self.ocr_sysprompt_edit)
+        ocr_form.addRow(self.tr("Detail Level:"), self.ocr_detail_combo)
+        ocr_form.addRow(self.tr("Max Tokens:"), self.ocr_maxtok_spin)
+        form_layout.addLayout(ocr_form)
+
+        form_layout.addStretch()
+        scroll.setWidget(form_widget)
+        layout.addWidget(scroll, 1)
+
+        # Populate combo and select first
+        self._refresh_combo()
+
+    # ── combo / form sync ──
+
+    def _refresh_combo(self):
+        self.profile_combo.blockSignals(True)
+        self.profile_combo.clear()
+        for p in self._profiles:
+            label = p.get("name", "")
+            if p.get("builtin"):
+                label += self.tr(" (built-in)")
+            self.profile_combo.addItem(label)
+        self.profile_combo.blockSignals(False)
+        if self._profiles:
+            self.profile_combo.setCurrentIndex(0)
+            self._on_combo_select(0)
+        else:
+            self._clear_fields()
+            self._current_idx = -1
+
+    def _clear_fields(self):
+        for edit in [
+            self.name_edit,
+            self.host_edit,
+            self.key_edit,
+            self.model_edit,
+            self.temp_edit,
+            self.topp_edit,
+            self.maxtok_edit,
+            self.fp_edit,
+            self.pp_edit,
+            self.prompt_template_edit,
+            self.proxy_edit,
+            self.ocr_prompt_edit,
+            self.ocr_sysprompt_edit,
+        ]:
+            edit.clear()
+        self.chat_samples_edit.clear()
+        self.chat_samples_edit.setPlainText("")
+        self.vision_check.setChecked(False)
+        self.rf_combo.setCurrentText("json_object")
+        self.reasoning_combo.setCurrentIndex(0)
+        self.ocr_detail_combo.setCurrentText("auto")
+        self.rpm_spin.setValue(20)
+        self.delay_spin.setValue(0.3)
+        self.ocr_maxtok_spin.setValue(4096)
+
+    def _populate_form(self, idx: int):
+        if idx < 0 or idx >= len(self._profiles):
+            return
+        p = self._profiles[idx]
+        self.name_edit.setText(p.get("name", ""))
+        self.vision_check.setChecked(p.get("vision_support", False))
+        self.host_edit.setText(p.get("api_host", ""))
+        self.key_edit.setText(p.get("api_key", ""))
+        self.model_edit.setText(p.get("model", ""))
+        self.proxy_edit.setText(p.get("proxy", ""))
+        try:
+            self.rpm_spin.setValue(int(p.get("requests_per_minute", 20)))
+        except (ValueError, TypeError):
+            self.rpm_spin.setValue(20)
+        try:
+            self.delay_spin.setValue(float(p.get("delay", 0.3)))
+        except (ValueError, TypeError):
+            self.delay_spin.setValue(0.3)
+        self.temp_edit.setText(str(p.get("temperature", "0.1")))
+        self.topp_edit.setText(str(p.get("top_p", "1.0")))
+        self.maxtok_edit.setText(str(p.get("max_tokens", "")))
+        self.rf_combo.setCurrentText(p.get("response_format", "json_object"))
+        re_val = p.get("reasoning_effort", "")
+        re_idx = self.reasoning_combo.findData(re_val)
+        self.reasoning_combo.setCurrentIndex(re_idx if re_idx >= 0 else 0)
+        self.prompt_template_edit.setPlainText(p.get("prompt_template", ""))
+        self.chat_samples_edit.setPlainText(p.get("chat_samples", ""))
+        self.fp_edit.setText(str(p.get("frequency_penalty", "")))
+        self.pp_edit.setText(str(p.get("presence_penalty", "")))
+        # OCR
+        self.ocr_prompt_edit.setPlainText(p.get("ocr_prompt", ""))
+        self.ocr_sysprompt_edit.setPlainText(p.get("ocr_system_prompt", ""))
+        self.ocr_detail_combo.setCurrentText(p.get("ocr_detail_level", "auto"))
+        try:
+            self.ocr_maxtok_spin.setValue(int(p.get("ocr_max_response_tokens", 4096)))
+        except (ValueError, TypeError):
+            self.ocr_maxtok_spin.setValue(4096)
+
+    # ── slots ──
+
+    def _on_combo_select(self, idx: int):
+        if idx < 0 or idx >= len(self._profiles):
+            return
+        self._save_current_form()
+        self._current_idx = idx
+        self._suppress_save = True
+        self._populate_form(idx)
+        self._suppress_save = False
+        self.delete_btn.setEnabled(not self._is_builtin(idx))
+
+    def _on_add(self):
+        self._save_current_form()
+        new_name = self.tr("New Profile")
+        # Ensure unique name
+        existing = {p.get("name") for p in self._profiles}
+        if new_name in existing:
+            i = 1
+            while f"{new_name} ({i})" in existing:
+                i += 1
+            new_name = f"{new_name} ({i})"
+        new_profile = dict(SAMPLE_PROFILES[0])  # start with defaults
+        new_profile["name"] = new_name
+        new_profile["builtin"] = False
+        self._profiles.append(new_profile)
+        self._persist()
+        self._refresh_combo()
+        # Select the new profile
+        self.profile_combo.setCurrentIndex(len(self._profiles) - 1)
+
+    def _on_delete(self):
+        idx = self.profile_combo.currentIndex()
+        if idx < 0 or idx >= len(self._profiles) or self._is_builtin(idx):
+            return
+        name = self._profiles[idx].get("name", "")
+        reply = QMessageBox.question(
+            self,
+            self.tr("Confirm Delete"),
+            self.tr('Delete profile "{name}"?').format(name=name),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        del self._profiles[idx]
+        self._current_idx = -1
+        self._persist()
+        self._refresh_combo()
+
+    def _on_restore_builtins(self):
+        """Re-append any missing builtin profiles without removing user ones."""
+        default_map = {p["name"]: dict(p) for p in SAMPLE_PROFILES if p.get("builtin")}
+        existing_names = {p.get("name") for p in self._profiles}
+        added = 0
+        for name, defaults in default_map.items():
+            if name not in existing_names:
+                self._profiles.append(defaults)
+                added += 1
+        if added:
+            self._persist()
+            self._refresh_combo()
+            QMessageBox.information(
+                self,
+                self.tr("Restored"),
+                self.tr("Restored {n} built-in profile(s).").format(n=added),
+            )
+        else:
+            QMessageBox.information(
+                self,
+                self.tr("No Change"),
+                self.tr("All built-in profiles already exist."),
+            )
+
+    def _on_fetch_models(self):
+        host = self.host_edit.text().strip()
+        key = self.key_edit.text().strip()
+        if not host or not key:
+            QMessageBox.warning(
+                self,
+                self.tr("Warning"),
+                self.tr("Host and API key are required to fetch the model list."),
+            )
+            return
+        try:
+            with httpx.Client() as client:
+                resp = client.get(
+                    f"{host.rstrip('/')}/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                    timeout=10,
+                )
+                if resp.status_code == 200:
+                    models = resp.json().get("data", [])
+                    names = sorted(m["id"] for m in models)
+                    if not names:
+                        QMessageBox.information(
+                            self, self.tr("Notice"), self.tr("No models found.")
+                        )
+                        return
+                    dlg = FilterableListDialog(
+                        self, self.tr("Select Model"), names
+                    )
+                    if dlg.exec() == QDialog.DialogCode.Accepted and dlg.selected:
+                        self.model_edit.setText(dlg.selected)
+                        self._save_current_form()
+                        self._persist()
+                else:
+                    QMessageBox.warning(
+                        self,
+                        self.tr("Error"),
+                        self.tr("Failed to fetch model list. HTTP {code}").format(
+                            code=resp.status_code
+                        ),
+                    )
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to fetch model list: {err}").format(err=e),
+            )
+
+    def _on_test_connection(self):
+        host = self.host_edit.text().strip()
+        key = self.key_edit.text().strip()
+        if not host:
+            QMessageBox.warning(
+                self,
+                self.tr("Warning"),
+                self.tr("Host is required."),
+            )
+            return
+        if not key:
+            QMessageBox.warning(
+                self,
+                self.tr("Warning"),
+                self.tr("A valid API key is required to test the connection."),
+            )
+            return
+        proxy = ""
+        idx = self._current_idx
+        if 0 <= idx < len(self._profiles):
+            proxy = self._profiles[idx].get("proxy", "")
+        try:
+            client_kwargs = {"timeout": 10}
+            if proxy:
+                client_kwargs["proxy"] = proxy
+            with httpx.Client(**client_kwargs) as client:
+                resp = client.get(
+                    f"{host.rstrip('/')}/models",
+                    headers={"Authorization": f"Bearer {key}"},
+                )
+                if resp.status_code == 200:
+                    QMessageBox.information(
+                        self,
+                        self.tr("Connection Successful"),
+                        self.tr(
+                            "Connected! API is reachable and credentials are valid."
+                        ),
+                    )
+                else:
+                    QMessageBox.warning(
+                        self,
+                        self.tr("Connection Failed"),
+                        self.tr("HTTP {code}: {text}").format(
+                            code=resp.status_code, text=resp.text[:200]
+                        ),
+                    )
+        except httpx.ConnectError:
+            QMessageBox.warning(
+                self,
+                self.tr("Connection Failed"),
+                self.tr(
+                    "Could not connect to {host}.\nPlease check the URL and your network."
+                ).format(host=host),
+            )
+        except httpx.TimeoutException:
+            QMessageBox.warning(
+                self,
+                self.tr("Connection Failed"),
+                self.tr("Connection timed out. Check the URL and network."),
+            )
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                self.tr("Connection Failed"),
+                self.tr("Error: {err}").format(err=e),
+            )
+
+    def hideEvent(self, event):
+        """Auto-save when navigating away from this page."""
+        self._save_current_form()
+        self._persist()
+        super().hideEvent(event)

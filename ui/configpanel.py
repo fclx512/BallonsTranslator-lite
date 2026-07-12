@@ -1,6 +1,6 @@
 from typing import List, Tuple, Union
 
-from qtpy.QtCore import QEasingCurve, QElapsedTimer, QItemSelection, QPoint, QSize, Qt, QTimer, Signal
+from qtpy.QtCore import QEasingCurve, QElapsedTimer, QEvent, QItemSelection, QPoint, QSize, Qt, QTimer, Signal
 from qtpy.QtGui import (
     QColor,
     QFocusEvent,
@@ -16,6 +16,7 @@ from qtpy.QtGui import (
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QAbstractSpinBox,
+    QApplication,
     QCheckBox,
     QGraphicsOpacityEffect,
     QComboBox,
@@ -263,6 +264,7 @@ def checkbox_with_label(
     name: str, description: str = None, note: str = None, target_block: QWidget = None
 ):
     checkbox = QCheckBox()
+    checkbox.setObjectName('ConfigCheckBox')
     if description is not None:
         font = checkbox.font()
         font.setPointSizeF(CONFIG_FONTSIZE_CONTENT * 0.8)
@@ -515,8 +517,8 @@ class TreeModel(QStandardItemModel):
 class ConfigTable(QTreeView):
     """Upstream-style navigation tree.
 
-    Ported from upstream's ``ConfigTable``, with expand/collapse disabled
-    for a flat-list appearance.  Selection is indicated by bold text.
+    Ported from upstream's ``ConfigTable`` with native expand/collapse
+    enabled on header items.  Selection is indicated by bold text.
     """
 
     section_pressed = Signal(str)
@@ -532,9 +534,7 @@ class ConfigTable(QTreeView):
         self.setMaximumWidth(NAVLIST_WIDTH)
         self.section_items = {}
 
-        # Flat-list appearance — no expand/collapse arrows or interaction
-        self.setItemsExpandable(False)
-        self.setRootIsDecorated(False)
+        # Native expand/collapse on header items
         self.setIndentation(20)
         self.setFrameShape(QFrame.Shape.NoFrame)
 
@@ -661,6 +661,7 @@ class AnimatedScrollBar(QScrollBar):
 class ConfigContent(QScrollArea):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.setObjectName('ConfigContent')
         self.config_block_list: List[ConfigBlock] = []
         self.scrollContent = Widget()
         self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
@@ -1371,6 +1372,17 @@ class _DeadBlock:
 
 
 class ConfigPanel(Widget):
+    # Whitelist: widgets whose active presence prevents outside-click closing.
+    # When a dialog from this set is open, clicking outside the config panel
+    # won't close it.
+    PRESERVE_ACTIVE_WIDGET_CLASS_NAMES = {
+        'FrameLessMessageBox',
+        'ImgtransProgressMessageBox',
+        'KeywordSubWidget',
+        'MessageBox',
+        'ProgressMessageBox',
+    }
+
     save_config = Signal()
     unload_models = Signal()
     reload_textstyle = Signal(bool)
@@ -1394,6 +1406,7 @@ class ConfigPanel(Widget):
         self.setMinimumSize(700, 450)
         ConfigPanel._active_panel = self
         self._modal_ref = None  # OverlayModal, injected by MainWindow
+        self._outside_click_filter_installed = False
 
         # Right-hand side is now a page stack: each nav item switches a page
         # (no long scroll). ``configContent`` is kept as a back-compat alias
@@ -1430,6 +1443,7 @@ class ConfigPanel(Widget):
 
         # Load on demand
         self.load_model_checker = QCheckBox()
+        self.load_model_checker.setObjectName('ConfigCheckBox')
         font = self.load_model_checker.font()
         font.setPointSizeF(CONFIG_FONTSIZE_CONTENT * 0.8)
         self.load_model_checker.setFont(font)
@@ -1443,6 +1457,7 @@ class ConfigPanel(Widget):
 
         # Empty cache
         self.empty_runcache_checker = QCheckBox()
+        self.empty_runcache_checker.setObjectName('ConfigCheckBox')
         font = self.empty_runcache_checker.font()
         font.setPointSizeF(CONFIG_FONTSIZE_CONTENT * 0.8)
         self.empty_runcache_checker.setFont(font)
@@ -1471,16 +1486,6 @@ class ConfigPanel(Widget):
         )
         models_vlayout.addWidget(unload_sublock)
 
-        profiles_btn = QPushButton(self.tr("Manage API Profiles..."))
-        profiles_btn.setObjectName("ConfigButton")
-        profiles_btn.clicked.connect(self._open_profile_manager)
-        profiles_sublock = ConfigSubBlock(
-            profiles_btn,
-            name=self.tr("API profiles"),
-            note=self.tr("<p>Configure API credentials and endpoints for online translators, OCR services, and AI features. Supports <b>multiple profiles</b> for different services or accounts.</p>"),
-        )
-        models_vlayout.addWidget(profiles_sublock)
-
         network_btn = QPushButton(self.tr("Network & Mirror Settings..."))
         network_btn.setObjectName("ConfigButton")
         network_btn.clicked.connect(self._open_network_settings)
@@ -1497,57 +1502,49 @@ class ConfigPanel(Widget):
         self.detect_config_panel = TextDetectConfigPanel(
             self.tr("Detector"), scrollWidget=self
         )
-        detect_group, self.detect_sub_block = self._build_grouped_widget(
+        self.detect_sub_block = self._add_grouped_page(
             label_text_det, self.detect_config_panel, object_name="GroupDetect",
             note=self.tr("<p>Select the <b>text detection engine</b>. Different detectors offer varying accuracy and speed. Some engines may require additional model downloads on first use.</p>"),
         )
+        detect_group = self.detect_sub_block.section_widget
         self.detect_config_panel.keep_existing_checker.clicked.connect(
             self.on_keepline_clicked
         )
 
         self.ocr_config_panel = OCRConfigPanel(self.tr("OCR"), scrollWidget=self)
-        ocr_group, self.ocr_sub_block = self._build_grouped_widget(
+        self.ocr_sub_block = self._add_grouped_page(
             label_text_ocr, self.ocr_config_panel, object_name="GroupOCR",
             note=self.tr("<p>Select the <b>OCR</b> (Optical Character Recognition) engine. This stage extracts text from detected text regions in the image.</p>"),
         )
+        ocr_group = self.ocr_sub_block.section_widget
 
         self.inpaint_config_panel = InpaintConfigPanel(
             self.tr("Inpainter"), scrollWidget=self
         )
-        inpaint_group, self.inpaint_sub_block = self._build_grouped_widget(
+        self.inpaint_sub_block = self._add_grouped_page(
             label_inpaint, self.inpaint_config_panel, object_name="GroupInpaint",
             note=self.tr("<p>Select the <b>image inpainting engine</b>. After erasing text regions, the inpainter fills the background. Quality varies by image complexity and engine capability.</p>"),
         )
+        inpaint_group = self.inpaint_sub_block.section_widget
 
         self.trans_config_panel = TranslatorConfigPanel(
             label_translator, scrollWidget=self
         )
-        trans_group, self.trans_sub_block = self._build_grouped_widget(
+        self.trans_sub_block = self._add_grouped_page(
             label_translator, self.trans_config_panel, object_name="GroupTranslate",
-            note=self.tr("<p>Select the <b>translation engine</b>. Online translators require an API profile with credentials configured under <b>Models > API Profiles</b>.</p>"),
+            note=self.tr("<p>Select the <b>translation engine</b>. Online translators require an API profile with credentials configured under <b>LLM Profile</b>.</p>"),
+        )
+        trans_group = self.trans_sub_block.section_widget
+        self.trans_config_panel.navigate_to_llm_profile.connect(
+            self.focusOnLLMProfile
         )
 
-        # === Combined DL Module pipeline page ===
-        dl_container = QWidget()
-        dl_layout = QVBoxLayout(dl_container)
-        dl_layout.setContentsMargins(0, 0, 0, 0)
-        dl_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        dl_layout.addWidget(detect_group)
-        dl_layout.addWidget(ocr_group)
-        dl_layout.addWidget(inpaint_group)
-        dl_layout.addWidget(trans_group)
+        # === LLM Profile page (inline profile manager) ===
+        from utils.profile_manager import ProfileManagerWidget
 
-        self._dl_combined_widget = dl_container
-        self._add_page(dl_container)
-        idx = self._page_index[id(dl_container)]
-        self._dl_scroll_area = self.pageStack.widget(idx)
-
-        self._dl_section_widgets = {
-            "detect": detect_group,
-            "ocr": ocr_group,
-            "inpaint": inpaint_group,
-            "trans": trans_group,
-        }
+        self.llm_profiles_panel = ProfileManagerWidget()
+        self.llm_profiles_panel.profiles_changed.connect(self.profiles_changed.emit)
+        self._add_page(self.llm_profiles_panel)
 
         # === General: Project (startup + save merged) ===
         project_widget = QWidget()
@@ -1559,6 +1556,7 @@ class ConfigPanel(Widget):
         self.open_on_startup_checker = QCheckBox(
             self.tr("Reopen last project on startup")
         )
+        self.open_on_startup_checker.setObjectName('ConfigCheckBox')
         self.open_on_startup_checker.stateChanged.connect(
             self.on_open_onstartup_changed
         )
@@ -1865,6 +1863,7 @@ class ConfigPanel(Widget):
         self.fit_window_checker = QCheckBox(
             self.tr("Fit image to window when opening")
         )
+        self.fit_window_checker.setObjectName('ConfigCheckBox')
         self.fit_window_checker.stateChanged.connect(self.on_fit_window_changed)
         fit_win_sublock = ConfigSubBlock(
             self.fit_window_checker, name=self.tr("Window Fit"),
@@ -1876,6 +1875,7 @@ class ConfigPanel(Widget):
         self.fit_window_page_checker = QCheckBox(
             self.tr("Also fit when switching pages")
         )
+        self.fit_window_page_checker.setObjectName('ConfigCheckBox')
         self.fit_window_page_checker.stateChanged.connect(
             self.on_fit_window_page_changed
         )
@@ -1953,6 +1953,7 @@ class ConfigPanel(Widget):
         self.seq_badge_checker = QCheckBox(
             self.tr("Show sequence number on text blocks")
         )
+        self.seq_badge_checker.setObjectName('ConfigCheckBox')
         self.seq_badge_checker.setChecked(pcfg.show_seq_badge)
         self.seq_badge_checker.stateChanged.connect(self.on_seq_badge_changed)
         seq_badge_sublock = ConfigSubBlock(
@@ -2019,6 +2020,7 @@ class ConfigPanel(Widget):
 
         # Show decorations during drag/resize
         self.drag_decorations_checker = QCheckBox(self.tr("Show decorations while resizing"))
+        self.drag_decorations_checker.setObjectName('ConfigCheckBox')
         self.drag_decorations_checker.setChecked(pcfg.show_decorations_during_drag)
         self.drag_decorations_checker.toggled.connect(self._on_decorations_during_drag_changed)
         decor_sublock = ConfigSubBlock(
@@ -2038,9 +2040,13 @@ class ConfigPanel(Widget):
         self.configTable.section_pressed.connect(self._on_nav_section_pressed)
 
         # Build section tree with group headers
-        module_header = self.configTable.addHeader(self.tr("DL Module"))
-        self.configTable.addSection(module_header, self.tr("Models"), "models", self.models_group)
-        self.configTable.addSection(module_header, self.tr("Pipeline"), "pipeline", self._dl_combined_widget)
+        module_header = self.configTable.addHeader(self.tr("Modules"))
+        self.configTable.addSection(module_header, self.tr("Module Actions"), "models", self.models_group)
+        self.configTable.addSection(module_header, label_text_det, "detect", detect_group)
+        self.configTable.addSection(module_header, label_text_ocr, "ocr", ocr_group)
+        self.configTable.addSection(module_header, label_inpaint, "inpaint", inpaint_group)
+        self.configTable.addSection(module_header, label_translator, "trans", trans_group)
+        self.configTable.addSection(module_header, self.tr("LLM Profile"), "llm_profile", self.llm_profiles_panel)
 
         general_header = self.configTable.addHeader(self.tr("General"))
         self.configTable.addSection(general_header, label_project, "project", self.project_block.section_widget)
@@ -2054,7 +2060,11 @@ class ConfigPanel(Widget):
         # Map: section_key -> widget for page switching
         self._nav_section_to_widget = {
             "models": self.models_group,
-            "pipeline": self._dl_combined_widget,
+            "detect": detect_group,
+            "ocr": ocr_group,
+            "inpaint": inpaint_group,
+            "trans": trans_group,
+            "llm_profile": self.llm_profiles_panel,
             "project": self.project_block.section_widget,
             "typesetting": self.typesetting_block.section_widget,
             "performance": self.performance_block.section_widget,
@@ -2132,7 +2142,7 @@ class ConfigPanel(Widget):
         return idx
 
     def _add_grouped_page(
-        self, group_title, widget, object_name=None, name=None, description=None
+        self, group_title, widget, object_name=None, name=None, description=None, note=None
     ) -> ConfigSubBlock:
         """Replacement for legacy ConfigBlock.addGroupedBlock: build a
         PanelGroupBox ``group`` whose section_widget becomes a page."""
@@ -2144,8 +2154,13 @@ class ConfigPanel(Widget):
         group_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
         group_vlayout.setSpacing(0)
 
-        sublock = ConfigSubBlock(widget, name=name, description=description)
+        sublock = ConfigSubBlock(widget, name=name, description=description, note=note)
         group_vlayout.addWidget(sublock)
+
+        # Hide the panel-internal module_label — PanelGroupBox title already
+        # provides the same heading, avoiding visual redundancy.
+        if hasattr(widget, 'module_label') and widget.module_label is not None:
+            widget.module_label.hide()
 
         idx = self._add_page(group)
         sublock.section_widget = group
@@ -2311,11 +2326,8 @@ class ConfigPanel(Widget):
         self.configTable.setCurrentSection(section_key)
 
     def _focus_on_dl_section(self, dl_key: str):
-        """Navigate to the combined DL pipeline page and scroll to a section."""
-        self._nav_select("pipeline")
-        widget = self._dl_section_widgets.get(dl_key)
-        if widget is not None:
-            self._dl_scroll_area.ensureWidgetVisible(widget, 0, 100)
+        """Navigate directly to the DL module page."""
+        self._nav_select(dl_key)
 
     def focusOnTranslator(self):
         self._focus_on_dl_section("trans")
@@ -2329,6 +2341,10 @@ class ConfigPanel(Widget):
     def focusOnOCR(self):
         self._focus_on_dl_section("ocr")
 
+    def focusOnLLMProfile(self, profile_id: str = ""):
+        """Navigate to the LLM Profile page."""
+        self._nav_select("llm_profile")
+
     def _run_modal_dialog(self, dialog) -> int:
         """Run a child QDialog while disabling the backdrop's click-to-close
         so the config modal isn't dismissed by stray scrim clicks."""
@@ -2338,19 +2354,6 @@ class ConfigPanel(Widget):
         if self._modal_ref is not None:
             self._modal_ref.set_backdrop_closable(True)
         return result
-
-    def _open_profile_manager(self):
-        from utils.profile_manager import (
-            ProfileManagerDialog,
-            load_profiles,
-            save_all_profiles,
-        )
-
-        profiles = load_profiles()
-        dialog = ProfileManagerDialog(self, profiles, on_changed=lambda: None)
-        self._run_modal_dialog(dialog)
-        save_all_profiles(profiles)
-        self.profiles_changed.emit()
 
     def _open_network_settings(self):
         from ui.network_settings_dialog import NetworkSettingsDialog
@@ -2387,8 +2390,81 @@ class ConfigPanel(Widget):
         e.accept()
 
     def hideEvent(self, e) -> None:
+        self._removeOutsideClickFilter()
         self.save_config.emit()
         return super().hideEvent(e)
+
+    # ── Outside-click auto-hide (via global eventFilter) ──────────────────
+
+    def _installOutsideClickFilter(self) -> None:
+        """Install a global event filter to intercept clicks outside the panel."""
+        if self._outside_click_filter_installed:
+            return
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
+            self._outside_click_filter_installed = True
+
+    def _removeOutsideClickFilter(self) -> None:
+        """Remove the global click-outside filter."""
+        if not self._outside_click_filter_installed:
+            return
+        app = QApplication.instance()
+        if app is not None:
+            app.removeEventFilter(self)
+        self._outside_click_filter_installed = False
+
+    def eventFilter(self, watched, event) -> bool:
+        """Catch MouseButtonPress outside the panel to auto-hide."""
+        if not self.isVisible() or not isinstance(watched, QWidget):
+            return super().eventFilter(watched, event)
+        if event.type() == QEvent.Type.MouseButtonPress:
+            if (
+                QApplication.activePopupWidget() is None
+                and not self._widgetInsidePanel(watched)
+                and not self._activeWidgetInWhitelist()
+            ):
+                if self._modal_ref is not None:
+                    self._modal_ref.hide()
+        return super().eventFilter(watched, event)
+
+    def _widgetInsidePanel(self, widget) -> bool:
+        """True if *widget* is the config panel itself or a descendant."""
+        while widget is not None:
+            if widget is self:
+                return True
+            widget = widget.parentWidget()
+        return False
+
+    def _activeWidgetInWhitelist(self) -> bool:
+        """Check whether any currently-active widget is whitelisted."""
+        return any(
+            self._widgetInWhitelist(w)
+            for w in (
+                QApplication.activeWindow(),
+                QApplication.activeModalWidget(),
+                QApplication.focusWidget(),
+            )
+        )
+
+    def _widgetInWhitelist(self, widget) -> bool:
+        """Walk parent chain of *widget* looking for a whitelisted type."""
+        while widget is not None:
+            if self._isWhitelistedWidget(widget):
+                return True
+            window = widget.window()
+            if window is not widget and self._isWhitelistedWidget(window):
+                return True
+            widget = widget.parentWidget()
+        return False
+
+    @staticmethod
+    def _isWhitelistedWidget(widget) -> bool:
+        return (
+            isinstance(widget, QDialog)
+            or widget.__class__.__name__
+            in ConfigPanel.PRESERVE_ACTIVE_WIDGET_CLASS_NAMES
+        )
 
     def setupConfig(self):
         self.blockSignals(True)

@@ -162,6 +162,15 @@ class ProgressMessageBox(QDialog):
             self.task_progress_bar = TaskProgressBar(task_name, True)
             layout.addWidget(self.task_progress_bar)
 
+            if show_stop_btn:
+                self.stop_button = QPushButton(self.tr("Stop"), self)
+                self.stop_button.clicked.connect(self.on_stop_clicked)
+                button_layout = QHBoxLayout()
+                button_layout.addStretch()
+                button_layout.addWidget(self.stop_button)
+                button_layout.addStretch()
+                layout.addLayout(button_layout)
+
     def on_stop_clicked(self):
         self.stop_clicked.emit()
         self.hide()

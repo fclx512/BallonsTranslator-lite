@@ -469,7 +469,7 @@ class MainWindow(mainwindow_cls):
         if translator is not None:
             name = translator.name
             pcfg.module.translator = name
-            self.bottomBar.trans_selector.finishSetTranslator(translator)
+            self.bottomBar.trans_selector.setSelectedValue(translator.name)
             self.configPanel.trans_config_panel.finishSetTranslator(translator)
             LOGGER.info("Translator set to {}".format(name))
         else:
@@ -478,16 +478,12 @@ class MainWindow(mainwindow_cls):
     def on_enable_module(self, idx, checked):
         if idx == 0:
             pcfg.module.enable_detect = checked
-            self.bottomBar.textdet_selector.setVisible(checked)
         elif idx == 1:
             pcfg.module.enable_ocr = checked
-            self.bottomBar.ocr_selector.setVisible(checked)
         elif idx == 2:
             pcfg.module.enable_translate = checked
-            self.bottomBar.trans_selector.setVisible(checked)
         elif idx == 3:
             pcfg.module.enable_inpaint = checked
-            self.bottomBar.inpaint_selector.setVisible(checked)
         pcfg.module.update_finish_code()
 
     def setupConfig(self):
@@ -534,10 +530,12 @@ class MainWindow(mainwindow_cls):
         self.bottomBar.ocr_selector.selector.currentTextChanged.connect(
             self.on_ocr_changed
         )
-        self.bottomBar.textdet_selector.setVisible(pcfg.module.enable_detect)
-        self.bottomBar.ocr_selector.setVisible(pcfg.module.enable_ocr)
-        self.bottomBar.trans_selector.setVisible(pcfg.module.enable_translate)
-        self.bottomBar.inpaint_selector.setVisible(pcfg.module.enable_inpaint)
+        # Always show all pipeline stage selectors (upstream behavior: the old
+        # cramped layout hid disabled stages; the new layout has room for all.)
+        self.bottomBar.textdet_selector.setVisible(True)
+        self.bottomBar.ocr_selector.setVisible(True)
+        self.bottomBar.trans_selector.setVisible(True)
+        self.bottomBar.inpaint_selector.setVisible(True)
 
         self.configPanel.trans_config_panel.target_combobox.currentTextChanged.connect(
             self.on_trans_tgt_changed
@@ -722,6 +720,7 @@ class MainWindow(mainwindow_cls):
 
     def _showConfigOverlay(self):
         self._configModal.show()
+        self.configPanel._installOutsideClickFilter()
 
     def _hideConfigOverlay(self):
         self._configModal.hide()
@@ -2582,6 +2581,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             )
 
             all_pages_cb = QCheckBox(self.tr("All Pages"))
+            all_pages_cb.setObjectName('ConfigCheckBox')
             all_pages_cb.toggled.connect(
                 lambda checked: (
                     slider.set_range(0, num_pages - 1),
@@ -2612,6 +2612,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             ctx_trans_cb = None
             for idx, label in enumerate(stage_labels):
                 cb = QCheckBox(label)
+                cb.setObjectName('ConfigCheckBox')
                 cb.setChecked(pcfg.module.stage_enabled(idx))
                 cb.toggled.connect(
                     lambda checked, i=idx: self.on_enable_module(i, checked)
@@ -2622,6 +2623,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
                     row_layout.setContentsMargins(0, 0, 0, 0)
                     row_layout.addWidget(cb)
                     ctx_trans_cb = QCheckBox(self.tr("Context Translation (beta)"))
+                    ctx_trans_cb.setObjectName('ConfigCheckBox')
                     row_layout.addWidget(ctx_trans_cb)
                     row_layout.addStretch()
                     stages_layout.addWidget(row)
@@ -2691,6 +2693,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
             all_pages_cb.toggled.connect(lambda _: _update_mode_label())
 
             glossary_cb = QCheckBox(self.tr("Enforce Term Consistency (Glossary)"))
+            glossary_cb.setObjectName('ConfigCheckBox')
             glossary_cb.setChecked(True)
             ai_grid.addWidget(glossary_cb, 4, 0, 1, 2)
 
@@ -2703,6 +2706,7 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
 
             # Run without update textstyle
             wo_update_cb = QCheckBox(self.tr("Run without update textstyle"))
+            wo_update_cb.setObjectName('ConfigCheckBox')
             layout.addWidget(wo_update_cb)
 
             btn_layout = QHBoxLayout()

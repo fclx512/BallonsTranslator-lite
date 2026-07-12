@@ -2,478 +2,199 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。按照时间顺序撰写。
 
-## 2026-07-09
+## 2026-07-12
 
-### 设置面板新增 Performance 页（Text Rendering + Drag Decorations）
+### P0#1 — ModuleThread 可取消 + 准备进度
 
-**需求：** 画布文本框性能优化策略全部硬编码，用户无法按需调节。需新增 Performance 设置页，集中控制影响帧率的参数。
-
-**改动：**
-
-1. **`utils/config.py`** — 替换 4 个旧字段（`canvas_render_quality`、`canvas_cache_mode`、`canvas_drag_preview`、`zoom_rebuild_delay`）为 2 个新字段：`text_rendering: int`（0=Crisp always vector, 1=Smooth bitmap cache）、`show_decorations_during_drag: bool`
-
-2. **`ui/configpanel.py`** — 新增 Performance 设置页（Animation FPS + Text Rendering 二选一 + Drag Decorations 复选框）；Animation 从 Interface 页移入；移除旧的 Canvas Rendering 3 档、Drag Preview 2 档、Zoom Rebuild Delay spinbox；新增 `text_rendering_changed` 信号；handler 去掉 `save_config()` 重复落盘
-
-3. **`ui/textitem.py`** — 全面接入新字段：
-   - `__init__`：Crisp 模式设 `NoCache` + `_use_full_pixmap=False`
-   - `repaint_background()`、`_render_text_only()`、`_build_full_pixmap()`：`SmoothPixmapTransform` 仅 Crisp 模式启用
-   - `set_fontformat()`：字体微调策略按模式切换
-   - `startReshape()`：装饰开启时 Smooth 走全位图（`_use_full_pixmap=True`），Crisp 保留 `background_pixmap`
-   - `endReshape()`：仅 Smooth 模式恢复位图缓存
-
-4. **`ui/scenetext_manager.py`** — `on_transwidget_focus_in/out` 按 `text_rendering` 条件切换 cache 模式
-
-5. **`ui/mainwindow.py`** — 新增 `text_rendering_changed` 信号连接 + `_on_text_rendering_changed` handler 即时刷新所有文本框
-
-**涉及文件：** `utils/config.py`、`ui/configpanel.py`、`ui/textitem.py`、`ui/scenetext_manager.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
-
-**← 修复：拖拽期间装饰层变形/不可见**
-
-**根因：** `background_pixmap`（Crisp）/ `_full_pixmap`（Smooth）在拖拽期间被冻结在旧尺寸，`_apply_resize`（30ms throttle）只更新 layout 尺寸不重建缓存；松手时 `mouseReleaseEvent` 与 timer 间的 `_pending_rect` 竞争导致 `setRect(repaint=True)` 可能被跳过。
+**需求：** 上游 `module_manager.py` 的 `ModuleThread` 有 `cancel_event`（`threading.Event`）线程安全取消、`module_prepare_progress` 信号分阶段上报加载进度。我们的版本缺少这两个特性，模块切换时用户无法获知进度也无法取消。
 
 **改动：**
 
-1. **`ui/textitem.py:501-507`** — `endReshape()` Crisp 分支新增 `self.repaint_background()`，确保松手时装饰层在最终尺寸重建
-2. **`ui/texteditshapecontrol.py:262-286`** — `_apply_resize()` 按缓存路径三选一：`_use_full_pixmap=True` → `_build_full_pixmap()`（Smooth）；`background_pixmap` 非空 → `repaint_background()`（Crisp）；均空 → 旧逻辑（无装饰模式）
+1. **`ui/module_manager.py`** — ModuleThread 新增 `cancel_event`、`module_prepare_progress` Signal、`_prepare_module_class()`、`installMissingPackagesAndSetModule()`；`_set_module()` 重写为三阶段（importing → instantiating → loading_model）各阶段检测取消标记；ModuleManager 新增准备进度对话框 + 4 线程信号连接 + `cancelModulePreparation()`
 
-**涉及文件：** `ui/textitem.py`、`ui/texteditshapecontrol.py`
+2. **`ui/custom_widget/message.py`** — `ProgressMessageBox` 新增可选停止按钮（`show_stop_btn=True` 时在任务条下方添加 Stop 按钮）
+
+**涉及文件：** `ui/module_manager.py`、`ui/custom_widget/message.py`
 
 ---
 
-### 设置备注弹出框引入 RichText HTML 排版
+### P0#2 — BottomBar ModuleSelectionWidget
 
-**问题：** 设置面板中的备注内容较长且纯文本无层级，在 320px 宽弹窗内显示为连续文字墙，扫读困难。受限于设计取向，备注框不宜增大。
+**需求：** 将 BottomBar 中基于组合框的模块选择器（`SelectionWithConfigWidget`、`TranslatorSelectionWidget`）替换为上游风格的 `QToolButton` + 图标 + 弹出菜单选择器。
 
 **改动：**
 
-1. **`ui/configpanel.py:433`** — `ConfigNotePopup` 新增 `label.setTextFormat(Qt.RichText)`，QLabel 加载 HTML 渲染
+1. **`ui/module_tool_button.py`（新）** — `ModuleSelectionWidget` 类（QToolButton + 18px SVG 图标 + 模块名 + QMenu 弹出菜单 + 悬停配置齿轮按钮）；菜单从隐藏的 SmallComboBox 动态重建，处理分隔符条目
+2. **`ui/mainwindowbars.py`** — 4 个选择器替换为 ModuleSelectionWidget 实例（各带专属图标）；删除旧的 `SelectionWithConfigWidget`、`TranslatorSelectionWidget`、`SmallConfigPutton`、`CFG_ICON`
+3. **`ui/mainwindow.py`、`ui/mainwindow_mixin.py`** — `finishSetTranslator()` → `setSelectedValue()`
+4. **`icons/small_ocr.svg`、`icons/edit.svg`** — 从上游复制新增
 
-2. **`ui/configpanel.py`** — 28 条 `note=self.tr(...)` 字符串全部改为 HTML 结构：
-   - 外层 `<p>` 包裹（段落分隔）
-   - `<b>` 加粗关键术语（引擎名、模式名、功能名）
-   - `<code>` 显示参数值（如 `0-100`）
-   - `<br/>` 列表式内容换行（格式对比、模式选项）
-   - 同步精简文案：无信息量从句删除，保留信息密度
-
-3. **`translate/zh_CN.ts` + `zh_CN.qm`** — 28 条 source + translation 同步更新为 HTML 结构，qm 重新编译（858 条）
-
-**涉及文件：** `ui/configpanel.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+**涉及文件：** `ui/module_tool_button.py`（新）、`ui/mainwindowbars.py`、`ui/mainwindow.py`、`ui/mainwindow_mixin.py`、`icons/small_ocr.svg`、`icons/edit.svg`
 
 ---
 
-### 新增 post-edit 缩进检查脚本
+### 上游样式迁移（首次）
 
-**问题：** Edit 工具在替换多行代码时偶发混入 tab 字符导致 `IndentationError`，之前手动排查耗时。
-
-**改动：** `scripts/check_syntax.py`（新） — 检查三项：`compile()` 语法编译、tab 字符检测、UTF-8 BOM。默认扫描 `ui/` + `utils/`，也支持指定单文件。编辑后顺手跑 `python scripts/check_syntax.py` 即可。
-
-**涉及文件：** `scripts/check_syntax.py`（新）
-
----
-
-### 核心依赖自动安装 + 启动时序修复（看齐上游）
-
-**问题：** 用户反馈系统 Python 启动时缺少核心依赖（qtpy、numpy 等），提示 `pip install -r requirements.txt` 后退出。根因：GPU 检测到 NVIDIA 显卡但 PyTorch 未装 → 自动 `args.cpu = True` → `prepare_environment()` 的 `if args.cpu: return` 跳过全部依赖安装 → 核心依赖缺失。
-
-**上游参考：** dmMaze/BallonsTranslator `easy_install` 分支已将核心依赖管理重构为 `ensure_core_requirements()`（`utils/core_requirements.py`）+ `package_installer.py` 结构化安装后端。核心依赖在 GPU 检测之前自动安装，装完重启。
+**需求：** 看齐上游（BallonsTranslator）设置面板 UI 样式：checkbox indicator、输入框下划线聚焦、BottomBar 模块按钮、QMenu 菜单样式。
 
 **改动：**
 
-1. **`utils/package_installer.py`（新）** — 移植上游的结构化安装后端：`InstallResult` 数据类、`resolve_backend()` 自动选 uv/pip、`build_install_command()` 不用 `shell=True`、`install()` 统一入口流式输出
+1. **`config/stylesheet.css`** — 新增 ConfigCheckBox/ParamCheckBox indicator 13×13px + SVG 勾选；ConfigContent 输入框下划线聚焦样式；BottomBarModuleToolButton 悬停/按下/展开色 + SVG 菜单指示器；QMenu 圆角 + 26px item 高 + 分割线
+2. **`ui/configpanel.py`** — checkbox 设 `objectName('ConfigCheckBox')`、`ConfigContent` 设 `objectName`
+3. **`ui/module_parse_widgets.py`** — `ParamCheckBox` 设 `objectName`
+4. **`utils/shared.py`** — 控件尺寸紧凑化（comboBox height 30→26, width 200→180/332→300/468→420, lineedit 45→30）
+5. **`icons/`** — 新增 5 个 SVG（`checkbox_checked.svg`、`textdetect.svg`、`text.svg`、`eye.svg`、`image.svg`）
 
-2. **`utils/core_requirements.py`（重写）** — 加入 `ensure_core_requirements()`：
-   - 探针列表扩充至上游水准：packaging、qtpy、numpy、PIL、cv2、natsort、win32api 等
-   - 任一探针失败 → 自动 `pip install -r requirements.txt` → 成功则清理 sys.modules 缓存后返回 True（触发 restart）
-   - 安装失败只打印错误不阻塞启动
-   - 保留 `warn_missing_core_imports()` 作为 Qt 初始化后的二次验证
+⚠️ **样式覆盖不完全** — Checkbox、ConfigContent、BottomBar 等模块的部分子控件/状态仍有未覆盖的样式缺口，需后续完整逐项排查。
 
-3. **`launch.py`** — `ensure_core_requirements()` 调用移至 GPU 检测之前，解决 `args.cpu` 自动 fallback 误杀依赖安装的 bug；`prepare_environment()` 精简为仅处理 `--reinstall-torch`；移除已无用的 `REQ_WIN`
-
-**涉及文件：** `utils/package_installer.py`（新）、`utils/core_requirements.py`、`launch.py`
+**涉及文件：** `config/stylesheet.css`、`ui/configpanel.py`、`ui/module_parse_widgets.py`、`utils/shared.py`、`icons/*.svg`
 
 ---
 
-### 画布状态标签样式统一 + 无字图绿点徽标
+### P1#6 LLM Profile 页面：占位按钮 → 内联表单（方案 A）
 
-**需求：** Preview 和 No-text BG 两个状态标签大小不统一，且未在画布缩放/模式切换时动态排布。页表列表项缺少无字图标记。
+**需求：** 将 LLM Profile 从占位按钮（打开模态 dialog）改为内联编辑页面，布局从左右 splitter 改为顶部工具栏 + 下方全宽表单。
 
 **改动：**
 
-- `ui/canvas.py` — `_layout_status_labels()` 新方法统一两个标签宽度（取较宽者），动态堆叠定位（preview 在上、notext 在下，preview 隐藏时 notext 上移）；preview/notext 标签 padding/font-size 增大、圆角加粗；preview/notext 切换和 `updateLayers` 时均重排
-- `ui/mainwindow.py` — 页表列表项支持无字图标记：缩略图模式在右上角绘制绿点角标（`_make_badged_icon`），纯文本模式显示小绿点图标（`_get_notext_dot_icon`）；`_notext_dot_icon` 类缓存避免重复绘制
+1. **`utils/profile_manager.py`** — 新增 `ProfileManagerWidget` 类：
+   - 顶部工具栏：`QComboBox` 切换 profile + [+ Add] [Delete] [Restore Builtins] 按钮
+   - `QScrollArea` 内包含完整编辑表单（4 组：Basic Settings / Connection & Rate Limiting / Translation Settings / OCR Settings）
+   - 自动保存：切换 profile / 添加 / 删除时落盘，离开页面（`hideEvent`）时自动保存
+   - 发出 `profiles_changed` 信号供外部监听
 
-**涉及文件：** `ui/canvas.py`、`ui/mainwindow.py`
+2. **`ui/configpanel.py`** — 替换占位页：占位 QWidget + 按钮 → `ProfileManagerWidget` 实例；连接 `profiles_changed` → `self.profiles_changed`；移除已无引用的 `_open_profile_manager` 方法
 
----
+**解决的核心问题：**
+- 原 dialog 的 splitter 左右布局（220px 列表 + 520px 表单）在页面可用宽度 ~520px 下过于拥挤
+- 方案 A：顶部 combo 切换 + 表单独占全宽，充分利用横向空间
+- 避免了双层 scroll 嵌套（用 `_add_page` 而非 `_add_grouped_page`）
 
-### 无字图配对工具 bugfix
-
-**问题：** 保存无字图时引用 `display_name` 字段可能为 `None`，导致导出路径异常。
-
-**改动：** `tools/无字图配对工具.py:1253` — `base = s['display_name'] or Path(...).stem` → `base = Path(...).stem`，始终用源文件名
-
-**涉及文件：** `tools/无字图配对工具.py`
-
----
-
-### CLAUDE.md → AGENTS.md
-
-`CLAUDE.md` 被删除，新增 `AGENTS.md`（内容相近）。.zcode/ 配置目录出现。未追溯确切触发动作，属工具链自动更新。
-
-**涉及文件：** `CLAUDE.md`（删）、`AGENTS.md`（新）、`.zcode/`（新）
+**涉及文件：** `utils/profile_manager.py`、`ui/configpanel.py`
 
 ---
 
-## 2026-07-07
+### 启动冒烟测试（tests/test_startup_imports.py）
 
-### 全新启动时自动读取系统语言
+**需求：** 此前 `ProfileManagerWidget._build_ui()` 使用了未导入的 `QFrame`，启动时 `NameError` 崩溃。需添加测试在下次改类似代码时提前拦截。
 
-**问题/需求：** 全新启动（无 `config.json`）时始终显示英文界面，而非用户系统语言（如中文 Windows 应显示中文）。
+**改动：**
+- `tests/test_startup_imports.py`（新）— 5 个测试用例：
+  1. `utils.config` 导入
+  2. `utils.profile_manager` 所有 public 符号导入
+  3. `launch.py` 顶层导入
+  4. `ProfileManagerWidget()` 实例化（`QApplication` offscreen 模式，直接触发 `_build_ui()`，捕捉 `QFrame` 类缺失）
+  5. `ui.configpanel` 模块级导入
 
-**根因：** `launch.py` 中 `load_config()` 先执行创建 `ProgramConfig()`（其 `display_lang` 默认值取自 `shared.DEFAULT_DISPLAY_LANG`），而后才检测 `QLocale.system()` 并更新 `shared.DEFAULT_DISPLAY_LANG`——此时 `pcfg` 已固定为 `"English"`。
+**用法：** `./ballontrans_pylibs_win/python.exe tests/test_startup_imports.py`
+
+**涉及文件：** `tests/test_startup_imports.py`（新）
+
+---
+
+### i18n：ProfileManagerWidget 翻译条目
+
+**需求：** `ProfileManagerWidget` 是新增类，其 `self.tr()` 字符串缺乏对应 `<context>` 条目。
+
+**改动：**
+- `scripts/add_ts_context.py`（新建，一次性工具）— 从已有语境（`ProfileManagerDialog` 等）收集翻译，自动生成 `ProfileManagerWidget` 的 `<context>` 块
+- `translate/zh_CN.ts` — 新增 `ProfileManagerWidget` 语境，60 条 `<message>`，翻译复用已有条目
+- `translate/zh_CN.qm` — 重新编译（917 条，比之前 +59）
+
+**涉及文件：** `scripts/add_ts_context.py`（新）、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+### AGENTS.md 更新：测试流程
+
+**改动：** AGENTS.md 新增「测试流程」章节，定义四步验证顺序：语法检查 → i18n 检查 → 启动冒烟测试 → 目视确认。
+
+**涉及文件：** `AGENTS.md`
+
+---
+
+### P2 样式补齐 + 所有 checkbox 统一 indicator 样式
+
+**需求：** 逐段对比上游 stylesheet.css 发现 8 条缺失规则；所有非图标类 QCheckBox（设置页、模块参数、对话框等）缺少 `setObjectName` 导致 indicator 回退原生渲染。
 
 **改动：**
 
-- `launch.py` — 将系统语言检测提前到 `load_config()` 之前，使首次启动时 `ProgramConfig().display_lang` 直接继承正确的系统语言（如 `"zh_CN"`）而非 `"English"`；同时增加 `VALID_LANG_SET` 校验，不支持的 locale 回退为英文
-- 已有 `config.json` 时不受影响——`display_lang` 从文件中读取，覆盖默认值
+1. **`config/stylesheet.css`** — 
+   - 新增：`SeparatorWidget { color }`、`ColorPickerLabel` 边框 + `::hover`、`SmallColorPickerLabel` 边框、`QLabel#fontAngleLabel`、`ConfigContent QPushButton` 尺寸/字号、`ConfigContent #ConfigInlineRow` 背景、`ConfigContent QLabel#ParamFieldLabel` 字号、`QMenu::item { bg }`
+   - 新增：`QGroupBox::indicator` 全套样式（可勾选标题框）、`QDialog QCheckBox::indicator` 全套样式（一次覆盖所有对话框 checkbox）
+   
+2. **`ui/module_parse_widgets.py`** — `ParamCheckGroup` 内 checker、`ParamCheckerBox.checker`、`TextDetectConfigPanel.keep_existing_checker` 加 `setObjectName('ParamCheckBox')`
 
-**涉及文件：** `launch.py`
+3. **`utils/profile_manager.py`** — `ProfileManagerWidget.vision_check`、`ProfileManagerDialog.vision_check` 加 `setObjectName('ConfigCheckBox')`
 
-### 左侧面板展开改为推 canvas 而非遮挡
+4. **`ui/mainwindow.py`** — `all_pages_cb`、`cb`（stage labels）、`ctx_trans_cb`、`glossary_cb`、`wo_update_cb` 加 `setObjectName('ConfigCheckBox')`
 
-**问题/需求：** PageList 和全局搜索展开时以 OverlaySlider 浮动在 `centralStackWidget` 上，遮挡画布左侧图片内容。
+5. **`ui/mainwindow_mixin.py`** — `all_pages_cb` 加 `setObjectName('ConfigCheckBox')`
+
+6. **`ui/fontstyle_manager.py`** — Bold/Italic/Underline/Vertical 4 个 checkbox 加 `setObjectName('ConfigCheckBox')`
+
+7. **`icons/rotation.svg`** — 从上游复制
+
+**涉及文件：** `config/stylesheet.css`、`ui/module_parse_widgets.py`、`utils/profile_manager.py`、`ui/mainwindow.py`、`ui/mainwindow_mixin.py`、`ui/fontstyle_manager.py`、`icons/rotation.svg`
+
+---
+
+### i18n 修复：14 条缺失 ts 条目 + ProfileManagerWidget 空翻译
+
+**需求：** `i18n_check.py` 报 14 条 `self.tr()` 无对应 `<message>`，包括 ConfigPanel 导航树标题（Modules/Module Actions/LLM Profile）、BottomBar Translator、FilterableListDialog、ModuleThread 进度文字、ProgressMessageBox；ProfileManagerWidget 50 条 `<translation type="unfinished"/>` 未填入实际翻译。
 
 **改动：**
+- `translate/zh_CN.ts` — 新增 14 条缺失条目（ConfigPanel/BottomBar/FilterableListDialog/ModuleThread/ProgressMessageBox）、填充 ProfileManagerWidget 全部 50 条空翻译、新增 5 条缺失源字符串；同时保留 ProfileManagerDialog 已有翻译
+- `translate/zh_CN.qm` — 重新编译（936 → 936 translations）
 
-- `ui/mainwindow.py` — 将 `leftStackWidget`（PageList）和 `global_search_widget` 从 `centralStackWidget` 的浮层子控件改为嵌入 `mainHLayout`（leftBar 与 centralStackWidget 之间）；移除两个 `OverlaySlider` 实例，替换为 `_animate_panel_width()`（timer + `setFixedWidth` 动画，350ms InOutExpo）；展开时直接推 canvas 右移，零遮挡；`setupImgTransUI` 同步简化
+**涉及文件：** `translate/zh_CN.ts`、`translate/zh_CN.qm`
 
-**涉及文件：** `ui/mainwindow.py`
+---
 
-**问题/需求：** 竖排文本框的縦中横（tate-chu-yoko）数字/字母存在两个外观问题：（1）横排字符视觉上轻微偏左；（2）文本框边缘的横排数字被边框裁剪。
+### BottomBar 管线模块选择器始终显示
+
+**需求：** 底部栏的 TextDetector/OCR/Inpaint/Translator 选择器此前跟随 Run 对话框的阶段勾选状态显隐（旧 UI 拥挤时为了省空间）。新版 UI 有充足空间，上游已改为全部显示。
 
 **改动：**
-- `ui/scene_textlayout.py` — `updateDrawOffsets` 中 tate-chu-yoko 分支：添加比例修正值 `xoff += cfmt.tbr.width() * 0.06` 补偿末字右 bearing（替代无法适应字号的固定值）；添加基于 `line_width`（naturalTextWidth）的边界 clamp，在绘制偏移层将 edge 列的溢出拉回 `[0, max_width]` 可见区内，避免裁剪且不干扰描边/阴影对齐
-
-**涉及文件：** `ui/scene_textlayout.py`
-
----
-
-### 系统诊断 dialog 信号导航接入
-
-**问题/需求：** 系统诊断 dialog 的跳转按钮（[Settings →]、[Details →]、[Check →]）需打通到 ConfigPanel 的对应页面/Tab。
-
-**改动：**
-- `ui/configpanel.py` — `_open_system_diagnostic` 接入 `open_tools_requested` → ToolsDialog 自动切 Tab、`open_settings_requested` → `_focus_on_dl_section` 跳管线页；`_open_tools_dialog` 增加 `tab_hint` 参数
-- `ui/system_diagnostic_dialog.py` — 新增 `open_tools_requested`/`open_settings_requested` 信号
-
-**涉及文件：** `ui/configpanel.py`、`ui/system_diagnostic_dialog.py`
-
----
-
-### 系统诊断工具 v2（卡片式）— 完整重写
-
-**需求：** 原诊断对话框仅纯文本信息转储，无法直观识别问题也无法操作。需要改为可交互的健康检查面板，支持管线模块功能测试和问题跳转。
-
-**改动：**
-
-1. **`utils/env_diagnostic.py`** — 新增 `check_module_status()`（遍历四大模块注册表，检测当前配置模块的加载状态）；`test_module_functional()`（四步测试：解析类 → 源码/模型文件 → 实例化 → API 连通性测试或设备状态）；`dependency_summary()`（快速依赖总览供卡片摘要用）
-
-2. **`ui/system_diagnostic_dialog.py`** — 完全重写：
-   - `_Card` 卡片组件（`QGroupBox` flat，圆角边框）
-   - 四张卡片：运行环境（Python 版本/启动路径/OS）、GPU 状态（显卡/PyTorch CUDA/onnxruntime）、管线模块（每模块加载状态 + [Test] 按钮 + 错误行内展示 + [Settings →] 跳转）、依赖检查（摘要 + [Details →][Check →] 跳转 ToolsDialog）
-   - 测试日志仅保留一个实例、每次点击刷新替换
-   - `_ModuleTestWorker` 后台线程执行测试
-
-3. **`ui/configpanel.py`** — `_open_system_diagnostic` 接入信号导航
-
-**已知待改进（下轮）：**
-- 配色暗色模式适配需实机验证
-- 测试按钮缺实时进度反馈
-- 翻译器 API 测试依赖 `httpx`，当前可能未声明在 `pyproject.toml` 中
-
-**涉及文件：** `utils/env_diagnostic.py`、`ui/system_diagnostic_dialog.py`、`ui/configpanel.py`
-
----
-
-### Pipeline 测试功能设计计划
-
-**需求：** 当前诊断测试只做导入+实例化检查，不触发真实推理。需要一张项目内置测试图跑完整管线，让用户获得切实反馈（检测框数、OCR 识别率、翻译返回、修复效果）。
-
----
-
-## 2026-07-08
-
-### 启动流程重划：launch.bat 只找 Python，依赖由 launch.py 统一处理
-
-**需求：** 用户反馈 git clone 后双击 `launch.bat` 因系统 Python 无 numpy 直接崩溃。经分析，`launch.py` 在导入 `utils.config`（→ `utils.fontformat` → `import numpy`）时崩溃，而 `prepare_environment()`（负责自动装依赖）在第 638 行未跑到。
-
-**场景划分确认：**
-
-| 场景 | 用户 | Python | 依赖来源 |
-|---|---|---|---|
-| A（一键包） | 小白 | `ballontrans_pylibs_win\python.exe` | 预装在嵌入式 Python |
-| B（Git 克隆） | 有经验的用户 | 系统 Python（`py`/`python3`/`python`） | 用户自行安装，或 `launch.py` 按需装 |
-
-**改动：**
-
-- `launch.bat` — 去掉所有依赖检查和引导逻辑，`:python_found` 后直接进 Git/ZIP 检测 → GPU 检测 → 启动。bat 职责缩减为只找 Python + 启动
-- ~~`install_deps.bat`~~ — 创建后又删除（采纳上游意见：不暴露依赖库给用户，bat 环境坑多且难跨平台测试）
-- `launch.py` — `prepare_environment()` 上移到 `from utils import config` 之前，使依赖安装在 numpy 被触发前完成。嵌入式 Python 路径早返（首行 `"ballontrans_pylibs_win" in sys.executable`），不影响场景 A
-
-**涉及文件：** `launch.bat`、`launch.py`
-
----
-
-**产出：**
-- `docs/pipeline_test_计划.md` — 完整设计方案，涵盖 manifest 场景清单、PipelineTestRunner、TestPreviewWindow 预览图窗、暗色模式修复
-
-**讨论要点：**
-- 测试图存放 `assets/test_scenes/`，manifest 管理场景-阶段映射
-- 用户勾选阶段，系统自动匹配测试图，无需感知图片路径
-- 纯翻译走文本文件，不弹图窗
-- 有画面效果的阶段可打开预览窗口（检测框叠加 / 修前修后切换 / OCR 对比表）
-- 等待用户制作测试图后实施
-
-**涉及文件：** `docs/pipeline_test_计划.md`
-
----
-
-### pylibs 依赖目录比对与裁减
-
-**需求：** 旧版依赖目录 `ballontrans_pylibs_win（旧/）（Python 3.13）` 与新目录（Python 3.12）存在大量差异，需比对后处理不一致项。
-
-**改动：**
-
-- `_scripts/diff_pylibs.py` — 新增目录对比脚本（文件数/大小/哈希/分类差异报告）
-- 从新版 `ballontrans_pylibs_win` 中卸载 **polars**（~176 MB，ultralytics 传递依赖但非必需）
-- 重新安装 **spacy-pkuseg==1.0.1**（旧版有、新版缺失）
-- 删除旧版目录 `ballontrans_pylibs_win（旧/）`（~1.1 GB, 33k+ 文件）
-- `docs/依赖库说明.md` — 更新包列表和体积说明
-
-**涉及文件：** `_scripts/diff_pylibs.py`、`_scripts/pylibs_diff_report.md`、`docs/依赖库说明.md`
-
----
-
-### 上游启动逻辑合并（6 批）
-
-**改动：**
-
-1. `utils/lazy_registry.py` — SafeEval 增强（`platform.machine()`、`shared.ON_WINDOWS/ON_MACOS/ON_LINUX`）；`_collect_translator_langs` 支持 `lang_map.update()` 和 `self.lang_map={...}` 完整赋值；`metadata_warnings` 追踪；`validate_lazy_module_specs` 诊断函数
-2. `utils/registry.py` — ModuleSpec 新增 `metadata_warnings: List[str]`
-3. `utils/shared.py` — 新增 `ON_MACOS`、`ON_LINUX` 常量
-4. `utils/core_requirements.py` — 新增：启动时核心依赖 probe（qtpy、numpy、PIL 等），非侵入式提示而非自动安装
-5. `utils/network_mirrors.py` — 新增：首次运行自动检测中国 locale/时区，写入 HuggingFace/PyPI 镜像到 config.json
-6. `utils/version.py` — 新增：从 pyproject.toml 读取版本号（`0.2.0`），消除 launch.py 硬编码
-7. `launch.py` — MSVC 运行时预加载（qtpy 导入前）、core_requirements 集成、网络镜像自动检测、版本号改为动态读取
-
-**涉及文件：** `launch.py`、`utils/lazy_registry.py`、`utils/registry.py`、`utils/shared.py`、`utils/core_requirements.py`（新）、`utils/network_mirrors.py`（新）、`utils/version.py`（新）
-
----
-
-## 2026-07-06
-
-### 文本框重排——画布右键菜单解除禁用
-
-**需求：** 右键菜单中的 Reorder 子菜单在画布上右键时因 `is_textpanel` 条件被禁用。经核查无技术理由（画布选中与 TextPanel `checked_list` 已双向同步，`move_selected()` 对两者一视同仁），解除限制。
-
-**改动：**
-- `ui/canvas.py:1198` — `reorder_menu.setEnabled(is_textpanel and 0 < n_sel < n_total)` → `setEnabled(0 < n_sel < n_total)`
-
-**涉及文件：** `ui/canvas.py`
-
-### 文本框重排面板（撤回记录 — 现状已完整记录，改动已回滚）
-
-**需求：** 右侧 TextPanel 中新增可折叠「重排文本框」面板 + 4 个键盘快捷键，替代仅靠拖拽重排。
-
-**改动文件（5 文件，+285 行）：**
-
-1. `ui/textedit_area.py` — 新增 `TextEditListScrollArea.move_selected()`（支持 up/down/top/bottom/to_pos 五种移动，全排列 diff 确保索引正确）；新增 `ReorderContent` 控件：Row1 = ▲▼⏫⏬ QToolButton，Row2 = sel_info_label + Pos 输入 + Go 按钮；连接 `selection_changed` 信号实时更新 UI
-2. `ui/scenetext_manager.py` — `TextPanel` 在切换行下方插入 `CollapsibleSection`（`expanded=False`，默认折叠）；`on_rearrange_blks()` 中 reorder 后 emit `selection_changed` 刷新选择信息
-3. `ui/configpanel.py` — `DEFAULT_SHORTCUTS`/`_ACTION_NAMES`/`_SHORTCUT_GROUPS` 新增 4 项（move_up/move_down/move_top/move_bottom）
-4. `ui/mainwindow.py` — `_install_shortcuts()` 注册 4 个快捷键 + 对应 handler 方法
-5. `translate/zh_CN.ts` — `TextPanel` 上下文新增 `"Reorder Text Blocks" → "重排文本框"`
-
-**撤回原因：** 实机验证发现三个问题：① i18n 理解偏差（面板标题未走 `self.tr`）；② 快捷键触发重排后索引未完整更新（`updateTextBlkItemIdx` 只更新 tgt 位置，被挤占项索引标签错乱）；③ 重排后 `selection_changed` 未 emit 导致 `sel_info_label` 未刷新。已修复 (前 3 个 commit 包含修正) 后决定整体回滚到另一台设备继续排查。
-
-**涉及文件：** `ui/textedit_area.py`、`ui/scenetext_manager.py`、`ui/configpanel.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`
-
----
-
-### 文本框重排——右键菜单实现
-
-**需求：** 文本框重排面板撤回后改用右键菜单 + 快捷键。面板方案暴露信号覆盖盲区（`selection_changed` 只在列表勾选时 emit，画布选中不触发），四个按钮恒不可用。
-
-**改动要点：**
-- `ReorderContent` 控件 + CollapsibleSection 整体删除，重排入口全部移至 TextPanel 区右键菜单
-- 保留 `move_selected()`（整组移动，`result_list` 全排列 diff 复用 `_emit_rearrange_from_perm`）和快捷键注册项（默认 `[]`）
-- Canvas 新增 `reorder_textblks = Signal(str, int)`，`SceneTextManager` 连接到 `textEditList.move_selected`
-- 右键菜单 "Reorder" 子菜单含 Move Up/Down/Top/Bottom + "Move to Position…"（`QInputDialog.getInt`）
-- 子菜单按 `is_textpanel` 启用（画布右键不显示），Move up/down/top/bottom 按选中位置细粒度禁用
-- i18n：Canvas 上下文加 7 条翻译，回滚 TextPanel/ReorderContent 残留条目；qm 重编译 858 条
-
-**涉及文件：**
-- `ui/textedit_area.py` — 删 ReorderContent/reordered，保留 move_selected/_emit_rearrange_from_perm
-- `ui/scenetext_manager.py` — 删 CollapsibleSection，连 canvas.reorder_textblks → move_selected
-- `ui/canvas.py` — 右键菜单 Reorder 子菜单 + reorder_textblks 信号
-- `ui/mainwindow.py` — 4 个快捷键 handler（_reorder_move 守门）
-- `ui/configpanel.py` — 快捷键 4 项（子 agent A 完成）
-- `translate/zh_CN.ts` + `.qm` — 新增 Canvas 重排条目，回滚面板残余条目
-
----
-
-### 启动时页面列表默认关闭
-
-**需求：** 左侧项目图片列表在启动时默认打开（由之前会话的配置持久化导致），改为每次启动默认关闭。
-
-**改动：**
-- `ui/mainwindow.py:515-518` — 启动时强制 `pcfg.show_page_list = False` + `setChecked(False)`，不再还原上次配置状态
+- **`ui/mainwindow.py`** — `on_enable_module()` 中移除 4 个 `setVisible(checked)` 调用；初始设置全部改为 `setVisible(True)`
 
 **涉及文件：** `ui/mainwindow.py`
 
 ---
 
-## 2026-07-05
+### 上游设置面板布局对齐（P0+P1）
 
-### 获取模型列表对话框添加搜索筛选栏
-
-**问题/需求：** 管理 API 配置文件 → 获取模型列表中，模型数量多时「获取模型列表」弹窗为纯单选下拉列表，无搜索功能，在大模型列表（如 OpenRouter 数百个模型）中定位困难。
+**需求：** 此前跟进了上游的拆分设计（导航树 + 页面栈），但各管线模块页面的内部布局（间距、标签重复、控件对齐、label_above 支持）尚未同步。
 
 **改动：**
 
-1. `utils/profile_manager.py` — 新增 `FilterableListDialog` 类（搜索栏 + 可筛选 `QListWidget` + 双击/按钮确认）；`_on_fetch_models()` 中原 `QInputDialog.getItem` 替换为 `FilterableListDialog`，输入即筛选（大小写不敏感），搜索栏自动获取焦点
+1. **`ui/module_parse_widgets.py`** —
+   - `ModuleConfigParseWidget.vlayout` 间距 `30→14`，与上游紧凑风格一致
+   - `ParamWidget` 添加 `SizePolicy(Preferred, Maximum)`，允许水平填充/限制纵向增长，修复参数项在父布局中居中显示的问题
+   - `ParamWidget` 添加 `label_above` 支持：param dict 中声明 `"label_above": True` 时，标签置于控件上方跨宽布局（供长文本编辑器使用）
+   - `ParamWidget` 添加 `exclude_keys` 参数，供子类跳过特定参数的网格渲染
 
-**涉及文件：** `utils/profile_manager.py`
+2. **`ui/configpanel.py`** —
+   - `_add_grouped_page` 中自动隐藏 `widget.module_label`（PanelGroupBox 标题已提供相同信息，消除视觉冗余）
+
+**涉及文件：** `ui/module_parse_widgets.py`、`ui/configpanel.py`
 
 ---
 
-### API 配置文件管理新增测试连接功能
+### Translator API Profile 独立凸出
 
-**问题/需求：** ProfileManagerDialog 已有「Fetch Models」间接做连接测试，但需要独立的一键测试连接功能，且要求 Host 和 API Key 均必填才发送请求。
+**需求：** `active_profile` 是 LLM API 翻译器最常用的切换项，原来混在 `ParamWidget` 网格参数中不够醒目，需要独立出来作为视觉重点。
 
 **改动：**
 
-1. `utils/profile_manager.py` — Host 输入框行新增「Test」按钮；新增 `_on_test_connection()` 方法，先校验 Host 和 Key 非空，再用 `GET {host}/models` 验证连通性，区分 HTTP 错误/连接失败/超时等场景分别给出中文提示；支持读取 profile 的 proxy 设置
-2. `translate/zh_CN.ts` — 新增 10 条翻译条目，已编译（844 条）
+1. **`ui/module_parse_widgets.py`** —
+   - `TranslatorConfigPanel` 新增独立 API Profile 区块（header + ConfigComboBox + "Manage…" 按钮），位于语言选择器下方、其他参数上方
+   - 新增 `navigate_to_llm_profile` 信号，"Manage…" 按钮点击时触发，跳转到 LLM Profile 编辑页
+   - 覆盖 `updateModuleParamWidget`，创建 ParamWidget 时过滤掉 `exclude_keys={"active_profile"}`
+   - `_refresh_profile_section()` 根据当前翻译器是否支持 profile 自动显隐区块并填充选项
 
-**涉及文件：** `utils/profile_manager.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+2. **`ui/configpanel.py`** —
+   - 连接 `trans_config_panel.navigate_to_llm_profile` → `self.focusOnLLMProfile`
 
----
+**涉及文件：** `ui/module_parse_widgets.py`、`ui/configpanel.py`
 
-### 画布序号徽标固定 100% 不透明度 + 启动闪退修复
-
-**问题/需求：** ① 画布文本框左上角的序号徽标跟随文本框不透明度变化，用户希望始终 100% 显示；② 闪退：`RowIndexLabel` 调用 `setTextMargins`（QLabel 无此方法），启动时报 `AttributeError`。
-
-**改动：**
-
-1. `ui/textitem.py:811` — `_draw_seq_badge` 中 `painter.save()` 后加 `painter.setOpacity(1.0)`，徽标不受文本框 `setOpacity` 影响
-2. `ui/textedit_area.py:318` — `self.setTextMargins` → `self.setContentsMargins`
-
-**涉及文件：** `ui/textitem.py`、`ui/textedit_area.py`
-
----
-
-### 设置面板改为独立 OS 窗口
-
-**问题/需求：** ConfigPanel 内嵌在 `centralStackWidget` 中，复杂 widget 树与 canvas 在同一渲染表面，已打开项目时显示设置面板仍有明显掉帧。
-
-**改动：**
-
-1. `ui/configpanel.py` — 窗口标志改为 `Qt.WindowType.Tool`（标准标题栏 + 无任务栏入口）；`setWindowTitle("Settings")` + `setMinimumSize(700, 450)` 允许用户拖拽调整大小
-2. `ui/overlay_modal.py` — 重写：panel 不再作为 `cover_widget` 子 widget，改为独立 OS 窗口；移除缓存截图动画机制（`_cache`/`_cache_effect`/`_swap_to_real_panel`/`_cleanup_cache`），改用 `setWindowOpacity()`（DWM 合成，无每帧 render-to-texture）；`setFixedSize`→`resize`，允许自由调整；`_center_window()` 用 `mapToGlobal` 映射到屏幕坐标
-3. `ui/mainwindow.py` — ConfigPanel 创建 parent 改为 `self`（MainWindow），移除冗余 `setParent`
-4. `translate/zh_CN.ts` + `zh_CN.qm` — 新增 `"Settings" → "设置"` 翻译，重新编译（845 条）
-
-**涉及文件：** `ui/configpanel.py`、`ui/overlay_modal.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
-
----
-
-### RowIndexLabel 双击编辑功能移除
-
-**问题/需求：** 画布右侧文本编辑列表中，左侧的顺序编号（`RowIndexLabel`）双击可切换到 `QLineEdit` 编辑模式，用户修改后导致序号显示错乱。
-
-**改动：**
-
-1. `ui/textedit_area.py` — `RowIndexLabel` 从 `QStackedWidget(QLabel + QLineEdit)` 简化为 `QLabel` 子类，保留 `setSizePolicy(Maximum, Maximum)` 维持原尺寸表现；移除 `mouseDoubleClickEvent`/`startEdit`/`keyPressEvent`/`try_update_idx` 等整条编辑信号链；清理不再使用的 import
-2. `ui/scenetext_manager.py` — 移除 `pair_widget.idx_edited` 死连接
-
-**涉及文件：** `ui/textedit_area.py`、`ui/scenetext_manager.py`
-
----
-
-### onTextBlkItemSizeChanged IndexError 修复
-
-**问题/需求：** 偶发 `IndexError: list index out of range`，位置 `scenetext_manager.py:683 onTextBlkItemSizeChanged`。根因：批量删除/重排 `textblk_item_list` 期间（如 `deleteTextblkItemList` 循环中），`canvas.removeItem()` 触发的场景重排导致剩余 `TextBlkItem` 发出 `doc_size_changed`，携带的是旧 `idx`，但此时列表已缩短尚未调用 `updateTextBlkItemIdx()`，索引越界。
-
-**改动：**
-- `ui/scenetext_manager.py:682` — `onTextBlkItemSizeChanged` 开头加 `if idx >= len(self.textblk_item_list): return` 边界守卫，与其姊妹方法（`on_textedit_redo`、`on_pairw_focusout` 等）保持一致模式
-
-**涉及文件：** `ui/scenetext_manager.py`
-
----
-
-## 2026-07-08
-
-### install_cuda.bat 重写
-
-**问题/需求：** 安装 CUDA PyTorch 脚本存在多个错误：① GPU 检测用多行 Python `-c`，cmd 逐行解析为独立命令导致 `'import' is not recognized`；② 硬编码 `torch==2.7.1` 与 `cu124` 索引不匹配（cu124 仅到 torch 2.6.0）；③ `torchaudio` 在 cu132 索引中不存在导致 pip 安装失败；④ 文件保存为 LF 行尾 + Unicode 字符（`─` `→`），Windows cmd 完全无法解析。
-
-**改动：**
-
-- `install_cuda.bat` — GPU 检测改用单行 Python + `nvidia-smi --query-gpu=compute_cap` 获取计算能力（CC 主版本号），按 CC 映射 CUDA 版本（CC≥10→cu132, CC≥9→cu130, CC≥8→cu126, CC≥7→cu124, CC≥6→cu118），无需硬编码 GPU 型号；去掉版本固定，`-U` 自动升级为 CUDA variant；移除 `torchaudio`；添加 `INSTALL_MODE`（replace/manual）方便环境共存；纯 ASCII + CRLF 行尾；安装成功提示末尾附加 polars 无警告说明，避免用户误解
-
-**涉及文件：** `install_cuda.bat`
-
----
-
-### `from PIL import Image` 崩溃修复 —— Scenario B 系统 Python broken PIL 深层探测
-
-**问题/需求：** Scenario B（git clone + 系统 Python）测试中，`prepare_environment()` 依赖检查通过但启动仍崩溃在 `from utils import config` → `io_utils.from PIL import Image`（`ImportError: cannot import name 'Image' from 'PIL' (unknown location)`）。
-
-**根因：** `check_req_file("requirements.txt")` 只校验 `packaging` 元数据版本（PIL metadata 完好，版本检查通过），不会检测子模块是否可实际导入。`warn_missing_core_imports()` 的 `("PIL", ())` 探针也只检查 `import PIL`——包存在所以不报错。但 `PIL.Image` 子模块因安装损坏（"unknown location" 表示 PIL 包残缺或 `PIL.py` 文件污染命名空间）实际不可用，触发崩溃。
-
-**改动：**
-
-1. `launch.py:615-627` — `warn_missing_core_imports()` 与 `from utils import config` 之间插入深层导入验证：`try: from PIL import Image`，失败时 `pip install --force-reinstall pillow` 强制修复
-2. `utils/core_requirements.py` — 从 `CORE_IMPORT_PROBES` 移除 `("PIL", ())`（无法检测子模块），改为在 `warn_missing_core_imports()` 内单独做 `import PIL.Image` 深层探测
-
-**涉及文件：** `launch.py`、`utils/core_requirements.py`
-
----
-
-### 深层探测修复验证通过
-
-**测试结果：** 修改后启动，`prepare_environment()` 的 `check_req_file` 版本检查通过（如预期），紧接着深层探测 `from PIL import Image` 正确检测到子模块损坏，触发 "[WARN] Some core packages are installed but broken. Forcing reinstall ..." → `pip install --force-reinstall pillow` 强制重装。依赖库恢复后再次启动正常。
-
-**涉及文件：** `launch.py`、`utils/core_requirements.py`
-
----
-
-### 删除 Environment 设置页 + About 改为 Help 菜单
-
-**需求：** 采纳上游建议，取消依赖/模型检查可视化功能。原先 Environment 页的 Tools（工具检查）和 Diagnostic（系统诊断）均为精简对象，该页只剩 Network 和 MCP 两个有用功能，不足以独立成页。
-
-**改动：**
-
-- `ui/configpanel.py` — 删除整个 Environment 页（含 `_env_button` helper、4 个按钮、block 注册、nav 树条目和 widget 映射）；Network & Mirror Settings 按钮移至 Models > Management 区（接在 API Profiles 后）；删除死方法 `_open_tools_dialog`、`_open_system_diagnostic`、`_open_mcp_info`
-- `ui/mainwindowbars.py` — About 按钮改为 Help 菜单（QToolButton + QMenu），包含 "About BallonsTranslator-lite" 和 "MCP Server Info…" 两项，分隔线预留扩展位
-- `ui/mainwindow.py` — 新增 `help_mcp_triggered` 信号连接和 `show_mcp_info_dialog()` handler
-
-**涉及文件：** `ui/configpanel.py`、`ui/mainwindowbars.py`、`ui/mainwindow.py`
-
----
-
-### 依赖安装后重启对齐上游 + 依赖完整性审计 + 缺包阻断
-
-**问题/需求：** `prepare_environment()` 安装缺失依赖后不重启，`warn_missing_core_imports()` 只打印不阻断，导致安装失败或 skipping 时在 `import numpy` 处以 `ModuleNotFoundError` 硬崩，用户得不到友好指引。
-
-**根因：** `prepare_environment()` 的 skipping 路径（portable Python、conda、frozen、CPU mode）有 5 条静默 return，安装后无 `os.execv` 重启，`importlib.reload(site)` 不足以让 native 扩展模块在新进程中生效。上游（dmMaze/BallonsTranslator）用 `ensure_core_requirements()` + `restart()` 模式规避此问题。
-
-**改动：**
-
-1. `launch.py:prepare_environment()` — 返回类型改为 `-> bool`；所有 skipping 路径改为 `return False`；`requirements.txt` 安装后改为 `return True` 触发重启；非重启类安装（pywin32、`--reinstall-torch`）保留 `importlib.reload(site)`
-2. `launch.py:main()` — 安装检查段重构：`prepare_environment()` 返回 `True` 时调用 `restart()`（`os.execv`）；`warn_missing_core_imports()` 改为阻断——缺包时 `sys.exit(1)` + 中文指引"请运行 pip install -r requirements.txt"；broken PIL 深层探测保留，force-reinstall 后 + `restart()`
-3. `utils/core_requirements.py` — 无改动（已有 `warn_missing_core_imports()` 返回值 `List[str]` 满足阻断需求）
-4. 依赖完整性审计：扫描全项目第三方导入（`utils/`、`ui/`、`modules/`、`launch.py`、`mcp_server/`），确认所有被使用的第三方包均在 `pyproject.toml` 声明，无遗漏
-5. `tests/test_dependency_startup.py` — 新增 8 个测试，覆盖 `warn_missing_core_imports` 探测、`prepare_environment` 结构、`sys.exit` 阻断路径、bundled env 早退场景
-
-**涉及文件：** `launch.py`、`tests/test_dependency_startup.py`

@@ -636,6 +636,7 @@ class MainWindowMixin:
         slider.rangeChanged.connect(lambda a, b: update_range_info())
 
         all_pages_cb = QCheckBox(self.tr("All Pages"))
+        all_pages_cb.setObjectName('ConfigCheckBox')
         all_pages_cb.toggled.connect(
             lambda checked: (
                 slider.set_range(0, num_pages - 1),
@@ -938,7 +939,7 @@ class MainWindowMixin:
         if translator is not None:
             name = translator.name
             pcfg.module.translator = name
-            self.bottomBar.trans_selector.finishSetTranslator(translator)
+            self.bottomBar.trans_selector.setSelectedValue(translator.name)
             self.configPanel.trans_config_panel.finishSetTranslator(translator)
             LOGGER.info("Translator set to {}".format(name))
         else:

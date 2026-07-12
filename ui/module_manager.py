@@ -1,6 +1,7 @@
 import importlib
 import os.path as osp
 import sys
+import threading
 import time
 from typing import List, Union
 
@@ -36,7 +37,7 @@ from utils.registry import Registry
 from utils.textblock import TextBlock, sort_regions
 
 from .configpanel import ConfigPanel
-from .custom_widget import ImgtransProgressMessageBox, ParamComboBox
+from .custom_widget import ImgtransProgressMessageBox, ParamComboBox, ProgressMessageBox
 from .funcmaps import get_maskseg_method
 
 modules.translators.SYSTEM_LANG = QLocale.system().name()
@@ -83,6 +84,7 @@ def _build_dep_notes(registry: Registry) -> dict[str, str]:
 
 class ModuleThread(QThread):
     finish_set_module = Signal()
+    module_prepare_progress = Signal(dict)
     _failed_set_module_msg = "Failed to set module."
     module_thread_stopped = Signal()
 
@@ -102,9 +104,56 @@ class ModuleThread(QThread):
         self.num_process_pages = 0
         self.imgtrans_proj: ProjImgTrans = None
         self.stop_requested = False
+        # Thread-safe cancel for module preparation (downloads, imports).
+        self.cancel_event = threading.Event()
+        self.last_set_success = False
+        self.last_set_module_name = ""
+        self.last_error = None
+        self.last_missing_requirements = []
+
+    def _emit_prepare_progress(self, payload: dict):
+        """Emit preparation progress with module_key context."""
+        payload = dict(payload)
+        payload.setdefault("module_key", self.module_key)
+        payload.setdefault("module", self.last_set_module_name)
+        self.module_prepare_progress.emit(payload)
+
+    def _prepare_module_class(self, module_name: str):
+        """Resolve module class after dependency checks (override for richer flow)."""
+        self._emit_prepare_progress({
+            "event": "importing",
+            "message": self.tr("Importing module"),
+        })
+        if self.cancel_event.is_set():
+            return None
+        spec = self.module_register.get_spec(module_name)
+        if spec is None and module_name not in self.module_register.module_dict:
+            raise KeyError(f"Unknown {self.module_key} module: {module_name}")
+        module_class = self.module_register.resolve_module(module_name)
+        if module_class is None:
+            raise KeyError(f"Failed to resolve {self.module_key} module: {module_name}")
+        return module_class
+
+    def _discard_module_instance(self, module):
+        """Safely unload a module that won't be used."""
+        if module is None:
+            return
+        try:
+            module.unload_model(empty_cache=True)
+        except Exception as e:
+            LOGGER.warning(
+                f"Failed to unload {self.module_key} module after failed preparation: {e}"
+            )
 
     def _set_module(self, module_name: str):
         old_module = self.module
+        new_module = None
+        self.last_set_module_name = module_name
+        self.last_set_success = False
+        self.last_error = None
+        self.last_missing_requirements = []
+        self.cancel_event.clear()
+
         try:
             if module_name not in self.module_register.module_dict:
                 available = list(self.module_register.module_dict.keys())
@@ -118,24 +167,103 @@ class ModuleThread(QThread):
                     LOGGER.warning(
                         f"No modules available for '{self.module_key}', skipping."
                     )
+                    self.finish_set_module.emit()
                     return
-            module: Union[TextDetectorBase, BaseTranslator, InpainterBase, OCRBase] = (
-                self.module_register.resolve_module(module_name)
-            )
-            params = cfg_module.get_params(self.module_key).get(module_name)
-            if params is not None:
-                self.module = module(**params)
+
+            # Skip re-load if already loaded and complete
+            same_module = old_module is not None and old_module.name == module_name
+            if same_module and old_module.all_model_loaded():
+                self.last_set_success = True
+                self.finish_set_module.emit()
+                return
+
+            module_class = self._prepare_module_class(module_name)
+            if self.cancel_event.is_set():
+                raise RuntimeError("Module preparation cancelled by user.")
+
+            if same_module:
+                new_module = old_module
+                old_module = None
             else:
-                self.module = module()
+                self._emit_prepare_progress({
+                    "event": "instantiating",
+                    "message": self.tr("Creating module"),
+                })
+                params = cfg_module.get_params(self.module_key).get(module_name)
+                if params is not None:
+                    new_module = module_class(**params)
+                else:
+                    new_module = module_class()
+
+            if self.cancel_event.is_set():
+                raise RuntimeError("Module preparation cancelled by user.")
+
             if not pcfg.module.load_model_on_demand:
-                self.module.load_model()
+                self._emit_prepare_progress({
+                    "event": "loading_model",
+                    "message": self.tr("Loading model"),
+                })
+                new_module.load_model()
+
+            if self.cancel_event.is_set():
+                raise RuntimeError("Module preparation cancelled by user.")
+
             if old_module is not None:
-                del old_module
+                old_module.unload_model(empty_cache=True)
+                old_module = None
+
+            self.module = new_module
+            new_module = None
+            self.last_set_success = True
+
+        except RuntimeError as e:
+            if "cancelled" in str(e).lower():
+                LOGGER.info(f"Cancelled preparing {self.module_key} module {module_name}.")
+            self.module = None
+            self._discard_module_instance(new_module)
+            self._discard_module_instance(old_module)
+            self.last_error = e
         except Exception as e:
-            self.module = old_module
+            self.module = None
+            self._discard_module_instance(new_module)
+            self._discard_module_instance(old_module)
+            self.last_error = e
             create_error_dialog(e, self._failed_set_module_msg)
 
         self.finish_set_module.emit()
+
+    def installMissingPackagesAndSetModule(
+        self,
+        module_name: str,
+        requirements: List[str],
+    ):
+        """Install missing packages then retry _set_module in thread."""
+        self.job = lambda: self._install_missing_then_set(module_name, requirements)
+        self.start()
+
+    def _install_missing_then_set(self, module_name: str, requirements: List[str]):
+        self.last_set_module_name = module_name
+        self.last_set_success = False
+        self.last_error = None
+        self.last_missing_requirements = []
+        self.cancel_event.clear()
+        self._emit_prepare_progress({
+            "event": "installing_packages",
+            "message": self.tr("Installing packages"),
+        })
+        try:
+            import subprocess
+            python = sys.executable
+            for req in requirements:
+                subprocess.run(
+                    [python, "-m", "pip", "install", req, "--prefer-binary"],
+                    capture_output=True, timeout=300, check=True,
+                )
+        except Exception as e:
+            self.last_error = e
+            self.finish_set_module.emit()
+            return
+        self._set_module(module_name)
 
     def pipeline_finished(self):
         if self.imgtrans_proj is None:
@@ -154,9 +282,18 @@ class ModuleThread(QThread):
     def requestStop(self):
         self.stop_requested = True
 
+    def requestCancelModuleInit(self):
+        """Request cooperative cancellation of module preparation."""
+        self.cancel_event.set()
+
     def run(self):
         if self.job is not None:
-            self.job()
+            try:
+                self.job()
+            except Exception as e:
+                create_error_dialog(
+                    e, self.tr("Module task failed."), f"ModuleThreadFailed:{self.module_key}"
+                )
         self.job = None
 
 
@@ -1292,6 +1429,25 @@ class ModuleManager(QObject):
         self.inpaint_thread = InpaintThread()
         self.inpaint_thread.finish_inpaint.connect(self.on_finish_inpaint)
 
+        # ── Module preparation progress dialog ─────────────────────
+        self.prepare_msgbox = ProgressMessageBox(
+            "", True, None
+        )
+        self.prepare_msgbox.stop_clicked.connect(self.cancelModulePreparation)
+
+        for module_thread in [
+            self.textdetect_thread,
+            self.ocr_thread,
+            self.translate_thread,
+            self.inpaint_thread,
+        ]:
+            module_thread.module_prepare_progress.connect(
+                self.on_module_prepare_progress
+            )
+            module_thread.finish_set_module.connect(
+                lambda th=module_thread: self.on_module_prepare_finished(th)
+            )
+
         self.progress_msgbox = imgtrans_progress_msgbox
         self.progress_msgbox.stop_clicked.connect(self.stopImgtransPipeline)
 
@@ -1376,6 +1532,55 @@ class ModuleManager(QObject):
 
     def unload_all_models(self):
         unload_modules(self, {"textdetector", "inpainter", "ocr", "translator"})
+
+    def on_module_prepare_progress(self, payload: dict):
+        """Update prepare progress dialog with current step."""
+        event = payload.get("event", "")
+        message = payload.get("message", "")
+        module_key = payload.get("module_key", "")
+        module_name = payload.get("module", "")
+        if event == "installing_packages":
+            self.prepare_msgbox.updateTaskProgress(0, 
+                self.tr("Installing packages for {module}...").format(module=module_name or module_key)
+            )
+        elif event == "checking_dependencies":
+            self.prepare_msgbox.updateTaskProgress(0, 
+                self.tr("Checking dependencies for {module}...").format(module=module_name or module_key)
+            )
+        elif event == "downloading":
+            self.prepare_msgbox.updateTaskProgress(0, 
+                self.tr("Downloading files for {module}...").format(module=module_name or module_key)
+            )
+        elif event == "importing":
+            self.prepare_msgbox.updateTaskProgress(0, 
+                self.tr("Importing {module}...").format(module=module_name or module_key)
+            )
+        elif event == "loading_model":
+            self.prepare_msgbox.updateTaskProgress(0, 
+                self.tr("Loading model for {module}...").format(module=module_name or module_key)
+            )
+        else:
+            self.prepare_msgbox.updateTaskProgress(0, message or module_name or module_key)
+
+    def on_module_prepare_finished(self, thread: ModuleThread):
+        """Check if thread succeeded; close progress if done, show error otherwise."""
+        self.prepare_msgbox.hide()
+        if not thread.last_set_success and thread.last_error is not None:
+            LOGGER.error(
+                f"Failed to set {thread.module_key} module '{thread.last_set_module_name}': {thread.last_error}"
+            )
+
+    def cancelModulePreparation(self):
+        """Cancel any in-progress module preparation."""
+        for thread in [
+            self.textdetect_thread,
+            self.ocr_thread,
+            self.translate_thread,
+            self.inpaint_thread,
+        ]:
+            if thread.isRunning():
+                thread.requestCancelModuleInit()
+        self.prepare_msgbox.hide()
 
     @property
     def translator(self) -> BaseTranslator:
@@ -1596,6 +1801,10 @@ class ModuleManager(QObject):
         if self.translate_thread.isRunning():
             LOGGER.warning("Terminating a running translation thread.")
             self.translate_thread.terminate()
+        self.prepare_msgbox.updateTaskProgress(0, 
+            self.tr("Preparing module: {module}...").format(module=translator)
+        )
+        self.prepare_msgbox.show()
         self.translate_thread.setTranslator(translator)
 
     def setInpainter(self, inpainter: str = None):
@@ -1626,6 +1835,10 @@ class ModuleManager(QObject):
                 )
             return
 
+        self.prepare_msgbox.updateTaskProgress(0, 
+            self.tr("Preparing module: {module}...").format(module=inpainter)
+        )
+        self.prepare_msgbox.show()
         self.inpaint_thread.setInpainter(inpainter)
 
     def setTextDetector(self, textdetector: str = None):
@@ -1646,6 +1859,10 @@ class ModuleManager(QObject):
         if self.textdetect_thread.isRunning():
             LOGGER.warning("Terminating a running text detection thread.")
             self.textdetect_thread.terminate()
+        self.prepare_msgbox.updateTaskProgress(0, 
+            self.tr("Preparing module: {module}...").format(module=textdetector)
+        )
+        self.prepare_msgbox.show()
         self.textdetect_thread.setTextDetector(textdetector)
 
     def setOCR(self, ocr: str = None):
@@ -1659,6 +1876,10 @@ class ModuleManager(QObject):
         if self.ocr_thread.isRunning():
             LOGGER.warning("Terminating a running OCR thread.")
             self.ocr_thread.terminate()
+        self.prepare_msgbox.updateTaskProgress(0, 
+            self.tr("Preparing module: {module}...").format(module=ocr)
+        )
+        self.prepare_msgbox.show()
         self.ocr_thread.setOCR(ocr)
 
     def on_finish_translate_page(self, page_key: str):
