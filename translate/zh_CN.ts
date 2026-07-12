@@ -4800,4 +4800,15 @@ This maps automatically to each provider's native parameter
             <translation>停止</translation>
         </message>
     </context>
+    <context>
+        <name>ModuleSelectionWidget</name>
+        <message>
+            <source>Source - {language}</source>
+            <translation>源语言 - {language}</translation>
+        </message>
+        <message>
+            <source>Target - {language}</source>
+            <translation>目标语言 - {language}</translation>
+        </message>
+    </context>
 </TS>

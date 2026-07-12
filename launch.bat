@@ -31,12 +31,12 @@ rem Option A: bundled/embedded Python (full release package)
 set "PYTHON=%~dp0ballontrans_pylibs_win\python.exe"
 if exist "%PYTHON%" (
     "%PYTHON%" -c "" >nul 2>&1
-    if %ERRORLEVEL% == 0 (
+    if !ERRORLEVEL! == 0 (
         echo [OK] Using embedded Python: %PYTHON%
         goto :python_found
     ) else (
         echo [WARN] Found embedded Python at %PYTHON%
-        echo [WARN]   but it failed to run (exit code: %ERRORLEVEL%^).
+        echo [WARN]   but it failed to run (exit code: !ERRORLEVEL!^).
         echo [WARN]   Common causes:
         echo [WARN]     - Missing VC++ Redistributable 2015-2022
         echo [WARN]       Download: https://aka.ms/vs/17/release/vc_redist.x64.exe

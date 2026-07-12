@@ -53,6 +53,8 @@ class ModuleSelectionWidget(Widget):
     """
 
     cfg_clicked = Signal()
+    src_changed = Signal(str)
+    tgt_changed = Signal(str)
 
     def __init__(self, fallback_name: str, icon_filename: str, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -63,6 +65,14 @@ class ModuleSelectionWidget(Widget):
         self.selector = SmallComboBox()
         self.selector.setVisible(False)
         self.selector.currentTextChanged.connect(self._on_selector_changed)
+
+        # Hidden language selectors (used by translator for Source/Target submenus).
+        self.src_selector = SmallComboBox()
+        self.tgt_selector = SmallComboBox()
+        self.src_selector.setVisible(False)
+        self.tgt_selector.setVisible(False)
+        self.src_selector.currentTextChanged.connect(self.src_changed)
+        self.tgt_selector.currentTextChanged.connect(self.tgt_changed)
 
         # Visible tool button
         self.tool_btn = QToolButton(self)
@@ -108,6 +118,8 @@ class ModuleSelectionWidget(Widget):
 
     def blockSignals(self, block: bool):
         self.selector.blockSignals(block)
+        self.src_selector.blockSignals(block)
+        self.tgt_selector.blockSignals(block)
         super().blockSignals(block)
 
     def setSelectedValue(self, value: str, block_signals=True):
@@ -125,6 +137,33 @@ class ModuleSelectionWidget(Widget):
         if not name:
             name = self.fallback_name
         self.tool_btn.setText("  " + name)
+
+    def setTranslatorMetadata(self, name, supported_src_list, supported_tgt_list, lang_source, lang_target):
+        """Populate language selectors from a translator instance.
+
+        Parameters
+        ----------
+        name : str
+            Translator module name to select.
+        supported_src_list : list of str
+            Available source languages.
+        supported_tgt_list : list of str
+            Available target languages.
+        lang_source : str
+            Currently selected source language.
+        lang_target : str
+            Currently selected target language.
+        """
+        self.blockSignals(True)
+        self.src_selector.clear()
+        self.tgt_selector.clear()
+        self.src_selector.addItems(supported_src_list)
+        self.tgt_selector.addItems(supported_tgt_list)
+        self.selector.setCurrentText(name)
+        self.src_selector.setCurrentText(lang_source)
+        self.tgt_selector.setCurrentText(lang_target)
+        self.blockSignals(False)
+        self.updateButtonText()
 
     # ── Menu management ─────────────────────────────────────────────
 
@@ -146,6 +185,49 @@ class ModuleSelectionWidget(Widget):
                 lambda checked=False, value=text: self.selector.setCurrentText(value)
             )
             self.menu.addAction(action)
+
+        # Language submenus (used by translator).
+        if self.src_selector.count() > 0:
+            self.menu.addSeparator()
+            self._addLanguageMenus()
+
+    def _addLanguageMenus(self):
+        """Add source/target language submenus (used by translator)."""
+        # Source language submenu
+        source_menu = QMenu(
+            self.tr("Source - {language}").format(
+                language=self.src_selector.currentText()
+            ),
+            self.menu,
+        )
+        self.menu.addMenu(source_menu)
+        for i in range(self.src_selector.count()):
+            lang = self.src_selector.itemText(i)
+            action = QAction(lang, source_menu)
+            action.setCheckable(True)
+            action.setChecked(lang == self.src_selector.currentText())
+            action.triggered.connect(
+                lambda checked=False, value=lang: self.src_selector.setCurrentText(value)
+            )
+            source_menu.addAction(action)
+
+        # Target language submenu
+        target_menu = QMenu(
+            self.tr("Target - {language}").format(
+                language=self.tgt_selector.currentText()
+            ),
+            self.menu,
+        )
+        self.menu.addMenu(target_menu)
+        for i in range(self.tgt_selector.count()):
+            lang = self.tgt_selector.itemText(i)
+            action = QAction(lang, target_menu)
+            action.setCheckable(True)
+            action.setChecked(lang == self.tgt_selector.currentText())
+            action.triggered.connect(
+                lambda checked=False, value=lang: self.tgt_selector.setCurrentText(value)
+            )
+            target_menu.addAction(action)
 
     # ── Internal slots ──────────────────────────────────────────────
 

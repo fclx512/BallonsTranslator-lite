@@ -553,7 +553,7 @@ QMenu::indicator:unchecked {
 }
 
 QMenu::indicator:checked {
-    image: none;
+    image: url(icons/checkbox_checked.svg);
 }
 
 QMenu::item:selected {

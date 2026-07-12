@@ -470,6 +470,13 @@ class MainWindow(mainwindow_cls):
             name = translator.name
             pcfg.module.translator = name
             self.bottomBar.trans_selector.setSelectedValue(translator.name)
+            self.bottomBar.trans_selector.setTranslatorMetadata(
+                translator.name,
+                translator.supported_src_list,
+                translator.supported_tgt_list,
+                translator.lang_source,
+                translator.lang_target,
+            )
             self.configPanel.trans_config_panel.finishSetTranslator(translator)
             LOGGER.info("Translator set to {}".format(name))
         else:
@@ -542,6 +549,14 @@ class MainWindow(mainwindow_cls):
         )
         self.configPanel.trans_config_panel.source_combobox.currentTextChanged.connect(
             self.on_trans_src_changed
+        )
+
+        # Bottom-bar translator language submenus.
+        self.bottomBar.trans_selector.src_selector.currentTextChanged.connect(
+            self.on_trans_src_changed
+        )
+        self.bottomBar.trans_selector.tgt_selector.currentTextChanged.connect(
+            self.on_trans_tgt_changed
         )
 
         self.drawingPanel.maskTransperancySlider.setValue(
@@ -2200,6 +2215,11 @@ class MainWindow(mainwindow_cls):
             combobox.blockSignals(True)
             combobox.setCurrentText(text)
             combobox.blockSignals(False)
+        src_selector = self.bottomBar.trans_selector.src_selector
+        if sender != src_selector:
+            src_selector.blockSignals(True)
+            src_selector.setCurrentText(text)
+            src_selector.blockSignals(False)
 
     def on_trans_tgt_changed(self):
         sender = self.sender()
@@ -2213,6 +2233,11 @@ class MainWindow(mainwindow_cls):
             combobox.blockSignals(True)
             combobox.setCurrentText(text)
             combobox.blockSignals(False)
+        tgt_selector = self.bottomBar.trans_selector.tgt_selector
+        if sender != tgt_selector:
+            tgt_selector.blockSignals(True)
+            tgt_selector.setCurrentText(text)
+            tgt_selector.blockSignals(False)
 
     def on_inpaint_changed(self):
         module = self.bottomBar.inpaint_selector.selector.currentText()
