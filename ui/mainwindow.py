@@ -97,6 +97,7 @@ from .textedit_area import SourceTextEdit, TransTextEdit
 from .textedit_commands import GlobalRepalceAllCommand
 from .update_checker import AboutDialog
 from .configpanel import MCPInfoDialog
+from .help_dialog import HelpDialog
 
 
 
@@ -228,6 +229,7 @@ class MainWindow(mainwindow_cls):
         self.app = app
         self.backup_blkstyles = []
         self._run_imgtrans_wo_textstyle_update = False
+        self._help_dialog = None
 
         self.setupThread()
         self.setupUi()
@@ -1192,6 +1194,7 @@ class MainWindow(mainwindow_cls):
         self.titleBar.darkmode_trigger.connect(self.on_darkmode_triggered)
         self.titleBar.merge_tool_trigger.connect(self.on_open_merge_tool)
         self.titleBar.stylemgr_trigger.connect(self.on_open_fontstyle_manager)
+        self.titleBar.help_doc_triggered.connect(self.show_help_dialog)
         self.titleBar.help_about_triggered.connect(self.show_about_dialog)
         self.titleBar.help_mcp_triggered.connect(self.show_mcp_info_dialog)
         self.titleBar.psd_export_triggered.connect(self.on_export_psd)
@@ -3304,3 +3307,11 @@ QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
         """Show the MCP Server setup info dialog."""
         dlg = MCPInfoDialog(self)
         dlg.exec_()
+
+    def show_help_dialog(self):
+        """Show the non-modal help documentation viewer."""
+        if self._help_dialog is None:
+            self._help_dialog = HelpDialog(self)
+        self._help_dialog.show()
+        self._help_dialog.raise_()
+        self._help_dialog.activateWindow()

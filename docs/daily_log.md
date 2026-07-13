@@ -198,3 +198,31 @@
 
 **涉及文件：** `ui/module_parse_widgets.py`、`ui/configpanel.py`
 
+---
+
+## 2026-07-13
+
+### 帮助系统框架（HelpDialog）
+
+**需求：** 软件内帮助文档阅读器，支持文档浏览、标题导航、跨文档搜索。
+
+**改动：**
+
+1. **`ui/help_dialog.py`（新）** — `HelpDialog(QDialog)` 完整实现：
+   - 非模态窗口，左侧栏（文档列表 + 本节目录），主内容区 `QTextBrowser.setMarkdown()`
+   - 跨文档全文搜索，结果以 PanelGroupBox 风格渲染到主内容区（主题色自适应），点击跳转
+
+2. **`ui/mainwindowbars.py`** — Help 菜单新增"使用手册" action
+
+3. **`ui/mainwindow.py`** — 连接信号 + `show_help_dialog()` 懒加载
+
+4. **`translate/zh_CN.ts`** / **`.qm`** — 新增 HelpDialog 上下文翻译 12 条
+
+5. **`tests/test_startup_imports.py`** — 新增 HelpDialog 导入测试 + 静态方法测试
+
+6. **`docs/help/测试文档.md`（新）** — 用于验证样式渲染和标题跳转的测试文档
+
+⚠️ **当前状态：框架已实现，文档正文和体验细节需后续细化。**
+
+**涉及文件：** `ui/help_dialog.py`（新）、`ui/mainwindowbars.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_startup_imports.py`、`docs/help/测试文档.md`（新）
+

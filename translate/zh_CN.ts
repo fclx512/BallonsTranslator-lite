@@ -3873,7 +3873,58 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <source>Pair No-text Images…</source>
             <translation>配对无字图…</translation>
         </message>
-    <message><source>Help</source><translation>帮助</translation></message><message><source>About BallonsTranslator-lite</source><translation>关于 BallonsTranslator-lite</translation></message><message><source>MCP Server Info…</source><translation>MCP 服务器信息…</translation></message></context>
+    <message><source>Help</source><translation>帮助</translation></message><message><source>使用手册</source><translation>使用手册</translation></message><message><source>About BallonsTranslator-lite</source><translation>关于 BallonsTranslator-lite</translation></message><message><source>MCP Server Info…</source><translation>MCP 服务器信息…</translation></message></context>
+    <context>
+        <name>HelpDialog</name>
+        <message>
+            <source>帮助 · 使用手册</source>
+            <translation>帮助 · 使用手册</translation>
+        </message>
+        <message>
+            <source>使用手册</source>
+            <translation>使用手册</translation>
+        </message>
+        <message>
+            <source>搜索文档...</source>
+            <translation>搜索文档...</translation>
+        </message>
+        <message>
+            <source>文档</source>
+            <translation>文档</translation>
+        </message>
+        <message>
+            <source>本节目录</source>
+            <translation>本节目录</translation>
+        </message>
+        <message>
+            <source>暂无帮助文档</source>
+            <translation>暂无帮助文档</translation>
+        </message>
+        <message>
+            <source>请将 .md 文档放入 {0} 目录后重新打开</source>
+            <translation>请将 .md 文档放入 {0} 目录后重新打开</translation>
+        </message>
+        <message>
+            <source>无可用文档</source>
+            <translation>无可用文档</translation>
+        </message>
+        <message>
+            <source>读取文档失败: {0}</source>
+            <translation>读取文档失败: {0}</translation>
+        </message>
+        <message>
+            <source>共 {0} 篇  |  当前: {1}</source>
+            <translation>共 {0} 篇  |  当前: {1}</translation>
+        </message>
+        <message>
+            <source>搜索结果</source>
+            <translation>搜索结果</translation>
+        </message>
+        <message>
+            <source>在 {0} 篇中找到 {1} 处匹配</source>
+            <translation>在 {0} 篇中找到 {1} 处匹配</translation>
+        </message>
+    </context>
     <context>
         <name>ToolsDialog</name>
         <message>
