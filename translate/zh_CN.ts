@@ -3889,10 +3889,6 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <translation>搜索文档...</translation>
         </message>
         <message>
-            <source>文档</source>
-            <translation>文档</translation>
-        </message>
-        <message>
             <source>本节目录</source>
             <translation>本节目录</translation>
         </message>
@@ -3923,6 +3919,14 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         <message>
             <source>在 {0} 篇中找到 {1} 处匹配</source>
             <translation>在 {0} 篇中找到 {1} 处匹配</translation>
+        </message>
+        <message>
+            <source>关键词</source>
+            <translation>关键词</translation>
+        </message>
+        <message>
+            <source>点击结果跳转到对应位置</source>
+            <translation>点击结果跳转到对应位置</translation>
         </message>
     </context>
     <context>

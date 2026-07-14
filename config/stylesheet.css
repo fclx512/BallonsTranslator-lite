@@ -1442,3 +1442,108 @@ DeleteStyleButton::hover {
     border: 1px solid @borderColor;
     border-radius: 6px;
 }
+
+/* ── HelpDialog ─────────────────────────────────────────── */
+
+#HelpDocTabBar {
+    background: transparent;
+    border: none;
+}
+
+HelpDocTab {
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 5px 16px;
+    background: transparent;
+    color: @textColor;
+    font-size: 13px;
+}
+
+HelpDocTab:hover {
+    background: @hoverBackgroundColor;
+    border-color: @borderColor;
+}
+
+HelpDocTab[current="true"] {
+    background: @accentPrimary;
+    color: @inverseTextColor;
+    border-color: @accentPrimary;
+    font-weight: bold;
+}
+
+HelpDocTab[current="true"]:hover {
+    background: @accentPrimary;
+    border-color: @accentPrimary;
+}
+
+#HelpOutlineTree {
+    background: transparent;
+    border: 1px solid @borderColor;
+    border-radius: 8px;
+    color: @textColor;
+    outline: none;
+}
+
+#HelpOutlineTree::item {
+    padding: 3px 6px;
+    border-radius: 4px;
+}
+
+#HelpOutlineTree::item:hover {
+    background: @hoverBackgroundColor;
+}
+
+#HelpOutlineTree::item:selected {
+    background: @accentPrimary20;
+    color: @accentPrimary;
+}
+
+#HelpOutlineTree::branch {
+    background: transparent;
+    image: none;
+    width: 0px;
+}
+
+#HelpSearchInput {
+    border: 1px solid @borderColor;
+    border-radius: 8px;
+    padding: 4px 8px;
+    background: @inputBackgroundColor;
+    color: @textColor;
+    font-size: 13px;
+}
+
+#HelpSearchInput:focus {
+    border-color: @accentPrimary;
+}
+
+#HelpContent {
+    border: 1px solid @borderColor;
+    border-radius: 8px;
+    background: @emptyContentBackgroundColor;
+    color: @textColor;
+    padding: 8px;
+}
+
+#HelpHeader {
+    background: transparent;
+    border: none;
+}
+
+#HelpTitle {
+    font-size: 16px;
+    font-weight: bold;
+    color: @textColor;
+    background: transparent;
+}
+
+#HelpStatusBar {
+    border-top: 1px solid @borderColor;
+    background: transparent;
+}
+
+#HelpStatusLabel, #HelpSearchStatus {
+    font-size: 12px;
+    color: @textColor;
+    background: transparent;
+}

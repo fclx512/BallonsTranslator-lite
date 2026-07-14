@@ -226,3 +226,69 @@
 
 **涉及文件：** `ui/help_dialog.py`（新）、`ui/mainwindowbars.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_startup_imports.py`、`docs/help/测试文档.md`（新）
 
+## 2026-07-14
+
+### HelpDialog UI 重构 — Tab 栏 + 折叠目录 + Scroll-Spy
+
+**需求：** 原有帮助系统对"文档少（3~5 篇）、单篇长"的场景适配不佳——文档列表挤占目录空间、目录平铺无折叠、滚动时目录不追踪当前位置、整体直角 UI 过硬。
+
+**改动要点：**
+
+1. **文档切换从侧栏列表 → 顶部药丸 Tab 栏**：每个文档一个 QPushButton（`HelpDocTab`），用动态属性 `current` 标记选中。释放侧栏全部空间给目录。
+
+2. **目录树形折叠**：QListWidget → QTreeWidget，H1/H2/H3 层级折叠（H1 展开、子级默认折叠），原生缩进替代全角空格模拟。
+
+3. **Scroll-Spy**：文档加载后用 `QTextBlock.blockFormat().headingLevel()` 构建标题块号映射。`verticalScrollBar().valueChanged` → 150ms debounce → `cursorForPosition(QPoint(0,0))` 取 viewport 顶部块号 → 反查最近标题 → 高亮树节点。
+
+4. **导航防抖**：点击目录导航时设 `_navigating` 标志，100ms 后释放，避免 scroll-spy 与 `find()` 触发的滚动互相拉扯。
+
+5. **搜索栏下移**：从顶栏移到侧栏底部（目录树下方），与原有替换内容区的搜索结果展示配合。
+
+6. **全局圆角化 & 主题集成**：在 `config/stylesheet.css` 新增 10+ 条 HelpDialog 专用 QSS 规则（全部使用 `@variable` 主题变量），Tab 8px 圆角药丸、目录树 8px、Content 8px，选中态 `accentPrimary20` 半透明背景。搜索结果 HTML 同行圆角化（`border-radius: 8px`），高亮行用 `rgba(accent, 0.15)` 替代硬编码灰底。
+
+**涉及文件：** `ui/help_dialog.py`（重写）、`config/stylesheet.css`（追加）、`translate/zh_CN.ts`（删"文档"+增"关键词"/"点击结果跳转到对应位置"）、`translate/zh_CN.qm`（重新编译）
+
+---
+
+### HelpDialog — 字体/代码块/搜索修复
+
+**问题：**
+1. 英文字符（尤其 `{}`）显示为宋体风格——body CSS 的 `font-family` 与 `setMarkdown()` 内部字体格式冲突
+2. 代码块无视觉区分——CSS 对 `<pre>` 无效，因为 `setMarkdown()` 内部设了 inline QTextCharFormat 覆盖 document stylesheet
+3. 搜索跳转错位——全文 `find()` 对重复文本跳到第一个出现处
+
+**修复：**
+
+1. **字体**：移除 body CSS 的 `font-family`，改用 `document().setDefaultFont(QFont("Microsoft YaHei", 10))`——document 级默认字体优先级低于 setMarkdown 的 block 级格式，互不冲突
+
+2. **代码块**：新增 `_style_code_blocks()` 程序化后处理——`setMarkdown()` 后遍历所有 block，检测 `charFormat().fontFixedPitch()` 识别围栏代码块，直接设置 `QTextBlockFormat` 的 background/margin。连续代码块合并 margin 消除块间间隙
+
+3. **搜索跳转**：搜索结果锚点从 `(doc_idx, matched)` 扩展为 `(doc_idx, matched, heading)`。跳转时先 `find(heading)` 将光标定位到目标小节，再 `find(matched)` 在正确区间内匹配
+
+**涉及文件：** `ui/help_dialog.py`
+
+---
+
+### HelpDialog — 代码块/搜索/间距统一 + 已知问题文档
+
+**问题/需求：**
+1. 代码块样式仍未呈现——`fontFixedPitch()` 对绝大多数代码块返回 False
+2. 搜索跳转仍不准——heading 范围限定被代码块/正文中相同文字截胡
+3. 正文区右侧、上下零间距；侧栏"本节目录"标签与正文区顶部不对齐；搜索框与正文区底部不对齐；目录树左侧展开图标被裁剪
+
+**改动：**
+
+1. **代码块检测修复**（`_block_is_code_block()` 静态方法）：放弃 `fontFixedPitch()`，改用 `fontFamilies()` 检测 Courier New 等等宽字体。两端扫描（样式 + 合并连续间隙）均用新方法。（⚠️ 检测已修，但视觉效果仍未达预期，见 `docs/已知问题.md`）
+
+2. **搜索导航简化**：放弃 heading 限定，`_search_anchors` 从 `(doc_idx, matched, heading)` 降为 `(doc_idx, matched)`，点击结果直接全文 `find(plain)`。（⚠️ 重复文本仍跳到首次出现处，见 `docs/已知问题.md`）
+
+3. **间距统一**：
+   - QSplitter 边距 `(0, 8, 0, 8)` → `(8, 8, 8, 8)`，左右 8px 让正文区右边框不再贴窗边
+   - QTextBrowser 加 `document().setDocumentMargin(8)`
+   - 去掉"本节目录"标签（`_outline_label` 整条删除）
+   - Sidebar 边距 `(8, 8, 8, 8)` → `(8, 9, 8, 9)`，上下 9px 匹配正文区 `1px border + 8px docMargin`，目录框顶部与正文区首行平齐、搜索框底部与正文区尾行平齐
+   - 目录树去掉展开折叠箭头（`rootIsDecorated(True)→False`），缩进 16→12，CSS `::branch` 隐藏
+
+4. **`docs/已知问题.md`**：新文件，记录代码块样式和搜索跳转两个待修问题的根因与后续方向。
+
+**涉及文件：** `ui/help_dialog.py`、`config/stylesheet.css`、`docs/已知问题.md`（新）
