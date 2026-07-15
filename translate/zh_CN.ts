@@ -4435,6 +4435,11 @@ in Settings → Mirror Config, then click Retry.</source>
             <translation>切换原文对照</translation>
         </message>
         <message>
+            <location filename="..\ui\configpanel.py" line="835" />
+            <source>Path Reorder</source>
+            <translation>路径重排</translation>
+        </message>
+        <message>
             <location filename="..\ui\configpanel.py" line="783" />
             <source>Move Up</source>
             <translation>上移</translation>

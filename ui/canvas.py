@@ -1019,6 +1019,7 @@ class Canvas(QGraphicsScene):
         self._reorder_path_item = QGraphicsPathItem()
         self._reorder_path_item.setPen(pen)
         self._reorder_path_item.setZValue(150)  # above textLayer children
+        self._reorder_path_item.setParentItem(self.textLayer)
         self._reorder_path_item.hide()
         self.addItem(self._reorder_path_item)
 
@@ -1048,15 +1049,21 @@ class Canvas(QGraphicsScene):
         """Begin a new reorder path stroke at *scene_pos*."""
         self._reorder_drawing = True
         self._reorder_path = QPainterPath()
-        self._reorder_path.moveTo(scene_pos)
+        # Map from scene coords to textLayer local coords so the path
+        # and absBoundingRect() are in the same coordinate space.
+        self._reorder_path.moveTo(self.textLayer.mapFromScene(scene_pos))
 
     def _reorder_extend_stroke(self, scene_pos: QPointF):
         """Extend the current reorder stroke and check intersections."""
-        self._reorder_path.lineTo(scene_pos)
+        # Map to textLayer local coords to match absBoundingRect() space
+        local_pos = self.textLayer.mapFromScene(scene_pos)
+        self._reorder_path.lineTo(local_pos)
 
-        # Build a stroked (wide) version for collision detection
+        # Build a stroked (wide) version for collision detection.
+        # Scale brush radius inversely with zoom so the visual hit
+        # area stays consistent regardless of zoom level.
         stroker = QPainterPathStroker()
-        stroker.setWidth(self._reorder_brush_radius * 2)
+        stroker.setWidth(self._reorder_brush_radius * 2 / self.scale_factor)
         stroked = stroker.createStroke(self._reorder_path)
 
         # Check un-touched blocks

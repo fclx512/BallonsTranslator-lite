@@ -1323,6 +1323,9 @@ class MainWindow(mainwindow_cls):
         self.shortcut_registry["toggle_original_opacity"] = self._make_shortcuts(
             "toggle_original_opacity", [], self.shortcutToggleOriginalOpacity
         )
+        self.shortcut_registry["path_reorder"] = self._make_shortcuts(
+            "path_reorder", [], self.on_path_reorder
+        )
         self.shortcut_registry["move_up"] = self._make_shortcuts(
             "move_up", [], self.shortcutMoveUp
         )
@@ -1934,6 +1937,10 @@ class MainWindow(mainwindow_cls):
 
     def on_path_reorder(self):
         """Path Reorder: user draws a path across text blocks to set reading order."""
+        if self.canvas._reorder_mode:
+            # Already in path-reorder mode — ignore repeat trigger
+            return
+
         if self.imgtrans_proj.is_empty:
             QMessageBox.warning(
                 self, self.tr("Warning"), self.tr("Please open a project first")
