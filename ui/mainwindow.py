@@ -1199,7 +1199,7 @@ class MainWindow(mainwindow_cls):
         self.titleBar.global_search_trigger.connect(self.on_global_search)
         self.titleBar.darkmode_trigger.connect(self.on_darkmode_triggered)
         self.titleBar.merge_tool_trigger.connect(self.on_open_merge_tool)
-        self.titleBar.smart_reorder_trigger.connect(self.on_smart_reorder)
+        self.titleBar.smart_reorder_trigger.connect(self.on_path_reorder)
         self.titleBar.stylemgr_trigger.connect(self.on_open_fontstyle_manager)
         self.titleBar.help_doc_triggered.connect(self.show_help_dialog)
         self.titleBar.help_about_triggered.connect(self.show_about_dialog)
@@ -1451,7 +1451,8 @@ class MainWindow(mainwindow_cls):
 
     def shortcutMergeBlks(self):
         if self._is_canvas_mode() and self.canvas.textEditMode():
-            self.canvas.merge_textblks.emit("LTR")
+            direction = "RTL" if pcfg.merge_rtl else "LTR"
+            self.canvas.merge_textblks.emit(direction)
 
     def shortcutCtrlD(self):
         if self._is_canvas_mode():
@@ -1931,101 +1932,8 @@ class MainWindow(mainwindow_cls):
 
     # ── Smart Reorder ─────────────────────────────────────
 
-    class SmartReorderDialog(QDialog):
-        """小弹窗：选择网格排序预设"""
-
-        def __init__(self, parent=None):
-            super().__init__(parent)
-            self.setWindowTitle(self.tr("Smart Reorder"))
-            self.setMinimumWidth(320)
-
-            layout = QVBoxLayout(self)
-            layout.setSpacing(6)
-            layout.setContentsMargins(12, 12, 12, 12)
-
-            # Preset radio buttons
-            self.presets = [
-                ("ltr", self.tr("LTR (Top→Bottom, Left→Right)")),
-                ("rtl", self.tr("RTL (Right→Left, for manga)")),
-                ("grid_2x2", self.tr("2×2 Grid (4-koma)")),
-                ("grid_3x3", self.tr("3×3 Grid")),
-                ("custom", self.tr("Custom Grid…")),
-            ]
-
-            self._group = QButtonGroup(self)
-            for key, label in self.presets:
-                rb = QRadioButton(label)
-                self._group.addButton(rb)
-                layout.addWidget(rb)
-                if key == "grid_2x2":
-                    rb.setChecked(True)
-
-            # Custom options (initially hidden)
-            custom_widget = QWidget()
-            custom_layout = QHBoxLayout(custom_widget)
-            custom_layout.setContentsMargins(24, 0, 0, 0)
-
-            self._rows_spin = QSpinBox()
-            self._rows_spin.setRange(1, 20)
-            self._rows_spin.setValue(2)
-            self._cols_spin = QSpinBox()
-            self._cols_spin.setRange(1, 20)
-            self._cols_spin.setValue(2)
-            self._dir_combo = QComboBox()
-            self._dir_combo.addItem("LTR")
-            self._dir_combo.addItem("RTL")
-
-            custom_layout.addWidget(QLabel(self.tr("Rows:")))
-            custom_layout.addWidget(self._rows_spin)
-            custom_layout.addSpacing(8)
-            custom_layout.addWidget(QLabel(self.tr("Cols:")))
-            custom_layout.addWidget(self._cols_spin)
-            custom_layout.addSpacing(8)
-            custom_layout.addWidget(QLabel(self.tr("Direction:")))
-            custom_layout.addWidget(self._dir_combo)
-            custom_layout.addStretch()
-            custom_widget.setVisible(False)
-            layout.addWidget(custom_widget)
-
-            # Toggle custom options visibility
-            self._group.buttonClicked.connect(
-                lambda: custom_widget.setVisible(
-                    self._group.checkedButton() == self._group.buttons()[-1]
-                )
-            )
-
-            # Buttons
-            btn_layout = QHBoxLayout()
-            btn_layout.addStretch()
-            ok_btn = QPushButton(self.tr("OK"))
-            cancel_btn = QPushButton(self.tr("Cancel"))
-            ok_btn.clicked.connect(self.accept)
-            cancel_btn.clicked.connect(self.reject)
-            btn_layout.addWidget(ok_btn)
-            btn_layout.addWidget(cancel_btn)
-            layout.addLayout(btn_layout)
-
-        def get_result(self):
-            checked = self._group.checkedButton()
-            if checked is None:
-                return None
-            idx = self._group.buttons().index(checked)
-            key = self.presets[idx][0]
-            if key == "custom":
-                return key, self._rows_spin.value(), self._cols_spin.value(), self._dir_combo.currentText()
-            preset_map = {
-                "ltr":       (1, 1, "LTR"),
-                "rtl":       (1, 1, "RTL"),
-                "grid_2x2":  (2, 2, "LTR"),
-                "grid_3x3":  (3, 3, "LTR"),
-            }
-            rows, cols, direction = preset_map[key]
-            return key, rows, cols, direction
-
-    def on_smart_reorder(self):
-        """Smart Reorder: grid-based batch reorder of text blocks."""
-        from utils.textblock import sort_by_grid
-
+    def on_path_reorder(self):
+        """Path Reorder: user draws a path across text blocks to set reading order."""
         if self.imgtrans_proj.is_empty:
             QMessageBox.warning(
                 self, self.tr("Warning"), self.tr("Please open a project first")
@@ -2046,58 +1954,70 @@ class MainWindow(mainwindow_cls):
             )
             return
 
-        # Get image dimensions
-        if self.imgtrans_proj.img_array is not None:
-            im_h, im_w = self.imgtrans_proj.img_array.shape[:2]
-        elif current_img in self.imgtrans_proj._image_info:
-            info = self.imgtrans_proj._image_info[current_img]
-            im_w = info.get("width", 0)
-            im_h = info.get("height", 0)
-        else:
-            try:
-                img = self.imgtrans_proj.read_img(current_img)
-                im_h, im_w = img.shape[:2]
-            except Exception:
-                QMessageBox.warning(
-                    self, self.tr("Error"), self.tr("Cannot read image dimensions")
-                )
-                return
+        self.canvas.reorder_path_finished.connect(self._on_reorder_path_done)
+        self.canvas.enterReorderMode()
 
-        if im_w <= 0 or im_h <= 0:
-            QMessageBox.warning(
-                self, self.tr("Error"), self.tr("Invalid image dimensions")
+    def _on_reorder_path_done(self, touched_ids):
+        """Callback when a reorder path stroke is completed."""
+        self.canvas.reorder_path_finished.disconnect(self._on_reorder_path_done)
+
+        if len(touched_ids) < 2:
+            mb = QMessageBox(self)
+            mb.setWindowTitle(self.tr("Path Reorder"))
+            mb.setText(
+                self.tr("Not enough text blocks touched by the path (need at least 2).")
             )
+            cont_btn = mb.addButton(
+                self.tr("Continue Drawing"), QMessageBox.ButtonRole.ActionRole
+            )
+            cancel_btn = mb.addButton(
+                self.tr("Cancel"), QMessageBox.ButtonRole.RejectRole
+            )
+            mb.setDefaultButton(cont_btn)
+            mb.exec_()
+            if mb.clickedButton() == cont_btn:
+                self.canvas.reorder_path_finished.connect(self._on_reorder_path_done)
+            else:
+                self.canvas.exitReorderMode()
             return
 
-        # Show dialog
-        dialog = self.SmartReorderDialog(self)
-        if dialog.exec() != QDialog.Accepted:
-            return
-
-        result = dialog.get_result()
-        if result is None:
-            return
-
-        _, grid_rows, grid_cols, reading_dir = result
-
-        # Apply grid sort
-        sorted_list = sort_by_grid(
-            blk_list, im_w, im_h,
-            grid_rows=grid_rows,
-            grid_cols=grid_cols,
-            reading_dir=reading_dir,
+        mb = QMessageBox(self)
+        mb.setWindowTitle(self.tr("Path Reorder"))
+        mb.setText(self.tr("Apply reorder?"))
+        apply_btn = mb.addButton(
+            self.tr("Apply"), QMessageBox.ButtonRole.AcceptRole
         )
-
-        # Update project data
-        self.imgtrans_proj.pages[current_img] = sorted_list
-        self.canvas.updateCanvas()
-        self.st_manager.updateSceneTextitems()
-
-        QMessageBox.information(
-            self,
-            self.tr("Success"),
-            self.tr("{n} text blocks reordered successfully").format(n=len(sorted_list)),
+        cont_btn = mb.addButton(
+            self.tr("Continue Drawing"), QMessageBox.ButtonRole.ActionRole
         )
+        cancel_btn = mb.addButton(
+            self.tr("Cancel"), QMessageBox.ButtonRole.RejectRole
+        )
+        mb.setDefaultButton(apply_btn)
+        mb.exec_()
+
+        clicked = mb.clickedButton()
+        if clicked == apply_btn:
+            current_img = self.imgtrans_proj.current_img
+            # Build block list from canvas items (includes unsaved new blocks)
+            blk_list = [
+                item.blk
+                for item in self.canvas.textLayer.childItems()
+                if isinstance(item, TextBlkItem)
+            ]
+            reordered = [blk_list[i] for i in touched_ids]
+            untouched = [
+                b for i, b in enumerate(blk_list) if i not in touched_ids
+            ]
+            reordered.extend(untouched)
+            self.imgtrans_proj.pages[current_img] = reordered
+            self.canvas.updateCanvas()
+            self.st_manager.updateSceneTextitems()
+            self.canvas.exitReorderMode()
+        elif clicked == cont_btn:
+            self.canvas.reorder_path_finished.connect(self._on_reorder_path_done)
+        else:
+            self.canvas.exitReorderMode()
 
     def run_merge_all_async(self, json_path, img_list, config):
         """Run merge async on all files"""

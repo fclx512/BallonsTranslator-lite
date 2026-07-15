@@ -235,6 +235,26 @@ class ProgramConfig(Config):
     expand_tadvanced_panel: bool = True
     show_seq_badge: bool = True
 
+    # ── Merge direction (shortcut default) ──────────────────
+    merge_rtl: bool = False
+    normalize_shrink: bool = False
+
+    # ── Right-click context menu customization ─────────────
+    context_menu_order: List[str] = field(default_factory=lambda: [
+        "copy", "paste", "delete",
+        "copy_src", "paste_src",
+        "---",
+        "reset_angle", "squeeze", "normalize_breaks",
+        "---",
+        "reorder",
+        "---",
+	    "align",
+	    "merge",
+	    "behavior",
+	    "---",
+	    "translate", "ocr", "ocr_translate", "ocr_translate_inpaint",
+    ])
+
     @staticmethod
     def load(cfg_path: str):
 

@@ -104,6 +104,98 @@
 
 **涉及文件：** `ui/module_manager.py`
 
+---
+
+### 右键菜单自定义对话框 — 暗色模式修复 + UI 优化
+
+**问题：** 对话框的列表区域使用 `setStyleSheet()` + `palette(window)` 引用系统调色板，在 Windows 上始终解析为亮色，覆盖了全局 stylesheet 的暗色变量。同时默认拖拽指示器（粗黑线）挡视野、无拖拽手柄提示。
+
+**改动：**
+
+1. **渲染方案更换**（`ui/context_menu_config.py`）：
+   - 删除 `_MenuPreviewDelegate`（native `CE_MenuItem` 绘制），改用标准 QListWidget 默认渲染
+   - 删掉 `list_widget` 的本地 stylesheet 中所有 `palette()` 引用，背景/文字/边框色从全局 stylesheet 继承（自动适配亮/暗主题）
+   - 分隔线改用 `QFrame(HLine)` 作为 item widget，不再依赖 delegate
+
+2. **UI 交互优化**：
+   - 拖拽指示器改为 2px 细线 + `palette(highlight)` 颜色，不再挡视野
+   - 列表项前面加 `⠿` 拖拽手柄视觉提示
+   - 增加 ↑↓ 移动按钮（选中项后点击），作为拖拽的替代方案
+   - 列表区域 `border-radius: 6px` 圆角 + `::item:hover` 悬停高亮
+   - 基于 fontMetrics 的固定按钮宽度，防止中/英文标签在多语言下被裁剪
+
+3. **顺手修复**：
+   - `_on_add_separator` 插入的分隔符未创建 QFrame 部件
+   - 移动操作时 `takeItem` 会删除 item 的 widget，加 `setParent(None)` 保护
+
+**涉及文件：** `ui/context_menu_config.py`
+
+---
+
+### Tools 菜单重排 + PSD 封存 + 路径重排工具
+
+**需求：** Tools 菜单工具过多需重新分组；PSD 导出有兼容问题需封存；智能重排改为画路径排序。
+
+**改动：**
+
+1. **Tools 菜单重排**（`ui/mainwindowbars.py`）：
+   - 重新分为 4 组：「页面布局工具」「文字/样式工具」「导出/批量处理」「外部工具」
+   - 减少分隔线，逻辑更清晰
+
+2. **PSD 导出封存**：
+   - 菜单项灰色禁用，文本标注 "(维修中)" + tooltip 说明原因
+
+3. **路径重排工具（替换 Smart Reorder）**：
+   - **`ui/canvas.py`**：新增路径绘制模式。用户拖拽画路径（笔刷半径 20px），文本框首次被路径碰到时高亮选中并显示序号。松手后发射触碰顺序。`enterReorderMode()` / `exitReorderMode()` 等方法
+   - **`ui/textitem.py`**：新增 `_reorder_seq` 属性，重排模式下 badge 显示触碰序号而非 `idx+1`
+   - **`ui/mainwindow.py`**：删除 `SmartReorderDialog` 内嵌类和 `on_smart_reorder`；新增 `on_path_reorder()` + `_on_reorder_path_done()`，弹窗三选一「应用/继续绘制/取消」
+   - 块索引用 `id(blk)` 身份映射，避免 dataclass `__eq__` 崩溃
+   - 块列表从 `canvas.textLayer.childItems()` 取（含未保存的新增块），而非 `current_block_list()`
+
+**涉及文件：** `ui/mainwindow.py`, `ui/canvas.py`, `ui/textitem.py`, `ui/mainwindowbars.py`, `translate/zh_CN.ts`, `translate/zh_CN.qm`
+
+---
+
+### 文字块合并 — 修复视觉扩张 + 重新加入右键菜单
+
+**问题：** 此前实现的文字块合并（Merge Text Blocks）后端完整（`MergeTextBlksCommand` + undo/redo）但 UI 已暂撤：
+1. 合并后文本框视觉区域未扩张——`setPos`/`setTextWidth` 不动 `_display_rect`，`boundingRect()` 仍返回宿主原尺寸
+2. 右键菜单无入口（仅可通过无默认绑定的快捷键调 LTR 方向）
+
+**改动：**
+
+1. **视觉扩张修复 + xyxy 格式转换**（`ui/scenetext_manager.py`）：
+   - `MergeTextBlksCommand.redo()/undo()` 中替换 `setPos` + `setTextWidth` 为 `setRect(xywh, padding=False)`
+   - **⚠️ 关键：** `setRect` 调用 `QRectF(*list)` 期望 `[x, y, w, h]` 格式，而 `merged.xyxy` 是 `[x1, y1, x2, y2]` 格式。直接传 `xyxy` 会导致 `width=x2`、`height=y3`（异常增大）。修复：传 `[x1, y1, x2-x1, y2-y1]`
+
+2. **边界计算用实际位置**（`_build_merged_blk`）：将 `blk.xyxy`（保存时的原始坐标）改为 `b.absBoundingRect()`（item 当前可视位置），避免因拖动导致并集偏移
+
+3. **右键菜单集成**（`ui/context_menu_config.py`）：
+   - 新增 `_build_merge()` 子菜单函数：选中 ≥2 块时启用，提供 "Left-to-Right" / "Right-to-Left" 两个方向
+   - 注册 `CmdDef("merge", "Merge", build_fn=_build_merge)` 到 `COMMAND_REGISTRY`
+   - 将 `"merge"` 加入 `DEFAULT_ORDER`（在 `"align"` 与 `"snap_alignment"` 之间）
+   - 新增 `_merge_default_order()`：已有保存配置的用户自动将新 `DEFAULT_ORDER` 项（如 `merge`）插入到其前驱项之后
+
+4. **配置默认同步**（`utils/config.py`）：`context_menu_order` dataclass 默认也加上 `"merge"`
+
+**验证：** 语法检查 ✅、qm 编译（1003 条）✅、i18n 检查 ✅、启动测试 ✅
+
+5. **撤回定位修复**（`MergeTextBlksCommand`）： 
+   - `undo()` 原来用 `survivor_original_blk.xyxy`（保存到文件时的原始坐标）恢复位置。若用户拖动过块再合并，此值过时导致撤回后宿主跳到旧位置
+   - 修复：合并瞬间用 `survivor.absBoundingRect()` 记录实际位置 `survivor_original_xyxy`，撤回时用此值恢复
+
+6. **Merge 改一级按钮 + 方向设置移至 Behavior 子菜单**：
+   - 用户反馈：Merge 是频繁操作，二级菜单增加点击层级。改为单次点击，方向设置放入新 "Behavior" 子菜单
+   - `_build_merge` 从子菜单改为单 `QAction`，方向根据 `pcfg.merge_rtl` 动态决定
+   - 新增 `_build_behavior` 子菜单：内含 Snap Alignment + Merge Right-to-Left + Normalize Breaks and Shrink 三个勾选项
+   - `DEFAULT_ORDER` 中 `"merge"` 后跟 `"behavior"` 替代原 `"snap_alignment"`；`"normalize_breaks_shrink"` 从一级菜单移除
+   - `normalize_breaks` 改为检查 `pcfg.normalize_shrink` 决定是否收缩（`emit(pcfg.normalize_shrink)`）
+   - 新增配置 `pcfg.merge_rtl: bool` + `pcfg.normalize_shrink: bool`（`utils/config.py`）
+
+**验证：** 语法检查 ✅、qm 编译（1005 条）✅
+
+**涉及文件：** `ui/scenetext_manager.py`、`ui/context_menu_config.py`、`ui/mainwindow.py`、`utils/config.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
 ## 2026-07-13
 
 ### 帮助系统框架（HelpDialog）

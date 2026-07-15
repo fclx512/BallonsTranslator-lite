@@ -12,6 +12,7 @@ from qtpy.QtGui import (
     QNativeGestureEvent,
     QPainter,
     QPainterPath,
+    QPainterPathStroker,
     QPen,
     QPixmap,
     QResizeEvent,
@@ -21,6 +22,7 @@ from qtpy.QtWidgets import (
     QApplication,
     QGraphicsItem,
     QGraphicsLineItem,
+    QGraphicsPathItem,
     QGraphicsPixmapItem,
     QGraphicsRectItem,
     QGraphicsScene,
@@ -296,6 +298,9 @@ class Canvas(QGraphicsScene):
     position_picked = Signal(int)
     switch_text_item = Signal(int, QKeyEvent)
 
+    # Path-reorder mode
+    reorder_path_finished = Signal(list)  # touched_ids in contact order
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.scale_factor = 1.0
@@ -306,6 +311,13 @@ class Canvas(QGraphicsScene):
         self.creating_textblock = False
         self._pick_axis = None  # "x" | "y" | None — canvas coordinate pick mode
         self._pick_line = None
+        # Path-reorder mode (replaces grid-based Smart Reorder)
+        self._reorder_mode = False
+        self._reorder_drawing = False       # left button currently held
+        self._reorder_path = QPainterPath()
+        self._reorder_path_item: QGraphicsPathItem = None
+        self._reorder_touched_blocks: List[TextBlock] = []  # TextBlock refs in contact order
+        self._reorder_brush_radius = 20.0   # effective brush half-width (scene coords)
         self.create_block_origin: QPointF = None
         self.editing_textblkitem: TextBlkItem = None
 
@@ -868,6 +880,11 @@ class Canvas(QGraphicsScene):
             self._pick_line.show()
             return
 
+        # Path-reorder mode — extend stroke and check intersections
+        if self._reorder_drawing:
+            self._reorder_extend_stroke(event.scenePos())
+            return
+
         if self.mid_btn_pressed:
             new_pos = event.screenPos()
             delta_pos = new_pos - self.pan_initial_pos
@@ -981,6 +998,104 @@ class Canvas(QGraphicsScene):
         """Return whether we are in coordinate picking mode."""
         return self._pick_axis is not None
 
+    # ── Path-reorder mode ───────────────────────────────────────
+
+    def enterReorderMode(self):
+        """Enter path-drawing reorder mode.
+
+        The user draws one or more strokes across text blocks on the canvas.
+        Blocks are reordered in the sequence they are first touched.
+        """
+        self._reorder_mode = True
+        self._reorder_drawing = False
+        self._reorder_path = QPainterPath()
+        self._reorder_touched_blocks.clear()
+        self.gv.setCursor(Qt.CursorShape.CrossCursor)
+        self.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
+
+        # Create visual path item
+        pen = QPen(QColor(52, 152, 219, 150), 4)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        self._reorder_path_item = QGraphicsPathItem()
+        self._reorder_path_item.setPen(pen)
+        self._reorder_path_item.setZValue(150)  # above textLayer children
+        self._reorder_path_item.hide()
+        self.addItem(self._reorder_path_item)
+
+    def exitReorderMode(self):
+        """Exit path-drawing reorder mode and clean up."""
+        self._reorder_mode = False
+        self._reorder_drawing = False
+        self._reorder_path = QPainterPath()
+        self._reorder_touched_blocks.clear()
+        self.gv.unsetCursor()
+        self.restore_drag_mode()
+
+        # Remove visual path item
+        if self._reorder_path_item is not None:
+            self.removeItem(self._reorder_path_item)
+            self._reorder_path_item = None
+
+        # Reset reorder badge state on all text blocks
+        for item in self.textLayer.childItems():
+            if isinstance(item, TextBlkItem):
+                if item._reorder_seq >= 0:
+                    item._reorder_seq = -1
+                    item.setSelected(False)
+                    item.update()
+
+    def _reorder_start_stroke(self, scene_pos: QPointF):
+        """Begin a new reorder path stroke at *scene_pos*."""
+        self._reorder_drawing = True
+        self._reorder_path = QPainterPath()
+        self._reorder_path.moveTo(scene_pos)
+
+    def _reorder_extend_stroke(self, scene_pos: QPointF):
+        """Extend the current reorder stroke and check intersections."""
+        self._reorder_path.lineTo(scene_pos)
+
+        # Build a stroked (wide) version for collision detection
+        stroker = QPainterPathStroker()
+        stroker.setWidth(self._reorder_brush_radius * 2)
+        stroked = stroker.createStroke(self._reorder_path)
+
+        # Check un-touched blocks
+        for item in self.textLayer.childItems():
+            if not isinstance(item, TextBlkItem):
+                continue
+            if any(item.blk is blk for blk in self._reorder_touched_blocks):
+                continue
+            br = item.absBoundingRect(qrect=True)
+            if stroked.intersects(br):
+                self._reorder_touched_blocks.append(item.blk)
+                item.setSelected(True)
+                item._reorder_seq = len(self._reorder_touched_blocks) - 1
+                item.update()
+
+        # Update visual path
+        if self._reorder_path_item is not None:
+            self._reorder_path_item.setPath(self._reorder_path)
+            if not self._reorder_path_item.isVisible():
+                self._reorder_path_item.show()
+
+    def _reorder_end_stroke(self):
+        """Finalize current stroke and emit results."""
+        self._reorder_drawing = False
+        # Build index from ALL canvas text items (includes unsaved
+        # new blocks that aren't yet in imgtrans_proj.pages)
+        canvas_blocks = [
+            item.blk
+            for item in self.textLayer.childItems()
+            if isinstance(item, TextBlkItem)
+        ]
+        idx_map = {id(blk): i for i, blk in enumerate(canvas_blocks)}
+        touched_ids = [
+            idx_map[id(blk)]
+            for blk in self._reorder_touched_blocks
+            if id(blk) in idx_map
+        ]
+        self.reorder_path_finished.emit(touched_ids)
+
     # ── Snap guides ────────────────────────────────────────────
 
     def clear_snap_guides(self):
@@ -1025,6 +1140,11 @@ class Canvas(QGraphicsScene):
             pos = event.scenePos()
             val = round(pos.y() if self._pick_axis == "y" else pos.x())
             self.position_picked.emit(val)
+            return
+
+        # Path-reorder mode — start drawing a stroke
+        if self._reorder_mode and btn == Qt.MouseButton.LeftButton:
+            self._reorder_start_stroke(event.scenePos())
             return
 
         if btn == Qt.MouseButton.MiddleButton:
@@ -1093,6 +1213,11 @@ class Canvas(QGraphicsScene):
 
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         btn = event.button()
+
+        # Path-reorder mode — finish stroke and emit results
+        if self._reorder_drawing and btn == Qt.MouseButton.LeftButton:
+            self._reorder_end_stroke()
+            return
 
         self.hide_rubber_band()
 
@@ -1187,149 +1312,9 @@ class Canvas(QGraphicsScene):
 
     def on_create_contextmenu(self, pos: QPoint, is_textpanel: bool):
         if self.textEditMode() and not self.creating_textblock:
-            menu = QMenu(self.gv)
-            copy_act = menu.addAction(self.tr("Copy"))
-            copy_act.setShortcut(QKeySequence.StandardKey.Copy)
-            paste_act = menu.addAction(self.tr("Paste"))
-            paste_act.setShortcut(QKeySequence.StandardKey.Paste)
-            delete_act = menu.addAction(self.tr("Delete"))
-            delete_act.setShortcut(QKeySequence("Ctrl+D"))
-            copy_src_act = menu.addAction(self.tr("Copy source text"))
-            copy_src_act.setShortcut(QKeySequence("Ctrl+Shift+C"))
-            paste_src_act = menu.addAction(self.tr("Paste source text"))
-            paste_src_act.setShortcut(QKeySequence("Ctrl+Shift+V"))
+            from .context_menu_config import build_context_menu
 
-            menu.addSeparator()
-
-            angle_act = menu.addAction(self.tr("Reset Angle"))
-            squeeze_act = menu.addAction(self.tr("Squeeze"))
-
-            # 整理换行：仅对选中的横排块可用
-            selected = self.selected_text_items()
-            n_total = sum(
-                1 for it in self.textLayer.childItems() if isinstance(it, TextBlkItem)
-            )
-            norm_enabled = any(not b.blk.vertical for b in selected)
-            norm_act = menu.addAction(self.tr("Normalize Breaks"))
-            norm_sq_act = menu.addAction(self.tr("Normalize Breaks and Shrink"))
-            norm_act.setEnabled(norm_enabled)
-            norm_sq_act.setEnabled(norm_enabled)
-
-            menu.addSeparator()
-
-            # --- Reorder submenu (only meaningful in textpanel list context) ---
-            n_sel = len(selected)
-            reorder_menu = menu.addMenu(self.tr("Reorder"))
-            reorder_menu.setEnabled(0 < n_sel < n_total)
-            mv_up_act = reorder_menu.addAction(self.tr("Move Up"))
-            mv_down_act = reorder_menu.addAction(self.tr("Move Down"))
-            mv_top_act = reorder_menu.addAction(self.tr("Move to Top"))
-            mv_bottom_act = reorder_menu.addAction(self.tr("Move to Bottom"))
-            reorder_menu.addSeparator()
-            mv_pos_act = reorder_menu.addAction(self.tr("Move to Position..."))
-            first_sel_idx = min(b.idx for b in selected) if selected else -1
-            last_sel_idx = max(b.idx for b in selected) if selected else -1
-            mv_up_act.setEnabled(n_sel > 0 and first_sel_idx > 0)
-            mv_down_act.setEnabled(n_sel > 0 and last_sel_idx < n_total - 1)
-            mv_top_act.setEnabled(n_sel > 0 and first_sel_idx > 0)
-            mv_bottom_act.setEnabled(n_sel > 0 and last_sel_idx < n_total - 1)
-
-            menu.addSeparator()
-
-            # --- Alignment submenu ---
-            n_selected = len(self.selected_text_items())
-            align_menu = menu.addMenu(self.tr("Align"))
-            align_menu.setEnabled(n_selected >= 2)
-
-            align_left_act = align_menu.addAction(self.tr("Align Left Edges"))
-            align_right_act = align_menu.addAction(self.tr("Align Right Edges"))
-            align_top_act = align_menu.addAction(self.tr("Align Top Edges"))
-            align_bottom_act = align_menu.addAction(self.tr("Align Bottom Edges"))
-            align_menu.addSeparator()
-            align_hc_act = align_menu.addAction(self.tr("Align Horizontal Centers"))
-            align_vc_act = align_menu.addAction(self.tr("Align Vertical Centers"))
-            align_menu.addSeparator()
-            dist_h_act = align_menu.addAction(self.tr("Distribute Horizontally"))
-            dist_v_act = align_menu.addAction(self.tr("Distribute Vertically"))
-
-            snap_act = menu.addAction(self.tr("Snap Alignment"))
-            snap_act.setCheckable(True)
-            snap_act.setChecked(self.alignment_enabled)
-
-            menu.addSeparator()
-
-            translate_act = menu.addAction(self.tr("translate"))
-            ocr_act = menu.addAction(self.tr("OCR"))
-            ocr_translate_act = menu.addAction(self.tr("OCR and translate"))
-            ocr_translate_inpaint_act = menu.addAction(
-                self.tr("OCR, translate and inpaint")
-            )
-
-            rst = menu.exec(pos)
-
-            if rst == delete_act:
-                self.delete_textblks.emit(0)
-            elif rst == copy_act:
-                self.on_copy()
-            elif rst == paste_act:
-                self.on_paste()
-            elif rst == copy_src_act:
-                self.copy_src_signal.emit()
-            elif rst == paste_src_act:
-                self.paste_src_signal.emit()
-            elif rst == angle_act:
-                self.reset_angle.emit()
-            elif rst == squeeze_act:
-                self.squeeze_blk.emit()
-            elif rst == norm_act:
-                self.normalize_break_requested.emit(False)
-            elif rst == norm_sq_act:
-                self.normalize_break_requested.emit(True)
-            elif rst == mv_up_act:
-                self.reorder_textblks.emit("up", 0)
-            elif rst == mv_down_act:
-                self.reorder_textblks.emit("down", 0)
-            elif rst == mv_top_act:
-                self.reorder_textblks.emit("top", 0)
-            elif rst == mv_bottom_act:
-                self.reorder_textblks.emit("bottom", 0)
-            elif rst == mv_pos_act:
-                pos, ok = QInputDialog.getInt(
-                    self.gv,
-                    self.tr("Move to Position"),
-                    self.tr("Target position (1-%1):").replace("%1", str(n_total)),
-                    1,
-                    1,
-                    n_total,
-                )
-                if ok:
-                    self.reorder_textblks.emit("to_pos", pos)
-            elif rst == align_left_act:
-                self.align_textblks.emit("left")
-            elif rst == align_right_act:
-                self.align_textblks.emit("right")
-            elif rst == align_top_act:
-                self.align_textblks.emit("top")
-            elif rst == align_bottom_act:
-                self.align_textblks.emit("bottom")
-            elif rst == align_hc_act:
-                self.align_textblks.emit("hcenter")
-            elif rst == align_vc_act:
-                self.align_textblks.emit("vcenter")
-            elif rst == dist_h_act:
-                self.align_textblks.emit("dist_h")
-            elif rst == dist_v_act:
-                self.align_textblks.emit("dist_v")
-            elif rst == snap_act:
-                self.alignment_enabled = snap_act.isChecked()
-            elif rst == translate_act:
-                self.run_blktrans.emit(-1)
-            elif rst == ocr_act:
-                self.run_blktrans.emit(0)
-            elif rst == ocr_translate_act:
-                self.run_blktrans.emit(1)
-            elif rst == ocr_translate_inpaint_act:
-                self.run_blktrans.emit(2)
+            build_context_menu(self, pos)
 
     @property
     def have_selected_blkitem(self):

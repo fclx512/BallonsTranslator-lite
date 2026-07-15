@@ -87,6 +87,7 @@ class TextBlkItem(QGraphicsTextItem):
 
         self.idx = idx
         self._hide_badge = False
+        self._reorder_seq: int = -1  # >=0 when in path-reorder mode; overrides badge number
 
         self.background_pixmap: QPixmap = None
         # Pixmap cache optimization: full rendered text+stroke+shadow into one pixmap
@@ -810,7 +811,7 @@ class TextBlkItem(QGraphicsTextItem):
     def _draw_seq_badge(self, painter: QPainter):
         """Draw sequence number badge at top-left corner of content area."""
         from utils.config import pcfg
-        if self._hide_badge or not pcfg.show_seq_badge:
+        if self._reorder_seq < 0 and (self._hide_badge or not pcfg.show_seq_badge):
             return
         scale = self.get_scale()
         font_size = max(6, 11 / scale)
@@ -821,7 +822,10 @@ class TextBlkItem(QGraphicsTextItem):
         font.setBold(True)
         font.setPixelSize(int(font_size))
 
-        seq_text = str(self.idx + 1)
+        if self._reorder_seq >= 0:
+            seq_text = str(self._reorder_seq + 1)
+        else:
+            seq_text = str(self.idx + 1)
 
         fm = QFontMetrics(font)
         text_w = fm.horizontalAdvance(seq_text) + 8

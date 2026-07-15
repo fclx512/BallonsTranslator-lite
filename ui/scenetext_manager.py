@@ -306,6 +306,7 @@ class MergeTextBlksCommand(QUndoCommand):
         removed_pairwidgets,
         merged_blk_data,
         survivor_original_blk,
+        survivor_original_xyxy,  # 合并瞬间宿主的实际位置 [x1, y1, x2, y2]
         ctrl,
         parent=None,
     ):
@@ -316,6 +317,7 @@ class MergeTextBlksCommand(QUndoCommand):
         self.removed_pairwidgets = removed_pairwidgets
         self.merged_blk_data = merged_blk_data
         self.survivor_original_blk = survivor_original_blk
+        self.survivor_original_xyxy = survivor_original_xyxy
         self.ctrl: SceneTextManager = ctrl
         self.op_counter = 0
 
@@ -332,11 +334,14 @@ class MergeTextBlksCommand(QUndoCommand):
         self.survivor_pairwidget.e_source.setPlainText(
             self.merged_blk_data.get_text()
         )
-        # 1b. 扩张文本框到合并区域
+        # 1b. 扩张文本框到合并区域（setRect 同时更新 pos、_display_rect、layout maxSize）
+        # padding=False：xyxy 已是完整外框，不加 document margin 避免偏移
+        # 注意 setRect 接受 [x, y, w, h] 格式，而 merged_blk_data.xyxy 是 [x1, y1, x2, y2]
         xyxy = self.merged_blk_data.xyxy
-        self.survivor_blkitem.setPos(xyxy[0], xyxy[1])
-        self.survivor_blkitem.setTextWidth(xyxy[2] - xyxy[0])
-        self.survivor_blkitem.update()
+        self.survivor_blkitem.setRect(
+            [xyxy[0], xyxy[1], xyxy[2] - xyxy[0], xyxy[3] - xyxy[1]],
+            padding=False, repaint=True,
+        )
         # 先选中宿主，让 delete 后的 selection 回调能正确同步
         self.survivor_blkitem.setSelected(True)
         # 2. 移除被合并块
@@ -356,11 +361,12 @@ class MergeTextBlksCommand(QUndoCommand):
         self.survivor_pairwidget.e_source.setPlainText(
             self.survivor_original_blk.get_text()
         )
-        # 1b. 恢复位置与宽度
-        orig_xyxy = self.survivor_original_blk.xyxy
-        self.survivor_blkitem.setPos(orig_xyxy[0], orig_xyxy[1])
-        self.survivor_blkitem.setTextWidth(orig_xyxy[2] - orig_xyxy[0])
-        self.survivor_blkitem.update()
+        # 1b. 用合并瞬间记录的实际位置恢复，而非可能过时的 blk.xyxy
+        xyxy = self.survivor_original_xyxy
+        self.survivor_blkitem.setRect(
+            [xyxy[0], xyxy[1], xyxy[2] - xyxy[0], xyxy[3] - xyxy[1]],
+            padding=False, repaint=True,
+        )
         # 2. 恢复被移除块
         self.ctrl.recoverTextblkItemList(
             self.removed_blkitems, self.removed_pairwidgets
@@ -1379,6 +1385,10 @@ class SceneTextManager(QObject):
         survivor = blkitems[0]
         removed = blkitems[1:]
 
+        # 记录宿主合并瞬间的实际位置（用于撤回时精确恢复）
+        abr = survivor.absBoundingRect()
+        survivor_original_xyxy = [abr[0], abr[1], abr[0] + abr[2], abr[1] + abr[3]]
+
         # 深拷贝宿主原始数据（用于撤消）
         survivor_original_blk = copy.deepcopy(survivor.blk)
 
@@ -1396,7 +1406,8 @@ class SceneTextManager(QObject):
             MergeTextBlksCommand(
                 survivor, self.pairwidget_list[survivor.idx],
                 removed_blkitems, removed_pairwidgets,
-                merged_blk, survivor_original_blk, self
+                merged_blk, survivor_original_blk,
+                survivor_original_xyxy, self
             )
         )
 
@@ -1417,7 +1428,10 @@ class SceneTextManager(QObject):
             rich_texts.append(blk.rich_text if isinstance(blk.rich_text, str) else "")
             for line in (blk.lines if blk.lines else []):
                 all_lines.append(line)
-            bx1, by1, bx2, by2 = blk.xyxy
+            # 使用 item 当前实际位置而非 blk.xyxy（可能因拖动而不同）
+            abr = b.absBoundingRect()
+            bx1, by1 = abr[0], abr[1]
+            bx2, by2 = bx1 + abr[2], by1 + abr[3]
             x1s.append(bx1); y1s.append(by1); x2s.append(bx2); y2s.append(by2)
 
         merged.text = texts

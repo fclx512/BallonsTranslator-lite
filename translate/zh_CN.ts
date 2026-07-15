@@ -276,12 +276,22 @@
             <source>Left-to-Right</source>
             <translation>从左到右</translation>
         </message>
-        <message>
-            <location filename="..\ui\canvas.py" />
-            <source>Right-to-Left</source>
-            <translation>从右到左</translation>
-        </message>
-        <message>
+	        <message>
+	            <location filename="..\ui\canvas.py" />
+	            <source>Right-to-Left</source>
+	            <translation>从右到左</translation>
+	        </message>
+		        <message>
+		            <location filename="..\ui\canvas.py" />
+		            <source>Merge Right-to-Left</source>
+		            <translation>默认从右到左合并</translation>
+		        </message>
+		        <message>
+		            <location filename="..\ui\canvas.py" />
+		            <source>Behavior</source>
+		            <translation>行为设置</translation>
+		        </message>
+		        <message>
             <location filename="..\ui\canvas.py" line="350" />
             <source>PREVIEW</source>
             <translation>预览</translation>
@@ -1032,10 +1042,22 @@
 		        <message>
 		            <source>&lt;p&gt;Select the &lt;b&gt;translation engine&lt;/b&gt;. Online translators require an API profile with credentials configured under &lt;b&gt;LLM Profile&lt;/b&gt;.&lt;/p&gt;</source>
 		            <translation>&lt;p&gt;选择&lt;b&gt;翻译引擎&lt;/b&gt;。在线翻译器需要在&lt;b&gt;LLM 配置&lt;/b&gt;中配置 API 凭据。&lt;/p&gt;</translation>
-		        </message>
-	    </context>
-    <context>
-        <name>DependencyDialog</name>
+			        </message>
+			        <message>
+			            <source>Customize Context Menu...</source>
+			            <translation>自定义右键菜单...</translation>
+			        </message>
+			        <message>
+			            <source>Context Menu</source>
+			            <translation>右键菜单</translation>
+			        </message>
+			        <message>
+			            <source>&lt;p&gt;Customize the right-click context menu: reorder items, add or remove commands via drag-and-drop.&lt;/p&gt;</source>
+			            <translation>&lt;p&gt;自定义右键菜单：拖拽排序、添加或移除命令项。&lt;/p&gt;</translation>
+			        </message>
+		    </context>
+	    <context>
+	        <name>DependencyDialog</name>
         <message>
             <location filename="..\ui\dependency_dialog.py" line="388" />
             <source>Dependencies</source>
@@ -1940,17 +1962,42 @@ Output:
 	            <source>{n} text blocks reordered successfully</source>
 	            <translation>{n} 个文本块已重新排序</translation>
 	        </message>
-	        <message>
-	            <location filename="..\ui\mainwindow.py" />
-	            <source>Cannot read image dimensions</source>
-	            <translation>无法读取图片尺寸</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\mainwindow.py" />
-	            <source>Invalid image dimensions</source>
-	            <translation>无效的图片尺寸</translation>
-	        </message>
-	    </context>
+		        <message>
+		            <location filename="..\ui\mainwindow.py" />
+		            <source>Cannot read image dimensions</source>
+		            <translation>无法读取图片尺寸</translation>
+		        </message>
+		        <message>
+		            <location filename="..\ui\mainwindow.py" />
+		            <source>Invalid image dimensions</source>
+		            <translation>无效的图片尺寸</translation>
+		        </message>
+		        <message>
+		            <location filename="..\ui\mainwindow.py" />
+		            <source>Path Reorder</source>
+		            <translation>路径重排</translation>
+		        </message>
+		        <message>
+		            <location filename="..\ui\mainwindow.py" />
+		            <source>Not enough text blocks touched by the path (need at least 2).</source>
+		            <translation>路径未触碰足够的文本框（至少需要2个）</translation>
+		        </message>
+		        <message>
+		            <location filename="..\ui\mainwindow.py" />
+		            <source>Continue Drawing</source>
+		            <translation>继续绘制</translation>
+		        </message>
+		        <message>
+		            <location filename="..\ui\mainwindow.py" />
+		            <source>Apply reorder?</source>
+		            <translation>应用重排？</translation>
+		        </message>
+		        <message>
+		            <location filename="..\ui\mainwindow.py" />
+		            <source>Apply</source>
+		            <translation>应用</translation>
+		        </message>
+		    </context>
 	    <context>
 	        <name>MainWindowMixin</name>
         <message>
@@ -3919,8 +3966,13 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" line="371" />
-            <source>Export as PSD…</source>
-            <translation>导出为 PSD…</translation>
+            <source>Export as PSD… (Under Repair)</source>
+            <translation>导出为 PSD… (维修中)</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindowbars.py" />
+            <source>暂不可用 — Photoshop 打开时有兼容问题，等待修复</source>
+            <translation>暂不可用 — Photoshop 打开时有兼容问题，等待修复</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" />
@@ -3944,8 +3996,8 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" />
-            <source>Smart Reorder…</source>
-            <translation>智能重排…</translation>
+            <source>Path Reorder…</source>
+            <translation>路径重排…</translation>
         </message>
     <message><source>Help</source><translation>帮助</translation></message><message><source>使用手册</source><translation>使用手册</translation></message><message><source>About BallonsTranslator-lite</source><translation>关于 BallonsTranslator-lite</translation></message><message><source>MCP Server Info…</source><translation>MCP 服务器信息…</translation></message></context>
     <context>
@@ -4943,6 +4995,109 @@ This maps automatically to each provider's native parameter
         <message>
             <source>Target - {language}</source>
             <translation>目标语言 - {language}</translation>
+        </message>
+    </context>
+    <context>
+        <name>ContextMenuCustomizeDialog</name>
+        <message>
+            <source>Customize Context Menu</source>
+            <translation>自定义右键菜单</translation>
+        </message>
+        <message>
+            <source>+ Add</source>
+            <translation>+ 添加</translation>
+        </message>
+        <message>
+            <source>Remove</source>
+            <translation>移除</translation>
+        </message>
+        <message>
+            <source>Reset to Default</source>
+            <translation>恢复默认</translation>
+        </message>
+        <message>
+            <source>Reset</source>
+            <translation>重置</translation>
+        </message>
+        <message>
+            <source>Reset context menu to default layout?</source>
+            <translation>将右键菜单恢复为默认布局？</translation>
+        </message>
+        <message>
+            <source>Add Separator</source>
+            <translation>添加分隔线</translation>
+        </message>
+        <message>
+            <source>(all commands added)</source>
+            <translation>（所有命令已添加）</translation>
+        </message>
+        <message>
+            <source>─ Separator ─</source>
+            <translation>── 分隔线 ──</translation>
+        </message>
+        <message>
+            <source>Copy</source>
+            <translation>复制</translation>
+        </message>
+        <message>
+            <source>Paste</source>
+            <translation>粘贴</translation>
+        </message>
+        <message>
+            <source>Delete</source>
+            <translation>删除</translation>
+        </message>
+        <message>
+            <source>Copy source text</source>
+            <translation>复制原文</translation>
+        </message>
+        <message>
+            <source>Paste source text</source>
+            <translation>粘贴原文</translation>
+        </message>
+        <message>
+            <source>Reset Angle</source>
+            <translation>重置角度</translation>
+        </message>
+        <message>
+            <source>Squeeze</source>
+            <translation>挤压</translation>
+        </message>
+        <message>
+            <source>Normalize Breaks</source>
+            <translation>整理换行</translation>
+        </message>
+        <message>
+            <source>Normalize Breaks and Shrink</source>
+            <translation>整理换行并收缩</translation>
+        </message>
+        <message>
+            <source>Reorder</source>
+            <translation>重新排序</translation>
+        </message>
+        <message>
+            <source>Align</source>
+            <translation>对齐</translation>
+        </message>
+        <message>
+            <source>Snap Alignment</source>
+            <translation>吸附对齐</translation>
+        </message>
+        <message>
+            <source>translate</source>
+            <translation>翻译</translation>
+        </message>
+        <message>
+            <source>OCR</source>
+            <translation>OCR</translation>
+        </message>
+        <message>
+            <source>OCR and translate</source>
+            <translation>OCR 并翻译</translation>
+        </message>
+        <message>
+            <source>OCR, translate and inpaint</source>
+            <translation>OCR、翻译并修复</translation>
         </message>
     </context>
 </TS>

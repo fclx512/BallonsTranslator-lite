@@ -368,12 +368,16 @@ class TitleBar(Widget):
         mergeToolAction = QAction(self.tr("Region Merge Tool"), self)
         self.merge_tool_trigger = mergeToolAction.triggered
 
-        # 智能重排
-        smartReorderAction = QAction(self.tr("Smart Reorder…"), self)
+        # 路径重排（替换原有的智能重排）
+        smartReorderAction = QAction(self.tr("Path Reorder…"), self)
         self.smart_reorder_trigger = smartReorderAction.triggered
 
-        # PSD 导出
-        psdExportAction = QAction(self.tr("Export as PSD…"), self)
+        # PSD 导出（封存 — 在 PS 中打开时有兼容问题，等待维修）
+        psdExportAction = QAction(self.tr("Export as PSD… (Under Repair)"), self)
+        psdExportAction.setEnabled(False)
+        psdExportAction.setToolTip(
+            self.tr("暂不可用 — Photoshop 打开时有兼容问题，等待修复")
+        )
         self.psd_export_triggered = psdExportAction.triggered
 
         # Quick Symbol dialog
@@ -393,17 +397,20 @@ class TitleBar(Widget):
         self.launch_notext_tool = noTextToolAction.triggered
 
         toolsMenu = QMenu(self.toolsToolBtn)
+        # 页面布局工具
         toolsMenu.addAction(mergeToolAction)
         toolsMenu.addAction(smartReorderAction)
         toolsMenu.addSeparator()
+        # 文字 / 样式工具
         toolsMenu.addAction(self._styleMgrAction)
-        toolsMenu.addSeparator()
-        toolsMenu.addAction(psdExportAction)
         toolsMenu.addAction(quickSymbolAction)
         toolsMenu.addAction(advAlignAction)
         toolsMenu.addSeparator()
+        # 导出 / 批量处理
+        toolsMenu.addAction(psdExportAction)
         toolsMenu.addAction(normalizeBreaksAction)
         toolsMenu.addSeparator()
+        # 外部工具
         toolsMenu.addAction(noTextToolAction)
         self.toolsToolBtn.setMenu(toolsMenu)
         self.toolsToolBtn.setPopupMode(QToolButton.InstantPopup)

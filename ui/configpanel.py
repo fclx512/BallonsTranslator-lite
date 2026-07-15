@@ -1896,6 +1896,18 @@ class ConfigPanel(Widget):
         )
         interface_layout.addWidget(shortcut_sublock)
 
+        # Context menu customization button
+        self.context_menu_btn = QPushButton(
+            self.tr("Customize Context Menu..."), parent=self
+        )
+        self.context_menu_btn.setObjectName("ConfigButton")
+        self.context_menu_btn.clicked.connect(self._open_context_menu_config)
+        ctxmenu_sublock = ConfigSubBlock(
+            self.context_menu_btn, name=self.tr("Context Menu"),
+            note=self.tr("<p>Customize the right-click context menu: reorder items, add or remove commands via drag-and-drop.</p>"),
+        )
+        interface_layout.addWidget(ctxmenu_sublock)
+
         # Combo Box Presets (moved from Typesetting)
         preset_header = QLabel(self.tr("Combo Box Presets"))
         preset_header.setStyleSheet("font-weight: bold;")
@@ -2368,6 +2380,12 @@ class ConfigPanel(Widget):
         dialog = ShortcutDialog(self)
         self._run_modal_dialog(dialog)
         self.shortcuts_changed.emit()
+
+    def _open_context_menu_config(self):
+        from .context_menu_config import ContextMenuCustomizeDialog
+
+        dialog = ContextMenuCustomizeDialog(self)
+        self._run_modal_dialog(dialog)
 
     def _on_anim_mode_changed(self):
         idx = self.anim_combo.currentIndex()
