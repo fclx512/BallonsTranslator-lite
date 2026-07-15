@@ -224,7 +224,7 @@ class TextStyleLabel(Widget):
             offset = d / 2 - draw_radius
             draw_rect = QRectF(offset, offset, draw_radius * 2, draw_radius * 2)
 
-        r, g, b = self.fontfmt.frgb
+        r, g, b = self.fontfmt.foreground_color()
         color = QColor(r, g, b, 255)
         painter.setBrush(color)
         painter.drawRoundedRect(draw_rect, draw_radius, draw_radius)

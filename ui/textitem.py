@@ -1422,7 +1422,7 @@ class TextBlkItem(QGraphicsTextItem):
             gradient = self.get_text_gradient()
             cfmt.setForeground(gradient)
         else:
-            cfmt.setForeground(QColor(*[int(c) for c in self.fontformat.frgb]))
+            cfmt.setForeground(QColor(*self.fontformat.foreground_color()))
 
         self.set_cursor_cfmt(cursor, cfmt, True)
         self._after_set_ffmt(cursor, repaint_background, restore_cursor, **after_kwargs)
@@ -1533,7 +1533,7 @@ class TextBlkItem(QGraphicsTextItem):
     ):
         cursor, after_kwargs = self._before_set_ffmt(set_selected, restore_cursor)
         cfmt = QTextCharFormat()
-        cfmt.setForeground(QColor(*value))
+        cfmt.setForeground(QColor(*[max(0, min(255, int(c))) for c in value]))
         self.set_cursor_cfmt(cursor, cfmt, True)
         self._after_set_ffmt(
             cursor,

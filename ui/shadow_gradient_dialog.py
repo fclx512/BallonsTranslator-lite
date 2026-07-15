@@ -72,7 +72,7 @@ class ShadowGradientPreview(QWidget):
         )
 
     def _pick_bg_color(self):
-        c = QColor(*[int(v) for v in self._bg_color])
+        c = QColor(*[max(0, min(255, int(v))) for v in self._bg_color])
         dlg = ColorPickerDialog(c, self.window())
         if dlg.exec_() == QDialog.DialogCode.Accepted:
             picked = dlg.get_color()
@@ -128,7 +128,7 @@ class ShadowGradientPreview(QWidget):
         w, h = self.width(), self.height()
 
         # solid background (default PS 50% gray)
-        c = QColor(*[int(v) for v in self._bg_color])
+        c = QColor(*[max(0, min(255, int(v))) for v in self._bg_color])
         p.fillRect(0, 0, w, h, c)
 
         # compute font pixel size for shadow/offset scaling (matches repaint_background)
@@ -152,11 +152,11 @@ class ShadowGradientPreview(QWidget):
                 cx + dx * size_val,
                 cy + dy * size_val,
             )
-            grad.setColorAt(0, QColor(*[int(c) for c in self.gradient_start]))
-            grad.setColorAt(1, QColor(*[int(c) for c in self.gradient_end]))
+            grad.setColorAt(0, QColor(*[max(0, min(255, int(c))) for c in self.gradient_start]))
+            grad.setColorAt(1, QColor(*[max(0, min(255, int(c))) for c in self.gradient_end]))
             fill_brush = QBrush(grad)
         else:
-            fill_brush = QBrush(QColor(*[int(c) for c in self.text_color]))
+            fill_brush = QBrush(QColor(*[max(0, min(255, int(c))) for c in self.text_color]))
 
         # render text with stroke for display
         display_pm = self._render_text_pixmap(
@@ -212,7 +212,7 @@ class ShadowGradientPreview(QWidget):
         p.setFont(font)
 
         if fill_brush is None:
-            fill_brush = QBrush(QColor(*[int(c) for c in self.text_color]))
+            fill_brush = QBrush(QColor(*[max(0, min(255, int(c))) for c in self.text_color]))
 
         if self.stroke_width > 0 and include_stroke:
             # Path-based stroke+fill rendering to match main app behavior
@@ -225,7 +225,7 @@ class ShadowGradientPreview(QWidget):
             path.addText(x, y, font, self._preview_text)
             sw = pt2px(24) * self.stroke_width
             pen = QPen(
-                QColor(*[int(c) for c in self.stroke_color]),
+                QColor(*[max(0, min(255, int(c))) for c in self.stroke_color]),
                 sw,
                 Qt.PenStyle.SolidLine,
                 Qt.PenCapStyle.RoundCap,
@@ -279,7 +279,7 @@ class ColorButton(QPushButton):
         return self._color
 
     def _pick(self):
-        c = QColor(*[int(v) for v in self._color])
+        c = QColor(*[max(0, min(255, int(v))) for v in self._color])
         dlg = ColorPickerDialog(c, self.window())
         if dlg.exec_() == QDialog.DialogCode.Accepted:
             self.set_color(dlg.get_color())
@@ -322,8 +322,8 @@ class GradientBar(QWidget):
         path.addRoundedRect(bar_rect, 4, 4)
 
         grad = QLinearGradient(bar_rect.topLeft(), bar_rect.topRight())
-        grad.setColorAt(0, QColor(*[int(c) for c in self._start]))
-        grad.setColorAt(1, QColor(*[int(c) for c in self._end]))
+        grad.setColorAt(0, QColor(*[max(0, min(255, int(c))) for c in self._start]))
+        grad.setColorAt(1, QColor(*[max(0, min(255, int(c))) for c in self._end]))
         p.fillPath(path, QBrush(grad))
         p.setPen(QPen(QColor(90, 90, 90), 1))
         p.drawPath(path)
@@ -335,11 +335,11 @@ class GradientBar(QWidget):
 
         # start stop
         p.setPen(QPen(QColor(255, 255, 255), 2))
-        p.setBrush(QBrush(QColor(*[int(c) for c in self._start])))
+        p.setBrush(QBrush(QColor(*[max(0, min(255, int(c))) for c in self._start])))
         p.drawEllipse(QPointF(self._stop_lx, stop_y), stop_r, stop_r)
 
         # end stop
-        p.setBrush(QBrush(QColor(*[int(c) for c in self._end])))
+        p.setBrush(QBrush(QColor(*[max(0, min(255, int(c))) for c in self._end])))
         p.drawEllipse(QPointF(self._stop_rx, stop_y), stop_r, stop_r)
 
         # store hit zone for click detection (margin = stop_r + 4)
@@ -366,7 +366,7 @@ class GradientBar(QWidget):
 
     def _pick_color(self, is_start=True):
         current = self._start if is_start else self._end
-        c = QColor(*[int(v) for v in current])
+        c = QColor(*[max(0, min(255, int(v))) for v in current])
         dlg = ColorPickerDialog(c, self.window())
         if dlg.exec_() == QDialog.DialogCode.Accepted:
             picked = dlg.get_color()

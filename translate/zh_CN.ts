@@ -267,6 +267,21 @@
             <translation>吸附对齐</translation>
         </message>
         <message>
+            <location filename="..\ui\canvas.py" />
+            <source>Merge</source>
+            <translation>合并</translation>
+        </message>
+        <message>
+            <location filename="..\ui\canvas.py" />
+            <source>Left-to-Right</source>
+            <translation>从左到右</translation>
+        </message>
+        <message>
+            <location filename="..\ui\canvas.py" />
+            <source>Right-to-Left</source>
+            <translation>从右到左</translation>
+        </message>
+        <message>
             <location filename="..\ui\canvas.py" line="350" />
             <source>PREVIEW</source>
             <translation>预览</translation>
@@ -381,7 +396,46 @@
         </message>
     </context>
     <context>
-        <name>ColorPickerDialog</name>
+        <name>SmartReorderDialog</name>
+	        <message>
+	            <source>Smart Reorder</source>
+	            <translation>智能重排</translation>
+	        </message>
+	        <message>
+	            <source>LTR (Top→Bottom, Left→Right)</source>
+	            <translation>LTR（上→下，左→右）</translation>
+	        </message>
+	        <message>
+	            <source>RTL (Right→Left, for manga)</source>
+	            <translation>RTL（右→左，日漫）</translation>
+	        </message>
+	        <message>
+	            <source>2×2 Grid (4-koma)</source>
+	            <translation>2×2 网格（四格漫画）</translation>
+	        </message>
+	        <message>
+	            <source>3×3 Grid</source>
+	            <translation>3×3 网格</translation>
+	        </message>
+	        <message>
+	            <source>Custom Grid…</source>
+	            <translation>自定义网格…</translation>
+	        </message>
+	        <message>
+	            <source>Rows:</source>
+	            <translation>行数：</translation>
+	        </message>
+	        <message>
+	            <source>Cols:</source>
+	            <translation>列数：</translation>
+	        </message>
+	        <message>
+	            <source>Direction:</source>
+	            <translation>方向：</translation>
+	        </message>
+	    </context>
+	    <context>
+	        <name>ColorPickerDialog</name>
         <message>
             <location filename="..\ui\custom_widget\color_picker.py" line="336" />
             <source>Color Picker</source>
@@ -1876,14 +1930,29 @@ Output:
             <source>批量整理换行</source>
             <translation>批量整理换行</translation>
         </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
-            <source>已整理 {} 块 / 跳过 {} 块（竖排）</source>
-            <translation>已整理 {} 块 / 跳过 {} 块（竖排）</translation>
-        </message>
-    </context>
-    <context>
-        <name>MainWindowMixin</name>
+	        <message>
+	            <location filename="..\ui\mainwindow.py" />
+	            <source>已整理 {} 块 / 跳过 {} 块（竖排）</source>
+	            <translation>已整理 {} 块 / 跳过 {} 块（竖排）</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\mainwindow.py" />
+	            <source>{n} text blocks reordered successfully</source>
+	            <translation>{n} 个文本块已重新排序</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\mainwindow.py" />
+	            <source>Cannot read image dimensions</source>
+	            <translation>无法读取图片尺寸</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\mainwindow.py" />
+	            <source>Invalid image dimensions</source>
+	            <translation>无效的图片尺寸</translation>
+	        </message>
+	    </context>
+	    <context>
+	        <name>MainWindowMixin</name>
         <message>
             <location filename="..\ui\mainwindow_mixin.py" line="101" />
             <source>Failed to load project </source>
@@ -3873,6 +3942,11 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <source>Pair No-text Images…</source>
             <translation>配对无字图…</translation>
         </message>
+        <message>
+            <location filename="..\ui\mainwindowbars.py" />
+            <source>Smart Reorder…</source>
+            <translation>智能重排…</translation>
+        </message>
     <message><source>Help</source><translation>帮助</translation></message><message><source>使用手册</source><translation>使用手册</translation></message><message><source>About BallonsTranslator-lite</source><translation>关于 BallonsTranslator-lite</translation></message><message><source>MCP Server Info…</source><translation>MCP 服务器信息…</translation></message></context>
     <context>
         <name>HelpDialog</name>
@@ -4327,6 +4401,11 @@ in Settings → Mirror Config, then click Retry.</source>
             <location filename="..\ui\configpanel.py" line="786" />
             <source>Move to Bottom</source>
             <translation>移到底部</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="796" />
+            <source>Merge Text Blocks</source>
+            <translation>合并文字块</translation>
         </message>
     </context>
     <context>

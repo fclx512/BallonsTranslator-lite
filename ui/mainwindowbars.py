@@ -368,6 +368,10 @@ class TitleBar(Widget):
         mergeToolAction = QAction(self.tr("Region Merge Tool"), self)
         self.merge_tool_trigger = mergeToolAction.triggered
 
+        # 智能重排
+        smartReorderAction = QAction(self.tr("Smart Reorder…"), self)
+        self.smart_reorder_trigger = smartReorderAction.triggered
+
         # PSD 导出
         psdExportAction = QAction(self.tr("Export as PSD…"), self)
         self.psd_export_triggered = psdExportAction.triggered
@@ -390,6 +394,7 @@ class TitleBar(Widget):
 
         toolsMenu = QMenu(self.toolsToolBtn)
         toolsMenu.addAction(mergeToolAction)
+        toolsMenu.addAction(smartReorderAction)
         toolsMenu.addSeparator()
         toolsMenu.addAction(self._styleMgrAction)
         toolsMenu.addSeparator()

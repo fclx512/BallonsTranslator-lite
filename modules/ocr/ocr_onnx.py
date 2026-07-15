@@ -178,31 +178,15 @@ class PaddleOCRv6ONNX(OCRBase):
         #    per batch (e.g. 320 for narrow crops, 374 for wide ones),
         #    destroying the cache across calls.
         #
-        #    Two-part fix:
-        #      a) Force ``resize_norm_img`` to *always* pad to
-        #         ``rec_image_shape`` width (320) — wide crops get clamped,
-        #         which is fine because the model was trained at this width.
-        #      b) Pad the last batch to ``rec_batch_num`` entries so the batch
-        #         dimension never changes either.
+        #    Fix: pad the last batch to ``rec_batch_num`` entries so the batch
+        #    dimension never changes.
+        #
+        #    NOTE: We do NOT clamp image width to 320 here.  The ONNX model
+        #    has a dynamic width input (confirmed at init time:
+        #    ``['DynamicDimension.0', 3, 48, 'DynamicDimension.1']``), so it
+        #    natively handles any width.  Clamping to 320 cropped wide text
+        #    lines, causing incomplete (right‑truncated) OCR output.
         if _use_gpu:
-            _orig_resize = self.recognizer.resize_norm_img
-
-            def _fixed_resize(img, max_wh_ratio):
-                result = _orig_resize(img, max_wh_ratio)
-                _, _, fixed_w = (3, 48, 320)  # rec_image_shape
-                if result.shape[2] != fixed_w:
-                    import numpy as _np
-
-                    fixed = _np.zeros(
-                        (result.shape[0], result.shape[1], fixed_w), dtype=_np.float32
-                    )
-                    w = min(result.shape[2], fixed_w)
-                    fixed[:, :, :w] = result[:, :, :w]
-                    result = fixed
-                return result
-
-            self.recognizer.resize_norm_img = _fixed_resize
-
             self.recognizer.__class__.__call__ = self._make_uniform_batch_rec(
                 self.recognizer,
                 self.get_param_value("rec_batch_num"),
@@ -231,11 +215,19 @@ class PaddleOCRv6ONNX(OCRBase):
         _orig_call = recognizer.__class__.__call__
 
         def _patched(self_, img_list):
-            remainder = len(img_list) % batch_num
+            n = len(img_list)
+            remainder = n % batch_num
             if remainder:
-                # Clone the first N crops as padding (a few rows of zeros)
                 pad_count = batch_num - remainder
-                img_list = img_list + _copy.deepcopy(img_list[:pad_count])
+                # Repeat the first elements cyclically until we have
+                # exactly pad_count padding entries.  Simple slice
+                # ``img_list[:pad_count]`` is WRONG when
+                # ``pad_count > len(img_list)`` — it yields fewer than
+                # needed, so the post-call trim produces an empty result.
+                repeats = (pad_count // n) + 1
+                img_list = img_list + _copy.deepcopy(
+                    (img_list * repeats)[:pad_count]
+                )
             results = _orig_call(self_, img_list)
             return results[: len(results) - (pad_count if remainder else 0)]
 

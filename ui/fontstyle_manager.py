@@ -171,7 +171,7 @@ class StyleListDelegate(QStyledItemDelegate):
         swatch_y = y_mid - self.SWATCH_SIZE // 2
 
         # ── Color swatch ──────────────────────────────────────────
-        fg = [int(round(c)) for c in ffmt.frgb]
+        fg = ffmt.foreground_color()
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(*fg))
 
@@ -180,7 +180,7 @@ class StyleListDelegate(QStyledItemDelegate):
 
         # Stroke ring if applicable
         if ffmt.stroke_width > 0:
-            srgb = [int(round(c)) for c in ffmt.srgb]
+            srgb = ffmt.stroke_color()
             pen = QPen(QColor(*srgb), 1.5)
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -770,7 +770,7 @@ class StyleDetail(QScrollArea):
             return
         fg = self._pending_fg
         c = QColorDialog.getColor(
-            QColor(int(fg[0]), int(fg[1]), int(fg[2])),
+            QColor(max(0, min(255, int(fg[0]))), max(0, min(255, int(fg[1]))), max(0, min(255, int(fg[2])))),
             self,
             self.tr("Pick Text Color"),
         )
@@ -787,7 +787,7 @@ class StyleDetail(QScrollArea):
             return
         sc = self._pending_stroke_color
         c = QColorDialog.getColor(
-            QColor(int(sc[0]), int(sc[1]), int(sc[2])),
+            QColor(max(0, min(255, int(sc[0]))), max(0, min(255, int(sc[1]))), max(0, min(255, int(sc[2])))),
             self,
             self.tr("Pick Stroke Color"),
         )

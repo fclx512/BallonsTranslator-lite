@@ -967,7 +967,14 @@ def _ensure_module_deps(
                     if not req.specifier.contains(dist.version, prereleases=True):
                         missing_pkgs.append(req_str)
                 except importlib_metadata.PackageNotFoundError:
-                    missing_pkgs.append(req_str)
+                    # Metadata name mismatch (e.g. onnxruntime installed as
+                    # onnxruntime-gpu).  Try a direct import as last resort —
+                    # if the top-level module can be loaded the dependency is
+                    # actually satisfied.
+                    try:
+                        importlib.import_module(req.name)
+                    except ImportError:
+                        missing_pkgs.append(req_str)
 
     # Check which model files are already on disk.
     # Use ``save_files`` (actual on-disk paths) when available, falling

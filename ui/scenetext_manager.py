@@ -295,6 +295,78 @@ class PasteBlkItemsCommand(QUndoCommand):
         self.ctrl.deleteTextblkItemList(self.blk_list, self.pwidget_list)
 
 
+class MergeTextBlksCommand(QUndoCommand):
+    """合并多个文字块为一个（含撤消）。"""
+
+    def __init__(
+        self,
+        survivor_blkitem,
+        survivor_pairwidget,
+        removed_blkitems,
+        removed_pairwidgets,
+        merged_blk_data,
+        survivor_original_blk,
+        ctrl,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.survivor_blkitem = survivor_blkitem
+        self.survivor_pairwidget = survivor_pairwidget
+        self.removed_blkitems = removed_blkitems
+        self.removed_pairwidgets = removed_pairwidgets
+        self.merged_blk_data = merged_blk_data
+        self.survivor_original_blk = survivor_original_blk
+        self.ctrl: SceneTextManager = ctrl
+        self.op_counter = 0
+
+    def redo(self):
+        if self.op_counter == 0:
+            self.op_counter += 1
+            # redo() called inside push_undo_command — apply merge now
+        # 1. 更新宿主数据
+        self.survivor_blkitem.blk = self.merged_blk_data
+        self.survivor_blkitem.setPlainText(self.merged_blk_data.translation)
+        self.survivor_pairwidget.e_trans.setPlainText(
+            self.merged_blk_data.translation
+        )
+        self.survivor_pairwidget.e_source.setPlainText(
+            self.merged_blk_data.get_text()
+        )
+        # 1b. 扩张文本框到合并区域
+        xyxy = self.merged_blk_data.xyxy
+        self.survivor_blkitem.setPos(xyxy[0], xyxy[1])
+        self.survivor_blkitem.setTextWidth(xyxy[2] - xyxy[0])
+        self.survivor_blkitem.update()
+        # 先选中宿主，让 delete 后的 selection 回调能正确同步
+        self.survivor_blkitem.setSelected(True)
+        # 2. 移除被合并块
+        self.ctrl.deleteTextblkItemList(
+            self.removed_blkitems, self.removed_pairwidgets
+        )
+
+    def undo(self):
+        # 1. 恢复宿主原始数据
+        self.survivor_blkitem.blk = self.survivor_original_blk
+        self.survivor_blkitem.setPlainText(
+            self.survivor_original_blk.translation
+        )
+        self.survivor_pairwidget.e_trans.setPlainText(
+            self.survivor_original_blk.translation
+        )
+        self.survivor_pairwidget.e_source.setPlainText(
+            self.survivor_original_blk.get_text()
+        )
+        # 1b. 恢复位置与宽度
+        orig_xyxy = self.survivor_original_blk.xyxy
+        self.survivor_blkitem.setPos(orig_xyxy[0], orig_xyxy[1])
+        self.survivor_blkitem.setTextWidth(orig_xyxy[2] - orig_xyxy[0])
+        self.survivor_blkitem.update()
+        # 2. 恢复被移除块
+        self.ctrl.recoverTextblkItemList(
+            self.removed_blkitems, self.removed_pairwidgets
+        )
+
+
 class PasteSrcItemsCommand(QUndoCommand):
     def __init__(self, src_list: List[SourceTextEdit], paste_list: List[str]):
         super().__init__()
@@ -434,6 +506,7 @@ class SceneTextManager(QObject):
         self.canvas.squeeze_blk.connect(self.onSqueezeBlk)
         self.canvas.normalize_break_requested.connect(self.on_normalize_break)
         self.canvas.align_textblks.connect(self.onAlignTextBlks)
+        self.canvas.merge_textblks.connect(self.on_merge_textblks)
         self.canvas.incanvas_selection_changed.connect(
             self.on_incanvas_selection_changed
         )
@@ -1290,6 +1363,74 @@ class SceneTextManager(QObject):
         self.canvas.push_undo_command(
             NormalizeBreaksCommand(self.imgtrans_proj, self, changes)
         )
+
+    def on_merge_textblks(self, direction: str):
+        """画布右键"Merge"：按 direction 合并选中的文字块为一个。"""
+        blkitems = self.canvas.selected_text_items()
+        if len(blkitems) < 2:
+            return
+
+        # 按 direction 排序（宿主 = 排序后第一个块）
+        if direction == "RTL":
+            blkitems.sort(key=lambda b: (-b.blk.center()[0], b.blk.center()[1]))
+        else:  # LTR
+            blkitems.sort(key=lambda b: (b.blk.center()[0], b.blk.center()[1]))
+
+        survivor = blkitems[0]
+        removed = blkitems[1:]
+
+        # 深拷贝宿主原始数据（用于撤消）
+        survivor_original_blk = copy.deepcopy(survivor.blk)
+
+        # 深拷贝被移除块数据（用于恢复 UI）
+        removed_blkitems = []
+        removed_pairwidgets = []
+        for blkitem in removed:
+            removed_blkitems.append(blkitem)
+            removed_pairwidgets.append(self.pairwidget_list[blkitem.idx])
+
+        # 构造合并后数据
+        merged_blk = self._build_merged_blk(blkitems, direction)
+
+        self.canvas.push_undo_command(
+            MergeTextBlksCommand(
+                survivor, self.pairwidget_list[survivor.idx],
+                removed_blkitems, removed_pairwidgets,
+                merged_blk, survivor_original_blk, self
+            )
+        )
+
+    def _build_merged_blk(self, blkitems: list, direction: str):
+        """按 direction 顺序合并多个 TextBlkItem 的 TextBlock 数据。"""
+        merged = copy.deepcopy(blkitems[0].blk)
+        texts = []
+        translations = []
+        rich_texts = []
+        all_lines = []
+        x1s, y1s, x2s, y2s = [], [], [], []
+
+        for b in blkitems:
+            blk = b.blk
+            texts.append(blk.get_text())
+            trans = blk.translation if isinstance(blk.translation, str) else ""
+            translations.append(trans)
+            rich_texts.append(blk.rich_text if isinstance(blk.rich_text, str) else "")
+            for line in (blk.lines if blk.lines else []):
+                all_lines.append(line)
+            bx1, by1, bx2, by2 = blk.xyxy
+            x1s.append(bx1); y1s.append(by1); x2s.append(bx2); y2s.append(by2)
+
+        merged.text = texts
+        # 只保留非空译文，空块不产生换行
+        non_empty_trans = [t.strip() for t in translations if t.strip()]
+        merged.translation = "\n".join(non_empty_trans)
+        merged.rich_text = "<br>".join(rich_texts)
+        merged.xyxy = [min(x1s), min(y1s), max(x2s), max(y2s)]
+        merged.lines = all_lines
+        merged.region_mask = None
+        merged.region_inpaint_dict = None
+        merged.merged = True
+        return merged
 
     def on_push_edit_stack(self, num_steps: int):
         edit: Union[TransTextEdit, SourceTextEdit] = self.sender()

@@ -793,6 +793,7 @@ DEFAULT_SHORTCUTS = {
     "merge_tool": ["Ctrl+Shift+M"],
     "quick_symbol": [],
     "advanced_align": [],
+    "merge_blks": [],
     "toggle_original_opacity": [],
     "move_up": [],
     "move_down": [],
@@ -830,6 +831,7 @@ _ACTION_NAMES = {
     "merge_tool": "Merge Tool",
     "quick_symbol": "Quick Symbol",
     "advanced_align": "Advanced Alignment",
+    "merge_blks": "Merge Text Blocks",
     "toggle_original_opacity": "Toggle Original Compare",
     "move_up": "Move Up",
     "move_down": "Move Down",
@@ -855,6 +857,7 @@ _SHORTCUT_GROUPS = [
             "underline",
             "undo",
             "redo",
+            "merge_blks",
         ],
     ),
     (

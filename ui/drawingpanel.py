@@ -448,7 +448,7 @@ class DrawingPanel(Widget):
 
     def setPenToolColor(self, color: Union[QColor, Tuple, List]):
         if not isinstance(color, QColor):
-            color = QColor(*color)
+            color = QColor(*[max(0, min(255, int(c))) for c in color])
         self.pentool_pen.setColor(color)
         pcfg.drawpanel.pentool_color = [
             color.red(),

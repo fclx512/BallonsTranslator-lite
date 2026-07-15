@@ -324,7 +324,16 @@ class BaseModule:
                 if not req.specifier.contains(dist.version, prereleases=True):
                     missing.append(req_str)
             except importlib_metadata.PackageNotFoundError:
-                missing.append(req_str)
+                # Metadata name mismatch (e.g. onnxruntime installed as
+                # onnxruntime-gpu).  Try a direct import as last resort —
+                # if the top-level module can be loaded the dependency is
+                # actually satisfied.
+                import importlib as _il
+
+                try:
+                    _il.import_module(req.name)
+                except ImportError:
+                    missing.append(req_str)
 
         if not missing:
             return

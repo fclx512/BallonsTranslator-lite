@@ -292,6 +292,7 @@ class Canvas(QGraphicsScene):
     context_menu_requested = Signal(QPoint, bool)
     incanvas_selection_changed = Signal()
     align_textblks = Signal(str)
+    merge_textblks = Signal(str)
     position_picked = Signal(int)
     switch_text_item = Signal(int, QKeyEvent)
 

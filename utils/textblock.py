@@ -1038,3 +1038,61 @@ def mit_merge_textlines(
         text_regions.append(region)
 
     return text_regions
+
+
+def sort_by_grid(
+    blocks: List[TextBlock],
+    img_w: int,
+    img_h: int,
+    grid_rows: int = 1,
+    grid_cols: int = 1,
+    reading_dir: str = "LTR",
+) -> List[TextBlock]:
+    """Grid-based sort: divide page into grid cells, sort by cell in reading order,
+    then within each cell by position (top-to-bottom, left-to-right).
+
+    This solves the quadrant zigzag problem: blocks in the same semantic region
+    stay contiguous, so merge tools produce correct text order.
+
+    Args:
+        blocks: list of TextBlock to reorder
+        img_w, img_h: image dimensions in pixels
+        grid_rows, grid_cols: grid division (e.g. 2x2 for 4-koma)
+        reading_dir: "LTR" (left-to-right, then top-to-bottom across cells)
+                     or "RTL" (right-to-left, then top-to-bottom)
+
+    Returns:
+        new list of TextBlock in sorted order
+    """
+    if len(blocks) < 2 or grid_rows < 1 or grid_cols < 1:
+        return list(blocks)
+
+    cell_w = max(img_w / grid_cols, 1)
+    cell_h = max(img_h / grid_rows, 1)
+
+    # Assign each block to a grid cell by centroid
+    cell_blocks: Dict[tuple, List[TextBlock]] = {}
+    for blk in blocks:
+        cx = (blk.xyxy[0] + blk.xyxy[2]) / 2
+        cy = (blk.xyxy[1] + blk.xyxy[3]) / 2
+        col = min(int(cx // cell_w), grid_cols - 1)
+        row = min(int(cy // cell_h), grid_rows - 1)
+        cell_blocks.setdefault((row, col), []).append(blk)
+
+    # Sort within each cell: top-to-bottom, left-to-right
+    for key in cell_blocks:
+        cell_blocks[key].sort(key=lambda b: (b.xyxy[1], b.xyxy[0]))
+
+    # Determine cell reading order
+    def cell_key(rc):
+        r, c = rc
+        if reading_dir == "RTL":
+            return r * grid_cols + (grid_cols - 1 - c)
+        return r * grid_cols + c
+
+    # Flatten in cell order
+    result: List[TextBlock] = []
+    for cell in sorted(cell_blocks.keys(), key=cell_key):
+        result.extend(cell_blocks[cell])
+
+    return result
