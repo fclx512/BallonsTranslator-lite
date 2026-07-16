@@ -7,8 +7,6 @@ from qtpy.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
-    QPlainTextEdit,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
@@ -29,7 +27,7 @@ from modules import (
 from utils.logger import logger as LOGGER
 from utils.shared import CONFIG_COMBOBOX_HEIGHT, CONFIG_COMBOBOX_LONG, size2width
 
-from .custom_widget import ConfigComboBox, ConfigSectionHeader, ParamComboBox, ParamNameLabel
+from .custom_widget import ConfigComboBox, ConfigLineEdit, ConfigSectionHeader, ConfigTextEdit, ParamComboBox, ParamNameLabel
 
 
 class ParamCheckGroup(QWidget):
@@ -58,7 +56,7 @@ class ParamCheckGroup(QWidget):
         self.paramwidget_edited.emit(self.param_key, new_state_dict)
 
 
-class ParamLineEditor(QLineEdit):
+class ParamLineEditor(ConfigLineEdit):
     paramwidget_edited = Signal(str, str)
 
     def __init__(
@@ -78,7 +76,7 @@ class ParamLineEditor(QLineEdit):
         self.paramwidget_edited.emit(self.param_key, self.text())
 
 
-class ParamEditor(QPlainTextEdit):
+class ParamEditor(ConfigTextEdit):
     paramwidget_edited = Signal(str, str)
 
     def __init__(self, param_key: str, *args, **kwargs) -> None:

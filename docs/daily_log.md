@@ -1,6 +1,6 @@
 # 每日开发日志
 
-> 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。按照时间顺序撰写。
+> 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。
 
 ## 2026-07-16
 
@@ -328,3 +328,44 @@
 4. **已知问题：** `setPos`/`setTextWidth` 无法让 TextBlkItem 视觉区域覆盖合并后的 xyxy 并集，需后续排查 TextBlkItem 的 boundingRect/paint 逻辑
 
 **涉及文件：** `ui/canvas.py`、`ui/scenetext_manager.py`、`ui/configpanel.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`
+
+---
+
+### 设置面板文本输入框全量迁移 NoArrowsSpinBox 风格
+
+**需求：** 设置面板（ConfigContent）中所有文本输入框（QLineEdit / QTextEdit / QPlainTextEdit）视觉上不统一，需全部换用 NoArrowsSpinBox 的半透明圆角外观。同时将复选框等基础控件纳入打包控件体系。
+
+**改动：**
+
+1. **`ConfigCheckBox`**（`ui/custom_widget/checkbox.py`）— 新打包控件，自动设置 `objectName='ConfigCheckBox'`，消除此前 8 处 `QCheckBox()` + `setObjectName()` 重复模式。
+2. **`ConfigLineEdit`** / **`ConfigTextEdit`**（`ui/custom_widget/text_input.py`，新）— 与 NoArrowsSpinBox 视觉一致的单行/多行文本输入控件。
+3. **迁移范围**：
+   - `configpanel.py`：`PercentageLineEdit` 基类切换 + `addLineEdit` / `_make_preset_row` / 对话框搜索框
+   - `profile_manager.py`：LLM 配置表单 28 处 `QLineEdit` + 12 处 `QTextEdit` 全部替换
+   - `module_parse_widgets.py`：`ParamLineEditor` / `ParamEditor` 基类切换
+4. **`configpanel.py`** 原 2 处 `QSpinBox` + `setButtonSymbols` 改用 `NoArrowsSpinBox`（Max Font Size / Original Compare 预设）。
+5. **文档** `docs/打包控件功能使用说明.md`：新增 §9 ConfigCheckBox、§10 ConfigLineEdit/ConfigTextEdit。
+
+**验证：** 语法检查 ✅、启动导入测试 7/7 ✅
+
+**涉及文件：** `ui/custom_widget/checkbox.py`、`ui/custom_widget/text_input.py`（新）、`ui/custom_widget/__init__.py`、`ui/configpanel.py`、`utils/profile_manager.py`、`ui/module_parse_widgets.py`、`docs/打包控件功能使用说明.md`
+
+---
+
+### 设置面板下拉框统一 NoArrowsSpinBox 风格
+
+**需求：** 设置面板中已使用 `ConfigComboBox` / `ParamComboBox` 作为打包控件，但未自带样式，外观依赖全局 CSS。需与 `ConfigLineEdit` 等保持一致的半透明圆角外观。
+
+**改动：**
+
+1. **`ui/custom_widget/combobox.py`** — 在 `ConfigComboBox` 和 `ParamComboBox` 的 `__init__` 中应用 NoArrowsSpinBox 风格的 `setStyleSheet`（半透明背景、圆角边框、focus 加亮），样式字符串提取为模块级常量 `_COMBO_STYLE`。
+2. **`ui/configpanel.py`** — 唯一遗留的原始 `QComboBox()`（`punctuation_position_combo`）改用 `ConfigComboBox`，移除不再需要的 `QComboBox` qtpy 导入。
+3. **`config/stylesheet.css`** — 为 `QComboBox` 弹出下拉列表（`QAbstractItemView`）添加主题配套样式：跟随亮/暗主题的背景、圆角边框、item 悬浮高亮和选中态 accent 色。
+4. **`ui/network_settings_dialog.py`** — 1 处 `QComboBox` → `ConfigComboBox`，4 处 `QLineEdit` → `ConfigLineEdit`。
+5. **`utils/profile_manager.py`** — `ProfileManagerDialog` / `ProfileManagerWidget` 中 7 处 `QComboBox` → `ConfigComboBox`，2 处 `QCheckBox` → `ConfigCheckBox`，2 处 `QSpinBox` → `NoArrowsSpinBox`，1 处 `QDoubleSpinBox` → `NoArrowsDoubleSpinBox`。
+6. **`ui/custom_widget/spinbox.py`** — 新增 `NoArrowsDoubleSpinBox(QDoubleSpinBox)`，与 `NoArrowsSpinBox` 共用 `_SPIN_STYLE` 样式常量。导出到 `__init__.py`。
+7. **文档** `docs/打包控件功能使用说明.md`：更新 §4 纳入 `NoArrowsDoubleSpinBox` + 补充迁移表；§10/§11 新增迁移范围。
+
+**验证：** 语法检查 ✅、启动导入测试 7/7 ✅
+
+**涉及文件：** `ui/custom_widget/combobox.py`、`ui/custom_widget/spinbox.py`、`ui/custom_widget/__init__.py`、`ui/configpanel.py`、`config/stylesheet.css`、`ui/network_settings_dialog.py`、`utils/profile_manager.py`、`docs/打包控件功能使用说明.md`

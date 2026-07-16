@@ -8,12 +8,10 @@ are collapsed behind a checkbox.
 import os
 
 from qtpy.QtWidgets import (
-    QComboBox,
     QDialog,
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -21,6 +19,8 @@ from qtpy.QtWidgets import (
 
 from utils.config import pcfg, save_config
 from utils.mirror import patch_hf_env
+
+from .custom_widget import ConfigComboBox, ConfigLineEdit
 
 # ── Presets (display_name, url) per scenario ─────────────────────────
 
@@ -62,7 +62,7 @@ class _SourceRow(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        self.combo = QComboBox()
+        self.combo = ConfigComboBox()
         self.combo.setMinimumHeight(34)
         for display, _ in presets:
             self.combo.addItem(display)
@@ -74,7 +74,7 @@ class _SourceRow(QWidget):
         self.explanation.setStyleSheet("font-size: 12px; padding: 2px 0;")
         layout.addWidget(self.explanation)
 
-        self.custom_field = QLineEdit()
+        self.custom_field = ConfigLineEdit()
         self.custom_field.setPlaceholderText(self.tr("Enter custom mirror URL..."))
         self.custom_field.setMinimumHeight(34)
         self.custom_field.setVisible(False)
@@ -178,14 +178,14 @@ class NetworkSettingsDialog(QDialog):
 
         # Extra pip index
         adv.addWidget(QLabel(self.tr("Extra pip index (for PyTorch, etc.):")))
-        self._extra_input = QLineEdit()
+        self._extra_input = ConfigLineEdit()
         self._extra_input.setMinimumHeight(34)
         self._extra_input.setPlaceholderText("https://download.pytorch.org/whl/cu124")
         adv.addWidget(self._extra_input)
 
         # Custom HF endpoint
         adv.addWidget(QLabel(self.tr("Custom HuggingFace endpoint (advanced):")))
-        self._hf_input = QLineEdit()
+        self._hf_input = ConfigLineEdit()
         self._hf_input.setMinimumHeight(34)
         self._hf_input.setPlaceholderText("https://hf-mirror.com")
         adv.addWidget(self._hf_input)

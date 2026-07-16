@@ -100,6 +100,30 @@ QComboBox::down-arrow {
     padding-right: 13px;
 }
 
+/* ── QComboBox dropdown popup list ───────────────────────── */
+QComboBox QAbstractItemView {
+    background-color: @widgetBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding: 4px 0px;
+    outline: none;
+}
+
+QComboBox QAbstractItemView::item {
+    padding: 4px 8px;
+    min-height: 24px;
+    border-radius: 3px;
+}
+
+QComboBox QAbstractItemView::item:hover {
+    background-color: @accentPrimary20;
+}
+
+QComboBox QAbstractItemView::item:selected {
+    background-color: @accentPrimary;
+    color: @inverseTextColor;
+}
+
 /* ── Config panel content inputs (underline style) ──────────── */
 /* Upstream reference: BallonsTranslator/resources/stylesheet.css:59-110 */
 ConfigContent QLineEdit,
@@ -1355,28 +1379,17 @@ PanelArea {
 
 PanelGroupBox {
     border: 1px solid @borderColor;
-    border-left: 3px solid @borderColor;
     border-radius: 7px;
     background-color: @emptyContentBackgroundColor;
 }
 
-PanelGroupBox#GroupDetect    { border-left-color: @accentDetect; }
-PanelGroupBox#GroupOCR       { border-left-color: @accentOCR; }
-PanelGroupBox#GroupInpaint   { border-left-color: @accentInpaint; }
-PanelGroupBox#GroupTranslate { border-left-color: @accentTranslate; }
-
-/* Config-panel pages: drop the full frame (no longer needed after the paged
-   refactor), but keep the 3px left accent stripe per DL stage. */
+/* Config-panel pages: full frame dropped after the paged refactor;
+   left accent stripe also removed (each stage is now its own page). */
 PanelGroupBox[cfgPage="true"] {
     border: none;
-    border-left: 3px solid @borderColor;
     border-radius: 0px;
     background-color: transparent;
 }
-PanelGroupBox#GroupDetect[cfgPage="true"]    { border-left-color: @accentDetect; }
-PanelGroupBox#GroupOCR[cfgPage="true"]       { border-left-color: @accentOCR; }
-PanelGroupBox#GroupInpaint[cfgPage="true"]   { border-left-color: @accentInpaint; }
-PanelGroupBox#GroupTranslate[cfgPage="true"] { border-left-color: @accentTranslate; }
 
 QLabel#CardTitle {
     font-weight: bold;

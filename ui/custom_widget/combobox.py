@@ -13,6 +13,24 @@ from utils.shared import (
 
 from .push_button import NoBorderPushBtn
 
+# Shared NoArrowsSpinBox-inspired style for config-panel comboboxes.
+# Keeps ::drop-down / ::down-arrow / ::hover from global stylesheet.
+_COMBO_STYLE = """
+QComboBox {
+    background: rgba(128,128,128,0.13);
+    border: 1px solid rgba(128,128,128,0.25);
+    border-radius: 4px;
+    padding-left: 8px;
+}
+QComboBox:focus {
+    border: 1px solid rgba(128,128,128,0.5);
+}
+QComboBox:disabled {
+    background: transparent;
+    border: 1px solid rgba(128,128,128,0.1);
+}
+"""
+
 
 class ComboBox(QComboBox):
     # https://stackoverflow.com/questions/3241830/qt-how-to-disable-mouse-scrolling-of-qcombobox
@@ -46,6 +64,7 @@ class ConfigComboBox(ComboBox):
         self, fix_size=True, scrollWidget: QWidget = None, *args, **kwargs
     ) -> None:
         super().__init__(scrollWidget, *args, **kwargs)
+        self.setStyleSheet(_COMBO_STYLE)
         self.fix_size = fix_size
         self.adjustSize()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -86,6 +105,7 @@ class ParamComboBox(ComboBox):
         **kwargs,
     ) -> None:
         super().__init__(scrollWidget=scrollWidget, *args, **kwargs)
+        self.setStyleSheet(_COMBO_STYLE)
         self.param_key = param_key
         self.setFixedWidth(size)
         self.setFixedHeight(CONFIG_COMBOBOX_HEIGHT)

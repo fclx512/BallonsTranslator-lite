@@ -10,24 +10,18 @@ from typing import Dict, List, Optional
 
 import httpx
 from qtpy.QtCore import Qt
-from ui.custom_widget import ConfigSectionHeader
+from ui.custom_widget import ConfigCheckBox, ConfigComboBox, ConfigLineEdit, ConfigSectionHeader, ConfigTextEdit, NoArrowsDoubleSpinBox, NoArrowsSpinBox
 from qtpy.QtWidgets import (
-    QCheckBox,
-    QComboBox,
     QDialog,
-    QDoubleSpinBox,
     QFormLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QListWidget,
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSpinBox,
     QSplitter,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -369,7 +363,7 @@ class FilterableListDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        self.search_edit = QLineEdit()
+        self.search_edit = ConfigLineEdit()
         self.search_edit.setPlaceholderText(self.tr("Search..."))
         self.search_edit.textChanged.connect(self._filter)
         layout.addWidget(self.search_edit)
@@ -525,37 +519,36 @@ class ProfileManagerDialog(QDialog):
         form.setFieldGrowthPolicy(
             QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
         )
-        self.name_edit = QLineEdit()
+        self.name_edit = ConfigLineEdit()
         self.name_edit.setPlaceholderText(self.tr("e.g., My Custom API"))
         host_row = QHBoxLayout()
-        self.host_edit = QLineEdit()
+        self.host_edit = ConfigLineEdit()
         self.host_edit.setPlaceholderText("https://api.example.com/v1")
         test_btn = QPushButton(self.tr("Test"))
         test_btn.clicked.connect(self._on_test_connection)
         host_row.addWidget(self.host_edit, 1)
         host_row.addWidget(test_btn)
-        self.key_edit = QLineEdit()
-        self.model_edit = QLineEdit()
+        self.key_edit = ConfigLineEdit()
+        self.model_edit = ConfigLineEdit()
         self.model_edit.setPlaceholderText("gpt-4o, ...")
         model_row = QHBoxLayout()
         model_row.addWidget(self.model_edit)
         fetch_btn = QPushButton(self.tr("Fetch Models"))
         fetch_btn.clicked.connect(self._on_fetch_models)
         model_row.addWidget(fetch_btn)
-        self.vision_check = QCheckBox(self.tr("Vision support (for OCR)"))
-        self.vision_check.setObjectName('ConfigCheckBox')
+        self.vision_check = ConfigCheckBox(self.tr("Vision support (for OCR)"))
         self.vision_check.setToolTip(
             self.tr(
                 "Enable this for models that can process images. Vision-capable profiles will appear in the OCR model selector."
             )
         )
-        self.temp_edit = QLineEdit()
+        self.temp_edit = ConfigLineEdit()
         self.temp_edit.setPlaceholderText("0.1")
-        self.topp_edit = QLineEdit()
+        self.topp_edit = ConfigLineEdit()
         self.topp_edit.setPlaceholderText("1.0")
-        self.maxtok_edit = QLineEdit()
+        self.maxtok_edit = ConfigLineEdit()
         self.maxtok_edit.setPlaceholderText(self.tr("Unlimited (leave empty)"))
-        self.reasoning_combo = QComboBox()
+        self.reasoning_combo = ConfigComboBox()
         items = [
             (self.tr("默认"), ""),
             ("none", "none"),
@@ -592,13 +585,13 @@ class ProfileManagerDialog(QDialog):
         conn_form.setFieldGrowthPolicy(
             QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
         )
-        self.proxy_edit = QLineEdit()
+        self.proxy_edit = ConfigLineEdit()
         self.proxy_edit.setPlaceholderText("http://user:pass@host:port")
-        self.rpm_spin = QSpinBox()
+        self.rpm_spin = NoArrowsSpinBox()
         self.rpm_spin.setRange(0, 10000)
         self.rpm_spin.setValue(20)
         self.rpm_spin.setToolTip(self.tr("0 = unlimited"))
-        self.delay_spin = QDoubleSpinBox()
+        self.delay_spin = NoArrowsDoubleSpinBox()
         self.delay_spin.setRange(0, 60)
         self.delay_spin.setSingleStep(0.1)
         self.delay_spin.setDecimals(2)
@@ -619,24 +612,24 @@ class ProfileManagerDialog(QDialog):
         adv_form.setFieldGrowthPolicy(
             QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
         )
-        self.rf_combo = QComboBox()
+        self.rf_combo = ConfigComboBox()
         self.rf_combo.addItems(["json_object", "json_schema"])
         self.rf_combo.setCurrentText("json_object")
-        self.prompt_template_edit = QTextEdit()
+        self.prompt_template_edit = ConfigTextEdit()
         self.prompt_template_edit.setPlaceholderText(
             self.tr("Translate to {to_lang}:\n{input_json}")
         )
         self.prompt_template_edit.setMinimumHeight(80)
-        self.chat_samples_edit = QTextEdit()
+        self.chat_samples_edit = ConfigTextEdit()
         self.chat_samples_edit.setPlaceholderText(
             self.tr(
                 "{to_lang}-{from_lang}:\n    source:\n        - text1\n    target:\n        - trans1"
             )
         )
         self.chat_samples_edit.setMinimumHeight(80)
-        self.fp_edit = QLineEdit()
+        self.fp_edit = ConfigLineEdit()
         self.fp_edit.setPlaceholderText("0.0")
-        self.pp_edit = QLineEdit()
+        self.pp_edit = ConfigLineEdit()
         self.pp_edit.setPlaceholderText("0.0")
         adv_form.addRow(self.tr("Response Format:"), self.rf_combo)
         adv_form.addRow(self.tr("Prompt Template:"), self.prompt_template_edit)
@@ -654,20 +647,20 @@ class ProfileManagerDialog(QDialog):
         ocr_form.setFieldGrowthPolicy(
             QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
         )
-        self.ocr_prompt_edit = QTextEdit()
+        self.ocr_prompt_edit = ConfigTextEdit()
         self.ocr_prompt_edit.setPlaceholderText(
             self.tr("OCR prompt with {language} placeholder.")
         )
         self.ocr_prompt_edit.setMinimumHeight(80)
-        self.ocr_sysprompt_edit = QTextEdit()
+        self.ocr_sysprompt_edit = ConfigTextEdit()
         self.ocr_sysprompt_edit.setPlaceholderText(
             self.tr("Optional system prompt for OCR.")
         )
         self.ocr_sysprompt_edit.setMinimumHeight(60)
-        self.ocr_detail_combo = QComboBox()
+        self.ocr_detail_combo = ConfigComboBox()
         self.ocr_detail_combo.addItems(["auto", "low", "high"])
         self.ocr_detail_combo.setCurrentText("auto")
-        self.ocr_maxtok_spin = QSpinBox()
+        self.ocr_maxtok_spin = NoArrowsSpinBox()
         self.ocr_maxtok_spin.setRange(64, 131072)
         self.ocr_maxtok_spin.setValue(4096)
         ocr_form.addRow(self.tr("OCR Prompt:"), self.ocr_prompt_edit)
@@ -1026,7 +1019,7 @@ class ProfileManagerWidget(QWidget):
         tlay.setSpacing(8)
 
         tlay.addWidget(QLabel(self.tr("Profile:")))
-        self.profile_combo = QComboBox()
+        self.profile_combo = ConfigComboBox()
         self.profile_combo.setMinimumWidth(200)
         self.profile_combo.currentIndexChanged.connect(self._on_combo_select)
         tlay.addWidget(self.profile_combo)
@@ -1079,10 +1072,10 @@ class ProfileManagerWidget(QWidget):
             QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
         )
 
-        self.name_edit = QLineEdit()
+        self.name_edit = ConfigLineEdit()
         self.name_edit.setPlaceholderText(self.tr("e.g., My Custom API"))
         host_row = QHBoxLayout()
-        self.host_edit = QLineEdit()
+        self.host_edit = ConfigLineEdit()
         self.host_edit.setPlaceholderText("https://api.example.com/v1")
         test_btn = QPushButton(self.tr("Test"))
         test_btn.setObjectName("ConfigButton")
@@ -1090,8 +1083,8 @@ class ProfileManagerWidget(QWidget):
         test_btn.clicked.connect(self._on_test_connection)
         host_row.addWidget(self.host_edit, 1)
         host_row.addWidget(test_btn)
-        self.key_edit = QLineEdit()
-        self.model_edit = QLineEdit()
+        self.key_edit = ConfigLineEdit()
+        self.model_edit = ConfigLineEdit()
         self.model_edit.setPlaceholderText("gpt-4o, ...")
         model_row = QHBoxLayout()
         model_row.addWidget(self.model_edit)
@@ -1100,21 +1093,20 @@ class ProfileManagerWidget(QWidget):
         fetch_btn.setFixedHeight(28)
         fetch_btn.clicked.connect(self._on_fetch_models)
         model_row.addWidget(fetch_btn)
-        self.vision_check = QCheckBox(self.tr("Vision support (for OCR)"))
-        self.vision_check.setObjectName('ConfigCheckBox')
+        self.vision_check = ConfigCheckBox(self.tr("Vision support (for OCR)"))
         self.vision_check.setToolTip(
             self.tr(
                 "Enable this for models that can process images. "
                 "Vision-capable profiles will appear in the OCR model selector."
             )
         )
-        self.temp_edit = QLineEdit()
+        self.temp_edit = ConfigLineEdit()
         self.temp_edit.setPlaceholderText("0.1")
-        self.topp_edit = QLineEdit()
+        self.topp_edit = ConfigLineEdit()
         self.topp_edit.setPlaceholderText("1.0")
-        self.maxtok_edit = QLineEdit()
+        self.maxtok_edit = ConfigLineEdit()
         self.maxtok_edit.setPlaceholderText(self.tr("Unlimited (leave empty)"))
-        self.reasoning_combo = QComboBox()
+        self.reasoning_combo = ConfigComboBox()
         items = [
             (self.tr("默认"), ""),
             ("none", "none"),
@@ -1157,13 +1149,13 @@ class ProfileManagerWidget(QWidget):
         conn_form.setFieldGrowthPolicy(
             QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
         )
-        self.proxy_edit = QLineEdit()
+        self.proxy_edit = ConfigLineEdit()
         self.proxy_edit.setPlaceholderText("http://user:pass@host:port")
-        self.rpm_spin = QSpinBox()
+        self.rpm_spin = NoArrowsSpinBox()
         self.rpm_spin.setRange(0, 10000)
         self.rpm_spin.setValue(20)
         self.rpm_spin.setToolTip(self.tr("0 = unlimited"))
-        self.delay_spin = QDoubleSpinBox()
+        self.delay_spin = NoArrowsDoubleSpinBox()
         self.delay_spin.setRange(0, 60)
         self.delay_spin.setSingleStep(0.1)
         self.delay_spin.setDecimals(2)
@@ -1185,24 +1177,24 @@ class ProfileManagerWidget(QWidget):
         adv_form.setFieldGrowthPolicy(
             QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
         )
-        self.rf_combo = QComboBox()
+        self.rf_combo = ConfigComboBox()
         self.rf_combo.addItems(["json_object", "json_schema"])
         self.rf_combo.setCurrentText("json_object")
-        self.prompt_template_edit = QTextEdit()
+        self.prompt_template_edit = ConfigTextEdit()
         self.prompt_template_edit.setPlaceholderText(
             self.tr("Translate to {to_lang}:\n{input_json}")
         )
         self.prompt_template_edit.setMinimumHeight(80)
-        self.chat_samples_edit = QTextEdit()
+        self.chat_samples_edit = ConfigTextEdit()
         self.chat_samples_edit.setPlaceholderText(
             self.tr(
                 "{to_lang}-{from_lang}:\n    source:\n        - text1\n    target:\n        - trans1"
             )
         )
         self.chat_samples_edit.setMinimumHeight(80)
-        self.fp_edit = QLineEdit()
+        self.fp_edit = ConfigLineEdit()
         self.fp_edit.setPlaceholderText("0.0")
-        self.pp_edit = QLineEdit()
+        self.pp_edit = ConfigLineEdit()
         self.pp_edit.setPlaceholderText("0.0")
         adv_form.addRow(self.tr("Response Format:"), self.rf_combo)
         adv_form.addRow(self.tr("Prompt Template:"), self.prompt_template_edit)
@@ -1223,20 +1215,20 @@ class ProfileManagerWidget(QWidget):
         ocr_form.setFieldGrowthPolicy(
             QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
         )
-        self.ocr_prompt_edit = QTextEdit()
+        self.ocr_prompt_edit = ConfigTextEdit()
         self.ocr_prompt_edit.setPlaceholderText(
             self.tr("OCR prompt with {language} placeholder.")
         )
         self.ocr_prompt_edit.setMinimumHeight(80)
-        self.ocr_sysprompt_edit = QTextEdit()
+        self.ocr_sysprompt_edit = ConfigTextEdit()
         self.ocr_sysprompt_edit.setPlaceholderText(
             self.tr("Optional system prompt for OCR.")
         )
         self.ocr_sysprompt_edit.setMinimumHeight(60)
-        self.ocr_detail_combo = QComboBox()
+        self.ocr_detail_combo = ConfigComboBox()
         self.ocr_detail_combo.addItems(["auto", "low", "high"])
         self.ocr_detail_combo.setCurrentText("auto")
-        self.ocr_maxtok_spin = QSpinBox()
+        self.ocr_maxtok_spin = NoArrowsSpinBox()
         self.ocr_maxtok_spin.setRange(64, 131072)
         self.ocr_maxtok_spin.setValue(4096)
         ocr_form.addRow(self.tr("OCR Prompt:"), self.ocr_prompt_edit)

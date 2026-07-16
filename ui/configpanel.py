@@ -15,11 +15,9 @@ from qtpy.QtGui import (
 )
 from qtpy.QtWidgets import (
     QAbstractItemView,
-    QAbstractSpinBox,
     QApplication,
     QCheckBox,
     QGraphicsOpacityEffect,
-    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFrame,
@@ -36,7 +34,6 @@ from qtpy.QtWidgets import (
     QScrollBar,
     QSizePolicy,
     QSpacerItem,
-    QSpinBox,
     QStackedWidget,
     QStyle,
     QTreeView,
@@ -60,8 +57,12 @@ from utils.shared import (
 )
 
 from .custom_widget import (
+    ConfigCheckBox,
     ConfigComboBox,
+    ConfigLineEdit,
     ConfigSectionHeader,
+    ConfigTextEdit,
+    NoArrowsSpinBox,
     PanelGroupBox,
     PaintQSlider,
     Widget,
@@ -106,7 +107,7 @@ class CustomIntValidator(QIntValidator):
         return (QValidator.State.Acceptable, s, pos)
 
 
-class PercentageLineEdit(QLineEdit):
+class PercentageLineEdit(ConfigLineEdit):
     finish_edited = Signal(str)
 
     def __init__(self, default_value: str = "100", parent=None) -> None:
@@ -288,8 +289,7 @@ def combobox_with_label(
 def checkbox_with_label(
     name: str, description: str = None, note: str = None, target_block: QWidget = None
 ):
-    checkbox = QCheckBox()
-    checkbox.setObjectName('ConfigCheckBox')
+    checkbox = ConfigCheckBox()
     if description is not None:
         font = checkbox.font()
         font.setPointSizeF(CONFIG_FONTSIZE_CONTENT * 0.8)
@@ -328,7 +328,7 @@ class ConfigBlock(Widget):
     def addLineEdit(
         self, name: str = None, description: str = None, vertical_layout: bool = False
     ):
-        le = QLineEdit()
+        le = ConfigLineEdit()
         le.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
         le.setFixedHeight(LINEEDIT_FIXHEIGHT)
         sublock = ConfigSubBlock(le, name, description, vertical_layout)
@@ -1204,7 +1204,7 @@ class FontExcludeDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # Search bar
-        self.search_edit = QLineEdit()
+        self.search_edit = ConfigLineEdit()
         self.search_edit.setPlaceholderText(self.tr("Search fonts..."))
         self.search_edit.textChanged.connect(self._filter_lists)
         layout.addWidget(self.search_edit)
@@ -1472,8 +1472,7 @@ class ConfigPanel(Widget):
         models_vlayout.addWidget(ConfigSectionHeader(self.tr("Model Loading")))
 
         # Load on demand
-        self.load_model_checker = QCheckBox()
-        self.load_model_checker.setObjectName('ConfigCheckBox')
+        self.load_model_checker = ConfigCheckBox()
         font = self.load_model_checker.font()
         font.setPointSizeF(CONFIG_FONTSIZE_CONTENT * 0.8)
         self.load_model_checker.setFont(font)
@@ -1486,8 +1485,7 @@ class ConfigPanel(Widget):
         models_vlayout.addWidget(cb_block)
 
         # Empty cache
-        self.empty_runcache_checker = QCheckBox()
-        self.empty_runcache_checker.setObjectName('ConfigCheckBox')
+        self.empty_runcache_checker = ConfigCheckBox()
         font = self.empty_runcache_checker.font()
         font.setPointSizeF(CONFIG_FONTSIZE_CONTENT * 0.8)
         self.empty_runcache_checker.setFont(font)
@@ -1582,10 +1580,9 @@ class ConfigPanel(Widget):
         project_layout.setSpacing(0)
 
         # Startup
-        self.open_on_startup_checker = QCheckBox(
+        self.open_on_startup_checker = ConfigCheckBox(
             self.tr("Reopen last project on startup")
         )
-        self.open_on_startup_checker.setObjectName('ConfigCheckBox')
         self.open_on_startup_checker.stateChanged.connect(
             self.on_open_onstartup_changed
         )
@@ -1655,7 +1652,7 @@ class ConfigPanel(Widget):
             lbl = QLabel(label)
             lbl.setFixedWidth(110)
             row.addWidget(lbl)
-            edit = QLineEdit()
+            edit = ConfigLineEdit()
             edit.setText(", ".join(str(v) for v in getattr(pcfg, config_key)))
             edit.setPlaceholderText(self.tr("comma-separated values"))
             row.addWidget(edit, 1)
@@ -1785,7 +1782,7 @@ class ConfigPanel(Widget):
         ts_layout.addWidget(ti_sublock)
 
         # Punctuation Position
-        self.punctuation_position_combo = QComboBox()
+        self.punctuation_position_combo = ConfigComboBox(fix_size=False)
         self.punctuation_position_combo.addItems(
             [self.tr("Centered (Traditional Chinese / Japanese)"), self.tr("Edge-aligned (Simplified Chinese)")]
         )
@@ -1823,8 +1820,7 @@ class ConfigPanel(Widget):
         )
         ts_layout.addWidget(btn_sublock)
 
-        self.max_font_size_edit = QSpinBox()
-        self.max_font_size_edit.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.max_font_size_edit = NoArrowsSpinBox()
         self.max_font_size_edit.setRange(10, 1000)
         self.max_font_size_edit.setValue(pcfg.max_font_size)
         self.max_font_size_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
@@ -1851,10 +1847,9 @@ class ConfigPanel(Widget):
         interface_layout.addWidget(ConfigSectionHeader(self.tr("Behavior")))
 
         # Fit image to window on open
-        self.fit_window_checker = QCheckBox(
+        self.fit_window_checker = ConfigCheckBox(
             self.tr("Fit image to window when opening")
         )
-        self.fit_window_checker.setObjectName('ConfigCheckBox')
         self.fit_window_checker.stateChanged.connect(self.on_fit_window_changed)
         fit_win_sublock = ConfigSubBlock(
             self.fit_window_checker, name=self.tr("Window Fit"),
@@ -1863,10 +1858,9 @@ class ConfigPanel(Widget):
         interface_layout.addWidget(fit_win_sublock)
 
         # Sub-option: also fit on page switch
-        self.fit_window_page_checker = QCheckBox(
+        self.fit_window_page_checker = ConfigCheckBox(
             self.tr("Also fit when switching pages")
         )
-        self.fit_window_page_checker.setObjectName('ConfigCheckBox')
         self.fit_window_page_checker.stateChanged.connect(
             self.on_fit_window_page_changed
         )
@@ -1927,8 +1921,7 @@ class ConfigPanel(Widget):
         toggle_lbl = QLabel(self.tr("Preset (%):"))
         toggle_lbl.setFixedWidth(110)
         toggle_row.addWidget(toggle_lbl)
-        self.orig_opacity_toggle_spin = QSpinBox()
-        self.orig_opacity_toggle_spin.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.orig_opacity_toggle_spin = NoArrowsSpinBox()
         self.orig_opacity_toggle_spin.setRange(0, 99)
         self.orig_opacity_toggle_spin.setValue(pcfg.original_transparency_preset)
         self.orig_opacity_toggle_spin.valueChanged.connect(
@@ -1943,10 +1936,9 @@ class ConfigPanel(Widget):
         interface_layout.addWidget(togglesublock)
 
         # Show sequence badge on text blocks
-        self.seq_badge_checker = QCheckBox(
+        self.seq_badge_checker = ConfigCheckBox(
             self.tr("Show sequence number on text blocks")
         )
-        self.seq_badge_checker.setObjectName('ConfigCheckBox')
         self.seq_badge_checker.setChecked(pcfg.show_seq_badge)
         self.seq_badge_checker.stateChanged.connect(self.on_seq_badge_changed)
         seq_badge_sublock = ConfigSubBlock(
@@ -2012,8 +2004,7 @@ class ConfigPanel(Widget):
         perf_layout.addWidget(render_sublock)
 
         # Show decorations during drag/resize
-        self.drag_decorations_checker = QCheckBox(self.tr("Show decorations while resizing"))
-        self.drag_decorations_checker.setObjectName('ConfigCheckBox')
+        self.drag_decorations_checker = ConfigCheckBox(self.tr("Show decorations while resizing"))
         self.drag_decorations_checker.setChecked(pcfg.show_decorations_during_drag)
         self.drag_decorations_checker.toggled.connect(self._on_decorations_during_drag_changed)
         decor_sublock = ConfigSubBlock(
