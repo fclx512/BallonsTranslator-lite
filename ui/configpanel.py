@@ -29,9 +29,9 @@ from qtpy.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QScrollArea,
-    QScrollBar,
     QSizePolicy,
     QSpacerItem,
     QStackedWidget,
@@ -60,6 +60,7 @@ from .custom_widget import (
     ConfigCheckBox,
     ConfigComboBox,
     ConfigLineEdit,
+    ConfigScrollBar,
     ConfigSectionHeader,
     ConfigTextEdit,
     NoArrowsSpinBox,
@@ -459,7 +460,7 @@ class ConfigNotePopup(QFrame):
         label.setMaximumWidth(320)
         label.setTextFormat(Qt.TextFormat.RichText)
         font = label.font()
-        font.setPointSize(font.pointSize() - 2)
+        font.setPointSize(max(font.pointSize() - 2, 1))
         label.setFont(font)
         label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextBrowserInteraction
@@ -610,79 +611,6 @@ class ConfigTable(QTreeView):
                 self.section_pressed.emit(section_key)
 
 
-class AnimatedScrollBar(QScrollBar):
-    """Vertical scrollbar with timer‑based handle brightness on hover."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setOrientation(Qt.Orientation.Vertical)
-
-        self._factor = 0.0  # 0 = normal, 1 = fully hovered
-        self._factor_start = 0.0
-        self._factor_end = 0.0
-        self._animating = False
-        self._timer = QTimer(self)
-        self._timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self._timer.timeout.connect(self._tick)
-        self._elapsed = QElapsedTimer()
-        self._duration = 150
-        self._easing = QEasingCurve(QEasingCurve.Type.OutCubic)
-
-        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
-        self._sync_style()
-
-    # ── Hover events ────────────────────────────────────────────
-
-    def enterEvent(self, event):
-        self._start_anim(1.0)
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._start_anim(0.0)
-        super().leaveEvent(event)
-
-    # ── Animation ───────────────────────────────────────────────
-
-    def _start_anim(self, target: float):
-        if pcfg.animation_fps < 0:
-            self._factor = target
-            self._sync_style()
-            return
-        self._factor_start = self._factor
-        self._factor_end = target
-        self._elapsed.start()
-        if not self._animating:
-            self._animating = True
-            self._timer.start(_scroll_interval())
-
-    def _tick(self):
-        elapsed = self._elapsed.elapsed()
-        progress = min(elapsed / self._duration, 1.0)
-        eased = self._easing.valueForProgress(progress)
-        self._factor = (
-            self._factor_start + (self._factor_end - self._factor_start) * eased
-        )
-        self._sync_style()
-        if progress >= 1.0:
-            self._timer.stop()
-            self._animating = False
-
-    def _sync_style(self):
-        f = self._factor
-        r = int(102 + 51 * f)  # #666 → #999
-        g = int(102 + 51 * f)
-        b = int(102 + 51 * f)
-        self.setStyleSheet(
-            f"QScrollBar:vertical {{"
-            f"  width: 8px; background: transparent; margin: 0; }}"
-            f"QScrollBar::handle:vertical {{"
-            f"  background: rgb({r},{g},{b});"
-            f"  border-radius: 4px; min-height: 20px; }}"
-            f"QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{"
-            f"  height: 0; }}"
-        )
-
-
 class ConfigContent(QScrollArea):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -699,7 +627,7 @@ class ConfigContent(QScrollArea):
         self.setContentsMargins(0, 0, 0, 0)
         self.vlayout = vlayout
 
-        self.setVerticalScrollBar(AnimatedScrollBar(self))
+        self.setVerticalScrollBar(ConfigScrollBar(self))
 
         self._scroll_timer = QTimer(self)
         self._scroll_timer.setTimerType(Qt.TimerType.PreciseTimer)
@@ -1123,19 +1051,8 @@ class ShortcutEditor(QWidget):
                 background: transparent;
                 border: none;
             }
-            QScrollBar:vertical {
-                width: 8px;
-                background: transparent;
-            }
-            QScrollBar::handle:vertical {
-                background: #666;
-                border-radius: 4px;
-                min-height: 20px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0;
-            }
         """)
+        scroll_area.setVerticalScrollBar(ConfigScrollBar(scroll_area))
 
         scroll_content = QWidget()
         self._content_layout = QVBoxLayout(scroll_content)
@@ -1250,6 +1167,12 @@ class FontExcludeDialog(QDialog):
 
         layout.addLayout(lists_layout)
 
+        # Legacy fonts button
+        self.legacy_btn = QPushButton(self.tr("Add Legacy Fonts to Hidden List"))
+        self.legacy_btn.setObjectName("ConfigButton")
+        self.legacy_btn.clicked.connect(self._on_add_legacy_fonts)
+        layout.addWidget(self.legacy_btn)
+
         # OK / Cancel buttons
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -1262,10 +1185,27 @@ class FontExcludeDialog(QDialog):
         self._populate_lists()
 
     def _add_font_item(self, list_widget: QListWidget, font_name: str):
-        """Add a font name to a list widget with its own typeface as preview."""
-        item = QListWidgetItem(font_name)
-        item.setFont(QFont(font_name, 11))
+        """Add a font name to a list widget.
+        
+        Legacy fonts skip the typeface preview and get a "[Legacy]" suffix.
+        The original font name is stored in ``Qt.UserRole``.
+        """
+        from utils.shared import LEGACY_FONTS
+        from qtpy.QtCore import Qt
+
+        is_legacy = font_name in LEGACY_FONTS
+        display = f"{font_name} [{self.tr('Legacy')}]" if is_legacy else font_name
+        item = QListWidgetItem(display)
+        item.setData(Qt.ItemDataRole.UserRole, font_name)
+        if not is_legacy:
+            item.setFont(QFont(font_name, 11))
         list_widget.addItem(item)
+
+    @staticmethod
+    def _real_name(item: QListWidgetItem) -> str:
+        """Return the original font name stored in UserRole."""
+        name = item.data(Qt.ItemDataRole.UserRole)
+        return name if name else item.text()
 
     def _populate_lists(self):
         from utils import shared
@@ -1284,24 +1224,61 @@ class FontExcludeDialog(QDialog):
         text = self.search_edit.text().lower()
         for i in range(self.available_list.count()):
             item = self.available_list.item(i)
-            item.setHidden(bool(text) and text not in item.text().lower())
+            item.setHidden(bool(text) and text not in self._real_name(item).lower())
         for i in range(self.excluded_list.count()):
             item = self.excluded_list.item(i)
-            item.setHidden(bool(text) and text not in item.text().lower())
+            item.setHidden(bool(text) and text not in self._real_name(item).lower())
 
     def _hide_fonts(self):
         for item in self.available_list.selectedItems():
             self.available_list.takeItem(self.available_list.row(item))
-            self._add_font_item(self.excluded_list, item.text())
+            self._add_font_item(self.excluded_list, self._real_name(item))
 
     def _show_fonts(self):
         for item in self.excluded_list.selectedItems():
             self.excluded_list.takeItem(self.excluded_list.row(item))
-            self._add_font_item(self.available_list, item.text())
+            self._add_font_item(self.available_list, self._real_name(item))
+
+    def _on_add_legacy_fonts(self):
+        """Detect legacy Windows fonts and add them to the hidden list automatically."""
+        from utils.shared import ALL_FONT_FAMILIES, LEGACY_FONTS
+
+        # Fonts that exist on this system AND are legacy
+        exist_legacy = set(ALL_FONT_FAMILIES) & LEGACY_FONTS
+        already_excluded = {
+            self._real_name(self.excluded_list.item(i))
+            for i in range(self.excluded_list.count())
+        }
+        to_add = sorted(exist_legacy - already_excluded)
+
+        if not to_add:
+            QMessageBox.information(
+                self,
+                self.tr("Legacy Fonts"),
+                self.tr("No additional legacy fonts detected on this system."),
+            )
+            return
+
+        for font_name in to_add:
+            self._add_font_item(self.excluded_list, font_name)
+            # Remove from available list
+            for i in range(self.available_list.count()):
+                if self._real_name(self.available_list.item(i)) == font_name:
+                    self.available_list.takeItem(i)
+                    break
+
+        QMessageBox.information(
+            self,
+            self.tr("Legacy Fonts"),
+            self.tr(
+                "Added {count} legacy font(s) to the hidden list:\n\n{fonts}"
+            ).replace("{count}", str(len(to_add))).replace("{fonts}", "\n".join(to_add)),
+        )
 
     def get_excluded_fonts(self) -> List[str]:
         return [
-            self.excluded_list.item(i).text() for i in range(self.excluded_list.count())
+            self._real_name(self.excluded_list.item(i))
+            for i in range(self.excluded_list.count())
         ]
 
 
@@ -2104,7 +2081,7 @@ class ConfigPanel(Widget):
         area.setWidgetResizable(True)
         area.setContentsMargins(0, 0, 0, 0)
         area.setFrameShape(QFrame.Shape.NoFrame)
-        area.setVerticalScrollBar(AnimatedScrollBar(area))
+        area.setVerticalScrollBar(ConfigScrollBar(area))
         page = QWidget()
         lay = QVBoxLayout(page)
         lay.setContentsMargins(*CONFIGBLOCK_CONTENT_MARGINS)

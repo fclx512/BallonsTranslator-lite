@@ -59,12 +59,12 @@ def shortcut_styles() -> dict:
 
 
 def scrollbar_colors():
-    """Return QColor values for scrollbar groove and handle."""
-    dark = is_dark_theme()
-    if dark:
-        return QColor(0, 0, 0, 30), QColor(0, 0, 0, 90)
-    else:
-        return QColor(0, 0, 0, 10), QColor(0, 0, 0, 40)
+    """Return QColor values for scrollbar groove and handle from active theme."""
+    from ui.misc import get_theme_color
+
+    groove = get_theme_color(key="@scrollBarBackground")
+    handle = get_theme_color(key="@scrollBarColor")
+    return groove, handle
 
 
 def slider_colors():

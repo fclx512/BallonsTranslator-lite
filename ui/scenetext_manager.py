@@ -1135,7 +1135,7 @@ class SceneTextManager(QObject):
 
         if resize_ratio != 1:
             new_font_size = blk_font.pointSizeF() * resize_ratio
-            blk_font.setPointSizeF(new_font_size)
+            blk_font.setPointSizeF(max(new_font_size, 1.0))
             wl_list = (
                 (np.array(wl_list, np.float64) * resize_ratio).astype(np.int32).tolist()
             )
@@ -1184,7 +1184,7 @@ class SceneTextManager(QObject):
             downscale_constraint = 0.5
             w = xywh[2]
             post_resize_ratio = np.clip(
-                max(region_rect[2] / w, downscale_constraint), 0, 1
+                max(region_rect[2] / w, downscale_constraint), 0.5, 1
             )
             resize_ratio *= post_resize_ratio
 
@@ -1197,7 +1197,7 @@ class SceneTextManager(QObject):
             new_font_size = blkitem.font().pointSizeF() * resize_ratio
             blkitem.textCursor().clearSelection()
             blkitem.setFontSize(new_font_size)
-            blk_font.setPointSizeF(new_font_size)
+            blk_font.setPointSizeF(max(new_font_size, 1.0))
 
         if restore_charfmts:
             char_fmts = blkitem.get_char_fmts()

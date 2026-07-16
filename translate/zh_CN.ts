@@ -1177,6 +1177,26 @@
             <source>Hidden Fonts</source>
             <translation>隐藏字体</translation>
         </message>
+        <message>
+            <source>Add Legacy Fonts to Hidden List</source>
+            <translation>添加老旧字体到隐藏列表</translation>
+        </message>
+        <message>
+            <source>Legacy Fonts</source>
+            <translation>老旧字体</translation>
+        </message>
+        <message>
+            <source>No additional legacy fonts detected on this system.</source>
+            <translation>系统中未检测到额外的老旧字体。</translation>
+        </message>
+        <message>
+            <source>Added {count} legacy font(s) to the hidden list:\n\n{fonts}</source>
+            <translation>已将 {count} 个老旧字体添加到隐藏列表：\n\n{fonts}</translation>
+        </message>
+        <message>
+            <source>Legacy</source>
+            <translation>老旧</translation>
+        </message>
     </context>
     <context>
         <name>FontFormatPanel</name>

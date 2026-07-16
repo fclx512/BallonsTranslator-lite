@@ -68,7 +68,7 @@ class _Scrim(QWidget):
 
     def __init__(self, parent: QWidget, alpha: float, on_click_outside: Callable):
         super().__init__(parent)
-        self._color = QColor(0, 0, 0, int(round(alpha * 255)))
+        self._color = QColor(0, 0, 0, max(0, min(255, int(round(alpha * 255)))))
         self._on_click_outside = on_click_outside
         self._closable = True
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)

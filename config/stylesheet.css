@@ -110,8 +110,8 @@ QComboBox QAbstractItemView {
 }
 
 QComboBox QAbstractItemView::item {
-    padding: 4px 8px;
-    min-height: 24px;
+    padding: 2px 8px;
+    min-height: 20px;
     border-radius: 3px;
 }
 
@@ -1018,14 +1018,14 @@ QScrollBar:vertical:hover,QScrollBar:horizontal:hover {
 QScrollBar::handle:vertical {
     background: @scrollBarColor;
     width: 10px;
-    /* border-radius: 5px; */
+    border-radius: 5px;
     border: none;
 }
 /*横向滚动条上面的滑块*/
 QScrollBar::handle:horizontal {
     background: @scrollBarColor;
     height: 10px;
-    /* border-radius: 5px; */
+    border-radius: 5px;
     border: none;
 }
 

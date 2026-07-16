@@ -134,6 +134,7 @@ def vertical_force_aligncentel(char: str) -> bool:
 def _font_metrics(
     ffamily: str, size: float, weight: int, italic: bool
 ) -> QFontMetricsF:
+    size = max(size, 1.0)
     font = QFont(ffamily, int(size), weight, italic)
     font.setPointSizeF(size)
     return QFontMetricsF(font)

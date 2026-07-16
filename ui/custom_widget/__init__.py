@@ -35,6 +35,7 @@ from .message import (
     TaskProgressBar,
 )
 from .push_button import NoBorderPushBtn
+from .scroll_bar import ConfigScrollBar
 from .scrollbar import ScrollBar
 from .spinbox import NoArrowsDoubleSpinBox, NoArrowsSpinBox
 from .text_input import ConfigLineEdit, ConfigTextEdit

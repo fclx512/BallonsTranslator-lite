@@ -1057,7 +1057,7 @@ class TextBlkItem(QGraphicsTextItem):
         font = self.document().defaultFont()
 
         font.setFamily(ffmat.font_family)
-        font.setPointSizeF(ffmat.size_pt)
+        font.setPointSizeF(max(ffmat.size_pt, 1.0))
         font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
         font.setStyleStrategy(
             QFont.StyleStrategy.PreferAntialias
@@ -1297,9 +1297,9 @@ class TextBlkItem(QGraphicsTextItem):
                     cfont = cfmt.font()
 
                     font = QFont(
-                        actual_family, cfont.pointSize(), cfont.weight(), cfont.italic()
+                        actual_family, max(1, cfont.pointSize()), cfont.weight(), cfont.italic()
                     )
-                    font.setPointSizeF(cfont.pointSizeF())
+                    font.setPointSizeF(max(1.0, cfont.pointSizeF()))
 
                     # 样式名到 Qt Weight 枚举的映射
                     _style_to_qt_weight = {
@@ -1448,8 +1448,9 @@ class TextBlkItem(QGraphicsTextItem):
         gradient.setFinalStop(center.x() + dx * radius, center.y() + dy * radius)
 
         # Set gradient colors
-        start_color = QColor(*fontformat.gradient_start_color)
-        end_color = QColor(*fontformat.gradient_end_color)
+        _clamp = lambda v: max(0, min(255, int(v)))  # noqa: E731
+        start_color = QColor(*[_clamp(c) for c in fontformat.gradient_start_color[:3]])
+        end_color = QColor(*[_clamp(c) for c in fontformat.gradient_end_color[:3]])
         gradient.setColorAt(0, start_color)
         gradient.setColorAt(1, end_color)
         return gradient
@@ -1547,7 +1548,11 @@ class TextBlkItem(QGraphicsTextItem):
         )
 
     def setStrokeColor(self, scolor, **kwargs):
-        self.stroke_qcolor = scolor if isinstance(scolor, QColor) else QColor(*scolor)
+        if isinstance(scolor, QColor):
+            self.stroke_qcolor = scolor
+        else:
+            clamped = [max(0, min(255, int(c))) for c in scolor[:3]]
+            self.stroke_qcolor = QColor(*clamped)
         self.fontformat.srgb = [
             self.stroke_qcolor.red(),
             self.stroke_qcolor.green(),
@@ -1633,6 +1638,7 @@ class TextBlkItem(QGraphicsTextItem):
 
         max_pt = px2pt(pcfg.max_font_size)
         value = min(value, max_pt)
+        value = max(value, 1)
 
         cursor, after_kwargs = self._before_set_ffmt(
             set_selected=set_selected, restore_cursor=restore_cursor

@@ -42,7 +42,7 @@ class ColorSwatchBtn(QPushButton):
         Accepts a QColor or a 3-element list [r, g, b].
         """
         if isinstance(color, (list, tuple)):
-            self._color = QColor(*[int(c) for c in color[:3]])
+            self._color = QColor(*[max(0, min(255, int(c))) for c in color[:3]])
         else:
             self._color = QColor(color)
         self._update_style()

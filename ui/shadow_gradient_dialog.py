@@ -265,7 +265,7 @@ class ColorButton(ColorSwatchBtn):
     def set_color(self, color):
         if isinstance(color, (list, tuple)):
             self._color_list = list(color[:3])
-            self._color = QColor(*self._color_list)
+            self._color = QColor(*[max(0, min(255, int(c))) for c in self._color_list])
         else:
             self._color_list = [color.red(), color.green(), color.blue()]
             self._color = QColor(color)

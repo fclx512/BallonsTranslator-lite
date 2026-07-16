@@ -87,7 +87,10 @@ class ColorPickerLabel(QLabel):
         if not isinstance(color, QColor):
             if isinstance(color, np.ndarray):
                 color = np.round(color).astype(np.uint8).tolist()
-            color = QColor(*color)
+            if isinstance(color, (list, tuple)):
+                color = QColor(*[max(0, min(255, int(c))) for c in color[:4]])
+            else:
+                color = QColor(color)
         self.color = color
         r, g, b = color.red(), color.green(), color.blue()
         self.setToolTip(f"RGB({r}, {g}, {b})  #{r:02x}{g:02x}{b:02x}".upper())

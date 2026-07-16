@@ -732,6 +732,11 @@ def main():
     #     remains usable without manual config changes. ──
     _ensure_module_fallback()
 
+    # Install global Qt warning filter before any other Qt setup
+    from utils.safe_qt import install_qt_warning_filter
+
+    install_qt_warning_filter()
+
     from qtpy.QtCore import QEvent, QLocale, QObject, Qt, QTranslator
     from qtpy.QtWidgets import QComboBox
 

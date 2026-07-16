@@ -62,7 +62,7 @@ class ClockDial(QWidget):
 
     def setColor(self, color):
         if isinstance(color, (list, tuple)):
-            color = QColor(*[int(c) for c in color[:3]])
+            color = QColor(*[max(0, min(255, int(c))) for c in color[:3]])
         self._color = QColor(color)
         self.update()
 

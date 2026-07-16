@@ -273,7 +273,7 @@ def ffmt_change_font_size(
 ):
     set_kwargs = global_default_set_kwargs if is_global else local_default_set_kwargs
     for blkitem, value in zip(blkitems, values):
-        if value < 0:
+        if value <= 0:
             continue
         value = px2pt(value)
         blkitem.setFontSize(value, clip_size=clip_size, **set_kwargs)
@@ -291,6 +291,8 @@ def ffmt_change_rel_font_size(
 ):
     set_kwargs = global_default_set_kwargs if is_global else local_default_set_kwargs
     for blkitem, value in zip(blkitems, values):
+        if value <= 0:
+            continue
         blkitem.setRelFontSize(value, clip_size=clip_size, **set_kwargs)
 
 

@@ -4,6 +4,37 @@
 
 ## 2026-07-16
 
+### 三项 Qt 刷屏 Warning 根治 + 老旧字体一键排除功能
+
+**问题：** 三种 Qt warning 在日志中反复刷屏：
+1. `qt.qpa.fonts: DirectWrite: CreateFontFaceFromHDC() failed` — Windows 老旧字体触发
+2. `QFont::setPointSize: Point size <= 0 (-1)` — 字体大小路径多处无下限守卫
+3. `QColor::fromRgb: RGB parameters out of range` — 渐变色/阴影色未钳位
+
+**改动：**
+
+1. **老旧字体一键排除**（`utils/shared.py`、`ui/configpanel.py`）：
+   - 新增 `LEGACY_FONTS` 常量（`frozenset`），收录 10 个触发 DirectWrite 告警的 Windows 老旧字体（MS Sans Serif, System, Fixedsys 等）
+   - `FontExcludeDialog` 新增"添加老旧字体到隐藏列表"按钮 → 点击自动检测本机存在的 legacy 字体并加入隐藏列表，同时从可用列表移除，弹窗展示结果
+   - `_add_font_item` 对 legacy 字体跳过预览渲染（以防预览时触发告警），并附 `[老旧]` 标识；真实名称存 `Qt.UserRole`，搜索/移动/导出均读该角色
+
+2. **排除字体过滤遗漏修复**（`ui/fontstyle_manager.py`）：`_sync_controls` 中字体系列改用 `get_filtered_font_list(pcfg.excluded_fonts)` 而非裸 `ALL_FONT_FAMILIES`
+
+3. **QFont::setPointSize 五处下限守卫**：
+   - `ui/scene_textlayout.py:137` — `_font_metrics` 的 `QFont()` 构造前先 `size = max(size, 1.0)`
+   - `ui/textitem.py:1635` — `setFontSize` 加 `value = max(value, 1)`
+   - `ui/textitem.py:1299-1302` — char format 的 `pointSize()/pointSizeF()` 包裹 `max(1)/max(1.0)`
+   - `ui/fontformat_commands.py:276,294` — `ffmt_change_font_size` 过滤 `< 0` → `<= 0`，`ffmt_change_rel_font_size` 新增 `<= 0` 守卫
+   - `ui/scenetext_manager.py:1187` — `np.clip(..., 0, 1)` → `np.clip(..., 0.5, 1)`
+
+4. **QColor 三处钳位**：
+   - `ui/textitem.py:1451-1452` — `get_text_gradient` 的 `gradient_start_color/end_color` 钳位到 `[0, 255]`
+   - `ui/textitem.py:1550` — `setStrokeColor` 非 QColor 入参钳位
+   - `ui/shadow_gradient_dialog.py:268` — `ColorButton.set_color` 的 `QColor(*self._color_list)` 钳位
+
+
+---
+
 ### 设置面板 UI 语言统一
 
 **需求：** 在不改动左侧导航、不合并页面、不改动功能的前提下，统一设置面板各页面的分组标题、留白与对齐方式。
@@ -369,3 +400,36 @@
 **验证：** 语法检查 ✅、启动导入测试 7/7 ✅
 
 **涉及文件：** `ui/custom_widget/combobox.py`、`ui/custom_widget/spinbox.py`、`ui/custom_widget/__init__.py`、`ui/configpanel.py`、`config/stylesheet.css`、`ui/network_settings_dialog.py`、`utils/profile_manager.py`、`docs/打包控件功能使用说明.md`
+
+---
+
+### Qt Warning 统一管控 — 三层架构（全局消息处理器 + 模型级钳位 + 调用点修复）
+
+**问题：** 此前逐个添加 `max(1.0)` / `max(0, min(255,...))` 守卫的模式既繁琐又容易遗漏，`QFont::setPointSize: Point size <= 0` 和 `QColor::fromRgb: RGB parameters out of range` 仍偶发。
+
+**方案：** 三层统一管控架构
+
+1. **第 1 层 — Qt 消息处理器（全局安全网）**（`utils/safe_qt.py`，新）：
+   - `install_qt_warning_filter()` 在 QApplication 创建后立即安装自定义消息处理器
+   - 通过 `str.startswith(tuple)` 匹配拦截 6 种 Qt 警告前缀（font size ≤0、RGB 越界等），静默吞噬
+   - 环境变量 `BALLOONTRANS_DEBUG_QT_WARNINGS=1` 可关闭过滤用于调试
+   - 还导出了 `safe_qcolor()` 和 `clamp_font_size()` 工具函数供后续代码使用
+   - **零调用点改动**，覆盖当前和未来所有违规调用
+
+2. **第 2 层 — FontFormat 模型级钳位**（`utils/fontformat.py`）：
+   - `size_pt` property 改为 `max(px2pt(self.font_size), 1.0)`
+   - `__post_init__` 中 `font_size = max(float(self.font_size), 1.0)`
+   - 从根源阻止零/负字体大小传播到渲染代码
+
+3. **第 3 层 — 7 个明确未防护的调用点修复**：
+   - `textitem.py:1060` — `setPointSizeF(ffmat.size_pt)` 加 `max(…, 1.0)`
+   - `scenetext_manager.py:1138,1200` — 两处 `setPointSizeF(new_font_size)` 加 `max(…, 1.0)`
+   - `configpanel.py:463` — `pointSize() - 2` 加 `max(…, 1)`
+   - `color_button.py:45` — `int(c)` → `max(0, min(255, int(c)))`
+   - `clock_dial.py:65` — 同上
+   - `label.py:90` — 列表路径 `QColor(*color)` 加钳位 + fallback
+   - `overlay_modal.py:71` — `int(round(alpha * 255))` 钳位到 `[0, 255]`
+
+**验证：** 语法检查 ✅、启动导入测试 7/7 ✅、i18n 无新问题 ✅
+
+**涉及文件：** `utils/safe_qt.py`（新）、`launch.py`、`utils/fontformat.py`、`ui/textitem.py`、`ui/scenetext_manager.py`、`ui/configpanel.py`、`ui/custom_widget/color_button.py`、`ui/custom_widget/clock_dial.py`、`ui/custom_widget/label.py`、`ui/overlay_modal.py`

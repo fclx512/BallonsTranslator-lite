@@ -127,7 +127,7 @@ class FontFormat(Config):
 
     @property
     def size_pt(self):
-        return px2pt(self.font_size)
+        return max(px2pt(self.font_size), 1.0)
 
     def __post_init__(self):
         da = self.deprecated_attributes
@@ -140,6 +140,7 @@ class FontFormat(Config):
                 self.font_family = da["family"]
 
         self.font_weight = fix_fontweight_qt(self.font_weight)
+        self.font_size = max(float(self.font_size), 1.0)
         self.deprecated_attributes = {}
 
     def deepcopy(self):
