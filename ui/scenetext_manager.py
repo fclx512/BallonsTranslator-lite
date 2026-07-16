@@ -24,7 +24,7 @@ from qtpy.QtGui import (
 )
 from qtpy.QtWidgets import QApplication, QGraphicsItem, QHBoxLayout, QLabel, QWidget
 
-from .custom_widget import CheckableLabel, TextCheckerLabel
+from .custom_widget import CheckableLabel, GroupFrame, TextCheckerLabel
 
 try:
     from qtpy.QtWidgets import QUndoCommand
@@ -462,7 +462,12 @@ class TextPanel(Widget):
             header_position="top",
         )
 
-        layout.addWidget(self.format_section)
+        # 用 GroupFrame 包裹格式编辑区，与下方文本内容区形成视觉分隔
+        format_frame = GroupFrame(self)
+        format_layout = QVBoxLayout(format_frame)
+        format_layout.setContentsMargins(0, 0, 0, 0)
+        format_layout.addWidget(self.format_section)
+        layout.addWidget(format_frame)
         self.textToolBar = QHBoxLayout()
         self.foldTextBtn = CheckableLabel(self.tr("Unfold"), self.tr("Fold"), False)
         self.sourceBtn = TextCheckerLabel(self.tr("Source"))

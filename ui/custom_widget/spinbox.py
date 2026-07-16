@@ -19,6 +19,9 @@ _SPIN_STYLE = """
     border-radius: 4px;
     padding: 2px 4px;
 }}
+{selector}:focus {{
+    border: 1px solid #5DADE2;
+}}
 {selector}::up-button, {selector}::down-button {{
     width: 0px;
     height: 0px;

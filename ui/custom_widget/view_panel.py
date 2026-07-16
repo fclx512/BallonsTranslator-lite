@@ -50,56 +50,81 @@ class HidePanelButton(QPushButton):
 class ExpandLabel(Widget):
     clicked = Signal()
 
-    def __init__(self, text=None, parent=None, size_type="normal", *args, **kwargs):
+    def __init__(
+        self, text=None, parent=None, size_type="normal", capsule=False, *args, **kwargs
+    ):
         super().__init__(parent=parent, *args, **kwargs)
+        self._capsule = capsule
         self.size_type = size_type
         self.textlabel = QLabel(self)
         self.textlabel.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.arrowlabel = QLabel(self)
-        self.arrowlabel.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        font = self.textlabel.font()
-        if size_type == "normal":
-            font.setPointSizeF(10)
-            self.setFixedHeight(26)
-            self.arrowlabel.setFixedSize(CHEVRON_SIZE, CHEVRON_SIZE)
-        elif size_type == "small":
-            font.setPointSizeF(8)
-            self.setFixedHeight(20)
-            self.arrowlabel.setFixedSize(CHEVRON_SIZE_SMALL, CHEVRON_SIZE_SMALL)
-        else:
-            raise
 
-        self.textlabel.setFont(font)
-        self.hidelabel = HidePanelButton(self)
-        self.hidelabel.setVisible(False)
+        if capsule:
+            # Compact bar: no arrow, no hide button, left-aligned text with bg
+            self.arrowlabel = None
+            self.hidelabel = None
+            self.setProperty("capsule", True)
+            self.setFixedHeight(20)
+            layout = QHBoxLayout(self)
+            layout.addWidget(self.textlabel)
+            layout.addStretch()
+            layout.setContentsMargins(6, 0, 6, 0)
+            layout.setSpacing(0)
+        else:
+            self.arrowlabel = QLabel(self)
+            self.arrowlabel.setAttribute(
+                Qt.WidgetAttribute.WA_TranslucentBackground, True
+            )
+            font = self.textlabel.font()
+            if size_type == "normal":
+                font.setPointSizeF(10)
+                self.setFixedHeight(26)
+                self.arrowlabel.setFixedSize(CHEVRON_SIZE, CHEVRON_SIZE)
+            elif size_type == "small":
+                font.setPointSizeF(8)
+                self.setFixedHeight(20)
+                self.arrowlabel.setFixedSize(CHEVRON_SIZE_SMALL, CHEVRON_SIZE_SMALL)
+            else:
+                raise
+
+            self.textlabel.setFont(font)
+            self.hidelabel = HidePanelButton(self)
+            self.hidelabel.setVisible(False)
+
+            layout = QHBoxLayout(self)
+            layout.addWidget(self.arrowlabel)
+            layout.addWidget(self.textlabel)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(1)
+            layout.addStretch(-1)
+            layout.addWidget(self.hidelabel)
 
         if text is not None:
             self.textlabel.setText(text)
-        layout = QHBoxLayout(self)
-        layout.addWidget(self.arrowlabel)
-        layout.addWidget(self.textlabel)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(1)
-        layout.addStretch(-1)
-        layout.addWidget(self.hidelabel)
 
         self.expanded = True
         self.setExpand(True)
+        if capsule:
+            self.style().unpolish(self)
+            self.style().polish(self)
 
     def enterEvent(self, event) -> None:
-        self.hidelabel.setVisible(True)
+        if self.hidelabel is not None:
+            self.hidelabel.setVisible(True)
         return super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
-        self.hidelabel.setVisible(False)
+        if self.hidelabel is not None:
+            self.hidelabel.setVisible(False)
         return super().leaveEvent(event)
 
     def setExpand(self, expand: bool):
         self.expanded = expand
-        if expand:
-            self.arrowlabel.setPixmap(chevron_down())
-        else:
-            self.arrowlabel.setPixmap(chevron_right())
+        if self.arrowlabel is not None:
+            if expand:
+                self.arrowlabel.setPixmap(chevron_down())
+            else:
+                self.arrowlabel.setPixmap(chevron_right())
 
     def mousePressEvent(self, e: QMouseEvent) -> None:
         if e.button() == Qt.MouseButton.LeftButton:
@@ -116,6 +141,7 @@ class PanelArea(QScrollArea):
         config_name: str,
         config_expand_name: str,
         action_name: str = None,
+        title_capsule=False,
     ):
         super().__init__()
         self.scrollContent = PanelAreaContent()
@@ -130,7 +156,7 @@ class PanelArea(QScrollArea):
         ScrollBar(Qt.Orientation.Horizontal, self)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
-        self.view_widget = ViewWidget(self, panel_name)
+        self.view_widget = ViewWidget(self, panel_name, title_capsule=title_capsule)
         self.view_hide_btn_clicked = self.view_widget.view_hide_btn_clicked
         self.expand_changed = self.view_widget.expend_changed
         self.title = self.view_widget.title
@@ -200,13 +226,18 @@ class ViewWidget(Widget):
         panel_name: str = None,
         parent=None,
         title_size_type="normal",
+        title_capsule=False,
         *args,
         **kwargs,
     ):
         super().__init__(parent=parent, *args, **kwargs)
 
-        self.title_label = ExpandLabel(panel_name, self, size_type=title_size_type)
-        self.title_label.hidelabel.clicked.connect(self.on_view_hide_btn_clicked)
+        self.title_label = ExpandLabel(
+            panel_name, self, size_type=title_size_type, capsule=title_capsule
+        )
+        # In capsule mode there is no hidelabel
+        if self.title_label.hidelabel is not None:
+            self.title_label.hidelabel.clicked.connect(self.on_view_hide_btn_clicked)
         self.content_widget = content_widget
 
         layout = QVBoxLayout(self)

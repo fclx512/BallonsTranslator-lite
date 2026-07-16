@@ -13,6 +13,7 @@ from .combobox import (
     SmallSizeComboBox,
 )
 from .flow_layout import FlowLayout
+from .group_frame import GroupFrame
 from .helper import isDarkTheme, themeColor
 from .label import (
     CheckableLabel,

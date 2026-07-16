@@ -24,8 +24,11 @@ class TextAdvancedFormatPanel(PanelArea):
         config_name: str,
         config_expand_name: str,
         on_format_changed: Callable,
+        title_capsule=False,
     ):
-        super().__init__(panel_name, config_name, config_expand_name)
+        super().__init__(
+            panel_name, config_name, config_expand_name, title_capsule=title_capsule
+        )
 
         self.active_format: FontFormat = None
         self.on_format_changed = on_format_changed

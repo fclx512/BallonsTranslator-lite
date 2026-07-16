@@ -108,6 +108,41 @@
 
 ---
 
+### 字体样式编辑器视觉重构 + 控件焦点样式统一
+
+**需求：** 字体样式编辑区的控件布局无分区、无视觉层次；各输入控件的聚焦边框颜色微弱（`rgba(128,128,128,0.5)`）；字体下拉栏误设为可编辑输入框。
+
+**改动：**
+
+1. **焦点边框颜色统一为 `#5DADE2`**：
+   - `_COMBO_STYLE`（`combobox.py`）— `ConfigComboBox` / `ParamComboBox` 及所有导入处
+   - `ConfigLineEdit` / `ConfigTextEdit`（`text_input.py`）
+   - `_SPIN_STYLE`（`spinbox.py`）— 新增 `:focus` 规则（此前完全没有焦点样式）
+   - `SizeComboBox:focus` / `SmallSizeComboBox:focus` / `SmallComboBox:focus`（`stylesheet.css`）
+
+2. **SizeComboBox / SmallComboBox / SmallSizeComboBox 改用半透圆角风格**：背景 `rgba(128,128,128,0.13)`，圆角 `4px`，移除旧 `@borderColor` / `@transtexteditBackgroundColor` 变量依赖；移除 `SizeComboBox` 的 `max-width: 54px` 限制
+
+3. **字号框加宽**：`fontsizebox.fcombobox.setMinimumWidth(75) → 90`
+
+4. **字体下拉栏取消可编辑**：`FontFamilyComboBox` 删除 `setLineEdit(LineEdit)`，连带删除死代码 `LineEdit` 类及不再需要的 `QLineEdit`/`QFocusEvent`/`QKeyEvent` import
+
+5. **`GroupFrame` 容器控件**（`ui/custom_widget/group_frame.py`，新）— 纯 CSS 驱动的圆角边框容器，用于包裹功能区块
+
+6. **FontFormatPanel 布局重构**：
+   - 4 行控件（字体/字号/对齐/轮廓）各用 `GroupFrame` 包裹，间距 `0→4`
+   - `vl0`（预设+高级面板）也套 `GroupFrame`，标题与内容共享同一边框
+   - hl2（粗体斜体行）GroupFrame 上下 padding 从 `4px` 降为 `1px`
+
+7. **预设/高级面板标题改为紧凑条式**：`ExpandLabel` 新增 `capsule` 模式→无箭头/无 hide 按钮、左对齐文字 + `20px` 高 + 浅底色区分；bug 修复：`setText(text)` 被误放在 `else` 分支导致胶囊模式标题不显示
+
+8. **TextPanel 格式区与内容区加边框分离**：`self.format_section`（CollapsibleSection）放入 `GroupFrame`
+
+**验证：** 语法检查 ✅、启动导入测试 7/7 ✅
+
+**涉及文件：** `ui/custom_widget/group_frame.py`（新）、`ui/custom_widget/combobox.py`、`ui/custom_widget/text_input.py`、`ui/custom_widget/spinbox.py`、`ui/custom_widget/__init__.py`、`ui/custom_widget/view_panel.py`、`ui/text_panel.py`、`ui/text_advanced_format.py`、`ui/text_style_presets.py`、`ui/scenetext_manager.py`、`config/stylesheet.css`
+
+---
+
 ## 2026-07-15
 
 ### PaddleOCRv6ONNX — 三处 Bug 修复（OCR 不输出 + 宽文本截断 + 依赖误报）

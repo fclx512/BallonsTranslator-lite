@@ -1,14 +1,13 @@
 import copy
 
 from qtpy.QtCore import Qt, Signal
-from qtpy.QtGui import QFocusEvent, QFont, QKeyEvent, QTextCursor
+from qtpy.QtGui import QFont, QTextCursor
 from qtpy.QtWidgets import (
     QApplication,
     QComboBox,
     QDialog,
     QFrame,
     QHBoxLayout,
-    QLineEdit,
     QSizePolicy,
     QStyledItemDelegate,
     QVBoxLayout,
@@ -22,6 +21,7 @@ from . import funcmaps as FM
 from .custom_widget import (
     AlignmentChecker,
     ColorPickerLabel,
+    GroupFrame,
     QFontChecker,
     SizeComboBox,
     SizeControlLabel,
@@ -31,35 +31,6 @@ from .custom_widget.combobox import _COMBO_STYLE
 from .text_advanced_format import TextAdvancedFormatPanel
 from .text_style_presets import TextStylePresetPanel
 from .textitem import TextBlkItem
-
-
-class LineEdit(QLineEdit):
-    return_pressed_wochange = Signal()
-    return_pressed = Signal()
-
-    def __init__(self, content: str = None, parent=None):
-        super().__init__(content, parent)
-        self.textChanged.connect(self.on_text_changed)
-        self._text_changed = False
-        self.editingFinished.connect(self.on_editing_finished)
-        # self.returnPressed.connect(self.on_return_pressed)
-
-    def on_text_changed(self):
-        self._text_changed = True
-
-    def on_editing_finished(self):
-        self._text_changed = False
-
-    def focusOutEvent(self, e: QFocusEvent) -> None:
-        self._text_changed = False
-        return super().focusOutEvent(e)
-
-    def keyPressEvent(self, e: QKeyEvent) -> None:
-        super().keyPressEvent(e)
-        if e.key() == Qt.Key.Key_Return:
-            self.return_pressed.emit()
-            if not self._text_changed:
-                self.return_pressed_wochange.emit()
 
 
 class AlignmentBtnGroup(QFrame):
@@ -154,8 +125,8 @@ class FontSizeBox(QFrame):
         self.fcombobox = SizeComboBox([1, 200], "font_size", self)
         self.fcombobox.addItems([str(v) for v in C.pcfg.font_size_presets])
         self.fcombobox.param_changed.connect(self.param_changed)
-        # 加宽字号框，防止新边框样式下较大字号值被截断
-        self.fcombobox.setMinimumWidth(75)
+        # 保证三位数（如 "200"）及多字号标记（如 "150+"）不被省略号截断
+        self.fcombobox.setMinimumWidth(90)
 
         hlayout = QHBoxLayout(self)
         hlayout.addWidget(self.fcombobox)
@@ -173,17 +144,12 @@ class FontItemDelegate(QStyledItemDelegate):
         super().paint(painter, option, index)
 
 
-class FontFamilyComboBox(QComboBox):  # 改为继承 QComboBox
+class FontFamilyComboBox(QComboBox):
     param_changed = Signal(str, object)
 
-    def __init__(self, emit_if_focused=True, *args, **kwargs) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.currentTextChanged.connect(self.on_fontfamily_changed)
-        self.lineedit = lineedit = LineEdit(parent=self)
-        lineedit.return_pressed.connect(self.on_return_pressed)
-        self.setLineEdit(lineedit)
-        self.emit_if_focused = emit_if_focused
-        self.return_pressed = False
         self.setItemDelegate(FontItemDelegate())
 
     def apply_fontfamily(self):
@@ -213,15 +179,8 @@ class FontFamilyComboBox(QComboBox):  # 改为继承 QComboBox
             self.setCurrentText(current_font)
         self.currentTextChanged.connect(self.on_fontfamily_changed)
 
-    def on_return_pressed(self):
-        self.return_pressed = True
-        self.apply_fontfamily()
-
     def on_fontfamily_changed(self):
-        if self.return_pressed:
-            self.return_pressed = False
-        else:
-            self.apply_fontfamily()
+        self.apply_fontfamily()
 
 
 class FontFormatPanel(Widget):
@@ -236,7 +195,7 @@ class FontFormatPanel(Widget):
 
         self.vlayout = QVBoxLayout(self)
         self.vlayout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.familybox = FontFamilyComboBox(emit_if_focused=True, parent=self)
+        self.familybox = FontFamilyComboBox(parent=self)
         self.familybox.setContentsMargins(0, 0, 0, 0)
         self.familybox.setObjectName("FontFamilyBox")
         self.familybox.setToolTip(self.tr("Font Family"))
@@ -353,6 +312,7 @@ class FontFormatPanel(Widget):
             self.global_fontfmt_str,
             config_name="show_text_style_preset",
             config_expand_name="expand_tstyle_panel",
+            title_capsule=True,
         )
         self.textstyle_panel.active_text_style_label_changed.connect(
             self.on_active_textstyle_label_changed
@@ -365,6 +325,7 @@ class FontFormatPanel(Widget):
             self.tr("Advanced Text Format"),
             config_name="text_advanced_format_panel",
             config_expand_name="expand_tadvanced_panel",
+            title_capsule=True,
             on_format_changed=self.on_param_changed,
         )
         # wire shadow/gradient trigger buttons to open the dialog
@@ -381,13 +342,14 @@ class FontFormatPanel(Widget):
             shared.config_name_to_view_widget.pop(cfg, None)
         for p in [self.textstyle_panel, self.textadvancedfmt_panel]:
             hl = p.view_widget.title_label.hidelabel
-            hl.setVisible(False)
-            hl.setMaximumSize(0, 0)
-            hl.setMinimumSize(0, 0)
+            if hl is not None:
+                hl.setVisible(False)
+                hl.setMaximumSize(0, 0)
+                hl.setMinimumSize(0, 0)
 
         self.familybox.currentTextChanged.connect(self.on_familybox_changed)
 
-        FONTFORMAT_SPACING = 6
+        FONTFORMAT_SPACING = 5
 
         vl0 = QVBoxLayout()
         vl0.addWidget(self.textstyle_panel.view_widget)
@@ -421,13 +383,24 @@ class FontFormatPanel(Widget):
         hl3.addLayout(stroke_hlayout)
         hl3.setContentsMargins(3, 0, 3, 0)
         hl3.setSpacing(13)
-        self.vlayout.addLayout(vl0)
-        self.vlayout.addLayout(hl1_font)  # 字体家族+样式行
-        self.vlayout.addLayout(hl1_size)  # 字号+行距行
-        self.vlayout.addLayout(hl2)
-        self.vlayout.addLayout(hl3)
+        # vl0（预设+高级面板）也用 GroupFrame 包裹，标题与内容共享同一边框
+        vl0_frame = GroupFrame(self)
+        vl0_layout_inner = QVBoxLayout(vl0_frame)
+        vl0_layout_inner.setContentsMargins(6, 0, 6, 0)
+        vl0_layout_inner.addLayout(vl0)
+        self.vlayout.addWidget(vl0_frame)
+
+        # 用 GroupFrame 包裹各功能区块，提供圆角主题边框
+        for hl in [hl1_font, hl1_size, hl2, hl3]:
+            frame = GroupFrame(self)
+            fl = QVBoxLayout(frame)
+            # hl2（粗体斜体行）上下 padding 缩到 1px，其他保持 4px
+            pad = 1 if hl is hl2 else 4
+            fl.setContentsMargins(6, pad, 6, pad)
+            fl.addLayout(hl)
+            self.vlayout.addWidget(frame)
         self.vlayout.setContentsMargins(0, 0, 7, 0)
-        self.vlayout.setSpacing(0)
+        self.vlayout.setSpacing(4)
 
         self.focusOnColorDialog = False
         C.active_format = self.global_format

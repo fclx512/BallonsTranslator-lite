@@ -29,7 +29,7 @@ class ConfigLineEdit(QLineEdit):
                 padding: 2px 8px;
             }
             QLineEdit:focus {
-                border: 1px solid rgba(128,128,128,0.5);
+                border: 1px solid #5DADE2;
             }
             QLineEdit:disabled {
                 background: transparent;
@@ -56,7 +56,7 @@ class ConfigTextEdit(QTextEdit):
                 padding: 4px 8px;
             }
             QTextEdit:focus {
-                border: 1px solid rgba(128,128,128,0.5);
+                border: 1px solid #5DADE2;
             }
             QTextEdit:disabled {
                 background: transparent;

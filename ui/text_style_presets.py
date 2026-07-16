@@ -300,8 +300,16 @@ class TextStylePresetPanel(PanelArea):
     export_style = Signal()
     import_style = Signal()
 
-    def __init__(self, panel_name: str, config_name: str, config_expand_name: str):
-        super().__init__(panel_name, config_name, config_expand_name)
+    def __init__(
+        self,
+        panel_name: str,
+        config_name: str,
+        config_expand_name: str,
+        title_capsule=False,
+    ):
+        super().__init__(
+            panel_name, config_name, config_expand_name, title_capsule=title_capsule
+        )
 
         self.active_text_style_label: TextStyleLabel = None
         self.flayout = FlowLayout()

@@ -216,12 +216,17 @@ SizeComboBox {
     padding-right: 0px;
     font-size: 12px;
     min-width: 54px;
-    max-width: 54px;
-    border-color: @borderColor;
+    background: rgba(128,128,128,0.13);
+    border: 1px solid rgba(128,128,128,0.25);
+    border-radius: 4px;
 }
 
 SizeComboBox::hover {
     border: 1px solid @accentPrimary;
+}
+
+SizeComboBox:focus {
+    border: 1px solid #5DADE2;
 }
 
 SizeComboBox::down-arrow {
@@ -1133,6 +1138,17 @@ QLabel#angleLabel {
     background-color: @accentPrimary20;
 }
 
+ExpandLabel[capsule="true"] {
+    padding: 2px 8px;
+    background: rgba(128,128,128,0.08);
+    border-radius: 4px;
+    min-height: 16px;
+}
+
+ExpandLabel[capsule="true"]::hover {
+    background: @accentPrimary20;
+}
+
 DrawToolCheckBox::indicator {
     height: 34px;
     width: 34px;
@@ -1391,6 +1407,12 @@ PanelGroupBox[cfgPage="true"] {
     background-color: transparent;
 }
 
+GroupFrame {
+    border: 1px solid rgba(128,128,128,0.25);
+    border-radius: 6px;
+    background: transparent;
+}
+
 QLabel#CardTitle {
     font-weight: bold;
     font-size: 20px;
@@ -1416,8 +1438,13 @@ SmallComboBox {
     height: 20px;
     font-size: 12px;
     /* padding-left: 8px; */
-    border: 1px solid @borderColor;
-    background-color: @transtexteditBackgroundColor;
+    background: rgba(128,128,128,0.13);
+    border: 1px solid rgba(128,128,128,0.25);
+    border-radius: 4px;
+}
+
+SmallComboBox:focus {
+    border: 1px solid #5DADE2;
 }
 
 SmallConfigPutton {
@@ -1432,8 +1459,13 @@ SmallSizeComboBox {
     height: 20px;
     font-size: 12px;
     /* padding-left: 8px; */
-    border: 1px solid @borderColor;
-    background-color: @transtexteditBackgroundColor;
+    background: rgba(128,128,128,0.13);
+    border: 1px solid rgba(128,128,128,0.25);
+    border-radius: 4px;
+}
+
+SmallSizeComboBox:focus {
+    border: 1px solid #5DADE2;
 }
 
 ArrowLeftButton {

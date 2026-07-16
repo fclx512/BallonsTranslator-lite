@@ -23,7 +23,7 @@ QComboBox {
     padding-left: 8px;
 }
 QComboBox:focus {
-    border: 1px solid rgba(128,128,128,0.5);
+    border: 1px solid #5DADE2;
 }
 QComboBox:disabled {
     background: transparent;
