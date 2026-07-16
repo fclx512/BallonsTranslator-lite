@@ -2995,7 +2995,7 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
         </message>
         <message>
             <location filename="..\utils\profile_manager.py" line="508" />
-            <source>Connection &amp; Rate Limiting:</source>
+            <source>Connection &amp; Rate Limiting</source>
             <translation>连接与速率限制：</translation>
         </message>
         <message>
@@ -4099,6 +4099,16 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <source>Target</source>
             <translation>目标语言</translation>
         </message>
+        <message>
+            <location filename="..\ui\module_parse_widgets.py" />
+            <source>API Profile</source>
+            <translation>API 配置文件</translation>
+        </message>
+        <message>
+            <location filename="..\ui\module_parse_widgets.py" />
+            <source>Manage…</source>
+            <translation>管理…</translation>
+        </message>
     </context>
     <context>
         <name>TranslatorSelectionWidget</name>
@@ -4707,7 +4717,7 @@ in Settings → Mirror Config, then click Retry.</source>
             <translation>连接成功！API 可达且凭据有效。</translation>
         </message>
         <message>
-            <source>Connection &amp; Rate Limiting:</source>
+            <source>Connection &amp; Rate Limiting</source>
             <translation>连接与速率限制：</translation>
         </message>
         <message>
@@ -5103,6 +5113,14 @@ This maps automatically to each provider's native parameter
         <message>
             <source>OCR, translate and inpaint</source>
             <translation>OCR、翻译并修复</translation>
+        </message>
+    </context>
+    <context>
+        <name>ModuleConfigParseWidget</name>
+        <message>
+            <location filename="..\ui\module_parse_widgets.py" />
+            <source>Parameters</source>
+            <translation>参数</translation>
         </message>
     </context>
 </TS>

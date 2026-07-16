@@ -28,6 +28,7 @@ from utils.fontformat import FontFormat
 
 from .custom_widget.clock_dial import ClockDial
 from .custom_widget.color_picker import ColorPickerDialog
+from .custom_widget import ColorSwatchBtn
 from .text_graphical_effect import apply_shadow_effect
 
 
@@ -244,42 +245,38 @@ class ShadowGradientPreview(QWidget):
         return pm
 
 
-class ColorButton(QPushButton):
-    """Button that shows a color swatch and opens ColorPickerDialog on click."""
+class ColorButton(ColorSwatchBtn):
+    """Button that shows a color swatch and opens ColorPickerDialog on click.
 
-    colorChanged = Signal(list)
+    Inherits the swatch styling from ColorSwatchBtn while keeping the
+    existing list-based ``colorChanged`` signal and ``_pick`` dialog.
+    """
+
+    colorChanged = Signal(list)  # override parent signal — emits [r,g,b]
 
     def __init__(self, color, parent=None):
         super().__init__(parent)
-        self._color = (
-            list(color)
-            if isinstance(color, (list, tuple))
-            else [color.red(), color.green(), color.blue()]
-        )
+        self._color_list = [0, 0, 0]
         self.setFixedSize(32, 22)
+        if color is not None:
+            self.set_color(color)
         self.clicked.connect(self._pick)
-        self._update_style()
-
-    def _update_style(self):
-        r, g, b = [int(c) for c in self._color]
-        self.setStyleSheet(
-            f"QPushButton {{ background-color: rgb({r},{g},{b}); "
-            f"border: 1px solid #888; border-radius: 3px; }}"
-        )
 
     def set_color(self, color):
         if isinstance(color, (list, tuple)):
-            self._color = list(color)
+            self._color_list = list(color[:3])
+            self._color = QColor(*self._color_list)
         else:
-            self._color = [color.red(), color.green(), color.blue()]
+            self._color_list = [color.red(), color.green(), color.blue()]
+            self._color = QColor(color)
         self._update_style()
-        self.colorChanged.emit(self._color)
+        self.colorChanged.emit(self._color_list)
 
     def color(self):
-        return self._color
+        return self._color_list
 
     def _pick(self):
-        c = QColor(*[max(0, min(255, int(v))) for v in self._color])
+        c = QColor(*[max(0, min(255, int(v))) for v in self._color_list])
         dlg = ColorPickerDialog(c, self.window())
         if dlg.exec_() == QDialog.DialogCode.Accepted:
             self.set_color(dlg.get_color())

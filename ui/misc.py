@@ -214,13 +214,24 @@ def _resolve_theme(theme: str) -> Dict:
     return {}
 
 
-def get_theme_color(theme_name: str = "", alpha: int = 255) -> "QColor":
+def get_theme_color(theme_name: str = "", alpha: int = 255, key: str = "@accentPrimary") -> "QColor":
+    """Return a QColor for a theme variable from the resolved current theme.
+
+    Parameters
+    ----------
+    theme_name : str
+        Theme name to resolve (default: current theme from pcfg).
+    alpha : int
+        Alpha channel (0-255) for the returned color.
+    key : str
+        Theme variable name, e.g. ``"@accentPrimary"``, ``"@dangerColor"``.
+    """
     if not theme_name:
         from utils.config import pcfg
 
         theme_name = pcfg.dark_theme if pcfg.darkmode else pcfg.light_theme
     tgt = _resolve_theme(theme_name)
-    c = QColor(tgt.get("@accentPrimary", "#1e93e5"))
+    c = QColor(tgt.get(key, "#1e93e5"))
     if alpha != 255:
         c.setAlpha(alpha)
     return c

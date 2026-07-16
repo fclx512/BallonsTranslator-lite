@@ -28,6 +28,8 @@ from qtpy.QtWidgets import (
 from utils import shared
 from utils.logger import logger as LOGGER
 
+from .misc import get_theme_color
+
 try:
     import importlib.metadata as importlib_metadata
 except (ModuleNotFoundError, ImportError):
@@ -88,12 +90,14 @@ _OPT_GROUP_COLORS = [
 ]
 _OPT_GROUP_META: dict[str, tuple[str, QColor]] = {}
 
-_STATUS_COLORS = {
-    "installed": QColor("#27ae60"),
-    "missing": QColor("#e74c3c"),
-    "mismatch": QColor("#f39c12"),
-    "skipped": QColor("#95a5a6"),
-}
+def _get_status_colors() -> dict:
+    """Return status-colour dict built from current theme."""
+    return {
+        "installed": get_theme_color(key="@successColor"),
+        "missing": get_theme_color(key="@dangerColor"),
+        "mismatch": get_theme_color(key="@warningColor"),
+        "skipped": QColor("#95a5a6"),
+    }
 
 
 def _installed_version(req_name: str) -> str:
@@ -323,7 +327,7 @@ class DependencyPanel(QWidget):
                 "skipped": self.tr("Not needed"),
             }.get(status, status)
             status_item = QTableWidgetItem(status_text)
-            status_item.setForeground(_STATUS_COLORS.get(status, QColor("#888")))
+            status_item.setForeground(_get_status_colors().get(status, QColor("#888")))
             self.table.setItem(row, 2, status_item)
 
             # Version cell; for skipped deps show the marker as tooltip

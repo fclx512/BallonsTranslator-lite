@@ -1,7 +1,7 @@
 from typing import Callable
 
 from qtpy.QtCore import Qt, Signal
-from qtpy.QtGui import QDoubleValidator, QFont
+from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
     QCheckBox,
     QGridLayout,
@@ -29,7 +29,7 @@ from modules import (
 from utils.logger import logger as LOGGER
 from utils.shared import CONFIG_COMBOBOX_HEIGHT, CONFIG_COMBOBOX_LONG, size2width
 
-from .custom_widget import ConfigComboBox, ParamComboBox, ParamNameLabel
+from .custom_widget import ConfigComboBox, ConfigSectionHeader, ParamComboBox, ParamNameLabel
 
 
 class ParamCheckGroup(QWidget):
@@ -172,6 +172,10 @@ class ParamWidget(QWidget):
         param_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         param_layout.setContentsMargins(0, 0, 0, 0)
         param_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        # Give the label column a uniform minimum width so controls in the
+        # second column line up across different parameter names.
+        param_layout.setColumnMinimumWidth(0, 160)
+        param_layout.setColumnStretch(1, 1)
         layout.addLayout(param_layout)
         layout.addStretch(-1)
 
@@ -278,6 +282,7 @@ class ParamWidget(QWidget):
             widget_idx = 0
             if require_label:
                 param_label = ParamNameLabel(display_param_name)
+                param_label.setWordWrap(True)
                 if param_dict is not None and "description" in param_dict:
                     param_label.setToolTip(self.tr(param_dict["description"]))
 
@@ -385,6 +390,7 @@ class ModuleConfigParseWidget(QWidget):
         layout = QVBoxLayout(self)
         self.param_widget_map = {}
         layout.addLayout(p_layout)
+        layout.addWidget(ConfigSectionHeader(self.tr("Parameters")))
         layout.addLayout(self.params_layout)
         layout.setSpacing(14)
         self.vlayout = layout
@@ -530,15 +536,10 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
         # ── Active Profile section ───────────────────────────────
         profile_section = QWidget()
         ps_layout = QVBoxLayout(profile_section)
-        ps_layout.setContentsMargins(24, 6, 24, 6)
+        ps_layout.setContentsMargins(0, 0, 0, 0)
         ps_layout.setSpacing(4)
 
-        # Section header label
-        ps_header = QLabel(self.tr("API Profile"))
-        hfont = ps_header.font()
-        hfont.setPointSizeF(CONFIG_FONTSIZE_CONTENT)
-        hfont.setWeight(QFont.Weight.Normal)
-        ps_header.setFont(hfont)
+        ps_header = ConfigSectionHeader(self.tr("API Profile"))
         ps_layout.addWidget(ps_header)
 
         # Combo + button row

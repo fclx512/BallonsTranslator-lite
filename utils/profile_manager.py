@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 
 import httpx
 from qtpy.QtCore import Qt
+from ui.custom_widget import ConfigSectionHeader
 from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -426,19 +427,6 @@ class ProfileManagerDialog(QDialog):
             "builtin", False
         )
 
-    def _section_label(self, text: str):
-        """Section divider label: —— text ——"""
-        lbl = QLabel(f"—— {text} ——")
-        from ui.misc import get_theme_color
-
-        c = get_theme_color()
-        lbl.setStyleSheet(
-            f"font-size: 14px; padding: 8px 0 2px 0; "
-            f"background-color: rgba({c.red()}, {c.green()}, {c.blue()}, 50);"
-        )
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        return lbl
-
     def _save_current_form(self):
         row = self._current_row
         if row < 0 or row >= len(self._profiles):
@@ -529,8 +517,14 @@ class ProfileManagerDialog(QDialog):
         right_layout.setContentsMargins(5, 5, 5, 5)
 
         # Basic Settings
-        right_layout.addWidget(self._section_label(self.tr("Basic Settings")))
+        right_layout.addWidget(ConfigSectionHeader(self.tr("Basic Settings")))
         form = QFormLayout()
+        form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText(self.tr("e.g., My Custom API"))
         host_row = QHBoxLayout()
@@ -590,8 +584,14 @@ class ProfileManagerDialog(QDialog):
         right_layout.addLayout(form)
 
         # Connection & Rate Limiting
-        right_layout.addWidget(QLabel(self.tr("Connection & Rate Limiting:")))
+        right_layout.addWidget(ConfigSectionHeader(self.tr("Connection & Rate Limiting")))
         conn_form = QFormLayout()
+        conn_form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        conn_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
         self.proxy_edit = QLineEdit()
         self.proxy_edit.setPlaceholderText("http://user:pass@host:port")
         self.rpm_spin = QSpinBox()
@@ -610,9 +610,15 @@ class ProfileManagerDialog(QDialog):
 
         # Advanced (optional) — Translation settings
         right_layout.addWidget(
-            self._section_label(self.tr("Translation Settings (optional)"))
+            ConfigSectionHeader(self.tr("Translation Settings (optional)"))
         )
         adv_form = QFormLayout()
+        adv_form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        adv_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
         self.rf_combo = QComboBox()
         self.rf_combo.addItems(["json_object", "json_schema"])
         self.rf_combo.setCurrentText("json_object")
@@ -640,8 +646,14 @@ class ProfileManagerDialog(QDialog):
         right_layout.addLayout(adv_form)
 
         # OCR Settings
-        right_layout.addWidget(self._section_label(self.tr("OCR Settings (optional)")))
+        right_layout.addWidget(ConfigSectionHeader(self.tr("OCR Settings (optional)")))
         ocr_form = QFormLayout()
+        ocr_form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        ocr_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
         self.ocr_prompt_edit = QTextEdit()
         self.ocr_prompt_edit.setPlaceholderText(
             self.tr("OCR prompt with {language} placeholder.")
@@ -932,18 +944,6 @@ class ProfileManagerWidget(QWidget):
 
     # ── helpers ──
 
-    def _section_label(self, text: str):
-        lbl = QLabel(f"—— {text} ——")
-        from ui.misc import get_theme_color
-
-        c = get_theme_color()
-        lbl.setStyleSheet(
-            f"font-size: 14px; padding: 8px 0 2px 0; "
-            f"background-color: rgba({c.red()}, {c.green()}, {c.blue()}, 50);"
-        )
-        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        return lbl
-
     def _is_builtin(self, idx: int) -> bool:
         return 0 <= idx < len(self._profiles) and self._profiles[idx].get(
             "builtin", False
@@ -1069,9 +1069,15 @@ class ProfileManagerWidget(QWidget):
         form_layout.setSpacing(6)
 
         # Basic Settings
-        form_layout.addWidget(self._section_label(self.tr("Basic Settings")))
+        form_layout.addWidget(ConfigSectionHeader(self.tr("Basic Settings")))
         basic_form = QFormLayout()
         basic_form.setSpacing(8)
+        basic_form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        basic_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
 
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText(self.tr("e.g., My Custom API"))
@@ -1141,10 +1147,16 @@ class ProfileManagerWidget(QWidget):
 
         # Connection & Rate Limiting
         form_layout.addWidget(
-            QLabel(self.tr("Connection & Rate Limiting:"))
+            ConfigSectionHeader(self.tr("Connection & Rate Limiting"))
         )
         conn_form = QFormLayout()
         conn_form.setSpacing(8)
+        conn_form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        conn_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
         self.proxy_edit = QLineEdit()
         self.proxy_edit.setPlaceholderText("http://user:pass@host:port")
         self.rpm_spin = QSpinBox()
@@ -1163,10 +1175,16 @@ class ProfileManagerWidget(QWidget):
 
         # Translation Settings (optional)
         form_layout.addWidget(
-            self._section_label(self.tr("Translation Settings (optional)"))
+            ConfigSectionHeader(self.tr("Translation Settings (optional)"))
         )
         adv_form = QFormLayout()
         adv_form.setSpacing(8)
+        adv_form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        adv_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
         self.rf_combo = QComboBox()
         self.rf_combo.addItems(["json_object", "json_schema"])
         self.rf_combo.setCurrentText("json_object")
@@ -1195,10 +1213,16 @@ class ProfileManagerWidget(QWidget):
 
         # OCR Settings
         form_layout.addWidget(
-            self._section_label(self.tr("OCR Settings (optional)"))
+            ConfigSectionHeader(self.tr("OCR Settings (optional)"))
         )
         ocr_form = QFormLayout()
         ocr_form.setSpacing(8)
+        ocr_form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        ocr_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
         self.ocr_prompt_edit = QTextEdit()
         self.ocr_prompt_edit.setPlaceholderText(
             self.tr("OCR prompt with {language} placeholder.")

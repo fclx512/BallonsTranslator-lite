@@ -23,6 +23,8 @@ from utils.update_cache import (
     record_check,
 )
 
+from .misc import get_theme_color
+
 
 class UpdateThread(QThread):
     """Background thread for git fetch/compare or git reset --hard.
@@ -366,7 +368,8 @@ class AboutDialog(QDialog):
 
         self.warning_label = QLabel("⚠ " + self.tr("Local changes will be overwritten"))
         self.warning_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.warning_label.setStyleSheet("color: #e68a00; font-weight: bold;")
+        wc = get_theme_color(key="@warningColor")
+        self.warning_label.setStyleSheet(f"color: {wc.name()}; font-weight: bold;")
         self.warning_label.hide()
         layout.addWidget(self.warning_label)
 

@@ -19,10 +19,11 @@ from qtpy.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
+
+from .spinbox import NoArrowsSpinBox
 
 # ── Default palette ───────────────────────────────────────
 
@@ -63,23 +64,6 @@ _DEFAULT_PALETTE = [
 
 _SWATCH_SIZE = 20
 _SWATCH_GAP = 2
-
-_NO_BTN_STYLE = """
-QSpinBox {
-    background: rgba(128,128,128,0.13);
-    border: 1px solid rgba(128,128,128,0.25);
-    border-radius: 4px;
-    padding: 1px 2px;
-}
-QSpinBox::up-button, QSpinBox::down-button {
-    width: 0px;
-    height: 0px;
-}
-QSpinBox::disabled {
-    background: transparent;
-    border: 1px solid rgba(128,128,128,0.1);
-}
-"""
 
 # ── Palette I/O ───────────────────────────────────────────
 
@@ -373,10 +357,9 @@ class ColorPickerDialog(QDialog):
 
         # Numeric inputs — each row is label + spinbox, center-aligned
         def make_spin(lo, hi, w=60):
-            s = QSpinBox()
+            s = NoArrowsSpinBox()
             s.setRange(lo, hi)
             s.setFixedWidth(w)
-            s.setStyleSheet(_NO_BTN_STYLE)
             return s
 
         self.h_spin = make_spin(0, 360)

@@ -85,6 +85,7 @@ from .custom_widget import (
     FrameLessMessageBox,
     ImgtransProgressMessageBox,
     MessageBox,
+    NoArrowsSpinBox,
     ViewWidget,
     Widget,
 )
@@ -2654,25 +2655,14 @@ class MainWindow(mainwindow_cls):
             # Spinboxes for precise page input (placed above slider)
             spin_layout = QHBoxLayout()
             spin_layout.setContentsMargins(0, 0, 0, 0)
-            no_btn_style = """
-QSpinBox {
-    background: rgba(128,128,128,0.13);
-    border: 1px solid rgba(128,128,128,0.25);
-    border-radius: 4px;
-    padding: 2px 4px;
-}
-QSpinBox::up-button, QSpinBox::down-button { width: 0px; }
-"""
-            start_spin = QSpinBox()
+            start_spin = NoArrowsSpinBox()
             start_spin.setRange(1, num_pages)
             start_spin.setValue(1)
             start_spin.setFixedWidth(70)
-            start_spin.setStyleSheet(no_btn_style)
-            end_spin = QSpinBox()
+            end_spin = NoArrowsSpinBox()
             end_spin.setRange(1, num_pages)
             end_spin.setValue(num_pages)
             end_spin.setFixedWidth(70)
-            end_spin.setStyleSheet(no_btn_style)
 
             spin_layout.addStretch()
             spin_layout.addWidget(start_spin)

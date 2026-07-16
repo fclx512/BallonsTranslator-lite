@@ -28,6 +28,8 @@ from qtpy.QtWidgets import (
 from utils import shared
 from utils.config import pcfg
 from utils.download_util import check_local_file
+
+from .misc import get_theme_color
 from utils.logger import logger as LOGGER
 
 # Pipeline display order and labels
@@ -167,9 +169,9 @@ def _theme_colors():
         "header_bg": "#3a3a3a" if dark else "#e8e8e8",
         "header_text": "#ddd" if dark else "#333",
         "summary_text": "#999" if dark else "#666",
-        "success": "#2ecc71",
-        "warning": "#f39c12",
-        "danger": "#e74c3c",
+        "success": get_theme_color(key="@successColor").name(),
+        "warning": get_theme_color(key="@warningColor").name(),
+        "danger": get_theme_color(key="@dangerColor").name(),
         "muted": "#777" if dark else "#95a5a6",
         "link": "#5dade2" if dark else "#3498db",
         "nosource_text": "#777" if dark else "#95a5a6",

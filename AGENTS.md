@@ -57,7 +57,13 @@ modules/
 | `ui/overlay_modal.py` | `OverlayModal` — 中心淡入/淡出模态（scrim 覆盖中央画布区，ConfigPanel 用它） |
 | `ui/overlay_slide.py` | `OverlaySlider` — 覆盖面板滑入滑出动画（GlobalSearchWidget、PageList 用它） |
 | `config/` | `config.json`(gitignore), `stylesheet.css`, `themes.json`, `custom_themes.json`, `textstyles/` |
-| `scripts/` | `run_module.py`, `qm_compile.py`, `i18n_check.py` |
+	| `scripts/` | `run_module.py`, `qm_compile.py`, `i18n_check.py` |
+
+## 打包控件功能
+
+`ui/configpanel.py` 的 `ConfigSubBlock` 已内置禁用自动变灰功能（`changeEvent`）。
+需要禁用配置面板中的某个子项时，先阅读 [`docs/打包控件功能使用说明.md`](docs/打包控件功能使用说明.md)，
+了解已封装好的模式（禁用自动变灰、"—" 占位符等），优先使用现有方案而非重新实现。
 
 ## 文档规范
 

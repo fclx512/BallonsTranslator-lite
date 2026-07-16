@@ -2,6 +2,7 @@ from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout
 
 from .checkbox import AlignmentChecker, QFontChecker
 from .clock_dial import ClockDial
+from .color_button import ColorSwatchBtn
 from .color_picker import ColorPickerDialog
 from .combobox import (
     ComboBox,
@@ -35,6 +36,8 @@ from .message import (
 )
 from .push_button import NoBorderPushBtn
 from .scrollbar import ScrollBar
+from .spinbox import NoArrowsSpinBox
+from .section_header import ConfigSectionHeader
 from .slider import PaintQSlider, RangeSlider
 from .view_panel import (
     ExpandLabel,

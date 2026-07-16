@@ -2,6 +2,81 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。按照时间顺序撰写。
 
+## 2026-07-16
+
+### 设置面板 UI 语言统一
+
+**需求：** 在不改动左侧导航、不合并页面、不改动功能的前提下，统一设置面板各页面的分组标题、留白与对齐方式。
+
+**改动：**
+
+1. 新增可复用组件 `ConfigSectionHeader`（`ui/custom_widget/section_header.py`），统一为左对齐粗体标题 + 固定边距，并在 `ui/custom_widget/__init__.py` 导出。
+2. **General / Models 页面**（`ui/configpanel.py`）：
+   - Models："Model Loading" / "Management" 改用 `ConfigSectionHeader`。
+   - Project："Startup" / "Output" 改用 `ConfigSectionHeader`；`Quality` 从 `Result image format` 子块中抽出，改为独立同级行。
+   - Typesetting："Default Font Format" / "Text formatting" 改用 `ConfigSectionHeader`；8 个字体格式下拉框从 2×4 标签-控件并排改为 4×2 标签在上方的紧凑网格。
+   - Interface："Behavior" / "Combo Box Presets" / "Original Compare" 改用 `ConfigSectionHeader`，替换之前临时加粗的 `QLabel`。
+3. **模块参数页**（`ui/module_parse_widgets.py`）：
+   - 在 `ModuleConfigParseWidget` 动态参数区上方增加 "Parameters" 分组标题。
+   - `ParamWidget` 标签列设置最小宽度 160px、开启自动换行、控件列拉伸，使不同参数名的控件左边缘对齐。
+   - `TranslatorConfigPanel` 的 "API Profile" 标题改用 `ConfigSectionHeader`。
+4. **LLM Profile 页面**（`utils/profile_manager.py`）：
+   - 所有区块标题改用 `ConfigSectionHeader`，包括新增 "Connection & Rate Limiting" 标题。
+   - 移除旧的居中背景色 `_section_label`。
+   - `QFormLayout` 标签统一左对齐、字段自动拉伸。
+5. **i18n**：在 `translate/zh_CN.ts` 中新增 `ModuleConfigPanel` "Parameters"、`TranslatorConfigPanel` "API Profile" / "Manage…" 翻译；更新 `Connection & Rate Limiting` 源文本（去掉冒号）；重新编译 `zh_CN.qm`。
+
+**验证：**
+- `scripts/check_syntax.py`：通过
+- `scripts/i18n_check.py`：新增字符串已补齐，剩余 2 个缺失条目为 `ContextMenuCustomizeDialog` 中预存在的 "Move down" / "Move up"，非本次改动引入
+- `tests/test_startup_imports.py`：通过
+- 离屏实例化 `ConfigPanel`：成功
+
+**涉及文件：** `ui/configpanel.py`、`ui/module_parse_widgets.py`、`ui/custom_widget/section_header.py`、`ui/custom_widget/__init__.py`、`utils/profile_manager.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+### 主题色系统重构 — 状态颜色改用主题变量
+
+**问题：** `dependency_dialog.py`、`model_check_dialog.py`、`update_checker.py` 中多处状态提示颜色（成功/警告/危险）使用硬编码 hex，不随亮/暗主题切换。
+
+**改动：**
+
+1. **`ui/misc.py`**：`get_theme_color()` 新增 `key` 参数，可查询任意主题变量而不限于 `@accentPrimary`。
+2. **主题变量**（`config/themes.json`）：亮/暗主题统一新增 `@warningColor`；`@successColor`/`@dangerColor` 色值与之前各文件硬编码值对齐。
+3. **调用方替换**（3 处）：
+   - `ui/dependency_dialog.py` — `_STATUS_COLORS` 静态字典改为 `_get_status_colors()` 函数，从主题变量读取 installed/missing/mismatch 颜色。
+   - `ui/model_check_dialog.py` — `_theme_colors()` 的 success/warning/danger 改用 `get_theme_color()`。
+   - `ui/update_checker.py` — 警告标签 `color` 改用 `@warningColor`。
+4. **Disabled 样式**（`config/stylesheet.css`）：新增 `ConfigContent QLineEdit:disabled` / `QComboBox:disabled` 样式表，禁用态使用 `@disabledForegroundColor`。
+
+**涉及文件：** `ui/misc.py`、`ui/dependency_dialog.py`、`ui/model_check_dialog.py`、`ui/update_checker.py`、`config/themes.json`、`config/stylesheet.css`
+
+---
+
+### 打包控件功能组件化 — 抽取共享 UI 组件
+
+**需求：** 多处文件反复出现 inline QSS 模式（无色箭头 QSpinBox、色块按钮 QPushButton、QFrame 分隔线），需抽取为可复用组件，降低维护成本与样式不一致风险。
+
+**改动：**
+
+1. **`NoArrowsSpinBox`**（`ui/custom_widget/spinbox.py`，新）— 隐藏箭头 QSpinBox，替代此前 2 处 inline `_NO_BTN_STYLE`/`no_btn_style` QSS：
+   - `ui/custom_widget/color_picker.py` — `QSpinBox` → `NoArrowsSpinBox`
+   - `ui/mainwindow.py` — 范围选择器 `QSpinBox` → `NoArrowsSpinBox`
+2. **`ColorSwatchBtn`**（`ui/custom_widget/color_button.py`，新）— 色块按钮，替代此前 4 处 inline `setStyleSheet(f"background-color: rgb(…)")`：
+   - `ui/fontstyle_manager.py` — 前景色/描边色 2 个按钮改为 `ColorSwatchBtn`
+   - `ui/shadow_gradient_dialog.py` — `ColorButton` 改为继承 `ColorSwatchBtn`
+3. **`SeparatorWidget`**（`ui/custom_widget/widget.py`，已有）— 本次将 `ui/fontstyle_manager.py` 的内联 `_Separator` 类 3 处使用替换为该共享组件。
+4. **默认调色板**（`config/palette.json`，新）— ColorPickerDialog 读取的 30 色默认色板，从 `_DEFAULT_PALETTE` 常量中分离。
+5. **AGENTS.md** — 新增「打包控件功能」章节，指引后续开发者优先使用已有组件而非重新实现。
+6. **使用文档**（`docs/打包控件功能使用说明.md`，新）— 说明现有封装模式（禁用自动变灰、"—" 占位符等）及适用场景。
+
+**验证：** `scripts/check_syntax.py`：通过
+
+**涉及文件：** `ui/custom_widget/color_button.py`（新）、`ui/custom_widget/spinbox.py`（新）、`config/palette.json`（新）、`docs/打包控件功能使用说明.md`（新）、`AGENTS.md`、`ui/custom_widget/__init__.py`、`ui/custom_widget/color_picker.py`、`ui/shadow_gradient_dialog.py`、`ui/fontstyle_manager.py`、`ui/mainwindow.py`
+
+---
+
 ## 2026-07-15
 
 ### PaddleOCRv6ONNX — 三处 Bug 修复（OCR 不输出 + 宽文本截断 + 依赖误报）
@@ -196,55 +271,6 @@
 
 **涉及文件：** `ui/scenetext_manager.py`、`ui/context_menu_config.py`、`ui/mainwindow.py`、`utils/config.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
 
-## 2026-07-13
-
-### 帮助系统框架（HelpDialog）
-
-**需求：** 软件内帮助文档阅读器，支持文档浏览、标题导航、跨文档搜索。
-
-**改动：**
-
-1. **`ui/help_dialog.py`（新）** — `HelpDialog(QDialog)` 完整实现：
-   - 非模态窗口，左侧栏（文档列表 + 本节目录），主内容区 `QTextBrowser.setMarkdown()`
-   - 跨文档全文搜索，结果以 PanelGroupBox 风格渲染到主内容区（主题色自适应），点击跳转
-
-2. **`ui/mainwindowbars.py`** — Help 菜单新增"使用手册" action
-
-3. **`ui/mainwindow.py`** — 连接信号 + `show_help_dialog()` 懒加载
-
-4. **`translate/zh_CN.ts`** / **`.qm`** — 新增 HelpDialog 上下文翻译 12 条
-
-5. **`tests/test_startup_imports.py`** — 新增 HelpDialog 导入测试 + 静态方法测试
-
-6. **`docs/help/测试文档.md`（新）** — 用于验证样式渲染和标题跳转的测试文档
-
-⚠️ **当前状态：框架已实现，文档正文和体验细节需后续细化。**
-
-**涉及文件：** `ui/help_dialog.py`（新）、`ui/mainwindowbars.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_startup_imports.py`、`docs/help/测试文档.md`（新）
-
-## 2026-07-14
-
-### HelpDialog UI 重构 — Tab 栏 + 折叠目录 + Scroll-Spy
-
-**需求：** 原有帮助系统对"文档少（3~5 篇）、单篇长"的场景适配不佳——文档列表挤占目录空间、目录平铺无折叠、滚动时目录不追踪当前位置、整体直角 UI 过硬。
-
-**改动要点：**
-
-1. **文档切换从侧栏列表 → 顶部药丸 Tab 栏**：每个文档一个 QPushButton（`HelpDocTab`），用动态属性 `current` 标记选中。释放侧栏全部空间给目录。
-
-2. **目录树形折叠**：QListWidget → QTreeWidget，H1/H2/H3 层级折叠（H1 展开、子级默认折叠），原生缩进替代全角空格模拟。
-
-3. **Scroll-Spy**：文档加载后用 `QTextBlock.blockFormat().headingLevel()` 构建标题块号映射。`verticalScrollBar().valueChanged` → 150ms debounce → `cursorForPosition(QPoint(0,0))` 取 viewport 顶部块号 → 反查最近标题 → 高亮树节点。
-
-4. **导航防抖**：点击目录导航时设 `_navigating` 标志，100ms 后释放，避免 scroll-spy 与 `find()` 触发的滚动互相拉扯。
-
-5. **搜索栏下移**：从顶栏移到侧栏底部（目录树下方），与原有替换内容区的搜索结果展示配合。
-
-6. **全局圆角化 & 主题集成**：在 `config/stylesheet.css` 新增 10+ 条 HelpDialog 专用 QSS 规则（全部使用 `@variable` 主题变量），Tab 8px 圆角药丸、目录树 8px、Content 8px，选中态 `accentPrimary20` 半透明背景。搜索结果 HTML 同行圆角化（`border-radius: 8px`），高亮行用 `rgba(accent, 0.15)` 替代硬编码灰底。
-
-**涉及文件：** `ui/help_dialog.py`（重写）、`config/stylesheet.css`（追加）、`translate/zh_CN.ts`（删"文档"+增"关键词"/"点击结果跳转到对应位置"）、`translate/zh_CN.qm`（重新编译）
-
----
 
 ### HelpDialog — 字体/代码块/搜索修复
 

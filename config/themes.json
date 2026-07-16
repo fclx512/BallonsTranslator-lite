@@ -27,8 +27,9 @@
         "@disabledForegroundColor": "#9d9d9f",
         "@cardBackgroundColor": "#ebeef5",
         "@hoverBackgroundColor": "#cad7ed",
-        "@dangerColor": "#E81123",
-        "@successColor": "#4caf84",
+        "@dangerColor": "#e74c3c",
+        "@successColor": "#27ae60",
+        "@warningColor": "#f39c12",
         "@inverseTextColor": "#ffffff",
         "_iconFillActive": "#697187",
         "_iconFill": "#b3b6bf"
@@ -62,7 +63,8 @@
         "@cardBackgroundColor": "#282c34",
         "@hoverBackgroundColor": "#3a3a52",
         "@dangerColor": "#FF605C",
-        "@successColor": "#4caf84",
+        "@successColor": "#27ae60",
+        "@warningColor": "#f39c12",
         "@inverseTextColor": "#ffffff",
         "_iconFillActive": "#96a4cd",
         "_iconFill": "#697186"

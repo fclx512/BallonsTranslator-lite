@@ -59,7 +59,13 @@ from utils.shared import (
     NAVLIST_WIDTH,
 )
 
-from .custom_widget import ConfigComboBox, PanelGroupBox, PaintQSlider, Widget
+from .custom_widget import (
+    ConfigComboBox,
+    ConfigSectionHeader,
+    PanelGroupBox,
+    PaintQSlider,
+    Widget,
+)
 from .module_parse_widgets import (
     InpaintConfigPanel,
     OCRConfigPanel,
@@ -223,6 +229,25 @@ class ConfigSubBlock(Widget):
     def _show_note_popup(self):
         self._note_popup = ConfigNotePopup(self._note_btn, self._note_text)
         self._note_popup.show()
+
+    # ── Disabled-state auto-styling ────────────────────────────────
+    _disabled_color = None  # class-level cache
+
+    def changeEvent(self, e: QEvent):
+        if e.type() == QEvent.Type.EnabledChange and self.name_label is not None:
+            if self.isEnabled():
+                self.name_label.setStyleSheet("")
+            else:
+                if type(self)._disabled_color is None:
+                    from ui.misc import _resolve_theme
+                    theme = _resolve_theme("")
+                    type(self)._disabled_color = theme.get(
+                        "@disabledForegroundColor", "#5d6170"
+                    )
+                self.name_label.setStyleSheet(
+                    f"color: {type(self)._disabled_color};"
+                )
+        super().changeEvent(e)
 
 
 def combobox_with_label(
@@ -1444,8 +1469,7 @@ class ConfigPanel(Widget):
         models_vlayout.setSpacing(8)
 
         # -- Model Loading section --
-        loading_header = ConfigSubBlock(name=self.tr("Model Loading"))
-        models_vlayout.addWidget(loading_header)
+        models_vlayout.addWidget(ConfigSectionHeader(self.tr("Model Loading")))
 
         # Load on demand
         self.load_model_checker = QCheckBox()
@@ -1479,8 +1503,7 @@ class ConfigPanel(Widget):
         self.empty_runcache_checker.stateChanged.connect(self.on_runcache_changed)
 
         # -- Management section --
-        mgmt_header = ConfigSubBlock(name=self.tr("Management"))
-        models_vlayout.addWidget(mgmt_header)
+        models_vlayout.addWidget(ConfigSectionHeader(self.tr("Management")))
 
         unload_btn = QPushButton(self.tr("Unload All Models"))
         unload_btn.setObjectName("ConfigButton")
@@ -1566,23 +1589,36 @@ class ConfigPanel(Widget):
         self.open_on_startup_checker.stateChanged.connect(
             self.on_open_onstartup_changed
         )
+        project_layout.addWidget(ConfigSectionHeader(self.tr("Startup")))
+
         startup_sublock = ConfigSubBlock(
-            self.open_on_startup_checker, name=self.tr("Startup"),
+            self.open_on_startup_checker,
             note=self.tr("<p>Reopen the last project automatically when the application starts. Saves time when continuing work on the same project.</p>"),
         )
         project_layout.addWidget(startup_sublock)
 
         # Output section label
-        output_header = ConfigSubBlock(name=self.tr("Output"))
-        project_layout.addWidget(output_header)
+        project_layout.addWidget(ConfigSectionHeader(self.tr("Output")))
 
-        self.rst_imgformat_combobox, imsave_sublock = combobox_with_label(
+        self.rst_imgformat_combobox, self.rst_imgsave_sublock = combobox_with_label(
             ["PNG", "JPG", "WEBP", "JXL"], self.tr("Result image format"),
             note=self.tr("<p>Choose the output format for translated images:</p><p><b>PNG</b> — lossless quality<br/><b>JPG / WEBP</b> — smaller files, some quality loss<br/><b>JXL</b> — high compression efficiency with lossless option</p>"),
             parent=self,
         )
         self.rst_imgformat_combobox.activated.connect(self.on_rst_imgformat_changed)
-        project_layout.addWidget(imsave_sublock)
+        project_layout.addWidget(self.rst_imgsave_sublock)
+
+        self.rst_imgquality_edit = PercentageLineEdit("100")
+        self.rst_imgquality_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
+        self.rst_imgquality_edit.finish_edited.connect(self.on_edit_quality_changed)
+        self.rst_quality_sublock = ConfigSubBlock(
+            self.rst_imgquality_edit, self.tr("Quality"),
+            note=self.tr("<p>Output image quality (<code>0-100</code>). Higher values give better quality but larger file sizes. Applies to <b>JPG</b> and <b>WEBP</b> only.</p>"),
+            vertical_layout=False,
+        )
+        self.rst_quality_sublock.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.rst_quality_sublock.layout().insertStretch(-1)
+        project_layout.addWidget(self.rst_quality_sublock)
 
         self.rst_autoformat_checker, autoformat_sublock = checkbox_with_label(
             self.tr("Auto detect source format"),
@@ -1590,19 +1626,6 @@ class ConfigPanel(Widget):
         )
         self.rst_autoformat_checker.stateChanged.connect(self.on_autoformat_changed)
         project_layout.addWidget(autoformat_sublock)
-
-        self.rst_imgquality_edit = PercentageLineEdit("100")
-        self.rst_imgquality_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
-        self.rst_imgquality_edit.finish_edited.connect(self.on_edit_quality_changed)
-
-        quality_sublock = ConfigSubBlock(
-            self.rst_imgquality_edit, self.tr("Quality"),
-            note=self.tr("<p>Output image quality (<code>0-100</code>). Higher values give better quality but larger file sizes. Applies to <b>JPG</b> and <b>WEBP</b> only.</p>"),
-            vertical_layout=False,
-        )
-        quality_sublock.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
-        quality_sublock.layout().insertStretch(-1)
-        imsave_sublock.layout().addWidget(quality_sublock)
 
         self.intermediate_imgformat_combobox, intermediate_imsave_sublock = (
             combobox_with_label(
@@ -1649,14 +1672,15 @@ class ConfigPanel(Widget):
         ts_layout.setContentsMargins(0, 0, 0, 0)
         ts_layout.setSpacing(0)
 
-        # Compact container for font format delegation grid
+        # Default Font Format section
+        ts_layout.addWidget(ConfigSectionHeader(self.tr("Default Font Format")))
+
         delegation_frame = QFrame()
         delegation_frame.setObjectName("CompactDelegationFrame")
         delegation_layout = QVBoxLayout(delegation_frame)
         delegation_layout.setContentsMargins(12, 8, 12, 8)
         delegation_layout.setSpacing(4)
 
-        # Context label
         delegation_label = ConfigTextLabel(
             self.tr("Default font format (when not set per-textblock):"),
             CONFIG_FONTSIZE_CONTENT - 2,
@@ -1665,112 +1689,74 @@ class ConfigPanel(Widget):
 
         global_fntfmt_widget = QWidget()
         global_fntfmt_layout = QGridLayout(global_fntfmt_widget)
-        global_fntfmt_layout.setSpacing(0)
-        global_fntfmt_widget.setContentsMargins(0, 0, 0, 0)
-
-        b = ConfigSubBlock(global_fntfmt_widget)
-        b.layout().setContentsMargins(0, 0, 0, 0)
-        b.setContentsMargins(0, 0, 0, 0)
-        delegation_layout.addWidget(b)
+        global_fntfmt_layout.setContentsMargins(0, 0, 0, 0)
+        global_fntfmt_layout.setHorizontalSpacing(16)
+        global_fntfmt_layout.setVerticalSpacing(8)
+        global_fntfmt_layout.setColumnStretch(3, 1)
+        delegation_layout.addWidget(global_fntfmt_widget)
 
         DELEGATION_COMBO_WIDTH = 140
 
-        self.let_fntsize_combox, sublock = combobox_with_label(
-            [dec_program_str, use_global_str],
-            self.tr("Font Size"),
-            parent=self,
-            insert_stretch=True,
-        )
-        self.let_fntsize_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
-        self.let_fntsize_combox.activated.connect(self.on_fntsize_flag_changed)
-        global_fntfmt_layout.addWidget(sublock, 0, 0)
+        def _add_fontfmt_cell(row, col, label, items, signal, attr_name):
+            cell = QWidget()
+            cell_layout = QVBoxLayout(cell)
+            cell_layout.setContentsMargins(0, 0, 0, 0)
+            cell_layout.setSpacing(2)
+            lbl = ConfigTextLabel(label, CONFIG_FONTSIZE_CONTENT - 2)
+            combo = ConfigComboBox(scrollWidget=self)
+            combo.addItems(items)
+            combo.setFixedWidth(DELEGATION_COMBO_WIDTH)
+            combo.activated.connect(signal)
+            cell_layout.addWidget(lbl)
+            cell_layout.addWidget(combo)
+            global_fntfmt_layout.addWidget(cell, row, col)
+            setattr(self, attr_name, combo)
 
-        self.let_fntstroke_combox, sublock = combobox_with_label(
+        _add_fontfmt_cell(
+            0, 0, self.tr("Font Size"),
             [dec_program_str, use_global_str],
-            self.tr("Stroke Size"),
-            parent=self,
-            insert_stretch=True,
+            self.on_fntsize_flag_changed, "let_fntsize_combox",
         )
-        self.let_fntstroke_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
-        self.let_fntstroke_combox.activated.connect(self.on_fntstroke_flag_changed)
-        global_fntfmt_layout.addWidget(sublock, 0, 1)
-
-        self.let_fntcolor_combox, sublock = combobox_with_label(
+        _add_fontfmt_cell(
+            0, 1, self.tr("Stroke Size"),
             [dec_program_str, use_global_str],
-            self.tr("Font Color"),
-            parent=self,
-            insert_stretch=True,
+            self.on_fntstroke_flag_changed, "let_fntstroke_combox",
         )
-        self.let_fntcolor_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
-        self.let_fntcolor_combox.activated.connect(self.on_fontcolor_flag_changed)
-        global_fntfmt_layout.addWidget(sublock, 1, 0)
-        self.let_fnt_scolor_combox, sublock = combobox_with_label(
+        _add_fontfmt_cell(
+            0, 2, self.tr("Font Color"),
             [dec_program_str, use_global_str],
-            self.tr("Stroke Color"),
-            parent=self,
-            insert_stretch=True,
+            self.on_fontcolor_flag_changed, "let_fntcolor_combox",
         )
-        self.let_fnt_scolor_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
-        self.let_fnt_scolor_combox.activated.connect(self.on_font_scolor_flag_changed)
-        global_fntfmt_layout.addWidget(sublock, 1, 1)
-
-        self.let_effect_combox, sublock = combobox_with_label(
+        _add_fontfmt_cell(
+            0, 3, self.tr("Stroke Color"),
             [dec_program_str, use_global_str],
-            self.tr("Effect"),
-            parent=self,
-            insert_stretch=True,
+            self.on_font_scolor_flag_changed, "let_fnt_scolor_combox",
         )
-        self.let_effect_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
-        self.let_effect_combox.activated.connect(self.on_effect_flag_changed)
-        global_fntfmt_layout.addWidget(sublock, 2, 0)
-        self.let_alignment_combox, sublock = combobox_with_label(
+        _add_fontfmt_cell(
+            1, 0, self.tr("Effect"),
             [dec_program_str, use_global_str],
-            self.tr("Alignment"),
-            parent=self,
-            insert_stretch=True,
+            self.on_effect_flag_changed, "let_effect_combox",
         )
-        self.let_alignment_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
-        self.let_alignment_combox.activated.connect(self.on_alignment_flag_changed)
-        global_fntfmt_layout.addWidget(sublock, 2, 1)
-
-        self.let_writing_mode_combox, sublock = combobox_with_label(
+        _add_fontfmt_cell(
+            1, 1, self.tr("Alignment"),
             [dec_program_str, use_global_str],
-            self.tr("Writing-mode"),
-            parent=self,
-            insert_stretch=True,
+            self.on_alignment_flag_changed, "let_alignment_combox",
         )
-        self.let_writing_mode_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
-        self.let_writing_mode_combox.activated.connect(
-            self.on_writing_mode_flag_changed
+        _add_fontfmt_cell(
+            1, 2, self.tr("Writing-mode"),
+            [dec_program_str, use_global_str],
+            self.on_writing_mode_flag_changed, "let_writing_mode_combox",
         )
-        global_fntfmt_layout.addWidget(sublock, 3, 0)
-        self.let_family_combox, sublock = combobox_with_label(
+        _add_fontfmt_cell(
+            1, 3, self.tr("Font Family"),
             [self.tr("Keep existing"), self.tr("Always use global setting")],
-            self.tr("Font Family"),
-            parent=self,
-            insert_stretch=True,
-        )
-        self.let_family_combox.setFixedWidth(DELEGATION_COMBO_WIDTH)
-        self.let_family_combox.activated.connect(self.on_family_flag_changed)
-        global_fntfmt_layout.addWidget(sublock, 3, 1)
-
-        global_fntfmt_layout.addItem(
-            QSpacerItem(
-                0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-            ),
-            0,
-            2,
+            self.on_family_flag_changed, "let_family_combox",
         )
 
-        delegation_sublock = ConfigSubBlock(
-            delegation_frame, name=self.tr("Default Font Format"),
-            note=self.tr("<p>Configure the fallback font format for text blocks without their own formatting. Each attribute can be <b>delegated</b> separately.</p>"),
-        )
-        ts_layout.addWidget(delegation_sublock)
+        ts_layout.addWidget(ConfigSubBlock(delegation_frame))
 
-        # Text formatting sub-label
-        fmt_header = ConfigSubBlock(name=self.tr("Text formatting"))
-        ts_layout.addWidget(fmt_header)
+        # Text formatting section
+        ts_layout.addWidget(ConfigSectionHeader(self.tr("Text formatting")))
 
         self.let_autolayout_checker, al_sublock = checkbox_with_label(
             self.tr("Auto layout"),
@@ -1861,9 +1847,8 @@ class ConfigPanel(Widget):
         interface_layout.setContentsMargins(0, 0, 0, 0)
         interface_layout.setSpacing(8)
 
-        # Behavior sub-label
-        behavior_header = ConfigSubBlock(name=self.tr("Behavior"))
-        interface_layout.addWidget(behavior_header)
+        # Behavior section
+        interface_layout.addWidget(ConfigSectionHeader(self.tr("Behavior")))
 
         # Fit image to window on open
         self.fit_window_checker = QCheckBox(
@@ -1912,12 +1897,7 @@ class ConfigPanel(Widget):
         interface_layout.addWidget(ctxmenu_sublock)
 
         # Combo Box Presets (moved from Typesetting)
-        preset_header = QLabel(self.tr("Combo Box Presets"))
-        preset_header.setStyleSheet("font-weight: bold;")
-        preset_header_sublock = ConfigSubBlock(
-            preset_header, content_margins=(24, 12, 24, 4)
-        )
-        interface_layout.addWidget(preset_header_sublock)
+        interface_layout.addWidget(ConfigSectionHeader(self.tr("Combo Box Presets")))
 
         # Helper label
         preset_hint = ConfigTextLabel(
@@ -1940,12 +1920,7 @@ class ConfigPanel(Widget):
         _make_preset_row(self.tr("Opacity:"), "opacity_presets", interface_layout)
 
         # ── Original Compare ───────────────────────────────────
-        toggle_header = QLabel(self.tr("Original Compare"))
-        toggle_header.setStyleSheet("font-weight: bold;")
-        toggle_header_sublock = ConfigSubBlock(
-            toggle_header, content_margins=(24, 12, 24, 4)
-        )
-        interface_layout.addWidget(toggle_header_sublock)
+        interface_layout.addWidget(ConfigSectionHeader(self.tr("Original Compare")))
 
         toggle_row = QHBoxLayout()
         toggle_row.setSpacing(6)
@@ -2238,12 +2213,28 @@ class ConfigPanel(Widget):
 
             save_config()
 
+    def _set_quality_visual_state(self, enabled: bool):
+        """Toggle quality subblock + show "—" placeholder when disabled.
+        
+        Label dimming is handled automatically by ``ConfigSubBlock.changeEvent``.
+        """
+        self.rst_quality_sublock.setEnabled(enabled)
+        self.rst_imgquality_edit.blockSignals(True)
+        if enabled:
+            self.rst_imgquality_edit.setText(str(pcfg.imgsave_quality))
+        else:
+            self.rst_imgquality_edit.setText("—")
+        self.rst_imgquality_edit.blockSignals(False)
+
     def on_rst_imgformat_changed(self):
         pcfg.imgsave_ext = "." + self.rst_imgformat_combobox.currentText().lower()
+        # PNG is lossless — quality setting is irrelevant
+        is_png = self.rst_imgformat_combobox.currentText() == "PNG"
+        self._set_quality_visual_state(not is_png)
 
     def on_autoformat_changed(self):
         pcfg.imgsave_auto_format = self.rst_autoformat_checker.isChecked()
-        self.rst_imgformat_combobox.setEnabled(not pcfg.imgsave_auto_format)
+        self.rst_imgsave_sublock.setEnabled(not pcfg.imgsave_auto_format)
 
     def on_max_font_size_changed(self, value: int):
         pcfg.max_font_size = value
@@ -2514,11 +2505,13 @@ class ConfigPanel(Widget):
             pcfg.imgsave_ext.replace(".", "").upper()
         )
         self.rst_autoformat_checker.setChecked(pcfg.imgsave_auto_format)
-        self.rst_imgformat_combobox.setEnabled(not pcfg.imgsave_auto_format)
+        self.rst_imgsave_sublock.setEnabled(not pcfg.imgsave_auto_format)
         self.intermediate_imgformat_combobox.setCurrentText(
             pcfg.intermediate_imgsave_ext.replace(".", "").upper()
         )
-        self.rst_imgquality_edit.setText(str(pcfg.imgsave_quality))
+        # PNG is lossless — disable quality with "—" placeholder
+        is_png = self.rst_imgformat_combobox.currentText() == "PNG"
+        self._set_quality_visual_state(not is_png)
         self.load_model_checker.setChecked(pcfg.module.load_model_on_demand)
         self.empty_runcache_checker.setChecked(pcfg.module.empty_runcache)
         self.max_font_size_edit.setValue(pcfg.max_font_size)

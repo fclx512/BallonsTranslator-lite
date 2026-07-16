@@ -37,6 +37,7 @@ from utils.registry import Registry
 from utils.textblock import TextBlock, sort_regions
 
 from .configpanel import ConfigPanel
+from .misc import get_theme_color
 from .custom_widget import ImgtransProgressMessageBox, ParamComboBox, ProgressMessageBox
 from .funcmaps import get_maskseg_method
 
@@ -1233,8 +1234,11 @@ def _ensure_module_deps(
                     )
                 )
                 _hf_warn.setWordWrap(True)
+                wc = get_theme_color(key="@warningColor")
                 _hf_warn.setStyleSheet(
-                    "color: #cc5500; background: #fff3cd; border: 1px solid #cc5500; "
+                    f"color: {wc.name()}; "
+                    f"background: rgba({wc.red()},{wc.green()},{wc.blue()},30); "
+                    f"border: 1px solid {wc.name()}; "
                     "border-radius: 4px; padding: 8px; margin-top: 4px;"
                 )
                 layout.addWidget(_hf_warn)
@@ -1263,9 +1267,12 @@ def _ensure_module_deps(
             self._log_area.setVisible(False)
             self._log_area.setReadOnly(True)
             self._log_area.setMaximumBlockCount(200)
+            lfg = get_theme_color(key="@qwidgetForegroundColor").name()
+            lbg = get_theme_color(key="@transtexteditBackgroundColor").name()
+            lbrd = get_theme_color(key="@borderColor").name()
             self._log_area.setStyleSheet(
-                "color: #555; font-size: 11px; background: #f5f5f5; "
-                "border: 1px solid #ddd; border-radius: 3px; padding: 4px;"
+                f"color: {lfg}; font-size: 11px; background: {lbg}; "
+                f"border: 1px solid {lbrd}; border-radius: 3px; padding: 4px;"
             )
             self._log_area.setFixedHeight(120)
             layout.addWidget(self._log_area)
@@ -1274,9 +1281,11 @@ def _ensure_module_deps(
             self._error_hint = QLabel()
             self._error_hint.setVisible(False)
             self._error_hint.setWordWrap(True)
+            ec = get_theme_color(key="@dangerColor")
             self._error_hint.setStyleSheet(
-                "color: #a00; font-size: 12px; background: #fff0f0; "
-                "border: 1px solid #e88; border-radius: 4px; padding: 8px;"
+                f"color: {ec.name()}; font-size: 12px; "
+                f"background: rgba({ec.red()},{ec.green()},{ec.blue()},20); "
+                f"border: 1px solid {ec.name()}; border-radius: 4px; padding: 8px;"
             )
             layout.addWidget(self._error_hint)
 

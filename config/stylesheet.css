@@ -135,6 +135,15 @@ ConfigContent QPlainTextEdit:focus {
     border-bottom: 1px solid @accentPrimary;
 }
 
+ConfigContent QLineEdit:disabled {
+    border-bottom: 1px solid @disabledForegroundColor;
+    color: @disabledForegroundColor;
+}
+
+ConfigContent QComboBox:disabled {
+    color: @disabledForegroundColor;
+}
+
 ConfigContent QComboBox::drop-down {
     border: none;
 }

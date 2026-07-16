@@ -25,7 +25,6 @@ from qtpy.QtWidgets import (
     QColorDialog,
     QComboBox,
     QDoubleSpinBox,
-    QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -46,6 +45,8 @@ from utils.fontformat import (
     FontFormat,
     px2pt,
 )
+
+from .custom_widget import ColorSwatchBtn, SeparatorWidget
 
 # ═══════════════════════════════════════════════════════════════════════
 # Style discovery
@@ -378,7 +379,7 @@ class StyleDetail(QScrollArea):
         self._header_info.setWordWrap(True)
         self._layout.addWidget(self._header_info)
 
-        self._layout.addWidget(_Separator())
+        self._layout.addWidget(SeparatorWidget())
 
         # ── 3b. Property Summary ──────────────────────────────────
         self._layout.addWidget(_SectionHeader(self.tr("Properties")))
@@ -408,7 +409,7 @@ class StyleDetail(QScrollArea):
         ]:
             self._layout.addWidget(pw)
 
-        self._layout.addWidget(_Separator())
+        self._layout.addWidget(SeparatorWidget())
 
         # ── 3c. Batch Edit Controls ───────────────────────────────
         self._layout.addWidget(_SectionHeader(self.tr("Batch Edit")))
@@ -450,7 +451,7 @@ class StyleDetail(QScrollArea):
         self._layout.addLayout(_labeled_control(self.tr("Flags"), flags_widget))
 
         # Foreground color
-        self._fg_btn = QPushButton()
+        self._fg_btn = ColorSwatchBtn()
         self._fg_btn.setFixedSize(24, 24)
         self._fg_btn.clicked.connect(self._pick_fg)
         self._fg_label = QLabel()
@@ -463,7 +464,7 @@ class StyleDetail(QScrollArea):
         self._layout.addLayout(_labeled_control(self.tr("Text Color"), fg_w))
 
         # Stroke color + width
-        self._stroke_color_btn = QPushButton()
+        self._stroke_color_btn = ColorSwatchBtn()
         self._stroke_color_btn.setFixedSize(24, 24)
         self._stroke_color_btn.clicked.connect(self._pick_stroke_color)
         self._stroke_color_label = QLabel()
@@ -498,7 +499,7 @@ class StyleDetail(QScrollArea):
         self._layout.addSpacing(6)
         self._layout.addWidget(self._apply_all_btn)
 
-        self._layout.addWidget(_Separator())
+        self._layout.addWidget(SeparatorWidget())
 
         # ── 3d. Block List ────────────────────────────────────────
         self._layout.addWidget(_SectionHeader(self.tr("Blocks Using This Style")))
@@ -634,19 +635,13 @@ class StyleDetail(QScrollArea):
 
         # FG color
         fg = ffmt.foreground_color()
-        self._fg_btn.setStyleSheet(
-            f"background-color: rgb({fg[0]},{fg[1]},{fg[2]}); "
-            f"border: 1px solid #888; border-radius: 3px;"
-        )
+        self._fg_btn.setColor(QColor(*fg))
         self._fg_label.setText(f"rgb({fg[0]}, {fg[1]}, {fg[2]})")
         self._pending_fg = list(ffmt.frgb)
 
         # Stroke
         bg = ffmt.stroke_color()
-        self._stroke_color_btn.setStyleSheet(
-            f"background-color: rgb({bg[0]},{bg[1]},{bg[2]}); "
-            f"border: 1px solid #888; border-radius: 3px;"
-        )
+        self._stroke_color_btn.setColor(QColor(*bg))
         self._stroke_color_label.setText(f"rgb({bg[0]}, {bg[1]}, {bg[2]})")
         self._pending_stroke_color = list(ffmt.srgb)
         self._stroke_spin.blockSignals(True)
@@ -776,10 +771,7 @@ class StyleDetail(QScrollArea):
         )
         if c.isValid():
             self._pending_fg = [c.red(), c.green(), c.blue()]
-            self._fg_btn.setStyleSheet(
-                f"background-color: rgb({c.red()},{c.green()},{c.blue()}); "
-                f"border: 1px solid #888; border-radius: 3px;"
-            )
+            self._fg_btn.setColor(c)
             self._fg_label.setText(f"rgb({c.red()}, {c.green()}, {c.blue()})")
 
     def _pick_stroke_color(self):
@@ -793,25 +785,13 @@ class StyleDetail(QScrollArea):
         )
         if c.isValid():
             self._pending_stroke_color = [c.red(), c.green(), c.blue()]
-            self._stroke_color_btn.setStyleSheet(
-                f"background-color: rgb({c.red()},{c.green()},{c.blue()}); "
-                f"border: 1px solid #888; border-radius: 3px;"
-            )
+            self._stroke_color_btn.setColor(c)
             self._stroke_color_label.setText(f"rgb({c.red()}, {c.green()}, {c.blue()})")
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
-
-
-class _Separator(QFrame):
-    """Horizontal line separator."""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setFrameShape(QFrame.Shape.HLine)
-        self.setFrameShadow(QFrame.Shadow.Sunken)
 
 
 def _labeled_control(
