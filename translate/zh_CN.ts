@@ -1070,9 +1070,93 @@
 				        </message>
 				        <message>
 				            <source>&lt;p&gt;When enabled, projects created by importing individual images (via drag-drop or &lt;b&gt;Open Image…&lt;/b&gt;) will be &lt;b&gt;automatically deleted&lt;/b&gt; when the application closes.&lt;/p&gt;&lt;p&gt;Use &lt;b&gt;Save Project As…&lt;/b&gt; to keep a project permanently.&lt;/p&gt;</source>
-				            <translation>&lt;p&gt;启用后，通过单张图片导入（拖拽或&lt;b&gt;打开图片…&lt;/b&gt;）创建的临时项目将在程序关闭时&lt;b&gt;自动删除&lt;/b&gt;。&lt;/p&gt;&lt;p&gt;使用&lt;b&gt;项目另存为…&lt;/b&gt;可以永久保留项目。&lt;/p&gt;</translation>
-				        </message>
-				    </context>
+					            <translation>&lt;p&gt;启用后，通过单张图片导入（拖拽或&lt;b&gt;打开图片…&lt;/b&gt;）创建的临时项目将在程序关闭时&lt;b&gt;自动删除&lt;/b&gt;。&lt;/p&gt;&lt;p&gt;使用&lt;b&gt;项目另存为…&lt;/b&gt;可以永久保留项目。&lt;/p&gt;</translation>
+					        </message>
+					        <message>
+					            <source>Config Management</source>
+					            <translation>配置管理</translation>
+					        </message>
+					        <message>
+					            <source>Export Config</source>
+					            <translation>导出配置</translation>
+					        </message>
+					        <message>
+					            <source>Exclude API keys when exporting</source>
+					            <translation>导出时排除 API 密钥</translation>
+					        </message>
+					        <message>
+					            <source>&lt;p&gt;API profiles will be exported without &lt;b&gt;api_key&lt;/b&gt; and &lt;b&gt;proxy&lt;/b&gt; fields. Structure and all other settings remain intact. Uncheck to include credentials (not recommended for sharing).&lt;/p&gt;</source>
+					            <translation>&lt;p&gt;API 配置在导出时将不包含 &lt;b&gt;api_key&lt;/b&gt; 和 &lt;b&gt;proxy&lt;/b&gt; 字段。结构和所有其他设置保持不变。取消勾选可包含凭证（不建议用于分享）。&lt;/p&gt;</translation>
+					        </message>
+					        <message>
+						            <source>Export Config...</source>
+						            <translation>导出配置...</translation>
+						        </message>
+						        <message>
+						            <source>&lt;p&gt;Save current settings to a &lt;b&gt;.json&lt;/b&gt; file. Useful for backups or transferring configurations between machines.&lt;/p&gt;</source>
+						            <translation>&lt;p&gt;将当前设置保存到 &lt;b&gt;.json&lt;/b&gt; 文件。用于备份或在机器间迁移配置。&lt;/p&gt;</translation>
+						        </message>
+						        <message>
+						            <source>Import Config</source>
+						            <translation>导入配置</translation>
+						        </message>
+						        <message>
+						            <source>Import Config...</source>
+							            <translation>导入配置...</translation>
+						        </message>
+						        <message>
+						            <source>Export</source>
+						            <translation>导出</translation>
+						        </message>
+						        <message>
+						            <source>Import</source>
+						            <translation>导入</translation>
+						        </message>
+						        <message>
+						            <source>&lt;p&gt;Load settings from a previously exported &lt;b&gt;.json&lt;/b&gt; file. A compatibility summary will be shown before applying.&lt;/p&gt;</source>
+					            <translation>&lt;p&gt;从之前导出的 &lt;b&gt;.json&lt;/b&gt; 文件加载设置。应用前会显示兼容性摘要。&lt;/p&gt;</translation>
+					        </message>
+					        <message>
+					            <source>Configuration exported to </source>
+					            <translation>配置已导出到 </translation>
+					        </message>
+					        <message>
+					            <source>Failed to export configuration</source>
+					            <translation>导出配置失败</translation>
+					        </message>
+					        <message>
+					            <source>Failed to import configuration</source>
+					            <translation>导入配置失败</translation>
+					        </message>
+					        <message>
+					            <source>Source version: {ver}</source>
+					            <translation>来源版本：{ver}</translation>
+					        </message>
+					        <message>
+					            <source>All settings imported successfully.</source>
+					            <translation>所有设置已成功导入。</translation>
+					        </message>
+					        <message>
+					            <source>Configuration imported ({n} items checked):</source>
+					            <translation>配置已导入（检查了 {n} 项）：</translation>
+					        </message>
+						        <message>
+						            <source>⚠ {n} unknown setting(s) — from a newer version, will be skipped:</source>
+						            <translation>⚠ {n} 个未知设置项——来自较新版本，将被跳过：</translation>
+						        </message>
+						        <message>
+						            <source>  … and {n} more</source>
+						            <translation>  还有 {n} 项</translation>
+						        </message>
+						        <message>
+						            <source>ℹ {n} setting(s) not in file — current values kept:</source>
+						            <translation>ℹ {n} 个设置项不在文件中——保持当前值：</translation>
+					        </message>
+					        <message>
+					            <source>Please close and reopen Settings to refresh the UI.</source>
+					            <translation>请关闭并重新打开设置面板以刷新界面。</translation>
+					        </message>
+					    </context>
 			    <context>
 			        <name>DependencyDialog</name>
         <message>

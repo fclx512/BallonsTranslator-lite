@@ -263,3 +263,47 @@
 **涉及文件：** `ui/custom_widget/group_frame.py`（新）、`ui/custom_widget/combobox.py`、`ui/custom_widget/text_input.py`、`ui/custom_widget/spinbox.py`、`ui/custom_widget/__init__.py`、`ui/custom_widget/view_panel.py`、`ui/text_panel.py`、`ui/text_advanced_format.py`、`ui/text_style_presets.py`、`ui/scenetext_manager.py`、`config/stylesheet.css`
 
 ---
+
+### 配置导入导出功能
+
+**需求：** 支持导入/导出配置（`.json`），可配置排除敏感信息（API Key），导入时自动比对 schema 并给出兼容性提示。
+
+**改动：**
+
+1. **工具函数**（`utils/config.py`）：
+   - 新增 `export_config(path, exclude_api_keys, exclude_recent_projects)` — 序列化 pcfg → JSON，可选清除 `model_profiles` 中的 `api_key`/`proxy`，插入 `_export_meta` 元信息段（版本、时间、排除项），原子写入
+   - 新增 `import_config(path)` — 读取 JSON，用 `_compare_export_schema()` 递归比对导出 key 与当前 `ProgramConfig` schema，收集未知 key（未来版本）和缺失 key（旧版本），`pcfg.merge()` 合并后 `save_config()`
+   - 新增辅助函数 `_compare_export_schema(data, ref_obj, prefix)` — 递归比对，返回 `{unknown_keys, missing_keys}`
+
+2. **UI 页面**（`ui/configpanel.py`）：
+   - General 分组下新增"配置管理"页面，含"导出配置"/"导入配置"按钮
+   - 导出时可选"排除 API 密钥"（默认勾选）
+   - 导入后弹兼容摘要对话框，显示未知项/缺失项数量（最多 5 条），提示关闭重开面板刷新
+
+3. **翻译**（`translate/zh_CN.ts`、`translate/zh_CN.qm`）：新增 20 条翻译，qm 编译 1030 条
+
+4. **文档**（`docs/配置导入导出.md`，新）：功能说明、导出格式、敏感信息排除、导入兼容性说明
+
+**验证：** 语法检查 ✅、i18n 检查 ✅（仅剩 2 条预存缺失）、启动导入测试 5/5 ✅
+
+**涉及文件：** `utils/config.py`、`ui/configpanel.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/配置导入导出.md`（新）
+
+---
+
+### 上下文翻译两处运行时错误修复
+
+**问题：** 上下文翻译功能运行时两处 AttributeError：
+
+1. `ui/context_log_dialog.py:37` — `clear_btn` 连接了不存在的 `self.clear`，应为 `self.output.clear`
+2. `modules/translators/context_batch.py:467` — 局部变量 `re` 遮蔽了模块 `re`，导致后续 `re.search()` 抛出 `AttributeError: 'str' object has no attribute 'search'`
+
+**改动：**
+
+1. `ui/context_log_dialog.py`：`clear_btn.clicked.connect(self.clear)` → `self.output.clear`
+2. `modules/translators/context_batch.py`：`re = self.api_config.get("reasoning_effort", "")` → `reasoning_effort = ...`，解除对模块 `re` 的遮蔽
+
+**验证：** 语法检查 ✅
+
+**涉及文件：** `ui/context_log_dialog.py`、`modules/translators/context_batch.py`
+
+---

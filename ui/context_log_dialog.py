@@ -34,7 +34,7 @@ class ContextLogDialog(QDialog):
 
         btn_row = QVBoxLayout()
         clear_btn = QPushButton(self.tr("Clear"))
-        clear_btn.clicked.connect(self.clear)
+        clear_btn.clicked.connect(self.output.clear)
         btn_row.addWidget(clear_btn, alignment=Qt.AlignmentFlag.AlignRight)
         layout.addLayout(btn_row)
 

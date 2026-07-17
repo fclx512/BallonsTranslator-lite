@@ -74,6 +74,7 @@ config/custom_themes.json
 tools/*.history.json
 tools/.sort_history.json
 debug
+projects/
 .agents/
 .zcode/
 skills-lock.json

@@ -17,10 +17,11 @@ from qtpy.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QCheckBox,
-    QGraphicsOpacityEffect,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFrame,
+    QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
     QKeySequenceEdit,
@@ -41,7 +42,8 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from utils.config import pcfg
+from utils.config import export_config, import_config, pcfg
+from utils.message import create_error_dialog, create_info_dialog
 from utils.shared import (
     CONFIG_COMBOBOX_LONG,
     CONFIG_COMBOBOX_MIDEAN,
@@ -55,6 +57,8 @@ from utils.shared import (
     LINEEDIT_FIXHEIGHT,
     NAVLIST_WIDTH,
 )
+
+import os.path as osp
 
 from .custom_widget import (
     ConfigCheckBox,
@@ -2015,6 +2019,67 @@ class ConfigPanel(Widget):
             label_performance, perf_widget, object_name="GroupGeneral"
         )
 
+        # === Config Management (Import / Export) ===
+        label_config_mgmt = self.tr("Config Management")
+        config_mgmt_widget = QWidget()
+        config_mgmt_layout = QVBoxLayout(config_mgmt_widget)
+        config_mgmt_layout.setContentsMargins(0, 0, 0, 0)
+        config_mgmt_layout.setSpacing(0)
+
+        # Export section
+        config_mgmt_layout.addWidget(ConfigSectionHeader(self.tr("Export Config")))
+
+        self.export_exclude_keys = ConfigCheckBox(
+            self.tr("Exclude API keys when exporting")
+        )
+        self.export_exclude_keys.setChecked(True)
+        font = self.export_exclude_keys.font()
+        font.setPointSizeF(CONFIG_FONTSIZE_CONTENT * 0.8)
+        self.export_exclude_keys.setFont(font)
+        config_mgmt_layout.addWidget(ConfigSubBlock(
+            self.export_exclude_keys,
+            note=self.tr(
+                "<p>API profiles will be exported without <b>api_key</b> and "
+                "<b>proxy</b> fields. Structure and all other settings remain "
+                "intact. Uncheck to include credentials "
+                "(not recommended for sharing).</p>"
+            ),
+        ))
+
+        export_btn = QPushButton(self.tr("Export Config..."))
+        export_btn.setObjectName("ConfigButton")
+        export_btn.clicked.connect(self.on_export_config)
+        export_sublock = ConfigSubBlock(
+            export_btn,
+            name=self.tr("Export"),
+            note=self.tr(
+                "<p>Save current settings to a <b>.json</b> file. "
+                "Useful for backups or transferring configurations "
+                "between machines.</p>"
+            ),
+        )
+        config_mgmt_layout.addWidget(export_sublock)
+
+        # Import section
+        config_mgmt_layout.addWidget(ConfigSectionHeader(self.tr("Import Config")))
+
+        import_btn = QPushButton(self.tr("Import Config..."))
+        import_btn.setObjectName("ConfigButton")
+        import_btn.clicked.connect(self.on_import_config)
+        import_sublock = ConfigSubBlock(
+            import_btn,
+            name=self.tr("Import"),
+            note=self.tr(
+                "<p>Load settings from a previously exported <b>.json</b> file. "
+                "A compatibility summary will be shown before applying.</p>"
+            ),
+        )
+        config_mgmt_layout.addWidget(import_sublock)
+
+        self.config_mgmt_block = generalConfigPanel.addGroupedBlock(
+            label_config_mgmt, config_mgmt_widget, object_name="GroupGeneral"
+        )
+
         # === Navigation tree (upstream-style) ===
         self.configTable = ConfigTable()
         self.configTable.setObjectName("ConfigNavList")
@@ -2034,6 +2099,10 @@ class ConfigPanel(Widget):
         self.configTable.addSection(general_header, label_typesetting, "typesetting", self.typesetting_block.section_widget)
         self.configTable.addSection(general_header, label_performance, "performance", self.performance_block.section_widget)
         self.configTable.addSection(general_header, label_interface, "interface", self.interface_block.section_widget)
+        self.configTable.addSection(
+            general_header, label_config_mgmt, "config_mgmt",
+            self.config_mgmt_block.section_widget,
+        )
 
         # Expand all headers so children are visible
         self.configTable.expandAll()
@@ -2050,6 +2119,7 @@ class ConfigPanel(Widget):
             "typesetting": self.typesetting_block.section_widget,
             "performance": self.performance_block.section_widget,
             "interface": self.interface_block.section_widget,
+            "config_mgmt": self.config_mgmt_block.section_widget,
         }
 
         # Select first section by default
@@ -2089,6 +2159,104 @@ class ConfigPanel(Widget):
         pcfg.module.keep_exist_textlines = (
             self.detect_config_panel.keep_existing_checker.isChecked()
         )
+
+    def on_export_config(self):
+        """Export current configuration to a JSON file."""
+        from pathlib import Path
+
+        exclude_keys = self.export_exclude_keys.isChecked()
+        ddir = osp.dirname(pcfg.text_styles_path)
+        savep = QFileDialog.getSaveFileName(
+            self, self.tr("Export Config"), ddir, None, "(.json)"
+        )
+        if not isinstance(savep, str):
+            savep = savep[0]
+        if savep == "":
+            return
+        suffix = Path(savep).suffix
+        if suffix != ".json":
+            if suffix == "":
+                savep = savep + ".json"
+            else:
+                savep = savep.replace(suffix, ".json")
+
+        if export_config(savep, exclude_api_keys=exclude_keys):
+            create_info_dialog(
+                self.tr("Configuration exported to ") + savep
+            )
+        else:
+            create_error_dialog(
+                self.tr("Failed to export configuration"),
+                parent=self,
+            )
+
+    def on_import_config(self):
+        """Import configuration from a JSON file and merge into pcfg."""
+        ddir = osp.dirname(pcfg.text_styles_path)
+        p = QFileDialog.getOpenFileName(
+            self, self.tr("Import Config"), ddir, None, "(.json)"
+        )
+        if not isinstance(p, str):
+            p = p[0]
+        if p == "":
+            return
+
+        result = import_config(p)
+        if not result["success"]:
+            create_error_dialog(
+                self.tr("Failed to import configuration"),
+                parent=self,
+            )
+            return
+
+        # Build summary message
+        lines = []
+        meta = result.get("export_meta", {})
+        if meta.get("app_version"):
+            lines.append(
+                self.tr("Source version: {ver}").format(ver=meta["app_version"])
+            )
+        unknown = result.get("unknown_keys", [])
+        missing = result.get("missing_keys", [])
+
+        lines.append("")
+
+        if not unknown and not missing:
+            lines.append(
+                self.tr("All settings imported successfully.")
+            )
+        else:
+            lines.append(
+                self.tr("Configuration imported ({n} items checked):")
+                .format(n=len(unknown) + len(missing))
+            )
+
+        if unknown:
+            lines.append(
+                self.tr("⚠ {n} unknown setting(s) — from a newer version, will be skipped:")
+                .format(n=len(unknown))
+            )
+            for k in unknown[:5]:
+                lines.append(f"  \u2022 {k}")
+            if len(unknown) > 5:
+                lines.append(self.tr("  \u2026 and {n} more").format(n=len(unknown) - 5))
+
+        if missing:
+            lines.append(
+                self.tr("\u2139 {n} setting(s) not in file \u2014 current values kept:")
+                .format(n=len(missing))
+            )
+            for k in missing[:5]:
+                lines.append(f"  \u2022 {k}")
+            if len(missing) > 5:
+                lines.append(self.tr("  \u2026 and {n} more").format(n=len(missing) - 5))
+
+        lines.append("")
+        lines.append(
+            self.tr("Please close and reopen Settings to refresh the UI.")
+        )
+
+        create_info_dialog("\n".join(lines), parent=self)
 
     def addConfigBlock(self, header: str) -> _DeadBlock:
         # Legacy shim — sections are now pages. Returned block's

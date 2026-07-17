@@ -4,6 +4,7 @@ import os
 import os.path as osp
 import traceback
 from dataclasses import field
+from datetime import datetime
 from typing import Dict, List
 
 from . import shared
@@ -438,3 +439,178 @@ def save_text_styles(raise_exception=False):
     os.replace(tmp_save_tgt, pcfg.text_styles_path)
     LOGGER.info("Text style saved")
     return True
+
+
+# ── Config Import / Export ──────────────────────────────────────────
+
+CONFIG_EXPORT_VERSION = 1
+
+# Keys whose values are always stripped during export when exclude_api_keys=True
+EXPORT_SENSITIVE_KEYS = {"api_key", "proxy"}
+
+
+def _compare_export_schema(data, ref_obj, prefix=""):
+    """Recursively compare exported dict keys against a Config schema.
+
+    Returns:
+        dict with keys:
+        - unknown_keys: keys in export not in current schema (future-version features)
+        - missing_keys:  keys in schema not in export (will keep current values)
+    """
+    result = {"unknown_keys": [], "missing_keys": []}
+    ref_annotations = getattr(ref_obj, "__annotations__", {})
+    ref_keys = set(ref_annotations.keys())
+    data_keys = set(data.keys()) if isinstance(data, dict) else set()
+
+    for key in sorted(data_keys - ref_keys):
+        if not key.startswith("_"):
+            path = f"{prefix}.{key}" if prefix else key
+            result["unknown_keys"].append(path)
+
+    for key in sorted(ref_keys - data_keys):
+        path = f"{prefix}.{key}" if prefix else key
+        result["missing_keys"].append(path)
+
+    # Recurse into known nested Config fields
+    for key in ref_keys & data_keys:
+        child_val = getattr(ref_obj, key, None)
+        child_data = data.get(key)
+        if isinstance(child_val, Config) and isinstance(child_data, dict):
+            child_result = _compare_export_schema(
+                child_data, child_val, f"{prefix}.{key}" if prefix else key
+            )
+            result["unknown_keys"].extend(child_result["unknown_keys"])
+            result["missing_keys"].extend(child_result["missing_keys"])
+
+    return result
+
+
+def _get_app_version():
+    """Return the application version string, or 'unknown' if unavailable."""
+    try:
+        from importlib.metadata import version
+        return version("ballonstranslator")
+    except Exception:
+        pass
+    try:
+        return __import__("launch").__version__
+    except Exception:
+        pass
+    return "0.3.0"
+
+
+def export_config(path, exclude_api_keys=True, exclude_recent_projects=False):
+    """Export pcfg to a JSON file with optional filtering.
+
+    Args:
+        path: Target file path (should end in .json).
+        exclude_api_keys: Strip api_key and proxy from LLM profiles.
+        exclude_recent_projects: Omit recent project list.
+
+    Returns:
+        True on success, False on failure.
+    """
+    global pcfg
+    try:
+        data = json.loads(json_dump_program_config(pcfg))
+
+        # Stash metadata before filtering
+        export_meta = {
+            "version": CONFIG_EXPORT_VERSION,
+            "app_version": _get_app_version(),
+            "exported_at": datetime.now().isoformat(),
+            "excluded": [],
+        }
+
+        # Filter sensitive data
+        if exclude_api_keys:
+            profiles_raw = data.get("module", {}).get("model_profiles", "[]")
+            try:
+                profiles = json.loads(profiles_raw) if profiles_raw else []
+                excluded_keys = set()
+                for p in profiles:
+                    for sk in EXPORT_SENSITIVE_KEYS:
+                        if sk in p:
+                            p[sk] = ""
+                            excluded_keys.add(
+                                "module.model_profiles[].%s" % sk
+                            )
+                if excluded_keys:
+                    data["module"]["model_profiles"] = json.dumps(
+                        profiles, ensure_ascii=False
+                    )
+                    export_meta["excluded"].extend(sorted(excluded_keys))
+            except (json.JSONDecodeError, TypeError):
+                LOGGER.warning("Failed to parse model_profiles for export filtering")
+
+        if exclude_recent_projects:
+            data.pop("recent_proj_list", None)
+            export_meta["excluded"].append("recent_proj_list")
+
+        data["_export_meta"] = export_meta
+
+        # Atomic write
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        os.replace(tmp, path)
+        LOGGER.info("Config exported to %s", path)
+        return True
+
+    except Exception as e:
+        LOGGER.error("Failed to export config to %s: %s", path, e)
+        LOGGER.error(traceback.format_exc())
+        return False
+
+
+def import_config(path):
+    """Import config from a JSON file and merge into pcfg.
+
+    Returns:
+        dict with keys:
+        - success: bool
+        - unknown_keys: list of keys in export not in current schema
+        - missing_keys: list of keys in current schema not in export
+        - export_meta: the _export_meta block (or empty dict)
+    """
+    global pcfg
+    result = {
+        "success": False,
+        "unknown_keys": [],
+        "missing_keys": [],
+        "export_meta": {},
+    }
+
+    try:
+        with open(path, "r", encoding="utf8") as f:
+            data = json.load(f)
+    except Exception as e:
+        LOGGER.error("Failed to read config file %s: %s", path, e)
+        return result
+
+    # Extract metadata
+    export_meta = data.pop("_export_meta", {})
+    result["export_meta"] = export_meta
+
+    # Compare schemas for compatibility hints
+    schema_result = _compare_export_schema(data, pcfg)
+    result["unknown_keys"] = schema_result["unknown_keys"]
+    result["missing_keys"] = schema_result["missing_keys"]
+
+    try:
+        constructed = ProgramConfig(**data)
+        pcfg.merge(constructed)
+        save_config()
+        result["success"] = True
+        LOGGER.info(
+            "Config imported from %s (unknown: %d, missing: %d)",
+            path,
+            len(result["unknown_keys"]),
+            len(result["missing_keys"]),
+        )
+    except Exception as e:
+        LOGGER.error("Failed to import config from %s: %s", path, e)
+        LOGGER.error(traceback.format_exc())
+
+    return result
