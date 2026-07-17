@@ -1,6 +1,7 @@
 import os
 import os.path as osp
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -8,6 +9,7 @@ import traceback
 from functools import partial
 from pathlib import Path
 from typing import List, Optional, Union
+from uuid import uuid4
 
 from qtpy.QtCore import QEasingCurve, QElapsedTimer, QEvent, QEventLoop, QPoint, QPointF, QRect, QSize, Qt, QTimer, Signal
 
@@ -244,8 +246,17 @@ class MainWindow(mainwindow_cls):
         self.setupShortcuts()
         self.setupRegisterWidget()
         # self.showMaximized()
+        # Set a reasonable default geometry before maximizing, so that
+        # restoring from maximized (e.g. Win+Down or drag from title bar)
+        # returns to a usable size rather than Qt's tiny default.
+        screen = QGuiApplication.primaryScreen()
+        if screen:
+            avail = screen.availableSize()
+            self.resize(avail.width() * 4 // 5, avail.height() * 4 // 5)
         FramelessMoveResize.toggleMaxState(self)
         self.setAcceptDrops(True)
+
+        self._temp_project_dirs: set = set()  # drag-imported temp project dirs
 
         if open_dir != "" and osp.exists(open_dir):
             self.OpenProj(open_dir)
@@ -286,7 +297,9 @@ class MainWindow(mainwindow_cls):
         self.leftBar.globalSearchChecker.clicked.connect(self.on_set_gsearch_widget)
         self.leftBar.open_dir.connect(self.OpenProj)
         self.leftBar.open_json_proj.connect(self.openJsonProj)
+        self.leftBar.open_images.connect(self.openImages)
         self.leftBar.save_proj.connect(self.manual_save)
+        self.leftBar.save_proj_as.connect(self.saveProjectAs)
         self.leftBar.export_src_txt.connect(
             lambda: self.on_export_txt(dump_target="source")
         )
@@ -342,6 +355,7 @@ class MainWindow(mainwindow_cls):
         self.canvas.textstack_changed.connect(self.on_textstack_changed)
         self.canvas.run_blktrans.connect(self.on_run_blktrans)
         self.canvas.drop_open_folder.connect(self.dropOpenDir)
+        self.canvas.drop_images.connect(self.openImages)
         self.canvas.copy_src_signal.connect(self.on_copy_src)
         self.canvas.paste_src_signal.connect(self.on_paste_src)
 
@@ -941,9 +955,13 @@ class MainWindow(mainwindow_cls):
     def set_display_lang(self, lang: str):
         self.retranslateUI()
 
+    _IMG_EXTS = frozenset({".bmp", ".jpg", ".png", ".jpeg", ".webp", ".jxl"})
+
     def OpenProj(self, proj_path: str):
         if osp.isdir(proj_path):
             self.openDir(proj_path)
+        elif osp.splitext(proj_path)[1].lower() in self._IMG_EXTS:
+            self.openImages([proj_path])
         else:
             self.openJsonProj(proj_path)
 
@@ -1008,6 +1026,7 @@ class MainWindow(mainwindow_cls):
             self.st_manager.clearSceneTextitems()
             self.titleBar.setTitleContent(osp.basename(directory))
             self.updatePageList()
+            self.canvas._update_hint_visibility()
             self.opening_dir = False
             progress.close()
         except Exception as e:
@@ -1062,6 +1081,101 @@ class MainWindow(mainwindow_cls):
             self.leftBar.updateRecentProjList(directory)
             self.OpenProj(directory)
 
+    def openImages(self, filepaths: List[str]):
+        """Create a temp project from dragged/opened image files.
+
+        If a project is already open, this is a no-op — users must close the
+        current project first (or use File → Open Image before loading a folder).
+        """
+        if self.imgtrans_proj.img_valid:
+            return
+
+        # Determine parent directory for the temp project
+        root = pcfg.temp_project_dir or shared.TEMP_PROJECTS_DIR
+        os.makedirs(root, exist_ok=True)
+
+        # Generate a unique project directory name
+        base = osp.splitext(osp.basename(filepaths[0]))[0]
+        uid = uuid4().hex[:8]
+        work_dir = osp.join(root, f"{base}_{uid}")
+
+        # Copy all images into the working directory
+        os.makedirs(work_dir)
+        for fp in filepaths:
+            shutil.copy2(fp, osp.join(work_dir, osp.basename(fp)))
+
+        # Track as temp project for optional auto-clean
+        self._temp_project_dirs.add(work_dir)
+
+        # Proceed with normal project loading
+        self.openDir(work_dir)
+        self.leftBar.updateRecentProjList(work_dir)
+
+    def saveProjectAs(self):
+        """Save the current project to a new location (Ctrl+Shift+S).
+
+        Copies the entire project directory (images, JSON, mask/, inpainted/,
+        result/, etc.) to a user-chosen destination and switches to it.
+        If the source was a drag-imported temp project, it is cleaned up.
+        """
+        if self.imgtrans_proj.directory is None or not self.imgtrans_proj.img_valid:
+            return
+
+        # Save current state first
+        self.manual_save()
+
+        # Wait for any pending image saves to complete
+        while self.imsave_thread.isRunning():
+            QApplication.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
+            time.sleep(0.05)
+
+        src_dir = self.imgtrans_proj.directory
+
+        # Ask user for destination folder
+        dialog = QFileDialog()
+        dst_dir = dialog.getExistingDirectory(
+            self,
+            self.tr("Save project to..."),
+            osp.dirname(src_dir),
+        )
+        if not dst_dir:
+            return  # user cancelled
+
+        try:
+            # Copy entire project contents
+            shutil.copytree(src_dir, dst_dir, dirs_exist_ok=True)
+
+            # Rename the project JSON to match the new directory name
+            old_basename = osp.basename(src_dir)
+            new_basename = osp.basename(dst_dir)
+            old_json = osp.join(dst_dir, f"imgtrans_{old_basename}.json")
+            new_json = osp.join(dst_dir, f"imgtrans_{new_basename}.json")
+            if osp.exists(old_json) and old_json != new_json:
+                os.replace(old_json, new_json)
+
+            # Remove .backup file if present (from conditional_save during close)
+            old_backup = osp.join(dst_dir, f"imgtrans_{old_basename}.json.backup")
+            if osp.exists(old_backup):
+                os.remove(old_backup)
+
+            # Switch to new location
+            self.openDir(dst_dir)
+            self.leftBar.updateRecentProjList(dst_dir)
+
+            # If the source was a temp project, clean it up
+            if src_dir in self._temp_project_dirs:
+                self._temp_project_dirs.discard(src_dir)
+                shutil.rmtree(src_dir, ignore_errors=True)
+
+        except Exception as e:
+            create_error_dialog(
+                e,
+                self.tr("Failed to save project to") + f" {dst_dir}",
+            )
+        finally:
+            # Restore hint visibility (openDir may have loaded a project)
+            self.canvas._update_hint_visibility()
+
     def openJsonProj(self, json_path: str):
         try:
             self.opening_dir = True
@@ -1071,6 +1185,7 @@ class MainWindow(mainwindow_cls):
             self.updatePageList()
             self.titleBar.setTitleContent(osp.basename(self.imgtrans_proj.proj_path))
             self.opening_dir = False
+            self.canvas._update_hint_visibility()
         except Exception as e:
             self.opening_dir = False
             create_error_dialog(e, self.tr("Failed to load project from") + json_path)
@@ -1129,6 +1244,16 @@ class MainWindow(mainwindow_cls):
         self.st_manager.blockSignals(True)
         self.canvas.prepareClose()
         self.save_config()
+
+        # Auto-clean temp project dirs created by drag-import
+        if pcfg.auto_clean_temp_projects:
+            for d in list(self._temp_project_dirs):
+                try:
+                    if osp.isdir(d):
+                        shutil.rmtree(d, ignore_errors=True)
+                except OSError:
+                    pass
+
         return super().closeEvent(event)
 
     def changeEvent(self, event: QEvent):

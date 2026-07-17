@@ -222,6 +222,10 @@ class ProgramConfig(Config):
     )
     animation_fps: int = 0  # 0=auto, 30=30fps, 60=60fps, -1=disabled
 
+    # ── Temp project (drag-imported single/multi images) ─────
+    temp_project_dir: str = ""  # empty = use default TEMP_PROJECTS_DIR
+    auto_clean_temp_projects: bool = False  # delete temp dirs on close
+
     # ── Performance settings ─────────────────────────────────
     text_rendering: int = 1  # 0=Crisp(always vector), 1=Smooth(bitmap cache)
     show_decorations_during_drag: bool = False
@@ -350,6 +354,16 @@ def load_config(config_path: str = shared.CONFIG_PATH):
 
     global pcfg
     pcfg.merge(config)
+
+    # Reset gradient fields — gradient is a per-text-block visual effect,
+    # not a global default. Don't persist across restarts.
+    # See also FontFormatPanel.on_active_textstyle_label_changed in text_panel.py.
+    gf = pcfg.global_fontformat
+    gf.gradient_enabled = False
+    gf.gradient_start_color = [0, 0, 0]
+    gf.gradient_end_color = [255, 255, 255]
+    gf.gradient_angle = 0.0
+    gf.gradient_size = 1.0
 
     # Backward compat: migrate old theme_name to light_theme/dark_theme
     if hasattr(pcfg, "theme_name") and pcfg.theme_name:

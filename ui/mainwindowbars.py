@@ -87,7 +87,9 @@ class LeftBar(Widget):
     configChecked = Signal()
     open_dir = Signal(str)
     open_json_proj = Signal(str)
+    open_images = Signal(list)  # list of image file paths
     save_proj = Signal()
+    save_proj_as = Signal()
     save_config = Signal()
 
     def __init__(self, mainwindow, *args, **kwargs) -> None:
@@ -118,9 +120,16 @@ class LeftBar(Widget):
         actionOpenProj = QAction(self.tr("Open Project ... *.json"), self)
         actionOpenProj.triggered.connect(self.onOpenProj)
 
+        actionOpenImage = QAction(self.tr("Open Image ..."), self)
+        actionOpenImage.triggered.connect(self.onOpenImage)
+
         actionSaveProj = QAction(self.tr("Save Project"), self)
         self.save_proj = actionSaveProj.triggered
         actionSaveProj.setShortcut(QKeySequence.StandardKey.Save)
+
+        actionSaveProjAs = QAction(self.tr("Save Project As ..."), self)
+        self.save_proj_as = actionSaveProjAs.triggered
+        actionSaveProjAs.setShortcut(QKeySequence.StandardKey.SaveAs)
 
         actionExportSrcTxt = QAction(self.tr("Export source text as TXT"), self)
         self.export_src_txt = actionExportSrcTxt.triggered
@@ -135,12 +144,13 @@ class LeftBar(Widget):
         self.recentMenu = QMenu(self.tr("Open Recent"), self)
 
         openMenu = QMenu(self)
-        openMenu.addActions([actionOpenFolder, actionOpenProj])
-        openMenu.addMenu(self.recentMenu)
+        openMenu.addActions([actionOpenFolder, actionOpenProj, actionOpenImage])
+        self._recent_menu_action = openMenu.addMenu(self.recentMenu)
         openMenu.addSeparator()
         openMenu.addActions(
             [
                 actionSaveProj,
+                actionSaveProjAs,
                 actionExportSrcTxt,
                 actionExportTranslationTxt,
                 actionImportTranslationTxt,
@@ -187,6 +197,57 @@ class LeftBar(Widget):
             action = QAction(proj, self)
             self.recentMenu.addAction(action)
             action.triggered.connect(self.recentActionTriggered)
+        self._add_trailing_clear_action()
+        self._update_recent_menu_state()
+
+    # ── Recent menu helpers ────────────────────────────────
+
+
+    def _get_proj_actions(self):
+        """Return actions that correspond to recent project entries only."""
+        actions = self.recentMenu.actions()
+        return [
+            a for a in actions if not a.property("_is_clear_action") and not a.isSeparator()
+        ]
+
+    def _remove_trailing_clear_action(self):
+        """Remove existing 'Clear History' action and its preceding separator."""
+        actions = self.recentMenu.actions()
+        for a in list(actions):
+            if a.property("_is_clear_action"):
+                self.recentMenu.removeAction(a)
+        actions = self.recentMenu.actions()
+        if actions and actions[-1].isSeparator():
+            self.recentMenu.removeAction(actions[-1])
+
+    def _add_trailing_clear_action(self):
+        """Add separator and 'Clear History' action at the end if there are entries."""
+        if not self._get_proj_actions():
+            return
+        self.recentMenu.addSeparator()
+        clear_action = QAction(self.tr("Clear History"), self)
+        clear_action.setProperty("_is_clear_action", True)
+        clear_action.triggered.connect(self._clearRecentProjList)
+        self.recentMenu.addAction(clear_action)
+
+    def _rebuild_trailing_clear_action(self):
+        """Remove and re-add the trailing separator + Clear History."""
+        self._remove_trailing_clear_action()
+        self._add_trailing_clear_action()
+
+    def _clearRecentProjList(self):
+        """Clear all recent project history entries."""
+        for a in self._get_proj_actions():
+            self.recentMenu.removeAction(a)
+        self.recent_proj_list.clear()
+        self._remove_trailing_clear_action()
+        self.save_config.emit()
+        self._update_recent_menu_state()
+
+    def _update_recent_menu_state(self):
+        """Gray out the 'Open Recent' menu item when there are no recent projects."""
+        has_recent = bool(self._get_proj_actions())
+        self._recent_menu_action.setEnabled(has_recent)
 
     def updateRecentProjList(self, proj_list: Union[str, List[str]]):
         if len(proj_list) == 0:
@@ -225,7 +286,7 @@ class LeftBar(Widget):
             topAction = newTop
 
         MAXIUM_RECENT_PROJ_NUM = 14
-        actionlist = self.recentMenu.actions()
+        actionlist = self._get_proj_actions()
         num_to_remove = len(actionlist) - MAXIUM_RECENT_PROJ_NUM
         if num_to_remove > 0:
             actions_to_remove = actionlist[-num_to_remove:]
@@ -233,7 +294,9 @@ class LeftBar(Widget):
                 self.recentMenu.removeAction(action)
                 self.recent_proj_list.pop()
 
+        self._rebuild_trailing_clear_action()
         self.save_config.emit()
+        self._update_recent_menu_state()
 
     def recentActionTriggered(self):
         path = self.sender().text()
@@ -243,6 +306,9 @@ class LeftBar(Widget):
         else:
             self.recent_proj_list.remove(path)
             self.recentMenu.removeAction(self.sender())
+            self._rebuild_trailing_clear_action()
+            self.save_config.emit()
+            self._update_recent_menu_state()
 
     def onOpenFolder(self) -> None:
 
@@ -272,6 +338,17 @@ class LeftBar(Widget):
         )
         if osp.exists(json_path):
             self.open_json_proj.emit(json_path)
+
+    def onOpenImage(self):
+        dialog = QFileDialog()
+        paths = dialog.getOpenFileNames(
+            self,
+            self.tr("Open Image ..."),
+            "",
+            "Images (*.bmp *.jpg *.jpeg *.png *.webp *.jxl);;All Files (*)",
+        )[0]
+        if paths:
+            self.open_images.emit(paths)
 
     def stateCheckerChanged(self, checker_type: str):
         if checker_type == "imgtrans":

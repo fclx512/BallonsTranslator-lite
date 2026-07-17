@@ -1613,6 +1613,26 @@ class ConfigPanel(Widget):
         )
         project_layout.addWidget(intermediate_imsave_sublock)
 
+        # Temporary Projects
+        project_layout.addWidget(ConfigSectionHeader(self.tr("Temporary Projects")))
+
+        self.temp_clean_checker = ConfigCheckBox(
+            self.tr("Clean up imported image projects on exit")
+        )
+        self.temp_clean_checker.stateChanged.connect(
+            self.on_auto_clean_temp_changed
+        )
+        temp_clean_sublock = ConfigSubBlock(
+            self.temp_clean_checker,
+	            note=self.tr(
+	                "<p>When enabled, projects created by importing individual images "
+	                "(via drag-drop or <b>Open Image…</b>) will be "
+	                "<b>automatically deleted</b> when the application closes.</p>"
+	                "<p>Use <b>Save Project As…</b> to keep a project permanently.</p>"
+	            ),
+        )
+        project_layout.addWidget(temp_clean_sublock)
+
         self.project_block = generalConfigPanel.addGroupedBlock(
             label_project, project_widget, object_name="GroupGeneral"
         )
@@ -2155,6 +2175,9 @@ class ConfigPanel(Widget):
     def on_open_onstartup_changed(self):
         pcfg.open_recent_on_startup = self.open_on_startup_checker.isChecked()
 
+    def on_auto_clean_temp_changed(self):
+        pcfg.auto_clean_temp_projects = self.temp_clean_checker.isChecked()
+
     def on_fntsize_flag_changed(self):
         pcfg.let_fntsize_flag = self.let_fntsize_combox.currentIndex()
 
@@ -2454,6 +2477,9 @@ class ConfigPanel(Widget):
 
         if pcfg.open_recent_on_startup:
             self.open_on_startup_checker.setChecked(True)
+
+        if pcfg.auto_clean_temp_projects:
+            self.temp_clean_checker.setChecked(True)
 
         self.detect_config_panel.keep_existing_checker.setChecked(
             pcfg.module.keep_exist_textlines

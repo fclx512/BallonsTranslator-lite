@@ -105,6 +105,8 @@ args = None
 
 FUZZY_MATCH_IMAGE_NAME = False
 
+TEMP_PROJECTS_DIR = osp.join(PROGRAM_PATH, "projects")
+
 cache_data: Dict = None
 cache_dir: str = osp.join(PROGRAM_PATH, ".btrans_cache")
 cache_path: str = osp.join(PROGRAM_PATH, ".btrans_cache/cache.json")

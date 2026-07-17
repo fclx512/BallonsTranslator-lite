@@ -192,6 +192,15 @@ class CustomGV(QGraphicsView):
 
     def paintEvent(self, event):
         super().paintEvent(event)
+        if self.canvas is not None and self.canvas._drag_hover_active:
+            painter = QPainter(self.viewport())
+            pen = QPen(QColor(64, 150, 255, 180), 3)
+            painter.setPen(pen)
+            r = self.viewport().rect()
+            painter.drawRect(r.adjusted(2, 2, -3, -3))
+            fill_color = QColor(64, 150, 255, 30)
+            painter.fillRect(r, fill_color)
+            painter.end()
         if self.canvas is not None and self.canvas.preview_mode:
             painter = QPainter(self.viewport())
             pen = QPen(QColor("#e67e22"), 5)
@@ -291,6 +300,7 @@ class Canvas(QGraphicsScene):
     proj_savestate_changed = Signal(bool)
     textstack_changed = Signal()
     drop_open_folder = Signal(str)
+    drop_images = Signal(list)  # list of image file paths from drag-drop
     context_menu_requested = Signal(QPoint, bool)
     incanvas_selection_changed = Signal()
     align_textblks = Signal(str)
@@ -384,6 +394,21 @@ class Canvas(QGraphicsScene):
         self.notextLabel.setVisible(False)
         self._layout_status_labels()
 
+        # Empty-state hint shown when no project is loaded
+        self._empty_hint_label = QLabel(self.gv)
+        self._empty_hint_label.setObjectName("EmptyHintLabel")
+        self._empty_hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_hint_label.setText(
+            self.tr("Drop images here or open a folder to start")
+        )
+        self._empty_hint_label.setStyleSheet(
+            "color: rgba(128, 128, 128, 180); font-size: 22px; background: transparent;"
+        )
+        self._empty_hint_label.adjustSize()
+        self._empty_hint_label.setVisible(True)
+
+        self._drag_hover_active = False
+
         self.txtblkShapeControl = TextBlkShapeControl(self.gv)
 
         self.baseLayer = QGraphicsRectItem()
@@ -442,10 +467,12 @@ class Canvas(QGraphicsScene):
         self.clipboard_blks: List[TextBlock] = []
 
         self.drop_folder: str = None
+        self._drop_images: List[str] = []
         self.block_selection_signal = False
         self._fit_to_window = True  # fit-to-window flag, set by MainWindow before updateCanvas()
 
-        im_rect = QRectF(0, 0, C.SCREEN_W, C.SCREEN_H)
+        # Tiny rect for empty startup — updated to actual image size when a project opens.
+        im_rect = QRectF(0, 0, 1, 1)
         self.baseLayer.setRect(im_rect)
 
     def on_switch_item(self, switch_delta: int, key_event: QKeyEvent = None):
@@ -457,25 +484,46 @@ class Canvas(QGraphicsScene):
             return self.inpaintLayer.pixmap().size()
         return self.baseLayer.rect().size().toSize()
 
-    def dragEnterEvent(self, e: QGraphicsSceneDragDropEvent):
+    _IMG_EXTS = frozenset({".bmp", ".jpg", ".png", ".jpeg", ".webp", ".jxl"})
 
+    def dragEnterEvent(self, e: QGraphicsSceneDragDropEvent):
         self.drop_folder = None
+        self._drop_images = []
+
+        # No drag response when a project is already open
+        if self.imgtrans_proj.img_valid:
+            return
+
         if e.mimeData().hasUrls():
-            urls = e.mimeData().urls()
-            ufolder = None
-            for url in urls:
+            imgs = []
+            for url in e.mimeData().urls():
                 furl = url.toLocalFile()
                 if os.path.isdir(furl):
-                    ufolder = furl
-                    break
-            if ufolder is not None:
+                    self.drop_folder = furl
+                    break  # folder wins immediately
+                elif os.path.splitext(furl)[1].lower() in self._IMG_EXTS:
+                    imgs.append(furl)
+
+            if self.drop_folder is not None:
                 e.acceptProposedAction()
-                self.drop_folder = ufolder
+                self._show_drag_hover(True)
+            elif imgs:
+                self._drop_images = imgs
+                e.acceptProposedAction()
+                self._show_drag_hover(True)
+
+    def dragLeaveEvent(self, e: QGraphicsSceneDragDropEvent):
+        self._show_drag_hover(False)
+        return super().dragLeaveEvent(e)
 
     def dropEvent(self, event) -> None:
         if self.drop_folder is not None:
             self.drop_open_folder.emit(self.drop_folder)
-            self.drop_folder = None
+        elif self._drop_images:
+            self.drop_images.emit(self._drop_images)
+        self.drop_folder = None
+        self._drop_images = []
+        self._show_drag_hover(False)
         return super().dropEvent(event)
 
     def textEditMode(self) -> bool:
@@ -781,12 +829,61 @@ class Canvas(QGraphicsScene):
         pos.setX(x - 30)
         self.search_widget.move(pos)
 
+        # Center the empty-state hint label in the viewport
+        if self._empty_hint_label.isVisible():
+            self._empty_hint_label.adjustSize()
+            hint_x = (gv_w - self._empty_hint_label.width()) // 2
+            hint_y = (gv_h - self._empty_hint_label.height()) // 2
+            self._empty_hint_label.move(hint_x, hint_y)
+
         self._layout_status_labels()
 
     def onScaleFactorChanged(self):
         self.scaleFactorLabel.setText(f"{self.scale_factor * 100:2.0f}%")
         self.scaleFactorLabel.raise_()
         self.scaleFactorLabel.startFadeAnimation()
+
+    def _show_drag_hover(self, active: bool):
+        """Show/hide a semi-transparent blue overlay during drag-hover."""
+        if self._drag_hover_active == active:
+            return
+        self._drag_hover_active = active
+        self.gv.viewport().update()
+
+    def _update_hint_visibility(self):
+        """Show the empty-state hint and clear canvas when no project is loaded."""
+        visible = not self.imgtrans_proj.img_valid
+        self._empty_hint_label.setVisible(visible)
+        if visible:
+            self.onViewResized()  # re-center the hint
+            self._clear_canvas()
+
+    def _clear_canvas(self):
+        """Clear visual content from the canvas when the project is no longer valid."""
+        self.editing_textblkitem = None
+        self.stroke_img_item = None
+        self.erase_img_key = None
+        self.txtblkShapeControl.setBlkItem(None)
+        self.mid_btn_pressed = False
+        self.search_widget.reInitialize()
+        self.clearSelection()
+        self.setProjSaveState(False)
+
+        # Clear text block items from the scene
+        for item in list(self.textLayer.childItems()):
+            self.removeItem(item)
+
+        # Reset pixmap layers to transparent
+        if self.base_pixmap is not None:
+            pixmap = self.base_pixmap.copy()
+            pixmap.fill(Qt.GlobalColor.transparent)
+            self.textLayer.setPixmap(pixmap)
+            self.inpaintLayer.setPixmap(pixmap)
+
+        self.drawingLayer.clearAllDrawings()
+
+        self.baseLayer.setRect(QRectF(0, 0, 1, 1))
+        self.baseLayer.setScale(1)
 
     def on_selection_changed(self):
         if self.txtblkShapeControl.isVisible():

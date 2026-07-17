@@ -162,6 +162,11 @@
     <context>
         <name>Canvas</name>
         <message>
+            <location filename="..\ui\canvas.py" line="389"/>
+            <source>Drop images here or open a folder to start</source>
+            <translation>拖拽图片到此处或打开文件夹以开始</translation>
+        </message>
+        <message>
             <location filename="..\ui\canvas.py" line="993" />
             <source>Copy</source>
             <translation>复制</translation>
@@ -1055,9 +1060,21 @@
 			            <source>&lt;p&gt;Customize the right-click context menu: reorder items, add or remove commands via drag-and-drop.&lt;/p&gt;</source>
 			            <translation>&lt;p&gt;自定义右键菜单：拖拽排序、添加或移除命令项。&lt;/p&gt;</translation>
 			        </message>
-		    </context>
-	    <context>
-	        <name>DependencyDialog</name>
+			        <message>
+			            <source>Temporary Projects</source>
+			            <translation>临时项目</translation>
+			        </message>
+			        <message>
+			            <source>Clean up imported image projects on exit</source>
+				            <translation>关闭时清理单图导入的临时项目</translation>
+				        </message>
+				        <message>
+				            <source>&lt;p&gt;When enabled, projects created by importing individual images (via drag-drop or &lt;b&gt;Open Image…&lt;/b&gt;) will be &lt;b&gt;automatically deleted&lt;/b&gt; when the application closes.&lt;/p&gt;&lt;p&gt;Use &lt;b&gt;Save Project As…&lt;/b&gt; to keep a project permanently.&lt;/p&gt;</source>
+				            <translation>&lt;p&gt;启用后，通过单张图片导入（拖拽或&lt;b&gt;打开图片…&lt;/b&gt;）创建的临时项目将在程序关闭时&lt;b&gt;自动删除&lt;/b&gt;。&lt;/p&gt;&lt;p&gt;使用&lt;b&gt;项目另存为…&lt;/b&gt;可以永久保留项目。&lt;/p&gt;</translation>
+				        </message>
+				    </context>
+			    <context>
+			        <name>DependencyDialog</name>
         <message>
             <location filename="..\ui\dependency_dialog.py" line="388" />
             <source>Dependencies</source>
@@ -1487,15 +1504,25 @@ Run detection + OCR to populate text blocks.</source>
             <translation>打开文件夹...</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindowbars.py" line="270" />
-            <location filename="..\ui\mainwindowbars.py" line="118" />
+            <location filename="..\ui\mainwindowbars.py" line="270"/>
+            <location filename="..\ui\mainwindowbars.py" line="118"/>
             <source>Open Project ... *.json</source>
             <translation>打开项目文件...*.json</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindowbars.py" line="121" />
+            <location filename="..\ui\mainwindowbars.py" line="122"/>
+            <source>Open Image ...</source>
+            <translation>打开图片...</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindowbars.py" line="125"/>
             <source>Save Project</source>
             <translation>保存项目</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindowbars.py" line="129"/>
+            <source>Save Project As ...</source>
+            <translation>项目另存为...</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" line="125" />
@@ -1526,6 +1553,11 @@ Run detection + OCR to populate text blocks.</source>
             <location filename="..\ui\mainwindowbars.py" line="260" />
             <source>Select Directory</source>
             <translation>选择文件夹</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindowbars.py" line="216" />
+            <source>Clear History</source>
+            <translation>清除历史记录</translation>
         </message>
     </context>
     <context>
@@ -1624,6 +1656,16 @@ Run detection + OCR to populate text blocks.</source>
             <source>Restart to apply changes? 
 </source>
             <translation>重启程序以应用更改?\n</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" line="1150"/>
+            <source>Save project to...</source>
+            <translation>项目另存到...</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" line="1165"/>
+            <source>Failed to save project to</source>
+            <translation>项目另存失败：</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" line="1367" />
