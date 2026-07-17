@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import time
-from typing import TYPE_CHECKING, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 import httpx
 import openai
@@ -27,6 +28,12 @@ if TYPE_CHECKING:
 from utils.config import pcfg
 
 logger = logging.getLogger("context_batch")
+
+# Debug log path (written alongside project root, for GUI users who can't see terminal logs)
+_DEBUG_LOG = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "ctx_debug.log",
+)
 
 # ── Pydantic models ─────────────────────────────────────────────────────
 
@@ -62,10 +69,12 @@ class ContextBatchTranslator:
         api_config: dict,
         translation_prompt: str = "",
         status_callback=None,
+        custom_glossary: Optional[Dict[str, str]] = None,
     ):
         self.api_config = dict(api_config)
         self.translation_prompt = translation_prompt
         self._status_cb = status_callback
+        self.custom_glossary = custom_glossary or {}
 
         # Runtime state (reset per project via set_project)
         self._proj: Optional["ProjImgTrans"] = None
@@ -74,6 +83,7 @@ class ContextBatchTranslator:
         self._glossary: Dict[str, str] = {}
         self._summaries: Dict[int, str] = {}
         self._completed: Set[str] = set()
+        self._batch_boundaries: List[Tuple[int, int]] = []
 
         # Run-time params (set by Run dialog)
         self.batch_size = 5
@@ -101,6 +111,8 @@ class ContextBatchTranslator:
         self._completed.clear()
         for pname, blklist in proj.pages.items():
             self._blklist_to_pagekey[id(blklist)] = pname
+        self._batch_boundaries.clear()
+        self._auto_configure()
 
     def finalize(self):
         self._proj = None
@@ -109,6 +121,7 @@ class ContextBatchTranslator:
         self._glossary.clear()
         self._summaries.clear()
         self._completed.clear()
+        self._batch_boundaries.clear()
 
     def translate_textblk_lst(self, textblk_lst: List["TextBlock"]):
         non_empty = []
@@ -137,7 +150,32 @@ class ContextBatchTranslator:
         for tr, blk in zip(translations, textblk_lst):
             # Final safeguard: ensure no stray \n reaches the canvas
             tr = tr.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+            tr = tr.replace("\u2028", " ").replace("\u2029", " ").replace("\u0085", " ")
             blk.translation = tr
+
+        # DEBUG: dump first 3 blocks' repr to check for hidden control chars
+        # Writes to ctx_debug.log since terminal logs may not be visible in GUI mode.
+        if non_empty:
+            try:
+                import datetime as _dt
+                with open(_DEBUG_LOG, "a", encoding="utf-8") as dbg:
+                    dbg.write(
+                        f"\n--- {_dt.datetime.now():%H:%M:%S} "
+                        f"page={page_key} ---\n"
+                    )
+                    for ii in non_empty[:3]:
+                        blk = textblk_lst[ii]
+                        dbg.write(
+                            f"  blk[{ii}] repr: {blk.translation[:200]!r}\n"
+                        )
+                        # Dump raw hex to detect hidden control chars like \u2028
+                        raw_chars = blk.translation[:100] if blk.translation else ""
+                        if raw_chars:
+                            dbg.write(
+                                f"  blk[{ii}] hex: {raw_chars.encode('utf-8').hex()}\n"
+                            )
+            except Exception:
+                pass
 
     def _status(self, msg: str):
         logger.info(msg)
@@ -171,18 +209,24 @@ class ContextBatchTranslator:
     # ── Core contextual translate ─────────────────────────────────────
 
     def _contextual(self, text_list, blk_list, page_key, non_empty):
-        bs = self.batch_size
         pi = self._page_idx(page_key)
         if self._proj is None:
             return self._direct_call(text_list)
         all_keys = list(self._proj.pages.keys())
         total = len(all_keys)
 
-        # Group pages into batches of batch_size
-        start = (pi // bs) * bs
-        end = min(start + bs, total)
-        batch_keys = all_keys[start:end]
+        # Resolve batch from pre-computed boundaries (auto-configured)
+        batch_keys = None
+        batch_idx = 0
+        for bi, (s, e) in enumerate(self._batch_boundaries):
+            if s <= pi < e:
+                batch_keys = all_keys[s:e]
+                batch_idx = bi
+                break
+        if batch_keys is None:
+            batch_keys = [all_keys[pi]]
         triggers = {batch_keys[0]}
+        total_batches = len(self._batch_boundaries)
 
         # Cache hit
         if page_key in self._cached:
@@ -196,15 +240,14 @@ class ContextBatchTranslator:
 
         ctx_pages = len([c for c in ctx if c.get("type") != "summary"])
         ctx_blks = sum(len(c.get("blocks", [])) for c in ctx if "blocks" in c)
-        use_summary = total > bs * 4 and self._summaries
-        mode = "summary" if use_summary else ("full" if total <= bs else "window")
-        batch_idx = (pi // bs) + 1
-        total_batches = (total + bs - 1) // bs
+        use_summary = total_batches > 4 and self._summaries
+        mode = "summary" if use_summary else ("full" if total_batches <= 1 else "auto")
         self._status(
             f"────────────────────────────────────────"
         )
         self._status(
-            f"Batch {batch_idx}/{total_batches} · Pages {start}-{end-1} · {mode}"
+            f"Batch {batch_idx + 1}/{total_batches} · "
+            f"Pages {batch_keys[0]}-{batch_keys[-1]} · {mode}"
         )
         self._status(
             f"Context: {ctx_pages} pages, {ctx_blks} ref blocks"
@@ -243,8 +286,10 @@ class ContextBatchTranslator:
 
         if self.use_glossary:
             self._update_glossary(blk_list, raw)
-        if total > bs * 4:
-            self._update_summary(start, end, batch_keys)
+        if total_batches > 4:
+            start_idx = self._page_idx(batch_keys[0])
+            end_idx = self._page_idx(batch_keys[-1]) + 1
+            self._update_summary(start_idx, end_idx, batch_keys)
 
         return self._apply_cache(blk_list, non_empty, self._cached[page_key])
 
@@ -262,6 +307,67 @@ class ContextBatchTranslator:
                 ]
         return [cache.get(idx, blk_list[idx].get_text()) for idx in non_empty]
 
+    # ── Auto configuration ──────────────────────────────────────────────
+
+    def _auto_configure(self):
+        """Auto-determine batch organization based on page content density.
+
+        Groups consecutive pages into batches where each batch stays within
+        a character budget (~4000 CJK chars ≈ ~2000 tokens). Never splits a
+        single page across batches. Context window is sized proportionally.
+        """
+        if self._proj is None:
+            return
+
+        MAX_CHARS_PER_BATCH = 4000  # ~2000 CJK tokens
+        all_keys = list(self._proj.pages.keys())
+        total = len(all_keys)
+        if total == 0:
+            return
+
+        # Estimate chars per page from source text
+        page_chars = []
+        for pname in all_keys:
+            blks = self._proj.pages[pname]
+            chars = sum(
+                len(b.get_text().strip())
+                for b in blks
+                if b.get_text().strip()
+            )
+            page_chars.append(chars)
+
+        total_chars = sum(page_chars)
+
+        # Compute batch boundaries — never split a page
+        boundaries = []
+        start = 0
+        while start < total:
+            batch_chars = 0
+            end = start
+            while end < total:
+                next_chars = page_chars[end]
+                if batch_chars + next_chars > MAX_CHARS_PER_BATCH and end > start:
+                    break
+                batch_chars += next_chars
+                end += 1
+            boundaries.append((start, end))
+            start = end
+        self._batch_boundaries = boundaries
+
+        # Auto context pages: budget ~2000 chars for reference context
+        avg_chars = total_chars / total if total else 0
+        if avg_chars > 0:
+            self.context_pages = max(1, int(2000 / avg_chars))
+        else:
+            self.context_pages = 3
+        self.context_pages = min(self.context_pages, 10)
+
+        self._status(
+            f"Auto-config: {len(boundaries)} batch(es), "
+            f"{total_chars} chars across {total} pages, "
+            f"context ±{self.context_pages} pages"
+        )
+
     # ── Context building ──────────────────────────────────────────────
 
     def _build_ctx(self, page_key, batch_keys, all_keys):
@@ -278,7 +384,7 @@ class ContextBatchTranslator:
             ctx.append(self._describe(all_keys[ci], ci))
 
         # Summaries for completed batches (only for long projects)
-        if total > self.batch_size * 4 and self._summaries:
+        if len(self._batch_boundaries) > 4 and self._summaries:
             lines = "\n".join(
                 f"  Batch {k}: {v}" for k, v in sorted(self._summaries.items())
             )
@@ -305,7 +411,15 @@ class ContextBatchTranslator:
                 continue
             e = {"id": f"{pidx}:{bidx}", "src": src}
             if done and blk.translation:
-                e["trans"] = blk.translation
+                # Clean \n from existing translations when building context.
+                # Normal translator does NOT sanitize \n, so previous runs may
+                # have left them. Passing raw \n in TXT format context corrupts
+                # the format and encourages the LLM to produce \n in output.
+                e["trans"] = (
+                    blk.translation.replace("\r\n", " ")
+                    .replace("\n", " ")
+                    .replace("\r", " ")
+                )
             entries.append(e)
         return {
             "pidx": pidx,
@@ -334,31 +448,40 @@ class ContextBatchTranslator:
                     )
         return result
 
-	    # ── Message assembly ──────────────────────────────────────────────
+        # ── Message assembly ──────────────────────────────────────────────
 
     def _build_msgs(self, ctx_pages, target_blocks):
         source = pcfg.module.translate_source if hasattr(pcfg, "module") else "auto"
         target = pcfg.module.translate_target if hasattr(pcfg, "module") else "auto"
 
-        # System prompt
+        # System prompt — 3-step chain-of-thought methodology
         sys_prompt = (
             f"You are a professional manga/comic translator "
             f"translating from {source} to {target}.\n\n"
-            f"The user message contains two sections in project import TXT format:\n"
-            f"1. === CONTEXT (nearby pages) === — Already translated, "
-            f"shown for reference (source → translation).\n"
-            f"2. === TRANSLATE THESE === — Source text only, "
-            f"these need translation.\n\n"
-            f"RULES:\n"
-            f"- Keep character names and terms consistent with CONTEXT.\n"
-            f"- Match the speaking style and tone from CONTEXT.\n"
+            f"### 3-Step Translation Process (internal, for each block):\n\n"
+            f"Step 1 — Literal translation:\n"
+            f"  Translate each block literally in your mind first, preserving "
+            f"all original markers, numbers, placeholders, and special characters.\n\n"
+            f"Step 2 — Context-aware correction:\n"
+            f"  Review each literal translation considering:\n"
+            f"  • Context from nearby pages (character names, terminology, "
+            f"dialogue tone)\n"
+            f"  • Reading order — adjacent blocks must flow as natural dialogue\n"
+            f"  • Character voice and personality consistency\n"
+            f"  • Semantic accuracy within the scene\n\n"
+            f"Step 3 — Final polishing:\n"
+            f"  Polish into natural, idiomatic {target} dialogue. Sound effects "
+            f"localized appropriately. Character names and terms consistent "
+            f"with CONTEXT.\n\n"
+            f"### Rules\n"
             f"- Blocks are in READING ORDER. Adjacent blocks must read "
             f"naturally in sequence — "
             f"flow like continuous dialogue or narration.\n"
             f"- Do NOT include any line breaks inside a translation.\n"
-            f"- Localize sound effects and onomatopoeia appropriately.\n"
-            f"- Output ONLY the project import TXT format, nothing else.\n\n"
-            f"Output format (same as input):\n"
+            f"- Keep character names and terms consistent with CONTEXT.\n"
+            f"- Translate faithfully. The original work is art — use natural "
+            f"language, do not censor or sanitize.\n\n"
+            f"### Output format (TXT only)\n"
             f"### page_name.ext\n"
             f"1. translation for first block\n"
             f"2. translation for second block\n"
@@ -367,12 +490,19 @@ class ContextBatchTranslator:
             f"1. translation ..."
         )
 
-        # Glossary section
+        # Glossary section — custom terms first, auto-glossary second
+        glossary_lines = []
+        if self.custom_glossary:
+            glossary_lines.append("Verified glossary (must match exactly):")
+            for s, t in self.custom_glossary.items():
+                glossary_lines.append(f'  "{s}" → "{t}"')
         if self.use_glossary and self._glossary:
-            lines = ["Term consistency guide:"]
+            if not glossary_lines:
+                glossary_lines.append("Term consistency guide:")
             for s, t in list(self._glossary.items())[:MAX_GLOSSARY]:
-                lines.append(f'  "{s}" → "{t}"')
-            sys_prompt += "\n\n" + "\n".join(lines)
+                glossary_lines.append(f'  "{s}" → "{t}"')
+        if glossary_lines:
+            sys_prompt += "\n\n" + "\n".join(glossary_lines)
 
         messages = [{"role": "system", "content": sys_prompt}]
 
@@ -661,6 +791,17 @@ class ContextBatchTranslator:
                         if completion.choices
                         else ""
                     )
+
+                    # DEBUG: dump raw LLM response to ctx_debug.log
+                    try:
+                        import datetime as _dt
+                        with open(_DEBUG_LOG, "a", encoding="utf-8") as dbg:
+                            dbg.write(
+                                f"\n=== LLM RAW [{_dt.datetime.now():%H:%M:%S}] "
+                                f"{parser=} ===\n{raw[:2000]}\n=== END RAW ===\n"
+                            )
+                    except Exception:
+                        pass
 
                     if not raw:
                         logger.warning(

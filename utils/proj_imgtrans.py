@@ -580,7 +580,12 @@ class ProjImgTrans:
             text_in_page = ["### " + page_name]
             for ii, blk in enumerate(blk_list):
                 if dump_target == "translation":
-                    text = blk.translation.strip()
+                    text = (
+                        blk.translation.strip()
+                        .replace("\r\n", " ")
+                        .replace("\n", " ")
+                        .replace("\r", " ")
+                    )
                 elif dump_target == "source":
                     text = blk.get_text().strip()
                 text_in_page.append(f"{ii + 1}. {text}")

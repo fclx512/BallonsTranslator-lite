@@ -1926,37 +1926,7 @@ Failed: {f}/{t}</source>
             <source>AI Chat Settings</source>
             <translation>AI Chat 设置</translation>
         </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="2119" />
-            <source>Batch Size:</source>
-            <translation>批次大小：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="2125" />
-            <source>Context Pages:</source>
-            <translation>上下文页数：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="2139" />
-            <source>Adaptive -- will be determined when Run starts</source>
-            <translation>自适应 — 将在运行时自动确定</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="2141" />
-            <source>Full context (%1 pages, all previous translations as reference)</source>
-            <translation>全文上下文（%1页，以之前所有翻译为参考）</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="2147" />
-            <source>Windowed context (%1 pages, +/-%2 page window)</source>
-            <translation>窗口上下文（%1页，±%2页窗口）</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="2152" />
-            <source>Windowed + auto-summary (%1 pages, long-form mode)</source>
-            <translation>窗口 + 自动摘要（%1 页，长文模式）</translation>
-        </message>
-        <message>
+                <message>
             <location filename="..\ui\mainwindow.py" line="2163" />
             <source>Enforce Term Consistency (Glossary)</source>
             <translation>启用术语一致性（词汇表）</translation>
@@ -2138,14 +2108,51 @@ Output:
 		            <source>Apply reorder?</source>
 		            <translation>应用重排？</translation>
 		        </message>
+			        <message>
+			            <location filename="..\ui\mainwindow.py" />
+			            <source>Apply</source>
+			            <translation>应用</translation>
+			        </message>
+			        <message>
+			            <location filename="..\ui\mainwindow.py" />
+			            <source>Custom Terms...</source>
+			            <translation>自定义术语...</translation>
+			        </message>
+				    </context>
+		    <context>
+		        <name>CustomGlossaryDialog</name>
 		        <message>
-		            <location filename="..\ui\mainwindow.py" />
-		            <source>Apply</source>
-		            <translation>应用</translation>
+		            <location filename="..\ui\glossary_dialog.py" />
+		            <source>Custom Glossary</source>
+		            <translation>自定义术语表</translation>
+		        </message>
+		        <message>
+		            <location filename="..\ui\glossary_dialog.py" />
+		            <source>Enter one term per line: source → target
+Supported separators:   →   |   ->   |   :</source>
+		            <translation>每行一条术语：来源 → 译文
+支持的分隔符：  →   |   ->   |   :</translation>
+		        </message>
+		        <message>
+		            <location filename="..\ui\glossary_dialog.py" />
+		            <source>e.g. 天馬 → 天马
+氷の女王 → 冰之女王</source>
+		            <translation>例如：天馬 → 天马
+氷の女王 → 冰之女王</translation>
+		        </message>
+		        <message>
+		            <location filename="..\ui\glossary_dialog.py" />
+		            <source>OK</source>
+		            <translation>确定</translation>
+		        </message>
+		        <message>
+		            <location filename="..\ui\glossary_dialog.py" />
+		            <source>Cancel</source>
+		            <translation>取消</translation>
 		        </message>
 		    </context>
-	    <context>
-	        <name>MainWindowMixin</name>
+		    <context>
+		        <name>MainWindowMixin</name>
         <message>
             <location filename="..\ui\mainwindow_mixin.py" line="101" />
             <source>Failed to load project </source>

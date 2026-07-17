@@ -2897,59 +2897,28 @@ class MainWindow(mainwindow_cls):
             ai_title.setStyleSheet("font-weight: bold;")
             ai_grid.addWidget(ai_title, 0, 0, 1, 2)
 
-            # Adaptive mode info label — updates based on project page count
-            mode_label = QLabel()
-            mode_label.setWordWrap(True)
-            mode_label.setStyleSheet("font-style: italic;")
-            ai_grid.addWidget(mode_label, 1, 0, 1, 2)
-
-            ai_grid.addWidget(QLabel(self.tr("Batch Size:")), 2, 0)
-            batch_combo = QComboBox()
-            batch_combo.addItems(["1", "3", "5", "10", "20"])
-            batch_combo.setCurrentText("5")
-            ai_grid.addWidget(batch_combo, 2, 1)
-
-            ai_grid.addWidget(QLabel(self.tr("Context Pages:")), 3, 0)
-            pages_spin = QSpinBox()
-            pages_spin.setRange(0, 20)
-            pages_spin.setValue(3)
-            ai_grid.addWidget(pages_spin, 3, 1)
-
-            def _update_mode_label():
-                if all_pages_cb.isChecked():
-                    effective = num_pages
-                else:
-                    effective = slider.high() - slider.low() + 1
-                bs = int(batch_combo.currentText())
-                pw = pages_spin.value()
-                if effective == 0:
-                    text = self.tr("Adaptive -- will be determined when Run starts")
-                elif effective <= bs:
-                    text = self.tr(
-                        "Full context (%1 pages, all previous translations as reference)"
-                    ).replace("%1", str(effective))
-                elif effective <= bs * 4:
-                    text = (
-                        self.tr("Windowed context (%1 pages, +/-%2 page window)")
-                        .replace("%1", str(effective))
-                        .replace("%2", str(pw))
-                    )
-                else:
-                    text = self.tr(
-                        "Windowed + auto-summary (%1 pages, long-form mode)"
-                    ).replace("%1", str(effective))
-                mode_label.setText(text)
-
-            _update_mode_label()
-            batch_combo.currentTextChanged.connect(lambda _: _update_mode_label())
-            pages_spin.valueChanged.connect(lambda _: _update_mode_label())
-            slider.rangeChanged.connect(lambda _lo, _hi: _update_mode_label())
-            all_pages_cb.toggled.connect(lambda _: _update_mode_label())
+            # Batch size and context pages are now auto-configured internally.
 
             glossary_cb = QCheckBox(self.tr("Enforce Term Consistency (Glossary)"))
             glossary_cb.setObjectName('ConfigCheckBox')
             glossary_cb.setChecked(True)
-            ai_grid.addWidget(glossary_cb, 4, 0, 1, 2)
+            ai_grid.addWidget(glossary_cb, 1, 0, 1, 2)
+
+            # Custom glossary button — visible only when glossary is enabled
+            custom_glossary_store: dict = {}
+            custom_terms_btn = QPushButton(self.tr("Custom Terms..."))
+            custom_terms_btn.setVisible(glossary_cb.isChecked())
+            ai_grid.addWidget(custom_terms_btn, 2, 0, 1, 2)
+
+            def _open_custom_glossary():
+                from ui.glossary_dialog import CustomGlossaryDialog
+                dlg = CustomGlossaryDialog(self, existing_terms=custom_glossary_store)
+                if dlg.exec_() == QDialog.DialogCode.Accepted:
+                    custom_glossary_store.clear()
+                    custom_glossary_store.update(dlg.get_terms())
+
+            glossary_cb.toggled.connect(custom_terms_btn.setVisible)
+            custom_terms_btn.clicked.connect(_open_custom_glossary)
 
             ai_chat_frame.setVisible(False)
             layout.addWidget(ai_chat_frame)
@@ -3022,9 +2991,8 @@ class MainWindow(mainwindow_cls):
                         self._ctx_log_dialog = ContextLogDialog(self)
                         self._ctx_log_dialog.show()
 
-                        ctx.batch_size = int(batch_combo.currentText())
-                        ctx.context_pages = pages_spin.value()
                         ctx.use_glossary = glossary_cb.isChecked()
+                        ctx.custom_glossary = custom_glossary_store
                         self.module_manager.translate_thread.translator = ctx
                         self.module_manager.translate_thread.module = ctx
 
