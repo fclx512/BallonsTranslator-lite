@@ -4,6 +4,22 @@
 
 ## 2026-07-17
 
+### 🏷️ Release v0.3.0 — 设置面板 UI 统一 + 打包控件组件化 + 字体样式重构
+
+**版本：** `v0.3.0`（基于 `v0.2.1`，+5 commits，+2,153 / -1,993 行）
+
+**主要变更：**
+1. **设置面板 UI 统一 + 主题色系统重构** — 分组标题统一、状态色改用主题变量、NavList 焦点框修复
+2. **打包控件功能组件化** — 抽取 `NoArrowsSpinBox`、`ColorSwatchBtn`、`ConfigCheckBox`、`ConfigLineEdit`/`ConfigTextEdit`、`GroupFrame`、`SeparatorWidget` 等共享组件，新增使用文档
+3. **字体样式编辑器视觉重构** — 焦点边框统一 `#5DADE2`、`GroupFrame` 分区包裹、预设/高级面板紧凑条式标题、字体下拉取消可编辑
+4. **Qt Warning 统一管控** — 三层架构（全局消息处理器 → 模型级钳位 → 调用点修复），`utils/safe_qt.py` 新增
+5. **老旧字体一键排除** — `LEGACY_FONTS` 常量 + FontExcludeDialog 一键操作
+6. **移除帮助手册** — 删除 `ui/help_dialog.py` 及相关引用（-884 行减法）
+
+**验证：** 语法检查 ✅、启动导入测试 ✅、i18n 检查 ✅
+
+---
+
 ### 字体样式编辑器 & 文本编辑区视觉层次优化
 
 **需求：** 格式编辑区与文本编辑区的边框无层次区分、样式间隔不一、布局冗余。
