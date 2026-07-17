@@ -523,7 +523,6 @@ class SceneTextManager(QObject):
         self.canvas.layout_textblks.connect(self.onAutoLayoutTextblks)
         self.canvas.reset_angle.connect(self.onResetAngle)
         self.canvas.squeeze_blk.connect(self.onSqueezeBlk)
-        self.canvas.normalize_break_requested.connect(self.on_normalize_break)
         self.canvas.align_textblks.connect(self.onAlignTextBlks)
         self.canvas.merge_textblks.connect(self.on_merge_textblks)
         self.canvas.incanvas_selection_changed.connect(
@@ -1345,42 +1344,6 @@ class SceneTextManager(QObject):
                 blkitem, e_trans, num_steps, self.textpanel.formatpanel
             ),
             update_pushed_step=is_formatting,
-        )
-
-    def on_normalize_break(self, squeeze: bool):
-        """画布右键"整理换行"：对当前选中的横排块应用 normalize_softbreaks 并推入撤销栈。"""
-        from utils.text_normalize import normalize_softbreaks
-        from .textedit_commands import NormalizeBreaksCommand
-
-        # 刷新当前页 live 文档到 blk.translation，拿到最新的换行
-        self.updateTextBlkList()
-
-        pname = self.imgtrans_proj.current_img
-        changes = []
-        for blkitem in self.canvas.selected_text_items():
-            blk = blkitem.blk
-            if blk.vertical:
-                continue
-            old_text = blk.translation if isinstance(blk.translation, str) else ""
-            if old_text == "":
-                continue
-            new_text = normalize_softbreaks(old_text)
-            if new_text == old_text:
-                continue  # 无变化，不推命令
-            changes.append(
-                {
-                    "pagename": pname,
-                    "block_idx": blkitem.idx,
-                    "old_translation": old_text,
-                    "old_rich_text": blk.rich_text,
-                    "new_text": new_text,
-                    "squeeze": squeeze,
-                }
-            )
-        if not changes:
-            return
-        self.canvas.push_undo_command(
-            NormalizeBreaksCommand(self.imgtrans_proj, self, changes)
         )
 
     def on_merge_textblks(self, direction: str):

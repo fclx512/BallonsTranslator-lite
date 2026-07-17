@@ -242,7 +242,6 @@ class ProgramConfig(Config):
 
     # ── Merge direction (shortcut default) ──────────────────
     merge_rtl: bool = False
-    normalize_shrink: bool = False
 
     # ── Right-click context menu customization ─────────────
     context_menu_order: List[str] = field(default_factory=lambda: [

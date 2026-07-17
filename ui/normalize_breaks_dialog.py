@@ -1,8 +1,9 @@
-"""批量整理换行对话框。
+"""整理换行对话框。
 
 布局（自上而下）：
 - ☑ 全部页（勾选时禁用页码列表，按全部页处理）
 - 页码列表（每页一个复选框）
+- 换行处理方式：○ 替换为空格 ○ 直接删除
 - ☐ 完成后自动收缩框
 - [应用] [取消]
 
@@ -11,10 +12,12 @@ live ``TextBlkItem`` 捕获，故本对话框只负责生成每块的文本变�
 """
 
 from qtpy.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QDialog,
     QHBoxLayout,
     QPushButton,
+    QRadioButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -24,7 +27,7 @@ from utils.text_normalize import normalize_softbreaks
 
 
 class NormalizeBreaksDialog(QDialog):
-    """批量整理换行对话框。"""
+    """整理换行对话框。"""
 
     def __init__(self, proj, scene_manager, parent=None):
         super().__init__(parent)
@@ -37,7 +40,7 @@ class NormalizeBreaksDialog(QDialog):
         self._populate_pages()
 
     def _setup_ui(self):
-        self.setWindowTitle(self.tr("Batch Normalize Breaks"))
+        self.setWindowTitle(self.tr("Normalize Breaks"))
         self.setMinimumWidth(400)
         layout = QVBoxLayout(self)
 
@@ -54,6 +57,21 @@ class NormalizeBreaksDialog(QDialog):
         self.page_layout.setSpacing(2)
         self.scroll.setWidget(self.page_container)
         layout.addWidget(self.scroll, stretch=1)
+
+        # 换行处理方式
+        mode_label = QWidget(self)
+        mode_layout = QVBoxLayout(mode_label)
+        mode_layout.setContentsMargins(0, 4, 0, 0)
+        mode_layout.setSpacing(4)
+        self.mode_group = QButtonGroup(self)
+        self.space_radio = QRadioButton(self.tr("Replace with space"), self)
+        self.space_radio.setChecked(True)
+        self.delete_radio = QRadioButton(self.tr("Delete directly"), self)
+        self.mode_group.addButton(self.space_radio, 0)
+        self.mode_group.addButton(self.delete_radio, 1)
+        mode_layout.addWidget(self.space_radio)
+        mode_layout.addWidget(self.delete_radio)
+        layout.addWidget(mode_label)
 
         self.squeeze_check = QCheckBox(self.tr("Auto-shrink after completion"), self)
         self.squeeze_check.setChecked(False)
@@ -98,6 +116,7 @@ class NormalizeBreaksDialog(QDialog):
             ]
 
         squeeze = self.squeeze_check.isChecked()
+        mode = "delete" if self.delete_radio.isChecked() else "space"
         current_pname = self.proj.current_img
 
         for pi in page_indices:
@@ -109,7 +128,7 @@ class NormalizeBreaksDialog(QDialog):
                     continue
                 if not isinstance(blk.translation, str) or blk.translation == "":
                     continue
-                new_text = normalize_softbreaks(blk.translation)
+                new_text = normalize_softbreaks(blk.translation, mode)
                 if new_text == blk.translation:
                     continue
                 self._changes.append(

@@ -2,11 +2,15 @@
 
 提供 ``normalize_softbreaks`` 纯函数，按 ``「」`` 分块归一化译文中的无意义换行：
 
-- 无任何 ``「」`` 的文本：整体 ``\\n``/空白压成单空格，交给排版器重排。
-- ``「」`` 块内换行压成空格；块与块之间用单个 ``\\n`` 分隔（每句独占一行）。
+- 无任何 ``「」`` 的文本：整体 ``\\n``/空白压成单空格或直接删除，交给排版器重排。
+- ``「」`` 块内换行压成空格或直接删除；块与块之间用单个 ``\\n`` 分隔（每句独占一行）。
 - ``「」`` 块之间的纯文本片段：删掉换行、紧贴相邻引号块。
 - 嵌套 ``「」`` 取最外层配对，内层字面保留。
 - 幂等：对已整理过的文本再跑一次结果不变。
+
+``mode`` 参数：
+- ``"space"`` （默认）：换行 → 单空格。
+- ``"delete"``：直接删除换行，不插入空格。
 
 不依赖 Qt，仅用标准库，可被 ``utils`` 包或同级目录导入。
 """
@@ -21,19 +25,26 @@ _NEWLINE_RUN = re.compile(r"[ \t]*\n+[ \t]*")
 _MULTIPLE_SPACES = re.compile(r" {2,}")
 
 
-def normalize_softbreaks(text: str) -> str:
-    """归一化译文软换行。见模块文档。"""
+def normalize_softbreaks(text: str, mode: str = "space") -> str:
+    """归一化译文软换行。
+
+    Args:
+        text: 输入文本。
+        mode: ``"space"`` 换行→空格，``"delete"`` 直接删除换行。
+    """
     if not isinstance(text, str) or text == "":
         return text
 
+    repl = "" if mode == "delete" else " "
+
     if QUOTE_OPEN not in text:
-        return _join_flat(text)
+        return _join_flat(text, repl)
 
     segments = _split_by_outer_quotes(text)
     parts = []
     for typ, content in segments:
         if typ == "quote":
-            parts.append(("quote", "「" + _join_in_quote(content) + "」"))
+            parts.append(("quote", "「" + _join_in_quote(content, repl) + "」"))
         else:
             parts.append(("plain", _join_plain(content)))
 
@@ -48,17 +59,19 @@ def normalize_softbreaks(text: str) -> str:
     return "".join(out)
 
 
-def _join_flat(s: str) -> str:
-    """无引号文本：连续 \\n/空白 → 单空格，strip。"""
-    s = _NEWLINE_RUN.sub(" ", s)
-    s = _MULTIPLE_SPACES.sub(" ", s)
+def _join_flat(s: str, repl: str = " ") -> str:
+    """无引号文本：连续 \\n/空白 → *repl*，strip。"""
+    s = _NEWLINE_RUN.sub(repl, s)
+    if repl == " ":
+        s = _MULTIPLE_SPACES.sub(" ", s)
     return s.strip()
 
 
-def _join_in_quote(s: str) -> str:
-    """quote 段内：连续 \\n/空白 → 单空格，strip。"""
-    s = _NEWLINE_RUN.sub(" ", s)
-    s = _MULTIPLE_SPACES.sub(" ", s)
+def _join_in_quote(s: str, repl: str = " ") -> str:
+    """quote 段内：连续 \\n/空白 → *repl*，strip。"""
+    s = _NEWLINE_RUN.sub(repl, s)
+    if repl == " ":
+        s = _MULTIPLE_SPACES.sub(" ", s)
     return s.strip()
 
 

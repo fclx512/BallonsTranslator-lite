@@ -40,9 +40,47 @@
 
 **涉及文件：** `ui/canvas.py`、`ui/mainwindow.py`、`ui/mainwindowbars.py`、`ui/configpanel.py`、`utils/shared.py`、`utils/config.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
 
+
+
 ---
 
-### 🏷️ Release v0.3.0 — 设置面板 UI 统一 + 打包控件组件化 + 字体样式重构
+### 整理换行功能改造：可选直接删除模式 + 移出右键菜单 + 死代码清理
+
+**需求：**
+1. 批量整理换行增加"直接删除"（不添加空格）选项
+2. 移除右键菜单入口（保留顶部工具菜单）
+3. 改名"批量整理换行"→"整理换行"
+
+**改动：**
+
+1. **核心逻辑**（`utils/text_normalize.py`）：
+   - `normalize_softbreaks()` 新增 `mode="space"|"delete"` 参数
+   - `"space"`（默认）：换行→空格；`"delete"`：直接删除换行
+
+2. **对话框**（`ui/normalize_breaks_dialog.py`）：
+   - 新增「替换为空格」/「直接删除」两个 QRadioButton
+   - 窗口标题从「Batch Normalize Breaks」改为「Normalize Breaks」
+
+3. **右键菜单**（`ui/context_menu_config.py`）：
+   - 移除 `normalize_breaks` 命令定义及 `DEFAULT_ORDER` 条目
+   - Behavior 子菜单移除「Normalize Breaks and Shrink」选项
+   - 删除 `_toggle_normalize_shrink`、`_normalize_breaks_enabled` 辅助函数
+
+4. **菜单改名**（`ui/mainwindowbars.py`）：
+   - 「Batch Normalize Breaks…」→「Normalize Breaks…」
+
+5. **死代码清理**：
+   - `utils/config.py`：删除 `normalize_shrink` 字段
+   - `ui/canvas.py`：删除 `normalize_break_requested` 信号
+   - `ui/scenetext_manager.py`：删除信号连接及 `on_normalize_break` 方法
+
+6. **i18n**（`translate/zh_CN.ts`、`translate/zh_CN.qm`）：
+   - 新增 3 条翻译（Normalize Breaks、Replace with space、Delete directly）
+   - 旧字符串标记为 `type="obsolete"`
+
+**验证：** 语法检查 ✅、i18n 检查 ✅（仅剩 2 条预存缺失）、qm 编译 1028 条 ✅、启动导入测试 5/5 ✅
+
+**涉及文件：** `utils/text_normalize.py`、`ui/normalize_breaks_dialog.py`、`ui/context_menu_config.py`、`ui/mainwindowbars.py`、`ui/mainwindow.py`、`utils/config.py`、`ui/canvas.py`、`ui/scenetext_manager.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
 
 **版本：** `v0.3.0`（基于 `v0.2.1`，+5 commits，+2,153 / -1,993 行）
 
@@ -305,5 +343,36 @@
 **验证：** 语法检查 ✅
 
 **涉及文件：** `ui/context_log_dialog.py`、`modules/translators/context_batch.py`
+
+---
+
+### 上下文翻译换行符问题排查与多项修复
+
+**问题：** 上下文翻译（ContextBatchTranslator）输出的译文中持续存在大量不合理换行符 `\n`，即使已改用 TXT 格式 + 解析器替换 `\n` → 空格。
+
+**排查过程：**
+1. 完整通读 `modules/translators/context_batch.py` 全部代码及调用链
+2. 追踪 TXT 主路径数据流：`_build_msgs` → `_llm_call(txt)` → `_parse_txt_response`（`\n`→空格）→ cache → `_apply_cache` → `blk.translation` — 此路径确实已正确处理 `\n`
+3. 追踪 JSON fallback 路径（`_direct_call`）及 `_parse_json_response` — 发现该路径从未正确工作过
+
+**发现并修复的 bug（5 项）：**
+
+1. **`_direct_call` JSON 格式不匹配**（关键）— prompt 要求 `{"translations": ["..."]}`（简单数组），但 `_parse_json_response` 用 `CtxResponse`（对象数组）解析，始终返回 None → 翻译结果始终是原文。修复：添加数组格式 fallback。
+
+2. **JSON 解析器 `\n` 替换用 `""` 而非 `" "`** — 单词粘连。修复：统一改为 `" "`。
+
+3. **输出格式示例 vs 实际输入不一致** — prompt 中 `Output format (same as input)` 示例在 `###` 和 `1.` 间有空行，但实际输入没有。修复：去掉空行。
+
+4. **`_parse_txt_response` block 索引映射错位** — `_collect_target` 跳过空 text block，导致 target 的 bidx 不连续。解析器用顺序 0,1,2 而非原始 bidx，空 block 之后的 block 拿到原文。修复：用 LLM 输出的 `N.` 编号做 bidx。
+
+5. **`_parse_txt_response` 末尾代码围栏** — 若 LLM 输出 ``` 围栏，结尾 `` ` `` 被最后一个 block 捕获。修复：解析前剥离。
+
+**附加安全网：** `translate_textblk_lst` 最终赋值前统一清洗 `blk.translation` 中的 `\n` → 空格。
+
+**现存问题：** 上述修复后用户测试仍有不合理换行符。判断根因可能在 TXT 路径之外：(a) `_direct_call` 在非 trigger 且缓存未命中时频繁被调用（需排查缓存命中条件）；(b) Qt 自动换行在无空格 CJK 文本下的表现可能被误判为 `\n`；(c) LLM 自身输出格式不稳定导致解析重试次数过多、最终回退到原始 fallback 路径。
+
+**待进一步排查方向：** 在 `_parse_txt_response` 入口和出口加日志确认实际解析路径；检查 `_contextual` 中非 trigger 页面是否真的命中缓存；排查 `_build_ctx` 的 batch/window 判断逻辑是否造成意外跳过。
+
+**涉及文件：** `modules/translators/context_batch.py`
 
 ---

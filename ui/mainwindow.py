@@ -1823,7 +1823,7 @@ class MainWindow(mainwindow_cls):
 
             QMessageBox.information(
                 self,
-                self.tr("批量整理换行"),
+                self.tr("整理换行"),
                 self.tr("已整理 {} 块 / 跳过 {} 块（竖排）").format(
                     dlg.processed_count, dlg.skipped_count
                 ),

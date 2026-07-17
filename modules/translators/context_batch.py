@@ -135,6 +135,8 @@ class ContextBatchTranslator:
         for ii, idx in enumerate(non_empty):
             translations[idx] = result[ii]
         for tr, blk in zip(translations, textblk_lst):
+            # Final safeguard: ensure no stray \n reaches the canvas
+            tr = tr.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
             blk.translation = tr
 
     def _status(self, msg: str):
@@ -199,16 +201,24 @@ class ContextBatchTranslator:
         batch_idx = (pi // bs) + 1
         total_batches = (total + bs - 1) // bs
         self._status(
-            f"────────────────────────────────────────\n"
-            f"Batch {batch_idx}/{total_batches} · Pages {start}-{end-1} · {mode}\n"
-            f"Context: {ctx_pages} pages, {ctx_blks} ref blocks\n"
+            f"────────────────────────────────────────"
+        )
+        self._status(
+            f"Batch {batch_idx}/{total_batches} · Pages {start}-{end-1} · {mode}"
+        )
+        self._status(
+            f"Context: {ctx_pages} pages, {ctx_blks} ref blocks"
+        )
+        self._status(
             f"→ translating {len(target)} blocks"
         )
 
         messages = self._build_msgs(ctx, target)
 
         t0 = time.time()
-        raw = self._llm_call(messages, len(target))
+        raw = self._llm_call(
+            messages, len(target), parser="txt", batch_keys=batch_keys
+        )
         self._status(f"LLM done: {len(target)} translations in {time.time() - t0:.1f}s")
 
         # Log per-block results
@@ -318,41 +328,43 @@ class ContextBatchTranslator:
                             "id": f"{pi}:{bidx}",
                             "pidx": pi,
                             "bidx": bidx,
+                            "pname": pname,
                             "src": src,
                         }
                     )
         return result
 
-    # ── Message assembly ──────────────────────────────────────────────
+	    # ── Message assembly ──────────────────────────────────────────────
 
     def _build_msgs(self, ctx_pages, target_blocks):
         source = pcfg.module.translate_source if hasattr(pcfg, "module") else "auto"
         target = pcfg.module.translate_target if hasattr(pcfg, "module") else "auto"
 
-        # System prompt — always use dedicated context prompt, NOT profile's
-        # prompt_template (which is designed for simple batch translation and
-        # lacks any context-awareness instructions).
+        # System prompt
         sys_prompt = (
             f"You are a professional manga/comic translator "
             f"translating from {source} to {target}.\n\n"
-            f"The user message contains two sections:\n"
-            f"1. === CONTEXT (nearby pages) === — Pages near the current text, "
-            f"already translated for reference.\n"
-            f"   [done] = fully translated with both source and translation shown;\n"
-            f"   [raw]  = source text only, not yet translated.\n"
-            f"   Use these to maintain consistency in character names, "
-            f"terminology, and dialogue tone.\n\n"
-            f"2. === TRANSLATE THESE === — The text blocks that need translation now.\n\n"
+            f"The user message contains two sections in project import TXT format:\n"
+            f"1. === CONTEXT (nearby pages) === — Already translated, "
+            f"shown for reference (source → translation).\n"
+            f"2. === TRANSLATE THESE === — Source text only, "
+            f"these need translation.\n\n"
             f"RULES:\n"
-            f"- Keep character names and terms consistent with the CONTEXT "
-            f"translations.\n"
-            f"- Match the speaking style and tone established in the CONTEXT.\n"
-            f"- Use surrounding dialogue to disambiguate pronouns and implied "
-            f"subjects.\n"
+            f"- Keep character names and terms consistent with CONTEXT.\n"
+            f"- Match the speaking style and tone from CONTEXT.\n"
+            f"- Blocks are in READING ORDER. Adjacent blocks must read "
+            f"naturally in sequence — "
+            f"flow like continuous dialogue or narration.\n"
+            f"- Do NOT include any line breaks inside a translation.\n"
             f"- Localize sound effects and onomatopoeia appropriately.\n"
-            f"- Output ONLY valid JSON with no extra text.\n\n"
-            f"Output strict JSON:\n"
-            '{"translations": [{"id": "page:block", "translation": "..."}, ...]}'
+            f"- Output ONLY the project import TXT format, nothing else.\n\n"
+            f"Output format (same as input):\n"
+            f"### page_name.ext\n"
+            f"1. translation for first block\n"
+            f"2. translation for second block\n"
+            f"\n"
+            f"### next_page.ext\n"
+            f"1. translation ..."
         )
 
         # Glossary section
@@ -364,26 +376,192 @@ class ContextBatchTranslator:
 
         messages = [{"role": "system", "content": sys_prompt}]
 
-        # User prompt
+        # User prompt — all pages in unified project TXT format
         parts = []
+
+        # Context section — pages with translations
         if ctx_pages:
             parts.append("=== CONTEXT (nearby pages) ===")
             for cp in ctx_pages:
                 if cp.get("type") == "summary":
                     parts.append(cp["text"])
                     continue
-                status = "[done]" if cp.get("translated") else "[raw]"
-                parts.append(f'\nPage {cp["pidx"]} "{cp["name"]}" {status}:')
+                parts.append(f'\n### {cp["name"]}\n')
                 for b in cp["blocks"]:
-                    line = f'  [{b["id"]}] "{b["src"]}"'
+                    # page:block → 1-based block number
+                    bid = int(b["id"].split(":")[1]) + 1
+                    line = f'{bid}. {b["src"]}'
                     if b.get("trans"):
-                        line += f' → "{b["trans"]}"'
+                        line += f' → {b["trans"]}'
                     parts.append(line)
 
+        # Target section — source text only
         parts.append("\n=== TRANSLATE THESE ===")
-        parts.extend(f'  [{b["id"]}] "{b["src"]}"' for b in target_blocks)
+        by_page = {}
+        for b in target_blocks:
+            pn = b.get("pname", f"page_{b['pidx']}")
+            by_page.setdefault(pn, []).append(b)
+        for pname, blocks in by_page.items():
+            parts.append(f'\n### {pname}\n')
+            for b in blocks:
+                parts.append(f'{b["bidx"] + 1}. {b["src"]}')
+
         messages.append({"role": "user", "content": "\n".join(parts)})
         return messages
+
+    # ── Response parsers ────────────────────────────────────────────────
+
+    def _parse_json_response(self, raw: str):
+        """Parse JSON response.
+
+        Supports two formats:
+        1. CtxResponse schema: {"translations": [{"id": "...", "translation": "..."}, ...]}
+        2. Simple array:       {"translations": ["...", "...", ...]}
+
+        Returns dict {id_str: translation} or None on failure.
+        All \n in translations replaced with space.
+        """
+
+        def _clean(text: str) -> str:
+            return text.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+
+        json_str = raw.strip()
+        m = re.search(
+            r"```(?:json)?\s*(\{.*?\})\s*```",
+            json_str,
+            re.DOTALL,
+        )
+        if m:
+            json_str = m.group(1)
+        else:
+            s = json_str.find("{")
+            e = json_str.rfind("}")
+            if s != -1 and e > s:
+                json_str = json_str[s : e + 1]
+
+        try:
+            data = json.loads(json_str)
+        except json.JSONDecodeError:
+            return None
+
+        translations = data.get("translations")
+        if not isinstance(translations, list) or not translations:
+            return None
+
+        # Try CtxResponse format first (objects with id + translation)
+        if isinstance(translations[0], dict) and "id" in translations[0]:
+            try:
+                validated = CtxResponse.model_validate(data)
+                if validated and validated.translations:
+                    return {
+                        item.id: _clean(item.translation)
+                        for item in validated.translations
+                    }
+            except ValidationError:
+                pass
+
+        # Fallback: simple array of strings → use index as id
+        if isinstance(translations[0], str):
+            return {
+                str(i): _clean(t)
+                for i, t in enumerate(translations)
+            }
+
+        return None
+
+    def _parse_txt_response(self, raw: str, batch_keys) -> dict | None:
+        """Parse project import TXT format response.
+
+        Uses the same approach as parse_txt_translation() — captures all text
+        between block markers (including continuation lines) so multi-line
+        translations aren't truncated, then strips \n from each block.
+
+        Expected format:
+            ### page_name.ext
+
+            1. translation for block 0
+            continues on next line
+            2. translation for block 1
+
+            ### next_page.ext
+
+            1. translation ...
+
+        Returns flat dict {pidx:bidx → translation_clean} or None.
+        """
+        # Strip leading/trailing ``` code fences that some LLMs add
+        raw = raw.strip()
+        raw = re.sub(r"^```\w*\s*", "", raw)
+        raw = re.sub(r"```\s*$", "", raw)
+        PAGE_RE = re.compile(r"^###\s+(.+)$", re.MULTILINE)
+        BLOCK_RE = re.compile(r"^\d+\.", re.MULTILINE)
+
+        # Split raw text into page sections by ### headers
+        page_starts = [
+            (m.start(), m.group(1).strip()) for m in PAGE_RE.finditer(raw)
+        ]
+        if not page_starts:
+            return None
+
+        result = {}  # {pname: {bidx: text}}
+        for i, (pos, pname) in enumerate(page_starts):
+            # Content from this page header to the next (or end of string)
+            next_pos = (
+                page_starts[i + 1][0]
+                if i + 1 < len(page_starts)
+                else len(raw)
+            )
+            page_text = raw[pos:next_pos]
+
+            # Extract blocks: content between "N." markers (multi-line safe).
+            # Use the LLM's block number (1-based "N." → 0-based bidx) so
+            # mapping stays correct even when empty blocks were skipped.
+            blocks = {}
+            prev_end = None
+            prev_m = None
+            for m in BLOCK_RE.finditer(page_text):
+                if prev_end is not None and prev_m is not None:
+                    raw_text = page_text[prev_end : m.start()].strip()
+                    bidx = int(prev_m.group().rstrip(".")) - 1
+                    blocks[bidx] = (
+                        raw_text.replace("\r\n", " ")
+                        .replace("\n", " ")
+                        .replace("\r", " ")
+                    )
+                prev_end = m.end()
+                prev_m = m
+            if prev_end is not None and prev_m is not None:
+                raw_text = page_text[prev_end:].strip()
+                bidx = int(prev_m.group().rstrip(".")) - 1
+                blocks[bidx] = (
+                    raw_text.replace("\r\n", " ")
+                    .replace("\n", " ")
+                    .replace("\r", " ")
+                )
+
+            result[pname] = blocks
+
+        # Validate: each expected page must have blocks
+        for pname in batch_keys:
+            if pname not in result or not result[pname]:
+                logger.warning(
+                    "TXT parser: page %s missing or empty", pname
+                )
+                return None
+
+        # Flatten to {pidx:bidx → text}
+        flat = {}
+        proj_keys = list(self._proj.pages.keys()) if self._proj else []
+        for pname, blocks in result.items():
+            try:
+                pidx = proj_keys.index(pname)
+            except ValueError:
+                logger.warning("TXT parser: unknown page %s", pname)
+                continue
+            for bidx, text in blocks.items():
+                flat[f"{pidx}:{bidx}"] = text
+
+        return flat if flat else None
 
     # ── LLM API call ──────────────────────────────────────────────────
 
@@ -413,13 +591,14 @@ class ContextBatchTranslator:
                 {"role": "user", "content": user},
             ],
             len(text_list),
+            parser="json",
         )
         out = []
         for i in range(len(text_list)):
             out.append(result.get(str(i), text_list[i]))
         return out
 
-    def _llm_call(self, messages, expected_count):
+    def _llm_call(self, messages, expected_count, parser="json", batch_keys=None):
         RETRYABLE = (
             openai.RateLimitError,
             openai.APIConnectionError,
@@ -495,35 +674,23 @@ class ContextBatchTranslator:
                         time.sleep(self.retry_parse_sleep)
                         continue
 
-                    # Parse JSON
-                    json_str = raw.strip()
-                    m = re.search(
-                        r"```(?:json)?\s*(\{.*?\})\s*```",
-                        json_str,
-                        re.DOTALL,
-                    )
-                    if m:
-                        json_str = m.group(1)
+                    # Parse response
+                    if parser == "txt":
+                        result = self._parse_txt_response(raw, batch_keys or [])
                     else:
-                        s = json_str.find("{")
-                        e = json_str.rfind("}")
-                        if s != -1 and e > s:
-                            json_str = json_str[s : e + 1]
+                        result = self._parse_json_response(raw)
 
-                    data = json.loads(json_str)
-                    validated = CtxResponse.model_validate(data)
-
-                    if not validated or not validated.translations:
-                        raise ValueError("No translations")
-                    if len(validated.translations) != expected_count:
+                    if result is None:
                         raise ValueError(
-                            f"Expected {expected_count}, "
-                            f"got {len(validated.translations)}"
+                            f"Failed to parse {parser} response"
+                        )
+                    if len(result) != expected_count:
+                        raise ValueError(
+                            f"Expected {expected_count} entries, "
+                            f"got {len(result)}"
                         )
 
-                    return {
-                        item.id: item.translation for item in validated.translations
-                    }
+                    return result
 
                 except (ValidationError, ValueError) as e:
                     logger.warning(

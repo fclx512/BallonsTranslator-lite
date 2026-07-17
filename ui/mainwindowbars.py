@@ -465,8 +465,8 @@ class TitleBar(Widget):
         advAlignAction = QAction(self.tr("Advanced Alignment"), self)
         self.adv_align_trigger = advAlignAction.triggered
 
-        # 批量整理换行
-        normalizeBreaksAction = QAction(self.tr("Batch Normalize Breaks…"), self)
+        # 整理换行
+        normalizeBreaksAction = QAction(self.tr("Normalize Breaks…"), self)
         self.normalize_breaks_triggered = normalizeBreaksAction.triggered
 
         # 无字图配对工具

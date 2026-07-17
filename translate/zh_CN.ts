@@ -306,12 +306,12 @@
             <source>No-text BG</source>
             <translation>无字图</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="..\ui\canvas.py" line="1160" />
             <source>Normalize Breaks</source>
             <translation>整理换行</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="..\ui\canvas.py" line="1161" />
             <source>Normalize Breaks and Shrink</source>
             <translation>整理换行并收缩框</translation>
@@ -2095,8 +2095,8 @@ Output:
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" />
-            <source>批量整理换行</source>
-            <translation>批量整理换行</translation>
+            <source>整理换行</source>
+            <translation>整理换行</translation>
         </message>
 	        <message>
 	            <location filename="..\ui\mainwindow.py" />
@@ -4132,8 +4132,8 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" />
-            <source>Batch Normalize Breaks…</source>
-            <translation>批量整理换行…</translation>
+            <source>Normalize Breaks…</source>
+            <translation>整理换行…</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" line="387" />
@@ -4744,8 +4744,8 @@ in Settings → Mirror Config, then click Retry.</source>
         <name>NormalizeBreaksDialog</name>
         <message>
             <location filename="..\ui\normalize_breaks_dialog.py" />
-            <source>Batch Normalize Breaks</source>
-            <translation>批量整理换行</translation>
+            <source>Normalize Breaks</source>
+            <translation>整理换行</translation>
         </message>
         <message>
             <location filename="..\ui\normalize_breaks_dialog.py" />
@@ -4772,7 +4772,18 @@ in Settings → Mirror Config, then click Retry.</source>
             <source>Page %1 — %2</source>
             <translation>第 %1 页 — %2</translation>
         </message>
-    </context>
+    
+        <message>
+            <location filename="..\ui\normalize_breaks_dialog.py" />
+            <source>Replace with space</source>
+            <translation>替换为空格</translation>
+        </message>
+        <message>
+            <location filename="..\ui\normalize_breaks_dialog.py" />
+            <source>Delete directly</source>
+            <translation>直接删除</translation>
+        </message>
+        </context>
     <context>
         <name>ProfileManagerWidget</name>
         <message>
@@ -5169,11 +5180,11 @@ This maps automatically to each provider's native parameter
             <source>Squeeze</source>
             <translation>挤压</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <source>Normalize Breaks</source>
             <translation>整理换行</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <source>Normalize Breaks and Shrink</source>
             <translation>整理换行并收缩</translation>
         </message>

@@ -278,8 +278,6 @@ class Canvas(QGraphicsScene):
     layout_textblks = Signal()
     reset_angle = Signal()
     squeeze_blk = Signal()
-    # 请求整理换行：squeeze=True 时同时收缩框
-    normalize_break_requested = Signal(bool)
 
     reorder_textblks = Signal(str, int)
 

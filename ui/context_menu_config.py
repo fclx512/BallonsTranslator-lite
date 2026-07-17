@@ -43,7 +43,7 @@ DEFAULT_ORDER: List[str] = [
     "copy", "paste", "delete",
     "copy_src", "paste_src",
     "---",
-    "reset_angle", "squeeze", "normalize_breaks",
+    "reset_angle", "squeeze",
     "---",
     "reorder",
     "---",
@@ -212,27 +212,12 @@ def _build_behavior(menu: QMenu, canvas):
     _act(sub, canvas, "Merge Right-to-Left", checkable=True,
          checked=pcfg.merge_rtl,
          connect=lambda checked: _toggle_merge_rtl(checked))
-    # Normalize Breaks and Shrink toggle
-    _act(sub, canvas, "Normalize Breaks and Shrink", checkable=True,
-         checked=pcfg.normalize_shrink,
-         connect=lambda checked: _toggle_normalize_shrink(checked))
 
 
 def _toggle_merge_rtl(checked: bool):
     """Toggle the global merge direction (affects shortcut)."""
     pcfg.merge_rtl = checked
     save_config()
-
-
-def _toggle_normalize_shrink(checked: bool):
-    """Toggle whether Normalize Breaks also shrinks the bounding rect."""
-    pcfg.normalize_shrink = checked
-    save_config()
-
-
-def _normalize_breaks_enabled(canvas) -> bool:
-    selected = canvas.selected_text_items()
-    return any(not b.blk.vertical for b in selected)
 
 
 # ── Register all built-in commands ──────────────────────────
@@ -271,11 +256,6 @@ _reg(CmdDef("reset_angle", "Reset Angle",
 _reg(CmdDef("squeeze", "Squeeze",
     build_fn=lambda m, c: _act(m, c, "Squeeze",
         connect=lambda: c.squeeze_blk.emit())))
-
-_reg(CmdDef("normalize_breaks", "Normalize Breaks",
-    build_fn=lambda m, c: _act(m, c, "Normalize Breaks",
-        enabled=_normalize_breaks_enabled(c),
-        connect=lambda: c.normalize_break_requested.emit(pcfg.normalize_shrink))))
 
 # --- Reorder submenu ---
 _reg(CmdDef("reorder", "Reorder",
