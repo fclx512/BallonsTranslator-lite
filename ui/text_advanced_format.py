@@ -51,23 +51,24 @@ class TextAdvancedFormatPanel(PanelArea):
         # shadow / gradient trigger buttons (replaces old inline groups)
         btn_style = (
             "QPushButton { border: 1px solid palette(mid); border-radius: 4px; "
-            "padding: 2px 8px; font-size: 11px; } "
+            "padding: 0px 4px; font-size: 12px; } "
             "QPushButton:hover { border-color: palette(highlight); }"
         )
         self.shadow_btn = QPushButton(self.tr("Shadow"))
         self.shadow_btn.setStyleSheet(btn_style)
         self.shadow_btn.setToolTip(self.tr("Edit shadow settings"))
         self.shadow_btn.setObjectName("inpanel_effect_btn")
+        self.shadow_btn.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
 
         self.gradient_btn = QPushButton(self.tr("Gradient"))
         self.gradient_btn.setStyleSheet(btn_style)
         self.gradient_btn.setToolTip(self.tr("Edit gradient settings"))
         self.gradient_btn.setObjectName("inpanel_effect_btn")
-
-        btns_layout = QHBoxLayout()
-        btns_layout.addWidget(self.shadow_btn)
-        btns_layout.addWidget(self.gradient_btn)
-        btns_layout.addStretch()
+        self.gradient_btn.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
 
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         self.scrollContent.after_resized.connect(self.adjuset_size)
@@ -78,20 +79,36 @@ class TextAdvancedFormatPanel(PanelArea):
         self.linespacing_type_combobox.activated.connect(
             self.on_linespacing_type_changed
         )
-        linespacing_type_label = SmallParamLabel(self.tr("Line Spacing Type"))
+        linespacing_type_label = SmallParamLabel(self.tr("Line Spacing"))
 
-        # Combine opacity and line spacing type on the same row
-        combo_layout = QHBoxLayout()
-        combo_layout.addWidget(self.opacity_label)
-        combo_layout.addWidget(self.opacity_box)
-        combo_layout.addSpacing(16)
-        combo_layout.addWidget(linespacing_type_label)
-        combo_layout.addWidget(self.linespacing_type_combobox)
-        combo_layout.addStretch()
-
+        # 两列布局：opacity/shadow 列 | 行距类型/gradient 列，按钮与上方控件垂直对齐
         vlayout = QVBoxLayout()
-        vlayout.addLayout(combo_layout)
-        vlayout.addLayout(btns_layout)
+        col_layout = QHBoxLayout()
+
+        left_col = QVBoxLayout()
+        left_col.setSpacing(4)
+        opacity_row = QHBoxLayout()
+        opacity_row.addWidget(self.opacity_label)
+        opacity_row.addWidget(self.opacity_box)
+        opacity_row.addStretch()
+        left_col.addLayout(opacity_row)
+        left_col.addWidget(self.shadow_btn)
+
+        right_col = QVBoxLayout()
+        right_col.setSpacing(4)
+        ls_row = QHBoxLayout()
+        ls_row.addWidget(linespacing_type_label)
+        ls_row.addWidget(self.linespacing_type_combobox)
+        ls_row.addStretch()
+        right_col.addLayout(ls_row)
+        right_col.addWidget(self.gradient_btn)
+
+        col_layout.addLayout(left_col)
+        col_layout.addSpacing(16)
+        col_layout.addLayout(right_col)
+        col_layout.addStretch()
+
+        vlayout.addLayout(col_layout)
         vlayout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.setContentLayout(vlayout)
@@ -123,7 +140,7 @@ class TextAdvancedFormatPanel(PanelArea):
     def _update_effect_btns(self, font_format: FontFormat):
         base = (
             "QPushButton { border: 1px solid palette(mid); border-radius: 4px; "
-            "padding: 2px 8px; font-size: 11px; } "
+            "padding: 0px 4px; font-size: 12px; } "
             "QPushButton:hover { border-color: palette(highlight); }"
         )
         has_shadow = font_format.shadow_radius > 0 and font_format.shadow_strength > 0

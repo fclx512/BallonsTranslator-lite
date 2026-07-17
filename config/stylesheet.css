@@ -30,6 +30,7 @@ CustomGV {
     border-color: @borderColor;
     border-style: solid;
     border-width: 1px;
+    border-radius: 6px;
 }
 
 /* ConfigBlock, ConfigSubBlock 继承 Widget 的 @widgetBackgroundColor (#282C34)，
@@ -333,11 +334,13 @@ SmallColorPickerLabel {
 
 AlignmentChecker {
     margin: 0px;
+    padding: 0px;
 }
 
 AlignmentChecker::indicator {
-    height: 28px;
-    width: 28px;
+    margin: 0px;
+    height: 26px;
+    width: 26px;
     border: 2px solid @borderColor;
 }
 
@@ -385,11 +388,14 @@ AlignmentChecker#AlignRightChecker::indicator:checked {
 
 QFontChecker {
     max-width: 34px;
+    padding: 0px;
+    margin: 0px;
 }
 
 QFontChecker::indicator {
-    width: 30px;
-    height: 30px;
+    margin: 0px;
+    width: 26px;
+    height: 26px;
     border: 2px solid transparent;
 }
 
@@ -804,6 +810,13 @@ QPushButton#closeBtn::hover {
     image: url(icons/titlebar_close_activate.svg);
 }
 
+/* ── Text panel toolbar buttons ─────────────────────── */
+CheckableLabel, TextCheckerLabel {
+    padding: 2px 10px;
+}
+CheckableLabel:hover {
+    background-color: @accentPrimary20;
+}
 TextCheckerLabel::hover {
     background-color: @accentPrimary20;
 }
@@ -1411,6 +1424,14 @@ GroupFrame {
     border: 1px solid rgba(128,128,128,0.25);
     border-radius: 6px;
     background: transparent;
+}
+
+/* 格式编辑区外层大框 — 更粗的边框以增强视觉层次 */
+GroupFrame#formatOuterFrame,
+GroupFrame#textEditOuterFrame {
+    border: 3px solid rgba(128,128,128,0.30);
+    border-radius: 6px;
+    background: @widgetBackgroundColor;
 }
 
 QLabel#CardTitle {

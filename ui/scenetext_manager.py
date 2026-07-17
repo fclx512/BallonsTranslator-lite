@@ -464,8 +464,9 @@ class TextPanel(Widget):
 
         # 用 GroupFrame 包裹格式编辑区，与下方文本内容区形成视觉分隔
         format_frame = GroupFrame(self)
+        format_frame.setObjectName("formatOuterFrame")
         format_layout = QVBoxLayout(format_frame)
-        format_layout.setContentsMargins(0, 0, 0, 0)
+        format_layout.setContentsMargins(5, 5, 5, 5)
         format_layout.addWidget(self.format_section)
         layout.addWidget(format_frame)
         self.textToolBar = QHBoxLayout()
@@ -479,10 +480,17 @@ class TextPanel(Widget):
         self.textToolBar.setStretch(0, 1)
         self.textToolBar.setStretch(1, 1)
         self.textToolBar.setStretch(2, 1)
-        self.textToolBar.setContentsMargins(0, 12, 0, 0)
+        self.textToolBar.setContentsMargins(0, 0, 0, 0)
         self.textToolBar.setSpacing(0)
-        layout.addLayout(self.textToolBar)
-        layout.addWidget(self.textEditList)
+
+        # 用 GroupFrame 包裹文本编辑区（工具栏 + 文本框列表），与上方格式编辑区对称
+        text_frame = GroupFrame(self)
+        text_frame.setObjectName("textEditOuterFrame")
+        text_layout = QVBoxLayout(text_frame)
+        text_layout.setContentsMargins(5, 5, 5, 5)
+        text_layout.addLayout(self.textToolBar)
+        text_layout.addWidget(self.textEditList)
+        layout.addWidget(text_frame)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(7)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)

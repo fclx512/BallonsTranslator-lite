@@ -222,7 +222,8 @@ class TextCheckerLabel(QLabel):
 
             c = get_theme_color()
             self.setStyleSheet(
-                f"QLabel {{ background-color: {c.name()}; color: white; }}"
+                f"QLabel {{ background-color: {c.name()}; color: white; "
+                f"padding: 2px 10px; }}"
             )
         else:
             self.setStyleSheet("")

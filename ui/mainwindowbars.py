@@ -415,10 +415,7 @@ class TitleBar(Widget):
         self.toolsToolBtn.setMenu(toolsMenu)
         self.toolsToolBtn.setPopupMode(QToolButton.InstantPopup)
 
-        # 帮助菜单（使用手册、关于、MCP 等）
-        helpDocAction = QAction(self.tr("使用手册"), self)
-        self.help_doc_triggered = helpDocAction.triggered
-
+        # 帮助菜单（关于、MCP 等）
         aboutAction = QAction(self.tr("About BallonsTranslator-lite"), self)
         self.help_about_triggered = aboutAction.triggered
 
@@ -428,8 +425,6 @@ class TitleBar(Widget):
         self.helpToolBtn = TitleBarToolBtn(self)
         self.helpToolBtn.setText(self.tr("Help"))
         helpMenu = QMenu(self.helpToolBtn)
-        helpMenu.addAction(helpDocAction)
-        helpMenu.addSeparator()
         helpMenu.addAction(aboutAction)
         helpMenu.addSeparator()
         helpMenu.addAction(mcpAction)

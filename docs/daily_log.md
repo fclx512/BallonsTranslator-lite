@@ -2,6 +2,45 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，超期内容自动清理。
 
+## 2026-07-17
+
+### 字体样式编辑器 & 文本编辑区视觉层次优化
+
+**需求：** 格式编辑区与文本编辑区的边框无层次区分、样式间隔不一、布局冗余。
+
+**改动：**
+
+1. **3px 边框胶囊 + 内容 5px padding**（`config/stylesheet.css`、`ui/scenetext_manager.py`）：
+   - `GroupFrame#formatOuterFrame` / `GroupFrame#textEditOuterFrame` 使用 3px 半透灰边框（内层小框保持 1px），背景色实色填充防止子控件圆角穿透
+   - 格式编辑区与文本编辑区各用独立 GroupFrame 包裹，间距统一 5px
+
+2. **Canvas 视觉增强**（`config/stylesheet.css`、`ui/mainwindow.py`）：
+   - `CustomGV` 加 `border-radius: 6px`
+   - canvas 与编辑区间距 `0→5px`，编辑区右侧贴窗边距 `0→5px`
+
+3. **行间布局合并瘦身**（`ui/text_panel.py`）：
+   - 字体行 + 颜色/字号/间距行 → 合并为单个胶囊框
+   - 加粗斜体行 + 轮廓行 → 合并为单个胶囊框，行间保留 4px 间距
+   - `FormatGroupBtn` / `AlignmentBtnGroup` 内建 QLayout 默认 11px 边距 → 归零（修复图标按钮距边框过大问题）
+   - QFontChecker/AlignmentChecker 指示器从 30×30 / 28×28 统一缩至 26×26 + padding/margin 归零
+
+4. **高级文本格式面板列布局**（`ui/text_advanced_format.py`）：
+   - Shadow/Gradient 按钮从水平并列改为与上方 Opacity/Line Spacing 控件垂直对齐的两列布局
+   - 按钮 padding `1px 8px` → `0px 4px`，字号 `11→12px`
+   - `Line Spacing Type` → `Line Spacing`（缩短标签宽度）
+
+5. **工具栏贴顶 + hover**（`ui/scenetext_manager.py`、`config/stylesheet.css`、`ui/custom_widget/label.py`）：
+   - 工具栏上边距归零贴顶
+   - `CheckableLabel`/`TextCheckerLabel` padding `4px→2px` 缩矮，取消 border-radius 恢复直角
+
+6. **移除帮助手册功能**（预存改动）：删除 `ui/help_dialog.py`、`docs/help/测试文档.md` 及相关引用
+
+**验证：** 语法检查 ✅、qm 编译 1000 条 ✅、i18n 检查 ✅
+
+**涉及文件：** `config/stylesheet.css`、`ui/mainwindow.py`、`ui/scenetext_manager.py`、`ui/text_panel.py`、`ui/text_advanced_format.py`、`ui/custom_widget/label.py`、`ui/help_dialog.py`（删）、`docs/help/测试文档.md`（删）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_startup_imports.py`、`ui/mainwindowbars.py`
+
+---
+
 ## 2026-07-16
 
 ### 三项 Qt 刷屏 Warning 根治 + 老旧字体一键排除功能

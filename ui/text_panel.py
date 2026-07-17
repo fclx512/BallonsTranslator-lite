@@ -53,6 +53,7 @@ class AlignmentBtnGroup(QFrame):
         hlayout.addWidget(self.alignCenterChecker)
         hlayout.addWidget(self.alignRightChecker)
         hlayout.setSpacing(0)
+        hlayout.setContentsMargins(0, 0, 0, 0)
 
     def alignBtnPressed(self):
         btn = self.sender()
@@ -106,6 +107,7 @@ class FormatGroupBtn(QFrame):
         hlayout.addWidget(self.italicBtn)
         hlayout.addWidget(self.underlineBtn)
         hlayout.setSpacing(0)
+        hlayout.setContentsMargins(0, 0, 0, 0)
 
     def setBold(self):
         self.param_changed.emit("bold", self.boldBtn.isChecked())
@@ -360,7 +362,7 @@ class FontFormatPanel(Widget):
         hl1_font.addWidget(self.familybox, 3)  # 字体框占绝大部分伸缩空间
         hl1_font.addWidget(self.stylebox)  # 字重框按内容自适应
         hl1_font.setSpacing(4)
-        hl1_font.setContentsMargins(0, 12, 0, 0)
+        hl1_font.setContentsMargins(0, 2, 0, 0)
         hl1_size = QHBoxLayout()
         hl1_size.addWidget(self.colorPicker)
         hl1_size.addWidget(self.fontsizebox)
@@ -383,23 +385,36 @@ class FontFormatPanel(Widget):
         hl3.addLayout(stroke_hlayout)
         hl3.setContentsMargins(3, 0, 3, 0)
         hl3.setSpacing(13)
-        # vl0（预设+高级面板）也用 GroupFrame 包裹，标题与内容共享同一边框
+        # vl0（预设+高级面板）用 GroupFrame 包裹，标题与内容共享同一边框
         vl0_frame = GroupFrame(self)
         vl0_layout_inner = QVBoxLayout(vl0_frame)
         vl0_layout_inner.setContentsMargins(6, 0, 6, 0)
         vl0_layout_inner.addLayout(vl0)
         self.vlayout.addWidget(vl0_frame)
 
-        # 用 GroupFrame 包裹各功能区块，提供圆角主题边框
-        for hl in [hl1_font, hl1_size, hl2, hl3]:
+        # 合并行：字体行 + 颜色/字号/间距行 → 一个胶囊
+        hl1_merged = QVBoxLayout()
+        hl1_merged.addLayout(hl1_font)
+        hl1_merged.addLayout(hl1_size)
+        hl1_merged.setSpacing(0)
+        hl1_merged.setContentsMargins(0, 0, 0, 0)
+
+        # 合并行：加粗斜体行 + 轮廓行 → 一个胶囊，行间保留 4px 间距
+        hl2_merged = QVBoxLayout()
+        hl2_merged.addLayout(hl2)
+        hl2_merged.addLayout(hl3)
+        hl2_merged.setSpacing(4)
+        hl2_merged.setContentsMargins(0, 0, 0, 0)
+
+        # 用 GroupFrame 包裹各行，提供圆角主题边框
+        for hl in [hl1_merged, hl2_merged]:
             frame = GroupFrame(self)
             fl = QVBoxLayout(frame)
-            # hl2（粗体斜体行）上下 padding 缩到 1px，其他保持 4px
-            pad = 1 if hl is hl2 else 4
+            pad = 4
             fl.setContentsMargins(6, pad, 6, pad)
             fl.addLayout(hl)
             self.vlayout.addWidget(frame)
-        self.vlayout.setContentsMargins(0, 0, 7, 0)
+        self.vlayout.setContentsMargins(0, 0, 0, 0)
         self.vlayout.setSpacing(4)
 
         self.focusOnColorDialog = False

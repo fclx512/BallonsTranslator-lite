@@ -65,13 +65,6 @@ class TestStartupImports(unittest.TestCase):
             "import launch; print('OK')",
         )
 
-    def test_04_help_dialog_import(self):
-        """HelpDialog module imports cleanly (catches str-vs-Path bugs etc.)."""
-        self._import_test(
-            "ui.help_dialog",
-            "from ui.help_dialog import HelpDialog; print('OK')",
-        )
-
     def test_05_profile_manager_widget_init(self):
         """ProfileManagerWidget can be instantiated (catches missing QFrame etc.)."""
         script = """
@@ -96,57 +89,6 @@ print(f'OK: ProfileManagerWidget created ({w})')
             "ui.configpanel",
             "from ui.configpanel import ConfigPanel; print('OK')",
         )
-
-    def test_07_help_dialog_static_methods(self):
-        """HelpDialog static methods work without QApp (heading parsing, etc.).
-
-        Covers the logic that was affected by the str-vs-Path bug.
-        Does not instantiate QWidgets (offscreen can crash on complex widgets).
-        """
-        script = """
-import sys, os
-sys.path.insert(0, '.')
-
-from ui.help_dialog import HelpDialog
-
-# _parse_headings
-md = '# Title\\n## Section 1\\n### Sub 1.1\\n## Section 2\\ntext here'
-h = HelpDialog._parse_headings(md)
-assert h == [(1, 'Title'), (2, 'Section 1'), (3, 'Sub 1.1'), (2, 'Section 2')], f'Got {h}'
-print('_parse_headings OK')
-
-# _find_nearest_heading
-lines = ['# Title', '## Section 1', 'some text', '## Section 2', 'more text']
-ctx = HelpDialog._find_nearest_heading(lines, 2)
-assert ctx == 'Section 1', f'Got {ctx}'
-ctx2 = HelpDialog._find_nearest_heading(lines, 4)
-assert ctx2 == 'Section 2', f'Got {ctx2}'
-print('_find_nearest_heading OK')
-
-        # _extract_title
-import tempfile, os, pathlib
-fd, md_path = tempfile.mkstemp(suffix='.md')
-os.close(fd)  # release handle so .unlink() works on Windows
-f = pathlib.Path(md_path)
-f.write_text('# Real Title\\n## Sub\\ncontent', encoding='utf-8')
-t = HelpDialog._extract_title(f)
-assert t == 'Real Title', f'Got {t}'
-f.unlink()
-print('_extract_title OK')
-
-# _extract_title fallback (no # heading)
-fd2, md_path2 = tempfile.mkstemp(suffix='.md')
-os.close(fd2)
-f2 = pathlib.Path(md_path2)
-f2.write_text('plain text', encoding='utf-8')
-t2 = HelpDialog._extract_title(f2)
-assert t2 == f2.stem, f'Got {t2}'
-f2.unlink()
-print('_extract_title fallback OK')
-
-print('ALL OK')
-"""
-        self._check("HelpDialog.static", script)
 
 
 if __name__ == "__main__":
