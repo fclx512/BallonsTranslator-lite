@@ -30,7 +30,7 @@
 |------|------|------|
 | 设置面板 | 内部分页 + 中心模态（OverlayModal），遮罩仅覆盖中央画布区 | 右侧长卷轴滚动面板 |
 | 左侧面板（PageList/全局搜索） | 展开时推 canvas 右移，零遮挡 | 浮层遮挡画布 |
-| 关于页面 | Help 菜单（关于 + MCP 信息） | 独立 About 对话框 |
+| 关于页面 | Help 菜单（关于） | 独立 About 对话框 |
 | 文本框重排 | 右键菜单 + 快捷键 | 面板操作 |
 
 ### 部署差异
@@ -153,9 +153,6 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 
 在设置面板 → Models → API Profiles 中配置。
 
-**MCP 如何使用？**
-
-参见 [MCP 用户指南](docs/MCP用户指南.md)
 
 ---
 

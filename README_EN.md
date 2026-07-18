@@ -30,7 +30,7 @@ Other streamlined features:
 |------|------|----------|
 | Settings panel | Internal tabbed pages + center modal (OverlayModal), scrim covers canvas only | Right-side long scroll panel |
 | Left panels (PageList/Global Search) | Push canvas to the right when expanded, zero occlusion | Overlay on top of canvas |
-| About page | Help menu (About + MCP info) | Standalone About dialog |
+| About page | Help menu (About) | Standalone About dialog |
 | Text block reordering | Context menu + keyboard shortcuts | Panel-based |
 
 ### Deployment Differences
@@ -152,9 +152,6 @@ See [Shortcuts Guide](docs/快捷键.md)
 
 Settings → Models → API Profiles.
 
-**How to use MCP?**
-
-See [MCP User Guide](docs/MCP用户指南.md)
 
 ---
 

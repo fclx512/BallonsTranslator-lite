@@ -43,7 +43,7 @@ GET_PIP_URL = "https://bootstrap.pypa.io/get-pip.py"
 # 3.12 is chosen for broad package compatibility.
 DEFAULT_PYTHON_VER = "3.12.4"
 
-# Optional groups (gpu, onnx, mcp) are NOT included — they ship in model packs.
+# Optional groups (gpu, onnx) are NOT included — they ship in model packs.
 
 
 # ── Utilities ────────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ def _parse_core_deps(project_root: Path) -> list[str]:
 
     Returns a flat list of PEP 508 requirement strings.
     Only ``[project.dependencies]`` is included (core only);
-    ``[project.optional-dependencies]`` groups (gpu, onnx, mcp) are excluded.
+    ``[project.optional-dependencies]`` groups (gpu, onnx) are excluded.
     """
     pyproject_path = project_root / "pyproject.toml"
     if not pyproject_path.exists():

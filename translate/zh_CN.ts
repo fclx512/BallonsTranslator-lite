@@ -1644,55 +1644,7 @@ Run detection + OCR to populate text blocks.</source>
             <translation>清除历史记录</translation>
         </message>
     </context>
-    <context>
-        <name>MCPInfoDialog</name>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1192" />
-            <source>MCP Server Setup</source>
-            <translation>MCP 服务器设置</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1199" />
-            <source>MCP Server</source>
-            <translation>MCP 服务器</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1208" />
-            <source>MCP (Model Context Protocol) allows external AI agents such as Claude Code to read and edit BallonsTranslator project data directly through tool calls — no GUI needed.</source>
-            <translation>MCP（模型上下文协议）允许 Claude Code 等外部 AI 代理通过工具调用直接读取和修改 BallonsTranslator 项目数据，无需启动 GUI。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1216" />
-            <source>Quick start:</source>
-            <translation>快速开始：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1223" />
-            <source>1. Install:  pip install -e ".[mcp]"
-2. Add a config entry in .claude/settings.json
-3. Run Claude Code in the project directory
-4. Ask it to open your project and edit text blocks</source>
-            <translation>1. 安装：pip install -e ".[mcp]"
-2. 在 .claude/settings.json 中添加配置条目
-3. 在项目目录中运行 Claude Code
-4. 让它打开你的项目并编辑文字块</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1232" />
-            <source>Full user guide available at docs/MCP用户指南.md</source>
-            <translation>完整用户指南见 docs/MCP用户指南.md</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1242" />
-            <source>Open User Guide</source>
-            <translation>打开用户指南</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1246" />
-            <source>Close</source>
-            <translation>关闭</translation>
-        </message>
-    </context>
+
     <context>
         <name>MainWindow</name>
         <message>
@@ -4152,7 +4104,7 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <source>Path Reorder…</source>
             <translation>路径重排…</translation>
         </message>
-    <message><source>Help</source><translation>帮助</translation></message><message><source>About BallonsTranslator-lite</source><translation>关于 BallonsTranslator-lite</translation></message><message><source>MCP Server Info…</source><translation>MCP 服务器信息…</translation></message></context>
+    <message><source>Help</source><translation>帮助</translation></message><message><source>About BallonsTranslator-lite</source><translation>关于 BallonsTranslator-lite</translation></message></context>
     <context>
         <name>ToolsDialog</name>
         <message>

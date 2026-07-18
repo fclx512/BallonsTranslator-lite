@@ -51,7 +51,7 @@ def _load_declared_deps() -> list[tuple[str, str]]:
     """Parse pyproject.toml and return (req_str, type) pairs.
 
     *type* is ``"core"`` for mandatory deps, or the optional-dependency
-    group name (e.g. ``"gpu"``, ``"mcp"``) for optional groups.
+    group name (e.g. ``"gpu"``) for optional groups.
     Automatically discovers all groups — no hardcoded list needed.
     """
     pp = Path(shared.PROGRAM_PATH) / "pyproject.toml"

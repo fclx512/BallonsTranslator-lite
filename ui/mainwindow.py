@@ -105,8 +105,6 @@ from .scenetext_manager import PasteSrcItemsCommand, SceneTextManager, TextPanel
 from .textedit_area import SourceTextEdit, TransTextEdit
 from .textedit_commands import GlobalRepalceAllCommand
 from .update_checker import AboutDialog
-from .configpanel import MCPInfoDialog
-
 
 
 
@@ -1329,7 +1327,6 @@ class MainWindow(mainwindow_cls):
         self.titleBar.stylemgr_trigger.connect(self.on_open_fontstyle_manager)
 
         self.titleBar.help_about_triggered.connect(self.show_about_dialog)
-        self.titleBar.help_mcp_triggered.connect(self.show_mcp_info_dialog)
         self.titleBar.psd_export_triggered.connect(self.on_export_psd)
         self.titleBar.quick_symbol_trigger.connect(self.on_open_quick_symbol)
         self.titleBar.adv_align_trigger.connect(self.on_open_advanced_align)
@@ -3495,11 +3492,6 @@ class MainWindow(mainwindow_cls):
             repo_path=str(launch.PATH_ROOT),
         )
         dlg.restart_requested.connect(self.restart_signal.emit)
-        dlg.exec_()
-
-    def show_mcp_info_dialog(self):
-        """Show the MCP Server setup info dialog."""
-        dlg = MCPInfoDialog(self)
         dlg.exec_()
 
 

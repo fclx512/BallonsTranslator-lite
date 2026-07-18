@@ -227,35 +227,6 @@ def check_torch() -> dict:
     return result
 
 
-# ── MCP check ────────────────────────────────────────────────────────────────
-
-
-def check_mcp() -> dict:
-    """Check if the MCP package is installed and whether the server module loads.
-
-    Returns a dict::
-
-        {"available": bool,
-         "version": str | None,
-         "server_loadable": bool}
-    """
-    result: dict = {"available": False, "version": None, "server_loadable": False}
-
-    try:
-        result["version"] = importlib.metadata.version("mcp")
-        result["available"] = True
-    except importlib.metadata.PackageNotFoundError:
-        pass
-
-    try:
-        import mcp_server.main  # noqa: F401
-
-        result["server_loadable"] = True
-    except ImportError:
-        pass
-
-    return result
-
 
 # ── Full diagnostic ───────────────────────────────────────────────────────────
 
@@ -300,20 +271,6 @@ def run_diagnostic() -> dict:
         lines.append("GPU: not detected (no nvidia-smi or no NVIDIA GPU)")
 
     info["diagnostic_lines"] = lines
-
-    # MCP
-    mcp_info = check_mcp()
-    info["mcp"] = mcp_info
-    if mcp_info["available"]:
-        lines.append(
-            f"MCP: {mcp_info['version']} "
-            f"(server loadable: {mcp_info['server_loadable']})"
-        )
-    else:
-        lines.append(
-            "MCP: not installed (needed for AI agent project editing; "
-            "install via 'pip install \"mcp>=1.0.0\"' or 'pip install -e \".[mcp]\"')"
-        )
 
     return info
 

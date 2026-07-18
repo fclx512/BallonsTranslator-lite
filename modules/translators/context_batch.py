@@ -29,12 +29,6 @@ from utils.config import pcfg
 
 logger = logging.getLogger("context_batch")
 
-# Debug log path (written alongside project root, for GUI users who can't see terminal logs)
-_DEBUG_LOG = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-    "ctx_debug.log",
-)
-
 # ── Pydantic models ─────────────────────────────────────────────────────
 
 
@@ -152,30 +146,6 @@ class ContextBatchTranslator:
             tr = tr.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
             tr = tr.replace("\u2028", " ").replace("\u2029", " ").replace("\u0085", " ")
             blk.translation = tr
-
-        # DEBUG: dump first 3 blocks' repr to check for hidden control chars
-        # Writes to ctx_debug.log since terminal logs may not be visible in GUI mode.
-        if non_empty:
-            try:
-                import datetime as _dt
-                with open(_DEBUG_LOG, "a", encoding="utf-8") as dbg:
-                    dbg.write(
-                        f"\n--- {_dt.datetime.now():%H:%M:%S} "
-                        f"page={page_key} ---\n"
-                    )
-                    for ii in non_empty[:3]:
-                        blk = textblk_lst[ii]
-                        dbg.write(
-                            f"  blk[{ii}] repr: {blk.translation[:200]!r}\n"
-                        )
-                        # Dump raw hex to detect hidden control chars like \u2028
-                        raw_chars = blk.translation[:100] if blk.translation else ""
-                        if raw_chars:
-                            dbg.write(
-                                f"  blk[{ii}] hex: {raw_chars.encode('utf-8').hex()}\n"
-                            )
-            except Exception:
-                pass
 
     def _status(self, msg: str):
         logger.info(msg)
@@ -791,17 +761,6 @@ class ContextBatchTranslator:
                         if completion.choices
                         else ""
                     )
-
-                    # DEBUG: dump raw LLM response to ctx_debug.log
-                    try:
-                        import datetime as _dt
-                        with open(_DEBUG_LOG, "a", encoding="utf-8") as dbg:
-                            dbg.write(
-                                f"\n=== LLM RAW [{_dt.datetime.now():%H:%M:%S}] "
-                                f"{parser=} ===\n{raw[:2000]}\n=== END RAW ===\n"
-                            )
-                    except Exception:
-                        pass
 
                     if not raw:
                         logger.warning(
