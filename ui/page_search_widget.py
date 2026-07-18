@@ -15,7 +15,6 @@ from qtpy.QtGui import (
 )
 from qtpy.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
@@ -27,7 +26,7 @@ from qtpy.QtWidgets import (
 
 from utils.config import pcfg
 
-from .custom_widget import ClickableLabel, Widget
+from .custom_widget import ClickableLabel, ConfigComboBox, Widget
 from .textedit_area import SourceTextEdit, TransPairWidget, TransTextEdit
 from .textitem import TextBlkItem
 
@@ -270,7 +269,7 @@ class PageSearchWidget(Widget):
         self.regex_toggle.setToolTip(self.tr("Use Regular Expression"))
         self.regex_toggle.clicked.connect(self.on_regex_clicked)
 
-        self.range_combobox = QComboBox(self)
+        self.range_combobox = ConfigComboBox(scrollWidget=self)
         self.range_combobox.addItems(
             [self.tr("Translation"), self.tr("Source"), self.tr("All")]
         )

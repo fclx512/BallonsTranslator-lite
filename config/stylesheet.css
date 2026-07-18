@@ -482,6 +482,10 @@ QListWidget {
     border-width: 1px;
 }
 
+QListWidget#PageListView {
+    border-radius: 6px;
+}
+
 /* ── Config panel nav list ─────────────────────────────────── */
 #ConfigNavList {
     border: none;
@@ -1227,6 +1231,7 @@ GlobalSearchWidget {
     border-color: @borderColor;
     border-style: solid;
     border-width: 1px;
+    border-radius: 6px;
 }
 
 QScrollArea {
@@ -1310,7 +1315,15 @@ QCheckBox#RegexToggle::indicator:hover {
 }
 
 SearchEditor {
+    background: rgba(128,128,128,0.13);
+    border: 1px solid rgba(128,128,128,0.25);
+    border-radius: 4px;
+    padding: 2px 8px;
     height: 32px;
+}
+
+SearchEditor:focus {
+    border: 1px solid #5DADE2;
 }
 
 ClickableLabel#ReplaceBtn {

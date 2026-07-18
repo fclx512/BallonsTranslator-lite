@@ -16,7 +16,6 @@ from qtpy.QtGui import (
 from qtpy.QtWidgets import (
     QApplication,
     QCheckBox,
-    QComboBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -33,7 +32,7 @@ from utils import shared as C
 from utils.config import pcfg
 from utils.proj_imgtrans import ProjImgTrans
 
-from .custom_widget import NoBorderPushBtn, ProgressMessageBox, Widget
+from .custom_widget import ConfigComboBox, NoBorderPushBtn, ProgressMessageBox, Widget
 from .io_thread import ThreadBase
 from .misc import doc_replace
 from .page_search_widget import HighlightMatched, SearchEditor, _search_highlight_color
@@ -360,9 +359,10 @@ class GlobalSearchWidget(Widget):
         self.current_cursor: QTextCursor = None
         self.result_pos = 0
 
-        self.search_editor = SearchEditor(self, commit_latency=-1)
+        self.search_editor = SearchEditor(self, commit_latency=500)
         self.search_editor.setPlaceholderText(self.tr("Find"))
         self.search_editor.enter_pressed.connect(self.commit_search)
+        self.search_editor.commit.connect(self.commit_search)
 
         self.no_result_str = self.tr("No results found. ")
         self.doc_edited_str = self.tr("Document changed. Press Enter to re-search.")
@@ -385,7 +385,7 @@ class GlobalSearchWidget(Widget):
         self.regex_toggle.setToolTip(self.tr("Use Regular Expression"))
         self.regex_toggle.clicked.connect(self.on_regex_clicked)
 
-        self.range_combobox = QComboBox(self)
+        self.range_combobox = ConfigComboBox(scrollWidget=self)
         self.range_combobox.addItems(
             [self.tr("Translation"), self.tr("Source"), self.tr("All")]
         )

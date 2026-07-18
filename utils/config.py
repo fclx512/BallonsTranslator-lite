@@ -151,9 +151,6 @@ class ProgramConfig(Config):
 
     let_fntsize_flag: int = 0
     let_fntstroke_flag: int = 0
-    let_fntcolor_flag: int = 0
-    let_fnt_scolor_flag: int = 0
-    let_fnteffect_flag: int = 1
     let_alignment_flag: int = 0
     let_writing_mode_flag: int = 0
     let_family_flag: int = 0

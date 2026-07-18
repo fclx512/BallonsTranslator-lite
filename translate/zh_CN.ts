@@ -680,34 +680,19 @@
             <source>Font Size</source>
             <translation>大小</translation>
         </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1480" />
-            <source>Stroke Size</source>
-            <translation>轮廓大小</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1490" />
-            <source>Font Color</source>
-            <translation>字体颜色</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1499" />
-            <source>Stroke Color</source>
-            <translation>轮廓颜色</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1509" />
-            <source>Effect</source>
-            <translation>特效</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1518" />
-            <source>Alignment</source>
-            <translation>对齐方式</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1528" />
-            <source>Writing-mode</source>
+	        <message>
+	            <location filename="..\ui\configpanel.py" line="1480" />
+	            <source>Stroke Size</source>
+	            <translation>轮廓大小</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\configpanel.py" line="1518" />
+	            <source>Alignment</source>
+	            <translation>对齐方式</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\configpanel.py" line="1528" />
+	            <source>Writing-mode</source>
             <translation>书写方向</translation>
         </message>
         <message>
@@ -911,12 +896,12 @@
             <translation>&lt;p&gt;启动时自动打开上次使用的项目。继续处理同一项目时节省时间。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>&lt;p&gt;When enabled, the output format automatically matches the &lt;b&gt;source image format&lt;/b&gt;. Overrides the format selected above.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;启用后，输出格式自动匹配&lt;b&gt;源图像格式&lt;/b&gt;，覆盖上方选择的格式。&lt;/p&gt;</translation>
+            <source>&lt;p&gt;When enabled, the output format automatically matches the &lt;b&gt;source image format&lt;/b&gt;. Overrides the format selected above. If the source uses a lossy format (&lt;b&gt;JPG&lt;/b&gt;, &lt;b&gt;WEBP&lt;/b&gt;), the &lt;b&gt;Quality&lt;/b&gt; setting above is used.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;启用后，输出格式自动匹配&lt;b&gt;源图像格式&lt;/b&gt;，覆盖上方选择的格式。若源图为有损格式（&lt;b&gt;JPG&lt;/b&gt;、&lt;b&gt;WEBP&lt;/b&gt;），则使用上方&lt;b&gt;质量&lt;/b&gt;设置。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>&lt;p&gt;Output image quality (&lt;code&gt;0-100&lt;/code&gt;). Higher values give better quality but larger file sizes. Applies to &lt;b&gt;JPG&lt;/b&gt; and &lt;b&gt;WEBP&lt;/b&gt; only.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;输出图像质量（&lt;code&gt;0-100&lt;/code&gt;）。数值越高质量越好但文件越大。仅适用于&lt;b&gt; JPG&lt;/b&gt; 和&lt;b&gt; WEBP&lt;/b&gt; 格式。&lt;/p&gt;</translation>
+            <source>&lt;p&gt;Output image quality (&lt;code&gt;0-100&lt;/code&gt;). Higher values give better quality but larger file sizes. Applies to &lt;b&gt;JPG&lt;/b&gt; and &lt;b&gt;WEBP&lt;/b&gt; only. Also used when &lt;b&gt;Auto detect source format&lt;/b&gt; matches a lossy source.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;输出图像质量（&lt;code&gt;0-100&lt;/code&gt;）。数值越高质量越好但文件越大。仅适用于&lt;b&gt; JPG&lt;/b&gt; 和&lt;b&gt; WEBP&lt;/b&gt; 格式。当&lt;b&gt;自动匹配源图格式&lt;/b&gt;匹配到有损源图时同样有效。&lt;/p&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Configure the fallback font format for text blocks without their own formatting. Each attribute can be &lt;b&gt;delegated&lt;/b&gt; separately.&lt;/p&gt;</source>
@@ -1152,11 +1137,31 @@
 						            <source>ℹ {n} setting(s) not in file — current values kept:</source>
 						            <translation>ℹ {n} 个设置项不在文件中——保持当前值：</translation>
 					        </message>
-					        <message>
-					            <source>Please close and reopen Settings to refresh the UI.</source>
-					            <translation>请关闭并重新打开设置面板以刷新界面。</translation>
-					        </message>
-					    </context>
+						        <message>
+						            <source>Please close and reopen Settings to refresh the UI.</source>
+						            <translation>请关闭并重新打开设置面板以刷新界面。</translation>
+						        </message>
+						        <message>
+						            <source>decide by program: Use OCR-detected font size and enable adaptive resizing to fit text regions.</source>
+						            <translation>由程序决定：使用OCR检测到的字号，并开启自适应缩放以适配文字区域。</translation>
+						        </message>
+						        <message>
+						            <source>decide by program: Calculate stroke width from OCR-detected text properties.</source>
+						            <translation>由程序决定：根据OCR检测的文本属性计算轮廓宽度。</translation>
+						        </message>
+						        <message>
+						            <source>decide by program: Detect alignment (left/center/right) from the text region shape.</source>
+						            <translation>由程序决定：根据文字区域形状检测对齐方式（左/中/右）。</translation>
+						        </message>
+						        <message>
+						            <source>decide by program: Preserve the detected writing mode (horizontal/vertical) from source text.</source>
+						            <translation>由程序决定：保留从原文检测到的书写方向（横排/竖排）。</translation>
+						        </message>
+						        <message>
+						            <source>Keep existing: Preserve each block's existing font family (if set). Always use global setting: Override all blocks with the global default font family.</source>
+						            <translation>保留已有格式：保留每个文本块已有的字体（如有已设的字体）。始终使用全局设置：用全局默认字体覆盖所有文本块。</translation>
+						        </message>
+						    </context>
 			    <context>
 			        <name>DependencyDialog</name>
         <message>

@@ -191,6 +191,105 @@
 
 **涉及文件：**
 - 删除：`mcp_server/`（5 文件）、`docs/MCP集成指南.md`、`docs/MCP用户指南.md`、`.mcp.json`
-- 修改：`README.md`、`README_EN.md`、`docs/README.md`、`docs/项目概述.md`、`docs/经验教训.md`、`ui/configpanel.py`、`ui/mainwindow.py`、`ui/mainwindowbars.py`、`utils/env_diagnostic.py`、`ui/dependency_dialog.py`、`scripts/build_portable.py`、`scripts/i18n_check.py`、`manifest.json`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+	- 修改：`README.md`、`README_EN.md`、`docs/README.md`、`docs/项目概述.md`、`docs/经验教训.md`、`ui/configpanel.py`、`ui/mainwindow.py`、`ui/mainwindowbars.py`、`utils/env_diagnostic.py`、`ui/dependency_dialog.py`、`scripts/build_portable.py`、`scripts/i18n_check.py`、`manifest.json`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
 
 ---
+
+### Default Font Format 精简 + 死代码清理
+
+**需求：**
+- 字体名称检测模块此前已被移除，Font Color / Stroke Color / Effect 三个选项的「decide by program」分支实际什么都不做（只是保留默认值），没有展示意义，占用用户视线
+- `ui/mainwindow_mixin.py` 完整复制了 `on_pagtrans_finished` 逻辑但从未被 import，100% 死代码
+
+**改动：**
+
+1. **删除死代码**：
+   - `ui/mainwindow_mixin.py` — 整个文件删除（`MainWindowMixin.on_pagtrans_finished` 从未被调用）
+
+2. **Default Font Format 从 8 项精简为 5 项**：
+   - 移除 Font Color、Stroke Color、Effect 三个下拉框（`let_fntcolor_flag` / `let_fnt_scolor_flag` / `let_fnteffect_flag` 字段一并删除）
+   - 这三个属性改为无条件应用全局格式值（和「use global setting」行为一致）
+   - 网格 2×4 → 2×3 布局：Font Size / Stroke Size / Alignment → Writing-mode / Font Family
+   - 剩余 5 项 combo box 均添加 tooltip，悬停时解释「decide by program」实际在决定什么
+
+3. **清理配置与配置示例**（`config/config.json.example`）
+
+4. **i18n**（`translate/zh_CN.ts`、`translate/zh_CN.qm`）：
+   - 移除 3 条旧翻译（Font Color / Stroke Color / Effect）
+   - 新增 5 条 tooltip 翻译（含中文释义），qm 编译 1021 条
+
+**验证：** 语法检查 ✅、qm 编译 ✅、i18n 检查 ✅（仅剩 2 条预存缺失）、启动导入测试 5/5 ✅
+
+**涉及文件：**
+- 删除：`ui/mainwindow_mixin.py`
+- 修改：`ui/configpanel.py`、`ui/mainwindow.py`、`utils/config.py`、`config/config.json.example`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+### 自动匹配源图格式 + 质量设置的交互说明与逻辑完善
+
+**需求：** 当勾选「自动匹配源图格式」且源图为有损格式（JPG/WEBP）时，实际使用什么质量值？确认是用户当前的「质量」设置后，在相关选项的备注框中写明。
+
+**改动：**
+
+1. **行为修正**（`ui/configpanel.py`）：
+   - `on_autoformat_changed`：自动匹配启用时，强制启用质量控件（源图可能是 JPG/WEBP，质量设置生效）
+   - `_loadConfig`：config 加载时同样处理——自动匹配启用则质量启用，否则才按格式下拉框判断
+   - 修复了此前自动匹配开启后质量控件跟随格式下拉框（可能显示为禁用的"—"）的误导
+
+2. **备注更新**（`ui/configpanel.py`）：
+   - 「自动匹配源图格式」tooltip 增加：*若源图为有损格式（JPG、WEBP），则使用上方质量设置*
+   - 「质量」tooltip 增加：*当自动匹配源图格式匹配到有损源图时同样有效*
+
+3. **翻译同步**（`translate/zh_CN.ts`、`translate/zh_CN.qm`）
+
+**验证：** 语法检查 ✅、i18n 检查 ✅（仅剩 2 条预存缺失）、qm 编译 1021 条 ✅
+
+**涉及文件：** `ui/configpanel.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+### 左侧栏面板/搜索控件统一替换为打包控件 + 圆角样式
+
+**需求：** 全局搜索、图片列表、Ctrl+F 单图搜索等位置的控件尚未应用新的 ConfigComboBox 等打包控件，左侧展开面板的边框缺少圆角。
+
+**改动：**
+
+1. **ConfigComboBox 替换**：
+   - `ui/global_search_widget.py` — `GlobalSearchWidget.range_combobox`：`QComboBox` → `ConfigComboBox`
+   - `ui/page_search_widget.py` — `PageSearchWidget.range_combobox`：`QComboBox` → `ConfigComboBox`
+
+2. **SearchEditor 视觉统一**（`config/stylesheet.css`）：
+   - 搜索输入框增加与 `ConfigLineEdit` 一致的半透明背景、圆角边框、focus 高亮
+   - 此前仅有 `height: 32px`，现在背景 `rgba(128,128,128,0.13)`、边框 `1px solid rgba(128,128,128,0.25)`、圆角 4px
+
+3. **展开面板圆角**（`config/stylesheet.css`）：
+   - `GlobalSearchWidget` 增加 `border-radius: 6px`
+   - `PageListView` 增加 `#PageListView` 选择器 + `border-radius: 6px`
+   - `ui/mainwindow.py` — `PageListView.__init__` 增加 `setObjectName("PageListView")`
+
+**验证：** 语法检查 ✅、i18n 检查 ✅（仅剩 2 条预存缺失）
+
+**涉及文件：** `ui/global_search_widget.py`、`ui/page_search_widget.py`、`ui/mainwindow.py`、`config/stylesheet.css`
+
+---
+
+### 左侧面板与画布区间距 + 全局搜索防抖
+
+**需求：**
+1. 左侧展开面板与右侧画布区零间距，需添加 5px 间距
+2. 全局搜索需手动点击按钮或按 Enter 才能搜索，改为输入停止 0.5s 后自动搜索
+
+**改动：**
+
+1. **5px 间距**（`ui/mainwindow.py`）：
+   - `mainHLayout` 中在 `global_search_widget` 和 `centralStackWidget` 之间插入 `addSpacing(5)`
+
+2. **全局搜索防抖**（`ui/global_search_widget.py`）：
+   - `SearchEditor` 的 `commit_latency` 从 `-1`（关闭）改为 `500`（500ms）
+   - 连接 `commit` 信号到 `commit_search`，实现输入停止 0.5s 后自动搜索
+   - Enter 键和切换选项等仍保持原有即时搜索行为
+
+**验证：** 语法检查 ✅
+
+**涉及文件：** `ui/mainwindow.py`、`ui/global_search_widget.py`

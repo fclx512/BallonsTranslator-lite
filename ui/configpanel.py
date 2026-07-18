@@ -1516,7 +1516,7 @@ class ConfigPanel(Widget):
         self.rst_imgquality_edit.finish_edited.connect(self.on_edit_quality_changed)
         self.rst_quality_sublock = ConfigSubBlock(
             self.rst_imgquality_edit, self.tr("Quality"),
-            note=self.tr("<p>Output image quality (<code>0-100</code>). Higher values give better quality but larger file sizes. Applies to <b>JPG</b> and <b>WEBP</b> only.</p>"),
+            note=self.tr("<p>Output image quality (<code>0-100</code>). Higher values give better quality but larger file sizes. Applies to <b>JPG</b> and <b>WEBP</b> only. Also used when <b>Auto detect source format</b> matches a lossy source.</p>"),
             vertical_layout=False,
         )
         self.rst_quality_sublock.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -1525,7 +1525,7 @@ class ConfigPanel(Widget):
 
         self.rst_autoformat_checker, autoformat_sublock = checkbox_with_label(
             self.tr("Auto detect source format"),
-            note=self.tr("<p>When enabled, the output format automatically matches the <b>source image format</b>. Overrides the format selected above.</p>"),
+            note=self.tr("<p>When enabled, the output format automatically matches the <b>source image format</b>. Overrides the format selected above. If the source uses a lossy format (<b>JPG</b>, <b>WEBP</b>), the <b>Quality</b> setting above is used.</p>"),
         )
         self.rst_autoformat_checker.stateChanged.connect(self.on_autoformat_changed)
         project_layout.addWidget(autoformat_sublock)
@@ -1615,12 +1615,12 @@ class ConfigPanel(Widget):
         global_fntfmt_layout.setContentsMargins(0, 0, 0, 0)
         global_fntfmt_layout.setHorizontalSpacing(16)
         global_fntfmt_layout.setVerticalSpacing(8)
-        global_fntfmt_layout.setColumnStretch(3, 1)
+        global_fntfmt_layout.setColumnStretch(2, 1)
         delegation_layout.addWidget(global_fntfmt_widget)
 
         DELEGATION_COMBO_WIDTH = 140
 
-        def _add_fontfmt_cell(row, col, label, items, signal, attr_name):
+        def _add_fontfmt_cell(row, col, label, items, signal, attr_name, tooltip=None):
             cell = QWidget()
             cell_layout = QVBoxLayout(cell)
             cell_layout.setContentsMargins(0, 0, 0, 0)
@@ -1629,6 +1629,8 @@ class ConfigPanel(Widget):
             combo = ConfigComboBox(scrollWidget=self)
             combo.addItems(items)
             combo.setFixedWidth(DELEGATION_COMBO_WIDTH)
+            if tooltip:
+                combo.setToolTip(tooltip)
             combo.activated.connect(signal)
             cell_layout.addWidget(lbl)
             cell_layout.addWidget(combo)
@@ -1639,41 +1641,41 @@ class ConfigPanel(Widget):
             0, 0, self.tr("Font Size"),
             [dec_program_str, use_global_str],
             self.on_fntsize_flag_changed, "let_fntsize_combox",
+            tooltip=self.tr(
+                "decide by program: Use OCR-detected font size and enable adaptive resizing to fit text regions."
+            ),
         )
         _add_fontfmt_cell(
             0, 1, self.tr("Stroke Size"),
             [dec_program_str, use_global_str],
             self.on_fntstroke_flag_changed, "let_fntstroke_combox",
+            tooltip=self.tr(
+                "decide by program: Calculate stroke width from OCR-detected text properties."
+            ),
         )
         _add_fontfmt_cell(
-            0, 2, self.tr("Font Color"),
-            [dec_program_str, use_global_str],
-            self.on_fontcolor_flag_changed, "let_fntcolor_combox",
-        )
-        _add_fontfmt_cell(
-            0, 3, self.tr("Stroke Color"),
-            [dec_program_str, use_global_str],
-            self.on_font_scolor_flag_changed, "let_fnt_scolor_combox",
-        )
-        _add_fontfmt_cell(
-            1, 0, self.tr("Effect"),
-            [dec_program_str, use_global_str],
-            self.on_effect_flag_changed, "let_effect_combox",
-        )
-        _add_fontfmt_cell(
-            1, 1, self.tr("Alignment"),
+            0, 2, self.tr("Alignment"),
             [dec_program_str, use_global_str],
             self.on_alignment_flag_changed, "let_alignment_combox",
+            tooltip=self.tr(
+                "decide by program: Detect alignment (left/center/right) from the text region shape."
+            ),
         )
         _add_fontfmt_cell(
-            1, 2, self.tr("Writing-mode"),
+            1, 0, self.tr("Writing-mode"),
             [dec_program_str, use_global_str],
             self.on_writing_mode_flag_changed, "let_writing_mode_combox",
+            tooltip=self.tr(
+                "decide by program: Preserve the detected writing mode (horizontal/vertical) from source text."
+            ),
         )
         _add_fontfmt_cell(
-            1, 3, self.tr("Font Family"),
+            1, 1, self.tr("Font Family"),
             [self.tr("Keep existing"), self.tr("Always use global setting")],
             self.on_family_flag_changed, "let_family_combox",
+            tooltip=self.tr(
+                "Keep existing: Preserve each block's existing font family (if set). Always use global setting: Override all blocks with the global default font family."
+            ),
         )
 
         ts_layout.addWidget(ConfigSubBlock(delegation_frame))
@@ -2319,6 +2321,10 @@ class ConfigPanel(Widget):
     def on_autoformat_changed(self):
         pcfg.imgsave_auto_format = self.rst_autoformat_checker.isChecked()
         self.rst_imgsave_sublock.setEnabled(not pcfg.imgsave_auto_format)
+        # When auto-format is on the actual format depends on the source,
+        # which may be lossy — keep quality editable so its value can be seen.
+        if pcfg.imgsave_auto_format:
+            self._set_quality_visual_state(True)
 
     def on_max_font_size_changed(self, value: int):
         pcfg.max_font_size = value
@@ -2387,12 +2393,6 @@ class ConfigPanel(Widget):
     def on_edit_quality_changed(self, value: str):
         pcfg.imgsave_quality = int(value)
 
-    def on_fontcolor_flag_changed(self):
-        pcfg.let_fntcolor_flag = self.let_fntcolor_combox.currentIndex()
-
-    def on_font_scolor_flag_changed(self):
-        pcfg.let_fnt_scolor_flag = self.let_fnt_scolor_combox.currentIndex()
-
     def on_alignment_flag_changed(self):
         pcfg.let_alignment_flag = self.let_alignment_combox.currentIndex()
 
@@ -2401,9 +2401,6 @@ class ConfigPanel(Widget):
 
     def on_family_flag_changed(self):
         pcfg.let_family_flag = self.let_family_combox.currentIndex()
-
-    def on_effect_flag_changed(self):
-        pcfg.let_fnteffect_flag = self.let_effect_combox.currentIndex()
 
     def _on_nav_section_pressed(self, section_key: str):
         """Switch page stack to the section for the selected nav item."""
@@ -2577,11 +2574,8 @@ class ConfigPanel(Widget):
         self.detect_config_panel.keep_existing_checker.setChecked(
             pcfg.module.keep_exist_textlines
         )
-        self.let_effect_combox.setCurrentIndex(pcfg.let_fnteffect_flag)
         self.let_fntsize_combox.setCurrentIndex(pcfg.let_fntsize_flag)
         self.let_fntstroke_combox.setCurrentIndex(pcfg.let_fntstroke_flag)
-        self.let_fntcolor_combox.setCurrentIndex(pcfg.let_fntcolor_flag)
-        self.let_fnt_scolor_combox.setCurrentIndex(pcfg.let_fnt_scolor_flag)
         self.let_alignment_combox.setCurrentIndex(pcfg.let_alignment_flag)
         self.let_family_combox.setCurrentIndex(pcfg.let_family_flag)
         self.let_writing_mode_combox.setCurrentIndex(pcfg.let_writing_mode_flag)
@@ -2596,9 +2590,13 @@ class ConfigPanel(Widget):
         self.intermediate_imgformat_combobox.setCurrentText(
             pcfg.intermediate_imgsave_ext.replace(".", "").upper()
         )
-        # PNG is lossless — disable quality with "—" placeholder
-        is_png = self.rst_imgformat_combobox.currentText() == "PNG"
-        self._set_quality_visual_state(not is_png)
+        # When auto-format is on, quality may apply if source is lossy
+        if pcfg.imgsave_auto_format:
+            self._set_quality_visual_state(True)
+        else:
+            # PNG is lossless — disable quality with "—" placeholder
+            is_png = self.rst_imgformat_combobox.currentText() == "PNG"
+            self._set_quality_visual_state(not is_png)
         self.load_model_checker.setChecked(pcfg.module.load_model_on_demand)
         self.empty_runcache_checker.setChecked(pcfg.module.empty_runcache)
         self.max_font_size_edit.setValue(pcfg.max_font_size)

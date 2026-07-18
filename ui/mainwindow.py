@@ -113,6 +113,7 @@ class PageListView(QListWidget):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self.setObjectName("PageListView")
         self.setIconSize(
             QSize(shared.PAGELIST_THUMBNAIL_SIZE, shared.PAGELIST_THUMBNAIL_SIZE)
         )
@@ -341,6 +342,7 @@ class MainWindow(mainwindow_cls):
         mainHLayout.addWidget(self.leftBar)
         mainHLayout.addWidget(self.leftStackWidget)
         mainHLayout.addWidget(self.global_search_widget)
+        mainHLayout.addSpacing(5)
         mainHLayout.addWidget(self.centralStackWidget)
         mainHLayout.setContentsMargins(0, 0, 0, 0)
         mainHLayout.setSpacing(0)
@@ -2593,10 +2595,7 @@ class MainWindow(mainwindow_cls):
         # override font format if necessary
         override_fnt_size = pcfg.let_fntsize_flag == 1
         override_fnt_stroke = pcfg.let_fntstroke_flag == 1
-        override_fnt_color = pcfg.let_fntcolor_flag == 1
-        override_fnt_scolor = pcfg.let_fnt_scolor_flag == 1
         override_alignment = pcfg.let_alignment_flag == 1
-        override_effect = pcfg.let_fnteffect_flag == 1
         override_writing_mode = pcfg.let_writing_mode_flag == 1
         override_font_family = pcfg.let_family_flag == 1
         gf = self.textPanel.formatpanel.global_format
@@ -2623,22 +2622,20 @@ class MainWindow(mainwindow_cls):
                         blk.stroke_width = gf.stroke_width
                     elif pcfg.module.enable_ocr:
                         blk.recalulate_stroke_width()
-                    if override_fnt_color:
-                        blk.set_font_colors(fg_colors=gf.frgb)
-                    if override_fnt_scolor:
-                        blk.set_font_colors(bg_colors=gf.srgb)
                     if override_alignment:
                         blk.alignment = gf.alignment
                     elif pcfg.module.enable_detect and not blk.src_is_vertical:
                         blk.recalulate_alignment()
-                    if override_effect:
-                        blk.opacity = gf.opacity
-                        blk.shadow_color = gf.shadow_color
-                        blk.shadow_radius = gf.shadow_radius
-                        blk.shadow_strength = gf.shadow_strength
-                        blk.shadow_offset = gf.shadow_offset
                     if override_writing_mode:
                         blk.vertical = gf.vertical
+                    # Always apply global font/background colors and effects
+                    # (removed "decide by program" — it did nothing meaningful)
+                    blk.set_font_colors(fg_colors=gf.frgb, bg_colors=gf.srgb)
+                    blk.opacity = gf.opacity
+                    blk.shadow_color = gf.shadow_color
+                    blk.shadow_radius = gf.shadow_radius
+                    blk.shadow_strength = gf.shadow_strength
+                    blk.shadow_offset = gf.shadow_offset
                     if override_font_family or blk.font_family is None:
                         blk.font_family = gf.font_family
                         if blk.rich_text:

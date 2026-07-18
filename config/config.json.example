@@ -74,9 +74,6 @@
 
     "let_fntsize_flag": 0,
     "let_fntstroke_flag": 0,
-    "let_fntcolor_flag": 0,
-    "let_fnt_scolor_flag": 0,
-    "let_fnteffect_flag": 1,
     "let_alignment_flag": 0,
     "let_writing_mode_flag": 0,
     "let_family_flag": 0,
