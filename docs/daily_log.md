@@ -445,3 +445,29 @@
 **验证：** 语法检查 ✅、启动导入测试 5/5 ✅、qm 编译 1021 条 ✅
 
 **涉及文件：** `ui/textedit_area.py`、`ui/custom_widget/scrollbar.py`、`ui/scenetext_manager.py`、`utils/config.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+### 文本框模式蓝色边框修复 + Run 对话框始终显示 + 默认编辑模式
+
+**需求/问题：**
+
+1. **Run 对话框**：`run` 功能只在项目页数 > 1 时弹出设置窗口，单页项目直接执行上次流程。改为无条件弹出。
+2. **默认模式**：每次启动右侧文本框区模式默认为「审阅」（Review），需改为「编辑」（Edit）。
+3. **蓝色边框不显示**：按 W 进入文本框模式时，已有文本框的蓝色边框「几乎不可见」。手动调整任一文本框尺寸后才恢复正常。
+
+**根因与修复：**
+
+1. **Run 对话框**（`ui/mainwindow.py:2750`）— 移除 `if num_pages > 1:` 条件判断，Run 对话框始终弹出。
+
+2. **默认编辑模式**（`ui/mainwindow.py:603,606`）— `foldTextBtn.setChecked(True)` 和 `fold_textarea(True)` 硬编码启动，忽略配置值。
+
+3. **蓝色边框**（`ui/textitem.py`）：
+
+   - **根因：** 文本渲染模式设为「清晰（矢量渲染）」时，`_use_full_pixmap = False` + `CacheMode = NoCache`，走 `paint()` 慢路径。慢路径中 `_draw_accessories()` 以 `DestinationOver` 合成模式绘制，将蓝色边框画在 QTextDocument 内容**后面**，被文字遮盖不可见。流畅（位图渲染）模式走快路径，边框通过 `_draw_border_rect()` 以 `SourceOver` 画在文字**上面**，一切正常。
+   - **修复：** 慢路径非编辑状态下，背景（stroke/shadow）仍用 `DestinationOver` 画在文字后，边框改用 `_draw_border_rect()` 以 `SourceOver` 画在文字上方。新增 `_draw_background_only()` 方法剥离边框绘制。
+   - **辅助**（`ui/scenetext_manager.py`）：`showTextblkItemRect()` 中加上 `_invalidate_cache()` + `update()` 确保 Qt `DeviceCoordinateCache` 失效。
+
+**验证：** 语法检查 ✅（`ui/textitem.py` + `ui/scenetext_manager.py`）
+
+**涉及文件：** `ui/mainwindow.py`、`ui/textitem.py`、`ui/scenetext_manager.py`

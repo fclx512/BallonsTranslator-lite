@@ -1566,6 +1566,10 @@ class SceneTextManager(QObject):
     def showTextblkItemRect(self, draw_rect: bool):
         for blk_item in self.textblk_item_list:
             blk_item.draw_rect = draw_rect
+            blk_item._invalidate_cache()
+            # Ensure DeviceCoordinateCache is invalidated so paint() is called.
+            # The border rendering fix lives in TextBlkItem.paint() — the slow
+            # path now draws the border on top (SourceOver) even in crisp mode.
             blk_item.update()
 
     def set_blkitems_selection(

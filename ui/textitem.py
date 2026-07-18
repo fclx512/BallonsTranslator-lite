@@ -756,10 +756,13 @@ class TextBlkItem(QGraphicsTextItem):
             painter.setCompositionMode(
                 QPainter.CompositionMode.CompositionMode_DestinationOver
             )
-            self._draw_accessories(painter)
+            # Draw background (stroke/shadow) behind text content
+            self._draw_background_only(painter)
             painter.setCompositionMode(
                 QPainter.CompositionMode.CompositionMode_SourceOver
             )
+            # Draw border ON TOP of text so it's visible in crisp (vector) mode
+            self._draw_border_rect(painter)
             self._draw_seq_badge(painter)
 
     def _draw_accessories(self, painter: QPainter):
@@ -783,6 +786,19 @@ class TextBlkItem(QGraphicsTextItem):
             )
             painter.setPen(pen)
             painter.drawRect(self.unpadRect(br))
+        painter.restore()
+
+    def _draw_background_only(self, painter: QPainter):
+        """Draw background pixmap only (no border, no badge).
+
+        Used by the crisp/vector paint path where accessories must be drawn
+        behind text via DestinationOver, but the border needs to be on top.
+        """
+        br = self.boundingRect()
+        painter.save()
+        if self.background_pixmap is not None:
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            painter.drawPixmap(br.toRect(), self.background_pixmap)
         painter.restore()
 
     def _draw_border_rect(self, painter: QPainter):

@@ -78,3 +78,6 @@ projects/
 .agents/
 .zcode/
 skills-lock.json
+
+# debug logs
+ctx_debug.log

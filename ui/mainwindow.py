@@ -600,10 +600,10 @@ class MainWindow(mainwindow_cls):
 
         self.rightComicTransStackPanel.setHidden(True)
         self.st_manager.setTextEditMode(False)
-        self.textPanel.foldTextBtn.setChecked(pcfg.fold_textarea)
+        self.textPanel.foldTextBtn.setChecked(True)  # Always start in Edit mode
         self.textPanel.transBtn.setCheckState(pcfg.show_trans_text)
         self.textPanel.sourceBtn.setCheckState(pcfg.show_source_text)
-        self.fold_textarea(pcfg.fold_textarea)
+        self.fold_textarea(True)
         self.show_trans_text(pcfg.show_trans_text)
         self.show_source_text(pcfg.show_source_text)
 
@@ -669,10 +669,7 @@ class MainWindow(mainwindow_cls):
         if familybox.count() == 0 and filtered:
             familybox.update_font_list(filtered)
 
-        textblock_mode = pcfg.imgtrans_textblock
         if pcfg.imgtrans_textedit:
-            if textblock_mode:
-                self.bottomBar.textblockChecker.setChecked(True)
             self.bottomBar.texteditChecker.click()
         elif pcfg.imgtrans_paintmode:
             self.bottomBar.paintChecker.click()
@@ -2748,258 +2745,257 @@ class MainWindow(mainwindow_cls):
             return
 
         page_filter = None
-        if num_pages > 1:
-            from qtpy.QtWidgets import (
-                QCheckBox,
-                QComboBox,
-                QDialog,
-                QFrame,
-                QGridLayout,
-                QHBoxLayout,
-                QLabel,
-                QPushButton,
-                QSpinBox,
-                QVBoxLayout,
+        from qtpy.QtWidgets import (
+            QCheckBox,
+            QComboBox,
+            QDialog,
+            QFrame,
+            QGridLayout,
+            QHBoxLayout,
+            QLabel,
+            QPushButton,
+            QSpinBox,
+            QVBoxLayout,
+        )
+
+        from ui.custom_widget import RangeSlider
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(self.tr("Run"))
+        dialog.setMinimumWidth(420)
+        dialog.setSizeGripEnabled(False)
+        layout = QVBoxLayout(dialog)
+
+        range_frame = QFrame()
+        range_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        range_layout = QVBoxLayout(range_frame)
+
+        # Spinboxes for precise page input (placed above slider)
+        spin_layout = QHBoxLayout()
+        spin_layout.setContentsMargins(0, 0, 0, 0)
+        start_spin = NoArrowsSpinBox()
+        start_spin.setRange(1, num_pages)
+        start_spin.setValue(1)
+        start_spin.setFixedWidth(70)
+        end_spin = NoArrowsSpinBox()
+        end_spin.setRange(1, num_pages)
+        end_spin.setValue(num_pages)
+        end_spin.setFixedWidth(70)
+
+        spin_layout.addStretch()
+        spin_layout.addWidget(start_spin)
+        spin_layout.addWidget(QLabel(" ~ "))
+        spin_layout.addWidget(end_spin)
+        spin_layout.addStretch()
+        range_layout.addLayout(spin_layout)
+
+        slider = RangeSlider(0, num_pages - 1)
+        slider.setMinimumWidth(350)
+        range_layout.addWidget(slider)
+
+        range_info = QLabel()
+        range_layout.addWidget(range_info)
+
+        def update_range_info():
+            lo = slider.low() + 1
+            hi = slider.high() + 1
+            range_info.setText(
+                self.tr("Page %1 ~ Page %2 (%3 pages)")
+                .replace("%1", str(lo))
+                .replace("%2", str(hi))
+                .replace("%3", str(hi - lo + 1))
             )
 
-            from ui.custom_widget import RangeSlider
+        def sync_spinboxes():
+            start_spin.blockSignals(True)
+            end_spin.blockSignals(True)
+            start_spin.setValue(slider.low() + 1)
+            end_spin.setValue(slider.high() + 1)
+            start_spin.blockSignals(False)
+            end_spin.blockSignals(False)
 
-            dialog = QDialog(self)
-            dialog.setWindowTitle(self.tr("Run"))
-            dialog.setMinimumWidth(420)
-            dialog.setSizeGripEnabled(False)
-            layout = QVBoxLayout(dialog)
-
-            range_frame = QFrame()
-            range_frame.setFrameShape(QFrame.Shape.StyledPanel)
-            range_layout = QVBoxLayout(range_frame)
-
-            # Spinboxes for precise page input (placed above slider)
-            spin_layout = QHBoxLayout()
-            spin_layout.setContentsMargins(0, 0, 0, 0)
-            start_spin = NoArrowsSpinBox()
-            start_spin.setRange(1, num_pages)
-            start_spin.setValue(1)
-            start_spin.setFixedWidth(70)
-            end_spin = NoArrowsSpinBox()
-            end_spin.setRange(1, num_pages)
-            end_spin.setValue(num_pages)
-            end_spin.setFixedWidth(70)
-
-            spin_layout.addStretch()
-            spin_layout.addWidget(start_spin)
-            spin_layout.addWidget(QLabel(" ~ "))
-            spin_layout.addWidget(end_spin)
-            spin_layout.addStretch()
-            range_layout.addLayout(spin_layout)
-
-            slider = RangeSlider(0, num_pages - 1)
-            slider.setMinimumWidth(350)
-            range_layout.addWidget(slider)
-
-            range_info = QLabel()
-            range_layout.addWidget(range_info)
-
-            def update_range_info():
-                lo = slider.low() + 1
-                hi = slider.high() + 1
-                range_info.setText(
-                    self.tr("Page %1 ~ Page %2 (%3 pages)")
-                    .replace("%1", str(lo))
-                    .replace("%2", str(hi))
-                    .replace("%3", str(hi - lo + 1))
-                )
-
-            def sync_spinboxes():
-                start_spin.blockSignals(True)
-                end_spin.blockSignals(True)
-                start_spin.setValue(slider.low() + 1)
-                end_spin.setValue(slider.high() + 1)
-                start_spin.blockSignals(False)
-                end_spin.blockSignals(False)
-
-            def on_spinbox_changed():
-                slider.blockSignals(True)
-                slider.set_range(start_spin.value() - 1, end_spin.value() - 1)
-                slider.blockSignals(False)
-                sync_spinboxes()
-                update_range_info()
-
-            start_spin.valueChanged.connect(on_spinbox_changed)
-            end_spin.valueChanged.connect(on_spinbox_changed)
-            slider.rangeChanged.connect(
-                lambda lo, hi: (sync_spinboxes(), update_range_info())
-            )
-
-            all_pages_cb = QCheckBox(self.tr("All Pages"))
-            all_pages_cb.setObjectName('ConfigCheckBox')
-            all_pages_cb.toggled.connect(
-                lambda checked: (
-                    slider.set_range(0, num_pages - 1),
-                    slider.setEnabled(not checked),
-                    start_spin.setEnabled(not checked),
-                    end_spin.setEnabled(not checked),
-                    update_range_info(),
-                )
-            )
-            all_pages_cb.setChecked(True)
-            range_layout.addWidget(all_pages_cb)
-
-            layout.addWidget(range_frame)
+        def on_spinbox_changed():
+            slider.blockSignals(True)
+            slider.set_range(start_spin.value() - 1, end_spin.value() - 1)
+            slider.blockSignals(False)
+            sync_spinboxes()
             update_range_info()
 
-            # Pipeline stages toggles
-            stages_frame = QFrame()
-            stages_frame.setFrameShape(QFrame.Shape.StyledPanel)
-            stages_layout = QVBoxLayout(stages_frame)
-            stages_layout.setContentsMargins(8, 6, 8, 6)
+        start_spin.valueChanged.connect(on_spinbox_changed)
+        end_spin.valueChanged.connect(on_spinbox_changed)
+        slider.rangeChanged.connect(
+            lambda lo, hi: (sync_spinboxes(), update_range_info())
+        )
 
-            stage_labels = [
-                self.tr("Enable Text Detection"),
-                self.tr("Enable OCR"),
-                self.tr("Enable Translation"),
-                self.tr("Enable Inpainting"),
-            ]
-            ctx_trans_cb = None
-            for idx, label in enumerate(stage_labels):
-                cb = QCheckBox(label)
-                cb.setObjectName('ConfigCheckBox')
-                cb.setChecked(pcfg.module.stage_enabled(idx))
-                cb.toggled.connect(
-                    lambda checked, i=idx: self.on_enable_module(i, checked)
-                )
-                if idx == 2:
-                    row = QWidget()
-                    row_layout = QHBoxLayout(row)
-                    row_layout.setContentsMargins(0, 0, 0, 0)
-                    row_layout.addWidget(cb)
-                    ctx_trans_cb = QCheckBox(self.tr("Context Translation (beta)"))
-                    ctx_trans_cb.setObjectName('ConfigCheckBox')
-                    row_layout.addWidget(ctx_trans_cb)
-                    row_layout.addStretch()
-                    stages_layout.addWidget(row)
-                else:
-                    stages_layout.addWidget(cb)
-
-            layout.addWidget(stages_frame)
-
-            # AI Chat settings — shown when Context Translation (beta) is checked
-            ai_chat_frame = QFrame()
-            ai_chat_frame.setFrameShape(QFrame.Shape.StyledPanel)
-            ai_grid = QGridLayout(ai_chat_frame)
-            ai_grid.setContentsMargins(8, 6, 8, 6)
-            ai_grid.setSpacing(6)
-
-            ai_title = QLabel(self.tr("AI Chat Settings"))
-            ai_title.setStyleSheet("font-weight: bold;")
-            ai_grid.addWidget(ai_title, 0, 0, 1, 2)
-
-            # Batch size and context pages are now auto-configured internally.
-
-            glossary_cb = QCheckBox(self.tr("Enforce Term Consistency (Glossary)"))
-            glossary_cb.setObjectName('ConfigCheckBox')
-            glossary_cb.setChecked(True)
-            ai_grid.addWidget(glossary_cb, 1, 0, 1, 2)
-
-            # Custom glossary button — visible only when glossary is enabled
-            custom_glossary_store: dict = {}
-            custom_terms_btn = QPushButton(self.tr("Custom Terms..."))
-            custom_terms_btn.setVisible(glossary_cb.isChecked())
-            ai_grid.addWidget(custom_terms_btn, 2, 0, 1, 2)
-
-            def _open_custom_glossary():
-                from ui.glossary_dialog import CustomGlossaryDialog
-                dlg = CustomGlossaryDialog(self, existing_terms=custom_glossary_store)
-                if dlg.exec_() == QDialog.DialogCode.Accepted:
-                    custom_glossary_store.clear()
-                    custom_glossary_store.update(dlg.get_terms())
-
-            glossary_cb.toggled.connect(custom_terms_btn.setVisible)
-            custom_terms_btn.clicked.connect(_open_custom_glossary)
-
-            ai_chat_frame.setVisible(False)
-            layout.addWidget(ai_chat_frame)
-
-            ctx_trans_cb.toggled.connect(
-                lambda checked: ai_chat_frame.setVisible(checked)
+        all_pages_cb = QCheckBox(self.tr("All Pages"))
+        all_pages_cb.setObjectName('ConfigCheckBox')
+        all_pages_cb.toggled.connect(
+            lambda checked: (
+                slider.set_range(0, num_pages - 1),
+                slider.setEnabled(not checked),
+                start_spin.setEnabled(not checked),
+                end_spin.setEnabled(not checked),
+                update_range_info(),
             )
+        )
+        all_pages_cb.setChecked(True)
+        range_layout.addWidget(all_pages_cb)
 
-            # Run without update textstyle
-            wo_update_cb = QCheckBox(self.tr("Run without update textstyle"))
-            wo_update_cb.setObjectName('ConfigCheckBox')
-            layout.addWidget(wo_update_cb)
+        layout.addWidget(range_frame)
+        update_range_info()
 
-            btn_layout = QHBoxLayout()
-            run_btn = QPushButton(self.tr("Run"))
-            cancel_btn = QPushButton(self.tr("Cancel"))
-            btn_layout.addWidget(run_btn)
-            btn_layout.addWidget(cancel_btn)
-            layout.addLayout(btn_layout)
+        # Pipeline stages toggles
+        stages_frame = QFrame()
+        stages_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        stages_layout = QVBoxLayout(stages_frame)
+        stages_layout.setContentsMargins(8, 6, 8, 6)
 
-            run_btn.clicked.connect(dialog.accept)
-            cancel_btn.clicked.connect(dialog.reject)
+        stage_labels = [
+            self.tr("Enable Text Detection"),
+            self.tr("Enable OCR"),
+            self.tr("Enable Translation"),
+            self.tr("Enable Inpainting"),
+        ]
+        ctx_trans_cb = None
+        for idx, label in enumerate(stage_labels):
+            cb = QCheckBox(label)
+            cb.setObjectName('ConfigCheckBox')
+            cb.setChecked(pcfg.module.stage_enabled(idx))
+            cb.toggled.connect(
+                lambda checked, i=idx: self.on_enable_module(i, checked)
+            )
+            if idx == 2:
+                row = QWidget()
+                row_layout = QHBoxLayout(row)
+                row_layout.setContentsMargins(0, 0, 0, 0)
+                row_layout.addWidget(cb)
+                ctx_trans_cb = QCheckBox(self.tr("Context Translation (beta)"))
+                ctx_trans_cb.setObjectName('ConfigCheckBox')
+                row_layout.addWidget(ctx_trans_cb)
+                row_layout.addStretch()
+                stages_layout.addWidget(row)
+            else:
+                stages_layout.addWidget(cb)
 
-            if pcfg.module.all_stages_disabled():
-                run_btn.setEnabled(False)
+        layout.addWidget(stages_frame)
 
-            if dialog.exec_() != QDialog.DialogCode.Accepted:
-                return
+        # AI Chat settings — shown when Context Translation (beta) is checked
+        ai_chat_frame = QFrame()
+        ai_chat_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        ai_grid = QGridLayout(ai_chat_frame)
+        ai_grid.setContentsMargins(8, 6, 8, 6)
+        ai_grid.setSpacing(6)
 
-            # If Context Translation is enabled, use current translator's profile
-            if ctx_trans_cb.isChecked():
-                translator = self.module_manager.translator
-                if hasattr(translator, "_active_profile"):
-                    profile = translator._active_profile
-                    if profile:
-                        from modules.translators.context_batch import (
-                            ContextBatchTranslator,
-                        )
+        ai_title = QLabel(self.tr("AI Chat Settings"))
+        ai_title.setStyleSheet("font-weight: bold;")
+        ai_grid.addWidget(ai_title, 0, 0, 1, 2)
 
-                        def _ctx_status(msg):
-                            bar = self.module_manager.progress_msgbox.translate_bar
-                            bar.updateProgress(bar.progressbar.value(), msg)
-                            if hasattr(self, "_ctx_log_dialog") and self._ctx_log_dialog:
-                                self._ctx_log_dialog.append(msg)
+        # Batch size and context pages are now auto-configured internally.
 
-                        self._ctx_batch_restore = pcfg.module.translator
-                        ctx = ContextBatchTranslator(
-                            api_config={
-                                "api_host": profile.get("api_host", ""),
-                                "api_key": profile.get("api_key", ""),
-                                "model": profile.get("model", "gpt-4o"),
-                                "temperature": profile.get("temperature", 0.1),
-                                "max_tokens": profile.get("max_tokens", ""),
-                                "proxy": profile.get("proxy", ""),
-                                "reasoning_effort": profile.get("reasoning_effort", ""),
-                            },
-                            translation_prompt=profile.get("prompt_template", ""),
-                            status_callback=_ctx_status,
-                        )
+        glossary_cb = QCheckBox(self.tr("Enforce Term Consistency (Glossary)"))
+        glossary_cb.setObjectName('ConfigCheckBox')
+        glossary_cb.setChecked(True)
+        ai_grid.addWidget(glossary_cb, 1, 0, 1, 2)
 
-                        # Create/show the context translation log window
-                        if (
-                            hasattr(self, "_ctx_log_dialog")
-                            and self._ctx_log_dialog is not None
-                        ):
-                            self._ctx_log_dialog.close()
-                            self._ctx_log_dialog = None
-                        from ui.context_log_dialog import ContextLogDialog
+        # Custom glossary button — visible only when glossary is enabled
+        custom_glossary_store: dict = {}
+        custom_terms_btn = QPushButton(self.tr("Custom Terms..."))
+        custom_terms_btn.setVisible(glossary_cb.isChecked())
+        ai_grid.addWidget(custom_terms_btn, 2, 0, 1, 2)
 
-                        self._ctx_log_dialog = ContextLogDialog(self)
-                        self._ctx_log_dialog.show()
+        def _open_custom_glossary():
+            from ui.glossary_dialog import CustomGlossaryDialog
+            dlg = CustomGlossaryDialog(self, existing_terms=custom_glossary_store)
+            if dlg.exec_() == QDialog.DialogCode.Accepted:
+                custom_glossary_store.clear()
+                custom_glossary_store.update(dlg.get_terms())
 
-                        ctx.use_glossary = glossary_cb.isChecked()
-                        ctx.custom_glossary = custom_glossary_store
-                        self.module_manager.translate_thread.translator = ctx
-                        self.module_manager.translate_thread.module = ctx
+        glossary_cb.toggled.connect(custom_terms_btn.setVisible)
+        custom_terms_btn.clicked.connect(_open_custom_glossary)
 
-            if wo_update_cb.isChecked():
-                self._run_imgtrans_wo_textstyle_update = True
+        ai_chat_frame.setVisible(False)
+        layout.addWidget(ai_chat_frame)
 
-            if not all_pages_cb.isChecked():
-                page_filter = []
-                for i in range(slider.low(), slider.high() + 1):
-                    page_filter.append(self.imgtrans_proj.idx2pagename(i))
+        ctx_trans_cb.toggled.connect(
+            lambda checked: ai_chat_frame.setVisible(checked)
+        )
+
+        # Run without update textstyle
+        wo_update_cb = QCheckBox(self.tr("Run without update textstyle"))
+        wo_update_cb.setObjectName('ConfigCheckBox')
+        layout.addWidget(wo_update_cb)
+
+        btn_layout = QHBoxLayout()
+        run_btn = QPushButton(self.tr("Run"))
+        cancel_btn = QPushButton(self.tr("Cancel"))
+        btn_layout.addWidget(run_btn)
+        btn_layout.addWidget(cancel_btn)
+        layout.addLayout(btn_layout)
+
+        run_btn.clicked.connect(dialog.accept)
+        cancel_btn.clicked.connect(dialog.reject)
+
+        if pcfg.module.all_stages_disabled():
+            run_btn.setEnabled(False)
+
+        if dialog.exec_() != QDialog.DialogCode.Accepted:
+            return
+
+        # If Context Translation is enabled, use current translator's profile
+        if ctx_trans_cb.isChecked():
+            translator = self.module_manager.translator
+            if hasattr(translator, "_active_profile"):
+                profile = translator._active_profile
+                if profile:
+                    from modules.translators.context_batch import (
+                        ContextBatchTranslator,
+                    )
+
+                    def _ctx_status(msg):
+                        bar = self.module_manager.progress_msgbox.translate_bar
+                        bar.updateProgress(bar.progressbar.value(), msg)
+                        if hasattr(self, "_ctx_log_dialog") and self._ctx_log_dialog:
+                            self._ctx_log_dialog.append(msg)
+
+                    self._ctx_batch_restore = pcfg.module.translator
+                    ctx = ContextBatchTranslator(
+                        api_config={
+                            "api_host": profile.get("api_host", ""),
+                            "api_key": profile.get("api_key", ""),
+                            "model": profile.get("model", "gpt-4o"),
+                            "temperature": profile.get("temperature", 0.1),
+                            "max_tokens": profile.get("max_tokens", ""),
+                            "proxy": profile.get("proxy", ""),
+                            "reasoning_effort": profile.get("reasoning_effort", ""),
+                        },
+                        translation_prompt=profile.get("prompt_template", ""),
+                        status_callback=_ctx_status,
+                    )
+
+                    # Create/show the context translation log window
+                    if (
+                        hasattr(self, "_ctx_log_dialog")
+                        and self._ctx_log_dialog is not None
+                    ):
+                        self._ctx_log_dialog.close()
+                        self._ctx_log_dialog = None
+                    from ui.context_log_dialog import ContextLogDialog
+
+                    self._ctx_log_dialog = ContextLogDialog(self)
+                    self._ctx_log_dialog.show()
+
+                    ctx.use_glossary = glossary_cb.isChecked()
+                    ctx.custom_glossary = custom_glossary_store
+                    self.module_manager.translate_thread.translator = ctx
+                    self.module_manager.translate_thread.module = ctx
+
+        if wo_update_cb.isChecked():
+            self._run_imgtrans_wo_textstyle_update = True
+
+        if not all_pages_cb.isChecked():
+            page_filter = []
+            for i in range(slider.low(), slider.high() + 1):
+                page_filter.append(self.imgtrans_proj.idx2pagename(i))
 
         if (
             not self.imgtrans_proj.is_all_pages_no_text
