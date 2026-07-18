@@ -5,9 +5,9 @@ from qtpy.QtCore import (
     QEvent,
     QMimeData,
     QPoint,
-    QPropertyAnimation,
     QRectF,
     Qt,
+    QTimer,
     Signal,
 )
 from qtpy.QtGui import (
@@ -29,7 +29,6 @@ from qtpy.QtWidgets import (
     QApplication,
     QFrame,
     QGraphicsDropShadowEffect,
-    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QScrollArea,
@@ -38,13 +37,18 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
 )
 
+from ui.misc import get_theme_color
 
-from .custom_widget import ScrollBar, SeparatorWidget, Widget
+
+from .custom_widget import ScrollBar, Widget
 from .textitem import TextBlock
 
 # Styling moved to config/stylesheet.css with dynamic property selectors.
 # TransPairWidget card states (checked, hover, drag) are now controlled
 # via setProperty() + unpolish/polish, not setStyleSheet().
+
+# Width of the drag handle zone to the right of accent_bar when fold=ON
+DRAG_AREA_WIDTH = 22
 
 
 class SourceTextEdit(QTextEdit):
@@ -64,7 +68,6 @@ class SourceTextEdit(QTextEdit):
         super().__init__(parent, *args, **kwargs)
         self.idx = idx
         self.pre_editing = False
-        self.setStyleSheet(r"QScrollBar:horizontal {height: 5px;}")
         self.document().contentsChanged.connect(self.on_content_changed)
         self.document().documentLayout().documentSizeChanged.connect(self.adjustSize)
         self.document().contentsChange.connect(self.on_content_changing)
@@ -86,6 +89,15 @@ class SourceTextEdit(QTextEdit):
         self.cursor_coord = None
         self.block_all_input = False
         self.in_acts = False
+
+        # NoFrame + transparent viewport → CSS border-radius shows through.
+        self.setFrameStyle(QFrame.NoFrame)
+        self.viewport().setAutoFillBackground(False)
+
+        # Remove internal text padding; hide scrollbars (wheel still works)
+        self.document().setDocumentMargin(0)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         self.min_height = 45
         self.setFold(fold)
@@ -309,15 +321,6 @@ class TransTextEdit(SourceTextEdit):
     pass
 
 
-class RowIndexLabel(QLabel):
-    """Read-only label for text block index. No editing — display only."""
-
-    def __init__(self, text: str = None, parent=None):
-        super().__init__(str(text) if text is not None else "", parent=parent)
-        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
-        self.setContentsMargins(0, 0, 0, 0)
-
-
 class TransPairWidget(Widget):
     check_state_changed = Signal(object, bool, bool)
     drag_move = Signal(int)
@@ -332,46 +335,140 @@ class TransPairWidget(Widget):
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.e_source = SourceTextEdit(idx, self, fold)
-        self.e_trans = TransTextEdit(idx, self, fold)
-        self.idx_label = RowIndexLabel(str(idx + 1).zfill(2), self)  # read-only index
+        self.e_source = SourceTextEdit(idx, self, False)
+        self.e_trans = TransTextEdit(idx, self, False)
         self.textblock = textblock
         self.idx = idx
+        self.fold = fold
+
+        # ── Index badges ─────────────────────────────────────────
+        # Two badges, one visible at a time depending on fold state.
+        # Viewport badge (unfold/review mode) — overlaid at top-right
+        self.badge_vp = QLabel(self.e_source.viewport())
+        self.badge_vp.setObjectName("TextBlockIndexBadge")
+        self.badge_vp.setText(str(idx + 1))
+        self.badge_vp.setContentsMargins(4, 0, 4, 0)
+        self.badge_vp.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.badge_vp.adjustSize()
+        self.badge_vp.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+        QTimer.singleShot(0, self._repos_badge_tr)
+        # Fade out on source-edit hover so it doesn't block text
+        self.e_source.hover_enter.connect(lambda _: self._set_badge_hover(True))
+        self.e_source.hover_leave.connect(lambda _: self._set_badge_hover(False))
+
+        # Drag-area badge (fold/editing mode) — inside the left drag zone
+        self.badge_drag = QLabel()
+        self.badge_drag.setObjectName("TextBlockIndexBadge")
+        self.badge_drag.setText(str(idx + 1))
+        self.badge_drag.setContentsMargins(2, 0, 2, 0)
+        self.badge_drag.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.badge_drag.adjustSize()
+        self.badge_drag.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+
         self.checked = False
         self._is_hovered = False
+        self._badge_hovered = False
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         vlayout = QVBoxLayout()
         vlayout.setAlignment(Qt.AlignTop)
         vlayout.addWidget(self.e_source)
         vlayout.addWidget(self.e_trans)
-        vlayout.addWidget(SeparatorWidget(self))
-        spacing = 7
+        spacing = 2
         vlayout.setSpacing(spacing)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setContentsMargins(0, 0, 0, 0)
-        vlayout.setContentsMargins(0, spacing, spacing, spacing)
+        # right=3 to match left side accent_bar width after spacing is 0
+        vlayout.setContentsMargins(spacing, spacing, 3, spacing)
 
         # Left accent bar for checked-state indicator
         self.accent_bar = QFrame(self)
         self.accent_bar.setObjectName("accentBar")
         self.accent_bar.setFixedWidth(3)
-        # Color is set via stylesheet (TransPairWidget #accentBar) so theme
-        # switching updates it automatically — no hardcoded setStyleSheet here.
-        self._accent_effect = QGraphicsOpacityEffect(self.accent_bar)
-        self._accent_effect.setOpacity(0.0)
-        self.accent_bar.setGraphicsEffect(self._accent_effect)
+        # Start hidden — CSS rule TransPairWidget #accentBar would otherwise
+        # render it at full opacity before the first animation runs.
+        self.accent_bar.setStyleSheet("background: transparent;")
+        # Avoid QGraphicsOpacityEffect: its offscreen cache breaks rendering
+        # inside QScrollArea (bar "sticks" in place during scroll).  Instead
+        # animate background alpha via timer + setStyleSheet.
+        self._accent_alpha = 0.0  # 0.0=hidden, 1.0=full
+        self._accent_timer = None
         self.accent_bar.setAttribute(
             Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
         )
 
+        # Drag handle zone — sits between accent_bar and text content
+        # Only visible in fold=ON mode, provides space for drag initiation
+        # and contains the drag-area badge (vertically centered via layout).
+        self.drag_area = QFrame(self)
+        self.drag_area.setObjectName("dragArea")
+        self.drag_area.setFixedWidth(DRAG_AREA_WIDTH)
+        self.drag_area.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+        drag_layout = QVBoxLayout(self.drag_area)
+        drag_layout.setContentsMargins(0, 0, 0, 0)
+        drag_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        drag_layout.addWidget(self.badge_drag)
+
         hlayout = QHBoxLayout(self)
         hlayout.addWidget(self.accent_bar)
-        hlayout.addWidget(self.idx_label)
+        hlayout.addWidget(self.drag_area)
         hlayout.addLayout(vlayout)
         hlayout.setContentsMargins(0, 0, 0, 0)
-        hlayout.setSpacing(spacing)
+        hlayout.setSpacing(0)  # all spacing managed by vlayout margins
 
         self.setAcceptDrops(True)
+
+        # Apply initial fold layout
+        self._apply_fold()
+
+    def setFold(self, fold: bool):
+        """Switch between fold=ON (editing layout) and fold=OFF (review layout).
+
+        fold=ON:
+          - accent_bar 3px (blue selection indicator)
+          - drag_area 17px visible (drag handle + badge)
+          - badge inside drag_area
+          - QTextEdit: NoWrap + 35px min height
+        fold=OFF:
+          - accent_bar 10px (wider, shows visible blue bar)
+          - drag_area hidden
+          - badge on SourceTextEdit viewport top-right
+          - QTextEdit: WidgetWidth + 45px min height
+        """
+        if self.fold == fold:
+            return
+        self.fold = fold
+        self._apply_fold()
+
+    def _apply_fold(self):
+        """Update layout and badge visibility for current fold state."""
+        if self.fold:
+            # ── fold=ON: editing layout ──
+            self.accent_bar.setFixedWidth(3)
+            self.drag_area.show()
+            # Set badge style for drag area and ensure sizing
+            self.badge_drag.setProperty("folded", True)
+            self.badge_drag.style().unpolish(self.badge_drag)
+            self.badge_drag.style().polish(self.badge_drag)
+            self.badge_drag.adjustSize()
+            self.badge_drag.show()
+            # Hide viewport badge
+            self.badge_vp.hide()
+        else:
+            # ── fold=OFF: review layout ──
+            self.accent_bar.setFixedWidth(3)
+            self.drag_area.hide()
+            # Show viewport badge at top-right
+            self.badge_vp.show()
+            # Hide drag badge
+            self.badge_drag.hide()
+            # Reposition viewport badge
+            QTimer.singleShot(0, self._repos_badge_tr)
 
     def dragEnterEvent(self, e: QDragEnterEvent) -> None:
         if isinstance(e.source(), TransPairWidget):
@@ -408,15 +505,59 @@ class TransPairWidget(Widget):
             self.style().unpolish(self)
             self.style().polish(self)
 
-            # Animate accent bar opacity (stop any running animation first)
-            if hasattr(self, "_accent_ani") and self._accent_ani is not None:
-                self._accent_ani.stop()
-            old = self._accent_effect
-            self._accent_ani = QPropertyAnimation(old, b"opacity", self)
-            self._accent_ani.setDuration(150)
-            self._accent_ani.setStartValue(old.opacity())
-            self._accent_ani.setEndValue(1.0 if checked else 0.0)
-            self._accent_ani.start()
+            # Animate accent bar opacity (no QGraphicsOpacityEffect — it
+            # breaks inside QScrollArea).  Use timer-based color alpha fade.
+            self._animate_accent_alpha(1.0 if checked else 0.0)
+
+    def _animate_accent_alpha(self, target: float):
+        """Fade accent bar background alpha toward *target* (0.0–1.0)."""
+        if self._accent_timer is not None:
+            self._accent_timer.stop()
+            self._accent_timer = None
+
+        duration = 150  # ms
+        steps = max(2, duration // 16)  # ~60 fps
+        step_ms = duration // steps
+        step = 0
+        start = self._accent_alpha
+        delta = target - start
+
+        self._accent_timer = QTimer(self)
+        self._accent_timer.timeout.connect(self._accent_tick)
+        self._accent_tick_data = (start, delta, target, steps, step_ms)
+        self._accent_step = 0
+        self._accent_timer.start(step_ms)
+
+    def _accent_tick(self):
+        """Tick handler for accent bar fade animation."""
+        start, delta, target, steps, step_ms = self._accent_tick_data
+        self._accent_step += 1
+        progress = min(self._accent_step / steps, 1.0)
+        self._accent_alpha = start + delta * progress
+        alpha_int = max(0, min(255, int(self._accent_alpha * 255)))
+        if alpha_int <= 0:
+            self.accent_bar.setStyleSheet("background: transparent;")
+        else:
+            c = get_theme_color(alpha=alpha_int)
+            self.accent_bar.setStyleSheet(
+                f"background-color: rgba({c.red()},{c.green()},{c.blue()},{alpha_int});"
+                "border-radius: 1px;"
+            )
+        if progress >= 1.0:
+            self._accent_timer.stop()
+            self._accent_timer = None
+            self._accent_tick_data = None
+
+    def _set_badge_hover(self, hovered: bool):
+        """Fade viewport badge opacity on hover (fold=OFF only)."""
+        if self.fold:
+            return  # drag-area badge doesn't use hover fade
+        if self._badge_hovered == hovered:
+            return
+        self._badge_hovered = hovered
+        self.badge_vp.setProperty("hovered", hovered)
+        self.badge_vp.style().unpolish(self.badge_vp)
+        self.badge_vp.style().polish(self.badge_vp)
 
     def enterEvent(self, event):
         self._is_hovered = True
@@ -447,9 +588,22 @@ class TransPairWidget(Widget):
     def updateIndex(self, idx: int):
         if self.idx != idx:
             self.idx = idx
-            self.idx_label.setText(str(idx + 1).zfill(2))
+            text = str(idx + 1)
+            self.badge_vp.setText(text)
+            self.badge_drag.setText(text)
+            self.badge_vp.adjustSize()
+            self.badge_drag.adjustSize()
+            self._repos_badge_tr()
             self.e_source.idx = idx
             self.e_trans.idx = idx
+
+    def _repos_badge_tr(self):
+        """Move viewport badge to top-right corner of SourceTextEdit viewport."""
+        try:
+            vp = self.e_source.viewport()
+            self.badge_vp.move(vp.width() - self.badge_vp.width(), 0)
+        except RuntimeError:
+            pass
 
 
 class TextEditListScrollArea(QScrollArea):
@@ -468,12 +622,11 @@ class TextEditListScrollArea(QScrollArea):
         self.scrollContent = Widget(parent=self)
         self.setWidget(self.scrollContent)
 
-        # ScrollBar(Qt.Orientation.Horizontal, self)
-        ScrollBar(Qt.Orientation.Vertical, self)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Custom scrollbar — upstream Fluent-style, auto-fade on idle
+        ScrollBar(Qt.Orientation.Vertical, self, fadeout=True)
 
         vlayout = QVBoxLayout(self.scrollContent)
-        vlayout.setContentsMargins(0, 0, 3, 0)
+        vlayout.setContentsMargins(0, 0, 0, 0)
         vlayout.setAlignment(Qt.AlignmentFlag.AlignTop)
         vlayout.setSpacing(6)
         vlayout.addStretch(1)
@@ -843,9 +996,9 @@ class TextEditListScrollArea(QScrollArea):
         super().focusOutEvent(e)
 
     def setFoldTextarea(self, fold: bool):
+        """Propagate fold state to all TransPairWidget children."""
         for pw in self.pairwidget_list:
-            pw.e_trans.setFold(fold)
-            pw.e_source.setFold(fold)
+            pw.setFold(fold)
 
     def setSourceVisible(self, show: bool):
         self.source_visible = show

@@ -57,9 +57,14 @@ SourceTextEdit {
     border-style: none;
 }
 
+SourceTextEdit QScrollBar:horizontal {
+    height: 5px;
+}
+
 TransTextEdit {
     font-size: 17px;
     border-radius: 5px;
+    border-style: none;
     background-color: @transtexteditBackgroundColor;
 }
 
@@ -199,17 +204,122 @@ ConfigContent QCheckBox {
     font-size: 13px;
 }
 
-QFontComboBox#FontFamilyBox {
+/* ── Config panel input widgets (rounded border style) ──────── */
+/* These override the underline-style ConfigContent rules above  */
+/* for widgets that explicitly opt into the rounded look.        */
+
+ConfigLineEdit,
+ConfigContent ConfigLineEdit {
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding: 2px 8px;
+}
+ConfigLineEdit:focus {
+    border: 1px solid @accentPrimary;
+}
+ConfigLineEdit:disabled {
+    background: transparent;
+    border: 1px solid @disabledForegroundColor;
+}
+
+ConfigTextEdit,
+ConfigContent ConfigTextEdit {
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+ConfigTextEdit:focus {
+    border: 1px solid @accentPrimary;
+}
+ConfigTextEdit:disabled {
+    background: transparent;
+    border: 1px solid @disabledForegroundColor;
+}
+
+ConfigComboBox,
+ConfigContent ConfigComboBox,
+ParamComboBox,
+ConfigContent ParamComboBox {
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding-left: 8px;
+}
+ConfigComboBox:focus,
+ParamComboBox:focus {
+    border: 1px solid @accentPrimary;
+}
+ConfigComboBox:disabled,
+ParamComboBox:disabled {
+    background: transparent;
+    border: 1px solid @disabledForegroundColor;
+}
+
+/* ── NoArrowsSpinBox / NoArrowsDoubleSpinBox ───────────────── */
+NoArrowsSpinBox, NoArrowsDoubleSpinBox {
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+NoArrowsSpinBox:focus, NoArrowsDoubleSpinBox:focus {
+    border: 1px solid @accentPrimary;
+}
+NoArrowsSpinBox::up-button, NoArrowsSpinBox::down-button,
+NoArrowsDoubleSpinBox::up-button, NoArrowsDoubleSpinBox::down-button {
+    width: 0px;
+    height: 0px;
+}
+NoArrowsSpinBox:disabled, NoArrowsDoubleSpinBox:disabled {
+    background: transparent;
+    border: 1px solid @disabledForegroundColor;
+}
+
+/* ── Text style panel font/combo boxes ─────────────────────── */
+QComboBox#FontFamilyBox {
     width: 106px;
     height: 26px;
     font-size: 14px;
     padding-right: 14px;
-    padding-left: 6px;
-    border-color: @borderColor;
+    padding-left: 8px;
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+}
+QComboBox#FontFamilyBox:hover,
+QComboBox#FontFamilyBox:focus {
+    border: 1px solid @accentPrimary;
 }
 
-QFontComboBox#FontFamilyBox::hover {
+QComboBox#FontStyleBox {
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding-left: 8px;
+}
+QComboBox#FontStyleBox:focus {
     border: 1px solid @accentPrimary;
+}
+QComboBox#FontStyleBox:disabled {
+    background: transparent;
+    border: 1px solid @disabledForegroundColor;
+}
+
+/* ── StyleDetail (fontstyle_manager) combo boxes ───────────── */
+StyleDetail QComboBox {
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding-left: 8px;
+}
+StyleDetail QComboBox:focus {
+    border: 1px solid @accentPrimary;
+}
+StyleDetail QComboBox:disabled {
+    background: transparent;
+    border: 1px solid @disabledForegroundColor;
 }
 
 SizeComboBox {
@@ -217,8 +327,8 @@ SizeComboBox {
     padding-right: 0px;
     font-size: 12px;
     min-width: 54px;
-    background: rgba(128,128,128,0.13);
-    border: 1px solid rgba(128,128,128,0.25);
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
     border-radius: 4px;
 }
 
@@ -227,7 +337,7 @@ SizeComboBox::hover {
 }
 
 SizeComboBox:focus {
-    border: 1px solid #5DADE2;
+    border: 1px solid @accentPrimary;
 }
 
 SizeComboBox::down-arrow {
@@ -475,6 +585,38 @@ TransPairWidget #accentBar {
     border-radius: 1px;
 }
 
+/* ── Text block index badge (overlaid on SourceTextEdit) ───── */
+/* Matches canvas _draw_seq_badge: semi-transparent black bg, white text, no border */
+QLabel#TextBlockIndexBadge {
+    background: rgba(0, 0, 0, 170);
+    border: none;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+}
+
+QLabel#TextBlockIndexBadge[hovered="true"] {
+    background: rgba(0, 0, 0, 60);
+    color: rgba(255, 255, 255, 60);
+}
+
+/* Badge in drag area (fold=ON, editing mode) — no background, theme text,
+   vertically centered in the left drag zone. */
+QLabel#TextBlockIndexBadge[folded="true"] {
+    background: transparent;
+    color: @qwidgetForegroundColor;
+    font-size: 13px;
+    font-weight: bold;
+    border: none;
+}
+
+/* Drag handle zone — invisible but provides mouse space for drag */
+TransPairWidget #dragArea {
+    background: transparent;
+    border: none;
+}
+
 QListWidget {
     background-color: @emptyContentBackgroundColor;
     border-color: @borderColor;
@@ -483,7 +625,16 @@ QListWidget {
 }
 
 QListWidget#PageListView {
+    border: none;
     border-radius: 6px;
+    background: transparent;
+}
+
+/* 左侧 PageList 容器 — 统一圆角与边框，避免 QStackedWidget 矩形背景外露 */
+QStackedWidget#leftStackWidget {
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+    background: @emptyContentBackgroundColor;
 }
 
 /* ── Config panel nav list ─────────────────────────────────── */
@@ -1315,15 +1466,15 @@ QCheckBox#RegexToggle::indicator:hover {
 }
 
 SearchEditor {
-    background: rgba(128,128,128,0.13);
-    border: 1px solid rgba(128,128,128,0.25);
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
     border-radius: 4px;
     padding: 2px 8px;
     height: 32px;
 }
 
 SearchEditor:focus {
-    border: 1px solid #5DADE2;
+    border: 1px solid @accentPrimary;
 }
 
 ClickableLabel#ReplaceBtn {
@@ -1439,10 +1590,10 @@ GroupFrame {
     background: transparent;
 }
 
-/* 格式编辑区外层大框 — 更粗的边框以增强视觉层次 */
+/* 格式编辑区外层大框 — 与画布一致的细边框 */
 GroupFrame#formatOuterFrame,
 GroupFrame#textEditOuterFrame {
-    border: 3px solid rgba(128,128,128,0.30);
+    border: 1px solid @borderColor;
     border-radius: 6px;
     background: @widgetBackgroundColor;
 }
@@ -1472,13 +1623,13 @@ SmallComboBox {
     height: 20px;
     font-size: 12px;
     /* padding-left: 8px; */
-    background: rgba(128,128,128,0.13);
-    border: 1px solid rgba(128,128,128,0.25);
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
     border-radius: 4px;
 }
 
 SmallComboBox:focus {
-    border: 1px solid #5DADE2;
+    border: 1px solid @accentPrimary;
 }
 
 SmallConfigPutton {

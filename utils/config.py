@@ -174,7 +174,7 @@ class ProgramConfig(Config):
     darkmode: bool = False
     light_theme: str = "eva-light"
     dark_theme: str = "eva-dark"
-    fold_textarea: bool = False
+    fold_textarea: bool = True
     expand_font_format_panel: bool = True
     show_source_text: bool = True
     show_trans_text: bool = True

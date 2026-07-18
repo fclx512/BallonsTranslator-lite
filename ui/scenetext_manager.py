@@ -470,7 +470,7 @@ class TextPanel(Widget):
         format_layout.addWidget(self.format_section)
         layout.addWidget(format_frame)
         self.textToolBar = QHBoxLayout()
-        self.foldTextBtn = CheckableLabel(self.tr("Unfold"), self.tr("Fold"), False)
+        self.foldTextBtn = CheckableLabel(self.tr("Edit"), self.tr("Review"), True)
         self.sourceBtn = TextCheckerLabel(self.tr("Source"))
         self.transBtn = TextCheckerLabel(self.tr("Translation"))
         self.textToolBar.setAlignment(Qt.AlignmentFlag.AlignCenter)

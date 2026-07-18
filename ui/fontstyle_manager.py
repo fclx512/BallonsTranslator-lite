@@ -420,8 +420,6 @@ class StyleDetail(QScrollArea):
         self._family_combo.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        from .custom_widget.combobox import _COMBO_STYLE
-        self._family_combo.setStyleSheet(_COMBO_STYLE)
         self._layout.addLayout(
             _labeled_control(self.tr("Font Family"), self._family_combo)
         )
@@ -490,8 +488,6 @@ class StyleDetail(QScrollArea):
         self._align_combo.addItems(
             [self.tr("Left"), self.tr("Center"), self.tr("Right")]
         )
-        from .custom_widget.combobox import _COMBO_STYLE
-        self._align_combo.setStyleSheet(_COMBO_STYLE)
         self._layout.addLayout(
             _labeled_control(self.tr("Alignment"), self._align_combo)
         )

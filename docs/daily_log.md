@@ -293,3 +293,155 @@
 **验证：** 语法检查 ✅
 
 **涉及文件：** `ui/mainwindow.py`、`ui/global_search_widget.py`
+### 文本框编号徽章 + QTextEdit 圆角修复
+
+**需求：**
+1. 文本框输入区内部 QTextEdit（SourceTextEdit/TransTextEdit）直角 → 圆角
+2. 左侧独立编号标签占用空间大且视觉冗余，改为紧凑徽章
+
+**改动：**
+
+1. **QTextEdit 圆角**（`ui/textedit_area.py`、`config/stylesheet.css`）：
+   - `SourceTextEdit.__init__` 移除内联 `setStyleSheet("QScrollBar:horizontal {height: 5px;}")`（干扰全局样式），改到 CSS 统一管理
+   - `TransTextEdit` CSS 补 `border-style: none`（此前缺少此项，默认矩形 frame 外露）
+   - `SourceTextEdit QScrollBar:horizontal { height: 5px; }` 移入全局 CSS
+
+2. **左侧编号 → 叠加徽章**（`ui/textedit_area.py`）：
+   - 移除 `RowIndexLabel`（独立列）及 `hlayout.addWidget(self.idx_label)`
+   - 改为 `QLabel` 叠加在 `SourceTextEdit.viewport()` 左上角（`move(0, 0)`），避开 QAbstractScrollArea 裁剪
+   - 文字居中 + `setContentsMargins(4, 0, 4, 0)` 匹配画布 `_draw_seq_badge` 4px padding
+   - 通过 `SourceTextEdit.hover_enter/hover_leave` 信号切换 `[hovered="true"]` 属性
+
+3. **徽章样式**（`config/stylesheet.css`）：
+   - 匹配画布 `_draw_seq_badge`：半透明黑底 `rgba(0,0,0,170)`、白字 `10px bold`、无边框、`border-radius: 3px`
+   - Hover：背景与文字一同淡出（`rgba(0,0,0,60)` + `rgba(255,255,255,60)`）
+
+4. **踩坑修复**：
+   - `viewport().setStyleSheet("border-radius: 5px;")` 导致原文/译文框背景色被覆盖 → 删除此行（`TransTextEdit` 已有 `border-radius` + `border-style: none` 效果已足）
+   - CSS `padding` 不被 `adjustSize()` 计入，徽章尺寸过小 → 改用 `setContentsMargins`
+   - 多次 `\t` 混入空格导致缩进混乱 → 规范化缩进
+
+**已知问题（待后续处理）：**
+- 徽章在 viewport 内会随文本滚动，少量内容时无影响
+- 徽章文字在某些高 DPI 下可能偏小
+
+**验证：** 语法检查 ✅
+
+**涉及文件：** `ui/textedit_area.py`、`config/stylesheet.css`
+
+---
+
+### 文本框编号徽章 → 右上角 + QTextEdit 圆角修复 + 布局边距/滚动条精简
+
+**需求：**
+1. 徽章编号从左上改到右上（占比更小），字号稍大
+2. 原文/译文输入框圆角被意外破坏，需修复
+3. 布局边距过大且左右不等，需缩窄调平
+4. 右侧滚动条遮挡视线，需隐藏（保留滚轮滑动）
+
+**改动：**
+
+1. **QTextEdit 圆角修复**（`ui/textedit_area.py`、`config/stylesheet.css`）：
+   - `SourceTextEdit.__init__`：`setFrameStyle(QFrame.NoFrame)` + `viewport().setAutoFillBackground(False)` — 框架归零，viewport 透明，CSS `border-radius: 5px` 透出
+   - `TransTextEdit`（继承 SourceTextEdit）自动生效
+   - CSS `QLabel#TextBlockIndexBadge`：`font-size: 10px → 12px`
+
+2. **徽章右上角**（`ui/textedit_area.py`）：
+   - 保持 viewport 子控件（避免 QAbstractScrollArea 裁剪）
+   - `move(0,0)` → `_repos_badge_tr()`：`move(vp.width() - badge.width(), 0)` 定位到右上
+   - 初始定位经 `QTimer.singleShot(0, ...)` 在布局完成后执行
+   - `updateIndex` 时重定位
+   - hover 行为不变（仅响应 SourceTextEdit 信号）
+
+3. **布局边距精简+调平**（`ui/textedit_area.py`）：
+   - `hlayout.setSpacing(7) → 0`：移除左侧 accent_bar 与文本框之间的间距
+   - `vlayout.setContentsMargins(2,2,**3**,2)`：右侧设为 3px，匹配左侧 accent_bar(3px) 宽度，实现左右对称
+   - `scrollContent` 的 vlayout 右边距 `3 → 0`（右侧间距完全由 TransPairWidget 的 vlayout 控制）
+   - `self.document().setDocumentMargin(0)`：移除 QTextEdit 内部文字起始间距
+   - 原文/译文框间距 `7 → 2`
+
+4. **滚动条移除**（`ui/textedit_area.py`）：
+   - 删除 `ScrollBar(Qt.Orientation.Vertical, self)` 控件创建
+   - `ScrollBarAlwaysOff` 策略保持，滚轮滑动正常
+   - 清理未使用的 `ScrollBar` import
+
+5. **底部分割线移除**（`ui/textedit_area.py`）：
+   - 删除 `vlayout.addWidget(SeparatorWidget(self))` 及对应 import
+
+**验证：** 语法检查 ✅、启动导入测试 5/5 ✅
+
+**涉及文件：** `ui/textedit_area.py`、`config/stylesheet.css`
+
+---
+
+### 输入/下拉控件样式主题化：从固定 rgba 改为 @inputBackgroundColor
+
+**需求：** `ConfigLineEdit`、`ConfigTextEdit`、`ConfigComboBox` 等输入框背景使用硬编码 `rgba(128,128,128,0.13)`，在深色主题下比容器背景亮一截，观感突兀。要求改为以背景色为基准变暗固定值，使控件在任何主题下都比容器更深。
+
+**改动：**
+
+1. **主题色**（`config/themes.json`）：
+   - eva-light：`@inputBackgroundColor` 从 `"whitesmoke"`（比 `@widgetBackgroundColor` #ebeef5 还亮）改为 `"#d8dbe2"`（略深）
+   - eva-dark：从 `"#191d24"`（过深）调整为 `"#22262e"`（适度深于 #282c34）
+
+2. **全局 CSS**（`config/stylesheet.css`）：
+   - 新增 `ConfigLineEdit`、`ConfigTextEdit`、`ConfigComboBox`、`ParamComboBox` 四条选择器（含 `ConfigContent` 前缀覆盖），使用 `@inputBackgroundColor` / `@borderColor` / `@accentPrimary` / `@disabledForegroundColor`
+   - 同步更新 `SizeComboBox`、`SearchEditor`、`SmallComboBox`：`rgba` 固定值 → 相同主题变量
+
+3. **移除内联 setStyleSheet**：
+   - `ui/custom_widget/text_input.py`：`ConfigLineEdit`、`ConfigTextEdit` 移除内联 stylesheet（改为纯 CSS）
+   - `ui/custom_widget/combobox.py`：`ConfigComboBox`、`ParamComboBox` 移除 `setStyleSheet(_COMBO_STYLE)` 调用；彻底移除 `_COMBO_STYLE` 常量
+   - `ui/custom_widget/spinbox.py`：`NoArrowsSpinBox`、`NoArrowsDoubleSpinBox` 移除 `_SPIN_STYLE` 模板和内联 stylesheet
+   - `ui/text_panel.py`：`FontFamilyComboBox`(#FontFamilyBox)、`QComboBox`(#FontStyleBox) 移除 `_COMBO_STYLE` 内联样式
+   - `ui/fontstyle_manager.py`：`StyleDetail` 内的 `_family_combo`、`_align_combo` 移除 `_COMBO_STYLE` 内联样式
+
+4. **全局 CSS 补充**：
+   - 新增 `NoArrowsSpinBox` / `NoArrowsDoubleSpinBox` 选择器（含 `::up-button` / `::down-button` 隐藏）
+   - 新增 `QComboBox#FontFamilyBox`、`QComboBox#FontStyleBox` 选择器（替换原 `QFontComboBox#FontFamilyBox` 旧规则）
+   - 新增 `StyleDetail QComboBox` 选择器（覆盖字体管理面板的下拉框）
+
+5. **文档更新**（`docs/打包控件功能使用说明.md`）：
+   - §4「样式内容」从固定 rgba 描述改为主题变量说明，移除 `_SPIN_STYLE` 常量描述
+   - §10、§11 的「样式内容」从固定 rgba 描述改为主题变量说明
+   - §10「注意事项」更新为描述 CSS 覆盖机制（非内联优先级）
+
+**验证：** 语法检查 ✅
+
+**涉及文件：** `config/themes.json`、`config/stylesheet.css`、`ui/custom_widget/text_input.py`、`ui/custom_widget/combobox.py`、`ui/custom_widget/spinbox.py`、`ui/text_panel.py`、`ui/fontstyle_manager.py`、`docs/打包控件功能使用说明.md`
+
+---
+
+## 2026-07-19
+
+### Fold 按钮布局改造：左侧拖拽区 + 双模式切换
+
+**需求：** 原左侧编号栏压缩后拖拽交互困难、选中蓝条不可见。将 fold 按钮升级为完整布局模式切换。
+
+**改动：**
+
+1. **布局重构**（`ui/textedit_area.py`）：
+   - 新增 `drag_area` QFrame（22px），置于 accent_bar 与文本内容之间
+   - 双 badge：`badge_vp`（viewport 右上角，fold=OFF 使用）/ `badge_drag`（drag_area 内居中，fold=ON 使用）
+   - `setFold(fold)`：fold=ON → accent_bar 3px + drag_area 显示 + badge 在左侧；fold=OFF → accent_bar 3px + drag_area 隐藏 + badge 回 viewport
+   - 移除原 fold 对 QTextEdit（NoWrap/min_height）的影响
+
+2. **滚动条**（`ui/custom_widget/scrollbar.py`、`ui/textedit_area.py`）：
+   - `scrollbar.py` 替换为上游版本（支持 `hover_style` / `fadeout` 参数）
+   - `TextEditListScrollArea` 加回 `ScrollBar(Qt.Vertical, self, fadeout=True)` — 默认淡出，hover 展开
+
+3. **默认值**（`utils/config.py`）：
+   - `fold_textarea: False → True`
+
+4. **按钮改名**（`ui/scenetext_manager.py`）：
+   - `CheckableLabel("Unfold", "Fold")` → `CheckableLabel("Edit", "Review")`
+
+5. **样式**（`config/stylesheet.css`）：
+   - 新增 `QLabel#TextBlockIndexBadge[folded="true"]` 拖拽区徽章样式（`font-size: 13px`，透明底、主题色字）
+   - 新增 `TransPairWidget #dragArea` 透明区样式
+
+6. **i18n**（`translate/zh_CN.ts`、`translate/zh_CN.qm`）：
+   - "Unfold" → "Edit"（编辑）/ "Fold" → "Review"（审阅）
+
+**验证：** 语法检查 ✅、启动导入测试 5/5 ✅、qm 编译 1021 条 ✅
+
+**涉及文件：** `ui/textedit_area.py`、`ui/custom_widget/scrollbar.py`、`ui/scenetext_manager.py`、`utils/config.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`

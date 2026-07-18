@@ -27,7 +27,6 @@ from .custom_widget import (
     SizeControlLabel,
     Widget,
 )
-from .custom_widget.combobox import _COMBO_STYLE
 from .text_advanced_format import TextAdvancedFormatPanel
 from .text_style_presets import TextStylePresetPanel
 from .textitem import TextBlkItem
@@ -205,7 +204,6 @@ class FontFormatPanel(Widget):
         self.familybox.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        self.familybox.setStyleSheet(_COMBO_STYLE)
 
         self.stylebox = QComboBox()
         self.stylebox.setObjectName("FontStyleBox")
@@ -215,7 +213,6 @@ class FontFormatPanel(Widget):
         )
         self.stylebox.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         self.stylebox.setMaximumWidth(110)  # 限制最大宽度，防止挤占字体框
-        self.stylebox.setStyleSheet(_COMBO_STYLE)
         self.stylebox.currentTextChanged.connect(self.on_fontstyle_changed)
 
         self.fontsizebox = FontSizeBox(self)

@@ -117,6 +117,8 @@ class PageListView(QListWidget):
         self.setIconSize(
             QSize(shared.PAGELIST_THUMBNAIL_SIZE, shared.PAGELIST_THUMBNAIL_SIZE)
         )
+        # Transparent viewport so leftStackWidget's rounded bg shows through
+        self.viewport().setStyleSheet("background: transparent;")
 
     def contextMenuEvent(self, e: QContextMenuEvent):
         menu = QMenu()
@@ -315,6 +317,7 @@ class MainWindow(mainwindow_cls):
         # Left panels: PageList & GlobalSearch are now embedded in the main
         # layout so they push the canvas right when shown, not overlay on top.
         self.leftStackWidget = QStackedWidget(self)
+        self.leftStackWidget.setObjectName("leftStackWidget")
         self.leftStackWidget.addWidget(self.pageList)
         self.leftStackWidget.setVisible(False)
 

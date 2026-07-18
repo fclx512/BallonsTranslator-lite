@@ -3925,14 +3925,14 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <translation>字体样式</translation>
         </message>
         <message>
-            <location filename="..\ui\scenetext_manager.py" line="389" />
-            <source>Unfold</source>
-            <translation>展开</translation>
+            <location filename="..\ui\scenetext_manager.py" line="473" />
+            <source>Edit</source>
+            <translation>编辑</translation>
         </message>
         <message>
-            <location filename="..\ui\scenetext_manager.py" line="389" />
-            <source>Fold</source>
-            <translation>折叠</translation>
+            <location filename="..\ui\scenetext_manager.py" line="473" />
+            <source>Review</source>
+            <translation>审阅</translation>
         </message>
         <message>
             <location filename="..\ui\scenetext_manager.py" line="390" />

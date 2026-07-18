@@ -1,33 +1,15 @@
-from qtpy.QtCore import (
-    Property,
-    QAbstractAnimation,
-    QEvent,
-    QPoint,
-    QPropertyAnimation,
-    Qt,
-    QTimer,
-    Signal,
-)
-from qtpy.QtGui import QMouseEvent, QPainter
-from qtpy.QtWidgets import (
-    QAbstractScrollArea,
-    QApplication,
-    QGraphicsOpacityEffect,
-    QHBoxLayout,
-    QVBoxLayout,
-    QWidget,
-)
+from qtpy.QtWidgets import QApplication, QAbstractScrollArea, QGraphicsOpacityEffect, QWidget, QVBoxLayout, QHBoxLayout
+from qtpy.QtCore import QEvent, Qt, QPropertyAnimation, QTimer, Signal, QPoint, Property, QAbstractAnimation
+from qtpy.QtGui import QMouseEvent, QPainter, QColor
 
+from .helper import isDarkTheme
 
 class ScrollBarGroove(QWidget):
-    """Scroll bar groove"""
+    """ Scroll bar groove """
 
-    # QGraphicsOpacityEffect animation — stays widget-based.
-    # 150ms fade deep in scrollbar widget hierarchy.  Qt6 RHI provides
-    # GPU compositing for opacity effects.
-
-    def __init__(self, orient: Qt.Orientation, parent):
+    def __init__(self, orient: Qt.Orientation, parent, hover_style: bool = False):
         super().__init__(parent=parent)
+        self.hover_style = hover_style
         if orient == Qt.Vertical:
             self.setFixedWidth(12)
             self.setLayout(QVBoxLayout(self))
@@ -40,9 +22,9 @@ class ScrollBarGroove(QWidget):
             self.layout().setContentsMargins(3, 0, 3, 0)
 
         self.opacityEffect = QGraphicsOpacityEffect(self)
-        self.opacityAni = QPropertyAnimation(self.opacityEffect, b"opacity", self)
+        self.opacityAni = QPropertyAnimation(self.opacityEffect, b'opacity', self)
         self.setGraphicsEffect(self.opacityEffect)
-        self.opacityEffect.setOpacity(0)
+        self.opacityEffect.setOpacity(1 if hover_style else 0)
 
     def fadeIn(self):
         self.opacityAni.setEndValue(1)
@@ -59,28 +41,26 @@ class ScrollBarGroove(QWidget):
         painter.setRenderHints(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)
 
-        from ui.theme_helpers import scrollbar_colors
-
-        groove, _ = scrollbar_colors()
-        painter.setBrush(groove)
+        if self.hover_style and isDarkTheme():
+            painter.setBrush(QColor(64, 70, 82, 150))
+        else:
+            painter.setBrush(QColor(0, 0, 0, 30))
         painter.drawRoundedRect(self.rect(), 6, 6)
 
 
 # ScrollBarHandle, ScrollBar and FlowLayout are modified from https://github.com/zhiyiYo/PyQt-Fluent-Widgets/blob/master/qfluentwidgets/components/widgets/scroll_bar.py
 
-
 class ScrollBarHandle(QWidget):
-    """Scroll bar handle"""
+    """ Scroll bar handle """
 
-    # QGraphicsOpacityEffect auto-fade — stays widget-based.
-    # 300ms fade deep in scrollbar widget hierarchy.  Qt6 RHI provides
-    # GPU compositing for opacity effects.
-
-    def __init__(self, orient: Qt.Orientation, parent=None, fadeout: bool = False):
+    def __init__(self, orient: Qt.Orientation, parent=None, fadeout: bool = False, hover_style: bool = False):
         super().__init__(parent)
         self.orient = orient
+        self.hover_style = hover_style
 
-        if fadeout:
+        if hover_style:
+            fixsize = 6
+        elif fadeout:
             self.effect = effect = QGraphicsOpacityEffect(self, opacity=1.0)
             self.setGraphicsEffect(effect)
             self.fadeAnimation = QPropertyAnimation(
@@ -89,7 +69,7 @@ class ScrollBarHandle(QWidget):
                 targetObject=effect,
                 duration=300,
                 startValue=1.0,
-                endValue=0.0,
+                endValue=0.,
             )
             # self.fadeAnimation.setEasingCurve(QEasingCurve.Type.InQuint)
             self.fadeAnimation.finished.connect(self.hide)
@@ -99,12 +79,12 @@ class ScrollBarHandle(QWidget):
             self.anime_timer.timeout.connect(self.start_fade_animation)
         else:
             fixsize = 3
-
+         
         if orient == Qt.Vertical:
             self.setFixedWidth(fixsize)
         else:
             self.setFixedHeight(fixsize)
-
+        
         self.fadeout = fadeout
 
     def start_fade_animation(self):
@@ -120,32 +100,33 @@ class ScrollBarHandle(QWidget):
             self.show()
         if self.fadeAnimation.state() == QAbstractAnimation.State.Running:
             self.fadeAnimation.stop()
-        if self.effect.opacity() != 1.0:
-            self.effect.setOpacity(1.0)
+        if self.effect.opacity() != 1.:
+            self.effect.setOpacity(1.)
 
     def stopFadeout(self):
         if self.fadeAnimation.state() == QAbstractAnimation.State.Running:
             self.fadeAnimation.stop()
         self.anime_timer.stop()
         self.show()
-        if self.effect.opacity() != 1.0:
-            self.effect.setOpacity(1.0)
+        if self.effect.opacity() != 1.:
+            self.effect.setOpacity(1.)
 
     def paintEvent(self, e):
         painter = QPainter(self)
         painter.setRenderHints(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)
 
-        from ui.theme_helpers import scrollbar_colors
-
-        _, handle = scrollbar_colors()
         r = self.width() / 2 if self.orient == Qt.Vertical else self.height() / 2
-        painter.setBrush(handle)
+        if self.hover_style:
+            c = QColor(82, 90, 104, 230) if isDarkTheme() else QColor(0, 0, 0, 50)
+        else:
+            c = QColor(0, 0, 0, 90)
+        painter.setBrush(c)
         painter.drawRoundedRect(self.rect(), r, r)
 
 
 class ScrollBar(QWidget):
-    """Fluent scroll bar"""
+    """ Fluent scroll bar """
 
     rangeChanged = Signal(tuple)
     valueChanged = Signal(int)
@@ -153,15 +134,15 @@ class ScrollBar(QWidget):
     sliderReleased = Signal()
     sliderMoved = Signal()
 
-    def __init__(
-        self, orient: Qt.Orientation, parent: QAbstractScrollArea, fadeout: bool = False
-    ):
+    def __init__(self, orient: Qt.Orientation, parent: QAbstractScrollArea, fadeout: bool = False, hover_style: bool = False):
         super().__init__(parent)
-        self.groove = ScrollBarGroove(orient, self)
-        self.handle = ScrollBarHandle(orient, self, fadeout)
+        fadeout = fadeout and not hover_style
+        self.groove = ScrollBarGroove(orient, self, hover_style=hover_style)
+        self.handle = ScrollBarHandle(orient, self, fadeout, hover_style=hover_style)
         self.timer = QTimer(self)
         self.scroll_area = parent
         self.fadeout = fadeout
+        self.hover_style = hover_style
 
         self._orientation = orient
         self._singleStep = 1
@@ -180,14 +161,10 @@ class ScrollBar(QWidget):
 
         if orient == Qt.Vertical:
             self.partnerBar = parent.verticalScrollBar()
-            QAbstractScrollArea.setVerticalScrollBarPolicy(
-                parent, Qt.ScrollBarAlwaysOff
-            )
+            QAbstractScrollArea.setVerticalScrollBarPolicy(parent, Qt.ScrollBarAlwaysOff)
         else:
             self.partnerBar = parent.horizontalScrollBar()
-            QAbstractScrollArea.setHorizontalScrollBarPolicy(
-                parent, Qt.ScrollBarAlwaysOff
-            )
+            QAbstractScrollArea.setHorizontalScrollBarPolicy(parent, Qt.ScrollBarAlwaysOff)
 
         self.__initWidget(parent)
 
@@ -298,7 +275,9 @@ class ScrollBar(QWidget):
             self.sliderReleased.emit()
 
     def expand(self):
-        """expand scroll bar"""
+        """ expand scroll bar """
+        if self.hover_style:
+            return
         if self._isExpanded or not self.isEnter:
             return
 
@@ -306,7 +285,9 @@ class ScrollBar(QWidget):
         self.groove.fadeIn()
 
     def collapse(self):
-        """collapse scroll bar"""
+        """ collapse scroll bar """
+        if self.hover_style:
+            return
         if not self._isExpanded or self.isEnter:
             return
 
@@ -439,7 +420,7 @@ class ScrollBar(QWidget):
         self._adjustHandlePos()
 
     def setForceHidden(self, isHidden: bool):
-        """whether to force the scrollbar to be hidden"""
+        """ whether to force the scrollbar to be hidden """
         self._isForceHidden = isHidden
         self.setVisible(self.maximum() > 0 and not isHidden)
 
