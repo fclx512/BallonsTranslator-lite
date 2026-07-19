@@ -4,7 +4,7 @@ from qtpy.QtWidgets import QSlider, QStyle, QStyleOptionSlider, QWidget
 
 from utils import shared as C
 
-from .helper import isDarkTheme, themeColor
+from .helper import borderColor, isDarkTheme, themeColor, widgetBackgroundColor
 
 
 def slider_subcontrol_rect(r: QRect, widget: QWidget):
@@ -74,20 +74,15 @@ class SliderHandle(QWidget):
     def paintEvent(self, e):
         painter = QPainter(self)
         painter.setRenderHints(QPainter.RenderHint.Antialiasing)
-        painter.setPen(Qt.PenStyle.NoPen)
 
-        # draw outer circle
-        from ui.theme_helpers import is_dark_theme, slider_colors
-
-        handle_outer, _ = slider_colors()
-        painter.setPen(QColor(0, 0, 0, 90 if is_dark_theme() else 25))
-        painter.setBrush(handle_outer)
+        # draw outer circle — theme-aware border + fill (upstream pattern)
+        painter.setPen(borderColor())
+        painter.setBrush(widgetBackgroundColor())
         painter.drawEllipse(self.rect().adjusted(1, 1, -1, -1))
 
-        # draw inner circle
-        inner_color = themeColor()
-        inner_color.setAlpha(127)
-        painter.setBrush(inner_color)
+        # draw inner circle — fully opaque accent color
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(themeColor())
         painter.drawEllipse(QPoint(11, 11), self.radius, self.radius)
 
 
@@ -163,10 +158,7 @@ class Slider(QSlider):
         painter = QPainter(self)
         painter.setRenderHints(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
-        from ui.theme_helpers import slider_colors
-
-        _, groove = slider_colors()
-        painter.setBrush(groove)
+        painter.setBrush(self.grooveColor())
 
         if self.orientation() == Qt.Orientation.Horizontal:
             self._drawHorizonGroove(painter)
@@ -239,6 +231,9 @@ class Slider(QSlider):
             * (h - r * 2)
         )
         painter.drawRoundedRect(QRectF(r - 2, r, 4, ah), 2, 2)
+
+    def grooveColor(self):
+        return borderColor()
 
     def resizeEvent(self, e):
         self._adjustHandlePos()

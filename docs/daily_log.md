@@ -579,3 +579,134 @@
 **涉及文件：**
 - 新增：`modules/context/__init__.py`、`modules/context/glossary.py`、`modules/context/history.py`、`modules/context/token_usage.py`、`modules/context/errors.py`
 - 修改：`modules/translators/trans_llm_api.py`、`utils/config.py`、`utils/profile_manager.py`、`ui/module_manager.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+### Run 对话框简化 + 上游 LLM Context 设置集成 + 尺寸锁定
+
+**需求：**
+1. Run 对话框样式过多（2×2 网格 / 可折叠 Settings），仅上下文翻译相关设置有用，其他接口设置无用
+2. 缺少上游的 LLM Context（page/+history）设置项
+3. 窗口高度应在内容折叠时自动收缩，不可手动拉伸
+4. 下拉框使用自定义 `ConfigComboBox` 样式，边框颜色需与背景有区分
+5. Glossary 上传后无法清除，退出窗口后应自动清理
+
+**改动：**
+
+1. **Run 对话框 UI 简化**（`ui/mainwindow.py`）：
+   - 去掉 Activate Modules 2×2 网格 + Settings 可折叠章节
+   - 还原为简单逐行勾选框列表（Enable Text Detection / Enable OCR / Enable Translation / Enable Inpainting）
+   - 去掉 Text Detection（Keep Existing Lines）和 Inpainting（Skip simple cases）设置项
+   - Translation 行 inline 放置 Context Translation (beta) 复选框
+
+2. **添加上游 LLM Context 设置**（`ui/mainwindow.py`）：
+   - 新增 LLM Context 下拉框（page / +history），绑定 `llm_translate_context`
+   - 新增 Token Budget `NoArrowsSpinBox`（512-16384），绑定 `llm_prior_context_token_budget`，仅 +history 时显示
+   - Glossary 设置（文件路径 + Matching/All 模式）保留并优化
+   - 仅 CT beta 勾选时显示 Context 区域，删除冗余的普通 Context（textblock/page）
+
+3. **复选框联动**（`ui/mainwindow.py`）：
+   - 勾选 CT beta → 自动勾选 Enable Translation
+   - 取消 Enable Translation → 自动取消 CT beta
+
+4. **尺寸锁定**（`ui/mainwindow.py`）：
+   - `_resize_to_fit()` 辅助函数：先解锁 → `adjustSize()` → `setFixedSize()` 锁定
+   - 所有可见性切换（CT beta toggle、LLM Context 模式、Glossary toggle）均调用 `_resize_to_fit()`
+
+5. **自定义控件替换**（`ui/mainwindow.py`）：
+   - 3 个下拉框：`QComboBox` → `ConfigComboBox`（主题感知圆角样式）
+   - Token Budget：`QSpinBox` → `NoArrowsSpinBox`
+   - Browse 按钮：加 `setFixedHeight(27)` 匹配 QLineEdit 行高
+   - Glossary 路径在 dialog 关闭时自动清空
+
+6. **边框颜色调亮**（`config/stylesheet.css`）：
+   - `ConfigComboBox`/`ParamComboBox` 边框：`@borderColor` → `@accentPrimary80`
+   - 浅色/深色主题下均有明显蓝色边框，与输入框背景形成对比
+
+7. **i18n**（`translate/zh_CN.ts`、`translate/zh_CN.qm`）：
+   - 新增 3 条翻译（LLM Context / +history / Token Budget）
+   - 编译为 1036 条
+
+**验证：** 语法检查 ✅、i18n 检查 ✅（无缺失条目）、qm 编译 ✅、启动导入测试 5/5 ✅
+
+**涉及文件：** `ui/mainwindow.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+### 合并功能简化：移除 LTR/RTL 方向，改为按列表次序合并
+
+**需求：** 右键合并的 LTR/RTL 方向判断对上下排列的文本框无意义，且不尊重用户手动排好的阅读顺序。改为始终按文本框 `idx`（列表顺序）合并，去掉「默认从右到左合并」开关。
+
+**改动：**
+
+1. **配置层**（`utils/config.py`）— 删除 `merge_rtl` 字段
+
+2. **信号变更**（`ui/canvas.py`）— `merge_textblks = Signal(str)` → `Signal()`，不再传方向
+
+3. **右键菜单**（`ui/context_menu_config.py`）：
+   - `_build_merge()`：去掉 direction 判断，直接 emit
+   - `_build_behavior()`：去掉「Merge Right-to-Left」切换和分隔线
+   - 删除 `_toggle_merge_rtl()` 函数
+
+4. **合并执行**（`ui/scenetext_manager.py`）：
+   - `on_merge_textblks()`：排序改为 `b.idx`（列表顺序），不再按 `center_x` 位置排
+   - 合并前增加 **UI→blk 文字同步**：用户手动在画布输入的文字存于 QTextDocument，未写回 `blk.translation`/`blk.text`。合并前遍历选中块，从 `b.toPlainText()` 和 `pw.e_source.toPlainText()` 同步到 `blk`，确保原文和译文不丢失（原有 bug，与本次方向改动无关）
+   - `_build_merged_blk()`：删除无用的 `direction` 参数
+
+5. **快捷键**（`ui/mainwindow.py`）— `shortcutMergeBlks()` 直接 emit 无参数
+
+6. **i18n**（`translate/zh_CN.ts`、`translate/zh_CN.qm`）— 删除 Left-to-Right、Right-to-Left、Merge Right-to-Left 三条翻译，重编译为 1032 条
+
+**行为变更：** 合并不再区分 LTR/RTL/上下，直接按文本框在侧栏列表中的顺序（`idx`）拼接文字/译文。用户先排好顺序再合并即可获得预期的文字顺序。
+
+**验证：** 语法检查 ✅、i18n 检查 ✅、qm 编译 1032 条 ✅、手动合并测试 ✅（含手动创建文本框输入文字的场景）
+
+**涉及文件：** `utils/config.py`、`ui/canvas.py`、`ui/context_menu_config.py`、`ui/scenetext_manager.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+### 自定义术语 AI 转换 + 文件路径替换为状态指示器 + 独立日志窗口替换为调试日志文件
+
+**需求：**
+1. 在 Run 对话框术语表 Browse 按钮旁加「Custom...」按钮，用户可用自然语言描述角色/术语，运行前由 AI 转为结构化术语表
+2. 删除文件路径地址栏，改为紧凑状态指示器（○/✓）
+3. 删除独立 ContextLogDialog 窗口，改为默认关闭的调试日志文件输出
+
+**改动：**
+
+1. **自定义术语对话框**（`ui/glossary_dialog.py` — 从 git 恢复并增强）：
+   - `CustomGlossaryDialog(parent, initial_text="")` 支持回显上次输入
+   - 提示文字支持自然语言描述（示例改用 Dragon Ball / One Piece 等常见作品）
+   - `get_raw_text()` 返回编辑器原始内容供 AI 转换
+   - 移除分隔符说明文字，按钮宽度从 90px 加宽至 110px
+
+2. **Run 对话框 Glossary UI 改造**（`ui/mainwindow.py`）：
+   - 删除 `glossary_path_edit`（QLineEdit），改用 `glossary_status_label` 显示 ○/✓
+   - 新增 `glossary_custom_btn`（Custom...），复选框与 `_custom_glossary_text` 闭包变量配合
+   - 对话框关闭时清理自定义文本和 glossary 路径
+
+3. **AI 术语表生成**（`modules/translators/context_batch.py`）：
+   - `ContextBatchTranslator` 新增 `custom_glossary_text` 参数
+   - `set_project()` 中调用 `_generate_custom_glossary()` 将用户自然语言转为 `GlossaryEntry` 列表
+   - `_raw_llm_call()` / `_parse_glossary_response()` — JSON 响应解析（含 markdown fence 处理）
+   - 优先级：自定义术语 > 文件术语 > 自动学习术语
+
+4. **调试日志替代独立窗口**：
+   - `ui/context_log_dialog.py` — 删除
+   - `utils/debug_log.py` — 新建 `DebugLogger`，输出到 `debug/context_translation_<timestamp>.log`
+   - `utils/config.py` — `ProgramConfig` 新增 `context_translation_debug_log: bool = False`（默认关闭，config.json 已 gitignore）
+   - `ui/mainwindow.py` — 删除 `ContextLogDialog` 创建/显示/关闭逻辑，`_ctx_status` 在开关开启时写入调试日志文件
+
+5. **i18n**（`translate/zh_CN.ts`、`translate/zh_CN.qm`）：
+   - 新增 CustomGlossaryDialog 提示文字翻译（含 Dragon Ball / Goku 等示例）
+   - 删除 ContextLogDialog 上下文（2 条 message）
+   - 编译为 1035 条
+
+**验证：** 语法检查 ✅、i18n 检查 ✅（仅剩 orphan，均为预存间接调用）、qm 编译 ✅、启动导入测试 5/5 ✅
+
+**使用方式：** `config/config.json` 中设 `"context_translation_debug_log": true` 启用调试日志，输出至 `debug/context_translation_*.log`
+
+**涉及文件：**
+- 新增：`utils/debug_log.py`
+- 删除：`ui/context_log_dialog.py`
+- 修改：`ui/glossary_dialog.py`、`ui/mainwindow.py`、`modules/translators/context_batch.py`、`utils/config.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`

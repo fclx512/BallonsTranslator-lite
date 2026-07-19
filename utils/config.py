@@ -291,9 +291,6 @@ class ProgramConfig(Config):
     expand_tadvanced_panel: bool = True
     show_seq_badge: bool = True
 
-    # ── Merge direction (shortcut default) ──────────────────
-    merge_rtl: bool = False
-
     # ── Right-click context menu customization ─────────────
     context_menu_order: List[str] = field(default_factory=lambda: [
         "copy", "paste", "delete",
@@ -307,8 +304,11 @@ class ProgramConfig(Config):
 	    "merge",
 	    "behavior",
 	    "---",
-	    "translate", "ocr", "ocr_translate", "ocr_translate_inpaint",
-    ])
+		    "translate", "ocr", "ocr_translate", "ocr_translate_inpaint",
+	    ])
+
+    # ── Development / Debug ─────────────────────────────
+    context_translation_debug_log: bool = False
 
     @staticmethod
     def load(cfg_path: str):

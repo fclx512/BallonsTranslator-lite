@@ -1579,8 +1579,7 @@ class MainWindow(mainwindow_cls):
 
     def shortcutMergeBlks(self):
         if self._is_canvas_mode() and self.canvas.textEditMode():
-            direction = "RTL" if pcfg.merge_rtl else "LTR"
-            self.canvas.merge_textblks.emit(direction)
+            self.canvas.merge_textblks.emit()
 
     def shortcutCtrlD(self):
         if self._is_canvas_mode():
@@ -2546,10 +2545,13 @@ class MainWindow(mainwindow_cls):
             original = self._ctx_batch_restore
             self._ctx_batch_restore = None
             self.module_manager.setTranslator(original)
-        # Close context translation log window if open
-        if hasattr(self, "_ctx_log_dialog") and self._ctx_log_dialog is not None:
-            self._ctx_log_dialog.close()
-            self._ctx_log_dialog = None
+        # Close debug log file if open
+        if pcfg.context_translation_debug_log:
+            try:
+                from utils.debug_log import debug_logger
+                debug_logger.close()
+            except Exception:
+                pass
         if pcfg.module.empty_runcache and not shared.HEADLESS:
             self.module_manager.unload_all_models()
         if shared.args.export_translation_txt:
@@ -2738,26 +2740,34 @@ class MainWindow(mainwindow_cls):
             return
 
         page_filter = None
+        from qtpy.QtCore import Qt
+        from qtpy.QtGui import QIcon
         from qtpy.QtWidgets import (
             QCheckBox,
-            QComboBox,
             QDialog,
+            QFileDialog,
             QFrame,
-            QGridLayout,
             QHBoxLayout,
             QLabel,
+            QLineEdit,
             QPushButton,
-            QSpinBox,
             QVBoxLayout,
+            QWidget,
         )
 
-        from ui.custom_widget import RangeSlider
+        from ui.custom_widget import ConfigComboBox, NoArrowsSpinBox, RangeSlider
 
         dialog = QDialog(self)
         dialog.setWindowTitle(self.tr("Run"))
-        dialog.setMinimumWidth(420)
         dialog.setSizeGripEnabled(False)
         layout = QVBoxLayout(dialog)
+
+        def _resize_to_fit():
+            """Unlock size, recalculate, then lock both dimensions."""
+            dialog.setMinimumSize(0, 0)
+            dialog.setMaximumSize(16777215, 16777215)
+            dialog.adjustSize()
+            dialog.setFixedSize(dialog.width(), dialog.height())
 
         range_frame = QFrame()
         range_frame.setFrameShape(QFrame.Shape.StyledPanel)
@@ -2837,7 +2847,7 @@ class MainWindow(mainwindow_cls):
         layout.addWidget(range_frame)
         update_range_info()
 
-        # Pipeline stages toggles
+        # ── Pipeline stage toggles ──────────────────────────────────────────
         stages_frame = QFrame()
         stages_frame.setFrameShape(QFrame.Shape.StyledPanel)
         stages_layout = QVBoxLayout(stages_frame)
@@ -2849,6 +2859,7 @@ class MainWindow(mainwindow_cls):
             self.tr("Enable Translation"),
             self.tr("Enable Inpainting"),
         ]
+        trans_cb = None
         ctx_trans_cb = None
         for idx, label in enumerate(stage_labels):
             cb = QCheckBox(label)
@@ -2858,10 +2869,12 @@ class MainWindow(mainwindow_cls):
                 lambda checked, i=idx: self.on_enable_module(i, checked)
             )
             if idx == 2:
+                # Translation row: checkbox + Context Translation (beta) inline
                 row = QWidget()
                 row_layout = QHBoxLayout(row)
                 row_layout.setContentsMargins(0, 0, 0, 0)
                 row_layout.addWidget(cb)
+                trans_cb = cb
                 ctx_trans_cb = QCheckBox(self.tr("Context Translation (beta)"))
                 ctx_trans_cb.setObjectName('ConfigCheckBox')
                 row_layout.addWidget(ctx_trans_cb)
@@ -2870,48 +2883,195 @@ class MainWindow(mainwindow_cls):
             else:
                 stages_layout.addWidget(cb)
 
+        # Checkbox coupling: CT beta depends on Translation
+        def _on_ctx_trans_toggled(checked):
+            if checked:
+                trans_cb.setChecked(True)
+
+        def _on_trans_toggled(checked):
+            if not checked:
+                ctx_trans_cb.setChecked(False)
+
+        ctx_trans_cb.toggled.connect(_on_ctx_trans_toggled)
+        trans_cb.toggled.connect(_on_trans_toggled)
+
         layout.addWidget(stages_frame)
 
-        # AI Chat settings — shown when Context Translation (beta) is checked
-        ai_chat_frame = QFrame()
-        ai_chat_frame.setFrameShape(QFrame.Shape.StyledPanel)
-        ai_grid = QGridLayout(ai_chat_frame)
-        ai_grid.setContentsMargins(8, 6, 8, 6)
-        ai_grid.setSpacing(6)
+        # ── Context settings (only shown when Context Translation beta is on) ──
+        context_frame = QFrame()
+        context_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        context_vbox = QVBoxLayout(context_frame)
+        context_vbox.setContentsMargins(8, 6, 8, 6)
+        context_vbox.setSpacing(6)
 
-        ai_title = QLabel(self.tr("AI Chat Settings"))
-        ai_title.setStyleSheet("font-weight: bold;")
-        ai_grid.addWidget(ai_title, 0, 0, 1, 2)
+        ctx_title = QLabel(self.tr("Context"))
+        ctx_title.setStyleSheet("font-weight: bold;")
+        context_vbox.addWidget(ctx_title)
 
-        # Batch size and context pages are now auto-configured internally.
+        # Row: LLM Context (page / +history) + Token Budget
+        llm_row = QWidget()
+        llm_row_layout = QHBoxLayout(llm_row)
+        llm_row_layout.setContentsMargins(0, 0, 0, 0)
+        llm_row_layout.setSpacing(8)
+        llm_row_layout.addWidget(QLabel(self.tr("LLM Context")))
+        llm_row_layout.addStretch()
+        llm_context_combo = ConfigComboBox()
+        from utils.config import LLMTranslateContext
+        llm_context_combo.addItem(self.tr("page"), LLMTranslateContext.PAGE)
+        llm_context_combo.addItem(self.tr("+history"), LLMTranslateContext.HISTORY)
+        llm_idx = llm_context_combo.findData(pcfg.module.llm_translate_context)
+        llm_context_combo.setCurrentIndex(max(llm_idx, 0))
+        llm_context_combo.currentIndexChanged.connect(
+            lambda: setattr(pcfg.module, 'llm_translate_context', llm_context_combo.currentData())
+        )
+        llm_context_combo.setFixedWidth(110)
+        llm_row_layout.addWidget(llm_context_combo)
 
+        token_label = QLabel(self.tr("Token Budget"))
+        llm_row_layout.addWidget(token_label)
+        token_budget_spin = NoArrowsSpinBox()
+        token_budget_spin.setRange(512, 16384)
+        token_budget_spin.setSingleStep(512)
+        token_budget_spin.setValue(pcfg.module.llm_prior_context_token_budget)
+        token_budget_spin.valueChanged.connect(
+            lambda v: setattr(pcfg.module, 'llm_prior_context_token_budget', v)
+        )
+        token_budget_spin.setFixedWidth(80)
+        llm_row_layout.addWidget(token_budget_spin)
+
+        def _update_token_visibility(mode):
+            is_history = mode == LLMTranslateContext.HISTORY
+            token_label.setVisible(is_history)
+            token_budget_spin.setVisible(is_history)
+            _resize_to_fit()
+
+        llm_context_combo.currentIndexChanged.connect(
+            lambda: _update_token_visibility(llm_context_combo.currentData())
+        )
+        _update_token_visibility(llm_context_combo.currentData())
+
+        context_vbox.addWidget(llm_row)
+
+        # Glossary checkbox
         glossary_cb = QCheckBox(self.tr("Enforce Term Consistency (Glossary)"))
         glossary_cb.setObjectName('ConfigCheckBox')
-        glossary_cb.setChecked(True)
-        ai_grid.addWidget(glossary_cb, 1, 0, 1, 2)
+        glossary_cb.setChecked(bool(pcfg.module.llm_glossary_path))
+        context_vbox.addWidget(glossary_cb)
 
-        # Custom glossary button — visible only when glossary is enabled
-        custom_glossary_store: dict = {}
-        custom_terms_btn = QPushButton(self.tr("Custom Terms..."))
-        custom_terms_btn.setVisible(glossary_cb.isChecked())
-        ai_grid.addWidget(custom_terms_btn, 2, 0, 1, 2)
+        # Glossary file path row (status indicator + browse + custom terms)
+        glossary_path_row = QWidget()
+        glossary_path_layout = QHBoxLayout(glossary_path_row)
+        glossary_path_layout.setContentsMargins(0, 0, 0, 0)
+        glossary_path_layout.setSpacing(6)
+        glossary_path_label = QLabel(self.tr("Glossary"))
+        glossary_path_layout.addWidget(glossary_path_label)
+
+        # Status indicator: ○ (no file) / ✓ filename (file loaded)
+        glossary_status_label = QLabel()
+        if pcfg.module.llm_glossary_path:
+            fname = osp.basename(pcfg.module.llm_glossary_path)
+            glossary_status_label.setText(f"\u2713 {fname}")
+            glossary_status_label.setStyleSheet("color: #4caf50;")
+        else:
+            glossary_status_label.setText("\u25cb")
+            glossary_status_label.setStyleSheet("color: #888;")
+        glossary_path_layout.addWidget(glossary_status_label)
+
+        glossary_browse_btn = QPushButton(self.tr("Browse..."))
+        glossary_browse_btn.setFixedWidth(110)
+        glossary_browse_btn.setFixedHeight(27)
+        glossary_path_layout.addWidget(glossary_browse_btn)
+
+        glossary_custom_btn = QPushButton(self.tr("Custom..."))
+        glossary_custom_btn.setFixedWidth(140)
+        glossary_custom_btn.setFixedHeight(27)
+        glossary_path_layout.addWidget(glossary_custom_btn)
+
+        # Custom glossary text (stored in closure for post-dialog access)
+        _custom_glossary_text = ""
+
+        def _browse_glossary():
+            path, _ = QFileDialog.getOpenFileName(
+                self,
+                self.tr("Select Glossary File"),
+                pcfg.module.llm_glossary_path or "",
+                self.tr("Glossary files (*.json *.txt *.tsv);;All files (*)"),
+            )
+            if path:
+                pcfg.module.llm_glossary_path = path
+                fname = osp.basename(path)
+                glossary_status_label.setText(f"\u2713 {fname}")
+                glossary_status_label.setStyleSheet("color: #4caf50;")
+
+        glossary_browse_btn.clicked.connect(_browse_glossary)
 
         def _open_custom_glossary():
+            nonlocal _custom_glossary_text
             from ui.glossary_dialog import CustomGlossaryDialog
-            dlg = CustomGlossaryDialog(self, existing_terms=custom_glossary_store)
+
+            dlg = CustomGlossaryDialog(self, initial_text=_custom_glossary_text)
             if dlg.exec_() == QDialog.DialogCode.Accepted:
-                custom_glossary_store.clear()
-                custom_glossary_store.update(dlg.get_terms())
+                _custom_glossary_text = dlg.get_raw_text()
+                if _custom_glossary_text.strip():
+                    glossary_custom_btn.setText(
+                        "\u2713 " + self.tr("Custom...")
+                    )
+                    glossary_custom_btn.setStyleSheet("color: #4caf50;")
+                else:
+                    _custom_glossary_text = ""
+                    glossary_custom_btn.setText(self.tr("Custom..."))
+                    glossary_custom_btn.setStyleSheet("")
 
-        glossary_cb.toggled.connect(custom_terms_btn.setVisible)
-        custom_terms_btn.clicked.connect(_open_custom_glossary)
+        glossary_custom_btn.clicked.connect(_open_custom_glossary)
+        glossary_path_row.setVisible(glossary_cb.isChecked())
+        context_vbox.addWidget(glossary_path_row)
 
-        ai_chat_frame.setVisible(False)
-        layout.addWidget(ai_chat_frame)
+        # Glossary mode row
+        glossary_mode_row = QWidget()
+        glossary_mode_layout = QHBoxLayout(glossary_mode_row)
+        glossary_mode_layout.setContentsMargins(0, 0, 0, 0)
+        glossary_mode_layout.setSpacing(6)
+        glossary_mode_label = QLabel(self.tr("Mode"))
+        glossary_mode_layout.addWidget(glossary_mode_label)
+        glossary_mode_layout.addStretch()
+        glossary_mode_combo = ConfigComboBox()
+        glossary_mode_combo.addItem(self.tr("Matching"), "matching")
+        glossary_mode_combo.addItem(self.tr("All"), "all")
+        mode_idx = glossary_mode_combo.findData(pcfg.module.llm_glossary_mode)
+        if mode_idx >= 0:
+            glossary_mode_combo.setCurrentIndex(mode_idx)
+        glossary_mode_combo.setFixedWidth(140)
+        glossary_mode_layout.addWidget(glossary_mode_combo)
+        glossary_mode_row.setVisible(glossary_cb.isChecked())
+        context_vbox.addWidget(glossary_mode_row)
 
-        ctx_trans_cb.toggled.connect(
-            lambda checked: ai_chat_frame.setVisible(checked)
+        def _update_glossary_visibility(checked):
+            glossary_path_row.setVisible(checked)
+            glossary_mode_row.setVisible(checked)
+            _resize_to_fit()
+
+        glossary_cb.toggled.connect(_update_glossary_visibility)
+
+        def _update_ctx_visibility(ct_enabled):
+            """Show/hide the entire context section and its advanced settings."""
+            context_frame.setVisible(ct_enabled and pcfg.module.stage_enabled(2))
+            llm_row.setVisible(True)
+            glossary_cb.setVisible(True)
+            show_glossary = glossary_cb.isChecked()
+            glossary_path_row.setVisible(show_glossary)
+            glossary_mode_row.setVisible(show_glossary)
+            _update_token_visibility(llm_context_combo.currentData())
+            _resize_to_fit()
+
+        # Show context frame initially if CT beta is checked and Translation is on
+        context_frame.setVisible(
+            ctx_trans_cb.isChecked() and pcfg.module.stage_enabled(2)
         )
+
+        # CT beta toggle controls context frame visibility
+        ctx_trans_cb.toggled.connect(_update_ctx_visibility)
+
+        layout.addWidget(context_frame)
 
         # Run without update textstyle
         wo_update_cb = QCheckBox(self.tr("Run without update textstyle"))
@@ -2919,8 +3079,11 @@ class MainWindow(mainwindow_cls):
         layout.addWidget(wo_update_cb)
 
         btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
         run_btn = QPushButton(self.tr("Run"))
+        run_btn.setFixedWidth(90)
         cancel_btn = QPushButton(self.tr("Cancel"))
+        cancel_btn.setFixedWidth(90)
         btn_layout.addWidget(run_btn)
         btn_layout.addWidget(cancel_btn)
         layout.addLayout(btn_layout)
@@ -2930,6 +3093,21 @@ class MainWindow(mainwindow_cls):
 
         if pcfg.module.all_stages_disabled():
             run_btn.setEnabled(False)
+
+        # Lock dialog size; height dynamically adjusts via _resize_to_fit()
+        _resize_to_fit()
+
+        # Clear glossary state on dialog close
+        def _clear_glossary():
+            nonlocal _custom_glossary_text
+            glossary_status_label.setText("\u25cb")
+            glossary_status_label.setStyleSheet("color: #888;")
+            glossary_custom_btn.setText(self.tr("Custom..."))
+            glossary_custom_btn.setStyleSheet("")
+            _custom_glossary_text = ""
+            pcfg.module.llm_glossary_path = ""
+
+        dialog.finished.connect(_clear_glossary)
 
         if dialog.exec_() != QDialog.DialogCode.Accepted:
             return
@@ -2947,8 +3125,9 @@ class MainWindow(mainwindow_cls):
                     def _ctx_status(msg):
                         bar = self.module_manager.progress_msgbox.translate_bar
                         bar.updateProgress(bar.progressbar.value(), msg)
-                        if hasattr(self, "_ctx_log_dialog") and self._ctx_log_dialog:
-                            self._ctx_log_dialog.append(msg)
+                        if pcfg.context_translation_debug_log:
+                            from utils.debug_log import debug_logger
+                            debug_logger.write(msg)
 
                     self._ctx_batch_restore = pcfg.module.translator
                     ctx = ContextBatchTranslator(
@@ -2963,22 +3142,17 @@ class MainWindow(mainwindow_cls):
                         },
                         translation_prompt=profile.get("system_prompt", ""),
                         status_callback=_ctx_status,
+                        glossary_path=pcfg.module.llm_glossary_path or "",
+                        glossary_mode=glossary_mode_combo.currentData(),
+                        custom_glossary_text=_custom_glossary_text,
                     )
 
-                    # Create/show the context translation log window
-                    if (
-                        hasattr(self, "_ctx_log_dialog")
-                        and self._ctx_log_dialog is not None
-                    ):
-                        self._ctx_log_dialog.close()
-                        self._ctx_log_dialog = None
-                    from ui.context_log_dialog import ContextLogDialog
+                    if pcfg.context_translation_debug_log:
+                        from utils.debug_log import debug_logger
+                        debug_logger.start()
 
-                    self._ctx_log_dialog = ContextLogDialog(self)
-                    self._ctx_log_dialog.show()
-
-                    ctx.use_glossary = glossary_cb.isChecked()
-                    ctx.custom_glossary = custom_glossary_store
+                    self.module_manager.translate_thread.translator = ctx
+                    self.module_manager.translate_thread.module = ctx
                     self.module_manager.translate_thread.translator = ctx
                     self.module_manager.translate_thread.module = ctx
 

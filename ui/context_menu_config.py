@@ -192,32 +192,20 @@ def _build_align(menu: QMenu, canvas):
 
 
 def _build_merge(menu: QMenu, canvas):
-    """Merge selected text blocks using the current global direction."""
+    """Merge selected text blocks in list order (by idx)."""
     n_selected = len(canvas.selected_text_items())
-    direction = "RTL" if pcfg.merge_rtl else "LTR"
     _act(menu, canvas, "Merge", enabled=n_selected >= 2,
-         connect=lambda: canvas.merge_textblks.emit(direction))
+         connect=canvas.merge_textblks.emit)
 
 
 def _build_behavior(menu: QMenu, canvas):
-    """Build the **Behavior** submenu — snap alignment + toggles."""
+    """Build the **Behavior** submenu — snap alignment."""
     sub = menu.addMenu(canvas.tr("Behavior"))
 
     # Snap Alignment (checkable toggle)
     _act(sub, canvas, "Snap Alignment", checkable=True,
          checked=canvas.alignment_enabled,
          connect=lambda checked: setattr(canvas, "alignment_enabled", checked))
-    sub.addSeparator()
-    # Merge direction toggle
-    _act(sub, canvas, "Merge Right-to-Left", checkable=True,
-         checked=pcfg.merge_rtl,
-         connect=lambda checked: _toggle_merge_rtl(checked))
-
-
-def _toggle_merge_rtl(checked: bool):
-    """Toggle the global merge direction (affects shortcut)."""
-    pcfg.merge_rtl = checked
-    save_config()
 
 
 # ── Register all built-in commands ──────────────────────────

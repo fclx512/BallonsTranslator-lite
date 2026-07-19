@@ -1,7 +1,9 @@
 """Custom glossary dialog for context translation.
 
-Opened from the Run dialog when the user clicks "Custom Terms...".
-Allows manual entry of source→target term pairs.
+Opened from the Run dialog when the user clicks "Custom...".
+Allows manual entry or natural-language description of
+source→target term pairs.  The raw text is later sent to the
+LLM to produce a structured glossary before translation begins.
 """
 
 import re
@@ -22,16 +24,20 @@ _SEP = re.compile(r"\s*(→|->|:)\s*")
 class CustomGlossaryDialog(QDialog):
     """Dialog for entering custom translation terms.
 
-    Each line should be: source → target
-    Supported separators: →  ->  :
+    Supports two input styles:
+    • Structured: one term per line,  source → target
+    • Natural language: plain descriptions the LLM will parse later.
+
+    Use get_raw_text() to retrieve the editor content for AI processing,
+    or get_terms() for structured-parsed results.
     """
 
-    def __init__(self, parent=None, existing_terms: Dict[str, str] | None = None):
+    def __init__(self, parent=None, initial_text: str = ""):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Custom Glossary"))
         self.setMinimumSize(420, 320)
         self.resize(480, 400)
-        self._existing = dict(existing_terms) if existing_terms else {}
+        self._initial_text = initial_text
         self._build_ui()
         self._populate()
 
@@ -40,17 +46,14 @@ class CustomGlossaryDialog(QDialog):
         layout.setSpacing(6)
 
         hint = QLabel(
-            self.tr(
-                "Enter one term per line: source → target\n"
-                "Supported separators:   →   |   ->   |   :"
-            )
+            self.tr('Enter one term per line: source → target\n\nYou can also use natural language, e.g.:\n  The protagonist is Goku, the villain is Frieza')
         )
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
         self.editor = QPlainTextEdit()
         self.editor.setPlaceholderText(
-            self.tr("e.g. 天馬 → 天马\n氷の女王 → 冰之女王")
+            self.tr("e.g.  Dragon Ball → 龙珠\nOne Piece → 海贼王\n\nOr: 主角叫鸣人，反派叫佐助")
         )
         layout.addWidget(self.editor, stretch=1)
 
@@ -65,16 +68,20 @@ class CustomGlossaryDialog(QDialog):
         layout.addLayout(btn_row)
 
     def _populate(self):
-        """Pre-fill editor with existing terms."""
-        if not self._existing:
-            return
-        lines = [f"{s} → {t}" for s, t in self._existing.items()]
-        self.editor.setPlainText("\n".join(lines))
+        """Pre-fill editor with initial text."""
+        if self._initial_text:
+            self.editor.setPlainText(self._initial_text)
+
+    def get_raw_text(self) -> str:
+        """Return the raw editor content for AI processing."""
+        return self.editor.toPlainText()
 
     def get_terms(self) -> Dict[str, str]:
         """Parse editor text and return {source: target} dict.
 
-        Lines that don't match the expected format are silently skipped.
+        Lines that don't match the expected separator pattern
+        are silently skipped — they will be handled later by the
+        AI glossary generator.
         """
         result: Dict[str, str] = {}
         for line in self.editor.toPlainText().splitlines():

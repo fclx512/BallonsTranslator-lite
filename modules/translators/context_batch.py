@@ -26,6 +26,13 @@ if TYPE_CHECKING:
     from utils.textblock import TextBlock
 
 from utils.config import pcfg
+from modules.context.glossary import (
+    GlossaryEntry,
+    GlossaryError,
+    load_glossary,
+    select_glossary,
+    render_glossary,
+)
 
 logger = logging.getLogger("context_batch")
 
@@ -63,17 +70,23 @@ class ContextBatchTranslator:
         api_config: dict,
         translation_prompt: str = "",
         status_callback=None,
-        custom_glossary: Optional[Dict[str, str]] = None,
+        glossary_path: str = "",
+        glossary_mode: str = "matching",
+        custom_glossary_text: str = "",
     ):
         self.api_config = dict(api_config)
         self.translation_prompt = translation_prompt
         self._status_cb = status_callback
-        self.custom_glossary = custom_glossary or {}
+        self._glossary_path = glossary_path
+        self._glossary_mode = glossary_mode
+        self._custom_glossary_text = custom_glossary_text
 
         # Runtime state (reset per project via set_project)
         self._proj: Optional["ProjImgTrans"] = None
         self._blklist_to_pagekey: Dict[int, str] = {}
         self._cached: Dict[str, Dict[int, str]] = {}
+        self._file_glossary_entries: Tuple[GlossaryEntry, ...] = ()
+        self._custom_glossary_entries: Tuple[GlossaryEntry, ...] = ()
         self._glossary: Dict[str, str] = {}
         self._summaries: Dict[int, str] = {}
         self._completed: Set[str] = set()
@@ -100,6 +113,7 @@ class ContextBatchTranslator:
         self._proj = proj
         self._blklist_to_pagekey.clear()
         self._cached.clear()
+        self._file_glossary_entries = ()
         self._glossary.clear()
         self._summaries.clear()
         self._completed.clear()
@@ -108,16 +122,46 @@ class ContextBatchTranslator:
         self._batch_boundaries.clear()
         self._auto_configure()
 
+        # Load file-based glossary
+        if self._glossary_path and self.use_glossary:
+            try:
+                self._file_glossary_entries = load_glossary(self._glossary_path)
+                if self._file_glossary_entries:
+                    self._status(
+                        f"Glossary loaded: {len(self._file_glossary_entries)} "
+                        f"entries from {os.path.basename(self._glossary_path)}"
+                    )
+            except GlossaryError as e:
+                self._status(f"Glossary error: {e}")
+                self._file_glossary_entries = ()
+
+        # Generate AI glossary from user's custom text
+        if self._custom_glossary_text and self.use_glossary:
+            try:
+                self._custom_glossary_entries = self._generate_custom_glossary(
+                    self._custom_glossary_text
+                )
+                if self._custom_glossary_entries:
+                    self._status(
+                        f"AI glossary generated: {len(self._custom_glossary_entries)} "
+                        f"entries from custom input"
+                    )
+            except Exception as e:
+                self._status(f"AI glossary generation error: {e}")
+                self._custom_glossary_entries = ()
+
     def finalize(self):
         self._proj = None
         self._blklist_to_pagekey.clear()
         self._cached.clear()
+        self._file_glossary_entries = ()
+        self._custom_glossary_entries = ()
         self._glossary.clear()
         self._summaries.clear()
         self._completed.clear()
         self._batch_boundaries.clear()
 
-    def translate_textblk_lst(self, textblk_lst: List["TextBlock"]):
+    def translate_textblk_lst(self, textblk_lst: List["TextBlock"], **kwargs):
         non_empty = []
         text_list = []
         translations = []
@@ -460,12 +504,23 @@ class ContextBatchTranslator:
             f"1. translation ..."
         )
 
-        # Glossary section — custom terms first, auto-glossary second
+        # Glossary section — custom (AI-generated), file, auto-learned
         glossary_lines = []
-        if self.custom_glossary:
-            glossary_lines.append("Verified glossary (must match exactly):")
-            for s, t in self.custom_glossary.items():
-                glossary_lines.append(f'  "{s}" → "{t}"')
+        if self.use_glossary and self._custom_glossary_entries:
+            glossary_lines.append("Terminology (must match exactly):")
+            for entry in self._custom_glossary_entries:
+                line = f'  "{entry.source}" → "{entry.translation}"'
+                if entry.note:
+                    line += f"  ({entry.note})"
+                glossary_lines.append(line)
+        if self.use_glossary and self._file_glossary_entries:
+            if not glossary_lines:
+                glossary_lines.append("Terminology (must match exactly):")
+            for entry in self._file_glossary_entries:
+                line = f'  "{entry.source}" → "{entry.translation}"'
+                if entry.note:
+                    line += f"  ({entry.note})"
+                glossary_lines.append(line)
         if self.use_glossary and self._glossary:
             if not glossary_lines:
                 glossary_lines.append("Term consistency guide:")
@@ -852,6 +907,139 @@ class ContextBatchTranslator:
                 if blk.get_text().strip() == text:
                     n += 1
         return n
+
+    # ── AI glossary generation ─────────────────────────────────────────
+
+    def _generate_custom_glossary(
+        self, user_text: str
+    ) -> Tuple[GlossaryEntry, ...]:
+        """Send user's natural language description to the LLM and parse
+        the structured glossary response.
+
+        The prompt instructs the LLM to extract source→target term pairs
+        and return them as a compact JSON array.  Returns an empty tuple
+        on any failure so translation can continue without custom terms.
+        """
+        if not user_text or not user_text.strip():
+            return ()
+
+        prompt = (
+            "You are a translation glossary assistant. The user provides "
+            "terminology descriptions in natural language or semi-structured "
+            "format. Convert them into a structured glossary.\n\n"
+            "Rules:\n"
+            "- Extract every named entity (character names, place names, "
+            "special terms) and its intended translation.\n"
+            '- Format: {"src": "original", "dst": "translated", '
+            '"info": "brief context note if helpful, else empty"}\n'
+            "- If the user uses notation like A > B or A → B, treat A as "
+            "source and B as translation.\n"
+            '- Return ONLY valid JSON: {"glossary": [...]}\n'
+            "- If nothing can be extracted, return {\"glossary\": []}.\n\n"
+            f"User input:\n{user_text}"
+        )
+
+        messages = [{"role": "system", "content": prompt}]
+        self._status("Generating AI glossary from custom input...")
+
+        try:
+            raw = self._raw_llm_call(messages)
+            if not raw:
+                self._status("AI glossary: empty response")
+                return ()
+            entries = self._parse_glossary_response(raw)
+            return tuple(entries)
+        except Exception as e:
+            logger.warning("AI glossary generation failed: %s", e)
+            return ()
+
+    def _parse_glossary_response(self, raw: str) -> List[GlossaryEntry]:
+        """Parse the LLM's glossary JSON response into GlossaryEntry objects.
+
+        Handles markdown code fences and various JSON whitespace patterns.
+        """
+        text = raw.strip()
+
+        # Strip ```json ... ``` fences
+        m = re.search(
+            r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL
+        )
+        if m:
+            text = m.group(1)
+        else:
+            # Fallback: find first { and last }
+            s = text.find("{")
+            e = text.rfind("}")
+            if s != -1 and e > s:
+                text = text[s : e + 1]
+
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            logger.warning("AI glossary: failed to parse JSON response")
+            return []
+
+        glossary_data = data.get("glossary", [])
+        if not isinstance(glossary_data, list):
+            return []
+
+        entries: List[GlossaryEntry] = []
+        for item in glossary_data:
+            if not isinstance(item, dict):
+                continue
+            src = item.get("src", "").strip()
+            dst = item.get("dst", "").strip()
+            if not src or not dst:
+                continue
+            note = item.get("info", "").strip() or ""
+            entries.append(GlossaryEntry(src, dst, note))
+
+        return entries
+
+    def _raw_llm_call(self, messages: list) -> str:
+        """Make a single LLM call with the given messages.
+
+        Unlike _llm_call(), this is a one-shot call without retry logic
+        or batch-target parsing — intended for glossary generation and
+        other lightweight side tasks.
+        """
+        ac = self.api_config
+        api_key = ac.get("api_key", "")
+        api_host = ac.get("api_host", "")
+        model = ac.get("model", "gpt-4o")
+        proxy = ac.get("proxy", "")
+
+        if not api_key or not api_host:
+            logger.error(
+                "ContextBatchTranslator._raw_llm_call: "
+                "missing api_key or api_host"
+            )
+            return ""
+
+        http_client = None
+        if proxy:
+            try:
+                http_client = httpx.Client(proxy=proxy)
+            except Exception:
+                pass
+
+        try:
+            client = openai.OpenAI(
+                api_key=api_key, base_url=api_host, http_client=http_client
+            )
+            completion = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.1,
+            )
+            return (
+                (completion.choices[0].message.content or "")
+                if completion.choices
+                else ""
+            )
+        finally:
+            if http_client is not None:
+                http_client.close()
 
     # ── Progressive summary ───────────────────────────────────────────
 

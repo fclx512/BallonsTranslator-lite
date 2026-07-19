@@ -14,7 +14,7 @@ from .combobox import (
 )
 from .flow_layout import FlowLayout
 from .group_frame import GroupFrame
-from .helper import isDarkTheme, themeColor
+from .helper import borderColor, isDarkTheme, themeColor, widgetBackgroundColor
 from .label import (
     CheckableLabel,
     ClickableLabel,
@@ -35,7 +35,7 @@ from .message import (
     ProgressMessageBox,
     TaskProgressBar,
 )
-from .push_button import NoBorderPushBtn
+from .push_button import ExpandingToolButton, NoBorderPushBtn
 from .scroll_bar import ConfigScrollBar
 from .scrollbar import ScrollBar
 from .spinbox import NoArrowsDoubleSpinBox, NoArrowsSpinBox

@@ -143,7 +143,7 @@ class BaseTranslator(BaseModule):
     def _translate(self, src_list: List[str]) -> List[str]:
         raise NotImplementedError
 
-    def translate(self, text: Union[str, List]) -> Union[str, List]:
+    def translate(self, text: Union[str, List], **kwargs) -> Union[str, List]:
         if text_is_empty(text):
             return text
 
@@ -187,9 +187,11 @@ class BaseTranslator(BaseModule):
         text_list = text.split(breaker)
         return [text.lstrip().rstrip() for text in text_list]
 
-    def translate_textblk_lst(self, textblk_lst: List[TextBlock]):
+    def translate_textblk_lst(self, textblk_lst: List[TextBlock], **kwargs):
         """
-        only textblks with non-empty source text would be passed to translator
+        only textblks with non-empty source text would be passed to translator.
+        Extra keyword arguments (e.g. project, page_key) are forwarded to
+        self.translate() for translators that support context awareness.
         """
         non_empty_ids = []
         text_list = []
@@ -213,7 +215,7 @@ class BaseTranslator(BaseModule):
             )
 
         if len(text_list) > 0:
-            _translations = self.translate(text_list)
+            _translations = self.translate(text_list, **kwargs)
             for ii, idx in enumerate(non_empty_ids):
                 translations[idx] = _translations[ii]
 

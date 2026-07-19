@@ -1095,17 +1095,25 @@ class SceneTextManager(QObject):
             update_pushed_step=is_formatting,
         )
 
-    def on_merge_textblks(self, direction: str):
-        """画布右键"Merge"：按 direction 合并选中的文字块为一个。"""
+    def on_merge_textblks(self):
+        """画布右键"Merge"：按列表 idx 顺序合并选中的文字块为一个。"""
         blkitems = self.canvas.selected_text_items()
         if len(blkitems) < 2:
             return
 
-        # 按 direction 排序（宿主 = 排序后第一个块）
-        if direction == "RTL":
-            blkitems.sort(key=lambda b: (-b.blk.center()[0], b.blk.center()[1]))
-        else:  # LTR
-            blkitems.sort(key=lambda b: (b.blk.center()[0], b.blk.center()[1]))
+        # 按列表 idx 排序（尊重用户排好的阅读顺序）
+        blkitems.sort(key=lambda b: b.idx)
+
+        # 先将 UI 中的文字同步到 blk 数据（画布输入的文字存在 QTextDocument 中，
+        # 尚未写回 blk.translation / blk.text）
+        for b in blkitems:
+            blk = b.blk
+            if not b.document().isEmpty():
+                blk.translation = b.toPlainText()
+            else:
+                blk.translation = ""
+            pw = self.pairwidget_list[b.idx]
+            blk.text = [pw.e_source.toPlainText()]
 
         survivor = blkitems[0]
         removed = blkitems[1:]
@@ -1125,7 +1133,7 @@ class SceneTextManager(QObject):
             removed_pairwidgets.append(self.pairwidget_list[blkitem.idx])
 
         # 构造合并后数据
-        merged_blk = self._build_merged_blk(blkitems, direction)
+        merged_blk = self._build_merged_blk(blkitems)
 
         self.canvas.push_undo_command(
             MergeTextBlksCommand(
@@ -1136,8 +1144,8 @@ class SceneTextManager(QObject):
             )
         )
 
-    def _build_merged_blk(self, blkitems: list, direction: str):
-        """按 direction 顺序合并多个 TextBlkItem 的 TextBlock 数据。"""
+    def _build_merged_blk(self, blkitems: list):
+        """按列表顺序合并多个 TextBlkItem 的 TextBlock 数据。"""
         merged = copy.deepcopy(blkitems[0].blk)
         texts = []
         translations = []

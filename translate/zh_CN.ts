@@ -271,31 +271,16 @@
             <source>Snap Alignment</source>
             <translation>吸附对齐</translation>
         </message>
-        <message>
-            <location filename="..\ui\canvas.py" />
-            <source>Merge</source>
-            <translation>合并</translation>
-        </message>
-        <message>
-            <location filename="..\ui\canvas.py" />
-            <source>Left-to-Right</source>
-            <translation>从左到右</translation>
-        </message>
 	        <message>
 	            <location filename="..\ui\canvas.py" />
-	            <source>Right-to-Left</source>
-	            <translation>从右到左</translation>
+	            <source>Merge</source>
+	            <translation>合并</translation>
 	        </message>
-		        <message>
-		            <location filename="..\ui\canvas.py" />
-		            <source>Merge Right-to-Left</source>
-		            <translation>默认从右到左合并</translation>
-		        </message>
-		        <message>
-		            <location filename="..\ui\canvas.py" />
-		            <source>Behavior</source>
-		            <translation>行为设置</translation>
-		        </message>
+	        <message>
+	            <location filename="..\ui\canvas.py" />
+	            <source>Behavior</source>
+	            <translation>行为设置</translation>
+	        </message>
 		        <message>
             <location filename="..\ui\canvas.py" line="350" />
             <source>PREVIEW</source>
@@ -2060,11 +2045,121 @@ Output:
 			            <source>Apply</source>
 			            <translation>应用</translation>
 			        </message>
-			        <message>
-			            <location filename="..\ui\mainwindow.py" />
-			            <source>Custom Terms...</source>
-			            <translation>自定义术语...</translation>
-			        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>Activate Modules</source>
+				            <translation>激活模块</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>Text Detection</source>
+				            <translation>文本检测</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>OCR</source>
+				            <translation>OCR</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>Translation</source>
+				            <translation>翻译</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>Inpainting</source>
+				            <translation>图像修复</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>Settings</source>
+				            <translation>设置</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>Keep Existing Lines</source>
+				            <translation>保留已有文本框</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>Skip simple cases</source>
+				            <translation>跳过简单案例</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>Context</source>
+				            <translation>上下文</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>textblock</source>
+				            <translation>单文本块</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>page</source>
+				            <translation>页面</translation>
+				        </message>
+                <message>
+                    <location filename="..\ui\mainwindow.py" />
+                    <source>Browse...</source>
+                    <translation>浏览...</translation>
+                </message>
+                <message>
+                    <location filename="..\ui\mainwindow.py" />
+                    <source>Custom...</source>
+                    <translation>自定义术语...</translation>
+                </message>
+                <message>
+                    <location filename="..\ui\mainwindow.py" />
+                    <source>Select a glossary file...</source>
+                    <translation>选择术语表文件...</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>Glossary files (*.json *.txt *.tsv);;All files (*)</source>
+				            <translation>术语表文件 (*.json *.txt *.tsv);;所有文件 (*)</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>Select Glossary File</source>
+				            <translation>选择术语表文件</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>Glossary</source>
+				            <translation>术语表</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>Mode</source>
+				            <translation>模式</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>Matching</source>
+				            <translation>匹配</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>All</source>
+				            <translation>全部</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>LLM Context</source>
+				            <translation>LLM 上下文</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>+history</source>
+				            <translation>+历史</translation>
+				        </message>
+				        <message>
+				            <location filename="..\ui\mainwindow.py" />
+				            <source>Token Budget</source>
+				            <translation>令牌预算</translation>
+				        </message>
 				    </context>
 		    <context>
 		        <name>CustomGlossaryDialog</name>
@@ -2073,30 +2168,38 @@ Output:
 		            <source>Custom Glossary</source>
 		            <translation>自定义术语表</translation>
 		        </message>
-		        <message>
-		            <location filename="..\ui\glossary_dialog.py" />
-		            <source>Enter one term per line: source → target
-Supported separators:   →   |   ->   |   :</source>
-		            <translation>每行一条术语：来源 → 译文
-支持的分隔符：  →   |   ->   |   :</translation>
-		        </message>
-		        <message>
-		            <location filename="..\ui\glossary_dialog.py" />
-		            <source>e.g. 天馬 → 天马
-氷の女王 → 冰之女王</source>
-		            <translation>例如：天馬 → 天马
-氷の女王 → 冰之女王</translation>
-		        </message>
-		        <message>
-		            <location filename="..\ui\glossary_dialog.py" />
-		            <source>OK</source>
-		            <translation>确定</translation>
-		        </message>
-		        <message>
-		            <location filename="..\ui\glossary_dialog.py" />
-		            <source>Cancel</source>
-		            <translation>取消</translation>
-		        </message>
+                <message>
+                    <location filename="..\ui\glossary_dialog.py" />
+                    <source>Enter one term per line: source → target
+
+You can also use natural language, e.g.:
+  The protagonist is Goku, the villain is Frieza</source>
+                    <translation>每行一条术语：原文 → 译文
+
+也支持自然语言描述，例如：
+  主角叫悟空，反派叫弗利萨</translation>
+                </message>
+                <message>
+                    <location filename="..\ui\glossary_dialog.py" />
+                    <source>e.g.  Dragon Ball → 龙珠
+One Piece → 海贼王
+
+Or: 主角叫鸣人，反派叫佐助</source>
+                    <translation>例如：Dragon Ball → 龙珠
+One Piece → 海贼王
+
+或者：主角叫鸣人，反派叫佐助</translation>
+                </message>
+                <message>
+                    <location filename="..\ui\glossary_dialog.py" />
+                    <source>OK</source>
+                    <translation>确定</translation>
+                </message>
+                <message>
+                    <location filename="..\ui\glossary_dialog.py" />
+                    <source>Cancel</source>
+                    <translation>取消</translation>
+                </message>
 		    </context>
 		    <context>
 		        <name>MainWindowMixin</name>
@@ -4657,21 +4760,8 @@ in Settings → Mirror Config, then click Retry.</source>
             <translation>其他</translation>
         </message>
     </context>
-    <context>
-        <name>ContextLogDialog</name>
-        <message>
-            <location filename="..\ui\context_log_dialog.py" line="17" />
-            <source>Context Translation Log</source>
-            <translation>上下文翻译日志</translation>
-        </message>
-        <message>
-            <location filename="..\ui\context_log_dialog.py" line="36" />
-            <source>Clear</source>
-            <translation>清空</translation>
-        </message>
-    </context>
-    <context>
-        <name>NormalizeBreaksDialog</name>
+	    <context>
+	        <name>NormalizeBreaksDialog</name>
         <message>
             <location filename="..\ui\normalize_breaks_dialog.py" />
             <source>Normalize Breaks</source>
@@ -5121,11 +5211,19 @@ This maps automatically to each provider's native parameter
             <source>OCR and translate</source>
             <translation>OCR 并翻译</translation>
         </message>
-        <message>
-            <source>OCR, translate and inpaint</source>
-            <translation>OCR、翻译并修复</translation>
-        </message>
-    </context>
+	        <message>
+	            <source>OCR, translate and inpaint</source>
+	            <translation>OCR、翻译并修复</translation>
+	        </message>
+	        <message>
+	            <source>Move down</source>
+	            <translation>下移</translation>
+	        </message>
+	        <message>
+	            <source>Move up</source>
+	            <translation>上移</translation>
+	        </message>
+	    </context>
     <context>
         <name>ModuleConfigParseWidget</name>
         <message>
