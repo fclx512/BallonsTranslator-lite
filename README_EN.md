@@ -2,75 +2,34 @@
 
 [简体中文](README.md) | [English](README_EN.md)
 
-A lightweight fork of [BallonsTranslator](https://github.com/dmMaze/BallonsTranslator) focused on the core manga/comic translation pipeline.
+A comic/image translation tool with a five-stage pipeline: text detection → OCR → translation → image inpainting → text rendering.
 
 ---
 
-## Differences from Upstream
-
-### Module Selection
-
-Available modules in lite vs. upstream:
-
-| Stage | lite Modules | Upstream-Only Modules (not in lite) |
-|-------|-------------|--------------------------------------|
-| Text Detection | CTD, YSG | Same |
-| OCR | MIT48px-CTC, LLM API OCR, LM Studio, Disabled | PaddleOCR, Google Vision, Bing Lens, etc. |
-| Translation | LLM API (OpenAI-compatible), Sakura | Baidu, Caiyun, DeepL, Google, Youdao, Papago, etc. |
-| Inpainting | LaMa 512px, AOT, Lama MPE | — |
-
-Other streamlined features:
-- Saladict dictionary lookup
-- Keyword substitution
-- Headless mode
-
-### Interaction Changes
-
-| Item | lite | Upstream |
-|------|------|----------|
-| Settings panel | Internal tabbed pages + center modal (OverlayModal), scrim covers canvas only | Right-side long scroll panel |
-| Left panels (PageList/Global Search) | Push canvas to the right when expanded, zero occlusion | Overlay on top of canvas |
-| About page | Help menu (About) | Standalone About dialog |
-| Text block reordering | Context menu + keyboard shortcuts | Panel-based |
-
-### Deployment Differences
-
-- **Bundled CPU PyTorch**: Full pipeline runs without an NVIDIA GPU
-- **Auto GPU detection**: Detects GPU architecture generation and matches CUDA version (RTX 50 series auto-switches to CUDA 12.8+)
-- **Embedded Python environment**: `ballontrans_pylibs_win/` is a self-contained Python 3.12 environment with all dependencies, no system Python required
-- **No cross-Python ABI torch injection**: No longer attempts to share site-packages across different Python versions
-
-> The upstream supports macOS and AMD GPUs. This fork targets Windows x64 CUDA/CPU only, due to lack of test hardware.
-
----
-
-## Deployment
-
-### System Requirements
+## System Requirements
 
 - **OS**: Windows 10+ x64
-- **GPU**: Optional (NVIDIA GPU provides acceleration, CPU-only works)
+- **GPU**: Optional (NVIDIA acceleration supported, CPU-only works)
 - **Disk Space**: ~**2.1 GB** (models ~700 MB + embedded Python ~1.4 GB)
 - **VC++ Runtime**: [VC++ Redistributable 2015-2022](https://aka.ms/vs/17/release/vc_redist.x64.exe) (required by embedded Python)
 
-### Windows One-Click
+## Quick Start
 
-1. Download the source (ZIP or git clone) and extract to a local directory
-2. Run the launch script:
-   - `launch.bat` — auto-detects GPU/CPU mode (recommended)
-   - `launch.bat --cpu` — force CPU-only mode
-3. Model files (~700 MB) download automatically on first launch — keep your internet connection active
+### One-Click Bundle (recommended)
 
-If downloads fail due to network issues, get the full package from cloud storage:
+Download the full package (includes embedded Python 3.12, all dependencies, and model files) from:
 
-- [Google Drive](https://drive.google.com/drive/folders/1WJXjcQt7UzHvRpH3QfwcOokL8Fm7l0zT?usp=sharing)
+- [123 Cloud Drive](https://1815181720.share.123865.com/123pan/sKBtVv-Zs1Vd) (preferred, mainly for CN users)
+- [Google Drive](https://drive.google.com/drive/folders/1WJXjcQt7UzHvRpH3QfwcOokL8Fm7l0zT?usp=sharing) (may lag behind)
 
-Extract the downloaded archives into the project root:
+Extract and run `launch.bat`.
+
+You can also download a lightweight bundle (without model files) — models (~700 MB) will be downloaded automatically on first launch:
 
 ```
 BallonsTranslator-lite/
-├── ballontrans_pylibs_win/   # Embedded Python environment
-└── data/                     # Model files
+├── ballontrans_pylibs_win/   # Embedded Python 3.12 environment (~1.4 GB)
+└── launch.bat
 ```
 
 ### Run from Source
@@ -79,10 +38,10 @@ BallonsTranslator-lite/
 git clone https://github.com/fclx512/BallonsTranslator-lite.git
 cd BallonsTranslator-lite
 
-# GPU mode: auto-detects system PyTorch + CUDA, falls back to CPU
+# GPU mode: auto-detects CUDA, falls back to CPU
 python launch.py
 
-# CPU mode: force CPU-only
+# Force CPU mode
 python launch.py --cpu
 
 # Update code
@@ -95,13 +54,13 @@ Dependencies install automatically on first launch. If auto-install fails:
 pip install -r requirements.txt
 ```
 
-### Model Download
+### Model Files
 
-Models download automatically on first launch. For manual setup, place model files in `data/models/`.
+Models download automatically to `data/models/` on first launch. You can also extract them from the full cloud storage package.
 
-### GPU Acceleration
+## GPU Acceleration
 
-#### Portable Users (embedded Python)
+### One-Click Bundle Users
 
 Run `install_cuda.bat` to install CUDA PyTorch into the embedded Python environment:
 
@@ -109,9 +68,9 @@ Run `install_cuda.bat` to install CUDA PyTorch into the embedded Python environm
 install_cuda.bat
 ```
 
-The script auto-detects GPU compute capability and selects the appropriate CUDA version.
+The script auto-detects GPU compute capability and selects the appropriate CUDA version (supports GTX 10 series and newer).
 
-#### Source Users
+### Source Users
 
 Ensure your system Python has CUDA-enabled PyTorch:
 
@@ -132,15 +91,13 @@ python launch.py --reinstall-torch
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
 
-**Kepler (GTX 6xx / 7xx)** is not supported by PyTorch 2.x — use CPU mode: `python launch.py --cpu`
+**Kepler (GTX 6xx / 7xx)** is not supported by PyTorch 2.x — use CPU mode.
 
-### Updating
+## Updating
 
-- **ZIP distribution users**: `launch.bat` checks for GitHub updates on each launch and applies them on restart
-- **Git users**:
-  - Using batch script: `launch.bat --update`
-  - Running Python directly: `python launch.py --update`
-- **In-app**: Help → About → Check for Updates
+- **ZIP distribution users** (one-click bundle): Download the latest source from [Releases](https://github.com/fclx512/BallonsTranslator-lite/releases), extract and overwrite into your existing directory. The one-click bundle does not include git, so the launch script and in-app update features are unavailable.
+- **Git users**: `python launch.py --update` or `git pull`
+- **In-app check**: Help → About → Check for Updates (requires git on your system, shows commit logs only — does not auto-update)
 
 ## FAQ
 
@@ -151,7 +108,6 @@ See [Shortcuts Guide](docs/快捷键.md)
 **How to configure translation API?**
 
 Settings → Models → API Profiles.
-
 
 ---
 

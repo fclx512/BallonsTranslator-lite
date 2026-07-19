@@ -487,7 +487,7 @@ class ShadowGradientDialog(QDialog):
 
         # strength
         ctrl.addWidget(QLabel(self.tr("Strength")))
-        self.strength_slider = PaintQSlider(Qt.Orientation.Horizontal)
+        self.strength_slider = PaintQSlider(orientation=Qt.Orientation.Horizontal)
         self.strength_slider.setRange(0, 100)
         self.strength_slider.setValue(int(fmt.shadow_strength * 100))
         self.strength_slider.setFixedWidth(150)
@@ -500,7 +500,7 @@ class ShadowGradientDialog(QDialog):
 
         # blur radius
         ctrl.addWidget(QLabel(self.tr("Radius")))
-        self.radius_slider = PaintQSlider(Qt.Orientation.Horizontal)
+        self.radius_slider = PaintQSlider(orientation=Qt.Orientation.Horizontal)
         self.radius_slider.setRange(0, 100)
         self.radius_slider.setValue(int(fmt.shadow_radius * 100))
         self.radius_slider.setFixedWidth(150)
@@ -586,7 +586,7 @@ class ShadowGradientDialog(QDialog):
 
         # scale (PS terminology)
         ctrl.addWidget(QLabel(self.tr("Scale")))
-        self.scale_slider = PaintQSlider(Qt.Orientation.Horizontal)
+        self.scale_slider = PaintQSlider(orientation=Qt.Orientation.Horizontal)
         self.scale_slider.setRange(50, 200)  # 0.5 to 2.0
         self.scale_slider.setValue(int(fmt.gradient_size * 100))
         self.scale_slider.setFixedWidth(150)

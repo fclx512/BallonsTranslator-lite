@@ -43,14 +43,29 @@ modules/
 | `ui/scene_textlayout.py` | 画布文字渲染 |
 | `ui/overlay_modal.py` | `OverlayModal` — 中心淡入/淡出模态（scrim 覆盖中央画布区，ConfigPanel 用它） |
 | `ui/overlay_slide.py` | `OverlaySlider` — 覆盖面板滑入滑出动画（GlobalSearchWidget、PageList 用它） |
+| `ui/custom_widget/` | 可复用控件库（`__init__.py` 统一导出，见下方"打包控件功能"） |
 | `config/` | `config.json`(gitignore), `stylesheet.css`, `themes.json`, `custom_themes.json`, `textstyles/` |
-	| `scripts/` | `run_module.py`, `qm_compile.py`, `i18n_check.py` |
+| `scripts/` | `run_module.py`, `qm_compile.py`, `i18n_check.py` |
 
 ## 打包控件功能
 
-`ui/configpanel.py` 的 `ConfigSubBlock` 已内置禁用自动变灰功能（`changeEvent`）。
-需要禁用配置面板中的某个子项时，先阅读 [`docs/打包控件功能使用说明.md`](docs/打包控件功能使用说明.md)，
-了解已封装好的模式（禁用自动变灰、"—" 占位符等），优先使用现有方案而非重新实现。
+`ui/custom_widget/` 封装了完整的可复用控件库，通过 `__init__.py` 统一导出：
+`from ui.custom_widget import ConfigCheckBox, NoArrowsSpinBox, …`。
+
+**核心模式**（详见 [`docs/打包控件功能使用说明.md`](docs/打包控件功能使用说明.md)）：
+
+| 模式/控件 | 一句话说明 |
+|-----------|----------|
+| `ConfigSubBlock` 禁用自动变灰 | `changeEvent` 自动处理禁用态 label 颜色 |
+| "—" 占位符模式 | 禁用数值字段时以 "—" 替代，`blockSignals` 防误触 |
+| `NoArrowsSpinBox` 族 | 无箭头、主题感知的数字/文本/下拉/滚动条控件族 |
+| `ColorSwatchBtn` | 色块按钮，`setColor()`/`color()` + `colorChanged` 信号 |
+| `ConfigScrollBar` | 全局统一的 8px 圆角滚动条（含悬停动画） |
+| `ClockDial` | 指针式角度/距离选择（影子方向用） |
+| `ConfigSectionHeader` | 配置面板章节标题 |
+| `GroupFrame` | 圆角边框分组容器 |
+
+新增控件时更新上表即可，无需展开详细用法。优先使用已有方案而非重新实现。
 
 ## 文档规范
 
@@ -61,7 +76,7 @@ modules/
 - `config/config.json` 已 gitignore（含 API 密钥），其余配置/样式文件被跟踪。
 - 模块声明 `params: Dict` 自动渲染为 UI 表单。以 `_` 开头的 key 为内部参数，save/load 时保留。
 
-全局配置 `pcfg`（`utils/config.py:279`）是模块级单例：
+全局配置 `pcfg`（`utils/config.py:301`）是模块级单例：
 
 - 改 `pcfg` 后须显式调用 `save_config()`。仅 `closeEvent` 和 `ConfigPanel.hideEvent` 触发自动保存。
 - 启动顺序：`launch.py` 先 `load_config()` 再 `init_module_registries()`。
@@ -73,6 +88,7 @@ modules/
 - **提交聚合原则：** 工作完成后，用 `git reset --soft <基准>` + `git commit` 将同批次逻辑相关的多个提交聚合为一个原子提交再推送。避免给远端推送碎片化小提交。聚合前先向用户确认消息内容。
 - **禁止 `git commit --amend`：** amend 会重写 commit hash。如果旧 hash 已被推送（包括 git GUI 自动推送），本地与远程历史分叉，`git pull` 必然产生多余的 merge 提交。要修改已推送的 commit，用 `git reset --soft <基准>` + 重提交 + `git push --force-with-lease`，且须先经用户同意。
 - **禁止在 commit 信息中添加 AI 署名。** 作者只为 `提交者自己`，不添加 `Co-Authored-By` 或任何其他协作署名行。
+- **禁止使用 `git push --tags`：** 会把本地所有 tag（含上游 remote 拉下来的残留 tag）一并推送到 fork 远端，造成混淆。**发版推送 tag 时用精准推送：`git push origin vx.y.z`**（只推送指定 tag）。如果误推了多余 tag，用 `git push --delete origin <tag>` 逐个清理。
 
 ## i18n 翻译
 
