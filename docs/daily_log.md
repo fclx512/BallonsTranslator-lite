@@ -492,3 +492,90 @@
 **验证：** 语法检查 ✅
 
 **涉及文件：** `ui/textedit_area.py`、`config/stylesheet.css`
+
+---
+
+### PPOCRv6 ONNX 竖排文本框方向修复
+
+**问题：** ppocrv6_onnx 文本检测模型识别出的竖排文本框未正确应用文本方向参数（`src_is_vertical` / `vertical` 始终为 False），导致 OCR 虽然能正确识别竖排文字，但框的方向参数仍为横排。
+
+**根因：** `detector_paddlev6.py` 的 `_detect()` 将检测框直接转为 `TextBlock`，跳过了 `sort_pnts()` 方向判断和 `examine_textblk()` 计算，`src_is_vertical` 在 `__post_init__` 中默认走 `self.vertical`（`False`）。
+
+**修复：** 对每个检测框调用 `sort_pnts()` 判断竖排/横排，设置 `src_is_vertical` / `vertical` 标志，调用 `examine_textblk()` 正确计算角度和字号。
+
+**验证：** 语法检查 ✅、启动导入测试 5/5 ✅
+
+**涉及文件：** `modules/textdetector/detector_paddlev6.py`
+
+---
+
+### Auto Layout 功能完整移除
+
+**理由：** 该功能（根据气泡 mask 自动分割译文为多行）的 mask 提取基于硬编码 Canny 阈值 + flood fill，对非常规场景完全不可靠。遵循减法原则：不维护半桶水功能。
+
+**清理范围：**
+
+1. **配置层**（`utils/config.py`）— 删除 `let_autolayout_flag`
+2. **UI**（`ui/configpanel.py`）— 删除复选框、处理器、setChecked
+3. **触发逻辑**（`ui/mainwindow.py`）— 删除 `auto_textlayout_flag` 设置/重置
+4. **核心逻辑**（`ui/scenetext_manager.py`）— 删除 imports、属性、addTextBlock 拦截分支、`onAutoLayoutTextblks`、`layout_textblk`（217行）、`get_text_size` / `get_words_length_list` 死函数
+5. **撤销命令**（`ui/textedit_commands.py`）— 删除 `AutoLayoutCommand`
+6. **信号**（`ui/canvas.py`）— 删除 `layout_textblks = Signal()`
+7. **布局引擎**（`utils/text_layout.py`）— 整文件删除（623行）
+8. **分词**（`utils/text_processing.py`）— 删除 `seg_text` 及全部下游依赖，保留 `full_len`/`half_len`/`is_cjk`
+9. **i18n**（`translate/zh_CN.ts`、`translate/zh_CN.qm`）— 删除 2 条翻译，重编译
+
+**验证：** 语法检查 ✅、启动导入测试 5/5 ✅、i18n 检查 ✅、qm 编译 1019 条 ✅
+
+**涉及文件：**
+- 删除：`utils/text_layout.py`
+- 修改：`utils/config.py`、`ui/configpanel.py`、`ui/mainwindow.py`、`ui/scenetext_manager.py`、`ui/textedit_commands.py`、`ui/canvas.py`、`utils/text_processing.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+## 2026-07-19
+
+### 上游 Context 系统适配 + Profile Manager 清理 + 提示词策略替换
+
+**需求：** 借鉴上游的 LLM translation context 系统（glossary / history window / token budget / context recovery），替换现有的三段式提示词；清理 Profile Manager 中废弃的「翻译设置」；新增「返回 JSON Schema」勾选框和「额外翻译指令」编辑框。
+
+**改动：**
+
+1. **新增 Context 基础设施**（`modules/context/`）：
+   - `glossary.py` — 术语表加载（JSON/TXT/TSV）、LRU 缓存、大小写不敏感匹配、稳定渲染
+   - `history.py` — `HistoryPage`/`RenderedHistoryPage`/`HistoryWindow` 不可变快照；`eligible_history_for_request()` 智能历史选择（60% low-water mark）；`recover_context_length()` context overflow 恢复；`ContextDiagnostic` 诊断日志
+   - `token_usage.py` — tiktoken 精确计数 + fallback 估算；`format_token_usage()` 兼容各厂商 usage 字段
+   - `errors.py` — `ContextLengthError` + `is_context_length_error()` 三阶段识别（status code / error code / message regex）
+
+2. **配置层**（`utils/config.py`）：
+   - 新增 `TranslateContext`、`LLMTranslateContext`、`LLMGlossaryMode` 枚举
+   - `ModuleConfig` 新增 5 个字段：`translate_context`、`llm_translate_context`、`llm_prior_context_token_budget`、`llm_glossary_path`、`llm_glossary_mode`
+   - `__post_init__` 验证逻辑
+
+3. **Profile Manager 重构**（`utils/profile_manager.py`）：
+   - **删除**「Translation Settings (optional)」整个 section（Response Format ComboBox、Prompt Template、Few-Shot Examples、Frequency Penalty、Presence Penalty）
+   - **删除** `DEFAULT_PROMPT_TEMPLATE`、`DEFAULT_CHAT_SAMPLES` 常量
+   - **新增**「返回 JSON Schema」`ConfigCheckBox`（字段 `return_json_schema`，默认 False）
+   - **新增**「Extra Translation Instructions (optional)」可折叠 `ConfigTextEdit`（字段 `system_prompt`，留空则纯用硬编码 contract）
+   - 同步更新 `PROFILE_FIELDS`、`SAMPLE_PROFILES`、`ProfileManagerDialog` 和 `ProfileManagerWidget` 的 UI/保存/填充/清空方法
+
+4. **LLM 翻译器重写**（`modules/translators/trans_llm_api.py`）：
+   - **移除**三段式：`DEFAULT_SYSTEM_PROMPT`、`_assemble_prompts()`、`_parse_chat_samples()`、`build_copy_prompt()`
+   - **新增**上游 contract 策略：`_system_prompt()`（JSON 输出合约 + history_rule + 可选额外指令）、`_render_user_prompt()`（"Translate from X to Y:\nINPUT:\n{json}" + 可选 GLOSSARY）、`_assemble_request()`（cache-friendly 前缀顺序：system → glossary → history → current user）
+   - **集成 Context**：`_snapshot_request_context()` 冻结 glossary + eligible history pages；`_history_window` 实例级缓存；`translate()`/`_translate()` 支持 `project`/`page_key`/`commit_history_window`；ContextLengthError recovery 自动重试
+   - 保留原有 profile 访问、API key 管理、rate limiting、响应解析
+
+5. **管线集成**（`ui/module_manager.py`、`ui/mainwindow.py`）：
+   - `translate_textblk_lst()` 调用传入 `project` 和 `page_key`
+   - `mainwindow.py` 中 `context_batch` 引用从 `prompt_template` 改为 `system_prompt`
+
+6. **i18n**（`translate/zh_CN.ts`、`translate/zh_CN.qm`）：
+   - 移除旧翻译设置相关条目（Response Format / Prompt Template / Few-Shot Examples / Frequency Penalty / Presence Penalty）
+   - 新增 6 条翻译（Return JSON Schema / Extra Translation Instructions / Instructions 等）
+   - 重编译为 1013 条
+
+**验证：** 语法检查 ✅、i18n 检查 ✅、启动导入测试 5/5 ✅、Context 模块独立导入验证 ✅
+
+**涉及文件：**
+- 新增：`modules/context/__init__.py`、`modules/context/glossary.py`、`modules/context/history.py`、`modules/context/token_usage.py`、`modules/context/errors.py`
+- 修改：`modules/translators/trans_llm_api.py`、`utils/config.py`、`utils/profile_manager.py`、`ui/module_manager.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`

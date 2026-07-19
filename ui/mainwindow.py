@@ -2657,10 +2657,6 @@ class MainWindow(mainwindow_cls):
                     ):
                         blk.font_size = blk.font_size / (1 + sw)
 
-            self.st_manager.auto_textlayout_flag = pcfg.let_autolayout_flag and (
-                pcfg.module.enable_detect or pcfg.module.enable_translate
-            )
-
         if page_index != self.pageList.currentIndex().row():
             self.pageList.setCurrentRow(page_index)
         else:
@@ -2671,9 +2667,6 @@ class MainWindow(mainwindow_cls):
         if not pcfg.module.enable_detect and pcfg.module.enable_translate:
             for blkitem in self.st_manager.textblk_item_list:
                 blkitem.squeezeBoundingRect()
-
-        if page_index + 1 == self.imgtrans_proj.num_pages:
-            self.st_manager.auto_textlayout_flag = False
 
         # save proj file on page trans finished
         self.imgtrans_proj.save()
@@ -2968,7 +2961,7 @@ class MainWindow(mainwindow_cls):
                             "proxy": profile.get("proxy", ""),
                             "reasoning_effort": profile.get("reasoning_effort", ""),
                         },
-                        translation_prompt=profile.get("prompt_template", ""),
+                        translation_prompt=profile.get("system_prompt", ""),
                         status_callback=_ctx_status,
                     )
 

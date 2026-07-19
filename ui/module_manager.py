@@ -420,10 +420,14 @@ class TranslateThread(ModuleThread):
         self.job = lambda: self._set_translator(translator)
         self.start()
 
-    def _translate_page(self, page_dict, page_key: str, emit_finished=True):
+    def _translate_page(self, page_dict, page_key: str, emit_finished=True, project=None):
         page = page_dict[page_key]
         try:
-            self.translator.translate_textblk_lst(page)
+            self.translator.translate_textblk_lst(
+                page,
+                project=project or getattr(self, 'imgtrans_proj', None),
+                page_key=page_key,
+            )
         except Exception as e:
             create_error_dialog(e, self.tr("Translation Failed."), "TranslationFailed")
         if emit_finished:
@@ -461,7 +465,8 @@ class TranslateThread(ModuleThread):
             trans_success = True
             try:
                 self._translate_page(
-                    self.imgtrans_proj.pages, page_key, emit_finished=False
+                    self.imgtrans_proj.pages, page_key,
+                    emit_finished=False, project=self.imgtrans_proj,
                 )
             except Exception as e:
                 # TODO: allowing retry/skip/terminate
@@ -622,7 +627,11 @@ class ImgtransThread(QThread):
                         "skipping translate in blktrans"
                     )
                 else:
-                    trans_mod.translate_textblk_lst(blk_list)
+                    trans_mod.translate_textblk_lst(
+                        blk_list,
+                        project=getattr(self, 'imgtrans_proj', None),
+                        page_key=getattr(self, 'current_page_key', None),
+                    )
             except Exception as e:
                 create_error_dialog(
                     e, self.tr("Translation Failed."), "TranslationFailed"
@@ -781,7 +790,11 @@ class ImgtransThread(QThread):
                             "Translator not loaded, skipping translate stage"
                         )
                     else:
-                        self.translator.translate_textblk_lst(blk_list)
+                        self.translator.translate_textblk_lst(
+                            blk_list,
+                            project=self.imgtrans_proj,
+                            page_key=imgname,
+                        )
                         self.translate_counter += 1
                         self.update_translate_progress.emit(self.translate_counter)
 
@@ -826,7 +839,11 @@ class ImgtransThread(QThread):
                         "Translator not loaded, skipping low-vram translate"
                     )
                 else:
-                    self.translator.translate_textblk_lst(blk_list)
+                    self.translator.translate_textblk_lst(
+                        blk_list,
+                        project=self.imgtrans_proj,
+                        page_key=imgname,
+                    )
                     self.translate_counter += 1
                     self.imgtrans_proj.update_page_progress(
                         imgname, RunStatus.FIN_TRANSLATE

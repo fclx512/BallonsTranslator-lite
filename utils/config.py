@@ -22,6 +22,42 @@ class RunStatus:
     FIN_ALL = 15
 
 
+class TranslateContext:
+    """Canonical translation grouping values stored in module config.
+
+    >>> TranslateContext.Page
+    'page'
+    """
+
+    TextBlock = 'textblock'
+    Page = 'page'
+    Valid = (TextBlock, Page)
+
+
+class LLMTranslateContext:
+    """Canonical LLM translation-context modes stored in module config.
+
+    >>> LLMTranslateContext.HISTORY
+    'history'
+    """
+
+    PAGE = 'page'
+    HISTORY = 'history'
+    Valid = (PAGE, HISTORY)
+
+
+class LLMGlossaryMode:
+    """Canonical glossary selection modes stored in module config.
+
+    >>> LLMGlossaryMode.Matching
+    'matching'
+    """
+
+    Matching = 'matching'
+    All = 'all'
+    Valid = (Matching, All)
+
+
 @nested_dataclass
 class ModuleConfig(Config):
     textdetector: str = "ctd"
@@ -39,6 +75,11 @@ class ModuleConfig(Config):
     inpainter_params: Dict = field(default_factory=lambda: dict())
     translate_source: str = "日本語"
     translate_target: str = "简体中文"
+    translate_context: str = TranslateContext.Page
+    llm_translate_context: str = LLMTranslateContext.PAGE
+    llm_prior_context_token_budget: int = 4096
+    llm_glossary_path: str = ''
+    llm_glossary_mode: str = LLMGlossaryMode.Matching
     check_need_inpaint: bool = True
     load_model_on_demand: bool = True
     empty_runcache: bool = False
@@ -96,6 +137,20 @@ class ModuleConfig(Config):
         ) is False
 
     def __post_init__(self):
+        if self.translate_context not in TranslateContext.Valid:
+            self.translate_context = TranslateContext.Page
+        if self.llm_translate_context not in LLMTranslateContext.Valid:
+            self.llm_translate_context = LLMTranslateContext.PAGE
+        if not isinstance(self.llm_glossary_path, str):
+            self.llm_glossary_path = ''
+        if self.llm_glossary_mode not in LLMGlossaryMode.Valid:
+            self.llm_glossary_mode = LLMGlossaryMode.Matching
+        if (
+            not isinstance(self.llm_prior_context_token_budget, int)
+            or isinstance(self.llm_prior_context_token_budget, bool)
+            or self.llm_prior_context_token_budget <= 0
+        ):
+            self.llm_prior_context_token_budget = 4096
         self.update_finish_code()
 
     def update_finish_code(self):
@@ -156,7 +211,6 @@ class ProgramConfig(Config):
     let_family_flag: int = 0
     punctuation_position: int = PunctuationPosition.Simplified
     tatechuyoko_threshold: int = 3
-    let_autolayout_flag: bool = True
     let_uppercase_flag: bool = True
     use_notext_images: bool = True
     let_textstyle_indep_flag: bool = False

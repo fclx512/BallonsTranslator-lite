@@ -1683,16 +1683,6 @@ class ConfigPanel(Widget):
         # Text formatting section
         ts_layout.addWidget(ConfigSectionHeader(self.tr("Text formatting")))
 
-        self.let_autolayout_checker, al_sublock = checkbox_with_label(
-            self.tr("Auto layout"),
-            description=self.tr(
-                "Split translation into multi-lines according to the extracted balloon region."
-            ),
-            note=self.tr("<p>Automatically split translated text into multiple lines matching the shape of the detected balloon or text region.</p>"),
-        )
-        self.let_autolayout_checker.stateChanged.connect(self.on_autolayout_changed)
-        ts_layout.addWidget(al_sublock)
-
         self.let_uppercase_checker, uc_sublock = checkbox_with_label(
             self.tr("To uppercase"),
             note=self.tr("<p>Convert all translated text to uppercase. Useful for certain <b>typographic styles</b> or all-caps conventions.</p>"),
@@ -2279,9 +2269,6 @@ class ConfigPanel(Widget):
     def on_fntstroke_flag_changed(self):
         pcfg.let_fntstroke_flag = self.let_fntstroke_combox.currentIndex()
 
-    def on_autolayout_changed(self):
-        pcfg.let_autolayout_flag = self.let_autolayout_checker.isChecked()
-
     def on_uppercase_changed(self):
         pcfg.let_uppercase_flag = self.let_uppercase_checker.isChecked()
 
@@ -2579,7 +2566,6 @@ class ConfigPanel(Widget):
         self.let_alignment_combox.setCurrentIndex(pcfg.let_alignment_flag)
         self.let_family_combox.setCurrentIndex(pcfg.let_family_flag)
         self.let_writing_mode_combox.setCurrentIndex(pcfg.let_writing_mode_flag)
-        self.let_autolayout_checker.setChecked(pcfg.let_autolayout_flag)
         self.let_uppercase_checker.setChecked(pcfg.let_uppercase_flag)
         self.let_textstyle_indep_checker.setChecked(pcfg.let_textstyle_indep_flag)
         self.rst_imgformat_combobox.setCurrentText(

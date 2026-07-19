@@ -22,6 +22,7 @@ from modules.textdetector.base import (
     TextDetectorBase,
     register_textdetectors,
 )
+from utils.textblock import examine_textblk, sort_pnts
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
@@ -273,12 +274,16 @@ class PPOCRv6Detector(TextDetectorBase):
         if dt_boxes is None or len(dt_boxes) == 0:
             return np.zeros(img.shape[:2], dtype=np.uint8), []
 
-        # 2. Convert each quad to a TextBlock
+        # 2. Convert each quad to a TextBlock with direction detection
+        im_h, im_w = img.shape[:2]
         blk_list = []
         for box in dt_boxes:
-            pts = box.tolist()  # list of 4 [x,y] pairs
-            blk = TextBlock(lines=[pts])
+            pts_sorted, is_vertical = sort_pnts(box)
+            blk = TextBlock(lines=[pts_sorted.tolist()])
+            blk.src_is_vertical = is_vertical
+            blk.vertical = is_vertical
             blk.adjust_bbox()
+            examine_textblk(blk, im_w, im_h)
             blk_list.append(blk)
 
         # 3. Sort by reading order

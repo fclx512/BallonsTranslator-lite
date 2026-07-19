@@ -3,19 +3,21 @@
 from qtpy.QtCore import Signal
 from qtpy.QtWidgets import (
     QButtonGroup,
-    QCheckBox,
     QDialog,
-    QFrame,
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QRadioButton,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
-from ui.custom_widget import RangeSlider
+from ui.custom_widget import (
+    ConfigCheckBox,
+    GroupFrame,
+    NoArrowsSpinBox,
+    NoBorderPushBtn,
+    RangeSlider,
+)
 
 
 class PointAlignDialog(QDialog):
@@ -44,6 +46,9 @@ class PointAlignDialog(QDialog):
         "y": ("top", "center", "bottom"),
     }
 
+    # Consistent inner padding for all GroupFrame sections
+    _INNER_MARGINS = (8, 4, 8, 4)
+
     def __init__(self, num_pages: int, parent: QWidget = None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Advanced Alignment"))
@@ -51,11 +56,13 @@ class PointAlignDialog(QDialog):
         self.setModal(True)
 
         layout = QVBoxLayout(self)
+        layout.setSpacing(6)
+        layout.setContentsMargins(8, 8, 8, 8)
 
         # ── Axis selection ────────────────────────────────────
-        axis_frame = QFrame()
-        axis_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        axis_frame = GroupFrame()
         axis_layout = QVBoxLayout(axis_frame)
+        axis_layout.setContentsMargins(*self._INNER_MARGINS)
         axis_layout.addWidget(QLabel(self.tr("Alignment Axis")))
 
         self.axis_group = QButtonGroup(self)
@@ -63,7 +70,7 @@ class PointAlignDialog(QDialog):
         self.radio_y = QRadioButton(self.tr("Y Axis"))
         self.axis_group.addButton(self.radio_x, 1)
         self.axis_group.addButton(self.radio_y, 2)
-        self.radio_y.setChecked(True)  # default: Y axis
+        self.radio_y.setChecked(True)
 
         axis_row = QHBoxLayout()
         axis_row.addWidget(self.radio_x)
@@ -72,31 +79,30 @@ class PointAlignDialog(QDialog):
         layout.addWidget(axis_frame)
 
         # ── Target coordinate ──────────────────────────────────
-        self._pos_frame = QFrame()
-        self._pos_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        self._pos_frame = GroupFrame()
         pos_layout = QVBoxLayout(self._pos_frame)
+        pos_layout.setContentsMargins(*self._INNER_MARGINS)
         self._pos_header = QLabel(self.tr("Target Position"))
-        self._pos_header.setObjectName("GroupTitle")
         pos_layout.addWidget(self._pos_header)
 
         pos_row = QHBoxLayout()
-        self._pos_label = QLabel("Y:")  # placeholder — _refresh_ui sets it
+        self._pos_label = QLabel("Y:")
         pos_row.addWidget(self._pos_label)
-        self._spin = QSpinBox()
+        self._spin = NoArrowsSpinBox()
         self._spin.setRange(-99999, 99999)
         self._spin.setValue(0)
         pos_row.addWidget(self._spin, 1)
 
-        self.pick_btn = QPushButton(self.tr("Pick"))
+        self.pick_btn = NoBorderPushBtn(self.tr("Pick"))
         self.pick_btn.clicked.connect(self._on_pick)
         pos_row.addWidget(self.pick_btn)
         pos_layout.addLayout(pos_row)
         layout.addWidget(self._pos_frame)
 
         # ── Alignment mode ─────────────────────────────────────
-        self._mode_frame = QFrame()
-        self._mode_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        self._mode_frame = GroupFrame()
         mode_layout = QVBoxLayout(self._mode_frame)
+        mode_layout.setContentsMargins(*self._INNER_MARGINS)
         mode_layout.addWidget(QLabel(self.tr("Alignment Mode")))
 
         self.mode_0 = QRadioButton()
@@ -110,9 +116,9 @@ class PointAlignDialog(QDialog):
         layout.addWidget(self._mode_frame)
 
         # ── Page range ─────────────────────────────────────────
-        range_frame = QFrame()
-        range_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        range_frame = GroupFrame()
         range_layout = QVBoxLayout(range_frame)
+        range_layout.setContentsMargins(*self._INNER_MARGINS)
         range_layout.addWidget(QLabel(self.tr("Apply To")))
 
         self.slider = RangeSlider(0, max(0, num_pages - 1))
@@ -121,7 +127,7 @@ class PointAlignDialog(QDialog):
         self.range_info = QLabel()
         range_layout.addWidget(self.range_info)
 
-        self.all_pages_cb = QCheckBox(self.tr("All Pages"))
+        self.all_pages_cb = ConfigCheckBox(self.tr("All Pages"))
         self.all_pages_cb.toggled.connect(self._on_all_pages_toggled)
         self.all_pages_cb.setChecked(True)
         range_layout.addWidget(self.all_pages_cb)
@@ -132,8 +138,8 @@ class PointAlignDialog(QDialog):
 
         # ── Buttons ────────────────────────────────────────────
         btn_layout = QHBoxLayout()
-        ok_btn = QPushButton(self.tr("OK"))
-        cancel_btn = QPushButton(self.tr("Cancel"))
+        ok_btn = NoBorderPushBtn(self.tr("OK"))
+        cancel_btn = NoBorderPushBtn(self.tr("Cancel"))
         ok_btn.clicked.connect(self.accept)
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addStretch()
@@ -192,11 +198,7 @@ class PointAlignDialog(QDialog):
     def _refresh_ui(self):
         """Update labels and mode radio buttons for the current axis."""
         axis = self.alignment_axis()
-
-        # Coordinate label
         self._pos_label.setText(self.tr(self._AXIS_LABELS[axis]))
-
-        # Mode radio buttons
         labels = self._MODE_LABELS[axis]
         self.mode_0.setText(self.tr(labels[0]))
         self.mode_1.setText(self.tr(labels[1]))

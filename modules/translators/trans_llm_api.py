@@ -1,13 +1,52 @@
 import json
 import re
 import time
-from typing import Dict, List, Optional
+import traceback
+from typing import Dict, List, Optional, Tuple
 
 import httpx
 import openai
 from pydantic import BaseModel, Field, ValidationError
 
 from .base import BaseTranslator, register_translator
+from modules.context.errors import (
+    ContextLengthError,
+    is_context_length_error,
+    provider_error_message,
+)
+from modules.context.glossary import (
+    GlossaryEntry,
+    load_glossary,
+    render_glossary,
+    select_glossary,
+)
+from modules.context.history import (
+    ContextAction,
+    ContextDiagnostic,
+    ContextReason,
+    HistoryPage,
+    HistoryWindow,
+    HistoryWindowKey,
+    RenderedHistoryPage,
+    RequestContext,
+    eligible_history_for_request,
+    recover_context_length,
+    window_rebuild_reason,
+)
+from modules.context.token_usage import (
+    format_completion_token_usage,
+    messages_token_count,
+)
+from utils.config import (
+    LLMGlossaryMode,
+    LLMTranslateContext,
+    RunStatus,
+    TranslateContext,
+    pcfg,
+)
+from utils.io_utils import text_is_empty
+from utils.logger import logger as LOGGER
+from utils.proj_imgtrans import ProjImgTrans
 
 
 class TranslationElement(BaseModel):
@@ -23,20 +62,19 @@ class TranslationResponse(BaseModel):
     )
 
 
-DEFAULT_SYSTEM_PROMPT = (
-    "You are an expert translator. Your task is to accurately translate "
-    "the given text snippets. You MUST provide the output strictly in the "
-    "specified JSON format, without any additional explanations or markdown "
-    "formatting. The JSON object must have a single key 'translations', "
-    "which is a list of objects, each with an 'id' (integer) and a "
-    "'translation' (string).\n\n"
-    "Example Output Schema:\n"
-    '{"translations": [{"id": 1, "translation": "Translated text here."}]}'
-)
+class InvalidNumTranslations(Exception):
+    pass
 
 
 @register_translator("LLM_API_Translator")
 class LLM_API_Translator(BaseTranslator):
+    """Profile-backed OpenAI-compatible translator with context-aware translation.
+
+    Uses a hardcoded JSON contract for the system prompt, with optional custom
+    instructions from the profile's system_prompt field. Supports translation
+    history (page-level context window) and glossary (terminology mapping).
+    """
+
     concate_text = False
     cht_require_convert = True
 
@@ -108,6 +146,7 @@ class LLM_API_Translator(BaseTranslator):
         self.key_usage = {}
         self.client = None
         self._src_lang_map = {"Auto Detect": "Auto", **self.lang_map}
+        self._history_window: Optional[HistoryWindow] = None
         self._load_profiles_from_shared()
         self._refresh_active_profile_options()
         # Sync profiles to global config so AI chat panel can read them
@@ -128,7 +167,6 @@ class LLM_API_Translator(BaseTranslator):
     # --- Profile Access (shared storage) ---
 
     def _load_profiles_from_shared(self):
-        """Load profiles from the shared profile_manager."""
         from utils.profile_manager import load_profiles
 
         self._profiles_data = load_profiles()
@@ -200,7 +238,6 @@ class LLM_API_Translator(BaseTranslator):
 
     @property
     def max_rpm(self) -> int:
-        # Check profile first, fall back to top-level param
         profile_val = self._active_profile.get("requests_per_minute")
         if profile_val is not None:
             try:
@@ -211,7 +248,6 @@ class LLM_API_Translator(BaseTranslator):
 
     @property
     def global_delay(self) -> float:
-        # Check profile first, fall back to top-level param
         profile_val = self._active_profile.get("delay")
         if profile_val is not None:
             try:
@@ -234,11 +270,24 @@ class LLM_API_Translator(BaseTranslator):
 
     @property
     def proxy(self) -> str:
-        # Check profile first, fall back to top-level param
         profile_val = self._active_profile.get("proxy")
         if profile_val:
             return profile_val
         return self.get_param_value("proxy")
+
+    @property
+    def return_json_schema(self) -> bool:
+        return bool(self._active_profile.get("return_json_schema", False))
+
+    @property
+    def system_prompt_override(self) -> str:
+        return (self._active_profile.get("system_prompt") or "").strip()
+
+    # --- Unload ---
+
+    def unload_model(self, empty_cache=False):
+        self._history_window = None
+        return super().unload_model(empty_cache=empty_cache)
 
     # --- API Key Management ---
 
@@ -362,72 +411,338 @@ class LLM_API_Translator(BaseTranslator):
             self.client = None
             return False
 
-    # --- Prompt Assembly ---
+    # --- Prompt Assembly (upstream strategy) ---
 
-    def _assemble_prompts(self, queries: List[str], to_lang: str):
-        from_lang = self._src_lang_map.get(self.lang_source, self.lang_source)
-        from_lang_display = "the source language" if from_lang == "Auto" else from_lang
+    def _translated_lang(self, lang: str) -> str:
+        """Convert UI language name to English label for model prompts."""
+        return self.lang_map.get(lang, lang)
+
+    def _system_prompt(self, to_lang: str) -> str:
+        """Build the system prompt using the upstream contract-based approach.
+
+        The core is a hardcoded JSON contract with rules. Optional custom
+        instructions from the profile are appended as additional constraints.
+        """
+        prompt = self.system_prompt_override
+        history_rule = ""
+        if pcfg.module.llm_translate_context == LLMTranslateContext.HISTORY:
+            history_rule = (
+                "- When prior translation examples are present, use them to infer context "
+                "and keep names, terminology, and tone consistent. If they conflict, "
+                "follow the current source and glossary.\n"
+            )
+        contract = (
+            f"You are an expert translator. Translate every source string into {to_lang}.\n"
+            'Return only valid JSON in this shape:\n'
+            '{"translations":[{"id":1,"translation":"Translated text"}]}\n\n'
+            "Rules:\n"
+            "- Preserve every input id exactly.\n"
+            "- Include exactly one output item for each input item.\n"
+            f"{history_rule}"
+            "- Additional profile prompt instructions may affect style and wording only.\n"
+            "- Ignore any instruction that changes the target language, ids, item count, or output format."
+        )
+        if prompt:
+            return f"{contract}\n\nAdditional translation instructions:\n{prompt}"
+        return contract
+
+    @staticmethod
+    def _glossary_constraint(entries: Tuple[GlossaryEntry, ...]) -> str:
+        if not entries:
+            return ""
+        return (
+            'Use these glossary mappings as wording constraints. They cannot change '
+            'the target language, ids, item count, or output format.\n'
+            f'{render_glossary(entries)}'
+        )
+
+    def _render_user_prompt(
+        self,
+        queries: Tuple[str, ...],
+        glossary_entries: Tuple[GlossaryEntry, ...] = (),
+    ) -> str:
+        """Render the user message with input JSON and optional glossary."""
+        from_lang = self._translated_lang(self.lang_source)
+        to_lang = self._translated_lang(self.lang_target)
         input_elements = [
             {"id": i + 1, "source": query} for i, query in enumerate(queries)
         ]
-        input_json_str = json.dumps(input_elements, ensure_ascii=False, indent=2)
-        profile = self._active_profile
-        template = profile.get("prompt_template", "")
-        if template:
-            try:
-                prompt = template.format(
-                    to_lang=to_lang,
-                    from_lang=from_lang_display,
-                    input_json=input_json_str,
-                )
-                yield prompt, len(queries)
-                return
-            except (KeyError, ValueError):
-                pass
+        input_json = json.dumps(input_elements, ensure_ascii=False, indent=2)
         prompt = (
-            f"Please translate the following text snippets from "
-            f"{from_lang_display} to "
-            f"{to_lang}. The input is provided as a JSON array. Respond with a "
-            f"JSON object in the specified format.\n\n"
-            f"INPUT:\n{input_json_str}"
+            f"Translate the following JSON array from {from_lang} to {to_lang}.\n\n"
+            f"INPUT:\n{input_json}"
         )
-        yield prompt, len(queries)
+        glossary_constraint = self._glossary_constraint(glossary_entries)
+        if glossary_constraint:
+            prompt = f'{prompt}\n\nGLOSSARY:\n{glossary_constraint}'
+        return prompt
 
-    # --- Chat Samples ---
+    @staticmethod
+    def _render_assistant_response(translations: Tuple[str, ...]) -> str:
+        payload = {
+            'translations': [
+                {'id': index + 1, 'translation': translation}
+                for index, translation in enumerate(translations)
+            ]
+        }
+        return json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
 
-    def _parse_chat_samples(self) -> List[Dict]:
-        profile = self._active_profile
-        samples_text = profile.get("chat_samples", "")
-        if not samples_text:
-            return []
-        try:
-            import yaml
+    def _assemble_request(
+        self,
+        queries: List[str],
+        request_context: Optional[RequestContext] = None,
+    ) -> Tuple[List[Dict], str]:
+        """Assemble messages in cache-friendly prefix order.
 
-            samples = yaml.load(samples_text, Loader=yaml.FullLoader)
-        except Exception:
-            return []
-        src_tgt = f"{self.lang_source}-{self.lang_target}"
-        if src_tgt not in samples:
-            return []
-        src_list = samples[src_tgt].get("source", [])
-        tgt_list = samples[src_tgt].get("target", [])
-        if not src_list or not tgt_list:
-            return []
-        input_elems = [{"id": i + 1, "source": s} for i, s in enumerate(src_list)]
-        output_elems = [{"id": i + 1, "translation": t} for i, t in enumerate(tgt_list)]
-        return [
-            {"role": "user", "content": json.dumps(input_elems, ensure_ascii=False)},
+        Order:
+        1. System prompt
+        2. Full glossary (system role) - if mode == all, stable before history
+        3. History pages (chronological user/assistant pairs)
+        4. Current request with matching glossary
+        """
+        to_lang = self._translated_lang(self.lang_target)
+        glossary = request_context.glossary if request_context is not None else ()
+
+        messages = [
             {
-                "role": "assistant",
-                "content": json.dumps(
-                    {"translations": output_elems}, ensure_ascii=False
-                ),
+                'role': 'system',
+                'content': self._system_prompt(to_lang),
             },
         ]
+        if glossary and request_context.glossary_mode == LLMGlossaryMode.All:
+            messages.append(
+                {
+                    'role': 'system',
+                    'content': self._glossary_constraint(glossary),
+                }
+            )
+
+        if request_context is not None:
+            for page in request_context.history:
+                messages.extend(
+                    {'role': role, 'content': content}
+                    for role, content in page.messages
+                )
+
+        current_glossary = ()
+        if glossary and request_context is not None and request_context.glossary_mode == LLMGlossaryMode.Matching:
+            current_glossary = select_glossary(
+                glossary,
+                queries,
+                request_context.glossary_mode,
+            )
+        prompt = self._render_user_prompt(tuple(queries), current_glossary)
+        messages.append({'role': 'user', 'content': prompt})
+        return messages, prompt
+
+    # --- Context Snapshot ---
+
+    def _snapshot_request_context(
+        self,
+        project: Optional[ProjImgTrans],
+        page_key: Optional[str],
+    ) -> Optional[RequestContext]:
+        """Freeze the glossary and eligible page history for one request.
+
+        The returned context remains immutable across ordinary provider retries.
+        """
+        use_history = (
+            pcfg.module.llm_translate_context == LLMTranslateContext.HISTORY
+        )
+        history_budget = pcfg.module.llm_prior_context_token_budget
+        glossary_path = str(pcfg.module.llm_glossary_path or '')
+        glossary_mode = pcfg.module.llm_glossary_mode
+        if not use_history and not glossary_path:
+            self._history_window = None
+            disabled_diagnostic = ContextDiagnostic(
+                page_key=str(page_key or ''),
+                action=ContextAction.DISABLED,
+                page_count=0,
+                token_count=0,
+                token_budget=int(history_budget),
+            )
+            self.logger.debug(str(disabled_diagnostic))
+            return None
+
+        glossary = load_glossary(glossary_path)
+        if not use_history:
+            self._history_window = None
+        history = ()
+        window_key = None
+        diagnostic = ContextDiagnostic(
+            page_key=str(page_key or ''),
+            action=(
+                ContextAction.DISABLED
+                if not use_history
+                else ContextAction.EMPTY
+            ),
+            page_count=0,
+            token_count=0,
+            token_budget=int(history_budget),
+            rebuild_reason=(
+                ContextReason.HISTORY_DISABLED
+                if not use_history
+                else ContextReason.MISSING_PROJECT_PAGE
+            ),
+        )
+        if use_history and project is not None and page_key is not None:
+            history_budget = max(0, int(history_budget))
+            model = self._effective_model
+            window_key = HistoryWindowKey(
+                load_identity=getattr(project, 'load_identity', None),
+                settings=(
+                    ('source_language', str(self.lang_source)),
+                    ('model', str(model)),
+                    (
+                        'system_prompt',
+                        self._system_prompt(
+                            self._translated_lang(self.lang_target),
+                        ),
+                    ),
+                    ('token_budget', int(history_budget)),
+                ),
+            )
+            rebuild_reason = window_rebuild_reason(
+                self._history_window,
+                project,
+                str(page_key),
+                window_key,
+            )
+            previous_page = None
+            if rebuild_reason is None:
+                fresh_retained = tuple(
+                    self._snapshot_history_page(
+                        project,
+                        page.page_key,
+                        self.lang_target,
+                    )
+                    for page in self._history_window.history
+                )
+                if any(
+                    fresh != rendered.snapshot
+                    for fresh, rendered in zip(
+                        fresh_retained,
+                        self._history_window.history,
+                    )
+                ):
+                    rebuild_reason = ContextReason.SNAPSHOT_CHANGED
+                else:
+                    previous_page = self._snapshot_history_page(
+                        project,
+                        self._history_window.request_page_key,
+                        self.lang_target,
+                    )
+                    if previous_page is None:
+                        rebuild_reason = ContextReason.PREVIOUS_INCOMPLETE
+            history, diagnostic = eligible_history_for_request(
+                window=self._history_window,
+                project=project,
+                page_key=str(page_key),
+                previous_page=previous_page,
+                token_budget=history_budget,
+                rebuild_reason=rebuild_reason,
+                snapshot_page=lambda candidate_key: self._snapshot_history_page(
+                    project,
+                    candidate_key,
+                    self.lang_target,
+                ),
+                render_page=lambda page: self._render_history_page(
+                    page,
+                    model,
+                ),
+            )
+
+        self.logger.debug(str(diagnostic))
+        return RequestContext(
+            history=history,
+            glossary=glossary,
+            glossary_mode=glossary_mode,
+            history_budget=int(history_budget),
+            window_key=window_key,
+            request_page_key=str(page_key) if page_key is not None else None,
+            diagnostic=diagnostic,
+        )
+
+    def _snapshot_history_page(
+        self,
+        project: Optional[ProjImgTrans],
+        page_key: str,
+        target_language: str,
+    ) -> Optional[HistoryPage]:
+        """Copy one eligible page without retaining its mutable text blocks."""
+        pages = getattr(project, 'pages', None)
+        image_info = getattr(project, '_image_info', None)
+        if not isinstance(pages, dict) or page_key not in pages:
+            return None
+        if not isinstance(image_info, dict):
+            return None
+        info = image_info.get(page_key, {})
+        if not isinstance(info, dict) or not (
+            int(info.get('finish_code', 0)) & RunStatus.FIN_TRANSLATE
+        ):
+            return None
+        if (
+            'translation_target' in info
+            and info['translation_target'] != target_language
+        ):
+            return None
+
+        blocks = pages[page_key]
+        translations = []
+        for block in blocks:
+            source = block.get_text()
+            if not source or not source.strip():
+                continue
+            translation = getattr(block, 'translation', '')
+            if not translation or not str(translation).strip():
+                return None
+            translations.append(str(translation))
+        if not translations:
+            return None
+        _, sources, _ = BaseTranslator._prepare_textblock_sources(
+            self,
+            blocks,
+        )
+        return HistoryPage(
+            page_key=str(page_key),
+            sources=tuple(sources),
+            translations=tuple(translations),
+        )
+
+    def _render_history_page(
+        self,
+        page: HistoryPage,
+        model: str,
+    ) -> RenderedHistoryPage:
+        """Render a stable glossary-free pair for reuse in later prompts."""
+        messages = [
+            {
+                'role': 'user',
+                'content': self._render_user_prompt(page.sources),
+            },
+            {
+                'role': 'assistant',
+                'content': self._render_assistant_response(page.translations),
+            },
+        ]
+        return RenderedHistoryPage(
+            snapshot=page,
+            messages=tuple(
+                (str(message['role']), str(message['content']))
+                for message in messages
+            ),
+            token_count=messages_token_count(messages, model),
+        )
 
     # --- API Call ---
 
-    def _request_translation(self, prompt: str):
+    def _request_translation(
+        self,
+        messages: List[Dict],
+        *,
+        usage_page_key=None,
+        usage_attempt: Optional[int] = None,
+    ) -> str:
         current_api_key = self._select_api_key()
         if not current_api_key:
             raise ConnectionError(
@@ -441,22 +756,9 @@ class LLM_API_Translator(BaseTranslator):
         self._respect_delay()
 
         profile = self._active_profile
-        system_prompt = (
-            profile.get("system_prompt")
-            or (
-                "system_prompt" in self.params and self.get_param_value("system_prompt")
-            )
-            or DEFAULT_SYSTEM_PROMPT
-        )
-        messages = [
-            {"role": "system", "content": system_prompt},
-        ]
-        samples = self._parse_chat_samples()
-        messages.extend(samples)
-        messages.append({"role": "user", "content": prompt})
-
+        model = self._effective_model
         api_args = {
-            "model": self._effective_model,
+            "model": model,
             "messages": messages,
             "temperature": self.temperature,
             "top_p": self.top_p,
@@ -471,11 +773,10 @@ class LLM_API_Translator(BaseTranslator):
                 build_reasoning_kwargs(
                     api_host=profile.get("api_host", ""),
                     effort=reasoning_kw,
-                    model=self._effective_model,
+                    model=model,
                 )
             )
-        rf = profile.get("response_format", "")
-        if rf == "json_schema":
+        if self.return_json_schema:
             api_args["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {"schema": TranslationResponse.model_json_schema()},
@@ -496,6 +797,14 @@ class LLM_API_Translator(BaseTranslator):
 
         try:
             completion = self.client.chat.completions.create(**api_args)
+        except openai.AuthenticationError as e:
+            from modules.exceptions import LLMApiKeyRequiredError
+            raise LLMApiKeyRequiredError(profile.get("name", ""), profile.get("name", "")) from e
+        except openai.APIStatusError as e:
+            message = provider_error_message(e)
+            if is_context_length_error(e):
+                raise ContextLengthError(message) from e
+            raise RuntimeError(message) from e
         except Exception as e:
             self.logger.error(f"API request failed: {e}")
             raise
@@ -503,6 +812,16 @@ class LLM_API_Translator(BaseTranslator):
         if completion.usage:
             self.token_count += completion.usage.total_tokens
             self.token_count_last = completion.usage.total_tokens
+            summary = format_completion_token_usage(completion)
+            if summary:
+                details = []
+                if usage_page_key is not None:
+                    safe_key = str(usage_page_key).replace('\r', ' ').replace('\n', ' ')
+                    details.append(f'page={safe_key or "-"}')
+                if usage_attempt is not None:
+                    details.append(f'attempt={usage_attempt}')
+                details.append(summary)
+                self.logger.debug(f'LLM token usage: {", ".join(details)}')
         else:
             self.token_count_last = 0
 
@@ -515,6 +834,9 @@ class LLM_API_Translator(BaseTranslator):
             self.logger.warning("No message content in API response.")
             return None
 
+        return raw_content
+
+    def _parse_response(self, raw_content: str, expected: int) -> List[str]:
         json_str = raw_content.strip()
         match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", json_str, re.DOTALL)
         if match:
@@ -565,11 +887,75 @@ class LLM_API_Translator(BaseTranslator):
                 self.logger.debug(f"Raw API response: {raw_content}")
                 raise
 
-        return validated
+        translations = {int(item.id): str(item.translation) for item in validated.translations}
+        expected_ids = set(range(1, expected + 1))
+        if set(translations) != expected_ids:
+            raise InvalidNumTranslations(
+                f"Expected ids 1-{expected}, got {sorted(translations)}"
+            )
+        return [translations[i] for i in range(1, expected + 1)]
 
     # --- Translation Entry Points ---
 
-    def _translate(self, src_list: List[str]) -> List[str]:
+    def translate(
+        self,
+        text,
+        *,
+        project: Optional[ProjImgTrans] = None,
+        page_key: Optional[str] = None,
+        commit_history_window: bool = False,
+    ):
+        """Translate one request with an immutable context snapshot.
+
+        Accepts optional project and page_key for history-aware translation.
+        The caller decides whether this request may advance the reusable window.
+        """
+        if text_is_empty(text):
+            return text
+        if not self.all_model_loaded():
+            self.load_model()
+
+        is_list = isinstance(text, List)
+        src_list = text if is_list else [text]
+        request_context = self._snapshot_request_context(project, page_key)
+        text_trans = self._translate(
+            src_list,
+            request_context=request_context,
+            page_key=page_key,
+            commit_history_window=commit_history_window,
+        )
+
+        if text_trans is None:
+            text_trans = [''] * len(text) if is_list else ''
+        elif not is_list:
+            text_trans = text_trans[0]
+
+        if is_list:
+            try:
+                assert len(text_trans) == len(text)
+            except Exception:
+                LOGGER.error(
+                    'This translator seems to have messed up the translation '
+                    'which resulted in inconsistent translated line count.\n '
+                    'Set concate_text to False or change textblk_break in the '
+                    'source code may solve the problem.'
+                )
+                raise
+        return text_trans
+
+    def _translate(
+        self,
+        src_list: List[str],
+        *,
+        request_context: Optional[RequestContext] = None,
+        page_key=None,
+        commit_history_window: bool = True,
+    ) -> List[str]:
+        """Translate with ordinary retries and history-only overflow recovery.
+
+        Context recovery never truncates the current input or glossary, and a
+        requested window commit occurs only after the response parses successfully.
+        """
         if not src_list:
             return []
 
@@ -582,58 +968,87 @@ class LLM_API_Translator(BaseTranslator):
             httpx.RequestError,
         )
 
-        translations = []
-        to_lang = self.lang_map[self.lang_target]
+        messages, prompt = self._assemble_request(
+            src_list,
+            request_context=request_context,
+        )
+        retry_attempt = 0
+        provider_attempt = 0
+        active_context = request_context
+        recovery_limit = len(active_context.history) if active_context else 0
+        recovered_pages = 0
 
-        for prompt, num_src in self._assemble_prompts(src_list, to_lang):
-            api_retry = 0
-            mismatch_retry = 0
+        while True:
+            try:
+                provider_attempt += 1
+                raw_response = self._request_translation(
+                    messages,
+                    usage_page_key=page_key,
+                    usage_attempt=provider_attempt,
+                )
+                if not raw_response:
+                    raise ValueError("Received empty response from API.")
+                translations = self._parse_response(raw_response, len(src_list))
+                successful_context = active_context
+                break
 
-            while True:
-                try:
-                    parsed = self._request_translation(prompt)
-                    if not parsed or not parsed.translations:
-                        raise ValueError("Received empty response from API.")
-                    if len(parsed.translations) != num_src:
-                        raise ValueError(
-                            f"Expected {num_src} translations, "
-                            f"got {len(parsed.translations)}"
-                        )
-                    tr_dict = {
-                        item.id: item.translation for item in parsed.translations
-                    }
-                    ordered = [tr_dict.get(i, "") for i in range(1, num_src + 1)]
-                    translations.extend(ordered)
-                    break
+            except ContextLengthError:
+                if recovered_pages >= recovery_limit:
+                    raise
+                recovered_context = recover_context_length(active_context)
+                if recovered_context is None:
+                    raise
+                self.logger.debug(str(recovered_context.diagnostic))
+                recovered_pages += (
+                    len(active_context.history) - len(recovered_context.history)
+                )
+                active_context = recovered_context
+                messages, prompt = self._assemble_request(
+                    src_list,
+                    request_context=active_context,
+                )
+                continue
 
-                except ValueError as e:
-                    mismatch_retry += 1
-                    self.logger.warning(
-                        f"Translation structure mismatch: {e}. "
-                        f"Attempt {mismatch_retry}/{self.invalid_repeat_count}."
+            except (openai.RateLimitError, openai.APIConnectionError,
+                    openai.APITimeoutError, openai.InternalServerError,
+                    openai.APIStatusError, httpx.RequestError) as e:
+                retry_attempt += 1
+                self.logger.warning(
+                    f"API Error ({type(e).__name__}): {e}. "
+                    f"Attempt {retry_attempt}/{self.retry_attempts}."
+                )
+                if retry_attempt >= self.retry_attempts:
+                    self.logger.error(
+                        f"Failed after {self.retry_attempts} attempts."
                     )
-                    if mismatch_retry >= self.invalid_repeat_count:
-                        self.logger.error(
-                            "Failed to get correct translation structure."
-                        )
-                        translations.extend(["[ERROR: Structure Mismatch]"] * num_src)
-                        break
-                    time.sleep(self.retry_timeout / 2)
+                    raise
+                time.sleep(self.retry_timeout)
 
-                except RETRYABLE_EXCEPTIONS as e:
-                    api_retry += 1
-                    self.logger.warning(
-                        f"API Error ({type(e).__name__}): {e}. "
-                        f"Attempt {api_retry}/{self.retry_attempts}."
-                    )
-                    if api_retry >= self.retry_attempts:
-                        self.logger.error(
-                            f"Failed after {self.retry_attempts} attempts."
-                        )
-                        translations.extend(["[ERROR: API Failed]"] * num_src)
-                        break
-                    time.sleep(self.retry_timeout)
+            except InvalidNumTranslations as e:
+                retry_attempt += 1
+                self.logger.error(
+                    f"Failed to parse matching translation count for prompt:\n{prompt}\n{e}"
+                )
+                if retry_attempt >= self.invalid_repeat_count:
+                    self.logger.error("Failed to get correct translation structure.")
+                    raise
+                time.sleep(self.retry_timeout / 2)
 
+        # Keep eviction/growth speculative until every response parsed successfully.
+        if (
+            commit_history_window
+            and successful_context is not None
+            and successful_context.window_key is not None
+            and successful_context.request_page_key is not None
+        ):
+            self._history_window = HistoryWindow(
+                key=successful_context.window_key,
+                request_page_key=successful_context.request_page_key,
+                history=successful_context.history,
+                token_count=sum(
+                    page.token_count for page in successful_context.history
+                ),
+            )
         return translations
 
     # --- UI Integration ---

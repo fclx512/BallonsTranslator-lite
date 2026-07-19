@@ -275,7 +275,6 @@ class Canvas(QGraphicsScene):
     paste_src_signal = Signal()
 
     format_textblks = Signal()
-    layout_textblks = Signal()
     reset_angle = Signal()
     squeeze_blk = Signal()
 

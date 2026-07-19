@@ -33,16 +33,6 @@ from .logger import logger as LOGGER
 
 # ── Default values ──────────────────────────────────────────────────
 
-DEFAULT_PROMPT_TEMPLATE = "请将以下 {from_lang} 文本翻译为 {to_lang}：\n{input_json}"
-DEFAULT_CHAT_SAMPLES = (
-    "日本語-简体中文:\n"
-    "    source:\n"
-    "        - 二人のちゅーを 目撃した ぼっちちゃん\n"
-    "        - 大好きなお友達には あいさつ代わりに ちゅーするんだって\n"
-    "    target:\n"
-    "        - 小孤独目击了两人的接吻\n"
-    "        - 我听说人们会把亲吻作为与喜爱的朋友打招呼的方式"
-)
 DEFAULT_OCR_PROMPT = (
     "Perform OCR on the provided manga image snippet. The language is **{language}**.\n"
     "Recognize all text, including handwritten sound effects (SFX).\n"
@@ -76,12 +66,9 @@ SAMPLE_PROFILES = [
         "proxy": "",
         "requests_per_minute": 20,
         "delay": 0.3,
-        "response_format": "json_object",
         "reasoning_effort": "",
-        "prompt_template": DEFAULT_PROMPT_TEMPLATE,
-        "chat_samples": DEFAULT_CHAT_SAMPLES,
-        "frequency_penalty": "",
-        "presence_penalty": "",
+        "return_json_schema": False,
+        "system_prompt": "",
         "ocr_prompt": DEFAULT_OCR_PROMPT,
         "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
         "ocr_detail_level": "auto",
@@ -100,12 +87,9 @@ SAMPLE_PROFILES = [
         "proxy": "",
         "requests_per_minute": 20,
         "delay": 0.3,
-        "response_format": "json_object",
         "reasoning_effort": "",
-        "prompt_template": DEFAULT_PROMPT_TEMPLATE,
-        "chat_samples": DEFAULT_CHAT_SAMPLES,
-        "frequency_penalty": "",
-        "presence_penalty": "",
+        "return_json_schema": False,
+        "system_prompt": "",
         "ocr_prompt": DEFAULT_OCR_PROMPT,
         "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
         "ocr_detail_level": "auto",
@@ -124,12 +108,9 @@ SAMPLE_PROFILES = [
         "proxy": "",
         "requests_per_minute": 20,
         "delay": 0.3,
-        "response_format": "json_object",
         "reasoning_effort": "",
-        "prompt_template": DEFAULT_PROMPT_TEMPLATE,
-        "chat_samples": DEFAULT_CHAT_SAMPLES,
-        "frequency_penalty": "",
-        "presence_penalty": "",
+        "return_json_schema": False,
+        "system_prompt": "",
         "ocr_prompt": DEFAULT_OCR_PROMPT,
         "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
         "ocr_detail_level": "auto",
@@ -148,12 +129,9 @@ SAMPLE_PROFILES = [
         "proxy": "",
         "requests_per_minute": 20,
         "delay": 0.3,
-        "response_format": "json_object",
         "reasoning_effort": "",
-        "prompt_template": DEFAULT_PROMPT_TEMPLATE,
-        "chat_samples": DEFAULT_CHAT_SAMPLES,
-        "frequency_penalty": "",
-        "presence_penalty": "",
+        "return_json_schema": False,
+        "system_prompt": "",
         "ocr_prompt": DEFAULT_OCR_PROMPT,
         "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
         "ocr_detail_level": "auto",
@@ -172,12 +150,9 @@ SAMPLE_PROFILES = [
         "proxy": "",
         "requests_per_minute": 20,
         "delay": 0.3,
-        "response_format": "json_object",
         "reasoning_effort": "",
-        "prompt_template": DEFAULT_PROMPT_TEMPLATE,
-        "chat_samples": DEFAULT_CHAT_SAMPLES,
-        "frequency_penalty": "",
-        "presence_penalty": "",
+        "return_json_schema": False,
+        "system_prompt": "",
         "ocr_prompt": DEFAULT_OCR_PROMPT,
         "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
         "ocr_detail_level": "auto",
@@ -201,12 +176,9 @@ PROFILE_FIELDS = [
     "proxy",
     "requests_per_minute",
     "delay",
-    "response_format",
     "reasoning_effort",
-    "prompt_template",
-    "chat_samples",
-    "frequency_penalty",
-    "presence_penalty",
+    "return_json_schema",
+    "system_prompt",
     "ocr_prompt",
     "ocr_system_prompt",
     "ocr_detail_level",
@@ -443,10 +415,9 @@ class ProfileManagerDialog(QDialog):
             p["delay"] = float(self.delay_spin.value())
         except (ValueError, TypeError):
             p["delay"] = 0.3
-        p["response_format"] = self.rf_combo.currentText()
         p["reasoning_effort"] = self.reasoning_combo.currentData() or ""
-        p["prompt_template"] = self.prompt_template_edit.toPlainText().strip()
-        p["chat_samples"] = self.chat_samples_edit.toPlainText().strip()
+        p["return_json_schema"] = self.return_json_schema_check.isChecked()
+        p["system_prompt"] = self.system_prompt_edit.toPlainText().strip()
         try:
             p["temperature"] = float(self.temp_edit.text() or "0.1")
         except ValueError:
@@ -456,16 +427,6 @@ class ProfileManagerDialog(QDialog):
         except ValueError:
             p["top_p"] = 1.0
         p["max_tokens"] = self.maxtok_edit.text().strip()
-        for key in ["frequency_penalty", "presence_penalty"]:
-            edit = self.fp_edit if key == "frequency_penalty" else self.pp_edit
-            val = edit.text().strip()
-            if val:
-                try:
-                    p[key] = float(val)
-                except ValueError:
-                    pass
-            elif key in p:
-                del p[key]
         # OCR-specific fields
         p["ocr_prompt"] = self.ocr_prompt_edit.toPlainText().strip()
         p["ocr_system_prompt"] = self.ocr_sysprompt_edit.toPlainText().strip()
@@ -601,42 +562,39 @@ class ProfileManagerDialog(QDialog):
         conn_form.addRow(self.tr("Delay (s):"), self.delay_spin)
         right_layout.addLayout(conn_form)
 
-        # Advanced (optional) — Translation settings
-        right_layout.addWidget(
-            ConfigSectionHeader(self.tr("Translation Settings (optional)"))
+        # Return JSON Schema checkbox
+        self.return_json_schema_check = ConfigCheckBox(
+            self.tr("Return JSON Schema")
         )
-        adv_form = QFormLayout()
-        adv_form.setLabelAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-        )
-        adv_form.setFieldGrowthPolicy(
-            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
-        )
-        self.rf_combo = ConfigComboBox()
-        self.rf_combo.addItems(["json_object", "json_schema"])
-        self.rf_combo.setCurrentText("json_object")
-        self.prompt_template_edit = ConfigTextEdit()
-        self.prompt_template_edit.setPlaceholderText(
-            self.tr("Translate to {to_lang}:\n{input_json}")
-        )
-        self.prompt_template_edit.setMinimumHeight(80)
-        self.chat_samples_edit = ConfigTextEdit()
-        self.chat_samples_edit.setPlaceholderText(
+        self.return_json_schema_check.setToolTip(
             self.tr(
-                "{to_lang}-{from_lang}:\n    source:\n        - text1\n    target:\n        - trans1"
+                "When enabled, the API response is validated against a strict JSON schema. "
+                "Disable for broader compatibility with non-OpenAI providers."
             )
         )
-        self.chat_samples_edit.setMinimumHeight(80)
-        self.fp_edit = ConfigLineEdit()
-        self.fp_edit.setPlaceholderText("0.0")
-        self.pp_edit = ConfigLineEdit()
-        self.pp_edit.setPlaceholderText("0.0")
-        adv_form.addRow(self.tr("Response Format:"), self.rf_combo)
-        adv_form.addRow(self.tr("Prompt Template:"), self.prompt_template_edit)
-        adv_form.addRow(self.tr("Few-Shot Examples:"), self.chat_samples_edit)
-        adv_form.addRow(self.tr("Frequency Penalty:"), self.fp_edit)
-        adv_form.addRow(self.tr("Presence Penalty:"), self.pp_edit)
-        right_layout.addLayout(adv_form)
+        right_layout.addWidget(self.return_json_schema_check)
+
+        # Extra translation instructions (optional)
+        right_layout.addWidget(
+            ConfigSectionHeader(self.tr("Extra Translation Instructions (optional)"))
+        )
+        sp_form = QFormLayout()
+        sp_form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        sp_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
+        self.system_prompt_edit = ConfigTextEdit()
+        self.system_prompt_edit.setPlaceholderText(
+            self.tr(
+                "Optional custom instructions appended to the system prompt. "
+                "Leave empty to use the default translation contract."
+            )
+        )
+        self.system_prompt_edit.setMinimumHeight(80)
+        sp_form.addRow(self.tr("Instructions:"), self.system_prompt_edit)
+        right_layout.addLayout(sp_form)
 
         # OCR Settings
         right_layout.addWidget(ConfigSectionHeader(self.tr("OCR Settings (optional)")))
@@ -700,18 +658,14 @@ class ProfileManagerDialog(QDialog):
             self.temp_edit,
             self.topp_edit,
             self.maxtok_edit,
-            self.fp_edit,
-            self.pp_edit,
-            self.prompt_template_edit,
+            self.system_prompt_edit,
             self.proxy_edit,
             self.ocr_prompt_edit,
             self.ocr_sysprompt_edit,
         ]:
             edit.clear()
-        self.chat_samples_edit.clear()
-        self.chat_samples_edit.setPlainText("")
         self.vision_check.setChecked(False)
-        self.rf_combo.setCurrentText("json_object")
+        self.return_json_schema_check.setChecked(False)
         self.reasoning_combo.setCurrentIndex(0)  # 默认
         self.ocr_detail_combo.setCurrentText("auto")
         self.rpm_spin.setValue(20)
@@ -759,14 +713,11 @@ class ProfileManagerDialog(QDialog):
         self.temp_edit.setText(str(p.get("temperature", "0.1")))
         self.topp_edit.setText(str(p.get("top_p", "1.0")))
         self.maxtok_edit.setText(str(p.get("max_tokens", "")))
-        self.rf_combo.setCurrentText(p.get("response_format", "json_object"))
+        self.return_json_schema_check.setChecked(p.get("return_json_schema", False))
         re_val = p.get("reasoning_effort", "")
         re_idx = self.reasoning_combo.findData(re_val)
         self.reasoning_combo.setCurrentIndex(re_idx if re_idx >= 0 else 0)
-        self.prompt_template_edit.setPlainText(p.get("prompt_template", ""))
-        self.chat_samples_edit.setPlainText(p.get("chat_samples", ""))
-        self.fp_edit.setText(str(p.get("frequency_penalty", "")))
-        self.pp_edit.setText(str(p.get("presence_penalty", "")))
+        self.system_prompt_edit.setPlainText(p.get("system_prompt", ""))
         # OCR fields
         self.ocr_prompt_edit.setPlainText(p.get("ocr_prompt", ""))
         self.ocr_sysprompt_edit.setPlainText(p.get("ocr_system_prompt", ""))
@@ -966,10 +917,9 @@ class ProfileManagerWidget(QWidget):
             p["delay"] = float(self.delay_spin.value())
         except (ValueError, TypeError):
             p["delay"] = 0.3
-        p["response_format"] = self.rf_combo.currentText()
         p["reasoning_effort"] = self.reasoning_combo.currentData() or ""
-        p["prompt_template"] = self.prompt_template_edit.toPlainText().strip()
-        p["chat_samples"] = self.chat_samples_edit.toPlainText().strip()
+        p["return_json_schema"] = self.return_json_schema_check.isChecked()
+        p["system_prompt"] = self.system_prompt_edit.toPlainText().strip()
         try:
             p["temperature"] = float(self.temp_edit.text() or "0.1")
         except ValueError:
@@ -979,16 +929,6 @@ class ProfileManagerWidget(QWidget):
         except ValueError:
             p["top_p"] = 1.0
         p["max_tokens"] = self.maxtok_edit.text().strip()
-        for key in ["frequency_penalty", "presence_penalty"]:
-            edit = self.fp_edit if key == "frequency_penalty" else self.pp_edit
-            val = edit.text().strip()
-            if val:
-                try:
-                    p[key] = float(val)
-                except ValueError:
-                    pass
-            elif key in p:
-                del p[key]
         # OCR-specific fields
         p["ocr_prompt"] = self.ocr_prompt_edit.toPlainText().strip()
         p["ocr_system_prompt"] = self.ocr_sysprompt_edit.toPlainText().strip()
@@ -1165,43 +1105,40 @@ class ProfileManagerWidget(QWidget):
         conn_form.addRow(self.tr("Delay (s):"), self.delay_spin)
         form_layout.addLayout(conn_form)
 
-        # Translation Settings (optional)
-        form_layout.addWidget(
-            ConfigSectionHeader(self.tr("Translation Settings (optional)"))
+        # Return JSON Schema checkbox
+        self.return_json_schema_check = ConfigCheckBox(
+            self.tr("Return JSON Schema")
         )
-        adv_form = QFormLayout()
-        adv_form.setSpacing(8)
-        adv_form.setLabelAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-        )
-        adv_form.setFieldGrowthPolicy(
-            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
-        )
-        self.rf_combo = ConfigComboBox()
-        self.rf_combo.addItems(["json_object", "json_schema"])
-        self.rf_combo.setCurrentText("json_object")
-        self.prompt_template_edit = ConfigTextEdit()
-        self.prompt_template_edit.setPlaceholderText(
-            self.tr("Translate to {to_lang}:\n{input_json}")
-        )
-        self.prompt_template_edit.setMinimumHeight(80)
-        self.chat_samples_edit = ConfigTextEdit()
-        self.chat_samples_edit.setPlaceholderText(
+        self.return_json_schema_check.setToolTip(
             self.tr(
-                "{to_lang}-{from_lang}:\n    source:\n        - text1\n    target:\n        - trans1"
+                "When enabled, the API response is validated against a strict JSON schema. "
+                "Disable for broader compatibility with non-OpenAI providers."
             )
         )
-        self.chat_samples_edit.setMinimumHeight(80)
-        self.fp_edit = ConfigLineEdit()
-        self.fp_edit.setPlaceholderText("0.0")
-        self.pp_edit = ConfigLineEdit()
-        self.pp_edit.setPlaceholderText("0.0")
-        adv_form.addRow(self.tr("Response Format:"), self.rf_combo)
-        adv_form.addRow(self.tr("Prompt Template:"), self.prompt_template_edit)
-        adv_form.addRow(self.tr("Few-Shot Examples:"), self.chat_samples_edit)
-        adv_form.addRow(self.tr("Frequency Penalty:"), self.fp_edit)
-        adv_form.addRow(self.tr("Presence Penalty:"), self.pp_edit)
-        form_layout.addLayout(adv_form)
+        form_layout.addWidget(self.return_json_schema_check)
+
+        # Extra translation instructions (optional)
+        form_layout.addWidget(
+            ConfigSectionHeader(self.tr("Extra Translation Instructions (optional)"))
+        )
+        sp_form = QFormLayout()
+        sp_form.setSpacing(8)
+        sp_form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        sp_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
+        self.system_prompt_edit = ConfigTextEdit()
+        self.system_prompt_edit.setPlaceholderText(
+            self.tr(
+                "Optional custom instructions appended to the system prompt. "
+                "Leave empty to use the default translation contract."
+            )
+        )
+        self.system_prompt_edit.setMinimumHeight(80)
+        sp_form.addRow(self.tr("Instructions:"), self.system_prompt_edit)
+        form_layout.addLayout(sp_form)
 
         # OCR Settings
         form_layout.addWidget(
@@ -1271,18 +1208,14 @@ class ProfileManagerWidget(QWidget):
             self.temp_edit,
             self.topp_edit,
             self.maxtok_edit,
-            self.fp_edit,
-            self.pp_edit,
-            self.prompt_template_edit,
+            self.system_prompt_edit,
             self.proxy_edit,
             self.ocr_prompt_edit,
             self.ocr_sysprompt_edit,
         ]:
             edit.clear()
-        self.chat_samples_edit.clear()
-        self.chat_samples_edit.setPlainText("")
         self.vision_check.setChecked(False)
-        self.rf_combo.setCurrentText("json_object")
+        self.return_json_schema_check.setChecked(False)
         self.reasoning_combo.setCurrentIndex(0)
         self.ocr_detail_combo.setCurrentText("auto")
         self.rpm_spin.setValue(20)
@@ -1310,14 +1243,11 @@ class ProfileManagerWidget(QWidget):
         self.temp_edit.setText(str(p.get("temperature", "0.1")))
         self.topp_edit.setText(str(p.get("top_p", "1.0")))
         self.maxtok_edit.setText(str(p.get("max_tokens", "")))
-        self.rf_combo.setCurrentText(p.get("response_format", "json_object"))
+        self.return_json_schema_check.setChecked(p.get("return_json_schema", False))
         re_val = p.get("reasoning_effort", "")
         re_idx = self.reasoning_combo.findData(re_val)
         self.reasoning_combo.setCurrentIndex(re_idx if re_idx >= 0 else 0)
-        self.prompt_template_edit.setPlainText(p.get("prompt_template", ""))
-        self.chat_samples_edit.setPlainText(p.get("chat_samples", ""))
-        self.fp_edit.setText(str(p.get("frequency_penalty", "")))
-        self.pp_edit.setText(str(p.get("presence_penalty", "")))
+        self.system_prompt_edit.setPlainText(p.get("system_prompt", ""))
         # OCR
         self.ocr_prompt_edit.setPlainText(p.get("ocr_prompt", ""))
         self.ocr_sysprompt_edit.setPlainText(p.get("ocr_system_prompt", ""))

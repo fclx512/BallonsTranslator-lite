@@ -172,52 +172,6 @@ class RotateItemCommand(QUndoCommand):
         return True
 
 
-class AutoLayoutCommand(QUndoCommand):
-    def __init__(
-        self,
-        items: List[TextBlkItem],
-        old_rect_lst: List,
-        old_html_lst: List,
-        trans_widget_lst: List[TransTextEdit],
-    ):
-        super(AutoLayoutCommand, self).__init__()
-        self.items = items
-        self.old_html_lst = old_html_lst
-        self.old_rect_lst = old_rect_lst
-        self.trans_widget_lst = trans_widget_lst
-        self.new_rect_lst = []
-        self.new_html_lst = []
-        for item in items:
-            self.new_html_lst.append(item.toHtml())
-            self.new_rect_lst.append(item.absBoundingRect(qrect=True))
-        self.counter = 0
-
-    def redo(self):
-        self.counter += 1
-        if self.counter <= 1:
-            return
-        for item, trans_widget, html, rect in zip(
-            self.items, self.trans_widget_lst, self.new_html_lst, self.new_rect_lst
-        ):
-            trans_widget.setPlainText(item.toPlainText())
-            item.setPlainText("")
-            item.setRect(rect, repaint=False)
-            item.setHtml(html)
-            if item.fontformat.letter_spacing != 1:
-                item.setLetterSpacing(item.fontformat.letter_spacing, force=True)
-
-    def undo(self):
-        for item, trans_widget, html, rect in zip(
-            self.items, self.trans_widget_lst, self.old_html_lst, self.old_rect_lst
-        ):
-            trans_widget.setPlainText(item.toPlainText())
-            item.setPlainText("")
-            item.setRect(rect, repaint=False)
-            item.setHtml(html)
-            if item.fontformat.letter_spacing != 1:
-                item.setLetterSpacing(item.fontformat.letter_spacing, force=True)
-
-
 class SqueezeCommand(QUndoCommand):
     def __init__(self, blkitem_lst: List[TextBlkItem], ctrl: TextBlkShapeControl):
         super(SqueezeCommand, self).__init__()

@@ -716,16 +716,6 @@
             <translation>文本格式</translation>
         </message>
         <message>
-            <location filename="..\ui\configpanel.py" line="1564" />
-            <source>Auto layout</source>
-            <translation>横排自动排版</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1565" />
-            <source>Split translation into multi-lines according to the extracted balloon region.</source>
-            <translation>根据提取的对话框区域将译文分割为多行</translation>
-        </message>
-        <message>
             <location filename="..\ui\configpanel.py" line="1573" />
             <source>To uppercase</source>
             <translation>小写转大写</translation>
@@ -3130,52 +3120,28 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
         </message>
         <message>
             <location filename="..\utils\profile_manager.py" line="528" />
-            <source>Translation Settings (optional)</source>
-            <translation>翻译设置（可选）</translation>
+            <source>Return JSON Schema</source>
+            <translation>返回 JSON Schema</translation>
         </message>
         <message>
-            <location filename="..\utils\profile_manager.py" line="536" />
-            <source>Translate to {to_lang}:
-{input_json}</source>
-            <translation type="unfinished" />
+            <location filename="..\utils\profile_manager.py" line="531" />
+            <source>When enabled, the API response is validated against a strict JSON schema. Disable for broader compatibility with non-OpenAI providers.</source>
+            <translation>启用后，API 响应将使用严格的 JSON Schema 进行验证。如果与非 OpenAI 提供商兼容性有问题，请关闭此选项。</translation>
         </message>
         <message>
-            <location filename="..\utils\profile_manager.py" line="541" />
-            <source>{to_lang}-{from_lang}:
-    source:
-        - text1
-    target:
-        - trans1</source>
-            <translation>{to_lang}-{from_lang}：
-    source：
-        - text1
-    target：
-        - trans1</translation>
+            <location filename="..\utils\profile_manager.py" line="539" />
+            <source>Extra Translation Instructions (optional)</source>
+            <translation>额外翻译指令（可选）</translation>
         </message>
         <message>
-            <location filename="..\utils\profile_manager.py" line="550" />
-            <source>Response Format:</source>
-            <translation>响应格式：</translation>
-        </message>
-        <message>
-            <location filename="..\utils\profile_manager.py" line="551" />
-            <source>Prompt Template:</source>
-            <translation>提示词模板：</translation>
-        </message>
-        <message>
-            <location filename="..\utils\profile_manager.py" line="552" />
-            <source>Few-Shot Examples:</source>
-            <translation>少样本示例：</translation>
+            <location filename="..\utils\profile_manager.py" line="549" />
+            <source>Optional custom instructions appended to the system prompt. Leave empty to use the default translation contract.</source>
+            <translation>附加到系统提示词的可选自定义指令。留空则使用默认翻译合约。</translation>
         </message>
         <message>
             <location filename="..\utils\profile_manager.py" line="553" />
-            <source>Frequency Penalty:</source>
-            <translation>频率惩罚：</translation>
-        </message>
-        <message>
-            <location filename="..\utils\profile_manager.py" line="554" />
-            <source>Presence Penalty:</source>
-            <translation>存在惩罚：</translation>
+            <source>Instructions:</source>
+            <translation>指令：</translation>
         </message>
         <message>
             <location filename="..\utils\profile_manager.py" line="558" />
@@ -4579,62 +4545,62 @@ in Settings → Mirror Config, then click Retry.</source>
     <context>
         <name>PointAlignDialog</name>
         <message>
-            <location filename="..\ui\point_align_dialog.py" line="34" />
+            <location filename="..\ui\point_align_dialog.py" line="54" />
             <source>Advanced Alignment</source>
             <translation>高级对齐</translation>
         </message>
         <message>
-            <location filename="..\ui\point_align_dialog.py" line="44" />
+            <location filename="..\ui\point_align_dialog.py" line="85" />
             <source>Target Position</source>
             <translation>目标位置</translation>
         </message>
         <message>
-            <location filename="..\ui\point_align_dialog.py" line="55" />
+            <location filename="..\ui\point_align_dialog.py" line="96" />
             <source>Pick</source>
             <translation>拾取</translation>
         </message>
         <message>
-            <location filename="..\ui\point_align_dialog.py" line="65" />
+            <location filename="..\ui\point_align_dialog.py" line="106" />
             <source>Alignment Mode</source>
             <translation>对齐模式</translation>
         </message>
         <message>
-            <location filename="..\ui\point_align_dialog.py" line="81" />
+            <location filename="..\ui\point_align_dialog.py" line="122" />
             <source>Apply To</source>
             <translation>应用到</translation>
         </message>
         <message>
-            <location filename="..\ui\point_align_dialog.py" line="89" />
+            <location filename="..\ui\point_align_dialog.py" line="130" />
             <source>All Pages</source>
             <translation>所有页面</translation>
         </message>
         <message>
-            <location filename="..\ui\point_align_dialog.py" line="99" />
+            <location filename="..\ui\point_align_dialog.py" line="141" />
             <source>OK</source>
             <translation>确定</translation>
         </message>
         <message>
-            <location filename="..\ui\point_align_dialog.py" line="100" />
+            <location filename="..\ui\point_align_dialog.py" line="142" />
             <source>Cancel</source>
             <translation>取消</translation>
         </message>
         <message>
-            <location filename="..\ui\point_align_dialog.py" line="147" />
+            <location filename="..\ui\point_align_dialog.py" line="215" />
             <source>Page %1 ~ Page %2 (%3 pages)</source>
             <translation>第%1页 ~ 第%2页（共%3页）</translation>
         </message>
         <message>
-            <location filename="..\\ui\\point_align_dialog.py" line="58" />
+            <location filename="..\\ui\\point_align_dialog.py" line="66" />
             <source>Alignment Axis</source>
             <translation>对齐轴</translation>
         </message>
         <message>
-            <location filename="..\\ui\\point_align_dialog.py" line="61" />
+            <location filename="..\\ui\\point_align_dialog.py" line="69" />
             <source>X Axis</source>
             <translation>X 轴</translation>
         </message>
         <message>
-            <location filename="..\\ui\\point_align_dialog.py" line="62" />
+            <location filename="..\\ui\\point_align_dialog.py" line="70" />
             <source>Y Axis</source>
             <translation>Y 轴</translation>
         </message>
@@ -4835,14 +4801,6 @@ in Settings → Mirror Config, then click Retry.</source>
             <translation>获取模型列表</translation>
         </message>
         <message>
-            <source>Few-Shot Examples:</source>
-            <translation>少样本示例：</translation>
-        </message>
-        <message>
-            <source>Frequency Penalty:</source>
-            <translation>频率惩罚：</translation>
-        </message>
-        <message>
             <source>Host and API key are required to fetch the model list.</source>
             <translation>需要填写地址和密钥才能获取模型列表。</translation>
         </message>
@@ -4903,16 +4861,8 @@ in Settings → Mirror Config, then click Retry.</source>
             <translation>OCR 的可选系统提示词。</translation>
         </message>
         <message>
-            <source>Presence Penalty:</source>
-            <translation>存在惩罚：</translation>
-        </message>
-        <message>
             <source>Profile:</source>
             <translation>配置：</translation>
-        </message>
-        <message>
-            <source>Prompt Template:</source>
-            <translation>提示词模板：</translation>
         </message>
         <message>
             <source>Proxy:</source>
@@ -4925,10 +4875,6 @@ in Settings → Mirror Config, then click Retry.</source>
         <message>
             <source>Requests/min:</source>
             <translation>请求数/分钟：</translation>
-        </message>
-        <message>
-            <source>Response Format:</source>
-            <translation>响应格式：</translation>
         </message>
         <message>
             <source>Restore Builtins</source>
@@ -4959,8 +4905,24 @@ in Settings → Mirror Config, then click Retry.</source>
             <translation>Top P：</translation>
         </message>
         <message>
-            <source>Translation Settings (optional)</source>
-            <translation>翻译设置（可选）</translation>
+            <source>Return JSON Schema</source>
+            <translation>返回 JSON Schema</translation>
+        </message>
+        <message>
+            <source>When enabled, the API response is validated against a strict JSON schema. Disable for broader compatibility with non-OpenAI providers.</source>
+            <translation>启用后，API 响应将使用严格的 JSON Schema 进行验证。如果与非 OpenAI 提供商兼容性有问题，请关闭此选项。</translation>
+        </message>
+        <message>
+            <source>Extra Translation Instructions (optional)</source>
+            <translation>额外翻译指令（可选）</translation>
+        </message>
+        <message>
+            <source>Optional custom instructions appended to the system prompt. Leave empty to use the default translation contract.</source>
+            <translation>附加到系统提示词的可选自定义指令。留空则使用默认翻译合约。</translation>
+        </message>
+        <message>
+            <source>Instructions:</source>
+            <translation>指令：</translation>
         </message>
         <message>
             <source>Unlimited (leave empty)</source>
@@ -4999,23 +4961,6 @@ This maps automatically to each provider's native parameter
 选择"默认"则由 API 自行决定。
 该值会自动映射到各厂商的原生参数
 （OpenAI reasoning_effort、Claude output_config.effort 等）。</translation>
-        </message>
-        <message>
-            <source>Translate to {to_lang}:
-{input_json}</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>{to_lang}-{from_lang}:
-    source:
-        - text1
-    target:
-        - trans1</source>
-            <translation>{to_lang}-{from_lang}：
-    source：
-        - text1
-    target：
-        - trans1</translation>
         </message>
         <message>
             <source>OCR prompt with {language} placeholder.</source>
