@@ -1,11 +1,10 @@
 from qtpy.QtWidgets import QApplication, QAbstractScrollArea, QGraphicsOpacityEffect, QWidget, QVBoxLayout, QHBoxLayout
 from qtpy.QtCore import QEvent, Qt, QPropertyAnimation, QTimer, Signal, QPoint, Property, QAbstractAnimation
-from qtpy.QtGui import QMouseEvent, QPainter, QColor
+from qtpy.QtGui import QMouseEvent, QPainter
 
-from .helper import isDarkTheme
 
 class ScrollBarGroove(QWidget):
-    """ Scroll bar groove """
+    """Scroll bar groove — theme-aware via @scrollBarBackground, alpha tuned for QPainter."""
 
     def __init__(self, orient: Qt.Orientation, parent, hover_style: bool = False):
         super().__init__(parent=parent)
@@ -37,21 +36,25 @@ class ScrollBarGroove(QWidget):
         self.opacityAni.start()
 
     def paintEvent(self, e):
+        from ui.misc import get_theme_color
+
         painter = QPainter(self)
         painter.setRenderHints(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)
 
-        if self.hover_style and isDarkTheme():
-            painter.setBrush(QColor(64, 70, 82, 150))
-        else:
-            painter.setBrush(QColor(0, 0, 0, 30))
-        painter.drawRoundedRect(self.rect(), 6, 6)
+        groove = get_theme_color(key="@scrollBarBackground")
+        # Theme @scrollBarBackground uses CSS rgba percentage (30% → alpha 77),
+        # which is too heavy for QPainter flat fill.  Clamp alpha to match
+        # original subtle groove appearance.
+        groove.setAlpha(50)
+        painter.setBrush(groove)
+        painter.drawRoundedRect(self.rect(), 4, 4)
 
 
 # ScrollBarHandle, ScrollBar and FlowLayout are modified from https://github.com/zhiyiYo/PyQt-Fluent-Widgets/blob/master/qfluentwidgets/components/widgets/scroll_bar.py
 
 class ScrollBarHandle(QWidget):
-    """ Scroll bar handle """
+    """Scroll bar handle — theme-aware via @scrollBarColor/@scrollBarHoverColor."""
 
     def __init__(self, orient: Qt.Orientation, parent=None, fadeout: bool = False, hover_style: bool = False):
         super().__init__(parent)
@@ -59,7 +62,7 @@ class ScrollBarHandle(QWidget):
         self.hover_style = hover_style
 
         if hover_style:
-            fixsize = 6
+            fixsize = 8
         elif fadeout:
             self.effect = effect = QGraphicsOpacityEffect(self, opacity=1.0)
             self.setGraphicsEffect(effect)
@@ -73,18 +76,18 @@ class ScrollBarHandle(QWidget):
             )
             # self.fadeAnimation.setEasingCurve(QEasingCurve.Type.InQuint)
             self.fadeAnimation.finished.connect(self.hide)
-            fixsize = 5
+            fixsize = 6
             self.anime_timer = QTimer(self)
             self.anime_timer.setSingleShot(True)
             self.anime_timer.timeout.connect(self.start_fade_animation)
         else:
             fixsize = 3
-         
+
         if orient == Qt.Vertical:
             self.setFixedWidth(fixsize)
         else:
             self.setFixedHeight(fixsize)
-        
+
         self.fadeout = fadeout
 
     def start_fade_animation(self):
@@ -112,15 +115,19 @@ class ScrollBarHandle(QWidget):
             self.effect.setOpacity(1.)
 
     def paintEvent(self, e):
+        from ui.misc import get_theme_color
+
         painter = QPainter(self)
         painter.setRenderHints(QPainter.Antialiasing)
         painter.setPen(Qt.NoPen)
 
         r = self.width() / 2 if self.orient == Qt.Vertical else self.height() / 2
         if self.hover_style:
-            c = QColor(82, 90, 104, 230) if isDarkTheme() else QColor(0, 0, 0, 50)
+            c = get_theme_color(key="@scrollBarHoverColor")
+            c.setAlpha(70)
         else:
-            c = QColor(0, 0, 0, 90)
+            c = get_theme_color(key="@scrollBarColor")
+            c.setAlpha(80)
         painter.setBrush(c)
         painter.drawRoundedRect(self.rect(), r, r)
 
@@ -363,11 +370,11 @@ class ScrollBar(QWidget):
 
     def _adjustPos(self, size):
         if self.orientation() == Qt.Vertical:
-            self.resize(12, size.height() - 2)
-            self.move(size.width() - 13, 1)
+            self.resize(8, size.height() - 2)
+            self.move(size.width() - 9, 1)
         else:
-            self.resize(size.width() - 2, 12)
-            self.move(1, size.height() - 13)
+            self.resize(size.width() - 2, 8)
+            self.move(1, size.height() - 9)
 
     def _adjustHandleSize(self):
         p = self.parent()

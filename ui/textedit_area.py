@@ -28,7 +28,6 @@ from qtpy.QtGui import (
 from qtpy.QtWidgets import (
     QApplication,
     QFrame,
-    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QScrollArea,
@@ -94,8 +93,10 @@ class SourceTextEdit(QTextEdit):
         self.setFrameStyle(QFrame.NoFrame)
         self.viewport().setAutoFillBackground(False)
 
-        # Remove internal text padding; hide scrollbars (wheel still works)
-        self.document().setDocumentMargin(0)
+        # Small internal padding so the edit cursor doesn't bump the edge
+        # and cause text to shift on focus (margin=0 → cursor flush with edge
+        # forces a re-layout on every click).
+        self.document().setDocumentMargin(2)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
@@ -206,19 +207,9 @@ class SourceTextEdit(QTextEdit):
                 self.push_undo_stack.emit(new_steps)
 
     def setHoverEffect(self, hover: bool):
-        try:
-            if hover:
-                se = QGraphicsDropShadowEffect()
-                se.setBlurRadius(12)
-                se.setOffset(0, 0)
-                from ui.misc import get_theme_color
-
-                se.setColor(get_theme_color())
-                self.setGraphicsEffect(se)
-            else:
-                self.setGraphicsEffect(None)
-        except RuntimeError:
-            pass
+        """Visual hover feedback handled via CSS :hover/:focus in stylesheet.css.
+        This method is kept as a no-op for signal emission in enter/leave/focus events."""
+        pass
 
     def enterEvent(self, event: QEvent) -> None:
         self.setHoverEffect(True)

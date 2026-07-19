@@ -471,3 +471,24 @@
 **验证：** 语法检查 ✅（`ui/textitem.py` + `ui/scenetext_manager.py`）
 
 **涉及文件：** `ui/mainwindow.py`、`ui/textitem.py`、`ui/scenetext_manager.py`
+
+---
+
+## 2026-07-19
+
+### 右侧文本框区 hover 跳变修复 + 编辑光标偏移修复 + documentMargin 恢复
+
+**需求/问题：**
+
+1. **hover 跳变**：鼠标悬停原文/译文框时，`QGraphicsDropShadowEffect`（blurRadius=12）改变渲染管道，导致内部文字轻微偏移跳动。尤其在当前紧凑布局下影响明显。
+2. **编辑光标偏移**：进入编辑模式时，由于 `documentMargin=0` 文字紧贴边框边缘，光标比字形高，Qt 会重新排版使光标完整显示，导致文本行向上/下偏移。
+
+**修复：**
+
+1. **hover 改用 CSS**:（`ui/textedit_area.py`）— 移除 `QGraphicsDropShadowEffect`，`setHoverEffect` 改为空方法。视觉反馈由 CSS `:hover` 伪类接管（边框变 accent 色）。
+2. **新增淡边框**（`config/stylesheet.css`）— `SourceTextEdit` / `TransTextEdit` 添加 `1px solid rgba(128,128,128,0.20)` 永久淡边框稳定内容区域；`:hover` / `:focus` 边框变 `@accentPrimary`。
+3. **恢复 documentMargin**（`ui/textedit_area.py:97`）— 从 `0` 改为 `2`，保留 2px 上下气口使光标完整显示，消除编辑点击时的文本偏移。
+
+**验证：** 语法检查 ✅
+
+**涉及文件：** `ui/textedit_area.py`、`config/stylesheet.css`

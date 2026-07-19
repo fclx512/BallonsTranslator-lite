@@ -54,7 +54,15 @@ SourceTextEdit {
     font-size: 17px;
     background-color: @emptyContentBackgroundColor;
     border-radius: 5px;
-    border-style: none;
+    border: 1px solid rgba(128,128,128,0.20);
+}
+
+SourceTextEdit:hover {
+    border: 1px solid @accentPrimary;
+}
+
+SourceTextEdit:focus {
+    border: 1px solid @accentPrimary;
 }
 
 SourceTextEdit QScrollBar:horizontal {
@@ -64,8 +72,16 @@ SourceTextEdit QScrollBar:horizontal {
 TransTextEdit {
     font-size: 17px;
     border-radius: 5px;
-    border-style: none;
+    border: 1px solid rgba(128,128,128,0.20);
     background-color: @transtexteditBackgroundColor;
+}
+
+TransTextEdit:hover {
+    border: 1px solid @accentPrimary;
+}
+
+TransTextEdit:focus {
+    border: 1px solid @accentPrimary;
 }
 
 QComboBox {
@@ -1166,39 +1182,38 @@ StateChecker#ConfigChecker::indicator:checked
 /*https://github.com/PyQt5/PyQt/blob/master/QScrollBar/StyleScrollBar.py*/
 /*纵向滚动条*/
 QScrollBar:vertical {
-    /* background: transparent; 背景透明 */
-    width: 10px; /*宽度*/
-    margin: 0px 0px 0px 0px; /**/
-    padding-top: 0px; /*距离上面12px*/
-    padding-bottom: 0px; /*距离底部12px*/
-    background: @scrollBarBackground
+    width: 8px; /*宽度*/
+    margin: 0px 0px 0px 0px;
+    padding-top: 0px;
+    padding-bottom: 0px;
+    background: transparent
 }
 /*横向滚动条*/
 QScrollBar:horizontal {
-    background: @scrollBarBackground;
-    height: 7px; /*高度*/
+    background: transparent;
+    height: 8px; /*高度*/
     margin: 0px 0px 0px 0px;
-    padding-left: 0px; /*距离左边12px*/
-    padding-right: 0px; /*距离右边12px*/
+    padding-left: 0px;
+    padding-right: 0px;
 }
 
 /*当鼠标放到纵向或者横向滚动条上面时*/
 QScrollBar:vertical:hover,QScrollBar:horizontal:hover {
-    background: @scrollBarColor; /*修改背景透明度 30*/
+    background: transparent;
 }
 
 /*纵向滚动条上面的滑块*/
 QScrollBar::handle:vertical {
     background: @scrollBarColor;
-    width: 10px;
-    border-radius: 5px;
+    width: 8px;
+    border-radius: 4px;
     border: none;
 }
 /*横向滚动条上面的滑块*/
 QScrollBar::handle:horizontal {
     background: @scrollBarColor;
-    height: 10px;
-    border-radius: 5px;
+    height: 8px;
+    border-radius: 4px;
     border: none;
 }
 
