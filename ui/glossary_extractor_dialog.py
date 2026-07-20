@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 
 from modules.context.glossary import GlossaryEntry
 from modules.glossary_extractor import (
+    TARGET_LANGUAGES,
     extract_by_frequency,
     extract_by_llm,
     save_glossary_json,
@@ -69,12 +70,14 @@ class _ExtractWorker(QThread):
         proj: "ProjImgTrans",
         mode: str,
         profile_name: str,
+        target_language: str = "简体中文",
         parent=None,
     ):
         super().__init__(parent)
         self._proj = proj
         self._mode = mode
         self._profile_name = profile_name
+        self._target_language = target_language
 
     def run(self):
         try:
@@ -102,6 +105,7 @@ class _ExtractWorker(QThread):
                     self._proj,
                     api_config=api_config,
                     status_cb=lambda msg: self.progress.emit(msg),
+                    target_language=self._target_language,
                 )
             self.finished.emit(entries)
         except Exception as exc:
@@ -130,11 +134,12 @@ class GlossaryExtractorDialog(QDialog):
         self,
         proj: "ProjImgTrans",
         current_profile_name: str = "",
+        existing_entries: tuple = (),
         parent=None,
     ):
         super().__init__(parent)
         self._proj = proj
-        self._entries: tuple = ()
+        self._entries: tuple = existing_entries or ()
         self._saved_path: str = ""
 
         self.setWindowTitle(self.tr("Glossary Extraction"))
@@ -144,7 +149,21 @@ class GlossaryExtractorDialog(QDialog):
         self._build_ui()
         self._populate_profiles(current_profile_name)
 
+        # Restore previous extraction results if available
+        if self._entries:
+            self._populate_table(self._entries)
+            self._save_btn.setEnabled(True)
+            self._status_label.setText(
+                self.tr("Previously extracted {} terms.").format(len(self._entries))
+            )
+
     # ── UI construction ──────────────────────────────────────────────────
+
+    def done(self, result: int):
+        """Persist extracted entries on parent before dialog closes."""
+        if self._entries and self.parent() is not None:
+            self.parent()._glossary_extractor_entries = self._entries
+        super().done(result)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -160,6 +179,23 @@ class GlossaryExtractorDialog(QDialog):
         profile_layout.addWidget(self._profile_combo)
         profile_layout.addStretch()
         layout.addWidget(profile_row)
+
+        # -- Target language row --
+        lang_row = QWidget()
+        lang_layout = QHBoxLayout(lang_row)
+        lang_layout.setContentsMargins(0, 0, 0, 0)
+        lang_layout.addWidget(QLabel(self.tr("Target Language")))
+        self._target_lang_combo = ConfigComboBox()
+        for lang in TARGET_LANGUAGES:
+            self._target_lang_combo.addItem(lang, lang)
+        # Default to the translator's current target language
+        current_target = pcfg.module.translate_target
+        idx = self._target_lang_combo.findData(current_target)
+        if idx >= 0:
+            self._target_lang_combo.setCurrentIndex(idx)
+        lang_layout.addWidget(self._target_lang_combo)
+        lang_layout.addStretch()
+        layout.addWidget(lang_row)
 
         # -- Extraction mode --
         mode_frame = QFrame()
@@ -262,6 +298,7 @@ class GlossaryExtractorDialog(QDialog):
 
         mode = "llm" if self._llm_radio.isChecked() else "frequency"
         profile_name = self._profile_combo.currentData() or ""
+        target_language = self._target_lang_combo.currentData() or "简体中文"
 
         if mode == "llm" and not profile_name:
             QMessageBox.warning(
@@ -273,28 +310,48 @@ class GlossaryExtractorDialog(QDialog):
             return
 
         # Check that there are enough pages with data
-        has_data = any(
-            blk.get_text().strip() and (blk.translation or "").strip()
-            for blk_list in self._proj.pages.values()
-            for blk in blk_list
-        )
-        if not has_data:
-            QMessageBox.information(
-                self,
-                self.tr("No Data"),
-                self.tr(
-                    "The project has no source/translation pairs to analyse.\n\n"
-                    "Please run the translation pipeline first, then extract "
-                    "glossary terms from the results."
-                ),
+        if mode == "llm":
+            has_data = any(
+                blk.get_text().strip()
+                for blk_list in self._proj.pages.values()
+                for blk in blk_list
             )
-            self._set_ui_busy(False)
-            return
+            if not has_data:
+                QMessageBox.information(
+                    self,
+                    self.tr("No Data"),
+                    self.tr(
+                        "The project has no source text to analyse.\n\n"
+                        "Please run text detection and OCR first."
+                    ),
+                )
+                self._set_ui_busy(False)
+                return
+        else:
+            has_data = any(
+                blk.get_text().strip() and (blk.translation or "").strip()
+                for blk_list in self._proj.pages.values()
+                for blk in blk_list
+            )
+            if not has_data:
+                QMessageBox.information(
+                    self,
+                    self.tr("No Data"),
+                    self.tr(
+                        "The project has no source/translation pairs to analyse.\n\n"
+                        "Frequency extraction requires translations to pair with "
+                        "source text.  Try LLM Extraction mode instead, or run "
+                        "the translation pipeline first."
+                    ),
+                )
+                self._set_ui_busy(False)
+                return
 
         self._worker = _ExtractWorker(
             proj=self._proj,
             mode=mode,
             profile_name=profile_name,
+            target_language=target_language,
             parent=self,
         )
         self._worker.progress.connect(self._on_worker_progress)
@@ -362,10 +419,7 @@ class GlossaryExtractorDialog(QDialog):
             return
 
         default_name = "extracted_glossary.json"
-        default_dir = os.path.join(
-            os.path.dirname(pcfg.lastdir) if pcfg.lastdir else "",
-            default_name,
-        )
+        default_dir = default_name
         path, _ = QFileDialog.getSaveFileName(
             self,
             self.tr("Save Glossary"),

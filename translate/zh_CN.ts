@@ -2327,11 +2327,16 @@ One Piece → 海贼王
 	        <message>
 	            <location filename="..\ui\glossary_extractor_dialog.py" />
 	            <source>LLM Profile</source>
-	            <translation>LLM 配置</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Extraction Mode</source>
+		            <translation>LLM 配置</translation>
+		        </message>
+		        <message>
+		            <location filename="..\ui\glossary_extractor_dialog.py" />
+		            <source>Target Language</source>
+		            <translation>目标语言</translation>
+		        </message>
+		        <message>
+		            <location filename="..\ui\glossary_extractor_dialog.py" />
+		            <source>Extraction Mode</source>
 	            <translation>提取模式</translation>
 	        </message>
 	        <message>
@@ -2396,8 +2401,17 @@ One Piece → 海贼王
 	        </message>
 	        <message>
 	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>The project has no source/translation pairs to analyse.\n\nPlease run the translation pipeline first, then extract glossary terms from the results.</source>
-	            <translation>项目中没有原文/译文对可供分析。\n\n请先运行翻译管线，然后从结果中提取术语。</translation>
+	            <source>The project has no source text to analyse.
+
+Please run text detection and OCR first.</source>
+	            <translation>项目中没有原文可供分析。
+
+请先运行文字检测和 OCR。</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Frequency extraction requires translations to pair with source text.  Try LLM Extraction mode instead, or run the translation pipeline first.</source>
+	            <translation>频率提取需要译文与原文配对。请改用 LLM 提取模式，或先运行翻译管线。</translation>
 	        </message>
 	        <message>
 	            <location filename="..\ui\glossary_extractor_dialog.py" />
@@ -2413,6 +2427,11 @@ One Piece → 海贼王
 	            <location filename="..\ui\glossary_extractor_dialog.py" />
 	            <source>No glossary terms found in this project.</source>
 	            <translation>该项目中未找到术语。</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Previously extracted {} terms.</source>
+	            <translation>上次已提取 {} 条术语。</translation>
 	        </message>
 	        <message>
 	            <location filename="..\ui\glossary_extractor_dialog.py" />
@@ -2441,8 +2460,10 @@ One Piece → 海贼王
 	        </message>
 	        <message>
 	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Failed to save glossary:\n{}</source>
-	            <translation>保存术语表失败：\n{}</translation>
+	            <source>Failed to save glossary:
+{}</source>
+	            <translation>保存术语表失败：
+{}</translation>
 	        </message>
 	        <message>
 	            <location filename="..\ui\glossary_extractor_dialog.py" />
@@ -2451,8 +2472,14 @@ One Piece → 海贼王
 	        </message>
 	        <message>
 	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Glossary saved to:\n{}\n\nSet this file as the active glossary now?</source>
-	            <translation>术语表已保存至：\n{}\n\n立即将此文件设为活动术语表？</translation>
+	            <source>Glossary saved to:
+{}
+
+Set this file as the active glossary now?</source>
+	            <translation>术语表已保存至：
+{}
+
+立即将此文件设为活动术语表？</translation>
 	        </message>
 	    </context>
 	    <context>
@@ -4066,6 +4093,31 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <location filename="..\ui\fontstyle_manager.py" line="788" />
             <source>Pick Stroke Color</source>
             <translation>选择描边颜色</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="495" />
+            <source>Preset</source>
+            <translation>预设</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="498" />
+            <source>Apply Preset</source>
+            <translation>应用预设</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="756" />
+            <source>(Select a preset)</source>
+            <translation>（选择预设）</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="759" />
+            <source>(unnamed)</source>
+            <translation>（未命名）</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="777" />
+            <source>Apply preset style</source>
+            <translation>应用预设样式</translation>
         </message>
     </context>
     <context>

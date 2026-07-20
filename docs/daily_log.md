@@ -755,3 +755,63 @@
 **涉及文件：**
 - 新增：`modules/glossary_extractor.py`、`ui/glossary_extractor_dialog.py`
 - 修改：`ui/mainwindow.py`、`ui/mainwindowbars.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+
+### 字体样式管理器修复 + 一键应用预设
+
+**问题/需求：**
+
+1. **"应用修改"不生效** — `_apply_all()` 中 `BatchFontformatCommand.redo()` 的 `_first_redo` 跳过机制导致实际块的 fontformat 从未被修改，仅更新了内存中的代表副本。
+2. **操作顺序错误** — 修改在创建命令之前执行，构造函数捕获的是新状态而非旧状态，undo 无法正确还原。
+3. **离线页面不更新** — 修改离线页块的数据后缺少画布重建机制。
+4. **一键应用预设** — 希望从已保存的字体样式预设中选取应用到当前风格的所有块。
+
+**改动：**
+
+1. **修复应用不生效**（`ui/fontstyle_manager.py`）：
+   - 拆分 `_apply_all()` 操作顺序为：① 创建命令（捕获旧状态）→ ② push 到撤销栈 → ③ 直接应用到所有块 → ④ `updateSceneTextitems()` 全局刷新
+   - 新增 `_apply_changes_to_blocks()` 统一处理当前页（`set_fontformat`）和离线页（`blk.fontformat = new_ffmt`）的修改
+
+2. **一键应用预设**（`ui/fontstyle_manager.py`）：
+   - Batch Edit 区新增 "Preset" 行：`QComboBox`（列出 `utils.config.text_styles`）+ "Apply Preset" 按钮
+   - 新增 `_load_presets()` 加载预设列表
+   - 新增 `_apply_preset()` 复用完整 apply 流程：创建命令 → push → 直接应用 → 全局刷新 → 同步控件值
+   - `show_entry()` 中调用 `_load_presets()` 保持下拉与最新预设同步
+   - 新增 `_make_change_dict_from_ffmt()` 以预设 `FontFormat` 直接构建 change list
+
+3. **i18n**（`translate/zh_CN.ts`、`translate/zh_CN.qm`）：
+   - `StyleDetail` 上下文新增 6 条翻译（Preset / Apply Preset / (Select a preset) / (unnamed) / Apply preset style）
+   - 重编译为 1070 条
+
+**验证：** 语法检查 ✅、i18n 检查 ✅（无缺失条目）、qm 编译 1070 条 ✅、启动导入测试 5/5 ✅
+
+**涉及文件：** `ui/fontstyle_manager.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+### 术语表提取：导出崩溃 + 结果持久化 + i18n `\n` 陷阱修复
+
+**问题/需求：**
+
+1. **导出崩溃**：`_on_save()` 引用不存在的 `pcfg.lastdir`（`ProgramConfig` 无此属性，且该文件未 import `pcfg`），AttributeError。
+2. **结果不持久**：对话框关闭后提取条目丢失，再次打开需重新提取。
+3. **i18n 中文不显示**："Note" 列头和保存确认对话框虽在 `.ts` 有对应条目，运行时仍显示英文。
+
+**根因与修复：**
+
+1. **导出崩溃**（`ui/glossary_extractor_dialog.py:366`）— `pcfg.lastdir` → `""`（直接用文件名作默认路径）。
+
+2. **结果持久化**（`ui/glossary_extractor_dialog.py` / `ui/mainwindow.py`）：
+   - `__init__` 新增 `existing_entries` 参数，传入即有历史结果时恢复显示
+   - 新增 `done()` 重写，对话框关闭前将 `self._entries` 存到 `self.parent()._glossary_extractor_entries`
+   - `mainwindow.py` 打开对话框前用 `getattr(self, "_glossary_extractor_entries", ())` 取回
+   - 效果：条目存活于 MainWindow 实例，随主窗口生命周期
+
+3. **i18n `\n` 陷阱**（`translate/zh_CN.ts`）：
+   - **根因**：`.ts` 是 XML，其中 `\n` 是**字面反斜杠+字母 n**，不是换行符。但 `self.tr("...\n...")` 的 `\n` 是 Python 转义得到真正的换行符（0x0A）。两边字符串不同 → Qt 的 ELF hash 不匹配 → 翻译查找失败 → 回退显示英文。
+   - **修复**：将 `GlossaryExtractorDialog` 上下文中 3 组 `<source>`/`<translation>` 的 `\n` 替换为真正的换行符。
+   - 同步新增 `Previously extracted {} terms.` 翻译条目。
+
+**验证：** 语法检查 ✅、i18n 检查 ✅（无缺失条目）、qm 编译 1065 条 ✅、Qt QTranslator 运行时查找全部返回正确中文 ✅
+
+**涉及文件：** `ui/glossary_extractor_dialog.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`

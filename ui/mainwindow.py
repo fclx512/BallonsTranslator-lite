@@ -3204,9 +3204,11 @@ class MainWindow(mainwindow_cls):
 
         from ui.glossary_extractor_dialog import GlossaryExtractorDialog
 
+        existing = getattr(self, "_glossary_extractor_entries", ())
         dlg = GlossaryExtractorDialog(
             proj=self.imgtrans_proj,
             current_profile_name=current_profile,
+            existing_entries=existing,
             parent=self,
         )
         if dlg.exec_() == QDialog.DialogCode.Accepted:

@@ -492,6 +492,23 @@ class StyleDetail(QScrollArea):
             _labeled_control(self.tr("Alignment"), self._align_combo)
         )
 
+        # ── Preset apply ─────────────────────────────────────────
+        self._preset_combo = QComboBox()
+        self._preset_combo.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        self._preset_btn = QPushButton(self.tr("Apply Preset"))
+        self._preset_btn.clicked.connect(self._apply_preset)
+        preset_row = QWidget()
+        preset_lay = QHBoxLayout(preset_row)
+        preset_lay.setContentsMargins(0, 1, 0, 1)
+        preset_lay.setSpacing(6)
+        preset_lay.addWidget(self._preset_combo, 1)
+        preset_lay.addWidget(self._preset_btn)
+        self._layout.addLayout(
+            _labeled_control(self.tr("Preset"), preset_row)
+        )
+
         # ── Single Apply All button ──────────────────────────────
         self._apply_all_btn = QPushButton(self.tr("Apply Changes"))
         self._apply_all_btn.setObjectName("StyleApplyAllBtn")
@@ -525,6 +542,9 @@ class StyleDetail(QScrollArea):
         """Populate the detail panel for *entry*."""
         self._entry = entry
         ffmt = entry.fontformat
+
+        # Reload preset list so it reflects the latest saved presets
+        self._load_presets()
 
         # Header preview
         font = QFont(ffmt.font_family)
@@ -717,6 +737,70 @@ class StyleDetail(QScrollArea):
             )
         return changes
 
+    def _make_change_dict_from_ffmt(self, ffmt: FontFormat) -> List[Dict]:
+        """Build change list using *ffmt* directly as the new format (preset apply)."""
+        if self._entry is None or self._proj is None:
+            return []
+        old_ffmt = self._entry.fontformat
+        changes = []
+        for pname, bidx in self._entry.blocks:
+            changes.append(
+                {
+                    "pagename": pname,
+                    "block_idx": bidx,
+                    "old_ffmt": old_ffmt.deepcopy(),
+                    "new_ffmt": ffmt.deepcopy(),
+                }
+            )
+        return changes
+
+    def _load_presets(self):
+        """Reload the preset combo from utils.config.text_styles."""
+        from utils.config import text_styles
+
+        self._preset_combo.blockSignals(True)
+        self._preset_combo.clear()
+        self._preset_combo.addItem(self.tr("(Select a preset)"))
+        for ts in text_styles:
+            name = ts._style_name or self.tr("(unnamed)")
+            self._preset_combo.addItem(name, userData=ts)
+        self._preset_combo.blockSignals(False)
+
+    def _apply_preset(self):
+        """Apply the selected preset to all blocks in the current entry."""
+        if self._entry is None:
+            return
+        idx = self._preset_combo.currentIndex()
+        if idx <= 0:  # 0 is the placeholder "(Select a preset)"
+            return
+        preset_ffmt = self._preset_combo.itemData(idx, Qt.ItemDataRole.UserRole)
+        if preset_ffmt is None:
+            return
+
+        changes = self._make_change_dict_from_ffmt(preset_ffmt)
+
+        # Same flow as _apply_all: create cmd → push → apply → refresh
+        from .fontstyle_manager_commands import BatchFontformatCommand
+
+        cmd = BatchFontformatCommand(
+            self._proj, self._scene_manager, changes,
+            self.tr("Apply preset style"),
+        )
+        try:
+            self._scene_manager.canvas.push_undo_command(cmd)
+        except AttributeError:
+            pass
+
+        self._apply_changes_to_blocks(changes)
+
+        if self._scene_manager is not None:
+            self._scene_manager.updateSceneTextitems()
+
+        # Update local entry and sync manual controls to preset values
+        self._entry.fontformat = preset_ffmt.deepcopy()
+        self._sync_controls(preset_ffmt)
+        self.show_entry(self._entry)
+
     def _push_command(self, changes: List[Dict], description: str = ""):
         """Push a BatchFontformatCommand to the canvas undo stack."""
         if not changes:
@@ -730,6 +814,24 @@ class StyleDetail(QScrollArea):
             self._scene_manager.canvas.push_undo_command(cmd)
         except AttributeError:
             pass
+
+    def _apply_changes_to_blocks(self, changes: List[Dict]):
+        """Apply new_ffmt to every block in *changes* directly (no undo)."""
+        from .fontstyle_manager_commands import _find_blk_item
+
+        current_pname = self._proj.current_img if self._proj else None
+        for ch in changes:
+            pname = ch["pagename"]
+            bidx = ch["block_idx"]
+            new_ffmt = ch["new_ffmt"]
+
+            if pname == current_pname:
+                item = _find_blk_item(self._scene_manager, bidx)
+                if item is not None:
+                    item.set_fontformat(new_ffmt, set_char_format=True)
+            else:
+                blk = self._proj.pages[pname][bidx]
+                blk.fontformat = new_ffmt
 
     def _apply_all(self):
         """Apply all batch controls at once."""
@@ -754,8 +856,33 @@ class StyleDetail(QScrollArea):
         }
 
         changes = self._make_change_dict(override)
-        self._push_command(changes, self.tr("Batch edit font style"))
-        # Update local entry
+
+        # 1. Create the command FIRST — its constructor captures the current
+        #    live-item state (HTML / rect / fontformat) for undo BEFORE we
+        #    modify anything.
+        from .fontstyle_manager_commands import BatchFontformatCommand
+
+        cmd = BatchFontformatCommand(
+            self._proj, self._scene_manager, changes,
+            self.tr("Batch edit font style"),
+        )
+
+        # 2. Push to undo stack → Qt calls cmd.redo() which skips via
+        #    _first_redo because we haven't applied anything yet.
+        try:
+            self._scene_manager.canvas.push_undo_command(cmd)
+        except AttributeError:
+            pass
+
+        # 3. Now apply changes directly to every block.
+        self._apply_changes_to_blocks(changes)
+
+        # 4. Rebuild the current page's canvas items from the project data
+        #    so the visual is fully in sync with the updated blocks.
+        if self._scene_manager is not None:
+            self._scene_manager.updateSceneTextitems()
+
+        # 5. Update local entry and refresh UI
         ffmt = self._entry.fontformat
         for k, v in override.items():
             setattr(ffmt, k, v)

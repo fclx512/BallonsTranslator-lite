@@ -39,6 +39,26 @@ _LLM_TEMPERATURE = 0.1
 
 _LLM_TIMEOUT_SEC = 60
 
+# Target language options for the glossary extractor dialog.
+# Displayed in native form; not translatable UI strings.
+TARGET_LANGUAGES = [
+    "简体中文",
+    "繁體中文",
+    "English",
+    "日本語",
+    "한국어",
+    "Tiếng Việt",
+    "Français",
+    "Deutsch",
+    "Español",
+    "Português",
+    "Brazilian Portuguese",
+    "русский язык",
+    "Arabic",
+    "Hindi",
+    "Thai",
+]
+
 # ── Frequency-based extraction ─────────────────────────────────────────────
 
 
@@ -103,17 +123,26 @@ def extract_by_llm(
     proj: "ProjImgTrans",
     api_config: dict,
     status_cb: Optional[Callable[[str], None]] = None,
+    target_language: str = "简体中文",
 ) -> Tuple[GlossaryEntry, ...]:
     """Extract glossary entries via an LLM call.
 
-    Collects all unique source/translation pairs from the project, then
-    sends them to the LLM with a prompt that asks it to identify:
+    Two modes, auto-selected:
 
-    * Character names, place names, organisation names
-    * Terms where translation is non-literal or context-dependent
-    * Any term whose consistent translation across the project matters
+    * **With translations** — collects all unique source/translation
+      pairs and sends them to the LLM for analysis.  The LLM identifies
+      important terms based on how they were translated.
 
-    The LLM is instructed to return a compact JSON array of
+    * **Without translations** (source-only) — falls back when the
+      project has not been translated yet.  Collects unique source texts
+      and asks the LLM to identify important terms **and** suggest
+      appropriate translations based on its knowledge.
+
+    *target_language* is the display name of the target language
+    (e.g. ``"简体中文"``, ``"English"``), injected into the LLM prompt
+    so the model knows which language to translate glossary entries into.
+
+    The LLM always returns a compact JSON array of
     ``{"src": …, "dst": …, "info": …}`` objects.
 
     Parameters
@@ -125,23 +154,43 @@ def extract_by_llm(
         optionally ``proxy``.
     status_cb:
         Optional callback for progress/status messages.
+    target_language:
+        Display name of the target language (default ``"简体中文"``).
 
     Returns
     -------
     Tuple[GlossaryEntry, …]
     """
+    # Try pair mode first (requires translations)
     if status_cb:
         status_cb("Collecting source/translation pairs...")
 
     pairs = _collect_src_tr_pairs(proj)
-    if not pairs:
-        logger.info("extract_by_llm: no source/translation pairs found")
-        return ()
+    if pairs:
+        has_translations = True
+        input_data = pairs
+        input_label = "unique terms"
+    else:
+        # Fall back to source-only mode
+        if status_cb:
+            status_cb("No translations found, collecting source texts only...")
+        texts = _collect_src_texts(proj)
+        if not texts:
+            logger.info("extract_by_llm: no source texts found either")
+            return ()
+        has_translations = False
+        input_data = texts
+        input_label = "unique source texts"
 
-    prompt = _build_llm_prompt(pairs)
+    prompt = _build_llm_prompt(
+        input_data,
+        has_translations=has_translations,
+        target_language=target_language,
+    )
 
     if status_cb:
-        status_cb(f"Sending {len(pairs)} unique terms to LLM...")
+        count = len(pairs) if has_translations else len(input_data)  # type: ignore[arg-type]
+        status_cb(f"Sending {count} {input_label} to LLM...")
 
     raw = _raw_llm_call(
         api_config=api_config,
@@ -214,65 +263,145 @@ def _collect_src_tr_pairs(proj: "ProjImgTrans") -> Dict[str, List[str]]:
     return result
 
 
-def _build_llm_prompt(pairs: Dict[str, List[str]]) -> str:
+def _collect_src_texts(proj: "ProjImgTrans") -> List[str]:
+    """Collect unique, non-trivial source texts from the project.
+
+    Unlike ``_collect_src_tr_pairs``, this does **not** require a
+    translation — it is used when the project has not been translated yet
+    (glossary extraction before translation).
+
+    Returns a deduplicated list of source strings sorted alphabetically.
+    """
+    seen: set[str] = set()
+    for blk_list in proj.pages.values():
+        for blk in blk_list:
+            src = blk.get_text().strip()
+            if not src or len(src) < _MIN_SRC_LEN or len(src) > _MAX_SRC_LEN:
+                continue
+            seen.add(src)
+
+    result = sorted(seen)
+    logger.debug("_collect_src_texts: %d unique source texts", len(result))
+    return result
+
+
+def _build_llm_prompt(
+    pairs_or_texts: "Dict[str, List[str]] | List[str]",
+    has_translations: bool = True,
+    target_language: str = "简体中文",
+) -> str:
     """Build the system prompt for LLM-based glossary extraction.
 
-    The prompt instructs the LLM to analyse the provided source/translation
-    pairs and extract the subset that represents important terminology —
-    character names, place names, organisations, specialised terms, and
-    any word whose translation is non-obvious or varies between literal
-    and contextual rendering.
+    Two modes:
 
-    Output format is a JSON array of ``{"src": …, "dst": …, "info": …}``
-    objects.  The ``info`` field should contain a short category or note
-    (e.g. ``"character"``, ``"location"``, ``"term"``).
+    * ``has_translations=True`` (default) — source/translation pairs are
+      provided as ``{src: [translations]}``.  The prompt asks the LLM to
+      analyse existing translations and extract important glossary terms.
+
+    * ``has_translations=False`` — only a list of source texts is
+      provided.  The prompt asks the LLM to identify important terms and
+      suggest appropriate translations based on its knowledge.
+
+    *target_language* is the display name of the target language
+    (e.g. ``"简体中文"``, ``"English"``).  It is injected into the prompt
+    so the LLM knows which language to translate glossary entries into.
+
+    Output format is always a JSON array of
+    ``{"src": …, "dst": …, "info": …}`` objects.
     """
-    # Serialise pairs in compact form for token efficiency
-    pair_lines = []
-    for src, translations in pairs.items():
-        if len(translations) == 1:
-            pair_lines.append(f"{src} → {translations[0]}")
-        else:
-            alternatives = " | ".join(translations)
-            pair_lines.append(f"{src} → {alternatives}")
 
-    # Chunk to avoid overly long prompts (rough 8k-token safety)
     MAX_INPUT_LINES = 3000
-    if len(pair_lines) > MAX_INPUT_LINES:
-        pair_lines = pair_lines[:MAX_INPUT_LINES]
 
-    pairs_text = "\n".join(pair_lines)
+    if has_translations:
+        # ── Pair mode: source → translation ────────────────────────────
+        pairs: "Dict[str, List[str]]" = pairs_or_texts  # type: ignore
+        pair_lines = []
+        for src, translations in pairs.items():
+            if len(translations) == 1:
+                pair_lines.append(f"{src} → {translations[0]}")
+            else:
+                alternatives = " | ".join(translations)
+                pair_lines.append(f"{src} → {alternatives}")
+
+        if len(pair_lines) > MAX_INPUT_LINES:
+            pair_lines = pair_lines[:MAX_INPUT_LINES]
+
+        input_text = "\n".join(pair_lines)
+
+        return (
+            "You are a glossary extraction assistant specialised in manga and "
+            "comic-book translation.\n\n"
+            "Below is a list of source-text → translation pairs from a manga "
+            "translation project.  Each line shows a source phrase and how it "
+            "was translated (if multiple translations exist they are separated "
+            "by `|`).\n\n"
+            "Your task is to identify the IMPORTANT terms that should be added "
+            "to a translation glossary for consistent use across the project.  "
+            f"The target language is **{target_language}**.\n"
+            "Focus on:\n"
+            "1. Character names (protagonists, antagonists, supporting cast)\n"
+            "2. Place names and location names\n"
+            "3. Organisation, faction, and race names\n"
+            "4. Special techniques, items, or magical terms\n"
+            "5. Any term whose translation is non-literal or where the "
+            "translation differs notably from the source\n"
+            "6. Any word that appears frequently and whose consistent "
+            "translation matters for readability\n\n"
+            "RULES:\n"
+            "- Only include terms that genuinely benefit from glossary "
+            "consistency.  Skip ordinary vocabulary (e.g. \"hello\", \"thank you\").\n"
+            "- If a source has multiple translations, pick the MOST COMMON or "
+            "most appropriate one as the glossary translation.\n"
+            "- Return ONLY valid JSON — no markdown, no explanation.\n"
+            "- Output format:\n"
+            '  [{"src": "original", "dst": "translation", "info": "category"}, ...]\n'
+            "- If nothing useful is found, return an empty array [].\n\n"
+            "Source→Translation pairs:\n"
+            "---\n"
+            f"{input_text}\n"
+            "---\n\n"
+            "JSON output:"
+        )
+
+    # ── Source-only mode (no translations available yet) ───────────────
+    texts: "List[str]" = pairs_or_texts  # type: ignore
+
+    if len(texts) > MAX_INPUT_LINES:
+        texts = texts[:MAX_INPUT_LINES]
+
+    input_text = "\n".join(f"{i+1}. {t}" for i, t in enumerate(texts))
 
     return (
         "You are a glossary extraction assistant specialised in manga and "
         "comic-book translation.\n\n"
-        "Below is a list of source-text → translation pairs from a manga "
-        "translation project.  Each line shows a source phrase and how it "
-        "was translated (if multiple translations exist they are separated "
-        "by `|`).\n\n"
+        "Below is a list of source texts extracted from a manga/comic "
+        "translation project.  The project has not been translated yet.\n\n"
         "Your task is to identify the IMPORTANT terms that should be added "
         "to a translation glossary for consistent use across the project.  "
+        f"The target language is **{target_language}**.\n"
         "Focus on:\n"
         "1. Character names (protagonists, antagonists, supporting cast)\n"
         "2. Place names and location names\n"
         "3. Organisation, faction, and race names\n"
         "4. Special techniques, items, or magical terms\n"
-        "5. Any term whose translation is non-literal or where the "
-        "translation differs notably from the source\n"
-        "6. Any word that appears frequently and whose consistent "
+        "5. Any proper noun or specialised term whose consistent "
         "translation matters for readability\n\n"
+        "For each identified term, suggest an appropriate translation "
+        f"in **{target_language}** based on your knowledge.  If you are "
+        "uncertain about the best translation, still include the term "
+        "— the user can review and adjust it later.\n\n"
         "RULES:\n"
         "- Only include terms that genuinely benefit from glossary "
         "consistency.  Skip ordinary vocabulary (e.g. \"hello\", \"thank you\").\n"
-        "- If a source has multiple translations, pick the MOST COMMON or "
-        "most appropriate one as the glossary translation.\n"
         "- Return ONLY valid JSON — no markdown, no explanation.\n"
         "- Output format:\n"
-        '  [{"src": "original", "dst": "translation", "info": "category"}, ...]\n'
+        '  [{"src": "original", "dst": "suggested_translation_or_empty", '
+        '"info": "category"}, ...]\n'
+        "- The \"dst\" field must be non-empty — provide your best guess.\n"
         "- If nothing useful is found, return an empty array [].\n\n"
-        "Source→Translation pairs:\n"
+        "Source texts:\n"
         "---\n"
-        f"{pairs_text}\n"
+        f"{input_text}\n"
         "---\n\n"
         "JSON output:"
     )
