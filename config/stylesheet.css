@@ -259,7 +259,7 @@ ConfigContent ConfigComboBox,
 ParamComboBox,
 ConfigContent ParamComboBox {
     background: @inputBackgroundColor;
-    border: 1px solid @accentPrimary80;
+    border: 1px solid @borderColor;
     border-radius: 4px;
     padding-left: 8px;
 }

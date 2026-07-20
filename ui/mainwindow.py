@@ -1335,6 +1335,9 @@ class MainWindow(mainwindow_cls):
         self.titleBar.normalize_breaks_triggered.connect(
             self.on_open_normalize_breaks_dialog
         )
+        self.titleBar.glossary_extract_triggered.connect(
+            self.on_open_glossary_extractor
+        )
 
         self._install_shortcuts()
 
@@ -3191,6 +3194,25 @@ class MainWindow(mainwindow_cls):
         if not osp.exists(tool_path):
             return
         subprocess.Popen([sys.executable, tool_path])
+
+    def on_open_glossary_extractor(self):
+        translator = self.module_manager.translator
+        current_profile = ""
+        if hasattr(translator, "_active_profile"):
+            profile = translator._active_profile
+            current_profile = profile.get("name", "")
+
+        from ui.glossary_extractor_dialog import GlossaryExtractorDialog
+
+        dlg = GlossaryExtractorDialog(
+            proj=self.imgtrans_proj,
+            current_profile_name=current_profile,
+            parent=self,
+        )
+        if dlg.exec_() == QDialog.DialogCode.Accepted:
+            saved_path = dlg.get_saved_path()
+            if saved_path:
+                pcfg.module.llm_glossary_path = saved_path
 
     def on_run_imgtrans(self, page_filter=None):
         self.backup_blkstyles.clear()

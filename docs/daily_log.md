@@ -710,3 +710,48 @@
 - 新增：`utils/debug_log.py`
 - 删除：`ui/context_log_dialog.py`
 - 修改：`ui/glossary_dialog.py`、`ui/mainwindow.py`、`modules/translators/context_batch.py`、`utils/config.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+## 2026-07-20
+
+### 术语表提取工具 — 频率启发 + LLM 语义提取
+
+**需求：** 从已有翻译项目中自动提取术语表，支持两种模式：快速频率统计和 LLM 语义分析。参考 AiNiee 的术语表提取方式设计。
+
+**研究结论：** AiNiee 使用两阶段 LLM 管线（提取 → 去重合并）识别角色名/专有名词/不翻译项，结合结构化 prompt + JSON 输出。本项目已有 glossary 系统（`modules/context/glossary.py`）和 `ContextBatchTranslator._generate_custom_glossary()` 作为 LLM glossary 参考实现，但缺少从已有翻译项目自动提取的功能。
+
+**改动：**
+
+1. **核心提取逻辑**（`modules/glossary_extractor.py` — 新建）：
+   - `extract_by_frequency(proj, min_count=2)` — 遍历项目统计词频，从高频重复且有对应译文的 source 中提取术语
+   - `extract_by_llm(proj, api_config, status_cb)` — 收集项目原文/译文对，发送给 LLM 识别重要命名实体和术语
+   - `save_glossary_json(entries, path)` — 保存为标准 JSON glossary 格式
+   - LLM prompt 聚焦角色/地点/组织/特殊术语/非直译术语，输出 `[{"src", "dst", "info"}]` 格式
+
+2. **提取对话框 UI**（`ui/glossary_extractor_dialog.py` — 新建）：
+   - `GlossaryExtractorDialog(QDialog)` — LLM 配置选择 + 提取模式切换（频率/LLM）
+   - 后台线程 `_ExtractWorker` 避免 UI 卡顿
+   - 可编辑的预览表格（QTableWidget），支持提取结果编辑
+   - 保存后可选立即设置为活动术语表
+   - 覆盖缺少数据/无配置等边界情况
+
+3. **集成：Tools 菜单**（`ui/mainwindowbars.py` + `ui/mainwindow.py`）：
+   - 在顶部 TitleBar 的「Tools」菜单中添加「Extract Glossary…」菜单项
+   - 点击打开 `GlossaryExtractorDialog` 作为独立窗口（不依赖 Run 对话框）
+   - 自动读取当前翻译器激活的 profile 作为默认 LLM 配置
+   - 提取保存后自动设置 `pcfg.module.llm_glossary_path`
+   - 移除之前 Run 对话框中的「Extract...」按钮，解耦运行管线与提取流程
+
+4. **i18n**（`translate/zh_CN.ts`、`translate/zh_CN.qm`）：
+   - 新增 `GlossaryExtractorDialog` 上下文（27 条翻译）
+   - 新增 `_ExtractWorker` 上下文（4 条翻译）
+   - `TitleBar` 新增「Extract Glossary…」翻译
+   - `MainWindow` 移除已删除的「Extract...」翻译
+   - 重编译为 1064 条
+
+**验证：** 语法检查 ✅、i18n 检查 ✅（无缺失条目）、qm 编译 1064 条 ✅、启动导入测试 5/5 ✅、glossary_extractor 模块独立导入验证 ✅、save/load 双向测试 ✅
+
+**涉及文件：**
+- 新增：`modules/glossary_extractor.py`、`ui/glossary_extractor_dialog.py`
+- 修改：`ui/mainwindow.py`、`ui/mainwindowbars.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`

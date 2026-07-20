@@ -473,6 +473,10 @@ class TitleBar(Widget):
         noTextToolAction = QAction(self.tr("Pair No-text Images…"), self)
         self.launch_notext_tool = noTextToolAction.triggered
 
+        # 术语表提取
+        glossaryExtractAction = QAction(self.tr("Extract Glossary…"), self)
+        self.glossary_extract_triggered = glossaryExtractAction.triggered
+
         toolsMenu = QMenu(self.toolsToolBtn)
         # 页面布局工具
         toolsMenu.addAction(mergeToolAction)
@@ -486,6 +490,9 @@ class TitleBar(Widget):
         # 导出 / 批量处理
         toolsMenu.addAction(psdExportAction)
         toolsMenu.addAction(normalizeBreaksAction)
+        toolsMenu.addSeparator()
+        # 术语表
+        toolsMenu.addAction(glossaryExtractAction)
         toolsMenu.addSeparator()
         # 外部工具
         toolsMenu.addAction(noTextToolAction)

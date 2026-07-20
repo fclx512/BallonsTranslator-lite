@@ -2316,9 +2316,170 @@ One Piece → 海贼王
             <translation>重启以应用更改？
 </translation>
         </message>
-    </context>
-    <context>
-        <name>MergeDialog</name>
+	    </context>
+	    <context>
+	        <name>GlossaryExtractorDialog</name>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Glossary Extraction</source>
+	            <translation>术语表提取</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>LLM Profile</source>
+	            <translation>LLM 配置</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Extraction Mode</source>
+	            <translation>提取模式</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Frequency (fast, no LLM) — count repeated terms</source>
+	            <translation>频率提取（快速，无 LLM）— 统计重复出现的术语</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>LLM Extraction (slower, semantic) — detect named entities and important terms</source>
+	            <translation>LLM 语义提取（较慢）— 检测命名实体和重要术语</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Extract Glossary</source>
+	            <translation>提取术语表</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Extracted Terms</source>
+	            <translation>提取结果</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Source</source>
+	            <translation>原文</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Translation</source>
+	            <translation>译文</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Note</source>
+	            <translation>备注</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Save as...</source>
+	            <translation>保存为...</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Cancel</source>
+	            <translation>取消</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>No Profile</source>
+	            <translation>未选择配置</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Please select an LLM profile for extraction.</source>
+	            <translation>请选择一个 LLM 配置用于提取。</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>No Data</source>
+	            <translation>无数据</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>The project has no source/translation pairs to analyse.\n\nPlease run the translation pipeline first, then extract glossary terms from the results.</source>
+	            <translation>项目中没有原文/译文对可供分析。\n\n请先运行翻译管线，然后从结果中提取术语。</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Extraction failed — see log.</source>
+	            <translation>提取失败 — 查看日志了解详情。</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Extracted {} terms.</source>
+	            <translation>已提取 {} 条术语。</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>No glossary terms found in this project.</source>
+	            <translation>该项目中未找到术语。</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>No Entries</source>
+	            <translation>无条目</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>There are no entries to save.</source>
+	            <translation>没有可保存的条目。</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Save Glossary</source>
+	            <translation>保存术语表</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Glossary files (*.json);;All files (*)</source>
+	            <translation>术语表文件 (*.json);;所有文件 (*)</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Save Error</source>
+	            <translation>保存出错</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Failed to save glossary:\n{}</source>
+	            <translation>保存术语表失败：\n{}</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Use Glossary</source>
+	            <translation>使用术语表</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Glossary saved to:\n{}\n\nSet this file as the active glossary now?</source>
+	            <translation>术语表已保存至：\n{}\n\n立即将此文件设为活动术语表？</translation>
+	        </message>
+	    </context>
+	    <context>
+	        <name>_ExtractWorker</name>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Analysing source text frequency...</source>
+	            <translation>正在分析原文词频...</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Error: profile '{}' not found.</source>
+	            <translation>错误：找不到配置「{}」。</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Sending to LLM for analysis...</source>
+	            <translation>正在发送到 LLM 分析...</translation>
+	        </message>
+	        <message>
+	            <location filename="..\ui\glossary_extractor_dialog.py" />
+	            <source>Error: {}</source>
+	            <translation>错误：{}</translation>
+	        </message>
+	    </context>
+	    <context>
+	        <name>MergeDialog</name>
         <message>
             <location filename="..\ui\merge_dialog.py" line="28" />
             <source>Region Merge Tool Settings</source>
@@ -4172,6 +4333,11 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <location filename="..\ui\mainwindowbars.py" line="387" />
             <source>Pair No-text Images…</source>
             <translation>配对无字图…</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindowbars.py" />
+            <source>Extract Glossary…</source>
+            <translation>提取术语表…</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" />
