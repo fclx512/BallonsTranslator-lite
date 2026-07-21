@@ -789,6 +789,29 @@
 
 ---
 
+## 2026-07-21
+
+### 上游 PR #1238 调研：独立文字缩放与倾斜变换
+
+**需求：** 调研上游 https://github.com/dmMaze/BallonsTranslator/pull/1238 的内容，评估可学习点，形成文档后暂搁置。
+
+**调研结论：**
+
+该 PR 为 Advanced Text Format 添加了四个独立变换维度（Horizontal Scale 10%–400%、Vertical Scale 10%–400%、Box Slant -85°–85°、Glyph Slant -45°–45°），15 文件 ~5800 行净改动。
+
+**核心亮点：**
+- `text_glyph_renderer.py`（新）— 只读字形级倾斜渲染引擎，路径优先 + 栅格回退
+- `text_transform.py`（新）— 旋转补偿矩阵解决 Qt 旋转先于 setTransform 的问题
+- 多边形 shape control 使 Box Slant 后手柄仍然贴合
+- 预览系统 + 批量更新合并防抖
+- 项目格式版本化迁移
+
+**决定：** 暂搁置，功能太大不急于实装。详细调研文档见 `docs/上游PR-1238-文字变换调研.md`。
+
+**涉及文件：** `docs/上游PR-1238-文字变换调研.md`（新）、`docs/README.md`
+
+---
+
 ### 术语表提取：导出崩溃 + 结果持久化 + i18n `\n` 陷阱修复
 
 **问题/需求：**
@@ -815,3 +838,37 @@
 **验证：** 语法检查 ✅、i18n 检查 ✅（无缺失条目）、qm 编译 1065 条 ✅、Qt QTranslator 运行时查找全部返回正确中文 ✅
 
 **涉及文件：** `ui/glossary_extractor_dialog.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+### 全局搜索 UI 布局调整 + 替换后界面卡死修复
+
+**需求/问题：**
+
+1. **UI 布局**：全局搜索替换输入框比查找输入框窄太多，右侧搜索区域下拉栏占空间过多，替换框宽度应与查找框一致。
+2. **替换后界面卡死**：多次替换操作后界面持续显示"内容已更新，请按回车刷新搜索"，按回车无响应，搜索和替换功能失效。
+
+**根因分析：**
+
+**UI 布局问题：** `hlayout_bar1`（查找行）将 `search_editor` 放在独立的 `hlayout_bar1_0` 子布局中（可自由伸缩），而 `hlayout_bar2`（替换行）让 `replace_editor` 与 `range_label` + `range_combobox`（固定 300px）平铺在同一层，导致替换框被严重挤压。
+
+**替换后卡死根因：**
+
+1. **焦点问题** — `replace_editor`（替换输入框）也是 `SearchEditor`，按下 Enter 会发射 `enter_pressed` 信号，但该信号**没有被连接**。替换操作完成后，用户焦点通常落在替换框（刚输完替换文本），此时按 Enter → 信号发射但无人监听 → 用户感觉"没反应"。
+2. **线程重入** — `on_replace()`（简单替换）启动后台线程后，若线程尚未结束用户再次点击"Replace All"，`self.start()` 被 Qt 忽略（线程已在运行），新设置的 `job` lambda 在旧线程结束时被 `self.job = None` 覆盖，第二次替换静默丢失。
+
+**改动：**
+
+1. **UI 布局**（`ui/global_search_widget.py`）：
+   - `ConfigComboBox` 改为 `fix_size=False` + `setMaximumWidth(120)`，不再固定 300px
+   - `hlayout_bar2` 拆分为 `hlayout_bar2_0`（`replace_editor` 伸缩区）+ `hlayout_bar2_1`（`range_label` + `range_combobox` 紧凑区），完全镜像 `hlayout_bar1` 结构
+
+2. **替换框回车响应**（`ui/global_search_widget.py`）：
+   - `replace_editor.enter_pressed` 连接到 `commit_search()`，焦点在替换框时按 Enter 也能触发重新搜索
+
+3. **线程忙碌守卫**（`ui/global_search_widget.py`）：
+   - `on_replace()` 入口增加 `if self.replace_thread.isRunning(): return`，防止线程重入导致替换丢失
+
+**验证：** 语法检查 ✅
+
+**涉及文件：** `ui/global_search_widget.py`

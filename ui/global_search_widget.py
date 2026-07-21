@@ -385,16 +385,18 @@ class GlobalSearchWidget(Widget):
         self.regex_toggle.setToolTip(self.tr("Use Regular Expression"))
         self.regex_toggle.clicked.connect(self.on_regex_clicked)
 
-        self.range_combobox = ConfigComboBox(scrollWidget=self)
+        self.range_combobox = ConfigComboBox(fix_size=False, scrollWidget=self)
         self.range_combobox.addItems(
             [self.tr("Translation"), self.tr("Source"), self.tr("All")]
         )
+        self.range_combobox.setMaximumWidth(120)
         self.range_combobox.currentIndexChanged.connect(self.on_range_changed)
         self.range_label = QLabel(self)
         self.range_label.setText(self.tr(" in"))
 
         self.replace_editor = SearchEditor(self)
         self.replace_editor.setPlaceholderText(self.tr("Replace"))
+        self.replace_editor.enter_pressed.connect(self.commit_search)
 
         self.search_tree = SearchResultTree(self)
         self.replace_btn = NoBorderPushBtn(self.tr("Replace All"))
@@ -427,11 +429,22 @@ class GlobalSearchWidget(Widget):
         hlayout_bar1.addLayout(hlayout_bar1_0)
         hlayout_bar1.addLayout(hlayout_bar1_1)
 
+        hlayout_bar2_0 = QHBoxLayout()
+        hlayout_bar2_0.addWidget(self.replace_editor)
+        hlayout_bar2_0.setAlignment(Qt.AlignmentFlag.AlignTop)
+        hlayout_bar2_0.setSpacing(10)
+
+        hlayout_bar2_1 = QHBoxLayout()
+        hlayout_bar2_1.addWidget(self.range_label)
+        hlayout_bar2_1.addWidget(self.range_combobox)
+        hlayout_bar2_1.setAlignment(
+            hlayout_bar2_1.alignment() | Qt.AlignmentFlag.AlignTop
+        )
+        hlayout_bar2_1.setSpacing(5)
+
         hlayout_bar2 = QHBoxLayout()
-        hlayout_bar2.addWidget(self.replace_editor)
-        hlayout_bar2.addWidget(self.range_label)
-        hlayout_bar2.addWidget(self.range_combobox)
-        hlayout_bar2.setSpacing(5)
+        hlayout_bar2.addLayout(hlayout_bar2_0)
+        hlayout_bar2.addLayout(hlayout_bar2_1)
 
         vlayout = QVBoxLayout(self)
         vlayout.addLayout(hlayout_bar1)
@@ -554,6 +567,8 @@ class GlobalSearchWidget(Widget):
 
     def on_replace(self):
         if self.counter_sum < 1:
+            return
+        if self.replace_thread.isRunning():
             return
         self.replace_thread.replace(self.replace_editor.toPlainText())
 
