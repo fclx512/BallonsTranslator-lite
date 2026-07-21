@@ -2157,10 +2157,35 @@ Output:
 				        </message>
 				        <message>
 				            <location filename="..\ui\mainwindow.py" />
-				            <source>Token Budget</source>
-				            <translation>令牌预算</translation>
-				        </message>
-				    </context>
+                        <source>Token Budget</source>
+                        <translation>令牌预算</translation>
+                    </message>
+                    <message>
+                        <location filename="..\ui\mainwindow.py" line="1298" />
+                        <source>此页有未渲染的批量修改，翻到该页后将自动刷新</source>
+                        <translation>此页有未渲染的批量修改，翻到该页后将自动刷新</translation>
+                    </message>
+                    <message>
+                        <location filename="..\ui\mainwindow.py" line="2944" />
+                        <source>Pipeline</source>
+                        <translation>流水线</translation>
+                    </message>
+                    <message>
+                        <location filename="..\ui\mainwindow.py" line="2945" />
+                        <source>Render Only</source>
+                        <translation>纯渲染</translation>
+                    </message>
+                    <message>
+                        <location filename="..\ui\mainwindow.py" line="3239" />
+                        <source>Rendering pages...</source>
+                        <translation>正在渲染页面...</translation>
+                    </message>
+                    <message>
+                        <location filename="..\ui\mainwindow.py" line="3251" />
+                        <source>Rendering %1 (%2/%3)</source>
+                        <translation>正在渲染 %1 (%2/%3)</translation>
+                    </message>
+                </context>
 		    <context>
 		        <name>CustomGlossaryDialog</name>
 		        <message>
@@ -2200,9 +2225,9 @@ One Piece → 海贼王
                     <source>Cancel</source>
                     <translation>取消</translation>
                 </message>
-		    </context>
-		    <context>
-		        <name>MainWindowMixin</name>
+            </context>
+            <context>
+                <name>MainWindowMixin</name>
         <message>
             <location filename="..\ui\mainwindow_mixin.py" line="101" />
             <source>Failed to load project </source>

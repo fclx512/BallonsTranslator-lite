@@ -351,6 +351,7 @@ class StyleDetail(QScrollArea):
 
     # block navigation signal
     navigate_to_block = Signal(str, int)  # pagename, block_idx
+    pages_dirtied = Signal()  # emitted after batch-apply modifies other pages
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -793,6 +794,9 @@ class StyleDetail(QScrollArea):
 
         self._apply_changes_to_blocks(changes)
 
+        # Notify main window to refresh page list (dirty indicators)
+        self.pages_dirtied.emit()
+
         if self._scene_manager is not None:
             self._scene_manager.updateSceneTextitems()
 
@@ -832,6 +836,7 @@ class StyleDetail(QScrollArea):
             else:
                 blk = self._proj.pages[pname][bidx]
                 blk.fontformat = new_ffmt
+                self._proj.mark_batch_dirty(pname)
 
     def _apply_all(self):
         """Apply all batch controls at once."""
@@ -876,6 +881,9 @@ class StyleDetail(QScrollArea):
 
         # 3. Now apply changes directly to every block.
         self._apply_changes_to_blocks(changes)
+
+        # Notify main window to refresh page list (dirty indicators)
+        self.pages_dirtied.emit()
 
         # 4. Rebuild the current page's canvas items from the project data
         #    so the visual is fully in sync with the updated blocks.
@@ -954,6 +962,7 @@ class FontStyleManager(QWidget):
 
     # Emitted when user clicks a block in the detail panel
     navigate_to_block = Signal(str, int)  # pagename, block_idx
+    pages_dirtied = Signal()  # relayed from StyleDetail after batch-apply
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -971,6 +980,7 @@ class FontStyleManager(QWidget):
         # ── Right: StyleDetail ────────────────────────────────────
         self.detailContent = StyleDetail()
         self.detailContent.navigate_to_block.connect(self.navigate_to_block)
+        self.detailContent.pages_dirtied.connect(self.pages_dirtied)
 
         # ── Layout ────────────────────────────────────────────────
         hlayout = QHBoxLayout(self)

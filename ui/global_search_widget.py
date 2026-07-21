@@ -253,6 +253,7 @@ class GlobalReplaceThead(ThreadBase):
         sceneitem_list = {"src": [], "trans": []}
         background_list = {"src": [], "trans": []}
         self.target_text = target
+        batch_dirty_pages = set()
 
         for ii in range(row_count):
             page_rst_item: PageSeachResultItem = self.srt.sm.item(ii, 0)
@@ -283,6 +284,7 @@ class GlobalReplaceThead(ThreadBase):
                     )
 
             else:
+                batch_dirty_pages.add(page_rst_item.pagename)
                 for idx in page_rst_item.blkid2match["src"]:
                     blk: TextBlock = self.proj.pages[page_rst_item.pagename][idx]
                     text = blk.get_text()
@@ -329,6 +331,8 @@ class GlobalReplaceThead(ThreadBase):
 
         self.sceneitem_list = sceneitem_list
         self.background_list = background_list
+        for pname in batch_dirty_pages:
+            self.proj.mark_batch_dirty(pname)
         self.finished.emit()
 
     def on_finished(self):
@@ -343,6 +347,7 @@ class GlobalSearchWidget(Widget):
     replace_all = Signal()
     req_update_pagetext = Signal()
     req_move_page = Signal(str, bool)
+    pages_dirtied = Signal()
 
     def __init__(self, parent: QWidget = None, *args, **kwargs) -> None:
         super().__init__(parent)
@@ -406,6 +411,7 @@ class GlobalSearchWidget(Widget):
         )
         self.replace_rerender_btn.clicked.connect(self.on_replace_rerender)
         self.replace_thread = GlobalReplaceThead()
+        self.replace_thread.finished.connect(self.pages_dirtied.emit)
 
         sp = self.replace_rerender_btn.sizePolicy()
         sp.setHorizontalPolicy(QSizePolicy.Policy.Expanding)

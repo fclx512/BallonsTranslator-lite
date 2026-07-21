@@ -22,6 +22,7 @@ from qtpy.QtGui import (
     QCloseEvent,
     QColor,
     QContextMenuEvent,
+    QFont,
     QGuiApplication,
     QIcon,
     QImageReader,
@@ -182,6 +183,7 @@ class MainWindow(mainwindow_cls):
     create_infodialog = Signal(dict)
 
     _notext_dot_icon: "QIcon | None" = None
+    _dirty_dot_icon: "QIcon | None" = None
 
     @staticmethod
     def _make_badged_icon(imgpath: str, thumb_size: int) -> "QIcon":
@@ -209,6 +211,33 @@ class MainWindow(mainwindow_cls):
         return QIcon(pixmap)
 
     @staticmethod
+    def _make_dirty_badged_icon(imgpath: str, thumb_size: int) -> "QIcon":
+        """Load an image at thumbnail size and add an orange dot badge at
+        bottom-right, indicating the page has unrendered batch changes."""
+        reader = QImageReader(imgpath)
+        reader.setScaledSize(QSize(thumb_size, thumb_size))
+        img = reader.read()
+        if img.isNull():
+            return QIcon(imgpath)
+        pixmap = QPixmap.fromImage(img)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        dot_size = 8
+        margin = 2
+        y = pixmap.height() - dot_size - margin
+        x = pixmap.width() - dot_size - margin
+        # White border ring for contrast
+        painter.setBrush(QColor(255, 255, 255))
+        r = QRect(x, y, dot_size, dot_size)
+        painter.drawEllipse(r.adjusted(-1, -1, 1, 1))
+        # Orange fill for batch-dirty
+        painter.setBrush(QColor(230, 126, 34))
+        painter.drawEllipse(r)
+        painter.end()
+        return QIcon(pixmap)
+
+    @staticmethod
     def _get_notext_dot_icon() -> "QIcon":
         """Return a small green dot icon for text-only list items (cached)."""
         if MainWindow._notext_dot_icon is None:
@@ -224,6 +253,23 @@ class MainWindow(mainwindow_cls):
             painter.end()
             MainWindow._notext_dot_icon = QIcon(pixmap)
         return MainWindow._notext_dot_icon
+
+    @staticmethod
+    def _get_dirty_dot_icon() -> "QIcon":
+        """Return a small orange dot icon for batch-dirty text-only list items (cached)."""
+        if MainWindow._dirty_dot_icon is None:
+            pixmap = QPixmap(14, 14)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(255, 255, 255))
+            painter.drawEllipse(0, 0, 14, 14)
+            painter.setBrush(QColor(230, 126, 34))
+            painter.drawEllipse(1, 1, 12, 12)
+            painter.end()
+            MainWindow._dirty_dot_icon = QIcon(pixmap)
+        return MainWindow._dirty_dot_icon
 
     def __init__(
         self, app: QApplication, config: ProgramConfig, open_dir="", **exec_args
@@ -327,6 +373,7 @@ class MainWindow(mainwindow_cls):
             self.on_req_update_pagetext
         )
         self.global_search_widget.req_move_page.connect(self.on_req_move_page)
+        self.global_search_widget.pages_dirtied.connect(self.updatePageList)
         self.imsave_thread.img_writed.connect(self.global_search_widget.on_img_writed)
         self.global_search_widget.search_tree.result_item_clicked.connect(
             self.on_search_result_item_clicked
@@ -787,6 +834,7 @@ class MainWindow(mainwindow_cls):
         fsm.set_project(self.imgtrans_proj, self.st_manager)
         fsm.refresh()
         fsm.navigate_to_block.connect(self._on_stylemgr_navigate)
+        fsm.pages_dirtied.connect(self.updatePageList)
 
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1201,22 +1249,56 @@ class MainWindow(mainwindow_cls):
                 pcfg.use_notext_images
                 and self.imgtrans_proj.get_notext_path(imgname) is not None
             )
+            is_dirty = self.imgtrans_proj.is_batch_dirty(imgname)
 
             if use_thumbnails:
                 imgpath = osp.join(self.imgtrans_proj.directory, imgname)
-                if has_notext:
-                    lstitem = QListWidgetItem(
-                        self._make_badged_icon(
-                            imgpath, shared.PAGELIST_THUMBNAIL_SIZE
-                        ),
-                        imgname,
-                    )
-                else:
+                reader = QImageReader(imgpath)
+                reader.setScaledSize(
+                    QSize(shared.PAGELIST_THUMBNAIL_SIZE, shared.PAGELIST_THUMBNAIL_SIZE)
+                )
+                img = reader.read()
+                if img.isNull():
                     lstitem = QListWidgetItem(QIcon(imgpath), imgname)
+                else:
+                    pixmap = QPixmap.fromImage(img)
+                    if has_notext or is_dirty:
+                        painter = QPainter(pixmap)
+                        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                        painter.setPen(Qt.PenStyle.NoPen)
+                        ts = shared.PAGELIST_THUMBNAIL_SIZE
+                        dot_size = 8
+                        margin = 2
+                        if has_notext:
+                            # Green dot at top-right (same as _make_badged_icon)
+                            painter.setBrush(QColor(255, 255, 255))
+                            r = QRect(ts - dot_size - margin, margin, dot_size, dot_size)
+                            painter.drawEllipse(r.adjusted(-1, -1, 1, 1))
+                            painter.setBrush(QColor(39, 174, 96))
+                            painter.drawEllipse(r)
+                        if is_dirty:
+                            # Orange dot at bottom-right
+                            painter.setBrush(QColor(255, 255, 255))
+                            r = QRect(ts - dot_size - margin, ts - dot_size - margin,
+                                      dot_size, dot_size)
+                            painter.drawEllipse(r.adjusted(-1, -1, 1, 1))
+                            painter.setBrush(QColor(230, 126, 34))
+                            painter.drawEllipse(r)
+                        painter.end()
+                    lstitem = QListWidgetItem(QIcon(pixmap), imgname)
             else:
                 lstitem = QListWidgetItem(imgname)
                 if has_notext:
                     lstitem.setIcon(self._get_notext_dot_icon())
+                if is_dirty:
+                    font = lstitem.font()
+                    font.setItalic(True)
+                    lstitem.setFont(font)
+
+            if is_dirty:
+                lstitem.setToolTip(
+                    self.tr("此页有未渲染的批量修改，翻到该页后将自动刷新")
+                )
 
             self.pageList.addItem(lstitem)
             if imgname == self.imgtrans_proj.current_img:
@@ -1303,7 +1385,8 @@ class MainWindow(mainwindow_cls):
         if item is not None:
             if self.save_on_page_changed:
                 self.conditional_save()
-            self.imgtrans_proj.set_current_img(item.text())
+            new_pagename = item.text()
+            self.imgtrans_proj.set_current_img(new_pagename)
             self.canvas.clear_undostack(update_saved_step=True)
             self.canvas._fit_to_window = self.opening_dir or pcfg.fit_window_on_page_switch
             self.canvas.updateCanvas()
@@ -1311,6 +1394,10 @@ class MainWindow(mainwindow_cls):
             self.titleBar.setTitleContent(page_name=self.imgtrans_proj.current_img)
             self.module_manager.handle_page_changed()
             self.drawingPanel.handle_page_changed()
+            # Clear batch-dirty flag now that the page has been visited/rendered
+            if self.imgtrans_proj.is_batch_dirty(new_pagename):
+                self.imgtrans_proj.clear_batch_dirty(new_pagename)
+                self.updatePageList()
 
         self.page_changing = False
 
@@ -2340,9 +2427,11 @@ class MainWindow(mainwindow_cls):
         if not osp.exists(self.imgtrans_proj.result_dir()):
             os.makedirs(self.imgtrans_proj.result_dir())
 
+        proj_save_succeeded = not save_proj
         if save_proj:
             try:
                 self.imgtrans_proj.save(keep_exist_as_backup=keep_exist_as_backup)
+                proj_save_succeeded = True
                 if not save_rst_only:
                     mask_path = self.imgtrans_proj.get_mask_path()
                     mask_array = self.imgtrans_proj.mask_array
@@ -2388,9 +2477,9 @@ class MainWindow(mainwindow_cls):
                 save_params={"ext": imsave_ext, "quality": pcfg.imgsave_quality},
                 keep_alpha=self.imgtrans_proj.current_has_alpha(),
             )
-            self.canvas.setProjSaveState(False)
-            self.canvas.update_saved_undostep()
-
+            if proj_save_succeeded:
+                self.canvas.setProjSaveState(False)
+                self.canvas.update_saved_undostep()
         except Exception as e:
             LOGGER.error(f"Failed to render and save result image: {e}")
 
@@ -2754,6 +2843,8 @@ class MainWindow(mainwindow_cls):
             QLabel,
             QLineEdit,
             QPushButton,
+            QStackedWidget,
+            QTabBar,
             QVBoxLayout,
             QWidget,
         )
@@ -2847,8 +2938,42 @@ class MainWindow(mainwindow_cls):
         all_pages_cb.setChecked(True)
         range_layout.addWidget(all_pages_cb)
 
-        layout.addWidget(range_frame)
         update_range_info()
+
+        # ── Tab bar: Pipeline / Render Only ────────────────────────────────
+        tab_bar = QTabBar()
+        tab_bar.addTab(self.tr("Pipeline"))
+        tab_bar.addTab(self.tr("Render Only"))
+        tab_bar.setExpanding(False)
+        tab_bar.setDrawBase(True)
+        tab_bar.setCurrentIndex(0)
+        layout.addWidget(tab_bar)
+
+        # ── Stacked content (switched by tab bar) ──────────────────────────
+        stack = QStackedWidget()
+
+        # Page 0: Pipeline mode
+        pipeline_page = QWidget()
+        pipeline_layout = QVBoxLayout(pipeline_page)
+        pipeline_layout.setContentsMargins(0, 0, 0, 0)
+        pipeline_layout.addWidget(range_frame)
+
+        # Page 1: Render-only mode (minimal)
+        render_page = QWidget()
+        render_layout = QVBoxLayout(render_page)
+        render_layout.setContentsMargins(0, 0, 0, 0)
+        render_label = QLabel(
+            self.tr("Render all result images from current project data.\n"
+                    "No pipeline stages will be executed.")
+        )
+        render_label.setWordWrap(True)
+        render_layout.addWidget(render_label)
+        render_layout.addStretch()
+
+        stack.addWidget(pipeline_page)
+        stack.addWidget(render_page)
+
+        tab_bar.currentChanged.connect(stack.setCurrentIndex)
 
         # ── Pipeline stage toggles ──────────────────────────────────────────
         stages_frame = QFrame()
@@ -2898,7 +3023,7 @@ class MainWindow(mainwindow_cls):
         ctx_trans_cb.toggled.connect(_on_ctx_trans_toggled)
         trans_cb.toggled.connect(_on_trans_toggled)
 
-        layout.addWidget(stages_frame)
+        pipeline_layout.addWidget(stages_frame)
 
         # ── Context settings (only shown when Context Translation beta is on) ──
         context_frame = QFrame()
@@ -3074,12 +3199,15 @@ class MainWindow(mainwindow_cls):
         # CT beta toggle controls context frame visibility
         ctx_trans_cb.toggled.connect(_update_ctx_visibility)
 
-        layout.addWidget(context_frame)
+        pipeline_layout.addWidget(context_frame)
 
         # Run without update textstyle
         wo_update_cb = QCheckBox(self.tr("Run without update textstyle"))
         wo_update_cb.setObjectName('ConfigCheckBox')
-        layout.addWidget(wo_update_cb)
+        pipeline_layout.addWidget(wo_update_cb)
+        pipeline_layout.addStretch()
+
+        layout.addWidget(stack)
 
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
@@ -3091,7 +3219,68 @@ class MainWindow(mainwindow_cls):
         btn_layout.addWidget(cancel_btn)
         layout.addLayout(btn_layout)
 
-        run_btn.clicked.connect(dialog.accept)
+        render_mode = False
+
+        def _do_batch_render():
+            """Iterate selected pages, render and save each, then restore."""
+            nonlocal render_mode
+            render_mode = True
+            orig_page = self.imgtrans_proj.current_img
+            orig_save = self.save_on_page_changed
+            self.save_on_page_changed = False
+
+            if all_pages_cb.isChecked():
+                page_names = list(self.imgtrans_proj.pages.keys())
+            else:
+                page_names = [
+                    self.imgtrans_proj.idx2pagename(i)
+                    for i in range(slider.low(), slider.high() + 1)
+                ]
+
+            from qtpy.QtWidgets import QProgressDialog
+
+            progress = QProgressDialog(
+                self.tr("Rendering pages..."), self.tr("Cancel"),
+                0, len(page_names), dialog,
+            )
+            progress.setWindowModality(Qt.WindowModality.WindowModal)
+            progress.setMinimumDuration(300)
+            progress.show()
+
+            for i, pname in enumerate(page_names):
+                if progress.wasCanceled():
+                    break
+                progress.setValue(i)
+                progress.setLabelText(
+                    self.tr("Rendering %1 (%2/%3)")
+                    .replace("%1", pname)
+                    .replace("%2", str(i + 1))
+                    .replace("%3", str(len(page_names)))
+                )
+                self.imgtrans_proj.set_current_img(pname)
+                self.canvas.clear_undostack(update_saved_step=True)
+                self.canvas._fit_to_window = False
+                self.canvas.updateCanvas()
+                self.st_manager.updateSceneTextitems()
+                self.saveCurrentPage()
+                self.imgtrans_proj.clear_batch_dirty(pname)
+                QApplication.processEvents()
+
+            progress.setValue(len(page_names))
+            # Restore original page
+            if orig_page and orig_page != self.imgtrans_proj.current_img:
+                self.pageList.setCurrentRow(
+                    self.imgtrans_proj.pagename2idx(orig_page)
+                )
+            self.save_on_page_changed = orig_save
+            self.updatePageList()
+
+        def _on_run():
+            if tab_bar.currentIndex() == 1:
+                _do_batch_render()
+            dialog.accept()
+
+        run_btn.clicked.connect(_on_run)
         cancel_btn.clicked.connect(dialog.reject)
 
         if pcfg.module.all_stages_disabled():
@@ -3113,6 +3302,9 @@ class MainWindow(mainwindow_cls):
         dialog.finished.connect(_clear_glossary)
 
         if dialog.exec_() != QDialog.DialogCode.Accepted:
+            return
+
+        if render_mode:
             return
 
         # If Context Translation is enabled, use current translator's profile

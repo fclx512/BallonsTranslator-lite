@@ -871,4 +871,36 @@
 
 **验证：** 语法检查 ✅
 
+---
+
+### 保存容错 + 页面脏标记 + Run 对话框纯渲染模式
+
+**需求：**
+1. `saveCurrentPage` 中 project.json 写盘失败被静默吞掉，画布仍标记为"已保存"，翻页后改动丢失
+2. 批量操作（字体样式全部应用、全局替换）修改非当前页后，页面列表无任何提示，用户不知道哪些页参数已更新但尚未渲染
+3. Run 对话框缺少"只渲染不跑流水线"的模式
+
+**改动：**
+
+1. **保存失败传播**（`ui/mainwindow.py`）：
+   - `saveCurrentPage()` 引入 `proj_save_succeeded` 标记，`proj.save()` 成功后才置 True
+   - `setProjSaveState(False)` / `update_saved_undostep()` 仅在 `proj_save_succeeded` 为 True 时执行
+   - 渲染 try 块独立，渲染失败不影响保存成功的判断
+
+2. **页面列表"待渲染"脏标记**（4 文件配合）：
+   - `utils/proj_imgtrans.py`：`ProjImgTrans` 新增 `_batch_dirty_pages` 集合 + `mark_batch_dirty` / `clear_batch_dirty` / `is_batch_dirty` 方法
+   - `ui/fontstyle_manager.py`：`_apply_changes_to_blocks()` 修改非当前页时调 `mark_batch_dirty`；`StyleDetail` / `FontStyleManager` 新增 `pages_dirtied` 信号
+   - `ui/global_search_widget.py`：`_search_proj()` 修改非当前页时收集脏页名批量调 `mark_batch_dirty`；`GlobalSearchWidget` 新增 `pages_dirtied` 信号（由 `replace_thread.finished` 驱动）
+   - `ui/mainwindow.py`：`updatePageList()` 对脏页显示橙色圆点（缩略图模式，右下角）或斜体文字（纯文字模式）+ hover tooltip "此页有未渲染的批量修改，翻到该页后将自动刷新"；`pageListCurrentItemChanged()` 翻到该页后自动清除标记；`fsm.pages_dirtied` / `gsw.pages_dirtied` 连接 `updatePageList` 即时刷新
+
+3. **Run 对话框 [流水线] | [纯渲染] 切换**（`ui/mainwindow.py`）：
+   - 对话框顶部加 `QTabBar` + `QStackedWidget` 切换两页
+   - 流水线页：包含页码范围（移入 tab 内）+ 4 阶段勾选 + Context 设置 + "Run without update textstyle"，默认选中
+   - 纯渲染页：遍历选中/全部页面 → 切换页面 → `saveCurrentPage()` 渲染结果图 → 清除脏标记 → 还原原页面，全程带 `QProgressDialog` 进度条
+   - Run 按钮根据当前 tab 分发逻辑
+
+**验证：** 语法检查 ✅、i18n 检查 ✅（新增 5 条翻译，qm 编译 1077 条）、启动导入测试 ✅
+
+**涉及文件：** `utils/proj_imgtrans.py`、`ui/mainwindow.py`、`ui/fontstyle_manager.py`、`ui/global_search_widget.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
 **涉及文件：** `ui/global_search_widget.py`
