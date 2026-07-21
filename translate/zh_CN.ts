@@ -1133,12 +1133,24 @@
 						            <translation>由程序决定：保留从原文检测到的书写方向（横排/竖排）。</translation>
 						        </message>
 						        <message>
-						            <source>Keep existing: Preserve each block's existing font family (if set). Always use global setting: Override all blocks with the global default font family.</source>
-						            <translation>保留已有格式：保留每个文本块已有的字体（如有已设的字体）。始终使用全局设置：用全局默认字体覆盖所有文本块。</translation>
-						        </message>
-						    </context>
-			    <context>
-			        <name>DependencyDialog</name>
+							            <source>Keep existing: Preserve each block's existing font family (if set). Always use global setting: Override all blocks with the global default font family.</source>
+							            <translation>保留已有格式：保留每个文本块已有的字体（如有已设的字体）。始终使用全局设置：用全局默认字体覆盖所有文本块。</translation>
+							        </message>
+							        <message>
+							            <source>Clip text overflow after translation</source>
+							            <translation>翻译后裁剪溢出文字</translation>
+							        </message>
+							        <message>
+							            <source>Overflow Clip</source>
+							            <translation>溢出裁剪</translation>
+							        </message>
+							        <message>
+							            <source>&lt;p&gt;When translation text exceeds the block boundary, &lt;b&gt;clip it&lt;/b&gt; instead of enlarging the block. A &lt;b&gt;yellow border&lt;/b&gt; indicates clipping. Drag a corner handle to resize and un-clip.&lt;/p&gt;</source>
+							            <translation>&lt;p&gt;当译文超出文本框边界时，&lt;b&gt;裁剪文字&lt;/b&gt;而非撑大文本框。&lt;b&gt;黄色边框&lt;/b&gt;表示裁剪状态，拖拽角落手柄即可调整尺寸并解除裁剪。&lt;/p&gt;</translation>
+							        </message>
+							    </context>
+						    <context>
+						        <name>DependencyDialog</name>
         <message>
             <location filename="..\ui\dependency_dialog.py" line="388" />
             <source>Dependencies</source>

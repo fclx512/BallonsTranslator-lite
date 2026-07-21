@@ -1865,6 +1865,18 @@ class ConfigPanel(Widget):
         )
         interface_layout.addWidget(seq_badge_sublock)
 
+        # Clip text overflow on translation fill
+        self.clip_overflow_checker = ConfigCheckBox(
+            self.tr("Clip text overflow after translation")
+        )
+        self.clip_overflow_checker.setChecked(pcfg.clip_text_overflow)
+        self.clip_overflow_checker.stateChanged.connect(self.on_clip_overflow_changed)
+        clip_overflow_sublock = ConfigSubBlock(
+            self.clip_overflow_checker, name=self.tr("Overflow Clip"),
+            note=self.tr("<p>When translation text exceeds the block boundary, <b>clip it</b> instead of enlarging the block. A <b>yellow border</b> indicates clipping. Drag a corner handle to resize and un-clip.</p>"),
+        )
+        interface_layout.addWidget(clip_overflow_sublock)
+
         self.interface_block = generalConfigPanel.addGroupedBlock(
             label_interface, interface_widget, object_name="GroupGeneral"
         )
@@ -2071,6 +2083,9 @@ class ConfigPanel(Widget):
     def on_seq_badge_changed(self):
         pcfg.show_seq_badge = self.seq_badge_checker.isChecked()
         self.seq_badge_changed.emit()
+
+    def on_clip_overflow_changed(self):
+        pcfg.clip_text_overflow = self.clip_overflow_checker.isChecked()
 
     def on_keepline_clicked(self):
         pcfg.module.keep_exist_textlines = (

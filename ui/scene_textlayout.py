@@ -425,6 +425,7 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
         self._is_painting_stroke = False
         self._draw_offset = []
         self.text_padding = 0
+        self._prevent_expand: bool = False  # 裁剪模式：禁止 layout 自动撑大 max_width/max_height
 
     def setMaxSize(self, max_width: int, max_height: int, relayout=True):
         self.max_height = max_height
@@ -613,15 +614,16 @@ class VerticalTextDocumentLayout(SceneTextLayout):
 
         enlarged = False
         x_shift = 0
-        if self.layout_left < doc_margin:
-            x_shift = doc_margin - self.layout_left
-            self.max_width += x_shift
-            self.available_width = self.max_width - 2 * doc_margin
-            enlarged = True
-        if self.min_height - doc_margin > self.available_height:
-            self.available_height = self.min_height - doc_margin
-            self.max_height = self.available_height + doc_margin * 2
-            enlarged = True
+        if not self._prevent_expand:
+            if self.layout_left < doc_margin:
+                x_shift = doc_margin - self.layout_left
+                self.max_width += x_shift
+                self.available_width = self.max_width - 2 * doc_margin
+                enlarged = True
+            if self.min_height - doc_margin > self.available_height:
+                self.available_height = self.min_height - doc_margin
+                self.max_height = self.available_height + doc_margin * 2
+                enlarged = True
         if enlarged:
             self.size_enlarged.emit()
             if x_shift != 0:
@@ -1274,7 +1276,7 @@ class HorizontalTextDocumentLayout(SceneTextLayout):
             new_height = self.shrink_height
         else:
             new_height = doc_margin
-        if new_height > self.available_height:
+        if not self._prevent_expand and new_height > self.available_height:
             self.max_height = new_height + doc_margin * 2
             self.available_height = new_height
             self.size_enlarged.emit()
