@@ -728,6 +728,22 @@ class TextBlkItem(QGraphicsTextItem):
         else:
             return self.scale()
 
+    def _get_overflow_clip_rect(self) -> QRectF:
+        """Return the image boundary rect in item-local coordinates for painter clipping.
+
+        When overflow mode is active, this clips text rendering to the canvas boundary.
+        Returns an empty QRectF if no clipping is needed.
+        """
+        from utils.config import pcfg
+
+        if not pcfg.overflow_mode:
+            return QRectF()
+        scene = self.scene()
+        if scene is None or not hasattr(scene, "baseLayer"):
+            return QRectF()
+        img_scene_rect = scene.baseLayer.sceneBoundingRect()
+        return self.mapFromScene(img_scene_rect).boundingRect()
+
     def paint(
         self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: QWidget
     ) -> None:
@@ -735,33 +751,60 @@ class TextBlkItem(QGraphicsTextItem):
         # which can be avoided by calling super().paint first, but it results in disappeared background in editting mode
         # so the checking logic lies here
 
+        # ── Overflow clipping ─────────────────────────────────────────
+        # When overflow_mode is on, clip text content to the image boundary
+        # so that only the border is visible outside the canvas.
+        clip_rect = self._get_overflow_clip_rect()
+        draw_clip = not clip_rect.isEmpty()
+
         # --- Fast path: use pre-rendered pixmap cache (drag/rotate optimization) ---
         if self._use_full_pixmap and not self.is_editting():
             if self._full_pixmap_dirty and not self._skip_pixmap_rebuild:
                 self._build_full_pixmap()
             if self._full_pixmap is not None:
+                if draw_clip:
+                    painter.save()
+                    painter.setClipRect(clip_rect)
                 painter.drawPixmap(self.boundingRect().toRect(), self._full_pixmap)
+                if draw_clip:
+                    painter.restore()
+                # Border and badge always draw outside the clip
                 self._draw_border_rect(painter)
                 self._draw_seq_badge(painter)
                 return
 
         # --- Slow path: original QTextDocument-based rendering ---
         if self.is_editting():
+            if draw_clip:
+                painter.save()
+                painter.setClipRect(clip_rect)
             self._draw_accessories(painter)
+            if draw_clip:
+                painter.restore()
 
         option.state = QStyle.State_None
+        if draw_clip:
+            painter.save()
+            painter.setClipRect(clip_rect)
         super().paint(painter, option, widget)
+        if draw_clip:
+            painter.restore()
 
         if not self.is_editting():
             painter.setCompositionMode(
                 QPainter.CompositionMode.CompositionMode_DestinationOver
             )
-            # Draw background (stroke/shadow) behind text content
+            # Draw background (stroke/shadow) behind text content (clipped)
+            if draw_clip:
+                painter.save()
+                painter.setClipRect(clip_rect)
             self._draw_background_only(painter)
+            if draw_clip:
+                painter.restore()
             painter.setCompositionMode(
                 QPainter.CompositionMode.CompositionMode_SourceOver
             )
-            # Draw border ON TOP of text so it's visible in crisp (vector) mode
+            # Border and badge always draw outside the clip
             self._draw_border_rect(painter)
             self._draw_seq_badge(painter)
 

@@ -4347,6 +4347,11 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <translation>深色模式</translation>
         </message>
         <message>
+            <location filename="..\ui\mainwindowbars.py" line="430" />
+            <source>Overflow Mode</source>
+            <translation>过界模式</translation>
+        </message>
+        <message>
             <location filename="..\ui\mainwindowbars.py" line="364" />
             <source>Tools</source>
             <translation>工具</translation>

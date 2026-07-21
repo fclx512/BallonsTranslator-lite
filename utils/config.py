@@ -290,6 +290,7 @@ class ProgramConfig(Config):
     text_advanced_format_panel: bool = True
     expand_tadvanced_panel: bool = True
     show_seq_badge: bool = True
+    overflow_mode: bool = False  # 过界模式 — 画布边界视觉指示 + 文字块跨边界裁剪
 
     # ── Right-click context menu customization ─────────────
     context_menu_order: List[str] = field(default_factory=lambda: [
