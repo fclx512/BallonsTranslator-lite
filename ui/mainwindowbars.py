@@ -426,16 +426,23 @@ class TitleBar(Widget):
         self.darkModeAction = darkModeAction = QAction(self.tr("Dark Mode"), self)
         darkModeAction.setCheckable(True)
 
+        self.overflowAction = overflowAction = QAction(
+            self.tr("Overflow Mode"), self
+        )
+        overflowAction.setCheckable(True)
+
         self.viewMenu = viewMenu = QMenu(self.viewToolBtn)
         viewMenu.addMenu(self.displayLanguageMenu)
         viewMenu.addActions([drawBoardAction, texteditAction])
         viewMenu.addSeparator()
         viewMenu.addAction(darkModeAction)
+        viewMenu.addAction(overflowAction)
         self.viewToolBtn.setMenu(viewMenu)
         self.viewToolBtn.setPopupMode(QToolButton.InstantPopup)
         self.textedit_trigger = texteditAction.triggered
         self.drawboard_trigger = drawBoardAction.triggered
         self.darkmode_trigger = darkModeAction.triggered
+        self.overflow_trigger = overflowAction.triggered
 
         # 工具菜单
         self.toolsToolBtn = TitleBarToolBtn(self)

@@ -77,7 +77,7 @@ from utils.config import (
 from utils.logger import logger as LOGGER
 from utils.message import create_error_dialog, create_info_dialog
 from utils.proj_imgtrans import ProjImgTrans
-from utils.text_processing import full_len, half_len, is_cjk
+from utils.text_processing import is_cjk
 from utils.textblock import TextAlignment, TextBlock
 
 from . import shared_widget as SW
@@ -686,6 +686,7 @@ class MainWindow(mainwindow_cls):
         self.leftBar.run_imgtrans_clicked.connect(self.run_imgtrans)
 
         self.titleBar.darkModeAction.setChecked(pcfg.darkmode)
+        self.titleBar.overflowAction.setChecked(pcfg.overflow_mode)
 
         self.drawingPanel.set_config(pcfg.drawpanel)
         self.drawingPanel.initDLModule(module_manager)
@@ -1411,6 +1412,7 @@ class MainWindow(mainwindow_cls):
         self.titleBar.page_search_trigger.connect(self.on_page_search)
         self.titleBar.global_search_trigger.connect(self.on_global_search)
         self.titleBar.darkmode_trigger.connect(self.on_darkmode_triggered)
+        self.titleBar.overflow_trigger.connect(self.on_overflow_triggered)
         self.titleBar.merge_tool_trigger.connect(self.on_open_merge_tool)
         self.titleBar.smart_reorder_trigger.connect(self.on_path_reorder)
         self.titleBar.stylemgr_trigger.connect(self.on_open_fontstyle_manager)
@@ -2657,11 +2659,8 @@ class MainWindow(mainwindow_cls):
         src_is_cjk = is_cjk(pcfg.module.translate_source)
         tgt_is_cjk = is_cjk(pcfg.module.translate_target)
         if tgt_is_cjk:
-            for blk in blk_list:
-                if src_is_cjk:
-                    blk.translation = full_len(blk.translation)
-                else:
-                    blk.translation = half_len(blk.translation)
+            if not src_is_cjk:
+                for blk in blk_list:
                     blk.translation = re.sub(
                         r'([?.!"])\s+', r"\1", blk.translation
                     )  # remove spaces following punctuations
@@ -2669,7 +2668,6 @@ class MainWindow(mainwindow_cls):
             for blk in blk_list:
                 if blk.vertical:
                     blk.alignment = TextAlignment.Center
-                blk.translation = half_len(blk.translation)
                 blk.vertical = False
 
         for blk in blk_list:
@@ -3708,6 +3706,9 @@ class MainWindow(mainwindow_cls):
         pcfg.darkmode = self.titleBar.darkModeAction.isChecked()
         self.resetStyleSheet(reverse_icon=True)
         self.save_config()
+
+    def on_overflow_triggered(self, checked: bool):
+        self.canvas.setOverflowMode(checked)
 
     def on_copy_src(self):
         blks = self.canvas.selected_text_items()

@@ -100,6 +100,7 @@ class TextBlkItem(QGraphicsTextItem):
         self.oldPos = QPointF()
         self.oldRect = QRectF()
         self.repaint_on_changed = True
+        self._text_overflows: bool = False  # 文字超出文本框，启用裁剪 + 黄色边框
 
         self.is_formatting = False
         self.old_undo_steps = 0
@@ -476,6 +477,10 @@ class TextBlkItem(QGraphicsTextItem):
     def startReshape(self):
         self.oldRect = self.absBoundingRect(qrect=True)
         self.reshaping = True
+        # 拖拽调整文本框 → 解除裁剪状态，恢复自动撑大行为
+        if self._text_overflows:
+            self._text_overflows = False
+            self._invalidate_cache()
         from utils.config import pcfg
         if pcfg.show_decorations_during_drag:
             if pcfg.text_rendering == 1:  # Smooth — use full pixmap (has decorations)
@@ -718,8 +723,21 @@ class TextBlkItem(QGraphicsTextItem):
         self.old_undo_steps = self.document().availableUndoSteps()
 
     def on_document_enlarged(self):
-        size = self.documentSize()
-        self.set_size(size.width(), size.height())
+        from utils.config import pcfg
+
+        if pcfg.clip_text_overflow:
+            # 裁剪模式：不撑大文本框，记录溢出状态，重置 layout 到原始尺寸
+            self._text_overflows = True
+            self.layout._prevent_expand = True
+            self.layout.setMaxSize(
+                self._display_rect.width(), self._display_rect.height()
+            )
+            self.layout._prevent_expand = False
+            self._invalidate_cache()
+            self.update()
+        else:
+            size = self.documentSize()
+            self.set_size(size.width(), size.height())
 
     def get_scale(self) -> float:
         tl = self.topLevelItem()
@@ -728,6 +746,22 @@ class TextBlkItem(QGraphicsTextItem):
         else:
             return self.scale()
 
+    def _get_overflow_clip_rect(self) -> QRectF:
+        """Return the image boundary rect in item-local coordinates for painter clipping.
+
+        When overflow mode is active, this clips text rendering to the canvas boundary.
+        Returns an empty QRectF if no clipping is needed.
+        """
+        from utils.config import pcfg
+
+        if not pcfg.overflow_mode:
+            return QRectF()
+        scene = self.scene()
+        if scene is None or not hasattr(scene, "baseLayer"):
+            return QRectF()
+        img_scene_rect = scene.baseLayer.sceneBoundingRect()
+        return self.mapFromScene(img_scene_rect).boundingRect()
+
     def paint(
         self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: QWidget
     ) -> None:
@@ -735,33 +769,70 @@ class TextBlkItem(QGraphicsTextItem):
         # which can be avoided by calling super().paint first, but it results in disappeared background in editting mode
         # so the checking logic lies here
 
+        # ── Overflow clipping ─────────────────────────────────────────
+        # When overflow_mode is on, clip text content to the image boundary
+        # so that only the border is visible outside the canvas.
+        clip_rect = self._get_overflow_clip_rect()
+        draw_clip = not clip_rect.isEmpty()
+        # Translate-fill clipping: when _text_overflows, clip text to the
+        # text block's own content boundary (unpadded rect) so text that
+        # exceeds the box is hidden rather than expanding it.
+        if self._text_overflows and not self.is_editting():
+            content_clip = self.unpadRect(self.boundingRect())
+            if draw_clip:
+                clip_rect = clip_rect.intersected(content_clip)
+            else:
+                clip_rect = content_clip
+                draw_clip = True
+
         # --- Fast path: use pre-rendered pixmap cache (drag/rotate optimization) ---
         if self._use_full_pixmap and not self.is_editting():
             if self._full_pixmap_dirty and not self._skip_pixmap_rebuild:
                 self._build_full_pixmap()
             if self._full_pixmap is not None:
+                if draw_clip:
+                    painter.save()
+                    painter.setClipRect(clip_rect)
                 painter.drawPixmap(self.boundingRect().toRect(), self._full_pixmap)
+                if draw_clip:
+                    painter.restore()
+                # Border and badge always draw outside the clip
                 self._draw_border_rect(painter)
                 self._draw_seq_badge(painter)
                 return
 
         # --- Slow path: original QTextDocument-based rendering ---
         if self.is_editting():
+            if draw_clip:
+                painter.save()
+                painter.setClipRect(clip_rect)
             self._draw_accessories(painter)
+            if draw_clip:
+                painter.restore()
 
         option.state = QStyle.State_None
+        if draw_clip:
+            painter.save()
+            painter.setClipRect(clip_rect)
         super().paint(painter, option, widget)
+        if draw_clip:
+            painter.restore()
 
         if not self.is_editting():
             painter.setCompositionMode(
                 QPainter.CompositionMode.CompositionMode_DestinationOver
             )
-            # Draw background (stroke/shadow) behind text content
+            # Draw background (stroke/shadow) behind text content (clipped)
+            if draw_clip:
+                painter.save()
+                painter.setClipRect(clip_rect)
             self._draw_background_only(painter)
+            if draw_clip:
+                painter.restore()
             painter.setCompositionMode(
                 QPainter.CompositionMode.CompositionMode_SourceOver
             )
-            # Draw border ON TOP of text so it's visible in crisp (vector) mode
+            # Border and badge always draw outside the clip
             self._draw_border_rect(painter)
             self._draw_seq_badge(painter)
 
@@ -774,7 +845,13 @@ class TextBlkItem(QGraphicsTextItem):
             painter.drawPixmap(br.toRect(), self.background_pixmap)
 
         draw_rect = self.draw_rect and not self.under_ctrl
-        if self.isSelected() and not self.is_editting():
+        if self._text_overflows and not self.is_editting():
+            pen = QPen(
+                QColor(255, 200, 0, 200), 3.5 / self.get_scale(), Qt.PenStyle.SolidLine
+            )
+            painter.setPen(pen)
+            painter.drawRect(self.unpadRect(br))
+        elif self.isSelected() and not self.is_editting():
             pen = QPen(
                 TEXTRECT_SELECTED_COLOR, 3.5 / self.get_scale(), Qt.PenStyle.DashLine
             )
@@ -810,7 +887,13 @@ class TextBlkItem(QGraphicsTextItem):
         br = self.boundingRect()
         painter.save()
         draw_rect = self.draw_rect and not self.under_ctrl
-        if self.isSelected() and not self.is_editting():
+        if self._text_overflows and not self.is_editting():
+            pen = QPen(
+                QColor(255, 200, 0, 200), 3.5 / self.get_scale(), Qt.PenStyle.SolidLine
+            )
+            painter.setPen(pen)
+            painter.drawRect(self.unpadRect(br))
+        elif self.isSelected() and not self.is_editting():
             pen = QPen(
                 TEXTRECT_SELECTED_COLOR, 3.5 / self.get_scale(), Qt.PenStyle.DashLine
             )
@@ -1786,8 +1869,19 @@ class TextBlkItem(QGraphicsTextItem):
         rotation invariant
         """
 
+        # 裁剪模式保护：文字溢出时禁止改变 _display_rect 尺寸（撑大和缩小都不行）
+        # 用户拖拽调整（startReshape 清除了 _text_overflows）后恢复正常
+        if self._text_overflows:
+            w = max(w, self._display_rect.width())
+            h = max(h, self._display_rect.height())
+            w = min(w, self._display_rect.width())
+            h = min(h, self._display_rect.height())
+
         if set_layout_maxsize:
             self.layout.setMaxSize(w, h)
+
+        old_w = self._display_rect.width()
+        old_h = self._display_rect.height()
 
         old_w = self._display_rect.width()
         old_h = self._display_rect.height()

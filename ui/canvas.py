@@ -55,6 +55,7 @@ from .textitem import TextBlkItem, TextBlock
 CANVAS_SCALE_MAX = 10.0
 CANVAS_SCALE_MIN = 0.01
 CANVAS_SCALE_SPEED = 0.1
+OVERFLOW_MARGIN_RATIO = 0.3  # 过界模式场景扩展比例
 
 
 class MoveByKeyCommand(QUndoCommand):
@@ -538,15 +539,19 @@ class Canvas(QGraphicsScene):
     def scaleBy(self, value: float):
         self.scaleImage(value)
 
+    def _overflow_scene_rect(self) -> QRectF:
+        """Return expanded scene rect for overflow mode, or normal rect."""
+        br = self.baseLayer.sceneBoundingRect()
+        if not pcfg.overflow_mode or not self.imgtrans_proj.img_valid:
+            return QRectF(0, 0, br.width(), br.height())
+        mw = br.width() * OVERFLOW_MARGIN_RATIO
+        mh = br.height() * OVERFLOW_MARGIN_RATIO
+        return QRectF(-mw, -mh, br.width() + 2 * mw, br.height() + 2 * mh)
+
     def _set_scene_scale(self, scale: float):
         self.scale_factor = scale
         self.baseLayer.setScale(scale)
-        self.setSceneRect(
-            0,
-            0,
-            self.baseLayer.sceneBoundingRect().width(),
-            self.baseLayer.sceneBoundingRect().height(),
-        )
+        self.setSceneRect(self._overflow_scene_rect())
 
     def render_result_img(self):
 
@@ -761,12 +766,7 @@ class Canvas(QGraphicsScene):
             self.adjustScrollBar(self.gv.horizontalScrollBar(), factor)
             self.adjustScrollBar(self.gv.verticalScrollBar(), factor)
             self.scalefactor_changed.emit()
-        self.setSceneRect(
-            0,
-            0,
-            self.baseLayer.sceneBoundingRect().width(),
-            self.baseLayer.sceneBoundingRect().height(),
-        )
+        self.setSceneRect(self._overflow_scene_rect())
 
     def _fitToWindow(self):
         """Scale image to fit viewport with a small margin."""
@@ -785,12 +785,7 @@ class Canvas(QGraphicsScene):
         self.txtblkShapeControl.updateScale(self.scale_factor)
         if scale_changed:
             self.scalefactor_changed.emit()
-        self.setSceneRect(
-            0,
-            0,
-            self.baseLayer.sceneBoundingRect().width(),
-            self.baseLayer.sceneBoundingRect().height(),
-        )
+        self.setSceneRect(self._overflow_scene_rect())
 
     def _layout_status_labels(self):
         """Unify label sizes and position them dynamically in top-left corner."""
@@ -811,6 +806,12 @@ class Canvas(QGraphicsScene):
             self.notextLabel.move(8, 8 + self.previewLabel.height() + 4)
         else:
             self.notextLabel.move(8, 8)
+
+    def setOverflowMode(self, enabled: bool):
+        """Toggle overflow mode on/off and update the canvas display."""
+        pcfg.overflow_mode = enabled
+        self.setSceneRect(self._overflow_scene_rect())
+        self.gv.viewport().update()
 
     def onViewResized(self):
         gv_w, gv_h = self.gv.geometry().width(), self.gv.geometry().height()
@@ -846,6 +847,36 @@ class Canvas(QGraphicsScene):
             return
         self._drag_hover_active = active
         self.gv.viewport().update()
+
+    def drawForeground(self, painter: QPainter, rect: QRectF) -> None:
+        """Draw overflow boundary overlay on top of all scene items."""
+        if not pcfg.overflow_mode or not self.imgtrans_proj.img_valid:
+            return
+
+        img_rect = self.baseLayer.sceneBoundingRect()
+
+        # ── Semi-transparent dark overlay outside the image boundary ──
+        painter.save()
+        painter.setBrush(QColor(0, 0, 0, 60))
+        painter.setPen(Qt.PenStyle.NoPen)
+
+        # Construct a large rect minus the image rect (OddEvenFill creates the hole)
+        vp = self.gv.viewport()
+        vp_rect = self.gv.mapToScene(vp.rect()).boundingRect()
+        margin = max(vp_rect.width(), vp_rect.height()) * 2
+        large = vp_rect.adjusted(-margin, -margin, margin, margin)
+        path = QPainterPath()
+        path.addRect(large)
+        path.addRect(img_rect)
+        painter.drawPath(path)
+
+        # ── Red boundary line at the image edge ──
+        pen = QPen(QColor(255, 60, 60, 200), 0)  # cosmetic pen (1px always)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(img_rect)
+
+        painter.restore()
 
     def _update_hint_visibility(self):
         """Show the empty-state hint and clear canvas when no project is loaded."""

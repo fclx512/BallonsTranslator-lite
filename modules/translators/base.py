@@ -228,6 +228,26 @@ class BaseTranslator(BaseModule):
     def supported_languages(self) -> List[str]:
         return self.valid_lang_list
 
+    @staticmethod
+    def _prepare_textblock_sources(
+        translator, textblk_lst: List[TextBlock],
+    ):
+        """Extract non-empty source texts from text blocks for history context.
+
+        Returns a 3-tuple: (block_ids, sources, plain_sources) where:
+        - block_ids: indices of non-empty blocks
+        - sources: list of cleaned source text strings
+        - plain_sources: the same list (for backward compat)
+        """
+        text_list = []
+        non_empty_ids = []
+        for ii, blk in enumerate(textblk_lst):
+            text = blk.get_text()
+            if text.strip() != "":
+                non_empty_ids.append(ii)
+                text_list.append(text)
+        return non_empty_ids, text_list, text_list
+
     @property
     def supported_tgt_list(self) -> List[str]:
         return self.valid_lang_list
