@@ -498,7 +498,8 @@ class ContextBatchTranslator:
             f"2. translation for second block\n"
             f"\n"
             f"### next_page.ext\n"
-            f"1. translation ..."
+            f"1. translation ...\n"
+            f"- Include ALL pages listed above — do not skip any.\n"
         )
 
         # Glossary section — custom (AI-generated), file, auto-learned
@@ -693,13 +694,17 @@ class ContextBatchTranslator:
 
             result[pname] = blocks
 
-        # Validate: each expected page must have blocks
-        for pname in batch_keys:
-            if pname not in result or not result[pname]:
-                logger.warning(
-                    "TXT parser: page %s missing or empty", pname
-                )
-                return None
+        # Tolerant validation: log missing pages but keep what we have
+        missing = [
+            pname for pname in batch_keys
+            if pname not in result or not result[pname]
+        ]
+        if missing:
+            logger.warning(
+                "TXT parser: %d/%d page(s) missing or empty — %s. "
+                "Using partial results.",
+                len(missing), len(batch_keys), ", ".join(missing),
+            )
 
         # Flatten to {pidx:bidx → text}
         flat = {}
@@ -836,10 +841,15 @@ class ContextBatchTranslator:
                         raise ValueError(
                             f"Failed to parse {parser} response"
                         )
-                    if len(result) != expected_count:
+                    if len(result) == 0:
                         raise ValueError(
-                            f"Expected {expected_count} entries, "
-                            f"got {len(result)}"
+                            f"Parsed {parser} response is empty"
+                        )
+                    if len(result) < expected_count:
+                        logger.warning(
+                            "TXT parser: expected %d entries, got %d — "
+                            "missing entries will use original text",
+                            expected_count, len(result),
                         )
 
                     return result
