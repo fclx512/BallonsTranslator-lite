@@ -198,3 +198,97 @@
 **最终结果：** `ruff check .` → **All checks passed! ✅**（244 → 0）
 
 **涉及文件：** `launch.py`、`utils/config.py`、`utils/package_installer.py`、`utils/psd_descriptor.py`、`ui/configpanel.py`、`ui/mainwindow.py`、`ui/module_manager.py`、`ui/normalize_breaks_dialog.py`、`ui/scenetext_manager.py`、`ui/textedit_area.py`、`modules/translators/context_batch.py`、`modules/translators/trans_llm_api.py`、`scripts/compare_tysh_items.py`、`scripts/debug_ref_items.py`、`scripts/parse_tysh.py`、`scripts/extract_psd_tysh.py`、`scripts/tatechuyoko_render_test.py`、`tools/无字图配对工具.py`
+
+---
+
+## 2026-07-22
+
+### 上下文翻译解析失败导致整批回退原文 + 字体样式管理器缺失字重控件
+
+#### 上下文翻译批量解析宽容处理
+
+**问题：** 上下文翻译时，LLM 返回的响应缺少某个页面（如写了 `043.jpg` 而非 `043.jpeg`），`_parse_txt_response` 的 all-or-nothing 校验直接 `return None`，3 次重试全部失败后返回 `{}`，导致整个批次所有块回退到原文。术语表虽注入到 system prompt，但因解析失败、LLM 输出被丢弃而用不上。
+
+**改动（`modules/translators/context_batch.py`）：**
+
+1. **`_parse_txt_response`**（第 697-707 行）— 移除严格的 all-or-nothing 校验，改为收集缺失页面列表打 warning，保留已成功解析的部分结果。
+2. **`_llm_call`**（第 844-853 行）— 数量校验从 `len(result) != expected_count` 改为只拒绝完全空的结果；部分结果只打 warning 不报错。
+3. **`_build_msgs`**（第 502 行）— output format 说明末尾加 `- Include ALL pages listed above — do not skip any.`，从源头减少 LLM 遗漏页面的概率。
+
+**涉及文件：** `modules/translators/context_batch.py`
+
+#### 字体样式管理器新增字重/样式选择控件
+
+**问题：** 用户自建的 `font_weight` 参数（独立于上游）在字体样式管理器的批量编辑区域没有对应控件，创建字体样式时无法设置和保存字重。
+
+**改动（`ui/fontstyle_manager.py`）：**
+
+1. **导入** — 新增 `QFontDatabase`
+2. **`StyleDetail.__init__`** — Batch edit 区域 Font Family 下方新增 **Font Style** 下拉框（`_style_combo`），显示当前字体族支持的样式列表（来自 `shared.FONT_STYLES`）
+3. **`_sync_controls`** — 同步控件时调用 `_populate_style_combo`，按 `_style_name` → `font_weight` 数值优先匹配选中
+4. **新增 `_populate_style_combo`** — 填充样式列表，顶部提供 `(default)` 条目；切换字体族时自动更新
+5. **新增 `_on_family_for_style_changed`** — 字体族切换回调
+6. **`_apply_all`** — override dict 新增 `_style_name` 和 `font_weight`，从下拉选中计算字重值
+
+**涉及文件：** `ui/fontstyle_manager.py`
+
+---
+
+### CLI 工具：AI agent 项目文本读写助手
+
+**需求：** 需要让 AI agent 能读取和修改项目内的原文/译文，但搞 MCP server 太重（只是偶尔使用）。需要一个轻量方案，且能控制上下文体量——避免一次加载整个项目 JSON（含坐标、遮罩、字体等无关字段）。
+
+**方案：** 利用已有的 `utils/proj_compact.py`（废弃 AI Chat 子系统幸存的两层+分块+选择性字段 API），写一个薄 CLI 包装层。
+
+**改动（`tools/proj_text.py`，新文件）：**
+
+1. **4 个子命令 + 1 个辅助命令：**
+   - `index <proj_dir>` — 项目概览（页面列表、块数、字符统计），调用 `build_index()`，体量约 700 字节/3页
+   - `read <proj_dir> --pages <spec> [--fields src,trans] [--paginate N]` — 读取指定页面文本，默认只返回 src/trans 字段，超过 N 页自动分块。每块 ~2KB/5页。带 `meta.hash` 供后续校验
+   - `search <proj_dir> <keyword> [--field src|trans|both]` — 全文搜索，返回匹配块 ID + 上下文片段，默认最多 50 条
+   - `hash <proj_dir>` — 获取当前项目 hash（8 位 SHA-256）
+   - `apply <proj_dir> <patch.json> [--hash xxx]` — 应用增量修改，可选 hash 校验防冲突
+
+2. **上下文控制机制：**
+   - 默认 `--fields src,trans`，不输出坐标/字体/遮罩/渲染等无关字段
+   - `compact_block()` 将每块从原始 JSON ~1KB 压缩到 ~100-200 字节
+   - 超过 `--paginate`（默认 10 页）自动分块输出
+   - `search` 遍历时不加载全部页面数据
+
+3. **安全设计：**
+   - `apply` 走 `proj_compact.apply_modifications()` 的 hash 校验，用户同时在 GUI 中修改后 apply 会抛 `StaleProjectError`
+   - 修改后自动 `proj.save()` 持久化
+
+**验证：** 全部命令实际项目测试通过 ✅（index → read → search → hash → apply → verify → revert）
+
+---
+
+### 清晰（始终矢量）模式切页后描边/阴影不渲染修复
+
+**问题：** 设置描边或阴影效果的文本框在清晰模式（始终矢量）下，切页后描边/阴影不显示，需拖拽文本框触发刷新后才能渲染。位图模式无此问题。
+
+**根因：** 慢路径 `paint()` 在 `super().paint()` 之后通过 `DestinationOver` 合成 `background_pixmap`（描边+阴影），但 `QGraphicsTextItem::paint()` 在 NoCache 模式下可能破坏 QPainter 的 clip/transform 状态，导致后续合成失效。仅在切页新创 `TextBlkItem` 的首次绘制触发。
+
+**改动（`ui/textitem.py`）：**
+
+1. **`paint()` 慢路径顺序调整**（核心）— 描边/阴影（`background_pixmap`）改在 `super().paint()` **之前** 用 `SourceOver` 绘制，文字画在上面覆盖即可。不再依赖 `DestinationOver` 和后置合成，消除 `QGraphicsTextItem::paint()` 污染 painter 状态的影响。
+
+2. **`__init__`** — 清晰模式 `_use_full_pixmap = False`，保持 `NoCache`，走原生矢量路径。
+
+3. **`startReshape()`** — 清晰模式 `_use_full_pixmap = False`，保留 `background_pixmap` 使拖拽时装饰样式可见。
+
+4. **`endReshape()`** — 清晰模式调用 `repaint_background()` 重建最终尺寸的 `background_pixmap`。
+
+5. **`repaint_background()`** — 末尾追加 `self.update()`，失效 DeviceCoordinateCache 确保下次 paint 重建 `_full_pixmap`。
+
+6. **`_build_full_pixmap()`** — 跳过空尺寸时不再将 `_full_pixmap_dirty` 置 False，避免 fast path 永久跳过重建导致装饰永久丢失。
+
+7. **`endFormatting()`** — 抑制 `endEditBlock()` 触发的冗余 `reLayoutEverything`，避免 `minSize` 不一致。
+
+**相关修复（`ui/scene_textlayout.py`）：**
+
+- **`punc_actual_rect()`** — 零宽/零高文本行返回 `[0,0,1,1]` 而非创建空 QImage，避免 `QImage`/`QPainter` 构造崩溃。
+
+**验证：** 语法检查 ✅、i18n 检查 ✅（无新增条目）、启动导入测试 ✅
+
+**涉及文件：** `ui/textitem.py`、`ui/scene_textlayout.py`

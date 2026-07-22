@@ -16,6 +16,7 @@ from qtpy.QtCore import QRect, QSize, Qt, Signal
 from qtpy.QtGui import (
     QColor,
     QFont,
+    QFontDatabase,
     QFontMetrics,
     QPainter,
     QPen,
@@ -425,6 +426,16 @@ class StyleDetail(QScrollArea):
             _labeled_control(self.tr("Font Family"), self._family_combo)
         )
 
+        # Font style / weight
+        self._style_combo = QComboBox()
+        self._style_combo.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        self._layout.addLayout(
+            _labeled_control(self.tr("Font Style"), self._style_combo)
+        )
+        self._family_combo.currentTextChanged.connect(self._on_family_for_style_changed)
+
         # Font size
         self._size_spin = QDoubleSpinBox()
         self._size_spin.setRange(1, 999)
@@ -636,6 +647,9 @@ class StyleDetail(QScrollArea):
             self._family_combo.setCurrentIndex(idx)
         self._family_combo.blockSignals(False)
 
+        # Font style / weight
+        self._populate_style_combo(ffmt.font_family, ffmt._style_name, ffmt.font_weight)
+
         # Size
         self._size_spin.blockSignals(True)
         self._size_spin.setValue(ffmt.font_size)
@@ -674,6 +688,45 @@ class StyleDetail(QScrollArea):
         self._align_combo.blockSignals(True)
         self._align_combo.setCurrentIndex(ffmt.alignment)
         self._align_combo.blockSignals(False)
+
+    def _populate_style_combo(
+        self, family: str, style_name: str = "", weight: int | None = None
+    ):
+        """Fill the style combo with available styles for *family*.
+        Selects by style_name first, then by best weight match."""
+        from utils import shared
+
+        self._style_combo.blockSignals(True)
+        self._style_combo.clear()
+        styles = shared.FONT_STYLES.get(family, [])
+        self._style_combo.addItems(styles)
+
+        # Add a "(default)" entry at top for resetting to font default weight
+        self._style_combo.insertItem(0, "")
+        self._style_combo.setItemText(0, self.tr("(default)"))
+
+        # Try to match by style name first
+        selected = False
+        if style_name:
+            idx = self._style_combo.findText(style_name)
+            if idx >= 0:
+                self._style_combo.setCurrentIndex(idx)
+                selected = True
+
+        # Fallback: match by best weight
+        if not selected and weight is not None:
+            for i in range(1, self._style_combo.count()):
+                s = self._style_combo.itemText(i)
+                sw = QFontDatabase.weight(family, s)
+                if sw == weight:
+                    self._style_combo.setCurrentIndex(i)
+                    selected = True
+                    break
+        self._style_combo.blockSignals(False)
+
+    def _on_family_for_style_changed(self, family: str):
+        """Update style combo when font family changes."""
+        self._populate_style_combo(family)
 
     def _populate_block_tree(self, entry: StyleEntry):
         """Fill the QTreeWidget with pages → blocks."""
@@ -847,8 +900,19 @@ class StyleDetail(QScrollArea):
         if not family:
             return
 
+        # Font style / weight
+        style_text = self._style_combo.currentText()
+        if style_text:
+            style_name = style_text
+            font_weight = QFontDatabase.weight(family, style_text)
+        else:
+            style_name = ""
+            font_weight = QFont.Weight.Normal  # default weight
+
         override = {
             "font_family": family,
+            "_style_name": style_name,
+            "font_weight": font_weight,
             "font_size": self._size_spin.value(),
             "bold": self._bold_cb.isChecked(),
             "italic": self._italic_cb.isChecked(),

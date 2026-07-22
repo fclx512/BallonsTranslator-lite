@@ -120,7 +120,10 @@ class TextBlkItem(QGraphicsTextItem):
         self.setBoundingRegionGranularity(0)
         self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable)
         self.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
-        # Crisp mode: always vector rendering (NoCache + no pixmap path)
+        # Crisp mode: no Qt cache, render text natively each frame via
+        # super().paint(). Background (stroke/shadow) is drawn BEFORE text
+        # in the slow path — avoiding DestinationOver issues where
+        # super().paint() can leave the painter in a stale state.
         from utils.config import pcfg
 
         if pcfg.text_rendering == 0:  # Crisp (always vector)
@@ -320,6 +323,8 @@ class TextBlkItem(QGraphicsTextItem):
         painter.end()
         self.background_pixmap = target_map
         self.repainting = False
+        # 失效 DeviceCoordinateCache，确保下次 paint 重建 _full_pixmap
+        self.update()
 
     def _render_text_only(self) -> QPixmap:
         """Render text content without stroke into a fresh transparent pixmap.
@@ -352,8 +357,11 @@ class TextBlkItem(QGraphicsTextItem):
         empty = self.document().isEmpty()
         size = self.boundingRect().size().toSize()
         if size.width() < 1 or size.height() < 1 or empty:
+            # 保持 _full_pixmap_dirty = True，下次 paint 重试。
+            # 如果在此设为 False 而 pixmap 未构建，fast path 将永久跳过重建，
+            # fall through 到 slow path；若 background_pixmap 也为 None，
+            # 描边/阴影即消失。
             self._full_pixmap = None
-            self._full_pixmap_dirty = False
             return
 
         paint_stroke = self.fontformat.stroke_width > 0
@@ -487,7 +495,7 @@ class TextBlkItem(QGraphicsTextItem):
                 self.background_pixmap = None
                 self._skip_pixmap_rebuild = True
                 self._use_full_pixmap = True
-            else:  # Crisp — keep existing background_pixmap, native render
+            else:  # Crisp — slow path with existing background_pixmap
                 self._skip_pixmap_rebuild = True
                 self._use_full_pixmap = False
                 # background_pixmap kept intact — decorations stay visible
@@ -504,12 +512,8 @@ class TextBlkItem(QGraphicsTextItem):
             self._use_full_pixmap = True
             self._invalidate_cache()
             self._build_full_pixmap()
-        else:  # Crisp mode — no pixmap path
+        else:  # Crisp mode — rebuild background_pixmap at final drag size
             self._use_full_pixmap = False
-            # Rebuild background_pixmap at final drag size.
-            # Without this, the stale pre-drag bitmap persists if
-            # mouseReleaseEvent skipped setRect(repaint=True) because
-            # _pending_rect was already consumed by the timer.
             self.repaint_background()
         self.reshaped.emit(self)
         self.reshaping = False
@@ -802,6 +806,21 @@ class TextBlkItem(QGraphicsTextItem):
                 return
 
         # --- Slow path: original QTextDocument-based rendering ---
+        #
+        # Key ordering: background (stroke/shadow) is drawn BEFORE text
+        # via SourceOver, not after via DestinationOver.  This avoids
+        # relying on QGraphicsTextItem::paint() leaving the painter in
+        # a clean state — after page switches, super().paint() can leave
+        # stale clip/transform that breaks subsequent DestinationOver
+        # compositing.
+        if not self.is_editting():
+            if draw_clip:
+                painter.save()
+                painter.setClipRect(clip_rect)
+            self._draw_background_only(painter)
+            if draw_clip:
+                painter.restore()
+
         if self.is_editting():
             if draw_clip:
                 painter.save()
@@ -819,19 +838,6 @@ class TextBlkItem(QGraphicsTextItem):
             painter.restore()
 
         if not self.is_editting():
-            painter.setCompositionMode(
-                QPainter.CompositionMode.CompositionMode_DestinationOver
-            )
-            # Draw background (stroke/shadow) behind text content (clipped)
-            if draw_clip:
-                painter.save()
-                painter.setClipRect(clip_rect)
-            self._draw_background_only(painter)
-            if draw_clip:
-                painter.restore()
-            painter.setCompositionMode(
-                QPainter.CompositionMode.CompositionMode_SourceOver
-            )
             # Border and badge always draw outside the clip
             self._draw_border_rect(painter)
             self._draw_seq_badge(painter)
@@ -1296,7 +1302,12 @@ class TextBlkItem(QGraphicsTextItem):
         if repaint_background:
             self.repaint_background()
 
+        # endEditBlock 会触发 deferred documentChanged → reLayoutEverything，
+        # 但 layout 已在之前显式调用的 reLayoutEverything/squeezeBoundingRect 中完成，
+        # 抑制这次冗余重排避免潜在的 minSize 不一致。
+        self.layout.relayout_on_changed = False
         cursor.endEditBlock()
+        self.layout.relayout_on_changed = True
         self.is_formatting = False
 
     def setFontFamily(
@@ -1876,6 +1887,10 @@ class TextBlkItem(QGraphicsTextItem):
             h = max(h, self._display_rect.height())
             w = min(w, self._display_rect.width())
             h = min(h, self._display_rect.height())
+
+        # 安全钳位：阻止 _display_rect 缩到 0（极端排版边界情况）
+        w = max(w, 1.0)
+        h = max(h, 1.0)
 
         if set_layout_maxsize:
             self.layout.setMaxSize(w, h)

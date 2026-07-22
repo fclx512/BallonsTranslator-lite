@@ -172,6 +172,9 @@ def punc_actual_rect(
         h = int(line.height())
     if w is None:
         w = int(line.naturalTextWidth())
+    if w < 1 or h < 1:
+        # 零宽/零高文本行：跳过 QImage/QPainter 避免崩溃
+        return [0, 0, 1, 1]
     pixmap = QImage(w * 2, h * 2, QImage.Format.Format_ARGB32)
     pixmap.fill(Qt.GlobalColor.transparent)
     p = QPainter(pixmap)
