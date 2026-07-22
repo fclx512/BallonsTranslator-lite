@@ -1,13 +1,12 @@
 """Qt-free glossary loading, selection, and deterministic rendering."""
 
-from dataclasses import dataclass
-from functools import lru_cache
 import json
 import os
-from pathlib import Path
 import stat
+from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple, Union
-
 
 GLOSSARY_MODE_MATCHING = "matching"
 GLOSSARY_MODE_ALL = "all"

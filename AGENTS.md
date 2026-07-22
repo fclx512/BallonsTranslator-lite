@@ -52,7 +52,7 @@ modules/
 `ui/custom_widget/` 封装了完整的可复用控件库，通过 `__init__.py` 统一导出：
 `from ui.custom_widget import ConfigCheckBox, NoArrowsSpinBox, …`。
 
-**核心模式**（详见 [`docs/打包控件功能使用说明.md`](docs/打包控件功能使用说明.md)）：
+**核心模式**（详见 [`docs/基础速查/打包控件功能使用说明.md`](docs/基础速查/打包控件功能使用说明.md)）：
 
 | 模式/控件 | 一句话说明 |
 |-----------|----------|
@@ -104,7 +104,7 @@ modules/
 - 模块参数 `description` 用英文，翻译放 `<context><name>ParamWidget</name></context>`。
 - 无需翻译：日志、LLM prompt、字体测试字符、语言映射字典。
 - 常见问题：source 大小写不一致；context 放错；`type="obsolete"`。批量编辑 ts 用 Python 脚本直接操作文本。
-- **⚠️ QM 编码陷阱**：`scripts/qm_compile.py` 旧版用 `latin-1` 编码，会把 `—`/`→`/`⚠`/`✓` 等非 Latin-1 字符静默替换成 `?`，导致 Qt 哈希查找失败、翻译回退为英文。`self.tr()` 正确但运行时仍显英文 → 查 qm 是否被污染，确保 `_iso8859_str()` 用 `"utf-8"` 后重新编译。诊断脚本与细节见 [`docs/i18n.md`](docs/i18n.md)「常见问题」。
+- **⚠️ QM 编码陷阱**：`scripts/qm_compile.py` 旧版用 `latin-1` 编码，会把 `—`/`→`/`⚠`/`✓` 等非 Latin-1 字符静默替换成 `?`，导致 Qt 哈希查找失败、翻译回退为英文。`self.tr()` 正确但运行时仍显英文 → 查 qm 是否被污染，确保 `_iso8859_str()` 用 `"utf-8"` 后重新编译。诊断脚本与细节见 [`docs/基础速查/i18n.md`](docs/基础速查/i18n.md)「常见问题」。
 
 ## 测试流程
 
@@ -123,7 +123,7 @@ modules/
 
 ## 快捷键系统
 
-定义在 `ui/configpanel.py` 的 `DEFAULT_SHORTCUTS`/`_ACTION_NAMES`，`_SHORTCUT_GROUPS` 分组。安装/刷新见 `ui/mainwindow.py` 的 `_install_shortcuts()`/`refreshShortcuts()`。用户配置持久化在 `pcfg.shortcuts`（`config.json`）。详见 `docs/快捷键.md`。
+定义在 `ui/configpanel.py` 的 `DEFAULT_SHORTCUTS`/`_ACTION_NAMES`，`_SHORTCUT_GROUPS` 分组。安装/刷新见 `ui/mainwindow.py` 的 `_install_shortcuts()`/`refreshShortcuts()`。用户配置持久化在 `pcfg.shortcuts`（`config.json`）。详见 `docs/基础速查/快捷键.md`。
 
 ## 动画系统
 

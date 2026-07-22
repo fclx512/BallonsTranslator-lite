@@ -1,6 +1,22 @@
-from qtpy.QtWidgets import QApplication, QAbstractScrollArea, QGraphicsOpacityEffect, QWidget, QVBoxLayout, QHBoxLayout
-from qtpy.QtCore import QEvent, Qt, QPropertyAnimation, QTimer, Signal, QPoint, Property, QAbstractAnimation
+from qtpy.QtCore import (
+    Property,
+    QAbstractAnimation,
+    QEvent,
+    QPoint,
+    QPropertyAnimation,
+    Qt,
+    QTimer,
+    Signal,
+)
 from qtpy.QtGui import QMouseEvent, QPainter
+from qtpy.QtWidgets import (
+    QAbstractScrollArea,
+    QApplication,
+    QGraphicsOpacityEffect,
+    QHBoxLayout,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class ScrollBarGroove(QWidget):

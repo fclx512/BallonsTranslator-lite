@@ -227,9 +227,9 @@ class PPOCRv6Detector(TextDetectorBase):
         _pb.PredictBase.get_onnx_session = _patched_session
 
         # 3. Create the detector directly.
-        from onnxocr.predict_det import TextDetector
-
         import argparse
+
+        from onnxocr.predict_det import TextDetector
 
         det_path = self._model_path("det.onnx")
         if not osp.isfile(det_path):

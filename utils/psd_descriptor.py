@@ -158,7 +158,7 @@ def bounds_descriptor(
     elif unit == "Pnt":
         mk = DescriptorValue.unit_points
     else:
-        mk = lambda v: DescriptorValue.unit_float(v, f"#{unit}")
+        def mk(v): return DescriptorValue.unit_float(v, f"#{unit}")
     return (
         DescriptorObject("", class_id)
         .with_item("Left", mk(left))

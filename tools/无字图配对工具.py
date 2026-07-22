@@ -7,26 +7,39 @@
 
 兼容：qtpy（适配项目现有的 PyQt6 环境）
 """
-import sys
-import os
+# ruff: noqa
 import json
+import os
 import shutil
-from pathlib import Path
-from typing import List, Dict, Optional, Set
+import sys
 from collections import deque
+from pathlib import Path
+from typing import Dict, List, Optional, Set
 
 try:
+    from qtpy.QtCore import QMimeData, QPoint, QRect, QSize, Qt, QTimer, QUrl, Signal
+    from qtpy.QtGui import QDrag, QFont, QKeySequence, QPainter, QPixmap
     from qtpy.QtWidgets import (
-        QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-        QScrollArea, QLabel, QFrame, QPushButton, QFileDialog,
-        QMessageBox, QMenu, QAction, QInputDialog, QStatusBar,
-        QShortcut, QSizePolicy, QLayout, QDialog, QProgressDialog
-    )
-    from qtpy.QtCore import (
-        Qt, QMimeData, QPoint, QSize, QRect, Signal, QUrl, QTimer
-    )
-    from qtpy.QtGui import (
-        QPixmap, QDrag, QKeySequence, QFont, QPainter
+        QAction,
+        QApplication,
+        QDialog,
+        QFileDialog,
+        QFrame,
+        QHBoxLayout,
+        QInputDialog,
+        QLabel,
+        QLayout,
+        QMainWindow,
+        QMenu,
+        QMessageBox,
+        QProgressDialog,
+        QPushButton,
+        QScrollArea,
+        QShortcut,
+        QSizePolicy,
+        QStatusBar,
+        QVBoxLayout,
+        QWidget,
     )
 except ImportError:
     print("请确保已安装 qtpy 与 PyQt6: pip install qtpy PyQt6")

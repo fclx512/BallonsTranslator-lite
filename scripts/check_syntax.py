@@ -9,10 +9,8 @@ Usage:
   python scripts/check_syntax.py path/to/file.py         # check one file
 """
 
-import ast
 import os
 import sys
-import traceback
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -62,7 +60,7 @@ def check_bom(filepath: Path) -> list[str]:
     with open(filepath, "rb") as f:
         raw = f.read(3)
     if raw == b"\xef\xbb\xbf":
-        errors.append(f"  UTF-8 BOM detected")
+        errors.append("  UTF-8 BOM detected")
     return errors
 
 

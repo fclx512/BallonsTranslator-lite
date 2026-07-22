@@ -6,14 +6,11 @@ from qtpy.QtWidgets import (
     QCheckBox,
     QGridLayout,
     QHBoxLayout,
-    QLabel,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
-
-from utils.shared import CONFIG_FONTSIZE_CONTENT
 
 from modules import (
     DEFAULT_DEVICE,
@@ -25,9 +22,20 @@ from modules import (
     BaseTranslator,
 )
 from utils.logger import logger as LOGGER
-from utils.shared import CONFIG_COMBOBOX_HEIGHT, CONFIG_COMBOBOX_LONG, size2width
+from utils.shared import (
+    CONFIG_COMBOBOX_HEIGHT,
+    CONFIG_COMBOBOX_LONG,
+    size2width,
+)
 
-from .custom_widget import ConfigComboBox, ConfigLineEdit, ConfigSectionHeader, ConfigTextEdit, ParamComboBox, ParamNameLabel
+from .custom_widget import (
+    ConfigComboBox,
+    ConfigLineEdit,
+    ConfigSectionHeader,
+    ConfigTextEdit,
+    ParamComboBox,
+    ParamNameLabel,
+)
 
 
 class ParamCheckGroup(QWidget):

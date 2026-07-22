@@ -5,6 +5,7 @@
 输出 PNG 到临时目录，并打印关键字内部数据（line 数、naturalTextWidth、draw_shifted、
 layout_left、shrink_width）供对照断言。
 """
+# ruff: noqa
 import os
 import sys
 import tempfile
@@ -12,16 +13,15 @@ import tempfile
 # 让脚本能 import 项目内模块
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import (
-    QPainter,
-    QPixmap,
-    QTextDocument,
     QColor,
-    QPen,
     QFont,
+    QPainter,
+    QPen,
+    QPixmap,
     QTextCharFormat,
     QTextCursor,
+    QTextDocument,
 )
 from PyQt6.QtWidgets import QApplication
 

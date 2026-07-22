@@ -1,13 +1,22 @@
+import os.path as osp
 from typing import List, Tuple, Union
 
-from qtpy.QtCore import QEasingCurve, QElapsedTimer, QEvent, QItemSelection, QPoint, QSize, Qt, QTimer, Signal
+from qtpy.QtCore import (
+    QEasingCurve,
+    QElapsedTimer,
+    QEvent,
+    QItemSelection,
+    QPoint,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+)
 from qtpy.QtGui import (
-    QColor,
     QFocusEvent,
     QFont,
     QGuiApplication,
     QIntValidator,
-    QPainter,
     QShortcut,
     QStandardItem,
     QStandardItemModel,
@@ -36,7 +45,6 @@ from qtpy.QtWidgets import (
     QSizePolicy,
     QSpacerItem,
     QStackedWidget,
-    QStyle,
     QTreeView,
     QVBoxLayout,
     QWidget,
@@ -58,18 +66,15 @@ from utils.shared import (
     NAVLIST_WIDTH,
 )
 
-import os.path as osp
-
 from .custom_widget import (
     ConfigCheckBox,
     ConfigComboBox,
     ConfigLineEdit,
     ConfigScrollBar,
     ConfigSectionHeader,
-    ConfigTextEdit,
     NoArrowsSpinBox,
-    PanelGroupBox,
     PaintQSlider,
+    PanelGroupBox,
     Widget,
 )
 from .module_parse_widgets import (
@@ -1194,8 +1199,9 @@ class FontExcludeDialog(QDialog):
         Legacy fonts skip the typeface preview and get a "[Legacy]" suffix.
         The original font name is stored in ``Qt.UserRole``.
         """
-        from utils.shared import LEGACY_FONTS
         from qtpy.QtCore import Qt
+
+        from utils.shared import LEGACY_FONTS
 
         is_legacy = font_name in LEGACY_FONTS
         display = f"{font_name} [{self.tr('Legacy')}]" if is_legacy else font_name
@@ -1353,7 +1359,7 @@ class ConfigPanel(Widget):
         # Map: section_widget (PanelGroupBox) -> page index in pageStack
         self._page_index: dict = {}
         # Dead blocks retained for compatibility; sections live in pageStack
-        dlConfigPanel = _DeadBlock(self.tr("DL Module"))
+        dlConfigPanel = _DeadBlock(self.tr("DL Module"))  # noqa: F841
         generalConfigPanel = _DeadBlock(self.tr("General"))
 
         label_text_det = self.tr("Text Detection")
@@ -1553,12 +1559,12 @@ class ConfigPanel(Widget):
         )
         temp_clean_sublock = ConfigSubBlock(
             self.temp_clean_checker,
-	            note=self.tr(
-	                "<p>When enabled, projects created by importing individual images "
-	                "(via drag-drop or <b>Open Image…</b>) will be "
-	                "<b>automatically deleted</b> when the application closes.</p>"
-	                "<p>Use <b>Save Project As…</b> to keep a project permanently.</p>"
-	            ),
+            note=self.tr(
+                "<p>When enabled, projects created by importing individual images "
+                "(via drag-drop or <b>Open Image…</b>) will be "
+                "<b>automatically deleted</b> when the application closes.</p>"
+                "<p>Use <b>Save Project As…</b> to keep a project permanently.</p>"
+            ),
         )
         project_layout.addWidget(temp_clean_sublock)
 
@@ -2243,7 +2249,7 @@ class ConfigPanel(Widget):
         if hasattr(widget, 'module_label') and widget.module_label is not None:
             widget.module_label.hide()
 
-        idx = self._add_page(group)
+        self._add_page(group)  # registers page in stack
         sublock.section_widget = group
         self.subblock_list = getattr(self, "subblock_list", [])
         # keep a reference list of sublocks for parity with legacy blocks

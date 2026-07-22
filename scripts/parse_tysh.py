@@ -1,5 +1,7 @@
 """Parse TySh descriptor from reference PSD — simple, flat, correct."""
-import struct, os
+# ruff: noqa
+import struct
+
 
 def read_unicode(data, pos):
     c = struct.unpack(">I", data[pos:pos+4])[0]
@@ -93,7 +95,7 @@ def list_items(data, pos, depth=0):
             val_preview = f"= enum({t}={v})"
         elif typ == b"Objc":
             # print sub-descriptor
-            val_preview = f"= [Objc]"
+            val_preview = "= [Objc]"
             print(f"{prefix}  [{i}] key={key!r} type={typ} {val_preview}")
             pos = list_items(data, pos, depth+1)
             continue
@@ -148,7 +150,7 @@ print(f"Descriptor version: {dv}"); pp += 2
 print("\n--- TEXT DESCRIPTOR ---")
 pp = list_items(tysh, pp)
 
-print(f"\n--- WARP ---")
+print("\n--- WARP ---")
 wv = struct.unpack(">h", tysh[pp:pp+2])[0]
 print(f"Warp version: {wv}"); pp += 2
 pp = list_items(tysh, pp)

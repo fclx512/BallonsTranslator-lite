@@ -16,7 +16,6 @@ from qtpy.QtCore import (
 )
 from qtpy.QtGui import (
     QClipboard,
-    QFont,
     QKeyEvent,
     QTextCharFormat,
     QTextCursor,
@@ -34,6 +33,16 @@ from utils import shared
 from utils.config import pcfg
 from utils.fontformat import FontFormat
 from utils.imgproc_utils import get_block_mask
+from utils.text_alignment import (
+    align_bottom,
+    align_horizontal_center,
+    align_left,
+    align_right,
+    align_top,
+    align_vertical_center,
+    distribute_horizontal,
+    distribute_vertical,
+)
 
 from .canvas import Canvas
 from .text_panel import FontFormatPanel
@@ -60,16 +69,6 @@ from .textedit_commands import (
     propagate_user_edit,
 )
 from .textitem import TextBlkItem, TextBlock
-from utils.text_alignment import (
-    align_bottom,
-    align_horizontal_center,
-    align_left,
-    align_right,
-    align_top,
-    align_vertical_center,
-    distribute_horizontal,
-    distribute_vertical,
-)
 
 
 class CreateItemCommand(QUndoCommand):
@@ -1165,7 +1164,10 @@ class SceneTextManager(QObject):
             abr = b.absBoundingRect()
             bx1, by1 = abr[0], abr[1]
             bx2, by2 = bx1 + abr[2], by1 + abr[3]
-            x1s.append(bx1); y1s.append(by1); x2s.append(bx2); y2s.append(by2)
+            x1s.append(bx1)
+            y1s.append(by1)
+            x2s.append(bx2)
+            y2s.append(by2)
 
         merged.text = texts
         # 只保留非空译文，空块不产生换行

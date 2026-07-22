@@ -1,10 +1,11 @@
 """直接对比我们的 TySh 输出与参考 PSD 的 TySh 结构差异。"""
-import struct, sys
+import struct
+import sys
 
 sys.path.insert(0, r"D:\ruanjian\BallonsTranslator-lite")
 
-from utils.psd_engine_data import encode_engine_data, TextEngineSpec, TextOrientation, TextJustification
 from utils.psd_binary_exporter import TextLayerMetadata, _tysh_body
+from utils.psd_engine_data import TextJustification, TextOrientation
 
 # ========================================================================
 # 1. Generate our TySh for a simple 'A', vertical text, no rotation
@@ -71,7 +72,7 @@ print(f"  Ref: {ref_dv}")
 # ========================================================================
 # 4. Compare the descriptor body (after version marker)
 # ========================================================================
-print(f"\n=== DESCRIPTOR BODY (starting at offset 52 = 0x34) ===")
+print("\n=== DESCRIPTOR BODY (starting at offset 52 = 0x34) ===")
 
 # After the version 50 marker, what does each file have?
 print("\n--- Our descriptor body after u16(50): ---")
@@ -92,7 +93,7 @@ print("\n--- Reference descriptor body after u16(50): ---")
 
 # What are the first 32 bytes?
 ref_body_start = ref_tysh[52:84]
-print(f"  First 32 bytes of descriptor body:")
+print("  First 32 bytes of descriptor body:")
 for i in range(0, len(ref_body_start), 16):
     chunk = ref_body_start[i:i+16]
     hexp = " ".join(f"{b:02x}" for b in chunk)
@@ -102,7 +103,7 @@ for i in range(0, len(ref_body_start), 16):
 # ========================================================================
 # 5. COMPLETE HEX DIFF of the descriptor portions
 # ========================================================================
-print(f"\n=== COMPLETE HEX SIDE-BY-SIDE (first 300 bytes) ===")
+print("\n=== COMPLETE HEX SIDE-BY-SIDE (first 300 bytes) ===")
 print(f"{'Offset':>6} | {'Our TySh':<48s} | {'Ref TySh':<48s}")
 print("-"*120)
 max_len = min(len(our_tysh), len(ref_tysh), 300)
@@ -119,7 +120,7 @@ for i in range(0, max_len, 16):
 # ========================================================================
 # 6. Show data sizes
 # ========================================================================
-print(f"\n=== LENGTH COMPARISON ===")
+print("\n=== LENGTH COMPARISON ===")
 print(f"  Our TySh: {len(our_tysh)} bytes")
 print(f"  Ref TySh:  {len(ref_tysh)} bytes")
 print(f"  Difference: {abs(len(our_tysh)-len(ref_tysh))} bytes")
@@ -129,4 +130,4 @@ print(f"  Difference: {abs(len(our_tysh)-len(ref_tysh))} bytes")
 # ========================================================================
 with open(r"D:\下载\_our_tysh.bin", "wb") as f:
     f.write(our_tysh)
-print(f"\nSaved our TySh to D:\\下载\\_our_tysh.bin")
+print("\nSaved our TySh to D:\\下载\\_our_tysh.bin")

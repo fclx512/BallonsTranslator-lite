@@ -17,7 +17,7 @@ BallonsTranslator的分支版漫画/图片翻译工具。五阶段管线：文�
 
 ### 一键包（推荐）
 
-从以下渠道下载完整包（含嵌入式 Python 3.12 + 全部依赖 + 模型文件），解压后运行 `launch.bat`：
+从以下渠道下载完整依赖和模型（含嵌入式 Python 3.12 + 全部依赖 + 模型文件），解压后运行 `launch.bat`：
 
 - [123 云盘](https://1815181720.share.123865.com/123pan/sKBtVv-Zs1Vd)（优先）
 - [Google Drive](https://drive.google.com/drive/folders/1WJXjcQt7UzHvRpH3QfwcOokL8Fm7l0zT?usp=sharing)（更新可能有延迟）
@@ -96,18 +96,6 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 - **ZIP 发行版用户**（一键包）：前往 [Releases](https://github.com/fclx512/BallonsTranslator-lite/releases) 下载最新版源码压缩包，解压覆盖到原目录。一键包不含 git，无法通过启动脚本或应用内功能更新。
 - **Git 用户**：`python launch.py --update` 或 `git pull`
 - **应用内检查**：Help → About → 检查更新（需系统已安装 git，仅获取提交记录，不自动更新）
-
-## 常见问题
-
-**如何自定义快捷键？**
-
-参见 [快捷键指南](docs/快捷键.md)
-
-**如何添加翻译 API？**
-
-在设置面板 → Models → API Profiles 中配置。
-
----
 
 ## 致谢
 

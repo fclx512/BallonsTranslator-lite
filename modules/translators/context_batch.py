@@ -25,14 +25,12 @@ if TYPE_CHECKING:
     from utils.proj_imgtrans import ProjImgTrans
     from utils.textblock import TextBlock
 
-from utils.config import pcfg
 from modules.context.glossary import (
     GlossaryEntry,
     GlossaryError,
     load_glossary,
-    select_glossary,
-    render_glossary,
 )
+from utils.config import pcfg
 
 logger = logging.getLogger("context_batch")
 
@@ -227,7 +225,6 @@ class ContextBatchTranslator:
         if self._proj is None:
             return self._direct_call(text_list)
         all_keys = list(self._proj.pages.keys())
-        total = len(all_keys)
 
         # Resolve batch from pre-computed boundaries (auto-configured)
         batch_keys = None
@@ -257,7 +254,7 @@ class ContextBatchTranslator:
         use_summary = total_batches > 4 and self._summaries
         mode = "summary" if use_summary else ("full" if total_batches <= 1 else "auto")
         self._status(
-            f"────────────────────────────────────────"
+            "────────────────────────────────────────"
         )
         self._status(
             f"Batch {batch_idx + 1}/{total_batches} · "

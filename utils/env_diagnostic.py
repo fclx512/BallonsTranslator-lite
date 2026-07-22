@@ -388,6 +388,7 @@ def test_module_functional(stage: str, module_key: str) -> Dict[str, Any]:
 
     import time
     from pathlib import Path
+
     from utils import shared
 
     start = time.perf_counter()
@@ -434,9 +435,9 @@ def test_module_functional(stage: str, module_key: str) -> Dict[str, Any]:
                         f"  Model files: {found_files}/{total_files} on disk"
                     )
             else:
-                output_parts.append(f"[2/4] No download_file_list declared")
+                output_parts.append("[2/4] No download_file_list declared")
         else:
-            output_parts.append(f"[2/4] Module spec not available")
+            output_parts.append("[2/4] Module spec not available")
 
         # Step 3: instantiate the module
         try:
@@ -511,7 +512,7 @@ def test_module_functional(stage: str, module_key: str) -> Dict[str, Any]:
                         except Exception as e:
                             output_parts.append(f"  API test failed: {e}")
                     else:
-                        output_parts.append(f"  API test skipped: host/key empty")
+                        output_parts.append("  API test skipped: host/key empty")
                 else:
                     output_parts.append(
                         f"[4/4] Profile '{profile_name}' not found in saved profiles"
@@ -551,7 +552,7 @@ def dependency_summary() -> Dict[str, Any]:
     """
     total = installed = missing = mismatched = skipped = 0
     try:
-        from ui.dependency_dialog import _load_declared_deps, _check_req
+        from ui.dependency_dialog import _check_req, _load_declared_deps
 
         raw = _load_declared_deps()
         for req_str, _dep_type in raw:

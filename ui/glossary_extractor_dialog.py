@@ -15,10 +15,9 @@ so it can be used immediately.
 from __future__ import annotations
 
 import logging
-import os
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
-from qtpy.QtCore import Qt, QThread, Signal
+from qtpy.QtCore import QThread, Signal
 from qtpy.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -46,7 +45,7 @@ from modules.glossary_extractor import (
     extract_by_llm,
     save_glossary_json,
 )
-from ui.custom_widget import ConfigCheckBox, ConfigComboBox
+from ui.custom_widget import ConfigComboBox
 from utils.config import pcfg
 from utils.profile_manager import find_profile, get_profile_names
 

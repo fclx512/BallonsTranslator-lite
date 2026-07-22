@@ -123,7 +123,7 @@ def _esc(s: str) -> str:
 
 
 def context_block(name: str, translations: dict) -> str:
-    parts = [f"    <context>", f"        <name>{name}</name>"]
+    parts = ["    <context>", f"        <name>{name}</name>"]
     for src in SOURCES:
         if src in SKIP_TRANSLATION:
             continue

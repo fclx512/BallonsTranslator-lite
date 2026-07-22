@@ -6,7 +6,7 @@ import time
 from typing import List, Union
 
 import numpy as np
-from qtpy.QtCore import Qt, QLocale, QObject, QThread, QTimer, Signal
+from qtpy.QtCore import QLocale, QObject, QThread, QTimer, Signal
 from qtpy.QtWidgets import QFileDialog
 
 import modules
@@ -37,9 +37,9 @@ from utils.registry import Registry
 from utils.textblock import TextBlock, sort_regions
 
 from .configpanel import ConfigPanel
-from .misc import get_theme_color
 from .custom_widget import ImgtransProgressMessageBox, ParamComboBox, ProgressMessageBox
 from .funcmaps import get_maskseg_method
+from .misc import get_theme_color
 
 modules.translators.SYSTEM_LANG = QLocale.system().name()
 cfg_module = pcfg.module
@@ -1061,14 +1061,12 @@ def _ensure_module_deps(
             self.dfl = dfl  # raw download_file_list from the module
 
         def run(self):
-            import subprocess
             import shutil
+            import subprocess
 
             success = True
             failure_code = None
             has_hf_no_mirror = self._check_hf_no_mirror()
-            failure_reason = ""  # human-readable summary for the dialog
-
             # 1. Install Python packages
             if self.missing_pkgs:
                 self.status.emit(

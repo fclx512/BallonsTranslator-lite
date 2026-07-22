@@ -17,8 +17,8 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Callable, Dict, List, Optional
 
-from qtpy.QtCore import Qt, QPoint, QSize
-from qtpy.QtGui import QAction, QKeySequence
+from qtpy.QtCore import QPoint, QSize, Qt
+from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -34,8 +34,8 @@ from qtpy.QtWidgets import (
 )
 
 from utils.config import pcfg, save_config
-from .textitem import TextBlkItem
 
+from .textitem import TextBlkItem
 
 # ── Default layout (mirrors the current hardcoded order) ────
 # This is the fallback used when ``pcfg.context_menu_order`` is empty / reset.

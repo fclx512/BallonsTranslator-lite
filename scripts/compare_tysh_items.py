@@ -1,9 +1,11 @@
 """比较参考 PSD 和我们的 TySh 描述符项。"""
-import struct, sys
+# ruff: noqa
+import struct
+import sys
 
 sys.path.insert(0, r"D:\ruanjian\BallonsTranslator-lite")
 from utils.psd_binary_exporter import TextLayerMetadata, _tysh_body
-from utils.psd_engine_data import TextOrientation, TextJustification
+from utils.psd_engine_data import TextJustification, TextOrientation
 
 # ==================================================================
 # 1. Generate our TySh
@@ -179,7 +181,7 @@ our_tail = find_after_items(our)
 ref_tail = find_after_items(ref)
 
 print(f"\n{'='*60}")
-print(f"AFTER TEXT DESCRIPTOR ITEMS:")
+print("AFTER TEXT DESCRIPTOR ITEMS:")
 print(f"  Our: offset {our_tail:#x} (remaining {len(our)-our_tail} bytes)")
 print(f"  Ref: offset {ref_tail:#x} (remaining {len(ref)-ref_tail} bytes)")
 

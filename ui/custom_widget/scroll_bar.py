@@ -6,7 +6,7 @@ Usage
     scroll_area.setHorizontalScrollBar(ConfigScrollBar(scroll_area))
 """
 
-from qtpy.QtCore import QEasingCurve, QElapsedTimer, Qt, QTimer, QTimer
+from qtpy.QtCore import QEasingCurve, QElapsedTimer, Qt, QTimer
 from qtpy.QtGui import QColor
 from qtpy.QtWidgets import QScrollBar
 

@@ -140,9 +140,9 @@ class PaddleOCRv6ONNX(OCRBase):
         _pb.PredictBase.get_onnx_session = _patched_session
 
         # 3. Create the recognizer directly — no detector involved.
-        from onnxocr.predict_rec import TextRecognizer
-
         import argparse
+
+        from onnxocr.predict_rec import TextRecognizer
 
         rec_path = self._model_path("rec.onnx")
         dict_path = osp.abspath(osp.join(_MODEL_DIR, "ppocrv6_dict_proper.txt"))

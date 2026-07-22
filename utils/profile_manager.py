@@ -9,8 +9,7 @@ import json
 from typing import Dict, List, Optional
 
 import httpx
-from qtpy.QtCore import Qt
-from ui.custom_widget import ConfigCheckBox, ConfigComboBox, ConfigLineEdit, ConfigSectionHeader, ConfigTextEdit, NoArrowsDoubleSpinBox, NoArrowsSpinBox
+from qtpy.QtCore import Qt, Signal
 from qtpy.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -26,7 +25,15 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from qtpy.QtCore import Signal
+from ui.custom_widget import (
+    ConfigCheckBox,
+    ConfigComboBox,
+    ConfigLineEdit,
+    ConfigSectionHeader,
+    ConfigTextEdit,
+    NoArrowsDoubleSpinBox,
+    NoArrowsSpinBox,
+)
 
 from .config import pcfg, save_config
 from .logger import logger as LOGGER

@@ -21,7 +21,9 @@ import utils.shared as shared  # noqa: E402
 from utils.env_diagnostic import detect_gpu_info  # noqa: E402
 
 BRANCH = "main"
-from utils.version import APP_VERSION as VERSION  # single source: pyproject.toml
+from utils.version import (  # noqa: E402  # single source: pyproject.toml
+    APP_VERSION as VERSION,
+)
 
 python = sys.executable
 git = os.environ.get("GIT", "git")
@@ -360,8 +362,8 @@ def _ensure_model_files_fallback():
     import importlib
     import os.path as osp
 
-    from utils.config import pcfg
     from utils import shared
+    from utils.config import pcfg
 
     # Lazy-import registries (safe after init_lazy_module_registries)
     try:
@@ -525,7 +527,7 @@ def main():
                 print("  Continuing with system Python — some operations may fail.")
                 _venv_python = None  # Don't re-exec
         if _venv_python and os.path.isfile(_venv_python):
-            print(f"  Switching to virtual environment Python...")
+            print("  Switching to virtual environment Python...")
             os.execv(_venv_python, [_venv_python] + sys.argv)
 
     print(f"Version: {VERSION}")

@@ -13,7 +13,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable, Iterable, List, Optional, Tuple
 
 BACKENDS = ("auto", "pip", "uv")
@@ -178,6 +178,7 @@ def _run_with_pty(
     progress_callback: Optional[Callable[[dict], None]] = None,
 ) -> Tuple[int, str]:
     import pty
+    import select
 
     master_fd, slave_fd = pty.openpty()
     try:

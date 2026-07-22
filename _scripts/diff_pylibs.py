@@ -5,10 +5,10 @@
 输出报告到 _scripts/pylibs_diff_report.md
 """
 
-import os
 import hashlib
-from pathlib import Path
+import os
 from collections import defaultdict
+from pathlib import Path
 
 BASE = Path(r"d:\ruanjian\BallonsTranslator-lite")
 OLD = BASE / "ballontrans_pylibs_win（旧）"
@@ -124,7 +124,7 @@ def main():
                 different_content.append((k, old_files[k].st_size, new_files[k].st_size))
 
     # ---- 构建报告 ----
-    lines = ["# Pylibs 目录差异报告", "", f"生成时间: 2026-07-07", ""]
+    lines = ["# Pylibs 目录差异报告", "", "生成时间: 2026-07-07", ""]
     lines.append(f"| 维度 | 旧版（{OLD_ROOT.name}） | 新版（{NEW.name}） |")
     lines.append("|------|------------------------|--------------------|")
     lines.append(f"| 文件/目录数 | {len(old_files)} | {len(new_files)} |")

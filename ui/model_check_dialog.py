@@ -9,9 +9,8 @@ All colours adapt to dark/light mode via ``pcfg.darkmode``.
 import os.path as osp
 
 from qtpy.QtCore import Qt, QUrl
-from qtpy.QtGui import QColor, QDesktopServices, QFont
+from qtpy.QtGui import QColor, QDesktopServices
 from qtpy.QtWidgets import (
-    QCheckBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -28,9 +27,9 @@ from qtpy.QtWidgets import (
 from utils import shared
 from utils.config import pcfg
 from utils.download_util import check_local_file
+from utils.logger import logger as LOGGER
 
 from .misc import get_theme_color
-from utils.logger import logger as LOGGER
 
 # Pipeline display order and labels
 _TYPE_ORDER = ["textdetector", "ocr", "inpainter"]

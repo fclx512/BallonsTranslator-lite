@@ -1,4 +1,5 @@
 """精确追踪参考 PSD TySh 的所有描述符项，逐一对比。"""
+# ruff: noqa
 import struct
 
 data = open(r"D:\下载\测试.psd", "rb").read()
@@ -43,7 +44,7 @@ num_items = struct.unpack(">I", tysh[p:p+4])[0]
 p += 4
 print(f"Items: {num_items}")
 
-print(f"\n=== PARSING ITEMS ===")
+print("\n=== PARSING ITEMS ===")
 item_p = p
 for i in range(num_items):
     item_start = item_p
@@ -218,9 +219,10 @@ for i in range(num_items):
 
 # Now parse OUR descriptor the same way
 import sys
+
 sys.path.insert(0, r"D:\ruanjian\BallonsTranslator-lite")
-from utils.psd_engine_data import TextOrientation, TextJustification
 from utils.psd_binary_exporter import TextLayerMetadata, _tysh_body
+from utils.psd_engine_data import TextJustification, TextOrientation
 
 meta = TextLayerMetadata(
     index=0, text="A",
@@ -235,7 +237,7 @@ meta = TextLayerMetadata(
 )
 our = _tysh_body(meta)
 
-print(f"\n=== OUR ITEMS ===")
+print("\n=== OUR ITEMS ===")
 op = 2 + 48 + 2  # skip version + transform + desc_ver
 inner_ver = struct.unpack(">I", our[op:op+4])[0]
 op += 4

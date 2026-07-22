@@ -8,7 +8,6 @@ from qtpy.QtGui import (
     QCursor,
     QHideEvent,
     QKeyEvent,
-    QKeySequence,
     QNativeGestureEvent,
     QPainter,
     QPainterPath,
@@ -29,9 +28,7 @@ from qtpy.QtWidgets import (
     QGraphicsSceneDragDropEvent,
     QGraphicsSceneMouseEvent,
     QGraphicsView,
-    QInputDialog,
     QLabel,
-    QMenu,
     QRubberBand,
     QScrollBar,
 )

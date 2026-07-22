@@ -12,7 +12,6 @@ when ``config.json`` does not yet exist.
 import json
 import locale
 import os
-import sys
 import time
 from typing import Iterable, Optional, Set
 

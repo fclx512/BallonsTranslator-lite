@@ -4,7 +4,6 @@ from collections.abc import Mapping
 from functools import lru_cache
 from typing import Dict, List
 
-
 MESSAGE_TOKEN_OVERHEAD = 4
 
 

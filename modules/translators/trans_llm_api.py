@@ -1,14 +1,12 @@
 import json
 import re
 import time
-import traceback
 from typing import Dict, List, Optional, Tuple
 
 import httpx
 import openai
 from pydantic import BaseModel, Field, ValidationError
 
-from .base import BaseTranslator, register_translator
 from modules.context.errors import (
     ContextLengthError,
     is_context_length_error,
@@ -41,12 +39,13 @@ from utils.config import (
     LLMGlossaryMode,
     LLMTranslateContext,
     RunStatus,
-    TranslateContext,
     pcfg,
 )
 from utils.io_utils import text_is_empty
 from utils.logger import logger as LOGGER
 from utils.proj_imgtrans import ProjImgTrans
+
+from .base import BaseTranslator, register_translator
 
 
 class TranslationElement(BaseModel):
@@ -958,15 +957,6 @@ class LLM_API_Translator(BaseTranslator):
         """
         if not src_list:
             return []
-
-        RETRYABLE_EXCEPTIONS = (
-            openai.RateLimitError,
-            openai.APIConnectionError,
-            openai.APITimeoutError,
-            openai.InternalServerError,
-            openai.APIStatusError,
-            httpx.RequestError,
-        )
 
         messages, prompt = self._assemble_request(
             src_list,

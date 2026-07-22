@@ -1,6 +1,8 @@
 """正确解析 PSD TySh 的描述符并提取 EngineData。"""
+# ruff: noqa
 
-import struct, os
+import os
+import struct
 
 # ============================================================
 # Correct PSD descriptor parser (version >= 16 format)
@@ -211,7 +213,7 @@ def extract_tysh_engine_data(psd_path):
     # Parse the text descriptor
     text_desc, pos2 = parse_descriptor(tysh_data, pos2)
 
-    print(f"\nText Descriptor items:")
+    print("\nText Descriptor items:")
     for k, v in text_desc.items():
         if k == "EngineData":
             ed_data = v if isinstance(v, bytes) else b""

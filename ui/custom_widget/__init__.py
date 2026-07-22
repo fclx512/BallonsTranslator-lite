@@ -38,10 +38,10 @@ from .message import (
 from .push_button import ExpandingToolButton, NoBorderPushBtn
 from .scroll_bar import ConfigScrollBar
 from .scrollbar import ScrollBar
-from .spinbox import NoArrowsDoubleSpinBox, NoArrowsSpinBox
-from .text_input import ConfigLineEdit, ConfigTextEdit
 from .section_header import ConfigSectionHeader
 from .slider import PaintQSlider, RangeSlider
+from .spinbox import NoArrowsDoubleSpinBox, NoArrowsSpinBox
+from .text_input import ConfigLineEdit, ConfigTextEdit
 from .view_panel import (
     ExpandLabel,
     PanelArea,

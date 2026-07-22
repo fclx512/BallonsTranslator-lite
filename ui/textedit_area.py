@@ -38,7 +38,6 @@ from qtpy.QtWidgets import (
 
 from ui.misc import get_theme_color
 
-
 from .custom_widget import ScrollBar, Widget
 from .textitem import TextBlock
 
@@ -509,7 +508,6 @@ class TransPairWidget(Widget):
         duration = 150  # ms
         steps = max(2, duration // 16)  # ~60 fps
         step_ms = duration // steps
-        step = 0
         start = self._accent_alpha
         delta = target - start
 

@@ -17,7 +17,7 @@ A comic/image translation tool with a five-stage pipeline: text detection → OC
 
 ### One-Click Bundle (recommended)
 
-Download the full package (includes embedded Python 3.12, all dependencies, and model files) from:
+Download the complete dependencies and models (includes embedded Python 3.12, all dependencies, and model files) from:
 
 - [123 Cloud Drive](https://1815181720.share.123865.com/123pan/sKBtVv-Zs1Vd) (preferred, mainly for CN users)
 - [Google Drive](https://drive.google.com/drive/folders/1WJXjcQt7UzHvRpH3QfwcOokL8Fm7l0zT?usp=sharing) (may lag behind)
@@ -98,18 +98,6 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 - **ZIP distribution users** (one-click bundle): Download the latest source from [Releases](https://github.com/fclx512/BallonsTranslator-lite/releases), extract and overwrite into your existing directory. The one-click bundle does not include git, so the launch script and in-app update features are unavailable.
 - **Git users**: `python launch.py --update` or `git pull`
 - **In-app check**: Help → About → Check for Updates (requires git on your system, shows commit logs only — does not auto-update)
-
-## FAQ
-
-**How to customize keyboard shortcuts?**
-
-See [Shortcuts Guide](docs/快捷键.md)
-
-**How to configure translation API?**
-
-Settings → Models → API Profiles.
-
----
 
 ## Acknowledgement
 

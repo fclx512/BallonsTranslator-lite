@@ -117,7 +117,6 @@ class NormalizeBreaksDialog(QDialog):
 
         squeeze = self.squeeze_check.isChecked()
         mode = "delete" if self.delete_radio.isChecked() else "space"
-        current_pname = self.proj.current_img
 
         for pi in page_indices:
             pname = self.proj.idx2pagename(pi)

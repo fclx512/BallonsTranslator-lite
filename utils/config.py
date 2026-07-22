@@ -302,12 +302,12 @@ class ProgramConfig(Config):
         "---",
         "reorder",
         "---",
-	    "align",
-	    "merge",
-	    "behavior",
-	    "---",
-		    "translate", "ocr", "ocr_translate", "ocr_translate_inpaint",
-	    ])
+        "align",
+        "merge",
+        "behavior",
+        "---",
+        "translate", "ocr", "ocr_translate", "ocr_translate_inpaint",
+        ])
 
     # ── Development / Debug ─────────────────────────────
     context_translation_debug_log: bool = False

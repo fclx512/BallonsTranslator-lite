@@ -11,7 +11,19 @@ from pathlib import Path
 from typing import List, Optional, Union
 from uuid import uuid4
 
-from qtpy.QtCore import QEasingCurve, QElapsedTimer, QEvent, QEventLoop, QPoint, QPointF, QRect, QSize, Qt, QTimer, Signal
+from qtpy.QtCore import (
+    QEasingCurve,
+    QElapsedTimer,
+    QEvent,
+    QEventLoop,
+    QPoint,
+    QPointF,
+    QRect,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+)
 
 try:
     from qtpy.QtWidgets import QUndoCommand
@@ -22,7 +34,6 @@ from qtpy.QtGui import (
     QCloseEvent,
     QColor,
     QContextMenuEvent,
-    QFont,
     QGuiApplication,
     QIcon,
     QImageReader,
@@ -34,8 +45,6 @@ from qtpy.QtGui import (
 from qtpy.QtWidgets import (
     QAction,
     QApplication,
-    QButtonGroup,
-    QComboBox,
     QDialog,
     QFileDialog,
     QGraphicsItem,
@@ -48,9 +57,7 @@ from qtpy.QtWidgets import (
     QPlainTextEdit,
     QProgressDialog,
     QPushButton,
-    QRadioButton,
     QShortcut,
-    QSpinBox,
     QStackedWidget,
     QTextEdit,
     QVBoxLayout,
@@ -83,12 +90,10 @@ from utils.textblock import TextAlignment, TextBlock
 from . import shared_widget as SW
 from .canvas import Canvas
 from .configpanel import ConfigPanel
-from .textitem import TextBlkItem
 from .custom_widget import (
     FrameLessMessageBox,
     ImgtransProgressMessageBox,
     MessageBox,
-    NoArrowsSpinBox,
     ViewWidget,
     Widget,
 )
@@ -105,8 +110,8 @@ from .psd_export_dialog import PsdExportDialog
 from .scenetext_manager import PasteSrcItemsCommand, SceneTextManager, TextPanel
 from .textedit_area import SourceTextEdit, TransTextEdit
 from .textedit_commands import GlobalRepalceAllCommand
+from .textitem import TextBlkItem
 from .update_checker import AboutDialog
-
 
 
 class PageListView(QListWidget):
@@ -2193,7 +2198,7 @@ class MainWindow(mainwindow_cls):
             cont_btn = mb.addButton(
                 self.tr("Continue Drawing"), QMessageBox.ButtonRole.ActionRole
             )
-            cancel_btn = mb.addButton(
+            mb.addButton(
                 self.tr("Cancel"), QMessageBox.ButtonRole.RejectRole
             )
             mb.setDefaultButton(cont_btn)
@@ -2213,7 +2218,7 @@ class MainWindow(mainwindow_cls):
         cont_btn = mb.addButton(
             self.tr("Continue Drawing"), QMessageBox.ButtonRole.ActionRole
         )
-        cancel_btn = mb.addButton(
+        mb.addButton(
             self.tr("Cancel"), QMessageBox.ButtonRole.RejectRole
         )
         mb.setDefaultButton(apply_btn)
@@ -2831,16 +2836,12 @@ class MainWindow(mainwindow_cls):
 
         page_filter = None
         from qtpy.QtCore import Qt
-        from qtpy.QtGui import QIcon
         from qtpy.QtWidgets import (
             QCheckBox,
             QDialog,
             QFileDialog,
             QFrame,
             QHBoxLayout,
-            QLabel,
-            QLineEdit,
-            QPushButton,
             QStackedWidget,
             QTabBar,
             QVBoxLayout,
