@@ -96,9 +96,10 @@ class ProjImgTrans:
 
         self._fuzzy_inpainted_list = None
 
-        # Pages modified by batch ops (font-style manager, global replace)
-        # but not yet visited/re-rendered by the user.
-        self._batch_dirty_pages: Set[str] = set()
+        # Pages whose TextBlock data has been modified by batch ops
+        # (font-style manager, global replace, txt import) but whose
+        # result image has not yet been re-rendered.
+        self._pages_needing_rerender: Set[str] = set()
 
         self.not_found_pages: Dict[str, List[TextBlock]] = {}
         self.new_pages: List[str] = []
@@ -123,17 +124,17 @@ class ProjImgTrans:
     def proj_name(self) -> str:
         return self.type + "_" + osp.basename(self.directory)
 
-    def mark_batch_dirty(self, pagename: str):
-        """Mark a page as modified by a batch operation but not yet re-rendered."""
+    def mark_page_needs_rerender(self, pagename: str):
+        """Mark a page as modified by a batch operation; result image is stale."""
         if pagename != self.current_img:
-            self._batch_dirty_pages.add(pagename)
+            self._pages_needing_rerender.add(pagename)
 
-    def clear_batch_dirty(self, pagename: str):
-        """Clear the batch-dirty flag after the page has been visited/rendered."""
-        self._batch_dirty_pages.discard(pagename)
+    def clear_page_needs_rerender(self, pagename: str):
+        """Clear the stale-result-image flag after re-rendering."""
+        self._pages_needing_rerender.discard(pagename)
 
-    def is_batch_dirty(self, pagename: str) -> bool:
-        return pagename in self._batch_dirty_pages
+    def page_needs_rerender(self, pagename: str) -> bool:
+        return pagename in self._pages_needing_rerender
 
     def load(self, directory: str, json_path: str = None) -> bool:
         self.directory = directory

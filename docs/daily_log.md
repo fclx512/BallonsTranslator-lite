@@ -2,6 +2,43 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，每次在文档末尾写入。
 
+## 2026-07-23
+
+### Medium 字重渲染变形 — `_doc_set_font_family` 误将 Medium 设为 Bold
+
+**问题：** Medium 字重渲染时字形部首纵向/横向变形（过粗），切换粗体等样式触发重渲染后恢复正常。
+
+**根因：** `ui/textitem.py` 的 `_doc_set_font_family()` 中，当 `actual_style = "Medium"` 时：
+
+1. `font.setWeight(QFont.Weight.Medium)` 正确设字重 500
+2. `font.setBold(True)` **紧随其后被调用**，因为 `"Medium"` 被错误列入粗体列表
+3. Qt 中 `setBold(true)` 等价于 `setWeight(QFont::Bold)`（700），覆盖了 Medium 字重
+4. 系统收到 Bold 请求，对无 Bold 变体的字体触发合成加粗（synthetic bold），导致字形变形
+
+切换粗体走 `ffmt_change_bold` → `setFontWeight` 路径，不含 styleName 干扰，故恢复正常。
+
+**修复：** 从 `setBold(True)` 列表中移除 `"Medium"`、`"SemiBold"`、`"DemiBold"`——这三个是中间字重（500/600），不是 Bold(700)。只保留真正的粗体样式：`Bold`、`ExtraBold`、`UltraBold`、`Black`、`Heavy`。
+
+**涉及文件：** `ui/textitem.py:1454-1466`
+
+---
+
+### 切换字体家族/样式后加粗按钮状态不同步（总显示为 Regular + 加粗激活）
+
+**问题：** 切换字体家族或样式后，样式组合框总是变成 Regular，且加粗按钮保持激活状态，需手动再次点击取消。
+
+**根因：** `ui/text_panel.py` 的 `apply_font_change()` 只更新了 `_style_name`，未同步更新 `bold` 和 `font_weight` 到 `act_ffmt`，导致 UI 加粗按钮状态与底层格式不一致。同时 `on_familybox_changed()` 总是硬编码样式组合框为 "Regular"，丢弃了用户上次选择的样式名。
+
+**修复两项：**
+
+1. **`apply_font_change()`** — 设置 `_style_name` 后，通过 `QFontDatabase.weight(family, style)` 获取数字字重，用 `fix_fontweight_qt()` 做 Qt5/Qt6 兼容转换，同步更新 `act_ffmt.bold`（>= Bold 700 才为 True）和 `act_ffmt.font_weight`，最后调用 `boldBtn.setChecked()` 同步 UI。
+
+2. **`on_familybox_changed()`** — 清空填充样式组合框前，从 `act_ffmt._style_name` 读取当前样式名；新家族有此样式则保留，不再无条件回退到 "Regular"。
+
+**涉及文件：** `ui/text_panel.py:679-742`、`utils/fontformat.py`（新增 `fix_fontweight_qt` 模块级导出）
+
+---
+
 ## 2026-07-21
 
 ### 上游 PR #1238 调研：独立文字缩放与倾斜变换

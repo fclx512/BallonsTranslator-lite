@@ -15,7 +15,7 @@ from qtpy.QtWidgets import (
 
 from utils import config as C
 from utils import shared
-from utils.fontformat import FontFormat, LineSpacingType
+from utils.fontformat import FontFormat, LineSpacingType, fix_fontweight_qt
 
 from . import funcmaps as FM
 from .custom_widget import (
@@ -677,21 +677,33 @@ class FontFormatPanel(Widget):
             self.set_globalfmt_title()
 
     def on_familybox_changed(self, family: str):
-        """Update style combo box when font family changes"""
+        """Update style combo box when font family changes.
+
+        Preserves the current _style_name from the active format when possible,
+        so switching font family doesn't unconditionally reset to "Regular".
+        """
+        # Look up the desired style from the active format before touching the combo
+        act_ffmt = self.global_format if self.global_mode() else C.active_format
+        desired_style = ""
+        if act_ffmt is not None and act_ffmt._style_name:
+            desired_style = act_ffmt._style_name
+
         self.stylebox.blockSignals(True)
         self.stylebox.clear()
         styles = shared.FONT_STYLES.get(family, [])
         self.stylebox.addItems(styles)
 
-        # 尝试默认选中 Regular
-        idx = self.stylebox.findText("Regular")
-        if idx < 0 and len(styles) > 0:
-            idx = 0
-        if idx >= 0:
-            self.stylebox.setCurrentIndex(idx)
+        if desired_style and desired_style in styles:
+            self.stylebox.setCurrentText(desired_style)
+        else:
+            idx = self.stylebox.findText("Regular")
+            if idx < 0 and len(styles) > 0:
+                idx = 0
+            if idx >= 0:
+                self.stylebox.setCurrentIndex(idx)
         self.stylebox.blockSignals(False)
 
-        # 触发格式更新
+        # 触发格式更新（apply_font_change 会同步 bold/font_weight）
         self.apply_font_change()
 
     def on_fontstyle_changed(self, style: str):
@@ -706,10 +718,26 @@ class FontFormatPanel(Widget):
         if family not in shared.ALL_FONT_FAMILIES:
             return
 
-        # Set _style_name directly on the active format first
         act_ffmt = self.global_format if self.global_mode() else C.active_format
         if act_ffmt is not None:
             act_ffmt._style_name = style
+
+            # Sync bold and font_weight to match the selected style name.
+            # Previously only _style_name was updated, leaving bold/font_weight
+            # stale — so the bold button could remain checked after switching
+            # font family (which resets style to Regular).
+            if style:
+                from qtpy.QtGui import QFont, QFontDatabase
+                weight = QFontDatabase.weight(family, style)
+                act_ffmt.font_weight = fix_fontweight_qt(weight)
+                act_ffmt.bold = weight >= QFont.Weight.Bold
+            else:
+                act_ffmt.font_weight = None
+                act_ffmt.bold = False
+
+            # Keep the bold button in sync
+            self.formatBtnGroup.boldBtn.setChecked(act_ffmt.bold)
+
         # Then update font_family (setFontFamily reads _style_name)
         self.on_param_changed("font_family", family)
 

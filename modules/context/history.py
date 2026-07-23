@@ -64,15 +64,21 @@ class HistoryPage:
 
 @dataclass(frozen=True)
 class RenderedHistoryPage:
-    """A page snapshot plus its immutable provider messages and token cost.
+    """A page snapshot plus its narrative reference text and token cost.
+
+    The ``text`` field carries the page's source/translation pair as plain
+    narrative prose (no JSON, no ids, no per-page instruction), so the model
+    reads a continuous story reference rather than a chain of translation
+    task turns. ``token_count`` estimates the cost of injecting ``text`` as a
+    single system message.
 
     >>> page = HistoryPage('001.png', ('hello',), ('bonjour',))
-    >>> RenderedHistoryPage(page, (), 3).page_key
+    >>> RenderedHistoryPage(page, 'hello -> bonjour', 4).page_key
     '001.png'
     """
 
     snapshot: HistoryPage
-    messages: Tuple[Tuple[str, str], ...]
+    text: str
     token_count: int
 
     @property

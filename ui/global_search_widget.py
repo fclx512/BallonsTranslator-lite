@@ -253,7 +253,7 @@ class GlobalReplaceThead(ThreadBase):
         sceneitem_list = {"src": [], "trans": []}
         background_list = {"src": [], "trans": []}
         self.target_text = target
-        batch_dirty_pages = set()
+        rerender_pages_set = set()
 
         for ii in range(row_count):
             page_rst_item: PageSeachResultItem = self.srt.sm.item(ii, 0)
@@ -284,7 +284,7 @@ class GlobalReplaceThead(ThreadBase):
                     )
 
             else:
-                batch_dirty_pages.add(page_rst_item.pagename)
+                rerender_pages_set.add(page_rst_item.pagename)
                 for idx in page_rst_item.blkid2match["src"]:
                     blk: TextBlock = self.proj.pages[page_rst_item.pagename][idx]
                     text = blk.get_text()
@@ -331,8 +331,8 @@ class GlobalReplaceThead(ThreadBase):
 
         self.sceneitem_list = sceneitem_list
         self.background_list = background_list
-        for pname in batch_dirty_pages:
-            self.proj.mark_batch_dirty(pname)
+        for pname in rerender_pages_set:
+            self.proj.mark_page_needs_rerender(pname)
         self.finished.emit()
 
     def on_finished(self):
@@ -346,8 +346,8 @@ class GlobalSearchWidget(Widget):
     search = Signal()
     replace_all = Signal()
     req_update_pagetext = Signal()
-    req_move_page = Signal(str, bool)
     pages_dirtied = Signal()
+    req_commit_and_rerender = Signal()  # persist JSON + re-render dirty result images
 
     def __init__(self, parent: QWidget = None, *args, **kwargs) -> None:
         super().__init__(parent)
@@ -462,10 +462,6 @@ class GlobalSearchWidget(Widget):
         vlayout.setStretchFactor(self.search_tree, 10)
         vlayout.setSpacing(7)
 
-        self.progress_bar = ProgressMessageBox("task")
-        self.progress_bar.setTaskName(self.tr("Replace..."))
-        self.progress_bar.hide()
-
     def setupReplaceThread(
         self,
         pairwidget_list: List[TransPairWidget],
@@ -579,6 +575,14 @@ class GlobalSearchWidget(Widget):
         self.replace_thread.replace(self.replace_editor.toPlainText())
 
     def on_replace_rerender(self):
+        """Replace all matches across pages, then re-render all result images.
+
+        Unlike the simple 'Replace All' (which defers result-image rendering
+        until page visits), this applies replacements synchronously to both
+        the current-page UI and all non-current pages' model data, persists
+        the project JSON, and then triggers a non-disruptive batch re-render
+        of every affected page's result image.
+        """
         if self.counter_sum < 1:
             return
         pattern = self.replace_thread.searched_pattern
@@ -587,9 +591,8 @@ class GlobalSearchWidget(Widget):
 
         msg = QMessageBox()
         msg.setText(
-            self.tr("Replace all occurrences re-render all pages? It can't be undone.")
+            self.tr("Replace all occurrences and re-render all pages? It can't be undone.")
         )
-
         msg.setStandardButtons(
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
@@ -597,56 +600,56 @@ class GlobalSearchWidget(Widget):
         if ret == QMessageBox.StandardButton.No:
             return
 
-        self.num_pages = self.search_tree.rowCount()
-        self.fin_page_counter = 0
-        self.page_set = set()
-        rerender_pages = []
-        for ii in range(self.num_pages):
-            pagename = self.search_tree.sm.item(ii, 0).pagename
-            self.page_set.add(pagename)
-            if pagename == self.imgtrans_proj.current_img:
-                rerender_pages.insert(0, [pagename, ii])
-            else:
-                rerender_pages.append([pagename, ii])
-
-        # 20260418 优化全部替换并渲染全部文件界面卡顿问题
-        self.progress_bar.updateTaskProgress(0)
-        self.progress_bar.show()
-        # 新增：强制立即显示进度条弹窗
-        QApplication.processEvents()
-
         target = self.replace_editor.toPlainText()
+        row_count = self.search_tree.rowCount()
+        current_img = self.imgtrans_proj.current_img
+        doc = QTextDocument()
+        doc.setUndoRedoEnabled(False)
 
         replace_src = self.range_combobox.currentIndex() != 0
         replace_trans = self.range_combobox.currentIndex() != 1
 
-        for pagename, page_row in rerender_pages:
-            self.req_move_page.emit(pagename, False)
-            page_rst_item: PageSeachResultItem = self.search_tree.sm.item(page_row, 0)
+        for ii in range(row_count):
+            page_rst_item: PageSeachResultItem = self.search_tree.sm.item(ii, 0)
+            pagename = page_rst_item.pagename
 
-            if replace_src:
-                for idx in page_rst_item.blkid2match["src"]:
-                    src = self.replace_thread.pairwidget_list[idx].e_source
-                    src.setPlainText(pattern.sub(target, src.toPlainText()))
+            if pagename == current_img:
+                # Modify live UI widgets for current page (visible feedback)
+                if replace_src:
+                    for idx in page_rst_item.blkid2match["src"]:
+                        src = self.pairwidget_list[idx].e_source
+                        src.setPlainText(pattern.sub(target, src.toPlainText()))
+                if replace_trans:
+                    for idx, rstitem_list in page_rst_item.blkid2match["trans"].items():
+                        item = self.textblk_item_list[idx]
+                        span_list = [
+                            [rstitem.start, rstitem.end] for rstitem in rstitem_list
+                        ]
+                        doc_replace(item.document(), span_list, target)
+            else:
+                # Directly modify TextBlock model data for non-current pages
+                self.imgtrans_proj.mark_page_needs_rerender(pagename)
+                if replace_src:
+                    for idx in page_rst_item.blkid2match["src"]:
+                        blk: TextBlock = self.imgtrans_proj.pages[pagename][idx]
+                        blk.text = [pattern.sub(target, blk.get_text())]
+                if replace_trans:
+                    for idx, rstitem_list in page_rst_item.blkid2match["trans"].items():
+                        blk: TextBlock = self.imgtrans_proj.pages[pagename][idx]
+                        span_list = [
+                            [rstitem.start, rstitem.end] for rstitem in rstitem_list
+                        ]
+                        if blk.rich_text:
+                            doc.setHtml(blk.rich_text)
+                            doc_replace(doc, span_list, target)
+                            blk.rich_text = doc.toHtml()
+                            blk.translation = doc.toPlainText()
+                        else:
+                            blk.translation = pattern.sub(target, blk.translation)
 
-            if replace_trans:
-                for idx, rstitem_list in page_rst_item.blkid2match["trans"].items():
-                    item = self.textblk_item_list[idx]
-                    span_list = [
-                        [rstitem.start, rstitem.end] for rstitem in rstitem_list
-                    ]
-                    doc_replace(item.document(), span_list, target)
-
-            # 新增：释放主线程控制权，处理积压的 UI 事件。
-            # 这能防止程序未响应，并让后台保存线程（ImgSaveThread）发回的进度信号得以更新到进度条上。
-            QApplication.processEvents()
-
-        if len(rerender_pages) > 0:
-            self.req_move_page.emit(pagename, True)
-            self.set_document_edited()
-            # 新增：确保最后一页的界面刷新不会卡顿
-            QApplication.processEvents()
-        # 20260418 优化全部替换并渲染全部文件界面卡顿问题 end
+        # Persist JSON then batch-re-render all affected result images
+        self.req_commit_and_rerender.emit()
+        self.set_document_edited()
 
     def sizeHint(self) -> QSize:
         size = super().sizeHint()
@@ -658,18 +661,3 @@ class GlobalSearchWidget(Widget):
             self.search_tree.clearPages()
             self.result_label.setText(self.doc_edited_str)
             self.counter_sum = 0
-
-    def on_img_writed(self, pagename: str):
-        if not self.progress_bar.isVisible():
-            return
-        if pagename not in self.page_set:
-            return
-        else:
-            self.page_set.remove(pagename)
-            self.fin_page_counter += 1
-            if self.fin_page_counter == self.num_pages:
-                self.progress_bar.hide()
-            else:
-                self.progress_bar.updateTaskProgress(
-                    int(self.fin_page_counter / self.num_pages * 100)
-                )

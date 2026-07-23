@@ -1456,7 +1456,7 @@ Run detection + OCR to populate text blocks.</source>
         </message>
         <message>
             <location filename="..\ui\global_search_widget.py" line="569" />
-            <source>Replace all occurrences re-render all pages? It can't be undone.</source>
+            <source>Replace all occurrences and re-render all pages? It can't be undone.</source>
             <translation>全部替换并重新渲染所有页? 无法撤销. </translation>
         </message>
     </context>
@@ -1996,6 +1996,11 @@ Output:
             <location filename="..\ui\mainwindow.py" line="2515" />
             <source>Failed to import translation from </source>
             <translation>从目标文件导入失败 </translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" line="2559" />
+            <source>Re-rendering result images...</source>
+            <translation>正在重新渲染结果图...</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" />

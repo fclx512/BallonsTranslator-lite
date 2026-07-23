@@ -377,9 +377,10 @@ class MainWindow(mainwindow_cls):
         self.global_search_widget.req_update_pagetext.connect(
             self.on_req_update_pagetext
         )
-        self.global_search_widget.req_move_page.connect(self.on_req_move_page)
         self.global_search_widget.pages_dirtied.connect(self.updatePageList)
-        self.imsave_thread.img_writed.connect(self.global_search_widget.on_img_writed)
+        self.global_search_widget.req_commit_and_rerender.connect(
+            self._on_commit_and_rerender
+        )
         self.global_search_widget.search_tree.result_item_clicked.connect(
             self.on_search_result_item_clicked
         )
@@ -841,6 +842,7 @@ class MainWindow(mainwindow_cls):
         fsm.refresh()
         fsm.navigate_to_block.connect(self._on_stylemgr_navigate)
         fsm.pages_dirtied.connect(self.updatePageList)
+        fsm.data_committed.connect(self._sync_and_commit_project)
 
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1255,7 +1257,7 @@ class MainWindow(mainwindow_cls):
                 pcfg.use_notext_images
                 and self.imgtrans_proj.get_notext_path(imgname) is not None
             )
-            is_dirty = self.imgtrans_proj.is_batch_dirty(imgname)
+            is_dirty = self.imgtrans_proj.page_needs_rerender(imgname)
 
             if use_thumbnails:
                 imgpath = osp.join(self.imgtrans_proj.directory, imgname)
@@ -1400,9 +1402,11 @@ class MainWindow(mainwindow_cls):
             self.titleBar.setTitleContent(page_name=self.imgtrans_proj.current_img)
             self.module_manager.handle_page_changed()
             self.drawingPanel.handle_page_changed()
-            # Clear batch-dirty flag now that the page has been visited/rendered
-            if self.imgtrans_proj.is_batch_dirty(new_pagename):
-                self.imgtrans_proj.clear_batch_dirty(new_pagename)
+            # If this page was modified by a batch op without re-rendering,
+            # re-render its result image now that the scene is built.
+            if self.imgtrans_proj.page_needs_rerender(new_pagename):
+                self.imgtrans_proj.clear_page_needs_rerender(new_pagename)
+                self._save_result_image_only()
                 self.updatePageList()
 
         self.page_changing = False
@@ -2307,20 +2311,6 @@ class MainWindow(mainwindow_cls):
         if self.canvas.text_change_unsaved():
             self.st_manager.updateTextBlkList()
 
-    def on_req_move_page(self, page_name: str, force_save=False):
-        ori_save = self.save_on_page_changed
-        self.save_on_page_changed = False
-        current_img = self.imgtrans_proj.current_img
-        if current_img == page_name and not force_save:
-            return
-        if current_img not in self.global_search_widget.page_set:
-            if self.canvas.projstate_unsaved:
-                self.saveCurrentPage()
-        else:
-            self.saveCurrentPage(save_rst_only=True)
-        self.pageList.setCurrentRow(self.imgtrans_proj.pagename2idx(page_name))
-        self.save_on_page_changed = ori_save
-
     def on_search_result_item_clicked(
         self, pagename: str, blk_idx: int, is_src: bool, start: int, end: int
     ):
@@ -2505,6 +2495,99 @@ class MainWindow(mainwindow_cls):
                 self.canvas.block_selection_signal = False
             if editing_textitem is not None:
                 editing_textitem.startEdit()
+
+    def _sync_and_commit_project(self):
+        """Sync current page UI → model, immediately save JSON (no image rendering).
+
+        After any batch operation that modifies TextBlock data across pages,
+        call this to persist the data to disk immediately, preventing data
+        loss on crash or unexpected exit.  Result images for non-current
+        pages are left stale (re-rendered lazily on visit).
+        """
+        if not self.imgtrans_proj.img_valid:
+            return
+        if self.canvas.text_change_unsaved():
+            self.st_manager.updateTextBlkList()
+        try:
+            self.imgtrans_proj.save()
+            self.canvas.setProjSaveState(False)
+            self.canvas.update_saved_undostep()
+        except Exception as e:
+            LOGGER.error(f"Failed to commit project: {e}")
+
+    def _save_result_image_only(self):
+        """Re-render and save only the current page's result image.
+
+        Assumes the scene is already built from current TextBlock data and
+        the JSON has already been committed.  Does NOT sync UI→model or
+        save the project JSON.
+        """
+        if not self.imgtrans_proj.img_valid:
+            return
+        try:
+            img = self.canvas.render_result_img()
+            pagename = self.imgtrans_proj.current_img
+            imsave_path = self.imgtrans_proj.get_result_path(pagename)
+            imsave_ext = self.imgtrans_proj.get_result_ext(pagename)
+            self.imsave_thread.saveImg(
+                imsave_path, img, pagename,
+                save_params={"ext": imsave_ext, "quality": pcfg.imgsave_quality},
+                keep_alpha=self.imgtrans_proj.current_has_alpha(),
+            )
+        except Exception as e:
+            LOGGER.error(f"Failed to render result image: {e}")
+
+    def _rerender_dirty_pages(self):
+        """Non-disruptively re-render result images for all pages needing it.
+
+        Iterates over every page marked by ``page_needs_rerender()``,
+        loads it, rebuilds the scene, renders and saves the result image,
+        then restores the original page the user was viewing.
+        """
+        dirty_pages = [
+            p for p in self.imgtrans_proj.pages
+            if self.imgtrans_proj.page_needs_rerender(p)
+        ]
+        if not dirty_pages:
+            return
+
+        orig_page = self.imgtrans_proj.current_img
+        orig_save = self.save_on_page_changed
+        self.save_on_page_changed = False
+
+        progress = QProgressDialog(
+            self.tr("Re-rendering result images..."), None,
+            0, len(dirty_pages), self,
+        )
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(300)
+        progress.setCancelButton(None)
+        progress.show()
+
+        for i, pname in enumerate(dirty_pages):
+            progress.setValue(i)
+            self.imgtrans_proj.set_current_img(pname)
+            self.canvas.clear_undostack(update_saved_step=True)
+            self.canvas._fit_to_window = False
+            self.canvas.updateCanvas()
+            self.st_manager.updateSceneTextitems()
+            self._save_result_image_only()
+            self.imgtrans_proj.clear_page_needs_rerender(pname)
+            QApplication.processEvents()
+
+        progress.setValue(len(dirty_pages))
+        # Restore original page
+        if orig_page and orig_page != self.imgtrans_proj.current_img:
+            self.pageList.setCurrentRow(
+                self.imgtrans_proj.pagename2idx(orig_page)
+            )
+        self.save_on_page_changed = orig_save
+        self.updatePageList()
+
+    def _on_commit_and_rerender(self):
+        """Called after Replace All & Re-render: persist JSON, then batch re-render."""
+        self._sync_and_commit_project()
+        self._rerender_dirty_pages()
 
     def to_trans_config(self):
         self.leftBar.configChecker.setChecked(True)
@@ -3262,7 +3345,7 @@ class MainWindow(mainwindow_cls):
                 self.canvas.updateCanvas()
                 self.st_manager.updateSceneTextitems()
                 self.saveCurrentPage()
-                self.imgtrans_proj.clear_batch_dirty(pname)
+                self.imgtrans_proj.clear_page_needs_rerender(pname)
                 QApplication.processEvents()
 
             progress.setValue(len(page_names))
@@ -3663,7 +3746,12 @@ class MainWindow(mainwindow_cls):
                 msg = msg.strip()
 
             for pagename in matched_pages:
-                pass  # keep blk data as-is
+                if pagename != self.imgtrans_proj.current_img:
+                    self.imgtrans_proj.mark_page_needs_rerender(pagename)
+
+            # Persist all imported translations to JSON immediately
+            self._sync_and_commit_project()
+            self.updatePageList()
 
             create_info_dialog(msg)
 
@@ -3702,6 +3790,12 @@ class MainWindow(mainwindow_cls):
         )
         rt.sceneitem_list = None
         rt.background_list = None
+        # Persist all modified TextBlock data to JSON immediately.
+        # Non-current pages were modified directly in memory by the
+        # replace thread; the current page was modified via the undo
+        # command above.  Result images for non-current pages will be
+        # re-rendered lazily when the user visits them.
+        self._sync_and_commit_project()
 
     def on_darkmode_triggered(self):
         pcfg.darkmode = self.titleBar.darkModeAction.isChecked()

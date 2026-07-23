@@ -1452,6 +1452,8 @@ class TextBlkItem(QGraphicsTextItem):
                     if actual_style in _style_to_qt_weight:
                         font.setWeight(_style_to_qt_weight[actual_style])
                         # 根据字重设置 Bold 状态，防止被默认逻辑覆盖
+                        # 注意：Medium(500)/SemiBold(600)/DemiBold(600) 是中间字重，
+                        # 不是 Bold(700)，调用 setBold(True) 会覆盖字重为 Bold 导致渲染变形。
                         font.setBold(
                             actual_style
                             in (
@@ -1460,9 +1462,6 @@ class TextBlkItem(QGraphicsTextItem):
                                 "UltraBold",
                                 "Black",
                                 "Heavy",
-                                "SemiBold",
-                                "DemiBold",
-                                "Medium",
                             )
                         )
 

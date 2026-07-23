@@ -426,9 +426,10 @@ class LLM_API_Translator(BaseTranslator):
         history_rule = ""
         if pcfg.module.llm_translate_context == LLMTranslateContext.HISTORY:
             history_rule = (
-                "- When prior translation examples are present, use them to infer context "
-                "and keep names, terminology, and tone consistent. If they conflict, "
-                "follow the current source and glossary.\n"
+                "- A Prior translation reference section may follow this contract. "
+                "Use it for tone, pronoun/salutation continuity, and terminology "
+                "consistency with earlier pages; the current source and glossary "
+                "take precedence when they conflict.\n"
             )
         contract = (
             f"You are an expert translator. Translate every source string into {to_lang}.\n"
@@ -476,16 +477,6 @@ class LLM_API_Translator(BaseTranslator):
             prompt = f'{prompt}\n\nGLOSSARY:\n{glossary_constraint}'
         return prompt
 
-    @staticmethod
-    def _render_assistant_response(translations: Tuple[str, ...]) -> str:
-        payload = {
-            'translations': [
-                {'id': index + 1, 'translation': translation}
-                for index, translation in enumerate(translations)
-            ]
-        }
-        return json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
-
     def _assemble_request(
         self,
         queries: List[str],
@@ -494,9 +485,12 @@ class LLM_API_Translator(BaseTranslator):
         """Assemble messages in cache-friendly prefix order.
 
         Order:
-        1. System prompt
-        2. Full glossary (system role) - if mode == all, stable before history
-        3. History pages (chronological user/assistant pairs)
+        1. System prompt (stable across requests)
+        2. Prior translation reference (system role) - history pages joined as
+           narrative prose so the model reads continuous story context, not a
+           chain of translation-task turns; stable across ordinary retries and
+           changes only when the window grows/evicts
+        3. Full glossary (system role) - if mode == all, stable before current
         4. Current request with matching glossary
         """
         to_lang = self._translated_lang(self.lang_target)
@@ -508,6 +502,21 @@ class LLM_API_Translator(BaseTranslator):
                 'content': self._system_prompt(to_lang),
             },
         ]
+        if request_context is not None and request_context.history:
+            reference_body = '\n\n---\n\n'.join(
+                page.text for page in request_context.history
+            )
+            messages.append(
+                {
+                    'role': 'system',
+                    'content': (
+                        'Prior translation reference (keep tone, terminology, '
+                        'and pronoun consistency with these earlier pages; '
+                        'do not translate them again):\n\n' + reference_body
+                    ),
+                }
+            )
+
         if glossary and request_context.glossary_mode == LLMGlossaryMode.All:
             messages.append(
                 {
@@ -515,13 +524,6 @@ class LLM_API_Translator(BaseTranslator):
                     'content': self._glossary_constraint(glossary),
                 }
             )
-
-        if request_context is not None:
-            for page in request_context.history:
-                messages.extend(
-                    {'role': role, 'content': content}
-                    for role, content in page.messages
-                )
 
         current_glossary = ()
         if glossary and request_context is not None and request_context.glossary_mode == LLMGlossaryMode.Matching:
@@ -708,29 +710,36 @@ class LLM_API_Translator(BaseTranslator):
             translations=tuple(translations),
         )
 
+    @staticmethod
+    def _format_narrative_block(lines: Tuple[str, ...]) -> str:
+        """Join non-empty source/translation lines as narrative prose.
+
+        Empty or whitespace-only lines are dropped so the model reads a clean
+        continuous flow rather than blank placeholders from skipped bubbles.
+        """
+        return '\n'.join(line for line in lines if line and line.strip())
+
     def _render_history_page(
         self,
         page: HistoryPage,
         model: str,
     ) -> RenderedHistoryPage:
-        """Render a stable glossary-free pair for reuse in later prompts."""
-        messages = [
-            {
-                'role': 'user',
-                'content': self._render_user_prompt(page.sources),
-            },
-            {
-                'role': 'assistant',
-                'content': self._render_assistant_response(page.translations),
-            },
-        ]
+        """Render a page as plain narrative reference text (no JSON, no ids).
+
+        The model reads prior pages as continuous story context instead of a
+        chain of translation-task turns, which keeps cross-page tone and
+        pronoun continuity intact without fragmenting the output style.
+        """
+        source_block = self._format_narrative_block(page.sources)
+        translation_block = self._format_narrative_block(page.translations)
+        text = f'Original:\n{source_block}\n\nTranslation:\n{translation_block}'
         return RenderedHistoryPage(
             snapshot=page,
-            messages=tuple(
-                (str(message['role']), str(message['content']))
-                for message in messages
+            text=text,
+            token_count=messages_token_count(
+                [{'role': 'system', 'content': text}],
+                model,
             ),
-            token_count=messages_token_count(messages, model),
         )
 
     # --- API Call ---
