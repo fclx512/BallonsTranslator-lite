@@ -1,8 +1,11 @@
 from typing import List, Tuple, Union
 
+import os
+import os.path as osp
+
 import cv2
 import numpy as np
-from qtpy.QtCore import QLineF, QPointF, QRectF, QSizeF, Qt, Signal
+from qtpy.QtCore import QLineF, QPointF, QProcess, QRectF, QSizeF, Qt, Signal
 from qtpy.QtGui import QBrush, QColor, QCursor, QFontMetrics, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import (
     QBoxLayout,
@@ -21,8 +24,10 @@ from qtpy.QtWidgets import (
 
 from utils.config import DrawPanelConfig, pcfg
 from utils.imgproc_utils import enlarge_window
+from utils.io_utils import imread, imwrite
 from utils.logger import logger
 from utils.logger import logger as LOGGER
+from utils.message import create_info_dialog
 from utils.shared import CONFIG_COMBOBOX_HEIGHT, CONFIG_COMBOBOX_SHORT
 
 from .canvas import Canvas
@@ -399,6 +404,15 @@ class DrawingPanel(Widget):
         layout.addWidget(self.toolConfigStackwidget)
         layout.addWidget(SeparatorWidget())
         layout.addLayout(masklayout)
+        layout.addWidget(SeparatorWidget())
+        ps_layout = QHBoxLayout()
+        self.psEditBtn = QPushButton(self.tr("Edit in Photoshop"))
+        self.psEditBtn.clicked.connect(self.on_edit_in_photoshop)
+        self.psRefreshBtn = QPushButton(self.tr("Refresh from Photoshop"))
+        self.psRefreshBtn.clicked.connect(self.on_refresh_from_photoshop)
+        ps_layout.addWidget(self.psEditBtn)
+        ps_layout.addWidget(self.psRefreshBtn)
+        layout.addLayout(ps_layout)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
     def setCurrentToolByName(self, tool_name: str):
@@ -649,11 +663,23 @@ class DrawingPanel(Widget):
             self.canvas.removeItem(stroke_item)
             return
         if self.currentTool == self.penTool:
-            rect, _, qimg = stroke_item.clip()
-            if rect is not None:
-                self.canvas.push_undo_command(
-                    StrokeItemUndoCommand(self.canvas.drawingLayer, rect, qimg)
+            rect, mask, _ = stroke_item.clip(mask_only=True)
+            if mask is not None:
+                proj = self.canvas.imgtrans_proj
+                mx, my, mw, mh = rect
+                mask_roi = proj.mask_array[my : my + mh, mx : mx + mw]
+                new_mask = cv2.bitwise_or(mask_roi, mask)
+                inpaint_rect = [mx, my, mx + mw, my + mh]
+                redo_img = np.copy(
+                    proj.inpainted_array[my : my + mh, mx : mx + mw]
                 )
+                self.canvas.push_undo_command(
+                    InpaintUndoCommand(
+                        self.canvas, redo_img, new_mask, inpaint_rect
+                    )
+                )
+                proj.mask_array[my : my + mh, mx : mx + mw] = new_mask
+                self.canvas.updateLayers()
             self.canvas.removeItem(stroke_item)
         elif self.currentTool == self.inpaintTool:
             self.inpaint_stroke = stroke_item
@@ -699,15 +725,25 @@ class DrawingPanel(Widget):
             self.canvas.removeItem(stroke_item)
 
         elif self.currentTool == self.penTool:
-            rect, _, qimg = stroke_item.clip()
-            if self.canvas.erase_img_key is not None:
-                self.canvas.drawingLayer.removeQImage(self.canvas.erase_img_key)
-                self.canvas.erase_img_key = None
-                self.canvas.stroke_img_item = None
-            if rect is not None:
-                self.canvas.push_undo_command(
-                    StrokeItemUndoCommand(self.canvas.drawingLayer, rect, qimg, True)
+            rect, mask, _ = stroke_item.clip(mask_only=True)
+            if mask is not None:
+                proj = self.canvas.imgtrans_proj
+                mx, my, mw, mh = rect
+                erase_mask = 255 - mask
+                old_mask = np.copy(proj.mask_array[my : my + mh, mx : mx + mw])
+                new_mask = cv2.bitwise_and(old_mask, erase_mask)
+                inpaint_rect = [mx, my, mx + mw, my + mh]
+                redo_img = np.copy(
+                    proj.inpainted_array[my : my + mh, mx : mx + mw]
                 )
+                self.canvas.push_undo_command(
+                    InpaintUndoCommand(
+                        self.canvas, redo_img, new_mask, inpaint_rect
+                    )
+                )
+                proj.mask_array[my : my + mh, mx : mx + mw] = new_mask
+                self.canvas.updateLayers()
+            self.canvas.removeItem(stroke_item)
 
     def runInpaint(self, inpaint_dict=None):
 
@@ -987,3 +1023,136 @@ class DrawingPanel(Widget):
 
     def handle_page_changed(self):
         self.clearInpaintItems()
+
+    # ── Photoshop external editing ──────────────────────────────────────
+
+    @staticmethod
+    def _find_photoshop_path_registry():
+        """Locate Photoshop.exe via Windows Registry.
+
+        Returns the full path string, or ``None`` if not found.
+        """
+        try:
+            import winreg
+        except ImportError:
+            return None
+
+        # 1) App Paths — most reliable when set by the installer
+        try:
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\Photoshop.exe",
+            ) as key:
+                path = winreg.QueryValue(key, None)
+                if path and osp.exists(path):
+                    return osp.normpath(path)
+        except OSError:
+            pass
+
+        # 2) Adobe Photoshop versioned key — iterate to find the latest
+        try:
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\Adobe\Photoshop",
+            ) as key:
+                versions = []
+                i = 0
+                while True:
+                    try:
+                        versions.append(winreg.EnumKey(key, i))
+                        i += 1
+                    except OSError:
+                        break
+                versions.sort(reverse=True)
+                for ver in versions:
+                    try:
+                        with winreg.OpenKey(key, f"{ver}\\ApplicationPath") as vkey:
+                            path = winreg.QueryValue(vkey, None)
+                            if path and osp.exists(path):
+                                return osp.normpath(path)
+                    except OSError:
+                        continue
+        except OSError:
+            pass
+
+        return None
+
+    def on_edit_in_photoshop(self):
+        """Save the current inpainted image as PNG and open it in Photoshop."""
+        proj = self.canvas.imgtrans_proj
+        if not proj.img_valid or proj.current_img is None:
+            create_info_dialog(
+                self.tr("No project or image is open. Open a project first.")
+            )
+            return
+
+        # Resolve Photoshop path
+        ps_path = pcfg.drawpanel.photoshop_path
+        if not ps_path or not osp.exists(ps_path):
+            found = self._find_photoshop_path_registry()
+            if found:
+                ps_path = found
+                pcfg.drawpanel.photoshop_path = found
+            else:
+                create_info_dialog(
+                    self.tr("Photoshop was not found.\n\nPlease set the path in:\nSettings → Inpainter → Photoshop Path")
+                )
+                return
+
+        # Write the current inpainted image as PNG
+        inpainted_dir = proj.inpainted_dir()
+        os.makedirs(inpainted_dir, exist_ok=True)
+        basename = osp.splitext(proj.current_img)[0]
+        png_path = osp.join(inpainted_dir, f"{basename}.png")
+
+        imwrite(png_path, proj.inpainted_array, ext=".png")
+
+        # Launch Photoshop (detached — we don't wait for it)
+        if not QProcess.startDetached(ps_path, [png_path]):
+            create_info_dialog(
+                self.tr("Failed to launch Photoshop. Please check the path in Settings.")
+            )
+
+    def on_refresh_from_photoshop(self):
+        """Reload the PNG that Photoshop saved back into the project."""
+        proj = self.canvas.imgtrans_proj
+        if not proj.img_valid or proj.current_img is None:
+            return
+
+        basename = osp.splitext(proj.current_img)[0]
+        png_path = osp.join(proj.inpainted_dir(), f"{basename}.png")
+
+        if not osp.exists(png_path):
+            create_info_dialog(
+                self.tr("No edited image found. Please save your changes in Photoshop first.")
+            )
+            return
+
+        edited = imread(png_path)
+        if edited is None:
+            create_info_dialog(
+                self.tr("Failed to read the edited image file.")
+            )
+            return
+
+        h, w = proj.img_array.shape[:2]
+        eh, ew = edited.shape[:2]
+        if eh != h or ew != w:
+            create_info_dialog(
+                self.tr("Image dimensions changed. Please undo in Photoshop and save again with the original dimensions.")
+            )
+            return
+
+        # Create an undo command for the full image so the user can revert
+        full_rect = [0, 0, w, h]
+        full_mask = np.ones((h, w), dtype=np.uint8)
+        undo_cmd = InpaintUndoCommand(
+            self.canvas, edited, full_mask, full_rect
+        )
+        self.canvas.push_undo_command(undo_cmd)
+
+        # Persist to the configured intermediate format too
+        proj.save_inpainted(proj.current_img, proj.inpainted_array)
+
+        # Note: canvas.updateLayers() is already called inside
+        # InpaintUndoCommand.redo() pushed above, so the display is fresh.

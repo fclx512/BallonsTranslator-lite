@@ -24,7 +24,6 @@ from qtpy.QtWidgets import (
     QDialogButtonBox,
     QFrame,
     QHBoxLayout,
-    QInputDialog,
     QListWidget,
     QListWidgetItem,
     QMenu,
@@ -35,8 +34,6 @@ from qtpy.QtWidgets import (
 
 from utils.config import pcfg, save_config
 
-from .textitem import TextBlkItem
-
 # ── Default layout (mirrors the current hardcoded order) ────
 # This is the fallback used when ``pcfg.context_menu_order`` is empty / reset.
 DEFAULT_ORDER: List[str] = [
@@ -44,8 +41,6 @@ DEFAULT_ORDER: List[str] = [
     "copy_src", "paste_src",
     "---",
     "reset_angle", "squeeze",
-    "---",
-    "reorder",
     "---",
     "align",
     "merge",
@@ -119,49 +114,6 @@ def _emit(menu, canvas, label_key, signal, *args, shortcut=None, enabled=True):
 
 
 # ── Submenu builders ────────────────────────────────────────
-
-def _build_reorder(menu: QMenu, canvas):
-    """Build the **Reorder** submenu contents."""
-    selected = canvas.selected_text_items()
-    n_total = sum(
-        1 for it in canvas.textLayer.childItems() if isinstance(it, TextBlkItem)
-    )
-    n_sel = len(selected)
-    any_sel = n_sel > 0
-    first_sel_idx = min(b.idx for b in selected) if selected else -1
-    last_sel_idx = max(b.idx for b in selected) if selected else -1
-    can_up = any_sel and first_sel_idx > 0
-    can_down = any_sel and last_sel_idx < n_total - 1
-
-    sub = menu.addMenu(canvas.tr("Reorder"))
-    sub.setEnabled(0 < n_sel < n_total)
-
-    _act(sub, canvas, "Move Up", enabled=can_up,
-         connect=lambda: canvas.reorder_textblks.emit("up", 0))
-    _act(sub, canvas, "Move Down", enabled=can_down,
-         connect=lambda: canvas.reorder_textblks.emit("down", 0))
-    _act(sub, canvas, "Move to Top", enabled=can_up,
-         connect=lambda: canvas.reorder_textblks.emit("top", 0))
-    _act(sub, canvas, "Move to Bottom", enabled=can_down,
-         connect=lambda: canvas.reorder_textblks.emit("bottom", 0))
-    sub.addSeparator()
-
-    pos_enabled = 0 < n_sel < n_total
-    _act(sub, canvas, "Move to Position...", enabled=pos_enabled,
-         connect=lambda n=n_total: _reorder_to_pos_dialog(canvas, n))
-
-
-def _reorder_to_pos_dialog(canvas, n_total: int):
-    """Show ``QInputDialog`` for 'Move to Position...'."""
-    pos, ok = QInputDialog.getInt(
-        canvas.gv,
-        canvas.tr("Move to Position"),
-        canvas.tr("Target position (1-%1):").replace("%1", str(n_total)),
-        1, 1, n_total,
-    )
-    if ok:
-        canvas.reorder_textblks.emit("to_pos", pos)
-
 
 def _build_align(menu: QMenu, canvas):
     """Build the **Align** submenu contents."""
@@ -244,10 +196,6 @@ _reg(CmdDef("reset_angle", "Reset Angle",
 _reg(CmdDef("squeeze", "Squeeze",
     build_fn=lambda m, c: _act(m, c, "Squeeze",
         connect=lambda: c.squeeze_blk.emit())))
-
-# --- Reorder submenu ---
-_reg(CmdDef("reorder", "Reorder",
-    build_fn=_build_reorder))
 
 # --- Align submenu ---
 _reg(CmdDef("align", "Align",

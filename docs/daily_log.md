@@ -329,3 +329,27 @@
 **验证：** 语法检查 ✅、i18n 检查 ✅（无新增条目）、启动导入测试 ✅
 
 **涉及文件：** `ui/textitem.py`、`ui/scene_textlayout.py`
+
+---
+
+## 2026-07-24
+
+### PS 外部编辑图像修复 — 不依赖扩散模型的复杂背景修复方案
+
+**需求：** 内置轻量修复模型（AOT/LaMa）对密集复杂背景效果差，且不愿添加体积大的扩散模型。借用已安装的 Photoshop 作为外部编辑器处理背景修复。
+
+**设计决策：**
+1. 一键导出当前 `inpainted` 图为 PNG → 启动 PS 打开该文件 → PS 中编辑 → Ctrl+S 保存 → 回到本工具点「从 PS 刷新」读回
+2. 中转格式固定 PNG，直接写入 `inpainted/{basename}.png`，不新增额外中转文件
+3. PS 路径发现仅用 Windows 注册表（`App Paths\Photoshop.exe` + `SOFTWARE\Adobe\Photoshop`），不猜安装路径
+4. 设置面板 `InpaintConfigPanel` 底部新增「External Editor」区域，文本框 + 浏览按钮可手动配置 PS 路径
+
+**实现要点：**
+- `utils/config.py`：`DrawPanelConfig.photoshop_path` 新字段
+- `ui/module_parse_widgets.py`：`InpaintConfigPanel` 底部加路径配置 UI，`ConfigLineEdit` + `QPushButton`(Browse) + `ConfigSubBlock`
+- `ui/drawingpanel.py`：底部加「Edit in Photoshop」「Refresh from Photoshop」两个按钮；`_find_photoshop_path_registry()` 静态方法查注册表；`on_edit_in_photoshop()` 保存 PNG + `QProcess.startDetached` 启动 PS；`on_refresh_from_photoshop()` 读回 PNG、校验尺寸、`InpaintUndoCommand` 全图撤销、`save_inpainted()` 持久化
+- `translate/zh_CN.ts`：新增 15 条翻译条目
+
+**验证：** 语法检查 ✅、i18n 检查 ✅（15 条新增均匹配）、QM 编译 1097 条 ✅、启动导入测试 5/5 ✅
+
+**涉及文件：** `utils/config.py`、`ui/module_parse_widgets.py`、`ui/drawingpanel.py`、`translate/zh_CN.ts` + `zh_CN.qm`

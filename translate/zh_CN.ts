@@ -1237,6 +1237,45 @@
             <source>Mask Opacity</source>
             <translation>掩膜不透明度</translation>
         </message>
+        <message>
+            <source>Edit in Photoshop</source>
+            <translation>在 Photoshop 中编辑</translation>
+        </message>
+        <message>
+            <source>Refresh from Photoshop</source>
+            <translation>从 PS 刷新</translation>
+        </message>
+        <message>
+            <source>No project or image is open. Open a project first.</source>
+            <translation>没有打开的项目或图片。请先打开一个项目。</translation>
+        </message>
+        <message>
+            <source>Photoshop was not found.
+
+Please set the path in:
+Settings → Inpainter → Photoshop Path</source>
+            <translation>未找到 Photoshop。
+
+请前往：
+设置 → 图像修复 → Photoshop 路径
+配置 Photoshop 启动路径。</translation>
+        </message>
+        <message>
+            <source>Failed to launch Photoshop. Please check the path in Settings.</source>
+            <translation>启动 Photoshop 失败。请检查设置中的路径。</translation>
+        </message>
+        <message>
+            <source>No edited image found. Please save your changes in Photoshop first.</source>
+            <translation>未找到编辑过的图片。请先在 Photoshop 中保存。</translation>
+        </message>
+        <message>
+            <source>Failed to read the edited image file.</source>
+            <translation>读取编辑后的图片文件失败。</translation>
+        </message>
+        <message>
+            <source>Image dimensions changed. Please undo in Photoshop and save again with the original dimensions.</source>
+            <translation>图片尺寸已变更。请在 Photoshop 中撤销并保存为原始尺寸。</translation>
+        </message>
     </context>
     <context>
         <name>FontExcludeDialog</name>
@@ -1529,6 +1568,34 @@ Run detection + OCR to populate text blocks.</source>
             <location filename="..\ui\module_parse_widgets.py" line="523" />
             <source>Let the program decide whether it is necessary to use the selected inpaint method.</source>
             <translation>由程序决定是否有必要使用选定的图像修复方法</translation>
+        </message>
+        <message>
+            <source>External Editor</source>
+            <translation>外部编辑器</translation>
+        </message>
+        <message>
+            <source>Photoshop.exe path (leave empty to auto-detect)</source>
+            <translation>Photoshop.exe 路径（留空则自动检测）</translation>
+        </message>
+        <message>
+            <source>Browse…</source>
+            <translation>浏览…</translation>
+        </message>
+        <message>
+            <source>Photoshop Path</source>
+            <translation>Photoshop 路径</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Path to &lt;b&gt;Photoshop.exe&lt;/b&gt; for editing inpainted images externally. If empty, the application will attempt to locate Photoshop via the Windows Registry automatically.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;用于外部编辑修复后图片的 &lt;b&gt;Photoshop.exe&lt;/b&gt; 路径。留空时程序会自动通过 Windows 注册表查找。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Select Photoshop Executable</source>
+            <translation>选择 Photoshop 可执行文件</translation>
+        </message>
+        <message>
+            <source>Executables (*.exe);;All Files (*)</source>
+            <translation>可执行文件 (*.exe);;所有文件 (*)</translation>
         </message>
     </context>
     <context>

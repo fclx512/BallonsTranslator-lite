@@ -4,6 +4,7 @@ from qtpy.QtCore import Qt, Signal
 from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
     QCheckBox,
+    QFileDialog,
     QGridLayout,
     QHBoxLayout,
     QPushButton,
@@ -672,6 +673,49 @@ class InpaintConfigPanel(ModuleConfigParseWidget):
             )
         )
         self.vlayout.addWidget(self.needInpaintChecker)
+
+        # ── External editor (Photoshop) path ──
+        from utils.config import pcfg
+
+        self.vlayout.addWidget(ConfigSectionHeader(self.tr("External Editor")))
+        ps_path_layout = QHBoxLayout()
+        self.ps_path_edit = ConfigLineEdit()
+        self.ps_path_edit.setText(pcfg.drawpanel.photoshop_path)
+        self.ps_path_edit.setPlaceholderText(
+            self.tr("Photoshop.exe path (leave empty to auto-detect)")
+        )
+        self.ps_path_edit.editingFinished.connect(self._on_ps_path_changed)
+        self.ps_browse_btn = QPushButton(self.tr("Browse…"))
+        self.ps_browse_btn.clicked.connect(self._on_ps_browse)
+        ps_path_layout.addWidget(self.ps_path_edit)
+        ps_path_layout.addWidget(self.ps_browse_btn)
+        # Wrap in a sublock for consistent styling
+        from .configpanel import ConfigSubBlock
+
+        ps_path_sublock = ConfigSubBlock(
+            ps_path_layout,
+            name=self.tr("Photoshop Path"),
+            note=self.tr("<p>Path to <b>Photoshop.exe</b> for editing inpainted images externally. If empty, the application will attempt to locate Photoshop via the Windows Registry automatically.</p>"),
+        )
+        self.vlayout.addWidget(ps_path_sublock)
+
+    def _on_ps_path_changed(self):
+        from utils.config import pcfg
+
+        pcfg.drawpanel.photoshop_path = self.ps_path_edit.text()
+
+    def _on_ps_browse(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            self.tr("Select Photoshop Executable"),
+            "",
+            self.tr("Executables (*.exe);;All Files (*)"),
+        )
+        if path:
+            from utils.config import pcfg
+
+            self.ps_path_edit.setText(path)
+            pcfg.drawpanel.photoshop_path = path
 
     def showEvent(self, e) -> None:
         self.p_layout.insertWidget(1, self.module_combobox)

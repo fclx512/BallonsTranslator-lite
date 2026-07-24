@@ -173,6 +173,7 @@ class DrawPanelConfig(Config):
     rectool_auto: bool = False
     rectool_method: int = 0
     recttool_dilate_ksize: int = 0
+    photoshop_path: str = ""
 
 
 @nested_dataclass
