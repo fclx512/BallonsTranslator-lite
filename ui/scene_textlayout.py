@@ -96,6 +96,8 @@ PUNSET_VERNEEDROTATE = PUNSET_NONBRACKET.union(PUNSET_BRACKET).union(PUNSET_HALF
 PUNSET_ROTATE_ALIGNL = {"」", "』", "”", "’"}
 PUNSET_ROTATE_ALIGNR = {"「", "『", "“", "‘"}
 
+PUNSET_CORNER_BRACKET = {"「", "」", "『", "』"}
+
 Dingbats_vertical_aligncenter = r"\u2700-\u275A\u2761-\u2767\u2776-\u27BF"
 Miscellaneous_Symbols_Pattern = r"\u2600-\u26FF"  # align center in vertical mode
 
@@ -390,6 +392,7 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
         fontformat: FontFormat,
         punctuation_position: int = PunctuationAlignment.Traditional,
         tatechuyoko_threshold: int = 0,
+        halfwidth_jp_corner_brackets: bool = False,
     ) -> None:
         super().__init__(doc)
         self.max_height = 0
@@ -402,6 +405,7 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
         self.fontformat = fontformat
         self.punctuation_position = punctuation_position
         self.tatechuyoko_threshold = tatechuyoko_threshold
+        self.halfwidth_jp_corner_brackets = halfwidth_jp_corner_brackets
 
         self.x_offset_lst = []
         self.y_offset_lst = []
@@ -578,9 +582,11 @@ class VerticalTextDocumentLayout(SceneTextLayout):
         fontformat: FontFormat,
         punctuation_position: int = PunctuationAlignment.Traditional,
         tatechuyoko_threshold: int = 0,
+        halfwidth_jp_corner_brackets: bool = False,
     ):
         super().__init__(
-            doc, fontformat, punctuation_position, tatechuyoko_threshold
+            doc, fontformat, punctuation_position, tatechuyoko_threshold,
+            halfwidth_jp_corner_brackets=halfwidth_jp_corner_brackets,
         )
 
         self.line_spaces_lst = []
@@ -713,6 +719,15 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                             yoff = yoff - (line_width - non_bracket_br[3])
                         else:
                             yoff = yoff - (line_width - non_bracket_br[3]) / 2
+
+                        # 半角紧凑直角引号：左括号上移，抵消列高缩减造成的位置偏移
+                        if char in PUNSET_CORNER_BRACKET and self.halfwidth_jp_corner_brackets:
+                            y_ofs = self.y_offset_lst[blk_no][ii]
+                            tbr_h_effective = y_ofs[1] - y_ofs[0]
+                            natural_h = line.naturalTextWidth() - num_lspaces * cfmt.space_width
+                            reduction = natural_h - tbr_h_effective
+                            if reduction > 0 and char in PUNSET_ROTATE_ALIGNR:
+                                xoff -= reduction
 
                 else:
                     # other characters will simply be aligned center for this line
@@ -1098,6 +1113,9 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                             and blk_text[next_char_idx] == char
                         ):
                             tbr_h -= let_sp_offset
+                    elif char in PUNSET_CORNER_BRACKET and self.halfwidth_jp_corner_brackets:
+                        # 半角紧凑：tbr_h 已用 tbr.width() * text_len，接近字形实际宽度
+                        pass
                     else:
                         tbr_h = line.naturalTextWidth() - num_lspaces * space_w
                     tbr_h += let_sp_offset
@@ -1258,9 +1276,11 @@ class HorizontalTextDocumentLayout(SceneTextLayout):
         fontformat: FontFormat,
         punctuation_position: int = PunctuationAlignment.Traditional,
         tatechuyoko_threshold: int = 0,
+        halfwidth_jp_corner_brackets: bool = False,
     ):
         super().__init__(
-            doc, fontformat, punctuation_position, tatechuyoko_threshold
+            doc, fontformat, punctuation_position, tatechuyoko_threshold,
+            halfwidth_jp_corner_brackets=halfwidth_jp_corner_brackets,
         )
         self.need_ideal_height = True
 

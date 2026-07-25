@@ -1135,6 +1135,11 @@ class DrawingPanel(Widget):
             )
             return
 
+        # Photoshop may save PNG with an alpha channel (RGBA).
+        # Drop it to match project's 3-channel inpainted_array.
+        if edited.ndim == 3 and edited.shape[-1] == 4:
+            edited = np.ascontiguousarray(edited[..., :3])
+
         h, w = proj.img_array.shape[:2]
         eh, ew = edited.shape[:2]
         if eh != h or ew != w:

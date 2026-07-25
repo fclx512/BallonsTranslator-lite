@@ -211,6 +211,8 @@ class ProgramConfig(Config):
     let_writing_mode_flag: int = 0
     let_family_flag: int = 0
     punctuation_position: int = PunctuationPosition.Simplified
+    halfwidth_jp_corner_brackets: bool = False
+    halfwidth_jp_corner_brackets_horizontal: bool = False
     tatechuyoko_threshold: int = 3
     let_uppercase_flag: bool = True
     use_notext_images: bool = True

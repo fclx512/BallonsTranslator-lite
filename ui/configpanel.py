@@ -1721,6 +1721,44 @@ class ConfigPanel(Widget):
         )
         ts_layout.addWidget(punct_pos_sublock)
 
+        # Half-width Japanese corner brackets (「」『』) in vertical mode
+        self.halfwidth_corner_bracket_checker = ConfigCheckBox(
+            self.tr("Compact 「」『』 in vertical text (half-width style)")
+        )
+        self.halfwidth_corner_bracket_checker.setChecked(
+            pcfg.halfwidth_jp_corner_brackets
+        )
+        self.halfwidth_corner_bracket_checker.stateChanged.connect(
+            self.on_halfwidth_corner_bracket_changed
+        )
+        corner_bracket_sublock = ConfigSubBlock(
+            self.halfwidth_corner_bracket_checker,
+            self.tr("Corner Bracket Style"),
+            note=self.tr("<p>When enabled, 「」『』 <b>corner brackets</b> in <b>vertical</b> text use half-width compact layout, matching narrow half-width punctuation width instead of full-width CJK character width. Use the sub-option below to also apply the effect to <b>horizontal</b> text.</p>"),
+        )
+        ts_layout.addWidget(corner_bracket_sublock)
+
+        # Sub-option: also apply in horizontal text
+        self.halfwidth_horizontal_checker = ConfigCheckBox(
+            self.tr("Also apply in horizontal text")
+        )
+        self.halfwidth_horizontal_checker.setChecked(
+            pcfg.halfwidth_jp_corner_brackets_horizontal
+        )
+        self.halfwidth_horizontal_checker.setEnabled(
+            pcfg.halfwidth_jp_corner_brackets
+        )
+        self.halfwidth_horizontal_checker.stateChanged.connect(
+            self.on_halfwidth_corner_bracket_horizontal_changed
+        )
+        halfwidth_horizontal_wrapper = QWidget()
+        halfwidth_horizontal_wrapper.setContentsMargins(32, 0, 0, 4)
+        hw_layout = QHBoxLayout(halfwidth_horizontal_wrapper)
+        hw_layout.setContentsMargins(0, 0, 0, 0)
+        hw_layout.addWidget(self.halfwidth_horizontal_checker)
+        hw_layout.addStretch()
+        ts_layout.addWidget(halfwidth_horizontal_wrapper)
+
         # Vertical Latin/Digits Length (tate-chuyoko)
         self.tatechuyoko_slider = PaintQSlider()
         self.tatechuyoko_slider.setRange(0, 5)
@@ -2345,6 +2383,37 @@ class ConfigPanel(Widget):
         pcfg.tatechuyoko_threshold = value
         self._apply_tatechuyoko_settings()
 
+    def on_halfwidth_corner_bracket_changed(self, state: int):
+        pcfg.halfwidth_jp_corner_brackets = bool(state)
+        # Enable/disable the horizontal sub-option
+        self.halfwidth_horizontal_checker.setEnabled(bool(state))
+        self._apply_halfwidth_corner_bracket_settings()
+
+    def on_halfwidth_corner_bracket_horizontal_changed(self, state: int):
+        pcfg.halfwidth_jp_corner_brackets_horizontal = bool(state)
+        self._apply_halfwidth_corner_bracket_settings()
+
+    def _apply_halfwidth_corner_bracket_settings(self):
+        """Apply halfwidth_jp_corner_brackets to ALL existing text items."""
+        from .shared_widget import canvas as sw_canvas
+        from .textitem import TextBlkItem
+
+        if sw_canvas is None:
+            return
+        for item in sw_canvas.items():
+            if isinstance(item, TextBlkItem):
+                layout = item.layout
+                if layout is not None and hasattr(layout, "halfwidth_jp_corner_brackets"):
+                    layout.halfwidth_jp_corner_brackets = pcfg.halfwidth_jp_corner_brackets
+                    layout.reLayout()
+                # Horizontal half-width: apply/restore text substitution in document
+                if pcfg.halfwidth_jp_corner_brackets and pcfg.halfwidth_jp_corner_brackets_horizontal:
+                    item.apply_horizontal_halfwidth_corner_brackets()
+                else:
+                    item.restore_horizontal_halfwidth_corner_brackets()
+                item.repaint_background()
+                item.update()
+
     def _apply_tatechuyoko_settings(self):
         """Apply tatechuyoko_threshold to ALL existing text items."""
         from .shared_widget import canvas as sw_canvas
@@ -2609,6 +2678,15 @@ class ConfigPanel(Widget):
         self.max_font_size_edit.setValue(pcfg.max_font_size)
         self.punctuation_position_combo.setCurrentIndex(pcfg.punctuation_position)
         self.tatechuyoko_slider.setValue(pcfg.tatechuyoko_threshold)
+        self.halfwidth_corner_bracket_checker.setChecked(
+            pcfg.halfwidth_jp_corner_brackets
+        )
+        self.halfwidth_horizontal_checker.setChecked(
+            pcfg.halfwidth_jp_corner_brackets_horizontal
+        )
+        self.halfwidth_horizontal_checker.setEnabled(
+            pcfg.halfwidth_jp_corner_brackets
+        )
 
         self.fit_window_checker.setChecked(pcfg.open_image_fit_window)
         self.fit_window_page_checker.setVisible(pcfg.open_image_fit_window)

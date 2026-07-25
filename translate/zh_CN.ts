@@ -726,6 +726,26 @@
             <translation>标点位置</translation>
         </message>
         <message>
+            <location filename="..\ui\configpanel.py" line="0"/>
+            <source>Compact 「」『』 in vertical text (half-width style)</source>
+            <translation>竖排文本中压缩「」『』为半角样式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="0"/>
+            <source>Corner Bracket Style</source>
+            <translation>直角引号样式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="0"/>
+            <source>&lt;p&gt;When enabled, 「」『』 &lt;b&gt;corner brackets&lt;/b&gt; in &lt;b&gt;vertical&lt;/b&gt; text use half-width compact layout, matching narrow half-width punctuation width instead of full-width CJK character width. Use the sub-option below to also apply the effect to &lt;b&gt;horizontal&lt;/b&gt; text.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;开启后，&lt;b&gt;竖排&lt;/b&gt;文本中的「」『』&lt;b&gt;直角引号&lt;/b&gt;使用半角紧凑布局，匹配窄体半角标点宽度，而非全角 CJK 字符宽度。可启用下方附属选项将效果同样应用于&lt;b&gt;横排&lt;/b&gt;文本。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="0"/>
+            <source>Also apply in horizontal text</source>
+            <translation>同样应用于横排文本</translation>
+        </message>
+        <message>
             <location filename="..\ui\configpanel.py" line="1601" />
             <source>Exclude Fonts...</source>
             <translation>排除字体...</translation>

@@ -39,90 +39,6 @@
 
 ---
 
-## 2026-07-21
-
-### 上游 PR #1238 调研：独立文字缩放与倾斜变换
-
-**需求：** 调研上游 https://github.com/dmMaze/BallonsTranslator/pull/1238 的内容，评估可学习点，形成文档后暂搁置。
-
-**调研结论：**
-
-该 PR 为 Advanced Text Format 添加了四个独立变换维度（Horizontal Scale 10%–400%、Vertical Scale 10%–400%、Box Slant -85°–85°、Glyph Slant -45°–45°），15 文件 ~5800 行净改动。
-
-**核心亮点：**
-- `text_glyph_renderer.py`（新）— 只读字形级倾斜渲染引擎，路径优先 + 栅格回退
-- `text_transform.py`（新）— 旋转补偿矩阵解决 Qt 旋转先于 setTransform 的问题
-- 多边形 shape control 使 Box Slant 后手柄仍然贴合
-- 预览系统 + 批量更新合并防抖
-- 项目格式版本化迁移
-
-**决定：** 暂搁置，功能太大不急于实装。详细调研文档见 `docs/上游PR-1238-文字变换调研.md`。
-
-**涉及文件：** `docs/上游PR-1238-文字变换调研.md`（新）、`docs/README.md`
-
----
-
-### 术语表提取：导出崩溃 + 结果持久化 + i18n `\n` 陷阱修复
-
-**问题/需求：**
-
-1. **导出崩溃**：`_on_save()` 引用不存在的 `pcfg.lastdir`（`ProgramConfig` 无此属性，且该文件未 import `pcfg`），AttributeError。
-2. **结果不持久**：对话框关闭后提取条目丢失，再次打开需重新提取。
-3. **i18n 中文不显示**："Note" 列头和保存确认对话框虽在 `.ts` 有对应条目，运行时仍显示英文。
-
-**根因与修复：**
-
-1. **导出崩溃**（`ui/glossary_extractor_dialog.py:366`）— `pcfg.lastdir` → `""`（直接用文件名作默认路径）。
-
-2. **结果持久化**（`ui/glossary_extractor_dialog.py` / `ui/mainwindow.py`）：
-   - `__init__` 新增 `existing_entries` 参数，传入即有历史结果时恢复显示
-   - 新增 `done()` 重写，对话框关闭前将 `self._entries` 存到 `self.parent()._glossary_extractor_entries`
-   - `mainwindow.py` 打开对话框前用 `getattr(self, "_glossary_extractor_entries", ())` 取回
-   - 效果：条目存活于 MainWindow 实例，随主窗口生命周期
-
-3. **i18n `\n` 陷阱**（`translate/zh_CN.ts`）：
-   - **根因**：`.ts` 是 XML，其中 `\n` 是**字面反斜杠+字母 n**，不是换行符。但 `self.tr("...\n...")` 的 `\n` 是 Python 转义得到真正的换行符（0x0A）。两边字符串不同 → Qt 的 ELF hash 不匹配 → 翻译查找失败 → 回退显示英文。
-   - **修复**：将 `GlossaryExtractorDialog` 上下文中 3 组 `<source>`/`<translation>` 的 `\n` 替换为真正的换行符。
-   - 同步新增 `Previously extracted {} terms.` 翻译条目。
-
-**验证：** 语法检查 ✅、i18n 检查 ✅（无缺失条目）、qm 编译 1065 条 ✅、Qt QTranslator 运行时查找全部返回正确中文 ✅
-
-**涉及文件：** `ui/glossary_extractor_dialog.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
-
----
-
-### 全局搜索 UI 布局调整 + 替换后界面卡死修复
-
-**需求/问题：**
-
-1. **UI 布局**：全局搜索替换输入框比查找输入框窄太多，右侧搜索区域下拉栏占空间过多，替换框宽度应与查找框一致。
-2. **替换后界面卡死**：多次替换操作后界面持续显示"内容已更新，请按回车刷新搜索"，按回车无响应，搜索和替换功能失效。
-
-**根因分析：**
-
-**UI 布局问题：** `hlayout_bar1`（查找行）将 `search_editor` 放在独立的 `hlayout_bar1_0` 子布局中（可自由伸缩），而 `hlayout_bar2`（替换行）让 `replace_editor` 与 `range_label` + `range_combobox`（固定 300px）平铺在同一层，导致替换框被严重挤压。
-
-**替换后卡死根因：**
-
-1. **焦点问题** — `replace_editor`（替换输入框）也是 `SearchEditor`，按下 Enter 会发射 `enter_pressed` 信号，但该信号**没有被连接**。替换操作完成后，用户焦点通常落在替换框（刚输完替换文本），此时按 Enter → 信号发射但无人监听 → 用户感觉"没反应"。
-2. **线程重入** — `on_replace()`（简单替换）启动后台线程后，若线程尚未结束用户再次点击"Replace All"，`self.start()` 被 Qt 忽略（线程已在运行），新设置的 `job` lambda 在旧线程结束时被 `self.job = None` 覆盖，第二次替换静默丢失。
-
-**改动：**
-
-1. **UI 布局**（`ui/global_search_widget.py`）：
-   - `ConfigComboBox` 改为 `fix_size=False` + `setMaximumWidth(120)`，不再固定 300px
-   - `hlayout_bar2` 拆分为 `hlayout_bar2_0`（`replace_editor` 伸缩区）+ `hlayout_bar2_1`（`range_label` + `range_combobox` 紧凑区），完全镜像 `hlayout_bar1` 结构
-
-2. **替换框回车响应**（`ui/global_search_widget.py`）：
-   - `replace_editor.enter_pressed` 连接到 `commit_search()`，焦点在替换框时按 Enter 也能触发重新搜索
-
-3. **线程忙碌守卫**（`ui/global_search_widget.py`）：
-   - `on_replace()` 入口增加 `if self.replace_thread.isRunning(): return`，防止线程重入导致替换丢失
-
-**验证：** 语法检查 ✅
-
----
-
 ## 2026-07-22
 
 ### 文档翻新：子目录分类 + 合并精简 + 内容刷新
@@ -353,3 +269,35 @@
 **验证：** 语法检查 ✅、i18n 检查 ✅（15 条新增均匹配）、QM 编译 1097 条 ✅、启动导入测试 5/5 ✅
 
 **涉及文件：** `utils/config.py`、`ui/module_parse_widgets.py`、`ui/drawingpanel.py`、`translate/zh_CN.ts` + `zh_CN.qm`
+
+---
+
+## 2026-07-25
+
+### 竖排直角引号半角紧凑样式（「」『』 half-width compact）
+
+**需求：** 竖排文本中「」『』（U+300C/D/E/F）默认全角宽度与其他 CJK 字符一致，需要类似 PS「日文间距挤压」的半角紧凑显示，仅限这 4 个特指字符，简单开关即可。
+
+**实现要点（竖排）：**
+- `utils/config.py`：新增 `halfwidth_jp_corner_brackets: bool = False`
+- `ui/scene_textlayout.py`：新增 `PUNSET_CORNER_BRACKET` 字符集；`SceneTextLayout` 基类增加 `halfwidth_jp_corner_brackets` 参数传递
+- `VerticalTextDocumentLayout.layoutBlock()`：在已旋转标点分支中，对直角引号跳过 `tbr_h = line.naturalTextWidth()` 覆盖，保留 `tbr.width() * text_len` 紧凑列高
+- `VerticalTextDocumentLayout.draw()`：左括号（「『）在 `updateDrawOffsets` 中 `xoff -= reduction` 上移补偿列高缩减——这里用 x 而非 y 是因为旋转变换 `QTransform(0,1,-1,0,…)` 中 pre-rotation x 映射到 post-rotation 垂直方向
+- `ui/configpanel.py`：`ConfigCheckBox` + `ConfigSubBlock`，开关切换时遍历所有 `TextBlkItem` 更新 layout 属性并重绘
+
+**竖排调试教训：**
+- `tightBoundingRect().width()` vs `naturalTextWidth()`：前者对直角引号约为后者 50%，直接用作 tbr_h 即可
+- `space_w` 是 `layoutBlock` 局部变量，`updateDrawOffsets` 中用 `cfmt.space_width` 替代
+- 左括号位移方向用 `xoff` 而非 `yoff`，因为旋转坐标系下 x→纵向
+
+### 横排半角直角引号附属开关
+
+**需求：** 主开关下新增「也处理横排」附属子开关。
+
+**实现要点（横排）：**
+- `utils/config.py`：新增 `halfwidth_jp_corner_brackets_horizontal: bool = False`
+- 横排模式通过**文本替换**实现：`「`(U+300C)→`｢`(U+FF62)、`」`(U+300D)→`｣`(U+FF63)，利用 Unicode 半角引号自然获得半宽布局。`『』`无半角等价字符，横排下保持全宽。
+- `ui/textitem.py`：新增 `_on_contents_change_for_hw` 信号处理器（自动拦截「/」插入）、`apply_horizontal_halfwidth_corner_brackets`（全量替换）、`restore_horizontal_halfwidth_corner_brackets`（反向还原），均内置 `self.fontformat.vertical` 守卫跳过竖排。`_block_hw_sub` 标志防递归。
+- `ui/configpanel.py`：`halfwidth_horizontal_checker`（32px 左缩进），主开关关闭时自动禁用；`_apply_halfwidth_corner_bracket_settings` 扩展为同时处理竖排 layout 属性 + 横排文档文本替换。
+
+**涉及文件：** `utils/config.py`、`ui/scene_textlayout.py`、`ui/textitem.py`、`ui/configpanel.py`、`translate/zh_CN.ts` + `zh_CN.qm`

@@ -111,11 +111,14 @@ class TextBlkItem(QGraphicsTextItem):
         self.input_method_text = ""
         self.block_all_input = False
         self.block_change_signal = False
+        self._block_hw_sub = False  # prevents recursion in half-width corner bracket substitution
 
         self.layout: Union[VerticalTextDocumentLayout, HorizontalTextDocumentLayout] = (
             None
         )
         self.document().setDocumentMargin(0)
+        # Auto-substitute corner brackets for horizontal half-width mode
+        self.document().contentsChange.connect(self._on_contents_change_for_hw)
         self.initTextBlock(blk, set_format=set_format)
         self.setBoundingRegionGranularity(0)
         self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable)
@@ -234,6 +237,7 @@ class TextBlkItem(QGraphicsTextItem):
                 self.fontformat,
                 punctuation_position=pcfg.punctuation_position,
                 tatechuyoko_threshold=pcfg.tatechuyoko_threshold,
+                halfwidth_jp_corner_brackets=pcfg.halfwidth_jp_corner_brackets,
             )
             if self.fontformat.vertical
             else HorizontalTextDocumentLayout(
@@ -241,6 +245,7 @@ class TextBlkItem(QGraphicsTextItem):
                 self.fontformat,
                 punctuation_position=pcfg.punctuation_position,
                 tatechuyoko_threshold=pcfg.tatechuyoko_threshold,
+                halfwidth_jp_corner_brackets=pcfg.halfwidth_jp_corner_brackets,
             )
         )
         layout._draw_offset = self.layout._draw_offset
@@ -475,6 +480,96 @@ class TextBlkItem(QGraphicsTextItem):
         self.setStrokeWidth(font_fmt.stroke_width, repaint_background=False)
         self.repaint_background()
 
+    # ── Horizontal half-width corner bracket substitution ──────────────────
+
+    # Bidirectional map for 「↔ ｢ and 」↔ ｣
+    _HW_CORNER_MAP = {"「": "｢", "」": "｣"}
+
+    @staticmethod
+    def _hw_corner_reverse_map():
+        return {"｢": "「", "｣": "」"}
+
+    def _on_contents_change_for_hw(self, pos: int, removed: int, added: int):
+        """Auto-substitute 「/」→ ｢/｣ when horizontal half-width mode is on."""
+        if self._block_hw_sub:
+            return
+        if added <= 0:
+            return
+        # Only applies to horizontal text blocks
+        if self.fontformat.vertical:
+            return
+        from utils.config import pcfg
+        if not (pcfg.halfwidth_jp_corner_brackets and pcfg.halfwidth_jp_corner_brackets_horizontal):
+            return
+        # Only check the newly-added range for corner brackets
+        text = self.toPlainText()
+        end = pos + added
+        if end > len(text):
+            return
+        self._block_hw_sub = True
+        try:
+            for i in range(end - 1, pos - 1, -1):  # right to left to avoid index shift
+                if i >= len(text):
+                    continue
+                ch = text[i]
+                if ch in self._HW_CORNER_MAP:
+                    cursor = QTextCursor(self.document())
+                    cursor.setPosition(i)
+                    cursor.movePosition(
+                        QTextCursor.MoveOperation.Right,
+                        QTextCursor.MoveMode.KeepAnchor,
+                    )
+                    cursor.insertText(self._HW_CORNER_MAP[ch])
+        finally:
+            self._block_hw_sub = False
+
+    def apply_horizontal_halfwidth_corner_brackets(self):
+        """Replace 「→ ｢, 」→ ｣ throughout the document (horizontal only)."""
+        if self._block_hw_sub or self.fontformat.vertical:
+            return
+        self._block_hw_sub = True
+        try:
+            doc = self.document()
+            text = doc.toPlainText()
+            cursor = QTextCursor(doc)
+            cursor.beginEditBlock()
+            for i, ch in enumerate(text):
+                if ch in self._HW_CORNER_MAP:
+                    cursor.setPosition(i)
+                    cursor.movePosition(
+                        QTextCursor.MoveOperation.Right,
+                        QTextCursor.MoveMode.KeepAnchor,
+                    )
+                    cursor.insertText(self._HW_CORNER_MAP[ch])
+            cursor.endEditBlock()
+        finally:
+            self._block_hw_sub = False
+
+    def restore_horizontal_halfwidth_corner_brackets(self):
+        """Reverse: replace ｢→ 「, ｣→ 」 throughout the document (horizontal only)."""
+        if self._block_hw_sub or self.fontformat.vertical:
+            return
+        rev_map = self._hw_corner_reverse_map()
+        self._block_hw_sub = True
+        try:
+            doc = self.document()
+            text = doc.toPlainText()
+            cursor = QTextCursor(doc)
+            cursor.beginEditBlock()
+            for i, ch in enumerate(text):
+                if ch in rev_map:
+                    cursor.setPosition(i)
+                    cursor.movePosition(
+                        QTextCursor.MoveOperation.Right,
+                        QTextCursor.MoveMode.KeepAnchor,
+                    )
+                    cursor.insertText(rev_map[ch])
+            cursor.endEditBlock()
+        finally:
+            self._block_hw_sub = False
+
+    # ───────────────────────────────────────────────────────────────────────
+
     def setCenterTransform(self):
         center = self.boundingRect().center()
         self.setTransformOriginPoint(center)
@@ -651,6 +746,7 @@ class TextBlkItem(QGraphicsTextItem):
                 self.fontformat,
                 punctuation_position=pcfg.punctuation_position,
                 tatechuyoko_threshold=pcfg.tatechuyoko_threshold,
+                halfwidth_jp_corner_brackets=pcfg.halfwidth_jp_corner_brackets,
             )
         else:
             layout = HorizontalTextDocumentLayout(
@@ -658,6 +754,7 @@ class TextBlkItem(QGraphicsTextItem):
                 self.fontformat,
                 punctuation_position=pcfg.punctuation_position,
                 tatechuyoko_threshold=pcfg.tatechuyoko_threshold,
+                halfwidth_jp_corner_brackets=pcfg.halfwidth_jp_corner_brackets,
             )
 
         self.layout = layout
