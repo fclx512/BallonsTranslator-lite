@@ -48,8 +48,6 @@ python scripts/check_all.py --skip-ruff  # 跳过 ruff
 | 脚本 | 平台 | 用途 |
 |---|---|---|
 | `scripts/build_win.bat` | Windows | Nuitka 编译为独立 `.exe` |
-| `scripts/mac_legacy/build-macos-app.sh` | macOS（遗留） | PyInstaller 构建 `.app`（原项目遗留，未适配当前魔改） |
-| `scripts/mac_legacy/macos-build-script-arm64.sh` | macOS ARM64（遗留） | 完整构建（含哈希校验，原项目遗留，未适配当前魔改） |
 | `scripts/download_models.bat` | Windows | 下载模型文件到 `data/models/` |
 | `scripts/download_models.sh` | Linux/macOS | 下载模型 + 编译 PyPatchMatch |
 | `scripts/local_gitpull.bat` | Windows | 使用便携环境执行 `git pull` |
