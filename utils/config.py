@@ -453,6 +453,8 @@ def json_dump_program_config(obj, **kwargs):
             return serialize_np(obj)
         elif isinstance(obj, ModuleConfig):
             return obj.get_saving_params()
+        if hasattr(obj, "to_serializable_dict"):
+            return obj.to_serializable_dict()
         return obj.__dict__
 
     return json.dumps(obj, default=lambda o: _default(o), ensure_ascii=False, **kwargs)

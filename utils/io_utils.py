@@ -118,6 +118,8 @@ def json_dump_nested_obj(obj, **kwargs):
     def _default(obj):
         if isinstance(obj, (np.ndarray, np.ScalarType)):
             return serialize_np(obj)
+        if hasattr(obj, "to_serializable_dict"):
+            return obj.to_serializable_dict()
         return obj.__dict__
 
     return json.dumps(obj, default=lambda o: _default(o), ensure_ascii=False, **kwargs)

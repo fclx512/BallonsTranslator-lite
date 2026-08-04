@@ -81,7 +81,7 @@ class TextBlkEncoder(NumpyEncoder):
         if isinstance(obj, TextBlock):
             return obj.to_dict()
         elif isinstance(obj, FontFormat):
-            return vars(obj)
+            return obj.to_serializable_dict()
         return NumpyEncoder.default(self, obj)
 
 

@@ -351,6 +351,38 @@ def ffmt_change_punctuation_alignment(
     pass
 
 
+@font_formating(push_undostack=False, is_property=False)
+def ffmt_change_text_transform(
+    param_name: str,
+    values,
+    act_ffmt: FontFormat,
+    is_global: bool,
+    blkitems: List[TextBlkItem],
+    **kwargs,
+):
+    """Text transform is managed by the transform editor (port Stage 4+).
+
+    This generic entry point is a no-op kept for funcmaps discovery of the
+    new ``FontFormat.text_transform`` field; the real editing path uses the
+    state-snapshot transform command once the transform system is ported."""
+    pass
+
+
+@font_formating(push_undostack=False, is_property=False)
+def ffmt_change_glyph_slant_angle(
+    param_name: str,
+    values,
+    act_ffmt: FontFormat,
+    is_global: bool,
+    blkitems: List[TextBlkItem],
+    **kwargs,
+):
+    """Glyph slant is managed by the transform editor (port Stage 4+).
+
+    No-op until then, mirroring :func:`ffmt_change_text_transform`."""
+    pass
+
+
 @font_formating(push_undostack=True)
 def ffmt_change_shadow_offset(
     param_name: str,
