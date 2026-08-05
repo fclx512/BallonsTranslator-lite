@@ -984,34 +984,6 @@
             <source>Performance</source>
             <translation>性能表现</translation>
         </message>
-	        <message>
-	            <source>Text Rendering</source>
-	            <translation>文本渲染模式</translation>
-	        </message>
-	        <message>
-	            <source>Crisp (always vector)</source>
-	            <translation>清晰（始终矢量）</translation>
-	        </message>
-	        <message>
-	            <source>Smooth (bitmap cache)</source>
-	            <translation>流畅（位图缓存）</translation>
-	        </message>
-	        <message>
-	            <source>&lt;p&gt;Controls how text is drawn on the canvas:&lt;/p&gt;&lt;p&gt;&lt;b&gt;Crisp (always vector)&lt;/b&gt; — sharp at any zoom, but dragging large blocks may lag&lt;br/&gt;&lt;b&gt;Smooth (bitmap cache)&lt;/b&gt; — smooth drag/scroll; text may blur briefly after zoom until cache rebuilds&lt;/p&gt;</source>
-	            <translation>&lt;p&gt;控制画布上文本的绘制方式：&lt;/p&gt;&lt;p&gt;&lt;b&gt;清晰（始终矢量）&lt;/b&gt; — 任何缩放下都锐利，但拖拽大块文字时可能卡顿&lt;br/&gt;&lt;b&gt;流畅（位图缓存）&lt;/b&gt; — 拖拽/滚动丝滑；缩放后缓存重建前文字可能短暂模糊&lt;/p&gt;</translation>
-	        </message>
-	        <message>
-	            <source>Show decorations while resizing</source>
-	            <translation>调整大小时显示描边和阴影</translation>
-	        </message>
-	        <message>
-	            <source>Drag Decorations</source>
-	            <translation>拖拽装饰</translation>
-	        </message>
-	        <message>
-	            <source>&lt;p&gt;When checked, &lt;b&gt;text stroke and shadow&lt;/b&gt; remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.&lt;/p&gt;</source>
-		            <translation>&lt;p&gt;勾选后，拖拽或调整文本框时&lt;b&gt;描边和阴影&lt;/b&gt;保持可见。取消勾选可在调整大小时获得最高帧率。&lt;/p&gt;</translation>
-		        </message>
 		        <message>
 		            <source>Modules</source>
 		            <translation>模块</translation>
@@ -1412,6 +1384,11 @@ Settings → Inpainter → Photoshop Path</source>
             <source>Advanced Text Format</source>
             <translation>高级文本格式</translation>
         </message>
+        <message>
+            <source>Text Transform</source>
+            <translation>文本变换</translation>
+        </message>
+
     </context>
     <context>
         <name>FontStyleManager</name>
@@ -4033,6 +4010,11 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <translation>字体</translation>
         </message>
         <message>
+            <location filename="..\ui\fontstyle_manager.py" line="436" />
+            <source>Font Style</source>
+            <translation>字体样式</translation>
+        </message>
+        <message>
             <location filename="..\ui\fontstyle_manager.py" line="387" />
             <source>Size</source>
             <translation>大小</translation>
@@ -5582,6 +5564,157 @@ This maps automatically to each provider's native parameter
             <location filename="..\ui\module_parse_widgets.py" />
             <source>Parameters</source>
             <translation>参数</translation>
+        </message>
+    </context>
+
+    <context>
+        <name>TextTransformPanel</name>
+        <message>
+            <source>Amount</source>
+            <translation>数量</translation>
+        </message>
+        <message>
+            <source>Bend</source>
+            <translation>弯曲</translation>
+        </message>
+        <message>
+            <source>Divisions</source>
+            <translation>网格数</translation>
+        </message>
+        <message>
+            <source>Glyph Slant</source>
+            <translation>字形倾斜</translation>
+        </message>
+        <message>
+            <source>Grid</source>
+            <translation>网格</translation>
+        </message>
+        <message>
+            <source>Height</source>
+            <translation>高度</translation>
+        </message>
+        <message>
+            <source>Horizontal</source>
+            <translation>水平</translation>
+        </message>
+        <message>
+            <source>Interpolation</source>
+            <translation>插值</translation>
+        </message>
+        <message>
+            <source>Left-to-Right Wave</source>
+            <translation>从左到右波浪</translation>
+        </message>
+        <message>
+            <source>Perspective</source>
+            <translation>透视</translation>
+        </message>
+        <message>
+            <source>Rotation</source>
+            <translation>旋转</translation>
+        </message>
+        <message>
+            <source>Scale / Slant / 3D</source>
+            <translation>缩放 / 倾斜 / 3D</translation>
+        </message>
+        <message>
+            <source>Scale</source>
+            <translation>缩放</translation>
+        </message>
+        <message>
+            <source>Segments</source>
+            <translation>段数</translation>
+        </message>
+        <message>
+            <source>Shift</source>
+            <translation>位移</translation>
+        </message>
+        <message>
+            <source>Shortcut: R (or R → Z)</source>
+            <translation>快捷键：R（或 R → Z）</translation>
+        </message>
+        <message>
+            <source>Shortcut: R → X</source>
+            <translation>快捷键：R → X</translation>
+        </message>
+        <message>
+            <source>Shortcut: R → Y</source>
+            <translation>快捷键：R → Y</translation>
+        </message>
+        <message>
+            <source>Shortcut: S → X</source>
+            <translation>快捷键：S → X</translation>
+        </message>
+        <message>
+            <source>Shortcut: S → Y</source>
+            <translation>快捷键：S → Y</translation>
+        </message>
+        <message>
+            <source>Sine Wave</source>
+            <translation>正弦波</translation>
+        </message>
+        <message>
+            <source>Slant</source>
+            <translation>倾斜</translation>
+        </message>
+        <message>
+            <source>Smooth</source>
+            <translation>平滑</translation>
+        </message>
+        <message>
+            <source>Straight</source>
+            <translation>直线</translation>
+        </message>
+        <message>
+            <source>Top-to-Bottom Wave</source>
+            <translation>从上到下波浪</translation>
+        </message>
+        <message>
+            <source>Vertical</source>
+            <translation>垂直</translation>
+        </message>
+        <message>
+            <source>Width</source>
+            <translation>宽度</translation>
+        </message>
+        <message>
+            <source>X</source>
+            <translation>X</translation>
+        </message>
+        <message>
+            <source>Y</source>
+            <translation>Y</translation>
+        </message>
+        <message>
+            <source>Z</source>
+            <translation>Z</translation>
+        </message>
+        <message>
+            <source>Add</source>
+            <translation>添加</translation>
+        </message>
+        <message>
+            <source>Add Transform</source>
+            <translation>添加变换</translation>
+        </message>
+        <message>
+            <source>Mixed</source>
+            <translation>混合</translation>
+        </message>
+    </context>
+    <context>
+        <name>TransformParameterPanel</name>
+        <message>
+            <source>Move Up</source>
+            <translation>上移</translation>
+        </message>
+        <message>
+            <source>Move Down</source>
+            <translation>下移</translation>
+        </message>
+        <message>
+            <source>Delete Transform</source>
+            <translation>删除变换</translation>
         </message>
     </context>
 </TS>

@@ -29,6 +29,8 @@ from .custom_widget import (
 )
 from .text_advanced_format import TextAdvancedFormatPanel
 from .text_style_presets import TextStylePresetPanel
+from .text_engine.transforms.editor import TextTransformEditSession
+from .text_engine.transforms.panel import TextTransformPanel
 from .textitem import TextBlkItem
 
 
@@ -335,11 +337,31 @@ class FontFormatPanel(Widget):
             self._on_gradient_btn_clicked
         )
 
-        # Remove View menu entries + hide buttons for these two built-in panels
+        # Text transform panel (stage 5 node H) — owned by the same session
+        # that talks to the scene controls; the panel is only its UI front.
+        self.texttransform_panel = TextTransformPanel(
+            self.tr("Text Transform"),
+            config_name="text_transform_panel",
+            config_expand_name="expand_ttransform_panel",
+        )
+        self.text_transform_editor = TextTransformEditSession(
+            self.texttransform_panel
+        )
+        self.text_transform_editor.global_format = self.global_format
+
+        # Remove View menu entries + hide buttons for these built-in panels
         # (keep the panels functional; prevent accidental hide via View menu)
-        for cfg in ["show_text_style_preset", "text_advanced_format_panel"]:
+        for cfg in [
+            "show_text_style_preset",
+            "text_advanced_format_panel",
+            "text_transform_panel",
+        ]:
             shared.config_name_to_view_widget.pop(cfg, None)
-        for p in [self.textstyle_panel, self.textadvancedfmt_panel]:
+        for p in [
+            self.textstyle_panel,
+            self.textadvancedfmt_panel,
+            self.texttransform_panel,
+        ]:
             hl = p.view_widget.title_label.hidelabel
             if hl is not None:
                 hl.setVisible(False)
@@ -353,6 +375,7 @@ class FontFormatPanel(Widget):
         vl0 = QVBoxLayout()
         vl0.addWidget(self.textstyle_panel.view_widget)
         vl0.addWidget(self.textadvancedfmt_panel.view_widget)
+        vl0.addWidget(self.texttransform_panel.view_widget)
         vl0.setSpacing(0)
         vl0.setContentsMargins(0, 0, 0, 0)
         hl1_font = QHBoxLayout()
@@ -590,6 +613,10 @@ class FontFormatPanel(Widget):
         self.familybox.blockSignals(False)
         self.stylebox.blockSignals(False)  # 新增
         self.textadvancedfmt_panel.set_active_format(font_format)
+        # Keep the session's no-items path (global format) in sync and show
+        # the active format's transform state in the panel.
+        self.text_transform_editor.global_format = self.global_format
+        self.texttransform_panel.set_active_format(font_format)
 
     def set_globalfmt_title(self):
         active_text_style_label = self.active_text_style_label()
@@ -744,6 +771,19 @@ class FontFormatPanel(Widget):
     def set_textblk_item(
         self, textblk_item: TextBlkItem = None, multi_select: bool = False
     ):
+        # A selection transition is a transaction boundary for transform text.
+        # Commit typed values against the old target list before replacing it.
+        self.text_transform_editor.finish_pending_edits()
+        if textblk_item is not None:
+            transform_items = [textblk_item]
+        elif multi_select:
+            from ui import shared_widget as SW
+
+            transform_items = SW.canvas.selected_text_items()
+        else:
+            transform_items = []
+
+        preserve_local_owner = False
         if textblk_item is None:
             focus_w = self.app.focusWidget()
             focus_p = None if focus_w is None else focus_w.parentWidget()
@@ -753,6 +793,15 @@ class FontFormatPanel(Widget):
             elif focus_p:
                 if focus_p == self or focus_p.parentWidget() == self:
                     focus_on_fmtoptions = True
+            preserve_local_owner = (
+                not transform_items
+                and self.textblk_item is not None
+                and focus_on_fmtoptions
+            )
+            if preserve_local_owner:
+                # Formatting focus can briefly clear the canvas selection; use
+                # the retained local item when comparing effective owners.
+                transform_items = [self.textblk_item]
             if not focus_on_fmtoptions:
                 # Store the current text block's format before switching to global
                 if self.textblk_item is not None:
@@ -782,3 +831,20 @@ class FontFormatPanel(Widget):
                 )
                 self.set_active_format(blk_fmt, multi_size)
                 self.textstyle_panel.setTitle(f"TextBlock #{textblk_item.idx + 1}")
+        self.text_transform_editor.replace_targets(transform_items)
+        if transform_items:
+            self.texttransform_panel.set_transform_items(transform_items)
+
+    def resolve_text_transform_edits_for_save(self):
+        # Pending numeric edits are not dirty until they commit; resolve them
+        # before the close-time/save-time dirty check.
+        self.text_transform_editor.resolve_for_save()
+
+    def resolve_text_transform_edits_for_history_change(self):
+        self.text_transform_editor.resolve_for_history_change()
+
+    def resolve_text_transform_edits_for_page_change(self):
+        self.text_transform_editor.resolve_for_page_change()
+
+    def cancel_text_transform_edits_for_scene_change(self):
+        self.text_transform_editor.cancel_for_scene_change()

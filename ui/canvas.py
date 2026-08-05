@@ -46,7 +46,12 @@ from .custom_widget import FadeLabel, ScrollBar
 from .image_edit import DrawingLayer, ImageEditMode, StrokeImgItem
 from .misc import ARROWKEY2DIRECTION, QKEY, ndarray2pixmap
 from .page_search_widget import PageSearchWidget
-from .texteditshapecontrol import ControlBlockItem, TextBlkShapeControl
+from .texteditshapecontrol import (
+    CONTROL_ITEM_DATA_KEY,
+    ControlBlockItem,
+    TextBlkShapeControl,
+)
+from .text_engine.transforms.grid_control import TextGridTransformControl
 from .textitem import TextBlkItem, TextBlock
 
 CANVAS_SCALE_MAX = 10.0
@@ -440,6 +445,12 @@ class Canvas(QGraphicsScene):
         self.textLayer.setParentItem(self.baseLayer)
         self.previewLayer.setParentItem(self.baseLayer)
         self.txtblkShapeControl.setParentItem(self.baseLayer)
+
+        # Grid transform overlay (stage 5 follow-up): bound by the transform
+        # session when a Grid card is selected; hidden otherwise.
+        self.textGridControl = TextGridTransformControl()
+        self.addItem(self.textGridControl)
+        self.textGridControl.setParentItem(self.baseLayer)
 
         self.addItem(self.snap_guide_item)
         self.snap_guide_item.setParentItem(self.textLayer)
@@ -889,6 +900,7 @@ class Canvas(QGraphicsScene):
         self.stroke_img_item = None
         self.erase_img_key = None
         self.txtblkShapeControl.setBlkItem(None)
+        self.clear_text_transform_controls()
         self.mid_btn_pressed = False
         self.search_widget.reInitialize()
         self.clearSelection()
@@ -909,6 +921,34 @@ class Canvas(QGraphicsScene):
 
         self.baseLayer.setRect(QRectF(0, 0, 1, 1))
         self.baseLayer.setScale(1)
+
+    def bind_text_grid_control(
+        self,
+        item,
+        stack_index,
+        *,
+        begin_edit,
+        preview_points,
+        commit_points,
+        cancel_edit,
+    ):
+        """Bind the Grid overlay to *item*'s selected Grid stage.
+
+        Dispatched from ``TextTransformEditSession._sync_transform_controller``
+        whenever the selected transform card is a Grid transform.
+        """
+        self.textGridControl.bind(
+            item,
+            stack_index,
+            begin_edit=begin_edit,
+            preview_points=preview_points,
+            commit_points=commit_points,
+            cancel_edit=cancel_edit,
+        )
+
+    def clear_text_transform_controls(self):
+        """Detach and hide the Grid overlay (session dispatch)."""
+        self.textGridControl.clear()
 
     def on_selection_changed(self):
         if self.txtblkShapeControl.isVisible():
@@ -968,6 +1008,7 @@ class Canvas(QGraphicsScene):
         self.create_block_origin = pos
         self.gv.setCursor(Qt.CursorShape.CrossCursor)
         self.txtblkShapeControl.setBlkItem(None)
+        self.clear_text_transform_controls()
         self.txtblkShapeControl.setPos(0, 0)
         self.txtblkShapeControl.setRotation(0)
         self.txtblkShapeControl.setRect(QRectF(pos, QSizeF(1, 1)))
@@ -1329,10 +1370,16 @@ class Canvas(QGraphicsScene):
 
         if btn == Qt.MouseButton.LeftButton and self.txtblkShapeControl.isVisible():
             items_at = self.items(event.scenePos())
+            # Keep the editing overlays (shape handles / grid handles) alive
+            # when the press lands on one of them; only an empty-space click
+            # clears the control frames.
             if not any(
-                isinstance(item, (TextBlkItem, ControlBlockItem)) for item in items_at
+                isinstance(item, TextBlkItem)
+                or item.data(CONTROL_ITEM_DATA_KEY)
+                for item in items_at
             ):
                 self.txtblkShapeControl.setBlkItem(None)
+                self.clear_text_transform_controls()
 
         return super().mousePressEvent(event)
 
@@ -1374,6 +1421,7 @@ class Canvas(QGraphicsScene):
         self.stroke_img_item = None
         self.erase_img_key = None
         self.txtblkShapeControl.setBlkItem(None)
+        self.clear_text_transform_controls()
         self.mid_btn_pressed = False
         self.search_widget.reInitialize()
 

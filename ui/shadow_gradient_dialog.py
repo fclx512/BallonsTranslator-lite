@@ -28,7 +28,7 @@ from utils.fontformat import FontFormat
 from .custom_widget import ColorSwatchBtn, PaintQSlider
 from .custom_widget.clock_dial import ClockDial
 from .custom_widget.color_picker import ColorPickerDialog
-from .text_graphical_effect import apply_shadow_effect
+from .text_engine.rendering.shadow import apply_shadow_effect
 
 
 class ShadowGradientPreview(QWidget):

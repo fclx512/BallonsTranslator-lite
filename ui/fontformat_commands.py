@@ -8,7 +8,7 @@ try:
 except ImportError:
     from qtpy.QtGui import QUndoCommand
 
-from utils.fontformat import FontFormat, px2pt
+from utils.fontformat import FontFormat, TextTransformState, px2pt
 
 from . import shared_widget as SW
 from .textitem import TextBlkItem
@@ -360,12 +360,18 @@ def ffmt_change_text_transform(
     blkitems: List[TextBlkItem],
     **kwargs,
 ):
-    """Text transform is managed by the transform editor (port Stage 4+).
+    """Apply a whole transform stack snapshot to each text item.
 
-    This generic entry point is a no-op kept for funcmaps discovery of the
-    new ``FontFormat.text_transform`` field; the real editing path uses the
-    state-snapshot transform command once the transform system is ported."""
-    pass
+    Snapshot-style commit (no undo entry by design): the geometry controller
+    persists the state into both the model (``blk.fontformat``) and the render
+    ``fontformat``. The full editable/undoable path is provided by
+    ``SetTextTransformCommand`` via the transform editor (Stage 5 UI).
+    """
+    for blkitem, value in zip(blkitems, values):
+        state = TextTransformState(
+            value, blkitem.fontformat.glyph_slant_angle
+        )
+        blkitem.set_text_transform(state, preview=False)
 
 
 @font_formating(push_undostack=False, is_property=False)
@@ -377,10 +383,15 @@ def ffmt_change_glyph_slant_angle(
     blkitems: List[TextBlkItem],
     **kwargs,
 ):
-    """Glyph slant is managed by the transform editor (port Stage 4+).
+    """Apply a glyph slant angle snapshot to each text item.
 
-    No-op until then, mirroring :func:`ffmt_change_text_transform`."""
-    pass
+    See :func:`ffmt_change_text_transform` for the snapshot semantics.
+    """
+    for blkitem, value in zip(blkitems, values):
+        state = TextTransformState(
+            blkitem.fontformat.text_transform, value
+        )
+        blkitem.set_text_transform(state, preview=False)
 
 
 @font_formating(push_undostack=True)

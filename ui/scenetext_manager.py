@@ -20,7 +20,7 @@ from qtpy.QtGui import (
     QTextCharFormat,
     QTextCursor,
 )
-from qtpy.QtWidgets import QApplication, QGraphicsItem, QHBoxLayout, QLabel, QWidget
+from qtpy.QtWidgets import QApplication, QHBoxLayout, QLabel, QWidget
 
 from .custom_widget import CheckableLabel, GroupFrame, TextCheckerLabel
 
@@ -630,15 +630,14 @@ class SceneTextManager(QObject):
         self._rebuild_timer.start(100)
 
     def _rebuild_item_caches(self):
-        """Rebuild full pixmap caches for all text items after zoom."""
+        """Rebuild item rendering caches after zoom."""
         for blk_item in self.textblk_item_list:
-            blk_item._invalidate_cache()
-            blk_item._build_full_pixmap()
             blk_item.update()
 
     def clearSceneTextitems(self):
         self.hovering_transwidget = None
         self.txtblkShapeControl.setBlkItem(None)
+        self.canvas.clear_text_transform_controls()
         for blkitem in self.textblk_item_list:
             blkitem.release_render_resources()
             self.canvas.removeItem(blkitem)
@@ -1061,11 +1060,6 @@ class SceneTextManager(QObject):
 
         if idx < len(self.textblk_item_list):
             blk_item = self.textblk_item_list[idx]
-            sender = self.sender()
-            if isinstance(sender, TransTextEdit):
-                # Smooth mode: switch to vector during editing; Crisp mode is already NoCache
-                if pcfg.text_rendering == 1:  # Smooth (bitmap cache)
-                    blk_item.setCacheMode(QGraphicsItem.CacheMode.NoCache)
             self.canvas.gv.ensureVisible(blk_item)
             self.txtblkShapeControl.setBlkItem(blk_item)
 
@@ -1073,12 +1067,9 @@ class SceneTextManager(QObject):
         self.canvas.redo_textedit()
 
     def on_pairw_focusout(self, idx: int):
-        sender = self.sender()
-        if isinstance(sender, TransTextEdit) and idx < len(self.textblk_item_list):
-            blk_item = self.textblk_item_list[idx]
-            # Smooth mode: restore bitmap cache after editing; Crisp mode stays NoCache
-            if pcfg.text_rendering == 1:  # Smooth (bitmap cache)
-                blk_item.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
+        # Cache restore is handled by TextBlkItem.endEdit → refresh_cache_policy;
+        # the former text_rendering config branch was removed with it.
+        pass
 
     def on_textedit_undo(self):
         self.canvas.undo_textedit()
@@ -1327,7 +1318,6 @@ class SceneTextManager(QObject):
     def showTextblkItemRect(self, draw_rect: bool):
         for blk_item in self.textblk_item_list:
             blk_item.draw_rect = draw_rect
-            blk_item._invalidate_cache()
             # Ensure DeviceCoordinateCache is invalidated so paint() is called.
             # The border rendering fix lives in TextBlkItem.paint() — the slow
             # path now draws the border on top (SourceOver) even in crisp mode.

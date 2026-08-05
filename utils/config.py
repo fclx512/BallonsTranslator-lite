@@ -282,8 +282,6 @@ class ProgramConfig(Config):
     auto_clean_temp_projects: bool = False  # delete temp dirs on close
 
     # ── Performance settings ─────────────────────────────────
-    text_rendering: int = 1  # 0=Crisp(always vector), 1=Smooth(bitmap cache)
-    show_decorations_during_drag: bool = False
     open_image_fit_window: bool = False
     fit_window_on_page_switch: bool = False
     show_text_style_preset: bool = True
@@ -292,6 +290,8 @@ class ProgramConfig(Config):
     expand_teffect_panel: bool = True
     text_advanced_format_panel: bool = True
     expand_tadvanced_panel: bool = True
+    text_transform_panel: bool = True
+    expand_ttransform_panel: bool = True
     show_seq_badge: bool = True
     overflow_mode: bool = False  # 过界模式 — 画布边界视觉指示 + 文字块跨边界裁剪
     clip_text_overflow: bool = True  # 翻译填充时裁剪溢出文字并显示黄色提示框，拖拽调整后解除

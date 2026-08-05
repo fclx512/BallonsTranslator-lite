@@ -28,16 +28,15 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from utils.fontformat import FontFormat, pt2px, px2pt
+from utils.fontformat import FontFormat, TextTransformState, pt2px, px2pt
 from utils.imgproc_utils import xywh2xyxypoly
 from utils.text_alignment import SNAP_THRESHOLD, compute_snap
 from utils.textblock import TextBlock
 
 from .misc import table_pattern, td_pattern
 from .scene_textlayout import HorizontalTextDocumentLayout, VerticalTextDocumentLayout
-from .text_graphical_effect import apply_shadow_effect
 
-from ui.text_engine._stubs import TextEffectRendererStub
+from ui.text_engine.effect_renderer import TextEffectRenderer
 from ui.text_engine.geometry import TextItemGeometryController
 
 TEXTRECT_SELECTED_COLOR = QColor(248, 64, 147, 170)
@@ -80,9 +79,10 @@ class TextBlkItem(QGraphicsTextItem):
     ):
         super().__init__(*args, **kwargs)
         # Geometry ownership lives in the controller (Stage 2 port); the item
-        # only keeps thin Qt hooks. Effect/render stubs are swapped in Stage 3.
+        # only keeps thin Qt hooks. Effect/background state lives in the
+        # renderer (Stage 3 port).
         self.geometry_controller = TextItemGeometryController(self)
-        self.effect_renderer = TextEffectRendererStub(self)
+        self.effect_renderer = TextEffectRenderer(self)
         self.pre_editing = False
         self.blk: TextBlock = None
         self.fontformat: FontFormat = None
@@ -95,13 +95,6 @@ class TextBlkItem(QGraphicsTextItem):
         self.idx = idx
         self._hide_badge = False
         self._reorder_seq: int = -1  # >=0 when in path-reorder mode; overrides badge number
-
-        self.background_pixmap: QPixmap = None
-        # Pixmap cache optimization: full rendered text+stroke+shadow into one pixmap
-        self._full_pixmap: QPixmap = None
-        self._full_pixmap_dirty = True
-        self._use_full_pixmap = True
-        self._skip_pixmap_rebuild = False  # set True during drag resize to defer full pixmap
 
         self.stroke_qcolor = QColor(0, 0, 0)
         self.oldPos = QPointF()
@@ -130,15 +123,6 @@ class TextBlkItem(QGraphicsTextItem):
         self.setBoundingRegionGranularity(0)
         self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable)
         self.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
-        # Crisp mode: no Qt cache, render text natively each frame via
-        # super().paint(). Background (stroke/shadow) is drawn BEFORE text
-        # in the slow path — avoiding DestinationOver issues where
-        # super().paint() can leave the painter in a stale state.
-        from utils.config import pcfg
-
-        if pcfg.text_rendering == 0:  # Crisp (always vector)
-            self.setCacheMode(QGraphicsItem.CacheMode.NoCache)
-            self._use_full_pixmap = False
         self.geometry_controller.finish_initialization()
 
     @property
@@ -210,240 +194,8 @@ class TextBlkItem(QGraphicsTextItem):
                     self.repaint_background()
             self.update()
 
-    def paint_stroke(self, painter: QPainter):
-        doc = QTextDocument()
-        doc.setUndoRedoEnabled(False)
-        doc.setDocumentMargin(self.document().documentMargin())
-        doc.setDefaultFont(self.document().defaultFont())
-        doc.setHtml(self.document().toHtml())
-        doc.setDefaultTextOption(self.document().defaultTextOption())
-        cursor = QTextCursor(doc)
-        block = doc.firstBlock()
-        stroke_pen = QPen(
-            self.stroke_qcolor,
-            0,
-            Qt.PenStyle.SolidLine,
-            Qt.PenCapStyle.RoundCap,
-            Qt.PenJoinStyle.RoundJoin,
-        )
-        letter_spacing = self.fontformat.letter_spacing * 100
-        while block.isValid():
-            it = block.begin()
-            while not it.atEnd():
-                fragment = it.fragment()
-                cfmt = fragment.charFormat()
-                sw = pt2px(cfmt.fontPointSize()) * self.fontformat.stroke_width
-                stroke_pen.setWidthF(sw)
-                pos1 = fragment.position()
-                pos2 = pos1 + fragment.length()
-                cursor.setPosition(pos1)
-                cursor.setPosition(pos2, QTextCursor.MoveMode.KeepAnchor)
-                cfmt.setTextOutline(stroke_pen)
-                if letter_spacing != 100 and not self.fontformat.vertical:
-                    cfmt.setFontLetterSpacingType(QFont.SpacingType.PercentageSpacing)
-                    cfmt.setFontLetterSpacing(letter_spacing)
-                cursor.mergeCharFormat(cfmt)
-                it += 1
-            block = block.next()
-
-        from utils.config import pcfg
-
-        layout = (
-            VerticalTextDocumentLayout(
-                doc,
-                self.fontformat,
-                punctuation_position=pcfg.punctuation_position,
-                tatechuyoko_threshold=pcfg.tatechuyoko_threshold,
-                halfwidth_jp_corner_brackets=pcfg.halfwidth_jp_corner_brackets,
-            )
-            if self.fontformat.vertical
-            else HorizontalTextDocumentLayout(
-                doc,
-                self.fontformat,
-                punctuation_position=pcfg.punctuation_position,
-                tatechuyoko_threshold=pcfg.tatechuyoko_threshold,
-                halfwidth_jp_corner_brackets=pcfg.halfwidth_jp_corner_brackets,
-            )
-        )
-        layout._draw_offset = self.layout._draw_offset
-        layout._is_painting_stroke = True
-        layout.setMaxSize(self.layout.max_width, self.layout.max_height, False)
-        doc.setDocumentLayout(layout)
-
-        layout.relayout_on_changed = False
-        doc.drawContents(painter)
-
-    def repaint_background(self):
-        # Full pixmap cache is no longer valid — content or style changed.
-        self._invalidate_cache()
-
-        empty = self.document().isEmpty()
-        if self.repainting:
-            return
-
-        paint_stroke = self.fontformat.stroke_width > 0
-        paint_shadow = (
-            self.fontformat.shadow_radius > 0 and self.fontformat.shadow_strength > 0
-        )
-        if not paint_shadow and not paint_stroke or empty:
-            self.background_pixmap = None
-            return
-
-        self.repainting = True
-        font_size = self.layout.max_font_size(to_px=True)
-        target_map = QPixmap(self.boundingRect().size().toSize())
-        target_map.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(target_map)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-
-        if paint_stroke:
-            self.paint_stroke(painter)
-        else:
-            self.document().drawContents(painter)
-
-        # shadow
-        if paint_shadow:
-            r = int(round(self.fontformat.shadow_radius * font_size))
-            xoffset, yoffset = (
-                int(self.fontformat.shadow_offset[0] * font_size),
-                int(self.fontformat.shadow_offset[1] * font_size),
-            )
-            if paint_stroke:
-                if self.fontformat.shadow_include_stroke:
-                    # Shadow includes stroke area — use target_map (glyph + stroke)
-                    shadow_map, _ = apply_shadow_effect(
-                        target_map,
-                        self.fontformat.shadow_color,
-                        self.fontformat.shadow_strength,
-                        r,
-                    )
-                else:
-                    # Generate shadow from text-only alpha mask (exclude stroke).
-                    # PS drop shadow only shadows glyphs, not strokes — match that.
-                    text_only = self._render_text_only()
-                    shadow_map, _ = apply_shadow_effect(
-                        text_only,
-                        self.fontformat.shadow_color,
-                        self.fontformat.shadow_strength,
-                        r,
-                    )
-            else:
-                # No stroke — target_map is already text-only
-                shadow_map, _ = apply_shadow_effect(
-                    target_map,
-                    self.fontformat.shadow_color,
-                    self.fontformat.shadow_strength,
-                    r,
-                )
-            cm = painter.compositionMode()
-            painter.setCompositionMode(
-                QPainter.CompositionMode.CompositionMode_DestinationOver
-            )
-            painter.drawPixmap(xoffset, yoffset, shadow_map)
-            painter.setCompositionMode(cm)
-
-        painter.end()
-        self.background_pixmap = target_map
-        self.repainting = False
-        # 失效 DeviceCoordinateCache，确保下次 paint 重建 _full_pixmap
-        self.update()
-
-    def _render_text_only(self) -> QPixmap:
-        """Render text content without stroke into a fresh transparent pixmap.
-
-        Used to generate shadows from the text alpha mask only, matching PS
-        behavior where drop shadow does not include stroke area.
-        """
-        pm = QPixmap(self.boundingRect().size().toSize())
-        pm.fill(Qt.GlobalColor.transparent)
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        self.document().drawContents(p)
-        p.end()
-        return pm
-
-    # ---- Pixmap cache optimization ----
-
-    def _invalidate_cache(self):
-        """Mark the full pixmap cache as dirty, forcing rebuild on next paint."""
-        self._full_pixmap_dirty = True
-        self._full_pixmap = None
-
-    def _build_full_pixmap(self):
-        """Render text + stroke + shadow into a single pixmap for fast paint.
-
-        This is the core of the drag/rotate performance optimization.
-        Instead of calling QTextDocument.drawContents() on every frame,
-        we pre-render everything into a QPixmap and blit it during paint.
-        """
-        empty = self.document().isEmpty()
-        size = self.boundingRect().size().toSize()
-        if size.width() < 1 or size.height() < 1 or empty:
-            # 保持 _full_pixmap_dirty = True，下次 paint 重试。
-            # 如果在此设为 False 而 pixmap 未构建，fast path 将永久跳过重建，
-            # fall through 到 slow path；若 background_pixmap 也为 None，
-            # 描边/阴影即消失。
-            self._full_pixmap = None
-            return
-
-        paint_stroke = self.fontformat.stroke_width > 0
-        paint_shadow = (
-            self.fontformat.shadow_radius > 0
-            and self.fontformat.shadow_strength > 0
-        )
-
-        pm = QPixmap(size)
-        pm.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pm)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-
-        # 1. Render text content (with stroke outline if enabled)
-        if paint_stroke:
-            # Render stroke layer first (fill + outline from cloned doc).
-            # Then render real text fill ON TOP to match the real-time
-            # composition: in the non-cache path, stroke is drawn BEHIND
-            # the fill via DestinationOver, so only the outward half of
-            # the stroke is visible. Drawing fill on top here covers the
-            # inward half, producing the same clean result.
-            self.paint_stroke(painter)
-            self.document().drawContents(painter)
-        else:
-            self.document().drawContents(painter)
-
-        # 2. Apply drop shadow behind text
-        if paint_shadow:
-            font_size = self.layout.max_font_size(to_px=True)
-            r = int(round(self.fontformat.shadow_radius * font_size))
-            xoffset = int(self.fontformat.shadow_offset[0] * font_size)
-            yoffset = int(self.fontformat.shadow_offset[1] * font_size)
-
-            if paint_stroke and not self.fontformat.shadow_include_stroke:
-                # Generate shadow from text-only alpha mask (exclude stroke).
-                text_only = self._render_text_only()
-                shadow_map, _ = apply_shadow_effect(
-                    text_only,
-                    self.fontformat.shadow_color,
-                    self.fontformat.shadow_strength,
-                    r,
-                )
-            else:
-                shadow_map, _ = apply_shadow_effect(
-                    pm,
-                    self.fontformat.shadow_color,
-                    self.fontformat.shadow_strength,
-                    r,
-                )
-
-            cm = painter.compositionMode()
-            painter.setCompositionMode(
-                QPainter.CompositionMode.CompositionMode_DestinationOver
-            )
-            painter.drawPixmap(xoffset, yoffset, shadow_map)
-            painter.setCompositionMode(cm)
-
-        painter.end()
-        self._full_pixmap = pm
-        self._full_pixmap_dirty = False
+    def repaint_background(self, render_scale: float = 1.0):
+        return self.effect_renderer.repaint_background(render_scale)
 
     def docSizeChanged(self):
         self.setCenterTransform()
@@ -600,35 +352,13 @@ class TextBlkItem(QGraphicsTextItem):
         # 拖拽调整文本框 → 解除裁剪状态，恢复自动撑大行为
         if self._text_overflows:
             self._text_overflows = False
-            self._invalidate_cache()
-        from utils.config import pcfg
-        if pcfg.show_decorations_during_drag:
-            if pcfg.text_rendering == 1:  # Smooth — use full pixmap (has decorations)
-                self.background_pixmap = None
-                self._skip_pixmap_rebuild = True
-                self._use_full_pixmap = True
-            else:  # Crisp — slow path with existing background_pixmap
-                self._skip_pixmap_rebuild = True
-                self._use_full_pixmap = False
-                # background_pixmap kept intact — decorations stay visible
-        else:
-            # Hide decorations — native text only, no compositing overhead
-            self.background_pixmap = None
-            self._skip_pixmap_rebuild = True
-            self._use_full_pixmap = False
+        # 禁用背景重绘，避免拖拽全程的重复合成
+        self.effect_renderer.clear_cached_surface()
 
     def endReshape(self):
-        self._skip_pixmap_rebuild = False
-        from utils.config import pcfg
-        if pcfg.text_rendering == 1:  # Smooth mode — restore pixmap cache
-            self._use_full_pixmap = True
-            self._invalidate_cache()
-            self._build_full_pixmap()
-        else:  # Crisp mode — rebuild background_pixmap at final drag size
-            self._use_full_pixmap = False
-            self.repaint_background()
         self.reshaped.emit(self)
         self.reshaping = False
+        self.repaint_background()
 
     def padRect(self, rect: QRectF) -> QRectF:
         p = self.padding()
@@ -680,14 +410,16 @@ class TextBlkItem(QGraphicsTextItem):
         return self.document().documentMargin()
 
     def setPadding(self, p: float):
+        """Grow-only document margin update; True if the margin changed."""
         _p = self.padding()
         if _p >= p:
-            return
+            return False
         abr = self.absBoundingRect(qrect=True)
         self.layout.relayout_on_changed = False
         self.layout.updateDocumentMargin(p)
         self.layout.relayout_on_changed = True
         self.setRect(abr, repaint=False)
+        return True
 
     def absBoundingRect(
         self, max_h=None, max_w=None, qrect=False
@@ -713,31 +445,20 @@ class TextBlkItem(QGraphicsTextItem):
     def refresh_cache_policy(self) -> bool:
         """Align Qt cache mode with the active rendering policy.
 
-        Mirrors ``_on_text_rendering_changed`` (Crisp → NoCache,
-        Smooth → DeviceCoordinateCache). Editing state is owned by
-        startEdit/endEdit, so it is never overridden here.
+        Text is always cached with ``DeviceCoordinateCache`` outside editing
+        (the former "Smooth" mode); editing switches to ``NoCache`` inside
+        startEdit and is restored here by endEdit.
         """
         if self.is_editting():
             return False
-        from utils.config import pcfg
-
-        mode = (
-            QGraphicsItem.CacheMode.NoCache
-            if pcfg.text_rendering == 0
-            else QGraphicsItem.CacheMode.DeviceCoordinateCache
-        )
-        if self.cacheMode() == mode:
+        if self.cacheMode() == QGraphicsItem.CacheMode.DeviceCoordinateCache:
             return False
-        self.setCacheMode(mode)
-        self._use_full_pixmap = mode == QGraphicsItem.CacheMode.DeviceCoordinateCache
-        self._invalidate_cache()
+        self.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
         return True
 
     def release_render_resources(self) -> None:
         """Release item-owned renderer/cache state at the page boundary."""
         self.geometry_controller.release_render_resources()
-        self._invalidate_cache()
-        self.background_pixmap = None
 
     def itemChange(self, change, value):
         controller = getattr(self, 'geometry_controller', None)
@@ -881,7 +602,6 @@ class TextBlkItem(QGraphicsTextItem):
                 self._display_rect.width(), self._display_rect.height()
             )
             self.layout._prevent_expand = False
-            self._invalidate_cache()
             self.update()
         else:
             size = self.documentSize()
@@ -942,23 +662,7 @@ class TextBlkItem(QGraphicsTextItem):
                 clip_rect = content_clip
                 draw_clip = True
 
-        # --- Fast path: use pre-rendered pixmap cache (drag/rotate optimization) ---
-        if self._use_full_pixmap and not self.is_editting():
-            if self._full_pixmap_dirty and not self._skip_pixmap_rebuild:
-                self._build_full_pixmap()
-            if self._full_pixmap is not None:
-                if draw_clip:
-                    painter.save()
-                    painter.setClipRect(clip_rect)
-                painter.drawPixmap(self.boundingRect().toRect(), self._full_pixmap)
-                if draw_clip:
-                    painter.restore()
-                # Border and badge always draw outside the clip
-                self._draw_border_rect(painter)
-                self._draw_seq_badge(painter)
-                return
-
-        # --- Slow path: original QTextDocument-based rendering ---
+        # ── Background then text, SourceOver ──────────────────────────────
         #
         # Key ordering: background (stroke/shadow) is drawn BEFORE text
         # via SourceOver, not after via DestinationOver.  This avoids
@@ -999,9 +703,9 @@ class TextBlkItem(QGraphicsTextItem):
         br = self.boundingRect()
         painter.save()
 
-        if self.background_pixmap is not None:
+        if self.effect_renderer.background_pixmap is not None:
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-            painter.drawPixmap(br.toRect(), self.background_pixmap)
+            painter.drawPixmap(br.toRect(), self.effect_renderer.background_pixmap)
 
         draw_rect = self.draw_rect and not self.under_ctrl
         if self._text_overflows and not self.is_editting():
@@ -1027,22 +731,18 @@ class TextBlkItem(QGraphicsTextItem):
     def _draw_background_only(self, painter: QPainter):
         """Draw background pixmap only (no border, no badge).
 
-        Used by the crisp/vector paint path where accessories must be drawn
-        behind text via DestinationOver, but the border needs to be on top.
+        Used by the paint path where accessories must be drawn
+        behind text via SourceOver, but the border needs to be on top.
         """
         br = self.boundingRect()
         painter.save()
-        if self.background_pixmap is not None:
+        if self.effect_renderer.background_pixmap is not None:
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-            painter.drawPixmap(br.toRect(), self.background_pixmap)
+            painter.drawPixmap(br.toRect(), self.effect_renderer.background_pixmap)
         painter.restore()
 
     def _draw_border_rect(self, painter: QPainter):
-        """Draw selection/display border only (no background pixmap).
-
-        Used by the pixmap cache fast path in paint() where the background
-        pixmap is already embedded in _full_pixmap.
-        """
+        """Draw selection/display border only (no background pixmap)."""
         br = self.boundingRect()
         painter.save()
         draw_rect = self.draw_rect and not self.under_ctrl
@@ -1135,10 +835,7 @@ class TextBlkItem(QGraphicsTextItem):
         cursor.clearSelection()
         self.setTextCursor(cursor)
         self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
-        self.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
-        # Rebuild full pixmap cache so first paint after editing is fast
-        self._invalidate_cache()
-        self._build_full_pixmap()
+        self.refresh_cache_policy()
         if keep_focus:
             self.setFocus()
 
@@ -1693,29 +1390,37 @@ class TextBlkItem(QGraphicsTextItem):
         self.set_cursor_cfmt(cursor, cfmt, True)
         self._after_set_ffmt(cursor, repaint_background, restore_cursor, **after_kwargs)
 
-    def get_text_gradient(self, fontformat: FontFormat = None):
-        gradient = QLinearGradient()
-        if fontformat is None:
-            fontformat = self.fontformat
-        angle = fontformat.gradient_angle
-        rad = math.radians(angle)
-        dx = math.cos(rad)
-        dy = math.sin(rad)
+    def get_text_gradient(self, fontformat: FontFormat = None, *, persistent: bool = False):
+        return self.effect_renderer.get_text_gradient(fontformat, persistent=persistent)
 
-        # Set gradient points with size adjustment
-        rect = self.boundingRect()
-        center = rect.center()
-        radius = max(rect.width(), rect.height()) * fontformat.gradient_size
-        gradient.setStart(center.x() - dx * radius, center.y() - dy * radius)
-        gradient.setFinalStop(center.x() + dx * radius, center.y() + dy * radius)
+    def _text_transform_is_neutral(self) -> bool:
+        return self.geometry_controller.is_neutral()
 
-        # Set gradient colors
-        _clamp = lambda v: max(0, min(255, int(v)))  # noqa: E731
-        start_color = QColor(*[_clamp(c) for c in fontformat.gradient_start_color[:3]])
-        end_color = QColor(*[_clamp(c) for c in fontformat.gradient_end_color[:3]])
-        gradient.setColorAt(0, start_color)
-        gradient.setColorAt(1, end_color)
-        return gradient
+    def _effective_text_transform(self):
+        return self.geometry_controller.effective()
+
+    def set_text_transform(
+        self,
+        state: TextTransformState = None,
+        *,
+        preview: bool = False,
+    ) -> bool:
+        """Apply complete stack/layout state, optionally as a preview.
+
+        Mirrors upstream ``TextBlkItem.set_text_transform`` (v1.5.9): the
+        geometry controller returns whether the visual state actually changed;
+        only then is ``visual_geometry_changed`` emitted.
+        """
+        changed = self.geometry_controller.set(state, preview=preview)
+        if changed:
+            self.visual_geometry_changed.emit()
+        return changed
+
+    def clear_text_transform_preview(self) -> bool:
+        changed = self.geometry_controller.clear_preview()
+        if changed:
+            self.visual_geometry_changed.emit()
+        return changed
 
     def setLineSpacing(
         self,

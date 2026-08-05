@@ -47,7 +47,6 @@ from qtpy.QtWidgets import (
     QApplication,
     QDialog,
     QFileDialog,
-    QGraphicsItem,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -714,7 +713,6 @@ class MainWindow(mainwindow_cls):
         self.configPanel.shortcuts_changed.connect(self.refreshShortcuts)
         self.configPanel.presets_changed.connect(self._on_presets_changed)
         self.configPanel.seq_badge_changed.connect(self._on_seq_badge_changed)
-        self.configPanel.text_rendering_changed.connect(self._on_text_rendering_changed)
         # 初始化字体列表（系统字体枚举）
         shared.init_font_list()
         # 使用过滤后的字体列表（排除用户已隐藏的字体）
@@ -764,22 +762,6 @@ class MainWindow(mainwindow_cls):
             return
         for item in self.canvas.textLayer.childItems():
             if isinstance(item, TextBlkItem):
-                item.update()
-
-    def _on_text_rendering_changed(self):
-        """Apply text rendering mode to all existing text items immediately."""
-        if not self.canvas:
-            return
-        for item in self.canvas.textLayer.childItems():
-            if isinstance(item, TextBlkItem):
-                if pcfg.text_rendering == 0:  # Crisp
-                    item.setCacheMode(QGraphicsItem.CacheMode.NoCache)
-                    item._use_full_pixmap = False
-                else:  # Smooth
-                    item.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
-                    item._use_full_pixmap = True
-                    item._invalidate_cache()
-                    item._build_full_pixmap()
                 item.update()
 
     def setupImgTransUI(self):
@@ -863,6 +845,7 @@ class MainWindow(mainwindow_cls):
             return
         # Switch page if needed
         if proj.current_img != pagename:
+            self.st_manager.formatpanel.resolve_text_transform_edits_for_page_change()
             if self.save_on_page_changed:
                 self.conditional_save()
             proj.set_current_img(pagename)
@@ -1324,6 +1307,9 @@ class MainWindow(mainwindow_cls):
         pcfg.show_page_list = setup
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        # Pending numeric transform edits are not dirty until they commit;
+        # resolve them before the close-time dirty check.
+        self.st_manager.formatpanel.resolve_text_transform_edits_for_save()
         if not self.imgtrans_proj.is_empty:
             self.conditional_save(keep_exist_as_backup=True)
         while True:
@@ -1373,6 +1359,9 @@ class MainWindow(mainwindow_cls):
         self.canvas.clearToolStates()
 
     def conditional_save(self, keep_exist_as_backup=False):
+        # Typed transform edits belong to the current page and must commit
+        # before its dirty check.
+        self.st_manager.formatpanel.resolve_text_transform_edits_for_save()
         if self.canvas.projstate_unsaved and not self.opening_dir:
             update_scene_text = save_proj = self.canvas.text_change_unsaved()
             save_rst_only = not self.canvas.draw_change_unsaved()
@@ -1391,6 +1380,9 @@ class MainWindow(mainwindow_cls):
         item = self.pageList.currentItem()
         self.page_changing = True
         if item is not None:
+            # Typed transform edits belong to the old page and must commit
+            # before its dirty check. Live drags are previews and cancel.
+            self.st_manager.formatpanel.resolve_text_transform_edits_for_page_change()
             if self.save_on_page_changed:
                 self.conditional_save()
             new_pagename = item.text()
@@ -1718,9 +1710,12 @@ class MainWindow(mainwindow_cls):
             self.textPanel.formatpanel.formatBtnGroup.underlineBtn.click()
 
     def on_redo(self):
+        # A live transform preview must not leak across the history boundary.
+        self.st_manager.formatpanel.resolve_text_transform_edits_for_history_change()
         self.canvas.redo()
 
     def on_undo(self):
+        self.st_manager.formatpanel.resolve_text_transform_edits_for_history_change()
         self.canvas.undo()
 
     def on_page_search(self):

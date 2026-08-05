@@ -1334,7 +1334,6 @@ class ConfigPanel(Widget):
     shortcuts_changed = Signal()
     presets_changed = Signal()
     seq_badge_changed = Signal()
-    text_rendering_changed = Signal()
 
     # Active instance used by _DeadBlock/_DeadLayout to find the page stack
     # during __init__ construction.
@@ -1956,38 +1955,6 @@ class ConfigPanel(Widget):
         )
         perf_layout.addWidget(anim_sublock)
 
-        # Text rendering mode: vector vs bitmap cache
-        render_widget = QWidget()
-        render_row_layout = QHBoxLayout(render_widget)
-        render_row_layout.setContentsMargins(0, 0, 0, 0)
-        render_row_layout.setSpacing(6)
-        self.text_rendering_combo = ConfigComboBox(scrollWidget=self)
-        self.text_rendering_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
-        self.text_rendering_combo.addItems([
-            self.tr("Crisp (always vector)"),
-            self.tr("Smooth (bitmap cache)"),
-        ])
-        self.text_rendering_combo.activated.connect(self._on_text_rendering_changed)
-        render_row_layout.addWidget(self.text_rendering_combo)
-        render_row_layout.addStretch()
-        render_sublock = ConfigSubBlock(
-            render_widget, name=self.tr("Text Rendering"),
-            note=self.tr("<p>Controls how text is drawn on the canvas:</p><p><b>Crisp (always vector)</b> — sharp at any zoom, but dragging large blocks may lag<br/><b>Smooth (bitmap cache)</b> — smooth drag/scroll; text may blur briefly after zoom until cache rebuilds</p>"),
-            vertical_layout=False,
-        )
-        perf_layout.addWidget(render_sublock)
-
-        # Show decorations during drag/resize
-        self.drag_decorations_checker = ConfigCheckBox(self.tr("Show decorations while resizing"))
-        self.drag_decorations_checker.setChecked(pcfg.show_decorations_during_drag)
-        self.drag_decorations_checker.toggled.connect(self._on_decorations_during_drag_changed)
-        decor_sublock = ConfigSubBlock(
-            self.drag_decorations_checker, name=self.tr("Drag Decorations"),
-            note=self.tr("<p>When checked, <b>text stroke and shadow</b> remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.</p>"),
-            vertical_layout=False,
-        )
-        perf_layout.addWidget(decor_sublock)
-
         self.performance_block = generalConfigPanel.addGroupedBlock(
             label_performance, perf_widget, object_name="GroupGeneral"
         )
@@ -2544,13 +2511,6 @@ class ConfigPanel(Widget):
         mapping = {0: 0, 1: 60, 2: 30, 3: -1}
         pcfg.animation_fps = mapping.get(idx, 0)
 
-    def _on_text_rendering_changed(self):
-        pcfg.text_rendering = self.text_rendering_combo.currentIndex()
-        self.text_rendering_changed.emit()
-
-    def _on_decorations_during_drag_changed(self, checked: bool):
-        pcfg.show_decorations_during_drag = checked
-
     def _close_via_esc(self) -> None:
         """Esc → delegate to modal hide."""
         if self._modal_ref is not None:
@@ -2694,8 +2654,5 @@ class ConfigPanel(Widget):
 
         anim_idx = {0: 0, 60: 1, 30: 2, -1: 3}.get(pcfg.animation_fps, 0)
         self.anim_combo.setCurrentIndex(anim_idx)
-
-        self.text_rendering_combo.setCurrentIndex(pcfg.text_rendering)
-        self.drag_decorations_checker.setChecked(pcfg.show_decorations_during_drag)
 
         self.blockSignals(False)

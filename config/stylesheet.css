@@ -1801,3 +1801,64 @@ HelpDocTab[current="true"]:hover {
     color: @textColor;
     background: transparent;
 }
+/* ── Text transform panel (stage 5 node H) ─────────────────── */
+QFrame#TextTransformParameterPanel {
+    background: @hoverBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+}
+QFrame#TextTransformParameterPanel[selected="true"] {
+    border: 1px solid @accentPrimary;
+}
+QLabel#TextTransformParameterTitle {
+    color: @textColor;
+    font-weight: bold;
+    background: transparent;
+}
+QLabel#TextTransformParamLabel {
+    color: @qwidgetForegroundColor;
+    background: transparent;
+}
+QLineEdit#TextTransformParamEditor {
+    height: 22px;
+    padding: 0 4px;
+    font-size: 12px;
+}
+QComboBox#TextTransformParamEditor {
+    height: 22px;
+    font-size: 12px;
+    padding-left: 4px;
+}
+QLabel#TextTransformSectionTitle {
+    color: @disabledForegroundColor;
+    font-size: 11px;
+    background: transparent;
+}
+QLabel#TextTransformMixedLabel {
+    color: @disabledForegroundColor;
+    background: transparent;
+    padding: 2px 0;
+}
+QToolButton#AddTextTransformButton {
+    background: @pushBtnBackgroundColor;
+    color: @textColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding: 2px 8px;
+}
+QToolButton#AddTextTransformButton:hover {
+    border: 1px solid @accentPrimary;
+}
+QToolButton#TextTransformMoveButton,
+QToolButton#TextTransformCloseButton {
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+}
+QToolButton#TextTransformMoveButton:hover,
+QToolButton#TextTransformCloseButton:hover {
+    background: @hoverBackgroundColor;
+}
+QToolButton#TextTransformCloseButton:hover {
+    background: @dangerColor;
+}

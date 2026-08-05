@@ -1,10 +1,11 @@
 """Geometry and transform lifecycle for one ``TextBlkItem``.
 
-Stage 2 port of upstream v1.5.9 ``text_engine/geometry.py``
-(``TextItemGeometryController``).  Non-linear branches keep their upstream
-structure but resolve their dependencies through ``ui.text_engine._stubs``;
-only the neutral state (empty transform stack + ``glyph_slant_angle == 0``)
-is reachable in this stage and must behave exactly like the pre-port local
+Stage 2-4 port of upstream v1.5.9 ``text_engine/geometry.py``
+(``TextItemGeometryController``).  The controller resolves its transform
+and rendering dependencies through the real ``transforms/*`` and
+``rendering/*`` modules (Stage 4); the neutral state (empty transform stack
++ ``glyph_slant_angle == 0``) compiles to an identity matrix with no
+surface mapper and must behave exactly like the pre-port local
 implementation.
 
 Localization notes (compared with upstream):
@@ -37,16 +38,18 @@ from utils.fontformat import (
     TextTransformState,
 )
 from utils.textblock import TextAlignment
-from ui.text_engine._stubs import (
+from ui.text_engine.transforms.mapping import (
     CompiledTextTransform,
     CompositeTextTransformMapper,
-    EffectRasterAllocationError,
-    GlyphSlantLayoutRenderer,
-    NonlinearTextSurfaceRenderer,
-    RASTER_BOUNDARY_FAILURES,
     compensated_native_transform_matrix,
-    compile_text_transform_stack,
     grid_transform_stage,
+)
+from ui.text_engine.transforms.registry import compile_text_transform_stack
+from ui.text_engine.rendering.glyph_slant import GlyphSlantLayoutRenderer
+from ui.text_engine.rendering.surface import NonlinearTextSurfaceRenderer
+from ui.text_engine.rendering.raster import (
+    EffectRasterAllocationError,
+    RASTER_BOUNDARY_FAILURES,
 )
 
 if TYPE_CHECKING:
