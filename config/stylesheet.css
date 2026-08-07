@@ -1823,11 +1823,34 @@ QLineEdit#TextTransformParamEditor {
     height: 22px;
     padding: 0 4px;
     font-size: 12px;
+    background: @inputBackgroundColor;
+    border-radius: 4px;
+}
+QLineEdit#TextTransformParamEditor:focus {
+    border: 1px solid @accentPrimary;
+}
+QLineEdit#TextTransformParamEditor:disabled {
+    background: transparent;
+    border: 1px solid @disabledForegroundColor;
+    color: @disabledForegroundColor;
+}
+QLineEdit#TextTransformParamEditor[integerStepper="true"] {
+    padding-right: 36px;
 }
 QComboBox#TextTransformParamEditor {
     height: 22px;
     font-size: 12px;
     padding-left: 4px;
+    background: @inputBackgroundColor;
+    border-radius: 4px;
+}
+QComboBox#TextTransformParamEditor:hover,
+QComboBox#TextTransformParamEditor:focus {
+    border: 1px solid @accentPrimary;
+}
+QComboBox#TextTransformParamEditor:disabled {
+    background: transparent;
+    color: @disabledForegroundColor;
 }
 QLabel#TextTransformSectionTitle {
     color: @disabledForegroundColor;
@@ -1848,6 +1871,14 @@ QToolButton#AddTextTransformButton {
 }
 QToolButton#AddTextTransformButton:hover {
     border: 1px solid @accentPrimary;
+}
+QToolButton#AddTextTransformButton:pressed {
+    background: @hoverBackgroundColor;
+}
+QWidget#TextTransformControl,
+QWidget#TextTransformPanelActions,
+QWidget#TextTransformPanelControls {
+    background: transparent;
 }
 QToolButton#TextTransformMoveButton,
 QToolButton#TextTransformCloseButton {

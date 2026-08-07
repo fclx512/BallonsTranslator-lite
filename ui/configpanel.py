@@ -1955,6 +1955,22 @@ class ConfigPanel(Widget):
         )
         perf_layout.addWidget(anim_sublock)
 
+        # Show decorations during drag/resize
+        self.drag_decorations_checker = ConfigCheckBox(
+            self.tr("Show decorations while resizing")
+        )
+        self.drag_decorations_checker.setChecked(pcfg.show_decorations_during_drag)
+        self.drag_decorations_checker.toggled.connect(
+            self._on_decorations_during_drag_changed
+        )
+        decor_sublock = ConfigSubBlock(
+            self.drag_decorations_checker,
+            name=self.tr("Drag Decorations"),
+            note=self.tr("<p>When checked, <b>text stroke and shadow</b> remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.</p>"),
+            vertical_layout=False,
+        )
+        perf_layout.addWidget(decor_sublock)
+
         self.performance_block = generalConfigPanel.addGroupedBlock(
             label_performance, perf_widget, object_name="GroupGeneral"
         )
@@ -2510,6 +2526,9 @@ class ConfigPanel(Widget):
         idx = self.anim_combo.currentIndex()
         mapping = {0: 0, 1: 60, 2: 30, 3: -1}
         pcfg.animation_fps = mapping.get(idx, 0)
+
+    def _on_decorations_during_drag_changed(self, checked: bool):
+        pcfg.show_decorations_during_drag = checked
 
     def _close_via_esc(self) -> None:
         """Esc → delegate to modal hide."""

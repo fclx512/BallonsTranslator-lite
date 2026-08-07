@@ -40,6 +40,11 @@ from ui.text_engine.effect_renderer import TextEffectRenderer
 from ui.text_engine.geometry import TextItemGeometryController
 
 TEXTRECT_SELECTED_COLOR = QColor(248, 64, 147, 170)
+# Above this canvas zoom, DeviceCoordinateCache rasterizes text into enormous
+# device-resolution bitmaps (a 300px block at 1000% becomes a ~3000px-wide
+# cache) — hundreds of ms per block when it enters the viewport during pan.
+# Above the limit, render natively (viewport-clipped) instead.
+HIGH_ZOOM_CACHE_LIMIT = 3.0
 
 
 def _textrect_show_color():
@@ -354,6 +359,12 @@ class TextBlkItem(QGraphicsTextItem):
             self._text_overflows = False
         # 禁用背景重绘，避免拖拽全程的重复合成
         self.effect_renderer.clear_cached_surface()
+        from utils.config import pcfg
+
+        if pcfg.show_decorations_during_drag:
+            # Keep stroke/shadow visible during drag — rebuild now at current size;
+            # the per-frame rebuild in setRect keeps them following the box.
+            self.repaint_background()
 
     def endReshape(self):
         self.reshaped.emit(self)
@@ -445,15 +456,25 @@ class TextBlkItem(QGraphicsTextItem):
     def refresh_cache_policy(self) -> bool:
         """Align Qt cache mode with the active rendering policy.
 
-        Text is always cached with ``DeviceCoordinateCache`` outside editing
-        (the former "Smooth" mode); editing switches to ``NoCache`` inside
-        startEdit and is restored here by endEdit.
+        Text is cached with ``DeviceCoordinateCache`` outside editing at
+        normal zoom (the former "Smooth" mode); editing switches to
+        ``NoCache`` inside startEdit and is restored here by endEdit.
+        Above ``HIGH_ZOOM_CACHE_LIMIT`` the cache stays off outside editing
+        too: DeviceCoordinateCache rasterizes at device resolution, so a
+        block at 1000% zoom becomes a ~10×-scale cache bitmap (expensive on
+        pan entry), while native rendering is clipped to the viewport.
         """
         if self.is_editting():
             return False
-        if self.cacheMode() == QGraphicsItem.CacheMode.DeviceCoordinateCache:
+        use_cache = self.get_scale() <= HIGH_ZOOM_CACHE_LIMIT
+        target = (
+            QGraphicsItem.CacheMode.DeviceCoordinateCache
+            if use_cache
+            else QGraphicsItem.CacheMode.NoCache
+        )
+        if self.cacheMode() == target:
             return False
-        self.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
+        self.setCacheMode(target)
         return True
 
     def release_render_resources(self) -> None:

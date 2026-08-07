@@ -137,3 +137,36 @@ geometry.py + `_stubs.py` 删除）、`ui/scene_textlayout.py`、`ui/textitem.py
 `ui/canvas.py`、`ui/texteditshapecontrol.py`、`ui/text_engine/effect_renderer.py`、
 `ui/text_engine/transforms/editor.py`、`tests/test_text_transform_ui.py`
 （+5 用例 → 30）、`docs/技术实现/文本引擎移植_阶段5_UI自研.md`（节点 L 记录）
+
+---
+
+## 2026-08-07
+
+### 文本引擎移植收尾：变换面板样式 + 拖拽装饰开关 + 高缩放缓存策略
+
+**问题/需求：** 移植阶段 3-5 为保稳定性未带项目自定义样式，新增文本变换面板
+（正弦波/弯曲/网格/透视卡片）视觉与主题规范不符；随后实测发现两个性能体验问题：
+① 重样式（描边/阴影）文本块拖拽调整时每帧重建背景（含高斯模糊）导致帧率极低；
+② 画布缩放到 300% 以上平移时，新进入视口的文本块需构建设备分辨率级巨型缓存位图
+（1000% 下一个 300px 块 ≈ 3000px 宽），产生明显卡顿。
+
+**改动要点：**
+
+- 变换面板样式：`config/stylesheet.css` 补编辑器/下拉框 focus/hover/disabled 态、
+  整数步进器 padding-right（ID+attr 组合选择器解决特异性）、Add 按钮 pressed 态、
+  透明容器；`panel.py` 步进器 hover 高亮改 `get_theme_color(@accentPrimary, alpha=32)`。
+- 拖拽装饰开关：恢复 `show_decorations_during_drag`（默认 False）；`effect_renderer`
+  `repaint_background` 在 reshaping 且关闭时跳过（背景保持清除、paint 走原生文本）；
+  `startReshape` 开启时立即重建；设置面板 General→Performance 恢复勾选项（含 i18n）。
+- 高缩放缓存策略：`textitem.py` 新增 `HIGH_ZOOM_CACHE_LIMIT=3.0`，`refresh_cache_policy`
+  按 `get_scale()` 切换 DeviceCoordinateCache↔NoCache；`scenetext_manager._rebuild_item_caches`
+  （zoom 防抖）补策略刷新，越过阈值自动切换。
+
+**排障记录：** 离屏基准实测 DeviceCoordinateCache 光栅化成本随缩放平方增长
+（8 块：1×=29ms / 2×=108ms / 4×=420ms / 10×=2420ms），NoCache 任意缩放 ~2ms；
+阈值初定 4.0，用户实测仍有感知后下探至 3.0。
+
+**涉及文件：** `config/stylesheet.css`、`ui/text_engine/transforms/panel.py`、
+`utils/config.py`、`ui/text_engine/effect_renderer.py`、`ui/textitem.py`、
+`ui/configpanel.py`、`ui/scenetext_manager.py`、`translate/zh_CN.ts`、
+`translate/zh_CN.qm`、`docs/daily_log.md`

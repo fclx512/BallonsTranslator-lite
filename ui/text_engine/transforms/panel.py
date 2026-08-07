@@ -37,7 +37,7 @@ from qtpy.QtCore import (
     Signal,
     Qt,
 )
-from qtpy.QtGui import QColor, QIcon, QKeyEvent, QPainter
+from qtpy.QtGui import QIcon, QKeyEvent, QPainter
 from qtpy.QtWidgets import (
     QComboBox,
     QFrame,
@@ -54,6 +54,7 @@ from qtpy.QtWidgets import (
 
 from utils.fontformat import FontFormat, TextTransformState
 from ui.custom_widget import PanelArea, SizeControlLabel
+from ui.misc import get_theme_color
 from ui.text_engine.transforms.registry import (
     GLYPH_SLANT_CONTROL,
     TEXT_TRANSFORM_VARIANTS,
@@ -172,7 +173,9 @@ class _TransformIntegerEdit(_TransformValueEdit):
         ):
             if self._hover_button == name and self.isEnabled():
                 painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(QColor(30, 147, 229, 32))
+                painter.setBrush(
+                    get_theme_color(key="@accentPrimary", alpha=32)
+                )
                 painter.drawRoundedRect(rect, 3, 3)
             pixmap = _icon(icon_name).pixmap(
                 self.ICON_SIZE, self.ICON_SIZE

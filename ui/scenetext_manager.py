@@ -632,6 +632,9 @@ class SceneTextManager(QObject):
     def _rebuild_item_caches(self):
         """Rebuild item rendering caches after zoom."""
         for blk_item in self.textblk_item_list:
+            # Switch DeviceCoordinateCache <-> NoCache across the high-zoom
+            # limit, then force a repaint at the new cache policy.
+            blk_item.refresh_cache_policy()
             blk_item.update()
 
     def clearSceneTextitems(self):

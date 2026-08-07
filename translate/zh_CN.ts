@@ -786,6 +786,21 @@
             <translation>关闭（无动画）</translation>
         </message>
         <message>
+            <location filename="..\ui\configpanel.py" />
+            <source>Show decorations while resizing</source>
+            <translation>调整大小时显示描边和阴影</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" />
+            <source>Drag Decorations</source>
+            <translation>拖拽装饰</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" />
+            <source>&lt;p&gt;When checked, &lt;b&gt;text stroke and shadow&lt;/b&gt; remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;勾选后，拖拽或调整文本框时&lt;b&gt;描边和阴影&lt;/b&gt;保持可见。取消勾选可在调整大小时获得最高帧率。&lt;/p&gt;</translation>
+        </message>
+        <message>
             <location filename="..\ui\configpanel.py" line="1656" />
             <source>Edit Shortcuts...</source>
             <translation>快捷键编辑...</translation>

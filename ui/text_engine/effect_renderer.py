@@ -79,6 +79,17 @@ _VECTOR_EFFECT_RENDER_HINTS = (
 )
 
 
+def _decorations_visible_during_drag() -> bool:
+    """Whether stroke/shadow stay visible while dragging a text block.
+
+    Hidden by default: decorations reappear on release, and drags stay at
+    native-text frame rate.
+    """
+    from utils.config import pcfg
+
+    return pcfg.show_decorations_during_drag
+
+
 class _TransformedEffectState:
     """Allocate raster/cache state only after a transform needs it.
 
@@ -926,6 +937,11 @@ class TextEffectRenderer:
         self.update()
 
     def repaint_background(self, render_scale: float = 1.0):
+        if self.reshaping and not _decorations_visible_during_drag():
+            # Drag/resize with decorations hidden: keep the background pixmap
+            # cleared so paint falls through to native text. The single rebuild
+            # happens in endReshape, maximizing drag frame rate.
+            return
         if self._text_transform_is_neutral():
             self._repaint_neutral_background()
             return
