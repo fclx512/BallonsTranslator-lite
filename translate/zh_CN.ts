@@ -1,4 +1,5 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
 <TS version="2.1" language="zh_CN" sourcelanguage="en">
     <context>
         <name>AboutDialog</name>
@@ -152,17 +153,17 @@
         <message>
             <location filename="..\ui\mainwindowbars.py" line="651" />
             <source>Text layer opacity</source>
-		            <translation>嵌字层不透明度</translation>
-		        </message>
-		        <message>
-		            <source>Translator</source>
-		            <translation>翻译器</translation>
-		        </message>
-		    </context>
+            <translation>嵌字层不透明度</translation>
+        </message>
+        <message>
+            <source>Translator</source>
+            <translation>翻译器</translation>
+        </message>
+    </context>
     <context>
         <name>Canvas</name>
         <message>
-            <location filename="..\ui\canvas.py" line="389"/>
+            <location filename="..\ui\canvas.py" line="389" />
             <source>Drop images here or open a folder to start</source>
             <translation>拖拽图片到此处或打开文件夹以开始</translation>
         </message>
@@ -271,17 +272,17 @@
             <source>Snap Alignment</source>
             <translation>吸附对齐</translation>
         </message>
-	        <message>
-	            <location filename="..\ui\canvas.py" />
-	            <source>Merge</source>
-	            <translation>合并</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\canvas.py" />
-	            <source>Behavior</source>
-	            <translation>行为设置</translation>
-	        </message>
-		        <message>
+        <message>
+            <location filename="..\ui\canvas.py" />
+            <source>Merge</source>
+            <translation>合并</translation>
+        </message>
+        <message>
+            <location filename="..\ui\canvas.py" />
+            <source>Behavior</source>
+            <translation>行为设置</translation>
+        </message>
+        <message>
             <location filename="..\ui\canvas.py" line="350" />
             <source>PREVIEW</source>
             <translation>预览</translation>
@@ -397,45 +398,45 @@
     </context>
     <context>
         <name>SmartReorderDialog</name>
-	        <message>
-	            <source>Smart Reorder</source>
-	            <translation>智能重排</translation>
-	        </message>
-	        <message>
-	            <source>LTR (Top→Bottom, Left→Right)</source>
-	            <translation>LTR（上→下，左→右）</translation>
-	        </message>
-	        <message>
-	            <source>RTL (Right→Left, for manga)</source>
-	            <translation>RTL（右→左，日漫）</translation>
-	        </message>
-	        <message>
-	            <source>2×2 Grid (4-koma)</source>
-	            <translation>2×2 网格（四格漫画）</translation>
-	        </message>
-	        <message>
-	            <source>3×3 Grid</source>
-	            <translation>3×3 网格</translation>
-	        </message>
-	        <message>
-	            <source>Custom Grid…</source>
-	            <translation>自定义网格…</translation>
-	        </message>
-	        <message>
-	            <source>Rows:</source>
-	            <translation>行数：</translation>
-	        </message>
-	        <message>
-	            <source>Cols:</source>
-	            <translation>列数：</translation>
-	        </message>
-	        <message>
-	            <source>Direction:</source>
-	            <translation>方向：</translation>
-	        </message>
-	    </context>
-	    <context>
-	        <name>ColorPickerDialog</name>
+        <message>
+            <source>Smart Reorder</source>
+            <translation>智能重排</translation>
+        </message>
+        <message>
+            <source>LTR (Top→Bottom, Left→Right)</source>
+            <translation>LTR（上→下，左→右）</translation>
+        </message>
+        <message>
+            <source>RTL (Right→Left, for manga)</source>
+            <translation>RTL（右→左，日漫）</translation>
+        </message>
+        <message>
+            <source>2×2 Grid (4-koma)</source>
+            <translation>2×2 网格（四格漫画）</translation>
+        </message>
+        <message>
+            <source>3×3 Grid</source>
+            <translation>3×3 网格</translation>
+        </message>
+        <message>
+            <source>Custom Grid…</source>
+            <translation>自定义网格…</translation>
+        </message>
+        <message>
+            <source>Rows:</source>
+            <translation>行数：</translation>
+        </message>
+        <message>
+            <source>Cols:</source>
+            <translation>列数：</translation>
+        </message>
+        <message>
+            <source>Direction:</source>
+            <translation>方向：</translation>
+        </message>
+    </context>
+    <context>
+        <name>ColorPickerDialog</name>
         <message>
             <location filename="..\ui\custom_widget\color_picker.py" line="336" />
             <source>Color Picker</source>
@@ -665,19 +666,19 @@
             <source>Font Size</source>
             <translation>大小</translation>
         </message>
-	        <message>
-	            <location filename="..\ui\configpanel.py" line="1480" />
-	            <source>Stroke Size</source>
-	            <translation>轮廓大小</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\configpanel.py" line="1518" />
-	            <source>Alignment</source>
-	            <translation>对齐方式</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\configpanel.py" line="1528" />
-	            <source>Writing-mode</source>
+        <message>
+            <location filename="..\ui\configpanel.py" line="1480" />
+            <source>Stroke Size</source>
+            <translation>轮廓大小</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="1518" />
+            <source>Alignment</source>
+            <translation>对齐方式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="1528" />
+            <source>Writing-mode</source>
             <translation>书写方向</translation>
         </message>
         <message>
@@ -726,22 +727,22 @@
             <translation>标点位置</translation>
         </message>
         <message>
-            <location filename="..\ui\configpanel.py" line="0"/>
+            <location filename="..\ui\configpanel.py" line="0" />
             <source>Compact 「」『』 in vertical text (half-width style)</source>
             <translation>竖排文本中压缩「」『』为半角样式</translation>
         </message>
         <message>
-            <location filename="..\ui\configpanel.py" line="0"/>
+            <location filename="..\ui\configpanel.py" line="0" />
             <source>Corner Bracket Style</source>
             <translation>直角引号样式</translation>
         </message>
         <message>
-            <location filename="..\ui\configpanel.py" line="0"/>
+            <location filename="..\ui\configpanel.py" line="0" />
             <source>&lt;p&gt;When enabled, 「」『』 &lt;b&gt;corner brackets&lt;/b&gt; in &lt;b&gt;vertical&lt;/b&gt; text use half-width compact layout, matching narrow half-width punctuation width instead of full-width CJK character width. Use the sub-option below to also apply the effect to &lt;b&gt;horizontal&lt;/b&gt; text.&lt;/p&gt;</source>
             <translation>&lt;p&gt;开启后，&lt;b&gt;竖排&lt;/b&gt;文本中的「」『』&lt;b&gt;直角引号&lt;/b&gt;使用半角紧凑布局，匹配窄体半角标点宽度，而非全角 CJK 字符宽度。可启用下方附属选项将效果同样应用于&lt;b&gt;横排&lt;/b&gt;文本。&lt;/p&gt;</translation>
         </message>
         <message>
-            <location filename="..\ui\configpanel.py" line="0"/>
+            <location filename="..\ui\configpanel.py" line="0" />
             <source>Also apply in horizontal text</source>
             <translation>同样应用于横排文本</translation>
         </message>
@@ -799,11 +800,6 @@
             <location filename="..\ui\configpanel.py" />
             <source>&lt;p&gt;When checked, &lt;b&gt;text stroke and shadow&lt;/b&gt; remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.&lt;/p&gt;</source>
             <translation>&lt;p&gt;勾选后，拖拽或调整文本框时&lt;b&gt;描边和阴影&lt;/b&gt;保持可见。取消勾选可在调整大小时获得最高帧率。&lt;/p&gt;</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1656" />
-            <source>Edit Shortcuts...</source>
-            <translation>快捷键编辑...</translation>
         </message>
         <message>
             <location filename="..\ui\configpanel.py" line="1662" />
@@ -993,171 +989,173 @@
             <source>Vertical Latin/Digits Length</source>
             <translation>竖排拉丁/数字横排长度</translation>
         </message>
-    <message><source>&lt;p&gt;Configure network proxies, mirror servers, and download sources. Useful for systems behind &lt;b&gt;firewalls&lt;/b&gt; or in restricted environments.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;配置网络代理、镜像服务器和下载源。适用于&lt;b&gt;防火墙&lt;/b&gt;后或受限网络环境的系统。&lt;/p&gt;</translation></message>
+        <message>
+            <source>&lt;p&gt;Configure network proxies, mirror servers, and download sources. Useful for systems behind &lt;b&gt;firewalls&lt;/b&gt; or in restricted environments.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;配置网络代理、镜像服务器和下载源。适用于&lt;b&gt;防火墙&lt;/b&gt;后或受限网络环境的系统。&lt;/p&gt;</translation>
+        </message>
         <message>
             <source>Performance</source>
             <translation>性能表现</translation>
         </message>
-		        <message>
-		            <source>Modules</source>
-		            <translation>模块</translation>
-		        </message>
-		        <message>
-		            <source>Module Actions</source>
-		            <translation>模块操作</translation>
-		        </message>
-		        <message>
-		            <source>LLM Profile</source>
-		            <translation>LLM 配置</translation>
-		        </message>
-		        <message>
-		            <source>&lt;p&gt;Select the &lt;b&gt;translation engine&lt;/b&gt;. Online translators require an API profile with credentials configured under &lt;b&gt;LLM Profile&lt;/b&gt;.&lt;/p&gt;</source>
-		            <translation>&lt;p&gt;选择&lt;b&gt;翻译引擎&lt;/b&gt;。在线翻译器需要在&lt;b&gt;LLM 配置&lt;/b&gt;中配置 API 凭据。&lt;/p&gt;</translation>
-			        </message>
-			        <message>
-			            <source>Customize Context Menu...</source>
-			            <translation>自定义右键菜单...</translation>
-			        </message>
-			        <message>
-			            <source>Context Menu</source>
-			            <translation>右键菜单</translation>
-			        </message>
-			        <message>
-			            <source>&lt;p&gt;Customize the right-click context menu: reorder items, add or remove commands via drag-and-drop.&lt;/p&gt;</source>
-			            <translation>&lt;p&gt;自定义右键菜单：拖拽排序、添加或移除命令项。&lt;/p&gt;</translation>
-			        </message>
-			        <message>
-			            <source>Temporary Projects</source>
-			            <translation>临时项目</translation>
-			        </message>
-			        <message>
-			            <source>Clean up imported image projects on exit</source>
-				            <translation>关闭时清理单图导入的临时项目</translation>
-				        </message>
-				        <message>
-				            <source>&lt;p&gt;When enabled, projects created by importing individual images (via drag-drop or &lt;b&gt;Open Image…&lt;/b&gt;) will be &lt;b&gt;automatically deleted&lt;/b&gt; when the application closes.&lt;/p&gt;&lt;p&gt;Use &lt;b&gt;Save Project As…&lt;/b&gt; to keep a project permanently.&lt;/p&gt;</source>
-					            <translation>&lt;p&gt;启用后，通过单张图片导入（拖拽或&lt;b&gt;打开图片…&lt;/b&gt;）创建的临时项目将在程序关闭时&lt;b&gt;自动删除&lt;/b&gt;。&lt;/p&gt;&lt;p&gt;使用&lt;b&gt;项目另存为…&lt;/b&gt;可以永久保留项目。&lt;/p&gt;</translation>
-					        </message>
-					        <message>
-					            <source>Config Management</source>
-					            <translation>配置管理</translation>
-					        </message>
-					        <message>
-					            <source>Export Config</source>
-					            <translation>导出配置</translation>
-					        </message>
-					        <message>
-					            <source>Exclude API keys when exporting</source>
-					            <translation>导出时排除 API 密钥</translation>
-					        </message>
-					        <message>
-					            <source>&lt;p&gt;API profiles will be exported without &lt;b&gt;api_key&lt;/b&gt; and &lt;b&gt;proxy&lt;/b&gt; fields. Structure and all other settings remain intact. Uncheck to include credentials (not recommended for sharing).&lt;/p&gt;</source>
-					            <translation>&lt;p&gt;API 配置在导出时将不包含 &lt;b&gt;api_key&lt;/b&gt; 和 &lt;b&gt;proxy&lt;/b&gt; 字段。结构和所有其他设置保持不变。取消勾选可包含凭证（不建议用于分享）。&lt;/p&gt;</translation>
-					        </message>
-					        <message>
-						            <source>Export Config...</source>
-						            <translation>导出配置...</translation>
-						        </message>
-						        <message>
-						            <source>&lt;p&gt;Save current settings to a &lt;b&gt;.json&lt;/b&gt; file. Useful for backups or transferring configurations between machines.&lt;/p&gt;</source>
-						            <translation>&lt;p&gt;将当前设置保存到 &lt;b&gt;.json&lt;/b&gt; 文件。用于备份或在机器间迁移配置。&lt;/p&gt;</translation>
-						        </message>
-						        <message>
-						            <source>Import Config</source>
-						            <translation>导入配置</translation>
-						        </message>
-						        <message>
-						            <source>Import Config...</source>
-							            <translation>导入配置...</translation>
-						        </message>
-						        <message>
-						            <source>Export</source>
-						            <translation>导出</translation>
-						        </message>
-						        <message>
-						            <source>Import</source>
-						            <translation>导入</translation>
-						        </message>
-						        <message>
-						            <source>&lt;p&gt;Load settings from a previously exported &lt;b&gt;.json&lt;/b&gt; file. A compatibility summary will be shown before applying.&lt;/p&gt;</source>
-					            <translation>&lt;p&gt;从之前导出的 &lt;b&gt;.json&lt;/b&gt; 文件加载设置。应用前会显示兼容性摘要。&lt;/p&gt;</translation>
-					        </message>
-					        <message>
-					            <source>Configuration exported to </source>
-					            <translation>配置已导出到 </translation>
-					        </message>
-					        <message>
-					            <source>Failed to export configuration</source>
-					            <translation>导出配置失败</translation>
-					        </message>
-					        <message>
-					            <source>Failed to import configuration</source>
-					            <translation>导入配置失败</translation>
-					        </message>
-					        <message>
-					            <source>Source version: {ver}</source>
-					            <translation>来源版本：{ver}</translation>
-					        </message>
-					        <message>
-					            <source>All settings imported successfully.</source>
-					            <translation>所有设置已成功导入。</translation>
-					        </message>
-					        <message>
-					            <source>Configuration imported ({n} items checked):</source>
-					            <translation>配置已导入（检查了 {n} 项）：</translation>
-					        </message>
-						        <message>
-						            <source>⚠ {n} unknown setting(s) — from a newer version, will be skipped:</source>
-						            <translation>⚠ {n} 个未知设置项——来自较新版本，将被跳过：</translation>
-						        </message>
-						        <message>
-						            <source>  … and {n} more</source>
-						            <translation>  还有 {n} 项</translation>
-						        </message>
-						        <message>
-						            <source>ℹ {n} setting(s) not in file — current values kept:</source>
-						            <translation>ℹ {n} 个设置项不在文件中——保持当前值：</translation>
-					        </message>
-						        <message>
-						            <source>Please close and reopen Settings to refresh the UI.</source>
-						            <translation>请关闭并重新打开设置面板以刷新界面。</translation>
-						        </message>
-						        <message>
-						            <source>decide by program: Use OCR-detected font size and enable adaptive resizing to fit text regions.</source>
-						            <translation>由程序决定：使用OCR检测到的字号，并开启自适应缩放以适配文字区域。</translation>
-						        </message>
-						        <message>
-						            <source>decide by program: Calculate stroke width from OCR-detected text properties.</source>
-						            <translation>由程序决定：根据OCR检测的文本属性计算轮廓宽度。</translation>
-						        </message>
-						        <message>
-						            <source>decide by program: Detect alignment (left/center/right) from the text region shape.</source>
-						            <translation>由程序决定：根据文字区域形状检测对齐方式（左/中/右）。</translation>
-						        </message>
-						        <message>
-						            <source>decide by program: Preserve the detected writing mode (horizontal/vertical) from source text.</source>
-						            <translation>由程序决定：保留从原文检测到的书写方向（横排/竖排）。</translation>
-						        </message>
-						        <message>
-							            <source>Keep existing: Preserve each block's existing font family (if set). Always use global setting: Override all blocks with the global default font family.</source>
-							            <translation>保留已有格式：保留每个文本块已有的字体（如有已设的字体）。始终使用全局设置：用全局默认字体覆盖所有文本块。</translation>
-							        </message>
-							        <message>
-							            <source>Clip text overflow after translation</source>
-							            <translation>翻译后裁剪溢出文字</translation>
-							        </message>
-							        <message>
-							            <source>Overflow Clip</source>
-							            <translation>溢出裁剪</translation>
-							        </message>
-							        <message>
-							            <source>&lt;p&gt;When translation text exceeds the block boundary, &lt;b&gt;clip it&lt;/b&gt; instead of enlarging the block. A &lt;b&gt;yellow border&lt;/b&gt; indicates clipping. Drag a corner handle to resize and un-clip.&lt;/p&gt;</source>
-							            <translation>&lt;p&gt;当译文超出文本框边界时，&lt;b&gt;裁剪文字&lt;/b&gt;而非撑大文本框。&lt;b&gt;黄色边框&lt;/b&gt;表示裁剪状态，拖拽角落手柄即可调整尺寸并解除裁剪。&lt;/p&gt;</translation>
-							        </message>
-							    </context>
-						    <context>
-						        <name>DependencyDialog</name>
+        <message>
+            <source>Modules</source>
+            <translation>模块</translation>
+        </message>
+        <message>
+            <source>Module Actions</source>
+            <translation>模块操作</translation>
+        </message>
+        <message>
+            <source>LLM Profile</source>
+            <translation>LLM 配置</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Select the &lt;b&gt;translation engine&lt;/b&gt;. Online translators require an API profile with credentials configured under &lt;b&gt;LLM Profile&lt;/b&gt;.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;选择&lt;b&gt;翻译引擎&lt;/b&gt;。在线翻译器需要在&lt;b&gt;LLM 配置&lt;/b&gt;中配置 API 凭据。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Customize Context Menu...</source>
+            <translation>自定义右键菜单...</translation>
+        </message>
+        <message>
+            <source>Context Menu</source>
+            <translation>右键菜单</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Customize the right-click context menu: reorder items, add or remove commands via drag-and-drop.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;自定义右键菜单：拖拽排序、添加或移除命令项。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Temporary Projects</source>
+            <translation>临时项目</translation>
+        </message>
+        <message>
+            <source>Clean up imported image projects on exit</source>
+            <translation>关闭时清理单图导入的临时项目</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;When enabled, projects created by importing individual images (via drag-drop or &lt;b&gt;Open Image…&lt;/b&gt;) will be &lt;b&gt;automatically deleted&lt;/b&gt; when the application closes.&lt;/p&gt;&lt;p&gt;Use &lt;b&gt;Save Project As…&lt;/b&gt; to keep a project permanently.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;启用后，通过单张图片导入（拖拽或&lt;b&gt;打开图片…&lt;/b&gt;）创建的临时项目将在程序关闭时&lt;b&gt;自动删除&lt;/b&gt;。&lt;/p&gt;&lt;p&gt;使用&lt;b&gt;项目另存为…&lt;/b&gt;可以永久保留项目。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Config Management</source>
+            <translation>配置管理</translation>
+        </message>
+        <message>
+            <source>Export Config</source>
+            <translation>导出配置</translation>
+        </message>
+        <message>
+            <source>Exclude API keys when exporting</source>
+            <translation>导出时排除 API 密钥</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;API profiles will be exported without &lt;b&gt;api_key&lt;/b&gt; and &lt;b&gt;proxy&lt;/b&gt; fields. Structure and all other settings remain intact. Uncheck to include credentials (not recommended for sharing).&lt;/p&gt;</source>
+            <translation>&lt;p&gt;API 配置在导出时将不包含 &lt;b&gt;api_key&lt;/b&gt; 和 &lt;b&gt;proxy&lt;/b&gt; 字段。结构和所有其他设置保持不变。取消勾选可包含凭证（不建议用于分享）。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Export Config...</source>
+            <translation>导出配置...</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Save current settings to a &lt;b&gt;.json&lt;/b&gt; file. Useful for backups or transferring configurations between machines.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;将当前设置保存到 &lt;b&gt;.json&lt;/b&gt; 文件。用于备份或在机器间迁移配置。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Import Config</source>
+            <translation>导入配置</translation>
+        </message>
+        <message>
+            <source>Import Config...</source>
+            <translation>导入配置...</translation>
+        </message>
+        <message>
+            <source>Export</source>
+            <translation>导出</translation>
+        </message>
+        <message>
+            <source>Import</source>
+            <translation>导入</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Load settings from a previously exported &lt;b&gt;.json&lt;/b&gt; file. A compatibility summary will be shown before applying.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;从之前导出的 &lt;b&gt;.json&lt;/b&gt; 文件加载设置。应用前会显示兼容性摘要。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Configuration exported to </source>
+            <translation>配置已导出到 </translation>
+        </message>
+        <message>
+            <source>Failed to export configuration</source>
+            <translation>导出配置失败</translation>
+        </message>
+        <message>
+            <source>Failed to import configuration</source>
+            <translation>导入配置失败</translation>
+        </message>
+        <message>
+            <source>Source version: {ver}</source>
+            <translation>来源版本：{ver}</translation>
+        </message>
+        <message>
+            <source>All settings imported successfully.</source>
+            <translation>所有设置已成功导入。</translation>
+        </message>
+        <message>
+            <source>Configuration imported ({n} items checked):</source>
+            <translation>配置已导入（检查了 {n} 项）：</translation>
+        </message>
+        <message>
+            <source>⚠ {n} unknown setting(s) — from a newer version, will be skipped:</source>
+            <translation>⚠ {n} 个未知设置项——来自较新版本，将被跳过：</translation>
+        </message>
+        <message>
+            <source>  … and {n} more</source>
+            <translation>  还有 {n} 项</translation>
+        </message>
+        <message>
+            <source>ℹ {n} setting(s) not in file — current values kept:</source>
+            <translation>ℹ {n} 个设置项不在文件中——保持当前值：</translation>
+        </message>
+        <message>
+            <source>Please close and reopen Settings to refresh the UI.</source>
+            <translation>请关闭并重新打开设置面板以刷新界面。</translation>
+        </message>
+        <message>
+            <source>decide by program: Use OCR-detected font size and enable adaptive resizing to fit text regions.</source>
+            <translation>由程序决定：使用OCR检测到的字号，并开启自适应缩放以适配文字区域。</translation>
+        </message>
+        <message>
+            <source>decide by program: Calculate stroke width from OCR-detected text properties.</source>
+            <translation>由程序决定：根据OCR检测的文本属性计算轮廓宽度。</translation>
+        </message>
+        <message>
+            <source>decide by program: Detect alignment (left/center/right) from the text region shape.</source>
+            <translation>由程序决定：根据文字区域形状检测对齐方式（左/中/右）。</translation>
+        </message>
+        <message>
+            <source>decide by program: Preserve the detected writing mode (horizontal/vertical) from source text.</source>
+            <translation>由程序决定：保留从原文检测到的书写方向（横排/竖排）。</translation>
+        </message>
+        <message>
+            <source>Keep existing: Preserve each block's existing font family (if set). Always use global setting: Override all blocks with the global default font family.</source>
+            <translation>保留已有格式：保留每个文本块已有的字体（如有已设的字体）。始终使用全局设置：用全局默认字体覆盖所有文本块。</translation>
+        </message>
+        <message>
+            <source>Clip text overflow after translation</source>
+            <translation>翻译后裁剪溢出文字</translation>
+        </message>
+        <message>
+            <source>Overflow Clip</source>
+            <translation>溢出裁剪</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;When translation text exceeds the block boundary, &lt;b&gt;clip it&lt;/b&gt; instead of enlarging the block. A &lt;b&gt;yellow border&lt;/b&gt; indicates clipping. Drag a corner handle to resize and un-clip.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;当译文超出文本框边界时，&lt;b&gt;裁剪文字&lt;/b&gt;而非撑大文本框。&lt;b&gt;黄色边框&lt;/b&gt;表示裁剪状态，拖拽角落手柄即可调整尺寸并解除裁剪。&lt;/p&gt;</translation>
+        </message>
+    </context>
+    <context>
+        <name>DependencyDialog</name>
         <message>
             <location filename="..\ui\dependency_dialog.py" line="388" />
             <source>Dependencies</source>
@@ -1403,7 +1401,6 @@ Settings → Inpainter → Photoshop Path</source>
             <source>Text Transform</source>
             <translation>文本变换</translation>
         </message>
-
     </context>
     <context>
         <name>FontStyleManager</name>
@@ -1659,23 +1656,23 @@ Run detection + OCR to populate text blocks.</source>
             <translation>打开文件夹...</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindowbars.py" line="270"/>
-            <location filename="..\ui\mainwindowbars.py" line="118"/>
+            <location filename="..\ui\mainwindowbars.py" line="270" />
+            <location filename="..\ui\mainwindowbars.py" line="118" />
             <source>Open Project ... *.json</source>
             <translation>打开项目文件...*.json</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindowbars.py" line="122"/>
+            <location filename="..\ui\mainwindowbars.py" line="122" />
             <source>Open Image ...</source>
             <translation>打开图片...</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindowbars.py" line="125"/>
+            <location filename="..\ui\mainwindowbars.py" line="125" />
             <source>Save Project</source>
             <translation>保存项目</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindowbars.py" line="129"/>
+            <location filename="..\ui\mainwindowbars.py" line="129" />
             <source>Save Project As ...</source>
             <translation>项目另存为...</translation>
         </message>
@@ -1715,7 +1712,6 @@ Run detection + OCR to populate text blocks.</source>
             <translation>清除历史记录</translation>
         </message>
     </context>
-
     <context>
         <name>MainWindow</name>
         <message>
@@ -1765,12 +1761,12 @@ Run detection + OCR to populate text blocks.</source>
             <translation>重启程序以应用更改?\n</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindow.py" line="1150"/>
+            <location filename="..\ui\mainwindow.py" line="1150" />
             <source>Save project to...</source>
             <translation>项目另存到...</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindow.py" line="1165"/>
+            <location filename="..\ui\mainwindow.py" line="1165" />
             <source>Failed to save project to</source>
             <translation>项目另存失败：</translation>
         </message>
@@ -1949,7 +1945,7 @@ Failed: {f}/{t}</source>
             <source>AI Chat Settings</source>
             <translation>AI Chat 设置</translation>
         </message>
-                <message>
+        <message>
             <location filename="..\ui\mainwindow.py" line="2163" />
             <source>Enforce Term Consistency (Glossary)</source>
             <translation>启用术语一致性（词汇表）</translation>
@@ -1988,43 +1984,6 @@ Failed: {f}/{t}</source>
             <location filename="..\ui\mainwindow.py" line="2317" />
             <source>Import Text Styles</source>
             <translation>导入字体样式</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="2376" />
-            <source>PSD Export</source>
-            <translation>PSD 导出</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="2413" />
-            <location filename="..\ui\mainwindow.py" line="2406" />
-            <source>Exported </source>
-            <translation>已导出 </translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="2408" />
-            <source> PSD file(s).
-
-Output:
-</source>
-            <translation> 个 PSD 文件。
-
-输出目录：
-</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="2415" />
-            <source> ExtendScript(s).
-
-Open Photoshop → File → Scripts → Browse to run each .jsx.
-
-Output:
-</source>
-            <translation> 个 ExtendScript。
-
-打开 Photoshop → 文件 → 脚本 → 浏览以运行每个 .jsx 文件。
-
-输出目录：
-</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" line="2425" />
@@ -2096,234 +2055,256 @@ Output:
             <source>整理换行</source>
             <translation>整理换行</translation>
         </message>
-	        <message>
-	            <location filename="..\ui\mainwindow.py" />
-	            <source>已整理 {} 块 / 跳过 {} 块（竖排）</source>
-	            <translation>已整理 {} 块 / 跳过 {} 块（竖排）</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\mainwindow.py" />
-	            <source>{n} text blocks reordered successfully</source>
-	            <translation>{n} 个文本块已重新排序</translation>
-	        </message>
-		        <message>
-		            <location filename="..\ui\mainwindow.py" />
-		            <source>Cannot read image dimensions</source>
-		            <translation>无法读取图片尺寸</translation>
-		        </message>
-		        <message>
-		            <location filename="..\ui\mainwindow.py" />
-		            <source>Invalid image dimensions</source>
-		            <translation>无效的图片尺寸</translation>
-		        </message>
-		        <message>
-		            <location filename="..\ui\mainwindow.py" />
-		            <source>Path Reorder</source>
-		            <translation>路径重排</translation>
-		        </message>
-		        <message>
-		            <location filename="..\ui\mainwindow.py" />
-		            <source>Not enough text blocks touched by the path (need at least 2).</source>
-		            <translation>路径未触碰足够的文本框（至少需要2个）</translation>
-		        </message>
-		        <message>
-		            <location filename="..\ui\mainwindow.py" />
-		            <source>Continue Drawing</source>
-		            <translation>继续绘制</translation>
-		        </message>
-		        <message>
-		            <location filename="..\ui\mainwindow.py" />
-		            <source>Apply reorder?</source>
-		            <translation>应用重排？</translation>
-		        </message>
-			        <message>
-			            <location filename="..\ui\mainwindow.py" />
-			            <source>Apply</source>
-			            <translation>应用</translation>
-			        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>Activate Modules</source>
-				            <translation>激活模块</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>Text Detection</source>
-				            <translation>文本检测</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>OCR</source>
-				            <translation>OCR</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>Translation</source>
-				            <translation>翻译</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>Inpainting</source>
-				            <translation>图像修复</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>Settings</source>
-				            <translation>设置</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>Keep Existing Lines</source>
-				            <translation>保留已有文本框</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>Skip simple cases</source>
-				            <translation>跳过简单案例</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>Context</source>
-				            <translation>上下文</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>textblock</source>
-				            <translation>单文本块</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>page</source>
-				            <translation>页面</translation>
-				        </message>
-                <message>
-                    <location filename="..\ui\mainwindow.py" />
-                    <source>Browse...</source>
-                    <translation>浏览...</translation>
-                </message>
-                <message>
-                    <location filename="..\ui\mainwindow.py" />
-                    <source>Custom...</source>
-                    <translation>自定义术语...</translation>
-                </message>
-                <message>
-                    <location filename="..\ui\mainwindow.py" />
-                    <source>Select a glossary file...</source>
-                    <translation>选择术语表文件...</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>Glossary files (*.json *.txt *.tsv);;All files (*)</source>
-				            <translation>术语表文件 (*.json *.txt *.tsv);;所有文件 (*)</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>Select Glossary File</source>
-				            <translation>选择术语表文件</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>Glossary</source>
-				            <translation>术语表</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>Mode</source>
-				            <translation>模式</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>Matching</source>
-				            <translation>匹配</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>All</source>
-				            <translation>全部</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>LLM Context</source>
-				            <translation>LLM 上下文</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-				            <source>+history</source>
-				            <translation>+历史</translation>
-				        </message>
-				        <message>
-				            <location filename="..\ui\mainwindow.py" />
-                        <source>Token Budget</source>
-                        <translation>令牌预算</translation>
-                    </message>
-                    <message>
-                        <location filename="..\ui\mainwindow.py" line="1298" />
-                        <source>此页有未渲染的批量修改，翻到该页后将自动刷新</source>
-                        <translation>此页有未渲染的批量修改，翻到该页后将自动刷新</translation>
-                    </message>
-                    <message>
-                        <location filename="..\ui\mainwindow.py" line="2944" />
-                        <source>Pipeline</source>
-                        <translation>流水线</translation>
-                    </message>
-                    <message>
-                        <location filename="..\ui\mainwindow.py" line="2945" />
-                        <source>Render Only</source>
-                        <translation>纯渲染</translation>
-                    </message>
-                    <message>
-                        <location filename="..\ui\mainwindow.py" line="3239" />
-                        <source>Rendering pages...</source>
-                        <translation>正在渲染页面...</translation>
-                    </message>
-                    <message>
-                        <location filename="..\ui\mainwindow.py" line="3251" />
-                        <source>Rendering %1 (%2/%3)</source>
-                        <translation>正在渲染 %1 (%2/%3)</translation>
-                    </message>
-                </context>
-		    <context>
-		        <name>CustomGlossaryDialog</name>
-		        <message>
-		            <location filename="..\ui\glossary_dialog.py" />
-		            <source>Custom Glossary</source>
-		            <translation>自定义术语表</translation>
-		        </message>
-                <message>
-                    <location filename="..\ui\glossary_dialog.py" />
-                    <source>Enter one term per line: source → target
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>已整理 {} 块 / 跳过 {} 块（竖排）</source>
+            <translation>已整理 {} 块 / 跳过 {} 块（竖排）</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>{n} text blocks reordered successfully</source>
+            <translation>{n} 个文本块已重新排序</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Cannot read image dimensions</source>
+            <translation>无法读取图片尺寸</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Invalid image dimensions</source>
+            <translation>无效的图片尺寸</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Path Reorder</source>
+            <translation>路径重排</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Not enough text blocks touched by the path (need at least 2).</source>
+            <translation>路径未触碰足够的文本框（至少需要2个）</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Continue Drawing</source>
+            <translation>继续绘制</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Apply reorder?</source>
+            <translation>应用重排？</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Apply</source>
+            <translation>应用</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Activate Modules</source>
+            <translation>激活模块</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Text Detection</source>
+            <translation>文本检测</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>OCR</source>
+            <translation>OCR</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Translation</source>
+            <translation>翻译</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Inpainting</source>
+            <translation>图像修复</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Settings</source>
+            <translation>设置</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Keep Existing Lines</source>
+            <translation>保留已有文本框</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Skip simple cases</source>
+            <translation>跳过简单案例</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Context</source>
+            <translation>上下文</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>textblock</source>
+            <translation>单文本块</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>page</source>
+            <translation>页面</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Browse...</source>
+            <translation>浏览...</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Custom...</source>
+            <translation>自定义术语...</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Select a glossary file...</source>
+            <translation>选择术语表文件...</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Glossary files (*.json *.txt *.tsv);;All files (*)</source>
+            <translation>术语表文件 (*.json *.txt *.tsv);;所有文件 (*)</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Select Glossary File</source>
+            <translation>选择术语表文件</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Glossary</source>
+            <translation>术语表</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Mode</source>
+            <translation>模式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Matching</source>
+            <translation>匹配</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>All</source>
+            <translation>全部</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>LLM Context</source>
+            <translation>LLM 上下文</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>+history</source>
+            <translation>+历史</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Token Budget</source>
+            <translation>令牌预算</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" line="1298" />
+            <source>此页有未渲染的批量修改，翻到该页后将自动刷新</source>
+            <translation>此页有未渲染的批量修改，翻到该页后将自动刷新</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" line="2944" />
+            <source>Pipeline</source>
+            <translation>流水线</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" line="2945" />
+            <source>Render Only</source>
+            <translation>纯渲染</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" line="3239" />
+            <source>Rendering pages...</source>
+            <translation>正在渲染页面...</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" line="3251" />
+            <source>Rendering %1 (%2/%3)</source>
+            <translation>正在渲染 %1 (%2/%3)</translation>
+        </message>
+        <message>
+            <source>
+
+Each page is saved as an editable-text PSD.</source>
+            <translation>每页都会另存为一个带可编辑文本层的 PSD 文件。</translation>
+        </message>
+        <message>
+            <source> page(s).
+
+Open Photoshop → File → Scripts → Browse → run </source>
+            <translation> 个页面。
+
+打开 Photoshop → 文件 → 脚本 → 浏览，运行 </translation>
+        </message>
+        <message>
+            <source>Exported 1 ExtendScript covering </source>
+            <translation>已导出 1 个 ExtendScript，涵盖 </translation>
+        </message>
+        <message>
+            <source>Failed to export PSD script</source>
+            <translation>导出 PSD 脚本失败</translation>
+        </message>
+    </context>
+    <context>
+        <name>CustomGlossaryDialog</name>
+        <message>
+            <location filename="..\ui\glossary_dialog.py" />
+            <source>Custom Glossary</source>
+            <translation>自定义术语表</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_dialog.py" />
+            <source>Enter one term per line: source → target
 
 You can also use natural language, e.g.:
   The protagonist is Goku, the villain is Frieza</source>
-                    <translation>每行一条术语：原文 → 译文
+            <translation>每行一条术语：原文 → 译文
 
 也支持自然语言描述，例如：
   主角叫悟空，反派叫弗利萨</translation>
-                </message>
-                <message>
-                    <location filename="..\ui\glossary_dialog.py" />
-                    <source>e.g.  Dragon Ball → 龙珠
+        </message>
+        <message>
+            <location filename="..\ui\glossary_dialog.py" />
+            <source>e.g.  Dragon Ball → 龙珠
 One Piece → 海贼王
 
 Or: 主角叫鸣人，反派叫佐助</source>
-                    <translation>例如：Dragon Ball → 龙珠
+            <translation>例如：Dragon Ball → 龙珠
 One Piece → 海贼王
 
 或者：主角叫鸣人，反派叫佐助</translation>
-                </message>
-                <message>
-                    <location filename="..\ui\glossary_dialog.py" />
-                    <source>OK</source>
-                    <translation>确定</translation>
-                </message>
-                <message>
-                    <location filename="..\ui\glossary_dialog.py" />
-                    <source>Cancel</source>
-                    <translation>取消</translation>
-                </message>
-            </context>
-            <context>
-                <name>MainWindowMixin</name>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_dialog.py" />
+            <source>OK</source>
+            <translation>确定</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_dialog.py" />
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+    </context>
+    <context>
+        <name>MainWindowMixin</name>
         <message>
             <location filename="..\ui\mainwindow_mixin.py" line="101" />
             <source>Failed to load project </source>
@@ -2437,197 +2418,197 @@ One Piece → 海贼王
             <translation>重启以应用更改？
 </translation>
         </message>
-	    </context>
-	    <context>
-	        <name>GlossaryExtractorDialog</name>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Glossary Extraction</source>
-	            <translation>术语表提取</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>LLM Profile</source>
-		            <translation>LLM 配置</translation>
-		        </message>
-		        <message>
-		            <location filename="..\ui\glossary_extractor_dialog.py" />
-		            <source>Target Language</source>
-		            <translation>目标语言</translation>
-		        </message>
-		        <message>
-		            <location filename="..\ui\glossary_extractor_dialog.py" />
-		            <source>Extraction Mode</source>
-	            <translation>提取模式</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Frequency (fast, no LLM) — count repeated terms</source>
-	            <translation>频率提取（快速，无 LLM）— 统计重复出现的术语</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>LLM Extraction (slower, semantic) — detect named entities and important terms</source>
-	            <translation>LLM 语义提取（较慢）— 检测命名实体和重要术语</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Extract Glossary</source>
-	            <translation>提取术语表</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Extracted Terms</source>
-	            <translation>提取结果</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Source</source>
-	            <translation>原文</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Translation</source>
-	            <translation>译文</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Note</source>
-	            <translation>备注</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Save as...</source>
-	            <translation>保存为...</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Cancel</source>
-	            <translation>取消</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>No Profile</source>
-	            <translation>未选择配置</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Please select an LLM profile for extraction.</source>
-	            <translation>请选择一个 LLM 配置用于提取。</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>No Data</source>
-	            <translation>无数据</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>The project has no source text to analyse.
+    </context>
+    <context>
+        <name>GlossaryExtractorDialog</name>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Glossary Extraction</source>
+            <translation>术语表提取</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>LLM Profile</source>
+            <translation>LLM 配置</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Target Language</source>
+            <translation>目标语言</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Extraction Mode</source>
+            <translation>提取模式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Frequency (fast, no LLM) — count repeated terms</source>
+            <translation>频率提取（快速，无 LLM）— 统计重复出现的术语</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>LLM Extraction (slower, semantic) — detect named entities and important terms</source>
+            <translation>LLM 语义提取（较慢）— 检测命名实体和重要术语</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Extract Glossary</source>
+            <translation>提取术语表</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Extracted Terms</source>
+            <translation>提取结果</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Source</source>
+            <translation>原文</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Translation</source>
+            <translation>译文</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Note</source>
+            <translation>备注</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Save as...</source>
+            <translation>保存为...</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>No Profile</source>
+            <translation>未选择配置</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Please select an LLM profile for extraction.</source>
+            <translation>请选择一个 LLM 配置用于提取。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>No Data</source>
+            <translation>无数据</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>The project has no source text to analyse.
 
 Please run text detection and OCR first.</source>
-	            <translation>项目中没有原文可供分析。
+            <translation>项目中没有原文可供分析。
 
 请先运行文字检测和 OCR。</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Frequency extraction requires translations to pair with source text.  Try LLM Extraction mode instead, or run the translation pipeline first.</source>
-	            <translation>频率提取需要译文与原文配对。请改用 LLM 提取模式，或先运行翻译管线。</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Extraction failed — see log.</source>
-	            <translation>提取失败 — 查看日志了解详情。</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Extracted {} terms.</source>
-	            <translation>已提取 {} 条术语。</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>No glossary terms found in this project.</source>
-	            <translation>该项目中未找到术语。</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Previously extracted {} terms.</source>
-	            <translation>上次已提取 {} 条术语。</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>No Entries</source>
-	            <translation>无条目</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>There are no entries to save.</source>
-	            <translation>没有可保存的条目。</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Save Glossary</source>
-	            <translation>保存术语表</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Glossary files (*.json);;All files (*)</source>
-	            <translation>术语表文件 (*.json);;所有文件 (*)</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Save Error</source>
-	            <translation>保存出错</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Failed to save glossary:
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Frequency extraction requires translations to pair with source text.  Try LLM Extraction mode instead, or run the translation pipeline first.</source>
+            <translation>频率提取需要译文与原文配对。请改用 LLM 提取模式，或先运行翻译管线。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Extraction failed — see log.</source>
+            <translation>提取失败 — 查看日志了解详情。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Extracted {} terms.</source>
+            <translation>已提取 {} 条术语。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>No glossary terms found in this project.</source>
+            <translation>该项目中未找到术语。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Previously extracted {} terms.</source>
+            <translation>上次已提取 {} 条术语。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>No Entries</source>
+            <translation>无条目</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>There are no entries to save.</source>
+            <translation>没有可保存的条目。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Save Glossary</source>
+            <translation>保存术语表</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Glossary files (*.json);;All files (*)</source>
+            <translation>术语表文件 (*.json);;所有文件 (*)</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Save Error</source>
+            <translation>保存出错</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Failed to save glossary:
 {}</source>
-	            <translation>保存术语表失败：
+            <translation>保存术语表失败：
 {}</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Use Glossary</source>
-	            <translation>使用术语表</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Glossary saved to:
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Use Glossary</source>
+            <translation>使用术语表</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Glossary saved to:
 {}
 
 Set this file as the active glossary now?</source>
-	            <translation>术语表已保存至：
+            <translation>术语表已保存至：
 {}
 
 立即将此文件设为活动术语表？</translation>
-	        </message>
-	    </context>
-	    <context>
-	        <name>_ExtractWorker</name>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Analysing source text frequency...</source>
-	            <translation>正在分析原文词频...</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Error: profile '{}' not found.</source>
-	            <translation>错误：找不到配置「{}」。</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Sending to LLM for analysis...</source>
-	            <translation>正在发送到 LLM 分析...</translation>
-	        </message>
-	        <message>
-	            <location filename="..\ui\glossary_extractor_dialog.py" />
-	            <source>Error: {}</source>
-	            <translation>错误：{}</translation>
-	        </message>
-	    </context>
-	    <context>
-	        <name>MergeDialog</name>
+        </message>
+    </context>
+    <context>
+        <name>_ExtractWorker</name>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Analysing source text frequency...</source>
+            <translation>正在分析原文词频...</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Error: profile '{}' not found.</source>
+            <translation>错误：找不到配置「{}」。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Sending to LLM for analysis...</source>
+            <translation>正在发送到 LLM 分析...</translation>
+        </message>
+        <message>
+            <location filename="..\ui\glossary_extractor_dialog.py" />
+            <source>Error: {}</source>
+            <translation>错误：{}</translation>
+        </message>
+    </context>
+    <context>
+        <name>MergeDialog</name>
         <message>
             <location filename="..\ui\merge_dialog.py" line="28" />
             <source>Region Merge Tool Settings</source>
@@ -3672,9 +3653,6 @@ This maps automatically to each provider's native parameter
 该值会自动映射到各厂商的原生参数
 （OpenAI reasoning_effort、Claude output_config.effort 等）。</translation>
         </message>
-    </context>
-    <context>
-        <name>ProfileManagerDialog</name>
         <message>
             <source>Test</source>
             <translation>测试连接</translation>
@@ -3736,30 +3714,7 @@ Please check the URL and your network.</source>
             <translation>全部页面</translation>
         </message>
         <message>
-            <location filename="..\ui\psd_export_dialog.py" line="122" />
-            <source>Export Method</source>
-            <translation>导出方式</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="125" />
-            <source>Binary PSD (direct)</source>
-            <translation>二进制 PSD（直接导出）</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="126" />
-            <source>ExtendScript (.jsx) — needs Photoshop</source>
-            <translation>ExtendScript (.jsx) — 需要 Photoshop</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="194" />
-            <location filename="..\ui\psd_export_dialog.py" line="131" />
-            <source>Generates a .psd file directly — no Photoshop dependency.
-Text layers are editable in Photoshop (TySh + EngineData).</source>
-            <translation>直接生成 .psd 文件，无需 Photoshop。
-文字图层在 Photoshop 中可编辑（TySh + EngineData）。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="144" />
+            <location filename="..\ui\psd_export_dialog.py" line="147" />
             <source>Output Directory</source>
             <translation>输出目录</translation>
         </message>
@@ -3787,19 +3742,6 @@ Text layers are editable in Photoshop (TySh + EngineData).</source>
             <location filename="..\ui\psd_export_dialog.py" line="173" />
             <source>Cancel</source>
             <translation>取消</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="200" />
-            <source>Exports a .jsx script + image files. Run the script on any machine with Photoshop to generate the PSD.
-
-No Photoshop dependency at export time.
-
-Open Photoshop → File → Scripts → Browse → select the .jsx file.</source>
-            <translation>导出 .jsx 脚本 + 图片素材。在任意装有 Photoshop 的机器上运行脚本即可生成 PSD。
-
-导出时不依赖本机是否安装 PS。
-
-打开 Photoshop → 文件 → 脚本 → 浏览 → 选择 .jsx 文件运行。</translation>
         </message>
         <message>
             <location filename="..\ui\psd_export_dialog.py" line="217" />
@@ -3830,6 +3772,22 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <location filename="..\ui\psd_export_dialog.py" line="288" />
             <source>Select Output Directory</source>
             <translation>选择输出目录</translation>
+        </message>
+        <message>
+            <source>Center text within its block (recommended)</source>
+            <translation>将文本在文字块内居中（推荐）</translation>
+        </message>
+        <message>
+            <source>Exports a single .jsx script for the selected pages.
+Run it once in Photoshop (File → Scripts → Browse);
+text layers are fully editable.</source>
+            <translation>为所选页面导出一个 .jsx 脚本。
+在 Photoshop 中运行一次（文件 → 脚本 → 浏览）；
+文字图层完全可编辑。</translation>
+        </message>
+        <message>
+            <source>Shift each text layer so its center matches the block box. Absorbs font-metric differences between the app and Photoshop.</source>
+            <translation>将每个文本图层移动到其文字块中心。可抵消应用与 Photoshop 之间的字体度量差异。</translation>
         </message>
     </context>
     <context>
@@ -3979,14 +3937,6 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <location filename="..\ui\shadow_gradient_dialog.py" line="62" />
             <source>Background color</source>
             <translation>背景颜色</translation>
-        </message>
-    </context>
-    <context>
-        <name>ShortcutDialog</name>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1059" />
-            <source>Shortcut Editor</source>
-            <translation>快捷键编辑器</translation>
         </message>
     </context>
     <context>
@@ -4478,6 +4428,16 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <translation>过界模式</translation>
         </message>
         <message>
+            <location filename="..\ui\mainwindowbars.py" />
+            <source>Sequence Badge</source>
+            <translation>序号徽标</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindowbars.py" />
+            <source>Overflow Clip</source>
+            <translation>溢出裁剪</translation>
+        </message>
+        <message>
             <location filename="..\ui\mainwindowbars.py" line="364" />
             <source>Tools</source>
             <translation>工具</translation>
@@ -4486,16 +4446,6 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <location filename="..\ui\mainwindowbars.py" line="367" />
             <source>Region Merge Tool</source>
             <translation>区域合并工具</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindowbars.py" line="371" />
-            <source>Export as PSD… (Under Repair)</source>
-            <translation>导出为 PSD… (维修中)</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindowbars.py" />
-            <source>暂不可用 — Photoshop 打开时有兼容问题，等待修复</source>
-            <translation>暂不可用 — Photoshop 打开时有兼容问题，等待修复</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" />
@@ -4527,7 +4477,23 @@ Open Photoshop → File → Scripts → Browse → select the .jsx file.</source
             <source>Path Reorder…</source>
             <translation>路径重排…</translation>
         </message>
-    <message><source>Help</source><translation>帮助</translation></message><message><source>About BallonsTranslator-lite</source><translation>关于 BallonsTranslator-lite</translation></message></context>
+        <message>
+            <source>Help</source>
+            <translation>帮助</translation>
+        </message>
+        <message>
+            <source>About BallonsTranslator-lite</source>
+            <translation>关于 BallonsTranslator-lite</translation>
+        </message>
+        <message>
+            <source>Export as PSD… (Under Repair)</source>
+            <translation>导出为 PSD… (维修中)</translation>
+        </message>
+        <message>
+            <source>暂不可用 — PSD 导出功能修复中</source>
+            <translation>暂不可用 — PSD 导出功能修复中</translation>
+        </message>
+    </context>
     <context>
         <name>ToolsDialog</name>
         <message>
@@ -4747,21 +4713,6 @@ in Settings → Mirror Config, then click Retry.</source>
     </context>
     <context>
         <name>_ShortcutRow</name>
-        <message>
-            <location filename="..\ui\configpanel.py" line="835" />
-            <source>Add shortcut</source>
-            <translation>添加快捷键</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="847" />
-            <source>Disable this shortcut</source>
-            <translation>禁用此快捷键</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="859" />
-            <source>Reset to Default</source>
-            <translation>恢复默认</translation>
-        </message>
         <message>
             <location filename="..\ui\configpanel.py" line="927" />
             <source>— None —</source>
@@ -5109,8 +5060,8 @@ in Settings → Mirror Config, then click Retry.</source>
             <translation>其他</translation>
         </message>
     </context>
-	    <context>
-	        <name>NormalizeBreaksDialog</name>
+    <context>
+        <name>NormalizeBreaksDialog</name>
         <message>
             <location filename="..\ui\normalize_breaks_dialog.py" />
             <source>Normalize Breaks</source>
@@ -5141,7 +5092,6 @@ in Settings → Mirror Config, then click Retry.</source>
             <source>Page %1 — %2</source>
             <translation>第 %1 页 — %2</translation>
         </message>
-    
         <message>
             <location filename="..\ui\normalize_breaks_dialog.py" />
             <source>Replace with space</source>
@@ -5152,7 +5102,7 @@ in Settings → Mirror Config, then click Retry.</source>
             <source>Delete directly</source>
             <translation>直接删除</translation>
         </message>
-        </context>
+    </context>
     <context>
         <name>ProfileManagerWidget</name>
         <message>
@@ -5477,16 +5427,17 @@ This maps automatically to each provider's native parameter
             <translation>移除</translation>
         </message>
         <message>
-            <source>Reset to Default</source>
-            <translation>恢复默认</translation>
-        </message>
-        <message>
             <source>Reset</source>
             <translation>重置</translation>
         </message>
         <message>
             <source>Reset context menu to default layout?</source>
             <translation>将右键菜单恢复为默认布局？</translation>
+        </message>
+        <message>
+            <location filename="..\ui\context_menu_config.py" line="403" />
+            <source>Reset to Default</source>
+            <translation>恢复默认</translation>
         </message>
         <message>
             <source>Add Separator</source>
@@ -5560,19 +5511,19 @@ This maps automatically to each provider's native parameter
             <source>OCR and translate</source>
             <translation>OCR 并翻译</translation>
         </message>
-	        <message>
-	            <source>OCR, translate and inpaint</source>
-	            <translation>OCR、翻译并修复</translation>
-	        </message>
-	        <message>
-	            <source>Move down</source>
-	            <translation>下移</translation>
-	        </message>
-	        <message>
-	            <source>Move up</source>
-	            <translation>上移</translation>
-	        </message>
-	    </context>
+        <message>
+            <source>OCR, translate and inpaint</source>
+            <translation>OCR、翻译并修复</translation>
+        </message>
+        <message>
+            <source>Move down</source>
+            <translation>下移</translation>
+        </message>
+        <message>
+            <source>Move up</source>
+            <translation>上移</translation>
+        </message>
+    </context>
     <context>
         <name>ModuleConfigParseWidget</name>
         <message>
@@ -5581,7 +5532,6 @@ This maps automatically to each provider's native parameter
             <translation>参数</translation>
         </message>
     </context>
-
     <context>
         <name>TextTransformPanel</name>
         <message>

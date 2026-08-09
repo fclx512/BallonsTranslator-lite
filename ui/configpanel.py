@@ -890,7 +890,6 @@ class _ShortcutRow(QWidget):
         # Add button
         self._add_btn = QPushButton("+")
         self._add_btn.setFixedSize(24, 24)
-        self._add_btn.setToolTip(self.tr("Add shortcut"))
         self._add_btn.setStyleSheet(
             f"QPushButton {{ border: 1px solid {s['add_bdr']}; border-radius: 3px; "
             f"color: {s['add_clr']}; background: transparent; padding: 0px; }}"
@@ -902,7 +901,6 @@ class _ShortcutRow(QWidget):
         # Clear button
         self._clear_btn = QPushButton("Del")
         self._clear_btn.setFixedSize(28, 24)
-        self._clear_btn.setToolTip(self.tr("Disable this shortcut"))
         self._clear_btn.setStyleSheet(
             f"QPushButton {{ border: none; border-radius: 3px; color: {s['btn_clr']}; "
             f"background: transparent; padding: 0px; }}"
@@ -914,7 +912,6 @@ class _ShortcutRow(QWidget):
         # Reset button
         self._reset_btn = QPushButton("Rst")
         self._reset_btn.setFixedSize(28, 24)
-        self._reset_btn.setToolTip(self.tr("Reset to Default"))
         self._reset_btn.setStyleSheet(
             f"QPushButton {{ border: none; border-radius: 3px; color: {s['btn_clr']}; "
             f"background: transparent; padding: 0px; }}"
@@ -1038,35 +1035,18 @@ class _ShortcutRow(QWidget):
 
 
 class ShortcutEditor(QWidget):
+    """Grouped shortcut rows. Flat widget — the settings page provides
+    scrolling via _wrap_page (same pattern as ProfileManagerWidget)."""
+
     shortcut_changed = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._rows = {}
-        self.setMinimumHeight(200)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 4, 0, 0)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-
-        # Create scroll area for grouped shortcuts
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setFrameShape(QScrollArea.NoFrame)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll_area.viewport().setContentsMargins(0, 0, 0, 0)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                background: transparent;
-                border: none;
-            }
-        """)
-        scroll_area.setVerticalScrollBar(ConfigScrollBar(scroll_area))
-
-        scroll_content = QWidget()
-        self._content_layout = QVBoxLayout(scroll_content)
-        self._content_layout.setContentsMargins(0, 0, 0, 0)
-        self._content_layout.setSpacing(0)
 
         # Build grouped layout
         from .theme_helpers import shortcut_styles
@@ -1088,35 +1068,14 @@ class ShortcutEditor(QWidget):
                 self._rows[action_id] = row
                 group_layout.addWidget(row)
 
-            self._content_layout.addWidget(group_box)
-            self._content_layout.addSpacing(6)
+            layout.addWidget(group_box)
+            layout.addSpacing(6)
 
-        self._content_layout.addStretch()
-        scroll_area.setWidget(scroll_content)
-        layout.addWidget(scroll_area)
+        layout.addStretch()
 
     def refresh(self):
         for row in self._rows.values():
             row.refresh()
-
-
-class ShortcutDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle(self.tr("Shortcut Editor"))
-        self.setMinimumSize(560, 480)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        self.shortcut_editor = ShortcutEditor()
-        self.shortcut_editor.shortcut_changed.connect(self._on_shortcut_changed)
-        layout.addWidget(self.shortcut_editor)
-
-    def _on_shortcut_changed(self):
-        from utils.config import save_config
-
-        save_config()
 
 
 class FontExcludeDialog(QDialog):
@@ -1334,6 +1293,7 @@ class ConfigPanel(Widget):
     shortcuts_changed = Signal()
     presets_changed = Signal()
     seq_badge_changed = Signal()
+    clip_overflow_changed = Signal()
 
     # Active instance used by _DeadBlock/_DeadLayout to find the page stack
     # during __init__ construction.
@@ -1369,6 +1329,7 @@ class ConfigPanel(Widget):
         label_typesetting = self.tr("Typesetting")
         label_performance = self.tr("Performance")
         label_interface = self.tr("Interface")
+        label_shortcuts = self.tr("Shortcuts")
 
         # === Models group ===
         models_group = PanelGroupBox(self.tr("Models"))
@@ -1830,15 +1791,6 @@ class ConfigPanel(Widget):
         self._fit_page_sublock.setVisible(False)
         interface_layout.addWidget(self._fit_page_sublock)
 
-        # Shortcut button
-        self.shortcut_btn = QPushButton(self.tr("Edit Shortcuts..."), parent=self)
-        self.shortcut_btn.setObjectName("ConfigButton")
-        self.shortcut_btn.clicked.connect(self._open_shortcut_dialog)
-        shortcut_sublock = ConfigSubBlock(
-            self.shortcut_btn, name=self.tr("Shortcuts"),
-        )
-        interface_layout.addWidget(shortcut_sublock)
-
         # Context menu customization button
         self.context_menu_btn = QPushButton(
             self.tr("Customize Context Menu..."), parent=self
@@ -1923,6 +1875,13 @@ class ConfigPanel(Widget):
         self.interface_block = generalConfigPanel.addGroupedBlock(
             label_interface, interface_widget, object_name="GroupGeneral"
         )
+
+        # === General: Shortcuts ===
+        # Flat page (page stack provides the scroll area), same pattern as
+        # ProfileManagerWidget. Edits save and re-bind shortcuts live.
+        self.shortcuts_editor = ShortcutEditor()
+        self.shortcuts_editor.shortcut_changed.connect(self._on_shortcuts_edited)
+        self._add_page(self.shortcuts_editor)
 
         # === General: Performance ===
         perf_widget = QWidget()
@@ -2055,6 +2014,7 @@ class ConfigPanel(Widget):
         self.configTable.addSection(general_header, label_typesetting, "typesetting", self.typesetting_block.section_widget)
         self.configTable.addSection(general_header, label_performance, "performance", self.performance_block.section_widget)
         self.configTable.addSection(general_header, label_interface, "interface", self.interface_block.section_widget)
+        self.configTable.addSection(general_header, label_shortcuts, "shortcuts", self.shortcuts_editor)
         self.configTable.addSection(
             general_header, label_config_mgmt, "config_mgmt",
             self.config_mgmt_block.section_widget,
@@ -2075,6 +2035,7 @@ class ConfigPanel(Widget):
             "typesetting": self.typesetting_block.section_widget,
             "performance": self.performance_block.section_widget,
             "interface": self.interface_block.section_widget,
+            "shortcuts": self.shortcuts_editor,
             "config_mgmt": self.config_mgmt_block.section_widget,
         }
 
@@ -2113,6 +2074,7 @@ class ConfigPanel(Widget):
 
     def on_clip_overflow_changed(self):
         pcfg.clip_text_overflow = self.clip_overflow_checker.isChecked()
+        self.clip_overflow_changed.emit()
 
     def on_keepline_clicked(self):
         pcfg.module.keep_exist_textlines = (
@@ -2511,9 +2473,12 @@ class ConfigPanel(Widget):
         dialog = NetworkSettingsDialog(self)
         self._run_modal_dialog(dialog)
 
-    def _open_shortcut_dialog(self):
-        dialog = ShortcutDialog(self)
-        self._run_modal_dialog(dialog)
+    def _on_shortcuts_edited(self):
+        """A shortcut row changed: persist and re-bind shortcuts live
+        (previously only refreshed when the dialog closed)."""
+        from utils.config import save_config
+
+        save_config()
         self.shortcuts_changed.emit()
 
     def _open_context_menu_config(self):

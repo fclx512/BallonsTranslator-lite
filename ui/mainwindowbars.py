@@ -419,8 +419,15 @@ class TitleBar(Widget):
             lang_actions.append(la)
         self.displayLanguageMenu.addActions(lang_actions)
 
-        drawBoardAction = QAction(self.tr("Drawing Board"), self)
-        texteditAction = QAction(self.tr("Text Editor"), self)
+        self.drawBoardAction = drawBoardAction = QAction(self.tr("Drawing Board"), self)
+        drawBoardAction.setCheckable(True)
+        self.texteditAction = texteditAction = QAction(self.tr("Text Editor"), self)
+        texteditAction.setCheckable(True)
+        # 画板/编辑器互斥：QActionGroup 单选，勾选=当前激活模式
+        self.viewModeGroup = viewModeGroup = QActionGroup(self)
+        viewModeGroup.setExclusive(True)
+        viewModeGroup.addAction(drawBoardAction)
+        viewModeGroup.addAction(texteditAction)
         self._styleMgrAction = QAction(self.tr("Font Style Manager"), self)
         self.stylemgr_trigger = self._styleMgrAction.triggered
         self.darkModeAction = darkModeAction = QAction(self.tr("Dark Mode"), self)
@@ -431,18 +438,33 @@ class TitleBar(Widget):
         )
         overflowAction.setCheckable(True)
 
+        # 序号徽标 / 溢出裁剪 — 与设置面板双向同步（设置里仍保留）
+        self.seqBadgeAction = seqBadgeAction = QAction(
+            self.tr("Sequence Badge"), self
+        )
+        seqBadgeAction.setCheckable(True)
+        self.clipOverflowAction = clipOverflowAction = QAction(
+            self.tr("Overflow Clip"), self
+        )
+        clipOverflowAction.setCheckable(True)
+
         self.viewMenu = viewMenu = QMenu(self.viewToolBtn)
         viewMenu.addMenu(self.displayLanguageMenu)
+        viewMenu.addSeparator()
         viewMenu.addActions([drawBoardAction, texteditAction])
         viewMenu.addSeparator()
         viewMenu.addAction(darkModeAction)
         viewMenu.addAction(overflowAction)
+        viewMenu.addSeparator()
+        viewMenu.addActions([seqBadgeAction, clipOverflowAction])
         self.viewToolBtn.setMenu(viewMenu)
         self.viewToolBtn.setPopupMode(QToolButton.InstantPopup)
         self.textedit_trigger = texteditAction.triggered
         self.drawboard_trigger = drawBoardAction.triggered
         self.darkmode_trigger = darkModeAction.triggered
         self.overflow_trigger = overflowAction.triggered
+        self.seq_badge_trigger = seqBadgeAction.triggered
+        self.clip_overflow_trigger = clipOverflowAction.triggered
 
         # 工具菜单
         self.toolsToolBtn = TitleBarToolBtn(self)
@@ -456,11 +478,11 @@ class TitleBar(Widget):
         smartReorderAction = QAction(self.tr("Path Reorder…"), self)
         self.smart_reorder_trigger = smartReorderAction.triggered
 
-        # PSD 导出（封存 — 在 PS 中打开时有兼容问题，等待维修）
+        # PSD 导出（暂时禁用 — JSX 批量路线已知问题待修复）
         psdExportAction = QAction(self.tr("Export as PSD… (Under Repair)"), self)
         psdExportAction.setEnabled(False)
         psdExportAction.setToolTip(
-            self.tr("暂不可用 — Photoshop 打开时有兼容问题，等待修复")
+            self.tr("暂不可用 — PSD 导出功能修复中")
         )
         self.psd_export_triggered = psdExportAction.triggered
 

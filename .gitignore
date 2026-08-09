@@ -77,5 +77,6 @@ debug
 projects/
 .agents/
 .zcode/
+.workbuddy/
 skills-lock.json
 

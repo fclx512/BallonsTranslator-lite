@@ -170,3 +170,95 @@ geometry.py + `_stubs.py` 删除）、`ui/scene_textlayout.py`、`ui/textitem.py
 `utils/config.py`、`ui/text_engine/effect_renderer.py`、`ui/textitem.py`、
 `ui/configpanel.py`、`ui/scenetext_manager.py`、`translate/zh_CN.ts`、
 `translate/zh_CN.qm`、`docs/daily_log.md`
+
+---
+
+## 2026-08-08
+
+### 快捷键设置面板页面化重构（删除子对话框 + hover tooltip）
+
+**问题/需求：** 快捷键编辑器沿用早期"单页滚动 + 分组"设计，经 Interface 页按钮弹
+`ShortcutDialog` 子对话框编辑；设置面板已是"导航树 + 独立页面"的现代布局，快捷键窗口
+显得割裂。另外行内 + / Del / Rst 按钮的 `setToolTip` 在 Windows 上渲染为黑底黑字不可读，
+功能理解成本低，决定删除。
+
+**改动要点：**
+
+- 快捷键编辑改为设置面板独立页面：导航树 General 分组新增 "Shortcuts"（Interface 与
+  Config Management 之间），注册走 `_add_page` 平铺模式（与 LLM Profile 页一致，
+  页面统一提供滚动）。
+- 删除 `ShortcutDialog` 类、`_open_shortcut_dialog`、Interface 页 "Edit Shortcuts..." 按钮；
+  `ShortcutEditor` 去掉内部 `QScrollArea` 与 `setMinimumHeight`。
+- 快捷键**实时生效**：编辑任一动作即 `save_config()` + emit `shortcuts_changed` →
+  `MainWindow.refreshShortcuts()`（原为对话框关闭后才刷新）。
+- 删除 `_ShortcutRow` 三处 `setToolTip`（Add shortcut / Disable this shortcut /
+  Reset to Default），修复黑底黑字问题。
+- i18n：清 `ShortcutDialog` context、"Edit Shortcuts..." 与三个 tooltip 的 ts 条目；
+  `ContextMenuCustomizeDialog` 的 "Reset to Default" 按钮翻译保留。
+
+**涉及文件：** `ui/configpanel.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、
+`docs/daily_log.md`
+
+---
+
+### View 菜单增强：画板/编辑器互斥 + 序号徽标/溢出裁剪快捷开关
+
+**问题/需求：** 画板与文本编辑器模式此前只能经底部栏切换，View 菜单的入口不可见；
+序号徽标与溢出裁剪开关仅存在于设置面板，高频操作路径偏长。
+
+**改动要点：**
+
+- `TitleBar` 的 Drawing Board / Text Editor 动作改为 checkable，加入互斥
+  `QActionGroup`，勾选态=当前激活模式；底部栏模式切换时经 `_sync_view_mode_actions`
+  回写 View 菜单勾选。
+- View 菜单新增 Sequence Badge / Overflow Clip 两个可勾选动作，与设置面板
+  `seq_badge_checker` / `clip_overflow_checker` 双向同步（`blockSignals` 防回环），
+  勾选即改 `pcfg` 并 `save_config()`。
+- i18n：`TitleBar` 上下文补 "Drawing Board" / "Text Editor" / "Sequence Badge" /
+  "Overflow Clip" 词条（部分与 `_ShortcutRow`/`ConfigPanel` 上下文重复，需各自保留），
+  qm 重编译。
+
+**涉及文件：** `ui/mainwindowbars.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、
+`translate/zh_CN.qm`、`docs/daily_log.md`
+
+---
+
+### PSD 导出重做：JSX 批量路线（弃用二进制 EngineData）
+
+**问题/需求：** 封存的 PSD 导出有三条旧路线的顽疾——二进制直写（`TySh`+`EngineData`
+手写序列化，PS 打开兼容问题无法解决）、COM 自动化（已删）、旧 JSX（每页一个脚本，
+要手动逐个跑）。调研 LabelPlus PS 脚本分支
+[ZsIsMe/PS-Script](https://github.com/ZsIsMe/PS-Script) 后确认：**可编辑文本层只能在
+PS 进程内用 DOM API 创建**。重做为"Python 生成单个自包含 .jsx → PS 里跑一次 → 全部页
+产出可编辑文本层 PSD"，修复三个痛点（EngineData 弃用 / 批量单脚本 / 中心对齐兜底保真度）。
+
+**改动要点：**
+
+- `utils/psd_jsx_exporter.py` 重写：内嵌 Meo 风格 JSON 的批量脚本模板（UTF-8 with BOM）；
+  文本层用 `artLayers.add()+LayerKind.TEXT`+`textItem.*`（contents/font/size_pt/color/
+  fauxBold/direction/justification/autoLeading/position）；旋转取负（BT 逆时针→PS 顺时针）；
+  描边/投影走图层样式 ActionDescriptor（frameFX/dropShadow）；**中心对齐兜底**（按 bounds
+  平移使文本中心=块盒中心）；新增 `export_batch()` 一次产出全部页脚本。
+- payload 换算对齐渲染器：`size_pt = font_size×72/图片DPI`；`stroke_size = font_size×
+  stroke_width`（纠正旧代码 `×0.5`，与 effect_renderer 一致）；竖排 rotation 直取
+  `blk.angle`（-90 已内置，无需修正）。
+- `utils/psd_exporter.py`：`ExportOptions.export_method` 默认改 `jsx`、新增 `center_align`；
+  `AbstractPsdExporter` 加 `export_batch` 基类默认实现。
+- `ui/psd_export_dialog.py`：去掉 Export Method 下拉（JSX-only），新增「居中」勾选，更新说明。
+- `ui/mainwindow.py`：`on_export_psd` 改同步 `export_batch`，删除线程/进度相关 4 个 handler。
+- `ui/mainwindowbars.py`：菜单项**暂时禁用**（"Under Repair"），等修复后再启用。
+- i18n：ts 新增 9 条 + 清 11 条旧 PSD 条目，qm 重编译，i18n_check 全绿。
+- `pyproject.toml`：pytest 加 `pythonpath = ["."]`（捆绑 python 为 isolated 模式，忽略
+  PYTHONPATH/cwd，此前 test_psd_binary 无法收集）；捆绑环境补装 pytest。
+- 新增 `tests/test_psd_jsx_export.py`（14 用例），全量 pytest 159 通过（1 项为既有
+  `prepare_environment` 失败，非本次引入）。
+- 新文档 `docs/技术实现/PSD导出_JSX路线.md`（机制/保真度策略/已知限制/Phase 2 扩展点）。
+
+**涉及文件：** `utils/psd_jsx_exporter.py`、`utils/psd_exporter.py`、`ui/psd_export_dialog.py`、
+`ui/mainwindow.py`、`ui/mainwindowbars.py`、`pyproject.toml`、`translate/zh_CN.ts`、
+`translate/zh_CN.qm`、`tests/test_psd_jsx_export.py`（新增）、`tests/test_psd_binary.py`、
+`docs/技术实现/PSD导出_JSX路线.md`（新增）、`docs/daily_log.md`
+
+> **⚠️ 状态：用户已审查，反馈"可见问题较多"（问题清单未提供）。2026-08-09 决定
+> **暂且禁用**（菜单恢复 "Under Repair" 禁用态）并随本次提交入库，修复后再启用。
+> 续作先取评审问题清单逐项修复，确认后启用入口并提交。

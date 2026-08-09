@@ -392,6 +392,8 @@ class MainWindow(mainwindow_cls):
         self.bottomBar.textedit_checkchanged.connect(self.setTextEditMode)
         self.bottomBar.paintmode_checkchanged.connect(self.setPaintMode)
         self.bottomBar.textblock_checkchanged.connect(self.setTextBlockMode)
+        self.bottomBar.paintmode_checkchanged.connect(self._sync_view_mode_actions)
+        self.bottomBar.textedit_checkchanged.connect(self._sync_view_mode_actions)
 
         mainHLayout = QHBoxLayout()
         mainHLayout.addWidget(self.leftBar)
@@ -692,6 +694,8 @@ class MainWindow(mainwindow_cls):
 
         self.titleBar.darkModeAction.setChecked(pcfg.darkmode)
         self.titleBar.overflowAction.setChecked(pcfg.overflow_mode)
+        self.titleBar.seqBadgeAction.setChecked(pcfg.show_seq_badge)
+        self.titleBar.clipOverflowAction.setChecked(pcfg.clip_text_overflow)
 
         self.drawingPanel.set_config(pcfg.drawpanel)
         self.drawingPanel.initDLModule(module_manager)
@@ -713,6 +717,11 @@ class MainWindow(mainwindow_cls):
         self.configPanel.shortcuts_changed.connect(self.refreshShortcuts)
         self.configPanel.presets_changed.connect(self._on_presets_changed)
         self.configPanel.seq_badge_changed.connect(self._on_seq_badge_changed)
+        self.configPanel.clip_overflow_changed.connect(self._on_clip_overflow_changed)
+        self.titleBar.seq_badge_trigger.connect(self.on_seq_badge_menu_toggled)
+        self.titleBar.clip_overflow_trigger.connect(
+            self.on_clip_overflow_menu_toggled
+        )
         # 初始化字体列表（系统字体枚举）
         shared.init_font_list()
         # 使用过滤后的字体列表（排除用户已隐藏的字体）
@@ -758,11 +767,40 @@ class MainWindow(mainwindow_cls):
 
     def _on_seq_badge_changed(self):
         """Force canvas text items to repaint so seq badge appears/disappears."""
+        self.titleBar.seqBadgeAction.setChecked(pcfg.show_seq_badge)
         if not self.canvas:
             return
         for item in self.canvas.textLayer.childItems():
             if isinstance(item, TextBlkItem):
                 item.update()
+
+    def _on_clip_overflow_changed(self):
+        """Keep the View menu toggle in sync with the settings panel."""
+        self.titleBar.clipOverflowAction.setChecked(pcfg.clip_text_overflow)
+
+    def on_seq_badge_menu_toggled(self, checked: bool):
+        pcfg.show_seq_badge = checked
+        self.configPanel.seq_badge_checker.blockSignals(True)
+        self.configPanel.seq_badge_checker.setChecked(checked)
+        self.configPanel.seq_badge_checker.blockSignals(False)
+        self._on_seq_badge_changed()
+        self.save_config()
+
+    def on_clip_overflow_menu_toggled(self, checked: bool):
+        pcfg.clip_text_overflow = checked
+        self.configPanel.clip_overflow_checker.blockSignals(True)
+        self.configPanel.clip_overflow_checker.setChecked(checked)
+        self.configPanel.clip_overflow_checker.blockSignals(False)
+        self.save_config()
+
+    def _sync_view_mode_actions(self):
+        """Mirror bottom-bar paint/text-edit mode state onto View menu actions."""
+        self.titleBar.drawBoardAction.setChecked(
+            self.bottomBar.paintChecker.isChecked()
+        )
+        self.titleBar.texteditAction.setChecked(
+            self.bottomBar.texteditChecker.isChecked()
+        )
 
     def setupImgTransUI(self):
         self._hideConfigOverlay()
@@ -3559,7 +3597,11 @@ class MainWindow(mainwindow_cls):
             create_error_dialog(e, self.tr(f"Failed to load from {p}"))
 
     def on_export_psd(self):
-        """Open the PSD export dialog and run the chosen export method."""
+        """Open the PSD export dialog, then generate a batch ExtendScript.
+
+        The generated .jsx recreates the project's text blocks as editable
+        text layers in Photoshop (run once via File → Scripts → Browse).
+        """
         if self.imgtrans_proj.directory is None:
             return
         dialog = PsdExportDialog(self.imgtrans_proj, parent=self)
@@ -3567,89 +3609,40 @@ class MainWindow(mainwindow_cls):
             return
 
         options = dialog.get_options()
-        blk_lists = self.imgtrans_proj.pages
-        pages_to_export = options.page_filter or list(blk_lists.keys())
+        pages_to_export = options.page_filter or list(
+            self.imgtrans_proj.pages.keys()
+        )
         if not pages_to_export:
             return
 
-        total_pages = len(blk_lists)
-        filtered = len(pages_to_export)
-        if filtered < total_pages:
-            LOGGER.info(
-                "PSD export: %d/%d pages (filter: %s .. %s)",
-                filtered,
-                total_pages,
-                pages_to_export[0],
-                pages_to_export[-1],
-            )
-        else:
-            LOGGER.info("PSD export: all %d pages", total_pages)
+        LOGGER.info(
+            "PSD export: %d/%d pages (filter: %s .. %s)",
+            len(pages_to_export),
+            len(self.imgtrans_proj.pages),
+            pages_to_export[0],
+            pages_to_export[-1],
+        )
 
         from utils.psd_exporter import create_exporter
 
-        LOGGER.info("PSD export method: %s", options.export_method)
         exporter = create_exporter(method=options.export_method)
-
-        # Store result context for the completion handler
-        self._psd_result = {
-            "output_dir": options.output_dir,
-            "success": 0,
-            "total": len(pages_to_export),
-            "export_method": options.export_method,
-        }
-
-        from .custom_widget import ProgressMessageBox
-        from .io_thread import PsdExportThread
-
-        self._psd_thread = PsdExportThread()
-        self._psd_thread.page_done.connect(self._on_psd_page_done)
-        self._psd_thread.page_failed.connect(self._on_psd_page_failed)
-        self._psd_thread.export_finished.connect(self._on_psd_export_finished)
-
-        self._psd_progress = ProgressMessageBox(self.tr("PSD Export"))
-        self._psd_progress.zero_progress()
-        self._psd_progress.stop_clicked.connect(self._psd_thread.request_stop)
-        self._psd_progress.show()
-
-        self._psd_thread.run_export(
-            exporter, self.imgtrans_proj, pages_to_export, options
-        )
-
-    def _on_psd_page_done(self, page_name: str, out_path: str):
-        self._psd_result["success"] += 1
-        # Update progress bar
-        total = self._psd_result.get("total", 1)
-        done = self._psd_result["success"]
-        pct = int(done / total * 100)
-        self._psd_progress.updateTaskProgress(pct, f"  ({done}/{total})")
-
-    def _on_psd_page_failed(self, page_name: str, error_msg: str):
-        pass
-
-    def _on_psd_export_finished(self, success_count: int):
-        self._psd_progress.hide()
-        # Cleanup is handled by PsdExportThread._run_export's finally block
-
-        if success_count == 0:
+        try:
+            jsx_path = exporter.export_batch(
+                self.imgtrans_proj, pages_to_export, options
+            )
+        except Exception as e:
+            create_error_dialog(e, self.tr("Failed to export PSD script"))
             return
 
-        method = self._psd_result.get("export_method", "binary")
-        if method == "binary":
-            msg = (
-                self.tr("Exported ")
-                + str(success_count)
-                + self.tr(" PSD file(s).\n\nOutput:\n")
-                + self._psd_result["output_dir"]
+        msg = (
+            self.tr("Exported 1 ExtendScript covering ")
+            + str(len(pages_to_export))
+            + self.tr(
+                " page(s).\n\nOpen Photoshop → File → Scripts → Browse → run "
             )
-        else:
-            msg = (
-                self.tr("Exported ")
-                + str(success_count)
-                + self.tr(
-                    " ExtendScript(s).\n\nOpen Photoshop → File → Scripts → Browse to run each .jsx.\n\nOutput:\n"
-                )
-                + self._psd_result["output_dir"]
-            )
+            + osp.basename(jsx_path)
+            + self.tr("\n\nEach page is saved as an editable-text PSD.")
+        )
         create_info_dialog(msg)
 
     def export_tstyles(self):

@@ -613,11 +613,12 @@ class TestExporterFactory:
 
         assert isinstance(exporter, PsJsxExporter)
 
-    def test_create_default_is_binary(self):
+    def test_create_default_is_jsx(self):
+        # The JSX batch route is the active default; the binary route is retired.
         exporter = create_exporter()
-        from utils.psd_binary_exporter import PsBinaryExporter
+        from utils.psd_jsx_exporter import PsJsxExporter
 
-        assert isinstance(exporter, PsBinaryExporter)
+        assert isinstance(exporter, PsJsxExporter)
 
     def test_create_invalid(self):
         with pytest.raises(ValueError, match="Unknown PSD export method"):

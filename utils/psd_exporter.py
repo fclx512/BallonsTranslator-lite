@@ -1,7 +1,10 @@
 """Unified PSD export interface — strategy pattern.
 
-One concrete strategy:
-- ``PsJsxExporter``  — ExtendScript .jsx generation (``utils.psd_jsx_exporter``)
+Active strategy:
+- ``PsJsxExporter``  — ExtendScript .jsx batch generation
+  (``utils.psd_jsx_exporter``), recreating editable text layers inside
+  Photoshop.  The retired binary route (``PsBinaryExporter``) is kept
+  importable for reference but is no longer surfaced in the UI.
 """
 
 from abc import ABC, abstractmethod
@@ -17,7 +20,8 @@ class ExportOptions:
 
     output_dir: str
     page_filter: Optional[List[str]] = None  # None = all pages
-    export_method: str = "binary"  # "binary" or "jsx"
+    export_method: str = "jsx"  # "jsx" — binary route retired from the UI
+    center_align: bool = True  # center text layers on their block box
 
 
 class AbstractPsdExporter(ABC):
@@ -52,6 +56,22 @@ class AbstractPsdExporter(ABC):
     ) -> str:
         """Export a single page.  Returns the path to the created file."""
 
+    def export_batch(
+        self,
+        proj: ProjImgTrans,
+        page_names: List[str],
+        options: ExportOptions,
+    ) -> str:
+        """Export all *page_names*; returns the path to the last file.
+
+        Default implementation runs :meth:`export_page` per page.  Batch
+        exporters (``PsJsxExporter``) override it to produce a single output.
+        """
+        last = ""
+        for page_name in page_names:
+            last = self.export_page(proj, page_name, options)
+        return last
+
     @abstractmethod
     def cleanup(self):
         """Release resources (e.g. disconnect from PS COM)."""
@@ -68,12 +88,12 @@ class AbstractPsdExporter(ABC):
         return families
 
 
-def create_exporter(method: str = "binary") -> AbstractPsdExporter:
+def create_exporter(method: str = "jsx") -> AbstractPsdExporter:
     """Factory — returns an exporter for the given *method*.
 
     Args:
-        method: ``"binary"`` for direct PSD (default), ``"jsx"`` for
-            ExtendScript generation.
+        method: ``"jsx"`` for ExtendScript generation (default), ``"binary"``
+            for the retired direct-PSD route.
 
     Raises:
         ValueError: On unknown *method*.

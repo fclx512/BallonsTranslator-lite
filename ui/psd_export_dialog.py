@@ -1,4 +1,9 @@
-"""PSD export dialog — page range selector + export config."""
+"""PSD export dialog — page range selector + export config.
+
+Generates a single ExtendScript (.jsx) that recreates the project's text
+blocks as editable text layers in Photoshop (run once via
+File → Scripts → Browse).
+"""
 
 from typing import List, Optional
 
@@ -6,7 +11,6 @@ from qtpy.QtCore import Qt
 from qtpy.QtGui import QFont
 from qtpy.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDialog,
     QFileDialog,
     QFrame,
@@ -56,12 +60,11 @@ class PsdExportDialog(QDialog):
             hi = self._slider.high()
             page_filter = [self._proj.idx2pagename(i) for i in range(lo, hi + 1)]
 
-        method = self._method_cb.currentData() or "binary"
-
         return ExportOptions(
             output_dir=self._dir_edit.text(),
             page_filter=page_filter,
-            export_method=method,
+            export_method="jsx",
+            center_align=self._center_cb.isChecked(),
         )
 
     # ------------------------------------------------------------------
@@ -118,24 +121,26 @@ class PsdExportDialog(QDialog):
         # ---- separator --------------------------------------------------
         layout.addWidget(self._make_separator())
 
-        # ---- export method -----------------------------------------
-        layout.addWidget(self._make_section_label(self.tr("Export Method")))
+        # ---- export description -----------------------------------------
+        layout.addWidget(self._make_section_label(self.tr("Export")))
 
-        self._method_cb = QComboBox()
-        self._method_cb.addItem(self.tr("Binary PSD (direct)"), "binary")
-        self._method_cb.addItem(self.tr("ExtendScript (.jsx) — needs Photoshop"), "jsx")
-        self._method_cb.currentIndexChanged.connect(self._on_method_changed)
-        layout.addWidget(self._method_cb)
-
-        self._method_info = QLabel(
+        info = QLabel(
             self.tr(
-                "Generates a .psd file directly — no Photoshop dependency.\n"
-                "Text layers are editable in Photoshop (TySh + EngineData)."
+                "Exports a single .jsx script for the selected pages.\nRun it once in Photoshop (File → Scripts → Browse);\ntext layers are fully editable."
             )
         )
-        self._method_info.setWordWrap(True)
-        self._method_info.setStyleSheet("padding: 4px 0;")
-        layout.addWidget(self._method_info)
+        info.setWordWrap(True)
+        info.setStyleSheet("padding: 4px 0;")
+        layout.addWidget(info)
+
+        self._center_cb = QCheckBox(self.tr("Center text within its block (recommended)"))
+        self._center_cb.setChecked(True)
+        self._center_cb.setToolTip(
+            self.tr(
+                "Shift each text layer so its center matches the block box. Absorbs font-metric differences between the app and Photoshop."
+            )
+        )
+        layout.addWidget(self._center_cb)
 
         # ---- separator --------------------------------------------------
         layout.addWidget(self._make_separator())
@@ -150,9 +155,6 @@ class PsdExportDialog(QDialog):
         dir_row.addWidget(self._dir_edit)
         dir_row.addWidget(browse_btn)
         layout.addLayout(dir_row)
-
-        # ---- separator --------------------------------------------------
-        layout.addWidget(self._make_separator())
 
         # ---- separator --------------------------------------------------
         layout.addWidget(self._make_separator())
@@ -184,25 +186,6 @@ class PsdExportDialog(QDialog):
         self._end_spin.valueChanged.connect(self._on_spinbox_changed)
 
     # ------------------------------------------------------------------
-    # internal — method change
-    # ------------------------------------------------------------------
-
-    def _on_method_changed(self, index: int):
-        method = self._method_cb.itemData(index)
-        if method == "binary":
-            self._method_info.setText(
-                self.tr(
-                    "Generates a .psd file directly — no Photoshop dependency.\nText layers are editable in Photoshop (TySh + EngineData)."
-                )
-            )
-        else:
-            self._method_info.setText(
-                self.tr(
-                    "Exports a .jsx script + image files. Run the script on any machine with Photoshop to generate the PSD.\n\nNo Photoshop dependency at export time.\n\nOpen Photoshop → File → Scripts → Browse → select the .jsx file."
-                )
-            )
-
-    # ------------------------------------------------------------------
     # internal — font warning
     # ------------------------------------------------------------------
 
@@ -217,8 +200,7 @@ class PsdExportDialog(QDialog):
             self._font_label.setText(self.tr("No text blocks in project."))
             return
 
-        # For COM path we could check against installed PS fonts.
-        # For the dialog preview we only use the static map.
+        # Static map only — the target Photoshop's font list is unknown here.
         from utils.font_mapping import QT_TO_PS_FONT_MAP
 
         unknown = [f for f in sorted(families) if f not in QT_TO_PS_FONT_MAP]
