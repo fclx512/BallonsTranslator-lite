@@ -90,7 +90,6 @@ class ScrollBarHandle(QWidget):
                 startValue=1.0,
                 endValue=0.,
             )
-            # self.fadeAnimation.setEasingCurve(QEasingCurve.Type.InQuint)
             self.fadeAnimation.finished.connect(self.hide)
             fixsize = 6
             self.anime_timer = QTimer(self)

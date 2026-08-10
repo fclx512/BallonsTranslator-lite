@@ -181,7 +181,6 @@
     "scripts/svgscript.py": "sha256:52edd00abfdfaa1e4dbadf7a3e9336fb5787fe8a0f1f4012569505f8f2e5c9b4",
     "scripts/ts_auto_fill.py": "sha256:d30a086c803c720933ac4457478ed3722183f4c17c3edde022fc7ebbab628ae5",
     "scripts/update_translation.py": "sha256:cbb24edd75625a2c49c539d12637983d367dad59156219184ab53c635b2a3cd0",
-    "scripts/webengine_memory_test.py": "sha256:611bdf7ccbbca6490e31a6f238e6b5120577804fecc35d3c9f56579343742624",
     "test_ocr.png": "sha256:66b27520137da123bc6425067eea7615258926bdb1b8e88d13d24d9375237dce",
     "tests/test_proj_compact.py": "sha256:11539f1e6d61f9fede365f6642ab51e557995556323005a1db7c6f62be6220eb",
     "tests/test_psd_binary.py": "sha256:77f13203528c939b32a6ed754f02642cbec253da67835ef53b2c0dced4bd2a8a",

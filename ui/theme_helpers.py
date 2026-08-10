@@ -34,6 +34,8 @@ def shortcut_styles() -> dict:
             "header_clr": "#ccc",
             "disabled_clr": "#666",
             "disabled_bg": "#2a2a30",
+            "conflict_pill_bg": "#7d2b2b",
+            "conflict_pill_text": "#ffd9d9",
         }
     else:
         return {
@@ -55,6 +57,8 @@ def shortcut_styles() -> dict:
             "header_clr": "#333336",
             "disabled_clr": "#aaa",
             "disabled_bg": "#e0e0e4",
+            "conflict_pill_bg": "#d9534f",
+            "conflict_pill_text": "#ffffff",
         }
 
 

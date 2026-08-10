@@ -143,7 +143,6 @@ class CustomGV(QGraphicsView):
         modifiers = e.modifiers()
         if modifiers == Qt.KeyboardModifier.ControlModifier:
             if key == QKEY.Key_V:
-                # self.ctrlv_pressed.emit(e)
                 if self.canvas.handle_ctrlv():
                     e.accept()
                     return
@@ -203,13 +202,6 @@ class CustomGV(QGraphicsView):
             painter.drawRect(r.adjusted(2, 2, -3, -3))
             fill_color = QColor(64, 150, 255, 30)
             painter.fillRect(r, fill_color)
-            painter.end()
-        if self.canvas is not None and self.canvas.preview_mode:
-            painter = QPainter(self.viewport())
-            pen = QPen(QColor("#e67e22"), 5)
-            painter.setPen(pen)
-            r = self.viewport().rect()
-            painter.drawRect(r.adjusted(2, 2, -3, -3))
             painter.end()
 
 
@@ -356,7 +348,6 @@ class Canvas(QGraphicsScene):
         self.ctrl_relesed = self.gv.ctrl_released
         self.vscroll_bar = self.gv.verticalScrollBar()
         self.hscroll_bar = self.gv.horizontalScrollBar()
-        # self.default_cursor = self.gv.cursor()
         self.rubber_band = self.addWidget(QRubberBand(QRubberBand.Shape.Rectangle))
         self.rubber_band.hide()
         self.rubber_band_origin = None
@@ -370,17 +361,6 @@ class Canvas(QGraphicsScene):
         self.scaleFactorLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.scaleFactorLabel.setText("100%")
         self.scaleFactorLabel.gv = self.gv
-
-        self.previewLabel = QLabel(self.gv)
-        self.previewLabel.setObjectName("PreviewLabel")
-        self.previewLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.previewLabel.setText(self.tr("PREVIEW"))
-        self.previewLabel.setStyleSheet(
-            "background: rgba(230, 126, 34, 200); color: white; "
-            "padding: 4px 12px; border-radius: 6px; font-size: 15px;"
-        )
-        self.previewLabel.adjustSize()
-        self.previewLabel.setVisible(False)
 
         self.notextLabel = QLabel(self.gv)
         self.notextLabel.setObjectName("NotextLabel")
@@ -425,12 +405,6 @@ class Canvas(QGraphicsScene):
             Qt.TransformationMode.FastTransformation
         )
         self.textLayer = QGraphicsPixmapItem()
-        self.previewLayer = QGraphicsPixmapItem()
-        self.previewLayer.setTransformationMode(
-            Qt.TransformationMode.SmoothTransformation
-        )
-        self.previewLayer.setVisible(False)
-        self.preview_mode = False
 
         self.inpaintLayer.setAcceptDrops(True)
         self.drawingLayer.setAcceptDrops(True)
@@ -443,7 +417,6 @@ class Canvas(QGraphicsScene):
         self.inpaintLayer.setParentItem(self.baseLayer)
         self.drawingLayer.setParentItem(self.baseLayer)
         self.textLayer.setParentItem(self.baseLayer)
-        self.previewLayer.setParentItem(self.baseLayer)
         self.txtblkShapeControl.setParentItem(self.baseLayer)
 
         # Grid transform overlay (stage 5 follow-up): bound by the transform
@@ -623,88 +596,6 @@ class Canvas(QGraphicsScene):
 
         return result
 
-    def toggle_preview(self):
-        self.preview_mode = not self.preview_mode
-        if self.preview_mode:
-            if not self.imgtrans_proj or not self.imgtrans_proj.img_valid:
-                self.preview_mode = False
-                return
-            self._enter_preview()
-        else:
-            self._exit_preview()
-
-    def _enter_preview(self):
-        scale_before = self.scale_factor
-        tlayer_opacity_before = self.textLayer.opacity()
-        tlayer_visible = self.textLayer.isVisible()
-        txcontrol_visible = self.txtblkShapeControl.isVisible()
-        inpaint_visible = self.inpaintLayer.isVisible()
-        self._tlayer_was_visible = tlayer_visible
-        self._txcontrol_was_visible = txcontrol_visible
-
-        self.textLayer.setOpacity(1)
-        if not tlayer_visible:
-            self.textLayer.show()
-        if not inpaint_visible:
-            self.inpaintLayer.show()
-
-        # Render at 1:1 scale without changing the viewport
-        if scale_before != 1:
-            self.baseLayer.setScale(1)
-
-        self.clearSelection()
-        if self.txtblkShapeControl.blk_item is not None:
-            blk_item = self.txtblkShapeControl.blk_item
-            if blk_item.is_editting():
-                blk_item.endEdit(keep_focus=False)
-            if blk_item.isSelected():
-                blk_item.setSelected(False)
-
-        # Hide shape control BEFORE rendering so it's not captured in the preview
-        self.txtblkShapeControl.setVisible(False)
-
-        proj = self.imgtrans_proj
-        base = proj.notext_array if (proj.notext_array is not None) else proj.inpainted_array
-        result = ndarray2pixmap(base, return_qimg=False)
-        canvas_sz = self.img_window_size()
-        painter = QPainter(result)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        rect = QRectF(0, 0, canvas_sz.width(), canvas_sz.height())
-        self.render(painter, rect, rect)
-        painter.end()
-
-        if scale_before != 1:
-            self.baseLayer.setScale(scale_before)
-
-        self.textLayer.setOpacity(tlayer_opacity_before)
-        if not tlayer_visible:
-            self.textLayer.hide()
-        if not inpaint_visible:
-            self.inpaintLayer.hide()
-
-        self.previewLayer.setPixmap(result)
-        self.previewLayer.setVisible(True)
-        self.textLayer.setVisible(False)
-
-        self.previewLabel.setVisible(True)
-        self.previewLabel.raise_()
-        self.notextLabel.raise_()
-        self._layout_status_labels()
-
-        self.gv.viewport().update()
-
-    def _exit_preview(self):
-        self.previewLayer.setVisible(False)
-        if self._txcontrol_was_visible:
-            self.txtblkShapeControl.setVisible(True)
-        if self._tlayer_was_visible:
-            self.textLayer.setVisible(True)
-
-        self.previewLabel.setVisible(False)
-        self._layout_status_labels()
-
     def updateLayers(self):
 
         if not self.imgtrans_proj.img_valid:
@@ -798,22 +689,8 @@ class Canvas(QGraphicsScene):
     def _layout_status_labels(self):
         """Unify label sizes and position them dynamically in top-left corner."""
         # Re-adjust to content (text length may vary by i18n)
-        self.previewLabel.adjustSize()
         self.notextLabel.adjustSize()
-
-        # Both labels take the wider one's width for visual consistency
-        w = max(self.previewLabel.width(), self.notextLabel.width())
-        if w > 0:
-            self.previewLabel.setFixedWidth(w)
-            self.notextLabel.setFixedWidth(w)
-
-        # Dynamic positioning: preview on top, notext below; when preview
-        # is hidden, notext moves up to fill the space.
-        self.previewLabel.move(8, 8)
-        if self.previewLabel.isVisible():
-            self.notextLabel.move(8, 8 + self.previewLabel.height() + 4)
-        else:
-            self.notextLabel.move(8, 8)
+        self.notextLabel.move(8, 8)
 
     def setOverflowMode(self, enabled: bool):
         """Toggle overflow mode on/off and update the canvas display."""
@@ -1464,7 +1341,6 @@ class Canvas(QGraphicsScene):
             self.editing_textblkitem = None
             self.textblock_mode = False
         else:
-            # self.gv.setCursor(self.default_cursor)
             self.gv.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
             self.image_edit_mode = ImageEditMode.NONE
 

@@ -34,6 +34,7 @@ from qtpy.QtGui import (
     QCloseEvent,
     QColor,
     QContextMenuEvent,
+    QCursor,
     QGuiApplication,
     QIcon,
     QImageReader,
@@ -175,6 +176,16 @@ class _PointAlignCommand(QUndoCommand):
 mainwindow_cls = Widget if shared.HEADLESS else FramelessWindow
 
 
+def _is_text_input(widget) -> bool:
+    """True for widgets where Tab would insert text (source/translation
+    fields, search boxes) — the pie menu must not fire there, and neither
+    should Tab insert a tab char or move focus.
+    """
+    from qtpy.QtWidgets import QPlainTextEdit, QTextEdit
+
+    return isinstance(widget, (QTextEdit, QPlainTextEdit))
+
+
 class MainWindow(mainwindow_cls):
     imgtrans_proj: ProjImgTrans = ProjImgTrans()
     save_on_page_changed = True
@@ -295,6 +306,7 @@ class MainWindow(mainwindow_cls):
         self.setupUi()
         self.setupConfig()
         self.setupShortcuts()
+        self.setupPieMenu()
         self.setupRegisterWidget()
         # self.showMaximized()
         # Set a reasonable default geometry before maximizing, so that
@@ -1379,6 +1391,112 @@ class MainWindow(mainwindow_cls):
 
         super().changeEvent(event)
 
+    # ── Pie menu: Tab trigger + cancel routing (app event filter) ──
+
+    def eventFilter(self, watched, event: QEvent):
+        """App-level filter driving the pie menu.
+
+        ``ShortcutOverride`` swallows any QShortcut bound to the trigger
+        key (Qt checks it before QShortcut); ``KeyPress``/``KeyRelease``
+        drive the spring-loaded state machine; Esc / click-outside cancel
+        a pinned menu.
+        """
+        t = event.type()
+        if t == QEvent.Type.ShortcutOverride:
+            if self._pie_handle_shortcut_override(event):
+                return True
+        elif t == QEvent.Type.KeyPress:
+            if self._pie_handle_keypress(event):
+                return True
+        elif t == QEvent.Type.KeyRelease:
+            if self._pie_handle_keyrelease(event):
+                return True
+        elif t == QEvent.Type.MouseButtonPress:
+            if self._pie_handle_click_outside(watched, event):
+                return True
+        elif t == QEvent.Type.ApplicationDeactivate:
+            # Alt-Tab / switch app while the menu is open would strand it
+            # (the release would land in another window) — cancel instead.
+            if self.pie_menu.is_open():
+                self.pie_menu.cancel()
+        return super().eventFilter(watched, event)
+
+    def _pie_trigger_ready(self) -> bool:
+        """Mode conditions: textEditMode ∧ ¬creating ∧ ¬editing ∧ canvas mode.
+
+        Focus is intentionally *not* required to be on the canvas: Tab is
+        the pie trigger anywhere inside the main window in text-edit mode
+        (review 2026-08-10), except inside pure text inputs — those are
+        handled in :meth:`_pie_handle_keypress`.
+        """
+        canvas = self.canvas
+        return (
+            canvas.textEditMode()
+            and not canvas.creating_textblock
+            and canvas.editing_textblkitem is None
+            and self._is_canvas_mode()
+        )
+
+    def _pie_handle_shortcut_override(self, event) -> bool:
+        if (
+            event.key() != QKEY.Key_Tab
+            or event.modifiers() != Qt.KeyboardModifier.NoModifier
+        ):
+            return False
+        if self.pie_menu.is_open() or self._pie_trigger_ready():
+            event.accept()
+            return True
+        return False
+
+    def _pie_handle_keypress(self, event) -> bool:
+        key = event.key()
+        if self.pie_menu.is_open():
+            if key == QKEY.Key_Escape:
+                self.pie_menu.cancel()
+                return True
+            if key == QKEY.Key_Tab and not event.isAutoRepeat():
+                self.pie_menu.cancel()
+                return True
+            return False
+        if key != QKEY.Key_Tab or event.isAutoRepeat():
+            return False
+        if event.modifiers() != Qt.KeyboardModifier.NoModifier:
+            return False
+        if not self._pie_trigger_ready():
+            return False
+        fw = self.app.focusWidget()
+        in_main = fw is self or (fw is not None and self.isAncestorOf(fw))
+        if fw is None and self.isActiveWindow():
+            in_main = True
+        if fw is not None and _is_text_input(fw) and in_main:
+            # Pure text inputs (source / translation fields, search boxes):
+            # Tab must not insert a tab char nor move focus — swallow it.
+            return True
+        if not in_main:
+            # Dialogs / other windows keep their own Tab behavior.
+            return False
+        # QKeyEvent has no cursor position in PyQt6 — use the global cursor.
+        self.pie_menu.start_hold(QCursor.pos())
+        return True
+
+    def _pie_handle_keyrelease(self, event) -> bool:
+        if event.key() != QKEY.Key_Tab or event.isAutoRepeat():
+            return False
+        if not self.pie_menu.is_holding():
+            return False
+        self.pie_menu.release_hold()
+        return True
+
+    def _pie_handle_click_outside(self, watched, event) -> bool:
+        pm = self.pie_menu
+        if not pm.is_open() or pm.is_holding():
+            return False
+        # PIN mode: any press outside the menu rect cancels it.
+        gpos = event.globalPosition().toPoint()
+        if not pm.geometry().contains(gpos):
+            pm.cancel()
+        return False  # never swallow mouse presses
+
     def retranslateUI(self):
         msg = QMessageBox()
         msg.setText(self.tr("Restart to apply changes? \n"))
@@ -1496,6 +1614,21 @@ class MainWindow(mainwindow_cls):
         self.shortcut_registry.clear()
         self._install_shortcuts()
 
+    def setupPieMenu(self):
+        """Create the canvas pie menu and hook the Tab trigger via an app event filter.
+
+        A single app-level filter also handles Esc / click-outside cancel
+        while the menu is pinned, and swallows any QShortcut bound to Tab.
+        """
+        from .pie_menu import PieMenu
+        from .context_menu_config import run_cmd
+
+        self.pie_menu = PieMenu(self.canvas, parent=self)
+        self.pie_menu.command_triggered.connect(
+            lambda cmd_id: run_cmd(self.canvas, cmd_id)
+        )
+        self.app.installEventFilter(self)
+
     def _install_shortcuts(self):
         """Create all QShortcut objects from current config (used at init + refresh)."""
 
@@ -1528,9 +1661,6 @@ class MainWindow(mainwindow_cls):
         )
         self.shortcut_registry["select_all"] = self._make_shortcuts(
             "select_all", ["Ctrl+A"], self.shortcutSelectAll
-        )
-        self.shortcut_registry["preview"] = self._make_shortcuts(
-            "preview", ["Tab"], self.shortcutPreview
         )
         self.shortcut_registry["escape"] = self._make_shortcuts(
             "escape", ["Escape"], self.shortcutEscape
@@ -2357,10 +2487,6 @@ class MainWindow(mainwindow_cls):
         cursor.setPosition(start)
         cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
         edit.setTextCursor(cursor)
-
-    def shortcutPreview(self):
-        if self._is_canvas_mode():
-            self.canvas.toggle_preview()
 
     def shortcutEscape(self):
         if self.canvas.search_widget.isVisible():

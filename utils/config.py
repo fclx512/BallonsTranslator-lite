@@ -313,6 +313,20 @@ class ProgramConfig(Config):
         "translate", "ocr", "ocr_translate", "ocr_translate_inpaint",
         ])
 
+    # ── Pie menu (canvas ring menu) ─────────────────────────
+    # 8 sectors, each sector holds up to 3 command ids (inner → outer ring).
+    # Command ids reuse COMMAND_REGISTRY (ui/context_menu_config.py).
+    pie_sectors: List[List[str]] = field(default_factory=lambda: [
+        ["ocr_translate"],                              # 0 top
+        ["ocr"],                                        # 1 upper-right
+        ["copy"],                                       # 2 right
+        ["paste"],                                      # 3 lower-right
+        ["delete"],                                     # 4 bottom
+        ["merge"],                                      # 5 lower-left
+        ["align_left", "align_right", "align_hcenter"], # 6 left (inner→outer)
+        ["translate"],                                  # 7 upper-left
+        ])
+
     # ── Development / Debug ─────────────────────────────
     context_translation_debug_log: bool = False
 

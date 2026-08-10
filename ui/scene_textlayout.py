@@ -195,7 +195,6 @@ def punc_actual_rect(
     mask = mask[..., -1]
 
     ar = cv2.boundingRect(cv2.findNonZero(mask))
-    # if stroke_width != 0:
     ar = np.array(ar, dtype=np.float64)
     ar[[0, 1]] += stroke_width
     ar[[2, 3]] -= stroke_width * 2
@@ -873,8 +872,6 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                             xoff -= (_dl + line_width - self.max_width)
                     else:
                         xoff = -act_rect[0] + (line_width - act_rect[2]) / 2
-                    # if char in PUNSET_ALIGNTOP:
-                    #     yoff = yoff + (cfmt.tbr.height() - act_rect[3]) / 2
 
                     if num_lspaces > 0:
                         xoff -= space_shift
@@ -888,16 +885,6 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                             yoff += (
                                 tbr.height() + cfmt.font_metrics.descent() - act_rect[3]
                             ) / 2
-
-                # else:
-                #     empty_spacing = num_lspaces * cfmt.space_width
-                #     if TEXTLAYOUT_QTVERSION:
-                #         xshift = max(line.naturalTextWidth() - cfmt.br.width(), 0)
-                #     else:
-                #         xshift = empty_spacing
-
-                #     xoff = -xshift
-                #     yoff = min(cfmt.br.top() - cfmt.tbr.top(), -cfmt.tbr.top() - line.ascent()) + empty_spacing
 
                 xy_offsets[0], xy_offsets[1] = xoff, yoff
             block = block.next()

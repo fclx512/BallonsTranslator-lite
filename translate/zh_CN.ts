@@ -283,11 +283,6 @@
             <translation>行为设置</translation>
         </message>
         <message>
-            <location filename="..\ui\canvas.py" line="350" />
-            <source>PREVIEW</source>
-            <translation>预览</translation>
-        </message>
-        <message>
             <location filename="..\ui\canvas.py" line="348" />
             <source>No-text BG</source>
             <translation>无字图</translation>
@@ -4762,11 +4757,6 @@ in Settings → Mirror Config, then click Retry.</source>
             <location filename="..\\ui\\configpanel.py" line="808" />
             <source>Zoom Out</source>
             <translation>缩小</translation>
-        </message>
-        <message>
-            <location filename="..\\ui\\configpanel.py" line="808" />
-            <source>Preview</source>
-            <translation>预览</translation>
         </message>
         <message>
             <location filename="..\\ui\\configpanel.py" line="808" />

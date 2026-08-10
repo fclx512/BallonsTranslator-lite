@@ -482,10 +482,6 @@ class TranslateThread(ModuleThread):
 
                 self.blockSignals(False)
                 create_error_dialog(e, msg, "TranslationFailed")
-                # self.imgtrans_proj = None
-                # self.finished_counter = 0
-                # self.pipeline_pagekey_queue = []
-                # return
             self.blockSignals(False)
             self.finished_counter += 1
             if trans_success:

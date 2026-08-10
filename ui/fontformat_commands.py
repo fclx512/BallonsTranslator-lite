@@ -214,7 +214,6 @@ def ffmt_change_vertical(
     blkitems: List[TextBlkItem],
     **kwargs,
 ):
-    # set_kwargs = global_default_set_kwargs if is_global else local_default_set_kwargs
     for blkitem, value in zip(blkitems, values):
         blkitem.setVertical(value)
 

@@ -14,10 +14,6 @@ Widget {
 }
 
 
-/* ConfigTextLabel {
-    background-color : @emptyContentBackgroundColor;
-} */
-
 ConfigNotePopup {
     background-color: @widgetBackgroundColor;
     border: 1px solid @borderColor;
@@ -793,7 +789,6 @@ QGroupBox {
 }
 
 QPushButton {
-    /* max-width: 94px; */
     height: 32px;
     font-size: 14px;
     background-color: @pushBtnBackgroundColor;
@@ -819,7 +814,7 @@ QPushButton::hover {
 }
 
 QPushButton:pressed {
-    border: 1px solid royalblue;
+    border: 1px solid @accentPrimary;
 }
 
 QPushButton:disabled {
@@ -936,9 +931,6 @@ QPushButton#minBtn::hover {
 }
 
 StatusButton {
-    /* max-width: 140px; */
-    /* height: 50px; */
-    /* min-width: 140px; */
     font-size: 12px;
     padding-left: 7px;
     border: none;
@@ -1021,15 +1013,6 @@ QToolButton#BottomBarModuleToolButton::menu-indicator {
     right: 8px;
 }
 
-/* ── Menu section labels (used in ModuleSelectionWidget menus) ─ */
-QLabel#MenuSectionLabel {
-    min-height: 20px;
-    padding: 6px 7px 2px 7px;
-    background-color: @emptyContentBackgroundColor;
-    color: @qwidgetForegroundColor;
-    font-size: 13px;
-}
-
 QCheckBox#TransChecker::indicator {
     padding-left: 8px;
     padding-right: 8px;
@@ -1052,7 +1035,6 @@ QCheckBox#PaintChecker::indicator {
     padding-left: 8px;
     padding-right: 8px;
     padding-top: 8px;
-    /* padding-bottom: 4px; */
     height: 33px;
     width: 33px;
     image: url(icons/bottombar_paintmode.svg);
@@ -1161,7 +1143,6 @@ StateChecker#ImgTransChecker::indicator:hover
 StateChecker#ImgTransChecker::indicator:checked
 {
     image: url(icons/leftbar_imgtrans_activate.svg);
-    color: red;
 }
 
 StateChecker#ConfigChecker::indicator{
@@ -1258,14 +1239,6 @@ QScrollBar::add-line {
     subcontrol-position: top;
 }
 
-
-.IncrementalBtn#FsizeIncrementUp {
-    border-image: url(icons/incre_up.svg) 0 0 0 0 stretch stretch;
-}
-.IncrementalBtn#FsizeIncrementDown {
-    border-image: url(icons/incre_down.svg) 0 0 0 0 stretch stretch;
-}
-
 .FadeLabel {
     background: rgba(0, 0, 0, 85);
     border-radius: 16px;
@@ -1276,16 +1249,6 @@ QScrollBar::add-line {
     min-width: 72px;
     max-width: 72px;
     color: rgba(255, 255, 255, 150);
-}
-
-#PreviewLabel {
-    background: rgba(0, 0, 0, 120);
-    border-radius: 8px;
-    border: 2px solid @accentPrimary;
-    font-size: 16px;
-    padding: 6px 20px;
-    color: @accentPrimary;
-    font-weight: bold;
 }
 
 QLabel#TitleLabel {
@@ -1415,10 +1378,6 @@ TextEditListScrollArea {
     border-left: 0px;
     border-right: 0px;
     border-bottom: 0px;
-}
-
-PresetListWidget {
-    min-height: 280px;
 }
 
 ClickableLabel#PrevMatchBtn {
@@ -1637,7 +1596,6 @@ SmallParamLabel {
 SmallComboBox {
     height: 20px;
     font-size: 12px;
-    /* padding-left: 8px; */
     background: @inputBackgroundColor;
     border: 1px solid @borderColor;
     border-radius: 4px;
@@ -1647,25 +1605,16 @@ SmallComboBox:focus {
     border: 1px solid @accentPrimary;
 }
 
-SmallConfigPutton {
-    height: 20px;
-    width: 20px;
-    border: none;
-    border-width: 0px;
-    background-color: rgba(0, 0, 0, 0);
-}
-
 SmallSizeComboBox {
     height: 20px;
     font-size: 12px;
-    /* padding-left: 8px; */
     background: rgba(128,128,128,0.13);
     border: 1px solid rgba(128,128,128,0.25);
     border-radius: 4px;
 }
 
 SmallSizeComboBox:focus {
-    border: 1px solid #5DADE2;
+    border: 1px solid @accentPrimary;
 }
 
 ArrowLeftButton {
@@ -1697,110 +1646,6 @@ DeleteStyleButton::hover {
     border-radius: 6px;
 }
 
-/* ── HelpDialog ─────────────────────────────────────────── */
-
-#HelpDocTabBar {
-    background: transparent;
-    border: none;
-}
-
-HelpDocTab {
-    border: 1px solid transparent;
-    border-radius: 8px;
-    padding: 5px 16px;
-    background: transparent;
-    color: @textColor;
-    font-size: 13px;
-}
-
-HelpDocTab:hover {
-    background: @hoverBackgroundColor;
-    border-color: @borderColor;
-}
-
-HelpDocTab[current="true"] {
-    background: @accentPrimary;
-    color: @inverseTextColor;
-    border-color: @accentPrimary;
-    font-weight: bold;
-}
-
-HelpDocTab[current="true"]:hover {
-    background: @accentPrimary;
-    border-color: @accentPrimary;
-}
-
-#HelpOutlineTree {
-    background: transparent;
-    border: 1px solid @borderColor;
-    border-radius: 8px;
-    color: @textColor;
-    outline: none;
-}
-
-#HelpOutlineTree::item {
-    padding: 3px 6px;
-    border-radius: 4px;
-}
-
-#HelpOutlineTree::item:hover {
-    background: @hoverBackgroundColor;
-}
-
-#HelpOutlineTree::item:selected {
-    background: @accentPrimary20;
-    color: @accentPrimary;
-}
-
-#HelpOutlineTree::branch {
-    background: transparent;
-    image: none;
-    width: 0px;
-}
-
-#HelpSearchInput {
-    border: 1px solid @borderColor;
-    border-radius: 8px;
-    padding: 4px 8px;
-    background: @inputBackgroundColor;
-    color: @textColor;
-    font-size: 13px;
-}
-
-#HelpSearchInput:focus {
-    border-color: @accentPrimary;
-}
-
-#HelpContent {
-    border: 1px solid @borderColor;
-    border-radius: 8px;
-    background: @emptyContentBackgroundColor;
-    color: @textColor;
-    padding: 8px;
-}
-
-#HelpHeader {
-    background: transparent;
-    border: none;
-}
-
-#HelpTitle {
-    font-size: 16px;
-    font-weight: bold;
-    color: @textColor;
-    background: transparent;
-}
-
-#HelpStatusBar {
-    border-top: 1px solid @borderColor;
-    background: transparent;
-}
-
-#HelpStatusLabel, #HelpSearchStatus {
-    font-size: 12px;
-    color: @textColor;
-    background: transparent;
-}
 /* ── Text transform panel (stage 5 node H) ─────────────────── */
 QFrame#TextTransformParameterPanel {
     background: @hoverBackgroundColor;

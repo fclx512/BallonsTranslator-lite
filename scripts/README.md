@@ -36,10 +36,10 @@ python scripts/check_all.py --skip-ruff  # 跳过 ruff
 | 脚本 | 用途 | 运行方式 |
 |---|---|---|
 | `scripts/run_module.py` | CLI 测试文本检测器 | `python scripts/run_module.py run_detector --proj_dir <路径>` |
+| `scripts/pie_menu_test.py` | 环形菜单离线功能测试（状态机/命中判定/命令注册，独立进程沙箱配置） | `python scripts/pie_menu_test.py` |
 | `scripts/svgscript.py` | SVG 图标工具（替换颜色、压缩路径） | `from scripts.svgscript import set_svgcolor, minify_svg` |
 | `scripts/BTjson_to_LPtxt.pyw` | 将 BallonsTranslator JSON 转为 LabelPlus TXT 格式 | 双击（GUI 文件选择） |
 | `scripts/export to photoshop/` | 导出到 Photoshop 的脚本 | 见目录内说明 |
-| `scripts/webengine_memory_test.py` | 测试 QtWebEngine 渲染聊天界面的内存占用 | `python scripts/webengine_memory_test.py` |
 
 ---
 

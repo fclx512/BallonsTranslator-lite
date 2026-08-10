@@ -1,5 +1,5 @@
 import os.path as osp
-from typing import List, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 from qtpy.QtCore import (
     QEasingCurve,
@@ -735,7 +735,6 @@ DEFAULT_SHORTCUTS = {
     "drawboard_mode": ["P"],
     "zoom_in": ["Ctrl++"],
     "zoom_out": ["Ctrl+-"],
-    "preview": ["Tab"],
     "delete_blks": ["Del"],
     "delete_blks_alt": ["Ctrl+D"],
     "select_all": ["Ctrl+A"],
@@ -774,7 +773,6 @@ _ACTION_NAMES = {
     "drawboard_mode": "Draw Board",
     "zoom_in": "Zoom In",
     "zoom_out": "Zoom Out",
-    "preview": "Preview",
     "delete_blks": "Delete",
     "delete_blks_alt": "Delete (alt)",
     "select_all": "Select All",
@@ -806,7 +804,7 @@ _ACTION_NAMES = {
 # Shortcut groups for organized display
 _SHORTCUT_GROUPS = [
     ("Navigation", ["prev_page", "next_page", "prev_page_alt", "next_page_alt"]),
-    ("View", ["zoom_in", "zoom_out", "preview", "toggle_original_opacity"]),
+    ("View", ["zoom_in", "zoom_out", "toggle_original_opacity"]),
     (
         "Edit",
         [
@@ -853,6 +851,7 @@ class _ShortcutRow(QWidget):
         super().__init__(parent)
         self.action_id = action_id
         self._disabled_placeholder = None
+        self._conflict_keys: set = set()
 
         from .theme_helpers import shortcut_styles
 
@@ -953,9 +952,13 @@ class _ShortcutRow(QWidget):
                 fl = QHBoxLayout(frame)
                 fl.setContentsMargins(8, 1, 4, 1)
                 fl.setSpacing(2)
+                # Conflict keys (bound to another action) render in red
+                is_conflict = k in self._conflict_keys
+                pill_bg = s["conflict_pill_bg"] if is_conflict else s["pill_bg"]
+                pill_text = s["conflict_pill_text"] if is_conflict else s["pill_text"]
                 lbl = QLabel(k)
                 lbl.setStyleSheet(
-                    f"color: {s['pill_text']}; background: transparent; border: none;"
+                    f"color: {pill_text}; background: transparent; border: none;"
                 )
                 fl.addWidget(lbl)
                 close_btn = QPushButton("x")
@@ -971,7 +974,7 @@ class _ShortcutRow(QWidget):
                 )
                 fl.addWidget(close_btn)
                 frame.setStyleSheet(
-                    f"QFrame {{ background: {s['pill_bg']}; border-radius: 4px; }}"
+                    f"QFrame {{ background: {pill_bg}; border-radius: 4px; }}"
                 )
                 self.shortcuts_layout.addWidget(frame)
         else:
@@ -1030,8 +1033,13 @@ class _ShortcutRow(QWidget):
         self._rebuild_pills()
         self.shortcut_changed.emit()
 
-    def refresh(self):
+    def refresh(self, conflict_keys=None):
+        self._conflict_keys = conflict_keys or set()
         self._rebuild_pills()
+
+    def effective_keys(self) -> list:
+        """Current effective keys (user override or default)."""
+        return self._get_keys()
 
 
 class ShortcutEditor(QWidget):
@@ -1064,7 +1072,7 @@ class ShortcutEditor(QWidget):
                     sep.setStyleSheet(f"background: {s['add_bdr']};")
                     group_layout.addWidget(sep)
                 row = _ShortcutRow(action_id)
-                row.shortcut_changed.connect(self.shortcut_changed)
+                row.shortcut_changed.connect(self._on_row_changed)
                 self._rows[action_id] = row
                 group_layout.addWidget(row)
 
@@ -1073,9 +1081,26 @@ class ShortcutEditor(QWidget):
 
         layout.addStretch()
 
-    def refresh(self):
+        self.refresh()
+
+    def _on_row_changed(self):
+        """Recompute conflicts and re-render all rows, then forward signal."""
+        self.refresh()
+        self.shortcut_changed.emit()
+
+    def _compute_conflicts(self) -> set:
+        """Return the set of key sequences bound to more than one action."""
+        mapping: Dict[str, list] = {}
         for row in self._rows.values():
-            row.refresh()
+            for k in row.effective_keys():
+                if k:
+                    mapping.setdefault(k, []).append(row.action_id)
+        return {k for k, owners in mapping.items() if len(owners) > 1}
+
+    def refresh(self):
+        conflicts = self._compute_conflicts()
+        for row in self._rows.values():
+            row.refresh(conflicts)
 
 
 class FontExcludeDialog(QDialog):

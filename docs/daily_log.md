@@ -262,3 +262,21 @@ PS 进程内用 DOM API 创建**。重做为"Python 生成单个自包含 .jsx �
 > **⚠️ 状态：用户已审查，反馈"可见问题较多"（问题清单未提供）。2026-08-09 决定
 > **暂且禁用**（菜单恢复 "Under Repair" 禁用态）并随本次提交入库，修复后再启用。
 > 续作先取评审问题清单逐项修复，确认后启用入口并提交。
+
+---
+
+## 2026-08-10
+
+### 环形菜单前置：旧样式清理（阶段 0）+ 删 preview 与快捷键冲突校验（阶段 1）
+
+**问题/需求：** 画布右键菜单交互不便（高频功能需两次点击+定位），规划 Blender 风格环形菜单（按 Tab 呼出、鼠标方向选择、松开触发，8 扇区 × 径向分层，短按 pin / 长按 release-commit）。正式动工前按用户要求先完成两阶段前置：清理遗留旧样式/无用代码；删除 preview 释放 Tab 并新增快捷键冲突校验。完整方案在 `docs/技术实现/环形菜单_实施方案.md`，阶段 2 起由新 agent 接手。
+
+**改动要点：**
+
+- 阶段 0 清理：stylesheet.css 删 5 块无对应控件的孤立规则（HelpDoc 系列约 100 行/IncrementalBtn/PresetListWidget/MenuSectionLabel/SmallConfigPutton）+ 6 处注释死规则 + 3 处调试色改主题变量（royalblue/#5DADE2→`@accentPrimary`）；删除 6 个未引用图标（`eye`/`image`/`text` 各 2 变体）；删除 `utils/text_normalize_test.py`、`scripts/webengine_memory_test.py`（同步 `scripts/README.md`、`manifest.json` 条目）；清理 10 处无 TODO 注释掉的 Python 代码块（canvas/module_manager/scene_textlayout/drawingpanel/fontformat_commands/scrollbar）。
+- 阶段 1：删除 preview 功能（configpanel 三处定义、mainwindow `shortcut_registry["preview"]` 注册与 `shortcutPreview` 槽、canvas `previewLabel`/`previewLayer`/`preview_mode` 初始化与 viewport 橙色边框、`toggle_preview`/`_enter_preview`/`_exit_preview`、`_layout_status_labels` 简化、stylesheet `#PreviewLabel`、ts 的 Preview+PREVIEW 条目），qm 重编译 1128 条，**Tab 键已释放**。
+- 阶段 1：快捷键冲突校验——`ShortcutEditor._compute_conflicts()` 汇总全部动作生效键集（`pcfg.shortcuts` 优先，否则 `DEFAULT_SHORTCUTS`）找重复键；`_ShortcutRow` 冲突键渲染红色 pill（theme_helpers 深/浅主题新增 `conflict_pill_bg`/`conflict_pill_text`）；构造时 + 每次编辑后（`_on_row_changed`）刷新。
+
+**排障记录：** PyQt6 在创建 QApplication 之前实例化 QWidget 会直接 abort（无 Python traceback、Git Bash 下 exit 127，易误判为命令缺失）；调研报告的图标清理清单有大量子串误报（`textdetect`/`edit_activate`/`text`/`image` 等实为有引用），删除文件前必须用完整文件名精确 grep 复核。
+
+**涉及文件：** `config/stylesheet.css`、`ui/theme_helpers.py`、`ui/configpanel.py`、`ui/mainwindow.py`、`ui/canvas.py`、`ui/module_manager.py`、`ui/scene_textlayout.py`、`ui/drawingpanel.py`、`ui/fontformat_commands.py`、`ui/custom_widget/scrollbar.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`manifest.json`、`scripts/README.md`、`icons/`（删 6 个 svg）、`utils/text_normalize_test.py`（删）、`scripts/webengine_memory_test.py`（删）、`docs/技术实现/环形菜单_实施方案.md`（新增）

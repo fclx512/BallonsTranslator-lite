@@ -379,9 +379,6 @@ class DrawingPanel(Widget):
             Qt.PenJoinStyle.RoundJoin,
         )
 
-        # self.setPenToolWidth(10)
-        # self.setPenToolColor([0, 0, 0, 127])
-
         self.toolConfigStackwidget = QStackedWidget()
         self.toolConfigStackwidget.setSizePolicy(
             QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Minimum

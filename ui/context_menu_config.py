@@ -60,12 +60,22 @@ class CmdDef:
 
     ``build_fn(menu, canvas)`` must add the relevant ``QAction``(s) to
     *menu* and connect their ``triggered`` signals.
+
+    ``run_fn(canvas)`` (optional) executes the command directly without
+    building a QMenu — used by the pie menu (:func:`run_cmd`).
+    ``enabled_fn(canvas)`` (optional) reports whether the command can run
+    right now (pie menu gray-out / unselectable).
+    ``icon`` (optional) is the filename of an SVG in ``icons/`` shown next
+    to the label in the pie menu.
     """
 
     id: str
     label_key: str = ""
     build_fn: Optional[Callable] = None
     hidden_in_customize: bool = False  # submenu leaf items
+    run_fn: Optional[Callable] = None
+    enabled_fn: Optional[Callable] = None
+    icon: str = ""
 
 
 # ── Registry ────────────────────────────────────────────────
@@ -162,48 +172,96 @@ def _build_behavior(menu: QMenu, canvas):
 
 # ── Register all built-in commands ──────────────────────────
 
+def _selected_count(canvas) -> int:
+    return len(canvas.selected_text_items())
+
+
 # --- Basic editing ---
 _reg(CmdDef("copy", "Copy",
     build_fn=lambda m, c: _act(m, c, "Copy",
         shortcut=QKeySequence.StandardKey.Copy,
-        connect=c.on_copy)))
+        connect=c.on_copy),
+    run_fn=lambda c: c.on_copy(),
+    enabled_fn=lambda c: c.have_selected_blkitem))
 
 _reg(CmdDef("paste", "Paste",
     build_fn=lambda m, c: _act(m, c, "Paste",
         shortcut=QKeySequence.StandardKey.Paste,
-        connect=c.on_paste)))
+        connect=c.on_paste),
+    run_fn=lambda c: c.on_paste()))
 
 _reg(CmdDef("delete", "Delete",
     build_fn=lambda m, c: _act(m, c, "Delete",
         shortcut=QKeySequence("Ctrl+D"),
-        connect=lambda: c.delete_textblks.emit(0))))
+        connect=lambda: c.delete_textblks.emit(0)),
+    run_fn=lambda c: c.delete_textblks.emit(0),
+    enabled_fn=lambda c: c.have_selected_blkitem,
+    icon="chrome-close.svg"))
 
 _reg(CmdDef("copy_src", "Copy source text",
     build_fn=lambda m, c: _act(m, c, "Copy source text",
         shortcut=QKeySequence("Ctrl+Shift+C"),
-        connect=c.copy_src_signal.emit)))
+        connect=c.copy_src_signal.emit),
+    run_fn=lambda c: c.copy_src_signal.emit()))
 
 _reg(CmdDef("paste_src", "Paste source text",
     build_fn=lambda m, c: _act(m, c, "Paste source text",
         shortcut=QKeySequence("Ctrl+Shift+V"),
-        connect=c.paste_src_signal.emit)))
+        connect=c.paste_src_signal.emit),
+    run_fn=lambda c: c.paste_src_signal.emit()))
 
 # --- Text manipulation ---
 _reg(CmdDef("reset_angle", "Reset Angle",
     build_fn=lambda m, c: _act(m, c, "Reset Angle",
-        connect=lambda: c.reset_angle.emit())))
+        connect=lambda: c.reset_angle.emit()),
+    run_fn=lambda c: c.reset_angle.emit(),
+    enabled_fn=lambda c: c.have_selected_blkitem))
 
 _reg(CmdDef("squeeze", "Squeeze",
     build_fn=lambda m, c: _act(m, c, "Squeeze",
-        connect=lambda: c.squeeze_blk.emit())))
+        connect=lambda: c.squeeze_blk.emit()),
+    run_fn=lambda c: c.squeeze_blk.emit(),
+    enabled_fn=lambda c: c.have_selected_blkitem))
 
 # --- Align submenu ---
 _reg(CmdDef("align", "Align",
     build_fn=_build_align))
 
+# --- Align direction leaves (pie menu direct commands) -------
+# Single-direction actions usable by the pie menu; hidden from the
+# customize dialog (the right-click "Align" submenu remains the entry
+# point there).
+_ALIGN_DIRECTIONS = [
+    ("align_left", "Align Left Edges", "left", "fontfmt_alignl.svg"),
+    ("align_right", "Align Right Edges", "right", "fontfmt_alignr.svg"),
+    ("align_top", "Align Top Edges", "top", ""),
+    ("align_bottom", "Align Bottom Edges", "bottom", ""),
+    ("align_hcenter", "Align Horizontal Centers", "hcenter", "fontfmt_alignc.svg"),
+    ("align_vcenter", "Align Vertical Centers", "vcenter", ""),
+]
+
+for _cid, _label, _op, _icon in _ALIGN_DIRECTIONS:
+
+    def _align_cmd(cid, label, op, icon):
+        def _build(m, c):
+            _act(m, c, label, enabled=_selected_count(c) >= 2,
+                 connect=lambda: c.align_textblks.emit(op))
+
+        def _run(c):
+            c.align_textblks.emit(op)
+
+        return CmdDef(cid, label, build_fn=_build, hidden_in_customize=True,
+                      run_fn=_run,
+                      enabled_fn=lambda c: _selected_count(c) >= 2,
+                      icon=icon)
+
+    _reg(_align_cmd(_cid, _label, _op, _icon))
+
 # --- Merge action (single click, respects global direction) ---
 _reg(CmdDef("merge", "Merge",
-    build_fn=_build_merge))
+    build_fn=_build_merge,
+    run_fn=lambda c: c.merge_textblks.emit(),
+    enabled_fn=lambda c: _selected_count(c) >= 2))
 
 # --- Behavior submenu (snap alignment + merge direction) ---
 _reg(CmdDef("behavior", "Behavior",
@@ -212,19 +270,26 @@ _reg(CmdDef("behavior", "Behavior",
 # --- Pipeline actions ---
 _reg(CmdDef("translate", "translate",
     build_fn=lambda m, c: _act(m, c, "translate",
-        connect=lambda: c.run_blktrans.emit(-1))))
+        connect=lambda: c.run_blktrans.emit(-1)),
+    run_fn=lambda c: c.run_blktrans.emit(-1),
+    icon="bottombar_translate.svg"))
 
 _reg(CmdDef("ocr", "OCR",
     build_fn=lambda m, c: _act(m, c, "OCR",
-        connect=lambda: c.run_blktrans.emit(0))))
+        connect=lambda: c.run_blktrans.emit(0)),
+    run_fn=lambda c: c.run_blktrans.emit(0),
+    icon="bottombar_ocr.svg"))
 
 _reg(CmdDef("ocr_translate", "OCR and translate",
     build_fn=lambda m, c: _act(m, c, "OCR and translate",
-        connect=lambda: c.run_blktrans.emit(1))))
+        connect=lambda: c.run_blktrans.emit(1)),
+    run_fn=lambda c: c.run_blktrans.emit(1),
+    icon="bottombar_ocr.svg"))
 
 _reg(CmdDef("ocr_translate_inpaint", "OCR, translate and inpaint",
     build_fn=lambda m, c: _act(m, c, "OCR, translate and inpaint",
-        connect=lambda: c.run_blktrans.emit(2))))
+        connect=lambda: c.run_blktrans.emit(2)),
+    run_fn=lambda c: c.run_blktrans.emit(2)))
 
 
 # ── Menu builder ────────────────────────────────────────────
@@ -310,6 +375,29 @@ def build_context_menu(canvas, pos: QPoint):
             menu.removeAction(actions[-1])
 
     menu.exec_(pos)
+
+
+def run_cmd(canvas, cmd_id: str) -> bool:
+    """Directly execute a context-menu command by id (no QMenu built).
+
+    Used by the pie menu.  Returns False if the command is unknown or has
+    no direct-execution hook (e.g. submenu-only commands like ``align``).
+    """
+    cmd = COMMAND_REGISTRY.get(cmd_id)
+    if cmd is None or cmd.run_fn is None:
+        return False
+    cmd.run_fn(canvas)
+    return True
+
+
+def cmd_enabled(canvas, cmd_id: str) -> bool:
+    """Whether *cmd_id* can run right now (pie-menu gray-out / unselectable)."""
+    cmd = COMMAND_REGISTRY.get(cmd_id)
+    if cmd is None or cmd.run_fn is None:
+        return False
+    if cmd.enabled_fn is None:
+        return True
+    return cmd.enabled_fn(canvas)
 
 
 # ── Customization dialog ────────────────────────────────────
