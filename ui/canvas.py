@@ -686,6 +686,10 @@ class Canvas(QGraphicsScene):
             self.scalefactor_changed.emit()
         self.setSceneRect(self._overflow_scene_rect())
 
+    def fitToWindow(self):
+        """Public alias for :meth:`_fitToWindow` (pie-menu command pool)."""
+        self._fitToWindow()
+
     def _layout_status_labels(self):
         """Unify label sizes and position them dynamically in top-left corner."""
         # Re-adjust to content (text length may vary by i18n)

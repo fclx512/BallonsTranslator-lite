@@ -51,6 +51,12 @@ DEFAULT_ORDER: List[str] = [
 
 SEPARATOR_SENTINEL = "---"
 
+# ── Command categories (pie-menu palette grouping) ──────────
+CAT_BASIC = "basic"        # copy / paste / delete / undo / redo ...
+CAT_TEXT = "text"          # reset_angle / squeeze / align directions
+CAT_PIPELINE = "pipeline"  # translate / ocr / ocr_translate ...
+CAT_VIEW = "view"          # fit to window / zoom / page navigation
+
 
 # ── Command definition ──────────────────────────────────────
 
@@ -61,10 +67,14 @@ class CmdDef:
     ``build_fn(menu, canvas)`` must add the relevant ``QAction``(s) to
     *menu* and connect their ``triggered`` signals.
 
-    ``run_fn(canvas)`` (optional) executes the command directly without
-    building a QMenu — used by the pie menu (:func:`run_cmd`).
-    ``enabled_fn(canvas)`` (optional) reports whether the command can run
+    ``run_fn(mw)`` (optional) executes the command directly without
+    building a QMenu — used by the pie menu (:func:`run_cmd`); receives the
+    ``MainWindow`` so canvas-level (``mw.canvas``) and window-level
+    (page navigation) commands share one signature.
+    ``enabled_fn(mw)`` (optional) reports whether the command can run
     right now (pie menu gray-out / unselectable).
+    ``category`` groups the command in the pie-menu palette (one of the
+    ``CAT_*`` constants; empty = not shown in the palette).
     """
 
     id: str
@@ -73,6 +83,7 @@ class CmdDef:
     hidden_in_customize: bool = False  # submenu leaf items
     run_fn: Optional[Callable] = None
     enabled_fn: Optional[Callable] = None
+    category: str = ""
 
 
 # ── Registry ────────────────────────────────────────────────
@@ -178,46 +189,53 @@ _reg(CmdDef("copy", "Copy",
     build_fn=lambda m, c: _act(m, c, "Copy",
         shortcut=QKeySequence.StandardKey.Copy,
         connect=c.on_copy),
-    run_fn=lambda c: c.on_copy(),
-    enabled_fn=lambda c: c.have_selected_blkitem))
+    run_fn=lambda mw: mw.canvas.on_copy(),
+    enabled_fn=lambda mw: mw.canvas.have_selected_blkitem,
+    category=CAT_BASIC))
 
 _reg(CmdDef("paste", "Paste",
     build_fn=lambda m, c: _act(m, c, "Paste",
         shortcut=QKeySequence.StandardKey.Paste,
         connect=c.on_paste),
-    run_fn=lambda c: c.on_paste()))
+    run_fn=lambda mw: mw.canvas.on_paste(),
+    category=CAT_BASIC))
 
 _reg(CmdDef("delete", "Delete",
     build_fn=lambda m, c: _act(m, c, "Delete",
         shortcut=QKeySequence("Ctrl+D"),
         connect=lambda: c.delete_textblks.emit(0)),
-    run_fn=lambda c: c.delete_textblks.emit(0),
-    enabled_fn=lambda c: c.have_selected_blkitem))
+    run_fn=lambda mw: mw.canvas.delete_textblks.emit(0),
+    enabled_fn=lambda mw: mw.canvas.have_selected_blkitem,
+    category=CAT_BASIC))
 
 _reg(CmdDef("copy_src", "Copy source text",
     build_fn=lambda m, c: _act(m, c, "Copy source text",
         shortcut=QKeySequence("Ctrl+Shift+C"),
         connect=c.copy_src_signal.emit),
-    run_fn=lambda c: c.copy_src_signal.emit()))
+    run_fn=lambda mw: mw.canvas.copy_src_signal.emit(),
+    category=CAT_BASIC))
 
 _reg(CmdDef("paste_src", "Paste source text",
     build_fn=lambda m, c: _act(m, c, "Paste source text",
         shortcut=QKeySequence("Ctrl+Shift+V"),
         connect=c.paste_src_signal.emit),
-    run_fn=lambda c: c.paste_src_signal.emit()))
+    run_fn=lambda mw: mw.canvas.paste_src_signal.emit(),
+    category=CAT_BASIC))
 
 # --- Text manipulation ---
 _reg(CmdDef("reset_angle", "Reset Angle",
     build_fn=lambda m, c: _act(m, c, "Reset Angle",
         connect=lambda: c.reset_angle.emit()),
-    run_fn=lambda c: c.reset_angle.emit(),
-    enabled_fn=lambda c: c.have_selected_blkitem))
+    run_fn=lambda mw: mw.canvas.reset_angle.emit(),
+    enabled_fn=lambda mw: mw.canvas.have_selected_blkitem,
+    category=CAT_TEXT))
 
 _reg(CmdDef("squeeze", "Squeeze",
     build_fn=lambda m, c: _act(m, c, "Squeeze",
         connect=lambda: c.squeeze_blk.emit()),
-    run_fn=lambda c: c.squeeze_blk.emit(),
-    enabled_fn=lambda c: c.have_selected_blkitem))
+    run_fn=lambda mw: mw.canvas.squeeze_blk.emit(),
+    enabled_fn=lambda mw: mw.canvas.have_selected_blkitem,
+    category=CAT_TEXT))
 
 # --- Align submenu ---
 _reg(CmdDef("align", "Align",
@@ -243,20 +261,21 @@ for _cid, _label, _op in _ALIGN_DIRECTIONS:
             _act(m, c, label, enabled=_selected_count(c) >= 2,
                  connect=lambda: c.align_textblks.emit(op))
 
-        def _run(c):
-            c.align_textblks.emit(op)
+        def _run(mw):
+            mw.canvas.align_textblks.emit(op)
 
         return CmdDef(cid, label, build_fn=_build, hidden_in_customize=True,
-                      run_fn=_run,
-                      enabled_fn=lambda c: _selected_count(c) >= 2)
+                      run_fn=_run, category=CAT_TEXT,
+                      enabled_fn=lambda mw: _selected_count(mw.canvas) >= 2)
 
     _reg(_align_cmd(_cid, _label, _op))
 
 # --- Merge action (single click, respects global direction) ---
 _reg(CmdDef("merge", "Merge",
     build_fn=_build_merge,
-    run_fn=lambda c: c.merge_textblks.emit(),
-    enabled_fn=lambda c: _selected_count(c) >= 2))
+    run_fn=lambda mw: mw.canvas.merge_textblks.emit(),
+    enabled_fn=lambda mw: _selected_count(mw.canvas) >= 2,
+    category=CAT_TEXT))
 
 # --- Behavior submenu (snap alignment + merge direction) ---
 _reg(CmdDef("behavior", "Behavior",
@@ -266,22 +285,83 @@ _reg(CmdDef("behavior", "Behavior",
 _reg(CmdDef("translate", "translate",
     build_fn=lambda m, c: _act(m, c, "translate",
         connect=lambda: c.run_blktrans.emit(-1)),
-    run_fn=lambda c: c.run_blktrans.emit(-1)))
+    run_fn=lambda mw: mw.canvas.run_blktrans.emit(-1),
+    category=CAT_PIPELINE))
 
 _reg(CmdDef("ocr", "OCR",
     build_fn=lambda m, c: _act(m, c, "OCR",
         connect=lambda: c.run_blktrans.emit(0)),
-    run_fn=lambda c: c.run_blktrans.emit(0)))
+    run_fn=lambda mw: mw.canvas.run_blktrans.emit(0),
+    category=CAT_PIPELINE))
 
 _reg(CmdDef("ocr_translate", "OCR and translate",
     build_fn=lambda m, c: _act(m, c, "OCR and translate",
         connect=lambda: c.run_blktrans.emit(1)),
-    run_fn=lambda c: c.run_blktrans.emit(1)))
+    run_fn=lambda mw: mw.canvas.run_blktrans.emit(1),
+    category=CAT_PIPELINE))
 
 _reg(CmdDef("ocr_translate_inpaint", "OCR, translate and inpaint",
     build_fn=lambda m, c: _act(m, c, "OCR, translate and inpaint",
         connect=lambda: c.run_blktrans.emit(2)),
-    run_fn=lambda c: c.run_blktrans.emit(2)))
+    run_fn=lambda mw: mw.canvas.run_blktrans.emit(2),
+    category=CAT_PIPELINE))
+
+# --- Undo / Redo (pie-menu palette only) ---
+def _undo_enabled(mw) -> bool:
+    c = mw.canvas
+    if c.textEditMode():
+        return c.text_undo_stack.canUndo()
+    if c.drawMode():
+        return c.draw_undo_stack.canUndo()
+    return False
+
+
+def _redo_enabled(mw) -> bool:
+    c = mw.canvas
+    if c.textEditMode():
+        return c.text_undo_stack.canRedo()
+    if c.drawMode():
+        return c.draw_undo_stack.canRedo()
+    return False
+
+
+_reg(CmdDef("undo", "Undo",
+    run_fn=lambda mw: mw.canvas.undo(),
+    enabled_fn=_undo_enabled,
+    hidden_in_customize=True,
+    category=CAT_BASIC))
+
+_reg(CmdDef("redo", "Redo",
+    run_fn=lambda mw: mw.canvas.redo(),
+    enabled_fn=_redo_enabled,
+    hidden_in_customize=True,
+    category=CAT_BASIC))
+
+# --- View actions (pie-menu palette only) ---
+_reg(CmdDef("fit_window", "Fit to Window",
+    run_fn=lambda mw: mw.canvas.fitToWindow(),
+    hidden_in_customize=True,
+    category=CAT_VIEW))
+
+_reg(CmdDef("zoom_in", "Zoom In",
+    run_fn=lambda mw: mw.canvas.scaleUp(),
+    hidden_in_customize=True,
+    category=CAT_VIEW))
+
+_reg(CmdDef("zoom_out", "Zoom Out",
+    run_fn=lambda mw: mw.canvas.scaleDown(),
+    hidden_in_customize=True,
+    category=CAT_VIEW))
+
+_reg(CmdDef("prev_page", "Previous Page",
+    run_fn=lambda mw: mw.shortcutBefore(),
+    hidden_in_customize=True,
+    category=CAT_VIEW))
+
+_reg(CmdDef("next_page", "Next Page",
+    run_fn=lambda mw: mw.shortcutNext(),
+    hidden_in_customize=True,
+    category=CAT_VIEW))
 
 
 # ── Menu builder ────────────────────────────────────────────
@@ -369,27 +449,28 @@ def build_context_menu(canvas, pos: QPoint):
     menu.exec_(pos)
 
 
-def run_cmd(canvas, cmd_id: str) -> bool:
+def run_cmd(mw, cmd_id: str) -> bool:
     """Directly execute a context-menu command by id (no QMenu built).
 
-    Used by the pie menu.  Returns False if the command is unknown or has
-    no direct-execution hook (e.g. submenu-only commands like ``align``).
+    Used by the pie menu.  *mw* is the ``MainWindow`` (commands reach the
+    canvas via ``mw.canvas``).  Returns False if the command is unknown or
+    has no direct-execution hook (e.g. submenu-only commands like ``align``).
     """
     cmd = COMMAND_REGISTRY.get(cmd_id)
     if cmd is None or cmd.run_fn is None:
         return False
-    cmd.run_fn(canvas)
+    cmd.run_fn(mw)
     return True
 
 
-def cmd_enabled(canvas, cmd_id: str) -> bool:
+def cmd_enabled(mw, cmd_id: str) -> bool:
     """Whether *cmd_id* can run right now (pie-menu gray-out / unselectable)."""
     cmd = COMMAND_REGISTRY.get(cmd_id)
     if cmd is None or cmd.run_fn is None:
         return False
     if cmd.enabled_fn is None:
         return True
-    return cmd.enabled_fn(canvas)
+    return cmd.enabled_fn(mw)
 
 
 # ── Customization dialog ────────────────────────────────────

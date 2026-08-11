@@ -19,23 +19,16 @@ from qtpy.QtGui import QFont, QPixmap
 from qtpy.QtWidgets import QApplication
 
 from utils import shared
-from utils.config import load_config, pcfg
+from utils.config import DEFAULT_PIE_MENUS, load_config, pcfg
 
 _TMP_CFG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_pie_preview_config.json")
 shared.CONFIG_PATH = _TMP_CFG
 if os.path.exists(_TMP_CFG):
     os.remove(_TMP_CFG)
 load_config(_TMP_CFG)
-pcfg.pie_sectors = [
-    ["ocr_translate"],
-    ["ocr"],
-    ["copy"],
-    ["paste"],
-    ["delete"],
-    ["merge"],
-    ["align_left", "align_right", "align_hcenter"],
-    ["translate"],
-]
+# Preview the default 8-sector "edit" menu (its left sector stacks two
+# cards tangentially, exercising the stacked-card layout).
+pcfg.pie_menus = [DEFAULT_PIE_MENUS[0]]
 
 
 _LABEL_ZH = {
@@ -65,6 +58,7 @@ class MockCanvas(QObject):
     def __init__(self):
         super().__init__()
         self._selected = 2
+        self.canvas = self  # mock also plays the MainWindow role (mw.canvas)
 
     def tr(self, s):
         return _LABEL_ZH.get(s, s)
@@ -85,7 +79,7 @@ def render(dark: bool, path: str):
     from ui.context_menu_config import run_cmd
 
     canvas = MockCanvas()
-    pm = PieMenu(canvas)
+    pm = PieMenu(canvas, mw=canvas)
     pm.command_triggered.connect(lambda cid: run_cmd(canvas, cid))
 
     font = QFont("Microsoft YaHei")
@@ -93,7 +87,7 @@ def render(dark: bool, path: str):
     pm.setFont(font)
 
     pm.start_hold(QPoint(400, 400))
-    # Highlight the middle card of the left fan sector.
+    # Highlight the second card of the stacked left sector.
     pm._update_hover((6, 1))
     pm.update()
     app.processEvents()

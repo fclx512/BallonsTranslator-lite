@@ -52,6 +52,7 @@ from qtpy.QtWidgets import (
 
 from utils.config import export_config, import_config, pcfg
 from utils.message import create_error_dialog, create_info_dialog
+from utils.shortcut_conflicts import find_conflict_keys
 from utils.shared import (
     CONFIG_COMBOBOX_LONG,
     CONFIG_COMBOBOX_MIDEAN,
@@ -1090,12 +1091,9 @@ class ShortcutEditor(QWidget):
 
     def _compute_conflicts(self) -> set:
         """Return the set of key sequences bound to more than one action."""
-        mapping: Dict[str, list] = {}
-        for row in self._rows.values():
-            for k in row.effective_keys():
-                if k:
-                    mapping.setdefault(k, []).append(row.action_id)
-        return {k for k, owners in mapping.items() if len(owners) > 1}
+        return find_conflict_keys({
+            row.action_id: row.effective_keys() for row in self._rows.values()
+        })
 
     def refresh(self):
         conflicts = self._compute_conflicts()
@@ -1908,6 +1906,12 @@ class ConfigPanel(Widget):
         self.shortcuts_editor.shortcut_changed.connect(self._on_shortcuts_edited)
         self._add_page(self.shortcuts_editor)
 
+        # === General: Pie Menus ===
+        # Multi-menu drag-config editor; edits save pcfg.pie_menus live.
+        from .pie_menu_editor import PieMenuEditor
+        self.pie_menus_editor = PieMenuEditor()
+        self._add_page(self.pie_menus_editor)
+
         # === General: Performance ===
         perf_widget = QWidget()
         perf_layout = QVBoxLayout(perf_widget)
@@ -2040,6 +2044,10 @@ class ConfigPanel(Widget):
         self.configTable.addSection(general_header, label_performance, "performance", self.performance_block.section_widget)
         self.configTable.addSection(general_header, label_interface, "interface", self.interface_block.section_widget)
         self.configTable.addSection(general_header, label_shortcuts, "shortcuts", self.shortcuts_editor)
+        label_pie_menus = self.tr("Pie Menus")
+        self.configTable.addSection(
+            general_header, label_pie_menus, "pie_menus", self.pie_menus_editor
+        )
         self.configTable.addSection(
             general_header, label_config_mgmt, "config_mgmt",
             self.config_mgmt_block.section_widget,
@@ -2061,6 +2069,7 @@ class ConfigPanel(Widget):
             "performance": self.performance_block.section_widget,
             "interface": self.interface_block.section_widget,
             "shortcuts": self.shortcuts_editor,
+            "pie_menus": self.pie_menus_editor,
             "config_mgmt": self.config_mgmt_block.section_widget,
         }
 

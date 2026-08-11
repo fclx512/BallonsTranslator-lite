@@ -337,6 +337,41 @@
             <source>Target position (1-%1):</source>
             <translation>目标位置 (1-%1)：</translation>
         </message>
+        <message>
+            <location filename="..\ui\context_menu_config.py" />
+            <source>Undo</source>
+            <translation>撤销</translation>
+        </message>
+        <message>
+            <location filename="..\ui\context_menu_config.py" />
+            <source>Redo</source>
+            <translation>重做</translation>
+        </message>
+        <message>
+            <location filename="..\ui\context_menu_config.py" />
+            <source>Fit to Window</source>
+            <translation>适配窗口</translation>
+        </message>
+        <message>
+            <location filename="..\ui\context_menu_config.py" />
+            <source>Zoom In</source>
+            <translation>放大</translation>
+        </message>
+        <message>
+            <location filename="..\ui\context_menu_config.py" />
+            <source>Zoom Out</source>
+            <translation>缩小</translation>
+        </message>
+        <message>
+            <location filename="..\ui\context_menu_config.py" />
+            <source>Previous Page</source>
+            <translation>上一页</translation>
+        </message>
+        <message>
+            <location filename="..\ui\context_menu_config.py" />
+            <source>Next Page</source>
+            <translation>下一页</translation>
+        </message>
     </context>
     <context>
         <name>CategoryCard</name>
@@ -472,6 +507,11 @@
             <location filename="..\ui\configpanel.py" line="1382" />
             <source>Settings</source>
             <translation>设置</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" />
+            <source>Pie Menus</source>
+            <translation>环形菜单</translation>
         </message>
         <message>
             <location filename="..\ui\configpanel.py" line="1736" />
@@ -2983,6 +3023,79 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <location filename="..\ui\pie_menu.py" line="302" />
             <source>Actions</source>
             <translation>操作</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu.py" />
+            <source>Editing</source>
+            <translation>编辑</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu.py" />
+            <source>Alignment</source>
+            <translation>对齐</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu.py" />
+            <source>Pipeline &amp; View</source>
+            <translation>管线与视图</translation>
+        </message>
+    </context>
+    <context>
+        <name>PieMenuEditor</name>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>New Menu</source>
+            <translation>新建菜单</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Name:</source>
+            <translation>名称：</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Trigger Key:</source>
+            <translation>触发键：</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Sectors:</source>
+            <translation>扇区数：</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Conflict: already in use</source>
+            <translation>冲突：已被占用</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>At most %1 pie menus are supported — one trigger key per menu keeps them memorable.</source>
+            <translation>最多支持 %1 个环形菜单——每菜单一个触发键才便于记忆。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Commands (drag onto the menu; max %1 per sector, right-click a card to remove):</source>
+            <translation>命令（拖拽到上方菜单，每扇区最多 %1 个；右键卡片可移除）：</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Basic Editing</source>
+            <translation>基础编辑</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Text Operations</source>
+            <translation>文本操作</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Pipeline</source>
+            <translation>管线</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>View</source>
+            <translation>视图</translation>
         </message>
     </context>
     <context>

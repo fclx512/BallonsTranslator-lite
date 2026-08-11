@@ -23,16 +23,42 @@ shared.CONFIG_PATH = _TMP_CFG
 if os.path.exists(_TMP_CFG):
     os.remove(_TMP_CFG)
 load_config(_TMP_CFG)
-pcfg.pie_sectors = [
-    ["ocr_translate"], ["ocr"], ["copy"], ["paste"],
-    ["delete"], ["merge"],
-    ["align_left", "align_right", "align_hcenter"],
-    ["translate"],
-]
+_TEST_MENU = {
+    "id": "test",
+    "name": "",
+    "trigger": "Tab",
+    "sectors": 8,
+    "layout": "ring",
+    "slots": [
+        ["ocr_translate"], ["ocr"], ["copy"], ["paste"],
+        ["delete"], ["merge"],
+        ["align_left", "align_right", "align_hcenter"],
+        ["translate"],
+    ],
+}
+pcfg.pie_menus = [_TEST_MENU]
+
+
+class MockUndoStack:
+    """Minimal QUndoStack stand-in for enabled_fn checks."""
+
+    def __init__(self):
+        self.can_undo = False
+        self.can_redo = False
+
+    def canUndo(self):
+        return self.can_undo
+
+    def canRedo(self):
+        return self.can_redo
 
 
 class MockCanvas(QObject):
-    """Minimal canvas stand-in: records direct-execution calls."""
+    """Minimal canvas stand-in: records direct-execution calls.
+
+    Also plays the ``MainWindow`` role: ``run_cmd(mc, ...)`` reaches the
+    canvas-level methods through ``mc.canvas`` (= self).
+    """
 
     delete_textblks = Signal(int)
     merge_textblks = Signal()
@@ -47,11 +73,16 @@ class MockCanvas(QObject):
         super().__init__()
         self.calls = []
         self._selected = 0
+        self._textedit = True
+        self.canvas = self  # mock also plays the MainWindow role (mw.canvas)
         for name in ("delete_textblks", "merge_textblks", "align_textblks",
                      "run_blktrans", "reset_angle", "squeeze_blk",
                      "copy_src_signal", "paste_src_signal"):
             sig = getattr(self, name)
             sig.connect(lambda *a, _n=name: self.calls.append((_n, a)))
+        self.undo_stack = MockUndoStack()
+        self.text_undo_stack = self.undo_stack
+        self.draw_undo_stack = MockUndoStack()
 
     def tr(self, s):
         return s
@@ -68,6 +99,33 @@ class MockCanvas(QObject):
 
     def on_paste(self):
         self.calls.append(("paste", ()))
+
+    def textEditMode(self):
+        return self._textedit
+
+    def drawMode(self):
+        return not self._textedit
+
+    def undo(self):
+        self.calls.append(("undo", ()))
+
+    def redo(self):
+        self.calls.append(("redo", ()))
+
+    def scaleUp(self):
+        self.calls.append(("scaleUp", ()))
+
+    def scaleDown(self):
+        self.calls.append(("scaleDown", ()))
+
+    def fitToWindow(self):
+        self.calls.append(("fitToWindow", ()))
+
+    def shortcutBefore(self):
+        self.calls.append(("shortcutBefore", ()))
+
+    def shortcutNext(self):
+        self.calls.append(("shortcutNext", ()))
 
 
 PASS = []
@@ -93,7 +151,7 @@ def main():
     )
 
     mc = MockCanvas()
-    pm = PieMenu(mc)
+    pm = PieMenu(mc, mw=mc)
     # Mirror the MainWindow wiring: emitted cmd_id -> direct execution.
     pm.command_triggered.connect(lambda cid: run_cmd(mc, cid))
 
@@ -128,6 +186,56 @@ def main():
     run_cmd(mc, "ocr_translate")
     check("run_cmd ocr_translate emits run_blktrans 1",
           ("run_blktrans", (1,)) in mc.calls)
+
+    print("== new palette commands (category + view/undo pool) ==")
+    check("undo/redo/zoom/fit/pages registered",
+          all(cid in COMMAND_REGISTRY for cid in
+              ("undo", "redo", "fit_window", "zoom_in", "zoom_out",
+               "prev_page", "next_page")))
+    check("new commands hidden from context-menu customize",
+          all(COMMAND_REGISTRY[cid].hidden_in_customize for cid in
+              ("undo", "redo", "fit_window", "zoom_in", "zoom_out",
+               "prev_page", "next_page")))
+    check("undo category basic", COMMAND_REGISTRY["undo"].category == "basic")
+    check("fit_window category view", COMMAND_REGISTRY["fit_window"].category == "view")
+    check("translate category pipeline", COMMAND_REGISTRY["translate"].category == "pipeline")
+    check("reset_angle category text", COMMAND_REGISTRY["reset_angle"].category == "text")
+    check("align_left runnable", run_cmd(mc, "align_left"))
+    check("fit_window runnable", run_cmd(mc, "fit_window"))
+    check("prev_page runnable", run_cmd(mc, "prev_page"))
+    check("next_page runnable", run_cmd(mc, "next_page"))
+    mc.calls.clear()
+    run_cmd(mc, "undo")
+    check("run_cmd undo invokes canvas.undo", ("undo", ()) in mc.calls)
+    mc.calls.clear()
+    run_cmd(mc, "redo")
+    check("run_cmd redo invokes canvas.redo", ("redo", ()) in mc.calls)
+    mc.calls.clear()
+    run_cmd(mc, "zoom_in")
+    check("run_cmd zoom_in invokes scaleUp", ("scaleUp", ()) in mc.calls)
+    mc.calls.clear()
+    run_cmd(mc, "zoom_out")
+    check("run_cmd zoom_out invokes scaleDown", ("scaleDown", ()) in mc.calls)
+    mc.calls.clear()
+    run_cmd(mc, "fit_window")
+    check("run_cmd fit_window invokes fitToWindow", ("fitToWindow", ()) in mc.calls)
+    mc.calls.clear()
+    run_cmd(mc, "prev_page")
+    check("run_cmd prev_page invokes shortcutBefore", ("shortcutBefore", ()) in mc.calls)
+    mc.calls.clear()
+    run_cmd(mc, "next_page")
+    check("run_cmd next_page invokes shortcutNext", ("shortcutNext", ()) in mc.calls)
+    # enabled states
+    mc.undo_stack.can_undo = False
+    mc.undo_stack.can_redo = False
+    check("undo disabled when stack empty", not cmd_enabled(mc, "undo"))
+    check("redo disabled when stack empty", not cmd_enabled(mc, "redo"))
+    mc.undo_stack.can_undo = True
+    mc.undo_stack.can_redo = True
+    check("undo enabled when stack ready", cmd_enabled(mc, "undo"))
+    check("redo enabled when stack ready", cmd_enabled(mc, "redo"))
+    check("zoom always enabled", cmd_enabled(mc, "zoom_in"))
+    check("page nav always enabled", cmd_enabled(mc, "next_page"))
 
     print("== hit-test math (floating cards + tangential stack) ==")
 
@@ -173,6 +281,101 @@ def main():
     check("left boundary 292.4 -> sector 6", hit_hi is not None and hit_hi[0] == 6)
     # outside the widget
     check("outside -> None", pm._hit_test(_pt(0, WINDOW_RADIUS + 10)) is None)
+
+    print("== multi-menu + sector-count parameterization ==")
+    from ui.pie_menu import normalize_pie_menu
+    from utils.config import _LEGACY_PIE_SECTORS, DEFAULT_PIE_MENUS, migrate_legacy_pie
+
+    # normalize: sector clamp + per-sector truncation to 3 cards
+    norm = normalize_pie_menu({"sectors": 4, "slots": [["copy", "paste", "delete"],
+                                                       ["x"], [], []]})
+    check("normalize keeps 4 sectors", norm["sectors"] == 4)
+    check("normalize truncates to 3 cards",
+          norm["slots"][0] == ["copy", "paste", "delete"])
+    check("normalize pads empty slots", len(norm["slots"]) == 4)
+    norm_bad = normalize_pie_menu({"sectors": 5})
+    check("normalize clamps invalid sectors to 8", norm_bad["sectors"] == 8)
+    check("default menus all valid",
+          all(normalize_pie_menu(m)["sectors"] in (4, 6, 8)
+              and len(normalize_pie_menu(m)["slots"]) == normalize_pie_menu(m)["sectors"]
+              for m in DEFAULT_PIE_MENUS))
+
+    # 4-sector menu: hit-test at the 4 cardinal angles
+    quad = normalize_pie_menu({"sectors": 4, "slots": [["copy"], ["paste"],
+                                                        ["delete"], ["merge"]]})
+    pm.set_menu_config(quad)
+    check("4-sector top -> (0,0)", pm._hit_test(_pt(0, 130)) == (0, 0))
+    check("4-sector right -> (1,0)", pm._hit_test(_pt(90, 130)) == (1, 0))
+    check("4-sector bottom -> (2,0)", pm._hit_test(_pt(180, 130)) == (2, 0))
+    check("4-sector left -> (3,0)", pm._hit_test(_pt(270, 130)) == (3, 0))
+    hit_diag = pm._hit_test(_pt(45, 130))
+    check("4-sector diagonal arms nearer sector",
+          hit_diag is not None and hit_diag[0] in (0, 1))
+    # switch back to the 8-sector test menu
+    pm.set_menu_config(_TEST_MENU)
+    check("restore 8-sector top", pm._hit_test(_pt(0, 130)) == (0, 0))
+
+    # legacy migration
+    migrated_default = migrate_legacy_pie(_LEGACY_PIE_SECTORS)
+    check("legacy default -> 3 menus", len(migrated_default) == 3)
+    check("legacy default first menu id edit", migrated_default[0]["id"] == "edit")
+    custom = [["copy"], ["paste"], [], [], [], [], [], []]
+    migrated_custom = migrate_legacy_pie(custom)
+    check("legacy custom kept as first menu", migrated_custom[0]["slots"] == custom)
+    check("legacy custom gets 2 extra defaults", len(migrated_custom) == 3)
+
+    print("== config editor: drop geometry + mutation ==")
+    from ui.pie_menu_editor import PieMenuEditor
+
+    editor = PieMenuEditor()
+    editor._menus = [normalize_pie_menu({
+        "id": "e", "name": "", "trigger": "Tab", "sectors": 8,
+        "slots": [["copy"], ["paste"], [], [], ["delete"], [], [], []],
+    })]
+    editor._current = 0
+    editor._refresh_preview()
+    pv = editor.preview
+    check("preview sector_at top", pv.sector_at(_pt(0, 130)) == 0)
+    check("preview sector_at center -> -1",
+          pv.sector_at(QPointF(WINDOW_RADIUS, WINDOW_RADIUS)) == -1)
+    check("drop ok into non-full sector", pv._drop_ok(2, -1))
+    check("drop ok internal reorder of full sector", pv._drop_ok(0, 0))
+    check("insert idx empty sector", pv._drop_insert_index(2, _pt(0, 130)) == 0)
+    editor._on_command_dropped(2, 0, "merge", -1, -1)
+    check("drop add lands in sector 2", editor._menus[0]["slots"][2] == ["merge"])
+    editor._on_command_dropped(1, 1, "copy", 0, 0)
+    check("move reorders across sectors",
+          editor._menus[0]["slots"][1] == ["paste", "copy"])
+    check("move removes source", editor._menus[0]["slots"][0] == [])
+    editor._on_card_remove(1, 0)
+    check("remove card", editor._menus[0]["slots"][1] == ["copy"])
+    # full sector: additions rejected, internal moves allowed
+    editor._menus[0]["slots"][6] = ["a", "b", "c"]
+    editor._refresh_preview()
+    check("drop rejected on full sector", not pv._drop_ok(6, -1))
+    check("internal move ok on full sector", pv._drop_ok(6, 6))
+    # sector-count resize truncates / pads slots
+    editor._on_sectors_changed(0)   # 4 sectors
+    check("sector count resize to 4",
+          editor._menus[0]["sectors"] == 4 and len(editor._menus[0]["slots"]) == 4)
+    # paint smoke: edit-mode guides + drop-target highlight render without crashing
+    pv.set_drop_target(3, rejected=False)
+    check("edit-mode preview paints", not pv.grab().isNull())
+    pv.set_drop_target(6, rejected=True)
+    check("rejected drop-target paints", not pv.grab().isNull())
+    pv.set_drop_target(-1)
+    # trigger conflict pill
+    editor._menus = [normalize_pie_menu({
+        "id": "a", "trigger": "Tab", "sectors": 8, "slots": []}),
+        normalize_pie_menu({
+            "id": "b", "trigger": "Tab", "sectors": 8, "slots": []})]
+    editor._refresh_conflicts()
+    check("conflict pill shown for duplicate trigger",
+          not editor.conflict_label.isHidden())
+    editor._menus[1]["trigger"] = "X"
+    editor._refresh_conflicts()
+    check("conflict pill hidden after unique trigger",
+          editor.conflict_label.isHidden())
 
     print("== state machine ==")
     # short press -> PIN
@@ -270,7 +473,7 @@ def main():
     class FakeMW:
         def __init__(self):
             self.canvas = FakeCanvas()
-            self.pie_menu = PieMenu(self.canvas)
+            self.pie_menu = PieMenu(self.canvas, mw=self)
             self.pie_menu.command_triggered.connect(lambda cid: run_cmd(mc, cid))
             self._canvas_mode = True
             self.cursor_on_canvas = True   # trigger-area gate (review 2026-08-11)
@@ -286,8 +489,8 @@ def main():
 
     def bind(fmw):
         for name in ("_pie_trigger_ready", "_pie_handle_shortcut_override",
-                     "_pie_handle_keypress", "_pie_handle_keyrelease",
-                     "_pie_handle_click_outside"):
+                     "_pie_menu_for_event", "_pie_handle_keypress",
+                     "_pie_handle_keyrelease", "_pie_handle_click_outside"):
             setattr(fmw, name, getattr(mw_mod.MainWindow, name).__get__(fmw))
 
     fmw = FakeMW()
@@ -385,6 +588,28 @@ def main():
     check("Ctrl+Tab override not swallowed",
           fmw._pie_handle_shortcut_override(ev_ov_mod) is False)
 
+    # multi-menu trigger lookup (configurable keys)
+    pcfg.pie_menus = [_TEST_MENU, {
+        "id": "quad", "name": "", "trigger": "X", "sectors": 4, "layout": "ring",
+        "slots": [["copy"], ["paste"], ["delete"], ["merge"]],
+    }]
+    check("trigger lookup finds Tab menu", fmw._pie_menu_for_event(
+        Qt.Key.Key_Tab, Qt.KeyboardModifier.NoModifier) is not None)
+    check("trigger lookup finds X menu", fmw._pie_menu_for_event(
+        Qt.Key.Key_X, Qt.KeyboardModifier.NoModifier) is not None)
+    check("trigger lookup ignores Ctrl+X",
+          fmw._pie_menu_for_event(
+              Qt.Key.Key_X, Qt.KeyboardModifier.ControlModifier) is None)
+    ev_x = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_X,
+                     Qt.KeyboardModifier.NoModifier)
+    check("X opens its own menu", fmw._pie_handle_keypress(ev_x) is True)
+    check("X menu has 4 sectors", fmw.pie_menu._sector_count == 4)
+    check("X menu holding", pm2.is_holding())
+    ev_x_rel = QKeyEvent(QEvent.Type.KeyRelease, Qt.Key.Key_X,
+                         Qt.KeyboardModifier.NoModifier)
+    check("X release handled", fmw._pie_handle_keyrelease(ev_x_rel) is True)
+    pm2.cancel()
+
     # KeyRelease Tab while not holding → not swallowed
     check("KeyRelease passes when not holding",
           fmw._pie_handle_keyrelease(ev_rel) is False)
@@ -402,6 +627,12 @@ def main():
     check("focus in text input", app.focusWidget() is _txt)
     check("Tab in text input swallowed", fmw._pie_handle_keypress(ev_tab) is True)
     check("pie not opened from text input", not pm2.is_open())
+    # a typeable trigger key (X) must pass through text inputs
+    ev_x_txt = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_X,
+                         Qt.KeyboardModifier.NoModifier)
+    check("X in text input passes through",
+          fmw._pie_handle_keypress(ev_x_txt) is False)
+    check("pie not opened from X in text input", not pm2.is_open())
     _win2.close()
 
     # focus NOT inside the main window (e.g. a dialog) → Tab passes through

@@ -189,6 +189,76 @@ class MirrorConfig(Config):
     github_mirror: str = ""
 
 
+# ── Pie menu defaults & legacy migration ────────────────────
+# The pre-2026-08-11 single-menu layout (still present in old config.json
+# files as ``pie_sectors``); used only to decide the migration path.
+_LEGACY_PIE_SECTORS = [
+    ["ocr_translate"],                              # 0 top
+    ["ocr"],                                        # 1 upper-right
+    ["copy"],                                       # 2 right
+    ["paste"],                                      # 3 lower-right
+    ["delete"],                                     # 4 bottom
+    ["merge"],                                      # 5 lower-left
+    ["align_left", "align_right", "align_hcenter"], # 6 left (stacked)
+    ["translate"],                                  # 7 upper-left
+]
+
+# Default menu template: one trigger key per menu, 8 sectors each.
+# Direction-mapped layouts (align "up" on the top sector, page-forward at
+# the bottom ...) so the ring interaction matches the user's intuition.
+DEFAULT_PIE_MENUS = [
+    {
+        "id": "edit",
+        "name": "Editing",
+        "trigger": "Tab",
+        "sectors": 8,
+        "layout": "ring",
+        "slots": [
+            ["copy"], ["paste"], ["delete"], ["merge"],
+            ["undo"], ["redo"],
+            ["reset_angle", "squeeze"],
+            ["copy_src", "paste_src"],
+        ],
+    },
+    {
+        "id": "align",
+        "name": "Alignment",
+        "trigger": "X",
+        "sectors": 8,
+        "layout": "ring",
+        "slots": [
+            ["align_top"], ["align_right"], ["align_vcenter"], ["align_bottom"],
+            ["reset_angle"], ["align_left"], ["align_hcenter"], ["squeeze"],
+        ],
+    },
+    {
+        "id": "pipeline",
+        "name": "Pipeline & View",
+        "trigger": "C",
+        "sectors": 8,
+        "layout": "ring",
+        "slots": [
+            ["ocr_translate"], ["ocr"], ["translate"], ["ocr_translate_inpaint"],
+            ["next_page"], ["prev_page"], ["zoom_out"], ["zoom_in"],
+        ],
+    },
+]
+
+
+def migrate_legacy_pie(legacy: List[List[str]]) -> List[dict]:
+    """Migrate a legacy ``pie_sectors`` value to the ``pie_menus`` model.
+
+    An untouched default becomes the three-menu template; a customized
+    layout is kept as the first ("edit") menu with the two other default
+    menus appended (the user can delete them).
+    """
+    if legacy == _LEGACY_PIE_SECTORS:
+        return copy.deepcopy(DEFAULT_PIE_MENUS)
+    menus = [dict(DEFAULT_PIE_MENUS[0], slots=copy.deepcopy(legacy))]
+    menus += [copy.deepcopy(m) for m in DEFAULT_PIE_MENUS[1:]]
+    return menus
+
+
 @nested_dataclass
 class ProgramConfig(Config):
     module: ModuleConfig = field(default_factory=lambda: ModuleConfig())
@@ -313,19 +383,18 @@ class ProgramConfig(Config):
         "translate", "ocr", "ocr_translate", "ocr_translate_inpaint",
         ])
 
-    # ── Pie menu (canvas ring menu) ─────────────────────────
-    # 8 sectors, each sector holds up to 3 command ids (tangential stack).
+    # ── Pie menus (canvas ring menus) ─────────────────────────
+    # Each menu: {id, name, trigger, sectors, layout, slots}
+    #   id      — stable identifier
+    #   name    — display name (defaults are tr keys; user renames are free text)
+    #   trigger — QKeySequence string; "" = not reachable by key
+    #   sectors — 4 / 6 / 8
+    #   layout  — "ring" (extension point for future layouts)
+    #   slots   — `sectors` lists, each up to SECTOR_MAX_CARDS command ids
     # Command ids reuse COMMAND_REGISTRY (ui/context_menu_config.py).
-    pie_sectors: List[List[str]] = field(default_factory=lambda: [
-        ["ocr_translate"],                              # 0 top
-        ["ocr"],                                        # 1 upper-right
-        ["copy"],                                       # 2 right
-        ["paste"],                                      # 3 lower-right
-        ["delete"],                                     # 4 bottom
-        ["merge"],                                      # 5 lower-left
-        ["align_left", "align_right", "align_hcenter"], # 6 left (stacked)
-        ["translate"],                                  # 7 upper-left
-        ])
+    pie_menus: List[dict] = field(
+        default_factory=lambda: copy.deepcopy(DEFAULT_PIE_MENUS)
+    )
 
     # ── Development / Debug ─────────────────────────────
     context_translation_debug_log: bool = False
@@ -368,6 +437,14 @@ class ProgramConfig(Config):
                 module_cfg["translator"] = "LLM_API_Translator"
             for removed in ("ChatGPT", "Gemini"):
                 trans_params.pop(removed, None)
+
+        # Backward compat: single-menu pie_sectors -> pie_menus
+        if "pie_menus" not in config_dict and "pie_sectors" in config_dict:
+            config_dict["pie_menus"] = migrate_legacy_pie(
+                config_dict.pop("pie_sectors")
+            )
+        elif "pie_sectors" in config_dict:
+            config_dict.pop("pie_sectors")
 
         return ProgramConfig(**config_dict)
 

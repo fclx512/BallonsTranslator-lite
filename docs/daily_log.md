@@ -320,3 +320,20 @@ PS 进程内用 DOM API 创建**。重做为"Python 生成单个自包含 .jsx �
 **排障记录：** i18n_check 只扫 `self.tr("字面量")`，标题必须内联字面量（方案中的 `PIE_MENU_TITLE` 常量经 tr 间接调用会产生 orphan）；预览脚本的 MockCanvas 不加载 qm，标题在预览图中显示英文属预期，实机经 qm 显示"操作"。
 
 **涉及文件：** `ui/pie_menu.py`、`ui/context_menu_config.py`、`utils/config.py`、`scripts/pie_menu_test.py`、`scripts/_pie_preview_dark.png`、`scripts/_pie_preview_light.png`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/技术实现/环形菜单_Blender样式复刻方案.md`、`docs/daily_log.md`
+
+---
+
+### 多菜单可配置环形菜单（阶段 A–D 全部完成）
+
+**问题/需求：** 环形菜单此前只有单一 Tab 触发入口、内容写死（`pcfg.pie_sectors` 无编辑 UI）。目标：建立若干个菜单（每菜单一个触发键）、用户可在设置中拖拽配置功能项；配置页上半实时预览（与真机样式一致）、下半分类命令池，拖拽摆放/堆叠（最高 3 个）。经与用户逐点确认定稿：3 个默认菜单（Tab=编辑 / X=对齐 / C=视图管线）、命令池适度扩池（四类含视图）、环形+扇区数可调（4/6/8）、ConfigPanel 新页面、完工后补设计/交接文档（供未来多模态 AI 修缮 UI）。
+
+**改动要点：**
+
+- **阶段 A 命令池**：`CmdDef` 加 `category`（basic/text/pipeline/view）；新增 6 命令（undo/redo→`mw.canvas.undo()/redo()`、zoom±→`scaleUp/scaleDown`、fit_window→canvas 新公开 `fitToWindow()` 薄封装、prev/next_page→`mw.shortcutBefore/Next`），均 `hidden_in_customize=True` 只进饼菜单池；`run_cmd(canvas,id)`→`run_cmd(mw,id)`，`run_fn/enabled_fn` 统一收 MainWindow（~13 处 lambda 机械改 `mw.canvas.*`），右键菜单 `build_fn` 不动。
+- **阶段 B 数据模型与触发**：`pcfg.pie_menus: List[dict]`（id/name/trigger/sectors/layout/slots）+ `DEFAULT_PIE_MENUS` 三菜单模板 + `migrate_legacy_pie` 迁移（旧默认→新模板；自定义→保留为首菜单+补 2 默认）；`PieMenu` 扇区数参数化（`_card_center`/`_hit_test`/绘制/中心指示器全按 `360/sector_count`）；MainWindow `_pie_menu_for_event` 按键查表 + 文本输入两套规则（Tab 惰性吞保留、字母/组合触发键完全放行照常输入）；冲突校验抽 `utils/shortcut_conflicts.py::find_conflict_keys` 供快捷键面板与触发键共用。
+- **阶段 C 配置页**：`PieMenu` 加 preview 模式（无窗口 flag、hover/点击/右键/拖放、painter scale 统一缩放、编辑态虚线扇区引导 + 拖放目标高亮 + 选中环，渲染零复制）；新增 `ui/pie_menu_editor.py`（菜单 tab 管理 + 触发键 QKeySequenceEdit + 冲突红 pill + 扇区数下拉 + 名称行 + 实时预览 + 分类命令池 QTreeWidget）；拖放 mime `x-pie-cmd`/`x-pie-src`，落点解析复用 `sector_at`/`_drop_insert_index`（切线投影定插入位），满 3 拒收红闪、同扇区重排、拖回池移除、右键移除；上限 4 拦截；注册为 ConfigPanel「环形菜单」页（nav key `pie_menus`）。
+- **阶段 D 文档**：`docs/技术实现/多菜单环形菜单_设计与交接.md`（设计思路/代码索引/视觉常量/数据模型/Qt 坑/待修缮清单）。
+
+**排障记录：** `QPen` 无 `setAlpha`（应设在 QColor，paint 内抛异常会致 grab 硬崩无回溯）；`QDrag` 在 Qt6 属 QtGui；`QTabBar` 无 `clear()`；`self.tr()` 无 `.arg()` 用 `.replace("%1")`；`KeyboardModifier` Flag 枚举 `int()` 不可用需 `.value`；offscreen 实例化 ConfigPanel 验证页面注册/迁移（`pageStack.indexOf` 返回 -1 是 `_add_page` 包裹层所致，非 bug）。
+
+**涉及文件：** `ui/pie_menu.py`、`ui/pie_menu_editor.py`（新增）、`ui/context_menu_config.py`、`ui/mainwindow.py`、`ui/configpanel.py`、`ui/canvas.py`、`utils/config.py`、`utils/shortcut_conflicts.py`（新增）、`scripts/pie_menu_test.py`、`scripts/_pie_preview.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/技术实现/多菜单环形菜单_设计与交接.md`（新增）、`docs/daily_log.md`

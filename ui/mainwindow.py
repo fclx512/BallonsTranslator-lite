@@ -1448,18 +1448,48 @@ class MainWindow(mainwindow_cls):
             return False
         return gv.rect().contains(gv.mapFromGlobal(QCursor.pos()))
 
+    def _pie_menu_for_event(self, key, mods):
+        """Menu config whose trigger key matches (key, mods), or None.
+
+        Both sides are canonicalized through ``QKeySequence`` so the stored
+        string ("Tab", "X", "Ctrl+X", ...) compares equal to the key event.
+        """
+        try:
+            key_int = int(key)
+            # KeyboardModifier is a Flag enum (no int() in PyQt6) — use .value
+            mod_int = int(getattr(mods, "value", mods))
+            seq = QKeySequence(key_int | mod_int).toString(
+                QKeySequence.SequenceFormat.PortableText)
+        except Exception:
+            return None
+        if not seq:
+            return None
+        for menu in (pcfg.pie_menus or []):
+            trigger = menu.get("trigger")
+            if trigger and QKeySequence(trigger).toString(
+                    QKeySequence.SequenceFormat.PortableText) == seq:
+                return menu
+        return None
+
     def _pie_handle_shortcut_override(self, event) -> bool:
-        if (
-            event.key() != QKEY.Key_Tab
-            or event.modifiers() != Qt.KeyboardModifier.NoModifier
-        ):
+        if self._pie_menu_for_event(event.key(), event.modifiers()) is None:
             return False
-        if self.pie_menu.is_open() or (
-            self._pie_trigger_ready() and self._pie_cursor_on_canvas()
-        ):
+        if self.pie_menu.is_open():
             event.accept()
             return True
-        return False
+        if not (self._pie_trigger_ready() and self._pie_cursor_on_canvas()):
+            return False
+        fw = self.app.focusWidget()
+        in_main = fw is self or (fw is not None and self.isAncestorOf(fw))
+        if (
+            fw is not None and _is_text_input(fw) and in_main
+            and event.key() != QKEY.Key_Tab
+        ):
+            # Letter / combo triggers must not hijack text-editing shortcuts
+            # (Ctrl+X cut etc.) — only Tab keeps its inert-swallow behavior.
+            return False
+        event.accept()
+        return True
 
     def _pie_handle_keypress(self, event) -> bool:
         key = event.key()
@@ -1467,18 +1497,19 @@ class MainWindow(mainwindow_cls):
             if key == QKEY.Key_Escape:
                 self.pie_menu.cancel()
                 return True
-            if key == QKEY.Key_Tab:
-                # Swallow every Tab (incl. auto-repeat) while the menu is up:
-                # the first press cancels a pinned menu; repeats must never
-                # reach the focus widget (no focus cycling / tab-char insert
-                # during a long hold).
+            if self._pie_menu_for_event(key, event.modifiers()) is not None:
+                # Swallow every trigger key (incl. auto-repeat) while the
+                # menu is up: the first press cancels a pinned menu; repeats
+                # must never reach the focus widget (no focus cycling /
+                # tab-char insertion / typing during a long hold).
                 if not event.isAutoRepeat():
                     self.pie_menu.cancel()
                 return True
             return False
-        if key != QKEY.Key_Tab or event.isAutoRepeat():
+        if event.isAutoRepeat():
             return False
-        if event.modifiers() != Qt.KeyboardModifier.NoModifier:
+        menu = self._pie_menu_for_event(key, event.modifiers())
+        if menu is None:
             return False
         if not self._pie_trigger_ready():
             return False
@@ -1487,23 +1518,26 @@ class MainWindow(mainwindow_cls):
         if fw is None and self.isActiveWindow():
             in_main = True
         if fw is not None and _is_text_input(fw) and in_main:
-            # Pure text inputs (source / translation fields, search boxes):
-            # Tab must not insert a tab char nor move focus — swallow it.
-            return True
+            # Text inputs: Tab stays inert (no \t / focus jump); letter and
+            # combo triggers pass through so the user can type them.
+            return key == QKEY.Key_Tab
         if not in_main:
-            # Dialogs / other windows keep their own Tab behavior.
+            # Dialogs / other windows keep their own key behavior.
             return False
         if not self._pie_cursor_on_canvas():
-            # Tab outside the canvas keeps its default behavior (focus nav).
+            # Trigger key outside the canvas keeps its default behavior.
             return False
         # QKeyEvent has no cursor position in PyQt6 — use the global cursor.
+        self.pie_menu.set_menu_config(menu)
         self.pie_menu.start_hold(QCursor.pos())
         return True
 
     def _pie_handle_keyrelease(self, event) -> bool:
-        if event.key() != QKEY.Key_Tab or event.isAutoRepeat():
+        if event.isAutoRepeat():
             return False
         if not self.pie_menu.is_holding():
+            return False
+        if self._pie_menu_for_event(event.key(), event.modifiers()) is None:
             return False
         self.pie_menu.release_hold()
         return True
@@ -1644,9 +1678,9 @@ class MainWindow(mainwindow_cls):
         from .pie_menu import PieMenu
         from .context_menu_config import run_cmd
 
-        self.pie_menu = PieMenu(self.canvas, parent=self)
+        self.pie_menu = PieMenu(self.canvas, mw=self, parent=self)
         self.pie_menu.command_triggered.connect(
-            lambda cmd_id: run_cmd(self.canvas, cmd_id)
+            lambda cmd_id: run_cmd(self, cmd_id)
         )
         self.app.installEventFilter(self)
 
