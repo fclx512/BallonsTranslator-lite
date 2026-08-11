@@ -89,7 +89,7 @@ def main():
     from ui.context_menu_config import COMMAND_REGISTRY, cmd_enabled, run_cmd
     from ui.pie_menu import (
         CENTER_RADIUS, DEAD_ZONE_RADIUS, SECTOR_COUNT, SHORT_PRESS_MS,
-        TOTAL_RADIUS, PieMenu,
+        WINDOW_RADIUS, PieMenu,
     )
 
     mc = MockCanvas()
@@ -129,34 +129,50 @@ def main():
     check("run_cmd ocr_translate emits run_blktrans 1",
           ("run_blktrans", (1,)) in mc.calls)
 
-    print("== hit-test math (floating cards + fan) ==")
+    print("== hit-test math (floating cards + tangential stack) ==")
 
     def _pt(cw_deg, r):
         """Widget-local point at clockwise-from-top angle *cw_deg*, radius *r*."""
         from math import cos, radians, sin
         t = radians(cw_deg - 90)
-        return QPointF(TOTAL_RADIUS + r * cos(t), TOTAL_RADIUS + r * sin(t))
+        return QPointF(WINDOW_RADIUS + r * cos(t), WINDOW_RADIUS + r * sin(t))
 
     # center
-    check("center -> None", pm._hit_test(QPointF(TOTAL_RADIUS, TOTAL_RADIUS)) is None)
+    check("center -> None", pm._hit_test(QPointF(WINDOW_RADIUS, WINDOW_RADIUS)) is None)
     # dead zone
     check("dead zone -> None",
-          pm._hit_test(QPointF(TOTAL_RADIUS + 2, TOTAL_RADIUS)) is None)
+          pm._hit_test(QPointF(WINDOW_RADIUS + 2, WINDOW_RADIUS)) is None)
     # single-card sectors: any radius in the annulus at the sector angle
     check("top -> (0,0)", pm._hit_test(_pt(0, 130)) == (0, 0))
     check("upper-right -> (1,0)", pm._hit_test(_pt(45, 130)) == (1, 0))
     check("right -> (2,0)", pm._hit_test(_pt(90, 60)) == (2, 0))
     check("bottom -> (4,0)", pm._hit_test(_pt(180, 130)) == (4, 0))
     check("upper-left -> (7,0)", pm._hit_test(_pt(315, 130)) == (7, 0))
-    # sector boundaries map to a single card (left sector, cw 270 center)
-    check("left boundary 247.5 -> (6,0)", pm._hit_test(_pt(247.6, 130)) == (6, 0))
-    check("left boundary 292.5 -> (6,2)", pm._hit_test(_pt(292.4, 130)) == (6, 2))
-    # align fan: cards fanned at 258 / 270 / 282 (cw from top)
-    check("align fan 258 -> (6,0)", pm._hit_test(_pt(258, 130)) == (6, 0))
-    check("align fan 270 -> (6,1)", pm._hit_test(_pt(270, 130)) == (6, 1))
-    check("align fan 282 -> (6,2)", pm._hit_test(_pt(282, 130)) == (6, 2))
-    # outside the menu
-    check("outside -> None", pm._hit_test(_pt(0, TOTAL_RADIUS + 10)) is None)
+    # left sector (3 stacked cards): each card rect center hits its own card,
+    # and the stacked rects must not overlap each other
+    from qtpy.QtGui import QFontMetrics
+    fm = QFontMetrics(pm.font())
+    for idx in range(3):
+        c = pm._card_rect(6, idx, fm).center()
+        check(f"align stack card {idx} hit", pm._hit_test(c) == (6, idx))
+    rects = [pm._card_rect(6, i, fm) for i in range(3)]
+    check("align stack cards do not overlap",
+          all(not rects[i].intersects(rects[j])
+              for i in range(3) for j in range(i + 1, 3)))
+    # every card stays fully inside the (transparent) widget bounds
+    check("all cards inside widget bounds",
+          all(0 <= r.left() and r.right() <= 2 * WINDOW_RADIUS
+              and 0 <= r.top() and r.bottom() <= 2 * WINDOW_RADIUS
+              for s in range(SECTOR_COUNT)
+              for i in range(len(pm._sector_data[s]))
+              for r in [pm._card_rect(s, i, fm)]))
+    # sector wedge fallback near the boundary arms the nearest card of sector 6
+    hit_lo = pm._hit_test(_pt(247.6, 130))
+    check("left boundary 247.6 -> sector 6", hit_lo is not None and hit_lo[0] == 6)
+    hit_hi = pm._hit_test(_pt(292.4, 130))
+    check("left boundary 292.4 -> sector 6", hit_hi is not None and hit_hi[0] == 6)
+    # outside the widget
+    check("outside -> None", pm._hit_test(_pt(0, WINDOW_RADIUS + 10)) is None)
 
     print("== state machine ==")
     # short press -> PIN
@@ -169,10 +185,10 @@ def main():
     mc._selected = 2
     from qtpy.QtGui import QMouseEvent
     from qtpy.QtCore import QEvent
-    # sector 3 (lower-right) ring 0 = paste; point at dist 58, angle 45°
+    # sector 3 (lower-right) = paste; point at dist 58, cw angle 135°
     off3 = 58 * 2 ** -0.5
     ev = QMouseEvent(QEvent.Type.MouseButtonPress,
-                     QPointF(TOTAL_RADIUS + off3, TOTAL_RADIUS + off3),
+                     QPointF(WINDOW_RADIUS + off3, WINDOW_RADIUS + off3),
                      QPointF(500, 400), Qt.MouseButton.LeftButton,
                      Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     mc.calls.clear()
@@ -185,7 +201,7 @@ def main():
     pm.release_hold()
     check("pin again", pm.is_open() and not pm.is_holding())
     ev_center = QMouseEvent(QEvent.Type.MouseButtonPress,
-                            QPointF(TOTAL_RADIUS, TOTAL_RADIUS),
+                            QPointF(WINDOW_RADIUS, WINDOW_RADIUS),
                             QPointF(400, 400), Qt.MouseButton.LeftButton,
                             Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
     mc.calls.clear()
@@ -197,7 +213,7 @@ def main():
     pm.start_hold(QPoint(400, 400))
     pm.release_hold()
     ev_r = QMouseEvent(QEvent.Type.MouseButtonPress,
-                       QPointF(TOTAL_RADIUS + 80, TOTAL_RADIUS + 80),
+                       QPointF(WINDOW_RADIUS + 80, WINDOW_RADIUS + 80),
                        QPointF(480, 480), Qt.MouseButton.RightButton,
                        Qt.MouseButton.RightButton, Qt.KeyboardModifier.NoModifier)
     pm.mousePressEvent(ev_r)
@@ -257,6 +273,10 @@ def main():
             self.pie_menu = PieMenu(self.canvas)
             self.pie_menu.command_triggered.connect(lambda cid: run_cmd(mc, cid))
             self._canvas_mode = True
+            self.cursor_on_canvas = True   # trigger-area gate (review 2026-08-11)
+
+        def _pie_cursor_on_canvas(self):
+            return self.cursor_on_canvas
 
         def _is_canvas_mode(self):
             return self._canvas_mode
@@ -324,6 +344,30 @@ def main():
     check("pie reopened", pm2.is_open())
     check("Tab-again cancels", fmw._pie_handle_keypress(ev_tab) is True)
     check("pie closed after Tab-again", not pm2.is_open())
+
+    # auto-repeat Tab while open → swallowed, menu kept (no focus cycling /
+    # tab-char insertion during a long hold — the leak fix)
+    pm2.start_hold(QPoint(300, 300))
+    ev_tab_rep = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Tab,
+                           Qt.KeyboardModifier.NoModifier, "\t", True)
+    check("auto-repeat Tab swallowed while open",
+          fmw._pie_handle_keypress(ev_tab_rep) is True)
+    check("pie still open after auto-repeat", pm2.is_open())
+    check("Tab-again cancels", fmw._pie_handle_keypress(ev_tab) is True)
+    check("pie closed after Tab-again", not pm2.is_open())
+
+    # trigger-area gate: cursor off the canvas → Tab passes through, no pie
+    fmw.cursor_on_canvas = False
+    check("Tab passes through off-canvas", fmw._pie_handle_keypress(ev_tab) is False)
+    check("pie not opened off-canvas", not pm2.is_open())
+    ev_ov_off = QKeyEvent(QEvent.Type.ShortcutOverride, Qt.Key.Key_Tab,
+                          Qt.KeyboardModifier.NoModifier)
+    check("ShortcutOverride not swallowed off-canvas",
+          fmw._pie_handle_shortcut_override(ev_ov_off) is False)
+    fmw.cursor_on_canvas = True
+    check("Tab opens pie again on-canvas", fmw._pie_handle_keypress(ev_tab) is True)
+    check("pie holding again", pm2.is_holding())
+    pm2.cancel()
 
     # bare Tab when not ready → not swallowed
     fmw.canvas._textedit = False

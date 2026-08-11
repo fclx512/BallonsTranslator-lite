@@ -2978,6 +2978,14 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
         </message>
     </context>
     <context>
+        <name>PieMenu</name>
+        <message>
+            <location filename="..\ui\pie_menu.py" line="302" />
+            <source>Actions</source>
+            <translation>操作</translation>
+        </message>
+    </context>
+    <context>
         <name>PageListView</name>
         <message>
             <location filename="..\ui\mainwindow.py" line="102" />

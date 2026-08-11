@@ -65,8 +65,6 @@ class CmdDef:
     building a QMenu — used by the pie menu (:func:`run_cmd`).
     ``enabled_fn(canvas)`` (optional) reports whether the command can run
     right now (pie menu gray-out / unselectable).
-    ``icon`` (optional) is the filename of an SVG in ``icons/`` shown next
-    to the label in the pie menu.
     """
 
     id: str
@@ -75,7 +73,6 @@ class CmdDef:
     hidden_in_customize: bool = False  # submenu leaf items
     run_fn: Optional[Callable] = None
     enabled_fn: Optional[Callable] = None
-    icon: str = ""
 
 
 # ── Registry ────────────────────────────────────────────────
@@ -195,8 +192,7 @@ _reg(CmdDef("delete", "Delete",
         shortcut=QKeySequence("Ctrl+D"),
         connect=lambda: c.delete_textblks.emit(0)),
     run_fn=lambda c: c.delete_textblks.emit(0),
-    enabled_fn=lambda c: c.have_selected_blkitem,
-    icon="chrome-close.svg"))
+    enabled_fn=lambda c: c.have_selected_blkitem))
 
 _reg(CmdDef("copy_src", "Copy source text",
     build_fn=lambda m, c: _act(m, c, "Copy source text",
@@ -232,17 +228,17 @@ _reg(CmdDef("align", "Align",
 # customize dialog (the right-click "Align" submenu remains the entry
 # point there).
 _ALIGN_DIRECTIONS = [
-    ("align_left", "Align Left Edges", "left", "fontfmt_alignl.svg"),
-    ("align_right", "Align Right Edges", "right", "fontfmt_alignr.svg"),
-    ("align_top", "Align Top Edges", "top", ""),
-    ("align_bottom", "Align Bottom Edges", "bottom", ""),
-    ("align_hcenter", "Align Horizontal Centers", "hcenter", "fontfmt_alignc.svg"),
-    ("align_vcenter", "Align Vertical Centers", "vcenter", ""),
+    ("align_left", "Align Left Edges", "left"),
+    ("align_right", "Align Right Edges", "right"),
+    ("align_top", "Align Top Edges", "top"),
+    ("align_bottom", "Align Bottom Edges", "bottom"),
+    ("align_hcenter", "Align Horizontal Centers", "hcenter"),
+    ("align_vcenter", "Align Vertical Centers", "vcenter"),
 ]
 
-for _cid, _label, _op, _icon in _ALIGN_DIRECTIONS:
+for _cid, _label, _op in _ALIGN_DIRECTIONS:
 
-    def _align_cmd(cid, label, op, icon):
+    def _align_cmd(cid, label, op):
         def _build(m, c):
             _act(m, c, label, enabled=_selected_count(c) >= 2,
                  connect=lambda: c.align_textblks.emit(op))
@@ -252,10 +248,9 @@ for _cid, _label, _op, _icon in _ALIGN_DIRECTIONS:
 
         return CmdDef(cid, label, build_fn=_build, hidden_in_customize=True,
                       run_fn=_run,
-                      enabled_fn=lambda c: _selected_count(c) >= 2,
-                      icon=icon)
+                      enabled_fn=lambda c: _selected_count(c) >= 2)
 
-    _reg(_align_cmd(_cid, _label, _op, _icon))
+    _reg(_align_cmd(_cid, _label, _op))
 
 # --- Merge action (single click, respects global direction) ---
 _reg(CmdDef("merge", "Merge",
@@ -271,20 +266,17 @@ _reg(CmdDef("behavior", "Behavior",
 _reg(CmdDef("translate", "translate",
     build_fn=lambda m, c: _act(m, c, "translate",
         connect=lambda: c.run_blktrans.emit(-1)),
-    run_fn=lambda c: c.run_blktrans.emit(-1),
-    icon="bottombar_translate.svg"))
+    run_fn=lambda c: c.run_blktrans.emit(-1)))
 
 _reg(CmdDef("ocr", "OCR",
     build_fn=lambda m, c: _act(m, c, "OCR",
         connect=lambda: c.run_blktrans.emit(0)),
-    run_fn=lambda c: c.run_blktrans.emit(0),
-    icon="bottombar_ocr.svg"))
+    run_fn=lambda c: c.run_blktrans.emit(0)))
 
 _reg(CmdDef("ocr_translate", "OCR and translate",
     build_fn=lambda m, c: _act(m, c, "OCR and translate",
         connect=lambda: c.run_blktrans.emit(1)),
-    run_fn=lambda c: c.run_blktrans.emit(1),
-    icon="bottombar_ocr.svg"))
+    run_fn=lambda c: c.run_blktrans.emit(1)))
 
 _reg(CmdDef("ocr_translate_inpaint", "OCR, translate and inpaint",
     build_fn=lambda m, c: _act(m, c, "OCR, translate and inpaint",

@@ -280,3 +280,43 @@ PS 进程内用 DOM API 创建**。重做为"Python 生成单个自包含 .jsx �
 **排障记录：** PyQt6 在创建 QApplication 之前实例化 QWidget 会直接 abort（无 Python traceback、Git Bash 下 exit 127，易误判为命令缺失）；调研报告的图标清理清单有大量子串误报（`textdetect`/`edit_activate`/`text`/`image` 等实为有引用），删除文件前必须用完整文件名精确 grep 复核。
 
 **涉及文件：** `config/stylesheet.css`、`ui/theme_helpers.py`、`ui/configpanel.py`、`ui/mainwindow.py`、`ui/canvas.py`、`ui/module_manager.py`、`ui/scene_textlayout.py`、`ui/drawingpanel.py`、`ui/fontformat_commands.py`、`ui/custom_widget/scrollbar.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`manifest.json`、`scripts/README.md`、`icons/`（删 6 个 svg）、`utils/text_normalize_test.py`（删）、`scripts/webengine_memory_test.py`（删）、`docs/技术实现/环形菜单_实施方案.md`（新增）
+
+---
+
+## 2026-08-11
+
+### 环形菜单 Tab 触发修复：长按泄漏 + 触发区域限定（阶段 2 修订）
+
+**问题/需求：** 用户反馈按 Tab 唤出环形菜单时右侧文本编辑区同步响应（焦点在面板功能元素间循环切换），长按则向下方文本框插入制表符。排查确认根因：`_pie_handle_keypress` 对自动重复（auto-repeat）Tab 完全未处理——菜单打开期间仅吞首次 Tab，重复 Tab 直接放行落到焦点控件，触发 Qt 默认 Tab 焦点遍历 / QTextEdit 插 `\t`；饼菜单窗口不抢焦点，长按瞄准全程泄漏可见。经与用户确认，同时将触发区域限定为「光标在画布上」。
+
+**改动要点：**
+
+- `ui/mainwindow.py`：
+  - `_pie_handle_keypress` 菜单打开分支改为吞掉**所有** Tab（含 auto-repeat）——首次 Tab 仍取消 pin 菜单，重复 Tab 只吞不放，永不落到焦点控件。
+  - 新增 `_pie_cursor_on_canvas()`（光标是否落在画布 GraphicsView 上：`gv.mapFromGlobal(QCursor.pos())` 命中 `gv.rect()`），`_pie_handle_keypress` 与 `_pie_handle_shortcut_override` 在模式条件之外追加区域判定：光标不在画布上时 Tab 恢复正常焦点切换，不弹菜单、不吞 ShortcutOverride。
+  - 保留：纯文本输入框（源/译文/搜索）内 Tab 惰性吞掉；对话框/独立窗口 Tab 原行为；Ctrl+B/I/U 等文本编辑 QShortcut 不受影响（走 ShortcutOverride 通道，与 KeyPress 吞键互不相干）。
+- `scripts/pie_menu_test.py`：FakeMW 增 `_pie_cursor_on_canvas` 存根 + 10 项新断言（auto-repeat 吞掉且不取消、off-canvas 穿透不开菜单、ShortcutOverride off-canvas 不吞、on-canvas 恢复触发等），全量 75 项通过。
+
+**排障记录：** 独立离线脚本复现确认（旧逻辑 auto-repeat 在 QTextEdit 中插入 `\t`；修复后不插入）。区域判定放在文本输入吞并逻辑**之后**——文本输入框的 Tab 吞并必须独立于光标位置，否则光标不在画布时编辑框会恢复插 `\t`（回归 8-10 审查决定）。i18n exit 4 为既有快捷键面板 orphan（`self.tr(variable)` 间接调用，已知问题），本次未新增任何 tr 字符串。
+
+**涉及文件：** `ui/mainwindow.py`、`scripts/pie_menu_test.py`
+
+---
+
+### 环形菜单 Blender 样式复刻（视觉重做）
+
+**问题/需求：** 按 `docs/技术实现/环形菜单_Blender样式复刻方案.md` 把饼菜单从"大圆盘自定义菜单"改为 Blender 透明扇区样式：无圆盘背景、中心圆环+扇形填充指示、去图标卡片、同扇区多卡片切向堆叠。交互状态机与触发逻辑不动。
+
+**改动要点：**
+
+- `ui/pie_menu.py` 重绘：删除大圆盘与 hover 背景扇形；中心指示器改为细圆环 + 空心扇形填充（`QPainterPath` 扇形减内圆）；新增中心标题 `self.tr("Actions")`；卡片去图标、改半透明底 + 强调色描边、紧凑内边距；多卡片扇区从角度扇开改为**切向堆叠**（左/右扇区纵向、上/下扇区横向），命中测试改为"扇区内最近卡片中心"。
+- 新增 `WINDOW_MARGIN = 40`：窗口尺寸与逻辑半径解耦（500×500 窗口 / TOTAL_RADIUS 210），卡片矩形 clamp 进窗口边界，杜绝透明窗口边缘无声裁剪。
+- 顺手修复既有 bug：旧扇形角度公式（`-112.5 - sector*45`）画反 180°（旧 wedge alpha 仅 22 几乎不可见，一直未被发现），中心扇形填充改用 `67.5 - sector*45`，预览图实证方向正确。
+- `ui/context_menu_config.py`：删除 `CmdDef.icon` 字段及全部 `icon=` 赋值（delete / 3 个 align / translate / ocr / ocr_translate）。
+- `utils/config.py`：pie_sectors 注释更新为切向堆叠语义（默认配置不变）。
+- i18n：ts 新增 `PieMenu` context（Actions→操作），qm 重编译 1129 条；i18n_check exit 4 为既有 orphan（`canvas.tr(label_key)` / `self.tr(variable)` 间接调用，已知），本次未新增问题项。
+- `scripts/pie_menu_test.py`：命中测试断言改为切向堆叠几何（逐卡片中心命中 / 堆叠不重叠 / 全部卡片在窗口内 / 扇区边界回退），全量 76 项通过；`scripts/_pie_preview.py` dark/light 预览图已更新。
+
+**排障记录：** i18n_check 只扫 `self.tr("字面量")`，标题必须内联字面量（方案中的 `PIE_MENU_TITLE` 常量经 tr 间接调用会产生 orphan）；预览脚本的 MockCanvas 不加载 qm，标题在预览图中显示英文属预期，实机经 qm 显示"操作"。
+
+**涉及文件：** `ui/pie_menu.py`、`ui/context_menu_config.py`、`utils/config.py`、`scripts/pie_menu_test.py`、`scripts/_pie_preview_dark.png`、`scripts/_pie_preview_light.png`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/技术实现/环形菜单_Blender样式复刻方案.md`、`docs/daily_log.md`

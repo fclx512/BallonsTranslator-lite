@@ -1424,10 +1424,9 @@ class MainWindow(mainwindow_cls):
     def _pie_trigger_ready(self) -> bool:
         """Mode conditions: textEditMode ∧ ¬creating ∧ ¬editing ∧ canvas mode.
 
-        Focus is intentionally *not* required to be on the canvas: Tab is
-        the pie trigger anywhere inside the main window in text-edit mode
-        (review 2026-08-10), except inside pure text inputs — those are
-        handled in :meth:`_pie_handle_keypress`.
+        The *area* condition (cursor over the canvas) is checked separately
+        in :meth:`_pie_handle_keypress` via :meth:`_pie_cursor_on_canvas`;
+        pure text inputs swallow Tab on their own (see there).
         """
         canvas = self.canvas
         return (
@@ -1437,13 +1436,27 @@ class MainWindow(mainwindow_cls):
             and self._is_canvas_mode()
         )
 
+    def _pie_cursor_on_canvas(self) -> bool:
+        """True when the global cursor is over the canvas graphics view.
+
+        Review 2026-08-11: the Tab trigger is scoped to the canvas — Tab
+        elsewhere (right text panel, bars) keeps its default behavior, so
+        the pie menu never hijacks the text panel's keyboard navigation.
+        """
+        gv = self.canvas.gv
+        if gv is None or not gv.isVisible():
+            return False
+        return gv.rect().contains(gv.mapFromGlobal(QCursor.pos()))
+
     def _pie_handle_shortcut_override(self, event) -> bool:
         if (
             event.key() != QKEY.Key_Tab
             or event.modifiers() != Qt.KeyboardModifier.NoModifier
         ):
             return False
-        if self.pie_menu.is_open() or self._pie_trigger_ready():
+        if self.pie_menu.is_open() or (
+            self._pie_trigger_ready() and self._pie_cursor_on_canvas()
+        ):
             event.accept()
             return True
         return False
@@ -1454,8 +1467,13 @@ class MainWindow(mainwindow_cls):
             if key == QKEY.Key_Escape:
                 self.pie_menu.cancel()
                 return True
-            if key == QKEY.Key_Tab and not event.isAutoRepeat():
-                self.pie_menu.cancel()
+            if key == QKEY.Key_Tab:
+                # Swallow every Tab (incl. auto-repeat) while the menu is up:
+                # the first press cancels a pinned menu; repeats must never
+                # reach the focus widget (no focus cycling / tab-char insert
+                # during a long hold).
+                if not event.isAutoRepeat():
+                    self.pie_menu.cancel()
                 return True
             return False
         if key != QKEY.Key_Tab or event.isAutoRepeat():
@@ -1474,6 +1492,9 @@ class MainWindow(mainwindow_cls):
             return True
         if not in_main:
             # Dialogs / other windows keep their own Tab behavior.
+            return False
+        if not self._pie_cursor_on_canvas():
+            # Tab outside the canvas keeps its default behavior (focus nav).
             return False
         # QKeyEvent has no cursor position in PyQt6 — use the global cursor.
         self.pie_menu.start_hold(QCursor.pos())

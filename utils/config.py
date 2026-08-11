@@ -314,7 +314,7 @@ class ProgramConfig(Config):
         ])
 
     # ── Pie menu (canvas ring menu) ─────────────────────────
-    # 8 sectors, each sector holds up to 3 command ids (inner → outer ring).
+    # 8 sectors, each sector holds up to 3 command ids (tangential stack).
     # Command ids reuse COMMAND_REGISTRY (ui/context_menu_config.py).
     pie_sectors: List[List[str]] = field(default_factory=lambda: [
         ["ocr_translate"],                              # 0 top
@@ -323,7 +323,7 @@ class ProgramConfig(Config):
         ["paste"],                                      # 3 lower-right
         ["delete"],                                     # 4 bottom
         ["merge"],                                      # 5 lower-left
-        ["align_left", "align_right", "align_hcenter"], # 6 left (inner→outer)
+        ["align_left", "align_right", "align_hcenter"], # 6 left (stacked)
         ["translate"],                                  # 7 upper-left
         ])
 
