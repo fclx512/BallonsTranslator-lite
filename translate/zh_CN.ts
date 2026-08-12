@@ -510,8 +510,8 @@
         </message>
         <message>
             <location filename="..\ui\configpanel.py" />
-            <source>Pie Menus</source>
-            <translation>环形菜单</translation>
+            <source>Quick Menus</source>
+            <translation>快捷菜单</translation>
         </message>
         <message>
             <location filename="..\ui\configpanel.py" line="1736" />
@@ -1047,18 +1047,6 @@
         <message>
             <source>&lt;p&gt;Select the &lt;b&gt;translation engine&lt;/b&gt;. Online translators require an API profile with credentials configured under &lt;b&gt;LLM Profile&lt;/b&gt;.&lt;/p&gt;</source>
             <translation>&lt;p&gt;选择&lt;b&gt;翻译引擎&lt;/b&gt;。在线翻译器需要在&lt;b&gt;LLM 配置&lt;/b&gt;中配置 API 凭据。&lt;/p&gt;</translation>
-        </message>
-        <message>
-            <source>Customize Context Menu...</source>
-            <translation>自定义右键菜单...</translation>
-        </message>
-        <message>
-            <source>Context Menu</source>
-            <translation>右键菜单</translation>
-        </message>
-        <message>
-            <source>&lt;p&gt;Customize the right-click context menu: reorder items, add or remove commands via drag-and-drop.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;自定义右键菜单：拖拽排序、添加或移除命令项。&lt;/p&gt;</translation>
         </message>
         <message>
             <source>Temporary Projects</source>
@@ -3069,8 +3057,8 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
         </message>
         <message>
             <location filename="..\ui\pie_menu_editor.py" />
-            <source>At most %1 pie menus are supported — one trigger key per menu keeps them memorable.</source>
-            <translation>最多支持 %1 个环形菜单——每菜单一个触发键才便于记忆。</translation>
+            <source>At most %1 quick menus are supported — one trigger key per menu keeps them memorable.</source>
+            <translation>最多支持 %1 个快捷菜单——每菜单一个触发键才便于记忆。</translation>
         </message>
         <message>
             <location filename="..\ui\pie_menu_editor.py" />
@@ -3096,6 +3084,41 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <location filename="..\ui\pie_menu_editor.py" />
             <source>View</source>
             <translation>视图</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Style:</source>
+            <translation>样式：</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Ring</source>
+            <translation>环形</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>List</source>
+            <translation>竖排</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Direction:</source>
+            <translation>方向：</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Right</source>
+            <translation>右</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Left</source>
+            <translation>左</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Commands (drag onto the list; drag cards to reorder, right-click a card to remove):</source>
+            <translation>命令（拖到下方列表中添加；拖动卡片可排序，右键卡片可移除）：</translation>
         </message>
     </context>
     <context>

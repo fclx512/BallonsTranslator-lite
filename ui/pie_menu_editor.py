@@ -1,13 +1,19 @@
-"""Config-page editor for the canvas ring menus (multi-menu, drag-config).
+"""Config-page editor for the canvas quick menus (multi-menu, drag-config).
 
 Layout (top → bottom):
-  - menu management bar: menu tabs + "new" button, per-menu properties
-    (name, trigger key with conflict pills, sector count)
-  - live preview: embedded :class:`PieMenu` in edit mode (dashed sector
-    guides, drop-target highlights, hover preview) — the exact rendering
-    code used at runtime, only scaled down
+  - menu management bar: menu tabs + "new" button
+  - per-menu properties row 1: name, trigger key with conflict pills
+  - per-menu properties row 2: style (Ring / List), sectors (ring only),
+    direction Left/Right (list only)
+  - live preview: embedded :class:`PieMenu` in edit mode — renders the ring
+    or the vertical list exactly like runtime, only scaled down
   - command palette: categorized list of runnable commands; drag one onto
-    the preview to place it (max 3 per sector), drag a card back to remove
+    the preview to place it (max 3 per sector / 24 per list), drag a card
+    back to remove
+
+Switching style converts the commands (ring -> list flattens the sectors,
+list -> ring distributes the cards back into sectors).  One menu = one
+function group; split into new menus when you want separation.
 
 The editor mutates ``pcfg.pie_menus`` live (same pattern as the shortcut
 editor) and saves on each committed change, so the runtime menu picks the
@@ -41,11 +47,14 @@ from .context_menu_config import (
     COMMAND_REGISTRY,
 )
 from .pie_menu import (
+    LIST_MAX_ITEMS,
     SECTOR_MAX_CARDS,
     WINDOW_RADIUS,
     PieMenu,
+    items_to_slots,
     normalize_pie_menu,
     pie_menu_display_name,
+    slots_to_items,
 )
 from .theme_helpers import shortcut_styles
 
@@ -140,29 +149,45 @@ class PieMenuEditor(QWidget):
         bar.addWidget(self.new_btn)
         layout.addLayout(bar)
 
-        # Per-menu properties
-        props = QHBoxLayout()
-        props.setSpacing(6)
-        props.addWidget(QLabel(self.tr("Name:")))
+        # Per-menu properties (row 1: identity)
+        props1 = QHBoxLayout()
+        props1.setSpacing(6)
+        props1.addWidget(QLabel(self.tr("Name:")))
         self.name_edit = QLineEdit()
-        props.addWidget(self.name_edit, 1)
-        props.addSpacing(8)
-        props.addWidget(QLabel(self.tr("Trigger Key:")))
+        props1.addWidget(self.name_edit, 1)
+        props1.addSpacing(8)
+        props1.addWidget(QLabel(self.tr("Trigger Key:")))
         self.trigger_edit = QKeySequenceEdit()
         self.trigger_edit.setClearButtonEnabled(True)
         self.trigger_edit.setFixedWidth(130)
-        props.addWidget(self.trigger_edit)
+        props1.addWidget(self.trigger_edit)
         self.conflict_label = QLabel()
         self.conflict_label.hide()
-        props.addWidget(self.conflict_label)
-        props.addSpacing(8)
-        props.addWidget(QLabel(self.tr("Sectors:")))
+        props1.addWidget(self.conflict_label)
+        layout.addLayout(props1)
+
+        # Per-menu properties (row 2: style)
+        props2 = QHBoxLayout()
+        props2.setSpacing(6)
+        props2.addWidget(QLabel(self.tr("Style:")))
+        self.style_combo = QComboBox()
+        self.style_combo.addItem(self.tr("Ring"), "ring")
+        self.style_combo.addItem(self.tr("List"), "list")
+        props2.addWidget(self.style_combo)
+        self.sectors_label = QLabel(self.tr("Sectors:"))
         self.sectors_combo = QComboBox()
         for n in _SECTOR_CHOICES:
             self.sectors_combo.addItem(str(n), n)
-        props.addWidget(self.sectors_combo)
-        props.addStretch()
-        layout.addLayout(props)
+        props2.addWidget(self.sectors_label)
+        props2.addWidget(self.sectors_combo)
+        self.direction_label = QLabel(self.tr("Direction:"))
+        self.direction_combo = QComboBox()
+        self.direction_combo.addItem(self.tr("Right"), "right")
+        self.direction_combo.addItem(self.tr("Left"), "left")
+        props2.addWidget(self.direction_label)
+        props2.addWidget(self.direction_combo)
+        props2.addStretch()
+        layout.addLayout(props2)
 
         # Live preview (scaled, edit-mode)
         self.preview = PieMenu(None, mw=None, parent=self, preview=True)
@@ -174,10 +199,11 @@ class PieMenuEditor(QWidget):
         layout.addLayout(pv_host)
 
         # Command palette
-        layout.addWidget(QLabel(
+        self.palette_hint = QLabel(
             self.tr("Commands (drag onto the menu; max %1 per sector, "
                     "right-click a card to remove):")
-            .replace("%1", str(SECTOR_MAX_CARDS))))
+            .replace("%1", str(SECTOR_MAX_CARDS)))
+        layout.addWidget(self.palette_hint)
         self.palette = CommandPalette(self)
         self.palette.setFixedHeight(190)
         layout.addWidget(self.palette, 1)
@@ -188,9 +214,13 @@ class PieMenuEditor(QWidget):
         self.new_btn.clicked.connect(self._on_new_menu)
         self.name_edit.textEdited.connect(self._on_name_changed)
         self.trigger_edit.keySequenceChanged.connect(self._on_trigger_changed)
+        self.style_combo.currentIndexChanged.connect(self._on_style_changed)
         self.sectors_combo.currentIndexChanged.connect(self._on_sectors_changed)
+        self.direction_combo.currentIndexChanged.connect(self._on_direction_changed)
         self.preview.slot_remove_requested.connect(self._on_card_remove)
         self.preview.command_dropped.connect(self._on_command_dropped)
+        self.preview.list_item_remove_requested.connect(self._on_item_remove)
+        self.preview.list_command_dropped.connect(self._on_list_command_dropped)
         self.palette.remove_requested.connect(self._on_card_remove)
 
     # ── Current menu helpers ───────────────────────────────
@@ -218,7 +248,8 @@ class PieMenuEditor(QWidget):
     def _load_current_props(self):
         menu = self._current_menu()
         enabled = menu is not None
-        for w in (self.name_edit, self.trigger_edit, self.sectors_combo):
+        for w in (self.name_edit, self.trigger_edit, self.sectors_combo,
+                  self.style_combo, self.direction_combo):
             w.blockSignals(True)
         if menu is None:
             self.name_edit.clear()
@@ -226,14 +257,25 @@ class PieMenuEditor(QWidget):
         else:
             self.name_edit.setText(menu.get("name", ""))
             self.trigger_edit.setKeySequence(QKeySequence(menu.get("trigger", "")))
+            is_list = menu.get("layout", "ring") == "list"
+            self.style_combo.setCurrentIndex(1 if is_list else 0)
+            self.direction_combo.setCurrentIndex(
+                1 if menu.get("direction", "right") == "left" else 0)
             sectors = menu.get("sectors", 8)
             self.sectors_combo.setCurrentIndex(
                 _SECTOR_CHOICES.index(sectors) if sectors in _SECTOR_CHOICES else 2)
-        for w in (self.name_edit, self.trigger_edit, self.sectors_combo):
+        for w in (self.name_edit, self.trigger_edit, self.sectors_combo,
+                  self.style_combo, self.direction_combo):
             w.blockSignals(False)
-        self.name_edit.setEnabled(enabled)
-        self.trigger_edit.setEnabled(enabled)
-        self.sectors_combo.setEnabled(enabled)
+        is_list = bool(menu) and menu.get("layout", "ring") == "list"
+        self.sectors_label.setVisible(enabled and not is_list)
+        self.sectors_combo.setVisible(enabled and not is_list)
+        self.direction_label.setVisible(enabled and is_list)
+        self.direction_combo.setVisible(enabled and is_list)
+        for w in (self.name_edit, self.trigger_edit, self.sectors_combo,
+                  self.style_combo, self.direction_combo):
+            w.setEnabled(enabled)
+        self._refresh_hint()
 
     # ── Slots ──────────────────────────────────────────────
 
@@ -248,8 +290,8 @@ class PieMenuEditor(QWidget):
         if len(self._menus) >= PIE_MENU_MAX:
             from utils.message import create_info_dialog
             create_info_dialog(self.tr(
-                "At most %1 pie menus are supported — one trigger key per "
-                "menu keeps them memorable.").replace("%1", str(PIE_MENU_MAX)))
+                "At most %1 quick menus are supported — one trigger key per menu keeps them memorable."
+            ).replace("%1", str(PIE_MENU_MAX)))
             return
         n = len(self._menus) + 1
         self._menus.append(normalize_pie_menu({
@@ -302,6 +344,53 @@ class PieMenuEditor(QWidget):
         self._refresh_preview()
         self._save()
 
+    def _on_style_changed(self, index):
+        """Switch the current menu between ring and list, converting its
+        commands: ring -> list flattens the sectors, list -> ring distributes
+        the cards back into sectors (<= 3 each)."""
+        menu = self._current_menu()
+        if menu is None:
+            return
+        new_layout = "list" if index == 1 else "ring"
+        if new_layout == menu.get("layout", "ring"):
+            return
+        if new_layout == "list":
+            menu["items"] = slots_to_items(menu.get("slots", []))
+        else:
+            menu["slots"] = items_to_slots(menu.get("items", []), menu.get("sectors", 8))
+        menu["layout"] = new_layout
+        self._load_current_props()   # sync combos + visibility (signals blocked)
+        self._refresh_preview()
+        self._save()
+
+    def _on_direction_changed(self, index):
+        menu = self._current_menu()
+        if menu is None:
+            return
+        menu["direction"] = "left" if index == 1 else "right"
+        self._save()
+
+    def _on_list_command_dropped(self, idx, cmd_id, src_idx):
+        menu = self._current_menu()
+        if menu is None:
+            return
+        items = menu["items"]
+        if src_idx >= 0 and 0 <= src_idx < len(items):
+            items.pop(src_idx)
+        items.insert(max(0, min(idx, len(items))), cmd_id)
+        self._refresh_preview()
+        self._save()
+
+    def _on_item_remove(self, idx):
+        menu = self._current_menu()
+        if menu is None:
+            return
+        items = menu["items"]
+        if 0 <= idx < len(items):
+            items.pop(idx)
+        self._refresh_preview()
+        self._save()
+
     def _on_command_dropped(self, sector, idx, cmd_id, src_sector, src_idx):
         menu = self._current_menu()
         if menu is None:
@@ -316,12 +405,19 @@ class PieMenuEditor(QWidget):
         self._save()
 
     def _on_card_remove(self, sector, idx):
+        """Remove a card dragged back onto the palette (the preview emits
+        sector/idx; a list card carries ``x-pie-src = 0,idx``)."""
         menu = self._current_menu()
         if menu is None:
             return
-        slots = menu["slots"]
-        if 0 <= sector < len(slots) and 0 <= idx < len(slots[sector]):
-            slots[sector].pop(idx)
+        if menu.get("layout", "ring") == "list":
+            items = menu["items"]
+            if 0 <= idx < len(items):
+                items.pop(idx)
+        else:
+            slots = menu["slots"]
+            if 0 <= sector < len(slots) and 0 <= idx < len(slots[sector]):
+                slots[sector].pop(idx)
         self._refresh_preview()
         self._save()
 
@@ -331,6 +427,20 @@ class PieMenuEditor(QWidget):
         menu = self._current_menu() or {}
         self.preview.set_menu_config(menu)
         self.preview.set_edit_mode(True)
+        self._refresh_hint()
+
+    def _refresh_hint(self):
+        """Palette hint text follows the current menu's style."""
+        menu = self._current_menu() or {}
+        if menu.get("layout") == "list":
+            text = self.tr(
+                "Commands (drag onto the list; drag cards to reorder, right-click a card to remove):"
+            )
+        else:
+            text = self.tr(
+                "Commands (drag onto the menu; max %1 per sector, right-click a card to remove):"
+            ).replace("%1", str(SECTOR_MAX_CARDS))
+        self.palette_hint.setText(text)
 
     def _refresh_conflicts(self):
         """Trigger keys must not collide with each other or with shortcuts."""

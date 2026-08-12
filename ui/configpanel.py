@@ -1814,18 +1814,6 @@ class ConfigPanel(Widget):
         self._fit_page_sublock.setVisible(False)
         interface_layout.addWidget(self._fit_page_sublock)
 
-        # Context menu customization button
-        self.context_menu_btn = QPushButton(
-            self.tr("Customize Context Menu..."), parent=self
-        )
-        self.context_menu_btn.setObjectName("ConfigButton")
-        self.context_menu_btn.clicked.connect(self._open_context_menu_config)
-        ctxmenu_sublock = ConfigSubBlock(
-            self.context_menu_btn, name=self.tr("Context Menu"),
-            note=self.tr("<p>Customize the right-click context menu: reorder items, add or remove commands via drag-and-drop.</p>"),
-        )
-        interface_layout.addWidget(ctxmenu_sublock)
-
         # Combo Box Presets (moved from Typesetting)
         interface_layout.addWidget(ConfigSectionHeader(self.tr("Combo Box Presets")))
 
@@ -1906,11 +1894,12 @@ class ConfigPanel(Widget):
         self.shortcuts_editor.shortcut_changed.connect(self._on_shortcuts_edited)
         self._add_page(self.shortcuts_editor)
 
-        # === General: Pie Menus ===
+        # === General: Quick Menus ===
         # Multi-menu drag-config editor; edits save pcfg.pie_menus live.
+        # Page will host both pie (ring) and vertical-list styles.
         from .pie_menu_editor import PieMenuEditor
-        self.pie_menus_editor = PieMenuEditor()
-        self._add_page(self.pie_menus_editor)
+        self.quick_menus_editor = PieMenuEditor()
+        self._add_page(self.quick_menus_editor)
 
         # === General: Performance ===
         perf_widget = QWidget()
@@ -2044,9 +2033,9 @@ class ConfigPanel(Widget):
         self.configTable.addSection(general_header, label_performance, "performance", self.performance_block.section_widget)
         self.configTable.addSection(general_header, label_interface, "interface", self.interface_block.section_widget)
         self.configTable.addSection(general_header, label_shortcuts, "shortcuts", self.shortcuts_editor)
-        label_pie_menus = self.tr("Pie Menus")
+        label_quick_menus = self.tr("Quick Menus")
         self.configTable.addSection(
-            general_header, label_pie_menus, "pie_menus", self.pie_menus_editor
+            general_header, label_quick_menus, "quick_menus", self.quick_menus_editor
         )
         self.configTable.addSection(
             general_header, label_config_mgmt, "config_mgmt",
@@ -2069,7 +2058,7 @@ class ConfigPanel(Widget):
             "performance": self.performance_block.section_widget,
             "interface": self.interface_block.section_widget,
             "shortcuts": self.shortcuts_editor,
-            "pie_menus": self.pie_menus_editor,
+            "quick_menus": self.quick_menus_editor,
             "config_mgmt": self.config_mgmt_block.section_widget,
         }
 
@@ -2514,12 +2503,6 @@ class ConfigPanel(Widget):
 
         save_config()
         self.shortcuts_changed.emit()
-
-    def _open_context_menu_config(self):
-        from .context_menu_config import ContextMenuCustomizeDialog
-
-        dialog = ContextMenuCustomizeDialog(self)
-        self._run_modal_dialog(dialog)
 
     def _on_anim_mode_changed(self):
         idx = self.anim_combo.currentIndex()
