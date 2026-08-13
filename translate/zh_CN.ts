@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE TS>
+<?xml version='1.0' encoding='utf-8'?>
 <TS version="2.1" language="zh_CN" sourcelanguage="en">
     <context>
         <name>AboutDialog</name>
@@ -52,11 +51,6 @@
             <translation>启用/禁用文本编辑</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindowbars.py" line="645" />
-            <source>Original Compare</source>
-            <translation>原文对照</translation>
-        </message>
-        <message>
             <location filename="..\ui\mainwindowbars.py" line="651" />
             <source>Text layer opacity</source>
             <translation>嵌字层不透明度</translation>
@@ -64,6 +58,11 @@
         <message>
             <source>Translator</source>
             <translation>翻译器</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindowbars.py" line="645" />
+            <source>Original Compare</source>
+            <translation>原文对照</translation>
         </message>
     </context>
     <context>
@@ -432,6 +431,18 @@
             <translation>常规</translation>
         </message>
         <message>
+            <source>App</source>
+            <translation>应用</translation>
+        </message>
+        <message>
+            <source>Appearance</source>
+            <translation>外观</translation>
+        </message>
+        <message>
+            <source>Canvas</source>
+            <translation>画布</translation>
+        </message>
+        <message>
             <location filename="..\ui\configpanel.py" line="1833" />
             <source>Pipeline</source>
             <translation>管线</translation>
@@ -497,12 +508,7 @@
             <source>Text formatting</source>
             <translation>文本格式</translation>
         </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1300" />
-            <source>Behavior</source>
-            <translation>行为</translation>
-        </message>
-        <message>
+        <message type="obsolete">
             <location filename="..\ui\configpanel.py" line="1300" />
             <source>Window Fit</source>
             <translation>窗口适配</translation>
@@ -512,7 +518,7 @@
             <source>Shortcuts</source>
             <translation>快捷键</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="..\ui\configpanel.py" line="1295" />
             <source>Load models on demand</source>
             <translation>按需加载模型</translation>
@@ -522,7 +528,7 @@
             <source>Load models on demand to save memory.</source>
             <translation>按需加载模型以节省内存</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="..\ui\configpanel.py" line="1301" />
             <source>Empty cache after RUN</source>
             <translation>RUN后清空缓存</translation>
@@ -597,7 +603,7 @@
             <source>comma-separated values</source>
             <translation>逗号分隔的数值</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="..\ui\configpanel.py" line="1451" />
             <source>Default font format (when not set per-textblock):</source>
             <translation>默认字体格式（当未按文本块设置时）：</translation>
@@ -672,7 +678,7 @@
             <source>Compact 「」『』 in vertical text (half-width style)</source>
             <translation>竖排文本中压缩「」『』为半角样式</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="..\ui\configpanel.py" line="0" />
             <source>Corner Bracket Style</source>
             <translation>直角引号样式</translation>
@@ -732,7 +738,7 @@
             <source>Show decorations while resizing</source>
             <translation>调整大小时显示描边和阴影</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="..\ui\configpanel.py" />
             <source>Drag Decorations</source>
             <translation>拖拽装饰</translation>
@@ -742,12 +748,7 @@
             <source>&lt;p&gt;When checked, &lt;b&gt;text stroke and shadow&lt;/b&gt; remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.&lt;/p&gt;</source>
             <translation>&lt;p&gt;勾选后，拖拽或调整文本框时&lt;b&gt;描边和阴影&lt;/b&gt;保持可见。取消勾选可在调整大小时获得最高帧率。&lt;/p&gt;</translation>
         </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1662" />
-            <source>Combo Box Presets</source>
-            <translation>下拉框预设值</translation>
-        </message>
-        <message>
+        <message type="obsolete">
             <location filename="..\ui\configpanel.py" line="1668" />
             <source>Comma-separated values — used in font format panel dropdowns.</source>
             <translation>逗号分隔的值 — 用于字体格式面板下拉选项。</translation>
@@ -781,10 +782,6 @@
             <location filename="..\ui\configpanel.py" line="1706" />
             <source>Network &amp; Mirror Settings...</source>
             <translation>网络与镜像设置...</translation>
-        </message>
-        <message>
-            <source>Original Compare</source>
-            <translation>原文对照</translation>
         </message>
         <message>
             <source>Preset (%):</source>
@@ -850,7 +847,7 @@
             <source>&lt;p&gt;Output image quality (&lt;code&gt;0-100&lt;/code&gt;). Higher values give better quality but larger file sizes. Applies to &lt;b&gt;JPG&lt;/b&gt; and &lt;b&gt;WEBP&lt;/b&gt; only. Also used when &lt;b&gt;Auto detect source format&lt;/b&gt; matches a lossy source.&lt;/p&gt;</source>
             <translation>&lt;p&gt;输出图像质量（&lt;code&gt;0-100&lt;/code&gt;）。数值越高质量越好但文件越大。仅适用于&lt;b&gt; JPG&lt;/b&gt; 和&lt;b&gt; WEBP&lt;/b&gt; 格式。当&lt;b&gt;自动匹配源图格式&lt;/b&gt;匹配到有损源图时同样有效。&lt;/p&gt;</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <source>&lt;p&gt;Configure the fallback font format for text blocks without their own formatting. Each attribute can be &lt;b&gt;delegated&lt;/b&gt; separately.&lt;/p&gt;</source>
             <translation>&lt;p&gt;配置未单独设置格式的文本块的默认字体格式。每个属性可分别&lt;b&gt;委托&lt;/b&gt;。&lt;/p&gt;</translation>
         </message>
@@ -894,7 +891,7 @@
             <source>Font Exclusion</source>
             <translation>字体排除</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <source>Preset</source>
             <translation>预设</translation>
         </message>
@@ -906,7 +903,7 @@
             <source>Show sequence number on text blocks</source>
             <translation>在文本框上显示序号</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <source>Sequence Badge</source>
             <translation>序号徽标</translation>
         </message>
@@ -933,10 +930,6 @@
         <message>
             <source>&lt;p&gt;Configure network proxies, mirror servers, and download sources. Useful for systems behind &lt;b&gt;firewalls&lt;/b&gt; or in restricted environments.&lt;/p&gt;</source>
             <translation>&lt;p&gt;配置网络代理、镜像服务器和下载源。适用于&lt;b&gt;防火墙&lt;/b&gt;后或受限网络环境的系统。&lt;/p&gt;</translation>
-        </message>
-        <message>
-            <source>Performance</source>
-            <translation>性能表现</translation>
         </message>
         <message>
             <source>Modules</source>
@@ -967,10 +960,6 @@
             <translation>&lt;p&gt;启用后，通过单张图片导入（拖拽或&lt;b&gt;打开图片…&lt;/b&gt;）创建的临时项目将在程序关闭时&lt;b&gt;自动删除&lt;/b&gt;。&lt;/p&gt;&lt;p&gt;使用&lt;b&gt;项目另存为…&lt;/b&gt;可以永久保留项目。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>Config Management</source>
-            <translation>配置管理</translation>
-        </message>
-        <message>
             <source>Export Config</source>
             <translation>导出配置</translation>
         </message>
@@ -998,17 +987,41 @@
             <source>Import Config...</source>
             <translation>导入配置...</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <source>Export</source>
             <translation>导出</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <source>Import</source>
             <translation>导入</translation>
         </message>
         <message>
             <source>&lt;p&gt;Load settings from a previously exported &lt;b&gt;.json&lt;/b&gt; file. A compatibility summary will be shown before applying.&lt;/p&gt;</source>
             <translation>&lt;p&gt;从之前导出的 &lt;b&gt;.json&lt;/b&gt; 文件加载设置。应用前会显示兼容性摘要。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Update status:</source>
+            <translation>更新状态：</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Manually trigger a version check and view the current and latest release numbers.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;手动触发版本检查并查看当前版本与最新版本号。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Developer channel:</source>
+            <translation>开发者通道：</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Check for the latest commit (unverified developer changes). Not guaranteed to work on every device.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;检查最新提交（未经验证的开发者改动）。不保证在所有设备上可用。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Export file:</source>
+            <translation>导出文件：</translation>
+        </message>
+        <message>
+            <source>Import file:</source>
+            <translation>导入文件：</translation>
         </message>
         <message>
             <source>Configuration exported to </source>
@@ -1074,7 +1087,7 @@
             <source>Clip text overflow after translation</source>
             <translation>翻译后裁剪溢出文字</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <source>Overflow Clip</source>
             <translation>溢出裁剪</translation>
         </message>

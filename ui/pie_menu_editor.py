@@ -1,12 +1,15 @@
 """Config-page editor for the canvas quick menus (multi-menu, drag-config).
 
 Layout (top → bottom):
-  - menu management bar: menu tabs + "new" button
-  - per-menu properties row 1: name, trigger key with conflict pills
-  - per-menu properties row 2: style (Ring / List), sectors (ring only),
-    direction Left/Right (list only)
-  - live preview: embedded :class:`PieMenu` in edit mode — renders the ring
-    or the half-ring list panels exactly like runtime, only scaled down
+  - toolbar card (``#PieMenuToolbar``): menu tabs + "New Menu" button,
+    per-menu props row 1 (name + trigger key with conflict pill),
+    per-menu props row 2 (style Ring / List, sectors for ring, direction
+    Left/Right for list) — packaged custom controls (ConfigLineEdit /
+    ConfigComboBox) for a consistent look with the rest of the settings
+  - separator hairline
+  - live preview: embedded :class:`PieMenu` in edit mode inside a
+    ``GroupFrame`` — renders the ring or the half-ring list panels exactly
+    like runtime, only scaled down
   - command palette: flow grid of draggable command cards (with category
     badges); drag one onto the preview to place it (max 3 per sector /
     panel), drag a card back to remove
@@ -25,12 +28,10 @@ from qtpy.QtCore import QCoreApplication, QMimeData, Qt, Signal
 from qtpy.QtGui import QDrag, QKeySequence
 from qtpy.QtWidgets import (
     QApplication,
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QKeySequenceEdit,
     QLabel,
-    QLineEdit,
     QPushButton,
     QSizePolicy,
     QTabBar,
@@ -55,7 +56,12 @@ from .pie_menu import (
     pie_menu_display_name,
     slots_to_panels,
 )
-from .custom_widget import FlowLayout
+from .custom_widget import (
+    ConfigComboBox,
+    ConfigLineEdit,
+    FlowLayout,
+    GroupFrame,
+)
 from .misc import get_theme_color
 from .theme_helpers import shortcut_styles
 
@@ -214,12 +220,19 @@ class PieMenuEditor(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setContentsMargins(0, 0, 0, 0)   # page provides the margins
         layout.setSpacing(8)
         self.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
 
-        # Menu management bar
+        # ── Menu management card (tabs + per-menu props) ─────
+        card = QFrame()
+        card.setObjectName("PieMenuToolbar")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(12, 8, 12, 10)
+        card_layout.setSpacing(6)
+
+        # Row 1: menu tabs + new button
         bar = QHBoxLayout()
         bar.setSpacing(6)
         self.tabs = QTabBar()
@@ -228,15 +241,17 @@ class PieMenuEditor(QWidget):
         self.tabs.setExpanding(False)
         self.new_btn = QPushButton(self.tr("New Menu"))
         self.new_btn.setObjectName("ConfigButton")
+        self.new_btn.setFixedHeight(30)   # match the tab row height
         bar.addWidget(self.tabs, 1)
         bar.addWidget(self.new_btn)
-        layout.addLayout(bar)
+        card_layout.addLayout(bar)
 
-        # Per-menu properties (row 1: identity)
+        # Row 2: name + trigger key
         props1 = QHBoxLayout()
         props1.setSpacing(6)
         props1.addWidget(QLabel(self.tr("Name:")))
-        self.name_edit = QLineEdit()
+        self.name_edit = ConfigLineEdit()
+        self.name_edit.setFixedHeight(29)   # match the row's other fields
         props1.addWidget(self.name_edit, 1)
         props1.addSpacing(8)
         props1.addWidget(QLabel(self.tr("Trigger Key:")))
@@ -247,32 +262,40 @@ class PieMenuEditor(QWidget):
         self.conflict_label = QLabel()
         self.conflict_label.hide()
         props1.addWidget(self.conflict_label)
-        layout.addLayout(props1)
+        card_layout.addLayout(props1)
 
-        # Per-menu properties (row 2: style)
+        # Row 3: style + sectors / direction
         props2 = QHBoxLayout()
         props2.setSpacing(6)
         props2.addWidget(QLabel(self.tr("Style:")))
-        self.style_combo = QComboBox()
-        self.style_combo.addItem(self.tr("Ring"), "ring")
-        self.style_combo.addItem(self.tr("List"), "list")
+        self.style_combo = ConfigComboBox(fix_size=False)
+        self.style_combo.addItems([self.tr("Ring"), self.tr("List")])
         props2.addWidget(self.style_combo)
         self.sectors_label = QLabel(self.tr("Sectors:"))
-        self.sectors_combo = QComboBox()
-        for n in _SECTOR_CHOICES:
-            self.sectors_combo.addItem(str(n), n)
+        self.sectors_combo = ConfigComboBox(fix_size=False)
+        self.sectors_combo.addItems([str(n) for n in _SECTOR_CHOICES])
         props2.addWidget(self.sectors_label)
         props2.addWidget(self.sectors_combo)
         self.direction_label = QLabel(self.tr("Direction:"))
-        self.direction_combo = QComboBox()
-        self.direction_combo.addItem(self.tr("Right"), "right")
-        self.direction_combo.addItem(self.tr("Left"), "left")
+        self.direction_combo = ConfigComboBox(fix_size=False)
+        self.direction_combo.addItems([self.tr("Right"), self.tr("Left")])
         props2.addWidget(self.direction_label)
         props2.addWidget(self.direction_combo)
         props2.addStretch()
-        layout.addLayout(props2)
+        card_layout.addLayout(props2)
 
-        # Live preview (scaled, edit-mode).  The widget is Fixed-size so the
+        layout.addWidget(card)
+
+        # Separator between the toolbar card and the preview
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("color: @borderColor;")
+        sep.setFixedHeight(1)
+        layout.addWidget(sep)
+
+        # Live preview (scaled, edit-mode) inside a group frame so the
+        # floating canvas reads as a deliberate block (ring layout) instead
+        # of a lone circle on the page.  The widget is Fixed-size so the
         # layout can never squeeze it; the surrounding ConfigPanel page
         # scrolls instead.  (A nested QScrollArea here collapsed to a thin
         # strip whenever vertical space ran short — removed 2026-08-12.)
@@ -281,10 +304,11 @@ class PieMenuEditor(QWidget):
         self.preview.set_preview_scale(0.72)
         self.preview.setSizePolicy(
             QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        pv_host = QHBoxLayout()
-        pv_host.setContentsMargins(0, 0, 0, 0)
-        pv_host.addWidget(self.preview, 0, Qt.AlignmentFlag.AlignHCenter)
-        layout.addLayout(pv_host)
+        pv_frame = GroupFrame()
+        pv_lay = QVBoxLayout(pv_frame)
+        pv_lay.setContentsMargins(8, 8, 8, 8)
+        pv_lay.addWidget(self.preview, 0, Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(pv_frame)
 
         # Command palette
         self.palette_hint = QLabel(

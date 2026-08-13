@@ -250,6 +250,24 @@ ConfigTextEdit:disabled {
     border: 1px solid @disabledForegroundColor;
 }
 
+/* ── QKeySequenceEdit (trigger-key fields; e.g. PieMenuEditor) ── */
+/* The composite widget is a plain QWidget whose QSS background does not
+   paint by default — theme the embedded QLineEdit instead so the field
+   renders as a single rounded box. */
+QKeySequenceEdit QLineEdit {
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding: 0px 4px;
+}
+QKeySequenceEdit QLineEdit:focus {
+    border: 1px solid @accentPrimary;
+}
+QKeySequenceEdit QLineEdit:disabled {
+    background: transparent;
+    border: 1px solid @disabledForegroundColor;
+}
+
 ConfigComboBox,
 ConfigContent ConfigComboBox,
 ParamComboBox,
@@ -1740,6 +1758,11 @@ QToolButton#TextTransformCloseButton:hover {
 }
 
 /* ── QTabBar (theme-aware; e.g. PieMenuEditor menu tabs) ─────── */
+/* The global QWidget rule paints an opaque page background — clear it
+   so the bar blends into its container (e.g. the toolbar card). */
+QTabBar {
+    background: transparent;
+}
 QTabBar::tab {
     background: transparent;
     color: @qwidgetForegroundColor;
@@ -1763,6 +1786,13 @@ QTabBar::close-button {
 QTabBar::close-button:hover {
     background: @hoverBackgroundColor;
     border-radius: 3px;
+}
+
+/* ── PieMenuEditor toolbar card (tabs + per-menu props) ───── */
+QFrame#PieMenuToolbar {
+    background: @emptyContentBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
 }
 
 /* ── Item views base (QTreeWidget / QListWidget selection) ───── */

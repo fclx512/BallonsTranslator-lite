@@ -263,6 +263,96 @@ class ConfigSubBlock(Widget):
         super().changeEvent(e)
 
 
+class ConfigFormRow(ConfigSubBlock):
+    """Compact label-control row for settings forms.
+
+    Left side: a fixed-width, right-aligned label (with optional ? note button).
+    Right side: the actual control widget.
+    Use this to align controls vertically in a two-column layout.
+    """
+
+    def __init__(
+        self,
+        label: str,
+        widget: Union[QWidget, QLayout],
+        note: str = None,
+        label_width: int = 110,
+        parent: QWidget = None,
+    ) -> None:
+        row_widget = QWidget(parent)
+        row_layout = QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(8)
+        row_layout.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+
+        self.name_label = QLabel(label)
+        self.name_label.setFixedWidth(label_width)
+        self.name_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        row_layout.addWidget(self.name_label)
+        self._note_text = note
+
+        if isinstance(widget, QWidget):
+            row_layout.addWidget(widget)
+        else:
+            row_layout.addLayout(widget)
+
+        if note is not None:
+            self._note_btn = QPushButton("?")
+            self._note_btn.setFixedSize(20, 20)
+            self._note_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._note_btn.clicked.connect(self._show_note_popup)
+            self._style_note_btn()
+            row_layout.addWidget(self._note_btn)
+        else:
+            self._note_btn = None
+
+        row_layout.addStretch()
+
+        # content_margins tuned for dense form pages
+        super().__init__(
+            row_widget,
+            name=None,
+            vertical_layout=False,
+            content_margins=(16, 4, 16, 4),
+        )
+        self.layout().setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+
+    def _style_note_btn(self):
+        """Mirror ConfigSubBlock note button styling."""
+        from ui.misc import get_theme_color
+
+        c = get_theme_color()
+        r, g, b = c.red(), c.green(), c.blue()
+        self._note_btn.setStyleSheet(
+            f"QPushButton {{"
+            f"  border: 1px solid rgba({r},{g},{b},128);"
+            f"  border-radius: 10px;"
+            f"  font-size: 12px; font-weight: bold; padding: 0px;"
+            f"  color: rgb({r},{g},{b}); background: transparent;"
+            f"}}"
+            f"QPushButton:hover {{"
+            f"  background: rgba({r},{g},{b},40);"
+            f"}}"
+        )
+
+    def _show_note_popup(self):
+        self._note_popup = ConfigNotePopup(self._note_btn, self._note_text)
+        self._note_popup.show()
+
+
+def _section_header(text: str) -> ConfigSectionHeader:
+    """Compact section header for dense form pages."""
+    header = ConfigSectionHeader(text)
+    header.layout().setContentsMargins(16, 8, 16, 4)
+    return header
+
+
 def combobox_with_label(
     sel: List[str],
     name: str,
@@ -1353,7 +1443,6 @@ class ConfigPanel(Widget):
         label_translator = self.tr("Translator")
         label_project = self.tr("Project")
         label_typesetting = self.tr("Typesetting")
-        label_performance = self.tr("Performance")
         label_interface = self.tr("Interface")
         label_shortcuts = self.tr("Shortcuts")
 
@@ -1367,59 +1456,56 @@ class ConfigPanel(Widget):
         models_vlayout.setSpacing(8)
 
         # -- Model Loading section --
-        models_vlayout.addWidget(ConfigSectionHeader(self.tr("Model Loading")))
+        models_vlayout.addWidget(_section_header(self.tr("Model Loading")))
 
-        # Load on demand
-        self.load_model_checker = ConfigCheckBox()
-        font = self.load_model_checker.font()
-        font.setPointSizeF(CONFIG_FONTSIZE_CONTENT * 0.8)
-        self.load_model_checker.setFont(font)
-        self.load_model_checker.setText(self.tr("Load models on demand to save memory."))
-        cb_block = ConfigSubBlock(
-            self.load_model_checker,
-            name=self.tr("Load models on demand"),
-            note=self.tr("<p>When enabled, models are loaded only on <b>first use</b> instead of at startup. Reduces initial memory and launch time. Recommended for systems with limited GPU memory.</p>"),
+        self.load_model_checker = ConfigCheckBox(
+            self.tr("Load models on demand to save memory.")
         )
-        models_vlayout.addWidget(cb_block)
-
-        # Empty cache
-        self.empty_runcache_checker = ConfigCheckBox()
-        font = self.empty_runcache_checker.font()
-        font.setPointSizeF(CONFIG_FONTSIZE_CONTENT * 0.8)
-        self.empty_runcache_checker.setFont(font)
-        self.empty_runcache_checker.setText(self.tr("Empty cache after RUN to save memory."))
-        cb_block2 = ConfigSubBlock(
-            self.empty_runcache_checker,
-            name=self.tr("Empty cache after RUN"),
-            note=self.tr("<p>Clears intermediate inference data after each pipeline run. Frees <b>GPU/CPU memory</b> between runs. Useful when working with large projects or limited hardware.</p>"),
-        )
-        models_vlayout.addWidget(cb_block2)
-
         self.load_model_checker.stateChanged.connect(self.on_load_model_changed)
+        models_vlayout.addWidget(
+            ConfigFormRow(
+                "",
+                self.load_model_checker,
+                note=self.tr("<p>When enabled, models are loaded only on <b>first use</b> instead of at startup. Reduces initial memory and launch time. Recommended for systems with limited GPU memory.</p>"),
+            )
+        )
+
+        self.empty_runcache_checker = ConfigCheckBox(
+            self.tr("Empty cache after RUN to save memory.")
+        )
         self.empty_runcache_checker.stateChanged.connect(self.on_runcache_changed)
+        models_vlayout.addWidget(
+            ConfigFormRow(
+                "",
+                self.empty_runcache_checker,
+                note=self.tr("<p>Clears intermediate inference data after each pipeline run. Frees <b>GPU/CPU memory</b> between runs. Useful when working with large projects or limited hardware.</p>"),
+            )
+        )
 
         # -- Management section --
-        models_vlayout.addWidget(ConfigSectionHeader(self.tr("Management")))
+        models_vlayout.addWidget(_section_header(self.tr("Management")))
 
         unload_btn = QPushButton(self.tr("Unload All Models"))
         unload_btn.setObjectName("ConfigButton")
         unload_btn.clicked.connect(self.unload_models)
-        unload_sublock = ConfigSubBlock(
-            unload_btn,
-            name=self.tr("Unload models"),
-            note=self.tr("<p>Immediately releases all loaded models from memory. Use this to free <b>GPU/CPU resources</b> without restarting the application.</p>"),
+        models_vlayout.addWidget(
+            ConfigFormRow(
+                self.tr("Unload models"),
+                unload_btn,
+                note=self.tr("<p>Immediately releases all loaded models from memory. Use this to free <b>GPU/CPU resources</b> without restarting the application.</p>"),
+            )
         )
-        models_vlayout.addWidget(unload_sublock)
 
         network_btn = QPushButton(self.tr("Network & Mirror Settings..."))
         network_btn.setObjectName("ConfigButton")
         network_btn.clicked.connect(self._open_network_settings)
-        network_sublock = ConfigSubBlock(
-            network_btn,
-            name=self.tr("Network"),
-            note=self.tr("<p>Configure network proxies, mirror servers, and download sources. Useful for systems behind <b>firewalls</b> or in restricted environments.</p>"),
+        models_vlayout.addWidget(
+            ConfigFormRow(
+                self.tr("Network"),
+                network_btn,
+                note=self.tr("<p>Configure network proxies, mirror servers, and download sources. Useful for systems behind <b>firewalls</b> or in restricted environments.</p>"),
+            )
         )
-        models_vlayout.addWidget(network_sublock)
 
         # Register Models as its own page
         self._add_page(models_group)
@@ -1484,58 +1570,65 @@ class ConfigPanel(Widget):
         self.open_on_startup_checker.stateChanged.connect(
             self.on_open_onstartup_changed
         )
-        project_layout.addWidget(ConfigSectionHeader(self.tr("Startup")))
-
-        startup_sublock = ConfigSubBlock(
-            self.open_on_startup_checker,
-            note=self.tr("<p>Reopen the last project automatically when the application starts. Saves time when continuing work on the same project.</p>"),
+        project_layout.addWidget(_section_header(self.tr("Startup")))
+        project_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.open_on_startup_checker,
+                note=self.tr("<p>Reopen the last project automatically when the application starts. Saves time when continuing work on the same project.</p>"),
+            )
         )
-        project_layout.addWidget(startup_sublock)
 
-        # Output section label
-        project_layout.addWidget(ConfigSectionHeader(self.tr("Output")))
+        # Output
+        project_layout.addWidget(_section_header(self.tr("Output")))
 
-        self.rst_imgformat_combobox, self.rst_imgsave_sublock = combobox_with_label(
-            ["PNG", "JPG", "WEBP", "JXL"], self.tr("Result image format"),
-            note=self.tr("<p>Choose the output format for translated images:</p><p><b>PNG</b> — lossless quality<br/><b>JPG / WEBP</b> — smaller files, some quality loss<br/><b>JXL</b> — high compression efficiency with lossless option</p>"),
-            parent=self,
-        )
+        self.rst_imgformat_combobox = ConfigComboBox(scrollWidget=self)
+        self.rst_imgformat_combobox.addItems(["PNG", "JPG", "WEBP", "JXL"])
         self.rst_imgformat_combobox.activated.connect(self.on_rst_imgformat_changed)
+        self.rst_imgsave_sublock = ConfigFormRow(
+            self.tr("Result image format"),
+            self.rst_imgformat_combobox,
+            note=self.tr("<p>Choose the output format for translated images:</p><p><b>PNG</b> — lossless quality<br/><b>JPG / WEBP</b> — smaller files, some quality loss<br/><b>JXL</b> — high compression efficiency with lossless option</p>"),
+        )
         project_layout.addWidget(self.rst_imgsave_sublock)
 
         self.rst_imgquality_edit = PercentageLineEdit("100")
         self.rst_imgquality_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
         self.rst_imgquality_edit.finish_edited.connect(self.on_edit_quality_changed)
-        self.rst_quality_sublock = ConfigSubBlock(
-            self.rst_imgquality_edit, self.tr("Quality"),
+        self.rst_quality_sublock = ConfigFormRow(
+            self.tr("Quality"),
+            self.rst_imgquality_edit,
             note=self.tr("<p>Output image quality (<code>0-100</code>). Higher values give better quality but larger file sizes. Applies to <b>JPG</b> and <b>WEBP</b> only. Also used when <b>Auto detect source format</b> matches a lossy source.</p>"),
-            vertical_layout=False,
         )
-        self.rst_quality_sublock.layout().setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.rst_quality_sublock.layout().insertStretch(-1)
         project_layout.addWidget(self.rst_quality_sublock)
 
-        self.rst_autoformat_checker, autoformat_sublock = checkbox_with_label(
-            self.tr("Auto detect source format"),
-            note=self.tr("<p>When enabled, the output format automatically matches the <b>source image format</b>. Overrides the format selected above. If the source uses a lossy format (<b>JPG</b>, <b>WEBP</b>), the <b>Quality</b> setting above is used.</p>"),
+        self.rst_autoformat_checker = ConfigCheckBox(
+            self.tr("Auto detect source format")
         )
         self.rst_autoformat_checker.stateChanged.connect(self.on_autoformat_changed)
-        project_layout.addWidget(autoformat_sublock)
-
-        self.intermediate_imgformat_combobox, intermediate_imsave_sublock = (
-            combobox_with_label(
-                ["PNG", "JXL"], self.tr("Intermediate image format"),
-                note=self.tr("<p>Format used for intermediate processing data:</p><p><b>PNG</b> — default lossless option<br/><b>JXL</b> — better compression for mask and inpainted images</p>"),
-                parent=self,
+        project_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.rst_autoformat_checker,
+                note=self.tr("<p>When enabled, the output format automatically matches the <b>source image format</b>. Overrides the format selected above. If the source uses a lossy format (<b>JPG</b>, <b>WEBP</b>), the <b>Quality</b> setting above is used.</p>"),
             )
         )
+
+        self.intermediate_imgformat_combobox = ConfigComboBox(scrollWidget=self)
+        self.intermediate_imgformat_combobox.addItems(["PNG", "JXL"])
         self.intermediate_imgformat_combobox.activated.connect(
             self.on_intermediate_imgformat_changed
         )
-        project_layout.addWidget(intermediate_imsave_sublock)
+        project_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Intermediate image format"),
+                self.intermediate_imgformat_combobox,
+                note=self.tr("<p>Format used for intermediate processing data:</p><p><b>PNG</b> — default lossless option<br/><b>JXL</b> — better compression for mask and inpainted images</p>"),
+            )
+        )
 
         # Temporary Projects
-        project_layout.addWidget(ConfigSectionHeader(self.tr("Temporary Projects")))
+        project_layout.addWidget(_section_header(self.tr("Temporary Projects")))
 
         self.temp_clean_checker = ConfigCheckBox(
             self.tr("Clean up imported image projects on exit")
@@ -1543,100 +1636,15 @@ class ConfigPanel(Widget):
         self.temp_clean_checker.stateChanged.connect(
             self.on_auto_clean_temp_changed
         )
-        temp_clean_sublock = ConfigSubBlock(
-            self.temp_clean_checker,
-            note=self.tr(
-                "<p>When enabled, projects created by importing individual images "
-                "(via drag-drop or <b>Open Image…</b>) will be "
-                "<b>automatically deleted</b> when the application closes.</p>"
-                "<p>Use <b>Save Project As…</b> to keep a project permanently.</p>"
-            ),
-        )
-        project_layout.addWidget(temp_clean_sublock)
-
-        # Updates
-        project_layout.addWidget(ConfigSectionHeader(self.tr("Updates")))
-
-        self.check_update_on_startup_checker = ConfigCheckBox(
-            self.tr("Check update on startup")
-        )
-        self.check_update_on_startup_checker.stateChanged.connect(
-            self.on_check_update_onstartup_changed
-        )
-        check_update_onstartup_sublock = ConfigSubBlock(
-            self.check_update_on_startup_checker,
-            note=self.tr(
-                "<p>Automatically check for a newer release when the application starts. You will only be notified when a new version is available.</p>"
-            ),
-        )
-        project_layout.addWidget(check_update_onstartup_sublock)
-
-        # Update status row: Check update button + current/latest version labels
-        update_status_widget = QWidget()
-        update_status_widget.setObjectName("ConfigInlineRow")
-        update_status_widget.setAttribute(
-            Qt.WidgetAttribute.WA_StyledBackground, True
-        )
-        update_status_layout = QHBoxLayout(update_status_widget)
-        update_status_layout.setContentsMargins(10, 8, 10, 8)
-        update_status_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        self.check_update_btn = QPushButton(self.tr("Check update"))
-        self.check_update_btn.setObjectName("ConfigButton")
-        self.check_update_btn.clicked.connect(self.check_update)
-        update_status_layout.addWidget(self.check_update_btn)
-        update_status_layout.addSpacing(20)
-
-        self.current_version_label = ConfigTextLabel(
-            self.tr("Current version: ") + APP_VERSION,
-            CONFIG_FONTSIZE_CONTENT,
-        )
-        update_status_layout.addWidget(self.current_version_label)
-        update_status_layout.addSpacing(20)
-
-        self.latest_version_label = ConfigTextLabel(
-            self.tr("Latest version: ") + self.tr("Not checked"),
-            CONFIG_FONTSIZE_CONTENT,
-        )
-        update_status_layout.addWidget(self.latest_version_label)
-        update_status_layout.addStretch()
-        project_layout.addWidget(update_status_widget)
-
-        # Commit-based update check (developer channel) with risk notice
-        commit_widget = QWidget()
-        commit_layout = QVBoxLayout(commit_widget)
-        commit_layout.setContentsMargins(0, 0, 0, 0)
-        commit_layout.setSpacing(4)
-
-        commit_btn_row = QWidget()
-        commit_btn_row.setObjectName("ConfigInlineRow")
-        commit_btn_row.setAttribute(
-            Qt.WidgetAttribute.WA_StyledBackground, True
-        )
-        commit_btn_layout = QHBoxLayout(commit_btn_row)
-        commit_btn_layout.setContentsMargins(10, 8, 10, 8)
-        self.check_commit_btn = QPushButton(self.tr("Check commit updates"))
-        self.check_commit_btn.setObjectName("ConfigButton")
-        self.check_commit_btn.clicked.connect(self.check_commit_update)
-        commit_btn_layout.addWidget(self.check_commit_btn)
-        commit_btn_layout.addStretch()
-        commit_layout.addWidget(commit_btn_row)
-
-        commit_risk = QLabel(
-            "⚠ "
-            + self.tr(
-                "Updates from the latest commit are unverified developer changes and are not guaranteed to work on every device."
+        project_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.temp_clean_checker,
+                note=self.tr(
+                    "<p>When enabled, projects created by importing individual images (via drag-drop or <b>Open Image…</b>) will be <b>automatically deleted</b> when the application closes.</p><p>Use <b>Save Project As…</b> to keep a project permanently.</p>"
+                ),
             )
         )
-        commit_risk.setWordWrap(True)
-        from ui.misc import get_theme_color
-
-        commit_risk.setStyleSheet(
-            f"color: {get_theme_color(key='@warningColor').name()}; font-size: 12px;"
-        )
-        commit_layout.addWidget(commit_risk)
-
-        project_layout.addWidget(commit_widget)
 
         self.project_block = generalConfigPanel.addGroupedBlock(
             label_project, project_widget, object_name="GroupGeneral"
@@ -1648,18 +1656,14 @@ class ConfigPanel(Widget):
         self._preset_editors = {}
 
         def _make_preset_row(label: str, config_key: str, target_layout: QVBoxLayout):
-            """Build a label + comma-separated QLineEdit row for a preset list."""
-            row = QHBoxLayout()
-            row.setSpacing(6)
-            lbl = QLabel(label)
-            lbl.setFixedWidth(110)
-            row.addWidget(lbl)
+            """Build a compact form row for a preset list."""
             edit = ConfigLineEdit()
             edit.setText(", ".join(str(v) for v in getattr(pcfg, config_key)))
+            edit.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
             edit.setPlaceholderText(self.tr("comma-separated values"))
-            row.addWidget(edit, 1)
-            sublock = ConfigSubBlock(row)
-            target_layout.addWidget(sublock)
+            target_layout.addWidget(
+                ConfigFormRow(label, edit, label_width=110)
+            )
             self._preset_editors[config_key] = edit
             edit.editingFinished.connect(
                 lambda k=config_key, e=edit: self._on_preset_edited(k, e)
@@ -1672,19 +1676,13 @@ class ConfigPanel(Widget):
         ts_layout.setSpacing(0)
 
         # Default Font Format section
-        ts_layout.addWidget(ConfigSectionHeader(self.tr("Default Font Format")))
+        ts_layout.addWidget(_section_header(self.tr("Default Font Format")))
 
         delegation_frame = QFrame()
         delegation_frame.setObjectName("CompactDelegationFrame")
         delegation_layout = QVBoxLayout(delegation_frame)
-        delegation_layout.setContentsMargins(12, 8, 12, 8)
-        delegation_layout.setSpacing(4)
-
-        delegation_label = ConfigTextLabel(
-            self.tr("Default font format (when not set per-textblock):"),
-            CONFIG_FONTSIZE_CONTENT - 2,
-        )
-        delegation_layout.addWidget(delegation_label)
+        delegation_layout.setContentsMargins(16, 8, 16, 8)
+        delegation_layout.setSpacing(8)
 
         global_fntfmt_widget = QWidget()
         global_fntfmt_layout = QGridLayout(global_fntfmt_widget)
@@ -1754,26 +1752,34 @@ class ConfigPanel(Widget):
             ),
         )
 
-        ts_layout.addWidget(ConfigSubBlock(delegation_frame))
+        ts_layout.addWidget(ConfigSubBlock(delegation_frame, content_margins=(16, 4, 16, 4)))
 
         # Text formatting section
-        ts_layout.addWidget(ConfigSectionHeader(self.tr("Text formatting")))
+        ts_layout.addWidget(_section_header(self.tr("Text formatting")))
 
-        self.let_uppercase_checker, uc_sublock = checkbox_with_label(
-            self.tr("To uppercase"),
-            note=self.tr("<p>Convert all translated text to uppercase. Useful for certain <b>typographic styles</b> or all-caps conventions.</p>"),
-        )
+        self.let_uppercase_checker = ConfigCheckBox(self.tr("To uppercase"))
         self.let_uppercase_checker.stateChanged.connect(self.on_uppercase_changed)
-        ts_layout.addWidget(uc_sublock)
+        ts_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.let_uppercase_checker,
+                note=self.tr("<p>Convert all translated text to uppercase. Useful for certain <b>typographic styles</b> or all-caps conventions.</p>"),
+            )
+        )
 
-        self.let_textstyle_indep_checker, ti_sublock = checkbox_with_label(
-            self.tr("Independent text styles for each projects"),
-            note=self.tr("<p>When enabled, each project maintains its own <b>text style settings</b> independently instead of using shared global styles.</p>"),
+        self.let_textstyle_indep_checker = ConfigCheckBox(
+            self.tr("Independent text styles for each projects")
         )
         self.let_textstyle_indep_checker.stateChanged.connect(
             self.on_textstyle_indep_changed
         )
-        ts_layout.addWidget(ti_sublock)
+        ts_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.let_textstyle_indep_checker,
+                note=self.tr("<p>When enabled, each project maintains its own <b>text style settings</b> independently instead of using shared global styles.</p>"),
+            )
+        )
 
         # Punctuation Position
         self.punctuation_position_combo = ConfigComboBox(fix_size=False)
@@ -1785,11 +1791,13 @@ class ConfigPanel(Widget):
         self.punctuation_position_combo.currentIndexChanged.connect(
             self.on_punctuation_position_changed
         )
-        punct_pos_sublock = ConfigSubBlock(
-            self.punctuation_position_combo, self.tr("Punctuation Position"),
-            note=self.tr("<p>Choose punctuation alignment:</p><p><b>Centered</b> — traditional CJK style (Traditional Chinese / Japanese)<br/><b>Edge-aligned</b> — modern style (Simplified Chinese)</p>"),
+        ts_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Punctuation Position"),
+                self.punctuation_position_combo,
+                note=self.tr("<p>Choose punctuation alignment:</p><p><b>Centered</b> — traditional CJK style (Traditional Chinese / Japanese)<br/><b>Edge-aligned</b> — modern style (Simplified Chinese)</p>"),
+            )
         )
-        ts_layout.addWidget(punct_pos_sublock)
 
         # Half-width Japanese corner brackets (「」『』) in vertical mode
         self.halfwidth_corner_bracket_checker = ConfigCheckBox(
@@ -1801,12 +1809,13 @@ class ConfigPanel(Widget):
         self.halfwidth_corner_bracket_checker.stateChanged.connect(
             self.on_halfwidth_corner_bracket_changed
         )
-        corner_bracket_sublock = ConfigSubBlock(
-            self.halfwidth_corner_bracket_checker,
-            self.tr("Corner Bracket Style"),
-            note=self.tr("<p>When enabled, 「」『』 <b>corner brackets</b> in <b>vertical</b> text use half-width compact layout, matching narrow half-width punctuation width instead of full-width CJK character width. Use the sub-option below to also apply the effect to <b>horizontal</b> text.</p>"),
+        ts_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.halfwidth_corner_bracket_checker,
+                note=self.tr("<p>When enabled, 「」『』 <b>corner brackets</b> in <b>vertical</b> text use half-width compact layout, matching narrow half-width punctuation width instead of full-width CJK character width. Use the sub-option below to also apply the effect to <b>horizontal</b> text.</p>"),
+            )
         )
-        ts_layout.addWidget(corner_bracket_sublock)
 
         # Sub-option: also apply in horizontal text
         self.halfwidth_horizontal_checker = ConfigCheckBox(
@@ -1822,7 +1831,8 @@ class ConfigPanel(Widget):
             self.on_halfwidth_corner_bracket_horizontal_changed
         )
         halfwidth_horizontal_wrapper = QWidget()
-        halfwidth_horizontal_wrapper.setContentsMargins(32, 0, 0, 4)
+        # Align with the control column of ConfigFormRow (16 margin + 110 label + 8 spacing)
+        halfwidth_horizontal_wrapper.setContentsMargins(134, 0, 0, 4)
         hw_layout = QHBoxLayout(halfwidth_horizontal_wrapper)
         hw_layout.setContentsMargins(0, 0, 0, 0)
         hw_layout.addWidget(self.halfwidth_horizontal_checker)
@@ -1837,31 +1847,37 @@ class ConfigPanel(Widget):
         self.tatechuyoko_slider.valueChanged.connect(
             self.on_tatechuyoko_threshold_changed
         )
-        tatechuyoko_sublock = ConfigSubBlock(
-            self.tatechuyoko_slider, self.tr("Vertical Latin/Digits Length"),
-            note=self.tr("<p>In vertical text, consecutive Latin letters/digits up to this length are displayed upright (<b>tate-chuyoko</b>). <code>0</code> disables; longer runs fall back to per-character rotation.</p>"),
+        ts_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Vertical Latin/Digits Length"),
+                self.tatechuyoko_slider,
+                note=self.tr("<p>In vertical text, consecutive Latin letters/digits up to this length are displayed upright (<b>tate-chuyoko</b>). <code>0</code> disables; longer runs fall back to per-character rotation.</p>"),
+            )
         )
-        ts_layout.addWidget(tatechuyoko_sublock)
 
         self.exclude_fonts_btn = QPushButton(self.tr("Exclude Fonts..."), parent=self)
         self.exclude_fonts_btn.setObjectName("ConfigButton")
         self.exclude_fonts_btn.clicked.connect(self.on_exclude_fonts_clicked)
-        btn_sublock = ConfigSubBlock(
-            self.exclude_fonts_btn, name=self.tr("Font Exclusion"),
-            note=self.tr("<p>Hide selected fonts from all font selection dropdowns. Useful for filtering out <b>unusable or decorative</b> fonts.</p>"),
+        ts_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Font Exclusion"),
+                self.exclude_fonts_btn,
+                note=self.tr("<p>Hide selected fonts from all font selection dropdowns. Useful for filtering out <b>unusable or decorative</b> fonts.</p>"),
+            )
         )
-        ts_layout.addWidget(btn_sublock)
 
         self.max_font_size_edit = NoArrowsSpinBox()
         self.max_font_size_edit.setRange(10, 1000)
         self.max_font_size_edit.setValue(pcfg.max_font_size)
         self.max_font_size_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
         self.max_font_size_edit.valueChanged.connect(self.on_max_font_size_changed)
-        max_font_sublock = ConfigSubBlock(
-            self.max_font_size_edit, self.tr("Max Font Size (px)"),
-            note=self.tr("<p>Maximum allowed font size in pixels. Text that would render larger than this limit is <b>scaled down</b> automatically.</p>"),
+        ts_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Max Font Size (px)"),
+                self.max_font_size_edit,
+                note=self.tr("<p>Maximum allowed font size in pixels. Text that would render larger than this limit is <b>scaled down</b> automatically.</p>"),
+            )
         )
-        ts_layout.addWidget(max_font_sublock)
 
         self.typesetting_block = generalConfigPanel.addGroupedBlock(
             label_typesetting, ts_widget, object_name="GroupGeneral"
@@ -1869,25 +1885,26 @@ class ConfigPanel(Widget):
 
         # === Save controls moved into Project group above ===
 
-        # === General: Interface (animation + shortcuts + presets) ===
+        # === General: Interface (canvas behavior + appearance) ===
         interface_widget = QWidget()
         interface_layout = QVBoxLayout(interface_widget)
         interface_layout.setContentsMargins(0, 0, 0, 0)
-        interface_layout.setSpacing(8)
+        interface_layout.setSpacing(0)
 
         # Behavior section
-        interface_layout.addWidget(ConfigSectionHeader(self.tr("Behavior")))
+        interface_layout.addWidget(_section_header(self.tr("Behavior")))
 
-        # Fit image to window on open
         self.fit_window_checker = ConfigCheckBox(
             self.tr("Fit image to window when opening")
         )
         self.fit_window_checker.stateChanged.connect(self.on_fit_window_changed)
-        fit_win_sublock = ConfigSubBlock(
-            self.fit_window_checker, name=self.tr("Window Fit"),
-            note=self.tr("<p>Automatically scale the image to fit the window when opening a project. Avoids <b>manual zooming</b> on every file open.</p>"),
+        interface_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.fit_window_checker,
+                note=self.tr("<p>Automatically scale the image to fit the window when opening a project. Avoids <b>manual zooming</b> on every file open.</p>"),
+            )
         )
-        interface_layout.addWidget(fit_win_sublock)
 
         # Sub-option: also fit on page switch
         self.fit_window_page_checker = ConfigCheckBox(
@@ -1897,21 +1914,33 @@ class ConfigPanel(Widget):
             self.on_fit_window_page_changed
         )
         self.fit_window_page_checker.setVisible(False)
-        self._fit_page_sublock = ConfigSubBlock(self.fit_window_page_checker)
+        self._fit_page_sublock = ConfigFormRow("", self.fit_window_page_checker)
         self._fit_page_sublock.setVisible(False)
         interface_layout.addWidget(self._fit_page_sublock)
 
-        # Combo Box Presets (moved from Typesetting)
-        interface_layout.addWidget(ConfigSectionHeader(self.tr("Combo Box Presets")))
+        # Appearance section — animation, combo box presets, original compare
+        interface_layout.addWidget(_section_header(self.tr("Appearance")))
 
-        # Helper label
-        preset_hint = ConfigTextLabel(
-            self.tr("Comma-separated values — used in font format panel dropdowns."),
-            CONFIG_FONTSIZE_CONTENT - 3,
+        self.anim_combo = ConfigComboBox(scrollWidget=self)
+        self.anim_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
+        self.anim_combo.addItems(
+            [
+                self.tr("Auto (match display)"),
+                "60 FPS",
+                "30 FPS",
+                self.tr("Off (no animation)"),
+            ]
         )
-        preset_hint_sublock = ConfigSubBlock(preset_hint)
-        interface_layout.addWidget(preset_hint_sublock)
+        self.anim_combo.activated.connect(self._on_anim_mode_changed)
+        interface_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Animation"),
+                self.anim_combo,
+                note=self.tr("<p>Controls UI transition smoothness:</p><p><b>Auto</b> — matches display refresh rate<br/><b>Specific FPS</b> — cap GPU usage<br/><b>Off</b> — disables all animations</p>"),
+            )
+        )
 
+        # Combo Box Presets
         _make_preset_row(self.tr("Font Size:"), "font_size_presets", interface_layout)
         _make_preset_row(
             self.tr("Line Spacing:"), "line_spacing_presets", interface_layout
@@ -1925,50 +1954,64 @@ class ConfigPanel(Widget):
         _make_preset_row(self.tr("Opacity:"), "opacity_presets", interface_layout)
 
         # ── Original Compare ───────────────────────────────────
-        interface_layout.addWidget(ConfigSectionHeader(self.tr("Original Compare")))
-
-        toggle_row = QHBoxLayout()
-        toggle_row.setSpacing(6)
-        toggle_lbl = QLabel(self.tr("Preset (%):"))
-        toggle_lbl.setFixedWidth(110)
-        toggle_row.addWidget(toggle_lbl)
         self.orig_opacity_toggle_spin = NoArrowsSpinBox()
         self.orig_opacity_toggle_spin.setRange(0, 99)
         self.orig_opacity_toggle_spin.setValue(pcfg.original_transparency_preset)
+        self.orig_opacity_toggle_spin.setFixedWidth(CONFIG_COMBOBOX_SHORT)
         self.orig_opacity_toggle_spin.valueChanged.connect(
             lambda v: setattr(pcfg, "original_transparency_preset", v)
         )
-        toggle_row.addWidget(self.orig_opacity_toggle_spin, 1)
-        toggle_row.addStretch()
-        togglesublock = ConfigSubBlock(
-            toggle_row, name=self.tr("Preset"),
-            note=self.tr("<p>Background opacity level when using the <b>Original Compare</b> shortcut. Lower values show more of the original image beneath the translation.</p>"),
+        interface_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Preset (%):"),
+                self.orig_opacity_toggle_spin,
+                note=self.tr("<p>Background opacity level when using the <b>Original Compare</b> shortcut. Lower values show more of the original image beneath the translation.</p>"),
+            )
         )
-        interface_layout.addWidget(togglesublock)
 
-        # Show sequence badge on text blocks
+        # Canvas section — canvas editing behaviors
+        interface_layout.addWidget(_section_header(self.tr("Canvas")))
+
         self.seq_badge_checker = ConfigCheckBox(
             self.tr("Show sequence number on text blocks")
         )
         self.seq_badge_checker.setChecked(pcfg.show_seq_badge)
         self.seq_badge_checker.stateChanged.connect(self.on_seq_badge_changed)
-        seq_badge_sublock = ConfigSubBlock(
-            self.seq_badge_checker, name=self.tr("Sequence Badge"),
-            note=self.tr("<p>Displays the block <b>sequence number</b> at the top-left corner of each text block on the canvas. Disable to avoid occlusion when working with small fonts.</p>"),
+        interface_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.seq_badge_checker,
+                note=self.tr("<p>Displays the block <b>sequence number</b> at the top-left corner of each text block on the canvas. Disable to avoid occlusion when working with small fonts.</p>"),
+            )
         )
-        interface_layout.addWidget(seq_badge_sublock)
 
-        # Clip text overflow on translation fill
         self.clip_overflow_checker = ConfigCheckBox(
             self.tr("Clip text overflow after translation")
         )
         self.clip_overflow_checker.setChecked(pcfg.clip_text_overflow)
         self.clip_overflow_checker.stateChanged.connect(self.on_clip_overflow_changed)
-        clip_overflow_sublock = ConfigSubBlock(
-            self.clip_overflow_checker, name=self.tr("Overflow Clip"),
-            note=self.tr("<p>When translation text exceeds the block boundary, <b>clip it</b> instead of enlarging the block. A <b>yellow border</b> indicates clipping. Drag a corner handle to resize and un-clip.</p>"),
+        interface_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.clip_overflow_checker,
+                note=self.tr("<p>When translation text exceeds the block boundary, <b>clip it</b> instead of enlarging the block. A <b>yellow border</b> indicates clipping. Drag a corner handle to resize and un-clip.</p>"),
+            )
         )
-        interface_layout.addWidget(clip_overflow_sublock)
+
+        self.drag_decorations_checker = ConfigCheckBox(
+            self.tr("Show decorations while resizing")
+        )
+        self.drag_decorations_checker.setChecked(pcfg.show_decorations_during_drag)
+        self.drag_decorations_checker.toggled.connect(
+            self._on_decorations_during_drag_changed
+        )
+        interface_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.drag_decorations_checker,
+                note=self.tr("<p>When checked, <b>text stroke and shadow</b> remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.</p>"),
+            )
+        )
 
         self.interface_block = generalConfigPanel.addGroupedBlock(
             label_interface, interface_widget, object_name="GroupGeneral"
@@ -1988,116 +2031,146 @@ class ConfigPanel(Widget):
         self.quick_menus_editor = PieMenuEditor()
         self._add_page(self.quick_menus_editor)
 
-        # === General: Performance ===
-        perf_widget = QWidget()
-        perf_layout = QVBoxLayout(perf_widget)
-        perf_layout.setContentsMargins(0, 0, 0, 0)
-        perf_layout.setSpacing(8)
-
-        # Animation mode (moved from Interface)
-        anim_widget = QWidget()
-        anim_row_layout = QHBoxLayout(anim_widget)
-        anim_row_layout.setContentsMargins(0, 0, 0, 0)
-        anim_row_layout.setSpacing(6)
-        self.anim_combo = ConfigComboBox(scrollWidget=self)
-        self.anim_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
-        self.anim_combo.addItems(
-            [
-                self.tr("Auto (match display)"),
-                "60 FPS",
-                "30 FPS",
-                self.tr("Off (no animation)"),
-            ]
-        )
-        self.anim_combo.activated.connect(self._on_anim_mode_changed)
-        anim_row_layout.addWidget(self.anim_combo)
-        anim_row_layout.addStretch()
-        anim_sublock = ConfigSubBlock(
-            anim_widget, name=self.tr("Animation"),
-            note=self.tr("<p>Controls UI transition smoothness:</p><p><b>Auto</b> — matches display refresh rate<br/><b>Specific FPS</b> — cap GPU usage<br/><b>Off</b> — disables all animations</p>"),
-            vertical_layout=False,
-        )
-        perf_layout.addWidget(anim_sublock)
-
-        # Show decorations during drag/resize
-        self.drag_decorations_checker = ConfigCheckBox(
-            self.tr("Show decorations while resizing")
-        )
-        self.drag_decorations_checker.setChecked(pcfg.show_decorations_during_drag)
-        self.drag_decorations_checker.toggled.connect(
-            self._on_decorations_during_drag_changed
-        )
-        decor_sublock = ConfigSubBlock(
-            self.drag_decorations_checker,
-            name=self.tr("Drag Decorations"),
-            note=self.tr("<p>When checked, <b>text stroke and shadow</b> remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.</p>"),
-            vertical_layout=False,
-        )
-        perf_layout.addWidget(decor_sublock)
-
-        self.performance_block = generalConfigPanel.addGroupedBlock(
-            label_performance, perf_widget, object_name="GroupGeneral"
-        )
-
-        # === Config Management (Import / Export) ===
-        label_config_mgmt = self.tr("Config Management")
+        # === App (Updates + Config Import/Export) ===
+        label_app = self.tr("App")
         config_mgmt_widget = QWidget()
         config_mgmt_layout = QVBoxLayout(config_mgmt_widget)
         config_mgmt_layout.setContentsMargins(0, 0, 0, 0)
         config_mgmt_layout.setSpacing(0)
 
+        # Updates section (moved from Project)
+        config_mgmt_layout.addWidget(_section_header(self.tr("Updates")))
+
+        self.check_update_on_startup_checker = ConfigCheckBox(
+            self.tr("Check update on startup")
+        )
+        self.check_update_on_startup_checker.stateChanged.connect(
+            self.on_check_update_onstartup_changed
+        )
+        config_mgmt_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.check_update_on_startup_checker,
+                note=self.tr(
+                    "<p>Automatically check for a newer release when the application starts. You will only be notified when a new version is available.</p>"
+                ),
+            )
+        )
+
+        # Update status row: Check update button + current/latest version labels
+        update_status_widget = QWidget()
+        update_status_widget.setObjectName("ConfigInlineRow")
+        update_status_layout = QHBoxLayout(update_status_widget)
+        update_status_layout.setContentsMargins(0, 0, 0, 0)
+        update_status_layout.setSpacing(12)
+        update_status_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        self.check_update_btn = QPushButton(self.tr("Check update"))
+        self.check_update_btn.setObjectName("ConfigButton")
+        self.check_update_btn.clicked.connect(self.check_update)
+        update_status_layout.addWidget(self.check_update_btn)
+
+        self.current_version_label = ConfigTextLabel(
+            self.tr("Current version: ") + APP_VERSION,
+            CONFIG_FONTSIZE_CONTENT,
+        )
+        update_status_layout.addWidget(self.current_version_label)
+
+        self.latest_version_label = ConfigTextLabel(
+            self.tr("Latest version: ") + self.tr("Not checked"),
+            CONFIG_FONTSIZE_CONTENT,
+        )
+        update_status_layout.addWidget(self.latest_version_label)
+        update_status_layout.addStretch()
+        config_mgmt_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Update status:"),
+                update_status_widget,
+                note=self.tr("<p>Manually trigger a version check and view the current and latest release numbers.</p>"),
+            )
+        )
+
+        # Commit-based update check (developer channel) with risk notice
+        self.check_commit_btn = QPushButton(self.tr("Check commit updates"))
+        self.check_commit_btn.setObjectName("ConfigButton")
+        self.check_commit_btn.clicked.connect(self.check_commit_update)
+        config_mgmt_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Developer channel:"),
+                self.check_commit_btn,
+                note=self.tr("<p>Check for the latest commit (unverified developer changes). Not guaranteed to work on every device.</p>"),
+            )
+        )
+
+        commit_risk = QLabel(
+            "⚠ "
+            + self.tr(
+                "Updates from the latest commit are unverified developer changes and are not guaranteed to work on every device."
+            )
+        )
+        commit_risk.setWordWrap(True)
+        from ui.misc import get_theme_color
+
+        commit_risk.setStyleSheet(
+            f"color: {get_theme_color(key='@warningColor').name()}; font-size: 12px;"
+        )
+        risk_wrapper = QWidget()
+        # Align with the control column of ConfigFormRow
+        risk_wrapper.setContentsMargins(134, 0, 16, 4)
+        risk_layout = QHBoxLayout(risk_wrapper)
+        risk_layout.setContentsMargins(0, 0, 0, 0)
+        risk_layout.addWidget(commit_risk)
+        risk_layout.addStretch()
+        config_mgmt_layout.addWidget(risk_wrapper)
+
         # Export section
-        config_mgmt_layout.addWidget(ConfigSectionHeader(self.tr("Export Config")))
+        config_mgmt_layout.addWidget(_section_header(self.tr("Export Config")))
 
         self.export_exclude_keys = ConfigCheckBox(
             self.tr("Exclude API keys when exporting")
         )
         self.export_exclude_keys.setChecked(True)
-        font = self.export_exclude_keys.font()
-        font.setPointSizeF(CONFIG_FONTSIZE_CONTENT * 0.8)
-        self.export_exclude_keys.setFont(font)
-        config_mgmt_layout.addWidget(ConfigSubBlock(
-            self.export_exclude_keys,
-            note=self.tr(
-                "<p>API profiles will be exported without <b>api_key</b> and "
-                "<b>proxy</b> fields. Structure and all other settings remain "
-                "intact. Uncheck to include credentials "
-                "(not recommended for sharing).</p>"
-            ),
-        ))
+        config_mgmt_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.export_exclude_keys,
+                note=self.tr(
+                    "<p>API profiles will be exported without <b>api_key</b> and <b>proxy</b> fields. Structure and all other settings remain intact. Uncheck to include credentials (not recommended for sharing).</p>"
+                ),
+            )
+        )
 
         export_btn = QPushButton(self.tr("Export Config..."))
         export_btn.setObjectName("ConfigButton")
         export_btn.clicked.connect(self.on_export_config)
-        export_sublock = ConfigSubBlock(
-            export_btn,
-            name=self.tr("Export"),
-            note=self.tr(
-                "<p>Save current settings to a <b>.json</b> file. "
-                "Useful for backups or transferring configurations "
-                "between machines.</p>"
-            ),
+        config_mgmt_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Export file:"),
+                export_btn,
+                note=self.tr(
+                    "<p>Save current settings to a <b>.json</b> file. Useful for backups or transferring configurations between machines.</p>"
+                ),
+            )
         )
-        config_mgmt_layout.addWidget(export_sublock)
 
         # Import section
-        config_mgmt_layout.addWidget(ConfigSectionHeader(self.tr("Import Config")))
+        config_mgmt_layout.addWidget(_section_header(self.tr("Import Config")))
 
         import_btn = QPushButton(self.tr("Import Config..."))
         import_btn.setObjectName("ConfigButton")
         import_btn.clicked.connect(self.on_import_config)
-        import_sublock = ConfigSubBlock(
-            import_btn,
-            name=self.tr("Import"),
-            note=self.tr(
-                "<p>Load settings from a previously exported <b>.json</b> file. "
-                "A compatibility summary will be shown before applying.</p>"
-            ),
+        config_mgmt_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Import file:"),
+                import_btn,
+                note=self.tr(
+                    "<p>Load settings from a previously exported <b>.json</b> file. A compatibility summary will be shown before applying.</p>"
+                ),
+            )
         )
-        config_mgmt_layout.addWidget(import_sublock)
 
         self.config_mgmt_block = generalConfigPanel.addGroupedBlock(
-            label_config_mgmt, config_mgmt_widget, object_name="GroupGeneral"
+            label_app, config_mgmt_widget, object_name="GroupGeneral"
         )
 
         # === Navigation tree (upstream-style) ===
@@ -2117,7 +2190,6 @@ class ConfigPanel(Widget):
         general_header = self.configTable.addHeader(self.tr("General"))
         self.configTable.addSection(general_header, label_project, "project", self.project_block.section_widget)
         self.configTable.addSection(general_header, label_typesetting, "typesetting", self.typesetting_block.section_widget)
-        self.configTable.addSection(general_header, label_performance, "performance", self.performance_block.section_widget)
         self.configTable.addSection(general_header, label_interface, "interface", self.interface_block.section_widget)
         self.configTable.addSection(general_header, label_shortcuts, "shortcuts", self.shortcuts_editor)
         label_quick_menus = self.tr("Quick Menus")
@@ -2125,7 +2197,7 @@ class ConfigPanel(Widget):
             general_header, label_quick_menus, "quick_menus", self.quick_menus_editor
         )
         self.configTable.addSection(
-            general_header, label_config_mgmt, "config_mgmt",
+            general_header, label_app, "config_mgmt",
             self.config_mgmt_block.section_widget,
         )
 
@@ -2142,7 +2214,6 @@ class ConfigPanel(Widget):
             "llm_profile": self.llm_profiles_panel,
             "project": self.project_block.section_widget,
             "typesetting": self.typesetting_block.section_widget,
-            "performance": self.performance_block.section_widget,
             "interface": self.interface_block.section_widget,
             "shortcuts": self.shortcuts_editor,
             "quick_menus": self.quick_menus_editor,
