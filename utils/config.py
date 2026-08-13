@@ -274,6 +274,7 @@ class ProgramConfig(Config):
     original_transparency: float = 0.0
     original_transparency_preset: int = 20
     open_recent_on_startup: bool = True
+    check_update_on_startup: bool = False
 
     let_fntsize_flag: int = 0
     let_fntstroke_flag: int = 0

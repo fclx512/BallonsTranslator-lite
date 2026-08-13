@@ -1784,3 +1784,74 @@ QTreeView::item:selected, QListView::item:selected {
     color: @textColor;
 }
 
+/* ── Update release dialog ─────────────────────────────────── */
+QDialog#UpdateReleaseDialog {
+    background: transparent;
+}
+
+QFrame#UpdateReleaseSurface {
+    background-color: @widgetBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 10px;
+}
+
+QLabel#UpdateReleaseTitle {
+    font-size: 18px;
+    font-weight: bold;
+    color: @qwidgetForegroundColor;
+}
+
+QLabel#UpdateReleaseVersion {
+    font-size: 14px;
+    color: @qwidgetForegroundColor;
+}
+
+QLabel#UpdateReleaseMetadata {
+    font-size: 12px;
+    color: @borderColor;
+}
+
+QLabel#UpdateReleaseNotesHeading {
+    font-size: 13px;
+    font-weight: bold;
+    color: @qwidgetForegroundColor;
+}
+
+QFrame#UpdateReleaseNotesCard {
+    background-color: @emptyContentBackgroundColor;
+    border-radius: 6px;
+}
+
+QTextBrowser#UpdateReleaseNotes {
+    background: transparent;
+    border: none;
+    color: @qwidgetForegroundColor;
+    font-size: 13px;
+}
+
+QLabel#UpdateReleaseRestartNotice {
+    font-size: 12px;
+    color: @borderColor;
+}
+
+QPushButton#UpdateDialogPrimaryButton {
+    background-color: @accentPrimary;
+    color: @textColor;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 18px;
+    font-weight: bold;
+}
+
+QPushButton#UpdateDialogPrimaryButton:hover {
+    background-color: @hoverBackgroundColor;
+    border: 1px solid @accentPrimary;
+}
+
+QPushButton#UpdateDialogCancelButton {
+    background-color: @emptyContentBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding: 5px 18px;
+    color: @qwidgetForegroundColor;
+}

@@ -2,6 +2,23 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，每次在对应日期中末尾写入日志。
 
+## 2026-08-13
+
+### 检查更新：对齐上游 release 策略 + 界面统一迁入设置
+
+**问题/需求：** 原检查更新是 git 比较 main 分支 commit（开发分支天天有提交，无版本语义）；对齐上游 dmMaze 策略改为查 GitHub latest release + semver 版本比较。且 About 与设置两处检查更新称呼一致易混淆，统一迁入设置页，About 只留干净版本信息。
+
+**改动要点：**
+
+- **release 通道**（`utils/updater.py` 新增，移植自上游适配）：查 `fclx512/BallonsTranslator-lite` `releases/latest` API（api.github.com 无镜像可用），`packaging.version` semver 比较（异常回退 tuple）；更新动作 = 下载源码 zip → 备份 `.btrans_cache/last_version` → git stash 保护本地改动 → 安全解压（防路径穿越）→ 原子替换 → 清理。`SOURCE_UPDATE_DIRS/FILES` 白名单按本仓库平铺结构校准（config/ 拆文件白名单保护 config.json，data/ 与 gitignored 用户数据不更新）。
+- **UI**（`ui/update_dialog.py` 新增 + `ui/configpanel.py`）：ConfigPanel Project 页 Updates 区——`[Check update]` 按钮 + Current/Latest version 行 + `check_update_on_startup` 复选框（**默认关**，用户指定）；有新版本弹 `UpdateReleaseDialog`（release notes 按 `## Changelog`/`## 更新说明` 选区段、剥图、主题样式）；`ui/update_thread.py`（新增）QThread 编排 + ProgressMessageBox 进度 + 启动 500ms 静默检查。
+- **commit 通道**（`ui/update_checker.py`）：AboutDialog 瘦身（只留版本/commit/branch/链接）；commit 检查 + git reset 更新迁入新 `CommitUpdateDialog`（开发者测试通道，带"按最新提交可能不稳定"风险提示），入口在 Updates 区「检查提交更新」按钮。
+- 真实 API 验证：本地 0.5.0 == fork release v0.5.0 → up_to_date。
+
+**涉及文件：** `utils/updater.py`（新增）、`ui/update_thread.py`（新增）、`ui/update_dialog.py`（新增）、`ui/update_checker.py`、`ui/configpanel.py`、`ui/mainwindow.py`、`utils/config.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
 ## 2026-08-12
 
 ### 快捷菜单：竖排样式 + 设置页清理（杂事）

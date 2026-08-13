@@ -23,101 +23,7 @@
             <source>Branch</source>
             <translation>分支</translation>
         </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="361" />
-            <source>Recent changes:</source>
-            <translation>最近更新：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="371" />
-            <source>Local changes will be overwritten</source>
-            <translation>本地更改将被覆盖</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="466" />
-            <location filename="..\ui\update_checker.py" line="429" />
-            <location filename="..\ui\update_checker.py" line="414" />
-            <location filename="..\ui\update_checker.py" line="382" />
-            <source>Cancel</source>
-            <translation>取消</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="400" />
-            <source>Check for updates</source>
-            <translation>检查更新</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="403" />
-            <source>Last checked: {time}</source>
-            <translation>上次检查：{time}</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="412" />
-            <source>Check Now</source>
-            <translation>立即检查</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="422" />
-            <source>Checking for updates...</source>
-            <translation>正在检查更新...</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="437" />
-            <source>You are running the latest version.</source>
-            <translation>已是最新版本</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="495" />
-            <location filename="..\ui\update_checker.py" line="443" />
-            <source>OK</source>
-            <translation>确定</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="451" />
-            <source>A new version is available!</source>
-            <translation>发现新版本！</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="464" />
-            <source>Update Now</source>
-            <translation>立即更新</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="473" />
-            <source>Updating...</source>
-            <translation>正在更新...</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="480" />
-            <source>Working...</source>
-            <translation>处理中...</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="487" />
-            <source>Update check failed</source>
-            <translation>检查更新失败</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="503" />
-            <source>Update complete!</source>
-            <translation>更新完成！</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="505" />
-            <source>Restart to apply changes?</source>
-            <translation>重启以应用更新？</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="511" />
-            <source>Restart Now</source>
-            <translation>立即重启</translation>
-        </message>
-        <message>
-            <location filename="..\ui\update_checker.py" line="513" />
-            <source>Later</source>
-            <translation>稍后</translation>
-        </message>
-    </context>
+</context>
     <context>
         <name>BottomBar</name>
         <message>
@@ -1176,7 +1082,43 @@
             <source>&lt;p&gt;When translation text exceeds the block boundary, &lt;b&gt;clip it&lt;/b&gt; instead of enlarging the block. A &lt;b&gt;yellow border&lt;/b&gt; indicates clipping. Drag a corner handle to resize and un-clip.&lt;/p&gt;</source>
             <translation>&lt;p&gt;当译文超出文本框边界时，&lt;b&gt;裁剪文字&lt;/b&gt;而非撑大文本框。&lt;b&gt;黄色边框&lt;/b&gt;表示裁剪状态，拖拽角落手柄即可调整尺寸并解除裁剪。&lt;/p&gt;</translation>
         </message>
-    </context>
+            <message>
+            <source>Check update</source>
+            <translation>检查更新</translation>
+        </message>
+        <message>
+            <source>Check update on startup</source>
+            <translation>启动时检查更新</translation>
+        </message>
+        <message>
+            <source>Current version: </source>
+            <translation>当前版本：</translation>
+        </message>
+        <message>
+            <source>Latest version: </source>
+            <translation>最新版本：</translation>
+        </message>
+        <message>
+            <source>Not checked</source>
+            <translation>未检查</translation>
+        </message>
+        <message>
+            <source>Updates</source>
+            <translation>更新</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Automatically check for a newer release when the application starts. You will only be notified when a new version is available.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;应用启动时自动检查是否有新版本。仅在有新版本可用时提醒你。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Check commit updates</source>
+            <translation>检查提交更新</translation>
+        </message>
+        <message>
+            <source>Updates from the latest commit are unverified developer changes and are not guaranteed to work on every device.</source>
+            <translation>按最新提交更新属于未经验证的开发中更改，不保证在每台设备上可用。</translation>
+        </message>
+</context>
     <context>
         <name>DependencyDialog</name>
         <message>
@@ -2285,7 +2227,39 @@ Open Photoshop → File → Scripts → Browse → run </source>
             <source>Failed to export PSD script</source>
             <translation>导出 PSD 脚本失败</translation>
         </message>
-    </context>
+            <message>
+            <source>Already up-to-date.</source>
+            <translation>已是最新版本。</translation>
+        </message>
+        <message>
+            <source>Backing up current version: </source>
+            <translation>正在备份当前版本：</translation>
+        </message>
+        <message>
+            <source>Checking...</source>
+            <translation>正在检查…</translation>
+        </message>
+        <message>
+            <source>Downloading update: </source>
+            <translation>正在下载更新：</translation>
+        </message>
+        <message>
+            <source>Failed to check for updates.</source>
+            <translation>检查更新失败。</translation>
+        </message>
+        <message>
+            <source>Installing update: </source>
+            <translation>正在安装更新：</translation>
+        </message>
+        <message>
+            <source>Saving local changes: </source>
+            <translation>正在保存本地更改：</translation>
+        </message>
+        <message>
+            <source>Updating: </source>
+            <translation>正在更新：</translation>
+        </message>
+</context>
     <context>
         <name>CustomGlossaryDialog</name>
         <message>
@@ -5816,4 +5790,144 @@ This maps automatically to each provider's native parameter
             <translation>删除变换</translation>
         </message>
     </context>
+    <context>
+        <name>UpdateReleaseDialog</name>
+        <message>
+            <source>Update Available</source>
+            <translation>有可用更新</translation>
+        </message>
+        <message>
+            <source>A new version is available</source>
+            <translation>检测到新版本</translation>
+        </message>
+        <message>
+            <source>What's new</source>
+            <translation>更新内容</translation>
+        </message>
+        <message>
+            <source>No release notes.</source>
+            <translation>无发布说明。</translation>
+        </message>
+        <message>
+            <source>Updating will restart the app.</source>
+            <translation>更新后将重启应用。</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <source>Update</source>
+            <translation>更新</translation>
+        </message>
+        <message>
+            <source>Close</source>
+            <translation>关闭</translation>
+        </message>
+    </context>
+    <context>
+        <name>CommitUpdateDialog</name>
+        <message>
+            <location filename="..\ui\update_checker.py" line="361" />
+            <source>Recent changes:</source>
+            <translation>最近更新：</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="371" />
+            <source>Local changes will be overwritten</source>
+            <translation>本地更改将被覆盖</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="466" />
+            <location filename="..\ui\update_checker.py" line="429" />
+            <location filename="..\ui\update_checker.py" line="414" />
+            <location filename="..\ui\update_checker.py" line="382" />
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="400" />
+            <source>Check for updates</source>
+            <translation>检查更新</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="403" />
+            <source>Last checked: {time}</source>
+            <translation>上次检查：{time}</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="412" />
+            <source>Check Now</source>
+            <translation>立即检查</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="422" />
+            <source>Checking for updates...</source>
+            <translation>正在检查更新...</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="437" />
+            <source>You are running the latest version.</source>
+            <translation>已是最新版本</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="495" />
+            <location filename="..\ui\update_checker.py" line="443" />
+            <source>OK</source>
+            <translation>确定</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="451" />
+            <source>A new version is available!</source>
+            <translation>发现新版本！</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="464" />
+            <source>Update Now</source>
+            <translation>立即更新</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="473" />
+            <source>Updating...</source>
+            <translation>正在更新...</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="480" />
+            <source>Working...</source>
+            <translation>处理中...</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="487" />
+            <source>Update check failed</source>
+            <translation>检查更新失败</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="503" />
+            <source>Update complete!</source>
+            <translation>更新完成！</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="505" />
+            <source>Restart to apply changes?</source>
+            <translation>重启以应用更新？</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="511" />
+            <source>Restart Now</source>
+            <translation>立即重启</translation>
+        </message>
+        <message>
+            <location filename="..\ui\update_checker.py" line="513" />
+            <source>Later</source>
+            <translation>稍后</translation>
+        </message>
+            <message>
+            <source>Check commit updates</source>
+            <translation>检查提交更新</translation>
+        </message>
+        <message>
+            <source>Checking by latest commit applies unverified developer changes and may be unstable on your device.</source>
+            <translation>按最新提交检查会应用未经验证的开发中更改，在您的设备上可能不稳定。</translation>
+        </message>
+</context>
 </TS>

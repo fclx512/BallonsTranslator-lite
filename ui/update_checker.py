@@ -1,6 +1,11 @@
 """
-In-app update checker and About dialog.
-Background git operations (fetch + reset --hard) via QThread.
+About dialog (version info only) and commit-based update checker.
+
+Commit-based updates compare against the latest commit of the repository's
+main branch and are intended for developers: commits are unverified and may
+not be stable on every device. The release-based update check (versioned
+releases, safer for normal users) lives in ``ui/update_dialog.py`` and is
+triggered from the settings panel.
 """
 
 import subprocess
@@ -251,31 +256,19 @@ class UpdateThread(QThread):
 
 
 class AboutDialog(QDialog):
-    """About dialog with version info and embedded update check section."""
+    """About dialog with version info only (no update check)."""
 
-    restart_requested = Signal()
-
-    def __init__(self, parent, version, commit, branch, git_path=None, repo_path=None):
+    def __init__(self, parent, version, commit, branch):
         super().__init__(parent)
         self.setWindowTitle(self.tr("About"))
         self.setMinimumWidth(520)
         self.setModal(True)
 
-        self._git_path = git_path
-        self._branch = branch
-        self._repo_path = repo_path
-
         short = commit[:8] if commit and commit != "<none>" else "?"
         self._version = version
         self._commit = short
-        self._full_commit = commit
-        self._latest_short = ""
-        self._latest_full = ""
-        self._thread = None
-        self._state = "idle"
 
         self._build_ui(short, branch)
-        self._set_state_idle()
 
     # ── build ──────────────────────────────────────────────────
 
@@ -283,8 +276,6 @@ class AboutDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
         layout.setContentsMargins(32, 24, 32, 24)
-
-        # ── About section ──────────────────────────────────────
 
         title = QLabel("BallonsTranslator-lite")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -321,18 +312,59 @@ class AboutDialog(QDialog):
         link.setOpenExternalLinks(True)
         layout.addWidget(link)
 
-        layout.addSpacing(16)
+        layout.addStretch()
 
-        # ── Separator ──────────────────────────────────────────
 
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setFrameShadow(QFrame.Shadow.Sunken)
-        layout.addWidget(sep)
+class CommitUpdateDialog(QDialog):
+    """Check for updates by comparing against the latest commit of the
+    repository's main branch.
 
-        layout.addSpacing(12)
+    Intended for developers: each commit is unverified developer state and is
+    not guaranteed to work on every device.
+    """
 
-        # ── Update section ─────────────────────────────────────
+    restart_requested = Signal()
+
+    def __init__(self, parent, branch, git_path=None, repo_path=None):
+        super().__init__(parent)
+        self.setWindowTitle(self.tr("Check commit updates"))
+        self.setMinimumWidth(520)
+        self.setModal(True)
+
+        self._git_path = git_path
+        self._branch = branch
+        self._repo_path = repo_path
+        self._latest_short = ""
+        self._latest_full = ""
+        self._thread = None
+        self._state = "idle"
+
+        self._build_ui()
+        self._set_state_idle()
+
+    # ── build ──────────────────────────────────────────────────
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(8)
+        layout.setContentsMargins(32, 24, 32, 24)
+
+        # Persistent risk notice: commits are unverified developer state.
+        self.risk_label = QLabel(
+            "⚠ "
+            + self.tr(
+                "Checking by latest commit applies unverified developer changes and may be unstable on your device."
+            )
+        )
+        self.risk_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.risk_label.setWordWrap(True)
+        wc = get_theme_color(key="@warningColor")
+        self.risk_label.setStyleSheet(
+            f"color: {wc.name()}; font-size: 12px;"
+        )
+        layout.addWidget(self.risk_label)
+
+        layout.addSpacing(8)
 
         self.icon_label = QLabel()
         self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)

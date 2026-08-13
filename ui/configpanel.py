@@ -53,6 +53,7 @@ from qtpy.QtWidgets import (
 from utils.config import export_config, import_config, pcfg
 from utils.message import create_error_dialog, create_info_dialog
 from utils.shortcut_conflicts import find_conflict_keys
+from utils.version import APP_VERSION
 from utils.shared import (
     CONFIG_COMBOBOX_LONG,
     CONFIG_COMBOBOX_MIDEAN,
@@ -1317,6 +1318,8 @@ class ConfigPanel(Widget):
     presets_changed = Signal()
     seq_badge_changed = Signal()
     clip_overflow_changed = Signal()
+    check_update = Signal()
+    check_commit_update = Signal()
 
     # Active instance used by _DeadBlock/_DeadLayout to find the page stack
     # during __init__ construction.
@@ -1550,6 +1553,90 @@ class ConfigPanel(Widget):
             ),
         )
         project_layout.addWidget(temp_clean_sublock)
+
+        # Updates
+        project_layout.addWidget(ConfigSectionHeader(self.tr("Updates")))
+
+        self.check_update_on_startup_checker = ConfigCheckBox(
+            self.tr("Check update on startup")
+        )
+        self.check_update_on_startup_checker.stateChanged.connect(
+            self.on_check_update_onstartup_changed
+        )
+        check_update_onstartup_sublock = ConfigSubBlock(
+            self.check_update_on_startup_checker,
+            note=self.tr(
+                "<p>Automatically check for a newer release when the application starts. You will only be notified when a new version is available.</p>"
+            ),
+        )
+        project_layout.addWidget(check_update_onstartup_sublock)
+
+        # Update status row: Check update button + current/latest version labels
+        update_status_widget = QWidget()
+        update_status_widget.setObjectName("ConfigInlineRow")
+        update_status_widget.setAttribute(
+            Qt.WidgetAttribute.WA_StyledBackground, True
+        )
+        update_status_layout = QHBoxLayout(update_status_widget)
+        update_status_layout.setContentsMargins(10, 8, 10, 8)
+        update_status_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        self.check_update_btn = QPushButton(self.tr("Check update"))
+        self.check_update_btn.setObjectName("ConfigButton")
+        self.check_update_btn.clicked.connect(self.check_update)
+        update_status_layout.addWidget(self.check_update_btn)
+        update_status_layout.addSpacing(20)
+
+        self.current_version_label = ConfigTextLabel(
+            self.tr("Current version: ") + APP_VERSION,
+            CONFIG_FONTSIZE_CONTENT,
+        )
+        update_status_layout.addWidget(self.current_version_label)
+        update_status_layout.addSpacing(20)
+
+        self.latest_version_label = ConfigTextLabel(
+            self.tr("Latest version: ") + self.tr("Not checked"),
+            CONFIG_FONTSIZE_CONTENT,
+        )
+        update_status_layout.addWidget(self.latest_version_label)
+        update_status_layout.addStretch()
+        project_layout.addWidget(update_status_widget)
+
+        # Commit-based update check (developer channel) with risk notice
+        commit_widget = QWidget()
+        commit_layout = QVBoxLayout(commit_widget)
+        commit_layout.setContentsMargins(0, 0, 0, 0)
+        commit_layout.setSpacing(4)
+
+        commit_btn_row = QWidget()
+        commit_btn_row.setObjectName("ConfigInlineRow")
+        commit_btn_row.setAttribute(
+            Qt.WidgetAttribute.WA_StyledBackground, True
+        )
+        commit_btn_layout = QHBoxLayout(commit_btn_row)
+        commit_btn_layout.setContentsMargins(10, 8, 10, 8)
+        self.check_commit_btn = QPushButton(self.tr("Check commit updates"))
+        self.check_commit_btn.setObjectName("ConfigButton")
+        self.check_commit_btn.clicked.connect(self.check_commit_update)
+        commit_btn_layout.addWidget(self.check_commit_btn)
+        commit_btn_layout.addStretch()
+        commit_layout.addWidget(commit_btn_row)
+
+        commit_risk = QLabel(
+            "⚠ "
+            + self.tr(
+                "Updates from the latest commit are unverified developer changes and are not guaranteed to work on every device."
+            )
+        )
+        commit_risk.setWordWrap(True)
+        from ui.misc import get_theme_color
+
+        commit_risk.setStyleSheet(
+            f"color: {get_theme_color(key='@warningColor').name()}; font-size: 12px;"
+        )
+        commit_layout.addWidget(commit_risk)
+
+        project_layout.addWidget(commit_widget)
 
         self.project_block = generalConfigPanel.addGroupedBlock(
             label_project, project_widget, object_name="GroupGeneral"
@@ -2290,6 +2377,17 @@ class ConfigPanel(Widget):
     def on_auto_clean_temp_changed(self):
         pcfg.auto_clean_temp_projects = self.temp_clean_checker.isChecked()
 
+    def on_check_update_onstartup_changed(self):
+        pcfg.check_update_on_startup = (
+            self.check_update_on_startup_checker.isChecked()
+        )
+
+    def setLatestVersion(self, version: str):
+        self.latest_version_label.setText(self.tr("Latest version: ") + version)
+
+    def setUpdateChecking(self, checking: bool):
+        self.check_update_btn.setEnabled(not checking)
+
     def on_fntsize_flag_changed(self):
         pcfg.let_fntsize_flag = self.let_fntsize_combox.currentIndex()
 
@@ -2608,6 +2706,9 @@ class ConfigPanel(Widget):
 
         if pcfg.auto_clean_temp_projects:
             self.temp_clean_checker.setChecked(True)
+
+        if pcfg.check_update_on_startup:
+            self.check_update_on_startup_checker.setChecked(True)
 
         self.detect_config_panel.keep_existing_checker.setChecked(
             pcfg.module.keep_exist_textlines

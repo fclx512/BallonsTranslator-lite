@@ -94,6 +94,7 @@ from .custom_widget import (
     FrameLessMessageBox,
     ImgtransProgressMessageBox,
     MessageBox,
+    ProgressMessageBox,
     ViewWidget,
     Widget,
 )
@@ -111,7 +112,9 @@ from .scenetext_manager import PasteSrcItemsCommand, SceneTextManager, TextPanel
 from .textedit_area import SourceTextEdit, TransTextEdit
 from .textedit_commands import GlobalRepalceAllCommand
 from .textitem import TextBlkItem
-from .update_checker import AboutDialog
+from .update_checker import AboutDialog, CommitUpdateDialog
+from .update_dialog import UpdateReleaseDialog
+from .update_thread import UpdateCheckThread
 
 
 class PageListView(QListWidget):
@@ -332,6 +335,13 @@ class MainWindow(mainwindow_cls):
         if shared.HEADLESS:
             self.run_batch(**exec_args)
 
+        if not shared.HEADLESS and pcfg.check_update_on_startup:
+            # Defer startup update checks until the event loop can paint progress.
+            QTimer.singleShot(
+                500,
+                lambda: self.check_for_updates(manual=False),
+            )
+
         # Windows: apply font & set titlebar
 
     def setStyleSheet(self, styleSheet: str) -> None:
@@ -340,6 +350,14 @@ class MainWindow(mainwindow_cls):
 
     def setupThread(self):
         self.imsave_thread = ImgSaveThread()
+        self.update_thread = UpdateCheckThread()
+        self.update_thread.progress_changed.connect(self.on_update_progress_changed)
+        self.update_thread.update_finished.connect(self.on_update_finished)
+        self.update_thread.update_failed.connect(self.on_update_failed)
+        self.update_progress_msgbox = ProgressMessageBox(
+            self.tr("Updating: "), False, self
+        )
+        self._update_progress_visible = False
 
     def resetStyleSheet(self, reverse_icon: bool = False):
         theme = pcfg.dark_theme if pcfg.darkmode else pcfg.light_theme
@@ -352,6 +370,8 @@ class MainWindow(mainwindow_cls):
         self.centralStackWidget = QStackedWidget(self)
 
         self.configPanel = ConfigPanel(self)
+        self.configPanel.check_update.connect(self.check_for_updates)
+        self.configPanel.check_commit_update.connect(self.show_commit_update_dialog)
 
         self.leftBar = LeftBar(self)
         self.leftBar.showPageListLabel.clicked.connect(self.pageLabelStateChanged)
@@ -4123,14 +4143,129 @@ class MainWindow(mainwindow_cls):
 
     # ── About / Update Check ──────────────────────────────────
 
+    def check_for_updates(self, manual: bool = True, show_release_info: bool = False):
+        """Check GitHub for a newer release (silently on startup)."""
+        if self.update_thread.isBusy():
+            LOGGER.info(
+                "Ignored update check request because an update check or update is already running."
+            )
+            return
+        self._manual_update_check = manual
+        self.configPanel.setUpdateChecking(True)
+        self.configPanel.setLatestVersion(self.tr("Checking..."))
+        self.update_thread.checkLatest(show_release_info=show_release_info)
+
+    def apply_confirmed_update(self, release_info, current_version: str):
+        if self.update_thread.isBusy():
+            LOGGER.info(
+                "Ignored update apply request because an update check or update is already running."
+            )
+            return
+        self.configPanel.setUpdateChecking(True)
+        self.update_progress_msgbox.zero_progress()
+        self.update_progress_msgbox.setTaskName(self.tr("Downloading update: "))
+        self.update_progress_msgbox.updateTaskProgress(0, release_info.version)
+        self.update_progress_msgbox.show()
+        self._update_progress_visible = True
+        self.update_thread.applyUpdate(release_info, current_version)
+
+    def on_update_progress_changed(self, payload: dict):
+        if not self._update_progress_visible:
+            return
+        progress = payload.get("progress", 0)
+        message = payload.get("message", "")
+        event = payload.get("event", "")
+        task_names = {
+            "backup_source": self.tr("Backing up current version: "),
+            "download_start": self.tr("Downloading update: "),
+            "download_progress": self.tr("Downloading update: "),
+            "download_done": self.tr("Downloading update: "),
+            "git_safety": self.tr("Saving local changes: "),
+            "extract_source": self.tr("Installing update: "),
+            "replace_source": self.tr("Installing update: "),
+            "done": self.tr("Installing update: "),
+        }
+        self.update_progress_msgbox.setTaskName(
+            task_names.get(event, self.tr("Updating: "))
+        )
+        self.update_progress_msgbox.updateTaskProgress(progress, message)
+
+    def on_update_finished(self, result):
+        if self._update_progress_visible:
+            self.update_progress_msgbox.done(0)
+            self._update_progress_visible = False
+        self.configPanel.setUpdateChecking(False)
+        if result.latest_version:
+            self.configPanel.setLatestVersion(result.latest_version)
+
+        if result.status in {"available", "preview"}:
+            allow_update = result.status == "available"
+            if self.confirm_update_release(result, allow_update=allow_update) and allow_update:
+                QTimer.singleShot(
+                    0,
+                    lambda info=result.release_info, current=result.current_version: self.apply_confirmed_update(
+                        info, current
+                    ),
+                )
+            return
+
+        if result.status == "up_to_date":
+            if self._manual_update_check:
+                create_info_dialog(
+                    self.tr("Already up-to-date.") + f"\n{result.current_version}"
+                )
+            else:
+                LOGGER.info(
+                    f"BallonsTranslator-lite is already up-to-date: {result.current_version}"
+                )
+            return
+
+        if result.status == "updated":
+            # launch.restart() closes this window synchronously.
+            self.update_thread.wait()
+            self.restart_signal.emit()
+            return
+
+        LOGGER.warning(f"Ignored unexpected updater result status: {result.status}")
+
+    def on_update_failed(self, error_msg: str, detail_traceback: str):
+        if self._update_progress_visible:
+            self.update_progress_msgbox.done(0)
+            self._update_progress_visible = False
+        self.configPanel.setUpdateChecking(False)
+        self.on_create_errdialog(
+            error_msg + "\n" + self.tr("Failed to check for updates."),
+            detail_traceback,
+            "",
+        )
+
+    def confirm_update_release(self, result, allow_update: bool = True) -> bool:
+        dialog = UpdateReleaseDialog(
+            result,
+            self,
+            display_language=pcfg.display_lang,
+            allow_update=allow_update,
+        )
+        return dialog.exec_() == QDialog.DialogCode.Accepted
+
     def show_about_dialog(self):
-        """Show the About dialog with version info and update check."""
+        """Show the About dialog with version info (update checks live in settings)."""
         import launch
 
         dlg = AboutDialog(
             self,
             version=launch.VERSION,
             commit=launch.commit_hash(),
+            branch=launch.BRANCH,
+        )
+        dlg.exec_()
+
+    def show_commit_update_dialog(self):
+        """Show the commit-based update checker (developer channel)."""
+        import launch
+
+        dlg = CommitUpdateDialog(
+            self,
             branch=launch.BRANCH,
             git_path=launch.git,
             repo_path=str(launch.PATH_ROOT),
