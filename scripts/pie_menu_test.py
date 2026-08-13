@@ -666,76 +666,128 @@ def main():
         pm2.cancel()
     check("app deactivate cancels pie", not pm2.is_open())
 
-    print("== vertical list layout ==")
+    print("== vertical list layout (half-ring panels) ==")
     from ui.pie_menu import (
-        LIST_EDGE_OFFSET, LIST_MAX_ITEMS, LIST_MIN_W, LIST_PAD_Y,
-        items_to_slots, slots_to_items,
+        LIST_MIN_W, LIST_PANEL_MAX_ITEMS, LIST_PANELS, WINDOW_RADIUS,
+        panels_to_slots, slots_to_panels,
     )
 
-    # normalize: list items / direction, invalid fallbacks, cap
+    # normalize: panels / direction, invalid fallbacks, caps, items migration
     lst = normalize_pie_menu({
         "id": "L", "trigger": "V", "layout": "list",
-        "items": ["copy", "paste", "---", "delete", 123, ""],
+        "panels": [["copy", "paste"], ["---", "delete", 123, ""], []],
         "direction": "left",
     })
-    check("list normalize keeps items", lst["items"] == ["copy", "paste", "delete"])
+    check("list normalize keeps panels",
+          lst["panels"] == [["copy", "paste"], ["delete"], []])
     check("list normalize filters separator+non-str",
-          "---" not in lst["items"] and 123 not in lst["items"] and "" not in lst["items"])
+          "---" not in str(lst["panels"]) and "123" not in str(lst["panels"]))
     check("list normalize direction", lst["direction"] == "left")
     check("list normalize keeps slots shape", len(lst["slots"]) == lst["sectors"])
     check("invalid layout -> ring", normalize_pie_menu({"layout": "bogus"})["layout"] == "ring")
     check("invalid direction -> right",
           normalize_pie_menu({"direction": "up"})["direction"] == "right")
-    many = normalize_pie_menu({"layout": "list", "items": [f"c{i}" for i in range(60)]})
-    check("list normalize caps items", len(many["items"]) == LIST_MAX_ITEMS)
+    wide = normalize_pie_menu({"layout": "list",
+                               "panels": [[f"c{i}" for i in range(9)], "x", []]})
+    check("list normalize caps panel rows",
+          len(wide["panels"][0]) == LIST_PANEL_MAX_ITEMS)
+    check("list normalize coerces bad panel", wide["panels"][1] == [])
+    check("list normalize pads panels",
+          len(normalize_pie_menu({"layout": "list"})["panels"]) == LIST_PANELS)
+    mig = normalize_pie_menu({"layout": "list",
+                              "items": ["a", "b", "c", "d", "e", "f", "g"]})
+    check("legacy items migrate to panels (chunked)",
+          mig["panels"] == [["a", "b", "c"], ["d", "e", "f"], ["g"]])
 
-    # ring <-> list conversions
-    ring_slots = [["copy", "paste"], ["delete"], [], ["merge"], [], [], [], []]
-    check("slots_to_items flattens sector-major",
-          slots_to_items(ring_slots) == ["copy", "paste", "delete", "merge"])
-    back = items_to_slots(["copy", "paste", "delete", "merge"], 8)
-    check("items_to_slots fills sectors",
-          back[0] == ["copy", "paste", "delete"] and back[1] == ["merge"])
-    fill = items_to_slots(["a", "b", "c", "d", "e"], 8)
-    check("items_to_slots caps 3 per sector",
-          fill[0] == ["a", "b", "c"] and fill[1] == ["d", "e"])
+    # ring <-> list conversions (lateral half, top -> bottom)
+    ring_slots = [["copy"], ["paste"], ["delete"], ["merge"], [], [], [], []]
+    check("slots_to_panels picks right half",
+          slots_to_panels(ring_slots, "right") == [["paste"], ["delete"], ["merge"]])
+    left_slots = [[], [], [], [], [], ["merge"], ["delete"], ["paste"]]
+    check("slots_to_panels picks left half",
+          slots_to_panels(left_slots, "left") == [["paste"], ["delete"], ["merge"]])
+    back = panels_to_slots([["paste"], ["delete"], ["merge"]], "right")
+    check("panels_to_slots writes sectors 1..3",
+          back[1] == ["paste"] and back[2] == ["delete"] and back[3] == ["merge"])
+    back_l = panels_to_slots([["paste"], ["delete"], ["merge"]], "left")
+    check("panels_to_slots writes sectors 7..5",
+          back_l[7] == ["paste"] and back_l[6] == ["delete"] and back_l[5] == ["merge"])
+    quad = slots_to_panels([["a"], ["b"], ["c"], ["d"]], "right")
+    check("4-sector ring -> single lateral panel + padding",
+          quad == [["b"], [], []])
 
     # list geometry + hit-test on a runtime widget
     list_menu = normalize_pie_menu({
         "id": "L", "trigger": "V", "layout": "list",
-        "items": ["copy", "paste", "delete"],
+        "panels": [["copy", "paste"], ["delete"], ["merge"]],
     })
     pm.set_menu_config(list_menu)
     check("list mode active", pm._is_list())
-    check("list size set", pm._list_w >= LIST_MIN_W and pm._list_h > 0)
-    r0 = pm._list_item_rect(0)
-    r2 = pm._list_item_rect(2)
-    check("list hit card 0", pm._hit_test_list(r0.center()) == 0)
-    check("list hit card 2", pm._hit_test_list(r2.center()) == 2)
-    check("list hit title -> None",
-          pm._hit_test_list(QPointF(10.0, LIST_PAD_Y + 4)) is None)
-    check("list hit gap -> None",
-          pm._hit_test_list(QPointF(10.0, r0.bottom() + 3.0)) is None)
-    check("list insert before card 1", pm._list_insert_index(r0.center()) == 1)
-    check("list insert after last",
-          pm._list_insert_index(QPointF(10.0, r2.bottom() + 8)) == 3)
+    check("list window sized", pm._list_w >= LIST_MIN_W and pm._list_h > 0)
+    # regression 2026-08-12: switching list -> ring must restore the ring
+    # window size (a list-sized window clips the ring to nothing)
+    ring_menu = normalize_pie_menu({
+        "id": "R", "trigger": "B", "layout": "ring",
+        "slots": [["copy"], ["paste"], ["delete"], [], [], [], [], []],
+    })
+    pm.set_menu_config(ring_menu)
+    check("ring window restored after list",
+          pm.width() == int(2 * WINDOW_RADIUS) and pm.height() == pm.width())
+    pm.set_menu_config(list_menu)
+    check("list window restored after ring",
+          pm.width() == int(pm._list_w) and pm.height() == int(pm._list_h))
+    check("three panel rects", len(pm._list_rects) == LIST_PANELS)
+    check("mid panel right of cursor",
+          pm._list_rects[1].left() > pm._list_cursor.x())
+    check("top panel above cursor",
+          pm._list_rects[0].bottom() < pm._list_cursor.y())
+    check("bottom panel below cursor",
+          pm._list_rects[2].top() > pm._list_cursor.y())
+    check("mid panel vertically centered on cursor",
+          abs(pm._list_rects[1].center().y() - pm._list_cursor.y()) <= 1)
+    check("list hit top panel row 1",
+          pm._hit_test_list(pm._list_row_rect(0, 1).center()) == (0, 1))
+    check("list hit mid panel row 0",
+          pm._hit_test_list(pm._list_row_rect(1, 0).center()) == (1, 0))
+    check("list hit cursor gap -> None",
+          pm._hit_test_list(pm._list_cursor) is None)
+    c0 = pm._list_row_rect(0, 0).center()
+    check("drop at row center inserts before it",
+          pm._list_drop_pos(c0) == (0, 0))
+    check("drop below row center inserts after",
+          pm._list_drop_pos(c0 + QPointF(0.0, 9.0)) == (0, 1))
+    check("drop at panel bottom appends",
+          pm._list_drop_pos(QPointF(c0.x(), pm._list_rects[0].bottom() - 1))
+          == (0, 2))
+    check("drop outside -> (-1, -1)",
+          pm._list_drop_pos(QPointF(0.0, 0.0)) == (-1, -1))
 
-    # runtime anchoring: right of cursor by default, vertically centered
+    # empty panel: no hit at runtime, but a valid drop target (ghost)
+    sparse = normalize_pie_menu({
+        "layout": "list", "panels": [["copy"], [], ["delete"]]})
+    pm.set_menu_config(sparse)
+    check("empty panel not hit", pm._hit_test_list(pm._list_rects[1].center()) is None)
+    check("empty panel is drop target",
+          pm._list_drop_pos(pm._list_rects[1].center()) == (1, 0))
+
+    # runtime anchoring: widget-local cursor lands on the global cursor pos
     pm.set_menu_config(list_menu)
     pm.start_hold(QPoint(400, 300))
-    check("list anchored right of cursor",
-          pm.geometry().left() == 400 + int(LIST_EDGE_OFFSET))
-    cy = pm.geometry().top() + pm.geometry().height() / 2.0
-    check("list vertically centered on cursor", abs(cy - 300) <= 1)
+    check("list window cursor-anchored (right)",
+          abs(pm.geometry().left() + pm._list_cursor.x() - 400) <= 1
+          and abs(pm.geometry().top() + pm._list_cursor.y() - 300) <= 1)
     pm.cancel()
     list_menu["direction"] = "left"
     pm.set_menu_config(list_menu)
+    check("left direction mirrors panels",
+          pm._list_rects[1].right() < pm._list_cursor.x())
     pm.start_hold(QPoint(400, 300))
-    check("list anchored left of cursor",
-          pm.geometry().left() == 400 - int(LIST_EDGE_OFFSET) - pm.width())
+    check("list window cursor-anchored (left)",
+          abs(pm.geometry().left() + pm._list_cursor.x() - 400) <= 1
+          and abs(pm.geometry().top() + pm._list_cursor.y() - 300) <= 1)
     pm.cancel()
 
-    # PIN: left click on a list card triggers
+    # PIN: left click on a list row triggers
     # (fresh timer: earlier long-press tests stubbed _press_timer.elapsed)
     pm._press_timer = QElapsedTimer()
     list_menu["direction"] = "right"
@@ -745,7 +797,7 @@ def main():
     check("list pin after short release", pm.is_open() and not pm.is_holding())
     mc._selected = 2
     ev_l = QMouseEvent(QEvent.Type.MouseButtonPress,
-                       pm._list_item_rect(1).center(), QPointF(400, 300),
+                       pm._list_row_rect(0, 1).center(), QPointF(400, 300),
                        Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton,
                        Qt.KeyboardModifier.NoModifier)
     mc.calls.clear()
@@ -753,67 +805,77 @@ def main():
     check("list PIN click triggers paste", ("paste", ()) in mc.calls)
     check("list closed after trigger", not pm.is_open())
 
-    # long press release-commit on a list card
+    # long press release-commit on a list row
     pm.start_hold(QPoint(400, 300))
     pm._press_timer.elapsed = lambda: SHORT_PRESS_MS + 1
-    pm._update_hover(0)   # copy
+    pm._update_hover((0, 0))   # copy
     mc.calls.clear()
     pm.release_hold()
     check("list long press commits", ("copy", ()) in mc.calls)
     check("list closed after commit", not pm.is_open())
 
-    # disabled list card behaves like the center (hover cleared -> cancel)
+    # disabled list row behaves like the center (hover cleared -> cancel)
     pm.start_hold(QPoint(400, 300))
     pm._press_timer.elapsed = lambda: SHORT_PRESS_MS + 1
     mc._selected = 0
-    pm._update_hover(0)   # copy disabled (no selection)
-    check("list disabled hover cleared", pm._hover_item == -1)
+    pm._update_hover((0, 0))   # copy disabled (no selection)
+    check("list disabled hover cleared", pm._hover is None)
     mc.calls.clear()
     pm.release_hold()
     check("list disabled commit cancels", not pm.is_open())
     check("no copy fired", ("copy", ()) not in mc.calls)
     mc._selected = 1
 
-    # editor: style switch conversions, direction, visibility, list drag-drop
+    # editor: style switch conversions, direction, visibility, panel drag-drop
     editor._menus = [normalize_pie_menu({
         "id": "e", "trigger": "T", "sectors": 8,
-        "slots": [["copy", "paste"], ["delete"], [], [], ["merge"], [], [], []],
+        "slots": [["copy"], ["paste"], ["delete"], ["merge"], [], [], [], []],
     })]
     editor._current = 0
     editor._refresh_preview()
     editor._on_style_changed(1)   # -> list
     check("style switch to list", editor._menus[0]["layout"] == "list")
-    check("style switch flattens slots",
-          editor._menus[0]["items"] == ["copy", "paste", "delete", "merge"])
+    check("style switch picks lateral half",
+          editor._menus[0]["panels"] == [["paste"], ["delete"], ["merge"]])
     check("sectors hidden in list style", editor.sectors_combo.isHidden())
     check("direction shown in list style", not editor.direction_combo.isHidden())
-    editor._on_direction_changed(1)
-    check("direction set to left", editor._menus[0]["direction"] == "left")
-    editor._on_style_changed(0)   # -> ring
+    editor._on_style_changed(0)   # -> ring (panels written to the right half)
     check("style switch back to ring", editor._menus[0]["layout"] == "ring")
-    check("style switch redistributes",
-          editor._menus[0]["slots"][0] == ["copy", "paste", "delete"]
-          and editor._menus[0]["slots"][1] == ["merge"])
-    editor._on_style_changed(1)   # -> list again
-    editor._on_list_command_dropped(2, "ocr", -1)
-    check("list drop adds",
-          editor._menus[0]["items"] == ["copy", "paste", "ocr", "delete", "merge"])
-    editor._on_list_command_dropped(1, "delete", 3)   # move card 3 before card 1
-    check("list drop reorders",
-          editor._menus[0]["items"] == ["copy", "delete", "paste", "ocr", "merge"])
-    editor._on_item_remove(1)
+    check("panels written back to sectors 1..3",
+          editor._menus[0]["slots"][1] == ["paste"]
+          and editor._menus[0]["slots"][2] == ["delete"]
+          and editor._menus[0]["slots"][3] == ["merge"])
+    editor._on_direction_changed(1)   # ring ignores it, just persists
+    check("direction set to left", editor._menus[0]["direction"] == "left")
+    editor._on_style_changed(1)   # -> list again, now from the left half
+    check("round trip keeps commands (left half empty -> padded)",
+          editor._menus[0]["panels"] == [[], [], []])
+    editor._menus = [normalize_pie_menu({
+        "id": "e", "trigger": "T", "layout": "list", "direction": "right",
+        "panels": [["paste"], ["delete"], ["merge"]],
+    })]
+    editor._current = 0
+    editor._refresh_preview()
+    editor._on_command_dropped(1, 1, "ocr", -1, -1)   # palette add, panel 1 row 1
+    check("list drop adds to panel",
+          editor._menus[0]["panels"][1] == ["delete", "ocr"])
+    editor._on_command_dropped(0, 0, "delete", 1, 0)  # move panel1 row0 -> panel0 row0
+    check("list drop moves across panels",
+          editor._menus[0]["panels"][0] == ["delete", "paste"]
+          and editor._menus[0]["panels"][1] == ["ocr"])
+    editor._on_card_remove(0, 1)   # right-click "paste" in panel 0
     check("list right-click remove",
-          editor._menus[0]["items"] == ["copy", "paste", "ocr", "merge"])
-    editor._on_card_remove(0, 0)   # palette drop-back in list mode
+          editor._menus[0]["panels"][0] == ["delete"])
+    editor._on_card_remove(2, 0)   # palette drop-back in list mode
     check("list palette drop-back removes",
-          editor._menus[0]["items"] == ["paste", "ocr", "merge"])
+          editor._menus[0]["panels"][2] == [])
 
-    # list preview paints + insertion geometry
+    # list preview paints + ghost drop geometry
     editor._refresh_preview()
     pv_list = editor.preview
     check("list preview paints", not pv_list.grab().isNull())
-    check("list preview insert idx", pv_list._list_insert_index(
-        pv_list._list_item_rect(0).center() - QPointF(0.0, 10.0)) == 0)
+    check("list preview ghost drop target",
+          pv_list._list_drop_pos(pv_list._list_rects[2].center()) == (2, 0))
 
     print(f"\n{PASS} passed, {len(FAIL)} failed")
     save_config()

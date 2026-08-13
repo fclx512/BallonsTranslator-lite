@@ -21,6 +21,25 @@
 **涉及文件：** `ui/pie_menu.py`、`ui/pie_menu_editor.py`、`ui/configpanel.py`、`scripts/pie_menu_test.py`（+38 断言，共 158 全过）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/技术实现/快捷菜单_竖排样式_设计与交接.md`（新增）
 
 ---
+
+### 竖排样式重做为半环多面板 + 设置页预览修复
+
+**问题/需求：** 上午版竖排是"单面板卡片列"，用户确认方向为**半环多面板**（"把扇形竖着砍一半，在预定位置放简化版右键菜单"）；同时截图排查发现设置页预览被压成细缝（环形/竖排同受害）、页面横向溢出裁掉触发键列、运行时超长 label 被硬裁无省略号。
+
+**改动要点：**
+
+- **数据模型**（`ui/pie_menu.py`）：`items`（扁平列）→ `panels`（恒 3 组 × 每组 ≤3，对齐环形扇区容量）；旧 `items` 配置 normalize 时按 3 个一组自动迁移。转换函数换成 `slots_to_panels`/`panels_to_slots`（按 direction 取/写侧向半环扇区：右 1/2/3、左 7/6/5，顶→底）。
+- **竖排几何重做**：`_relayout_list`（统一面板宽 + 3 锚点矩形 + 包围盒偏移，空面板也算 1 行幽灵矩形保证几何稳定）、`_list_row_rect`、`_hit_test_list`（→ `(panel,row)`，空面板不可命中）、`_list_drop_pos`（行中线决定插前/插后，幽灵框可放置）、`_move_list_at`（光标固定点 - 窗口偏移 + 屏幕钳制）。`_slot_at` 改布局感知后，悬停/提交/点击/拖拽与环形**完全共用**；删除两个 list 专用信号，复用环形信号（sector 参数承载面板号）。
+- **问题 3 修复**：`changeEvent` 监听 `FontChange` 重算几何（此前字体在 `set_menu_config` 后变化会宽度失配）；行 label 超宽 `elidedText` 右省略（此前硬裁）。
+- **设置页修复**（`ui/pie_menu_editor.py`）：删掉预览区内嵌的 `QScrollArea`（空间不足时被压成 ~60px 细缝，是"严重裁剪"根因），Fixed 预览直挂布局随页面滚动；`palette_hint` 加 `setWordWrap(True)`（单行长文本曾把页面撑到 690+px 宽撑出横向裁剪）。`_on_direction_changed` 补预览刷新。
+- **测试**：竖排章节 38 项断言全部重写为 panels 模型（共 158 项全过）；启动冒烟 5/5；i18n 无新增字符串。
+- **截图脚本**：`_list_preview.py`/`_pie_editor_preview.py` 改 panels 配置；新增 `_ring_editor_preview.py`（环形设置页预览回归用）。**离屏截图勿用 `QT_QPA_PLATFORM=offscreen`（豆腐块）**。
+
+**排障记录：** ① `git` 对象库损坏（`.git/objects/pack` 只剩 .idx），dev/pie-menu 分支无提交，工作区是唯一事实来源，git 还原不可用。② 测试中 `save_config` 偶发 `WinError 5`（`os.replace` 被占用），删 `_pie_test_config.json(.tmp)` 残留重跑即过。
+
+**涉及文件：** `ui/pie_menu.py`、`ui/pie_menu_editor.py`、`scripts/pie_menu_test.py`、`scripts/_list_preview.py`、`scripts/_pie_editor_preview.py`、`scripts/_ring_editor_preview.py`（新增）、`docs/技术实现/快捷菜单_竖排样式_设计与交接.md`（重写）
+
+---
 ## 2026-08-05
 
 ### 文本引擎移植 阶段 3：渲染层拆分（节点 A–E 完成）

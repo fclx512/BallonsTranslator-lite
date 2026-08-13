@@ -6,33 +6,34 @@ Layout (top → bottom):
   - per-menu properties row 2: style (Ring / List), sectors (ring only),
     direction Left/Right (list only)
   - live preview: embedded :class:`PieMenu` in edit mode — renders the ring
-    or the vertical list exactly like runtime, only scaled down
-  - command palette: categorized list of runnable commands; drag one onto
-    the preview to place it (max 3 per sector / 24 per list), drag a card
-    back to remove
+    or the half-ring list panels exactly like runtime, only scaled down
+  - command palette: flow grid of draggable command cards (with category
+    badges); drag one onto the preview to place it (max 3 per sector /
+    panel), drag a card back to remove
 
-Switching style converts the commands (ring -> list flattens the sectors,
-list -> ring distributes the cards back into sectors).  One menu = one
-function group; split into new menus when you want separation.
+Switching style converts the commands (ring -> list picks the lateral-half
+sectors as panels, list -> ring writes them back into an 8-sector layout).
+One menu = one function group; split into new menus when you want
+separation.
 
 The editor mutates ``pcfg.pie_menus`` live (same pattern as the shortcut
 editor) and saves on each committed change, so the runtime menu picks the
 edit up on the next trigger press.
 """
 
-from qtpy.QtCore import QCoreApplication, Qt, Signal
-from qtpy.QtGui import QKeySequence
+from qtpy.QtCore import QCoreApplication, QMimeData, Qt, Signal
+from qtpy.QtGui import QDrag, QKeySequence
 from qtpy.QtWidgets import (
-    QAbstractItemView,
+    QApplication,
     QComboBox,
+    QFrame,
     QHBoxLayout,
     QKeySequenceEdit,
     QLabel,
     QLineEdit,
     QPushButton,
+    QSizePolicy,
     QTabBar,
-    QTreeWidget,
-    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -47,34 +48,92 @@ from .context_menu_config import (
     COMMAND_REGISTRY,
 )
 from .pie_menu import (
-    LIST_MAX_ITEMS,
     SECTOR_MAX_CARDS,
-    WINDOW_RADIUS,
     PieMenu,
-    items_to_slots,
     normalize_pie_menu,
+    panels_to_slots,
     pie_menu_display_name,
-    slots_to_items,
+    slots_to_panels,
 )
+from .custom_widget import FlowLayout
+from .misc import get_theme_color
 from .theme_helpers import shortcut_styles
 
 _SECTOR_CHOICES = (4, 6, 8)
 PIE_MENU_MAX = 4   # menu cap — more trigger keys become hard to remember
 
-# Palette category order + display labels (tr keys; orphans by design —
-# indirect calls, add <message> to the PieMenuEditor ts context).
+# Palette category order + display labels + badge colors (tr keys; orphans
+# by design — indirect calls, add <message> to the PieMenuEditor ts context).
 _CATEGORY_LABELS = [
-    (CAT_BASIC, "Basic Editing"),
-    (CAT_TEXT, "Text Operations"),
-    (CAT_PIPELINE, "Pipeline"),
-    (CAT_VIEW, "View"),
+    (CAT_BASIC, "Basic Editing", "#1e93e5"),
+    (CAT_TEXT, "Text Operations", "#27ae60"),
+    (CAT_PIPELINE, "Pipeline", "#e67e22"),
+    (CAT_VIEW, "View", "#8e44ad"),
 ]
 
+_CARD_W, _CARD_H = 128, 44
 
-class CommandPalette(QTreeWidget):
-    """Categorized runnable-command list.
 
-    Items drag out with the ``application/x-pie-cmd`` mime; dropping a menu
+class _CommandCard(QFrame):
+    """One draggable command chip in the palette grid (name + category badge)."""
+
+    def __init__(self, cmd_id, name, cat_label, cat_color, parent=None):
+        super().__init__(parent)
+        self.cmd_id = cmd_id
+        self._drag_start = None
+        self.setObjectName("PieCmdCard")
+        self.setFixedSize(_CARD_W, _CARD_H)
+        self.setToolTip(name)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(8, 4, 8, 4)
+        lay.setSpacing(0)
+        self.name_label = QLabel(name)
+        fm = self.name_label.fontMetrics()
+        self.name_label.setText(fm.elidedText(
+            name, Qt.TextElideMode.ElideRight, _CARD_W - 16))
+        self.name_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        badge = QLabel(cat_label)
+        badge.setStyleSheet(f"color: {cat_color}; font-size: 10px;")
+        for lbl in (self.name_label, badge):
+            lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        lay.addWidget(self.name_label)
+        lay.addWidget(badge)
+
+    def set_used(self, used: bool):
+        """Toggle the dimmed "already in this menu" look."""
+        if self.property("used") == used:
+            return
+        self.setProperty("used", used)
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_start = event.position()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_start is not None \
+                and event.buttons() & Qt.MouseButton.LeftButton:
+            if (event.position() - self._drag_start).manhattanLength() \
+                    >= QApplication.startDragDistance():
+                self._drag_start = None
+                drag = QDrag(self)
+                md = QMimeData()
+                md.setData("application/x-pie-cmd", self.cmd_id.encode("utf-8"))
+                drag.setMimeData(md)
+                drag.setPixmap(self.grab())
+                drag.setHotSpot(event.position().toPoint())
+                drag.exec(Qt.DropAction.MoveAction)
+                return
+        super().mouseMoveEvent(event)
+
+
+class CommandPalette(QWidget):
+    """Flow grid of draggable command cards.
+
+    Cards drag out with the ``application/x-pie-cmd`` mime; dropping a menu
     card back here (``application/x-pie-src``) emits :attr:`remove_requested`.
     """
 
@@ -82,20 +141,42 @@ class CommandPalette(QTreeWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setHeaderHidden(True)
-        self.setDragEnabled(True)
-        self.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
         self.setAcceptDrops(True)
-        self.setDefaultDropAction(Qt.DropAction.MoveAction)
-        self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+        self.flow = FlowLayout(self)
+        self.flow.setContentsMargins(0, 2, 0, 2)
+        self.flow.setHorizontalSpacing(8)
+        self.flow.setVerticalSpacing(8)
+        self._cards = {}
 
-    def mimeData(self, items):
-        md = super().mimeData(items)
-        if items:
-            cmd_id = items[0].data(0, Qt.ItemDataRole.UserRole)
-            if cmd_id:
-                md.setData("application/x-pie-cmd", str(cmd_id).encode("utf-8"))
-        return md
+    def set_commands(self, commands):
+        """Rebuild the grid. *commands*: (cmd_id, name, cat_label, cat_color)."""
+        self.flow.takeAllWidgets()
+        self._cards.clear()
+        s = shortcut_styles()
+        accent = get_theme_color(key="@accentPrimary").name()
+        border = get_theme_color(key="@borderColor").name()
+        self.setStyleSheet(
+            f"#PieCmdCard {{ background: {s['card_bg']};"
+            f" border: 1px solid {border}; border-radius: 6px; }}"
+            f"#PieCmdCard:hover {{ border-color: {accent}; }}"
+            f"#PieCmdCard QLabel {{ color: {s['name_clr']};"
+            f" background: transparent; border: none; }}"
+            f"#PieCmdCard[used=\"true\"] {{ background: {s['disabled_bg']}; }}"
+            f"#PieCmdCard[used=\"true\"] QLabel {{ color: {s['disabled_clr']}; }}"
+        )
+        for cmd_id, name, cat_label, cat_color in commands:
+            card = _CommandCard(cmd_id, name, cat_label, cat_color, self)
+            self.flow.addWidget(card)
+            self._cards[cmd_id] = card
+        self.updateGeometry()
+
+    def set_used(self, used_ids):
+        """Dim cards already in the current menu (hint only — they stay
+        draggable, duplicates are allowed by design)."""
+        for cmd_id, card in self._cards.items():
+            card.set_used(cmd_id in used_ids)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasFormat("application/x-pie-src"):
@@ -135,6 +216,8 @@ class PieMenuEditor(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(8)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
 
         # Menu management bar
         bar = QHBoxLayout()
@@ -189,11 +272,16 @@ class PieMenuEditor(QWidget):
         props2.addStretch()
         layout.addLayout(props2)
 
-        # Live preview (scaled, edit-mode)
+        # Live preview (scaled, edit-mode).  The widget is Fixed-size so the
+        # layout can never squeeze it; the surrounding ConfigPanel page
+        # scrolls instead.  (A nested QScrollArea here collapsed to a thin
+        # strip whenever vertical space ran short — removed 2026-08-12.)
         self.preview = PieMenu(None, mw=None, parent=self, preview=True)
         self.preview.set_edit_mode(True)
         self.preview.set_preview_scale(0.72)
-        pv_host = QVBoxLayout()
+        self.preview.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        pv_host = QHBoxLayout()
         pv_host.setContentsMargins(0, 0, 0, 0)
         pv_host.addWidget(self.preview, 0, Qt.AlignmentFlag.AlignHCenter)
         layout.addLayout(pv_host)
@@ -203,9 +291,10 @@ class PieMenuEditor(QWidget):
             self.tr("Commands (drag onto the menu; max %1 per sector, "
                     "right-click a card to remove):")
             .replace("%1", str(SECTOR_MAX_CARDS)))
+        self.palette_hint.setWordWrap(True)   # a single long line would
+        # force the whole page wider than the ConfigPanel viewport
         layout.addWidget(self.palette_hint)
         self.palette = CommandPalette(self)
-        self.palette.setFixedHeight(190)
         layout.addWidget(self.palette, 1)
 
     def _connect_signals(self):
@@ -219,8 +308,6 @@ class PieMenuEditor(QWidget):
         self.direction_combo.currentIndexChanged.connect(self._on_direction_changed)
         self.preview.slot_remove_requested.connect(self._on_card_remove)
         self.preview.command_dropped.connect(self._on_command_dropped)
-        self.preview.list_item_remove_requested.connect(self._on_item_remove)
-        self.preview.list_command_dropped.connect(self._on_list_command_dropped)
         self.palette.remove_requested.connect(self._on_card_remove)
 
     # ── Current menu helpers ───────────────────────────────
@@ -346,18 +433,19 @@ class PieMenuEditor(QWidget):
 
     def _on_style_changed(self, index):
         """Switch the current menu between ring and list, converting its
-        commands: ring -> list flattens the sectors, list -> ring distributes
-        the cards back into sectors (<= 3 each)."""
+        commands: ring -> list picks the lateral-half sectors as panels,
+        list -> ring writes the panels back into an 8-sector layout."""
         menu = self._current_menu()
         if menu is None:
             return
         new_layout = "list" if index == 1 else "ring"
         if new_layout == menu.get("layout", "ring"):
             return
+        direction = menu.get("direction", "right")
         if new_layout == "list":
-            menu["items"] = slots_to_items(menu.get("slots", []))
+            menu["panels"] = slots_to_panels(menu.get("slots", []), direction)
         else:
-            menu["slots"] = items_to_slots(menu.get("items", []), menu.get("sectors", 8))
+            menu["slots"] = panels_to_slots(menu.get("panels", []), direction)
         menu["layout"] = new_layout
         self._load_current_props()   # sync combos + visibility (signals blocked)
         self._refresh_preview()
@@ -368,56 +456,36 @@ class PieMenuEditor(QWidget):
         if menu is None:
             return
         menu["direction"] = "left" if index == 1 else "right"
-        self._save()
-
-    def _on_list_command_dropped(self, idx, cmd_id, src_idx):
-        menu = self._current_menu()
-        if menu is None:
-            return
-        items = menu["items"]
-        if src_idx >= 0 and 0 <= src_idx < len(items):
-            items.pop(src_idx)
-        items.insert(max(0, min(idx, len(items))), cmd_id)
-        self._refresh_preview()
-        self._save()
-
-    def _on_item_remove(self, idx):
-        menu = self._current_menu()
-        if menu is None:
-            return
-        items = menu["items"]
-        if 0 <= idx < len(items):
-            items.pop(idx)
-        self._refresh_preview()
+        self._refresh_preview()   # panel anchors mirror to the other side
         self._save()
 
     def _on_command_dropped(self, sector, idx, cmd_id, src_sector, src_idx):
+        """Drop onto the preview.  For the list layout the sector argument
+        carries the panel index; the storage group switches accordingly."""
         menu = self._current_menu()
         if menu is None:
             return
-        slots = menu["slots"]
-        if src_sector >= 0 and 0 <= src_sector < len(slots) \
-                and 0 <= src_idx < len(slots[src_sector]):
-            slots[src_sector].pop(src_idx)
-        sector = max(0, min(sector, len(slots) - 1))
-        slots[sector].insert(max(0, min(idx, len(slots[sector]))), cmd_id)
+        key = "panels" if menu.get("layout", "ring") == "list" else "slots"
+        groups = menu[key]
+        if src_sector >= 0 and 0 <= src_sector < len(groups) \
+                and 0 <= src_idx < len(groups[src_sector]):
+            groups[src_sector].pop(src_idx)
+        sector = max(0, min(sector, len(groups) - 1))
+        groups[sector].insert(max(0, min(idx, len(groups[sector]))), cmd_id)
         self._refresh_preview()
         self._save()
 
     def _on_card_remove(self, sector, idx):
-        """Remove a card dragged back onto the palette (the preview emits
-        sector/idx; a list card carries ``x-pie-src = 0,idx``)."""
+        """Remove a card (right-click in the preview, or dragged back onto
+        the palette).  For the list layout the sector argument is the panel
+        index."""
         menu = self._current_menu()
         if menu is None:
             return
-        if menu.get("layout", "ring") == "list":
-            items = menu["items"]
-            if 0 <= idx < len(items):
-                items.pop(idx)
-        else:
-            slots = menu["slots"]
-            if 0 <= sector < len(slots) and 0 <= idx < len(slots[sector]):
-                slots[sector].pop(idx)
+        key = "panels" if menu.get("layout", "ring") == "list" else "slots"
+        groups = menu[key]
+        if 0 <= sector < len(groups) and 0 <= idx < len(groups[sector]):
+            groups[sector].pop(idx)
         self._refresh_preview()
         self._save()
 
@@ -428,6 +496,14 @@ class PieMenuEditor(QWidget):
         self.preview.set_menu_config(menu)
         self.preview.set_edit_mode(True)
         self._refresh_hint()
+        self._refresh_used()
+
+    def _refresh_used(self):
+        """Dim palette cards whose command is already in the current menu."""
+        menu = self._current_menu() or {}
+        key = "panels" if menu.get("layout", "ring") == "list" else "slots"
+        used = {cid for group in menu.get(key, []) for cid in group}
+        self.palette.set_used(used)
 
     def _refresh_hint(self):
         """Palette hint text follows the current menu's style."""
@@ -468,27 +544,19 @@ class PieMenuEditor(QWidget):
             self.conflict_label.hide()
 
     def _populate_palette(self):
-        self.palette.clear()
-        by_cat = {}
-        for cmd in COMMAND_REGISTRY.values():
-            if cmd.run_fn is not None and cmd.category:
-                by_cat.setdefault(cmd.category, []).append(cmd)
-        for cat, label in _CATEGORY_LABELS:
-            cmds = by_cat.get(cat)
-            if not cmds:
-                continue
-            root = QTreeWidgetItem([self.tr(label)])
-            root.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        """Flat card grid: category order, translated-name order inside each."""
+        commands = []
+        for cat, label, color in _CATEGORY_LABELS:
+            cmds = [c for c in COMMAND_REGISTRY.values()
+                    if c.run_fn is not None and c.category == cat]
             for cmd in sorted(cmds, key=lambda c: self.tr(c.label_key).lower()):
-                child = QTreeWidgetItem([
-                    QCoreApplication.translate("Canvas", cmd.label_key)])
-                child.setData(0, Qt.ItemDataRole.UserRole, cmd.id)
-                child.setFlags(Qt.ItemFlag.ItemIsEnabled
-                               | Qt.ItemFlag.ItemIsSelectable
-                               | Qt.ItemFlag.ItemIsDragEnabled)
-                root.addChild(child)
-            self.palette.addTopLevelItem(root)
-        self.palette.expandAll()
+                commands.append((
+                    cmd.id,
+                    QCoreApplication.translate("Canvas", cmd.label_key),
+                    self.tr(label),
+                    color,
+                ))
+        self.palette.set_commands(commands)
 
     def _save(self):
         pcfg.pie_menus = self._menus

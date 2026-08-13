@@ -1738,3 +1738,49 @@ QToolButton#TextTransformCloseButton:hover {
 QToolButton#TextTransformCloseButton:hover {
     background: @dangerColor;
 }
+
+/* ── QTabBar (theme-aware; e.g. PieMenuEditor menu tabs) ─────── */
+QTabBar::tab {
+    background: transparent;
+    color: @qwidgetForegroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+    padding: 4px 12px;
+    margin-right: 4px;
+}
+QTabBar::tab:selected {
+    background: @accentPrimary20;
+    color: @accentPrimary;
+    border-color: @accentPrimary;
+}
+QTabBar::tab:hover:!selected {
+    background: @hoverBackgroundColor;
+}
+QTabBar::close-button {
+    margin: 2px;
+    margin-left: 4px;
+}
+QTabBar::close-button:hover {
+    background: @hoverBackgroundColor;
+    border-radius: 3px;
+}
+
+/* ── Item views base (QTreeWidget / QListWidget selection) ───── */
+QTreeView, QListView {
+    background: @emptyContentBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+    outline: none;
+}
+QTreeView::item, QListView::item {
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+QTreeView::item:hover, QListView::item:hover {
+    background: @hoverBackgroundColor;
+}
+QTreeView::item:selected, QListView::item:selected {
+    background: @accentPrimary20;
+    color: @textColor;
+}
+

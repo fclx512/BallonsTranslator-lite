@@ -17,10 +17,12 @@ tangentially (perpendicular to the sector radius) instead of fanning them
 angularly, so stacked cards never overlap. The center indicator is a thin
 ring plus a hollow sector fill pointing at the hovered sector.
 
-Vertical list style (2026-08-12): a one-column card stack beside the cursor
-(left/right configurable), sharing the card visual language and the whole
-state machine.  One menu = one function group; no separators inside a list.
-See ``docs/技术实现/快捷菜单_竖排样式_设计与交接.md``.
+Vertical list style (2026-08-12, half-ring redesign): the ring is cut
+vertically and each lateral sector position hosts one small continuous
+context-menu panel (touching rows, no card gaps) — three fixed anchor
+positions per side (top-diagonal / lateral / bottom-diagonal).  Data model:
+``panels`` — 3 groups x up to 3 commands.  Shares the whole state machine
+with the ring.  See ``docs/技术实现/快捷菜单_竖排样式_设计与交接.md``.
 
 The widget is a separate frameless ``Qt.Tool`` window that does not take
 focus, so the main window keeps receiving key events (release of the
@@ -29,7 +31,7 @@ trigger key, Esc) while it is open.
 
 from math import atan2, cos, hypot, pi, radians, sin
 
-from qtpy.QtCore import QCoreApplication, QElapsedTimer, QMimeData, QPoint, QPointF, QRectF, Qt, Signal
+from qtpy.QtCore import QCoreApplication, QElapsedTimer, QEvent, QMimeData, QPoint, QPointF, QRectF, Qt, Signal
 from qtpy.QtGui import QColor, QDrag, QFontMetrics, QPainter, QPainterPath, QPen
 from qtpy.QtWidgets import QApplication, QWidget
 
@@ -58,25 +60,27 @@ SECTOR_COUNT = 8
 SECTOR_MAX_CARDS = 3          # cards per sector (config load truncates to this)
 SHORT_PRESS_MS = 250          # hold shorter than this -> PIN mode
 DEAD_ZONE_RADIUS = 5.0        # jitter dead zone right at the center
-CARD_CORNER_RADIUS = 5.0      # rounded corner radius of a card
+CARD_CORNER_RADIUS = 8.0      # rounded corner radius of a card
 CENTER_RING_WIDTH = 2.0       # stroke width of the center ring
 TITLE_OFFSET_Y = 28.0         # title baseline distance above the center ring
 HOVER_TEXT_COLOR = QColor(255, 255, 255)
 
 # ── Vertical list layout (quick-menu "List" style) ─────────
-# A one-column stack of cards (same card visual language as the ring, minus
-# the sector numbers).  Grouping happens at the menu level: one menu = one
-# function group, split into new menus when you want separation (no
-# separators inside a list — decision 2026-08-12).
-LIST_TITLE_H = 30.0           # title row height (menu display name)
-LIST_ITEM_H = 34.0            # card height
-LIST_GAP = 6.0                # vertical gap between cards
-LIST_PAD_X = 12.0             # horizontal padding inside a card
-LIST_PAD_Y = 10.0             # top/bottom padding of the column
-LIST_EDGE_OFFSET = 16.0       # horizontal gap between the cursor and the column
-LIST_MIN_W = 140.0            # column width floor (short labels)
-LIST_MAX_W = 260.0            # column width cap (long labels)
-LIST_MAX_ITEMS = 24           # card cap (matches ring 8 sectors x 3 cards)
+# Half-ring of context-menu panels: the ring is cut vertically and each
+# lateral sector position hosts one small continuous panel (standard
+# context-menu look — touching rows, no card gaps).  Grouping happens at
+# the menu level: one menu = one function group, split into new menus when
+# you want separation (no separators inside a panel — decision 2026-08-12).
+LIST_PANELS = 3               # anchor positions per side (top / middle / bottom)
+LIST_PANEL_MAX_ITEMS = 3      # rows per panel (matches SECTOR_MAX_CARDS)
+LIST_ANCHOR_DIST = 120.0      # cursor -> panel anchor distance
+LIST_PANEL_RADIUS = 6.0       # outer corner radius of a panel
+LIST_ROW_H = 26.0             # single command row height
+LIST_PAD_X = 14.0             # horizontal padding inside a panel
+LIST_PAD_Y = 4.0              # top/bottom padding inside a panel
+LIST_MIN_W = 120.0            # panel width floor (short labels)
+LIST_MAX_W = 240.0            # panel width cap (longer labels elide)
+LIST_MARGIN = 8.0             # transparent margin around the panel bbox
 
 # ts context used for pie-menu display names (defaults are tr keys).
 PIE_MENU_TR_CONTEXT = "PieMenu"
@@ -87,10 +91,11 @@ def normalize_pie_menu(menu) -> dict:
 
     Ring layout: ``sectors`` in (4, 6, 8), ``slots`` has exactly ``sectors``
     lists each truncated to ``SECTOR_MAX_CARDS`` ids.  List layout:
-    ``items`` is a flat list of command ids capped at ``LIST_MAX_ITEMS`` and
-    ``direction`` is ``"left"`` / ``"right"``.  Both representations are
-    kept and normalized so switching styles is cheap.  Unknown ids are kept
-    (they render disabled / skipped); unknown commands never crash.
+    ``panels`` has exactly ``LIST_PANELS`` lists each truncated to
+    ``LIST_PANEL_MAX_ITEMS`` ids and ``direction`` is ``"left"`` /
+    ``"right"``.  Both representations are kept and normalized so switching
+    styles is cheap.  Unknown ids are kept (they render disabled /
+    skipped); unknown commands never crash.
     """
     if not isinstance(menu, dict):
         menu = {}
@@ -111,13 +116,22 @@ def normalize_pie_menu(menu) -> dict:
     direction = menu.get("direction", "right")
     if direction not in ("left", "right"):
         direction = "right"
-    items = menu.get("items", [])
-    if not isinstance(items, list):
-        items = []
-    items = [
-        cid for cid in items
-        if isinstance(cid, str) and cid and cid != SEPARATOR_SENTINEL
-    ][:LIST_MAX_ITEMS]
+    panels = menu.get("panels", [])
+    if not isinstance(panels, list):
+        panels = []
+    if not panels:
+        # migrate the retired flat ``items`` list (chunked by panel capacity)
+        legacy = menu.get("items", [])
+        if isinstance(legacy, list) and legacy:
+            panels = [legacy[i:i + LIST_PANEL_MAX_ITEMS]
+                      for i in range(0, len(legacy), LIST_PANEL_MAX_ITEMS)]
+    panels = (panels + [[] for _ in range(LIST_PANELS)])[:LIST_PANELS]
+    panels = [
+        [cid for cid in lst[:LIST_PANEL_MAX_ITEMS]
+         if isinstance(cid, str) and cid and cid != SEPARATOR_SENTINEL]
+        if isinstance(lst, list) else []
+        for lst in panels
+    ]
     return {
         "id": menu.get("id", ""),
         "name": menu.get("name", ""),
@@ -126,33 +140,39 @@ def normalize_pie_menu(menu) -> dict:
         "layout": layout,
         "slots": slots,
         "direction": direction,
-        "items": items,
+        "panels": panels,
     }
 
 
-def slots_to_items(slots) -> list:
-    """Flatten ring sectors (sector-major) into a flat list command list."""
-    out = []
-    for lst in slots:
-        out.extend(
-            cid for cid in lst
-            if isinstance(cid, str) and cid != SEPARATOR_SENTINEL
-        )
-    return out
-
-
-def items_to_slots(items, sectors) -> list:
-    """Distribute a flat command list into ring slots (<= 3 per sector)."""
-    slots = [[] for _ in range(max(0, sectors))]
-    i = 0
-    for cid in items:
-        if not isinstance(cid, str) or cid == SEPARATOR_SENTINEL:
-            continue
-        while i < len(slots) and len(slots[i]) >= SECTOR_MAX_CARDS:
-            i += 1
-        if i >= len(slots):
+def slots_to_panels(slots, direction="right") -> list:
+    """Pick the lateral half of ring slots as list panels (top -> bottom)."""
+    n = len(slots)
+    picked = []
+    for i in range(n):
+        if n == 0:
             break
-        slots[i].append(cid)
+        x = sin(radians(i * 360.0 / n))   # clock-face: 0 = top, clockwise
+        if direction == "left":
+            x = -x
+        if x > 0.01:
+            lst = slots[i]
+            picked.append(list(lst) if isinstance(lst, list) else [])
+    if direction == "left":
+        picked.reverse()   # increasing index runs bottom -> top on the left
+    picked = (picked + [[] for _ in range(LIST_PANELS)])[:LIST_PANELS]
+    return [lst[:LIST_PANEL_MAX_ITEMS] for lst in picked]
+
+
+def panels_to_slots(panels, direction="right") -> list:
+    """Write list panels back into an 8-sector ring slot layout."""
+    slots = [[] for _ in range(SECTOR_COUNT)]
+    if direction == "left":
+        idxs = (7, 6, 5)   # top-left, left, bottom-left
+    else:
+        idxs = (1, 2, 3)   # top-right, right, bottom-right
+    for panel, slot_i in zip(panels, idxs):
+        if isinstance(panel, list):
+            slots[slot_i] = list(panel)[:SECTOR_MAX_CARDS]
     return slots
 
 
@@ -180,12 +200,11 @@ class PieMenu(QWidget):
 
     command_triggered = Signal(str)   # cmd_id
     canceled = Signal()
-    # Preview-mode signals (config editor)
+    # Preview-mode signals (config editor).  For the list layout the
+    # "sector" argument carries the panel index (0..LIST_PANELS-1).
     slot_selected = Signal(int, int)          # (sector, idx) left-click on a card
     slot_remove_requested = Signal(int, int)  # (sector, idx) right-click on a card
     command_dropped = Signal(int, int, str, int, int)  # sector, idx, cmd_id, src_sector, src_idx
-    list_command_dropped = Signal(int, str, int)  # idx, cmd_id, src_idx (list layout)
-    list_item_remove_requested = Signal(int)      # idx (list layout, right-click)
 
     def __init__(self, canvas, mw=None, parent=None, preview=False):
         super().__init__(parent)
@@ -215,20 +234,22 @@ class PieMenu(QWidget):
         self.setFixedSize(size, size)
 
         self._state = "hidden"   # hidden | holding | pin
-        self._hover = None       # (sector, card_idx) or None (= center / disabled)
+        self._hover = None       # (sector, card_idx) / (panel, row) or None
         self._press_timer = QElapsedTimer()
         self._menu = {}
         self._sector_count = SECTOR_COUNT
         self._sector_data = []
-        self._list_items = []    # list-layout command ids (flat)
-        self._hover_item = -1    # list-layout hovered card index
-        self._list_w = LIST_MIN_W  # list-layout logical column width
-        self._list_h = 0.0         # list-layout logical column height
+        self._list_panels = []   # list-layout command id groups (3 panels)
+        self._list_rects = []    # per-panel QRectF (widget-local, logical)
+        self._list_cursor = QPointF(0.0, 0.0)  # widget-local cursor position
+        self._list_panel_w = LIST_MIN_W        # uniform panel width
+        self._list_w = LIST_MIN_W  # list-layout logical window width
+        self._list_h = 0.0         # list-layout logical window height
         # Preview-mode state (unused by the runtime menu)
         self._preview_scale = 1.0
         self._edit_mode = False
         self._drop_sector = -1
-        self._drop_item = -1     # list-layout drop insertion index
+        self._drop_row = -1      # list-layout drop insertion row
         self._drop_rejected = False
         self._selected = None    # (sector, idx) clicked card in edit mode
         self._press_pos = None
@@ -242,7 +263,6 @@ class PieMenu(QWidget):
         if self._state != "hidden":
             self.cancel()
         self._hover = None
-        self._hover_item = -1
         if self._is_list():
             self._move_list_at(global_pos)
         else:
@@ -253,15 +273,11 @@ class PieMenu(QWidget):
         self._press_timer.start()
 
     def _move_list_at(self, global_pos: QPoint):
-        """Anchor the list column left/right of the cursor, vertically
-        centered on it, then clamp the widget inside the screen's available
-        geometry (a list taller than the screen keeps its top visible)."""
-        w, h = self._list_w, self._list_h
-        if self._menu.get("direction") == "left":
-            x = global_pos.x() - LIST_EDGE_OFFSET - w
-        else:
-            x = global_pos.x() + LIST_EDGE_OFFSET
-        y = global_pos.y() - h / 2.0
+        """Place the panel window so the cursor lands on its anchor point,
+        then clamp the widget inside the screen's available geometry."""
+        x = global_pos.x() - self._list_cursor.x()
+        y = global_pos.y() - self._list_cursor.y()
+        w, h = self.width(), self.height()
         scr = QApplication.screenAt(global_pos) or QApplication.primaryScreen()
         if scr is not None:
             g = scr.availableGeometry()
@@ -307,56 +323,112 @@ class PieMenu(QWidget):
         self._menu = menu
         self._sector_count = menu["sectors"]
         self._sector_data = menu["slots"]
-        self._list_items = menu["items"]
+        self._list_panels = menu["panels"]
         self._hover = None
-        self._hover_item = -1
         if self._is_list():
-            self._list_w, self._list_h = self._list_logical_size()
+            self._relayout_list()
+        self._sync_fixed_size()
+        self.updateGeometry()
+        self.update()
+
+    def _sync_fixed_size(self):
+        """Resize the widget to the current layout's logical size (x preview
+        scale).  Must run on every layout switch — a list-sized window would
+        otherwise clip the ring (its center sits outside the small rect,
+        so a previously-list runtime menu rendered fully transparent)."""
+        if self._is_list():
             self.setFixedSize(int(self._list_w * self._preview_scale),
                               int(self._list_h * self._preview_scale))
-        self.update()
+        else:
+            size = int(2 * WINDOW_RADIUS * self._preview_scale)
+            self.setFixedSize(size, size)
 
     # ── List layout helpers ────────────────────────────────
 
     def _is_list(self) -> bool:
         return self._menu.get("layout") == "list"
 
-    def _list_logical_size(self):
-        """(w, h) logical size of the vertical list column."""
+    def _relayout_list(self):
+        """Recompute panel rects / window size from the current font.
+
+        Three fixed anchor positions on the configured side of the cursor
+        (top-diagonal, lateral, bottom-diagonal); each panel is a small
+        continuous context menu.  All three panels always get a rect
+        (empty ones collapse to a one-row ghost) so the window geometry is
+        stable while the editor fills panels; the runtime menu simply never
+        paints or hit-tests empty panels.
+        """
         fm = QFontMetrics(self.font())
         w = LIST_MIN_W
-        for cid in self._list_items:
-            cmd = COMMAND_REGISTRY.get(cid)
-            if cmd is None:
-                continue
-            w = max(w, fm.horizontalAdvance(self._label_for(cid)) + 2 * LIST_PAD_X)
+        for panel in self._list_panels:
+            for cid in panel:
+                if cid in COMMAND_REGISTRY:
+                    w = max(w, fm.horizontalAdvance(self._label_for(cid))
+                            + 2 * LIST_PAD_X)
         w = min(w, LIST_MAX_W)
-        n = len(self._list_items)
-        h = (LIST_PAD_Y + LIST_TITLE_H + LIST_GAP
-             + n * LIST_ITEM_H + max(0, n - 1) * LIST_GAP + LIST_PAD_Y)
-        return w, h
+        self._list_panel_w = w
+        diag = LIST_ANCHOR_DIST / 2 ** 0.5
+        left_dir = self._menu.get("direction") == "left"
+        rects = []
+        for i, panel in enumerate(self._list_panels):
+            rows = max(1, len(panel))
+            h = 2 * LIST_PAD_Y + rows * LIST_ROW_H
+            if i == 0:        # top-diagonal: bottom-left corner at the anchor
+                x, y = diag, -diag - h
+            elif i == 1:      # lateral: left edge midpoint at the anchor
+                x, y = LIST_ANCHOR_DIST, -h / 2.0
+            else:             # bottom-diagonal: top-left corner at the anchor
+                x, y = diag, diag
+            if left_dir:
+                x = -x - w
+            rects.append(QRectF(x, y, w, h))
+        left = min(r.left() for r in rects)
+        top = min(r.top() for r in rects)
+        right = max(r.right() for r in rects)
+        bottom = max(r.bottom() for r in rects)
+        off_x, off_y = LIST_MARGIN - left, LIST_MARGIN - top
+        self._list_rects = [r.translated(off_x, off_y) for r in rects]
+        self._list_cursor = QPointF(off_x, off_y)
+        self._list_w = (right - left) + 2 * LIST_MARGIN
+        self._list_h = (bottom - top) + 2 * LIST_MARGIN
 
-    def _list_item_rect(self, idx: int) -> QRectF:
-        """Widget-local rect of a list card (logical coordinates)."""
-        y = (LIST_PAD_Y + LIST_TITLE_H + LIST_GAP
-             + idx * (LIST_ITEM_H + LIST_GAP))
-        return QRectF(0.0, y, self._list_w, LIST_ITEM_H)
+    def changeEvent(self, event):
+        # Font changes re-flow the list panels (width derives from labels).
+        if event.type() == QEvent.Type.FontChange and self._is_list():
+            self._relayout_list()
+            self._sync_fixed_size()
+        super().changeEvent(event)
+
+    def _list_row_rect(self, panel: int, row: int) -> QRectF:
+        """Widget-local rect of a command row (logical coordinates)."""
+        rect = self._list_rects[panel]
+        return QRectF(rect.x(), rect.y() + LIST_PAD_Y + row * LIST_ROW_H,
+                      rect.width(), LIST_ROW_H)
 
     def _hit_test_list(self, local_pos: QPointF):
-        """Index of the card under *local_pos*, or None (title / gap / padding)."""
-        for i in range(len(self._list_items)):
-            if self._list_item_rect(i).contains(local_pos):
-                return i
+        """(panel, row) under *local_pos*, or None (gap / ghost / outside)."""
+        for i, rect in enumerate(self._list_rects):
+            if not self._list_panels[i]:
+                continue
+            if rect.contains(local_pos):
+                row = int((local_pos.y() - rect.top() - LIST_PAD_Y)
+                          // LIST_ROW_H)
+                row = max(0, min(row, len(self._list_panels[i]) - 1))
+                return (i, row)
         return None
 
-    def _list_insert_index(self, local_pos: QPointF) -> int:
-        """Insertion index (0..n) for a drop at *local_pos*: before the first
-        card whose center lies below the cursor."""
-        n = len(self._list_items)
-        for i in range(n):
-            if local_pos.y() < self._list_item_rect(i).center().y():
-                return i
-        return n
+    def _list_drop_pos(self, local_pos: QPointF):
+        """(panel, insert_row) for a drop at *local_pos*, or (-1, -1).
+        Empty panels (ghost rects) are valid drop targets in edit mode."""
+        for i, rect in enumerate(self._list_rects):
+            if rect.contains(local_pos):
+                n = len(self._list_panels[i])
+                rel = local_pos.y() - rect.top() - LIST_PAD_Y
+                idx = int(rel // LIST_ROW_H)
+                if rel - idx * LIST_ROW_H > LIST_ROW_H / 2.0:
+                    idx += 1   # past the row's midpoint -> insert after it
+                return i, max(0, min(idx, n))
+        return -1, -1
 
     def _cmd_available(self, cmd_id: str) -> bool:
         if self._preview:
@@ -374,8 +446,10 @@ class PieMenu(QWidget):
         return QCoreApplication.translate("Canvas", cmd.label_key)
 
     def _slot_at(self, sector: int, idx: int):
-        """Command id at (sector, idx), or None for an empty slot."""
-        lst = self._sector_data[sector] if 0 <= sector < self._sector_count else []
+        """Command id at (sector, idx) — for the list layout the "sector" is
+        the panel index.  Returns None for an empty slot."""
+        data = self._list_panels if self._is_list() else self._sector_data
+        lst = data[sector] if 0 <= sector < len(data) else []
         if 0 <= idx < len(lst):
             return lst[idx]
         return None
@@ -455,13 +529,6 @@ class PieMenu(QWidget):
 
     def _update_hover(self, hit):
         # Disabled / empty slots behave like the center (unselectable).
-        if self._is_list():
-            if hit is not None and not self._cmd_available(self._list_items[hit]):
-                hit = None
-            if hit != self._hover_item:
-                self._hover_item = hit if hit is not None else -1
-                self.update()
-            return
         if hit is not None:
             sector, idx = hit
             cmd_id = self._slot_at(sector, idx)
@@ -473,14 +540,6 @@ class PieMenu(QWidget):
 
     def _commit(self):
         """Release-commit: trigger the hovered item, or cancel (center/disabled)."""
-        if self._is_list():
-            h = self._hover_item
-            if 0 <= h < len(self._list_items) \
-                    and self._cmd_available(self._list_items[h]):
-                self._trigger(self._list_items[h])
-                return
-            self.cancel()
-            return
         hover = self._hover
         if hover is not None:
             sector, idx = hover
@@ -501,11 +560,7 @@ class PieMenu(QWidget):
         """Uniform scale for the embedded preview (paint transform only —
         geometry stays in logical coordinates)."""
         self._preview_scale = scale
-        if self._is_list():
-            self.setFixedSize(int(self._list_w * scale), int(self._list_h * scale))
-        else:
-            self.setFixedSize(int(2 * WINDOW_RADIUS * scale),
-                              int(2 * WINDOW_RADIUS * scale))
+        self._sync_fixed_size()
         self.update()
 
     def set_edit_mode(self, enabled: bool):
@@ -514,7 +569,7 @@ class PieMenu(QWidget):
         self._edit_mode = enabled
         if not enabled:
             self._drop_sector = -1
-            self._drop_item = -1
+            self._drop_row = -1
             self._selected = None
         self.update()
 
@@ -524,9 +579,10 @@ class PieMenu(QWidget):
         self._drop_rejected = rejected
         self.update()
 
-    def set_list_drop_target(self, idx: int, rejected: bool = False):
+    def set_list_drop_target(self, panel: int, row: int, rejected: bool = False):
         """Highlight a list insertion slot as the current drop target."""
-        self._drop_item = idx
+        self._drop_sector = panel
+        self._drop_row = row
         self._drop_rejected = rejected
         self.update()
 
@@ -568,18 +624,7 @@ class PieMenu(QWidget):
         drag.exec(Qt.DropAction.MoveAction)
         # the drag ended: repaint (drop target may still be highlighted)
         self._drop_sector = -1
-        self.update()
-
-    def _start_item_drag(self, idx: int, cmd_id: str, pos):
-        """Start a drag from a list card (x-pie-src reuses ``"0,{idx}"`` so a
-        drop back onto the palette removes the right item)."""
-        drag = QDrag(self)
-        md = QMimeData()
-        md.setData("application/x-pie-cmd", cmd_id.encode("utf-8"))
-        md.setData("application/x-pie-src", f"0,{idx}".encode("utf-8"))
-        drag.setMimeData(md)
-        drag.exec(Qt.DropAction.MoveAction)
-        self._drop_item = -1
+        self._drop_row = -1
         self.update()
 
     # ── Mouse ──────────────────────────────────────────────
@@ -593,19 +638,11 @@ class PieMenu(QWidget):
             # drag threshold reached → start a card drag (move / reorder)
             if (event.position() - self._press_pos).manhattanLength() \
                     > QApplication.startDragDistance():
-                if self._is_list():
-                    idx = self._press_hit
-                    cmd_id = (self._list_items[idx]
-                              if 0 <= idx < len(self._list_items) else None)
-                    self._press_hit = None
-                    if cmd_id:
-                        self._start_item_drag(idx, cmd_id, event.position())
-                else:
-                    sector, idx = self._press_hit
-                    cmd_id = self._slot_at(sector, idx)
-                    self._press_hit = None
-                    if cmd_id:
-                        self._start_card_drag(sector, idx, cmd_id, event.position())
+                sector, idx = self._press_hit
+                cmd_id = self._slot_at(sector, idx)
+                self._press_hit = None
+                if cmd_id:
+                    self._start_card_drag(sector, idx, cmd_id, event.position())
         return super().mouseMoveEvent(event)
 
     def mousePressEvent(self, event):
@@ -613,10 +650,7 @@ class PieMenu(QWidget):
             pos = event.position() / self._preview_scale
             hit = self._hit_test_list(pos) if self._is_list() else self._hit_test(pos)
             if event.button() == Qt.MouseButton.RightButton:
-                if self._is_list():
-                    if hit is not None:
-                        self.list_item_remove_requested.emit(hit)
-                elif hit is not None:
+                if hit is not None:
                     sector, idx = hit
                     cmd_id = self._slot_at(sector, idx)
                     if cmd_id:
@@ -635,10 +669,10 @@ class PieMenu(QWidget):
             return super().mousePressEvent(event)
         if self._is_list():
             hit = self._hit_test_list(event.position())
-            if hit is None:  # title / gap / padding -> cancel
+            if hit is None:  # gap / ghost / outside -> cancel
                 self.cancel()
                 return
-            cmd_id = self._list_items[hit]
+            cmd_id = self._slot_at(*hit)
             if cmd_id and self._cmd_available(cmd_id):
                 self._trigger(cmd_id)
             else:
@@ -657,8 +691,8 @@ class PieMenu(QWidget):
 
     def mouseReleaseEvent(self, event):
         if self._preview and event.button() == Qt.MouseButton.LeftButton:
-            # click (no drag started) on a card → select it in edit mode (ring)
-            if self._press_hit is not None and not self._is_list():
+            # click (no drag started) on a card → select it in edit mode
+            if self._press_hit is not None:
                 sector, idx = self._press_hit
                 if self._slot_at(sector, idx):
                     self._selected = (sector, idx)
@@ -704,13 +738,16 @@ class PieMenu(QWidget):
             cmd_id, src_sector, _ = self._drop_info(event.mimeData())
             if cmd_id == SEPARATOR_SENTINEL:   # defensive: no separators in menus
                 self.set_drop_target(-1)
-                self.set_list_drop_target(-1)
+                self.set_list_drop_target(-1, -1)
                 event.ignore()
                 return
             if self._is_list():
-                idx = self._list_insert_index(event.position() / self._preview_scale)
-                ok = (src_sector == 0 or len(self._list_items) < LIST_MAX_ITEMS)
-                self.set_list_drop_target(idx, rejected=not ok)
+                panel, row = self._list_drop_pos(
+                    event.position() / self._preview_scale)
+                ok = panel >= 0 and (src_sector == panel
+                                     or len(self._list_panels[panel])
+                                     < LIST_PANEL_MAX_ITEMS)
+                self.set_list_drop_target(panel, row, rejected=not ok)
                 if ok:
                     event.acceptProposedAction()
                 else:
@@ -729,7 +766,7 @@ class PieMenu(QWidget):
     def dragLeaveEvent(self, event):
         if self._preview:
             self.set_drop_target(-1)
-            self.set_list_drop_target(-1)
+            self.set_list_drop_target(-1, -1)
         super().dragLeaveEvent(event)
 
     def dropEvent(self, event):
@@ -739,20 +776,23 @@ class PieMenu(QWidget):
         pos = event.position() / self._preview_scale
         if cmd_id == SEPARATOR_SENTINEL:
             self.set_drop_target(-1)
-            self.set_list_drop_target(-1)
+            self.set_list_drop_target(-1, -1)
             event.ignore()
             return
         if self._is_list():
-            idx = self._list_insert_index(pos)
-            if src_idx >= 0 and src_idx < idx:
-                idx -= 1   # internal move: source removal shifts the target
-            self.set_list_drop_target(-1)
-            if len(self._list_items) >= LIST_MAX_ITEMS \
-                    and not (src_sector == 0 and src_idx >= 0):
+            panel, row = self._list_drop_pos(pos)
+            self.set_list_drop_target(-1, -1)
+            if panel < 0:
+                event.ignore()
+                return
+            if src_sector == panel and 0 <= src_idx < row:
+                row -= 1   # internal move: source removal shifts the target
+            if src_sector != panel \
+                    and len(self._list_panels[panel]) >= LIST_PANEL_MAX_ITEMS:
                 event.ignore()
                 return
             event.acceptProposedAction()
-            self.list_command_dropped.emit(idx, cmd_id, src_idx)
+            self.command_dropped.emit(panel, row, cmd_id, src_sector, src_idx)
             return
         sector = self.sector_at(pos)
         self.set_drop_target(-1)
@@ -771,17 +811,17 @@ class PieMenu(QWidget):
         """Shared card colors for both layouts (dark/light theme)."""
         if dark:
             ring_c = QColor(130, 135, 150, 220)
-            card_bg = QColor(35, 37, 46, 200)
+            card_bg = QColor(55, 58, 70, 200)
             number_c = QColor(255, 255, 255, 140)
+            border_c = QColor(255, 255, 255, 70)
         else:
             ring_c = QColor(100, 105, 120, 160)
-            card_bg = QColor(255, 255, 255, 220)
+            card_bg = QColor(255, 255, 255, 235)
             number_c = QColor(0, 0, 0, 120)
+            border_c = QColor(0, 0, 0, 55)
         text_c = get_theme_color(key="@textColor")
         accent_c = get_theme_color(key="@accentPrimary")
-        card_border = QColor(accent_c)
-        card_border.setAlpha(160)
-        return ring_c, card_bg, number_c, text_c, accent_c, card_border
+        return ring_c, card_bg, number_c, text_c, accent_c, border_c
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -795,14 +835,14 @@ class PieMenu(QWidget):
         dark = is_dark_theme()
         fm = painter.fontMetrics()
 
-        ring_c, card_bg, number_c, text_c, accent_c, card_border = \
+        ring_c, card_bg, number_c, text_c, accent_c, border_c = \
             self._card_palette(dark)
 
         if self._edit_mode:
             self._paint_edit_guides(painter, center, text_c)
 
         # floating command cards
-        self._paint_cards(painter, fm, card_bg, card_border, text_c,
+        self._paint_cards(painter, fm, card_bg, border_c, text_c,
                           number_c, accent_c)
 
         # drop-target highlight (config editor, dragging over the menu)
@@ -951,72 +991,89 @@ class PieMenu(QWidget):
     # ── List layout painting ───────────────────────────────
 
     def _paint_list(self, painter):
-        """Vertical list: title row + stacked cards (same visual language as
-        the ring cards, without sector numbers)."""
+        """Half-ring of context-menu panels: each non-empty panel is one
+        continuous rounded menu; empty panels only show as dashed ghosts in
+        the config editor (drop targets)."""
         dark = is_dark_theme()
-        _, card_bg, _, text_c, accent_c, card_border = self._card_palette(dark)
+        _, panel_bg, _, text_c, accent_c, border_c = self._card_palette(dark)
         fm = painter.fontMetrics()
+        max_text_w = int(self._list_panel_w - 2 * LIST_PAD_X)
 
-        # title row (dimmed, elided)
-        title = pie_menu_display_name(self._menu) or self.tr("Actions")
-        title = fm.elidedText(title, Qt.TextElideMode.ElideRight,
-                              int(self._list_w - 2 * LIST_PAD_X))
-        tcolor = QColor(text_c)
-        tcolor.setAlpha(170)
-        painter.setPen(QPen(tcolor))
-        painter.drawText(
-            QPointF(LIST_PAD_X,
-                    LIST_PAD_Y + fm.ascent() + (LIST_TITLE_H - fm.height()) / 2),
-            title)
-
-        # cards
-        for i, cmd_id in enumerate(self._list_items):
-            cmd = COMMAND_REGISTRY.get(cmd_id)
-            if cmd is None:
+        for i, rect in enumerate(self._list_rects):
+            panel = self._list_panels[i]
+            if not panel:
+                if self._edit_mode:
+                    ghost = QColor(text_c)
+                    ghost.setAlpha(45)
+                    painter.setPen(QPen(ghost, 1.0, Qt.PenStyle.DashLine))
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.drawRoundedRect(rect, LIST_PANEL_RADIUS,
+                                            LIST_PANEL_RADIUS)
                 continue
-            rect = self._list_item_rect(i)
-            hovered = self._hover_item == i
-            enabled = self._cmd_available(cmd_id)
 
-            if hovered:
-                fill = QColor(accent_c)
-                fill.setAlpha(255)
-                painter.setPen(QPen(HOVER_TEXT_COLOR, 1.5))
-                painter.setBrush(fill)
-            else:
-                painter.setPen(QPen(card_border, 1.5))
-                painter.setBrush(card_bg)
-            painter.drawRoundedRect(rect, CARD_CORNER_RADIUS, CARD_CORNER_RADIUS)
+            # Panel background + border
+            panel_path = QPainterPath()
+            panel_path.addRoundedRect(rect, LIST_PANEL_RADIUS,
+                                      LIST_PANEL_RADIUS)
+            painter.setPen(QPen(border_c, 1.0))
+            painter.setBrush(panel_bg)
+            painter.drawPath(panel_path)
 
-            label = self._label_for(cmd_id)
-            if hovered:
-                tcolor = HOVER_TEXT_COLOR
-            else:
-                tcolor = QColor(text_c)
-                if not enabled:
-                    tcolor.setAlpha(110)
-            baseline = rect.y() + (rect.height() - fm.height()) / 2 + fm.ascent()
-            painter.setPen(QPen(tcolor))
-            painter.drawText(QPointF(rect.x() + LIST_PAD_X, baseline), label)
+            # Clip rows to the panel so hover fills respect the corners
+            painter.save()
+            painter.setClipPath(panel_path)
+            for row, cmd_id in enumerate(panel):
+                cmd = COMMAND_REGISTRY.get(cmd_id)
+                if cmd is None:
+                    continue
+                row_rect = self._list_row_rect(i, row)
+                hovered = self._hover == (i, row)
+                enabled = self._cmd_available(cmd_id)
 
-        # drop insertion line (config editor, dragging over the list)
-        if self._edit_mode and self._drop_item >= 0:
+                if hovered:
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(QColor(accent_c))
+                    painter.drawRect(row_rect)
+                    tcolor = HOVER_TEXT_COLOR
+                else:
+                    tcolor = QColor(text_c)
+                    if not enabled:
+                        tcolor.setAlpha(110)
+
+                # selection ring (config editor)
+                if self._edit_mode and self._selected == (i, row):
+                    sel_pen = QPen(QColor(accent_c), 1.2, Qt.PenStyle.DashLine)
+                    painter.setPen(sel_pen)
+                    painter.setBrush(Qt.BrushStyle.NoBrush)
+                    painter.drawRoundedRect(
+                        row_rect.adjusted(2, 2, -2, -2), 3.0, 3.0)
+
+                label = fm.elidedText(self._label_for(cmd_id),
+                                      Qt.TextElideMode.ElideRight,
+                                      max_text_w)
+                baseline = (row_rect.y() + (row_rect.height() - fm.height())
+                            / 2 + fm.ascent())
+                painter.setPen(QPen(tcolor))
+                painter.drawText(QPointF(row_rect.x() + LIST_PAD_X,
+                                         baseline), label)
+            painter.restore()
+
+        # Drop insertion line (config editor, dragging over a panel)
+        if self._edit_mode and 0 <= self._drop_sector < len(self._list_rects):
             self._paint_list_drop_line(painter, accent_c)
 
     def _paint_list_drop_line(self, painter, accent_c):
-        """Horizontal accent line marking where a drop would insert (red when
-        the list is full)."""
-        n = len(self._list_items)
-        idx = min(self._drop_item, n)
-        if n == 0:
-            y = LIST_PAD_Y + LIST_TITLE_H + LIST_GAP
-        else:
-            rect = self._list_item_rect(min(idx, n - 1))
-            y = rect.top() if idx < n else rect.bottom() + LIST_GAP
+        """Horizontal accent line inside the target panel marking the
+        insertion slot (red when the panel is full)."""
+        rect = self._list_rects[self._drop_sector]
+        n = len(self._list_panels[self._drop_sector])
+        idx = max(0, min(self._drop_row, n))
+        y = rect.top() + LIST_PAD_Y + idx * LIST_ROW_H
         if self._drop_rejected:
             color = QColor(220, 60, 60, 200)
         else:
             color = QColor(accent_c)
             color.setAlpha(220)
         painter.setPen(QPen(color, 2.0))
-        painter.drawLine(QPointF(4.0, y), QPointF(self._list_w - 4.0, y))
+        painter.drawLine(QPointF(rect.left() + 4.0, y),
+                         QPointF(rect.right() - 4.0, y))
