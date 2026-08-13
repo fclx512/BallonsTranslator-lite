@@ -73,7 +73,16 @@ HOVER_TEXT_COLOR = QColor(255, 255, 255)
 # you want separation (no separators inside a panel — decision 2026-08-12).
 LIST_PANELS = 3               # anchor positions per side (top / middle / bottom)
 LIST_PANEL_MAX_ITEMS = 3      # rows per panel (matches SECTOR_MAX_CARDS)
-LIST_ANCHOR_DIST = 120.0      # cursor -> panel anchor distance
+# The cluster hugs the cursor (2026-08-13): the ring's 120px radius left the
+# panels far from the pointer — a ring can be aimed by direction, a vertical
+# list needs direct pointer travel.  Lateral panel left edge sits
+# LIST_ANCHOR_GAP_X right of the cursor (vertically centered); the diagonal
+# panels inset LIST_DIAG_INSET further left and clear the lateral panel
+# vertically by LIST_ANCHOR_GAP_Y (computed from its actual height, so the
+# three panels never overlap whatever their row counts).
+LIST_ANCHOR_GAP_X = 10.0      # cursor -> lateral panel left edge
+LIST_ANCHOR_GAP_Y = 6.0       # vertical clearance: diagonal vs lateral panel
+LIST_DIAG_INSET = 10.0        # diagonal panels inset left of the lateral one
 LIST_PANEL_RADIUS = 6.0       # outer corner radius of a panel
 LIST_ROW_H = 26.0             # single command row height
 LIST_PAD_X = 14.0             # horizontal padding inside a panel
@@ -367,21 +376,28 @@ class PieMenu(QWidget):
                             + 2 * LIST_PAD_X)
         w = min(w, LIST_MAX_W)
         self._list_panel_w = w
-        diag = LIST_ANCHOR_DIST / 2 ** 0.5
         left_dir = self._menu.get("direction") == "left"
-        rects = []
-        for i, panel in enumerate(self._list_panels):
-            rows = max(1, len(panel))
-            h = 2 * LIST_PAD_Y + rows * LIST_ROW_H
-            if i == 0:        # top-diagonal: bottom-left corner at the anchor
-                x, y = diag, -diag - h
-            elif i == 1:      # lateral: left edge midpoint at the anchor
-                x, y = LIST_ANCHOR_DIST, -h / 2.0
-            else:             # bottom-diagonal: top-left corner at the anchor
-                x, y = diag, diag
-            if left_dir:
-                x = -x - w
-            rects.append(QRectF(x, y, w, h))
+        # Heights first: the diagonal panels clear the lateral one vertically
+        # by LIST_ANCHOR_GAP_Y, so their placement derives from the lateral
+        # panel's actual height (empty panels keep a one-row ghost rect).
+        heights = [2 * LIST_PAD_Y + max(1, len(p)) * LIST_ROW_H
+                   for p in self._list_panels]
+        h_lat = heights[1]
+        x_lat = LIST_ANCHOR_GAP_X
+        x_diag = max(0.0, LIST_ANCHOR_GAP_X - LIST_DIAG_INSET)
+        y_top = -(h_lat / 2.0 + LIST_ANCHOR_GAP_Y)
+        y_bot = h_lat / 2.0 + LIST_ANCHOR_GAP_Y
+        rects = [
+            # top-diagonal: bottom-left corner sits above the lateral panel
+            QRectF(x_diag, y_top - heights[0], w, heights[0]),
+            # lateral: left edge midpoint at (GAP_X, 0) — centered on cursor
+            QRectF(x_lat, -h_lat / 2.0, w, h_lat),
+            # bottom-diagonal: top-left corner sits below the lateral panel
+            QRectF(x_diag, y_bot, w, heights[2]),
+        ]
+        if left_dir:
+            rects = [QRectF(-r.x() - r.width(), r.y(), r.width(), r.height())
+                     for r in rects]
         left = min(r.left() for r in rects)
         top = min(r.top() for r in rects)
         right = max(r.right() for r in rects)

@@ -3107,6 +3107,21 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <source>Commands (drag onto the list; drag cards to reorder, right-click a card to remove):</source>
             <translation>命令（拖到下方列表中添加；拖动卡片可排序，右键卡片可移除）：</translation>
         </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Reset to Defaults</source>
+            <translation>重置默认状态</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Reset</source>
+            <translation>重置</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Reset all quick menus to the default layout?</source>
+            <translation>将所有快捷菜单重置为默认布局？</translation>
+        </message>
     </context>
     <context>
         <name>PageListView</name>

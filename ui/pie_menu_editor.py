@@ -32,6 +32,7 @@ from qtpy.QtWidgets import (
     QHBoxLayout,
     QKeySequenceEdit,
     QLabel,
+    QMessageBox,
     QPushButton,
     QSizePolicy,
     QTabBar,
@@ -39,7 +40,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from utils.config import pcfg, save_config
+from utils.config import DEFAULT_PIE_MENUS, pcfg, save_config
 from utils.shortcut_conflicts import find_conflict_keys
 from .context_menu_config import (
     CAT_BASIC,
@@ -78,6 +79,8 @@ _CATEGORY_LABELS = [
 ]
 
 _CARD_W, _CARD_H = 128, 44
+_DRAG_SCALE = 0.55   # drag-ghost shrinks to ~70x24 so it can't cover the
+                     # small (0.72-scaled) preview while dragging a card in
 
 
 class _CommandCard(QFrame):
@@ -129,8 +132,16 @@ class _CommandCard(QFrame):
                 md = QMimeData()
                 md.setData("application/x-pie-cmd", self.cmd_id.encode("utf-8"))
                 drag.setMimeData(md)
-                drag.setPixmap(self.grab())
-                drag.setHotSpot(event.position().toPoint())
+                # Scale the ghost down (and the hotspot with it) — a full-size
+                # 128px card hides the small preview's drop slots.
+                pix = self.grab()
+                pix = pix.scaled(
+                    max(1, int(pix.width() * _DRAG_SCALE)),
+                    max(1, int(pix.height() * _DRAG_SCALE)),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation)
+                drag.setPixmap(pix)
+                drag.setHotSpot((event.position() * _DRAG_SCALE).toPoint())
                 drag.exec(Qt.DropAction.MoveAction)
                 return
         super().mouseMoveEvent(event)
@@ -244,6 +255,10 @@ class PieMenuEditor(QWidget):
         self.new_btn.setFixedHeight(30)   # match the tab row height
         bar.addWidget(self.tabs, 1)
         bar.addWidget(self.new_btn)
+        self.reset_btn = QPushButton(self.tr("Reset to Defaults"))
+        self.reset_btn.setObjectName("ConfigButton")
+        self.reset_btn.setFixedHeight(30)
+        bar.addWidget(self.reset_btn)
         card_layout.addLayout(bar)
 
         # Row 2: name + trigger key
@@ -270,6 +285,9 @@ class PieMenuEditor(QWidget):
         props2.addWidget(QLabel(self.tr("Style:")))
         self.style_combo = ConfigComboBox(fix_size=False)
         self.style_combo.addItems([self.tr("Ring"), self.tr("List")])
+        # CJK items ("环形"/"竖排") are wider than the combos' English-derived
+        # sizeHint — give the text room so it isn't clipped by the dropdown.
+        self.style_combo.setMinimumWidth(110)
         props2.addWidget(self.style_combo)
         self.sectors_label = QLabel(self.tr("Sectors:"))
         self.sectors_combo = ConfigComboBox(fix_size=False)
@@ -279,6 +297,7 @@ class PieMenuEditor(QWidget):
         self.direction_label = QLabel(self.tr("Direction:"))
         self.direction_combo = ConfigComboBox(fix_size=False)
         self.direction_combo.addItems([self.tr("Right"), self.tr("Left")])
+        self.direction_combo.setMinimumWidth(110)
         props2.addWidget(self.direction_label)
         props2.addWidget(self.direction_combo)
         props2.addStretch()
@@ -325,6 +344,7 @@ class PieMenuEditor(QWidget):
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self.tabs.tabCloseRequested.connect(self._on_delete_menu)
         self.new_btn.clicked.connect(self._on_new_menu)
+        self.reset_btn.clicked.connect(self._on_reset_defaults)
         self.name_edit.textEdited.connect(self._on_name_changed)
         self.trigger_edit.keySequenceChanged.connect(self._on_trigger_changed)
         self.style_combo.currentIndexChanged.connect(self._on_style_changed)
@@ -424,6 +444,21 @@ class PieMenuEditor(QWidget):
         if self._current > index:
             self._current -= 1
         self._current = min(self._current, max(0, len(self._menus) - 1))
+        self._reload()
+        self._save()
+
+    def _on_reset_defaults(self):
+        """Restore every quick menu to the built-in default template."""
+        reply = QMessageBox.question(
+            self,
+            self.tr("Reset"),
+            self.tr("Reset all quick menus to the default layout?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self._menus = [normalize_pie_menu(m) for m in DEFAULT_PIE_MENUS]
+        self._current = 0
         self._reload()
         self._save()
 

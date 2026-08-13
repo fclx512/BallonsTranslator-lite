@@ -376,6 +376,28 @@ def main():
     editor._refresh_conflicts()
     check("conflict pill hidden after unique trigger",
           editor.conflict_label.isHidden())
+    # reset-to-defaults button (patch QMessageBox so no real modal pops)
+    from qtpy.QtWidgets import QMessageBox
+    _real_question = QMessageBox.question
+    QMessageBox.question = staticmethod(
+        lambda *a, **k: QMessageBox.StandardButton.Yes)
+    try:
+        editor._menus = [normalize_pie_menu({"id": "z", "trigger": "Q"})]
+        editor._on_reset_defaults()
+    finally:
+        QMessageBox.question = _real_question
+    check("reset restores default menus",
+          len(editor._menus) == 3
+          and [m["id"] for m in editor._menus] == ["edit", "align", "pipeline"])
+    QMessageBox.question = staticmethod(
+        lambda *a, **k: QMessageBox.StandardButton.No)
+    try:
+        editor._menus = [normalize_pie_menu({"id": "z", "trigger": "Q"})]
+        editor._on_reset_defaults()
+    finally:
+        QMessageBox.question = _real_question
+    check("reset declined keeps menus",
+          len(editor._menus) == 1 and editor._menus[0]["id"] == "z")
 
     print("== state machine ==")
     # short press -> PIN
@@ -668,8 +690,8 @@ def main():
 
     print("== vertical list layout (half-ring panels) ==")
     from ui.pie_menu import (
-        LIST_MIN_W, LIST_PANEL_MAX_ITEMS, LIST_PANELS, WINDOW_RADIUS,
-        panels_to_slots, slots_to_panels,
+        LIST_ANCHOR_GAP_X, LIST_MIN_W, LIST_PANEL_MAX_ITEMS, LIST_PANELS,
+        WINDOW_RADIUS, panels_to_slots, slots_to_panels,
     )
 
     # normalize: panels / direction, invalid fallbacks, caps, items migration
@@ -745,6 +767,23 @@ def main():
           pm._list_rects[2].top() > pm._list_cursor.y())
     check("mid panel vertically centered on cursor",
           abs(pm._list_rects[1].center().y() - pm._list_cursor.y()) <= 1)
+    # 2026-08-13: the cluster hugs the cursor (old 120px ring radius left it
+    # far from the pointer).  The lateral panel is just LIST_ANCHOR_GAP_X
+    # right of the cursor and the diagonal panels clear it vertically.
+    check("lateral panel hugs cursor",
+          pm._list_rects[1].left() - pm._list_cursor.x() <= LIST_ANCHOR_GAP_X + 1)
+    check("diagonal panels clear lateral",
+          pm._list_rects[0].bottom() <= pm._list_rects[1].top()
+          and pm._list_rects[2].top() >= pm._list_rects[1].bottom())
+    # worst case: every panel at 3 rows still never overlaps
+    full = normalize_pie_menu({
+        "layout": "list",
+        "panels": [["a", "b", "c"], ["d", "e", "f"], ["g", "h", "i"]]})
+    pm.set_menu_config(full)
+    check("3-row panels never overlap",
+          pm._list_rects[0].bottom() < pm._list_rects[1].top()
+          and pm._list_rects[2].top() > pm._list_rects[1].bottom())
+    pm.set_menu_config(list_menu)
     check("list hit top panel row 1",
           pm._hit_test_list(pm._list_row_rect(0, 1).center()) == (0, 1))
     check("list hit mid panel row 0",

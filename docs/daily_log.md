@@ -17,6 +17,20 @@
 
 **涉及文件：** `utils/updater.py`（新增）、`ui/update_thread.py`（新增）、`ui/update_dialog.py`（新增）、`ui/update_checker.py`、`ui/configpanel.py`、`ui/mainwindow.py`、`utils/config.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
 
+### 快捷菜单：竖排紧贴光标 + 拖拽 ghost 缩小 + 重置默认按钮（收尾）
+
+**问题/需求：** ① 竖排样式沿用环形菜单模板，弹出时鼠标落在集群外 ~85~120px——环形靠方向甩动瞄准无所谓，竖排是精确指向，距离纯属负担；② 命令池卡片以整张 128×44 图作拖拽 ghost，遮住 0.72 缩放的小预览，看不到放置位置；③ 验收后补一个「重置默认状态」按钮；④ 「样式」「方向」下拉框宽度按英文 item 算的 sizeHint 决定，中文化后"环形/竖排"被下拉箭头挤出（被控件遮挡）。
+
+**改动要点：**
+
+- **竖排面板集群紧贴光标**（`ui/pie_menu.py`，用户确认保持半环阶梯）：删 `LIST_ANCHOR_DIST = 120`，改三个常量 `LIST_ANCHOR_GAP_X = 10`（光标→正侧面板左缘）、`LIST_ANCHOR_GAP_Y = 6`（上下斜与正侧垂直净距）、`LIST_DIAG_INSET = 10`（上下斜左缘缩进，保留阶梯）。`_relayout_list` 锚点重写：先算各面板高度（空面板 1 行幽灵），正侧面板垂直居中于光标、上下斜面板的 y 由 `h_lat` 推导 → 任意行数组合三面板永不相交。命中距离从 ~85~120px 缩到 ~10px（正侧）/~23~49px（上下斜）。状态机/命中/拖放/镜像逻辑零改动。
+- **命令卡片拖拽 ghost 缩小**（`ui/pie_menu_editor.py`）：`_CommandCard` 拖拽图按 `_DRAG_SCALE = 0.55` 平滑缩放（128×44 → ~70×24），hotspot 同步缩放。
+- **重置默认状态按钮**（`ui/pie_menu_editor.py`）：工具卡片 Row1 「New Menu」旁新增 `Reset to Defaults`（ConfigButton 样式），`_on_reset_defaults` 弹 `QMessageBox.question` 确认后把全部菜单重置为 `DEFAULT_PIE_MENUS`（复用 `context_menu_config._on_reset` 的既有模式）。
+- **下拉框加宽**（`ui/pie_menu_editor.py`）：`style_combo`/`direction_combo` `setMinimumWidth(110)`，中文项不再被下拉控件遮挡（sectors 是数字，不动）。
+- i18n：`PieMenuEditor` context 新增 3 条（Reset to Defaults/Reset/Reset all quick menus...），qm 1176 条。
+
+**涉及文件：** `ui/pie_menu.py`、`ui/pie_menu_editor.py`、`scripts/pie_menu_test.py`（+5 断言：hugs cursor/clear lateral/3-row 不重叠/重置 Yes/No）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/技术实现/快捷菜单_竖排样式_设计与交接.md`
+
 ---
 
 ## 2026-08-12
