@@ -819,7 +819,8 @@ QPushButton#RunButton {
 }
 
 QPushButton#ConfigButton {
-    max-width: 280px;
+    padding: 0 12px;
+    max-width: 460px;
 }
 
 NoBorderPushBtn {

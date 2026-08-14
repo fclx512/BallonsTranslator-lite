@@ -13,16 +13,20 @@ Rendering (Blender restyle 2026-08-11): no background disc — the window is
 fully transparent except for the floating cards, the center ring and the
 menu title. Cards are horizontal, axis-aligned labels with the sector
 number on the right; sectors with multiple commands stack their cards
-tangentially (perpendicular to the sector radius) instead of fanning them
-angularly, so stacked cards never overlap. The center indicator is a thin
-ring plus a hollow sector fill pointing at the hovered sector.
+perpendicular to the sector radius.  Left/right sectors fan tangentially
+(vertically); top/bottom sectors would fan horizontally and bury the wide
+cards' text, so they stack screen-vertically instead (2026-08-14) — a
+stack never overlaps itself.  The center indicator is a thin ring plus a
+hollow sector fill pointing at the hovered sector.
 
 Vertical list style (2026-08-12, half-ring redesign): the ring is cut
 vertically and each lateral sector position hosts one small continuous
-context-menu panel (touching rows, no card gaps) — three fixed anchor
-positions per side (top-diagonal / lateral / bottom-diagonal).  Data model:
-``panels`` — 3 groups x up to 3 commands.  Shares the whole state machine
-with the ring.  See ``docs/技术实现/快捷菜单_竖排样式_设计与交接.md``.
+context-menu panel (touching rows, no card gaps) — five fixed anchor
+positions per side (top / upper-diagonal / lateral / lower-diagonal /
+bottom; the poles were added 2026-08-14 so ring -> list keeps the top and
+bottom sectors).  Data model: ``panels`` — 5 groups x up to 3 commands.
+Shares the whole state machine with the ring.  See
+``docs/技术实现/快捷菜单_竖排样式_设计与交接.md``.
 
 The widget is a separate frameless ``Qt.Tool`` window that does not take
 focus, so the main window keeps receiving key events (release of the
@@ -39,6 +43,7 @@ from utils.config import pcfg
 from .context_menu_config import (
     COMMAND_REGISTRY,
     SEPARATOR_SENTINEL,
+    cmd_checked,
     cmd_enabled,
 )
 from .misc import get_theme_color
@@ -55,7 +60,10 @@ CARD_PAD_X = 8.0              # horizontal content padding
 CARD_PAD_Y = 4.0              # vertical content padding
 NUM_MARGIN = 8.0              # space around the sector number
 NUM_WIDTH_EXTRA = 2.0         # extra horizontal room for the number
-CARD_STACK_GAP = 4.0          # tangential gap between stacked cards of one sector
+CARD_STACK_GAP = 4.0          # gap between stacked cards of one sector
+CHECKBOX_SIZE = 12.0          # toggle-command checkbox side length
+CHECKBOX_GAP = 6.0            # checkbox -> label gap
+CHECKBOX_RADIUS = 3.0         # checkbox corner radius
 SECTOR_COUNT = 8
 SECTOR_MAX_CARDS = 3          # cards per sector (config load truncates to this)
 SHORT_PRESS_MS = 250          # hold shorter than this -> PIN mode
@@ -71,7 +79,10 @@ HOVER_TEXT_COLOR = QColor(255, 255, 255)
 # context-menu look — touching rows, no card gaps).  Grouping happens at
 # the menu level: one menu = one function group, split into new menus when
 # you want separation (no separators inside a panel — decision 2026-08-12).
-LIST_PANELS = 3               # anchor positions per side (top / middle / bottom)
+# 5 anchors per side since 2026-08-14: the top/bottom poles were added so
+# ring -> list no longer drops the top/bottom sectors (the conversion picks
+# the whole lateral half including the poles).
+LIST_PANELS = 5               # anchor positions per side (top / upper-diag / lateral / lower-diag / bottom)
 LIST_PANEL_MAX_ITEMS = 3      # rows per panel (matches SECTOR_MAX_CARDS)
 # The cluster hugs the cursor (2026-08-13): the ring's 120px radius left the
 # panels far from the pointer — a ring can be aimed by direction, a vertical
@@ -153,33 +164,33 @@ def normalize_pie_menu(menu) -> dict:
     }
 
 
+def half_ring_sector_idxs(n: int, direction: str = "right") -> list:
+    """Ring sector indices of the lateral half, ordered top -> bottom.
+
+    Includes the top/bottom poles (they belong to both halves; the
+    ``direction`` only picks which diagonal/left-right sectors sit between
+    them).  Used by both conversion functions so ring <-> list round-trips
+    map the same sectors.
+    """
+    if direction == "left":
+        return [0] + list(range(n - 1, n // 2 - 1, -1))
+    return list(range(0, n // 2 + 1))
+
+
 def slots_to_panels(slots, direction="right") -> list:
     """Pick the lateral half of ring slots as list panels (top -> bottom)."""
     n = len(slots)
-    picked = []
-    for i in range(n):
-        if n == 0:
-            break
-        x = sin(radians(i * 360.0 / n))   # clock-face: 0 = top, clockwise
-        if direction == "left":
-            x = -x
-        if x > 0.01:
-            lst = slots[i]
-            picked.append(list(lst) if isinstance(lst, list) else [])
-    if direction == "left":
-        picked.reverse()   # increasing index runs bottom -> top on the left
+    idxs = half_ring_sector_idxs(n, direction) if n else []
+    picked = [list(slots[i]) if 0 <= i < n and isinstance(slots[i], list)
+              else [] for i in idxs]
     picked = (picked + [[] for _ in range(LIST_PANELS)])[:LIST_PANELS]
     return [lst[:LIST_PANEL_MAX_ITEMS] for lst in picked]
 
 
-def panels_to_slots(panels, direction="right") -> list:
-    """Write list panels back into an 8-sector ring slot layout."""
-    slots = [[] for _ in range(SECTOR_COUNT)]
-    if direction == "left":
-        idxs = (7, 6, 5)   # top-left, left, bottom-left
-    else:
-        idxs = (1, 2, 3)   # top-right, right, bottom-right
-    for panel, slot_i in zip(panels, idxs):
+def panels_to_slots(panels, direction="right", sectors=SECTOR_COUNT) -> list:
+    """Write list panels back into a ring slot layout (lateral half)."""
+    slots = [[] for _ in range(sectors)]
+    for panel, slot_i in zip(panels, half_ring_sector_idxs(sectors, direction)):
         if isinstance(panel, list):
             slots[slot_i] = list(panel)[:SECTOR_MAX_CARDS]
     return slots
@@ -360,40 +371,42 @@ class PieMenu(QWidget):
     def _relayout_list(self):
         """Recompute panel rects / window size from the current font.
 
-        Three fixed anchor positions on the configured side of the cursor
-        (top-diagonal, lateral, bottom-diagonal); each panel is a small
-        continuous context menu.  All three panels always get a rect
-        (empty ones collapse to a one-row ghost) so the window geometry is
-        stable while the editor fills panels; the runtime menu simply never
-        paints or hit-tests empty panels.
+        Five anchor positions on the configured side of the cursor
+        (top / upper-diagonal / lateral / lower-diagonal / bottom); each
+        panel is a small continuous context menu.  All five panels always
+        get a rect (empty ones collapse to a one-row ghost) so the window
+        geometry is stable while the editor fills panels; the runtime menu
+        simply never paints or hit-tests empty panels.
         """
         fm = QFontMetrics(self.font())
         w = LIST_MIN_W
         for panel in self._list_panels:
             for cid in panel:
                 if cid in COMMAND_REGISTRY:
+                    toggle_w = int(CHECKBOX_SIZE + CHECKBOX_GAP) \
+                        if COMMAND_REGISTRY[cid].is_toggle else 0
                     w = max(w, fm.horizontalAdvance(self._label_for(cid))
-                            + 2 * LIST_PAD_X)
+                            + 2 * LIST_PAD_X + toggle_w)
         w = min(w, LIST_MAX_W)
         self._list_panel_w = w
         left_dir = self._menu.get("direction") == "left"
-        # Heights first: the diagonal panels clear the lateral one vertically
-        # by LIST_ANCHOR_GAP_Y, so their placement derives from the lateral
-        # panel's actual height (empty panels keep a one-row ghost rect).
+        # Heights first: every panel clears the neighbouring one vertically
+        # by LIST_ANCHOR_GAP_Y; the lateral panel is centered on the cursor.
         heights = [2 * LIST_PAD_Y + max(1, len(p)) * LIST_ROW_H
                    for p in self._list_panels]
-        h_lat = heights[1]
+        h_lat = heights[2]
         x_lat = LIST_ANCHOR_GAP_X
         x_diag = max(0.0, LIST_ANCHOR_GAP_X - LIST_DIAG_INSET)
-        y_top = -(h_lat / 2.0 + LIST_ANCHOR_GAP_Y)
-        y_bot = h_lat / 2.0 + LIST_ANCHOR_GAP_Y
+        y_ud = -h_lat / 2.0 - LIST_ANCHOR_GAP_Y - heights[1]   # upper-diag top
+        y_tp = y_ud - LIST_ANCHOR_GAP_Y - heights[0]           # top top
+        y_ld = h_lat / 2.0 + LIST_ANCHOR_GAP_Y                 # lower-diag top
+        y_bt = y_ld + heights[3] + LIST_ANCHOR_GAP_Y           # bottom top
         rects = [
-            # top-diagonal: bottom-left corner sits above the lateral panel
-            QRectF(x_diag, y_top - heights[0], w, heights[0]),
-            # lateral: left edge midpoint at (GAP_X, 0) — centered on cursor
-            QRectF(x_lat, -h_lat / 2.0, w, h_lat),
-            # bottom-diagonal: top-left corner sits below the lateral panel
-            QRectF(x_diag, y_bot, w, heights[2]),
+            QRectF(x_diag, y_tp, w, heights[0]),               # 0 top
+            QRectF(x_diag, y_ud, w, heights[1]),               # 1 upper-diagonal
+            QRectF(x_lat, -h_lat / 2.0, w, h_lat),             # 2 lateral
+            QRectF(x_diag, y_ld, w, heights[3]),               # 3 lower-diagonal
+            QRectF(x_diag, y_bt, w, heights[4]),               # 4 bottom
         ]
         if left_dir:
             rects = [QRectF(-r.x() - r.width(), r.y(), r.width(), r.height())
@@ -451,6 +464,16 @@ class PieMenu(QWidget):
             return True   # editor preview: everything looks enabled
         return cmd_enabled(self.mw or self.canvas, cmd_id)
 
+    def _is_toggle_cmd(self, cmd_id: str) -> bool:
+        cmd = COMMAND_REGISTRY.get(cmd_id)
+        return bool(cmd is not None and cmd.is_toggle)
+
+    def _cmd_checked(self, cmd_id: str) -> bool:
+        """Current checked state of a toggle command (checkbox rendering)."""
+        if self._preview:
+            return False   # editor preview has no live canvas state
+        return cmd_checked(self.mw or self.canvas, cmd_id)
+
     def _label_for(self, cmd_id: str) -> str:
         """Translated label of a command (runtime uses canvas.tr, preview
         resolves the Canvas context directly)."""
@@ -470,19 +493,35 @@ class PieMenu(QWidget):
             return lst[idx]
         return None
 
+    def _stack_vertical(self, sector: int) -> bool:
+        """Whether *sector* stacks its cards screen-vertically.
+
+        Cards are wider than tall, so a tangential fan only keeps them from
+        overlapping when the tangent is (near-)vertical (left/right
+        sectors).  Top/bottom sectors fan horizontally and the wide cards
+        would bury each other's text — they stack straight up/down instead
+        (decision 2026-08-14).
+        """
+        span = 360.0 / self._sector_count
+        base = radians(-90 + sector * span)
+        return abs(-sin(base)) > abs(cos(base))
+
     def _card_center(self, sector: int, idx: int, card_h: float):
-        """Widget-local center of a card (tangential stacking for k > 1)."""
+        """Widget-local center of a card (stacked along the stack axis for
+        k > 1).  See :meth:`_stack_vertical` for the axis rule."""
         span = 360.0 / self._sector_count
         base = radians(-90 + sector * span)
         bx = WINDOW_RADIUS + CARD_RADIUS * cos(base)
         by = WINDOW_RADIUS + CARD_RADIUS * sin(base)
         k = len(self._sector_data[sector])
         if k > 1:
-            # stack along the tangent (perpendicular to the sector radius):
-            # left/right sectors stack vertically, top/bottom horizontally
             off = (idx - (k - 1) / 2.0) * (card_h + CARD_STACK_GAP)
-            bx += off * -sin(base)
-            by += off * cos(base)
+            if self._stack_vertical(sector):
+                by += off
+            else:
+                # tangential (perpendicular to the sector radius)
+                bx += off * -sin(base)
+                by += off * cos(base)
         return bx, by
 
     def _card_rect(self, sector: int, idx: int, fm: QFontMetrics) -> QRectF:
@@ -491,7 +530,8 @@ class PieMenu(QWidget):
         label = self._label_for(cmd_id) if cmd_id else ""
         text_w = fm.horizontalAdvance(label)
         num_w = fm.horizontalAdvance(str(sector + 1)) + NUM_WIDTH_EXTRA
-        cw = 2 * CARD_PAD_X + text_w + 2 * NUM_MARGIN + num_w
+        toggle_w = CHECKBOX_SIZE + CHECKBOX_GAP if self._is_toggle_cmd(cmd_id) else 0.0
+        cw = 2 * CARD_PAD_X + text_w + 2 * NUM_MARGIN + num_w + toggle_w
         ch = fm.height() + 2 * CARD_PAD_Y
         cx, cy = self._card_center(sector, idx, ch)
         # The transparent window edge clips silently — keep cards fully inside.
@@ -615,7 +655,8 @@ class PieMenu(QWidget):
 
     def _drop_insert_index(self, sector: int, local_pos) -> int:
         """Insertion index (0..k) among a sector's stacked cards for a drop
-        at *local_pos*, derived from the drop's tangential coordinate."""
+        at *local_pos*, measured along the sector's stack axis (see
+        :meth:`_stack_vertical`)."""
         cards = self._sector_data[sector]
         k = len(cards)
         if k == 0:
@@ -626,8 +667,11 @@ class PieMenu(QWidget):
         base = radians(-90 + sector * span)
         bx = WINDOW_RADIUS + CARD_RADIUS * cos(base)
         by = WINDOW_RADIUS + CARD_RADIUS * sin(base)
-        tx, ty = -sin(base), cos(base)
-        rel = (local_pos.x() - bx) * tx + (local_pos.y() - by) * ty
+        if self._stack_vertical(sector):
+            rel = local_pos.y() - by
+        else:
+            tx, ty = -sin(base), cos(base)
+            rel = (local_pos.x() - bx) * tx + (local_pos.y() - by) * ty
         idx = int(round(rel / (ch + CARD_STACK_GAP) + (k - 1) / 2.0))
         return max(0, min(idx, k))
 
@@ -918,58 +962,119 @@ class PieMenu(QWidget):
 
     def _paint_cards(self, painter, fm, card_bg, card_border, text_c,
                      number_c, accent_c):
+        """Draw all sector cards.
+
+        The hovered card is drawn *last* so it sits on top: a long label
+        whose card collides with a neighbouring sector's stack stays fully
+        readable while the cursor is on it (decision 2026-08-14).
+        """
+        hovered = self._hover
         for sector in range(self._sector_count):
-            for idx, cmd_id in enumerate(self._sector_data[sector]):
-                cmd = COMMAND_REGISTRY.get(cmd_id)
-                if cmd is None:
-                    continue
-                rect = self._card_rect(sector, idx, fm)
-                hovered = self._hover == (sector, idx)
-                enabled = self._cmd_available(cmd_id)
+            for idx in range(len(self._sector_data[sector])):
+                if (sector, idx) != hovered:
+                    self._paint_card(painter, sector, idx, fm, card_bg,
+                                     card_border, text_c, number_c, accent_c)
+        if hovered is not None:
+            sector, idx = hovered
+            if (0 <= sector < self._sector_count
+                    and 0 <= idx < len(self._sector_data[sector])):
+                self._paint_card(painter, sector, idx, fm, card_bg,
+                                 card_border, text_c, number_c, accent_c)
 
-                # card background / hover highlight
-                if hovered:
-                    fill = QColor(accent_c)
-                    fill.setAlpha(255)
-                    painter.setPen(QPen(HOVER_TEXT_COLOR, 1.5))
-                    painter.setBrush(fill)
-                else:
-                    painter.setPen(QPen(card_border, 1.5))
-                    painter.setBrush(card_bg)
-                painter.drawRoundedRect(rect, CARD_CORNER_RADIUS, CARD_CORNER_RADIUS)
+    def _paint_card(self, painter, sector, idx, fm, card_bg, card_border,
+                    text_c, number_c, accent_c):
+        cmd_id = self._slot_at(sector, idx)
+        cmd = COMMAND_REGISTRY.get(cmd_id)
+        if cmd is None:
+            return
+        rect = self._card_rect(sector, idx, fm)
+        hovered = self._hover == (sector, idx)
+        enabled = self._cmd_available(cmd_id)
 
-                # selection ring (config editor)
-                if self._edit_mode and self._selected == (sector, idx):
-                    sel_pen = QPen(QColor(accent_c), 1.2, Qt.PenStyle.DashLine)
-                    painter.setPen(sel_pen)
-                    painter.setBrush(Qt.BrushStyle.NoBrush)
-                    painter.drawRoundedRect(rect.adjusted(2, 2, -2, -2),
-                                            CARD_CORNER_RADIUS, CARD_CORNER_RADIUS)
+        # card background / hover highlight
+        if hovered:
+            fill = QColor(accent_c)
+            fill.setAlpha(255)
+            painter.setPen(QPen(HOVER_TEXT_COLOR, 1.5))
+            painter.setBrush(fill)
+        else:
+            painter.setPen(QPen(card_border, 1.5))
+            painter.setBrush(card_bg)
+        painter.drawRoundedRect(rect, CARD_CORNER_RADIUS, CARD_CORNER_RADIUS)
 
-                label = self._label_for(cmd_id)
-                number = str(sector + 1)
+        # selection ring (config editor)
+        if self._edit_mode and self._selected == (sector, idx):
+            sel_pen = QPen(QColor(accent_c), 1.2, Qt.PenStyle.DashLine)
+            painter.setPen(sel_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(rect.adjusted(2, 2, -2, -2),
+                                    CARD_CORNER_RADIUS, CARD_CORNER_RADIUS)
 
-                if hovered:
-                    tcolor = HOVER_TEXT_COLOR
-                    ncolor = HOVER_TEXT_COLOR
-                else:
-                    tcolor = QColor(text_c)
-                    ncolor = QColor(number_c)
-                    if not enabled:
-                        tcolor.setAlpha(110)
-                        ncolor.setAlpha(110)
+        label = self._label_for(cmd_id)
+        number = str(sector + 1)
 
-                baseline = rect.y() + (rect.height() - fm.height()) / 2 + fm.ascent()
+        if hovered:
+            tcolor = HOVER_TEXT_COLOR
+            ncolor = HOVER_TEXT_COLOR
+        else:
+            tcolor = QColor(text_c)
+            ncolor = QColor(number_c)
+            if not enabled:
+                tcolor.setAlpha(110)
+                ncolor.setAlpha(110)
 
-                # label (left-aligned)
-                painter.setPen(QPen(tcolor))
-                painter.drawText(QPointF(rect.x() + CARD_PAD_X, baseline), label)
+        baseline = rect.y() + (rect.height() - fm.height()) / 2 + fm.ascent()
 
-                # sector number (right-aligned)
-                num_w = fm.horizontalAdvance(number) + NUM_WIDTH_EXTRA
-                num_x = rect.x() + rect.width() - CARD_PAD_X - num_w
-                painter.setPen(QPen(ncolor))
-                painter.drawText(QPointF(num_x, baseline), number)
+        # label (left-aligned; toggle commands lead with a checkbox)
+        label_x = rect.x() + CARD_PAD_X
+        if self._is_toggle_cmd(cmd_id):
+            cy = rect.y() + (rect.height() - CHECKBOX_SIZE) / 2
+            self._paint_checkbox(painter, label_x, cy,
+                                 self._cmd_checked(cmd_id),
+                                 hovered, enabled, accent_c, card_border)
+            label_x += CHECKBOX_SIZE + CHECKBOX_GAP
+        painter.setPen(QPen(tcolor))
+        painter.drawText(QPointF(label_x, baseline), label)
+
+        # sector number (right-aligned)
+        num_w = fm.horizontalAdvance(number) + NUM_WIDTH_EXTRA
+        num_x = rect.x() + rect.width() - CARD_PAD_X - num_w
+        painter.setPen(QPen(ncolor))
+        painter.drawText(QPointF(num_x, baseline), number)
+
+    def _paint_checkbox(self, painter, x, y, checked, hovered, enabled,
+                        accent_c, border_c):
+        """Small rounded checkbox for a toggle command (checked = accent
+        fill + white tick; unchecked = outline that follows the card text
+        color on hover)."""
+        box = QRectF(x, y, CHECKBOX_SIZE, CHECKBOX_SIZE)
+        if checked:
+            fill = QColor(accent_c)
+            if not enabled:
+                fill.setAlpha(140)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(fill)
+            painter.drawRoundedRect(box, CHECKBOX_RADIUS, CHECKBOX_RADIUS)
+            mark = QColor(HOVER_TEXT_COLOR)
+            if not enabled:
+                mark.setAlpha(140)
+            painter.setPen(QPen(mark, 1.6))
+            painter.drawLine(QPointF(x + 2.2, y + CHECKBOX_SIZE * 0.52),
+                             QPointF(x + CHECKBOX_SIZE * 0.44,
+                                     y + CHECKBOX_SIZE - 2.4))
+            painter.drawLine(QPointF(x + CHECKBOX_SIZE * 0.44,
+                                     y + CHECKBOX_SIZE - 2.4),
+                             QPointF(x + CHECKBOX_SIZE - 1.6, y + 2.2))
+        else:
+            if hovered:
+                pen_c = QColor(HOVER_TEXT_COLOR)
+            else:
+                pen_c = QColor(border_c)
+                if not enabled:
+                    pen_c.setAlpha(110)
+            painter.setPen(QPen(pen_c, 1.2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(box, CHECKBOX_RADIUS, CHECKBOX_RADIUS)
 
     def _paint_center_indicator(self, painter, center, ring_c, accent_c):
         # thin outer ring
@@ -1045,6 +1150,7 @@ class PieMenu(QWidget):
                 row_rect = self._list_row_rect(i, row)
                 hovered = self._hover == (i, row)
                 enabled = self._cmd_available(cmd_id)
+                toggle_w = int(CHECKBOX_SIZE + CHECKBOX_GAP) if cmd.is_toggle else 0
 
                 if hovered:
                     painter.setPen(Qt.PenStyle.NoPen)
@@ -1066,12 +1172,18 @@ class PieMenu(QWidget):
 
                 label = fm.elidedText(self._label_for(cmd_id),
                                       Qt.TextElideMode.ElideRight,
-                                      max_text_w)
+                                      max_text_w - toggle_w)
                 baseline = (row_rect.y() + (row_rect.height() - fm.height())
                             / 2 + fm.ascent())
+                label_x = row_rect.x() + LIST_PAD_X
+                if toggle_w:
+                    cy = row_rect.y() + (row_rect.height() - CHECKBOX_SIZE) / 2
+                    self._paint_checkbox(painter, label_x, cy,
+                                         self._cmd_checked(cmd_id),
+                                         hovered, enabled, accent_c, border_c)
+                    label_x += CHECKBOX_SIZE + CHECKBOX_GAP
                 painter.setPen(QPen(tcolor))
-                painter.drawText(QPointF(row_rect.x() + LIST_PAD_X,
-                                         baseline), label)
+                painter.drawText(QPointF(label_x, baseline), label)
             painter.restore()
 
         # Drop insertion line (config editor, dragging over a panel)

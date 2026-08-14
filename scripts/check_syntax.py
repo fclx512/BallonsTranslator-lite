@@ -84,14 +84,17 @@ def check_syntax(filepath: Path) -> list[str]:
 
 def main():
     if len(sys.argv) > 1:
-        targets = [Path(sys.argv[1]).resolve()]
+        targets = [Path(a).resolve() for a in sys.argv[1:]]
     else:
         # Only check ui/ and utils/ — the hot paths the Edit tool touches most
         targets = find_py_files(ROOT / "ui") + find_py_files(ROOT / "utils")
 
     total_errors = 0
     for fp in sorted(targets):
-        rel = fp.relative_to(ROOT)
+        try:
+            rel = fp.relative_to(ROOT)
+        except ValueError:
+            rel = fp
         file_errors = []
         file_errors += check_bom(fp)
         file_errors += check_syntax(fp)

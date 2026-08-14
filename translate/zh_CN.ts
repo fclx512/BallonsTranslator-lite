@@ -703,7 +703,7 @@
             <source>Max Font Size (px)</source>
             <translation>最大字号 (px)</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <location filename="..\ui\configpanel.py" line="1631" />
             <source>Behavior</source>
             <translation>行为</translation>
@@ -748,10 +748,15 @@
             <source>&lt;p&gt;When checked, &lt;b&gt;text stroke and shadow&lt;/b&gt; remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.&lt;/p&gt;</source>
             <translation>&lt;p&gt;勾选后，拖拽或调整文本框时&lt;b&gt;描边和阴影&lt;/b&gt;保持可见。取消勾选可在调整大小时获得最高帧率。&lt;/p&gt;</translation>
         </message>
-        <message type="obsolete">
-            <location filename="..\ui\configpanel.py" line="1668" />
+        <message>
+            <location filename="..\ui\configpanel.py" />
             <source>Comma-separated values — used in font format panel dropdowns.</source>
             <translation>逗号分隔的值 — 用于字体格式面板下拉选项。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" />
+            <source>Text Format Presets</source>
+            <translation>文本格式预设</translation>
         </message>
         <message>
             <location filename="..\ui\configpanel.py" line="1673" />
@@ -784,8 +789,8 @@
             <translation>网络与镜像设置...</translation>
         </message>
         <message>
-            <source>Preset (%):</source>
-            <translation>预设 (%):</translation>
+            <source>Original Compare Preset (%):</source>
+            <translation>原文对照预设 (%):</translation>
         </message>
         <message>
             <source>Model Loading</source>
@@ -3011,8 +3016,8 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
         </message>
         <message>
             <location filename="..\ui\pie_menu.py" />
-            <source>Pipeline &amp; View</source>
-            <translation>管线与视图</translation>
+            <source>Pipeline</source>
+            <translation>管线</translation>
         </message>
     </context>
     <context>
@@ -3044,8 +3049,8 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
         </message>
         <message>
             <location filename="..\ui\pie_menu_editor.py" />
-            <source>At most %1 quick menus are supported — one trigger key per menu keeps them memorable.</source>
-            <translation>最多支持 %1 个快捷菜单——每菜单一个触发键才便于记忆。</translation>
+            <source>At most %1 quick menus are supported.</source>
+            <translation>最多支持 %1 个快捷菜单。</translation>
         </message>
         <message>
             <location filename="..\ui\pie_menu_editor.py" />
@@ -3071,6 +3076,16 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <location filename="..\ui\pie_menu_editor.py" />
             <source>View</source>
             <translation>视图</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Canvas Options</source>
+            <translation>画布选项</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Canvas Options (checkbox commands — click a card in the menu to switch it on/off):</source>
+            <translation>画布选项（勾选式开关——在菜单中点击卡片即可开/关）：</translation>
         </message>
         <message>
             <location filename="..\ui\pie_menu_editor.py" />

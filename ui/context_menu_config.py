@@ -56,6 +56,7 @@ CAT_BASIC = "basic"        # copy / paste / delete / undo / redo ...
 CAT_TEXT = "text"          # reset_angle / squeeze / align directions
 CAT_PIPELINE = "pipeline"  # translate / ocr / ocr_translate ...
 CAT_VIEW = "view"          # fit to window / zoom / page navigation
+CAT_TOGGLE = "toggle"      # checkbox-form canvas options (Snap Alignment ...)
 
 
 # ── Command definition ──────────────────────────────────────
@@ -84,6 +85,8 @@ class CmdDef:
     run_fn: Optional[Callable] = None
     enabled_fn: Optional[Callable] = None
     category: str = ""
+    is_toggle: bool = False            # checkbox-form command (pie menu renders a checkbox)
+    checked_fn: Optional[Callable] = None  # mw -> bool current state (toggle commands)
 
 
 # ── Registry ────────────────────────────────────────────────
@@ -306,7 +309,8 @@ _reg(CmdDef("ocr_translate_inpaint", "OCR, translate and inpaint",
     run_fn=lambda mw: mw.canvas.run_blktrans.emit(2),
     category=CAT_PIPELINE))
 
-# --- Undo / Redo (pie-menu palette only) ---
+# --- Undo / Redo (no longer offered in the pie palette 2026-08-14: they
+# have universal Ctrl+Z / Ctrl+Y shortcuts, so menu slots are wasted) ---
 def _undo_enabled(mw) -> bool:
     c = mw.canvas
     if c.textEditMode():
@@ -328,40 +332,54 @@ def _redo_enabled(mw) -> bool:
 _reg(CmdDef("undo", "Undo",
     run_fn=lambda mw: mw.canvas.undo(),
     enabled_fn=_undo_enabled,
-    hidden_in_customize=True,
-    category=CAT_BASIC))
+    hidden_in_customize=True))
 
 _reg(CmdDef("redo", "Redo",
     run_fn=lambda mw: mw.canvas.redo(),
     enabled_fn=_redo_enabled,
-    hidden_in_customize=True,
-    category=CAT_BASIC))
+    hidden_in_customize=True))
 
-# --- View actions (pie-menu palette only) ---
+# --- View actions (pie-menu pool only) ---
 _reg(CmdDef("fit_window", "Fit to Window",
     run_fn=lambda mw: mw.canvas.fitToWindow(),
     hidden_in_customize=True,
     category=CAT_VIEW))
 
+# Zoom / page navigation stay registered for existing configs but are no
+# longer offered in the palette (wheel / Ctrl+wheel / PgUp / PgDn cover them).
+
 _reg(CmdDef("zoom_in", "Zoom In",
     run_fn=lambda mw: mw.canvas.scaleUp(),
-    hidden_in_customize=True,
-    category=CAT_VIEW))
+    hidden_in_customize=True))
 
 _reg(CmdDef("zoom_out", "Zoom Out",
     run_fn=lambda mw: mw.canvas.scaleDown(),
-    hidden_in_customize=True,
-    category=CAT_VIEW))
+    hidden_in_customize=True))
 
 _reg(CmdDef("prev_page", "Previous Page",
     run_fn=lambda mw: mw.shortcutBefore(),
-    hidden_in_customize=True,
-    category=CAT_VIEW))
+    hidden_in_customize=True))
 
 _reg(CmdDef("next_page", "Next Page",
     run_fn=lambda mw: mw.shortcutNext(),
+    hidden_in_customize=True))
+
+# --- Canvas toggle options (checkbox commands, pie palette only) ---
+def _snap_alignment_run(mw):
+    canvas = mw.canvas
+    canvas.alignment_enabled = not canvas.alignment_enabled
+
+
+def _snap_alignment_checked(mw) -> bool:
+    return bool(mw.canvas.alignment_enabled)
+
+
+_reg(CmdDef("snap_alignment", "Snap Alignment",
+    run_fn=_snap_alignment_run,
+    checked_fn=_snap_alignment_checked,
+    is_toggle=True,
     hidden_in_customize=True,
-    category=CAT_VIEW))
+    category=CAT_TOGGLE))
 
 
 # ── Menu builder ────────────────────────────────────────────
@@ -471,6 +489,18 @@ def cmd_enabled(mw, cmd_id: str) -> bool:
     if cmd.enabled_fn is None:
         return True
     return cmd.enabled_fn(mw)
+
+
+def cmd_checked(mw, cmd_id: str) -> bool:
+    """Current checked state of a toggle command (pie-menu checkbox rendering).
+
+    Non-toggle commands report False; the runtime menu only asks for
+    commands where ``is_toggle`` is set.
+    """
+    cmd = COMMAND_REGISTRY.get(cmd_id)
+    if cmd is None or cmd.checked_fn is None:
+        return False
+    return bool(cmd.checked_fn(mw))
 
 
 # ── Customization dialog ────────────────────────────────────

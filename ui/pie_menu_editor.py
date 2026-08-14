@@ -13,6 +13,9 @@ Layout (top → bottom):
   - command palette: flow grid of draggable command cards (with category
     badges); drag one onto the preview to place it (max 3 per sector /
     panel), drag a card back to remove
+  - canvas-options palette (second section, magenta badges): checkbox
+    toggles (Snap Alignment ...) — same drag & drop, rendered as checkboxes
+    in the menu; kept apart from regular commands on purpose
 
 Switching style converts the commands (ring -> list picks the lateral-half
 sectors as panels, list -> ring writes them back into an 8-sector layout).
@@ -46,12 +49,15 @@ from .context_menu_config import (
     CAT_BASIC,
     CAT_PIPELINE,
     CAT_TEXT,
+    CAT_TOGGLE,
     CAT_VIEW,
     COMMAND_REGISTRY,
 )
 from .pie_menu import (
+    SECTOR_COUNT,
     SECTOR_MAX_CARDS,
     PieMenu,
+    half_ring_sector_idxs,
     normalize_pie_menu,
     panels_to_slots,
     pie_menu_display_name,
@@ -77,6 +83,11 @@ _CATEGORY_LABELS = [
     (CAT_PIPELINE, "Pipeline", "#e67e22"),
     (CAT_VIEW, "View", "#8e44ad"),
 ]
+
+# Checkbox toggles live in a separate palette section below the regular
+# commands (decision 2026-08-14) — magenta badge sets them apart.
+_TOGGLE_LABEL = "Canvas Options"
+_TOGGLE_COLOR = "#e84393"
 
 _CARD_W, _CARD_H = 128, 44
 _DRAG_SCALE = 0.55   # drag-ghost shrinks to ~70x24 so it can't cover the
@@ -340,6 +351,15 @@ class PieMenuEditor(QWidget):
         self.palette = CommandPalette(self)
         layout.addWidget(self.palette, 1)
 
+        # Checkbox toggles: a separate section (they render differently in
+        # the menu, so they get their own area and badge — 2026-08-14).
+        self.toggle_hint = QLabel(self.tr(
+            "Canvas Options (checkbox commands — click a card in the menu to switch it on/off):"))
+        self.toggle_hint.setWordWrap(True)
+        layout.addWidget(self.toggle_hint)
+        self.toggle_palette = CommandPalette(self)
+        layout.addWidget(self.toggle_palette)
+
     def _connect_signals(self):
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self.tabs.tabCloseRequested.connect(self._on_delete_menu)
@@ -353,6 +373,7 @@ class PieMenuEditor(QWidget):
         self.preview.slot_remove_requested.connect(self._on_card_remove)
         self.preview.command_dropped.connect(self._on_command_dropped)
         self.palette.remove_requested.connect(self._on_card_remove)
+        self.toggle_palette.remove_requested.connect(self._on_card_remove)
 
     # ── Current menu helpers ───────────────────────────────
 
@@ -421,7 +442,7 @@ class PieMenuEditor(QWidget):
         if len(self._menus) >= PIE_MENU_MAX:
             from utils.message import create_info_dialog
             create_info_dialog(self.tr(
-                "At most %1 quick menus are supported — one trigger key per menu keeps them memorable."
+                "At most %1 quick menus are supported."
             ).replace("%1", str(PIE_MENU_MAX)))
             return
         n = len(self._menus) + 1
@@ -492,8 +513,14 @@ class PieMenuEditor(QWidget):
 
     def _on_style_changed(self, index):
         """Switch the current menu between ring and list, converting its
-        commands: ring -> list picks the lateral-half sectors as panels,
-        list -> ring writes the panels back into an 8-sector layout."""
+        commands.
+
+        ring -> list derives the lateral half (incl. the top/bottom poles)
+        as panels; the full ring layout stays in ``slots`` untouched.
+        list -> ring writes the panels back into that *same* lateral half
+        of the existing ring layout and keeps every other sector — the
+        round trip never drops a command (decision 2026-08-14).
+        """
         menu = self._current_menu()
         if menu is None:
             return
@@ -501,10 +528,19 @@ class PieMenuEditor(QWidget):
         if new_layout == menu.get("layout", "ring"):
             return
         direction = menu.get("direction", "right")
+        sectors = menu.get("sectors", SECTOR_COUNT)
         if new_layout == "list":
             menu["panels"] = slots_to_panels(menu.get("slots", []), direction)
         else:
-            menu["slots"] = panels_to_slots(menu.get("panels", []), direction)
+            slots = panels_to_slots(menu.get("panels", []), direction,
+                                    sectors=sectors)
+            old = menu.get("slots") or []
+            if len(old) == sectors:
+                keep = (set(range(sectors))
+                        - set(half_ring_sector_idxs(sectors, direction)))
+                for i in keep:
+                    slots[i] = list(old[i])
+            menu["slots"] = slots
         menu["layout"] = new_layout
         self._load_current_props()   # sync combos + visibility (signals blocked)
         self._refresh_preview()
@@ -563,6 +599,7 @@ class PieMenuEditor(QWidget):
         key = "panels" if menu.get("layout", "ring") == "list" else "slots"
         used = {cid for group in menu.get(key, []) for cid in group}
         self.palette.set_used(used)
+        self.toggle_palette.set_used(used)
 
     def _refresh_hint(self):
         """Palette hint text follows the current menu's style."""
@@ -603,7 +640,7 @@ class PieMenuEditor(QWidget):
             self.conflict_label.hide()
 
     def _populate_palette(self):
-        """Flat card grid: category order, translated-name order inside each."""
+        """Regular command grid + a separate section for checkbox toggles."""
         commands = []
         for cat, label, color in _CATEGORY_LABELS:
             cmds = [c for c in COMMAND_REGISTRY.values()
@@ -616,6 +653,18 @@ class PieMenuEditor(QWidget):
                     color,
                 ))
         self.palette.set_commands(commands)
+
+        toggle_cmds = [c for c in COMMAND_REGISTRY.values()
+                       if c.run_fn is not None and c.category == CAT_TOGGLE]
+        toggle_cards = [
+            (cmd.id,
+             QCoreApplication.translate("Canvas", cmd.label_key),
+             self.tr(_TOGGLE_LABEL),
+             _TOGGLE_COLOR)
+            for cmd in sorted(toggle_cmds,
+                              key=lambda c: self.tr(c.label_key).lower())
+        ]
+        self.toggle_palette.set_commands(toggle_cards)
 
     def _save(self):
         pcfg.pie_menus = self._menus

@@ -166,6 +166,41 @@ class ConfigTextLabel(QLabel):
         )
 
 
+def _make_note_btn(note_text: str) -> QPushButton:
+    """Build a themed ``?`` button that pops up ``note_text`` on click.
+
+    The note text is captured in the click closure so the popup never loses
+    it (the old per-instance ``_note_text`` attribute was clobbered by
+    ConfigSubBlock.__init__ when a subclass passed ``name=None``).
+    """
+    btn = QPushButton("?")
+    btn.setFixedSize(20, 20)
+    btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    from ui.misc import get_theme_color
+
+    c = get_theme_color()
+    r, g, b = c.red(), c.green(), c.blue()
+    btn.setStyleSheet(
+        f"QPushButton {{"
+        f"  border: 1px solid rgba({r},{g},{b},128);"
+        f"  border-radius: 10px;"
+        f"  font-size: 12px; font-weight: bold; padding: 0px;"
+        f"  color: rgb({r},{g},{b}); background: transparent;"
+        f"}}"
+        f"QPushButton:hover {{"
+        f"  background: rgba({r},{g},{b},40);"
+        f"}}"
+    )
+
+    def _show_note_popup(checked: bool = False):
+        popup = ConfigNotePopup(btn, note_text)
+        popup.show()
+        btn._note_popup = popup  # keep alive: popup has no parent
+
+    btn.clicked.connect(_show_note_popup)
+    return btn
+
+
 class ConfigSubBlock(Widget):
     def __init__(
         self,
@@ -183,7 +218,6 @@ class ConfigSubBlock(Widget):
         else:
             layout = QHBoxLayout(self)
         self.name = name
-        self._note_text = note
         if name is not None and note is not None:
             # Name row: label + ? button
             name_row = QWidget()
@@ -195,11 +229,7 @@ class ConfigSubBlock(Widget):
             )
             self.name_label = textlabel
             name_row_layout.addWidget(textlabel)
-            self._note_btn = QPushButton("?")
-            self._note_btn.setFixedSize(20, 20)
-            self._note_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            self._note_btn.clicked.connect(self._show_note_popup)
-            self._style_note_btn()
+            self._note_btn = _make_note_btn(note)
             name_row_layout.addWidget(self._note_btn)
             name_row_layout.addStretch()
             layout.addWidget(name_row)
@@ -221,33 +251,17 @@ class ConfigSubBlock(Widget):
         self.widget = widget
         self.setContentsMargins(*content_margins)
 
-    def _style_note_btn(self):
-        """Apply theme-accent styling to the ? note button."""
-        from ui.misc import get_theme_color
-
-        c = get_theme_color()
-        r, g, b = c.red(), c.green(), c.blue()
-        self._note_btn.setStyleSheet(
-            f"QPushButton {{"
-            f"  border: 1px solid rgba({r},{g},{b},128);"
-            f"  border-radius: 10px;"
-            f"  font-size: 12px; font-weight: bold; padding: 0px;"
-            f"  color: rgb({r},{g},{b}); background: transparent;"
-            f"}}"
-            f"QPushButton:hover {{"
-            f"  background: rgba({r},{g},{b},40);"
-            f"}}"
-        )
-
-    def _show_note_popup(self):
-        self._note_popup = ConfigNotePopup(self._note_btn, self._note_text)
-        self._note_popup.show()
-
     # ── Disabled-state auto-styling ────────────────────────────────
     _disabled_color = None  # class-level cache
 
     def changeEvent(self, e: QEvent):
-        if e.type() == QEvent.Type.EnabledChange and self.name_label is not None:
+        # name_label only exists for instances built with a name; guard with
+        # getattr so name-less sublocks (e.g. module pages) don't crash on
+        # enabled-state changes.
+        if (
+            e.type() == QEvent.Type.EnabledChange
+            and getattr(self, "name_label", None) is not None
+        ):
             if self.isEnabled():
                 self.name_label.setStyleSheet("")
             else:
@@ -293,7 +307,6 @@ class ConfigFormRow(ConfigSubBlock):
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
         row_layout.addWidget(self.name_label)
-        self._note_text = note
 
         if isinstance(widget, QWidget):
             row_layout.addWidget(widget)
@@ -301,11 +314,7 @@ class ConfigFormRow(ConfigSubBlock):
             row_layout.addLayout(widget)
 
         if note is not None:
-            self._note_btn = QPushButton("?")
-            self._note_btn.setFixedSize(20, 20)
-            self._note_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            self._note_btn.clicked.connect(self._show_note_popup)
-            self._style_note_btn()
+            self._note_btn = _make_note_btn(note)
             row_layout.addWidget(self._note_btn)
         else:
             self._note_btn = None
@@ -322,28 +331,6 @@ class ConfigFormRow(ConfigSubBlock):
         self.layout().setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-
-    def _style_note_btn(self):
-        """Mirror ConfigSubBlock note button styling."""
-        from ui.misc import get_theme_color
-
-        c = get_theme_color()
-        r, g, b = c.red(), c.green(), c.blue()
-        self._note_btn.setStyleSheet(
-            f"QPushButton {{"
-            f"  border: 1px solid rgba({r},{g},{b},128);"
-            f"  border-radius: 10px;"
-            f"  font-size: 12px; font-weight: bold; padding: 0px;"
-            f"  color: rgb({r},{g},{b}); background: transparent;"
-            f"}}"
-            f"QPushButton:hover {{"
-            f"  background: rgba({r},{g},{b},40);"
-            f"}}"
-        )
-
-    def _show_note_popup(self):
-        self._note_popup = ConfigNotePopup(self._note_btn, self._note_text)
-        self._note_popup.show()
 
 
 def _section_header(text: str) -> ConfigSectionHeader:
@@ -1891,8 +1878,52 @@ class ConfigPanel(Widget):
         interface_layout.setContentsMargins(0, 0, 0, 0)
         interface_layout.setSpacing(0)
 
-        # Behavior section
-        interface_layout.addWidget(_section_header(self.tr("Behavior")))
+        # Appearance section — UI animation smoothness
+        interface_layout.addWidget(_section_header(self.tr("Appearance")))
+
+        self.anim_combo = ConfigComboBox(scrollWidget=self)
+        self.anim_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
+        self.anim_combo.addItems(
+            [
+                self.tr("Auto (match display)"),
+                "60 FPS",
+                "30 FPS",
+                self.tr("Off (no animation)"),
+            ]
+        )
+        self.anim_combo.activated.connect(self._on_anim_mode_changed)
+        interface_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Animation"),
+                self.anim_combo,
+                note=self.tr("<p>Controls UI transition smoothness:</p><p><b>Auto</b> — matches display refresh rate<br/><b>Specific FPS</b> — cap GPU usage<br/><b>Off</b> — disables all animations</p>"),
+            )
+        )
+
+        # Text Format Presets section — values offered in the font format panel dropdowns
+        interface_layout.addWidget(_section_header(self.tr("Text Format Presets")))
+
+        preset_hint = ConfigTextLabel(
+            self.tr("Comma-separated values — used in font format panel dropdowns."),
+            CONFIG_FONTSIZE_CONTENT - 3,
+        )
+        preset_hint.setContentsMargins(16, 0, 16, 4)
+        interface_layout.addWidget(preset_hint)
+
+        _make_preset_row(self.tr("Font Size:"), "font_size_presets", interface_layout)
+        _make_preset_row(
+            self.tr("Line Spacing:"), "line_spacing_presets", interface_layout
+        )
+        _make_preset_row(
+            self.tr("Letter Spacing:"), "letter_spacing_presets", interface_layout
+        )
+        _make_preset_row(
+            self.tr("Stroke Width:"), "stroke_width_presets", interface_layout
+        )
+        _make_preset_row(self.tr("Opacity:"), "opacity_presets", interface_layout)
+
+        # Canvas section — canvas viewing & editing behaviors
+        interface_layout.addWidget(_section_header(self.tr("Canvas")))
 
         self.fit_window_checker = ConfigCheckBox(
             self.tr("Fit image to window when opening")
@@ -1917,60 +1948,6 @@ class ConfigPanel(Widget):
         self._fit_page_sublock = ConfigFormRow("", self.fit_window_page_checker)
         self._fit_page_sublock.setVisible(False)
         interface_layout.addWidget(self._fit_page_sublock)
-
-        # Appearance section — animation, combo box presets, original compare
-        interface_layout.addWidget(_section_header(self.tr("Appearance")))
-
-        self.anim_combo = ConfigComboBox(scrollWidget=self)
-        self.anim_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
-        self.anim_combo.addItems(
-            [
-                self.tr("Auto (match display)"),
-                "60 FPS",
-                "30 FPS",
-                self.tr("Off (no animation)"),
-            ]
-        )
-        self.anim_combo.activated.connect(self._on_anim_mode_changed)
-        interface_layout.addWidget(
-            ConfigFormRow(
-                self.tr("Animation"),
-                self.anim_combo,
-                note=self.tr("<p>Controls UI transition smoothness:</p><p><b>Auto</b> — matches display refresh rate<br/><b>Specific FPS</b> — cap GPU usage<br/><b>Off</b> — disables all animations</p>"),
-            )
-        )
-
-        # Combo Box Presets
-        _make_preset_row(self.tr("Font Size:"), "font_size_presets", interface_layout)
-        _make_preset_row(
-            self.tr("Line Spacing:"), "line_spacing_presets", interface_layout
-        )
-        _make_preset_row(
-            self.tr("Letter Spacing:"), "letter_spacing_presets", interface_layout
-        )
-        _make_preset_row(
-            self.tr("Stroke Width:"), "stroke_width_presets", interface_layout
-        )
-        _make_preset_row(self.tr("Opacity:"), "opacity_presets", interface_layout)
-
-        # ── Original Compare ───────────────────────────────────
-        self.orig_opacity_toggle_spin = NoArrowsSpinBox()
-        self.orig_opacity_toggle_spin.setRange(0, 99)
-        self.orig_opacity_toggle_spin.setValue(pcfg.original_transparency_preset)
-        self.orig_opacity_toggle_spin.setFixedWidth(CONFIG_COMBOBOX_SHORT)
-        self.orig_opacity_toggle_spin.valueChanged.connect(
-            lambda v: setattr(pcfg, "original_transparency_preset", v)
-        )
-        interface_layout.addWidget(
-            ConfigFormRow(
-                self.tr("Preset (%):"),
-                self.orig_opacity_toggle_spin,
-                note=self.tr("<p>Background opacity level when using the <b>Original Compare</b> shortcut. Lower values show more of the original image beneath the translation.</p>"),
-            )
-        )
-
-        # Canvas section — canvas editing behaviors
-        interface_layout.addWidget(_section_header(self.tr("Canvas")))
 
         self.seq_badge_checker = ConfigCheckBox(
             self.tr("Show sequence number on text blocks")
@@ -2010,6 +1987,22 @@ class ConfigPanel(Widget):
                 "",
                 self.drag_decorations_checker,
                 note=self.tr("<p>When checked, <b>text stroke and shadow</b> remain visible while dragging or resizing a text block. Uncheck for maximum frame rate during resize.</p>"),
+            )
+        )
+
+        # ── Original Compare ───────────────────────────────────
+        self.orig_opacity_toggle_spin = NoArrowsSpinBox()
+        self.orig_opacity_toggle_spin.setRange(0, 99)
+        self.orig_opacity_toggle_spin.setValue(pcfg.original_transparency_preset)
+        self.orig_opacity_toggle_spin.setFixedWidth(CONFIG_COMBOBOX_SHORT)
+        self.orig_opacity_toggle_spin.valueChanged.connect(
+            lambda v: setattr(pcfg, "original_transparency_preset", v)
+        )
+        interface_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Original Compare Preset (%):"),
+                self.orig_opacity_toggle_spin,
+                note=self.tr("<p>Background opacity level when using the <b>Original Compare</b> shortcut. Lower values show more of the original image beneath the translation.</p>"),
             )
         )
 
@@ -2401,6 +2394,19 @@ class ConfigPanel(Widget):
         if object_name:
             group.setObjectName(object_name)
         group.setProperty("cfgPage", True)
+
+        if note is not None:
+            # Group title gets a ? note button. ConfigSubBlock would drop the
+            # note silently when name is None, so place it beside the title.
+            title_row = QWidget(group)
+            title_row_layout = QHBoxLayout(title_row)
+            title_row_layout.setContentsMargins(0, 0, 0, 0)
+            title_row_layout.setSpacing(6)
+            title_row_layout.addWidget(group.title_label)
+            title_row_layout.addWidget(_make_note_btn(note))
+            title_row_layout.addStretch()
+            group.layout().insertWidget(0, title_row)
+
         group_vlayout = group.contentLayout()
         group_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
         group_vlayout.setSpacing(0)

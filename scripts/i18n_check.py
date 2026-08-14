@@ -6,9 +6,14 @@ Three checks:
   2. self.tr() calls missing from zh_CN.ts
   3. Active zh_CN.ts entries with no matching self.tr() call (orphans)
 
+Orphans from KNOWN_ORPHAN_CONTEXTS (indirect ``self.tr(variable)`` calls,
+maintained by hand in the .ts) are reported as "expected" and do not count
+toward the exit code; pass ``--show-expected`` to list them.
+
 Usage:
   python scripts/i18n_check.py          # report all issues
   python scripts/i18n_check.py --ci     # non-zero exit on any finding
+  python scripts/i18n_check.py --show-expected  # also list known orphans
 """
 
 import argparse
@@ -19,6 +24,12 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TS_FILE = PROJECT_ROOT / "translate" / "zh_CN.ts"
+
+# Contexts whose .ts entries are never matched by a literal self.tr() call:
+# the code renders them via self.tr(variable) / canvas.tr(key) or they are
+# module param descriptions.  They are maintained by hand in zh_CN.ts, so
+# i18n_check would report them as orphans on every run — treat as expected.
+KNOWN_ORPHAN_CONTEXTS = frozenset({"_ShortcutRow", "ShortcutEditor", "ParamWidget"})
 
 # Chinese character range (CJK Unified Ideographs)
 CJK_RE = re.compile(r"[一-鿿]")
@@ -207,10 +218,10 @@ def extract_ts_entries(ts_path):
 
 
 def find_missing_and_orphans(files):
-    """Return (missing_tr_calls, orphan_ts_entries)."""
+    """Return (missing_tr_calls, orphan_ts_entries, expected_orphans)."""
     ts_entries = extract_ts_entries(TS_FILE)
     if ts_entries is None:
-        return [], []
+        return [], [], []
 
     all_tr_calls = set()
     for fpath in files:
@@ -223,13 +234,19 @@ def find_missing_and_orphans(files):
 
     missing = sorted((ctx, s) for ctx, s in all_tr_calls if (ctx, s) not in ts_entries)
     # Filter orphans: exclude format strings (skipped by tr() extractor)
-    # and ParamWidget context (module param descriptions, not tr() calls).
+    # and known-indirect contexts (shortcut names/group titles, module param
+    # descriptions — hand-maintained in .ts, always orphans).
     orphans = sorted(
         (ctx, s)
         for ctx, s in ts_entries
-        if (ctx, s) not in all_tr_calls and "{" not in s and ctx != "ParamWidget"
+        if (ctx, s) not in all_tr_calls and "{" not in s and ctx not in KNOWN_ORPHAN_CONTEXTS
     )
-    return missing, orphans
+    expected = sorted(
+        (ctx, s)
+        for ctx, s in ts_entries
+        if (ctx, s) not in all_tr_calls and ctx in KNOWN_ORPHAN_CONTEXTS
+    )
+    return missing, orphans, expected
 
 
 # ── Main ────────────────────────────────────────────────────────────────
@@ -254,6 +271,11 @@ def main():
 
     parser = argparse.ArgumentParser(description="i18n audit for BallonsTranslator")
     parser.add_argument("--ci", action="store_true", help="Exit non-zero on findings")
+    parser.add_argument(
+        "--show-expected",
+        action="store_true",
+        help="Also list known orphans (indirect self.tr() calls, hand-maintained in .ts)",
+    )
     args = parser.parse_args()
 
     exit_code = 0
@@ -272,7 +294,7 @@ def main():
 
     # Check 2 & 3: tr() <-> .ts coverage — ui/ + modules/
     all_files = find_all_py_files()
-    missing, orphans = find_missing_and_orphans(all_files)
+    missing, orphans, expected = find_missing_and_orphans(all_files)
 
     if missing:
         exit_code |= 2
@@ -295,6 +317,16 @@ def main():
             print(f'  [{ctx}] "{s}"')
     else:
         print("\n[ORPHAN .ts ENTRIES] None found.")
+
+    if args.show_expected and expected:
+        print(
+            f"\n[KNOWN ORPHANS] {len(expected)} expected entry(ies) from "
+            f"indirect self.tr(variable) calls / param descriptions "
+            f"(contexts: {', '.join(sorted(KNOWN_ORPHAN_CONTEXTS))}) — "
+            f"hand-maintained in .ts, not counted as failures:"
+        )
+        for ctx, s in expected:
+            print(f'  [{ctx}] "{s}"')
 
     if exit_code == 0:
         print("\n[PASS] i18n check passed.")

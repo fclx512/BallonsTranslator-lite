@@ -203,21 +203,24 @@ _LEGACY_PIE_SECTORS = [
     ["translate"],                                  # 7 upper-left
 ]
 
-# Default menu template: one trigger key per menu, 8 sectors each.
-# Direction-mapped layouts (align "up" on the top sector, page-forward at
-# the bottom ...) so the ring interaction matches the user's intuition.
+# Default menu template: one trigger key per menu, sector count sized to the
+# content (4/6/8) so no ring sector is left as a dead zone.  Undo/redo, page
+# navigation and zoom were dropped from the defaults (2026-08-14): they have
+# universal shortcuts (Ctrl+Z/Y, PgUp/PgDn, wheel) and only waste menu slots.
 DEFAULT_PIE_MENUS = [
     {
         "id": "edit",
         "name": "Editing",
         "trigger": "Tab",
-        "sectors": 8,
+        "sectors": 6,
         "layout": "ring",
         "slots": [
-            ["copy"], ["paste"], ["delete"], ["merge"],
-            ["undo"], ["redo"],
-            ["reset_angle", "squeeze"],
-            ["copy_src", "paste_src"],
+            ["copy"],                            # 0 top
+            ["paste"],                           # 1 upper-right
+            ["delete"],                          # 2 lower-right
+            ["merge"],                           # 3 bottom
+            ["reset_angle", "squeeze"],          # 4 lower-left
+            ["copy_src", "paste_src"],           # 5 upper-left
         ],
     },
     {
@@ -233,13 +236,15 @@ DEFAULT_PIE_MENUS = [
     },
     {
         "id": "pipeline",
-        "name": "Pipeline & View",
+        "name": "Pipeline",
         "trigger": "C",
-        "sectors": 8,
+        "sectors": 4,
         "layout": "ring",
         "slots": [
-            ["ocr_translate"], ["ocr"], ["translate"], ["ocr_translate_inpaint"],
-            ["next_page"], ["prev_page"], ["zoom_out"], ["zoom_in"],
+            ["ocr_translate"],                   # 0 top
+            ["ocr"],                             # 1 right
+            ["translate"],                       # 2 bottom
+            ["ocr_translate_inpaint"],           # 3 left
         ],
     },
 ]
@@ -250,11 +255,13 @@ def migrate_legacy_pie(legacy: List[List[str]]) -> List[dict]:
 
     An untouched default becomes the three-menu template; a customized
     layout is kept as the first ("edit") menu with the two other default
-    menus appended (the user can delete them).
+    menus appended (the user can delete them).  The legacy layout is
+    always 8 sectors — keep its own sector count, not the new template's.
     """
     if legacy == _LEGACY_PIE_SECTORS:
         return copy.deepcopy(DEFAULT_PIE_MENUS)
-    menus = [dict(DEFAULT_PIE_MENUS[0], slots=copy.deepcopy(legacy))]
+    menus = [dict(DEFAULT_PIE_MENUS[0], sectors=len(legacy),
+                  slots=copy.deepcopy(legacy))]
     menus += [copy.deepcopy(m) for m in DEFAULT_PIE_MENUS[1:]]
     return menus
 

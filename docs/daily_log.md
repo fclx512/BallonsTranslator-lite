@@ -19,6 +19,24 @@
 
 ---
 
+### 快捷菜单优化批次：命令池瘦身 + 勾选式命令 + 环形堆叠修复 + 竖排 5 面板无损往返 + hover 置顶
+
+**问题/需求：** ① 命令池里的 undo/redo/翻页/缩放自带通用快捷键（Ctrl+Z/Y、PgUp/PgDn、滚轮），放菜单纯占位；② 画布区的勾选式功能（吸附对齐）进不了菜单；③ 环形顶/底扇区多卡横排互相遮挡宽卡片文本、难选中；④ 竖排只有 3 个面板，默认环形切竖排时位置变少、来回切换还会清空内容；⑤ 长标签卡片（英文）与相邻扇区堆叠相撞时被遮挡看不到；⑥「新建菜单」上限提示文案冗余。
+
+**改动要点：**
+
+- **命令池瘦身 + 默认模板重排**（`ui/context_menu_config.py`、`utils/config.py`）：undo/redo/zoom±/prev/next_page 保留注册（旧配置已放菜单的仍可触发）但 `category` 置空退出命令池，`fit_window` 保留；默认模板按"每菜单一个功能组、扇区数适配内容"重排——编辑 6 扇区（去撤销/重做）、管线 4 扇区（去翻页/缩放，更名 Pipeline），环上不留空死区；`migrate_legacy_pie` 自定义旧配置按 `len(legacy)` 回退扇区数。
+- **勾选式命令**（`ui/context_menu_config.py`、`ui/pie_menu.py`、`ui/pie_menu_editor.py`）：`CmdDef` 新增 `is_toggle`/`checked_fn` + `cmd_checked()` 助手；新分类 `CAT_TOGGLE`；注册 `snap_alignment`（吸附对齐，运行时点击翻转 `canvas.alignment_enabled`）；环形卡片与竖排行渲染小复选框（勾选 = accent 填充 + 白色对勾，未勾 = 描边）；设置页命令池在常规命令下方独立成段（洋红徽标 + 独立提示文案），拖放/右键移除与常规命令一致。
+- **环形堆叠修复**（`ui/pie_menu.py`）：`_stack_vertical` 让顶/底扇区（切线水平，横排步距只按卡片高度、宽卡片互相遮挡）改屏幕纵向堆叠，左右扇区保持切线垂直堆叠；`_drop_insert_index` 同步按堆叠轴投影。
+- **竖排 5 面板 + 无损往返**（`ui/pie_menu.py`、`ui/pie_menu_editor.py`）：`LIST_PANELS` 3→5（上/上斜/正侧/下斜/下）；`half_ring_sector_idxs` 定义含顶/底极的半环映射（8/6/4 扇区 → 5/4/3 面板）；`_relayout_list` 重写 5 锚点几何（各面板垂直净距 `LIST_ANCHOR_GAP_Y` 互不重叠）；`_on_style_changed` ring→list 只重算 `panels` 保留 `slots`，list→ring 写回侧向半环后合并原 `slots` 的非侧向扇区——往返永不丢命令。
+- **hover 置顶**（`ui/pie_menu.py`）：`_paint_cards` 拆两遍渲染（非 hover 先画、hover 最后画），长标签卡片被相邻堆叠遮挡时 hover 到即置顶可读。
+- **提示文案精简**（`ui/pie_menu_editor.py`）：新建菜单上限提示只留「最多支持 %1 个快捷菜单。」
+- **排障**：两处 paint 内 Python 异常被 Qt 静默吞掉导致进程无声崩溃（exit 127，无回溯）——`elidedText` 宽度传 float（TypeError，`toggle_w` 改 int）与 `_paint_cards` 内 `border_c` 未定义（NameError，参数实际叫 `card_border`）；已加渲染冒烟测试兜底（这类错误目测/普通测试都发现不了）。
+
+**涉及文件：** `ui/context_menu_config.py`、`ui/pie_menu.py`、`ui/pie_menu_editor.py`、`utils/config.py`、`scripts/pie_menu_test.py`（共 224 断言，新增半环映射/无损往返/5 面板几何/hover 置顶渲染）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/技术实现/快捷菜单_实现总结.md`、`scripts/_pie_fix_preview.py`（新增预览脚本，可删）
+
+---
+
 ## 2026-08-13
 
 ### 检查更新：对齐上游 release 策略 + 界面统一迁入设置

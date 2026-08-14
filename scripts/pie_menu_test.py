@@ -74,6 +74,7 @@ class MockCanvas(QObject):
         self.calls = []
         self._selected = 0
         self._textedit = True
+        self.alignment_enabled = True   # snap-alignment toggle state
         self.canvas = self  # mock also plays the MainWindow role (mw.canvas)
         for name in ("delete_textblks", "merge_textblks", "align_textblks",
                      "run_blktrans", "reset_angle", "squeeze_blk",
@@ -196,8 +197,14 @@ def main():
           all(COMMAND_REGISTRY[cid].hidden_in_customize for cid in
               ("undo", "redo", "fit_window", "zoom_in", "zoom_out",
                "prev_page", "next_page")))
-    check("undo category basic", COMMAND_REGISTRY["undo"].category == "basic")
-    check("fit_window category view", COMMAND_REGISTRY["fit_window"].category == "view")
+    # 2026-08-14: undo/redo/page-nav/zoom have universal shortcuts, so they
+    # stay registered (existing configs keep working) but drop out of the
+    # palette (empty category).  fit_window keeps its view category.
+    check("undo/redo/zoom/pages dropped from palette (empty category)",
+          all(COMMAND_REGISTRY[cid].category == "" for cid in
+              ("undo", "redo", "zoom_in", "zoom_out", "prev_page", "next_page")))
+    check("fit_window stays in view category",
+          COMMAND_REGISTRY["fit_window"].category == "view")
     check("translate category pipeline", COMMAND_REGISTRY["translate"].category == "pipeline")
     check("reset_angle category text", COMMAND_REGISTRY["reset_angle"].category == "text")
     check("align_left runnable", run_cmd(mc, "align_left"))
@@ -237,6 +244,23 @@ def main():
     check("zoom always enabled", cmd_enabled(mc, "zoom_in"))
     check("page nav always enabled", cmd_enabled(mc, "next_page"))
 
+    print("== checkbox toggle commands (snap_alignment) ==")
+    from ui.context_menu_config import cmd_checked
+    check("snap_alignment registered as toggle",
+          "snap_alignment" in COMMAND_REGISTRY
+          and COMMAND_REGISTRY["snap_alignment"].is_toggle
+          and COMMAND_REGISTRY["snap_alignment"].category == "toggle")
+    mc.alignment_enabled = True
+    check("snap_alignment checked when on", cmd_checked(mc, "snap_alignment"))
+    check("snap_alignment runnable", run_cmd(mc, "snap_alignment"))
+    check("snap_alignment toggles off", not mc.alignment_enabled)
+    check("snap_alignment unchecked after toggle",
+          not cmd_checked(mc, "snap_alignment"))
+    run_cmd(mc, "snap_alignment")
+    check("snap_alignment toggles back on", mc.alignment_enabled)
+    check("non-toggle cmd_checked False", not cmd_checked(mc, "copy"))
+    check("unknown cmd_checked False", not cmd_checked(mc, "nope"))
+
     print("== hit-test math (floating cards + tangential stack) ==")
 
     def _pt(cw_deg, r):
@@ -274,6 +298,34 @@ def main():
               for s in range(SECTOR_COUNT)
               for i in range(len(pm._sector_data[s]))
               for r in [pm._card_rect(s, i, fm)]))
+
+    # top/bottom sectors stack screen-vertically (2026-08-14) — a horizontal
+    # tangential fan would bury the wide cards' text behind each other.
+    top_menu = {
+        "id": "top", "sectors": 8,
+        "slots": [["copy", "paste", "delete"]] + [[] for _ in range(7)],
+    }
+    pm.set_menu_config(top_menu)
+    rects_top = [pm._card_rect(0, i, fm) for i in range(3)]
+    check("top stack cards do not overlap",
+          all(not rects_top[i].intersects(rects_top[j])
+              for i in range(3) for j in range(i + 1, 3)))
+    check("top stack is a vertical column",
+          len({pm._card_rect(0, i, fm).center().x() for i in range(3)}) == 1)
+    check("top stack inside widget bounds",
+          all(0 <= r.top() and r.bottom() <= 2 * WINDOW_RADIUS
+              for r in rects_top))
+    c_mid = pm._card_rect(0, 1, fm).center()
+    check("top stack drop insert by vertical pos",
+          pm._drop_insert_index(0, c_mid) == 1)
+    pm.set_menu_config(_TEST_MENU)
+    check("restore test menu after top-stack check",
+          pm._hit_test(_pt(0, 130)) == (0, 0))
+    # hover-to-front (2026-08-14): the hovered card repaints on top so a
+    # long label colliding with a neighbouring stack stays readable
+    pm._update_hover((6, 1))
+    check("hovered card paints", not pm.grab().isNull())
+    pm._update_hover(None)
     # sector wedge fallback near the boundary arms the nearest card of sector 6
     hit_lo = pm._hit_test(_pt(247.6, 130))
     check("left boundary 247.6 -> sector 6", hit_lo is not None and hit_lo[0] == 6)
@@ -701,7 +753,7 @@ def main():
         "direction": "left",
     })
     check("list normalize keeps panels",
-          lst["panels"] == [["copy", "paste"], ["delete"], []])
+          lst["panels"] == [["copy", "paste"], ["delete"], [], [], []])
     check("list normalize filters separator+non-str",
           "---" not in str(lst["panels"]) and "123" not in str(lst["panels"]))
     check("list normalize direction", lst["direction"] == "left")
@@ -719,24 +771,29 @@ def main():
     mig = normalize_pie_menu({"layout": "list",
                               "items": ["a", "b", "c", "d", "e", "f", "g"]})
     check("legacy items migrate to panels (chunked)",
-          mig["panels"] == [["a", "b", "c"], ["d", "e", "f"], ["g"]])
+          mig["panels"] == [["a", "b", "c"], ["d", "e", "f"], ["g"], [], []])
 
-    # ring <-> list conversions (lateral half, top -> bottom)
+    # ring <-> list conversions (lateral half incl. top/bottom poles,
+    # top -> bottom)
     ring_slots = [["copy"], ["paste"], ["delete"], ["merge"], [], [], [], []]
-    check("slots_to_panels picks right half",
-          slots_to_panels(ring_slots, "right") == [["paste"], ["delete"], ["merge"]])
+    check("slots_to_panels picks right half incl. poles",
+          slots_to_panels(ring_slots, "right")
+          == [["copy"], ["paste"], ["delete"], ["merge"], []])
     left_slots = [[], [], [], [], [], ["merge"], ["delete"], ["paste"]]
-    check("slots_to_panels picks left half",
-          slots_to_panels(left_slots, "left") == [["paste"], ["delete"], ["merge"]])
+    check("slots_to_panels picks left half incl. poles",
+          slots_to_panels(left_slots, "left")
+          == [[], ["paste"], ["delete"], ["merge"], []])
     back = panels_to_slots([["paste"], ["delete"], ["merge"]], "right")
-    check("panels_to_slots writes sectors 1..3",
-          back[1] == ["paste"] and back[2] == ["delete"] and back[3] == ["merge"])
+    check("panels_to_slots writes sectors 0..2",
+          back[0] == ["paste"] and back[1] == ["delete"]
+          and back[2] == ["merge"])
     back_l = panels_to_slots([["paste"], ["delete"], ["merge"]], "left")
-    check("panels_to_slots writes sectors 7..5",
-          back_l[7] == ["paste"] and back_l[6] == ["delete"] and back_l[5] == ["merge"])
+    check("panels_to_slots writes sectors 0/7/6",
+          back_l[0] == ["paste"] and back_l[7] == ["delete"]
+          and back_l[6] == ["merge"])
     quad = slots_to_panels([["a"], ["b"], ["c"], ["d"]], "right")
-    check("4-sector ring -> single lateral panel + padding",
-          quad == [["b"], [], []])
+    check("4-sector ring -> top/right/bottom panels + padding",
+          quad == [["a"], ["b"], ["c"], [], []])
 
     # list geometry + hit-test on a runtime widget
     list_menu = normalize_pie_menu({
@@ -758,31 +815,31 @@ def main():
     pm.set_menu_config(list_menu)
     check("list window restored after ring",
           pm.width() == int(pm._list_w) and pm.height() == int(pm._list_h))
-    check("three panel rects", len(pm._list_rects) == LIST_PANELS)
-    check("mid panel right of cursor",
-          pm._list_rects[1].left() > pm._list_cursor.x())
+    check("five panel rects", len(pm._list_rects) == LIST_PANELS)
+    check("lateral panel right of cursor",
+          pm._list_rects[2].left() > pm._list_cursor.x())
     check("top panel above cursor",
           pm._list_rects[0].bottom() < pm._list_cursor.y())
     check("bottom panel below cursor",
-          pm._list_rects[2].top() > pm._list_cursor.y())
-    check("mid panel vertically centered on cursor",
-          abs(pm._list_rects[1].center().y() - pm._list_cursor.y()) <= 1)
+          pm._list_rects[4].top() > pm._list_cursor.y())
+    check("lateral panel vertically centered on cursor",
+          abs(pm._list_rects[2].center().y() - pm._list_cursor.y()) <= 1)
     # 2026-08-13: the cluster hugs the cursor (old 120px ring radius left it
     # far from the pointer).  The lateral panel is just LIST_ANCHOR_GAP_X
     # right of the cursor and the diagonal panels clear it vertically.
     check("lateral panel hugs cursor",
-          pm._list_rects[1].left() - pm._list_cursor.x() <= LIST_ANCHOR_GAP_X + 1)
-    check("diagonal panels clear lateral",
-          pm._list_rects[0].bottom() <= pm._list_rects[1].top()
-          and pm._list_rects[2].top() >= pm._list_rects[1].bottom())
+          pm._list_rects[2].left() - pm._list_cursor.x() <= LIST_ANCHOR_GAP_X + 1)
+    check("five panels never overlap",
+          all(pm._list_rects[i].bottom() <= pm._list_rects[i + 1].top()
+              for i in range(LIST_PANELS - 1)))
     # worst case: every panel at 3 rows still never overlaps
     full = normalize_pie_menu({
         "layout": "list",
         "panels": [["a", "b", "c"], ["d", "e", "f"], ["g", "h", "i"]]})
     pm.set_menu_config(full)
     check("3-row panels never overlap",
-          pm._list_rects[0].bottom() < pm._list_rects[1].top()
-          and pm._list_rects[2].top() > pm._list_rects[1].bottom())
+          all(pm._list_rects[i].bottom() < pm._list_rects[i + 1].top()
+              for i in range(LIST_PANELS - 1)))
     pm.set_menu_config(list_menu)
     check("list hit top panel row 1",
           pm._hit_test_list(pm._list_row_rect(0, 1).center()) == (0, 1))
@@ -819,7 +876,7 @@ def main():
     list_menu["direction"] = "left"
     pm.set_menu_config(list_menu)
     check("left direction mirrors panels",
-          pm._list_rects[1].right() < pm._list_cursor.x())
+          pm._list_rects[2].right() < pm._list_cursor.x())
     pm.start_hold(QPoint(400, 300))
     check("list window cursor-anchored (left)",
           abs(pm.geometry().left() + pm._list_cursor.x() - 400) <= 1
@@ -874,21 +931,41 @@ def main():
     editor._refresh_preview()
     editor._on_style_changed(1)   # -> list
     check("style switch to list", editor._menus[0]["layout"] == "list")
-    check("style switch picks lateral half",
-          editor._menus[0]["panels"] == [["paste"], ["delete"], ["merge"]])
+    check("style switch picks lateral half incl. poles",
+          editor._menus[0]["panels"]
+          == [["copy"], ["paste"], ["delete"], ["merge"], []])
     check("sectors hidden in list style", editor.sectors_combo.isHidden())
     check("direction shown in list style", not editor.direction_combo.isHidden())
     editor._on_style_changed(0)   # -> ring (panels written to the right half)
     check("style switch back to ring", editor._menus[0]["layout"] == "ring")
-    check("panels written back to sectors 1..3",
-          editor._menus[0]["slots"][1] == ["paste"]
+    check("panels written back to sectors 0..3",
+          editor._menus[0]["slots"][0] == ["copy"]
+          and editor._menus[0]["slots"][1] == ["paste"]
           and editor._menus[0]["slots"][2] == ["delete"]
           and editor._menus[0]["slots"][3] == ["merge"])
     editor._on_direction_changed(1)   # ring ignores it, just persists
     check("direction set to left", editor._menus[0]["direction"] == "left")
     editor._on_style_changed(1)   # -> list again, now from the left half
-    check("round trip keeps commands (left half empty -> padded)",
-          editor._menus[0]["panels"] == [[], [], []])
+    check("round trip keeps top command after direction flip",
+          editor._menus[0]["panels"] == [["copy"], [], [], [], []])
+    # non-destructive round trip (2026-08-14): sectors outside the lateral
+    # half are preserved when converting back — nothing is ever dropped
+    editor._menus = [normalize_pie_menu({
+        "id": "e", "trigger": "T", "sectors": 8,
+        "slots": [["copy"], ["paste"], ["delete"], ["merge"],
+                  ["bottom"], ["l-l"], ["left"], ["u-l"]],
+    })]
+    editor._current = 0
+    editor._refresh_preview()
+    editor._on_style_changed(1)   # -> list (right half incl. poles)
+    check("list shows right half incl. poles",
+          editor._menus[0]["panels"] == [["copy"], ["paste"], ["delete"],
+                                         ["merge"], ["bottom"]])
+    editor._on_style_changed(0)   # -> ring
+    check("non-lateral sectors preserved on round trip",
+          editor._menus[0]["slots"][5] == ["l-l"]
+          and editor._menus[0]["slots"][6] == ["left"]
+          and editor._menus[0]["slots"][7] == ["u-l"])
     editor._menus = [normalize_pie_menu({
         "id": "e", "trigger": "T", "layout": "list", "direction": "right",
         "panels": [["paste"], ["delete"], ["merge"]],
@@ -915,6 +992,16 @@ def main():
     check("list preview paints", not pv_list.grab().isNull())
     check("list preview ghost drop target",
           pv_list._list_drop_pos(pv_list._list_rects[2].center()) == (2, 0))
+
+    # a menu containing a toggle command paints (checkbox rendering path —
+    # regression: a NameError there used to kill Qt silently)
+    editor._menus = [normalize_pie_menu({
+        "id": "e", "trigger": "T", "sectors": 8,
+        "slots": [[]] + [["snap_alignment"]] + [[] for _ in range(6)],
+    })]
+    editor._current = 0
+    editor._refresh_preview()
+    check("preview toggle card paints", not pv.grab().isNull())
 
     print(f"\n{PASS} passed, {len(FAIL)} failed")
     save_config()
