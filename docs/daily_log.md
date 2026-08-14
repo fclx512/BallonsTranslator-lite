@@ -2,6 +2,23 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，每次在对应日期中末尾写入日志。
 
+## 2026-08-14
+
+### 测试流程优化：一键 verify.py + i18n 孤儿降噪 + 冒烟单进程化
+
+**问题/需求：** 每次开发功能后 AI 都要依次手动跑 语法检查 / i18n / qm 编译 / 冒烟测试 4 条命令（约 1 分钟、几 KB 输出进上下文），且 i18n 每次都 dump 大量"已知孤儿"（`canvas.tr()`/`self.tr(variable)` 间接调用的合法条目）刷屏；冒烟测试起 5 个独立子进程各冷启动一次 PyQt。目标：一条命令 + 零噪音输出 + 明确的跳过条件，失败时仍给完整报错供 AI 修复。
+
+**改动要点：**
+
+- **`scripts/verify.py`（新增，统一入口）**：`python scripts/verify.py` 依次跑 语法 → i18n → qm → 冒烟；成功每步只打一行（⏭ 跳过 / ✅ 通过 / ⚠ 警告），失败才完整打印报错与退出码。自动判定：语法只查 git 改动涉及的 .py（`--all` 全扫 ui/+utils/）；ts 有改动自动编译 qm；改动命中启动链文件（launch.py / modules/base.py / utils/profile_manager.py / ui/configpanel.py / ui/mainwindow.py）自动触发冒烟（`--smoke` 可强制）。
+- **`scripts/i18n_check.py`**：`KNOWN_ORPHAN_CONTEXTS` 白名单（`_ShortcutRow`/`ShortcutEditor`/`ParamWidget`）——间接 tr() 调用条目移入"已知孤儿"，默认不显示、不计退出码，`--show-expected` 查看；`find_missing_and_orphans` 返回三值。verify.py 进一步把全项目孤儿（168 条基线，`canvas.tr()` 等）降级为一行警告：仅硬编码中文（位 1）/缺失条目（位 2）判失败。
+- **`tests/test_startup_imports.py`**：5 个 subprocess → 单进程内依次验证（imports 幂等），5 次子进程冷启动（预计 30~60s）→ ~1.5s；`QT_QPA_PLATFORM=offscreen` 提到模块级；import launch 前临时替换 sys.argv（顶层有 parse_known_args）。
+- **`scripts/check_syntax.py`**：支持多文件参数（原只取 argv[1]）。
+
+**涉及文件：** `scripts/verify.py`（新增）、`scripts/check_syntax.py`、`scripts/i18n_check.py`、`tests/test_startup_imports.py`、`AGENTS.md`、`docs/项目概述.md`
+
+---
+
 ## 2026-08-13
 
 ### 检查更新：对齐上游 release 策略 + 界面统一迁入设置

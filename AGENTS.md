@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-> 本项目 CLAUDE.md 已提交到仓库中（不在 `.gitignore`），多设备间通过 git 同步。
+> 本项目 AGENTS.md 已提交到仓库中（不在 `.gitignore`），多设备间通过 git 同步。
 
 ## 项目概述
 
@@ -36,7 +36,6 @@ modules/
 | `utils/profile_manager.py` | LLM API 配置管理（翻译器/OCR 共用） |
 | `utils/ai_tools.py` | AI 辅助工具函数 |
 | `ui/mainwindow.py` | 主窗口 |
-| `ui/mainwindow_mixin.py` | MainWindow 业务逻辑 mixin |
 | `ui/configpanel.py` | 配置面板、快捷键编辑 |
 | `ui/text_panel.py` | 文本编辑面板 |
 | `ui/io_thread.py` | 管线编排（检测→OCR→翻译→修复） |
@@ -45,7 +44,7 @@ modules/
 | `ui/overlay_slide.py` | `OverlaySlider` — 覆盖面板滑入滑出动画（GlobalSearchWidget、PageList 用它） |
 | `ui/custom_widget/` | 可复用控件库（`__init__.py` 统一导出，见下方"打包控件功能"） |
 | `config/` | `config.json`(gitignore), `stylesheet.css`, `themes.json`, `custom_themes.json`, `textstyles/` |
-| `scripts/` | `run_module.py`, `qm_compile.py`, `i18n_check.py` |
+| `scripts/` | `verify.py`, `check_docs.py`, `check_syntax.py`, `qm_compile.py`, `i18n_check.py` |
 
 ## 打包控件功能
 
@@ -71,12 +70,15 @@ modules/
 
 所有文档放 `docs/`，文件名中文化，无英文版本。
 
+- 引用文件用**仓库相对路径**（如 `ui/configpanel.py`）；引用符号用 **`路径::符号`**（如 `ui/configpanel.py::DEFAULT_SHORTCUTS`），**不写行号**（行号易漂移）。
+- 改动后跑 `scripts/check_docs.py` 校验文档里的路径/符号引用是否失效（已并入 `verify.py`）。仅归档/日志类文档（`daily_log.md`、`经验教训.md`、`上游参考.md`）不在校验范围；`技术实现/` 已纳入校验，引用上游仓库路径时须带 `ballontranslator/`（或 `BallonsTranslator/`、`resources/`）前缀以触发跨库豁免。
+
 ## 配置系统
 
 - `config/config.json` 已 gitignore（含 API 密钥），其余配置/样式文件被跟踪。
 - 模块声明 `params: Dict` 自动渲染为 UI 表单。以 `_` 开头的 key 为内部参数，save/load 时保留。
 
-全局配置 `pcfg`（`utils/config.py:301`）是模块级单例：
+全局配置 `pcfg`（`utils/config.py`）是模块级单例：
 
 - 改 `pcfg` 后须显式调用 `save_config()`。仅 `closeEvent` 和 `ConfigPanel.hideEvent` 触发自动保存。
 - 启动顺序：`launch.py` 先 `load_config()` 再 `init_module_registries()`。
@@ -97,10 +99,10 @@ modules/
 - 所有 UI 文字用 `self.tr()` 包裹，严禁硬编码中文。
 - ts 中 `<context>` 对应类名，`<message>` 对应 tr 字符串。
 - 编译：`python scripts/qm_compile.py translate/zh_CN.ts translate/zh_CN.qm`
-- 验证：`python scripts/i18n_check.py`；发版前 `--ci`。
+- 验证：`python scripts/i18n_check.py`；发版前 `--ci`；`--show-expected` 可列出已知孤儿。
 - `self.tr()` 字符串必须是单个字符串，不要用隐式拼接（`"a" "b"`）—— `i18n_check.py` 按行扫描，检测不到跨行拼接。长字符串在 `tr(` 后换行即可。
-- `--ci` 对 orphan 条目（ts 有但代码无对应 `self.tr()`）退出码 4。通常是 `self.tr(variable)` 间接调用，运行时正常。
-- **⚠️ 快捷键面板等使用 `self.tr(variable)` 间接调用的地方最易漏翻译**。`_ShortcutRow` 通过 `self.tr(_ACTION_NAMES[id])` 渲染动作名，`ShortcutEditor` 通过 `self.tr(group_name)` 渲染分组标题——这些字符串在 i18n_check 中永远显示为 orphan，需手动在 ts 对应 `<context>` 中添加 `<message>`。新增/删除快捷键动作时，ts 的 `_ShortcutRow` 和 `ShortcutEditor` 上下文要同步更新。
+- `--ci` 对 orphan 条目（ts 有但代码无对应 `self.tr()`）退出码 4。通常是 `self.tr(variable)` / `canvas.tr()` 间接调用，运行时正常。
+- **⚠️ 快捷键面板等使用 `self.tr(variable)` 间接调用的地方最易漏翻译**。`_ShortcutRow` 通过 `self.tr(_ACTION_NAMES[id])` 渲染动作名，`ShortcutEditor` 通过 `self.tr(group_name)` 渲染分组标题——这些字符串 i18n_check 报 orphan 且无法自动检测，**已列入已知孤儿白名单**（`KNOWN_ORPHAN_CONTEXTS`，默认不显示、不计失败，`--show-expected` 查看），但 ts 对应 `<context>` 仍需**手工同步**：新增/删除快捷键动作时，ts 的 `_ShortcutRow` 和 `ShortcutEditor` 上下文要同步增删 `<message>`，否则运行时显示英文。
 - 模块参数 `description` 用英文，翻译放 `<context><name>ParamWidget</name></context>`。
 - 无需翻译：日志、LLM prompt、字体测试字符、语言映射字典。
 - 常见问题：source 大小写不一致；context 放错；`type="obsolete"`。批量编辑 ts 用 Python 脚本直接操作文本。
@@ -108,18 +110,26 @@ modules/
 
 ## 测试流程
 
-改代码后按以下顺序验证，避免遗漏回归：
+改代码后按以下顺序验证，避免遗漏回归。**首选统一入口**：
 
-1. **语法检查**（必做）：`./ballontrans_pylibs_win/python.exe scripts/check_syntax.py <改动的文件...>`
-   - 检查 Python 语法编译 + tab 字符 + UTF-8 BOM
-2. **i18n 检查**（涉及 UI 字符串时必做）：`./ballontrans_pylibs_win/python.exe scripts/i18n_check.py`
-   - 新增 `self.tr()` 必须在 `translate/zh_CN.ts` 对应 `<context>` 中有 `<message>`
-   - 编译：`./ballontrans_pylibs_win/python.exe scripts/qm_compile.py translate/zh_CN.ts translate/zh_CN.qm`
-3. **启动冒烟测试**（修改了 `profile_manager.py` / `configpanel.py` / `launch.py` 等初始化代码时必做）：`./ballontrans_pylibs_win/python.exe tests/test_startup_imports.py`
-   - 模拟关键导入链，捕捉 `NameError` / `ImportError`（如漏 import `QFrame`）
-   - 包含 `ProfileManagerWidget` 实例化测试（offscreen QApplication）
-4. **启动 app 目视确认**（可选，但推荐）：双击 `launch.bat` 或 `python launch.py`
-   - 确认导航、页面切换、新功能视觉效果正常
+`./ballontrans_pylibs_win/python.exe scripts/verify.py`
+
+一条命令依次跑 语法 → 文档 → i18n → qm → 冒烟；**成功每步只打一行，失败才完整打印报错（据此修复）**。各步自动判定：
+
+- **语法**：只查 git 改动涉及的 .py（`--all` 改查全部 ui/+utils/）
+- **文档**：全量校验 `AGENTS.md` 与 `docs/` 活文档里的路径/符号引用（`scripts/check_docs.py`）
+- **i18n**：全量扫描；硬编码中文/缺失条目为失败，孤儿条目降级为警告（项目大量 `canvas.tr()`/`self.tr(variable)` 间接调用是已知噪音，详见上方 i18n 说明）
+- **qm**：ts 有改动时自动编译
+- **冒烟**：改动命中启动链文件（`launch.py`/`modules/base.py`/`utils/profile_manager.py`/`ui/configpanel.py`/`ui/mainwindow.py`）时自动触发，`--smoke` 可强制
+
+需要时手动分步跑：
+
+1. **语法检查**：`./ballontrans_pylibs_win/python.exe scripts/check_syntax.py <文件...>`（支持多文件；查编译 + tab 字符 + UTF-8 BOM）
+2. **文档校验**：`./ballontrans_pylibs_win/python.exe scripts/check_docs.py`（校验 `AGENTS.md` + `docs/` 活文档的路径/符号引用）
+3. **i18n 检查**：`./ballontrans_pylibs_win/python.exe scripts/i18n_check.py`；发版前 `--ci`；`--show-expected` 列出已知孤儿
+4. **qm 编译**：`./ballontrans_pylibs_win/python.exe scripts/qm_compile.py translate/zh_CN.ts translate/zh_CN.qm`
+5. **启动冒烟测试**：`./ballontrans_pylibs_win/python.exe tests/test_startup_imports.py`（单进程约 2s；模拟关键导入链，捕捉 `NameError` / `ImportError`，含 `ProfileManagerWidget` 实例化）
+6. **启动 app 目视确认**（可选，但推荐）：双击 `launch.bat` 或 `python launch.py`，确认导航、页面切换、新功能视觉效果正常
 
 ## 快捷键系统
 
