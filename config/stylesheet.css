@@ -1314,6 +1314,19 @@ ExpandLabel[capsule="true"]::hover {
     background: @accentPrimary20;
 }
 
+QPushButton[capsule="true"] {
+    padding: 2px 8px;
+    background: rgba(128,128,128,0.08);
+    border-radius: 4px;
+    min-height: 16px;
+    border: none;
+    text-align: left;
+}
+
+QPushButton[capsule="true"]:hover {
+    background: @accentPrimary20;
+}
+
 DrawToolCheckBox::indicator {
     height: 34px;
     width: 34px;

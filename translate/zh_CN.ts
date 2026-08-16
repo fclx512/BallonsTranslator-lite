@@ -277,6 +277,26 @@
             <source>Next Page</source>
             <translation>下一页</translation>
         </message>
+        <message>
+            <location filename="..\ui\context_menu_config.py" />
+            <source>Sequence Badge</source>
+            <translation>序号徽标</translation>
+        </message>
+        <message>
+            <location filename="..\ui\context_menu_config.py" />
+            <source>Overflow Clip</source>
+            <translation>溢出裁剪</translation>
+        </message>
+        <message>
+            <location filename="..\ui\context_menu_config.py" />
+            <source>Overflow Mode</source>
+            <translation>过界模式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\context_menu_config.py" />
+            <source>Show decorations while resizing</source>
+            <translation>拖动时显示装饰</translation>
+        </message>
     </context>
     <context>
         <name>CategoryCard</name>
@@ -789,8 +809,8 @@
             <translation>网络与镜像设置...</translation>
         </message>
         <message>
-            <source>Original Compare Preset (%):</source>
-            <translation>原文对照预设 (%):</translation>
+            <source>Original Compare Preset</source>
+            <translation>原文对照预设</translation>
         </message>
         <message>
             <source>Model Loading</source>
@@ -904,11 +924,11 @@
             <source>Network</source>
             <translation>网络</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <source>Show sequence number on text blocks</source>
             <translation>在文本框上显示序号</translation>
         </message>
-        <message type="obsolete">
+        <message>
             <source>Sequence Badge</source>
             <translation>序号徽标</translation>
         </message>
@@ -926,11 +946,11 @@
         </message>
         <message>
             <source>&lt;p&gt;In vertical text, consecutive Latin letters/digits up to this length are displayed upright (&lt;b&gt;tate-chuyoko&lt;/b&gt;). &lt;code&gt;0&lt;/code&gt; disables; longer runs fall back to per-character rotation.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;竖排文本中，不超过此长度的连续拉丁字母/数字将正立横排显示（&lt;b&gt;縦中横&lt;/b&gt;）。设为 &lt;code&gt;0&lt;/code&gt; 禁用；更长的连续串回退为逐字旋转。&lt;/p&gt;</translation>
+            <translation>&lt;p&gt;竖排文本中，不超过此长度的连续拉丁字母/数字将正立横排显示（&lt;b&gt;直排内横排&lt;/b&gt;）。设为 &lt;code&gt;0&lt;/code&gt; 禁用；更长的连续串回退为逐字旋转。&lt;/p&gt;</translation>
         </message>
         <message>
             <source>Vertical Latin/Digits Length</source>
-            <translation>竖排拉丁/数字横排长度</translation>
+            <translation>直排内横排长度</translation>
         </message>
         <message>
             <source>&lt;p&gt;Configure network proxies, mirror servers, and download sources. Useful for systems behind &lt;b&gt;firewalls&lt;/b&gt; or in restricted environments.&lt;/p&gt;</source>
@@ -1088,11 +1108,11 @@
             <source>Keep existing: Preserve each block's existing font family (if set). Always use global setting: Override all blocks with the global default font family.</source>
             <translation>保留已有格式：保留每个文本块已有的字体（如有已设的字体）。始终使用全局设置：用全局默认字体覆盖所有文本块。</translation>
         </message>
-        <message>
+        <message type="obsolete">
             <source>Clip text overflow after translation</source>
             <translation>翻译后裁剪溢出文字</translation>
         </message>
-        <message type="obsolete">
+        <message>
             <source>Overflow Clip</source>
             <translation>溢出裁剪</translation>
         </message>
@@ -1375,14 +1395,17 @@ Settings → Inpainter → Photoshop Path</source>
             <source>Global Font Format</source>
             <translation>全局字体格式</translation>
         </message>
-        <message>
-            <location filename="..\ui\text_panel.py" line="362" />
-            <source>Advanced Text Format</source>
-            <translation>高级文本格式</translation>
-        </message>
-        <message>
+                <message>
             <source>Text Transform</source>
             <translation>文本变换</translation>
+        </message>
+            <message>
+            <source>Text Style</source>
+            <translation>文本样式</translation>
+        </message>
+        <message>
+            <source>Edit text style</source>
+            <translation>编辑文本样式</translation>
         </message>
     </context>
     <context>
@@ -3137,6 +3160,21 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <source>Reset all quick menus to the default layout?</source>
             <translation>将所有快捷菜单重置为默认布局？</translation>
         </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Save as Default</source>
+            <translation>保存为默认布局</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Default menu layout saved to utils/config.py.</source>
+            <translation>默认菜单布局已保存到 utils/config.py。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\pie_menu_editor.py" />
+            <source>Failed to save default layout: %1</source>
+            <translation>保存默认布局失败：%1</translation>
+        </message>
     </context>
     <context>
         <name>PageListView</name>
@@ -4005,11 +4043,11 @@ text layers are fully editable.</source>
         </message>
     </context>
     <context>
-        <name>ShadowGradientDialog</name>
+        <name>TextStyleDialog</name>
         <message>
             <location filename="..\ui\shadow_gradient_dialog.py" line="397" />
-            <source>Shadow &amp; Gradient</source>
-            <translation>阴影与渐变</translation>
+            <source>Text Style</source>
+            <translation>文本样式</translation>
         </message>
         <message>
             <location filename="..\ui\shadow_gradient_dialog.py" line="437" />
@@ -4085,7 +4123,27 @@ text layers are fully editable.</source>
             <location filename="..\ui\shadow_gradient_dialog.py" line="605" />
             <source>Gradient</source>
             <translation>渐变</translation>
+        </message>        <message>
+            <source>Basic</source>
+            <translation>基础</translation>
         </message>
+        <message>
+            <source>Opacity</source>
+            <translation>不透明度</translation>
+        </message>
+        <message>
+            <source>Line Spacing</source>
+            <translation>行距类型</translation>
+        </message>
+        <message>
+            <source>Proportional</source>
+            <translation>按比例</translation>
+        </message>
+        <message>
+            <source>Distance</source>
+            <translation>绝对距离</translation>
+        </message>
+
     </context>
     <context>
         <name>ShadowGradientPreview</name>
@@ -4373,54 +4431,6 @@ text layers are fully editable.</source>
             <location filename="..\ui\system_diagnostic_dialog.py" line="69" />
             <source>Close</source>
             <translation>关闭</translation>
-        </message>
-    </context>
-    <context>
-        <name>TextAdvancedFormatPanel</name>
-        <message>
-            <location filename="..\ui\text_advanced_format.py" line="35" />
-            <source>Set Text Opacity</source>
-            <translation>文本不透明度</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_advanced_format.py" line="40" />
-            <source>Opacity</source>
-            <translation>不透明度</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_advanced_format.py" line="54" />
-            <source>Shadow</source>
-            <translation>阴影</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_advanced_format.py" line="56" />
-            <source>Edit shadow settings</source>
-            <translation>编辑阴影设置</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_advanced_format.py" line="59" />
-            <source>Gradient</source>
-            <translation>渐变</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_advanced_format.py" line="61" />
-            <source>Edit gradient settings</source>
-            <translation>编辑渐变设置</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_advanced_format.py" line="73" />
-            <source>Proportional</source>
-            <translation>按比例</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_advanced_format.py" line="73" />
-            <source>Distance</source>
-            <translation>绝对距离</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_advanced_format.py" line="78" />
-            <source>Line Spacing</source>
-            <translation>行距类型</translation>
         </message>
     </context>
     <context>

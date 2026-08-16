@@ -14,6 +14,7 @@ from qtpy.QtGui import (
 )
 from qtpy.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -51,6 +52,7 @@ class ShadowGradientPreview(QWidget):
         self.stroke_width = 0.0
         self.stroke_color = [0, 0, 0]
         self.shadow_include_stroke = False
+        self.opacity = 1.0
         self._preview_text = "Preview"
         self._bg_color = [128, 128, 128]  # PS 50% gray default
         self.setMinimumHeight(90)
@@ -101,6 +103,7 @@ class ShadowGradientPreview(QWidget):
         stroke_width=None,
         stroke_color=None,
         shadow_include_stroke=None,
+        opacity=None,
     ):
         self.shadow_radius = shadow_radius
         self.shadow_strength = shadow_strength
@@ -119,6 +122,8 @@ class ShadowGradientPreview(QWidget):
             self.stroke_color = stroke_color
         if shadow_include_stroke is not None:
             self.shadow_include_stroke = shadow_include_stroke
+        if opacity is not None:
+            self.opacity = opacity
         self.update()
 
     def paintEvent(self, event):
@@ -181,9 +186,11 @@ class ShadowGradientPreview(QWidget):
             shadow_pm, _ = apply_shadow_effect(
                 shadow_src_pm, self.shadow_color, self.shadow_strength, r
             )
+            p.setOpacity(self.opacity)
             p.drawPixmap(ox + sx, oy + sy, shadow_pm)
 
         # gradient or flat color text (always with stroke for display)
+        p.setOpacity(self.opacity)
         p.drawPixmap(ox, oy, display_pm)
 
         p.end()
@@ -376,21 +383,24 @@ class GradientBar(QWidget):
             self.update()
 
 
-class ShadowGradientDialog(QDialog):
-    """PS-style dialog for shadow and gradient settings with live preview."""
+_last_tab_index = 0  # remember last-used tab across dialog invocations
 
-    applied = Signal(dict, dict)
+
+class TextStyleDialog(QDialog):
+    """PS-style unified dialog for text style: opacity, line spacing, shadow, gradient."""
+
+    applied = Signal(dict, dict, dict)
 
     def __init__(
         self,
         font_format: FontFormat,
-        tab="shadow",
+        tab="basic",
         text_color=None,
         shadow_include_stroke=None,
         parent=None,
     ):
         super().__init__(parent)
-        self.setWindowTitle(self.tr("Shadow & Gradient"))
+        self.setWindowTitle(self.tr("Text Style"))
         self.setFixedSize(520, 520)
 
         self._shadow_color = list(font_format.shadow_color)
@@ -416,9 +426,13 @@ class ShadowGradientDialog(QDialog):
 
         # tabs
         self.tabs = QTabWidget()
+        self._setup_basic_tab(fmt)
         self._setup_shadow_tab(fmt)
         self._setup_gradient_tab(fmt)
-        self.tabs.setCurrentIndex(0 if initial_tab == "shadow" else 1)
+        tab_idx = {"basic": 0, "shadow": 1, "gradient": 2}.get(
+            initial_tab, _last_tab_index
+        )
+        self.tabs.setCurrentIndex(tab_idx)
         self.tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tabs)
 
@@ -443,6 +457,39 @@ class ShadowGradientDialog(QDialog):
         btn_layout.addWidget(cancel_btn)
         btn_layout.addWidget(apply_btn)
         layout.addLayout(btn_layout)
+
+    def _setup_basic_tab(self, fmt: FontFormat):
+        page = QWidget()
+        vlayout = QVBoxLayout(page)
+        vlayout.setSpacing(8)
+
+        # opacity — reuses the configurable opacity_presets dropdown
+        op_row = QHBoxLayout()
+        op_row.addWidget(QLabel(self.tr("Opacity")))
+        self.opacity_combo = QComboBox()
+        from utils import config as C
+
+        self.opacity_combo.addItems([str(v) for v in C.pcfg.opacity_presets])
+        self._set_opacity(fmt.opacity)
+        self.opacity_combo.currentIndexChanged.connect(self._update_preview)
+        op_row.addWidget(self.opacity_combo)
+        op_row.addStretch()
+        vlayout.addLayout(op_row)
+
+        # line spacing type
+        ls_row = QHBoxLayout()
+        ls_row.addWidget(QLabel(self.tr("Line Spacing")))
+        self.linespacing_combo = QComboBox()
+        self.linespacing_combo.addItems(
+            [self.tr("Proportional"), self.tr("Distance")]
+        )
+        self.linespacing_combo.setCurrentIndex(fmt.line_spacing_type)
+        ls_row.addWidget(self.linespacing_combo)
+        ls_row.addStretch()
+        vlayout.addLayout(ls_row)
+
+        vlayout.addStretch()
+        self.tabs.addTab(page, self.tr("Basic"))
 
     def _setup_shadow_tab(self, fmt: FontFormat):
         page = QWidget()
@@ -662,6 +709,8 @@ class ShadowGradientDialog(QDialog):
         self._update_preview()
 
     def _on_tab_changed(self, idx):
+        global _last_tab_index
+        _last_tab_index = idx
         self._update_preview()
 
     # ── Preview ─────────────────────────────────────────────
@@ -681,9 +730,35 @@ class ShadowGradientDialog(QDialog):
             stroke_width=self._stroke_width,
             stroke_color=self._stroke_color,
             shadow_include_stroke=self.include_stroke_cb.isChecked(),
+            opacity=self._opacity(),
         )
 
     # ── Result accessors ────────────────────────────────────
+
+    def _opacity(self):
+        from utils import config as C
+
+        presets = C.pcfg.opacity_presets
+        return presets[self.opacity_combo.currentIndex()] if presets else 1.0
+
+    def _set_opacity(self, value):
+        from utils import config as C
+
+        presets = C.pcfg.opacity_presets
+        if not presets:
+            return
+        idx, best = 0, abs(presets[0] - value)
+        for i, v in enumerate(presets):
+            d = abs(v - value)
+            if d < best:
+                best, idx = d, i
+        self.opacity_combo.setCurrentIndex(idx)
+
+    def get_basic_params(self) -> dict:
+        return {
+            "opacity": self._opacity(),
+            "line_spacing_type": self.linespacing_combo.currentIndex(),
+        }
 
     def get_shadow_params(self) -> dict:
         return {
@@ -706,7 +781,11 @@ class ShadowGradientDialog(QDialog):
     # ── Buttons ─────────────────────────────────────────────
 
     def _on_apply(self):
-        self.applied.emit(self.get_shadow_params(), self.get_gradient_params())
+        self.applied.emit(
+            self.get_basic_params(),
+            self.get_shadow_params(),
+            self.get_gradient_params(),
+        )
 
     def _on_ok(self):
         self.accept()

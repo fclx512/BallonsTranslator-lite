@@ -212,16 +212,26 @@ DEFAULT_PIE_MENUS = [
         "id": "edit",
         "name": "Editing",
         "trigger": "Tab",
-        "sectors": 6,
+        "sectors": 8,
         "layout": "ring",
         "slots": [
-            ["copy"],                            # 0 top
-            ["paste"],                           # 1 upper-right
-            ["delete"],                          # 2 lower-right
-            ["merge"],                           # 3 bottom
-            ["reset_angle", "squeeze"],          # 4 lower-left
-            ["copy_src", "paste_src"],           # 5 upper-left
+            ["copy", "copy_src"],
+            ["paste", "paste_src"],
+            ["delete"],
+            ["drag_decorations"],
+            ["snap_alignment", "seq_badge", "clip_overflow"],
+            [],
+            [],
+            []
         ],
+        "direction": "right",
+        "panels": [
+            ["copy", "copy_src"],
+            ["paste", "paste_src"],
+            ["delete"],
+            ["drag_decorations"],
+            ["snap_alignment", "seq_badge", "clip_overflow"]
+        ]
     },
     {
         "id": "align",
@@ -230,9 +240,23 @@ DEFAULT_PIE_MENUS = [
         "sectors": 8,
         "layout": "ring",
         "slots": [
-            ["align_top"], ["align_right"], ["align_vcenter"], ["align_bottom"],
-            ["reset_angle"], ["align_left"], ["align_hcenter"], ["squeeze"],
+            ["align_top", "align_bottom"],
+            ["align_vcenter", "align_hcenter"],
+            ["align_right"],
+            [],
+            ["align_bottom"],
+            ["merge"],
+            ["align_left"],
+            ["reset_angle", "squeeze"]
         ],
+        "direction": "right",
+        "panels": [
+            ["align_top", "align_bottom"],
+            ["align_vcenter", "align_hcenter"],
+            ["align_right"],
+            [],
+            ["align_bottom"]
+        ]
     },
     {
         "id": "pipeline",
@@ -241,12 +265,20 @@ DEFAULT_PIE_MENUS = [
         "sectors": 4,
         "layout": "ring",
         "slots": [
-            ["ocr_translate"],                   # 0 top
-            ["ocr"],                             # 1 right
-            ["translate"],                       # 2 bottom
-            ["ocr_translate_inpaint"],           # 3 left
+            [],
+            [],
+            [],
+            ["ocr_translate_inpaint", "ocr_translate", "ocr"]
         ],
-    },
+        "direction": "right",
+        "panels": [
+            [],
+            [],
+            [],
+            [],
+            []
+        ]
+    }
 ]
 
 

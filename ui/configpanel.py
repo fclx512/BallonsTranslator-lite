@@ -1814,16 +1814,25 @@ class ConfigPanel(Widget):
         self.halfwidth_horizontal_checker.setEnabled(
             pcfg.halfwidth_jp_corner_brackets
         )
+        self.halfwidth_horizontal_checker.setVisible(
+            pcfg.halfwidth_jp_corner_brackets
+        )
         self.halfwidth_horizontal_checker.stateChanged.connect(
             self.on_halfwidth_corner_bracket_horizontal_changed
         )
         halfwidth_horizontal_wrapper = QWidget()
-        # Align with the control column of ConfigFormRow (16 margin + 110 label + 8 spacing)
-        halfwidth_horizontal_wrapper.setContentsMargins(134, 0, 0, 4)
+        # Indent the sub-option under the parent's control column
+        # (16 margin + 110 label + 8 spacing = 134) plus a 24px hierarchy
+        # indent so it reads as a child row. Margins must go on the layout,
+        # not the widget, or they are lost before the layout exists.
         hw_layout = QHBoxLayout(halfwidth_horizontal_wrapper)
-        hw_layout.setContentsMargins(0, 0, 0, 0)
+        hw_layout.setContentsMargins(158, 0, 0, 4)
         hw_layout.addWidget(self.halfwidth_horizontal_checker)
         hw_layout.addStretch()
+        self._halfwidth_horizontal_sublock = halfwidth_horizontal_wrapper
+        halfwidth_horizontal_wrapper.setVisible(
+            pcfg.halfwidth_jp_corner_brackets
+        )
         ts_layout.addWidget(halfwidth_horizontal_wrapper)
 
         # Vertical Latin/Digits Length (tate-chuyoko)
@@ -1844,6 +1853,8 @@ class ConfigPanel(Widget):
 
         self.exclude_fonts_btn = QPushButton(self.tr("Exclude Fonts..."), parent=self)
         self.exclude_fonts_btn.setObjectName("ConfigButton")
+        # Match the max-font-size spinbox width below for a uniform column
+        self.exclude_fonts_btn.setFixedWidth(CONFIG_COMBOBOX_SHORT)
         self.exclude_fonts_btn.clicked.connect(self.on_exclude_fonts_clicked)
         ts_layout.addWidget(
             ConfigFormRow(
@@ -1947,10 +1958,16 @@ class ConfigPanel(Widget):
         self.fit_window_page_checker.setVisible(False)
         self._fit_page_sublock = ConfigFormRow("", self.fit_window_page_checker)
         self._fit_page_sublock.setVisible(False)
-        interface_layout.addWidget(self._fit_page_sublock)
+        # Same 24px hierarchy indent as the half-width bracket sub-option
+        fit_sublock_wrapper = QWidget()
+        fsl_layout = QVBoxLayout(fit_sublock_wrapper)
+        fsl_layout.setContentsMargins(24, 0, 0, 0)
+        fsl_layout.addWidget(self._fit_page_sublock)
+        self._fit_page_sublock_wrapper = fit_sublock_wrapper
+        interface_layout.addWidget(fit_sublock_wrapper)
 
         self.seq_badge_checker = ConfigCheckBox(
-            self.tr("Show sequence number on text blocks")
+            self.tr("Sequence Badge")
         )
         self.seq_badge_checker.setChecked(pcfg.show_seq_badge)
         self.seq_badge_checker.stateChanged.connect(self.on_seq_badge_changed)
@@ -1963,7 +1980,7 @@ class ConfigPanel(Widget):
         )
 
         self.clip_overflow_checker = ConfigCheckBox(
-            self.tr("Clip text overflow after translation")
+            self.tr("Overflow Clip")
         )
         self.clip_overflow_checker.setChecked(pcfg.clip_text_overflow)
         self.clip_overflow_checker.stateChanged.connect(self.on_clip_overflow_changed)
@@ -2000,7 +2017,7 @@ class ConfigPanel(Widget):
         )
         interface_layout.addWidget(
             ConfigFormRow(
-                self.tr("Original Compare Preset (%):"),
+                self.tr("Original Compare Preset"),
                 self.orig_opacity_toggle_spin,
                 note=self.tr("<p>Background opacity level when using the <b>Original Compare</b> shortcut. Lower values show more of the original image beneath the translation.</p>"),
             )
@@ -2237,7 +2254,9 @@ class ConfigPanel(Widget):
         checked = self.fit_window_checker.isChecked()
         pcfg.open_image_fit_window = checked
         self.fit_window_page_checker.setVisible(checked)
+        self.fit_window_page_checker.setEnabled(checked)
         self._fit_page_sublock.setVisible(checked)
+        self._fit_page_sublock_wrapper.setVisible(checked)
 
     def on_fit_window_page_changed(self):
         pcfg.fit_window_on_page_switch = self.fit_window_page_checker.isChecked()
@@ -2528,8 +2547,10 @@ class ConfigPanel(Widget):
 
     def on_halfwidth_corner_bracket_changed(self, state: int):
         pcfg.halfwidth_jp_corner_brackets = bool(state)
-        # Enable/disable the horizontal sub-option
+        # Hide and disable the horizontal sub-option when the parent is off
         self.halfwidth_horizontal_checker.setEnabled(bool(state))
+        self.halfwidth_horizontal_checker.setVisible(bool(state))
+        self._halfwidth_horizontal_sublock.setVisible(bool(state))
         self._apply_halfwidth_corner_bracket_settings()
 
     def on_halfwidth_corner_bracket_horizontal_changed(self, state: int):

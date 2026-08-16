@@ -340,10 +340,12 @@ _reg(CmdDef("redo", "Redo",
     hidden_in_customize=True))
 
 # --- View actions (pie-menu pool only) ---
+# fit_window dropped from the palette (2026-08-15): it only rescales to the
+# viewport size, which the user found useless.  Stays registered so menus
+# saved before the change keep triggering it.
 _reg(CmdDef("fit_window", "Fit to Window",
     run_fn=lambda mw: mw.canvas.fitToWindow(),
-    hidden_in_customize=True,
-    category=CAT_VIEW))
+    hidden_in_customize=True))
 
 # Zoom / page navigation stay registered for existing configs but are no
 # longer offered in the palette (wheel / Ctrl+wheel / PgUp / PgDn cover them).
@@ -377,6 +379,61 @@ def _snap_alignment_checked(mw) -> bool:
 _reg(CmdDef("snap_alignment", "Snap Alignment",
     run_fn=_snap_alignment_run,
     checked_fn=_snap_alignment_checked,
+    is_toggle=True,
+    hidden_in_customize=True,
+    category=CAT_TOGGLE))
+
+
+# --- Canvas display toggles (checkbox commands, pie palette only) ---
+# These mirror the titlebar View-menu actions / settings-panel checkboxes;
+# reusing the MainWindow handlers keeps the checkbox states in sync.
+def _seq_badge_run(mw):
+    mw.on_seq_badge_menu_toggled(not pcfg.show_seq_badge)
+
+
+def _clip_overflow_run(mw):
+    mw.on_clip_overflow_menu_toggled(not pcfg.clip_text_overflow)
+
+
+def _overflow_mode_run(mw):
+    mw.on_overflow_triggered(not pcfg.overflow_mode)
+
+
+def _drag_decorations_run(mw):
+    checked = not pcfg.show_decorations_during_drag
+    pcfg.show_decorations_during_drag = checked
+    panel = getattr(mw, "configPanel", None)
+    checker = getattr(panel, "drag_decorations_checker", None)
+    if checker is not None:
+        checker.blockSignals(True)
+        checker.setChecked(checked)
+        checker.blockSignals(False)
+
+
+_reg(CmdDef("seq_badge", "Sequence Badge",
+    run_fn=_seq_badge_run,
+    checked_fn=lambda mw: bool(pcfg.show_seq_badge),
+    is_toggle=True,
+    hidden_in_customize=True,
+    category=CAT_TOGGLE))
+
+_reg(CmdDef("clip_overflow", "Overflow Clip",
+    run_fn=_clip_overflow_run,
+    checked_fn=lambda mw: bool(pcfg.clip_text_overflow),
+    is_toggle=True,
+    hidden_in_customize=True,
+    category=CAT_TOGGLE))
+
+_reg(CmdDef("overflow_mode", "Overflow Mode",
+    run_fn=_overflow_mode_run,
+    checked_fn=lambda mw: bool(pcfg.overflow_mode),
+    is_toggle=True,
+    hidden_in_customize=True,
+    category=CAT_TOGGLE))
+
+_reg(CmdDef("drag_decorations", "Show decorations while resizing",
+    run_fn=_drag_decorations_run,
+    checked_fn=lambda mw: bool(pcfg.show_decorations_during_drag),
     is_toggle=True,
     hidden_in_customize=True,
     category=CAT_TOGGLE))

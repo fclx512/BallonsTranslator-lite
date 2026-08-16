@@ -794,8 +794,6 @@ class MainWindow(mainwindow_cls):
 
     def _on_presets_changed(self):
         self.textPanel.formatpanel.reload_presets()
-        if hasattr(self.textPanel.formatpanel, "textadvancedfmt_panel"):
-            self.textPanel.formatpanel.textadvancedfmt_panel.reload_presets()
 
     def _on_seq_badge_changed(self):
         """Force canvas text items to repaint so seq badge appears/disappears."""

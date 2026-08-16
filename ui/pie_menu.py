@@ -35,7 +35,9 @@ trigger key, Esc) while it is open.
 
 from math import atan2, cos, hypot, pi, radians, sin
 
-from qtpy.QtCore import QCoreApplication, QElapsedTimer, QEvent, QMimeData, QPoint, QPointF, QRectF, Qt, Signal
+from qtpy.QtCore import (QCoreApplication, QEasingCurve, QElapsedTimer,
+                         QEvent, QMimeData, QPoint, QPointF, QRectF, Qt,
+                         QTimer, Signal)
 from qtpy.QtGui import QColor, QDrag, QFontMetrics, QPainter, QPainterPath, QPen
 from qtpy.QtWidgets import QApplication, QWidget
 
@@ -88,12 +90,15 @@ LIST_PANEL_MAX_ITEMS = 3      # rows per panel (matches SECTOR_MAX_CARDS)
 # panels far from the pointer — a ring can be aimed by direction, a vertical
 # list needs direct pointer travel.  Lateral panel left edge sits
 # LIST_ANCHOR_GAP_X right of the cursor (vertically centered); the diagonal
-# panels inset LIST_DIAG_INSET further left and clear the lateral panel
-# vertically by LIST_ANCHOR_GAP_Y (computed from its actual height, so the
-# three panels never overlap whatever their row counts).
+# panels inset LIST_DIAG_INSET further left and the poles LIST_POLE_INSET,
+# so the five panels sweep a ring-like arc (10 / 5 / 0 px from the cursor).
+# The diagonal panels clear the lateral panel vertically by LIST_ANCHOR_GAP_Y
+# (computed from its actual height, so the panels never overlap whatever
+# their row counts).
 LIST_ANCHOR_GAP_X = 10.0      # cursor -> lateral panel left edge
 LIST_ANCHOR_GAP_Y = 6.0       # vertical clearance: diagonal vs lateral panel
-LIST_DIAG_INSET = 10.0        # diagonal panels inset left of the lateral one
+LIST_DIAG_INSET = 5.0         # diagonal panels inset from the lateral one
+LIST_POLE_INSET = 10.0        # pole panels inset further (ring-like arc)
 LIST_PANEL_RADIUS = 6.0       # outer corner radius of a panel
 LIST_ROW_H = 26.0             # single command row height
 LIST_PAD_X = 14.0             # horizontal padding inside a panel
@@ -102,8 +107,59 @@ LIST_MIN_W = 120.0            # panel width floor (short labels)
 LIST_MAX_W = 240.0            # panel width cap (longer labels elide)
 LIST_MARGIN = 8.0             # transparent margin around the panel bbox
 
+# ── Ring-card text width & menu pop-in animation ────────────
+# Long labels (English UI) cap the ring-card width at the same value as the
+# list panels (LIST_MAX_W) so pipeline names like "OCR and translate" stay
+# fully visible; only longer labels elide, and the hovered card expands
+# with a short animation to its full width (drawn last, on top — decision
+# 2026-08-14).  The menu itself pops in with a fade + slight scale.  Both
+# animations skip when ``pcfg.animation_fps < 0`` (project convention).
+CARD_MAX_W = 240.0      # ring-card width cap (== list panel cap); longer labels elide until hovered
+CARD_ANIM_MS = 140      # hover expand / collapse duration (ms)
+OPEN_ANIM_MS = 140      # menu pop-in duration (ms)
+OPEN_SCALE_FROM = 0.92  # pop-in starts slightly scaled down
+
 # ts context used for pie-menu display names (defaults are tr keys).
 PIE_MENU_TR_CONTEXT = "PieMenu"
+
+
+def _anim_interval() -> int:
+    """Frame interval (ms) honoring ``pcfg.animation_fps``, else 16 ms
+    (60 fps) — same convention as overlay_modal._detect_interval."""
+    fps = pcfg.animation_fps
+    if fps > 0:
+        return int(round(1000.0 / fps))
+    try:
+        from qtpy.QtGui import QGuiApplication
+
+        app = QGuiApplication.instance()
+        if app is None:
+            return 16
+        screens = app.screens()
+        if not screens:
+            return 16
+        hz = screens[0].refreshRate()
+        if hz <= 0:
+            return 16
+        return max(16, int(round(1000.0 / (hz + 10))))
+    except Exception:
+        return 16
+
+
+def _elide_fitting(fm: QFontMetrics, label: str, avail: float) -> str:
+    """Return *label* unchanged when it fits within *avail*, else an
+    ElideRight copy.  Eliding at exactly the measured width is not safe:
+    on fonts whose real (fractional) advance rounds down (e.g. 9pt
+    Microsoft YaHei) ``elidedText`` truncates a label that fits — "OCR"
+    became "O…" — so the fit check uses the same integer advance and only
+    elides on a genuine overflow.
+    """
+    if not label:
+        return label
+    if fm.horizontalAdvance(label) <= avail:
+        return label
+    return fm.elidedText(label, Qt.TextElideMode.ElideRight,
+                         max(0, int(avail)))
 
 
 def normalize_pie_menu(menu) -> dict:
@@ -274,6 +330,19 @@ class PieMenu(QWidget):
         self._selected = None    # (sector, idx) clicked card in edit mode
         self._press_pos = None
         self._press_hit = None
+        # Animation state — hover card expand/collapse + menu pop-in
+        # (skipped when ``pcfg.animation_fps < 0``, see module constants).
+        self._card_progress: dict = {}   # (sector, idx) -> 0..1 expand progress
+        self._card_anim: dict = {}       # (sector, idx) -> (start, target, t0)
+        self._open_progress = 1.0        # 0..1 pop-in (runtime menus only)
+        self._open_anim = None           # (start, target, t0) or None
+        self._anim_timer = QTimer(self)
+        self._anim_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._anim_timer.timeout.connect(self._tick_anim)
+        self._anim_elapsed = QElapsedTimer()
+        self._card_easing = QEasingCurve(QEasingCurve.Type.OutCubic)
+        self._open_easing = QEasingCurve(QEasingCurve.Type.OutCubic)
+        self._anim_interval = _anim_interval()
         self.set_menu_config(None)
 
     # ── State machine ──────────────────────────────────────
@@ -283,6 +352,7 @@ class PieMenu(QWidget):
         if self._state != "hidden":
             self.cancel()
         self._hover = None
+        self._reset_anim()
         if self._is_list():
             self._move_list_at(global_pos)
         else:
@@ -291,6 +361,7 @@ class PieMenu(QWidget):
         self.raise_()
         self._state = "holding"
         self._press_timer.start()
+        self._start_open_anim()
 
     def _move_list_at(self, global_pos: QPoint):
         """Place the panel window so the cursor lands on its anchor point,
@@ -320,6 +391,9 @@ class PieMenu(QWidget):
             return
         self._state = "hidden"
         self.hide()
+        self._anim_timer.stop()
+        self._card_anim.clear()
+        self._open_anim = None
         self.canceled.emit()
 
     def is_open(self) -> bool:
@@ -345,6 +419,8 @@ class PieMenu(QWidget):
         self._sector_data = menu["slots"]
         self._list_panels = menu["panels"]
         self._hover = None
+        self._card_progress.clear()
+        self._card_anim.clear()
         if self._is_list():
             self._relayout_list()
         self._sync_fixed_size()
@@ -397,16 +473,17 @@ class PieMenu(QWidget):
         h_lat = heights[2]
         x_lat = LIST_ANCHOR_GAP_X
         x_diag = max(0.0, LIST_ANCHOR_GAP_X - LIST_DIAG_INSET)
+        x_pole = max(0.0, LIST_ANCHOR_GAP_X - LIST_POLE_INSET)
         y_ud = -h_lat / 2.0 - LIST_ANCHOR_GAP_Y - heights[1]   # upper-diag top
         y_tp = y_ud - LIST_ANCHOR_GAP_Y - heights[0]           # top top
         y_ld = h_lat / 2.0 + LIST_ANCHOR_GAP_Y                 # lower-diag top
         y_bt = y_ld + heights[3] + LIST_ANCHOR_GAP_Y           # bottom top
         rects = [
-            QRectF(x_diag, y_tp, w, heights[0]),               # 0 top
+            QRectF(x_pole, y_tp, w, heights[0]),               # 0 top pole
             QRectF(x_diag, y_ud, w, heights[1]),               # 1 upper-diagonal
             QRectF(x_lat, -h_lat / 2.0, w, h_lat),             # 2 lateral
             QRectF(x_diag, y_ld, w, heights[3]),               # 3 lower-diagonal
-            QRectF(x_diag, y_bt, w, heights[4]),               # 4 bottom
+            QRectF(x_pole, y_bt, w, heights[4]),               # 4 bottom pole
         ]
         if left_dir:
             rects = [QRectF(-r.x() - r.width(), r.y(), r.width(), r.height())
@@ -525,13 +602,21 @@ class PieMenu(QWidget):
         return bx, by
 
     def _card_rect(self, sector: int, idx: int, fm: QFontMetrics) -> QRectF:
-        """Axis-aligned bounding rect of a card in widget-local coordinates."""
+        """Axis-aligned bounding rect of a card in widget-local coordinates.
+
+        Width follows the hover expand animation: capped at ``CARD_MAX_W``,
+        then interpolated toward the full label width as the progress goes
+        to 1.0 (short labels never exceed the cap, so they never animate).
+        """
         cmd_id = self._slot_at(sector, idx)
         label = self._label_for(cmd_id) if cmd_id else ""
         text_w = fm.horizontalAdvance(label)
         num_w = fm.horizontalAdvance(str(sector + 1)) + NUM_WIDTH_EXTRA
         toggle_w = CHECKBOX_SIZE + CHECKBOX_GAP if self._is_toggle_cmd(cmd_id) else 0.0
-        cw = 2 * CARD_PAD_X + text_w + 2 * NUM_MARGIN + num_w + toggle_w
+        full_w = 2 * CARD_PAD_X + text_w + 2 * NUM_MARGIN + num_w + toggle_w
+        capped = min(full_w, CARD_MAX_W)
+        p = self._card_progress.get((sector, idx), 0.0)
+        cw = capped + (full_w - capped) * p
         ch = fm.height() + 2 * CARD_PAD_Y
         cx, cy = self._card_center(sector, idx, ch)
         # The transparent window edge clips silently — keep cards fully inside.
@@ -591,8 +676,78 @@ class PieMenu(QWidget):
             if not cmd_id or not self._cmd_available(cmd_id):
                 hit = None
         if hit != self._hover:
+            old = self._hover
             self._hover = hit
+            # Hover expand animation: the old card collapses, the new one
+            # expands to its full width (see CARD_MAX_W).
+            if old is not None:
+                self._set_card_progress(old, 0.0)
+            if hit is not None:
+                self._set_card_progress(hit, 1.0)
             self.update()
+
+    # ── Animation (hover expand + pop-in; ``pcfg.animation_fps < 0`` skips) ──
+
+    def _reset_anim(self):
+        """Clear all animation state on a menu (re)open."""
+        self._anim_timer.stop()
+        self._card_progress.clear()
+        self._card_anim.clear()
+        self._open_progress = 1.0
+        self._open_anim = None
+
+    def _start_open_anim(self):
+        """Pop the menu in from transparent / slightly scaled (runtime only)."""
+        if pcfg.animation_fps < 0:
+            self._open_progress = 1.0
+            return
+        self._open_progress = 0.0
+        self._ensure_anim_timer()
+        self._open_anim = (0.0, 1.0, self._anim_elapsed.elapsed())
+
+    def _set_card_progress(self, key, target):
+        """Animate a card's expand progress toward *target* (0 = capped, 1 = full)."""
+        cur = self._card_progress.get(key, 0.0)
+        if cur == target:
+            return
+        if pcfg.animation_fps < 0:
+            self._card_progress[key] = target
+            return
+        self._ensure_anim_timer()
+        self._card_anim[key] = (cur, target, self._anim_elapsed.elapsed())
+
+    def _ensure_anim_timer(self):
+        """Start the shared frame driver unless something already runs it."""
+        if not self._anim_timer.isActive():
+            self._anim_elapsed.start()
+            self._anim_timer.start(self._anim_interval)
+
+    def _tick_anim(self):
+        """Advance every running animation by elapsed time, then repaint."""
+        now = self._anim_elapsed.elapsed()
+        animating = False
+        for key, (start, target, t0) in list(self._card_anim.items()):
+            p = min((now - t0) / CARD_ANIM_MS, 1.0)
+            if p >= 1.0:
+                self._card_progress[key] = target
+                del self._card_anim[key]
+            else:
+                self._card_progress[key] = start + (target - start) \
+                    * self._card_easing.valueForProgress(p)
+                animating = True
+        if self._open_anim is not None:
+            start, target, t0 = self._open_anim
+            p = min((now - t0) / OPEN_ANIM_MS, 1.0)
+            if p >= 1.0:
+                self._open_progress = target
+                self._open_anim = None
+            else:
+                self._open_progress = start + (target - start) \
+                    * self._open_easing.valueForProgress(p)
+                animating = True
+        self.update()
+        if not animating:
+            self._anim_timer.stop()
 
     def _commit(self):
         """Release-commit: trigger the hovered item, or cancel (center/disabled)."""
@@ -608,6 +763,9 @@ class PieMenu(QWidget):
     def _trigger(self, cmd_id: str):
         self._state = "hidden"
         self.hide()
+        self._anim_timer.stop()
+        self._card_anim.clear()
+        self._open_anim = None
         self.command_triggered.emit(cmd_id)
 
     # ── Preview mode (config editor) ─────────────────────────
@@ -868,15 +1026,21 @@ class PieMenu(QWidget):
     # ── Painting ───────────────────────────────────────────
 
     def _card_palette(self, dark):
-        """Shared card colors for both layouts (dark/light theme)."""
+        """Shared card colors for both layouts (dark/light theme).
+
+        Cards are fully opaque (2026-08-16): the menu is a transient
+        overlay, so letting the canvas bleed through only hurt label
+        readability on light backgrounds.  The center ring and numbers
+        stay translucent.
+        """
         if dark:
             ring_c = QColor(130, 135, 150, 220)
-            card_bg = QColor(55, 58, 70, 200)
+            card_bg = QColor(55, 58, 70, 255)
             number_c = QColor(255, 255, 255, 140)
             border_c = QColor(255, 255, 255, 70)
         else:
             ring_c = QColor(100, 105, 120, 160)
-            card_bg = QColor(255, 255, 255, 235)
+            card_bg = QColor(255, 255, 255, 255)
             number_c = QColor(0, 0, 0, 120)
             border_c = QColor(0, 0, 0, 55)
         text_c = get_theme_color(key="@textColor")
@@ -886,6 +1050,16 @@ class PieMenu(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        # Pop-in animation: fade + slight scale from the window center
+        # (runtime menus only — the editor preview never runs it).
+        if self._open_progress < 1.0:
+            painter.setOpacity(self._open_progress)
+            s = OPEN_SCALE_FROM + (1.0 - OPEN_SCALE_FROM) * self._open_progress
+            wc = (self._list_w if self._is_list() else 2 * WINDOW_RADIUS) / 2.0
+            hc = (self._list_h if self._is_list() else 2 * WINDOW_RADIUS) / 2.0
+            painter.translate(wc, hc)
+            painter.scale(s, s)
+            painter.translate(-wc, -hc)
         if self._preview_scale != 1.0:
             painter.scale(self._preview_scale, self._preview_scale)
         if self._is_list():
@@ -964,13 +1138,15 @@ class PieMenu(QWidget):
                      number_c, accent_c):
         """Draw all sector cards.
 
-        The hovered card is drawn *last* so it sits on top: a long label
-        whose card collides with a neighbouring sector's stack stays fully
+        Layering follows the card index: a lower index sits on top of a
+        higher one when cards overlap (layer 1 > layer 2, decision
+        2026-08-16), so each sector stack draws from the last card up.
+        The hovered card is drawn *last* so it always stays fully
         readable while the cursor is on it (decision 2026-08-14).
         """
         hovered = self._hover
         for sector in range(self._sector_count):
-            for idx in range(len(self._sector_data[sector])):
+            for idx in range(len(self._sector_data[sector]) - 1, -1, -1):
                 if (sector, idx) != hovered:
                     self._paint_card(painter, sector, idx, fm, card_bg,
                                      card_border, text_c, number_c, accent_c)
@@ -1012,6 +1188,15 @@ class PieMenu(QWidget):
 
         label = self._label_for(cmd_id)
         number = str(sector + 1)
+        num_w = fm.horizontalAdvance(number) + NUM_WIDTH_EXTRA
+        toggle_w = CHECKBOX_SIZE + CHECKBOX_GAP if self._is_toggle_cmd(cmd_id) else 0.0
+        # Elide only when the label really overflows the card's content
+        # width (see _elide_fitting); the cap then only cuts labels that
+        # are genuinely longer than CARD_MAX_W, and the fully-expanded
+        # hovered card keeps its whole label.
+        label = _elide_fitting(
+            fm, label,
+            rect.width() - 2 * CARD_PAD_X - 2 * NUM_MARGIN - num_w - toggle_w)
 
         if hovered:
             tcolor = HOVER_TEXT_COLOR
@@ -1037,7 +1222,6 @@ class PieMenu(QWidget):
         painter.drawText(QPointF(label_x, baseline), label)
 
         # sector number (right-aligned)
-        num_w = fm.horizontalAdvance(number) + NUM_WIDTH_EXTRA
         num_x = rect.x() + rect.width() - CARD_PAD_X - num_w
         painter.setPen(QPen(ncolor))
         painter.drawText(QPointF(num_x, baseline), number)
@@ -1097,7 +1281,7 @@ class PieMenu(QWidget):
         outer.arcTo(
             QRectF(center.x() - outer_r, center.y() - outer_r,
                    2 * outer_r, 2 * outer_r),
-            start_deg, 45.0,
+            start_deg, span,   # sweep follows the sector count (4/6/8)
         )
         outer.closeSubpath()
         inner = QPainterPath()
@@ -1170,9 +1354,8 @@ class PieMenu(QWidget):
                     painter.drawRoundedRect(
                         row_rect.adjusted(2, 2, -2, -2), 3.0, 3.0)
 
-                label = fm.elidedText(self._label_for(cmd_id),
-                                      Qt.TextElideMode.ElideRight,
-                                      max_text_w - toggle_w)
+                label = _elide_fitting(fm, self._label_for(cmd_id),
+                                       max_text_w - toggle_w)
                 baseline = (row_rect.y() + (row_rect.height() - fm.height())
                             / 2 + fm.ascent())
                 label_x = row_rect.x() + LIST_PAD_X

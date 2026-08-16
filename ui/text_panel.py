@@ -27,7 +27,7 @@ from .custom_widget import (
     SizeControlLabel,
     Widget,
 )
-from .text_advanced_format import TextAdvancedFormatPanel
+from .text_advanced_format import TextStyleEntryButton
 from .text_style_presets import TextStylePresetPanel
 from .text_engine.transforms.editor import TextTransformEditSession
 from .text_engine.transforms.panel import TextTransformPanel
@@ -322,20 +322,11 @@ class FontFormatPanel(Widget):
             self.on_active_stylename_edited
         )
 
-        self.textadvancedfmt_panel = TextAdvancedFormatPanel(
-            self.tr("Advanced Text Format"),
-            config_name="text_advanced_format_panel",
-            config_expand_name="expand_tadvanced_panel",
-            title_capsule=True,
-            on_format_changed=self.on_param_changed,
-        )
-        # wire shadow/gradient trigger buttons to open the dialog
-        self.textadvancedfmt_panel.shadow_btn.clicked.connect(
-            self._on_shadow_btn_clicked
-        )
-        self.textadvancedfmt_panel.gradient_btn.clicked.connect(
-            self._on_gradient_btn_clicked
-        )
+        # Unified text style entry — opens the Text Style dialog (opacity,
+        # line spacing, shadow, gradient). Replaces the old inline panel.
+        self.text_style_btn = TextStyleEntryButton(self.tr("Text Style"))
+        self.text_style_btn.setToolTip(self.tr("Edit text style"))
+        self.text_style_btn.clicked.connect(self._on_text_style_btn_clicked)
 
         # Text transform panel (stage 5 node H) — owned by the same session
         # that talks to the scene controls; the panel is only its UI front.
@@ -353,13 +344,11 @@ class FontFormatPanel(Widget):
         # (keep the panels functional; prevent accidental hide via View menu)
         for cfg in [
             "show_text_style_preset",
-            "text_advanced_format_panel",
             "text_transform_panel",
         ]:
             shared.config_name_to_view_widget.pop(cfg, None)
         for p in [
             self.textstyle_panel,
-            self.textadvancedfmt_panel,
             self.texttransform_panel,
         ]:
             hl = p.view_widget.title_label.hidelabel
@@ -374,7 +363,8 @@ class FontFormatPanel(Widget):
 
         vl0 = QVBoxLayout()
         vl0.addWidget(self.textstyle_panel.view_widget)
-        vl0.addWidget(self.textadvancedfmt_panel.view_widget)
+        # 样式入口按钮：不透明度/行距/阴影/渐变 统一收进 Text Style 对话框
+        vl0.addWidget(self.text_style_btn)
         vl0.addWidget(self.texttransform_panel.view_widget)
         vl0.setSpacing(0)
         vl0.setContentsMargins(0, 0, 0, 0)
@@ -503,50 +493,36 @@ class FontFormatPanel(Widget):
             mul = 0.01
         self.lineSpacingBox.setValue(self.lineSpacingBox.value() + delta * mul)
 
-    def _on_shadow_btn_clicked(self):
-        from .shadow_gradient_dialog import ShadowGradientDialog
+    def _on_text_style_btn_clicked(self):
+        from .shadow_gradient_dialog import TextStyleDialog
 
         fmt = self.global_format if self.global_mode() else C.active_format
-        text_color = fmt.frgb
-        dlg = ShadowGradientDialog(
+        dlg = TextStyleDialog(
             fmt,
-            tab="shadow",
-            text_color=text_color,
+            tab="basic",
+            text_color=fmt.frgb,
             shadow_include_stroke=self.global_format.shadow_include_stroke,
             parent=self.window(),
         )
-        dlg.applied.connect(self._on_shadow_gradient_applied)
+        dlg.applied.connect(self._on_text_style_applied)
         if dlg.exec_() == QDialog.DialogCode.Accepted:
-            self._on_shadow_gradient_applied(
-                dlg.get_shadow_params(), dlg.get_gradient_params()
+            self._on_text_style_applied(
+                dlg.get_basic_params(),
+                dlg.get_shadow_params(),
+                dlg.get_gradient_params(),
             )
-        dlg.applied.disconnect(self._on_shadow_gradient_applied)
+        dlg.applied.disconnect(self._on_text_style_applied)
 
-    def _on_gradient_btn_clicked(self):
-        from .shadow_gradient_dialog import ShadowGradientDialog
-
-        fmt = self.global_format if self.global_mode() else C.active_format
-        text_color = fmt.frgb
-        dlg = ShadowGradientDialog(
-            fmt,
-            tab="gradient",
-            text_color=text_color,
-            shadow_include_stroke=self.global_format.shadow_include_stroke,
-            parent=self.window(),
-        )
-        dlg.applied.connect(self._on_shadow_gradient_applied)
-        if dlg.exec_() == QDialog.DialogCode.Accepted:
-            self._on_shadow_gradient_applied(
-                dlg.get_shadow_params(), dlg.get_gradient_params()
-            )
-        dlg.applied.disconnect(self._on_shadow_gradient_applied)
-
-    def _on_shadow_gradient_applied(self, shadow_params: dict, gradient_params: dict):
+    def _on_text_style_applied(
+        self, basic_params: dict, shadow_params: dict, gradient_params: dict
+    ):
         # Handle shadow_include_stroke separately — it must apply to ALL text blocks
         # on the current page, not just selected ones. This is a project-wide toggle
         # (no local/per-block mode) consistent with PS behavior.
         include_stroke = shadow_params.pop("shadow_include_stroke", None)
 
+        for param_name, value in basic_params.items():
+            self.on_param_changed(param_name, value)
         for param_name, value in shadow_params.items():
             self.on_param_changed(param_name, value)
         for param_name, value in gradient_params.items():
@@ -564,11 +540,6 @@ class FontFormatPanel(Widget):
 
             # Always persist to global format (project-wide toggle).
             self.global_format.shadow_include_stroke = include_stroke
-
-        if self.textadvancedfmt_panel.active_format is not None:
-            self.textadvancedfmt_panel._update_effect_btns(
-                self.textadvancedfmt_panel.active_format
-            )
 
     def set_active_format(self, font_format: FontFormat, multi_size=False):
         C.active_format = font_format
@@ -612,7 +583,6 @@ class FontFormatPanel(Widget):
 
         self.familybox.blockSignals(False)
         self.stylebox.blockSignals(False)  # 新增
-        self.textadvancedfmt_panel.set_active_format(font_format)
         # Keep the session's no-items path (global format) in sync and show
         # the active format's transform state in the panel.
         self.text_transform_editor.global_format = self.global_format

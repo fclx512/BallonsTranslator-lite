@@ -122,6 +122,20 @@ class MockCanvas(QObject):
     def fitToWindow(self):
         self.calls.append(("fitToWindow", ()))
 
+    # Toggle handlers mirroring MainWindow — write pcfg so the pie-menu
+    # checkbox commands can be tested end to end.
+    def on_seq_badge_menu_toggled(self, checked):
+        pcfg.show_seq_badge = checked
+        self.calls.append(("on_seq_badge_menu_toggled", (checked,)))
+
+    def on_clip_overflow_menu_toggled(self, checked):
+        pcfg.clip_text_overflow = checked
+        self.calls.append(("on_clip_overflow_menu_toggled", (checked,)))
+
+    def on_overflow_triggered(self, checked):
+        pcfg.overflow_mode = checked
+        self.calls.append(("on_overflow_triggered", (checked,)))
+
     def shortcutBefore(self):
         self.calls.append(("shortcutBefore", ()))
 
@@ -199,12 +213,12 @@ def main():
                "prev_page", "next_page")))
     # 2026-08-14: undo/redo/page-nav/zoom have universal shortcuts, so they
     # stay registered (existing configs keep working) but drop out of the
-    # palette (empty category).  fit_window keeps its view category.
-    check("undo/redo/zoom/pages dropped from palette (empty category)",
+    # palette (empty category).  fit_window joined them 2026-08-15 — the
+    # viewport-fit rescale was deemed useless, but old menus keep running.
+    check("undo/redo/zoom/fit/pages dropped from palette (empty category)",
           all(COMMAND_REGISTRY[cid].category == "" for cid in
-              ("undo", "redo", "zoom_in", "zoom_out", "prev_page", "next_page")))
-    check("fit_window stays in view category",
-          COMMAND_REGISTRY["fit_window"].category == "view")
+              ("undo", "redo", "fit_window", "zoom_in", "zoom_out",
+               "prev_page", "next_page")))
     check("translate category pipeline", COMMAND_REGISTRY["translate"].category == "pipeline")
     check("reset_angle category text", COMMAND_REGISTRY["reset_angle"].category == "text")
     check("align_left runnable", run_cmd(mc, "align_left"))
@@ -260,6 +274,30 @@ def main():
     check("snap_alignment toggles back on", mc.alignment_enabled)
     check("non-toggle cmd_checked False", not cmd_checked(mc, "copy"))
     check("unknown cmd_checked False", not cmd_checked(mc, "nope"))
+
+    print("== canvas display toggles (seq badge / overflow / decorations) ==")
+    for cid, attr in (("seq_badge", "show_seq_badge"),
+                      ("clip_overflow", "clip_text_overflow"),
+                      ("overflow_mode", "overflow_mode"),
+                      ("drag_decorations", "show_decorations_during_drag")):
+        cmd = COMMAND_REGISTRY[cid]
+        check(f"{cid} registered as toggle",
+              cmd.is_toggle and cmd.category == "toggle"
+              and cmd.hidden_in_customize)
+        setattr(pcfg, attr, False)
+        check(f"{cid} unchecked when off", not cmd_checked(mc, cid))
+        check(f"{cid} runnable", run_cmd(mc, cid))
+        check(f"{cid} toggles on", bool(getattr(pcfg, attr)))
+        check(f"{cid} checked after toggle", cmd_checked(mc, cid))
+        run_cmd(mc, cid)
+        check(f"{cid} toggles off", not bool(getattr(pcfg, attr)))
+    check("seq_badge routes through on_seq_badge_menu_toggled",
+          ("on_seq_badge_menu_toggled", (True,)) in mc.calls
+          and ("on_seq_badge_menu_toggled", (False,)) in mc.calls)
+    check("clip_overflow routes through on_clip_overflow_menu_toggled",
+          ("on_clip_overflow_menu_toggled", (True,)) in mc.calls)
+    check("overflow_mode routes through on_overflow_triggered",
+          ("on_overflow_triggered", (True,)) in mc.calls)
 
     print("== hit-test math (floating cards + tangential stack) ==")
 
@@ -326,6 +364,73 @@ def main():
     pm._update_hover((6, 1))
     check("hovered card paints", not pm.grab().isNull())
     pm._update_hover(None)
+
+    # card width cap + hover expand (2026-08-16): long labels (English UI)
+    # cap at CARD_MAX_W; the hovered card expands to its full width
+    from ui.pie_menu import CARD_MAX_W
+    long_menu = {
+        "id": "long", "sectors": 8,
+        "slots": [["drag_decorations"]] + [[] for _ in range(7)],
+    }
+    pm.set_menu_config(long_menu)
+    w_capped = pm._card_rect(0, 0, fm).width()
+    check("long label card capped at CARD_MAX_W", w_capped <= CARD_MAX_W + 0.01)
+    check("long label really exceeds cap", w_capped > CARD_MAX_W - 30.0)
+    pm._card_progress[(0, 0)] = 1.0
+    check("expanded card reaches full label width",
+          pm._card_rect(0, 0, fm).width() > CARD_MAX_W)
+    pm._card_progress[(0, 0)] = 0.0
+    old_fps = pcfg.animation_fps
+    pcfg.animation_fps = -1
+    pm._set_card_progress((0, 0), 1.0)
+    check("anim disabled -> immediate expand",
+          pm._card_progress.get((0, 0)) == 1.0)
+    pcfg.animation_fps = old_fps
+    pm.set_menu_config(_TEST_MENU)
+    check("restore test menu after cap check",
+          pm._hit_test(_pt(0, 130)) == (0, 0))
+
+    # elide razor edge (2026-08-16): eliding at exactly the measured width
+    # truncated fitting labels on fonts whose fractional advance rounds
+    # down — 9pt Microsoft YaHei turned "OCR" into "O…" on the user's
+    # machine while offscreen FreeType metrics rounded the other way, so
+    # the regression is asserted with a spy: a fitting label must never
+    # reach elidedText at all, whatever the font's rounding.
+    from ui.pie_menu import _elide_fitting
+    spy_fm = QFontMetrics(pm.font())
+    spy_calls = []
+
+    def _spy_elide(text, mode, width, flags=0):
+        spy_calls.append((text, width))
+        return text
+
+    spy_fm.elidedText = _spy_elide
+    for probe in ("OCR", "OCR并翻译", "OCR，翻译并抹字", "Copy", "Paste"):
+        w = spy_fm.horizontalAdvance(probe)
+        check(f"elide keeps fitting label {probe!r}",
+              _elide_fitting(spy_fm, probe, w) == probe)
+    check("fitting label never reaches elidedText", not spy_calls)
+    long_lab = "OCR, translate and inpaint"
+    tight = spy_fm.horizontalAdvance(long_lab) - 10
+    _elide_fitting(spy_fm, long_lab, tight)
+    check("overflow does reach elidedText with the tight width",
+          spy_calls == [(long_lab, tight)])
+    check("elide empty label returns empty",
+          _elide_fitting(spy_fm, "", 10) == "")
+
+    # pop-in + hover-expand animation plumbing (2026-08-16)
+    pm._reset_anim()
+    pm._ensure_anim_timer()
+    pm._open_anim = (0.0, 1.0, pm._anim_elapsed.elapsed() - 1000)
+    pm._tick_anim()
+    check("pop-in tick completes to opaque", pm._open_progress == 1.0)
+    pm._card_anim[(0, 0)] = (0.0, 1.0, pm._anim_elapsed.elapsed() - 1000)
+    pm._tick_anim()
+    check("card expand tick completes to full",
+          pm._card_progress.get((0, 0)) == 1.0)
+    pm._tick_anim()
+    check("timer stops when animations finish", not pm._anim_timer.isActive())
+
     # sector wedge fallback near the boundary arms the nearest card of sector 6
     hit_lo = pm._hit_test(_pt(247.6, 130))
     check("left boundary 247.6 -> sector 6", hit_lo is not None and hit_lo[0] == 6)
@@ -832,6 +937,11 @@ def main():
     check("five panels never overlap",
           all(pm._list_rects[i].bottom() <= pm._list_rects[i + 1].top()
               for i in range(LIST_PANELS - 1)))
+    # 2026-08-16: the five panels sweep a ring-like arc — the lateral panel
+    # sits outermost, the diagonals inset, the poles inset furthest.
+    check("panels sweep a ring-like arc (lateral > diag > pole)",
+          pm._list_rects[2].x() > pm._list_rects[1].x() > pm._list_rects[0].x()
+          and pm._list_rects[2].x() > pm._list_rects[3].x() > pm._list_rects[4].x())
     # worst case: every panel at 3 rows still never overlaps
     full = normalize_pie_menu({
         "layout": "list",

@@ -27,6 +27,13 @@ editor) and saves on each committed change, so the runtime menu picks the
 edit up on the next trigger press.
 """
 
+import copy
+import json
+import re
+from pathlib import Path
+
+import utils.config
+
 from qtpy.QtCore import QCoreApplication, QMimeData, Qt, Signal
 from qtpy.QtGui import QDrag, QKeySequence
 from qtpy.QtWidgets import (
@@ -43,7 +50,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from utils.config import DEFAULT_PIE_MENUS, pcfg, save_config
+from utils.config import pcfg, save_config
 from utils.shortcut_conflicts import find_conflict_keys
 from .context_menu_config import (
     CAT_BASIC,
@@ -89,9 +96,10 @@ _CATEGORY_LABELS = [
 _TOGGLE_LABEL = "Canvas Options"
 _TOGGLE_COLOR = "#e84393"
 
-_CARD_W, _CARD_H = 128, 44
-_DRAG_SCALE = 0.55   # drag-ghost shrinks to ~70x24 so it can't cover the
-                     # small (0.72-scaled) preview while dragging a card in
+_CARD_H = 44
+_CARD_W_MAX = 400         # defensive width cap — labels elide only past this
+_DRAG_SCALE = 0.55   # drag-ghost shrinks so the small (0.72-scaled) preview
+                     # stays visible while dragging a card in
 
 
 class _CommandCard(QFrame):
@@ -102,31 +110,30 @@ class _CommandCard(QFrame):
         self.cmd_id = cmd_id
         self._drag_start = None
         self.setObjectName("PieCmdCard")
-        self.setFixedSize(_CARD_W, _CARD_H)
         self.setToolTip(name)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(8, 4, 8, 4)
         lay.setSpacing(0)
         self.name_label = QLabel(name)
-        fm = self.name_label.fontMetrics()
-        self.name_label.setText(fm.elidedText(
-            name, Qt.TextElideMode.ElideRight, _CARD_W - 16))
-        self.name_label.setSizePolicy(
-            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         badge = QLabel(cat_label)
         badge.setStyleSheet(f"color: {cat_color}; font-size: 10px;")
+        # Card width follows its longest line (name or category badge) so
+        # long command names show in full while the grid has room — the
+        # tooltip always carries the full name anyway (2026-08-16).
+        name_w = self.name_label.fontMetrics().horizontalAdvance(name)
+        badge_w = badge.fontMetrics().horizontalAdvance(cat_label)
+        text_w = max(name_w, badge_w)
+        w = min(text_w + 2 * 8 + 12, _CARD_W_MAX)   # margins (8+8) + padding
+        self.setFixedSize(w, _CARD_H)
+        if text_w + 2 * 8 + 12 > _CARD_W_MAX:
+            self.name_label.setText(self.name_label.fontMetrics().elidedText(
+                name, Qt.TextElideMode.ElideRight, _CARD_W_MAX - 2 * 8 - 12))
+        self.name_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         for lbl in (self.name_label, badge):
             lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         lay.addWidget(self.name_label)
         lay.addWidget(badge)
-
-    def set_used(self, used: bool):
-        """Toggle the dimmed "already in this menu" look."""
-        if self.property("used") == used:
-            return
-        self.setProperty("used", used)
-        self.style().unpolish(self)
-        self.style().polish(self)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -191,20 +198,12 @@ class CommandPalette(QWidget):
             f"#PieCmdCard:hover {{ border-color: {accent}; }}"
             f"#PieCmdCard QLabel {{ color: {s['name_clr']};"
             f" background: transparent; border: none; }}"
-            f"#PieCmdCard[used=\"true\"] {{ background: {s['disabled_bg']}; }}"
-            f"#PieCmdCard[used=\"true\"] QLabel {{ color: {s['disabled_clr']}; }}"
         )
         for cmd_id, name, cat_label, cat_color in commands:
             card = _CommandCard(cmd_id, name, cat_label, cat_color, self)
             self.flow.addWidget(card)
             self._cards[cmd_id] = card
         self.updateGeometry()
-
-    def set_used(self, used_ids):
-        """Dim cards already in the current menu (hint only — they stay
-        draggable, duplicates are allowed by design)."""
-        for cmd_id, card in self._cards.items():
-            card.set_used(cmd_id in used_ids)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasFormat("application/x-pie-src"):
@@ -270,6 +269,12 @@ class PieMenuEditor(QWidget):
         self.reset_btn.setObjectName("ConfigButton")
         self.reset_btn.setFixedHeight(30)
         bar.addWidget(self.reset_btn)
+        # Dev tool (2026-08-16): persist the arranged layout into
+        # utils/config.py::DEFAULT_PIE_MENUS so future defaults match it.
+        self.save_default_btn = QPushButton(self.tr("Save as Default"))
+        self.save_default_btn.setObjectName("ConfigButton")
+        self.save_default_btn.setFixedHeight(30)
+        bar.addWidget(self.save_default_btn)
         card_layout.addLayout(bar)
 
         # Row 2: name + trigger key
@@ -365,6 +370,7 @@ class PieMenuEditor(QWidget):
         self.tabs.tabCloseRequested.connect(self._on_delete_menu)
         self.new_btn.clicked.connect(self._on_new_menu)
         self.reset_btn.clicked.connect(self._on_reset_defaults)
+        self.save_default_btn.clicked.connect(self._save_as_default)
         self.name_edit.textEdited.connect(self._on_name_changed)
         self.trigger_edit.keySequenceChanged.connect(self._on_trigger_changed)
         self.style_combo.currentIndexChanged.connect(self._on_style_changed)
@@ -478,7 +484,8 @@ class PieMenuEditor(QWidget):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        self._menus = [normalize_pie_menu(m) for m in DEFAULT_PIE_MENUS]
+        self._menus = [normalize_pie_menu(m)
+                       for m in utils.config.DEFAULT_PIE_MENUS]
         self._current = 0
         self._reload()
         self._save()
@@ -591,15 +598,6 @@ class PieMenuEditor(QWidget):
         self.preview.set_menu_config(menu)
         self.preview.set_edit_mode(True)
         self._refresh_hint()
-        self._refresh_used()
-
-    def _refresh_used(self):
-        """Dim palette cards whose command is already in the current menu."""
-        menu = self._current_menu() or {}
-        key = "panels" if menu.get("layout", "ring") == "list" else "slots"
-        used = {cid for group in menu.get(key, []) for cid in group}
-        self.palette.set_used(used)
-        self.toggle_palette.set_used(used)
 
     def _refresh_hint(self):
         """Palette hint text follows the current menu's style."""
@@ -669,3 +667,54 @@ class PieMenuEditor(QWidget):
     def _save(self):
         pcfg.pie_menus = self._menus
         save_config()
+
+    def _save_as_default(self):
+        """Dev tool: overwrite ``utils/config.py::DEFAULT_PIE_MENUS`` with the
+        current layout, so fresh configs and "Reset to Defaults" start from
+        what was arranged here (newly added commands land in a sane default
+        without hand-editing the source)."""
+
+        def _fmt(v, depth):
+            """Source-format a value: dicts expand per key, str lists stay
+            inline, nested grids (slots/panels) expand one row per line."""
+            pad = "    " * depth
+            if isinstance(v, dict):
+                items = ",\n".join(
+                    f"{pad}    {json.dumps(k, ensure_ascii=False)}: "
+                    f"{_fmt(x, depth + 1)}"
+                    for k, x in v.items())
+                return "{\n" + items + "\n" + pad + "}"
+            if isinstance(v, list):
+                if not v:
+                    return "[]"
+                if all(isinstance(x, str) for x in v):
+                    return "[" + ", ".join(
+                        json.dumps(x, ensure_ascii=False) for x in v) + "]"
+                items = ",\n".join(
+                    f"{pad}    " + _fmt(x, depth + 1) for x in v)
+                return "[\n" + items + "\n" + pad + "]"
+            return json.dumps(v, ensure_ascii=False)
+
+        try:
+            cfg_path = Path(__file__).resolve().parents[1] / "utils" / "config.py"
+            text = cfg_path.read_text(encoding="utf-8")
+            block = "DEFAULT_PIE_MENUS = " + _fmt(self._menus, 0)
+            new_text, n = re.subn(
+                r"DEFAULT_PIE_MENUS = \[.*?\n\]",
+                block, text, count=1, flags=re.S)
+            if n == 0:
+                raise RuntimeError("DEFAULT_PIE_MENUS block not found")
+            cfg_path.write_text(new_text, encoding="utf-8")
+            # The file write alone would not affect this process — the
+            # module constant was bound at import time — so update it in
+            # memory too, making "Reset to Defaults" use the new layout
+            # immediately (dev-stage priority over the old defaults).
+            utils.config.DEFAULT_PIE_MENUS = copy.deepcopy(self._menus)
+            QMessageBox.information(
+                self, self.tr("Save as Default"),
+                self.tr("Default menu layout saved to utils/config.py."))
+        except Exception as exc:
+            QMessageBox.warning(
+                self, self.tr("Save as Default"),
+                self.tr("Failed to save default layout: %1").replace(
+                    "%1", str(exc)))
