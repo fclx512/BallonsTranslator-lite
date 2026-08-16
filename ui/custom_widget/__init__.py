@@ -38,6 +38,7 @@ from .message import (
 from .push_button import ExpandingToolButton, NoBorderPushBtn
 from .scroll_bar import ConfigScrollBar
 from .scrollbar import ScrollBar
+from .screen_picker import pick_screen_color
 from .section_header import ConfigSectionHeader
 from .slider import PaintQSlider, RangeSlider
 from .spinbox import NoArrowsDoubleSpinBox, NoArrowsSpinBox

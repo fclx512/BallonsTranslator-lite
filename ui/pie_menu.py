@@ -19,14 +19,15 @@ cards' text, so they stack screen-vertically instead (2026-08-14) — a
 stack never overlaps itself.  The center indicator is a thin ring plus a
 hollow sector fill pointing at the hovered sector.
 
-Vertical list style (2026-08-12, half-ring redesign): the ring is cut
-vertically and each lateral sector position hosts one small continuous
-context-menu panel (touching rows, no card gaps) — five fixed anchor
+Vertical list style (2026-08-12, half-ring redesign): five fixed anchor
 positions per side (top / upper-diagonal / lateral / lower-diagonal /
-bottom; the poles were added 2026-08-14 so ring -> list keeps the top and
-bottom sectors).  Data model: ``panels`` — 5 groups x up to 3 commands.
-Shares the whole state machine with the ring.  See
-``docs/技术实现/快捷菜单_竖排样式_设计与交接.md``.
+bottom; the poles were added 2026-08-14) each host one small continuous
+context-menu panel (touching rows, no card gaps).  Data model: ``panels``
+— 5 groups x up to 3 commands.  ``slots`` (ring) and ``panels`` (list)
+are *independent* arrangements of the same commands — switching the
+layout only shows one, edits never cross (decision 2026-08-16).  Shares
+the whole state machine with the ring.  See
+``docs/技术实现/快捷菜单_实现总结.md``.
 
 The widget is a separate frameless ``Qt.Tool`` window that does not take
 focus, so the main window keeps receiving key events (release of the
@@ -81,9 +82,9 @@ HOVER_TEXT_COLOR = QColor(255, 255, 255)
 # context-menu look — touching rows, no card gaps).  Grouping happens at
 # the menu level: one menu = one function group, split into new menus when
 # you want separation (no separators inside a panel — decision 2026-08-12).
-# 5 anchors per side since 2026-08-14: the top/bottom poles were added so
-# ring -> list no longer drops the top/bottom sectors (the conversion picks
-# the whole lateral half including the poles).
+# 5 anchors per side since 2026-08-14 (top/bottom poles added).  The list
+# layout is *independent* of the ring layout — the two are never converted
+# into each other (decision 2026-08-16).
 LIST_PANELS = 5               # anchor positions per side (top / upper-diag / lateral / lower-diag / bottom)
 LIST_PANEL_MAX_ITEMS = 3      # rows per panel (matches SECTOR_MAX_CARDS)
 # The cluster hugs the cursor (2026-08-13): the ring's 120px radius left the
@@ -169,9 +170,10 @@ def normalize_pie_menu(menu) -> dict:
     lists each truncated to ``SECTOR_MAX_CARDS`` ids.  List layout:
     ``panels`` has exactly ``LIST_PANELS`` lists each truncated to
     ``LIST_PANEL_MAX_ITEMS`` ids and ``direction`` is ``"left"`` /
-    ``"right"``.  Both representations are kept and normalized so switching
-    styles is cheap.  Unknown ids are kept (they render disabled /
-    skipped); unknown commands never crash.
+    ``"right"``.  Both representations are kept independently — the two
+    layouts of one menu never convert into or overwrite each other.
+    Unknown ids are kept (they render disabled / skipped); unknown commands
+    never crash.
     """
     if not isinstance(menu, dict):
         menu = {}
@@ -218,38 +220,6 @@ def normalize_pie_menu(menu) -> dict:
         "direction": direction,
         "panels": panels,
     }
-
-
-def half_ring_sector_idxs(n: int, direction: str = "right") -> list:
-    """Ring sector indices of the lateral half, ordered top -> bottom.
-
-    Includes the top/bottom poles (they belong to both halves; the
-    ``direction`` only picks which diagonal/left-right sectors sit between
-    them).  Used by both conversion functions so ring <-> list round-trips
-    map the same sectors.
-    """
-    if direction == "left":
-        return [0] + list(range(n - 1, n // 2 - 1, -1))
-    return list(range(0, n // 2 + 1))
-
-
-def slots_to_panels(slots, direction="right") -> list:
-    """Pick the lateral half of ring slots as list panels (top -> bottom)."""
-    n = len(slots)
-    idxs = half_ring_sector_idxs(n, direction) if n else []
-    picked = [list(slots[i]) if 0 <= i < n and isinstance(slots[i], list)
-              else [] for i in idxs]
-    picked = (picked + [[] for _ in range(LIST_PANELS)])[:LIST_PANELS]
-    return [lst[:LIST_PANEL_MAX_ITEMS] for lst in picked]
-
-
-def panels_to_slots(panels, direction="right", sectors=SECTOR_COUNT) -> list:
-    """Write list panels back into a ring slot layout (lateral half)."""
-    slots = [[] for _ in range(sectors)]
-    for panel, slot_i in zip(panels, half_ring_sector_idxs(sectors, direction)):
-        if isinstance(panel, list):
-            slots[slot_i] = list(panel)[:SECTOR_MAX_CARDS]
-    return slots
 
 
 def pie_menu_display_name(menu) -> str:
@@ -315,7 +285,7 @@ class PieMenu(QWidget):
         self._menu = {}
         self._sector_count = SECTOR_COUNT
         self._sector_data = []
-        self._list_panels = []   # list-layout command id groups (3 panels)
+        self._list_panels = []   # list-layout command id groups (5 panels)
         self._list_rects = []    # per-panel QRectF (widget-local, logical)
         self._list_cursor = QPointF(0.0, 0.0)  # widget-local cursor position
         self._list_panel_w = LIST_MIN_W        # uniform panel width
@@ -419,6 +389,7 @@ class PieMenu(QWidget):
         self._sector_data = menu["slots"]
         self._list_panels = menu["panels"]
         self._hover = None
+        self._selected = None   # stale selection ring must not survive a layout switch
         self._card_progress.clear()
         self._card_anim.clear()
         if self._is_list():
@@ -945,6 +916,18 @@ class PieMenu(QWidget):
             return True
         return len(self._sector_data[sector]) < SECTOR_MAX_CARDS
 
+    def _menu_has_cmd(self, cmd_id: str, src_sector: int = -1) -> bool:
+        """Whether *cmd_id* already sits in the active storage (one menu =
+        one copy of a command; palette adds pass src_sector == -1, so every
+        group is checked)."""
+        data = self._list_panels if self._is_list() else self._sector_data
+        for s, group in enumerate(data):
+            if s == src_sector:
+                continue
+            if cmd_id in group:
+                return True
+        return False
+
     def dragEnterEvent(self, event):
         if self._preview and event.mimeData().hasFormat("application/x-pie-cmd"):
             event.acceptProposedAction()
@@ -963,8 +946,9 @@ class PieMenu(QWidget):
                 panel, row = self._list_drop_pos(
                     event.position() / self._preview_scale)
                 ok = panel >= 0 and (src_sector == panel
-                                     or len(self._list_panels[panel])
-                                     < LIST_PANEL_MAX_ITEMS)
+                                     or (len(self._list_panels[panel])
+                                         < LIST_PANEL_MAX_ITEMS
+                                         and not self._menu_has_cmd(cmd_id)))
                 self.set_list_drop_target(panel, row, rejected=not ok)
                 if ok:
                     event.acceptProposedAction()
@@ -972,7 +956,8 @@ class PieMenu(QWidget):
                     event.ignore()
                 return
             sector = self.sector_at(event.position() / self._preview_scale)
-            ok = self._drop_ok(sector, src_sector)
+            ok = self._drop_ok(sector, src_sector) \
+                and (src_sector >= 0 or not self._menu_has_cmd(cmd_id))
             self.set_drop_target(sector, rejected=not ok)
             if ok:
                 event.acceptProposedAction()
@@ -1006,7 +991,8 @@ class PieMenu(QWidget):
             if src_sector == panel and 0 <= src_idx < row:
                 row -= 1   # internal move: source removal shifts the target
             if src_sector != panel \
-                    and len(self._list_panels[panel]) >= LIST_PANEL_MAX_ITEMS:
+                    and (len(self._list_panels[panel]) >= LIST_PANEL_MAX_ITEMS
+                         or self._menu_has_cmd(cmd_id)):
                 event.ignore()
                 return
             event.acceptProposedAction()
@@ -1014,7 +1000,8 @@ class PieMenu(QWidget):
             return
         sector = self.sector_at(pos)
         self.set_drop_target(-1)
-        if sector < 0 or not self._drop_ok(sector, src_sector):
+        if sector < 0 or not self._drop_ok(sector, src_sector) \
+                or (src_sector < 0 and self._menu_has_cmd(cmd_id)):
             event.ignore()
             return
         idx = self._drop_insert_index(sector, pos)

@@ -17,10 +17,10 @@ Layout (top → bottom):
     toggles (Snap Alignment ...) — same drag & drop, rendered as checkboxes
     in the menu; kept apart from regular commands on purpose
 
-Switching style converts the commands (ring -> list picks the lateral-half
-sectors as panels, list -> ring writes them back into an 8-sector layout).
-One menu = one function group; split into new menus when you want
-separation.
+Ring and List are two independent arrangements of the same command group:
+switching the style only shows the other arrangement — it never converts,
+merges or overwrites the other layout (decision 2026-08-16).  One menu =
+one function group; split into new menus when you want separation.
 
 The editor mutates ``pcfg.pie_menus`` live (same pattern as the shortcut
 editor) and saves on each committed change, so the runtime menu picks the
@@ -61,14 +61,10 @@ from .context_menu_config import (
     COMMAND_REGISTRY,
 )
 from .pie_menu import (
-    SECTOR_COUNT,
     SECTOR_MAX_CARDS,
     PieMenu,
-    half_ring_sector_idxs,
     normalize_pie_menu,
-    panels_to_slots,
     pie_menu_display_name,
-    slots_to_panels,
 )
 from .custom_widget import (
     ConfigComboBox,
@@ -134,6 +130,19 @@ class _CommandCard(QFrame):
             lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         lay.addWidget(self.name_label)
         lay.addWidget(badge)
+
+    def set_used(self, used: bool):
+        """Track "already in this menu (current layout)" — the property stays
+        for the duplicate-add guard parity, but the *visual* dimming is
+        disabled for now (2026-08-16): on the user's machine the property
+        updates live yet the QSS never re-renders, root cause unknown —
+        parked until there is time to debug; keep this property mechanism
+        so restoring the look is a one-line stylesheet change."""
+        if self.property("used") == used:
+            return
+        self.setProperty("used", used)
+        self.style().unpolish(self)
+        self.style().polish(self)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -204,6 +213,12 @@ class CommandPalette(QWidget):
             self.flow.addWidget(card)
             self._cards[cmd_id] = card
         self.updateGeometry()
+
+    def set_used(self, used_ids):
+        """Dim cards already in the current menu's current layout (hint only —
+        the drag guard rejects a duplicate add anyway)."""
+        for cmd_id, card in self._cards.items():
+            card.set_used(cmd_id in used_ids)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasFormat("application/x-pie-src"):
@@ -462,6 +477,9 @@ class PieMenuEditor(QWidget):
         }))
         self.tabs.addTab(pie_menu_display_name(self._menus[-1]))
         self.tabs.setCurrentIndex(len(self._menus) - 1)
+        # The new menu is empty: clear the used-grey even when the tab index
+        # did not move (currentChanged then never fires — 2026-08-16).
+        self._refresh_preview()
         self._save()
 
     def _on_delete_menu(self, index):
@@ -519,14 +537,10 @@ class PieMenuEditor(QWidget):
         self._save()
 
     def _on_style_changed(self, index):
-        """Switch the current menu between ring and list, converting its
-        commands.
-
-        ring -> list derives the lateral half (incl. the top/bottom poles)
-        as panels; the full ring layout stays in ``slots`` untouched.
-        list -> ring writes the panels back into that *same* lateral half
-        of the existing ring layout and keeps every other sector — the
-        round trip never drops a command (decision 2026-08-14).
+        """Switch which arrangement the menu shows.  Ring ``slots`` and list
+        ``panels`` are independent layouts, each edited on its own — a style
+        switch never converts, merges or overwrites the other one (decision
+        2026-08-16).
         """
         menu = self._current_menu()
         if menu is None:
@@ -534,30 +548,21 @@ class PieMenuEditor(QWidget):
         new_layout = "list" if index == 1 else "ring"
         if new_layout == menu.get("layout", "ring"):
             return
-        direction = menu.get("direction", "right")
-        sectors = menu.get("sectors", SECTOR_COUNT)
-        if new_layout == "list":
-            menu["panels"] = slots_to_panels(menu.get("slots", []), direction)
-        else:
-            slots = panels_to_slots(menu.get("panels", []), direction,
-                                    sectors=sectors)
-            old = menu.get("slots") or []
-            if len(old) == sectors:
-                keep = (set(range(sectors))
-                        - set(half_ring_sector_idxs(sectors, direction)))
-                for i in keep:
-                    slots[i] = list(old[i])
-            menu["slots"] = slots
         menu["layout"] = new_layout
         self._load_current_props()   # sync combos + visibility (signals blocked)
         self._refresh_preview()
         self._save()
 
     def _on_direction_changed(self, index):
+        """Side of the cursor the list panels sit on — a pure render mirror
+        of the same five panels, never touches the ring slots."""
         menu = self._current_menu()
         if menu is None:
             return
-        menu["direction"] = "left" if index == 1 else "right"
+        new_dir = "left" if index == 1 else "right"
+        if new_dir == menu.get("direction", "right"):
+            return
+        menu["direction"] = new_dir
         self._refresh_preview()   # panel anchors mirror to the other side
         self._save()
 
@@ -569,6 +574,9 @@ class PieMenuEditor(QWidget):
             return
         key = "panels" if menu.get("layout", "ring") == "list" else "slots"
         groups = menu[key]
+        if src_sector < 0 and any(cmd_id in g for g in groups):
+            return   # one copy per command per menu (adds only — internal
+                     # drags carry the source slot and relocate the same card)
         if src_sector >= 0 and 0 <= src_sector < len(groups) \
                 and 0 <= src_idx < len(groups[src_sector]):
             groups[src_sector].pop(src_idx)
@@ -598,6 +606,18 @@ class PieMenuEditor(QWidget):
         self.preview.set_menu_config(menu)
         self.preview.set_edit_mode(True)
         self._refresh_hint()
+        self._refresh_used()
+
+    def _refresh_used(self):
+        """Dim palette cards already placed in the current menu's *current*
+        layout (ring reads ``slots``, list reads ``panels`` — each menu and
+        each style is checked independently, mirroring the duplicate-add
+        guard)."""
+        menu = self._current_menu() or {}
+        key = "panels" if menu.get("layout", "ring") == "list" else "slots"
+        used = {cid for group in menu.get(key, []) for cid in group}
+        self.palette.set_used(used)
+        self.toggle_palette.set_used(used)
 
     def _refresh_hint(self):
         """Palette hint text follows the current menu's style."""

@@ -255,7 +255,6 @@ def build_stylesheet_from_dict(tgt_theme: Dict) -> str:
             _stylesheet_cache = f.read()
     stylesheet = _stylesheet_cache
     C.FOREGROUND_FONTCOLOR = hex2rgb(tgt_theme["@qwidgetForegroundColor"])
-    C.SLIDERHANDLE_COLOR = hex2rgb(tgt_theme["@sliderHandleColor"])
     for key, val in sorted(tgt_theme.items(), key=lambda kv: len(kv[0]), reverse=True):
         if not key.startswith("_"):
             stylesheet = stylesheet.replace(key, val)

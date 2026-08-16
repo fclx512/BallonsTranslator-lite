@@ -207,6 +207,9 @@ _LEGACY_PIE_SECTORS = [
 # content (4/6/8) so no ring sector is left as a dead zone.  Undo/redo, page
 # navigation and zoom were dropped from the defaults (2026-08-14): they have
 # universal shortcuts (Ctrl+Z/Y, PgUp/PgDn, wheel) and only waste menu slots.
+# Each menu keeps two *independent* layouts — ``slots`` (ring) and ``panels``
+# (list): switching the style only shows one, they never convert into each
+# other (decision 2026-08-16).
 DEFAULT_PIE_MENUS = [
     {
         "id": "edit",
@@ -218,9 +221,9 @@ DEFAULT_PIE_MENUS = [
             ["copy", "copy_src"],
             ["paste", "paste_src"],
             ["delete"],
-            ["drag_decorations"],
-            ["snap_alignment", "seq_badge", "clip_overflow"],
+            ["clip_overflow", "seq_badge", "overflow_mode"],
             [],
+            ["drag_decorations", "snap_alignment"],
             [],
             []
         ],
@@ -238,24 +241,24 @@ DEFAULT_PIE_MENUS = [
         "name": "Alignment",
         "trigger": "X",
         "sectors": 8,
-        "layout": "ring",
+        "layout": "list",
         "slots": [
-            ["align_top", "align_bottom"],
+            ["align_top"],
             ["align_vcenter", "align_hcenter"],
             ["align_right"],
             [],
             ["align_bottom"],
-            ["merge"],
+            ["reset_angle", "squeeze"],
             ["align_left"],
-            ["reset_angle", "squeeze"]
+            ["merge"]
         ],
         "direction": "right",
         "panels": [
             ["align_top", "align_bottom"],
-            ["align_vcenter", "align_hcenter"],
-            ["align_right"],
-            [],
-            ["align_bottom"]
+            ["align_hcenter", "align_vcenter"],
+            ["align_left", "align_right"],
+            ["reset_angle", "squeeze", "merge"],
+            []
         ]
     },
     {
@@ -292,8 +295,14 @@ def migrate_legacy_pie(legacy: List[List[str]]) -> List[dict]:
     """
     if legacy == _LEGACY_PIE_SECTORS:
         return copy.deepcopy(DEFAULT_PIE_MENUS)
+    # The legacy model had no list layout — seed one from the ring's right
+    # half (sectors 0..n//2 incl. the poles) so the first style switch is
+    # coherent.  The two layouts stay independent afterwards.
+    # ``normalize_pie_menu`` re-validates the panel shape/caps on load.
+    panels = [list(s) for s in legacy[: len(legacy) // 2 + 1]]
+    panels += [[] for _ in range(5 - len(panels))]
     menus = [dict(DEFAULT_PIE_MENUS[0], sectors=len(legacy),
-                  slots=copy.deepcopy(legacy))]
+                  slots=copy.deepcopy(legacy), panels=panels)]
     menus += [copy.deepcopy(m) for m in DEFAULT_PIE_MENUS[1:]]
     return menus
 

@@ -3,10 +3,11 @@
 import json
 from pathlib import Path
 
-from qtpy.QtCore import QRectF, QRegularExpression, Qt, Signal
+from qtpy.QtCore import QRectF, QRegularExpression, QSize, Qt, QTimer, Signal
 from qtpy.QtGui import (
     QBrush,
     QColor,
+    QIcon,
     QLinearGradient,
     QMouseEvent,
     QPainter,
@@ -14,6 +15,7 @@ from qtpy.QtGui import (
     QRegularExpressionValidator,
 )
 from qtpy.QtWidgets import (
+    QApplication,
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -89,6 +91,14 @@ def _save_palette(colors):
 
 
 # ── Widgets ───────────────────────────────────────────────
+
+
+class _HexEdit(QLineEdit):
+    """Hex input that selects its whole content when focused (easy Ctrl+C)."""
+
+    def focusInEvent(self, e):
+        super().focusInEvent(e)
+        self.selectAll()
 
 
 class _ColorSquare(QWidget):
@@ -318,19 +328,18 @@ class ColorPickerDialog(QDialog):
     def __init__(self, current: QColor, parent=None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Color Picker"))
-        self.setFixedSize(400, 380)
 
         self._result = QColor(current)
         self._old = QColor(current)
 
-        h, s, v, a = current.getHsvF()
+        h, s, v, _ = current.getHsvF()
         self._hue = h if h >= 0 else 0.0
         self._sat = s
         self._val = v
-        self._alpha = current.alpha()
 
         self._setup_ui()
         self._sync_all_from_hsv()
+        self._fit_fixed_size()
 
     def get_color(self):
         return self._result
@@ -368,7 +377,6 @@ class ColorPickerDialog(QDialog):
         self.r_spin = make_spin(0, 255)
         self.g_spin = make_spin(0, 255)
         self.b_spin = make_spin(0, 255)
-        self.a_spin = make_spin(0, 255)
 
         self.h_spin.setSuffix("°")
         self.s_spin.setSuffix("%")
@@ -380,7 +388,6 @@ class ColorPickerDialog(QDialog):
         self.r_spin.valueChanged.connect(lambda v: self._on_rgb_spin())
         self.g_spin.valueChanged.connect(lambda v: self._on_rgb_spin())
         self.b_spin.valueChanged.connect(lambda v: self._on_rgb_spin())
-        self.a_spin.valueChanged.connect(lambda v: self._on_alpha_spin())
 
         num_col = QVBoxLayout()
         num_col.setSpacing(3)
@@ -404,7 +411,6 @@ class ColorPickerDialog(QDialog):
         num_col.addLayout(lbl_row("R", self.r_spin))
         num_col.addLayout(lbl_row("G", self.g_spin))
         num_col.addLayout(lbl_row("B", self.b_spin))
-        num_col.addLayout(lbl_row("A", self.a_spin))
         num_col.addWidget(QLabel("─" * 4), alignment=Qt.AlignmentFlag.AlignCenter)
 
         hex_row = QHBoxLayout()
@@ -415,15 +421,15 @@ class ColorPickerDialog(QDialog):
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
         hex_row.addWidget(hex_lbl)
-        self.hex_edit = QLineEdit()
+        self.hex_edit = _HexEdit()
         self.hex_edit.setMaxLength(8)
-        self.hex_edit.setFixedWidth(78)
+        self.hex_edit.setMinimumWidth(100)
         self.hex_edit.setStyleSheet("""
             QLineEdit {
                 background: rgba(128,128,128,0.13);
                 border: 1px solid rgba(128,128,128,0.25);
                 border-radius: 4px;
-                padding: 2px 4px;
+                padding: 1px 4px;
             }
         """)
         rx = QRegularExpression("[0-9A-Fa-f]{0,8}")
@@ -440,6 +446,40 @@ class ColorPickerDialog(QDialog):
 
         top.addLayout(wrapper)
         layout.addLayout(top)
+
+        # Utility strip: screen picker + copyable color formats
+        strip = QHBoxLayout()
+        strip.setSpacing(8)
+
+        self._pick_btn = QPushButton(self)
+        self._pick_btn.setObjectName("ColorPickerPickBtn")
+        self._pick_btn.setIcon(QIcon("icons/eyedropper.svg"))
+        self._pick_btn.setIconSize(QSize(16, 16))
+        self._pick_btn.setFixedSize(26, 26)
+        self._pick_btn.setToolTip(self.tr("Pick color from screen"))
+        self._pick_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._pick_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._pick_btn.clicked.connect(self._start_screen_pick)
+        strip.addWidget(self._pick_btn)
+
+        self._copy_hex_btn = QPushButton(self)
+        self._copy_rgb_btn = QPushButton(self)
+        for b in (self._copy_hex_btn, self._copy_rgb_btn):
+            b.setObjectName("ColorPickerCopyBtn")
+            b.setFixedHeight(26)
+            b.setMinimumWidth(150)
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._copy_hex_btn.clicked.connect(lambda: self._copy_color(0))
+        self._copy_rgb_btn.clicked.connect(lambda: self._copy_color(1))
+        strip.addWidget(self._copy_hex_btn)
+        strip.addWidget(self._copy_rgb_btn)
+        strip.addStretch()
+        layout.addLayout(strip)
+
+        # The hex field is the color-code preview right above this strip;
+        # keep it about as tall as the copy buttons (+2px for its font).
+        self.hex_edit.setFixedHeight(self._copy_hex_btn.height() + 2)
 
         # Bottom: swatches + palette + buttons
         bottom = QHBoxLayout()
@@ -488,31 +528,81 @@ class ColorPickerDialog(QDialog):
             self.r_spin,
             self.g_spin,
             self.b_spin,
-            self.a_spin,
         ]:
             s.blockSignals(block)
         self.hex_edit.blockSignals(block)
 
     def _sync_all_from_hsv(self):
         self._block_spins(True)
-        c = QColor.fromHsvF(self._hue, self._sat, self._val, self._alpha / 255.0)
+        c = QColor.fromHsvF(self._hue, self._sat, self._val)
         self.h_spin.setValue(int(self._hue * 360))
         self.s_spin.setValue(int(self._sat * 100))
         self.v_spin.setValue(int(self._val * 100))
         self.r_spin.setValue(c.red())
         self.g_spin.setValue(c.green())
         self.b_spin.setValue(c.blue())
-        self.a_spin.setValue(self._alpha)
-        if self._alpha < 255:
-            self.hex_edit.setText(c.name(QColor.NameFormat.HexArgb)[1:].upper())
-        else:
-            self.hex_edit.setText(c.name()[1:].upper())
+        self.hex_edit.setText(c.name()[1:].upper())
         self._block_spins(False)
 
         self.square.set_hsv(self._hue, self._sat, self._val)
         self._result = c
         self._new_swatch.set_color(c)
+        self._update_copy_buttons()
         self.colorChanging.emit(c)
+
+    # ── screen picker & copy ──────────────────────────────
+
+    def _fit_fixed_size(self):
+        """Pin the dialog to its natural layout size (fixed, non-resizable).
+
+        Measured with the longest possible readout strings so the copy
+        buttons never elide, whatever color is picked later.  Adapts to the
+        active font/theme, so no hardcoded pixel width is needed.
+        """
+        self._copy_hex_btn.setText("HEX #FF001122")
+        self._copy_rgb_btn.setText("RGB(255, 255, 255)")
+        self.ensurePolished()
+        self.layout().activate()
+        self.setFixedSize(self.sizeHint().expandedTo(QSize(420, 360)))
+        self._update_copy_buttons()
+
+    def _start_screen_pick(self):
+        from .screen_picker import pick_screen_color
+
+        # Don't hide the modal dialog: hiding and re-showing it mid-`exec()`
+        # corrupts Qt's modal stack on Windows — the outer dialogs lose their
+        # modality and the main window ends up un-clickable after the picker
+        # closes. A fully transparent window is absent from the frozen frame
+        # the screen picker captures (no DWM fade residue either), so there's
+        # no need to hide at all.
+        self.setWindowOpacity(0.0)
+        try:
+            color = pick_screen_color()
+        finally:
+            self.setWindowOpacity(1.0)
+            self.raise_()
+            self.activateWindow()
+        if color is not None:
+            self.set_color_direct(color)
+
+    def _update_copy_buttons(self):
+        c = self._result
+        hex_str = c.name()[1:].upper()
+        self._copy_hex_btn.setText(self.tr("HEX") + " #" + hex_str)
+        self._copy_hex_btn.setToolTip("#" + hex_str)
+        r, g, b = c.red(), c.green(), c.blue()
+        self._copy_rgb_btn.setText(f"{self.tr('RGB')}({r}, {g}, {b})")
+        self._copy_rgb_btn.setToolTip(f"rgb({r}, {g}, {b})")
+
+    def _copy_color(self, idx: int):
+        c = self._result
+        hex_str = c.name()[1:].upper()
+        rgb_str = f"rgb({c.red()}, {c.green()}, {c.blue()})"
+        QApplication.clipboard().setText("#" + hex_str if idx == 0 else rgb_str)
+        btn = self._copy_hex_btn if idx == 0 else self._copy_rgb_btn
+        orig = btn.text()
+        btn.setText(self.tr("Copied") + " ✓")
+        QTimer.singleShot(900, lambda: btn.setText(orig))
 
     def _on_square_changed(self):
         self._sat, self._val = self.square.sat_value()
@@ -542,20 +632,15 @@ class ColorPickerDialog(QDialog):
         self.square.set_hsv(self._hue, self._sat, self._val)
         self._sync_all_from_hsv()
 
-    def _on_alpha_spin(self):
-        self._alpha = self.a_spin.value()
-        self._sync_all_from_hsv()
-
     def _on_hex_changed(self, text):
         if len(text) in (6, 8):
             try:
                 c = QColor("#" + text)
                 if c.isValid():
-                    h, s, v, a = c.getHsvF()
+                    h, s, v, _ = c.getHsvF()
                     self._hue = h if h >= 0 else 0.0
                     self._sat = s
                     self._val = v
-                    self._alpha = c.alpha()
                     self.hue_slider.set_hue(self._hue)
                     self.square.set_hsv(self._hue, self._sat, self._val)
                     self._sync_all_from_hsv()
@@ -569,11 +654,10 @@ class ColorPickerDialog(QDialog):
         self._palette.set_at(idx, self._result)
 
     def set_color_direct(self, color: QColor):
-        h, s, v, a = color.getHsvF()
+        h, s, v, _ = color.getHsvF()
         self._hue = h if h >= 0 else 0.0
         self._sat = s
         self._val = v
-        self._alpha = color.alpha()
         self.hue_slider.set_hue(self._hue)
         self.square.set_hsv(self._hue, self._sat, self._val)
         self._sync_all_from_hsv()

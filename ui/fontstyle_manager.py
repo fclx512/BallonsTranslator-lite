@@ -23,8 +23,8 @@ from qtpy.QtGui import (
 )
 from qtpy.QtWidgets import (
     QCheckBox,
-    QColorDialog,
     QComboBox,
+    QDialog,
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
@@ -47,7 +47,7 @@ from utils.fontformat import (
     px2pt,
 )
 
-from .custom_widget import ColorSwatchBtn, SeparatorWidget
+from .custom_widget import ColorPickerDialog, ColorSwatchBtn, SeparatorWidget
 
 # ═══════════════════════════════════════════════════════════════════════
 # Style discovery
@@ -969,12 +969,16 @@ class StyleDetail(QScrollArea):
         if self._entry is None:
             return
         fg = self._pending_fg
-        c = QColorDialog.getColor(
-            QColor(max(0, min(255, int(fg[0]))), max(0, min(255, int(fg[1]))), max(0, min(255, int(fg[2])))),
-            self,
-            self.tr("Pick Text Color"),
+        dlg = ColorPickerDialog(
+            QColor(
+                max(0, min(255, int(fg[0]))),
+                max(0, min(255, int(fg[1]))),
+                max(0, min(255, int(fg[2]))),
+            ),
+            self.window(),
         )
-        if c.isValid():
+        if dlg.exec_() == QDialog.DialogCode.Accepted:
+            c = dlg.get_color()
             self._pending_fg = [c.red(), c.green(), c.blue()]
             self._fg_btn.setColor(c)
             self._fg_label.setText(f"rgb({c.red()}, {c.green()}, {c.blue()})")
@@ -983,12 +987,16 @@ class StyleDetail(QScrollArea):
         if self._entry is None:
             return
         sc = self._pending_stroke_color
-        c = QColorDialog.getColor(
-            QColor(max(0, min(255, int(sc[0]))), max(0, min(255, int(sc[1]))), max(0, min(255, int(sc[2])))),
-            self,
-            self.tr("Pick Stroke Color"),
+        dlg = ColorPickerDialog(
+            QColor(
+                max(0, min(255, int(sc[0]))),
+                max(0, min(255, int(sc[1]))),
+                max(0, min(255, int(sc[2]))),
+            ),
+            self.window(),
         )
-        if c.isValid():
+        if dlg.exec_() == QDialog.DialogCode.Accepted:
+            c = dlg.get_color()
             self._pending_stroke_color = [c.red(), c.green(), c.blue()]
             self._stroke_color_btn.setColor(c)
             self._stroke_color_label.setText(f"rgb({c.red()}, {c.green()}, {c.blue()})")

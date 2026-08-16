@@ -472,6 +472,19 @@ SmallColorPickerLabel {
     border: 1px solid @borderColor;
 }
 
+/* Compact utility-strip buttons inside the color picker dialog: the
+   global QPushButton height/padding is too tall for the hex/RGB readouts. */
+QPushButton#ColorPickerPickBtn {
+    height: 26px;
+    width: 26px;
+    padding: 0;
+}
+
+QPushButton#ColorPickerCopyBtn {
+    height: 26px;
+    padding: 1px 10px;
+}
+
 AlignmentChecker {
     margin: 0px;
     padding: 0px;

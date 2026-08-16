@@ -59,6 +59,7 @@ modules/
 | "—" 占位符模式 | 禁用数值字段时以 "—" 替代，`blockSignals` 防误触 |
 | `NoArrowsSpinBox` 族 | 无箭头、主题感知的数字/文本/下拉/滚动条控件族 |
 | `ColorSwatchBtn` | 色块按钮，`setColor()`/`color()` + `colorChanged` 信号 |
+| `pick_screen_color()` | 屏幕吸色管：全屏覆盖 + 8x 放大镜，左键取色、右键/Esc 取消（冻结帧采样，事件驱动不卡 UI） |
 | `ConfigScrollBar` | 全局统一的 8px 圆角滚动条（含悬停动画） |
 | `ClockDial` | 指针式角度/距离选择（影子方向用） |
 | `ConfigSectionHeader` | 配置面板章节标题 |

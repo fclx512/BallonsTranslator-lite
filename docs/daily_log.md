@@ -40,6 +40,31 @@
 **涉及文件：** `ui/shadow_gradient_dialog.py`、`ui/text_advanced_format.py`、`ui/text_panel.py`、`ui/mainwindow.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/技术实现/排版技术.md`
 
 ---
+
+### 快捷菜单：环形↔竖排独立化 + 命令池 used 灰显（已停用）
+
+**问题/需求：** 用户实机反馈「部分卡片不可复用，竖排使用的功能卡片到环形菜单出错，强行拖拽添加导致另一个菜单出现预期外复制卡片」。根因是**竖排借用环形半环、切换互转**（list 由 ring 派生、双向写回）——竖排只有半边，无法表达左右两侧都有卡片的环形，任何转换补丁都治标不治本。用户拍板：**Ring 与 List 是同一菜单的两套完全独立布局**（互不相关）。
+
+**改动要点：**
+- `ui/pie_menu.py`：删除半环转换函数 `half_ring_sector_idxs`/`slots_to_panels`/`panels_to_slots`（所有转换 bug 的根源，约 40 行）
+- `ui/pie_menu_editor.py`：`_on_style_changed` 只切 `layout` 显示、`_on_direction_changed` 只镜像渲染侧（不动 slots）；`_refresh_used` 按「当前菜单 + 当前样式」（ring 读 slots / list 读 panels）独立检测
+- `utils/config.py`：`DEFAULT_PIE_MENUS` 管线菜单补默认竖排布局（3 管线命令放正侧面板）；`migrate_legacy_pie` 从旧环形右半侧播种 panels（首次切换不空白）；对齐菜单默认布局修正（align_top/align_bottom 不再重复占顶扇区）
+- **used 灰显恢复又停用**：命令池卡片 property 机制恢复（同菜单同样式每命令一份，与去重守卫一致），但**实机 QSS 灰显不生效**——诊断脚本 `_grey_diag.py`（临时，已删）证明 property 实时更新、offscreen 像素也变灰，app 内却始终不显示（根因未明，待修）。用户拍板**停用视觉**（删 QSS 规则），property 逻辑链保留，之后修只需恢复一行样式
+- 测试：转换断言全部改写为**独立性断言**（切换不互转/不覆盖、方向翻转不动 slots、同命令可分属两布局但每布局仅一份、真实 dropEvent 路径 property 实时更新）
+
+**涉及文件：** `ui/pie_menu.py`、`ui/pie_menu_editor.py`、`utils/config.py`、`scripts/pie_menu_test.py`、`docs/技术实现/快捷菜单_实现总结.md`
+
+---
+
+### 拾色器改进：屏幕吸色管 + ColorPickerDialog 统一
+
+**问题/需求：** ① 取色只能手动输入/拖滑块，不能直接吸屏幕颜色；② HEX/RGB 复制不便；③ 字体颜色控件（fontstyle_manager）与拾色器两套实现。
+
+**改动要点：** `pick_screen_color()` 屏幕吸色管（`ui/custom_widget/screen_picker.py`：全屏覆盖 + 8x 放大镜，**冻结帧采样 + 事件驱动模态循环**——结构上不会卡 UI；左键取色、右键/Esc 取消）；`ColorPickerDialog` 重构（HEX 输入聚焦全选方便 Ctrl+C、尺寸自适应、去 alpha spin）；`fontstyle_manager` 颜色控件统一到 ColorPickerDialog；`slider.py` 新增 MD3 式 `SliderValueTip` 数值气泡（主题随 paint 实时解析）；offscreen 测试 11 例全绿，i18n/文档已同步。
+
+**涉及文件：** `ui/custom_widget/screen_picker.py`（新增）、`tests/test_screen_picker.py`（新增）、`ui/custom_widget/color_picker.py`、`ui/custom_widget/slider.py`、`ui/custom_widget/__init__.py`、`ui/fontstyle_manager.py`、`ui/shadow_gradient_dialog.py`、`ui/mainwindowbars.py`、`ui/misc.py`、`utils/shared.py`、`config/palette.json`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/基础速查/打包控件功能使用说明.md`、`AGENTS.md`
+
+---
 ---
 
 ## 2026-08-14

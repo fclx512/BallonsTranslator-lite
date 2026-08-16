@@ -1,28 +1,142 @@
-from qtpy.QtCore import Property, QPoint, QPropertyAnimation, QRect, QRectF, Qt, Signal
-from qtpy.QtGui import QBrush, QColor, QFontMetrics, QMouseEvent, QPainter, QPen
-from qtpy.QtWidgets import QSlider, QStyle, QStyleOptionSlider, QWidget
+from qtpy.QtCore import (
+    Property,
+    QEasingCurve,
+    QEvent,
+    QPoint,
+    QPropertyAnimation,
+    QRect,
+    QRectF,
+    QSize,
+    Qt,
+    Signal,
+)
+from qtpy.QtGui import QBrush, QColor, QFontMetrics, QMouseEvent, QPainter, QPainterPath, QPen
+from qtpy.QtWidgets import QGraphicsOpacityEffect, QSlider, QWidget
 
-from utils import shared as C
+from utils.config import pcfg
 
 from .helper import borderColor, isDarkTheme, themeColor, widgetBackgroundColor
 
 
-def slider_subcontrol_rect(r: QRect, widget: QWidget):
-    if widget.orientation() == Qt.Orientation.Horizontal:
-        y = widget.height() // 4
-        h = y * 2
-        r = QRect(r.x(), y, r.width(), h)
-    else:
-        x = widget.width() // 4
-        w = x * 2
-        r = QRect(x, r.y(), w, r.height())
+class SliderValueTip(QWidget):
+    """MD3-style value bubble floating above the slider handle.
 
-    # seems a bit dumb, otherwise the handle is buggy
-    if r.height() < r.width():
-        r.setHeight(r.width())
-    else:
-        r.setWidth(r.height())
-    return r
+    A frameless top-level tool window with translucent background, so it
+    can overflow the slider's small bounds without disturbing layout or
+    capturing mouse events. Colors are re-resolved on every paint, so
+    theme switches apply to a visible bubble immediately.
+    """
+
+    _BUBBLE_H = 26
+    _TAIL_H = 7
+    _PADDING_X = 10
+    _GAP = 1  # gap between the tail tip and the handle top
+
+    def __init__(self):
+        super().__init__(
+            None,
+            Qt.WindowType.Tool
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowDoesNotAcceptFocus,
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._text = ""
+        self._has_tail = True
+        font = self.font()
+        font.setPointSize(max(font.pointSize() - 1, 7))
+        self.setFont(font)
+
+        self._effect = QGraphicsOpacityEffect(self)
+        self._effect.setOpacity(1.0)
+        self.setGraphicsEffect(self._effect)
+        self._ani = QPropertyAnimation(self._effect, b"opacity", self)
+        self._ani.setDuration(100)
+        self._ani.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._ani.finished.connect(lambda: self._effect.setOpacity(1.0))
+        self.hide()
+
+    def sizeHint(self):
+        fm = QFontMetrics(self.font())
+        w = fm.horizontalAdvance(self._text) + 2 * self._PADDING_X
+        h = self._BUBBLE_H + (self._TAIL_H if self._has_tail else 0)
+        return QSize(w, h)
+
+    def setHasTail(self, has: bool):
+        """Whether the bubble draws its downward pointer triangle."""
+        if has != self._has_tail:
+            self._has_tail = has
+            self.update()
+
+    def showTip(self, slider: QWidget, handle_top_center: QPoint, text: str):
+        """Show the bubble with its tail tip pointing at handle_top_center
+        (a point in ``slider`` coordinates)."""
+        if not slider.isEnabled():
+            self.hideTip()
+            return
+        self._text = text
+        self.adjustSize()
+        w, h = self.sizeHint().width(), self.sizeHint().height()
+        # never wider than the slider, so the bubble cannot cover neighbours
+        w = min(w, slider.width())
+        self.resize(w, h)
+        c = slider.mapToGlobal(handle_top_center)
+        x = c.x() - w // 2
+        y = c.y() - self._GAP - h
+        # keep the bubble within the slider's horizontal span
+        left = slider.mapToGlobal(QPoint(0, 0)).x()
+        right = left + slider.width()
+        x = max(left, min(x, right - w))
+        self.move(x, y)
+        if not self.isVisible():
+            self.show()
+            self._fade_in()
+        else:
+            self.update()
+
+    def hideTip(self):
+        if self.isVisible():
+            self.hide()
+
+    def _fade_in(self):
+        if pcfg.animation_fps < 0:
+            self._effect.setOpacity(1.0)
+            return
+        self._effect.setOpacity(0.0)
+        self._ani.stop()
+        self._ani.setStartValue(0.0)
+        self._ani.setEndValue(1.0)
+        self._ani.start()
+
+    def paintEvent(self, e):
+        painter = QPainter(self)
+        painter.setRenderHints(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+
+        bg = themeColor()
+        painter.setBrush(bg)
+        bubble = QRectF(0, 0, self.width(), self._BUBBLE_H)
+        painter.drawRoundedRect(bubble, self._BUBBLE_H / 2, self._BUBBLE_H / 2)
+
+        # tail: small triangle pointing down at the handle
+        if self._has_tail:
+            tail_top = bubble.bottom() - 1
+            path = QPainterPath()
+            path.moveTo(self.width() / 2 - 7, tail_top)
+            path.lineTo(self.width() / 2 + 7, tail_top)
+            path.lineTo(self.width() / 2, self.height() - 1)
+            path.closeSubpath()
+            painter.drawPath(path)
+
+        painter.setFont(self.font())
+        painter.setPen(self._textColor(bg))
+        painter.drawText(bubble, Qt.AlignmentFlag.AlignCenter, self._text)
+
+    @staticmethod
+    def _textColor(bg: QColor) -> QColor:
+        lum = (0.299 * bg.red() + 0.587 * bg.green() + 0.114 * bg.blue()) / 255
+        return QColor(255, 255, 255) if lum < 0.5 else QColor(0, 0, 0)
 
 
 class SliderHandle(QWidget):
@@ -113,6 +227,57 @@ class Slider(QSlider):
         self.handle.released.connect(self.sliderReleased)
         self.valueChanged.connect(self._adjustHandlePos)
 
+        self._tip = SliderValueTip()
+        self._label_tip = SliderValueTip()  # fixed caption bubble for draw_content
+        self._label_tip.setHasTail(False)  # caption is self-explanatory, no pointer
+        self._interacting = False
+        self._value_format = str
+        self._tip_prefix = ""
+        self.sliderPressed.connect(self._onSliderPressed)
+        self.sliderReleased.connect(self._onSliderReleased)
+        self.valueChanged.connect(self._updateTip)
+
+    def setValueFormat(self, fmt):
+        """Set a callable ``fmt(value) -> str`` for the value bubble text."""
+        self._value_format = fmt if callable(fmt) else str
+
+    # caption bubble sits above the value bubble, horizontally centered and
+    # fixed (does not follow the handle) so the label stays visually stable
+    _LABEL_TIP_GAP = 38  # value bubble (33px) + gap (1) + spacing (4)
+
+    def _showLabelTip(self):
+        if not self._tip_prefix or not self.isEnabled():
+            return
+        self._label_tip.showTip(
+            self, QPoint(self.width() // 2, -self._LABEL_TIP_GAP), self._tip_prefix
+        )
+
+    def _hideLabelTip(self):
+        self._label_tip.hideTip()
+
+    def _onSliderPressed(self):
+        self._interacting = True
+        self._updateTip()
+
+    def _onSliderReleased(self):
+        self._interacting = False
+        if not self.hovering:
+            self._tip.hideTip()
+        else:
+            self._updateTip()
+
+    def _updateTip(self):
+        if not self.isEnabled():
+            self._tip.hideTip()
+            return
+        if not (self._interacting or self.hovering or self.hasFocus()):
+            return
+        handle_top = QPoint(
+            self.handle.pos().x() + self.handle.width() // 2,
+            self.handle.pos().y(),
+        )
+        self._tip.showTip(self, handle_top, self._value_format(self.value()))
+
     def setOrientation(self, orientation: Qt.Orientation) -> None:
         super().setOrientation(orientation)
         if orientation == Qt.Orientation.Horizontal:
@@ -122,8 +287,27 @@ class Slider(QSlider):
 
     def mousePressEvent(self, e: QMouseEvent):
         self._pressedPos = e.pos()
+        self._interacting = True
         self.setValue(self._posToValue(e.pos()))
         self.clicked.emit(self.value())
+        self._updateTip()
+
+    def mouseReleaseEvent(self, e: QMouseEvent):
+        self._interacting = False
+        if not self.hovering:
+            self._tip.hideTip()
+        return super().mouseReleaseEvent(e)
+
+    def focusOutEvent(self, e) -> None:
+        if not self.hovering:
+            self._tip.hideTip()
+        return super().focusOutEvent(e)
+
+    def changeEvent(self, e) -> None:
+        super().changeEvent(e)
+        if e.type() == QEvent.Type.EnabledChange and not self.isEnabled():
+            self._tip.hideTip()
+            self._hideLabelTip()
 
     def mouseMoveEvent(self, e: QMouseEvent):
         self.setValue(self._posToValue(e.pos()))
@@ -165,43 +349,6 @@ class Slider(QSlider):
         else:
             self._drawVerticalGroove(painter)
 
-        if hasattr(self, "draw_content") and self.hovering:
-            # its a bad idea to display text like this, but I leave it as it is for now
-
-            option = QStyleOptionSlider()
-            self.initStyleOption(option)
-
-            rect = self.style().subControlRect(
-                QStyle.CC_Slider, option, QStyle.SC_SliderHandle, self
-            )
-            rect = slider_subcontrol_rect(rect, self)
-
-            value = self.value()
-            value_str = str(value)
-
-            painter.setPen(QColor(*C.SLIDERHANDLE_COLOR, 255))
-            font = painter.font()
-            font.setPointSizeF(8)
-            fm = QFontMetrics(font)
-            painter.setFont(font)
-
-            is_hor = self.orientation() == Qt.Orientation.Horizontal
-            if is_hor:
-                value_w = fm.boundingRect(value_str).width()
-                dx = self.width() - value_w
-            else:
-                dx = dy = 0
-
-            dy = self.height() - fm.height() + fm.descent()
-            painter.drawText(dx, dy, value_str)
-
-            if self.draw_content is not None:
-                painter.drawText(
-                    0,
-                    dy,
-                    self.draw_content,
-                )
-
     def _drawHorizonGroove(self, painter: QPainter):
         w, r = self.width(), self.handle.width() / 2
         painter.drawRoundedRect(QRectF(r, r - 2, w - r * 2, 4), 2, 2)
@@ -237,6 +384,9 @@ class Slider(QSlider):
 
     def resizeEvent(self, e):
         self._adjustHandlePos()
+        self._updateTip()
+        if self.hovering:
+            self._showLabelTip()
 
     def keyPressEvent(self, e):
         key = e.key()
@@ -250,11 +400,16 @@ class Slider(QSlider):
 
     def enterEvent(self, event) -> None:
         self.hovering = True
+        self._showLabelTip()
+        self._updateTip()
         self.update()
         return super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
         self.hovering = False
+        if not self._interacting:
+            self._hideLabelTip()
+            self._tip.hideTip()
         self.update()
         return super().leaveEvent(event)
 
@@ -267,6 +422,9 @@ class PaintQSlider(Slider):
     ):
         super().__init__(orientation, *args, **kwargs)
         self.draw_content = draw_content
+        # description text (e.g. "Text layer opacity") leads the value bubble
+        if draw_content:
+            self._tip_prefix = draw_content
         self.pressed: bool = False
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
@@ -298,6 +456,17 @@ class RangeSlider(QWidget):
         self.setMouseTracking(True)
         self._dragging = None  # 'low', 'high', or None
         self._hovered = None  # 'low', 'high', or None
+        self._tip = SliderValueTip()
+
+    def _showTip(self, value: int):
+        c = self._handleCenter(value)
+        handle_top = QPoint(c.x(), c.y() - self._handle_size // 2)
+        self._tip.showTip(self, handle_top, str(value))
+
+    def changeEvent(self, e):
+        super().changeEvent(e)
+        if e.type() == QEvent.Type.EnabledChange and not self.isEnabled():
+            self._tip.hideTip()
 
     def low(self) -> int:
         return self._low
@@ -368,6 +537,8 @@ class RangeSlider(QWidget):
                 self._high = min(self._max, max(v, self._low))
             self.rangeChanged.emit(self._low, self._high)
             self.update()
+        if self._dragging:
+            self._showTip(self._low if self._dragging == "low" else self._high)
 
     def mouseMoveEvent(self, event):
         if not self.isEnabled():
@@ -384,6 +555,10 @@ class RangeSlider(QWidget):
         if hovered != self._hovered:
             self._hovered = hovered
             self.update()
+            if hovered:
+                self._showTip(self._low if hovered == "low" else self._high)
+            else:
+                self._tip.hideTip()
 
         if self._dragging is None:
             return
@@ -400,13 +575,18 @@ class RangeSlider(QWidget):
                 self._high = v
                 self.rangeChanged.emit(self._low, self._high)
                 self.update()
+        if self._dragging:
+            self._showTip(self._low if self._dragging == "low" else self._high)
 
     def mouseReleaseEvent(self, event):
         self._dragging = None
         self.update()
+        if not self._hovered:
+            self._tip.hideTip()
 
     def leaveEvent(self, event):
         self._hovered = None
+        self._tip.hideTip()
         self.update()
 
     def paintEvent(self, e):

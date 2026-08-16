@@ -690,6 +690,7 @@ class BottomBar(Widget):
         )
         self.originalSlider.setFixedWidth(150)
         self.originalSlider.setRange(0, 100)
+        self.originalSlider.setValueFormat(lambda v: f"{v}%")
 
         self.textlayerSlider = PaintQSlider(
             self.tr("Text layer opacity"), Qt.Orientation.Horizontal, self
@@ -697,6 +698,7 @@ class BottomBar(Widget):
         self.textlayerSlider.setFixedWidth(150)
         self.textlayerSlider.setValue(100)
         self.textlayerSlider.setRange(0, 100)
+        self.textlayerSlider.setValueFormat(lambda v: f"{v}%")
 
         self.hlayout.addWidget(self.textdet_selector)
         self.hlayout.addWidget(self.ocr_selector)

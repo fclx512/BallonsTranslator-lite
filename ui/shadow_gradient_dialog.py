@@ -537,6 +537,7 @@ class TextStyleDialog(QDialog):
         self.strength_slider.setRange(0, 100)
         self.strength_slider.setValue(int(fmt.shadow_strength * 100))
         self.strength_slider.setFixedWidth(150)
+        self.strength_slider.setValueFormat(lambda v: f"{v / 100:.2f}")
         self.strength_slider.valueChanged.connect(self._on_shadow_value_changed)
         self.strength_label = QLabel(f"{fmt.shadow_strength:.2f}")
         sr = QHBoxLayout()
@@ -550,6 +551,7 @@ class TextStyleDialog(QDialog):
         self.radius_slider.setRange(0, 100)
         self.radius_slider.setValue(int(fmt.shadow_radius * 100))
         self.radius_slider.setFixedWidth(150)
+        self.radius_slider.setValueFormat(lambda v: f"{v / 100:.2f}")
         self.radius_slider.valueChanged.connect(self._on_shadow_value_changed)
         self.radius_label = QLabel(f"{fmt.shadow_radius:.2f}")
         rr = QHBoxLayout()
@@ -636,6 +638,7 @@ class TextStyleDialog(QDialog):
         self.scale_slider.setRange(50, 200)  # 0.5 to 2.0
         self.scale_slider.setValue(int(fmt.gradient_size * 100))
         self.scale_slider.setFixedWidth(150)
+        self.scale_slider.setValueFormat(lambda v: f"{v / 100:.2f}")
         self.scale_slider.valueChanged.connect(self._on_gradient_value_changed)
         self.scale_label = QLabel(f"{fmt.gradient_size:.2f}")
         szr = QHBoxLayout()

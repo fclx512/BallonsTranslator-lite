@@ -848,7 +848,7 @@ def main():
     print("== vertical list layout (half-ring panels) ==")
     from ui.pie_menu import (
         LIST_ANCHOR_GAP_X, LIST_MIN_W, LIST_PANEL_MAX_ITEMS, LIST_PANELS,
-        WINDOW_RADIUS, panels_to_slots, slots_to_panels,
+        WINDOW_RADIUS,
     )
 
     # normalize: panels / direction, invalid fallbacks, caps, items migration
@@ -878,27 +878,21 @@ def main():
     check("legacy items migrate to panels (chunked)",
           mig["panels"] == [["a", "b", "c"], ["d", "e", "f"], ["g"], [], []])
 
-    # ring <-> list conversions (lateral half incl. top/bottom poles,
-    # top -> bottom)
+    # ring <-> list independence (2026-08-16): the two layouts of one menu
+    # never convert into each other — switching only shows the other side.
     ring_slots = [["copy"], ["paste"], ["delete"], ["merge"], [], [], [], []]
-    check("slots_to_panels picks right half incl. poles",
-          slots_to_panels(ring_slots, "right")
-          == [["copy"], ["paste"], ["delete"], ["merge"], []])
-    left_slots = [[], [], [], [], [], ["merge"], ["delete"], ["paste"]]
-    check("slots_to_panels picks left half incl. poles",
-          slots_to_panels(left_slots, "left")
-          == [[], ["paste"], ["delete"], ["merge"], []])
-    back = panels_to_slots([["paste"], ["delete"], ["merge"]], "right")
-    check("panels_to_slots writes sectors 0..2",
-          back[0] == ["paste"] and back[1] == ["delete"]
-          and back[2] == ["merge"])
-    back_l = panels_to_slots([["paste"], ["delete"], ["merge"]], "left")
-    check("panels_to_slots writes sectors 0/7/6",
-          back_l[0] == ["paste"] and back_l[7] == ["delete"]
-          and back_l[6] == ["merge"])
-    quad = slots_to_panels([["a"], ["b"], ["c"], ["d"]], "right")
-    check("4-sector ring -> top/right/bottom panels + padding",
-          quad == [["a"], ["b"], ["c"], [], []])
+    indep = normalize_pie_menu({"id": "I", "layout": "ring",
+                                "slots": ring_slots})
+    check("ring menu keeps its slots untouched by normalize",
+          indep["slots"] == ring_slots)
+    check("ring menu list side stays empty until edited",
+          indep["panels"] == [[], [], [], [], []])
+    list_side = normalize_pie_menu({"id": "I", "layout": "list",
+                                    "panels": [["a"], ["b"], ["c"]]})
+    check("list menu keeps its panels untouched by normalize",
+          list_side["panels"] == [["a"], ["b"], ["c"], [], []])
+    check("list menu ring side stays empty until edited",
+          list_side["slots"] == [[] for _ in range(list_side["sectors"])])
 
     # list geometry + hit-test on a runtime widget
     list_menu = normalize_pie_menu({
@@ -1032,7 +1026,9 @@ def main():
     check("no copy fired", ("copy", ()) not in mc.calls)
     mc._selected = 1
 
-    # editor: style switch conversions, direction, visibility, panel drag-drop
+    # editor: style switch, direction, visibility, panel drag-drop.
+    # Ring ``slots`` and list ``panels`` are independent (2026-08-16): a
+    # style switch only shows the other arrangement, never converts.
     editor._menus = [normalize_pie_menu({
         "id": "e", "trigger": "T", "sectors": 8,
         "slots": [["copy"], ["paste"], ["delete"], ["merge"], [], [], [], []],
@@ -1041,41 +1037,48 @@ def main():
     editor._refresh_preview()
     editor._on_style_changed(1)   # -> list
     check("style switch to list", editor._menus[0]["layout"] == "list")
-    check("style switch picks lateral half incl. poles",
-          editor._menus[0]["panels"]
-          == [["copy"], ["paste"], ["delete"], ["merge"], []])
+    check("style switch never converts slots",
+          editor._menus[0]["slots"] == [["copy"], ["paste"], ["delete"],
+                                        ["merge"], [], [], [], []])
+    check("untouched list side stays empty",
+          editor._menus[0]["panels"] == [[], [], [], [], []])
     check("sectors hidden in list style", editor.sectors_combo.isHidden())
     check("direction shown in list style", not editor.direction_combo.isHidden())
-    editor._on_style_changed(0)   # -> ring (panels written to the right half)
+    editor._on_style_changed(0)   # -> ring
     check("style switch back to ring", editor._menus[0]["layout"] == "ring")
-    check("panels written back to sectors 0..3",
-          editor._menus[0]["slots"][0] == ["copy"]
-          and editor._menus[0]["slots"][1] == ["paste"]
-          and editor._menus[0]["slots"][2] == ["delete"]
-          and editor._menus[0]["slots"][3] == ["merge"])
-    editor._on_direction_changed(1)   # ring ignores it, just persists
+    check("slots untouched by the round trip",
+          editor._menus[0]["slots"] == [["copy"], ["paste"], ["delete"],
+                                        ["merge"], [], [], [], []])
+    editor._on_direction_changed(1)   # pure render mirror, persists either way
     check("direction set to left", editor._menus[0]["direction"] == "left")
-    editor._on_style_changed(1)   # -> list again, now from the left half
-    check("round trip keeps top command after direction flip",
-          editor._menus[0]["panels"] == [["copy"], [], [], [], []])
-    # non-destructive round trip (2026-08-14): sectors outside the lateral
-    # half are preserved when converting back — nothing is ever dropped
+    check("direction flip leaves slots alone",
+          editor._menus[0]["slots"] == [["copy"], ["paste"], ["delete"],
+                                        ["merge"], [], [], [], []])
+    editor._on_style_changed(1)   # -> list again
+    check("list side still empty after direction flip",
+          editor._menus[0]["panels"] == [[], [], [], [], []])
+    # a ring with cards on both sides keeps them all; the list shows its own
+    # arrangement — not a half or a mirror of the ring
     editor._menus = [normalize_pie_menu({
         "id": "e", "trigger": "T", "sectors": 8,
         "slots": [["copy"], ["paste"], ["delete"], ["merge"],
                   ["bottom"], ["l-l"], ["left"], ["u-l"]],
+        "panels": [["ocr"], [], [], [], []],
     })]
     editor._current = 0
     editor._refresh_preview()
-    editor._on_style_changed(1)   # -> list (right half incl. poles)
-    check("list shows right half incl. poles",
-          editor._menus[0]["panels"] == [["copy"], ["paste"], ["delete"],
-                                         ["merge"], ["bottom"]])
+    editor._on_style_changed(1)   # -> list
+    check("ring with both sides keeps every sector on switch",
+          editor._menus[0]["slots"] == [["copy"], ["paste"], ["delete"],
+                                        ["merge"], ["bottom"], ["l-l"],
+                                        ["left"], ["u-l"]])
+    check("list shows its own arrangement, not a ring half",
+          editor._menus[0]["panels"] == [["ocr"], [], [], [], []])
     editor._on_style_changed(0)   # -> ring
-    check("non-lateral sectors preserved on round trip",
-          editor._menus[0]["slots"][5] == ["l-l"]
-          and editor._menus[0]["slots"][6] == ["left"]
-          and editor._menus[0]["slots"][7] == ["u-l"])
+    check("list edits never leak into the ring",
+          editor._menus[0]["slots"] == [["copy"], ["paste"], ["delete"],
+                                        ["merge"], ["bottom"], ["l-l"],
+                                        ["left"], ["u-l"]])
     editor._menus = [normalize_pie_menu({
         "id": "e", "trigger": "T", "layout": "list", "direction": "right",
         "panels": [["paste"], ["delete"], ["merge"]],
@@ -1096,12 +1099,169 @@ def main():
     check("list palette drop-back removes",
           editor._menus[0]["panels"][2] == [])
 
+    # ── Independence (decision 2026-08-16) ──────────────────────────────
+    # Ring ``slots`` and list ``panels`` are two independent arrangements of
+    # the same menu.  Switching the style only picks which one is shown and
+    # edited — it never converts, merges, mirrors or overwrites the other,
+    # so a ring with cards on both sides keeps them all and the list keeps
+    # its own arrangement.
+    editor._menus = [normalize_pie_menu({
+        "id": "e", "trigger": "T", "sectors": 8,
+        "slots": [["a"], ["b"], ["c"], ["d"], ["e"], ["f"], ["g"], ["h"]],
+        "panels": [["x"], [], [], [], []],
+    })]
+    editor._current = 0
+    editor._refresh_preview()
+    editor._on_style_changed(1)            # -> list
+    check("style switch keeps the ring untouched",
+          editor._menus[0]["slots"] == [["a"], ["b"], ["c"], ["d"], ["e"],
+                                        ["f"], ["g"], ["h"]])
+    check("list shows its own stored arrangement",
+          editor._menus[0]["panels"] == [["x"], [], [], [], []])
+    editor._on_command_dropped(1, 0, "y", -1, -1)   # edit the list
+    editor._on_style_changed(0)            # -> ring
+    check("list edits never leak into the ring",
+          editor._menus[0]["slots"] == [["a"], ["b"], ["c"], ["d"], ["e"],
+                                        ["f"], ["g"], ["h"]])
+    check("ring switch leaves the list edits in place",
+          editor._menus[0]["panels"] == [["x"], ["y"], [], [], []])
+    editor._on_direction_changed(1)        # pure render-side mirror
+    check("direction flip touches nothing but direction",
+          editor._menus[0]["direction"] == "left"
+          and editor._menus[0]["slots"] == [["a"], ["b"], ["c"], ["d"],
+                                            ["e"], ["f"], ["g"], ["h"]]
+          and editor._menus[0]["panels"] == [["x"], ["y"], [], [], []])
+    # a ring with cards on both sides: switching never converts, so nothing
+    # is mirrored, merged or dropped
+    editor._menus = [normalize_pie_menu({
+        "id": "e", "trigger": "T", "sectors": 8, "layout": "list",
+        "slots": [["copy"], ["paste"], ["delete"], ["merge"],
+                  ["bottom"], ["l-l"], ["left"], ["u-l"]],
+        "panels": [["ocr"], [], [], [], []],
+    })]
+    editor._current = 0
+    editor._refresh_preview()
+    editor._on_style_changed(0)            # -> ring
+    check("ring with cards on both sides keeps all 8 sectors",
+          editor._menus[0]["slots"] == [["copy"], ["paste"], ["delete"],
+                                        ["merge"], ["bottom"], ["l-l"],
+                                        ["left"], ["u-l"]])
+    check("list arrangement kept on ring switch",
+          editor._menus[0]["panels"] == [["ocr"], [], [], [], []])
+    # one copy per command per *layout*: the same command may live in both
+    # the ring and the list (they are independent), but never twice in one
+    editor._menus = [normalize_pie_menu({
+        "id": "e", "trigger": "T", "sectors": 8, "layout": "list",
+        "slots": [["copy"], [], [], [], [], [], [], []],
+        "panels": [[], [], [], [], []],
+    })]
+    editor._current = 0
+    editor._refresh_preview()
+    editor._on_command_dropped(1, 0, "copy", -1, -1)   # add copy to the list
+    check("copy in the ring does not block the list copy",
+          editor._menus[0]["panels"] == [[], ["copy"], [], [], []])
+    editor._on_command_dropped(1, 1, "copy", -1, -1)   # duplicate within list
+    check("duplicate add rejected within one layout",
+          editor._menus[0]["panels"] == [[], ["copy"], [], [], []])
+    editor._on_command_dropped(2, 0, "copy", 1, 0)     # move within the list
+    check("move of an existing card still allowed",
+          editor._menus[0]["panels"] == [[], [], ["copy"], [], []])
+    # the duplicate-add guard applies to the ring side as well
+    editor._menus = [normalize_pie_menu({
+        "id": "e", "trigger": "T", "sectors": 8, "layout": "ring",
+        "slots": [[]] * 8,
+    })]
+    editor._current = 0
+    editor._refresh_preview()
+    editor._on_command_dropped(2, 0, "copy", -1, -1)
+    editor._on_command_dropped(2, 1, "copy", -1, -1)   # duplicate add
+    check("ring duplicate add rejected",
+          editor._menus[0]["slots"][2] == ["copy"])
+    editor._on_command_dropped(3, 0, "copy", 2, 0)     # move to sector 3
+    check("ring move of an existing card still allowed",
+          editor._menus[0]["slots"][2] == []
+          and editor._menus[0]["slots"][3] == ["copy"])
+    # used-grey (2026-08-16): palette cards already in the current menu's
+    # *current* layout are dimmed — each menu and each style independently
+    editor._menus = [normalize_pie_menu({
+        "id": "e", "trigger": "T", "sectors": 8, "layout": "ring",
+        "slots": [["copy"], ["paste"], [], [], [], [], [], []],
+        "panels": [["merge"], [], [], [], []],
+    })]
+    editor._current = 0
+    editor._refresh_preview()
+    check("used-grey follows the ring layout",
+          bool(editor.palette._cards["copy"].property("used"))
+          and bool(editor.palette._cards["paste"].property("used"))
+          and not editor.palette._cards["merge"].property("used"))
+    editor._on_style_changed(1)   # -> list: grey now follows panels
+    check("used-grey follows the list layout",
+          bool(editor.palette._cards["merge"].property("used"))
+          and not editor.palette._cards["copy"].property("used"))
+    editor._menus.append(normalize_pie_menu({
+        "id": "m2", "trigger": "Y", "sectors": 8, "layout": "ring",
+        "slots": [["delete"], [], [], [], [], [], [], []],
+    }))
+    editor._current = 1
+    editor._refresh_preview()
+    check("used-grey is per menu",
+          bool(editor.palette._cards["delete"].property("used"))
+          and not editor.palette._cards["copy"].property("used"))
+    # end-to-end: the grey follows drag operations *live* — a drop add dims
+    # the palette card, dragging it back un-dims it, no manual refresh
+    editor._menus = [normalize_pie_menu({
+        "id": "e", "trigger": "T", "sectors": 8, "layout": "ring",
+        "slots": [[]] * 8,
+    })]
+    editor._current = 0
+    editor._refresh_preview()
+    check("fresh card starts un-greyed",
+          not editor.palette._cards["merge"].property("used"))
+    editor.preview.command_dropped.emit(2, 0, "merge", -1, -1)   # drop add
+    check("drop add greys the card live",
+          bool(editor.palette._cards["merge"].property("used")))
+    editor._on_card_remove(2, 0)                                  # drag back
+    check("drag-back un-greys the card live",
+          not editor.palette._cards["merge"].property("used"))
+    # end-to-end through the *real* dropEvent path (mime parse + hit-test +
+    # _menu_has_cmd guard), not just the emitted signal
+    from qtpy.QtCore import QMimeData
+    from qtpy.QtGui import QDropEvent
+    md = QMimeData()
+    md.setData("application/x-pie-cmd", b"translate")
+    pv = editor.preview
+    drop_pos = QPointF((WINDOW_RADIUS + 130) * 0.72, WINDOW_RADIUS * 0.72)
+    ev = QDropEvent(drop_pos, Qt.DropAction.MoveAction, md,
+                    Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    check("drop pos hits right sector", pv.sector_at(drop_pos / 0.72) == 2)
+    pv.dropEvent(ev)
+    check("real dropEvent adds to the menu",
+          "translate" in editor._menus[0]["slots"][2])
+    check("real dropEvent greys the card live",
+          bool(editor.palette._cards["translate"].property("used")))
+
     # list preview paints + ghost drop geometry
     editor._refresh_preview()
     pv_list = editor.preview
     check("list preview paints", not pv_list.grab().isNull())
     check("list preview ghost drop target",
           pv_list._list_drop_pos(pv_list._list_rects[2].center()) == (2, 0))
+    # duplicate-add detection at the preview level (ring + list), and the
+    # source-sector exclusion for internal drags
+    pv_list.set_menu_config(normalize_pie_menu({
+        "id": "e", "trigger": "T", "sectors": 8,
+        "slots": [["copy"], [], [], [], [], [], [], []],
+    }))
+    check("preview blocks duplicate add (ring)",
+          pv_list._menu_has_cmd("copy") and not pv_list._menu_has_cmd("paste"))
+    pv_list.set_menu_config(normalize_pie_menu({
+        "id": "e", "trigger": "T", "layout": "list",
+        "panels": [["copy"], [], [], [], []],
+    }))
+    check("preview blocks duplicate add (list)",
+          pv_list._menu_has_cmd("copy") and not pv_list._menu_has_cmd("paste")
+          and not pv_list._menu_has_cmd("copy", src_sector=0))
+    editor._refresh_preview()   # restore the editor's own menu state
 
     # a menu containing a toggle command paints (checkbox rendering path —
     # regression: a NameError there used to kill Qt silently)

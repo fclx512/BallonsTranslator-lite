@@ -417,6 +417,26 @@
             <source>Cancel</source>
             <translation>取消</translation>
         </message>
+        <message>
+            <location filename="..\ui\custom_widget\color_picker.py" />
+            <source>Pick color from screen</source>
+            <translation>从屏幕取色</translation>
+        </message>
+        <message>
+            <location filename="..\ui\custom_widget\color_picker.py" />
+            <source>Copied</source>
+            <translation>已复制</translation>
+        </message>
+        <message>
+            <location filename="..\ui\custom_widget\color_picker.py" />
+            <source>HEX</source>
+            <translation>HEX</translation>
+        </message>
+        <message>
+            <location filename="..\ui\custom_widget\color_picker.py" />
+            <source>RGB</source>
+            <translation>RGB</translation>
+        </message>
     </context>
     <context>
         <name>ColorPickerLabel</name>
@@ -4373,16 +4393,6 @@ text layers are fully editable.</source>
             <location filename="..\ui\fontstyle_manager.py" line="757" />
             <source>Batch edit font style</source>
             <translation>批量编辑字体样式</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="771" />
-            <source>Pick Text Color</source>
-            <translation>选择文字颜色</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="788" />
-            <source>Pick Stroke Color</source>
-            <translation>选择描边颜色</translation>
         </message>
         <message>
             <location filename="..\ui\fontstyle_manager.py" line="495" />
