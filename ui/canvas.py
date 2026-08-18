@@ -51,13 +51,19 @@ from .texteditshapecontrol import (
     ControlBlockItem,
     TextBlkShapeControl,
 )
-from .text_engine.transforms.grid_control import TextGridTransformControl
+from .text_engine.transforms.grid_control import (
+    GridControlPointItem,
+    TextGridTransformControl,
+)
 from .textitem import TextBlkItem, TextBlock
 
 CANVAS_SCALE_MAX = 10.0
 CANVAS_SCALE_MIN = 0.01
 CANVAS_SCALE_SPEED = 0.1
 OVERFLOW_MARGIN_RATIO = 0.3  # 过界模式场景扩展比例
+# Minimum drag (screen pixels, scaled by zoom) before a left-drag turns from
+# a click into a text-block box select (2026-08-18).
+MIN_RUBBER_BAND_DRAG = 4.0
 
 
 class MoveByKeyCommand(QUndoCommand):
@@ -116,7 +122,9 @@ class CustomGV(QGraphicsView):
         self.scrollbar_v = ScrollBar(Qt.Orientation.Vertical, self, fadeout=True)
 
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        # Left-drag on the canvas is the text-block box select (owned by the
+        # scene); plain canvas panning is the middle button / scrollbars.
+        self.setDragMode(QGraphicsView.DragMode.NoDrag)
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         # qgraphicsview always scroll content according to wheelevent
@@ -351,6 +359,7 @@ class Canvas(QGraphicsScene):
         self.rubber_band = self.addWidget(QRubberBand(QRubberBand.Shape.Rectangle))
         self.rubber_band.hide()
         self.rubber_band_origin = None
+        self.rubber_band_dragged = False  # left-drag box select moved past the click threshold
 
         self.draw_undo_stack = QUndoStack(self)
         self.text_undo_stack = QUndoStack(self)
@@ -961,18 +970,21 @@ class Canvas(QGraphicsScene):
             self.rubber_band.setGeometry(
                 QRectF(self.rubber_band_origin, event.scenePos()).normalized()
             )
-            sel_path = QPainterPath(self.rubber_band_origin)
-            sel_path.addRect(self.rubber_band.geometry())
-            if C.FLAG_QT6:
-                self.setSelectionArea(
-                    sel_path, deviceTransform=self.gv.viewportTransform()
+            rect = self.rubber_band.geometry()
+            if not self.rubber_band_dragged:
+                min_drag = MIN_RUBBER_BAND_DRAG / self.scale_factor
+                if rect.width() <= min_drag and rect.height() <= min_drag:
+                    return  # still a click — keep the native press selection
+                self.rubber_band_dragged = True
+            additive = bool(
+                event.modifiers()
+                & (
+                    Qt.KeyboardModifier.ControlModifier
+                    | Qt.KeyboardModifier.ShiftModifier
                 )
-            else:
-                self.setSelectionArea(
-                    sel_path,
-                    Qt.ItemSelectionMode.IntersectsItemBoundingRect,
-                    self.gv.viewportTransform(),
-                )
+            )
+            self.apply_box_selection(rect, additive=additive)
+            return  # the box select owns the gesture — never forward to items
 
         return super().mouseMoveEvent(event)
 
@@ -1035,8 +1047,16 @@ class Canvas(QGraphicsScene):
             self._pick_line = None
 
     def restore_drag_mode(self):
-        """Restore the normal ScrollHandDrag panning mode."""
-        self.gv.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        """Restore the normal canvas drag mode — NoDrag, because left-drag is
+        the text-block box select, not a ScrollHandDrag pan — and the plain
+        arrow cursor.
+
+        ScrollHandDrag used to let Qt own the viewport cursor and mask stray
+        tool cursors; with NoDrag the cursor must be reset explicitly, or a
+        crosshair/pen cursor set by a tool stays stuck on the canvas.
+        """
+        self.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
+        self.gv.setCursor(Qt.CursorShape.ArrowCursor)
 
     def is_picking(self) -> bool:
         """Return whether we are in coordinate picking mode."""
@@ -1186,6 +1206,14 @@ class Canvas(QGraphicsScene):
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         btn = event.button()
 
+        # Quick-menu safety net: a press that reaches the canvas necessarily
+        # landed OUTSIDE the pie-menu window (it is a separate always-on-top
+        # window, so on-menu presses never arrive here) — close it.  This is
+        # the guaranteed path for "左键点空白关闭"; the app-level click-outside
+        # filter in MainWindow is the first attempt, this catches any press
+        # that still slips through for any reason (2026-08-18).
+        self._dismiss_open_pie_menu()
+
         # Coordinate picking mode — capture scene X or Y on any click
         if self._pick_axis is not None and btn == Qt.MouseButton.LeftButton:
             pos = event.scenePos()
@@ -1204,14 +1232,20 @@ class Canvas(QGraphicsScene):
             return
 
         if self.imgtrans_proj.img_valid:
+            # Text-block creation mode (W / bottom-bar toggle, defaults ON via
+            # pcfg.imgtrans_textblock): only the RIGHT press creates a new
+            # block here — the LEFT press must fall through to the normal
+            # box-select / block-move interaction below (2026-08-18), or the
+            # whole left-drag gesture goes dead whenever nothing is selected.
             if (
                 self.textblock_mode
                 and len(self.selectedItems()) == 0
                 and self.textEditMode()
+                and btn == Qt.MouseButton.RightButton
             ):
-                if btn == Qt.MouseButton.RightButton:
-                    return self.startCreateTextblock(event.scenePos())
-            elif self.creating_normal_rect:
+                return self.startCreateTextblock(event.scenePos())
+
+            if self.creating_normal_rect:
                 if (
                     btn == Qt.MouseButton.RightButton
                     or btn == Qt.MouseButton.LeftButton
@@ -1229,6 +1263,11 @@ class Canvas(QGraphicsScene):
                         self.inpaintLayer.mapFromScene(event.scenePos()),
                         self.painting_pen,
                     )
+                elif self.textEditMode():
+                    # Left-drag = text-block box select (2026-08-18): plain
+                    # presses start the rubber band; control handles keep
+                    # their own drag (start_box_select decides).
+                    self.start_box_select(event.scenePos())
 
             elif btn == Qt.MouseButton.RightButton:
                 # user is drawing using eraser
@@ -1239,15 +1278,6 @@ class Canvas(QGraphicsScene):
                         self.erasing_pen,
                         erasing,
                     )
-                else:  # rubber band selection
-                    self.rubber_band_origin = event.scenePos()
-                    self.rubber_band.setGeometry(
-                        QRectF(
-                            self.rubber_band_origin, self.rubber_band_origin
-                        ).normalized()
-                    )
-                    self.rubber_band.show()
-                    self.rubber_band.setZValue(1)
 
         if btn == Qt.MouseButton.LeftButton and self.txtblkShapeControl.isVisible():
             items_at = self.items(event.scenePos())
@@ -1276,9 +1306,9 @@ class Canvas(QGraphicsScene):
             self._reorder_end_stroke()
             return
 
+        box_selecting = self.rubber_band_dragged
         self.hide_rubber_band()
 
-        Qt.MouseButton.LeftButton
         if btn == Qt.MouseButton.MiddleButton:
             self.mid_btn_pressed = False
         textblk_created = False
@@ -1295,6 +1325,10 @@ class Canvas(QGraphicsScene):
                 self.finish_painting.emit(self.stroke_img_item)
             elif self.scale_tool_mode:
                 self.end_scale_tool.emit()
+            if box_selecting:
+                # A real box drag just replaced the selection — re-bind the
+                # shape control so it no longer points at the pressed block.
+                self._sync_shape_control_to_selection()
         return super().mouseReleaseEvent(event)
 
     def updateCanvas(self):
@@ -1345,7 +1379,10 @@ class Canvas(QGraphicsScene):
             self.editing_textblkitem = None
             self.textblock_mode = False
         else:
-            self.gv.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+            # Leaving draw mode returns the canvas to the plain arrow cursor
+            # (NoDrag — see restore_drag_mode for why the cursor is set here).
+            self.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self.gv.setCursor(Qt.CursorShape.ArrowCursor)
             self.image_edit_mode = ImageEditMode.NONE
 
     @property
@@ -1395,6 +1432,74 @@ class Canvas(QGraphicsScene):
         if self.rubber_band.isVisible():
             self.rubber_band.hide()
             self.rubber_band_origin = None
+        self.rubber_band_dragged = False
+
+    # ── Left-drag box select (text blocks) ────────────────────
+
+    def start_box_select(self, scene_pos: QPointF):
+        """Begin the text-block rubber band at *scene_pos*.
+
+        Left-drag on empty canvas is the box select (2026-08-18); left-drag on
+        a text block is the MOVE gesture — the press lands on the block's
+        native ``ItemIsMovable`` drag, so no rubber band starts and the block
+        (or its whole selection) follows the mouse.  Control handles (shape
+        resize/rotate, grid node) keep their own drag, and a block being
+        text-edited keeps the text cursor.
+        """
+        items_at = self.items(scene_pos)
+        if any(
+            isinstance(item, (ControlBlockItem, GridControlPointItem))
+            for item in items_at
+        ):
+            return  # control handles keep their own drag
+        if any(isinstance(item, TextBlkItem) for item in items_at):
+            return  # block press = move gesture — native ItemIsMovable drag
+        self.rubber_band_origin = scene_pos
+        self.rubber_band.setGeometry(
+            QRectF(self.rubber_band_origin, self.rubber_band_origin).normalized()
+        )
+        self.rubber_band.show()
+        self.rubber_band.setZValue(1)
+        self.rubber_band_dragged = False
+
+    def apply_box_selection(self, rect: QRectF, additive: bool = False):
+        """Select the text blocks intersected by *rect* — and only those.
+
+        Non-additive selection replaces the current selection; additive
+        (Ctrl/Shift held) keeps it and adds the boxed blocks.
+        """
+        if not additive:
+            self.clearSelection()
+        for item in self.textLayer.childItems():
+            if isinstance(item, TextBlkItem) and rect.intersects(
+                item.sceneBoundingRect()
+            ):
+                item.setSelected(True)
+
+    def _sync_shape_control_to_selection(self):
+        """Re-bind the shape control after a box drag replaced the selection.
+
+        A box drag on a block would otherwise leave the outline pointing at
+        the pressed block even after the box select deselected it.
+        """
+        sel = self.selected_text_items()
+        if len(sel) == 1:
+            self.txtblkShapeControl.setBlkItem(sel[0])
+        else:
+            self.txtblkShapeControl.setBlkItem(None)
+
+    def _dismiss_open_pie_menu(self):
+        """Close the quick menu if one is open above this canvas.
+
+        Called from :meth:`mousePressEvent`: a press that reaches the scene
+        proves it landed outside the pie-menu window (the menu is a separate
+        always-on-top window), so the menu must not stay stranded (2026-08-18).
+        """
+        view = self.gv
+        win = view.window() if view is not None else None
+        pm = getattr(win, "pie_menu", None)
+        if pm is not None and pm.is_open():
+            pm.cancel()
 
     def on_hide_canvas(self):
         self.clear_states()

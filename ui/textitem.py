@@ -969,11 +969,22 @@ class TextBlkItem(QGraphicsTextItem):
 
     def hoverMoveEvent(self, event: QGraphicsSceneHoverEvent) -> None:
         self.hover_move.emit(self.idx)
+        self._update_move_cursor()
         return super().hoverMoveEvent(event)
 
     def hoverEnterEvent(self, event: QGraphicsSceneHoverEvent) -> None:
         self.hover_enter.emit(self.idx)
+        self._update_move_cursor()
         return super().hoverEnterEvent(event)
+
+    def _update_move_cursor(self) -> None:
+        """Show the move cursor over a draggable block; give the text
+        editor's I-beam back to the block while it is being edited
+        (2026-08-18)."""
+        if self.is_editting():
+            self.unsetCursor()
+        else:
+            self.setCursor(Qt.CursorShape.SizeAllCursor)
 
     def toPixmap(self) -> QPixmap:
         pixmap = QPixmap(self.boundingRect().size().toSize())

@@ -849,6 +849,14 @@ class PieMenu(QWidget):
                 self._press_pos = event.position()
                 self._press_hit = hit
             return
+        if self._state == "holding":
+            # HOLDING is spring-loaded: commands fire on the trigger-key
+            # release, so no mouse press on the menu itself is meaningful —
+            # any press cancels the menu (2026-08-18).  Previously this fell
+            # through to super() and a press on the transparent window area /
+            # ring gap did nothing, stranding the menu.
+            self.cancel()
+            return
         if self._state != "pin":
             return super().mousePressEvent(event)
         if event.button() == Qt.MouseButton.RightButton:

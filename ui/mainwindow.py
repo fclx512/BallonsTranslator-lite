@@ -1406,8 +1406,26 @@ class MainWindow(mainwindow_cls):
                 self.titleBar.maxBtn.setChecked(True)
         elif event.type() == QEvent.Type.ActivationChange:
             self.canvas.on_activation_changed()
+            self._pie_maybe_cancel_on_activation()
 
         super().changeEvent(event)
+
+    def _pie_maybe_cancel_on_activation(self):
+        """Close the quick menu when the main window loses activation.
+
+        ActivationChange is delivered before ``isActiveWindow()`` settles, so
+        the check is deferred by one event-loop turn.  The menu is a Tool
+        window that never takes focus, so it can only outlive the main window
+        when the user switched to another window/app — in which case it must
+        not stay stranded on top.
+        """
+        if getattr(self, "pie_menu", None) is None:
+            return
+        QTimer.singleShot(0, self._pie_cancel_if_inactive)
+
+    def _pie_cancel_if_inactive(self):
+        if self.pie_menu.is_open() and not self.isActiveWindow():
+            self.pie_menu.cancel()
 
     # ── Pie menu: Tab trigger + cancel routing (app event filter) ──
 
@@ -1562,9 +1580,12 @@ class MainWindow(mainwindow_cls):
 
     def _pie_handle_click_outside(self, watched, event) -> bool:
         pm = self.pie_menu
-        if not pm.is_open() or pm.is_holding():
+        if not pm.is_open():
             return False
-        # PIN mode: any press outside the menu rect cancels it.
+        # Any open state (PIN or holding): a press outside the menu rect
+        # cancels it.  The holding state is the spring-loaded default, so a
+        # long hold must not strand the menu above the canvas while the user
+        # tries to do something else (2026-08-18).
         gpos = event.globalPosition().toPoint()
         if not pm.geometry().contains(gpos):
             pm.cancel()
@@ -1701,6 +1722,17 @@ class MainWindow(mainwindow_cls):
             lambda cmd_id: run_cmd(self, cmd_id)
         )
         self.app.installEventFilter(self)
+        # App-wide deactivation (Alt-Tab / switch app) must close the menu
+        # too — ApplicationDeactivate in the event filter is not reliable on
+        # Windows (2026-08-18).
+        self.app.applicationStateChanged.connect(self._pie_on_app_state_changed)
+
+    def _pie_on_app_state_changed(self, state):
+        if (
+            self.pie_menu.is_open()
+            and state != Qt.ApplicationState.ApplicationActive
+        ):
+            self.pie_menu.cancel()
 
     def _install_shortcuts(self):
         """Create all QShortcut objects from current config (used at init + refresh)."""
