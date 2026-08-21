@@ -639,9 +639,9 @@ class PieMenuEditor(QWidget):
             t = m.get("trigger", "")
             if t:
                 mapping[f"pie_menu_{i}"] = [t]
-        from .configpanel import DEFAULT_SHORTCUTS  # lazy: avoid circular import
-        for aid, defaults in DEFAULT_SHORTCUTS.items():
-            keys = (pcfg.shortcuts or {}).get(aid) or defaults or []
+        from .configpanel import DEFAULT_SHORTCUTS, default_keys_for  # lazy: avoid circular import
+        for aid in DEFAULT_SHORTCUTS:
+            keys = (pcfg.shortcuts or {}).get(aid) or default_keys_for(aid) or []
             mapping[aid] = [k for k in keys if k]
         conflicts = find_conflict_keys(mapping)
         menu = self._current_menu()

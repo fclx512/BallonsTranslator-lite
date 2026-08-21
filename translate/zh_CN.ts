@@ -455,6 +455,11 @@
         </message>
         <message>
             <location filename="..\ui\configpanel.py" />
+            <source>Original Compare</source>
+            <translation>原文对照</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" />
             <source>Quick Menus</source>
             <translation>快捷菜单</translation>
         </message>
@@ -692,6 +697,16 @@
             <location filename="..\ui\configpanel.py" line="1573" />
             <source>To uppercase</source>
             <translation>小写转大写</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="1577" />
+            <source>Shrink text blocks after running</source>
+            <translation>运行后自动收缩文本框</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="1584" />
+            <source>&lt;p&gt;After a run, shrink each text block to fit its translated text. Disable to keep the blocks exactly as you placed them — useful when you want to run background cleanup (inpaint) before translating, since empty blocks would otherwise collapse to a tiny sliver.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;管线运行后，将每个文本框收缩到贴合其译文大小。关闭此选项可保持文本框为你手动摆放的原始大小——适合先运行背景清理（修复）再翻译的工作流，否则空文本框会被收缩成一条细缝。&lt;/p&gt;</translation>
         </message>
         <message>
             <location filename="..\ui\configpanel.py" line="1579" />
@@ -5068,6 +5083,16 @@ in Settings → Mirror Config, then click Retry.</source>
             <location filename="..\ui\configpanel.py" line="796" />
             <source>Merge Text Blocks</source>
             <translation>合并文字块</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="1021" />
+            <source>Del</source>
+            <translation>Del</translation>
+        </message>
+        <message>
+            <location filename="..\ui\configpanel.py" line="1032" />
+            <source>Rst</source>
+            <translation>Rst</translation>
         </message>
     </context>
     <context>

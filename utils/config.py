@@ -334,6 +334,7 @@ class ProgramConfig(Config):
     halfwidth_jp_corner_brackets_horizontal: bool = False
     tatechuyoko_threshold: int = 3
     let_uppercase_flag: bool = True
+    auto_squeeze_after_run: bool = True
     use_notext_images: bool = True
     let_textstyle_indep_flag: bool = False
     text_styles_path: str = osp.join(shared.DEFAULT_TEXTSTYLE_DIR, "default.json")
@@ -531,6 +532,43 @@ def load_textstyle_from(p: str, raise_exception=False):
     pcfg.text_styles_path = p
 
 
+def sanitize_shortcuts(shortcuts: dict) -> dict:
+    """Return a cleaned copy of the user shortcut map.
+
+    Hand-edited or legacy ``config.json`` values can be malformed: a value
+    that is not a list, non-string keys, or duplicated sequences would crash
+    the shortcut editor (``QLabel(non-str)``) or be silently dropped.  Keep
+    only known-string sequences, drop everything else, and collapse
+    intra-list duplicates while preserving order.  A ``None`` value is
+    treated as "no override" and removed so the default keys apply.
+    """
+    if not isinstance(shortcuts, dict):
+        return {}
+    cleaned = {}
+    for action_id, keys in shortcuts.items():
+        if not isinstance(action_id, str):
+            LOGGER.warning(f"sanitize_shortcuts: dropping non-str action id {action_id!r}")
+            continue
+        if keys is None:
+            continue
+        if not isinstance(keys, list):
+            keys = [keys]
+            LOGGER.warning(
+                f"sanitize_shortcuts: {action_id} value is not a list, wrapped: {keys!r}"
+            )
+        kept = []
+        for k in keys:
+            if not isinstance(k, str) or not k:
+                LOGGER.warning(
+                    f"sanitize_shortcuts: dropping invalid shortcut for {action_id}: {k!r}"
+                )
+                continue
+            if k not in kept:
+                kept.append(k)
+        cleaned[action_id] = kept
+    return cleaned
+
+
 def load_config(config_path: str = shared.CONFIG_PATH):
     if config_path != shared.CONFIG_PATH:
         shared.CONFIG_PATH = config_path
@@ -551,6 +589,10 @@ def load_config(config_path: str = shared.CONFIG_PATH):
 
     global pcfg
     pcfg.merge(config)
+
+    # Sanitize persisted shortcut data before use: malformed values would
+    # crash the shortcut editor or be silently ignored at runtime.
+    pcfg.shortcuts = sanitize_shortcuts(pcfg.shortcuts)
 
     # Reset gradient fields — gradient is a per-text-block visual effect,
     # not a global default. Don't persist across restarts.

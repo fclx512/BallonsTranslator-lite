@@ -12,11 +12,12 @@ def find_conflict_keys(mapping: Dict[str, Iterable[str]]) -> Set[str]:
 
     *mapping* maps an action id (or menu id) to its list of effective key
     sequences; empty / ``None`` entries are skipped.  The returned set
-    contains the duplicated key strings.
+    contains the duplicated key strings.  A key repeated several times
+    *within a single action* is not a conflict (the owner set is deduped).
     """
-    seen: Dict[str, List[str]] = {}
+    seen: Dict[str, Set[str]] = {}
     for owner, keys in mapping.items():
         for k in keys or []:
             if k:
-                seen.setdefault(k, []).append(owner)
+                seen.setdefault(k, set()).add(owner)
     return {k for k, owners in seen.items() if len(owners) > 1}

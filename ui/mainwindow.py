@@ -89,7 +89,7 @@ from utils.textblock import TextAlignment, TextBlock
 
 from . import shared_widget as SW
 from .canvas import Canvas
-from .configpanel import ConfigPanel
+from .configpanel import ConfigPanel, default_keys_for
 from .custom_widget import (
     FrameLessMessageBox,
     ImgtransProgressMessageBox,
@@ -1681,21 +1681,33 @@ class MainWindow(mainwindow_cls):
 
         self._install_shortcuts()
 
-    def _get_shortcut_keys(self, action_id, defaults):
-        """Resolve shortcut keys: user config overrides defaults."""
+    def _get_shortcut_keys(self, action_id):
+        """Resolve effective shortcut keys: user config overrides defaults.
+
+        Defaults come from the single source of truth ``default_keys_for``
+        (which resolves Qt StandardKeys per-platform) rather than duplicating
+        them at each call site.
+        """
         from utils.config import pcfg
 
         if action_id in pcfg.shortcuts:
             keys = pcfg.shortcuts[action_id]
             if not isinstance(keys, list):
                 keys = [keys] if keys else []
-            return keys
-        return list(defaults)
+            return [k for k in keys if isinstance(k, str) and k]
+        return default_keys_for(action_id)
 
-    def _make_shortcuts(self, action_id, defaults, slot):
+    def _make_shortcuts(self, action_id, slot):
+        """Create one QShortcut per effective key for ``action_id``.
+
+        Each shortcut carries its action identity as a property so handlers
+        can branch on semantics (e.g. page-turn suppression) instead of the
+        literal bound key.
+        """
         lst = []
-        for k in self._get_shortcut_keys(action_id, defaults):
+        for k in self._get_shortcut_keys(action_id):
             sc = QShortcut(QKeySequence(k), self)
+            sc.setProperty("action_id", action_id)
             sc.activated.connect(slot)
             lst.append(sc)
         return lst
@@ -1738,99 +1750,99 @@ class MainWindow(mainwindow_cls):
         """Create all QShortcut objects from current config (used at init + refresh)."""
 
         self.shortcut_registry["prev_page"] = self._make_shortcuts(
-            "prev_page", ["A"], self.shortcutBefore
+            "prev_page", self.shortcutBefore
         )
         self.shortcut_registry["prev_page_alt"] = self._make_shortcuts(
-            "prev_page_alt", ["PgUp"], self.shortcutBefore
+            "prev_page_alt", self.shortcutBefore
         )
         self.shortcut_registry["next_page"] = self._make_shortcuts(
-            "next_page", ["D"], self.shortcutNext
+            "next_page", self.shortcutNext
         )
         self.shortcut_registry["next_page_alt"] = self._make_shortcuts(
-            "next_page_alt", ["PgDown"], self.shortcutNext
+            "next_page_alt", self.shortcutNext
         )
         self.shortcut_registry["textblock_mode"] = self._make_shortcuts(
-            "textblock_mode", ["W"], self.shortcutTextblock
+            "textblock_mode", self.shortcutTextblock
         )
         self.shortcut_registry["zoom_in"] = self._make_shortcuts(
-            "zoom_in", ["Ctrl++"], self.canvas.gv.scale_up_signal
+            "zoom_in", self.canvas.gv.scale_up_signal
         )
         self.shortcut_registry["zoom_out"] = self._make_shortcuts(
-            "zoom_out", ["Ctrl+-"], self.canvas.gv.scale_down_signal
+            "zoom_out", self.canvas.gv.scale_down_signal
         )
         self.shortcut_registry["delete_blks_alt"] = self._make_shortcuts(
-            "delete_blks_alt", ["Ctrl+D"], self.shortcutCtrlD
+            "delete_blks_alt", self.shortcutCtrlD
         )
         self.shortcut_registry["space_inpaint"] = self._make_shortcuts(
-            "space_inpaint", ["Space"], self.shortcutSpace
+            "space_inpaint", self.shortcutSpace
         )
         self.shortcut_registry["select_all"] = self._make_shortcuts(
-            "select_all", ["Ctrl+A"], self.shortcutSelectAll
+            "select_all", self.shortcutSelectAll
         )
         self.shortcut_registry["escape"] = self._make_shortcuts(
-            "escape", ["Escape"], self.shortcutEscape
+            "escape", self.shortcutEscape
         )
         self.shortcut_registry["bold"] = self._make_shortcuts(
-            "bold", ["Ctrl+B"], self.shortcutBold
+            "bold", self.shortcutBold
         )
         self.shortcut_registry["italic"] = self._make_shortcuts(
-            "italic", ["Ctrl+I"], self.shortcutItalic
+            "italic", self.shortcutItalic
         )
         self.shortcut_registry["underline"] = self._make_shortcuts(
-            "underline", ["Ctrl+U"], self.shortcutUnderline
+            "underline", self.shortcutUnderline
         )
         self.shortcut_registry["delete_blks"] = self._make_shortcuts(
-            "delete_blks", ["Del"], self.shortcutDelete
+            "delete_blks", self.shortcutDelete
         )
 
         # Wire up actions that were previously only available via hardcoded TitleBar QAction shortcuts
         self.shortcut_registry["textedit_mode"] = self._make_shortcuts(
-            "textedit_mode", ["T"], self.shortcutTextedit
+            "textedit_mode", self.shortcutTextedit
         )
         self.shortcut_registry["drawboard_mode"] = self._make_shortcuts(
-            "drawboard_mode", ["P"], self.shortcutDrawboard
+            "drawboard_mode", self.shortcutDrawboard
         )
         self.shortcut_registry["undo"] = self._make_shortcuts(
-            "undo", ["Ctrl+Z"], self.on_undo
+            "undo", self.on_undo
         )
         self.shortcut_registry["redo"] = self._make_shortcuts(
-            "redo", ["Ctrl+Y"], self.on_redo
+            "redo", self.on_redo
         )
         self.shortcut_registry["page_search"] = self._make_shortcuts(
-            "page_search", ["Ctrl+F"], self.on_page_search
+            "page_search", self.on_page_search
         )
         self.shortcut_registry["global_search"] = self._make_shortcuts(
-            "global_search", ["Ctrl+G"], self.on_global_search
+            "global_search", self.on_global_search
         )
         self.shortcut_registry["merge_tool"] = self._make_shortcuts(
-            "merge_tool", ["Ctrl+Shift+M"], self.on_open_merge_tool
+            "merge_tool", self.on_open_merge_tool
         )
         self.shortcut_registry["quick_symbol"] = self._make_shortcuts(
-            "quick_symbol", [], self.on_open_quick_symbol
+            "quick_symbol", self.on_open_quick_symbol
         )
         self.shortcut_registry["advanced_align"] = self._make_shortcuts(
-            "advanced_align", [], self.on_open_advanced_align
+            "advanced_align", self.on_open_advanced_align
         )
         self.shortcut_registry["toggle_original_opacity"] = self._make_shortcuts(
-            "toggle_original_opacity", [], self.shortcutToggleOriginalOpacity
+            "toggle_original_opacity", self.shortcutToggleOriginalOpacity
         )
         self.shortcut_registry["path_reorder"] = self._make_shortcuts(
-            "path_reorder", [], self.on_path_reorder
+            "path_reorder", self.on_path_reorder
         )
         self.shortcut_registry["move_up"] = self._make_shortcuts(
-            "move_up", [], self.shortcutMoveUp
+            "move_up", self.shortcutMoveUp
         )
         self.shortcut_registry["move_down"] = self._make_shortcuts(
-            "move_down", [], self.shortcutMoveDown
+            "move_down", self.shortcutMoveDown
         )
         self.shortcut_registry["move_top"] = self._make_shortcuts(
-            "move_top", [], self.shortcutMoveTop
+            "move_top", self.shortcutMoveTop
         )
         self.shortcut_registry["move_bottom"] = self._make_shortcuts(
-            "move_bottom", [], self.shortcutMoveBottom
+            "move_bottom", self.shortcutMoveBottom
         )
         self.shortcut_registry["merge_blks"] = self._make_shortcuts(
-            "merge_blks", [], self.shortcutMergeBlks
+            "merge_blks", self.shortcutMergeBlks
         )
 
         drawpanel_info = {
@@ -1839,17 +1851,12 @@ class MainWindow(mainwindow_cls):
             "inpaint": "inpaint_tool",
             "pen": "pen_tool",
         }
-        drawpanel_defs = {
-            "hand_tool": ["H"],
-            "rect_tool": ["R"],
-            "inpaint_tool": ["J"],
-            "pen_tool": ["B"],
-        }
         for tool_name, action_id in drawpanel_info.items():
-            keys = self._get_shortcut_keys(action_id, drawpanel_defs[action_id])
+            keys = self._get_shortcut_keys(action_id)
             lst = []
             for k in keys:
                 sc = QShortcut(QKeySequence(k), self)
+                sc.setProperty("action_id", action_id)
                 sc.activated.connect(
                     partial(self.drawingPanel.shortcutSetCurrentToolByName, tool_name)
                 )
@@ -1861,7 +1868,11 @@ class MainWindow(mainwindow_cls):
     def shortcutNext(self):
         sender: QShortcut = self.sender()
         if isinstance(sender, QShortcut):
-            if sender.key() == QKEY.Key_D:
+            # ``next_page`` is a letter key by default (D) that must not
+            # turn the page while a text block is being edited; the alt
+            # page-turn (PgDn) keeps navigating.  Keyed by action identity
+            # so rebinding the key does not change this behavior.
+            if sender.property("action_id") == "next_page":
                 if self.canvas.editing_textblkitem is not None:
                     return
         if self._is_canvas_mode():
@@ -1883,7 +1894,10 @@ class MainWindow(mainwindow_cls):
     def shortcutBefore(self):
         sender: QShortcut = self.sender()
         if isinstance(sender, QShortcut):
-            if sender.key() == QKEY.Key_A:
+            # Mirror of shortcutNext: ``prev_page`` (letter key, default A)
+            # is suppressed while editing a text block; ``prev_page_alt``
+            # keeps navigating.  Keyed by action identity, not the bound key.
+            if sender.property("action_id") == "prev_page":
                 if self.canvas.editing_textblkitem is not None:
                     return
         if self._is_canvas_mode():
@@ -3108,7 +3122,11 @@ class MainWindow(mainwindow_cls):
             self.canvas.updateCanvas()
             self.st_manager.updateSceneTextitems()
 
-        if not pcfg.module.enable_detect and pcfg.module.enable_translate:
+        if (
+            pcfg.auto_squeeze_after_run
+            and not pcfg.module.enable_detect
+            and pcfg.module.enable_translate
+        ):
             for blkitem in self.st_manager.textblk_item_list:
                 blkitem.squeezeBoundingRect()
 

@@ -1,4 +1,5 @@
 import os.path as osp
+from functools import partial
 from typing import Dict, List, Tuple, Union
 
 from qtpy.QtCore import (
@@ -17,6 +18,7 @@ from qtpy.QtGui import (
     QFont,
     QGuiApplication,
     QIntValidator,
+    QKeySequence,
     QShortcut,
     QStandardItem,
     QStandardItemModel,
@@ -880,6 +882,47 @@ _ACTION_NAMES = {
     "move_bottom": "Move to Bottom",
 }
 
+# Actions whose factory default resolves through a Qt StandardKey so macOS
+# users get native Command-based bindings instead of literal Ctrl+... .
+# Windows is unaffected — for this set, QKeySequence(StandardKey).toString(
+# PortableText) equals the literal in DEFAULT_SHORTCUTS above, so behavior is
+# byte-identical there (guarded by tests/test_shortcut_system.py).
+_STANDARD_DEFAULT_KEYS = {
+    "undo": QKeySequence.StandardKey.Undo,
+    "redo": QKeySequence.StandardKey.Redo,
+    "select_all": QKeySequence.StandardKey.SelectAll,
+    "bold": QKeySequence.StandardKey.Bold,
+    "italic": QKeySequence.StandardKey.Italic,
+    "underline": QKeySequence.StandardKey.Underline,
+    "page_search": QKeySequence.StandardKey.Find,
+    "delete_blks": QKeySequence.StandardKey.Delete,
+    "zoom_in": QKeySequence.StandardKey.ZoomIn,
+    "zoom_out": QKeySequence.StandardKey.ZoomOut,
+}
+
+
+def default_keys_for(action_id: str) -> List[str]:
+    """Factory-default key sequences (PortableText) for ``action_id``.
+
+    Standard-keyed actions resolve through Qt so macOS picks up Command-based
+    bindings; the rest fall back to the literal ``DEFAULT_SHORTCUTS``.
+    """
+    std = _STANDARD_DEFAULT_KEYS.get(action_id)
+    if std is not None:
+        return [
+            QKeySequence(std).toString(QKeySequence.SequenceFormat.PortableText)
+        ]
+    return list(DEFAULT_SHORTCUTS.get(action_id, []))
+
+
+def native_key_display(seq: str) -> str:
+    """Render a PortableText key sequence in the current platform's native form."""
+    try:
+        return QKeySequence(seq).toString(QKeySequence.SequenceFormat.NativeText)
+    except Exception:
+        return seq
+
+
 # Shortcut groups for organized display
 _SHORTCUT_GROUPS = [
     ("Navigation", ["prev_page", "next_page", "prev_page_alt", "next_page_alt"]),
@@ -977,7 +1020,7 @@ class _ShortcutRow(QWidget):
         btn_layout.addWidget(self._add_btn)
 
         # Clear button
-        self._clear_btn = QPushButton("Del")
+        self._clear_btn = QPushButton(self.tr("Del"))
         self._clear_btn.setFixedSize(28, 24)
         self._clear_btn.setStyleSheet(
             f"QPushButton {{ border: none; border-radius: 3px; color: {s['btn_clr']}; "
@@ -988,7 +1031,7 @@ class _ShortcutRow(QWidget):
         btn_layout.addWidget(self._clear_btn)
 
         # Reset button
-        self._reset_btn = QPushButton("Rst")
+        self._reset_btn = QPushButton(self.tr("Rst"))
         self._reset_btn.setFixedSize(28, 24)
         self._reset_btn.setStyleSheet(
             f"QPushButton {{ border: none; border-radius: 3px; color: {s['btn_clr']}; "
@@ -1008,8 +1051,8 @@ class _ShortcutRow(QWidget):
             keys = pcfg.shortcuts[self.action_id]
             if not isinstance(keys, list):
                 keys = [keys] if keys else []
-            return keys
-        return list(DEFAULT_SHORTCUTS.get(self.action_id, []))
+            return [k for k in keys if isinstance(k, str) and k]
+        return default_keys_for(self.action_id)
 
     def _rebuild_pills(self):
         # Clear existing pills and placeholder
@@ -1035,7 +1078,7 @@ class _ShortcutRow(QWidget):
                 is_conflict = k in self._conflict_keys
                 pill_bg = s["conflict_pill_bg"] if is_conflict else s["pill_bg"]
                 pill_text = s["conflict_pill_text"] if is_conflict else s["pill_text"]
-                lbl = QLabel(k)
+                lbl = QLabel(native_key_display(k))
                 lbl.setStyleSheet(
                     f"color: {pill_text}; background: transparent; border: none;"
                 )
@@ -1046,11 +1089,9 @@ class _ShortcutRow(QWidget):
                     f"QPushButton {{ border: none; border-radius: 2px; color: {s['close_clr']}; "
                     f"background: transparent; padding: 0px; }}"
                     f"QPushButton:hover {{ color: {s['close_hvr']}; "
-                    f"background: rgba(200,50,50,0.2); }}"
+                    f"background: {s['close_hvr_bg']}; }}"
                 )
-                close_btn.clicked.connect(
-                    lambda checked, ks=k: self._remove_shortcut(ks)
-                )
+                close_btn.clicked.connect(partial(self._remove_shortcut, k))
                 fl.addWidget(close_btn)
                 frame.setStyleSheet(
                     f"QFrame {{ background: {pill_bg}; border-radius: 4px; }}"
@@ -1074,21 +1115,23 @@ class _ShortcutRow(QWidget):
         edit.setStyleSheet("QKeySequenceEdit { padding: 1px 4px; }")
         self.shortcuts_layout.addWidget(edit)
         edit.setFocus()
+        edit.editingFinished.connect(self._on_add_sequence_finished)
 
-        def on_finished():
-            seq = edit.keySequence().toString()
-            edit.deleteLater()
-            if seq:
-                keys = self._get_keys()
-                if seq not in keys:
-                    keys.append(seq)
-                    pcfg.shortcuts[self.action_id] = keys
-                self._rebuild_pills()
-                self.shortcut_changed.emit()
-            else:
-                self._rebuild_pills()
-
-        edit.editingFinished.connect(on_finished)
+    def _on_add_sequence_finished(self):
+        edit = self.sender()
+        if not isinstance(edit, QKeySequenceEdit):
+            return
+        seq = edit.keySequence().toString()
+        edit.deleteLater()
+        if seq:
+            keys = self._get_keys()
+            if seq not in keys:
+                keys.append(seq)
+                pcfg.shortcuts[self.action_id] = keys
+            self._rebuild_pills()
+            self.shortcut_changed.emit()
+        else:
+            self._rebuild_pills()
 
     def _remove_shortcut(self, key_seq: str):
         keys = self._get_keys()
@@ -1104,7 +1147,7 @@ class _ShortcutRow(QWidget):
         self.shortcut_changed.emit()
 
     def _reset(self):
-        defaults = DEFAULT_SHORTCUTS.get(self.action_id, [])
+        defaults = default_keys_for(self.action_id)
         if defaults:
             pcfg.shortcuts[self.action_id] = list(defaults)
         elif self.action_id in pcfg.shortcuts:
@@ -1754,6 +1797,20 @@ class ConfigPanel(Widget):
             )
         )
 
+        self.auto_squeeze_checker = ConfigCheckBox(
+            self.tr("Shrink text blocks after running")
+        )
+        self.auto_squeeze_checker.stateChanged.connect(
+            self.on_auto_squeeze_changed
+        )
+        ts_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.auto_squeeze_checker,
+                note=self.tr("<p>After a run, shrink each text block to fit its translated text. Disable to keep the blocks exactly as you placed them — useful when you want to run background cleanup (inpaint) before translating, since empty blocks would otherwise collapse to a tiny sliver.</p>"),
+            )
+        )
+
         self.let_textstyle_indep_checker = ConfigCheckBox(
             self.tr("Independent text styles for each projects")
         )
@@ -1767,6 +1824,28 @@ class ConfigPanel(Widget):
                 note=self.tr("<p>When enabled, each project maintains its own <b>text style settings</b> independently instead of using shared global styles.</p>"),
             )
         )
+
+        # Text Format Presets section — values offered in the font format panel dropdowns
+        ts_layout.addWidget(_section_header(self.tr("Text Format Presets")))
+
+        preset_hint = ConfigTextLabel(
+            self.tr("Comma-separated values — used in font format panel dropdowns."),
+            CONFIG_FONTSIZE_CONTENT - 3,
+        )
+        preset_hint.setContentsMargins(16, 0, 16, 4)
+        ts_layout.addWidget(preset_hint)
+
+        _make_preset_row(self.tr("Font Size:"), "font_size_presets", ts_layout)
+        _make_preset_row(
+            self.tr("Line Spacing:"), "line_spacing_presets", ts_layout
+        )
+        _make_preset_row(
+            self.tr("Letter Spacing:"), "letter_spacing_presets", ts_layout
+        )
+        _make_preset_row(
+            self.tr("Stroke Width:"), "stroke_width_presets", ts_layout
+        )
+        _make_preset_row(self.tr("Opacity:"), "opacity_presets", ts_layout)
 
         # Punctuation Position
         self.punctuation_position_combo = ConfigComboBox(fix_size=False)
@@ -1911,28 +1990,6 @@ class ConfigPanel(Widget):
             )
         )
 
-        # Text Format Presets section — values offered in the font format panel dropdowns
-        interface_layout.addWidget(_section_header(self.tr("Text Format Presets")))
-
-        preset_hint = ConfigTextLabel(
-            self.tr("Comma-separated values — used in font format panel dropdowns."),
-            CONFIG_FONTSIZE_CONTENT - 3,
-        )
-        preset_hint.setContentsMargins(16, 0, 16, 4)
-        interface_layout.addWidget(preset_hint)
-
-        _make_preset_row(self.tr("Font Size:"), "font_size_presets", interface_layout)
-        _make_preset_row(
-            self.tr("Line Spacing:"), "line_spacing_presets", interface_layout
-        )
-        _make_preset_row(
-            self.tr("Letter Spacing:"), "letter_spacing_presets", interface_layout
-        )
-        _make_preset_row(
-            self.tr("Stroke Width:"), "stroke_width_presets", interface_layout
-        )
-        _make_preset_row(self.tr("Opacity:"), "opacity_presets", interface_layout)
-
         # Canvas section — canvas viewing & editing behaviors
         interface_layout.addWidget(_section_header(self.tr("Canvas")))
 
@@ -2008,6 +2065,7 @@ class ConfigPanel(Widget):
         )
 
         # ── Original Compare ───────────────────────────────────
+        interface_layout.addWidget(_section_header(self.tr("Original Compare")))
         self.orig_opacity_toggle_spin = NoArrowsSpinBox()
         self.orig_opacity_toggle_spin.setRange(0, 99)
         self.orig_opacity_toggle_spin.setValue(pcfg.original_transparency_preset)
@@ -2493,6 +2551,9 @@ class ConfigPanel(Widget):
     def on_uppercase_changed(self):
         pcfg.let_uppercase_flag = self.let_uppercase_checker.isChecked()
 
+    def on_auto_squeeze_changed(self):
+        pcfg.auto_squeeze_after_run = self.auto_squeeze_checker.isChecked()
+
     def on_textstyle_indep_changed(self):
         pcfg.let_textstyle_indep_flag = self.let_textstyle_indep_checker.isChecked()
         self.reload_textstyle.emit(pcfg.let_textstyle_indep_flag)
@@ -2817,6 +2878,7 @@ class ConfigPanel(Widget):
         self.let_family_combox.setCurrentIndex(pcfg.let_family_flag)
         self.let_writing_mode_combox.setCurrentIndex(pcfg.let_writing_mode_flag)
         self.let_uppercase_checker.setChecked(pcfg.let_uppercase_flag)
+        self.auto_squeeze_checker.setChecked(pcfg.auto_squeeze_after_run)
         self.let_textstyle_indep_checker.setChecked(pcfg.let_textstyle_indep_flag)
         self.rst_imgformat_combobox.setCurrentText(
             pcfg.imgsave_ext.replace(".", "").upper()
