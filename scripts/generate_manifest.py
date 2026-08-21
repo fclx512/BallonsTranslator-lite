@@ -168,7 +168,8 @@ def generate_manifest(project_root: Path) -> dict:
 
 
 def _detect_version(project_root: Path) -> str:
-    """Extract version string from launch.py."""
+    """Extract version string from launch.py or pyproject.toml."""
+    # launch.py 内的字面量（旧式）——当前版本从 utils/version.py 读 pyproject，仅在缺失时回退
     launch_py = project_root / "launch.py"
     if launch_py.exists():
         try:
@@ -180,6 +181,17 @@ def _detect_version(project_root: Path) -> str:
                         val = line.split("=", 1)[1].strip().strip("\"'")
                         if val:
                             return val
+        except Exception:
+            pass
+    pyproject = project_root / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            for line in pyproject.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line.startswith("version"):
+                    val = line.split("=", 1)[1].strip().strip("\"'")
+                    if val:
+                        return val
         except Exception:
             pass
     return "unknown"

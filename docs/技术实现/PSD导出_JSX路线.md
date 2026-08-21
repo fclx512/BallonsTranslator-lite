@@ -105,7 +105,7 @@ PS 用自己的排版引擎重排文字，字体度量与本地渲染必然有�
 - **字符级样式未做（Phase 2）**：縦中横 / 直立罗马字 / 比例间距需操作
   `textKey.textStyleRange`（PS-Script `applyCharStyleOverrides`），payload schema 已按可扩展结构预留。
 - **同机使用**：脚本引用原图绝对路径，跨机器需连同图片一起搬运（或后续改为可选打包）。
-- 与上游 `scripts/export to photoshop/Import from BallonTranslator JSON.jsx` 的关系：上游脚本是
+- 与上游 `BallonsTranslator/scripts/export to photoshop/Import from BallonTranslator JSON.jsx` 的关系：上游脚本是
   "在已打开的 PS 文档里导入项目 JSON" 的老方案，无批量、无旋转/描边/阴影、字号直当 pt 用（有偏差）。
   本路线是其改进版：批量单脚本 + 完整样式 + DPI 换算 + 中心对齐。
 
