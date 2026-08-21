@@ -161,12 +161,12 @@ def download_url_to_file(
     except (ImportError, AttributeError, RuntimeError):
         pass
 
-    original_ctx = ssl._create_default_https_context
-    ssl._create_default_https_context = ssl._create_unverified_context  # https://stackoverflow.com/questions/50236117/scraping-ssl-certificate-verify-failed-error-for-http-en-wikipedia-org
-
     file_size = None
     req = Request(url, headers={"User-Agent": "torch.hub"})
-    u = urlopen(req, timeout=timeout)
+    # Keep verification request-local and supplement platform roots with Requests' CA bundle.
+    ssl_context = ssl.create_default_context()
+    ssl_context.load_verify_locations(cafile=requests.certs.where())
+    u = urlopen(req, timeout=timeout, context=ssl_context)
     meta = u.info()
     if hasattr(meta, "getheaders"):
         content_length = meta.getheaders("Content-Length")
@@ -211,7 +211,6 @@ def download_url_to_file(
                 pbar.update(len(buffer))
 
         f.close()
-        ssl._create_default_https_context = original_ctx
         if hash_prefix is not None:
             digest = sha256.hexdigest()  # type: ignore[possibly-undefined]
             if digest[: len(hash_prefix)] != hash_prefix:

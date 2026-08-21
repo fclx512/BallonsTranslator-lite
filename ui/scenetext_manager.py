@@ -663,6 +663,7 @@ class SceneTextManager(QObject):
         if isinstance(blk, TextBlkItem):
             blk_item = blk
             blk_item.idx = len(self.textblk_item_list)
+            blk_item.refresh_seq_badge()
         else:
             blk_item = TextBlkItem(
                 blk, len(self.textblk_item_list), show_rect=self.canvas.textblock_mode
@@ -1289,7 +1290,7 @@ class SceneTextManager(QObject):
             if sel_ids is not None and ii not in sel_ids:
                 continue
             blk_item.idx = ii
-            blk_item.update()
+            blk_item.refresh_seq_badge()
             self.pairwidget_list[ii].updateIndex(ii)
         cl = self.textEditList.checked_list
         if len(cl) != 0:

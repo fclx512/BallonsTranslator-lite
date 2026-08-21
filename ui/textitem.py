@@ -55,6 +55,88 @@ def _textrect_show_color():
     return c
 
 
+class _OrderBadgeItem(QGraphicsItem):
+    """Sequence-number badge anchored above the block's top-left corner.
+
+    Ported from upstream v1.5.12 (``ballontranslator/ui/text_engine/item.py``):
+    a fixed-pixel child item outside the parent's geometry, so it never
+    covers the text and stays crisp at any zoom.  It inherits the parent's
+    transforms (rotation) but ignores the view transform.
+    """
+
+    HORIZONTAL_PADDING = 4
+    VERTICAL_PADDING = 2
+
+    def __init__(self, parent: QGraphicsItem) -> None:
+        super().__init__(parent)
+        self._font = QFont()
+        self._font.setBold(True)
+        self._font.setPixelSize(11)
+        self._text = ""
+        self._bounds = QRectF()
+        self._selected = False
+        self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self.setFlag(
+            QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations,
+            True,
+        )
+        # Keep the badge out of the parent's cached paint surface.
+        self.setCacheMode(QGraphicsItem.CacheMode.NoCache)
+        self.setZValue(100.0)
+        self.hide()
+
+    def boundingRect(self) -> QRectF:
+        return QRectF(self._bounds)
+
+    def set_number(self, number: int) -> None:
+        text = str(max(1, int(number)))
+        if self._text == text:
+            return
+        metrics = QFontMetrics(self._font)
+        width = metrics.horizontalAdvance(text) + 2 * self.HORIZONTAL_PADDING
+        height = metrics.height() + 2 * self.VERTICAL_PADDING
+        self.prepareGeometryChange()
+        self._text = text
+        # The bottom-left corner remains attached to the block's top-left.
+        self._bounds = QRectF(0, -height, width, height)
+        self.update()
+
+    def paint(
+        self,
+        painter: QPainter,
+        _option: QStyleOptionGraphicsItem,
+        _widget: QWidget = None,
+    ) -> None:
+        painter.save()
+        try:
+            painter.setPen(Qt.PenStyle.NoPen)
+            if self._selected:
+                from ui.misc import get_theme_color
+
+                bg = get_theme_color()
+                bg.setAlpha(200)
+            else:
+                bg = QColor(0, 0, 0, 170)
+            painter.setBrush(bg)
+            painter.drawRoundedRect(self._bounds, 3, 3)
+            painter.setPen(Qt.GlobalColor.white)
+            painter.setFont(self._font)
+            painter.drawText(
+                self._bounds,
+                Qt.AlignmentFlag.AlignCenter,
+                self._text,
+            )
+        finally:
+            painter.restore()
+
+    def set_selected(self, selected: bool) -> None:
+        selected = bool(selected)
+        if self._selected == selected:
+            return
+        self._selected = selected
+        self.update()
+
+
 class TextBlkItem(QGraphicsTextItem):
     begin_edit = Signal(int)
     end_edit = Signal(int)
@@ -129,6 +211,9 @@ class TextBlkItem(QGraphicsTextItem):
         self.setFlags(QGraphicsItem.ItemIsMovable | QGraphicsItem.ItemIsSelectable)
         self.setCacheMode(QGraphicsItem.CacheMode.DeviceCoordinateCache)
         self.geometry_controller.finish_initialization()
+        self._order_badge_item = _OrderBadgeItem(self)
+        self.visual_geometry_changed.connect(self._sync_order_badge)
+        self._sync_order_badge()
 
     @property
     def _display_rect(self) -> QRectF:
@@ -482,7 +567,11 @@ class TextBlkItem(QGraphicsTextItem):
         self.geometry_controller.release_render_resources()
 
     def itemChange(self, change, value):
-        controller = getattr(self, 'geometry_controller', None)
+        if change == QGraphicsItem.GraphicsItemChange.ItemSelectedChange:
+            badge = getattr(self, "_order_badge_item", None)
+            if badge is not None:
+                badge.set_selected(bool(value))
+        controller = getattr(self, "geometry_controller", None)
         if controller is None:
             return super().itemChange(change, value)
         return controller.item_change(change, value, super().itemChange)
@@ -504,6 +593,7 @@ class TextBlkItem(QGraphicsTextItem):
         if self.blk.angle != angle:
             self.setRotation(angle)
         self.blk.angle = angle
+        self.blk.sync_xyxy_from_bounding_rect()
 
     def setVertical(self, vertical: bool):
         if self.fontformat is not None:
@@ -716,9 +806,8 @@ class TextBlkItem(QGraphicsTextItem):
             painter.restore()
 
         if not self.is_editting():
-            # Border and badge always draw outside the clip
+            # Border always draws outside the clip
             self._draw_border_rect(painter)
-            self._draw_seq_badge(painter)
 
     def _draw_accessories(self, painter: QPainter):
         br = self.boundingRect()
@@ -787,56 +876,28 @@ class TextBlkItem(QGraphicsTextItem):
             painter.drawRect(self.unpadRect(br))
         painter.restore()
 
-    def _draw_seq_badge(self, painter: QPainter):
-        """Draw sequence number badge at top-left corner of content area."""
-        from utils.config import pcfg
-        if self._reorder_seq < 0 and (self._hide_badge or not pcfg.show_seq_badge):
+    def _sync_order_badge(self) -> None:
+        """Align the sequence badge with the current number/visibility/selection.
+
+        Number and visibility depend on state that other modules mutate
+        directly (``_reorder_seq``, ``_hide_badge``, ``idx``, ``pcfg``),
+        so every external mutation must call :meth:`refresh_seq_badge`.
+        """
+        badge = getattr(self, "_order_badge_item", None)
+        if badge is None:
             return
-        scale = self.get_scale()
-        font_size = max(6, 11 / scale)
+        from utils.config import pcfg
 
-        content_rect = self.unpadRect(self.boundingRect())
-
-        font = QFont()
-        font.setBold(True)
-        font.setPixelSize(int(font_size))
-
-        if self._reorder_seq >= 0:
-            seq_text = str(self._reorder_seq + 1)
-        else:
-            seq_text = str(self.idx + 1)
-
-        fm = QFontMetrics(font)
-        text_w = fm.horizontalAdvance(seq_text) + 8
-        text_h = fm.height() + 4
-
-        badge_rect = QRectF(
-            content_rect.x(),
-            content_rect.y(),
-            text_w,
-            text_h,
+        badge.set_number(self._reorder_seq if self._reorder_seq >= 0 else self.idx + 1)
+        badge.set_selected(self.isSelected())
+        visible = (self._reorder_seq >= 0) or (
+            pcfg.show_seq_badge and not self._hide_badge
         )
+        badge.setVisible(visible)
 
-        painter.save()
-        painter.setOpacity(1.0)
-
-        if self.isSelected():
-            from ui.misc import get_theme_color
-
-            bg = get_theme_color()
-            bg.setAlpha(200)
-        else:
-            bg = QColor(0, 0, 0, 170)
-
-        painter.setBrush(bg)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(badge_rect, 3, 3)
-
-        painter.setPen(Qt.GlobalColor.white)
-        painter.setFont(font)
-        painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, seq_text)
-
-        painter.restore()
+    def refresh_seq_badge(self) -> None:
+        """Refresh the sequence badge after state changed outside this item."""
+        self._sync_order_badge()
 
     def startEdit(self, pos: QPointF = None) -> None:
         self.pre_editing = False

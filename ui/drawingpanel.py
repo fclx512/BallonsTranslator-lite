@@ -482,6 +482,7 @@ class DrawingPanel(Widget):
             self.currentTool.setChecked(False)
         self.currentTool = self.handTool
         pcfg.drawpanel.current_tool = ImageEditMode.HandTool
+        self.canvas.clear_canvas_cursor()
         self.canvas.gv.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.canvas.image_edit_mode = ImageEditMode.HandTool
 
@@ -824,10 +825,12 @@ class DrawingPanel(Widget):
         self.scale_circle.setRect(0, 0, pen_size, pen_size)
         self.scale_tool_pos = pos - QPointF(pen_size, pen_size)
         self.canvas.addItem(self.scale_circle)
-        self.setCrossCursor()
+        self.scale_circle.setCursor(self.get_pen_cursor(draw_shape=False))
 
-    def setCrossCursor(self):
-        self.canvas.gv.setCursor(self.get_pen_cursor(draw_shape=False))
+    def setCrossCursor(self) -> None:
+        if not self.isVisible() or self.currentTool != self.rectTool:
+            return
+        self.canvas.set_canvas_cursor(self.get_pen_cursor(draw_shape=False))
 
     def on_scale_tool(self, pos: QPointF):
         if self.scale_tool_pos is None:

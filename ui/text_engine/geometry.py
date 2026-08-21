@@ -615,6 +615,7 @@ class TextItemGeometryController:
             item.repaint_background()
         if update_blk_rect:
             item.blk._bounding_rect = self.absolute_rect()
+            item.blk.sync_xyxy_from_bounding_rect()
 
     def _size_alignment_anchor(self, rect: QRectF) -> QPointF:
         item = self.item
@@ -702,6 +703,7 @@ class TextItemGeometryController:
         item.setPos(item.pos() + pos_shift)
         if item.blk is not None and set_blk_size:
             item.blk._bounding_rect = self.absolute_rect()
+            item.blk.sync_xyxy_from_bounding_rect()
 
     def _resize_transformed(
         self,
@@ -746,6 +748,7 @@ class TextItemGeometryController:
 
             if item.blk is not None and set_blk_size:
                 item.blk._bounding_rect = self.absolute_rect()
+                item.blk.sync_xyxy_from_bounding_rect()
         finally:
             if set_layout_maxsize:
                 item.layout.blockSignals(signals_were_blocked)

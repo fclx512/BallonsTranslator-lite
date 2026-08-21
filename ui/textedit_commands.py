@@ -61,6 +61,7 @@ class MoveBlkItemsCommand(QUndoCommand):
             padding = item.padding()
             padding = QPointF(padding, padding)
             item.setPos(new_pos - padding)
+            self._sync_block(item)
             if self.shape_ctrl.blk_item == item and self.shape_ctrl.pos() != new_pos:
                 self.shape_ctrl.setPos(new_pos)
 
@@ -69,8 +70,15 @@ class MoveBlkItemsCommand(QUndoCommand):
             padding = item.padding()
             padding = QPointF(padding, padding)
             item.setPos(old_pos - padding)
+            self._sync_block(item)
             if self.shape_ctrl.blk_item == item and self.shape_ctrl.pos() != old_pos:
                 self.shape_ctrl.setPos(old_pos)
+
+    @staticmethod
+    def _sync_block(item: TextBlkItem) -> None:
+        if item.blk is not None:
+            item.blk._bounding_rect = item.absBoundingRect()
+            item.blk.sync_xyxy_from_bounding_rect()
 
 
 class ApplyFontformatCommand(QUndoCommand):

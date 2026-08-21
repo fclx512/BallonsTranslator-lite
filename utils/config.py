@@ -2,8 +2,9 @@ import copy
 import json
 import os
 import os.path as osp
+import string
 import traceback
-from dataclasses import field
+from dataclasses import field, fields
 from datetime import datetime
 from typing import Dict, List
 
@@ -308,6 +309,42 @@ def migrate_legacy_pie(legacy: List[List[str]]) -> List[dict]:
 
 
 @nested_dataclass
+class AutoTateChuYokoConfig(Config):
+    """Automatic tate-chu-yoko detection settings (upstream v1.5.12 parity).
+
+    Consumed by the pipeline's background tate-chu-yoko pass; its UI is
+    added in a later node.
+    """
+
+    enabled: bool = False
+    max_length: int = 4
+    include_numbers: bool = True
+    include_letters: bool = False
+    additional_chars: str = ""
+
+    def allowed_characters(self) -> frozenset[str]:
+        """Return the configured character categories as one lookup set."""
+        characters = set(self.additional_chars)
+        if self.include_numbers:
+            characters.update(string.digits)
+        if self.include_letters:
+            characters.update(string.ascii_letters)
+        return frozenset(characters)
+
+    def __post_init__(self) -> None:
+        for setting in fields(self):
+            value = getattr(self, setting.name)
+            valid = type(value) is setting.type
+            if setting.name == "max_length":
+                valid = valid and 1 <= value <= 99
+            if not valid:
+                LOGGER.warning(
+                    f"Discard invalid auto_tate_chu_yoko.{setting.name} config."
+                )
+                setattr(self, setting.name, setting.default)
+
+
+@nested_dataclass
 class ProgramConfig(Config):
     module: ModuleConfig = field(default_factory=lambda: ModuleConfig())
     drawpanel: DrawPanelConfig = field(default_factory=lambda: DrawPanelConfig())
@@ -333,6 +370,11 @@ class ProgramConfig(Config):
     halfwidth_jp_corner_brackets: bool = False
     halfwidth_jp_corner_brackets_horizontal: bool = False
     tatechuyoko_threshold: int = 3
+    auto_tate_chu_yoko: AutoTateChuYokoConfig = field(
+        default_factory=AutoTateChuYokoConfig
+    )
+    compact_vertical_punctuation_spacing: bool = True
+    quick_insert_characters: str = "『』「」♥♡★☆※♩♬"
     let_uppercase_flag: bool = True
     auto_squeeze_after_run: bool = True
     use_notext_images: bool = True
@@ -495,6 +537,14 @@ class ProgramConfig(Config):
             )
         elif "pie_sectors" in config_dict:
             config_dict.pop("pie_sectors")
+
+        # Mirror upstream v1.5.12 guard: a malformed persisted value would
+        # otherwise crash consumers that iterate the characters.
+        if not isinstance(config_dict.get("quick_insert_characters", ""), str):
+            LOGGER.warning(
+                "Discard invalid quick_insert_characters config: expected a string."
+            )
+            config_dict.pop("quick_insert_characters")
 
         return ProgramConfig(**config_dict)
 

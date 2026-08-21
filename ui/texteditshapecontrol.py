@@ -218,6 +218,11 @@ class ControlBlockItem(QGraphicsRectItem):
         return super().hoverEnterEvent(event)
 
     def hoverMoveEvent(self, event: QGraphicsSceneHoverEvent) -> None:
+        # No bound text block (e.g. during text-item creation): hand the
+        # hover to the base class instead of dereferencing the block
+        # (upstream 280e023 parity).
+        if self.ctrl.blk_item is None:
+            return super().hoverMoveEvent(event)
         if self.visible_rect.contains(event.pos()):
             angle_idx = scene_angle_to_cursor_index(
                 self.ctrl.resizeHandleSceneAngle(self.idx)

@@ -735,9 +735,14 @@ class FontFormat(Config):
     italic: bool = False
     alignment: int = 0
     vertical: bool = False
+    standard_vertical_roman_alignment: bool = True
     font_weight: int = None
     line_spacing: float = 1.2
     letter_spacing: float = 1.15
+    ligature_common: str = "default"
+    ligature_discretionary: str = "enabled"
+    ligature_contextual: str = "default"
+    oldstyle_nums: str = "default"
     opacity: float = 1.0
     shadow_radius: float = 0.0
     shadow_strength: float = 1.0

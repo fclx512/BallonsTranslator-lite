@@ -314,6 +314,27 @@ class TextBlock:
         if adjust_bbox:
             self.adjust_bbox()
 
+    def sync_xyxy_from_bounding_rect(self) -> None:
+        """Sync the editable rectangle to ``xyxy`` without changing lines."""
+
+        if self._bounding_rect is None:
+            return
+
+        x, y, width, height = self._bounding_rect
+        polygon = xywh2xyxypoly(np.array([[x, y, width, height]]))
+        if self.angle:
+            polygon = rotate_polygons(
+                [x + width / 2, y + height / 2],
+                polygon,
+                -self.angle,
+            )
+        self.xyxy = np.array([
+            polygon[..., ::2].min(),
+            polygon[..., 1::2].min(),
+            polygon[..., ::2].max(),
+            polygon[..., 1::2].max(),
+        ]).astype(int).tolist()
+
     def aspect_ratio(self) -> float:
         min_rect = self.min_rect()
         middle_pnts = (min_rect[:, [1, 2, 3, 0]] + min_rect) / 2

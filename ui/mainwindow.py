@@ -796,13 +796,13 @@ class MainWindow(mainwindow_cls):
         self.textPanel.formatpanel.reload_presets()
 
     def _on_seq_badge_changed(self):
-        """Force canvas text items to repaint so seq badge appears/disappears."""
+        """Keep View menu + canvas badges in sync with the settings toggle."""
         self.titleBar.seqBadgeAction.setChecked(pcfg.show_seq_badge)
         if not self.canvas:
             return
         for item in self.canvas.textLayer.childItems():
             if isinstance(item, TextBlkItem):
-                item.update()
+                item.refresh_seq_badge()
 
     def _on_clip_overflow_changed(self):
         """Keep the View menu toggle in sync with the settings panel."""
@@ -2969,23 +2969,13 @@ class MainWindow(mainwindow_cls):
 
         self.global_search_widget.set_document_edited()
 
-        im_h, im_w = tgt_img.shape[:2]
-
         blk_list, blk_ids = [], []
         for blkitem in blkitem_list:
             blk: TextBlock = blkitem.blk
-            blk._bounding_rect = blkitem.absBoundingRect()
             blk.text = self.st_manager.pairwidget_list[
                 blkitem.idx
             ].e_source.toPlainText()
             blk_ids.append(blkitem.idx)
-            blk.set_lines_by_xywh(
-                blk._bounding_rect,
-                angle=-blk.angle,
-                x_range=[0, im_w - 1],
-                y_range=[0, im_h - 1],
-                adjust_bbox=True,
-            )
             blk_list.append(blk)
 
         self.module_manager.runBlktransPipeline(
