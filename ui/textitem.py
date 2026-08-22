@@ -70,13 +70,16 @@ class TextBlkItem(_EngineTextBlkItem):
         *args,
         **kwargs,
     ):
+        # 必须在 super().__init__ 之前建立：引擎 init → initTextBlock → setPlainText
+        # 的首次布局若溢出，会经 size_enlarged 同步回调 on_document_enlarged → set_size，
+        # 此时本行若在 super 之后会读未初始化属性。
+        self._text_overflows: bool = False  # 文字超出文本框，启用裁剪 + 黄色边框
         super().__init__(blk, idx, set_format, show_rect, *args, **kwargs)
         self.oldPos = QPointF()
         self.oldRect = QRectF()
         self._hide_badge = False
         self._reorder_seq: int = -1  # >=0 when in path-reorder mode; overrides badge number
         self._block_hw_sub = False  # prevents recursion in half-width corner bracket substitution
-        self._text_overflows: bool = False  # 文字超出文本框，启用裁剪 + 黄色边框
         # 引擎侧无这两个信号，桥接（moved 保持 fork 的「位置有变化才发」语义）
         self.move_interaction_finished.connect(self._fork_bridge_moved)
         self.visual_geometry_changed.connect(self._fork_bridge_doc_size_changed)

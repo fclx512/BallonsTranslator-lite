@@ -9,11 +9,15 @@ Full port of upstream v1.5.9 ``text_engine/rendering/glyph.py`` (Stage 4).
 Only import prefixes were adapted to the local package layout; the
 ``GLYPH_STROKE_FORMAT_PROPERTY`` constant and ``GlyphRasterAllocationError``
 keep the same signatures the Stage 3 effect renderer already consumes.
+``draw_slanted_line`` additionally carries the v1.5.12 ``background_overlays``
+and ``horizontal_shifts`` parameters (with ``_split_paint_spans``) that the
+2a/2b ported vertical/horizontal layouts call.
 """
 
 from __future__ import annotations
 
 from collections import OrderedDict
+from bisect import bisect_right
 import math
 from typing import (
     Any,
@@ -84,6 +88,31 @@ class PaintSpan(NamedTuple):
     start: int
     length: int
     char_format: QTextCharFormat
+
+
+def _split_paint_spans(
+    spans: Sequence[PaintSpan],
+    boundaries: Sequence[int],
+) -> Tuple[PaintSpan, ...]:
+    """Split paint only; the attached QTextLayout keeps its shaped runs."""
+    if not boundaries:
+        return tuple(spans)
+    result = []
+    for span in spans:
+        span_end = span.start + span.length
+        position = span.start
+        index = bisect_right(boundaries, position)
+        while index < len(boundaries) and boundaries[index] < span_end:
+            boundary = boundaries[index]
+            result.append(PaintSpan(
+                position, boundary - position, span.char_format
+            ))
+            position = boundary
+            index += 1
+        result.append(PaintSpan(
+            position, span_end - position, span.char_format
+        ))
+    return tuple(result)
 
 
 class FallbackGlyph(NamedTuple):
@@ -1047,23 +1076,53 @@ def draw_slanted_line(
     failure_handler: Optional[Callable[[Exception, bool], None]] = None,
     persistent_geometry_cache: Optional[Any] = None,
     cache_namespace: Optional[Hashable] = None,
+    background_overlays: Sequence[Tuple[QRectF, QBrush]] = (),
+    horizontal_shifts: Sequence[Tuple[int, int, float]] = (),
 ) -> None:
     """Paint one already-laid-out line without changing logical geometry."""
     layout = block.layout()
     additional_formats = tuple(layout.formats())
-    normal_spans = resolve_paint_spans(block, line, additional_formats)
+    shift_boundaries = tuple(
+        sorted({
+            boundary
+            for start, end, _shift in horizontal_shifts
+            for boundary in (start, end)
+        })
+    )
+
+    def paint_spans(
+        selection: Optional[QAbstractTextDocumentLayout.Selection] = None,
+    ) -> Tuple[PaintSpan, ...]:
+        return _split_paint_spans(
+            resolve_paint_spans(
+                block, line, additional_formats, selection
+            ),
+            shift_boundaries,
+        )
+
+    normal_spans = paint_spans()
     baseline_y = line.y() + line.ascent() + offset.y()
     geometry_cache = {}
+    shift_starts = tuple(start for start, _end, _shift in horizontal_shifts)
+
+    def span_offset(span: PaintSpan) -> QPointF:
+        if not shift_starts:
+            return offset
+        index = bisect_right(shift_starts, span.start) - 1
+        if index < 0 or span.start >= horizontal_shifts[index][1]:
+            return offset
+        return QPointF(offset.x() + horizontal_shifts[index][2], offset.y())
 
     def span_geometry(span: PaintSpan) -> GlyphGeometry:
         key = (span.start, span.length)
         geometry = geometry_cache.get(key)
         if geometry is None:
+            span_draw_offset = span_offset(span)
             persistent_key = _geometry_cache_key(
                 cache_namespace,
                 span.start,
                 span.length,
-                offset,
+                span_draw_offset,
                 orientation,
                 angle,
             )
@@ -1074,7 +1133,7 @@ def draw_slanted_line(
                     line,
                     span.start,
                     span.length,
-                    offset,
+                    span_draw_offset,
                     orientation,
                     angle,
                 )
@@ -1100,9 +1159,7 @@ def draw_slanted_line(
             selection_range = _selection_range(block, selection, line)
             if selection_range is None:
                 continue
-            for span in resolve_paint_spans(
-                block, line, additional_formats, selection
-            ):
+            for span in paint_spans(selection):
                 if not (
                     selection_range[0] <= span.start
                     and span.start < selection_range[1]
@@ -1117,12 +1174,14 @@ def draw_slanted_line(
         return
 
     for span in normal_spans:
-        rect = logical_span_rect(line, span.start, span.length, offset, orientation)
+        rect = logical_span_rect(
+            line, span.start, span.length, span_offset(span), orientation
+        )
         _draw_background(painter, rect, span.char_format)
 
     selection_spans = []
     for selection in context.selections:
-        spans = resolve_paint_spans(block, line, additional_formats, selection)
+        spans = paint_spans(selection)
         selection_range = _selection_range(block, selection, line)
         if selection_range is None:
             continue
@@ -1147,11 +1206,16 @@ def draw_slanted_line(
             ):
                 continue
             rect = logical_span_rect(
-                line, span.start, span.length, offset, orientation
+                line, span.start, span.length, span_offset(span), orientation
             )
             if not full_width:
                 _draw_background(painter, rect, span.char_format)
             selection_spans.append((span, rect))
+
+    # Layout-owned selection cells must cover document backgrounds but remain
+    # below glyph ink. This hook keeps that paint order inside the glyph pass.
+    for rect, brush in background_overlays:
+        painter.fillRect(rect, brush)
 
     # Paint normal ink once. Selection foreground is a second, logically
     # clipped pass so ligature overhang outside the selection remains normal.
@@ -1165,7 +1229,7 @@ def draw_slanted_line(
         _draw_decorations(
             painter,
             _logical_span_base_rect(
-                line, span.start, span.length, offset
+                line, span.start, span.length, span_offset(span)
             ),
             span.char_format,
             orientation,
@@ -1185,7 +1249,7 @@ def draw_slanted_line(
             _draw_decorations(
                 painter,
                 _logical_span_base_rect(
-                    line, span.start, span.length, offset
+                    line, span.start, span.length, span_offset(span)
                 ),
                 span.char_format,
                 orientation,

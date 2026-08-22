@@ -1,6 +1,6 @@
 import copy
 
-from qtpy.QtCore import Qt, Signal
+from qtpy.QtCore import QSignalBlocker, Qt, Signal
 from qtpy.QtGui import QFont, QTextCursor
 from qtpy.QtWidgets import (
     QApplication,
@@ -8,6 +8,10 @@ from qtpy.QtWidgets import (
     QDialog,
     QFrame,
     QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
     QSizePolicy,
     QStyledItemDelegate,
     QVBoxLayout,
@@ -29,6 +33,18 @@ from .custom_widget import (
 )
 from .text_advanced_format import TextStyleEntryButton
 from .text_style_presets import TextStylePresetPanel
+from .text_engine.annotations import (
+    EMPHASIS_GLYPHS,
+    EMPHASIS_POSITIONS,
+    EMPHASIS_STYLES,
+    LIGATURE_AXIS_VALUES,
+    LIGATURE_COMMON,
+    LIGATURE_CONTEXTUAL,
+    LIGATURE_DISCRETIONARY,
+    RUBY_POSITIONS,
+    RUBY_TYPES,
+    RubyValidationError,
+)
 from .text_engine.transforms.editor import TextTransformEditSession
 from .text_engine.transforms.panel import TextTransformPanel
 from .textitem import TextBlkItem
@@ -184,6 +200,214 @@ class FontFamilyComboBox(QComboBox):
 
     def on_fontfamily_changed(self):
         self.apply_fontfamily()
+
+
+class AnnotationFormatGroup(QFrame):
+    """In-place annotation controls (emphasis / Ruby / tate-chu-yoko /
+    ligatures / oldstyle numerals).
+
+    Node 2c first-pass UI: every change emits a named signal so the panel can
+    route it to the engine ``TextBlkItem`` setter that owns the undo document
+    transaction.  ``set_*`` helpers restore widget state without emitting.
+    """
+
+    annotation_changed = Signal(str, object)
+    ruby_remove = Signal()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        label_font = self.font()
+        label_font.setPointSizeF(shared.CONFIG_FONTSIZE_CONTENT * 0.9)
+
+        # ── emphasis ────────────────────────────────────────────────
+        self.emphasisLabel = QLabel(self.tr("Emphasis"))
+        self.emphasisLabel.setFont(label_font)
+        self.emphasisBox = QComboBox(self)
+        self.emphasisBox.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToContents
+        )
+        for style in EMPHASIS_STYLES:
+            glyph = EMPHASIS_GLYPHS.get(style, "")
+            text = style if not glyph else f"{glyph} {style}"
+            self.emphasisBox.addItem(text, style)
+        self.emphasisBox.setToolTip(self.tr("Emphasis mark style"))
+        self.emphasisPosBox = QComboBox(self)
+        self.emphasisPosBox.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToContents
+        )
+        for position in EMPHASIS_POSITIONS:
+            self.emphasisPosBox.addItem(position, position)
+        self.emphasisPosBox.setToolTip(self.tr("Emphasis mark position"))
+        emphasis_hlayout = QHBoxLayout()
+        emphasis_hlayout.addWidget(self.emphasisLabel)
+        emphasis_hlayout.addWidget(self.emphasisBox, 1)
+        emphasis_hlayout.addWidget(self.emphasisPosBox)
+        emphasis_hlayout.setSpacing(4)
+        emphasis_hlayout.setContentsMargins(0, 0, 0, 0)
+
+        # ── Ruby ────────────────────────────────────────────────────
+        self.rubyLabel = QLabel(self.tr("Ruby"))
+        self.rubyLabel.setFont(label_font)
+        self.rubyTypeBox = QComboBox(self)
+        for ruby_type in RUBY_TYPES:
+            self.rubyTypeBox.addItem(ruby_type, ruby_type)
+        self.rubyEdit = QLineEdit(self)
+        self.rubyEdit.setPlaceholderText(self.tr("Reading"))
+        self.rubyPosBox = QComboBox(self)
+        for position in RUBY_POSITIONS:
+            self.rubyPosBox.addItem(position, position)
+        self.rubyApplyBtn = QPushButton(self.tr("Apply"), self)
+        self.rubyRemoveBtn = QPushButton(self.tr("Remove"), self)
+        ruby_hlayout = QHBoxLayout()
+        ruby_hlayout.addWidget(self.rubyLabel)
+        ruby_hlayout.addWidget(self.rubyTypeBox)
+        ruby_hlayout.addWidget(self.rubyEdit, 1)
+        ruby_hlayout.addWidget(self.rubyPosBox)
+        ruby_hlayout.addWidget(self.rubyApplyBtn)
+        ruby_hlayout.addWidget(self.rubyRemoveBtn)
+        ruby_hlayout.setSpacing(4)
+        ruby_hlayout.setContentsMargins(0, 0, 0, 0)
+
+        # ── tate-chu-yoko ───────────────────────────────────────────
+        self.tcyChecker = QFontChecker(self)
+        self.tcyChecker.setObjectName("FontTateChuYokoChecker")
+        self.tcyChecker.setText(self.tr("Tate-chu-yoko"))
+        tcy_hlayout = QHBoxLayout()
+        tcy_hlayout.addWidget(self.tcyChecker)
+        tcy_hlayout.addStretch()
+        tcy_hlayout.setContentsMargins(0, 0, 0, 0)
+
+        # ── ligature axes ───────────────────────────────────────────
+        self.ligatureLabel = QLabel(self.tr("Ligatures"))
+        self.ligatureLabel.setFont(label_font)
+        self.ligatureBoxes = {}
+        for axis, tooltip in (
+            (LIGATURE_COMMON, self.tr("Common ligatures")),
+            (LIGATURE_DISCRETIONARY, self.tr("Discretionary ligatures")),
+            (LIGATURE_CONTEXTUAL, self.tr("Contextual alternates")),
+        ):
+            box = QComboBox(self)
+            box.setSizeAdjustPolicy(
+                QComboBox.SizeAdjustPolicy.AdjustToContents
+            )
+            for state in LIGATURE_AXIS_VALUES:
+                box.addItem(state, state)
+            box.setToolTip(tooltip)
+            self.ligatureBoxes[axis] = box
+        ligature_hlayout = QHBoxLayout()
+        ligature_hlayout.addWidget(self.ligatureLabel)
+        for axis, box in self.ligatureBoxes.items():
+            ligature_hlayout.addWidget(box)
+        ligature_hlayout.addStretch()
+        ligature_hlayout.setSpacing(4)
+        ligature_hlayout.setContentsMargins(0, 0, 0, 0)
+
+        # ── oldstyle numerals ───────────────────────────────────────
+        self.onumLabel = QLabel(self.tr("Oldstyle nums"))
+        self.onumLabel.setFont(label_font)
+        self.onumBox = QComboBox(self)
+        for state in LIGATURE_AXIS_VALUES:
+            self.onumBox.addItem(state, state)
+        self.onumBox.setToolTip(self.tr("Oldstyle figures"))
+        onum_hlayout = QHBoxLayout()
+        onum_hlayout.addWidget(self.onumLabel)
+        onum_hlayout.addWidget(self.onumBox)
+        onum_hlayout.addStretch()
+        onum_hlayout.setSpacing(4)
+        onum_hlayout.setContentsMargins(0, 0, 0, 0)
+
+        vlayout = QVBoxLayout(self)
+        vlayout.addLayout(emphasis_hlayout)
+        vlayout.addLayout(ruby_hlayout)
+        vlayout.addLayout(tcy_hlayout)
+        vlayout.addLayout(ligature_hlayout)
+        vlayout.addLayout(onum_hlayout)
+        vlayout.setSpacing(4)
+        vlayout.setContentsMargins(0, 0, 0, 0)
+
+        self.emphasisBox.currentIndexChanged.connect(self._emit_emphasis)
+        self.emphasisPosBox.currentIndexChanged.connect(self._emit_emphasis)
+        self.tcyChecker.toggled.connect(
+            lambda checked: self.annotation_changed.emit("tcy", checked)
+        )
+        for axis, box in self.ligatureBoxes.items():
+            box.currentIndexChanged.connect(
+                lambda _index, a=axis, b=box: self.annotation_changed.emit(
+                    "ligature", (a, b.currentData())
+                )
+            )
+        self.onumBox.currentIndexChanged.connect(
+            lambda _index: self.annotation_changed.emit(
+                "onum", self.onumBox.currentData()
+            )
+        )
+        self.rubyApplyBtn.clicked.connect(self._emit_ruby)
+        self.rubyRemoveBtn.clicked.connect(self.ruby_remove)
+
+    def _emit_emphasis(self):
+        self.annotation_changed.emit(
+            "emphasis", (self.emphasisBox.currentData(), self.emphasisPosBox.currentData())
+        )
+
+    def _emit_ruby(self):
+        self.annotation_changed.emit(
+            "ruby",
+            (
+                self.rubyTypeBox.currentData(),
+                self.rubyEdit.text(),
+                self.rubyPosBox.currentData(),
+            ),
+        )
+
+    def set_emphasis(self, style: str, position: str) -> None:
+        with QSignalBlocker(self.emphasisBox), QSignalBlocker(
+            self.emphasisPosBox
+        ):
+            index = self.emphasisBox.findData(style)
+            if index >= 0:
+                self.emphasisBox.setCurrentIndex(index)
+            index = self.emphasisPosBox.findData(position)
+            if index >= 0:
+                self.emphasisPosBox.setCurrentIndex(index)
+
+    def set_ruby(
+        self,
+        ruby_type: str,
+        text: str,
+        position: str,
+        enabled: bool,
+    ) -> None:
+        with QSignalBlocker(self.rubyTypeBox), QSignalBlocker(
+            self.rubyPosBox
+        ):
+            index = self.rubyTypeBox.findData(ruby_type)
+            if index >= 0:
+                self.rubyTypeBox.setCurrentIndex(index)
+            self.rubyEdit.setText(text)
+            index = self.rubyPosBox.findData(position)
+            if index >= 0:
+                self.rubyPosBox.setCurrentIndex(index)
+        self.rubyRemoveBtn.setEnabled(enabled)
+
+    def set_tcy(self, enabled: bool) -> None:
+        with QSignalBlocker(self.tcyChecker):
+            self.tcyChecker.setChecked(enabled)
+
+    def set_ligature(self, axis: str, state: str) -> None:
+        box = self.ligatureBoxes.get(axis)
+        if box is None:
+            return
+        with QSignalBlocker(box):
+            index = box.findData(state)
+            if index >= 0:
+                box.setCurrentIndex(index)
+
+    def set_onum(self, state: str) -> None:
+        with QSignalBlocker(self.onumBox):
+            index = self.onumBox.findData(state)
+            if index >= 0:
+                self.onumBox.setCurrentIndex(index)
 
 
 class FontFormatPanel(Widget):
@@ -424,6 +648,21 @@ class FontFormatPanel(Widget):
             fl.setContentsMargins(6, pad, 6, pad)
             fl.addLayout(hl)
             self.vlayout.addWidget(frame)
+
+        # 注解分区（节点 2c 初版）：着重号/Ruby/縦中横/连字/旧式数字。
+        # 操作目标是文字块内部字符格式，经引擎 TextBlkItem 注解 setter 落地。
+        self.annotation_group = AnnotationFormatGroup(self)
+        annotation_frame = GroupFrame(self)
+        annotation_layout = QVBoxLayout(annotation_frame)
+        annotation_layout.setContentsMargins(6, 4, 6, 4)
+        annotation_layout.addWidget(self.annotation_group)
+        self.vlayout.addWidget(annotation_frame)
+        self.annotation_group.annotation_changed.connect(
+            self._on_annotation_changed
+        )
+        self.annotation_group.ruby_remove.connect(self._on_ruby_remove)
+        self.annotation_group.setEnabled(False)
+
         self.vlayout.setContentsMargins(0, 0, 0, 0)
         self.vlayout.setSpacing(4)
 
@@ -804,6 +1043,73 @@ class FontFormatPanel(Widget):
         self.text_transform_editor.replace_targets(transform_items)
         if transform_items:
             self.texttransform_panel.set_transform_items(transform_items)
+        self._sync_annotation_controls()
+
+    def _sync_annotation_controls(self):
+        """Restore the annotation controls from the active text item.
+
+        Called on every selection transition; during text editing the engine
+        item re-reports its own state, so a per-keystroke sync is deferred to
+        node 3 panel consolidation.
+        """
+        item = self.textblk_item
+        group = self.annotation_group
+        if item is None:
+            group.setEnabled(False)
+            return
+        group.setEnabled(True)
+        with QSignalBlocker(group):
+            style, position = item.emphasis_values()
+            group.set_emphasis(style, position)
+            group.set_tcy(item.tate_chu_yoko_enabled())
+            for axis in (
+                LIGATURE_COMMON,
+                LIGATURE_DISCRETIONARY,
+                LIGATURE_CONTEXTUAL,
+            ):
+                group.set_ligature(axis, item.ligature_axis_value(axis))
+            group.set_onum(item.oldstyle_nums_value())
+            ruby_type, text, position, enabled = item.ruby_editor_values()
+            group.set_ruby(ruby_type, text, position, enabled)
+
+    def _on_annotation_changed(self, name: str, value):
+        item = self.textblk_item
+        if item is None:
+            return
+        if name == "emphasis":
+            item.setEmphasis(*value)
+        elif name == "tcy":
+            try:
+                item.setTateChuYoko(value)
+            except RubyValidationError as error:
+                # 与 Ruby 互斥；回滚勾选态，避免控件状态与文档不一致
+                self.annotation_group.set_tcy(item.tate_chu_yoko_enabled())
+                QMessageBox.information(self, self.tr("Tate-chu-yoko"), str(error))
+        elif name == "ligature":
+            axis, state = value
+            item.setLigatureAxis(axis, state)
+        elif name == "onum":
+            item.setOldstyleNums(value)
+        elif name == "ruby":
+            try:
+                if (
+                    not item.isEditing()
+                    and not item.textCursor().hasSelection()
+                ):
+                    # 与 emphasis/TCY/连字/onum 一致：非编辑态应用到整块文本
+                    # （编辑态仍需先在编辑器内选中注音基底）
+                    cursor = item.textCursor()
+                    cursor.select(QTextCursor.SelectionType.Document)
+                    item.setTextCursor(cursor)
+                item.setRuby(*value)
+            except RubyValidationError as error:
+                # Ruby needs selected base text; surface the engine's
+                # validation reason instead of crashing the panel.
+                QMessageBox.information(self, self.tr("Ruby"), str(error))
+
+    def _on_ruby_remove(self):
+        if self.textblk_item is not None:
+            self.textblk_item.removeRuby()
 
     def resolve_text_transform_edits_for_save(self):
         # Pending numeric edits are not dirty until they commit; resolve them

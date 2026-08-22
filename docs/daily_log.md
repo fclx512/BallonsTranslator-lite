@@ -25,6 +25,24 @@
 
 ---
 
+### 节点 2b 提交推送 + 节点 2c 注解层：主 UI 注解入口初版
+
+**问题/需求：** 用户验收 2b 后授权提交并继续推进；按规划进入节点 2c（Ruby/着重号/连字/onum/手动 TCY/字距 注解层）。探索确认：annotations 字重适配（引擎局部 `font_weight.py` shim）与渲染接通（horizontal/vertical 布局均已接 ruby/emphasis 绘制）在 2a 已完成，**缺口是主 UI 无 Ruby/着重号/TCY/连字/onum 入口**（引擎 `formatting/panel.py` 面板存在但未被主窗口使用，`editing/manager.py` 内嵌的 TextPanel 未接入 mainwindow）。
+
+**改动要点：**
+
+- **节点 2b 提交 `c19a5a6`**（用户验收后）：竖排双引擎三设置接通 + 縦中横注入 + 半宽角引号 + clone-stroke 改引擎布局 + 实机审查修正（全角句读恢复居中）聚合为原子提交，已授权提交（用户自行推送）。
+- **`ui/text_panel.py` 增补 `AnnotationFormatGroup` 初版控件**（保持 fork 面板形态）：着重号（样式/位置下拉）、Ruby（类型/读音/位置 + 应用/移除）、縦中横（QFontChecker）、连字（common/discretionary/contextual 三下拉）、旧式数字（onum 下拉）。信号按名分发到引擎 `TextBlkItem` 的 `setEmphasis`/`setRuby`/`setTateChuYoko`/`setLigatureAxis`/`setOldstyleNums`（走文档级 undo）；`_sync_annotation_controls()` 在 `set_textblk_item` 切换时从 `emphasis_values`/`ruby_editor_values`/`tate_chu_yoko_enabled`/`ligature_axis_value`/`oldstyle_nums_value` 读回（QSignalBlocker 防回环），无选中块（global mode）时禁用。
+- **Ruby 无选区防护**：`_on_annotation_changed` 捕获 `RubyValidationError`（无选区/读音空/与 TCY 重叠）→ `QMessageBox` 提示，避免面板崩溃。
+- **i18n**：`AnnotationFormatGroup` context 14 条 + `FontFormatPanel` context 1 条（Ruby 对话框标题）补齐 ts，qm 1299 条。
+- 新增 `tests/test_annotation_controls.py` 11 例：item 注解 setter/读回端到端（emphasis/tcy/ruby+remove/ligature/onum，Ruby 需先 `startEdit` + 选区）、group 信号载荷与 `set_*` 恢复不发声、面板路由（TCY 与 Ruby 互斥用独立 item）。
+
+**排障记录：** `set_*` 恢复 helper 初版未 blocker 子控件导致发信号（改按控件 `QSignalBlocker`）；Ruby 无选区时引擎抛 `RubyValidationError`（面板捕获提示；测试先进编辑态选区）。
+
+**涉及文件：** `ui/text_panel.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_annotation_controls.py`（新增）、`docs/daily_log.md`
+
+---
+
 ## 2026-08-21
 
 ### 上游 v1.5.12 移植推进（节点 0/1/4/5）+ 计划外批次提交推送

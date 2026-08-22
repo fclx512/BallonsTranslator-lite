@@ -220,5 +220,59 @@ class TestVerticalEngineLayout(unittest.TestCase):
             self.assertFalse(image.isNull())
 
 
+class TestVerticalEditSelectionRender(unittest.TestCase):
+    """双击编辑 + 选区时竖排绘制路径不得崩溃。
+
+    钉住 v1.5.12 移植缺口：``draw_slanted_line`` 的
+    ``background_overlays``/``horizontal_shifts`` 参数曾缺失，竖排选区
+    背景经 ``_vertical_selection_backgrounds`` 传入时抛 TypeError。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from qtpy.QtGui import QImage, QPainter, QTextCursor
+        from qtpy.QtWidgets import QGraphicsScene
+
+        from ui.textitem import TextBlkItem
+
+        cls.TextBlkItem = TextBlkItem
+        cls.QImage = QImage
+        cls.QPainter = QPainter
+        cls.QTextCursor = QTextCursor
+        cls.QGraphicsScene = QGraphicsScene
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _render_editing_item(self, vertical: bool) -> None:
+        from utils.textblock import TextBlock
+
+        xyxy = [100, 100, 260, 420] if vertical else [100, 100, 500, 220]
+        blk = TextBlock(xyxy=list(xyxy), translation="縦書きテスト文字列")
+        blk._bounding_rect = list(xyxy)
+        blk.vertical = vertical
+        blk.fontformat.vertical = vertical
+        scene = self.QGraphicsScene()
+        item = self.TextBlkItem(blk=blk, idx=0)
+        scene.addItem(item)
+        item.startEdit()
+        cursor = item.textCursor()
+        cursor.setPosition(0)
+        cursor.setPosition(4, self.QTextCursor.MoveMode.KeepAnchor)
+        item.setTextCursor(cursor)
+        image = self.QImage(600, 700, self.QImage.Format.Format_ARGB32)
+        image.fill(0xFFFFFFFF)
+        painter = self.QPainter(image)
+        try:
+            scene.render(painter)
+        finally:
+            painter.end()
+        self.assertFalse(image.isNull())
+
+    def test_vertical_selection_render(self):
+        self._render_editing_item(vertical=True)
+
+    def test_horizontal_selection_render(self):
+        self._render_editing_item(vertical=False)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

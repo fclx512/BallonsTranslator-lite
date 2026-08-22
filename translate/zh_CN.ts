@@ -1374,7 +1374,74 @@ Settings → Inpainter → Photoshop Path</source>
         </message>
     </context>
     <context>
+        <name>AnnotationFormatGroup</name>
+        <message>
+            <source>Apply</source>
+            <translation>应用</translation>
+        </message>
+        <message>
+            <source>Common ligatures</source>
+            <translation>常用连字</translation>
+        </message>
+        <message>
+            <source>Contextual alternates</source>
+            <translation>上下文替代</translation>
+        </message>
+        <message>
+            <source>Discretionary ligatures</source>
+            <translation>任意连字</translation>
+        </message>
+        <message>
+            <source>Emphasis</source>
+            <translation>着重号</translation>
+        </message>
+        <message>
+            <source>Emphasis mark position</source>
+            <translation>着重号位置</translation>
+        </message>
+        <message>
+            <source>Emphasis mark style</source>
+            <translation>着重号样式</translation>
+        </message>
+        <message>
+            <source>Ligatures</source>
+            <translation>连字</translation>
+        </message>
+        <message>
+            <source>Oldstyle figures</source>
+            <translation>旧式数字</translation>
+        </message>
+        <message>
+            <source>Oldstyle nums</source>
+            <translation>旧式数字</translation>
+        </message>
+        <message>
+            <source>Reading</source>
+            <translation>注音</translation>
+        </message>
+        <message>
+            <source>Remove</source>
+            <translation>移除</translation>
+        </message>
+        <message>
+            <source>Ruby</source>
+            <translation>注音（Ruby）</translation>
+        </message>
+        <message>
+            <source>Tate-chu-yoko</source>
+            <translation>直排内横排</translation>
+        </message>
+    </context>
+    <context>
         <name>FontFormatPanel</name>
+        <message>
+            <source>Ruby</source>
+            <translation>注音（Ruby）</translation>
+        </message>
+        <message>
+            <source>Tate-chu-yoko</source>
+            <translation>直排内横排</translation>
+        </message>
         <message>
             <location filename="..\ui\text_panel.py" line="241" />
             <source>Font Family</source>
