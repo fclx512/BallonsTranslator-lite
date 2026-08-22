@@ -189,11 +189,12 @@ class TextBlkItemEffectTest(unittest.TestCase):
         self.assertTrue(renderer._commit_effect_padding(5.0))
         self.assertAlmostEqual(item.padding(), 5.0, delta=1e-6)
         self.assertEqual(item.absBoundingRect(qrect=True), abr_before)
-        # Qt records the documentMargin change as exactly one undo step…
-        self.assertEqual(doc.availableUndoSteps(), undo_before + 1)
+        # 引擎布局把 effect padding 存于布局自身状态（不用 documentMargin），
+        # 提交 padding 不再产生 documentMargin 的 undo 步（fork 布局的副作用）。
+        self.assertEqual(doc.availableUndoSteps(), undo_before)
         # …and the grow-only guard makes repeated commits idempotent.
         self.assertFalse(renderer._commit_effect_padding(5.0))
-        self.assertEqual(doc.availableUndoSteps(), undo_before + 1)
+        self.assertEqual(doc.availableUndoSteps(), undo_before)
 
     # ── fontformat combo paint smoke ─────────────────────────────────────
 

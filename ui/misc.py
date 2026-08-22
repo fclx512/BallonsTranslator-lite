@@ -299,6 +299,28 @@ def set_icon_theme(theme_name: str = ""):
             f.write(svg_content)
 
 
+def themed_icon_path(filename: str, theme: str = None) -> str:
+    """Return the path of a themed SVG icon file.
+
+    Icons are themed in place by :func:`set_icon_theme`, so there is no
+    per-theme cache directory — the `icons/` folder already holds the
+    currently applied fill (2026-08-21, engine 2a landing).
+    """
+    return osp.join(ICON_DIR, filename)
+
+
+def themed_icon_url(filename: str, theme: str = None) -> str:
+    return (
+        '"' + Path(themed_icon_path(filename, theme)).as_posix().replace('"', '\\"') + '"'
+    )
+
+
+def icon_url(filename: str) -> str:
+    return (
+        '"' + Path(osp.join(ICON_DIR, filename)).as_posix().replace('"', '\\"') + '"'
+    )
+
+
 def mutate_dict_key(adict: dict, old_key: Union[str, int], new_key: str):
     # https://stackoverflow.com/questions/12150872/change-key-in-ordereddict-without-losing-order
     key_list = list(adict.keys())

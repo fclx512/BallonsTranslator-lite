@@ -366,7 +366,7 @@ class Canvas(QGraphicsScene):
         self._reorder_drawing = False       # left button currently held
         self._reorder_path = QPainterPath()
         self._reorder_path_item: QGraphicsPathItem = None
-        self._reorder_touched_blocks: List[TextBlock] = []  # TextBlock refs in contact order
+        self._reorder_touched_blocks: List[TextBlkItem] = []  # touched TextBlkItems in contact order
         self._reorder_brush_radius = 20.0   # effective brush half-width (scene coords)
         self._reorder_last_local_pos: QPointF = None  # last stroke point in textLayer coords
         self.create_block_origin: QPointF = None
@@ -1151,7 +1151,6 @@ class Canvas(QGraphicsScene):
         self._reorder_path_item.setZValue(150)  # above textLayer children
         self._reorder_path_item.setParentItem(self.textLayer)
         self._reorder_path_item.hide()
-        self.addItem(self._reorder_path_item)
 
     def exitReorderMode(self):
         """Exit path-drawing reorder mode and clean up."""
@@ -1224,7 +1223,7 @@ class Canvas(QGraphicsScene):
         for item in self.textLayer.childItems():
             if not isinstance(item, TextBlkItem):
                 continue
-            if item.blk in touched:
+            if item in touched:
                 continue
             br = item.absBoundingRect(qrect=True)
             if not hit_area.intersects(br):
@@ -1234,7 +1233,7 @@ class Canvas(QGraphicsScene):
             )
         candidates.sort(key=lambda hit: hit[0])
         for _entry, item in candidates:
-            self._reorder_touched_blocks.append(item.blk)
+            self._reorder_touched_blocks.append(item)
             item.setSelected(True)
             item._reorder_seq = len(self._reorder_touched_blocks) - 1
             item.refresh_seq_badge()
@@ -1257,9 +1256,9 @@ class Canvas(QGraphicsScene):
         ]
         idx_map = {id(blk): i for i, blk in enumerate(canvas_blocks)}
         touched_ids = [
-            idx_map[id(blk)]
-            for blk in self._reorder_touched_blocks
-            if id(blk) in idx_map
+            idx_map[id(item.blk)]
+            for item in self._reorder_touched_blocks
+            if id(item.blk) in idx_map
         ]
         self.reorder_path_finished.emit(touched_ids)
 

@@ -20,3 +20,31 @@
 **排障记录：** 4a 初版"框内 paint 直接移出框外"方案被 `DeviceCoordinateCache` 超 boundingRect 裁剪否决（padding 可为 0），改走上游式独立子项；verify 的 docs 步抓出 `反向移植_规范.md` 对已删符号 `_draw_seq_badge` 的失效引用，已同步更新。
 
 **涉及文件：** `modules/translators/trans_llm_api.py`、`utils/download_util.py`、`utils/textblock.py`、`utils/config.py`、`utils/fontformat.py`、`utils/shortcut_conflicts.py`、`ui/textitem.py`、`ui/canvas.py`、`ui/mainwindow.py`、`ui/drawingpanel.py`、`ui/scenetext_manager.py`、`ui/textedit_commands.py`、`ui/text_engine/geometry.py`、`ui/texteditshapecontrol.py`、`ui/configpanel.py`、`ui/pie_menu_editor.py`、`ui/theme_helpers.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_auto_squeeze.py`（新增）、`tests/test_shortcut_system.py`（新增）、`docs/技术实现/上游v1.5.11之后提交调研.md`（新增）、`docs/技术实现/移植规划_上游v1.5.12.md`（新增）、`docs/技术实现/反向移植_规范.md`、`docs/daily_log.md`
+
+---
+
+### 路径重排闪退修复（TextBlock 不可哈希 + 路径项重复 addItem）
+
+**问题/需求：** 路径重排（节点 4b）实机点击后报错闪退：`QGraphicsScene::addItem: item has already been added to this scene` 警告后，`ui/canvas.py::_reorder_extend_stroke` 抛 `TypeError: unhashable type: 'TextBlock'`。
+
+**改动要点：**
+
+- 触及块记账 `_reorder_touched_blocks` 改存 **`TextBlkItem`**（按身份可哈希，对齐上游 `_path_reorder_touched`）；原先存 `TextBlock`——nested_dataclass 定义了 `__eq__` 不再有默认 `__hash__`，`set()` 成员判定直接炸。`_reorder_end_stroke` 改用 `id(item.blk)` 映射回 blk 索引。
+- 预览虚线路径项去掉重复 `self.addItem(...)`（`setParentItem(self.textLayer)` 本身已把项送入场景），消除 duplicate-add 警告；退出清理沿用 `removeItem` 对 textLayer 子项的既有模式（canvas.py:859）。
+- 新增 `tests/test_path_reorder.py` 回归 5 例：行程顺序编号、单帧快拖跨块按 entry 排序、回头路过不重复编号、预览路径项仅一次入场景（parent 为 textLayer）、退出重排模式清理（`_reorder_seq` 复位/取消选中/路径项移除）。
+
+**涉及文件：** `ui/canvas.py`、`tests/test_path_reorder.py`（新增）、`docs/daily_log.md`
+
+---
+
+### 节点 2a 阶段一：引擎文件落地 + 依赖核对（进行中，交接见 `docs/技术实现/移植交接_节点2a文件落地.md`）
+
+**问题/需求：** 计划未完成部分按序推进，先做小节点 —— 节点 2a 的「文件落地 + 依赖核对」，不切渲染入口（入口切换须与落地分开：本地旧快照已 fork 改写，整体覆盖会破坏现行渲染链）。
+
+**改动要点：**
+
+- **落地 26 个上游缺失文件**至 `ui/text_engine/`（annotations/item/layout/horizontal_layout/vertical_layout/shape_control/cache/font_family/pipeline_formatting、editing/context_menu·manager·widgets、formatting/*、rendering/emphasis·native_document·ruby·tate_chu_yoko、transforms/controls·edit_session·grid_numba·modal·projective_control），剥 `ballontranslator.` 前缀、相对导入深度语义一致（最深 `...` = `ui` 包）原样保留。
+- **依赖适配**：新建 `ui/text_engine/font_weight.py`（引擎局部 shim：FontWeight IntEnum + coerce/qt 转换 + HTML 字重 helper，数据表由本地 `fontweight_qt5_to_qt6` 派生——节点 1 决策「不引入上游 FontWeight 枚举/HTML 往返进 utils」的落地形态）；导入改写 5 处（item/annotations/formatting·panel/formatting·commands/pipeline_formatting）；`utils/text_processing.py` 增 seg 家族 + `capitalize_sentences`（seg_ch_pkg 删 prepare_pkuseg 依赖、缺 segmenter 降级逐字符）；`utils/text_layout.py`（layout_text）、`ui/icon_rendering.py`、`ui/adaptive_wrap_layout.py`、`ui/spellcheck.py` 落地；`ui/misc.py` 增 themed_icon_path/url、icon_url；`rendering/indexing.py` 换上游版（增 `_grapheme_ranges`，`_grapheme_count` 语义不变，消费方核对无影响）。
+- **冒烟**：43 模块 42 可导入，剩 `editing.manager` 缺上游命令类（`ApplyFontformatCommand` 等 14 名）- 推荐方案已写在交接文档（建 `editing/upstream_commands.py` 放上游 15 类 + 模块函数，本地 commands.py 保持不动，改 manager 导入）。i18n 步 exit 6（94 条新 tr() 缺 ts 条目，上游 `resources/translate/zh_CN.ts` 已含，可批量复制 + qm 编译）。
+
+**涉及文件：** 见交接文档 §2 清单（`ui/text_engine/` 新增 26 文件 + `font_weight.py`、`ui/icon_rendering.py`、`ui/adaptive_wrap_layout.py`、`ui/spellcheck.py`、`utils/text_layout.py`、`utils/text_processing.py`、`ui/misc.py`、`ui/text_engine/rendering/indexing.py`、`docs/技术实现/移植交接_节点2a文件落地.md`（新增））

@@ -172,6 +172,19 @@ class TextItemGeometryController:
             if self._update_depth == 0:
                 self._flush_update()
 
+    @contextmanager
+    def defer_compilation(self):
+        """Compile once after a transient layout transaction settles.
+
+        Ported from upstream (v1.5.12); the fork's equivalent flag is
+        ``_compile_deferred``, which ``flush_deferred_compilation`` resets.
+        """
+        self._compile_deferred = True
+        try:
+            yield
+        finally:
+            self.flush_deferred_compilation()
+
     def request_update(self) -> None:
         self._update_dirty = True
         if self._update_depth == 0:

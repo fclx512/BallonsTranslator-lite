@@ -52,6 +52,9 @@ from utils.fontformat import FontFormat, pt2px
 
 from ..misc import ndarray2pixmap, pixmap2ndarray
 from ..scene_textlayout import HorizontalTextDocumentLayout, VerticalTextDocumentLayout
+from .vertical_layout import (
+    VerticalTextDocumentLayout as EngineVerticalTextDocumentLayout,
+)
 from .rendering.glyph import GLYPH_STROKE_FORMAT_PROPERTY
 from .rendering.shadow import apply_shadow_effect
 from .rendering.raster import (
@@ -247,6 +250,14 @@ class TextEffectRenderer:
     def clear_cached_surface(self) -> None:
         self.background_pixmap = None
         self.background_pixmap_scale = None
+
+    def requires_no_item_cache(self) -> bool:
+        """Let the effect raster cache see the actual paint-device scale.
+
+        Ported from upstream (v1.5.12); consumed by the engine item's
+        ``refresh_cache_policy``.
+        """
+        return any(self._effect_flags())
 
     def release_caches(self) -> None:
         """Release every item-owned raster cache before page removal."""
@@ -553,7 +564,10 @@ class TextEffectRenderer:
             return
         active_layout = self.document().documentLayout()
         if (
-            isinstance(active_layout, VerticalTextDocumentLayout)
+            isinstance(
+                active_layout,
+                (VerticalTextDocumentLayout, EngineVerticalTextDocumentLayout),
+            )
             and self._has_layout_distortion()
         ):
             self._paint_vertical_stroke(painter, render_scale, surface_rect)

@@ -2665,7 +2665,9 @@ class ConfigPanel(Widget):
             return
         for item in sw_canvas.items():
             if isinstance(item, TextBlkItem):
-                item.layout.setPunctuationPosition(pcfg.punctuation_position)
+                layout = item.layout
+                if layout is not None and hasattr(layout, "setPunctuationPosition"):
+                    layout.setPunctuationPosition(pcfg.punctuation_position)
                 item.repaint_background()
                 item.update()
 

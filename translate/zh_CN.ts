@@ -1442,7 +1442,75 @@ Settings → Inpainter → Photoshop Path</source>
             <source>Edit text style</source>
             <translation>编辑文本样式</translation>
         </message>
-    </context>
+            <message>
+            <source>Advanced Text Format</source>
+            <translation>进阶字体格式</translation>
+        </message>
+        <message>
+            <source>Combine the selected text into one upright vertical cell</source>
+            <translation>将所选文本合并为竖排中的一个横排单元</translation>
+        </message>
+        <message>
+            <source>Fold</source>
+            <translation>折叠</translation>
+        </message>
+        <message>
+            <source>Font Weight</source>
+            <translation>字重</translation>
+        </message>
+        <message>
+            <source>Mono Ruby needs one whitespace-separated reading per base grapheme.</source>
+            <translation>单字注释要求每个基文字符对应一个以空格分隔的读音</translation>
+        </message>
+        <message>
+            <source>Ruby base text cannot contain paragraph or forced line breaks.</source>
+            <translation>注释基文不能包含段落或强制换行</translation>
+        </message>
+        <message>
+            <source>Ruby cannot overlap Tate-chu-yoko.</source>
+            <translation>注释不能与纵中横重叠</translation>
+        </message>
+        <message>
+            <source>Ruby cannot partially overlap an existing container.</source>
+            <translation>注释范围不能与现有注释范围部分重叠</translation>
+        </message>
+        <message>
+            <source>Ruby text cannot be empty.</source>
+            <translation>注释文本不能为空</translation>
+        </message>
+        <message>
+            <source>Select base text to apply Ruby.</source>
+            <translation>请选择要添加注释的基文</translation>
+        </message>
+        <message>
+            <source>Source</source>
+            <translation>原文</translation>
+        </message>
+        <message>
+            <source>Standard Vertical Roman Alignment</source>
+            <translation>标准垂直罗马对齐方式</translation>
+        </message>
+        <message>
+            <source>Tate-chu-yoko cannot overlap Ruby.</source>
+            <translation>纵中横不能与注释重叠</translation>
+        </message>
+        <message>
+            <source>Translation</source>
+            <translation>译文</translation>
+        </message>
+        <message>
+            <source>Unable to apply Ruby to this selection.</source>
+            <translation>无法为当前选区应用注释</translation>
+        </message>
+        <message>
+            <source>Unable to apply Tate-chu-yoko to this selection.</source>
+            <translation>无法为当前选区应用纵中横</translation>
+        </message>
+        <message>
+            <source>Unfold</source>
+            <translation>展开</translation>
+        </message>
+</context>
     <context>
         <name>FontStyleManager</name>
         <message>
@@ -4516,7 +4584,11 @@ text layers are fully editable.</source>
             <source>Delete Style</source>
             <translation>删除</translation>
         </message>
-    </context>
+            <message>
+            <source>Click to set as Global format. Double click to edit name. Drag to reorder.</source>
+            <translation>单击设为全局字体格式，双击编辑名称，拖拽可重排</translation>
+        </message>
+</context>
     <context>
         <name>TextStylePresetPanel</name>
         <message>
@@ -6018,4 +6090,341 @@ This maps automatically to each provider's native parameter
             <translation>按最新提交检查会应用未经验证的开发中更改，在您的设备上可能不稳定。</translation>
         </message>
 </context>
+    <context>
+        <name>AddWordItemWidget</name>
+        <message>
+            <source>Add new word...</source>
+            <translation>新增词</translation>
+        </message>
+        <message>
+            <source>Add word</source>
+            <translation>新增词</translation>
+        </message>
+    </context>
+    <context>
+        <name>AutoTateChuYokoThread</name>
+        <message>
+            <source>Failed to apply automatic Tate-chu-yoko.</source>
+            <translation>纵中横规则应用失败</translation>
+        </message>
+    </context>
+    <context>
+        <name>DictionaryManagerDialog</name>
+        <message>
+            <source>Close</source>
+            <translation>关闭</translation>
+        </message>
+        <message>
+            <source>Custom Dictionary Manager</source>
+            <translation>自定义字典管理器</translation>
+        </message>
+    </context>
+    <context>
+        <name>EmphasisToolButton</name>
+        <message>
+            <source>Emphasis Marks</source>
+            <translation>着重号</translation>
+        </message>
+        <message>
+            <source>Filled Circle</source>
+            <translation>实心圆</translation>
+        </message>
+        <message>
+            <source>Filled Dot</source>
+            <translation>实心圆点</translation>
+        </message>
+        <message>
+            <source>Filled Double Circle</source>
+            <translation>实心双圆</translation>
+        </message>
+        <message>
+            <source>Filled Sesame</source>
+            <translation>实心芝麻点</translation>
+        </message>
+        <message>
+            <source>Filled Triangle</source>
+            <translation>实心三角</translation>
+        </message>
+        <message>
+            <source>Marks</source>
+            <translation>符号</translation>
+        </message>
+        <message>
+            <source>Open Circle</source>
+            <translation>空心圆</translation>
+        </message>
+        <message>
+            <source>Open Dot</source>
+            <translation>空心小圆点</translation>
+        </message>
+        <message>
+            <source>Open Double Circle</source>
+            <translation>空心双圆</translation>
+        </message>
+        <message>
+            <source>Open Sesame</source>
+            <translation>空心芝麻点</translation>
+        </message>
+        <message>
+            <source>Open Triangle</source>
+            <translation>空心三角</translation>
+        </message>
+        <message>
+            <source>Over / Left</source>
+            <translation>上方 / 左侧</translation>
+        </message>
+        <message>
+            <source>Over / Right</source>
+            <translation>上方 / 右侧</translation>
+        </message>
+        <message>
+            <source>Position</source>
+            <translation>位置</translation>
+        </message>
+        <message>
+            <source>Under / Left</source>
+            <translation>下方 / 左侧</translation>
+        </message>
+        <message>
+            <source>Under / Right</source>
+            <translation>下方 / 右侧</translation>
+        </message>
+    </context>
+    <context>
+        <name>FloatingSuggestionLabel</name>
+        <message>
+            <source>Add</source>
+            <translation>添加</translation>
+        </message>
+    </context>
+    <context>
+        <name>FontWeightComboBox</name>
+        <message>
+            <source>Black</source>
+            <translation>黑体</translation>
+        </message>
+        <message>
+            <source>Bold</source>
+            <translation>粗体</translation>
+        </message>
+        <message>
+            <source>Demi Bold</source>
+            <translation>半粗</translation>
+        </message>
+        <message>
+            <source>Extra Bold</source>
+            <translation>中黑</translation>
+        </message>
+        <message>
+            <source>Extra Light</source>
+            <translation>超细</translation>
+        </message>
+        <message>
+            <source>Light</source>
+            <translation>细体</translation>
+        </message>
+        <message>
+            <source>Medium</source>
+            <translation>中等</translation>
+        </message>
+        <message>
+            <source>Normal</source>
+            <translation>常规</translation>
+        </message>
+        <message>
+            <source>Thin</source>
+            <translation>瘦体</translation>
+        </message>
+    </context>
+    <context>
+        <name>RubyFuriganaGroup</name>
+        <message>
+            <source>Apply</source>
+            <translation>应用</translation>
+        </message>
+        <message>
+            <source>For Mono Ruby, separate readings with whitespace</source>
+            <translation>单字注释时，请用空格分隔各个读音</translation>
+        </message>
+        <message>
+            <source>Group</source>
+            <translation>整体</translation>
+        </message>
+        <message>
+            <source>Mono</source>
+            <translation>单字</translation>
+        </message>
+        <message>
+            <source>Over / Right</source>
+            <translation>上方 / 右侧</translation>
+        </message>
+        <message>
+            <source>Position</source>
+            <translation>位置</translation>
+        </message>
+        <message>
+            <source>Reading</source>
+            <translation>注释</translation>
+        </message>
+        <message>
+            <source>Remove</source>
+            <translation>移除</translation>
+        </message>
+        <message>
+            <source>Ruby / Furigana</source>
+            <translation>注释 / 振假名</translation>
+        </message>
+        <message>
+            <source>Ruby text</source>
+            <translation>注释文本</translation>
+        </message>
+        <message>
+            <source>Type</source>
+            <translation>类型</translation>
+        </message>
+        <message>
+            <source>Under / Left</source>
+            <translation>下方 / 左侧</translation>
+        </message>
+    </context>
+    <context>
+        <name>TextAdvancedFormatPanel</name>
+        <message>
+            <source>Common</source>
+            <translation>标准</translation>
+        </message>
+        <message>
+            <source>Contextual</source>
+            <translation>上下文</translation>
+        </message>
+        <message>
+            <source>Default</source>
+            <translation>默认</translation>
+        </message>
+        <message>
+            <source>Discretionary</source>
+            <translation>自由</translation>
+        </message>
+        <message>
+            <source>Distance</source>
+            <translation>绝对距离</translation>
+        </message>
+        <message>
+            <source>Ligature</source>
+            <translation>连字</translation>
+        </message>
+        <message>
+            <source>Line Spacing Type</source>
+            <translation>行距类型</translation>
+        </message>
+        <message>
+            <source>Off</source>
+            <translation>关闭</translation>
+        </message>
+        <message>
+            <source>Oldstyle</source>
+            <translation>旧式数字</translation>
+        </message>
+        <message>
+            <source>On</source>
+            <translation>开启</translation>
+        </message>
+        <message>
+            <source>Opacity</source>
+            <translation>不透明度</translation>
+        </message>
+        <message>
+            <source>Proportional</source>
+            <translation>按比例</translation>
+        </message>
+        <message>
+            <source>Set Text Opacity</source>
+            <translation>文本不透明度</translation>
+        </message>
+        <message>
+            <source>Set common ligatures for the selected text</source>
+            <translation>为所选文本设置标准连字</translation>
+        </message>
+        <message>
+            <source>Set oldstyle numerals for the selected text</source>
+            <translation>为所选文本设置旧式数字</translation>
+        </message>
+        <message>
+            <source>Shadow</source>
+            <translation>阴影</translation>
+        </message>
+    </context>
+    <context>
+        <name>TextGradientGroup</name>
+        <message>
+            <source>Angle</source>
+            <translation>方向</translation>
+        </message>
+        <message>
+            <source>Enable</source>
+            <translation>启用</translation>
+        </message>
+        <message>
+            <source>End Color</source>
+            <translation>颜色2</translation>
+        </message>
+        <message>
+            <source>Gradient</source>
+            <translation>颜色渐变</translation>
+        </message>
+        <message>
+            <source>Set Gradient Angle</source>
+            <translation>渐变方向</translation>
+        </message>
+        <message>
+            <source>Set Gradient Size</source>
+            <translation>渐变范围</translation>
+        </message>
+        <message>
+            <source>Size</source>
+            <translation>范围</translation>
+        </message>
+        <message>
+            <source>Start Color</source>
+            <translation>颜色1</translation>
+        </message>
+    </context>
+    <context>
+        <name>TextShadowGroup</name>
+        <message>
+            <source>Offset</source>
+            <translation>偏移量</translation>
+        </message>
+        <message>
+            <source>Radius</source>
+            <translation>半径</translation>
+        </message>
+        <message>
+            <source>Set Shadow Radius</source>
+            <translation>阴影半径</translation>
+        </message>
+        <message>
+            <source>Set Shadow Strength</source>
+            <translation>阴影强度</translation>
+        </message>
+        <message>
+            <source>Set X offset</source>
+            <translation>X 偏移量</translation>
+        </message>
+        <message>
+            <source>Set Y offset</source>
+            <translation>Y 偏移量</translation>
+        </message>
+        <message>
+            <source>Strength</source>
+            <translation>强度</translation>
+        </message>
+    </context>
+    <context>
+        <name>WordListItemWidget</name>
+        <message>
+            <source>Delete word</source>
+            <translation>删除词</translation>
+        </message>
+    </context>
 </TS>
