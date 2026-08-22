@@ -2,6 +2,27 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，每次在对应日期中末尾写入日志。
 
+## 2026-08-23
+
+### 右侧面板排版重构 + 移植收尾审计与文档清理
+
+**问题/需求：** 上游移植后右侧面板拥挤、控件容器语言混杂（GroupFrame 行胶囊/QGroupBox/折叠胶囊/平铺四套并存）；用户确认整体重构方向（全局字体样式→基本选项→拓展样式→文本框输入区）并验收"姑且可用"。随后对 v1.5.12 移植计划做全量执行审计，并清理 docs 里堆砌的过程文档。
+
+**改动要点：**
+
+- **FontFormatPanel 三区重构**（`ui/text_panel.py`）：A 全局字体样式预设（`textstyle_panel.view_widget` 胶囊）→ B 基本选项平铺（字体/样式/字号行、图标行加 `fmtGroupSeparator` 细分隔线、测量行）→ C 拓展区（text_style_btn + 变换折叠 + 注解折叠胶囊）。去 GroupFrame 行胶囊与注解区 QGroupBox，统一"胶囊标题 + 平铺内容"一种容器语言。
+- **注解折叠胶囊**：`AnnotationFormatGroup` 改小节平铺（Ruby 行 + 连字/onum 2×2），整组包进 `ViewWidget`——默认收起（`pcfg.expand_annotation_panel`），全局模式整体隐藏无死区，块内有激活注解时标题加 "•" 标记。
+- **ExpandLabel 串写修复**（`ui/custom_widget/view_panel.py`）：删 `mousePressEvent` 里硬编码的 `pcfg.expand_tstyle_panel = self.expanded`——任意胶囊点击都会覆盖文本样式面板折叠态；持久化统一走 `config_expand_name` 机制。
+- `ui/scenetext_manager.py` 去掉 CollapsibleSection 外壳（format_section），formatpanel 直接入 formatOuterFrame。
+- **移植审计**：节点 0-5 + 引擎 2a-2d + 3 逐项符号核对全部通过（含 `_text_overflows` 前置、punctuation_position 不参与渲染、font_weight 本地 int、休眠上游面板现状）；verify + 5 个移植测试套 51 例 + `i18n --ci` 零硬编码零缺失。
+- **文档清理**：删 `移植规划_上游v1.5.12.md`、`移植交接_节点2a文件落地.md`、`上游v1.5.11之后提交调研.md` 三份过程文档，蒸馏为唯一存档 `docs/技术实现/上游v1.5.12移植_完成记录.md`（决策摘要/节点→提交→落点/六条持久分歧/回归资产）。
+
+**排障记录：** 连字下拉 1×4 排布超出 348px 面板内宽（组合框 sizeHint 126px × 4 ≈ 534px，文字截断），改 2×2 网格；离屏预览需 `setFixedWidth` 才能复现主窗口强制宽度的挤压效果。
+
+**涉及文件：** `ui/text_panel.py`、`ui/custom_widget/view_panel.py`、`ui/scenetext_manager.py`、`utils/config.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_annotation_controls.py`、`tests/test_configpanel_node3.py`（新增）、`tests/test_pipeline_tcy.py`（新增）、`tests/test_vertical_engine.py`、`docs/技术实现/文本编辑区UI重构.md`（新增）、`docs/技术实现/上游v1.5.12移植_完成记录.md`（新增）、`docs/daily_log.md`
+
+---
+
 ## 2026-08-22
 
 ### 上游 v1.5.12 移植节点 2a 收尾提交推送 + 节点 2b 竖排双引擎
@@ -39,7 +60,67 @@
 
 **排障记录：** `set_*` 恢复 helper 初版未 blocker 子控件导致发信号（改按控件 `QSignalBlocker`）；Ruby 无选区时引擎抛 `RubyValidationError`（面板捕获提示；测试先进编辑态选区）。
 
-**涉及文件：** `ui/text_panel.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_annotation_controls.py`（新增）、`docs/daily_log.md`
+**另开对话修复后统一提交 `723f7f9`：** 竖排/横排编辑选区绘制缺口——`ui/text_engine/rendering/glyph.py::draw_slanted_line` 补齐 v1.5.12 的 `background_overlays`/`horizontal_shifts` 参数（`_split_paint_spans` 按 shift 边界切分 paint span），否则竖排选区背景传参抛 TypeError；`ui/textitem.py` 的 `_text_overflows` 初始化移到 `super().__init__` 之前（引擎 init 首次布局溢出会经 `on_document_enlarged` → `set_size` 回读未初始化属性）。`tests/test_vertical_engine.py` 补竖排/横排编辑选区渲染 2 例，`tests/test_annotation_controls.py` 扩至 16 例。
+
+**涉及文件：** `ui/text_panel.py`、`ui/text_engine/rendering/glyph.py`、`ui/textitem.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_annotation_controls.py`（新增）、`tests/test_vertical_engine.py`、`docs/daily_log.md`
+
+---
+
+### 节点 2d 管线联动：auto TCY 接线 + 西文竖排对齐传播
+
+**问题/需求：** 按规划完成节点 2d（管线联动）。探索确认：fork 管线编排在 `ui/module_manager.py`（上游 io_thread.py 的对应物），每页收尾在 `ui/mainwindow.py::on_pagtrans_finished`；`pipeline_formatting.py`（2a 落地）此前无任何消费者；fork 无上游 `_render_only` 机制，TCY 守卫可简化为 `enable_translate`。
+
+**改动要点：**
+
+- **每页管线收尾 `on_pagtrans_finished`**：格式覆盖循环后内联 `apply_auto_tate_chu_yoko(blk_list, pcfg.auto_tate_chu_yoko)`——竖排块数字/字母 run 注入 TCY 到 `block.rich_text`，随页面重建 item（`updateSceneTextitems`/`setCurrentRow`）生效；并补 `blk.fontformat.standard_vertical_roman_alignment = gf.standard_vertical_roman_alignment` 传播（节点 1 新增字段此前未接管线）。
+- **`AutoTateChuYokoThread` 接线**（照上游 mainwindow 形态）：`setupThread` 建线程 + 进度框，`progress_changed`→进度框、`processing_finished`→`on_auto_tate_chu_yoko_processing_finished`（changed 块 id 集合 → 对应 item `load_rich_text_html` 重载 + `canvas.setProjSaveState(True)`）、进度框 stop→`request_stop`、`closeEvent` 停止线程；新增 `apply_auto_tate_chu_yoko_to_project()` 整项目后台应用入口（设置面板按钮待节点 3）。`on_imgtrans_progressbox_showed` 改 sender 优先定位，TCY 进度框与 RUN 进度框共用；`ui/custom_widget/message.py::ProgressMessageBox` 补 `fit_to_content`/`show_fitted`。
+- 新增 `tests/test_pipeline_tcy.py` 9 例：apply 语义（竖排数字注入/横排不变/禁用/长度阈值/无匹配字符/字母开关/既有 rich_text 保留格式）+ 线程跨页应用（跨线程信号 `processEvents` 冲刷）+ 进度框 show_fitted。
+
+**验证：** verify 全绿（含 mainwindow 启动链冒烟）；三个引擎测试套件 40 例全过。
+
+**涉及文件：** `ui/mainwindow.py`、`ui/custom_widget/message.py`、`tests/test_pipeline_tcy.py`（新增）、`docs/daily_log.md`
+
+---
+
+### 节点 3 UI 整理：设置面板三配置项 + 快速插入自定义字符
+
+**问题/需求：** 按规划完成节点 3（UI 整理）。探索确认：格式化面板整合实际已在 2c 完成（fork 保留自有 `FontFormatPanel` 形态，注解层已接入；上游 `formatting/panel.py`/`advanced.py` 仅参考不并入，字重控件保留我方）；节点 1 备好的三个 pcfg 键此前无 UI。本轮落地设置面板 + 快速插入。
+
+**改动要点：**
+
+- **设置面板 Text formatting 区**（`ui/configpanel.py`，两列表单形态）：
+  - **自动直排内横排**：开关 + Apply 按钮同行，选项（Maximum Run Length / Numbers / Letters / Additional Characters）缩进分组、主开关关闭时整体隐藏；槽函数直写 `pcfg.auto_tate_chu_yoko.*`；Apply → 新增 `apply_auto_tate_chu_yoko_requested` 信号 → mainwindow `apply_auto_tate_chu_yoko_to_project()`（节点 2d 已接线，设置按钮补上即闭环）。
+  - **紧凑标点** checkbox → `pcfg.compact_vertical_punctuation_spacing` + `_apply_compact_punctuation_settings()`（引擎 per-layoutBlock 读 pcfg，仅需对现有 item `reLayout`）。
+  - **快速插入字符** line edit → `pcfg.quick_insert_characters`。
+- **快速插入**（`ui/quick_symbol_dialog.py`）：`QuickSymbolDialog` 追加 Custom 分组，渲染 `pcfg.quick_insert_characters`（去空白字符），交互形态不变（固定分组 + 自定义分组）。
+- **i18n**：ConfigPanel context 12 条 + QuickSymbolDialog context 1 条（Custom→自定义），qm 1313 条。孤儿 173→174（`Custom` 经 `self.tr(group_name)` 间接调用，与 Quotes/Other 同类已知噪音）。
+
+**排障记录：** ts 插入脚本按 4 空格 `</context>` 定位 context 结尾，但 ConfigPanel 的 `</context>` 顶格无缩进 → 12 条消息误入 DependencyDialog context，i18n_check 报 MISSING；改用"context 内最后一条消息"作锚点重插（先 `git checkout` 恢复 ts）后 12 条全部命中。
+
+**涉及文件：** `ui/configpanel.py`、`ui/quick_symbol_dialog.py`、`ui/mainwindow.py`（信号连接）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_configpanel_node3.py`（新增）、`docs/daily_log.md`、`docs/技术实现/移植规划_上游v1.5.12.md`
+
+---
+
+### 节点 3 审查修正：设置面板归组重排 + 注解区对齐上游图标/排版
+
+**问题/需求：** 用户审查节点 3：① 设置面板新项与原设置混排、部分放置意义不明；② 右侧文本样式区新移植的注音等功能无图标，要求 UI 排布暂对齐上游（用上游图标和排版）。
+
+**改动要点：**
+
+- **设置面板 Typesetting 页重排**（`ui/configpanel.py`）：新增 **Vertical Text** 章节头，竖排专属设置归组（Punctuation Position / Compact punctuation / 半宽「」『』+子项 / Vertical Latin-Digits Length / Auto TCY+选项），不再与 Font Exclusion / Max Font Size 混排；Quick insert characters 上移置 Text Format Presets 之后（对齐上游"字体格式区 → 快速插入 → 竖排组"相对顺序）。
+- **注解区对齐上游**（`ui/text_panel.py`）：
+  - **着重号** → 移植上游 `EmphasisToolButton`（程序化绘制 'あ'+选中标记图标 + 菜单箭头；MenuButtonPopup 菜单选 10 种标记样式 + 4 种位置；勾选即生效、取消勾选=清除），进 `FormatGroupBtn` 的 B/I/U 行；`emphasis_changed` → 面板 `_on_annotation_changed("emphasis", …)`。
+  - **縦中横 + Standard Vertical Roman Alignment** → 竖排行图标 QFontChecker（`FontTateChuYokoChecker` / `FontRomanAlignmentChecker`），新增 `icons/fontfmt_tate_chu_yoko*.svg` / `fontfmt_roman_alignment*.svg` 4 个 SVG（上游图形，常规色改 #96a4cd 对齐本地图标族）；qss 增两组 indicator + `FontEmphasisToolButton` / `FontEmphasisMenu` 选择器。roman 走 `on_param_changed("standard_vertical_roman_alignment")`，`set_active_format` 回显。
+  - **Ruby/连字/旧式数字** 保留在注解 GroupFrame，改上游式带标题分组：**Ruby / Furigana** 组（Type=组/逐字 + Position 选择行；Reading 编辑 + Apply/Remove 行）、**Ligature** 组（Common/Discretionary/Contextual/Oldstyle 2×2 行，onum 并入同组，仍发 "onum" 载荷走 `setOldstyleNums`）。
+  - 无选中块时 emphasis/TCY 一并禁用（`_sync_annotation_controls` 扩展）；TCY 与 Ruby 互斥回滚改走 `self.tcyChecker`。
+- **i18n**：AnnotationFormatGroup 21 条新增（Type/Group/Mono/Position/Ruby / Furigana/…）+ 11 条死串删除（Emphasis/Emphasis mark style/…/Tate-chu-yoko）；ConfigPanel +1（Vertical Text→竖排文本）；qm 1331 条。着重号菜单字符串（Emphasis Marks/Filled Dot/…）沿用 2a 移植上游 panel.py 时已入库的 EmphasisToolButton context，零新增。
+- **测试**：`tests/test_annotation_controls.py` 重构（AnnotationGroupTest 移除 emphasis/tcy；新增 EmphasisButtonTest 6 例：默认 none/恢复不发声/勾选载荷）；`tests/test_configpanel_node3.py` 新增章节顺序断言（quick insert < Vertical Text 头 < Punctuation Position）。8 相关套件 + verify 五步全绿。
+
+**排障记录：** `ligature_axis_value` 不接受 oldstyle 轴（引擎 `_LIGATURE_AXIS_TOKENS` 无 `oldstyle`），旧式数字回读仍走 `oldstyle_nums_value()`，组合框载荷保持 "onum" 路由；`ConfigFormRow.widget` 存的是包裹行而非控件本身，章节顺序测试改用 `findChildren` 定位。
+
+**涉及文件：** `ui/configpanel.py`、`ui/text_panel.py`、`config/stylesheet.css`、`icons/fontfmt_tate_chu_yoko.svg`、`icons/fontfmt_tate_chu_yoko_activate.svg`、`icons/fontfmt_roman_alignment.svg`、`icons/fontfmt_roman_alignment_activate.svg`（新增）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_annotation_controls.py`、`tests/test_configpanel_node3.py`、`docs/daily_log.md`、`docs/技术实现/移植规划_上游v1.5.12.md`
+
+---
 
 ---
 

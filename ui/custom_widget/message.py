@@ -187,6 +187,20 @@ class ProgressMessageBox(QDialog):
         if self.task_progress_bar is not None:
             self.task_progress_bar.updateProgress(0)
 
+    def fit_to_content(self):
+        # Stylesheets can change progress-bar height after construction.
+        layout = self.layout()
+        if layout is not None:
+            layout.invalidate()
+            layout.activate()
+        self.adjustSize()
+
+    def show_fitted(self):
+        self.fit_to_content()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
     def showEvent(self, e: QShowEvent) -> None:
         self.showed.emit()
         return super().showEvent(e)

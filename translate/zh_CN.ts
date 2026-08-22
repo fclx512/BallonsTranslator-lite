@@ -980,14 +980,6 @@
             <translation>&lt;p&gt;中间处理数据使用的格式：&lt;/p&gt;&lt;p&gt;&lt;b&gt;PNG&lt;/b&gt; — 默认无损选项&lt;br/&gt;&lt;b&gt;JXL&lt;/b&gt; — 为遮罩和修复图像提供更好的压缩率&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>&lt;p&gt;In vertical text, consecutive Latin letters/digits up to this length are displayed upright (&lt;b&gt;tate-chuyoko&lt;/b&gt;). &lt;code&gt;0&lt;/code&gt; disables; longer runs fall back to per-character rotation.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;竖排文本中，不超过此长度的连续拉丁字母/数字将正立横排显示（&lt;b&gt;直排内横排&lt;/b&gt;）。设为 &lt;code&gt;0&lt;/code&gt; 禁用；更长的连续串回退为逐字旋转。&lt;/p&gt;</translation>
-        </message>
-        <message>
-            <source>Vertical Latin/Digits Length</source>
-            <translation>直排内横排长度</translation>
-        </message>
-        <message>
             <source>&lt;p&gt;Configure network proxies, mirror servers, and download sources. Useful for systems behind &lt;b&gt;firewalls&lt;/b&gt; or in restricted environments.&lt;/p&gt;</source>
             <translation>&lt;p&gt;配置网络代理、镜像服务器和下载源。适用于&lt;b&gt;防火墙&lt;/b&gt;后或受限网络环境的系统。&lt;/p&gt;</translation>
         </message>
@@ -1191,6 +1183,58 @@
             <source>Updates from the latest commit are unverified developer changes and are not guaranteed to work on every device.</source>
             <translation>按最新提交更新属于未经验证的开发中更改，不保证在每台设备上可用。</translation>
         </message>
+        <message>
+            <source>Compact punctuation spacing</source>
+            <translation>紧凑标点间距</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Remove extra spacing around punctuation in &lt;b&gt;vertical&lt;/b&gt; text.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;移除&lt;b&gt;竖排&lt;/b&gt;文本中标点周围的额外间距。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Automatic Tate-chu-yoko</source>
+            <translation>自动直排内横排</translation>
+        </message>
+        <message>
+            <source>Apply</source>
+            <translation>应用</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Automatically combine matching character runs into one upright horizontal unit in &lt;b&gt;vertical&lt;/b&gt; text. Applied to translated results after each run, or to the whole project via &lt;b&gt;Apply&lt;/b&gt;.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;将匹配的连续字符组合为&lt;b&gt;竖排&lt;/b&gt;文本中的一个横向单位。每次运行后应用于翻译结果，或通过&lt;b&gt;应用&lt;/b&gt;按钮应用到整个项目。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Maximum Run Length</source>
+            <translation>最大连续长度</translation>
+        </message>
+        <message>
+            <source>Character Sets</source>
+            <translation>字符集</translation>
+        </message>
+        <message>
+            <source>Numbers</source>
+            <translation>数字</translation>
+        </message>
+        <message>
+            <source>Letters</source>
+            <translation>字母</translation>
+        </message>
+        <message>
+            <source>Additional Characters</source>
+            <translation>附加字符</translation>
+        </message>
+        <message>
+            <source>Quick insert characters</source>
+            <translation>快速插入字符</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Characters offered in the &lt;b&gt;Quick Symbol&lt;/b&gt; palette's custom section. Insert them with the quick-symbol shortcut while editing text.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;&lt;b&gt;快捷符号&lt;/b&gt;面板自定义分区中提供的字符。编辑文本时可用快捷符号快捷键插入。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Vertical Text</source>
+            <translation>竖排文本</translation>
+        </message>
 </context>
     <context>
         <name>DependencyDialog</name>
@@ -1380,42 +1424,6 @@ Settings → Inpainter → Photoshop Path</source>
             <translation>应用</translation>
         </message>
         <message>
-            <source>Common ligatures</source>
-            <translation>常用连字</translation>
-        </message>
-        <message>
-            <source>Contextual alternates</source>
-            <translation>上下文替代</translation>
-        </message>
-        <message>
-            <source>Discretionary ligatures</source>
-            <translation>任意连字</translation>
-        </message>
-        <message>
-            <source>Emphasis</source>
-            <translation>着重号</translation>
-        </message>
-        <message>
-            <source>Emphasis mark position</source>
-            <translation>着重号位置</translation>
-        </message>
-        <message>
-            <source>Emphasis mark style</source>
-            <translation>着重号样式</translation>
-        </message>
-        <message>
-            <source>Ligatures</source>
-            <translation>连字</translation>
-        </message>
-        <message>
-            <source>Oldstyle figures</source>
-            <translation>旧式数字</translation>
-        </message>
-        <message>
-            <source>Oldstyle nums</source>
-            <translation>旧式数字</translation>
-        </message>
-        <message>
             <source>Reading</source>
             <translation>注音</translation>
         </message>
@@ -1424,16 +1432,96 @@ Settings → Inpainter → Photoshop Path</source>
             <translation>移除</translation>
         </message>
         <message>
-            <source>Ruby</source>
+            <source>Common</source>
+            <translation>常用</translation>
+        </message>
+        <message>
+            <source>Contextual</source>
+            <translation>上下文</translation>
+        </message>
+        <message>
+            <source>Default</source>
+            <translation>默认</translation>
+        </message>
+        <message>
+            <source>Discretionary</source>
+            <translation>任意</translation>
+        </message>
+        <message>
+            <source>For Mono Ruby, separate readings with whitespace</source>
+            <translation>逐字注音时请用空格分隔读音</translation>
+        </message>
+        <message>
+            <source>Group</source>
+            <translation>组注音</translation>
+        </message>
+        <message>
+            <source>Ligature</source>
+            <translation>连字</translation>
+        </message>
+        <message>
+            <source>Mono</source>
+            <translation>逐字</translation>
+        </message>
+        <message>
+            <source>Off</source>
+            <translation>关闭</translation>
+        </message>
+        <message>
+            <source>Oldstyle</source>
+            <translation>旧式数字</translation>
+        </message>
+        <message>
+            <source>On</source>
+            <translation>开启</translation>
+        </message>
+        <message>
+            <source>Over / Right</source>
+            <translation>上方 / 右侧</translation>
+        </message>
+        <message>
+            <source>Position</source>
+            <translation>位置</translation>
+        </message>
+        <message>
+            <source>Ruby / Furigana</source>
             <translation>注音（Ruby）</translation>
         </message>
         <message>
-            <source>Tate-chu-yoko</source>
-            <translation>直排内横排</translation>
+            <source>Ruby text</source>
+            <translation>注音文字</translation>
         </message>
-    </context>
+        <message>
+            <source>Set common ligatures for the selected text</source>
+            <translation>为所选文本设置常用连字</translation>
+        </message>
+        <message>
+            <source>Set contextual alternate glyphs for the selected text</source>
+            <translation>为所选文本设置上下文替代字形</translation>
+        </message>
+        <message>
+            <source>Set font-specific optional ligatures for the selected text</source>
+            <translation>为所选文本设置字体专属可选连字</translation>
+        </message>
+        <message>
+            <source>Set oldstyle numerals for the selected text</source>
+            <translation>为所选文本设置旧式数字</translation>
+        </message>
+        <message>
+            <source>Type</source>
+            <translation>类型</translation>
+        </message>
+        <message>
+            <source>Under / Left</source>
+            <translation>下方 / 左侧</translation>
+        </message>
+</context>
     <context>
         <name>FontFormatPanel</name>
+        <message>
+            <source>Annotations</source>
+            <translation>注解</translation>
+        </message>
         <message>
             <source>Ruby</source>
             <translation>注音（Ruby）</translation>
@@ -4604,11 +4692,6 @@ text layers are fully editable.</source>
     <context>
         <name>TextPanel</name>
         <message>
-            <location filename="..\ui\scenetext_manager.py" line="380" />
-            <source>Font Format</source>
-            <translation>字体样式</translation>
-        </message>
-        <message>
             <location filename="..\ui\scenetext_manager.py" line="473" />
             <source>Edit</source>
             <translation>编辑</translation>
@@ -5393,6 +5476,10 @@ in Settings → Mirror Config, then click Retry.</source>
         <message>
             <source>Other</source>
             <translation>其他</translation>
+        </message>
+        <message>
+            <source>Custom</source>
+            <translation>自定义</translation>
         </message>
     </context>
     <context>

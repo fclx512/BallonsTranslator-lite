@@ -459,7 +459,6 @@ class TextEffectRenderer:
             # arguments; the engine layout exposes the same pcfg members, so
             # reapply them after construction.
             layout.punctuation_position = pcfg.punctuation_position
-            layout.tatechuyoko_threshold = pcfg.tatechuyoko_threshold
             layout.halfwidth_jp_corner_brackets = (
                 pcfg.halfwidth_jp_corner_brackets
             )

@@ -77,7 +77,6 @@ from .custom_widget import (
     ConfigScrollBar,
     ConfigSectionHeader,
     NoArrowsSpinBox,
-    PaintQSlider,
     PanelGroupBox,
     Widget,
 )
@@ -1438,6 +1437,7 @@ class ConfigPanel(Widget):
     presets_changed = Signal()
     seq_badge_changed = Signal()
     clip_overflow_changed = Signal()
+    apply_auto_tate_chu_yoko_requested = Signal()
     check_update = Signal()
     check_commit_update = Signal()
 
@@ -1847,6 +1847,25 @@ class ConfigPanel(Widget):
         )
         _make_preset_row(self.tr("Opacity:"), "opacity_presets", ts_layout)
 
+        # Quick insert characters — feeds the Quick Symbol palette's custom
+        # section (opened with the quick-symbol shortcut while editing text).
+        self.quick_insert_characters_edit = ConfigLineEdit()
+        self.quick_insert_characters_edit.setText(pcfg.quick_insert_characters)
+        self.quick_insert_characters_edit.setFixedWidth(CONFIG_COMBOBOX_LONG)
+        self.quick_insert_characters_edit.textChanged.connect(
+            self.on_quick_insert_characters_changed
+        )
+        ts_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Quick insert characters"),
+                self.quick_insert_characters_edit,
+                note=self.tr("<p>Characters offered in the <b>Quick Symbol</b> palette's custom section. Insert them with the quick-symbol shortcut while editing text.</p>"),
+            )
+        )
+
+        # Vertical Text section — vertical-only typography controls
+        ts_layout.addWidget(_section_header(self.tr("Vertical Text")))
+
         # Punctuation Position
         self.punctuation_position_combo = ConfigComboBox(fix_size=False)
         self.punctuation_position_combo.addItems(
@@ -1862,6 +1881,24 @@ class ConfigPanel(Widget):
                 self.tr("Punctuation Position"),
                 self.punctuation_position_combo,
                 note=self.tr("<p>Choose punctuation alignment:</p><p><b>Centered</b> — traditional CJK style (Traditional Chinese / Japanese)<br/><b>Edge-aligned</b> — modern style (Simplified Chinese)</p>"),
+            )
+        )
+
+        # Compact punctuation spacing in vertical text
+        self.compact_punctuation_checker = ConfigCheckBox(
+            self.tr("Compact punctuation spacing")
+        )
+        self.compact_punctuation_checker.setChecked(
+            pcfg.compact_vertical_punctuation_spacing
+        )
+        self.compact_punctuation_checker.toggled.connect(
+            self.on_compact_punctuation_changed
+        )
+        ts_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.compact_punctuation_checker,
+                note=self.tr("<p>Remove extra spacing around punctuation in <b>vertical</b> text.</p>"),
             )
         )
 
@@ -1914,21 +1951,115 @@ class ConfigPanel(Widget):
         )
         ts_layout.addWidget(halfwidth_horizontal_wrapper)
 
-        # Vertical Latin/Digits Length (tate-chuyoko)
-        self.tatechuyoko_slider = PaintQSlider()
-        self.tatechuyoko_slider.setRange(0, 5)
-        self.tatechuyoko_slider.setValue(pcfg.tatechuyoko_threshold)
-        self.tatechuyoko_slider.setFixedWidth(CONFIG_COMBOBOX_LONG)
-        self.tatechuyoko_slider.valueChanged.connect(
-            self.on_tatechuyoko_threshold_changed
+        # Automatic Tate-chu-yoko (pipeline formatting pass)
+        self.auto_tate_chu_yoko_checker = ConfigCheckBox(
+            self.tr("Automatic Tate-chu-yoko")
         )
+        self.auto_tate_chu_yoko_checker.setChecked(
+            pcfg.auto_tate_chu_yoko.enabled
+        )
+        self.auto_tate_chu_yoko_checker.toggled.connect(
+            self.on_auto_tate_chu_yoko_changed
+        )
+        self.auto_tate_chu_yoko_apply_btn = QPushButton(
+            self.tr("Apply"), parent=self
+        )
+        self.auto_tate_chu_yoko_apply_btn.setObjectName("ConfigButton")
+        self.auto_tate_chu_yoko_apply_btn.setFixedWidth(CONFIG_COMBOBOX_SHORT)
+        self.auto_tate_chu_yoko_apply_btn.clicked.connect(
+            self.on_apply_auto_tate_chu_yoko_clicked
+        )
+        auto_tcy_row = QWidget()
+        auto_tcy_row_layout = QHBoxLayout(auto_tcy_row)
+        auto_tcy_row_layout.setContentsMargins(0, 0, 0, 0)
+        auto_tcy_row_layout.setSpacing(8)
+        auto_tcy_row_layout.addWidget(self.auto_tate_chu_yoko_checker)
+        auto_tcy_row_layout.addWidget(self.auto_tate_chu_yoko_apply_btn)
+        auto_tcy_row_layout.addStretch()
         ts_layout.addWidget(
             ConfigFormRow(
-                self.tr("Vertical Latin/Digits Length"),
-                self.tatechuyoko_slider,
-                note=self.tr("<p>In vertical text, consecutive Latin letters/digits up to this length are displayed upright (<b>tate-chuyoko</b>). <code>0</code> disables; longer runs fall back to per-character rotation.</p>"),
+                "",
+                auto_tcy_row,
+                note=self.tr("<p>Automatically combine matching character runs into one upright horizontal unit in <b>vertical</b> text. Applied to translated results after each run, or to the whole project via <b>Apply</b>.</p>"),
             )
         )
+
+        # Sub-options: what may participate in an automatic run
+        self.auto_tate_chu_yoko_max_length = NoArrowsSpinBox()
+        self.auto_tate_chu_yoko_max_length.setRange(1, 99)
+        self.auto_tate_chu_yoko_max_length.setValue(
+            pcfg.auto_tate_chu_yoko.max_length
+        )
+        self.auto_tate_chu_yoko_max_length.setFixedWidth(CONFIG_COMBOBOX_SHORT)
+        self.auto_tate_chu_yoko_max_length.valueChanged.connect(
+            self.on_auto_tate_chu_yoko_max_length_changed
+        )
+        self.auto_tate_chu_yoko_numbers = ConfigCheckBox(
+            self.tr("Numbers")
+        )
+        self.auto_tate_chu_yoko_numbers.setChecked(
+            pcfg.auto_tate_chu_yoko.include_numbers
+        )
+        self.auto_tate_chu_yoko_numbers.toggled.connect(
+            self.on_auto_tate_chu_yoko_numbers_changed
+        )
+        self.auto_tate_chu_yoko_letters = ConfigCheckBox(
+            self.tr("Letters")
+        )
+        self.auto_tate_chu_yoko_letters.setChecked(
+            pcfg.auto_tate_chu_yoko.include_letters
+        )
+        self.auto_tate_chu_yoko_letters.toggled.connect(
+            self.on_auto_tate_chu_yoko_letters_changed
+        )
+        self.auto_tate_chu_yoko_additional_chars = ConfigLineEdit()
+        self.auto_tate_chu_yoko_additional_chars.setText(
+            pcfg.auto_tate_chu_yoko.additional_chars
+        )
+        self.auto_tate_chu_yoko_additional_chars.setFixedWidth(
+            CONFIG_COMBOBOX_SHORT
+        )
+        self.auto_tate_chu_yoko_additional_chars.textChanged.connect(
+            self.on_auto_tate_chu_yoko_additional_chars_changed
+        )
+
+        auto_tcy_category_row = QWidget()
+        auto_tcy_category_layout = QHBoxLayout(auto_tcy_category_row)
+        auto_tcy_category_layout.setContentsMargins(0, 0, 0, 0)
+        auto_tcy_category_layout.setSpacing(16)
+        auto_tcy_category_layout.addWidget(self.auto_tate_chu_yoko_numbers)
+        auto_tcy_category_layout.addWidget(self.auto_tate_chu_yoko_letters)
+        auto_tcy_category_layout.addStretch()
+
+        self.auto_tcy_options_widget = QWidget()
+        auto_tcy_options_layout = QVBoxLayout(self.auto_tcy_options_widget)
+        auto_tcy_options_layout.setContentsMargins(24, 0, 0, 0)
+        auto_tcy_options_layout.setSpacing(4)
+        auto_tcy_options_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Maximum Run Length"),
+                self.auto_tate_chu_yoko_max_length,
+            )
+        )
+        auto_tcy_options_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Character Sets"),
+                auto_tcy_category_row,
+            )
+        )
+        auto_tcy_options_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Additional Characters"),
+                self.auto_tate_chu_yoko_additional_chars,
+            )
+        )
+        self.auto_tcy_options_widget.setVisible(
+            pcfg.auto_tate_chu_yoko.enabled
+        )
+        self.auto_tate_chu_yoko_apply_btn.setVisible(
+            pcfg.auto_tate_chu_yoko.enabled
+        )
+        ts_layout.addWidget(self.auto_tcy_options_widget)
 
         self.exclude_fonts_btn = QPushButton(self.tr("Exclude Fonts..."), parent=self)
         self.exclude_fonts_btn.setObjectName("ConfigButton")
@@ -2602,9 +2733,48 @@ class ConfigPanel(Widget):
         pcfg.punctuation_position = index
         self._apply_punctuation_settings()
 
-    def on_tatechuyoko_threshold_changed(self, value: int):
-        pcfg.tatechuyoko_threshold = value
-        self._apply_tatechuyoko_settings()
+    def on_compact_punctuation_changed(self, enabled: bool):
+        pcfg.compact_vertical_punctuation_spacing = enabled
+        self._apply_compact_punctuation_settings()
+
+    def _apply_compact_punctuation_settings(self):
+        """Apply compact_vertical_punctuation_spacing to ALL existing items."""
+        from .shared_widget import canvas as sw_canvas
+        from .textitem import TextBlkItem
+
+        if sw_canvas is None:
+            return
+        for item in sw_canvas.items():
+            if isinstance(item, TextBlkItem):
+                # The engine layout reads the pcfg key per layoutBlock pass.
+                layout = item.layout
+                if layout is not None and hasattr(layout, "reLayout"):
+                    layout.reLayout()
+                item.repaint_background()
+                item.update()
+
+    def on_auto_tate_chu_yoko_changed(self, enabled: bool):
+        pcfg.auto_tate_chu_yoko.enabled = enabled
+        self.auto_tcy_options_widget.setVisible(enabled)
+        self.auto_tate_chu_yoko_apply_btn.setVisible(enabled)
+
+    def on_apply_auto_tate_chu_yoko_clicked(self):
+        self.apply_auto_tate_chu_yoko_requested.emit()
+
+    def on_auto_tate_chu_yoko_max_length_changed(self, value: int):
+        pcfg.auto_tate_chu_yoko.max_length = value
+
+    def on_auto_tate_chu_yoko_numbers_changed(self, checked: bool):
+        pcfg.auto_tate_chu_yoko.include_numbers = checked
+
+    def on_auto_tate_chu_yoko_letters_changed(self, checked: bool):
+        pcfg.auto_tate_chu_yoko.include_letters = checked
+
+    def on_auto_tate_chu_yoko_additional_chars_changed(self, text: str):
+        pcfg.auto_tate_chu_yoko.additional_chars = text
+
+    def on_quick_insert_characters_changed(self, text: str):
+        pcfg.quick_insert_characters = text
 
     def on_halfwidth_corner_bracket_changed(self, state: int):
         pcfg.halfwidth_jp_corner_brackets = bool(state)
@@ -2636,23 +2806,6 @@ class ConfigPanel(Widget):
                     item.apply_horizontal_halfwidth_corner_brackets()
                 else:
                     item.restore_horizontal_halfwidth_corner_brackets()
-                item.repaint_background()
-                item.update()
-
-    def _apply_tatechuyoko_settings(self):
-        """Apply tatechuyoko_threshold to ALL existing text items."""
-        from .shared_widget import canvas as sw_canvas
-        from .textitem import TextBlkItem
-
-        if sw_canvas is None:
-            return
-        for item in sw_canvas.items():
-            if isinstance(item, TextBlkItem):
-                # 强制整体重排，不能走 setPunctuationPosition 那种增量
-                layout = item.layout
-                if layout is not None and hasattr(layout, "tatechuyoko_threshold"):
-                    layout.tatechuyoko_threshold = pcfg.tatechuyoko_threshold
-                    layout.reLayout()
                 item.repaint_background()
                 item.update()
 
@@ -2901,7 +3054,31 @@ class ConfigPanel(Widget):
         self.empty_runcache_checker.setChecked(pcfg.module.empty_runcache)
         self.max_font_size_edit.setValue(pcfg.max_font_size)
         self.punctuation_position_combo.setCurrentIndex(pcfg.punctuation_position)
-        self.tatechuyoko_slider.setValue(pcfg.tatechuyoko_threshold)
+        self.compact_punctuation_checker.setChecked(
+            pcfg.compact_vertical_punctuation_spacing
+        )
+        self.auto_tate_chu_yoko_checker.setChecked(
+            pcfg.auto_tate_chu_yoko.enabled
+        )
+        self.auto_tate_chu_yoko_max_length.setValue(
+            pcfg.auto_tate_chu_yoko.max_length
+        )
+        self.auto_tate_chu_yoko_numbers.setChecked(
+            pcfg.auto_tate_chu_yoko.include_numbers
+        )
+        self.auto_tate_chu_yoko_letters.setChecked(
+            pcfg.auto_tate_chu_yoko.include_letters
+        )
+        self.auto_tate_chu_yoko_additional_chars.setText(
+            pcfg.auto_tate_chu_yoko.additional_chars
+        )
+        self.auto_tcy_options_widget.setVisible(
+            pcfg.auto_tate_chu_yoko.enabled
+        )
+        self.auto_tate_chu_yoko_apply_btn.setVisible(
+            pcfg.auto_tate_chu_yoko.enabled
+        )
+        self.quick_insert_characters_edit.setText(pcfg.quick_insert_characters)
         self.halfwidth_corner_bracket_checker.setChecked(
             pcfg.halfwidth_jp_corner_brackets
         )

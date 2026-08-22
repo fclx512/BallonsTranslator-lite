@@ -1,14 +1,12 @@
 """Offscreen regression tests for the engine vertical layout (port node 2b).
 
-The engine ``ui/text_engine/vertical_layout.py`` gained three fork-compatible
-typography members (``punctuation_position``, ``tatechuyoko_threshold``,
-``halfwidth_jp_corner_brackets``) that the settings panel drives through
-hasattr-guarded calls.  This test pins:
+The engine ``ui/text_engine/vertical_layout.py`` gained two fork-compatible
+typography members (``punctuation_position``, ``halfwidth_jp_corner_brackets``)
+that the settings panel drives through hasattr-guarded calls.  This test pins:
 
 - constructor defaults read from ``pcfg``,
 - ``setPunctuationPosition`` re-layout behaviour,
-- tate-chu-yoko run injection from the fork ``find_tatechuyoko_runs``
-  detector into the annotation-driven ``text_combine_ranges``,
+- explicit tate-chu-yoko annotation injection into ``text_combine_ranges``,
 - ``centers_vertical_glyph`` honouring Simplified/Traditional.
 
 Run from the repo root:
@@ -34,7 +32,6 @@ from ui.text_engine.vertical_layout import (  # noqa: E402
     PUNSET_ALIGNCENTER,
     PUNSET_CORNER_BRACKET,
     VerticalTextDocumentLayout,
-    find_tatechuyoko_runs,
 )
 
 
@@ -52,26 +49,6 @@ def _make_layout(text, **layout_kwargs):
     return doc, layout
 
 
-class TestTatechuyokoRuns(unittest.TestCase):
-    def test_disabled_below_threshold(self):
-        self.assertEqual(find_tatechuyoko_runs("ABC abc", 0), {})
-        self.assertEqual(find_tatechuyoko_runs("ABC abc", -1), {})
-
-    def test_short_runs_only(self):
-        self.assertEqual(
-            find_tatechuyoko_runs("ABC 中文 abc", 3), {0: 3, 7: 3}
-        )
-
-    def test_long_runs_excluded(self):
-        self.assertEqual(find_tatechuyoko_runs("ABCDEF", 3), {})
-
-    def test_exact_threshold_included(self):
-        # The detector matches the whole contiguous [A-Za-z0-9] run; a
-        # separated "12" run of length 2 is inside the threshold.
-        self.assertEqual(find_tatechuyoko_runs("ab 12", 2), {0: 2, 3: 2})
-        self.assertEqual(find_tatechuyoko_runs("ab12", 4), {0: 4})
-
-
 class TestVerticalEngineLayout(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -81,9 +58,6 @@ class TestVerticalEngineLayout(unittest.TestCase):
         _doc, layout = _make_layout("测试")
         self.assertEqual(
             layout.punctuation_position, int(pcfg.punctuation_position)
-        )
-        self.assertEqual(
-            layout.tatechuyoko_threshold, int(pcfg.tatechuyoko_threshold)
         )
         self.assertEqual(
             layout.halfwidth_jp_corner_brackets,
@@ -118,29 +92,9 @@ class TestVerticalEngineLayout(unittest.TestCase):
         # Alignment-center marks always center regardless of position.
         self.assertTrue(layout.centers_vertical_glyph("·"))
 
-    def test_tate_chu_yoko_injection(self):
-        _doc, layout = _make_layout("ABC 中文 abc")
-        layout.tatechuyoko_threshold = 3
-        layout.reLayout()
-        ranges = layout.text_combine_ranges[0]
-        lengths = {
-            start: length for start, length, _group_id in ranges
-        }
-        self.assertIn(0, lengths)
-        self.assertIn(7, lengths)
-        self.assertEqual(lengths[0], 3)
-        self.assertEqual(lengths[7], 3)
-
-    def test_tate_chu_yoko_disabled(self):
-        _doc, layout = _make_layout("ABC 中文 abc")
-        layout.tatechuyoko_threshold = 0
-        layout.reLayout()
-        ranges = layout.text_combine_ranges[0]
-        self.assertEqual(ranges, ())
-
-    def test_auto_runs_do_not_overlap_annotations(self):
-        # An explicit <tcy> annotation over the same span must win over the
-        # automatic detector's identical run.
+    def test_explicit_tate_chu_yoko_injection(self):
+        # The engine drives tate-chu-yoko from explicit TEXT_COMBINE_UPRIGHT
+        # annotation ranges (the fork's threshold detector was removed).
         from qtpy.QtCore import Qt
         from qtpy.QtGui import QTextCursor, QTextDocument
 
@@ -155,6 +109,9 @@ class TestVerticalEngineLayout(unittest.TestCase):
         fmt.setProperty(
             int(AnnotationProperty.TEXT_COMBINE_UPRIGHT), "all"
         )
+        fmt.setProperty(
+            int(AnnotationProperty.TEXT_COMBINE_ID), "test-id"
+        )
         cursor.mergeCharFormat(fmt)
         fontformat = FontFormat(vertical=True)
         layout = VerticalTextDocumentLayout(doc, fontformat)
@@ -162,16 +119,18 @@ class TestVerticalEngineLayout(unittest.TestCase):
         layout.relayout_on_changed = False
         layout.setMaxSize(200, 200, relayout=False)
         layout.reLayoutEverything()
-        layout.tatechuyoko_threshold = 2
-        layout.reLayout()
         ranges = layout.text_combine_ranges[0]
-        # Only one range owns [0, 2); the auto detector must not double-book.
-        owners = [
-            group_id
-            for start, length, group_id in ranges
-            if start == 0
-        ]
-        self.assertEqual(len(owners), 1)
+        lengths = {
+            start: length for start, length, _group_id in ranges
+        }
+        self.assertEqual(lengths.get(0), 2)
+
+    def test_no_annotation_no_tate_chu_yoko(self):
+        # Without an explicit annotation the engine no longer auto-detects
+        # [A-Za-z0-9] runs (fork threshold detector removed).
+        _doc, layout = _make_layout("ABC 中文 abc")
+        layout.reLayout()
+        self.assertEqual(layout.text_combine_ranges[0], ())
 
     def test_corner_bracket_member_default(self):
         _doc, layout = _make_layout("「」")
@@ -202,7 +161,6 @@ class TestVerticalEngineLayout(unittest.TestCase):
         doc.setDocumentLayout(layout)
         layout.relayout_on_changed = False
         layout.setMaxSize(160, 160, relayout=False)
-        layout.tatechuyoko_threshold = 3
         layout.halfwidth_jp_corner_brackets = True
         layout.reLayoutEverything()
         for position in (

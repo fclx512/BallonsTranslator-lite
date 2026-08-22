@@ -8,7 +8,7 @@ import time
 import traceback
 from functools import partial
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 from uuid import uuid4
 
 from qtpy.QtCore import (
@@ -110,6 +110,10 @@ from .overlay_modal import OverlayModal
 from .psd_export_dialog import PsdExportDialog
 from .scenetext_manager import PasteSrcItemsCommand, SceneTextManager, TextPanel
 from .textedit_area import SourceTextEdit, TransTextEdit
+from .text_engine.pipeline_formatting import (
+    AutoTateChuYokoThread,
+    apply_auto_tate_chu_yoko,
+)
 from .textedit_commands import GlobalRepalceAllCommand
 from .textitem import TextBlkItem
 from .update_checker import AboutDialog, CommitUpdateDialog
@@ -358,6 +362,20 @@ class MainWindow(mainwindow_cls):
             self.tr("Updating: "), False, self
         )
         self._update_progress_visible = False
+        self.auto_tate_chu_yoko_thread = AutoTateChuYokoThread(self)
+        self.auto_tate_chu_yoko_progress = ProgressMessageBox("", True, self)
+        self.auto_tate_chu_yoko_thread.progress_changed.connect(
+            self.auto_tate_chu_yoko_progress.updateTaskProgress
+        )
+        self.auto_tate_chu_yoko_thread.processing_finished.connect(
+            self.on_auto_tate_chu_yoko_processing_finished
+        )
+        self.auto_tate_chu_yoko_progress.stop_clicked.connect(
+            self.auto_tate_chu_yoko_thread.request_stop
+        )
+        self.auto_tate_chu_yoko_progress.showed.connect(
+            self.on_imgtrans_progressbox_showed
+        )
 
     def resetStyleSheet(self, reverse_icon: bool = False):
         theme = pcfg.dark_theme if pcfg.darkmode else pcfg.light_theme
@@ -372,6 +390,9 @@ class MainWindow(mainwindow_cls):
         self.configPanel = ConfigPanel(self)
         self.configPanel.check_update.connect(self.check_for_updates)
         self.configPanel.check_commit_update.connect(self.show_commit_update_dialog)
+        self.configPanel.apply_auto_tate_chu_yoko_requested.connect(
+            self.apply_auto_tate_chu_yoko_to_project
+        )
 
         self.leftBar = LeftBar(self)
         self.leftBar.showPageListLabel.clicked.connect(self.pageLabelStateChanged)
@@ -1384,6 +1405,9 @@ class MainWindow(mainwindow_cls):
             if not self.imsave_thread.isRunning():
                 break
             time.sleep(0.1)
+        if self.auto_tate_chu_yoko_thread.isRunning():
+            self.auto_tate_chu_yoko_thread.request_stop()
+            self.auto_tate_chu_yoko_thread.wait()
         self.st_manager.hovering_transwidget = None
         self.st_manager.blockSignals(True)
         self.canvas.prepareClose()
@@ -3096,6 +3120,9 @@ class MainWindow(mainwindow_cls):
                     blk.italic = gf.italic
                     blk.bold = gf.bold
                     blk.underline = gf.underline
+                    blk.fontformat.standard_vertical_roman_alignment = (
+                        gf.standard_vertical_roman_alignment
+                    )
                     sw = blk.stroke_width
                     if (
                         sw > 0
@@ -3104,6 +3131,9 @@ class MainWindow(mainwindow_cls):
                         and not override_fnt_size
                     ):
                         blk.font_size = blk.font_size / (1 + sw)
+
+            if pcfg.auto_tate_chu_yoko.enabled and pcfg.module.enable_translate:
+                apply_auto_tate_chu_yoko(blk_list, pcfg.auto_tate_chu_yoko)
 
         if page_index != self.pageList.currentIndex().row():
             self.pageList.setCurrentRow(page_index)
@@ -3162,12 +3192,49 @@ class MainWindow(mainwindow_cls):
         )
 
     def on_imgtrans_progressbox_showed(self):
-        msg_size = self.module_manager.progress_msgbox.size()
+        # Handles both the RUN progress dialog and the TCY apply progress box.
+        msgbox = self.sender()
+        if msgbox is None or not hasattr(msgbox, "size"):
+            msgbox = self.module_manager.progress_msgbox
+        if hasattr(msgbox, "fit_to_content"):
+            msgbox.fit_to_content()
+        msg_size = msgbox.size()
         size = self.size()
         p = self.mapToGlobal(
             QPoint(size.width() - msg_size.width(), size.height() - msg_size.height())
         )
-        self.module_manager.progress_msgbox.move(p)
+        msgbox.move(p)
+
+    def apply_auto_tate_chu_yoko_to_project(self) -> None:
+        if (
+            self.imgtrans_proj.is_empty
+            or self.auto_tate_chu_yoko_thread.isRunning()
+        ):
+            return
+
+        # Capture live edits before the worker mutates the project documents.
+        self.st_manager.updateTextBlkList()
+        self.auto_tate_chu_yoko_progress.zero_progress()
+        if self.auto_tate_chu_yoko_thread.start_processing(
+            self.imgtrans_proj.pages,
+            pcfg.auto_tate_chu_yoko,
+        ):
+            self.auto_tate_chu_yoko_progress.show_fitted()
+
+    def on_auto_tate_chu_yoko_processing_finished(
+        self,
+        changed_count: int,
+        changed_blocks: Tuple[TextBlock, ...],
+    ) -> None:
+        self.auto_tate_chu_yoko_progress.hide()
+        if not changed_count:
+            return
+
+        changed_ids = {id(block) for block in changed_blocks}
+        for block_item in self.st_manager.textblk_item_list:
+            if id(block_item.blk) in changed_ids:
+                block_item.load_rich_text_html(block_item.blk.rich_text)
+        self.canvas.setProjSaveState(True)
 
     def on_closebtn_clicked(self):
         if self.imsave_thread.isRunning():

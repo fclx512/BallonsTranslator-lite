@@ -540,7 +540,7 @@ AlignmentChecker#AlignRightChecker::indicator:checked {
 }
 
 QFontChecker {
-    max-width: 34px;
+    max-width: 31px;
     padding: 0px;
     margin: 0px;
 }
@@ -591,6 +591,49 @@ QFontChecker#FontVerticalChecker::indicator {
 
 QFontChecker#FontVerticalChecker::indicator:checked {
     image: url(icons/fontfmt_vertical_activate.svg);
+}
+
+QFontChecker#FontTateChuYokoChecker::indicator {
+    image: url(icons/fontfmt_tate_chu_yoko.svg);
+}
+
+QFontChecker#FontTateChuYokoChecker::indicator:checked {
+    image: url(icons/fontfmt_tate_chu_yoko_activate.svg);
+}
+
+QFontChecker#FontRomanAlignmentChecker::indicator {
+    image: url(icons/fontfmt_roman_alignment.svg);
+}
+
+QFontChecker#FontRomanAlignmentChecker::indicator:checked {
+    image: url(icons/fontfmt_roman_alignment_activate.svg);
+}
+
+/* Emphasis toggle button — face is painted procedurally (see
+   EmphasisToolButton.paintEvent); the popup arrow is the ::menu-button. */
+QToolButton#FontEmphasisToolButton {
+    min-width: 39px;
+    max-width: 39px;
+    min-height: 26px;
+    max-height: 26px;
+    padding: 0px;
+    border: 2px solid transparent;
+    border-radius: 0px;
+    background-color: transparent;
+}
+
+QToolButton#FontEmphasisToolButton::menu-button {
+    width: 11px;
+    border: none;
+    background-color: transparent;
+}
+
+QToolButton#FontEmphasisToolButton::menu-arrow {
+    image: none;
+}
+
+QMenu#FontEmphasisMenu::item {
+    height: 24px;
 }
 
 TextEditListScrollArea {
@@ -1607,6 +1650,12 @@ GroupFrame {
     border: 1px solid rgba(128,128,128,0.25);
     border-radius: 6px;
     background: transparent;
+}
+
+/* 格式面板内的分组细线：图标行竖分隔（1×16）与注解小节横分隔 */
+QFrame#fmtGroupSeparator {
+    background: rgba(128,128,128,0.25);
+    border: none;
 }
 
 /* 格式编辑区外层大框 — 与画布一致的细边框 */

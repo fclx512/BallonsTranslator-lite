@@ -369,7 +369,6 @@ class ProgramConfig(Config):
     punctuation_position: int = PunctuationPosition.Simplified
     halfwidth_jp_corner_brackets: bool = False
     halfwidth_jp_corner_brackets_horizontal: bool = False
-    tatechuyoko_threshold: int = 3
     auto_tate_chu_yoko: AutoTateChuYokoConfig = field(
         default_factory=AutoTateChuYokoConfig
     )
@@ -454,6 +453,8 @@ class ProgramConfig(Config):
     expand_tadvanced_panel: bool = True
     text_transform_panel: bool = True
     expand_ttransform_panel: bool = True
+    # 注解折叠胶囊（Ruby/连字/旧式数字）：默认收起，仅选中文字块后显示
+    expand_annotation_panel: bool = False
     show_seq_badge: bool = True
     overflow_mode: bool = False  # 过界模式 — 画布边界视觉指示 + 文字块跨边界裁剪
     clip_text_overflow: bool = True  # 翻译填充时裁剪溢出文字并显示黄色提示框，拖拽调整后解除

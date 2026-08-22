@@ -149,15 +149,10 @@ class AnnotationGroupTest(unittest.TestCase):
         group.annotation_changed.connect(
             lambda name, value: emissions.append(name)
         )
-        group.set_emphasis("open triangle", "under left")
-        group.set_tcy(True)
         group.set_ligature("contextual", "disabled")
         group.set_onum("enabled")
         group.set_ruby("mono", "よ", "under", True)
         self.assertEqual(emissions, [])
-        self.assertEqual(group.emphasisBox.currentData(), "open triangle")
-        self.assertEqual(group.emphasisPosBox.currentData(), "under left")
-        self.assertTrue(group.tcyChecker.isChecked())
         self.assertEqual(
             group.ligatureBoxes["contextual"].currentData(), "disabled"
         )
@@ -166,27 +161,12 @@ class AnnotationGroupTest(unittest.TestCase):
         self.assertEqual(group.rubyEdit.text(), "よ")
         self.assertTrue(group.rubyRemoveBtn.isEnabled())
 
-    def test_emphasis_emits_payload(self):
+    def test_ligature_and_oldstyle_emit(self):
         group = self._make_group()
         payloads = []
         group.annotation_changed.connect(
             lambda name, value: payloads.append((name, value))
         )
-        group.emphasisBox.setCurrentIndex(
-            group.emphasisBox.findData("filled circle")
-        )
-        self.assertEqual(
-            payloads[-1], ("emphasis", ("filled circle", "over right"))
-        )
-
-    def test_tcy_and_axis_emit(self):
-        group = self._make_group()
-        payloads = []
-        group.annotation_changed.connect(
-            lambda name, value: payloads.append((name, value))
-        )
-        group.tcyChecker.setChecked(True)
-        self.assertEqual(payloads[-1], ("tcy", True))
         group.ligatureBoxes["common"].setCurrentIndex(
             group.ligatureBoxes["common"].findData("disabled")
         )
@@ -210,6 +190,42 @@ class AnnotationGroupTest(unittest.TestCase):
         )
         group.rubyRemoveBtn.click()
         self.assertEqual(remove_emissions, [True])
+
+
+class EmphasisButtonTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _make_button(self):
+        from ui.text_panel import EmphasisToolButton
+
+        return EmphasisToolButton()
+
+    def test_defaults_to_none_when_unchecked(self):
+        btn = self._make_button()
+        self.assertFalse(btn.isChecked())
+        self.assertEqual(btn.values(), ("none", "over right"))
+
+    def test_set_values_restores_without_emitting(self):
+        btn = self._make_button()
+        emissions = []
+        btn.emphasis_changed.connect(lambda *v: emissions.append(v))
+        btn.set_values("open triangle", "under left")
+        self.assertEqual(emissions, [])
+        self.assertTrue(btn.isChecked())
+        self.assertEqual(btn.values(), ("open triangle", "under left"))
+
+    def test_toggling_emits_values(self):
+        btn = self._make_button()
+        emissions = []
+        btn.emphasis_changed.connect(lambda *v: emissions.append(v))
+        btn.click()
+        self.assertTrue(btn.isChecked())
+        self.assertEqual(emissions[-1], ("filled dot", "over right"))
+        btn.click()
+        self.assertFalse(btn.isChecked())
+        self.assertEqual(emissions[-1], ("none", "over right"))
 
 
 class PanelRoutingTest(unittest.TestCase):
@@ -284,17 +300,17 @@ class PanelRoutingTest(unittest.TestCase):
         """TCY 与 Ruby 互斥：面板捕获引擎校验并回滚勾选态，不得冒泡异常。"""
         from unittest.mock import patch
 
-        from ui.text_panel import AnnotationFormatGroup
+        from qtpy.QtWidgets import QCheckBox
 
         panel, item = self._panel_with_item()
-        panel.annotation_group = AnnotationFormatGroup()
+        panel.tcyChecker = QCheckBox()
         self.FontFormatPanel._on_annotation_changed(
             panel, "ruby", ("group", "か", "over")
         )
         with patch("ui.text_panel.QMessageBox.information") as info:
             self.FontFormatPanel._on_annotation_changed(panel, "tcy", True)
         info.assert_called_once()
-        self.assertFalse(panel.annotation_group.tcyChecker.isChecked())
+        self.assertFalse(panel.tcyChecker.isChecked())
 
     def test_ruby_empty_reading_is_validation_not_crash(self):
         from unittest.mock import patch

@@ -129,7 +129,8 @@ class ExpandLabel(Widget):
     def mousePressEvent(self, e: QMouseEvent) -> None:
         if e.button() == Qt.MouseButton.LeftButton:
             self.setExpand(not self.expanded)
-            pcfg.expand_tstyle_panel = self.expanded
+            # 持久化由宿主 ViewWidget.set_expend_area 按 config_expand_name
+            # 落地；此处不可硬编码写死某个面板的展开字段（会串写兄弟面板）
             self.clicked.emit()
         return super().mousePressEvent(e)
 

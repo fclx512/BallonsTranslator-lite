@@ -1,20 +1,33 @@
 import copy
 
 from qtpy.QtCore import QSignalBlocker, Qt, Signal
-from qtpy.QtGui import QFont, QTextCursor
+from qtpy.QtGui import (
+    QActionGroup,
+    QColor,
+    QFont,
+    QIcon,
+    QPainter,
+    QPen,
+    QPixmap,
+    QTextCursor,
+)
 from qtpy.QtWidgets import (
     QApplication,
     QComboBox,
     QDialog,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QMessageBox,
     QPushButton,
     QSizePolicy,
     QStyledItemDelegate,
+    QToolButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from utils import config as C
@@ -25,24 +38,26 @@ from . import funcmaps as FM
 from .custom_widget import (
     AlignmentChecker,
     ColorPickerLabel,
-    GroupFrame,
+    FlowLayout,
     QFontChecker,
     SizeComboBox,
     SizeControlLabel,
+    ViewWidget,
     Widget,
 )
 from .text_advanced_format import TextStyleEntryButton
 from .text_style_presets import TextStylePresetPanel
 from .text_engine.annotations import (
+    DEFAULT_EMPHASIS_POSITION,
     EMPHASIS_GLYPHS,
     EMPHASIS_POSITIONS,
     EMPHASIS_STYLES,
     LIGATURE_AXIS_VALUES,
     LIGATURE_COMMON,
     LIGATURE_CONTEXTUAL,
+    LIGATURE_DEFAULT,
     LIGATURE_DISCRETIONARY,
-    RUBY_POSITIONS,
-    RUBY_TYPES,
+    OLDSTYLE_NUMS,
     RubyValidationError,
 )
 from .text_engine.transforms.editor import TextTransformEditSession
@@ -105,8 +120,214 @@ class AlignmentBtnGroup(QFrame):
             self.alignRightChecker.setChecked(True)
 
 
+class EmphasisToolButton(QToolButton):
+    """Toggle emphasis and pick its CSS-compatible mark and position.
+
+    Ported from the upstream formatting panel: the button face is drawn
+    procedurally (selected mark over a ``あ`` glyph), and the popup menu
+    picks the mark style / position.  Checked means an emphasis style is
+    active; unchecking (clicking the face) clears it to ``none``.
+    """
+
+    emphasis_changed = Signal(str, str)
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._selected_style = "filled dot"
+        self._position = DEFAULT_EMPHASIS_POSITION
+        self.setObjectName("FontEmphasisToolButton")
+        self.setCheckable(True)
+        self.setToolTip(self.tr("Emphasis Marks"))
+        self.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+
+        menu = QMenu(self)
+        menu.setObjectName("FontEmphasisMenu")
+        section_font = menu.font()
+        section_font.setBold(True)
+        marks_header = menu.addAction(self.tr("Marks"))
+        marks_header.setEnabled(False)
+        marks_header.setFont(section_font)
+        self._style_group = QActionGroup(self)
+        self._style_group.setExclusive(True)
+        self._style_actions = {}
+        style_labels = (
+            self.tr("Filled Dot"),
+            self.tr("Open Dot"),
+            self.tr("Filled Circle"),
+            self.tr("Open Circle"),
+            self.tr("Filled Double Circle"),
+            self.tr("Open Double Circle"),
+            self.tr("Filled Triangle"),
+            self.tr("Open Triangle"),
+            self.tr("Filled Sesame"),
+            self.tr("Open Sesame"),
+        )
+        for label, style in zip(style_labels, EMPHASIS_STYLES[1:]):
+            action = menu.addAction(label)
+            action.setCheckable(True)
+            action.setData(style)
+            self._style_group.addAction(action)
+            self._style_actions[style] = action
+        self._style_group.triggered.connect(self._on_style_selected)
+
+        position_header = menu.addAction(self.tr("Position"))
+        position_header.setEnabled(False)
+        position_header.setFont(section_font)
+        self._position_group = QActionGroup(self)
+        self._position_group.setExclusive(True)
+        self._position_actions = {}
+        position_labels = (
+            self.tr("Over / Right"),
+            self.tr("Under / Right"),
+            self.tr("Over / Left"),
+            self.tr("Under / Left"),
+        )
+        for label, position in zip(position_labels, EMPHASIS_POSITIONS):
+            action = menu.addAction(label)
+            action.setCheckable(True)
+            action.setData(position)
+            self._position_group.addAction(action)
+            self._position_actions[position] = action
+
+        self._position_group.triggered.connect(self._on_position_selected)
+        menu.aboutToShow.connect(self._update_menu_icons)
+        self.setMenu(menu)
+        self._update_menu_icons()
+        self._style_actions[self._selected_style].setChecked(True)
+        self._position_actions[self._position].setChecked(True)
+        self.clicked.connect(self._on_toggled)
+
+    def values(self) -> tuple[str, str]:
+        style = self._selected_style if self.isChecked() else "none"
+        return style, self._position
+
+    def _update_menu_icons(self) -> None:
+        icon_size = 24
+        ratio = max(1.0, self.devicePixelRatioF())
+        font = self.font()
+        font.setPixelSize(20)
+        color = self.palette().text().color()
+        icon_key = (ratio, font.toString(), color.rgba())
+        if icon_key == getattr(self, "_menu_icon_key", None):
+            return
+        self._menu_icon_key = icon_key
+        for style, action in self._style_actions.items():
+            pixmap = QPixmap(
+                round(icon_size * ratio), round(icon_size * ratio)
+            )
+            pixmap.setDevicePixelRatio(ratio)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+            painter.setFont(font)
+            painter.setPen(color)
+            painter.drawText(
+                0,
+                0,
+                icon_size,
+                icon_size,
+                Qt.AlignmentFlag.AlignCenter,
+                EMPHASIS_GLYPHS[style],
+            )
+            painter.end()
+            action.setIcon(QIcon(pixmap))
+
+    def set_values(self, style: str, position: str) -> None:
+        enabled = style in self._style_actions
+        if enabled:
+            self._selected_style = style
+            self._style_actions[style].setChecked(True)
+        if position in self._position_actions:
+            self._position = position
+            self._position_actions[position].setChecked(True)
+        with QSignalBlocker(self):
+            self.setChecked(enabled)
+        self.update()
+
+    def _on_toggled(self, _checked: bool) -> None:
+        self.emphasis_changed.emit(*self.values())
+
+    def _on_style_selected(self, action) -> None:
+        self._selected_style = str(action.data())
+        self.setChecked(True)
+        self.update()
+        self.emphasis_changed.emit(*self.values())
+
+    def _on_position_selected(self, action) -> None:
+        self._position = str(action.data())
+        if self.isChecked():
+            self.emphasis_changed.emit(*self.values())
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        arrow_width = 11
+        icon_width = max(1, self.width() - arrow_width)
+        icon_rect = self.rect()
+        icon_rect.setWidth(icon_width)
+        if self.isChecked() and self.isEnabled():
+            painter.fillRect(
+                icon_rect.adjusted(2, 2, -2, -2), QColor(30, 147, 229)
+            )
+        if self.isEnabled() and (self.isChecked() or self.underMouse()):
+            painter.setPen(QPen(QColor(30, 147, 229), 2))
+            painter.drawRect(icon_rect.adjusted(1, 1, -1, -1))
+        color = (
+            QColor("white")
+            if self.isChecked() and self.isEnabled()
+            else self.palette().text().color()
+        )
+        if not self.isEnabled():
+            color.setAlpha(110)
+        painter.setPen(color)
+
+        glyph_font = self.font()
+        glyph_font.setPixelSize(16)
+        mark_font = self.font()
+        mark_font.setPixelSize(12)
+        painter.setFont(mark_font)
+        mark = EMPHASIS_GLYPHS[self._selected_style]
+        mark_bounds = painter.fontMetrics().tightBoundingRect(mark)
+        mark_x = round((icon_width - mark_bounds.width()) / 2 - mark_bounds.left())
+        mark_y = self.height() - 3 - mark_bounds.bottom()
+        painter.drawText(mark_x, mark_y, mark)
+
+        glyph = "あ"
+        glyph_bottom = mark_y + mark_bounds.top() - 1
+        painter.setFont(glyph_font)
+        glyph_bounds = painter.fontMetrics().tightBoundingRect(glyph)
+        available_height = max(1, glyph_bottom - 1)
+        if glyph_bounds.height() > 0:
+            fitted_size = round(
+                glyph_font.pixelSize()
+                * available_height
+                / glyph_bounds.height()
+            )
+            glyph_font.setPixelSize(min(19, max(16, fitted_size)))
+            painter.setFont(glyph_font)
+            glyph_bounds = painter.fontMetrics().tightBoundingRect(glyph)
+        glyph_x = round(
+            (icon_width - glyph_bounds.width()) / 2 - glyph_bounds.left()
+        )
+        glyph_y = glyph_bottom - glyph_bounds.bottom()
+        painter.drawText(glyph_x, glyph_y, glyph)
+
+        separator = QColor(color)
+        separator.setAlpha(90)
+        painter.setPen(QPen(separator, 1))
+        painter.drawLine(icon_width, 3, icon_width, self.height() - 4)
+        painter.setPen(QPen(color, 1.2))
+        arrow_x = self.width() - arrow_width // 2
+        arrow_y = self.height() // 2
+        painter.drawLine(arrow_x - 3, arrow_y - 1, arrow_x, arrow_y + 2)
+        painter.drawLine(arrow_x, arrow_y + 2, arrow_x + 3, arrow_y - 1)
+
+
 class FormatGroupBtn(QFrame):
     param_changed = Signal(str, bool)
+    emphasis_changed = Signal(str, str)
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -119,10 +340,13 @@ class FormatGroupBtn(QFrame):
         self.underlineBtn = QFontChecker(self)
         self.underlineBtn.setObjectName("FontUnderlineChecker")
         self.underlineBtn.clicked.connect(self.setUnderline)
+        self.emphasisBtn = EmphasisToolButton(self)
+        self.emphasisBtn.emphasis_changed.connect(self.emphasis_changed)
         hlayout = QHBoxLayout(self)
         hlayout.addWidget(self.boldBtn)
         hlayout.addWidget(self.italicBtn)
         hlayout.addWidget(self.underlineBtn)
+        hlayout.addWidget(self.emphasisBtn)
         hlayout.setSpacing(0)
         hlayout.setContentsMargins(0, 0, 0, 0)
 
@@ -203,12 +427,17 @@ class FontFamilyComboBox(QComboBox):
 
 
 class AnnotationFormatGroup(QFrame):
-    """In-place annotation controls (emphasis / Ruby / tate-chu-yoko /
-    ligatures / oldstyle numerals).
+    """Ruby and OpenType-feature annotation controls.
 
-    Node 2c first-pass UI: every change emits a named signal so the panel can
-    route it to the engine ``TextBlkItem`` setter that owns the undo document
-    transaction.  ``set_*`` helpers restore widget state without emitting.
+    Emphasis and tate-chu-yoko live as icon buttons in the format rows
+    (``FormatGroupBtn`` / the vertical checker row); this group keeps the
+    text-entry annotation (Ruby) and the OpenType feature axes (ligatures,
+    oldstyle numerals), mirroring the upstream advanced-format grouping.
+    Hosted inside the "Annotations" fold capsule in ``FontFormatPanel`` —
+    sub-sections are flat small-cap headers, not nested bordered boxes.
+    Every change emits a named signal so the panel can route it to the
+    engine ``TextBlkItem`` setter that owns the undo document transaction.
+    ``set_*`` helpers restore widget state without emitting.
     """
 
     annotation_changed = Signal(str, object)
@@ -217,138 +446,137 @@ class AnnotationFormatGroup(QFrame):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        label_font = self.font()
-        label_font.setPointSizeF(shared.CONFIG_FONTSIZE_CONTENT * 0.9)
+        def _small_label(text: str, bold: bool = False) -> QLabel:
+            label = QLabel(text)
+            font = self.font()
+            font.setPointSizeF(shared.CONFIG_FONTSIZE_CONTENT * 0.9)
+            font.setBold(bold)
+            label.setFont(font)
+            return label
 
-        # ── emphasis ────────────────────────────────────────────────
-        self.emphasisLabel = QLabel(self.tr("Emphasis"))
-        self.emphasisLabel.setFont(label_font)
-        self.emphasisBox = QComboBox(self)
-        self.emphasisBox.setSizeAdjustPolicy(
-            QComboBox.SizeAdjustPolicy.AdjustToContents
-        )
-        for style in EMPHASIS_STYLES:
-            glyph = EMPHASIS_GLYPHS.get(style, "")
-            text = style if not glyph else f"{glyph} {style}"
-            self.emphasisBox.addItem(text, style)
-        self.emphasisBox.setToolTip(self.tr("Emphasis mark style"))
-        self.emphasisPosBox = QComboBox(self)
-        self.emphasisPosBox.setSizeAdjustPolicy(
-            QComboBox.SizeAdjustPolicy.AdjustToContents
-        )
-        for position in EMPHASIS_POSITIONS:
-            self.emphasisPosBox.addItem(position, position)
-        self.emphasisPosBox.setToolTip(self.tr("Emphasis mark position"))
-        emphasis_hlayout = QHBoxLayout()
-        emphasis_hlayout.addWidget(self.emphasisLabel)
-        emphasis_hlayout.addWidget(self.emphasisBox, 1)
-        emphasis_hlayout.addWidget(self.emphasisPosBox)
-        emphasis_hlayout.setSpacing(4)
-        emphasis_hlayout.setContentsMargins(0, 0, 0, 0)
+        def _atomic_unit(label_widget, control) -> QWidget:
+            unit = QWidget(self)
+            unit_layout = QVBoxLayout(unit)
+            unit_layout.setContentsMargins(0, 0, 0, 0)
+            unit_layout.setSpacing(2)
+            unit_layout.addWidget(label_widget)
+            unit_layout.addWidget(control)
+            return unit
 
-        # ── Ruby ────────────────────────────────────────────────────
-        self.rubyLabel = QLabel(self.tr("Ruby"))
-        self.rubyLabel.setFont(label_font)
+        # ── Ruby / Furigana ──────────────────────────────────────────
         self.rubyTypeBox = QComboBox(self)
-        for ruby_type in RUBY_TYPES:
-            self.rubyTypeBox.addItem(ruby_type, ruby_type)
-        self.rubyEdit = QLineEdit(self)
-        self.rubyEdit.setPlaceholderText(self.tr("Reading"))
+        self.rubyTypeBox.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToContents
+        )
+        self.rubyTypeBox.addItem(self.tr("Group"), "group")
+        self.rubyTypeBox.addItem(self.tr("Mono"), "mono")
         self.rubyPosBox = QComboBox(self)
-        for position in RUBY_POSITIONS:
-            self.rubyPosBox.addItem(position, position)
+        self.rubyPosBox.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToContents
+        )
+        self.rubyPosBox.addItem(self.tr("Over / Right"), "over")
+        self.rubyPosBox.addItem(self.tr("Under / Left"), "under")
+
+        self.rubyEdit = QLineEdit(self)
+        self.rubyEdit.setPlaceholderText(self.tr("Ruby text"))
+        self.rubyEdit.setToolTip(
+            self.tr("For Mono Ruby, separate readings with whitespace")
+        )
         self.rubyApplyBtn = QPushButton(self.tr("Apply"), self)
         self.rubyRemoveBtn = QPushButton(self.tr("Remove"), self)
-        ruby_hlayout = QHBoxLayout()
-        ruby_hlayout.addWidget(self.rubyLabel)
-        ruby_hlayout.addWidget(self.rubyTypeBox)
-        ruby_hlayout.addWidget(self.rubyEdit, 1)
-        ruby_hlayout.addWidget(self.rubyPosBox)
-        ruby_hlayout.addWidget(self.rubyApplyBtn)
-        ruby_hlayout.addWidget(self.rubyRemoveBtn)
-        ruby_hlayout.setSpacing(4)
-        ruby_hlayout.setContentsMargins(0, 0, 0, 0)
 
-        # ── tate-chu-yoko ───────────────────────────────────────────
-        self.tcyChecker = QFontChecker(self)
-        self.tcyChecker.setObjectName("FontTateChuYokoChecker")
-        self.tcyChecker.setText(self.tr("Tate-chu-yoko"))
-        tcy_hlayout = QHBoxLayout()
-        tcy_hlayout.addWidget(self.tcyChecker)
-        tcy_hlayout.addStretch()
-        tcy_hlayout.setContentsMargins(0, 0, 0, 0)
+        ruby_text_row = QHBoxLayout()
+        ruby_text_row.setSpacing(4)
+        ruby_text_row.setContentsMargins(0, 0, 0, 0)
+        ruby_text_row.addWidget(self.rubyEdit, 1)
+        ruby_text_row.addWidget(self.rubyApplyBtn)
+        ruby_text_row.addWidget(self.rubyRemoveBtn)
 
-        # ── ligature axes ───────────────────────────────────────────
-        self.ligatureLabel = QLabel(self.tr("Ligatures"))
-        self.ligatureLabel.setFont(label_font)
+        # ── Ligature / Oldstyle feature axes ─────────────────────────
         self.ligatureBoxes = {}
-        for axis, tooltip in (
-            (LIGATURE_COMMON, self.tr("Common ligatures")),
-            (LIGATURE_DISCRETIONARY, self.tr("Discretionary ligatures")),
-            (LIGATURE_CONTEXTUAL, self.tr("Contextual alternates")),
-        ):
+        ligature_specs = (
+            (LIGATURE_COMMON, self.tr("Common"),
+             self.tr("Set common ligatures for the selected text")),
+            (LIGATURE_DISCRETIONARY, self.tr("Discretionary"),
+             self.tr("Set font-specific optional ligatures for the selected text")),
+            (LIGATURE_CONTEXTUAL, self.tr("Contextual"),
+             self.tr("Set contextual alternate glyphs for the selected text")),
+            (OLDSTYLE_NUMS, self.tr("Oldstyle"),
+             self.tr("Set oldstyle numerals for the selected text")),
+        )
+        ligature_units = []
+        for axis, label_text, tooltip in ligature_specs:
             box = QComboBox(self)
             box.setSizeAdjustPolicy(
                 QComboBox.SizeAdjustPolicy.AdjustToContents
             )
-            for state in LIGATURE_AXIS_VALUES:
-                box.addItem(state, state)
+            for label, state in zip(
+                (self.tr("Default"), self.tr("On"), self.tr("Off")),
+                LIGATURE_AXIS_VALUES,
+            ):
+                box.addItem(label, state)
             box.setToolTip(tooltip)
             self.ligatureBoxes[axis] = box
-        ligature_hlayout = QHBoxLayout()
-        ligature_hlayout.addWidget(self.ligatureLabel)
-        for axis, box in self.ligatureBoxes.items():
-            ligature_hlayout.addWidget(box)
-        ligature_hlayout.addStretch()
-        ligature_hlayout.setSpacing(4)
-        ligature_hlayout.setContentsMargins(0, 0, 0, 0)
+            ligature_units.append(
+                _atomic_unit(_small_label(label_text), box)
+            )
+        self.onumBox = self.ligatureBoxes[OLDSTYLE_NUMS]
 
-        # ── oldstyle numerals ───────────────────────────────────────
-        self.onumLabel = QLabel(self.tr("Oldstyle nums"))
-        self.onumLabel.setFont(label_font)
-        self.onumBox = QComboBox(self)
-        for state in LIGATURE_AXIS_VALUES:
-            self.onumBox.addItem(state, state)
-        self.onumBox.setToolTip(self.tr("Oldstyle figures"))
-        onum_hlayout = QHBoxLayout()
-        onum_hlayout.addWidget(self.onumLabel)
-        onum_hlayout.addWidget(self.onumBox)
-        onum_hlayout.addStretch()
-        onum_hlayout.setSpacing(4)
-        onum_hlayout.setContentsMargins(0, 0, 0, 0)
-
+        # 平铺两小节：小标题 + 内容行，小节间一条细分隔线。
+        # Type/Position 仍走 FlowLayout，窄面板下自动换行。
         vlayout = QVBoxLayout(self)
-        vlayout.addLayout(emphasis_hlayout)
-        vlayout.addLayout(ruby_hlayout)
-        vlayout.addLayout(tcy_hlayout)
-        vlayout.addLayout(ligature_hlayout)
-        vlayout.addLayout(onum_hlayout)
-        vlayout.setSpacing(4)
-        vlayout.setContentsMargins(0, 0, 0, 0)
+        vlayout.setContentsMargins(2, 2, 2, 2)
+        vlayout.setSpacing(6)
 
-        self.emphasisBox.currentIndexChanged.connect(self._emit_emphasis)
-        self.emphasisPosBox.currentIndexChanged.connect(self._emit_emphasis)
-        self.tcyChecker.toggled.connect(
-            lambda checked: self.annotation_changed.emit("tcy", checked)
+        vlayout.addWidget(_small_label(self.tr("Ruby / Furigana"), bold=True))
+        ruby_selector_flow = FlowLayout()
+        ruby_selector_flow.setContentsMargins(0, 0, 0, 0)
+        ruby_selector_flow.addWidget(
+            _atomic_unit(_small_label(self.tr("Type")), self.rubyTypeBox)
         )
+        ruby_selector_flow.addWidget(
+            _atomic_unit(_small_label(self.tr("Position")), self.rubyPosBox)
+        )
+        vlayout.addLayout(ruby_selector_flow)
+        vlayout.addWidget(_small_label(self.tr("Reading")))
+        vlayout.addLayout(ruby_text_row)
+
+        separator = QFrame(self)
+        separator.setObjectName("fmtGroupSeparator")
+        separator.setFixedHeight(1)
+        separator.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        vlayout.addWidget(separator)
+
+        vlayout.addWidget(_small_label(self.tr("Ligature"), bold=True))
+        # 2×2 紧凑网格：主题字号下单个下拉 sizeHint ≈126px，一行四个
+        # （≈534px）超出 348 内宽，会挤压到文字不可读
+        ligature_grid = QGridLayout()
+        ligature_grid.setContentsMargins(0, 0, 0, 0)
+        ligature_grid.setHorizontalSpacing(10)
+        ligature_grid.setVerticalSpacing(6)
+        for index, unit in enumerate(ligature_units):
+            ligature_grid.addWidget(unit, index // 2, index % 2)
+        for col in (0, 1):
+            ligature_grid.setColumnStretch(col, 1)
+        vlayout.addLayout(ligature_grid)
+
         for axis, box in self.ligatureBoxes.items():
-            box.currentIndexChanged.connect(
-                lambda _index, a=axis, b=box: self.annotation_changed.emit(
-                    "ligature", (a, b.currentData())
+            if axis == OLDSTYLE_NUMS:
+                box.currentIndexChanged.connect(
+                    lambda _index: self.annotation_changed.emit(
+                        "onum", self.onumBox.currentData()
+                    )
                 )
-            )
-        self.onumBox.currentIndexChanged.connect(
-            lambda _index: self.annotation_changed.emit(
-                "onum", self.onumBox.currentData()
-            )
-        )
+            else:
+                box.currentIndexChanged.connect(
+                    lambda _index, a=axis, b=box: self.annotation_changed.emit(
+                        "ligature", (a, b.currentData())
+                    )
+                )
         self.rubyApplyBtn.clicked.connect(self._emit_ruby)
         self.rubyRemoveBtn.clicked.connect(self.ruby_remove)
-
-    def _emit_emphasis(self):
-        self.annotation_changed.emit(
-            "emphasis", (self.emphasisBox.currentData(), self.emphasisPosBox.currentData())
-        )
 
     def _emit_ruby(self):
         self.annotation_changed.emit(
@@ -359,17 +587,6 @@ class AnnotationFormatGroup(QFrame):
                 self.rubyPosBox.currentData(),
             ),
         )
-
-    def set_emphasis(self, style: str, position: str) -> None:
-        with QSignalBlocker(self.emphasisBox), QSignalBlocker(
-            self.emphasisPosBox
-        ):
-            index = self.emphasisBox.findData(style)
-            if index >= 0:
-                self.emphasisBox.setCurrentIndex(index)
-            index = self.emphasisPosBox.findData(position)
-            if index >= 0:
-                self.emphasisPosBox.setCurrentIndex(index)
 
     def set_ruby(
         self,
@@ -390,10 +607,6 @@ class AnnotationFormatGroup(QFrame):
                 self.rubyPosBox.setCurrentIndex(index)
         self.rubyRemoveBtn.setEnabled(enabled)
 
-    def set_tcy(self, enabled: bool) -> None:
-        with QSignalBlocker(self.tcyChecker):
-            self.tcyChecker.setChecked(enabled)
-
     def set_ligature(self, axis: str, state: str) -> None:
         box = self.ligatureBoxes.get(axis)
         if box is None:
@@ -404,10 +617,7 @@ class AnnotationFormatGroup(QFrame):
                 box.setCurrentIndex(index)
 
     def set_onum(self, state: str) -> None:
-        with QSignalBlocker(self.onumBox):
-            index = self.onumBox.findData(state)
-            if index >= 0:
-                self.onumBox.setCurrentIndex(index)
+        self.set_ligature(OLDSTYLE_NUMS, state)
 
 
 class FontFormatPanel(Widget):
@@ -477,6 +687,28 @@ class FontFormatPanel(Widget):
         self.verticalChecker.setObjectName("FontVerticalChecker")
         self.verticalChecker.clicked.connect(
             lambda: self.on_param_changed("vertical", self.verticalChecker.isChecked())
+        )
+
+        # Annotation icon toggles (upstream layout): tate-chu-yoko and the
+        # standard vertical roman alignment sit next to the vertical checker.
+        self.tcyChecker = QFontChecker(self)
+        self.tcyChecker.setObjectName("FontTateChuYokoChecker")
+        self.tcyChecker.setToolTip(
+            self.tr("Combine the selected text into one upright vertical cell")
+        )
+        self.tcyChecker.toggled.connect(
+            lambda checked: self._on_annotation_changed("tcy", checked)
+        )
+        self.romanAlignmentChecker = QFontChecker(self)
+        self.romanAlignmentChecker.setObjectName("FontRomanAlignmentChecker")
+        self.romanAlignmentChecker.setToolTip(
+            self.tr("Standard Vertical Roman Alignment")
+        )
+        self.romanAlignmentChecker.clicked.connect(
+            lambda: self.on_param_changed(
+                "standard_vertical_roman_alignment",
+                self.romanAlignmentChecker.isChecked(),
+            )
         )
 
         self.strokeWidthBox = SizeComboBox([0, 10], "stroke_width", self)
@@ -583,88 +815,100 @@ class FontFormatPanel(Widget):
 
         self.familybox.currentTextChanged.connect(self.on_familybox_changed)
 
-        FONTFORMAT_SPACING = 5
+        # ── Zone A：全局字体样式 ────────────────────────────────────
+        # 预设折叠胶囊（标题承载 Global Font Format / TextBlock #N）
+        self.vlayout.addWidget(self.textstyle_panel.view_widget)
 
-        vl0 = QVBoxLayout()
-        vl0.addWidget(self.textstyle_panel.view_widget)
+        # ── Zone B：基本选项（平铺三行，无边框）──────────────────────
+        # Row 1：字体选择 [颜色 | 字体 | 字重] | 字号
+        font_selector = QHBoxLayout()
+        font_selector.addWidget(self.colorPicker)
+        font_selector.addWidget(self.familybox, 1)  # 字体框占绝大部分伸缩空间
+        font_selector.addWidget(self.stylebox)  # 字重框按内容自适应
+        font_selector.addWidget(self.fontsizebox)
+        font_selector.setSpacing(4)
+        font_selector.setContentsMargins(2, 0, 2, 0)
+
+        # Row 2：格式图标行 对齐 | B/I/U/着重号 | 竖排(TCY/Roman)，竖线分组
+        def _vsep() -> QFrame:
+            sep = QFrame(self)
+            sep.setObjectName("fmtGroupSeparator")
+            sep.setFixedSize(1, 16)
+            return sep
+
+        format_icons = QHBoxLayout()
+        format_icons.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        format_icons.addWidget(self.alignBtnGroup)
+        format_icons.addWidget(_vsep())
+        format_icons.addWidget(self.formatBtnGroup)
+        format_icons.addWidget(_vsep())
+        vertical_layout = QHBoxLayout()
+        vertical_layout.addWidget(self.verticalChecker)
+        vertical_layout.addWidget(self.tcyChecker)
+        vertical_layout.addWidget(self.romanAlignmentChecker)
+        vertical_layout.setSpacing(0)
+        vertical_layout.setContentsMargins(0, 0, 0, 0)
+        format_icons.addLayout(vertical_layout)
+        format_icons.setSpacing(6)
+        format_icons.setContentsMargins(2, 0, 2, 0)
+
+        # Row 3：量测行 [行距] [字距] [描边+颜色]
+        linesp_hlayout = QHBoxLayout()
+        linesp_hlayout.addWidget(self.lineSpacingLabel)
+        linesp_hlayout.addWidget(self.lineSpacingBox)
+        linesp_hlayout.setSpacing(shared.WIDGET_SPACING_CLOSE)
+        measurements = QHBoxLayout()
+        measurements.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        measurements.addLayout(linesp_hlayout)
+        measurements.addLayout(lettersp_hlayout)
+        measurements.addLayout(stroke_hlayout)
+        measurements.setContentsMargins(3, 0, 3, 0)
+        measurements.setSpacing(13)
+
+        basics = QVBoxLayout()
+        basics.addLayout(font_selector)
+        basics.addLayout(format_icons)
+        basics.addLayout(measurements)
+        basics.setSpacing(5)
+        basics.setContentsMargins(2, 3, 2, 3)
+        self.vlayout.addLayout(basics)
+
+        # ── Zone C：拓展样式与变换 ──────────────────────────────────
         # 样式入口按钮：不透明度/行距/阴影/渐变 统一收进 Text Style 对话框
-        vl0.addWidget(self.text_style_btn)
-        vl0.addWidget(self.texttransform_panel.view_widget)
-        vl0.setSpacing(0)
-        vl0.setContentsMargins(0, 0, 0, 0)
-        hl1_font = QHBoxLayout()
-        hl1_font.addWidget(self.familybox, 3)  # 字体框占绝大部分伸缩空间
-        hl1_font.addWidget(self.stylebox)  # 字重框按内容自适应
-        hl1_font.setSpacing(4)
-        hl1_font.setContentsMargins(0, 2, 0, 0)
-        hl1_size = QHBoxLayout()
-        hl1_size.addWidget(self.colorPicker)
-        hl1_size.addWidget(self.fontsizebox)
-        hl1_size.addWidget(self.lineSpacingLabel)
-        hl1_size.addWidget(self.lineSpacingBox)
-        hl1_size.addWidget(self.letterSpacingLabel)
-        hl1_size.addWidget(self.letterSpacingBox)
-        hl1_size.addStretch()  # 防止控件被水平拉伸分散，保持紧凑靠左
-        hl1_size.setSpacing(4)
-        hl1_size.setContentsMargins(0, 2, 0, 0)
-        hl2 = QHBoxLayout()
-        hl2.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        hl2.addWidget(self.alignBtnGroup)
-        hl2.addWidget(self.formatBtnGroup)
-        hl2.addWidget(self.verticalChecker)
-        hl2.setSpacing(FONTFORMAT_SPACING)
-        hl2.setContentsMargins(0, 0, 0, 0)
-        hl3 = QHBoxLayout()
-        hl3.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        hl3.addLayout(stroke_hlayout)
-        hl3.setContentsMargins(3, 0, 3, 0)
-        hl3.setSpacing(13)
-        # vl0（预设+高级面板）用 GroupFrame 包裹，标题与内容共享同一边框
-        vl0_frame = GroupFrame(self)
-        vl0_layout_inner = QVBoxLayout(vl0_frame)
-        vl0_layout_inner.setContentsMargins(6, 0, 6, 0)
-        vl0_layout_inner.addLayout(vl0)
-        self.vlayout.addWidget(vl0_frame)
+        self.vlayout.addWidget(self.text_style_btn)
+        self.vlayout.addWidget(self.texttransform_panel.view_widget)
 
-        # 合并行：字体行 + 颜色/字号/间距行 → 一个胶囊
-        hl1_merged = QVBoxLayout()
-        hl1_merged.addLayout(hl1_font)
-        hl1_merged.addLayout(hl1_size)
-        hl1_merged.setSpacing(0)
-        hl1_merged.setContentsMargins(0, 0, 0, 0)
-
-        # 合并行：加粗斜体行 + 轮廓行 → 一个胶囊，行间保留 4px 间距
-        hl2_merged = QVBoxLayout()
-        hl2_merged.addLayout(hl2)
-        hl2_merged.addLayout(hl3)
-        hl2_merged.setSpacing(4)
-        hl2_merged.setContentsMargins(0, 0, 0, 0)
-
-        # 用 GroupFrame 包裹各行，提供圆角主题边框
-        for hl in [hl1_merged, hl2_merged]:
-            frame = GroupFrame(self)
-            fl = QVBoxLayout(frame)
-            pad = 4
-            fl.setContentsMargins(6, pad, 6, pad)
-            fl.addLayout(hl)
-            self.vlayout.addWidget(frame)
-
-        # 注解分区（节点 2c 初版）：着重号/Ruby/縦中横/连字/旧式数字。
-        # 操作目标是文字块内部字符格式，经引擎 TextBlkItem 注解 setter 落地。
+        # 注解折叠胶囊：默认收起（pcfg.expand_annotation_panel），且仅在
+        # 选中文字块后显示（见 _sync_annotation_controls），消除全局模式
+        # 下的灰色死区。着重号/縦中横图标仍在基本选项行内即点即用。
         self.annotation_group = AnnotationFormatGroup(self)
-        annotation_frame = GroupFrame(self)
-        annotation_layout = QVBoxLayout(annotation_frame)
-        annotation_layout.setContentsMargins(6, 4, 6, 4)
-        annotation_layout.addWidget(self.annotation_group)
-        self.vlayout.addWidget(annotation_frame)
+        self.annotation_area = ViewWidget(
+            self.annotation_group,
+            self.tr("Annotations"),
+            title_capsule=True,
+        )
+        # 不注册进 View 菜单，仅持久化展开状态
+        self.annotation_area.config_expand_name = "expand_annotation_panel"
+        self.annotation_area.set_expend_area(
+            C.pcfg.expand_annotation_panel, set_config=False
+        )
+        self.annotation_area.setVisible(False)
+        self.vlayout.addWidget(self.annotation_area)
         self.annotation_group.annotation_changed.connect(
             self._on_annotation_changed
         )
         self.annotation_group.ruby_remove.connect(self._on_ruby_remove)
         self.annotation_group.setEnabled(False)
+        self.formatBtnGroup.emphasis_changed.connect(
+            lambda style, position: self._on_annotation_changed(
+                "emphasis", (style, position)
+            )
+        )
+        self.tcyChecker.setEnabled(False)
+        self.formatBtnGroup.emphasisBtn.setEnabled(False)
 
         self.vlayout.setContentsMargins(0, 0, 0, 0)
-        self.vlayout.setSpacing(4)
+        self.vlayout.setSpacing(7)
 
         self.focusOnColorDialog = False
         C.active_format = self.global_format
@@ -815,6 +1059,9 @@ class FontFormatPanel(Widget):
         self.lineSpacingBox.setValue(font_format.line_spacing)
         self.letterSpacingBox.setValue(font_format.letter_spacing)
         self.verticalChecker.setChecked(font_format.vertical)
+        self.romanAlignmentChecker.setChecked(
+            font_format.standard_vertical_roman_alignment
+        )
         self.formatBtnGroup.boldBtn.setChecked(font_format.bold)
         self.formatBtnGroup.underlineBtn.setChecked(font_format.underline)
         self.formatBtnGroup.italicBtn.setChecked(font_format.italic)
@@ -1048,20 +1295,28 @@ class FontFormatPanel(Widget):
     def _sync_annotation_controls(self):
         """Restore the annotation controls from the active text item.
 
+        The annotation capsule is selection-scoped: in global mode it is
+        hidden entirely (instead of a greyed dead zone), and its capsule
+        title carries a "•" marker while the current block has any
+        annotation active, so collapsed state still hints at content.
+
         Called on every selection transition; during text editing the engine
         item re-reports its own state, so a per-keystroke sync is deferred to
         node 3 panel consolidation.
         """
         item = self.textblk_item
         group = self.annotation_group
+        has_item = item is not None
+        self.annotation_area.setVisible(has_item)
+        group.setEnabled(has_item)
+        self.tcyChecker.setEnabled(has_item)
+        self.formatBtnGroup.emphasisBtn.setEnabled(has_item)
+        self._update_annotation_title()
         if item is None:
-            group.setEnabled(False)
             return
-        group.setEnabled(True)
-        with QSignalBlocker(group):
-            style, position = item.emphasis_values()
-            group.set_emphasis(style, position)
-            group.set_tcy(item.tate_chu_yoko_enabled())
+        with QSignalBlocker(group), QSignalBlocker(self.tcyChecker):
+            self.formatBtnGroup.emphasisBtn.set_values(*item.emphasis_values())
+            self.tcyChecker.setChecked(item.tate_chu_yoko_enabled())
             for axis in (
                 LIGATURE_COMMON,
                 LIGATURE_DISCRETIONARY,
@@ -1071,6 +1326,30 @@ class FontFormatPanel(Widget):
             group.set_onum(item.oldstyle_nums_value())
             ruby_type, text, position, enabled = item.ruby_editor_values()
             group.set_ruby(ruby_type, text, position, enabled)
+
+    def _update_annotation_title(self):
+        """Capsule title carries "•" while the current block has annotations."""
+        item = self.textblk_item
+        active = False
+        if item is not None:
+            active = (
+                item.emphasis_values()[0] != EMPHASIS_STYLES[0]
+                or item.tate_chu_yoko_enabled()
+                or item.oldstyle_nums_value() != LIGATURE_DEFAULT
+                or any(
+                    item.ligature_axis_value(axis) != LIGATURE_DEFAULT
+                    for axis in (
+                        LIGATURE_COMMON,
+                        LIGATURE_DISCRETIONARY,
+                        LIGATURE_CONTEXTUAL,
+                    )
+                )
+                or item.ruby_editor_values()[3]
+            )
+        title = self.tr("Annotations")
+        if active:
+            title += " •"
+        self.annotation_area.setTitle(title)
 
     def _on_annotation_changed(self, name: str, value):
         item = self.textblk_item
@@ -1083,7 +1362,7 @@ class FontFormatPanel(Widget):
                 item.setTateChuYoko(value)
             except RubyValidationError as error:
                 # 与 Ruby 互斥；回滚勾选态，避免控件状态与文档不一致
-                self.annotation_group.set_tcy(item.tate_chu_yoko_enabled())
+                self.tcyChecker.setChecked(item.tate_chu_yoko_enabled())
                 QMessageBox.information(self, self.tr("Tate-chu-yoko"), str(error))
         elif name == "ligature":
             axis, state = value

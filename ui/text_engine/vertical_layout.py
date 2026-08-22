@@ -104,26 +104,6 @@ Miscellaneous_Symbols_Pattern = r'\u2600-\u26FF'  # align center in vertical mod
 
 vertical_force_aligncentel_pattern = re.compile('[' + Dingbats_vertical_aligncenter + Miscellaneous_Symbols_Pattern + r'⁁⁂⁇⁈⁉⁊⁋⁎※⁑⁒⁕⁖⁘⁙⁛⁜‼‽]')
 
-# Fork compatibility: the fork layout detects [A-Za-z0-9] runs at layout time
-# and packs each run horizontally (tate-chu-yoko).  The engine layout drives
-# the same rendering from text_combine_ranges, so the detected runs are
-# injected there (see layoutBlock).
-TATECHUYOKO_PATTERN = re.compile(r'[A-Za-z0-9]+')
-
-
-def find_tatechuyoko_runs(blk_text: str, threshold: int) -> dict:
-    """Return {run_start_char_idx: run_len} for consecutive [A-Za-z0-9] runs
-    whose length <= threshold. Returns {} when threshold <= 0 (disabled)."""
-    if threshold <= 0:
-        return {}
-    runs = {}
-    for m in TATECHUYOKO_PATTERN.finditer(blk_text):
-        length = m.end() - m.start()
-        if length <= threshold:
-            runs[m.start()] = length
-    return runs
-
-
 @lru_cache(maxsize=512)
 def _is_non_fullwidth_roman(char: str) -> bool:
     """Return whether a glyph follows the item-wide Roman orientation.
@@ -290,12 +270,11 @@ class VerticalTextDocumentLayout(SceneTextLayout):
     def __init__(self, doc: QTextDocument, fontformat: FontFormat):
         super().__init__(doc, fontformat)
 
-        # Fork compatibility: the fork vertical layout read these three pcfg
+        # Fork compatibility: the fork vertical layout read these two pcfg
         # typography settings at construction; configpanel only touches them
         # through hasattr-guarded members, so exposing them here reconnects
         # the settings panel without any UI change.
         self.punctuation_position = int(pcfg.punctuation_position)
-        self.tatechuyoko_threshold = int(pcfg.tatechuyoko_threshold)
         self.halfwidth_jp_corner_brackets = bool(
             pcfg.halfwidth_jp_corner_brackets
         )
@@ -1854,31 +1833,6 @@ class VerticalTextDocumentLayout(SceneTextLayout):
         blk_text = block.text()
         custom_rendering = self.render_delegate is not None
         text_combine_ranges = list(text_combine_upright_ranges(block))
-        if self.tatechuyoko_threshold > 0:
-            # Fork compatibility: the fork layout detected [A-Za-z0-9] runs at
-            # layout time and packed each run horizontally.  Reuse the engine
-            # tate-chu-yoko machinery by injecting the detected runs into the
-            # annotation-driven ranges (only where no explicit <tcy> owns the
-            # same span).
-            auto_ranges = find_tatechuyoko_runs(
-                blk_text, self.tatechuyoko_threshold
-            )
-            if auto_ranges:
-                occupied = [
-                    (start, start + length)
-                    for start, length, _group_id in text_combine_ranges
-                ]
-                for auto_start, auto_length in auto_ranges.items():
-                    auto_end = auto_start + auto_length
-                    if any(
-                        start < auto_end and auto_start < end
-                        for start, end in occupied
-                    ):
-                        continue
-                    text_combine_ranges.append(
-                        (auto_start, auto_length, 'auto')
-                    )
-                    occupied.append((auto_start, auto_end))
         text_combine_ranges = tuple(text_combine_ranges)
         self.text_combine_ranges.append(text_combine_ranges)
         ruby_metrics = vertical_ruby_metrics(

@@ -443,26 +443,18 @@ class RearrangeBlksCommand(QUndoCommand):
 class TextPanel(Widget):
     def __init__(self, app: QApplication, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        from .collapsible_section import CollapsibleSection
 
         layout = QVBoxLayout(self)
         self.textEditList = TextEditListScrollArea(self)
         self.formatpanel = FontFormatPanel(app, self)
 
-        self.format_section = CollapsibleSection(
-            title=self.tr("Font Format"),
-            content=self.formatpanel,
-            parent=self,
-            expanded=True,
-            header_position="top",
-        )
-
-        # 用 GroupFrame 包裹格式编辑区，与下方文本内容区形成视觉分隔
+        # 用 GroupFrame 包裹格式编辑区，与下方文本内容区形成视觉分隔；
+        # 区块标题（预设/变形/注解折叠胶囊）由 FontFormatPanel 内部承载
         format_frame = GroupFrame(self)
         format_frame.setObjectName("formatOuterFrame")
         format_layout = QVBoxLayout(format_frame)
         format_layout.setContentsMargins(5, 5, 5, 5)
-        format_layout.addWidget(self.format_section)
+        format_layout.addWidget(self.formatpanel)
         layout.addWidget(format_frame)
         self.textToolBar = QHBoxLayout()
         self.foldTextBtn = CheckableLabel(self.tr("Edit"), self.tr("Review"), True)

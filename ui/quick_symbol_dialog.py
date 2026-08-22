@@ -55,7 +55,21 @@ class QuickSymbolDialog(QDialog):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
 
-        for group_name, symbols in self._GROUPS:
+        from utils.config import pcfg
+
+        groups = list(self._GROUPS)
+        custom_chars = (
+            getattr(pcfg, "quick_insert_characters", "") or ""
+        ).strip()
+        if custom_chars:
+            groups.append(
+                (
+                    "Custom",
+                    [ch for ch in custom_chars if not ch.isspace()],
+                )
+            )
+
+        for group_name, symbols in groups:
             label = QLabel(self.tr(group_name))
             label.setStyleSheet("font-weight: bold; font-size: 11px;")
             layout.addWidget(label)
