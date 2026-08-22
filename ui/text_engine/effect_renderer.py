@@ -21,8 +21,8 @@ Localization notes (compared with upstream):
   is generated from a glyph-only alpha mask (the local ``_render_text_only``
   logic moved into this file), both in ``_render_effect_surface`` and in
   ``_repaint_neutral_background``.
-- ``_paint_cloned_document_stroke`` instantiates the local layouts with the
-  ``pcfg`` typography parameters (matching ``textitem`` construction).
+- ``_paint_cloned_document_stroke`` instantiates the engine layouts with the
+  ``pcfg`` typography parameters (matching ``item.py`` construction).
 - ``get_text_gradient`` drops the local colour clamp (upstream parity).
 """
 
@@ -51,7 +51,7 @@ from qtpy.QtWidgets import QStyle, QWidget
 from utils.fontformat import FontFormat, pt2px
 
 from ..misc import ndarray2pixmap, pixmap2ndarray
-from ..scene_textlayout import HorizontalTextDocumentLayout, VerticalTextDocumentLayout
+from .horizontal_layout import HorizontalTextDocumentLayout
 from .vertical_layout import (
     VerticalTextDocumentLayout as EngineVerticalTextDocumentLayout,
 )
@@ -454,21 +454,17 @@ class TextEffectRenderer:
         from utils.config import pcfg
 
         if self.fontformat.vertical:
-            layout = VerticalTextDocumentLayout(
-                doc,
-                self.fontformat,
-                punctuation_position=pcfg.punctuation_position,
-                tatechuyoko_threshold=pcfg.tatechuyoko_threshold,
-                halfwidth_jp_corner_brackets=pcfg.halfwidth_jp_corner_brackets,
+            layout = EngineVerticalTextDocumentLayout(doc, self.fontformat)
+            # Fork compatibility: the fork layout accepted these as constructor
+            # arguments; the engine layout exposes the same pcfg members, so
+            # reapply them after construction.
+            layout.punctuation_position = pcfg.punctuation_position
+            layout.tatechuyoko_threshold = pcfg.tatechuyoko_threshold
+            layout.halfwidth_jp_corner_brackets = (
+                pcfg.halfwidth_jp_corner_brackets
             )
         else:
-            layout = HorizontalTextDocumentLayout(
-                doc,
-                self.fontformat,
-                punctuation_position=pcfg.punctuation_position,
-                tatechuyoko_threshold=pcfg.tatechuyoko_threshold,
-                halfwidth_jp_corner_brackets=pcfg.halfwidth_jp_corner_brackets,
-            )
+            layout = HorizontalTextDocumentLayout(doc, self.fontformat)
         layout._draw_offset = self.layout._draw_offset
         layout._is_painting_stroke = True
         layout.setMaxSize(self.layout.max_width, self.layout.max_height, False)
@@ -564,10 +560,7 @@ class TextEffectRenderer:
             return
         active_layout = self.document().documentLayout()
         if (
-            isinstance(
-                active_layout,
-                (VerticalTextDocumentLayout, EngineVerticalTextDocumentLayout),
-            )
+            isinstance(active_layout, EngineVerticalTextDocumentLayout)
             and self._has_layout_distortion()
         ):
             self._paint_vertical_stroke(painter, render_scale, surface_rect)

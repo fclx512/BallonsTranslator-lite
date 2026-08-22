@@ -2,6 +2,29 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，每次在对应日期中末尾写入日志。
 
+## 2026-08-22
+
+### 上游 v1.5.12 移植节点 2a 收尾提交推送 + 节点 2b 竖排双引擎
+
+**问题/需求：** 完成文本引擎迁移的竖排环节——2a（文件落地 + 渲染入口切换）收尾并提交；随后按规划推进节点 2b（竖排双引擎 + 竖排特性），把 fork 竖排的三个排版设置与縦中横/半宽括号行为接回引擎布局。
+
+**改动要点：**
+
+- **节点 2a 聚合提交 `c097b41` 并推送（用户手动）**：阶段一 26 文件落地 + `editing/upstream_commands.py` + i18n 94 条补齐（qm 1284 条）+ 渲染入口切换（`ui/textitem.py` 改为引擎 TextBlkItem 的 fork 兼容子类，引擎补 `vertical_rotation_chars` 等兼容面）+ 节点 4b 重排闪退修复聚合为一个原子提交。
+- **节点 2b 竖排三设置接通引擎布局**（`ui/text_engine/vertical_layout.py`）：构造读 `pcfg` 默认补 `punctuation_position` / `tatechuyoko_threshold` / `halfwidth_jp_corner_brackets` 三成员 + `setPunctuationPosition` setter——configpanel 三处 hasattr 防护调用自动接通，UI 零改动。标点偏移分支按 Simplified（右上/右对齐）/Traditional（居中）切换：`centers_vertical_glyph` 的 PAUSEORSTOP 改随 `punctuation_position`（修复 2a 切换后竖排标点从右上变居中的回归），ALIGNCENTER 补 Simplified 右对齐分支。
+- **縦中横自动检测注入**：移植 fork `find_tatechuyoko_runs`（`[A-Za-z0-9]+` run 长度 ≤ threshold）到引擎，`layoutBlock` 中把检测 run 注入注解驱动的 `text_combine_ranges`（与显式 `<tcy>` 注解不重叠），复用引擎 setNumColumns / tate_chu_yoko 渲染。
+- **半宽角引号紧凑**：`layoutBlock` 的 `needs_vertical_rotation` 分支加 `PUNSET_CORNER_BRACKET` 保持字形宽度 advance；`updateDrawOffsets` 旋转分支移植 fork 的 opening-mark 上移修正。
+- **清理项**：`ui/text_engine/effect_renderer.py` clone-stroke 路径改实例化引擎布局（竖排构造后设三属性，横排用引擎 `HorizontalTextDocumentLayout`），不再引用 fork `scene_textlayout` 布局类；`ui/text_engine/rendering/glyph_slant.py` TYPE_CHECKING 注解改 `..layout.SceneTextLayout`。
+- 新增 `tests/test_vertical_engine.py` 13 例：`find_tatechuyoko_runs` 阈值语义、pcfg 默认值、`setPunctuationPosition` 重排触发、`centers_vertical_glyph` 随 Simplified/Traditional、TCY 注入/禁用/不与注解重叠、全特性竖排渲染冒烟。
+
+**排障记录：** 测试两处期望笔误（连续 run 整段判定、`ab 12` 双 run）已修正；`test_dependency_startup` 1 例失败属基线（launch 环境准备子进程断言，与本次改动无关）。
+
+**实机审查修正（同日）：** 用户实机反馈"竖排全角符号变右对齐"——初版把引擎 CLREQ Mainland 右上分支错误接给了 Simplified，导致全角句读（`PAUSEORSTOP`）右对齐；核 fork 布局确认其句读**从不右对齐**（x 居中 + y 顶部，`punctuation_position` 只影响间隔号 `ALIGNCENTER`）。已回退：`centers_vertical_glyph` 的 PAUSEORSTOP 恢复跟随 `standard_vertical_roman_alignment`（默认 True 居中）、删除 ALIGNCENTER Simplified 右对齐分支；`punctuation_position` 成员与 `setPunctuationPosition` 保留（configpanel hasattr 兼容），但不再参与竖排渲染。縦中横/半宽括号/紧凑标点不受影响，测试断言同步更新，13 例 + verify 全绿。
+
+**涉及文件：** `ui/text_engine/vertical_layout.py`、`ui/text_engine/effect_renderer.py`、`ui/text_engine/rendering/glyph_slant.py`、`tests/test_vertical_engine.py`（新增）、`docs/daily_log.md`
+
+---
+
 ## 2026-08-21
 
 ### 上游 v1.5.12 移植推进（节点 0/1/4/5）+ 计划外批次提交推送

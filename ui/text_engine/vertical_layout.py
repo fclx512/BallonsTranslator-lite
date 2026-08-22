@@ -70,6 +70,9 @@ PUNSET_BRACKETL = {'「', '『', '“', '‘', '‶', '（', '《', '〈', '【'
 PUNSET_BRACKETR = {'」', '』', '”', '’', '〟', '″', '）', '》', '〉', '】', '〗', '〕', '］', '｝', ')'}
 PUNSET_BRACKET = PUNSET_BRACKETL.union(PUNSET_BRACKETR)
 PUNSET_COMPACT = PUNSET_PAUSEORSTOP.union(PUNSET_BRACKET)
+# Fork compatibility: compact half-width Japanese corner brackets keep their
+# glyph-width advance instead of Qt's natural (wider) run advance.
+PUNSET_CORNER_BRACKET = {'「', '」', '『', '』'}
 
 PUNSET_INSEPARABLE_REPEAT = {'—', '―', '‥', '…', '⋯'}
 PUNSET_NONBRACKET = {'⸺', '…', '⋯', '～', '-', '–', '—', '＿', '﹏', '~'}
@@ -100,6 +103,25 @@ Dingbats_vertical_aligncenter = r'\u2700-\u275A\u2761-\u2767\u2776-\u27BF'
 Miscellaneous_Symbols_Pattern = r'\u2600-\u26FF'  # align center in vertical mode
 
 vertical_force_aligncentel_pattern = re.compile('[' + Dingbats_vertical_aligncenter + Miscellaneous_Symbols_Pattern + r'⁁⁂⁇⁈⁉⁊⁋⁎※⁑⁒⁕⁖⁘⁙⁛⁜‼‽]')
+
+# Fork compatibility: the fork layout detects [A-Za-z0-9] runs at layout time
+# and packs each run horizontally (tate-chu-yoko).  The engine layout drives
+# the same rendering from text_combine_ranges, so the detected runs are
+# injected there (see layoutBlock).
+TATECHUYOKO_PATTERN = re.compile(r'[A-Za-z0-9]+')
+
+
+def find_tatechuyoko_runs(blk_text: str, threshold: int) -> dict:
+    """Return {run_start_char_idx: run_len} for consecutive [A-Za-z0-9] runs
+    whose length <= threshold. Returns {} when threshold <= 0 (disabled)."""
+    if threshold <= 0:
+        return {}
+    runs = {}
+    for m in TATECHUYOKO_PATTERN.finditer(blk_text):
+        length = m.end() - m.start()
+        if length <= threshold:
+            runs[m.start()] = length
+    return runs
 
 
 @lru_cache(maxsize=512)
@@ -268,6 +290,16 @@ class VerticalTextDocumentLayout(SceneTextLayout):
     def __init__(self, doc: QTextDocument, fontformat: FontFormat):
         super().__init__(doc, fontformat)
 
+        # Fork compatibility: the fork vertical layout read these three pcfg
+        # typography settings at construction; configpanel only touches them
+        # through hasattr-guarded members, so exposing them here reconnects
+        # the settings panel without any UI change.
+        self.punctuation_position = int(pcfg.punctuation_position)
+        self.tatechuyoko_threshold = int(pcfg.tatechuyoko_threshold)
+        self.halfwidth_jp_corner_brackets = bool(
+            pcfg.halfwidth_jp_corner_brackets
+        )
+
         self.line_spaces_lst = []
         self.min_height = 0
         self.layout_left = 0
@@ -284,6 +316,11 @@ class VerticalTextDocumentLayout(SceneTextLayout):
         self._resize_layout_available_height = None
         self._resize_layout_padding = None
         self._selection_geometry_cache = {}
+
+    def setPunctuationPosition(self, value: int):
+        if self.punctuation_position != value:
+            self.punctuation_position = value
+            self.reLayout()
 
     def needs_vertical_rotation(self, char: str) -> bool:
         rotation_chars = (
@@ -322,6 +359,9 @@ class VerticalTextDocumentLayout(SceneTextLayout):
 
     def centers_vertical_glyph(self, char: str) -> bool:
         if char in PUNSET_PAUSEORSTOP:
+            # Standard vertical roman alignment keeps stop marks centered;
+            # the fork layout also centers them (x-center, top-aligned) and
+            # never right-aligns them regardless of punctuation_position.
             return self.fontformat.standard_vertical_roman_alignment
         if (
             self.fontformat.standard_vertical_roman_alignment
@@ -663,6 +703,23 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                             yoff -= (
                                 base_width - non_bracket_br.height()
                             ) / 2
+
+                        # Fork compatibility: compact half-width corner
+                        # brackets shift the opening mark up by the column
+                        # height reduction their narrower advance produced.
+                        if (
+                            char in PUNSET_CORNER_BRACKET
+                            and self.halfwidth_jp_corner_brackets
+                        ):
+                            y_ofs = self.y_offset_lst[blk_no][ii]
+                            tbr_h_effective = y_ofs[1] - y_ofs[0]
+                            natural_h = (
+                                line.naturalTextWidth()
+                                - num_lspaces * cfmt.space_width
+                            )
+                            reduction = natural_h - tbr_h_effective
+                            if reduction > 0 and char in PUNSET_ROTATE_ALIGNR:
+                                xoff -= reduction
                     yoff -= left_margin
 
                 else:
@@ -1796,7 +1853,33 @@ class VerticalTextDocumentLayout(SceneTextLayout):
         block_no = block.blockNumber()
         blk_text = block.text()
         custom_rendering = self.render_delegate is not None
-        text_combine_ranges = text_combine_upright_ranges(block)
+        text_combine_ranges = list(text_combine_upright_ranges(block))
+        if self.tatechuyoko_threshold > 0:
+            # Fork compatibility: the fork layout detected [A-Za-z0-9] runs at
+            # layout time and packed each run horizontally.  Reuse the engine
+            # tate-chu-yoko machinery by injecting the detected runs into the
+            # annotation-driven ranges (only where no explicit <tcy> owns the
+            # same span).
+            auto_ranges = find_tatechuyoko_runs(
+                blk_text, self.tatechuyoko_threshold
+            )
+            if auto_ranges:
+                occupied = [
+                    (start, start + length)
+                    for start, length, _group_id in text_combine_ranges
+                ]
+                for auto_start, auto_length in auto_ranges.items():
+                    auto_end = auto_start + auto_length
+                    if any(
+                        start < auto_end and auto_start < end
+                        for start, end in occupied
+                    ):
+                        continue
+                    text_combine_ranges.append(
+                        (auto_start, auto_length, 'auto')
+                    )
+                    occupied.append((auto_start, auto_end))
+        text_combine_ranges = tuple(text_combine_ranges)
         self.text_combine_ranges.append(text_combine_ranges)
         ruby_metrics = vertical_ruby_metrics(
             block,
@@ -2075,6 +2158,13 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                     if char.isalpha():
                         cw2 = cfmt.punc_rect(char+char)[1].width()
                         tbr_h = br.width() - (br.width() * 2 - cw2)
+                    elif (
+                        char in PUNSET_CORNER_BRACKET
+                        and self.halfwidth_jp_corner_brackets
+                    ):
+                        # Fork compatibility: compact corner brackets keep the
+                        # glyph-width advance computed above.
+                        pass
                     else:
                         # Rotated punctuation keeps Qt's natural advance;
                         # joined runs subdivide that same occupied extent.

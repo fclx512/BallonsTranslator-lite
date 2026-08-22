@@ -46,7 +46,7 @@ from .glyph import (
 from .indexing import _utf16_char_at, _utf16_length
 
 if TYPE_CHECKING:
-    from ..scene_textlayout import SceneTextLayout
+    from ..layout import SceneTextLayout
 
 
 _LAYOUT_CACHE_TOKENS = count(1)
