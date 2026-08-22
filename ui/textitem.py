@@ -18,6 +18,8 @@ from typing import List, Tuple, Union
 from qtpy.QtCore import QPointF, QRectF, Qt, Signal
 from qtpy.QtGui import (
     QColor,
+    QFont,
+    QFontDatabase,
     QPainter,
     QPen,
     QTextCharFormat,
@@ -34,7 +36,12 @@ from qtpy.QtWidgets import (
 )
 
 from utils.config import pcfg
-from utils.fontformat import FontFormat, TextTransformState, TextTransformStack
+from utils.fontformat import (
+    FontFormat,
+    TextTransformState,
+    TextTransformStack,
+    fix_fontweight_qt,
+)
 from utils.text_alignment import SNAP_THRESHOLD, compute_snap
 from utils.textblock import TextBlock as TextBlock
 
@@ -574,3 +581,54 @@ class TextBlkItem(_EngineTextBlkItem):
         cursor.mergeCharFormat(cfmt)
         cursor.clearSelection()
         self.setTextCursor(cursor)
+
+    # ── 格式 setter 兼容（引擎签名收敛，fork 消费方仍传旧 kwargs）───────
+
+    def setFontFamily(
+        self,
+        value: str,
+        style_name: str = "",
+        repaint_background: bool = True,
+        set_selected: bool = False,
+        restore_cursor: bool = False,
+    ):
+        """字体族切换：引擎只改 family，fork 按所选样式名同步字重/bold。
+
+        ``apply_font_change``（text_panel）先把 ``_style_name`` 写入活动格式
+        再调用本方法；这里让画布立即反映所选样式，避免换家族后残留旧字重。
+        ``style_name`` 为空时等价于引擎原行为。
+        """
+        super().setFontFamily(
+            value,
+            repaint_background=repaint_background,
+            set_selected=set_selected,
+            restore_cursor=restore_cursor,
+        )
+        if not style_name:
+            return
+        raw_weight = QFontDatabase.weight(value, style_name)
+        if raw_weight <= 0:
+            return
+        font = self.document().defaultFont()
+        font.setStyleName(style_name)
+        # 先 setBold 再 setWeight：setBold(False) 会把字重复位为 Normal(400)
+        font.setBold(raw_weight >= QFont.Weight.Bold)
+        font.setWeight(QFont.Weight(fix_fontweight_qt(raw_weight)))
+        self.document().setDefaultFont(font)
+        cfmt = QTextCharFormat()
+        cfmt.setFont(font)
+        doc_cursor = QTextCursor(self.document())
+        doc_cursor.select(QTextCursor.SelectionType.Document)
+        doc_cursor.mergeCharFormat(cfmt)
+        # 同步插入符格式，避免后续输入沿用旧字重
+        self.textCursor().mergeCharFormat(cfmt)
+        self.layout.reLayoutEverything()
+
+    def setLineSpacing(self, value: float, **kwargs) -> None:
+        super().setLineSpacing(value)
+
+    def setLetterSpacing(self, value: float, **kwargs) -> None:
+        super().setLetterSpacing(value)
+
+    def setLineSpacingType(self, value: int, **kwargs) -> None:
+        super().setLineSpacingType(value)

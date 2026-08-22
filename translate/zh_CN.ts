@@ -714,21 +714,6 @@
             <translation>在每个项目下建立独立的字体样式</translation>
         </message>
         <message>
-            <location filename="..\ui\configpanel.py" line="1589" />
-            <source>Centered (Traditional Chinese / Japanese)</source>
-            <translation>居中（繁体中文/日文排版）</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1589" />
-            <source>Edge-aligned (Simplified Chinese)</source>
-            <translation>靠边（简体中文排版）</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1597" />
-            <source>Punctuation Position</source>
-            <translation>标点位置</translation>
-        </message>
-        <message>
             <location filename="..\ui\configpanel.py" line="0" />
             <source>Compact 「」『』 in vertical text (half-width style)</source>
             <translation>竖排文本中压缩「」『』为半角样式</translation>
@@ -922,10 +907,6 @@
         <message>
             <source>&lt;p&gt;When enabled, each project maintains its own &lt;b&gt;text style settings&lt;/b&gt; independently instead of using shared global styles.&lt;/p&gt;</source>
             <translation>&lt;p&gt;启用后，每个项目独立维护自己的&lt;b&gt;文本样式设置&lt;/b&gt;，而非使用共享的全局样式。&lt;/p&gt;</translation>
-        </message>
-        <message>
-            <source>&lt;p&gt;Choose punctuation alignment:&lt;/p&gt;&lt;p&gt;&lt;b&gt;Centered&lt;/b&gt; — traditional CJK style (Traditional Chinese / Japanese)&lt;br/&gt;&lt;b&gt;Edge-aligned&lt;/b&gt; — modern style (Simplified Chinese)&lt;/p&gt;</source>
-            <translation>&lt;p&gt;选择标点对齐方式：&lt;/p&gt;&lt;p&gt;&lt;b&gt;居中&lt;/b&gt; — 传统 CJK 排版（繁体中文 / 日文）&lt;br/&gt;&lt;b&gt;靠边&lt;/b&gt; — 现代排版（简体中文）&lt;/p&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Hide selected fonts from all font selection dropdowns. Useful for filtering out &lt;b&gt;unusable or decorative&lt;/b&gt; fonts.&lt;/p&gt;</source>
@@ -1235,6 +1216,10 @@
             <source>Vertical Text</source>
             <translation>竖排文本</translation>
         </message>
+        <message>
+            <source>Fonts</source>
+            <translation>字体</translation>
+        </message>
 </context>
     <context>
         <name>DependencyDialog</name>
@@ -1517,12 +1502,22 @@ Settings → Inpainter → Photoshop Path</source>
         </message>
 </context>
     <context>
+        <name>FormatGroupBtn</name>
+        <message>
+            <source>Strike-through</source>
+            <translation>删除线</translation>
+        </message>
+    </context>
+    <context>
         <name>FontFormatPanel</name>
         <message>
             <source>Annotations</source>
             <translation>注解</translation>
         </message>
         <message>
+            <source>Strike-through</source>
+            <translation>删除线</translation>
+        </message>        <message>
             <source>Ruby</source>
             <translation>注音（Ruby）</translation>
         </message>
@@ -5193,8 +5188,8 @@ in Settings → Mirror Config, then click Retry.</source>
         </message>
         <message>
             <location filename="..\\ui\\configpanel.py" line="808" />
-            <source>Bold</source>
-            <translation>粗体</translation>
+            <source>Strike-through</source>
+            <translation>删除线</translation>
         </message>
         <message>
             <location filename="..\\ui\\configpanel.py" line="808" />

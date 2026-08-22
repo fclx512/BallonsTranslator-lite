@@ -331,9 +331,10 @@ class FormatGroupBtn(QFrame):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.boldBtn = QFontChecker(self)
-        self.boldBtn.setObjectName("FontBoldChecker")
-        self.boldBtn.clicked.connect(self.setBold)
+        self.strikeBtn = QFontChecker(self)
+        self.strikeBtn.setObjectName("FontStrikeChecker")
+        self.strikeBtn.setToolTip(self.tr("Strike-through"))
+        self.strikeBtn.clicked.connect(self.setStrikeout)
         self.italicBtn = QFontChecker(self)
         self.italicBtn.setObjectName("FontItalicChecker")
         self.italicBtn.clicked.connect(self.setItalic)
@@ -343,15 +344,15 @@ class FormatGroupBtn(QFrame):
         self.emphasisBtn = EmphasisToolButton(self)
         self.emphasisBtn.emphasis_changed.connect(self.emphasis_changed)
         hlayout = QHBoxLayout(self)
-        hlayout.addWidget(self.boldBtn)
+        hlayout.addWidget(self.strikeBtn)
         hlayout.addWidget(self.italicBtn)
         hlayout.addWidget(self.underlineBtn)
         hlayout.addWidget(self.emphasisBtn)
         hlayout.setSpacing(0)
         hlayout.setContentsMargins(0, 0, 0, 0)
 
-    def setBold(self):
-        self.param_changed.emit("bold", self.boldBtn.isChecked())
+    def setStrikeout(self):
+        self.param_changed.emit("strikeout", self.strikeBtn.isChecked())
 
     def setItalic(self):
         self.param_changed.emit("italic", self.italicBtn.isChecked())
@@ -819,13 +820,13 @@ class FontFormatPanel(Widget):
         # 预设折叠胶囊（标题承载 Global Font Format / TextBlock #N）
         self.vlayout.addWidget(self.textstyle_panel.view_widget)
 
-        # ── Zone B：基本选项（平铺三行，无边框）──────────────────────
-        # Row 1：字体选择 [颜色 | 字体 | 字重] | 字号
+        # ── Zone B：基本选项（平铺，无边框）─────────────────────────
+        # Row 1：字体选择 [颜色 | 字体 | 字重]——字号迁往测量行，把整行
+        # 宽度让给字体名与字重名的显示
         font_selector = QHBoxLayout()
         font_selector.addWidget(self.colorPicker)
         font_selector.addWidget(self.familybox, 1)  # 字体框占绝大部分伸缩空间
         font_selector.addWidget(self.stylebox)  # 字重框按内容自适应
-        font_selector.addWidget(self.fontsizebox)
         font_selector.setSpacing(4)
         font_selector.setContentsMargins(2, 0, 2, 0)
 
@@ -852,23 +853,29 @@ class FontFormatPanel(Widget):
         format_icons.setSpacing(6)
         format_icons.setContentsMargins(2, 0, 2, 0)
 
-        # Row 3：量测行 [行距] [字距] [描边+颜色]
+        # Row 3：量测行 [字号] [行距] [字距]——排版数值一组；描边组宽
+        # 度放不进同行，单独一行
         linesp_hlayout = QHBoxLayout()
         linesp_hlayout.addWidget(self.lineSpacingLabel)
         linesp_hlayout.addWidget(self.lineSpacingBox)
         linesp_hlayout.setSpacing(shared.WIDGET_SPACING_CLOSE)
-        measurements = QHBoxLayout()
-        measurements.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        measurements.addLayout(linesp_hlayout)
-        measurements.addLayout(lettersp_hlayout)
-        measurements.addLayout(stroke_hlayout)
-        measurements.setContentsMargins(3, 0, 3, 0)
-        measurements.setSpacing(13)
+        size_and_metrics = QHBoxLayout()
+        size_and_metrics.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        size_and_metrics.addWidget(self.fontsizebox)
+        size_and_metrics.addLayout(linesp_hlayout)
+        size_and_metrics.addLayout(lettersp_hlayout)
+        size_and_metrics.setContentsMargins(2, 0, 2, 0)
+        size_and_metrics.setSpacing(13)
+        stroke_row = QHBoxLayout()
+        stroke_row.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        stroke_row.addLayout(stroke_hlayout)
+        stroke_row.setContentsMargins(2, 0, 2, 0)
 
         basics = QVBoxLayout()
         basics.addLayout(font_selector)
         basics.addLayout(format_icons)
-        basics.addLayout(measurements)
+        basics.addLayout(size_and_metrics)
+        basics.addLayout(stroke_row)
         basics.setSpacing(5)
         basics.setContentsMargins(2, 3, 2, 3)
         self.vlayout.addLayout(basics)
@@ -1062,7 +1069,7 @@ class FontFormatPanel(Widget):
         self.romanAlignmentChecker.setChecked(
             font_format.standard_vertical_roman_alignment
         )
-        self.formatBtnGroup.boldBtn.setChecked(font_format.bold)
+        self.formatBtnGroup.strikeBtn.setChecked(font_format.strikeout)
         self.formatBtnGroup.underlineBtn.setChecked(font_format.underline)
         self.formatBtnGroup.italicBtn.setChecked(font_format.italic)
         self.alignBtnGroup.setAlignment(font_format.alignment)
@@ -1217,9 +1224,6 @@ class FontFormatPanel(Widget):
             else:
                 act_ffmt.font_weight = None
                 act_ffmt.bold = False
-
-            # Keep the bold button in sync
-            self.formatBtnGroup.boldBtn.setChecked(act_ffmt.bold)
 
         # Then update font_family (setFontFamily reads _style_name)
         self.on_param_changed("font_family", family)

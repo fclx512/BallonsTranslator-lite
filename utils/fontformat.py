@@ -732,6 +732,7 @@ class FontFormat(Config):
     srgb: List = field(default_factory=lambda: [0, 0, 0])
     bold: bool = False
     underline: bool = False
+    strikeout: bool = False
     italic: bool = False
     alignment: int = 0
     vertical: bool = False

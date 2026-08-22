@@ -131,48 +131,77 @@ class ConfigPanelNode3Test(unittest.TestCase):
         self.assertEqual(pcfg.quick_insert_characters, "♥♡")
 
     def test_typesetting_section_order(self):
-        """竖排相关设置归入 Vertical Text 分组，quick insert 前置不混排。"""
-        from qtpy.QtWidgets import QComboBox, QLabel, QLineEdit
+        """竖排设置归入 Vertical Text 分组，quick insert 前置不混排；
+        字体管理项归 Fonts 组并前移（不再悬挂在 Vertical Text 之后）。"""
+        from qtpy.QtWidgets import QCheckBox, QLabel, QLineEdit, QPushButton
 
         layout = self.panel.typesetting_block.widget.layout()
         widgets = [
             layout.itemAt(i).widget() for i in range(layout.count())
         ]
-        edit = self.panel.quick_insert_characters_edit
-        combo = self.panel.punctuation_position_combo
-        quick_row = next(
-            w
-            for w in widgets
-            if w is not None
-            and w is not edit
-            and edit in w.findChildren(QLineEdit)
-        )
-        header = next(
-            w
-            for w in widgets
-            if w is not None
-            and w.objectName() == "ConfigSectionHeader"
-            and any(
-                isinstance(c, QLabel) and c.text() == "Vertical Text"
-                for c in w.findChildren(QLabel)
+
+        def row_of(control, child_type):
+            return next(
+                w
+                for w in widgets
+                if w is not None
+                and w is not control
+                and control in w.findChildren(child_type)
             )
-        )
-        punct_row = next(
-            w
-            for w in widgets
-            if w is not None
-            and w is not combo
-            and combo in w.findChildren(QComboBox)
-        )
+
+        def header_of(text):
+            return next(
+                w
+                for w in widgets
+                if w is not None
+                and w.objectName() == "ConfigSectionHeader"
+                and any(
+                    isinstance(c, QLabel) and c.text() == text
+                    for c in w.findChildren(QLabel)
+                )
+            )
+
+        quick_row = row_of(self.panel.quick_insert_characters_edit, QLineEdit)
+        vertical_header = header_of("Vertical Text")
+        compact_row = row_of(self.panel.compact_punctuation_checker, QCheckBox)
+        fonts_header = header_of("Fonts")
+        exclusion_row = row_of(self.panel.exclude_fonts_btn, QPushButton)
+
         self.assertLess(
             widgets.index(quick_row),
-            widgets.index(header),
+            widgets.index(vertical_header),
             "Quick insert characters must sit before the Vertical Text header",
         )
         self.assertLess(
-            widgets.index(header),
-            widgets.index(punct_row),
-            "Punctuation Position must sit inside the Vertical Text section",
+            widgets.index(vertical_header),
+            widgets.index(compact_row),
+            "Compact punctuation must sit inside the Vertical Text section",
+        )
+        self.assertLess(
+            widgets.index(fonts_header),
+            widgets.index(exclusion_row),
+            "Font Exclusion must sit inside the Fonts section",
+        )
+        self.assertLess(
+            widgets.index(exclusion_row),
+            widgets.index(vertical_header),
+            "Fonts section must precede the Vertical Text section",
+        )
+        self.assertIsNone(
+            next(
+                (
+                    w
+                    for w in widgets
+                    if w is not None
+                    and hasattr(w, "findChildren")
+                    and any(
+                        isinstance(c, QLabel) and c.text() == "Punctuation Position"
+                        for c in w.findChildren(QLabel)
+                    )
+                ),
+                None,
+            ),
+            "Punctuation Position is a dead setting post-port and must be gone",
         )
 
 

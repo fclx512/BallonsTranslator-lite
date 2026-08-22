@@ -148,6 +148,20 @@ def ffmt_change_underline(
 
 
 @font_formating()
+def ffmt_change_strikeout(
+    param_name: str,
+    values: str,
+    act_ffmt: FontFormat,
+    is_global: bool,
+    blkitems: List[TextBlkItem],
+    **kwargs,
+):
+    set_kwargs = global_default_set_kwargs if is_global else local_default_set_kwargs
+    for blkitem, value in zip(blkitems, values):
+        blkitem.setFontStrikeOut(value, **set_kwargs)
+
+
+@font_formating()
 def ffmt_change_font_weight(
     param_name: str,
     values: str,

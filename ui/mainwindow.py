@@ -1806,8 +1806,8 @@ class MainWindow(mainwindow_cls):
         self.shortcut_registry["escape"] = self._make_shortcuts(
             "escape", self.shortcutEscape
         )
-        self.shortcut_registry["bold"] = self._make_shortcuts(
-            "bold", self.shortcutBold
+        self.shortcut_registry["strike"] = self._make_shortcuts(
+            "strike", self.shortcutStrikeout
         )
         self.shortcut_registry["italic"] = self._make_shortcuts(
             "italic", self.shortcutItalic
@@ -2004,9 +2004,9 @@ class MainWindow(mainwindow_cls):
                 if self.drawingPanel.currentTool == self.drawingPanel.rectTool:
                     self.drawingPanel.rectPanel.inpaint_btn.click()
 
-    def shortcutBold(self):
+    def shortcutStrikeout(self):
         if self.textPanel.formatpanel.isVisible():
-            self.textPanel.formatpanel.formatBtnGroup.boldBtn.click()
+            self.textPanel.formatpanel.formatBtnGroup.strikeBtn.click()
 
     def shortcutDelete(self):
         if self.canvas.gv.isVisible():

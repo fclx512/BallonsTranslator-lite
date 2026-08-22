@@ -818,7 +818,7 @@ DEFAULT_SHORTCUTS = {
     "delete_blks": ["Del"],
     "delete_blks_alt": ["Ctrl+D"],
     "select_all": ["Ctrl+A"],
-    "bold": ["Ctrl+B"],
+    "strike": [],
     "italic": ["Ctrl+I"],
     "underline": ["Ctrl+U"],
     "undo": ["Ctrl+Z"],
@@ -856,7 +856,7 @@ _ACTION_NAMES = {
     "delete_blks": "Delete",
     "delete_blks_alt": "Delete (alt)",
     "select_all": "Select All",
-    "bold": "Bold",
+    "strike": "Strike-through",
     "italic": "Italic",
     "underline": "Underline",
     "undo": "Undo",
@@ -890,7 +890,6 @@ _STANDARD_DEFAULT_KEYS = {
     "undo": QKeySequence.StandardKey.Undo,
     "redo": QKeySequence.StandardKey.Redo,
     "select_all": QKeySequence.StandardKey.SelectAll,
-    "bold": QKeySequence.StandardKey.Bold,
     "italic": QKeySequence.StandardKey.Italic,
     "underline": QKeySequence.StandardKey.Underline,
     "page_search": QKeySequence.StandardKey.Find,
@@ -935,7 +934,7 @@ _SHORTCUT_GROUPS = [
             "delete_blks",
             "delete_blks_alt",
             "select_all",
-            "bold",
+            "strike",
             "italic",
             "underline",
             "undo",
@@ -1784,6 +1783,36 @@ class ConfigPanel(Widget):
 
         ts_layout.addWidget(ConfigSubBlock(delegation_frame, content_margins=(16, 4, 16, 4)))
 
+        # Fonts section — font-management items (dropdown filtering and the
+        # render-time size clamp); kept out of the vertical-typography group.
+        ts_layout.addWidget(_section_header(self.tr("Fonts")))
+
+        self.exclude_fonts_btn = QPushButton(self.tr("Exclude Fonts..."), parent=self)
+        self.exclude_fonts_btn.setObjectName("ConfigButton")
+        # Match the max-font-size spinbox width below for a uniform column
+        self.exclude_fonts_btn.setFixedWidth(CONFIG_COMBOBOX_SHORT)
+        self.exclude_fonts_btn.clicked.connect(self.on_exclude_fonts_clicked)
+        ts_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Font Exclusion"),
+                self.exclude_fonts_btn,
+                note=self.tr("<p>Hide selected fonts from all font selection dropdowns. Useful for filtering out <b>unusable or decorative</b> fonts.</p>"),
+            )
+        )
+
+        self.max_font_size_edit = NoArrowsSpinBox()
+        self.max_font_size_edit.setRange(10, 1000)
+        self.max_font_size_edit.setValue(pcfg.max_font_size)
+        self.max_font_size_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
+        self.max_font_size_edit.valueChanged.connect(self.on_max_font_size_changed)
+        ts_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Max Font Size (px)"),
+                self.max_font_size_edit,
+                note=self.tr("<p>Maximum allowed font size in pixels. Text that would render larger than this limit is <b>scaled down</b> automatically.</p>"),
+            )
+        )
+
         # Text formatting section
         ts_layout.addWidget(_section_header(self.tr("Text formatting")))
 
@@ -1865,24 +1894,6 @@ class ConfigPanel(Widget):
 
         # Vertical Text section — vertical-only typography controls
         ts_layout.addWidget(_section_header(self.tr("Vertical Text")))
-
-        # Punctuation Position
-        self.punctuation_position_combo = ConfigComboBox(fix_size=False)
-        self.punctuation_position_combo.addItems(
-            [self.tr("Centered (Traditional Chinese / Japanese)"), self.tr("Edge-aligned (Simplified Chinese)")]
-        )
-        self.punctuation_position_combo.setCurrentIndex(pcfg.punctuation_position)
-        self.punctuation_position_combo.setFixedWidth(CONFIG_COMBOBOX_LONG)
-        self.punctuation_position_combo.currentIndexChanged.connect(
-            self.on_punctuation_position_changed
-        )
-        ts_layout.addWidget(
-            ConfigFormRow(
-                self.tr("Punctuation Position"),
-                self.punctuation_position_combo,
-                note=self.tr("<p>Choose punctuation alignment:</p><p><b>Centered</b> — traditional CJK style (Traditional Chinese / Japanese)<br/><b>Edge-aligned</b> — modern style (Simplified Chinese)</p>"),
-            )
-        )
 
         # Compact punctuation spacing in vertical text
         self.compact_punctuation_checker = ConfigCheckBox(
@@ -2060,32 +2071,6 @@ class ConfigPanel(Widget):
             pcfg.auto_tate_chu_yoko.enabled
         )
         ts_layout.addWidget(self.auto_tcy_options_widget)
-
-        self.exclude_fonts_btn = QPushButton(self.tr("Exclude Fonts..."), parent=self)
-        self.exclude_fonts_btn.setObjectName("ConfigButton")
-        # Match the max-font-size spinbox width below for a uniform column
-        self.exclude_fonts_btn.setFixedWidth(CONFIG_COMBOBOX_SHORT)
-        self.exclude_fonts_btn.clicked.connect(self.on_exclude_fonts_clicked)
-        ts_layout.addWidget(
-            ConfigFormRow(
-                self.tr("Font Exclusion"),
-                self.exclude_fonts_btn,
-                note=self.tr("<p>Hide selected fonts from all font selection dropdowns. Useful for filtering out <b>unusable or decorative</b> fonts.</p>"),
-            )
-        )
-
-        self.max_font_size_edit = NoArrowsSpinBox()
-        self.max_font_size_edit.setRange(10, 1000)
-        self.max_font_size_edit.setValue(pcfg.max_font_size)
-        self.max_font_size_edit.setFixedWidth(CONFIG_COMBOBOX_SHORT)
-        self.max_font_size_edit.valueChanged.connect(self.on_max_font_size_changed)
-        ts_layout.addWidget(
-            ConfigFormRow(
-                self.tr("Max Font Size (px)"),
-                self.max_font_size_edit,
-                note=self.tr("<p>Maximum allowed font size in pixels. Text that would render larger than this limit is <b>scaled down</b> automatically.</p>"),
-            )
-        )
 
         self.typesetting_block = generalConfigPanel.addGroupedBlock(
             label_typesetting, ts_widget, object_name="GroupGeneral"
@@ -2729,10 +2714,6 @@ class ConfigPanel(Widget):
     def on_max_font_size_changed(self, value: int):
         pcfg.max_font_size = value
 
-    def on_punctuation_position_changed(self, index: int):
-        pcfg.punctuation_position = index
-        self._apply_punctuation_settings()
-
     def on_compact_punctuation_changed(self, enabled: bool):
         pcfg.compact_vertical_punctuation_spacing = enabled
         self._apply_compact_punctuation_settings()
@@ -2806,21 +2787,6 @@ class ConfigPanel(Widget):
                     item.apply_horizontal_halfwidth_corner_brackets()
                 else:
                     item.restore_horizontal_halfwidth_corner_brackets()
-                item.repaint_background()
-                item.update()
-
-    def _apply_punctuation_settings(self):
-        """Apply punctuation_position to ALL existing text items."""
-        from .shared_widget import canvas as sw_canvas
-        from .textitem import TextBlkItem
-
-        if sw_canvas is None:
-            return
-        for item in sw_canvas.items():
-            if isinstance(item, TextBlkItem):
-                layout = item.layout
-                if layout is not None and hasattr(layout, "setPunctuationPosition"):
-                    layout.setPunctuationPosition(pcfg.punctuation_position)
                 item.repaint_background()
                 item.update()
 
@@ -3053,7 +3019,6 @@ class ConfigPanel(Widget):
         self.load_model_checker.setChecked(pcfg.module.load_model_on_demand)
         self.empty_runcache_checker.setChecked(pcfg.module.empty_runcache)
         self.max_font_size_edit.setValue(pcfg.max_font_size)
-        self.punctuation_position_combo.setCurrentIndex(pcfg.punctuation_position)
         self.compact_punctuation_checker.setChecked(
             pcfg.compact_vertical_punctuation_spacing
         )

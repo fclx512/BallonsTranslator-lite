@@ -36,7 +36,7 @@ from .font_family import (
     qfont_with_family,
 )
 from .editing.context_menu import create_text_edit_context_menu
-from ..misc import td_pattern, table_pattern
+from ..misc import get_theme_color, td_pattern, table_pattern
 from .horizontal_layout import HorizontalTextDocumentLayout
 from .vertical_layout import VerticalTextDocumentLayout
 from .effect_renderer import TextEffectRenderer
@@ -136,11 +136,14 @@ class _OrderBadgeItem(QGraphicsItem):
                 QPainter.CompositionMode.CompositionMode_SourceOver
             )
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(
-                TEXTRECT_SELECTED_COLOR
-                if self._selected
-                else TEXTRECT_SHOW_COLOR
-            )
+            # fork badge colors (upstream reuses the text-rect blue/pink):
+            # semi-transparent black by default, theme accent when selected.
+            if self._selected:
+                bg = get_theme_color()
+                bg.setAlpha(200)
+            else:
+                bg = QColor(0, 0, 0, 170)
+            painter.setBrush(bg)
             painter.drawRoundedRect(self._bounds, 3, 3)
             painter.setPen(Qt.GlobalColor.white)
             painter.setFont(self._font)
@@ -1380,6 +1383,7 @@ class TextBlkItem(QGraphicsTextItem):
         else:
             fontformat.font_size = self.minFontSize()
         fontformat.underline = font.underline()
+        fontformat.strikeout = font.strikeOut()
         fontformat.italic = font.italic()
         fontformat.letter_spacing = self.letter_spacing_value()
         if self.document().isEmpty():
@@ -1439,6 +1443,7 @@ class TextBlkItem(QGraphicsTextItem):
         format.setFontWeight(fweight)
         format.setFontItalic(ffmat.italic)
         format.setFontUnderline(ffmat.underline)
+        format.setFontStrikeOut(ffmat.strikeout)
         format.setProperty(
             AnnotationProperty.LETTER_SPACING,
             ffmat.letter_spacing,
@@ -1639,6 +1644,13 @@ class TextBlkItem(QGraphicsTextItem):
         cursor, after_kwargs = self._before_set_ffmt(set_selected, restore_cursor)
         cfmt = QTextCharFormat()
         cfmt.setFontUnderline(value)
+        self.set_cursor_cfmt(cursor, cfmt, True)
+        self._after_set_ffmt(cursor, repaint_background, restore_cursor, **after_kwargs)
+
+    def setFontStrikeOut(self, value: bool, repaint_background: bool = True, set_selected: bool = False, restore_cursor: bool = False):
+        cursor, after_kwargs = self._before_set_ffmt(set_selected, restore_cursor)
+        cfmt = QTextCharFormat()
+        cfmt.setFontStrikeOut(value)
         self.set_cursor_cfmt(cursor, cfmt, True)
         self._after_set_ffmt(cursor, repaint_background, restore_cursor, **after_kwargs)
 

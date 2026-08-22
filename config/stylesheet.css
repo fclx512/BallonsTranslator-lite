@@ -561,12 +561,12 @@ QFontChecker::indicator::checked {
     background-color: @accentPrimary;
 }
 
-QFontChecker#FontBoldChecker::indicator {
-    image: url(icons/fontfmt_bold.svg);
+QFontChecker#FontStrikeChecker::indicator {
+    image: url(icons/fontfmt_strikeout.svg);
 }
 
-QFontChecker#FontBoldChecker::indicator:checked {
-    image: url(icons/fontfmt_bold_activate.svg);
+QFontChecker#FontStrikeChecker::indicator:checked {
+    image: url(icons/fontfmt_strikeout_activate.svg);
 }
 
 QFontChecker#FontItalicChecker::indicator {
