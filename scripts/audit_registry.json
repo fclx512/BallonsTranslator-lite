@@ -1,6 +1,16 @@
 {
   "_comment": "AI 审计登记表。机制见 .agents/skills/audit-docs/SKILL.md。deprecated = 已删待守（不得复活、残留引用必须清零或进 allowed_mentions）；suspended = 存在的休眠文件（不得被主 UI import）。删除文件前先在此登记。",
   "deprecated": {
+    "modules/translators/context_batch.py": {
+      "note": "翻译 agent 化（docs/技术实现/翻译agent化_设计方案.md §11）合一删 beta：ContextBatchTranslator 2026-08-23 删除，agent 为唯一 LLM 翻译路径",
+      "allowed_mentions": [
+        "docs/技术实现/翻译agent化_设计方案.md",
+        "docs/技术实现/翻译管线现状调研.md"
+      ]
+    },
+    "ui/glossary_dialog.py": {
+      "note": "随阶段4删 beta 退役：CustomGlossaryDialog 唯一入口是运行窗口已删的 Custom... 按钮，2026-08-23 删除"
+    },
     "ui/scene_textlayout.py": {
       "note": "v1.5.12 移植后零引用的旧 fork 布局，2026-08-23 删除（渲染入口已切 ui/text_engine/）",
       "allowed_mentions": [

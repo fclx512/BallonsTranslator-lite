@@ -30,6 +30,8 @@ modules/
 | `launch.py` | 入口，命令行参数，PyTorch 设备 |
 | `utils/proj_imgtrans.py` | 项目管理（页面、文字块、撤销栈） |
 | `utils/textblock.py` | 核心数据单元（坐标、原文、译文、字体、遮罩） |
+| `utils/base_styles.py` | 项目级大样式 + 变体发现：块按 `(font_family, vertical)` 身份键归属大样式，override 量化 diff 派生子样式（同 override 自动聚类 + 自动命名）；`discover_style_tree` 驱动样式管理器树 |
+| `modules/translators/trans_agent.py` + `modules/translators/agent/` | 翻译 agent：`AgentTranslator`（继承 `LLM_API_Translator` 复用 profile/重试/RPM）作唯一 LLM 翻译路径；原生 function calling 多轮循环 + 只读探索工具 + 唯一 `submit_translations` 提交出口；`agent/` 包内为 loop/工具面/prompts/validator 纯逻辑 |
 | `utils/config.py` | 配置读写 |
 | `utils/shared.py` | 路径常量 |
 | `utils/structures.py` | `nested_dataclass`，`Config`/`Dict` 基类 |

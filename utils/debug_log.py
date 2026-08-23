@@ -1,7 +1,8 @@
 """Simple file-based debug logger for development use.
 
-Context translation status messages are written here when
-pcfg.context_translation_debug_log is True.
+Agent translation per-turn status messages are written here when
+pcfg.module.agent_translation_debug_log is True (merged from the beta's
+context_translation_debug_log, design stage 5 F).
 """
 
 import os
@@ -14,19 +15,24 @@ DEBUG_DIR = osp.join(shared.PROGRAM_PATH, "debug")
 
 
 class DebugLogger:
-    """Single-purpose logger for context translation debug output."""
+    """Single-purpose logger for agent translation debug output."""
 
     def __init__(self):
         self._file = None
 
+    def is_open(self) -> bool:
+        return self._file is not None
+
     def start(self):
-        """Open a new timestamped log file."""
+        """Open a timestamped log file once per session (idempotent)."""
+        if self._file is not None:
+            return
         os.makedirs(DEBUG_DIR, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = osp.join(DEBUG_DIR, f"context_translation_{ts}.log")
+        path = osp.join(DEBUG_DIR, f"agent_translation_{ts}.log")
         self._file = open(path, "w", encoding="utf-8")
         self._file.write(
-            f"=== Context Translation Log started at {datetime.now()} ===\n"
+            f"=== Agent Translation Log started at {datetime.now()} ===\n"
         )
         self._file.flush()
 

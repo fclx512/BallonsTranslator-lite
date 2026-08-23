@@ -375,10 +375,15 @@ class OCRThread(ModuleThread):
 class TranslateThread(ModuleThread):
     finish_translate_page = Signal(str)
     progress_changed = Signal(int)
+    # agent 翻译每轮状态(page_key, turn, tool_names),阶段 5 F 类不黑盒反馈
+    agent_status = Signal(str, int, object)
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__("translator", TRANSLATORS, *args, **kwargs)
         self.translator: BaseTranslator = self.module
+
+    def _emit_agent_status(self, page_key, turn, tool_names):
+        self.agent_status.emit(page_key, turn, tool_names)
 
     def _set_translator(self, translator: str):
 
@@ -413,6 +418,8 @@ class TranslateThread(ModuleThread):
             msg = self.tr("Failed to set translator ") + translator
             create_error_dialog(e, msg, "FailedSetTranslator")
 
+        if hasattr(self.translator, "set_status_callback"):
+            self.translator.set_status_callback(self._emit_agent_status)
         self.module = self.translator
         self.finish_set_module.emit()
 
@@ -588,7 +595,10 @@ class ImgtransThread(QThread):
         mode: int,
         blk_ids: List[int],
         tgt_mask,
+        page_key: str = None,
     ):
+        # 单框/选区翻译所在页(设计 §9:page_key 此前恒 None,导致单框任务定位不到页面)
+        self.current_page_key = page_key
         self.job = lambda: self._blktrans_pipeline(
             blk_list, tgt_img, mode, blk_ids, tgt_mask
         )
@@ -1452,6 +1462,7 @@ class ModuleManager(QObject):
         self.translate_thread.finish_translate_page.connect(
             self.on_finish_translate_page
         )
+        self.translate_thread.agent_status.connect(self.on_agent_turn_status)
 
         self.inpaint_thread = InpaintThread()
         self.inpaint_thread.finish_inpaint.connect(self.on_finish_inpaint)
@@ -1704,6 +1715,7 @@ class ModuleManager(QObject):
         mode: int,
         blk_ids: List[int],
         tgt_mask,
+        page_key: str = None,
     ):
         self.terminateRunningThread()
         self.progress_msgbox.hide_all_bars()
@@ -1716,7 +1728,7 @@ class ModuleManager(QObject):
         self.progress_msgbox.zero_progress()
         self.progress_msgbox.show()
         self.imgtrans_thread.runBlktransPipeline(
-            blk_list, tgt_img, mode, blk_ids, tgt_mask
+            blk_list, tgt_img, mode, blk_ids, tgt_mask, page_key=page_key
         )
 
     def on_finish_blktrans_stage(self, stage: str, progress: int):
@@ -1756,6 +1768,20 @@ class ModuleManager(QObject):
             self.page_trans_finished.emit(ri)
         if progress == 100:
             self.finishImgtransPipeline()
+
+    def on_agent_turn_status(self, page_key: str, turn: int, tool_names: List):
+        """agent 每轮状态:写进翻译进度条消息,长任务不再黑盒(阶段 5 F 类)。"""
+        if not self.progress_msgbox.isVisible():
+            return
+        tools = ", ".join(tool_names) if tool_names else self.tr("waiting for model")
+        msg = (
+            self.tr("Page %1 · agent turn %2: %3")
+            .replace("%1", str(page_key or ""))
+            .replace("%2", str(turn))
+            .replace("%3", tools)
+        )
+        bar = self.progress_msgbox.translate_bar
+        bar.updateProgress(bar.progressbar.value(), msg)
 
     def on_update_translate_progress(self, progress: int):
         ri = self.imgtrans_thread.recent_finished_index(progress)

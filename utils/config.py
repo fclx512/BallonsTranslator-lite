@@ -23,30 +23,6 @@ class RunStatus:
     FIN_ALL = 15
 
 
-class TranslateContext:
-    """Canonical translation grouping values stored in module config.
-
-    >>> TranslateContext.Page
-    'page'
-    """
-
-    TextBlock = 'textblock'
-    Page = 'page'
-    Valid = (TextBlock, Page)
-
-
-class LLMTranslateContext:
-    """Canonical LLM translation-context modes stored in module config.
-
-    >>> LLMTranslateContext.HISTORY
-    'history'
-    """
-
-    PAGE = 'page'
-    HISTORY = 'history'
-    Valid = (PAGE, HISTORY)
-
-
 class LLMGlossaryMode:
     """Canonical glossary selection modes stored in module config.
 
@@ -57,6 +33,18 @@ class LLMGlossaryMode:
     Matching = 'matching'
     All = 'all'
     Valid = (Matching, All)
+
+
+class SingleBlkTranslateMode:
+    """单框翻译策略(设计方案 §9):plain = 单条直译,context = 轻量 agent 注入本页块。
+
+    >>> SingleBlkTranslateMode.Plain
+    'plain'
+    """
+
+    Plain = 'plain'
+    Context = 'context'
+    Valid = (Plain, Context)
 
 
 @nested_dataclass
@@ -76,11 +64,12 @@ class ModuleConfig(Config):
     inpainter_params: Dict = field(default_factory=lambda: dict())
     translate_source: str = "日本語"
     translate_target: str = "简体中文"
-    translate_context: str = TranslateContext.Page
-    llm_translate_context: str = LLMTranslateContext.PAGE
+    # 是否注入前页历史(设计方案 §12:阶段 4 由 page/history 枚举简化为开关,默认开)
+    llm_translate_context: bool = True
     llm_prior_context_token_budget: int = 4096
     llm_glossary_path: str = ''
     llm_glossary_mode: str = LLMGlossaryMode.Matching
+    single_blk_translate_mode: str = SingleBlkTranslateMode.Plain
     check_need_inpaint: bool = True
     load_model_on_demand: bool = True
     empty_runcache: bool = False
@@ -138,14 +127,14 @@ class ModuleConfig(Config):
         ) is False
 
     def __post_init__(self):
-        if self.translate_context not in TranslateContext.Valid:
-            self.translate_context = TranslateContext.Page
-        if self.llm_translate_context not in LLMTranslateContext.Valid:
-            self.llm_translate_context = LLMTranslateContext.PAGE
+        if not isinstance(self.llm_translate_context, bool):
+            self.llm_translate_context = True
         if not isinstance(self.llm_glossary_path, str):
             self.llm_glossary_path = ''
         if self.llm_glossary_mode not in LLMGlossaryMode.Valid:
             self.llm_glossary_mode = LLMGlossaryMode.Matching
+        if self.single_blk_translate_mode not in SingleBlkTranslateMode.Valid:
+            self.single_blk_translate_mode = SingleBlkTranslateMode.Plain
         if (
             not isinstance(self.llm_prior_context_token_budget, int)
             or isinstance(self.llm_prior_context_token_budget, bool)
@@ -392,8 +381,6 @@ class ProgramConfig(Config):
     darkmode: bool = False
     light_theme: str = "eva-light"
     dark_theme: str = "eva-dark"
-    # Edit 模式不折叠文本卡片；True 仅在 Review 模式（单行紧凑）生效
-    fold_textarea: bool = False
     expand_font_format_panel: bool = True
     show_source_text: bool = True
     show_trans_text: bool = True
@@ -495,7 +482,9 @@ class ProgramConfig(Config):
     )
 
     # ── Development / Debug ─────────────────────────────
-    context_translation_debug_log: bool = False
+    # agent 翻译每轮状态写 utils/debug_log.py(阶段 5 F 类;原 beta 的
+    # context_translation_debug_log 已合并进此开关)。
+    agent_translation_debug_log: bool = False
 
     @staticmethod
     def load(cfg_path: str):

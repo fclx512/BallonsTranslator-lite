@@ -45,7 +45,7 @@ from .textitem import TextBlock
 # TransPairWidget card states (checked, hover, drag) are now controlled
 # via setProperty() + unpolish/polish, not setStyleSheet().
 
-# Width of the drag handle zone to the right of accent_bar when fold=ON
+# Width of the drag handle zone to the right of accent_bar (always shown)
 DRAG_AREA_WIDTH = 22
 
 
@@ -62,7 +62,7 @@ class SourceTextEdit(QTextEdit):
     show_select_menu = Signal(QPoint, str)
     focus_out = Signal(int)
 
-    def __init__(self, idx, parent, fold=False, *args, **kwargs):
+    def __init__(self, idx, parent, *args, **kwargs):
         super().__init__(parent, *args, **kwargs)
         self.idx = idx
         self.pre_editing = False
@@ -99,11 +99,6 @@ class SourceTextEdit(QTextEdit):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
-        self.min_height = 45
-        self.setFold(fold)
-
-    def setFold(self, fold: bool):
-        # 编辑/审阅统一：整块高度多行（审阅态不再省高度变单行 NoWrap/35px）
         self.min_height = 45
         self.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
 
@@ -317,49 +312,29 @@ class TransPairWidget(Widget):
         self,
         textblock: TextBlock = None,
         idx: int = None,
-        fold: bool = False,
         *args,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.e_source = SourceTextEdit(idx, self, fold)
-        self.e_trans = TransTextEdit(idx, self, fold)
+        self.e_source = SourceTextEdit(idx, self)
+        self.e_trans = TransTextEdit(idx, self)
         self.textblock = textblock
         self.idx = idx
-        self.fold = fold
 
-        # ── Index badges ─────────────────────────────────────────
-        # Two badges, one visible at a time depending on fold state.
-        # Viewport badge (fold=OFF / Edit mode) — overlaid at top-right
-        self.badge_vp = QLabel(self.e_source.viewport())
-        self.badge_vp.setObjectName("TextBlockIndexBadge")
-        self.badge_vp.setText(str(idx + 1))
-        self.badge_vp.setContentsMargins(4, 0, 4, 0)
-        self.badge_vp.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.badge_vp.adjustSize()
-        self.badge_vp.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
-        )
-        QTimer.singleShot(0, self._repos_badge_tr)
-        # Fade out on source-edit hover so it doesn't block text
-        self.e_source.hover_enter.connect(lambda _: self._set_badge_hover(True))
-        self.e_source.hover_leave.connect(lambda _: self._set_badge_hover(False))
-
-        # Drag-area badge (fold=ON / 审阅态) — inside the
-        # left drag zone
-        self.badge_drag = QLabel()
-        self.badge_drag.setObjectName("TextBlockIndexBadge")
-        self.badge_drag.setText(str(idx + 1))
-        self.badge_drag.setContentsMargins(2, 0, 2, 0)
-        self.badge_drag.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.badge_drag.adjustSize()
-        self.badge_drag.setAttribute(
+        # ── Index badge ─────────────────────────────────────────
+        # Number badge inside the left drag zone (always shown).
+        self.badge = QLabel()
+        self.badge.setObjectName("TextBlockIndexBadge")
+        self.badge.setText(str(idx + 1))
+        self.badge.setContentsMargins(2, 0, 2, 0)
+        self.badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.badge.adjustSize()
+        self.badge.setAttribute(
             Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
         )
 
         self.checked = False
         self._is_hovered = False
-        self._badge_hovered = False
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         vlayout = QVBoxLayout()
         vlayout.setAlignment(Qt.AlignTop)
@@ -388,9 +363,9 @@ class TransPairWidget(Widget):
             Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
         )
 
-        # Drag handle zone — sits between accent_bar and text content
-        # Only visible in fold=ON mode, provides space for drag initiation
-        # and contains the drag-area badge (vertically centered via layout).
+        # Drag handle zone — sits between accent_bar and text content.
+        # Provides space for drag initiation and contains the number badge
+        # (vertically centered via layout); always shown.
         self.drag_area = QFrame(self)
         self.drag_area.setObjectName("dragArea")
         self.drag_area.setFixedWidth(DRAG_AREA_WIDTH)
@@ -400,7 +375,7 @@ class TransPairWidget(Widget):
         drag_layout = QVBoxLayout(self.drag_area)
         drag_layout.setContentsMargins(0, 0, 0, 0)
         drag_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        drag_layout.addWidget(self.badge_drag)
+        drag_layout.addWidget(self.badge)
 
         hlayout = QHBoxLayout(self)
         hlayout.addWidget(self.accent_bar)
@@ -410,57 +385,6 @@ class TransPairWidget(Widget):
         hlayout.setSpacing(0)  # all spacing managed by vlayout margins
 
         self.setAcceptDrops(True)
-
-        # Apply initial fold layout
-        self._apply_fold()
-
-    def setFold(self, fold: bool):
-        """Switch badge / drag-column layout per fold state.
-
-            审阅态（fold=ON）与编辑态（fold=OFF）文本框都保持整块多行，
-        不再有省高度的单行紧凑样式；差异只在编号徽章位置与拖拽列：
-        fold=ON:
-          - drag_area 22px visible（左侧拖拽列 + 编号徽章）
-          - 编号徽章在 drag_area 内
-          - QTextEdit: WidgetWidth + 45px min height
-        fold=OFF（编辑态）:
-          - drag_area 隐藏
-          - 编号徽章在 SourceTextEdit viewport 右上角
-          - QTextEdit: WidgetWidth + 45px min height
-        """
-        if self.fold == fold:
-            return
-        self.fold = fold
-        # setFoldTextarea 只调 pw.setFold，fold 必须传导到文本框，
-        # 否则换行/最小高度态丢失（ef0a8d7 引入的回归）
-        self.e_source.setFold(fold)
-        self.e_trans.setFold(fold)
-        self._apply_fold()
-
-    def _apply_fold(self):
-        """Update layout and badge visibility for current fold state."""
-        if self.fold:
-            # ── fold=ON: 审阅态（编号居左 + 拖拽列）──
-            self.accent_bar.setFixedWidth(3)
-            self.drag_area.show()
-            # Set badge style for drag area and ensure sizing
-            self.badge_drag.setProperty("folded", True)
-            self.badge_drag.style().unpolish(self.badge_drag)
-            self.badge_drag.style().polish(self.badge_drag)
-            self.badge_drag.adjustSize()
-            self.badge_drag.show()
-            # Hide viewport badge
-            self.badge_vp.hide()
-        else:
-            # ── fold=OFF: Edit 完整布局 ──
-            self.accent_bar.setFixedWidth(3)
-            self.drag_area.hide()
-            # Show viewport badge at top-right
-            self.badge_vp.show()
-            # Hide drag badge
-            self.badge_drag.hide()
-            # Reposition viewport badge
-            QTimer.singleShot(0, self._repos_badge_tr)
 
     def dragEnterEvent(self, e: QDragEnterEvent) -> None:
         if isinstance(e.source(), TransPairWidget):
@@ -539,17 +463,6 @@ class TransPairWidget(Widget):
             self._accent_timer = None
             self._accent_tick_data = None
 
-    def _set_badge_hover(self, hovered: bool):
-        """Fade viewport badge opacity on hover (fold=OFF only)."""
-        if self.fold:
-            return  # drag-area badge doesn't use hover fade
-        if self._badge_hovered == hovered:
-            return
-        self._badge_hovered = hovered
-        self.badge_vp.setProperty("hovered", hovered)
-        self.badge_vp.style().unpolish(self.badge_vp)
-        self.badge_vp.style().polish(self.badge_vp)
-
     def enterEvent(self, event):
         self._is_hovered = True
         return super().enterEvent(event)
@@ -580,21 +493,10 @@ class TransPairWidget(Widget):
         if self.idx != idx:
             self.idx = idx
             text = str(idx + 1)
-            self.badge_vp.setText(text)
-            self.badge_drag.setText(text)
-            self.badge_vp.adjustSize()
-            self.badge_drag.adjustSize()
-            self._repos_badge_tr()
+            self.badge.setText(text)
+            self.badge.adjustSize()
             self.e_source.idx = idx
             self.e_trans.idx = idx
-
-    def _repos_badge_tr(self):
-        """Move viewport badge to top-right corner of SourceTextEdit viewport."""
-        try:
-            vp = self.e_source.viewport()
-            self.badge_vp.move(vp.width() - self.badge_vp.width(), 0)
-        except RuntimeError:
-            pass
 
 
 class TextEditListScrollArea(QScrollArea):
@@ -632,6 +534,7 @@ class TextEditListScrollArea(QScrollArea):
         self.trans_visible = True
 
         self.drag_to_pos: int = -1
+        self._dnd_active = False
 
         self.setSizePolicy(
             self.sizePolicy().horizontalPolicy(), QSizePolicy.Policy.Expanding
@@ -666,6 +569,10 @@ class TextEditListScrollArea(QScrollArea):
 
     def begin_rows_drag(self, source_widget: TransPairWidget) -> None:
         """Start the row-reorder drag from *source_widget*."""
+        # While the drag is active, suppress the hover/checked accent tint on
+        # cards the pointer passes over — otherwise they flash the selected
+        # look during the gesture (same background for :hover and checked).
+        self._set_dnd(True)
         drag = self.drag = QDrag(source_widget)
         mime = QMimeData()
         drag.setMimeData(mime)
@@ -695,9 +602,20 @@ class TextEditListScrollArea(QScrollArea):
 
         drag.exec(Qt.DropAction.MoveAction)
         self.drag = None
+        self._set_dnd(False)
         if self.drag_to_pos != -1:
             self.set_drag_style(self.drag_to_pos, True)
             self.drag_to_pos = -1
+
+    def _set_dnd(self, active: bool):
+        """Toggle the dnd visual override on every card during row drag."""
+        if self._dnd_active == active:
+            return
+        self._dnd_active = active
+        for pw in self.pairwidget_list:
+            pw.setProperty("dnd", active)
+            pw.style().unpolish(pw)
+            pw.style().polish(pw)
 
     def set_drag_style(self, pos: int, clear_style: bool = False):
         if pos == len(self.pairwidget_list):
@@ -719,6 +637,7 @@ class TextEditListScrollArea(QScrollArea):
             pw.style().unpolish(pw)
             pw.style().polish(pw)
         self.drag_to_pos = -1
+        self._set_dnd(False)
         if self.drag is not None:
             try:
                 self.drag.cancel()
@@ -728,7 +647,7 @@ class TextEditListScrollArea(QScrollArea):
 
     def handle_drag_pos(self, to_pos: int):
         if self.drag_to_pos != to_pos:
-            if self.drag_to_pos is not None:
+            if self.drag_to_pos is not None and self.drag_to_pos >= 0:
                 self.set_drag_style(self.drag_to_pos, True)
             self.drag_to_pos = to_pos
             self.set_drag_style(to_pos)
@@ -987,11 +906,6 @@ class TextEditListScrollArea(QScrollArea):
     def focusOutEvent(self, e: QFocusEvent) -> None:
         self.focus_out.emit()
         super().focusOutEvent(e)
-
-    def setFoldTextarea(self, fold: bool):
-        """Propagate fold state to all TransPairWidget children."""
-        for pw in self.pairwidget_list:
-            pw.setFold(fold)
 
     def setSourceVisible(self, show: bool):
         self.source_visible = show

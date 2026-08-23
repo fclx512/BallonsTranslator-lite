@@ -1,25 +1,38 @@
 """
-Font Style Manager — batch editor for text-block font styles across the project.
+Font Style Manager — base styles + derived variants across the project.
 
-Left panel: list of unique styles discovered from all text blocks.
-Right panel: style detail, property summary, batch-edit controls, block list.
+Left panel: tree of base styles (project-level named entities, identity =
+font_family + vertical) with their auto-derived variants, plus an
+"Ungrouped" section for blocks whose identity matches no base style
+(clustered by full-parameter signature, the legacy discovery).
+
+Right panel (StyleDetail) has three modes:
+
+* base style — batch edit flattens the *changed* parameters onto every
+  block of the style (other per-block overrides survive); rename, save as
+  cross-project preset, delete.
+* variant — batch edit writes only the changed parameters onto the
+  variant's blocks; after re-discovery the variant may merge elsewhere or
+  dissolve back into the base style.
+* ungrouped signature — legacy full-parameter apply + "promote to base
+  style".
+
+All batch operations go through BatchFontformatCommand (undoable) and
+emit pages_dirtied / data_committed like before.
 """
 
 from __future__ import annotations
 
-import hashlib
-from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 
-import numpy as np
-from qtpy.QtCore import QRect, QSize, Qt, Signal
+from qtpy.QtCore import QRect, Qt, QTimer, Signal
 from qtpy.QtGui import (
     QColor,
     QFont,
     QFontDatabase,
-    QFontMetrics,
+    QIcon,
     QPainter,
-    QPen,
+    QPixmap,
 )
 from qtpy.QtWidgets import (
     QCheckBox,
@@ -28,13 +41,11 @@ from qtpy.QtWidgets import (
     QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
+    QLineEdit,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
-    QStyle,
-    QStyledItemDelegate,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -42,6 +53,20 @@ from qtpy.QtWidgets import (
 )
 
 from utils import shared
+from utils.base_styles import (
+    BaseStyleNode,
+    StyleEntry,
+    StyleTree,
+    VariantEntry,
+    build_flatten_changes,
+    build_variant_changes,
+    compute_signature,
+    copy_value,
+    discover_style_tree,
+    overrides_summary,
+    quantize_field,
+    variant_display_name,
+)
 from utils.fontformat import (
     FontFormat,
     px2pt,
@@ -49,283 +74,169 @@ from utils.fontformat import (
 
 from .custom_widget import ColorPickerDialog, ColorSwatchBtn, SeparatorWidget
 
-# ═══════════════════════════════════════════════════════════════════════
-# Style discovery
-# ═══════════════════════════════════════════════════════════════════════
-
-_SIGNATURE_FIELDS = [
-    "font_family",
-    "font_size",
-    "stroke_width",
-    "frgb",
-    "srgb",
-    "bold",
-    "italic",
-    "underline",
-    "alignment",
-    "vertical",
-    "font_weight",
-    "line_spacing",
-    "letter_spacing",
-    "opacity",
-    "shadow_radius",
-    "shadow_strength",
-    "shadow_color",
-    "shadow_offset",
-    "gradient_enabled",
-    "gradient_start_color",
-    "gradient_end_color",
-    "gradient_angle",
-    "gradient_size",
-    "line_spacing_type",
+# Re-exported for legacy importers (tests import these from this module).
+__all__ = [
+    "FontStyleManager",
+    "StyleDetail",
+    "StyleEntry",
+    "compute_signature",
+    "discover_styles",
 ]
 
 
-# Float fields are quantized before hashing: OCR-derived continuous values
-# (font sizes, spacings, …) would otherwise split visually identical styles
-# into near-duplicate entries, one per block.
-_FLOAT_QUANT = {
-    "font_size": 0.5,
-    "stroke_width": 0.1,
-    "line_spacing": 0.05,
-    "letter_spacing": 0.05,
-    "opacity": 0.01,
-    "shadow_radius": 0.5,
-    "shadow_strength": 0.05,
-    "gradient_angle": 1.0,
-    "gradient_size": 1.0,
-}
-
-
-def compute_signature(ffmt: FontFormat) -> str:
-    """Return a stable 12-char hex hash for a FontFormat's visible properties."""
-    parts: List[str] = []
-    for fname in _SIGNATURE_FIELDS:
-        val = getattr(ffmt, fname)
-        step = _FLOAT_QUANT.get(fname)
-        if step is not None:
-            quantized = round(round(float(val) / step) * step, 4)
-            parts.append(repr(quantized))
-        elif isinstance(val, (list, np.ndarray)):
-            parts.append(repr(tuple(round(float(v), 2) for v in val)))
-        else:
-            parts.append(repr(val))
-    return hashlib.md5("|".join(parts).encode()).hexdigest()[:12]
-
-
-@dataclass
-class StyleEntry:
-    """One unique style discovered from the project."""
-
-    signature: str
-    fontformat: FontFormat  # representative copy
-    blocks: List[Tuple[str, int]] = field(default_factory=list)
-    # (pagename, block_index)
-
-    @property
-    def count(self) -> int:
-        return len(self.blocks)
-
-    @property
-    def page_count(self) -> int:
-        return len({p for p, _ in self.blocks})
-
-
 def discover_styles(proj) -> List[StyleEntry]:
-    """Scan all pages in *proj* and return StyleEntry list sorted by use count desc."""
-    sig_map: Dict[str, StyleEntry] = {}
-    for pname, blklist in proj.pages.items():
-        for bidx, blk in enumerate(blklist):
-            sig = compute_signature(blk.fontformat)
-            entry = sig_map.get(sig)
-            if entry is None:
-                entry = StyleEntry(
-                    signature=sig,
-                    fontformat=blk.fontformat.deepcopy(),
-                )
-                sig_map[sig] = entry
-            entry.blocks.append((pname, bidx))
-    return sorted(sig_map.values(), key=lambda e: e.count, reverse=True)
+    """Legacy full-signature discovery (no base styles attached)."""
+    return discover_style_tree(proj, []).ungrouped
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# StyleList (left panel)
+# Style tree (left panel)
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class StyleListDelegate(QStyledItemDelegate):
-    """Paint a compact style card: color swatch + font name + size + count."""
-
-    ITEM_HEIGHT = 44
-    SWATCH_SIZE = 12
-    PADDING_H = 8
-    PADDING_V = 4
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-    def sizeHint(self, option, index):
-        return QSize(option.rect.width(), self.ITEM_HEIGHT)
-
-    def paint(self, painter: QPainter, option, index):
-        painter.save()
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        rect: QRect = option.rect
-        is_selected = option.state & QStyle.StateFlag.State_Selected
-
-        # Background
-        if is_selected:
-            painter.fillRect(rect, option.palette.highlight())
-        elif index.row() % 2 == 0:
-            painter.fillRect(rect, QColor(255, 255, 255, 10))
-        else:
-            painter.fillRect(rect, Qt.GlobalColor.transparent)
-
-        entry: StyleEntry = index.data(Qt.ItemDataRole.UserRole)
-        if entry is None:
-            painter.restore()
-            return
-
-        ffmt = entry.fontformat
-        x = rect.x() + self.PADDING_H
-        y_mid = rect.y() + rect.height() // 2
-        swatch_y = y_mid - self.SWATCH_SIZE // 2
-
-        # ── Color swatch ──────────────────────────────────────────
-        fg = ffmt.foreground_color()
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(*fg))
-
-        swatch_rect = QRect(x, swatch_y, self.SWATCH_SIZE, self.SWATCH_SIZE)
-        painter.drawRoundedRect(swatch_rect, 3, 3)
-
-        # Stroke ring if applicable
-        if ffmt.stroke_width > 0:
-            srgb = ffmt.stroke_color()
-            pen = QPen(QColor(*srgb), 1.5)
-            painter.setPen(pen)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(swatch_rect, 3, 3)
-            painter.setPen(Qt.PenStyle.NoPen)
-
-        # ── Font name + size ──────────────────────────────────────
-        text_x = x + self.SWATCH_SIZE + 8
-        font = QFont(ffmt.font_family)
-        font.setPixelSize(12)
-        painter.setFont(font)
-
-        text_color = (
-            option.palette.highlightedText().color()
-            if is_selected
-            else option.palette.text().color()
-        )
-        painter.setPen(text_color)
-
-        name_text = f"{ffmt.font_family}  {ffmt.font_size:.0f}px"
-        fm = QFontMetrics(font)
-        name_elided = fm.elidedText(
-            name_text, Qt.TextElideMode.ElideRight, rect.width() - text_x - 60
-        )
-        painter.drawText(text_x, y_mid - 3, name_elided)
-
-        # ── Subtitle line: style flags ────────────────────────────
-        sub_parts: List[str] = []
-        if ffmt.bold:
-            sub_parts.append("B")
-        if ffmt.italic:
-            sub_parts.append("I")
-        if ffmt.underline:
-            sub_parts.append("U")
-        if ffmt.vertical:
-            sub_parts.append("V")
-        if ffmt.stroke_width > 0:
-            sub_parts.append(f"≡{ffmt.stroke_width:.1f}")
-
-        sub_font = QFont()
-        sub_font.setPixelSize(10)
-        painter.setFont(sub_font)
-        sub_color = (
-            QColor(160, 160, 160)
-            if not is_selected
-            else option.palette.highlightedText().color()
-        )
-        painter.setPen(sub_color)
-
-        sub_text = "  ".join(sub_parts) if sub_parts else ""
-        painter.drawText(text_x, y_mid + 12, sub_text)
-
-        # ── Count badge (right-aligned) ───────────────────────────
-        count_text = f"{entry.count}"
-        count_font = QFont()
-        count_font.setPixelSize(11)
-        count_font.setBold(True)
-        painter.setFont(count_font)
-        fmc = QFontMetrics(count_font)
-        count_w = fmc.horizontalAdvance(count_text) + 10
-        badge_rect = QRect(
-            rect.right() - count_w - self.PADDING_H,
-            y_mid - 9,
-            count_w,
-            18,
-        )
-        painter.setBrush(QColor(255, 255, 255, 20))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(badge_rect, 9, 9)
-        painter.setPen(text_color)
-        painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, count_text)
-
-        painter.restore()
+def _swatch_icon(ffmt: FontFormat) -> QIcon:
+    """Two-tone rounded swatch: stroke ring outside, foreground inside."""
+    d = 14
+    pixmap = QPixmap(d, d)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    rect = QRect(1, 1, d - 2, d - 2)
+    radius = d / 3
+    if ffmt.stroke_width > 0:
+        painter.setBrush(QColor(*ffmt.stroke_color(), 255))
+        painter.drawRoundedRect(rect, radius, radius)
+        inset = d // 4
+        rect = QRect(inset, inset, d - 2 * inset, d - 2 * inset)
+    painter.setBrush(QColor(*ffmt.foreground_color(), 255))
+    painter.drawRoundedRect(rect, radius, radius)
+    painter.end()
+    return QIcon(pixmap)
 
 
-class StyleList(QListWidget):
-    """Left panel: scrollable list of unique styles."""
+class StyleTreeWidget(QTreeWidget):
+    """Left panel: base styles → variants, plus an Ungrouped section.
 
-    style_selected = Signal(str)  # signature
-    style_right_clicked = Signal(str)  # signature
+    Node payloads (UserRole):
+      {"type": "base",    "identity": (family, vertical)}
+      {"type": "variant", "identity": (family, vertical), "key": tuple}
+      {"type": "sig",     "signature": str}
+    """
+
+    node_selected = Signal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setObjectName("StyleList")
-        self.setItemDelegate(StyleListDelegate(self))
+        self.setObjectName("StyleTree")
+        self.setHeaderHidden(True)
+        self.setIndentation(14)
+        self.setRootIsDecorated(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
-        self.setMouseTracking(True)
-        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.customContextMenuRequested.connect(self._on_context_menu)
-        self.itemClicked.connect(self._on_item_clicked)
+        self.setVerticalScrollMode(QTreeWidget.ScrollMode.ScrollPerPixel)
+        self.currentItemChanged.connect(self._on_current_changed)
 
-    def populate(self, entries: List[StyleEntry]):
-        """Replace contents with *entries*."""
+    def populate(self, tree: StyleTree):
+        self.blockSignals(True)
         self.clear()
-        for e in entries:
-            item = QListWidgetItem()
-            item.setData(Qt.ItemDataRole.UserRole, e)
-            item.setSizeHint(QSize(0, StyleListDelegate.ITEM_HEIGHT))
-            self.addItem(item)
+        for node in tree.nodes:
+            base = node.base
+            orient = self.tr("V") if base.fontformat.vertical else self.tr("H")
+            label = f"{base.name} · {orient}"
+            if node.total_count:
+                label += f"  ({node.total_count})"
+            item = QTreeWidgetItem([label])
+            item.setData(
+                0, Qt.ItemDataRole.UserRole, {"type": "base", "identity": base.identity}
+            )
+            item.setIcon(0, _swatch_icon(base.fontformat))
+            bold = item.font(0)
+            bold.setBold(True)
+            item.setFont(0, bold)
+            item.setToolTip(
+                0,
+                self.tr("Font: {f}\nOrientation: {o}").format(
+                    f=base.fontformat.font_family,
+                    o=self.tr("Vertical")
+                    if base.fontformat.vertical
+                    else self.tr("Horizontal"),
+                ),
+            )
+            self.addTopLevelItem(item)
+            for var in node.variants:
+                vlabel = variant_display_name(base.name, var.overrides)
+                if var.count:
+                    vlabel += f"  ({var.count})"
+                child = QTreeWidgetItem([vlabel])
+                child.setData(
+                    0,
+                    Qt.ItemDataRole.UserRole,
+                    {"type": "variant", "identity": base.identity, "key": var.key},
+                )
+                child.setToolTip(0, overrides_summary(var.overrides))
+                item.addChild(child)
+            item.setExpanded(True)
 
-    def _on_item_clicked(self, item: QListWidgetItem):
-        entry: StyleEntry = item.data(Qt.ItemDataRole.UserRole)
-        if entry is not None:
-            self.style_selected.emit(entry.signature)
+        if tree.ungrouped:
+            root = QTreeWidgetItem([self.tr("Ungrouped")])
+            root.setFlags(Qt.ItemFlag.ItemIsEnabled)  # header row, not selectable
+            bold = root.font(0)
+            bold.setBold(True)
+            root.setFont(0, bold)
+            for entry in tree.ungrouped:
+                ffmt = entry.fontformat
+                child = QTreeWidgetItem(
+                    [f"{ffmt.font_family} {ffmt.font_size:.0f}px  ({entry.count})"]
+                )
+                child.setData(
+                    0,
+                    Qt.ItemDataRole.UserRole,
+                    {"type": "sig", "signature": entry.signature},
+                )
+                child.setIcon(0, _swatch_icon(ffmt))
+                root.addChild(child)
+            root.setExpanded(True)
+            self.addTopLevelItem(root)
+        self.blockSignals(False)
 
-    def _on_context_menu(self, pos):
-        item = self.itemAt(pos)
+    def select_payload(self, payload: dict) -> bool:
+        """Programmatically select the item matching *payload*."""
+        if not payload:
+            return False
+        for i in range(self.topLevelItemCount()):
+            top = self.topLevelItem(i)
+            for item in [top] + [top.child(j) for j in range(top.childCount())]:
+                data = item.data(0, Qt.ItemDataRole.UserRole)
+                if data is not None and self._payload_matches(data, payload):
+                    self.setCurrentItem(item)
+                    return True
+        return False
+
+    @staticmethod
+    def _payload_matches(data: dict, payload: dict) -> bool:
+        if data.get("type") != payload.get("type"):
+            return False
+        if data["type"] == "base":
+            return data["identity"] == payload["identity"]
+        if data["type"] == "variant":
+            return (
+                data["identity"] == payload["identity"]
+                and data["key"] == payload.get("key")
+            )
+        return data["signature"] == payload["signature"]
+
+    def current_payload(self) -> dict | None:
+        item = self.currentItem()
         if item is None:
-            return
-        entry: StyleEntry = item.data(Qt.ItemDataRole.UserRole)
-        if entry is not None:
-            self.style_selected.emit(entry.signature)
-            self.style_right_clicked.emit(entry.signature)
+            return None
+        return item.data(0, Qt.ItemDataRole.UserRole)
 
-    def set_active_signature(self, sig: str):
-        """Programmatically select the item matching *sig*."""
-        for i in range(self.count()):
-            item = self.item(i)
-            entry: StyleEntry = item.data(Qt.ItemDataRole.UserRole)
-            if entry is not None and entry.signature == sig:
-                self.setCurrentRow(i)
-                return
+    def _on_current_changed(self, current, _previous):
+        if current is None:
+            return
+        data = current.data(0, Qt.ItemDataRole.UserRole)
+        if data is not None:
+            self.node_selected.emit(data)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -345,7 +256,7 @@ class _SectionHeader(QLabel):
 
 
 class _PropertyRow(QWidget):
-    """Label : value row with optional action button."""
+    """Label : value row."""
 
     def __init__(self, label: str, parent=None):
         super().__init__(parent)
@@ -368,15 +279,19 @@ class _PropertyRow(QWidget):
 
 
 class StyleDetail(QScrollArea):
-    """Right panel: header preview, property summary, batch controls, block list."""
+    """Right panel: base-style / variant / ungrouped-signature detail views."""
 
     # block navigation signal
     navigate_to_block = Signal(str, int)  # pagename, block_idx
     pages_dirtied = Signal()  # emitted after batch-apply modifies other pages
-    data_committed = Signal()  # emitted after batch-apply — caller should persist JSON
-    # emitted after a successful batch-apply with the signature the blocks now
-    # share; the container refreshes the style list and reselects it
-    styles_changed = Signal(str)
+    data_committed = Signal()  # emitted after changes — caller should persist JSON
+    # emitted after an apply / promote / delete; the container re-discovers
+    # and reselects the node described by the payload (None = plain refresh)
+    styles_changed = Signal(object)
+
+    MODE_BASE = "base"
+    MODE_VARIANT = "variant"
+    MODE_SIG = "sig"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -384,7 +299,11 @@ class StyleDetail(QScrollArea):
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
+        self._mode: str | None = None
+        self._base_node: BaseStyleNode | None = None
+        self._variant: VariantEntry | None = None
         self._entry: StyleEntry | None = None
+        self._baseline_ffmt: FontFormat | None = None
         self._proj = None
         self._scene_manager = None
 
@@ -394,7 +313,7 @@ class StyleDetail(QScrollArea):
         self._layout.setSpacing(4)
         self._layout.setContentsMargins(12, 8, 12, 8)
 
-        # ── 3a. Header ────────────────────────────────────────────
+        # ── Header ───────────────────────────────────────────────
         self._preview_label = QLabel("Aa Bb Gg")
         self._preview_label.setObjectName("StylePreviewLabel")
         self._preview_label.setFixedHeight(36)
@@ -405,11 +324,20 @@ class StyleDetail(QScrollArea):
         self._header_info.setWordWrap(True)
         self._layout.addWidget(self._header_info)
 
+        # ── Base-style identity row (rename) ─────────────────────
+        self._name_edit = QLineEdit()
+        self._name_edit.setToolTip(self.tr("Base style name"))
+        self._name_edit.editingFinished.connect(self._on_name_edited)
+        self._layout.addLayout(
+            _labeled_control(self.tr("Style Name"), self._name_edit)
+        )
+
         self._layout.addWidget(SeparatorWidget())
 
-        # ── 3b. Property Summary ──────────────────────────────────
+        # ── Property Summary ──────────────────────────────────────
         self._layout.addWidget(_SectionHeader(self.tr("Properties")))
 
+        self._prop_overrides = _PropertyRow(self.tr("Overrides"))
         self._prop_font = _PropertyRow(self.tr("Font"))
         self._prop_size = _PropertyRow(self.tr("Size"))
         self._prop_weight = _PropertyRow(self.tr("Weight"))
@@ -420,8 +348,11 @@ class StyleDetail(QScrollArea):
         self._prop_layout = _PropertyRow(self.tr("Layout"))
         self._prop_spacing = _PropertyRow(self.tr("Spacing"))
         self._prop_effects = _PropertyRow(self.tr("Effects"))
+        self._prop_pure = _PropertyRow(self.tr("Blocks Matching Base"))
+        self._prop_variants = _PropertyRow(self.tr("Variants"))
 
         for pw in [
+            self._prop_overrides,
             self._prop_font,
             self._prop_size,
             self._prop_weight,
@@ -432,12 +363,14 @@ class StyleDetail(QScrollArea):
             self._prop_layout,
             self._prop_spacing,
             self._prop_effects,
+            self._prop_pure,
+            self._prop_variants,
         ]:
             self._layout.addWidget(pw)
 
         self._layout.addWidget(SeparatorWidget())
 
-        # ── 3c. Batch Edit Controls ───────────────────────────────
+        # ── Batch Edit Controls ───────────────────────────────────
         self._layout.addWidget(_SectionHeader(self.tr("Batch Edit")))
 
         # Font family
@@ -545,7 +478,35 @@ class StyleDetail(QScrollArea):
             _labeled_control(self.tr("Preset"), preset_row)
         )
 
-        # ── Single Apply All button ──────────────────────────────
+        # ── Mode-specific action buttons ─────────────────────────
+        self._promote_btn = QPushButton(self.tr("Promote to Base Style"))
+        self._promote_btn.setToolTip(
+            self.tr(
+                "Create a base style from this parameter set; blocks with the same font and orientation will join it automatically."
+            )
+        )
+        self._promote_btn.clicked.connect(self._promote_to_base)
+        self._layout.addWidget(self._promote_btn)
+
+        base_actions = QWidget()
+        base_lay = QHBoxLayout(base_actions)
+        base_lay.setContentsMargins(0, 1, 0, 1)
+        base_lay.setSpacing(6)
+        self._save_preset_btn = QPushButton(self.tr("Save as Preset"))
+        self._save_preset_btn.setToolTip(
+            self.tr("Add this base style to the cross-project preset list")
+        )
+        self._save_preset_btn.clicked.connect(self._save_base_as_preset)
+        self._delete_base_btn = QPushButton(self.tr("Delete Style"))
+        self._delete_base_btn.setToolTip(
+            self.tr("Delete this base style; its blocks move to Ungrouped")
+        )
+        self._delete_base_btn.clicked.connect(self._delete_base_style)
+        base_lay.addWidget(self._save_preset_btn)
+        base_lay.addWidget(self._delete_base_btn)
+        self._layout.addWidget(base_actions)
+
+        # ── Single Apply button ──────────────────────────────────
         self._apply_all_btn = QPushButton(self.tr("Apply Changes"))
         self._apply_all_btn.setObjectName("StyleApplyAllBtn")
         self._apply_all_btn.clicked.connect(self._apply_all)
@@ -554,7 +515,7 @@ class StyleDetail(QScrollArea):
 
         self._layout.addWidget(SeparatorWidget())
 
-        # ── 3d. Block List ────────────────────────────────────────
+        # ── Block List ────────────────────────────────────────────
         self._layout.addWidget(_SectionHeader(self.tr("Blocks Using This Style")))
         self._block_tree = QTreeWidget()
         self._block_tree.setObjectName("StyleBlockList")
@@ -567,6 +528,9 @@ class StyleDetail(QScrollArea):
         self._layout.addStretch()
         self.setWidget(container)
 
+        self._pending_fg: List[int] = [0, 0, 0]
+        self._pending_stroke_color: List[int] = [0, 0, 0]
+
     # ── Public API ─────────────────────────────────────────────────
 
     def set_project(self, proj, scene_manager):
@@ -574,11 +538,118 @@ class StyleDetail(QScrollArea):
         self._proj = proj
         self._scene_manager = scene_manager
 
+    # -- mode dispatch -------------------------------------------------
+
+    def show_base_style(self, node: BaseStyleNode):
+        self._mode = self.MODE_BASE
+        self._base_node = node
+        self._variant = None
+        self._entry = None
+        base = node.base
+        ffmt = base.fontformat
+
+        self._name_edit.blockSignals(True)
+        self._name_edit.setText(base.name)
+        self._name_edit.blockSignals(False)
+
+        self._header_info.setText(
+            self.tr("Base style — {n} blocks across {p} pages").format(
+                n=node.total_count, p=node.page_count
+            )
+        )
+
+        self._prop_overrides.hide()
+        self._prop_pure.show()
+        self._prop_variants.show()
+        self._prop_pure.set_value(str(node.pure.count))
+        self._prop_variants.set_value(str(len(node.variants)))
+
+        self._fill_property_summary(ffmt)
+        self._baseline_ffmt = ffmt.deepcopy()
+        self._sync_controls(ffmt)
+
+        blocks = list(node.pure.blocks)
+        for var in node.variants:
+            blocks.extend(var.blocks)
+        self._populate_block_list(blocks)
+
+        self._name_edit.show()
+        self._promote_btn.hide()
+        self._save_preset_btn.show()
+        self._delete_base_btn.show()
+
+    def show_variant(self, node: BaseStyleNode, variant: VariantEntry):
+        self._mode = self.MODE_VARIANT
+        self._base_node = node
+        self._variant = variant
+        self._entry = None
+        base = node.base
+
+        rep = self._representative_ffmt(variant, base.fontformat)
+        self._header_info.setText(
+            self.tr("Variant of “{name}” — {n} blocks across {p} pages").format(
+                name=base.name, n=variant.count, p=variant.page_count
+            )
+        )
+
+        self._prop_overrides.show()
+        self._prop_pure.hide()
+        self._prop_variants.hide()
+        self._prop_overrides.set_value(overrides_summary(variant.overrides))
+
+        self._fill_property_summary(rep)
+        self._baseline_ffmt = rep.deepcopy()
+        self._sync_controls(rep)
+
+        self._populate_block_list(variant.blocks)
+
+        self._name_edit.hide()
+        self._promote_btn.hide()
+        self._save_preset_btn.hide()
+        self._delete_base_btn.hide()
+
     def show_entry(self, entry: StyleEntry):
-        """Populate the detail panel for *entry*."""
+        """Ungrouped signature entry (legacy view)."""
+        self._mode = self.MODE_SIG
+        self._base_node = None
+        self._variant = None
         self._entry = entry
         ffmt = entry.fontformat
 
+        self._header_info.setText(
+            self.tr("Ungrouped — applied to {n} blocks across {p} pages").format(
+                n=entry.count, p=entry.page_count
+            )
+        )
+
+        self._prop_overrides.hide()
+        self._prop_pure.hide()
+        self._prop_variants.hide()
+
+        self._fill_property_summary(ffmt)
+        self._baseline_ffmt = ffmt.deepcopy()
+        self._sync_controls(ffmt)
+
+        self._populate_block_list(entry.blocks)
+
+        self._name_edit.hide()
+        self._promote_btn.show()
+        self._save_preset_btn.hide()
+        self._delete_base_btn.hide()
+
+    def _representative_ffmt(
+        self, variant: VariantEntry, fallback: FontFormat
+    ) -> FontFormat:
+        """First live block of the variant as the display representative."""
+        for pname, bidx in variant.blocks:
+            page = self._proj.pages.get(pname) if self._proj else None
+            if page is not None and 0 <= bidx < len(page):
+                return page[bidx].fontformat
+        return fallback
+
+    # -- property summary ----------------------------------------------
+
+    def _fill_property_summary(self, ffmt: FontFormat):
         # Reload preset list so it reflects the latest saved presets
         self._load_presets()
 
@@ -601,12 +672,6 @@ class StyleDetail(QScrollArea):
             f"border-radius: 4px;"
         )
         self._preview_label.setStyleSheet(ss)
-
-        self._header_info.setText(
-            self.tr("Applied to {n} blocks across {p} pages").format(
-                n=entry.count, p=entry.page_count
-            )
-        )
 
         # Property summary
         self._prop_font.set_value(ffmt.font_family)
@@ -651,15 +716,10 @@ class StyleDetail(QScrollArea):
             eff_parts.append(self.tr("Opacity: {o}").format(o=ffmt.opacity))
         self._prop_effects.set_value(", ".join(eff_parts) or self.tr("None"))
 
-        # Batch controls: sync to current values
-        self._sync_controls(ffmt)
-
-        # Block list
-        self._populate_block_tree(entry)
+    # -- control sync ---------------------------------------------------
 
     def _sync_controls(self, ffmt: FontFormat):
         """Sync batch-edit control values to *ffmt*."""
-        # Font family
         from utils.config import pcfg
         families = shared.get_filtered_font_list(pcfg.excluded_fonts)
         self._family_combo.blockSignals(True)
@@ -716,10 +776,7 @@ class StyleDetail(QScrollArea):
     def _populate_style_combo(
         self, family: str, style_name: str = "", weight: int | None = None
     ):
-        """Fill the style combo with available styles for *family*.
-        Selects by style_name first, then by best weight match."""
-        from utils import shared
-
+        """Fill the style combo with available styles for *family*."""
         self._style_combo.blockSignals(True)
         self._style_combo.clear()
         styles = shared.FONT_STYLES.get(family, [])
@@ -752,12 +809,16 @@ class StyleDetail(QScrollArea):
         """Update style combo when font family changes."""
         self._populate_style_combo(family)
 
-    def _populate_block_tree(self, entry: StyleEntry):
+    # -- block list -----------------------------------------------------
+
+    def _populate_block_list(self, blocks: List[Tuple[str, int]]):
         """Fill the QTreeWidget with pages → blocks."""
         self._block_tree.clear()
+        if self._proj is None:
+            return
         # Group by page
         page_map: Dict[str, List[int]] = {}
-        for pname, bidx in entry.blocks:
+        for pname, bidx in blocks:
             page_map.setdefault(pname, []).append(bidx)
 
         for pname, bidx_list in page_map.items():
@@ -793,104 +854,76 @@ class StyleDetail(QScrollArea):
         if data and data.get("type") == "block":
             self.navigate_to_block.emit(data["pagename"], data["block_idx"])
 
-    # ── Batch apply handlers ───────────────────────────────────────
+    # ── Change collection & apply ───────────────────────────────────
 
-    def _collect_live_blocks(self) -> List[Tuple[str, int, "TextBlock"]]:
-        """Re-derive the entry's blocks by matching signatures at apply time.
+    def _control_values(self) -> Dict:
+        """Current batch-edit control values as a FontFormat field dict."""
+        family = self._family_combo.currentText()
+        style_text = self._style_combo.currentText()
+        if style_text:
+            style_name = style_text
+            font_weight = QFontDatabase.weight(family, style_text)
+        else:
+            style_name = ""
+            font_weight = QFont.Weight.Normal  # default weight
+        return {
+            "font_family": family,
+            "font_weight": font_weight,
+            "font_size": self._size_spin.value(),
+            "bold": self._bold_cb.isChecked(),
+            "italic": self._italic_cb.isChecked(),
+            "underline": self._underline_cb.isChecked(),
+            "vertical": self._vertical_cb.isChecked(),
+            "frgb": list(self._pending_fg),
+            "srgb": list(self._pending_stroke_color),
+            "stroke_width": self._stroke_spin.value(),
+            "alignment": self._align_combo.currentIndex(),
+        }
 
-        The entry's cached block list can go stale while this non-modal dialog
-        is open (blocks deleted/reordered on the canvas). Re-matching by
-        signature heals that: vanished blocks are skipped, and blocks that
-        still carry the style are still found.
+    def _collect_changed(self) -> Dict:
+        """Quantized diff of the controls against the baseline format.
+
+        Only fields the user actually touched become part of the change —
+        the flatten semantics rely on this (untouched parameters must not
+        clobber per-block overrides).
         """
-        if self._entry is None or self._proj is None:
-            return []
-        sig = self._entry.signature
-        live = []
-        for pname, blklist in self._proj.pages.items():
-            for bidx, blk in enumerate(blklist):
-                if compute_signature(blk.fontformat) == sig:
-                    live.append((pname, bidx, blk))
-        return live
+        changed: Dict = {}
+        for k, v in self._control_values().items():
+            old = getattr(self._baseline_ffmt, k, None)
+            if old is None or quantize_field(k, v) != quantize_field(k, old):
+                changed[k] = v
+        return changed
 
-    def _changes_for_targets(self, new_ffmt: FontFormat) -> List[Dict]:
-        """Build the change list for every block currently carrying the style.
+    def _style_name_field(self) -> str:
+        return self._style_combo.currentText()
 
-        old_ffmt is captured per block (not from the entry representative) so
-        undo restores each block's exact previous format.
-        """
-        changes = []
-        for pname, bidx, blk in self._collect_live_blocks():
-            changes.append(
-                {
-                    "pagename": pname,
-                    "block_idx": bidx,
-                    "old_ffmt": blk.fontformat.deepcopy(),
-                    "new_ffmt": new_ffmt.deepcopy(),
-                }
-            )
-        return changes
+    # -- shared apply flow ------------------------------------------------
 
-    def _load_presets(self):
-        """Reload the preset combo from utils.config.text_styles."""
-        from utils.config import text_styles
-
-        self._preset_combo.blockSignals(True)
-        self._preset_combo.clear()
-        self._preset_combo.addItem(self.tr("(Select a preset)"))
-        for ts in text_styles:
-            name = ts._style_name or self.tr("(unnamed)")
-            self._preset_combo.addItem(name, userData=ts)
-        self._preset_combo.blockSignals(False)
-
-    def _apply_preset(self):
-        """Apply the selected preset to all blocks in the current entry."""
-        if self._entry is None:
-            return
-        idx = self._preset_combo.currentIndex()
-        if idx <= 0:  # 0 is the placeholder "(Select a preset)"
-            return
-        preset_ffmt = self._preset_combo.itemData(idx, Qt.ItemDataRole.UserRole)
-        if preset_ffmt is None:
-            return
-
-        changes = self._changes_for_targets(preset_ffmt)
-        if not changes:
-            return
-        self._apply_ffmt_changes(
-            changes, compute_signature(preset_ffmt), self.tr("Apply preset style")
-        )
-
-    def _apply_ffmt_changes(self, changes: List[Dict], new_sig: str, description: str):
+    def _apply_ffmt_changes(self, changes: List[Dict], reselect, description: str):
         """Shared batch-apply flow: undo command → apply → rebuild → refresh."""
         from .fontstyle_manager_commands import BatchFontformatCommand
 
         # 1. Create the command FIRST — its constructor captures the current
         #    live-item state (HTML / rect) for undo BEFORE we modify anything.
-        cmd = BatchFontformatCommand(
-            self._proj, self._scene_manager, changes, description
-        )
-
-        # 2. Push to the text undo stack explicitly: push_undo_command()
-        #    would silently drop the command outside text-edit mode and the
-        #    batch change would become non-undoable.
-        self._scene_manager.canvas.push_text_command(cmd)
-
-        # 3. Now apply changes directly to every block.
-        self._apply_changes_to_blocks(changes)
+        if changes:
+            cmd = BatchFontformatCommand(
+                self._proj, self._scene_manager, changes, description
+            )
+            self._scene_manager.canvas.push_text_command(cmd)
+            self._apply_changes_to_blocks(changes)
 
         # Notify main window to refresh page list (dirty indicators)
         self.pages_dirtied.emit()
         # Notify main window to persist project data (JSON) immediately
         self.data_committed.emit()
 
-        # 4. Rebuild the current page's canvas items from the project data
+        # 2. Rebuild the current page's canvas items from the project data
         #    so the visual is fully in sync with the updated blocks.
-        if self._scene_manager is not None:
+        if self._scene_manager is not None and changes:
             self._scene_manager.updateSceneTextitems()
 
-        # 5. Let the container re-discover styles and reselect the new style.
-        self.styles_changed.emit(new_sig)
+        # 3. Let the container re-discover styles and reselect.
+        self.styles_changed.emit(reselect)
 
     def _apply_changes_to_blocks(self, changes: List[Dict]):
         """Apply new_ffmt to every block in *changes* directly (no undo)."""
@@ -914,53 +947,258 @@ class StyleDetail(QScrollArea):
                 blk.fontformat = new_ffmt
                 self._proj.mark_page_needs_rerender(pname)
 
+    # -- apply dispatch ----------------------------------------------------
+
     def _apply_all(self):
-        """Apply all batch controls at once."""
-        if self._entry is None:
+        """Apply all batch controls at once, per current mode."""
+        if self._mode == self.MODE_BASE:
+            self._apply_base()
+        elif self._mode == self.MODE_VARIANT:
+            self._apply_variant()
+        elif self._mode == self.MODE_SIG:
+            self._apply_sig()
+
+    def _apply_base(self):
+        """Flatten the *changed* parameters onto every block of the style."""
+        if self._base_node is None or self._proj is None:
             return
-
-        family = self._family_combo.currentText()
-        if not family:
+        changed = self._collect_changed()
+        if not changed:
             return
+        base_style = self._base_node.base
+        # Collect first (blocks are matched by the *current* identity key),
+        # then update the base — a family/orientation change would otherwise
+        # re-key the style before its own blocks are gathered.
+        changes = build_flatten_changes(self._proj, base_style, changed)
+        for k, v in changed.items():
+            setattr(base_style.fontformat, k, copy_value(v))
+        self._apply_ffmt_changes(
+            changes,
+            {"type": "base", "identity": base_style.identity},
+            self.tr("Edit base style"),
+        )
 
-        # Font style / weight
-        style_text = self._style_combo.currentText()
-        if style_text:
-            style_name = style_text
-            font_weight = QFontDatabase.weight(family, style_text)
-        else:
-            style_name = ""
-            font_weight = QFont.Weight.Normal  # default weight
+    def _apply_variant(self):
+        """Write the *changed* parameters onto this variant's blocks only."""
+        if self._variant is None or self._proj is None:
+            return
+        changed = self._collect_changed()
+        if not changed:
+            return
+        changes = build_variant_changes(self._variant.blocks, self._proj, changed)
+        reselect = (
+            {"type": "base", "identity": self._base_node.base.identity}
+            if self._base_node is not None
+            else None
+        )
+        self._apply_ffmt_changes(changes, reselect, self.tr("Edit variant style"))
 
-        override = {
-            "font_family": family,
-            "_style_name": style_name,
-            "font_weight": font_weight,
-            "font_size": self._size_spin.value(),
-            "bold": self._bold_cb.isChecked(),
-            "italic": self._italic_cb.isChecked(),
-            "underline": self._underline_cb.isChecked(),
-            "vertical": self._vertical_cb.isChecked(),
-            "frgb": list(self._pending_fg),
-            "srgb": list(self._pending_stroke_color),
-            "stroke_width": self._stroke_spin.value(),
-            "alignment": self._align_combo.currentIndex(),
-        }
-
+    def _apply_sig(self):
+        """Legacy full-parameter apply onto signature-matched blocks."""
+        if self._entry is None or self._proj is None:
+            return
+        candidate = self._control_values()
+        candidate["_style_name"] = self._style_name_field()
         new_ffmt = self._entry.fontformat.deepcopy()
-        for k, v in override.items():
-            setattr(new_ffmt, k, v)
-
+        for k, v in candidate.items():
+            setattr(new_ffmt, k, copy_value(v))
         changes = self._changes_for_targets(new_ffmt)
         if not changes:
             return
         self._apply_ffmt_changes(
-            changes, compute_signature(new_ffmt), self.tr("Batch edit font style")
+            changes,
+            {"type": "base", "identity": (new_ffmt.font_family, bool(new_ffmt.vertical))},
+            self.tr("Batch edit font style"),
         )
 
-    def _pick_fg(self):
-        if self._entry is None:
+    def _collect_live_blocks(self) -> List[Tuple[str, int, "TextBlock"]]:
+        """Re-derive the entry's blocks by matching signatures at apply time."""
+        if self._entry is None or self._proj is None:
+            return []
+        sig = self._entry.signature
+        live = []
+        for pname, blklist in self._proj.pages.items():
+            for bidx, blk in enumerate(blklist):
+                if compute_signature(blk.fontformat) == sig:
+                    live.append((pname, bidx, blk))
+        return live
+
+    def _changes_for_targets(self, new_ffmt: FontFormat) -> List[Dict]:
+        """Full-replacement change list for every block carrying the style."""
+        changes = []
+        for pname, bidx, blk in self._collect_live_blocks():
+            changes.append(
+                {
+                    "pagename": pname,
+                    "block_idx": bidx,
+                    "old_ffmt": blk.fontformat.deepcopy(),
+                    "new_ffmt": new_ffmt.deepcopy(),
+                }
+            )
+        return changes
+
+    # -- preset apply --------------------------------------------------------
+
+    def _load_presets(self):
+        """Reload the preset combo from utils.config.text_styles."""
+        from utils.config import text_styles
+
+        self._preset_combo.blockSignals(True)
+        self._preset_combo.clear()
+        self._preset_combo.addItem(self.tr("(Select a preset)"))
+        for ts in text_styles:
+            name = ts._style_name or self.tr("(unnamed)")
+            self._preset_combo.addItem(name, userData=ts)
+        self._preset_combo.blockSignals(False)
+
+    def _apply_preset(self):
+        if self._proj is None:
             return
+        idx = self._preset_combo.currentIndex()
+        if idx <= 0:  # 0 is the placeholder "(Select a preset)"
+            return
+        preset_ffmt = self._preset_combo.itemData(idx, Qt.ItemDataRole.UserRole)
+        if preset_ffmt is None:
+            return
+
+        if self._mode == self.MODE_BASE and self._base_node is not None:
+            # Redefine the base style: full flatten of every differing field.
+            base_style = self._base_node.base
+            new_ffmt = preset_ffmt.deepcopy()
+            changed: Dict = {}
+            for k, v in self._control_fields_of(new_ffmt).items():
+                old = getattr(base_style.fontformat, k, None)
+                if old is None or quantize_field(k, v) != quantize_field(k, old):
+                    changed[k] = v
+            if not changed:
+                return
+            # Same ordering contract as _apply_base: collect by the old key
+            # before re-keying the style.
+            changes = build_flatten_changes(self._proj, base_style, changed)
+            for k, v in changed.items():
+                setattr(base_style.fontformat, k, copy_value(v))
+            self._apply_ffmt_changes(
+                changes,
+                {"type": "base", "identity": base_style.identity},
+                self.tr("Apply preset style"),
+            )
+            return
+
+        # variant / sig modes: full-parameter replacement (legacy behavior)
+        new_ffmt = preset_ffmt.deepcopy()
+        if self._mode == self.MODE_VARIANT and self._variant is not None:
+            changes = []
+            for pname, bidx in self._variant.blocks:
+                page = self._proj.pages.get(pname)
+                if page is None or not 0 <= bidx < len(page):
+                    continue
+                blk = page[bidx]
+                changes.append(
+                    {
+                        "pagename": pname,
+                        "block_idx": bidx,
+                        "old_ffmt": blk.fontformat.deepcopy(),
+                        "new_ffmt": new_ffmt.deepcopy(),
+                    }
+                )
+            reselect = (
+                {"type": "base", "identity": (new_ffmt.font_family, bool(new_ffmt.vertical))}
+            )
+        else:
+            changes = self._changes_for_targets(new_ffmt)
+            reselect = (
+                {"type": "base", "identity": (new_ffmt.font_family, bool(new_ffmt.vertical))}
+            )
+        if not changes:
+            return
+        self._apply_ffmt_changes(changes, reselect, self.tr("Apply preset style"))
+
+    @staticmethod
+    def _control_fields_of(ffmt: FontFormat) -> Dict:
+        """The subset of fields the batch controls can edit."""
+        return {
+            "font_family": ffmt.font_family,
+            "font_weight": ffmt.font_weight,
+            "font_size": ffmt.font_size,
+            "bold": ffmt.bold,
+            "italic": ffmt.italic,
+            "underline": ffmt.underline,
+            "vertical": ffmt.vertical,
+            "frgb": list(ffmt.frgb),
+            "srgb": list(ffmt.srgb),
+            "stroke_width": ffmt.stroke_width,
+            "alignment": ffmt.alignment,
+        }
+
+    # -- base style management actions ------------------------------------
+
+    def _on_name_edited(self):
+        if self._mode != self.MODE_BASE or self._base_node is None:
+            return
+        new_name = self._name_edit.text().strip()
+        base = self._base_node.base
+        if new_name and new_name != base.name:
+            base.name = new_name
+            self.data_committed.emit()
+            self.styles_changed.emit(
+                {"type": "base", "identity": base.identity}
+            )
+
+    def _save_base_as_preset(self):
+        """Add the base style to the cross-project preset list."""
+        if self._base_node is None:
+            return
+        from utils.config import save_text_styles, text_styles
+
+        ffmt = self._base_node.base.fontformat.deepcopy()
+        ffmt._style_name = self._base_node.base.name
+        text_styles.append(ffmt)
+        save_text_styles()
+        self._load_presets()
+
+    def _delete_base_style(self):
+        if self._base_node is None or self._proj is None:
+            return
+        base = self._base_node.base
+        ret = QMessageBox.question(
+            self,
+            self.tr("Delete Base Style"),
+            self.tr(
+                "Delete base style “{name}”?\n"
+                "No block parameters change; its blocks move to Ungrouped."
+            ).format(name=base.name),
+        )
+        if ret != QMessageBox.StandardButton.Yes:
+            return
+        if base in self._proj.base_styles:
+            self._proj.base_styles.remove(base)
+        self._base_node = None
+        self.data_committed.emit()
+        self.styles_changed.emit(None)
+
+    def _promote_to_base(self):
+        """Create a base style from this ungrouped parameter set."""
+        if self._entry is None or self._proj is None:
+            return
+        ffmt = self._entry.fontformat
+        identity = (ffmt.font_family, bool(ffmt.vertical))
+        if any(bs.identity == identity for bs in self._proj.base_styles):
+            QMessageBox.warning(
+                self,
+                self.tr("Promote to Base Style"),
+                self.tr("A base style with this font and orientation already exists."),
+            )
+            return
+        from utils.base_styles import BaseStyle
+
+        new_style = BaseStyle(ffmt.font_family, ffmt.deepcopy())
+        self._proj.base_styles.append(new_style)
+        self.data_committed.emit()
+        self.styles_changed.emit({"type": "base", "identity": identity})
+
+    # ── Color pickers ───────────────────────────────────────────────
+
+    def _pick_fg(self):
         fg = self._pending_fg
         dlg = ColorPickerDialog(
             QColor(
@@ -977,8 +1215,6 @@ class StyleDetail(QScrollArea):
             self._fg_label.setText(f"rgb({c.red()}, {c.green()}, {c.blue()})")
 
     def _pick_stroke_color(self):
-        if self._entry is None:
-            return
         sc = self._pending_stroke_color
         dlg = ColorPickerDialog(
             QColor(
@@ -992,7 +1228,9 @@ class StyleDetail(QScrollArea):
             c = dlg.get_color()
             self._pending_stroke_color = [c.red(), c.green(), c.blue()]
             self._stroke_color_btn.setColor(c)
-            self._stroke_color_label.setText(f"rgb({c.red()}, {c.green()}, {c.blue()})")
+            self._stroke_color_label.setText(
+                f"rgb({c.red()}, {c.green()}, {c.blue()})"
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -1003,7 +1241,7 @@ class StyleDetail(QScrollArea):
 def _labeled_control(
     label: str, control: QWidget, action_btn: QPushButton | None = None
 ) -> QHBoxLayout:
-    """Build a horizontal row: [label 120px] [control stretch] [action_btn]."""
+    """Build a horizontal row: [label 100px] [control stretch] [action_btn]."""
     lbl = QLabel(label)
     lbl.setFixedWidth(100)
     layout = QHBoxLayout()
@@ -1023,11 +1261,12 @@ def _labeled_control(
 
 
 class FontStyleManager(QWidget):
-    """Left-right split panel: style list + style detail.
+    """Left-right split panel: style tree + style detail.
 
-    Designed to be used inside an OverlaySlider with split_mode=True,
-    where the StyleList is split_left_widget and StyleDetail is
-    split_right_widget.
+    Designed to be used inside a QDialog (see MainWindow
+    on_open_fontstyle_manager). While open, any text undo-stack activity
+    (single-block edits on the canvas) triggers a debounced re-discovery so
+    the tree tracks parameter drift live.
     """
 
     # Emitted when user clicks a block in the detail panel
@@ -1035,36 +1274,46 @@ class FontStyleManager(QWidget):
     pages_dirtied = Signal()  # relayed from StyleDetail after batch-apply
     data_committed = Signal()  # relayed from StyleDetail — persist JSON
 
+    _REFRESH_DEBOUNCE_MS = 300
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("FontStyleManager")
 
         self._proj = None
         self._scene_manager = None
-        self._entries: List[StyleEntry] = []
-        self._sig_to_entry: Dict[str, StyleEntry] = {}
+        self._tree: StyleTree | None = None
+        self._node_map: Dict[tuple, BaseStyleNode] = {}
+        self._sig_map: Dict[str, StyleEntry] = {}
 
-        # ── Left: StyleList ───────────────────────────────────────
-        self.styleList = StyleList()
-        self.styleList.style_selected.connect(self._on_style_selected)
+        # ── Left: StyleTree ──────────────────────────────────────
+        self.styleTree = StyleTreeWidget()
+        self.styleTree.node_selected.connect(self._on_node_selected)
 
-        # ── Right: StyleDetail ────────────────────────────────────
+        # ── Right: StyleDetail ───────────────────────────────────
         self.detailContent = StyleDetail()
         self.detailContent.navigate_to_block.connect(self.navigate_to_block)
         self.detailContent.pages_dirtied.connect(self.pages_dirtied)
         self.detailContent.data_committed.connect(self.data_committed)
         self.detailContent.styles_changed.connect(self._on_styles_changed)
 
-        # ── Layout ────────────────────────────────────────────────
+        # ── Layout ───────────────────────────────────────────────
         hlayout = QHBoxLayout(self)
         hlayout.setContentsMargins(0, 0, 0, 0)
         hlayout.setSpacing(0)
-        hlayout.addWidget(self.styleList)
+        hlayout.addWidget(self.styleTree)
         hlayout.addWidget(self.detailContent, 1)
 
-        self.styleList.setFixedWidth(240)
+        self.styleTree.setFixedWidth(260)
 
-        # ── Empty state ───────────────────────────────────────────
+        # ── Debounced live refresh on canvas edits ───────────────
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setSingleShot(True)
+        self._refresh_timer.setInterval(self._REFRESH_DEBOUNCE_MS)
+        self._refresh_timer.timeout.connect(lambda: self.refresh())
+        self._undo_stack = None
+
+        # ── Empty state ──────────────────────────────────────────
         self._empty_label = QLabel(
             self.tr(
                 "No text blocks in the project.\nRun detection + OCR to populate text blocks."
@@ -1083,40 +1332,73 @@ class FontStyleManager(QWidget):
         self._scene_manager = scene_manager
         self.detailContent.set_project(proj, scene_manager)
 
+        # Live tracking: any text-stack activity (block edits, undos) →
+        # debounced re-discovery. QObject teardown disconnects automatically.
+        undo_stack = getattr(
+            getattr(scene_manager, "canvas", None), "text_undo_stack", None
+        )
+        if undo_stack is not None and undo_stack is not self._undo_stack:
+            if self._undo_stack is not None:
+                try:
+                    self._undo_stack.indexChanged.disconnect(self._schedule_refresh)
+                except TypeError:
+                    pass
+            self._undo_stack = undo_stack
+            self._undo_stack.indexChanged.connect(self._schedule_refresh)
+
+    def _schedule_refresh(self, *_args):
+        if self.isVisible():
+            self._refresh_timer.start()
+
     def refresh(self, proj=None, scene_manager=None):
-        """Re-discover styles and repopulate the list."""
+        """Re-discover styles and repopulate the tree, keeping selection."""
         if proj is not None:
             self.set_project(proj, scene_manager)
         if self._proj is None:
             self._empty_label.show()
-            self.styleList.hide()
+            self.styleTree.hide()
             self.detailContent.hide()
             return
 
-        entries = discover_styles(self._proj)
-        self._entries = entries
-        self._sig_to_entry = {e.signature: e for e in entries}
+        keep = self.styleTree.current_payload()
+        tree = discover_style_tree(self._proj, self._proj.base_styles)
+        self._tree = tree
+        self._node_map = {node.base.identity: node for node in tree.nodes}
+        self._sig_map = {e.signature: e for e in tree.ungrouped}
 
-        if not entries:
+        if not tree.nodes and not tree.ungrouped:
             self._empty_label.show()
-            self.styleList.hide()
+            self.styleTree.hide()
             self.detailContent.hide()
             return
 
         self._empty_label.hide()
-        self.styleList.show()
+        self.styleTree.show()
         self.detailContent.show()
-        self.styleList.populate(entries)
+        self.styleTree.populate(tree)
+        if keep is not None:
+            self.styleTree.select_payload(keep)
 
-    def _on_style_selected(self, sig: str):
-        entry = self._sig_to_entry.get(sig)
-        if entry is not None:
-            self.detailContent.show_entry(entry)
+    def _on_node_selected(self, payload: dict):
+        if payload.get("type") == "base":
+            node = self._node_map.get(payload["identity"])
+            if node is not None:
+                self.detailContent.show_base_style(node)
+        elif payload.get("type") == "variant":
+            node = self._node_map.get(payload["identity"])
+            if node is None:
+                return
+            for var in node.variants:
+                if var.key == payload.get("key"):
+                    self.detailContent.show_variant(node, var)
+                    return
+        elif payload.get("type") == "sig":
+            entry = self._sig_map.get(payload["signature"])
+            if entry is not None:
+                self.detailContent.show_entry(entry)
 
-    def _on_styles_changed(self, new_sig: str):
-        """After a batch-apply: re-discover styles and reselect the new style."""
+    def _on_styles_changed(self, reselect):
+        """After an apply/promote/delete: re-discover and reselect."""
         self.refresh()
-        entry = self._sig_to_entry.get(new_sig)
-        if entry is not None:
-            self.styleList.set_active_signature(new_sig)
-            self.detailContent.show_entry(entry)
+        if reselect is not None:
+            self.styleTree.select_payload(reselect)

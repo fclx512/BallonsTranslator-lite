@@ -2,15 +2,15 @@
 
 Covers the 2026-08-23 text-panel rework and its same-day revisions: row
 numbering stays inside ``TransPairWidget`` (badges / drag column /
-accent bar), fold propagation to the row text edits (fold now switches
-the badge placement / drag column only — both states show full
-multi-line cards), the annotation capsule is replaced by a rail launcher
+accent bar), the annotation capsule is replaced by a rail launcher
 (``ui/panel_rail.py::PanelRail``) whose panel hard-docks to the rail's
 left side over the canvas area (``ui/custom_widget/rail_dock_panel.py::
 RailDockPanel`` — not draggable, resizable via the bottom-left grip,
 re-anchors on host resize / rail move, resize floor follows the content
-layout), and the text-area toolbar (Edit/Review | Source | Translation)
-sits inside the bordered ``GroupFrame`` together with the text list.
+layout), and the text-area toolbar (Source | Translation) sits inside
+the bordered ``GroupFrame`` together with the text list. The Edit/Review
+mode toggle was removed; the left number badge + drag column layout is
+permanent (``ui/textedit_area.py::TransPairWidget``).
 
 Run from the repo root:
     ./ballontrans_pylibs_win/python.exe tests/test_panel_rail.py
@@ -60,43 +60,32 @@ class TransPairWidgetTest(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def _make_pair(self, fold=False):
+    def _make_pair(self):
         from ui.textedit_area import TransPairWidget
 
-        return TransPairWidget(_make_blk(), 0, fold)
+        return TransPairWidget(_make_blk(), 0)
 
     def test_row_chrome_restored(self):
         """编号/拖拽列/选中条与文本框一体（2026-08-23 修订回归）。"""
         pw = self._make_pair()
-        for attr in ("badge_vp", "badge_drag", "drag_area", "accent_bar"):
+        for attr in ("badge", "drag_area", "accent_bar"):
             self.assertTrue(hasattr(pw, attr), attr)
-        self.assertEqual(pw.badge_vp.text(), "1")
-        self.assertEqual(pw.badge_drag.text(), "1")
+        self.assertEqual(pw.badge.text(), "1")
 
-    def test_fold_propagates_to_text_edits(self):
-        pw = self._make_pair(fold=False)
+    def test_always_full_multiline(self):
+        """模式切换已删除：常驻左侧编号+拖拽列，文本框恒为整块多行。"""
+        pw = self._make_pair()
         for edit in (pw.e_source, pw.e_trans):
             self.assertEqual(edit.lineWrapMode(), edit.LineWrapMode.WidgetWidth)
             self.assertEqual(edit.min_height, 45)
-        pw.setFold(True)
-        for edit in (pw.e_source, pw.e_trans):
-            # 审阅态不再省高度变单行：与编辑态同为整块多行
-            self.assertEqual(edit.lineWrapMode(), edit.LineWrapMode.WidgetWidth)
-            self.assertEqual(edit.min_height, 45)
-        self.assertTrue(pw.badge_drag.isVisibleTo(pw))
-        pw.setFold(False)
-        self.assertEqual(pw.e_source.min_height, 45)
-        self.assertEqual(
-            pw.e_trans.lineWrapMode(),
-            pw.e_trans.LineWrapMode.WidgetWidth,
-        )
-        self.assertFalse(pw.badge_drag.isVisibleTo(pw.drag_area))
+        # 拖拽列与编号徽章常驻可见（编辑态样式已删除）
+        self.assertTrue(pw.drag_area.isVisibleTo(pw))
+        self.assertTrue(pw.badge.isVisibleTo(pw.drag_area))
 
-    def test_update_index_updates_badges(self):
+    def test_update_index_updates_badge(self):
         pw = self._make_pair()
         pw.updateIndex(5)
-        self.assertEqual(pw.badge_vp.text(), "6")
-        self.assertEqual(pw.badge_drag.text(), "6")
+        self.assertEqual(pw.badge.text(), "6")
         self.assertEqual(pw.e_source.idx, 5)
 
     def test_checked_state_runs_accent_animation(self):

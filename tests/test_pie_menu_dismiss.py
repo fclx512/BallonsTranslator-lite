@@ -24,8 +24,9 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-# Unconditional insert: under pytest, tests/ sits at sys.path[0] and the
-# tests/ui package would otherwise shadow the repo-root ui package.
+# Unconditional insert: under pytest, tests/ sits at sys.path[0]; the repo
+# previously had a tests/ui fixture dir that shadowed the repo-root ui package
+# (renamed to tests/offscreen_ui on 2026-08-23), keep the insert as belt-and-braces.
 sys.path.insert(0, str(REPO_ROOT))
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

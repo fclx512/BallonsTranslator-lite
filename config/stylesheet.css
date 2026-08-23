@@ -638,31 +638,29 @@ TransPairWidget[dragPos="bottom"] {
     border-bottom: 3px solid @accentPrimary;
 }
 
+/* Rows-drag in progress (dnd=true set by TextEditListScrollArea during
+   QDrag.exec): neutral background on cards the pointer passes over so
+   reordering no longer flashes the accent tint (which shares its look with
+   the checked/selected state) on unintended cards. Real selection keeps its
+   tint; the dragPos border still marks the insert position. */
+TransPairWidget[dnd="true"] {
+    background-color: @widgetBackgroundColor;
+}
+
+TransPairWidget[dnd="true"][checked="true"] {
+    background-color: @accentPrimary20;
+}
+
 /* Left accent bar — color follows theme accent, visible only when checked */
 TransPairWidget #accentBar {
     background-color: @accentPrimary;
     border-radius: 1px;
 }
 
-/* ── Text block index badge (overlaid on SourceTextEdit) ───── */
-/* Matches canvas _draw_seq_badge: semi-transparent black bg, white text, no border */
+/* ── Text block index badge (left drag zone) ───────────────── */
+/* Transparent bg, theme text, vertically centered in the left
+   drag column. */
 QLabel#TextBlockIndexBadge {
-    background: rgba(0, 0, 0, 170);
-    border: none;
-    border-radius: 3px;
-    font-size: 12px;
-    font-weight: bold;
-    color: white;
-}
-
-QLabel#TextBlockIndexBadge[hovered="true"] {
-    background: rgba(0, 0, 0, 60);
-    color: rgba(255, 255, 255, 60);
-}
-
-/* Badge in drag area (fold=ON, editing mode) — no background, theme text,
-   vertically centered in the left drag zone. */
-QLabel#TextBlockIndexBadge[folded="true"] {
     background: transparent;
     color: @qwidgetForegroundColor;
     font-size: 13px;

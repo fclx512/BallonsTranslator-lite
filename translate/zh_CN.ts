@@ -2192,11 +2192,6 @@ Failed: {f}/{t}</source>
             <translation>启用修复</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindow.py" line="2094" />
-            <source>Context Translation (beta)</source>
-            <translation>上下文翻译 (beta)</translation>
-        </message>
-        <message>
             <location filename="..\ui\mainwindow.py" line="2110" />
             <source>AI Chat Settings</source>
             <translation>AI Chat 设置</translation>
@@ -2403,23 +2398,8 @@ Failed: {f}/{t}</source>
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" />
-            <source>textblock</source>
-            <translation>单文本块</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
-            <source>page</source>
-            <translation>页面</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
             <source>Browse...</source>
             <translation>浏览...</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
-            <source>Custom...</source>
-            <translation>自定义术语...</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" />
@@ -2458,18 +2438,13 @@ Failed: {f}/{t}</source>
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" />
-            <source>LLM Context</source>
-            <translation>LLM 上下文</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
-            <source>+history</source>
-            <translation>+历史</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
             <source>Token Budget</source>
             <translation>令牌预算</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindow.py" />
+            <source>Inject Prior-Page History</source>
+            <translation>注入前页历史</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" line="1298" />
@@ -2551,46 +2526,7 @@ Open Photoshop → File → Scripts → Browse → run </source>
             <translation>正在更新：</translation>
         </message>
 </context>
-    <context>
-        <name>CustomGlossaryDialog</name>
-        <message>
-            <location filename="..\ui\glossary_dialog.py" />
-            <source>Custom Glossary</source>
-            <translation>自定义术语表</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_dialog.py" />
-            <source>Enter one term per line: source → target
 
-You can also use natural language, e.g.:
-  The protagonist is Goku, the villain is Frieza</source>
-            <translation>每行一条术语：原文 → 译文
-
-也支持自然语言描述，例如：
-  主角叫悟空，反派叫弗利萨</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_dialog.py" />
-            <source>e.g.  Dragon Ball → 龙珠
-One Piece → 海贼王
-
-Or: 主角叫鸣人，反派叫佐助</source>
-            <translation>例如：Dragon Ball → 龙珠
-One Piece → 海贼王
-
-或者：主角叫鸣人，反派叫佐助</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_dialog.py" />
-            <source>OK</source>
-            <translation>确定</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_dialog.py" />
-            <source>Cancel</source>
-            <translation>取消</translation>
-        </message>
-    </context>
     <context>
         <name>MainWindowMixin</name>
         <message>
@@ -3176,6 +3112,16 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <source>Failed to fetch model list. Please check your API key and host configuration.</source>
             <translation>获取模型列表失败，请检查 API 密钥和主机配置。</translation>
         </message>
+        <message>
+            <location filename="..\ui\module_manager.py" />
+            <source>Page %1 · agent turn %2: %3</source>
+            <translation>第 %1 页 · agent 第 %2 轮: %3</translation>
+        </message>
+        <message>
+            <location filename="..\ui\module_manager.py" />
+            <source>waiting for model</source>
+            <translation>等待模型响应</translation>
+        </message>
     </context>
     <context>
         <name>NetworkSettingsDialog</name>
@@ -3556,6 +3502,16 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
                 <location filename="../ui/module_parse_widgets.py" line="115" />
                 <source>Proxy address (e.g. http(s)://user:password@host:port)</source>
                 <translation>代理地址（例如 http(s)://user:password@host:port）</translation>
+            </message>
+            <message>
+                <location filename="../modules/translators/trans_agent.py" />
+                <source>Max model turns per page agent task</source>
+                <translation>每页翻译任务的最大模型轮次</translation>
+            </message>
+            <message>
+                <location filename="../modules/translators/trans_agent.py" />
+                <source>Max total tokens per page agent task (0 = unlimited)</source>
+                <translation>每页翻译任务的最大 token 总量（0 = 不限制）</translation>
             </message>
             <message>
                 <location filename="../modules/base.py" line="352" />
@@ -4553,11 +4509,6 @@ text layers are fully editable.</source>
             <translation>使用此样式的文本框</translation>
         </message>
         <message>
-            <location filename="..\ui\fontstyle_manager.py" line="545" />
-            <source>Applied to {n} blocks across {p} pages</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <location filename="..\ui\fontstyle_manager.py" line="556" />
             <source>(default)</source>
             <translation>（默认）</translation>
@@ -4577,7 +4528,7 @@ text layers are fully editable.</source>
         <message>
             <location filename="..\ui\fontstyle_manager.py" line="580" />
             <source>Line: {ls}  Letter: {lsp}</source>
-            <translation type="unfinished" />
+            <translation>行距：{ls}  字距：{lsp}</translation>
         </message>
         <message>
             <location filename="..\ui\fontstyle_manager.py" line="586" />
@@ -4592,12 +4543,12 @@ text layers are fully editable.</source>
         <message>
             <location filename="..\ui\fontstyle_manager.py" line="590" />
             <source>Opacity: {o}</source>
-            <translation type="unfinished" />
+            <translation>不透明度：{o}</translation>
         </message>
         <message>
             <location filename="..\ui\fontstyle_manager.py" line="681" />
             <source>Block #{n}:  "{t}"</source>
-            <translation type="unfinished" />
+            <translation>文本框 #{n}："{t}"</translation>
         </message>
         <message>
             <location filename="..\ui\fontstyle_manager.py" line="757" />
@@ -4628,6 +4579,138 @@ text layers are fully editable.</source>
             <location filename="..\ui\fontstyle_manager.py" line="777" />
             <source>Apply preset style</source>
             <translation>应用预设样式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Base style name</source>
+            <translation>基础样式名称</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Style Name</source>
+            <translation>样式名称</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Overrides</source>
+            <translation>差异参数</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Blocks Matching Base</source>
+            <translation>完全匹配块数</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Variants</source>
+            <translation>变体数</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Base style — {n} blocks across {p} pages</source>
+            <translation>基础样式 — {n} 个文本框，跨 {p} 页</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Variant of “{name}” — {n} blocks across {p} pages</source>
+            <translation>“{name}”的变体 — {n} 个文本框，跨 {p} 页</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Ungrouped — applied to {n} blocks across {p} pages</source>
+            <translation>未分组 — 应用于 {n} 个文本框，跨 {p} 页</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Promote to Base Style</source>
+            <translation>提升为基础样式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Create a base style from this parameter set; blocks with the same font and orientation will join it automatically.</source>
+            <translation>以此参数组创建基础样式；相同字体与方向的文本框将自动归入。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Save as Preset</source>
+            <translation>另存为预设</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Add this base style to the cross-project preset list</source>
+            <translation>将此基础样式加入跨项目预设列表</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Delete Style</source>
+            <translation>删除样式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Delete this base style; its blocks move to Ungrouped</source>
+            <translation>删除此基础样式；其文本框将移入未分组</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Edit base style</source>
+            <translation>编辑基础样式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Edit variant style</source>
+            <translation>编辑变体样式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Delete Base Style</source>
+            <translation>删除基础样式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>A base style with this font and orientation already exists.</source>
+            <translation>已存在相同字体与方向的基础样式。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Delete base style “{name}”?
+No block parameters change; its blocks move to Ungrouped.</source>
+            <translation>删除基础样式“{name}”？
+文本框参数不会改变；其文本框将移入未分组。</translation>
+        </message>
+    </context>
+    <context>
+        <name>StyleTreeWidget</name>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>V</source>
+            <translation>竖</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>H</source>
+            <translation>横</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Font: {f}
+Orientation: {o}</source>
+            <translation>字体：{f}
+方向：{o}</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Vertical</source>
+            <translation>竖排</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Horizontal</source>
+            <translation>横排</translation>
+        </message>
+        <message>
+            <location filename="..\ui\fontstyle_manager.py" line="0" />
+            <source>Ungrouped</source>
+            <translation>未分组</translation>
         </message>
     </context>
     <context>
@@ -4663,16 +4746,6 @@ text layers are fully editable.</source>
     </context>
     <context>
         <name>TextPanel</name>
-        <message>
-            <location filename="..\ui\scenetext_manager.py" line="473" />
-            <source>Edit</source>
-            <translation>编辑</translation>
-        </message>
-        <message>
-            <location filename="..\ui\scenetext_manager.py" line="473" />
-            <source>Review</source>
-            <translation>审阅</translation>
-        </message>
         <message>
             <location filename="..\ui\scenetext_manager.py" line="390" />
             <source>Source</source>
@@ -4932,6 +5005,26 @@ text layers are fully editable.</source>
             <location filename="..\ui\module_parse_widgets.py" />
             <source>Manage…</source>
             <translation>管理…</translation>
+        </message>
+        <message>
+            <location filename="..\ui\module_parse_widgets.py" />
+            <source>Single-Block Translation</source>
+            <translation>单框翻译</translation>
+        </message>
+        <message>
+            <location filename="..\ui\module_parse_widgets.py" />
+            <source>Mode</source>
+            <translation>模式</translation>
+        </message>
+        <message>
+            <location filename="..\ui\module_parse_widgets.py" />
+            <source>plain</source>
+            <translation>直译</translation>
+        </message>
+        <message>
+            <location filename="..\ui\module_parse_widgets.py" />
+            <source>context</source>
+            <translation>上下文</translation>
         </message>
     </context>
     <context>

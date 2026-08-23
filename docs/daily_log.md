@@ -66,6 +66,146 @@
 
 ---
 
+### 项目级大样式 + 自动派生子样式（嵌字样式体系重构）
+
+**问题/需求：** 嵌字实际流程中字体种类固定但字号/颜色/间距每气泡不同——按参数组合建样式则命名困难、样式列表膨胀；末尾想批量改某字体的某参数只能苦哈哈手动跳。经四轮设计问答定稿：大样式（InDesign 段落样式式）+ 子样式（override 补丁自动派生、免命名、自动归并）两级体系，批量改 = 改大样式推平该参数。
+
+**设计决策（用户拍板）：** 子样式同 override 自动合并去重；改大样式参数 = 强制统一（推平后代该参数 override，其他 override 保留）；`(font_family, vertical)` 同为身份键（块上改字体/横竖排自动迁移到对应大样式）；未匹配块进"未分组"+手动提升；预设胶囊区与项目大样式并行互不侵入（另存为预设是唯一交点）；子样式不持久化（纯 diff 派生，块不存样式引用，旧项目零迁移）。
+
+**改动要点：**
+
+- **`utils/base_styles.py`（新）**：数据层全套——`BaseStyle`（身份键 `(font_family, vertical)`、to_dict/from_dict）、`compute_override`（量化 diff，复用签名量化表防浮点噪声）、`discover_style_tree`（身份键归属 → override 聚类 → `BaseStyleNode`/`VariantEntry`/未分组 `StyleEntry` 三层）、`variant_display_name`（ASCII token 自动名：`38px · fg#FF0000`，字号 token 前置、超 4 项截断 +n）、`build_flatten_changes`/`build_variant_changes`（推平/变体批量变更列表，old/new 独立 deepcopy）。`compute_signature`/`discover_styles` 从 fontstyle_manager 迁入并保留 re-export。
+- **`utils/proj_imgtrans.py`**：项目 JSON 增 `base_styles` 字段（load 解析 + to_dict 输出）；旧项目无字段时 `ensure_default_base_styles` 以 `pcfg.global_fontformat` 种子注册默认大样式（名 = 字体族名，零硬编码）。
+- **`ui/fontstyle_manager.py` 重写**：左列 `StyleTreeWidget`（QTreeWidget 三层树：大样式名+方向徽标+块数 → 变体自动名；未分组根节点不可选仅作分组头；色块 swatch 图标）；右列 `StyleDetail` 三模式——base（改名/推平 Apply/另存为预设/删除大样式）、variant（继承提示+override 摘要+仅作用于该变体块）、sig（原有全量 Apply + 提升为大样式）。推平语义：进入详情时记 baseline 快照，Apply 只提交控件相对 baseline 的量化差异（`_collect_changed`），未动参数不覆盖块上的其他 override；预设 Apply 在 base 模式 = 重定义（全量推平差异字段）。身份键变更（改字体/横竖排）须先收集后更新大样式（否则按新键收集漏掉自家块——已修）。
+- **软刷新**：管理器 `set_project` 时挂 `canvas.text_undo_stack.indexChanged` → 300ms debounce `refresh()`（保持当前选中），画布单块编辑实时反映到树。
+- i18n：新 context `StyleTreeWidget`（V/H/Ungrouped 等 6 条）+ `StyleDetail` 新增 19 条（含删除确认/提升提示），废弃 "Applied to..." 条目移除，unfinished 3 条补齐。
+
+**排障记录：** ① `self.tr()` 跨行隐式拼接再次漏检（AGENTS.md 既有坑），两条提升提示合并为单行字符串后 orphan 归零；② 变体显示名曾显示 `40.0001px`——聚类按量化值归并但 overrides 存的是首块原始值，`_override_token` 改为量化后格式化；③ `build_flatten_changes` 身份键时序：先 setattr 大样式再收集会按新键扫描漏块，调用顺序固定为 collect→update 并写入 docstring 契约（子代理测试亦证实该隐患）。
+
+**验证：** `tests/test_base_styles.py`（新增，26 例：override diff/量化、归属聚类、round-trip、推平保序、持久化集成）+ 树形化后既有 `tests/test_global_search_fontstyle.py` 18 例全绿；离屏冒烟覆盖三模式切换/改名/推平全链路（跨页块、override 保留、undo 还原、needs_rerender 标记）；全仓 350 例通过（`test_dependency_startup` 1 例为既有基线失败）；verify 六步全绿。
+
+**涉及文件：** `utils/base_styles.py`（新增）、`utils/proj_imgtrans.py`、`ui/fontstyle_manager.py`（重写）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_base_styles.py`（新增）、`AGENTS.md`、`docs/daily_log.md`
+
+---
+
+### agent 翻译实机排查：Context Translation (beta) 整项目分批致"只选几页仍译数百框"
+
+**问题/需求：** 用户实机测试翻译（配置：translator=LLM_Agent_Translator、检测/OCR 关、翻译开），发现 Run 对话框即便只选几页，翻译进度窗口仍显示约三百个文本框的文本、单次等待过久，怀疑 agent 有 bug。用户离开，授意自行排查并按思路解决、写日志回溯。
+
+**根因定位：** 用户实际走的是 Run 对话框的 **Context Translation (beta)**（`ContextBatchTranslator`），而非 agent——工程里唯一向进度窗口写文本的就是它的 `_status`（`_ctx_status` → `translate_bar.updateProgress(value, msg)`，`ui/mainwindow.py` + `ui/custom_widget/message.py::TaskProgressBar`）。其 `set_project → _auto_configure` 按字符预算（4000）对**整项目**分批：实测 94 页项目第一批 ≈ 页 1-46 = **298 块**，正是"近三百"。所选页范围只约束管线遍历，**未约束分批**——选区只要含第一批首页（如选 1-3 页），整批 298 块就被装进单次 LLM 请求。agent 本身按页切任务（每页任务块数 = 该页块数，历史注入由 `llm_prior_context_token_budget` 预算裁剪，页 47 实测 30 页/167 块），与症状不符，排除。
+
+**修复（scoped batching）：** `modules/translators/context_batch.py` 增 `pages_scope`（= Run 对话框所选页列表）：
+- `_scope_keys` 属性 = 范围内项目页（不存在的名字过滤；None = 全部，向后兼容）；
+- `_auto_configure` 分批只扫范围内页面；`_contextual` 按范围内索引查批、目标收集只含范围内页；范围外页面防御性退化为直译（`translate_textblk_lst` 同步加守卫）；
+- 上下文参考窗口仍按全项目索引（可引用范围外的已完成页，保跨页一致性）。
+`ui/mainwindow.py`：`page_filter` 计算提前到 ContextBatch 构造之前，以 `pages_scope=page_filter` 传入（删除原滞后重复计算块）。
+
+**验证：** 新增 `tests/test_context_batch_scope.py` 6 例（scope keys / 缺名过滤 / 默认全量 / 分批边界 / TRANSLATE THESE 段只含范围内页 / 范围外直译）；agent 既有 32 例 + 新 6 例全绿；verify 全绿（含 mainwindow 冒烟）。同项目实测：选 1-3 页时单次请求 298 块 → **12 块**。
+
+**涉及文件：** `modules/translators/context_batch.py`、`ui/mainwindow.py`、`tests/test_context_batch_scope.py`（新增）、`docs/daily_log.md`
+
+---
+
+### 已知体验问题登记：长翻译无中间反馈，用户无法区分「在翻译」与「模型出错」
+
+**问题：** 实机验收 scoped batching 时确认翻译质量过关、选页正确，同时暴露一个体验问题——译文要等模型整段输出完成后才一次性填入文本块（beta 与 agent 皆然），篇幅较长时用户盯着空框无从判断是仍在翻译还是模型卡死/出错。
+
+**登记（未修）：** 归入阶段 5 质量护栏（F 类：debug 日志 + 状态栏轮次显示）一并处理，届时同步实现渐进反馈（每轮/每块完成即更新状态栏或进度提示）。决策：不做流式逐字渲染（改动渲染链路、收益低），以"轮次/块粒度"的状态反馈为主。
+
+---
+
+### 阶段 3 单框翻译策略：修 page_key + single_blk_translate_mode + UI 入口
+
+**问题/需求：** 按设计方案推进阶段 3。`ui/module_manager.py::_blktrans_pipeline` 的 `current_page_key` 从未赋值（恒 None），单框/选区翻译定位不到所在页；且单框翻译缺策略分化——现状一律整 agent（8 轮），没有"单条直译"与"轻量 agent 注入本页"的可切换档位。
+
+**改动要点：**
+
+- **page_key 修复**：`runBlktransPipeline` 增 `page_key` 参数存到 `self.current_page_key`；`ui/mainwindow.py::translateBlkitemList` 以 `self._blktrans_at_page`（`imgtrans_proj.current_img`，即页名/页 key）传入。修好后两种档位都能定位页面。
+- **配置**：`utils/config.py` 增 `SingleBlkTranslateMode`（plain/context）+ `ModuleConfig.single_blk_translate_mode`（默认 plain，`__post_init__` 坏值兜底）。
+- **agent 行为**（`modules/translators/trans_agent.py`）：单源块调用按档位分流——`plain` → `super().translate(project=None, page_key=None)` 走父类直译路径（不注入页面上下文，术语表仍生效）；`context` → `_run_agent_task(block_mode=True)`：`max_turns=2`（设计 §4.4）+ 注入当前页其余块快照（`modules/translators/agent/prompts.py::build_page_context_snippet`，任务块自身按原文排除，整页未译/无其余块时为空）。多块任务不受该配置影响，始终完整 agent。
+- **UI 入口**：Run 对话框 Context 区新增 "Block Translate" 行（plain 直译 / context 上下文，写 `pcfg.module.single_blk_translate_mode`），i18n 三条入库并编译 qm。
+- **清理 `tests/ui` 阴影坑**：`tests/` 下遗留夹具目录 `tests/ui/`（独立脚本 `text_rendering.py`，已无引用）会阴影 repo 根 `ui` 包——pytest 收集 `tests/*.py` 会把 `tests/` 插到 `sys.path[0]`，多文件合跑时后续文件 `import ui.custom_widget` 解析到 `tests/ui` 报错。已重命名为 `tests/offscreen_ui/`（脚本内 3 层 dirname 定位 APP_ROOT 不受影响），并更新 `test_pie_menu_dismiss.py` 的过时注释。
+
+**验证：** `tests/test_agent_single_block.py`（新增 8 例：plain 走直译不启 agent / plain 不带页面上下文 / context 启 agent block_mode / 多块恒完整 agent / max_turns=2 + 页面上下文注入且不串邻近页 / 多块用配置轮数 / 配置默认值与坏值）+ `test_agent_translator.py`（+4 例 `build_page_context_snippet`）；三套件 + scope/pie 60 例合跑全绿（顺带验证 ui 阴影修复）；verify 六步全绿。
+
+**涉及文件：** `utils/config.py`、`ui/module_manager.py`、`ui/mainwindow.py`、`modules/translators/trans_agent.py`、`modules/translators/agent/prompts.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_agent_single_block.py`（新增）、`tests/test_agent_translator.py`、`tests/ui/` → `tests/offscreen_ui/`（重命名）、`tests/test_pie_menu_dismiss.py`、`docs/daily_log.md`
+
+---
+
+### 阶段 3 实机修正：page_key TypeError + 单框策略入口迁到设置面板
+
+**问题/需求：** 实机回归暴露两处阶段 3 缺陷：① 单框/选区翻译直接崩溃 `ModuleManager.runBlktransPipeline() got an unexpected keyword argument 'page_key'`；② "Block Translate" 档位开关放在运行窗口里语义不清——画布右键单框翻译根本不经过运行窗口，该入口等于摆设，应作为全局行为设置放进设置面板。
+
+**改动要点：**
+
+- **TypeError 根因**：`ui/module_manager.py` 有两个 `runBlktransPipeline`——`ImgtransThread`（行 584，阶段 3 的 page_key 改动落在这里）与 `ModuleManager`（行 1703，mainwindow 实际调用对象）。mainwindow 传 `page_key` 打到 ModuleManager 版本，签名没有该参数直接抛 TypeError。修复：`ModuleManager.runBlktransPipeline` 增 `page_key: str = None` 并转发给 `imgtrans_thread.runBlktransPipeline(..., page_key=page_key)`，worker 侧 `current_page_key` → `_blktrans_pipeline` → `translate_textblk_lst` 链路不动。
+- **入口迁移**：删掉运行窗口 Context 区的 "Block Translate" 行（`ui/mainwindow.py`），在设置面板 `ui/module_parse_widgets.py::TranslatorConfigPanel` 新增 "Single-Block Translation" 章节（Mode: plain 直译 / context 上下文），绑定 `pcfg.module.single_blk_translate_mode`；沿用 API Profile 章节的模式——仅当选 `LLM_Agent_Translator` 时显示（`_refresh_single_blk_section` 挂在 `updateModuleParamWidget`）。
+- **i18n**：ts 里 MainWindow context 的 Block Translate/plain/context 三条迁到 `TranslatorConfigPanel` context（新增 Single-Block Translation/Mode/plain/context），qm 重编译。
+
+**验证：** `ModuleManager.runBlktransPipeline` 签名核对（`inspect` 含 page_key）；offscreen 面板构造 + 可见性切换（agent 显示 / 非 agent 隐藏，`isHidden` 断言）；81 例测试合跑通过；verify 六步全绿。
+
+**涉及文件：** `ui/module_manager.py`、`ui/module_parse_widgets.py`、`ui/mainwindow.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/daily_log.md`
+
+---
+
+### 阶段 4 债务清理：删 beta + 历史窗口机制 + 死配置 + glossary 时序
+
+**问题/需求：** 按设计方案 §11/§13 完成阶段 4：删掉 beta `ContextBatchTranslator` 与运行窗口入口（agent 为唯一 LLM 翻译路径）；直译路径降为回退、历史散文注入由 agent 编排取代；删死配置与历史窗口状态机；修 glossary 路径时序 bug。
+
+**改动要点：**
+
+- **删 beta**：`modules/translators/context_batch.py` 登记 `scripts/audit_registry.json` deprecated 后删除（allowed_mentions：设计方案/现状调研）；运行窗口删除 "Context Translation (beta)" 勾选耦合（`ctx_trans_cb` 联动、上下文帧显隐门控、`_ctx_batch_restore` 换入还原、`pcfg.context_translation_debug_log` 两处消费）；删 `tests/test_context_batch_scope.py`；`ui/glossary_dialog.py`（CustomGlossaryDialog，唯一入口即被删的 Custom... 按钮）一并登记删除；`modules/glossary_extractor.py` 注释去引用。
+- **历史窗口状态机废弃**（`modules/context/history.py`）：仅保留 `RequestContext` 快照模式，删 HistoryWindow/HistoryWindowKey/HistoryPage/RenderedHistoryPage/ContextAction/ContextDiagnostic/ContextReason/eligible_history_for_request/recover_context_length/window_rebuild_reason/HISTORY_LOW_WATER_RATIO；`modules/translators/trans_llm_api.py` 直译路径不再构建历史窗口——`_snapshot_request_context` 缩为纯术语表快照，删 `_snapshot_history_page`/`_render_history_page`/`_format_narrative_block` 与 `_system_prompt` history_rule、`_assemble_request` 历史散文段、`_translate` 的越限恢复与窗口提交；`commit_history_window`/`project`/`page_key` 参数保留为调用方兼容与 usage 日志。
+- **llm_translate_context 简化**（`utils/config.py`）：删 `TranslateContext`/`LLMTranslateContext` 枚举，`translate_context` 字段删除，`llm_translate_context` 改 `bool`（默认 True = 原 history 语义，坏值兜底）；`modules/translators/trans_agent.py` 的 `build_history_snippet` 注入改受开关约束（关闭则不注前页历史，单框 context 的本页块注入不受影响）；运行窗口 "LLM Context" 下拉（page/+history）改为 "Inject Prior-Page History" 勾选 + Token Budget 联动显隐。
+- **glossary 时序修复**（设计 §11 #4）：根治删 `_clear_glossary` 在 `dialog.finished` 清空 `pcfg.module.llm_glossary_path` 的行为——Browse 写入持久生效，译前就绪状态（路径+勾选）可见；同时补上 `glossary_mode_combo` 的 pcfg 回写（此前只有 beta 消费其 currentData，对 agent/回退路径是永不生效的摆设）。
+- **文档同步**：现状调研 §4.3-4.6 顶部加阶段 4 横幅，§5/§11 债务对照表按处置结果改写（已删文件/符号改裸名散文，沿用 scene_textlayout 惯例）；设计方案 §7/§11/§13 同步；项目概述文件树去 glossary_dialog.py。
+- **i18n**：ts 删 Context Translation (beta)/LLM Context/page/+history/textblock/Custom... 与 CustomGlossaryDialog 上下文，新增 Inject Prior-Page History，qm 重编译。
+
+**验证：** verify 六步全绿（audit 登记表 10 居删 / 2 休眠）；全量测试 399 通过（唯一失败的 `test_dependency_startup` env 子进程断言为 08-22 已记录的基线，launch.py 未动）；`LLM_API_Translator`/`AgentTranslator`/`RequestContext` 导入冒烟通过。
+
+**涉及文件：** `modules/translators/context_batch.py`（删）、`tests/test_context_batch_scope.py`（删）、`ui/glossary_dialog.py`（删）、`modules/context/history.py`、`modules/translators/trans_llm_api.py`、`modules/translators/trans_agent.py`、`modules/glossary_extractor.py`、`utils/config.py`、`ui/mainwindow.py`、`scripts/audit_registry.json`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/技术实现/翻译agent化_设计方案.md`、`docs/技术实现/翻译管线现状调研.md`、`docs/项目概述.md`、`docs/daily_log.md`
+
+---
+
+### 实机排查"只选几页却翻译几百框" + 阶段 5 质量护栏与轮次反馈
+
+**问题/需求：** 用户实机测试 agent 翻译反馈：只选几页却"填充几百个框"，翻译进度窗口显示近三百个文本框的文本，等待太久无法判断是否正常。同时批准阶段 5：E 类质量护栏（空译文/译文=原文/术语残留检测与打回补译）+ F 类可观测（每轮状态显示 + debug 日志合并）。
+
+**排查结论：** 页过滤链路逐层核对无 bug——Run 对话框 `page_filter` → `on_run_imgtrans` → `ModuleManager.runImgtransPipeline` → `ImgtransThread._imgtrans_pipeline`（`pages_to_process` 限 `pages_to_iterate`）→ 每页 `translate_textblk_lst(blk_list, page_key=imgname)`，并行翻译队列同样只推选中页；agent 写面被 `valid_ids` 封闭集封死，只读工具无法越权。真因有二：① 阶段 4 起 `llm_translate_context` 默认开，`build_history_snippet` 只按 4096 token 预算裁，短块页会把预算吃满——约等于塞进 ~300 个旧块参考文本（"近三百个文本框的文本"即此），每次请求又大又慢；② 进度窗口按页百分比更新，agent 每页数分钟无任何中间反馈（"无法确定是否有问题"）。
+
+**改动要点：**
+
+- **历史注入页数上限**（`modules/translators/agent/prompts.py`）：`build_history_snippet` 增加 `max_pages`（默认 `_MAX_HISTORY_PAGES = 3`），页序向前取、页数上限与 token 预算双重裁剪——保证"邻近页"语义，杜绝几十页短块把预算吃满；超出部分由探索工具按需深挖。
+- **E 类出口护栏**（`modules/translators/agent/validator.py` + `loop.py`）：新增"译文=原文"（纯数字/单字符豁免，拟声词豁免名单留待后续）与"术语残留"（命中术语 src≠dst 且本块原文含该词、译文仍保留原词）两项检测，**先警告后打回**——`validate_submission` 返回 `(accepted, feedback, warnings, newly_warned, rejected_ids)`，loop 维护 `warned_ids` 跨轮累计，再犯则打回并把该 id 从已累积结果中移除（回 missing 重新请求，整单被拒时同样移除），修复了"警告轮接受的坏条目让缺失检查误判已覆盖"的闭环缺陷；无效 id 反馈截断到 10 条防上下文爆炸。
+- **F 类轮次反馈**（`ui/module_manager.py` + `modules/translators/trans_agent.py` + `modules/translators/agent/loop.py`）：`run_agent_task` 增 `status_cb(turn, tool_names, usage)` 每轮回调；`AgentTranslator.set_status_callback` 接线到 `TranslateThread.agent_status` 信号，`ModuleManager.on_agent_turn_status` 把"第 X 页 · agent 第 N 轮: read_pages…"打到进度窗口 translate_bar 消息（无状态栏控件，进度窗口即用户盯的反馈面）。
+- **debug 日志合并**：`context_translation_debug_log` → `agent_translation_debug_log`（`utils/config.py`），`utils/debug_log.py` 前缀改 `agent_translation_*`、`start()` 幂等（会话内单文件）；agent 每轮状态在开关开启时写日志。
+- **测试**：validator 新增译文=原文/术语残留/恒等术语豁免/纯数字单字符豁免用例；loop 新增先警告后打回端到端（两轮再犯打回、修正后通过）与 status_cb 每轮调用用例；`build_history_snippet` 页数上限用例（默认 3 页、显式放宽全装）。
+- **i18n/文档**：ts 新增 `ModuleManager` 两条（"Page %1 · agent turn %2: %3"/"waiting for model"），qm 重编译；设计方案/现状调研的 debug 字段行更新为 `agent_translation_debug_log`。
+
+**验证：** verify 六步全绿；全量测试 407 通过（唯一失败的 `test_dependency_startup` env 子进程断言为 08-22 已记录的基线，launch.py 未动）。
+
+**涉及文件：** `modules/translators/agent/prompts.py`、`modules/translators/agent/validator.py`、`modules/translators/agent/loop.py`、`modules/translators/trans_agent.py`、`ui/module_manager.py`、`utils/config.py`、`utils/debug_log.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_agent_translator.py`、`docs/技术实现/翻译agent化_设计方案.md`、`docs/技术实现/翻译管线现状调研.md`、`docs/daily_log.md`
+
+---
+
+### 文本输入区删除 Edit/Review 模式切换（常驻左侧编号 + 拖拽列）+ 拖拽重排误显选中修复
+
+**问题/需求：** 编辑/审阅两套样式的切换（工具栏 Edit/Review 按钮 + `fold_textarea` 配置）语义多次被重构反转（config 默认 False、启动又强制 Edit），用户确认直接删除该功能与 UI，常驻"左侧编号徽章 + 22px 拖拽列"样式、文本框恒为整块多行；同批排查并修复拖拽重排时其他卡片闪现选中样式的视觉问题（悬停与选中同用 `@accentPrimary20` 底色，QDrag 期间指针扫过的卡片会闪烁成"被选中"的样子）。
+
+**改动要点：**
+
+- **删除模式切换**（`ui/scenetext_manager.py`、`ui/mainwindow.py`、`utils/config.py`）：删工具栏 `foldTextBtn`（Edit/Review 按钮）、`MainWindow.fold_textarea` 方法与启动强制 Edit、`pcfg.fold_textarea` 配置字段；工具栏只留 Source | Translation 两开关（拉伸索引顺移）。
+- **行卡片常驻样式**（`ui/textedit_area.py`）：删 `TransPairWidget.setFold/_apply_fold`、viewport 徽章 `badge_vp`（含 hover 淡出与 `_repos_badge_tr`）、`SourceTextEdit.setFold`（本就只设整块多行）、`TextEditListScrollArea.setFoldTextarea`；拖拽列徽章 `badge_drag` 更名 `badge` 常驻显示（属性 `drag_area` 与 22px 拖拽列不变）。
+- **CSS 扁平化**（`config/stylesheet.css`）：`QLabel#TextBlockIndexBadge` 基规则改为透明底 + 主题文字 + 13px（原 `[folded="true"]` 变体并入），删 `[hovered]`/`[folded]` 两条变体规则。
+- **拖拽时卡片误显选中修复**：`QDrag.exec` 期间 `TextEditListScrollArea._set_dnd` 给全部卡片置 `dnd` property，CSS `TransPairWidget[dnd="true"]` 中性底色压制悬停/选中同色闪烁（真选中仍有 `[dnd="true"][checked="true"]` 保持 `@accentPrimary20`）；顺带修 `handle_drag_pos` 首次调用对末卡片的多余 polish。
+- **i18n/测试/文档**：ts 删 TextPanel 上下文 Edit/Review 条目（qm 重编译）；`tests/test_panel_rail.py::TransPairWidgetTest` 改为常驻样式断言（无 `setFold`/`badge_vp`）；`docs/技术实现/侧栏图标_画布浮层面板实现.md` 的 "Edit/Review 都不折叠" 节改为常驻说明。
+
+**验证：** verify 六步全绿（语法 25 文件、文档、审计、i18n 仅既有孤儿告警、qm 编译、冒烟通过）；`tests/test_panel_rail.py` 跑通。
+
+**涉及文件：** `ui/textedit_area.py`、`ui/scenetext_manager.py`、`ui/mainwindow.py`、`utils/config.py`、`config/stylesheet.css`、`tests/test_panel_rail.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/技术实现/侧栏图标_画布浮层面板实现.md`、`docs/daily_log.md`
+
+---
+
 ## 2026-08-22
 
 ### 上游 v1.5.12 移植节点 2a 收尾提交推送 + 节点 2b 竖排双引擎

@@ -17,6 +17,7 @@ from .exceptions import (
 )
 from .io_utils import NumpyEncoder, find_all_imgs, imread, imwrite
 from .logger import logger as LOGGER
+from .base_styles import BaseStyle, ensure_default_base_styles
 from .textblock import FontFormat, TextBlock
 
 
@@ -104,6 +105,8 @@ class ProjImgTrans:
         self.not_found_pages: Dict[str, List[TextBlock]] = {}
         self.new_pages: List[str] = []
         self.proj_path: str = None
+        # Project-level base styles (identity: font_family + vertical).
+        self.base_styles: List[BaseStyle] = []
 
         self.current_img: str = None
         self.img_array: np.ndarray = None
@@ -206,6 +209,17 @@ class ProjImgTrans:
             self._image_info = proj_dict["image_info"]
         else:
             self._image_info = {}
+
+        # Project-level base styles; legacy projects carry none → register a
+        # default one seeded from the global format (see ensure_default_base_styles).
+        self.base_styles = []
+        for bs_dict in proj_dict.get("base_styles", []):
+            try:
+                self.base_styles.append(BaseStyle.from_dict(bs_dict))
+            except Exception as e:
+                LOGGER.warning(f"Ignoring invalid base style entry: {e}")
+        if ensure_default_base_styles(self.base_styles, pcfg.global_fontformat):
+            LOGGER.debug("Registered default base style for legacy project")
 
         for p in self.pages:
             if p not in self._image_info:
@@ -390,12 +404,14 @@ class ProjImgTrans:
         pages = self.pages.copy()
         pages.update(self.not_found_pages)
         image_info = self._image_info.copy()
-        return {
+        proj_dict = {
             "directory": self.directory,
             "pages": pages,
             "current_img": self.current_img,
             "image_info": image_info,
+            "base_styles": [bs.to_dict() for bs in self.base_styles],
         }
+        return proj_dict
 
     def read_img(self, imgname: str) -> np.ndarray:
         if imgname not in self.pages:

@@ -22,7 +22,7 @@ from qtpy.QtGui import (
 )
 from qtpy.QtWidgets import QApplication, QHBoxLayout, QLabel, QWidget
 
-from .custom_widget import CheckableLabel, GroupFrame, TextCheckerLabel
+from .custom_widget import GroupFrame, TextCheckerLabel
 
 try:
     from qtpy.QtWidgets import QUndoCommand
@@ -30,7 +30,6 @@ except ImportError:
     from qtpy.QtGui import QUndoCommand
 
 from utils import shared
-from utils.config import pcfg
 from utils.fontformat import FontFormat
 from utils.imgproc_utils import get_block_mask
 from utils.text_alignment import (
@@ -468,17 +467,14 @@ class TextPanel(Widget):
 
         # 下部：文本编辑区（工具栏 + 文本框列表同框）；行编号/选中锚色/
         # 拖拽在行卡片内（textedit_area）
-        self.foldTextBtn = CheckableLabel(self.tr("Edit"), self.tr("Review"), True)
         self.sourceBtn = TextCheckerLabel(self.tr("Source"))
         self.transBtn = TextCheckerLabel(self.tr("Translation"))
         self.textToolBar = QHBoxLayout()
         self.textToolBar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.textToolBar.addWidget(self.foldTextBtn)
         self.textToolBar.addWidget(self.sourceBtn)
         self.textToolBar.addWidget(self.transBtn)
         self.textToolBar.setStretch(0, 1)
         self.textToolBar.setStretch(1, 1)
-        self.textToolBar.setStretch(2, 1)
         self.textToolBar.setContentsMargins(0, 0, 0, 0)
         self.textToolBar.setSpacing(0)
 
@@ -689,9 +685,7 @@ class SceneTextManager(QObject):
             )
         self.addTextBlkItem(blk_item)
 
-        pair_widget = TransPairWidget(
-            blk, len(self.pairwidget_list), pcfg.fold_textarea
-        )
+        pair_widget = TransPairWidget(blk, len(self.pairwidget_list))
         self.pairwidget_list.append(pair_widget)
         self.textEditList.addPairWidget(pair_widget)
         pair_widget.e_source.setPlainText(blk_item.blk.get_text())

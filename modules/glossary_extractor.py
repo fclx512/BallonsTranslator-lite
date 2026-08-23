@@ -459,9 +459,9 @@ def _parse_llm_response(raw: str) -> Tuple[GlossaryEntry, ...]:
 def _raw_llm_call(api_config: dict, messages: list) -> str:
     """Make a single one-shot LLM call.
 
-    Mirrors ``ContextBatchTranslator._raw_llm_call()`` — no retry, no
-    batch parsing.  Returns the raw response text, or empty string on
-    failure.
+    No retry, no batch parsing (the beta batch translator this mirrored was
+    removed in the agent rework).  Returns the raw response text, or empty
+    string on failure.
     """
     api_key = api_config.get("api_key", "")
     api_host = api_config.get("api_host", "")

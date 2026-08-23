@@ -575,6 +575,47 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
 
         self._profile_combo.currentTextChanged.connect(self._on_profile_changed)
 
+        # ── Single-block translation mode (agent-only strategy) ──
+        self._single_blk_section = QWidget()
+        sb_layout = QVBoxLayout(self._single_blk_section)
+        sb_layout.setContentsMargins(0, 0, 0, 0)
+        sb_layout.setSpacing(4)
+
+        sb_header = ConfigSectionHeader(self.tr("Single-Block Translation"))
+        sb_layout.addWidget(sb_header)
+
+        sb_row = QHBoxLayout()
+        sb_row.setSpacing(6)
+        from utils.config import SingleBlkTranslateMode, pcfg
+
+        self._single_blk_combo = ConfigComboBox(scrollWidget=scrollWidget)
+        self._single_blk_combo.setFixedWidth(CONFIG_COMBOBOX_LONG)
+        self._single_blk_combo.addItem(
+            self.tr("plain"), SingleBlkTranslateMode.Plain
+        )
+        self._single_blk_combo.addItem(
+            self.tr("context"), SingleBlkTranslateMode.Context
+        )
+        idx = self._single_blk_combo.findData(
+            pcfg.module.single_blk_translate_mode
+        )
+        self._single_blk_combo.setCurrentIndex(max(idx, 0))
+        self._single_blk_combo.currentIndexChanged.connect(
+            lambda: setattr(
+                pcfg.module,
+                "single_blk_translate_mode",
+                self._single_blk_combo.currentData(),
+            )
+        )
+
+        sb_row.addWidget(ParamNameLabel(self.tr("Mode")))
+        sb_row.addWidget(self._single_blk_combo)
+        sb_row.addStretch()
+        sb_layout.addLayout(sb_row)
+
+        self.vlayout.insertWidget(3, self._single_blk_section)
+        self._single_blk_section.setVisible(False)
+
     # ── Public ───────────────────────────────────────────────────
 
     def finishSetTranslator(self, translator: BaseTranslator):
@@ -604,6 +645,7 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
             self.visibleWidget.hide()
 
         self._refresh_profile_section()
+        self._refresh_single_blk_section()
 
         if module in self.param_widget_map:
             widget = self.param_widget_map[module]
@@ -652,6 +694,14 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
 
     def _on_manage_profiles(self):
         self.navigate_to_llm_profile.emit()
+
+    # ── Single-block section ──────────────────────────────────────
+
+    def _refresh_single_blk_section(self):
+        """Show the single-block strategy only for the agent translator."""
+        module = self.module_combobox.currentText()
+        is_agent = module == "LLM_Agent_Translator"
+        self._single_blk_section.setVisible(is_agent)
 
 
 class InpaintConfigPanel(ModuleConfigParseWidget):

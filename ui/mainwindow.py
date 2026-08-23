@@ -480,9 +480,6 @@ class MainWindow(mainwindow_cls):
             self.canvas, self.configPanel.inpaint_config_panel
         )
         self.textPanel = TextPanel(self.app)
-        self.textPanel.foldTextBtn.checkStateChanged.connect(
-            self.fold_textarea
-        )
         self.textPanel.sourceBtn.checkStateChanged.connect(
             self.show_source_text
         )
@@ -707,12 +704,21 @@ class MainWindow(mainwindow_cls):
 
         self.rightComicTransStackPanel.setHidden(True)
         self.st_manager.setTextEditMode(False)
-        self.textPanel.foldTextBtn.setChecked(True)  # Always start in Edit mode
         self.textPanel.transBtn.setCheckState(pcfg.show_trans_text)
         self.textPanel.sourceBtn.setCheckState(pcfg.show_source_text)
-        self.fold_textarea(True)
         self.show_trans_text(pcfg.show_trans_text)
         self.show_source_text(pcfg.show_source_text)
+
+        # 启动不自动展开窄栏浮层面板：清掉上次会话的开合记忆，浮层
+        # 只随窄栏图标手动开（on_textpanel_visibility 首次可见时按
+        # pcfg.*_dock_open 复活上次打开的浮层）
+        for flag in (
+            "annotation_dock_open",
+            "emphasis_dock_open",
+            "textstyle_dock_open",
+            "transform_dock_open",
+        ):
+            setattr(pcfg, flag, False)
 
         self.module_manager = module_manager = ModuleManager(self.imgtrans_proj)
         module_manager.finish_translate_page.connect(self.finishTranslatePage)
@@ -3013,7 +3019,12 @@ class MainWindow(mainwindow_cls):
             blk_list.append(blk)
 
         self.module_manager.runBlktransPipeline(
-            blk_list, tgt_img, mode, blk_ids, tgt_mask=tgt_mask
+            blk_list,
+            tgt_img,
+            mode,
+            blk_ids,
+            tgt_mask=tgt_mask,
+            page_key=self._blktrans_at_page,
         )
         return True
 
@@ -3024,18 +3035,6 @@ class MainWindow(mainwindow_cls):
     def on_imgtrans_pipeline_finished(self):
         self.backup_blkstyles.clear()
         self._run_imgtrans_wo_textstyle_update = False
-        # Restore original translator if temporarily swapped for context-aware run
-        if hasattr(self, "_ctx_batch_restore") and self._ctx_batch_restore:
-            original = self._ctx_batch_restore
-            self._ctx_batch_restore = None
-            self.module_manager.setTranslator(original)
-        # Close debug log file if open
-        if pcfg.context_translation_debug_log:
-            try:
-                from utils.debug_log import debug_logger
-                debug_logger.close()
-            except Exception:
-                pass
         if pcfg.module.empty_runcache and not shared.HEADLESS:
             self.module_manager.unload_all_models()
         if shared.args.export_translation_txt:
@@ -3418,8 +3417,6 @@ class MainWindow(mainwindow_cls):
             self.tr("Enable Translation"),
             self.tr("Enable Inpainting"),
         ]
-        trans_cb = None
-        ctx_trans_cb = None
         for idx, label in enumerate(stage_labels):
             cb = QCheckBox(label)
             cb.setObjectName('ConfigCheckBox')
@@ -3427,36 +3424,11 @@ class MainWindow(mainwindow_cls):
             cb.toggled.connect(
                 lambda checked, i=idx: self.on_enable_module(i, checked)
             )
-            if idx == 2:
-                # Translation row: checkbox + Context Translation (beta) inline
-                row = QWidget()
-                row_layout = QHBoxLayout(row)
-                row_layout.setContentsMargins(0, 0, 0, 0)
-                row_layout.addWidget(cb)
-                trans_cb = cb
-                ctx_trans_cb = QCheckBox(self.tr("Context Translation (beta)"))
-                ctx_trans_cb.setObjectName('ConfigCheckBox')
-                row_layout.addWidget(ctx_trans_cb)
-                row_layout.addStretch()
-                stages_layout.addWidget(row)
-            else:
-                stages_layout.addWidget(cb)
-
-        # Checkbox coupling: CT beta depends on Translation
-        def _on_ctx_trans_toggled(checked):
-            if checked:
-                trans_cb.setChecked(True)
-
-        def _on_trans_toggled(checked):
-            if not checked:
-                ctx_trans_cb.setChecked(False)
-
-        ctx_trans_cb.toggled.connect(_on_ctx_trans_toggled)
-        trans_cb.toggled.connect(_on_trans_toggled)
+            stages_layout.addWidget(cb)
 
         pipeline_layout.addWidget(stages_frame)
 
-        # ── Context settings (only shown when Context Translation beta is on) ──
+        # ── LLM context settings (history injection + glossary) ──
         context_frame = QFrame()
         context_frame.setFrameShape(QFrame.Shape.StyledPanel)
         context_vbox = QVBoxLayout(context_frame)
@@ -3467,24 +3439,19 @@ class MainWindow(mainwindow_cls):
         ctx_title.setStyleSheet("font-weight: bold;")
         context_vbox.addWidget(ctx_title)
 
-        # Row: LLM Context (page / +history) + Token Budget
+        # Row: history-injection switch + Token Budget
         llm_row = QWidget()
         llm_row_layout = QHBoxLayout(llm_row)
         llm_row_layout.setContentsMargins(0, 0, 0, 0)
         llm_row_layout.setSpacing(8)
-        llm_row_layout.addWidget(QLabel(self.tr("LLM Context")))
-        llm_row_layout.addStretch()
-        llm_context_combo = ConfigComboBox()
-        from utils.config import LLMTranslateContext
-        llm_context_combo.addItem(self.tr("page"), LLMTranslateContext.PAGE)
-        llm_context_combo.addItem(self.tr("+history"), LLMTranslateContext.HISTORY)
-        llm_idx = llm_context_combo.findData(pcfg.module.llm_translate_context)
-        llm_context_combo.setCurrentIndex(max(llm_idx, 0))
-        llm_context_combo.currentIndexChanged.connect(
-            lambda: setattr(pcfg.module, 'llm_translate_context', llm_context_combo.currentData())
+        history_cb = QCheckBox(self.tr("Inject Prior-Page History"))
+        history_cb.setObjectName('ConfigCheckBox')
+        history_cb.setChecked(bool(pcfg.module.llm_translate_context))
+        history_cb.toggled.connect(
+            lambda checked: setattr(pcfg.module, 'llm_translate_context', checked)
         )
-        llm_context_combo.setFixedWidth(110)
-        llm_row_layout.addWidget(llm_context_combo)
+        llm_row_layout.addWidget(history_cb)
+        llm_row_layout.addStretch()
 
         token_label = QLabel(self.tr("Token Budget"))
         llm_row_layout.addWidget(token_label)
@@ -3498,16 +3465,13 @@ class MainWindow(mainwindow_cls):
         token_budget_spin.setFixedWidth(80)
         llm_row_layout.addWidget(token_budget_spin)
 
-        def _update_token_visibility(mode):
-            is_history = mode == LLMTranslateContext.HISTORY
-            token_label.setVisible(is_history)
-            token_budget_spin.setVisible(is_history)
+        def _update_token_visibility(enabled):
+            token_label.setVisible(enabled)
+            token_budget_spin.setVisible(enabled)
             _resize_to_fit()
 
-        llm_context_combo.currentIndexChanged.connect(
-            lambda: _update_token_visibility(llm_context_combo.currentData())
-        )
-        _update_token_visibility(llm_context_combo.currentData())
+        history_cb.toggled.connect(_update_token_visibility)
+        _update_token_visibility(history_cb.isChecked())
 
         context_vbox.addWidget(llm_row)
 
@@ -3541,14 +3505,6 @@ class MainWindow(mainwindow_cls):
         glossary_browse_btn.setFixedHeight(27)
         glossary_path_layout.addWidget(glossary_browse_btn)
 
-        glossary_custom_btn = QPushButton(self.tr("Custom..."))
-        glossary_custom_btn.setFixedWidth(140)
-        glossary_custom_btn.setFixedHeight(27)
-        glossary_path_layout.addWidget(glossary_custom_btn)
-
-        # Custom glossary text (stored in closure for post-dialog access)
-        _custom_glossary_text = ""
-
         def _browse_glossary():
             path, _ = QFileDialog.getOpenFileName(
                 self,
@@ -3563,25 +3519,6 @@ class MainWindow(mainwindow_cls):
                 glossary_status_label.setStyleSheet("color: #4caf50;")
 
         glossary_browse_btn.clicked.connect(_browse_glossary)
-
-        def _open_custom_glossary():
-            nonlocal _custom_glossary_text
-            from ui.glossary_dialog import CustomGlossaryDialog
-
-            dlg = CustomGlossaryDialog(self, initial_text=_custom_glossary_text)
-            if dlg.exec_() == QDialog.DialogCode.Accepted:
-                _custom_glossary_text = dlg.get_raw_text()
-                if _custom_glossary_text.strip():
-                    glossary_custom_btn.setText(
-                        "\u2713 " + self.tr("Custom...")
-                    )
-                    glossary_custom_btn.setStyleSheet("color: #4caf50;")
-                else:
-                    _custom_glossary_text = ""
-                    glossary_custom_btn.setText(self.tr("Custom..."))
-                    glossary_custom_btn.setStyleSheet("")
-
-        glossary_custom_btn.clicked.connect(_open_custom_glossary)
         glossary_path_row.setVisible(glossary_cb.isChecked())
         context_vbox.addWidget(glossary_path_row)
 
@@ -3599,6 +3536,11 @@ class MainWindow(mainwindow_cls):
         mode_idx = glossary_mode_combo.findData(pcfg.module.llm_glossary_mode)
         if mode_idx >= 0:
             glossary_mode_combo.setCurrentIndex(mode_idx)
+        glossary_mode_combo.currentIndexChanged.connect(
+            lambda: setattr(
+                pcfg.module, "llm_glossary_mode", glossary_mode_combo.currentData()
+            )
+        )
         glossary_mode_combo.setFixedWidth(140)
         glossary_mode_layout.addWidget(glossary_mode_combo)
         glossary_mode_row.setVisible(glossary_cb.isChecked())
@@ -3611,24 +3553,8 @@ class MainWindow(mainwindow_cls):
 
         glossary_cb.toggled.connect(_update_glossary_visibility)
 
-        def _update_ctx_visibility(ct_enabled):
-            """Show/hide the entire context section and its advanced settings."""
-            context_frame.setVisible(ct_enabled and pcfg.module.stage_enabled(2))
-            llm_row.setVisible(True)
-            glossary_cb.setVisible(True)
-            show_glossary = glossary_cb.isChecked()
-            glossary_path_row.setVisible(show_glossary)
-            glossary_mode_row.setVisible(show_glossary)
-            _update_token_visibility(llm_context_combo.currentData())
-            _resize_to_fit()
-
-        # Show context frame initially if CT beta is checked and Translation is on
-        context_frame.setVisible(
-            ctx_trans_cb.isChecked() and pcfg.module.stage_enabled(2)
-        )
-
-        # CT beta toggle controls context frame visibility
-        ctx_trans_cb.toggled.connect(_update_ctx_visibility)
+        # Context frame shows whenever the translation stage is enabled
+        context_frame.setVisible(pcfg.module.stage_enabled(2))
 
         pipeline_layout.addWidget(context_frame)
 
@@ -3720,75 +3646,23 @@ class MainWindow(mainwindow_cls):
         # Lock dialog size; height dynamically adjusts via _resize_to_fit()
         _resize_to_fit()
 
-        # Clear glossary state on dialog close
-        def _clear_glossary():
-            nonlocal _custom_glossary_text
-            glossary_status_label.setText("\u25cb")
-            glossary_status_label.setStyleSheet("color: #888;")
-            glossary_custom_btn.setText(self.tr("Custom..."))
-            glossary_custom_btn.setStyleSheet("")
-            _custom_glossary_text = ""
-            pcfg.module.llm_glossary_path = ""
-
-        dialog.finished.connect(_clear_glossary)
-
+        # 术语表路径在对话框内 Browse 时直接写入 pcfg，关闭后保持（译前就绪状态可见）
         if dialog.exec_() != QDialog.DialogCode.Accepted:
             return
 
         if render_mode:
             return
 
-        # If Context Translation is enabled, use current translator's profile
-        if ctx_trans_cb.isChecked():
-            translator = self.module_manager.translator
-            if hasattr(translator, "_active_profile"):
-                profile = translator._active_profile
-                if profile:
-                    from modules.translators.context_batch import (
-                        ContextBatchTranslator,
-                    )
-
-                    def _ctx_status(msg):
-                        bar = self.module_manager.progress_msgbox.translate_bar
-                        bar.updateProgress(bar.progressbar.value(), msg)
-                        if pcfg.context_translation_debug_log:
-                            from utils.debug_log import debug_logger
-                            debug_logger.write(msg)
-
-                    self._ctx_batch_restore = pcfg.module.translator
-                    ctx = ContextBatchTranslator(
-                        api_config={
-                            "api_host": profile.get("api_host", ""),
-                            "api_key": profile.get("api_key", ""),
-                            "model": profile.get("model", "gpt-4o"),
-                            "temperature": profile.get("temperature", 0.1),
-                            "max_tokens": profile.get("max_tokens", ""),
-                            "proxy": profile.get("proxy", ""),
-                            "reasoning_effort": profile.get("reasoning_effort", ""),
-                        },
-                        translation_prompt=profile.get("system_prompt", ""),
-                        status_callback=_ctx_status,
-                        glossary_path=pcfg.module.llm_glossary_path or "",
-                        glossary_mode=glossary_mode_combo.currentData(),
-                        custom_glossary_text=_custom_glossary_text,
-                    )
-
-                    if pcfg.context_translation_debug_log:
-                        from utils.debug_log import debug_logger
-                        debug_logger.start()
-
-                    self.module_manager.translate_thread.translator = ctx
-                    self.module_manager.translate_thread.module = ctx
-                    self.module_manager.translate_thread.translator = ctx
-                    self.module_manager.translate_thread.module = ctx
+        # 计算本次运行的页面范围（供 on_run_imgtrans 使用）
+        page_filter = None
+        if not all_pages_cb.isChecked():
+            page_filter = [
+                self.imgtrans_proj.idx2pagename(i)
+                for i in range(slider.low(), slider.high() + 1)
+            ]
 
         if wo_update_cb.isChecked():
             self._run_imgtrans_wo_textstyle_update = True
-
-        if not all_pages_cb.isChecked():
-            page_filter = []
-            for i in range(slider.low(), slider.high() + 1):
-                page_filter.append(self.imgtrans_proj.idx2pagename(i))
 
         if (
             not self.imgtrans_proj.is_all_pages_no_text
@@ -3984,15 +3858,6 @@ class MainWindow(mainwindow_cls):
         except Exception as e:
             create_error_dialog(e, self.tr(f"Failed save to {savep}"))
             pcfg.text_styles_path = oldp
-
-    def fold_textarea(self, edit_mode: bool):
-        """Edit(勾选)=完整多行卡片；Review=单行紧凑列表（可整体浏览）。
-
-        单行收缩不再挂在 Edit 模式上（用户要求）。
-        """
-        fold = not edit_mode
-        pcfg.fold_textarea = fold
-        self.textPanel.textEditList.setFoldTextarea(fold)
 
     def show_source_text(self, show: bool):
         pcfg.show_source_text = show
