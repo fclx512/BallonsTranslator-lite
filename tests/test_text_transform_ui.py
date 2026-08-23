@@ -589,6 +589,47 @@ class TextTransformPanelTest(TextTransformEditSessionTestBase):
         self.assertEqual(panel.transform_panels, [])
         self.assertFalse(panel.transform_mixed_label.isHidden())
 
+    def test_card_columns_adapt_to_panel_width(self):
+        """TransformParameterPanel reflows controls as its width changes."""
+        panel = self._make_panel()
+        panel.set_transform(
+            transform_state(
+                SineTextTransform(),
+            )
+        )
+        sine_panel = panel.transform_panels[0]
+        panel.show()
+
+        # At a narrow width the sine-wave sections should fall back to a
+        # single column.
+        panel.resize(260, panel.sizeHint().height())
+        panel._sync_content_height()
+        self.app.processEvents()
+        self.assertTrue(
+            all(
+                data['column_count'] == 1
+                for data in sine_panel._section_controls_data
+            ),
+            'narrow panel should use single column layout',
+        )
+
+        # At a wider width the multi-control sections should use two columns.
+        panel.resize(520, panel.sizeHint().height())
+        panel._sync_content_height()
+        self.app.processEvents()
+        column_counts = [
+            data['column_count']
+            for data in sine_panel._section_controls_data
+        ]
+        self.assertTrue(
+            all(
+                data['column_count'] == 2
+                for data in sine_panel._section_controls_data
+                if len(data['controls']) > 1
+            ),
+            f'wide panel should use two-column layout, got {column_counts}',
+        )
+
     def test_cards_select_on_card_click_and_parameter_interaction(self):
         from qtpy.QtTest import QTest
 

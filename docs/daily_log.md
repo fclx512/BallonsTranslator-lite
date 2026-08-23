@@ -47,6 +47,25 @@
 
 ---
 
+### 侧栏收纳收尾：三 dock 入栏 + 文本样式 dock 化 + AI 审计固定策略
+
+**问题/需求：** 侧栏收纳批次（记忆：rail-docks-emphasis-textstyle-transform）收尾提交。面板栏定稿后，把右上角文本格式区剩余的独立交互（着重号/文本样式/变换）一并迁入 PS 式窄栏浮层，实现格式面板瘦身；随后把「AI 自审计」固定成 verify 常规步骤（删除文件的残留引用/死代码复活强制清零），并按规范清理 docs。
+
+**改动要点：**
+
+- **三个新 dock 入栏**（`ui/scenetext_manager.py`）：`install_emphasis_launcher`（着重号样式/位置平铺标记）+ `install_transform_launcher`（变换面板去折叠直接入 dock）+ `install_textstyle_launcher`（不透明度/阴影/渐变三节），与既有注解 launcher 共 4 图标；各 dock 开合记忆加 `pcfg.emphasis_dock_open`/`textstyle_dock_open`/`transform_dock_open`（`utils/config.py`）。
+- **文本样式 dock 化替代旧模态**：新增 `ui/text_style_dock.py`——不透明度/阴影/渐变三节进 `RailDockPanel`，拖动实时 preview、松手 commit（`shadow_include_stroke` 项目级开关），全局模式（无选中块）也工作；`ui/shadow_gradient_dialog.py`、`ui/text_advanced_format.py` 两个旧模态对话框退役删除。
+- **变换面板重排**（`ui/text_engine/transforms/panel.py`）：控件上下式 + `_relayout_for_width` 按可用宽度挑选列数（FlowLayout 平铺思想替代原固定多列网格），去卡片框/网格列重排/width-sync；头部 Add 下拉 + glyph-slant 左聚不再跨宽居中；`ui/text_engine/transforms/controls.py`（上游 v1.5.12 移植时留存、功能已并入 panel.py 的死副本）删除。
+- **姿态/细节**：`clock_dial.py` 增 `compact` 模式（去刻度/度数标签、小尺寸，dock 用）；`rail_dock_panel.py` `_ResizeGrip` 透明化（避免方形覆盖 6px 圆角）；`stylesheet.css` 同步（`RailDockGrip` 透明、`TextTransformCardsFrame`/`TextTransformCardsSeparator` 等）。
+- **AI 审计固定策略**（新 `scripts/check_audit.py` + `scripts/audit_registry.json`）：`deprecated` 已删文件不得复活、残留引用须清零（`allowed_mentions` 白名单外）；`suspended` 休眠文件不得被主 UI import；未登记删除仅提示不失败。并入 `scripts/verify.py` 第 3 步；`scripts/check_syntax.py` 不会重复报 deleted file（git 改动集过滤）。
+- **文档清理**（docs 12→8 份）：删 `docs/技术实现/反向移植_完整流程.md`（并入规范 §11）、`反向移植_工作进度交接.md`、`快捷键系统.md`（并入 `docs/基础速查/快捷键.md`，动作清单重生成）、`排版技术.md`（陈旧三节）；`ui/scene_textlayout.py` 删除（引擎迁移后零引用旧 fork 布局）并登记；`AGENTS.md` 增"禁止裸符号名 + 删除前登记 deprecated + /audit-docs 技能"三节；`docs/技术实现/文本编辑区UI重构.md` 更新（Zone C 全外迁浮层）、`docs/项目概述.md` 精简。
+
+**排障记录：** check_audit 初版文件名用**裸子串**匹配，`test_annotation_controls.py` 文件名里的 `controls.py` 子串被误判为对已删文件的残留引用（132 处假阳性）——改文件名整词匹配（`(?<![A-Za-z0-9_.])controls\.py`）+ 模块名只认 import 形态（`import controls` / `from .controls import X`，from 分支须后随 `import`，避免 `yield from panel.iter_controls()` 误伤），处理后真残留仅 2 处（panel.py:4 docstring 已改述、1265 为 `iter_controls()` 误报）。另补登记同批次已删 `shadow_gradient_dialog.py`/`text_advanced_format.py`。
+
+**涉及文件：** `ui/text_style_dock.py`（新增）、`ui/scenetext_manager.py`、`ui/text_engine/transforms/panel.py`、`ui/text_engine/transforms/controls.py`（删）、`ui/custom_widget/rail_dock_panel.py`、`ui/custom_widget/clock_dial.py`、`utils/config.py`、`config/stylesheet.css`、`scripts/check_audit.py`（新增）、`scripts/audit_registry.json`（新增）、`scripts/verify.py`、`tests/test_rail_docks.py`（新增）、`tests/test_annotation_controls.py`、`tests/test_panel_rail.py`、`tests/test_strikeout.py`、`tests/test_text_transform_engine.py`、`tests/test_text_transform_ui.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`AGENTS.md`、`docs/daily_log.md`
+
+---
+
 ## 2026-08-22
 
 ### 上游 v1.5.12 移植节点 2a 收尾提交推送 + 节点 2b 竖排双引擎
@@ -143,8 +162,6 @@
 **排障记录：** `ligature_axis_value` 不接受 oldstyle 轴（引擎 `_LIGATURE_AXIS_TOKENS` 无 `oldstyle`），旧式数字回读仍走 `oldstyle_nums_value()`，组合框载荷保持 "onum" 路由；`ConfigFormRow.widget` 存的是包裹行而非控件本身，章节顺序测试改用 `findChildren` 定位。
 
 **涉及文件：** `ui/configpanel.py`、`ui/text_panel.py`、`config/stylesheet.css`、`icons/fontfmt_tate_chu_yoko.svg`、`icons/fontfmt_tate_chu_yoko_activate.svg`、`icons/fontfmt_roman_alignment.svg`、`icons/fontfmt_roman_alignment_activate.svg`（新增）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_annotation_controls.py`、`tests/test_configpanel_node3.py`、`docs/daily_log.md`、`docs/技术实现/移植规划_上游v1.5.12.md`
-
----
 
 ---
 

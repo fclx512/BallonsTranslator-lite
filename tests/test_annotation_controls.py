@@ -192,40 +192,47 @@ class AnnotationGroupTest(unittest.TestCase):
         self.assertEqual(remove_emissions, [True])
 
 
-class EmphasisButtonTest(unittest.TestCase):
+class EmphasisGroupTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def _make_button(self):
-        from ui.text_panel import EmphasisToolButton
+    def _make_group(self):
+        from ui.text_panel import EmphasisFormatGroup
 
-        return EmphasisToolButton()
+        return EmphasisFormatGroup()
 
-    def test_defaults_to_none_when_unchecked(self):
-        btn = self._make_button()
-        self.assertFalse(btn.isChecked())
-        self.assertEqual(btn.values(), ("none", "over right"))
+    def test_defaults_to_none(self):
+        group = self._make_group()
+        self.assertEqual(group.values(), ("none", "over right"))
+        self.assertEqual(group.markBox.currentData(), "none")
 
     def test_set_values_restores_without_emitting(self):
-        btn = self._make_button()
+        group = self._make_group()
         emissions = []
-        btn.emphasis_changed.connect(lambda *v: emissions.append(v))
-        btn.set_values("open triangle", "under left")
+        group.emphasis_changed.connect(lambda *v: emissions.append(v))
+        group.set_values("open sesame", "under left")
         self.assertEqual(emissions, [])
-        self.assertTrue(btn.isChecked())
-        self.assertEqual(btn.values(), ("open triangle", "under left"))
+        self.assertEqual(group.values(), ("open sesame", "under left"))
 
-    def test_toggling_emits_values(self):
-        btn = self._make_button()
+    def test_selecting_mark_emits_values(self):
+        group = self._make_group()
         emissions = []
-        btn.emphasis_changed.connect(lambda *v: emissions.append(v))
-        btn.click()
-        self.assertTrue(btn.isChecked())
+        group.emphasis_changed.connect(lambda *v: emissions.append(v))
+        group.markBox.setCurrentIndex(group.markBox.findData("filled dot"))
         self.assertEqual(emissions[-1], ("filled dot", "over right"))
-        btn.click()
-        self.assertFalse(btn.isChecked())
+        group.markBox.setCurrentIndex(group.markBox.findData("none"))
         self.assertEqual(emissions[-1], ("none", "over right"))
+
+    def test_position_emits_values(self):
+        group = self._make_group()
+        emissions = []
+        group.emphasis_changed.connect(lambda *v: emissions.append(v))
+        group.markBox.setCurrentIndex(group.markBox.findData("filled circle"))
+        group.positionBox.setCurrentIndex(
+            group.positionBox.findData("under left")
+        )
+        self.assertEqual(emissions[-1], ("filled circle", "under left"))
 
 
 class PanelRoutingTest(unittest.TestCase):
@@ -253,6 +260,7 @@ class PanelRoutingTest(unittest.TestCase):
         cursor.setPosition(2, QTextCursor.MoveMode.KeepAnchor)
         item.setTextCursor(cursor)
         panel.textblk_item = item
+        self._set_rail_slots(panel)
         return panel, item
 
     def test_routes_to_item_setters(self):
@@ -328,12 +336,29 @@ class PanelRoutingTest(unittest.TestCase):
         item = self.TextBlkItem(blk=_make_blk(), idx=0)
         self.scene.addItem(item)
         panel.textblk_item = item
+        self._set_rail_slots(panel)
         self.FontFormatPanel._on_annotation_changed(
             panel, "ruby", ("group", "か", "over")
         )
         _t, text, _p, enabled = item.ruby_editor_values()
         self.assertTrue(enabled)
         self.assertEqual(text, "か")
+
+    @staticmethod
+    def _set_rail_slots(panel):
+        """rail launcher/dock slots (indicator methods touch these); not
+        installed yet == None, exactly like a fresh FontFormatPanel."""
+        for attr in (
+            "annotation_launcher",
+            "annotation_dock",
+            "emphasis_launcher",
+            "emphasis_dock",
+            "transform_launcher",
+            "transform_dock",
+            "textstyle_launcher",
+            "textstyle_dock",
+        ):
+            setattr(panel, attr, None)
 
 
 if __name__ == "__main__":

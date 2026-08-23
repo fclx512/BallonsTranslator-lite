@@ -41,6 +41,13 @@ class _ResizeGrip(QFrame):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        # Transparent: the grip overlaps the panel's rounded bottom-left
+        # corner, so an opaque QWidget background would paint a square over
+        # the 6px corner radius.  ``stylesheet.css`` pins it transparent.
+        self.setObjectName("RailDockGrip")
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setAutoFillBackground(False)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setFixedSize(14, 14)
         self.setCursor(Qt.CursorShape.SizeBDiagCursor)
 

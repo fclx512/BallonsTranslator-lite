@@ -609,33 +609,6 @@ QFontChecker#FontRomanAlignmentChecker::indicator:checked {
     image: url(icons/fontfmt_roman_alignment_activate.svg);
 }
 
-/* Emphasis toggle button — face is painted procedurally (see
-   EmphasisToolButton.paintEvent); the popup arrow is the ::menu-button. */
-QToolButton#FontEmphasisToolButton {
-    min-width: 39px;
-    max-width: 39px;
-    min-height: 26px;
-    max-height: 26px;
-    padding: 0px;
-    border: 2px solid transparent;
-    border-radius: 0px;
-    background-color: transparent;
-}
-
-QToolButton#FontEmphasisToolButton::menu-button {
-    width: 11px;
-    border: none;
-    background-color: transparent;
-}
-
-QToolButton#FontEmphasisToolButton::menu-arrow {
-    image: none;
-}
-
-QMenu#FontEmphasisMenu::item {
-    height: 24px;
-}
-
 TextEditListScrollArea {
     border-style: none;
 }
@@ -1700,6 +1673,13 @@ QFrame#RailDockBody {
     border: none;
 }
 
+/* 左下角拉伸手柄：透明背景，只画对角线圆点 —— 否则它作为子控件盖上
+   面板的 6px 圆角，方形背景会切断圆角边缘 */
+QFrame#RailDockGrip {
+    background: transparent;
+    border: none;
+}
+
 QLabel#RailDockTitle {
     color: @qwidgetForegroundColor;
     font-weight: bold;
@@ -1864,6 +1844,11 @@ QToolButton#AddTextTransformButton:hover {
 }
 QToolButton#AddTextTransformButton:pressed {
     background: @hoverBackgroundColor;
+}
+QFrame#TextTransformCardsFrame {
+    background: transparent;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
 }
 QWidget#TextTransformControl,
 QWidget#TextTransformPanelActions,

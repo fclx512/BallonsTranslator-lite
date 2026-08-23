@@ -1,0 +1,43 @@
+{
+  "_comment": "AI 审计登记表。机制见 .agents/skills/audit-docs/SKILL.md。deprecated = 已删待守（不得复活、残留引用必须清零或进 allowed_mentions）；suspended = 存在的休眠文件（不得被主 UI import）。删除文件前先在此登记。",
+  "deprecated": {
+    "ui/scene_textlayout.py": {
+      "note": "v1.5.12 移植后零引用的旧 fork 布局，2026-08-23 删除（渲染入口已切 ui/text_engine/）",
+      "allowed_mentions": [
+        "AGENTS.md",
+        "docs/项目概述.md",
+        "docs/技术实现/反向移植_规范.md"
+      ]
+    },
+    "ui/text_engine/transforms/controls.py": {
+      "note": "上游 v1.5.12 移植时对照留存的原始副本，功能已并入 panel.py（自研合并版），2026-08-23 删除"
+    },
+    "ui/shadow_gradient_dialog.py": {
+      "note": "2026-08-23 随文本样式 dock 化（ui/text_style_dock.py）退役的旧模态对话框"
+    },
+    "ui/text_advanced_format.py": {
+      "note": "2026-08-23 随文本样式 dock 化（ui/text_style_dock.py）退役的旧模态对话框"
+    },
+    "docs/技术实现/反向移植_完整流程.md": {
+      "note": "2026-08-23 并入 反向移植_规范.md §11（端到端操作手册），原文档删除",
+      "allowed_mentions": ["docs/技术实现/反向移植_规范.md"]
+    },
+    "docs/技术实现/反向移植_工作进度交接.md": {
+      "note": "2026-08-23 删除：过期会话交接稿，信息已被 反向移植_规范.md §10 覆盖"
+    },
+    "docs/技术实现/快捷键系统.md": {
+      "note": "2026-08-23 并入 docs/基础速查/快捷键.md（动作清单重生成），原文档删除"
+    },
+    "docs/技术实现/排版技术.md": {
+      "note": "2026-08-23 删除：三节全部过时（旧布局实现已删、调研已消费）"
+    }
+  },
+  "suspended": {
+    "ui/text_engine/formatting/panel.py": {
+      "note": "上游休眠拷贝：仅被同休眠的 editing/manager.py 引用，未接主 UI（见 上游v1.5.12移植_完成记录.md 持久分歧）"
+    },
+    "ui/text_engine/editing/manager.py": {
+      "note": "上游休眠拷贝：无任何 import 者（见 上游v1.5.12移植_完成记录.md 持久分歧）"
+    }
+  }
+}

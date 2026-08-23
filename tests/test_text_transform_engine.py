@@ -907,36 +907,10 @@ class TextTransformRenderingTest(TextTransformTestBase):
     def test_tatechuyoko_group_not_rotated_by_glyph_slant(self):
         # 2026-08-22 渲染入口切换后：本用例 A/B 对比依赖 mock fork 布局的
         # find_tatechuyoko_runs 检测器来改变渲染，但引擎竖排布局自带 tcy 检测
-        # （rendering/tate_chu_yoko.py），该 mock 不再驱动布局，用例前提失效。
-        # 引擎 tcy × fork glyph_slant 的适配属节点 2b「竖排双引擎」范围，
-        # 届时重写本用例（改用引擎 tcy 检测路径）后再移除跳过。
-        self.skipTest('fork tcy 检测器 mock 前提失效，待 2b 重写')
-        # Local-only: with glyph_slant active, tatechuyoko runs keep their
-        # upright placement (glyph_slant guards rotation via per-char
-        # records). The run must lead a line so the first char is a rotation
-        # char; disabling the tcy detector then rotates that line, so an A/B
-        # pixel comparison locks the guard.
-        block = TextBlock([0, 0, 300, 600])
-        block._bounding_rect = [0, 0, 300, 600]
-        block.vertical = True
-        block.translation = "ABC発表"
-        block.fontformat.glyph_slant_angle = 25.0
-        item = self.TextBlkItem(block, 0)
-        scene = self.QGraphicsScene()
-        scene.addItem(item)
-        self.app.processEvents()
-
-        guarded = self._render_scene(scene)
-        with patch(
-            "ui.scene_textlayout.find_tatechuyoko_runs",
-            return_value={},
-        ):
-            item.layout.reLayout()
-            item.update()
-            self.app.processEvents()
-            unguarded = self._render_scene(scene)
-        self.assertNotEqual(guarded, unguarded)
-        scene.removeItem(item)
+        # （rendering/tate_chu_yoko.py），该 mock 不再驱动布局，前提失效。
+        # fork 的旧布局文件已随 2b 收尾删除（2026-08-23），
+        # 适配用例待按引擎 tcy 检测路径重写。
+        self.skipTest('fork tcy 检测器已删，待按引擎 tcy 检测路径重写')
 
 
 if __name__ == "__main__":

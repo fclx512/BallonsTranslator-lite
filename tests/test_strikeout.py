@@ -87,8 +87,10 @@ class FormatButtonsTest(unittest.TestCase):
 
         group = FormatGroupBtn()
         self.assertFalse(hasattr(group, "boldBtn"))
-        for attr in ("strikeBtn", "italicBtn", "underlineBtn", "emphasisBtn"):
+        for attr in ("strikeBtn", "italicBtn", "underlineBtn"):
             self.assertTrue(hasattr(group, attr), attr)
+        # emphasis moved to a rail launcher + dock (EmphasisFormatGroup)
+        self.assertFalse(hasattr(group, "emphasisBtn"))
         # strike replaces bold in the leftmost slot
         self.assertIs(group.layout().itemAt(0).widget(), group.strikeBtn)
 

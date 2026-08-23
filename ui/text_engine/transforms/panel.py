@@ -1,7 +1,9 @@
 """Expandable controls for composable text transforms (Stage 5 node H).
 
 Local self-development of upstream v1.5.10 ``transforms/panel.py`` +
-``transforms/controls.py``, keeping the exact session-facing contract the
+``transforms/controls`` (both merged into this file — the upstream
+controls module was a dead duplicate and was dropped), keeping the exact
+session-facing contract the
 stage-5 ``TextTransformEditSession`` (``transforms/editor.py``) relies on:
 
 * 8 signals: ``transform_commit_requested`` / ``transform_preview_requested`` /
@@ -53,7 +55,7 @@ from qtpy.QtWidgets import (
 )
 
 from utils.fontformat import FontFormat, TextTransformState
-from ui.custom_widget import PanelArea, SizeControlLabel
+from ui.custom_widget import GroupFrame, PanelArea, SeparatorWidget, SizeControlLabel
 from ui.misc import get_theme_color
 from ui.text_engine.transforms.registry import (
     GLYPH_SLANT_CONTROL,
@@ -641,7 +643,8 @@ class TransformParameterPanel(QFrame):
         header_layout.addWidget(action_widget)
 
         self.controls = {}
-        controls_widget = QWidget(self)
+        self.controls_widget = QWidget(self)
+        controls_widget = self.controls_widget
         controls_widget.setObjectName('TextTransformPanelControls')
         controls_layout = QVBoxLayout(controls_widget)
         controls_layout.setContentsMargins(0, 0, 0, 0)
@@ -672,8 +675,6 @@ class TransformParameterPanel(QFrame):
                     control.label.setToolTip(shortcut)
                     control.editor.setToolTip(shortcut)
             control.layout().setSpacing(8)
-            control.layout().setStretch(0, 1)
-            control.layout().setStretch(1, 2)
             control.label.setWordWrap(False)
             control.label.setAlignment(
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
@@ -684,13 +685,7 @@ class TransformParameterPanel(QFrame):
                 else control.editor
             )
             editor.setProperty('cardEditor', True)
-            editor.setMinimumWidth(0)
-            editor.setMaximumWidth(16777215)
             editor.setFixedHeight(22)
-            editor.setSizePolicy(
-                QSizePolicy.Policy.Expanding,
-                QSizePolicy.Policy.Fixed,
-            )
             control.commit_requested.connect(
                 lambda name, value, self=self:
                 self.commit_requested.emit(self.index, name, value)
@@ -719,7 +714,7 @@ class TransformParameterPanel(QFrame):
             section for section in grouped_controls if section is not None
         ]
         self.section_labels = []
-        self.control_grids = []
+        self._section_controls_data = []
         for section in section_order:
             if section is not None:
                 section_label = QLabel(section, controls_widget)
@@ -731,23 +726,17 @@ class TransformParameterPanel(QFrame):
             grid.setHorizontalSpacing(8)
             grid.setVerticalSpacing(4)
             section_controls = grouped_controls[section]
-            column_count = max(
+            max_columns = max(
                 spec.section_columns for spec, _control in section_controls
             )
-            for column in range(column_count):
-                grid.setColumnStretch(column, 1)
-            for control_index, (_spec, control) in enumerate(section_controls):
-                control.setSizePolicy(
-                    QSizePolicy.Policy.Expanding,
-                    QSizePolicy.Policy.Preferred,
-                )
-                grid.addWidget(
-                    control,
-                    control_index // column_count,
-                    control_index % column_count,
-                )
+            self._section_controls_data.append({
+                'section': section,
+                'controls': [control for _spec, control in section_controls],
+                'max_columns': min(max_columns, len(section_controls)),
+                'grid': grid,
+                'column_count': 0,
+            })
             controls_layout.addLayout(grid)
-            self.control_grids.append(grid)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 12, 8)
@@ -756,6 +745,79 @@ class TransformParameterPanel(QFrame):
         layout.addWidget(controls_widget)
 
         self._sync_action_visibility()
+
+    def _apply_section_columns(self, section_data: dict, column_count: int) -> None:
+        """Place the section's controls into the grid using ``column_count`` columns."""
+        controls = section_data['controls']
+        grid = section_data['grid']
+        old_count = section_data['column_count']
+        if old_count == column_count and grid.count() > 0:
+            return
+        for col in range(old_count):
+            grid.setColumnStretch(col, 0)
+        for col in range(column_count):
+            grid.setColumnStretch(col, 1)
+        for control in controls:
+            grid.removeWidget(control)
+        single_column = column_count == 1
+        for control_index, control in enumerate(controls):
+            editor = (
+                control.combobox
+                if isinstance(control, CommittedTransformChoiceControl)
+                else control.editor
+            )
+            if single_column:
+                control.layout().setStretch(0, 1)
+                control.layout().setStretch(1, 0)
+                editor.setSizePolicy(
+                    QSizePolicy.Policy.Fixed,
+                    QSizePolicy.Policy.Fixed,
+                )
+            else:
+                control.layout().setStretch(0, 0)
+                control.layout().setStretch(1, 1)
+                editor.setSizePolicy(
+                    QSizePolicy.Policy.Expanding,
+                    QSizePolicy.Policy.Fixed,
+                )
+            control.setSizePolicy(
+                QSizePolicy.Policy.Expanding,
+                QSizePolicy.Policy.Preferred,
+            )
+            grid.addWidget(
+                control,
+                control_index // column_count,
+                control_index % column_count,
+            )
+        grid.activate()
+        section_data['column_count'] = column_count
+
+    def _relayout_for_width(self, width: int) -> None:
+        """Choose the largest column count that still fits each section."""
+        if width <= 0 or not self._section_controls_data:
+            return
+        # The controls widget fills the card width minus the outer margins
+        # (8 left, 12 right) and the grid's own left margin.
+        base_width = max(1, width - 20)
+        for section_data in self._section_controls_data:
+            grid = section_data['grid']
+            controls = section_data['controls']
+            max_columns = section_data['max_columns']
+            if max_columns <= 1 or len(controls) <= 1:
+                self._apply_section_columns(section_data, 1)
+                continue
+            available = base_width - grid.contentsMargins().left()
+            spacing = grid.horizontalSpacing()
+            min_required = max(
+                control.minimumSizeHint().width() for control in controls
+            )
+            optimal = 1
+            for columns in range(max_columns, 0, -1):
+                needed = columns * min_required + (columns - 1) * spacing
+                if needed <= available:
+                    optimal = columns
+                    break
+            self._apply_section_columns(section_data, optimal)
 
     def set_index(self, index: int) -> None:
         self.index = int(index)
@@ -870,6 +932,12 @@ class TextTransformPanel(PanelArea):
         self.glyph_slant_control.label.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
+        # Keep it compact beside the Add dropdown: one line, no expanding
+        # (otherwise it spreads across the header and centres on the panel).
+        self.glyph_slant_control.label.setWordWrap(False)
+        self.glyph_slant_control.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
+        )
         self.glyph_slant_control.layout().setSpacing(8)
         self.glyph_slant_control.layout().setStretch(0, 1)
         self.glyph_slant_control.layout().setStretch(1, 2)
@@ -930,20 +998,38 @@ class TextTransformPanel(PanelArea):
         self.transform_layout.setSpacing(6)
         self.transform_header_layout = QHBoxLayout()
         self.transform_header_layout.setContentsMargins(0, 0, 0, 0)
-        self.transform_header_layout.setSpacing(6)
+        self.transform_header_layout.setSpacing(8)
         self.add_transform_layout = QHBoxLayout()
         self.add_transform_layout.setContentsMargins(0, 0, 0, 0)
         self.add_transform_layout.addWidget(
             self.add_transform_button,
             alignment=Qt.AlignmentFlag.AlignVCenter,
         )
-        self.add_transform_layout.addStretch()
-        self.transform_header_layout.addLayout(self.add_transform_layout, 1)
-        self.transform_header_layout.addWidget(self.glyph_slant_control, 1)
+        # Add dropdown and glyph slant sit together at the top-left, then
+        # stretch — never split the two across the full width, which used
+        # to push the slant into a centred-looking block.
+        self.transform_header_layout.addLayout(self.add_transform_layout)
+        self.transform_header_layout.addWidget(self.glyph_slant_control)
+        self.transform_header_layout.addStretch()
+
+        self.cards_frame = GroupFrame(self.scrollContent)
+        self.cards_frame.setObjectName('TextTransformCardsFrame')
+        self.cards_frame.setVisible(False)
+        cards_layout = QVBoxLayout(self.cards_frame)
+        cards_layout.setContentsMargins(6, 6, 6, 6)
+        cards_layout.setSpacing(8)
+        cards_layout.addLayout(self.transform_rows_layout)
+
+        self.cards_separator = SeparatorWidget(self.scrollContent)
+        self.cards_separator.setObjectName('TextTransformCardsSeparator')
+        self.cards_separator.setVisible(False)
+
         self.transform_layout.addLayout(self.transform_header_layout)
-        self.transform_layout.addSpacing(6)
+        self.transform_layout.addSpacing(4)
+        self.transform_layout.addWidget(self.cards_separator)
+        self.transform_layout.addSpacing(4)
         self.transform_layout.addWidget(self.transform_mixed_label)
-        self.transform_layout.addLayout(self.transform_rows_layout)
+        self.transform_layout.addWidget(self.cards_frame)
         self.setContentLayout(self.transform_layout)
         self._base_width_hint = super().sizeHint().width()
         self._sync_content_height()
@@ -980,6 +1066,24 @@ class TextTransformPanel(PanelArea):
             self.transform_layout.activate()
             self.transform_rows_layout.invalidate()
             self.transform_rows_layout.activate()
+            # Cards now have their resolved width; reflow internal columns and
+            # let the parent layout pick up any resulting height changes.
+            for panel in self.transform_panels:
+                panel._relayout_for_width(panel.width())
+            self.transform_layout.invalidate()
+            self.transform_layout.activate()
+            self.transform_rows_layout.invalidate()
+            self.transform_rows_layout.activate()
+            content_height = (
+                self.transform_layout.heightForWidth(content_width)
+                if self.transform_layout.hasHeightForWidth()
+                else self.transform_layout.sizeHint().height()
+            )
+            self.scrollContent.setMinimumHeight(content_height)
+            self.scrollContent.resize(
+                content_width,
+                max(content_height, self.viewport().height()),
+            )
             target = min(
                 content_height + 2 * self.frameWidth(),
                 self.MAX_CONTENT_HEIGHT,
@@ -1067,6 +1171,10 @@ class TextTransformPanel(PanelArea):
             and self._selected_transform_index >= count
         ):
             self.clear_transform_selection()
+        self.cards_frame.setVisible(count > 0)
+        self.cards_separator.setVisible(
+            self.transform_mixed_label.isVisible() or self.cards_frame.isVisible()
+        )
         self._sync_content_height()
 
     def select_transform(self, index: int, *, emit: bool = True):

@@ -40,7 +40,7 @@ modules/
 | `ui/text_panel.py` | 文本编辑面板 |
 | `ui/panel_rail.py` | 嵌字页格式区左缘窄栏：功能图标列（画布浮层面板入口，见 `ui/custom_widget/rail_dock_panel.py`） |
 | `ui/io_thread.py` | 管线编排（检测→OCR→翻译→修复） |
-| `ui/scene_textlayout.py` | 画布文字渲染 |
+| `ui/textitem.py` / `ui/text_engine/` | 画布文字渲染（textitem 是 fork 适配层，渲染实现在 engine；旧 scene_textlayout.py 已废弃待删） |
 | `ui/overlay_modal.py` | `OverlayModal` — 中心淡入/淡出模态（scrim 覆盖中央画布区，ConfigPanel 用它） |
 | `ui/overlay_slide.py` | `OverlaySlider` — 覆盖面板滑入滑出动画（GlobalSearchWidget、PageList 用它） |
 | `ui/custom_widget/` | 可复用控件库（`__init__.py` 统一导出，见下方"打包控件功能"） |
@@ -73,8 +73,9 @@ modules/
 
 所有文档放 `docs/`，文件名中文化，无英文版本。
 
-- 引用文件用**仓库相对路径**（如 `ui/configpanel.py`）；引用符号用 **`路径::符号`**（如 `ui/configpanel.py::DEFAULT_SHORTCUTS`），**不写行号**（行号易漂移）。
+- 引用文件用**仓库相对路径**（如 `ui/configpanel.py`）；引用符号用 **`路径::符号`**（如 `ui/configpanel.py::DEFAULT_SHORTCUTS`），**不写行号**（行号易漂移）。**禁止裸符号名**（如 `TextStyleDialog`）——check_docs 查表校验不到裸名，符号被删后静默漏网（2026-08-23 教训）；符号一律带文件路径。
 - 改动后跑 `scripts/check_docs.py` 校验文档里的路径/符号引用是否失效（已并入 `verify.py`）。仅归档/日志类文档（`daily_log.md`、`经验教训.md`、`上游参考.md`）不在校验范围；`技术实现/` 已纳入校验，引用上游仓库路径时须带 `ballontranslator/`（或 `BallonsTranslator/`、`resources/`）前缀以触发跨库豁免。
+- 深度审计（死代码/休眠登记表、删除残留引用）用 `/audit-docs` 技能（`verify.py` 第 3 步已自动跑核心检查）。
 
 ## 配置系统
 
@@ -117,10 +118,11 @@ modules/
 
 `./ballontrans_pylibs_win/python.exe scripts/verify.py`
 
-一条命令依次跑 语法 → 文档 → i18n → qm → 冒烟；**成功每步只打一行，失败才完整打印报错（据此修复）**。各步自动判定：
+一条命令依次跑 语法 → 文档 → 审计 → i18n → qm → 冒烟；**成功每步只打一行，失败才完整打印报错（据此修复）**。各步自动判定：
 
 - **语法**：只查 git 改动涉及的 .py（`--all` 改查全部 ui/+utils/）
 - **文档**：全量校验 `AGENTS.md` 与 `docs/` 活文档里的路径/符号引用（`scripts/check_docs.py`）
+- **审计**：登记表契约（`scripts/check_audit.py` + `scripts/audit_registry.json`）——`deprecated` 已删文件不得复活、残留引用须清零（`allowed_mentions` 白名单外）；`suspended` 休眠文件不得被主 UI import；未登记删除仅提示不失败
 - **i18n**：全量扫描；硬编码中文/缺失条目为失败，孤儿条目降级为警告（项目大量 `canvas.tr()`/`self.tr(variable)` 间接调用是已知噪音，详见上方 i18n 说明）
 - **qm**：ts 有改动时自动编译
 - **冒烟**：改动命中启动链文件（`launch.py`/`modules/base.py`/`utils/profile_manager.py`/`ui/configpanel.py`/`ui/mainwindow.py`）时自动触发，`--smoke` 可强制
@@ -129,10 +131,11 @@ modules/
 
 1. **语法检查**：`./ballontrans_pylibs_win/python.exe scripts/check_syntax.py <文件...>`（支持多文件；查编译 + tab 字符 + UTF-8 BOM）
 2. **文档校验**：`./ballontrans_pylibs_win/python.exe scripts/check_docs.py`（校验 `AGENTS.md` + `docs/` 活文档的路径/符号引用）
-3. **i18n 检查**：`./ballontrans_pylibs_win/python.exe scripts/i18n_check.py`；发版前 `--ci`；`--show-expected` 列出已知孤儿
-4. **qm 编译**：`./ballontrans_pylibs_win/python.exe scripts/qm_compile.py translate/zh_CN.ts translate/zh_CN.qm`
-5. **启动冒烟测试**：`./ballontrans_pylibs_win/python.exe tests/test_startup_imports.py`（单进程约 2s；模拟关键导入链，捕捉 `NameError` / `ImportError`，含 `ProfileManagerWidget` 实例化）
-6. **启动 app 目视确认**（可选，但推荐）：双击 `launch.bat` 或 `python launch.py`，确认导航、页面切换、新功能视觉效果正常
+3. **审计登记表**：`./ballontrans_pylibs_win/python.exe scripts/check_audit.py`（死代码/休眠登记表 + 删除文件残留引用；**删除文件前先在 `scripts/audit_registry.json` 登记 `deprecated`**）
+4. **i18n 检查**：`./ballontrans_pylibs_win/python.exe scripts/i18n_check.py`；发版前 `--ci`；`--show-expected` 列出已知孤儿
+5. **qm 编译**：`./ballontrans_pylibs_win/python.exe scripts/qm_compile.py translate/zh_CN.ts translate/zh_CN.qm`
+6. **启动冒烟测试**：`./ballontrans_pylibs_win/python.exe tests/test_startup_imports.py`（单进程约 2s；模拟关键导入链，捕捉 `NameError` / `ImportError`，含 `ProfileManagerWidget` 实例化）
+7. **启动 app 目视确认**（可选，但推荐）：双击 `launch.bat` 或 `python launch.py`，确认导航、页面切换、新功能视觉效果正常
 
 ## 快捷键系统
 

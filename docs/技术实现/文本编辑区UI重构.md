@@ -6,6 +6,8 @@
 > 最终落地的重构方案。评估对象是 `ui/text_panel.py::FontFormatPanel`
 > （画布右侧、『原文/译文』切换上方的格式面板），不涉及设置窗口
 > （`ui/configpanel.py`）。
+> 2026-08-23 更新：侧栏收纳批次后，Zone C 内容全部外迁画布浮层
+> （详见 `docs/技术实现/侧栏图标_画布浮层面板实现.md`），本文结构述已同步修订。
 
 ## 1. 评估结论（重构依据）
 
@@ -29,14 +31,14 @@ Zone A  全局字体样式
         └ TextStylePresetPanel 折叠胶囊（标题承载 Global Font Format /
           TextBlock #N，即 ui/text_style_presets.py）
 Zone B  基本选项（平铺三行，无边框）
-        ├ [前景色 | 字体 | 字重] | 字号
-        ├ [对齐×3 ‖ B/I/U/着重号 ‖ 竖排/TCY/Roman]  （‖ = 1px 竖分隔线）
-        └ [行距] [字距] [描边宽+描边色]
-Zone C  拓展样式与变换
-        ├ Text Style 按钮（capsule 样式，弹 ui/shadow_gradient_dialog.py
-        │  的 TextStyleDialog：不透明度/行距类型/阴影/渐变）
-        ├ TextTransformPanel 折叠胶囊
-        └ 注解折叠胶囊（AnnotationFormatGroup，默认收起）
+        ├ [前景色 | 字体 | 字重]（3:2 定宽 stretch，弹出列表撑宽完整显示）
+        ├ [对齐×3 ‖ B/I/U/着重号 ‖ 竖排/TCY/Roman]   （‖ = 1px 竖分隔线）
+        └ [字号 | 行距 | 字距] 量测行（排版数值一组）；[描边宽+描边色] 单行
+Zone C  拓展样式——内容全部外迁画布浮层（窄栏图标入口 + RailDockPanel
+        ├ TextStyleGroup（不透明度/阴影/渐变，原 TextStyleDialog 内容）
+        ├ TextTransformPanel（PanelArea 本体进浮层，去折叠标题条）
+        ├ AnnotationFormatGroup（Ruby/连字/旧式数字等注解）
+        └ EmphasisFormatGroup（着重号）
 文本输入区（TextPanel 下半，本节不改）
 ```
 
@@ -46,25 +48,27 @@ Zone C  拓展样式与变换
 （`ui/scenetext_manager.py::TextPanel` 直接内嵌 formatpanel，
 保留 `formatOuterFrame` 大框与下半文本区对称）。
 
-## 3. 注解折叠胶囊行为（`ui/text_panel.py`）
+## 3. 拓展样式全部走画布浮层（2026-08-23 起）
 
-- **默认收起**：展开状态持久化在 `utils/config.py::pcfg` 的
-  `expand_annotation_panel`（默认 `False`）；复用
-  `ui/custom_widget/view_panel.py::ViewWidget`（`title_capsule=True`），
-  不注册进 View 菜单。
-- **状态显隐**：`_sync_annotation_controls()` 在无选中文字块（全局模式）
-  时对整个胶囊 `setVisible(False)`，消除灰色死区；选中块后显示并回显。
-- **标题标记**：当前块任一注解激活（着重号≠none / TCY / 任一连字轴≠
-  default / 旧式数字≠default / Ruby 存在）时标题显示 `Annotations •`，
-  收起态也能提示「这里有东西可改」（`_update_annotation_title()`）。
-- **着重号/TCY/Roman 图标留在 Zone B 图标行**：单击即用的快捷开关，
-  与上游图标排版一致；胶囊折叠不影响其工作。
-- **内部平铺**：`AnnotationFormatGroup` 去掉了两个 QGroupBox，改为
-  小加粗标签小节（Ruby / Furigana、Ligature）+ 细横线分隔；
-  Ruby 的 Type/Position 仍走 `FlowLayout`（窄面板自动换行），
-  连字/旧式数字为 **2×2 紧凑网格**——主题字号下单个下拉 sizeHint
-  约 126px（"Default" 文本实测 98px），一行四个约 534px 超出 348
-  内宽会挤压到不可读，2×2 每列约 168px 充裕。
+侧栏收纳批次把 Zone C 四组内容（文字样式/变换/注解/着重号）全部移出
+格式面板，改为窄栏图标（`RailLauncherButton`，`ui/text_panel.py` 的
+`install_*_launcher`）懒创建打开画布浮层（`RailDockPanel`，
+`pcfg.*_dock_open` 记忆开合）。布局机制详见
+`docs/技术实现/侧栏图标_画布浮层面板实现.md`，这里只记与面板重构相关的
+作用域规则：
+
+- **选中级（注解/着重号）**：无选中文字块（全局模式）时窄栏图标禁用；
+  浮层若已打开保持打开、仅内容置灰（`_sync_annotation_controls`），
+  **绝不因失焦自动关闭**——只响应图标 toggle、标题栏 ×、Esc。
+  当前块有激活注解时图标带角标提示（收起态也能看出"这里有东西可改"）。
+- **非选中级（变换/文字样式）**：全局与逐块两种模式都可操作，不置灰
+  （`_sync_annotation_controls` 不碰这两组）。
+- Zone B 图标行保留着重号/TCY/Roman 快捷开关：单击即用，浮层折叠不
+  影响其工作（与上游图标排版一致）。
+- 中间态说明：重构首批曾用「注解折叠胶囊」（`ViewWidget` +
+  `title_capsule=True`）承载注解，`expand_annotation_panel` 字段持久化——
+  收纳批次用 `annotation_dock_open` 等四个 `*_dock_open` 字段取代，
+  胶囊形态已移除。
 
 ## 4. 附带修复
 
@@ -82,8 +86,10 @@ Zone C  拓展样式与变换
 上游 `ballontranslator/ui/text_engine/formatting/panel.py` 把注解全部
 内联平铺（无折叠），高级格式也在面板内联。本 fork 的分歧：
 
-1. 注解区折叠 + 选区显隐（减法导向：低频功能不占常驻空间）；
-2. 不透明度/行距类型/阴影/渐变收进 Text Style 对话框而非内联；
+1. 注解区折叠 + 选区显隐（减法导向：低频功能不占常驻空间）——收纳批次
+   后进一步外迁画布浮层，面板本体不再承载；浮层内沿用选中级置灰；
+2. 不透明度/行距类型/阴影/渐变收进文字样式浮层（原 Text Style 对话框，
+   2026-08-23 收纳批次后为 `ui/text_style_dock.py`）而非内联；
 3. 字重控件保留本地实现（不取上游 `FontWeight` 枚举与 HTML 往返）。
 
 另注：`ui/text_engine/formatting/panel.py` / `ui/text_engine/editing/manager.py`
@@ -92,13 +98,16 @@ Zone C  拓展样式与变换
 
 ## 6. 涉及文件
 
-- `ui/text_panel.py`：分区重排、注解折叠胶囊（ViewWidget + 显隐 + 标记）、
-  `AnnotationFormatGroup` 平铺化
+- `ui/text_panel.py`：分区重排、四组 Zone C 内容外迁画布浮层
+  （`install_annotation/transform/emphasis/textstyle_launcher` +
+  `RailDockPanel` 懒创建）
+- `ui/text_style_dock.py`：文字样式浮层（不透明度/阴影/渐变）
 - `ui/scenetext_manager.py`：移除 "Font Format" CollapsibleSection 包装
 - `ui/custom_widget/view_panel.py`：ExpandLabel 串写修复
-- `utils/config.py`：`expand_annotation_panel` 字段
-- `config/stylesheet.css`：`fmtGroupSeparator` 细线规则
-- `translate/zh_CN.ts` / `.qm`：新增 `Annotations`（注解），
+- `utils/config.py`：`annotation_dock_open`/`emphasis_dock_open`/
+  `transform_dock_open`/`textstyle_dock_open` 字段
+- `config/stylesheet.css`：`fmtGroupSeparator` 细线规则、浮层标题条样式
+- `translate/zh_CN.ts` / `.qm`：新增 `Annotations`（注解）等串，
   删除 TextPanel 的 "Font Format" 死串
 
 ## 7. 验证入口

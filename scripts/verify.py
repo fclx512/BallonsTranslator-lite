@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-shot dev verification: syntax -> docs -> i18n -> qm -> smoke.
+"""One-shot dev verification: syntax -> docs -> audit -> i18n -> qm -> smoke.
 
 Combines the AGENTS.md 测试流程 steps into a single command so the AI runs
 one tool call instead of five.  Prints a one-line summary per step on
@@ -9,6 +9,9 @@ straight from the report.
 Step activation:
   - syntax : always, over git-diff .py files (--all to scan ui/+utils/ instead)
   - docs   : always (validates doc file/symbol references via check_docs.py)
+  - audit  : always (check_audit.py: audit_registry.json 契约——deprecated 已删
+            文件不得复活/残留引用（allowed_mentions 白名单外），suspended 休眠
+            文件不得被主 UI import；未登记删除仅提示不失败）
   - i18n   : always (scans whole ui/modules/utils; known orphans exempted)
   - qm     : only when a .ts file changed
   - smoke  : with --smoke, or automatically when a startup-chain file changed
@@ -145,7 +148,16 @@ def main():
         print("❌ docs: 文档存在失效引用")
         _dump(r)
 
-    # ── 3. i18n ──────────────────────────────────────────────────────────
+    # ── 3. audit ────────────────────────────────────────────────────────
+    r = _run([_py(), str(ROOT / "scripts" / "check_audit.py")])
+    if r.returncode == 0:
+        print(r.stdout.rstrip())
+    else:
+        failures += 1
+        print("❌ audit: 审计登记表/删除残留检查失败")
+        _dump(r)
+
+    # ── 4. i18n ──────────────────────────────────────────────────────────
     r = _run([_py(), str(ROOT / "scripts" / "i18n_check.py"), "--ci"])
     code = r.returncode
     if code == 0:
@@ -164,7 +176,7 @@ def main():
             f"需核对时手动跑 i18n_check.py）"
         )
 
-    # ── 4. qm ────────────────────────────────────────────────────────────
+    # ── 5. qm ────────────────────────────────────────────────────────────
     if ts_changed:
         r = _run(
             [
@@ -183,7 +195,7 @@ def main():
     else:
         print("⏭  qm: ts 无改动，跳过")
 
-    # ── 5. Smoke ─────────────────────────────────────────────────────────
+    # ── 6. Smoke ─────────────────────────────────────────────────────────
     hit = [p.as_posix() for p in changed if p.as_posix() in INIT_FILES]
     if args.smoke or hit:
         reason = "手动 --smoke" if args.smoke else f"改动命中启动链（{', '.join(hit)}）"

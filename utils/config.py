@@ -456,6 +456,10 @@ class ProgramConfig(Config):
     expand_ttransform_panel: bool = True
     # 注解停靠面板（PS 式图标栏入口，Ruby/连字/旧式数字）：记忆开合
     annotation_dock_open: bool = False
+    # 图标栏停靠面板开合记忆：着重号 / 文本样式 / 文本变换
+    emphasis_dock_open: bool = False
+    textstyle_dock_open: bool = False
+    transform_dock_open: bool = False
     show_seq_badge: bool = True
     overflow_mode: bool = False  # 过界模式 — 画布边界视觉指示 + 文字块跨边界裁剪
     clip_text_overflow: bool = True  # 翻译填充时裁剪溢出文字并显示黄色提示框，拖拽调整后解除

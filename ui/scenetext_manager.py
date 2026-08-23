@@ -494,6 +494,9 @@ class TextPanel(Widget):
         layout.setSpacing(7)
 
         self.formatpanel.install_annotation_launcher(self.rail)
+        self.formatpanel.install_emphasis_launcher(self.rail)
+        self.formatpanel.install_transform_launcher(self.rail)
+        self.formatpanel.install_textstyle_launcher(self.rail)
 
     def showEvent(self, event) -> None:
         self.formatpanel.on_textpanel_visibility(True)

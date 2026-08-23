@@ -2,27 +2,21 @@ import copy
 
 from qtpy.QtCore import QSignalBlocker, Qt, Signal
 from qtpy.QtGui import (
-    QActionGroup,
-    QColor,
     QFont,
     QIcon,
     QPainter,
-    QPen,
     QPixmap,
     QTextCursor,
 )
 from qtpy.QtWidgets import (
     QApplication,
     QComboBox,
-    QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QMenu,
     QMessageBox,
     QSizePolicy,
     QStyledItemDelegate,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -45,8 +39,12 @@ from .custom_widget import (
     SmallParamLabel,
     Widget,
 )
-from .text_advanced_format import TextStyleEntryButton
 from .text_style_presets import TextStylePresetPanel
+from .text_style_dock import (
+    GRADIENT_PARAMS,
+    SHADOW_PARAMS,
+    TextStyleGroup,
+)
 from .text_engine.annotations import (
     DEFAULT_EMPHASIS_POSITION,
     EMPHASIS_GLYPHS,
@@ -120,36 +118,35 @@ class AlignmentBtnGroup(QFrame):
             self.alignRightChecker.setChecked(True)
 
 
-class EmphasisToolButton(QToolButton):
-    """Toggle emphasis and pick its CSS-compatible mark and position.
+class EmphasisFormatGroup(QFrame):
+    """Emphasis marks: visible mark + position pickers (rail dock content).
 
-    Ported from the upstream formatting panel: the button face is drawn
-    procedurally (selected mark over a ``あ`` glyph), and the popup menu
-    picks the mark style / position.  Checked means an emphasis style is
-    active; unchecking (clicking the face) clears it to ``none``.
+    Replaces the old ``EmphasisToolButton`` popup menu: the dock shows the
+    ten CSS-compatible marks and the four positions as combo boxes, so the
+    current values stay visible while editing.  Selecting the leading
+    "None" entry clears emphasis (the old unchecked-button semantics).
     """
 
     emphasis_changed = Signal(str, str)
 
-    def __init__(self, parent=None) -> None:
-        super().__init__(parent)
-        self._selected_style = "filled dot"
-        self._position = DEFAULT_EMPHASIS_POSITION
-        self.setObjectName("FontEmphasisToolButton")
-        self.setCheckable(True)
-        self.setToolTip(self.tr("Emphasis Marks"))
-        self.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-        menu = QMenu(self)
-        menu.setObjectName("FontEmphasisMenu")
-        section_font = menu.font()
-        section_font.setBold(True)
-        marks_header = menu.addAction(self.tr("Marks"))
-        marks_header.setEnabled(False)
-        marks_header.setFont(section_font)
-        self._style_group = QActionGroup(self)
-        self._style_group.setExclusive(True)
-        self._style_actions = {}
+        def _unit(label_text: str, control: QWidget) -> QWidget:
+            unit = QWidget(self)
+            unit_layout = QVBoxLayout(unit)
+            unit_layout.setContentsMargins(0, 0, 0, 0)
+            unit_layout.setSpacing(2)
+            unit_layout.addWidget(SmallParamLabel(label_text))
+            unit_layout.addWidget(control)
+            return unit
+
+        self.markBox = SmallComboBox(parent=self)
+        self.markBox.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToContents
+        )
+        self.markBox.addItem(self.tr("None"), "none")
+        mark_icons = self._build_mark_icons()
         style_labels = (
             self.tr("Filled Dot"),
             self.tr("Open Dot"),
@@ -163,19 +160,12 @@ class EmphasisToolButton(QToolButton):
             self.tr("Open Sesame"),
         )
         for label, style in zip(style_labels, EMPHASIS_STYLES[1:]):
-            action = menu.addAction(label)
-            action.setCheckable(True)
-            action.setData(style)
-            self._style_group.addAction(action)
-            self._style_actions[style] = action
-        self._style_group.triggered.connect(self._on_style_selected)
+            self.markBox.addItem(mark_icons.get(style), label, style)
 
-        position_header = menu.addAction(self.tr("Position"))
-        position_header.setEnabled(False)
-        position_header.setFont(section_font)
-        self._position_group = QActionGroup(self)
-        self._position_group.setExclusive(True)
-        self._position_actions = {}
+        self.positionBox = SmallComboBox(parent=self)
+        self.positionBox.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToContents
+        )
         position_labels = (
             self.tr("Over / Right"),
             self.tr("Under / Right"),
@@ -183,35 +173,30 @@ class EmphasisToolButton(QToolButton):
             self.tr("Under / Left"),
         )
         for label, position in zip(position_labels, EMPHASIS_POSITIONS):
-            action = menu.addAction(label)
-            action.setCheckable(True)
-            action.setData(position)
-            self._position_group.addAction(action)
-            self._position_actions[position] = action
+            self.positionBox.addItem(label, position)
 
-        self._position_group.triggered.connect(self._on_position_selected)
-        menu.aboutToShow.connect(self._update_menu_icons)
-        self.setMenu(menu)
-        self._update_menu_icons()
-        self._style_actions[self._selected_style].setChecked(True)
-        self._position_actions[self._position].setChecked(True)
-        self.clicked.connect(self._on_toggled)
+        flow = FlowLayout()
+        flow.setContentsMargins(0, 0, 0, 0)
+        flow.addWidget(_unit(self.tr("Marks"), self.markBox))
+        flow.addWidget(_unit(self.tr("Position"), self.positionBox))
 
-    def values(self) -> tuple[str, str]:
-        style = self._selected_style if self.isChecked() else "none"
-        return style, self._position
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(6)
+        layout.addLayout(flow)
 
-    def _update_menu_icons(self) -> None:
-        icon_size = 24
+        self.markBox.currentIndexChanged.connect(self._emit)
+        self.positionBox.currentIndexChanged.connect(self._emit)
+
+    def _build_mark_icons(self) -> "dict":
+        """Glyph icons for the mark dropdown (same drawing as the old menu)."""
+        icon_size = 16
         ratio = max(1.0, self.devicePixelRatioF())
         font = self.font()
-        font.setPixelSize(20)
+        font.setPixelSize(13)
         color = self.palette().text().color()
-        icon_key = (ratio, font.toString(), color.rgba())
-        if icon_key == getattr(self, "_menu_icon_key", None):
-            return
-        self._menu_icon_key = icon_key
-        for style, action in self._style_actions.items():
+        icons = {}
+        for style in EMPHASIS_STYLES[1:]:
             pixmap = QPixmap(
                 round(icon_size * ratio), round(icon_size * ratio)
             )
@@ -230,104 +215,27 @@ class EmphasisToolButton(QToolButton):
                 EMPHASIS_GLYPHS[style],
             )
             painter.end()
-            action.setIcon(QIcon(pixmap))
+            icons[style] = QIcon(pixmap)
+        return icons
+
+    def values(self) -> tuple[str, str]:
+        return self.markBox.currentData(), self.positionBox.currentData()
 
     def set_values(self, style: str, position: str) -> None:
-        enabled = style in self._style_actions
-        if enabled:
-            self._selected_style = style
-            self._style_actions[style].setChecked(True)
-        if position in self._position_actions:
-            self._position = position
-            self._position_actions[position].setChecked(True)
-        with QSignalBlocker(self):
-            self.setChecked(enabled)
-        self.update()
+        with QSignalBlocker(self.markBox), QSignalBlocker(self.positionBox):
+            index = self.markBox.findData(style)
+            if index >= 0:
+                self.markBox.setCurrentIndex(index)
+            index = self.positionBox.findData(position)
+            if index >= 0:
+                self.positionBox.setCurrentIndex(index)
 
-    def _on_toggled(self, _checked: bool) -> None:
+    def _emit(self, *_args):
         self.emphasis_changed.emit(*self.values())
-
-    def _on_style_selected(self, action) -> None:
-        self._selected_style = str(action.data())
-        self.setChecked(True)
-        self.update()
-        self.emphasis_changed.emit(*self.values())
-
-    def _on_position_selected(self, action) -> None:
-        self._position = str(action.data())
-        if self.isChecked():
-            self.emphasis_changed.emit(*self.values())
-
-    def paintEvent(self, event) -> None:
-        super().paintEvent(event)
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-        arrow_width = 11
-        icon_width = max(1, self.width() - arrow_width)
-        icon_rect = self.rect()
-        icon_rect.setWidth(icon_width)
-        if self.isChecked() and self.isEnabled():
-            painter.fillRect(
-                icon_rect.adjusted(2, 2, -2, -2), QColor(30, 147, 229)
-            )
-        if self.isEnabled() and (self.isChecked() or self.underMouse()):
-            painter.setPen(QPen(QColor(30, 147, 229), 2))
-            painter.drawRect(icon_rect.adjusted(1, 1, -1, -1))
-        color = (
-            QColor("white")
-            if self.isChecked() and self.isEnabled()
-            else self.palette().text().color()
-        )
-        if not self.isEnabled():
-            color.setAlpha(110)
-        painter.setPen(color)
-
-        glyph_font = self.font()
-        glyph_font.setPixelSize(16)
-        mark_font = self.font()
-        mark_font.setPixelSize(12)
-        painter.setFont(mark_font)
-        mark = EMPHASIS_GLYPHS[self._selected_style]
-        mark_bounds = painter.fontMetrics().tightBoundingRect(mark)
-        mark_x = round((icon_width - mark_bounds.width()) / 2 - mark_bounds.left())
-        mark_y = self.height() - 3 - mark_bounds.bottom()
-        painter.drawText(mark_x, mark_y, mark)
-
-        glyph = "あ"
-        glyph_bottom = mark_y + mark_bounds.top() - 1
-        painter.setFont(glyph_font)
-        glyph_bounds = painter.fontMetrics().tightBoundingRect(glyph)
-        available_height = max(1, glyph_bottom - 1)
-        if glyph_bounds.height() > 0:
-            fitted_size = round(
-                glyph_font.pixelSize()
-                * available_height
-                / glyph_bounds.height()
-            )
-            glyph_font.setPixelSize(min(19, max(16, fitted_size)))
-            painter.setFont(glyph_font)
-            glyph_bounds = painter.fontMetrics().tightBoundingRect(glyph)
-        glyph_x = round(
-            (icon_width - glyph_bounds.width()) / 2 - glyph_bounds.left()
-        )
-        glyph_y = glyph_bottom - glyph_bounds.bottom()
-        painter.drawText(glyph_x, glyph_y, glyph)
-
-        separator = QColor(color)
-        separator.setAlpha(90)
-        painter.setPen(QPen(separator, 1))
-        painter.drawLine(icon_width, 3, icon_width, self.height() - 4)
-        painter.setPen(QPen(color, 1.2))
-        arrow_x = self.width() - arrow_width // 2
-        arrow_y = self.height() // 2
-        painter.drawLine(arrow_x - 3, arrow_y - 1, arrow_x, arrow_y + 2)
-        painter.drawLine(arrow_x, arrow_y + 2, arrow_x + 3, arrow_y - 1)
 
 
 class FormatGroupBtn(QFrame):
     param_changed = Signal(str, bool)
-    emphasis_changed = Signal(str, str)
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -341,13 +249,10 @@ class FormatGroupBtn(QFrame):
         self.underlineBtn = QFontChecker(self)
         self.underlineBtn.setObjectName("FontUnderlineChecker")
         self.underlineBtn.clicked.connect(self.setUnderline)
-        self.emphasisBtn = EmphasisToolButton(self)
-        self.emphasisBtn.emphasis_changed.connect(self.emphasis_changed)
         hlayout = QHBoxLayout(self)
         hlayout.addWidget(self.strikeBtn)
         hlayout.addWidget(self.italicBtn)
         hlayout.addWidget(self.underlineBtn)
-        hlayout.addWidget(self.emphasisBtn)
         hlayout.setSpacing(0)
         hlayout.setContentsMargins(0, 0, 0, 0)
 
@@ -804,11 +709,15 @@ class FontFormatPanel(Widget):
             self.on_active_stylename_edited
         )
 
-        # Unified text style entry — opens the Text Style dialog (opacity,
-        # line spacing, shadow, gradient). Replaces the old inline panel.
-        self.text_style_btn = TextStyleEntryButton(self.tr("Text Style"))
-        self.text_style_btn.setToolTip(self.tr("Edit text style"))
-        self.text_style_btn.clicked.connect(self._on_text_style_btn_clicked)
+        # Text style group (opacity / shadow / gradient) — former modal
+        # TextStyleDialog, now a rail dock panel for live canvas editing.
+        self.textstyle_group = TextStyleGroup(self)
+        self.textstyle_group.preview_changed.connect(self._preview_style_param)
+        self.textstyle_group.commit_changed.connect(self._on_text_style_commit)
+        self.textstyle_group.shadow_include_stroke_changed.connect(
+            self._apply_shadow_include_stroke
+        )
+        self.textstyle_group.hide()
 
         # Text transform panel (stage 5 node H) — owned by the same session
         # that talks to the scene controls; the panel is only its UI front.
@@ -906,13 +815,14 @@ class FontFormatPanel(Widget):
         basics.setContentsMargins(2, 3, 2, 3)
         self.vlayout.addLayout(basics)
 
-        # ── Zone C：拓展样式与变换 ──────────────────────────────────
-        # 样式入口按钮：不透明度/行距/阴影/渐变 统一收进 Text Style 对话框
-        self.vlayout.addWidget(self.text_style_btn)
-        self.vlayout.addWidget(self.texttransform_panel.view_widget)
+        # ── Zone C：拓展样式 ──────────────────────────────────────
+        # 样式(/变换) 内容外迁画布浮层（图标栏入口）。变换面板以
+        # PanelArea（QScrollArea）本体进浮层：内部折叠标题条被去
+        # 掉（浮层标题条已承载标题），滚动几何由 TransformPanel
+        # 自身维护，随浮层宽度自适应重排变换卡片。
 
         # 注解组：内容外迁画布浮层（图标栏入口，见 install_annotation_launcher），
-        # 着重号/縦中横图标仍在基本选项行内即点即用。浮层懒创建，
+        # 着重号组随注解一同外迁：两者都是选中级注解，浮层懒创建，
         # 创建前组本体必须隐藏，避免在格式面板左上角裸显。
         self.annotation_group = AnnotationFormatGroup(self)
         self.annotation_group.annotation_changed.connect(
@@ -921,15 +831,23 @@ class FontFormatPanel(Widget):
         self.annotation_group.ruby_remove.connect(self._on_ruby_remove)
         self.annotation_group.setEnabled(False)
         self.annotation_group.hide()
-        self.formatBtnGroup.emphasis_changed.connect(
+        self.emphasis_group = EmphasisFormatGroup(self)
+        self.emphasis_group.emphasis_changed.connect(
             lambda style, position: self._on_annotation_changed(
                 "emphasis", (style, position)
             )
         )
+        self.emphasis_group.setEnabled(False)
+        self.emphasis_group.hide()
         self.tcyChecker.setEnabled(False)
-        self.formatBtnGroup.emphasisBtn.setEnabled(False)
         self.annotation_launcher = None
         self.annotation_dock = None
+        self.emphasis_launcher = None
+        self.emphasis_dock = None
+        self.transform_launcher = None
+        self.transform_dock = None
+        self.textstyle_launcher = None
+        self.textstyle_dock = None
 
         self.vlayout.setContentsMargins(0, 0, 0, 0)
         self.vlayout.setSpacing(7)
@@ -1000,53 +918,42 @@ class FontFormatPanel(Widget):
             mul = 0.01
         self.lineSpacingBox.setValue(self.lineSpacingBox.value() + delta * mul)
 
-    def _on_text_style_btn_clicked(self):
-        from .shadow_gradient_dialog import TextStyleDialog
+    def _on_text_style_commit(self, name: str, value):
+        if name == "shadow_include_stroke":
+            self._apply_shadow_include_stroke(value)
+            return
+        self.on_param_changed(name, value)
+        self._update_textstyle_indicator()
 
-        fmt = self.global_format if self.global_mode() else C.active_format
-        dlg = TextStyleDialog(
-            fmt,
-            tab="basic",
-            text_color=fmt.frgb,
-            shadow_include_stroke=self.global_format.shadow_include_stroke,
-            parent=self.window(),
-        )
-        dlg.applied.connect(self._on_text_style_applied)
-        if dlg.exec_() == QDialog.DialogCode.Accepted:
-            self._on_text_style_applied(
-                dlg.get_basic_params(),
-                dlg.get_shadow_params(),
-                dlg.get_gradient_params(),
-            )
-        dlg.applied.disconnect(self._on_text_style_applied)
+    def _preview_style_param(self, name: str, value):
+        """Live drag preview without an undo entry (rail Text Style dock).
 
-    def _on_text_style_applied(
-        self, basic_params: dict, shadow_params: dict, gradient_params: dict
-    ):
-        # Handle shadow_include_stroke separately — it must apply to ALL text blocks
-        # on the current page, not just selected ones. This is a project-wide toggle
-        # (no local/per-block mode) consistent with PS behavior.
-        include_stroke = shadow_params.pop("shadow_include_stroke", None)
+        Global mode has no block to preview onto — commits write the
+        global format anyway, so preview is a no-op there.
+        """
+        item = self.textblk_item
+        if item is None:
+            return
+        if name == "opacity":
+            item.setOpacity(value)
+        elif name in SHADOW_PARAMS:
+            item.setBGAttribute(name, value)
+        elif name in GRADIENT_PARAMS:
+            item.setGradientAttribute(name, value)
+        else:
+            self.on_param_changed(name, value)
 
-        for param_name, value in basic_params.items():
-            self.on_param_changed(param_name, value)
-        for param_name, value in shadow_params.items():
-            self.on_param_changed(param_name, value)
-        for param_name, value in gradient_params.items():
-            self.on_param_changed(param_name, value)
+    def _apply_shadow_include_stroke(self, include_stroke: bool):
+        # shadow_include_stroke is project-wide (PS behavior): applies to
+        # ALL text blocks on the current page, not just the selection.
+        from .shared_widget import canvas as SW_canvas
+        from .textitem import TextBlkItem
 
-        if include_stroke is not None:
-            # Always propagate to all text items on the scene
-            from .shared_widget import canvas as SW_canvas
-            from .textitem import TextBlkItem
-
-            for item in SW_canvas.items():
-                if isinstance(item, TextBlkItem):
-                    item.setBGAttribute("shadow_include_stroke", include_stroke)
-                    item.update()
-
-            # Always persist to global format (project-wide toggle).
-            self.global_format.shadow_include_stroke = include_stroke
+        for item in SW_canvas.items():
+            if isinstance(item, TextBlkItem):
+                item.setBGAttribute("shadow_include_stroke", include_stroke)
+                item.update()
+        self.global_format.shadow_include_stroke = include_stroke
 
     def set_active_format(self, font_format: FontFormat, multi_size=False):
         C.active_format = font_format
@@ -1090,6 +997,8 @@ class FontFormatPanel(Widget):
         self.formatBtnGroup.underlineBtn.setChecked(font_format.underline)
         self.formatBtnGroup.italicBtn.setChecked(font_format.italic)
         self.alignBtnGroup.setAlignment(font_format.alignment)
+        if getattr(self, "textstyle_group", None) is not None:
+            self.textstyle_group.set_from_format(font_format)
 
         self.familybox.blockSignals(False)
         self.stylebox.blockSignals(False)  # 新增
@@ -1313,6 +1222,36 @@ class FontFormatPanel(Widget):
             self.texttransform_panel.set_transform_items(transform_items)
         self._sync_annotation_controls()
 
+    def _iter_docks(self):
+        """Yield (key, launcher, dock) for the four rail docks.
+
+        Launchers/docks are None until their ``install_*_launcher`` ran;
+        ``getattr`` default keeps this safe on partially-built panels.
+        """
+        for key in ("annotation", "emphasis", "transform", "textstyle"):
+            yield (
+                key,
+                getattr(self, f"{key}_launcher", None),
+                getattr(self, f"{key}_dock", None),
+            )
+
+    def _close_other_docks(self, opener_key: str) -> None:
+        """Only one rail dock shows at a time (PS sidebar behaviour).
+
+        Opening one float closes every other open float so they never stack
+        over each other.  The other dock hides through ``close_panel`` (its
+        launcher unchecks itself via the normal ``closed`` signal path and
+        its ``pcfg`` open-state key clears), so a later page-return reopens
+        just the one still open.
+        """
+        for key, _launcher, dock in self._iter_docks():
+            # "open" == not explicitly hidden (isVisible would be False for
+            # a shown child whose top-level host isn't shown, e.g. in the
+            # offscreen test harness).
+            if key == opener_key or dock is None or dock.isHidden():
+                continue
+            dock.close_panel()
+
     def install_annotation_launcher(self, rail) -> None:
         """注解浮层入口：图标栏按钮 + RailDockPanel（内容=AnnotationFormatGroup）。
 
@@ -1331,6 +1270,209 @@ class FontFormatPanel(Widget):
             self._on_annotation_launcher_toggled
         )
         rail.add_launcher(self.annotation_launcher)
+
+    def install_transform_launcher(self, rail) -> None:
+        """文本变换浮层入口（同注解浮层模式）。
+
+        变换面板不是选中级作用域：无选中项时编辑全局格式
+        （TextTransformEditSession 空 items 走 global_format），所以
+        launcher 在全局模式保持可用、不做禁用。角标在当前块存在
+        变换（变换栈非空或字形斜角非 0）时点亮。开合记忆在
+        ``pcfg.transform_dock_open``。
+        """
+        from ui.panel_rail import RailLauncherButton
+
+        self.rail = rail
+        self.transform_launcher = RailLauncherButton("⤢")
+        self.transform_launcher.setToolTip(self.tr("Text Transform"))
+        self.transform_launcher.toggled.connect(
+            self._on_transform_launcher_toggled
+        )
+        rail.add_launcher(self.transform_launcher)
+
+    def _ensure_transform_dock(self):
+        if self.transform_dock is None:
+            from ui.custom_widget import RailDockPanel
+
+            # Content is the panel itself, not its view_widget: the dock
+            # header already carries the "Text Transform" title, so the
+            # panel's own collapsible/fold title bar is dropped and the
+            # scroll content fills the dock width directly (its width-sync
+            # reflows the transform cards to whatever the dock is sized to).
+            self.transform_dock = RailDockPanel(
+                self.tr("Text Transform"),
+                self.texttransform_panel,
+                rail=self.rail,
+                config_open="transform_dock_open",
+            )
+            # The transform section grids (2-3 columns of label+editor) need
+            # real width; 230px is far too cramped, so pin a wider floor.
+            # The user can still drag wider; no lower than this.
+            self.transform_dock.setMinimumWidth(340)
+            self.transform_dock.closed.connect(
+                self._on_transform_dock_closed
+            )
+        return self.transform_dock
+
+    def _on_transform_launcher_toggled(self, checked: bool):
+        if self.transform_dock is None and not checked:
+            return
+        if checked:
+            self._close_other_docks("transform")
+            self._ensure_transform_dock().open_panel()
+        elif self.transform_dock is not None:
+            self.transform_dock.close_panel()
+
+    def _on_transform_dock_closed(self):
+        if self.transform_launcher is not None and self.transform_launcher.isChecked():
+            with QSignalBlocker(self.transform_launcher):
+                self.transform_launcher.setChecked(False)
+
+    def _update_transform_indicator(self):
+        """Rail icon corner dot while the block holds any transform."""
+        item = self.textblk_item
+        active = False
+        if item is not None:
+            fmt = item.blk.fontformat
+            transform_active = bool(fmt.text_transform) or (
+                fmt.glyph_slant_angle != 0.0
+            )
+            active = bool(transform_active)
+        if self.transform_launcher is not None:
+            self.transform_launcher.set_dot(active)
+        if self.transform_dock is not None:
+            title = self.tr("Text Transform")
+            if active:
+                title += " •"
+            self.transform_dock.set_title(title)
+
+    def install_emphasis_launcher(self, rail) -> None:
+        """着重号浮层入口（同注解浮层模式，选中级作用域）。
+
+        格式行里的着重号按钮迁到这里：launcher 图标用着重号标记本体，
+        浮层内容为可见的标记/位置选择（EmphasisFormatGroup）。全局模式
+        禁用（无当前块没有可作用的选中文本），角标在当前块带强调时点亮。
+        开合记忆在 ``pcfg.emphasis_dock_open``。
+        """
+        from ui.panel_rail import RailLauncherButton
+
+        self.rail = rail
+        self.emphasis_launcher = RailLauncherButton("●")
+        self.emphasis_launcher.setToolTip(self.tr("Emphasis Marks"))
+        self.emphasis_launcher.toggled.connect(
+            self._on_emphasis_launcher_toggled
+        )
+        rail.add_launcher(self.emphasis_launcher)
+
+    def _ensure_emphasis_dock(self):
+        if self.emphasis_dock is None:
+            from ui.custom_widget import RailDockPanel
+
+            self.emphasis_dock = RailDockPanel(
+                self.tr("Emphasis Marks"),
+                self.emphasis_group,
+                rail=self.rail,
+                config_open="emphasis_dock_open",
+            )
+            self.emphasis_dock.closed.connect(
+                self._on_emphasis_dock_closed
+            )
+        return self.emphasis_dock
+
+    def _on_emphasis_launcher_toggled(self, checked: bool):
+        if self.emphasis_dock is None and not checked:
+            return
+        if checked:
+            self._close_other_docks("emphasis")
+            self._ensure_emphasis_dock().open_panel()
+        elif self.emphasis_dock is not None:
+            self.emphasis_dock.close_panel()
+
+    def _on_emphasis_dock_closed(self):
+        if self.emphasis_launcher is not None and self.emphasis_launcher.isChecked():
+            with QSignalBlocker(self.emphasis_launcher):
+                self.emphasis_launcher.setChecked(False)
+
+    def _update_emphasis_indicator(self):
+        """Rail icon corner dot while the block carries an emphasis mark."""
+        item = self.textblk_item
+        active = False
+        if item is not None:
+            active = item.emphasis_values()[0] != EMPHASIS_STYLES[0]
+        if self.emphasis_launcher is not None:
+            self.emphasis_launcher.set_dot(active)
+        if self.emphasis_dock is not None:
+            title = self.tr("Emphasis Marks")
+            if active:
+                title += " •"
+            self.emphasis_dock.set_title(title)
+
+    def install_textstyle_launcher(self, rail) -> None:
+        """文本样式浮层入口（不透明度/阴影/渐变，同注解浮层模式）。
+
+        内容=TextStyleGroup；非选中级作用域：全局模式也可用（提交走
+        on_param_changed 落地全局格式，与旧对话框一致）。角标在当前块
+        带非默认样式（透明度≠1 / 阴影半径>0 / 阴影偏移非零 / 渐变开）
+        时点亮。开合记忆在 ``pcfg.textstyle_dock_open``。
+        """
+        from ui.panel_rail import RailLauncherButton
+
+        self.rail = rail
+        self.textstyle_launcher = RailLauncherButton("◐")
+        self.textstyle_launcher.setToolTip(self.tr("Text Style"))
+        self.textstyle_launcher.toggled.connect(
+            self._on_textstyle_launcher_toggled
+        )
+        rail.add_launcher(self.textstyle_launcher)
+
+    def _ensure_textstyle_dock(self):
+        if self.textstyle_dock is None:
+            from ui.custom_widget import RailDockPanel
+
+            self.textstyle_dock = RailDockPanel(
+                self.tr("Text Style"),
+                self.textstyle_group,
+                rail=self.rail,
+                config_open="textstyle_dock_open",
+            )
+            self.textstyle_dock.closed.connect(
+                self._on_textstyle_dock_closed
+            )
+        return self.textstyle_dock
+
+    def _on_textstyle_launcher_toggled(self, checked: bool):
+        if self.textstyle_dock is None and not checked:
+            return
+        if checked:
+            self._close_other_docks("textstyle")
+            self._ensure_textstyle_dock().open_panel()
+        elif self.textstyle_dock is not None:
+            self.textstyle_dock.close_panel()
+
+    def _on_textstyle_dock_closed(self):
+        if self.textstyle_launcher is not None and self.textstyle_launcher.isChecked():
+            with QSignalBlocker(self.textstyle_launcher):
+                self.textstyle_launcher.setChecked(False)
+
+    def _update_textstyle_indicator(self):
+        """Rail icon corner dot while the block carries a non-default style."""
+        item = self.textblk_item
+        active = False
+        if item is not None:
+            fmt = item.blk.fontformat
+            active = (
+                fmt.opacity != 1.0
+                or fmt.shadow_radius > 0.0
+                or fmt.shadow_offset != [0.0, 0.0]
+                or fmt.gradient_enabled
+            )
+        if self.textstyle_launcher is not None:
+            self.textstyle_launcher.set_dot(active)
+        if self.textstyle_dock is not None:
+            title = self.tr("Text Style")
+            if active:
+                title += " •"
+            self.textstyle_dock.set_title(title)
 
     def _ensure_annotation_dock(self):
         if self.annotation_dock is None:
@@ -1351,6 +1493,7 @@ class FontFormatPanel(Widget):
         if self.annotation_dock is None and not checked:
             return
         if checked:
+            self._close_other_docks("annotation")
             self._ensure_annotation_dock().open_panel()
         elif self.annotation_dock is not None:
             self.annotation_dock.close_panel()
@@ -1362,18 +1505,47 @@ class FontFormatPanel(Widget):
 
     def on_textpanel_visibility(self, visible: bool):
         """嵌字页显隐时同步浮层：页面隐藏则随隐（保留开合状态与勾选）。"""
+        docks = (
+            (
+                self.annotation_launcher,
+                self.annotation_dock,
+                self._ensure_annotation_dock,
+                "annotation_dock_open",
+            ),
+            (
+                self.emphasis_launcher,
+                self.emphasis_dock,
+                self._ensure_emphasis_dock,
+                "emphasis_dock_open",
+            ),
+            (
+                self.transform_launcher,
+                self.transform_dock,
+                self._ensure_transform_dock,
+                "transform_dock_open",
+            ),
+            (
+                self.textstyle_launcher,
+                self.textstyle_dock,
+                self._ensure_textstyle_dock,
+                "textstyle_dock_open",
+            ),
+        )
         if visible:
-            if (
-                self.annotation_launcher is not None
-                and self.annotation_launcher.isEnabled()
-                and (
-                    self.annotation_launcher.isChecked()
-                    or C.pcfg.annotation_dock_open
-                )
-            ):
-                self._ensure_annotation_dock().open_panel()
-        elif self.annotation_dock is not None and self.annotation_dock.isVisible():
-            self.annotation_dock.hide_keep_state()
+            # Mutual exclusion: at most one dock is open-state at a time, so
+            # reopen the first eligible one and stop — never stack several.
+            for launcher, _dock, ensure, config_open in docks:
+                if (
+                    launcher is not None
+                    and launcher.isEnabled()
+                    and (launcher.isChecked() or getattr(C.pcfg, config_open))
+                ):
+                    ensure().open_panel()
+                    break
+        else:
+            for _launcher, dock, _ensure, _config_open in docks:
+                if dock is not None and not dock.isHidden():
+                    dock.hide_keep_state()
 
     def _sync_annotation_controls(self):
         """Restore the annotation controls from the active text item.
@@ -1394,14 +1566,19 @@ class FontFormatPanel(Widget):
         has_item = item is not None
         group.setEnabled(has_item)
         self.tcyChecker.setEnabled(has_item)
-        self.formatBtnGroup.emphasisBtn.setEnabled(has_item)
+        self.emphasis_group.setEnabled(has_item)
         if self.annotation_launcher is not None:
             self.annotation_launcher.setEnabled(has_item)
+        if self.emphasis_launcher is not None:
+            self.emphasis_launcher.setEnabled(has_item)
         self._update_annotation_indicator()
+        self._update_emphasis_indicator()
+        self._update_textstyle_indicator()
+        self._update_transform_indicator()
         if item is None:
             return
         with QSignalBlocker(group), QSignalBlocker(self.tcyChecker):
-            self.formatBtnGroup.emphasisBtn.set_values(*item.emphasis_values())
+            self.emphasis_group.set_values(*item.emphasis_values())
             self.tcyChecker.setChecked(item.tate_chu_yoko_enabled())
             for axis in (
                 LIGATURE_COMMON,
@@ -1414,13 +1591,18 @@ class FontFormatPanel(Widget):
             group.set_ruby(ruby_type, text, position, enabled)
 
     def _update_annotation_indicator(self):
-        """Rail icon corner dot + dock title while the block has annotations."""
+        """Rail icon corner dot + dock title while the block has annotations.
+
+        Emphasis has its own launcher and is reported by
+        ``_update_emphasis_indicator``; this indicator covers the
+        remaining annotation family (tate-chu-yoko, oldstyle, ligatures,
+        ruby).
+        """
         item = self.textblk_item
         active = False
         if item is not None:
             active = (
-                item.emphasis_values()[0] != EMPHASIS_STYLES[0]
-                or item.tate_chu_yoko_enabled()
+                item.tate_chu_yoko_enabled()
                 or item.oldstyle_nums_value() != LIGATURE_DEFAULT
                 or any(
                     item.ligature_axis_value(axis) != LIGATURE_DEFAULT
@@ -1474,6 +1656,9 @@ class FontFormatPanel(Widget):
                 # Ruby needs selected base text; surface the engine's
                 # validation reason instead of crashing the panel.
                 QMessageBox.information(self, self.tr("Ruby"), str(error))
+        # 块注解变化后即时刷新 rail 角标（不等待下次选择同步）
+        self._update_annotation_indicator()
+        self._update_emphasis_indicator()
 
     def _on_ruby_remove(self):
         if self.textblk_item is not None:

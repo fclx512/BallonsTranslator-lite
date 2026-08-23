@@ -24,15 +24,16 @@ class ClockDial(QWidget):
     distanceChanged = Signal(float)
     valueChanged = Signal()
 
-    def __init__(self, mode="shadow", parent=None):
+    def __init__(self, mode="shadow", parent=None, min_size=160, compact=False):
         super().__init__(parent)
         self._mode = mode
+        self._compact = bool(compact)
         self._angle = 135.0  # degrees, 0=right, clockwise
         self._distance = 0.5 if mode == "shadow" else 1.0
         self._color = QColor(0, 0, 0)
         self._dragging = False
         self._hovered = False
-        self.setMinimumSize(160, 160)
+        self.setMinimumSize(min_size, min_size)
         self.setMouseTracking(True)
 
     # ── Public API ──────────────────────────────────────────
@@ -71,7 +72,7 @@ class ClockDial(QWidget):
     def _dial_rect(self) -> QRectF:
         """The circle bounds, centered in the widget."""
         s = min(self.width(), self.height())
-        margin = 18.0
+        margin = 4.0 if self._compact else 18.0
         size = s - 2 * margin
         x = (self.width() - size) / 2.0
         y = (self.height() - size) / 2.0
@@ -134,24 +135,30 @@ class ClockDial(QWidget):
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawEllipse(rect.center(), inner_r, inner_r)
 
-        # tick marks every 30 degrees
-        font = QFont()
-        font.setPointSizeF(7.5)
-        p.setFont(font)
-        p.setPen(QPen(QColor(130, 130, 130), 1))
-        for deg in range(0, 360, 30):
-            rad = math.radians(deg)
-            cos_a, sin_a = math.cos(rad), math.sin(rad)
-            # outer tick
-            x1 = cx + cos_a * (inner_r - 1)
-            y1 = cy - sin_a * (inner_r - 1)
-            x2 = cx + cos_a * (inner_r - 10)
-            y2 = cy - sin_a * (inner_r - 10)
-            p.drawLine(QPointF(x1, y1), QPointF(x2, y2))
-            # degree label
-            lx = cx + cos_a * (inner_r - 16) - 10
-            ly = cy - sin_a * (inner_r - 16) - 5
-            p.drawText(QRectF(lx, ly, 20, 12), Qt.AlignmentFlag.AlignCenter, str(deg))
+        # tick marks every 30 degrees (dropped in compact mode — the dock
+        # dial only needs a rough direction, no degree annotation)
+        if not self._compact:
+            font = QFont()
+            font.setPointSizeF(7.5)
+            p.setFont(font)
+            p.setPen(QPen(QColor(130, 130, 130), 1))
+            for deg in range(0, 360, 30):
+                rad = math.radians(deg)
+                cos_a, sin_a = math.cos(rad), math.sin(rad)
+                # outer tick
+                x1 = cx + cos_a * (inner_r - 1)
+                y1 = cy - sin_a * (inner_r - 1)
+                x2 = cx + cos_a * (inner_r - 10)
+                y2 = cy - sin_a * (inner_r - 10)
+                p.drawLine(QPointF(x1, y1), QPointF(x2, y2))
+                # degree label
+                lx = cx + cos_a * (inner_r - 16) - 10
+                ly = cy - sin_a * (inner_r - 16) - 5
+                p.drawText(
+                    QRectF(lx, ly, 20, 12),
+                    Qt.AlignmentFlag.AlignCenter,
+                    str(deg),
+                )
 
         # dashed inner circle (shadow mode)
         if self._mode == "shadow":
@@ -173,7 +180,7 @@ class ClockDial(QWidget):
         p.drawLine(QPointF(cx, cy), hpos)
 
         # handle
-        handle_r = 7.0
+        handle_r = 5.0 if self._compact else 7.0
         handle_color = (
             self._color.lighter(130) if self._dragging or self._hovered else self._color
         )
@@ -227,4 +234,4 @@ class ClockDial(QWidget):
     def minimumSizeHint(self):
         from qtpy.QtCore import QSize
 
-        return QSize(160, 160)
+        return QSize(self.minimumSize().width(), self.minimumSize().height())

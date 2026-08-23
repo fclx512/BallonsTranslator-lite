@@ -325,40 +325,75 @@ class AnnotationLauncherLogicTest(unittest.TestCase):
 
     def _make_panel(self):
         from ui.panel_rail import RailLauncherButton
-        from ui.text_panel import AnnotationFormatGroup, FormatGroupBtn
+        from ui.text_panel import (
+            AnnotationFormatGroup,
+            EmphasisFormatGroup,
+            FormatGroupBtn,
+        )
 
         panel = self.FontFormatPanel.__new__(self.FontFormatPanel)
         panel.textblk_item = None
         panel.annotation_group = AnnotationFormatGroup()
+        panel.emphasis_group = EmphasisFormatGroup()
+        panel.textstyle_group = QCheckBox()  # only setEnabled is touched here
         panel.tcyChecker = QCheckBox()
         panel.formatBtnGroup = FormatGroupBtn()
         panel.annotation_launcher = RailLauncherButton("あ", deco="dots")
         panel.annotation_dock = None
+        panel.emphasis_launcher = RailLauncherButton("●")
+        panel.emphasis_dock = None
+        panel.transform_launcher = RailLauncherButton("⤢")
+        panel.transform_dock = None
+        panel.textstyle_launcher = RailLauncherButton("◐")
+        panel.textstyle_dock = None
         return panel
 
     def test_global_mode_disables_launcher(self):
         panel = self._make_panel()
         panel._sync_annotation_controls()
         self.assertFalse(panel.annotation_launcher.isEnabled())
+        self.assertFalse(panel.emphasis_launcher.isEnabled())
         self.assertFalse(panel.annotation_launcher._dot)
+        self.assertFalse(panel.emphasis_launcher._dot)
 
     def test_item_with_annotation_sets_dot(self):
+        """强调角标独立：增删强调只影响 emphasis launcher。
+
+        注：注解角标对干净块也可能恒亮（引擎默认 Discretionary 连字为
+        'enabled'，与 LIGATURE_DEFAULT 比较视为非默认）——这是既有行为，
+        本测试只验证强调角标自身跟随强调的增删。
+        """
         panel = self._make_panel()
         item = self.TextBlkItem(blk=_make_blk(), idx=0)
         self.scene.addItem(item)
-        item.setEmphasis("filled dot", "over right")
         panel.textblk_item = item
         panel._sync_annotation_controls()
+        self.assertFalse(panel.emphasis_launcher._dot)
+        item.setEmphasis("filled dot", "over right")
+        panel._sync_annotation_controls()
         self.assertTrue(panel.annotation_launcher.isEnabled())
-        self.assertTrue(panel.annotation_launcher._dot)
+        self.assertTrue(panel.emphasis_launcher.isEnabled())
+        self.assertTrue(panel.emphasis_launcher._dot)
+        item.setEmphasis("none", "over right")
+        panel._sync_annotation_controls()
+        self.assertFalse(panel.emphasis_launcher._dot)
 
     def test_indicator_without_launcher_installed(self):
         panel = self.FontFormatPanel.__new__(self.FontFormatPanel)
         panel.textblk_item = None
         panel.annotation_launcher = None
         panel.annotation_dock = None
-        # must not raise before install_annotation_launcher ran
+        panel.emphasis_launcher = None
+        panel.emphasis_dock = None
+        panel.transform_launcher = None
+        panel.transform_dock = None
+        panel.textstyle_launcher = None
+        panel.textstyle_dock = None
+        # must not raise before install_*_launcher ran
         panel._update_annotation_indicator()
+        panel._update_emphasis_indicator()
+        panel._update_textstyle_indicator()
+        panel._update_transform_indicator()
 
 
 if __name__ == "__main__":

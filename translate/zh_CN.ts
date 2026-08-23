@@ -1511,6 +1511,11 @@ Settings → Inpainter → Photoshop Path</source>
     <context>
         <name>FontFormatPanel</name>
         <message>
+            <location filename="..\ui\text_panel.py" />
+            <source>Emphasis Marks</source>
+            <translation>着重号</translation>
+        </message>
+        <message>
             <source>Annotations</source>
             <translation>注解</translation>
         </message>
@@ -4288,107 +4293,87 @@ text layers are fully editable.</source>
         </message>
     </context>
     <context>
-        <name>TextStyleDialog</name>
+        <name>TextStyleGroup</name>
         <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="397" />
-            <source>Text Style</source>
-            <translation>文本样式</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="437" />
-            <source>OK</source>
-            <translation>确定</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="438" />
-            <source>Cancel</source>
-            <translation>取消</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="439" />
-            <source>Apply</source>
-            <translation>应用</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="484" />
-            <source>Color</source>
-            <translation>颜色</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="492" />
-            <source>Strength</source>
-            <translation>强度</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="505" />
-            <source>Radius</source>
-            <translation>半径</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="518" />
-            <source>Offset</source>
-            <translation>偏移</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="525" />
-            <source>Include stroke in shadow</source>
-            <translation>阴影包含描边</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="529" />
-            <source>(global)</source>
-            <translation>（全局生效）</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="535" />
-            <source>Note: PSD export uses Photoshop's native drop shadow (glyph-only), regardless of this setting.</source>
-            <translation>注意：PSD 导出将使用 Photoshop 原生投影（仅字形），不受此设置影响。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="545" />
-            <source>Shadow</source>
-            <translation>阴影</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="567" />
-            <source>Enable</source>
-            <translation>启用</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="583" />
-            <source>↔ Reverse</source>
-            <translation>↔ 互换</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="591" />
-            <source>Scale</source>
-            <translation>缩放</translation>
-        </message>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="605" />
-            <source>Gradient</source>
-            <translation>渐变</translation>
-        </message>        <message>
-            <source>Basic</source>
-            <translation>基础</translation>
-        </message>
-        <message>
+            <location filename="\..\ui\text_style_dock.py" />
             <source>Opacity</source>
             <translation>不透明度</translation>
         </message>
         <message>
+            <location filename="\..\ui\text_style_dock.py" />
             <source>Line Spacing</source>
             <translation>行距类型</translation>
         </message>
         <message>
+            <location filename="\..\ui\text_style_dock.py" />
             <source>Proportional</source>
             <translation>按比例</translation>
         </message>
         <message>
+            <location filename="\..\ui\text_style_dock.py" />
             <source>Distance</source>
             <translation>绝对距离</translation>
         </message>
-
+        <message>
+            <location filename="\..\ui\text_style_dock.py" />
+            <source>Shadow</source>
+            <translation>阴影</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_style_dock.py" />
+            <source>Gradient</source>
+            <translation>渐变</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_style_dock.py" />
+            <source>Color</source>
+            <translation>颜色</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_style_dock.py" />
+            <source>Strength</source>
+            <translation>强度</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_style_dock.py" />
+            <source>Radius</source>
+            <translation>半径</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_style_dock.py" />
+            <source>Offset</source>
+            <translation>偏移</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_style_dock.py" />
+            <source>Include stroke in shadow</source>
+            <translation>阴影包含描边</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_style_dock.py" />
+            <source>(global)</source>
+            <translation>（全局生效）</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_style_dock.py" />
+            <source>Enable</source>
+            <translation>启用</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_style_dock.py" />
+            <source>Scale</source>
+            <translation>缩放</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_style_dock.py" />
+            <source>↔ Reverse</source>
+            <translation>↔ 互换</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_style_dock.py" />
+            <source>Note: PSD export uses Photoshop's native drop shadow (glyph-only), regardless of this setting.</source>
+            <translation>注意：PSD 导出将使用 Photoshop 原生投影（仅字形），不受此设置影响。</translation>
+        </message>
     </context>
     <context>
         <name>ShadowGradientPreview</name>
@@ -6261,72 +6246,177 @@ This maps automatically to each provider's native parameter
         </message>
     </context>
     <context>
-        <name>EmphasisToolButton</name>
+        <name>EmphasisFormatGroup</name>
         <message>
-            <source>Emphasis Marks</source>
-            <translation>着重号</translation>
+            <location filename="\..\ui\text_panel.py" />
+            <source>None</source>
+            <translation>无</translation>
         </message>
         <message>
-            <source>Filled Circle</source>
-            <translation>实心圆</translation>
-        </message>
-        <message>
-            <source>Filled Dot</source>
-            <translation>实心圆点</translation>
-        </message>
-        <message>
-            <source>Filled Double Circle</source>
-            <translation>实心双圆</translation>
-        </message>
-        <message>
-            <source>Filled Sesame</source>
-            <translation>实心芝麻点</translation>
-        </message>
-        <message>
-            <source>Filled Triangle</source>
-            <translation>实心三角</translation>
-        </message>
-        <message>
+            <location filename="\..\ui\text_panel.py" />
             <source>Marks</source>
             <translation>符号</translation>
         </message>
         <message>
-            <source>Open Circle</source>
-            <translation>空心圆</translation>
-        </message>
-        <message>
-            <source>Open Dot</source>
-            <translation>空心小圆点</translation>
-        </message>
-        <message>
-            <source>Open Double Circle</source>
-            <translation>空心双圆</translation>
-        </message>
-        <message>
-            <source>Open Sesame</source>
-            <translation>空心芝麻点</translation>
-        </message>
-        <message>
-            <source>Open Triangle</source>
-            <translation>空心三角</translation>
-        </message>
-        <message>
-            <source>Over / Left</source>
-            <translation>上方 / 左侧</translation>
-        </message>
-        <message>
-            <source>Over / Right</source>
-            <translation>上方 / 右侧</translation>
-        </message>
-        <message>
+            <location filename="\..\ui\text_panel.py" />
             <source>Position</source>
             <translation>位置</translation>
         </message>
         <message>
+            <location filename="\..\ui\text_panel.py" />
+            <source>Filled Dot</source>
+            <translation>实心圆点</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_panel.py" />
+            <source>Open Dot</source>
+            <translation>空心小圆点</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_panel.py" />
+            <source>Filled Circle</source>
+            <translation>实心圆</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_panel.py" />
+            <source>Open Circle</source>
+            <translation>空心圆</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_panel.py" />
+            <source>Filled Double Circle</source>
+            <translation>实心双圆</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_panel.py" />
+            <source>Open Double Circle</source>
+            <translation>空心双圆</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_panel.py" />
+            <source>Filled Triangle</source>
+            <translation>实心三角</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_panel.py" />
+            <source>Open Triangle</source>
+            <translation>空心三角</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_panel.py" />
+            <source>Filled Sesame</source>
+            <translation>实心芝麻点</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_panel.py" />
+            <source>Open Sesame</source>
+            <translation>空心芝麻点</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_panel.py" />
+            <source>Over / Right</source>
+            <translation>上方 / 右侧</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_panel.py" />
+            <source>Under / Right</source>
+            <translation>下方 / 右侧</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_panel.py" />
+            <source>Over / Left</source>
+            <translation>上方 / 左侧</translation>
+        </message>
+        <message>
+            <location filename="\..\ui\text_panel.py" />
+            <source>Under / Left</source>
+            <translation>下方 / 左侧</translation>
+        </message>
+    </context>
+    <context>
+        <name>EmphasisToolButton</name>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Emphasis Marks</source>
+            <translation>着重号</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Filled Circle</source>
+            <translation>实心圆</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Filled Dot</source>
+            <translation>实心圆点</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Filled Double Circle</source>
+            <translation>实心双圆</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Filled Sesame</source>
+            <translation>实心芝麻点</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Filled Triangle</source>
+            <translation>实心三角</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Marks</source>
+            <translation>符号</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Open Circle</source>
+            <translation>空心圆</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Open Dot</source>
+            <translation>空心小圆点</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Open Double Circle</source>
+            <translation>空心双圆</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Open Sesame</source>
+            <translation>空心芝麻点</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Open Triangle</source>
+            <translation>空心三角</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Over / Left</source>
+            <translation>上方 / 左侧</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Over / Right</source>
+            <translation>上方 / 右侧</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
+            <source>Position</source>
+            <translation>位置</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
             <source>Under / Left</source>
             <translation>下方 / 左侧</translation>
         </message>
         <message>
+            <location filename="..\ui\text_engine\formatting\panel.py" />
             <source>Under / Right</source>
             <translation>下方 / 右侧</translation>
         </message>
