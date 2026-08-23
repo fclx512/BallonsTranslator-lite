@@ -23,6 +23,30 @@
 
 ---
 
+### 侧栏图标 + 画布浮层面板（PS 式面板栏，当日三版定稿）
+
+**问题/需求：** 注解折叠胶囊受 348px 宽度约束，草案按 PS 图层面板隐喻定稿为"左缘窄栏 + 浮层"。首版（行号槽迁窄栏 + Qt.Tool 自由浮窗）实机截图暴露四问题：文本输入区不可见、行号错位、浮窗无固定锚、图标无激活态。二版改"镜像覆盖格式区"的停靠式后用户再审提出五点：去掉窄域边框、面板展开到画布区可自由拖拽且不自动关、Edit 模式不收缩单行、三开关按钮回卡片框内、字体/字重下拉定宽但弹层加宽。
+
+**改动要点（三版后终态）：**
+
+- **`ui/panel_rail.py::PanelRail`（新）**：26px 窄栏只挂格式区左缘，`RailLauncherButton` 图标（程序化字形 + 注解角标）；激活态 = CSS 主题色底 + 代码绘白字形/白角标。**窄条透明**：复查后去边框再去底色（去掉 `WA_StyledBackground`，背后格式区透出）。行号槽整套（全局坐标映射/事件过滤去抖/编号点选拖拽）已删。
+- **`ui/custom_widget/rail_dock_panel.py::RailDockPanel`（新）**：主窗口内子控件浮层，宿主 `rail.window().centralStackWidget`；展开**硬连接**锚定窄栏左侧 8px（右缘+顶部固定，画布区右缘、不占文本编辑区），**不可拖拽**、左下角 `_ResizeGrip` 拉伸（光标 `SizeBDiag`、斜纹镜像；尺寸下限随内容布局，功能项压不成一线）；**位置补偿**——宿主缩放/窄栏移动经事件过滤器自动重锚，无需重开刷新；只响应图标 toggle/×/Esc 关闭（全局模式保持打开仅置灰）；开合记忆 `pcfg.annotation_dock_open`，位置始终回锚点、尺寸用户调整会话内保持。不用边框/底色，靠 `#RailDockHeader` 标题条底色分层。
+- **控件自定义样式**：浮层内部注解控件换成本项目 `ui/custom_widget` 库——`SmallComboBox`（Ruby Type/Position + 连字 4 轴下拉）、`ConfigLineEdit`（Ruby 文本行）、`NoBorderPushBtn`（Apply/Remove）、`SmallParamLabel`（小节标签），与全应用主题一致（`ui/text_panel.py::AnnotationFormatGroup`）。
+- **行卡片回归**：`TransPairWidget` 的 `badge_vp`/`badge_drag`/`drag_area`/`accent_bar` 徽章体系从 HEAD 恢复（编号与文本框一体）；保留抽出的 `begin_rows_drag` 共用入口与 fold 传导修复。
+- **布局**：`TextPanel` 纵向两行——上行为窄栏 + 格式区（GroupFrame），下行为文本区 GroupFrame：三开关工具栏（Edit/Review | Source | Translation）居中与行卡片列表同框（二版 HeaderGroupFrame 骑跨式已随该控件整体删除）。
+- **Edit 不折叠**：`fold_textarea` 映射反转——Edit（勾选）= 完整多行卡片，Review = 单行紧凑；`pcfg.fold_textarea` 默认 False。
+- **下拉定宽**：`WidePopupComboMixin`（showPopup 前按最长条目抬弹层视图最小宽）+ 字体/字重框 3:2 布局拉伸（`FontStyleComboBox` 新类），闭合态宽度恒定、弹层完整显示。
+- **注解入口**：`install_annotation_launcher(rail)` 懒创建浮层（创建时才能从 rail 解析主窗宿主）；全局模式图标禁用、浮层不关；角标与标题 "•" 语义不变；嵌字页显隐经 `on_textpanel_visibility` 联动。
+- 保留双向悬停：行文本框 hover → `_flash_row_item` 点亮画布块描边（不接管常显描边块）。i18n：上下文 FloatingPanel→RailDockPanel（"Close"）。
+
+**排障记录：** ① 首版行号槽错位根因：跨控件 `mapToGlobal` 对齐滚动区兄弟节点在 DPI 缩放/布局挤压下脆弱，修订直接删除该机制；② `QEvent.Type.MouseButtonMove` 不存在（正确为 `MouseMove`），PyQt6 虚函数回调内 AttributeError 逃逸表现为原生崩溃（exit 127 无回溯），bisect + 子类包装 eventFilter 捕获异常才定位；③ offscreen 下 `python -c` 的 stdout 在硬崩溃时随缓冲丢失，诊断须 `-u` 或落文件；④ 未 show 的窗口 resize 事件延迟到首次显示；⑤ `TextEditListScrollArea.pairwidget_list` 是类级共享可变列表，测试多实例需先 clear；⑥ QSizeGrip 只作用于顶层窗口，窗口内子控件浮层需自绘角部把手。
+
+**复查修订（用户再审两轮）：** ① 窄栏去底色（透明窄条）；② 面板缩放主窗错位——补宿主 `Resize` + 窄栏 `Move` 事件过滤器自动重锚；③ 面板向左展开、右下角手柄改左下角生效 + 尺寸下限随内容布局（`_min_size()`）；④ 浮动面板内部控件换自定义控件库（见上）。
+
+**涉及文件：** `ui/panel_rail.py`（新增）、`ui/custom_widget/rail_dock_panel.py`（新增）、`ui/custom_widget/floating_panel.py`（新增后删除）、`ui/custom_widget/group_frame.py`（HeaderGroupFrame 增后又删，净零）、`ui/custom_widget/__init__.py`、`ui/textedit_area.py`、`ui/text_panel.py`、`ui/scenetext_manager.py`、`ui/mainwindow.py`、`utils/config.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_panel_rail.py`（新增，20 例）、`docs/技术实现/侧栏图标_画布浮层面板实现.md`、`AGENTS.md`
+
+---
+
 ## 2026-08-22
 
 ### 上游 v1.5.12 移植节点 2a 收尾提交推送 + 节点 2b 竖排双引擎

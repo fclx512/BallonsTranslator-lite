@@ -45,6 +45,7 @@ from utils.text_alignment import (
 )
 
 from .canvas import Canvas
+from .panel_rail import PanelRail
 from .text_panel import FontFormatPanel
 from .textedit_area import (
     QVBoxLayout,
@@ -445,21 +446,32 @@ class TextPanel(Widget):
         super().__init__(*args, **kwargs)
 
         layout = QVBoxLayout(self)
+
         self.textEditList = TextEditListScrollArea(self)
         self.formatpanel = FontFormatPanel(app, self)
 
-        # 用 GroupFrame 包裹格式编辑区，与下方文本内容区形成视觉分隔；
-        # 区块标题（预设/变形/注解折叠胶囊）由 FontFormatPanel 内部承载
-        format_frame = GroupFrame(self)
-        format_frame.setObjectName("formatOuterFrame")
-        format_layout = QVBoxLayout(format_frame)
+        # 上部：格式编辑区（GroupFrame）+ 左缘窄栏（功能图标，展开的
+        # 浮层面板锚定在窄栏左侧画布区，见 ui/panel_rail.py / rail_dock_panel.py）
+        format_row = QWidget(self)
+        format_row_layout = QHBoxLayout(format_row)
+        format_row_layout.setContentsMargins(0, 0, 0, 0)
+        format_row_layout.setSpacing(2)
+        self.rail = PanelRail(format_row)
+        format_row_layout.addWidget(self.rail)
+        self.format_frame = GroupFrame(format_row)
+        self.format_frame.setObjectName("formatOuterFrame")
+        format_layout = QVBoxLayout(self.format_frame)
         format_layout.setContentsMargins(5, 5, 5, 5)
         format_layout.addWidget(self.formatpanel)
-        layout.addWidget(format_frame)
-        self.textToolBar = QHBoxLayout()
+        format_row_layout.addWidget(self.format_frame, 1)
+        layout.addWidget(format_row)
+
+        # 下部：文本编辑区（工具栏 + 文本框列表同框）；行编号/选中锚色/
+        # 拖拽在行卡片内（textedit_area）
         self.foldTextBtn = CheckableLabel(self.tr("Edit"), self.tr("Review"), True)
         self.sourceBtn = TextCheckerLabel(self.tr("Source"))
         self.transBtn = TextCheckerLabel(self.tr("Translation"))
+        self.textToolBar = QHBoxLayout()
         self.textToolBar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.textToolBar.addWidget(self.foldTextBtn)
         self.textToolBar.addWidget(self.sourceBtn)
@@ -470,17 +482,26 @@ class TextPanel(Widget):
         self.textToolBar.setContentsMargins(0, 0, 0, 0)
         self.textToolBar.setSpacing(0)
 
-        # 用 GroupFrame 包裹文本编辑区（工具栏 + 文本框列表），与上方格式编辑区对称
         text_frame = GroupFrame(self)
         text_frame.setObjectName("textEditOuterFrame")
         text_layout = QVBoxLayout(text_frame)
         text_layout.setContentsMargins(5, 5, 5, 5)
         text_layout.addLayout(self.textToolBar)
         text_layout.addWidget(self.textEditList)
-        layout.addWidget(text_frame)
+        layout.addWidget(text_frame, 1)
+
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(7)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.formatpanel.install_annotation_launcher(self.rail)
+
+    def showEvent(self, event) -> None:
+        self.formatpanel.on_textpanel_visibility(True)
+        super().showEvent(event)
+
+    def hideEvent(self, event) -> None:
+        self.formatpanel.on_textpanel_visibility(False)
+        super().hideEvent(event)
 
 
 class SceneTextManager(QObject):
@@ -519,13 +540,14 @@ class SceneTextManager(QObject):
         self.textEditList = textpanel.textEditList
         self.textEditList.focus_out.connect(self.on_textedit_list_focusout)
         self.textEditList.textpanel_contextmenu_requested.connect(
-            canvas.on_create_contextmenu
+            self.canvas.on_create_contextmenu
         )
         self.textEditList.selection_changed.connect(
             self.on_transwidget_selection_changed
         )
         self.textEditList.rearrange_blks.connect(self.on_rearrange_blks)
         self.canvas.reorder_textblks.connect(self.textEditList.move_selected)
+
         self.formatpanel = textpanel.formatpanel
         self.formatpanel.textstyle_panel.apply_fontfmt.connect(self.onFormatTextblks)
 
@@ -534,6 +556,8 @@ class SceneTextManager(QObject):
         self.pairwidget_list: List[TransPairWidget] = self.textEditList.pairwidget_list
 
         self.hovering_transwidget: TransTextEdit = None
+        # 行悬停→画布块描边闪烁的当前持有项（见 _flash_row_item）
+        self._row_flash_item: TextBlkItem = None
 
         self.prev_blkitem: TextBlkItem = None
 
@@ -689,6 +713,11 @@ class SceneTextManager(QObject):
         pair_widget.e_trans.redo_signal.connect(self.on_textedit_redo)
         pair_widget.e_trans.undo_signal.connect(self.on_textedit_undo)
         pair_widget.e_trans.focus_out.connect(self.on_pairw_focusout)
+        # 行悬停双向联动（行→画布）：原文/译文框与行号槽共用同一闪烁路径
+        pair_widget.e_source.hover_enter.connect(self.on_row_hover)
+        pair_widget.e_source.hover_leave.connect(self.on_row_leave)
+        pair_widget.e_trans.hover_enter.connect(self.on_row_hover)
+        pair_widget.e_trans.hover_leave.connect(self.on_row_leave)
         pair_widget.drag_move.connect(self.textEditList.handle_drag_pos)
         pair_widget.pw_drop.connect(self.textEditList.on_pw_dropped)
 
@@ -801,6 +830,41 @@ class SceneTextManager(QObject):
         self.canvas.editing_textblkitem = None
         self.textblk_item_list[blk_id].setSelected(True)
         self.txtblkShapeControl.endEditing()
+
+    def on_row_hover(self, idx: int):
+        if self.is_editting():
+            return
+        self._flash_row_item(idx)
+
+    def on_row_leave(self, idx: int):
+        self._flash_row_item(-1)
+
+    def _flash_row_item(self, idx: int):
+        """行悬停时在画布上临时点亮对应块的描边框（draw_rect 闪烁）。
+
+        只接管原本未显示描边的块；常显描边（textblock_mode）的块不
+        归我们回收，避免与全局显示选项打架。
+        """
+        old = self._row_flash_item
+        if old is not None:
+            self._row_flash_item = None
+            try:
+                if old.scene() is not None:
+                    old.draw_rect = False
+                    old.update()
+            except RuntimeError:
+                pass
+        if idx < 0 or idx >= len(self.textblk_item_list):
+            return
+        item = self.textblk_item_list[idx]
+        try:
+            if item.draw_rect:
+                return
+            item.draw_rect = True
+            item.update()
+        except RuntimeError:
+            return
+        self._row_flash_item = item
 
     def editingTextItem(self) -> TextBlkItem:
         if (

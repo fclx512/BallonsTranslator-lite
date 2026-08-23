@@ -754,10 +754,10 @@ class MainWindow(mainwindow_cls):
         self.drawingPanel.initDLModule(module_manager)
 
         self.global_search_widget.imgtrans_proj = self.imgtrans_proj
-        self.global_search_widget.setupReplaceThread(
+        self.global_search_widget.set_page_widget_lists(
             self.st_manager.pairwidget_list, self.st_manager.textblk_item_list
         )
-        self.global_search_widget.replace_thread.finished.connect(
+        self.global_search_widget.replace_finished.connect(
             self.on_global_replace_finished
         )
 
@@ -2621,14 +2621,24 @@ class MainWindow(mainwindow_cls):
         self, pagename: str, blk_idx: int, is_src: bool, start: int, end: int
     ):
         idx = self.imgtrans_proj.pagename2idx(pagename)
+        if idx < 0:
+            return
         self.pageList.setCurrentRow(idx)
-        pw = self.st_manager.pairwidget_list[blk_idx]
+        # Page switch is synchronous; bail out if it somehow didn't land,
+        # so we never index into another page's widget list.
+        if self.imgtrans_proj.current_img != pagename:
+            return
+        pw_list = self.st_manager.pairwidget_list
+        if not 0 <= blk_idx < len(pw_list):
+            return
+        pw = pw_list[blk_idx]
         edit = pw.e_source if is_src else pw.e_trans
         edit.setFocus()
         edit.ensure_scene_visible.emit()
         cursor = QTextCursor(edit.document())
-        cursor.setPosition(start)
-        cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+        doc_len = edit.document().characterCount() - 1
+        cursor.setPosition(min(start, doc_len))
+        cursor.setPosition(min(end, doc_len), QTextCursor.MoveMode.KeepAnchor)
         edit.setTextCursor(cursor)
 
     def shortcutEscape(self):
@@ -3975,7 +3985,12 @@ class MainWindow(mainwindow_cls):
             create_error_dialog(e, self.tr(f"Failed save to {savep}"))
             pcfg.text_styles_path = oldp
 
-    def fold_textarea(self, fold: bool):
+    def fold_textarea(self, edit_mode: bool):
+        """Edit(勾选)=完整多行卡片；Review=单行紧凑列表（可整体浏览）。
+
+        单行收缩不再挂在 Edit 模式上（用户要求）。
+        """
+        fold = not edit_mode
         pcfg.fold_textarea = fold
         self.textPanel.textEditList.setFoldTextarea(fold)
 
@@ -4072,21 +4087,22 @@ class MainWindow(mainwindow_cls):
         else:
             self._hideSearchOverlay()
 
-    def on_global_replace_finished(self):
-        rt = self.global_search_widget.replace_thread
+    def on_global_replace_finished(
+        self, sceneitem_list: dict, background_list: dict, target_text: str
+    ):
+        # Runs synchronously right after GlobalSearchWidget collected the
+        # live widget references, so they are guaranteed to exist here.
         self.canvas.push_text_command(
             GlobalRepalceAllCommand(
-                rt.sceneitem_list,
-                rt.background_list,
-                rt.target_text,
+                sceneitem_list,
+                background_list,
+                target_text,
                 self.imgtrans_proj,
             )
         )
-        rt.sceneitem_list = None
-        rt.background_list = None
         # Persist all modified TextBlock data to JSON immediately.
         # Non-current pages were modified directly in memory by the
-        # replace thread; the current page was modified via the undo
+        # replace collector; the current page was modified via the undo
         # command above.  Result images for non-current pages will be
         # re-rendered lazily when the user visits them.
         self._sync_and_commit_project()

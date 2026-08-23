@@ -32,11 +32,10 @@ from utils import shared as C
 from utils.config import pcfg
 from utils.proj_imgtrans import ProjImgTrans
 
-from .custom_widget import ConfigComboBox, NoBorderPushBtn, ProgressMessageBox, Widget
-from .io_thread import ThreadBase
-from .misc import doc_replace
-from .page_search_widget import HighlightMatched, SearchEditor, _search_highlight_color
-from .textedit_area import SourceTextEdit, TransPairWidget
+from .custom_widget import ConfigComboBox, NoBorderPushBtn, Widget
+from .misc import doc_replace, doc_replace_no_shift
+from .page_search_widget import SearchEditor, _search_highlight_color
+from .textedit_area import SourceTextEdit, TransPairWidget, TransTextEdit
 from .textitem import TextBlkItem, TextBlock
 
 SEARCHRST_FONTSIZE = 10.3
@@ -217,152 +216,25 @@ class SearchResultTree(QTreeView):
         return self.root_item.rowCount()
 
 
-class GlobalReplaceThead(ThreadBase):
-    finished = Signal()
-    _thread_error_msg = "Failed to perform replacement"
-    _thread_exception_type = "GlobalReplaceThead"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.srt: SearchResultTree = None
-        self.pairwidget_list: List[TransPairWidget] = None
-        self.textblk_item_list: List[TextBlkItem] = None
-        self.proj: ProjImgTrans = None
-        self.progress_bar = ProgressMessageBox("task")
-        self.progress_bar.setTaskName(self.tr("Replace..."))
-        self.searched_pattern: re.Pattern = None
-        self.finished.connect(self.on_finished)
-
-    def replace(self, target: str):
-        msg = QMessageBox()
-        msg.setText(self.tr("Replace all occurrences?"))
-        msg.setStandardButtons(
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        ret = msg.exec_()
-        if ret == QMessageBox.StandardButton.Yes:
-            self.job = lambda: self._search_proj(target)
-            self.progress_bar.updateTaskProgress(0)
-            self.progress_bar.show()
-            self.start()
-
-    def _search_proj(self, target: str):
-        row_count = self.srt.rowCount()
-        doc = QTextDocument()
-        doc.setUndoRedoEnabled(False)
-        sceneitem_list = {"src": [], "trans": []}
-        background_list = {"src": [], "trans": []}
-        self.target_text = target
-        rerender_pages_set = set()
-
-        for ii in range(row_count):
-            page_rst_item: PageSeachResultItem = self.srt.sm.item(ii, 0)
-            self.progress_bar.updateTaskProgress(int(ii / row_count * 100))
-            if page_rst_item.pagename == self.proj.current_img:
-                for idx in page_rst_item.blkid2match["src"]:
-                    src = self.pairwidget_list[idx].e_source
-                    sceneitem_list["src"].append(
-                        {
-                            "edit": src,
-                            "replace": self.searched_pattern.sub(
-                                target, src.toPlainText()
-                            ),
-                        }
-                    )
-                for idx, rstitem_list in page_rst_item.blkid2match["trans"].items():
-                    edit = self.pairwidget_list[idx].e_trans
-                    item = self.textblk_item_list[idx]
-
-                    sceneitem_list["trans"].append(
-                        {
-                            "edit": edit,
-                            "item": item,
-                            "matched_map": [
-                                [rstitem.start, rstitem.end] for rstitem in rstitem_list
-                            ],
-                        }
-                    )
-
-            else:
-                rerender_pages_set.add(page_rst_item.pagename)
-                for idx in page_rst_item.blkid2match["src"]:
-                    blk: TextBlock = self.proj.pages[page_rst_item.pagename][idx]
-                    text = blk.get_text()
-                    replace = self.searched_pattern.sub(target, text)
-                    background_list["src"].append(
-                        {
-                            "ori": text,
-                            "replace": replace,
-                            "pagename": page_rst_item.pagename,
-                            "idx": idx,
-                        }
-                    )
-                    blk.text = replace
-
-                for idx, rstitem_list in page_rst_item.blkid2match["trans"].items():
-                    blk: TextBlock = self.proj.pages[page_rst_item.pagename][idx]
-                    ori = blk.translation
-                    replace = ""
-                    ori_html = blk.rich_text
-                    replace_html = ""
-                    if blk.rich_text:
-                        ori_html = blk.rich_text
-                        doc.setHtml(blk.rich_text)
-                        span_list = [
-                            [rstitem.start, rstitem.end] for rstitem in rstitem_list
-                        ]
-                        doc_replace(doc, span_list, target)
-                        replace_html = doc.toHtml()
-                        replace = doc.toPlainText()
-                    else:
-                        replace = self.searched_pattern.sub(target, ori)
-                    blk.translation = replace
-                    blk.rich_text = replace_html
-                    background_list["trans"].append(
-                        {
-                            "ori": ori,
-                            "replace": replace,
-                            "ori_html": ori_html,
-                            "replace_html": replace_html,
-                            "pagename": page_rst_item.pagename,
-                            "idx": idx,
-                        }
-                    )
-
-        self.sceneitem_list = sceneitem_list
-        self.background_list = background_list
-        for pname in rerender_pages_set:
-            self.proj.mark_page_needs_rerender(pname)
-        self.finished.emit()
-
-    def on_finished(self):
-        self.progress_bar.hide()
-
-    def on_exec_failed(self):
-        self.progress_bar.hide()
-
-
 class GlobalSearchWidget(Widget):
-    search = Signal()
-    replace_all = Signal()
     req_update_pagetext = Signal()
     pages_dirtied = Signal()
     req_commit_and_rerender = Signal()  # persist JSON + re-render dirty result images
+    # (sceneitem_list, background_list, target_text) — emitted after a
+    # synchronous Replace All collection; MainWindow turns it into an undoable
+    # GlobalRepalceAllCommand and persists the project.
+    replace_finished = Signal(object, object, str)
 
     def __init__(self, parent: QWidget = None, *args, **kwargs) -> None:
-        super().__init__(parent)
+        super().__init__(parent, *args, **kwargs)
         self.imgtrans_proj: ProjImgTrans = None
 
-        self.search_rstedit_list: List[SourceTextEdit] = []
-        self.search_counter_list: List[int] = []
-        self.highlighter_list: List[HighlightMatched] = []
-        self.counter_sum = 0
+        # Live per-page widget lists (the same list objects mutated in place by
+        # SceneTextManager), used by Replace All for the current page.
         self.pairwidget_list: List[TransPairWidget] = []
         self.textblk_item_list: List[TextBlkItem] = []
-
-        self.current_edit: SourceTextEdit = None
-        self.current_cursor: QTextCursor = None
-        self.result_pos = 0
+        self.counter_sum = 0
+        self.searched_pattern: re.Pattern = None
 
         self.search_editor = SearchEditor(self, commit_latency=500)
         self.search_editor.setPlaceholderText(self.tr("Find"))
@@ -372,6 +244,7 @@ class GlobalSearchWidget(Widget):
         self.no_result_str = self.tr("No results found. ")
         self.doc_edited_str = self.tr("Document changed. Press Enter to re-search.")
         self.search_rst_str = self.tr("Found results: ")
+        self.invalid_regex_str = self.tr("Invalid regular expression.")
         self.result_label = QLabel(self.no_result_str)
         self.result_label.setMaximumHeight(32)
 
@@ -401,7 +274,6 @@ class GlobalSearchWidget(Widget):
 
         self.replace_editor = SearchEditor(self)
         self.replace_editor.setPlaceholderText(self.tr("Replace"))
-        self.replace_editor.enter_pressed.connect(self.commit_search)
 
         self.search_tree = SearchResultTree(self)
         self.replace_btn = NoBorderPushBtn(self.tr("Replace All"))
@@ -410,8 +282,6 @@ class GlobalSearchWidget(Widget):
             self.tr("Replace All and Re-render all pages")
         )
         self.replace_rerender_btn.clicked.connect(self.on_replace_rerender)
-        self.replace_thread = GlobalReplaceThead()
-        self.replace_thread.finished.connect(self.pages_dirtied.emit)
 
         sp = self.replace_rerender_btn.sizePolicy()
         sp.setHorizontalPolicy(QSizePolicy.Policy.Expanding)
@@ -462,17 +332,14 @@ class GlobalSearchWidget(Widget):
         vlayout.setStretchFactor(self.search_tree, 10)
         vlayout.setSpacing(7)
 
-    def setupReplaceThread(
+    def set_page_widget_lists(
         self,
         pairwidget_list: List[TransPairWidget],
         textblk_item_list: List[TextBlkItem],
     ):
-        self.pairwidget_list = self.replace_thread.pairwidget_list = pairwidget_list
-        self.textblk_item_list = self.replace_thread.textblk_item_list = (
-            textblk_item_list
-        )
-        self.replace_thread.srt = self.search_tree
-        self.replace_thread.proj = self.imgtrans_proj
+        """Store the per-page live widget lists (mutated in place on page switch)."""
+        self.pairwidget_list = pairwidget_list
+        self.textblk_item_list = textblk_item_list
 
     def on_whole_word_clicked(self):
         pcfg.gsearch_whole_word = self.whole_word_toggle.isChecked()
@@ -492,32 +359,35 @@ class GlobalSearchWidget(Widget):
 
     def get_regex_pattern(self) -> re.Pattern:
         target_text = self.search_editor.toPlainText()
-        regexr = target_text
         if target_text == "":
             return None
+
+        body = target_text if self.regex_toggle.isChecked() else re.escape(target_text)
+        if self.whole_word_toggle.isChecked():
+            body = r"\b" + body + r"\b"
 
         flag = re.DOTALL
         if not self.case_sensitive_toggle.isChecked():
             flag |= re.IGNORECASE
-        if not self.regex_toggle.isChecked():
-            regexr = re.escape(regexr)
-        if self.whole_word_toggle.isChecked():
-            regexr = r"\b" + target_text + r"\b"
 
         try:
-            return re.compile(regexr, flag)
+            return re.compile(body, flag)
         except re.error:
             return None
 
     def commit_search(self):
         self.search_tree.clearPages()
+        self.counter_sum = 0
         pattern = self.get_regex_pattern()
         if pattern is None:
-            self.replace_thread.searched_pattern = None
+            self.searched_pattern = None
+            if self.search_editor.toPlainText() != "":
+                self.result_label.setText(self.invalid_regex_str)
+            else:
+                self.updateResultText()
             return
-
+        self.searched_pattern = pattern
         self.req_update_pagetext.emit()
-        self.counter_sum = 0
 
         match_src = self.range_combobox.currentIndex() != 0
         match_trans = self.range_combobox.currentIndex() != 1
@@ -559,7 +429,6 @@ class GlobalSearchWidget(Widget):
 
         self.search_tree.expandAll()
         self.updateResultText()
-        self.replace_thread.searched_pattern = pattern
 
     def updateResultText(self):
         if self.counter_sum > 0:
@@ -567,12 +436,129 @@ class GlobalSearchWidget(Widget):
         else:
             self.result_label.setText(self.no_result_str)
 
+    def _confirm_replace(self, msg: str) -> bool:
+        msg_box = QMessageBox()
+        msg_box.setText(msg)
+        msg_box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        return msg_box.exec_() == QMessageBox.StandardButton.Yes
+
+    def _collect_replace_targets(self, target: str):
+        """Re-match the live pattern against every page and stage replacements.
+
+        Runs synchronously on the GUI thread. Matches are recomputed from the
+        current text of every block instead of trusting the spans captured at
+        search time, so stale search results can never corrupt edited text.
+        Current-page changes are staged as live widget references (applied
+        afterwards either by the undo command or the direct applier); all
+        other pages are modified in place in the project model and marked for
+        lazy re-render.
+        """
+        pattern = self.searched_pattern
+        doc = QTextDocument()
+        doc.setUndoRedoEnabled(False)
+        match_src = self.range_combobox.currentIndex() != 0
+        match_trans = self.range_combobox.currentIndex() != 1
+        current_img = self.imgtrans_proj.current_img
+
+        sceneitem_list = {"src": [], "trans": []}
+        background_list = {"src": [], "trans": []}
+
+        for pagename, page in self.imgtrans_proj.pages.items():
+            if pagename == current_img:
+                for pw, item in zip(self.pairwidget_list, self.textblk_item_list):
+                    if match_src:
+                        src = pw.e_source
+                        text = src.toPlainText()
+                        replace = pattern.sub(target, text)
+                        if replace != text:
+                            sceneitem_list["src"].append(
+                                {"edit": src, "replace": replace}
+                            )
+                    if match_trans:
+                        spans = [
+                            list(m.span()) for m in pattern.finditer(pw.e_trans.toPlainText())
+                        ]
+                        if spans:
+                            sceneitem_list["trans"].append(
+                                {
+                                    "edit": pw.e_trans,
+                                    "item": item,
+                                    "matched_map": spans,
+                                }
+                            )
+            else:
+                page_dirty = False
+                for idx, blk in enumerate(page):
+                    if match_src:
+                        text = blk.get_text()
+                        replace = pattern.sub(target, text)
+                        if replace != text:
+                            blk.text = [replace]
+                            background_list["src"].append(
+                                {
+                                    "ori": text,
+                                    "replace": replace,
+                                    "pagename": pagename,
+                                    "idx": idx,
+                                }
+                            )
+                            page_dirty = True
+                    if match_trans:
+                        ori = blk.translation
+                        ori_html = blk.rich_text
+                        replace_html = ""
+                        if blk.rich_text:
+                            doc.setHtml(blk.rich_text)
+                            spans = [
+                                list(m.span()) for m in pattern.finditer(doc.toPlainText())
+                            ]
+                            if spans:
+                                doc_replace(doc, spans, target)
+                                replace_html = doc.toHtml()
+                                replace = doc.toPlainText()
+                            else:
+                                replace = ori
+                        else:
+                            replace = pattern.sub(target, ori)
+                        if replace != ori:
+                            blk.translation = replace
+                            blk.rich_text = replace_html
+                            background_list["trans"].append(
+                                {
+                                    "ori": ori,
+                                    "replace": replace,
+                                    "ori_html": ori_html,
+                                    "replace_html": replace_html,
+                                    "pagename": pagename,
+                                    "idx": idx,
+                                }
+                            )
+                            page_dirty = True
+                if page_dirty:
+                    self.imgtrans_proj.mark_page_needs_rerender(pagename)
+
+        return sceneitem_list, background_list
+
+    def _has_staged_changes(self, sceneitem_list: dict, background_list: dict) -> bool:
+        return any(
+            sceneitem_list[key] or background_list[key] for key in ("src", "trans")
+        )
+
     def on_replace(self):
-        if self.counter_sum < 1:
+        """Replace all matches synchronously (undoable via text undo stack)."""
+        if self.counter_sum < 1 or self.searched_pattern is None:
             return
-        if self.replace_thread.isRunning():
+        if not self._confirm_replace(self.tr("Replace all occurrences?")):
             return
-        self.replace_thread.replace(self.replace_editor.toPlainText())
+        target = self.replace_editor.toPlainText()
+        sceneitem_list, background_list = self._collect_replace_targets(target)
+        if not self._has_staged_changes(sceneitem_list, background_list):
+            self.set_document_edited()
+            return
+        self.replace_finished.emit(sceneitem_list, background_list, target)
+        self.pages_dirtied.emit()
 
     def on_replace_rerender(self):
         """Replace all matches across pages, then re-render all result images.
@@ -581,71 +567,27 @@ class GlobalSearchWidget(Widget):
         until page visits), this applies replacements synchronously to both
         the current-page UI and all non-current pages' model data, persists
         the project JSON, and then triggers a non-disruptive batch re-render
-        of every affected page's result image.
+        of every affected page's result image. Not undoable.
         """
-        if self.counter_sum < 1:
+        if self.counter_sum < 1 or self.searched_pattern is None:
             return
-        pattern = self.replace_thread.searched_pattern
-        if pattern is None:
-            return
-
-        msg = QMessageBox()
-        msg.setText(
+        if not self._confirm_replace(
             self.tr("Replace all occurrences and re-render all pages? It can't be undone.")
-        )
-        msg.setStandardButtons(
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        ret = msg.exec_()
-        if ret == QMessageBox.StandardButton.No:
+        ):
             return
-
         target = self.replace_editor.toPlainText()
-        row_count = self.search_tree.rowCount()
-        current_img = self.imgtrans_proj.current_img
-        doc = QTextDocument()
-        doc.setUndoRedoEnabled(False)
+        sceneitem_list, _ = self._collect_replace_targets(target)
 
-        replace_src = self.range_combobox.currentIndex() != 0
-        replace_trans = self.range_combobox.currentIndex() != 1
-
-        for ii in range(row_count):
-            page_rst_item: PageSeachResultItem = self.search_tree.sm.item(ii, 0)
-            pagename = page_rst_item.pagename
-
-            if pagename == current_img:
-                # Modify live UI widgets for current page (visible feedback)
-                if replace_src:
-                    for idx in page_rst_item.blkid2match["src"]:
-                        src = self.pairwidget_list[idx].e_source
-                        src.setPlainText(pattern.sub(target, src.toPlainText()))
-                if replace_trans:
-                    for idx, rstitem_list in page_rst_item.blkid2match["trans"].items():
-                        item = self.textblk_item_list[idx]
-                        span_list = [
-                            [rstitem.start, rstitem.end] for rstitem in rstitem_list
-                        ]
-                        doc_replace(item.document(), span_list, target)
-            else:
-                # Directly modify TextBlock model data for non-current pages
-                self.imgtrans_proj.mark_page_needs_rerender(pagename)
-                if replace_src:
-                    for idx in page_rst_item.blkid2match["src"]:
-                        blk: TextBlock = self.imgtrans_proj.pages[pagename][idx]
-                        blk.text = [pattern.sub(target, blk.get_text())]
-                if replace_trans:
-                    for idx, rstitem_list in page_rst_item.blkid2match["trans"].items():
-                        blk: TextBlock = self.imgtrans_proj.pages[pagename][idx]
-                        span_list = [
-                            [rstitem.start, rstitem.end] for rstitem in rstitem_list
-                        ]
-                        if blk.rich_text:
-                            doc.setHtml(blk.rich_text)
-                            doc_replace(doc, span_list, target)
-                            blk.rich_text = doc.toHtml()
-                            blk.translation = doc.toPlainText()
-                        else:
-                            blk.translation = pattern.sub(target, blk.translation)
+        for src_dict in sceneitem_list["src"]:
+            edit: SourceTextEdit = src_dict["edit"]
+            edit.setPlainTextAndKeepUndoStack(src_dict["replace"])
+            edit.updateUndoSteps()
+        for trans_dict in sceneitem_list["trans"]:
+            edit: TransTextEdit = trans_dict["edit"]
+            item: TextBlkItem = trans_dict["item"]
+            sel_list = doc_replace(edit.document(), trans_dict["matched_map"], target)
+            doc_replace_no_shift(item.document(), sel_list, target)
+            item.updateUndoSteps()
 
         # Persist JSON then batch-re-render all affected result images
         self.req_commit_and_rerender.emit()
@@ -661,3 +603,4 @@ class GlobalSearchWidget(Widget):
             self.search_tree.clearPages()
             self.result_label.setText(self.doc_edited_str)
             self.counter_sum = 0
+        self.searched_pattern = None

@@ -497,19 +497,18 @@ class PageSearchWidget(Widget):
 
     def get_regex_pattern(self) -> re.Pattern:
         target_text = self.search_editor.toPlainText()
-        regexr = target_text
         if target_text == "":
             return None
+
+        body = target_text if self.regex_toggle.isChecked() else re.escape(target_text)
+        if self.whole_word_toggle.isChecked():
+            body = r"\b" + body + r"\b"
 
         flag = re.DOTALL
         if not self.case_sensitive_toggle.isChecked():
             flag |= re.IGNORECASE
-        if not self.regex_toggle.isChecked():
-            regexr = re.escape(regexr)
-        if self.whole_word_toggle.isChecked():
-            regexr = r"\b" + target_text + r"\b"
 
-        return re.compile(regexr, flag)
+        return re.compile(body, flag)
 
     def find_page_text(self, text_edit: QTextEdit):
         found_counter, pos_map = self._match_text(text_edit.toPlainText())

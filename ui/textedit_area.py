@@ -103,12 +103,9 @@ class SourceTextEdit(QTextEdit):
         self.setFold(fold)
 
     def setFold(self, fold: bool):
-        if fold:
-            self.min_height = 35
-            self.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
-        else:
-            self.min_height = 45
-            self.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
+        # 编辑/审阅统一：整块高度多行（审阅态不再省高度变单行 NoWrap/35px）
+        self.min_height = 45
+        self.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
 
     def contextMenuEvent(self, event):
         pass
@@ -325,15 +322,15 @@ class TransPairWidget(Widget):
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self.e_source = SourceTextEdit(idx, self, False)
-        self.e_trans = TransTextEdit(idx, self, False)
+        self.e_source = SourceTextEdit(idx, self, fold)
+        self.e_trans = TransTextEdit(idx, self, fold)
         self.textblock = textblock
         self.idx = idx
         self.fold = fold
 
         # ── Index badges ─────────────────────────────────────────
         # Two badges, one visible at a time depending on fold state.
-        # Viewport badge (unfold/review mode) — overlaid at top-right
+        # Viewport badge (fold=OFF / Edit mode) — overlaid at top-right
         self.badge_vp = QLabel(self.e_source.viewport())
         self.badge_vp.setObjectName("TextBlockIndexBadge")
         self.badge_vp.setText(str(idx + 1))
@@ -348,7 +345,8 @@ class TransPairWidget(Widget):
         self.e_source.hover_enter.connect(lambda _: self._set_badge_hover(True))
         self.e_source.hover_leave.connect(lambda _: self._set_badge_hover(False))
 
-        # Drag-area badge (fold/editing mode) — inside the left drag zone
+        # Drag-area badge (fold=ON / 审阅态) — inside the
+        # left drag zone
         self.badge_drag = QLabel()
         self.badge_drag.setObjectName("TextBlockIndexBadge")
         self.badge_drag.setText(str(idx + 1))
@@ -417,28 +415,32 @@ class TransPairWidget(Widget):
         self._apply_fold()
 
     def setFold(self, fold: bool):
-        """Switch between fold=ON (editing layout) and fold=OFF (review layout).
+        """Switch badge / drag-column layout per fold state.
 
+            审阅态（fold=ON）与编辑态（fold=OFF）文本框都保持整块多行，
+        不再有省高度的单行紧凑样式；差异只在编号徽章位置与拖拽列：
         fold=ON:
-          - accent_bar 3px (blue selection indicator)
-          - drag_area 17px visible (drag handle + badge)
-          - badge inside drag_area
-          - QTextEdit: NoWrap + 35px min height
-        fold=OFF:
-          - accent_bar 10px (wider, shows visible blue bar)
-          - drag_area hidden
-          - badge on SourceTextEdit viewport top-right
+          - drag_area 22px visible（左侧拖拽列 + 编号徽章）
+          - 编号徽章在 drag_area 内
+          - QTextEdit: WidgetWidth + 45px min height
+        fold=OFF（编辑态）:
+          - drag_area 隐藏
+          - 编号徽章在 SourceTextEdit viewport 右上角
           - QTextEdit: WidgetWidth + 45px min height
         """
         if self.fold == fold:
             return
         self.fold = fold
+        # setFoldTextarea 只调 pw.setFold，fold 必须传导到文本框，
+        # 否则换行/最小高度态丢失（ef0a8d7 引入的回归）
+        self.e_source.setFold(fold)
+        self.e_trans.setFold(fold)
         self._apply_fold()
 
     def _apply_fold(self):
         """Update layout and badge visibility for current fold state."""
         if self.fold:
-            # ── fold=ON: editing layout ──
+            # ── fold=ON: 审阅态（编号居左 + 拖拽列）──
             self.accent_bar.setFixedWidth(3)
             self.drag_area.show()
             # Set badge style for drag area and ensure sizing
@@ -450,7 +452,7 @@ class TransPairWidget(Widget):
             # Hide viewport badge
             self.badge_vp.hide()
         else:
-            # ── fold=OFF: review layout ──
+            # ── fold=OFF: Edit 完整布局 ──
             self.accent_bar.setFixedWidth(3)
             self.drag_area.hide()
             # Show viewport badge at top-right
@@ -658,42 +660,44 @@ class TextEditListScrollArea(QScrollArea):
             ).manhattanLength() < QApplication.startDragDistance():
                 return
             self.dragStartPosition = None
-            w = self.sel_anchor_widget
-            drag = self.drag = QDrag(w)
-            mime = QMimeData()
-            drag.setMimeData(mime)
-
-            # Drag indicator: "Sel N" badge
-            if self.checked_list:
-                text = f"Sel {len(self.checked_list)}"
-                font = QFont()
-                font.setBold(True)
-                font.setPixelSize(12)
-                fm = QFontMetrics(font)
-                tw = fm.horizontalAdvance(text) + 12
-                th = fm.height() + 8
-                pm = QPixmap(int(tw), int(th))
-                pm.fill(Qt.GlobalColor.transparent)
-                p = QPainter(pm)
-                p.setRenderHint(QPainter.RenderHint.Antialiasing)
-                p.setBrush(QColor(0, 0, 0, 180))
-                p.setPen(Qt.PenStyle.NoPen)
-                p.drawRoundedRect(0, 0, int(tw), int(th), 4, 4)
-                p.setPen(Qt.GlobalColor.white)
-                p.setFont(font)
-                p.drawText(QRectF(0, 0, tw, th), Qt.AlignmentFlag.AlignCenter, text)
-                p.end()
-                drag.setPixmap(pm)
-                drag.setHotSpot(QPoint(int(tw) // 2, int(th) // 2))
-
-            drag.exec(Qt.DropAction.MoveAction)
-            self.drag = None
-            if self.drag_to_pos != -1:
-                self.set_drag_style(self.drag_to_pos, True)
-                self.drag_to_pos = -1
-            pass
+            self.begin_rows_drag(self.sel_anchor_widget)
 
         return super().mouseMoveEvent(e)
+
+    def begin_rows_drag(self, source_widget: TransPairWidget) -> None:
+        """Start the row-reorder drag from *source_widget*."""
+        drag = self.drag = QDrag(source_widget)
+        mime = QMimeData()
+        drag.setMimeData(mime)
+
+        # Drag indicator: "Sel N" badge
+        if self.checked_list:
+            text = f"Sel {len(self.checked_list)}"
+            font = QFont()
+            font.setBold(True)
+            font.setPixelSize(12)
+            fm = QFontMetrics(font)
+            tw = fm.horizontalAdvance(text) + 12
+            th = fm.height() + 8
+            pm = QPixmap(int(tw), int(th))
+            pm.fill(Qt.GlobalColor.transparent)
+            p = QPainter(pm)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            p.setBrush(QColor(0, 0, 0, 180))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(0, 0, int(tw), int(th), 4, 4)
+            p.setPen(Qt.GlobalColor.white)
+            p.setFont(font)
+            p.drawText(QRectF(0, 0, tw, th), Qt.AlignmentFlag.AlignCenter, text)
+            p.end()
+            drag.setPixmap(pm)
+            drag.setHotSpot(QPoint(int(tw) // 2, int(th) // 2))
+
+        drag.exec(Qt.DropAction.MoveAction)
+        self.drag = None
+        if self.drag_to_pos != -1:
+            self.set_drag_style(self.drag_to_pos, True)
+            self.drag_to_pos = -1
 
     def set_drag_style(self, pos: int, clear_style: bool = False):
         if pos == len(self.pairwidget_list):

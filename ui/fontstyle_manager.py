@@ -81,13 +81,33 @@ _SIGNATURE_FIELDS = [
 ]
 
 
+# Float fields are quantized before hashing: OCR-derived continuous values
+# (font sizes, spacings, …) would otherwise split visually identical styles
+# into near-duplicate entries, one per block.
+_FLOAT_QUANT = {
+    "font_size": 0.5,
+    "stroke_width": 0.1,
+    "line_spacing": 0.05,
+    "letter_spacing": 0.05,
+    "opacity": 0.01,
+    "shadow_radius": 0.5,
+    "shadow_strength": 0.05,
+    "gradient_angle": 1.0,
+    "gradient_size": 1.0,
+}
+
+
 def compute_signature(ffmt: FontFormat) -> str:
     """Return a stable 12-char hex hash for a FontFormat's visible properties."""
     parts: List[str] = []
     for fname in _SIGNATURE_FIELDS:
         val = getattr(ffmt, fname)
-        if isinstance(val, (list, np.ndarray)):
-            parts.append(repr(tuple(val)))
+        step = _FLOAT_QUANT.get(fname)
+        if step is not None:
+            quantized = round(round(float(val) / step) * step, 4)
+            parts.append(repr(quantized))
+        elif isinstance(val, (list, np.ndarray)):
+            parts.append(repr(tuple(round(float(v), 2) for v in val)))
         else:
             parts.append(repr(val))
     return hashlib.md5("|".join(parts).encode()).hexdigest()[:12]
@@ -354,6 +374,9 @@ class StyleDetail(QScrollArea):
     navigate_to_block = Signal(str, int)  # pagename, block_idx
     pages_dirtied = Signal()  # emitted after batch-apply modifies other pages
     data_committed = Signal()  # emitted after batch-apply — caller should persist JSON
+    # emitted after a successful batch-apply with the signature the blocks now
+    # share; the container refreshes the style list and reselects it
+    styles_changed = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -772,39 +795,38 @@ class StyleDetail(QScrollArea):
 
     # ── Batch apply handlers ───────────────────────────────────────
 
-    def _make_change_dict(self, override: dict) -> List[Dict]:
-        """Build change list for all blocks in the current entry."""
-        if self._entry is None or self._proj is None:
-            return []
-        old_ffmt = self._entry.fontformat
-        new_ffmt = old_ffmt.deepcopy()
-        for k, v in override.items():
-            setattr(new_ffmt, k, v)
-        changes = []
-        for pname, bidx in self._entry.blocks:
-            changes.append(
-                {
-                    "pagename": pname,
-                    "block_idx": bidx,
-                    "old_ffmt": old_ffmt.deepcopy(),
-                    "new_ffmt": new_ffmt.deepcopy(),
-                }
-            )
-        return changes
+    def _collect_live_blocks(self) -> List[Tuple[str, int, "TextBlock"]]:
+        """Re-derive the entry's blocks by matching signatures at apply time.
 
-    def _make_change_dict_from_ffmt(self, ffmt: FontFormat) -> List[Dict]:
-        """Build change list using *ffmt* directly as the new format (preset apply)."""
+        The entry's cached block list can go stale while this non-modal dialog
+        is open (blocks deleted/reordered on the canvas). Re-matching by
+        signature heals that: vanished blocks are skipped, and blocks that
+        still carry the style are still found.
+        """
         if self._entry is None or self._proj is None:
             return []
-        old_ffmt = self._entry.fontformat
+        sig = self._entry.signature
+        live = []
+        for pname, blklist in self._proj.pages.items():
+            for bidx, blk in enumerate(blklist):
+                if compute_signature(blk.fontformat) == sig:
+                    live.append((pname, bidx, blk))
+        return live
+
+    def _changes_for_targets(self, new_ffmt: FontFormat) -> List[Dict]:
+        """Build the change list for every block currently carrying the style.
+
+        old_ffmt is captured per block (not from the entry representative) so
+        undo restores each block's exact previous format.
+        """
         changes = []
-        for pname, bidx in self._entry.blocks:
+        for pname, bidx, blk in self._collect_live_blocks():
             changes.append(
                 {
                     "pagename": pname,
                     "block_idx": bidx,
-                    "old_ffmt": old_ffmt.deepcopy(),
-                    "new_ffmt": ffmt.deepcopy(),
+                    "old_ffmt": blk.fontformat.deepcopy(),
+                    "new_ffmt": new_ffmt.deepcopy(),
                 }
             )
         return changes
@@ -832,20 +854,29 @@ class StyleDetail(QScrollArea):
         if preset_ffmt is None:
             return
 
-        changes = self._make_change_dict_from_ffmt(preset_ffmt)
+        changes = self._changes_for_targets(preset_ffmt)
+        if not changes:
+            return
+        self._apply_ffmt_changes(
+            changes, compute_signature(preset_ffmt), self.tr("Apply preset style")
+        )
 
-        # Same flow as _apply_all: create cmd → push → apply → refresh
+    def _apply_ffmt_changes(self, changes: List[Dict], new_sig: str, description: str):
+        """Shared batch-apply flow: undo command → apply → rebuild → refresh."""
         from .fontstyle_manager_commands import BatchFontformatCommand
 
+        # 1. Create the command FIRST — its constructor captures the current
+        #    live-item state (HTML / rect) for undo BEFORE we modify anything.
         cmd = BatchFontformatCommand(
-            self._proj, self._scene_manager, changes,
-            self.tr("Apply preset style"),
+            self._proj, self._scene_manager, changes, description
         )
-        try:
-            self._scene_manager.canvas.push_undo_command(cmd)
-        except AttributeError:
-            pass
 
+        # 2. Push to the text undo stack explicitly: push_undo_command()
+        #    would silently drop the command outside text-edit mode and the
+        #    batch change would become non-undoable.
+        self._scene_manager.canvas.push_text_command(cmd)
+
+        # 3. Now apply changes directly to every block.
         self._apply_changes_to_blocks(changes)
 
         # Notify main window to refresh page list (dirty indicators)
@@ -853,27 +884,13 @@ class StyleDetail(QScrollArea):
         # Notify main window to persist project data (JSON) immediately
         self.data_committed.emit()
 
+        # 4. Rebuild the current page's canvas items from the project data
+        #    so the visual is fully in sync with the updated blocks.
         if self._scene_manager is not None:
             self._scene_manager.updateSceneTextitems()
 
-        # Update local entry and sync manual controls to preset values
-        self._entry.fontformat = preset_ffmt.deepcopy()
-        self._sync_controls(preset_ffmt)
-        self.show_entry(self._entry)
-
-    def _push_command(self, changes: List[Dict], description: str = ""):
-        """Push a BatchFontformatCommand to the canvas undo stack."""
-        if not changes:
-            return
-        from .fontstyle_manager_commands import BatchFontformatCommand
-
-        cmd = BatchFontformatCommand(
-            self._proj, self._scene_manager, changes, description
-        )
-        try:
-            self._scene_manager.canvas.push_undo_command(cmd)
-        except AttributeError:
-            pass
+        # 5. Let the container re-discover styles and reselect the new style.
+        self.styles_changed.emit(new_sig)
 
     def _apply_changes_to_blocks(self, changes: List[Dict]):
         """Apply new_ffmt to every block in *changes* directly (no undo)."""
@@ -890,7 +907,10 @@ class StyleDetail(QScrollArea):
                 if item is not None:
                     item.set_fontformat(new_ffmt, set_char_format=True)
             else:
-                blk = self._proj.pages[pname][bidx]
+                page = self._proj.pages.get(pname)
+                if page is None or not 0 <= bidx < len(page):
+                    continue
+                blk = page[bidx]
                 blk.fontformat = new_ffmt
                 self._proj.mark_page_needs_rerender(pname)
 
@@ -927,43 +947,16 @@ class StyleDetail(QScrollArea):
             "alignment": self._align_combo.currentIndex(),
         }
 
-        changes = self._make_change_dict(override)
-
-        # 1. Create the command FIRST — its constructor captures the current
-        #    live-item state (HTML / rect / fontformat) for undo BEFORE we
-        #    modify anything.
-        from .fontstyle_manager_commands import BatchFontformatCommand
-
-        cmd = BatchFontformatCommand(
-            self._proj, self._scene_manager, changes,
-            self.tr("Batch edit font style"),
-        )
-
-        # 2. Push to undo stack → Qt calls cmd.redo() which skips via
-        #    _first_redo because we haven't applied anything yet.
-        try:
-            self._scene_manager.canvas.push_undo_command(cmd)
-        except AttributeError:
-            pass
-
-        # 3. Now apply changes directly to every block.
-        self._apply_changes_to_blocks(changes)
-
-        # Notify main window to refresh page list (dirty indicators)
-        self.pages_dirtied.emit()
-        # Notify main window to persist project data (JSON) immediately
-        self.data_committed.emit()
-
-        # 4. Rebuild the current page's canvas items from the project data
-        #    so the visual is fully in sync with the updated blocks.
-        if self._scene_manager is not None:
-            self._scene_manager.updateSceneTextitems()
-
-        # 5. Update local entry and refresh UI
-        ffmt = self._entry.fontformat
+        new_ffmt = self._entry.fontformat.deepcopy()
         for k, v in override.items():
-            setattr(ffmt, k, v)
-        self.show_entry(self._entry)
+            setattr(new_ffmt, k, v)
+
+        changes = self._changes_for_targets(new_ffmt)
+        if not changes:
+            return
+        self._apply_ffmt_changes(
+            changes, compute_signature(new_ffmt), self.tr("Batch edit font style")
+        )
 
     def _pick_fg(self):
         if self._entry is None:
@@ -1060,6 +1053,7 @@ class FontStyleManager(QWidget):
         self.detailContent.navigate_to_block.connect(self.navigate_to_block)
         self.detailContent.pages_dirtied.connect(self.pages_dirtied)
         self.detailContent.data_committed.connect(self.data_committed)
+        self.detailContent.styles_changed.connect(self._on_styles_changed)
 
         # ── Layout ────────────────────────────────────────────────
         hlayout = QHBoxLayout(self)
@@ -1117,4 +1111,12 @@ class FontStyleManager(QWidget):
     def _on_style_selected(self, sig: str):
         entry = self._sig_to_entry.get(sig)
         if entry is not None:
+            self.detailContent.show_entry(entry)
+
+    def _on_styles_changed(self, new_sig: str):
+        """After a batch-apply: re-discover styles and reselect the new style."""
+        self.refresh()
+        entry = self._sig_to_entry.get(new_sig)
+        if entry is not None:
+            self.styleList.set_active_signature(new_sig)
             self.detailContent.show_entry(entry)

@@ -18,11 +18,8 @@ from qtpy.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QLabel,
-    QLineEdit,
     QMenu,
     QMessageBox,
-    QPushButton,
     QSizePolicy,
     QStyledItemDelegate,
     QToolButton,
@@ -38,11 +35,14 @@ from . import funcmaps as FM
 from .custom_widget import (
     AlignmentChecker,
     ColorPickerLabel,
+    ConfigLineEdit,
     FlowLayout,
+    NoBorderPushBtn,
     QFontChecker,
     SizeComboBox,
     SizeControlLabel,
-    ViewWidget,
+    SmallComboBox,
+    SmallParamLabel,
     Widget,
 )
 from .text_advanced_format import TextStyleEntryButton
@@ -388,7 +388,26 @@ class FontItemDelegate(QStyledItemDelegate):
         super().paint(painter, option, index)
 
 
-class FontFamilyComboBox(QComboBox):
+class WidePopupComboMixin:
+    """下拉弹出列表按最长条目撑宽，闭合态宽度不受内容牵引。
+
+    组合框本体保持布局给定的稳定宽度（长名截断显示）；点击展开时把
+    弹出视图的最小宽度抬到最长条目宽，完整显示不裁剪。
+    """
+
+    def showPopup(self):
+        view = self.view()
+        if view is not None:
+            need = view.sizeHintForColumn(0)
+            if need >= 0:
+                # 弹出后滚动条可能出现，预留其宽度
+                need += view.verticalScrollBar().sizeHint().width()
+                need += 2 * view.frameWidth() + 8
+                view.setMinimumWidth(max(need, self.width()))
+        super().showPopup()
+
+
+class FontFamilyComboBox(WidePopupComboMixin, QComboBox):
     param_changed = Signal(str, object)
 
     def __init__(self, *args, **kwargs) -> None:
@@ -427,6 +446,11 @@ class FontFamilyComboBox(QComboBox):
         self.apply_fontfamily()
 
 
+class FontStyleComboBox(WidePopupComboMixin, QComboBox):
+    """字重选择框：闭合态宽度由布局拉伸固定（不随字重名变化），
+    弹出列表经 WidePopupComboMixin 撑宽到最长条目。"""
+
+
 class AnnotationFormatGroup(QFrame):
     """Ruby and OpenType-feature annotation controls.
 
@@ -439,6 +463,9 @@ class AnnotationFormatGroup(QFrame):
     Every change emits a named signal so the panel can route it to the
     engine ``TextBlkItem`` setter that owns the undo document transaction.
     ``set_*`` helpers restore widget state without emitting.
+    Controls use the app's custom widget set (``SmallComboBox`` /
+    ``ConfigLineEdit`` / ``NoBorderPushBtn`` / ``SmallParamLabel``) so the
+    dock stays theme-consistent with the rest of the application.
     """
 
     annotation_changed = Signal(str, object)
@@ -447,12 +474,12 @@ class AnnotationFormatGroup(QFrame):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        def _small_label(text: str, bold: bool = False) -> QLabel:
-            label = QLabel(text)
-            font = self.font()
-            font.setPointSizeF(shared.CONFIG_FONTSIZE_CONTENT * 0.9)
-            font.setBold(bold)
-            label.setFont(font)
+        def _small_label(text: str, bold: bool = False) -> SmallParamLabel:
+            label = SmallParamLabel(text)
+            if bold:
+                font = label.font()
+                font.setBold(True)
+                label.setFont(font)
             return label
 
         def _atomic_unit(label_widget, control) -> QWidget:
@@ -465,26 +492,26 @@ class AnnotationFormatGroup(QFrame):
             return unit
 
         # ── Ruby / Furigana ──────────────────────────────────────────
-        self.rubyTypeBox = QComboBox(self)
+        self.rubyTypeBox = SmallComboBox(parent=self)
         self.rubyTypeBox.setSizeAdjustPolicy(
             QComboBox.SizeAdjustPolicy.AdjustToContents
         )
         self.rubyTypeBox.addItem(self.tr("Group"), "group")
         self.rubyTypeBox.addItem(self.tr("Mono"), "mono")
-        self.rubyPosBox = QComboBox(self)
+        self.rubyPosBox = SmallComboBox(parent=self)
         self.rubyPosBox.setSizeAdjustPolicy(
             QComboBox.SizeAdjustPolicy.AdjustToContents
         )
         self.rubyPosBox.addItem(self.tr("Over / Right"), "over")
         self.rubyPosBox.addItem(self.tr("Under / Left"), "under")
 
-        self.rubyEdit = QLineEdit(self)
+        self.rubyEdit = ConfigLineEdit(parent=self)
         self.rubyEdit.setPlaceholderText(self.tr("Ruby text"))
         self.rubyEdit.setToolTip(
             self.tr("For Mono Ruby, separate readings with whitespace")
         )
-        self.rubyApplyBtn = QPushButton(self.tr("Apply"), self)
-        self.rubyRemoveBtn = QPushButton(self.tr("Remove"), self)
+        self.rubyApplyBtn = NoBorderPushBtn(self.tr("Apply"), self)
+        self.rubyRemoveBtn = NoBorderPushBtn(self.tr("Remove"), self)
 
         ruby_text_row = QHBoxLayout()
         ruby_text_row.setSpacing(4)
@@ -507,7 +534,7 @@ class AnnotationFormatGroup(QFrame):
         )
         ligature_units = []
         for axis, label_text, tooltip in ligature_specs:
-            box = QComboBox(self)
+            box = SmallComboBox(parent=self)
             box.setSizeAdjustPolicy(
                 QComboBox.SizeAdjustPolicy.AdjustToContents
             )
@@ -642,14 +669,12 @@ class FontFormatPanel(Widget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
 
-        self.stylebox = QComboBox()
+        self.stylebox = FontStyleComboBox()
         self.stylebox.setObjectName("FontStyleBox")
         self.stylebox.setToolTip(self.tr("Font Style"))
         self.stylebox.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
-        self.stylebox.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
-        self.stylebox.setMaximumWidth(110)  # 限制最大宽度，防止挤占字体框
         self.stylebox.currentTextChanged.connect(self.on_fontstyle_changed)
 
         self.fontsizebox = FontSizeBox(self)
@@ -821,12 +846,13 @@ class FontFormatPanel(Widget):
         self.vlayout.addWidget(self.textstyle_panel.view_widget)
 
         # ── Zone B：基本选项（平铺，无边框）─────────────────────────
-        # Row 1：字体选择 [颜色 | 字体 | 字重]——字号迁往测量行，把整行
-        # 宽度让给字体名与字重名的显示
+        # Row 1：字体选择 [颜色 | 字体 | 字重]——字号迁往测量行；两个
+        # 下拉框宽度由 stretch 比例固定（3:2），不随内容伸缩，展开时
+        # 弹出列表自行撑宽完整显示（WidePopupComboMixin）
         font_selector = QHBoxLayout()
         font_selector.addWidget(self.colorPicker)
-        font_selector.addWidget(self.familybox, 1)  # 字体框占绝大部分伸缩空间
-        font_selector.addWidget(self.stylebox)  # 字重框按内容自适应
+        font_selector.addWidget(self.familybox, 3)
+        font_selector.addWidget(self.stylebox, 2)
         font_selector.setSpacing(4)
         font_selector.setContentsMargins(2, 0, 2, 0)
 
@@ -885,27 +911,16 @@ class FontFormatPanel(Widget):
         self.vlayout.addWidget(self.text_style_btn)
         self.vlayout.addWidget(self.texttransform_panel.view_widget)
 
-        # 注解折叠胶囊：默认收起（pcfg.expand_annotation_panel），且仅在
-        # 选中文字块后显示（见 _sync_annotation_controls），消除全局模式
-        # 下的灰色死区。着重号/縦中横图标仍在基本选项行内即点即用。
+        # 注解组：内容外迁画布浮层（图标栏入口，见 install_annotation_launcher），
+        # 着重号/縦中横图标仍在基本选项行内即点即用。浮层懒创建，
+        # 创建前组本体必须隐藏，避免在格式面板左上角裸显。
         self.annotation_group = AnnotationFormatGroup(self)
-        self.annotation_area = ViewWidget(
-            self.annotation_group,
-            self.tr("Annotations"),
-            title_capsule=True,
-        )
-        # 不注册进 View 菜单，仅持久化展开状态
-        self.annotation_area.config_expand_name = "expand_annotation_panel"
-        self.annotation_area.set_expend_area(
-            C.pcfg.expand_annotation_panel, set_config=False
-        )
-        self.annotation_area.setVisible(False)
-        self.vlayout.addWidget(self.annotation_area)
         self.annotation_group.annotation_changed.connect(
             self._on_annotation_changed
         )
         self.annotation_group.ruby_remove.connect(self._on_ruby_remove)
         self.annotation_group.setEnabled(False)
+        self.annotation_group.hide()
         self.formatBtnGroup.emphasis_changed.connect(
             lambda style, position: self._on_annotation_changed(
                 "emphasis", (style, position)
@@ -913,6 +928,8 @@ class FontFormatPanel(Widget):
         )
         self.tcyChecker.setEnabled(False)
         self.formatBtnGroup.emphasisBtn.setEnabled(False)
+        self.annotation_launcher = None
+        self.annotation_dock = None
 
         self.vlayout.setContentsMargins(0, 0, 0, 0)
         self.vlayout.setSpacing(7)
@@ -1296,13 +1313,77 @@ class FontFormatPanel(Widget):
             self.texttransform_panel.set_transform_items(transform_items)
         self._sync_annotation_controls()
 
+    def install_annotation_launcher(self, rail) -> None:
+        """注解浮层入口：图标栏按钮 + RailDockPanel（内容=AnnotationFormatGroup）。
+
+        替代原「Annotations」折叠胶囊；浮层展开在窄栏左侧的画布区、
+        可拖拽/拉伸，不占用文本编辑区，仅图标或 × 关闭。浮层懒创建
+        （创建时才能从 rail 解析主窗口宿主）。图标角标在当前块存在
+        注解时点亮（见 _update_annotation_indicator），开合状态记忆在
+        ``pcfg.annotation_dock_open``。
+        """
+        from ui.panel_rail import RailLauncherButton
+
+        self.rail = rail
+        self.annotation_launcher = RailLauncherButton("あ", deco="dots")
+        self.annotation_launcher.setToolTip(self.tr("Annotations"))
+        self.annotation_launcher.toggled.connect(
+            self._on_annotation_launcher_toggled
+        )
+        rail.add_launcher(self.annotation_launcher)
+
+    def _ensure_annotation_dock(self):
+        if self.annotation_dock is None:
+            from ui.custom_widget import RailDockPanel
+
+            self.annotation_dock = RailDockPanel(
+                self.tr("Annotations"),
+                self.annotation_group,
+                rail=self.rail,
+                config_open="annotation_dock_open",
+            )
+            self.annotation_dock.closed.connect(
+                self._on_annotation_dock_closed
+            )
+        return self.annotation_dock
+
+    def _on_annotation_launcher_toggled(self, checked: bool):
+        if self.annotation_dock is None and not checked:
+            return
+        if checked:
+            self._ensure_annotation_dock().open_panel()
+        elif self.annotation_dock is not None:
+            self.annotation_dock.close_panel()
+
+    def _on_annotation_dock_closed(self):
+        if self.annotation_launcher is not None and self.annotation_launcher.isChecked():
+            with QSignalBlocker(self.annotation_launcher):
+                self.annotation_launcher.setChecked(False)
+
+    def on_textpanel_visibility(self, visible: bool):
+        """嵌字页显隐时同步浮层：页面隐藏则随隐（保留开合状态与勾选）。"""
+        if visible:
+            if (
+                self.annotation_launcher is not None
+                and self.annotation_launcher.isEnabled()
+                and (
+                    self.annotation_launcher.isChecked()
+                    or C.pcfg.annotation_dock_open
+                )
+            ):
+                self._ensure_annotation_dock().open_panel()
+        elif self.annotation_dock is not None and self.annotation_dock.isVisible():
+            self.annotation_dock.hide_keep_state()
+
     def _sync_annotation_controls(self):
         """Restore the annotation controls from the active text item.
 
-        The annotation capsule is selection-scoped: in global mode it is
-        hidden entirely (instead of a greyed dead zone), and its capsule
-        title carries a "•" marker while the current block has any
-        annotation active, so collapsed state still hints at content.
+        The annotation dock is selection-scoped like the old capsule: in
+        global mode the rail icon is disabled and the dock (if open) stays
+        open with grayed content — per user requirement the float never
+        closes itself, only the rail icon or its × button does.  The rail
+        icon carries a corner dot while the current block has any
+        annotation active, so the collapsed rail still hints at content.
 
         Called on every selection transition; during text editing the engine
         item re-reports its own state, so a per-keystroke sync is deferred to
@@ -1311,11 +1392,12 @@ class FontFormatPanel(Widget):
         item = self.textblk_item
         group = self.annotation_group
         has_item = item is not None
-        self.annotation_area.setVisible(has_item)
         group.setEnabled(has_item)
         self.tcyChecker.setEnabled(has_item)
         self.formatBtnGroup.emphasisBtn.setEnabled(has_item)
-        self._update_annotation_title()
+        if self.annotation_launcher is not None:
+            self.annotation_launcher.setEnabled(has_item)
+        self._update_annotation_indicator()
         if item is None:
             return
         with QSignalBlocker(group), QSignalBlocker(self.tcyChecker):
@@ -1331,8 +1413,8 @@ class FontFormatPanel(Widget):
             ruby_type, text, position, enabled = item.ruby_editor_values()
             group.set_ruby(ruby_type, text, position, enabled)
 
-    def _update_annotation_title(self):
-        """Capsule title carries "•" while the current block has annotations."""
+    def _update_annotation_indicator(self):
+        """Rail icon corner dot + dock title while the block has annotations."""
         item = self.textblk_item
         active = False
         if item is not None:
@@ -1350,10 +1432,13 @@ class FontFormatPanel(Widget):
                 )
                 or item.ruby_editor_values()[3]
             )
-        title = self.tr("Annotations")
-        if active:
-            title += " •"
-        self.annotation_area.setTitle(title)
+        if self.annotation_launcher is not None:
+            self.annotation_launcher.set_dot(active)
+        if self.annotation_dock is not None:
+            title = self.tr("Annotations")
+            if active:
+                title += " •"
+            self.annotation_dock.set_title(title)
 
     def _on_annotation_changed(self, name: str, value):
         item = self.textblk_item

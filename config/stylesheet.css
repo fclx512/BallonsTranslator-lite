@@ -1659,11 +1659,62 @@ QFrame#fmtGroupSeparator {
 }
 
 /* 格式编辑区外层大框 — 与画布一致的细边框 */
-GroupFrame#formatOuterFrame,
-GroupFrame#textEditOuterFrame {
+GroupFrame#formatOuterFrame {
     border: 1px solid @borderColor;
     border-radius: 6px;
     background: @widgetBackgroundColor;
+}
+
+/* ── 面板窄栏（PanelRail：功能图标列，浮层面板宿主；透明窄条，
+      不画底色也不必边框——本来就很窄，再画框更局促） ──────────── */
+PanelRail QToolButton {
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+}
+
+PanelRail QToolButton:hover {
+    background: @accentPrimary20;
+}
+
+PanelRail QToolButton:checked {
+    background: @accentPrimary;
+}
+
+/* ── 画布浮层面板（RailDockPanel：硬连接锚定窄栏左侧展开，不可拖拽，
+      左下角手柄拉伸；不占用文本编辑区；不用边框，靠标题条底色分层） ── */
+RailDockPanel {
+    background: @widgetBackgroundColor;
+    border: none;
+    border-radius: 6px;
+}
+
+QWidget#RailDockHeader {
+    background: @emptyContentBackgroundColor;
+    border: none;
+    border-radius: 5px 5px 0 0;
+}
+
+QFrame#RailDockBody {
+    background: transparent;
+    border: none;
+}
+
+QLabel#RailDockTitle {
+    color: @qwidgetForegroundColor;
+    font-weight: bold;
+}
+
+QToolButton#RailDockCloseBtn {
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: @qwidgetForegroundColor;
+    font-size: 14px;
+}
+
+QToolButton#RailDockCloseBtn:hover {
+    background: @accentPrimary20;
 }
 
 QLabel#CardTitle {

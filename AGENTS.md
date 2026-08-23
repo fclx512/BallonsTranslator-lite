@@ -38,6 +38,7 @@ modules/
 | `ui/mainwindow.py` | 主窗口 |
 | `ui/configpanel.py` | 配置面板、快捷键编辑 |
 | `ui/text_panel.py` | 文本编辑面板 |
+| `ui/panel_rail.py` | 嵌字页格式区左缘窄栏：功能图标列（画布浮层面板入口，见 `ui/custom_widget/rail_dock_panel.py`） |
 | `ui/io_thread.py` | 管线编排（检测→OCR→翻译→修复） |
 | `ui/scene_textlayout.py` | 画布文字渲染 |
 | `ui/overlay_modal.py` | `OverlayModal` — 中心淡入/淡出模态（scrim 覆盖中央画布区，ConfigPanel 用它） |
@@ -64,6 +65,7 @@ modules/
 | `ClockDial` | 指针式角度/距离选择（影子方向用） |
 | `ConfigSectionHeader` | 配置面板章节标题 |
 | `GroupFrame` | 圆角边框分组容器 |
+| `RailDockPanel` | 画布区浮层面板（主窗口内子控件，展开硬连接锚定窄栏左侧：右缘+顶部固定、宿主缩放/窄栏移动自动重锚、左下角手柄拉伸、尺寸下限随内容布局、Esc/× 关闭不自动关；开合记忆 `pcfg`） |
 
 新增控件时更新上表即可，无需展开详细用法。优先使用已有方案而非重新实现。
 

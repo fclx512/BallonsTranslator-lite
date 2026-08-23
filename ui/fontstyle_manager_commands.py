@@ -12,16 +12,17 @@ try:
 except ImportError:
     from qtpy.QtGui import QUndoCommand
 
-from utils.fontformat import FontFormat
 from utils.proj_imgtrans import ProjImgTrans
 
 
 class BatchFontformatCommand(QUndoCommand):
     """Undoable batch application of a FontFormat to multiple blocks.
 
-    Handles blocks on the *current* page via live TextBlkItem instances
-    (storing old HTML / rect / format) and blocks on *other* pages by
-    modifying TextBlock.fontformat directly in the project data structure.
+    Blocks on the *current* page are handled through their live TextBlkItem
+    instances (HTML / rect captured up front for full restoration); blocks on
+    other pages are restored at the TextBlock data level. Every change dict
+    carries its block's own old/new FontFormat (captured at collect time), so
+    undo restores each block's exact previous format.
     """
 
     def __init__(
@@ -53,7 +54,6 @@ class BatchFontformatCommand(QUndoCommand):
         # from live TextBlkItem instances so we can restore HTML + rect.
         self._old_html: Dict[str, str] = {}  # key = "{pagename}:{idx}"
         self._old_rect: Dict[str, object] = {}
-        self._old_fmt: Dict[str, FontFormat] = {}
 
         current_pname = proj.current_img
         for ch in changes:
@@ -65,7 +65,6 @@ class BatchFontformatCommand(QUndoCommand):
                     key = f"{pname}:{bidx}"
                     self._old_html[key] = item.toHtml()
                     self._old_rect[key] = item.absBoundingRect(qrect=True)
-                    self._old_fmt[key] = item.get_fontformat()
 
     def redo(self):
         if self._first_redo:
@@ -89,6 +88,12 @@ class BatchFontformatCommand(QUndoCommand):
             ffmt = ch[f"{which}_ffmt"]
             key = f"{pname}:{bidx}"
 
+            page = self.proj.pages.get(pname)
+            if page is None or not 0 <= bidx < len(page):
+                continue
+            blk = page[bidx]
+            blk.fontformat = ffmt
+
             if pname == current_pname:
                 # Live item on the visible canvas → restore fully
                 item = _find_blk_item(sm, bidx)
@@ -99,25 +104,22 @@ class BatchFontformatCommand(QUndoCommand):
                     item.setHtml(self._old_html[key])
                     item.set_fontformat(ffmt)
                     item.setRect(self._old_rect[key])
-                    # Clear the trans widget undo stack
-                    try:
-                        pair_w = sm.pairwidget_list[bidx]
-                        if pair_w is not None:
-                            pair_w.e_trans.document().clearUndoRedoStacks()
-                    except Exception:
-                        pass
                 else:
                     item.set_fontformat(ffmt, set_char_format=True)
-                    try:
-                        pair_w = sm.pairwidget_list[bidx]
-                        if pair_w is not None:
-                            pair_w.e_trans.document().clearUndoRedoStacks()
-                    except Exception:
-                        pass
+                self._clear_trans_undo_stack(sm, bidx)
             else:
-                # Off-page block → modify TextBlock.fontformat directly
-                blk = self.proj.pages[pname][bidx]
-                blk.fontformat = ffmt
+                # Off-page block: data-level restore + lazy re-render on visit
+                self.proj.mark_page_needs_rerender(pname)
+
+    def _clear_trans_undo_stack(self, sm, bidx: int):
+        # The panel editor's own undo stack could otherwise replay text from
+        # before the batch apply. The widget may be gone by undo time.
+        try:
+            pair_w = sm.pairwidget_list[bidx]
+            if pair_w is not None:
+                pair_w.e_trans.document().clearUndoRedoStacks()
+        except (RuntimeError, IndexError, AttributeError):
+            pass
 
 
 # ── module helpers ───────────────────────────────────────────────────

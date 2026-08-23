@@ -15,7 +15,7 @@ from .misc import doc_replace, doc_replace_no_shift
 from .page_search_widget import Matched, PageSearchWidget
 from .textedit_area import SourceTextEdit, TransTextEdit
 from .texteditshapecontrol import TextBlkShapeControl
-from .textitem import TextBlkItem, TextBlock
+from .textitem import TextBlkItem
 
 
 def propagate_user_edit(
@@ -456,6 +456,10 @@ class GlobalRepalceAllCommand(QUndoCommand):
         self.btrans_list = background_list["trans"]
         self.bsrc_list = background_list["src"]
 
+        # Constructed synchronously on the GUI thread right after the live
+        # widget references were collected, so they are guaranteed to exist
+        # here. undo()/redo() may run much later and guard against widgets
+        # deleted in the meantime with RuntimeError handlers.
         for trans_dict in self.trans_list:
             edit: TransTextEdit = trans_dict["edit"]
             item: TextBlkItem = trans_dict["item"]
@@ -463,7 +467,6 @@ class GlobalRepalceAllCommand(QUndoCommand):
             sel_list = doc_replace(edit.document(), matched_map, target_text)
 
             doc_replace_no_shift(item.document(), sel_list, target_text)
-            item.updateUndoSteps()
             item.updateUndoSteps()
 
             trans_dict.pop("matched_map")
@@ -480,43 +483,57 @@ class GlobalRepalceAllCommand(QUndoCommand):
             return
 
         for trans_dict in self.trans_list:
-            edit: TransTextEdit = trans_dict["edit"]
-            item: TextBlkItem = trans_dict["item"]
-            edit.redo()
-            item.redo()
-
+            try:
+                trans_dict["edit"].redo()
+                trans_dict["item"].redo()
+            except RuntimeError:
+                pass
         for src_dict in self.src_list:
-            edit: SourceTextEdit = src_dict["edit"]
-            edit.redo()
-
-        for trans_dict in self.btrans_list:
-            blk: TextBlock = self.proj.pages[trans_dict["pagename"]][trans_dict["idx"]]
-            blk.translation = trans_dict["replace"]
-            blk.rich_text = trans_dict["replace_html"]
-
-        for src_dict in self.bsrc_list:
-            blk: TextBlock = self.proj.pages[src_dict["pagename"]][src_dict["idx"]]
-            blk.text = src_dict["replace"]
+            try:
+                src_dict["edit"].redo()
+            except RuntimeError:
+                pass
+        self._apply_background("replace")
 
     def undo(self):
         for trans_dict in self.trans_list:
-            edit: TransTextEdit = trans_dict["edit"]
-            item: TextBlkItem = trans_dict["item"]
-            edit.undo()
-            item.undo()
-
+            try:
+                trans_dict["edit"].undo()
+                trans_dict["item"].undo()
+            except RuntimeError:
+                pass
         for src_dict in self.src_list:
-            edit: SourceTextEdit = src_dict["edit"]
-            edit.undo()
+            try:
+                src_dict["edit"].undo()
+            except RuntimeError:
+                pass
+        self._apply_background("ori")
 
+    def _apply_background(self, key: str):
+        """Set background (non-current-page) blocks to their *key* state.
+
+        Skips pages/blocks that vanished since the command was created, so a
+        deleted page never crashes the undo stack. Both branches also refresh
+        the lazy re-render flag so visiting the page regenerates its image.
+        """
         for trans_dict in self.btrans_list:
-            blk: TextBlock = self.proj.pages[trans_dict["pagename"]][trans_dict["idx"]]
-            blk.translation = trans_dict["ori"]
-            blk.rich_text = trans_dict["ori_html"]
+            blk = self._get_blk(trans_dict["pagename"], trans_dict["idx"])
+            if blk is not None:
+                blk.translation = trans_dict[key]
+                blk.rich_text = trans_dict[key + "_html"]
+                self.proj.mark_page_needs_rerender(trans_dict["pagename"])
 
-        for src_dict in self.src_list:
-            blk: TextBlock = self.proj.pages[src_dict["pagename"]][src_dict["idx"]]
-            blk.text = src_dict["ori"]
+        for src_dict in self.bsrc_list:
+            blk = self._get_blk(src_dict["pagename"], src_dict["idx"])
+            if blk is not None:
+                blk.text = [src_dict[key]]
+                self.proj.mark_page_needs_rerender(src_dict["pagename"])
+
+    def _get_blk(self, pagename: str, idx: int):
+        page = self.proj.pages.get(pagename)
+        if page is not None and 0 <= idx < len(page):
+            return page[idx]
+        return None
 
 
 class MultiPasteCommand(QUndoCommand):

@@ -1672,20 +1672,17 @@ Run detection + OCR to populate text blocks.</source>
         </message>
     </context>
     <context>
-        <name>GlobalReplaceThead</name>
+        <name>GlobalSearchWidget</name>
         <message>
-            <location filename="..\ui\global_search_widget.py" line="233" />
-            <source>Replace...</source>
-            <translation>替换中...</translation>
+            <location filename="..\ui\global_search_widget.py" line="0" />
+            <source>Invalid regular expression.</source>
+            <translation>正则表达式无效.</translation>
         </message>
         <message>
-            <location filename="..\ui\global_search_widget.py" line="239" />
+            <location filename="..\ui\global_search_widget.py" line="0" />
             <source>Replace all occurrences?</source>
             <translation>替换所有结果?</translation>
         </message>
-    </context>
-    <context>
-        <name>GlobalSearchWidget</name>
         <message>
             <location filename="..\ui\global_search_widget.py" line="364" />
             <source>Find</source>
@@ -1755,11 +1752,6 @@ Run detection + OCR to populate text blocks.</source>
             <location filename="..\ui\global_search_widget.py" line="403" />
             <source>Replace All and Re-render all pages</source>
             <translation>全部替换并重新渲染所有页</translation>
-        </message>
-        <message>
-            <location filename="..\ui\global_search_widget.py" line="447" />
-            <source>Replace...</source>
-            <translation>替换中...</translation>
         </message>
         <message>
             <location filename="..\ui\global_search_widget.py" line="569" />
@@ -6344,6 +6336,13 @@ This maps automatically to each provider's native parameter
         <message>
             <source>Add</source>
             <translation>添加</translation>
+        </message>
+    </context>
+    <context>
+        <name>RailDockPanel</name>
+        <message>
+            <source>Close</source>
+            <translation>关闭</translation>
         </message>
     </context>
     <context>

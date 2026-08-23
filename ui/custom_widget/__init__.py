@@ -36,6 +36,7 @@ from .message import (
     TaskProgressBar,
 )
 from .push_button import ExpandingToolButton, NoBorderPushBtn
+from .rail_dock_panel import RailDockPanel
 from .scroll_bar import ConfigScrollBar
 from .scrollbar import ScrollBar
 from .screen_picker import pick_screen_color
