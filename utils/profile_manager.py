@@ -7,9 +7,10 @@ Both the translator and LLM OCR modules read from this shared pool.
 
 import json
 from typing import Dict, List, Optional
+from urllib.parse import urlparse, urlunparse
 
 import httpx
-from qtpy.QtCore import Qt, Signal
+from qtpy.QtCore import Qt, QThread, Signal
 from qtpy.QtWidgets import (
     QDialog,
     QFormLayout,
@@ -58,6 +59,14 @@ DEFAULT_OCR_SYSTEM_PROMPT = (
     "You are designed to intelligently handle common OCR errors, such as "
     "reconstructing jumbled characters that result from misreading vertical text."
 )
+DEFAULT_INPAINT_PROMPT = (
+    "Clean up this comic or manga image for further scanlation. Remove all visible text elements, "
+    "including speech bubble lettering, captions, sound effects, signs, labels, and text-like "
+    "watermarks. Keep all non-text artwork intact: characters, faces, line art, screentones, "
+    "backgrounds, speech bubbles, panel borders, lighting, colors, texture, and composition. "
+    "Do not translate, redraw with new text, add captions, or explain the edit. Return only the "
+    "cleaned image."
+)
 
 SAMPLE_PROFILES = [
     {
@@ -80,6 +89,10 @@ SAMPLE_PROFILES = [
         "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
         "ocr_detail_level": "auto",
         "ocr_max_response_tokens": 4096,
+        "image_support": False,
+        "image_base_url": "",
+        "image_model": "",
+        "image_prompt": DEFAULT_INPAINT_PROMPT,
     },
     {
         "name": "OpenRouter",
@@ -101,6 +114,10 @@ SAMPLE_PROFILES = [
         "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
         "ocr_detail_level": "auto",
         "ocr_max_response_tokens": 4096,
+        "image_support": False,
+        "image_base_url": "",
+        "image_model": "",
+        "image_prompt": DEFAULT_INPAINT_PROMPT,
     },
     {
         "name": "DeepSeek",
@@ -122,6 +139,10 @@ SAMPLE_PROFILES = [
         "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
         "ocr_detail_level": "auto",
         "ocr_max_response_tokens": 4096,
+        "image_support": False,
+        "image_base_url": "",
+        "image_model": "",
+        "image_prompt": DEFAULT_INPAINT_PROMPT,
     },
     {
         "name": "LM Studio",
@@ -143,6 +164,10 @@ SAMPLE_PROFILES = [
         "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
         "ocr_detail_level": "auto",
         "ocr_max_response_tokens": 4096,
+        "image_support": False,
+        "image_base_url": "",
+        "image_model": "",
+        "image_prompt": DEFAULT_INPAINT_PROMPT,
     },
     {
         "name": "Ollama",
@@ -164,6 +189,10 @@ SAMPLE_PROFILES = [
         "ocr_system_prompt": DEFAULT_OCR_SYSTEM_PROMPT,
         "ocr_detail_level": "auto",
         "ocr_max_response_tokens": 4096,
+        "image_support": False,
+        "image_base_url": "",
+        "image_model": "",
+        "image_prompt": DEFAULT_INPAINT_PROMPT,
     },
 ]
 
@@ -190,6 +219,10 @@ PROFILE_FIELDS = [
     "ocr_system_prompt",
     "ocr_detail_level",
     "ocr_max_response_tokens",
+    "image_support",
+    "image_base_url",
+    "image_model",
+    "image_prompt",
 ]
 
 
@@ -294,6 +327,160 @@ def get_vision_profiles() -> List[Dict]:
 
 def get_vision_profile_names() -> List[str]:
     return [p.get("name", "") for p in get_vision_profiles() if p.get("name")]
+
+
+def get_image_profiles() -> List[Dict]:
+    """Return profiles that have image inpainting enabled.
+
+    Inpainting is gated by the image_support flag on each profile (managed in
+    Model Management), so a profile that only does text/OCR does not appear in
+    the online inpainter's profile selector.
+    """
+    return [p for p in load_profiles() if p.get("image_support", False)]
+
+
+def get_image_profile_names() -> List[str]:
+    return [p.get("name", "") for p in get_image_profiles() if p.get("name")]
+
+
+# ── Image endpoint helpers (Test / Fetch Models for image inpainting) ──
+
+def _is_gemini_host(base_url: str) -> bool:
+    return urlparse(base_url).netloc.lower() == "generativelanguage.googleapis.com"
+
+
+def _is_openrouter_host(base_url: str) -> bool:
+    host = urlparse(base_url).netloc.lower()
+    return host == "openrouter.ai" or host.endswith(".openrouter.ai")
+
+
+def _join_url(base_url: str, path: str) -> str:
+    base = base_url.rstrip("/")
+    endpoint = "/" + path.strip("/")
+    return f"{base}{endpoint}"
+
+
+def _image_models_url(image_base_url: str) -> str:
+    """Derive the provider's model-list endpoint from an image endpoint.
+
+    Gemini exposes ``/models`` under its versioned root; a pasted
+    ``:generateContent`` or ``/models/<model>`` tail is stripped back to it.
+    OpenAI-compatible / OpenRouter image endpoints usually sit at
+    ``<api_root>/images/<action>``, so the list lives at ``<api_root>/models``.
+    """
+    base = image_base_url.rstrip("/")
+    if _is_gemini_host(base):
+        parsed = urlparse(base)
+        path = parsed.path.rstrip("/")
+        if ":generateContent" in path:
+            path = path.split(":generateContent")[0].rstrip("/")
+        if "/models" in path:
+            path = path.split("/models")[0].rstrip("/")
+        root = urlunparse(
+            parsed._replace(path=path, params="", query="", fragment="")
+        ).rstrip("/")
+        return _join_url(root, "/models")
+    fallback = base
+    path = urlparse(base).path.rstrip("/")
+    for action in ("/images/edits", "/images"):
+        if path.endswith(action):
+            fallback = base[: len(base) - len(action)]
+            break
+    return _join_url(fallback, "/models")
+
+
+def _image_headers(base_url: str, api_key: str) -> dict:
+    if _is_gemini_host(base_url):
+        return {"x-goog-api-key": api_key or "", "Content-Type": "application/json"}
+    return {"Authorization": f"Bearer {api_key or ''}"}
+
+
+def _parse_image_models(payload, base_url: str) -> List[str]:
+    if _is_gemini_host(base_url):
+        models = payload.get("models", []) or []
+        names = [m.get("name", "") if isinstance(m, dict) else "" for m in models]
+        return [n.rsplit("/", 1)[-1] for n in names if n]
+    data = payload.get("data", []) or []
+    return [m.get("id", "") for m in data if isinstance(m, dict) and m.get("id")]
+
+
+def fetch_image_models(
+    image_base_url: str, api_key: str = "", proxy: str = "", timeout: float = 10
+) -> List[str]:
+    """Fetch the provider's model list for the given image endpoint.
+
+    Raises the underlying ``httpx`` errors on failure, so callers can mirror the
+    existing text-profile Test / Fetch Models UX.
+    """
+    if not image_base_url:
+        raise ValueError("Image endpoint is required.")
+    url = _image_models_url(image_base_url)
+    client_kwargs = {
+        "timeout": timeout,
+        "headers": _image_headers(image_base_url, api_key),
+    }
+    if proxy:
+        client_kwargs["proxy"] = proxy
+    with httpx.Client(**client_kwargs) as client:
+        resp = client.get(url)
+        resp.raise_for_status()
+        return _parse_image_models(resp.json(), image_base_url)
+
+
+def _probe_connection(host: str, api_key: str, proxy: str = "") -> None:
+    """GET ``<host>/models`` and raise on any failure (used by the Test button).
+
+    Runs on a background thread; raises raw ``httpx`` exceptions so callers map
+    them to a friendly message without freezing the GUI.
+    """
+    client_kwargs = {"timeout": 10}
+    if proxy:
+        client_kwargs["proxy"] = proxy
+    with httpx.Client(**client_kwargs) as client:
+        resp = client.get(
+            f"{host.rstrip('/')}/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        resp.raise_for_status()
+
+
+def _probe_model_list(host: str, api_key: str, proxy: str = "") -> List[str]:
+    """GET ``<host>/models`` and return the sorted model ids (Fetch Models)."""
+    client_kwargs = {"timeout": 10}
+    if proxy:
+        client_kwargs["proxy"] = proxy
+    with httpx.Client(**client_kwargs) as client:
+        resp = client.get(
+            f"{host.rstrip('/')}/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        resp.raise_for_status()
+        models = resp.json().get("data", [])
+        return sorted(m["id"] for m in models)
+
+
+class _NetWorker(QThread):
+    """Run a blocking network call off the GUI thread.
+
+    The predecessor ran the request synchronously on the GUI thread, so a slow
+    or unreachable host froze the whole window (Windows reports "Not
+    Responding"). ``finished_ok`` / ``finished_err`` are delivered back on the
+    GUI thread via a queued connection, keeping the UI responsive.
+    """
+    finished_ok = Signal(object)
+    finished_err = Signal(object)
+
+    def __init__(self, parent, callback):
+        super().__init__(parent)
+        self._callback = callback
+
+    def run(self):
+        try:
+            result = self._callback()
+        except Exception as e:  # noqa: BLE001 — deliberate: forward to GUI
+            self.finished_err.emit(e)
+        else:
+            self.finished_ok.emit(result)
 
 
 def save_profile(name: str, data: Dict):
@@ -442,6 +629,11 @@ class ProfileManagerDialog(QDialog):
             p["ocr_max_response_tokens"] = int(self.ocr_maxtok_spin.value())
         except (ValueError, TypeError):
             p["ocr_max_response_tokens"] = 4096
+        # Image inpainting fields
+        p["image_support"] = self.image_support_check.isChecked()
+        p["image_base_url"] = self.image_base_edit.text().strip()
+        p["image_model"] = self.image_model_edit.text().strip()
+        p["image_prompt"] = self.image_prompt_edit.toPlainText().strip()
 
         if self._on_changed:
             self._on_changed()
@@ -634,6 +826,60 @@ class ProfileManagerDialog(QDialog):
         ocr_form.addRow(self.tr("Max Tokens:"), self.ocr_maxtok_spin)
         right_layout.addLayout(ocr_form)
 
+        # Image Inpainting Settings (optional)
+        right_layout.addWidget(
+            ConfigSectionHeader(self.tr("Image Inpainting Settings (optional)"))
+        )
+        self.image_support_check = ConfigCheckBox(
+            self.tr("Enable image inpainting for this profile")
+        )
+        self.image_support_check.setToolTip(
+            self.tr(
+                "Enable this for models that can generate/clean images. "
+                "Image-capable profiles appear in the online inpainter's profile selector."
+            )
+        )
+        right_layout.addWidget(self.image_support_check)
+
+        self.image_fields = QWidget()
+        image_form = QFormLayout(self.image_fields)
+        image_form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        image_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
+        self.image_base_edit = ConfigLineEdit()
+        self.image_base_edit.setPlaceholderText("https://api.openai.com/v1/images/edits")
+        image_test_btn = QPushButton(self.tr("Test"))
+        image_test_btn.setObjectName("ConfigButton")
+        image_test_btn.setFixedHeight(28)
+        image_test_btn.clicked.connect(self._on_test_image_connection)
+        image_base_row = QHBoxLayout()
+        image_base_row.addWidget(self.image_base_edit, 1)
+        image_base_row.addWidget(image_test_btn)
+        self.image_model_edit = ConfigLineEdit()
+        self.image_model_edit.setPlaceholderText("gpt-image-2, ...")
+        image_fetch_btn = QPushButton(self.tr("Fetch Models"))
+        image_fetch_btn.setObjectName("ConfigButton")
+        image_fetch_btn.setFixedHeight(28)
+        image_fetch_btn.clicked.connect(self._on_fetch_image_models)
+        image_model_row = QHBoxLayout()
+        image_model_row.addWidget(self.image_model_edit, 1)
+        image_model_row.addWidget(image_fetch_btn)
+        self.image_prompt_edit = ConfigTextEdit()
+        self.image_prompt_edit.setPlaceholderText(
+            self.tr("Optional prompt sent with each inpainting request.")
+        )
+        self.image_prompt_edit.setMinimumHeight(80)
+        image_form.addRow(self.tr("Image Endpoint:"), image_base_row)
+        image_form.addRow(self.tr("Image Model:"), image_model_row)
+        image_form.addRow(self.tr("Image Prompt:"), self.image_prompt_edit)
+        right_layout.addWidget(self.image_fields)
+
+        self.image_support_check.toggled.connect(self._on_image_support_toggled)
+        self._on_image_support_toggled(self.image_support_check.isChecked())
+
         right_layout.addStretch()
 
         scroll.setWidget(right_widget)
@@ -678,6 +924,10 @@ class ProfileManagerDialog(QDialog):
         self.rpm_spin.setValue(20)
         self.delay_spin.setValue(0.3)
         self.ocr_maxtok_spin.setValue(4096)
+        self.image_support_check.setChecked(False)
+        self.image_base_edit.clear()
+        self.image_model_edit.clear()
+        self.image_prompt_edit.setPlainText(DEFAULT_INPAINT_PROMPT)
 
     def _update_delete_button(self):
         row = self.list_widget.currentRow()
@@ -733,6 +983,12 @@ class ProfileManagerDialog(QDialog):
             self.ocr_maxtok_spin.setValue(int(p.get("ocr_max_response_tokens", 4096)))
         except (ValueError, TypeError):
             self.ocr_maxtok_spin.setValue(4096)
+        self.image_support_check.setChecked(p.get("image_support", False))
+        self.image_base_edit.setText(p.get("image_base_url", ""))
+        self.image_model_edit.setText(p.get("image_model", ""))
+        self.image_prompt_edit.setPlainText(
+            p.get("image_prompt", DEFAULT_INPAINT_PROMPT)
+        )
         self._update_delete_button()
 
     def _on_fetch_models(self):
@@ -848,6 +1104,86 @@ class ProfileManagerDialog(QDialog):
                 self.tr("Error: {err}").format(err=e),
             )
 
+    def _on_image_support_toggled(self, checked: bool):
+        self.image_fields.setVisible(bool(checked))
+
+    def _on_test_image_connection(self):
+        base_url = self.image_base_edit.text().strip()
+        key = self.key_edit.text().strip()
+        proxy = ""
+        row = self._current_row
+        if 0 <= row < len(self._profiles):
+            proxy = self._profiles[row].get("proxy", "")
+        if not base_url:
+            QMessageBox.warning(
+                self, self.tr("Warning"), self.tr("Image endpoint is required.")
+            )
+            return
+        try:
+            fetch_image_models(base_url, key, proxy=proxy)
+            QMessageBox.information(
+                self,
+                self.tr("Connection Successful"),
+                self.tr("Connected! API is reachable and credentials are valid."),
+            )
+        except httpx.HTTPStatusError as e:
+            QMessageBox.warning(
+                self,
+                self.tr("Connection Failed"),
+                self.tr("HTTP {code}: {text}").format(
+                    code=e.response.status_code, text=e.response.text[:200]
+                ),
+            )
+        except httpx.ConnectError:
+            QMessageBox.warning(
+                self,
+                self.tr("Connection Failed"),
+                self.tr(
+                    "Could not connect to {host}.\nPlease check the URL and your network."
+                ).format(host=base_url),
+            )
+        except httpx.TimeoutException:
+            QMessageBox.warning(
+                self,
+                self.tr("Connection Failed"),
+                self.tr("Connection timed out. Check the URL and network."),
+            )
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                self.tr("Connection Failed"),
+                self.tr("Error: {err}").format(err=e),
+            )
+
+    def _on_fetch_image_models(self):
+        base_url = self.image_base_edit.text().strip()
+        key = self.key_edit.text().strip()
+        proxy = ""
+        row = self._current_row
+        if 0 <= row < len(self._profiles):
+            proxy = self._profiles[row].get("proxy", "")
+        if not base_url:
+            QMessageBox.warning(
+                self, self.tr("Warning"), self.tr("Image endpoint is required.")
+            )
+            return
+        try:
+            names = fetch_image_models(base_url, key, proxy=proxy)
+            if names:
+                dlg = FilterableListDialog(self, self.tr("Select Model"), names)
+                if dlg.exec() == QDialog.DialogCode.Accepted and dlg.selected:
+                    self.image_model_edit.setText(dlg.selected)
+            else:
+                QMessageBox.information(
+                    self, self.tr("Notice"), self.tr("No models found.")
+                )
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                self.tr("Error"),
+                self.tr("Failed to fetch model list: {err}").format(err=e),
+            )
+
     def _on_delete(self):
         row = self.list_widget.currentRow()
         if row < 0 or row >= len(self._profiles) or self._is_builtin(row):
@@ -944,6 +1280,11 @@ class ProfileManagerWidget(QWidget):
             p["ocr_max_response_tokens"] = int(self.ocr_maxtok_spin.value())
         except (ValueError, TypeError):
             p["ocr_max_response_tokens"] = 4096
+        # Image inpainting fields
+        p["image_support"] = self.image_support_check.isChecked()
+        p["image_base_url"] = self.image_base_edit.text().strip()
+        p["image_model"] = self.image_model_edit.text().strip()
+        p["image_prompt"] = self.image_prompt_edit.toPlainText().strip()
 
     def _persist(self):
         """Write current profiles to config and notify listeners."""
@@ -1181,6 +1522,61 @@ class ProfileManagerWidget(QWidget):
         ocr_form.addRow(self.tr("Max Tokens:"), self.ocr_maxtok_spin)
         form_layout.addLayout(ocr_form)
 
+        # Image Inpainting Settings (optional)
+        form_layout.addWidget(
+            ConfigSectionHeader(self.tr("Image Inpainting Settings (optional)"))
+        )
+        self.image_support_check = ConfigCheckBox(
+            self.tr("Enable image inpainting for this profile")
+        )
+        self.image_support_check.setToolTip(
+            self.tr(
+                "Enable this for models that can generate/clean images. "
+                "Image-capable profiles appear in the online inpainter's profile selector."
+            )
+        )
+        form_layout.addWidget(self.image_support_check)
+
+        self.image_fields = QWidget()
+        image_form = QFormLayout(self.image_fields)
+        image_form.setSpacing(8)
+        image_form.setLabelAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        image_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow
+        )
+        self.image_base_edit = ConfigLineEdit()
+        self.image_base_edit.setPlaceholderText("https://api.openai.com/v1/images/edits")
+        image_test_btn = QPushButton(self.tr("Test"))
+        image_test_btn.setObjectName("ConfigButton")
+        image_test_btn.setFixedHeight(28)
+        image_test_btn.clicked.connect(self._on_test_image_connection)
+        image_base_row = QHBoxLayout()
+        image_base_row.addWidget(self.image_base_edit, 1)
+        image_base_row.addWidget(image_test_btn)
+        self.image_model_edit = ConfigLineEdit()
+        self.image_model_edit.setPlaceholderText("gpt-image-2, ...")
+        image_fetch_btn = QPushButton(self.tr("Fetch Models"))
+        image_fetch_btn.setObjectName("ConfigButton")
+        image_fetch_btn.setFixedHeight(28)
+        image_fetch_btn.clicked.connect(self._on_fetch_image_models)
+        image_model_row = QHBoxLayout()
+        image_model_row.addWidget(self.image_model_edit, 1)
+        image_model_row.addWidget(image_fetch_btn)
+        self.image_prompt_edit = ConfigTextEdit()
+        self.image_prompt_edit.setPlaceholderText(
+            self.tr("Optional prompt sent with each inpainting request.")
+        )
+        self.image_prompt_edit.setMinimumHeight(80)
+        image_form.addRow(self.tr("Image Endpoint:"), image_base_row)
+        image_form.addRow(self.tr("Image Model:"), image_model_row)
+        image_form.addRow(self.tr("Image Prompt:"), self.image_prompt_edit)
+        form_layout.addWidget(self.image_fields)
+
+        self.image_support_check.toggled.connect(self._on_image_support_toggled)
+        self._on_image_support_toggled(self.image_support_check.isChecked())
+
         form_layout.addStretch()
         scroll.setWidget(form_widget)
         layout.addWidget(scroll, 1)
@@ -1228,6 +1624,10 @@ class ProfileManagerWidget(QWidget):
         self.rpm_spin.setValue(20)
         self.delay_spin.setValue(0.3)
         self.ocr_maxtok_spin.setValue(4096)
+        self.image_support_check.setChecked(False)
+        self.image_base_edit.clear()
+        self.image_model_edit.clear()
+        self.image_prompt_edit.setPlainText(DEFAULT_INPAINT_PROMPT)
 
     def _populate_form(self, idx: int):
         if idx < 0 or idx >= len(self._profiles):
@@ -1263,6 +1663,12 @@ class ProfileManagerWidget(QWidget):
             self.ocr_maxtok_spin.setValue(int(p.get("ocr_max_response_tokens", 4096)))
         except (ValueError, TypeError):
             self.ocr_maxtok_spin.setValue(4096)
+        self.image_support_check.setChecked(p.get("image_support", False))
+        self.image_base_edit.setText(p.get("image_base_url", ""))
+        self.image_model_edit.setText(p.get("image_model", ""))
+        self.image_prompt_edit.setPlainText(
+            p.get("image_prompt", DEFAULT_INPAINT_PROMPT)
+        )
 
     # ── slots ──
 
@@ -1337,6 +1743,86 @@ class ProfileManagerWidget(QWidget):
                 self.tr("All built-in profiles already exist."),
             )
 
+    # ── Background network helpers ──
+    # Test / Fetch Models must not run the request on the GUI thread: a slow or
+    # unreachable host froze the window (Windows "Not Responding"). These route
+    # the request through ``_NetWorker`` and deliver the result back on the GUI
+    # thread.
+
+    def _current_proxy(self) -> str:
+        idx = self._current_idx
+        if 0 <= idx < len(self._profiles):
+            return self._profiles[idx].get("proxy", "")
+        return ""
+
+    def _start_net(self, callback, on_ok, on_err):
+        prev = getattr(self, "_net_worker", None)
+        if prev is not None and prev.isRunning():
+            return
+        worker = _NetWorker(self, callback)
+        worker.finished_ok.connect(on_ok)
+        worker.finished_err.connect(on_err)
+        self._net_worker = worker
+        worker.start()
+
+    def _net_error_message(self, e, host: str) -> str:
+        if isinstance(e, httpx.HTTPStatusError):
+            return self.tr("HTTP {code}: {text}").format(
+                code=e.response.status_code, text=e.response.text[:200]
+            )
+        if isinstance(e, httpx.ConnectError):
+            return self.tr(
+                "Could not connect to {host}.\nPlease check the URL and your network."
+            ).format(host=host)
+        if isinstance(e, httpx.TimeoutException):
+            return self.tr("Connection timed out. Check the URL and network.")
+        return self.tr("Error: {err}").format(err=e)
+
+    def _show_test_error(self, e, host: str):
+        QMessageBox.warning(
+            self, self.tr("Connection Failed"), self._net_error_message(e, host)
+        )
+
+    def _show_fetch_error(self, e, host: str):
+        QMessageBox.warning(
+            self,
+            self.tr("Error"),
+            self.tr("Failed to fetch model list: {err}").format(
+                err=self._net_error_message(e, host)
+            ),
+        )
+
+    def _test_success(self):
+        QMessageBox.information(
+            self,
+            self.tr("Connection Successful"),
+            self.tr("Connected! API is reachable and credentials are valid."),
+        )
+
+    def _models_fetch_ok(self, names):
+        if not names:
+            QMessageBox.information(
+                self, self.tr("Notice"), self.tr("No models found.")
+            )
+            return
+        dlg = FilterableListDialog(self, self.tr("Select Model"), names)
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.selected:
+            self.model_edit.setText(dlg.selected)
+            self._save_current_form()
+            self._persist()
+
+    def _image_models_fetch_ok(self, names):
+        if not names:
+            QMessageBox.information(
+                self, self.tr("Notice"), self.tr("No models found.")
+            )
+            return
+        dlg = FilterableListDialog(self, self.tr("Select Model"), names)
+        if dlg.exec() == QDialog.DialogCode.Accepted and dlg.selected:
+            self.image_model_edit.setText(dlg.selected)
+            self._save_current_form()
+            self._persist()
+
     def _on_fetch_models(self):
         host = self.host_edit.text().strip()
         key = self.key_edit.text().strip()
@@ -1347,42 +1833,12 @@ class ProfileManagerWidget(QWidget):
                 self.tr("Host and API key are required to fetch the model list."),
             )
             return
-        try:
-            with httpx.Client() as client:
-                resp = client.get(
-                    f"{host.rstrip('/')}/models",
-                    headers={"Authorization": f"Bearer {key}"},
-                    timeout=10,
-                )
-                if resp.status_code == 200:
-                    models = resp.json().get("data", [])
-                    names = sorted(m["id"] for m in models)
-                    if not names:
-                        QMessageBox.information(
-                            self, self.tr("Notice"), self.tr("No models found.")
-                        )
-                        return
-                    dlg = FilterableListDialog(
-                        self, self.tr("Select Model"), names
-                    )
-                    if dlg.exec() == QDialog.DialogCode.Accepted and dlg.selected:
-                        self.model_edit.setText(dlg.selected)
-                        self._save_current_form()
-                        self._persist()
-                else:
-                    QMessageBox.warning(
-                        self,
-                        self.tr("Error"),
-                        self.tr("Failed to fetch model list. HTTP {code}").format(
-                            code=resp.status_code
-                        ),
-                    )
-        except Exception as e:
-            QMessageBox.warning(
-                self,
-                self.tr("Error"),
-                self.tr("Failed to fetch model list: {err}").format(err=e),
-            )
+        proxy = self._current_proxy()
+        self._start_net(
+            lambda: _probe_model_list(host, key, proxy),
+            self._models_fetch_ok,
+            lambda e: self._show_fetch_error(e, host),
+        )
 
     def _on_test_connection(self):
         host = self.host_edit.text().strip()
@@ -1401,55 +1857,45 @@ class ProfileManagerWidget(QWidget):
                 self.tr("A valid API key is required to test the connection."),
             )
             return
-        proxy = ""
-        idx = self._current_idx
-        if 0 <= idx < len(self._profiles):
-            proxy = self._profiles[idx].get("proxy", "")
-        try:
-            client_kwargs = {"timeout": 10}
-            if proxy:
-                client_kwargs["proxy"] = proxy
-            with httpx.Client(**client_kwargs) as client:
-                resp = client.get(
-                    f"{host.rstrip('/')}/models",
-                    headers={"Authorization": f"Bearer {key}"},
-                )
-                if resp.status_code == 200:
-                    QMessageBox.information(
-                        self,
-                        self.tr("Connection Successful"),
-                        self.tr(
-                            "Connected! API is reachable and credentials are valid."
-                        ),
-                    )
-                else:
-                    QMessageBox.warning(
-                        self,
-                        self.tr("Connection Failed"),
-                        self.tr("HTTP {code}: {text}").format(
-                            code=resp.status_code, text=resp.text[:200]
-                        ),
-                    )
-        except httpx.ConnectError:
+        proxy = self._current_proxy()
+        self._start_net(
+            lambda: _probe_connection(host, key, proxy),
+            lambda _r: self._test_success(),
+            lambda e: self._show_test_error(e, host),
+        )
+
+    def _on_image_support_toggled(self, checked: bool):
+        self.image_fields.setVisible(bool(checked))
+
+    def _on_test_image_connection(self):
+        base_url = self.image_base_edit.text().strip()
+        key = self.key_edit.text().strip()
+        if not base_url:
             QMessageBox.warning(
-                self,
-                self.tr("Connection Failed"),
-                self.tr(
-                    "Could not connect to {host}.\nPlease check the URL and your network."
-                ).format(host=host),
+                self, self.tr("Warning"), self.tr("Image endpoint is required.")
             )
-        except httpx.TimeoutException:
+            return
+        proxy = self._current_proxy()
+        self._start_net(
+            lambda: fetch_image_models(base_url, key, proxy=proxy),
+            lambda _r: self._test_success(),
+            lambda e: self._show_test_error(e, base_url),
+        )
+
+    def _on_fetch_image_models(self):
+        base_url = self.image_base_edit.text().strip()
+        key = self.key_edit.text().strip()
+        if not base_url:
             QMessageBox.warning(
-                self,
-                self.tr("Connection Failed"),
-                self.tr("Connection timed out. Check the URL and network."),
+                self, self.tr("Warning"), self.tr("Image endpoint is required.")
             )
-        except Exception as e:
-            QMessageBox.warning(
-                self,
-                self.tr("Connection Failed"),
-                self.tr("Error: {err}").format(err=e),
-            )
+            return
+        proxy = self._current_proxy()
+        self._start_net(
+            lambda: fetch_image_models(base_url, key, proxy=proxy),
+            self._image_models_fetch_ok,
+            lambda e: self._show_fetch_error(e, base_url),
+        )
 
     def hideEvent(self, event):
         """Auto-save when navigating away from this page."""

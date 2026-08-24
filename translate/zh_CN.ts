@@ -1348,7 +1348,19 @@ Settings → Inpainter → Photoshop Path</source>
             <source>Image dimensions changed. Please undo in Photoshop and save again with the original dimensions.</source>
             <translation>图片尺寸已变更。请在 Photoshop 中撤销并保存为原始尺寸。</translation>
         </message>
-    </context>
+            <message>
+            <source>A repair is still in progress. Please wait.</source>
+            <translation>上一个修复仍在进行中，请稍候。</translation>
+        </message>
+        <message>
+            <source>Inpainting finished</source>
+            <translation>修复完成</translation>
+        </message>
+        <message>
+            <source>Inpainting...</source>
+            <translation>正在修复…</translation>
+        </message>
+</context>
     <context>
         <name>FontExcludeDialog</name>
         <message>
@@ -1864,6 +1876,40 @@ Run detection + OCR to populate text blocks.</source>
         </message>
     </context>
     <context>
+        <name>CropControls</name>
+        <message>
+            <source>Crop Ratio</source>
+            <translation>裁剪比例</translation>
+        </message>
+        <message>
+            <source>Crop mode</source>
+            <translation>裁剪模式</translation>
+        </message>
+        <message>
+            <source>Inpaint</source>
+            <translation>修复</translation>
+        </message>
+            <message>
+            <source>Clear mask</source>
+            <translation>清除遮罩</translation>
+        </message>
+        <message>
+            <source>Erase every mask you have drawn inside the crop.</source>
+            <translation>清除你在裁剪框内绘制的所有遮罩。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\drawingpanel.py" />
+            <source>Aspect ratios: 1:1 on every model. gpt-image-2 also supports 3:2 and 2:3. Other models also support 16:9, 9:16, 4:3 and 3:4.</source>
+            <translation>1:1: 正方形格式
+16:9: 宽屏横向格式（gpt-image-2不支持）
+9:16: 宽屏纵向格式（gpt-image-2不支持）
+4:3: 标准横向格式（gpt-image-2不支持）
+3:4: 标准纵向格式（gpt-image-2不支持）
+3:2: 横向格式（仅gpt-image-2支持）
+2:3: 纵向格式（仅gpt-image-2支持）</translation>
+        </message>
+</context>
+    <context>
         <name>InpaintPanel</name>
         <message>
             <location filename="..\ui\drawingpanel.py" line="88" />
@@ -1889,6 +1935,18 @@ Run detection + OCR to populate text blocks.</source>
             <location filename="..\ui\drawingpanel.py" line="108" />
             <source>Inpainter</source>
             <translation>修复工具</translation>
+        </message>
+        <message type="obsolete">
+            <source>Crop Ratio</source>
+            <translation>裁剪比例</translation>
+        </message>
+        <message type="obsolete">
+            <source>Crop mode</source>
+            <translation>裁剪模式</translation>
+        </message>
+        <message type="obsolete">
+            <source>Inpaint</source>
+            <translation>修复</translation>
         </message>
     </context>
     <context>
@@ -3122,7 +3180,15 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <source>waiting for model</source>
             <translation>等待模型响应</translation>
         </message>
-    </context>
+            <message>
+            <source>Waiting for the current inpainting to finish. It will switch to '{inpainter}' afterwards.</source>
+            <translation>等待当前修复完成，随后将切换到“{inpainter}”。</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+</context>
     <context>
         <name>NetworkSettingsDialog</name>
         <message>
@@ -3801,9 +3867,37 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
     <context>
         <name>ProfileManagerDialog</name>
         <message>
+            <source>Image endpoint is required.</source>
+            <translation>图像端点必填。</translation>
+        </message>
+        <message>
+            <source>Enable image inpainting for this profile</source>
+            <translation>为此配置文件启用图像修复</translation>
+        </message>
+        <message>
+            <source>Image Endpoint:</source>
+            <translation>图像端点：</translation>
+        </message>
+        <message>
+            <source>Image Inpainting Settings (optional)</source>
+            <translation>图像修复设置（可选）</translation>
+        </message>
+        <message>
+            <source>Image Model:</source>
+            <translation>图像模型：</translation>
+        </message>
+        <message>
+            <source>Image Prompt:</source>
+            <translation>图像提示词：</translation>
+        </message>
+        <message>
             <location filename="..\utils\profile_manager.py" line="359" />
             <source>Manage API Profiles</source>
             <translation>管理 API 配置文件</translation>
+        </message>
+        <message>
+            <source>Optional prompt sent with each inpainting request.</source>
+            <translation>每次修复请求附带的可选提示词。</translation>
         </message>
         <message>
             <location filename="..\utils\profile_manager.py" line="447" />
@@ -5593,6 +5687,10 @@ in Settings → Mirror Config, then click Retry.</source>
     <context>
         <name>ProfileManagerWidget</name>
         <message>
+            <source>Image endpoint is required.</source>
+            <translation>图像端点必填。</translation>
+        </message>
+        <message>
             <source> (built-in)</source>
             <translation>（内置）</translation>
         </message>
@@ -5657,6 +5755,10 @@ in Settings → Mirror Config, then click Retry.</source>
             <translation>细节级别：</translation>
         </message>
         <message>
+            <source>Enable image inpainting for this profile</source>
+            <translation>为此配置文件启用图像修复</translation>
+        </message>
+        <message>
             <source>Error</source>
             <translation>错误</translation>
         </message>
@@ -5691,6 +5793,22 @@ in Settings → Mirror Config, then click Retry.</source>
         <message>
             <source>HTTP {code}: {text}</source>
             <translation>HTTP {code}：{text}</translation>
+        </message>
+        <message>
+            <source>Image Endpoint:</source>
+            <translation>图像端点：</translation>
+        </message>
+        <message>
+            <source>Image Inpainting Settings (optional)</source>
+            <translation>图像修复设置（可选）</translation>
+        </message>
+        <message>
+            <source>Image Model:</source>
+            <translation>图像模型：</translation>
+        </message>
+        <message>
+            <source>Image Prompt:</source>
+            <translation>图像提示词：</translation>
         </message>
         <message>
             <source>Max Tokens:</source>
@@ -5731,6 +5849,10 @@ in Settings → Mirror Config, then click Retry.</source>
         <message>
             <source>OCR System Prompt:</source>
             <translation>OCR 系统提示词：</translation>
+        </message>
+        <message>
+            <source>Optional prompt sent with each inpainting request.</source>
+            <translation>每次修复请求附带的可选提示词。</translation>
         </message>
         <message>
             <source>Optional system prompt for OCR.</source>

@@ -159,6 +159,8 @@ class DrawPanelConfig(Config):
     pentool_shape: int = 0
     inpainter_width: float = 30.0
     inpainter_shape: int = 0
+    inpaint_crop_ratio: str = ""
+    inpaint_crop_mode: bool = False
     current_tool: int = 0
     rectool_auto: bool = False
     rectool_method: int = 0

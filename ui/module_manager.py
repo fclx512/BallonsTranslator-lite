@@ -7,7 +7,7 @@ from typing import List, Union
 
 import numpy as np
 from qtpy.QtCore import QLocale, QObject, QThread, QTimer, Signal
-from qtpy.QtWidgets import QFileDialog
+from qtpy.QtWidgets import QFileDialog, QMessageBox
 
 import modules
 from modules import (
@@ -31,13 +31,13 @@ from utils import shared
 from utils.config import RunStatus, pcfg
 from utils.imgproc_utils import enlarge_window
 from utils.logger import logger as LOGGER
-from utils.message import create_error_dialog, create_info_dialog
+from utils.message import create_error_dialog
 from utils.proj_imgtrans import ProjImgTrans
 from utils.registry import Registry
 from utils.textblock import TextBlock, sort_regions
 
 from .configpanel import ConfigPanel
-from .custom_widget import ImgtransProgressMessageBox, ParamComboBox, ProgressMessageBox
+from .custom_widget import ImgtransProgressMessageBox, MessageBox, ParamComboBox, ProgressMessageBox
 from .funcmaps import get_maskseg_method
 from .misc import get_theme_color
 
@@ -1444,6 +1444,11 @@ class ModuleManager(QObject):
         self.imgtrans_proj = imgtrans_proj
         self.check_inpaint_fin_timer = QTimer(self)
         self.check_inpaint_fin_timer.timeout.connect(self.check_inpaint_th_finished)
+        # Pending inpainter switch: set when the user changes the inpainter while
+        # a repair is still running, so the switch is applied once the thread is
+        # idle instead of locking the UI behind a modal "Set Inpainter..." box.
+        self._pending_inpainter = None
+        self._wait_inpainter_dialog = None
 
     def setupThread(
         self,
@@ -1528,6 +1533,14 @@ class ModuleManager(QObject):
         inpainter_params = merge_config_module_params(
             cfg_module.inpainter_params, GET_VALID_INPAINTERS(), INPAINTERS.get
         )
+        # Populate image-capable profile options for the online LLM inpainter
+        from utils.profile_manager import get_image_profile_names
+
+        for mod_key in ("LLMInpaint",):
+            if mod_key in inpainter_params and isinstance(inpainter_params[mod_key], dict):
+                profile_cfg = inpainter_params[mod_key].get("profile")
+                if isinstance(profile_cfg, dict):
+                    profile_cfg["options"] = get_image_profile_names()
         inpainter_panel.addModulesParamWidgets(
             inpainter_params, _build_dep_notes(INPAINTERS)
         )
@@ -1673,9 +1686,18 @@ class ModuleManager(QObject):
     def check_inpaint_th_finished(self):
         if self.inpaint_thread.isRunning():
             return
-        self.block_set_inpainter = False
         self.check_inpaint_fin_timer.stop()
+        if not self.block_set_inpainter:
+            return
+        # The running repair finally settled — apply the deferred switch (or just
+        # clear the pending state if the user cancelled it in the meantime).
+        pending = self._pending_inpainter
+        self._pending_inpainter = None
+        self.block_set_inpainter = False
+        self._wait_inpainter_dialog = None
         self.inpaint_th_finished.emit()
+        if pending is not None:
+            self.setInpainter(pending)
 
     def runImgtransPipeline(self, pages_to_process=None):
         if self.imgtrans_proj.is_empty:
@@ -1861,25 +1883,28 @@ class ModuleManager(QObject):
         self.translate_thread.setTranslator(translator)
 
     def setInpainter(self, inpainter: str = None):
-
-        if self.block_set_inpainter:
-            return
-
         if inpainter is None:
             inpainter = cfg_module.inpainter
-
+        if not self.inpaint_thread.isRunning() and self.block_set_inpainter:
+            # A deferred switch was queued but the poll timer hasn't fired yet —
+            # drop the stale queue and apply this request directly instead of
+            # letting the old pending target override the user's newest choice.
+            self._close_wait_inpainter_dialog()
+            self._pending_inpainter = None
+            self.block_set_inpainter = False
         if self.inpaint_thread.isRunning():
+            # A repair is still in flight (e.g. a slow online-LLM request). Defer
+            # the switch instead of locking the whole UI behind a modal: remember
+            # the target, wait for the running inpaint to finish, then apply it.
+            # The user can cancel the wait at any time.
+            self._pending_inpainter = inpainter
             self.block_set_inpainter = True
-            create_info_dialog(
-                self.tr("Set Inpainter..."),
-                modal=True,
-                signal_slot_map_list=[
-                    {"signal": self.inpaint_th_finished, "slot": "done"}
-                ],
-            )
+            self._show_wait_inpainter_dialog(inpainter)
             self.check_inpaint_fin_timer.start(300)
             return
+        self._start_set_inpainter(inpainter)
 
+    def _start_set_inpainter(self, inpainter: str):
         cls = INPAINTERS.get(inpainter)
         if cls and not _ensure_module_deps(cls, self.parent()):
             if self.inpainter is not None:
@@ -1887,12 +1912,46 @@ class ModuleManager(QObject):
                     self.inpainter.name
                 )
             return
-
-        self.prepare_msgbox.updateTaskProgress(0, 
-            self.tr("Preparing module: {module}...").format(module=inpainter)
+        self.prepare_msgbox.updateTaskProgress(
+            0, self.tr("Preparing module: {module}...").format(module=inpainter)
         )
         self.prepare_msgbox.show()
         self.inpaint_thread.setInpainter(inpainter)
+
+    def _show_wait_inpainter_dialog(self, inpainter: str):
+        """Non-blocking "waiting to finish" note with a Cancel button."""
+        self._close_wait_inpainter_dialog()
+        dlg = MessageBox(
+            self.tr(
+                "Waiting for the current inpainting to finish. It will switch to '{inpainter}' afterwards."
+            ).format(inpainter=inpainter),
+            modal=False,
+        )
+        # NoRole so clicking Cancel does not auto-close the box; our handler
+        # closes it (via inpaint_th_finished -> done) after resetting state.
+        dlg.addButton(self.tr("Cancel"), QMessageBox.ButtonRole.NoRole)
+        dlg.buttonClicked.connect(self.cancelPendingInpainter)
+        dlg.connect_signals([{"signal": self.inpaint_th_finished, "slot": "done"}])
+        dlg.show()
+        dlg.raise_()
+        self._wait_inpainter_dialog = dlg
+
+    def cancelPendingInpainter(self):
+        """Cancel a deferred inpainter switch (user clicked 'Cancel')."""
+        self._close_wait_inpainter_dialog()
+        self.check_inpaint_fin_timer.stop()
+        self._pending_inpainter = None
+        self.block_set_inpainter = False
+        self.inpaint_th_finished.emit()
+
+    def _close_wait_inpainter_dialog(self):
+        dlg = self._wait_inpainter_dialog
+        self._wait_inpainter_dialog = None
+        if dlg is not None:
+            try:
+                dlg.done(0)
+            except Exception:
+                pass
 
     def setTextDetector(self, textdetector: str = None):
         if textdetector is None:
@@ -1944,8 +2003,20 @@ class ModuleManager(QObject):
             self.run_canvas_inpaint = False
 
     def canvas_inpaint(self, inpaint_dict):
+        """Dispatch a canvas repair.
+
+        Returns ``True`` when the request was handed to the inpainting thread,
+        ``False`` when a previous repair is still running (so the caller can show
+        feedback instead of silently losing the request).  The flag is only set
+        when the request is actually dispatched, so a dropped request never leaks
+        ``run_canvas_inpaint`` into the next finish.
+        """
+        if self.inpaint_thread.isRunning():
+            LOGGER.warning("Canvas inpaint skipped: inpainting thread is busy.")
+            return False
         self.run_canvas_inpaint = True
         self.inpaint(**inpaint_dict)
+        return True
 
     def on_translatorparam_edited(self, param_key: str, param_content: dict):
         if self.translator is not None:
@@ -1972,8 +2043,12 @@ class ModuleManager(QObject):
     def _on_profiles_changed(self):
         """Refresh profile-dependent selectors after profiles are edited."""
         # Refresh OCR vision profile options (class-level params)
-        from modules import OCR as _OCR
-        from utils.profile_manager import get_profile_names, get_vision_profile_names
+        from modules import OCR as _OCR, INPAINTERS as _INP
+        from utils.profile_manager import (
+            get_image_profile_names,
+            get_profile_names,
+            get_vision_profile_names,
+        )
 
         ocr_cls = _OCR.module_dict.get("llm_ocr")
         if ocr_cls and hasattr(ocr_cls, "params"):
@@ -1994,10 +2069,20 @@ class ModuleManager(QObject):
                 active_cfg["options"] = all_names
                 if active_cfg.get("value", "") not in all_names:
                     active_cfg["value"] = all_names[0] if all_names else ""
+        # Refresh inpaint LLM profile options (class-level params)
+        inp_cls = _INP.module_dict.get("LLMInpaint")
+        if inp_cls and hasattr(inp_cls, "params"):
+            image_cfg = inp_cls.params.get("profile")
+            if isinstance(image_cfg, dict):
+                image_names = get_image_profile_names()
+                image_cfg["options"] = image_names
+                if image_cfg.get("value", "") not in image_names:
+                    image_cfg["value"] = image_names[0] if image_names else ""
         # Invalidate cached param widgets so they get rebuilt with new options
         for panel, module_key in [
             (self.config_panel.ocr_config_panel, "llm_ocr"),
             (self.config_panel.trans_config_panel, "LLM_API_Translator"),
+            (self.config_panel.inpaint_config_panel, "LLMInpaint"),
         ]:
             if module_key in panel.param_widget_map:
                 old_widget = panel.param_widget_map[module_key]

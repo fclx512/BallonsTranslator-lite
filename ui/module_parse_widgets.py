@@ -479,12 +479,37 @@ class ModuleConfigParseWidget(QWidget):
         self.updateModuleParamWidget()
         self.blockSignals(False)
 
+    @staticmethod
+    def _widget_is_deleted(w: QWidget) -> bool:
+        """Return True when *w* is a Python wrapper around a destroyed C++ object.
+
+        ``visibleWidget`` / ``param_widget_map`` can hold references to widgets
+        that Qt has already deleted (e.g. a module panel rebuilt on a later
+        profile change).  Calling a method on such a wrapper raises
+        ``RuntimeError: wrapped C/C++ object ... has been deleted`` and crashes
+        on a tool switch (2026-08-24), so every hide/show must probe first.
+        """
+        if w is None:
+            return True
+        try:
+            w.isHidden()
+        except RuntimeError:
+            return True
+        return False
+
     def updateModuleParamWidget(self):
         module = self.module_combobox.currentText()
         if self.visibleWidget is not None:
-            self.visibleWidget.hide()
+            if self._widget_is_deleted(self.visibleWidget):
+                self.visibleWidget = None
+            else:
+                self.visibleWidget.hide()
         if module in self.param_widget_map:
             widget: QWidget = self.param_widget_map[module]
+            if widget is not None and self._widget_is_deleted(widget):
+                # cached widget was destroyed — rebuild it lazily
+                self.param_widget_map[module] = None
+                widget = None
             if widget is None:
                 # lazy load widgets
                 params = self.module_dict[module]
@@ -642,13 +667,19 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
         """Filter out ``active_profile`` — handled by dedicated section."""
         module = self.module_combobox.currentText()
         if self.visibleWidget is not None:
-            self.visibleWidget.hide()
+            if self._widget_is_deleted(self.visibleWidget):
+                self.visibleWidget = None
+            else:
+                self.visibleWidget.hide()
 
         self._refresh_profile_section()
         self._refresh_single_blk_section()
 
         if module in self.param_widget_map:
             widget = self.param_widget_map[module]
+            if widget is not None and self._widget_is_deleted(widget):
+                self.param_widget_map[module] = None
+                widget = None
             if widget is None:
                 params = self.module_dict[module]
                 filtered = {

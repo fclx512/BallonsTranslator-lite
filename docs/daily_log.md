@@ -377,3 +377,23 @@
 **验证：** `check_syntax` 全过；`render_sync_probe` 7/7 PASS；`test_textblkitem_geometry/effect`、`test_text_transform_engine`、`test_vertical_engine`、`test_startup_imports` 全绿；溢出收敛行为符合预期。
 
 **涉及文件：** `ui/textedit_commands.py`、`ui/textedit_area.py`、`ui/scenetext_manager.py`、`ui/textitem.py`、`ui/canvas.py`、`scripts/render_sync_probe.py`（新增）、`docs/daily_log.md`
+
+---
+
+## 2026-08-25
+
+### 在线 LLM 图像修复全链路（LLMInpaint 模块 / 比例裁剪工具 / mask 高亮红 + 短专注提示词）
+
+**问题/需求：** 用生图模型自动擦除嵌字/破损区域。生图模型（Meshy/nano-banana）较笨：只靠通用提示词遇到复杂场景基本没擦掉嵌字，反而整幅套滤镜；而 gemini 对话式界面生成很完美，怀疑是对话模型读图后生成提示词。讨论确定方案：既然已人工标注 mask，就不需要额外视觉模型——把 mask 区域叠高亮色发给模型，提示词直接说明"这区域是要擦的嵌字、其余像素保持原样"，省去"要求模型不能做 xxx"的长篇。首版用 cyan 高亮 + `_REGIONAL_PROMPT` 拼接在长通用提示词后，实机失败（没擦掉字反而给字加蓝边）——根因是长提示词里"保持原样/别做滤镜"与"擦掉高亮区"自相矛盾，模型误以为要保留被标内容。修订：高亮改红、去掉长通用提示词、只保留一句短专注提示词，实机修复效果满意。
+
+**改动要点：**
+
+- **`modules/inpaint/inpaint_llm.py`（新）`LLMInpaint`**：profile 驱动（`utils/profile_manager` 选图像 profile，读 image-model/image-prompt/image-base-url/proxy/RPM/请求延迟），按端点宿主自动识别 OpenAI-compatible / Gemini / OpenRouter / Meshy 四类请求；Meshy 为异步（建任务→轮询→下载，去 mask、整幅重绘）；`_inpaint` 用 numpy 按原 mask 局部混合（`result*mask_original + img*(1-mask_original)`），带 stop_event 中断、retry（attempts/timeout）。**本批关键修复**：`_inpaint` 对局部 mask（`0 < 覆盖 ≤ 90%`）叠红色高亮（`img*0.55 + 红*0.45`）并只发短专注 `_REGIONAL_PROMPT`（"红色区域是嵌字/破损须擦除，视为修复标记而非图像内容，重建背景、框外像素保持不变"），替代 profile 长通用 image_prompt；`_meshy_aspect_ratio` 把实际裁剪宽高比吸附到模型支持集合（gpt-image-2 仅 1:1/3:2/2:3，nano-banana 系列另含 16:9/9:16/4:3/3:4）。LLM 提示词按规范不 i18n。
+- **比例裁剪工具**（`ui/crop_rect_item.py`（新）`CropRectItem` + `ui/drawingpanel.py::CropControls`/`InpaintPanel`/`RectPanel`）：画布框选裁剪 + 比例下拉 + Crop mode + Inpaint/Clear mask；画笔修复工具与框选工具共用 `CropControls`，单一裁剪状态在 `DrawingPanel` 同步；框内画笔/框选累积 mask 并冻结；Inpaint 按钮把裁剪区发 LLM 修复（`ui/module_manager.py` 在线修复线程 + 非阻塞"修复中"画布浮层 + 完成提示）。
+- **图像 profile 管理**（`utils/profile_manager.py` +610）：图像可用 profile（image-model/image-base-url/image-prompt/图像归属 proxy/RPM），`set_image_profile`/`get_image_profile_names`/`find_profile` 供 LLMInpaint 读取；`DEFAULT_INPAINT_PROMPT` 强通用提示词作默认。
+- **比例说明**：各模型支持比例说明移到共享 `ui/drawingpanel.py::CropControls`（画笔修复工具与框选工具两处都能看到，仅 LLM 修复时随裁剪控件显示；i18n 上下文 InpaintPanel→CropControls，qm 重编译）。
+- 配套：`ui/image_edit.py`（+5）、`ui/module_parse_widgets.py`（+35）、`utils/config.py`（+2）。
+
+**排障记录：** ① cyan 高亮 + 长提示词拼接 → 蓝边；改红 + 仅短专注提示词后正常。② 换比例报 `UNEXPECTED_EOF_WHILE_READING` 经排查为代理/网络 TLS 握手被掐（走 http_proxy 隧道），与比例无关——比例由 `_meshy_aspect_ratio` 吸附到支持集，模型不支持的比例根本不会发出；若真不支持会返回 HTTP 4xx 而非 SSL EOF。③ 比例说明之前只放进 `InpaintPanel`（画笔修复工具），而在线裁剪修复实际走 `RectPanel`（框选工具），故用户看不到——移到共享 `CropControls` 后两处皆有。
+
+**涉及文件：** `modules/inpaint/inpaint_llm.py`（新）、`ui/crop_rect_item.py`（新）、`ui/drawingpanel.py`、`ui/image_edit.py`、`ui/module_manager.py`、`ui/module_parse_widgets.py`、`utils/config.py`、`utils/profile_manager.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/daily_log.md`

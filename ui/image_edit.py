@@ -22,6 +22,11 @@ class ImageEditMode:
     InpaintTool = 1
     PenTool = 2
     RectTool = 3
+    # Exclusive ratio-crop editing state for the online-LLM inpaint tool. When
+    # active, ``Canvas.painting`` is False so the crop rectangle is the only
+    # thing the mouse edits — no brush stroke can be triggered through the
+    # dashed crop border (2026-08-24).
+    CropMode = 4
 
 
 class PenShape:

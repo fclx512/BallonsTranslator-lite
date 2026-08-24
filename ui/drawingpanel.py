@@ -5,7 +5,7 @@ import os.path as osp
 
 import cv2
 import numpy as np
-from qtpy.QtCore import QLineF, QPointF, QProcess, QRectF, QSizeF, Qt, Signal
+from qtpy.QtCore import QEvent, QLineF, QPointF, QProcess, QRectF, QSizeF, Qt, QTimer, Signal
 from qtpy.QtGui import QBrush, QColor, QCursor, QFontMetrics, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import (
     QBoxLayout,
@@ -20,6 +20,7 @@ from qtpy.QtWidgets import (
     QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
+    QWidget,
 )
 
 from utils.config import DrawPanelConfig, pcfg
@@ -32,6 +33,7 @@ from utils.shared import CONFIG_COMBOBOX_HEIGHT, CONFIG_COMBOBOX_SHORT
 
 from .canvas import Canvas
 from .configpanel import InpaintConfigPanel
+from .crop_rect_item import CropRectItem
 from .custom_widget import ColorPickerLabel, PaintQSlider, SeparatorWidget, Widget
 from .drawing_commands import InpaintUndoCommand, StrokeItemUndoCommand
 from .funcmaps import get_maskseg_method
@@ -43,6 +45,28 @@ INPAINT_BRUSH_COLOR = QColor(127, 0, 127, 127)
 MAX_PEN_SIZE = 1000
 MIN_PEN_SIZE = 1
 TOOLNAME_POINT_SIZE = 13
+
+# Glyphs cycled by the canvas "online repair in progress" overlay spinner.
+BUSY_SPINNER_CHARS = ("◐", "◓", "◑", "◒")
+
+# Aspect ratios offered for the online-LLM inpaint crop tool. These are the
+# union of ratios Meshy's image-to-image endpoint supports across its models.
+RATIO_OPTIONS = [
+    ("1:1", 1.0),
+    ("16:9", 16.0 / 9.0),
+    ("9:16", 9.0 / 16.0),
+    ("4:3", 4.0 / 3.0),
+    ("3:4", 3.0 / 4.0),
+    ("3:2", 3.0 / 2.0),
+    ("2:3", 2.0 / 3.0),
+]
+
+
+def ratio_from_label(label: str) -> float:
+    for lab, ratio in RATIO_OPTIONS:
+        if lab == label:
+            return ratio
+    return 16.0 / 9.0
 
 
 class DrawToolCheckBox(QCheckBox):
@@ -78,8 +102,112 @@ class ToolNameLabel(QLabel):
         self.setFont(font)
 
 
+class CropControls(Widget):
+    """Ratio-crop control row shared by the brush and box-select panels.
+
+    Bundles the aspect-ratio combo, the crop-mode toggle and the ``Inpaint``
+    button that dispatches the cropped region to an online LLM inpainter.  A
+    single canonical crop state lives in ``DrawingPanel``; both panel instances
+    are kept in sync so switching tools never loses the user's crop.
+    """
+
+    cropRatioChanged = Signal(str)
+    cropModeChanged = Signal(bool)
+    inpaintClicked = Signal()
+    clearMaskClicked = Signal()
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.llm_active = False
+
+        self.ratio_combo = QComboBox(self)
+        for label, _ratio in RATIO_OPTIONS:
+            self.ratio_combo.addItem(label)
+        self.ratio_combo.currentTextChanged.connect(self._on_ratio_changed)
+        self.mode_check = QCheckBox(self.tr("Crop mode"))
+        self.mode_check.toggled.connect(self._on_mode_changed)
+        self.inpaint_btn = QPushButton(self.tr("Inpaint"))
+        self.inpaint_btn.clicked.connect(self.inpaintClicked.emit)
+        self.clear_mask_btn = QPushButton(self.tr("Clear mask"))
+        self.clear_mask_btn.setToolTip(
+            self.tr("Erase every mask you have drawn inside the crop.")
+        )
+        self.clear_mask_btn.clicked.connect(self.clearMaskClicked.emit)
+
+        row = QHBoxLayout()
+        row.addWidget(ToolNameLabel(100, self.tr("Crop Ratio")))
+        row.addWidget(self.ratio_combo, 1)
+        row.addWidget(self.mode_check)
+
+        button_row = QHBoxLayout()
+        button_row.addWidget(self.inpaint_btn)
+        button_row.addWidget(self.clear_mask_btn)
+
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(row)
+        layout.addLayout(button_row)
+        # Per-model aspect-ratio support reference, shown alongside the crop
+        # controls for the online image models (Meshy family) that the ratio-crop
+        # tool talks to. Lives on the shared CropControls so it appears in both
+        # the brush (InpaintPanel) and box-select (RectPanel) panels.
+        self.aspect_note = QLabel(
+            self.tr("Aspect ratios: 1:1 on every model. gpt-image-2 also supports 3:2 and 2:3. Other models also support 16:9, 9:16, 4:3 and 3:4.")
+        )
+        self.aspect_note.setWordWrap(True)
+        self.aspect_note.setObjectName("InpaintAspectNote")
+        layout.addWidget(self.aspect_note)
+        layout.setSpacing(14)
+
+        self._update_btn_visibility()
+
+    # ── public API ──
+
+    def ratio(self) -> str:
+        return self.ratio_combo.currentText()
+
+    def mode(self) -> bool:
+        return self.mode_check.isChecked()
+
+    def set_ratio(self, label: str):
+        idx = self.ratio_combo.findText(label)
+        if idx >= 0:
+            self.ratio_combo.blockSignals(True)
+            self.ratio_combo.setCurrentIndex(idx)
+            self.ratio_combo.blockSignals(False)
+
+    def set_mode(self, checked: bool):
+        self.mode_check.blockSignals(True)
+        self.mode_check.setChecked(bool(checked))
+        self.mode_check.blockSignals(False)
+        self._update_btn_visibility()
+
+    def set_llm_active(self, active: bool):
+        self.llm_active = bool(active)
+        self.setVisible(self.llm_active)
+        self._update_btn_visibility()
+
+    # ── internal ──
+
+    def _on_ratio_changed(self, label: str):
+        self.cropRatioChanged.emit(label)
+
+    def _on_mode_changed(self, checked: bool):
+        self._update_btn_visibility()
+        self.cropModeChanged.emit(bool(checked))
+
+    def _update_btn_visibility(self):
+        self.inpaint_btn.setVisible(self.llm_active)
+        self.clear_mask_btn.setVisible(self.llm_active)
+
+
 class InpaintPanel(Widget):
     thicknessChanged = Signal(int)
+    cropRatioChanged = Signal(str)
+    cropModeChanged = Signal(bool)
+    inpaintClicked = Signal()
+    clearMaskClicked = Signal()
+    llmActiveChanged = Signal(bool)
 
     def __init__(self, inpainter_panel: InpaintConfigPanel, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -112,12 +240,59 @@ class InpaintPanel(Widget):
         inpaint_layout.addWidget(ToolNameLabel(100, self.tr("Inpainter")))
         self.inpainter_panel = inpainter_panel
 
+        # ── Online-LLM ratio-crop tool (shared with the box-select panel) ──
+        self.crop_controls = CropControls()
+        self.crop_controls.cropRatioChanged.connect(self.cropRatioChanged.emit)
+        self.crop_controls.cropModeChanged.connect(self.cropModeChanged.emit)
+        self.crop_controls.inpaintClicked.connect(self.inpaintClicked.emit)
+        self.crop_controls.clearMaskClicked.connect(self.clearMaskClicked.emit)
+
+        # Brush-specific body (thickness / shape) — hidden while the ratio-crop
+        # mode is active so the panel shows one unambiguous operation at a time.
+        self.brush_widget = Widget()
+        brush_layout = QVBoxLayout(self.brush_widget)
+        brush_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        brush_layout.addLayout(thickness_layout)
+        brush_layout.addLayout(shape_layout)
+        brush_layout.setSpacing(14)
+
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addLayout(inpaint_layout)
-        layout.addLayout(thickness_layout)
-        layout.addLayout(shape_layout)
+        layout.addWidget(self.brush_widget)
+        layout.addWidget(self.crop_controls)
         layout.setSpacing(14)
+
+        self._llm_active = False
+        self.inpainter_panel.module_changed.connect(self._on_inpainter_changed)
+        self._on_inpainter_changed(self.inpainter_panel.module_combobox.currentText())
+
+    # ── inpainter / crop state ──
+
+    def current_inpainter(self) -> str:
+        return self.inpainter_panel.module_combobox.currentText()
+
+    def crop_ratio(self) -> str:
+        return self.crop_controls.ratio()
+
+    def crop_mode(self) -> bool:
+        return self.crop_controls.mode()
+
+    def set_crop_state(self, ratio_label: str, crop_mode: bool):
+        self.crop_controls.set_ratio(ratio_label)
+        self.crop_controls.set_mode(bool(crop_mode))
+
+    def _on_inpainter_changed(self, name: str):
+        self._llm_active = name == "LLMInpaint"
+        self.llmActiveChanged.emit(self._llm_active)
+        self._update_crop_controls()
+
+    def _update_crop_controls(self):
+        self.crop_controls.set_llm_active(self._llm_active)
+
+    def set_crop_mode_active(self, active: bool):
+        """Hide the brush body while the ratio-crop mode is active."""
+        self.brush_widget.setVisible(not active)
 
     def on_thickness_changed(self):
         if self.thicknessSlider.hasFocus():
@@ -213,6 +388,10 @@ class RectPanel(Widget):
     method_changed = Signal(int)
     delete_btn_clicked = Signal()
     inpaint_btn_clicked = Signal()
+    cropRatioChanged = Signal(str)
+    cropModeChanged = Signal(bool)
+    cropInpaintClicked = Signal()
+    clearMaskClicked = Signal()
 
     def __init__(self, inpainter_panel: InpaintConfigPanel, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -251,12 +430,39 @@ class RectPanel(Widget):
         glayout.addWidget(self.autoChecker, 1, 0)
         glayout.addWidget(self.methodComboBox, 1, 1)
 
+        # Box-select body (mask controls + Inpaint/Delete) — hidden while the
+        # ratio-crop mode is active so the panel shows one unambiguous operation
+        # at a time (2026-08-24).
+        self.box_select_widget = Widget()
+        box_layout = QVBoxLayout(self.box_select_widget)
+        box_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        box_layout.addLayout(glayout)
+        box_layout.addLayout(self.btnlayout)
+        box_layout.setSpacing(8)
+
+        # ── Online-LLM ratio-crop tool (shared with the brush panel) ──
+        self.crop_controls = CropControls()
+        self.crop_controls.cropRatioChanged.connect(self.cropRatioChanged.emit)
+        self.crop_controls.cropModeChanged.connect(self.cropModeChanged.emit)
+        self.crop_controls.inpaintClicked.connect(self.cropInpaintClicked.emit)
+        self.crop_controls.clearMaskClicked.connect(self.clearMaskClicked.emit)
+        self.inpainter_panel.module_changed.connect(self._on_inpainter_changed)
+
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addLayout(inpaint_layout)
-        layout.addLayout(glayout)
-        layout.addLayout(self.btnlayout)
+        layout.addWidget(self.box_select_widget)
+        layout.addWidget(self.crop_controls)
         layout.setSpacing(14)
+
+        self._on_inpainter_changed(self.inpainter_panel.module_combobox.currentText())
+
+    def _on_inpainter_changed(self, name: str):
+        self.crop_controls.set_llm_active(name == "LLMInpaint")
+
+    def set_crop_mode_active(self, active: bool):
+        """Hide the box-select body while the ratio-crop mode is active."""
+        self.box_select_widget.setVisible(not active)
 
     def showEvent(self, e) -> None:
         self.inpaint_layout.addWidget(self.inpainter_panel.module_combobox)
@@ -332,6 +538,49 @@ class DrawingPanel(Widget):
         self.inpaintConfigPanel = InpaintPanel(inpainter_panel)
         self.inpaintConfigPanel.thicknessChanged.connect(self.setInpaintToolWidth)
         self.inpaintConfigPanel.shapeChanged.connect(self.setInpaintShape)
+        self.inpaintConfigPanel.cropRatioChanged.connect(self._on_crop_ratio_changed)
+        self.inpaintConfigPanel.cropModeChanged.connect(self._on_crop_mode_changed)
+        self.inpaintConfigPanel.inpaintClicked.connect(self.runInpaint)
+        self.inpaintConfigPanel.llmActiveChanged.connect(self._on_llm_active_changed)
+        self.inpaintConfigPanel.clearMaskClicked.connect(self._on_clear_crop_mask)
+        self.crop_rect_item = CropRectItem(parent=self.canvas.baseLayer)
+        self.crop_rect_item.setVisible(False)
+        self.crop_rect_item.on_released = self._on_crop_rect_released
+        self._crop_ratio = 16.0 / 9.0
+        self._crop_ratio_label = "16:9"
+        self._crop_mode = False
+        self._crop_active = False
+        # Whether a crop has been established (so the rect stays visible as the
+        # generation range even after crop mode is closed) — set on first LLM
+        # use and cleared when the inpainter is not LLM or the page changes.
+        self._crop_setup = False
+        # Accumulated user mask (full-image uint8 0/255) built from brush strokes
+        # and box-selects, clipped to the crop. Consumed by the one-shot crop
+        # inpaint; reset after dispatch / page change / Delete.
+        self._crop_mask_array: np.ndarray = None
+
+        # Non-blocking "online repair in progress" indicator over the canvas.
+        # Mouse-transparent so it never blocks canvas interaction; only shown
+        # while an online-LLM repair is in flight, then replaced by a short
+        # "finished" confirmation.
+        self._busy_overlay_shown = False
+        self._busy_spinner_index = 0
+        self._busy_overlay = QLabel(self.canvas.gv.viewport())
+        self._busy_overlay.setObjectName("CanvasBusyOverlay")
+        self._busy_overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._busy_overlay.setFixedWidth(220)
+        self._busy_overlay.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents
+        )
+        self._busy_overlay.setStyleSheet(
+            "#CanvasBusyOverlay { background-color: rgba(20,20,20,190);"
+            " color: #fff; border-radius: 8px; padding: 8px 14px; font-size: 13px; }"
+        )
+        self._busy_overlay.hide()
+        self._busy_spinner_timer = QTimer(self)
+        self._busy_spinner_timer.setInterval(140)
+        self._busy_spinner_timer.timeout.connect(self._on_busy_spinner_tick)
+        self.canvas.gv.viewport().installEventFilter(self)
 
         self.rectTool = DrawToolCheckBox()
         self.rectTool.setObjectName("DrawRectTool")
@@ -341,6 +590,10 @@ class DrawingPanel(Widget):
         self.rectPanel.inpaint_btn_clicked.connect(self.on_rect_inpaintbtn_clicked)
         self.rectPanel.delete_btn_clicked.connect(self.on_rect_deletebtn_clicked)
         self.rectPanel.dilate_ksize_changed.connect(self.on_rectool_ksize_changed)
+        self.rectPanel.cropRatioChanged.connect(self._on_crop_ratio_changed)
+        self.rectPanel.cropModeChanged.connect(self._on_crop_mode_changed)
+        self.rectPanel.cropInpaintClicked.connect(self.runInpaint)
+        self.rectPanel.clearMaskClicked.connect(self._on_clear_crop_mask)
 
         self.penTool = DrawToolCheckBox()
         self.penTool.setObjectName("DrawPenTool")
@@ -411,6 +664,9 @@ class DrawingPanel(Widget):
         ps_layout.addWidget(self.psRefreshBtn)
         layout.addLayout(ps_layout)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+        self._sync_crop_controls()
+        self._update_crop_active()
 
     def setCurrentToolByName(self, tool_name: str):
         try:
@@ -484,14 +740,13 @@ class DrawingPanel(Widget):
         pcfg.drawpanel.current_tool = ImageEditMode.HandTool
         self.canvas.clear_canvas_cursor()
         self.canvas.gv.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
-        self.canvas.image_edit_mode = ImageEditMode.HandTool
+        self._update_crop_active()
 
     def on_use_inpainttool(self) -> None:
         if self.currentTool is not None and self.currentTool != self.inpaintTool:
             self.currentTool.setChecked(False)
         self.currentTool = self.inpaintTool
         pcfg.drawpanel.current_tool = ImageEditMode.InpaintTool
-        self.canvas.image_edit_mode = ImageEditMode.InpaintTool
         self.canvas.painting_pen = self.inpaint_pen
         self.canvas.erasing_pen = self.inpaint_pen
         self.canvas.painting_shape = self.inpaintConfigPanel.shape
@@ -499,6 +754,7 @@ class DrawingPanel(Widget):
         if self.isVisible():
             self.canvas.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setInpaintCursor()
+        self._update_crop_active()
 
     def on_use_pentool(self) -> None:
         if self.currentTool is not None and self.currentTool != self.penTool:
@@ -508,11 +764,11 @@ class DrawingPanel(Widget):
         self.canvas.painting_pen = self.pentool_pen
         self.canvas.painting_shape = self.penConfigPanel.shape
         self.canvas.erasing_pen = self.erasing_pen
-        self.canvas.image_edit_mode = ImageEditMode.PenTool
         self.toolConfigStackwidget.setCurrentWidget(self.penConfigPanel)
         if self.isVisible():
             self.canvas.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
             self.setPenCursor()
+        self._update_crop_active()
 
     def on_use_recttool(self) -> None:
         if self.currentTool is not None and self.currentTool != self.rectTool:
@@ -521,8 +777,8 @@ class DrawingPanel(Widget):
         pcfg.drawpanel.current_tool = ImageEditMode.RectTool
         self.toolConfigStackwidget.setCurrentWidget(self.rectPanel)
         self.canvas.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
-        self.canvas.image_edit_mode = ImageEditMode.RectTool
         self.setCrossCursor()
+        self._update_crop_active()
 
     def set_config(self, config: DrawPanelConfig):
         self.setPenToolWidth(config.pentool_width)
@@ -533,6 +789,7 @@ class DrawingPanel(Widget):
         self.setInpaintToolWidth(config.inpainter_width)
         self.inpaintConfigPanel.thicknessSlider.setValue(int(config.inpainter_width))
         self.inpaintConfigPanel.shapeCombobox.setCurrentIndex(config.inpainter_shape)
+        self._set_crop_config(config.inpaint_crop_ratio, config.inpaint_crop_mode)
 
         self.rectPanel.dilate_slider.setValue(config.recttool_dilate_ksize)
         self.rectPanel.autoChecker.setChecked(config.rectool_auto)
@@ -681,6 +938,12 @@ class DrawingPanel(Widget):
             self.canvas.removeItem(stroke_item)
         elif self.currentTool == self.inpaintTool:
             self.inpaint_stroke = stroke_item
+            if self._is_crop_masking():
+                # In LLM crop-mask mode a brush stroke only marks the region to
+                # be replaced — accumulate the mask and do NOT dispatch a
+                # per-stroke repair (the crop "Inpaint" sends them all at once).
+                self._accumulate_stroke_mask(stroke_item)
+                return
             if self.canvas.gv.ctrl_pressed:
                 return
             else:
@@ -690,6 +953,16 @@ class DrawingPanel(Widget):
         stroke_item.finishPainting()
         # inpainted-erasing logic is essentially the same as inpainting
         if self.currentTool == self.inpaintTool:
+            if self._is_crop_masking():
+                # In LLM crop-mask mode a right-drag erases part of the mask
+                # (the inverse of marking) instead of editing the image.
+                rect, mask, _ = stroke_item.clip(mask_only=True)
+                self.canvas.removeItem(stroke_item)
+                self.inpaint_stroke = None
+                if mask is not None:
+                    self._erase_crop_mask(rect, mask)
+                    self._update_crop_mask_preview()
+                return
             rect, mask, _ = stroke_item.clip(mask_only=True)
             if mask is None:
                 self.canvas.removeItem(stroke_item)
@@ -743,7 +1016,347 @@ class DrawingPanel(Widget):
                 self.canvas.updateLayers()
             self.canvas.removeItem(stroke_item)
 
+    # ── Online-LLM crop tool ──
+
+    def _inpainter_is_llm(self) -> bool:
+        return self.inpaintConfigPanel.current_inpainter() == "LLMInpaint"
+
+    def _crop_tool_active(self) -> bool:
+        """Whether the current tool (or the pre-activation state) hosts a crop."""
+        return self.currentTool is None or self.currentTool in (
+            self.inpaintTool,
+            self.rectTool,
+        )
+
+    def _is_crop_masking(self) -> bool:
+        """LLM crop-mask mode: a crop exists, so brush/box-select only mark masks."""
+        return (
+            self._inpainter_is_llm()
+            and self._crop_setup
+            and self._crop_tool_active()
+        )
+
+    def _on_crop_ratio_changed(self, label: str):
+        self._crop_ratio_label = label
+        self._crop_ratio = ratio_from_label(label)
+        self.crop_rect_item.setRatio(self._crop_ratio)
+        pcfg.drawpanel.inpaint_crop_ratio = label
+        self._sync_crop_controls()
+
+    def _on_crop_mode_changed(self, checked: bool):
+        self._crop_mode = bool(checked)
+        pcfg.drawpanel.inpaint_crop_mode = self._crop_mode
+        if checked:
+            # Enabling crop mode establishes the crop; keep it visible as the
+            # generation range after it is turned off.
+            self._crop_setup = True
+        self._sync_crop_controls()
+        self._update_crop_active()
+
+    def _on_llm_active_changed(self, is_llm: bool):
+        self._update_crop_active()
+
+    def _set_crop_config(self, ratio_label: str, crop_mode: bool):
+        self._crop_ratio_label = ratio_label or "16:9"
+        self._crop_ratio = ratio_from_label(self._crop_ratio_label)
+        self._crop_mode = bool(crop_mode)
+        self.crop_rect_item.setRatio(self._crop_ratio)
+        self._sync_crop_controls()
+        self._update_crop_active()
+
+    def _sync_crop_controls(self):
+        if not hasattr(self, "inpaintConfigPanel") or not hasattr(self, "rectPanel"):
+            return
+        # Re-assert the LLM visibility on every sync — the module combobox can
+        # settle onto its saved value after the panels are built, so the first
+        # open would otherwise leave the crop controls hidden until the user
+        # re-picks the inpainter (2026-08-24).
+        is_llm = self._inpainter_is_llm()
+        for panel in (self.inpaintConfigPanel, self.rectPanel):
+            panel.crop_controls.set_llm_active(is_llm)
+            panel.crop_controls.set_ratio(self._crop_ratio_label)
+            panel.crop_controls.set_mode(self._crop_mode)
+
+    def _tool_natural_mode(self) -> int:
+        if self.currentTool is self.inpaintTool:
+            return ImageEditMode.InpaintTool
+        if self.currentTool is self.penTool:
+            return ImageEditMode.PenTool
+        if self.currentTool is self.rectTool:
+            return ImageEditMode.RectTool
+        if self.currentTool is self.handTool:
+            return ImageEditMode.HandTool
+        return ImageEditMode.NONE
+
+    def _tool_supports_crop(self) -> bool:
+        return self.currentTool in (self.inpaintTool, self.rectTool)
+
+    def _apply_canvas_mode(self):
+        if self._crop_active:
+            self.canvas.image_edit_mode = ImageEditMode.CropMode
+        else:
+            self.canvas.image_edit_mode = self._tool_natural_mode()
+
+    def _update_crop_active(self):
+        # Only drop crop mode when a concrete tool is active but cannot host a
+        # crop (pen/hand). During config load the tool is activated afterwards,
+        # so currentTool is still None here — never reset the persisted state.
+        if (
+            self.currentTool is not None
+            and self._crop_mode
+            and not self._tool_supports_crop()
+        ):
+            self._crop_mode = False
+            pcfg.drawpanel.inpaint_crop_mode = False
+            self._sync_crop_controls()
+        is_llm = self._inpainter_is_llm()
+        is_crop_tool = self._crop_tool_active()
+        # "crop active" = the rect is being POSITIONED (editable, painting off,
+        # tool body hidden). Once crop mode is closed the rect freezes but stays
+        # visible as the generation range.  In LLM mode a crop always exists.
+        self._crop_active = self._crop_mode and is_llm and is_crop_tool
+        if is_llm and not self._crop_setup:
+            self._crop_setup = True
+        if not is_llm:
+            self._crop_setup = False
+            self._reset_crop_mask()
+        self.crop_rect_item.set_editable(self._crop_active)
+        # Re-assert each panel's crop-control visibility AND body visibility
+        # from the CURRENT llm state on every call. The module combobox can be
+        # set during config load with blockSignals, so module_changed may never
+        # fire — without this, the first arrival could show only the model
+        # selector (crop controls hidden + body hidden) until a tool switch
+        # re-ran this (2026-08-24).
+        for panel in (self.inpaintConfigPanel, self.rectPanel):
+            panel.crop_controls.set_llm_active(is_llm)
+            panel.set_crop_mode_active(self._crop_active)
+        self._apply_canvas_mode()
+        self._update_crop_visibility()
+
+    def _update_crop_visibility(self):
+        is_crop_tool = self._crop_tool_active()
+        show = self._inpainter_is_llm() and self._crop_setup and is_crop_tool
+        self.crop_rect_item.setVisible(show)
+        if show and self.crop_rect_item.rect().width() <= 2:
+            self._place_crop_default()
+        if show and self.isVisible():
+            # Crop editing is its own non-painting state; park the canvas on a
+            # plain arrow cursor so no brush cursor can leak through the dashed
+            # crop border.  While frozen (masking) keep the tool's own cursor.
+            self.canvas.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
+            if self._crop_active:
+                self.canvas.gv.setCursor(Qt.CursorShape.ArrowCursor)
+
+    def _place_crop_default(self):
+        pr = self.canvas.baseLayer.rect()
+        width, height = pr.width(), pr.height()
+        if width <= 2 or height <= 2:
+            return
+        ratio = self._crop_ratio
+        w = min(width, height * ratio)
+        h = w / ratio
+        self.crop_rect_item.set_pixel_rect(
+            (width - w) / 2, (height - h) / 2, (width + w) / 2, (height + h) / 2
+        )
+
+    def _crop_inpaint_dict(self) -> dict:
+        x0, y0, x1, y1 = self.crop_rect_item.pixel_rect()
+        if x1 - x0 <= 2 or y1 - y0 <= 2:
+            return None
+        img_arr = self.canvas.imgtrans_proj.inpainted_array
+        img = np.array(img_arr[y0:y1, x0:x1], copy=True)
+        # Use the accumulated user mask clipped to the crop.  Only the marked
+        # pixels get the regenerated content merged back; the rest of the crop
+        # is preserved.  If nothing was marked, fall back to the full crop so a
+        # bare "Inpaint" still regenerates the whole rectangle.
+        mask = None
+        if self._crop_mask_array is not None:
+            m = self._crop_mask_array[y0:y1, x0:x1]
+            if m.sum() > 0:
+                mask = np.array(m, copy=True)
+        if mask is None:
+            mask = np.full((y1 - y0, x1 - x0), 255, np.uint8)
+        return {"img": img, "mask": mask, "inpaint_rect": [x0, y0, x1, y1]}
+
+    def _accumulate_stroke_mask(self, stroke_item: StrokeImgItem):
+        """Merge a finished brush stroke's mask into the crop composite."""
+        rect, mask, _ = stroke_item.clip(mask_only=True)
+        self.canvas.removeItem(stroke_item)
+        self.inpaint_stroke = None
+        if mask is None:
+            return
+        self._merge_crop_mask(rect, mask)
+        self._update_crop_mask_preview()
+
+    def _merge_crop_mask(self, rect, mask):
+        """OR a region-local mask (``rect=[x, y, w, h]``) into the crop composite.
+
+        The composite lives in full-image coordinates and every region is
+        clipped to the crop rectangle, since anything outside the crop was not
+        sent to the API and cannot be repaired (2026-08-24).
+        """
+        proj = self.canvas.imgtrans_proj
+        if not proj.img_valid:
+            return
+        if self._crop_mask_array is None:
+            self._crop_mask_array = np.zeros(
+                proj.inpainted_array.shape[:2], np.uint8
+            )
+        x, y, w, h = rect
+        x0, y0, x1, y1 = self.crop_rect_item.pixel_rect()
+        sx0, sy0 = max(x, x0), max(y, y0)
+        sx1, sy1 = min(x + w, x1), min(y + h, y1)
+        if sx1 <= sx0 or sy1 <= sy0:
+            return  # entirely outside the crop — nothing to keep
+        sub = np.asarray(mask[sy0 - y : sy1 - y, sx0 - x : sx1 - x])
+        region = self._crop_mask_array[sy0:sy1, sx0:sx1]
+        np.maximum(region, sub, out=region)
+
+    def _update_crop_mask_preview(self):
+        """Show the crop-local composite mask as a pink overlay on the canvas."""
+        if self._crop_mask_array is None:
+            if (
+                self.inpaint_mask_item is not None
+                and self.inpaint_mask_item.scene() == self.canvas
+            ):
+                self.canvas.removeItem(self.inpaint_mask_item)
+            return
+        x0, y0, x1, y1 = self.crop_rect_item.pixel_rect()
+        if x1 - x0 <= 2 or y1 - y0 <= 2:
+            return
+        m = self._crop_mask_array[y0:y1, x0:x1]
+        if m.sum() == 0:
+            if (
+                self.inpaint_mask_item is not None
+                and self.inpaint_mask_item.scene() == self.canvas
+            ):
+                self.canvas.removeItem(self.inpaint_mask_item)
+            return
+        preview = np.zeros((y1 - y0, x1 - x0, 4), dtype=np.uint8)
+        preview[:, :, [0, 2, 3]] = (m[:, :, np.newaxis] // 2).astype(np.uint8)
+        self.inpaint_mask_item.setPixmap(ndarray2pixmap(preview))
+        self.inpaint_mask_item.setParentItem(self.canvas.baseLayer)
+        self.inpaint_mask_item.setPos(x0, y0)
+        if self.inpaint_mask_item.scene() != self.canvas:
+            self.canvas.addItem(self.inpaint_mask_item)
+        self.inpaint_mask_item.show()
+
+    def _reset_crop_mask(self):
+        """Clear the accumulated crop mask and its canvas preview."""
+        self._crop_mask_array = None
+        if (
+            self.inpaint_mask_item is not None
+            and self.inpaint_mask_item.scene() == self.canvas
+        ):
+            self.canvas.removeItem(self.inpaint_mask_item)
+
+    def _on_crop_rect_released(self):
+        # The crop was just moved/resized; re-clip the composite preview to it.
+        self._update_crop_mask_preview()
+
+    # ── Mask erase / clear ─────────────────────────────────────────────
+
+    def _erase_crop_mask(self, rect, mask):
+        """Subtract a region-local erase stroke (``rect=[x, y, w, h]``) from the
+        crop composite, clipped to the crop rectangle."""
+        if self._crop_mask_array is None:
+            return
+        x, y, w, h = rect
+        x0, y0, x1, y1 = self.crop_rect_item.pixel_rect()
+        sx0, sy0 = max(x, x0), max(y, y0)
+        sx1, sy1 = min(x + w, x1), min(y + h, y1)
+        if sx1 <= sx0 or sy1 <= sy0:
+            return
+        sub = np.asarray(mask[sy0 - y : sy1 - y, sx0 - x : sx1 - x])
+        region = self._crop_mask_array[sy0:sy1, sx0:sx1]
+        region[sub > 0] = 0
+
+    def _on_clear_crop_mask(self):
+        """Wipe the whole accumulated crop mask (Clear mask button)."""
+        self._reset_crop_mask()
+
+    # ── Busy / finished indicator over the canvas ──────────────────────
+
+    def _place_busy_overlay(self):
+        vp = self.canvas.gv.viewport()
+        if vp is None:
+            return
+        self._busy_overlay.adjustSize()
+        x = max(0, (vp.width() - self._busy_overlay.width()) // 2)
+        self._busy_overlay.move(x, 16)
+
+    def _show_busy_overlay(self):
+        if not self._inpainter_is_llm():
+            return
+        self._busy_overlay_shown = True
+        self._busy_spinner_index = 0
+        self._busy_overlay.setText(
+            BUSY_SPINNER_CHARS[0] + " " + self.tr("Inpainting...")
+        )
+        self._place_busy_overlay()
+        self._busy_overlay.show()
+        self._busy_overlay.raise_()
+        self._busy_spinner_timer.start()
+
+    def _on_busy_spinner_tick(self):
+        self._busy_spinner_index = (self._busy_spinner_index + 1) % len(
+            BUSY_SPINNER_CHARS
+        )
+        self._busy_overlay.setText(
+            BUSY_SPINNER_CHARS[self._busy_spinner_index]
+            + " "
+            + self.tr("Inpainting...")
+        )
+        self._place_busy_overlay()
+
+    def _hide_busy_overlay(self, done: bool = False):
+        if not self._busy_overlay_shown:
+            return
+        self._busy_overlay_shown = False
+        self._busy_spinner_timer.stop()
+        if done:
+            self._busy_overlay.setText(self.tr("Inpainting finished"))
+            self._place_busy_overlay()
+            self._busy_overlay.show()
+            self._busy_overlay.raise_()
+            QTimer.singleShot(1600, self._busy_overlay.hide)
+        else:
+            self._busy_overlay.hide()
+
+    def _notify_inpaint_busy(self):
+        """A repair is already running — briefly explain why the click was ignored."""
+        if self._busy_overlay_shown or not self._inpainter_is_llm():
+            return
+        self._busy_overlay.setText(
+            self.tr("A repair is still in progress. Please wait.")
+        )
+        self._place_busy_overlay()
+        self._busy_overlay.show()
+        self._busy_overlay.raise_()
+        QTimer.singleShot(1800, self._busy_overlay.hide)
+
+    def eventFilter(self, obj, event):
+        if obj is self.canvas.gv.viewport() and event.type() == QEvent.Type.Resize:
+            self._place_busy_overlay()
+        return super().eventFilter(obj, event)
+
     def runInpaint(self, inpaint_dict=None):
+
+        if inpaint_dict is None and self._is_crop_masking():
+            crop = self._crop_inpaint_dict()
+            if crop is None:
+                return
+            # Only drop the accumulated mask once the request is actually handed
+            # to the thread; if the thread is busy we keep the mask so the user
+            # can retry, and tell them why.
+            if not self.module_manager.canvas_inpaint(crop):
+                self._notify_inpaint_busy()
+                return
+            self.clearInpaintItems()
+            self._reset_crop_mask()
+            self._apply_canvas_mode()
+            self._show_busy_overlay()
+            return
 
         if inpaint_dict is None:
             if self.inpaint_stroke is None:
@@ -778,29 +1391,58 @@ class DrawingPanel(Widget):
             inpaint_dict = {"img": img, "mask": mask, "inpaint_rect": inpaint_rect}
 
         self.canvas.image_edit_mode = ImageEditMode.NONE
-        self.module_manager.canvas_inpaint(inpaint_dict)
+        if not self.module_manager.canvas_inpaint(inpaint_dict):
+            self._notify_inpaint_busy()
+            return
+        self._show_busy_overlay()
 
     def on_inpaint_finished(self, inpaint_dict):
         inpainted = inpaint_dict["inpainted"]
         inpaint_rect = inpaint_dict["inpaint_rect"]
         mask_array = self.canvas.imgtrans_proj.mask_array
+        new_mask = inpaint_dict["mask"]
         mask = cv2.bitwise_or(
-            inpaint_dict["mask"],
+            new_mask,
             mask_array[
                 inpaint_rect[1] : inpaint_rect[3], inpaint_rect[0] : inpaint_rect[2]
             ],
         )
+        # The online-LLM inpainter regenerates the WHOLE crop, so the returned
+        # image differs everywhere.  Merge back only where the user marked
+        # (new_mask); everywhere else keep the crop's current pixels so the
+        # unmarked part of the generation is discarded.  Local inpainters already
+        # preserve unmarked pixels, so this is a no-op for them.
+        src = inpaint_dict.get("img")
+        if src is not None and new_mask is not None:
+            try:
+                if new_mask.shape[:2] == inpainted.shape[:2] == src.shape[:2]:
+                    mask3 = new_mask[..., None]
+                    inpainted = np.where(mask3 > 0, inpainted, src).astype(
+                        inpainted.dtype
+                    )
+            except Exception:
+                pass
         self.canvas.push_undo_command(
             InpaintUndoCommand(self.canvas, inpainted, mask, inpaint_rect)
         )
         self.clearInpaintItems()
+        self._hide_busy_overlay(done=True)
 
     def on_inpaint_failed(self):
         if self.currentTool == self.inpaintTool and self.inpaint_stroke is not None:
             self.clearInpaintItems()
+        self._hide_busy_overlay(done=False)
 
     def on_canvasctrl_released(self):
-        if self.isVisible() and self.currentTool == self.inpaintTool:
+        # Ctrl+release finalizes a brush stroke's mask into an inpaint. In LLM
+        # crop-mask mode a stroke only accumulates (no per-stroke dispatch) and
+        # the crop is sent via its Inpaint button, so ignore the shortcut here
+        # to avoid a stray crop dispatch.
+        if (
+            self.isVisible()
+            and self.currentTool == self.inpaintTool
+            and not self._is_crop_masking()
+        ):
             self.runInpaint()
 
     def on_begin_scale_tool(self, pos: QPointF):
@@ -911,6 +1553,17 @@ class DrawingPanel(Widget):
                 )
                 mask = self.rectPanel.post_process_mask(inpaint_mask_array)
 
+                if self._is_crop_masking():
+                    # In LLM crop-mask mode a box-select marks the region to be
+                    # replaced — accumulate its segmented mask into the crop
+                    # composite and do NOT dispatch a per-box repair.  Restore
+                    # RectTool so the user can keep boxing more masks.
+                    self.canvas.image_edit_mode = ImageEditMode.RectTool
+                    self._merge_crop_mask([x1, y1, x2 - x1, y2 - y1], mask)
+                    self._update_crop_mask_preview()
+                    self.setCrossCursor()
+                    return
+
                 bground_rgb = bub_dict["bground_rgb"]
                 need_inpaint = bub_dict["need_inpaint"]
 
@@ -937,6 +1590,17 @@ class DrawingPanel(Widget):
                     self.inpaint_mask_array = inpaint_mask_array
                     self.rect_inpaint_dict = inpaint_dict
             else:  # erasing
+                if self._is_crop_masking():
+                    # Box erase in LLM crop-mask mode clears the mask over the
+                    # box region rather than undoing image pixels.
+                    self._erase_crop_mask(
+                        [x1, y1, x2 - x1, y2 - y1],
+                        np.full((y2 - y1, x2 - x1), 255, np.uint8),
+                    )
+                    self._update_crop_mask_preview()
+                    self.canvas.image_edit_mode = ImageEditMode.RectTool
+                    self.setCrossCursor()
+                    return
                 mask = np.zeros((y2 - y1, x2 - x1), dtype=np.uint8)
                 erased = self.canvas.imgtrans_proj.img_array[y1:y2, x1:x2]
                 self.canvas.push_undo_command(
@@ -974,10 +1638,19 @@ class DrawingPanel(Widget):
             self.runInpaint(inpaint_dict=inpaint_dict)
 
     def on_rect_inpaintbtn_clicked(self):
+        # In LLM crop-mask mode the box-select's Inpaint button (and Space)
+        # dispatches the one-shot crop repair — the box body has no per-box
+        # dispatch here.  Otherwise it drives the box-select inpaint as usual.
+        if self._is_crop_masking():
+            self.runInpaint()
+            return
         if self.rect_inpaint_dict is not None:
             self.inpaintRect(self.rect_inpaint_dict)
 
     def on_rect_deletebtn_clicked(self):
+        if self._is_crop_masking():
+            self._reset_crop_mask()
+            return
         self.clearInpaintItems()
 
     def on_rectool_ksize_changed(self):
@@ -1008,21 +1681,32 @@ class DrawingPanel(Widget):
 
         self.rect_inpaint_dict = None
         self.inpaint_mask_array = None
-        if self.inpaint_mask_item is not None:
+        if self._is_crop_masking():
+            # In LLM crop-mask mode the accumulated composite is consumed by the
+            # one-shot crop inpaint (which resets it), not by tool switches — so
+            # keep it (and its preview) across tool changes.
+            self._update_crop_mask_preview()
+        elif self.inpaint_mask_item is not None:
             if self.inpaint_mask_item.scene() == self.canvas:
                 self.canvas.removeItem(self.inpaint_mask_item)
-            if self.rectTool.isChecked():
-                self.canvas.image_edit_mode = ImageEditMode.RectTool
 
         if self.inpaint_stroke is not None:
             if self.inpaint_stroke.scene() == self.canvas:
                 self.canvas.removeItem(self.inpaint_stroke)
             self.inpaint_stroke = None
-            if self.inpaintTool.isChecked():
-                self.canvas.image_edit_mode = ImageEditMode.InpaintTool
+
+        # Restore whichever mode is active for the current tool — including a
+        # live crop mode (CropMode), which must survive a crop "Inpaint" run.
+        self._apply_canvas_mode()
 
     def handle_page_changed(self):
         self.clearInpaintItems()
+        # The crop is preserved across pages (same ratio), but the accumulated
+        # mask only applies to the page it was drawn on — drop it.
+        self._reset_crop_mask()
+        # Re-place the crop centered if the page's image size changed (e.g. it
+        # was tiny before the image loaded).
+        self._update_crop_visibility()
 
     # ── Photoshop external editing ──────────────────────────────────────
 
