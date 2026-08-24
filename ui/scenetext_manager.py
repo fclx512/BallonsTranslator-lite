@@ -66,7 +66,7 @@ from .textedit_commands import (
     SqueezeCommand,
     TextEditCommand,
     TextItemEditCommand,
-    propagate_user_edit,
+    sync_text_by_diff,
 )
 from .textitem import TextBlkItem, TextBlock
 
@@ -1243,18 +1243,29 @@ class SceneTextManager(QObject):
     ):
         blk_item: TextBlkItem = self.sender()
         edit = self.pairwidget_list[blk_item.idx].e_trans
-        propagate_user_edit(blk_item, edit, pos, added_text, joint_previous)
-        self.canvas.push_text_command(command=None, update_pushed_step=True)
+        # 内联编辑回写面板：全文对账。in_acts 挡掉镜像写回触发的再次同步。
+        if not edit.in_acts:
+            edit.in_acts = True
+            try:
+                changed = sync_text_by_diff(
+                    edit, blk_item.toPlainText(), joint_previous
+                )
+            finally:
+                edit.in_acts = False
+            if changed:
+                self.canvas.push_text_command(
+                    command=None, update_pushed_step=True
+                )
 
-    def on_propagate_transwidget_edit(
-        self, pos: int, added_text: str, joint_previous: bool
-    ):
+    def on_propagate_transwidget_edit(self, joint_previous: bool):
         edit: TransTextEdit = self.sender()
         blk_item = self.textblk_item_list[edit.idx]
         if blk_item.isEditing():
             blk_item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
-        propagate_user_edit(edit, blk_item, pos, added_text, joint_previous)
-        self.canvas.push_text_command(command=None, update_pushed_step=True)
+        if sync_text_by_diff(
+            blk_item, edit.toPlainText(), joint_previous
+        ):
+            self.canvas.push_text_command(command=None, update_pushed_step=True)
 
     def apply_fontformat(self, fontformat: FontFormat):
         selected_blks = self.canvas.selected_text_items()
@@ -1355,6 +1366,12 @@ class SceneTextManager(QObject):
             return
         cbl.clear()
         for blk_item, trans_pair in zip(self.textblk_item_list, self.pairwidget_list):
+            # 右侧译文框是纯文本的权威视图：常规编辑已由 diff 对账实时写回
+            # item，这里兜底任何漏网路径（如同步信号建立前的初始文本），
+            # 确保 JSON 与成图都以用户实际输入为准。
+            panel_txt = trans_pair.e_trans.toPlainText()
+            if panel_txt != blk_item.toPlainText():
+                blk_item.setPlainText(panel_txt)
             if not blk_item.document().isEmpty():
                 blk_item.blk.rich_text = blk_item.toHtml()
                 blk_item.blk.translation = blk_item.toPlainText()

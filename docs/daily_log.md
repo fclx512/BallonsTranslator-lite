@@ -351,3 +351,29 @@
 - **冒烟**：43 模块 42 可导入，剩 `editing.manager` 缺上游命令类（`ApplyFontformatCommand` 等 14 名）- 推荐方案已写在交接文档（建 `editing/upstream_commands.py` 放上游 15 类 + 模块函数，本地 commands.py 保持不动，改 manager 导入）。i18n 步 exit 6（94 条新 tr() 缺 ts 条目，上游 `resources/translate/zh_CN.ts` 已含，可批量复制 + qm 编译）。
 
 **涉及文件：** 见交接文档 §2 清单（`ui/text_engine/` 新增 26 文件 + `font_weight.py`、`ui/icon_rendering.py`、`ui/adaptive_wrap_layout.py`、`ui/spellcheck.py`、`utils/text_layout.py`、`utils/text_processing.py`、`ui/misc.py`、`ui/text_engine/rendering/indexing.py`、`docs/技术实现/移植交接_节点2a文件落地.md`（新增））
+---
+
+## 2026-08-24
+
+### 保存成图与项目数据不一致：面板↔画布同步机制根治 + 溢出裁剪收敛
+
+**问题/需求：** 用户两类反馈——(1) 嵌字复查改措辞/位置后保存，成图有时不生效但项目内显示已保存，重启后恢复；(2) 他人反馈成图偶尔出现意外文本框，拖拽该框重新保存才消失。用户补充关键复现：惯用右侧输入区编辑，曾"删了一个字后保存，成图没响应，位移却正常"。
+
+**根因：** 成图由 `render_result_img` 直接渲染画布场景（`canvas.py`），与 JSON 是两条独立路径，问题出在"保存瞬间场景项的文本/绘制状态过期"，实为两条独立机制：
+
+- **面板↔画布双文档同步机制脆弱（主因，本次根治）**：右侧译文框（`TransTextEdit`）与画布 item 各持一份 QTextDocument，靠位置式差值重放（`propagate_user_edit`）双向同步——面板仅在 `hasFocus()` 时记录编辑位置，失焦时的程序性改动被静默跳过；且插入点在一个文档里记录、在另一份文档里重放，任何一次漏同步后位置即漂移。任一环节出错，两文档永久分叉：面板显示新文本（用户所见即"已保存"），而 item 文档（JSON 与成图唯一取数源）停留在旧文本；位移走 `item.pos` 直接属性，不受影响，与用户"改了字没生效、位移正常"的观察吻合。
+- **溢出裁剪标志残留**：`clip_text_overflow` 模式下 `_text_overflows` 仅在 `startReshape`（拖拽调框）时清除，文字改短后标志残留，导出画像继续按旧框裁剪文本并画出金黄边框——即"意外文本框"，拖拽调框后再保存即消失。
+
+**改动要点：**
+
+- **`sync_text_by_diff` 取代差值重放**（`ui/textedit_commands.py`）：面板任何文本变更（不再有焦点门控）→ 以两个文档的**当前全文现场**做 `SequenceMatcher` 差异 → 按最小差异以 QTextCursor 逆序套用到 item 文档。位置永不跨文档记录，漏同步在下一次变更时自动收敛；整个对账包在一个编辑块里，连续键入经 `joint_previous` 并入上一块，维持双文档撤销步数联动（`TextEditCommand.undo()` 是双文档各退一步，步数必须对等）。
+- **`ui/textedit_area.py`**：删 `hasFocus()` 门控与 `change_from`/`change_added`/IME 位置记录（连带 `paste_flag` 死代码）；`propagate_user_edited` 改 `Signal(bool)` 只带 `joint_previous`；`handle_content_change` 只负责通知 + 撤销步数推送，`text_changed` 发射逻辑不变（搜索框在监听）。
+- **`ui/scenetext_manager.py`**：两个传播处理器改走 `sync_text_by_diff`（面板→item 无门控直接对账；内联编辑→面板用 `in_acts` 挡镜像回写的再同步）；`push_text_command` 仅在真正发生改动时调用；`updateTextBlkList` 保留保存端"面板为权威"回写作为兜底安全网。
+- **溢出收敛**：`ui/textitem.py` 新增 `settle_overflow_state()`（按当前 `documentSize` vs 显示框重新求值，放得下即解除 `_text_overflows`）挂到 `endEdit`；`ui/canvas.py` `render_result_img` 渲染前对 textLayer 全部 TextBlkItem 调用一次，兜住未走 endEdit 的路径（含右侧输入触发的溢出）。
+- **`scripts/render_sync_probe.py`（新增）**：离屏回归脚本，7 项验证——渲染即时性、聚焦编辑收敛、**失焦程序性改动收敛（原 bug 场景）**、改动区外字符格式保留、内联编辑回写面板、连续快速编辑无分叉无回环、连续键入撤销步数联动。
+
+**取舍：** 面板仍是纯文本视图，多样式块在面板改字仍丢局部样式（现状如此，复杂样式走内联编辑）；`ui/text_engine/editing/manager.py` 存在一份同款脆弱重放的并行实现，但 fork 运行时未实例化（`mainwindow.py` 用的是 `scenetext_manager.SceneTextManager`），不动。
+
+**验证：** `check_syntax` 全过；`render_sync_probe` 7/7 PASS；`test_textblkitem_geometry/effect`、`test_text_transform_engine`、`test_vertical_engine`、`test_startup_imports` 全绿；溢出收敛行为符合预期。
+
+**涉及文件：** `ui/textedit_commands.py`、`ui/textedit_area.py`、`ui/scenetext_manager.py`、`ui/textitem.py`、`ui/canvas.py`、`scripts/render_sync_probe.py`（新增）、`docs/daily_log.md`

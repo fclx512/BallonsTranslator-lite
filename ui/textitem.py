@@ -131,6 +131,36 @@ class TextBlkItem(_EngineTextBlkItem):
     def is_editting(self) -> bool:
         return self.isEditing()
 
+    def endEdit(self, keep_focus=True) -> None:
+        # 编辑结束是溢出收敛的最自然时机：文字缩短回框内时解除裁剪，
+        # 避免黄框与裁剪被烘进成图（见 settle_overflow_state）。
+        super().endEdit(keep_focus)
+        self.settle_overflow_state()
+
+    def settle_overflow_state(self) -> bool:
+        """文字已放回框内时解除溢出裁剪状态。
+
+        ``_text_overflows`` 除 startReshape（拖拽调框）外从不复位：文字改短
+        后标志残留，导出画像会继续裁剪文本并画出金黄边框。编辑结束与导出
+        前各调用一次，按当前布局尺寸重新求值——放得下即解锁，放不下继续
+        保留黄框提示。
+        """
+        if not self._text_overflows or self.is_editting():
+            return False
+        size = self.documentSize()
+        if size is None or size.width() <= 0 or size.height() <= 0:
+            return False
+        pad = self.padding()
+        box = self._display_rect
+        if (
+            size.width() <= box.width() - pad * 2
+            and size.height() <= box.height() - pad * 2
+        ):
+            self._text_overflows = False
+            self.update()
+            return True
+        return False
+
     def get_scale(self) -> float:
         tl = self.topLevelItem()
         if tl is not None:

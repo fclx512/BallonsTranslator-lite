@@ -53,7 +53,7 @@ class SourceTextEdit(QTextEdit):
     hover_enter = Signal(int)
     hover_leave = Signal(int)
     focus_in = Signal(int)
-    propagate_user_edited = Signal(int, str, bool)
+    propagate_user_edited = Signal(bool)
     ensure_scene_visible = Signal()
     redo_signal = Signal()
     undo_signal = Signal()
@@ -73,13 +73,8 @@ class SourceTextEdit(QTextEdit):
         self.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
         self.old_undo_steps = self.document().availableUndoSteps()
         self.in_redo_undo = False
-        self.change_from: int = 0
-        self.change_added: int = 0
-        self.input_method_from = -1
-        self.input_method_text = ""
         self.text_content_changed = False
         self.highlighting = False
-        self.paste_flag = False
 
         self.selected_text = ""
         self.cursorPositionChanged.connect(self.on_cursorpos_changed)
@@ -138,9 +133,6 @@ class SourceTextEdit(QTextEdit):
     def on_content_changing(self, from_: int, removed: int, added: int):
         if not self.pre_editing:
             self.text_content_changed = True
-            if self.hasFocus():
-                self.change_from = from_
-                self.change_added = added
 
     def adjustSize(self):
         h = self.document().documentLayout().documentSize().toSize().height()
@@ -153,8 +145,7 @@ class SourceTextEdit(QTextEdit):
                 self.text_changed.emit()
 
         if (
-            self.hasFocus()
-            and not self.pre_editing
+            not self.pre_editing
             and not self.highlighting
             and not self.in_acts
         ):
@@ -162,36 +153,12 @@ class SourceTextEdit(QTextEdit):
 
     def handle_content_change(self):
         if not self.in_redo_undo:
-            change_from = self.change_from
-            added_text = ""
-
-            if self.paste_flag:
-                self.paste_flag = False
-                cursor = self.textCursor()
-                cursor.setPosition(change_from)
-                cursor.setPosition(
-                    self.textCursor().position(), QTextCursor.MoveMode.KeepAnchor
-                )
-                added_text = cursor.selectedText()
-
-            else:
-                if self.input_method_from != -1:
-                    added_text = self.input_method_text
-                    change_from = self.input_method_from
-                    self.input_method_from = -1
-                elif self.change_added > 0:
-                    cursor = self.textCursor()
-                    cursor.setPosition(change_from)
-                    cursor.setPosition(
-                        change_from + self.change_added, QTextCursor.MoveMode.KeepAnchor
-                    )
-                    added_text = cursor.selectedText()
-
+            # 位置式差值重放已废弃：对账基于两份文档的当前全文现场计算，
+            # 这里只负责通知下游并维护撤销步数（见 sync_text_by_diff）。
             undo_steps = self.document().availableUndoSteps()
             new_steps = undo_steps - self.old_undo_steps
             joint_previous = new_steps == 0
-            self.propagate_user_edited.emit(change_from, added_text, joint_previous)
-            self.change_added = 0
+            self.propagate_user_edited.emit(joint_previous)
 
             if new_steps > 0:
                 self.old_undo_steps = undo_steps
@@ -224,12 +191,10 @@ class SourceTextEdit(QTextEdit):
         return super().focusOutEvent(event)
 
     def inputMethodEvent(self, e: QInputMethodEvent) -> None:
-        if self.pre_editing is False:
-            cursor = self.textCursor()
-            self.input_method_from = cursor.selectionStart()
+        # pre_editing 只决定组合期是否跳过对账（组合中间态不写回画布）；
+        # 提交产生的内容变更会走常规 on_content_changed 路径。
         if e.preeditString() == "":
             self.pre_editing = False
-            self.input_method_text = e.commitString()
         else:
             self.pre_editing = True
         super().inputMethodEvent(e)
@@ -249,7 +214,6 @@ class SourceTextEdit(QTextEdit):
                 self.redo_signal.emit()
                 return
             elif e.key() == Qt.Key.Key_V:
-                self.paste_flag = True
                 return super().keyPressEvent(e)
         elif (
             e.modifiers()
@@ -285,17 +249,13 @@ class SourceTextEdit(QTextEdit):
     def insert_external_text(self, text: str):
         """Insert text from outside (e.g. QuickSymbolDialog).
 
-        Normal keyboard input relies on the widget having focus to propagate
-        changes. When an external dialog inserts text, the widget may not have
-        focus, so this method manually sets change tracking state and forces
-        propagation to the canvas text item.
+        The old focus-gated change tracking is gone: regular change handling
+        fires on any document change, so inserting then letting the normal
+        handler propagate is enough.
         """
         cursor = self.textCursor()
-        change_from = cursor.position()
         cursor.insertText(text)
         self.setTextCursor(cursor)
-        self.change_from = change_from
-        self.change_added = len(text)
         self.handle_content_change()
 
 

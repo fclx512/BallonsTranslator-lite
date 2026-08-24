@@ -1,3 +1,4 @@
+from difflib import SequenceMatcher
 from typing import List, Union
 
 from qtpy.QtCore import QPointF
@@ -18,28 +19,46 @@ from .texteditshapecontrol import TextBlkShapeControl
 from .textitem import TextBlkItem
 
 
-def propagate_user_edit(
-    src_edit: Union[TransTextEdit, TextBlkItem],
+def sync_text_by_diff(
     target_edit: Union[TransTextEdit, TextBlkItem],
-    pos: int,
-    added_text: str,
+    source_text: str,
     joint_previous: bool = False,
-):
-    ori_count = target_edit.document().characterCount()
-    new_count = src_edit.document().characterCount()
-    removed = ori_count + len(added_text) - new_count
+) -> bool:
+    """把 source_text 以最小差异对账进 target_edit 的文档。
 
-    cursor = target_edit.textCursor()
-    cursor.setPosition(pos)
+    取代旧的位置式差值重放（propagate_user_edit）：差异与插入点每次都基于
+    两个文档的当前全文现场计算，不再有跨文档记录插入点导致的漂移；失焦/
+    漏同步的变更会在下一次变更时自动收敛。整个对账包在一个编辑块里，作为
+    目标文档的一个撤销步（Qt 把连续键入合并进前一步时，joint_previous
+    让目标文档也并入上一步，维持两侧撤销步数联动）；改动区外的字符格式
+    保留。返回是否发生了实际改动。
+    """
+    target_doc = target_edit.document()
+    target_text = target_doc.toPlainText()
+    if source_text == target_text:
+        return False
+    cursor = QTextCursor(target_doc)
     if joint_previous:
         cursor.joinPreviousEditBlock()
     else:
         cursor.beginEditBlock()
-    if removed > 0:
-        cursor.setPosition(pos + removed, QTextCursor.MoveMode.KeepAnchor)
-    cursor.insertText(added_text)
-    cursor.endEditBlock()
-    target_edit.old_undo_steps = target_edit.document().availableUndoSteps()
+    try:
+        # 编辑块内坐标按原始文本计算：逆序应用 opcode，左侧坐标不被动过。
+        for tag, i1, i2, j1, j2 in reversed(
+            SequenceMatcher(None, target_text, source_text).get_opcodes()
+        ):
+            if tag == "equal":
+                continue
+            cursor.setPosition(i1)
+            if tag != "insert":
+                cursor.setPosition(i2, QTextCursor.MoveMode.KeepAnchor)
+                cursor.removeSelectedText()
+            if tag != "delete":
+                cursor.insertText(source_text[j1:j2])
+    finally:
+        cursor.endEditBlock()
+    target_edit.old_undo_steps = target_doc.availableUndoSteps()
+    return True
 
 
 class MoveBlkItemsCommand(QUndoCommand):
