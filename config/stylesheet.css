@@ -1637,32 +1637,25 @@ GroupFrame#formatOuterFrame {
 }
 
 /* ── 面板窄栏（PanelRail：功能图标列，浮层面板宿主；透明窄条，
-      不画底色也不必边框——本来就很窄，再画框更局促） ──────────── */
-PanelRail QToolButton {
-    background: transparent;
-    border: none;
-    border-radius: 5px;
-}
-
-PanelRail QToolButton:hover {
-    background: @accentPrimary20;
-}
-
-PanelRail QToolButton:checked {
-    background: @accentPrimary;
-}
+      不画底色也不必边框——本来就很窄，再画框更局促）。
+      ⚠ 按钮的 hover / checked 底色在 ui/panel_rail.py::
+      RailLauncherButton.paintEvent 自绘（PyQt6 Python 子类匹配不到
+      QSS 背景规则），不要试图在此用 QSS 给窄栏按钮加背景 ────────── */
 
 /* ── 画布浮层面板（RailDockPanel：硬连接锚定窄栏左侧展开，不可拖拽，
-      左下角手柄拉伸；不占用文本编辑区；不用边框，靠标题条底色分层） ── */
+      左下角手柄拉伸；不占用文本编辑区。1px 细边框描边（与
+      formatOuterFrame 的"与画布一致的细边框"同一语言），边缘在画布上
+      辨识清晰；标题条底色 + 底分隔线做面板内分层） ──────────────── */
 RailDockPanel {
     background: @widgetBackgroundColor;
-    border: none;
+    border: 1px solid @borderColor;
     border-radius: 6px;
 }
 
 QWidget#RailDockHeader {
     background: @emptyContentBackgroundColor;
     border: none;
+    border-bottom: 1px solid @borderColor;
     border-radius: 5px 5px 0 0;
 }
 
@@ -1680,6 +1673,7 @@ QFrame#RailDockGrip {
 
 QLabel#RailDockTitle {
     color: @qwidgetForegroundColor;
+    background: transparent;  /* 不声明会盖成调色板窗口色，遮住标题带底色 */
     font-weight: bold;
 }
 

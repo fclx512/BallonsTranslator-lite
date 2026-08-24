@@ -120,7 +120,9 @@ class PanelRailTest(unittest.TestCase):
         self.app.processEvents()
 
     def test_checked_paint_contrast(self):
-        """激活态：checked 下字形/角标翻白，绘制不崩（背景由 CSS 承担）。"""
+        """激活态：checked 下字形翻白 + 自绘 accent 底 + 底缘状态条，
+        绘制不崩（底色在 paintEvent 自绘；PyQt6 Python 子类匹配不到
+        QSS 背景规则，见 ui/panel_rail.py::RailLauncherButton）。"""
         from ui.panel_rail import RailLauncherButton
 
         btn = RailLauncherButton("あ", deco="dots")
