@@ -1508,11 +1508,17 @@ class DrawingPanel(Widget):
         elif self.currentTool == self.inpaintTool:
             self.setInpaintCursor()
 
-    def setPenCursor(self):
-        self.canvas.gv.setCursor(self.get_pen_cursor(shape=self.penConfigPanel.shape))
+    def setPenCursor(self) -> None:
+        if not self.isVisible() or self.currentTool != self.penTool:
+            return
+        self.canvas.set_canvas_cursor(
+            self.get_pen_cursor(shape=self.penConfigPanel.shape)
+        )
 
-    def setInpaintCursor(self):
-        self.canvas.gv.setCursor(
+    def setInpaintCursor(self) -> None:
+        if not self.isVisible() or self.currentTool != self.inpaintTool:
+            return
+        self.canvas.set_canvas_cursor(
             self.get_pen_cursor(
                 INPAINT_BRUSH_COLOR,
                 self.inpaint_pen.width(),
