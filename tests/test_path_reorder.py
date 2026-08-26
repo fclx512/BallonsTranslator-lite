@@ -131,6 +131,37 @@ class TestPathReorder(unittest.TestCase):
         self.assertEqual(self.b._reorder_seq, 1)
         self.assertEqual(self.emitted, [[0, 1]])  # canvas id order == idx
 
+    def test_stroke_badges_are_one_based(self):
+        # Regression (2026-08-25): _reorder_seq is 0-based, but the badge
+        # must show 1-based order.  Passing the raw 0-based seq straight into
+        # set_order_number_override (which clamps to >=1) made the first two
+        # touched blocks BOTH display "1".
+        self._stroke([(100, 45), (100, 100), (270, 100), (270, 130)])
+        self.assertEqual(self.a.order_number(), 1)
+        self.assertEqual(self.b.order_number(), 2)
+
+    def test_reorder_crosshair_suppresses_block_move_cursor(self):
+        # Regression (2026-08-25): while reorder mode is active, hovering a
+        # block used to restore its SizeAllCursor, overriding the view's
+        # crosshair ("精确选择") over the whole canvas.  The crosshair must
+        # live on baseLayer (a scene item) so QGraphicsScene's cursor
+        # resolution keeps it — a cursor on the view widget gets reset to
+        # the default arrow on the first mouse move.  setUp already entered
+        # reorder mode.
+        self.assertTrue(self.canvas.baseLayer.hasCursor())
+        self.assertEqual(
+            self.canvas.baseLayer.cursor().shape(), Qt.CursorShape.CrossCursor
+        )
+        self.a._update_move_cursor()
+        self.assertFalse(
+            self.a.hasCursor(),
+            "reorder mode must not let a block own a move cursor",
+        )
+        self.canvas.exitReorderMode()
+        self.assertFalse(self.canvas.baseLayer.hasCursor())
+        self.a._update_move_cursor()
+        self.assertEqual(self.a.cursor().shape(), Qt.CursorShape.SizeAllCursor)
+
     def test_fast_single_frame_drag_crosses_both_blocks(self):
         # One move event from A's centre to B's centre: the segment crosses
         # both; entry-order scoring must still number them A(0) B(1).

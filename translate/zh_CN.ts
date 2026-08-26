@@ -1910,6 +1910,54 @@ Run detection + OCR to populate text blocks.</source>
         </message>
 </context>
     <context>
+        <name>AIConfigPanel</name>
+        <message>
+            <location filename="..\ui\drawingpanel.py" />
+            <source>Profile</source>
+            <translation>配置</translation>
+        </message>
+        <message>
+            <location filename="..\ui\drawingpanel.py" />
+            <source>Mask</source>
+            <translation>遮罩</translation>
+        </message>
+        <message>
+            <location filename="..\ui\drawingpanel.py" />
+            <source>Brush</source>
+            <translation>画笔</translation>
+        </message>
+        <message>
+            <location filename="..\ui\drawingpanel.py" />
+            <source>Box</source>
+            <translation>框选</translation>
+        </message>
+        <message>
+            <location filename="..\ui\drawingpanel.py" />
+            <source>Thickness</source>
+            <translation>大小</translation>
+        </message>
+        <message>
+            <location filename="..\ui\drawingpanel.py" />
+            <source>Shape</source>
+            <translation>形状</translation>
+        </message>
+        <message>
+            <location filename="..\ui\drawingpanel.py" />
+            <source>Circle</source>
+            <translation>圆形</translation>
+        </message>
+        <message>
+            <location filename="..\ui\drawingpanel.py" />
+            <source>Rectangle</source>
+            <translation>方形</translation>
+        </message>
+        <message>
+            <location filename="..\ui\drawingpanel.py" />
+            <source>Dilate</source>
+            <translation>膨胀</translation>
+        </message>
+    </context>
+    <context>
         <name>InpaintPanel</name>
         <message>
             <location filename="..\ui\drawingpanel.py" line="88" />
@@ -3832,39 +3880,6 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
         </context>
     </context>
     <context>
-        <name>PenConfigPanel</name>
-        <message>
-            <location filename="..\ui\drawingpanel.py" line="153" />
-            <source>Color</source>
-            <translation>颜色</translation>
-        </message>
-        <message>
-            <location filename="..\ui\drawingpanel.py" line="154" />
-            <source>Alpha</source>
-            <translation>Alpha</translation>
-        </message>
-        <message>
-            <location filename="..\ui\drawingpanel.py" line="162" />
-            <source>Thickness</source>
-            <translation>大小</translation>
-        </message>
-        <message>
-            <location filename="..\ui\drawingpanel.py" line="167" />
-            <source>Shape</source>
-            <translation>形状</translation>
-        </message>
-        <message>
-            <location filename="..\ui\drawingpanel.py" line="171" />
-            <source>Circle</source>
-            <translation>圆形</translation>
-        </message>
-        <message>
-            <location filename="..\ui\drawingpanel.py" line="172" />
-            <source>Rectangle</source>
-            <translation>方形</translation>
-        </message>
-    </context>
-    <context>
         <name>ProfileManagerDialog</name>
         <message>
             <source>Image endpoint is required.</source>
@@ -5412,8 +5427,8 @@ in Settings → Mirror Config, then click Retry.</source>
         </message>
         <message>
             <location filename="..\\ui\\configpanel.py" line="808" />
-            <source>Pen Tool</source>
-            <translation>画笔工具</translation>
+            <source>AI Inpaint</source>
+            <translation>AI 修图</translation>
         </message>
         <message>
             <location filename="..\\ui\\configpanel.py" line="808" />

@@ -315,18 +315,19 @@ class InpaintThread(ModuleThread):
         self.start()
 
     def inpaint(
-        self, img: np.ndarray, mask: np.ndarray, img_key: str = None, inpaint_rect=None
+        self, img: np.ndarray, mask: np.ndarray, img_key: str = None, inpaint_rect=None, inpainter=None
     ):
-        self.job = lambda: self._inpaint(img, mask, img_key, inpaint_rect)
+        self.job = lambda: self._inpaint(img, mask, img_key, inpaint_rect, inpainter)
         self.start()
 
     def _inpaint(
-        self, img: np.ndarray, mask: np.ndarray, img_key: str = None, inpaint_rect=None
+        self, img: np.ndarray, mask: np.ndarray, img_key: str = None, inpaint_rect=None, inpainter=None
     ):
         inpaint_dict = {}
         self.inpainting = True
         try:
-            inpainted = self.inpainter.inpaint(img, mask)
+            engine = inpainter or self.inpainter
+            inpainted = engine.inpaint(img, mask)
             inpaint_dict = {
                 "inpainted": inpainted,
                 "img": img,
@@ -1449,6 +1450,11 @@ class ModuleManager(QObject):
         # idle instead of locking the UI behind a modal "Set Inpainter..." box.
         self._pending_inpainter = None
         self._wait_inpainter_dialog = None
+        # Cached online-LLM inpainter for the dedicated "AI 修图" canvas tool.
+        # The auto-pipeline never uses it (LLMInpaint is filtered from the local
+        # engine dropdown); it is dispatched only when the AI tool requests one.
+        self._ai_inpainter = None
+        self._ai_inpainter_profile = None
 
     def setupThread(
         self,
@@ -1671,7 +1677,8 @@ class ModuleManager(QObject):
         if self.inpaint_thread.isRunning():
             LOGGER.warning("Waiting for inpainting to finish")
             return
-        self.inpaint_thread.inpaint(img, mask, img_key, inpaint_rect)
+        inpainter = kwargs.pop("inpainter", None)
+        self.inpaint_thread.inpaint(img, mask, img_key, inpaint_rect, inpainter)
 
     def terminateRunningThread(self):
         if self.textdetect_thread.isRunning():
@@ -2002,7 +2009,7 @@ class ModuleManager(QObject):
             self.canvas_inpaint_finished.emit(inpaint_dict)
             self.run_canvas_inpaint = False
 
-    def canvas_inpaint(self, inpaint_dict):
+    def canvas_inpaint(self, inpaint_dict, inpainter=None):
         """Dispatch a canvas repair.
 
         Returns ``True`` when the request was handed to the inpainting thread,
@@ -2010,13 +2017,37 @@ class ModuleManager(QObject):
         feedback instead of silently losing the request).  The flag is only set
         when the request is actually dispatched, so a dropped request never leaks
         ``run_canvas_inpaint`` into the next finish.
+
+        ``inpainter`` is an optional module name (e.g. ``"LLMInpaint"``) to force
+        a specific engine for this request — used by the "AI 修图" tool so it can
+        reach the online-LLM inpainter even though that engine was removed from
+        the regular local-engine dropdown.
         """
         if self.inpaint_thread.isRunning():
             LOGGER.warning("Canvas inpaint skipped: inpainting thread is busy.")
             return False
+        if inpainter == "LLMInpaint":
+            inpainter = self._get_ai_inpainter()
         self.run_canvas_inpaint = True
-        self.inpaint(**inpaint_dict)
+        self.inpaint(**inpaint_dict, inpainter=inpainter)
         return True
+
+    def _get_ai_inpainter(self):
+        """Return a cached online-LLM inpainter bound to the current config.
+
+        The engine is recreated only when the active profile name changes, so the
+        per-instance rate-limit state survives repeated AI crop dispatches.
+        """
+        params = cfg_module.inpainter_params.get("LLMInpaint")
+        if not isinstance(params, dict):
+            params = {}
+        profile_obj = params.get("profile")
+        profile_name = profile_obj.get("value") if isinstance(profile_obj, dict) else None
+        if self._ai_inpainter is None or self._ai_inpainter_profile != profile_name:
+            ai_class = INPAINTERS.resolve_module("LLMInpaint")
+            self._ai_inpainter = ai_class(**params)
+            self._ai_inpainter_profile = profile_name
+        return self._ai_inpainter
 
     def on_translatorparam_edited(self, param_key: str, param_content: dict):
         if self.translator is not None:

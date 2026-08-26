@@ -173,7 +173,10 @@ class TextBlkItem(_EngineTextBlkItem):
     def refresh_seq_badge(self) -> None:
         """刷新序号角标（fork 语义：重排预览优先，其次 show_seq_badge 开关）。"""
         if self._reorder_seq >= 0:
-            self.set_order_number_override(self._reorder_seq)
+            # _reorder_seq 是接触顺序的 0 基下标；角标按 1 基显示，
+            # 且 set_order_number_override 用 max(1, ...) 兜底，直接传 0 会让
+            # 第 1、2 块都显示 "1"（2026-08-25）。
+            self.set_order_number_override(self._reorder_seq + 1)
         else:
             self.set_order_number_override(None)
         self.set_order_badge_visible(
@@ -536,7 +539,17 @@ class TextBlkItem(_EngineTextBlkItem):
     def _update_move_cursor(self) -> None:
         """Show the move cursor over a draggable block; give the text
         editor's I-beam back to the block while it is being edited
-        (2026-08-18)."""
+        (2026-08-18).
+
+        While path-reorder mode is active, the block's own cursor is
+        suppressed so the view's crosshair ("精确选择") stays visible
+        across the whole canvas while a stroke is drawn over blocks
+        (2026-08-25).
+        """
+        canvas = self.scene()
+        if canvas is not None and getattr(canvas, "_reorder_mode", False):
+            self.unsetCursor()
+            return
         if self.is_editting():
             self.unsetCursor()
         else:

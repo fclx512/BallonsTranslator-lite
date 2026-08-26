@@ -20,7 +20,7 @@ class ImageEditMode:
     NONE = 0
     HandTool = 0
     InpaintTool = 1
-    PenTool = 2
+    AITool = 2
     RectTool = 3
     # Exclusive ratio-crop editing state for the online-LLM inpaint tool. When
     # active, ``Canvas.painting`` is False so the crop rectangle is the only

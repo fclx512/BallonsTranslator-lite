@@ -1,8 +1,5 @@
-from typing import List, Tuple, Union
-
 import os
 import os.path as osp
-
 import cv2
 import numpy as np
 from qtpy.QtCore import QEvent, QLineF, QPointF, QProcess, QRectF, QSizeF, Qt, QTimer, Signal
@@ -23,7 +20,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from utils.config import DrawPanelConfig, pcfg
+from utils.config import DrawPanelConfig, pcfg, save_config
 from utils.imgproc_utils import enlarge_window
 from utils.io_utils import imread, imwrite
 from utils.logger import logger
@@ -34,7 +31,7 @@ from utils.shared import CONFIG_COMBOBOX_HEIGHT, CONFIG_COMBOBOX_SHORT
 from .canvas import Canvas
 from .configpanel import InpaintConfigPanel
 from .crop_rect_item import CropRectItem
-from .custom_widget import ColorPickerLabel, PaintQSlider, SeparatorWidget, Widget
+from .custom_widget import PaintQSlider, SeparatorWidget, Widget
 from .drawing_commands import InpaintUndoCommand, StrokeItemUndoCommand
 from .funcmaps import get_maskseg_method
 from .image_edit import ImageEditMode, PenShape, PixmapItem, StrokeImgItem
@@ -45,6 +42,12 @@ INPAINT_BRUSH_COLOR = QColor(127, 0, 127, 127)
 MAX_PEN_SIZE = 1000
 MIN_PEN_SIZE = 1
 TOOLNAME_POINT_SIZE = 13
+
+# Masking sub-tool selection for the "AI 修图" canvas tool (persisted in
+# ``DrawPanelConfig.ai_mask_mode``): the single conflict toggle picks which of
+# brush / box-select is used to mark masks into the LLM crop.
+AI_MASK_BRUSH = 0
+AI_MASK_BOX = 1
 
 # Glyphs cycled by the canvas "online repair in progress" overlay spinner.
 BUSY_SPINNER_CHARS = ("◐", "◓", "◑", "◒")
@@ -311,78 +314,6 @@ class InpaintPanel(Widget):
         return self.shapeCombobox.currentIndex()
 
 
-class PenConfigPanel(Widget):
-    thicknessChanged = Signal(int)
-    colorChanged = Signal(list)
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.thicknessSlider = PaintQSlider()
-        self.thicknessSlider.setRange(MIN_PEN_SIZE, MAX_PEN_SIZE)
-        self.thicknessSlider.valueChanged.connect(self.on_thickness_changed)
-        self.thicknessSlider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.alphaSlider = PaintQSlider()
-        self.alphaSlider.setRange(0, 255)
-        self.alphaSlider.setValue(255)
-        self.alphaSlider.valueChanged.connect(self.on_alpha_changed)
-
-        self.colorPicker = ColorPickerLabel()
-        self.colorPicker.colorChanged.connect(self.on_color_changed)
-
-        color_label = ToolNameLabel(None, self.tr("Color"))
-        alpha_label = ToolNameLabel(None, self.tr("Alpha"))
-        color_layout = QHBoxLayout()
-        color_layout.addWidget(color_label)
-        color_layout.addWidget(self.colorPicker)
-        color_layout.addWidget(alpha_label)
-        color_layout.addWidget(self.alphaSlider)
-
-        thickness_layout = QHBoxLayout()
-        thickness_label = ToolNameLabel(100, self.tr("Thickness"))
-        thickness_layout.addWidget(thickness_label)
-        thickness_layout.addWidget(self.thicknessSlider)
-        thickness_layout.setSpacing(10)
-
-        shape_label = ToolNameLabel(100, self.tr("Shape"))
-        self.shapeCombobox = QComboBox(self)
-        self.shapeCombobox.addItems(
-            [
-                self.tr("Circle"),
-                self.tr("Rectangle"),
-            ]
-        )
-        self.shapeChanged = self.shapeCombobox.currentIndexChanged
-        shape_layout = QHBoxLayout()
-        shape_layout.addWidget(shape_label)
-        shape_layout.addWidget(self.shapeCombobox)
-
-        layout = QVBoxLayout(self)
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout.addLayout(color_layout)
-        layout.addLayout(thickness_layout)
-        layout.addLayout(shape_layout)
-        layout.setSpacing(20)
-
-    def on_thickness_changed(self):
-        if self.thicknessSlider.hasFocus():
-            self.thicknessChanged.emit(self.thicknessSlider.value())
-
-    def on_alpha_changed(self):
-        color = self.colorPicker.rgba()
-        color = [color[0], color[1], color[2], self.alphaSlider.value()]
-        self.colorPicker.setPickerColor(color)
-        self.colorChanged.emit(color)
-
-    def on_color_changed(self):
-        color = self.colorPicker.rgba()
-        color = [color[0], color[1], color[2], self.alphaSlider.value()]
-        self.colorChanged.emit(color)
-
-    @property
-    def shape(self):
-        return self.shapeCombobox.currentIndex()
-
-
 class RectPanel(Widget):
     dilate_ksize_changed = Signal()
     method_changed = Signal(int)
@@ -500,6 +431,200 @@ class RectPanel(Widget):
         return cv2.dilate(mask, element)
 
 
+class AIConfigPanel(Widget):
+    """Configuration for the dedicated "AI 修图" canvas tool.
+
+    The online-LLM inpainter is no longer a per-tool engine choice in the
+    brush / box dropdown; it is exposed here as its own canvas tool.  Activating
+    it reuses the brush and box-select to *only* mark a mask into the LLM crop,
+    with a single "Mask" conflict toggle (Brush | Box) switching between the two
+    masking modes, each carrying its own settings.
+    """
+
+    cropRatioChanged = Signal(str)
+    cropModeChanged = Signal(bool)
+    inpaintClicked = Signal()
+    clearMaskClicked = Signal()
+    maskModeChanged = Signal(int)
+    thicknessChanged = Signal(int)
+    dilateChanged = Signal(int)
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        # ── LLM profile selector ──
+        profile_label = ToolNameLabel(100, self.tr("Profile"))
+        self.profile_combo = QComboBox(self)
+        self.profile_combo.setFixedHeight(CONFIG_COMBOBOX_HEIGHT)
+        self.profile_combo.currentTextChanged.connect(self._on_profile_changed)
+        profile_layout = QHBoxLayout()
+        profile_layout.addWidget(profile_label)
+        profile_layout.addWidget(self.profile_combo, 1)
+
+        # ── Brush | Box conflict toggle ──
+        mask_label = ToolNameLabel(100, self.tr("Mask"))
+        self.mask_combo = QComboBox(self)
+        self.mask_combo.setFixedHeight(CONFIG_COMBOBOX_HEIGHT)
+        self.mask_combo.addItems([self.tr("Brush"), self.tr("Box")])
+        self.mask_combo.currentIndexChanged.connect(self._on_mask_mode_changed)
+        mask_layout = QHBoxLayout()
+        mask_layout.addWidget(mask_label)
+        mask_layout.addWidget(self.mask_combo, 1)
+
+        # ── Brush settings ──
+        thickness_label = ToolNameLabel(100, self.tr("Thickness"))
+        self.thicknessSlider = PaintQSlider()
+        self.thicknessSlider.setRange(MIN_PEN_SIZE, MAX_PEN_SIZE)
+        self.thicknessSlider.valueChanged.connect(self.on_thickness_changed)
+        self.thicknessSlider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        thickness_layout = QHBoxLayout()
+        thickness_layout.addWidget(thickness_label)
+        thickness_layout.addWidget(self.thicknessSlider)
+        thickness_layout.setSpacing(10)
+
+        shape_label = ToolNameLabel(100, self.tr("Shape"))
+        self.shapeCombobox = QComboBox(self)
+        self.shapeCombobox.setFixedHeight(CONFIG_COMBOBOX_HEIGHT)
+        self.shapeCombobox.addItems([self.tr("Circle"), self.tr("Rectangle")])
+        self.shapeChanged = self.shapeCombobox.currentIndexChanged
+        shape_layout = QHBoxLayout()
+        shape_layout.addWidget(shape_label)
+        shape_layout.addWidget(self.shapeCombobox)
+
+        self.brush_widget = Widget()
+        brush_layout = QVBoxLayout(self.brush_widget)
+        brush_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        brush_layout.addLayout(thickness_layout)
+        brush_layout.addLayout(shape_layout)
+        brush_layout.setSpacing(14)
+
+        # ── Box settings ──
+        dilate_label = ToolNameLabel(100, self.tr("Dilate"))
+        self.dilate_slider = PaintQSlider()
+        self.dilate_slider.setRange(0, 100)
+        self.dilate_slider.valueChanged.connect(self.dilateChanged.emit)
+        dilate_layout = QHBoxLayout()
+        dilate_layout.addWidget(dilate_label)
+        dilate_layout.addWidget(self.dilate_slider)
+
+        self.box_widget = Widget()
+        box_layout = QVBoxLayout(self.box_widget)
+        box_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        box_layout.addLayout(dilate_layout)
+        box_layout.setSpacing(14)
+
+        # ── Ratio-crop controls (shared with the brush / box panels) ──
+        self.crop_controls = CropControls()
+        self.crop_controls.cropRatioChanged.connect(self.cropRatioChanged.emit)
+        self.crop_controls.cropModeChanged.connect(self.cropModeChanged.emit)
+        self.crop_controls.inpaintClicked.connect(self.inpaintClicked.emit)
+        self.crop_controls.clearMaskClicked.connect(self.clearMaskClicked.emit)
+
+        self._crop_mode_active = False
+
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(profile_layout)
+        layout.addLayout(mask_layout)
+        layout.addWidget(self.brush_widget)
+        layout.addWidget(self.box_widget)
+        layout.addWidget(self.crop_controls)
+        layout.setSpacing(14)
+
+        self._update_mask_body()
+
+    # ── public API ──
+
+    @property
+    def mask_mode(self) -> int:
+        return self.mask_combo.currentIndex()
+
+    def set_mask_mode(self, mode: int):
+        idx = AI_MASK_BOX if mode == AI_MASK_BOX else AI_MASK_BRUSH
+        pcfg.drawpanel.ai_mask_mode = idx
+        self.mask_combo.blockSignals(True)
+        self.mask_combo.setCurrentIndex(idx)
+        self.mask_combo.blockSignals(False)
+        self._update_mask_body()
+
+    def profile(self) -> str:
+        return self.profile_combo.currentText()
+
+    def set_profile(self, name: str):
+        idx = self.profile_combo.findText(name)
+        if idx >= 0:
+            self.profile_combo.blockSignals(True)
+            self.profile_combo.setCurrentIndex(idx)
+            self.profile_combo.blockSignals(False)
+
+    def refresh_profile_options(self):
+        """Populate the profile dropdown from the image-capable profiles."""
+        from utils.profile_manager import get_image_profile_names
+
+        names = get_image_profile_names()
+        current = self.profile()
+        self.profile_combo.blockSignals(True)
+        self.profile_combo.clear()
+        self.profile_combo.addItems(names)
+        if current and current in names:
+            self.profile_combo.setCurrentText(current)
+        self.profile_combo.blockSignals(False)
+
+    def set_brush_config(self, width: int, shape: int):
+        self.thicknessSlider.setValue(int(width))
+        self.shapeCombobox.setCurrentIndex(int(shape))
+
+    def set_box_config(self, dilate: int):
+        self.dilate_slider.setValue(int(dilate))
+
+    def set_crop_mode_active(self, active: bool):
+        """Hide the brush / box body while the ratio-crop is being positioned."""
+        self._crop_mode_active = bool(active)
+        self._update_mask_body()
+
+    # ── crop state passthrough ──
+
+    def crop_ratio(self) -> str:
+        return self.crop_controls.ratio()
+
+    def crop_mode(self) -> bool:
+        return self.crop_controls.mode()
+
+    def set_crop_state(self, ratio_label: str, crop_mode: bool):
+        self.crop_controls.set_ratio(ratio_label)
+        self.crop_controls.set_mode(bool(crop_mode))
+
+    # ── internal ──
+
+    def _on_profile_changed(self, name: str):
+        llm = pcfg.module.inpainter_params.get("LLMInpaint")
+        if isinstance(llm, dict) and isinstance(llm.get("profile"), dict):
+            llm["profile"]["value"] = name
+            save_config()
+
+    def _on_mask_mode_changed(self, idx: int):
+        pcfg.drawpanel.ai_mask_mode = AI_MASK_BOX if idx == AI_MASK_BOX else AI_MASK_BRUSH
+        self._update_mask_body()
+        self.maskModeChanged.emit(pcfg.drawpanel.ai_mask_mode)
+
+    def on_thickness_changed(self):
+        if self.thicknessSlider.hasFocus():
+            self.thicknessChanged.emit(self.thicknessSlider.value())
+
+    def _update_mask_body(self):
+        body_visible = not self._crop_mode_active
+        self.brush_widget.setVisible(
+            body_visible and self.mask_combo.currentIndex() == AI_MASK_BRUSH
+        )
+        self.box_widget.setVisible(
+            body_visible and self.mask_combo.currentIndex() == AI_MASK_BOX
+        )
+
+    @property
+    def shape(self):
+        return self.shapeCombobox.currentIndex()
+
+
 class DrawingPanel(Widget):
     scale_tool_pos: QPointF = None
 
@@ -595,29 +720,34 @@ class DrawingPanel(Widget):
         self.rectPanel.cropInpaintClicked.connect(self.runInpaint)
         self.rectPanel.clearMaskClicked.connect(self._on_clear_crop_mask)
 
-        self.penTool = DrawToolCheckBox()
-        self.penTool.setObjectName("DrawPenTool")
-        self.penTool.checked.connect(self.on_use_pentool)
-        self.penConfigPanel = PenConfigPanel()
-        self.penConfigPanel.thicknessChanged.connect(self.setPenToolWidth)
-        self.penConfigPanel.colorChanged.connect(self.setPenToolColor)
-        self.penConfigPanel.shapeChanged.connect(self.setPenShape)
+        self.aiTool = DrawToolCheckBox()
+        self.aiTool.setObjectName("DrawAiTool")
+        self.aiTool.checked.connect(self.on_use_aitool)
+        self.aiConfigPanel = AIConfigPanel()
+        self.aiConfigPanel.cropRatioChanged.connect(self._on_crop_ratio_changed)
+        self.aiConfigPanel.cropModeChanged.connect(self._on_crop_mode_changed)
+        self.aiConfigPanel.inpaintClicked.connect(self.runInpaint)
+        self.aiConfigPanel.clearMaskClicked.connect(self._on_clear_crop_mask)
+        self.aiConfigPanel.maskModeChanged.connect(self.on_ai_mask_mode_changed)
+        self.aiConfigPanel.thicknessChanged.connect(self.on_ai_thickness_changed)
+        self.aiConfigPanel.dilateChanged.connect(self.on_ai_dilate_changed)
+        self.aiConfigPanel.shapeChanged.connect(self.on_ai_shape_changed)
 
         toolboxlayout = QBoxLayout(QBoxLayout.Direction.LeftToRight)
         toolboxlayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
         toolboxlayout.addWidget(self.handTool)
         toolboxlayout.addWidget(self.inpaintTool)
-        toolboxlayout.addWidget(self.penTool)
         toolboxlayout.addWidget(self.rectTool)
+        toolboxlayout.addWidget(self.aiTool)
 
-        self.canvas.painting_pen = self.pentool_pen = QPen(
+        self.canvas.painting_pen = QPen(
             Qt.GlobalColor.black,
             1,
             Qt.PenStyle.SolidLine,
             Qt.PenCapStyle.RoundCap,
             Qt.PenJoinStyle.RoundJoin,
         )
-        self.canvas.erasing_pen = self.erasing_pen = QPen(
+        self.canvas.erasing_pen = QPen(
             Qt.GlobalColor.black,
             1,
             Qt.PenStyle.SolidLine,
@@ -637,8 +767,8 @@ class DrawingPanel(Widget):
             QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Minimum
         )
         self.toolConfigStackwidget.addWidget(self.inpaintConfigPanel)
-        self.toolConfigStackwidget.addWidget(self.penConfigPanel)
         self.toolConfigStackwidget.addWidget(self.rectPanel)
+        self.toolConfigStackwidget.addWidget(self.aiConfigPanel)
 
         self.maskTransperancySlider = PaintQSlider()
         self.maskTransperancySlider.valueChanged.connect(
@@ -706,33 +836,6 @@ class DrawingPanel(Widget):
         pcfg.drawpanel.inpainter_shape = shape
         self.canvas.painting_shape = shape
 
-    def setPenToolWidth(self, width):
-        self.pentool_pen.setWidthF(width)
-        self.erasing_pen.setWidthF(width)
-        pcfg.drawpanel.pentool_width = self.pentool_pen.widthF()
-        if self.isVisible():
-            self.setPenCursor()
-
-    def setPenToolColor(self, color: Union[QColor, Tuple, List]):
-        if not isinstance(color, QColor):
-            color = QColor(*[max(0, min(255, int(c))) for c in color])
-        self.pentool_pen.setColor(color)
-        pcfg.drawpanel.pentool_color = [
-            color.red(),
-            color.green(),
-            color.blue(),
-            color.alpha(),
-        ]
-        if self.isVisible():
-            self.setPenCursor()
-        self.penConfigPanel.colorPicker.setPickerColor(color)
-        self.penConfigPanel.alphaSlider.setValue(color.alpha())
-
-    def setPenShape(self, shape: int):
-        self.setPenCursor()
-        self.canvas.painting_shape = shape
-        pcfg.drawpanel.pentool_shape = shape
-
     def on_use_handtool(self) -> None:
         if self.currentTool is not None and self.currentTool != self.handTool:
             self.currentTool.setChecked(False)
@@ -756,20 +859,6 @@ class DrawingPanel(Widget):
             self.setInpaintCursor()
         self._update_crop_active()
 
-    def on_use_pentool(self) -> None:
-        if self.currentTool is not None and self.currentTool != self.penTool:
-            self.currentTool.setChecked(False)
-        self.currentTool = self.penTool
-        pcfg.drawpanel.current_tool = ImageEditMode.PenTool
-        self.canvas.painting_pen = self.pentool_pen
-        self.canvas.painting_shape = self.penConfigPanel.shape
-        self.canvas.erasing_pen = self.erasing_pen
-        self.toolConfigStackwidget.setCurrentWidget(self.penConfigPanel)
-        if self.isVisible():
-            self.canvas.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
-            self.setPenCursor()
-        self._update_crop_active()
-
     def on_use_recttool(self) -> None:
         if self.currentTool is not None and self.currentTool != self.rectTool:
             self.currentTool.setChecked(False)
@@ -780,12 +869,56 @@ class DrawingPanel(Widget):
         self.setCrossCursor()
         self._update_crop_active()
 
-    def set_config(self, config: DrawPanelConfig):
-        self.setPenToolWidth(config.pentool_width)
-        self.setPenToolColor(config.pentool_color)
-        self.penConfigPanel.thicknessSlider.setValue(int(config.pentool_width))
-        self.penConfigPanel.shapeCombobox.setCurrentIndex(config.pentool_shape)
+    def on_use_aitool(self) -> None:
+        if self.currentTool is not None and self.currentTool != self.aiTool:
+            self.currentTool.setChecked(False)
+        self.currentTool = self.aiTool
+        pcfg.drawpanel.current_tool = ImageEditMode.AITool
+        self.canvas.painting_pen = self.inpaint_pen
+        self.canvas.erasing_pen = self.inpaint_pen
+        self.canvas.painting_shape = self.aiConfigPanel.shape
+        self.aiConfigPanel.refresh_profile_options()
+        self.aiConfigPanel.set_brush_config(
+            pcfg.drawpanel.inpainter_width, pcfg.drawpanel.inpainter_shape
+        )
+        self.aiConfigPanel.set_box_config(pcfg.drawpanel.recttool_dilate_ksize)
+        self.toolConfigStackwidget.setCurrentWidget(self.aiConfigPanel)
+        if self.isVisible():
+            self.canvas.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
+            self._update_ai_cursor()
+        self._update_crop_active()
 
+    def _update_ai_cursor(self):
+        """Apply the cursor matching the AI tool's current mask mode."""
+        if self._ai_mask_brush():
+            self.setInpaintCursor()
+        else:
+            self.setCrossCursor()
+
+    def on_ai_mask_mode_changed(self, mode: int):
+        if self.currentTool == self.aiTool:
+            self._update_ai_cursor()
+            self._update_crop_active()
+
+    def on_ai_thickness_changed(self, width):
+        self.setInpaintToolWidth(width)
+        if self.currentTool == self.aiTool and self.isVisible():
+            self.setInpaintCursor()
+
+    def on_ai_shape_changed(self, shape):
+        self.canvas.painting_shape = shape
+        pcfg.drawpanel.inpainter_shape = shape
+        if self.currentTool == self.aiTool and self.isVisible():
+            self.setInpaintCursor()
+
+    def on_ai_dilate_changed(self, ksize):
+        pcfg.drawpanel.recttool_dilate_ksize = ksize
+        # The AI box-select post-processes its mask through the shared
+        # RectPanel.post_process_mask, which reads RectPanel's own slider — mirror
+        # the value so AI-box masking honours the same dilate setting.
+        self.rectPanel.dilate_slider.setValue(ksize)
+
+    def set_config(self, config: DrawPanelConfig):
         self.setInpaintToolWidth(config.inpainter_width)
         self.inpaintConfigPanel.thicknessSlider.setValue(int(config.inpainter_width))
         self.inpaintConfigPanel.shapeCombobox.setCurrentIndex(config.inpainter_shape)
@@ -794,14 +927,27 @@ class DrawingPanel(Widget):
         self.rectPanel.dilate_slider.setValue(config.recttool_dilate_ksize)
         self.rectPanel.autoChecker.setChecked(config.rectool_auto)
         self.rectPanel.methodComboBox.setCurrentIndex(config.rectool_method)
+
+        # AI tool configuration
+        self.aiConfigPanel.set_mask_mode(config.ai_mask_mode)
+        ai_profile = self._ai_profile_value()
+        if ai_profile:
+            self.aiConfigPanel.set_profile(ai_profile)
+
         if config.current_tool == ImageEditMode.HandTool:
             self.handTool.setChecked(True)
         elif config.current_tool == ImageEditMode.InpaintTool:
             self.inpaintTool.setChecked(True)
-        elif config.current_tool == ImageEditMode.PenTool:
-            self.penTool.setChecked(True)
         elif config.current_tool == ImageEditMode.RectTool:
             self.rectTool.setChecked(True)
+        elif config.current_tool == ImageEditMode.AITool:
+            self.aiTool.setChecked(True)
+
+    def _ai_profile_value(self) -> str:
+        llm = pcfg.module.inpainter_params.get("LLMInpaint")
+        if isinstance(llm, dict) and isinstance(llm.get("profile"), dict):
+            return llm["profile"].get("value", "")
+        return ""
 
     def get_pen_cursor(
         self,
@@ -814,9 +960,9 @@ class DrawingPanel(Widget):
         cross_len = cross_size // 4
         thickness = 3
         if pen_color is None:
-            pen_color = self.pentool_pen.color()
+            pen_color = self.inpaint_pen.color()
         if pen_size is None:
-            pen_size = self.pentool_pen.width()
+            pen_size = self.inpaint_pen.width()
         pen_size *= self.canvas.scale_factor
         map_size = max(cross_size + 7, pen_size)
         cursor_center = map_size // 2
@@ -886,25 +1032,18 @@ class DrawingPanel(Widget):
         pass
 
     def scalePen(self, scale_factor):
-        if self.currentTool == self.penTool:
-            val = self.pentool_pen.widthF()
-            new_val = round(int(val * scale_factor))
-            if scale_factor > 1:
-                new_val = max(val + 1, new_val)
-            else:
-                new_val = min(val - 1, new_val)
-            self.penConfigPanel.thicknessSlider.setValue(int(new_val))
-            self.setPenToolWidth(self.penConfigPanel.thicknessSlider.value())
-
-        elif self.currentTool == self.inpaintTool:
+        if self._brush_active():
             val = self.inpaint_pen.widthF()
             new_val = round(int(val * scale_factor))
             if scale_factor > 1:
                 new_val = max(val + 1, new_val)
             else:
                 new_val = min(val - 1, new_val)
-            self.inpaintConfigPanel.thicknessSlider.setValue(int(new_val))
-            self.setInpaintToolWidth(self.inpaintConfigPanel.thicknessSlider.value())
+            if self.currentTool == self.aiTool:
+                self.aiConfigPanel.thicknessSlider.setValue(int(new_val))
+            else:
+                self.inpaintConfigPanel.thicknessSlider.setValue(int(new_val))
+            self.setInpaintToolWidth(new_val)
 
     def showEvent(self, event) -> None:
         if self.currentTool is not None:
@@ -917,26 +1056,7 @@ class DrawingPanel(Widget):
         if not self.canvas.imgtrans_proj.img_valid:
             self.canvas.removeItem(stroke_item)
             return
-        if self.currentTool == self.penTool:
-            rect, mask, _ = stroke_item.clip(mask_only=True)
-            if mask is not None:
-                proj = self.canvas.imgtrans_proj
-                mx, my, mw, mh = rect
-                mask_roi = proj.mask_array[my : my + mh, mx : mx + mw]
-                new_mask = cv2.bitwise_or(mask_roi, mask)
-                inpaint_rect = [mx, my, mx + mw, my + mh]
-                redo_img = np.copy(
-                    proj.inpainted_array[my : my + mh, mx : mx + mw]
-                )
-                self.canvas.push_undo_command(
-                    InpaintUndoCommand(
-                        self.canvas, redo_img, new_mask, inpaint_rect
-                    )
-                )
-                proj.mask_array[my : my + mh, mx : mx + mw] = new_mask
-                self.canvas.updateLayers()
-            self.canvas.removeItem(stroke_item)
-        elif self.currentTool == self.inpaintTool:
+        if self._brush_active():
             self.inpaint_stroke = stroke_item
             if self._is_crop_masking():
                 # In LLM crop-mask mode a brush stroke only marks the region to
@@ -952,7 +1072,7 @@ class DrawingPanel(Widget):
     def on_finish_erasing(self, stroke_item: StrokeImgItem):
         stroke_item.finishPainting()
         # inpainted-erasing logic is essentially the same as inpainting
-        if self.currentTool == self.inpaintTool:
+        if self._brush_active():
             if self._is_crop_masking():
                 # In LLM crop-mask mode a right-drag erases part of the mask
                 # (the inverse of marking) instead of editing the image.
@@ -995,37 +1115,41 @@ class DrawingPanel(Widget):
             )
             self.canvas.removeItem(stroke_item)
 
-        elif self.currentTool == self.penTool:
-            rect, mask, _ = stroke_item.clip(mask_only=True)
-            if mask is not None:
-                proj = self.canvas.imgtrans_proj
-                mx, my, mw, mh = rect
-                erase_mask = 255 - mask
-                old_mask = np.copy(proj.mask_array[my : my + mh, mx : mx + mw])
-                new_mask = cv2.bitwise_and(old_mask, erase_mask)
-                inpaint_rect = [mx, my, mx + mw, my + mh]
-                redo_img = np.copy(
-                    proj.inpainted_array[my : my + mh, mx : mx + mw]
-                )
-                self.canvas.push_undo_command(
-                    InpaintUndoCommand(
-                        self.canvas, redo_img, new_mask, inpaint_rect
-                    )
-                )
-                proj.mask_array[my : my + mh, mx : mx + mw] = new_mask
-                self.canvas.updateLayers()
-            self.canvas.removeItem(stroke_item)
-
     # ── Online-LLM crop tool ──
 
+    def _ai_active(self) -> bool:
+        """Whether the dedicated "AI 修图" tool is the current tool."""
+        return self.currentTool == self.aiTool
+
+    def _ai_mask_brush(self) -> bool:
+        """AI mode is masking with the brush (vs. box-select)."""
+        return pcfg.drawpanel.ai_mask_mode == AI_MASK_BRUSH
+
+    def _brush_active(self) -> bool:
+        """The inpaint brush is the active masking tool (normal or AI)."""
+        return self.currentTool == self.inpaintTool or (
+            self.currentTool == self.aiTool and self._ai_mask_brush()
+        )
+
+    def _rect_active(self) -> bool:
+        """The box-select is the active masking tool (normal or AI)."""
+        return self.currentTool == self.rectTool or (
+            self.currentTool == self.aiTool and not self._ai_mask_brush()
+        )
+
     def _inpainter_is_llm(self) -> bool:
-        return self.inpaintConfigPanel.current_inpainter() == "LLMInpaint"
+        # The online-LLM inpainter is reached only through the AI tool (it is
+        # filtered from the local-engine dropdown), so "LLM active" == "AI tool
+        # active".  Kept alongside the old name for callers that still gate the
+        # busy overlay / crop visibility on the engine.
+        return self._ai_active()
 
     def _crop_tool_active(self) -> bool:
         """Whether the current tool (or the pre-activation state) hosts a crop."""
         return self.currentTool is None or self.currentTool in (
             self.inpaintTool,
             self.rectTool,
+            self.aiTool,
         )
 
     def _is_crop_masking(self) -> bool:
@@ -1076,12 +1200,21 @@ class DrawingPanel(Widget):
             panel.crop_controls.set_llm_active(is_llm)
             panel.crop_controls.set_ratio(self._crop_ratio_label)
             panel.crop_controls.set_mode(self._crop_mode)
+        if hasattr(self, "aiConfigPanel"):
+            self.aiConfigPanel.crop_controls.set_llm_active(is_llm)
+            self.aiConfigPanel.crop_controls.set_ratio(self._crop_ratio_label)
+            self.aiConfigPanel.crop_controls.set_mode(self._crop_mode)
 
     def _tool_natural_mode(self) -> int:
+        if self.currentTool is self.aiTool:
+            # AI mode reuses the brush / box-select to mark masks only.
+            return (
+                ImageEditMode.InpaintTool
+                if self._ai_mask_brush()
+                else ImageEditMode.RectTool
+            )
         if self.currentTool is self.inpaintTool:
             return ImageEditMode.InpaintTool
-        if self.currentTool is self.penTool:
-            return ImageEditMode.PenTool
         if self.currentTool is self.rectTool:
             return ImageEditMode.RectTool
         if self.currentTool is self.handTool:
@@ -1089,7 +1222,7 @@ class DrawingPanel(Widget):
         return ImageEditMode.NONE
 
     def _tool_supports_crop(self) -> bool:
-        return self.currentTool in (self.inpaintTool, self.rectTool)
+        return self.currentTool in (self.inpaintTool, self.rectTool, self.aiTool)
 
     def _apply_canvas_mode(self):
         if self._crop_active:
@@ -1099,7 +1232,7 @@ class DrawingPanel(Widget):
 
     def _update_crop_active(self):
         # Only drop crop mode when a concrete tool is active but cannot host a
-        # crop (pen/hand). During config load the tool is activated afterwards,
+        # crop (hand). During config load the tool is activated afterwards,
         # so currentTool is still None here — never reset the persisted state.
         if (
             self.currentTool is not None
@@ -1130,6 +1263,9 @@ class DrawingPanel(Widget):
         for panel in (self.inpaintConfigPanel, self.rectPanel):
             panel.crop_controls.set_llm_active(is_llm)
             panel.set_crop_mode_active(self._crop_active)
+        if hasattr(self, "aiConfigPanel"):
+            self.aiConfigPanel.crop_controls.set_llm_active(is_llm)
+            self.aiConfigPanel.set_crop_mode_active(self._crop_active)
         self._apply_canvas_mode()
         self._update_crop_visibility()
 
@@ -1349,7 +1485,7 @@ class DrawingPanel(Widget):
             # Only drop the accumulated mask once the request is actually handed
             # to the thread; if the thread is busy we keep the mask so the user
             # can retry, and tell them why.
-            if not self.module_manager.canvas_inpaint(crop):
+            if not self.module_manager.canvas_inpaint(crop, inpainter="LLMInpaint"):
                 self._notify_inpaint_busy()
                 return
             self.clearInpaintItems()
@@ -1429,7 +1565,7 @@ class DrawingPanel(Widget):
         self._hide_busy_overlay(done=True)
 
     def on_inpaint_failed(self):
-        if self.currentTool == self.inpaintTool and self.inpaint_stroke is not None:
+        if self._brush_active() and self.inpaint_stroke is not None:
             self.clearInpaintItems()
         self._hide_busy_overlay(done=False)
 
@@ -1440,16 +1576,14 @@ class DrawingPanel(Widget):
         # to avoid a stray crop dispatch.
         if (
             self.isVisible()
-            and self.currentTool == self.inpaintTool
+            and self._brush_active()
             and not self._is_crop_masking()
         ):
             self.runInpaint()
 
     def on_begin_scale_tool(self, pos: QPointF):
 
-        if self.currentTool == self.penTool:
-            circle_pen = QPen(self.pentool_pen)
-        elif self.currentTool == self.inpaintTool:
+        if self._brush_active():
             circle_pen = QPen(self.inpaint_pen)
         else:
             return
@@ -1470,7 +1604,7 @@ class DrawingPanel(Widget):
         self.scale_circle.setCursor(self.get_pen_cursor(draw_shape=False))
 
     def setCrossCursor(self) -> None:
-        if not self.isVisible() or self.currentTool != self.rectTool:
+        if not self.isVisible() or not self._rect_active():
             return
         self.canvas.set_canvas_cursor(self.get_pen_cursor(draw_shape=False))
 
@@ -1491,38 +1625,36 @@ class DrawingPanel(Widget):
         self.scale_tool_pos = None
         self.canvas.removeItem(self.scale_circle)
 
-        if self.currentTool == self.penTool:
-            self.setPenToolWidth(circle_size)
-            self.penConfigPanel.thicknessSlider.setValue(circle_size)
-            self.setPenCursor()
-        elif self.currentTool == self.inpaintTool:
+        if self._brush_active():
             self.setInpaintToolWidth(circle_size)
-            self.inpaintConfigPanel.thicknessSlider.setValue(circle_size)
+            if self.currentTool == self.aiTool:
+                self.aiConfigPanel.thicknessSlider.setValue(circle_size)
+                self.aiConfigPanel.shapeCombobox.setCurrentIndex(
+                    self.aiConfigPanel.shape
+                )
+            else:
+                self.inpaintConfigPanel.thicknessSlider.setValue(circle_size)
             self.setInpaintCursor()
 
     def on_canvas_scalefactor_changed(self):
         if not self.isVisible():
             return
-        if self.currentTool == self.penTool:
-            self.setPenCursor()
-        elif self.currentTool == self.inpaintTool:
+        if self._brush_active():
             self.setInpaintCursor()
 
-    def setPenCursor(self) -> None:
-        if not self.isVisible() or self.currentTool != self.penTool:
-            return
-        self.canvas.set_canvas_cursor(
-            self.get_pen_cursor(shape=self.penConfigPanel.shape)
-        )
-
     def setInpaintCursor(self) -> None:
-        if not self.isVisible() or self.currentTool != self.inpaintTool:
+        if not self.isVisible() or not self._brush_active():
             return
+        cur_shape = (
+            self.aiConfigPanel.shape
+            if self.currentTool == self.aiTool
+            else self.inpaintConfigPanel.shape
+        )
         self.canvas.set_canvas_cursor(
             self.get_pen_cursor(
                 INPAINT_BRUSH_COLOR,
                 self.inpaint_pen.width(),
-                shape=self.inpaintConfigPanel.shape,
+                shape=cur_shape,
             )
         )
 
@@ -1533,7 +1665,7 @@ class DrawingPanel(Widget):
             self.toolConfigStackwidget.show()
 
     def on_end_create_rect(self, rect: QRectF, mode: int):
-        if self.currentTool == self.rectTool:
+        if self._rect_active():
             self.canvas.image_edit_mode = ImageEditMode.NONE
             img = self.canvas.imgtrans_proj.inpainted_array
             im_h, im_w = img.shape[:2]

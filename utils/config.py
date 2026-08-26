@@ -154,14 +154,12 @@ class ModuleConfig(Config):
 
 @nested_dataclass
 class DrawPanelConfig(Config):
-    pentool_color: List = field(default_factory=lambda: [0, 0, 0])
-    pentool_width: float = 30.0
-    pentool_shape: int = 0
     inpainter_width: float = 30.0
     inpainter_shape: int = 0
     inpaint_crop_ratio: str = ""
     inpaint_crop_mode: bool = False
     current_tool: int = 0
+    ai_mask_mode: int = 0
     rectool_auto: bool = False
     rectool_method: int = 0
     recttool_dilate_ksize: int = 0

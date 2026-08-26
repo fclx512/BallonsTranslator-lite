@@ -653,7 +653,9 @@ class MainWindow(mainwindow_cls):
         self.bottomBar.textdet_selector.selector.currentTextChanged.connect(
             self.on_textdet_changed
         )
-        self.bottomBar.inpaint_selector.selector.addItems(GET_VALID_INPAINTERS())
+        self.bottomBar.inpaint_selector.selector.addItems(
+            [m for m in GET_VALID_INPAINTERS() if m != "LLMInpaint"]
+        )
         self.bottomBar.inpaint_selector.selector.currentTextChanged.connect(
             self.on_inpaint_changed
         )
@@ -1879,7 +1881,7 @@ class MainWindow(mainwindow_cls):
             "hand": "hand_tool",
             "rect": "rect_tool",
             "inpaint": "inpaint_tool",
-            "pen": "pen_tool",
+            "ai": "ai_tool",
         }
         for tool_name, action_id in drawpanel_info.items():
             keys = self._get_shortcut_keys(action_id)

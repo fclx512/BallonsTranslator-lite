@@ -1145,7 +1145,21 @@ class Canvas(QGraphicsScene):
         self._reorder_path = QPainterPath()
         self._reorder_touched_blocks.clear()
         self.gv.setCursor(Qt.CursorShape.CrossCursor)
+        self.set_canvas_cursor(Qt.CursorShape.CrossCursor)
         self.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
+
+        # The crosshair must stay visible while a stroke is drawn OVER text
+        # blocks.  A cursor set on the view widget does not survive
+        # QGraphicsScene's cursor resolution, which resets the viewport to
+        # the default arrow on the first mouse move (real window).  Hanging
+        # it on baseLayer — the scene item that covers the canvas — keeps it
+        # there, mirroring aaad064's tool-cursor rule (2026-08-25).  Blocks'
+        # own move cursors are dropped and _update_move_cursor refuses to
+        # re-install one while reorder is active, so the crosshair shows
+        # across the whole canvas.
+        for item in self.textLayer.childItems():
+            if isinstance(item, TextBlkItem):
+                item.unsetCursor()
 
         # Create visual path item
         pen = QPen(QColor(52, 152, 219, 150), 4)
@@ -1165,19 +1179,22 @@ class Canvas(QGraphicsScene):
         self._reorder_last_local_pos = None
         self.gv.unsetCursor()
         self.restore_drag_mode()
+        self.clear_canvas_cursor()
 
         # Remove visual path item
         if self._reorder_path_item is not None:
             self.removeItem(self._reorder_path_item)
             self._reorder_path_item = None
 
-        # Reset reorder badge state on all text blocks
+        # Reset reorder badge state on all text blocks, and restore the
+        # normal move cursor now that reorder mode is off (2026-08-25).
         for item in self.textLayer.childItems():
             if isinstance(item, TextBlkItem):
                 if item._reorder_seq >= 0:
                     item._reorder_seq = -1
                     item.setSelected(False)
                     item.refresh_seq_badge()
+                item._update_move_cursor()
 
     def _reorder_start_stroke(self, scene_pos: QPointF):
         """Begin a new reorder path stroke at *scene_pos*."""
@@ -1371,7 +1388,7 @@ class Canvas(QGraphicsScene):
             elif btn == Qt.MouseButton.RightButton:
                 # user is drawing using eraser
                 if self.painting:
-                    erasing = self.image_edit_mode == ImageEditMode.PenTool
+                    erasing = False
                     self.addStrokeImageItem(
                         self.inpaintLayer.mapFromScene(event.scenePos()),
                         self.erasing_pen,
@@ -1489,10 +1506,7 @@ class Canvas(QGraphicsScene):
 
     @property
     def painting(self):
-        return (
-            self.image_edit_mode == ImageEditMode.PenTool
-            or self.image_edit_mode == ImageEditMode.InpaintTool
-        )
+        return self.image_edit_mode == ImageEditMode.InpaintTool
 
     def setMaskTransparencyBySlider(self, slider_value: int):
         self.setMaskTransparency(slider_value / 100)

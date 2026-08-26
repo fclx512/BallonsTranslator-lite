@@ -404,6 +404,11 @@ class ModuleConfigParseWidget(QWidget):
 
         self.visibleWidget: QWidget = None
         self.module_dict: dict = {}
+        # Module keys to hide from the combobox / param registration. Used to
+        # pull an engine (e.g. the online ``LLMInpaint``) out of the general
+        # selection without unregistering it — its params stay in module_dict so
+        # a dedicated tool panel can still render them.
+        self.exclude_modules: set = set()
 
     def addModulesParamWidgets(
         self, module_dict: dict, dep_notes: dict[str, str] = None
@@ -426,6 +431,10 @@ class ModuleConfigParseWidget(QWidget):
         for module in module_dict:
             if module not in valid_modulekeys:
                 invalid_module_keys.append(module)
+                continue
+            if module in self.exclude_modules:
+                # Hidden from the dropdown but kept in module_dict for direct
+                # programmatic access (e.g. a dedicated tool panel).
                 continue
             if module in self.param_widget_map:
                 LOGGER.warning(f"duplicated module key: {module}")
@@ -746,6 +755,10 @@ class InpaintConfigPanel(ModuleConfigParseWidget):
             *args,
             **kwargs,
         )
+        # The online LLM inpainter is no longer a per-tool engine choice — it
+        # lives behind the dedicated "AI 修图" canvas tool.  Hide it from the
+        # brush/box/settings dropdown (it stays registered for that tool).
+        self.exclude_modules = {"LLMInpaint"}
         self.inpainter_changed = self.module_changed
         self.setInpainter = self.setModule
         self.needInpaintChecker = ParamCheckerBox(

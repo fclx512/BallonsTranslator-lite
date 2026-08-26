@@ -1,5 +1,5 @@
 """Regression test: repair-tool cursors live on canvas.baseLayer (upstream
-9ea9795 semantics).  A partial port left setPenCursor/setInpaintCursor writing
+9ea9795 semantics).  A partial port left setInpaintCursor writing
 to the QGraphicsView cursor, which child items override and mode switches
 destroy — the fixed path sets baseLayer and guards on visibility + tool.
 """
@@ -57,9 +57,8 @@ class DrawingCursorTest(unittest.TestCase):
     def _base_cursor(self):
         return self.canvas.baseLayer.cursor()
 
-    def test_pen_and_inpaint_cursors_land_on_base_layer(self) -> None:
+    def test_inpaint_cursor_lands_on_base_layer(self) -> None:
         for use, tool in (
-            (self.panel.on_use_pentool, self.panel.penTool),
             (self.panel.on_use_inpainttool, self.panel.inpaintTool),
         ):
             with self.subTest(tool=tool.objectName()):
@@ -79,7 +78,7 @@ class DrawingCursorTest(unittest.TestCase):
     def test_guards_do_not_touch_cursor(self) -> None:
         self.panel.show()
         _APP.processEvents()
-        self.panel.on_use_pentool()
+        self.panel.on_use_inpainttool()
         _APP.processEvents()
         before = self._base_cursor().pixmap().cacheKey()
 
@@ -95,7 +94,7 @@ class DrawingCursorTest(unittest.TestCase):
         self.panel.hide()
         _APP.processEvents()
         self.canvas.clear_canvas_cursor()
-        self.panel.setPenCursor()
+        self.panel.setInpaintCursor()
         self.assertFalse(
             self.canvas.baseLayer.hasCursor(),
             "hidden panel must not install a baseLayer cursor",
@@ -104,7 +103,7 @@ class DrawingCursorTest(unittest.TestCase):
     def test_hand_tool_clears_base_layer_cursor(self) -> None:
         self.panel.show()
         _APP.processEvents()
-        self.panel.on_use_pentool()
+        self.panel.on_use_inpainttool()
         _APP.processEvents()
         self.assertTrue(self.canvas.baseLayer.hasCursor())
         self.panel.on_use_handtool()
