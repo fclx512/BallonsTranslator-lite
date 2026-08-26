@@ -397,3 +397,23 @@
 **排障记录：** ① cyan 高亮 + 长提示词拼接 → 蓝边；改红 + 仅短专注提示词后正常。② 换比例报 `UNEXPECTED_EOF_WHILE_READING` 经排查为代理/网络 TLS 握手被掐（走 http_proxy 隧道），与比例无关——比例由 `_meshy_aspect_ratio` 吸附到支持集，模型不支持的比例根本不会发出；若真不支持会返回 HTTP 4xx 而非 SSL EOF。③ 比例说明之前只放进 `InpaintPanel`（画笔修复工具），而在线裁剪修复实际走 `RectPanel`（框选工具），故用户看不到——移到共享 `CropControls` 后两处皆有。
 
 **涉及文件：** `modules/inpaint/inpaint_llm.py`（新）、`ui/crop_rect_item.py`（新）、`ui/drawingpanel.py`、`ui/image_edit.py`、`ui/module_manager.py`、`ui/module_parse_widgets.py`、`utils/config.py`、`utils/profile_manager.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/daily_log.md`
+
+---
+
+## 2026-08-26
+
+### 图像修复区：工具图标重绘 + 面板可读性 + 控件自定义样式收尾
+
+**问题/需求：** 修复区四工具图标里框选借用了「文字块」图标（语义错 + 常规/hover 颠倒）、AI 修图**完全没图标**（点开是空白蓝块）、手型/画笔与它们风格不统一；画笔/框选两页各内嵌一份「永不显示」的 CropControls（LLMInpaint 摘出后已从这两页引擎下拉过滤）；三页字段排版不齐、`ToolNameLabel` 标签太宽会缩字越缩越小、修复面板控件仍用裸 Qt `QCheckBox`/`QComboBox`，与项目 `ui/custom_widget` 库的自定义样式不一致。经用户确认按「图标重置 + 去死重量 + 统一排版 + 换自定义控件」实施。
+
+**改动要点：**
+
+- **图标统一重绘为同源 Material 填充集**（`config/stylesheet.css` + `icons/drawingtools_*.svg`）：4 图标各 base（`#96a4cd`）/`_activate`（`#697186`）两版——手型 `pan_tool`、画笔 `brush`、框选 `crop_free`（选区框角）、AI 修图 `auto_fix_high`（魔棒+火花）。`DrawRectTool` 纠正常规/hover（原来常规用 `_activate` 暗色、hover 用亮色，与其它三家相反），`DrawAiTool` 补齐三条 QSS 规则；删除 `DrawPenTool` 三条死规则与 `drawingtools_pen_*` SVG（`scripts/audit_registry.json` 登记 deprecated）。图标仍由 `set_icon_theme` 按深浅主题换色。
+- **删掉画笔/框选两页永不显示的 CropControls**：`ui/drawingpanel.py::InpaintPanel`/`RectPanel` 移除各自 `CropControls` 实例与 `cropRatioChanged/cropModeChanged/inpaintClicked/clearMaskClicked/llmActiveChanged` 信号接线及 `_on_inpainter_changed/set_crop_mode_active/crop_*` 方法；裁剪控件收敛为 `AIConfigPanel` 一份权威副本，`_sync_crop_controls`/`_update_crop_active` 的三份同步循环改为仅同步 AI 页。
+- **统一三页字段排版**：新增 `TOOL_LABEL_WIDTH=110` 常量，替换三组 `ToolNameLabel(100/130, …)` 为统一定宽；`ToolNameLabel` 去掉「标签太宽就缩字号」逻辑（改固定宽不缩字，保证可读）；三页在「引擎/遮罩选择」与「参数设置」间、以及 AI 页裁剪区前加 `SeparatorWidget` 做逻辑分组。
+- **修复面板控件换成项目自定义样式**：`ui/drawingpanel.py` 的裸 `QComboBox`→`ComboBox`（`ui/custom_widget`，保留现有布局拉伸与定宽），裸 `QCheckBox`（Auto/Crop mode）→`ConfigCheckBox`（主题化勾选指示器）。
+
+**排障记录：** 图标 SVG 必须用 `fill="#…"` 填充字形（非 stroke），因为 `ui/misc.py::set_icon_theme` 按 `fill="<色>"` 正则做主题换色，stroke 不会被替换（浅色主题会残留错色）。Combo 换 `ConfigComboBox` 会强制 `setFixedWidth` 步进宽度，破坏现有 `addWidget(combo, 1)` 拉伸填充，故选基类 `ComboBox` 保留布局。
+
+**涉及文件：** `ui/drawingpanel.py`、`config/stylesheet.css`、`icons/drawingtools_hand.svg`、`icons/drawingtools_inpaint.svg`、`icons/drawingtools_rect.svg`（新）、`icons/drawingtools_rect_activate.svg`（新）、`icons/drawingtools_ai.svg`（新）、`icons/drawingtools_ai_activate.svg`（新）、`icons/drawingtools_hand_activate.svg`、`icons/drawingtools_inpaint_activate.svg`、`icons/drawingtools_pen.svg`（删）、`icons/drawingtools_pen_activate.svg`（删）、`scripts/audit_registry.json`、`docs/技术实现/图像修复区_审计与优化讨论.md`、`docs/daily_log.md`
+

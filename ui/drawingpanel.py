@@ -3,11 +3,10 @@ import os.path as osp
 import cv2
 import numpy as np
 from qtpy.QtCore import QEvent, QLineF, QPointF, QProcess, QRectF, QSizeF, Qt, QTimer, Signal
-from qtpy.QtGui import QBrush, QColor, QCursor, QFontMetrics, QPainter, QPen, QPixmap
+from qtpy.QtGui import QBrush, QColor, QCursor, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import (
     QBoxLayout,
     QCheckBox,
-    QComboBox,
     QGraphicsEllipseItem,
     QGraphicsView,
     QGridLayout,
@@ -31,7 +30,7 @@ from utils.shared import CONFIG_COMBOBOX_HEIGHT, CONFIG_COMBOBOX_SHORT
 from .canvas import Canvas
 from .configpanel import InpaintConfigPanel
 from .crop_rect_item import CropRectItem
-from .custom_widget import PaintQSlider, SeparatorWidget, Widget
+from .custom_widget import ComboBox, ConfigCheckBox, PaintQSlider, SeparatorWidget, Widget
 from .drawing_commands import InpaintUndoCommand, StrokeItemUndoCommand
 from .funcmaps import get_maskseg_method
 from .image_edit import ImageEditMode, PenShape, PixmapItem, StrokeImgItem
@@ -42,6 +41,9 @@ INPAINT_BRUSH_COLOR = QColor(127, 0, 127, 127)
 MAX_PEN_SIZE = 1000
 MIN_PEN_SIZE = 1
 TOOLNAME_POINT_SIZE = 13
+# Width of the fixed label column shared by every repair-panel field, so all
+# controls (engine dropdown, sliders, combos) left-align on the same x.
+TOOL_LABEL_WIDTH = 110
 
 # Masking sub-tool selection for the "AI 修图" canvas tool (persisted in
 # ``DrawPanelConfig.ai_mask_mode``): the single conflict toggle picks which of
@@ -90,19 +92,21 @@ class DrawToolCheckBox(QCheckBox):
 
 
 class ToolNameLabel(QLabel):
+    """Fixed-width field label for the repair panels.
+
+    Keeps a constant label column so every control in a panel starts at the
+    same x.  The font is never shrunk (that made long labels unreadably small);
+    the column width is fixed and generous enough for the localised labels.
+    """
+
     def __init__(self, fix_width=None, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         font = self.font()
         font.setPointSizeF(TOOLNAME_POINT_SIZE)
-        fmt = QFontMetrics(font)
-
+        self.setFont(font)
         if fix_width is not None:
             self.setFixedWidth(fix_width)
-            text_width = fmt.width(self.text())
-            if text_width > fix_width * 0.95:
-                font_size = TOOLNAME_POINT_SIZE * fix_width * 0.95 / text_width
-                font.setPointSizeF(font_size)
-        self.setFont(font)
+        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
 
 class CropControls(Widget):
@@ -123,11 +127,11 @@ class CropControls(Widget):
         super().__init__(*args, **kwargs)
         self.llm_active = False
 
-        self.ratio_combo = QComboBox(self)
+        self.ratio_combo = ComboBox(self)
         for label, _ratio in RATIO_OPTIONS:
             self.ratio_combo.addItem(label)
         self.ratio_combo.currentTextChanged.connect(self._on_ratio_changed)
-        self.mode_check = QCheckBox(self.tr("Crop mode"))
+        self.mode_check = ConfigCheckBox(self.tr("Crop mode"))
         self.mode_check.toggled.connect(self._on_mode_changed)
         self.inpaint_btn = QPushButton(self.tr("Inpaint"))
         self.inpaint_btn.clicked.connect(self.inpaintClicked.emit)
@@ -138,7 +142,7 @@ class CropControls(Widget):
         self.clear_mask_btn.clicked.connect(self.clearMaskClicked.emit)
 
         row = QHBoxLayout()
-        row.addWidget(ToolNameLabel(100, self.tr("Crop Ratio")))
+        row.addWidget(ToolNameLabel(TOOL_LABEL_WIDTH, self.tr("Crop Ratio")))
         row.addWidget(self.ratio_combo, 1)
         row.addWidget(self.mode_check)
 
@@ -206,11 +210,6 @@ class CropControls(Widget):
 
 class InpaintPanel(Widget):
     thicknessChanged = Signal(int)
-    cropRatioChanged = Signal(str)
-    cropModeChanged = Signal(bool)
-    inpaintClicked = Signal()
-    clearMaskClicked = Signal()
-    llmActiveChanged = Signal(bool)
 
     def __init__(self, inpainter_panel: InpaintConfigPanel, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -221,13 +220,13 @@ class InpaintPanel(Widget):
         self.thicknessSlider.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         thickness_layout = QHBoxLayout()
-        thickness_label = ToolNameLabel(100, self.tr("Thickness"))
+        thickness_label = ToolNameLabel(TOOL_LABEL_WIDTH, self.tr("Thickness"))
         thickness_layout.addWidget(thickness_label)
         thickness_layout.addWidget(self.thicknessSlider)
         thickness_layout.setSpacing(10)
 
-        shape_label = ToolNameLabel(100, self.tr("Shape"))
-        self.shapeCombobox = QComboBox(self)
+        shape_label = ToolNameLabel(TOOL_LABEL_WIDTH, self.tr("Shape"))
+        self.shapeCombobox = ComboBox(self)
         self.shapeCombobox.addItems(
             [
                 self.tr("Circle"),
@@ -240,18 +239,10 @@ class InpaintPanel(Widget):
         shape_layout.addWidget(self.shapeCombobox)
 
         self.inpaint_layout = inpaint_layout = QHBoxLayout()
-        inpaint_layout.addWidget(ToolNameLabel(100, self.tr("Inpainter")))
+        inpaint_layout.addWidget(ToolNameLabel(TOOL_LABEL_WIDTH, self.tr("Inpainter")))
         self.inpainter_panel = inpainter_panel
 
-        # ── Online-LLM ratio-crop tool (shared with the box-select panel) ──
-        self.crop_controls = CropControls()
-        self.crop_controls.cropRatioChanged.connect(self.cropRatioChanged.emit)
-        self.crop_controls.cropModeChanged.connect(self.cropModeChanged.emit)
-        self.crop_controls.inpaintClicked.connect(self.inpaintClicked.emit)
-        self.crop_controls.clearMaskClicked.connect(self.clearMaskClicked.emit)
-
-        # Brush-specific body (thickness / shape) — hidden while the ratio-crop
-        # mode is active so the panel shows one unambiguous operation at a time.
+        # Brush-specific body (thickness / shape).
         self.brush_widget = Widget()
         brush_layout = QVBoxLayout(self.brush_widget)
         brush_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -262,40 +253,11 @@ class InpaintPanel(Widget):
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addLayout(inpaint_layout)
+        layout.addWidget(SeparatorWidget())
         layout.addWidget(self.brush_widget)
-        layout.addWidget(self.crop_controls)
         layout.setSpacing(14)
 
-        self._llm_active = False
-        self.inpainter_panel.module_changed.connect(self._on_inpainter_changed)
-        self._on_inpainter_changed(self.inpainter_panel.module_combobox.currentText())
-
-    # ── inpainter / crop state ──
-
-    def current_inpainter(self) -> str:
-        return self.inpainter_panel.module_combobox.currentText()
-
-    def crop_ratio(self) -> str:
-        return self.crop_controls.ratio()
-
-    def crop_mode(self) -> bool:
-        return self.crop_controls.mode()
-
-    def set_crop_state(self, ratio_label: str, crop_mode: bool):
-        self.crop_controls.set_ratio(ratio_label)
-        self.crop_controls.set_mode(bool(crop_mode))
-
-    def _on_inpainter_changed(self, name: str):
-        self._llm_active = name == "LLMInpaint"
-        self.llmActiveChanged.emit(self._llm_active)
-        self._update_crop_controls()
-
-    def _update_crop_controls(self):
-        self.crop_controls.set_llm_active(self._llm_active)
-
-    def set_crop_mode_active(self, active: bool):
-        """Hide the brush body while the ratio-crop mode is active."""
-        self.brush_widget.setVisible(not active)
+    # ── brush state ──
 
     def on_thickness_changed(self):
         if self.thicknessSlider.hasFocus():
@@ -319,26 +281,22 @@ class RectPanel(Widget):
     method_changed = Signal(int)
     delete_btn_clicked = Signal()
     inpaint_btn_clicked = Signal()
-    cropRatioChanged = Signal(str)
-    cropModeChanged = Signal(bool)
-    cropInpaintClicked = Signal()
-    clearMaskClicked = Signal()
 
     def __init__(self, inpainter_panel: InpaintConfigPanel, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-        self.dilate_label = ToolNameLabel(100, self.tr("Dilate"))
+        self.dilate_label = ToolNameLabel(TOOL_LABEL_WIDTH, self.tr("Dilate"))
         self.dilate_slider = PaintQSlider()
         self.dilate_slider.setRange(0, 100)
         self.dilate_slider.valueChanged.connect(self.dilate_ksize_changed)
-        self.methodComboBox = QComboBox()
+        self.methodComboBox = ComboBox()
         self.methodComboBox.setFixedHeight(CONFIG_COMBOBOX_HEIGHT)
         self.methodComboBox.setFixedWidth(CONFIG_COMBOBOX_SHORT)
         self.methodComboBox.addItems(
             [self.tr("method 1"), self.tr("method 2"), self.tr("Use Existing Mask")]
         )
         self.methodComboBox.activated.connect(self.on_inpaint_seg_method_changed)
-        self.autoChecker = QCheckBox(self.tr("Auto"))
+        self.autoChecker = ConfigCheckBox(self.tr("Auto"))
         self.autoChecker.setToolTip(self.tr("run inpainting automatically."))
         self.autoChecker.stateChanged.connect(self.on_auto_changed)
         self.inpaint_btn = QPushButton(self.tr("Inpaint"))
@@ -352,7 +310,7 @@ class RectPanel(Widget):
         self.btnlayout.addWidget(self.delete_btn)
 
         self.inpaint_layout = inpaint_layout = QHBoxLayout()
-        inpaint_layout.addWidget(ToolNameLabel(100, self.tr("Inpainter")))
+        inpaint_layout.addWidget(ToolNameLabel(TOOL_LABEL_WIDTH, self.tr("Inpainter")))
         self.inpainter_panel = inpainter_panel
 
         glayout = QGridLayout()
@@ -361,9 +319,7 @@ class RectPanel(Widget):
         glayout.addWidget(self.autoChecker, 1, 0)
         glayout.addWidget(self.methodComboBox, 1, 1)
 
-        # Box-select body (mask controls + Inpaint/Delete) — hidden while the
-        # ratio-crop mode is active so the panel shows one unambiguous operation
-        # at a time (2026-08-24).
+        # Box-select body (mask controls + Inpaint/Delete).
         self.box_select_widget = Widget()
         box_layout = QVBoxLayout(self.box_select_widget)
         box_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -371,29 +327,12 @@ class RectPanel(Widget):
         box_layout.addLayout(self.btnlayout)
         box_layout.setSpacing(8)
 
-        # ── Online-LLM ratio-crop tool (shared with the brush panel) ──
-        self.crop_controls = CropControls()
-        self.crop_controls.cropRatioChanged.connect(self.cropRatioChanged.emit)
-        self.crop_controls.cropModeChanged.connect(self.cropModeChanged.emit)
-        self.crop_controls.inpaintClicked.connect(self.cropInpaintClicked.emit)
-        self.crop_controls.clearMaskClicked.connect(self.clearMaskClicked.emit)
-        self.inpainter_panel.module_changed.connect(self._on_inpainter_changed)
-
         layout = QVBoxLayout(self)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addLayout(inpaint_layout)
+        layout.addWidget(SeparatorWidget())
         layout.addWidget(self.box_select_widget)
-        layout.addWidget(self.crop_controls)
         layout.setSpacing(14)
-
-        self._on_inpainter_changed(self.inpainter_panel.module_combobox.currentText())
-
-    def _on_inpainter_changed(self, name: str):
-        self.crop_controls.set_llm_active(name == "LLMInpaint")
-
-    def set_crop_mode_active(self, active: bool):
-        """Hide the box-select body while the ratio-crop mode is active."""
-        self.box_select_widget.setVisible(not active)
 
     def showEvent(self, e) -> None:
         self.inpaint_layout.addWidget(self.inpainter_panel.module_combobox)
@@ -453,8 +392,8 @@ class AIConfigPanel(Widget):
         super().__init__(*args, **kwargs)
 
         # ── LLM profile selector ──
-        profile_label = ToolNameLabel(100, self.tr("Profile"))
-        self.profile_combo = QComboBox(self)
+        profile_label = ToolNameLabel(TOOL_LABEL_WIDTH, self.tr("Profile"))
+        self.profile_combo = ComboBox(self)
         self.profile_combo.setFixedHeight(CONFIG_COMBOBOX_HEIGHT)
         self.profile_combo.currentTextChanged.connect(self._on_profile_changed)
         profile_layout = QHBoxLayout()
@@ -462,8 +401,8 @@ class AIConfigPanel(Widget):
         profile_layout.addWidget(self.profile_combo, 1)
 
         # ── Brush | Box conflict toggle ──
-        mask_label = ToolNameLabel(100, self.tr("Mask"))
-        self.mask_combo = QComboBox(self)
+        mask_label = ToolNameLabel(TOOL_LABEL_WIDTH, self.tr("Mask"))
+        self.mask_combo = ComboBox(self)
         self.mask_combo.setFixedHeight(CONFIG_COMBOBOX_HEIGHT)
         self.mask_combo.addItems([self.tr("Brush"), self.tr("Box")])
         self.mask_combo.currentIndexChanged.connect(self._on_mask_mode_changed)
@@ -472,7 +411,7 @@ class AIConfigPanel(Widget):
         mask_layout.addWidget(self.mask_combo, 1)
 
         # ── Brush settings ──
-        thickness_label = ToolNameLabel(100, self.tr("Thickness"))
+        thickness_label = ToolNameLabel(TOOL_LABEL_WIDTH, self.tr("Thickness"))
         self.thicknessSlider = PaintQSlider()
         self.thicknessSlider.setRange(MIN_PEN_SIZE, MAX_PEN_SIZE)
         self.thicknessSlider.valueChanged.connect(self.on_thickness_changed)
@@ -482,8 +421,8 @@ class AIConfigPanel(Widget):
         thickness_layout.addWidget(self.thicknessSlider)
         thickness_layout.setSpacing(10)
 
-        shape_label = ToolNameLabel(100, self.tr("Shape"))
-        self.shapeCombobox = QComboBox(self)
+        shape_label = ToolNameLabel(TOOL_LABEL_WIDTH, self.tr("Shape"))
+        self.shapeCombobox = ComboBox(self)
         self.shapeCombobox.setFixedHeight(CONFIG_COMBOBOX_HEIGHT)
         self.shapeCombobox.addItems([self.tr("Circle"), self.tr("Rectangle")])
         self.shapeChanged = self.shapeCombobox.currentIndexChanged
@@ -499,7 +438,7 @@ class AIConfigPanel(Widget):
         brush_layout.setSpacing(14)
 
         # ── Box settings ──
-        dilate_label = ToolNameLabel(100, self.tr("Dilate"))
+        dilate_label = ToolNameLabel(TOOL_LABEL_WIDTH, self.tr("Dilate"))
         self.dilate_slider = PaintQSlider()
         self.dilate_slider.setRange(0, 100)
         self.dilate_slider.valueChanged.connect(self.dilateChanged.emit)
@@ -528,6 +467,7 @@ class AIConfigPanel(Widget):
         layout.addLayout(mask_layout)
         layout.addWidget(self.brush_widget)
         layout.addWidget(self.box_widget)
+        layout.addWidget(SeparatorWidget())
         layout.addWidget(self.crop_controls)
         layout.setSpacing(14)
 
@@ -663,11 +603,6 @@ class DrawingPanel(Widget):
         self.inpaintConfigPanel = InpaintPanel(inpainter_panel)
         self.inpaintConfigPanel.thicknessChanged.connect(self.setInpaintToolWidth)
         self.inpaintConfigPanel.shapeChanged.connect(self.setInpaintShape)
-        self.inpaintConfigPanel.cropRatioChanged.connect(self._on_crop_ratio_changed)
-        self.inpaintConfigPanel.cropModeChanged.connect(self._on_crop_mode_changed)
-        self.inpaintConfigPanel.inpaintClicked.connect(self.runInpaint)
-        self.inpaintConfigPanel.llmActiveChanged.connect(self._on_llm_active_changed)
-        self.inpaintConfigPanel.clearMaskClicked.connect(self._on_clear_crop_mask)
         self.crop_rect_item = CropRectItem(parent=self.canvas.baseLayer)
         self.crop_rect_item.setVisible(False)
         self.crop_rect_item.on_released = self._on_crop_rect_released
@@ -715,10 +650,6 @@ class DrawingPanel(Widget):
         self.rectPanel.inpaint_btn_clicked.connect(self.on_rect_inpaintbtn_clicked)
         self.rectPanel.delete_btn_clicked.connect(self.on_rect_deletebtn_clicked)
         self.rectPanel.dilate_ksize_changed.connect(self.on_rectool_ksize_changed)
-        self.rectPanel.cropRatioChanged.connect(self._on_crop_ratio_changed)
-        self.rectPanel.cropModeChanged.connect(self._on_crop_mode_changed)
-        self.rectPanel.cropInpaintClicked.connect(self.runInpaint)
-        self.rectPanel.clearMaskClicked.connect(self._on_clear_crop_mask)
 
         self.aiTool = DrawToolCheckBox()
         self.aiTool.setObjectName("DrawAiTool")
@@ -775,7 +706,7 @@ class DrawingPanel(Widget):
             self.canvas.setMaskTransparencyBySlider
         )
         masklayout = QHBoxLayout()
-        masklayout.addWidget(ToolNameLabel(130, self.tr("Mask Opacity")))
+        masklayout.addWidget(ToolNameLabel(TOOL_LABEL_WIDTH, self.tr("Mask Opacity")))
         masklayout.addWidget(self.maskTransperancySlider)
 
         layout = QVBoxLayout(self)
@@ -1177,9 +1108,6 @@ class DrawingPanel(Widget):
         self._sync_crop_controls()
         self._update_crop_active()
 
-    def _on_llm_active_changed(self, is_llm: bool):
-        self._update_crop_active()
-
     def _set_crop_config(self, ratio_label: str, crop_mode: bool):
         self._crop_ratio_label = ratio_label or "16:9"
         self._crop_ratio = ratio_from_label(self._crop_ratio_label)
@@ -1189,21 +1117,15 @@ class DrawingPanel(Widget):
         self._update_crop_active()
 
     def _sync_crop_controls(self):
-        if not hasattr(self, "inpaintConfigPanel") or not hasattr(self, "rectPanel"):
+        # The online-LLM crop lives only on the AI tool's panel now (it is
+        # filtered out of the brush / box engine dropdown), so a single
+        # authoritative copy on AIConfigPanel mirrors the DrawingPanel state.
+        if not hasattr(self, "aiConfigPanel"):
             return
-        # Re-assert the LLM visibility on every sync — the module combobox can
-        # settle onto its saved value after the panels are built, so the first
-        # open would otherwise leave the crop controls hidden until the user
-        # re-picks the inpainter (2026-08-24).
         is_llm = self._inpainter_is_llm()
-        for panel in (self.inpaintConfigPanel, self.rectPanel):
-            panel.crop_controls.set_llm_active(is_llm)
-            panel.crop_controls.set_ratio(self._crop_ratio_label)
-            panel.crop_controls.set_mode(self._crop_mode)
-        if hasattr(self, "aiConfigPanel"):
-            self.aiConfigPanel.crop_controls.set_llm_active(is_llm)
-            self.aiConfigPanel.crop_controls.set_ratio(self._crop_ratio_label)
-            self.aiConfigPanel.crop_controls.set_mode(self._crop_mode)
+        self.aiConfigPanel.crop_controls.set_llm_active(is_llm)
+        self.aiConfigPanel.crop_controls.set_ratio(self._crop_ratio_label)
+        self.aiConfigPanel.crop_controls.set_mode(self._crop_mode)
 
     def _tool_natural_mode(self) -> int:
         if self.currentTool is self.aiTool:
@@ -1254,15 +1176,10 @@ class DrawingPanel(Widget):
             self._crop_setup = False
             self._reset_crop_mask()
         self.crop_rect_item.set_editable(self._crop_active)
-        # Re-assert each panel's crop-control visibility AND body visibility
-        # from the CURRENT llm state on every call. The module combobox can be
+        # Re-assert the AI panel's crop-control visibility AND body visibility
+        # from the CURRENT llm state on every call (the module combobox can be
         # set during config load with blockSignals, so module_changed may never
-        # fire — without this, the first arrival could show only the model
-        # selector (crop controls hidden + body hidden) until a tool switch
-        # re-ran this (2026-08-24).
-        for panel in (self.inpaintConfigPanel, self.rectPanel):
-            panel.crop_controls.set_llm_active(is_llm)
-            panel.set_crop_mode_active(self._crop_active)
+        # fire — see 2026-08-24).
         if hasattr(self, "aiConfigPanel"):
             self.aiConfigPanel.crop_controls.set_llm_active(is_llm)
             self.aiConfigPanel.set_crop_mode_active(self._crop_active)

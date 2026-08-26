@@ -40,6 +40,14 @@
     },
     "docs/技术实现/排版技术.md": {
       "note": "2026-08-23 删除：三节全部过时（旧布局实现已删、调研已消费）"
+    },
+    "icons/drawingtools_pen.svg": {
+      "note": "2026-08-26 Pen/B 画笔工具移除后成为死资产，图标重绘为统一 Material 集（drawingtools_rect/ai 补齐，hand/inpaint 同步更换）",
+      "allowed_mentions": ["config/stylesheet.css"]
+    },
+    "icons/drawingtools_pen_activate.svg": {
+      "note": "2026-08-26 Pen/B 画笔工具移除后成为死资产，图标重绘为统一 Material 集（drawingtools_rect/ai 补齐，hand/inpaint 同步更换）",
+      "allowed_mentions": ["config/stylesheet.css"]
     }
   },
   "suspended": {
