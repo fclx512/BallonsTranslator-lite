@@ -20,7 +20,6 @@ from .label import (
     ClickableLabel,
     ColorPickerLabel,
     ConfigClickableLabel,
-    FadeLabel,
     ParamNameLabel,
     SizeControlLabel,
     SmallColorPickerLabel,
@@ -35,6 +34,7 @@ from .message import (
     ProgressMessageBox,
     TaskProgressBar,
 )
+from .notification import NotificationCenter, notification
 from .push_button import ExpandingToolButton, NoBorderPushBtn
 from .rail_dock_panel import RailDockPanel
 from .scroll_bar import ConfigScrollBar

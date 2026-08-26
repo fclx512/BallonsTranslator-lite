@@ -28,7 +28,6 @@ from qtpy.QtWidgets import (
     QGraphicsSceneDragDropEvent,
     QGraphicsSceneMouseEvent,
     QGraphicsView,
-    QLabel,
     QRubberBand,
     QScrollBar,
 )
@@ -42,7 +41,8 @@ from utils import shared as C
 from utils.config import pcfg
 from utils.proj_imgtrans import ProjImgTrans
 
-from .custom_widget import FadeLabel, ScrollBar
+from .custom_widget import ScrollBar
+from .custom_widget.notification import notification
 from .image_edit import DrawingLayer, ImageEditMode, StrokeImgItem
 from .misc import ARROWKEY2DIRECTION, QKEY, ndarray2pixmap
 from .page_search_widget import PageSearchWidget
@@ -407,35 +407,14 @@ class Canvas(QGraphicsScene):
         self.saved_drawundo_step = 0
         self.saved_textundo_step = 0
 
-        self.scaleFactorLabel = FadeLabel(self.gv)
-        self.scaleFactorLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.scaleFactorLabel.setText("100%")
-        self.scaleFactorLabel.gv = self.gv
-
-        self.notextLabel = QLabel(self.gv)
-        self.notextLabel.setObjectName("NotextLabel")
-        self.notextLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.notextLabel.setText(self.tr("No-text BG"))
-        self.notextLabel.setStyleSheet(
-            "background: rgba(39, 174, 96, 180); color: white; "
-            "padding: 4px 12px; border-radius: 6px; font-size: 15px;"
-        )
-        self.notextLabel.adjustSize()
-        self.notextLabel.setVisible(False)
-        self._layout_status_labels()
-
-        # Empty-state hint shown when no project is loaded
-        self._empty_hint_label = QLabel(self.gv)
-        self._empty_hint_label.setObjectName("EmptyHintLabel")
-        self._empty_hint_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._empty_hint_label.setText(
-            self.tr("Drop images here or open a folder to start")
-        )
-        self._empty_hint_label.setStyleSheet(
-            "color: rgba(128, 128, 128, 180); font-size: 22px; background: transparent;"
-        )
-        self._empty_hint_label.adjustSize()
-        self._empty_hint_label.setVisible(True)
+        notification.attach(self.gv.viewport())
+        if self.imgtrans_proj is None or not self.imgtrans_proj.img_valid:
+            notification.status(
+                "empty-hint",
+                self.tr("Drop images here or open a folder to start"),
+                kind="hint",
+                anchor="center",
+            )
 
         self._drag_hover_active = False
 
@@ -700,10 +679,10 @@ class Canvas(QGraphicsScene):
         painter.end()
         self.inpaintLayer.setPixmap(pixmap)
 
-        self.notextLabel.setVisible(
-            pcfg.use_notext_images and self.imgtrans_proj.notext_array is not None
-        )
-        self._layout_status_labels()
+        if pcfg.use_notext_images and self.imgtrans_proj.notext_array is not None:
+            notification.status("notext-bg", self.tr("No-text BG"))
+        else:
+            notification.status("notext-bg", None)
 
     def setMaskTransparency(self, transparency: float):
         pcfg.mask_transparency = transparency
@@ -762,12 +741,6 @@ class Canvas(QGraphicsScene):
         """Public alias for :meth:`_fitToWindow` (pie-menu command pool)."""
         self._fitToWindow()
 
-    def _layout_status_labels(self):
-        """Unify label sizes and position them dynamically in top-left corner."""
-        # Re-adjust to content (text length may vary by i18n)
-        self.notextLabel.adjustSize()
-        self.notextLabel.move(8, 8)
-
     def setOverflowMode(self, enabled: bool):
         """Toggle overflow mode on/off and update the canvas display."""
         pcfg.overflow_mode = enabled
@@ -775,32 +748,20 @@ class Canvas(QGraphicsScene):
         self.gv.viewport().update()
 
     def onViewResized(self):
-        gv_w, gv_h = self.gv.geometry().width(), self.gv.geometry().height()
-
-        x = gv_w - self.scaleFactorLabel.width()
-        y = gv_h - self.scaleFactorLabel.height()
-        pos_new = (QPointF(x, y) / 2).toPoint()
-        if self.scaleFactorLabel.pos() != pos_new:
-            self.scaleFactorLabel.move(pos_new)
+        gv_w = self.gv.geometry().width()
 
         x = gv_w - self.search_widget.width()
         pos = self.search_widget.pos()
         pos.setX(x - 30)
         self.search_widget.move(pos)
 
-        # Center the empty-state hint label in the viewport
-        if self._empty_hint_label.isVisible():
-            self._empty_hint_label.adjustSize()
-            hint_x = (gv_w - self._empty_hint_label.width()) // 2
-            hint_y = (gv_h - self._empty_hint_label.height()) // 2
-            self._empty_hint_label.move(hint_x, hint_y)
-
-        self._layout_status_labels()
-
     def onScaleFactorChanged(self):
-        self.scaleFactorLabel.setText(f"{self.scale_factor * 100:2.0f}%")
-        self.scaleFactorLabel.raise_()
-        self.scaleFactorLabel.startFadeAnimation()
+        notification.toast(
+            f"{self.scale_factor * 100:2.0f}%",
+            key="scale-factor",
+            anchor="bottom-center",
+            duration=1200,
+        )
 
     def _show_drag_hover(self, active: bool):
         """Show/hide a semi-transparent blue overlay during drag-hover."""
@@ -841,11 +802,16 @@ class Canvas(QGraphicsScene):
 
     def _update_hint_visibility(self):
         """Show the empty-state hint and clear canvas when no project is loaded."""
-        visible = not self.imgtrans_proj.img_valid
-        self._empty_hint_label.setVisible(visible)
-        if visible:
-            self.onViewResized()  # re-center the hint
+        if not self.imgtrans_proj.img_valid:
+            notification.status(
+                "empty-hint",
+                self.tr("Drop images here or open a folder to start"),
+                kind="hint",
+                anchor="center",
+            )
             self._clear_canvas()
+        else:
+            notification.status("empty-hint", None)
 
     def _clear_canvas(self):
         """Clear visual content from the canvas when the project is no longer valid."""

@@ -1,58 +1,12 @@
 from typing import List, Tuple, Union
 
 import numpy as np
-from qtpy.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, QTimer, Signal
-from qtpy.QtGui import QBrush, QColor, QMouseEvent, QPainter, QPen, QPixmap, QWheelEvent
-from qtpy.QtWidgets import QDialog, QGraphicsOpacityEffect, QLabel, QMenu
+from qtpy.QtCore import QRectF, Qt, Signal
+from qtpy.QtGui import QBrush, QColor, QMouseEvent, QPainter, QPen, QPixmap
+from qtpy.QtWidgets import QDialog, QLabel, QMenu
 
 from utils import shared
 from utils.shared import CONFIG_FONTSIZE_CONTENT
-
-
-class FadeLabel(QLabel):
-    # QGraphicsOpacityEffect animation — stays widget-based.
-    # Embedded in QGraphicsScene via QGraphicsProxyWidget, so QQuickWidget
-    # is not feasible.  Qt6 RHI (ANGLE/D3D11) provides GPU compositing.
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # https://stackoverflow.com/questions/57828052/qpropertyanimation-not-working-with-window-opacity
-        effect = QGraphicsOpacityEffect(self, opacity=1.0)
-        self.setGraphicsEffect(effect)
-        self.fadeAnimation = QPropertyAnimation(
-            self,
-            propertyName=b"opacity",
-            targetObject=effect,
-            duration=1200,
-            startValue=1.0,
-            endValue=0.0,
-        )
-        self.fadeAnimation.setEasingCurve(QEasingCurve.Type.InOutExpo)
-        self.fadeAnimation.finished.connect(self.hide)
-        self.hide_timer = QTimer(self)
-        self.hide_timer.setSingleShot(True)
-        self.hide_timer.timeout.connect(self.hide)
-        self.setHidden(True)
-        self.gv = None
-
-    def startFadeAnimation(self):
-        from utils.config import pcfg
-
-        if pcfg.animation_fps < 0:
-            self.show()
-            self.fadeAnimation.stop()
-            self.graphicsEffect().setOpacity(1.0)
-            self.hide_timer.start(1200)
-            return
-        self.hide_timer.stop()
-        self.show()
-        self.fadeAnimation.stop()
-        self.fadeAnimation.start()
-
-    def wheelEvent(self, event: QWheelEvent) -> None:
-        if self.gv is not None:
-            self.gv.wheelEvent(event)
-        return super().wheelEvent(event)
 
 
 class ColorPickerLabel(QLabel):

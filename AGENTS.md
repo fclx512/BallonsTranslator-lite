@@ -67,6 +67,7 @@ modules/
 | `ClockDial` | 指针式角度/距离选择（影子方向用） |
 | `ConfigSectionHeader` | 配置面板章节标题 |
 | `GroupFrame` | 圆角边框分组容器 |
+| `NotificationCenter`（`ui/custom_widget/notification.py`） | 统一画布通知中心：toast / 活动 spinner / 状态角标，锚点堆叠避让、key 去重刷新、`post()` 线程桥接；模块级单例 `notification`，Canvas 初始化时 attach 后由各模块调用 |
 | `RailDockPanel` | 画布区浮层面板（主窗口内子控件，展开硬连接锚定窄栏左侧：右缘+顶部固定、宿主缩放/窄栏移动自动重锚、左下角手柄拉伸、尺寸下限随内容布局、Esc/× 关闭不自动关；开合记忆 `pcfg`） |
 
 新增控件时更新上表即可，无需展开详细用法。优先使用已有方案而非重新实现。

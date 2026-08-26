@@ -2,7 +2,7 @@ import os
 import os.path as osp
 import cv2
 import numpy as np
-from qtpy.QtCore import QEvent, QLineF, QPointF, QProcess, QRectF, QSizeF, Qt, QTimer, Signal
+from qtpy.QtCore import QLineF, QPointF, QProcess, QRectF, QSizeF, Qt, Signal
 from qtpy.QtGui import QBrush, QColor, QCursor, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import (
     QBoxLayout,
@@ -31,6 +31,7 @@ from .canvas import Canvas
 from .configpanel import InpaintConfigPanel
 from .crop_rect_item import CropRectItem
 from .custom_widget import ComboBox, ConfigCheckBox, PaintQSlider, SeparatorWidget, Widget
+from .custom_widget.notification import notification
 from .drawing_commands import InpaintUndoCommand, StrokeItemUndoCommand
 from .funcmaps import get_maskseg_method
 from .image_edit import ImageEditMode, PenShape, PixmapItem, StrokeImgItem
@@ -50,9 +51,6 @@ TOOL_LABEL_WIDTH = 110
 # brush / box-select is used to mark masks into the LLM crop.
 AI_MASK_BRUSH = 0
 AI_MASK_BOX = 1
-
-# Glyphs cycled by the canvas "online repair in progress" overlay spinner.
-BUSY_SPINNER_CHARS = ("◐", "◓", "◑", "◒")
 
 # Aspect ratios offered for the online-LLM inpaint crop tool. These are the
 # union of ratios Meshy's image-to-image endpoint supports across its models.
@@ -618,29 +616,6 @@ class DrawingPanel(Widget):
         # and box-selects, clipped to the crop. Consumed by the one-shot crop
         # inpaint; reset after dispatch / page change / Delete.
         self._crop_mask_array: np.ndarray = None
-
-        # Non-blocking "online repair in progress" indicator over the canvas.
-        # Mouse-transparent so it never blocks canvas interaction; only shown
-        # while an online-LLM repair is in flight, then replaced by a short
-        # "finished" confirmation.
-        self._busy_overlay_shown = False
-        self._busy_spinner_index = 0
-        self._busy_overlay = QLabel(self.canvas.gv.viewport())
-        self._busy_overlay.setObjectName("CanvasBusyOverlay")
-        self._busy_overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._busy_overlay.setFixedWidth(220)
-        self._busy_overlay.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents
-        )
-        self._busy_overlay.setStyleSheet(
-            "#CanvasBusyOverlay { background-color: rgba(20,20,20,190);"
-            " color: #fff; border-radius: 8px; padding: 8px 14px; font-size: 13px; }"
-        )
-        self._busy_overlay.hide()
-        self._busy_spinner_timer = QTimer(self)
-        self._busy_spinner_timer.setInterval(140)
-        self._busy_spinner_timer.timeout.connect(self._on_busy_spinner_tick)
-        self.canvas.gv.viewport().installEventFilter(self)
 
         self.rectTool = DrawToolCheckBox()
         self.rectTool.setObjectName("DrawRectTool")
@@ -1330,68 +1305,23 @@ class DrawingPanel(Widget):
 
     # ── Busy / finished indicator over the canvas ──────────────────────
 
-    def _place_busy_overlay(self):
-        vp = self.canvas.gv.viewport()
-        if vp is None:
-            return
-        self._busy_overlay.adjustSize()
-        x = max(0, (vp.width() - self._busy_overlay.width()) // 2)
-        self._busy_overlay.move(x, 16)
-
     def _show_busy_overlay(self):
         if not self._inpainter_is_llm():
             return
-        self._busy_overlay_shown = True
-        self._busy_spinner_index = 0
-        self._busy_overlay.setText(
-            BUSY_SPINNER_CHARS[0] + " " + self.tr("Inpainting...")
-        )
-        self._place_busy_overlay()
-        self._busy_overlay.show()
-        self._busy_overlay.raise_()
-        self._busy_spinner_timer.start()
-
-    def _on_busy_spinner_tick(self):
-        self._busy_spinner_index = (self._busy_spinner_index + 1) % len(
-            BUSY_SPINNER_CHARS
-        )
-        self._busy_overlay.setText(
-            BUSY_SPINNER_CHARS[self._busy_spinner_index]
-            + " "
-            + self.tr("Inpainting...")
-        )
-        self._place_busy_overlay()
+        notification.activity("llm-inpaint", True, self.tr("Inpainting..."))
 
     def _hide_busy_overlay(self, done: bool = False):
-        if not self._busy_overlay_shown:
-            return
-        self._busy_overlay_shown = False
-        self._busy_spinner_timer.stop()
+        notification.activity("llm-inpaint", False)
         if done:
-            self._busy_overlay.setText(self.tr("Inpainting finished"))
-            self._place_busy_overlay()
-            self._busy_overlay.show()
-            self._busy_overlay.raise_()
-            QTimer.singleShot(1600, self._busy_overlay.hide)
-        else:
-            self._busy_overlay.hide()
+            notification.toast(self.tr("Inpainting finished"), kind="success")
 
     def _notify_inpaint_busy(self):
         """A repair is already running — briefly explain why the click was ignored."""
-        if self._busy_overlay_shown or not self._inpainter_is_llm():
+        if notification.is_active("llm-inpaint") or not self._inpainter_is_llm():
             return
-        self._busy_overlay.setText(
-            self.tr("A repair is still in progress. Please wait.")
+        notification.toast(
+            self.tr("A repair is still in progress. Please wait."), kind="warning"
         )
-        self._place_busy_overlay()
-        self._busy_overlay.show()
-        self._busy_overlay.raise_()
-        QTimer.singleShot(1800, self._busy_overlay.hide)
-
-    def eventFilter(self, obj, event):
-        if obj is self.canvas.gv.viewport() and event.type() == QEvent.Type.Resize:
-            self._place_busy_overlay()
-        return super().eventFilter(obj, event)
 
     def runInpaint(self, inpaint_dict=None):
 

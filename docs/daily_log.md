@@ -417,3 +417,20 @@
 
 **涉及文件：** `ui/drawingpanel.py`、`config/stylesheet.css`、`icons/drawingtools_hand.svg`、`icons/drawingtools_inpaint.svg`、`icons/drawingtools_rect.svg`（新）、`icons/drawingtools_rect_activate.svg`（新）、`icons/drawingtools_ai.svg`（新）、`icons/drawingtools_ai_activate.svg`（新）、`icons/drawingtools_hand_activate.svg`、`icons/drawingtools_inpaint_activate.svg`、`icons/drawingtools_pen.svg`（删）、`icons/drawingtools_pen_activate.svg`（删）、`scripts/audit_registry.json`、`docs/技术实现/图像修复区_审计与优化讨论.md`、`docs/daily_log.md`
 
+---
+
+### 统一画布通知系统（NotificationCenter）首期落地
+
+**问题/需求：** 画布区的临时性信息各自为政——无字图标识、缩放率标签、在线修复忙碌/完成/冲突提示、空状态提示各用独立的 QLabel 覆盖层和自绘定时器（`drawingpanel` 的 `_busy_overlay` + spinner 定时器 + 事件过滤、canvas 的 `_layout_status_labels` 三标签），行为/外观/生命周期不统一。经用户讨论确认：交互类工具覆盖层（裁剪框、对齐线、取色线、mask 预览等）不纳入通知系统但共享基础设施；进度窗口保持 QDialog 语义（置顶+阻塞主页面，UI 优化列后续）；锚点用统一默认约定、特殊需求自定义；通知中心采用进程级单例。
+
+**改动要点：**
+
+- **新增 `ui/custom_widget/notification.py`**：`NotificationCenter`（QObject，模块级单例 `notification`）——`toast()`/`activity()`/`status()` 三类 API + `post()` 线程桥（Qt 信号跨线程入队）+ `is_active()` 守卫；锚点堆叠布局带碰撞避让（top-left/top-right/top-center 向下堆、bottom-center/bottom-right 向上堆、center 单条居中），`GAP/EDGE/TOP_EDGE/BOTTOM_EDGE` 常量；宿主 viewport `Resize` 经事件过滤自动重排；`_Banner` 基类 `WA_TransparentForMouseEvents` 鼠标穿透 + `KIND_STYLES` 五类配色（info/success/warning/error/hint）；`ToastLabel` 淡入→驻留→淡出（按键刷新替换不堆叠）、`ActivityLabel` 自转 spinner、`StatusBadge` 持久键徽标；动画遵循 `pcfg.animation_fps`。
+- **迁移四场景**（`ui/canvas.py`）：无字图标识 → `status("notext-bg", …)`；缩放率标签 → `toast(…, key="scale-factor", anchor="bottom-center")`；空状态提示 → `status("empty-hint", kind="hint", anchor="center")`；删除 `_layout_status_labels()` 与三个覆盖层 QLabel。`ui/drawingpanel.py`：在线修复忙碌 → `activity("llm-inpaint", True, …)`，完成 → success toast，忙碌冲突点击 → warning toast；删除 `_busy_overlay`/`BUSY_SPINNER_CHARS`/spinner 定时器/事件过滤整套。`ui/custom_widget/label.py` 删除废弃 `FadeLabel` 及动画相关未用 import。
+- **测试**：`tests/test_notification.py` 7 例（锚定定位/按键刷新不堆叠/活动开关/状态移除/自下而上堆叠/无宿主静默/重挂清场），离屏回归。
+- **AGENTS.md** 打包控件表补 `NotificationCenter` 一行。
+
+**排障记录：** ① unittest 下进程硬崩溃 exit 127 / 0xC0000409（STATUS_STACK_BUFFER_OVERRUN）——PyQt6 GC 在无 Python 引用时回收 `QApplication` 包装、C++ 实例销毁，任何 QWidget 操作触发 Qt fail-fast；模块级 `_APP = qapp()` 保持引用后消除（同 `test_drawing_cursor` 约定）。② `isVisible()` 断言失败系宿主未 `show()`（isVisible 依赖祖先可见链）。③ `_find` 初版对非 toast 条目取 `key` 属性未定义，`_Banner` 基类补 `key = None` 默认。④ 生命周期：单例长于宿主，`host.destroyed` → 清场（try/except RuntimeError 防已销毁 C++ 对象上 deleteLater），`attach` 时同样先清旧宿主残留。
+
+**涉及文件：** `ui/custom_widget/notification.py`（新）、`tests/test_notification.py`（新）、`ui/canvas.py`、`ui/drawingpanel.py`、`ui/custom_widget/__init__.py`、`ui/custom_widget/label.py`、`AGENTS.md`、`docs/技术实现/点脏页跳转修复计划.md`（新，待办入档）、`docs/技术实现/反向移植_规范.md`（失效引用清理）、`docs/daily_log.md`
+
