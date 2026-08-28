@@ -1,4 +1,4 @@
-"""Headless diagnostic for the right-panel edit -> export render sync chain.
+"""Right-panel edit -> export render sync chain regression test.
 
 The right-panel (TransTextEdit) and the canvas text item each hold their own
 QTextDocument. They used to be synchronized by a focus-gated positional delta
@@ -10,7 +10,7 @@ both the project JSON and the exported result image.
 They are now reconciled by ``sync_text_by_diff``: the diff and the insertion
 points are recomputed from the current full text of both documents on every
 panel change, so there is no cross-document position drift, no focus gate,
-and a missed sync self-corrects on the next change. This probe verifies:
+and a missed sync self-corrects on the next change. This test verifies:
 
   1. a plain document edit reaches QGraphicsView.render() immediately
      (no stale pixmap feeding the export);
@@ -18,31 +18,27 @@ and a missed sync self-corrects on the next change. This probe verifies:
   3. an UNFOCUSED panel change also converges (the original bug case);
   4. the diff preserves char formats outside the edited range;
   5. an item inline edit converges back into the panel;
-  6. rapid mixed edits keep both documents in lockstep (no loop).
+  6. rapid mixed edits keep both documents in lockstep (no loop);
+  7. continuous typing keeps undo-step parity (lockstep undo).
 
 Run:
-    ./ballontrans_pylibs_win/python.exe scripts/render_sync_probe.py
-
-Exit code 0 = the sync chain behaves as documented (regression guard);
-exit code 1 = an unexpected failure.
+    ./ballontrans_pylibs_win/python.exe -m pytest tests/test_render_sync.py -v
+    # or directly:
+    ./ballontrans_pylibs_win/python.exe tests/test_render_sync.py
 """
 
 import os
-import os.path as osp
 import sys
+import unittest
+from pathlib import Path
 
-APP_ROOT = osp.dirname(osp.dirname(osp.abspath(__file__)))
-sys.path.insert(0, APP_ROOT)
-os.chdir(APP_ROOT)
-os.environ["QT_API"] = "pyqt6"
-os.environ["QT_QPA_PLATFORM"] = "offscreen"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-from qtpy.QtCore import Qt
-from qtpy.QtGui import QFont, QImage, QPainter, QTextCursor
-from qtpy.QtWidgets import QApplication, QGraphicsScene, QGraphicsView
-
-from utils.fontformat import TextAlignment
-from utils.textblock import TextBlock
+# Everything runs offscreen — no window pops up during the test.
+os.environ.setdefault("QT_API", "pyqt6")
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 RESULTS = []
 
@@ -54,9 +50,12 @@ def check(name, ok, detail=""):
 
 def make_item(scene, text):
     from ui.textitem import TextBlkItem
+    from utils.textblock import TextBlock
 
     blk = TextBlock(xyxy=[50, 50, 400, 150], translation=text)
     blk._bounding_rect = [50, 50, 400, 150]
+    from utils.fontformat import TextAlignment
+
     blk.fontformat.alignment = TextAlignment(1)
     item = TextBlkItem(blk=blk, idx=0)
     item.setPos(50, 50)
@@ -65,6 +64,8 @@ def make_item(scene, text):
 
 
 def render(view, w=480, h=240):
+    from qtpy.QtGui import QImage, QPainter
+
     img = QImage(w, h, QImage.Format.Format_ARGB32)
     img.fill(0xFFFFFFFF)
     p = QPainter(img)
@@ -83,11 +84,17 @@ def diff_count(a, b):
     return int((na != nb).sum())
 
 
-def main():
-    app = QApplication.instance() or QApplication(sys.argv[:1])
+def run_all_checks():
+    """Execute the 7 sync-chain checks, printing PASS/FAIL per check."""
+    from qtpy.QtCore import Qt
+    from qtpy.QtGui import QFont, QTextCursor
+    from qtpy.QtWidgets import QApplication, QGraphicsScene, QGraphicsView
 
     from ui.textedit_area import TransTextEdit
     from ui.textedit_commands import sync_text_by_diff
+
+    RESULTS.clear()
+    app = QApplication.instance() or QApplication(sys.argv[:1])
 
     # ── 1. render freshness: doc edit -> immediate view.render() ─────────
     scene = QGraphicsScene()
@@ -151,7 +158,7 @@ def main():
     bold_cursor.setPosition(0)
     bold_cursor.setPosition(1, QTextCursor.MoveMode.KeepAnchor)
     bold_cursor.setCharFormat(fmt)
-    # 光标移到文末键入（焦点在面板；格式区“AB”在改动区外）
+    # 光标移到文末键入（焦点在面板；格式区"AB"在改动区外）
     panel.setPlainText("AB译文C")
     cur = panel.textCursor()
     cur.movePosition(QTextCursor.MoveOperation.End)
@@ -227,11 +234,17 @@ def main():
         % (panel_steps, item_steps, item3.toPlainText()),
     )
 
-    ok = all(ok for _, ok in RESULTS)
-    print("----")
-    print("ALL PASS" if ok else "SOME CHECKS FAILED")
-    return 0 if ok else 1
+    return RESULTS
+
+
+class TestRenderSync(unittest.TestCase):
+    def test_sync_chain(self):
+        results = run_all_checks()
+        failed = [name for name, ok in results if not ok]
+        self.assertEqual(
+            failed, [], "sync-chain checks failed: %s" % ", ".join(failed)
+        )
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    unittest.main(verbosity=2)

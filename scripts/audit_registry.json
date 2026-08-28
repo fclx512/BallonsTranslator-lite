@@ -48,6 +48,18 @@
     "icons/drawingtools_pen_activate.svg": {
       "note": "2026-08-26 Pen/B 画笔工具移除后成为死资产，图标重绘为统一 Material 集（drawingtools_rect/ai 补齐，hand/inpaint 同步更换）",
       "allowed_mentions": ["config/stylesheet.css"]
+    },
+    "scripts/check_all.py": {
+      "note": "2026-08-27 并入 verify.py --full（ruff+pytest 两步）后删除：i18n+qm 两步与 verify 完全重复，且默认运行失败也 exit 0"
+    },
+    "scripts/run_module.py": {
+      "note": "2026-08-27 删除：上游遗留的 detector 单块调试脚本（blk_list[:1] hack），零引用"
+    },
+    "scripts/build_win.bat": {
+      "note": "2026-08-27 删除：Nuitka exe 路线废弃，实际发版走 build_portable.py 便携包；需要时从 git 历史恢复"
+    },
+    "scripts/render_sync_probe.py": {
+      "note": "2026-08-27 迁移为 tests/test_render_sync.py（pytest 化），删除 scripts 下原文件"
     }
   },
   "suspended": {

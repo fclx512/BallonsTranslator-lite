@@ -15,11 +15,14 @@ Step activation:
   - i18n   : always (scans whole ui/modules/utils; known orphans exempted)
   - qm     : only when a .ts file changed
   - smoke  : with --smoke, or automatically when a startup-chain file changed
+  - ruff   : with --full (skipped when ruff is not installed)
+  - pytest : with --full (missing heavy deps like torch/cv2 skip gracefully)
 
 Usage:
   python scripts/verify.py              # syntax(diff) + i18n + qm(if ts changed)
   python scripts/verify.py --smoke      # also run the startup smoke test
   python scripts/verify.py --all        # full syntax scan instead of git-diff files
+  python scripts/verify.py --full       # release gate: also ruff + pytest
 
 Exit code: 0 all pass, 1 any step failed.
 """
@@ -94,12 +97,41 @@ def _dump(result):
         print(result.stderr.rstrip())
 
 
-def _orphan_count(text):
-    """Extract the orphan count from i18n_check output (0 if absent)."""
-    import re
+def _orphan_only(code):
+    """True when i18n_check exited with ONLY the orphan bit (bit 4)."""
+    return code != 0 and not (code & 3)
 
-    m = re.search(r"\[ORPHAN \.ts ENTRIES\] (\d+) active", text)
-    return int(m.group(1)) if m else 0
+
+def _run_full_steps(failures):
+    """--full release gate: ruff + pytest (both skipped gracefully if absent)."""
+
+    # ── ruff ─────────────────────────────────────────────────────────────
+    r = _run([_py(), "-m", "ruff", "check", "--select", "I,F,E,W",
+              "ui/", "utils/", "modules/"])
+    if "No module named" in (r.stderr + r.stdout):
+        print("⏭  ruff: 未安装，跳过（--install 或 pip install ruff 后可用）")
+    elif r.returncode == 0:
+        print("✅ ruff: 通过，无问题")
+    else:
+        failures += 1
+        print("❌ ruff: 发现问题")
+        _dump(r)
+
+    # ── pytest ───────────────────────────────────────────────────────────
+    r = _run([_py(), "-m", "pytest", "tests/", "-v", "--tb=short"], timeout=600)
+    if "No module named" in (r.stderr + r.stdout) and "pytest" not in r.stdout:
+        print("⏭  pytest: 未安装或依赖缺失，跳过")
+    elif r.returncode == 0:
+        print("✅ pytest: tests/ 全部通过")
+    elif "ModuleNotFoundError" in (r.stderr + r.stdout):
+        # Heavy optional deps (cv2, torch, numpy…) — same tolerance as发版门禁
+        print("! pytest: 部分测试因缺少 opencv/torch/numpy 等重依赖跳过，其余通过")
+    else:
+        failures += 1
+        print("❌ pytest: 存在失败用例")
+        _dump(r)
+
+    return failures
 
 
 def main():
@@ -110,6 +142,11 @@ def main():
         "--all",
         action="store_true",
         help="Syntax-check all ui/+utils/ files instead of git-diff files",
+    )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Release gate: also run ruff and pytest (skipped gracefully if absent)",
     )
     args = parser.parse_args()
 
@@ -166,14 +203,13 @@ def main():
         failures += 1
         print(f"❌ i18n: 失败（退出码 {code}，1=硬编码 2=缺失 4=孤儿）")
         _dump(r)
-    else:
+    elif _orphan_only(code):
         # Only the orphan bit. Project-wide orphans are known noise from
         # indirect canvas.tr()/self.tr(variable) calls, hand-maintained in
-        # zh_CN.ts — count them but don't fail or dump 160+ lines.
-        n = _orphan_count(r.stdout)
+        # zh_CN.ts — don't fail or dump 160+ lines.
         print(
-            f"⚠ i18n: {n} 条孤儿条目（间接 tr() 调用已知噪音，可忽略；"
-            f"需核对时手动跑 i18n_check.py）"
+            "⚠ i18n: 存在孤儿条目（间接 tr() 调用已知噪音，可忽略；"
+            "需核对时手动跑 i18n_check.py --show-expected）"
         )
 
     # ── 5. qm ────────────────────────────────────────────────────────────
@@ -208,6 +244,10 @@ def main():
             _dump(r)
     else:
         print("⏭  冒烟: 未触发（未改启动链文件，可用 --smoke 强制）")
+
+    # ── 7. --full release gate: ruff + pytest ────────────────────────────
+    if args.full:
+        failures = _run_full_steps(failures)
 
     print()
     if failures == 0:

@@ -434,3 +434,25 @@
 
 **涉及文件：** `ui/custom_widget/notification.py`（新）、`tests/test_notification.py`（新）、`ui/canvas.py`、`ui/drawingpanel.py`、`ui/custom_widget/__init__.py`、`ui/custom_widget/label.py`、`AGENTS.md`、`docs/技术实现/点脏页跳转修复计划.md`（新，待办入档）、`docs/技术实现/反向移植_规范.md`（失效引用清理）、`docs/daily_log.md`
 
+
+## 2026-08-27
+
+### scripts 目录审计清理：合并入口 + 删遗留 + 消 i18n 白名单漂移
+
+**问题/需求：** scripts 目录多为工作途中 AI 自写的单一用途脚本，用户要求审计清理/合并/拓展。逐个读完全部 14 个脚本并交叉核对引用后按方案实施。
+
+**改动要点：**
+
+- **`check_all.py` 并入 `verify.py --full` 后删除**：i18n+qm 两步与 verify 完全重复；且其默认运行（无 `--ci`）即使失败也 exit 0，此前正是这个缺陷掩盖了 3 个存量测试失败。`--full` 追加 ruff + pytest 两步（未安装/重依赖缺失自动跳过），成为发版门禁。AGENTS.md、scripts/README.md 同步。
+- **删 `run_module.py`（上游遗留 detector 调试脚本，零引用）、`build_win.bat`（Nuitka 路线废弃，实际发版走 build_portable.py）**，均登记 `scripts/audit_registry.json` deprecated。
+- **抽取 `scripts/i18n_common.py`**：i18n_check 与 ts_auto_fill 约 80 行逐字重复（tr 提取/文件发现）合并为一份；孤儿白名单收敛为单份 `KNOWN_ORPHAN_CONTEXTS`（原来两份拷贝一旦漂移，ts_auto_fill --apply 会把手维条目当孤儿删掉）。ts_auto_fill `--apply` 写回后自动重编 .qm。
+- **`render_sync_probe.py` 迁移为 `tests/test_render_sync.py`**（unittest 壳，pytest/直接运行均可），进入 verify `--full` 覆盖范围；scripts/ 下不再有游离的回归脚本。
+- **`generate_manifest.py` 删 `_fallback_walk` 全家**（约 90 行）：git 不可用的 fallback 永走不到，且 os.walk 解包变量名写反、`is_file()` 碰巧不炸；git 失败改为直接报错。
+- **`check_docs.py` 加 scripts/README 登记自检**：scripts/ 下每个 *.py/*.bat/*.sh 必须在 scripts/README.md 出现，防"新增脚本忘写文档"漂移（本次审计即发现 render_sync_probe 漏登）。
+- **小修**：`check_syntax.py::check_tabs` 重写——原实现 `" " in leading` 恒 False，是从未报过错的死代码，现真正检测混合缩进；`verify.py` 去掉对 i18n_check stdout 的正则解析（改纯退出码位判断）；`check_audit.py` SKIP_DIRS 补 `.workbuddy`。
+
+**顺手修正 3 个存量测试失败**（此前被 check_all 默认 exit 0 掩盖）：`test_dependency_startup` 对 `prepare_environment` 锁的是旧契约（现函数重构后所有路径 return False，断言改为"禁止 return True"）；`test_auto_squeeze`/`test_base_styles` 改对全新 `ProgramConfig()`/`FontFormat()` 默认值断言——原写法依赖 pcfg 单例，被套件中先跑的 load_config(本机 config.json) 污染后必挂（测试间状态污染）。
+
+**验证：** `verify.py --full` 全绿（语法 29 文件/docs/audit 16 删 2 休眠/i18n/qm/冒烟/pytest 431 例）；`render_sync` 7/7 PASS；便携 Python 开启 safe_path 不自动加脚本目录，i18n_check/ts_auto_fill 已自举 `sys.path`。
+
+**涉及文件：** `scripts/verify.py`、`scripts/i18n_common.py`（新）、`scripts/i18n_check.py`、`scripts/ts_auto_fill.py`、`scripts/check_syntax.py`、`scripts/check_docs.py`、`scripts/check_audit.py`、`scripts/generate_manifest.py`、`scripts/README.md`、`tests/test_render_sync.py`（新，自 render_sync_probe.py 迁移）、`tests/test_auto_squeeze.py`、`tests/test_base_styles.py`、`tests/test_dependency_startup.py`、`scripts/check_all.py`（删）、`scripts/run_module.py`（删）、`scripts/build_win.bat`（删）、`scripts/render_sync_probe.py`（删）、`scripts/audit_registry.json`、`AGENTS.md`、`docs/项目概述.md`、`docs/技术实现/反向移植_规范.md`、`docs/daily_log.md`

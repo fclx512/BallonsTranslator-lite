@@ -35,22 +35,13 @@ def find_py_files(root: Path):
 
 
 def check_tabs(filepath: Path) -> list[str]:
-    """Report lines with tab characters inside indentation."""
+    """Report lines with mixed tab+space indentation."""
     errors = []
     with open(filepath, "r", encoding="utf-8") as f:
         for i, line in enumerate(f, 1):
-            stripped = line.lstrip("\t")
-            if stripped and line.startswith("\t"):
-                # Count tabs vs spaces
-                leading = line[: len(line) - len(stripped)]
-                tab_count = leading.count("\t")
-                if tab_count > 0:
-                    # Check if rest of file uses spaces
-                    pass  # Just report
-                    lines_after = leading
-                    # Check if this line has both tabs and spaces
-                    if "\t" in lines_after and " " in lines_after:
-                        errors.append(f"  L{i:>5}: mixed tab+space indent")
+            leading = line[: len(line) - len(line.lstrip())]
+            if "\t" in leading and " " in leading:
+                errors.append(f"  L{i:>5}: mixed tab+space indent")
     return errors
 
 

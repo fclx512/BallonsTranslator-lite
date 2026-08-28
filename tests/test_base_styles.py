@@ -247,8 +247,10 @@ def test_ensure_default_base_styles_seed_none_uses_default():
     lst = []
     assert ensure_default_base_styles(lst, None) is True
     assert len(lst) == 1
-    assert lst[0].name == pcfg.global_fontformat.font_family
-    assert lst[0].fontformat.font_family == pcfg.global_fontformat.font_family
+    # 对 FontFormat() 缺省值断言而非 pcfg 单例——pcfg 可能已被套件中
+    # 更早的测试 reload 成开发者本机 config.json 的内容。
+    assert lst[0].name == FontFormat().font_family
+    assert lst[0].fontformat.font_family == FontFormat().font_family
 
 
 # ═══════════════════════════════════════════════════════════════════════

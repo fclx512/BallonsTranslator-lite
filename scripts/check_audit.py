@@ -30,6 +30,7 @@ SKIP_DIRS = {
     ".git",
     ".zcode",  # 会话计划等本地产物，非仓库内容
     ".claude",
+    ".workbuddy",  # 本地会话记忆，非仓库内容
     "__pycache__",
     "ballontrans_pylibs_win",
     "release",

@@ -6,9 +6,10 @@ Three checks:
   2. self.tr() calls missing from zh_CN.ts
   3. Active zh_CN.ts entries with no matching self.tr() call (orphans)
 
-Orphans from KNOWN_ORPHAN_CONTEXTS (indirect ``self.tr(variable)`` calls,
-maintained by hand in the .ts) are reported as "expected" and do not count
-toward the exit code; pass ``--show-expected`` to list them.
+Orphans from KNOWN_ORPHAN_CONTEXTS (see i18n_common.py — indirect
+``self.tr(variable)`` calls, maintained by hand in the .ts) are reported
+as "expected" and do not count toward the exit code; pass
+``--show-expected`` to list them.
 
 Usage:
   python scripts/i18n_check.py          # report all issues
@@ -22,40 +23,28 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-TS_FILE = PROJECT_ROOT / "translate" / "zh_CN.ts"
+# 便携 Python 开启 safe_path 时不自动加脚本目录，自举以导入同目录模块
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-# Contexts whose .ts entries are never matched by a literal self.tr() call:
-# the code renders them via self.tr(variable) / canvas.tr(key) or they are
-# module param descriptions.  They are maintained by hand in zh_CN.ts, so
-# i18n_check would report them as orphans on every run — treat as expected.
-KNOWN_ORPHAN_CONTEXTS = frozenset({"_ShortcutRow", "ShortcutEditor", "ParamWidget"})
+from i18n_common import (
+    KNOWN_ORPHAN_CONTEXTS,
+    PROJECT_ROOT,
+    TR_CALL_RE,
+    TR_CALL_SQ_RE,
+    TS_FILE,
+    gather_tr_calls,
+    is_obsolete_ts_msg,
+    reconfigure_stdout,
+)
 
 # Chinese character range (CJK Unified Ideographs)
 CJK_RE = re.compile(r"[一-鿿]")
-
-# Match self.tr("...") or self.tr('...') — captures the string content
-TR_CALL_RE = re.compile(r'self\.tr\("((?:[^"\\]|\\.)*)"\)')
-TR_CALL_SQ_RE = re.compile(r"self\.tr\('((?:[^'\\]|\\.)*)'\)")
-
-# Match a class definition: class ClassName(...) or class ClassName:
-CLASS_RE = re.compile(r"^\s*class\s+(\w+)\s*[(:]")
 
 
 def find_ui_py_files():
     """Python files under ui/ — for hardcoded Chinese check."""
     ui_dir = PROJECT_ROOT / "ui"
     return sorted(ui_dir.rglob("*.py")) if ui_dir.is_dir() else []
-
-
-def find_all_py_files():
-    """Python files in ui/, modules/ and utils/ — for tr-coverage check."""
-    files = []
-    for scan_dir in ("ui", "modules", "utils"):
-        dir_path = PROJECT_ROOT / scan_dir
-        if dir_path.is_dir():
-            files.extend(dir_path.rglob("*.py"))
-    return sorted(files)
 
 
 def is_comment_or_docstring(lines, line_idx):
@@ -94,7 +83,6 @@ def find_hardcoded_chinese(files):
             "X木",
             "X",
             "简体中文",
-
             "无字图配对工具.py",  # file path, not UI text
         }
     )
@@ -142,51 +130,6 @@ def find_hardcoded_chinese(files):
 # ── Check 2 & 3: tr() .ts coverage ──────────────────────────────────
 
 
-def extract_context_and_tr_calls(content):
-    """Parse a .py file: return list of (context_class, tr_string).
-
-    Handles ``self.tr("...")``, ``self.tr('...')``, and multi-line
-    variants where the string body is on a different line from the
-    ``tr(`` call (e.g. ``self.tr(\\n    "text"\\n)``).
-
-    *Implicit* Python string concatenation across continuation lines
-    is *not* supported (e.g. ``self.tr("part1 " "part2")``) — keep
-    the whole translatable string as a single literal if you want it
-    detected by this checker.
-    """
-    # Build a position-index of class definitions so we can assign
-    # each tr() call to its enclosing class (regardless of line breaks).
-    class_positions = []  # (byte_offset, class_name)
-    for m in re.finditer(r"^\s*class\s+(\w+)\s*[(:]", content, re.MULTILINE):
-        class_positions.append((m.start(), m.group(1)))
-
-    def _context_for(pos):
-        for cp, cn in reversed(class_positions):
-            if cp < pos:
-                return cn
-        return "Unknown"
-
-    results = []
-    # Multi-line regex — DOTALL so \s matches newlines, allowing
-    # self.tr(\n  "string"\n) to be captured.
-    tr_re = re.compile(r'self\.tr\(\s*("(?:[^"\\]|\\.)*")\s*\)', re.DOTALL)
-    tr_sq_re = re.compile(r"self\.tr\(\s*('(?:[^'\\]|\\.)*')\s*\)", re.DOTALL)
-
-    for tr_regex in (tr_re, tr_sq_re):
-        for m in tr_regex.finditer(content):
-            s = m.group(1)[1:-1]  # strip surrounding quotes
-            s = s.replace('\\"', '"').replace("\\'", "'")
-            s = s.replace("\\\\", "\\")
-            s = s.replace("\\n", "\n").replace("\\t", "\t")
-            # Skip format strings containing placeholders
-            if "{" in s:
-                continue
-            ctx = _context_for(m.start())
-            results.append((ctx, s))
-
-    return results
-
-
 def extract_ts_entries(ts_path):
     """Parse zh_CN.ts: return set of (context, source) for active entries."""
     entries = set()
@@ -200,15 +143,9 @@ def extract_ts_entries(ts_path):
             context = ctx_name.text
             for msg in ctx_elem.findall("message"):
                 source_elem = msg.find("source")
-                trans_elem = msg.find("translation")
                 if source_elem is None or source_elem.text is None:
                     continue
-                # Skip entries where *either* <message> or <translation>
-                # carries type="obsolete" (the standard puts it on <message>,
-                # but lupdate sometimes puts it on <translation>).
-                if msg.get("type") == "obsolete":
-                    continue
-                if trans_elem is not None and trans_elem.get("type") == "obsolete":
+                if is_obsolete_ts_msg(msg):
                     continue
                 entries.add((context, source_elem.text))
     except Exception as e:
@@ -217,21 +154,8 @@ def extract_ts_entries(ts_path):
     return entries
 
 
-def find_missing_and_orphans(files):
+def find_missing_and_orphans(ts_entries, all_tr_calls):
     """Return (missing_tr_calls, orphan_ts_entries, expected_orphans)."""
-    ts_entries = extract_ts_entries(TS_FILE)
-    if ts_entries is None:
-        return [], [], []
-
-    all_tr_calls = set()
-    for fpath in files:
-        try:
-            content = fpath.read_text(encoding="utf-8")
-        except Exception:
-            continue
-        for ctx, s in extract_context_and_tr_calls(content):
-            all_tr_calls.add((ctx, s))
-
     missing = sorted((ctx, s) for ctx, s in all_tr_calls if (ctx, s) not in ts_entries)
     # Filter orphans: exclude format strings (skipped by tr() extractor)
     # and known-indirect contexts (shortcut names/group titles, module param
@@ -239,7 +163,9 @@ def find_missing_and_orphans(files):
     orphans = sorted(
         (ctx, s)
         for ctx, s in ts_entries
-        if (ctx, s) not in all_tr_calls and "{" not in s and ctx not in KNOWN_ORPHAN_CONTEXTS
+        if (ctx, s) not in all_tr_calls
+        and "{" not in s
+        and ctx not in KNOWN_ORPHAN_CONTEXTS
     )
     expected = sorted(
         (ctx, s)
@@ -252,22 +178,8 @@ def find_missing_and_orphans(files):
 # ── Main ────────────────────────────────────────────────────────────────
 
 
-def _reconfigure_stdout():
-    """Windows GBK console can't encode certain Unicode chars (e.g. U+9FFF).
-
-    Reconfigure stdout to UTF-8 so that print() doesn't raise
-    UnicodeEncodeError.  Safe no-op if the stream doesn't support
-    reconfigure (e.g. piped output on Unix).
-    """
-    if hasattr(sys.stdout, "reconfigure"):
-        try:
-            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        except Exception:
-            pass
-
-
 def main():
-    _reconfigure_stdout()
+    reconfigure_stdout()
 
     parser = argparse.ArgumentParser(description="i18n audit for BallonsTranslator")
     parser.add_argument("--ci", action="store_true", help="Exit non-zero on findings")
@@ -293,8 +205,12 @@ def main():
         print("\n[HARDCODED CHINESE] None found.")
 
     # Check 2 & 3: tr() <-> .ts coverage — ui/ + modules/
-    all_files = find_all_py_files()
-    missing, orphans, expected = find_missing_and_orphans(all_files)
+    ts_entries = extract_ts_entries(TS_FILE)
+    if ts_entries is None:
+        ts_entries = set()
+    missing, orphans, expected = find_missing_and_orphans(
+        ts_entries, gather_tr_calls()
+    )
 
     if missing:
         exit_code |= 2

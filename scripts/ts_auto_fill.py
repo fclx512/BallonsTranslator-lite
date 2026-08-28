@@ -5,7 +5,8 @@ Two operations:
   1. Fill missing: add self.tr() calls not yet in .ts as type="unfinished"
   2. Prune orphans: remove .ts entries with no matching self.tr() call
 
-Dry-run by default. Use --apply to write changes.
+Dry-run by default. Use --apply to write changes. After writing, the
+.qm is recompiled automatically.
 
 Usage:
   python scripts/ts_auto_fill.py                        # dry-run report
@@ -17,86 +18,24 @@ Usage:
 """
 
 import argparse
-import re
 import sys
 import xml.etree.ElementTree as ET
 from io import StringIO
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-TS_FILE = PROJECT_ROOT / "translate" / "zh_CN.ts"
+# 便携 Python 开启 safe_path 时不自动加脚本目录，自举以导入同目录模块
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-# Contexts whose translations are loaded via self.tr(variable_name) or
-# self.tr(_ACTION_NAMES[id]) — regex scanner cannot match the values.
-PARAM_CONTEXTS = frozenset({"ParamWidget", "_ShortcutRow", "ShortcutEditor"})
-
-
-# ── helpers ─────────────────────────────────────────────────────────────
-
-
-def _find_py_files():
-    files = []
-    for sub in ("ui", "modules", "utils"):
-        d = PROJECT_ROOT / sub
-        if d.is_dir():
-            files.extend(d.rglob("*.py"))
-    return sorted(files)
+from i18n_common import (
+    KNOWN_ORPHAN_CONTEXTS,
+    TS_FILE,
+    gather_tr_calls,
+    is_obsolete_ts_msg,
+    reconfigure_stdout,
+)
 
 
-def _extract_tr_calls(content: str):
-    """Yield (context_class, tr_string) from Python source.
-
-    Handles single-line ``self.tr("...")`` and multi-line variants
-    where the string body is on a different line (e.g.
-    ``self.tr(\\n    "text"\\n)``) via DOTALL regex.
-
-    *Implicit* Python string concatenation across continuation lines
-    is *not* supported (e.g. ``self.tr("part1 " "part2")``) — keep
-    the whole translatable string as a single literal.
-    """
-    # Build position-index of class definitions
-    class_positions = []  # (byte_offset, class_name)
-    for m in re.finditer(r"^\s*class\s+(\w+)\s*[(:]", content, re.MULTILINE):
-        class_positions.append((m.start(), m.group(1)))
-
-    def _context_for(pos):
-        for cp, cn in reversed(class_positions):
-            if cp < pos:
-                return cn
-        return "Unknown"
-
-    # DOTALL so \s matches newlines, capturing self.tr(\n  "string"\n)
-    tr_re = re.compile(r'self\.tr\(\s*("(?:[^"\\]|\\.)*")\s*\)', re.DOTALL)
-    tr_sq_re = re.compile(r"self\.tr\(\s*('(?:[^'\\]|\\.)*')\s*\)", re.DOTALL)
-
-    for tr_regex in (tr_re, tr_sq_re):
-        for m in tr_regex.finditer(content):
-            s = m.group(1)[1:-1]  # strip surrounding quotes
-            s = s.replace('\\"', '"').replace("\\'", "'")
-            s = s.replace("\\\\", "\\")
-            s = s.replace("\\n", "\n").replace("\\t", "\t")
-            if "{" in s:
-                continue
-            ctx = _context_for(m.start())
-            yield (ctx, s)
-
-
-def _gather_tr_calls():
-    """Return set of (context, source) from all scanned Python files."""
-    result = set()
-    for fpath in _find_py_files():
-        try:
-            content = fpath.read_text(encoding="utf-8")
-        except Exception:
-            continue
-        for ctx, s in _extract_tr_calls(content):
-            result.add((ctx, s))
-    return result
-
-
-def _is_obsolete(msg):
-    trans = msg.find("translation")
-    return trans is not None and trans.get("type") == "obsolete"
+# ── ts parsing ──────────────────────────────────────────────────────────
 
 
 def _normalize_ts(root):
@@ -140,7 +79,7 @@ def _parse_ts(path):
             src = msg.find("source")
             if src is None or src.text is None:
                 continue
-            if _is_obsolete(msg):
+            if is_obsolete_ts_msg(msg):
                 continue
             ts_entries.add((name_el.text, src.text))
 
@@ -158,7 +97,7 @@ def _parse_ts(path):
             src = msg.find("source")
             if src is None or src.text is None:
                 continue
-            if _is_obsolete(msg):
+            if is_obsolete_ts_msg(msg):
                 continue
             msgs.append((msg, src.text))
         ctx_map[name_el.text] = (ctx, msgs)
@@ -187,20 +126,19 @@ def _write_ts(tree, path):
     )
 
 
+def _recompile_qm():
+    """Recompile the .qm from the freshly written .ts (best effort)."""
+    import qm_compile
+
+    qm = TS_FILE.with_suffix(".qm")
+    qm_compile.compile_ts(str(TS_FILE), str(qm))
+
+
 # ── main ────────────────────────────────────────────────────────────────
 
 
-def _reconfigure_stdout():
-    """Windows GBK console can't encode certain Unicode chars."""
-    if hasattr(sys.stdout, "reconfigure"):
-        try:
-            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        except Exception:
-            pass
-
-
 def main():
-    _reconfigure_stdout()
+    reconfigure_stdout()
     parser = argparse.ArgumentParser(
         description="Synchronize zh_CN.ts with self.tr() calls in source code."
     )
@@ -235,7 +173,7 @@ def main():
         do_prune = args.prune
 
     # ── 1. Gather self.tr() calls from source ──────────────────────────
-    all_tr = _gather_tr_calls()
+    all_tr = gather_tr_calls()
 
     # ── 2. Parse .ts ───────────────────────────────────────────────────
     tree, root, ctx_map, ts_entries = _parse_ts(TS_FILE)
@@ -245,7 +183,9 @@ def main():
     orphans = sorted(
         (ctx, s)
         for ctx, s in ts_entries
-        if (ctx, s) not in all_tr and "{" not in s and ctx not in PARAM_CONTEXTS
+        if (ctx, s) not in all_tr
+        and "{" not in s
+        and ctx not in KNOWN_ORPHAN_CONTEXTS
     )
 
     # ── Report ─────────────────────────────────────────────────────────
@@ -302,8 +242,7 @@ def main():
     if changed:
         _write_ts(tree, TS_FILE)
         print(f"\n[APPLIED] {TS_FILE} updated.")
-        qm = TS_FILE.with_suffix(".qm")
-        print(f"  >> Recompile: python scripts/qm_compile.py {TS_FILE.name} {qm.name}")
+        _recompile_qm()
     else:
         if not args.apply and not args.fill_missing and not args.prune:
             print(

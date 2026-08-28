@@ -42,11 +42,17 @@ def _pagtrans_finished_squeeze_node(tree, source):
 
 class TestAutoSqueezeToggle(unittest.TestCase):
     def test_config_default_is_on(self):
-        """Default stays on so existing behavior is unchanged for all users."""
-        from utils.config import pcfg
+        """Default stays on so existing behavior is unchanged for all users.
 
-        self.assertIn("auto_squeeze_after_run", dir(pcfg))
-        self.assertTrue(pcfg.auto_squeeze_after_run)
+        Uses a freshly constructed ProgramConfig — the module-level pcfg
+        singleton may have been reloaded from the developer's local
+        config.json by an earlier test in the suite.
+        """
+        from utils.config import ProgramConfig
+
+        fresh = ProgramConfig()
+        self.assertIn("auto_squeeze_after_run", dir(fresh))
+        self.assertTrue(fresh.auto_squeeze_after_run)
 
     def test_squeeze_gated_by_toggle(self):
         """The on_pagtrans_finished squeeze must reference the toggle."""

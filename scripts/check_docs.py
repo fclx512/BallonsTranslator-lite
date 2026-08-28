@@ -21,7 +21,10 @@
   python scripts/check_docs.py             # 校验，失效引用退出码 1
   python scripts/check_docs.py --verbose   # 同时打印被跳过的引用
 
-退出码：0 通过，1 存在失效引用。
+附加检查：scripts/ 下每个可执行脚本（*.py/*.bat/*.sh）都必须在
+scripts/README.md 登记——防"工作途中新增脚本忘记写文档"的漂移。
+
+退出码：0 通过，1 存在失效引用或漏登脚本。
 """
 
 import argparse
@@ -179,6 +182,22 @@ def scan():
     return broken, skipped
 
 
+def check_scripts_readme():
+    """scripts/ 可执行脚本必须全部登记在 scripts/README.md，返回漏登文件名。"""
+    readme = ROOT / "scripts" / "README.md"
+    readme_text = readme.read_text(encoding="utf-8") if readme.is_file() else ""
+    missing = []
+    scripts_dir = ROOT / "scripts"
+    if not scripts_dir.is_dir():
+        return missing
+    for p in sorted(scripts_dir.iterdir()):
+        if p.suffix.lower() not in {".py", ".bat", ".sh"}:
+            continue
+        if p.name not in readme_text:
+            missing.append(p.name)
+    return missing
+
+
 def main():
     parser = argparse.ArgumentParser(description="校验文档路径/符号引用")
     parser.add_argument("--verbose", action="store_true", help="同时打印被跳过的引用")
@@ -186,17 +205,28 @@ def main():
 
     broken, skipped = scan()
 
+    failed = False
     if broken:
+        failed = True
         print(f"❌ docs: {len(broken)} 处失效引用：")
         for md, lineno, token, reason in broken:
             rel = md.relative_to(ROOT)
             print(f"  {rel}:{lineno}  `{token}`  → {reason}")
         if skipped:
             print(f"  （另有 {len(skipped)} 处被跳过，--verbose 查看）")
+
+    missing_scripts = check_scripts_readme()
+    if missing_scripts:
+        failed = True
+        print(f"❌ docs: {len(missing_scripts)} 个脚本未登记到 scripts/README.md：")
+        for name in missing_scripts:
+            print(f"  scripts/{name}")
+
+    if failed:
         sys.exit(1)
 
     total = sum(1 for _ in iter_md_files())
-    print(f"✅ docs: {total} 个活文档，路径/符号引用全部有效")
+    print(f"✅ docs: {total} 个活文档，路径/符号引用全部有效；scripts/ 脚本登记齐全")
     if args.verbose and skipped:
         print("  --verbose 跳过的引用：")
         for md, lineno, token, reason in skipped:

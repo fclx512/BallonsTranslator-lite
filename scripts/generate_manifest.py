@@ -13,7 +13,6 @@ Usage:
 import argparse
 import hashlib
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -21,106 +20,20 @@ from pathlib import Path
 
 def get_tracked_files(project_root: Path) -> list[Path]:
     """Return all git-tracked file paths relative to project_root."""
-    try:
-        result = subprocess.run(
-            ["git", "ls-files"],
-            capture_output=True,
-            text=True,
-            cwd=project_root,
-            timeout=30,
+    result = subprocess.run(
+        ["git", "ls-files"],
+        capture_output=True,
+        text=True,
+        cwd=project_root,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"git ls-files failed: {result.stderr.strip()}（发版清单必须基于 git，"
+            "请在本仓库内运行）"
         )
-        if result.returncode != 0:
-            print(
-                f"Warning: git ls-files failed: {result.stderr.strip()}",
-                file=sys.stderr,
-            )
-            # Fallback: walk the tree, respecting a basic exclude set
-            return _fallback_walk(project_root)
-        files = [project_root / p for p in result.stdout.strip().splitlines() if p]
-        return [f for f in files if f.is_file()]
-    except (subprocess.SubprocessError, FileNotFoundError):
-        print("Warning: git not available, using fallback walk", file=sys.stderr)
-        return _fallback_walk(project_root)
-
-
-def _fallback_walk(project_root: Path) -> list[Path]:
-    """Fallback when git is unavailable — walk directory with basic exclusions."""
-    exclude_dirs = {
-        ".git",
-        "__pycache__",
-        ".claude",
-        ".github",
-        ".vscode",
-        ".idea",
-        "node_modules",
-        "venv",
-        "venv_",
-        "env",
-        "release",
-    }
-    exclude_extensions = {".pyc", ".pyo"}
-    ignore_file = project_root / ".gitignore"
-    gitignore_patterns = _parse_gitignore(ignore_file) if ignore_file.exists() else []
-
-    files = []
-    for root, dirs, dirnames in list(os.walk(project_root)):
-        # Skip excluded directories
-        dirs[:] = [d for d in dirs if d not in exclude_dirs]
-        for name in dirs:
-            fpath = Path(root) / name
-            if fpath.is_file():
-                rel = fpath.relative_to(project_root)
-                # Skip .gitignore-matched files
-                if _matches_any(rel, gitignore_patterns):
-                    continue
-                if fpath.suffix in exclude_extensions:
-                    continue
-                files.append(fpath)
-        # Also include files directly in this dir
-        for name in dirnames:
-            if name in exclude_dirs:
-                continue
-            fpath = Path(root) / name
-            if fpath.is_file():
-                rel = fpath.relative_to(project_root)
-                if _matches_any(rel, gitignore_patterns):
-                    continue
-                if fpath.suffix in exclude_extensions:
-                    continue
-                files.append(fpath)
-    return files
-
-
-def _parse_gitignore(path: Path) -> list[str]:
-    """Return list of .gitignore patterns (simplified)."""
-    patterns = []
-    try:
-        for line in path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line and not line.startswith("#"):
-                patterns.append(line)
-    except Exception:
-        pass
-    return patterns
-
-
-def _matches_any(rel_path: Path, patterns: list[str]) -> bool:
-    """Check if a relative path matches any gitignore pattern (basic)."""
-    s = str(rel_path).replace("\\", "/")
-    for pat in patterns:
-        if pat.startswith("/"):
-            # Anchored pattern
-            if s == pat[1:] or s.startswith(pat[1:] + "/"):
-                return True
-        elif pat.endswith("/"):
-            # Directory pattern
-            if s.startswith(pat) or ("/" + s).startswith("/" + pat):
-                return True
-        else:
-            # Simple pattern
-            if s == pat or s.endswith("/" + pat):
-                return True
-    return False
+    files = [project_root / p for p in result.stdout.strip().splitlines() if p]
+    return [f for f in files if f.is_file()]
 
 
 def compute_sha256(file_path: Path) -> str:

@@ -101,13 +101,17 @@ for node in ast.walk(tree):
         assert isinstance(node.returns, ast.Name) and node.returns.id == 'bool', \
             f'unexpected return type: {ast.dump(node.returns)}'
         print('OK: prepare_environment() -> bool')
-        # Check both True and False returns exist
+        # Current contract: core requirements are handled by
+        # ensure_core_requirements() earlier in main(); prepare_environment
+        # only force-reinstalls torch, so it returns False on every path
+        # (True "restart needed" is reserved for ensure_core_requirements).
         returns = [n for n in ast.walk(node) if isinstance(n, ast.Return)]
+        assert returns, 'no return statement found'
         has_true = any(isinstance(r.value, ast.Constant) and r.value.value is True for r in returns)
         has_false = any(isinstance(r.value, ast.Constant) and r.value.value is False for r in returns)
-        assert has_true, 'no return True found'
         assert has_false, 'no return False found'
-        print('OK: both return True and return False exist')
+        assert not has_true, 'prepare_environment must never return True (no restart from here)'
+        print('OK: all return paths are False (no restart from this function)')
         break
 """
 

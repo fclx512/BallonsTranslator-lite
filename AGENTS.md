@@ -129,6 +129,7 @@ modules/
 - **i18n**：全量扫描；硬编码中文/缺失条目为失败，孤儿条目降级为警告（项目大量 `canvas.tr()`/`self.tr(variable)` 间接调用是已知噪音，详见上方 i18n 说明）
 - **qm**：ts 有改动时自动编译
 - **冒烟**：改动命中启动链文件（`launch.py`/`modules/base.py`/`utils/profile_manager.py`/`ui/configpanel.py`/`ui/mainwindow.py`）时自动触发，`--smoke` 可强制
+- **发版门禁**：`verify.py --full` 追加 ruff 风格检查 + pytest（`tests/`；ruff/pytest 未装或重依赖缺失时自动跳过并提示）。原独立全量门禁脚本已并入此 flag（2026-08-27，见 `scripts/audit_registry.json`）
 
 需要时手动分步跑：
 
