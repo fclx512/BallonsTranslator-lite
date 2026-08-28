@@ -407,7 +407,10 @@ class Canvas(QGraphicsScene):
         self.saved_drawundo_step = 0
         self.saved_textundo_step = 0
 
-        notification.attach(self.gv.viewport())
+        # 宿主挂 gv 而非 viewport：QAbstractScrollArea 滚动时对 viewport 做
+        # 像素级 scroll（含子控件一并平移），缩放调整滚动条会把 toast 漂走；
+        # gv 自身子控件不受 scroll 影响，坐标始终随窗口几何重排。
+        notification.attach(self.gv)
         if self.imgtrans_proj is None or not self.imgtrans_proj.img_valid:
             notification.status(
                 "empty-hint",

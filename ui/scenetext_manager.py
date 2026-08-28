@@ -454,7 +454,11 @@ class TextPanel(Widget):
         format_row = QWidget(self)
         format_row_layout = QHBoxLayout(format_row)
         format_row_layout.setContentsMargins(0, 0, 0, 0)
-        format_row_layout.setSpacing(2)
+        # No gap between the 28px rail tube and the format frame: the rail was
+        # widened for the icon enlargement and the fixed-width right panel was
+        # clipping the text-style area.  Reclaiming this sliver lets the format
+        # area expand leftward again.
+        format_row_layout.setSpacing(0)
         self.rail = PanelRail(format_row)
         format_row_layout.addWidget(self.rail)
         self.format_frame = GroupFrame(format_row)

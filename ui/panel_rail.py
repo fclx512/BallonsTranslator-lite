@@ -15,7 +15,10 @@ from qtpy.QtCore import QPointF, Qt
 from qtpy.QtGui import QColor, QPainter, QPen
 from qtpy.QtWidgets import QToolButton, QVBoxLayout, QWidget
 
-RAIL_WIDTH = 30
+# 26px icons + 1px side margins inside the tube.  Width was bumped to 30 during
+# the icon enlargement; trim back to 28 so the format area to the right of the
+# rail keeps its width (the fixed 360px right panel would otherwise clip it).
+RAIL_WIDTH = 28
 
 
 class RailLauncherButton(QToolButton):

@@ -830,7 +830,8 @@ DEFAULT_SHORTCUTS = {
     "hand_tool": ["H"],
     "rect_tool": ["R"],
     "inpaint_tool": ["J"],
-    "ai_tool": ["A"],
+    # Temporarily unbound — the previous "A" collided with prev_page (also "A").
+    "ai_tool": [],
     "merge_tool": ["Ctrl+Shift+M"],
     "quick_symbol": [],
     "advanced_align": [],

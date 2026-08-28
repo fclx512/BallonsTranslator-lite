@@ -16,7 +16,7 @@ from utils.config import load_config
 
 load_config()
 
-from qtpy.QtWidgets import QApplication, QWidget
+from qtpy.QtWidgets import QApplication, QGraphicsScene, QGraphicsView, QWidget
 
 from ui.custom_widget.notification import (
     ActivityLabel,
@@ -91,6 +91,31 @@ class NotificationCenterTest(unittest.TestCase):
         detached = NotificationCenter()
         detached.toast("dropped")  # 未 attach 时应静默忽略，不抛异常
         self.assertEqual(len(detached._items), 0)
+
+    def test_gv_host_immune_to_scroll_drift(self):
+        """宿主必须挂 QGraphicsView 本身而非 viewport：QAbstractScrollArea
+        滚动时对 viewport 做像素级 scroll（子控件一并平移），缩放调整滚动条
+        会把挂 viewport 的 toast 漂走。"""
+        scene = QGraphicsScene(0, 0, 4000, 6000)
+        scene.addRect(0, 0, 4000, 6000)
+        view = QGraphicsView(scene)
+        view.resize(800, 580)
+        view.show()
+        center = NotificationCenter()
+        center.attach(view)  # 回归点：不得改回 attach(view.viewport())
+        try:
+            center.toast("pinned", anchor="top-center", duration=900000)
+            item = center._items[0]
+            base_pos = item.pos()
+            for factor in (1.25, 1.5625, 0.8):
+                scene.setSceneRect(scene.sceneRect().adjusted(0, 0, 1000 * factor, 1000 * factor))
+                for bar in (view.verticalScrollBar(), view.horizontalScrollBar()):
+                    bar.setValue(int(bar.maximum() * 0.1))
+                QApplication.processEvents()
+                self.assertEqual(item.pos(), base_pos)
+        finally:
+            center.detach()
+            view.deleteLater()
 
     def test_reattach_clears_old_items(self):
         self.center.toast("one", anchor="top-left")

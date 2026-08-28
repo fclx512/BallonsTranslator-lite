@@ -535,3 +535,18 @@
 - 计划文档状态更新为已实施。
 
 **涉及文件：** `ui/mainwindow.py`、`tests/test_page_list_dirty_click.py`（新）、`docs/技术实现/点脏页跳转修复计划.md`、`docs/daily_log.md`
+
+---
+
+### 通知中心滚动漂移修复 + toast 视觉调整 + 窄栏宽度回勒 + ai_tool 快捷键解绑
+
+**问题/需求：** 实机使用发现的四处小问题：① 缩放调整滚动条时画布 toast 跟着 viewport 滚走；② toast 字号偏小不易读；③ 图标放大把窄栏加宽到 30px 后，固定 360px 右栏挤压格式区（文本样式区被截断）；④ ai_tool 快捷键 "A" 与 prev_page 冲突。
+
+**改动要点：**
+
+- **宿主挂 gv**（`ui/canvas.py`）：`notification.attach` 由 `gv.viewport()` 改挂 `QGraphicsView` 本身——QAbstractScrollArea 滚动时对 viewport 做像素级 scroll（子控件一并平移），缩放调整滚动条会把挂 viewport 的 toast 漂走；gv 自身子控件不受 scroll 影响，坐标始终随窗口几何重排。`tests/test_notification.py` 新增滚动漂移回归（多档缩放 + 滚动条驱动断言 toast pos 不变）。
+- **toast 视觉**（`ui/custom_widget/notification.py`）：KIND_STYLES 全类字号 13→15px、内边距 4px 12px→7px 18px、圆角 6→8px。
+- **窄栏回勒**（`ui/panel_rail.py` + `ui/scenetext_manager.py`）：`RAIL_WIDTH` 30→28（26px 图标 + 1px 边距），格式行 spacing 2→0，归还格式区被挤占的宽度。
+- **快捷键**（`ui/configpanel.py`）：`ai_tool` 默认键 "A" 暂解绑（与 prev_page 的 "A" 冲突），待定新键位。
+
+**涉及文件：** `ui/custom_widget/notification.py`、`ui/canvas.py`、`tests/test_notification.py`、`ui/panel_rail.py`、`ui/scenetext_manager.py`、`ui/configpanel.py`、`docs/daily_log.md`
