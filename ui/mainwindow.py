@@ -1681,7 +1681,17 @@ class MainWindow(mainwindow_cls):
             if self.imgtrans_proj.page_needs_rerender(new_pagename):
                 self.imgtrans_proj.clear_page_needs_rerender(new_pagename)
                 self._save_result_image_only()
-                self.updatePageList()
+                # Rebuilding the list synchronously re-fires currentItemChanged
+                # (clear/addItem/setCurrentItem), which would re-enter this very
+                # handler and repeat the full page switch.  Block signals only
+                # for this one rebuild (it is synchronous, so no real user click
+                # is lost), leaving the openDir first-render chain untouched.
+                was_blocked = self.pageList.signalsBlocked()
+                self.pageList.blockSignals(True)
+                try:
+                    self.updatePageList()
+                finally:
+                    self.pageList.blockSignals(was_blocked)
 
         self.page_changing = False
 

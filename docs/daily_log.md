@@ -521,3 +521,17 @@
 - 膨胀描边（上游 e23d180+9947043，`_draw_dilated_path_stroke`）确认**无需移植**：普通文本填充/描边走 Qt 原生文字渲染，draw_glyph_geometry 只服务注音/着重号注解。
 
 **涉及文件：** `ui/text_engine/effect_renderer.py`、`ui/text_engine/rendering/raster.py`、`ui/textitem.py`、`tests/test_text_transform_engine.py`、`docs/daily_log.md`
+
+---
+
+### 点脏页（斜体页）点击跳转错乱修复实施
+
+**问题/需求：** 按 [`docs/技术实现/点脏页跳转修复计划.md`](docs/技术实现/点脏页跳转修复计划.md) 实施（计划 08-26 入档）。批量样式改动后非当前页标脏（页列表斜体显示），点击脏页时 `pageListCurrentItemChanged` 在自己的处理器栈内同步 `updatePageList()` 重建列表——clear/addItem/setCurrentItem 重发 currentItemChanged 重入处理器，整段切页逻辑（存盘/切换/重绘/成图渲染）跑两遍，落错页且成图渲染两次。
+
+**改动要点：**
+
+- **`ui/mainwindow.py`**：仅对脏页分支的 `updatePageList()` 重建调用包 `pageList.blockSignals(True)`（同步重建，不丢真实用户点击），finally 恢复原阻断态；openDir 首屏渲染链路走顶层 `updatePageList()` 调用，不受影响。
+- **回归**：`tests/test_page_list_dirty_click.py`（新）——真 `PageListView` 绑真 `pageListCurrentItemChanged`/`updatePageList` 处理器 + 轻量假项目，未修复代码上必挂（重入跑两遍）、修复后通过。
+- 计划文档状态更新为已实施。
+
+**涉及文件：** `ui/mainwindow.py`、`tests/test_page_list_dirty_click.py`（新）、`docs/技术实现/点脏页跳转修复计划.md`、`docs/daily_log.md`
