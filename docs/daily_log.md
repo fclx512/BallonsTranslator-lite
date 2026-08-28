@@ -506,3 +506,18 @@
 - i18n：ts 补 DrawingPanel "queued"，qm 重编译。
 
 **涉及文件：** `modules/inpaint/inpaint_llm.py`、`utils/profile_manager.py`、`ui/drawingpanel.py`、`ui/module_manager.py`、`tests/test_edit_page_tool_leak.py`（新）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/daily_log.md`
+
+---
+
+### 字体样式轮廓（描边）发虚根治：中性块 1× 缓存捷径删除，统一 tier 光栅管线
+
+**问题/需求：** 描边/阴影在 HiDPI/缩放下发虚。根因：fork `_repaint_neutral_background` 把普通文本块的描边/阴影渲染进固定 1× 逻辑分辨率 QPixmap 再平滑放大上屏——HiDPI/缩放下必然模糊；上游无此捷径（v1.5.12 的 e0e0514/1d6c270 两个画质提交当时未跟上，`upstream-tmp/dev` 分支可对照）。
+
+**改动要点：**
+
+- **`ui/text_engine/effect_renderer.py`**：删 `_repaint_neutral_background` 捷径，中性/变换态统一走 `plan_effect_raster` + `quality_raster_request`（移植上游 e0e0514 质量分层：1/2/4/8 tier 取整，`ui/text_engine/rendering/raster.py` 落地）tier 管线；`repaint_background(render_scale=None)` 时经新增 `_host_target_scale()` 从视图自动取目标缩放；移植上游 1d6c270 `_sync_native_stroke_alignment`——透明零宽 outline 格式把填充推进 Qt path 光栅化器，与描边层像素对齐。
+- **`ui/textitem.py`**：绘制端新增 `ensure_host_background(painter)` 在绘制前按 deviceTransform 缩放刷新缓存，点式 drawPixmap 由缓存 DPR 定尺寸。绘制端探针实证：同一 item 在 1×/2× 绘制下缓存 DPR 分别为 2/4（旧路径恒为 1）。
+- **惰性契约**：中性路径无变换时不得分配 `_transformed_effect_state`（`tests/test_text_transform_engine.py` 断言随 `_repaint_neutral_background` 改名 `repaint_background` 同步更新）。
+- 膨胀描边（上游 e23d180+9947043，`_draw_dilated_path_stroke`）确认**无需移植**：普通文本填充/描边走 Qt 原生文字渲染，draw_glyph_geometry 只服务注音/着重号注解。
+
+**涉及文件：** `ui/text_engine/effect_renderer.py`、`ui/text_engine/rendering/raster.py`、`ui/textitem.py`、`tests/test_text_transform_engine.py`、`docs/daily_log.md`

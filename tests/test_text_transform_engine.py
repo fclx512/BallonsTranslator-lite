@@ -733,8 +733,8 @@ class TextTransformRenderingTest(TextTransformTestBase):
                     renderer = item.effect_renderer
                     with patch.object(
                         renderer,
-                        "_repaint_neutral_background",
-                        wraps=renderer._repaint_neutral_background,
+                        "repaint_background",
+                        wraps=renderer.repaint_background,
                     ) as repaint_neutral:
                         item.set_text_transform(zero, preview=True)
                     self.assertGreaterEqual(repaint_neutral.call_count, 1)
@@ -751,8 +751,8 @@ class TextTransformRenderingTest(TextTransformTestBase):
 
                     with patch.object(
                         renderer,
-                        "_repaint_neutral_background",
-                        wraps=renderer._repaint_neutral_background,
+                        "repaint_background",
+                        wraps=renderer.repaint_background,
                     ) as repaint_neutral:
                         item.set_text_transform(zero)
                     self.assertGreaterEqual(repaint_neutral.call_count, 1)

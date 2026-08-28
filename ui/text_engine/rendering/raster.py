@@ -2,7 +2,10 @@
 
 Port of upstream v1.5.9 ``text_engine/rendering/raster.py`` (verbatim,
 minus the upstream import prefix).  The constants and the plan planner are
-consumed by the Stage 3 ``TextEffectRenderer`` port; no behaviour change.
+consumed by the Stage 3 ``TextEffectRenderer`` port.
+``quality_raster_request`` additionally comes from upstream v1.5.12
+(``e0e0514`` unify effect raster quality) so settled rendering snaps to a
+shared quality tier instead of re-rendering per fractional zoom step.
 """
 
 import math
@@ -96,3 +99,22 @@ def plan_effect_raster(
         int(math.sqrt(EFFECT_CACHE_MAX_PIXELS)),
     )
     return EffectRasterPlan('tiles', 1.0, 0, 0, tile_edge)
+
+
+def quality_raster_request(requested_scale: float) -> float:
+    """Round settled rendering up to the shared quality tier.
+
+    >>> quality_raster_request(3.9)
+    4.0
+    >>> quality_raster_request(1.0)
+    1.0
+    """
+    requested_scale = max(1.0, float(requested_scale))
+    return next(
+        (
+            tier
+            for tier in (1.0, 2.0, 4.0, 8.0)
+            if requested_scale <= tier * (1.0 + 1e-6)
+        ),
+        requested_scale,
+    )

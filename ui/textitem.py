@@ -434,13 +434,20 @@ class TextBlkItem(_EngineTextBlkItem):
             # Border always draws outside the clip
             self._draw_border_rect(painter)
 
+    def _draw_effects_pixmap(self, painter: QPainter):
+        """Draw the stroke/shadow cache at the active device scale."""
+        self.effect_renderer.ensure_host_background(painter)
+        background = self.effect_renderer.background_pixmap
+        if background is not None:
+            # Point-based draw so the cache's devicePixelRatio governs
+            # raster resolution; the pixmap is already at device scale.
+            painter.drawPixmap(self.boundingRect().topLeft(), background)
+
     def _draw_accessories(self, painter: QPainter):
         br = self.boundingRect()
         painter.save()
 
-        if self.effect_renderer.background_pixmap is not None:
-            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-            painter.drawPixmap(br.toRect(), self.effect_renderer.background_pixmap)
+        self._draw_effects_pixmap(painter)
 
         draw_rect = self.draw_rect and not self.under_ctrl
         if self._text_overflows and not self.is_editting():
@@ -469,11 +476,8 @@ class TextBlkItem(_EngineTextBlkItem):
         Used by the paint path where accessories must be drawn
         behind text via SourceOver, but the border needs to be on top.
         """
-        br = self.boundingRect()
         painter.save()
-        if self.effect_renderer.background_pixmap is not None:
-            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-            painter.drawPixmap(br.toRect(), self.effect_renderer.background_pixmap)
+        self._draw_effects_pixmap(painter)
         painter.restore()
 
     def _draw_border_rect(self, painter: QPainter):

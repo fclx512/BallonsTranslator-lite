@@ -11,16 +11,22 @@ Localization notes (compared with upstream):
   the host paint.  The local ``_paint_native`` draws the background pixmap
   BEFORE text via SourceOver (page-switch stale-clip workaround) and paints
   border/badge last; the renderer must not composite the background itself
-  or the local composition order would double-draw.
-- ``_repaint_neutral_background`` keeps ``self.repainting`` as its only
-  reentrancy guard.  The upstream ``self.reshaping`` guard is dropped so the
-  shape-control drag path can rebuild ``background_pixmap`` at the new size
-  during resize (``_apply_resize`` relies on it); without this the pixmap
-  stays at the pre-drag size and stroke/shadow render deformed or invisible.
+  or the local composition order would double-draw.  Because the host
+  consumes ``background_pixmap`` outside ``_draw_effects``,
+  ``ensure_host_background`` refreshes the cache at the active device scale
+  before each host draw, and ``repaint_background`` applies the same unified
+  tier pipeline to neutral blocks that the transformed path already used
+  (replacing the legacy fixed-1x ``_repaint_neutral_background`` whose
+  upscale was the source of blurry outlines on HiDPI/zoomed canvases).
+- Guards mirror the local drag conventions: a resize drag keeps rebuilding
+  ``background_pixmap`` at the new size when decorations stay visible
+  (``_apply_resize`` relies on it); with decorations hidden the rebuild is
+  deferred to endReshape.
 - ``shadow_include_stroke`` semantics are merged in: when False the shadow
-  is generated from a glyph-only alpha mask (the local ``_render_text_only``
-  logic moved into this file), both in ``_render_effect_surface`` and in
-  ``_repaint_neutral_background``.
+  is generated from a glyph-only alpha mask rendered by
+  ``_render_effect_surface``'s silhouette pass.
+- ``_sync_native_stroke_alignment`` ports upstream ``1d6c270``: fill and
+  stroke rasterize through Qt's same path-backed glyph rasterizer.
 - ``_paint_cloned_document_stroke`` instantiates the engine layouts with the
   ``pcfg`` typography parameters (matching ``item.py`` construction).
 - ``get_text_gradient`` drops the local colour clamp (upstream parity).
@@ -69,12 +75,17 @@ from .rendering.raster import (
     EffectRasterAllocationError,
     EffectRasterPlan,
     plan_effect_raster,
+    quality_raster_request,
 )
 
 
 LOGGER = logging.getLogger(__name__)
 
 GRADIENT_LAYOUT_FORMAT_PROPERTY = 0x100000 + 1238
+STROKE_ALIGNMENT_LAYOUT_FORMAT_PROPERTY = 0x100000 + 1241
+# An alignment format range tagged with the property above spans whole
+# blocks; QTextLayout clips it to every laid-out line.
+_STROKE_ALIGNMENT_RANGE_LENGTH = 0x7FFFFFFF
 # Glyph Slant writes vector paths into effect pixmaps, not native text.
 _VECTOR_EFFECT_RENDER_HINTS = (
     QPainter.RenderHint.Antialiasing
@@ -869,121 +880,166 @@ class TextEffectRenderer:
                 self.surface_raster_error = previous_raster_error
         return target_map
 
-    def _render_text_only(self) -> QPixmap:
-        """Render text content without stroke into a fresh transparent pixmap.
+    def _sync_native_stroke_alignment(self) -> None:
+        """Keep fill and stroke on Qt's same native glyph raster path.
 
-        Used to generate shadows from the text alpha mask only, matching PS
-        behavior where drop shadow does not include stroke area.
+        Port of upstream ``1d6c270`` (fix text stroke/fill rasterization).
+        A transparent zero-width outline range selects Qt's path-backed
+        glyph rasterizer for the FILL pass too, so it registers pixel-exact
+        with the separately painted outline pass.
         """
-        pm = QPixmap(self.boundingRect().size().toSize())
-        pm.fill(Qt.GlobalColor.transparent)
-        p = QPainter(pm)
-        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        self.document().drawContents(p)
-        p.end()
-        return pm
+        if self.layout is None:
+            return
+        enabled = self.fontformat.stroke_width > 0
+        changed = False
+        alignment_format = None
+        block = self.document().firstBlock()
+        while block.isValid():
+            layout = block.layout()
+            formats = list(layout.formats())
+            tagged = [
+                entry
+                for entry in formats
+                if bool(entry.format.property(
+                    STROKE_ALIGNMENT_LAYOUT_FORMAT_PROPERTY
+                ))
+            ]
+            if enabled == bool(tagged):
+                block = block.next()
+                continue
+            formats = [
+                entry
+                for entry in formats
+                if not bool(entry.format.property(
+                    STROKE_ALIGNMENT_LAYOUT_FORMAT_PROPERTY
+                ))
+            ]
+            if enabled:
+                if alignment_format is None:
+                    alignment_format = QTextCharFormat()
+                    alignment_format.setProperty(
+                        STROKE_ALIGNMENT_LAYOUT_FORMAT_PROPERTY, True
+                    )
+                    # A styled outline selects Qt's path-backed glyph
+                    # rasterizer; transparent zero width paints no pixels.
+                    alignment_format.setTextOutline(QPen(
+                        QColor(0, 0, 0, 0),
+                        0.0,
+                        Qt.PenStyle.SolidLine,
+                        Qt.PenCapStyle.RoundCap,
+                        Qt.PenJoinStyle.RoundJoin,
+                    ))
+                entry = QTextLayout.FormatRange()
+                entry.start = 0
+                entry.length = _STROKE_ALIGNMENT_RANGE_LENGTH
+                entry.format = alignment_format
+                formats.append(entry)
+            layout.setFormats(formats)
+            changed = True
+            block = block.next()
+        if changed:
+            # setFormats invalidates QTextLine objects but changes no document
+            # content or geometry; rebuild once after all blocks are updated.
+            self.layout.reLayout()
 
-    def _repaint_neutral_background(self):
-        """Rebuild effects with the BASE pixmap and composition path."""
-        empty = self.document().isEmpty()
+    def ensure_host_background(self, painter: QPainter) -> None:
+        """Refresh the host-consumed cache at the active device scale.
+
+        Neutral blocks composite ``background_pixmap`` through the host item
+        instead of ``_draw_effects``, so a zoom/DPI change must rebuild the
+        cached raster here before ``drawPixmap`` consumes it.
+        """
+        if not any(self._effect_flags()):
+            return
+        requested_scale = quality_raster_request(
+            self._paint_device_scale(painter)
+        )
+        br = self.boundingRect()
+        plan = plan_effect_raster(br.width(), br.height(), requested_scale)
+        state = self._transformed_effect_state
+        stale = (
+            state is not None
+            and state.cache_rendered_generation != state.cache_generation
+        )
+        if (
+            self.background_pixmap is None
+            or self.background_pixmap_scale != plan.tier
+            or stale
+        ):
+            self.repaint_background(plan.tier)
+
+    def _host_target_scale(self) -> float:
+        """Best-effort target scale from the first visible host view."""
+        try:
+            scene = self.item.scene()
+            views = scene.views() if scene is not None else []
+        except RuntimeError:
+            return 1.0
+        for view in views:
+            if view.isVisible():
+                scale = abs(view.transform().m11()) * max(
+                    1.0, view.viewport().devicePixelRatioF()
+                )
+                return min(max(1.0, scale), EFFECT_CACHE_MAX_SCALE)
+        return 1.0
+
+    def repaint_background(self, render_scale: float = None):
+        """Rebuild the stroke/shadow cache at an effective device scale.
+
+        ``None`` (the common caller form) resolves the host view's current
+        target scale so caches rebuilt outside a paint event still stay
+        crisp on HiDPI or zoomed canvases.  Neutral blocks keep the
+        transformed-state laziness contract: no raster state is allocated
+        unless one already exists or a real box transform needs it.
+        """
         if self.repainting:
             return
-        # The base pixmap is exactly boundingRect()-sized, so a shadow whose
-        # radius/offset exceeds the legacy setShadow() padding would be clipped
-        # at the box edge ("virtual box" cut-off). Recompute the conservative
-        # padding so the surface always contains the full effect ink.
-        self._update_effect_padding()
-
-        paint_stroke, paint_shadow = self._effect_flags()
-        if (not paint_shadow and not paint_stroke) or empty:
-            self.background_pixmap = None
-            self.background_pixmap_scale = None
-            return
-
-        self.repainting = True
-        try:
-            font_size = self.layout.max_font_size(to_px=True)
-            target_map = QPixmap(self.boundingRect().size().toSize())
-            target_map.fill(Qt.GlobalColor.transparent)
-            painter = QPainter(target_map)
-            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-
-            if paint_stroke:
-                self._paint_cloned_document_stroke(painter)
-            else:
-                self.document().drawContents(painter)
-
-            if paint_shadow:
-                radius = int(round(self.fontformat.shadow_radius * font_size))
-                xoffset = int(self.fontformat.shadow_offset[0] * font_size)
-                yoffset = int(self.fontformat.shadow_offset[1] * font_size)
-                shadow_source = target_map
-                if paint_stroke and not self.fontformat.shadow_include_stroke:
-                    # PS drop shadow only shadows glyphs, not strokes — match that.
-                    shadow_source = self._render_text_only()
-                shadow_map, _ = apply_shadow_effect(
-                    shadow_source,
-                    self.fontformat.shadow_color,
-                    self.fontformat.shadow_strength,
-                    radius,
-                )
-                composition = painter.compositionMode()
-                painter.setCompositionMode(
-                    QPainter.CompositionMode.CompositionMode_DestinationOver
-                )
-                painter.drawPixmap(xoffset, yoffset, shadow_map)
-                painter.setCompositionMode(composition)
-
-            painter.end()
-            self.background_pixmap = target_map
-            self.background_pixmap_scale = 1.0
-        finally:
-            self.repainting = False
-        # 失效 DeviceCoordinateCache，确保下次 paint 重建缓存（本地旧行为）
-        self.update()
-
-    def repaint_background(self, render_scale: float = 1.0):
-        if self.reshaping and not _decorations_visible_during_drag():
-            # Drag/resize with decorations hidden: keep the background pixmap
-            # cleared so paint falls through to native text. The single rebuild
-            # happens in endReshape, maximizing drag frame rate.
-            return
-        if self._text_transform_is_neutral():
-            self._repaint_neutral_background()
-            return
-        empty = self.document().isEmpty()
-        if self.repainting or self.reshaping or self.pre_editing:
-            # Avoid reshape/reentrant work. During IME, reuse the preedit-free
+        if self.pre_editing or (
+            self.reshaping and not _decorations_visible_during_drag()
+        ):
+            # Drag/resize with decorations hidden keeps the pixmap cleared so
+            # paint falls through to native text; IME reuses the preedit-free
             # cache because PaintContext cannot exclude active preedit glyphs.
             return
 
+        self._sync_native_stroke_alignment()
         self._update_effect_padding()
 
+        empty = self.document().isEmpty()
         paint_stroke, paint_shadow = self._effect_flags()
+        neutral = self._text_transform_is_neutral()
         if not paint_shadow and not paint_stroke or empty:
+            changed = self.background_pixmap is not None
             self.background_pixmap = None
             self.background_pixmap_scale = None
-            self.tile_cache.clear()
-            self.direct_stroke = False
-            self.force_tiles = False
-            self.cache_dirty = False
-            self.cache_rendered_generation = self.cache_generation
+            state = self._transformed_effect_state
+            if state is not None:
+                state.tile_cache.clear()
+                state.direct_stroke = False
+                state.force_tiles = False
+                state.cache_dirty = False
+                state.cache_rendered_generation = state.cache_generation
+            if changed:
+                self.item.update()
             return
 
-        self.tile_cache.clear()
+        # Only a non-neutral item allocates transformed raster state; a
+        # neutral item merely refreshes whatever already exists.
+        state = (
+            self._transformed_state() if not neutral
+            else self._transformed_effect_state
+        )
+        if state is not None:
+            state.tile_cache.clear()
+        if render_scale is None:
+            render_scale = self._host_target_scale()
         self.repainting = True
         try:
             br = self.boundingRect()
             plan = plan_effect_raster(
-                br.width(), br.height(), render_scale
+                br.width(), br.height(),
+                quality_raster_request(render_scale),
             )
-            if plan.mode == 'tiles':
-                self.background_pixmap = None
-                self.background_pixmap_scale = None
-                self.direct_stroke = False
-                # Visible tiles are intentionally deferred until QPainter's
-                # exposed/clip rectangle is available.
-                return
             try:
                 target_map = self._render_effect_surface(br, plan.tier)
             except EFFECT_RASTER_FAILURES as error:
@@ -1006,22 +1062,24 @@ class TextEffectRenderer:
                         # A policy-valid full allocation can still fail at
                         # runtime. Export gets one bounded visible-tile retry
                         # before the transaction is failed.
-                        self.direct_stroke = False
-                        self.force_tiles = True
+                        if state is not None:
+                            state.direct_stroke = False
+                            state.force_tiles = True
                         return
-                    self.direct_stroke = paint_stroke
+                    if state is not None:
+                        state.direct_stroke = paint_stroke
                     self._warn_effect_allocation_once(error)
                     return
 
             self.background_pixmap = target_map
             self.background_pixmap_scale = plan.tier
-            self.direct_stroke = False
-            self.force_tiles = False
-            self.cache_dirty = False
-            self.cache_rendered_generation = self.cache_generation
+            if state is not None:
+                state.direct_stroke = False
+                state.force_tiles = False
+                state.cache_dirty = False
+                state.cache_rendered_generation = state.cache_generation
         finally:
             self.repainting = False
-
 
     def _mark_effect_cache_dirty(self):
         self.cache_generation += 1
