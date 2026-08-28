@@ -437,6 +437,37 @@
 
 ## 2026-08-27
 
+### 在线修复提示词 A/B 实验 + V3_final 定稿采纳
+
+**问题/需求：** 用户找到一条外传的在线图像修复提示词（SD 权重语法风格，据称指令遵循显著更好），但未覆盖本项目拓展场景（损伤修复/任意语言/局部 mask 调度）。经 20 次 Meshy/nano-banana-2 实测 A/B（4 个测试窗口：气泡、压线文字、手绘波浪气泡+颗粒内纹、多纹理背景）确定最终配方并收尾。
+
+**改动要点：**
+
+- **实验结论**（脚本在 gitignore 的 tmp/ 下，成图同）：① SD 权重语法 `(x:1.6)` 对 LLM 系图像模型是负资产——去权重版全场最佳，带权重版反而触发红框重绘；② 旧基线提示词在"文字压速度线"场景灾难性翻车（黑块），新提示词的纹理延续措辞（网点/排线/笔压逐项对齐）是关键差异；③ "红线仅是空间标记"语义必须保留（否则模型把标注线重绘成内容）；④ 气泡遮挡语义只能写成条件句，无条件"不要延续背景"会把非气泡区域吓成平色斑；⑤ nano-banana-2 运行间随机性显著，气泡内颗粒纹理偶尔幻觉线条/平涂，复跑通常可解（模型侧限制，提示词无法根治）。
+- **`modules/inpaint/inpaint_llm.py`**：`_REGIONAL_PROMPT` 替换为 V3_final（去权重纹理延续 + 红线语义 + 语言无关 + 气泡几何保护 + 禁平涂/禁发明对象），`_MASK_PROMPT` 同步为同策略（掩码路径措辞）；两条首句均保留 "or damage" 以覆盖损伤修复场景；常量注释入档上述实验结论防回退。
+- **i18n 补缺**：`translate/zh_CN.ts` DrawingPanel 上下文补 `"queued"→"排队"`（此前点脏页批次工作区改动遗漏，verify i18n 步失败后补齐）。
+
+**涉及文件：** `modules/inpaint/inpaint_llm.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/daily_log.md`
+
+---
+
+### 在线修复回贴质量：羽化过渡 + 修复结果对位微调
+
+**问题/需求：** 在线修复偶发两类场外问题：① API 返回图与原图轻微错位，希望支持手动微调位置后再贴合；② 生图分辨率与原图不同，在修复区边界出现清晰/模糊的分界线（硬二值掩膜直接线性回贴造成）。前者做成交互功能，后者先做确定性缓解。
+
+**改动要点：**
+
+- **羽化过渡**（`modules/inpaint/inpaint_llm.py`）：新增 `feathered_alpha()`——掩膜内部全部完全不透明（红线标记必被覆盖），边界外 ~2σ（σ=3px）平滑衰减；`_inpaint` 回贴由硬二值掩膜改用该软 alpha 混合。模型输出上采样 resize 由 `INTER_LINEAR` 改 `INTER_LANCZOS4`（`_request_inpaint` 与 `_inpaint` 两处），低分辨率返回图更锐。单测 `tests/test_llm_feather_alpha.py` 4 例（内部不透明/外侧衰减/全掩膜/远场零扰动）。
+- **对位微调模式**（`ui/drawingpanel.py`）：LLMInpaint 新增参数 "align after repair"（默认关）；开启后 AI 修图完成不立即提交，画布上以浮层挂起修复补丁，方向键微调（Shift=10px）、Enter 应用/Esc 放弃，偏移上限取 mask 短边一半（防薄 mask 滑出露出未修复内容），通知中心 status 徽标给操作提示；应用时按当前偏移重算羽化合成再入撤销栈，新修复请求隐式确认挂起会话。模块管理器把实际生效的修复器名附到结果 dict（仅 LLM 触发）。
+- **面板硬二值合并移除**：`on_inpaint_finished` 原有的 `np.where(mask3>0, …)` 保护对本模块输出会把羽化带裁掉（接缝回归），删除后直接采用引擎混合结果（原逻辑对本地修复器本就是 no-op）。
+- **i18n**：DrawingPanel 提示条 + ParamWidget 参数描述两条翻译。
+
+**涉及文件：** `modules/inpaint/inpaint_llm.py`、`ui/drawingpanel.py`、`ui/module_manager.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_llm_feather_alpha.py`（新）、`docs/daily_log.md`
+
+**修后补丁（同日）：** 首版对位浮层把补丁 PixmapItem 直接加在场景顶层，而页面缩放挂在 `canvas.baseLayer.setScale()`——非 1:1 视图下补丁位置/尺寸完全错开，表现即"修复完看不到修复图、挂起期间又没进撤销栈所以撤不回"。修复：补丁 `setParentItem(baseLayer)` 后再 addItem（跟随页面变换，任意缩放正确落位）。配套加固三处：① 进入对位模式包 try/except，失败降级为直接提交（修复结果永不丢）；② 应用级 eventFilter 全程异常防护——PyQt6 中过滤回调里未捕获异常会升级成 qFatal 杀掉整个进程（离屏复现确认）；③ eventFilter 接管 `ShortcutOverride`（Esc/Enter/方向键），否则主窗口全局 "escape" 快捷键会把 Esc 吞掉。新增 `tests/test_repair_align.py` 4 例：挂起时补丁挂在 baseLayer 且随缩放正确映射、Enter 提交偏移合成入撤销栈、Esc 零改动放弃、全局 Esc 快捷键被压制。
+
+---
+
 ### scripts 目录审计清理：合并入口 + 删遗留 + 消 i18n 白名单漂移
 
 **问题/需求：** scripts 目录多为工作途中 AI 自写的单一用途脚本，用户要求审计清理/合并/拓展。逐个读完全部 14 个脚本并交叉核对引用后按方案实施。
@@ -456,3 +487,22 @@
 **验证：** `verify.py --full` 全绿（语法 29 文件/docs/audit 16 删 2 休眠/i18n/qm/冒烟/pytest 431 例）；`render_sync` 7/7 PASS；便携 Python 开启 safe_path 不自动加脚本目录，i18n_check/ts_auto_fill 已自举 `sys.path`。
 
 **涉及文件：** `scripts/verify.py`、`scripts/i18n_common.py`（新）、`scripts/i18n_check.py`、`scripts/ts_auto_fill.py`、`scripts/check_syntax.py`、`scripts/check_docs.py`、`scripts/check_audit.py`、`scripts/generate_manifest.py`、`scripts/README.md`、`tests/test_render_sync.py`（新，自 render_sync_probe.py 迁移）、`tests/test_auto_squeeze.py`、`tests/test_base_styles.py`、`tests/test_dependency_startup.py`、`scripts/check_all.py`（删）、`scripts/run_module.py`（删）、`scripts/build_win.bat`（删）、`scripts/render_sync_probe.py`（删）、`scripts/audit_registry.json`、`AGENTS.md`、`docs/项目概述.md`、`docs/技术实现/反向移植_规范.md`、`docs/daily_log.md`
+
+---
+
+## 2026-08-28
+
+### AI 修图批次迭代：红高亮改描边标记 + OpenAI 真 mask 编辑 + 轮询进度回调 + 修复工具泄漏修复
+
+**问题/需求：** 接续 08-27 提示词定稿批次收尾 AI 修图工作区改动：红色半透明高亮把待擦内容本身也染红，模型容易"保留"色块不擦；OpenAI-compatible 端点支持真 mask 编辑却未用上；Meshy 轮询期间只有静态 "Inpainting..." 无进度感；且修复工具的画布模式会泄漏到文本编辑页（AI 画笔激活时在编辑页左键拖拽画的是修复笔刷而非框选文本块）。
+
+**改动要点：**
+
+- **标记重构**（`modules/inpaint/inpaint_llm.py`）：部分掩膜标记由红色半透明高亮改为 3px 红描边（`_mark_mask_outline`，MORPH_GRADIENT 烘焙在掩膜内缘，待擦内容对模型保持可读），回贴掩膜膨胀 5×5 核覆盖描边残留；`_REGIONAL_PROMPT`/`_MASK_PROMPT` V3_final 定稿入库，A/B 实验结论写入常量注释防回退。
+- **真 mask 编辑路径**：OpenAI-compatible 端点改发 RGBA PNG mask（`_mask_png_file`，白色=编辑区）+ `_MASK_PROMPT`（原图保持可读，比烘焙色标更可靠）；Gemini/OpenRouter/Meshy 无 mask 字段，回退描边标记。新增 `quality` 参数（auto/low/medium/high）。
+- **轮询进度回调**：`set_progress_callback`/`_report_progress`（Meshy 轮询回报 elapsed/progress/preceding，worker 线程回调）；`ui/module_manager.py` 新增 `ai_inpaint_progress` 信号桥接 GUI 线程；`ui/drawingpanel.py::on_ai_inpaint_progress` 把 "Inpainting... 12s · 45% · 排队 1" 刷进通知中心活动徽标。
+- **工具泄漏修复**（`ui/drawingpanel.py`）：`_apply_canvas_mode` 面板不可见时画布模式归 `NONE`（showEvent 重评恢复真实模式），`_update_crop_visibility` 裁剪框加面板可见门控 + `hideEvent` 重评——文本编辑页/文本块页不再残留修复笔刷模式与裁剪框。新增 `tests/test_edit_page_tool_leak.py` 回归。
+- **`DEFAULT_INPAINT_PROMPT` 纹理延续措辞**（`utils/profile_manager.py`）：通用提示词与 V3_final 同策略（背景重建/网点排线延续/禁平涂）。
+- i18n：ts 补 DrawingPanel "queued"，qm 重编译。
+
+**涉及文件：** `modules/inpaint/inpaint_llm.py`、`utils/profile_manager.py`、`ui/drawingpanel.py`、`ui/module_manager.py`、`tests/test_edit_page_tool_leak.py`（新）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/daily_log.md`

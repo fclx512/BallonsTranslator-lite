@@ -17,16 +17,66 @@ from ..textdetector import TextBlock
 # tint everything and help nothing.
 _MASK_MIN_SUBSET = 0.90
 
-# Short, focused repair prompt sent when a partial region is highlighted. It
-# replaces the profile's long generic ``image_prompt`` so the model focuses on
-# erasing the marked region instead of restyling the whole crop (which is what
-# produced the "didn't erase text / added coloured edges" regression). A repair
-# marker is an LLM prompt and is intentionally not translated.
+# Outline marker width (px) baked around a partial mask, plus the paste-mask
+# dilation that covers it again afterwards. The marker is drawn on the mask's
+# inner boundary so it is always inside the region blended back; dilating the
+# blend mask a couple of pixels adds a safety margin so no residual red line
+# survives at the boundary.
+_OUTLINE_THICKNESS = 3
+_MASK_EXPAND_KERNEL = np.ones((5, 5), np.uint8)
+
+# Focused repair prompt sent when a partial region is outlined. It replaces the
+# profile's long generic ``image_prompt`` so the model focuses on erasing the
+# outlined region instead of restyling the whole crop. Wording A/B-validated on
+# nano-banana-2 (2026-08-27, 20-run experiment): the texture-continuation detail
+# is what prevents a solid-blob regression on text over speedlines/screentone;
+# SD-style weights ("(x:1.6)") make results worse, never add them; the red-line
+# semantics must stay or the model redraws the marker as content; balloon/occlusion
+# phrasing must stay conditional — an unconditional "do not continue background"
+# flattens non-bubble regions. Residual risk: textured balloon interiors still
+# occasionally get invented linework (run variance, a rerun usually fixes it).
+# A repair prompt is an LLM prompt and is intentionally not translated.
 _REGIONAL_PROMPT = (
-    "The area highlighted in red is embedded text or damage that must be removed. "
-    "Treat the red as a repair marker, not as image content, and reconstruct the "
-    "background beneath it so it continues the surrounding artwork naturally. "
-    "Keep every pixel outside the red area unchanged."
+    "The area enclosed by the red outline is lettering or damage that must be "
+    "removed completely. The red line is only a spatial indicator for where to "
+    "edit; it is not image content and must never appear in the result. "
+    "Reconstruct what was behind the lettering so it looks as if nothing was ever "
+    "there: sample the pixels immediately surrounding the outlined region and "
+    "continue them into the erased area with identical structure — keep screentone "
+    "dot patterns and grain, hatching, speed lines and every other effect line "
+    "running through at the same spacing, angle, density and brightness; match the "
+    "original pen stroke weight; preserve the original shadow and highlight "
+    "distribution. Do NOT fill the erased area with a flat solid colour or a plain "
+    "blank gap, do not introduce gradients, blur or shading that the surroundings "
+    "do not have, and do not invent new objects. If the region lies inside a "
+    "speech balloon, keep the balloon's border, shape, volume and tail exactly "
+    "intact and continue the balloon's interior texture instead of filling it "
+    "flat; if it touches a panel border, keep that border sharp, straight and "
+    "unbroken. Leave every pixel outside the outlined region unchanged."
+)
+
+# Same repair intent as ``_REGIONAL_PROMPT`` but pointed at the real edit mask
+# instead of a baked red outline. Sent when the endpoint accepts a ``mask``
+# field (OpenAI-compatible image editing), where the mask itself marks the region
+# to edit while the original stays legible. Same validated wording as the
+# regional prompt. A repair prompt is an LLM prompt and is intentionally not
+# translated.
+_MASK_PROMPT = (
+    "The region indicated by the mask is lettering or damage that must be removed "
+    "completely. Reconstruct what was behind the lettering so it looks as if "
+    "nothing was ever there: sample the pixels immediately surrounding the mask "
+    "and continue them into the erased area with identical structure — keep "
+    "screentone dot patterns and grain, hatching, speed lines and every other "
+    "effect line running through at the same spacing, angle, density and "
+    "brightness; match the original pen stroke weight; preserve the original "
+    "shadow and highlight distribution. Do NOT fill the erased area with a flat "
+    "solid colour or a plain blank gap, do not introduce gradients, blur or "
+    "shading that the surroundings do not have, and do not invent new objects. If "
+    "the region lies inside a speech balloon, keep the balloon's border, shape, "
+    "volume and tail exactly intact and continue the balloon's interior texture "
+    "instead of filling it flat; if it touches a panel border, keep that border "
+    "sharp, straight and unbroken. Leave every pixel outside the masked region "
+    "identical to the original."
 )
 
 
@@ -83,6 +133,12 @@ class LLMInpaint(InpainterBase):
             "value": 180.0,
             "description": "HTTP timeout for image cleanup requests in seconds. Set to 0 to disable.",
         },
+        "quality": {
+            "type": "selector",
+            "options": ["auto", "low", "medium", "high"],
+            "value": "auto",
+            "description": "Output quality for the image model. 'auto' uses the provider default.",
+        },
         "description": "Inpaint using the selected image-capable LLM profile.",
     }
 
@@ -98,6 +154,7 @@ class LLMInpaint(InpainterBase):
         self.request_count_minute = 0
         self.minute_start_time = time.time()
         self.stop_event = None
+        self._progress_cb = None
 
     # ── Profile Access ─────────────────────────────────────────────
 
@@ -182,6 +239,23 @@ class LLMInpaint(InpainterBase):
 
     def set_stop_event(self, stop_event):
         self.stop_event = stop_event
+
+    def set_progress_callback(self, cb):
+        """Give the UI a hook to render in-progress status while polling.
+
+        ``cb`` receives a small dict (``elapsed``/``progress``/``preceding``) on
+        each poll. It runs on the worker thread, so the caller is responsible for
+        bridging it back to the GUI thread (e.g. via a Qt signal).
+        """
+        self._progress_cb = cb
+
+    def _report_progress(self, info: dict):
+        if self._progress_cb is None:
+            return
+        try:
+            self._progress_cb(info)
+        except Exception:
+            pass  # UI hooks must never break the repair loop
 
     def _wait(self, seconds: float):
         if seconds <= 0:
@@ -419,6 +493,54 @@ class LLMInpaint(InpainterBase):
         buffer.name = "image.png"
         return buffer
 
+    @staticmethod
+    def _mask_png_file(mask: np.ndarray) -> io.BytesIO:
+        """Encode a binary mask as an RGBA PNG for OpenAI-style mask editing.
+
+        OpenAI image-edit masks mark the region to be edited as opaque white and the
+        region to be preserved as transparent; the mask must carry an alpha channel
+        and match the reference image's pixel size. ``mask`` is a binary (HxW) array
+        where ``> 127`` marks the region to edit.
+        """
+        m = (mask > 127).astype(np.uint8)
+        height, width = m.shape
+        value = (m * 255).astype(np.uint8)
+        rgba = np.zeros((height, width, 4), dtype=np.uint8)
+        rgba[..., 0] = value
+        rgba[..., 1] = value
+        rgba[..., 2] = value
+        rgba[..., 3] = value
+        buffer = io.BytesIO()
+        Image.fromarray(rgba, "RGBA").save(buffer, format="PNG")
+        buffer.seek(0)
+        buffer.name = "mask.png"
+        return buffer
+
+    @staticmethod
+    def _ref_image_field(base_url: str) -> str:
+        """Return the multipart field name for the reference image.
+
+        OpenAI-compatible endpoints expect ``image``; the JuAPI gateway documents
+        ``image[]`` (repeated for multiple reference images). Picking the name from
+        the host makes a single reference image work on either without a separate
+        provider branch everywhere else.
+        """
+        host = urlparse(base_url).netloc.lower()
+        return "image[]" if (host == "juapi.net" or host.endswith(".juapi.net")) else "image"
+
+    def _supports_mask_api(self, profile: dict) -> bool:
+        """True when the endpoint can accept an image-edit ``mask`` field.
+
+        Only the OpenAI-compatible branch takes a real mask; Gemini, OpenRouter and
+        Meshy fall back to the bake-the-outline path because they have no mask field.
+        """
+        base_url = self._image_base_url(profile)
+        return not (
+            self._is_gemini_url(base_url)
+            or self._is_openrouter_url(base_url)
+            or self._is_meshy_url(base_url)
+        )
+
     def _api_args(self, profile: dict, image_file, prompt: str = None) -> Dict:
         return {
             "model": (profile.get("image_model") or "").strip(),
@@ -514,28 +636,45 @@ class LLMInpaint(InpainterBase):
         self._raise_for_response(profile, response)
         return self._decode_gemini_response_image(response.json())
 
-    def _request_openai_compatible_inpaint(self, client, profile: dict, image_file, prompt: str = None) -> np.ndarray:
+    def _request_openai_compatible_inpaint(self, client, profile: dict, image_file, prompt: str = None, mask_file=None) -> np.ndarray:
         base_url = self._image_base_url(profile)
         api_key = self._api_key_for_profile(profile)
         args = self._api_args(profile, image_file, prompt=prompt)
+        data = {
+            "model": args["model"],
+            "prompt": args["prompt"],
+        }
+        quality = self.get_param_value("quality")
+        if quality and quality != "auto":
+            data["quality"] = quality
+        files = {
+            self._ref_image_field(base_url): ("image.png", image_file.getvalue(), "image/png"),
+        }
+        if mask_file is not None:
+            files["mask"] = ("mask.png", mask_file.getvalue(), "image/png")
         response = client.post(
             base_url,
             headers=self._headers(api_key),
-            data={
-                "model": args["model"],
-                "prompt": args["prompt"],
-            },
-            files={
-                "image": ("image.png", image_file.getvalue(), "image/png"),
-            },
+            data=data,
+            files=files,
         )
         self._raise_for_response(profile, response)
         return self._decode_response_image(response.json())
 
-    def _request_inpaint(self, profile: dict, img: np.ndarray, prompt: str = None) -> np.ndarray:
+    def _request_inpaint(self, profile: dict, img: np.ndarray, prompt: str = None, mask: np.ndarray = None) -> np.ndarray:
         client = self._initialize_client(profile)
         request_img = self._scale_image_for_request(img)
         image_file = self._png_image_file(request_img)
+        mask_file = None
+        if mask is not None:
+            request_mask = mask
+            if request_mask.shape[:2] != request_img.shape[:2]:
+                request_mask = cv2.resize(
+                    request_mask,
+                    (request_img.shape[1], request_img.shape[0]),
+                    interpolation=cv2.INTER_NEAREST,
+                )
+            mask_file = self._mask_png_file(request_mask)
         self._respect_delay()
         try:
             base_url = self._image_base_url(profile)
@@ -548,12 +687,16 @@ class LLMInpaint(InpainterBase):
             elif self._is_openrouter_url(base_url):
                 result = self._request_openrouter_inpaint(client, profile, image_file, prompt=prompt)
             else:
-                result = self._request_openai_compatible_inpaint(client, profile, image_file, prompt=prompt)
+                result = self._request_openai_compatible_inpaint(
+                    client, profile, image_file, prompt=prompt, mask_file=mask_file
+                )
             if result.shape[:2] != img.shape[:2]:
                 result = cv2.resize(result, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR)
             return result
         finally:
             image_file.close()
+            if mask_file is not None:
+                mask_file.close()
 
     # ── Meshy provider (TEMPORARY ─ removable) ─────────────────────
     # Image-to-image via the temporary Meshy API
@@ -636,6 +779,7 @@ class LLMInpaint(InpainterBase):
             raise RuntimeError("Meshy image cleanup returned no task id.")
         poll_url = self._join_url(base_url, f"/{task_id}")
         consecutive_poll_errors = 0
+        started = time.time()
         for _ in range(self._MESHY_MAX_POLLS):
             self._wait(self._MESHY_POLL_INTERVAL)
             try:
@@ -657,6 +801,13 @@ class LLMInpaint(InpainterBase):
             consecutive_poll_errors = 0
             task = poll_resp.json()
             status = str(task.get("status") or "").upper()
+            progress = task.get("progress")
+            preceding = task.get("preceding_tasks")
+            self._report_progress({
+                "elapsed": int(time.time() - started),
+                "progress": int(progress) if isinstance(progress, (int, float)) and progress is not None else None,
+                "preceding": preceding if isinstance(preceding, int) else None,
+            })
             if status == "SUCCEEDED":
                 image_url = self._meshy_image_url(task)
                 if not image_url:
@@ -684,17 +835,32 @@ class LLMInpaint(InpainterBase):
         covered = float((mask > 127).mean())
         return 0.0 < covered <= _MASK_MIN_SUBSET
 
-    def _highlight_mask(self, img: np.ndarray, mask: np.ndarray) -> np.ndarray:
-        """Overlay the mask region as a translucent red repair marker so the
-        server-side model can spatially see which pixels to erase. ``img`` and
-        ``mask`` are always supplied at the same crop-local size, so the marker
-        lines up exactly with the region blended back afterwards."""
+    def _mark_mask_outline(self, img: np.ndarray, mask: np.ndarray) -> np.ndarray:
+        """Bake a thin red outline around the mask region onto the crop.
+
+        A solid tint hides the very text the model has to remove, so the model
+        often "keeps" the coloured blob. An outline (``_OUTLINE_THICKNESS`` px)
+        instead leaves the interior fully legible and marks only the boundary,
+        so the model sees exactly what to erase. The marker sits on the mask's
+        inner boundary, i.e. always inside the region blended back afterwards.
+        ``img`` and ``mask`` are supplied crop-local at the same size.
+        """
         m = mask > 127
         if not m.any():
             return img
+        outline = cv2.morphologyEx(
+            m.astype(np.uint8), cv2.MORPH_GRADIENT,
+            np.ones((_OUTLINE_THICKNESS, _OUTLINE_THICKNESS), np.uint8),
+        )
+        ring = (cv2.dilate(
+            ((outline > 0) & m).astype(np.uint8),
+            np.ones((3, 3), np.uint8), 1,
+        ) > 0) & m  # widen to a clean 2-3px line, kept inside the mask region
+        if not ring.any():
+            return img
         tint = np.array([255, 40, 40], dtype=np.float32)  # red marker, RGB (img is RGB)
-        out = img.astype(np.float32) * 0.55 + tint * 0.45
-        out = np.where(m[..., None], out, img.astype(np.float32))
+        out = img.astype(np.float32)
+        out[ring] = out[ring] * 0.4 + tint * 0.6
         return np.clip(out, 0, 255).astype(np.uint8)
 
     def _inpaint(
@@ -705,25 +871,36 @@ class LLMInpaint(InpainterBase):
             raise LLMInpaintError("No image-capable LLM profile is configured.")
         self._validate_profile(profile)
 
-        mask_original = (mask > 127)[..., None].astype(np.uint8)
-        # When the user annotated a partial region, overlay it with a red repair
-        # marker and hand the model a short, focused "erase here" prompt. That
-        # keeps its attention on the marked pixels so it reconstructs the
-        # background rather than restyling the whole crop. ``img`` and ``mask``
-        # are always crop-local and the same size, so the marker lines up exactly
-        # with the region that gets blended back afterwards.
+        mask_bin = (mask > 127).astype(np.uint8)
+        # When the user annotated a partial region, tell the model where to edit. On
+        # an endpoint that accepts a real mask (OpenAI-compatible), send the mask
+        # itself with a focused "erase here" prompt: the mask marks the region to edit
+        # while the original keeps the text legible, which is more reliable than baking
+        # colour into the crop (the "didn't erase text / coloured edges" regression).
+        # On providers without a mask field (Gemini / OpenRouter / Meshy) fall back to
+        # a thin red outline + the same intent. The blend mask is dilated a couple of
+        # px only on the outline path so the paste region covers the marker; ``img``
+        # and ``mask`` are always crop-local and the same size, so the marker lines up
+        # exactly with the region that gets blended back.
         request_img = img
         prompt = None
+        send_mask = None
         if self._is_partial_mask(mask):
-            request_img = self._highlight_mask(img, mask)
-            prompt = _REGIONAL_PROMPT
+            if self._supports_mask_api(profile):
+                send_mask = mask_bin
+                prompt = _MASK_PROMPT
+            else:
+                request_img = self._mark_mask_outline(img, mask)
+                prompt = _REGIONAL_PROMPT
+                mask_bin = cv2.dilate(mask_bin, _MASK_EXPAND_KERNEL, iterations=1)
+        mask_original = mask_bin[..., None]
         retry_attempt = 0
         max_retries = self.get_param_value("retry attempts")
         while True:
             if self.stop_event is not None and self.stop_event.is_set():
                 raise LLMInpaintStopped()
             try:
-                result = self._request_inpaint(profile, request_img, prompt=prompt)
+                result = self._request_inpaint(profile, request_img, prompt=prompt, mask=send_mask)
                 if result.shape[:2] != img.shape[:2]:
                     result = cv2.resize(
                         result, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR

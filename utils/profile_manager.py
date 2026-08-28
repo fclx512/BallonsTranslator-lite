@@ -60,12 +60,18 @@ DEFAULT_OCR_SYSTEM_PROMPT = (
     "reconstructing jumbled characters that result from misreading vertical text."
 )
 DEFAULT_INPAINT_PROMPT = (
-    "Clean up this comic or manga image for further scanlation. Remove all visible text elements, "
-    "including speech bubble lettering, captions, sound effects, signs, labels, and text-like "
-    "watermarks. Keep all non-text artwork intact: characters, faces, line art, screentones, "
-    "backgrounds, speech bubbles, panel borders, lighting, colors, texture, and composition. "
-    "Do not translate, redraw with new text, add captions, or explain the edit. Return only the "
-    "cleaned image."
+    "Clean up this comic or manga image for further scanlation. Remove all visible text "
+    "elements, including speech bubble lettering, captions, sound effects, signs, labels "
+    "and text-like watermarks. When text is removed, reconstruct the artwork that was "
+    "hidden behind it by sampling the surrounding pixels and extending them into the gap "
+    "so it looks as if nothing was ever there: continue the screentone, hatching, "
+    "gradients, shading, panel borders and structural lines (speed lines, scan lines, "
+    "cross-hatching) with consistent spacing, angle, density, colour and brightness. Do "
+    "not leave a flat solid colour, a blank white gap, or a coloured smear where the text "
+    "was. Keep all other non-text artwork intact: characters, faces, line art, "
+    "backgrounds, speech bubbles, panel borders, lighting, colours, texture and "
+    "composition. Do not translate, redraw with new text, add captions, or explain the "
+    "edit. Return only the cleaned image."
 )
 
 SAMPLE_PROFILES = [

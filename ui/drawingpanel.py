@@ -729,6 +729,7 @@ class DrawingPanel(Widget):
     def initDLModule(self, module_manager: ModuleManager):
         self.module_manager = module_manager
         module_manager.canvas_inpaint_finished.connect(self.on_inpaint_finished)
+        module_manager.ai_inpaint_progress.connect(self.on_ai_inpaint_progress)
         module_manager.inpaint_thread.inpaint_failed.connect(self.on_inpaint_failed)
 
     def setInpaintToolWidth(self, width):
@@ -1122,7 +1123,13 @@ class DrawingPanel(Widget):
         return self.currentTool in (self.inpaintTool, self.rectTool, self.aiTool)
 
     def _apply_canvas_mode(self):
-        if self._crop_active:
+        # The tool's canvas mode must not leak onto the text-edit page (or the
+        # startup sequence before the panel is first shown): while the panel is
+        # hidden the canvas parks at NONE. showEvent re-checks the current
+        # tool, which lands back here and re-applies the real mode.
+        if not self.isVisible():
+            self.canvas.image_edit_mode = ImageEditMode.NONE
+        elif self._crop_active:
             self.canvas.image_edit_mode = ImageEditMode.CropMode
         else:
             self.canvas.image_edit_mode = self._tool_natural_mode()
@@ -1163,7 +1170,17 @@ class DrawingPanel(Widget):
 
     def _update_crop_visibility(self):
         is_crop_tool = self._crop_tool_active()
-        show = self._inpainter_is_llm() and self._crop_setup and is_crop_tool
+        # The crop frame belongs to the online-LLM repair tool; it must only
+        # render while that tool's panel is on screen (draw-board mode). When
+        # the panel is hidden (text-edit / text-block modes) the current tool
+        # stays aiTool so the rect would otherwise linger as a stray overlay on
+        # the canvas — gate it on the panel being visible too.
+        show = (
+            self.isVisible()
+            and self._inpainter_is_llm()
+            and self._crop_setup
+            and is_crop_tool
+        )
         self.crop_rect_item.setVisible(show)
         if show and self.crop_rect_item.rect().width() <= 2:
             self._place_crop_default()
@@ -1309,6 +1326,29 @@ class DrawingPanel(Widget):
         if not self._inpainter_is_llm():
             return
         notification.activity("llm-inpaint", True, self.tr("Inpainting..."))
+
+    def on_ai_inpaint_progress(self, info: dict):
+        """Refresh the LLM-inpaint busy badge with elapsed time + server status.
+
+        Runs on the GUI thread (Qt bridges the worker-thread signal). ``info``
+        carries optional ``elapsed``/``progress``/``preceding`` from the poll, so
+        only the fields the server actually returned are shown.
+        """
+        suffix_parts = []
+        elapsed = info.get("elapsed")
+        if isinstance(elapsed, (int, float)):
+            suffix_parts.append(f"{int(elapsed)}s")
+        progress = info.get("progress")
+        if progress is not None:
+            suffix_parts.append(self.tr("{0}%").format(int(progress)))
+        preceding = info.get("preceding")
+        if isinstance(preceding, int) and preceding > 0:
+            suffix_parts.append(f"{self.tr('queued')} {int(preceding)}")
+        suffix = " · ".join(suffix_parts)
+        label = self.tr("Inpainting...")
+        if suffix:
+            label = f"{label} {suffix}"
+        notification.activity("llm-inpaint", True, label)
 
     def _hide_busy_overlay(self, done: bool = False):
         notification.activity("llm-inpaint", False)
@@ -1660,6 +1700,10 @@ class DrawingPanel(Widget):
 
     def hideEvent(self, e) -> None:
         self.clearInpaintItems()
+        # The crop frame lives on the canvas scene; hiding the panel leaves the
+        # current tool as aiTool so without this the rect would stay visible in
+        # text-edit / text-block modes. Re-evaluate it on hide.
+        self._update_crop_visibility()
         return super().hideEvent(e)
 
     def clearInpaintItems(self):

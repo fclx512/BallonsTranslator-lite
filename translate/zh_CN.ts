@@ -1305,6 +1305,10 @@
     <context>
         <name>DrawingPanel</name>
         <message>
+            <source>queued</source>
+            <translation>排队</translation>
+        </message>
+        <message>
             <location filename="..\ui\drawingpanel.py" line="395" />
             <source>Mask Opacity</source>
             <translation>掩膜不透明度</translation>

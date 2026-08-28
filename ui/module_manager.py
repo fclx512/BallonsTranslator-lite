@@ -1430,6 +1430,7 @@ class ModuleManager(QObject):
 
     finish_translate_page = Signal(str)
     canvas_inpaint_finished = Signal(dict)
+    ai_inpaint_progress = Signal(dict)
     inpaint_th_finished = Signal()
 
     imgtrans_pipeline_finished = Signal()
@@ -2028,6 +2029,10 @@ class ModuleManager(QObject):
             return False
         if inpainter == "LLMInpaint":
             inpainter = self._get_ai_inpainter()
+            # Report polling progress (elapsed / % / queued) to the UI via a
+            # signal; the engine calls this on the worker thread, so Qt bridges
+            # it back to the GUI-thread slots automatically.
+            inpainter.set_progress_callback(self.ai_inpaint_progress.emit)
         self.run_canvas_inpaint = True
         self.inpaint(**inpaint_dict, inpainter=inpainter)
         return True
