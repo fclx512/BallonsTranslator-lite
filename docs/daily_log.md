@@ -451,23 +451,6 @@
 
 ---
 
-### 在线修复回贴质量：羽化过渡 + 修复结果对位微调
-
-**问题/需求：** 在线修复偶发两类场外问题：① API 返回图与原图轻微错位，希望支持手动微调位置后再贴合；② 生图分辨率与原图不同，在修复区边界出现清晰/模糊的分界线（硬二值掩膜直接线性回贴造成）。前者做成交互功能，后者先做确定性缓解。
-
-**改动要点：**
-
-- **羽化过渡**（`modules/inpaint/inpaint_llm.py`）：新增 `feathered_alpha()`——掩膜内部全部完全不透明（红线标记必被覆盖），边界外 ~2σ（σ=3px）平滑衰减；`_inpaint` 回贴由硬二值掩膜改用该软 alpha 混合。模型输出上采样 resize 由 `INTER_LINEAR` 改 `INTER_LANCZOS4`（`_request_inpaint` 与 `_inpaint` 两处），低分辨率返回图更锐。单测 `tests/test_llm_feather_alpha.py` 4 例（内部不透明/外侧衰减/全掩膜/远场零扰动）。
-- **对位微调模式**（`ui/drawingpanel.py`）：LLMInpaint 新增参数 "align after repair"（默认关）；开启后 AI 修图完成不立即提交，画布上以浮层挂起修复补丁，方向键微调（Shift=10px）、Enter 应用/Esc 放弃，偏移上限取 mask 短边一半（防薄 mask 滑出露出未修复内容），通知中心 status 徽标给操作提示；应用时按当前偏移重算羽化合成再入撤销栈，新修复请求隐式确认挂起会话。模块管理器把实际生效的修复器名附到结果 dict（仅 LLM 触发）。
-- **面板硬二值合并移除**：`on_inpaint_finished` 原有的 `np.where(mask3>0, …)` 保护对本模块输出会把羽化带裁掉（接缝回归），删除后直接采用引擎混合结果（原逻辑对本地修复器本就是 no-op）。
-- **i18n**：DrawingPanel 提示条 + ParamWidget 参数描述两条翻译。
-
-**涉及文件：** `modules/inpaint/inpaint_llm.py`、`ui/drawingpanel.py`、`ui/module_manager.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_llm_feather_alpha.py`（新）、`docs/daily_log.md`
-
-**修后补丁（同日）：** 首版对位浮层把补丁 PixmapItem 直接加在场景顶层，而页面缩放挂在 `canvas.baseLayer.setScale()`——非 1:1 视图下补丁位置/尺寸完全错开，表现即"修复完看不到修复图、挂起期间又没进撤销栈所以撤不回"。修复：补丁 `setParentItem(baseLayer)` 后再 addItem（跟随页面变换，任意缩放正确落位）。配套加固三处：① 进入对位模式包 try/except，失败降级为直接提交（修复结果永不丢）；② 应用级 eventFilter 全程异常防护——PyQt6 中过滤回调里未捕获异常会升级成 qFatal 杀掉整个进程（离屏复现确认）；③ eventFilter 接管 `ShortcutOverride`（Esc/Enter/方向键），否则主窗口全局 "escape" 快捷键会把 Esc 吞掉。新增 `tests/test_repair_align.py` 4 例：挂起时补丁挂在 baseLayer 且随缩放正确映射、Enter 提交偏移合成入撤销栈、Esc 零改动放弃、全局 Esc 快捷键被压制。
-
----
-
 ### scripts 目录审计清理：合并入口 + 删遗留 + 消 i18n 白名单漂移
 
 **问题/需求：** scripts 目录多为工作途中 AI 自写的单一用途脚本，用户要求审计清理/合并/拓展。逐个读完全部 14 个脚本并交叉核对引用后按方案实施。
