@@ -1,4 +1,5 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
 <TS version="2.1" language="zh_CN" sourcelanguage="en">
     <context>
         <name>AboutDialog</name>
@@ -22,7 +23,7 @@
             <source>Branch</source>
             <translation>分支</translation>
         </message>
-</context>
+    </context>
     <context>
         <name>BottomBar</name>
         <message>
@@ -203,46 +204,6 @@
             <translation>整理换行并收缩框</translation>
         </message>
         <message>
-            <location filename="..\ui\canvas.py" line="1190" />
-            <source>Reorder</source>
-            <translation>重排</translation>
-        </message>
-        <message>
-            <location filename="..\ui\canvas.py" line="1192" />
-            <source>Move Up</source>
-            <translation>上移</translation>
-        </message>
-        <message>
-            <location filename="..\ui\canvas.py" line="1193" />
-            <source>Move Down</source>
-            <translation>下移</translation>
-        </message>
-        <message>
-            <location filename="..\ui\canvas.py" line="1194" />
-            <source>Move to Top</source>
-            <translation>移到顶部</translation>
-        </message>
-        <message>
-            <location filename="..\ui\canvas.py" line="1195" />
-            <source>Move to Bottom</source>
-            <translation>移到底部</translation>
-        </message>
-        <message>
-            <location filename="..\ui\canvas.py" line="1197" />
-            <source>Move to Position...</source>
-            <translation>移动到位置…</translation>
-        </message>
-        <message>
-            <location filename="..\ui\canvas.py" line="1271" />
-            <source>Move to Position</source>
-            <translation>移动到位置</translation>
-        </message>
-        <message>
-            <location filename="..\ui\canvas.py" line="1272" />
-            <source>Target position (1-%1):</source>
-            <translation>目标位置 (1-%1)：</translation>
-        </message>
-        <message>
             <location filename="..\ui\context_menu_config.py" />
             <source>Undo</source>
             <translation>撤销</translation>
@@ -348,46 +309,7 @@
         <message>
             <location filename="..\ui\model_check_dialog.py" line="553" />
             <source>{}/{} ready</source>
-            <translation type="unfinished" />
-        </message>
-    </context>
-    <context>
-        <name>SmartReorderDialog</name>
-        <message>
-            <source>Smart Reorder</source>
-            <translation>智能重排</translation>
-        </message>
-        <message>
-            <source>LTR (Top→Bottom, Left→Right)</source>
-            <translation>LTR（上→下，左→右）</translation>
-        </message>
-        <message>
-            <source>RTL (Right→Left, for manga)</source>
-            <translation>RTL（右→左，日漫）</translation>
-        </message>
-        <message>
-            <source>2×2 Grid (4-koma)</source>
-            <translation>2×2 网格（四格漫画）</translation>
-        </message>
-        <message>
-            <source>3×3 Grid</source>
-            <translation>3×3 网格</translation>
-        </message>
-        <message>
-            <source>Custom Grid…</source>
-            <translation>自定义网格…</translation>
-        </message>
-        <message>
-            <source>Rows:</source>
-            <translation>行数：</translation>
-        </message>
-        <message>
-            <source>Cols:</source>
-            <translation>列数：</translation>
-        </message>
-        <message>
-            <source>Direction:</source>
-            <translation>方向：</translation>
+            <translation>{}/{} 就绪</translation>
         </message>
     </context>
     <context>
@@ -488,11 +410,6 @@
             <translation>画布</translation>
         </message>
         <message>
-            <location filename="..\ui\configpanel.py" line="1833" />
-            <source>Pipeline</source>
-            <translation>管线</translation>
-        </message>
-        <message>
             <location filename="..\ui\configpanel.py" line="1280" />
             <source>Text Detection</source>
             <translation>文本检测</translation>
@@ -587,11 +504,6 @@
             <location filename="..\ui\configpanel.py" line="1313" />
             <source>Unload All Models</source>
             <translation>清空已载入的模型</translation>
-        </message>
-        <message>
-            <location filename="..\ui\configpanel.py" line="1318" />
-            <source>Manage API Profiles...</source>
-            <translation>管理 API 配置...</translation>
         </message>
         <message>
             <location filename="..\ui\configpanel.py" line="1327" />
@@ -845,10 +757,6 @@
             <translation>卸载模型</translation>
         </message>
         <message>
-            <source>API profiles</source>
-            <translation>API 配置</translation>
-        </message>
-        <message>
             <source>&lt;p&gt;When enabled, models are loaded only on &lt;b&gt;first use&lt;/b&gt; instead of at startup. Reduces initial memory and launch time. Recommended for systems with limited GPU memory.&lt;/p&gt;</source>
             <translation>&lt;p&gt;启用后，模型仅在&lt;b&gt;首次使用&lt;/b&gt;时加载而非启动时加载。减少初始内存占用和启动时间。建议 GPU 内存有限的系统开启。&lt;/p&gt;</translation>
         </message>
@@ -861,10 +769,6 @@
             <translation>&lt;p&gt;立即从内存中释放所有已加载的模型。无需重启应用即可释放&lt;b&gt; GPU/CPU 资源&lt;/b&gt;。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>&lt;p&gt;Configure API credentials and endpoints for online translators, OCR services, and AI features. Supports &lt;b&gt;multiple profiles&lt;/b&gt; for different services or accounts.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;配置在线翻译器、OCR 服务和 AI 功能的 API 密钥与端点。支持为不同服务或账户设置&lt;b&gt;多个配置&lt;/b&gt;。&lt;/p&gt;</translation>
-        </message>
-        <message>
             <source>&lt;p&gt;Select the &lt;b&gt;text detection engine&lt;/b&gt;. Different detectors offer varying accuracy and speed. Some engines may require additional model downloads on first use.&lt;/p&gt;</source>
             <translation>&lt;p&gt;选择&lt;b&gt;文本检测引擎&lt;/b&gt;。不同检测器提供不同的精度和速度。部分引擎首次使用可能需要额外下载模型。&lt;/p&gt;</translation>
         </message>
@@ -875,10 +779,6 @@
         <message>
             <source>&lt;p&gt;Select the &lt;b&gt;image inpainting engine&lt;/b&gt;. After erasing text regions, the inpainter fills the background. Quality varies by image complexity and engine capability.&lt;/p&gt;</source>
             <translation>&lt;p&gt;选择&lt;b&gt;图像修复引擎&lt;/b&gt;。擦除文本区域后，修复工具填充背景。质量因图像复杂度和引擎能力而异。&lt;/p&gt;</translation>
-        </message>
-        <message>
-            <source>&lt;p&gt;Select the &lt;b&gt;translation engine&lt;/b&gt;. Online translators require an API profile with credentials configured under &lt;b&gt;Models &gt; API Profiles&lt;/b&gt;.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;选择&lt;b&gt;翻译引擎&lt;/b&gt;。在线翻译器需要先在&lt;b&gt;模型管理 &gt; API 配置&lt;/b&gt;中设置 API 密钥。&lt;/p&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Reopen the last project automatically when the application starts. Saves time when continuing work on the same project.&lt;/p&gt;</source>
@@ -895,10 +795,6 @@
         <message type="obsolete">
             <source>&lt;p&gt;Configure the fallback font format for text blocks without their own formatting. Each attribute can be &lt;b&gt;delegated&lt;/b&gt; separately.&lt;/p&gt;</source>
             <translation>&lt;p&gt;配置未单独设置格式的文本块的默认字体格式。每个属性可分别&lt;b&gt;委托&lt;/b&gt;。&lt;/p&gt;</translation>
-        </message>
-        <message>
-            <source>&lt;p&gt;Automatically split translated text into multiple lines matching the shape of the detected balloon or text region.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;根据检测到的对话框或文本区域形状，自动将译文分割为多行。&lt;/p&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Convert all translated text to uppercase. Useful for certain &lt;b&gt;typographic styles&lt;/b&gt; or all-caps conventions.&lt;/p&gt;</source>
@@ -1128,7 +1024,7 @@
             <source>&lt;p&gt;When translation text exceeds the block boundary, &lt;b&gt;clip it&lt;/b&gt; instead of enlarging the block. A &lt;b&gt;yellow border&lt;/b&gt; indicates clipping. Drag a corner handle to resize and un-clip.&lt;/p&gt;</source>
             <translation>&lt;p&gt;当译文超出文本框边界时，&lt;b&gt;裁剪文字&lt;/b&gt;而非撑大文本框。&lt;b&gt;黄色边框&lt;/b&gt;表示裁剪状态，拖拽角落手柄即可调整尺寸并解除裁剪。&lt;/p&gt;</translation>
         </message>
-            <message>
+        <message>
             <source>Check update</source>
             <translation>检查更新</translation>
         </message>
@@ -1220,7 +1116,7 @@
             <source>Fonts</source>
             <translation>字体</translation>
         </message>
-</context>
+    </context>
     <context>
         <name>DependencyDialog</name>
         <message>
@@ -1352,7 +1248,7 @@ Settings → Inpainter → Photoshop Path</source>
             <source>Image dimensions changed. Please undo in Photoshop and save again with the original dimensions.</source>
             <translation>图片尺寸已变更。请在 Photoshop 中撤销并保存为原始尺寸。</translation>
         </message>
-            <message>
+        <message>
             <source>A repair is still in progress. Please wait.</source>
             <translation>上一个修复仍在进行中，请稍候。</translation>
         </message>
@@ -1364,7 +1260,7 @@ Settings → Inpainter → Photoshop Path</source>
             <source>Inpainting...</source>
             <translation>正在修复…</translation>
         </message>
-</context>
+    </context>
     <context>
         <name>FontExcludeDialog</name>
         <message>
@@ -1516,7 +1412,7 @@ Settings → Inpainter → Photoshop Path</source>
             <source>Under / Left</source>
             <translation>下方 / 左侧</translation>
         </message>
-</context>
+    </context>
     <context>
         <name>FormatGroupBtn</name>
         <message>
@@ -1536,9 +1432,6 @@ Settings → Inpainter → Photoshop Path</source>
             <translation>注解</translation>
         </message>
         <message>
-            <source>Strike-through</source>
-            <translation>删除线</translation>
-        </message>        <message>
             <source>Ruby</source>
             <translation>注音（Ruby）</translation>
         </message>
@@ -1601,19 +1494,15 @@ Settings → Inpainter → Photoshop Path</source>
             <source>Global Font Format</source>
             <translation>全局字体格式</translation>
         </message>
-                <message>
+        <message>
             <source>Text Transform</source>
             <translation>文本变换</translation>
         </message>
-            <message>
+        <message>
             <source>Text Style</source>
             <translation>文本样式</translation>
         </message>
         <message>
-            <source>Edit text style</source>
-            <translation>编辑文本样式</translation>
-        </message>
-            <message>
             <source>Advanced Text Format</source>
             <translation>进阶字体格式</translation>
         </message>
@@ -1681,7 +1570,7 @@ Settings → Inpainter → Photoshop Path</source>
             <source>Unfold</source>
             <translation>展开</translation>
         </message>
-</context>
+    </context>
     <context>
         <name>FontStyleManager</name>
         <message>
@@ -1770,14 +1659,36 @@ Run detection + OCR to populate text blocks.</source>
             <translation>全部替换</translation>
         </message>
         <message>
-            <location filename="..\ui\global_search_widget.py" line="403" />
-            <source>Replace All and Re-render all pages</source>
-            <translation>全部替换并重新渲染所有页</translation>
+            <source>Undo This Replace</source>
+            <translation>撤销本次替换</translation>
         </message>
         <message>
-            <location filename="..\ui\global_search_widget.py" line="569" />
-            <source>Replace all occurrences and re-render all pages? It can't be undone.</source>
-            <translation>全部替换并重新渲染所有页? 无法撤销. </translation>
+            <source>Replaced %d block(s) across %d page(s)</source>
+            <translation>已替换 %d 个块（跨 %d 页）</translation>
+        </message>
+        <message>
+            <source>Roll back the last batch replace? All edits made after it will be discarded.</source>
+            <translation>回滚上一次批量替换？其后的全部修改（含手动编辑）将被丢弃。</translation>
+        </message>
+        <message>
+            <source>Apply Base Style</source>
+            <translation>应用大样式</translation>
+        </message>
+        <message>
+            <source>Clear</source>
+            <translation>清空</translation>
+        </message>
+        <message>
+            <source>Format Conditions</source>
+            <translation>格式条件</translation>
+        </message>
+        <message>
+            <source>Patch Fields</source>
+            <translation>按字段替换</translation>
+        </message>
+        <message>
+            <source>Replace Format</source>
+            <translation>替换格式</translation>
         </message>
     </context>
     <context>
@@ -1893,7 +1804,7 @@ Run detection + OCR to populate text blocks.</source>
             <source>Inpaint</source>
             <translation>修复</translation>
         </message>
-            <message>
+        <message>
             <source>Clear mask</source>
             <translation>清除遮罩</translation>
         </message>
@@ -1912,7 +1823,7 @@ Run detection + OCR to populate text blocks.</source>
 3:2: 横向格式（仅gpt-image-2支持）
 2:3: 纵向格式（仅gpt-image-2支持）</translation>
         </message>
-</context>
+    </context>
     <context>
         <name>AIConfigPanel</name>
         <message>
@@ -2084,6 +1995,30 @@ Run detection + OCR to populate text blocks.</source>
             <location filename="..\ui\mainwindow.py" line="622" />
             <source>Font Style Manager</source>
             <translation>字体样式管理器</translation>
+        </message>
+        <message>
+            <source>Replace finished. Re-render the modified pages now?</source>
+            <translation>替换完成，立即重渲已修改的页面？</translation>
+        </message>
+        <message>
+            <source>Pages needing re-render: </source>
+            <translation>待重渲页数: </translation>
+        </message>
+        <message>
+            <source>Re-render now</source>
+            <translation>立即重渲</translation>
+        </message>
+        <message>
+            <source>Later</source>
+            <translation>稍后处理</translation>
+        </message>
+        <message>
+            <source>Undone</source>
+            <translation>已撤销</translation>
+        </message>
+        <message>
+            <source>Redone</source>
+            <translation>已重做</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" line="742" />
@@ -2302,11 +2237,6 @@ Failed: {f}/{t}</source>
             <translation>启用修复</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindow.py" line="2110" />
-            <source>AI Chat Settings</source>
-            <translation>AI Chat 设置</translation>
-        </message>
-        <message>
             <location filename="..\ui\mainwindow.py" line="2163" />
             <source>Enforce Term Consistency (Glossary)</source>
             <translation>启用术语一致性（词汇表）</translation>
@@ -2428,16 +2358,6 @@ Failed: {f}/{t}</source>
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" />
-            <source>Cannot read image dimensions</source>
-            <translation>无法读取图片尺寸</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
-            <source>Invalid image dimensions</source>
-            <translation>无效的图片尺寸</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
             <source>Path Reorder</source>
             <translation>路径重排</translation>
         </message>
@@ -2463,46 +2383,6 @@ Failed: {f}/{t}</source>
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" />
-            <source>Activate Modules</source>
-            <translation>激活模块</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
-            <source>Text Detection</source>
-            <translation>文本检测</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
-            <source>OCR</source>
-            <translation>OCR</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
-            <source>Translation</source>
-            <translation>翻译</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
-            <source>Inpainting</source>
-            <translation>图像修复</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
-            <source>Settings</source>
-            <translation>设置</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
-            <source>Keep Existing Lines</source>
-            <translation>保留已有文本框</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
-            <source>Skip simple cases</source>
-            <translation>跳过简单案例</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
             <source>Context</source>
             <translation>上下文</translation>
         </message>
@@ -2510,11 +2390,6 @@ Failed: {f}/{t}</source>
             <location filename="..\ui\mainwindow.py" />
             <source>Browse...</source>
             <translation>浏览...</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" />
-            <source>Select a glossary file...</source>
-            <translation>选择术语表文件...</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" />
@@ -2555,11 +2430,6 @@ Failed: {f}/{t}</source>
             <location filename="..\ui\mainwindow.py" />
             <source>Inject Prior-Page History</source>
             <translation>注入前页历史</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1298" />
-            <source>此页有未渲染的批量修改，翻到该页后将自动刷新</source>
-            <translation>此页有未渲染的批量修改，翻到该页后将自动刷新</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" line="2944" />
@@ -2603,7 +2473,7 @@ Open Photoshop → File → Scripts → Browse → run </source>
             <source>Failed to export PSD script</source>
             <translation>导出 PSD 脚本失败</translation>
         </message>
-            <message>
+        <message>
             <source>Already up-to-date.</source>
             <translation>已是最新版本。</translation>
         </message>
@@ -2635,122 +2505,23 @@ Open Photoshop → File → Scripts → Browse → run </source>
             <source>Updating: </source>
             <translation>正在更新：</translation>
         </message>
-</context>
-
-    <context>
-        <name>MainWindowMixin</name>
         <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="101" />
-            <source>Failed to load project </source>
-            <translation>加载项目失败：</translation>
+            <source>Batch replace rolled back</source>
+            <translation>已回滚上一次批量替换</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="134" />
-            <source>Failed to load project from</source>
-            <translation>从以下位置加载项目失败：</translation>
+            <source>Nothing left to undo. The last batch replace can be rolled back in the search panel.</source>
+            <translation>已无可撤销内容。上一次批量替换可在查找替换面板整体回滚。</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="375" />
-            <source>unsaved</source>
-            <translation>未保存</translation>
+            <source>Render all result images from current project data.
+No pipeline stages will be executed.</source>
+            <translation>仅从当前项目数据渲染所有结果图像。
+不执行任何管线阶段。</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="375" />
-            <source>saved</source>
-            <translation>已保存</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="649" />
-            <location filename="..\ui\mainwindow_mixin.py" line="608" />
-            <source>Run</source>
-            <translation>运行</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="626" />
-            <source>Page %1 ~ Page %2 (%3 pages)</source>
-            <translation>第 %1 页 ~ 第 %2 页（共 %3 页）</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="634" />
-            <source>All Pages</source>
-            <translation>全部页面</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="650" />
-            <source>Cancel</source>
-            <translation>取消</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="781" />
-            <source>Text file exported to </source>
-            <translation>文本文件已导出至：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="785" />
-            <source>Failed to export as TEXT file</source>
-            <translation>导出为 TEXT 文件失败</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="794" />
-            <source>Import *.md/*.txt</source>
-            <translation>导入 *.md/*.txt</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="811" />
-            <source>Translation imported and matched successfully.</source>
-            <translation>译文导入并匹配成功。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="813" />
-            <source>Imported txt file not fully matched with current project, please make sure source txt file structured like results from "export TXT"</source>
-            <translation type="unfinished">导入的 txt 文件未与当前项目完全匹配，请确保源 txt 文件结构与"导出 TXT"结果格式一致</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="819" />
-            <source>Missing pages: </source>
-            <translation>缺失页面：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="822" />
-            <source>Unexpected pages: </source>
-            <translation>多余页面：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="825" />
-            <source>Unmatched pages: </source>
-            <translation>未匹配页面：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="836" />
-            <source>Failed to import translation from </source>
-            <translation>从以下位置导入译文失败：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="1033" />
-            <source>Import Text Styles</source>
-            <translation>导入字体样式</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="1044" />
-            <source>Failed to load from {p}</source>
-            <translation type="unfinished">无法导入{p}</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="1049" />
-            <source>Save Text Styles</source>
-            <translation>保存字体样式</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="1068" />
-            <source>Failed save to {savep}</source>
-            <translation type="unfinished">无法保存到{savep}</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow_mixin.py" line="1155" />
-            <source>Restart to apply changes? 
-</source>
-            <translation>重启以应用更改？
-</translation>
+            <source>This page has unrendered batch changes and will refresh automatically when opened</source>
+            <translation>此页有未渲染的批量修改，翻到该页后将自动刷新</translation>
         </message>
     </context>
     <context>
@@ -2846,11 +2617,6 @@ Please run text detection and OCR first.</source>
         </message>
         <message>
             <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Frequency extraction requires translations to pair with source text.  Try LLM Extraction mode instead, or run the translation pipeline first.</source>
-            <translation>频率提取需要译文与原文配对。请改用 LLM 提取模式，或先运行翻译管线。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
             <source>Extraction failed — see log.</source>
             <translation>提取失败 — 查看日志了解详情。</translation>
         </message>
@@ -2916,6 +2682,14 @@ Set this file as the active glossary now?</source>
 {}
 
 立即将此文件设为活动术语表？</translation>
+        </message>
+        <message>
+            <source>The project has no source/translation pairs to analyse.
+
+Frequency extraction requires translations to pair with source text.  Try LLM Extraction mode instead, or run the translation pipeline first.</source>
+            <translation>项目中没有可分析的原文/译文对。
+
+频率提取需要译文与原文配对。请改用 LLM 提取模式，或先运行翻译管线。</translation>
         </message>
     </context>
     <context>
@@ -3157,6 +2931,10 @@ qipao,qipao2</translation>
             <source>Region merge: </source>
             <translation>区域合并: </translation>
         </message>
+        <message>
+            <source>Region merge failed</source>
+            <translation>区域合并失败</translation>
+        </message>
     </context>
     <context>
         <name>ModelCheckDialog</name>
@@ -3177,7 +2955,8 @@ qipao,qipao2</translation>
             <location filename="..\ui\model_check_dialog.py" line="627" />
             <source>No model data yet.
 Configure modules in Settings, then click Refresh to scan for model files.</source>
-            <translation type="unfinished" />
+            <translation>暂无模型数据。
+在设置中配置模块后，点击“刷新”扫描模型文件。</translation>
         </message>
         <message>
             <location filename="..\ui\model_check_dialog.py" line="645" />
@@ -3202,16 +2981,23 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
         <message>
             <location filename="..\ui\model_check_dialog.py" line="728" />
             <source>{}/{} model files on disk</source>
-            <translation type="unfinished" />
+            <translation>磁盘上共有 {}/{} 个模型文件</translation>
+        </message>
+        <message>
+            <source>Text Detection</source>
+            <translation>文本检测</translation>
+        </message>
+        <message>
+            <source>OCR</source>
+            <translation>OCR</translation>
+        </message>
+        <message>
+            <source>Inpainting</source>
+            <translation>图像修复</translation>
         </message>
     </context>
     <context>
         <name>ModuleManager</name>
-        <message>
-            <location filename="..\ui\module_manager.py" line="1521" />
-            <source>Set Inpainter...</source>
-            <translation>正在初始化修复工具...</translation>
-        </message>
         <message>
             <location filename="..\ui\module_manager.py" line="1663" />
             <source>Refresh failed</source>
@@ -3232,7 +3018,7 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <source>waiting for model</source>
             <translation>等待模型响应</translation>
         </message>
-            <message>
+        <message>
             <source>Waiting for the current inpainting to finish. It will switch to '{inpainter}' afterwards.</source>
             <translation>等待当前修复完成，随后将切换到“{inpainter}”。</translation>
         </message>
@@ -3240,7 +3026,7 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <source>Cancel</source>
             <translation>取消</translation>
         </message>
-</context>
+    </context>
     <context>
         <name>NetworkSettingsDialog</name>
         <message>
@@ -3584,304 +3370,277 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <source>Select Path</source>
             <translation>选择路径</translation>
         </message>
-        <context>
-            <name>ParamWidget</name>
-            <message>
-                <location filename="../ui/module_parse_widgets.py" line="91" />
-                <source>Quickly switch between saved profiles</source>
-                <translation>快速切换已保存的配置文件</translation>
-            </message>
-            <message>
-                <location filename="../ui/module_parse_widgets.py" line="95" />
-                <source>Max requests per minute per API key</source>
-                <translation>每分钟每密钥最大请求数</translation>
-            </message>
-            <message>
-                <location filename="../ui/module_parse_widgets.py" line="99" />
-                <source>Delay between requests (seconds)</source>
-                <translation>请求间延迟（秒）</translation>
-            </message>
-            <message>
-                <location filename="../ui/module_parse_widgets.py" line="103" />
-                <source>Retry count on API connection failure</source>
-                <translation>API 连接失败后的重试次数</translation>
-            </message>
-            <message>
-                <location filename="../ui/module_parse_widgets.py" line="107" />
-                <source>Retry wait time (seconds)</source>
-                <translation>重试等待时间（秒）</translation>
-            </message>
-            <message>
-                <location filename="../ui/module_parse_widgets.py" line="111" />
-                <source>Retry count on translation count mismatch</source>
-                <translation>翻译数量不匹配时的重试次数</translation>
-            </message>
-            <message>
-                <location filename="../ui/module_parse_widgets.py" line="115" />
-                <source>Proxy address (e.g. http(s)://user:password@host:port)</source>
-                <translation>代理地址（例如 http(s)://user:password@host:port）</translation>
-            </message>
-            <message>
-                <location filename="../modules/translators/trans_agent.py" />
-                <source>Max model turns per page agent task</source>
-                <translation>每页翻译任务的最大模型轮次</translation>
-            </message>
-            <message>
-                <location filename="../modules/translators/trans_agent.py" />
-                <source>Max total tokens per page agent task (0 = unlimited)</source>
-                <translation>每页翻译任务的最大 token 总量（0 = 不限制）</translation>
-            </message>
-            <message>
-                <location filename="../modules/base.py" line="352" />
-                <source>Hardware device for inference (GPU recommended)</source>
-                <translation>推理硬件设备（推荐使用 GPU）</translation>
-            </message>
-            <message>
-                <source>Sakura LLM API server base URL</source>
-                <translation>Sakura LLM API 服务器地址</translation>
-            </message>
-            <message>
-                <source>Path to the Sakura dictionary file (leave empty if not using a dictionary)</source>
-                <translation>Sakura 字典文件路径（不使用字典时留空）</translation>
-            </message>
-            <message>
-                <source>Sakura model version</source>
-                <translation>Sakura 模型版本</translation>
-            </message>
-            <message>
-                <source>Number of retry attempts on API connection failure</source>
-                <translation>API 连接失败后的重试次数</translation>
-            </message>
-            <message>
-                <source>API request timeout in seconds</source>
-                <translation>API 请求超时时间（秒）</translation>
-            </message>
-            <message>
-                <source>Maximum tokens in the model response</source>
-                <translation>模型响应的最大 token 数</translation>
-            </message>
-            <message>
-                <source>Threshold for detecting repeated text in translations</source>
-                <translation>翻译中检测重复文本的阈值</translation>
-            </message>
-            <message>
-                <source>Scale factor applied to detected font size</source>
-                <translation>应用于检测字号的缩放系数</translation>
-            </message>
-            <message>
-                <source>Maximum allowed font size (-1 for unlimited)</source>
-                <translation>最大允许字号（-1 表示不限制）</translation>
-            </message>
-            <message>
-                <source>Minimum allowed font size (-1 for unlimited)</source>
-                <translation>最小允许字号（-1 表示不限制）</translation>
-            </message>
-            <message>
-                <source>Dilation kernel size for text region mask</source>
-                <translation>文字区域蒙版的膨胀核大小</translation>
-            </message>
-            <message>
-                <source>Input image size for text detection (larger = more accurate but slower)</source>
-                <translation>文字检测的输入图像尺寸（越大越精确但越慢）</translation>
-            </message>
-            <message>
-                <source>Maximum parallel batches when rearranging detected text blocks</source>
-                <translation>重排检测文字块时的最大并行批次数</translation>
-            </message>
-            <message>
-                <source>Path to the YSGYolo model checkpoint file</source>
-                <translation>YSGYolo 模型权重文件路径</translation>
-            </message>
-            <message>
-                <source>Merge adjacent text fragments into single text blocks</source>
-                <translation>将相邻文字片段合并为单个文本块</translation>
-            </message>
-            <message>
-                <source>Minimum confidence score for accepting a text detection</source>
-                <translation>接受文字检测的最低置信度</translation>
-            </message>
-            <message>
-                <source>Intersection-over-Union threshold for merging overlapping detection boxes</source>
-                <translation>合并重叠检测框的 IoU 阈值</translation>
-            </message>
-            <message>
-                <source>Input image size for text detection</source>
-                <translation>文字检测的输入图像尺寸</translation>
-            </message>
-            <message>
-                <source>Text region types to detect</source>
-                <translation>要检测的文字区域类型</translation>
-            </message>
-            <message>
-                <source>Assume source text is written vertically (right-to-left)</source>
-                <translation>假定原文为竖排文字（从右到左）</translation>
-            </message>
-            <message>
-                <source>Maximum image dimension for inpainting (larger images are resized)</source>
-                <translation>修复的最大图像尺寸（超出部分将缩放处理）</translation>
-            </message>
-            <message>
-                <source>Model precision (bf16 is faster on supported GPUs, fp32 is more compatible)</source>
-                <translation>模型精度（bf16 在支持的 GPU 上更快，fp32 兼容性更好）</translation>
-            </message>
-            <message>
-                <source>Number of image pixel rows processed per batch (lower = less VRAM)</source>
-                <translation>每批处理的图像像素行数（越小占用显存越少）</translation>
-            </message>
-            <message>
-                <source>Add, edit, or delete API profiles</source>
-                <translation>添加、编辑或删除 API 配置文件</translation>
-            </message>
-            <message>
-                <source>check it if you're running it locally on a single device and encountered a crash due to vram OOM</source>
-                <translation>如果在本地单设备运行时因显存不足崩溃，请勾选此项</translation>
-            </message>
-            <message>
-                <source>Force apply the dictionary regardless of whether the terms appear in the original text
+    </context>
+    <context>
+        <name>ParamWidget</name>
+        <message>
+            <location filename="../ui/module_parse_widgets.py" line="91" />
+            <source>Quickly switch between saved profiles</source>
+            <translation>快速切换已保存的配置文件</translation>
+        </message>
+        <message>
+            <location filename="../ui/module_parse_widgets.py" line="95" />
+            <source>Max requests per minute per API key</source>
+            <translation>每分钟每密钥最大请求数</translation>
+        </message>
+        <message>
+            <location filename="../ui/module_parse_widgets.py" line="99" />
+            <source>Delay between requests (seconds)</source>
+            <translation>请求间延迟（秒）</translation>
+        </message>
+        <message>
+            <location filename="../ui/module_parse_widgets.py" line="103" />
+            <source>Retry count on API connection failure</source>
+            <translation>API 连接失败后的重试次数</translation>
+        </message>
+        <message>
+            <location filename="../ui/module_parse_widgets.py" line="107" />
+            <source>Retry wait time (seconds)</source>
+            <translation>重试等待时间（秒）</translation>
+        </message>
+        <message>
+            <location filename="../ui/module_parse_widgets.py" line="111" />
+            <source>Retry count on translation count mismatch</source>
+            <translation>翻译数量不匹配时的重试次数</translation>
+        </message>
+        <message>
+            <location filename="../ui/module_parse_widgets.py" line="115" />
+            <source>Proxy address (e.g. http(s)://user:password@host:port)</source>
+            <translation>代理地址（例如 http(s)://user:password@host:port）</translation>
+        </message>
+        <message>
+            <location filename="../modules/translators/trans_agent.py" />
+            <source>Max model turns per page agent task</source>
+            <translation>每页翻译任务的最大模型轮次</translation>
+        </message>
+        <message>
+            <location filename="../modules/translators/trans_agent.py" />
+            <source>Max total tokens per page agent task (0 = unlimited)</source>
+            <translation>每页翻译任务的最大 token 总量（0 = 不限制）</translation>
+        </message>
+        <message>
+            <location filename="../modules/base.py" line="352" />
+            <source>Hardware device for inference (GPU recommended)</source>
+            <translation>推理硬件设备（推荐使用 GPU）</translation>
+        </message>
+        <message>
+            <source>Sakura LLM API server base URL</source>
+            <translation>Sakura LLM API 服务器地址</translation>
+        </message>
+        <message>
+            <source>Path to the Sakura dictionary file (leave empty if not using a dictionary)</source>
+            <translation>Sakura 字典文件路径（不使用字典时留空）</translation>
+        </message>
+        <message>
+            <source>Sakura model version</source>
+            <translation>Sakura 模型版本</translation>
+        </message>
+        <message>
+            <source>Number of retry attempts on API connection failure</source>
+            <translation>API 连接失败后的重试次数</translation>
+        </message>
+        <message>
+            <source>API request timeout in seconds</source>
+            <translation>API 请求超时时间（秒）</translation>
+        </message>
+        <message>
+            <source>Maximum tokens in the model response</source>
+            <translation>模型响应的最大 token 数</translation>
+        </message>
+        <message>
+            <source>Threshold for detecting repeated text in translations</source>
+            <translation>翻译中检测重复文本的阈值</translation>
+        </message>
+        <message>
+            <source>Scale factor applied to detected font size</source>
+            <translation>应用于检测字号的缩放系数</translation>
+        </message>
+        <message>
+            <source>Maximum allowed font size (-1 for unlimited)</source>
+            <translation>最大允许字号（-1 表示不限制）</translation>
+        </message>
+        <message>
+            <source>Minimum allowed font size (-1 for unlimited)</source>
+            <translation>最小允许字号（-1 表示不限制）</translation>
+        </message>
+        <message>
+            <source>Dilation kernel size for text region mask</source>
+            <translation>文字区域蒙版的膨胀核大小</translation>
+        </message>
+        <message>
+            <source>Input image size for text detection (larger = more accurate but slower)</source>
+            <translation>文字检测的输入图像尺寸（越大越精确但越慢）</translation>
+        </message>
+        <message>
+            <source>Maximum parallel batches when rearranging detected text blocks</source>
+            <translation>重排检测文字块时的最大并行批次数</translation>
+        </message>
+        <message>
+            <source>Path to the YSGYolo model checkpoint file</source>
+            <translation>YSGYolo 模型权重文件路径</translation>
+        </message>
+        <message>
+            <source>Merge adjacent text fragments into single text blocks</source>
+            <translation>将相邻文字片段合并为单个文本块</translation>
+        </message>
+        <message>
+            <source>Minimum confidence score for accepting a text detection</source>
+            <translation>接受文字检测的最低置信度</translation>
+        </message>
+        <message>
+            <source>Intersection-over-Union threshold for merging overlapping detection boxes</source>
+            <translation>合并重叠检测框的 IoU 阈值</translation>
+        </message>
+        <message>
+            <source>Input image size for text detection</source>
+            <translation>文字检测的输入图像尺寸</translation>
+        </message>
+        <message>
+            <source>Text region types to detect</source>
+            <translation>要检测的文字区域类型</translation>
+        </message>
+        <message>
+            <source>Assume source text is written vertically (right-to-left)</source>
+            <translation>假定原文为竖排文字（从右到左）</translation>
+        </message>
+        <message>
+            <source>Maximum image dimension for inpainting (larger images are resized)</source>
+            <translation>修复的最大图像尺寸（超出部分将缩放处理）</translation>
+        </message>
+        <message>
+            <source>Model precision (bf16 is faster on supported GPUs, fp32 is more compatible)</source>
+            <translation>模型精度（bf16 在支持的 GPU 上更快，fp32 兼容性更好）</translation>
+        </message>
+        <message>
+            <source>Number of image pixel rows processed per batch (lower = less VRAM)</source>
+            <translation>每批处理的图像像素行数（越小占用显存越少）</translation>
+        </message>
+        <message>
+            <source>check it if you're running it locally on a single device and encountered a crash due to vram OOM</source>
+            <translation>如果在本地单设备运行时因显存不足崩溃，请勾选此项</translation>
+        </message>
+        <message>
+            <source>Enlarge small kana to normal size</source>
+            <translation>将小假名放大至正常大小</translation>
+        </message>
+        <message>
+            <source>ComicTextDetector</source>
+            <translation>漫画文字检测器</translation>
+        </message>
+        <message>
+            <source>manga-image-translator inpainter</source>
+            <translation>manga-image-translator 图像修复器</translation>
+        </message>
+        <message>
+            <source>Not a OCR, just return original text.</source>
+            <translation>非 OCR 模块，直接返回原始文本</translation>
+        </message>
+        <message>
+            <source>OCRMIT32px</source>
+            <translation>OCRMIT32px 文字识别</translation>
+        </message>
+        <message>
+            <source>Language for OCR.</source>
+            <translation>OCR 目标语言</translation>
+        </message>
+        <message>
+            <source>The main prompt for the OCR task. Use {language} placeholder.</source>
+            <translation>OCR 任务的主提示词。使用 {language} 作为占位符</translation>
+        </message>
+        <message>
+            <source>Return existing translation</source>
+            <translation>返回已有翻译（不翻译）</translation>
+        </message>
+        <message>
+            <source>Detection score threshold (lower = more detections)</source>
+            <translation>检测分数阈值（越低检测越多）</translation>
+        </message>
+        <message>
+            <source>Detection box threshold (lower = more boxes)</source>
+            <translation>检测框阈值（越低框越多）</translation>
+        </message>
+        <message>
+            <source>Detection box unclip ratio (higher = looser boxes)</source>
+            <translation>检测框扩展系数（越高框越松）</translation>
+        </message>
+        <message>
+            <source>Maximum candidate detection boxes</source>
+            <translation>最大候选检测框数</translation>
+        </message>
+        <message>
+            <source>Reading order: ltr=left-to-right, rtl=right-to-left (manga), auto=detect</source>
+            <translation>阅读顺序：ltr=从左到右，rtl=从右到左（漫画），auto=自动检测</translation>
+        </message>
+        <message>
+            <source>Recognition batch size (higher = faster, more VRAM)</source>
+            <translation>识别批次大小（越高越快，占用显存更多）</translation>
+        </message>
+        <message>
+            <source>Delay between retries in seconds.</source>
+            <translation>重试间隔（秒）。</translation>
+        </message>
+        <message>
+            <source>Force apply the dictionary regardless of whether the terms appear in the original text 
  DO NOT CHECK THIS IF YOU ARE NOT SURE WHAT IT MEANS</source>
-                <translation>强制应用字典，无论术语是否出现在原文中。如不确定此项含义请勿勾选</translation>
-            </message>
-            <message>
-                <source>Enlarge small kana to normal size</source>
-                <translation>将小假名放大至正常大小</translation>
-            </message>
-            <message>
-                <source>ComicTextDetector</source>
-                <translation>漫画文字检测器</translation>
-            </message>
-            <message>
-                <source>manga-image-translator inpainter</source>
-                <translation>manga-image-translator 图像修复器</translation>
-            </message>
-            <message>
-                <source>Not a OCR, just return original text.</source>
-                <translation>非 OCR 模块，直接返回原始文本</translation>
-            </message>
-            <message>
-                <source>OCRMIT32px</source>
-                <translation>OCRMIT32px 文字识别</translation>
-            </message>
-            <message>
-                <source>OCR using a locally running LM Studio vision model.</source>
-                <translation>使用本地运行的 LM Studio 视觉模型进行 OCR</translation>
-            </message>
-            <message>
-                <source>LM Studio server base URL (default: http://localhost:1234/v1).</source>
-                <translation>LM Studio 服务器地址（默认：http://localhost:1234/v1）</translation>
-            </message>
-            <message>
-                <source>Vision model name loaded in LM Studio (e.g., qwen2-vl-7b, llava-v1.5-7b).</source>
-                <translation>LM Studio 中加载的视觉模型名称（如 qwen2-vl-7b、llava-v1.5-7b）</translation>
-            </message>
-            <message>
-                <source>Language for OCR.</source>
-                <translation>OCR 目标语言</translation>
-            </message>
-            <message>
-                <source>The main prompt for the OCR task. Use {language} placeholder.</source>
-                <translation>OCR 任务的主提示词。使用 {language} 作为占位符</translation>
-            </message>
-            <message>
-                <source>Optional system prompt to guide the model's behavior.</source>
-                <translation>用于引导模型行为的可选系统提示词</translation>
-            </message>
-            <message>
-                <source>Maximum number of tokens in the LLM's response.</source>
-                <translation>LLM 返回的最大 token 数</translation>
-            </message>
-            <message>
-                <source>OCR using various vision-capable LLMs.</source>
-                <translation>使用各种视觉 LLM 进行 OCR</translation>
-            </message>
-            <message>
-                <source>Select the LLM provider.</source>
-                <translation>选择 LLM 服务商</translation>
-            </message>
-            <message>
-                <source>API key to use if multiple keys are not provided.</source>
-                <translation>单一 API 密钥（如填写了多密钥则此项无效）</translation>
-            </message>
-            <message>
-                <source>API keys separated by semicolons (;). Requests will rotate.</source>
-                <translation>多个 API 密钥，用分号 (;) 分隔。请求将轮换使用</translation>
-            </message>
-            <message>
-                <source>Base URL for the API. Leave empty for provider default.</source>
-                <translation>API 基础地址，留空则使用服务商默认地址</translation>
-            </message>
-            <message>
-                <source>Select the model to use.</source>
-                <translation>选择使用的模型</translation>
-            </message>
-            <message>
-                <source>Specify a custom model name to override the selected one.</source>
-                <translation>输入自定义模型名称以覆盖所选模型</translation>
-            </message>
-            <message>
-                <source>Controls image detail level for vision models.</source>
-                <translation>控制视觉模型的图像细节级别</translation>
-            </message>
-            <message>
-                <source>Delay in seconds between requests.</source>
-                <translation>请求间延迟（秒）</translation>
-            </message>
-            <message>
-                <source>Maximum number of requests per minute per key.</source>
-                <translation>每密钥每分钟最大请求数</translation>
-            </message>
-            <message>
-                <source>Return existing translation</source>
-                <translation>返回已有翻译（不翻译）</translation>
-            </message>
-            <message>
-                <source>PP-OCRv6 model scale (medium / small / tiny)</source>
-                <translation>PP-OCRv6 模型档位（medium / small / tiny）</translation>
-            </message>
-            <message>
-                <source>Language — 'ch' covers Chinese + English</source>
-                <translation>语言 — 'ch' 覆盖中文 + 英文</translation>
-            </message>
-            <message>
-                <source>Enable text line orientation detection (needed for vertical Japanese text in manga)</source>
-                <translation>启用文字行方向检测（竖排日文漫画需要此项）</translation>
-            </message>
-            <message>
-                <source>GPU memory limit in MB (subprocess mode only)</source>
-                <translation>GPU 显存限制（MB，仅子进程模式下生效）</translation>
-            </message>
-            <message>
-                <source>PP-OCRv6 — Baidu's latest OCR (medium/small/tiny, 50 languages)</source>
-                <translation>PP-OCRv6 — 百度最新 OCR（medium/small/tiny，支持 50 种语言）</translation>
-            </message>
-            <message>
-                <source>Detection score threshold (lower = more detections)</source>
-                <translation>检测分数阈值（越低检测越多）</translation>
-            </message>
-            <message>
-                <source>Detection box threshold (lower = more boxes)</source>
-                <translation>检测框阈值（越低框越多）</translation>
-            </message>
-            <message>
-                <source>Detection box unclip ratio (higher = looser boxes)</source>
-                <translation>检测框扩展系数（越高框越松）</translation>
-            </message>
-            <message>
-                <source>Maximum candidate detection boxes</source>
-                <translation>最大候选检测框数</translation>
-            </message>
-            <message>
-                <source>Reading order: ltr=left-to-right, rtl=right-to-left (manga), auto=detect</source>
-                <translation>阅读顺序：ltr=从左到右，rtl=从右到左（漫画），auto=自动检测</translation>
-            </message>
-            <message>
-                <source>Recognition batch size (higher = faster, more VRAM)</source>
-                <translation>识别批次大小（越高越快，占用显存更多）</translation>
-            </message>
-            <message>
-                <source>PP-OCRv6 ONNX — latest Baidu OCR via ONNX Runtime (no PaddlePaddle)</source>
-                <translation>PP-OCRv6 ONNX — 通过 ONNX Runtime 运行百度最新 OCR（无需 PaddlePaddle）</translation>
-            </message>
-        </context>
+            <translation>无论词条是否出现在原文中都强制应用词典
+不确定含义时不要勾选此项</translation>
+        </message>
+        <message>
+            <source>HTTP timeout for image cleanup requests in seconds. Set to 0 to disable.</source>
+            <translation>图像清理请求的 HTTP 超时时间（秒）。设为 0 禁用。</translation>
+        </message>
+        <message>
+            <source>Inpaint using the selected image-capable LLM profile.</source>
+            <translation>使用所选支持图像的 LLM 配置进行修复。</translation>
+        </message>
+        <message>
+            <source>Model size (only medium available)</source>
+            <translation>模型规格（仅 medium 可用）</translation>
+        </message>
+        <message>
+            <source>OCR using various vision-capable LLMs configured via API profiles.</source>
+            <translation>使用 API 配置中各种支持视觉的 LLM 进行 OCR。</translation>
+        </message>
+        <message>
+            <source>Output quality for the image model. 'auto' uses the provider default.</source>
+            <translation>图像模型的输出质量。'auto' 使用服务商默认值。</translation>
+        </message>
+        <message>
+            <source>PP-OCRv6 ONNX DBNet text detector via ONNX Runtime (no PaddlePaddle)</source>
+            <translation>经 ONNX Runtime 的 PP-OCRv6 ONNX DBNet 文字检测器（无需 PaddlePaddle）</translation>
+        </message>
+        <message>
+            <source>PP-OCRv6 ONNX recognition-only — crops text blocks then recognizes via ONNX Runtime</source>
+            <translation>PP-OCRv6 ONNX 纯识别——裁剪文本块后经 ONNX Runtime 识别</translation>
+        </message>
+        <message>
+            <source>Retries for API failures.</source>
+            <translation>API 失败重试次数。</translation>
+        </message>
+        <message>
+            <source>Scale images down before sending them to the LLM. Set to 0 to keep the original size.</source>
+            <translation>发送给 LLM 前缩小图像。设为 0 保持原始尺寸。</translation>
+        </message>
+        <message>
+            <source>Select a vision-capable API profile. Manage profiles in Model Management.</source>
+            <translation>选择支持视觉的 API 配置。可在模型管理中管理配置。</translation>
+        </message>
+        <message>
+            <source>Select an image-capable API profile. Manage profiles in Model Management.</source>
+            <translation>选择支持图像的 API 配置。可在模型管理中管理配置。</translation>
+        </message>
+        <message>
+            <source>Send each text block crop separately instead of sending the whole image.</source>
+            <translation>逐个发送文本块裁剪图而非整张图像。</translation>
+        </message>
+        <message>
+            <source>Skip inpainting. No model needed.</source>
+            <translation>跳过图像修复，无需模型。</translation>
+        </message>
+        <message>
+            <source>Skip text detection. No model needed.</source>
+            <translation>跳过文字检测，无需模型。</translation>
+        </message>
     </context>
     <context>
         <name>ProfileManagerDialog</name>
@@ -4115,11 +3874,6 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <translation>选择模型</translation>
         </message>
         <message>
-            <location filename="..\utils\profile_manager.py" line="714" />
-            <source>Choose a model:</source>
-            <translation>选择一个模型：</translation>
-        </message>
-        <message>
             <location filename="..\utils\profile_manager.py" line="732" />
             <location filename="..\utils\profile_manager.py" line="724" />
             <source>Error</source>
@@ -4207,6 +3961,10 @@ Please check the URL and your network.</source>
         <message>
             <source>Error: {err}</source>
             <translation>错误：{err}</translation>
+        </message>
+        <message>
+            <source>Enable this for models that can generate/clean images. Image-capable profiles appear in the online inpainter's profile selector.</source>
+            <translation>启用此选项适用于能生成/清理图像的模型。支持图像功能的配置将出现在在线修复的配置选择器中。</translation>
         </message>
     </context>
     <context>
@@ -4445,14 +4203,6 @@ text layers are fully editable.</source>
         </message>
     </context>
     <context>
-        <name>ShadowGradientPreview</name>
-        <message>
-            <location filename="..\ui\shadow_gradient_dialog.py" line="62" />
-            <source>Background color</source>
-            <translation>背景颜色</translation>
-        </message>
-    </context>
-    <context>
         <name>StatusDot</name>
         <message>
             <location filename="..\ui\model_check_dialog.py" line="333" />
@@ -4478,89 +4228,6 @@ text layers are fully editable.</source>
     <context>
         <name>StyleDetail</name>
         <message>
-            <location filename="..\ui\fontstyle_manager.py" line="384" />
-            <source>Properties</source>
-            <translation>属性</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="386" />
-            <source>Font</source>
-            <translation>字体</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="436" />
-            <source>Font Style</source>
-            <translation>字体样式</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="387" />
-            <source>Size</source>
-            <translation>大小</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="388" />
-            <source>Weight</source>
-            <translation>字重</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="389" />
-            <source>Style</source>
-            <translation>样式</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="390" />
-            <source>Foreground</source>
-            <translation>前景色</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="479" />
-            <location filename="..\ui\fontstyle_manager.py" line="391" />
-            <source>Stroke</source>
-            <translation>描边</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="487" />
-            <location filename="..\ui\fontstyle_manager.py" line="392" />
-            <source>Alignment</source>
-            <translation>对齐</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="393" />
-            <source>Layout</source>
-            <translation>排版</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="394" />
-            <source>Spacing</source>
-            <translation>间距</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="395" />
-            <source>Effects</source>
-            <translation>特效</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="414" />
-            <source>Batch Edit</source>
-            <translation>批量编辑</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="423" />
-            <source>Font Family</source>
-            <translation>字体家族</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="431" />
-            <source>Font Size</source>
-            <translation>字号</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="559" />
-            <location filename="..\ui\fontstyle_manager.py" line="437" />
-            <source>Bold</source>
-            <translation>粗体</translation>
-        </message>
-        <message>
             <location filename="..\ui\fontstyle_manager.py" line="561" />
             <location filename="..\ui\fontstyle_manager.py" line="438" />
             <source>Italic</source>
@@ -4573,45 +4240,6 @@ text layers are fully editable.</source>
             <translation>下划线</translation>
         </message>
         <message>
-            <location filename="..\ui\fontstyle_manager.py" line="577" />
-            <location filename="..\ui\fontstyle_manager.py" line="440" />
-            <source>Vertical</source>
-            <translation>竖排</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="446" />
-            <source>Flags</source>
-            <translation>标志</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="459" />
-            <source>Text Color</source>
-            <translation>文字颜色</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="476" />
-            <source>Width:</source>
-            <translation>宽度：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="572" />
-            <location filename="..\ui\fontstyle_manager.py" line="484" />
-            <source>Left</source>
-            <translation>左对齐</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="572" />
-            <location filename="..\ui\fontstyle_manager.py" line="484" />
-            <source>Center</source>
-            <translation>居中</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="572" />
-            <location filename="..\ui\fontstyle_manager.py" line="484" />
-            <source>Right</source>
-            <translation>右对齐</translation>
-        </message>
-        <message>
             <location filename="..\ui\fontstyle_manager.py" line="491" />
             <source>Apply Changes</source>
             <translation>应用更改</translation>
@@ -4620,23 +4248,6 @@ text layers are fully editable.</source>
             <location filename="..\ui\fontstyle_manager.py" line="500" />
             <source>Blocks Using This Style</source>
             <translation>使用此样式的文本框</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="556" />
-            <source>(default)</source>
-            <translation>（默认）</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="591" />
-            <location filename="..\ui\fontstyle_manager.py" line="571" />
-            <location filename="..\ui\fontstyle_manager.py" line="564" />
-            <source>None</source>
-            <translation>无</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="577" />
-            <source>Horizontal</source>
-            <translation>横排</translation>
         </message>
         <message>
             <location filename="..\ui\fontstyle_manager.py" line="580" />
@@ -4669,11 +4280,6 @@ text layers are fully editable.</source>
             <translation>批量编辑字体样式</translation>
         </message>
         <message>
-            <location filename="..\ui\fontstyle_manager.py" line="495" />
-            <source>Preset</source>
-            <translation>预设</translation>
-        </message>
-        <message>
             <location filename="..\ui\fontstyle_manager.py" line="498" />
             <source>Apply Preset</source>
             <translation>应用预设</translation>
@@ -4697,26 +4303,6 @@ text layers are fully editable.</source>
             <location filename="..\ui\fontstyle_manager.py" line="0" />
             <source>Base style name</source>
             <translation>基础样式名称</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="0" />
-            <source>Style Name</source>
-            <translation>样式名称</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="0" />
-            <source>Overrides</source>
-            <translation>差异参数</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="0" />
-            <source>Blocks Matching Base</source>
-            <translation>完全匹配块数</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="0" />
-            <source>Variants</source>
-            <translation>变体数</translation>
         </message>
         <message>
             <location filename="..\ui\fontstyle_manager.py" line="0" />
@@ -4790,19 +4376,33 @@ No block parameters change; its blocks move to Ungrouped.</source>
             <translation>删除基础样式“{name}”？
 文本框参数不会改变；其文本框将移入未分组。</translation>
         </message>
+        <message>
+            <source>Reset to Base</source>
+            <translation>重置为基准</translation>
+        </message>
+        <message>
+            <source>Reset variant to base</source>
+            <translation>变体重置为基准</translation>
+        </message>
+        <message>
+            <source>Strikeout</source>
+            <translation>删除线</translation>
+        </message>
+        <message>
+            <source>Write the base style's values back to this variant's blocks; the variant dissolves when its overrides are gone.</source>
+            <translation>将大样式的值写回此变体的文本框；覆盖项清空后变体即解散。</translation>
+        </message>
+        <message>
+            <source>Stroke {n}px</source>
+            <translation>描边 {n}px</translation>
+        </message>
+        <message>
+            <source>Blocks: {n}</source>
+            <translation>文本框：{n}</translation>
+        </message>
     </context>
     <context>
         <name>StyleTreeWidget</name>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="0" />
-            <source>V</source>
-            <translation>竖</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="0" />
-            <source>H</source>
-            <translation>横</translation>
-        </message>
         <message>
             <location filename="..\ui\fontstyle_manager.py" line="0" />
             <source>Font: {f}
@@ -4825,28 +4425,17 @@ Orientation: {o}</source>
             <source>Ungrouped</source>
             <translation>未分组</translation>
         </message>
-    </context>
-    <context>
-        <name>SystemDiagnosticDialog</name>
         <message>
-            <location filename="..\ui\system_diagnostic_dialog.py" line="38" />
-            <source>System Diagnostic</source>
-            <translation>系统诊断</translation>
+            <source>Italic</source>
+            <translation>斜体</translation>
         </message>
         <message>
-            <location filename="..\ui\system_diagnostic_dialog.py" line="52" />
-            <source>Click "Run Diagnostic" to check your system.</source>
-            <translation>点击“运行诊断”以检查系统环境。</translation>
+            <source>Strikeout</source>
+            <translation>删除线</translation>
         </message>
         <message>
-            <location filename="..\ui\system_diagnostic_dialog.py" line="64" />
-            <source>Run Diagnostic</source>
-            <translation>运行诊断</translation>
-        </message>
-        <message>
-            <location filename="..\ui\system_diagnostic_dialog.py" line="69" />
-            <source>Close</source>
-            <translation>关闭</translation>
+            <source>Underline</source>
+            <translation>下划线</translation>
         </message>
     </context>
     <context>
@@ -4892,11 +4481,11 @@ Orientation: {o}</source>
             <source>Delete Style</source>
             <translation>删除</translation>
         </message>
-            <message>
+        <message>
             <source>Click to set as Global format. Double click to edit name. Drag to reorder.</source>
             <translation>单击设为全局字体格式，双击编辑名称，拖拽可重排</translation>
         </message>
-</context>
+    </context>
     <context>
         <name>TextStylePresetPanel</name>
         <message>
@@ -5066,24 +4655,6 @@ Orientation: {o}</source>
         </message>
     </context>
     <context>
-        <name>ToolsDialog</name>
-        <message>
-            <location filename="..\ui\tools_dialog.py" line="19" />
-            <source>Tools</source>
-            <translation>工具检查</translation>
-        </message>
-        <message>
-            <location filename="..\ui\tools_dialog.py" line="30" />
-            <source>Check Dependencies</source>
-            <translation>检查依赖</translation>
-        </message>
-        <message>
-            <location filename="..\ui\tools_dialog.py" line="34" />
-            <source>Check Model Files</source>
-            <translation>检查模型文件</translation>
-        </message>
-    </context>
-    <context>
         <name>TranslateThread</name>
         <message>
             <location filename="..\ui\module_manager.py" line="275" />
@@ -5141,14 +4712,6 @@ Orientation: {o}</source>
         </message>
     </context>
     <context>
-        <name>TranslatorSelectionWidget</name>
-        <message>
-            <location filename="..\ui\mainwindowbars.py" line="563" />
-            <source>Translate</source>
-            <translation>翻译</translation>
-        </message>
-    </context>
-    <context>
         <name>UpdateThread</name>
         <message>
             <location filename="..\ui\update_checker.py" line="68" />
@@ -5180,7 +4743,8 @@ Please download the latest version from GitHub.</source>
             <location filename="..\ui\update_checker.py" line="115" />
             <source>Failed to contact GitHub.
 {err}</source>
-            <translation type="unfinished" />
+            <translation>无法连接 GitHub。
+{err}</translation>
         </message>
         <message>
             <location filename="..\ui\update_checker.py" line="130" />
@@ -5191,13 +4755,15 @@ Please download the latest version from GitHub.</source>
             <location filename="..\ui\update_checker.py" line="224" />
             <source>Failed to fetch.
 {err}</source>
-            <translation type="unfinished" />
+            <translation>获取失败。
+{err}</translation>
         </message>
         <message>
             <location filename="..\ui\update_checker.py" line="239" />
             <source>Failed to apply update.
 {err}</source>
-            <translation type="unfinished" />
+            <translation>应用更新失败。
+{err}</translation>
         </message>
     </context>
     <context>
@@ -5983,6 +5549,10 @@ This maps automatically to each provider's native parameter
             <source>OCR prompt with {language} placeholder.</source>
             <translation>使用 {language} 占位符的 OCR 提示词。</translation>
         </message>
+        <message>
+            <source>Enable this for models that can generate/clean images. Image-capable profiles appear in the online inpainter's profile selector.</source>
+            <translation>启用此选项适用于能生成/清理图像的模型。支持图像功能的配置将出现在在线修复的配置选择器中。</translation>
+        </message>
     </context>
     <context>
         <name>FilterableListDialog</name>
@@ -6075,38 +5645,6 @@ This maps automatically to each provider's native parameter
             <source>(all commands added)</source>
             <translation>（所有命令已添加）</translation>
         </message>
-        <message>
-            <source>─ Separator ─</source>
-            <translation>── 分隔线 ──</translation>
-        </message>
-        <message>
-            <source>Copy</source>
-            <translation>复制</translation>
-        </message>
-        <message>
-            <source>Paste</source>
-            <translation>粘贴</translation>
-        </message>
-        <message>
-            <source>Delete</source>
-            <translation>删除</translation>
-        </message>
-        <message>
-            <source>Copy source text</source>
-            <translation>复制原文</translation>
-        </message>
-        <message>
-            <source>Paste source text</source>
-            <translation>粘贴原文</translation>
-        </message>
-        <message>
-            <source>Reset Angle</source>
-            <translation>重置角度</translation>
-        </message>
-        <message>
-            <source>Squeeze</source>
-            <translation>挤压</translation>
-        </message>
         <message type="obsolete">
             <source>Normalize Breaks</source>
             <translation>整理换行</translation>
@@ -6114,34 +5652,6 @@ This maps automatically to each provider's native parameter
         <message type="obsolete">
             <source>Normalize Breaks and Shrink</source>
             <translation>整理换行并收缩</translation>
-        </message>
-        <message>
-            <source>Reorder</source>
-            <translation>重新排序</translation>
-        </message>
-        <message>
-            <source>Align</source>
-            <translation>对齐</translation>
-        </message>
-        <message>
-            <source>Snap Alignment</source>
-            <translation>吸附对齐</translation>
-        </message>
-        <message>
-            <source>translate</source>
-            <translation>翻译</translation>
-        </message>
-        <message>
-            <source>OCR</source>
-            <translation>OCR</translation>
-        </message>
-        <message>
-            <source>OCR and translate</source>
-            <translation>OCR 并翻译</translation>
-        </message>
-        <message>
-            <source>OCR, translate and inpaint</source>
-            <translation>OCR、翻译并修复</translation>
         </message>
         <message>
             <source>Move down</source>
@@ -6441,7 +5951,7 @@ This maps automatically to each provider's native parameter
             <source>Later</source>
             <translation>稍后</translation>
         </message>
-            <message>
+        <message>
             <source>Check commit updates</source>
             <translation>检查提交更新</translation>
         </message>
@@ -6449,7 +5959,7 @@ This maps automatically to each provider's native parameter
             <source>Checking by latest commit applies unverified developer changes and may be unstable on your device.</source>
             <translation>按最新提交检查会应用未经验证的开发中更改，在您的设备上可能不稳定。</translation>
         </message>
-</context>
+    </context>
     <context>
         <name>AddWordItemWidget</name>
         <message>
@@ -6897,6 +6407,213 @@ This maps automatically to each provider's native parameter
         <message>
             <source>Delete word</source>
             <translation>删除词</translation>
+        </message>
+    </context>
+    <context>
+        <name>TextEditingContextMenu</name>
+        <message>
+            <source>Copy</source>
+            <translation>复制</translation>
+        </message>
+        <message>
+            <source>Cut</source>
+            <translation>剪切</translation>
+        </message>
+        <message>
+            <source>Delete</source>
+            <translation>删除</translation>
+        </message>
+        <message>
+            <source>Paste</source>
+            <translation>粘贴</translation>
+        </message>
+        <message>
+            <source>Quick Insert</source>
+            <translation>快捷插入</translation>
+        </message>
+        <message>
+            <source>Redo</source>
+            <translation>重做</translation>
+        </message>
+        <message>
+            <source>Undo</source>
+            <translation>撤销</translation>
+        </message>
+    </context>
+    <context>
+        <name>ImgSaveThread</name>
+        <message>
+            <source>Failed to save image.</source>
+            <translation>保存图像失败。</translation>
+        </message>
+    </context>
+    <context>
+        <name>ImgTransProjFileIOThread</name>
+        <message>
+            <source>Thread job failed.</source>
+            <translation>线程任务失败。</translation>
+        </message>
+    </context>
+    <context>
+        <name>StyleFormatEditor</name>
+        <message>
+            <source>(default)</source>
+            <translation>（默认）</translation>
+        </message>
+        <message>
+            <source>Alignment</source>
+            <translation>对齐</translation>
+        </message>
+        <message>
+            <source>Center</source>
+            <translation>居中</translation>
+        </message>
+        <message>
+            <source>Color &amp; Stroke</source>
+            <translation>颜色与描边</translation>
+        </message>
+        <message>
+            <source>Common Ligatures</source>
+            <translation>标准连字</translation>
+        </message>
+        <message>
+            <source>Contextual Ligatures</source>
+            <translation>上下文连字</translation>
+        </message>
+        <message>
+            <source>Disabled</source>
+            <translation>禁用</translation>
+        </message>
+        <message>
+            <source>Discretionary Ligatures</source>
+            <translation>自由连字</translation>
+        </message>
+        <message>
+            <source>Distance</source>
+            <translation>固定值</translation>
+        </message>
+        <message>
+            <source>Effects</source>
+            <translation>效果</translation>
+        </message>
+        <message>
+            <source>Enabled</source>
+            <translation>启用</translation>
+        </message>
+        <message>
+            <source>Font Default</source>
+            <translation>字体默认</translation>
+        </message>
+        <message>
+            <source>Font Family</source>
+            <translation>字体族</translation>
+        </message>
+        <message>
+            <source>Font Size</source>
+            <translation>字号</translation>
+        </message>
+        <message>
+            <source>Font Weight</source>
+            <translation>字重</translation>
+        </message>
+        <message>
+            <source>Glyph Slant</source>
+            <translation>斜切</translation>
+        </message>
+        <message>
+            <source>Italic</source>
+            <translation>斜体</translation>
+        </message>
+        <message>
+            <source>Layout</source>
+            <translation>排版</translation>
+        </message>
+        <message>
+            <source>Left</source>
+            <translation>左对齐</translation>
+        </message>
+        <message>
+            <source>Letter Spacing</source>
+            <translation>字间距</translation>
+        </message>
+        <message>
+            <source>Line Spacing</source>
+            <translation>行距</translation>
+        </message>
+        <message>
+            <source>Line Spacing Type</source>
+            <translation>行距类型</translation>
+        </message>
+        <message>
+            <source>Oldstyle Numerals</source>
+            <translation>旧式数字</translation>
+        </message>
+        <message>
+            <source>Opacity</source>
+            <translation>不透明度</translation>
+        </message>
+        <message>
+            <source>Proportional</source>
+            <translation>比例</translation>
+        </message>
+        <message>
+            <source>Right</source>
+            <translation>右对齐</translation>
+        </message>
+        <message>
+            <source>Same as baseline</source>
+            <translation>与基准一致</translation>
+        </message>
+        <message>
+            <source>Strikeout</source>
+            <translation>删除线</translation>
+        </message>
+        <message>
+            <source>Stroke Color</source>
+            <translation>描边颜色</translation>
+        </message>
+        <message>
+            <source>Stroke Width</source>
+            <translation>描边宽度</translation>
+        </message>
+        <message>
+            <source>Text</source>
+            <translation>文本</translation>
+        </message>
+        <message>
+            <source>Text Color</source>
+            <translation>文字颜色</translation>
+        </message>
+        <message>
+            <source>Underline</source>
+            <translation>下划线</translation>
+        </message>
+        <message>
+            <source>Vertical</source>
+            <translation>竖排</translation>
+        </message>
+        <message>
+            <source>Vertical Roman Alignment</source>
+            <translation>竖排罗马字对齐</translation>
+        </message>
+        <message>
+            <source>{n} transform(s)</source>
+            <translation>{n} 个变换</translation>
+        </message>
+        <message>
+            <source>Shadow</source>
+            <translation>阴影</translation>
+        </message>
+        <message>
+            <source>Gradient</source>
+            <translation>渐变</translation>
+        </message>
+    </context>
+    <context>
+        <name>FloatDropPanel</name>
+        <message>
+            <source>Close</source>
+            <translation>关闭</translation>
         </message>
     </context>
 </TS>

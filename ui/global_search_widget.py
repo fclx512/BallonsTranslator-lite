@@ -1,5 +1,5 @@
 import re
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from qtpy.QtCore import QItemSelection, QRectF, QSize, Qt, Signal
 from qtpy.QtGui import (
@@ -20,21 +20,32 @@ from qtpy.QtWidgets import (
     QLabel,
     QMessageBox,
     QSizePolicy,
+    QStackedWidget,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionViewItem,
+    QToolButton,
     QTreeView,
     QVBoxLayout,
     QWidget,
 )
 
 from utils import shared as C
+from utils.base_styles import copy_value
 from utils.config import pcfg
+from utils.fontformat import FontFormat
 from utils.proj_imgtrans import ProjImgTrans
+from utils.style_query import FormatCondition, FormatPredicate
 
-from .custom_widget import ConfigComboBox, NoBorderPushBtn, Widget
+from .custom_widget import (
+    ConfigComboBox,
+    FloatDropPanel,
+    NoBorderPushBtn,
+    Widget,
+)
 from .misc import doc_replace, doc_replace_no_shift
 from .page_search_widget import SearchEditor, _search_highlight_color
+from .style_format_editor import FormatEditorPanel
 from .textedit_area import SourceTextEdit, TransPairWidget, TransTextEdit
 from .textitem import TextBlkItem, TextBlock
 
@@ -219,11 +230,22 @@ class SearchResultTree(QTreeView):
 class GlobalSearchWidget(Widget):
     req_update_pagetext = Signal()
     pages_dirtied = Signal()
-    req_commit_and_rerender = Signal()  # persist JSON + re-render dirty result images
-    # (sceneitem_list, background_list, target_text) — emitted after a
-    # synchronous Replace All collection; MainWindow turns it into an undoable
-    # GlobalRepalceAllCommand and persists the project.
-    replace_finished = Signal(object, object, str)
+    # Emitted right after the user confirms a replace and before any change
+    # is applied: MainWindow syncs the current page UI into the model, saves
+    # the project and writes the single-slot batch snapshot (which must
+    # reflect the pre-replace state).
+    replace_preparing = Signal()
+    # (sceneitem_list, background_list, target_text, format_changes) —
+    # emitted after a synchronous Replace All collection; MainWindow applies
+    # the current-page changes via GlobalReplaceApplier (no undo stack —
+    # rollback goes through the batch snapshot), persists the project, then
+    # asks about re-rendering the dirty pages. format_changes 契约 =
+    # utils/style_query.build_query_changes（old/new_ffmt 均为深拷贝）。
+    replace_finished = Signal(object, object, str, object)
+    # Emitted when the user clicks the rollback strip button (already
+    # confirmed in-panel); MainWindow restores the batch snapshot and
+    # rebuilds the scene.
+    batch_rollback_requested = Signal()
 
     def __init__(self, parent: QWidget = None, *args, **kwargs) -> None:
         super().__init__(parent, *args, **kwargs)
@@ -278,14 +300,77 @@ class GlobalSearchWidget(Widget):
         self.search_tree = SearchResultTree(self)
         self.replace_btn = NoBorderPushBtn(self.tr("Replace All"))
         self.replace_btn.clicked.connect(self.on_replace)
-        self.replace_rerender_btn = NoBorderPushBtn(
-            self.tr("Replace All and Re-render all pages")
-        )
-        self.replace_rerender_btn.clicked.connect(self.on_replace_rerender)
-
-        sp = self.replace_rerender_btn.sizePolicy()
+        sp = self.replace_btn.sizePolicy()
         sp.setHorizontalPolicy(QSizePolicy.Policy.Expanding)
-        self.replace_rerender_btn.setSizePolicy(sp)
+        self.replace_btn.setSizePolicy(sp)
+
+        # 批量替换后的回滚条：批量操作的唯一撤销入口（快照回滚），
+        # 下一次替换或执行回滚后消失，不常驻
+        self.rollback_strip = QWidget(self)
+        self.rollback_strip.setObjectName("RollbackStrip")
+        rollback_layout = QHBoxLayout(self.rollback_strip)
+        rollback_layout.setContentsMargins(0, 0, 0, 0)
+        self.rollback_label = QLabel(self.rollback_strip)
+        self.rollback_btn = NoBorderPushBtn(self.tr("Undo This Replace"), self.rollback_strip)
+        self.rollback_btn.clicked.connect(self._on_rollback_clicked)
+        rollback_layout.addWidget(self.rollback_label, 1)
+        rollback_layout.addWidget(self.rollback_btn)
+        self.rollback_strip.setVisible(False)
+
+        # ── 格式条件 / 替换格式（阶段 4，复用 FormatEditorPanel）──────
+        # 两个入口按钮互斥展开内嵌面板；动过的字段数显示在按钮文案里。
+        self._find_format_panel = FormatEditorPanel(self)
+        self._find_format_panel.set_format(FontFormat())
+        self._find_format_panel.field_changed.connect(
+            self._update_format_btn_texts
+        )
+        self._replace_format_panel = FormatEditorPanel(self)
+        self._replace_format_panel.set_format(FontFormat())
+        self._replace_format_panel.field_changed.connect(
+            self._update_format_btn_texts
+        )
+
+        self.find_format_btn = QToolButton(self)
+        self.find_format_btn.setObjectName("FormatToggleBtn")
+        self.find_format_btn.setCheckable(True)
+        self.find_format_btn.toggled.connect(self._on_find_format_toggled)
+
+        self.replace_format_btn = QToolButton(self)
+        self.replace_format_btn.setObjectName("FormatToggleBtn")
+        self.replace_format_btn.setCheckable(True)
+        self.replace_format_btn.toggled.connect(self._on_replace_format_toggled)
+        self._update_format_btn_texts()
+
+        self.replace_mode_combo = ConfigComboBox(fix_size=False, scrollWidget=self)
+        self.replace_mode_combo.addItems(
+            [self.tr("Patch Fields"), self.tr("Apply Base Style")]
+        )
+        self.replace_mode_combo.currentIndexChanged.connect(
+            self._sync_replace_mode_vis
+        )
+
+        self.style_combo = ConfigComboBox(fix_size=False, scrollWidget=self)
+
+        self.format_stack = QStackedWidget(self)
+        self.format_stack.addWidget(self._wrap_format_panel(self._find_format_panel))
+        self.format_stack.addWidget(self._wrap_replace_format_panel())
+        # 浮层宿主是主窗口中央控件（画布层）：左缘钉在本栏右缘、向画布
+        # 方向按内容给足宽度——内嵌会撑大本栏最小宽导致动画宽度下右侧
+        # 被裁切；本栏保持完全可见可交互
+        self.format_float = FloatDropPanel(
+            self.find_format_btn.text(),
+            self.format_stack,
+            self.find_format_btn,
+            edge=self,
+        )
+        self.format_float.closed.connect(self._on_format_float_closed)
+
+        hlayout_bar3 = QHBoxLayout()
+        hlayout_bar3.setSpacing(5)
+        hlayout_bar3.addWidget(self.find_format_btn)
+        hlayout_bar3.addWidget(self.replace_format_btn)
+        hlayout_bar3.addStretch()
+        self._sync_replace_mode_vis()
 
         hlayout_bar1_0 = QHBoxLayout()
         hlayout_bar1_0.addWidget(self.search_editor)
@@ -325,12 +410,18 @@ class GlobalSearchWidget(Widget):
         vlayout = QVBoxLayout(self)
         vlayout.addLayout(hlayout_bar1)
         vlayout.addLayout(hlayout_bar2)
+        vlayout.addLayout(hlayout_bar3)
         vlayout.addWidget(self.result_label)
         vlayout.addWidget(self.search_tree)
         vlayout.addWidget(self.replace_btn)
-        vlayout.addWidget(self.replace_rerender_btn)
+        vlayout.addWidget(self.rollback_strip)
         vlayout.setStretchFactor(self.search_tree, 10)
         vlayout.setSpacing(7)
+
+    def hideEvent(self, event):
+        # 搜索栏收起时浮层挂在中央堆叠区，不会随之隐藏，需显式收起
+        self.format_float.close_panel()
+        super().hideEvent(event)
 
     def set_page_widget_lists(
         self,
@@ -340,6 +431,138 @@ class GlobalSearchWidget(Widget):
         """Store the per-page live widget lists (mutated in place on page switch)."""
         self.pairwidget_list = pairwidget_list
         self.textblk_item_list = textblk_item_list
+
+    # ── 格式条件 / 替换格式（阶段 4）────────────────────────────────
+
+    def _wrap_format_panel(self, panel: FormatEditorPanel) -> QWidget:
+        host = QWidget(self)
+        vlayout = QVBoxLayout(host)
+        vlayout.setContentsMargins(0, 0, 0, 0)
+        vlayout.setSpacing(2)
+        clear_btn = NoBorderPushBtn(self.tr("Clear"), host)
+        clear_btn.clicked.connect(lambda: self._clear_format_panel(panel))
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.addStretch(1)
+        header.addWidget(clear_btn)
+        vlayout.addLayout(header)
+        vlayout.addWidget(panel, 1)
+        return host
+
+    def _wrap_replace_format_panel(self) -> QWidget:
+        """替换格式面板：模式选择与清空并入面板头，样式下拉仅大样式模式显示。"""
+        host = QWidget(self)
+        vlayout = QVBoxLayout(host)
+        vlayout.setContentsMargins(0, 0, 0, 0)
+        vlayout.setSpacing(2)
+        clear_btn = NoBorderPushBtn(self.tr("Clear"), host)
+        clear_btn.clicked.connect(
+            lambda: self._clear_format_panel(self._replace_format_panel)
+        )
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.addWidget(self.replace_mode_combo)
+        header.addStretch(1)
+        header.addWidget(clear_btn)
+        vlayout.addLayout(header)
+        vlayout.addWidget(self.style_combo)
+        vlayout.addWidget(self._replace_format_panel, 1)
+        return host
+
+    def _clear_format_panel(self, panel: FormatEditorPanel):
+        panel.set_format(FontFormat())
+        self._update_format_btn_texts()
+        if panel is self._find_format_panel:
+            self.commit_search()
+
+    def _on_find_format_toggled(self, checked: bool):
+        if checked:
+            self.replace_format_btn.setChecked(False)
+            self.format_stack.setCurrentIndex(0)
+            self.format_float.set_title(self.find_format_btn.text())
+            self.format_float.open_panel()
+        elif not self.replace_format_btn.isChecked():
+            self.format_float.close_panel()
+
+    def _on_replace_format_toggled(self, checked: bool):
+        if checked:
+            self.find_format_btn.setChecked(False)
+            self.format_stack.setCurrentIndex(1)
+            self._refresh_style_combo()
+            self.format_float.set_title(self.replace_format_btn.text())
+            self.format_float.open_panel()
+        elif not self.find_format_btn.isChecked():
+            self.format_float.close_panel()
+        self._sync_replace_mode_vis()
+
+    def _on_format_float_closed(self):
+        # × / Esc 关闭浮层：静默复位两个入口按钮（blockSignals 防止
+        # toggled 处理器再次触发 close_panel 递归发 closed）
+        for btn in (self.find_format_btn, self.replace_format_btn):
+            btn.blockSignals(True)
+            btn.setChecked(False)
+            btn.blockSignals(False)
+        self._sync_replace_mode_vis()
+        self.search_editor.setFocus()
+
+    def _sync_replace_mode_vis(self, _idx: int = 0):
+        on = self.replace_format_btn.isChecked()
+        self.replace_mode_combo.setVisible(on)
+        self.style_combo.setVisible(on and self.replace_mode_combo.currentIndex() == 1)
+        if self.format_stack.isVisible():
+            self.format_stack.setCurrentIndex(1)
+
+    def _update_format_btn_texts(self):
+        n = len(self._find_format_panel.changed_values())
+        self.find_format_btn.setText(
+            self.tr("Format Conditions") + (f" ({n})" if n else "")
+        )
+        n = len(self._replace_format_panel.changed_values())
+        self.replace_format_btn.setText(
+            self.tr("Replace Format") + (f" ({n})" if n else "")
+        )
+        # 浮层开着时标题跟随当前页按钮文案（含动过字段计数）；
+        # init 期间 format_float 可能尚未创建，用 getattr 防护
+        float_panel = getattr(self, "format_float", None)
+        if float_panel is not None and float_panel.isVisible():
+            src = (
+                self.replace_format_btn
+                if self.replace_format_btn.isChecked()
+                else self.find_format_btn
+            )
+            float_panel.set_title(src.text())
+
+    def _find_format_conditions(self) -> Optional[FormatPredicate]:
+        """查找侧格式条件：入口未开或未动字段时返回 None（不参与过滤）。"""
+        if not self.find_format_btn.isChecked():
+            return None
+        changed = self._find_format_panel.changed_values()
+        if not changed:
+            return None
+        return FormatPredicate(
+            [FormatCondition(fname, "eq", copy_value(v)) for fname, v in changed.items()]
+        )
+
+    def _refresh_style_combo(self):
+        self.style_combo.blockSignals(True)
+        self.style_combo.clear()
+        if self.imgtrans_proj is not None:
+            for bs in self.imgtrans_proj.base_styles:
+                self.style_combo.addItem(bs.name, bs)
+        self.style_combo.blockSignals(False)
+
+    def _replace_format_payload(self) -> Tuple[Optional[dict], Optional[FontFormat]]:
+        """替换侧格式载荷：(字段 patch, 大样式 ffmt)，互斥，未启用时 (None, None)。"""
+        if not self.replace_format_btn.isChecked():
+            return None, None
+        if self.replace_mode_combo.currentIndex() == 1:
+            bs = self.style_combo.currentData()
+            return (None, bs.fontformat.deepcopy() if bs is not None else None)
+        changed = self._replace_format_panel.changed_values()
+        if not changed:
+            return None, None
+        return ({k: copy_value(v) for k, v in changed.items()}, None)
+
 
     def on_whole_word_clicked(self):
         pcfg.gsearch_whole_word = self.whole_word_toggle.isChecked()
@@ -378,13 +601,19 @@ class GlobalSearchWidget(Widget):
     def commit_search(self):
         self.search_tree.clearPages()
         self.counter_sum = 0
-        pattern = self.get_regex_pattern()
-        if pattern is None:
-            self.searched_pattern = None
-            if self.search_editor.toPlainText() != "":
+        # 格式条件激活时文本维度（原文/译文）只作用于文本谓词：
+        # 格式是块级属性，不分 src/trans。
+        fmt_pred = self._find_format_conditions()
+        text_str = self.search_editor.toPlainText()
+        pattern = self.get_regex_pattern() if text_str else None
+        if pattern is None and text_str:
+            if fmt_pred is None:
+                self.searched_pattern = None
                 self.result_label.setText(self.invalid_regex_str)
-            else:
-                self.updateResultText()
+                return
+        elif pattern is None and fmt_pred is None:
+            self.searched_pattern = None
+            self.updateResultText()
             return
         self.searched_pattern = pattern
         self.req_update_pagetext.emit()
@@ -398,28 +627,38 @@ class GlobalSearchWidget(Widget):
             blkid2match = {"src": {}, "trans": {}}
             blk: TextBlock
             for ii, blk in enumerate(page):
-                if match_src:
-                    rst_span_list, match_counter = match_blk(
-                        pattern, blk, match_src=True
-                    )
-                    if match_counter > 0:
-                        rstitem_list = gen_searchitem_list(
-                            rst_span_list, blk.get_text(), ii, pagename, is_src=True
+                if fmt_pred is not None and not fmt_pred.matches(blk):
+                    continue
+                if pattern is not None:
+                    if match_src:
+                        rst_span_list, match_counter = match_blk(
+                            pattern, blk, match_src=True
                         )
-                        blkid2match["src"][ii] = rstitem_list
-                        page_rstitem_list += rstitem_list
-                        page_match_counter += match_counter
-                if match_trans:
-                    rst_span_list, match_counter = match_blk(
-                        pattern, blk, match_src=False
-                    )
-                    if match_counter > 0:
-                        rstitem_list = gen_searchitem_list(
-                            rst_span_list, blk.translation, ii, pagename, is_src=False
+                        if match_counter > 0:
+                            rstitem_list = gen_searchitem_list(
+                                rst_span_list, blk.get_text(), ii, pagename, is_src=True
+                            )
+                            blkid2match["src"][ii] = rstitem_list
+                            page_rstitem_list += rstitem_list
+                            page_match_counter += match_counter
+                    if match_trans:
+                        rst_span_list, match_counter = match_blk(
+                            pattern, blk, match_src=False
                         )
-                        blkid2match["trans"][ii] = rstitem_list
-                        page_rstitem_list += rstitem_list
-                        page_match_counter += match_counter
+                        if match_counter > 0:
+                            rstitem_list = gen_searchitem_list(
+                                rst_span_list, blk.translation, ii, pagename, is_src=False
+                            )
+                            blkid2match["trans"][ii] = rstitem_list
+                            page_rstitem_list += rstitem_list
+                            page_match_counter += match_counter
+                else:
+                    # 格式-only 命中：块级条目，无高亮 span（点击即跳块）
+                    disp_text = blk.get_text() or (blk.translation or "")
+                    rstitem = SearchResultItem(disp_text, (0, 0), ii, pagename, is_src=True)
+                    blkid2match["src"][ii] = [rstitem]
+                    page_rstitem_list.append(rstitem)
+                    page_match_counter += 1
             if page_match_counter > 0:
                 self.counter_sum += page_match_counter
                 pageitem = self.search_tree.addPage(
@@ -445,15 +684,20 @@ class GlobalSearchWidget(Widget):
         return msg_box.exec_() == QMessageBox.StandardButton.Yes
 
     def _collect_replace_targets(self, target: str):
-        """Re-match the live pattern against every page and stage replacements.
+        """Re-match the live pattern × format conditions against every page
+        and stage replacements.
 
         Runs synchronously on the GUI thread. Matches are recomputed from the
-        current text of every block instead of trusting the spans captured at
-        search time, so stale search results can never corrupt edited text.
+        current text/format of every block instead of trusting the spans
+        captured at search time, so stale search results can never corrupt
+        edited text. 格式条件激活时，命中块 = 文本谓词 AND 格式谓词。
         Current-page changes are staged as live widget references (applied
-        afterwards either by the undo command or the direct applier); all
-        other pages are modified in place in the project model and marked for
-        lazy re-render.
+        afterwards by GlobalReplaceApplier); all other pages' text is
+        modified in place in the project model. 格式 patch 不在收集期写
+        ——统一收集为 format_changes（old/new_ffmt 深拷贝），由施加器的
+        数据层落点一次性写入并标脏。
+
+        Returns (sceneitem_list, background_list, format_changes).
         """
         pattern = self.searched_pattern
         doc = QTextDocument()
@@ -461,22 +705,39 @@ class GlobalSearchWidget(Widget):
         match_src = self.range_combobox.currentIndex() != 0
         match_trans = self.range_combobox.currentIndex() != 1
         current_img = self.imgtrans_proj.current_img
+        fmt_pred = self._find_format_conditions()
+        fmt_patch, style_ffmt = self._replace_format_payload()
+        want_ffmt = fmt_patch is not None or style_ffmt is not None
+
+        def _new_ffmt(blk):
+            if style_ffmt is not None:
+                return style_ffmt.deepcopy()
+            new_ffmt = blk.fontformat.deepcopy()
+            for k, v in fmt_patch.items():
+                setattr(new_ffmt, k, copy_value(v))
+            return new_ffmt
 
         sceneitem_list = {"src": [], "trans": []}
         background_list = {"src": [], "trans": []}
+        format_changes = []
 
         for pagename, page in self.imgtrans_proj.pages.items():
             if pagename == current_img:
                 for pw, item in zip(self.pairwidget_list, self.textblk_item_list):
-                    if match_src:
+                    if not 0 <= item.idx < len(page):
+                        continue
+                    blk = page[item.idx]
+                    if fmt_pred is not None and not fmt_pred.matches(blk):
+                        continue
+                    if match_src and pattern is not None:
                         src = pw.e_source
                         text = src.toPlainText()
                         replace = pattern.sub(target, text)
                         if replace != text:
                             sceneitem_list["src"].append(
-                                {"edit": src, "replace": replace}
+                                {"edit": src, "replace": replace, "idx": item.idx}
                             )
-                    if match_trans:
+                    if match_trans and pattern is not None:
                         spans = [
                             list(m.span()) for m in pattern.finditer(pw.e_trans.toPlainText())
                         ]
@@ -488,10 +749,21 @@ class GlobalSearchWidget(Widget):
                                     "matched_map": spans,
                                 }
                             )
+                    if want_ffmt:
+                        format_changes.append(
+                            {
+                                "pagename": pagename,
+                                "block_idx": item.idx,
+                                "old_ffmt": blk.fontformat.deepcopy(),
+                                "new_ffmt": _new_ffmt(blk),
+                            }
+                        )
             else:
                 page_dirty = False
                 for idx, blk in enumerate(page):
-                    if match_src:
+                    if fmt_pred is not None and not fmt_pred.matches(blk):
+                        continue
+                    if match_src and pattern is not None:
                         text = blk.get_text()
                         replace = pattern.sub(target, text)
                         if replace != text:
@@ -505,7 +777,7 @@ class GlobalSearchWidget(Widget):
                                 }
                             )
                             page_dirty = True
-                    if match_trans:
+                    if match_trans and pattern is not None:
                         ori = blk.translation
                         ori_html = blk.rich_text
                         replace_html = ""
@@ -536,62 +808,93 @@ class GlobalSearchWidget(Widget):
                                 }
                             )
                             page_dirty = True
+                    if want_ffmt:
+                        format_changes.append(
+                            {
+                                "pagename": pagename,
+                                "block_idx": idx,
+                                "old_ffmt": blk.fontformat.deepcopy(),
+                                "new_ffmt": _new_ffmt(blk),
+                            }
+                        )
                 if page_dirty:
                     self.imgtrans_proj.mark_page_needs_rerender(pagename)
 
-        return sceneitem_list, background_list
+        return sceneitem_list, background_list, format_changes
 
-    def _has_staged_changes(self, sceneitem_list: dict, background_list: dict) -> bool:
-        return any(
+    def _has_staged_changes(
+        self, sceneitem_list: dict, background_list: dict, format_changes: list
+    ) -> bool:
+        return bool(format_changes) or any(
             sceneitem_list[key] or background_list[key] for key in ("src", "trans")
         )
 
     def on_replace(self):
-        """Replace all matches synchronously (undoable via text undo stack)."""
-        if self.counter_sum < 1 or self.searched_pattern is None:
+        """Replace all matches synchronously; rollback goes through the
+        pre-replace batch snapshot, never through the undo stack."""
+        if self.counter_sum < 1:
             return
         if not self._confirm_replace(self.tr("Replace all occurrences?")):
             return
+        # Snapshot + UI sync must happen before collection, which mutates
+        # non-current pages in place.
+        self.replace_preparing.emit()
+        self._refresh_style_combo()
         target = self.replace_editor.toPlainText()
-        sceneitem_list, background_list = self._collect_replace_targets(target)
-        if not self._has_staged_changes(sceneitem_list, background_list):
+        sceneitem_list, background_list, format_changes = (
+            self._collect_replace_targets(target)
+        )
+        if not self._has_staged_changes(sceneitem_list, background_list, format_changes):
+            # No-op replace: the just-written snapshot only mirrors the
+            # current state, so it is worthless — drop it together with any
+            # rollback strip still showing a (now unrecoverable) batch.
+            self.imgtrans_proj.clear_batch_backup()
+            self.hide_rollback_strip()
             self.set_document_edited()
             return
-        self.replace_finished.emit(sceneitem_list, background_list, target)
+        self.replace_finished.emit(
+            sceneitem_list, background_list, target, format_changes
+        )
         self.pages_dirtied.emit()
+        self._show_rollback_strip(sceneitem_list, background_list, format_changes)
 
-    def on_replace_rerender(self):
-        """Replace all matches across pages, then re-render all result images.
+    # ── 批量回滚条 ─────────────────────────────────────────────────
 
-        Unlike the simple 'Replace All' (which defers result-image rendering
-        until page visits), this applies replacements synchronously to both
-        the current-page UI and all non-current pages' model data, persists
-        the project JSON, and then triggers a non-disruptive batch re-render
-        of every affected page's result image. Not undoable.
-        """
-        if self.counter_sum < 1 or self.searched_pattern is None:
+    def _show_rollback_strip(
+        self, sceneitem_list: dict, background_list: dict, format_changes: list = ()
+    ):
+        current_img = self.imgtrans_proj.current_img
+        block_keys = set()
+        for rec in sceneitem_list["src"]:
+            block_keys.add((current_img, rec.get("idx")))
+        for rec in sceneitem_list["trans"]:
+            block_keys.add((current_img, rec["item"].idx))
+        for rec in background_list["src"] + background_list["trans"]:
+            block_keys.add((rec["pagename"], rec["idx"]))
+        for ch in format_changes:
+            block_keys.add((ch["pagename"], ch["block_idx"]))
+        block_keys.discard((current_img, None))
+        pages = {p for p, _ in block_keys}
+        self.rollback_label.setText(
+            self.tr("Replaced %d block(s) across %d page(s)")
+            % (len(block_keys), len(pages))
+        )
+        self.rollback_strip.setVisible(True)
+
+    def hide_rollback_strip(self):
+        self.rollback_strip.setVisible(False)
+
+    def _on_rollback_clicked(self):
+        if not self.imgtrans_proj.has_batch_backup():
+            self.hide_rollback_strip()
             return
-        if not self._confirm_replace(
-            self.tr("Replace all occurrences and re-render all pages? It can't be undone.")
-        ):
-            return
-        target = self.replace_editor.toPlainText()
-        sceneitem_list, _ = self._collect_replace_targets(target)
-
-        for src_dict in sceneitem_list["src"]:
-            edit: SourceTextEdit = src_dict["edit"]
-            edit.setPlainTextAndKeepUndoStack(src_dict["replace"])
-            edit.updateUndoSteps()
-        for trans_dict in sceneitem_list["trans"]:
-            edit: TransTextEdit = trans_dict["edit"]
-            item: TextBlkItem = trans_dict["item"]
-            sel_list = doc_replace(edit.document(), trans_dict["matched_map"], target)
-            doc_replace_no_shift(item.document(), sel_list, target)
-            item.updateUndoSteps()
-
-        # Persist JSON then batch-re-render all affected result images
-        self.req_commit_and_rerender.emit()
-        self.set_document_edited()
+        confirmed = self._confirm_replace(
+            self.tr(
+                "Roll back the last batch replace? All edits made after it will be discarded."
+            )
+        )
+        if confirmed:
+            self.batch_rollback_requested.emit()
 
     def sizeHint(self) -> QSize:
         size = super().sizeHint()

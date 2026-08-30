@@ -1,4 +1,4 @@
-from qtpy.QtCore import QThread, Signal
+from qtpy.QtCore import QCoreApplication, QThread, Signal
 from qtpy.QtGui import QImage, QPixmap
 
 from utils.io_utils import imwrite
@@ -12,6 +12,9 @@ from .misc import pixmap2ndarray
 
 class ThreadBase(QThread):
     _thread_exception_type = None
+    # Subclasses override this with an explicit-context translate at the
+    # literal (runtime tr context is the subclass, not ThreadBase, so the
+    # base default is intentionally left untranslated).
     _thread_error_msg = "Thread job failed."
 
     def __init__(self, *args, **kwargs):
@@ -27,16 +30,15 @@ class ThreadBase(QThread):
                 self.job()
             except Exception as e:
                 self.on_exec_failed()
-                create_error_dialog(
-                    e, self.tr(self._thread_error_msg), self._thread_exception_type
-                )
+                create_error_dialog(e, self._thread_error_msg, self._thread_exception_type)
         self.job = None
 
 
 class ImgSaveThread(ThreadBase):
     img_writed = Signal(str)
     _thread_exception_type = "ImgSaveThread"
-    _thread_error_msg = "Failed to save image."
+    _thread_error_msg = QCoreApplication.translate(
+        "ImgSaveThread", "Failed to save image.")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -82,9 +84,7 @@ class ImgSaveThread(ThreadBase):
                     self.job()
                 except Exception as e:
                     self.on_exec_failed()
-                    create_error_dialog(
-                        e, self.tr(self._thread_error_msg), self._thread_exception_type
-                    )
+                    create_error_dialog(e, self._thread_error_msg, self._thread_exception_type)
 
 
 class ImgTransProjFileIOThread(ThreadBase):
@@ -92,6 +92,8 @@ class ImgTransProjFileIOThread(ThreadBase):
     fin_io = Signal()
 
     _thread_exception_type = "ImgTransProjFileIOThread"
+    _thread_error_msg = QCoreApplication.translate(
+        "ImgTransProjFileIOThread", "Thread job failed.")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -119,7 +121,8 @@ class MergeThread(ThreadBase):
     merge_finished = Signal(int, int)  # (成功数, 失败数)
 
     _thread_exception_type = "MergeThread"
-    _thread_error_msg = "Region merge failed"
+    _thread_error_msg = QCoreApplication.translate(
+        "MergeThread", "Region merge failed")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -3,6 +3,7 @@ from functools import partial
 from typing import Dict, List, Tuple, Union
 
 from qtpy.QtCore import (
+    QCoreApplication,
     QEasingCurve,
     QElapsedTimer,
     QEvent,
@@ -844,42 +845,47 @@ DEFAULT_SHORTCUTS = {
     "move_bottom": [],
 }
 
+# Display names are translated at table definition (QCoreApplication.translate
+# with an explicit context) so the strings are plain literals — i18n_check can
+# extract them without the orphan whitelist.  Context names match the existing
+# zh_CN.ts contexts; launch.py installs the translator before this module is
+# imported.
 _ACTION_NAMES = {
-    "prev_page": "Page Up",
-    "next_page": "Page Down",
-    "prev_page_alt": "Page Up (alt)",
-    "next_page_alt": "Page Down (alt)",
-    "textedit_mode": "Text Editor",
-    "textblock_mode": "Text Block",
-    "drawboard_mode": "Draw Board",
-    "zoom_in": "Zoom In",
-    "zoom_out": "Zoom Out",
-    "delete_blks": "Delete",
-    "delete_blks_alt": "Delete (alt)",
-    "select_all": "Select All",
-    "strike": "Strike-through",
-    "italic": "Italic",
-    "underline": "Underline",
-    "undo": "Undo",
-    "redo": "Redo",
-    "page_search": "Page Search",
-    "global_search": "Global Search",
-    "escape": "Escape",
-    "space_inpaint": "Inpaint",
-    "hand_tool": "Hand Tool",
-    "rect_tool": "Rect Tool",
-    "inpaint_tool": "Inpaint Tool",
-    "ai_tool": "AI Inpaint",
-    "merge_tool": "Merge Tool",
-    "quick_symbol": "Quick Symbol",
-    "advanced_align": "Advanced Alignment",
-    "merge_blks": "Merge Text Blocks",
-    "toggle_original_opacity": "Toggle Original Compare",
-    "path_reorder": "Path Reorder",
-    "move_up": "Move Up",
-    "move_down": "Move Down",
-    "move_top": "Move to Top",
-    "move_bottom": "Move to Bottom",
+    "prev_page": QCoreApplication.translate("_ShortcutRow", "Page Up"),
+    "next_page": QCoreApplication.translate("_ShortcutRow", "Page Down"),
+    "prev_page_alt": QCoreApplication.translate("_ShortcutRow", "Page Up (alt)"),
+    "next_page_alt": QCoreApplication.translate("_ShortcutRow", "Page Down (alt)"),
+    "textedit_mode": QCoreApplication.translate("_ShortcutRow", "Text Editor"),
+    "textblock_mode": QCoreApplication.translate("_ShortcutRow", "Text Block"),
+    "drawboard_mode": QCoreApplication.translate("_ShortcutRow", "Draw Board"),
+    "zoom_in": QCoreApplication.translate("_ShortcutRow", "Zoom In"),
+    "zoom_out": QCoreApplication.translate("_ShortcutRow", "Zoom Out"),
+    "delete_blks": QCoreApplication.translate("_ShortcutRow", "Delete"),
+    "delete_blks_alt": QCoreApplication.translate("_ShortcutRow", "Delete (alt)"),
+    "select_all": QCoreApplication.translate("_ShortcutRow", "Select All"),
+    "strike": QCoreApplication.translate("_ShortcutRow", "Strike-through"),
+    "italic": QCoreApplication.translate("_ShortcutRow", "Italic"),
+    "underline": QCoreApplication.translate("_ShortcutRow", "Underline"),
+    "undo": QCoreApplication.translate("_ShortcutRow", "Undo"),
+    "redo": QCoreApplication.translate("_ShortcutRow", "Redo"),
+    "page_search": QCoreApplication.translate("_ShortcutRow", "Page Search"),
+    "global_search": QCoreApplication.translate("_ShortcutRow", "Global Search"),
+    "escape": QCoreApplication.translate("_ShortcutRow", "Escape"),
+    "space_inpaint": QCoreApplication.translate("_ShortcutRow", "Inpaint"),
+    "hand_tool": QCoreApplication.translate("_ShortcutRow", "Hand Tool"),
+    "rect_tool": QCoreApplication.translate("_ShortcutRow", "Rect Tool"),
+    "inpaint_tool": QCoreApplication.translate("_ShortcutRow", "Inpaint Tool"),
+    "ai_tool": QCoreApplication.translate("_ShortcutRow", "AI Inpaint"),
+    "merge_tool": QCoreApplication.translate("_ShortcutRow", "Merge Tool"),
+    "quick_symbol": QCoreApplication.translate("_ShortcutRow", "Quick Symbol"),
+    "advanced_align": QCoreApplication.translate("_ShortcutRow", "Advanced Alignment"),
+    "merge_blks": QCoreApplication.translate("_ShortcutRow", "Merge Text Blocks"),
+    "toggle_original_opacity": QCoreApplication.translate("_ShortcutRow", "Toggle Original Compare"),
+    "path_reorder": QCoreApplication.translate("_ShortcutRow", "Path Reorder"),
+    "move_up": QCoreApplication.translate("_ShortcutRow", "Move Up"),
+    "move_down": QCoreApplication.translate("_ShortcutRow", "Move Down"),
+    "move_top": QCoreApplication.translate("_ShortcutRow", "Move to Top"),
+    "move_bottom": QCoreApplication.translate("_ShortcutRow", "Move to Bottom"),
 }
 
 # Actions whose factory default resolves through a Qt StandardKey so macOS
@@ -922,12 +928,19 @@ def native_key_display(seq: str) -> str:
         return seq
 
 
-# Shortcut groups for organized display
+# Shortcut groups for organized display (titles translated at definition, see
+# _ACTION_NAMES note above)
 _SHORTCUT_GROUPS = [
-    ("Navigation", ["prev_page", "next_page", "prev_page_alt", "next_page_alt"]),
-    ("View", ["zoom_in", "zoom_out", "toggle_original_opacity"]),
     (
-        "Edit",
+        QCoreApplication.translate("ShortcutEditor", "Navigation"),
+        ["prev_page", "next_page", "prev_page_alt", "next_page_alt"],
+    ),
+    (
+        QCoreApplication.translate("ShortcutEditor", "View"),
+        ["zoom_in", "zoom_out", "toggle_original_opacity"],
+    ),
+    (
+        QCoreApplication.translate("ShortcutEditor", "Edit"),
         [
             "textedit_mode",
             "textblock_mode",
@@ -944,7 +957,7 @@ _SHORTCUT_GROUPS = [
         ],
     ),
     (
-        "Tools",
+        QCoreApplication.translate("ShortcutEditor", "Tools"),
         [
             "hand_tool",
             "rect_tool",
@@ -957,9 +970,15 @@ _SHORTCUT_GROUPS = [
             "advanced_align",
         ],
     ),
-    ("Reorder", ["move_up", "move_down", "move_top", "move_bottom"]),
-    ("Search", ["page_search", "global_search"]),
-    ("General", ["escape"]),
+    (
+        QCoreApplication.translate("ShortcutEditor", "Reorder"),
+        ["move_up", "move_down", "move_top", "move_bottom"],
+    ),
+    (
+        QCoreApplication.translate("ShortcutEditor", "Search"),
+        ["page_search", "global_search"],
+    ),
+    (QCoreApplication.translate("ShortcutEditor", "General"), ["escape"]),
 ]
 
 
@@ -982,8 +1001,8 @@ class _ShortcutRow(QWidget):
         h.setContentsMargins(2, 6, 2, 6)
         h.setSpacing(6)
 
-        # Action name — left column
-        name = QLabel(self.tr(_ACTION_NAMES.get(action_id, action_id)))
+        # Action name — left column (already translated, see _ACTION_NAMES)
+        name = QLabel(_ACTION_NAMES.get(action_id, action_id))
         name.setStyleSheet(
             f"color: {s['name_clr']}; background: transparent; border: none;"
         )
@@ -1183,7 +1202,7 @@ class ShortcutEditor(QWidget):
         s = shortcut_styles()
 
         for group_name, action_ids in _SHORTCUT_GROUPS:
-            group_box = PanelGroupBox(self.tr(group_name))
+            group_box = PanelGroupBox(group_name)
             group_layout = group_box.contentLayout()
 
             for idx, action_id in enumerate(action_ids):

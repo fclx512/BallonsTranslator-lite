@@ -5,8 +5,7 @@ Global search: Replace All used to run in a background thread that collected
 live text-edit widget references and touched widgets/models/progress bars
 from the worker thread — switching pages mid-run crashed with
 ``RuntimeError: wrapped C/C++ object of type TransTextEdit has been deleted``
-(the replacement was then applied to deleted widgets in
-``ui/textedit_commands.py::GlobalRepalceAllCommand``).  Replacement is now
+(the replacement was then applied to deleted widgets).  Replacement is now
 fully synchronous on the GUI thread and re-matches the pattern against the
 live text of every block, so stale search spans can never corrupt edited
 text.  This suite also pins the smaller fixes: whole-word searches escape
@@ -54,6 +53,7 @@ class FakeProj:
         self.pages = pages or {}
         self.current_img = current_img
         self.rerender_marked = set()
+        self.base_styles = []
 
     def mark_page_needs_rerender(self, pagename):
         self.rerender_marked.add(pagename)
@@ -173,7 +173,7 @@ class GlobalReplaceCollectorTest(unittest.TestCase):
         w = self._widget(
             {"cur.png": [], "p2.png": [blk]}, current_img="cur.png"
         )
-        sceneitem, background = self._collect(w)
+        sceneitem, background, _ = self._collect(w)
         self.assertEqual(blk.text, ["X bar"])
         self.assertEqual(blk.translation, "X啊X")
         self.assertEqual(len(background["src"]), 1)
@@ -190,7 +190,7 @@ class GlobalReplaceCollectorTest(unittest.TestCase):
         w = self._widget(
             {"cur.png": [], "p2.png": [blk]}, current_img="cur.png"
         )
-        _, background = self._collect(w)
+        _, background, _ = self._collect(w)
         self.assertEqual(blk.translation, "aa X bb")
         self.assertIn("X", blk.rich_text)
         self.assertNotIn("foo", blk.rich_text)
@@ -202,7 +202,7 @@ class GlobalReplaceCollectorTest(unittest.TestCase):
         w = self._widget(
             {"cur.png": [], "p2.png": [blk]}, current_img="cur.png"
         )
-        sceneitem, background = self._collect(w)
+        sceneitem, background, _ = self._collect(w)
         self.assertEqual(blk.text, ["bar"])
         self.assertEqual(blk.translation, "bar")
         self.assertEqual(background["src"], [])
@@ -217,17 +217,17 @@ class GlobalReplaceCollectorTest(unittest.TestCase):
             {"cur.png": [], "p2.png": [blk]}, current_img="cur.png"
         )
         blk.translation = "foo zzz"  # simulate an edit after the search
-        _, background = self._collect(w)
+        _, background, _ = self._collect(w)
         self.assertEqual(blk.translation, "X zzz")
         self.assertEqual(len(background["trans"]), 1)
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Global replace: undo command on live widgets
+# Global replace: applier on live widgets
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class GlobalReplaceCommandTest(unittest.TestCase):
+class GlobalReplaceApplierTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from qtpy.QtWidgets import QGraphicsScene
@@ -251,10 +251,8 @@ class GlobalReplaceCommandTest(unittest.TestCase):
         trans.setPlainText(text)
         return blk, item, src, trans
 
-    def test_command_apply_undo_redo_live_edits(self):
-        from qtpy.QtGui import QUndoStack
-
-        from ui.textedit_commands import GlobalRepalceAllCommand
+    def test_applier_applies_live_edits(self):
+        from ui.textedit_commands import GlobalReplaceApplier
 
         blk, item, src, trans = self._make_pair("foo bar")
         proj = FakeProj({"cur.png": [blk]}, "cur.png")
@@ -264,60 +262,14 @@ class GlobalReplaceCommandTest(unittest.TestCase):
                 {"edit": trans, "item": item, "matched_map": [[0, 3]]}
             ],
         }
-        background = {"src": [], "trans": []}
-        cmd = GlobalRepalceAllCommand(sceneitem, background, "X", proj)
+        GlobalReplaceApplier(sceneitem, "X", proj)
         self.assertEqual(trans.toPlainText(), "X bar")
         self.assertEqual(item.toPlainText(), "X bar")
         self.assertEqual(src.toPlainText(), "X bar")
-
-        # Push into a real stack to exercise the production lifecycle.
-        stack = QUndoStack()
-        stack.push(cmd)  # first redo() runs; edits already applied in __init__
-        self.assertEqual(trans.toPlainText(), "X bar")
-
-        stack.undo()
-        self.assertEqual(trans.toPlainText(), "foo bar")
-        self.assertEqual(item.toPlainText(), "foo bar")
-        self.assertEqual(src.toPlainText(), "foo bar")
-
-        stack.redo()
-        self.assertEqual(trans.toPlainText(), "X bar")
-        self.assertEqual(item.toPlainText(), "X bar")
-        self.assertEqual(src.toPlainText(), "X bar")
-
-    def test_background_restore_survives_vanished_page(self):
-        from ui.textedit_commands import GlobalRepalceAllCommand
-
-        blk = _make_blk(translation="foo", text="foo")
-        gone = _make_blk(translation="foo", text="foo")
-        proj = FakeProj({"p2.png": [blk]}, "cur.png")  # p3.png vanished
-        background = {
-            "src": [
-                {"ori": "foo", "replace": "X", "pagename": "p2.png", "idx": 0},
-                {"ori": "foo", "replace": "X", "pagename": "p3.png", "idx": 0},
-            ],
-            "trans": [
-                {
-                    "ori": "foo",
-                    "replace": "X",
-                    "ori_html": "",
-                    "replace_html": "",
-                    "pagename": "p2.png",
-                    "idx": 0,
-                }
-            ],
-        }
-        cmd = GlobalRepalceAllCommand(
-            {"src": [], "trans": []}, background, "X", proj
-        )
-        cmd.undo()
-        self.assertEqual(blk.text, ["foo"])
-        self.assertEqual(blk.translation, "foo")
-        cmd.redo()
-        self.assertEqual(blk.text, ["X"])
-        self.assertEqual(blk.translation, "X")
-        # Deleted-page entries were skipped without raising.
-        self.assertIn("p2.png", proj.rerender_marked)
+        # 批量替换不依赖文档撤销栈（回滚走项目快照）
+        self.assertFalse(trans.document().isUndoAvailable())
+        self.assertFalse(item.document().isUndoAvailable())
+        self.assertFalse(src.document().isUndoAvailable())
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -470,6 +422,156 @@ class BatchFontformatCommandTest(unittest.TestCase):
         cmd = BatchFontformatCommand(proj, None, changes, "test")
         cmd.undo()  # must not raise
         cmd.redo()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 阶段 4：格式条件搜索 / 格式替换（文本 × 格式四象限）
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class FormatConditionSearchTest(unittest.TestCase):
+    """格式条件接入 GlobalSearchWidget：搜索 AND 语义 + format-only 命中。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _widget(self, pages, current_img=None):
+        from ui.global_search_widget import GlobalSearchWidget
+
+        w = GlobalSearchWidget()
+        w.imgtrans_proj = FakeProj(pages, current_img)
+        return w
+
+    def _enable_find_format(self, w, fname="font_size", value=32.0):
+        w.find_format_btn.setChecked(True)
+        w._find_format_panel.set_field_value(fname, value)
+        w._update_format_btn_texts()
+
+    def test_format_only_search_finds_blocks(self):
+        big = _make_blk(translation="big")
+        big.fontformat.font_size = 32.0
+        small = _make_blk(translation="small")
+        w = self._widget({"p.png": [big, small]})
+        self._enable_find_format(w)
+        w.commit_search()
+        self.assertEqual(w.counter_sum, 1)
+        self.assertIsNone(w.searched_pattern)
+        w.deleteLater()
+
+    def test_format_condition_gates_text_search(self):
+        # AND 语义：文本都命中，但只有大字号块通过格式过滤
+        big = _make_blk(translation="foo big", text="foo")
+        big.fontformat.font_size = 32.0
+        small = _make_blk(translation="foo small", text="foo")
+        w = self._widget({"p.png": [big, small]})
+        w.range_combobox.setCurrentIndex(2)
+        w.search_editor.setPlainText("foo")
+        self._enable_find_format(w)
+        w.commit_search()
+        self.assertEqual(w.counter_sum, 2)  # big 的 src+trans 各一条
+        w.deleteLater()
+
+    def test_empty_query_with_no_format_conditions_resets(self):
+        w = self._widget({"p.png": [_make_blk()]})
+        w.commit_search()
+        self.assertEqual(w.counter_sum, 0)
+        w.deleteLater()
+
+    def test_format_only_replace_patches_off_page_blocks(self):
+        from ui.textedit_commands import GlobalReplaceApplier
+
+        blk = _make_blk(translation="t", text="s")
+        w = self._widget({"cur.png": [], "p2.png": [blk]}, current_img="cur.png")
+        w.replace_format_btn.setChecked(True)
+        w._replace_format_panel.set_field_value("font_size", 32.0)
+        sceneitem, background, fmt_changes = w._collect_replace_targets("X")
+        self.assertEqual(sceneitem["src"], [])
+        self.assertEqual(background["src"], [])
+        self.assertEqual(len(fmt_changes), 1)
+        self.assertEqual(fmt_changes[0]["block_idx"], 0)
+        self.assertEqual(fmt_changes[0]["new_ffmt"].font_size, 32.0)
+        # 收集期不写数据：由施加器统一落点
+        self.assertEqual(blk.fontformat.font_size, 24)
+        GlobalReplaceApplier(
+            sceneitem, "", w.imgtrans_proj, format_changes=fmt_changes
+        )
+        self.assertEqual(blk.fontformat.font_size, 32.0)
+        self.assertIn("p2.png", w.imgtrans_proj.rerender_marked)
+        w.deleteLater()
+
+    def test_apply_base_style_mode_replaces_whole_ffmt(self):
+        from utils.base_styles import BaseStyle
+
+        blk = _make_blk(translation="t")
+        style_ffmt = blk.fontformat.deepcopy()
+        style_ffmt.font_size = 40.0
+        style_ffmt.italic = True
+        w = self._widget({"cur.png": [], "p2.png": [blk]}, current_img="cur.png")
+        w.imgtrans_proj.base_styles = [BaseStyle("Big", style_ffmt)]
+        w.replace_format_btn.setChecked(True)
+        w._refresh_style_combo()
+        w.replace_mode_combo.setCurrentIndex(1)
+        sceneitem, _, fmt_changes = w._collect_replace_targets("")
+        self.assertEqual(len(fmt_changes), 1)
+        new_ffmt = fmt_changes[0]["new_ffmt"]
+        self.assertEqual(new_ffmt.font_size, 40.0)
+        self.assertTrue(new_ffmt.italic)
+        w.deleteLater()
+
+    def test_format_gate_skips_nonmatching_text_targets(self):
+        # 文本命中但格式不中的块：既不替换文本也不进 format_changes
+        blk = _make_blk(translation="foo", text="foo")
+        w = self._widget({"cur.png": [], "p2.png": [blk]}, current_img="cur.png")
+        w.search_editor.setPlainText("foo")
+        w.commit_search()
+        self.assertGreater(w.counter_sum, 0)
+        self._enable_find_format(w)
+        sceneitem, background, fmt_changes = w._collect_replace_targets("X")
+        self.assertEqual(sceneitem["src"], [])
+        self.assertEqual(background["src"], [])
+        self.assertEqual(background["trans"], [])
+        self.assertEqual(fmt_changes, [])
+        self.assertEqual(blk.translation, "foo")
+        w.deleteLater()
+
+    def test_current_page_format_gate_uses_data_block(self):
+        class _FakeEdit:
+            def __init__(self, text):
+                self._text = text
+
+            def toPlainText(self):
+                return self._text
+
+        class _FakePW:
+            def __init__(self, src, trans):
+                self.e_source = src
+                self.e_trans = trans
+
+        class _FakeItem:
+            def __init__(self, idx):
+                self.idx = idx
+
+        big = _make_blk(translation="foo big", text="foo")
+        big.fontformat.font_size = 32.0
+        small = _make_blk(translation="foo small", text="foo")
+        w = self._widget({"cur.png": [big, small]}, current_img="cur.png")
+        w.pairwidget_list = [
+            _FakePW(_FakeEdit("foo"), _FakeEdit("foo big")),
+            _FakePW(_FakeEdit("foo"), _FakeEdit("foo small")),
+        ]
+        w.textblk_item_list = [_FakeItem(0), _FakeItem(1)]
+        w.range_combobox.setCurrentIndex(2)  # All
+        w.search_editor.setPlainText("foo")
+        self._enable_find_format(w)
+        w.commit_search()
+        sceneitem, background, fmt_changes = w._collect_replace_targets("X")
+        # 只有 big（idx 0）通过格式门；src 暂存须带 idx 供回滚条计数
+        self.assertEqual(len(sceneitem["src"]), 1)
+        self.assertEqual(sceneitem["src"][0]["idx"], 0)
+        self.assertEqual(background["src"], [])
+        self.assertEqual(fmt_changes, [])
+        w.deleteLater()
 
 
 if __name__ == "__main__":

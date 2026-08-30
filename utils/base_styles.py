@@ -38,7 +38,6 @@ _SIGNATURE_FIELDS = [
     "stroke_width",
     "frgb",
     "srgb",
-    "bold",
     "italic",
     "underline",
     "alignment",
@@ -85,7 +84,6 @@ DIFF_FIELDS = [
     "stroke_width",
     "frgb",
     "srgb",
-    "bold",
     "italic",
     "underline",
     "strikeout",
@@ -355,7 +353,7 @@ def discover_style_tree(proj, base_styles: List[BaseStyle]) -> StyleTree:
 # the remaining fields in DIFF_FIELDS order.
 _TOKEN_ORDER = ["font_size"] + [f for f in DIFF_FIELDS if f != "font_size"]
 
-_BOOL_TOKENS = {"bold": "B", "italic": "I", "underline": "U", "strikeout": "S"}
+_BOOL_TOKENS = {"italic": "I", "underline": "U", "strikeout": "S"}
 _COLOR_FIELDS = {
     "frgb": "fg",
     "srgb": "st",

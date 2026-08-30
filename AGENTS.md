@@ -54,6 +54,11 @@ modules/
 `ui/custom_widget/` 封装了完整的可复用控件库，通过 `__init__.py` 统一导出：
 `from ui.custom_widget import ConfigCheckBox, NoArrowsSpinBox, …`。
 
+**输入类控件必须用封装类，禁止直接实例化 `QComboBox`/`QSpinBox`/`QLineEdit`/`QTextEdit`**：
+它们的圆角输入样式走类名选择器，原生类静默掉样式（`QSpinBox`/`QTextEdit` 甚至完全无规则）。
+下拉框/数字/单行/多行/复选框分别用 `ConfigComboBox`/`NoArrowsSpinBox`/`ConfigLineEdit`/`ConfigTextEdit`/`ConfigCheckBox`。
+按钮、滚动条、菜单、单选、tab 等有全局 QSS 兜底，原生类即可。详见使用说明文档「样式生效机制：全局兜底 vs 类名选择器」一节。
+
 **核心模式**（详见 [`docs/基础速查/打包控件功能使用说明.md`](docs/基础速查/打包控件功能使用说明.md)）：
 
 | 模式/控件 | 一句话说明 |
@@ -69,6 +74,7 @@ modules/
 | `GroupFrame` | 圆角边框分组容器 |
 | `NotificationCenter`（`ui/custom_widget/notification.py`） | 统一画布通知中心：toast / 活动 spinner / 状态角标，锚点堆叠避让、key 去重刷新、`post()` 线程桥接；模块级单例 `notification`，Canvas 初始化时 attach 后由各模块调用 |
 | `RailDockPanel` | 画布区浮层面板（主窗口内子控件，展开硬连接锚定窄栏左侧：右缘+顶部固定、宿主缩放/窄栏移动自动重锚、左下角手柄拉伸、尺寸下限随内容布局、Esc/× 关闭不自动关；开合记忆 `pcfg`） |
+| `FloatDropPanel`（`ui/custom_widget/float_drop_panel.py`） | 按钮锚定下拉浮层（`ui/global_search_widget.py` 格式条件用）：宿主为 `window.centralWidget()`（打开时惰性解析），左缘钉在锚点所在侧栏右缘、向画布方向按内容展开，不参与布局不撑宿主最小尺寸；Esc/×/再点锚点关闭，无开合记忆、无拉伸手柄（内容自带滚动）；QSS 复用 `RailDock*` objectName |
 
 新增控件时更新上表即可，无需展开详细用法。优先使用已有方案而非重新实现。
 
@@ -106,13 +112,13 @@ modules/
 - 所有 UI 文字用 `self.tr()` 包裹，严禁硬编码中文。
 - ts 中 `<context>` 对应类名，`<message>` 对应 tr 字符串。
 - 编译：`python scripts/qm_compile.py translate/zh_CN.ts translate/zh_CN.qm`
-- 验证：`python scripts/i18n_check.py`；发版前 `--ci`；`--show-expected` 可列出已知孤儿。
+- 验证：`python scripts/i18n_check.py`；发版前 `--ci`。
 - `self.tr()` 字符串必须是单个字符串，不要用隐式拼接（`"a" "b"`）—— `i18n_check.py` 按行扫描，检测不到跨行拼接。长字符串在 `tr(` 后换行即可。
-- `--ci` 对 orphan 条目（ts 有但代码无对应 `self.tr()`）退出码 4。通常是 `self.tr(variable)` / `canvas.tr()` 间接调用，运行时正常。
-- **⚠️ 快捷键面板等使用 `self.tr(variable)` 间接调用的地方最易漏翻译**。`_ShortcutRow` 通过 `self.tr(_ACTION_NAMES[id])` 渲染动作名，`ShortcutEditor` 通过 `self.tr(group_name)` 渲染分组标题——这些字符串 i18n_check 报 orphan 且无法自动检测，**已列入已知孤儿白名单**（`KNOWN_ORPHAN_CONTEXTS`，默认不显示、不计失败，`--show-expected` 查看），但 ts 对应 `<context>` 仍需**手工同步**：新增/删除快捷键动作时，ts 的 `_ShortcutRow` 和 `ShortcutEditor` 上下文要同步增删 `<message>`，否则运行时显示英文。
-- 模块参数 `description` 用英文，翻译放 `<context><name>ParamWidget</name></context>`。
+- **模块级翻译表禁止 `self.tr(variable)` 间接查表**（检查器看不见，必漏翻译）：在**字面量定义处**用 `QCoreApplication.translate("上下文", "...")` 显式标注上下文（快捷键名 `ui/configpanel.py::_ACTION_NAMES`、画布右键命令 `ui/context_menu_config.py`、饼菜单分区 `ui/pie_menu_editor.py`、线程错误消息 `ui/io_thread.py` 等），下游一律直接使用已翻译值（tr 对非匹配串原样返回）。孤儿白名单已清空（`scripts/i18n_common.py::KNOWN_ORPHAN_CONTEXTS` 为空集），`--ci` 报孤儿/缺失即真实问题，须修复。
+- 模块参数 `description`（`ParamWidget` 上下文）是纯数据，由 `scripts/i18n_common.py::extract_param_descriptions` 以 AST 规则从 dict 字面量提取：`modules/` 下含 `description` 键的 dict 全收（`agent/` 包除外）；其它目录须同时含 `value` 键（排除 LLM prompt 数据）。`modules/translators/agent/tools.py` 与 `utils/ai_tools.py` 的 description 是 LLM 提示词，不入 ts。跑 `ts_auto_fill.py` 即可自动同步。
+- **饼菜单默认名**（`utils/config.py::DEFAULT_PIE_MENUS` 的 `name`）因 config.py 导入早于翻译器安装，不能就地翻译；以 `ui/pie_menu.py::_DEFAULT_MENU_NAME_TR` 锚点字面量供工具链提取，勿删。
 - 无需翻译：日志、LLM prompt、字体测试字符、语言映射字典。
-- 常见问题：source 大小写不一致；context 放错；`type="obsolete"`。批量编辑 ts 用 Python 脚本直接操作文本。
+- 常见问题：source 大小写不一致；context 放错；`type="obsolete"`；**ts 的 `<context>` 块必须平行嵌套**（曾出现 ParamWidget 嵌进 ParamComboBox 导致整块对解析器与 qm 编译隐形）。批量编辑 ts 用 Python 脚本直接操作文本。
 - **⚠️ QM 编码陷阱**：`scripts/qm_compile.py` 旧版用 `latin-1` 编码，会把 `—`/`→`/`⚠`/`✓` 等非 Latin-1 字符静默替换成 `?`，导致 Qt 哈希查找失败、翻译回退为英文。`self.tr()` 正确但运行时仍显英文 → 查 qm 是否被污染，确保 `_iso8859_str()` 用 `"utf-8"` 后重新编译。诊断脚本与细节见 [`docs/基础速查/i18n.md`](docs/基础速查/i18n.md)「常见问题」。
 
 ## 测试流程

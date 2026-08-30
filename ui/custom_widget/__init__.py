@@ -27,6 +27,7 @@ from .label import (
     SmallSizeControlLabel,
     TextCheckerLabel,
 )
+from .float_drop_panel import FloatDropPanel
 from .message import (
     FrameLessMessageBox,
     ImgtransProgressMessageBox,

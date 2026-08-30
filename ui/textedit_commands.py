@@ -1,5 +1,6 @@
+import copy
 from difflib import SequenceMatcher
-from typing import List, Union
+from typing import Dict, List, Union
 
 from qtpy.QtCore import QPointF
 from qtpy.QtGui import QTextCursor
@@ -273,14 +274,20 @@ class TextItemEditCommand(QUndoCommand):
             self.op_counter += 1
             return
 
-        self.blkitem.repaint_on_changed = False
+        try:
+            self.blkitem.repaint_on_changed = False
+        except RuntimeError:
+            return
         if self.new_ffmt_values is not None:
             for k, v in self.new_ffmt_values.items():
                 self.blkitem.fontformat[k] = v
-        self.blkitem.redo()
-        self.blkitem.repaint_on_changed = True
-        if self.num_steps > 0:
-            self.blkitem.repaint_background()
+        try:
+            self.blkitem.redo()
+            self.blkitem.repaint_on_changed = True
+            if self.num_steps > 0:
+                self.blkitem.repaint_background()
+        except RuntimeError:
+            return
 
         if self.is_formatting and self.blkitem == self.formatpanel.textblk_item:
             multi_size = not self.blkitem.isEditing() and self.blkitem.isMultiFontSize()
@@ -289,17 +296,29 @@ class TextItemEditCommand(QUndoCommand):
             )
 
         if self.edit is not None and not self.is_formatting:
-            self.edit.redo()
+            try:
+                self.edit.redo()
+            except RuntimeError:
+                pass
 
     def undo(self):
-        self.blkitem.repaint_on_changed = False
+        # 僵尸命令：widget 已随切页/重渲销毁时静默失效（批量重渲保栈路径，
+        # 见 _rerender_dirty_pages(clear_stack=False)）；Qt 虚函数内未捕获
+        # 异常会 qFatal 直接闪退。
+        try:
+            self.blkitem.repaint_on_changed = False
+        except RuntimeError:
+            return
         if self.old_ffmt_values is not None:
             for k, v in self.old_ffmt_values.items():
                 self.blkitem.fontformat[k] = v
-        self.blkitem.undo()
-        self.blkitem.repaint_on_changed = True
-        if self.num_steps > 0:
-            self.blkitem.repaint_background()
+        try:
+            self.blkitem.undo()
+            self.blkitem.repaint_on_changed = True
+            if self.num_steps > 0:
+                self.blkitem.repaint_background()
+        except RuntimeError:
+            return
 
         if self.is_formatting and self.blkitem == self.formatpanel.textblk_item:
             multi_size = not self.blkitem.isEditing() and self.blkitem.isMultiFontSize()
@@ -308,7 +327,10 @@ class TextItemEditCommand(QUndoCommand):
             )
 
         if self.edit is not None:
-            self.edit.undo()
+            try:
+                self.edit.undo()
+            except RuntimeError:
+                pass
 
 
 class TextEditCommand(QUndoCommand):
@@ -329,14 +351,24 @@ class TextEditCommand(QUndoCommand):
         if self.op_counter == 0:
             self.op_counter += 1
             return
-        self.edit.redo()
-        if self.blkitem is not None:
-            self.blkitem.redo()
+        self._apply("redo")
 
     def undo(self):
-        self.edit.undo()
+        self._apply("undo")
+
+    def _apply(self, action: str):
+        # 僵尸命令：widget 已随切页/重渲销毁时静默失效（栈在批量重渲中
+        # 保留，见 _rerender_dirty_pages(clear_stack=False)），不抛异常——
+        # Qt 虚函数内未捕获异常会 qFatal 直接闪退。
+        try:
+            getattr(self.edit, action)()
+        except RuntimeError:
+            return
         if self.blkitem is not None:
-            self.blkitem.undo()
+            try:
+                getattr(self.blkitem, action)()
+            except RuntimeError:
+                pass
 
 
 class PageReplaceOneCommand(QUndoCommand):
@@ -458,101 +490,155 @@ class PageReplaceAllCommand(QUndoCommand):
             blkitem.undo()
 
 
-class GlobalRepalceAllCommand(QUndoCommand):
+def _suppress_change_sync(obj, value: bool):
+    """Toggle the in_redo_undo guard that gates change-driven propagation.
+
+    While set, content changes on the edit/item document no longer emit
+    ``propagate_user_edited`` / ``push_undo_stack`` (see
+    ``TextBlkItem.on_content_changed`` / edit ``handle_content_change``);
+    callers must refresh ``updateUndoSteps()`` themselves afterwards.
+    """
+    try:
+        obj.in_redo_undo = value
+    except AttributeError:
+        pass
+
+
+def _refresh_undo_steps(*objs):
+    for obj in objs:
+        try:
+            obj.updateUndoSteps()
+        except (RuntimeError, AttributeError):
+            pass
+
+
+class GlobalReplaceApplier:
+    """全局替换的当前页施加器：把收集器暂存的 live widget 改动一次性落上。
+
+    批量替换的撤销不走本类、也不进任何撤销栈：整体回滚由替换前的
+    项目快照负责（``utils/proj_imgtrans.py::write_batch_backup`` /
+    ``utils/proj_imgtrans.py::restore_batch_backup``），与逐块编辑的
+    文档撤销栈严格分治——快照回滚是批量操作的唯一撤销路径。原
+    GlobalReplaceCommand 的 undo/redo 与自动压栈的 TextEditCommand
+    双重记账、场景重建后引用失效两类缺陷随命令栈路径一并移除。
+
+    非当前页改动由收集器（``ui/global_search_widget.py::_collect_replace_targets``）
+    直接写数据并标脏，不经本类。
+
+    Args:
+        sceneitem_list: ``{"src": [...], "trans": [...]}``，收集器输出的
+            当前页 live widget 引用（原 GlobalRepalceAllCommand 契约不变）。
+        target_text: 替换目标文本。
+        proj: 项目对象。
+        scene_manager: 当前页场景管理器（仅格式-only 命中块定位 item 用）。
+        format_changes: ``[{pagename, block_idx, old_ffmt, new_ffmt}]``，
+            old_ffmt 须为改动前深拷贝（``utils/style_query.build_query_changes``
+            契约）；可为 None/空（纯文本替换）。
+    """
+
     def __init__(
         self,
         sceneitem_list: dict,
-        background_list: dict,
         target_text: str,
         proj: ProjImgTrans,
+        scene_manager=None,
+        format_changes: List[Dict] = None,
     ) -> None:
-        super().__init__()
-        self.op_counter = -1
         self.target_text = target_text
         self.proj = proj
-        self.trans_list = sceneitem_list["trans"]
-        self.src_list = sceneitem_list["src"]
-        self.btrans_list = background_list["trans"]
-        self.bsrc_list = background_list["src"]
+        self.scene_manager = scene_manager
+        # 深拷贝：format_changes 里的 FontFormat 若与调用方/blk 共享对象，
+        # 外部原地改写（如重建场景时的排版回写）会串改本次替换的目标值
+        self.format_changes: List[Dict] = [
+            copy.deepcopy(ch) for ch in (format_changes or [])
+        ]
 
-        # Constructed synchronously on the GUI thread right after the live
-        # widget references were collected, so they are guaranteed to exist
-        # here. undo()/redo() may run much later and guard against widgets
-        # deleted in the meantime with RuntimeError handlers.
-        for trans_dict in self.trans_list:
-            edit: TransTextEdit = trans_dict["edit"]
-            item: TextBlkItem = trans_dict["item"]
-            matched_map = trans_dict["matched_map"]
-            sel_list = doc_replace(edit.document(), matched_map, target_text)
+        current_pname = proj.current_img
+        fmt_by_idx = {
+            ch["block_idx"]: ch
+            for ch in self.format_changes
+            if ch["pagename"] == current_pname
+        }
 
-            doc_replace_no_shift(item.document(), sel_list, target_text)
-            item.updateUndoSteps()
+        for trans_dict in sceneitem_list["trans"]:
+            self._stage_trans(trans_dict, fmt_by_idx.pop(trans_dict["item"].idx, None))
+        # 无文本命中但格式命中的当前页块
+        for idx, ch in fmt_by_idx.items():
+            self._stage_format_only(idx, ch)
 
-            trans_dict.pop("matched_map")
+        for src_dict in sceneitem_list["src"]:
+            self._stage_src(src_dict)
 
-        for src_dict in self.src_list:
-            edit: SourceTextEdit = src_dict["edit"]
+        self._apply_format_data()
+
+    # ── 构造期：施加一次改动 ────────────────────────────────────────
+
+    def _stage_trans(self, trans_dict: Dict, fmt_change: Dict = None):
+        """施加当前页译文替换：守卫期间 edit/item 两个文档各改一次，
+        不触发同步链联动，也不触发自动推栈。"""
+        edit = trans_dict["edit"]
+        item = trans_dict["item"]
+
+        _suppress_change_sync(edit, True)
+        try:
+            sel_list = doc_replace(
+                edit.document(), trans_dict["matched_map"], self.target_text
+            )
+        finally:
+            _suppress_change_sync(edit, False)
+        _suppress_change_sync(item, True)
+        try:
+            doc_replace_no_shift(item.document(), sel_list, self.target_text)
+        finally:
+            _suppress_change_sync(item, False)
+        trans_dict.pop("matched_map", None)
+
+        if fmt_change is not None:
+            _suppress_change_sync(item, True)
+            try:
+                item.set_fontformat(fmt_change["new_ffmt"], set_char_format=True)
+            finally:
+                _suppress_change_sync(item, False)
+
+        # 批量替换不依赖文档撤销栈，清空涉及文档的栈：遗留零散步
+        # 会在回滚后与文档状态错位
+        item.document().clearUndoRedoStacks()
+        edit.document().clearUndoRedoStacks()
+        _refresh_undo_steps(edit, item)
+
+    def _stage_format_only(self, idx: int, fmt_change: Dict):
+        item = _find_blk_item_in(self.scene_manager, idx)
+        if item is None:
+            return  # 无 live item：仅数据层（_apply_format_data 覆盖）
+        _suppress_change_sync(item, True)
+        try:
+            item.set_fontformat(fmt_change["new_ffmt"], set_char_format=True)
+        finally:
+            _suppress_change_sync(item, False)
+        item.document().clearUndoRedoStacks()
+        _refresh_undo_steps(item)
+
+    def _stage_src(self, src_dict: Dict):
+        edit = src_dict["edit"]
+        _suppress_change_sync(edit, True)
+        try:
             edit.setPlainTextAndKeepUndoStack(src_dict["replace"])
-            edit.updateUndoSteps()
-            src_dict.pop("replace")
+        finally:
+            _suppress_change_sync(edit, False)
+        edit.document().clearUndoRedoStacks()
+        _refresh_undo_steps(edit)
+        src_dict.pop("replace", None)
 
-    def redo(self):
-        if self.op_counter == 0:
-            self.op_counter += 1
-            return
-
-        for trans_dict in self.trans_list:
-            try:
-                trans_dict["edit"].redo()
-                trans_dict["item"].redo()
-            except RuntimeError:
-                pass
-        for src_dict in self.src_list:
-            try:
-                src_dict["edit"].redo()
-            except RuntimeError:
-                pass
-        self._apply_background("replace")
-
-    def undo(self):
-        for trans_dict in self.trans_list:
-            try:
-                trans_dict["edit"].undo()
-                trans_dict["item"].undo()
-            except RuntimeError:
-                pass
-        for src_dict in self.src_list:
-            try:
-                src_dict["edit"].undo()
-            except RuntimeError:
-                pass
-        self._apply_background("ori")
-
-    def _apply_background(self, key: str):
-        """Set background (non-current-page) blocks to their *key* state.
-
-        Skips pages/blocks that vanished since the command was created, so a
-        deleted page never crashes the undo stack. Both branches also refresh
-        the lazy re-render flag so visiting the page regenerates its image.
-        """
-        for trans_dict in self.btrans_list:
-            blk = self._get_blk(trans_dict["pagename"], trans_dict["idx"])
-            if blk is not None:
-                blk.translation = trans_dict[key]
-                blk.rich_text = trans_dict[key + "_html"]
-                self.proj.mark_page_needs_rerender(trans_dict["pagename"])
-
-        for src_dict in self.bsrc_list:
-            blk = self._get_blk(src_dict["pagename"], src_dict["idx"])
-            if blk is not None:
-                blk.text = [src_dict[key]]
-                self.proj.mark_page_needs_rerender(src_dict["pagename"])
-
-    def _get_blk(self, pagename: str, idx: int):
-        page = self.proj.pages.get(pagename)
-        if page is not None and 0 <= idx < len(page):
-            return page[idx]
-        return None
+    def _apply_format_data(self):
+        """所有格式 patch 的数据层落点（含无 live item 的防御分支）。"""
+        current_pname = self.proj.current_img
+        for ch in self.format_changes:
+            page = self.proj.pages.get(ch["pagename"])
+            if page is None or not 0 <= ch["block_idx"] < len(page):
+                continue
+            page[ch["block_idx"]].fontformat = copy.deepcopy(ch["new_ffmt"])
+            if ch["pagename"] != current_pname:
+                self.proj.mark_page_needs_rerender(ch["pagename"])
 
 
 class MultiPasteCommand(QUndoCommand):

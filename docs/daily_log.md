@@ -533,3 +533,101 @@
 - **快捷键**（`ui/configpanel.py`）：`ai_tool` 默认键 "A" 暂解绑（与 prev_page 的 "A" 冲突），待定新键位。
 
 **涉及文件：** `ui/custom_widget/notification.py`、`ui/canvas.py`、`tests/test_notification.py`、`ui/panel_rail.py`、`ui/scenetext_manager.py`、`ui/configpanel.py`、`docs/daily_log.md`
+
+## 2026-08-29
+
+### 查找替换重构阶段 1/2/2.5：BlockQuery 谓词引擎 + 单替换按钮 + 批量快照回滚
+
+**问题/需求：** 按 [`docs/技术实现/查找替换与样式管理器重构_设计方案.md`](docs/技术实现/查找替换与样式管理器重构_设计方案.md)（08-28 定稿）实施阶段 1-2：块查询谓词引擎、双替换按钮合并、脏页固定询问。阶段 2 实机验证反馈"批量替换 Ctrl+Z 撤不回"——toast 已显示、无报错、数据画面均不回退，仅替换当前页也失灵（单块编辑撤销正常），即全快照命令的落点静默失配；与用户定稿**批量与逐块编辑严格分治**（批量操作只有一把总闸：整批退回快照或不退），阶段 2.5 以项目快照整体回滚取代撤销栈路径，实施后用户实机验收通过。
+
+**改动要点：**
+
+- **阶段 1 查询引擎**（`utils/style_query.py` 新）：TextPredicate 文本 × FormatPredicate 格式字段级谓词 AND 组合，字段分组 `FIELD_GROUPS` 供样式管理器与格式条件编辑器共用，`build_query_changes` 批量补丁供命令层消费；格式比较走 `utils/base_styles.py::_quantize` 量化。
+- **阶段 2 替换统一**：`ui/global_search_widget.py::GlobalSearchWidget` 单"Replace All"按钮；替换后 `ui/mainwindow.py::_ask_rerender_dirty_pages` 每次固定询问是否立即重渲；溢出裁剪确认复用既有全局机制 `pcfg.clip_text_overflow`，未另造开关。
+- **阶段 2.5 去命令栈化**：`ui/textedit_commands.py::GlobalReplaceCommand`（QUndoCommand 全快照语义）整体去命令化为 `ui/textedit_commands.py::GlobalReplaceApplier`——纯施加器，构造期守卫下 edit/item 双文档一次性写入并清其撤销栈，undo/redo/落点身份重绑定/数据兜底约 200 行连同 `_qt_alive`/`_item_live` 辅助删除（双重记账、场景重建引用失效两类缺陷连根移除）。
+- **单槽快照**（`utils/proj_imgtrans.py`）：`write_batch_backup` 把已落盘项目 JSON 原子快照到 `*.batch_backup.json` 并记录脏页清单（含当前页）；`restore_batch_backup` 整体换回数据与 base_styles、按快照重标脏、当前页不跳转、成功即消费；`has_batch_backup` 会话内有效（跨会话残留不算、重新加载项目即失效）；`clear_batch_backup` 供空替换清槽。
+- **替换流程两段化**：新增 `ui/global_search_widget.py::replace_preparing` 信号——确认后先 `_sync_and_commit_project`（当前页 UI→数据并落盘）再写快照（快照须在收集器原地改写非当前页数据之前反映替换前完整状态）。
+- **回滚入口两层**：① 查找替换面板回滚条（"已替换 N 个块（跨 M 页）｜撤销本次替换"，下次替换/回滚后消失，确认框讲清丢弃其后全部修改，经 `batch_rollback_requested` → `ui/mainwindow.py::on_batch_rollback`：清栈 + 重建当前页场景 + 落盘 + 脏页询问 + toast）；② Ctrl+Z 撤到见底且本会话有快照时 toast 指引到面板（`_notify_history` 扩展，通知异常不拖垮撤销本身）。
+- **顺带简化**：`ui/mainwindow.py::_rerender_dirty_pages` 删 `clear_stack` 参数与 `_batch_rerendering` 守卫（保栈只为命令重绑定服务）；混排否决理由与实机复盘教训存档设计方案 §4.4。
+- i18n：ts 补 5 条（GlobalSearchWidget 3 + MainWindow 2，单行字符串规避 i18n_check 跨行拼接盲区），qm 重编译。
+
+**涉及文件：** `utils/style_query.py`（新）、`utils/proj_imgtrans.py`、`ui/textedit_commands.py`、`ui/global_search_widget.py`、`ui/mainwindow.py`、`utils/shared.py`、`tests/test_style_query.py`（新）、`tests/test_global_replace_format.py`（重写）、`tests/test_batch_backup.py`（新）、`tests/test_global_search_fontstyle.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/技术实现/查找替换与样式管理器重构_设计方案.md`、`docs/daily_log.md`
+
+---
+
+### i18n 查表间接翻译全量显式上下文化 + ParamWidget AST 提取 + 脏页 tooltip 黑条修复
+
+**问题/需求：** 两批任务：① 上批会话定性的 ~81 条"活"查表间接翻译（`tr(variable)` 检查器不可见，靠手工同步 ts）转正；② 用户实机反馈图片列表脏页标记 hover 显示为小黑条无文本（另一台 Win10 机器正常，怀疑受系统影响的控件）。
+
+**改动要点：**
+
+- **tooltip 黑条根因**：`config/stylesheet.css` 全局 `QWidget { color/background }` 规则命中 QToolTip（QTipLabel 是 QWidget 子类），tooltip 脱离原生渲染路径，配色随系统主题漂移（两台机器 config.json 主题不同故表现不一）。修复：样式表加显式 `QToolTip` 规则（主题变量配色 + 边框 + padding），全应用 tooltip 配色从此确定。
+- **模块级翻译表显式上下文化**：在字面量定义处内联 `QCoreApplication.translate("上下文", "...")`，下游直接用已翻译值——`ui/context_menu_config.py` 命令注册表（59 处，`Canvas` 上下文）、`ui/pie_menu_editor.py` 分区表（`PieMenuEditor`）、`ui/quick_symbol_dialog.py::_GROUPS`、`ui/point_align_dialog.py` 轴/模式表、`ui/model_check_dialog.py::_TYPE_LABEL`（`ModelCheckPanel`）、`ui/io_thread.py::_thread_error_msg`（各线程子类上下文）；`ui/pie_menu.py::_label_for` 与饼菜单编辑器调色板随之去掉二次翻译。
+- **两处潜伏英文 bug 一并修正**：模型检查面板管线名（ts 条目挂在 MainWindow 下运行时查不到）、线程错误消息（ts 无对应上下文条目）。
+- **饼菜单默认名锚点**：`utils/config.py::DEFAULT_PIE_MENUS` 的 `name` 导入早于翻译器安装不能就地翻译，在 `ui/pie_menu.py::_DEFAULT_MENU_NAME_TR` 留显式字面量锚点供工具链提取。
+- **ParamWidget AST 提取**（`scripts/i18n_common.py::extract_param_descriptions`）：模块参数 description 是纯数据、渲染时 `tr(variable)` 查表——AST 规则提取 dict 字面量：`modules/` 下含 `description` 键全收（`agent/` 包除外）；其它目录须同时含 `value` 键（排除 `agent/tools.py`、`utils/ai_tools.py` 的 LLM 提示词）。孤儿白名单 `KNOWN_ORPHAN_CONTEXTS` 清空为空集，`--ci` 报孤儿/缺失即真实问题。
+- **ts 结构 bug**：ParamWidget 上下文块此前嵌套进 ParamComboBox（缺 `</context>`），整块对 ET 解析与 qm 编译隐形——很可能是模块参数 tooltip 一直英文的根因。已修复嵌套。
+- **ts 手术**：删 51 条陈旧（28 条错挂上下文含 ContextMenuCustomizeDialog 13 条重复 + 23 条旧版描述文本），补 86 条（63 条 ParamWidget 描述 + 7 条线程错误/管线名/脏页提示）；脏页提示从硬编码中文源串改规范英文源串 + ts 条目。qm 重编译后经 QTranslator 实际查找逐一验证命中；pytest 全过。
+- **文档**：AGENTS.md 与 `docs/基础速查/i18n.md` 重写 i18n 规范节（显式上下文模式站点表、ParamWidget AST 规则、白名单清零、ts 平行嵌套要求）。
+
+**涉及文件：** `config/stylesheet.css`、`ui/context_menu_config.py`、`ui/pie_menu.py`、`ui/pie_menu_editor.py`、`ui/quick_symbol_dialog.py`、`ui/point_align_dialog.py`、`ui/model_check_dialog.py`、`ui/io_thread.py`、`ui/mainwindow.py`、`scripts/i18n_common.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`AGENTS.md`、`docs/基础速查/i18n.md`、`docs/daily_log.md`
+
+---
+
+## 2026-08-30
+
+### 查找替换重构阶段 3：样式管理器 UI 重构落地（两行树 + 预览卡 + 差异优先分组）+ 效果组改只读摘要 + i18n 补全
+
+**问题/需求：** 按设计方案 §5 实施阶段 3：样式管理器左树改两行节点（样式名/签名 + 灰字参数摘要 + 块数），右栏改"预览卡 + 关键参数 chip 行 + 差异优先四组折叠区 + 块分布页 chip"，替换原"13 行只读属性行 + 平铺编辑控件"双视图。实机验收通过后用户反馈两项调整：① 阴影/渐变等复杂效果详细配置占空间且交互效率低——只笼统标记使用了哪些高级效果，可保存样式但不支持编辑相关字段；② 实机多处 UI 显示英文——StyleFormatEditor/StyleDetail/StyleTreeWidget/ModelCheckPanel/UpdateThread 等 context 的 ts 条目全部 unfinished 未填译文（上批次 ts_auto_fill 只加了条目没填翻译）。
+
+**改动要点：**
+
+- **复用控件层 `ui/style_format_editor.py`（新，阶段 4 格式条件编辑器共用）**：字段清单来自 `utils/style_query.py::FIELD_GROUPS`；模块级标签表（`GROUP_TITLES`/`FIELD_LABELS`/枚举取值表）定义处显式 `QCoreApplication.translate("StyleFormatEditor", …)`；`FieldEditor` 单行编辑器 + `FormatGroupCard` 折叠卡（组头状态徽标"与基准一致 / ● n 已修改"，改动组自动展开、差异字段高亮）+ `FormatEditorPanel` 四组面板——变更收集 `changed_values()` 量化 diff 语义与旧 `_collect_changed` 一致（基线 None + 中性默认不算变更，防误报与默认值压 override）；`set_format(only_fields=…)` 变体模式只渲染 override 字段。
+- **效果组只读摘要（验收反馈调整）**：阴影/渐变/变换/斜切不建编辑器，组头徽标 `ui/style_format_editor.py::effects_tokens` 笼统标记（激活语义与预览 chips 一致：radius>0 / enabled / 栈非空 / 角度非零），`set_summary_only` 摘要卡不可展开；保存/应用样式时效果字段原样透传——`changed_values`/`current_values`/`sync_into` 均不含效果字段，对应 `_build_control` 的 shadow_*/gradient_*/text_transform/glyph_slant 编辑分支全部删除（§7 效果栈迁移时整组替换为效果卡片栈）。
+- **`ui/fontstyle_manager.py` 重写**：左树 `StyleTreeWidget` 两行节点（`_StyleItemDelegate` 自绘：色板环 + 粗体标题 + 灰字摘要 `_base_summary` + 右对齐块数，选中圆角高亮）；右栏 `StyleDetail`——预览卡 `StylePreviewCard`（QTextDocument 近似渲染，竖排逐字堆叠，编辑实时刷新）、chip 行 `_ChipBar`（关键参数 + 效果 token，点击滚动定位分组）、变体模式"重置为基准"（`_reset_variant_to_base` 数据层重建变更走 `_apply_ffmt_changes`）、未分组提升/预设存删、块分布页 chip（点击跳该页首块）。
+- **i18n 补全**：ts_auto_fill --apply（删 12 条孤儿 + 补缺）后一次性填掉全部 50 条 unfinished（含 `{}/{} ready`、线程/更新错误多行串等陈旧欠账）+ 手工补 StyleFormatEditor context 缺失的 Shadow/Gradient 两条；qm 重编译（1333 条），i18n_check 零缺失零孤儿。
+
+**排障记录：** ① PyQt6 原生崩溃（exit 127 无回溯）：Python 自定义 QLayout 子类（经典 FlowLayout 模式）在布局激活时段错误，chip 行改手工 resizeEvent 换行布局根治——**PyQt6 下禁止 Python 侧子类化 QLayout**；且 `QLayout(parent_widget)` 构造即安装为顶层布局，再 setLayout 双重安装同样崩溃。② 离屏空字体库下 font_family 组合框回落首项造成 changed_values 误报——`set_format` 把当前字体族补插为下拉首项（顺带根治旧代码"未安装字体被静默替换"的潜伏 bug）。③ `QStyleOptionWidget` 在 qtpy.QtWidgets 不存在，用 `QStyleOption`。④ ts 占位串（`{n} …`）提取器跳过（`extract_tr_calls` 滤 `{`），`{n} transform(s)`/`Stroke {n}px`/`Blocks: {n}` 须手工补 ts 条目。
+
+**验证：** `tests/test_fontstyle_tree.py` 扩至 8 例（两行节点 display role/sizeHint、四组卡与 only_fields 契约、效果组只读后 changed_values 不含效果字段、变体重置回写块数据含 `_find_blk_item` None 兜底）；全仓 pytest 463 通过 1 跳过；verify 六步全绿；`i18n_check` 全绿。实机验收：阶段 3 通过（本次效果组摘要 + i18n 补全待复验）。
+
+**涉及文件：** `ui/style_format_editor.py`（新）、`ui/fontstyle_manager.py`（重写）、`config/stylesheet.css`、`tests/test_fontstyle_tree.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/技术实现/查找替换与样式管理器重构_设计方案.md`、`docs/daily_log.md`
+
+---
+
+### 阶段 3 二轮验收反馈：折叠组标题修复 + bold 参数弃用
+
+**问题/需求：** 用户复验反馈两点：① 折叠组只显示"与基准一致"徽标、没有组名标题——真 bug，`FormatGroupCard` 组头 QToolButton 从未 `setText`；② 项目已移除粗体样式、视觉字重完全由字体本身的字重（font_weight）承担，弃置的 `bold` 参数没必要再出现在样式管理器/查询体系里。
+
+**改动要点：**
+
+- **组标题修复**（`ui/style_format_editor.py::FormatGroupCard.__init__`）：补 `self._toggle.setText(self.title())`，四组（文本/颜色与描边/排版/效果）组名正常显示。
+- **bold 弃用四层移除**：`utils/style_query.py::FIELD_GROUPS` 文本组、`utils/base_styles.py` 的 `_SIGNATURE_FIELDS`（签名聚类）/`DIFF_FIELDS`（变体 diff）/`_BOOL_TOKENS`（变体自动名 B token）、`ui/style_format_editor.py` 字段清单与编辑器分支、`ui/fontstyle_manager.py` 树摘要 `_SUMMARY_TOKENS` 与预览 chips。`utils/fontformat.py::FontFormat.bold` 数据字段加弃用注释仅为旧项目兼容保留（`ui/text_panel.py`/`ui/textitem.py` 的镜像写入不动，渲染兼容不受影响）。
+- **测试同步**：`tests/test_style_query.py` bool 条目 bold→italic；`tests/test_base_styles.py` override diff 断言去 bold（并固化"bold 不参与 diff"语义）+ 变体名 token 用例去 B；`tests/test_global_replace_format.py` 快照载体 bold→opacity。
+- i18n：ts 清 3 条 Bold 孤儿，qm 重编译（1330 条）。
+
+**验证：** 相关 6 套件 83 例 + 全仓 463 通过 1 跳过；verify 六步全绿。
+
+**涉及文件：** `ui/style_format_editor.py`、`ui/fontstyle_manager.py`、`utils/style_query.py`、`utils/base_styles.py`、`utils/fontformat.py`、`tests/test_style_query.py`、`tests/test_base_styles.py`、`tests/test_global_replace_format.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/技术实现/查找替换与样式管理器重构_设计方案.md`、`docs/daily_log.md`
+
+---
+
+### 查找替换重构阶段 4：格式条件/替换格式接入全局搜索（BlockQuery + GlobalReplaceApplier）+ 浮层编辑面板三版定稿
+
+**问题/需求：** 设计方案 §6 落地：全局查找加"格式条件"、替换加"替换格式"入口，复用阶段 3 的 FormatEditorPanel（效果组保持只读摘要）。功能落地后实机三轮 UI 验收：① 内嵌面板太挤（模式下拉被截断、清空孤行、240px 高度拦腰截断字段行）；② 改浮层后宽度仍被钳在侧栏内、面板无圆角边框辨识度差；③ 定稿为画布方向全尺寸浮层。
+
+**改动要点：**
+
+- **查询集成**（`utils/style_query.py` + `ui/global_search_widget.py::commit_search`）：查找格式条件读 `ui/global_search_widget.py::_find_format_conditions` 面板实时 diff（相对 `FontFormat()` 默认基线的 eq 量化条件 → FormatPredicate），与文本谓词 AND 门控；格式激活时范围下拉仅作用文本维度；无文本条件时格式-only 命中以无高亮块级条目展示（点击照常跳块）；无效正则 + 无格式条件才报无效。
+- **替换集成**（`ui/global_search_widget.py::_collect_replace_targets`）：格式 patch **收集期不写数据**，统一暂存 `format_changes`（old/new_ffmt 深拷贝，契约 = `build_query_changes`），由 `GlobalReplaceApplier` 施加期一次性落点（当前页 live item + 数据层兜底、非当前页直写标脏）；替换模式二选一——按字段 patch（默认）/整块应用大样式（样式下拉取 `proj.base_styles` 深拷贝整 ffmt，字族/竖排身份字段 patch 会触发样式树重发现）；`replace_finished` 信号增列第 4 参 format_changes（`ui/mainwindow.py::on_global_replace_finished` 透传）；回滚条按 (页,块) 去重计数（`_show_rollback_strip`）。
+- **浮层编辑面板三版定稿**：① bar3 两个互斥 checkable 按钮（`QToolButton#FormatToggleBtn`）+ 动过字段数 `(n)` 上按钮文案与浮层标题；② 新控件 `ui/custom_widget/float_drop_panel.py::FloatDropPanel`——左缘钉在搜索栏右缘、向画布方向按内容展开（420×480 MIN 常量），Esc/×/再点按钮关闭，无 pcfg 开合记忆无拉伸手柄（FormatEditorPanel 自带滚动），QSS 复用 `RailDock*` objectName（`RailDockPanel, FloatDropPanel` 共用规则），搜索栏收起时 hideEvent 联动关闭；替换页头「模式下拉 + 清空」、样式下拉仅大样式模式显示，查找页头右侧清空。
+- **内嵌版废弃原因（持久结论）**：FormatEditorPanel 字段行（字体下拉等）最小宽 ~390px，内嵌参与布局会把整栏最小宽撑到 ~470px，与 300px 动画列宽冲突 → 布局按最小尺寸摆放、超界部分被裁切——用户截图「背景盖住边框圆角」的真身是右边框被裁切到半途，非 QSS 层叠问题（全局 `QTreeView/QListView` 圆角规则经对照实验确认渲染正常）。
+- **顺带**：`docs/基础速查/打包控件功能使用说明.md` 删对 `.tmp_probe/style_showcase.py` 临时文件的引用（活文档不引用临时文件）；AGENTS.md 打包控件表补 `FloatDropPanel` 行。
+
+**排障记录：** ① 浮层 QSS 边框不显示——裸 QWidget 子类需 `WA_StyledBackground` 才绘制边框/背景（`Widget` 基类即为此），改继承 `Widget` 解决；② 宿主错钉侧栏（300px）——构造期控件树未挂进主窗口，`window()` 只解析到直接父级，改为**首次打开时惰性解析**（`_ensure_host` 里 setParent 重钉到 `window.centralWidget()`）；③ 主窗口真实结构里 GlobalSearchWidget 与 centralStackWidget 是兄弟（都在 mainHLayout），host 不能用 centralStackWidget（`mapTo` 跨非祖先树无效）；④ 离屏无翻译器时英文按钮文本虚增布局最小宽（489px），诊断须用真实 qm 或短文本区分语言伪影与真实溢出；⑤ 测试替身 FakeProj 必须带 `base_styles` 属性，否则 `_refresh_style_combo` 在 Qt 槽内抛异常触发 PyQt6 qFatal 原生崩溃（无 Python 回溯）。
+
+**验证：** `tests/test_global_search_fontstyle.py::FormatConditionSearchTest` 七项（格式-only 搜索/AND 门控/patch 不写数据/大样式整块/当前页门控 idx 契约）+ 全仓 pytest 470 通过 1 跳过；verify 六步全绿；`i18n_check` 零缺失零孤儿（新增 Format Conditions/Replace Format/Clear/Patch Fields/Apply Base Style/FloatDropPanel::Close 等条目译文已填）。实机验收：功能四象限通过，UI 三版定稿通过。
+
+**涉及文件：** `ui/custom_widget/float_drop_panel.py`（新）、`ui/custom_widget/__init__.py`、`ui/global_search_widget.py`、`ui/mainwindow.py`、`ui/style_format_editor.py`、`config/stylesheet.css`、`tests/test_global_search_fontstyle.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/技术实现/查找替换与样式管理器重构_设计方案.md`、`AGENTS.md`、`docs/基础速查/打包控件功能使用说明.md`、`docs/daily_log.md`
+
+---

@@ -1,6 +1,6 @@
 """Advanced alignment configuration dialog."""
 
-from qtpy.QtCore import Signal
+from qtpy.QtCore import QCoreApplication, Signal
 from qtpy.QtWidgets import (
     QButtonGroup,
     QDialog,
@@ -35,11 +35,23 @@ class PointAlignDialog(QDialog):
 
     pick_clicked = Signal()
 
-    # ── Axis / mode label tables ───────────────────────────────
-    _AXIS_LABELS = {"x": "X:", "y": "Y:"}
+    # ── Axis / mode label tables (explicit context at the literal so the
+    #    ts toolchain tracks them) ──────────────────────────────
+    _AXIS_LABELS = {
+        "x": QCoreApplication.translate("PointAlignDialog", "X:"),
+        "y": QCoreApplication.translate("PointAlignDialog", "Y:"),
+    }
     _MODE_LABELS = {
-        "x": ("Align Left Edges", "Align Centers", "Align Right Edges"),
-        "y": ("Align Top Edges", "Align Centers", "Align Bottom Edges"),
+        "x": (
+            QCoreApplication.translate("PointAlignDialog", "Align Left Edges"),
+            QCoreApplication.translate("PointAlignDialog", "Align Centers"),
+            QCoreApplication.translate("PointAlignDialog", "Align Right Edges"),
+        ),
+        "y": (
+            QCoreApplication.translate("PointAlignDialog", "Align Top Edges"),
+            QCoreApplication.translate("PointAlignDialog", "Align Centers"),
+            QCoreApplication.translate("PointAlignDialog", "Align Bottom Edges"),
+        ),
     }
     _MODE_VALUES = {
         "x": ("left", "center", "right"),
@@ -198,11 +210,11 @@ class PointAlignDialog(QDialog):
     def _refresh_ui(self):
         """Update labels and mode radio buttons for the current axis."""
         axis = self.alignment_axis()
-        self._pos_label.setText(self.tr(self._AXIS_LABELS[axis]))
+        self._pos_label.setText(self._AXIS_LABELS[axis])
         labels = self._MODE_LABELS[axis]
-        self.mode_0.setText(self.tr(labels[0]))
-        self.mode_1.setText(self.tr(labels[1]))
-        self.mode_2.setText(self.tr(labels[2]))
+        self.mode_0.setText(labels[0])
+        self.mode_1.setText(labels[1])
+        self.mode_2.setText(labels[2])
 
     def _on_all_pages_toggled(self, checked: bool):
         self.slider.setEnabled(not checked)

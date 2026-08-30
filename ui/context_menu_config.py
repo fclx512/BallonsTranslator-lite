@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Callable, Dict, List, Optional
 
-from qtpy.QtCore import QPoint, QSize, Qt
+from qtpy.QtCore import QCoreApplication, QPoint, QSize, Qt
 from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import (
     QDialog,
@@ -46,7 +46,7 @@ DEFAULT_ORDER: List[str] = [
     "merge",
     "behavior",
     "---",
-    "translate", "ocr", "ocr_translate", "ocr_translate_inpaint",
+    QCoreApplication.translate("Canvas", "translate"), "ocr", "ocr_translate", "ocr_translate_inpaint",
 ]
 
 SEPARATOR_SENTINEL = "---"
@@ -101,9 +101,12 @@ def _reg(cmd: CmdDef) -> CmdDef:
 
 # ── Helpers ─────────────────────────────────────────────────
 
-def _act(menu, canvas, label_key, shortcut=None, checkable=False,
+def _act(menu, canvas, label, shortcut=None, checkable=False,
          checked=False, enabled=True, connect=None):
     """Add a ``QAction`` to *menu* with standard setup.
+
+    ``label`` must already be translated (``QCoreApplication.translate``
+    at the literal site); canvas context lookup is not needed here.
 
     NOTE: ``menu.addAction(str)`` is used instead of ``QAction(str)`` +
     ``menu.addAction(act)`` because PyQt6 will garbage-collect the
@@ -111,7 +114,7 @@ def _act(menu, canvas, label_key, shortcut=None, checkable=False,
     ``addAction(act)`` was called.  ``addAction(str)`` returns an action
     that stays alive correctly.
     """
-    act = menu.addAction(canvas.tr(label_key))
+    act = menu.addAction(label)
     if shortcut is not None:
         act.setShortcut(shortcut)
     if checkable:
@@ -128,9 +131,9 @@ def _act(menu, canvas, label_key, shortcut=None, checkable=False,
     return act
 
 
-def _emit(menu, canvas, label_key, signal, *args, shortcut=None, enabled=True):
+def _emit(menu, canvas, label, signal, *args, shortcut=None, enabled=True):
     """Shorthand for an action that emits a signal with positional args."""
-    return _act(menu, canvas, label_key, shortcut=shortcut, enabled=enabled,
+    return _act(menu, canvas, label, shortcut=shortcut, enabled=enabled,
                 connect=partial(signal.emit, *args))
 
 
@@ -141,42 +144,42 @@ def _build_align(menu: QMenu, canvas):
     n_selected = len(canvas.selected_text_items())
     enabled = n_selected >= 2
 
-    sub = menu.addMenu(canvas.tr("Align"))
+    sub = menu.addMenu(QCoreApplication.translate("Canvas", "Align"))
     sub.setEnabled(enabled)
 
-    _act(sub, canvas, "Align Left Edges", enabled=enabled,
+    _act(sub, canvas, QCoreApplication.translate("Canvas", "Align Left Edges"), enabled=enabled,
          connect=lambda: canvas.align_textblks.emit("left"))
-    _act(sub, canvas, "Align Right Edges", enabled=enabled,
+    _act(sub, canvas, QCoreApplication.translate("Canvas", "Align Right Edges"), enabled=enabled,
          connect=lambda: canvas.align_textblks.emit("right"))
-    _act(sub, canvas, "Align Top Edges", enabled=enabled,
+    _act(sub, canvas, QCoreApplication.translate("Canvas", "Align Top Edges"), enabled=enabled,
          connect=lambda: canvas.align_textblks.emit("top"))
-    _act(sub, canvas, "Align Bottom Edges", enabled=enabled,
+    _act(sub, canvas, QCoreApplication.translate("Canvas", "Align Bottom Edges"), enabled=enabled,
          connect=lambda: canvas.align_textblks.emit("bottom"))
     sub.addSeparator()
-    _act(sub, canvas, "Align Horizontal Centers", enabled=enabled,
+    _act(sub, canvas, QCoreApplication.translate("Canvas", "Align Horizontal Centers"), enabled=enabled,
          connect=lambda: canvas.align_textblks.emit("hcenter"))
-    _act(sub, canvas, "Align Vertical Centers", enabled=enabled,
+    _act(sub, canvas, QCoreApplication.translate("Canvas", "Align Vertical Centers"), enabled=enabled,
          connect=lambda: canvas.align_textblks.emit("vcenter"))
     sub.addSeparator()
-    _act(sub, canvas, "Distribute Horizontally", enabled=enabled,
+    _act(sub, canvas, QCoreApplication.translate("Canvas", "Distribute Horizontally"), enabled=enabled,
          connect=lambda: canvas.align_textblks.emit("dist_h"))
-    _act(sub, canvas, "Distribute Vertically", enabled=enabled,
+    _act(sub, canvas, QCoreApplication.translate("Canvas", "Distribute Vertically"), enabled=enabled,
          connect=lambda: canvas.align_textblks.emit("dist_v"))
 
 
 def _build_merge(menu: QMenu, canvas):
     """Merge selected text blocks in list order (by idx)."""
     n_selected = len(canvas.selected_text_items())
-    _act(menu, canvas, "Merge", enabled=n_selected >= 2,
+    _act(menu, canvas, QCoreApplication.translate("Canvas", "Merge"), enabled=n_selected >= 2,
          connect=canvas.merge_textblks.emit)
 
 
 def _build_behavior(menu: QMenu, canvas):
     """Build the **Behavior** submenu — snap alignment."""
-    sub = menu.addMenu(canvas.tr("Behavior"))
+    sub = menu.addMenu(QCoreApplication.translate("Canvas", "Behavior"))
 
     # Snap Alignment (checkable toggle)
-    _act(sub, canvas, "Snap Alignment", checkable=True,
+    _act(sub, canvas, QCoreApplication.translate("Canvas", "Snap Alignment"), checkable=True,
          checked=canvas.alignment_enabled,
          connect=lambda checked: setattr(canvas, "alignment_enabled", checked))
 
@@ -188,73 +191,73 @@ def _selected_count(canvas) -> int:
 
 
 # --- Basic editing ---
-_reg(CmdDef("copy", "Copy",
-    build_fn=lambda m, c: _act(m, c, "Copy",
+_reg(CmdDef("copy", QCoreApplication.translate("Canvas", "Copy"),
+    build_fn=lambda m, c: _act(m, c, QCoreApplication.translate("Canvas", "Copy"),
         shortcut=QKeySequence.StandardKey.Copy,
         connect=c.on_copy),
     run_fn=lambda mw: mw.canvas.on_copy(),
     enabled_fn=lambda mw: mw.canvas.have_selected_blkitem,
     category=CAT_BASIC))
 
-_reg(CmdDef("paste", "Paste",
-    build_fn=lambda m, c: _act(m, c, "Paste",
+_reg(CmdDef("paste", QCoreApplication.translate("Canvas", "Paste"),
+    build_fn=lambda m, c: _act(m, c, QCoreApplication.translate("Canvas", "Paste"),
         shortcut=QKeySequence.StandardKey.Paste,
         connect=c.on_paste),
     run_fn=lambda mw: mw.canvas.on_paste(),
     category=CAT_BASIC))
 
-_reg(CmdDef("delete", "Delete",
-    build_fn=lambda m, c: _act(m, c, "Delete",
+_reg(CmdDef("delete", QCoreApplication.translate("Canvas", "Delete"),
+    build_fn=lambda m, c: _act(m, c, QCoreApplication.translate("Canvas", "Delete"),
         shortcut=QKeySequence("Ctrl+D"),
         connect=lambda: c.delete_textblks.emit(0)),
     run_fn=lambda mw: mw.canvas.delete_textblks.emit(0),
     enabled_fn=lambda mw: mw.canvas.have_selected_blkitem,
     category=CAT_BASIC))
 
-_reg(CmdDef("copy_src", "Copy source text",
-    build_fn=lambda m, c: _act(m, c, "Copy source text",
+_reg(CmdDef("copy_src", QCoreApplication.translate("Canvas", "Copy source text"),
+    build_fn=lambda m, c: _act(m, c, QCoreApplication.translate("Canvas", "Copy source text"),
         shortcut=QKeySequence("Ctrl+Shift+C"),
         connect=c.copy_src_signal.emit),
     run_fn=lambda mw: mw.canvas.copy_src_signal.emit(),
     category=CAT_BASIC))
 
-_reg(CmdDef("paste_src", "Paste source text",
-    build_fn=lambda m, c: _act(m, c, "Paste source text",
+_reg(CmdDef("paste_src", QCoreApplication.translate("Canvas", "Paste source text"),
+    build_fn=lambda m, c: _act(m, c, QCoreApplication.translate("Canvas", "Paste source text"),
         shortcut=QKeySequence("Ctrl+Shift+V"),
         connect=c.paste_src_signal.emit),
     run_fn=lambda mw: mw.canvas.paste_src_signal.emit(),
     category=CAT_BASIC))
 
 # --- Text manipulation ---
-_reg(CmdDef("reset_angle", "Reset Angle",
-    build_fn=lambda m, c: _act(m, c, "Reset Angle",
+_reg(CmdDef("reset_angle", QCoreApplication.translate("Canvas", "Reset Angle"),
+    build_fn=lambda m, c: _act(m, c, QCoreApplication.translate("Canvas", "Reset Angle"),
         connect=lambda: c.reset_angle.emit()),
     run_fn=lambda mw: mw.canvas.reset_angle.emit(),
     enabled_fn=lambda mw: mw.canvas.have_selected_blkitem,
     category=CAT_TEXT))
 
-_reg(CmdDef("squeeze", "Squeeze",
-    build_fn=lambda m, c: _act(m, c, "Squeeze",
+_reg(CmdDef("squeeze", QCoreApplication.translate("Canvas", "Squeeze"),
+    build_fn=lambda m, c: _act(m, c, QCoreApplication.translate("Canvas", "Squeeze"),
         connect=lambda: c.squeeze_blk.emit()),
     run_fn=lambda mw: mw.canvas.squeeze_blk.emit(),
     enabled_fn=lambda mw: mw.canvas.have_selected_blkitem,
     category=CAT_TEXT))
 
 # --- Align submenu ---
-_reg(CmdDef("align", "Align",
+_reg(CmdDef("align", QCoreApplication.translate("Canvas", "Align"),
     build_fn=_build_align))
 
 # --- Align direction leaves (pie menu direct commands) -------
 # Single-direction actions usable by the pie menu; hidden from the
-# customize dialog (the right-click "Align" submenu remains the entry
+# customize dialog (the right-click QCoreApplication.translate("Canvas", "Align") submenu remains the entry
 # point there).
 _ALIGN_DIRECTIONS = [
-    ("align_left", "Align Left Edges", "left"),
-    ("align_right", "Align Right Edges", "right"),
-    ("align_top", "Align Top Edges", "top"),
-    ("align_bottom", "Align Bottom Edges", "bottom"),
-    ("align_hcenter", "Align Horizontal Centers", "hcenter"),
-    ("align_vcenter", "Align Vertical Centers", "vcenter"),
+    ("align_left", QCoreApplication.translate("Canvas", "Align Left Edges"), "left"),
+    ("align_right", QCoreApplication.translate("Canvas", "Align Right Edges"), "right"),
+    ("align_top", QCoreApplication.translate("Canvas", "Align Top Edges"), "top"),
+    ("align_bottom", QCoreApplication.translate("Canvas", "Align Bottom Edges"), "bottom"),
+    ("align_hcenter", QCoreApplication.translate("Canvas", "Align Horizontal Centers"), "hcenter"),
+    ("align_vcenter", QCoreApplication.translate("Canvas", "Align Vertical Centers"), "vcenter"),
 ]
 
 for _cid, _label, _op in _ALIGN_DIRECTIONS:
@@ -274,37 +277,37 @@ for _cid, _label, _op in _ALIGN_DIRECTIONS:
     _reg(_align_cmd(_cid, _label, _op))
 
 # --- Merge action (single click, respects global direction) ---
-_reg(CmdDef("merge", "Merge",
+_reg(CmdDef("merge", QCoreApplication.translate("Canvas", "Merge"),
     build_fn=_build_merge,
     run_fn=lambda mw: mw.canvas.merge_textblks.emit(),
     enabled_fn=lambda mw: _selected_count(mw.canvas) >= 2,
     category=CAT_TEXT))
 
 # --- Behavior submenu (snap alignment + merge direction) ---
-_reg(CmdDef("behavior", "Behavior",
+_reg(CmdDef("behavior", QCoreApplication.translate("Canvas", "Behavior"),
     build_fn=_build_behavior))
 
 # --- Pipeline actions ---
-_reg(CmdDef("translate", "translate",
-    build_fn=lambda m, c: _act(m, c, "translate",
+_reg(CmdDef(QCoreApplication.translate("Canvas", "translate"), QCoreApplication.translate("Canvas", "translate"),
+    build_fn=lambda m, c: _act(m, c, QCoreApplication.translate("Canvas", "translate"),
         connect=lambda: c.run_blktrans.emit(-1)),
     run_fn=lambda mw: mw.canvas.run_blktrans.emit(-1),
     category=CAT_PIPELINE))
 
-_reg(CmdDef("ocr", "OCR",
-    build_fn=lambda m, c: _act(m, c, "OCR",
+_reg(CmdDef("ocr", QCoreApplication.translate("Canvas", "OCR"),
+    build_fn=lambda m, c: _act(m, c, QCoreApplication.translate("Canvas", "OCR"),
         connect=lambda: c.run_blktrans.emit(0)),
     run_fn=lambda mw: mw.canvas.run_blktrans.emit(0),
     category=CAT_PIPELINE))
 
-_reg(CmdDef("ocr_translate", "OCR and translate",
-    build_fn=lambda m, c: _act(m, c, "OCR and translate",
+_reg(CmdDef("ocr_translate", QCoreApplication.translate("Canvas", "OCR and translate"),
+    build_fn=lambda m, c: _act(m, c, QCoreApplication.translate("Canvas", "OCR and translate"),
         connect=lambda: c.run_blktrans.emit(1)),
     run_fn=lambda mw: mw.canvas.run_blktrans.emit(1),
     category=CAT_PIPELINE))
 
-_reg(CmdDef("ocr_translate_inpaint", "OCR, translate and inpaint",
-    build_fn=lambda m, c: _act(m, c, "OCR, translate and inpaint",
+_reg(CmdDef("ocr_translate_inpaint", QCoreApplication.translate("Canvas", "OCR, translate and inpaint"),
+    build_fn=lambda m, c: _act(m, c, QCoreApplication.translate("Canvas", "OCR, translate and inpaint"),
         connect=lambda: c.run_blktrans.emit(2)),
     run_fn=lambda mw: mw.canvas.run_blktrans.emit(2),
     category=CAT_PIPELINE))
@@ -329,12 +332,12 @@ def _redo_enabled(mw) -> bool:
     return False
 
 
-_reg(CmdDef("undo", "Undo",
+_reg(CmdDef("undo", QCoreApplication.translate("Canvas", "Undo"),
     run_fn=lambda mw: mw.canvas.undo(),
     enabled_fn=_undo_enabled,
     hidden_in_customize=True))
 
-_reg(CmdDef("redo", "Redo",
+_reg(CmdDef("redo", QCoreApplication.translate("Canvas", "Redo"),
     run_fn=lambda mw: mw.canvas.redo(),
     enabled_fn=_redo_enabled,
     hidden_in_customize=True))
@@ -343,26 +346,26 @@ _reg(CmdDef("redo", "Redo",
 # fit_window dropped from the palette (2026-08-15): it only rescales to the
 # viewport size, which the user found useless.  Stays registered so menus
 # saved before the change keep triggering it.
-_reg(CmdDef("fit_window", "Fit to Window",
+_reg(CmdDef("fit_window", QCoreApplication.translate("Canvas", "Fit to Window"),
     run_fn=lambda mw: mw.canvas.fitToWindow(),
     hidden_in_customize=True))
 
 # Zoom / page navigation stay registered for existing configs but are no
 # longer offered in the palette (wheel / Ctrl+wheel / PgUp / PgDn cover them).
 
-_reg(CmdDef("zoom_in", "Zoom In",
+_reg(CmdDef("zoom_in", QCoreApplication.translate("Canvas", "Zoom In"),
     run_fn=lambda mw: mw.canvas.scaleUp(),
     hidden_in_customize=True))
 
-_reg(CmdDef("zoom_out", "Zoom Out",
+_reg(CmdDef("zoom_out", QCoreApplication.translate("Canvas", "Zoom Out"),
     run_fn=lambda mw: mw.canvas.scaleDown(),
     hidden_in_customize=True))
 
-_reg(CmdDef("prev_page", "Previous Page",
+_reg(CmdDef("prev_page", QCoreApplication.translate("Canvas", "Previous Page"),
     run_fn=lambda mw: mw.shortcutBefore(),
     hidden_in_customize=True))
 
-_reg(CmdDef("next_page", "Next Page",
+_reg(CmdDef("next_page", QCoreApplication.translate("Canvas", "Next Page"),
     run_fn=lambda mw: mw.shortcutNext(),
     hidden_in_customize=True))
 
@@ -376,7 +379,7 @@ def _snap_alignment_checked(mw) -> bool:
     return bool(mw.canvas.alignment_enabled)
 
 
-_reg(CmdDef("snap_alignment", "Snap Alignment",
+_reg(CmdDef("snap_alignment", QCoreApplication.translate("Canvas", "Snap Alignment"),
     run_fn=_snap_alignment_run,
     checked_fn=_snap_alignment_checked,
     is_toggle=True,
@@ -410,28 +413,28 @@ def _drag_decorations_run(mw):
         checker.blockSignals(False)
 
 
-_reg(CmdDef("seq_badge", "Sequence Badge",
+_reg(CmdDef("seq_badge", QCoreApplication.translate("Canvas", "Sequence Badge"),
     run_fn=_seq_badge_run,
     checked_fn=lambda mw: bool(pcfg.show_seq_badge),
     is_toggle=True,
     hidden_in_customize=True,
     category=CAT_TOGGLE))
 
-_reg(CmdDef("clip_overflow", "Overflow Clip",
+_reg(CmdDef("clip_overflow", QCoreApplication.translate("Canvas", "Overflow Clip"),
     run_fn=_clip_overflow_run,
     checked_fn=lambda mw: bool(pcfg.clip_text_overflow),
     is_toggle=True,
     hidden_in_customize=True,
     category=CAT_TOGGLE))
 
-_reg(CmdDef("overflow_mode", "Overflow Mode",
+_reg(CmdDef("overflow_mode", QCoreApplication.translate("Canvas", "Overflow Mode"),
     run_fn=_overflow_mode_run,
     checked_fn=lambda mw: bool(pcfg.overflow_mode),
     is_toggle=True,
     hidden_in_customize=True,
     category=CAT_TOGGLE))
 
-_reg(CmdDef("drag_decorations", "Show decorations while resizing",
+_reg(CmdDef("drag_decorations", QCoreApplication.translate("Canvas", "Show decorations while resizing"),
     run_fn=_drag_decorations_run,
     checked_fn=lambda mw: bool(pcfg.show_decorations_during_drag),
     is_toggle=True,
@@ -477,7 +480,7 @@ def _merge_default_order(saved: List[str]) -> List[str]:
         else:
             # Predecessor not in saved order — append before pipeline
             try:
-                pos = merged.index("translate")
+                pos = merged.index(QCoreApplication.translate("Canvas", "translate"))
             except ValueError:
                 pos = len(merged)
         merged.insert(pos, new_id)
@@ -699,7 +702,7 @@ class ContextMenuCustomizeDialog(QDialog):
                 return
             # Drag-handle visual cue (⠿) lets users know items are
             # reorderable before they try to drag.
-            item.setText("⠿ " + self.tr(cmd.label_key))
+            item.setText("⠿ " + cmd.label_key)
             fm = self.list_widget.fontMetrics()
             item.setSizeHint(QSize(0, fm.height() + 12))
             self.list_widget.addItem(item)
@@ -718,14 +721,14 @@ class ContextMenuCustomizeDialog(QDialog):
         for cmd_id, cmd in COMMAND_REGISTRY.items():
             if cmd_id not in current_ids and not cmd.hidden_in_customize:
                 available.append((cmd_id, cmd.label_key))
-        available.sort(key=lambda x: self.tr(x[1]).lower())
+        available.sort(key=lambda x: x[1].lower())
 
         if not available:
             act = menu.addAction(self.tr("(all commands added)"))
             act.setEnabled(False)
 
         for cmd_id, label_key in available:
-            act = menu.addAction(self.tr(label_key))
+            act = menu.addAction(label_key)
             act.setData(cmd_id)
 
         chosen = menu.exec(

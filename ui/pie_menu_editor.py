@@ -78,18 +78,19 @@ from .theme_helpers import shortcut_styles
 _SECTOR_CHOICES = (4, 6, 8)
 PIE_MENU_MAX = 4   # menu cap — more trigger keys become hard to remember
 
-# Palette category order + display labels + badge colors (tr keys; orphans
-# by design — indirect calls, add <message> to the PieMenuEditor ts context).
+# Palette category order + display labels + badge colors. Labels carry the
+# explicit PieMenuEditor context at the literal so the ts toolchain tracks
+# them (no manual <message> sync anymore).
 _CATEGORY_LABELS = [
-    (CAT_BASIC, "Basic Editing", "#1e93e5"),
-    (CAT_TEXT, "Text Operations", "#27ae60"),
-    (CAT_PIPELINE, "Pipeline", "#e67e22"),
-    (CAT_VIEW, "View", "#8e44ad"),
+    (CAT_BASIC, QCoreApplication.translate("PieMenuEditor", "Basic Editing"), "#1e93e5"),
+    (CAT_TEXT, QCoreApplication.translate("PieMenuEditor", "Text Operations"), "#27ae60"),
+    (CAT_PIPELINE, QCoreApplication.translate("PieMenuEditor", "Pipeline"), "#e67e22"),
+    (CAT_VIEW, QCoreApplication.translate("PieMenuEditor", "View"), "#8e44ad"),
 ]
 
 # Checkbox toggles live in a separate palette section below the regular
 # commands (decision 2026-08-14) — magenta badge sets them apart.
-_TOGGLE_LABEL = "Canvas Options"
+_TOGGLE_LABEL = QCoreApplication.translate("PieMenuEditor", "Canvas Options")
 _TOGGLE_COLOR = "#e84393"
 
 _CARD_H = 44
@@ -362,8 +363,7 @@ class PieMenuEditor(QWidget):
 
         # Command palette
         self.palette_hint = QLabel(
-            self.tr("Commands (drag onto the menu; max %1 per sector, "
-                    "right-click a card to remove):")
+            self.tr("Commands (drag onto the menu; max %1 per sector, right-click a card to remove):")
             .replace("%1", str(SECTOR_MAX_CARDS)))
         self.palette_hint.setWordWrap(True)   # a single long line would
         # force the whole page wider than the ConfigPanel viewport
@@ -663,24 +663,15 @@ class PieMenuEditor(QWidget):
         for cat, label, color in _CATEGORY_LABELS:
             cmds = [c for c in COMMAND_REGISTRY.values()
                     if c.run_fn is not None and c.category == cat]
-            for cmd in sorted(cmds, key=lambda c: self.tr(c.label_key).lower()):
-                commands.append((
-                    cmd.id,
-                    QCoreApplication.translate("Canvas", cmd.label_key),
-                    self.tr(label),
-                    color,
-                ))
+            for cmd in sorted(cmds, key=lambda c: c.label_key.lower()):
+                commands.append((cmd.id, cmd.label_key, label, color))
         self.palette.set_commands(commands)
 
         toggle_cmds = [c for c in COMMAND_REGISTRY.values()
                        if c.run_fn is not None and c.category == CAT_TOGGLE]
         toggle_cards = [
-            (cmd.id,
-             QCoreApplication.translate("Canvas", cmd.label_key),
-             self.tr(_TOGGLE_LABEL),
-             _TOGGLE_COLOR)
-            for cmd in sorted(toggle_cmds,
-                              key=lambda c: self.tr(c.label_key).lower())
+            (cmd.id, cmd.label_key, _TOGGLE_LABEL, _TOGGLE_COLOR)
+            for cmd in sorted(toggle_cmds, key=lambda c: c.label_key.lower())
         ]
         self.toggle_palette.set_commands(toggle_cards)
 

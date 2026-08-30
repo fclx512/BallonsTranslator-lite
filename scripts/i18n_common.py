@@ -11,6 +11,7 @@ elsewhere — a drifted copy would make ts_auto_fill prune hand-maintained
 entries that i18n_check considers expected orphans.
 """
 
+import ast
 import re
 import sys
 from pathlib import Path
@@ -18,12 +19,13 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TS_FILE = PROJECT_ROOT / "translate" / "zh_CN.ts"
 
-# Contexts whose .ts entries are never matched by a literal self.tr() call:
-# the code renders them via self.tr(variable) / canvas.tr(key) or they are
-# module param descriptions.  They are maintained by hand in zh_CN.ts, so
-# i18n_check would report them as orphans on every run — treat as expected,
-# and ts_auto_fill must never prune them.
-KNOWN_ORPHAN_CONTEXTS = frozenset({"_ShortcutRow", "ShortcutEditor", "ParamWidget"})
+# Contexts whose .ts entries are never matched by a literal self.tr() call
+# and are maintained by hand in zh_CN.ts.  Currently empty: module param
+# descriptions (ParamWidget) are extracted via the AST rule below, and the
+# former indirect-lookup tables (_ShortcutRow / ShortcutEditor / Canvas /
+# PieMenu* …) have all been converted to explicit-context
+# QCoreApplication.translate() literals.
+KNOWN_ORPHAN_CONTEXTS = frozenset()
 
 # Match self.tr("...") / self.tr('...') — single-line, for the hardcoded-
 # Chinese cleaner in i18n_check.
@@ -66,17 +68,82 @@ def extract_tr_calls(content: str):
 
     tr_re = re.compile(r'self\.tr\(\s*("(?:[^"\\]|\\.)*")\s*\)', re.DOTALL)
     tr_sq_re = re.compile(r"self\.tr\(\s*('(?:[^'\\]|\\.)*')\s*\)", re.DOTALL)
+    # Explicit-context module-level tables (e.g. shortcut names in
+    # ui/configpanel.py): first literal is the ts <context>.
+    qt_translate_re = re.compile(
+        r'QCoreApplication\.translate\(\s*("(?:[^"\\]|\\.)*")\s*,\s*("(?:[^"\\]|\\.)*")\s*\)',
+        re.DOTALL,
+    )
+    qt_translate_sq_re = re.compile(
+        r"QCoreApplication\.translate\(\s*('(?:[^'\\]|\\.)*')\s*,\s*('(?:[^'\\]|\\.)*')\s*\)",
+        re.DOTALL,
+    )
+
+    def _unquote(s):
+        s = s[1:-1]  # strip surrounding quotes
+        s = s.replace('\\"', '"').replace("\\'", "'")
+        s = s.replace("\\\\", "\\")
+        s = s.replace("\\n", "\n").replace("\\t", "\t")
+        return s
 
     for tr_regex in (tr_re, tr_sq_re):
         for m in tr_regex.finditer(content):
-            s = m.group(1)[1:-1]  # strip surrounding quotes
-            s = s.replace('\\"', '"').replace("\\'", "'")
-            s = s.replace("\\\\", "\\")
-            s = s.replace("\\n", "\n").replace("\\t", "\t")
+            s = _unquote(m.group(1))
             # Skip format strings containing placeholders
             if "{" in s:
                 continue
             yield (_context_for(m.start()), s)
+
+    for qt_regex in (qt_translate_re, qt_translate_sq_re):
+        for m in qt_regex.finditer(content):
+            ctx = _unquote(m.group(1))
+            s = _unquote(m.group(2))
+            if "{" in s:
+                continue
+            yield (ctx, s)
+
+
+def extract_param_descriptions(content: str, fpath: Path):
+    """Yield ("ParamWidget", description) from module param dict literals.
+
+    Module params are plain data (``{"param": {"value": …, "description":
+    "…"}}``) rendered via ``ParamWidget.tr(params["description"])`` — a
+    value lookup the regex extractor cannot see.  This AST rule covers it:
+
+    - files under ``modules/`` (except the translation-agent ``agent/``
+      package, whose "description" keys are LLM function-calling prompts
+      that must stay English): every dict literal with a string
+      ``description`` key;
+    - everywhere else: only dicts that *also* carry a ``value`` key, so
+      LLM tool schemas (``utils/ai_tools.py``, whose descriptions are
+      already Chinese prompt text) stay out.
+    """
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return
+    rel = fpath.relative_to(PROJECT_ROOT).parts
+    module_scope = len(rel) >= 1 and rel[0] == "modules" and "agent" not in rel
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Dict):
+            continue
+        keys = [
+            k.value if isinstance(k, ast.Constant) and isinstance(k.value, str)
+            else None
+            for k in node.keys
+        ]
+        if "description" not in keys:
+            continue
+        if not module_scope and "value" not in keys:
+            continue
+        val = node.values[keys.index("description")]
+        if not (isinstance(val, ast.Constant) and isinstance(val.value, str)):
+            continue
+        desc = val.value
+        if "{" in desc:
+            continue
+        yield ("ParamWidget", desc)
 
 
 def gather_tr_calls():
@@ -88,6 +155,7 @@ def gather_tr_calls():
         except Exception:
             continue
         result.update(extract_tr_calls(content))
+        result.update(extract_param_descriptions(content, fpath))
     return result
 
 

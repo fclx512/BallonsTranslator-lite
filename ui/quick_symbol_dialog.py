@@ -1,7 +1,7 @@
 """Floating dialog with common manga/comic symbols for quick insertion."""
 from typing import Optional
 
-from qtpy.QtCore import Qt
+from qtpy.QtCore import QCoreApplication, Qt
 from qtpy.QtWidgets import (
     QApplication,
     QDialog,
@@ -18,18 +18,19 @@ from qtpy.QtWidgets import (
 class QuickSymbolDialog(QDialog):
     """Always-on-top symbol palette. Click a symbol to insert it at cursor."""
 
-    # Symbols grouped by category
+    # Symbols grouped by category (names carry the explicit context at the
+    # literal so the ts toolchain tracks them)
     _GROUPS = [
-        ("Quotes", [
+        (QCoreApplication.translate("QuickSymbolDialog", "Quotes"), [
             "「", "」", "『", "』", "〝", "〟", "【", "】", "（", "）",
         ]),
-        ("Punctuation", [
+        (QCoreApplication.translate("QuickSymbolDialog", "Punctuation"), [
             "！", "？", "…", "——", "～", "〜", "〰", "·", "‼", "⁉",
         ]),
-        ("Decoratives", [
+        (QCoreApplication.translate("QuickSymbolDialog", "Decoratives"), [
             "※", "♥", "♡", "●", "○", "■", "□", "◆", "◇", "♪", "♫", "♬",
         ]),
-        ("Other", [
+        (QCoreApplication.translate("QuickSymbolDialog", "Other"), [
             "　",  # full-width space
         ]),
     ]
@@ -64,13 +65,13 @@ class QuickSymbolDialog(QDialog):
         if custom_chars:
             groups.append(
                 (
-                    "Custom",
+                    QCoreApplication.translate("QuickSymbolDialog", "Custom"),
                     [ch for ch in custom_chars if not ch.isspace()],
                 )
             )
 
         for group_name, symbols in groups:
-            label = QLabel(self.tr(group_name))
+            label = QLabel(group_name)
             label.setStyleSheet("font-weight: bold; font-size: 11px;")
             layout.addWidget(label)
 

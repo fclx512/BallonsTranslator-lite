@@ -772,10 +772,7 @@ class ProfileManagerDialog(QDialog):
             self.tr("Return JSON Schema")
         )
         self.return_json_schema_check.setToolTip(
-            self.tr(
-                "When enabled, the API response is validated against a strict JSON schema. "
-                "Disable for broader compatibility with non-OpenAI providers."
-            )
+            self.tr("When enabled, the API response is validated against a strict JSON schema. Disable for broader compatibility with non-OpenAI providers.")
         )
         right_layout.addWidget(self.return_json_schema_check)
 
@@ -792,10 +789,7 @@ class ProfileManagerDialog(QDialog):
         )
         self.system_prompt_edit = ConfigTextEdit()
         self.system_prompt_edit.setPlaceholderText(
-            self.tr(
-                "Optional custom instructions appended to the system prompt. "
-                "Leave empty to use the default translation contract."
-            )
+            self.tr("Optional custom instructions appended to the system prompt. Leave empty to use the default translation contract.")
         )
         self.system_prompt_edit.setMinimumHeight(80)
         sp_form.addRow(self.tr("Instructions:"), self.system_prompt_edit)
@@ -840,10 +834,7 @@ class ProfileManagerDialog(QDialog):
             self.tr("Enable image inpainting for this profile")
         )
         self.image_support_check.setToolTip(
-            self.tr(
-                "Enable this for models that can generate/clean images. "
-                "Image-capable profiles appear in the online inpainter's profile selector."
-            )
+            self.tr("Enable this for models that can generate/clean images. Image-capable profiles appear in the online inpainter's profile selector.")
         )
         right_layout.addWidget(self.image_support_check)
 
@@ -1389,10 +1380,7 @@ class ProfileManagerWidget(QWidget):
         model_row.addWidget(fetch_btn)
         self.vision_check = ConfigCheckBox(self.tr("Vision support (for OCR)"))
         self.vision_check.setToolTip(
-            self.tr(
-                "Enable this for models that can process images. "
-                "Vision-capable profiles will appear in the OCR model selector."
-            )
+            self.tr("Enable this for models that can process images. Vision-capable profiles will appear in the OCR model selector.")
         )
         self.temp_edit = ConfigLineEdit()
         self.temp_edit.setPlaceholderText("0.1")
@@ -1413,12 +1401,7 @@ class ProfileManagerWidget(QWidget):
         for display, data in items:
             self.reasoning_combo.addItem(display, data)
         self.reasoning_combo.setToolTip(
-            self.tr(
-                "Override the model's reasoning/thinking effort.\n"
-                'Leave as "default" to let the API decide.\n'
-                "This maps automatically to each provider's native parameter\n"
-                "(OpenAI reasoning_effort, Claude output_config.effort, etc.)."
-            )
+            self.tr("Override the model's reasoning/thinking effort.\nLeave as \"default\" to let the API decide.\nThis maps automatically to each provider's native parameter\n(OpenAI reasoning_effort, Claude output_config.effort, etc.).")
         )
         basic_form.addRow(self.tr("Name:"), self.name_edit)
         basic_form.addRow(self.tr("Host:"), host_row)
@@ -1464,10 +1447,7 @@ class ProfileManagerWidget(QWidget):
             self.tr("Return JSON Schema")
         )
         self.return_json_schema_check.setToolTip(
-            self.tr(
-                "When enabled, the API response is validated against a strict JSON schema. "
-                "Disable for broader compatibility with non-OpenAI providers."
-            )
+            self.tr("When enabled, the API response is validated against a strict JSON schema. Disable for broader compatibility with non-OpenAI providers.")
         )
         form_layout.addWidget(self.return_json_schema_check)
 
@@ -1485,10 +1465,7 @@ class ProfileManagerWidget(QWidget):
         )
         self.system_prompt_edit = ConfigTextEdit()
         self.system_prompt_edit.setPlaceholderText(
-            self.tr(
-                "Optional custom instructions appended to the system prompt. "
-                "Leave empty to use the default translation contract."
-            )
+            self.tr("Optional custom instructions appended to the system prompt. Leave empty to use the default translation contract.")
         )
         self.system_prompt_edit.setMinimumHeight(80)
         sp_form.addRow(self.tr("Instructions:"), self.system_prompt_edit)
@@ -1536,10 +1513,7 @@ class ProfileManagerWidget(QWidget):
             self.tr("Enable image inpainting for this profile")
         )
         self.image_support_check.setToolTip(
-            self.tr(
-                "Enable this for models that can generate/clean images. "
-                "Image-capable profiles appear in the online inpainter's profile selector."
-            )
+            self.tr("Enable this for models that can generate/clean images. Image-capable profiles appear in the online inpainter's profile selector.")
         )
         form_layout.addWidget(self.image_support_check)
 

@@ -102,14 +102,14 @@ def test_compute_override_float_micro_difference_no_override():
 
 
 def test_compute_override_real_differences():
+    # bold 已弃用（字重全走 font_weight），不参与 override diff。
     base = FontFormat(font_family="Z", font_size=24.0, frgb=[0, 0, 0], bold=False)
     block = FontFormat(font_family="Z", font_size=40.0, frgb=[255, 0, 0], bold=True)
     ov = compute_override(block, base)
-    assert ov == {"font_size": 40.0, "frgb": [255, 0, 0], "bold": True}
+    assert ov == {"font_size": 40.0, "frgb": [255, 0, 0]}
     # Override stores the block's raw value (not a quantized key).
     assert ov["font_size"] == 40.0
     assert ov["frgb"] == [255, 0, 0]
-    assert ov["bold"] is True
 
 
 def test_compute_override_identity_fields_never_override():
@@ -265,21 +265,20 @@ def test_overrides_summary_size_first_color_hex_upper():
 
 
 def test_overrides_summary_bool_tokens():
-    ov = {"bold": True, "italic": True, "underline": False, "strikeout": True}
-    assert overrides_summary(ov) == "B · I · -U · S"
+    ov = {"italic": True, "underline": False, "strikeout": True}
+    assert overrides_summary(ov) == "I · -U · S"
 
 
 def test_overrides_summary_truncates_over_four_tokens():
     ov = {
         "font_size": 38.0,
         "frgb": [255, 0, 0],
-        "bold": True,
         "italic": True,
         "underline": True,
         "strikeout": True,
     }
-    # font_size, frgb, bold, italic fill the 4-token budget; rest -> "+2".
-    assert overrides_summary(ov) == "38px · fg#FF0000 · B · I +2"
+    # font_size, frgb, italic, underline fill the 4-token budget; rest -> "+1".
+    assert overrides_summary(ov) == "38px · fg#FF0000 · I · U +1"
 
 
 def test_overrides_summary_empty():

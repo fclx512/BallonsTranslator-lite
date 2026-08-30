@@ -210,8 +210,7 @@ class GlossaryExtractorDialog(QDialog):
             self.tr("Frequency (fast, no LLM) — count repeated terms")
         )
         self._llm_radio = QRadioButton(
-            self.tr("LLM Extraction (slower, semantic) — detect named entities "
-                     "and important terms")
+            self.tr("LLM Extraction (slower, semantic) — detect named entities and important terms")
         )
         self._llm_radio.setChecked(True)  # default
         mode_layout.addWidget(self._freq_radio)
@@ -319,10 +318,7 @@ class GlossaryExtractorDialog(QDialog):
                 QMessageBox.information(
                     self,
                     self.tr("No Data"),
-                    self.tr(
-                        "The project has no source text to analyse.\n\n"
-                        "Please run text detection and OCR first."
-                    ),
+                    self.tr("The project has no source text to analyse.\n\nPlease run text detection and OCR first."),
                 )
                 self._set_ui_busy(False)
                 return
@@ -336,12 +332,7 @@ class GlossaryExtractorDialog(QDialog):
                 QMessageBox.information(
                     self,
                     self.tr("No Data"),
-                    self.tr(
-                        "The project has no source/translation pairs to analyse.\n\n"
-                        "Frequency extraction requires translations to pair with "
-                        "source text.  Try LLM Extraction mode instead, or run "
-                        "the translation pipeline first."
-                    ),
+                    self.tr("The project has no source/translation pairs to analyse.\n\nFrequency extraction requires translations to pair with source text.  Try LLM Extraction mode instead, or run the translation pipeline first."),
                 )
                 self._set_ui_busy(False)
                 return

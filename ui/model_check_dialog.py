@@ -8,7 +8,7 @@ All colours adapt to dark/light mode via ``pcfg.darkmode``.
 
 import os.path as osp
 
-from qtpy.QtCore import Qt, QUrl
+from qtpy.QtCore import QCoreApplication, Qt, QUrl
 from qtpy.QtGui import QColor, QDesktopServices
 from qtpy.QtWidgets import (
     QDialog,
@@ -31,12 +31,13 @@ from utils.logger import logger as LOGGER
 
 from .misc import get_theme_color
 
-# Pipeline display order and labels
+# Pipeline display order and labels (explicit context at the literal so
+# the ts toolchain tracks them)
 _TYPE_ORDER = ["textdetector", "ocr", "inpainter"]
 _TYPE_LABEL = {
-    "textdetector": "Text Detection",
-    "ocr": "OCR",
-    "inpainter": "Inpainting",
+    "textdetector": QCoreApplication.translate("ModelCheckPanel", "Text Detection"),
+    "ocr": QCoreApplication.translate("ModelCheckPanel", "OCR"),
+    "inpainter": QCoreApplication.translate("ModelCheckPanel", "Inpainting"),
 }
 
 # ── URL helpers ────────────────────────────────────────────────────────
@@ -580,7 +581,7 @@ class ModelCheckPanel(QWidget):
             group.sort(key=_model_sort_key)
 
             label = _TYPE_LABEL.get(type_name, type_name)
-            card = CategoryCard(type_name, self.tr(label))
+            card = CategoryCard(type_name, label)
             card.set_entries(group)
             self._cards[type_name] = card
             self._cards_layout.insertWidget(

@@ -1,21 +1,22 @@
 """
 Font Style Manager — base styles + derived variants across the project.
 
-Left panel: tree of base styles (project-level named entities, identity =
-font_family + vertical) with their auto-derived variants, plus an
-"Ungrouped" section for blocks whose identity matches no base style
-(clustered by full-parameter signature, the legacy discovery).
+Left panel: two-line tree nodes (line 1 = swatch + name + block count,
+line 2 = gray parameter summary; variants list only their diff fields)
+painted by ``_StyleItemDelegate``.
 
-Right panel (StyleDetail) has three modes:
+Right panel (StyleDetail) is diff-first (2026-08-30 rework, design doc
+查找替换与样式管理器重构_设计方案.md §5): preview card + key-parameter
+chip row + four collapsible field groups (``ui/style_format_editor.py``,
+shared with the find/replace format editor) + per-page block chips.
+Modes keep their previous semantics:
 
 * base style — batch edit flattens the *changed* parameters onto every
   block of the style (other per-block overrides survive); rename, save as
   cross-project preset, delete.
-* variant — batch edit writes only the changed parameters onto the
-  variant's blocks; after re-discovery the variant may merge elsewhere or
-  dissolve back into the base style.
-* ungrouped signature — legacy full-parameter apply + "promote to base
-  style".
+* variant — only the override fields are editable; "reset to base" writes
+  the base values back (the variant then dissolves on re-discovery).
+* ungrouped signature — full-parameter apply + "promote to base style".
 
 All batch operations go through BatchFontformatCommand (undoable) and
 emit pages_dirtied / data_committed like before.
@@ -25,20 +26,25 @@ from __future__ import annotations
 
 from typing import Dict, List, Tuple
 
-from qtpy.QtCore import QRect, Qt, QTimer, Signal
+from qtpy.QtCore import (
+    QCoreApplication,
+    QRectF,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+)
 from qtpy.QtGui import (
     QColor,
     QFont,
-    QFontDatabase,
-    QIcon,
+    QFontMetrics,
+    QPalette,
     QPainter,
-    QPixmap,
+    QTextDocument,
 )
 from qtpy.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDialog,
-    QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -46,6 +52,9 @@ from qtpy.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QStyle,
+    QStyleOption,
+    QStyledItemDelegate,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -67,12 +76,10 @@ from utils.base_styles import (
     quantize_field,
     variant_display_name,
 )
-from utils.fontformat import (
-    FontFormat,
-    px2pt,
-)
+from utils.fontformat import FontFormat
 
-from .custom_widget import ColorPickerDialog, ColorSwatchBtn, SeparatorWidget
+from .custom_widget import ColorPickerDialog, SeparatorWidget
+from .style_format_editor import FormatEditorPanel
 
 # Re-exported for legacy importers (tests import these from this module).
 __all__ = [
@@ -94,25 +101,125 @@ def discover_styles(proj) -> List[StyleEntry]:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _swatch_icon(ffmt: FontFormat) -> QIcon:
-    """Two-tone rounded swatch: stroke ring outside, foreground inside."""
-    d = 14
-    pixmap = QPixmap(d, d)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.setPen(Qt.PenStyle.NoPen)
-    rect = QRect(1, 1, d - 2, d - 2)
-    radius = d / 3
-    if ffmt.stroke_width > 0:
-        painter.setBrush(QColor(*ffmt.stroke_color(), 255))
-        painter.drawRoundedRect(rect, radius, radius)
-        inset = d // 4
-        rect = QRect(inset, inset, d - 2 * inset, d - 2 * inset)
-    painter.setBrush(QColor(*ffmt.foreground_color(), 255))
-    painter.drawRoundedRect(rect, radius, radius)
-    painter.end()
-    return QIcon(pixmap)
+# 树节点第二行参数摘要的翻译 token（模块级字面量，定义处显式标注上下文）。
+_SUMMARY_TOKENS = {
+    "vert": QCoreApplication.translate("StyleTreeWidget", "Vertical"),
+    "horz": QCoreApplication.translate("StyleTreeWidget", "Horizontal"),
+    "italic": QCoreApplication.translate("StyleTreeWidget", "Italic"),
+    "underline": QCoreApplication.translate("StyleTreeWidget", "Underline"),
+    "strikeout": QCoreApplication.translate("StyleTreeWidget", "Strikeout"),
+}
+
+
+def _base_summary(ffmt: FontFormat) -> str:
+    """Line-2 parameter summary for base/ungrouped nodes (translated)."""
+    tokens = [ffmt.font_family, f"{ffmt.font_size:g}px"]
+    tokens.append(
+        _SUMMARY_TOKENS["vert"] if ffmt.vertical else _SUMMARY_TOKENS["horz"]
+    )
+    for attr in ("italic", "underline", "strikeout"):
+        if getattr(ffmt, attr):
+            tokens.append(_SUMMARY_TOKENS[attr])
+    return " · ".join(tokens)
+
+
+_DISPLAY_ROLE = Qt.ItemDataRole.UserRole + 1
+
+
+class _StyleItemDelegate(QStyledItemDelegate):
+    """Two-line tree node: swatch + name + count / gray summary."""
+
+    _SWATCH = 14
+
+    def paint(self, painter: QPainter, option, index):
+        data = index.data(_DISPLAY_ROLE)
+        if not data or not data.get("two_line"):
+            super().paint(painter, option, index)
+            return
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(option.rect).adjusted(4, 2, -4, -2)
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        if selected:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(option.palette.color(QPalette.ColorRole.Highlight))
+            painter.drawRoundedRect(rect, 4, 4)
+
+        text_color = (
+            option.palette.color(QPalette.ColorRole.HighlightedText)
+            if selected
+            else option.palette.color(QPalette.ColorRole.Text)
+        )
+        sub_color = QColor(text_color)
+        sub_color.setAlpha(150)
+
+        line1_h = 20.0
+        x = rect.left()
+        # Swatch: stroke ring outside, foreground inside (base identity).
+        if data.get("fg") is not None:
+            sw = self._SWATCH
+            sw_rect = QRectF(x, rect.top() + (line1_h - sw) / 2, sw, sw)
+            painter.setPen(Qt.PenStyle.NoPen)
+            if data.get("st"):
+                painter.setBrush(QColor(*data["st"]))
+                painter.drawRoundedRect(sw_rect, sw / 3, sw / 3)
+                inset = sw / 4
+                sw_rect = sw_rect.adjusted(inset, inset, -inset, -inset)
+            painter.setBrush(QColor(*data["fg"]))
+            painter.drawRoundedRect(sw_rect, sw / 3, sw / 3)
+            x += sw + 8
+
+        count_txt = ""
+        if data.get("count"):
+            count_txt = str(data["count"])
+        count_w = (
+            QFontMetrics(option.font).horizontalAdvance(count_txt) + 6
+            if count_txt
+            else 0.0
+        )
+
+        # Line 1: name (elide before eliding — Windows GDI truncation guard).
+        title_font = painter.font()
+        title_font.setBold(True)
+        title_font.setPixelSize(12)
+        painter.setFont(title_font)
+        avail = rect.right() - count_w - x
+        title = data.get("title", "")
+        fm = QFontMetrics(title_font)
+        if fm.horizontalAdvance(title) > avail:
+            title = fm.elidedText(title, Qt.TextElideMode.ElideRight, int(avail))
+        painter.setPen(text_color)
+        painter.drawText(
+            QRectF(x, rect.top(), avail, line1_h),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            title,
+        )
+        if count_txt:
+            painter.setPen(sub_color)
+            painter.drawText(
+                QRectF(rect.right() - count_w, rect.top(), count_w, line1_h),
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                count_txt,
+            )
+
+        # Line 2: gray parameter summary.
+        sub_font = painter.font()
+        sub_font.setBold(False)
+        sub_font.setPixelSize(11)
+        painter.setFont(sub_font)
+        painter.setPen(sub_color)
+        sub = data.get("sub", "")
+        fm2 = QFontMetrics(sub_font)
+        avail2 = rect.width() - (x - rect.left())
+        if fm2.horizontalAdvance(sub) > avail2:
+            sub = fm2.elidedText(sub, Qt.TextElideMode.ElideRight, int(avail2))
+        painter.drawText(
+            QRectF(x, rect.top() + line1_h, avail2, rect.height() - line1_h),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            sub,
+        )
+        painter.restore()
 
 
 class StyleTreeWidget(QTreeWidget):
@@ -122,6 +229,8 @@ class StyleTreeWidget(QTreeWidget):
       {"type": "base",    "identity": (family, vertical)}
       {"type": "variant", "identity": (family, vertical), "key": tuple}
       {"type": "sig",     "signature": str}
+
+    Display data for the two-line delegate lives in ``_DISPLAY_ROLE``.
     """
 
     node_selected = Signal(dict)
@@ -134,6 +243,7 @@ class StyleTreeWidget(QTreeWidget):
         self.setRootIsDecorated(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollMode(QTreeWidget.ScrollMode.ScrollPerPixel)
+        self.setItemDelegate(_StyleItemDelegate(self))
         self.currentItemChanged.connect(self._on_current_changed)
 
     def populate(self, tree: StyleTree):
@@ -141,18 +251,25 @@ class StyleTreeWidget(QTreeWidget):
         self.clear()
         for node in tree.nodes:
             base = node.base
-            orient = self.tr("V") if base.fontformat.vertical else self.tr("H")
-            label = f"{base.name} · {orient}"
-            if node.total_count:
-                label += f"  ({node.total_count})"
-            item = QTreeWidgetItem([label])
+            item = QTreeWidgetItem()
             item.setData(
                 0, Qt.ItemDataRole.UserRole, {"type": "base", "identity": base.identity}
             )
-            item.setIcon(0, _swatch_icon(base.fontformat))
-            bold = item.font(0)
-            bold.setBold(True)
-            item.setFont(0, bold)
+            item.setData(
+                0,
+                _DISPLAY_ROLE,
+                {
+                    "two_line": True,
+                    "title": base.name,
+                    "sub": _base_summary(base.fontformat),
+                    "count": node.total_count,
+                    "fg": [int(c) for c in base.fontformat.foreground_color()],
+                    "st": [int(c) for c in base.fontformat.stroke_color()]
+                    if base.fontformat.stroke_width > 0
+                    else None,
+                },
+            )
+            item.setSizeHint(0, QSize(0, 42))
             item.setToolTip(
                 0,
                 self.tr("Font: {f}\nOrientation: {o}").format(
@@ -164,16 +281,36 @@ class StyleTreeWidget(QTreeWidget):
             )
             self.addTopLevelItem(item)
             for var in node.variants:
-                vlabel = variant_display_name(base.name, var.overrides)
-                if var.count:
-                    vlabel += f"  ({var.count})"
-                child = QTreeWidgetItem([vlabel])
+                child = QTreeWidgetItem()
                 child.setData(
                     0,
                     Qt.ItemDataRole.UserRole,
                     {"type": "variant", "identity": base.identity, "key": var.key},
                 )
-                child.setToolTip(0, overrides_summary(var.overrides))
+                fg = var.overrides.get("frgb")
+                st = var.overrides.get("srgb")
+                if fg is None:
+                    fg = [int(c) for c in base.fontformat.foreground_color()]
+                if st is None:
+                    st = (
+                        [int(c) for c in base.fontformat.stroke_color()]
+                        if base.fontformat.stroke_width > 0
+                        else None
+                    )
+                child.setData(
+                    0,
+                    _DISPLAY_ROLE,
+                    {
+                        "two_line": True,
+                        "title": base.name,
+                        "sub": overrides_summary(var.overrides),
+                        "count": var.count,
+                        "fg": [int(c) for c in fg[:3]],
+                        "st": [int(c) for c in st[:3]] if st else None,
+                    },
+                )
+                child.setSizeHint(0, QSize(0, 42))
+                child.setToolTip(0, variant_display_name(base.name, var.overrides))
                 item.addChild(child)
             item.setExpanded(True)
 
@@ -185,15 +322,28 @@ class StyleTreeWidget(QTreeWidget):
             root.setFont(0, bold)
             for entry in tree.ungrouped:
                 ffmt = entry.fontformat
-                child = QTreeWidgetItem(
-                    [f"{ffmt.font_family} {ffmt.font_size:.0f}px  ({entry.count})"]
-                )
+                child = QTreeWidgetItem()
                 child.setData(
                     0,
                     Qt.ItemDataRole.UserRole,
                     {"type": "sig", "signature": entry.signature},
                 )
-                child.setIcon(0, _swatch_icon(ffmt))
+                child.setData(
+                    0,
+                    _DISPLAY_ROLE,
+                    {
+                        "two_line": True,
+                        "title": f"{ffmt.font_family} {ffmt.font_size:.0f}px",
+                        "sub": _base_summary(ffmt),
+                        "count": entry.count,
+                        "fg": [int(c) for c in ffmt.foreground_color()],
+                        "st": [int(c) for c in ffmt.stroke_color()]
+                        if ffmt.stroke_width > 0
+                        else None,
+                    },
+                )
+                child.setSizeHint(0, QSize(0, 42))
+                child.setToolTip(0, _base_summary(ffmt))
                 root.addChild(child)
             root.setExpanded(True)
             self.addTopLevelItem(root)
@@ -240,6 +390,120 @@ class StyleTreeWidget(QTreeWidget):
 
 
 # ═══════════════════════════════════════════════════════════════════════
+# Reusable chips (preview parameter row + block distribution)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class _ChipBar(QWidget):
+    """Wrapping row of small clickable chips.
+
+    ``set_chips(chips)`` — *chips* is a list of
+    ``(chip_id, label, color_hex_or_None)``; clicks re-emit ``chip_clicked``.
+
+    Wrapping is laid out manually in ``resizeEvent`` — PyQt6 下 Python 自定义
+    QLayout 子类在布局激活时会原生段错误（最小复现确认），故不走 QLayout。
+    """
+
+    chip_clicked = Signal(str)
+    _SPACING = 4
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._chips: List[QPushButton] = []
+
+    def clear_chips(self):
+        for btn in self._chips:
+            btn.setParent(None)
+            btn.deleteLater()
+        self._chips = []
+
+    def set_chips(self, chips: List[Tuple[str, str, str | None]]):
+        self.clear_chips()
+        for chip_id, label, color in chips:
+            btn = QPushButton(label)
+            btn.setObjectName("ParamChip")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            if color:
+                btn.setStyleSheet(f"ParamChip {{ background-color: {color}; }}")
+            btn.clicked.connect(
+                lambda _=False, cid=chip_id: self.chip_clicked.emit(cid)
+            )
+            btn.setParent(self)
+            btn.show()
+            self._chips.append(btn)
+        self._relayout()
+
+    def _relayout(self):
+        x = y = 0
+        row_h = 0
+        avail = max(self.width(), 40)
+        for btn in self._chips:
+            hint = btn.sizeHint()
+            w, h = hint.width(), hint.height()
+            if x + w > avail and x > 0:
+                x = 0
+                y += row_h + self._SPACING
+                row_h = 0
+            btn.setGeometry(x, y, w, h)
+            x += w + self._SPACING
+            row_h = max(row_h, h)
+        self.setMinimumHeight(y + row_h)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._relayout()
+
+
+class StylePreviewCard(QWidget):
+    """Real-font preview card (QTextDocument approximation, v1 scope:
+    family/size/color/weight/style/underline/alignment/line spacing)."""
+
+    SAMPLE = "Aa Bb Gg 123"
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("StylePreviewCard")
+        self.setFixedHeight(64)
+        self._doc = QTextDocument(self)
+        self._doc.setDefaultFont(QFont())
+
+    def set_format(self, ffmt: FontFormat):
+        sample = self.SAMPLE
+        if ffmt.vertical:
+            sample = "\n".join(self.SAMPLE.replace(" ", ""))
+        weight = "bold" if ffmt.bold or (ffmt.font_weight or 0) >= 600 else "normal"
+        fg = ffmt.foreground_color()
+        css = (
+            f"font-family: '{ffmt.font_family}'; "
+            f"font-size: {max(12, min(int(ffmt.font_size), 32))}px; "
+            f"color: rgb({int(fg[0])},{int(fg[1])},{int(fg[2])}); "
+            f"font-weight: {weight};"
+        )
+        if ffmt.italic:
+            css += " font-style: italic;"
+        if ffmt.underline:
+            css += " text-decoration: underline;"
+        self._doc.setHtml(
+            f'<p style="line-height: 115%;"><span style="{css}">{sample}</span></p>'
+        )
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        opt = QStyleOption()
+        opt.initFrom(self)
+        self.style().drawPrimitive(
+            QStyle.PrimitiveElement.PE_Widget, opt, painter, self
+        )
+        self._doc.setTextWidth(self.width() - 16)
+        self._doc.drawContents(
+            painter, QRectF(8, 4, self.width() - 16, self.height() - 8)
+        )
+        painter.end()
+
+
+# ═══════════════════════════════════════════════════════════════════════
 # StyleDetail (right panel)
 # ═══════════════════════════════════════════════════════════════════════
 
@@ -253,29 +517,6 @@ class _SectionHeader(QLabel):
         font.setBold(True)
         font.setPixelSize(13)
         self.setFont(font)
-
-
-class _PropertyRow(QWidget):
-    """Label : value row."""
-
-    def __init__(self, label: str, parent=None):
-        super().__init__(parent)
-        self._label = QLabel(label)
-        self._label.setFixedWidth(100)
-        self._value = QLabel()
-        self._value.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-        self._value.setWordWrap(True)
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
-        layout.addWidget(self._label)
-        layout.addWidget(self._value, 1)
-
-    def set_value(self, text: str):
-        self._value.setText(text)
 
 
 class StyleDetail(QScrollArea):
@@ -303,163 +544,41 @@ class StyleDetail(QScrollArea):
         self._base_node: BaseStyleNode | None = None
         self._variant: VariantEntry | None = None
         self._entry: StyleEntry | None = None
-        self._baseline_ffmt: FontFormat | None = None
         self._proj = None
         self._scene_manager = None
 
-        # Container
         container = QWidget()
         self._layout = QVBoxLayout(container)
         self._layout.setSpacing(4)
         self._layout.setContentsMargins(12, 8, 12, 8)
 
-        # ── Header ───────────────────────────────────────────────
-        self._preview_label = QLabel("Aa Bb Gg")
-        self._preview_label.setObjectName("StylePreviewLabel")
-        self._preview_label.setFixedHeight(36)
-        self._preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._layout.addWidget(self._preview_label)
+        # ── Header (rename + info) ────────────────────────────────
+        self._name_edit = QLineEdit()
+        self._name_edit.setToolTip(self.tr("Base style name"))
+        self._name_edit.editingFinished.connect(self._on_name_edited)
+        self._layout.addWidget(self._name_edit)
 
         self._header_info = QLabel()
         self._header_info.setWordWrap(True)
         self._layout.addWidget(self._header_info)
 
-        # ── Base-style identity row (rename) ─────────────────────
-        self._name_edit = QLineEdit()
-        self._name_edit.setToolTip(self.tr("Base style name"))
-        self._name_edit.editingFinished.connect(self._on_name_edited)
-        self._layout.addLayout(
-            _labeled_control(self.tr("Style Name"), self._name_edit)
-        )
+        # ── Preview card + key-parameter chips ────────────────────
+        self._preview_card = StylePreviewCard()
+        self._layout.addWidget(self._preview_card)
+
+        self._chip_bar = _ChipBar()
+        self._chip_bar.chip_clicked.connect(self._scroll_to_group)
+        self._layout.addWidget(self._chip_bar)
 
         self._layout.addWidget(SeparatorWidget())
 
-        # ── Property Summary ──────────────────────────────────────
-        self._layout.addWidget(_SectionHeader(self.tr("Properties")))
-
-        self._prop_overrides = _PropertyRow(self.tr("Overrides"))
-        self._prop_font = _PropertyRow(self.tr("Font"))
-        self._prop_size = _PropertyRow(self.tr("Size"))
-        self._prop_weight = _PropertyRow(self.tr("Weight"))
-        self._prop_style = _PropertyRow(self.tr("Style"))
-        self._prop_foreground = _PropertyRow(self.tr("Foreground"))
-        self._prop_stroke = _PropertyRow(self.tr("Stroke"))
-        self._prop_alignment = _PropertyRow(self.tr("Alignment"))
-        self._prop_layout = _PropertyRow(self.tr("Layout"))
-        self._prop_spacing = _PropertyRow(self.tr("Spacing"))
-        self._prop_effects = _PropertyRow(self.tr("Effects"))
-        self._prop_pure = _PropertyRow(self.tr("Blocks Matching Base"))
-        self._prop_variants = _PropertyRow(self.tr("Variants"))
-
-        for pw in [
-            self._prop_overrides,
-            self._prop_font,
-            self._prop_size,
-            self._prop_weight,
-            self._prop_style,
-            self._prop_foreground,
-            self._prop_stroke,
-            self._prop_alignment,
-            self._prop_layout,
-            self._prop_spacing,
-            self._prop_effects,
-            self._prop_pure,
-            self._prop_variants,
-        ]:
-            self._layout.addWidget(pw)
+        # ── Four diff-first field groups ──────────────────────────
+        self._panel = FormatEditorPanel()
+        self._panel.field_changed.connect(self._on_field_changed)
+        self._panel.setMinimumHeight(200)
+        self._layout.addWidget(self._panel, 1)
 
         self._layout.addWidget(SeparatorWidget())
-
-        # ── Batch Edit Controls ───────────────────────────────────
-        self._layout.addWidget(_SectionHeader(self.tr("Batch Edit")))
-
-        # Font family
-        self._family_combo = QComboBox()
-        self._family_combo.setEditable(False)
-        self._family_combo.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        self._layout.addLayout(
-            _labeled_control(self.tr("Font Family"), self._family_combo)
-        )
-
-        # Font style / weight
-        self._style_combo = QComboBox()
-        self._style_combo.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        self._layout.addLayout(
-            _labeled_control(self.tr("Font Style"), self._style_combo)
-        )
-        self._family_combo.currentTextChanged.connect(self._on_family_for_style_changed)
-
-        # Font size
-        self._size_spin = QDoubleSpinBox()
-        self._size_spin.setRange(1, 999)
-        self._size_spin.setDecimals(1)
-        self._size_spin.setSuffix(" px")
-        self._layout.addLayout(_labeled_control(self.tr("Font Size"), self._size_spin))
-
-        # Bold / Italic / Underline / Vertical
-        flags_widget = QWidget()
-        flags_layout = QHBoxLayout(flags_widget)
-        flags_layout.setContentsMargins(0, 0, 0, 0)
-        self._bold_cb = QCheckBox(self.tr("Bold"))
-        self._bold_cb.setObjectName('ConfigCheckBox')
-        self._italic_cb = QCheckBox(self.tr("Italic"))
-        self._italic_cb.setObjectName('ConfigCheckBox')
-        self._underline_cb = QCheckBox(self.tr("Underline"))
-        self._underline_cb.setObjectName('ConfigCheckBox')
-        self._vertical_cb = QCheckBox(self.tr("Vertical"))
-        self._vertical_cb.setObjectName('ConfigCheckBox')
-        flags_layout.addWidget(self._bold_cb)
-        flags_layout.addWidget(self._italic_cb)
-        flags_layout.addWidget(self._underline_cb)
-        flags_layout.addWidget(self._vertical_cb)
-        flags_layout.addStretch()
-        self._layout.addLayout(_labeled_control(self.tr("Flags"), flags_widget))
-
-        # Foreground color
-        self._fg_btn = ColorSwatchBtn()
-        self._fg_btn.setFixedSize(24, 24)
-        self._fg_btn.clicked.connect(self._pick_fg)
-        self._fg_label = QLabel()
-        fg_w = QWidget()
-        fg_lay = QHBoxLayout(fg_w)
-        fg_lay.setContentsMargins(0, 0, 0, 0)
-        fg_lay.addWidget(self._fg_btn)
-        fg_lay.addWidget(self._fg_label)
-        fg_lay.addStretch()
-        self._layout.addLayout(_labeled_control(self.tr("Text Color"), fg_w))
-
-        # Stroke color + width
-        self._stroke_color_btn = ColorSwatchBtn()
-        self._stroke_color_btn.setFixedSize(24, 24)
-        self._stroke_color_btn.clicked.connect(self._pick_stroke_color)
-        self._stroke_color_label = QLabel()
-        self._stroke_spin = QDoubleSpinBox()
-        self._stroke_spin.setRange(0, 50)
-        self._stroke_spin.setDecimals(1)
-        self._stroke_spin.setSuffix(" px")
-        self._stroke_spin.setFixedWidth(80)
-        stroke_w = QWidget()
-        stroke_lay = QHBoxLayout(stroke_w)
-        stroke_lay.setContentsMargins(0, 0, 0, 0)
-        stroke_lay.addWidget(self._stroke_color_btn)
-        stroke_lay.addWidget(self._stroke_color_label)
-        stroke_lay.addWidget(QLabel(self.tr("Width:")))
-        stroke_lay.addWidget(self._stroke_spin)
-        stroke_lay.addStretch()
-        self._layout.addLayout(_labeled_control(self.tr("Stroke"), stroke_w))
-
-        # Alignment
-        self._align_combo = QComboBox()
-        self._align_combo.addItems(
-            [self.tr("Left"), self.tr("Center"), self.tr("Right")]
-        )
-        self._layout.addLayout(
-            _labeled_control(self.tr("Alignment"), self._align_combo)
-        )
 
         # ── Preset apply ─────────────────────────────────────────
         self._preset_combo = QComboBox()
@@ -474,11 +593,18 @@ class StyleDetail(QScrollArea):
         preset_lay.setSpacing(6)
         preset_lay.addWidget(self._preset_combo, 1)
         preset_lay.addWidget(self._preset_btn)
-        self._layout.addLayout(
-            _labeled_control(self.tr("Preset"), preset_row)
-        )
+        self._layout.addWidget(preset_row)
 
         # ── Mode-specific action buttons ─────────────────────────
+        self._reset_base_btn = QPushButton(self.tr("Reset to Base"))
+        self._reset_base_btn.setToolTip(
+            self.tr(
+                "Write the base style's values back to this variant's blocks; the variant dissolves when its overrides are gone."
+            )
+        )
+        self._reset_base_btn.clicked.connect(self._reset_variant_to_base)
+        self._layout.addWidget(self._reset_base_btn)
+
         self._promote_btn = QPushButton(self.tr("Promote to Base Style"))
         self._promote_btn.setToolTip(
             self.tr(
@@ -510,26 +636,18 @@ class StyleDetail(QScrollArea):
         self._apply_all_btn = QPushButton(self.tr("Apply Changes"))
         self._apply_all_btn.setObjectName("StyleApplyAllBtn")
         self._apply_all_btn.clicked.connect(self._apply_all)
-        self._layout.addSpacing(6)
         self._layout.addWidget(self._apply_all_btn)
 
         self._layout.addWidget(SeparatorWidget())
 
-        # ── Block List ────────────────────────────────────────────
+        # ── Block distribution chips ──────────────────────────────
         self._layout.addWidget(_SectionHeader(self.tr("Blocks Using This Style")))
-        self._block_tree = QTreeWidget()
-        self._block_tree.setObjectName("StyleBlockList")
-        self._block_tree.setHeaderHidden(True)
-        self._block_tree.setIndentation(16)
-        self._block_tree.setRootIsDecorated(True)
-        self._block_tree.itemClicked.connect(self._on_block_item_clicked)
-        self._layout.addWidget(self._block_tree)
+        self._block_chips = _ChipBar()
+        self._block_chips.chip_clicked.connect(self._on_page_chip_clicked)
+        self._layout.addWidget(self._block_chips)
 
         self._layout.addStretch()
         self.setWidget(container)
-
-        self._pending_fg: List[int] = [0, 0, 0]
-        self._pending_stroke_color: List[int] = [0, 0, 0]
 
     # ── Public API ─────────────────────────────────────────────────
 
@@ -558,15 +676,8 @@ class StyleDetail(QScrollArea):
             )
         )
 
-        self._prop_overrides.hide()
-        self._prop_pure.show()
-        self._prop_variants.show()
-        self._prop_pure.set_value(str(node.pure.count))
-        self._prop_variants.set_value(str(len(node.variants)))
-
-        self._fill_property_summary(ffmt)
-        self._baseline_ffmt = ffmt.deepcopy()
-        self._sync_controls(ffmt)
+        self._panel.set_format(ffmt)
+        self._refresh_preview_and_chips(ffmt)
 
         blocks = list(node.pure.blocks)
         for var in node.variants:
@@ -574,6 +685,7 @@ class StyleDetail(QScrollArea):
         self._populate_block_list(blocks)
 
         self._name_edit.show()
+        self._reset_base_btn.hide()
         self._promote_btn.hide()
         self._save_preset_btn.show()
         self._delete_base_btn.show()
@@ -592,18 +704,14 @@ class StyleDetail(QScrollArea):
             )
         )
 
-        self._prop_overrides.show()
-        self._prop_pure.hide()
-        self._prop_variants.hide()
-        self._prop_overrides.set_value(overrides_summary(variant.overrides))
-
-        self._fill_property_summary(rep)
-        self._baseline_ffmt = rep.deepcopy()
-        self._sync_controls(rep)
+        # 差异优先：变体只渲染 override 字段，其余组隐藏
+        self._panel.set_format(rep, only_fields=set(variant.overrides))
+        self._refresh_preview_and_chips(rep)
 
         self._populate_block_list(variant.blocks)
 
         self._name_edit.hide()
+        self._reset_base_btn.show()
         self._promote_btn.hide()
         self._save_preset_btn.hide()
         self._delete_base_btn.hide()
@@ -622,17 +730,13 @@ class StyleDetail(QScrollArea):
             )
         )
 
-        self._prop_overrides.hide()
-        self._prop_pure.hide()
-        self._prop_variants.hide()
-
-        self._fill_property_summary(ffmt)
-        self._baseline_ffmt = ffmt.deepcopy()
-        self._sync_controls(ffmt)
+        self._panel.set_format(ffmt)
+        self._refresh_preview_and_chips(ffmt)
 
         self._populate_block_list(entry.blocks)
 
         self._name_edit.hide()
+        self._reset_base_btn.hide()
         self._promote_btn.show()
         self._save_preset_btn.hide()
         self._delete_base_btn.hide()
@@ -647,269 +751,101 @@ class StyleDetail(QScrollArea):
                 return page[bidx].fontformat
         return fallback
 
-    # -- property summary ----------------------------------------------
+    # -- preview & chips ---------------------------------------------------
 
-    def _fill_property_summary(self, ffmt: FontFormat):
+    def _refresh_preview_and_chips(self, ffmt: FontFormat):
         # Reload preset list so it reflects the latest saved presets
         self._load_presets()
 
-        # Header preview
-        font = QFont(ffmt.font_family)
-        font.setPixelSize(max(14, min(int(ffmt.font_size), 36)))
-        if ffmt.bold:
-            font.setBold(True)
+        self._preview_card.set_format(ffmt)
+
+        chips: List[Tuple[str, str, str | None]] = [
+            ("text", ffmt.font_family, None),
+            ("text", f"{ffmt.font_size:g}px", None),
+        ]
         if ffmt.italic:
-            font.setItalic(True)
+            chips.append(("text", self.tr("Italic"), None))
         if ffmt.underline:
-            font.setUnderline(True)
-        self._preview_label.setFont(font)
-
-        fg = [int(round(c)) for c in ffmt.frgb]
-        bg = [int(round(c)) for c in ffmt.srgb]
-        ss = (
-            f"color: rgb({fg[0]},{fg[1]},{fg[2]}); "
-            f"background-color: rgba({bg[0]},{bg[1]},{bg[2]},50); "
-            f"border-radius: 4px;"
-        )
-        self._preview_label.setStyleSheet(ss)
-
-        # Property summary
-        self._prop_font.set_value(ffmt.font_family)
-        self._prop_size.set_value(
-            f"{ffmt.font_size:.1f} px  ({px2pt(ffmt.font_size):.1f} pt)"
-        )
-        wt = ffmt.font_weight
-        self._prop_weight.set_value(str(wt) if wt is not None else self.tr("(default)"))
-        style_parts = []
-        if ffmt.bold:
-            style_parts.append(self.tr("Bold"))
-        if ffmt.italic:
-            style_parts.append(self.tr("Italic"))
-        if ffmt.underline:
-            style_parts.append(self.tr("Underline"))
-        self._prop_style.set_value(", ".join(style_parts) or self.tr("None"))
-        self._prop_foreground.set_value(f"rgb({fg[0]}, {fg[1]}, {fg[2]})")
-        if ffmt.stroke_width > 0:
-            self._prop_stroke.set_value(
-                f"rgb({bg[0]}, {bg[1]}, {bg[2]})  /  {ffmt.stroke_width:.1f} px"
-            )
-        else:
-            self._prop_stroke.set_value(self.tr("None"))
-        align_names = {0: self.tr("Left"), 1: self.tr("Center"), 2: self.tr("Right")}
-        self._prop_alignment.set_value(
-            align_names.get(ffmt.alignment, str(ffmt.alignment))
-        )
-        self._prop_layout.set_value(
-            self.tr("Vertical") if ffmt.vertical else self.tr("Horizontal")
-        )
-        self._prop_spacing.set_value(
-            self.tr("Line: {ls}  Letter: {lsp}").format(
-                ls=ffmt.line_spacing, lsp=ffmt.letter_spacing
-            )
-        )
-        eff_parts: List[str] = []
-        if ffmt.shadow_radius > 0:
-            eff_parts.append(self.tr("Shadow"))
-        if ffmt.gradient_enabled:
-            eff_parts.append(self.tr("Gradient"))
-        if ffmt.opacity < 1.0:
-            eff_parts.append(self.tr("Opacity: {o}").format(o=ffmt.opacity))
-        self._prop_effects.set_value(", ".join(eff_parts) or self.tr("None"))
-
-    # -- control sync ---------------------------------------------------
-
-    def _sync_controls(self, ffmt: FontFormat):
-        """Sync batch-edit control values to *ffmt*."""
-        from utils.config import pcfg
-        families = shared.get_filtered_font_list(pcfg.excluded_fonts)
-        self._family_combo.blockSignals(True)
-        self._family_combo.clear()
-        if families:
-            self._family_combo.addItems(families)
-        idx = self._family_combo.findText(ffmt.font_family)
-        if idx >= 0:
-            self._family_combo.setCurrentIndex(idx)
-        self._family_combo.blockSignals(False)
-
-        # Font style / weight
-        self._populate_style_combo(ffmt.font_family, ffmt._style_name, ffmt.font_weight)
-
-        # Size
-        self._size_spin.blockSignals(True)
-        self._size_spin.setValue(ffmt.font_size)
-        self._size_spin.blockSignals(False)
-
-        # Flags
-        self._bold_cb.blockSignals(True)
-        self._italic_cb.blockSignals(True)
-        self._underline_cb.blockSignals(True)
-        self._vertical_cb.blockSignals(True)
-        self._bold_cb.setChecked(ffmt.bold)
-        self._italic_cb.setChecked(ffmt.italic)
-        self._underline_cb.setChecked(ffmt.underline)
-        self._vertical_cb.setChecked(ffmt.vertical)
-        self._bold_cb.blockSignals(False)
-        self._italic_cb.blockSignals(False)
-        self._underline_cb.blockSignals(False)
-        self._vertical_cb.blockSignals(False)
-
-        # FG color
+            chips.append(("text", self.tr("Underline"), None))
+        if ffmt.strikeout:
+            chips.append(("text", self.tr("Strikeout"), None))
         fg = ffmt.foreground_color()
-        self._fg_btn.setColor(QColor(*fg))
-        self._fg_label.setText(f"rgb({fg[0]}, {fg[1]}, {fg[2]})")
-        self._pending_fg = list(ffmt.frgb)
+        fg_hex = "#{:02X}{:02X}{:02X}".format(*[int(c) for c in fg[:3]])
+        chips.append(("color", fg_hex, fg_hex))
+        if ffmt.stroke_width > 0:
+            chips.append(
+                ("color", self.tr("Stroke {n}px").format(n=f"{ffmt.stroke_width:g}"), None)
+            )
+        if ffmt.shadow_radius > 0:
+            chips.append(("effects", self.tr("Shadow"), None))
+        if ffmt.gradient_enabled:
+            chips.append(("effects", self.tr("Gradient"), None))
+        if ffmt.opacity < 1.0:
+            chips.append(("color", self.tr("Opacity: {o}").format(o=ffmt.opacity), None))
+        self._chip_bar.set_chips(chips)
 
-        # Stroke
-        bg = ffmt.stroke_color()
-        self._stroke_color_btn.setColor(QColor(*bg))
-        self._stroke_color_label.setText(f"rgb({bg[0]}, {bg[1]}, {bg[2]})")
-        self._pending_stroke_color = list(ffmt.srgb)
-        self._stroke_spin.blockSignals(True)
-        self._stroke_spin.setValue(ffmt.stroke_width)
-        self._stroke_spin.blockSignals(False)
+    def _scroll_to_group(self, key: str):
+        self._panel.scroll_to_group(key)
 
-        # Alignment
-        self._align_combo.blockSignals(True)
-        self._align_combo.setCurrentIndex(ffmt.alignment)
-        self._align_combo.blockSignals(False)
+    def _on_field_changed(self, _fname: str):
+        """Live-update the preview card while the user edits fields."""
+        ffmt = self._panel.baseline_copy()
+        self._panel.sync_into(ffmt)
+        self._refresh_preview_and_chips(ffmt)
 
-    def _populate_style_combo(
-        self, family: str, style_name: str = "", weight: int | None = None
-    ):
-        """Fill the style combo with available styles for *family*."""
-        self._style_combo.blockSignals(True)
-        self._style_combo.clear()
-        styles = shared.FONT_STYLES.get(family, [])
-        self._style_combo.addItems(styles)
-
-        # Add a "(default)" entry at top for resetting to font default weight
-        self._style_combo.insertItem(0, "")
-        self._style_combo.setItemText(0, self.tr("(default)"))
-
-        # Try to match by style name first
-        selected = False
-        if style_name:
-            idx = self._style_combo.findText(style_name)
-            if idx >= 0:
-                self._style_combo.setCurrentIndex(idx)
-                selected = True
-
-        # Fallback: match by best weight
-        if not selected and weight is not None:
-            for i in range(1, self._style_combo.count()):
-                s = self._style_combo.itemText(i)
-                sw = QFontDatabase.weight(family, s)
-                if sw == weight:
-                    self._style_combo.setCurrentIndex(i)
-                    selected = True
-                    break
-        self._style_combo.blockSignals(False)
-
-    def _on_family_for_style_changed(self, family: str):
-        """Update style combo when font family changes."""
-        self._populate_style_combo(family)
-
-    # -- block list -----------------------------------------------------
+    # -- block distribution -------------------------------------------------
 
     def _populate_block_list(self, blocks: List[Tuple[str, int]]):
-        """Fill the QTreeWidget with pages → blocks."""
-        self._block_tree.clear()
+        """Per-page chips: ``p1.png (3)`` — click jumps to the first block."""
+        self._block_chips.clear_chips()
         if self._proj is None:
             return
-        # Group by page
         page_map: Dict[str, List[int]] = {}
         for pname, bidx in blocks:
             page_map.setdefault(pname, []).append(bidx)
 
-        for pname, bidx_list in page_map.items():
-            page_item = QTreeWidgetItem()
-            page_item.setText(0, f"{pname}  ({len(bidx_list)})")
-            page_item.setFlags(page_item.flags() | Qt.ItemFlag.ItemIsEnabled)
-            page_item.setData(
-                0, Qt.ItemDataRole.UserRole, {"type": "page", "pagename": pname}
-            )
+        chips: List[Tuple[str, str, str | None]] = []
+        tooltips: List[str] = []
+        for pname, bidx_list in sorted(page_map.items()):
+            bidx_list = sorted(bidx_list)
+            chips.append((f"{pname}\x00{bidx_list[0]}", f"{pname}  ({len(bidx_list)})", None))
+            tooltips.append(self.tr("Blocks: {n}").format(
+                n=", ".join(str(b) for b in bidx_list[:20])
+            ))
+        self._block_chips.set_chips(chips)
+        chips_widgets = self._block_chips._chips
+        for i, tip in enumerate(tooltips):
+            if i < len(chips_widgets):
+                chips_widgets[i].setToolTip(tip)
 
-            for bidx in sorted(bidx_list):
-                blk = self._proj.pages[pname][bidx]
-                preview = blk.translation or blk.text
-                if isinstance(preview, list):
-                    preview = " ".join(str(t) for t in preview)
-                preview = str(preview)[:60]
-                blk_item = QTreeWidgetItem()
-                blk_item.setText(
-                    0, self.tr('Block #{n}:  "{t}"').format(n=bidx, t=preview)
-                )
-                blk_item.setData(
-                    0,
-                    Qt.ItemDataRole.UserRole,
-                    {"type": "block", "pagename": pname, "block_idx": bidx},
-                )
-                page_item.addChild(blk_item)
-
-            self._block_tree.addTopLevelItem(page_item)
-            page_item.setExpanded(True)
-
-    def _on_block_item_clicked(self, item: QTreeWidgetItem, col: int):
-        data = item.data(0, Qt.ItemDataRole.UserRole)
-        if data and data.get("type") == "block":
-            self.navigate_to_block.emit(data["pagename"], data["block_idx"])
+    def _on_page_chip_clicked(self, chip_id: str):
+        pname, _, bidx = chip_id.partition("\x00")
+        if pname:
+            self.navigate_to_block.emit(pname, int(bidx))
 
     # ── Change collection & apply ───────────────────────────────────
 
-    def _control_values(self) -> Dict:
-        """Current batch-edit control values as a FontFormat field dict."""
-        family = self._family_combo.currentText()
-        style_text = self._style_combo.currentText()
-        if style_text:
-            style_name = style_text
-            font_weight = QFontDatabase.weight(family, style_text)
-        else:
-            style_name = ""
-            font_weight = QFont.Weight.Normal  # default weight
-        return {
-            "font_family": family,
-            "font_weight": font_weight,
-            "font_size": self._size_spin.value(),
-            "bold": self._bold_cb.isChecked(),
-            "italic": self._italic_cb.isChecked(),
-            "underline": self._underline_cb.isChecked(),
-            "vertical": self._vertical_cb.isChecked(),
-            "frgb": list(self._pending_fg),
-            "srgb": list(self._pending_stroke_color),
-            "stroke_width": self._stroke_spin.value(),
-            "alignment": self._align_combo.currentIndex(),
-        }
-
     def _collect_changed(self) -> Dict:
-        """Quantized diff of the controls against the baseline format.
+        """Quantized diff of the field editors against the baseline format.
 
-        Only fields the user actually touched become part of the change —
+        Only fields the user actually changed become part of the change —
         the flatten semantics rely on this (untouched parameters must not
         clobber per-block overrides).
         """
-        changed: Dict = {}
-        for k, v in self._control_values().items():
-            old = getattr(self._baseline_ffmt, k, None)
-            if old is None or quantize_field(k, v) != quantize_field(k, old):
-                changed[k] = v
-        return changed
-
-    def _style_name_field(self) -> str:
-        return self._style_combo.currentText()
-
-    # -- shared apply flow ------------------------------------------------
+        return self._panel.changed_values()
 
     def _apply_ffmt_changes(self, changes: List[Dict], reselect, description: str):
         """Shared batch-apply flow: undo command → apply → rebuild → refresh."""
-        from .fontstyle_manager_commands import BatchFontformatCommand
-
         # 1. Create the command FIRST — its constructor captures the current
         #    live-item state (HTML / rect) for undo BEFORE we modify anything.
         if changes:
-            cmd = BatchFontformatCommand(
-                self._proj, self._scene_manager, changes, description
-            )
-            self._scene_manager.canvas.push_text_command(cmd)
+            if self._scene_manager is not None:
+                from .fontstyle_manager_commands import BatchFontformatCommand
+
+                cmd = BatchFontformatCommand(
+                    self._proj, self._scene_manager, changes, description
+                )
+                self._scene_manager.canvas.push_text_command(cmd)
             self._apply_changes_to_blocks(changes)
 
         # Notify main window to refresh page list (dirty indicators)
@@ -939,18 +875,19 @@ class StyleDetail(QScrollArea):
                 item = _find_blk_item(self._scene_manager, bidx)
                 if item is not None:
                     item.set_fontformat(new_ffmt, set_char_format=True)
-            else:
-                page = self._proj.pages.get(pname)
-                if page is None or not 0 <= bidx < len(page):
                     continue
-                blk = page[bidx]
-                blk.fontformat = new_ffmt
-                self._proj.mark_page_needs_rerender(pname)
+                # 画布 item 不在（场景重建/离屏测试）→ 落数据层兜底
+            page = self._proj.pages.get(pname)
+            if page is None or not 0 <= bidx < len(page):
+                continue
+            blk = page[bidx]
+            blk.fontformat = new_ffmt
+            self._proj.mark_page_needs_rerender(pname)
 
     # -- apply dispatch ----------------------------------------------------
 
     def _apply_all(self):
-        """Apply all batch controls at once, per current mode."""
+        """Apply all field edits at once, per current mode."""
         if self._mode == self.MODE_BASE:
             self._apply_base()
         elif self._mode == self.MODE_VARIANT:
@@ -993,12 +930,35 @@ class StyleDetail(QScrollArea):
         )
         self._apply_ffmt_changes(changes, reselect, self.tr("Edit variant style"))
 
+    def _reset_variant_to_base(self):
+        """Write the base values back for every override field of the variant."""
+        if (
+            self._mode != self.MODE_VARIANT
+            or self._variant is None
+            or self._base_node is None
+            or self._proj is None
+        ):
+            return
+        base_ffmt = self._base_node.base.fontformat
+        changed: Dict = {}
+        for f in self._variant.overrides:
+            if f not in ("font_family", "vertical"):
+                changed[f] = copy_value(getattr(base_ffmt, f, None))
+        if not changed:
+            return
+        changes = build_variant_changes(self._variant.blocks, self._proj, changed)
+        if not changes:
+            return
+        reselect = {"type": "base", "identity": self._base_node.base.identity}
+        self._apply_ffmt_changes(
+            changes, reselect, self.tr("Reset variant to base")
+        )
+
     def _apply_sig(self):
-        """Legacy full-parameter apply onto signature-matched blocks."""
+        """Full-parameter apply onto signature-matched blocks."""
         if self._entry is None or self._proj is None:
             return
-        candidate = self._control_values()
-        candidate["_style_name"] = self._style_name_field()
+        candidate = self._panel.current_values()
         new_ffmt = self._entry.fontformat.deepcopy()
         for k, v in candidate.items():
             setattr(new_ffmt, k, copy_value(v))
@@ -1066,8 +1026,11 @@ class StyleDetail(QScrollArea):
             base_style = self._base_node.base
             new_ffmt = preset_ffmt.deepcopy()
             changed: Dict = {}
-            for k, v in self._control_fields_of(new_ffmt).items():
+            for k in self._panel.current_values():
+                v = getattr(new_ffmt, k, None)
                 old = getattr(base_style.fontformat, k, None)
+                if v is None:
+                    continue
                 if old is None or quantize_field(k, v) != quantize_field(k, old):
                     changed[k] = v
             if not changed:
@@ -1112,23 +1075,6 @@ class StyleDetail(QScrollArea):
         if not changes:
             return
         self._apply_ffmt_changes(changes, reselect, self.tr("Apply preset style"))
-
-    @staticmethod
-    def _control_fields_of(ffmt: FontFormat) -> Dict:
-        """The subset of fields the batch controls can edit."""
-        return {
-            "font_family": ffmt.font_family,
-            "font_weight": ffmt.font_weight,
-            "font_size": ffmt.font_size,
-            "bold": ffmt.bold,
-            "italic": ffmt.italic,
-            "underline": ffmt.underline,
-            "vertical": ffmt.vertical,
-            "frgb": list(ffmt.frgb),
-            "srgb": list(ffmt.srgb),
-            "stroke_width": ffmt.stroke_width,
-            "alignment": ffmt.alignment,
-        }
 
     # -- base style management actions ------------------------------------
 
@@ -1195,64 +1141,6 @@ class StyleDetail(QScrollArea):
         self._proj.base_styles.append(new_style)
         self.data_committed.emit()
         self.styles_changed.emit({"type": "base", "identity": identity})
-
-    # ── Color pickers ───────────────────────────────────────────────
-
-    def _pick_fg(self):
-        fg = self._pending_fg
-        dlg = ColorPickerDialog(
-            QColor(
-                max(0, min(255, int(fg[0]))),
-                max(0, min(255, int(fg[1]))),
-                max(0, min(255, int(fg[2]))),
-            ),
-            self.window(),
-        )
-        if dlg.exec_() == QDialog.DialogCode.Accepted:
-            c = dlg.get_color()
-            self._pending_fg = [c.red(), c.green(), c.blue()]
-            self._fg_btn.setColor(c)
-            self._fg_label.setText(f"rgb({c.red()}, {c.green()}, {c.blue()})")
-
-    def _pick_stroke_color(self):
-        sc = self._pending_stroke_color
-        dlg = ColorPickerDialog(
-            QColor(
-                max(0, min(255, int(sc[0]))),
-                max(0, min(255, int(sc[1]))),
-                max(0, min(255, int(sc[2]))),
-            ),
-            self.window(),
-        )
-        if dlg.exec_() == QDialog.DialogCode.Accepted:
-            c = dlg.get_color()
-            self._pending_stroke_color = [c.red(), c.green(), c.blue()]
-            self._stroke_color_btn.setColor(c)
-            self._stroke_color_label.setText(
-                f"rgb({c.red()}, {c.green()}, {c.blue()})"
-            )
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Helpers
-# ═══════════════════════════════════════════════════════════════════════
-
-
-def _labeled_control(
-    label: str, control: QWidget, action_btn: QPushButton | None = None
-) -> QHBoxLayout:
-    """Build a horizontal row: [label 100px] [control stretch] [action_btn]."""
-    lbl = QLabel(label)
-    lbl.setFixedWidth(100)
-    layout = QHBoxLayout()
-    layout.setContentsMargins(0, 1, 0, 1)
-    layout.setSpacing(6)
-    layout.addWidget(lbl)
-    layout.addWidget(control, 1)
-    if action_btn is not None:
-        action_btn.setFixedWidth(52)
-        layout.addWidget(action_btn)
-    return layout
 
 
 # ═══════════════════════════════════════════════════════════════════════

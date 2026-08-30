@@ -123,6 +123,15 @@ OPEN_SCALE_FROM = 0.92  # pop-in starts slightly scaled down
 # ts context used for pie-menu display names (defaults are tr keys).
 PIE_MENU_TR_CONTEXT = "PieMenu"
 
+# utils/config.py DEFAULT_PIE_MENUS 的 "name" 是纯数据（该模块导入早于翻译器
+# 安装，不能就地翻译）；运行时按值查表（pie_menu_display_name）。此处以
+# 显式上下文字面量供 ts 工具链提取，删掉会导致对应条目被判孤儿清除。
+_DEFAULT_MENU_NAME_TR = (
+    QCoreApplication.translate("PieMenu", "Editing"),
+    QCoreApplication.translate("PieMenu", "Alignment"),
+    QCoreApplication.translate("PieMenu", "Pipeline"),
+)
+
 
 def _anim_interval() -> int:
     """Frame interval (ms) honoring ``pcfg.animation_fps``, else 16 ms
@@ -523,14 +532,11 @@ class PieMenu(QWidget):
         return cmd_checked(self.mw or self.canvas, cmd_id)
 
     def _label_for(self, cmd_id: str) -> str:
-        """Translated label of a command (runtime uses canvas.tr, preview
-        resolves the Canvas context directly)."""
+        """Label of a command (already translated at the registry literal)."""
         cmd = COMMAND_REGISTRY.get(cmd_id)
         if cmd is None:
             return ""
-        if self.canvas is not None:
-            return self.canvas.tr(cmd.label_key)
-        return QCoreApplication.translate("Canvas", cmd.label_key)
+        return cmd.label_key
 
     def _slot_at(self, sector: int, idx: int):
         """Command id at (sector, idx) — for the list layout the "sector" is

@@ -98,6 +98,7 @@ from .custom_widget import (
     ViewWidget,
     Widget,
 )
+from .custom_widget.notification import notification
 from .drawing_commands import RunBlkTransCommand
 from .drawingpanel import DrawingPanel
 from .framelesswindow import FramelessMoveResize, FramelessWindow
@@ -114,7 +115,7 @@ from .text_engine.pipeline_formatting import (
     AutoTateChuYokoThread,
     apply_auto_tate_chu_yoko,
 )
-from .textedit_commands import GlobalRepalceAllCommand
+from .textedit_commands import GlobalReplaceApplier
 from .textitem import TextBlkItem
 from .update_checker import AboutDialog, CommitUpdateDialog
 from .update_dialog import UpdateReleaseDialog
@@ -430,9 +431,6 @@ class MainWindow(mainwindow_cls):
             self.on_req_update_pagetext
         )
         self.global_search_widget.pages_dirtied.connect(self.updatePageList)
-        self.global_search_widget.req_commit_and_rerender.connect(
-            self._on_commit_and_rerender
-        )
         self.global_search_widget.search_tree.result_item_clicked.connect(
             self.on_search_result_item_clicked
         )
@@ -767,6 +765,12 @@ class MainWindow(mainwindow_cls):
         )
         self.global_search_widget.replace_finished.connect(
             self.on_global_replace_finished
+        )
+        self.global_search_widget.replace_preparing.connect(
+            self.on_global_replace_preparing
+        )
+        self.global_search_widget.batch_rollback_requested.connect(
+            self.on_batch_rollback
         )
 
         self.configPanel.setupConfig()
@@ -1385,7 +1389,7 @@ class MainWindow(mainwindow_cls):
 
             if is_dirty:
                 lstitem.setToolTip(
-                    self.tr("此页有未渲染的批量修改，翻到该页后将自动刷新")
+                    self.tr("This page has unrendered batch changes and will refresh automatically when opened")
                 )
 
             self.pageList.addItem(lstitem)
@@ -2041,11 +2045,59 @@ class MainWindow(mainwindow_cls):
     def on_redo(self):
         # A live transform preview must not leak across the history boundary.
         self.st_manager.formatpanel.resolve_text_transform_edits_for_history_change()
+        before = self._history_index()
         self.canvas.redo()
+        self._notify_history("redo", before)
 
     def on_undo(self):
         self.st_manager.formatpanel.resolve_text_transform_edits_for_history_change()
+        before = self._history_index()
         self.canvas.undo()
+        self._notify_history("undo", before)
+
+    def _history_index(self):
+        """当前模式撤销栈的历史位置；不在可撤销模式时返回 None。"""
+        if self.canvas.textEditMode():
+            return self.canvas.text_undo_stack.index()
+        if self.canvas.drawMode():
+            return self.canvas.draw_undo_stack.index()
+        return None
+
+    def _notify_history(self, action: str, before):
+        """画布左下角撤销/重做 toast：历史位置未变（无可撤销内容）则不提示；
+        同 key 让连续撤销刷新同一条通知而不是堆叠。纯附加提示——任何异常
+        只记日志，绝不拖垮已完成的撤销/重做本身。"""
+        if before is None:
+            return
+        try:
+            stack = (
+                self.canvas.text_undo_stack
+                if self.canvas.textEditMode()
+                else self.canvas.draw_undo_stack
+            )
+            if stack.index() == before:
+                if (
+                    action == "undo"
+                    and self.imgtrans_proj is not None
+                    and self.imgtrans_proj.has_batch_backup()
+                ):
+                    # 批量替换与逐块编辑分治：Ctrl+Z 撤不到批量操作，
+                    # 见底时提示真正的回滚入口
+                    notification.toast(
+                        self.tr(
+                            "Nothing left to undo. The last batch replace can be rolled back in the search panel."
+                        ),
+                        anchor="bottom-left",
+                        key="history",
+                    )
+                return
+            notification.toast(
+                self.tr("Undone") if action == "undo" else self.tr("Redone"),
+                anchor="bottom-left",
+                key="history",
+            )
+        except Exception as e:
+            LOGGER.error(f"history toast failed: {e}")
 
     def on_page_search(self):
         if self.canvas.gv.isVisible():
@@ -2914,11 +2966,6 @@ class MainWindow(mainwindow_cls):
         self.save_on_page_changed = orig_save
         self.updatePageList()
 
-    def _on_commit_and_rerender(self):
-        """Called after Replace All & Re-render: persist JSON, then batch re-render."""
-        self._sync_and_commit_project()
-        self._rerender_dirty_pages()
-
     def to_trans_config(self):
         self.leftBar.configChecker.setChecked(True)
         self.configPanel.focusOnTranslator()
@@ -3405,8 +3452,7 @@ class MainWindow(mainwindow_cls):
         render_layout = QVBoxLayout(render_page)
         render_layout.setContentsMargins(0, 0, 0, 0)
         render_label = QLabel(
-            self.tr("Render all result images from current project data.\n"
-                    "No pipeline stages will be executed.")
+            self.tr("Render all result images from current project data.\nNo pipeline stages will be executed.")
         )
         render_label.setWordWrap(True)
         render_layout.addWidget(render_label)
@@ -3964,25 +4010,101 @@ class MainWindow(mainwindow_cls):
         else:
             self._hideSearchOverlay()
 
+    def on_global_replace_preparing(self):
+        """替换施加前的最后准备：先同步当前页 UI → 数据并落盘，再写批量快照。
+
+        快照必须反映替换前的完整状态（含当前页未落盘的手动编辑），
+        因此同步落盘先行；快照须在收集器原地改写非当前页数据之前写好。
+        """
+        self._sync_and_commit_project()
+        dirty = [
+            p for p in self.imgtrans_proj.pages
+            if self.imgtrans_proj.page_needs_rerender(p)
+        ]
+        if self.imgtrans_proj.current_img:
+            dirty.append(self.imgtrans_proj.current_img)
+        self.imgtrans_proj.write_batch_backup(dirty)
+
     def on_global_replace_finished(
-        self, sceneitem_list: dict, background_list: dict, target_text: str
+        self,
+        sceneitem_list: dict,
+        background_list: dict,
+        target_text: str,
+        format_changes: list,
     ):
         # Runs synchronously right after GlobalSearchWidget collected the
         # live widget references, so they are guaranteed to exist here.
-        self.canvas.push_text_command(
-            GlobalRepalceAllCommand(
-                sceneitem_list,
-                background_list,
-                target_text,
-                self.imgtrans_proj,
-            )
+        # No undo stack involvement: the batch is rolled back via the
+        # pre-replace snapshot written in on_global_replace_preparing.
+        GlobalReplaceApplier(
+            sceneitem_list,
+            target_text,
+            self.imgtrans_proj,
+            scene_manager=self.st_manager,
+            format_changes=format_changes,
         )
         # Persist all modified TextBlock data to JSON immediately.
         # Non-current pages were modified directly in memory by the
-        # replace collector; the current page was modified via the undo
-        # command above.  Result images for non-current pages will be
-        # re-rendered lazily when the user visits them.
+        # replace collector; the current page was applied by the applier
+        # above.  Result images for non-current pages will be re-rendered
+        # lazily when the user visits them.
         self._sync_and_commit_project()
+        self._ask_rerender_dirty_pages()
+
+    def on_batch_rollback(self):
+        """批量快照回滚：整体换回替换前的项目数据并重建当前页场景。
+
+        与逐块编辑撤销分治——本入口丢弃批量替换之后的全部修改（含其
+        后手动编辑），确认对话框在查找替换面板侧完成。
+        """
+        if not self.imgtrans_proj.has_batch_backup():
+            return
+        try:
+            self.imgtrans_proj.restore_batch_backup()
+        except Exception as e:
+            LOGGER.error(f"Batch rollback failed: {e}")
+            return
+        # 快照恢复是数据层的整体换入，与页栈中的任何命令都不再相干
+        self.canvas.clear_undostack(update_saved_step=True)
+        self.canvas.updateCanvas()
+        self.st_manager.updateSceneTextitems()
+        self._sync_and_commit_project()
+        self.updatePageList()
+        self.global_search_widget.hide_rollback_strip()
+        try:
+            notification.toast(
+                self.tr("Batch replace rolled back"), anchor="bottom-left"
+            )
+        except Exception as e:
+            LOGGER.error(f"rollback toast failed: {e}")
+        self._ask_rerender_dirty_pages()
+
+    def _ask_rerender_dirty_pages(self):
+        """替换提交后固定询问是否立即重渲脏页（定稿策略：每次都问）。
+
+        稍后处理时保留脏角标，用户可随时切页触发惰性重渲；
+        未来后台慢速脏页处理机制接管后由其替换本询问。
+        """
+        dirty_pages = [
+            p for p in self.imgtrans_proj.pages
+            if self.imgtrans_proj.page_needs_rerender(p)
+        ]
+        if not dirty_pages:
+            return
+        msg_box = QMessageBox(self)
+        msg_box.setText(self.tr("Replace finished. Re-render the modified pages now?"))
+        msg_box.setInformativeText(
+            self.tr("Pages needing re-render: ") + str(len(dirty_pages))
+        )
+        rerender_btn = msg_box.addButton(
+            self.tr("Re-render now"), QMessageBox.ButtonRole.AcceptRole
+        )
+        msg_box.addButton(
+            self.tr("Later"), QMessageBox.ButtonRole.RejectRole
+        )
+        msg_box.exec()
+        if msg_box.clickedButton() is rerender_btn:
+            self._rerender_dirty_pages()
 
     def on_darkmode_triggered(self):
         pcfg.darkmode = self.titleBar.darkModeAction.isChecked()

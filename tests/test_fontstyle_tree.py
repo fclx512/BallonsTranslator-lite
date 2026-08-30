@@ -157,6 +157,61 @@ def test_three_detail_modes_and_rename(proj):
     assert proj.base_styles[0].name == "正文 Arial"
 
 
+def test_two_line_tree_nodes(proj):
+    """Stage-3 tree: every node carries two-line display data (swatch +
+    title + count / gray summary); variants list only their diff fields."""
+    from ui.fontstyle_manager import _DISPLAY_ROLE
+
+    fsm = _make_manager(proj)
+    fsm.styleTree.populate(fsm._tree)
+    top = fsm.styleTree.topLevelItem(0)
+    data = top.data(0, _DISPLAY_ROLE)
+    assert data["two_line"] and data["title"] == "Arial" and data["count"] == 4
+    assert top.sizeHint(0).height() == 42
+
+    var_data = top.child(0).data(0, _DISPLAY_ROLE)
+    assert var_data["two_line"] and var_data["count"] == 2
+    # variant line-2 lists diff fields only (ASCII tokens from overrides)
+    assert "40px" in var_data["sub"] and "fg#FF0000" in var_data["sub"]
+
+
+def test_diff_first_group_behavior(proj):
+    """Stage-3 detail: four groups, changed group auto-expanded, variant
+    mode renders override fields only."""
+    from ui.style_format_editor import FIELD_GROUPS
+
+    fsm = _make_manager(proj)
+    payload = {"type": "base", "identity": ("Arial", True)}
+    fsm._on_node_selected(payload)
+    panel = fsm.detailContent._panel
+
+    assert set(panel._cards) == set(FIELD_GROUPS)
+    # fresh baseline: nothing modified, all groups collapsed
+    assert panel.changed_values() == {}
+
+    panel.set_field_value("font_size", 42.0)
+    changed = panel.changed_values()
+    assert changed == {"font_size": 42.0}
+    # live status refresh marks the text group modified
+    panel._refresh_group_status()
+    assert panel._cards["text"]._status.property("modified") is True
+    assert panel._cards["color"]._status.property("modified") is False
+
+    # variant mode: only override fields rendered
+    var = fsm._tree.nodes[0].variants[0]
+    var_payload = {"type": "variant", "identity": ("Arial", True), "key": var.key}
+    fsm._on_node_selected(var_payload)
+    assert set(panel._only_fields) == set(var.overrides) == {"font_size", "frgb"}
+    assert "font_family" not in panel.current_values()
+    assert panel.changed_values() == {}
+
+    # reset-to-base writes base values back → variant dissolves
+    fsm.detailContent._reset_variant_to_base()
+    for blk in (proj.pages["p1.png"][2], proj.pages["p1.png"][3]):
+        assert blk.fontformat.font_size == 24.0
+        assert blk.fontformat.frgb == [0, 0, 0]  # base default frgb
+
+
 def test_flatten_applies_changed_param_and_keeps_other_overrides():
     b1 = FakeBlk(font_family="Arial", vertical=True)
     b3 = FakeBlk(font_family="Arial", vertical=True, font_size=40, frgb=[255, 0, 0])
@@ -175,7 +230,7 @@ def test_flatten_applies_changed_param_and_keeps_other_overrides():
 
     d = fsm.detailContent
     assert d._mode == "base"
-    d._size_spin.setValue(42.0)
+    d._panel.set_field_value("font_size", 42.0)
     d._apply_all()
 
     # every Arial block got the new size (both live-item and off-page paths)

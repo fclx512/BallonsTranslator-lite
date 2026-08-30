@@ -4,6 +4,15 @@ QWidget {
     background-color: @qwidgetBackgroundColor;
 }
 
+/* 全局 QWidget 规则会命中 QToolTip，使其脱离原生渲染路径——配色随系统
+   主题漂移（部分机器上表现为黑条无文本），须显式给定颜色。 */
+QToolTip {
+    color: @qwidgetForegroundColor;
+    background-color: @qwidgetBackgroundColor;
+    border: 1px solid @borderColor;
+    padding: 2px;
+}
+
 SeparatorWidget {
     border-color: @borderColor;
     color: @borderColor;
@@ -350,6 +359,42 @@ StyleDetail QComboBox:focus {
 StyleDetail QComboBox:disabled {
     background: transparent;
     border: 1px solid @disabledForegroundColor;
+}
+
+/* ── Style manager diff-first detail panel (2026-08-30) ────── */
+#StylePreviewCard {
+    background: @emptyContentBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+}
+ParamChip {
+    background: @emptyContentBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 9px;
+    padding: 1px 8px;
+    font-size: 11px;
+}
+ParamChip:hover {
+    border: 1px solid @accentPrimary;
+}
+#FormatGroupCard {
+    background: transparent;
+    border: none;
+}
+#GroupStatus {
+    color: @disabledForegroundColor;
+    font-size: 11px;
+}
+#GroupStatus[modified="true"] {
+    color: @accentPrimary;
+    font-weight: bold;
+}
+FieldEditor[modified="true"] {
+    background: @hoverBackgroundColor;
+    border-radius: 4px;
+}
+#FormatEditorPanel {
+    background: transparent;
 }
 
 SizeComboBox {
@@ -739,28 +784,9 @@ QStackedWidget#leftStackWidget {
     background: @widgetBackgroundColor;
 }
 
-#StylePreviewLabel {
-    border-radius: 4px;
-    padding: 4px;
-}
-
 #StyleApplyAllBtn {
     padding: 8px 24px;
     font-weight: bold;
-}
-
-#StyleBlockList {
-    border: 1px solid @borderColor;
-    background: @emptyContentBackgroundColor;
-    alternate-background-color: @widgetBackgroundColor;
-}
-
-#StyleBlockList::item {
-    padding: 3px 6px;
-}
-
-#StyleBlockList::item:hover {
-    background: @hoverBackgroundColor;
 }
 
 QAction {
@@ -1496,6 +1522,22 @@ QCheckBox#RegexToggle::indicator:hover {
     background-color: rgba(127, 127, 127, 20%);
 }
 
+QToolButton#FormatToggleBtn {
+    padding: 3px 8px;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    background: transparent;
+}
+
+QToolButton#FormatToggleBtn:hover {
+    background-color: rgba(127, 127, 127, 20%);
+}
+
+QToolButton#FormatToggleBtn:checked {
+    border: 1px solid @accentPrimary;
+    background-color: @accentPrimary20;
+}
+
 SearchEditor {
     background: @inputBackgroundColor;
     border: 1px solid @borderColor;
@@ -1643,8 +1685,11 @@ GroupFrame#formatOuterFrame {
 /* ── 画布浮层面板（RailDockPanel：硬连接锚定窄栏左侧展开，不可拖拽，
       左下角手柄拉伸；不占用文本编辑区。1px 细边框描边（与
       formatOuterFrame 的"与画布一致的细边框"同一语言），边缘在画布上
-      辨识清晰；标题条底色 + 底分隔线做面板内分层） ──────────────── */
-RailDockPanel {
+      辨识清晰；标题条底色 + 底分隔线做面板内分层。
+      FloatDropPanel：按钮锚定下拉浮层（全局搜索格式条件用），
+      交互/视觉对齐 RailDockPanel，无拉伸手柄） ─────────────────── */
+RailDockPanel,
+FloatDropPanel {
     background: @widgetBackgroundColor;
     border: 1px solid @borderColor;
     border-radius: 6px;

@@ -730,6 +730,9 @@ class FontFormat(Config):
     stroke_width: float = 0.0
     frgb: List = field(default_factory=lambda: [0, 0, 0])
     srgb: List = field(default_factory=lambda: [0, 0, 0])
+    # Deprecated: 粗体样式已移除，视觉字重完全由 font_weight 承担。字段仅为
+    # 旧项目数据兼容保留（text_panel/textitem 镜像写入），不参与样式 diff、
+    # 查询谓词与任何 UI。
     bold: bool = False
     underline: bool = False
     strikeout: bool = False
