@@ -447,6 +447,7 @@ class ProgramConfig(Config):
     emphasis_dock_open: bool = False
     textstyle_dock_open: bool = False
     transform_dock_open: bool = False
+    glossary_dock_open: bool = False
     show_seq_badge: bool = True
     overflow_mode: bool = False  # 过界模式 — 画布边界视觉指示 + 文字块跨边界裁剪
     clip_text_overflow: bool = True  # 翻译填充时裁剪溢出文字并显示黄色提示框，拖拽调整后解除
