@@ -574,5 +574,72 @@ class FormatConditionSearchTest(unittest.TestCase):
         w.deleteLater()
 
 
+class FormatPanelFontPopulationTest(unittest.TestCase):
+    """字体下拉不得因字体库未枚举而只剩补插的当前字体一项。
+
+    GlobalSearchWidget 启动即 ``set_format(FontFormat())``，早于旧时序中
+    MainWindow 的 ``init_font_list()``——``ALL_FONT_FAMILIES`` 为空时
+    ``get_filtered_font_list`` 返回空，下拉经"当前字体补插"兜底后只剩
+    默认字体（Microsoft YaHei UI）一项，用户无法选其他字体。修复：
+    ``FormatEditorPanel.set_format`` 在列表为空时惰性触发字体枚举。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_set_format_lazily_enumerates_fonts(self):
+        from ui.style_format_editor import FormatEditorPanel
+
+        from utils import shared
+        from utils.fontformat import FontFormat
+
+        orig_families, orig_styles = shared.ALL_FONT_FAMILIES, shared.FONT_STYLES
+        orig_init = shared.init_font_list
+        calls = []
+        shared.ALL_FONT_FAMILIES = []
+        shared.FONT_STYLES = {}
+        shared.init_font_list = lambda: calls.append(True)
+        try:
+            panel = FormatEditorPanel()
+            panel.set_format(FontFormat())
+            # 字体库为空时必须惰性补枚举，而不是静默只填补插项
+            self.assertTrue(calls)
+            combo = panel._editors["font_family"]._control
+            self.assertGreaterEqual(combo.count(), 1)
+            panel.deleteLater()
+        finally:
+            shared.ALL_FONT_FAMILIES = orig_families
+            shared.FONT_STYLES = orig_styles
+            shared.init_font_list = orig_init
+
+    def test_current_family_always_selectable(self):
+        """补插兜底保持有效：当前字体不在过滤列表时下拉仍含它并可选中。"""
+        from ui.style_format_editor import FormatEditorPanel
+
+        from utils import shared
+        from utils.config import pcfg
+        from utils.fontformat import FontFormat
+
+        # 本机 config.json 可能排除了大量字体（实测 312 个），测试字体名
+        # 必须临时解除排除才有意义
+        orig_families = shared.ALL_FONT_FAMILIES
+        orig_excluded = pcfg.excluded_fonts
+        shared.ALL_FONT_FAMILIES = ["Arial", "Segoe UI"]
+        pcfg.excluded_fonts = []
+        try:
+            panel = FormatEditorPanel()
+            ffmt = FontFormat()
+            ffmt.font_family = "Missing Font"
+            panel.set_format(ffmt)
+            combo = panel._editors["font_family"]._control
+            self.assertEqual(combo.currentText(), "Missing Font")
+            self.assertIn("Arial", [combo.itemText(i) for i in range(combo.count())])
+            panel.deleteLater()
+        finally:
+            shared.ALL_FONT_FAMILIES = orig_families
+            pcfg.excluded_fonts = orig_excluded
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

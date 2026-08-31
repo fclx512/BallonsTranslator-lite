@@ -66,6 +66,7 @@ class RailDockLauncherTest(unittest.TestCase):
         panel.emphasis_launcher = panel.emphasis_dock = None
         panel.transform_launcher = panel.transform_dock = None
         panel.textstyle_launcher = panel.textstyle_dock = None
+        panel.glossary_launcher = panel.glossary_dock = None
         panel.install_annotation_launcher(rail)
         panel.install_emphasis_launcher(rail)
         panel.install_transform_launcher(rail)

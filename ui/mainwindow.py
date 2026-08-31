@@ -311,6 +311,10 @@ class MainWindow(mainwindow_cls):
 
 
         self.setupThread()
+        # 字体枚举必须先于任何 FormatEditorPanel 消费方（如 setupUi 中的
+        # GlobalSearchWidget 启动即 set_format 填字体下拉），否则
+        # ALL_FONT_FAMILIES 尚为空，下拉只剩补插的默认字体一项
+        shared.init_font_list()
         self.setupUi()
         self.setupConfig()
         self.setupShortcuts()
@@ -787,8 +791,6 @@ class MainWindow(mainwindow_cls):
         self.titleBar.clip_overflow_trigger.connect(
             self.on_clip_overflow_menu_toggled
         )
-        # 初始化字体列表（系统字体枚举）
-        shared.init_font_list()
         # 使用过滤后的字体列表（排除用户已隐藏的字体）
         familybox = self.textPanel.formatpanel.familybox
         filtered = shared.get_filtered_font_list(pcfg.excluded_fonts)
@@ -1720,9 +1722,6 @@ class MainWindow(mainwindow_cls):
         self.titleBar.adv_align_trigger.connect(self.on_open_advanced_align)
         self.titleBar.normalize_breaks_triggered.connect(
             self.on_open_normalize_breaks_dialog
-        )
-        self.titleBar.glossary_extract_triggered.connect(
-            self.on_open_glossary_extractor
         )
 
         self._install_shortcuts()
@@ -2878,17 +2877,24 @@ class MainWindow(mainwindow_cls):
             if editing_textitem is not None:
                 editing_textitem.startEdit()
 
-    def _sync_and_commit_project(self):
+    def _sync_and_commit_project(self, force_sync: bool = False):
         """Sync current page UI → model, immediately save JSON (no image rendering).
 
         After any batch operation that modifies TextBlock data across pages,
         call this to persist the data to disk immediately, preventing data
         loss on crash or unexpected exit.  Result images for non-current
         pages are left stale (re-rendered lazily on visit).
+
+        *force_sync* — sync UI → model unconditionally. Required after
+        batch writers that mutate the current page's widgets/items without
+        pushing undo commands (e.g. GlobalReplaceApplier):
+        ``text_change_unsaved()`` tracks the canvas undo-stack counter,
+        which such writers never advance, so the unsaved-change probe
+        stays False and the replaced text would never reach the model.
         """
         if not self.imgtrans_proj.img_valid:
             return
-        if self.canvas.text_change_unsaved():
+        if force_sync or self.canvas.text_change_unsaved():
             self.st_manager.updateTextBlkList()
         try:
             self.imgtrans_proj.save()
@@ -3750,27 +3756,6 @@ class MainWindow(mainwindow_cls):
             return
         subprocess.Popen([sys.executable, tool_path])
 
-    def on_open_glossary_extractor(self):
-        translator = self.module_manager.translator
-        current_profile = ""
-        if hasattr(translator, "_active_profile"):
-            profile = translator._active_profile
-            current_profile = profile.get("name", "")
-
-        from ui.glossary_extractor_dialog import GlossaryExtractorDialog
-
-        existing = getattr(self, "_glossary_extractor_entries", ())
-        dlg = GlossaryExtractorDialog(
-            proj=self.imgtrans_proj,
-            current_profile_name=current_profile,
-            existing_entries=existing,
-            parent=self,
-        )
-        if dlg.exec_() == QDialog.DialogCode.Accepted:
-            saved_path = dlg.get_saved_path()
-            if saved_path:
-                pcfg.module.llm_glossary_path = saved_path
-
     def on_run_imgtrans(self, page_filter=None):
         self.backup_blkstyles.clear()
 
@@ -4048,7 +4033,15 @@ class MainWindow(mainwindow_cls):
         # replace collector; the current page was applied by the applier
         # above.  Result images for non-current pages will be re-rendered
         # lazily when the user visits them.
-        self._sync_and_commit_project()
+        # force_sync: the applier bypasses the undo stack, so the
+        # unsaved-change probe cannot see the current-page edits.
+        self._sync_and_commit_project(force_sync=True)
+        # The current page's result image must re-render too — mark it so
+        # the re-render prompt below covers it like any other dirty page.
+        if self.imgtrans_proj.current_img:
+            self.imgtrans_proj.mark_page_needs_rerender(
+                self.imgtrans_proj.current_img
+            )
         self._ask_rerender_dirty_pages()
 
     def on_batch_rollback(self):

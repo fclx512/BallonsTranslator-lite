@@ -611,6 +611,10 @@ class FormatEditorPanel(QScrollArea):
             combo = self._editors["font_family"]._control
             combo.blockSignals(True)
             combo.clear()
+            # 惰性兜底：面板可能早于 MainWindow 的字体枚举创建（离屏
+            # 测试更是永不调用），空列表时下拉会只剩补插的当前字体一项
+            if not shared.ALL_FONT_FAMILIES:
+                shared.init_font_list()
             families = shared.get_filtered_font_list(pcfg.excluded_fonts)
             # 当前字体族必须可见可选：不在过滤列表（未安装/被排除/离屏
             # 空字体库）时补插首项，否则下拉会静默回落到别的字体。

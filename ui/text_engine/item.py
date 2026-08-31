@@ -23,7 +23,9 @@ from utils.imgproc_utils import xywh2xyxypoly
 from utils.fontformat import (
     FontFormat,
     LineSpacingType,
+    TextEffectStack,
     TextTransformStack,
+    _LEGACY_EFFECT_VIEW_NAMES,
     pt2px,
 )
 from .font_weight import (
@@ -39,7 +41,7 @@ from .editing.context_menu import create_text_edit_context_menu
 from ..misc import get_theme_color, td_pattern, table_pattern
 from .horizontal_layout import HorizontalTextDocumentLayout
 from .vertical_layout import VerticalTextDocumentLayout
-from .effect_renderer import TextEffectRenderer
+from .effects.renderer import TextEffectRenderer
 from .geometry import TextItemGeometryController
 from .annotations import (
     AnnotationProperty,
@@ -399,11 +401,9 @@ class TextBlkItem(QGraphicsTextItem):
                     self.push_undo_stack.emit(new_steps, self.is_formatting)
 
         if not (self.hasFocus() and self.pre_editing):
-            # Text edits can change glyph overhang, effect extents, and the
-            # logical gradient envelope without changing the FontFormat.
-            padding_changed = self._update_effect_padding()
-            if self.fontformat.gradient_enabled and not padding_changed:
-                self._refresh_gradient_geometry()
+            # Text edits can change glyph overhang and effect extents
+            # without changing the FontFormat.
+            self._update_effect_padding()
             if self.repaint_on_changed:
                 if not self.repainting:
                     self.repaint_background()
@@ -422,14 +422,20 @@ class TextBlkItem(QGraphicsTextItem):
     def _update_effect_padding(self):
         return self.effect_renderer._update_effect_padding()
 
-    def _refresh_gradient_geometry(self):
-        self.effect_renderer._refresh_gradient_geometry()
+    def set_text_effects(
+        self,
+        stack: TextEffectStack,
+        *,
+        preview: bool = False,
+    ) -> bool:
+        """Apply one complete effect stack through the renderer owner."""
+        return self.effect_renderer.set_text_effects(stack, preview=preview)
 
-    def get_text_gradient(self, fontformat=None, persistent=False):
-        return self.effect_renderer.get_text_gradient(
-            fontformat,
-            persistent=persistent,
-        )
+    def clear_text_effect_preview(self) -> bool:
+        return self.effect_renderer.clear_text_effect_preview()
+
+    def effective_text_effects(self) -> TextEffectStack:
+        return self.effect_renderer.effective_text_effects()
 
     def docSizeChanged(self):
         # A padding change routes through setRect(), which synchronizes the
@@ -476,8 +482,6 @@ class TextBlkItem(QGraphicsTextItem):
             cursor.setCharFormat(cfmt)
             cursor.setBlockCharFormat(cfmt)
             self.setTextCursor(cursor)
-        if self.fontformat.gradient_enabled:
-            self.setGradientEnabled(True)
         self.setShadow(font_fmt, repaint=False)
         self.setStrokeWidth(font_fmt.stroke_width, repaint_background=False)
         self.repaint_background()
@@ -508,13 +512,13 @@ class TextBlkItem(QGraphicsTextItem):
             self._sync_order_badge()
         return result
 
-    def refresh_cache_policy(self) -> bool:
+    def refresh_cache_policy(self, effect_nodes=None) -> bool:
         """Apply the sole QGraphicsItem cache policy for live text items."""
         use_no_cache = (
             self.isEditing()
             or self.geometry_controller.requires_no_cache()
             or self.geometry_controller.has_layout_distortion()
-            or self.effect_renderer.requires_no_item_cache()
+            or self.effect_renderer.requires_no_item_cache(effect_nodes)
         )
         cache_mode = (
             QGraphicsItem.CacheMode.NoCache
@@ -584,12 +588,12 @@ class TextBlkItem(QGraphicsTextItem):
         self._old_rect = self.absBoundingRect(qrect=True)
         self.reshaping = True
         # disable background repainting to avoid heavy redrawing in the whole process
-        self.effect_renderer.clear_cached_surface()
+        self.effect_renderer.begin_reshape()
 
     def endReshape(self):
         self.reshaped.emit(self)
         self.reshaping = False
-        self.repaint_background()
+        self.effect_renderer.end_reshape()
 
     def setRect(
         self,
@@ -858,8 +862,6 @@ class TextBlkItem(QGraphicsTextItem):
                 )
                 cursor.setCharFormat(insertion_format)
             self.setTextCursor(cursor)
-        if self.fontformat.gradient_enabled:
-            self._refresh_gradient_geometry()
         if valid_layout:
             self.visual_geometry_changed.emit()
 
@@ -1435,11 +1437,8 @@ class TextBlkItem(QGraphicsTextItem):
 
         self.document().setDefaultFont(font)
         format.setFont(font)
-        if ffmat.gradient_enabled:
-            gradient = self.get_text_gradient(ffmat, persistent=True)
-            format.setForeground(gradient)
-        else:
-            format.setForeground(QColor(*ffmat.foreground_color()))
+        # 渐变由效果栈 Text Fill 卡渲染；文档前景保持 frgb 兜底色。
+        format.setForeground(QColor(*ffmat.foreground_color()))
         format.setFontWeight(fweight)
         format.setFontItalic(ffmat.italic)
         format.setFontUnderline(ffmat.underline)
@@ -1475,7 +1474,12 @@ class TextBlkItem(QGraphicsTextItem):
         if set_effect:
             self.setShadow(ffmat, repaint=False)
         if set_stroke_width:
-            self.setStrokeWidth(ffmat.stroke_width, repaint_background=False)
+            def _apply_stroke(f: FontFormat):
+                f.stroke_width = ffmat.stroke_width
+                # 描边色只随非零宽度进栈；无描边块保持无卡语义。
+                if ffmat.stroke_width > 0:
+                    f.srgb = list(ffmat.srgb)
+            self._commit_effect_fields(_apply_stroke)
         self.setOpacity(ffmat.opacity)
         
         self.setAlignment(ffmat.alignment, repaint_background=False)
@@ -1498,22 +1502,12 @@ class TextBlkItem(QGraphicsTextItem):
             if fallback_changed:
                 self.layout.reLayout()
         
-        # Preserve gradient properties
-        self.fontformat.gradient_enabled = ffmat.gradient_enabled
-        self.fontformat.gradient_start_color = ffmat.gradient_start_color
-        self.fontformat.gradient_end_color = ffmat.gradient_end_color
-        self.fontformat.gradient_angle = ffmat.gradient_angle
-        self.fontformat.gradient_size = ffmat.gradient_size
-        
         # Apply while the canonical model still contains the previous
         # transform; merging first would skip live geometry recompilation.
         self.set_text_transform(ffmat.text_transform)
         self.fontformat.merge(ffmat)
 
         self.repainting = False
-        if self.fontformat.gradient_enabled:
-            self._refresh_gradient_geometry()
-            self.update()
         if set_effect or set_stroke_width:
             self.repaint_background()
 
@@ -1820,18 +1814,16 @@ class TextBlkItem(QGraphicsTextItem):
             self.is_formatting = False
 
     def setGradientEnabled(self, value: bool, repaint_background: bool = True, set_selected: bool = False, restore_cursor: bool = False):
-        self.fontformat.gradient_enabled = value
+        # 渐变由效果栈的 Text Fill 卡渲染（完成前景替换原生文本），
+        # 文档前景保持 frgb 兜底色；字段写入经栈属主提交。
+        self._commit_effect_fields(
+            lambda f: setattr(f, "gradient_enabled", value)
+        )
         cursor, after_kwargs = self._before_set_ffmt(set_selected, restore_cursor)
         cfmt = QTextCharFormat()
-        if value:
-            gradient = self.get_text_gradient(persistent=True)
-            cfmt.setForeground(gradient)
-        else:
-            cfmt.setForeground(QColor(*[int(c) for c in self.fontformat.frgb]))
-
+        cfmt.setForeground(QColor(*[int(c) for c in self.fontformat.frgb]))
         self.set_cursor_cfmt(cursor, cfmt, True)
         self._after_set_ffmt(cursor, repaint_background, restore_cursor, **after_kwargs)
-        self._refresh_gradient_geometry()
 
 
     def _set_line_spacing_pair(
@@ -1934,15 +1926,21 @@ class TextBlkItem(QGraphicsTextItem):
 
     def setStrokeColor(self, scolor, **kwargs):
         self.stroke_qcolor = scolor if isinstance(scolor, QColor) else QColor(*scolor)
-        self.fontformat.srgb = [self.stroke_qcolor.red(), self.stroke_qcolor.green(), self.stroke_qcolor.blue()]
-        self.repaint_background()
-        self.update()
+        self._commit_effect_fields(
+            lambda f: setattr(
+                f,
+                "srgb",
+                [self.stroke_qcolor.red(), self.stroke_qcolor.green(), self.stroke_qcolor.blue()],
+            )
+        )
 
     def setStrokeWidth(self, stroke_width: float, padding=True, repaint_background=True, restore_cursor=False, **kwargs):
-        
+
         cursor, after_kwargs = self._before_set_ffmt(set_selected=False, restore_cursor=restore_cursor)
 
-        self.fontformat.stroke_width = stroke_width
+        self._commit_effect_fields(
+            lambda f: setattr(f, "stroke_width", stroke_width)
+        )
         if padding:
             self._update_effect_padding()
 
@@ -2068,16 +2066,36 @@ class TextBlkItem(QGraphicsTextItem):
                 break
         return char_fmts
 
+    def _commit_effect_fields(self, mutate) -> None:
+        """Commit legacy effect-field writes through the stack owner entry.
+
+        The panel keeps a deep-copied render format (see
+        ``text_panel.py::set_textblk_item``), so a legacy write on
+        ``self.fontformat`` never reaches the canonical stack that the
+        effect renderer reads. Build the new stack on a canonical probe
+        via the FontFormat legacy views and commit with
+        ``set_text_effects``, which syncs both formats and runs the full
+        invalidation chain (upstream owner semantics).
+        """
+        probe = self.blk.fontformat.deepcopy()
+        mutate(probe)
+        self.effect_renderer.set_text_effects(probe.text_effects)
+
     def setShadow(self, fmt: FontFormat, repaint=True):
-        self.fontformat.shadow_radius = fmt.shadow_radius
-        self.fontformat.shadow_strength = fmt.shadow_strength
-        self.fontformat.shadow_color = fmt.shadow_color
-        self.fontformat.shadow_offset = fmt.shadow_offset
-        self._update_effect_padding()
-        if repaint:
-            self.repaint_background()
+        def _apply(f: FontFormat):
+            f.shadow_radius = fmt.shadow_radius
+            f.shadow_strength = fmt.shadow_strength
+            f.shadow_color = fmt.shadow_color
+            f.shadow_offset = fmt.shadow_offset
+
+        self._commit_effect_fields(_apply)
 
     def setBGAttribute(self, attr_name: str, value, repaint=True):
+        if attr_name in _LEGACY_EFFECT_VIEW_NAMES:
+            self._commit_effect_fields(
+                lambda f: setattr(f, attr_name, value)
+            )
+            return
         setattr(self.fontformat, attr_name, value)
         self._update_effect_padding()
         if repaint:
@@ -2087,13 +2105,28 @@ class TextBlkItem(QGraphicsTextItem):
     def setGradientAttribute(self, attr_name: str, value):
         self.old_ffmt_values = {}
         self.old_ffmt_values[attr_name] = self.fontformat[attr_name]
-        setattr(self.fontformat, attr_name, value)
-        self.setGradientEnabled(self.fontformat.gradient_enabled)
+        if attr_name in _LEGACY_EFFECT_VIEW_NAMES:
+            self._commit_effect_fields(
+                lambda f: setattr(f, attr_name, value)
+            )
+        else:
+            setattr(self.fontformat, attr_name, value)
+            self._update_effect_padding()
+            self.repaint_background()
+            self.update()
         self.old_ffmt_values = None
 
     def setOpacity(self, opacity: float):
-        super().setOpacity(opacity)
-        self.fontformat.opacity = opacity
+        # 上游模式：整体不透明度属于效果栈，native 透明度由
+        # _apply_effective_opacity 在提交链中应用。
+        self._commit_effect_fields(
+            lambda f: setattr(f, "opacity", opacity)
+        )
+
+    def _set_effective_opacity(self, opacity: float) -> None:
+        # Renderer-owned write for stack transitions (preview included);
+        # unlike setOpacity it must not re-enter the fontformat view.
+        QGraphicsTextItem.setOpacity(self, opacity)
 
     def setPlainTextAndKeepUndoStack(self, text: str):
         cursor = QTextCursor(self.document())

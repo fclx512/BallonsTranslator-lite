@@ -11,7 +11,7 @@ Row numbering, the selection accent cue and drag initiation stay inside
 the row cards themselves (``ui/textedit_area.py::TransPairWidget``).
 """
 
-from qtpy.QtCore import QPointF, Qt
+from qtpy.QtCore import Qt
 from qtpy.QtGui import QColor, QPainter, QPen
 from qtpy.QtWidgets import QToolButton, QVBoxLayout, QWidget
 
@@ -22,20 +22,24 @@ RAIL_WIDTH = 28
 
 
 class RailLauncherButton(QToolButton):
-    """Checkable rail icon: procedurally drawn glyph, annotation dot badge.
+    """Checkable rail icon button rendering a themed SVG glyph.
 
-    ``glyph`` is drawn centered; ``deco="dots"`` adds three small dots
-    above the glyph (ruby/emphasis reading mark).  ``set_dot(True)``
-    shows an accent dot at the top-right corner — "current block has
-    content in this panel" hint.  Checked (panel open) paints the accent
-    background procedurally and flips the glyph/dot to white; hover
-    draws a 1px border outline instead of a fill.
+    ``icon_name`` is an svg filename under ``icons/`` without extension
+    (see the ``rail_*`` set).  The icon is repainted per state: normal
+    uses the palette text color, checked paints white on the accent
+    background, disabled fades — colors applied through
+    ``ui/icon_rendering.py::render_svg_pixmap``'s ``override_fill``.
+    ``set_dot(True)`` shows an accent dot at the top-right corner —
+    "current block has content in this panel" hint.  Checked (panel
+    open) paints the accent background procedurally; hover draws a 1px
+    border outline instead of a fill.
     """
 
-    def __init__(self, glyph: str, deco: str = "", parent=None):
+    ICON_SIZE = 18
+
+    def __init__(self, icon_name: str, parent=None):
         super().__init__(parent)
-        self._glyph = glyph
-        self._deco = deco
+        self._icon_name = icon_name
         self._dot = False
         self.setCheckable(True)
         self.setFixedSize(26, 26)
@@ -47,7 +51,8 @@ class RailLauncherButton(QToolButton):
             self.update()
 
     def paintEvent(self, event) -> None:
-        from ui.misc import get_theme_color
+        from ui.icon_rendering import render_svg_pixmap
+        from ui.misc import get_theme_color, themed_icon_path
 
         checked = self.isChecked()
         hovered = self.isEnabled() and self.underMouse()
@@ -71,25 +76,17 @@ class RailLauncherButton(QToolButton):
         color = QColor("white") if checked else self.palette().text().color()
         if not self.isEnabled():
             color.setAlpha(110)
-        if self._deco == "dots":
-            pen = QPen(color)
-            pen.setWidthF(1.2)
-            painter.setPen(pen)
-            dot_y = 4.0
-            for dx in (-5.0, 0.0, 5.0):
-                painter.drawPoint(QPointF(self.width() / 2 + dx, dot_y))
-        font = self.font()
-        font.setPixelSize(15)
-        painter.setFont(font)
-        painter.setPen(color)
-        painter.drawText(
-            0,
-            4,
-            self.width(),
-            self.height() - 8,
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
-            self._glyph,
+        pixmap = render_svg_pixmap(
+            themed_icon_path(f"{self._icon_name}.svg"),
+            self.ICON_SIZE,
+            self.ICON_SIZE,
+            self.devicePixelRatioF(),
+            override_fill=color.name(QColor.NameFormat.HexArgb)
+            if color.alpha() < 255
+            else color.name(),
         )
+        offset = (self.width() - self.ICON_SIZE) // 2
+        painter.drawPixmap(offset, offset, pixmap)
         if self._dot:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor("white") if checked else get_theme_color())

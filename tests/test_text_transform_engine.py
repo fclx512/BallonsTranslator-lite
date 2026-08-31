@@ -737,6 +737,10 @@ class TextTransformRenderingTest(TextTransformTestBase):
                         wraps=renderer.repaint_background,
                     ) as repaint_neutral:
                         item.set_text_transform(zero, preview=True)
+                        # The ported renderer only invalidates caches on a
+                        # neutral transition (upstream semantics); the
+                        # neutral rebuild lands on the next paint pass.
+                        self._render_scene(scene)
                     self.assertGreaterEqual(repaint_neutral.call_count, 1)
                     self.assertIsNotNone(renderer.background_pixmap)
 
@@ -755,9 +759,10 @@ class TextTransformRenderingTest(TextTransformTestBase):
                         wraps=renderer.repaint_background,
                     ) as repaint_neutral:
                         item.set_text_transform(zero)
+                        self._render_scene(scene)
                     self.assertGreaterEqual(repaint_neutral.call_count, 1)
                     self.assertIsNotNone(renderer.background_pixmap)
-                    self.assertIsNone(renderer._transformed_effect_state)
+                    self.assertIsNone(renderer._preview_effect_raster_state)
                     self.assertNotEqual(
                         self._render_scene(scene), slanted_pixels
                     )

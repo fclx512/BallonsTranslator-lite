@@ -1,7 +1,8 @@
 import math
+import re
 from functools import lru_cache
 
-from qtpy.QtCore import QRectF, Qt
+from qtpy.QtCore import QByteArray, QRectF, Qt
 from qtpy.QtGui import QColor, QPainter, QPixmap
 from qtpy.QtSvg import QSvgRenderer
 
@@ -15,15 +16,27 @@ def render_svg_pixmap(
     inset: int = 0,
     background_rgba=(0, 0, 0, 0),
     background_radius: int = 0,
+    override_fill: str = "",
 ) -> QPixmap:
     """Render and cache a device-pixel-aware SVG pixmap.
+
+    ``override_fill`` repaints every ``fill="…"`` in the source with the
+    given color before rendering — for state-colored icons (the theme
+    swap itself is done in place by ``ui/misc.py::set_icon_theme``; this
+    is for per-widget state colors like checked-white that no theme
+    carries).
 
     >>> render_svg_pixmap('', 20, 20, 1.0).isNull()
     True
     """
     if not path or width <= 0 or height <= 0:
         return QPixmap()
-    renderer = QSvgRenderer(path)
+    if override_fill:
+        with open(path, "r", encoding="utf-8") as f:
+            svg_data = re.sub(r'fill="[^"]*"', f'fill="{override_fill}"', f.read())
+        renderer = QSvgRenderer(QByteArray(svg_data.encode("utf-8")))
+    else:
+        renderer = QSvgRenderer(path)
     if not renderer.isValid():
         return QPixmap()
 

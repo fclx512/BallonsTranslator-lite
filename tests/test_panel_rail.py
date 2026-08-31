@@ -107,8 +107,8 @@ class PanelRailTest(unittest.TestCase):
         from ui.panel_rail import PanelRail, RailLauncherButton
 
         rail = PanelRail()
-        first = RailLauncherButton("あ", deco="dots")
-        second = RailLauncherButton("A")
+        first = RailLauncherButton("rail_annotation")
+        second = RailLauncherButton("rail_emphasis")
         rail.add_launcher(first)
         rail.add_launcher(second)
         self.assertIs(rail.launcher_at(0), first)
@@ -125,7 +125,7 @@ class PanelRailTest(unittest.TestCase):
         QSS 背景规则，见 ui/panel_rail.py::RailLauncherButton）。"""
         from ui.panel_rail import RailLauncherButton
 
-        btn = RailLauncherButton("あ", deco="dots")
+        btn = RailLauncherButton("rail_annotation")
         btn.setChecked(True)
         btn.set_dot(True)
         btn.grab()
@@ -329,13 +329,13 @@ class AnnotationLauncherLogicTest(unittest.TestCase):
         panel.textstyle_group = QCheckBox()  # only setEnabled is touched here
         panel.tcyChecker = QCheckBox()
         panel.formatBtnGroup = FormatGroupBtn()
-        panel.annotation_launcher = RailLauncherButton("あ", deco="dots")
+        panel.annotation_launcher = RailLauncherButton("rail_annotation")
         panel.annotation_dock = None
-        panel.emphasis_launcher = RailLauncherButton("●")
+        panel.emphasis_launcher = RailLauncherButton("rail_emphasis")
         panel.emphasis_dock = None
-        panel.transform_launcher = RailLauncherButton("⤢")
+        panel.transform_launcher = RailLauncherButton("rail_transform")
         panel.transform_dock = None
-        panel.textstyle_launcher = RailLauncherButton("◐")
+        panel.textstyle_launcher = RailLauncherButton("rail_effects")
         panel.textstyle_dock = None
         return panel
 

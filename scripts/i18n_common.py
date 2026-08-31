@@ -110,10 +110,10 @@ def extract_param_descriptions(content: str, fpath: Path):
     "…"}}``) rendered via ``ParamWidget.tr(params["description"])`` — a
     value lookup the regex extractor cannot see.  This AST rule covers it:
 
-    - files under ``modules/`` (except the translation-agent ``agent/``
-      package, whose "description" keys are LLM function-calling prompts
-      that must stay English): every dict literal with a string
-      ``description`` key;
+    - files under ``modules/`` (except the agent packages ``translators/
+      agent/`` and ``context_agent/``, whose "description" keys are LLM
+      function-calling prompts that must stay English): every dict
+      literal with a string ``description`` key;
     - everywhere else: only dicts that *also* carry a ``value`` key, so
       LLM tool schemas (``utils/ai_tools.py``, whose descriptions are
       already Chinese prompt text) stay out.
@@ -123,7 +123,10 @@ def extract_param_descriptions(content: str, fpath: Path):
     except SyntaxError:
         return
     rel = fpath.relative_to(PROJECT_ROOT).parts
-    module_scope = len(rel) >= 1 and rel[0] == "modules" and "agent" not in rel
+    llm_prompt_packages = {"agent", "context_agent"}
+    module_scope = (
+        len(rel) >= 1 and rel[0] == "modules" and llm_prompt_packages.isdisjoint(rel)
+    )
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.Dict):

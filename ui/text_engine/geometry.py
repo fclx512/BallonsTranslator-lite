@@ -12,10 +12,9 @@ Localization notes (compared with upstream):
 - ``_resize_standard`` keeps the local alignment compensation semantics:
   only vertical / Right alignment compensates position; Left / Center do not
   (mirrors ``textitem.set_size``).
-- ``set_rect`` does not refresh the local gradient (``get_text_gradient`` is
-  only refreshed at gradient/format time, never on resize).
 - ``paint_item`` neutral path forwards to ``item.effect_renderer.paint_item``
-  (Stage 3 stub forwards straight to the base paint).
+  (the effects-stack renderer keeps the fork's neutral host composition
+  order for blocks without a completed foreground).
 """
 
 from contextlib import contextmanager
@@ -76,6 +75,9 @@ class TextItemGeometryController:
         self.layout_renderer = None
         self.visual_mapper = None
         self.surface_renderer = None
+        # Effect-preview surface retention is a stage-D optimization: the
+        # renderer contract requires these methods to exist today.
+        self._retained_effect_preview_surface = None
         self._surface_cursor_position = -1
         self._input_mapping_active = False
         self._input_previous_source = None
@@ -86,6 +88,7 @@ class TextItemGeometryController:
     def bind_model(self) -> None:
         """Reset transient state after the item adopts a ``TextBlock``."""
         self.preview = None
+        self._retained_effect_preview_surface = None
         self.detach_layout_renderer()
         self.detach_surface_mapper()
         self.compiled = CompiledTextTransform(
@@ -621,9 +624,6 @@ class TextItemGeometryController:
         if not self.effective().stack.is_neutral():
             self.refresh_compiled_geometry()
         self.sync_origin()
-        # 本地渐变（get_text_gradient）只在渐变/字体设置时刷新，不在 resize
-        # 时刷新；上游此处的 item._refresh_gradient_geometry() 调用本地丢弃
-        # （零回归，见 textitem.get_text_gradient）。
         if repaint:
             item.repaint_background()
         if update_blk_rect:
@@ -896,13 +896,43 @@ class TextItemGeometryController:
 
     def release_render_resources(self) -> None:
         """Release every item-owned renderer/cache at the page boundary."""
+        self.invalidate_effect_preview_surface()
         self.detach_layout_renderer()
         self.detach_surface_mapper()
         self.item.effect_renderer.release_caches()
 
     def invalidate_surface_cache(self) -> None:
+        self.invalidate_effect_preview_surface()
         if self.surface_renderer is not None:
             self.surface_renderer.invalidate_surface()
+
+    def retain_effect_preview_surface(self) -> None:
+        """Park canonical nonlinear output outside temporary preview geometry.
+
+        Stage-D optimization: full retention needs the upstream
+        ``surface_cache_key``/``_remap_key_is_current`` key alignment, so the
+        effect preview currently just survives on renderer-side caches.
+        """
+        return None
+
+    def invalidate_effect_preview_surface(self) -> None:
+        self._retained_effect_preview_surface = None
+
+    def restore_effect_preview_surface(self) -> None:
+        """Restore canonical pixels after canonical geometry is reinstated."""
+        return None
+
+    def paint_deferred_cursor(
+        self,
+        painter: QPainter,
+        mapper,
+        *,
+        export_render: bool,
+    ) -> None:
+        """Paint the caret after the completed effect/transform surface."""
+        self._paint_surface_cursor(
+            painter, mapper, export_render=export_render
+        )
 
     def _paint_surface_cursor(
         self,
@@ -928,7 +958,11 @@ class TextItemGeometryController:
             )
         if not isinstance(cursor_rect, (QRectF, QRect)):
             return
-        cursor_path = mapper.map_rect_path(QRectF(cursor_rect))
+        if mapper is None:
+            cursor_path = QPainterPath()
+            cursor_path.addRect(QRectF(cursor_rect))
+        else:
+            cursor_path = mapper.map_rect_path(QRectF(cursor_rect))
         if cursor_path.isEmpty():
             return
         painter.save()
@@ -1179,8 +1213,6 @@ class TextItemGeometryController:
             # ink measurement. Rebuild that small committed geometry now so a
             # later preview does not discover and evict stale entries.
             self.layout_renderer.ink_bounds()
-        if item.fontformat.gradient_enabled and not padding_changed:
-            item.effect_renderer._refresh_gradient_geometry()
         return padding_changed
 
     def _finalize_neutral(

@@ -191,6 +191,10 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
         self.render_failure_handler = None
         self.defer_cursor_paint = False
         self.deferred_cursor_position = -1
+        # Installed only for one native paint call while effects capture Qt's
+        # authoritative selection/IME context; the renderer clears it in
+        # finally before returning to the event loop.
+        self.paint_context_observer = None
         self.publishing_size_enlargement = False
         # QWidgetTextControl routes its mouse and drag hit tests through this
         # layout.  Nonlinear visual effects can therefore restore source

@@ -1,6 +1,20 @@
 {
   "_comment": "AI 审计登记表。机制见 .agents/skills/audit-docs/SKILL.md。deprecated = 已删待守（不得复活、残留引用必须清零或进 allowed_mentions）；suspended = 存在的休眠文件（不得被主 UI import）。删除文件前先在此登记。",
   "deprecated": {
+    "modules/glossary_extractor.py": {
+      "note": "术语工作台取代（2026-08-31）：频率启发式迁入 modules/context_agent/precollect.py，LLM one-shot 提取随 GlossaryExtractorDialog 一并删除；新入口=嵌字页窄栏 rail_glossary 图标（ui/glossary_agent_panel.py）",
+      "allowed_mentions": [
+        "docs/daily_log.md",
+        "modules/context_agent/precollect.py",
+        "modules/context_agent/__init__.py"
+      ]
+    },
+    "ui/glossary_extractor_dialog.py": {
+      "note": "术语工作台取代（2026-08-31）：one-shot LLM 提取对话框删除，新入口=嵌字页窄栏 rail_glossary 图标（ui/glossary_agent_panel.py）",
+      "allowed_mentions": [
+        "docs/daily_log.md"
+      ]
+    },
     "modules/translators/context_batch.py": {
       "note": "翻译 agent 化（docs/技术实现/翻译agent化_设计方案.md §11）合一删 beta：ContextBatchTranslator 2026-08-23 删除，agent 为唯一 LLM 翻译路径",
       "allowed_mentions": [
@@ -30,7 +44,9 @@
     },
     "docs/技术实现/反向移植_完整流程.md": {
       "note": "2026-08-23 并入 反向移植_规范.md §11（端到端操作手册），原文档删除",
-      "allowed_mentions": ["docs/技术实现/反向移植_规范.md"]
+      "allowed_mentions": [
+        "docs/技术实现/反向移植_规范.md"
+      ]
     },
     "docs/技术实现/反向移植_工作进度交接.md": {
       "note": "2026-08-23 删除：过期会话交接稿，信息已被 反向移植_规范.md §10 覆盖"
@@ -43,11 +59,15 @@
     },
     "icons/drawingtools_pen.svg": {
       "note": "2026-08-26 Pen/B 画笔工具移除后成为死资产，图标重绘为统一 Material 集（drawingtools_rect/ai 补齐，hand/inpaint 同步更换）",
-      "allowed_mentions": ["config/stylesheet.css"]
+      "allowed_mentions": [
+        "config/stylesheet.css"
+      ]
     },
     "icons/drawingtools_pen_activate.svg": {
       "note": "2026-08-26 Pen/B 画笔工具移除后成为死资产，图标重绘为统一 Material 集（drawingtools_rect/ai 补齐，hand/inpaint 同步更换）",
-      "allowed_mentions": ["config/stylesheet.css"]
+      "allowed_mentions": [
+        "config/stylesheet.css"
+      ]
     },
     "scripts/check_all.py": {
       "note": "2026-08-27 并入 verify.py --full（ruff+pytest 两步）后删除：i18n+qm 两步与 verify 完全重复，且默认运行失败也 exit 0"
@@ -60,6 +80,13 @@
     },
     "scripts/render_sync_probe.py": {
       "note": "2026-08-27 迁移为 tests/test_render_sync.py（pytest 化），删除 scripts 下原文件"
+    },
+    "ui/text_engine/effect_renderer.py": {
+      "note": "效果栈移植阶段C：v1.5.9 版 TextEffectRenderer 被 ui/text_engine/effects/renderer.py（上游 TextEffectStack 渲染引擎）取代，2026-08-31 删除",
+      "allowed_mentions": [
+        "docs/daily_log.md",
+        "docs/技术实现/效果栈移植与窄栏图标重绘_计划.md"
+      ]
     }
   },
   "suspended": {

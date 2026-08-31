@@ -3,13 +3,25 @@ import enum
 import math
 import re
 from dataclasses import asdict, dataclass, field, fields, replace
-from typing import ClassVar, Iterator, List, Sequence, Union
+from typing import ClassVar, Iterator, List, Optional, Sequence, Union
 
 import numpy as np
 
 from . import shared
 from .logger import logger as LOGGER
 from .structures import Config, nested_dataclass
+from .text_effects import (
+    GradientStop,
+    LinearGradientPaint,
+    ShadowEffect,
+    SolidPaint,
+    TextEffectStack,
+    TextFillEffect,
+    coerce_text_effect_stack,
+    effect_paint_fallback_color,
+    primary_stroke,
+    with_primary_stroke,
+)
 
 
 TEXT_TRANSFORM_SCALE_MIN = 0.1
@@ -721,6 +733,397 @@ def fix_fontweight_qt(weight: Union[str, int]):
     return weight
 
 
+_TEXT_EFFECTS_ABSENT = object()
+# 旧字段名仍被管线/既有 UI 当作读写入口，唯一活体是 text_effects 栈
+# （__getattribute__/__setattr__ 提供视图）。阶段 C 起阴影/渐变同样迁入栈。
+_LEGACY_EFFECT_VIEW_NAMES = {
+    "opacity", "stroke_width", "srgb",
+    "shadow_radius", "shadow_strength", "shadow_color", "shadow_offset",
+    "shadow_include_stroke",
+    "gradient_enabled", "gradient_start_color", "gradient_end_color",
+    "gradient_angle", "gradient_size",
+}
+
+
+def _legacy_shadow_effect(
+    stack: TextEffectStack,
+) -> Optional[ShadowEffect]:
+    """视图约定的阴影实体：栈中第一张 ShadowEffect 卡。"""
+    for effect in stack.effects:
+        if isinstance(effect, ShadowEffect):
+            return effect
+    return None
+
+
+def _legacy_gradient_fill(
+    stack: TextEffectStack,
+) -> Optional[TextFillEffect]:
+    for effect in stack.effects:
+        if isinstance(effect, TextFillEffect) and isinstance(
+            effect.paint, LinearGradientPaint
+        ):
+            return effect
+    return None
+
+
+def _with_shadow(
+    stack: TextEffectStack, parameters: dict, *, allow_create: bool
+) -> TextEffectStack:
+    """按视图语义更新（或按需新建）legacy 阴影卡，返回新栈。
+
+    无卡且写入值全为 legacy 默认（allow_create=False）时不变更，避免
+    setShadow 对未配置块凭空建卡。新建卡以 legacy 字段默认值为基
+    （strength=1.0、半径=0），enabled 由写入方按"半径>0 且强度>0"的
+    legacy 渲染门槛推导。
+    """
+    shadow = _legacy_shadow_effect(stack)
+    if shadow is None:
+        if not allow_create:
+            return stack
+        shadow = ShadowEffect(distance=0.0, angle=0.0)
+        effects = stack.effects + (shadow,)
+    else:
+        effects = stack.effects
+    updated = replace(shadow, **parameters)
+    if updated is shadow:
+        return stack
+    new_effects = tuple(
+        updated if effect is shadow else effect for effect in effects
+    )
+    return replace(stack, effects=new_effects)
+
+
+_SHADOW_DEFAULTS = {
+    "shadow_radius": 0.0,
+    "shadow_strength": 1.0,
+    "shadow_color": [0, 0, 0],
+    "shadow_offset": [0.0, 0.0],
+}
+
+
+def _set_shadow_radius(stack: TextEffectStack, value) -> TextEffectStack:
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return stack
+    if not math.isfinite(value) or value < 0.0:
+        value = 0.0
+    shadow = _legacy_shadow_effect(stack)
+    strength = shadow.opacity if shadow is not None else 1.0
+    allow_create = value > 0.0
+    return _with_shadow(
+        stack,
+        {"blur": value, "enabled": bool(value > 0.0 and strength > 0.0)},
+        allow_create=allow_create,
+    )
+
+
+def _set_shadow_strength(stack: TextEffectStack, value) -> TextEffectStack:
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return stack
+    if not math.isfinite(value):
+        value = 0.0
+    value = min(max(value, 0.0), 1.0)
+    shadow = _legacy_shadow_effect(stack)
+    blur = shadow.blur if shadow is not None else 0.0
+    allow_create = value != _SHADOW_DEFAULTS["shadow_strength"]
+    return _with_shadow(
+        stack,
+        {"opacity": value, "enabled": bool(value > 0.0 and blur > 0.0)},
+        allow_create=allow_create,
+    )
+
+
+def _set_shadow_color(stack: TextEffectStack, value) -> TextEffectStack:
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
+    allow_create = value != _SHADOW_DEFAULTS["shadow_color"]
+    try:
+        paint = SolidPaint(value)
+    except (TypeError, ValueError):
+        return stack
+    return _with_shadow(stack, {"paint": paint}, allow_create=allow_create)
+
+
+def _set_shadow_offset(stack: TextEffectStack, value) -> TextEffectStack:
+    try:
+        xoffset, yoffset = (float(v) for v in value)
+        if not (math.isfinite(xoffset) and math.isfinite(yoffset)):
+            raise ValueError
+    except (TypeError, ValueError):
+        return stack
+    distance = math.hypot(xoffset, yoffset)
+    angle = math.degrees(math.atan2(yoffset, xoffset))
+    allow_create = [xoffset, yoffset] != _SHADOW_DEFAULTS["shadow_offset"]
+    return _with_shadow(
+        stack, {"distance": distance, "angle": angle},
+        allow_create=allow_create,
+    )
+
+
+def _set_shadow_include_stroke(
+    stack: TextEffectStack, value
+) -> TextEffectStack:
+    # 仅调序，不建卡（无卡时 include_stroke 无从表达）。
+    """include_stroke 以卡片顺序表达：True = 阴影卡位于主描边之上。"""
+    shadow = _legacy_shadow_effect(stack)
+    stroke = primary_stroke(stack)
+    if shadow is None or stroke is None:
+        return stack
+    effects = list(stack.effects)
+    shadow_index = next(
+        index
+        for index, effect in enumerate(effects)
+        if effect is shadow
+    )
+    stroke_index = next(
+        index
+        for index, effect in enumerate(effects)
+        if effect is stroke
+    )
+    effects.pop(shadow_index)
+    if shadow_index < stroke_index:
+        stroke_index -= 1
+    effects.insert(stroke_index if value else stroke_index + 1, shadow)
+    return replace(stack, effects=tuple(effects))
+
+
+def _legacy_gradient_paint(
+    start_color, end_color, angle, size
+) -> LinearGradientPaint:
+    return LinearGradientPaint(
+        stops=(
+            GradientStop(0.0, tuple(start_color), 1.0),
+            GradientStop(1.0, tuple(end_color), 1.0),
+        ),
+        angle=angle,
+        # legacy gradient_size 是半径系数（跨度 = 2 × size × max(w, h)），
+        # 栈 paint.scale 是全跨度系数，故 ×2。
+        scale=min(max(2.0 * size, 0.1), 4.0),
+    )
+
+
+def _with_gradient_fill(
+    stack: TextEffectStack, paint: LinearGradientPaint
+) -> TextEffectStack:
+    fill = _legacy_gradient_fill(stack)
+    if fill is None:
+        new_fill = TextFillEffect(paint=paint)
+        return replace(stack, effects=(new_fill,) + stack.effects)
+    updated = replace(fill, paint=paint)
+    if updated == fill:
+        return stack
+    new_effects = tuple(
+        updated if effect is fill else effect for effect in stack.effects
+    )
+    return replace(stack, effects=new_effects)
+
+
+def _set_gradient_enabled(stack: TextEffectStack, value) -> TextEffectStack:
+    if value in (True, 1):
+        if _legacy_gradient_fill(stack) is not None:
+            return stack
+        fill = TextFillEffect(
+            paint=_legacy_gradient_paint(
+                (0, 0, 0), (255, 255, 255), 0.0, 1.0
+            )
+        )
+        return replace(stack, effects=(fill,) + stack.effects)
+    fills = tuple(
+        effect
+        for effect in stack.effects
+        if not (
+            isinstance(effect, TextFillEffect)
+            and isinstance(effect.paint, LinearGradientPaint)
+        )
+    )
+    if fills == stack.effects:
+        return stack
+    return replace(stack, effects=fills)
+
+
+def _set_gradient_stop_color(
+    stack: TextEffectStack, value, *, start: bool
+) -> TextEffectStack:
+    fill = _legacy_gradient_fill(stack)
+    if fill is None:
+        return stack
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
+    try:
+        color = tuple(
+            int(round(float(channel))) for channel in value
+        )
+    except (TypeError, ValueError):
+        return stack
+    if len(color) != 3 or not all(
+        math.isfinite(channel) for channel in color
+    ):
+        return stack
+    paint = fill.paint
+    stops = list(paint.stops)
+    index = 0 if start else len(stops) - 1
+    stops[index] = replace(stops[index], color=color)
+    return _with_gradient_fill(stack, replace(paint, stops=tuple(stops)))
+
+
+def _set_gradient_angle(stack: TextEffectStack, value) -> TextEffectStack:
+    fill = _legacy_gradient_fill(stack)
+    if fill is None:
+        return stack
+    try:
+        angle = float(value)
+    except (TypeError, ValueError):
+        return stack
+    if not math.isfinite(angle):
+        return stack
+    return _with_gradient_fill(
+        stack, replace(fill.paint, angle=angle)
+    )
+
+
+def _set_gradient_size(stack: TextEffectStack, value) -> TextEffectStack:
+    fill = _legacy_gradient_fill(stack)
+    if fill is None:
+        return stack
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        return stack
+    if not math.isfinite(size) or size <= 0.0:
+        return stack
+    return _with_gradient_fill(
+        stack, replace(fill.paint, scale=min(max(2.0 * size, 0.1), 4.0))
+    )
+
+
+def _migrate_legacy_text_effects(payload: dict) -> TextEffectStack:
+    """旧数据（无 text_effects 载荷）→ 等价效果栈。
+
+    迁移 opacity/stroke_width/srgb + 阴影/渐变字段本体；无效值逐项告警
+    丢弃。卡片顺序（顶→底）＝渐变填充、主描边、阴影（include_stroke
+    为真时阴影位于描边之上）。
+    """
+    stack = TextEffectStack()
+    try:
+        stack = replace(
+            stack,
+            overall_opacity=payload.get("opacity", 1.0),
+        )
+    except (TypeError, ValueError) as error:
+        LOGGER.warning(
+            "Ignoring invalid legacy text opacity (%s); using 1.0.", error
+        )
+
+    stroke_stack = stack
+    width = payload.get("stroke_width", 0.0)
+    if isinstance(width, bool) or not isinstance(width, (int, float)):
+        LOGGER.warning("Ignoring invalid legacy Stroke width %r.", width)
+    else:
+        width = float(width)
+        if not math.isfinite(width) or width < 0.0:
+            LOGGER.warning("Ignoring invalid legacy Stroke width %r.", width)
+        elif width > 0.0:
+            try:
+                paint = SolidPaint(payload.get("srgb", (0, 0, 0)))
+            except (TypeError, ValueError) as error:
+                LOGGER.warning(
+                    "Ignoring invalid legacy Stroke color (%s); using black.",
+                    error,
+                )
+                paint = SolidPaint()
+            stroke_stack = with_primary_stroke(
+                stroke_stack,
+                width=width,
+                paint=paint,
+                position="outside",
+            )
+
+    effects: list = []
+    gradient_stack = stroke_stack
+    if payload.get("gradient_enabled", False) in (True, 1):
+        try:
+            paint = _legacy_gradient_paint(
+                payload.get("gradient_start_color", (0, 0, 0)),
+                payload.get("gradient_end_color", (255, 255, 255)),
+                float(payload.get("gradient_angle", 0.0) or 0.0),
+                float(payload.get("gradient_size", 1.0) or 1.0),
+            )
+            gradient_stack = replace(
+                stroke_stack,
+                effects=(TextFillEffect(paint=paint),) + stroke_stack.effects,
+            )
+        except (TypeError, ValueError) as error:
+            LOGGER.warning(
+                "Ignoring invalid legacy text Gradient (%s).", error
+            )
+
+    shadow = None
+    radius = payload.get("shadow_radius", 0.0)
+    strength = payload.get("shadow_strength", 1.0)
+    if isinstance(radius, bool) or isinstance(strength, bool):
+        LOGGER.warning("Ignoring invalid legacy text Shadow flags.")
+    elif not isinstance(radius, (int, float)) or not isinstance(
+        strength, (int, float)
+    ):
+        LOGGER.warning("Ignoring invalid legacy text Shadow values.")
+    else:
+        radius = float(radius)
+        strength = float(strength)
+        if (
+            math.isfinite(radius)
+            and math.isfinite(strength)
+            and radius > 0.0
+            and strength > 0.0
+        ):
+            try:
+                shadow_color = payload.get("shadow_color", (0, 0, 0))
+                offset = payload.get("shadow_offset", (0.0, 0.0))
+                xoffset, yoffset = (float(v) for v in offset)
+                shadow = ShadowEffect(
+                    blur=min(max(radius, 0.0), 10.0),
+                    opacity=min(max(strength, 0.0), 1.0),
+                    paint=SolidPaint(shadow_color),
+                    distance=math.hypot(xoffset, yoffset),
+                    angle=math.degrees(math.atan2(yoffset, xoffset)),
+                )
+            except (TypeError, ValueError) as error:
+                LOGGER.warning(
+                    "Ignoring invalid legacy text Shadow (%s).", error
+                )
+                shadow = None
+
+    if shadow is not None:
+        include_stroke = bool(
+            payload.get("shadow_include_stroke", False)
+        )
+        base_effects = gradient_stack.effects
+        # 阴影默认置于最底（所有描边之下）；include_stroke 时置于主描边
+        # 之上（描边在阴影之下参与投影源）。
+        insert_at = len(base_effects)
+        if include_stroke:
+            primary = primary_stroke(gradient_stack)
+            if primary is not None:
+                insert_at = next(
+                    index
+                    for index, effect in enumerate(base_effects)
+                    if effect is primary
+                )
+        shadow_stack = replace(
+            gradient_stack,
+            effects=(
+                base_effects[:insert_at]
+                + (shadow,)
+                + base_effects[insert_at:]
+            ),
+        )
+    else:
+        shadow_stack = gradient_stack
+    return shadow_stack
+
+
 @nested_dataclass
 class FontFormat(Config):
     font_family: str = (
@@ -770,7 +1173,158 @@ class FontFormat(Config):
     )
     glyph_slant_angle: float = 0.0
 
+    # 效果栈唯一活体：opacity/stroke_width/srgb 旧字段名经
+    # __getattribute__/__setattr__ 视图直读直写栈（与上游一致）。
+    text_effects: Union[TextEffectStack, dict] = _TEXT_EFFECTS_ABSENT
+
     deprecated_attributes: dict = field(default_factory=lambda: dict())
+
+    def __getattribute__(self, name: str):
+        # 旧字段名的活体只在 text_effects 栈；管线/旧 UI 继续按旧名读写。
+        if name in _LEGACY_EFFECT_VIEW_NAMES:
+            data = object.__getattribute__(self, "__dict__")
+            stack = data.get("text_effects")
+            if isinstance(stack, TextEffectStack):
+                if name == "opacity":
+                    return stack.overall_opacity
+                stroke = primary_stroke(stack)
+                if name == "stroke_width":
+                    if (
+                        stroke is None
+                        or not stroke.enabled
+                        or stroke.opacity == 0.0
+                    ):
+                        return 0.0
+                    return stroke.width
+                if name == "srgb":
+                    return (
+                        list(effect_paint_fallback_color(stroke.paint))
+                        if stroke is not None
+                        else [0, 0, 0]
+                    )
+                shadow = _legacy_shadow_effect(stack)
+                if name == "shadow_radius":
+                    return shadow.blur if shadow is not None else 0.0
+                if name == "shadow_strength":
+                    return shadow.opacity if shadow is not None else 1.0
+                if name == "shadow_color":
+                    return (
+                        list(effect_paint_fallback_color(shadow.paint))
+                        if shadow is not None
+                        else [0, 0, 0]
+                    )
+                if name == "shadow_offset":
+                    if shadow is None:
+                        return [0.0, 0.0]
+                    radians = math.radians(shadow.angle)
+                    return [
+                        math.cos(radians) * shadow.distance,
+                        math.sin(radians) * shadow.distance,
+                    ]
+                if name == "shadow_include_stroke":
+                    if shadow is None or stroke is None:
+                        return False
+                    effects = stack.effects
+                    shadow_index = next(
+                        index
+                        for index, effect in enumerate(effects)
+                        if effect is shadow
+                    )
+                    stroke_index = next(
+                        index
+                        for index, effect in enumerate(effects)
+                        if effect is stroke
+                    )
+                    return shadow_index < stroke_index
+                fill = _legacy_gradient_fill(stack)
+                if name == "gradient_enabled":
+                    return fill is not None and not fill.is_neutral()
+                if name == "gradient_start_color":
+                    return (
+                        list(fill.paint.stops[0].color)
+                        if fill is not None
+                        else [0, 0, 0]
+                    )
+                if name == "gradient_end_color":
+                    return (
+                        list(fill.paint.stops[-1].color)
+                        if fill is not None
+                        else [255, 255, 255]
+                    )
+                if name == "gradient_angle":
+                    return fill.paint.angle if fill is not None else 0.0
+                if name == "gradient_size":
+                    return (
+                        fill.paint.scale / 2.0
+                        if fill is not None
+                        else 1.0
+                    )
+        return object.__getattribute__(self, name)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        data = object.__getattribute__(self, "__dict__")
+        stack = data.get("text_effects")
+        if name == "text_effects" and "text_effects" in data:
+            if not isinstance(value, TextEffectStack):
+                raise TypeError("live text_effects requires TextEffectStack")
+        if name in _LEGACY_EFFECT_VIEW_NAMES and isinstance(
+            stack, TextEffectStack
+        ):
+            if name == "opacity":
+                object.__setattr__(
+                    self,
+                    "text_effects",
+                    replace(stack, overall_opacity=value),
+                )
+                return
+            if name == "stroke_width":
+                object.__setattr__(
+                    self,
+                    "text_effects",
+                    with_primary_stroke(stack, width=value),
+                )
+                return
+            if name == "srgb":
+                if isinstance(value, np.ndarray):
+                    value = value.tolist()
+                parameters = {"paint": SolidPaint(value)}
+                if primary_stroke(stack) is None:
+                    # 检出/覆盖可能先写入颜色再写宽度；无描边时保持 0 宽。
+                    parameters["width"] = 0.0
+                object.__setattr__(
+                    self,
+                    "text_effects",
+                    with_primary_stroke(stack, **parameters),
+                )
+                return
+            if name == "shadow_radius":
+                new_stack = _set_shadow_radius(stack, value)
+            elif name == "shadow_strength":
+                new_stack = _set_shadow_strength(stack, value)
+            elif name == "shadow_color":
+                new_stack = _set_shadow_color(stack, value)
+            elif name == "shadow_offset":
+                new_stack = _set_shadow_offset(stack, value)
+            elif name == "shadow_include_stroke":
+                new_stack = _set_shadow_include_stroke(stack, bool(value))
+            elif name == "gradient_enabled":
+                new_stack = _set_gradient_enabled(stack, value)
+            elif name == "gradient_start_color":
+                new_stack = _set_gradient_stop_color(
+                    stack, value, start=True
+                )
+            elif name == "gradient_end_color":
+                new_stack = _set_gradient_stop_color(
+                    stack, value, start=False
+                )
+            elif name == "gradient_angle":
+                new_stack = _set_gradient_angle(stack, value)
+            else:
+                new_stack = _set_gradient_size(stack, value)
+            if new_stack is not stack:
+                object.__setattr__(self, "text_effects", new_stack)
+            return
+        object.__setattr__(self, name, value)
 
     @property
     def size_pt(self):
@@ -821,6 +1375,18 @@ class FontFormat(Config):
                 error,
             )
             self.glyph_slant_angle = 0.0
+
+        raw_text_effects = self.__dict__.get(
+            "text_effects", _TEXT_EFFECTS_ABSENT
+        )
+        if raw_text_effects is not _TEXT_EFFECTS_ABSENT:
+            text_effects = coerce_text_effect_stack(raw_text_effects)
+        else:
+            # 旧载荷：从 legacy 字段迁移等价效果栈（含阴影/渐变）。
+            text_effects = _migrate_legacy_text_effects(self.__dict__)
+        object.__setattr__(self, "text_effects", text_effects)
+        for name in _LEGACY_EFFECT_VIEW_NAMES:
+            self.__dict__.pop(name, None)
         self.deprecated_attributes = {}
 
     def to_serializable_dict(self) -> dict:
@@ -829,6 +1395,53 @@ class FontFormat(Config):
         serialized['text_transform'] = [
             asdict(transform) for transform in self.text_transform
         ]
+        # 效果栈序列化 + 旧字段兼容视图双写（旧键仅供旧版读取；加载时
+        # text_effects 载荷权威，本体的 shadow_*/gradient_* 字段不落盘）。
+        serialized['text_effects'] = self.text_effects.to_serializable_dict()
+        serialized['opacity'] = self.text_effects.overall_opacity
+        stroke = primary_stroke(self.text_effects)
+        compatible_stroke = stroke is not None and not stroke.is_neutral()
+        serialized['stroke_width'] = (
+            stroke.width if compatible_stroke else 0.0
+        )
+        serialized['srgb'] = (
+            list(effect_paint_fallback_color(stroke.paint))
+            if compatible_stroke
+            else [0, 0, 0]
+        )
+        shadow = _legacy_shadow_effect(self.text_effects)
+        shadow_on = shadow is not None and shadow.enabled
+        serialized['shadow_radius'] = shadow.blur if shadow_on else 0.0
+        serialized['shadow_strength'] = (
+            shadow.opacity if shadow_on else 1.0
+        )
+        serialized['shadow_color'] = (
+            list(effect_paint_fallback_color(shadow.paint))
+            if shadow_on
+            else [0, 0, 0]
+        )
+        radians = math.radians(shadow.angle) if shadow_on else 0.0
+        distance = shadow.distance if shadow_on else 0.0
+        serialized['shadow_offset'] = [
+            math.cos(radians) * distance,
+            math.sin(radians) * distance,
+        ]
+        serialized['shadow_include_stroke'] = self.shadow_include_stroke
+        fill = _legacy_gradient_fill(self.text_effects)
+        gradient_on = fill is not None and not fill.is_neutral()
+        serialized['gradient_enabled'] = gradient_on
+        serialized['gradient_start_color'] = (
+            list(fill.paint.stops[0].color) if gradient_on else [0, 0, 0]
+        )
+        serialized['gradient_end_color'] = (
+            list(fill.paint.stops[-1].color)
+            if gradient_on
+            else [255, 255, 255]
+        )
+        serialized['gradient_angle'] = fill.paint.angle if gradient_on else 0.0
+        serialized['gradient_size'] = (
+            fill.paint.scale / 2.0 if gradient_on else 1.0
+        )
         return serialized
 
     def deepcopy(self):
@@ -841,6 +1454,26 @@ class FontFormat(Config):
             return set()
         tgt_keys = target.annotations_set()
         updated_keys = set()
+        has_effect_stack = isinstance(
+            getattr(target, "text_effects", None), TextEffectStack
+        )
+        if has_effect_stack:
+            old_opacity = self.opacity
+            old_width = self.stroke_width
+            old_color = self.srgb
+            effects_changed = self.text_effects != target.text_effects
+            if not compare or effects_changed:
+                self.text_effects = copy.deepcopy(target.text_effects)
+            if compare and effects_changed:
+                updated_keys.add("text_effects")
+                if old_opacity != target.opacity:
+                    updated_keys.add("opacity")
+                if old_width != target.stroke_width:
+                    updated_keys.add("stroke_width")
+                if old_color != target.srgb:
+                    updated_keys.add("srgb")
+            tgt_keys -= _LEGACY_EFFECT_VIEW_NAMES
+        tgt_keys.discard("text_effects")
         for key in tgt_keys:
             if not hasattr(self, key):
                 continue

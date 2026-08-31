@@ -167,52 +167,50 @@ AgentTranslator(以翻译器身份注册进 utils/registries.py::TRANSLATORS,复
 术语表是**项目级一致性资产**,三方共治:提取器供给、人工编辑裁决、agent 翻译消费。这是权限护栏(§6.C)的自然延伸——**agent 不直接写术语表文件**,所有变更经 dialog 人工确认落盘。
 
 ```
-频次提取 / LLM 提取 / agent 翻译沉淀候选
-        │(候选,带来源标记)
+频次预填充 / agent 整合候选(术语工作台 modules/context_agent/)
+        │(候选,带来源标记,只落草稿)
         ▼
-人工编辑确认(ui/glossary_extractor_dialog.py::GlossaryExtractorDialog)
-        │ 落盘 JSON(modules/glossary_extractor.py::save_glossary_json)
+人工编辑确认(ui/glossary_agent_panel.py 草稿表;user-owned 冲突由人裁决)
+        │ 「应用」落盘 JSON(pcfg.module.llm_glossary_path)
         ▼
-术语表文件(pcfg.module.llm_glossary_path)
+术语表文件
         │
         ├─ 编排器自动注入保底(§7)
         ├─ search_glossary 工具按需全查(§5)
         └─ 出口校验·术语残留检测(§6.E)
 ```
 
-### 8.1 修缮提取器(`modules/glossary_extractor.py`)
+> 原「提取术语表」链路(one-shot LLM + GlossaryExtractorDialog)已于 2026-08-31
+> 由会话式术语工作台取代(`modules/context_agent/`,入口=嵌字页窄栏
+> rail_glossary 图标);下述 §8.1/§8.4 修缮方案随之作废。
 
-| 现状问题 | 修缮 |
-| --- | --- |
-| LLM 模式单轮宽松解析(正则捞 JSON),失败**静默**返回空 tuple | 走 `response_format` json_schema(复用回退直译路径的基建)+ 失败重试 + 显式报错到 status |
-| 输入超 3000 行**硬截断丢数据** | 按 token 预算分批提取 → 合并去重 |
-| 自维护 `_raw_llm_call` 单发副本(无重试/限流) | 复用 agent 包统一 API 调用层(profile/代理/重试),删副本 |
-| 频次模式(`modules/glossary_extractor.py::extract_by_frequency`)要求已有译文 | 逻辑保留(语义如此);两个使用时机的引导见 §8.2 |
+### 8.1 提取器(已被工作台取代,记录存档)
 
-### 8.2 两个使用时机
+原 one-shot 提取器(2026-08-31 已删):LLM 单轮宽松解析、3000 行硬截断、
+自维护单发调用层等问题,均由工作台的多轮会话 + 统一调用层根治;
+频次统计迁入 `modules/context_agent/precollect.py::extract_by_frequency`,
+降级为草稿预填充按钮(要求已有译文的语义不变)。
 
-- **翻译前**:LLM 纯 src 模式(`modules/glossary_extractor.py::_collect_src_texts`)产出建议译法 → 人工校对入库 → 整本翻译时作为注入保底;
-- **翻译后**:基于实际 src/trans 对提取(频次 / LLM pair 模式),准确度更高;并可带出 agent 沉淀候选(§8.3)。
-- dialog 内说明两时机的差异与推荐(现状无引导)。
+### 8.2 两个使用时机(语义保留)
+
+- **翻译前**:让工作台 agent 通读原 src 产出候选译法 → 人工在草稿表校对 → 「应用」入库,整本翻译时作为注入保底;
+- **翻译后**:基于实际 src/trans 对整合(频次预填充 / agent 会话),准确度更高;并可带出 agent 沉淀候选(§8.3)。
 
 ### 8.3 agent 沉淀候选回流(新能力)
 
-- 机制:整本翻译完成后,复用 `extract_by_frequency` 的统计逻辑对**本次新产生的译文**跑增量统计,新达到阈值(出现 ≥2 次且译法一致)的词条进入候选列表;
-- 候选在 dialog 表格带**来源标记**(频次提取 / LLM 提取 / agent 沉淀),人工勾选/编辑后才并入库——人工是最终裁决;
-- 设计取向:**拉模式**(打开提取 dialog 时计算),不做后台常驻统计线程——精简优先,零常驻状态。
+- 机制:整本翻译完成后,复用 `modules/context_agent/precollect.py::extract_by_frequency` 的统计逻辑对**本次新产生的译文**跑增量统计,新达到阈值(出现 ≥2 次且译法一致)的词条进入候选列表;
+- 候选在工作台草稿表带**来源标记**(base / AI / 人工),人工编辑后才并入库——人工是最终裁决;
+- 设计取向:**拉模式**(打开工作台时载入现有数据为草稿基底),不做后台常驻统计线程——精简优先,零常驻状态。
 
-### 8.4 dialog 人工编辑增强(`ui/glossary_extractor_dialog.py`)
+### 8.4 人工编辑(工作台草稿表)
 
-保留现有双击编辑单元格,增强:
-
-- **加载已有术语表文件**:打开当前 `llm_glossary_path` 的表继续编辑(现状表格只能装本次提取结果,是一次性的);
-- **合并去重**:新提取结果与已有表合并,同 src 不同 dst 时**标记冲突**,人工裁决;
-- **增删行**:手动补录/删除词条(现状不能加行);
-- 保存沿用 `save_glossary_json` + "设为当前术语表"询问。
+由 `ui/glossary_agent_panel.py` 的草稿表承担:打开即加载 `llm_glossary_path`
+已有表 / 增删行 / 双击编辑;user-owned 条目对 AI 提案受保护,冲突以冲突行
+呈现由人工裁决;「应用」按钮是唯一落盘路径。
 
 ### 8.5 入口
 
-- 工具栏入口保留为主入口(`ui/mainwindow.py::on_open_glossary_extractor`,titleBar `glossary_extract_triggered` 信号);
+- 嵌字页窄栏 rail_glossary 图标(`ui/text_panel.py::install_glossary_launcher`,RailDockPanel 浮层);
 - Run 对话框的 glossary 区随 beta 清理重整(§11 #4 死路径修复):整本翻译前可见术语表就绪状态(路径 + 勾选),Browse 不再是死路径。
 
 ---
@@ -255,8 +253,8 @@ agent loop(任何失败:格式崩/轮数耗尽仍无有效提交/端点不支持
 | Run 对话框 "Context Translation (beta)" 入口 | **删除**(调研 §11 #8 的实例换入问题随之消解);"上下文翻译"从开关变为 agent 模式固有行为 |
 | `modules/context/history.py` 窗口状态机 | **废弃**(保留 `RequestContext` 快照模式与 token 计数;HistoryWindow/eligible_history_for_request/recover_context_length 等登记后删) |
 | `ui/module_manager.py::_blktrans_pipeline` page_key | **修**(§9) |
-| `modules/glossary_extractor.py` | **修缮保留**(§8.1):LLM 模式 schema 化 + 分批,删 `_raw_llm_call` 副本改用统一调用层 |
-| `ui/glossary_extractor_dialog.py::GlossaryExtractorDialog` | **保留并增强**(§8.4):加载已有表 / 合并去重 / 增删行 / 来源标记;工具栏入口不变 |
+| 原 one-shot 提取器后端(登记 deprecated) | **已删**(2026-08-31 术语工作台取代,§8;频率逻辑迁 `modules/context_agent/precollect.py`) |
+| 原提取对话框 GlossaryExtractorDialog(登记 deprecated) | **已删**(2026-08-31 术语工作台取代:草稿表/来源标记/落盘走「应用」,§8.4/§8.5) |
 | Run 对话框 glossary 路径时序 bug(调研 §11 #4) | **修**(beta 删除后重整入口时一并处理,术语表路径读取移到构造前) |
 | `translate_context` 死配置(调研 §11 #9) | **删除**(阶段 4 已删，`utils/config.py::ModuleConfig` 无此字段) |
 | `context_translation_debug_log` | **已并入** `agent_translation_debug_log`（阶段 5 落地，`utils/config.py::ModuleConfig` 无旧字段） |

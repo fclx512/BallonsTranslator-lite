@@ -848,6 +848,8 @@ class FontFormatPanel(Widget):
         self.transform_dock = None
         self.textstyle_launcher = None
         self.textstyle_dock = None
+        self.glossary_launcher = None
+        self.glossary_dock = None
 
         self.vlayout.setContentsMargins(0, 0, 0, 0)
         self.vlayout.setSpacing(7)
@@ -1228,7 +1230,8 @@ class FontFormatPanel(Widget):
         Launchers/docks are None until their ``install_*_launcher`` ran;
         ``getattr`` default keeps this safe on partially-built panels.
         """
-        for key in ("annotation", "emphasis", "transform", "textstyle"):
+        for key in ("annotation", "emphasis", "transform", "textstyle",
+                    "glossary"):
             yield (
                 key,
                 getattr(self, f"{key}_launcher", None),
@@ -1257,14 +1260,14 @@ class FontFormatPanel(Widget):
 
         替代原「Annotations」折叠胶囊；浮层展开在窄栏左侧的画布区、
         可拖拽/拉伸，不占用文本编辑区，仅图标或 × 关闭。浮层懒创建
-        （创建时才能从 rail 解析主窗口宿主）。图标角标在当前块存在
-        注解时点亮（见 _update_annotation_indicator），开合状态记忆在
-        ``pcfg.annotation_dock_open``。
+        （创建时才能从 rail 解析主窗口宿主）。图标（ruby 点 + 正文
+        行）角标在当前块存在注解时点亮（见 _update_annotation_indicator），
+        开合状态记忆在 ``pcfg.annotation_dock_open``。
         """
         from ui.panel_rail import RailLauncherButton
 
         self.rail = rail
-        self.annotation_launcher = RailLauncherButton("あ", deco="dots")
+        self.annotation_launcher = RailLauncherButton("rail_annotation")
         self.annotation_launcher.setToolTip(self.tr("Annotations"))
         self.annotation_launcher.toggled.connect(
             self._on_annotation_launcher_toggled
@@ -1283,7 +1286,7 @@ class FontFormatPanel(Widget):
         from ui.panel_rail import RailLauncherButton
 
         self.rail = rail
-        self.transform_launcher = RailLauncherButton("⤢")
+        self.transform_launcher = RailLauncherButton("rail_transform")
         self.transform_launcher.setToolTip(self.tr("Text Transform"))
         self.transform_launcher.toggled.connect(
             self._on_transform_launcher_toggled
@@ -1357,7 +1360,7 @@ class FontFormatPanel(Widget):
         from ui.panel_rail import RailLauncherButton
 
         self.rail = rail
-        self.emphasis_launcher = RailLauncherButton("●")
+        self.emphasis_launcher = RailLauncherButton("rail_emphasis")
         self.emphasis_launcher.setToolTip(self.tr("Emphasis Marks"))
         self.emphasis_launcher.toggled.connect(
             self._on_emphasis_launcher_toggled
@@ -1410,7 +1413,9 @@ class FontFormatPanel(Widget):
     def install_textstyle_launcher(self, rail) -> None:
         """文本样式浮层入口（不透明度/阴影/渐变，同注解浮层模式）。
 
-        内容=TextStyleGroup；非选中级作用域：全局模式也可用（提交走
+        图标暂借 rail_effects（层叠方片）：阶段 D 本浮层内容并入
+        效果栈后，图标与开合记忆直接沿用。内容=TextStyleGroup；非选中级
+        作用域：全局模式也可用（提交走
         on_param_changed 落地全局格式，与旧对话框一致）。角标在当前块
         带非默认样式（透明度≠1 / 阴影半径>0 / 阴影偏移非零 / 渐变开）
         时点亮。开合记忆在 ``pcfg.textstyle_dock_open``。
@@ -1418,7 +1423,7 @@ class FontFormatPanel(Widget):
         from ui.panel_rail import RailLauncherButton
 
         self.rail = rail
-        self.textstyle_launcher = RailLauncherButton("◐")
+        self.textstyle_launcher = RailLauncherButton("rail_effects")
         self.textstyle_launcher.setToolTip(self.tr("Text Style"))
         self.textstyle_launcher.toggled.connect(
             self._on_textstyle_launcher_toggled
@@ -1453,6 +1458,56 @@ class FontFormatPanel(Widget):
         if self.textstyle_launcher is not None and self.textstyle_launcher.isChecked():
             with QSignalBlocker(self.textstyle_launcher):
                 self.textstyle_launcher.setChecked(False)
+
+    def install_glossary_launcher(self, rail) -> None:
+        """术语/剧情工作台浮层入口（非选中级，项目级工具）。
+
+        内容=GlossaryAgentPanel（会话式 agent：整合术语表与剧情上下文，
+        替代原「提取术语表」菜单对话框）。开合记忆在
+        ``pcfg.glossary_dock_open``。
+        """
+        from ui.panel_rail import RailLauncherButton
+
+        self.rail = rail
+        self.glossary_launcher = RailLauncherButton("rail_glossary")
+        self.glossary_launcher.setToolTip(self.tr("Glossary & Story"))
+        self.glossary_launcher.toggled.connect(
+            self._on_glossary_launcher_toggled
+        )
+        rail.add_launcher(self.glossary_launcher)
+
+    def _ensure_glossary_dock(self):
+        if self.glossary_dock is None:
+            from ui.custom_widget import RailDockPanel
+            from ui.glossary_agent_panel import GlossaryAgentPanel
+
+            panel = GlossaryAgentPanel(self.window().imgtrans_proj, self)
+            self.glossary_dock = RailDockPanel(
+                self.tr("Glossary & Story"),
+                panel,
+                rail=self.rail,
+                config_open="glossary_dock_open",
+            )
+            # 会话面板：日志流 + 双表需要宽度；与右栏同量级的下限
+            self.glossary_dock.setMinimumWidth(360)
+            self.glossary_dock.closed.connect(
+                self._on_glossary_dock_closed
+            )
+        return self.glossary_dock
+
+    def _on_glossary_launcher_toggled(self, checked: bool):
+        if self.glossary_dock is None and not checked:
+            return
+        if checked:
+            self._close_other_docks("glossary")
+            self._ensure_glossary_dock().open_panel()
+        elif self.glossary_dock is not None:
+            self.glossary_dock.close_panel()
+
+    def _on_glossary_dock_closed(self):
+        if self.glossary_launcher is not None and self.glossary_launcher.isChecked():
+            with QSignalBlocker(self.glossary_launcher):
+                self.glossary_launcher.setChecked(False)
 
     def _update_textstyle_indicator(self):
         """Rail icon corner dot while the block carries a non-default style."""
@@ -1529,6 +1584,12 @@ class FontFormatPanel(Widget):
                 self.textstyle_dock,
                 self._ensure_textstyle_dock,
                 "textstyle_dock_open",
+            ),
+            (
+                self.glossary_launcher,
+                self.glossary_dock,
+                self._ensure_glossary_dock,
+                "glossary_dock_open",
             ),
         )
         if visible:

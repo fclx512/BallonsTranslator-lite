@@ -82,8 +82,8 @@ DOM 做不到的效果用 ActionManager 补：
 | `color` / `stroke_color` | `ff.foreground_color()` / `ff.stroke_color()` |
 | `bold/italic/underline/vertical/alignment/opacity` | `ff.*` 直取 |
 | `line_spacing` | proportional → `×100`（120%）；Distance 型 → `值/font_size×100` |
-| `stroke_size` | `font_size × ff.stroke_width`（与 `ui/text_engine/effect_renderer.py::_stroke_paint_context` 一致；旧代码 `×0.5` 是错的） |
-| `shadow_blur/distance/opacity/angle` | 沿用 `ui/text_engine/effect_renderer.py` 公式：blur/offset = 参数×font_size；strength→百分比；angle 为 PS 光源角（offset 反向 +180°） |
+| `stroke_size` | `font_size × ff.stroke_width`（与 `ui/text_engine/effects/renderer.py::_stroke_paint_context` 一致；旧代码 `×0.5` 是错的） |
+| `shadow_blur/distance/opacity/angle` | 沿用 `ui/text_engine/effects/renderer.py` 公式：blur/offset = 参数×font_size；strength→百分比；angle 为 PS 光源角（offset 反向 +180°） |
 | `rotation` | `blk.angle` 直取（含竖排的 -90 已内置，无需修正），JSX 内取负 |
 | `box` | `blk.xyxy`（中心对齐的锚） |
 | `center` | 对话框「居中」勾选（默认开） |

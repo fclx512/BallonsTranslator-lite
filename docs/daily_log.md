@@ -2,6 +2,69 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，每次在对应日期中末尾写入日志。
 
+## 2026-08-31
+
+### 效果栈渲染层落地 + exit 127 硬崩修复（阶段 C 完成收尾）
+
+**问题/需求：** 接手阶段 C 中断交接——全量 pytest 83% 处 `test_text_transform_engine` 变换往返测试 Qt 硬崩（exit 127，faulthandler 抓不到、崩溃点随调用路径漂移）。
+
+**改动要点：**
+
+- 根因：移植转换脚本丢符号的残留——`ui/text_engine/effects/renderer.py::paint_stroke` 引用未导入的 `VerticalTextDocumentLayout`（本地别名 `EngineVerticalTextDocumentLayout`），NameError 经 Qt 虚回调 → PyQt6 abort → fast-fail；另补 `LOGGER` 导入（`utils.logger` 惯例）。全 effects 包未定义名 AST 扫描清零。教训：port 转换产物必须做未定义名扫描；monkeypatch 包装须处理 staticmethod，否则插桩自身造伪 TypeError 误导排查。
+- `tests/test_text_transform_engine.py::test_zero_glyph_slant_restores_effects_inside_nonlinear_stack` 适配新渲染器惰性重绘语义：新 `finalize_neutral_cache` 与上游逐字一致、只标脏缓存不再同步 repaint（旧 v1.5.9 版会同步 repaint_background），patch 块内补 `_render_scene` 触发重建；`_transformed_effect_state` 断言换 `_preview_effect_raster_state`。
+- 验证：全量 pytest 478 passed + 1 skipped；`verify.py --full` 全绿。计划文档第七节交接内容删除、阶段 C 标完成。
+
+**涉及文件：** `ui/text_engine/effects/renderer.py`、`tests/test_text_transform_engine.py`、`docs/技术实现/效果栈移植与窄栏图标重绘_计划.md`
+
+---
+
+### 面板效果设置写入断链修复（实机验收缺陷）
+
+**问题/需求：** 实机验收发现描边/阴影/渐变设置全部无效。根因：fork 双格式惯例（`ui/text_panel.py::set_textblk_item`/`get_fontformat()` 深拷贝解耦渲染副本与模型）× 新渲染器按上游语义读 `blk.fontformat` canonical 栈——面板写入只落渲染副本，渲染器不可见。引擎层/测试层不受影响（测试直写模型）。
+
+**改动要点：**
+
+- `ui/text_engine/item.py` 新增 `_commit_effect_fields`：canonical 栈 FontFormat 深拷贝探针 + legacy 视图写入 → `ui/text_engine/effects/renderer.py::set_text_effects` 提交（同时写 model+render 两格式，`_finish_effect_transition` 自带完整失效链：opacity 应用、描边对齐、padding、缓存策略、repaint、update）。
+- 七个效果 setter 接入（setStrokeWidth/setStrokeColor/setShadow/setBGAttribute/setGradientAttribute/setGradientEnabled/setOpacity）；`setOpacity` 上游模式化（native 透明度由 `_apply_effective_opacity` 应用）；`setBGAttribute`/`setGradientAttribute` 对非 legacy 名保留原通道。
+- `set_fontformat` bulk 路径：描边宽+色合并一次提交，色只随非零宽度进栈（0 宽卡是 neutral，`paint_item` 已短路，无伪影）。
+- 新增回归 `tests/test_textblkitem_effect.py::test_legacy_setters_reach_canonical_stack_after_panel_decoupling`（解耦后七 setter 写透 canonical + 渲染像素跟进）；全量 pytest 479 passed + 1 skipped、`verify.py --full` 全绿。
+
+**涉及文件：** `ui/text_engine/item.py`、`tests/test_textblkitem_effect.py`、`docs/技术实现/效果栈移植与窄栏图标重绘_计划.md`
+
+---
+
+## 2026-08-30
+
+### 效果栈移植立项 + 窄栏图标 SVG 重绘（阶段 A，已验收）
+
+**问题/需求：** 上游 dev 新增 `text_effects`（TextEffectStack 效果栈），移植前先定放置方案；用户同时反馈窄栏字体字形图标（あ/●/⤢/◐）难懂，要求换 SVG。方案定稿见 `docs/技术实现/效果栈移植与窄栏图标重绘_计划.md`（第 5 窄栏入口"效果"取代 ◐、整栈不拆、范围裁剪：AI 生成图/滤镜族/纹理/遮罩记入后续待办；格式条件中效果视为预合成仅复制粘贴；描边卡渐进披露）。
+
+**改动要点（阶段 A）：**
+
+- 新增 `icons/rail_annotation|emphasis|transform|effects.svg` 四枚 24px Material 网格单色填充图标（纯 `fill="#96a4cd"`、无 stroke、无 `_activate` 变体）：注解=三点+正文条（原 deco dots 并入 SVG 本体）、着重号=字身框+下圆点、变换=旋转方框+对角箭头、效果=错位双层方片+挖孔（挖孔几何须完全落在非叠区，否则读成月牙缺口）。
+- `ui/icon_rendering.py::render_svg_pixmap` 增 `override_fill` 参数：渲染前替换全部 fill，供窄栏状态色（正常=palette 前景色/选中=白/禁用降 alpha）。
+- `ui/panel_rail.py::RailLauncherButton` 弃 drawText 字形与 `deco` 参数改 SVG 渲染；accent 选中底/hover 描边/dot 角标自绘逻辑不动。文本样式 launcher 暂借 rail_effects 图标（阶段 D 整体取代时沿用）。
+- 排障：预览脚本大图小图叠画造成"图标有伪影"假象（着重号顶部凸起实为 24px 小图叠在 96px 大图上），先隔离渲染再怀疑路径本身。
+
+**涉及文件：** `icons/rail_*.svg`（新增×4）、`ui/icon_rendering.py`、`ui/panel_rail.py`、`ui/text_panel.py`、`tests/test_panel_rail.py`、`docs/技术实现/效果栈移植与窄栏图标重绘_计划.md`（新增）
+
+---
+
+### 效果栈数据层移植（阶段 B，待实机验收）
+
+**问题/需求：** 计划阶段 B——引入上游 TextEffectStack 效果栈数据层，旧字段经视图保持读写兼容，为阶段 C 渲染层与阶段 D 效果面板铺底。
+
+**改动要点：**
+
+- `utils/text_effects.py`（1417 行纯冻结 dataclass）+ `utils/raster_assets.py` 自上游逐字移植，import 路径零改动。
+- `utils/fontformat.py`：`text_effects` 哨兵字段 + `opacity`/`stroke_width`/`srgb` legacy 视图（`__getattribute__`/`__setattr__` 直读直写栈，既有管线/UI 透明）+ `__post_init__` 迁移（无载荷从旧字段合成栈；阴影/渐变阶段 C 前保持字段本体）+ `to_serializable_dict` 双写兼容 + `merge` 感知。显式载荷权威、无效值逐项告警降级。
+- **偏差**：base_styles 的 text_effects 感知（DIFF_FIELDS/量化）挪到阶段 D 与效果面板一起落——B 就入列会和 legacy 视图产生关联重复 override 条目，且变体面板尚无编辑控件。
+- 新增 `tests/test_text_effects_data.py` 7 例：默认中性栈/旧载荷迁移/视图写穿/序列化 roundtrip/显式载荷权威/merge+deepcopy/DIFF_FIELDS 阶段钉。verify --full 全绿（pytest 478 过）。
+
+**涉及文件：** `utils/text_effects.py`（新增）、`utils/raster_assets.py`（新增）、`utils/fontformat.py`、`tests/test_text_effects_data.py`（新增）
+
+---
+
 ## 2026-08-23
 
 ### 右侧面板排版重构 + 移植收尾审计与文档清理

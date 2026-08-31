@@ -36,6 +36,7 @@
 
 | 脚本 | 用途 | 运行方式 |
 |---|---|---|
+| `scripts/style_showcase.py` | 自定义控件样式展示台（人工目视）：Tab1 原生 vs 封装对照（识别哪些类必须用 `ui/custom_widget` 封装），Tab2 全部可离线实例化控件分区展示；新增控件在对应分区 rows 追加一行。系统 Python 启动时自动切便携解释器重跑 | `python scripts/style_showcase.py` |
 | `scripts/pie_menu_test.py` | 饼菜单/快捷菜单离线功能测试（状态机/命中判定/命令注册，独立进程沙箱配置）；功能已上线，后续加功能卡片等小修小补可复用 | `python scripts/pie_menu_test.py` |
 
 渲染同步回归已迁至 `tests/test_render_sync.py`（pytest/直接运行均可）。

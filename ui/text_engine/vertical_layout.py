@@ -1566,6 +1566,9 @@ class VerticalTextDocumentLayout(SceneTextLayout):
     def draw(self, painter: QPainter, context: QAbstractTextDocumentLayout.PaintContext) -> None:
         doc = self.document()
         self.deferred_cursor_position = context.cursorPosition
+        observer = self.paint_context_observer
+        if observer is not None:
+            observer(context)
         painter.save()
         block = doc.firstBlock()
         cursor_block = None

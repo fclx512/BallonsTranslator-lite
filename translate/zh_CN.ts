@@ -1503,6 +1503,10 @@ Settings → Inpainter → Photoshop Path</source>
             <translation>文本样式</translation>
         </message>
         <message>
+            <source>Glossary &amp; Story</source>
+            <translation>术语与剧情</translation>
+        </message>
+        <message>
             <source>Advanced Text Format</source>
             <translation>进阶字体格式</translation>
         </message>
@@ -2528,107 +2532,8 @@ No pipeline stages will be executed.</source>
         <name>GlossaryExtractorDialog</name>
         <message>
             <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Glossary Extraction</source>
-            <translation>术语表提取</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>LLM Profile</source>
-            <translation>LLM 配置</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Target Language</source>
-            <translation>目标语言</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Extraction Mode</source>
-            <translation>提取模式</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Frequency (fast, no LLM) — count repeated terms</source>
-            <translation>频率提取（快速，无 LLM）— 统计重复出现的术语</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>LLM Extraction (slower, semantic) — detect named entities and important terms</source>
-            <translation>LLM 语义提取（较慢）— 检测命名实体和重要术语</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Extract Glossary</source>
-            <translation>提取术语表</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Extracted Terms</source>
-            <translation>提取结果</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Source</source>
-            <translation>原文</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Translation</source>
-            <translation>译文</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Note</source>
-            <translation>备注</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Save as...</source>
-            <translation>保存为...</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Cancel</source>
-            <translation>取消</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>No Profile</source>
-            <translation>未选择配置</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Please select an LLM profile for extraction.</source>
-            <translation>请选择一个 LLM 配置用于提取。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>No Data</source>
-            <translation>无数据</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>The project has no source text to analyse.
-
-Please run text detection and OCR first.</source>
-            <translation>项目中没有原文可供分析。
-
-请先运行文字检测和 OCR。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Extraction failed — see log.</source>
-            <translation>提取失败 — 查看日志了解详情。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
             <source>Extracted {} terms.</source>
             <translation>已提取 {} 条术语。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>No glossary terms found in this project.</source>
-            <translation>该项目中未找到术语。</translation>
         </message>
         <message>
             <location filename="..\ui\glossary_extractor_dialog.py" />
@@ -2637,40 +2542,10 @@ Please run text detection and OCR first.</source>
         </message>
         <message>
             <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>No Entries</source>
-            <translation>无条目</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>There are no entries to save.</source>
-            <translation>没有可保存的条目。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Save Glossary</source>
-            <translation>保存术语表</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Glossary files (*.json);;All files (*)</source>
-            <translation>术语表文件 (*.json);;所有文件 (*)</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Save Error</source>
-            <translation>保存出错</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
             <source>Failed to save glossary:
 {}</source>
             <translation>保存术语表失败：
 {}</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Use Glossary</source>
-            <translation>使用术语表</translation>
         </message>
         <message>
             <location filename="..\ui\glossary_extractor_dialog.py" />
@@ -2683,31 +2558,13 @@ Set this file as the active glossary now?</source>
 
 立即将此文件设为活动术语表？</translation>
         </message>
-        <message>
-            <source>The project has no source/translation pairs to analyse.
-
-Frequency extraction requires translations to pair with source text.  Try LLM Extraction mode instead, or run the translation pipeline first.</source>
-            <translation>项目中没有可分析的原文/译文对。
-
-频率提取需要译文与原文配对。请改用 LLM 提取模式，或先运行翻译管线。</translation>
-        </message>
     </context>
     <context>
         <name>_ExtractWorker</name>
         <message>
             <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Analysing source text frequency...</source>
-            <translation>正在分析原文词频...</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
             <source>Error: profile '{}' not found.</source>
             <translation>错误：找不到配置「{}」。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Sending to LLM for analysis...</source>
-            <translation>正在发送到 LLM 分析...</translation>
         </message>
         <message>
             <location filename="..\ui\glossary_extractor_dialog.py" />
@@ -4626,11 +4483,6 @@ Orientation: {o}</source>
             <location filename="..\ui\mainwindowbars.py" line="387" />
             <source>Pair No-text Images…</source>
             <translation>配对无字图…</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindowbars.py" />
-            <source>Extract Glossary…</source>
-            <translation>提取术语表…</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" />
@@ -6614,6 +6466,108 @@ This maps automatically to each provider's native parameter
         <message>
             <source>Close</source>
             <translation>关闭</translation>
+        </message>
+    </context>
+    <context>
+        <name>GlossaryAgentPanel</name>
+        <message>
+            <source>Apply draft…</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Chat</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Global synopsis</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Glossary</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Instruction for the agent… (Ctrl+Enter to send)</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Note</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Origin</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Page</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Page summaries</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Prefill (frequency)</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Remove selected</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Save glossary</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Send</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Source</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Stop</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Story</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Summary</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Translation</source>
+            <translation type="finished" />
+        </message>
+    </context>
+    <context>
+        <name>GlossaryAgentWorker</name>
+        <message>
+            <source>Draft loaded: %1 glossary entries, %2 page summaries.</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Failed to load glossary '%1': %2</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Glossary saved: %1</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Prefill: %1 rows merged, %2 skipped.</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>Story context applied to project (%1 pages).</source>
+            <translation type="finished" />
+        </message>
+        <message>
+            <source>— turn %1: %2</source>
+            <translation type="finished" />
         </message>
     </context>
 </TS>
