@@ -78,17 +78,16 @@ class TestVerticalEngineLayout(unittest.TestCase):
 
     def test_centers_vertical_glyph_stop_marks(self):
         _doc, layout = _make_layout("。")
-        # Stop marks stay centered under the default standard vertical roman
-        # alignment; punctuation_position never right-aligns them (fork also
-        # centers PAUSEORSTOP regardless of the position setting).
-        self.assertTrue(layout.centers_vertical_glyph("。"))
+        # Stop marks follow punctuation_position again (fork edge-alignment
+        # restored): Simplified upper-right (not centered), Traditional
+        # centered. standard_vertical_roman_alignment no longer hijacks them.
         layout.punctuation_position = PunctuationPosition.Simplified
-        self.assertTrue(layout.centers_vertical_glyph("。"))
-        layout.punctuation_position = PunctuationPosition.Traditional
-        self.assertTrue(layout.centers_vertical_glyph("。"))
-        # Non-standard vertical roman alignment sends stop marks upper-right.
+        self.assertFalse(layout.centers_vertical_glyph("。"))
         layout.fontformat.standard_vertical_roman_alignment = False
         self.assertFalse(layout.centers_vertical_glyph("。"))
+        layout.fontformat.standard_vertical_roman_alignment = True
+        layout.punctuation_position = PunctuationPosition.Traditional
+        self.assertTrue(layout.centers_vertical_glyph("。"))
         # Alignment-center marks always center regardless of position.
         self.assertTrue(layout.centers_vertical_glyph("·"))
 

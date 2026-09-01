@@ -187,21 +187,24 @@ class ConfigPanelNode3Test(unittest.TestCase):
             widgets.index(vertical_header),
             "Fonts section must precede the Vertical Text section",
         )
-        self.assertIsNone(
-            next(
-                (
-                    w
-                    for w in widgets
-                    if w is not None
-                    and hasattr(w, "findChildren")
-                    and any(
-                        isinstance(c, QLabel) and c.text() == "Punctuation Position"
-                        for c in w.findChildren(QLabel)
-                    )
-                ),
-                None,
-            ),
-            "Punctuation Position is a dead setting post-port and must be gone",
+        # Edge-aligned punctuation setting was restored (fork「标点靠边」):
+        # it must exist again and sit at the top of the Vertical Text section.
+        punctuation_row = row_of(
+            self.panel.punctuation_position_combo, type(self.panel.punctuation_position_combo)
+        )
+        self.assertIsNotNone(
+            punctuation_row,
+            "Punctuation Position must be present in the Vertical Text section",
+        )
+        self.assertLess(
+            widgets.index(vertical_header),
+            widgets.index(punctuation_row),
+            "Punctuation Position must sit inside the Vertical Text section",
+        )
+        self.assertLess(
+            widgets.index(punctuation_row),
+            widgets.index(compact_row),
+            "Punctuation Position must precede the compact punctuation row",
         )
 
 

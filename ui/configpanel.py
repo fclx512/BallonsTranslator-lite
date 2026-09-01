@@ -2003,6 +2003,24 @@ class ConfigPanel(Widget):
         # Vertical Text section — vertical-only typography controls
         ts_layout.addWidget(_section_header(self.tr("Vertical Text")))
 
+        # Punctuation Position
+        self.punctuation_position_combo = ConfigComboBox(fix_size=False)
+        self.punctuation_position_combo.addItems(
+            [self.tr("Centered (Traditional Chinese / Japanese)"), self.tr("Edge-aligned (Simplified Chinese)")]
+        )
+        self.punctuation_position_combo.setCurrentIndex(pcfg.punctuation_position)
+        self.punctuation_position_combo.setFixedWidth(CONFIG_COMBOBOX_LONG)
+        self.punctuation_position_combo.currentIndexChanged.connect(
+            self.on_punctuation_position_changed
+        )
+        ts_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Punctuation Position"),
+                self.punctuation_position_combo,
+                note=self.tr("<p>Choose punctuation alignment:</p><p><b>Centered</b> — traditional CJK style (Traditional Chinese / Japanese)<br/><b>Edge-aligned</b> — modern style (Simplified Chinese)</p>"),
+            )
+        )
+
         # Compact punctuation spacing in vertical text
         self.compact_punctuation_checker = ConfigCheckBox(
             self.tr("Compact punctuation spacing")
@@ -2823,6 +2841,25 @@ class ConfigPanel(Widget):
     def on_max_font_size_changed(self, value: int):
         pcfg.max_font_size = value
 
+    def on_punctuation_position_changed(self, index: int):
+        pcfg.punctuation_position = index
+        self._apply_punctuation_settings()
+
+    def _apply_punctuation_settings(self):
+        """Apply punctuation_position to ALL existing text items."""
+        from .shared_widget import canvas as sw_canvas
+        from .textitem import TextBlkItem
+
+        if sw_canvas is None:
+            return
+        for item in sw_canvas.items():
+            if isinstance(item, TextBlkItem):
+                layout = item.layout
+                if layout is not None and hasattr(layout, "setPunctuationPosition"):
+                    layout.setPunctuationPosition(pcfg.punctuation_position)
+                item.repaint_background()
+                item.update()
+
     def on_compact_punctuation_changed(self, enabled: bool):
         pcfg.compact_vertical_punctuation_spacing = enabled
         self._apply_compact_punctuation_settings()
@@ -3128,6 +3165,7 @@ class ConfigPanel(Widget):
         self.load_model_checker.setChecked(pcfg.module.load_model_on_demand)
         self.empty_runcache_checker.setChecked(pcfg.module.empty_runcache)
         self.max_font_size_edit.setValue(pcfg.max_font_size)
+        self.punctuation_position_combo.setCurrentIndex(pcfg.punctuation_position)
         self.compact_punctuation_checker.setChecked(
             pcfg.compact_vertical_punctuation_spacing
         )

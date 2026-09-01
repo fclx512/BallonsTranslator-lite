@@ -1116,6 +1116,22 @@
             <source>Fonts</source>
             <translation>字体</translation>
         </message>
+        <message>
+            <source>&lt;p&gt;Choose punctuation alignment:&lt;/p&gt;&lt;p&gt;&lt;b&gt;Centered&lt;/b&gt; — traditional CJK style (Traditional Chinese / Japanese)&lt;br/&gt;&lt;b&gt;Edge-aligned&lt;/b&gt; — modern style (Simplified Chinese)&lt;/p&gt;</source>
+            <translation>&lt;p&gt;选择标点对齐方式：&lt;/p&gt;&lt;p&gt;&lt;b&gt;居中&lt;/b&gt;——传统 CJK 风格（繁体中文/日文）&lt;br/&gt;&lt;b&gt;靠边&lt;/b&gt;——现代风格（简体中文）&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Centered (Traditional Chinese / Japanese)</source>
+            <translation>居中（繁体中文/日文）</translation>
+        </message>
+        <message>
+            <source>Edge-aligned (Simplified Chinese)</source>
+            <translation>靠边（简体中文）</translation>
+        </message>
+        <message>
+            <source>Punctuation Position</source>
+            <translation>标点位置</translation>
+        </message>
     </context>
     <context>
         <name>DependencyDialog</name>

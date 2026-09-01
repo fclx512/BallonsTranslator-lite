@@ -19,7 +19,7 @@ from qtpy.QtGui import (
 
 from utils import shared as C
 from utils.config import pcfg
-from utils.fontformat import FontFormat, TextAlignment
+from utils.fontformat import FontFormat, PunctuationPosition, TextAlignment
 from .annotations import text_combine_upright_ranges
 from .cache import KeyedLruCache
 from .layout import (
@@ -64,6 +64,10 @@ PUNSET_HALF = {chr(i) for i in range(0x21, 0x7F)}
 PUNSET_PAUSEORSTOP = {
     '。', '．', '，', '、', '：', '；', '！', '‼', '？', '⁇', '⁈', '⁉',
 }
+# Fork: the Mainland upper-right edge convention applies to sentence-internal
+# pause marks only. Exclamation/question marks and colon/semicolon center in
+# both punctuation_position modes (Japanese/Traditional convention).
+PUNSET_EDGE_ALIGN = {'。', '．', '，', '、'}
 PUNSET_ALIGNCENTER = {'·', '・', '‧', '●', '•'}
 # ‶ pairs with either 〟 or ″ as the closing mark.
 PUNSET_BRACKETL = {'「', '『', '“', '‘', '‶', '（', '《', '〈', '【', '〖', '〔', '［', '｛', '('}
@@ -338,10 +342,16 @@ class VerticalTextDocumentLayout(SceneTextLayout):
 
     def centers_vertical_glyph(self, char: str) -> bool:
         if char in PUNSET_PAUSEORSTOP:
-            # Standard vertical roman alignment keeps stop marks centered;
-            # the fork layout also centers them (x-center, top-aligned) and
-            # never right-aligns them regardless of punctuation_position.
-            return self.fontformat.standard_vertical_roman_alignment
+            # Fork: punctuation_position governs stop marks. Simplified keeps
+            # the upper-right edge alignment (Mainland convention, the
+            # EDGE_ALIGN branch in updateDrawOffsets) for sentence-internal
+            # pause marks only; exclamation/question marks center in both
+            # modes. Traditional centers everything. Independent of
+            # standard_vertical_roman_alignment — that switch only concerns
+            # roman glyph orientation.
+            if char not in PUNSET_EDGE_ALIGN:
+                return True
+            return self.punctuation_position == PunctuationPosition.Traditional
         if (
             self.fontformat.standard_vertical_roman_alignment
             and _is_non_fullwidth_roman(char)
@@ -741,9 +751,13 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                                     - act_rect.height()
                                 ) / 2
                             )
-                        elif char in PUNSET_PAUSEORSTOP:
-                            # CLREQ's Mainland convention places stop marks at
-                            # the upper-right of their full character frame.
+                        elif char in PUNSET_EDGE_ALIGN:
+                            # Simplified (edge-aligned): CLREQ's Mainland
+                            # convention places sentence-internal pause marks
+                            # at the upper-right of their full character
+                            # frame. Traditional reaches the centered branch
+                            # above instead, and so do exclamation/question
+                            # marks in both modes.
                             xoff = (
                                 -act_rect.left()
                                 + base_width
