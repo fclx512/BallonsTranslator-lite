@@ -972,7 +972,10 @@ class FontFormatPanel(Widget):
         if multi_size:
             font_size += "+"
         self.fontsizebox.fcombobox.setCurrentText(font_size)
-        self.familybox.setCurrentText(font_format.font_family)
+        # 旧数据可能存的是被归并隐藏的别名家族名（如字重变体/英文名），
+        # 非可编辑下拉对不存在的名字 setCurrentText 是 no-op，会显示滞留，
+        # 这里先映射到规范名再回显
+        self.familybox.setCurrentText(shared.canonical_font_family(font_format.font_family))
 
         # 【新增】回显 Style
         styles = shared.FONT_STYLES.get(font_format.font_family, [])

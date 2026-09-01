@@ -818,6 +818,9 @@ class MainWindow(mainwindow_cls):
 
     def refresh_font_list_exclusion(self):
         """Re-apply font exclusion filter to the font combobox."""
+        # 重跑归并枚举：让 FONT_PS_NAMES 为本会话新增的「已精简」别名
+        # 补上借自规范名的 PS 记录
+        shared.init_font_list()
         familybox = self.textPanel.formatpanel.familybox
         current_family = familybox.currentText()
         filtered = shared.get_filtered_font_list(pcfg.excluded_fonts)
@@ -1127,7 +1130,9 @@ class MainWindow(mainwindow_cls):
         if only_custom:
             font_list = shared.CUSTOM_FONT_FAMILIES
         else:
-            font_list = shared.ALL_FONT_FAMILIES
+            # 与 refresh_font_list_exclusion 同源：走排除过滤，
+            # 否则打开项目时会把用户隐藏的字体重新灌回下拉
+            font_list = shared.get_filtered_font_list(pcfg.excluded_fonts)
 
         familybox = self.textPanel.formatpanel.familybox
         current_family = familybox.currentText()

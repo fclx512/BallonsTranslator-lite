@@ -122,8 +122,9 @@ LEGACY_FONTS = frozenset({
     "System", "Fixedsys", "Terminal",
     "Courier", "Modern", "Roman", "Script",
 })
-FONT_STYLES = {}  # 所有字体的样式映射 { FamilyName: [Style1, Style2...] }
-FONT_FAMILY_ALIAS = {}  # 规范名 -> [原始家族名列表] (用于问题4的归并)
+FONT_STYLES = {}  # 所有真实 Qt 家族名（含被归并隐藏的别名）→ 各自样式 { FamilyName: [Style1, Style2...] }
+FONT_FAMILY_ALIAS = {}  # 归并规范名 -> [被隐藏的别名家族名]（见 utils/font_scan.py）
+FONT_PS_NAMES = {}  # 任意家族名（规范名+别名）-> {OS/2 字重: PostScript 名}，PSD 导出用
 FONT_VARIABLE_AXES = {}  # { FamilyName: { 'wght': (min, max, default) } }
 VIRTUAL_FONT_STYLES = {}  # { FamilyName: set("Bold", "Light", ...) } 记录哪些样式是虚拟生成的
 pbar = {}
@@ -182,38 +183,69 @@ def dump_cache():
 
 
 def init_font_list():
-    """Enumerate all system fonts using QFontDatabase and populate ALL_FONT_FAMILIES and FONT_STYLES."""
-    from qtpy.QtGui import QFontDatabase
+    """枚举系统字体并归并重复家族名（详见 utils/font_scan.py）。
 
-    families = QFontDatabase.families()
-    # Filter out vertical font variants (prefixed with @ on Windows)
-    families = [f for f in families if not f.startswith("@")]
-    global ALL_FONT_FAMILIES, FONT_STYLES
-    ALL_FONT_FAMILIES = sorted(set(families))
+    ``ALL_FONT_FAMILIES`` 只保留归并后的规范名（同一字体的字重变体与
+    中英双名各留一项，对齐 Photoshop 的组织方式）；``FONT_STYLES`` 仍
+    覆盖所有真实 Qt 家族名（含被隐藏的别名），保证旧项目数据按原名
+    回显字重不受影响。「一键精简」条目存在 ``pcfg.excluded_fonts`` 里
+    （与手动排除同一条落盘路径），在 ``get_filtered_font_list`` 过滤，
+    不在此处剔除——否则会话内恢复要重启才生效。
+    """
+    from utils import font_scan
+    from utils.config import pcfg
 
-    # Populate font styles (weights/variants) for each family
-    FONT_STYLES = {}
-    for family in ALL_FONT_FAMILIES:
-        styles = QFontDatabase.styles(family)
-        if styles:
-            # Deduplicate by normalized name (some VF fonts return duplicate entries)
-            seen = {}
-            for s in styles:
-                key = s.strip()
-                if key not in seen:
-                    seen[key] = s
-            # Sort by numeric weight (100 Thin → 900 Black), then alphabetically
-            deduped = sorted(
-                seen.values(), key=lambda s: (QFontDatabase.weight(family, s), s)
-            )
-            FONT_STYLES[family] = deduped
+    global ALL_FONT_FAMILIES, FONT_STYLES, FONT_FAMILY_ALIAS, FONT_PS_NAMES
+    data = font_scan.build_font_data()
+    ALL_FONT_FAMILIES = data["display_families"]
+    FONT_STYLES = data["styles"]
+    FONT_FAMILY_ALIAS = data["canonical_to_aliases"]
+    FONT_PS_NAMES = data["ps_index"]
+    # 精简别名是真实 Qt 家族名：PS 索引借规范名的记录，旧项目数据按
+    # 别名存储时才能正常导出
+    for alias, canonical in pcfg.simplified_font_map.items():
+        if alias not in FONT_PS_NAMES and canonical in FONT_PS_NAMES:
+            FONT_PS_NAMES[alias] = FONT_PS_NAMES[canonical]
+
+
+def _alias_to_canonical() -> Dict[str, str]:
+    """反排 FONT_FAMILY_ALIAS 并入精简映射 → {别名: 规范名}。"""
+    from utils.config import pcfg
+
+    inverse = {}
+    for canonical, aliases in FONT_FAMILY_ALIAS.items():
+        for alias in aliases:
+            inverse[alias] = canonical
+    inverse.update(pcfg.simplified_font_map)
+    return inverse
+
+
+def canonical_font_family(name: str) -> str:
+    """归并别名（旧字重变体/另一语言名）到规范名；未知名字原样返回。"""
+    return _alias_to_canonical().get(name, name)
 
 
 def get_filtered_font_list(excluded=None) -> list:
-    """Return ALL_FONT_FAMILIES minus the excluded font names."""
+    """Return ALL_FONT_FAMILIES minus the excluded font names.
+
+    排除名若是被归并隐藏的别名（旧字重变体 / 另一语言名），视为排除
+    其规范名——用户排除重复项时记的旧名在归并后依然生效。「一键精简」
+    条目（``pcfg.simplified_font_map`` 的键，也在 excluded 里）例外：
+    只隐藏自身，**不**扩展到规范名，否则整组字体会被连带隐藏。
+    """
     if excluded is None:
         excluded = []
+    from utils.config import pcfg
+
     excluded_set = set(excluded)
+    alias_map = _alias_to_canonical()
+    simplified = set(pcfg.simplified_font_map)
+    for name in excluded:
+        if name in simplified:
+            continue
+        canonical = alias_map.get(name)
+        if canonical:
+            excluded_set.add(canonical)
     return [f for f in ALL_FONT_FAMILIES if f not in excluded_set]
 
 

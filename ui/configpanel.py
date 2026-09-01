@@ -1303,6 +1303,15 @@ class FontExcludeDialog(QDialog):
         self.legacy_btn.clicked.connect(self._on_add_legacy_fonts)
         layout.addWidget(self.legacy_btn)
 
+        # Fork-private one-shot simplify button
+        self.simplify_btn = QPushButton(self.tr("Simplify Font List"))
+        self.simplify_btn.setObjectName("ConfigButton")
+        self.simplify_btn.setToolTip(
+            self.tr("Hide duplicate weight/language variants of the same font")
+        )
+        self.simplify_btn.clicked.connect(self._on_simplify)
+        layout.addWidget(self.simplify_btn)
+
         # OK / Cancel buttons
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -1311,21 +1320,34 @@ class FontExcludeDialog(QDialog):
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
+        # 「一键精简」当前对话框状态：{隐藏家族名: 规范名}，确定时写回
+        # pcfg。必须从 pcfg 播种——否则重开对话框看不到已精简条目，
+        # 点 OK 会把 pcfg.simplified_font_map 覆盖成空 dict 丢盘
+        from utils.config import pcfg as _pcfg
+
+        self._simplify_map: Dict[str, str] = dict(_pcfg.simplified_font_map)
         # Populate lists
         self._populate_lists()
 
-    def _add_font_item(self, list_widget: QListWidget, font_name: str):
+    def _add_font_item(
+        self, list_widget: QListWidget, font_name: str, simplified: bool = False
+    ):
         """Add a font name to a list widget.
-        
+
         Legacy fonts skip the typeface preview and get a "[Legacy]" suffix.
-        The original font name is stored in ``Qt.UserRole``.
+        Simplified entries get a "(Simplified)" suffix. The original font
+        name is stored in ``Qt.UserRole``.
         """
         from qtpy.QtCore import Qt
 
         from utils.shared import LEGACY_FONTS
 
         is_legacy = font_name in LEGACY_FONTS
-        display = f"{font_name} [{self.tr('Legacy')}]" if is_legacy else font_name
+        display = font_name
+        if simplified:
+            display += f"（{self.tr('Simplified')}）"
+        elif is_legacy:
+            display = f"{font_name} [{self.tr('Legacy')}]"
         item = QListWidgetItem(display)
         item.setData(Qt.ItemDataRole.UserRole, font_name)
         if not is_legacy:
@@ -1345,11 +1367,27 @@ class FontExcludeDialog(QDialog):
         self.available_list.clear()
         self.excluded_list.clear()
 
-        for font in shared.get_filtered_font_list(pcfg.excluded_fonts):
-            self._add_font_item(self.available_list, font)
+        available = shared.get_filtered_font_list(pcfg.excluded_fonts)
+        for font in available:
+            if font not in self._simplify_map:
+                self._add_font_item(self.available_list, font)
 
+        # 精简条目与手动排除同住 excluded_fonts（同一条落盘路径，
+        # 复刻「老旧字体」按钮的持久化方式）；标记映射只负责
+        # 「已精简」后缀与恢复跟踪
         for font in pcfg.excluded_fonts:
-            self._add_font_item(self.excluded_list, font)
+            self._add_font_item(
+                self.excluded_list, font, simplified=font in self._simplify_map
+            )
+
+        # 对话框内新精简的名字在确定前还没写进 excluded_fonts，补进隐藏列表
+        hidden = {
+            self._real_name(self.excluded_list.item(i))
+            for i in range(self.excluded_list.count())
+        }
+        for font in sorted(self._simplify_map):
+            if font not in hidden:
+                self._add_font_item(self.excluded_list, font, simplified=True)
 
     def _filter_lists(self):
         text = self.search_edit.text().lower()
@@ -1367,8 +1405,53 @@ class FontExcludeDialog(QDialog):
 
     def _show_fonts(self):
         for item in self.excluded_list.selectedItems():
+            name = self._real_name(item)
             self.excluded_list.takeItem(self.excluded_list.row(item))
-            self._add_font_item(self.available_list, self._real_name(item))
+            self._add_font_item(self.available_list, name)
+            # 移回可用列表 = 撤销该条的「已精简」隐藏
+            self._simplify_map.pop(name, None)
+
+    def _on_simplify(self):
+        """按本项目规则把字重/语言变体一次性加入隐藏列表。
+
+        结果在对话框内生效并标记「已精简」，确定时才写回 pcfg；
+        选中标记条目点 "<" 可随时恢复。
+        """
+        from utils import font_scan
+
+        mapping = font_scan.compute_simplify_map()
+        # 已在隐藏列表的（手动排除或上一轮精简）不再重复标记
+        hidden = {
+            self._real_name(self.excluded_list.item(i))
+            for i in range(self.excluded_list.count())
+        }
+        mapping = {a: c for a, c in mapping.items() if a not in hidden}
+        if not mapping:
+            QMessageBox.information(
+                self,
+                self.tr("Simplify Font List"),
+                self.tr("No simplifiable font entries detected."),
+            )
+            return
+
+        names = sorted(mapping)
+        preview = "\n".join(names[:15])
+        if len(names) > 15:
+            preview += "\n..."
+        answer = QMessageBox.question(
+            self,
+            self.tr("Simplify Font List"),
+            self.tr(
+                "Detected {count} duplicate entries (weight/language variants):\n\n{fonts}\n\nHide them all? You can move them back later."
+            )
+            .replace("{count}", str(len(names)))
+            .replace("{fonts}", preview),
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        self._simplify_map.update(mapping)
+        self._populate_lists()
 
     def _on_add_legacy_fonts(self):
         """Detect legacy Windows fonts and add them to the hidden list automatically."""
@@ -1407,10 +1490,15 @@ class FontExcludeDialog(QDialog):
         )
 
     def get_excluded_fonts(self) -> List[str]:
+        """隐藏列表全量返回：精简条目与手动排除同走 excluded_fonts 落盘。"""
         return [
             self._real_name(self.excluded_list.item(i))
             for i in range(self.excluded_list.count())
         ]
+
+    def get_simplify_map(self) -> Dict[str, str]:
+        """「一键精简」标记映射（含本对话框内被移回撤销的扣除）。"""
+        return dict(self._simplify_map)
 
 
 class _DeadLayout:
@@ -2699,6 +2787,7 @@ class ConfigPanel(Widget):
         if self._run_modal_dialog(dialog) == QDialog.DialogCode.Accepted:
             excluded = dialog.get_excluded_fonts()
             pcfg.excluded_fonts = excluded
+            pcfg.simplified_font_map = dialog.get_simplify_map()
             self.font_exclusion_changed.emit()
             from utils.config import save_config
 

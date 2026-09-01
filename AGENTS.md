@@ -30,6 +30,7 @@ modules/
 | `launch.py` | 入口，命令行参数，PyTorch 设备 |
 | `utils/proj_imgtrans.py` | 项目管理（页面、文字块、撤销栈） |
 | `utils/textblock.py` | 核心数据单元（坐标、原文、译文、字体、遮罩） |
+| `utils/font_scan.py` | 字体名称表扫描与家族名归并：字重变体/中英双名/排版家族名归并为单一规范名（对齐 PS 组织方式，canonical 优先中文名），并建立精确 PS 名索引供 PSD 导出；`shared.init_font_list` 消费其结果；`compute_simplify_map` 为「一键精简」私有规则（扩展 heavy/ultra 后缀、无分隔符后缀、face 包含归并），产物写入 `pcfg.simplified_font_map`，由 FontExcludeDialog 的一键精简按钮管理 |
 | `utils/base_styles.py` | 项目级大样式 + 变体发现：块按 `(font_family, vertical)` 身份键归属大样式，override 量化 diff 派生子样式（同 override 自动聚类 + 自动命名）；`discover_style_tree` 驱动样式管理器树 |
 | `modules/translators/trans_agent.py` + `modules/translators/agent/` | 翻译 agent：`AgentTranslator`（继承 `LLM_API_Translator` 复用 profile/重试/RPM）作唯一 LLM 翻译路径；原生 function calling 多轮循环 + 只读探索工具 + 唯一 `submit_translations` 提交出口；`agent/` 包内为 loop/工具面/prompts/validator 纯逻辑 |
 | `utils/config.py` | 配置读写 |

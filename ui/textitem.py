@@ -662,8 +662,12 @@ class TextBlkItem(_EngineTextBlkItem):
         font.setBold(raw_weight >= QFont.Weight.Bold)
         font.setWeight(QFont.Weight(fix_fontweight_qt(raw_weight)))
         self.document().setDefaultFont(font)
+        # 只合并字重/样式名两个字段：setFont(font) 会把 defaultFont 的
+        # pointSize（停留在选区建立时的旧字号，setFontSize 不更新它）
+        # 一并写进全部 fragment，表现为改字重/家族后字号回退旧值
         cfmt = QTextCharFormat()
-        cfmt.setFont(font)
+        cfmt.setFontStyleName(style_name)
+        cfmt.setFontWeight(QFont.Weight(fix_fontweight_qt(raw_weight)))
         doc_cursor = QTextCursor(self.document())
         doc_cursor.select(QTextCursor.SelectionType.Document)
         doc_cursor.mergeCharFormat(cfmt)

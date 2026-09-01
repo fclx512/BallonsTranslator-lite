@@ -402,6 +402,11 @@ class ProgramConfig(Config):
     imgsave_auto_format: bool = False
     intermediate_imgsave_ext: str = ".png"
     excluded_fonts: List[str] = field(default_factory=lambda: list())
+    # 「一键精简」映射 {被隐藏家族名: 规范名}（utils/font_scan.py::
+    # compute_simplify_map 产物），与手动 excluded_fonts 分开管理
+    simplified_font_map: Dict[str, str] = field(
+        default_factory=lambda: dict()
+    )
     max_font_size: int = 200
     shortcuts: Dict[str, List[str]] = field(default_factory=lambda: dict())
     font_size_presets: List[float] = field(

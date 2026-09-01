@@ -200,10 +200,15 @@ class PsdExportDialog(QDialog):
             self._font_label.setText(self.tr("No text blocks in project."))
             return
 
-        # Static map only — the target Photoshop's font list is unknown here.
-        from utils.font_mapping import QT_TO_PS_FONT_MAP
+        # Static map + local font name-table scan index — the target
+        # Photoshop's font list is unknown here.
+        from utils.font_mapping import QT_TO_PS_FONT_MAP, exact_ps_name
 
-        unknown = [f for f in sorted(families) if f not in QT_TO_PS_FONT_MAP]
+        unknown = [
+            f
+            for f in sorted(families)
+            if f not in QT_TO_PS_FONT_MAP and exact_ps_name(f) is None
+        ]
         if unknown:
             self._font_label.setText(
                 self.tr("⚠  ")

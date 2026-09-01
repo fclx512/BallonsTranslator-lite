@@ -104,6 +104,23 @@ class FontFamilyStyleTest(unittest.TestCase):
             item.setFontFamily("Arial", style_name="NoSuchStyle")  # must not raise
         self.assertEqual(item.document().defaultFont().weight(), 400)
 
+    def test_weight_sync_preserves_fragment_size(self):
+        # setFontSize writes per-fragment point sizes and never touches the
+        # document default font. The style-weight sync must merge ONLY
+        # weight/style fields — the old cfmt.setFont(font) dragged
+        # defaultFont's stale pointSize across every fragment, so the size
+        # visibly reverted to the selection-time value after a weight change.
+        item = self._new_item()
+        item.setFontSize(48.0)
+        doc = item.document()
+        frag = doc.firstBlock().begin().fragment()
+        self.assertAlmostEqual(frag.charFormat().fontPointSize(), 48.0, places=1)
+        with patch("ui.textitem.QFontDatabase.weight", return_value=700):
+            item.setFontFamily("Arial", style_name="Bold")
+        frag = doc.firstBlock().begin().fragment()
+        self.assertAlmostEqual(frag.charFormat().fontPointSize(), 48.0, places=1)
+        self.assertGreaterEqual(frag.charFormat().font().weight(), 700)
+
     def test_spacing_setters_accept_legacy_kwargs(self):
         # ffmt_change_line/letter_spacing & line_spacing_type still pass
         # set_kwargs/restore_cursor the old compat layer used to take.

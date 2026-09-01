@@ -1313,6 +1313,34 @@ Settings → Inpainter → Photoshop Path</source>
             <source>Legacy</source>
             <translation>老旧</translation>
         </message>
+        <message>
+            <source>Hide duplicate weight/language variants of the same font</source>
+            <translation>隐藏同一字体的重复字重/语言变体</translation>
+        </message>
+        <message>
+            <source>No simplifiable font entries detected.</source>
+            <translation>未检测到可精简的字体条目。</translation>
+        </message>
+        <message>
+            <source>Detected {count} duplicate entries (weight/language variants):
+
+{fonts}
+
+Hide them all? You can move them back later.</source>
+            <translation>检测到 {count} 个重复条目（字重/语言变体）：
+
+{fonts}
+
+全部隐藏？之后可随时移回。</translation>
+        </message>
+        <message>
+            <source>Simplified</source>
+            <translation>已精简</translation>
+        </message>
+        <message>
+            <source>Simplify Font List</source>
+            <translation>一键精简字体列表</translation>
+        </message>
     </context>
     <context>
         <name>AnnotationFormatGroup</name>

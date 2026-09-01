@@ -44,6 +44,27 @@ def normalize_font_name(name: str) -> str:
     return " ".join(name.split()).casefold()
 
 
+def exact_ps_name(qt_family: str) -> Optional[str]:
+    """查名称表扫描索引（``shared.FONT_PS_NAMES``）返回精确 PS 名。
+
+    家族级解析优先 Regular(400) face，无则取最小字重。可变字体的命名
+    实例家族（如 ``MiSans VF Bold``）不在 name 表里，退查其基家族。
+    索引未构建（init_font_list 尚未跑 / fontTools 缺失）或家族无 face
+    数据时返回 None，调用方退回静态表/模糊匹配。
+    """
+    from utils import shared
+    from utils.font_scan import split_weight_family_name
+
+    faces = getattr(shared, "FONT_PS_NAMES", {}).get(qt_family)
+    if not faces:
+        base, _ = split_weight_family_name(qt_family)
+        if base:
+            faces = getattr(shared, "FONT_PS_NAMES", {}).get(base)
+    if not faces:
+        return None
+    return faces.get(400) or faces[min(faces)]
+
+
 def resolve_font_name(
     qt_family: str,
     ps_available: Optional[Set[str]] = None,
@@ -53,11 +74,17 @@ def resolve_font_name(
     Returns ``(resolved_name, is_exact_match)``.
 
     Resolution order:
+    0. Name-table scan index (exact PostScript name of the same font file).
     1. Exact match in *ps_available*.
     2. Lookup in static ``QT_TO_PS_FONT_MAP``.
     3. Case-insensitive fuzzy match against *ps_available*.
     4. Fall back to the original *qt_family* (PS will use its default if missing).
     """
+    # 0. Exact PS name from the font-file scan index.
+    exact = exact_ps_name(qt_family)
+    if exact is not None and (ps_available is None or exact in ps_available):
+        return exact, True
+
     # 1. Direct match (case-insensitive) in available PS fonts.
     if ps_available:
         key = normalize_font_name(qt_family)
