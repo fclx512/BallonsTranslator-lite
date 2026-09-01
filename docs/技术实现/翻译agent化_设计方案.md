@@ -91,7 +91,7 @@ AgentTranslator(以翻译器身份注册进 utils/registries.py::TRANSLATORS,复
 
 ## 5. 工具集定义
 
-翻译 agent 工具面比 `utils/ai_tools.py::TOOL_DEFINITIONS`(ai_chat 血缘)**更窄**:只读 + 提交,砍掉 `describe_tool`(工具描述进 schema)/ `set_font` / `set_color` / `set_layout` / `search_replace` / `translate_text` / `get_config`。
+翻译 agent 工具面自带 `modules/translators/agent/tools.py::AGENT_TOOL_DEFINITIONS`,比旧 ai_chat 的全量工具表**更窄**:只读 + 提交,砍掉 describe_tool(工具描述进 schema)/ set_font / set_color / set_layout / search_replace / translate_text / get_config——这些写类工具已随工作台阶段 4 从 `utils/ai_tools.py` 移除。
 
 | 工具 | 类型 | 说明 |
 | --- | --- | --- |
@@ -110,7 +110,7 @@ AgentTranslator(以翻译器身份注册进 utils/registries.py::TRANSLATORS,复
 
 ### A. 格式护栏
 
-每轮生效输出都是原生 tool call;`submit_translations` 的参数经 schema 约束(`additionalProperties: false`,value 为 string)。**不存在从散文里捞 JSON 的解析路径**(`utils/ai_tools.py::parse_tool_calls` 那套脆弱文本协议不进入翻译链路)。
+每轮生效输出都是原生 tool call;`submit_translations` 的参数经 schema 约束(`additionalProperties: false`,value 为 string)。**不存在从散文里捞 JSON 的解析路径**(旧 ai_chat 的 parse_tool_calls 脆弱文本协议不进入翻译链路,且已随阶段 4 删除)。
 
 ### B. 循环护栏
 
@@ -156,6 +156,7 @@ AgentTranslator(以翻译器身份注册进 utils/registries.py::TRANSLATORS,复
 | 本页全部块(任务主体) | `page_key` 对应 `pages` | 无裁剪 |
 | 邻近已完成页快照(src+trans) | 按页序向前取,资格 = 整页已有译文(agent 侧 `modules/translators/agent/prompts.py::build_history_snippet` 的资格判定);注入格式沿用散文片段 | `pcfg.module.llm_prior_context_token_budget`(4096,复用现有配置),`modules/context/token_usage.py` 计数 |
 | 命中术语表 | `modules/context/glossary.py::select_glossary` matching 模式 | 现状逻辑 |
+| 全局梗概(工作台阶段 3 已落地) | 项目级 `llm_compact_memory`(术语工作台「应用」写盘,`modules/context_agent/story.py::project_synopsis` 只读消费),经 `modules/translators/agent/prompts.py::synopsis_section` 进 system 稳定前缀 | 强制注入项:`modules/translators/agent/prompts.py::effective_history_budget` 先于可选历史页扣预算(驱逐后地板 1);开关 `llm_story_context` |
 
 - profile 的 `system_prompt` 在 agent 模式下**生效**(修调研 §11 #7),定位仍是"只影响风格措辞";
 - 超预算时从最旧页开始裁剪(窗口机制废弃,裁剪逻辑简化为一次性快照选择)。
@@ -273,6 +274,7 @@ agent loop(任何失败:格式崩/轮数耗尽仍无有效提交/端点不支持
 | `llm_translate_context` | 保留为历史注入开关,默认开 |
 | `translate_context` | 删除(死配置) |
 | `context_translation_debug_log` | **并入** `agent_translation_debug_log`（阶段 5 已改，`utils/debug_log.py` 日志前缀同步为 `agent_translation_*`） |
+| `llm_story_context` | **新增**（工作台阶段 3）：剧情梗概注入开关，默认开；仅影响翻译注入，不影响工作台本身 |
 
 profile 全部字段(含 `return_json_schema`、`reasoning_effort`)语义不变;`return_json_schema` 只影响回退直译路径的 response_format(agent 轮次固定带 tools)。
 
@@ -287,8 +289,8 @@ profile 全部字段(含 `return_json_schema`、`reasoning_effort`)语义不变;
 | 3. 单框策略 | 修 page_key + `single_blk_translate_mode` 配置 + UI 入口 | 两种档位可切换生效 |
 | 4. 债务清理 | 删 beta / 窗口机制 / 死配置,修 glossary 时序(§11 清单) | `scripts/verify.py` 全绿,审计登记表更新 |
 | 5. 质量护栏 | 术语残留检测 / 空译文检测 / 打回补译(E 类)+ debug 日志与状态栏轮次显示(F 类) | 校验器单测覆盖全部失效模式 |
-| 6a. 术语表供给链(独立) | 提取器 schema 化 / 分批 / 统一调用层 + dialog 加载已有表 / 合并去重 / 增删行编辑(§8.1/§8.4) | 不依赖 agent loop,可与阶段 1-2 并行 |
-| 6b. 沉淀回流 | agent 翻译后增量统计 → 候选来源标记 → 人工确认入库(§8.3) | 打开 dialog 可见 agent 沉淀候选 |
+| 6a. 术语表供给链(独立) | 提取器 schema 化 / 分批 / 统一调用层 + dialog 加载已有表 / 合并去重 / 增删行编辑(§8.1/§8.4)。**2026-09-01 销账:已由术语工作台整体取代**——打开即载入已有表 / 合并去重 / 增删行编辑 / 「应用」唯一落盘 | 不依赖 agent loop,可与阶段 1-2 并行 |
+| 6b. 沉淀回流 | agent 翻译后增量统计 → 候选来源标记 → 人工确认入库(§8.3)。**2026-09-01 销账:验收已达**——「Prefill (frequency)」拉模式统计项目译文产候选,经工作台草稿表 origin 标记(existing/ai/user)呈现,人工确认「应用」入库 | 打开 dialog 可见 agent 沉淀候选 |
 
 组件落点:新建 `modules/translators/agent/` 包(loop / guardrails / prompts / tools 分文件),工具执行复用 `utils/proj_compact.py` 的 build_* 函数。
 

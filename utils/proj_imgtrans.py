@@ -112,6 +112,10 @@ class ProjImgTrans:
         # Project-level base styles (identity: font_family + vertical).
         self.base_styles: List[BaseStyle] = []
 
+        # Project-level story synopsis (upstream vision_context key); the
+        # glossary workbench "apply" writes it, agent translation injects it.
+        self.llm_compact_memory: str = ""
+
         self.current_img: str = None
         self.img_array: np.ndarray = None
         self.mask_array: np.ndarray = None
@@ -290,6 +294,10 @@ class ProjImgTrans:
             self._image_info = proj_dict["image_info"]
         else:
             self._image_info = {}
+
+        # Project-level story synopsis; legacy projects carry none.
+        memory = proj_dict.get("llm_compact_memory", "")
+        self.llm_compact_memory = memory if isinstance(memory, str) else ""
 
         # Project-level base styles; legacy projects carry none → register a
         # default one seeded from the global format (see ensure_default_base_styles).
@@ -491,6 +499,7 @@ class ProjImgTrans:
             "current_img": self.current_img,
             "image_info": image_info,
             "base_styles": [bs.to_dict() for bs in self.base_styles],
+            "llm_compact_memory": self.llm_compact_memory,
         }
         return proj_dict
 

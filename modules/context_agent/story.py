@@ -2,7 +2,7 @@
 
 - 页段摘要存 image_info[页名]["llm_visual_summary"](上游页级键);
 - 全局梗概存项目级 "llm_compact_memory"(上游项目级键);
-- 本模块只做取数/序列化,写回项目由「应用」与注入管线(阶段 3)负责。
+- 本模块只做取数/序列化;写回项目由工作台「应用」负责,翻译注入只读消费。
 """
 
 from typing import Any, Dict, Mapping, Tuple
@@ -43,3 +43,9 @@ def export_story_json(
         ensure_ascii=False,
         indent=2,
     )
+
+
+def project_synopsis(project) -> str:
+    """读项目级全局梗概,供翻译 agent 注入(只读消费;无数据/类型异常返回空)。"""
+    value = getattr(project, SYNOPSIS_KEY, "")
+    return value.strip() if isinstance(value, str) else ""

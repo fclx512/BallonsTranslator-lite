@@ -36,7 +36,7 @@ modules/
 | `utils/shared.py` | 路径常量 |
 | `utils/structures.py` | `nested_dataclass`，`Config`/`Dict` 基类 |
 | `utils/profile_manager.py` | LLM API 配置管理（翻译器/OCR 共用） |
-| `utils/ai_tools.py` | AI 辅助工具函数 |
+| `utils/ai_tools.py` | 翻译 agent/术语工作台共享的只读探索工具执行器（4 只读工具 + `to_openai_tools`；写类工具已随旧 AI 助手移除） |
 | `ui/mainwindow.py` | 主窗口 |
 | `ui/configpanel.py` | 配置面板、快捷键编辑 |
 | `ui/text_panel.py` | 文本编辑面板 |
@@ -94,6 +94,7 @@ modules/
 全局配置 `pcfg`（`utils/config.py`）是模块级单例：
 
 - 改 `pcfg` 后须显式调用 `save_config()`。仅 `closeEvent` 和 `ConfigPanel.hideEvent` 触发自动保存。
+- 新增配置字段必须声明到对应 Config 类（`utils/config.py::ProgramConfig`/`utils/config.py::ModuleConfig` 等）：代码读到未声明字段是运行时 AttributeError（glossary_dock_open、agent_translation_debug_log、source_lang/target_lang 三度翻车）；`tests/test_config_fields.py` 静态校验 pcfg 引用与声明一致。
 - 启动顺序：`launch.py` 先 `load_config()` 再 `init_module_registries()`。
 
 ## Git 规则

@@ -16,6 +16,7 @@ import openai
 
 from modules.context.errors import is_context_length_error, provider_error_message
 from modules.context.glossary import load_glossary
+from modules.context_agent.story import project_synopsis
 from modules.translators.base import register_translator
 from modules.translators.trans_llm_api import LLM_API_Translator
 from modules.translators.agent.loop import (
@@ -28,6 +29,7 @@ from modules.translators.agent.prompts import (
     build_page_context_snippet,
     build_system_message,
     build_user_task_message,
+    effective_history_budget,
     page_label,
     select_matched_glossary,
 )
@@ -209,6 +211,12 @@ class AgentTranslator(LLM_API_Translator):
                 )
         matched_glossary = select_matched_glossary(glossary_entries, src_list)
 
+        # 剧情注入(工作台阶段 3):全局梗概进 system 稳定前缀,强制注入项
+        # 先于可选历史页占预算(上游注入预算优先级);开关关闭或无数据零开销。
+        synopsis = ""
+        if project is not None and pcfg.module.llm_story_context:
+            synopsis = project_synopsis(project)
+
         from_lang = self._translated_lang(self.lang_source)
         to_lang = self._translated_lang(self.lang_target)
         system_message = build_system_message(
@@ -216,12 +224,17 @@ class AgentTranslator(LLM_API_Translator):
             to_lang,
             profile_prompt=self.system_prompt_override,
             has_exploration=project is not None,
+            synopsis=synopsis,
         )
         # 历史注入开关(设计方案 §12:page/history 枚举简化为 bool,默认注入前页)
         history = ""
         if pcfg.module.llm_translate_context:
             history = build_history_snippet(
-                project, page_key, pcfg.module.llm_prior_context_token_budget
+                project,
+                page_key,
+                effective_history_budget(
+                    pcfg.module.llm_prior_context_token_budget, synopsis
+                ),
             )
         if block_mode and project is not None and page_key:
             page_ctx = build_page_context_snippet(project, page_key, exclude=src_list)

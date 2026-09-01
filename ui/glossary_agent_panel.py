@@ -269,7 +269,7 @@ class GlossaryAgentWorker(QObject):
 
         pages, synopsis = self.story.snapshot()
         system_message = build_system_prompt(
-            translator._translated_lang(pcfg.target_lang),
+            translator._translated_lang(pcfg.module.translate_target),
             has_glossary_base=bool(self.glossary.entries),
             has_story_base=bool(pages),
             n_pages=len(self._proj.pages),
@@ -304,8 +304,8 @@ class GlossaryAgentWorker(QObject):
             from modules.translators.trans_agent import AgentTranslator
 
             self._translator = AgentTranslator(
-                pcfg.source_lang,
-                pcfg.target_lang,
+                pcfg.module.translate_source,
+                pcfg.module.translate_target,
                 raise_unsupported_lang=False,
             )
         return self._translator

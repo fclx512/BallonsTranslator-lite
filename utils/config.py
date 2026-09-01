@@ -70,6 +70,12 @@ class ModuleConfig(Config):
     llm_glossary_path: str = ''
     llm_glossary_mode: str = LLMGlossaryMode.Matching
     single_blk_translate_mode: str = SingleBlkTranslateMode.Plain
+    # 剧情注入开关(工作台阶段 3):全局梗概进 agent system 稳定前缀,
+    # 强制注入项可驱逐可选历史页;仅影响翻译注入,不影响工作台本身
+    llm_story_context: bool = True
+    # agent 翻译每轮状态写 utils/debug_log.py(阶段 5 F 类;原 beta 的
+    # context_translation_debug_log 已合并进此开关)
+    agent_translation_debug_log: bool = False
     check_need_inpaint: bool = True
     load_model_on_demand: bool = True
     empty_runcache: bool = False
@@ -129,6 +135,10 @@ class ModuleConfig(Config):
     def __post_init__(self):
         if not isinstance(self.llm_translate_context, bool):
             self.llm_translate_context = True
+        if not isinstance(self.llm_story_context, bool):
+            self.llm_story_context = True
+        if not isinstance(self.agent_translation_debug_log, bool):
+            self.agent_translation_debug_log = False
         if not isinstance(self.llm_glossary_path, str):
             self.llm_glossary_path = ''
         if self.llm_glossary_mode not in LLMGlossaryMode.Valid:
@@ -481,11 +491,6 @@ class ProgramConfig(Config):
     pie_menus: List[dict] = field(
         default_factory=lambda: copy.deepcopy(DEFAULT_PIE_MENUS)
     )
-
-    # ── Development / Debug ─────────────────────────────
-    # agent 翻译每轮状态写 utils/debug_log.py(阶段 5 F 类;原 beta 的
-    # context_translation_debug_log 已合并进此开关)。
-    agent_translation_debug_log: bool = False
 
     @staticmethod
     def load(cfg_path: str):
