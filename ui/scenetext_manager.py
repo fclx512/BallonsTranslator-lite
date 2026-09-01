@@ -1141,12 +1141,15 @@ class SceneTextManager(QObject):
         e_trans = (
             self.pairwidget_list[blkitem.idx].e_trans if not is_formatting else None
         )
-        self.canvas.push_undo_command(
-            TextItemEditCommand(
-                blkitem, e_trans, num_steps, self.textpanel.formatpanel
-            ),
-            update_pushed_step=is_formatting,
+        cmd = TextItemEditCommand(
+            blkitem, e_trans, num_steps, self.textpanel.formatpanel
         )
+        if is_formatting:
+            # 面板格式化（改字号/行距等）：并入 canvas 的手势宏，一次手势
+            # 跨多块多键值只记一个撤销步
+            self.canvas.push_formatting_command(cmd)
+        else:
+            self.canvas.push_undo_command(cmd, update_pushed_step=True)
 
     def on_merge_textblks(self):
         """画布右键"Merge"：按列表 idx 顺序合并选中的文字块为一个。"""

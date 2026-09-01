@@ -2,7 +2,7 @@ import os
 from typing import List, Union
 
 import numpy as np
-from qtpy.QtCore import QDateTime, QLineF, QPoint, QPointF, QRectF, QSizeF, Qt, Signal
+from qtpy.QtCore import QDateTime, QLineF, QPoint, QPointF, QRectF, QSizeF, Qt, QTimer, Signal
 from qtpy.QtGui import (
     QColor,
     QCursor,
@@ -60,6 +60,10 @@ from .textitem import TextBlkItem, TextBlock
 CANVAS_SCALE_MAX = 10.0
 CANVAS_SCALE_MIN = 0.01
 CANVAS_SCALE_SPEED = 0.1
+# 格式化手势宏的空闲收口时长：最后一次格式化推送静默这么久即闭合宏。
+# 只作悬开兜底，常规边界（选区变化/清栈/撤销等）即时闭合。
+_FORMAT_GESTURE_IDLE_MS = 1500
+_FORMAT_GESTURE_LABEL = "formatting gesture"  # 内部宏标签，不显示于任何 UI
 OVERFLOW_MARGIN_RATIO = 0.3  # 过界模式场景扩展比例
 # Minimum drag (screen pixels, scaled by zoom) before a left-drag turns from
 # a click into a text-block box select (2026-08-18).
@@ -406,6 +410,14 @@ class Canvas(QGraphicsScene):
         self.text_undo_stack = QUndoStack(self)
         self.saved_drawundo_step = 0
         self.saved_textundo_step = 0
+
+        # 格式化手势宏：面板驱动的逐块格式化命令（改字号/行距等）在此聚拢为
+        # 一个撤销步，手势边界见 _close_format_gesture 的调用点。
+        self._format_gesture_open = False
+        self._format_gesture_timer = QTimer(self)
+        self._format_gesture_timer.setSingleShot(True)
+        self._format_gesture_timer.setInterval(_FORMAT_GESTURE_IDLE_MS)
+        self._format_gesture_timer.timeout.connect(self._close_format_gesture)
 
         # 宿主挂 gv 而非 viewport：QAbstractScrollArea 滚动时对 viewport 做
         # 像素级 scroll（含子控件一并平移），缩放调整滚动条会把 toast 漂走；
@@ -873,6 +885,8 @@ class Canvas(QGraphicsScene):
         self.textGridControl.clear()
 
     def on_selection_changed(self):
+        # 选区变化=格式化手势边界：整批已固化为一个撤销步
+        self._close_format_gesture()
         if self.txtblkShapeControl.isVisible():
             blk_item = self.txtblkShapeControl.blk_item
             if blk_item is not None and blk_item.isEditing():
@@ -1633,6 +1647,8 @@ class Canvas(QGraphicsScene):
         return None
 
     def push_undo_command(self, command: QUndoCommand, update_pushed_step=True):
+        # 任何非格式化命令（批量应用/文本键入/变换提交等）都是手势边界
+        self._close_format_gesture()
         if self.textEditMode():
             self.push_text_command(command, update_pushed_step)
         elif self.drawMode():
@@ -1640,7 +1656,34 @@ class Canvas(QGraphicsScene):
         else:
             return
 
+    def push_formatting_command(self, command: QUndoCommand):
+        """把面板驱动的逐块格式化命令并入手势宏，一次手势=一个撤销步。
+
+        与旧行为等价的语义：命令总压入 text_undo_stack，但不推进
+        num_pushed_textstep（格式化不计为项目脏）；非文本编辑模式下丢弃。
+        """
+        if command is None or not self.textEditMode():
+            return
+        if not self._format_gesture_open:
+            self._format_gesture_open = True
+            self.text_undo_stack.beginMacro(_FORMAT_GESTURE_LABEL)
+        self.text_undo_stack.push(command)
+        self._format_gesture_timer.start()
+
+    def _close_format_gesture(self):
+        """闭合格式化手势宏（幂等）。
+
+        endMacro 使整个宏按一个撤销步计，并恰好发一次 indexChanged（Qt
+        文档保证）——样式管理器的栈监听随之获得"每手势刷新一次"语义。
+        """
+        if not self._format_gesture_open:
+            return
+        self._format_gesture_open = False
+        self._format_gesture_timer.stop()
+        self.text_undo_stack.endMacro()
+
     def push_draw_command(self, command: QUndoCommand, update_pushed_step=True):
+        self._close_format_gesture()
         if command is not None:
             self.draw_undo_stack.push(command)
         if update_pushed_step:
@@ -1648,6 +1691,7 @@ class Canvas(QGraphicsScene):
             self.on_drawstack_changed()
 
     def push_text_command(self, command: QUndoCommand, update_pushed_step=True):
+        self._close_format_gesture()
         if command is not None:
             self.text_undo_stack.push(command)
         if update_pushed_step:
@@ -1674,15 +1718,18 @@ class Canvas(QGraphicsScene):
         self.textstack_changed.emit()
 
     def redo_textedit(self):
+        self._close_format_gesture()
         self.num_pushed_textstep += 1
         self.text_undo_stack.redo()
 
     def undo_textedit(self):
+        self._close_format_gesture()
         if self.num_pushed_textstep > 0:
             self.num_pushed_textstep -= 1
         self.text_undo_stack.undo()
 
     def redo(self):
+        self._close_format_gesture()
         if self.textEditMode():
             undo_stack = self.text_undo_stack
             self.num_pushed_textstep += 1
@@ -1699,6 +1746,7 @@ class Canvas(QGraphicsScene):
                 self.txtblkShapeControl.updateBoundingRect()
 
     def undo(self):
+        self._close_format_gesture()
         if self.textEditMode():
             undo_stack = self.text_undo_stack
             if self.num_pushed_textstep > 0:
@@ -1722,10 +1770,15 @@ class Canvas(QGraphicsScene):
             self.saved_textundo_step = 0
             self.num_pushed_textstep = 0
             self.num_pushed_drawstep = 0
+        # Qt 对"宏合成中 clear"未定义：先复位标志再清栈，绝不对已清栈 endMacro
+        self._format_gesture_open = False
+        self._format_gesture_timer.stop()
         self.draw_undo_stack.clear()
         self.text_undo_stack.clear()
 
     def clear_text_stack(self):
+        self._format_gesture_open = False
+        self._format_gesture_timer.stop()
         self.num_pushed_textstep = 0
         self.text_undo_stack.clear()
 
