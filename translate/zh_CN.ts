@@ -1467,46 +1467,12 @@ Hide them all? You can move them back later.</source>
     <context>
         <name>FontFormatPanel</name>
         <message>
-            <location filename="..\ui\text_panel.py" />
-            <source>Emphasis Marks</source>
-            <translation>着重号</translation>
+            <source>Advanced Text Format</source>
+            <translation>进阶字体格式</translation>
         </message>
         <message>
             <source>Annotations</source>
             <translation>注解</translation>
-        </message>
-        <message>
-            <source>Ruby</source>
-            <translation>注音（Ruby）</translation>
-        </message>
-        <message>
-            <source>Tate-chu-yoko</source>
-            <translation>直排内横排</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_panel.py" line="241" />
-            <source>Font Family</source>
-            <translation>字体</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_panel.py" line="249" />
-            <source>Font Style</source>
-            <translation>字体样式</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_panel.py" line="258" />
-            <source>Font Size</source>
-            <translation>大小</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_panel.py" line="260" />
-            <source>Change font size</source>
-            <translation>改变字体大小</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_panel.py" line="274" />
-            <source>Change line spacing</source>
-            <translation>修改行距</translation>
         </message>
         <message>
             <location filename="..\ui\text_panel.py" line="278" />
@@ -1514,19 +1480,9 @@ Hide them all? You can move them back later.</source>
             <translation>改变文字颜色</translation>
         </message>
         <message>
-            <location filename="..\ui\text_panel.py" line="297" />
-            <source>Change stroke width</source>
-            <translation>修改轮廓宽度</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_panel.py" line="300" />
-            <source>Stroke</source>
-            <translation>轮廓</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_panel.py" line="313" />
-            <source>Change stroke color</source>
-            <translation>改变文字轮廓颜色</translation>
+            <location filename="..\ui\text_panel.py" line="260" />
+            <source>Change font size</source>
+            <translation>改变字体大小</translation>
         </message>
         <message>
             <location filename="..\ui\text_panel.py" line="326" />
@@ -1534,41 +1490,64 @@ Hide them all? You can move them back later.</source>
             <translation>修改字符间距</translation>
         </message>
         <message>
-            <location filename="..\ui\text_panel.py" line="348" />
-            <source>Global Font Format</source>
-            <translation>全局字体格式</translation>
+            <location filename="..\ui\text_panel.py" line="274" />
+            <source>Change line spacing</source>
+            <translation>修改行距</translation>
         </message>
         <message>
-            <source>Text Transform</source>
-            <translation>文本变换</translation>
+            <location filename="..\ui\text_panel.py" line="313" />
+            <source>Change stroke color</source>
+            <translation>改变文字轮廓颜色</translation>
         </message>
         <message>
-            <source>Text Style</source>
-            <translation>文本样式</translation>
-        </message>
-        <message>
-            <source>Glossary &amp; Story</source>
-            <translation>术语与剧情</translation>
-        </message>
-        <message>
-            <source>Advanced Text Format</source>
-            <translation>进阶字体格式</translation>
+            <location filename="..\ui\text_panel.py" line="297" />
+            <source>Change stroke width</source>
+            <translation>修改轮廓宽度</translation>
         </message>
         <message>
             <source>Combine the selected text into one upright vertical cell</source>
             <translation>将所选文本合并为竖排中的一个横排单元</translation>
         </message>
         <message>
+            <location filename="..\ui\text_panel.py" />
+            <source>Emphasis Marks</source>
+            <translation>着重号</translation>
+        </message>
+        <message>
             <source>Fold</source>
             <translation>折叠</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_panel.py" line="241" />
+            <source>Font Family</source>
+            <translation>字体</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_panel.py" line="258" />
+            <source>Font Size</source>
+            <translation>大小</translation>
+        </message>
+        <message>
+            <location filename="..\ui\text_panel.py" line="249" />
+            <source>Font Style</source>
+            <translation>字体样式</translation>
         </message>
         <message>
             <source>Font Weight</source>
             <translation>字重</translation>
         </message>
         <message>
+            <location filename="..\ui\text_panel.py" line="348" />
+            <source>Global Font Format</source>
+            <translation>全局字体格式</translation>
+        </message>
+        <message>
             <source>Mono Ruby needs one whitespace-separated reading per base grapheme.</source>
             <translation>单字注释要求每个基文字符对应一个以空格分隔的读音</translation>
+        </message>
+        <message>
+            <source>Ruby</source>
+            <translation>注音（Ruby）</translation>
         </message>
         <message>
             <source>Ruby base text cannot contain paragraph or forced line breaks.</source>
@@ -1599,8 +1578,25 @@ Hide them all? You can move them back later.</source>
             <translation>标准垂直罗马对齐方式</translation>
         </message>
         <message>
+            <location filename="..\ui\text_panel.py" line="300" />
+            <source>Stroke</source>
+            <translation>轮廓</translation>
+        </message>
+        <message>
+            <source>Tate-chu-yoko</source>
+            <translation>直排内横排</translation>
+        </message>
+        <message>
             <source>Tate-chu-yoko cannot overlap Ruby.</source>
             <translation>纵中横不能与注释重叠</translation>
+        </message>
+        <message>
+            <source>Text Style</source>
+            <translation>文本样式</translation>
+        </message>
+        <message>
+            <source>Text Transform</source>
+            <translation>文本变换</translation>
         </message>
         <message>
             <source>Translation</source>
@@ -1971,35 +1967,9 @@ Run detection + OCR to populate text blocks.</source>
     <context>
         <name>LeftBar</name>
         <message>
-            <location filename="..\ui\mainwindowbars.py" line="103" />
-            <source>Global Search (Ctrl+G)</source>
-            <translation>全局查找 (Ctrl+G)</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindowbars.py" line="114" />
-            <source>Open Folder ...</source>
-            <translation>打开文件夹...</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindowbars.py" line="270" />
-            <location filename="..\ui\mainwindowbars.py" line="118" />
-            <source>Open Project ... *.json</source>
-            <translation>打开项目文件...*.json</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindowbars.py" line="122" />
-            <source>Open Image ...</source>
-            <translation>打开图片...</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindowbars.py" line="125" />
-            <source>Save Project</source>
-            <translation>保存项目</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindowbars.py" line="129" />
-            <source>Save Project As ...</source>
-            <translation>项目另存为...</translation>
+            <location filename="..\ui\mainwindowbars.py" line="216" />
+            <source>Clear History</source>
+            <translation>清除历史记录</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" line="125" />
@@ -2012,9 +1982,34 @@ Run detection + OCR to populate text blocks.</source>
             <translation>译文导出为 TXT</translation>
         </message>
         <message>
+            <location filename="..\ui\mainwindowbars.py" line="103" />
+            <source>Global Search (Ctrl+G)</source>
+            <translation>全局查找 (Ctrl+G)</translation>
+        </message>
+        <message>
+            <source>Glossary &amp; Story</source>
+            <translation>术语与剧情</translation>
+        </message>
+        <message>
             <location filename="..\ui\mainwindowbars.py" line="131" />
             <source>Import translation from TXT</source>
             <translation>从 TXT 导入译文</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindowbars.py" line="114" />
+            <source>Open Folder ...</source>
+            <translation>打开文件夹...</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindowbars.py" line="122" />
+            <source>Open Image ...</source>
+            <translation>打开图片...</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindowbars.py" line="270" />
+            <location filename="..\ui\mainwindowbars.py" line="118" />
+            <source>Open Project ... *.json</source>
+            <translation>打开项目文件...*.json</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" line="135" />
@@ -2027,14 +2022,19 @@ Run detection + OCR to populate text blocks.</source>
             <translation>运行</translation>
         </message>
         <message>
+            <location filename="..\ui\mainwindowbars.py" line="125" />
+            <source>Save Project</source>
+            <translation>保存项目</translation>
+        </message>
+        <message>
+            <location filename="..\ui\mainwindowbars.py" line="129" />
+            <source>Save Project As ...</source>
+            <translation>项目另存为...</translation>
+        </message>
+        <message>
             <location filename="..\ui\mainwindowbars.py" line="260" />
             <source>Select Directory</source>
             <translation>选择文件夹</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindowbars.py" line="216" />
-            <source>Clear History</source>
-            <translation>清除历史记录</translation>
         </message>
     </context>
     <context>
@@ -6515,103 +6515,131 @@ This maps automatically to each provider's native parameter
     <context>
         <name>GlossaryAgentPanel</name>
         <message>
+            <source>(no reply)</source>
+            <translation>（无回复）</translation>
+        </message>
+        <message>
+            <source>AI</source>
+            <translation>AI</translation>
+        </message>
+        <message>
             <source>Apply draft…</source>
-            <translation type="finished" />
+            <translation>应用草稿…</translation>
+        </message>
+        <message>
+            <source>base</source>
+            <translation>基底</translation>
         </message>
         <message>
             <source>Chat</source>
-            <translation type="finished" />
+            <translation>对话</translation>
         </message>
         <message>
             <source>Global synopsis</source>
-            <translation type="finished" />
+            <translation>全局梗概</translation>
         </message>
         <message>
             <source>Glossary</source>
-            <translation type="finished" />
+            <translation>术语表</translation>
         </message>
         <message>
             <source>Instruction for the agent… (Ctrl+Enter to send)</source>
-            <translation type="finished" />
+            <translation>给 agent 的指令…（Ctrl+Enter 发送）</translation>
         </message>
         <message>
             <source>Note</source>
-            <translation type="finished" />
+            <translation>备注</translation>
         </message>
         <message>
             <source>Origin</source>
-            <translation type="finished" />
+            <translation>来源</translation>
         </message>
         <message>
             <source>Page</source>
-            <translation type="finished" />
+            <translation>页</translation>
         </message>
         <message>
             <source>Page summaries</source>
-            <translation type="finished" />
+            <translation>页段摘要</translation>
         </message>
         <message>
             <source>Prefill (frequency)</source>
-            <translation type="finished" />
+            <translation>预填充（按词频）</translation>
         </message>
         <message>
             <source>Remove selected</source>
-            <translation type="finished" />
+            <translation>删除选中</translation>
         </message>
         <message>
             <source>Save glossary</source>
-            <translation type="finished" />
+            <translation>保存术语表</translation>
         </message>
         <message>
             <source>Send</source>
-            <translation type="finished" />
+            <translation>发送</translation>
         </message>
         <message>
             <source>Source</source>
-            <translation type="finished" />
+            <translation>原文</translation>
         </message>
         <message>
             <source>Stop</source>
-            <translation type="finished" />
+            <translation>停止</translation>
         </message>
         <message>
             <source>Story</source>
-            <translation type="finished" />
+            <translation>剧情</translation>
         </message>
         <message>
             <source>Summary</source>
-            <translation type="finished" />
+            <translation>摘要</translation>
         </message>
         <message>
             <source>Translation</source>
-            <translation type="finished" />
+            <translation>译文</translation>
+        </message>
+        <message>
+            <source>you</source>
+            <translation>用户</translation>
         </message>
     </context>
     <context>
         <name>GlossaryAgentWorker</name>
         <message>
+            <source>Cancelled.</source>
+            <translation>已取消。</translation>
+        </message>
+        <message>
             <source>Draft loaded: %1 glossary entries, %2 page summaries.</source>
-            <translation type="finished" />
+            <translation>草稿已载入：术语 %1 条，页段摘要 %2 条。</translation>
         </message>
         <message>
             <source>Failed to load glossary '%1': %2</source>
-            <translation type="finished" />
+            <translation>术语表载入失败“%1”：%2</translation>
         </message>
         <message>
             <source>Glossary saved: %1</source>
-            <translation type="finished" />
+            <translation>术语表已保存：%1</translation>
         </message>
         <message>
             <source>Prefill: %1 rows merged, %2 skipped.</source>
-            <translation type="finished" />
+            <translation>预填充：合并 %1 行，跳过 %2 行。</translation>
         </message>
         <message>
             <source>Story context applied to project (%1 pages).</source>
-            <translation type="finished" />
+            <translation>剧情上下文已写入项目（%1 页）。</translation>
+        </message>
+        <message>
+            <source>Token budget reached — the round ended without a reply.</source>
+            <translation>已达 Token 预算——本轮结束，未产生回复。</translation>
+        </message>
+        <message>
+            <source>Turn limit reached — the round ended without a reply.</source>
+            <translation>已达轮次上限——本轮结束，未产生回复。</translation>
         </message>
         <message>
             <source>— turn %1: %2</source>
-            <translation type="finished" />
+            <translation>— 第 %1 轮：%2</translation>
         </message>
     </context>
 </TS>

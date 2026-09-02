@@ -211,7 +211,7 @@ AgentTranslator(以翻译器身份注册进 utils/registries.py::TRANSLATORS,复
 
 ### 8.5 入口
 
-- 嵌字页窄栏 rail_glossary 图标(`ui/text_panel.py::install_glossary_launcher`,RailDockPanel 浮层);
+- 主窗口左侧栏 LeftBar 的工作台图标(`ui/mainwindowbars.py::LeftBar` 的 glossaryChecker,面板为 `ui/mainwindow.py` 内嵌左栏 `GlossaryAgentPanel`——与全局搜索同槽位的加宽版,开合走宽度动画 `ui/mainwindow.py::on_set_glossary_widget`);
 - Run 对话框的 glossary 区随 beta 清理重整(§11 #4 死路径修复):整本翻译前可见术语表就绪状态(路径 + 勾选),Browse 不再是死路径。
 
 ---

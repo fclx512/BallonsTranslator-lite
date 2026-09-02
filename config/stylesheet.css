@@ -1201,6 +1201,22 @@ QCheckBox#GlobalSearchChecker::indicator:checked
     image: url(icons/search_activate.svg);
 }
 
+QCheckBox#GlossaryChecker::indicator{
+    height: 27px;
+    width: 27px;
+    image: url(icons/leftbar_glossary.svg);
+}
+
+QCheckBox#GlossaryChecker::indicator:hover
+{
+    image: url(icons/leftbar_glossary_activate.svg);
+}
+
+QCheckBox#GlossaryChecker::indicator:checked
+{
+    image: url(icons/leftbar_glossary_activate.svg);
+}
+
 
 StateChecker#ImgTransChecker::indicator{
     height: 27px;

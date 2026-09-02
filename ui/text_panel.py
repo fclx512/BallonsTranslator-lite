@@ -848,8 +848,6 @@ class FontFormatPanel(Widget):
         self.transform_dock = None
         self.textstyle_launcher = None
         self.textstyle_dock = None
-        self.glossary_launcher = None
-        self.glossary_dock = None
 
         self.vlayout.setContentsMargins(0, 0, 0, 0)
         self.vlayout.setSpacing(7)
@@ -1233,8 +1231,7 @@ class FontFormatPanel(Widget):
         Launchers/docks are None until their ``install_*_launcher`` ran;
         ``getattr`` default keeps this safe on partially-built panels.
         """
-        for key in ("annotation", "emphasis", "transform", "textstyle",
-                    "glossary"):
+        for key in ("annotation", "emphasis", "transform", "textstyle"):
             yield (
                 key,
                 getattr(self, f"{key}_launcher", None),
@@ -1462,56 +1459,6 @@ class FontFormatPanel(Widget):
             with QSignalBlocker(self.textstyle_launcher):
                 self.textstyle_launcher.setChecked(False)
 
-    def install_glossary_launcher(self, rail) -> None:
-        """术语/剧情工作台浮层入口（非选中级，项目级工具）。
-
-        内容=GlossaryAgentPanel（会话式 agent：整合术语表与剧情上下文，
-        替代原「提取术语表」菜单对话框）。开合记忆在
-        ``pcfg.glossary_dock_open``。
-        """
-        from ui.panel_rail import RailLauncherButton
-
-        self.rail = rail
-        self.glossary_launcher = RailLauncherButton("rail_glossary")
-        self.glossary_launcher.setToolTip(self.tr("Glossary & Story"))
-        self.glossary_launcher.toggled.connect(
-            self._on_glossary_launcher_toggled
-        )
-        rail.add_launcher(self.glossary_launcher)
-
-    def _ensure_glossary_dock(self):
-        if self.glossary_dock is None:
-            from ui.custom_widget import RailDockPanel
-            from ui.glossary_agent_panel import GlossaryAgentPanel
-
-            panel = GlossaryAgentPanel(self.window().imgtrans_proj, self)
-            self.glossary_dock = RailDockPanel(
-                self.tr("Glossary & Story"),
-                panel,
-                rail=self.rail,
-                config_open="glossary_dock_open",
-            )
-            # 会话面板：日志流 + 双表需要宽度；与右栏同量级的下限
-            self.glossary_dock.setMinimumWidth(360)
-            self.glossary_dock.closed.connect(
-                self._on_glossary_dock_closed
-            )
-        return self.glossary_dock
-
-    def _on_glossary_launcher_toggled(self, checked: bool):
-        if self.glossary_dock is None and not checked:
-            return
-        if checked:
-            self._close_other_docks("glossary")
-            self._ensure_glossary_dock().open_panel()
-        elif self.glossary_dock is not None:
-            self.glossary_dock.close_panel()
-
-    def _on_glossary_dock_closed(self):
-        if self.glossary_launcher is not None and self.glossary_launcher.isChecked():
-            with QSignalBlocker(self.glossary_launcher):
-                self.glossary_launcher.setChecked(False)
-
     def _update_textstyle_indicator(self):
         """Rail icon corner dot while the block carries a non-default style."""
         item = self.textblk_item
@@ -1587,12 +1534,6 @@ class FontFormatPanel(Widget):
                 self.textstyle_dock,
                 self._ensure_textstyle_dock,
                 "textstyle_dock_open",
-            ),
-            (
-                self.glossary_launcher,
-                self.glossary_dock,
-                self._ensure_glossary_dock,
-                "glossary_dock_open",
             ),
         )
         if visible:

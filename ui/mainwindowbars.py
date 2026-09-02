@@ -104,6 +104,10 @@ class LeftBar(Widget):
         self.globalSearchChecker.setObjectName("GlobalSearchChecker")
         self.globalSearchChecker.setToolTip(self.tr("Global Search (Ctrl+G)"))
 
+        self.glossaryChecker = QCheckBox()
+        self.glossaryChecker.setObjectName("GlossaryChecker")
+        self.glossaryChecker.setToolTip(self.tr("Glossary & Story"))
+
         self.imgTransChecker = StateChecker("imgtrans")
         self.imgTransChecker.setObjectName("ImgTransChecker")
         self.imgTransChecker.checked.connect(self.stateCheckerChanged)
@@ -179,6 +183,7 @@ class LeftBar(Widget):
         vlayout.addWidget(openBtnToolBar)
         vlayout.addWidget(self.showPageListLabel)
         vlayout.addWidget(self.globalSearchChecker)
+        vlayout.addWidget(self.glossaryChecker)
         vlayout.addWidget(self.imgTransChecker)
         vlayout.addItem(QSpacerItem(0, 0, QSizePolicy.Minimum, QSizePolicy.Expanding))
         vlayout.addWidget(self.configChecker)

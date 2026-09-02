@@ -118,6 +118,17 @@ class GlossaryAgentPanelTest(unittest.TestCase):
         # 无译文项目:预填充为空,不报错
         self.assertEqual(len(worker.glossary.entries), 0)
 
+    def test_synopsis_edit_without_worker_ensures_worker(self):
+        # 回归:worker 尚未创建时(未发送过指令)编辑梗概,焦点离开触发
+        # _on_synopsis_edited → AttributeError('NoneType' object has no
+        # attribute 'user_synopsis_edit')。所有用户编辑路径必须经
+        # _ensure_worker 兜底。
+        panel, _wired = self._panel()
+        panel._worker = None
+        panel._on_synopsis_edited()
+        self.assertIsNotNone(panel._worker)
+        panel._shutdown()
+
     def test_old_entry_removed(self):
         # 旧入口彻底退役:标题栏信号/对话框引用不复存在(纯源码检查,
         # 避免 offscreen 导入完整主窗口)

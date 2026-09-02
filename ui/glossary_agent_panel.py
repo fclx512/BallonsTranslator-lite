@@ -4,8 +4,9 @@
   worker 草稿(modules/context_agent/draft.py),经同步信号单向刷新
   UI 镜像;落盘只经「应用」按钮。LLM 会话复用 AgentTranslator 的
   profile/client/重试基建(translator 实例在 worker 线程内构造)。
-- ``GlossaryAgentPanel``:RailDockPanel 内容(窄栏入口见
-  ui/text_panel.py::install_glossary_launcher)。三页:Chat(日志流 +
+- ``GlossaryAgentPanel``:主窗口左侧嵌入栏内容(与全局搜索同槽位、
+  更宽,入口见 ui/mainwindowbars.py::LeftBar 的 glossaryChecker 与
+  ui/mainwindow.py::on_set_glossary_widget)。三页:Chat(日志流 +
   指令输入)、Glossary(草稿表)、Story(页段摘要 + 全局梗概)。
 
 替代原 GlossaryExtractorDialog(one-shot LLM 提取,已删)。
@@ -14,7 +15,7 @@
 import json
 import logging
 
-from qtpy.QtCore import QObject, QThread, Qt, Signal, Slot
+from qtpy.QtCore import QCoreApplication, QObject, QThread, Qt, Signal, Slot
 from qtpy.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -57,16 +58,28 @@ from ui.custom_widget import ConfigTextEdit
 
 logger = logging.getLogger("glossary_agent_panel")
 
+# 模块级翻译表在字面量定义处显式标注上下文(self.tr(variable) 间接查表
+# 检查器看不见,必漏翻译);launch.py 安装翻译器早于本模块导入。
 _STOP_REASONS = {
-    STOP_MAX_TURNS: "Turn limit reached — the round ended without a reply.",
-    STOP_TOKEN_BUDGET: "Token budget reached — the round ended without a reply.",
-    STOP_CANCELLED: "Cancelled.",
+    STOP_MAX_TURNS: QCoreApplication.translate(
+        "GlossaryAgentWorker",
+        "Turn limit reached — the round ended without a reply."
+    ),
+    STOP_TOKEN_BUDGET: QCoreApplication.translate(
+        "GlossaryAgentWorker",
+        "Token budget reached — the round ended without a reply."
+    ),
+    STOP_CANCELLED: QCoreApplication.translate(
+        "GlossaryAgentWorker", "Cancelled."
+    ),
 }
 
 _ORIGIN_LABELS = {
-    ORIGIN_EXISTING: "base",
-    ORIGIN_AI: "AI",
-    ORIGIN_USER: "you",
+    ORIGIN_EXISTING: QCoreApplication.translate(
+        "GlossaryAgentPanel", "base"
+    ),
+    ORIGIN_AI: QCoreApplication.translate("GlossaryAgentPanel", "AI"),
+    ORIGIN_USER: QCoreApplication.translate("GlossaryAgentPanel", "you"),
 }
 
 
@@ -459,15 +472,18 @@ class GlossaryAgentPanel(QWidget):
         self.send_btn.clicked.connect(self._on_send)
         self.input_edit.installEventFilter(self)
         self.synopsis_edit.installEventFilter(self)
-        self.stop_btn.clicked.connect(lambda: self._worker.request_stop())
-        self.prefill_btn.clicked.connect(
-            lambda: self._worker.prefill_from_frequency()
-        )
+        self.stop_btn.clicked.connect(self._on_stop)
+        self.prefill_btn.clicked.connect(self._on_prefill)
         self.glossary_remove_btn.clicked.connect(self._on_glossary_remove)
         self.story_remove_btn.clicked.connect(self._on_story_remove)
         self.glossary_table.itemChanged.connect(self._on_glossary_item_changed)
         self.story_table.itemChanged.connect(self._on_story_item_changed)
         self.apply_btn.clicked.connect(self._on_apply)
+
+    def showEvent(self, event):
+        """工作台首次露出时即建 worker 并载入基底(草稿不需要等首条指令)。"""
+        super().showEvent(event)
+        self._ensure_worker()
 
     def eventFilter(self, obj, event):
         """Ctrl+Enter 发送指令;synopsis 焦点离开时提交到 worker。"""
@@ -508,7 +524,7 @@ class GlossaryAgentPanel(QWidget):
         worker.story_synced.connect(self._sync_story_tab)
         worker.round_finished.connect(
             lambda reply: self._append_log(
-                reply or "(no reply)"
+                reply or self.tr("(no reply)")
             )
         )
         worker.round_failed.connect(
@@ -523,6 +539,12 @@ class GlossaryAgentPanel(QWidget):
             self._thread = None
 
     # ── 用户动作 ──────────────────────────────────────────────
+
+    def _on_stop(self):
+        self._ensure_worker().request_stop()
+
+    def _on_prefill(self):
+        self._ensure_worker().prefill_from_frequency()
 
     def _on_send(self):
         text = self.input_edit.toPlainText().strip()
@@ -559,7 +581,7 @@ class GlossaryAgentPanel(QWidget):
         for row in rows:
             item = self.glossary_table.item(row, 0)
             if item is not None:
-                self._worker.user_glossary_remove(item.text())
+                self._ensure_worker().user_glossary_remove(item.text())
 
     def _on_story_remove(self):
         rows = sorted(
@@ -568,12 +590,14 @@ class GlossaryAgentPanel(QWidget):
         for row in rows:
             item = self.story_table.item(row, 0)
             if item is not None:
-                self._worker.user_summary_remove(item.text())
+                self._ensure_worker().user_summary_remove(item.text())
 
     def _on_synopsis_edited(self):
         if self._syncing:
             return
-        self._worker.user_synopsis_edit(self.synopsis_edit.toPlainText())
+        self._ensure_worker().user_synopsis_edit(
+            self.synopsis_edit.toPlainText()
+        )
 
     def _on_glossary_item_changed(self, item):
         if self._syncing or item.column() == 3:
@@ -584,7 +608,7 @@ class GlossaryAgentPanel(QWidget):
         note_item = self.glossary_table.item(row, 2)
         if src_item is None or dst_item is None:
             return
-        self._worker.user_glossary_edit(
+        self._ensure_worker().user_glossary_edit(
             src_item.text(),
             dst_item.text(),
             note_item.text() if note_item is not None else "",
@@ -596,7 +620,7 @@ class GlossaryAgentPanel(QWidget):
         page_item = self.story_table.item(item.row(), 0)
         if page_item is None:
             return
-        self._worker.user_summary_edit(page_item.text(), item.text())
+        self._ensure_worker().user_summary_edit(page_item.text(), item.text())
 
     def _on_busy_changed(self, busy: bool):
         self.send_btn.setEnabled(not busy)

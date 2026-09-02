@@ -2,6 +2,24 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，每次在对应日期中末尾写入日志。
 
+## 2026-09-02
+
+### 术语工作台迁入主窗口左侧栏 + 面板 i18n 补全 + worker 未创建崩溃修复
+
+**问题/需求：** 实机反馈三问题：① 工作台此前误做成嵌字页窄栏 RailDockPanel（画布区浮层），应放主窗口左侧栏位（与全局搜索同槽位）并给更宽面板；② 面板视觉全是英文——zh_CN.ts 里 GlossaryAgentPanel/GlossaryAgentWorker 两个 context 的 24 条翻译全为空串（`<translation type="finished" />`），另有模块级表 `_STOP_REASONS`/`_ORIGIN_LABELS` 未包翻译；③ 未发送过指令时（worker 尚未创建）编辑梗概后焦点离开 → `eventFilter` → `_on_synopsis_edited` 读 `self._worker` NoneType AttributeError。
+
+**改动要点：**
+
+- 左侧栏迁移：`ui/mainwindow.py` 把 `GlossaryAgentPanel` 直接嵌入 `mainHLayout`（leftStackWidget 与 centralStackWidget 之间，global_search 旁），常量 `WORKBENCH_WIDTH = 460`（全局搜索 300 的加宽版）；复用 `_animate_panel_width` 宽度动画；新增 `_showWorkbenchPanel`/`_hideWorkbenchPanel`/`on_set_glossary_widget`，与页面列表、全局搜索三方互斥（`_showSearchOverlay`/`_showPageListOverlay` 反向隐藏工作台）。入口换到 `ui/mainwindowbars.py::LeftBar` 的 `glossaryChecker`（objectName 供 QSS 挂图标）。
+- 右侧入口拆除：`ui/text_panel.py` 删 `install_glossary_launcher`/`_ensure_glossary_dock` 等 4 方法及 `_iter_docks`、面板恢复元组里的 glossary 项；`ui/scenetext_manager.py` 删安装调用；`utils/config.py::ProgramConfig` 删失效字段 `glossary_dock_open`（旧 config.json 残留键由 nested_dataclass 静默忽略）；死图标 `icons/rail_glossary.svg` 删除并在 `scripts/audit_registry.json` 登记。
+- i18n：ts 填 24 条空翻译 + 新增 8 条（origin 标签 base/AI/you、`(no reply)`、3 条停止原因、LeftBar 的「术语与剧情」）；`_STOP_REASONS`/`_ORIGIN_LABELS` 在字面量定义处用 `QCoreApplication.translate` 显式标注上下文（注意：`translate(...)` 括号内尾逗号会让 i18n_check 的提取正则失配 → 误报孤儿）；FontFormatPanel context 的孤儿条目「Glossary & Story」删除。
+- worker 兜底：`GlossaryAgentPanel.showEvent` 即 `_ensure_worker()`（对齐文档「打开工作台时的基底载入」，草稿不再等首条指令）；全部用户编辑路径（梗概/双表/删除/停止/预填充）统一经 `_ensure_worker()` 兜底，NoneType 崩溃不可能复现。
+- 验证：`tests/test_glossary_agent_panel.py` 新增 None-worker 回归测试（8 例全过）；`verify.py` 除既有 tmp 缺失外全绿；实机目视验收——左栏书本图标开合、三页中文（对话/术语表/剧情、原文/译文/备注/来源、全局梗概/页段摘要）、梗概编辑焦点离开无报错、与页面列表互斥正常、控制台零 traceback。
+
+**涉及文件：** `ui/mainwindow.py`、`ui/mainwindowbars.py`、`ui/text_panel.py`、`ui/scenetext_manager.py`、`ui/glossary_agent_panel.py`、`utils/config.py`、`config/stylesheet.css`、`icons/leftbar_glossary.svg`（新增）、`icons/leftbar_glossary_activate.svg`（新增）、`icons/rail_glossary.svg`（删除）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`scripts/audit_registry.json`、`tests/test_glossary_agent_panel.py`、`docs/技术实现/翻译agent化_设计方案.md`、`docs/技术实现/翻译管线现状调研.md`
+
+---
+
 ## 2026-09-01
 
 ### agent 模式翻译报错修复（配置字段声明错类 ×2）+ pcfg 字段静态校验兜底

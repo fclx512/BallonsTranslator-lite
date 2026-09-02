@@ -103,6 +103,7 @@ from .drawing_commands import RunBlkTransCommand
 from .drawingpanel import DrawingPanel
 from .framelesswindow import FramelessMoveResize, FramelessWindow
 from .global_search_widget import GlobalSearchWidget
+from .glossary_agent_panel import GlossaryAgentPanel
 from .io_thread import ImgSaveThread
 from .mainwindowbars import BottomBar, LeftBar, TitleBar
 from .misc import QKEY, parse_stylesheet, set_html_family
@@ -404,6 +405,7 @@ class MainWindow(mainwindow_cls):
         self.leftBar.imgTransChecked.connect(self.setupImgTransUI)
         self.leftBar.configChecked.connect(self.setupConfigUI)
         self.leftBar.globalSearchChecker.clicked.connect(self.on_set_gsearch_widget)
+        self.leftBar.glossaryChecker.clicked.connect(self.on_set_glossary_widget)
         self.leftBar.open_dir.connect(self.OpenProj)
         self.leftBar.open_json_proj.connect(self.openJsonProj)
         self.leftBar.open_images.connect(self.openImages)
@@ -439,6 +441,11 @@ class MainWindow(mainwindow_cls):
             self.on_search_result_item_clicked
         )
 
+        # Glossary/Story agent workbench: embedded left panel (widened
+        # GlobalSearch sibling), pushed into the same H layout slot.
+        self.glossary_workbench = GlossaryAgentPanel(self.imgtrans_proj, self)
+        self.glossary_workbench.setVisible(False)
+
         self.titleBar = TitleBar(self)
         self.titleBar.closebtn_clicked.connect(self.on_closebtn_clicked)
         self.titleBar.display_lang_changed.connect(self.on_display_lang_changed)
@@ -454,6 +461,7 @@ class MainWindow(mainwindow_cls):
         mainHLayout.addWidget(self.leftBar)
         mainHLayout.addWidget(self.leftStackWidget)
         mainHLayout.addWidget(self.global_search_widget)
+        mainHLayout.addWidget(self.glossary_workbench)
         mainHLayout.addSpacing(5)
         mainHLayout.addWidget(self.centralStackWidget)
         mainHLayout.setContentsMargins(0, 0, 0, 0)
@@ -976,6 +984,9 @@ class MainWindow(mainwindow_cls):
 
     PAGE_LIST_WIDTH = 250
     SEARCH_WIDTH = 300
+    # Agent workbench (GlossaryAgentPanel): 4-column table + chat log need
+    # more room than the search panel — widened-GlobalSearch sibling.
+    WORKBENCH_WIDTH = 460
 
     def _animate_panel_width(self, widget, target_max_w, on_finished=None):
         """Animate a panel's width between collapsed and expanded.
@@ -1068,6 +1079,7 @@ class MainWindow(mainwindow_cls):
         self._panel_anim_data[wid] = data
 
     def _showSearchOverlay(self):
+        self._hideWorkbenchPanel()
         self.global_search_widget.setFocus()
         self._animate_panel_width(self.global_search_widget, self.SEARCH_WIDTH)
 
@@ -1081,6 +1093,7 @@ class MainWindow(mainwindow_cls):
             self.leftBar.globalSearchChecker.setChecked(False)
 
     def _showPageListOverlay(self):
+        self._hideWorkbenchPanel()
         self.leftStackWidget.setCurrentWidget(self.pageList)
         self._animate_panel_width(self.leftStackWidget, self.PAGE_LIST_WIDTH)
 
@@ -1092,6 +1105,32 @@ class MainWindow(mainwindow_cls):
     def _on_page_list_hidden(self):
         if self.leftBar.showPageListLabel.isChecked():
             self.leftBar.showPageListLabel.setChecked(False)
+
+    def _showWorkbenchPanel(self):
+        self.glossary_workbench.setFocus()
+        self._animate_panel_width(self.glossary_workbench, self.WORKBENCH_WIDTH)
+
+    def _hideWorkbenchPanel(self):
+        if not self.glossary_workbench.isVisible():
+            return
+        self._animate_panel_width(
+            self.glossary_workbench, 0, on_finished=self._on_workbench_hidden
+        )
+
+    def _on_workbench_hidden(self):
+        if self.leftBar.glossaryChecker.isChecked():
+            self.leftBar.glossaryChecker.setChecked(False)
+
+    def on_set_glossary_widget(self):
+        setup = self.leftBar.glossaryChecker.isChecked()
+        if setup:
+            self._hidePageListOverlay()
+            self.leftBar.showPageListLabel.setChecked(False)
+            self._hideSearchOverlay()
+            self.leftBar.globalSearchChecker.setChecked(False)
+            self._showWorkbenchPanel()
+        else:
+            self._hideWorkbenchPanel()
 
     def resizeEvent(self, e):
         super().resizeEvent(e)

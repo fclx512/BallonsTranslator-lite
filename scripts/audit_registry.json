@@ -2,7 +2,7 @@
   "_comment": "AI 审计登记表。机制见 .agents/skills/audit-docs/SKILL.md。deprecated = 已删待守（不得复活、残留引用必须清零或进 allowed_mentions）；suspended = 存在的休眠文件（不得被主 UI import）。删除文件前先在此登记。",
   "deprecated": {
     "modules/glossary_extractor.py": {
-      "note": "术语工作台取代（2026-08-31）：频率启发式迁入 modules/context_agent/precollect.py，LLM one-shot 提取随 GlossaryExtractorDialog 一并删除；新入口=嵌字页窄栏 rail_glossary 图标（ui/glossary_agent_panel.py）",
+      "note": "术语工作台取代（2026-08-31）：频率启发式迁入 modules/context_agent/precollect.py，LLM one-shot 提取随 GlossaryExtractorDialog 一并删除；新入口=主窗口左侧栏工作台图标（ui/glossary_agent_panel.py，2026-09-02 自窄栏迁入左栏）",
       "allowed_mentions": [
         "docs/daily_log.md",
         "modules/context_agent/precollect.py",
@@ -10,7 +10,7 @@
       ]
     },
     "ui/glossary_extractor_dialog.py": {
-      "note": "术语工作台取代（2026-08-31）：one-shot LLM 提取对话框删除，新入口=嵌字页窄栏 rail_glossary 图标（ui/glossary_agent_panel.py）",
+      "note": "术语工作台取代（2026-08-31）：one-shot LLM 提取对话框删除，新入口=主窗口左侧栏工作台图标（ui/glossary_agent_panel.py，2026-09-02 自窄栏迁入左栏）",
       "allowed_mentions": [
         "docs/daily_log.md"
       ]
@@ -87,6 +87,9 @@
         "docs/daily_log.md",
         "docs/技术实现/效果栈移植与窄栏图标重绘_计划.md"
       ]
+    },
+    "icons/rail_glossary.svg": {
+      "note": "2026-09-02 术语/剧情工作台入口自嵌字页窄栏迁至主窗口左侧栏（LeftBar），窄栏图标成死资产；LeftBar 用 icons/leftbar_glossary.svg（+_activate 变体）"
     }
   },
   "suspended": {
