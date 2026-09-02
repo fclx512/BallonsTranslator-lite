@@ -30,6 +30,7 @@ from utils.shared import (
 )
 
 from .custom_widget import (
+    ConfigCheckBox,
     ConfigComboBox,
     ConfigLineEdit,
     ConfigSectionHeader,
@@ -649,6 +650,36 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
 
         self.vlayout.insertWidget(3, self._single_blk_section)
         self._single_blk_section.setVisible(False)
+
+        # ── Workbench (glossary/story) confirm toggle ────────────
+        # 工作台是左侧栏常驻功能,内部固定走 AgentTranslator,与所选
+        # 翻译器无关,故此节常显
+        self._workbench_section = QWidget()
+        wb_layout = QVBoxLayout(self._workbench_section)
+        wb_layout.setContentsMargins(0, 0, 0, 0)
+        wb_layout.setSpacing(4)
+
+        wb_layout.addWidget(ConfigSectionHeader(self.tr("Workbench")))
+
+        self._confirm_costly_checker = ConfigCheckBox(
+            self.tr("Confirm Costly Workbench Actions")
+        )
+        self._confirm_costly_checker.setToolTip(
+            self.tr(
+                "Ask for confirmation before workbench actions that call the AI (e.g. Prepare for translation)."
+            )
+        )
+        self._confirm_costly_checker.setChecked(bool(pcfg.workbench_confirm_costly))
+        self._confirm_costly_checker.toggled.connect(
+            lambda checked: setattr(pcfg, "workbench_confirm_costly", checked)
+        )
+        wb_row = QHBoxLayout()
+        wb_row.setSpacing(6)
+        wb_row.addWidget(self._confirm_costly_checker)
+        wb_row.addStretch()
+        wb_layout.addLayout(wb_row)
+
+        self.vlayout.insertWidget(4, self._workbench_section)
 
     # ── Public ───────────────────────────────────────────────────
 

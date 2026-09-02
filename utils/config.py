@@ -466,6 +466,9 @@ class ProgramConfig(Config):
     overflow_mode: bool = False  # 过界模式 — 画布边界视觉指示 + 文字块跨边界裁剪
     clip_text_overflow: bool = True  # 翻译填充时裁剪溢出文字并显示黄色提示框，拖拽调整后解除
     show_decorations_during_drag: bool = False  # 拖拽调整时保留描边/阴影（代价是帧率下降）
+    # 术语/剧情工作台：耗时/耗费操作（一键准备等）执行前弹确认窗说明步骤与
+    # API 花销；默认开启，弹窗内「不再提示」或设置面板翻译器页可关闭/恢复
+    workbench_confirm_costly: bool = True
 
     # ── Right-click context menu customization ─────────────
     context_menu_order: List[str] = field(default_factory=lambda: [

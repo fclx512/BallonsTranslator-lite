@@ -3568,18 +3568,6 @@ class MainWindow(mainwindow_cls):
             lambda checked: setattr(pcfg.module, 'llm_story_context', checked)
         )
         llm_row_layout.addWidget(story_cb)
-        confirm_cb = QCheckBox(self.tr("Confirm Costly Workbench Actions"))
-        confirm_cb.setObjectName('ConfigCheckBox')
-        confirm_cb.setToolTip(
-            self.tr(
-                "Ask for confirmation before workbench actions that call the AI (e.g. Prepare for translation)."
-            )
-        )
-        confirm_cb.setChecked(bool(pcfg.workbench_confirm_costly))
-        confirm_cb.toggled.connect(
-            lambda checked: setattr(pcfg, 'workbench_confirm_costly', checked)
-        )
-        llm_row_layout.addWidget(confirm_cb)
         llm_row_layout.addStretch()
 
         token_label = QLabel(self.tr("Token Budget"))

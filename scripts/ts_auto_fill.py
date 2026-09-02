@@ -218,13 +218,27 @@ def main():
         changed = True
         print(f"\n  >> Removed {len(orphans)} orphan entry(ies).")
 
-    # Rebuild ctx_map after prune (some contexts may have been emptied)
+    # Rebuild ctx_map after prune (some contexts may have been emptied).
+    # Must rebuild from the in-memory tree — re-parsing TS_FILE here would
+    # read the stale on-disk file and silently drop the fill step below.
     if changed:
         for ctx_elem in list(root.findall("context")):
             if not ctx_elem.findall("message"):
                 root.remove(ctx_elem)
-        # Rebuild for the fill step
-        _, _, ctx_map, _ = _parse_ts(TS_FILE)
+        ctx_map = {}
+        for ctx_elem in root.findall("context"):
+            name_el = ctx_elem.find("name")
+            if name_el is None or name_el.text is None:
+                continue
+            msgs = []
+            for msg in ctx_elem.findall("message"):
+                src = msg.find("source")
+                if src is None or src.text is None:
+                    continue
+                if is_obsolete_ts_msg(msg):
+                    continue
+                msgs.append((msg, src.text))
+            ctx_map[name_el.text] = (ctx_elem, msgs)
 
     # ── Fill missing ───────────────────────────────────────────────────
     if do_fill and missing:

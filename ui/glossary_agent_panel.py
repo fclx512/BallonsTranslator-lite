@@ -28,6 +28,7 @@ from qtpy.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QStackedLayout,
     QStackedWidget,
     QTabWidget,
     QTableWidget,
@@ -468,14 +469,19 @@ class GlossaryAgentPanel(QWidget):
             self.tr("Instruction for the agent… (Ctrl+Enter to send)")
         )
         input_row.addWidget(self.input_edit, 1)
-        btn_col = QVBoxLayout()
-        btn_col.setSpacing(4)
+        # Send/Stop 同槽位互斥切换(QStackedLayout 取两页最大尺寸约束):
+        # busy 切换不改变行高,避免整行布局跳动
+        self._send_stop_stack = QStackedLayout()
+        self._send_stop_stack.setSizeConstraint(
+            QStackedLayout.SizeConstraint.SetMinAndMaxSize
+        )
         self.send_btn = QPushButton(self.tr("Send"), chat_tab)
         self.stop_btn = QPushButton(self.tr("Stop"), chat_tab)
-        self.stop_btn.hide()
-        btn_col.addWidget(self.send_btn)
-        btn_col.addWidget(self.stop_btn)
-        input_row.addLayout(btn_col)
+        self._send_stop_stack.addWidget(self.send_btn)
+        self._send_stop_stack.addWidget(self.stop_btn)
+        stack_wrap = QWidget(chat_tab)
+        stack_wrap.setLayout(self._send_stop_stack)
+        input_row.addWidget(stack_wrap, 0, Qt.AlignmentFlag.AlignVCenter)
         chat_layout.addLayout(input_row)
         self.tabs.addTab(chat_tab, self.tr("Chat"))
 
@@ -679,8 +685,8 @@ class GlossaryAgentPanel(QWidget):
 
     def _prepare_confirmed(self) -> bool:
         """耗时/耗费操作的显式确认:说明将做的事与 API 花销,用户批准后
-        才执行。勾选「不再询问」写入 pcfg.workbench_confirm_costly=False
-        (立即落盘),可在翻译设置区重新开启。"""
+        才执行。勾选「不再提示」写入 pcfg.workbench_confirm_costly=False
+        (立即落盘),可在设置面板翻译器页重新开启。"""
         from utils.config import pcfg, save_config
 
         if not pcfg.workbench_confirm_costly:
@@ -710,9 +716,7 @@ class GlossaryAgentPanel(QWidget):
         )
         box.addButton(QMessageBox.StandardButton.Ok).setText(self.tr("Start"))
         box.addButton(QMessageBox.StandardButton.Cancel)
-        dont_ask = QCheckBox(
-            self.tr("Don't ask again (re-enable in translation settings)")
-        )
+        dont_ask = QCheckBox(self.tr("Don't ask again"))
         box.setCheckBox(dont_ask)
         if box.exec() != QMessageBox.StandardButton.Ok:
             return False
@@ -987,8 +991,7 @@ class GlossaryAgentPanel(QWidget):
         )
 
     def _on_busy_changed(self, busy: bool):
-        self.send_btn.setEnabled(not busy)
-        self.stop_btn.setVisible(busy)
+        self._send_stop_stack.setCurrentIndex(1 if busy else 0)
         self.prefill_btn.setEnabled(not busy)
         self.prepare_btn.setEnabled(not busy)
         self.apply_btn.setEnabled(not busy)

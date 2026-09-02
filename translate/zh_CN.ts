@@ -2575,14 +2575,6 @@ No pipeline stages will be executed.</source>
             <source>Inject Story Context</source>
             <translation>注入剧情上下文</translation>
         </message>
-        <message>
-            <source>Confirm Costly Workbench Actions</source>
-            <translation>工作台耗时操作需确认</translation>
-        </message>
-        <message>
-            <source>Ask for confirmation before workbench actions that call the AI (e.g. Prepare for translation).</source>
-            <translation>工作台中会调用 AI 的操作（如「一键准备」）执行前先弹窗确认。</translation>
-        </message>
     </context>
     <context>
         <name>GlossaryExtractorDialog</name>
@@ -4618,6 +4610,18 @@ Orientation: {o}</source>
             <source>context</source>
             <translation>上下文</translation>
         </message>
+        <message>
+            <source>Ask for confirmation before workbench actions that call the AI (e.g. Prepare for translation).</source>
+            <translation>工作台中会调用 AI 的操作（如「一键准备」）执行前先弹窗确认。</translation>
+        </message>
+        <message>
+            <source>Confirm Costly Workbench Actions</source>
+            <translation>工作台耗时操作需确认</translation>
+        </message>
+        <message>
+            <source>Workbench</source>
+            <translation>工作台</translation>
+        </message>
     </context>
     <context>
         <name>UpdateThread</name>
@@ -6631,10 +6635,6 @@ This maps automatically to each provider's native parameter
             <translation>请先打开项目——工作台需要读取其中的页面原文。</translation>
         </message>
         <message>
-            <source>Don't ask again (re-enable in translation settings)</source>
-            <translation>不再询问（可在翻译设置中重新开启）</translation>
-        </message>
-        <message>
             <source>Extract by frequency</source>
             <translation>从词频提取候选</translation>
         </message>
@@ -6697,6 +6697,10 @@ This maps automatically to each provider's native parameter
         <message>
             <source>Write 2-4 sentence summaries for the %1 pages that don't have one yet, then refresh the global synopsis.</source>
             <translation>为还没有摘要的 %1 个页面各写 2-4 句摘要，然后更新全局梗概。</translation>
+        </message>
+        <message>
+            <source>Don't ask again</source>
+            <translation>不再提示</translation>
         </message>
     </context>
     <context>
