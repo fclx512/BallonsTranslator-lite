@@ -29,6 +29,8 @@ def _make_proj():
     return types.SimpleNamespace(
         pages={"p01": [], "p02": []},
         idx2pagename=lambda i: ["p01", "p02"][i],
+        # 已打开项目语义(directory 非空)——空态页不接管内容页
+        directory="C:/fake_proj",
         _image_info={
             "p01": {"width": 800, "height": 1200, "llm_visual_summary": "old"},
             "p02": {"width": 800, "height": 1200},
@@ -140,6 +142,80 @@ class GlossaryAgentPanelTest(unittest.TestCase):
                         encoding="utf-8").read()
         self.assertNotIn("glossary_extract", bars_src)
         self.assertNotIn("Extract Glossary", bars_src)
+
+
+    def test_tab_badges_update(self):
+        # Tab 标题即状态总览:术语条数 / 摘要覆盖(已有/总页数)
+        panel, worker = self._panel()
+        worker.initialize()
+        self.assertEqual(panel.tabs.tabText(1), "Glossary (0)")
+        self.assertEqual(panel.tabs.tabText(2), "Story (1/2)")
+        worker.glossary.apply_patch([{"src": "勇者", "dst": "Hero"}])
+        worker._sync_all()
+        self.assertEqual(panel.tabs.tabText(1), "Glossary (1)")
+
+    def test_guide_card_dynamic_commands(self):
+        # 引导卡指令按项目状态生成:缺 1 页摘要 → 首条带页数;
+        # 术语表空 → 提议首次提取;非空 → 提议校对
+        panel, worker = self._panel()
+        worker.initialize()
+        cmds = panel._guide_commands
+        self.assertIn("1 pages", cmds[0])
+        self.assertIn("first 10 pages", cmds[1])
+        worker.glossary.apply_patch([{"src": "勇者", "dst": "Hero"}])
+        worker._sync_all()
+        self.assertIn("Check the glossary draft", panel._guide_commands[1])
+        # 补齐摘要后缺页指令消失
+        worker.user_summary_edit("p02", "new")
+        self.assertNotIn("pages that", panel._guide_commands[0])
+
+    def test_prepare_skips_dialog_when_confirm_disabled(self):
+        # pcfg.workbench_confirm_costly=False:不弹窗直接执行
+        # (词频 prefill + AI 指令入队);指令轮替换为记录器,避免真实 API 调用
+        from utils.config import pcfg
+
+        panel, worker = self._panel()
+        worker.initialize()
+        sent = []
+        worker.instruction_requested.disconnect(worker.run_instruction)
+        worker.instruction_requested.connect(sent.append)
+        old = pcfg.workbench_confirm_costly
+        pcfg.workbench_confirm_costly = False
+        try:
+            panel._on_prepare()
+        finally:
+            pcfg.workbench_confirm_costly = old
+        self.assertEqual(len(sent), 1)
+        self.assertIn("Prepare the drafts", sent[0])
+        # 指令以用户气泡形式上屏(透明可见)
+        self.assertIn("Prepare the drafts", panel._user_bubbles[-1].text())
+
+    def test_empty_state_without_project(self):
+        # 未打开项目(directory 空):空态页接管,不建 worker
+        from ui.glossary_agent_panel import GlossaryAgentPanel
+
+        proj = _make_proj()
+        proj.directory = None
+        panel = GlossaryAgentPanel(proj)
+        self.assertFalse(panel.has_project())
+        self.assertEqual(panel._stack.currentIndex(), 0)
+        panel.show()
+        self.assertIsNone(panel._worker)
+
+    def test_refresh_rebuilds_worker_on_new_project(self):
+        # 打开项目后 refresh:切到内容页并重建 worker 以载入新基底
+        from ui.glossary_agent_panel import GlossaryAgentPanel
+
+        proj = _make_proj()
+        proj.directory = None
+        panel = GlossaryAgentPanel(proj)
+        panel.show()
+        self.assertIsNone(panel._worker)
+        proj.directory = "C:/fake_proj"
+        panel.refresh_project_state()
+        self.assertEqual(panel._stack.currentIndex(), 1)
+        self.assertIsNotNone(panel._worker)
+        panel._shutdown()
 
 
 if __name__ == "__main__":

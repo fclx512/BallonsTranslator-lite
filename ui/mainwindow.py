@@ -1215,6 +1215,7 @@ class MainWindow(mainwindow_cls):
             self.canvas._update_hint_visibility()
             self.opening_dir = False
             progress.close()
+            self.glossary_workbench.refresh_project_state()
         except Exception as e:
             self.opening_dir = False
             create_error_dialog(e, self.tr("Failed to load project ") + directory)
@@ -1372,6 +1373,7 @@ class MainWindow(mainwindow_cls):
             self.titleBar.setTitleContent(osp.basename(self.imgtrans_proj.proj_path))
             self.opening_dir = False
             self.canvas._update_hint_visibility()
+            self.glossary_workbench.refresh_project_state()
         except Exception as e:
             self.opening_dir = False
             create_error_dialog(e, self.tr("Failed to load project from") + json_path)
@@ -3559,6 +3561,25 @@ class MainWindow(mainwindow_cls):
             lambda checked: setattr(pcfg.module, 'llm_translate_context', checked)
         )
         llm_row_layout.addWidget(history_cb)
+        story_cb = QCheckBox(self.tr("Inject Story Context"))
+        story_cb.setObjectName('ConfigCheckBox')
+        story_cb.setChecked(bool(pcfg.module.llm_story_context))
+        story_cb.toggled.connect(
+            lambda checked: setattr(pcfg.module, 'llm_story_context', checked)
+        )
+        llm_row_layout.addWidget(story_cb)
+        confirm_cb = QCheckBox(self.tr("Confirm Costly Workbench Actions"))
+        confirm_cb.setObjectName('ConfigCheckBox')
+        confirm_cb.setToolTip(
+            self.tr(
+                "Ask for confirmation before workbench actions that call the AI (e.g. Prepare for translation)."
+            )
+        )
+        confirm_cb.setChecked(bool(pcfg.workbench_confirm_costly))
+        confirm_cb.toggled.connect(
+            lambda checked: setattr(pcfg, 'workbench_confirm_costly', checked)
+        )
+        llm_row_layout.addWidget(confirm_cb)
         llm_row_layout.addStretch()
 
         token_label = QLabel(self.tr("Token Budget"))

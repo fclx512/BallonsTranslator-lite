@@ -1977,6 +1977,79 @@ QTreeView::item:selected, QListView::item:selected {
     color: @textColor;
 }
 
+/* ── Item views: tables (theme-aware; overrides native style —
+   windowsvista/Win10 and windows11/Win11 paint tables differently,
+   leaving them half-blended into the page background) ────────── */
+QTableWidget, QTableView {
+    background: @emptyContentBackgroundColor;
+    alternate-background-color: @emptyContentBackgroundColor;
+    gridline-color: @borderColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+    outline: none;
+    selection-background-color: @accentPrimary20;
+    selection-color: @textColor;
+}
+QTableWidget::item, QTableView::item {
+    padding: 2px 4px;
+}
+QTableWidget::item:selected, QTableView::item:selected {
+    background: @accentPrimary20;
+    color: @textColor;
+}
+QHeaderView::section {
+    background-color: @widgetBackgroundColor;
+    color: @qwidgetForegroundColor;
+    border: none;
+    border-bottom: 1px solid @borderColor;
+    padding: 4px 6px;
+}
+QTableCornerButton::section {
+    background-color: @widgetBackgroundColor;
+    border: none;
+    border-bottom: 1px solid @borderColor;
+}
+
+/* ── Glossary/Story agent workbench chat bubbles ──────────── */
+AIChatGuideCard {
+    background: @emptyContentBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+}
+QLabel#AIChatGuideTitle {
+    font-size: 13px;
+    font-weight: bold;
+    color: @qwidgetForegroundColor;
+}
+QLabel#AIChatGuideBody {
+    font-size: 12px;
+    color: @qwidgetForegroundColor;
+}
+QLabel#AIChatUserBubble {
+    background: @accentPrimary20;
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: @textColor;
+}
+QLabel#AIChatAssistantBubble {
+    background: @bubbleAIBackground;
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: @qwidgetForegroundColor;
+}
+QLabel#AIChatStatusLine {
+    font-size: 11px;
+    color: @disabledForegroundColor;
+}
+QLabel#AIChatErrorLine {
+    font-size: 11px;
+    color: @dangerColor;
+}
+QLabel#WorkbenchEmptyHint {
+    font-size: 13px;
+    color: @disabledForegroundColor;
+}
+
 /* ── Update release dialog ─────────────────────────────────── */
 QDialog#UpdateReleaseDialog {
     background: transparent;

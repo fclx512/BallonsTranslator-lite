@@ -300,12 +300,15 @@ class AgentTranslator(LLM_API_Translator):
 
     # --- agent 轮次请求 ---
 
-    def _agent_chat(self, messages, tools_spec, tool_choice):
+    def _agent_chat(self, messages, tools_spec, tool_choice, on_delta=None):
         """一轮 agent 请求:与 _request_translation 同构,但带 tools/tool_choice、不带 response_format。
 
         连接类错误沿用父类重试语义(retry_attempts × retry_timeout);
         400 且报错指向 tools/function 视为端点不支持 → AgentUnsupportedTools
         (预期内降级,不烧重试)。返回 (message, usage_total)。
+        on_delta 非 None 时走流式,content 增量实时回调(UI 逐字刷新),
+        聚合出与非流式同构的 message;端点拒绝 stream 参数时自动降级
+        非流式重发一次。
         """
         retry_attempt = 0
         while True:
@@ -321,6 +324,9 @@ class AgentTranslator(LLM_API_Translator):
             }
             if self.max_tokens is not None:
                 api_args["max_tokens"] = self.max_tokens
+            if on_delta is not None:
+                api_args["stream"] = True
+                api_args["stream_options"] = {"include_usage": True}
             reasoning_effort = profile.get("reasoning_effort", "")
             if reasoning_effort:
                 from utils.reasoning_params import build_reasoning_kwargs
@@ -340,10 +346,16 @@ class AgentTranslator(LLM_API_Translator):
                 api_args["presence_penalty"] = float(presence_penalty)
 
             try:
-                completion = self.client.chat.completions.create(**api_args)
+                response = self.client.chat.completions.create(**api_args)
             except openai.BadRequestError as e:
                 # 注意:BadRequestError 是 APIStatusError 子类,必须最先接
                 message_text = provider_error_message(e)
+                if on_delta is not None and "stream" in message_text.lower():
+                    self.logger.warning(
+                        "Endpoint rejected streaming; retrying non-streamed."
+                    )
+                    on_delta = None
+                    continue
                 if is_context_length_error(e):
                     raise RuntimeError(
                         f"Context length exceeded in agent loop: {message_text}"
@@ -379,16 +391,70 @@ class AgentTranslator(LLM_API_Translator):
                 self.logger.error(f"API request failed: {e}")
                 raise
 
+            if on_delta is not None:
+                return self._consume_agent_stream(response, on_delta)
+
             usage_total = None
-            if completion.usage:
-                usage_total = completion.usage.total_tokens
-                self.token_count += completion.usage.total_tokens
-                self.token_count_last = completion.usage.total_tokens
+            if response.usage:
+                usage_total = response.usage.total_tokens
+                self.token_count += response.usage.total_tokens
+                self.token_count_last = response.usage.total_tokens
             message = (
-                completion.choices[0].message
-                if completion.choices and completion.choices[0].message
+                response.choices[0].message
+                if response.choices and response.choices[0].message
                 else None
             )
             if message is None:
                 raise RuntimeError("No message in API response.")
             return message, usage_total
+
+    def _consume_agent_stream(self, stream, on_delta):
+        """聚合流式响应为与非流式同构的 (message, usage_total)。
+
+        content 增量经 on_delta 回调;tool_calls 分片按 index 拼装;
+        usage 由 stream_options include_usage 的末块携带。
+        """
+        from types import SimpleNamespace
+
+        content_parts = []
+        tool_chunks: Dict[int, Dict[str, str]] = {}
+        usage_total = None
+        for chunk in stream:
+            if getattr(chunk, "usage", None):
+                usage_total = chunk.usage.total_tokens
+                self.token_count += chunk.usage.total_tokens
+                self.token_count_last = chunk.usage.total_tokens
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta is None:
+                continue
+            if delta.content:
+                content_parts.append(delta.content)
+                on_delta(delta.content)
+            for tc in delta.tool_calls or []:
+                idx = tc.index if tc.index is not None else 0
+                entry = tool_chunks.setdefault(
+                    idx, {"id": "", "name": "", "arguments": ""}
+                )
+                if tc.id:
+                    entry["id"] = tc.id
+                if tc.function is not None:
+                    if tc.function.name:
+                        entry["name"] += tc.function.name
+                    if tc.function.arguments:
+                        entry["arguments"] += tc.function.arguments
+
+        calls = [
+            SimpleNamespace(
+                id=entry["id"] or f"call_{i}",
+                function=SimpleNamespace(
+                    name=entry["name"], arguments=entry["arguments"]
+                ),
+            )
+            for i, entry in sorted(tool_chunks.items())
+        ]
+        message = SimpleNamespace(
+            content="".join(content_parts), tool_calls=calls or None
+        )
+        return message, usage_total

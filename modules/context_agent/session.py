@@ -94,15 +94,18 @@ def run_agent_session(
     status_cb: Optional[Callable[[int, List[str], Optional[int]], None]] = None,
     log: Optional[Callable[[str], None]] = None,
     history_tail: Optional[List[Dict[str, Any]]] = None,
+    stream_cb: Optional[Callable[[str], None]] = None,
 ) -> SessionResult:
     """跑一次指令轮,返回最终回复与用量。
 
-    chat(messages, tools, tool_choice) -> (message, usage_total);
+    chat(messages, tools, tool_choice[, on_delta]) -> (message, usage_total);
     execute_tool_fn(name, arguments) -> dict;抛 ToolError 回给模型。
     工具执行异常不致命(上游失败语义),patch 冲突同理——都作为回执
     继续,由模型决定是否调整;纯文本回复即结束。
     history_tail 为上一指令轮裁剪后的消息(system 之后部分),续接在
     本轮 system 之后、新 user 指令之前。
+    stream_cb 非 None 时请求流式,content 增量实时回调(UI 逐字刷新);
+    端点不支持时由 chat 侧降级,此处无感。
     """
 
     def _log(msg: str) -> None:
@@ -138,7 +141,12 @@ def run_agent_session(
             messages.append({"role": "user", "content": _WRAPUP_MESSAGE})
             wrapup_sent = True
 
-        message, usage = chat(messages, tools_openai, "auto")
+        if stream_cb is not None:
+            message, usage = chat(
+                messages, tools_openai, "auto", on_delta=stream_cb
+            )
+        else:
+            message, usage = chat(messages, tools_openai, "auto")
         turns += 1
         usage_total += usage or 0
 
