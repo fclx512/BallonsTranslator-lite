@@ -18,8 +18,7 @@
     "modules/translators/context_batch.py": {
       "note": "翻译 agent 化（docs/技术实现/翻译agent化_设计方案.md §11）合一删 beta：ContextBatchTranslator 2026-08-23 删除，agent 为唯一 LLM 翻译路径",
       "allowed_mentions": [
-        "docs/技术实现/翻译agent化_设计方案.md",
-        "docs/技术实现/翻译管线现状调研.md"
+        "docs/技术实现/翻译agent化_设计方案.md"
       ]
     },
     "ui/glossary_dialog.py": {
@@ -90,6 +89,24 @@
     },
     "icons/rail_glossary.svg": {
       "note": "2026-09-02 术语/剧情工作台入口自嵌字页窄栏迁至主窗口左侧栏（LeftBar），窄栏图标成死资产；LeftBar 用 icons/leftbar_glossary.svg（+_activate 变体）"
+    },
+    "docs/技术实现/点脏页跳转修复计划.md": {
+      "note": "2026-09-02 删除：修复已随 8b45049 落地并经实机验收（2026-08-28），行为由 tests/test_page_list_dirty_click.py 锁定；blockSignals 范围硬约束摘录至 docs/基础速查/经验教训.md §3.2"
+    },
+    "docs/技术实现/翻译管线现状调研.md": {
+      "note": "2026-09-02 删除：agent 化重构已全部收官，其描述的前 agent 管线现状（含已删 beta 翻译器）整体过时；架构基线见 docs/技术实现/翻译agent化_设计方案.md"
+    },
+    "docs/技术实现/图像修复区_审计与优化讨论.md": {
+      "note": "2026-09-02 删除：2026-08-26 三档修复分级方向定稿并全部实现（AI 修图独立图标/画笔移除/面板控件统一），审计+讨论稿使命完成，现状以代码与 tests/test_drawing_cursor.py 为准"
+    },
+    "docs/技术实现/文本编辑区UI重构.md": {
+      "note": "2026-09-02 删除：右栏三区重构已落地（89e57a7+efac5e5），与上游的刻意分歧已由 docs/技术实现/上游v1.5.12移植_完成记录.md 持久分歧节覆盖"
+    },
+    "docs/技术实现/侧栏图标_画布浮层面板实现.md": {
+      "note": "2026-09-02 删除：RailDockPanel 两批次已提交（75ad4e8/11046f0），行为由 tests/test_panel_rail.py 锁定，控件契约见 AGENTS.md 打包控件表"
+    },
+    "docs/技术实现/PSD导出_JSX路线.md": {
+      "note": "2026-09-02 删除：JSX 路线已提交（fd90b31），字段换算由 tests/test_psd_jsx_export.py 锁定、保真策略/已知限制以代码注释为准；Phase 2 字符级样式扩展点由 payload schema 预留结构承载"
     }
   },
   "suspended": {
