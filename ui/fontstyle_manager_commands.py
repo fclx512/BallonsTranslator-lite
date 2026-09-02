@@ -14,6 +14,8 @@ except ImportError:
 
 from utils.proj_imgtrans import ProjImgTrans
 
+from .textedit_commands import replay_guard
+
 
 class BatchFontformatCommand(QUndoCommand):
     """Undoable batch application of a FontFormat to multiple blocks.
@@ -99,13 +101,17 @@ class BatchFontformatCommand(QUndoCommand):
                 item = _find_blk_item(sm, bidx)
                 if item is None:
                     continue
-                if which == "old" and key in self._old_html:
-                    # Full restoration (HTML + rect + format)
-                    item.setHtml(self._old_html[key])
-                    item.set_fontformat(ffmt)
-                    item.setRect(self._old_rect[key])
-                else:
-                    item.set_fontformat(ffmt, set_char_format=True)
+                try:
+                    with replay_guard(item):
+                        if which == "old" and key in self._old_html:
+                            # Full restoration (HTML + rect + format)
+                            item.setHtml(self._old_html[key])
+                            item.set_fontformat(ffmt)
+                            item.setRect(self._old_rect[key])
+                        else:
+                            item.set_fontformat(ffmt, set_char_format=True)
+                except RuntimeError:
+                    continue
                 self._clear_trans_undo_stack(sm, bidx)
             else:
                 # Off-page block: data-level restore + lazy re-render on visit

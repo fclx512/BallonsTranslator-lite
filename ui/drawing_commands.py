@@ -13,6 +13,7 @@ import numpy as np
 from .canvas import Canvas, TextBlkItem
 from .image_edit import DrawingLayer
 from .textedit_area import TransPairWidget
+from .textedit_commands import replay_guard, sync_text_by_diff
 
 
 class StrokeItemUndoCommand(QUndoCommand):
@@ -124,17 +125,43 @@ class RunBlkTransCommand(QUndoCommand):
         self.blkitems = blkitems
         self.transpairw_list = transpairw_list
 
+        # 3a 快照命令制：构造期抓前后快照（item 侧 HTML 全保真，面板侧纯
+        # 文本），undo/redo = 内容重放，不再借道文本文档私有 undo 栈排水。
+        # entries = (blkitem, transpairw, before_item_html, after_item_html,
+        #            before_trans, after_trans, before_source, after_source)
+        self.text_entries = []
         if mode < 3:
             for blkitem, transpairw in zip(self.blkitems, self.transpairw_list):
-                if mode != 0:
-                    trs = blkitem.blk.translation
-                    transpairw.e_trans.setPlainTextAndKeepUndoStack(trs)
-                    blkitem.setPlainTextAndKeepUndoStack(trs)
-                blkitem.blk.rich_text = ""
-                if mode >= 0:
-                    transpairw.e_source.setPlainTextAndKeepUndoStack(
-                        blkitem.blk.get_text()
+                write_trans = mode != 0
+                before_item_html = blkitem.toHtml() if write_trans else None
+                before_trans = (
+                    transpairw.e_trans.toPlainText() if write_trans else None
+                )
+                before_source = transpairw.e_source.toPlainText()
+                with replay_guard(
+                    blkitem, transpairw.e_trans, transpairw.e_source
+                ):
+                    if write_trans:
+                        trs = blkitem.blk.translation
+                        transpairw.e_trans.setPlainTextAndKeepUndoStack(trs)
+                        blkitem.setPlainTextAndKeepUndoStack(trs)
+                    blkitem.blk.rich_text = ""
+                    if mode >= 0:
+                        transpairw.e_source.setPlainTextAndKeepUndoStack(
+                            blkitem.blk.get_text()
+                        )
+                self.text_entries.append(
+                    (
+                        blkitem,
+                        transpairw,
+                        before_item_html,
+                        blkitem.toHtml() if write_trans else None,
+                        before_trans,
+                        transpairw.e_trans.toPlainText() if write_trans else None,
+                        before_source,
+                        transpairw.e_source.toPlainText(),
                     )
+                )
 
         self.canvas = canvas
         self.mode = mode
@@ -208,13 +235,40 @@ class RunBlkTransCommand(QUndoCommand):
             self.op_counter += 1
             return
 
-        if self.mode < 3:
-            for blkitem, transpairw in zip(self.blkitems, self.transpairw_list):
-                if self.mode != 0:
-                    transpairw.e_trans.redo()
-                    blkitem.redo()
-                if self.mode >= 0:
-                    transpairw.e_source.redo()
+        self._replay_text(after=True)
+
+    def _replay_text(self, after: bool):
+        """文字部分快照重放。widget 随切页/重渲销毁后静默跳过该条
+        （僵尸防御：Qt 虚函数内异常会 qFatal，必须捕获 RuntimeError）。"""
+        for (
+            blkitem,
+            transpairw,
+            before_item_html,
+            after_item_html,
+            before_trans,
+            after_trans,
+            before_source,
+            after_source,
+        ) in self.text_entries:
+            try:
+                with replay_guard(
+                    blkitem, transpairw.e_trans, transpairw.e_source
+                ):
+                    if before_item_html is not None:
+                        blkitem.load_rich_text_html(
+                            after_item_html if after else before_item_html
+                        )
+                    if before_trans is not None:
+                        sync_text_by_diff(
+                            transpairw.e_trans,
+                            after_trans if after else before_trans,
+                        )
+                    sync_text_by_diff(
+                        transpairw.e_source,
+                        after_source if after else before_source,
+                    )
+            except RuntimeError:
+                continue
 
     def undo(self) -> None:
 
@@ -239,10 +293,4 @@ class RunBlkTransCommand(QUndoCommand):
                 mask_view[:] = undo_mask
             self.canvas.updateLayers()
 
-        if self.mode < 3:
-            for blkitem, transpairw in zip(self.blkitems, self.transpairw_list):
-                if self.mode != 0:
-                    transpairw.e_trans.undo()
-                    blkitem.undo()
-                if self.mode >= 0:
-                    transpairw.e_source.undo()
+        self._replay_text(after=False)

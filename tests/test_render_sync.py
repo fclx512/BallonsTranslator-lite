@@ -19,7 +19,8 @@ and a missed sync self-corrects on the next change. This test verifies:
   4. the diff preserves char formats outside the edited range;
   5. an item inline edit converges back into the panel;
   6. rapid mixed edits keep both documents in lockstep (no loop);
-  7. continuous typing keeps undo-step parity (lockstep undo).
+  7. continuous typing converges item text (doc-step parity was dropped
+     with the undo rework 3a — see the note at the check).
 
 Run:
     ./ballontrans_pylibs_win/python.exe -m pytest tests/test_render_sync.py -v
@@ -207,7 +208,12 @@ def run_all_checks():
         "(panel=%r item=%r)" % (panel.toPlainText(), item2.toPlainText()),
     )
 
-    # ── 7. continuous typing keeps undo-step parity (lockstep undo) ──────
+    # ── 7. continuous typing converges item text ─────────────────────
+    # 旧断言「panel/item 文档 undo 步数对等」已随撤销体系 3a 废除：步数
+    # 对等建立在 new_steps>0 门留下的陈旧 old_undo_steps 水位伪象上
+    # （计划 docs/技术实现/撤销体系重构计划.md 1.1/4.6——双侧文档步数
+    # 联动正是被重构废除的耦合假设，3b 起文档栈整体禁用）。真实不变量
+    # 是双端文本收敛；命令级 undo 行为由 tests/test_undo_safety_net.py 锁定。
     scene3 = QGraphicsScene()
     item3 = make_item(scene3, "起")
     panel3 = TransTextEdit(idx=0, parent=None)
@@ -225,13 +231,10 @@ def run_all_checks():
         cur3.movePosition(QTextCursor.MoveOperation.End)
         cur3.insertText(ch)
         app.processEvents()
-    panel_steps = panel3.document().availableUndoSteps()
-    item_steps = item3.document().availableUndoSteps()
     check(
-        "continuous typing keeps undo-step parity",
-        panel_steps == item_steps and item3.toPlainText() == "起XYZ",
-        "(panel_steps=%d item_steps=%d item=%r)"
-        % (panel_steps, item_steps, item3.toPlainText()),
+        "continuous typing converges item text",
+        item3.toPlainText() == panel3.toPlainText() == "起XYZ",
+        "(panel=%r item=%r)" % (panel3.toPlainText(), item3.toPlainText()),
     )
 
     return RESULTS

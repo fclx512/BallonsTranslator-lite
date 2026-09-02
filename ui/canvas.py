@@ -46,6 +46,11 @@ from .custom_widget.notification import notification
 from .image_edit import DrawingLayer, ImageEditMode, StrokeImgItem
 from .misc import ARROWKEY2DIRECTION, QKEY, ndarray2pixmap
 from .page_search_widget import PageSearchWidget
+from .textedit_commands import (
+    FormatGestureCommand,
+    TypingSessionCommand,
+    replay_guard,
+)
 from .texteditshapecontrol import (
     CONTROL_ITEM_DATA_KEY,
     ControlBlockItem,
@@ -60,10 +65,10 @@ from .textitem import TextBlkItem, TextBlock
 CANVAS_SCALE_MAX = 10.0
 CANVAS_SCALE_MIN = 0.01
 CANVAS_SCALE_SPEED = 0.1
-# 格式化手势宏的空闲收口时长：最后一次格式化推送静默这么久即闭合宏。
-# 只作悬开兜底，常规边界（选区变化/清栈/撤销等）即时闭合。
-_FORMAT_GESTURE_IDLE_MS = 1500
-_FORMAT_GESTURE_LABEL = "formatting gesture"  # 内部宏标签，不显示于任何 UI
+# 编辑会话（键入会话/格式化手势）的空闲收口时长：最后一次变更静默这么久
+# 即闭合落账。只作悬开兜底，常规边界（选区变化/失焦/清栈/撤销/新命令
+# 推送）即时闭合，见 commit_edit_sessions 的调用点。
+_EDIT_SESSION_IDLE_MS = 1500
 OVERFLOW_MARGIN_RATIO = 0.3  # 过界模式场景扩展比例
 # Minimum drag (screen pixels, scaled by zoom) before a left-drag turns from
 # a click into a text-block box select (2026-08-18).
@@ -409,15 +414,18 @@ class Canvas(QGraphicsScene):
         self.draw_undo_stack = QUndoStack(self)
         self.text_undo_stack = QUndoStack(self)
         self.saved_drawundo_step = 0
-        self.saved_textundo_step = 0
 
-        # 格式化手势宏：面板驱动的逐块格式化命令（改字号/行距等）在此聚拢为
-        # 一个撤销步，手势边界见 _close_format_gesture 的调用点。
-        self._format_gesture_open = False
-        self._format_gesture_timer = QTimer(self)
-        self._format_gesture_timer.setSingleShot(True)
-        self._format_gesture_timer.setInterval(_FORMAT_GESTURE_IDLE_MS)
-        self._format_gesture_timer.timeout.connect(self._close_format_gesture)
+        # 编辑会话管理（撤销体系 3a 快照命令制）：键入会话与格式化手势在此
+        # 聚拢，闭合时各落一条快照命令（TypingSessionCommand /
+        # FormatGestureCommand），文档私有 undo 栈不再承担回退。
+        # 手势/会话边界：选区变化、失焦、撤销重做入口、新命令推送、清栈、
+        # 空闲定时器；见 docs/技术实现/撤销体系重构计划.md 4.5。
+        self._typing_session = None   # dict | None，见 note_typing_edit
+        self._format_gesture = None   # dict | None，见 note_formatting_edit
+        self._edit_session_timer = QTimer(self)
+        self._edit_session_timer.setSingleShot(True)
+        self._edit_session_timer.setInterval(_EDIT_SESSION_IDLE_MS)
+        self._edit_session_timer.timeout.connect(self.commit_edit_sessions)
 
         # 宿主挂 gv 而非 viewport：QAbstractScrollArea 滚动时对 viewport 做
         # 像素级 scroll（含子控件一并平移），缩放调整滚动条会把 toast 漂走；
@@ -482,9 +490,7 @@ class Canvas(QGraphicsScene):
         self.mid_btn_pressed = False
         self.pan_initial_pos = QPoint(0, 0)
 
-        self.saved_textundo_step = 0
         self.saved_drawundo_step = 0
-        self.num_pushed_textstep = 0
         self.num_pushed_drawstep = 0
 
         self.clipboard_blks: List[TextBlock] = []
@@ -885,8 +891,8 @@ class Canvas(QGraphicsScene):
         self.textGridControl.clear()
 
     def on_selection_changed(self):
-        # 选区变化=格式化手势边界：整批已固化为一个撤销步
-        self._close_format_gesture()
+        # 选区变化 = 编辑会话边界：键入会话/格式化手势各落一条快照命令
+        self.commit_edit_sessions()
         if self.txtblkShapeControl.isVisible():
             blk_item = self.txtblkShapeControl.blk_item
             if blk_item is not None and blk_item.isEditing():
@@ -1646,9 +1652,265 @@ class Canvas(QGraphicsScene):
             return self.draw_undo_stack
         return None
 
+    # ── 编辑会话（键入会话 + 格式化手势）─────────────────────────────
+    #
+    # 落账模型（撤销体系 3a）：内容变更不再逐条压栈，而是先聚进会话；
+    # 会话闭合（边界钩子或空闲定时器）时以一条快照命令落账。
+    # - 键入会话：before 由调用方在镜像对账前抓（镜像侧尚持旧文）；相邻
+    #   变更并入同一会话（Qt 合并同语义），非相邻插入闭合旧会话另起新
+    #   会话（burst，护网 test_panel_typing_burst_two_commands）。
+    # - 格式化手势：手势期间的预览中间值不入栈，闭合时以「基线↔终值」
+    #   一条 FormatGestureCommand 落账；预览悬开期间按 Ctrl+Z = 取消
+    #   手势恢复原值（目标行为 7，见 _cancel_format_gesture）。
+
+    @property
+    def _format_gesture_open(self) -> bool:
+        return self._format_gesture is not None
+
+    def note_typing_edit(
+        self,
+        item: TextBlkItem,
+        edit,
+        before_text: str,
+        change_from: int,
+        removed: int,
+        added_len: int,
+    ):
+        """译文侧键入变更登记（画布/面板双向共用）。
+
+        before_text 必须是镜像对账前的旧文（propagate handler 在同步前抓）。
+        相邻性判定：change_from <= last_end <= change_from + removed
+        （末尾插入/退格/Delete 均连续），否则闭合旧会话另起新会话。
+        """
+        session = self._typing_session
+        if session is not None and (
+            session["edit"] is not edit
+            or (
+                session["last_change_end"] is not None
+                and not (
+                    change_from
+                    <= session["last_change_end"]
+                    <= change_from + removed
+                )
+            )
+        ):
+            self._commit_typing_session()
+            session = None
+        if session is None:
+            # 键入是手势边界：先闭合格式化手势（落账）再开新会话
+            self._commit_format_gesture()
+            self._typing_session = session = {
+                "item": item,
+                "edit": edit,
+                "before_text": before_text,
+                "last_change_end": None,
+                "is_source": False,
+            }
+            self.on_textstack_changed()  # 会话开始持有未落账改动 → 脏
+        session["last_change_end"] = change_from + added_len
+        self._edit_session_timer.start()
+
+    def note_source_edit(
+        self, edit, change_from: int, removed: int, added_len: int
+    ):
+        """原文面板键入登记。原文无镜像可抓 before，会话由 focus_in 开启
+        （note_source_focus_in 已捕获 before）；无会话 = 拿不到 before，
+        降级忽略（该变更不可撤销，但不得崩）。"""
+        session = self._typing_session
+        if (
+            session is None
+            or session["edit"] is not edit
+            or not session["is_source"]
+        ):
+            return
+        if session["last_change_end"] is not None and not (
+            change_from <= session["last_change_end"] <= change_from + removed
+        ):
+            # 原文 burst：闭合旧会话；新会话 before 只能由当前文重建——
+            # 纯插入可逆推（剔除本次插入段），含删除则降级为当前文
+            # （before==after，闭合时不落账，本次变更不可撤销）。
+            self._commit_typing_session()
+            text = edit.toPlainText()
+            if removed == 0:
+                before = text[:change_from] + text[change_from + added_len:]
+            else:
+                before = text
+            self._typing_session = session = {
+                "item": None,
+                "edit": edit,
+                "before_text": before,
+                "last_change_end": None,
+                "is_source": True,
+            }
+        session["last_change_end"] = change_from + added_len
+        self._edit_session_timer.start()
+
+    def note_source_focus_in(self, edit):
+        """原文编辑器获得焦点：开启原文键入会话（before = 当前全文）。"""
+        session = self._typing_session
+        if (
+            session is not None
+            and session["edit"] is edit
+            and session["is_source"]
+        ):
+            return
+        self.commit_edit_sessions()
+        self._typing_session = {
+            "item": None,
+            "edit": edit,
+            "before_text": edit.toPlainText(),
+            "last_change_end": None,
+            "is_source": True,
+        }
+
+    def note_formatting_edit(self, item: TextBlkItem, formatpanel=None):
+        """格式化变更登记：并入当前手势；首块开启手势。基线由 item 在
+        is_formatting 事务入口预捕（ui/text_engine/item.py::
+        _capture_ffmt_gesture_baseline），此处只收集。"""
+        # 格式化是键入会话边界：先闭合键入会话（落账）再并入手势
+        self._commit_typing_session()
+        gesture = self._format_gesture
+        if gesture is None:
+            self._format_gesture = gesture = {
+                "items": {},
+                "formatpanel": formatpanel,
+            }
+            self.on_textstack_changed()
+        if item not in gesture["items"]:
+            baseline = item._ffmt_gesture_baseline
+            if baseline is None:
+                # 兜底：捕获点未覆盖的格式化路径——以当前态为基线（手势
+                # 第一次变更丢 before，仍保证可落账不崩）
+                baseline = (
+                    item.toHtml(),
+                    item.absBoundingRect(qrect=True),
+                    item.get_fontformat(),
+                )
+            gesture["items"][item] = baseline
+        self._edit_session_timer.start()
+
+    def commit_edit_sessions(self):
+        """闭合全部编辑会话（键入 + 格式化手势），各落一条快照命令。
+
+        也是所有外部命令推送、选区变化、失焦、保存点之前的统一边界。"""
+        self._commit_typing_session()
+        self._commit_format_gesture()
+
+    def _commit_typing_session(self):
+        session = self._typing_session
+        if session is None:
+            return
+        self._typing_session = None
+        self._edit_session_timer.stop()
+        edit = session["edit"]
+        try:
+            after_text = edit.toPlainText()
+        except RuntimeError:
+            return  # widget 已销毁（切页/重渲），改动随场景一起消失
+        if after_text != session["before_text"]:
+            item = None if session["is_source"] else session["item"]
+            self.text_undo_stack.push(
+                TypingSessionCommand(
+                    item, edit, session["before_text"], after_text
+                )
+            )
+        self.on_textstack_changed()
+
+    def _commit_format_gesture(self):
+        gesture = self._format_gesture
+        if gesture is None:
+            return
+        self._format_gesture = None
+        self._edit_session_timer.stop()
+        entries = []
+        for item, baseline in gesture["items"].items():
+            try:
+                before_html, before_rect, before_fmt = baseline
+                entries.append(
+                    {
+                        "item": item,
+                        "before_html": before_html,
+                        "before_rect": before_rect,
+                        "before_fmt": before_fmt,
+                        "after_html": item.toHtml(),
+                        "after_rect": item.absBoundingRect(qrect=True),
+                        "after_fmt": item.get_fontformat(),
+                    }
+                )
+                item._ffmt_gesture_baseline = None
+            except RuntimeError:
+                continue
+        if entries:
+            self.text_undo_stack.push(
+                FormatGestureCommand(entries, gesture["formatpanel"])
+            )
+        self.on_textstack_changed()
+
+    def _cancel_format_gesture(self):
+        """预览悬开期间按 Ctrl+Z：取消手势、恢复手势前原值（目标行为 7）。
+        不落命令、不产生新撤销步。"""
+        gesture = self._format_gesture
+        if gesture is None:
+            return
+        self._format_gesture = None
+        self._edit_session_timer.stop()
+        for item, baseline in gesture["items"].items():
+            try:
+                before_html, before_rect, before_fmt = baseline
+                with replay_guard(item):
+                    item.repaint_on_changed = False
+                    try:
+                        item.load_rich_text_html(before_html)
+                        item.set_fontformat(before_fmt)
+                        item.setRect(before_rect)
+                    finally:
+                        item.repaint_on_changed = True
+                    item.repaint_background()
+                item._ffmt_gesture_baseline = None
+            except RuntimeError:
+                continue
+        formatpanel = gesture["formatpanel"]
+        if formatpanel is not None:
+            try:
+                item = formatpanel.textblk_item
+                if item is not None:
+                    multi_size = not item.isEditing() and item.isMultiFontSize()
+                    formatpanel.set_active_format(
+                        item.get_fontformat(), multi_size
+                    )
+            except RuntimeError:
+                pass
+        self.on_textstack_changed()
+
+    def _drop_edit_sessions(self):
+        """清栈路径：丢弃会话状态（内容保持现状，不落账不恢复）。"""
+        self._typing_session = None
+        gesture = self._format_gesture
+        self._format_gesture = None
+        self._edit_session_timer.stop()
+        if gesture is not None:
+            for item in gesture["items"]:
+                try:
+                    item._ffmt_gesture_baseline = None
+                except RuntimeError:
+                    pass
+
+    def _edit_session_dirty(self) -> bool:
+        """会话持有未落账改动 = 脏（保存提示/probe 的会话侧输入）。"""
+        session = self._typing_session
+        if session is not None:
+            try:
+                if session["edit"].toPlainText() != session["before_text"]:
+                    return True
+            except RuntimeError:
+                pass
+        return self._format_gesture is not None
+
+    # ── 命令栈推送 / 撤销重做 ────────────────────────────────────────
+
     def push_undo_command(self, command: QUndoCommand, update_pushed_step=True):
-        # 任何非格式化命令（批量应用/文本键入/变换提交等）都是手势边界
-        self._close_format_gesture()
+        # 任何外部命令推送都是会话边界：先闭合落账（保持时间序），再压新命令
+        self.commit_edit_sessions()
         if self.textEditMode():
             self.push_text_command(command, update_pushed_step)
         elif self.drawMode():
@@ -1656,34 +1918,8 @@ class Canvas(QGraphicsScene):
         else:
             return
 
-    def push_formatting_command(self, command: QUndoCommand):
-        """把面板驱动的逐块格式化命令并入手势宏，一次手势=一个撤销步。
-
-        与旧行为等价的语义：命令总压入 text_undo_stack，但不推进
-        num_pushed_textstep（格式化不计为项目脏）；非文本编辑模式下丢弃。
-        """
-        if command is None or not self.textEditMode():
-            return
-        if not self._format_gesture_open:
-            self._format_gesture_open = True
-            self.text_undo_stack.beginMacro(_FORMAT_GESTURE_LABEL)
-        self.text_undo_stack.push(command)
-        self._format_gesture_timer.start()
-
-    def _close_format_gesture(self):
-        """闭合格式化手势宏（幂等）。
-
-        endMacro 使整个宏按一个撤销步计，并恰好发一次 indexChanged（Qt
-        文档保证）——样式管理器的栈监听随之获得"每手势刷新一次"语义。
-        """
-        if not self._format_gesture_open:
-            return
-        self._format_gesture_open = False
-        self._format_gesture_timer.stop()
-        self.text_undo_stack.endMacro()
-
     def push_draw_command(self, command: QUndoCommand, update_pushed_step=True):
-        self._close_format_gesture()
+        self.commit_edit_sessions()
         if command is not None:
             self.draw_undo_stack.push(command)
         if update_pushed_step:
@@ -1691,17 +1927,16 @@ class Canvas(QGraphicsScene):
             self.on_drawstack_changed()
 
     def push_text_command(self, command: QUndoCommand, update_pushed_step=True):
-        self._close_format_gesture()
+        self.commit_edit_sessions()
         if command is not None:
             self.text_undo_stack.push(command)
-        if update_pushed_step:
-            self.num_pushed_textstep += 1
-            self.on_textstack_changed()
+        self.on_textstack_changed()
 
     def on_drawstack_changed(self):
         if (
             self.num_pushed_drawstep != self.saved_drawundo_step
-            or self.num_pushed_textstep != self.saved_textundo_step
+            or not self.text_undo_stack.isClean()
+            or self._edit_session_dirty()
         ):
             self.setProjSaveState(True)
         else:
@@ -1709,7 +1944,8 @@ class Canvas(QGraphicsScene):
 
     def on_textstack_changed(self):
         if (
-            self.num_pushed_textstep != self.saved_textundo_step
+            not self.text_undo_stack.isClean()
+            or self._edit_session_dirty()
             or self.num_pushed_drawstep != self.saved_drawundo_step
         ):
             self.setProjSaveState(True)
@@ -1718,22 +1954,25 @@ class Canvas(QGraphicsScene):
         self.textstack_changed.emit()
 
     def redo_textedit(self):
-        self._close_format_gesture()
-        self.num_pushed_textstep += 1
+        # 预览悬开期间的 redo：先闭合手势落账（redo 无取消语义）
+        self.commit_edit_sessions()
         self.text_undo_stack.redo()
+        self.on_textstack_changed()
 
     def undo_textedit(self):
-        self._close_format_gesture()
-        if self.num_pushed_textstep > 0:
-            self.num_pushed_textstep -= 1
+        # 目标行为 7：预览悬开期间按 Ctrl+Z = 取消手势恢复原值
+        if self._format_gesture is not None:
+            self._cancel_format_gesture()
+            return
+        # 键入会话先落账再撤销 → 本次 Ctrl+Z 撤销的正是刚键入的内容
+        self._commit_typing_session()
         self.text_undo_stack.undo()
+        self.on_textstack_changed()
 
     def redo(self):
-        self._close_format_gesture()
         if self.textEditMode():
+            self.commit_edit_sessions()
             undo_stack = self.text_undo_stack
-            self.num_pushed_textstep += 1
-            self.on_textstack_changed()
         elif self.drawMode():
             undo_stack = self.draw_undo_stack
             self.num_pushed_drawstep += 1
@@ -1743,15 +1982,17 @@ class Canvas(QGraphicsScene):
         if undo_stack is not None:
             undo_stack.redo()
             if undo_stack == self.text_undo_stack:
+                self.on_textstack_changed()
                 self.txtblkShapeControl.updateBoundingRect()
 
     def undo(self):
-        self._close_format_gesture()
         if self.textEditMode():
+            # 目标行为 7：预览悬开期间按 Ctrl+Z = 取消手势恢复原值
+            if self._format_gesture is not None:
+                self._cancel_format_gesture()
+                return
+            self._commit_typing_session()
             undo_stack = self.text_undo_stack
-            if self.num_pushed_textstep > 0:
-                self.num_pushed_textstep -= 1
-            self.on_textstack_changed()
         elif self.drawMode():
             undo_stack = self.draw_undo_stack
             if self.num_pushed_drawstep > 0:
@@ -1762,24 +2003,20 @@ class Canvas(QGraphicsScene):
         if undo_stack is not None:
             undo_stack.undo()
             if undo_stack == self.text_undo_stack:
+                self.on_textstack_changed()
                 self.txtblkShapeControl.updateBoundingRect()
 
     def clear_undostack(self, update_saved_step=False):
+        # 会话状态随栈一起丢弃（内容保持现状，不落账不恢复）
+        self._drop_edit_sessions()
         if update_saved_step:
             self.saved_drawundo_step = 0
-            self.saved_textundo_step = 0
-            self.num_pushed_textstep = 0
             self.num_pushed_drawstep = 0
-        # Qt 对"宏合成中 clear"未定义：先复位标志再清栈，绝不对已清栈 endMacro
-        self._format_gesture_open = False
-        self._format_gesture_timer.stop()
         self.draw_undo_stack.clear()
         self.text_undo_stack.clear()
 
     def clear_text_stack(self):
-        self._format_gesture_open = False
-        self._format_gesture_timer.stop()
-        self.num_pushed_textstep = 0
+        self._drop_edit_sessions()
         self.text_undo_stack.clear()
 
     def clear_draw_stack(self):
@@ -1787,11 +2024,16 @@ class Canvas(QGraphicsScene):
         self.draw_undo_stack.clear()
 
     def update_saved_undostep(self):
+        # 保存点：未落账的会话先落账，再以 clean 机制记录干净位
+        self.commit_edit_sessions()
         self.saved_drawundo_step = self.num_pushed_drawstep
-        self.saved_textundo_step = self.num_pushed_textstep
+        self.text_undo_stack.setClean()
+        self.on_textstack_changed()
 
     def text_change_unsaved(self) -> bool:
-        return self.saved_textundo_step != self.num_pushed_textstep
+        # 3a 起走 QUndoStack clean 机制（保存时 setClean）+ 会话脏标记，
+        # 手工计步 num_pushed_textstep 已删除
+        return not self.text_undo_stack.isClean() or self._edit_session_dirty()
 
     def draw_change_unsaved(self) -> bool:
         return self.saved_drawundo_step != self.num_pushed_drawstep

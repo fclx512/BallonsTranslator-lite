@@ -1,4 +1,5 @@
 import copy
+from contextlib import contextmanager
 from difflib import SequenceMatcher
 from typing import Dict, List, Union
 
@@ -14,7 +15,7 @@ from utils.fontformat import FontFormat
 from utils.proj_imgtrans import ProjImgTrans
 
 from .misc import doc_replace, doc_replace_no_shift
-from .page_search_widget import Matched, PageSearchWidget
+from .page_search_widget import PageSearchWidget
 from .textedit_area import SourceTextEdit, TransTextEdit
 from .texteditshapecontrol import TextBlkShapeControl
 from .textitem import TextBlkItem
@@ -60,6 +61,145 @@ def sync_text_by_diff(
         cursor.endEditBlock()
     target_edit.old_undo_steps = target_doc.availableUndoSteps()
     return True
+
+
+@contextmanager
+def replay_guard(*widgets):
+    """统一重放守卫：快照重放期间切断 contentsChange 全链路的命令再发射。
+
+    undo/redo 走内容重放（sync_text_by_diff / load_rich_text_html /
+    setPlainTextAndKeepUndoStack），会触发 item/面板文档的
+    contentsChange；不抑制则反向发射 propagate/push 信号，被编辑会话
+    管理器误认为新用户编辑。item 侧用 block_change_signal（门控
+    ui/text_engine/item.py::on_content_changed 的发射段），面板侧用
+    in_acts（门控 ui/textedit_area.py::handle_content_change 与镜像
+    对账）；均保存/恢复旧值，嵌套重放不打破外层抑制。
+    """
+    saved = []
+    for w in widgets:
+        if w is None:
+            continue
+        try:
+            if isinstance(w, TextBlkItem):
+                saved.append((w, True, w.block_change_signal))
+                w.block_change_signal = True
+            else:
+                saved.append((w, False, w.in_acts))
+                w.in_acts = True
+        except (RuntimeError, AttributeError):
+            pass
+    try:
+        yield
+    finally:
+        for w, is_item, old in saved:
+            try:
+                if is_item:
+                    w.block_change_signal = old
+                else:
+                    w.in_acts = old
+            except RuntimeError:
+                pass
+
+
+class TypingSessionCommand(QUndoCommand):
+    """一次键入会话的快照命令：undo/redo = 前后全文 diff 重放。
+
+    只存纯文本前后值，重放走 sync_text_by_diff 最小差异对账——改动区
+    外的逐字符格式天然保留（与 Qt 文档撤销同语义），ruby/注解不受影响。
+    译文会话同时回放画布 item 与面板 e_trans；原文会话只回放 e_source
+    （blkitem 为 None）。
+    """
+
+    def __init__(
+        self,
+        blkitem: Union[TextBlkItem, None],
+        edit: Union[SourceTextEdit, TransTextEdit],
+        before_text: str,
+        after_text: str,
+    ):
+        super().__init__()
+        self.blkitem = blkitem
+        self.edit = edit
+        self.before_text = before_text
+        self.after_text = after_text
+        self.op_counter = 0
+
+    def redo(self):
+        if self.op_counter == 0:
+            self.op_counter += 1
+            return
+        self._replay(self.after_text)
+
+    def undo(self):
+        self._replay(self.before_text)
+
+    def _replay(self, text: str):
+        # 僵尸命令：widget 已随切页/重渲销毁时静默失效（批量重渲保栈路径，
+        # 见 _rerender_dirty_pages(clear_stack=False)）；Qt 虚函数内未捕获
+        # 异常会 qFatal 直接闪退。
+        try:
+            with replay_guard(self.blkitem, self.edit):
+                if self.blkitem is not None:
+                    sync_text_by_diff(self.blkitem, text)
+                sync_text_by_diff(self.edit, text)
+        except RuntimeError:
+            return
+
+
+class FormatGestureCommand(QUndoCommand):
+    """一次格式化手势的快照命令：手势期间的全部预览中间值不入栈，
+    闭合时以「手势前基线 ↔ 手势终值」一个撤销步落账（保住 04feaf8 的
+    多选一次手势 = 一个撤销步语义，宏机制已被本命令取代）。
+
+    每条 entry = {item, before_html, after_html, before_rect, after_rect,
+    before_fmt, after_fmt}；undo/redo = 富文本 HTML + 格式模型 + 几何
+    整体重放（逐字符格式保真，含多字号块）。HTML 快照格式即保存链路同
+    款（0-c 探针验证往返保真）。
+    """
+
+    def __init__(self, entries: List[dict], formatpanel=None):
+        super().__init__()
+        self.entries = entries
+        self.formatpanel = formatpanel
+        self.op_counter = 0
+
+    def redo(self):
+        if self.op_counter == 0:
+            self.op_counter += 1
+            return
+        self._replay(after=True)
+
+    def undo(self):
+        self._replay(after=False)
+
+    def _replay(self, after: bool):
+        suffix = "after" if after else "before"
+        for entry in self.entries:
+            item = entry["item"]
+            try:
+                with replay_guard(item):
+                    item.repaint_on_changed = False
+                    try:
+                        item.load_rich_text_html(entry[f"{suffix}_html"])
+                        item.set_fontformat(entry[f"{suffix}_fmt"])
+                        item.setRect(entry[f"{suffix}_rect"])
+                    finally:
+                        item.repaint_on_changed = True
+                    item.repaint_background()
+            except RuntimeError:
+                # 僵尸条目：item 已随切页/重渲销毁，静默跳过
+                continue
+            if self.formatpanel is not None:
+                try:
+                    if item == self.formatpanel.textblk_item:
+                        multi_size = (
+                            not item.isEditing() and item.isMultiFontSize()
+                        )
+                        self.formatpanel.set_active_format(
+                            item.get_fontformat(), multi_size
+                        )
+                except RuntimeError:
+                    pass
 
 
 class MoveBlkItemsCommand(QUndoCommand):
@@ -122,8 +262,12 @@ class ApplyFontformatCommand(QUndoCommand):
 
     def redo(self):
         for item, edit in zip(self.items, self.trans_widget_lst):
-            item.set_fontformat(self.new_fmt, set_char_format=True)
-            edit.document().clearUndoRedoStacks()
+            try:
+                with replay_guard(item, edit):
+                    item.set_fontformat(self.new_fmt, set_char_format=True)
+                    edit.document().clearUndoRedoStacks()
+            except RuntimeError:
+                continue
 
     def undo(self):
         for rect, item, html, fmt, edit in zip(
@@ -133,10 +277,14 @@ class ApplyFontformatCommand(QUndoCommand):
             self.old_fmt_lst,
             self.trans_widget_lst,
         ):
-            item.setHtml(html)
-            item.set_fontformat(fmt)
-            item.setRect(rect)
-            edit.document().clearUndoRedoStacks()
+            try:
+                with replay_guard(item, edit):
+                    item.setHtml(html)
+                    item.set_fontformat(fmt)
+                    item.setRect(rect)
+                    edit.document().clearUndoRedoStacks()
+            except RuntimeError:
+                continue
 
 
 class ReshapeItemCommand(QUndoCommand):
@@ -247,131 +395,13 @@ class ResetAngleCommand(QUndoCommand):
                 self.ctrl.setAngle(angle)
 
 
-class TextItemEditCommand(QUndoCommand):
-    def __init__(
-        self,
-        blkitem: TextBlkItem,
-        trans_edit: TransTextEdit,
-        num_steps: int,
-        formatpanel=None,
-    ):
-        super(TextItemEditCommand, self).__init__()
-        self.op_counter = 0
-        self.edit = trans_edit
-        self.blkitem = blkitem
-        self.num_steps = num_steps
-        self.is_formatting = blkitem.is_formatting
-        self.old_ffmt_values = self.new_ffmt_values = None
-        if blkitem.is_formatting and blkitem.old_ffmt_values is not None:
-            self.old_ffmt_values = blkitem.old_ffmt_values.copy()
-            self.new_ffmt_values = self.old_ffmt_values.copy()
-            for k in self.new_ffmt_values:
-                self.new_ffmt_values[k] = getattr(blkitem.fontformat, k)
-        self.formatpanel = formatpanel
-
-    def redo(self):
-        if self.op_counter == 0:
-            self.op_counter += 1
-            return
-
-        try:
-            self.blkitem.repaint_on_changed = False
-        except RuntimeError:
-            return
-        if self.new_ffmt_values is not None:
-            for k, v in self.new_ffmt_values.items():
-                self.blkitem.fontformat[k] = v
-        try:
-            self.blkitem.redo()
-            self.blkitem.repaint_on_changed = True
-            if self.num_steps > 0:
-                self.blkitem.repaint_background()
-        except RuntimeError:
-            return
-
-        if self.is_formatting and self.blkitem == self.formatpanel.textblk_item:
-            multi_size = not self.blkitem.isEditing() and self.blkitem.isMultiFontSize()
-            self.formatpanel.set_active_format(
-                self.blkitem.get_fontformat(), multi_size
-            )
-
-        if self.edit is not None and not self.is_formatting:
-            try:
-                self.edit.redo()
-            except RuntimeError:
-                pass
-
-    def undo(self):
-        # 僵尸命令：widget 已随切页/重渲销毁时静默失效（批量重渲保栈路径，
-        # 见 _rerender_dirty_pages(clear_stack=False)）；Qt 虚函数内未捕获
-        # 异常会 qFatal 直接闪退。
-        try:
-            self.blkitem.repaint_on_changed = False
-        except RuntimeError:
-            return
-        if self.old_ffmt_values is not None:
-            for k, v in self.old_ffmt_values.items():
-                self.blkitem.fontformat[k] = v
-        try:
-            self.blkitem.undo()
-            self.blkitem.repaint_on_changed = True
-            if self.num_steps > 0:
-                self.blkitem.repaint_background()
-        except RuntimeError:
-            return
-
-        if self.is_formatting and self.blkitem == self.formatpanel.textblk_item:
-            multi_size = not self.blkitem.isEditing() and self.blkitem.isMultiFontSize()
-            self.formatpanel.set_active_format(
-                self.blkitem.get_fontformat(), multi_size
-            )
-
-        if self.edit is not None:
-            try:
-                self.edit.undo()
-            except RuntimeError:
-                pass
-
-
-class TextEditCommand(QUndoCommand):
-    def __init__(
-        self,
-        edit: Union[SourceTextEdit, TransTextEdit],
-        num_steps: int,
-        blkitem: TextBlkItem,
-    ) -> None:
-        super().__init__()
-        # TODO: remove it for transtextedit
-        self.edit = edit
-        self.blkitem = blkitem
-        self.op_counter = 0
-        self.num_steps = num_steps
-
-    def redo(self):
-        if self.op_counter == 0:
-            self.op_counter += 1
-            return
-        self._apply("redo")
-
-    def undo(self):
-        self._apply("undo")
-
-    def _apply(self, action: str):
-        # 僵尸命令：widget 已随切页/重渲销毁时静默失效（栈在批量重渲中
-        # 保留，见 _rerender_dirty_pages(clear_stack=False)），不抛异常——
-        # Qt 虚函数内未捕获异常会 qFatal 直接闪退。
-        try:
-            getattr(self.edit, action)()
-        except RuntimeError:
-            return
-        if self.blkitem is not None:
-            try:
-                getattr(self.blkitem, action)()
-            except RuntimeError:
-                pass
-
-
 class PageReplaceOneCommand(QUndoCommand):
+    """页面内替换单个（PageSearchWidget 体系，非 GlobalReplaceApplier）。
+
+    3a 起不再借道文本文档私有 undo 栈做重放：构造期抓前后全文快照，
+    undo/redo = diff 重放（查找替换重构记录要求的快照化改造）。
+    """
+
     def __init__(self, se: PageSearchWidget, parent=None):
         super(PageReplaceOneCommand, self).__init__(parent)
         self.op_counter = 0
@@ -395,23 +425,30 @@ class PageReplaceOneCommand(QUndoCommand):
             else:
                 self.sw.result_pos = 0
 
-        if not self.edit_is_src:
-            cursor = self.blkitem.textCursor()
-            cursor.setPosition(self.sel_start)
-            cursor.setPosition(
+        # 前快照 → 施加 → 后快照
+        self.before_edit_text = self.edit.toPlainText()
+        self.before_item_text = (
+            None if self.edit_is_src else self.blkitem.toPlainText()
+        )
+        with replay_guard(self.blkitem, self.edit):
+            if not self.edit_is_src:
+                cursor = self.blkitem.textCursor()
+                cursor.setPosition(self.sel_start)
+                cursor.setPosition(
+                    self.sel_start + self.ori_len, QTextCursor.MoveMode.KeepAnchor
+                )
+                cursor.insertText(self.reptxt)
+
+            self.rep_cursor = self.edit.textCursor()
+            self.rep_cursor.setPosition(self.sel_start)
+            self.rep_cursor.setPosition(
                 self.sel_start + self.ori_len, QTextCursor.MoveMode.KeepAnchor
             )
-            cursor.beginEditBlock()
-            cursor.insertText(self.reptxt)
-            cursor.endEditBlock()
-
-        self.rep_cursor = self.edit.textCursor()
-        self.rep_cursor.setPosition(self.sel_start)
-        self.rep_cursor.setPosition(
-            self.sel_start + self.ori_len, QTextCursor.MoveMode.KeepAnchor
+            self.rep_cursor.insertText(self.reptxt)
+        self.after_edit_text = self.edit.toPlainText()
+        self.after_item_text = (
+            None if self.edit_is_src else self.blkitem.toPlainText()
         )
-        self.rep_cursor.insertText(self.reptxt)
-        self.edit.updateUndoSteps()
 
     def redo(self):
         if self.op_counter == 0:
@@ -427,16 +464,10 @@ class PageReplaceOneCommand(QUndoCommand):
             else:
                 self.sw.result_pos = 0
 
-        if not self.edit_is_src:
-            self.blkitem.redo()
-        self.edit.redo()
+        self._replay(after=True)
 
     def undo(self):
-        if not self.edit_is_src:
-            self.blkitem.undo()
-        self.sw.update_cursor_on_insert = False
-        self.edit.undo()
-        self.sw.update_cursor_on_insert = True
+        self._replay(after=False)
         if self.sw.current_edit is not None and self.sw.isVisible():
             move = self.sw.move_cursor(-1)
             if move == 0:
@@ -445,49 +476,82 @@ class PageReplaceOneCommand(QUndoCommand):
                 self.sw.result_pos = self.sw.counter_sum - 1
             self.sw.updateCounterText()
 
+    def _replay(self, after: bool):
+        try:
+            self.sw.update_cursor_on_insert = False
+            with replay_guard(self.blkitem, self.edit):
+                if not self.edit_is_src:
+                    sync_text_by_diff(
+                        self.blkitem,
+                        self.after_item_text if after else self.before_item_text,
+                    )
+                sync_text_by_diff(
+                    self.edit,
+                    self.after_edit_text if after else self.before_edit_text,
+                )
+        except RuntimeError:
+            return
+        finally:
+            self.sw.update_cursor_on_insert = True
+
 
 class PageReplaceAllCommand(QUndoCommand):
+    """页面内替换全部：逐编辑器/逐块前后快照，undo/redo = diff 重放。"""
+
     def __init__(self, search_widget: PageSearchWidget) -> None:
         super().__init__()
         self.op_counter = 0
         self.sw = search_widget
 
-        self.rstedit_list: List[SourceTextEdit] = []
-        self.blkitem_list: List[TextBlkItem] = []
-        curpos_list: List[List[Matched]] = []
+        # entries = (edit, blkitem|None, before_edit, after_edit,
+        #            before_item|None, after_item|None)
+        self.entries = []
+        replace = self.sw.replace_editor.toPlainText()
         for edit, highlighter in zip(
             self.sw.search_rstedit_list, self.sw.highlighter_list
         ):
-            self.rstedit_list.append(edit)
-            curpos_list.append(list(highlighter.matched_map.values()))
-
-        replace = self.sw.replace_editor.toPlainText()
-        for edit, curpos_lst in zip(self.rstedit_list, curpos_list):
-            redo_blk = type(edit) is TransTextEdit
-            if redo_blk:
-                blkitem = self.sw.textblk_item_list[edit.idx]
-                self.blkitem_list.append(blkitem)
-            span_list = [[matched.start, matched.end] for matched in curpos_lst]
-            sel_list = doc_replace(edit.document(), span_list, replace)
-            if redo_blk:
-                doc_replace_no_shift(blkitem.document(), sel_list, replace)
-                blkitem.updateUndoSteps()
+            curpos_lst = list(highlighter.matched_map.values())
+            is_trans = type(edit) is TransTextEdit
+            blkitem = self.sw.textblk_item_list[edit.idx] if is_trans else None
+            before_edit = edit.toPlainText()
+            before_item = blkitem.toPlainText() if is_trans else None
+            with replay_guard(blkitem, edit):
+                span_list = [[matched.start, matched.end] for matched in curpos_lst]
+                sel_list = doc_replace(edit.document(), span_list, replace)
+                if is_trans:
+                    doc_replace_no_shift(blkitem.document(), sel_list, replace)
+            self.entries.append(
+                (
+                    edit,
+                    blkitem,
+                    before_edit,
+                    edit.toPlainText(),
+                    before_item,
+                    blkitem.toPlainText() if is_trans else None,
+                )
+            )
 
     def redo(self):
         if self.op_counter == 0:
             self.op_counter += 1
             return
-
-        for edit in self.rstedit_list:
-            edit.redo()
-        for blkitem in self.blkitem_list:
-            blkitem.redo()
+        self._replay(after=True)
 
     def undo(self):
-        for edit in self.rstedit_list:
-            edit.undo()
-        for blkitem in self.blkitem_list:
-            blkitem.undo()
+        self._replay(after=False)
+
+    def _replay(self, after: bool):
+        for entry in self.entries:
+            edit, blkitem = entry[0], entry[1]
+            edit_text = entry[3] if after else entry[2]
+            item_text = entry[5] if after else entry[4]
+            try:
+                with replay_guard(blkitem, edit):
+                    sync_text_by_diff(edit, edit_text)
+                    if blkitem is not None:
+                        sync_text_by_diff(blkitem, item_text)
+            except RuntimeError:
+                continue
 
 
 def _suppress_change_sync(obj, value: bool):
@@ -642,6 +706,8 @@ class GlobalReplaceApplier:
 
 
 class MultiPasteCommand(QUndoCommand):
+    """多块粘贴：item 侧富文本 HTML 快照 + 面板纯文本快照，重放式 undo/redo。"""
+
     def __init__(
         self,
         text_list: Union[str, List],
@@ -650,29 +716,48 @@ class MultiPasteCommand(QUndoCommand):
     ) -> None:
         super().__init__()
         self.op_counter = -1
-        self.blkitems = blkitems
-        self.etrans = etrans
 
         if len(blkitems) > 0:
             if isinstance(text_list, str):
                 text_list = [text_list] * len(blkitems)
 
-        for blkitem, etran, text in zip(self.blkitems, self.etrans, text_list):
-            etran.setPlainTextAndKeepUndoStack(text)
-            blkitem.setPlainTextAndKeepUndoStack(text)
+        # entries = (blkitem, etran, before_html, after_html,
+        #            before_edit, after_edit)
+        self.entries = []
+        for blkitem, etran, text in zip(blkitems, etrans, text_list):
+            before_html = blkitem.toHtml()
+            before_edit = etran.toPlainText()
+            with replay_guard(blkitem, etran):
+                etran.setPlainTextAndKeepUndoStack(text)
+                blkitem.setPlainTextAndKeepUndoStack(text)
+            self.entries.append(
+                (
+                    blkitem,
+                    etran,
+                    before_html,
+                    blkitem.toHtml(),
+                    before_edit,
+                    etran.toPlainText(),
+                )
+            )
 
     def redo(self):
-        if self.op_counter == 0:
+        if self.op_counter < 0:
             self.op_counter += 1
             return
-        for blkitem, etran in zip(self.blkitems, self.etrans):
-            blkitem.redo()
-            etran.redo()
+        self._replay(after=True)
 
     def undo(self):
-        for blkitem, etran in zip(self.blkitems, self.etrans):
-            blkitem.undo()
-            etran.undo()
+        self._replay(after=False)
+
+    def _replay(self, after: bool):
+        for blkitem, etran, before_html, after_html, before_edit, after_edit in self.entries:
+            try:
+                with replay_guard(blkitem, etran):
+                    blkitem.load_rich_text_html(after_html if after else before_html)
+                    sync_text_by_diff(etran, after_edit if after else before_edit)
+            except RuntimeError:
+                continue
 
 
 class NormalizeBreaksCommand(QUndoCommand):
@@ -749,43 +834,54 @@ class NormalizeBreaksCommand(QUndoCommand):
                     blk.rich_text = ch["old_rich_text"]
                 continue
 
-            if which == "new":
-                blk.translation = ch["new_text"]
-                blk.rich_text = ""
-                item.setPlainTextAndKeepUndoStack(ch["new_text"])
-                # 新文本结构可能变了，重应用当前 char format 保证样式不丢
-                item.set_fontformat(item.get_fontformat(), set_char_format=True,
-                                    set_stroke_width=False, set_effect=False)
-                if ch.get("squeeze", False):
-                    item.squeezeBoundingRect(repaint=True)
-                else:
-                    item.repaint_background()
-                # 同步右侧 e_trans
-                try:
-                    pairw = sm.pairwidget_list[bidx]
-                    if pairw is not None:
-                        pairw.e_trans.setPlainTextAndKeepUndoStack(ch["new_text"])
-                        pairw.e_trans.document().clearUndoRedoStacks()
-                except Exception:
-                    pass
-            else:
-                blk.translation = ch["old_translation"]
-                blk.rich_text = ch["old_rich_text"]
-                item.setHtml(ch["old_html"])
-                item.set_fontformat(ch["old_ffmt"])
-                if ch.get("old_rect") is not None:
-                    item.setRect(ch["old_rect"])
-                else:
-                    item.repaint_background()
-                try:
-                    pairw = sm.pairwidget_list[bidx]
-                    if pairw is not None:
-                        pairw.e_trans.setPlainTextAndKeepUndoStack(
-                            ch["old_translation"]
+            try:
+                if which == "new":
+                    blk.translation = ch["new_text"]
+                    blk.rich_text = ""
+                    with replay_guard(item):
+                        item.setPlainTextAndKeepUndoStack(ch["new_text"])
+                        # 新文本结构可能变了，重应用当前 char format 保证样式不丢
+                        item.set_fontformat(
+                            item.get_fontformat(), set_char_format=True,
+                            set_stroke_width=False, set_effect=False,
                         )
-                        pairw.e_trans.document().clearUndoRedoStacks()
-                except Exception:
-                    pass
+                    if ch.get("squeeze", False):
+                        item.squeezeBoundingRect(repaint=True)
+                    else:
+                        item.repaint_background()
+                    # 同步右侧 e_trans
+                    try:
+                        pairw = sm.pairwidget_list[bidx]
+                        if pairw is not None:
+                            with replay_guard(pairw.e_trans):
+                                pairw.e_trans.setPlainTextAndKeepUndoStack(
+                                    ch["new_text"]
+                                )
+                                pairw.e_trans.document().clearUndoRedoStacks()
+                    except Exception:
+                        pass
+                else:
+                    blk.translation = ch["old_translation"]
+                    blk.rich_text = ch["old_rich_text"]
+                    with replay_guard(item):
+                        item.setHtml(ch["old_html"])
+                        item.set_fontformat(ch["old_ffmt"])
+                    if ch.get("old_rect") is not None:
+                        item.setRect(ch["old_rect"])
+                    else:
+                        item.repaint_background()
+                    try:
+                        pairw = sm.pairwidget_list[bidx]
+                        if pairw is not None:
+                            with replay_guard(pairw.e_trans):
+                                pairw.e_trans.setPlainTextAndKeepUndoStack(
+                                    ch["old_translation"]
+                                )
+                                pairw.e_trans.document().clearUndoRedoStacks()
+                    except Exception:
+                        pass
+            except RuntimeError:
+                continue
 
 
 def _find_blk_item_in(scene_manager, block_idx: int):

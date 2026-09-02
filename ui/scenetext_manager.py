@@ -64,8 +64,6 @@ from .textedit_commands import (
     ReshapeItemCommand,
     RotateItemCommand,
     SqueezeCommand,
-    TextEditCommand,
-    TextItemEditCommand,
     sync_text_by_diff,
 )
 from .textitem import TextBlkItem, TextBlock
@@ -831,6 +829,8 @@ class SceneTextManager(QObject):
         self.canvas.editing_textblkitem = None
         self.textblk_item_list[blk_id].setSelected(True)
         self.txtblkShapeControl.endEditing()
+        # 退出内联编辑 = 编辑会话边界：落账未闭合的键入会话/格式化手势。
+        self.canvas.commit_edit_sessions()
 
     def on_row_hover(self, idx: int):
         if self.is_editting():
@@ -1119,6 +1119,12 @@ class SceneTextManager(QObject):
             self.pairwidget_list[textitm.idx].e_trans.setHoverEffect(False)
             self.textEditList.clearAllSelected()
 
+        # 原文编辑器获得焦点：开启原文键入会话（before = 当前全文）。
+        # 原文无镜像可抓 before，只能靠 focus_in 预捕。
+        edit = self.sender()
+        if type(edit) is SourceTextEdit:
+            self.canvas.note_source_focus_in(edit)
+
         if idx < len(self.textblk_item_list):
             blk_item = self.textblk_item_list[idx]
             self.canvas.gv.ensureVisible(blk_item)
@@ -1130,25 +1136,19 @@ class SceneTextManager(QObject):
     def on_pairw_focusout(self, idx: int):
         # Cache restore is handled by TextBlkItem.endEdit → refresh_cache_policy;
         # the former text_rendering config branch was removed with it.
-        pass
+        # 失焦 = 编辑会话边界：键入会话/格式化手势各落一条快照命令。
+        self.canvas.commit_edit_sessions()
 
     def on_textedit_undo(self):
         self.canvas.undo_textedit()
 
     def on_push_textitem_undostack(self, num_steps: int, is_formatting: bool):
-        blkitem: TextBlkItem = self.sender()
-        e_trans = (
-            self.pairwidget_list[blkitem.idx].e_trans if not is_formatting else None
-        )
-        cmd = TextItemEditCommand(
-            blkitem, e_trans, num_steps, self.textpanel.formatpanel
-        )
+        # 3a 快照命令制：键入已由 propagate 登记（on_propagate_textitem_edit
+        # → canvas.note_typing_edit），此处只接管格式化变更——并入 canvas
+        # 的格式化手势，手势闭合时落一条 FormatGestureCommand。
         if is_formatting:
-            # 面板格式化（改字号/行距等）：并入 canvas 的手势宏，一次手势
-            # 跨多块多键值只记一个撤销步
-            self.canvas.push_formatting_command(cmd)
-        else:
-            self.canvas.push_undo_command(cmd, update_pushed_step=True)
+            blkitem: TextBlkItem = self.sender()
+            self.canvas.note_formatting_edit(blkitem, self.textpanel.formatpanel)
 
     def on_merge_textblks(self):
         """画布右键"Merge"：按列表 idx 顺序合并选中的文字块为一个。"""
@@ -1238,12 +1238,15 @@ class SceneTextManager(QObject):
         return merged
 
     def on_push_edit_stack(self, num_steps: int):
+        # 3a 快照命令制：译文侧键入已由 propagate 登记
+        # （on_propagate_transwidget_edit → canvas.note_typing_edit），此处只
+        # 接管原文面板——原文无镜像可抓 before，靠 push 信号登记进 focus_in
+        # 开启的键入会话。
         edit: Union[TransTextEdit, SourceTextEdit] = self.sender()
-        is_trans = type(edit) is TransTextEdit
-        blkitem = self.textblk_item_list[edit.idx] if is_trans else None
-        self.canvas.push_undo_command(
-            TextEditCommand(edit, num_steps, blkitem), update_pushed_step=not is_trans
-        )
+        if type(edit) is SourceTextEdit:
+            self.canvas.note_source_edit(
+                edit, edit.change_from, edit.change_removed, edit.change_added
+            )
 
     def on_propagate_textitem_edit(
         self, pos: int, removed: int, added_text: str, joint_previous: bool
@@ -1251,7 +1254,9 @@ class SceneTextManager(QObject):
         blk_item: TextBlkItem = self.sender()
         edit = self.pairwidget_list[blk_item.idx].e_trans
         # 内联编辑回写面板：全文对账。in_acts 挡掉镜像写回触发的再次同步。
+        # before 快照在同步前抓：镜像侧（e_trans）此时尚持旧文。
         if not edit.in_acts:
+            before_text = edit.toPlainText()
             edit.in_acts = True
             try:
                 changed = sync_text_by_diff(
@@ -1260,8 +1265,8 @@ class SceneTextManager(QObject):
             finally:
                 edit.in_acts = False
             if changed:
-                self.canvas.push_text_command(
-                    command=None, update_pushed_step=True
+                self.canvas.note_typing_edit(
+                    blk_item, edit, before_text, pos, removed, len(added_text)
                 )
 
     def on_propagate_transwidget_edit(self, joint_previous: bool):
@@ -1269,10 +1274,15 @@ class SceneTextManager(QObject):
         blk_item = self.textblk_item_list[edit.idx]
         if blk_item.isEditing():
             blk_item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        # before 快照在镜像同步前抓：item 侧此时尚持旧文。
+        before_text = blk_item.toPlainText()
         if sync_text_by_diff(
             blk_item, edit.toPlainText(), joint_previous
         ):
-            self.canvas.push_text_command(command=None, update_pushed_step=True)
+            self.canvas.note_typing_edit(
+                blk_item, edit, before_text,
+                edit.change_from, edit.change_removed, edit.change_added,
+            )
 
     def apply_fontformat(self, fontformat: FontFormat):
         selected_blks = self.canvas.selected_text_items()

@@ -199,7 +199,11 @@ class TextBlkItem(QGraphicsTextItem):
         self._order_number_override: Optional[int] = None
         self._order_badge_item: Optional[_OrderBadgeItem] = None
         self.old_ffmt_values = None
-        
+        # 格式化手势基线（撤销体系 3a）：手势首次触及本块时在 is_formatting
+        # 事务入口预捕 (HTML, rect, FontFormat)，手势闭合/取消时由 canvas
+        # 会话管理器读取并清空（ui/canvas.py::Canvas._commit_format_gesture）
+        self._ffmt_gesture_baseline = None
+
         self.idx = idx
         
         self.stroke_qcolor = QColor(0, 0, 0)
@@ -396,9 +400,13 @@ class TextBlkItem(QGraphicsTextItem):
                 self.change_added = 0
                 self.change_removed = 0
 
-                if new_steps > 0:
-                    self.old_undo_steps = undo_steps
-                    self.push_undo_stack.emit(new_steps, self.is_formatting)
+                # 3a 起无条件发射：撤销落账改由 canvas 编辑会话按内容变更
+                # 驱动（每次变更都要续 idle 定时器/判相邻性），不再以文档
+                # 步数增量为发射门——3b 禁用文档栈后 new_steps 恒为 0，
+                # 若仍以它为门则发射整体停摆。num_steps 参数仅维持信号
+                # 签名兼容，3b 随步数记账一并删除。
+                self.old_undo_steps = undo_steps
+                self.push_undo_stack.emit(new_steps, self.is_formatting)
 
         if not (self.hasFocus() and self.pre_editing):
             # Text edits can change glyph overhang and effect extents
@@ -485,6 +493,10 @@ class TextBlkItem(QGraphicsTextItem):
         self.setShadow(font_fmt, repaint=False)
         self.setStrokeWidth(font_fmt.stroke_width, repaint_background=False)
         self.repaint_background()
+        # 初始格式应用走 set_fontformat，会把手势基线捕获在"构造态"上；
+        # 该基线若被之后第一个真实手势沿用，undo 会把文本回退到构造态。
+        # 初始化是程序写入而非用户手势，基线必须复位为空。
+        self._ffmt_gesture_baseline = None
 
     def _effective_text_transform(self) -> TextTransformStack:
         return self.geometry_controller.effective()
@@ -1518,17 +1530,42 @@ class TextBlkItem(QGraphicsTextItem):
     def set_cursor_cfmt(self, cursor: QTextCursor, cfmt: QTextCharFormat, merge_char: bool = False):
         doc_is_empty = self.document().isEmpty()
         if merge_char:
+            # 保存/恢复旧值（与文件内其他抑制点一致）：外层可能已处于
+            # 抑制态，无条件复位为 False 会打破嵌套抑制
+            old_block_change_signal = self.block_change_signal
             self.block_change_signal = True
-            cursor.mergeCharFormat(cfmt)
-            self.block_change_signal = False
+            try:
+                cursor.mergeCharFormat(cfmt)
+            finally:
+                self.block_change_signal = old_block_change_signal
         cursor.mergeBlockCharFormat(cfmt)
         cursor.clearSelection()
         self.setTextCursor(cursor)
         if doc_is_empty:
             self.document().setDefaultFont(cursor.blockCharFormat().font())
 
+    def _capture_ffmt_gesture_baseline(self):
+        """格式化手势基线捕获：手势首次触及本块时快照（HTML+几何+格式模型）。
+
+        必须在 is_formatting 事务的入口、任何文档写入之前调用；只在手势
+        生命周期内首次触及生效（基线非空则跳过），闭合/取消由 canvas 会话
+        管理器清空。撤销体系 3a 快照命令制的 before 态来源。
+        """
+        if self.block_change_signal or self.in_redo_undo:
+            # 命令重放/程序写入（replay_guard、_suppress_change_sync）不是
+            # 用户手势：此时捕下的基线会滞留到下一个真实手势被误用为
+            # before 态，undo 将回退到与手势起点无关的陈旧状态
+            return
+        if self._ffmt_gesture_baseline is None:
+            self._ffmt_gesture_baseline = (
+                self.toHtml(),
+                self.absBoundingRect(qrect=True),
+                self.get_fontformat(),
+            )
+
     def _before_set_ffmt(self, set_selected: bool, restore_cursor: bool):
         self.is_formatting = True
+        self._capture_ffmt_gesture_baseline()
         cursor = self.textCursor()
 
         cursor_pos = None
@@ -1707,6 +1744,7 @@ class TextBlkItem(QGraphicsTextItem):
         if not self.isEditing() or select_document:
             cursor.select(QTextCursor.SelectionType.Document)
         self.is_formatting = True
+        self._capture_ffmt_gesture_baseline()
         try:
             cursor.beginEditBlock()
             try:
@@ -1793,6 +1831,7 @@ class TextBlkItem(QGraphicsTextItem):
         """Apply or update Ruby at the current text selection/caret."""
         cursor = self.textCursor()
         self.is_formatting = True
+        self._capture_ffmt_gesture_baseline()
         try:
             apply_ruby(cursor, ruby_type, text, position)
             self.setTextCursor(cursor)
@@ -1804,6 +1843,7 @@ class TextBlkItem(QGraphicsTextItem):
         """Remove Ruby containers intersecting the active cursor."""
         cursor = self.textCursor()
         self.is_formatting = True
+        self._capture_ffmt_gesture_baseline()
         try:
             removed = remove_ruby(cursor)
             if removed:

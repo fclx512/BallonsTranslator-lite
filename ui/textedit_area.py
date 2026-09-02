@@ -75,6 +75,12 @@ class SourceTextEdit(QTextEdit):
         self.in_redo_undo = False
         self.text_content_changed = False
         self.highlighting = False
+        # 最近一次内容变更的坐标参数（contentsChange 原样记录），编辑会话
+        # 管理器据此判断键入相邻性（burst 边界），见
+        # ui/canvas.py::Canvas.note_typing_edit
+        self.change_from = 0
+        self.change_removed = 0
+        self.change_added = 0
 
         self.selected_text = ""
         self.cursorPositionChanged.connect(self.on_cursorpos_changed)
@@ -133,6 +139,9 @@ class SourceTextEdit(QTextEdit):
     def on_content_changing(self, from_: int, removed: int, added: int):
         if not self.pre_editing:
             self.text_content_changed = True
+            self.change_from = from_
+            self.change_removed = removed
+            self.change_added = added
 
     def adjustSize(self):
         h = self.document().documentLayout().documentSize().toSize().height()
@@ -155,14 +164,16 @@ class SourceTextEdit(QTextEdit):
         if not self.in_redo_undo:
             # 位置式差值重放已废弃：对账基于两份文档的当前全文现场计算，
             # 这里只负责通知下游并维护撤销步数（见 sync_text_by_diff）。
+            # 3a 起 push_undo_stack 无条件发射：撤销落账由 canvas 编辑会话
+            # 按内容变更驱动（原文编辑器无镜像，靠本信号登记），不再以文档
+            # 步数增量为门——3b 禁用文档栈后 new_steps 恒为 0。
             undo_steps = self.document().availableUndoSteps()
             new_steps = undo_steps - self.old_undo_steps
             joint_previous = new_steps == 0
             self.propagate_user_edited.emit(joint_previous)
 
-            if new_steps > 0:
-                self.old_undo_steps = undo_steps
-                self.push_undo_stack.emit(new_steps)
+            self.old_undo_steps = undo_steps
+            self.push_undo_stack.emit(new_steps)
 
     def setHoverEffect(self, hover: bool):
         """Visual hover feedback handled via CSS :hover/:focus in stylesheet.css.
