@@ -2010,20 +2010,28 @@ QTableCornerButton::section {
     border-bottom: 1px solid @borderColor;
 }
 
-/* ── Glossary/Story agent workbench chat bubbles ──────────── */
-AIChatGuideCard {
+/* ── Glossary/Story agent workbench(pane 去框 + 面板底色 + chat bubbles) ──
+   QTabWidget::pane 无 QSS 时回落原生样式:Win10(windowsvista)画浅色框、
+   Win11(windows11)画深色细线,跨系统观感不一——统一去框(上方表格段同款分歧)。
+   工作台底色与画布页同源,以深一档的 @emptyContentBackgroundColor 保持边界;
+   QLabel 透明规则须在气泡规则之前,同优先级下后者按源顺序胜出保留底色。 */
+QTabWidget::pane {
+    border: none;
+    background: transparent;
+}
+QWidget#WorkbenchSurface {
     background: @emptyContentBackgroundColor;
-    border: 1px solid @borderColor;
-    border-radius: 6px;
 }
-QLabel#AIChatGuideTitle {
-    font-size: 13px;
-    font-weight: bold;
-    color: @qwidgetForegroundColor;
+QWidget#WorkbenchSurface QScrollArea {
+    background: transparent;
 }
-QLabel#AIChatGuideBody {
-    font-size: 12px;
-    color: @qwidgetForegroundColor;
+QWidget#WorkbenchSurface QLabel {
+    background: transparent;
+}
+/* 气泡流容器/输入行宿主:全局 QWidget 规则会盖成不透明,透出面板底色 */
+QWidget#WorkbenchChatFlow,
+QWidget#WorkbenchInputStack {
+    background: transparent;
 }
 QLabel#AIChatUserBubble {
     background: @accentPrimary20;

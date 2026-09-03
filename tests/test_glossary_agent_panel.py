@@ -154,21 +154,6 @@ class GlossaryAgentPanelTest(unittest.TestCase):
         worker._sync_all()
         self.assertEqual(panel.tabs.tabText(1), "Glossary (1)")
 
-    def test_guide_card_dynamic_commands(self):
-        # 引导卡指令按项目状态生成:缺 1 页摘要 → 首条带页数;
-        # 术语表空 → 提议首次提取;非空 → 提议校对
-        panel, worker = self._panel()
-        worker.initialize()
-        cmds = panel._guide_commands
-        self.assertIn("1 pages", cmds[0])
-        self.assertIn("first 10 pages", cmds[1])
-        worker.glossary.apply_patch([{"src": "勇者", "dst": "Hero"}])
-        worker._sync_all()
-        self.assertIn("Check the glossary draft", panel._guide_commands[1])
-        # 补齐摘要后缺页指令消失
-        worker.user_summary_edit("p02", "new")
-        self.assertNotIn("pages that", panel._guide_commands[0])
-
     def test_prepare_skips_dialog_when_confirm_disabled(self):
         # pcfg.workbench_confirm_costly=False:不弹窗直接执行
         # (词频 prefill + AI 指令入队);指令轮替换为记录器,避免真实 API 调用

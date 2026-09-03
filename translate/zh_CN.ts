@@ -6611,26 +6611,6 @@ This maps automatically to each provider's native parameter
             <translation>用户</translation>
         </message>
         <message>
-            <source>Check the glossary draft against the page texts for wrong or missing translations of recurring terms, then propose fixes.</source>
-            <translation>对照页面原文检查术语草稿中常见词的错译或漏译，并给出修正建议。</translation>
-        </message>
-        <message>
-            <source>How to use this workbench</source>
-            <translation>工作台使用说明</translation>
-        </message>
-        <message>
-            <source>Proposals appear as "AI" rows in the Glossary / Story tabs; your own rows are protected. "Apply draft…" saves them — the translation agent picks them up automatically.</source>
-            <translation>AI 的建议以“AI”行出现在 Glossary / Story 页；你自己的行受保护不会被覆盖。“应用草稿…”保存后，翻译 agent 会自动使用这些内容。</translation>
-        </message>
-        <message>
-            <source>Read the first 10 pages and propose glossary entries for recurring character, place and item names.</source>
-            <translation>阅读前 10 页，为反复出现的角色名、地名和物品名给出术语条目建议。</translation>
-        </message>
-        <message>
-            <source>Send an instruction below — the agent reads your project's pages (read-only) and writes proposals into the Glossary and Story drafts.</source>
-            <translation>在下方发送指令——agent 会只读访问项目页面，并把建议写入 Glossary 和 Story 草稿。</translation>
-        </message>
-        <message>
             <source>Open a project first — the workbench reads page texts from it.</source>
             <translation>请先打开项目——工作台需要读取其中的页面原文。</translation>
         </message>
@@ -6683,20 +6663,12 @@ This maps automatically to each provider's native parameter
             <translation>为翻译准备草稿：1）阅读各页面，为反复出现且草稿中仍缺失的人物、地点、物品名称提出术语条目；2）为每个还没有摘要的页面写 2-4 句摘要；3）更新全局梗概。不要改动我已有的条目。</translation>
         </message>
         <message>
-            <source>Read the recent pages and check whether the page summaries and global synopsis are still up to date; propose updates if the plot has moved on.</source>
-            <translation>阅读最近的页面，检查页面摘要与全局梗概是否仍然准确；若剧情已有推进，请提出更新。</translation>
-        </message>
-        <message>
             <source>Scan all pages' existing translations and merge recurring source→translation pairs into the draft. No AI involved — for AI proposals, send an instruction in the Chat tab.</source>
             <translation>扫描全部页面的现有译文，把反复出现的原文→译文对合并进草稿。不调用 AI——想让 AI 提建议，请在「对话」页发送指令。</translation>
         </message>
         <message>
             <source>Scan all pages' existing translations and pull recurring terms into the glossary draft (no AI, instant).</source>
             <translation>扫描全部页面的现有译文，提取高频词汇进术语草稿（不调用 AI，即时完成）。</translation>
-        </message>
-        <message>
-            <source>Write 2-4 sentence summaries for the %1 pages that don't have one yet, then refresh the global synopsis.</source>
-            <translation>为还没有摘要的 %1 个页面各写 2-4 句摘要，然后更新全局梗概。</translation>
         </message>
         <message>
             <source>Don't ask again</source>

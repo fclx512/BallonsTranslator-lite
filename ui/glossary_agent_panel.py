@@ -402,7 +402,7 @@ class GlossaryAgentWorker(QObject):
 
 
 class GlossaryAgentPanel(QWidget):
-    """RailDockPanel 内容:三页工作台。"""
+    """主窗口左侧栏内嵌的术语/剧情工作台(与全局搜索同槽位)。"""
 
     def __init__(self, proj, parent=None):
         super().__init__(parent)
@@ -426,6 +426,7 @@ class GlossaryAgentPanel(QWidget):
         layout.addWidget(self._stack, 1)
 
         empty_page = QWidget(self)
+        empty_page.setObjectName("WorkbenchSurface")
         empty_lay = QVBoxLayout(empty_page)
         empty_lay.addStretch(1)
         empty_hint = QLabel(
@@ -442,6 +443,7 @@ class GlossaryAgentPanel(QWidget):
         self._stack.addWidget(empty_page)
 
         content_page = QWidget(self)
+        content_page.setObjectName("WorkbenchSurface")
         content_lay = QVBoxLayout(content_page)
         content_lay.setContentsMargins(0, 0, 0, 0)
 
@@ -450,12 +452,14 @@ class GlossaryAgentPanel(QWidget):
 
         # ── Chat 页(气泡流,参考旧 AI 助手面板) ─────────────────
         chat_tab = QWidget(self)
+        chat_tab.setObjectName("WorkbenchSurface")
         chat_layout = QVBoxLayout(chat_tab)
         chat_layout.setContentsMargins(0, 4, 0, 0)
         self._chat_area = QScrollArea(chat_tab)
         self._chat_area.setWidgetResizable(True)
         self._chat_area.setFrameShape(QFrame.Shape.NoFrame)
         self._chat_inner = QWidget()
+        self._chat_inner.setObjectName("WorkbenchChatFlow")
         self._chat_layout = QVBoxLayout(self._chat_inner)
         self._chat_layout.setContentsMargins(2, 2, 2, 2)
         self._chat_layout.setSpacing(6)
@@ -480,6 +484,7 @@ class GlossaryAgentPanel(QWidget):
         self._send_stop_stack.addWidget(self.send_btn)
         self._send_stop_stack.addWidget(self.stop_btn)
         stack_wrap = QWidget(chat_tab)
+        stack_wrap.setObjectName("WorkbenchInputStack")
         stack_wrap.setLayout(self._send_stop_stack)
         input_row.addWidget(stack_wrap, 0, Qt.AlignmentFlag.AlignVCenter)
         chat_layout.addLayout(input_row)
@@ -487,6 +492,7 @@ class GlossaryAgentPanel(QWidget):
 
         # ── Glossary 页 ────────────────────────────────────────
         glossary_tab = QWidget(self)
+        glossary_tab.setObjectName("WorkbenchSurface")
         g_layout = QVBoxLayout(glossary_tab)
         g_layout.setContentsMargins(0, 4, 0, 0)
         self.glossary_table = QTableWidget(0, 4, glossary_tab)
@@ -522,6 +528,7 @@ class GlossaryAgentPanel(QWidget):
 
         # ── Story 页 ───────────────────────────────────────────
         story_tab = QWidget(self)
+        story_tab.setObjectName("WorkbenchSurface")
         s_layout = QVBoxLayout(story_tab)
         s_layout.setContentsMargins(0, 4, 0, 0)
         s_layout.addWidget(QLabel(self.tr("Global synopsis"), story_tab))
@@ -544,9 +551,6 @@ class GlossaryAgentPanel(QWidget):
         )
         s_layout.addWidget(self.story_remove_btn, 0, Qt.AlignmentFlag.AlignRight)
         self.tabs.addTab(story_tab, self.tr("Story"))
-
-        # 引导卡依赖两张表的存在(动态指令按表格镜像统计),故在三页建完后插入
-        self._build_guide_card()
 
         # ── Apply 行 ───────────────────────────────────────────
         apply_row = QHBoxLayout()
@@ -585,9 +589,8 @@ class GlossaryAgentPanel(QWidget):
                 self._ensure_worker()
         else:
             self._stack.setCurrentIndex(0)
-        # 项目切换改变总页数,徽章与动态引导指令随之刷新
+        # 项目切换改变总页数,徽章随之刷新
         self._update_tab_badges()
-        self._refresh_guide_card()
 
     # ── 信号接线 ──────────────────────────────────────────────
 
@@ -739,98 +742,6 @@ class GlossaryAgentPanel(QWidget):
 
     # ── Chat 页:气泡流 ────────────────────────────────────────
 
-    def _build_guide_card(self):
-        """顶部常驻引导卡;示例指令链接点击即发送(_on_guide_link)。
-
-        链接 href 只携带序号(cmd:0/1/2),指令文本经 ts 翻译后按序
-        存入 _guide_commands,避开 QUrl 对非 ASCII 指令的编码问题。
-        指令列表按项目状态动态生成(_refresh_guide_card):缺摘要页数、
-        术语表是否为空等,让用户多数时候点一下即可,不必打字。
-        """
-        card = QWidget(self._chat_inner)
-        card.setObjectName("AIChatGuideCard")
-        card_lay = QVBoxLayout(card)
-        card_lay.setContentsMargins(8, 6, 8, 6)
-        card_lay.setSpacing(4)
-        title = QLabel(self.tr("How to use this workbench"), card)
-        title.setObjectName("AIChatGuideTitle")
-        title.setWordWrap(True)
-        card_lay.addWidget(title)
-        self._guide_body = QLabel(card)
-        self._guide_body.setObjectName("AIChatGuideBody")
-        self._guide_body.setWordWrap(True)
-        self._guide_body.setTextFormat(Qt.TextFormat.RichText)
-        self._guide_body.setOpenExternalLinks(False)
-        self._guide_body.linkActivated.connect(self._on_guide_link)
-        card_lay.addWidget(self._guide_body)
-        self._guide_commands = []
-        self._refresh_guide_card()
-        self._insert_chat_widget(card)
-
-    def _guide_state(self):
-        """引导指令依赖的项目状态:(总页数, 缺摘要页数, 术语草稿是否为空)。
-
-        统计来源是 UI 镜像(两张表),不直读 worker 状态。
-        """
-        pages = getattr(self._proj, "pages", None) or {}
-        n_pages = len(pages) if self.has_project() else 0
-        n_missing = max(0, n_pages - self.story_table.rowCount())
-        glossary_empty = self.glossary_table.rowCount() == 0
-        return n_pages, n_missing, glossary_empty
-
-    def _refresh_guide_card(self):
-        """按当前项目状态重建引导指令列表(草稿同步后调用)。"""
-        n_pages, n_missing, glossary_empty = self._guide_state()
-        commands = []
-        if n_missing > 0:
-            commands.append(
-                self.tr(
-                    "Write 2-4 sentence summaries for the %1 pages that don't have one yet, then refresh the global synopsis."
-                ).replace("%1", str(n_missing))
-            )
-        if glossary_empty:
-            commands.append(
-                self.tr(
-                    "Read the first 10 pages and propose glossary entries for recurring character, place and item names."
-                )
-            )
-        else:
-            commands.append(
-                self.tr(
-                    "Check the glossary draft against the page texts for wrong or missing translations of recurring terms, then propose fixes."
-                )
-            )
-        commands.append(
-            self.tr(
-                "Read the recent pages and check whether the page summaries and global synopsis are still up to date; propose updates if the plot has moved on."
-            )
-        )
-        self._guide_commands = commands
-        items = "".join(
-            f'<li><a href="cmd:{i}">{cmd}</a></li>'
-            for i, cmd in enumerate(commands)
-        )
-        self._guide_body.setText(
-            "<p>"
-            + self.tr(
-                "Send an instruction below — the agent reads your project's pages (read-only) and writes proposals into the Glossary and Story drafts."
-            )
-            + f"</p><ul>{items}</ul><p>"
-            + self.tr(
-                'Proposals appear as "AI" rows in the Glossary / Story tabs; your own rows are protected. "Apply draft…" saves them — the translation agent picks them up automatically.'
-            )
-            + "</p>"
-        )
-
-    def _on_guide_link(self, link: str):
-        if link.startswith("cmd:"):
-            try:
-                idx = int(link.split(":", 1)[1])
-            except ValueError:
-                return
-            if 0 <= idx < len(getattr(self, "_guide_commands", [])):
-                self._send_text(self._guide_commands[idx])
-
     def _bubble_max_width(self) -> int:
         return max(160, int(self._chat_area.viewport().width() * 0.88))
 
@@ -844,6 +755,7 @@ class GlossaryAgentPanel(QWidget):
         label.setMaximumWidth(self._bubble_max_width())
         self._user_bubbles.append(label)
         wrap = QWidget()
+        wrap.setObjectName("WorkbenchChatFlow")
         row = QHBoxLayout(wrap)
         row.setContentsMargins(0, 0, 0, 0)
         row.addStretch(1)
@@ -1064,7 +976,6 @@ class GlossaryAgentPanel(QWidget):
         finally:
             self._syncing = False
         self._update_tab_badges()
-        self._refresh_guide_card()
 
     def _sync_story_tab(self, synopsis: str, rows: list):
         self._syncing = True
@@ -1089,4 +1000,3 @@ class GlossaryAgentPanel(QWidget):
         finally:
             self._syncing = False
         self._update_tab_badges()
-        self._refresh_guide_card()

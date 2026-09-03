@@ -261,6 +261,11 @@ def build_stylesheet_from_dict(tgt_theme: Dict) -> str:
     return stylesheet
 
 
+def theme_accent_color(theme: str = "") -> QColor:
+    """取主题强调色(@accentPrimary),供 QPalette 等 QSS 之外的上色场景。"""
+    return QColor(_resolve_theme(theme).get("@accentPrimary") or "#5dade2")
+
+
 ICON_DIR = "icons"
 ICON_LIST = []
 

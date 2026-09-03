@@ -40,6 +40,7 @@ from qtpy.QtGui import (
     QImageReader,
     QKeySequence,
     QPainter,
+    QPalette,
     QPixmap,
     QTextCursor,
 )
@@ -106,7 +107,7 @@ from .global_search_widget import GlobalSearchWidget
 from .glossary_agent_panel import GlossaryAgentPanel
 from .io_thread import ImgSaveThread
 from .mainwindowbars import BottomBar, LeftBar, TitleBar
-from .misc import QKEY, parse_stylesheet, set_html_family
+from .misc import QKEY, parse_stylesheet, set_html_family, theme_accent_color
 from .module_manager import ModuleManager
 from .overlay_modal import OverlayModal
 from .psd_export_dialog import PsdExportDialog
@@ -386,6 +387,13 @@ class MainWindow(mainwindow_cls):
     def resetStyleSheet(self, reverse_icon: bool = False):
         theme = pcfg.dark_theme if pcfg.darkmode else pcfg.light_theme
         self.setStyleSheet(parse_stylesheet(theme, reverse_icon))
+        # 富文本链接色来自 QPalette::Link(不受 QSS 管辖):Win10 原生样式
+        # 恒为浅色调色板,深底上深蓝链接不可读——显式对齐主题强调色。
+        pal = QApplication.instance().palette()
+        link = theme_accent_color(theme)
+        pal.setColor(QPalette.ColorRole.Link, link)
+        pal.setColor(QPalette.ColorRole.VisitedLink, link)
+        QApplication.instance().setPalette(pal)
 
     def setupUi(self):
         screen_size = QGuiApplication.primaryScreen().geometry().size()
