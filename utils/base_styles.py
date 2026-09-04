@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
+from utils.face_resolver import sync_face
 from utils.fontformat import FontFormat, TextTransformStack
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -479,6 +480,8 @@ def build_flatten_changes(
 
     Only the parameters in *changed* are written — other per-block overrides
     survive. ``new_ffmt`` is a per-block deepcopy so undo restores exactly.
+    ``_style_name`` 重算在此（快照之前）：face 是派生显示缓存，必须与
+    new_ffmt 的 weight/family 同源（utils/face_resolver.sync_face）。
 
     Ordering contract: blocks are collected by ``base_style.identity`` **at
     call time**. When *changed* contains an identity key (font_family /
@@ -492,6 +495,7 @@ def build_flatten_changes(
         new_ffmt = blk.fontformat.deepcopy()
         for k, v in changed.items():
             setattr(new_ffmt, k, copy_value(v))
+        sync_face(new_ffmt)
         changes.append(
             {
                 "pagename": pname,
@@ -516,6 +520,7 @@ def build_variant_changes(
         new_ffmt = blk.fontformat.deepcopy()
         for k, v in changed.items():
             setattr(new_ffmt, k, copy_value(v))
+        sync_face(new_ffmt)
         changes.append(
             {
                 "pagename": pname,

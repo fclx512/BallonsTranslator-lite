@@ -13,6 +13,7 @@
 """
 
 import glob
+import logging
 import os
 from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 
@@ -124,21 +125,30 @@ def scan_font_faces(font_dirs: Optional[List[str]] = None) -> List[dict]:
         return []
 
     faces: List[dict] = []
-    for d in font_dirs if font_dirs is not None else _default_font_dirs():
-        for path in sorted(glob.glob(os.path.join(d, "*"))):
-            if not path.lower().endswith(_SFNT_EXTS):
-                continue
-            try:
-                if path.lower().endswith(".ttc"):
-                    fonts = TTCollection(path, lazy=True).fonts
-                else:
-                    fonts = [TTFont(path, lazy=True)]
-            except Exception:
-                continue
-            for f in fonts:
-                face = _face_record(f)
-                if face:
-                    faces.append(face)
+    # 系统字体目录里常有 name 表畸形的字体（Win10 尤多），fontTools 解析
+    # 时会刷 ERROR 日志（"stringOffset incorrect"）；解析本身不失败、
+    # 扫描对异常已兜底，这里压掉纯噪音
+    ft_log = logging.getLogger("fontTools")
+    prev_level = ft_log.level
+    ft_log.setLevel(logging.CRITICAL)
+    try:
+        for d in font_dirs if font_dirs is not None else _default_font_dirs():
+            for path in sorted(glob.glob(os.path.join(d, "*"))):
+                if not path.lower().endswith(_SFNT_EXTS):
+                    continue
+                try:
+                    if path.lower().endswith(".ttc"):
+                        fonts = TTCollection(path, lazy=True).fonts
+                    else:
+                        fonts = [TTFont(path, lazy=True)]
+                except Exception:
+                    continue
+                for f in fonts:
+                    face = _face_record(f)
+                    if face:
+                        faces.append(face)
+    finally:
+        ft_log.setLevel(prev_level)
     return faces
 
 

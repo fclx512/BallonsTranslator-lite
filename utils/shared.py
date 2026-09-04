@@ -126,7 +126,6 @@ FONT_STYLES = {}  # 所有真实 Qt 家族名（含被归并隐藏的别名）�
 FONT_FAMILY_ALIAS = {}  # 归并规范名 -> [被隐藏的别名家族名]（见 utils/font_scan.py）
 FONT_PS_NAMES = {}  # 任意家族名（规范名+别名）-> {OS/2 字重: PostScript 名}，PSD 导出用
 FONT_VARIABLE_AXES = {}  # { FamilyName: { 'wght': (min, max, default) } }
-VIRTUAL_FONT_STYLES = {}  # { FamilyName: set("Bold", "Light", ...) } 记录哪些样式是虚拟生成的
 pbar = {}
 runtime_widget_set = set()
 
@@ -201,6 +200,10 @@ def init_font_list():
     FONT_STYLES = data["styles"]
     FONT_FAMILY_ALIAS = data["canonical_to_aliases"]
     FONT_PS_NAMES = data["ps_index"]
+    # face 派生缓存按字体库内容 memoize，刷新点重建
+    from utils.face_resolver import invalidate_face_cache
+
+    invalidate_face_cache()
     # 精简别名是真实 Qt 家族名：PS 索引借规范名的记录，旧项目数据按
     # 别名存储时才能正常导出
     for alias, canonical in pcfg.simplified_font_map.items():

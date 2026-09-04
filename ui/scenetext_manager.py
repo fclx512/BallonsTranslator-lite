@@ -1029,8 +1029,13 @@ class SceneTextManager(QObject):
             self.textEditList.set_selected_list([t.idx for t in textitems])
             if len(textitems) == 1:
                 self.formatpanel.set_textblk_item(textitems[-1])
+            elif len(textitems) > 1:
+                # 多选：面板镜像显示活动块（最后选中）+ 逐字段混合态
+                self.formatpanel.set_textblk_item(
+                    textitems[-1], multi_items=textitems
+                )
             else:
-                self.formatpanel.set_textblk_item(multi_select=bool(textitems))
+                self.formatpanel.set_textblk_item()
 
 
 

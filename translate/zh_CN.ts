@@ -1614,6 +1614,18 @@ Hide them all? You can move them back later.</source>
             <source>Unfold</source>
             <translation>展开</translation>
         </message>
+        <message>
+            <source>New Block Default Format</source>
+            <translation>新块默认格式</translation>
+        </message>
+        <message>
+            <source>Reset</source>
+            <translation>重置</translation>
+        </message>
+        <message>
+            <source>Reset the new-block default format</source>
+            <translation>重置新块默认格式</translation>
+        </message>
     </context>
     <context>
         <name>FontStyleManager</name>

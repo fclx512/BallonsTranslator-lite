@@ -8,6 +8,7 @@ try:
 except ImportError:
     from qtpy.QtGui import QUndoCommand
 
+from utils import face_resolver
 from utils.fontformat import FontFormat, TextTransformState, px2pt
 
 from . import shared_widget as SW
@@ -15,6 +16,29 @@ from .textitem import TextBlkItem
 
 global_default_set_kwargs = dict(set_selected=False, restore_cursor=False)
 local_default_set_kwargs = dict(set_selected=True, restore_cursor=True)
+
+# 触发 face 派生重算的属性字段（font_weight 单一真值，face 为派生缓存）
+_FACE_SYNC_FIELDS = ("font_weight", "font_family", "italic")
+
+
+def _sync_active_face(act_ffmt: FontFormat, param_name: str) -> None:
+    if param_name in _FACE_SYNC_FIELDS:
+        face_resolver.sync_face(act_ffmt)
+
+
+def _mirror_to_global_format(act_ffmt: FontFormat, param_name: str, value) -> None:
+    """新块默认跟随最近编辑（选中态编辑镜像写入 global_format）。
+
+    闲置/多选态的编辑本就落在 global_format（全局通道）；此处补齐单选
+    （及多选镜像副本）通道，对齐 PS「工具默认跟随最近编辑」语义。
+    """
+    manager = getattr(SW, "st_manager", None)
+    panel = getattr(manager, "formatpanel", None) if manager is not None else None
+    gf = getattr(panel, "global_format", None) if panel is not None else None
+    if gf is None or gf is act_ffmt or not hasattr(gf, param_name):
+        return
+    gf[param_name] = value
+    _sync_active_face(gf, param_name)
 
 
 class TextStyleUndoCommand(QUndoCommand):
@@ -61,6 +85,7 @@ def font_formating(push_undostack: bool = False, is_property=True):
             if is_global and is_property:
                 if hasattr(act_ffmt, param_name):
                     act_ffmt[param_name] = values
+                    _sync_active_face(act_ffmt, param_name)
                 else:
                     print(f"undefined param name: {param_name}")
 
@@ -68,6 +93,9 @@ def font_formating(push_undostack: bool = False, is_property=True):
             if len(blkitems) > 0:
                 if is_property:
                     act_ffmt[param_name] = values[0]
+                    _sync_active_face(act_ffmt, param_name)
+                    if not is_global:
+                        _mirror_to_global_format(act_ffmt, param_name, values[0])
                 if push_undostack:
                     params = copy.deepcopy(kwargs)
                     params.update(
@@ -114,9 +142,13 @@ def ffmt_change_font_family(
     **kwargs,
 ):
     set_kwargs = global_default_set_kwargs if is_global else local_default_set_kwargs
-    style_name = act_ffmt._style_name or ""
     for blkitem, value in zip(blkitems, values):
-        blkitem.setFontFamily(value, style_name=style_name, **set_kwargs)
+        blkitem.setFontFamily(value, **set_kwargs)
+        # 数据层即时同步 + 逐块 sync_face：每块按自身 weight/italic 映射
+        # 新家族 face（face 缺失就近/回落由 resolve_face 兜底），不再单值
+        # 广播活动格式的 _style_name
+        blkitem.fontformat.font_family = value
+        face_resolver.sync_face(blkitem.fontformat)
 
 
 @font_formating()

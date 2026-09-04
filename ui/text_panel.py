@@ -3,6 +3,7 @@ import copy
 from qtpy.QtCore import QSignalBlocker, Qt, Signal
 from qtpy.QtGui import (
     QFont,
+    QFontDatabase,
     QIcon,
     QPainter,
     QPixmap,
@@ -22,7 +23,9 @@ from qtpy.QtWidgets import (
 )
 
 from utils import config as C
+from utils import face_resolver
 from utils import shared
+from utils.base_styles import DIFF_FIELDS, quantize_field
 from utils.fontformat import FontFormat, LineSpacingType, fix_fontweight_qt
 
 from . import funcmaps as FM
@@ -61,6 +64,12 @@ from .text_engine.annotations import (
 from .text_engine.transforms.editor import TextTransformEditSession
 from .text_engine.transforms.panel import TextTransformPanel
 from .textitem import TextBlkItem
+
+# 混合态占位符（符号免译）；下拉里以禁用项呈现
+MIXED_PLACEHOLDER = "—"
+
+# 多选混合检测字段：身份键（可跨大样式多选）+ 全部 diff 字段
+_MIXED_CHECK_FIELDS = ("font_family", "vertical") + tuple(DIFF_FIELDS)
 
 
 class AlignmentBtnGroup(QFrame):
@@ -557,7 +566,8 @@ class FontFormatPanel(Widget):
     textblk_item: TextBlkItem = None
     text_cursor: QTextCursor = None
     global_format: FontFormat = None
-    restoring_textblk: bool = False
+    # 多选态的选中块列表（镜像副本作为 C.active_format 时非空）
+    _active_multi_items: list = None
 
     def __init__(self, app: QApplication, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -695,7 +705,7 @@ class FontFormatPanel(Widget):
         lettersp_hlayout.addWidget(self.letterSpacingBox)
         lettersp_hlayout.setSpacing(shared.WIDGET_SPACING_CLOSE)
 
-        self.global_fontfmt_str = self.tr("Global Font Format")
+        self.global_fontfmt_str = self.tr("New Block Default Format")
         self.textstyle_panel = TextStylePresetPanel(
             self.global_fontfmt_str,
             config_name="show_text_style_preset",
@@ -751,8 +761,16 @@ class FontFormatPanel(Widget):
         self.familybox.currentTextChanged.connect(self.on_familybox_changed)
 
         # ── Zone A：全局字体样式 ────────────────────────────────────
-        # 预设折叠胶囊（标题承载 Global Font Format / TextBlock #N）
-        self.vlayout.addWidget(self.textstyle_panel.view_widget)
+        # 预设折叠胶囊（标题承载 新块默认格式 / TextBlock #N）+ 右侧重置按钮
+        self.reset_global_btn = NoBorderPushBtn(self.tr("Reset"), self)
+        self.reset_global_btn.setToolTip(self.tr("Reset the new-block default format"))
+        self.reset_global_btn.clicked.connect(self._reset_global_format)
+        title_row = QHBoxLayout()
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(4)
+        title_row.addWidget(self.textstyle_panel.view_widget, 1)
+        title_row.addWidget(self.reset_global_btn)
+        self.vlayout.addLayout(title_row)
 
         # ── Zone B：基本选项（平铺，无边框）─────────────────────────
         # Row 1：字体选择 [颜色 | 字体 | 字重]——字号迁往测量行；两个
@@ -861,7 +879,13 @@ class FontFormatPanel(Widget):
             self.familybox.addItems(shared.get_filtered_font_list(pcfg.excluded_fonts))
 
     def global_mode(self):
-        return id(C.active_format) == id(self.global_format)
+        gf = self.global_format
+        # None 守卫：global_format 到 mainwindow 构造尾部才注入
+        # （pcfg.global_fontformat）。注入前 C.active_format 与它同为
+        # None，id(None)==id(None) 会误判成全局模式，把启动期字体下拉
+        # 填充触发的 font_family 信号派发到 None 上，刷
+        # "undefined param name: font_family"
+        return gf is not None and id(C.active_format) == id(gf)
 
     def active_text_style_label(self):
         return self.textstyle_panel.active_text_style_label
@@ -882,12 +906,19 @@ class FontFormatPanel(Widget):
             func(param_name, value, self.global_format, is_global=True, **func_kwargs)
             self.update_text_style_label()
         else:
+            # 单选作用于当前块；多选镜像态作用于全部选中块（wrap 重定向）
+            if self.textblk_item is not None:
+                blkitems = self.textblk_item
+            else:
+                blkitems = self._active_multi_items or []
+            if not blkitems:
+                return
             func(
                 param_name,
                 value,
                 C.active_format,
                 is_global=False,
-                blkitems=self.textblk_item,
+                blkitems=blkitems,
                 set_focus=True,
                 **func_kwargs,
             )
@@ -955,31 +986,61 @@ class FontFormatPanel(Widget):
                 item.update()
         self.global_format.shadow_include_stroke = include_stroke
 
-    def set_active_format(self, font_format: FontFormat, multi_size=False):
+    def _set_combo_mixed(self, combo: QComboBox, mixed: bool, current: str):
+        """非可编辑下拉的混合态：插入禁用 "—" 占位项并选中。
+
+        非混合时按普通文本回显；调用方自行负责 blockSignals。
+        """
+        # 清掉上次插入的占位项（禁用项不参与用户选择，但驻留会污染列表）
+        for i in range(combo.count()):
+            if (
+                combo.itemText(i) == MIXED_PLACEHOLDER
+                and not combo.model().item(i).isEnabled()
+            ):
+                combo.removeItem(i)
+                break
+        if mixed:
+            combo.addItem(MIXED_PLACEHOLDER)
+            model = combo.model()
+            model.item(combo.count() - 1).setEnabled(False)
+            combo.setCurrentText(MIXED_PLACEHOLDER)
+        else:
+            combo.setCurrentText(current)
+
+    def set_active_format(
+        self, font_format: FontFormat, multi_size=False, mixed: set = None
+    ):
         C.active_format = font_format
         self.familybox.blockSignals(True)
         self.stylebox.blockSignals(True)  # 新增
 
         from utils.config import pcfg
 
+        mixed = mixed or set()
         font_size = min(round(font_format.font_size, 1), pcfg.max_font_size)
         if int(font_size) == font_size:
             font_size = str(int(font_size))
         else:
             font_size = f"{font_size:.1f}"
-        if multi_size:
+        if multi_size or "font_size" in mixed:
             font_size += "+"
         self.fontsizebox.fcombobox.setCurrentText(font_size)
         # 旧数据可能存的是被归并隐藏的别名家族名（如字重变体/英文名），
         # 非可编辑下拉对不存在的名字 setCurrentText 是 no-op，会显示滞留，
-        # 这里先映射到规范名再回显
-        self.familybox.setCurrentText(shared.canonical_font_family(font_format.font_family))
+        # 这里先映射到规范名再回显；混合家族显示 "—" 占位（禁用项）
+        self._set_combo_mixed(
+            self.familybox,
+            "font_family" in mixed,
+            shared.canonical_font_family(font_format.font_family),
+        )
 
-        # 【新增】回显 Style
+        # 回显 Style（face 为 font_weight 的派生显示缓存，直接按缓存名回显）
         styles = shared.FONT_STYLES.get(font_format.font_family, [])
         self.stylebox.clear()
         self.stylebox.addItems(styles)
-        if font_format._style_name and font_format._style_name in styles:
+        if "font_weight" in mixed:
+            self._set_combo_mixed(self.stylebox, True, "")
+        elif font_format._style_name and font_format._style_name in styles:
             self.stylebox.setCurrentText(font_format._style_name)
         else:
             idx = self.stylebox.findText("Regular")
@@ -992,6 +1053,15 @@ class FontFormatPanel(Widget):
         self.strokeWidthBox.setValue(font_format.stroke_width)
         self.lineSpacingBox.setValue(font_format.line_spacing)
         self.letterSpacingBox.setValue(font_format.letter_spacing)
+        # 可编辑数值下拉的混合态：显示 "—"（value() 解析失败回退旧值，
+        # 不会把占位符当数值写回）
+        for box, field in (
+            (self.strokeWidthBox, "stroke_width"),
+            (self.lineSpacingBox, "line_spacing"),
+            (self.letterSpacingBox, "letter_spacing"),
+        ):
+            if field in mixed:
+                box.setCurrentText(MIXED_PLACEHOLDER)
         self.verticalChecker.setChecked(font_format.vertical)
         self.romanAlignmentChecker.setChecked(
             font_format.standard_vertical_roman_alignment
@@ -1015,13 +1085,23 @@ class FontFormatPanel(Widget):
         if active_text_style_label is None:
             self.textstyle_panel.setTitle(self.global_fontfmt_str)
         else:
-            title = (
-                self.global_fontfmt_str
-                + " - "
-                + active_text_style_label.fontfmt._style_name
-            )
+            face = active_text_style_label.fontfmt._style_name
+            if not face:
+                self.textstyle_panel.setTitle(self.global_fontfmt_str)
+                return
+            title = self.global_fontfmt_str + " - " + face
             valid_title = self.textstyle_panel.elidedText(title)
             self.textstyle_panel.setTitle(valid_title)
+
+    def _reset_global_format(self):
+        """重置默认格式：恢复 FontFormat 工厂默认（Affinity 有默认无重置
+        的多年差评来源，见修复计划决策3）。"""
+        self.global_format.merge(FontFormat(), compare=False)
+        face_resolver.sync_face(self.global_format)
+        if self.global_mode():
+            self.set_active_format(self.global_format)
+        self.update_text_style_label()
+        self.set_globalfmt_title()
 
     def reload_presets(self):
         """Reload dropdown items from pcfg preset lists, preserving current values."""
@@ -1084,6 +1164,9 @@ class FontFormatPanel(Widget):
             )
             for k, v in saved.items():
                 setattr(self.global_format, k, v)
+            # merge 非 compare 键会连带复制预设的 _style_name；face 是派生
+            # 显示缓存，须与合并后的 weight/family/italic 重新同源
+            face_resolver.sync_face(self.global_format)
             if self.global_mode() and len(updated_keys) > 0:
                 self.set_active_format(self.global_format)
             self.set_globalfmt_title()
@@ -1095,42 +1178,30 @@ class FontFormatPanel(Widget):
         if self.global_mode():
             self.set_globalfmt_title()
 
-    def on_familybox_changed(self, family: str):
-        """Update style combo box when font family changes.
-
-        Preserves the current _style_name from the active format when possible,
-        so switching font family doesn't unconditionally reset to "Regular".
-        """
-        # Look up the desired style from the active format before touching the combo
-        act_ffmt = self.global_format if self.global_mode() else C.active_format
-        desired_style = ""
-        if act_ffmt is not None and act_ffmt._style_name:
-            desired_style = act_ffmt._style_name
-
+    def _reload_stylebox(self, family: str):
         self.stylebox.blockSignals(True)
         self.stylebox.clear()
-        styles = shared.FONT_STYLES.get(family, [])
-        self.stylebox.addItems(styles)
-
-        if desired_style and desired_style in styles:
-            self.stylebox.setCurrentText(desired_style)
-        else:
-            idx = self.stylebox.findText("Regular")
-            if idx < 0 and len(styles) > 0:
-                idx = 0
-            if idx >= 0:
-                self.stylebox.setCurrentIndex(idx)
+        self.stylebox.addItems(shared.FONT_STYLES.get(family, []))
         self.stylebox.blockSignals(False)
 
-        # 触发格式更新（apply_font_change 会同步 bold/font_weight）
-        self.apply_font_change()
+    def on_familybox_changed(self, family: str):
+        """家族切换：stylebox 重载后按字重真值派生 face 回显（决策5——
+        每块按自身 (weight, italic) 映射新家族 face，缺失就近/回落）。"""
+        self._reload_stylebox(family)
+        self.apply_font_change(family_change=True)
 
     def on_fontstyle_changed(self, style: str):
         """Trigger format update when style changes"""
         self.apply_font_change()
 
-    def apply_font_change(self):
-        """Unified entry point for applying format changes, syncs Family and Style updates"""
+    def apply_font_change(self, family_change: bool = False):
+        """Unified entry point for applying Family/Style dropdown changes.
+
+        字重真值化后 face（``_style_name``）是派生显示缓存：显式选 face
+        时以 face 对应的 weight 入库；``QFontDatabase.weight`` 查不到
+        （-1，别名家族/可变命名实例）时不再入库污染数据，保持当前
+        weight 由渲染端按距离匹配兜底。
+        """
         family = self.familybox.currentText()
         style = self.stylebox.currentText()
 
@@ -1138,42 +1209,104 @@ class FontFormatPanel(Widget):
             return
 
         act_ffmt = self.global_format if self.global_mode() else C.active_format
+        broadcast_weight = None
         if act_ffmt is not None:
-            act_ffmt._style_name = style
-
-            # Sync bold and font_weight to match the selected style name.
-            # Previously only _style_name was updated, leaving bold/font_weight
-            # stale — so the bold button could remain checked after switching
-            # font family (which resets style to Regular).
-            if style:
-                from qtpy.QtGui import QFont, QFontDatabase
+            if family_change:
+                # 家族切换：字重保持，face 按 (新家族, 当前weight, italic) 派生
+                act_ffmt.font_family = family
+                face_resolver.sync_face(act_ffmt)
+                with QSignalBlocker(self.stylebox):
+                    idx = self.stylebox.findText(act_ffmt._style_name)
+                    if idx >= 0:
+                        self.stylebox.setCurrentIndex(idx)
+            elif style:
                 weight = QFontDatabase.weight(family, style)
-                act_ffmt.font_weight = fix_fontweight_qt(weight)
-                act_ffmt.bold = weight >= QFont.Weight.Bold
+                if weight > 0:
+                    act_ffmt.font_weight = fix_fontweight_qt(weight)
+                    broadcast_weight = act_ffmt.font_weight
+                # 查不到(-1)不入库：保持当前字重，face 交派生/weight 匹配
+                act_ffmt._style_name = style
             else:
+                # 样式列表为空（被精简/虚拟家族）：字重回默认
                 act_ffmt.font_weight = None
-                act_ffmt.bold = False
-
-        # Then update font_family (setFontFamily reads _style_name)
+                act_ffmt._style_name = ""
+        # Then update font_family
         self.on_param_changed("font_family", family)
+        if broadcast_weight is not None:
+            # 显式选 face 引起的字重变更：走统一管道（引擎端同次派生 face）
+            self.on_param_changed("font_weight", broadcast_weight)
+
+    @staticmethod
+    def _mixed_fields(items: list, active_fmt: FontFormat) -> set:
+        """逐字段量化比较：与活动块不一致的字段集合（多选混合态）。"""
+        others = [it.get_fontformat() for it in items if it is not items[-1]]
+        mixed = set()
+        for fname in _MIXED_CHECK_FIELDS:
+            base = quantize_field(fname, getattr(active_fmt, fname, None))
+            for fmt in others:
+                if quantize_field(fname, getattr(fmt, fname, None)) != base:
+                    mixed.add(fname)
+                    break
+        return mixed
+
+    def _set_multi_selection(self, items: list, active_item=None):
+        """多选镜像态：C.active_format = 活动块（默认最后选中）格式副本。
+
+        镜像副本仅作显示与编辑载体（wrapper 写入），不整包回写块——
+        块格式经文档编辑 + get_fontformat 回读落账。混合字段显示 "—"。
+        """
+        self.textblk_item = None
+        self._active_multi_items = list(items)
+        active = active_item if active_item is not None else items[-1]
+        mirror = active.get_fontformat()
+        # gradient 是块级数据层权威（get_fontformat 不回读 gradient）
+        if hasattr(active.fontformat, "gradient_enabled"):
+            mirror.gradient_enabled = active.fontformat.gradient_enabled
+            mirror.gradient_start_color = active.fontformat.gradient_start_color
+            mirror.gradient_end_color = active.fontformat.gradient_end_color
+            mirror.gradient_angle = active.fontformat.gradient_angle
+            mirror.gradient_size = active.fontformat.gradient_size
+        mixed = self._mixed_fields(items, mirror)
+        multi_size = not active.isEditing() and active.isMultiFontSize()
+        self.set_active_format(mirror, multi_size, mixed)
+        self.textstyle_panel.setTitle(f"TextBlock #{active.idx + 1}")
 
     def set_textblk_item(
-        self, textblk_item: TextBlkItem = None, multi_select: bool = False
+        self,
+        textblk_item: TextBlkItem = None,
+        multi_select: bool = False,
+        multi_items: list = None,
     ):
+        """选中态 → 面单同步。
+
+        * 多选（≥2）：``multi_items`` 传选中列表，优先判定（活动块取
+          ``textblk_item``，缺省为最后选中项）；``multi_select=True`` 为
+          旧签名兼容，内部取当前画布选中列表。
+        * 单选：``textblk_item`` 非 None 且无多选列表。
+        * 闲置：两者皆空 → 显示新块默认格式（``global_format``）。
+        """
         # A selection transition is a transaction boundary for transform text.
         # Commit typed values against the old target list before replacing it.
         self.text_transform_editor.finish_pending_edits()
-        if textblk_item is not None:
-            transform_items = [textblk_item]
-        elif multi_select:
+        if multi_items is None and multi_select:
             from ui import shared_widget as SW
 
-            transform_items = SW.canvas.selected_text_items()
+            multi_items = SW.canvas.selected_text_items()
+        if multi_items is not None and len(multi_items) < 2:
+            # multi_select=True 但实际选中不足 2 → 回落单选/闲置语义
+            multi_items = None
+
+        if multi_items:
+            transform_items = list(multi_items)
+        elif textblk_item is not None:
+            transform_items = [textblk_item]
         else:
             transform_items = []
 
         preserve_local_owner = False
-        if textblk_item is None:
+        if multi_items:
+            self._set_multi_selection(multi_items, textblk_item)
+        elif textblk_item is None:
             focus_w = self.app.focusWidget()
             focus_p = None if focus_w is None else focus_w.parentWidget()
             focus_on_fmtoptions = False
@@ -1192,34 +1325,37 @@ class FontFormatPanel(Widget):
                 # the retained local item when comparing effective owners.
                 transform_items = [self.textblk_item]
             if not focus_on_fmtoptions:
-                # Store the current text block's format before switching to global
+                # Store the current text block's format before switching to global.
+                # 整包 deepcopy 回写仅保留单选→闲置路径：多选镜像副本不回写
+                # （块格式经文档编辑 + 回读落账），避免与镜像双重写。
                 if self.textblk_item is not None:
                     # Save all format properties including gradient state
                     self.textblk_item.fontformat = copy.deepcopy(C.active_format)
-                self.textblk_item = None
-                self.set_active_format(self.global_format, multi_select)
+                    self.textblk_item = None
+                self._active_multi_items = None
+                self.set_active_format(self.global_format)
                 self.set_globalfmt_title()
 
         else:
-            if not self.restoring_textblk:
-                blk_fmt = textblk_item.get_fontformat()
-                # Preserve gradient properties from the text block's format
-                if hasattr(textblk_item.fontformat, "gradient_enabled"):
-                    blk_fmt.gradient_enabled = textblk_item.fontformat.gradient_enabled
-                    blk_fmt.gradient_start_color = (
-                        textblk_item.fontformat.gradient_start_color
-                    )
-                    blk_fmt.gradient_end_color = (
-                        textblk_item.fontformat.gradient_end_color
-                    )
-                    blk_fmt.gradient_angle = textblk_item.fontformat.gradient_angle
-                    blk_fmt.gradient_size = textblk_item.fontformat.gradient_size
-                self.textblk_item = textblk_item
-                multi_size = (
-                    not textblk_item.isEditing() and textblk_item.isMultiFontSize()
+            blk_fmt = textblk_item.get_fontformat()
+            # Preserve gradient properties from the text block's format
+            if hasattr(textblk_item.fontformat, "gradient_enabled"):
+                blk_fmt.gradient_enabled = textblk_item.fontformat.gradient_enabled
+                blk_fmt.gradient_start_color = (
+                    textblk_item.fontformat.gradient_start_color
                 )
-                self.set_active_format(blk_fmt, multi_size)
-                self.textstyle_panel.setTitle(f"TextBlock #{textblk_item.idx + 1}")
+                blk_fmt.gradient_end_color = (
+                    textblk_item.fontformat.gradient_end_color
+                )
+                blk_fmt.gradient_angle = textblk_item.fontformat.gradient_angle
+                blk_fmt.gradient_size = textblk_item.fontformat.gradient_size
+            self.textblk_item = textblk_item
+            self._active_multi_items = None
+            multi_size = (
+                not textblk_item.isEditing() and textblk_item.isMultiFontSize()
+            )
+            self.set_active_format(blk_fmt, multi_size)
+            self.textstyle_panel.setTitle(f"TextBlock #{textblk_item.idx + 1}")
         self.text_transform_editor.replace_targets(transform_items)
         if transform_items:
             self.texttransform_panel.set_transform_items(transform_items)

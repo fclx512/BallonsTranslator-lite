@@ -1341,6 +1341,12 @@ class FontFormat(Config):
                 self.font_family = da["family"]
 
         self.font_weight = fix_fontweight_qt(self.font_weight)
+        # bold 字段级折算：旧数据 bold=True 且字重未设/低于粗体时折算进
+        # 真值 font_weight，随后 bold 复位 False（真值化后不再参与渲染）
+        if self.bold:
+            weight = self.font_weight if isinstance(self.font_weight, int) else 0
+            self.font_weight = max(weight, 700)
+            self.bold = False
         self.font_size = max(float(self.font_size), 1.0)
         if not isinstance(self.text_transform, TextTransformStack):
             if isinstance(self.text_transform, (list, tuple)):

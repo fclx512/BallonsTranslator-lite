@@ -19,10 +19,8 @@ from qtpy.QtCore import QPointF, QRectF, Qt, Signal
 from qtpy.QtGui import (
     QColor,
     QFont,
-    QFontDatabase,
     QPainter,
     QPen,
-    QTextCharFormat,
     QTextCursor,
 )
 from qtpy.QtWidgets import (
@@ -40,7 +38,6 @@ from utils.fontformat import (
     FontFormat,
     TextTransformState,
     TextTransformStack,
-    fix_fontweight_qt,
 )
 from utils.text_alignment import SNAP_THRESHOLD, compute_snap
 from utils.textblock import TextBlock as TextBlock
@@ -590,90 +587,13 @@ class TextBlkItem(_EngineTextBlkItem):
         else:
             canvas.clear_snap_guides()
 
-    # ── 格式（fork：本地 FontFormat 的 bold/_style_name 补写）───────────
-
-    def set_fontformat(
-        self,
-        ffmat: FontFormat,
-        set_char_format=False,
-        set_stroke_width=True,
-        set_effect=True,
-    ):
-        super().set_fontformat(
-            ffmat,
-            set_char_format=set_char_format,
-            set_stroke_width=set_stroke_width,
-            set_effect=set_effect,
-        )
-        # fork：bold/_style_name 是本地 FontFormat 额外字段，上游实现只写 font_weight
-        bold = getattr(ffmat, "bold", False)
-        style_name = getattr(ffmat, "_style_name", "")
-        if not bold and not style_name:
-            return
-        font = self.document().defaultFont()
-        changed = False
-        if bold and not font.bold():
-            font.setBold(True)
-            changed = True
-        if style_name and font.styleName() != style_name:
-            font.setStyleName(style_name)
-            changed = True
-        if not changed:
-            return
-        self.document().setDefaultFont(font)
-        cursor = self.textCursor()
-        cursor.select(QTextCursor.SelectionType.Document)
-        cfmt = QTextCharFormat()
-        cfmt.setFont(font)
-        cursor.mergeCharFormat(cfmt)
-        cursor.clearSelection()
-        self.setTextCursor(cursor)
+    # ── 格式 ──────────────────────────────────────────────────────────
+    # set_fontformat / setFontFamily 无 fork 补丁：face 派生缓存由
+    # utils/face_resolver.sync_face 在写入点维护，引擎 set_fontformat
+    # 显式写数据层 _style_name、setFontWeight/setFontItalic 同次派生
+    # （2026-09 真值化，见 docs/技术实现/文本面板选中态与字重失效_修复计划.md）。
 
     # ── 格式 setter 兼容（引擎签名收敛，fork 消费方仍传旧 kwargs）───────
-
-    def setFontFamily(
-        self,
-        value: str,
-        style_name: str = "",
-        repaint_background: bool = True,
-        set_selected: bool = False,
-        restore_cursor: bool = False,
-    ):
-        """字体族切换：引擎只改 family，fork 按所选样式名同步字重/bold。
-
-        ``apply_font_change``（text_panel）先把 ``_style_name`` 写入活动格式
-        再调用本方法；这里让画布立即反映所选样式，避免换家族后残留旧字重。
-        ``style_name`` 为空时等价于引擎原行为。
-        """
-        super().setFontFamily(
-            value,
-            repaint_background=repaint_background,
-            set_selected=set_selected,
-            restore_cursor=restore_cursor,
-        )
-        if not style_name:
-            return
-        raw_weight = QFontDatabase.weight(value, style_name)
-        if raw_weight <= 0:
-            return
-        font = self.document().defaultFont()
-        font.setStyleName(style_name)
-        # 先 setBold 再 setWeight：setBold(False) 会把字重复位为 Normal(400)
-        font.setBold(raw_weight >= QFont.Weight.Bold)
-        font.setWeight(QFont.Weight(fix_fontweight_qt(raw_weight)))
-        self.document().setDefaultFont(font)
-        # 只合并字重/样式名两个字段：setFont(font) 会把 defaultFont 的
-        # pointSize（停留在选区建立时的旧字号，setFontSize 不更新它）
-        # 一并写进全部 fragment，表现为改字重/家族后字号回退旧值
-        cfmt = QTextCharFormat()
-        cfmt.setFontStyleName(style_name)
-        cfmt.setFontWeight(QFont.Weight(fix_fontweight_qt(raw_weight)))
-        doc_cursor = QTextCursor(self.document())
-        doc_cursor.select(QTextCursor.SelectionType.Document)
-        doc_cursor.mergeCharFormat(cfmt)
-        # 同步插入符格式，避免后续输入沿用旧字重
-        self.textCursor().mergeCharFormat(cfmt)
-        self.layout.reLayoutEverything()
 
     def setLineSpacing(self, value: float, **kwargs) -> None:
         super().setLineSpacing(value)

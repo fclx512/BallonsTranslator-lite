@@ -3245,7 +3245,8 @@ class MainWindow(mainwindow_cls):
                     blk.line_spacing = gf.line_spacing
                     blk.letter_spacing = gf.letter_spacing
                     blk.italic = gf.italic
-                    blk.bold = gf.bold
+                    # bold 已随字重真值化退役（font_weight 单一真值），
+                    # 管线建块不再跟随默认（保持未设 → 渲染 Normal）
                     blk.underline = gf.underline
                     blk.fontformat.standard_vertical_roman_alignment = (
                         gf.standard_vertical_roman_alignment

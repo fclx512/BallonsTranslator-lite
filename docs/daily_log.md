@@ -2,6 +2,31 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，每次在对应日期中末尾写入日志。
 
+## 2026-09-04
+
+### 文本面板选中态与字重真值化五阶段重构落地 + 中间图截断闪退修复 + 启动日志噪音修复
+
+**问题/需求：** 按《文本面板选中态与字重失效_问题分析/修复计划》落地已审计的五阶段修复（字重编辑有时不生效：Qt 的 styleName 精确匹配压过字重、多来源脏 face 名污染渲染）；实机验收另发现两问题：① 样式编辑器改字重后批量重渲染触发闪退（实为损坏的中间图穿透页面加载链路）；② Win10 启动终端刷 `fontTools _n_a_m_e stringOffset incorrect` ERROR ×3 与 `undefined param name: font_family` ×2。
+
+**改动要点：**
+
+- **阶段1 真值化基建**：新增 `utils/face_resolver.py`（`resolve_face` 就近匹配 face / `sync_face` 派生缓存 / `weight_of_face` / `invalidate_face_cache`，Qt styleStringHelper 阈值逻辑作 tie-break）；`font_weight` 成为唯一真值，`_style_name` 降级为派生显示缓存（`utils/fontformat.py::FontFormat` post_init bold 折算进字重）；`utils/shared.py::init_font_list` 尾部失效 face 缓存。
+- **渲染端收口**：删 `ui/textitem.py` 的 fork set_fontformat 钉 face 补丁与 setFontFamily 的 style_name 通道（字重失效根因）；`ui/text_engine/item.py` set_fontformat 显式写数据层 face、`_sync_face_char_format` 同事务派生（char format + defaultFont 同步含字重）、get_fontformat 回读 styleName。
+- **写入点重派生**：`ui/fontformat_commands.py` 包装器两处 act_ffmt 写点接 `_sync_active_face`；`utils/base_styles.py`（flatten/variant）、`utils/style_query.py`、`ui/fontstyle_manager.py`（sig/preset）undo 快照前 `sync_face`；`ui/mainwindow.py` 管线建块删 `blk.bold` 残留。
+- **阶段2 多选镜像+混合态**：`ui/text_panel.py` 新增 `_active_multi_items`；`set_textblk_item` 支持 `multi_items`（优先于单选），`_set_multi_selection` 以活动块（默认最后选中）为镜像 + `_mixed_fields` 逐字段量化混合检测；编辑经包装器重定向广播到全部选中块，退出多选仅单选→闲置做整格式回写。
+- **阶段3 闲置态**：无选中时面板镜像 `global_format`（标题「新块默认格式」），编辑实时落地全局默认（`_mirror_to_global_format`），新增 Reset 按钮（`_reset_global_format` 回退 FontFormat() 默认）。
+- **阶段4 样式编辑器**：`ui/style_format_editor.py` font_weight 编辑器 getter 对未触碰项透传存量值（治愈 350 被静默改写成 400），"(default)"=None 语义，显式变更经 `weight_of_face`/`resolve_face`。
+- **闪退修复**：`utils/proj_imgtrans.py` 修复图/无字图/遮罩三处中间图读取容错（损坏按"文件缺失"降级：修复图回退原图、遮罩置零），根因=早前写入中断留下的截断 PNG 使 `imread` 抛 `OSError: image file is truncated` 穿透 Qt 槽；`load_inpainted_by_imgname` 顺带修了 imread 返回 None 时的 `.shape` 二次崩溃。
+- **启动噪音**：`ui/text_panel.py::global_mode` 加 None 守卫（`global_format` 在 mainwindow 构造尾部才注入，此前 `id(None)==id(None)` 误判全局模式，启动期字体下拉填充触发的 font_family 信号被派发到 None 上——既有行为，非本次重构引入）；`utils/font_scan.py::scan_font_faces` 扫描期临时压制 fontTools 日志（Win10 系统字体 name 表畸形只刷 ERROR 不抛错）。
+- **测试**：`tests/test_face_resolver.py`（22 例：阈值锚点/就近/幂等/写入点快照保真）、`tests/test_selection_state_panel.py`（7 例多选广播/闲置跟随/回读）、`tests/test_fontfamily_style.py` 重写适配新契约、`tests/test_intermediate_img_robustness.py`（4 例截断中间图降级）。
+- **i18n**：ts 新增 3 条（New Block Default Format/Reset/Reset the new-block default format）+ qm 重编译。
+- ⚠️ 环境注意：测试曾误触 ultralytics 对 `PIL.Image.open` 的补丁（打开失败即 pip 装 pi-heif），pip 把 Pillow 卸到一半失败；已重装同版本 pillow==10.4.0 修复，pillow_jxl 完好。勿在测试中触达 `load_inpainted_by_imgname` 非当前页分支。
+- 验证：`verify.py --full` 全绿（ruff/pytest 未装跳过）；上述 4 个测试套件 + test_font_scan 30 例 + test_batch_backup/test_page_list_dirty_click/test_dependency_startup 全过；实机已验收重构成果与闪退修复。
+
+**涉及文件：** `utils/face_resolver.py`（新增）、`utils/fontformat.py`、`utils/shared.py`、`utils/base_styles.py`、`utils/style_query.py`、`utils/proj_imgtrans.py`、`utils/font_scan.py`、`ui/textitem.py`、`ui/text_engine/item.py`、`ui/fontformat_commands.py`、`ui/fontstyle_manager.py`、`ui/mainwindow.py`、`ui/text_panel.py`、`ui/scenetext_manager.py`、`ui/style_format_editor.py`、`scripts/audit_registry.json`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_face_resolver.py`（新增）、`tests/test_selection_state_panel.py`（新增）、`tests/test_fontfamily_style.py`、`tests/test_intermediate_img_robustness.py`（新增）、`docs/技术实现/文本面板选中态与字重失效_修复计划.md`、`docs/技术实现/文本面板选中态与字重失效_问题分析.md`
+
+---
+
 ## 2026-09-03
 
 ### 效果栈面板阶段 D-2 重做 + 两 bug 修复 + 点角标闪现弹窗修复
@@ -38,68 +63,3 @@
 
 **涉及文件：** `ui/mainwindow.py`、`ui/mainwindowbars.py`、`ui/text_panel.py`、`ui/scenetext_manager.py`、`ui/glossary_agent_panel.py`、`utils/config.py`、`config/stylesheet.css`、`icons/leftbar_glossary.svg`（新增）、`icons/leftbar_glossary_activate.svg`（新增）、`icons/rail_glossary.svg`（删除）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`scripts/audit_registry.json`、`tests/test_glossary_agent_panel.py`、`docs/技术实现/翻译agent化_设计方案.md`、`docs/技术实现/翻译管线现状调研.md`
 
----
-
-## 2026-09-01
-
-### agent 模式翻译报错修复（配置字段声明错类 ×2）+ pcfg 字段静态校验兜底
-
-**问题/需求：** 实机反馈 agent 模式无法翻译报错。排查确认并非计划未完成导致：`agent_translation_debug_log` 声明在 `ProgramConfig` 而 trans_agent 读 `pcfg.module.` → agent loop 每轮状态回调 AttributeError 必崩、永远静默回退直译（回退再失败才弹「翻译失败」错误框）；另术语工作台会话轮读不存在的 `pcfg.source_lang/target_lang` 必崩。系「新增配置字段未声明进对应 Config 类」第三次翻车（前有 glossary_dock_open）。
-
-**改动要点：**
-
-- 字段挪进 `utils/config.py::ModuleConfig`（含 `__post_init__` bool 归一；旧 config.json 残留键由 nested_dataclass 静默忽略，安全）；`ui/glossary_agent_panel.py` 改读 `pcfg.module.translate_source/translate_target`。
-- 新增 `tests/test_config_fields.py`：AST 静态校验全仓 pcfg 引用链与 Config 类声明一致（47 文件 607 链；休眠拷贝 editing/、formatting/ 排除；类方法与 hasattr 兼容读取走白名单），同类 bug 此后有测试兜底；AGENTS.md 配置系统节加纪律条目。
-- 验证：离线复现（真实 config + 脚本化 client 三路径：无 project 直提 / 带 project 探索后提交 / 单框 plain）修复前全崩、修复后全通；全量 pytest 564 绿；verify 全绿；实机已验收。
-
-**涉及文件：** `utils/config.py`、`ui/glossary_agent_panel.py`、`tests/test_config_fields.py`（新增）、`AGENTS.md`、`docs/daily_log.md`
-
----
-
-### 工作台阶段 3 剧情注入管线 + 阶段 4 ai_tools 瘦身 + 计划销账
-
-**问题/需求：** agent 翻译修复验收通过后推进剩余节点：工作台阶段 3（剧情注入翻译管线）、阶段 4（ai_tools 瘦身）；核对翻译 agent 化 6a/6b 状态并销账。
-
-**改动要点：**
-
-- 阶段 3 剧情注入：全局梗概（项目级 `llm_compact_memory`，工作台「应用」写盘）进 agent system 稳定前缀——`modules/translators/agent/prompts.py` 新增 `synopsis_section`/`effective_history_budget`，梗概为强制注入项、先于可选历史页扣预算（驱逐后地板 1：`build_history_snippet` 把 0 视为不限额）；`trans_agent.py::_run_agent_task` 接线；开关 `pcfg.module.llm_story_context`（默认开，仅影响翻译注入）。
-- **持久化补洞**：工作台 `apply_story` 此前经 `setattr` 写的 `llm_compact_memory` 未进 `to_dict`/`load_from_dict`——项目保存后梗概会丢；`utils/proj_imgtrans.py::ProjImgTrans` 补字段声明 + 序列化往返 + 坏值归一。
-- 阶段 4 ai_tools 瘦身：776→约 195 行，删旧 AI 助手全部残留（含写类工具的 `TOOL_DEFINITIONS`、`get_active_tools` 过滤、set_*/search_replace/translate_text 执行器、`parse_tool_calls`/`parse_changes`、get_config），只留 `ToolError`/`to_openai_tools`/`execute_tool`（收窄 4 只读：list_pages/read_pages/search_blocks/get_page_info，与 agent 侧 `READONLY_TOOLS`、工作台侧 `CONTEXT_READ_TOOLS` 白名单对齐）。
-- 设计文档销账：`docs/技术实现/翻译agent化_设计方案.md` §7 注入表加梗概行、§12 加 `llm_story_context`、§13 阶段 6a 标注「已由术语工作台整体取代」、6b 标注「验收已达（Prefill frequency 拉模式 + origin 三态标记 + 人工「应用」入库）」。
-- 测试：新增 `tests/test_story_injection.py` 9 例（system 梗概段 / 预算驱逐 / 只读 reader / 持久化往返 / 编排接线三态）；AGENTS.md ai_tools 条目描述同步。
-- 验证：全量 pytest 573 绿；`verify.py --full` 全绿；待实机验收（工作台产梗概→应用→整页翻译，确认 agent 轮次 system 带梗概、译名随剧情一致）。
-
-**涉及文件：** `utils/proj_imgtrans.py`、`utils/config.py`、`utils/ai_tools.py`、`modules/context_agent/story.py`、`modules/translators/agent/prompts.py`、`modules/translators/trans_agent.py`、`tests/test_story_injection.py`（新增）、`docs/技术实现/翻译agent化_设计方案.md`、`AGENTS.md`、`docs/daily_log.md`
-
----
-
-## 2026-08-31
-
-### 效果栈渲染层落地 + exit 127 硬崩修复（阶段 C 完成收尾）
-
-**问题/需求：** 接手阶段 C 中断交接——全量 pytest 83% 处 `test_text_transform_engine` 变换往返测试 Qt 硬崩（exit 127，faulthandler 抓不到、崩溃点随调用路径漂移）。
-
-**改动要点：**
-
-- 根因：移植转换脚本丢符号的残留——`ui/text_engine/effects/renderer.py::paint_stroke` 引用未导入的 `VerticalTextDocumentLayout`（本地别名 `EngineVerticalTextDocumentLayout`），NameError 经 Qt 虚回调 → PyQt6 abort → fast-fail；另补 `LOGGER` 导入（`utils.logger` 惯例）。全 effects 包未定义名 AST 扫描清零。教训：port 转换产物必须做未定义名扫描；monkeypatch 包装须处理 staticmethod，否则插桩自身造伪 TypeError 误导排查。
-- `tests/test_text_transform_engine.py::test_zero_glyph_slant_restores_effects_inside_nonlinear_stack` 适配新渲染器惰性重绘语义：新 `finalize_neutral_cache` 与上游逐字一致、只标脏缓存不再同步 repaint（旧 v1.5.9 版会同步 repaint_background），patch 块内补 `_render_scene` 触发重建；`_transformed_effect_state` 断言换 `_preview_effect_raster_state`。
-- 验证：全量 pytest 478 passed + 1 skipped；`verify.py --full` 全绿。计划文档第七节交接内容删除、阶段 C 标完成。
-
-**涉及文件：** `ui/text_engine/effects/renderer.py`、`tests/test_text_transform_engine.py`、`docs/技术实现/效果栈移植与窄栏图标重绘_计划.md`
-
----
-
-### 面板效果设置写入断链修复（实机验收缺陷）
-
-**问题/需求：** 实机验收发现描边/阴影/渐变设置全部无效。根因：fork 双格式惯例（`ui/text_panel.py::set_textblk_item`/`get_fontformat()` 深拷贝解耦渲染副本与模型）× 新渲染器按上游语义读 `blk.fontformat` canonical 栈——面板写入只落渲染副本，渲染器不可见。引擎层/测试层不受影响（测试直写模型）。
-
-**改动要点：**
-
-- `ui/text_engine/item.py` 新增 `_commit_effect_fields`：canonical 栈 FontFormat 深拷贝探针 + legacy 视图写入 → `ui/text_engine/effects/renderer.py::set_text_effects` 提交（同时写 model+render 两格式，`_finish_effect_transition` 自带完整失效链：opacity 应用、描边对齐、padding、缓存策略、repaint、update）。
-- 七个效果 setter 接入（setStrokeWidth/setStrokeColor/setShadow/setBGAttribute/setGradientAttribute/setGradientEnabled/setOpacity）；`setOpacity` 上游模式化（native 透明度由 `_apply_effective_opacity` 应用）；`setBGAttribute`/`setGradientAttribute` 对非 legacy 名保留原通道。
-- `set_fontformat` bulk 路径：描边宽+色合并一次提交，色只随非零宽度进栈（0 宽卡是 neutral，`paint_item` 已短路，无伪影）。
-- 新增回归 `tests/test_textblkitem_effect.py::test_legacy_setters_reach_canonical_stack_after_panel_decoupling`（解耦后七 setter 写透 canonical + 渲染像素跟进）；全量 pytest 479 passed + 1 skipped、`verify.py --full` 全绿。
-
-**涉及文件：** `ui/text_engine/item.py`、`tests/test_textblkitem_effect.py`、`docs/技术实现/效果栈移植与窄栏图标重绘_计划.md`
-
----

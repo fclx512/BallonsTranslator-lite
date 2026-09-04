@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from qtpy.QtCore import QCoreApplication, Qt, Signal
-from qtpy.QtGui import QColor, QFont, QFontDatabase
+from qtpy.QtGui import QColor, QFont
 from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -38,6 +38,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from utils import face_resolver
 from utils import shared
 from utils.base_styles import copy_value, quantize_field
 from utils.style_query import FIELD_GROUPS
@@ -253,9 +254,12 @@ def _build_control(fname: str) -> Tuple[QWidget, Callable, Callable, Callable]:
         return combo, getter, setter, wire
 
     if fname == "font_weight":
-        # 字体族上下文由面板经 FieldEditor.set_family_context 注入；
-        # 数据值是 int 字重，"(default)" 条目按旧 StyleDetail 语义映射 Normal。
-        state = {"family": ""}
+        # 字体族上下文由面板经 FieldEditor.set_family_context 注入。
+        # getter 原值透传语义（阶段4）：进入面板时记录 initial，仅用户
+        # 真实改动下拉才写新值——根治"打开面板即静默把 350 改写为 400"；
+        # "(default)" 条目 = None（未设/默认语义）。回显经 resolve_face
+        # 派生就近 face（350 类存量显示 Light/Regular 而非 "(default)"）。
+        state = {"family": "", "initial": None, "touched": False}
         combo = QComboBox()
 
         def _reload(family: str, keep: Optional[int]):
@@ -265,24 +269,46 @@ def _build_control(fname: str) -> Tuple[QWidget, Callable, Callable, Callable]:
             for style in shared.FONT_STYLES.get(family, []):
                 combo.addItem(style, style)
             if keep is not None:
+                target = None
                 for i in range(combo.count()):
                     raw = combo.itemData(i)
-                    if raw is not None and QFontDatabase.weight(family, raw) == keep:
-                        combo.setCurrentIndex(i)
+                    if raw is not None and face_resolver.weight_of_face(
+                        family, raw
+                    ) == keep:
+                        target = i
                         break
+                if target is None:
+                    # 精确匹配失败：派生就近 face（350 → Light/Regular…）
+                    face = face_resolver.resolve_face(family, keep, False)
+                    if face:
+                        idx = combo.findText(face)
+                        target = idx if idx >= 0 else None
+                if target is not None:
+                    combo.setCurrentIndex(target)
+                # 找不到则停在 "(default)"——未 touched 时 getter 透传
+                # initial，不会把显示态当新值写回
             combo.blockSignals(False)
 
         def getter():
+            if not state["touched"]:
+                return state["initial"]
             raw = combo.currentData()
             if raw is None:
-                return int(QFont.Weight.Normal)
-            return QFontDatabase.weight(state["family"], raw)
+                return None
+            weight = face_resolver.weight_of_face(state["family"], raw)
+            return weight if weight is not None else state["initial"]
 
         def setter(v):
+            state["initial"] = v
+            state["touched"] = False
             _reload(state["family"], None if v is None else int(v))
 
         def wire(cb):
-            combo.currentIndexChanged.connect(lambda _i: cb())
+            def _on_change(_i):
+                state["touched"] = True
+                cb()
+
+            combo.currentIndexChanged.connect(_on_change)
 
         combo._reload_weights = _reload  # type: ignore[attr-defined]
         combo._weight_state = state  # type: ignore[attr-defined]
@@ -633,10 +659,11 @@ class FormatEditorPanel(QScrollArea):
                 continue
             value = getattr(ffmt, fname, None)
             ed.set_family_context(family)
-            if value is not None:
+            if value is not None or fname == "font_weight":
+                # font_weight 的 None 是合法状态（未设 → "(default)"）
                 ed.set_value(value)
             else:
-                # None 字段（如 font_weight=None）按"默认"处理
+                # None 字段按"默认"处理
                 ed.set_value(self._default_for(fname))
             try:
                 if self._differs(fname, ed.value()):
@@ -683,11 +710,14 @@ class FormatEditorPanel(QScrollArea):
     def _differs(self, fname: str, v: Any) -> bool:
         """Diff one editable value against the baseline.
 
-        基线为 None（如未设字重）且编辑值是中性默认时视为一致——否则
-        大样式一打开就误报"已修改"，且 patch 会把默认值压进块级 override。
+        基线为 None（如未设字重）且编辑值也是 None/中性默认时视为一致——
+        否则大样式一打开就误报"已修改"，且 patch 会把默认值压进块级
+        override。"(default)"=None 语义下 None vs None 不算变更。
         """
         old = getattr(self._baseline, fname, None)
         if old is None:
+            if v is None:
+                return False
             return v != self._default_for(fname)
         return quantize_field(fname, v) != quantize_field(fname, old)
 

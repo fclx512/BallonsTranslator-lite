@@ -22,6 +22,7 @@ from utils.base_styles import (
     IDENTITY_FIELDS,
     copy_value,
     quantize_field,
+    sync_face,
 )
 
 # Fields a FormatPredicate may reference: identity keys + every render
@@ -258,6 +259,8 @@ def build_query_changes(
         new_ffmt = blk.fontformat.deepcopy()
         for k, v in changed.items():
             setattr(new_ffmt, k, copy_value(v))
+        # face 为派生显示缓存：new_ffmt 定型后重算（快照之前）
+        sync_face(new_ffmt)
         changes.append(
             {
                 "pagename": pname,

@@ -411,9 +411,14 @@ class ProjImgTrans:
             mask_path = self.get_mask_path(get_last_modified=True)
             self.img_array = imread(img_path)
             im_h, im_w = self.img_array.shape[:2]
+            self.mask_array = None
             if osp.exists(mask_path):
-                self.mask_array = imread(mask_path, cv2.IMREAD_GRAYSCALE)
-            else:
+                try:
+                    self.mask_array = imread(mask_path, cv2.IMREAD_GRAYSCALE)
+                except Exception as e:
+                    # 损坏遮罩按"无遮罩"降级（与文件缺失同语义），不让页面加载崩掉
+                    LOGGER.warning(f"Failed to read mask {mask_path}: {e}")
+            if self.mask_array is None:
                 self.mask_array = np.zeros((im_h, im_w), dtype=np.uint8)
             self.inpainted_array = self.load_inpainted_by_imgname(imgname)
             if self.inpainted_array is None:
@@ -579,19 +584,26 @@ class ProjImgTrans:
         inpainted = None
         mp = self.get_inpainted_path(imgname, get_last_modified=True)
         if mp is not None and osp.exists(mp):
-            inpainted = imread(mp)
-            if imgname == self.current_img and self.img_array is not None:
-                h, w = self.img_array.shape[:2]
-            else:
-                from PIL import Image
-                i = Image.open(osp.join(self.directory, imgname))
-                h, w = i.height, i.width
-            ih, iw = inpainted.shape[:2]
-            if ih != h or iw != w:
-                inpainted = Image.fromarray(inpainted).resize(
-                    (w, h), resample=Image.Resampling.LANCZOS
-                )
-                inpainted = np.array(inpainted)
+            try:
+                inpainted = imread(mp)
+            except Exception as e:
+                # 截断/损坏的中间修复图不致命：告警后按"无修复图"处理，
+                # 调用方回退原图，避免页面切换/批量重渲染时整个应用闪退
+                LOGGER.warning(f"Failed to read inpainted image {mp}: {e}")
+                inpainted = None
+            if inpainted is not None:
+                if imgname == self.current_img and self.img_array is not None:
+                    h, w = self.img_array.shape[:2]
+                else:
+                    from PIL import Image
+                    i = Image.open(osp.join(self.directory, imgname))
+                    h, w = i.height, i.width
+                ih, iw = inpainted.shape[:2]
+                if ih != h or iw != w:
+                    inpainted = Image.fromarray(inpainted).resize(
+                        (w, h), resample=Image.Resampling.LANCZOS
+                    )
+                    inpainted = np.array(inpainted)
         return inpainted
 
     def get_notext_path(self, imgname: str = None) -> str:
@@ -616,7 +628,11 @@ class ProjImgTrans:
         path = self.get_notext_path(imgname)
         if path is None:
             return None
-        notext = imread(path)
+        try:
+            notext = imread(path)
+        except Exception as e:
+            LOGGER.warning(f"Failed to read no-text image {path}: {e}")
+            return None
         if notext is None:
             return None
         h, w = self.img_array.shape[:2]

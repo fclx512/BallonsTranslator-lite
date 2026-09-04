@@ -76,6 +76,7 @@ from utils.base_styles import (
     quantize_field,
     variant_display_name,
 )
+from utils.face_resolver import sync_face
 from utils.fontformat import FontFormat
 
 from .custom_widget import ColorPickerDialog, SeparatorWidget
@@ -962,6 +963,8 @@ class StyleDetail(QScrollArea):
         new_ffmt = self._entry.fontformat.deepcopy()
         for k, v in candidate.items():
             setattr(new_ffmt, k, copy_value(v))
+        # face 为派生显示缓存：整包定型后重算（快照之前）
+        sync_face(new_ffmt)
         changes = self._changes_for_targets(new_ffmt)
         if not changes:
             return
@@ -1049,6 +1052,8 @@ class StyleDetail(QScrollArea):
 
         # variant / sig modes: full-parameter replacement (legacy behavior)
         new_ffmt = preset_ffmt.deepcopy()
+        # face 为派生显示缓存：整包定型后重算（快照之前）
+        sync_face(new_ffmt)
         if self._mode == self.MODE_VARIANT and self._variant is not None:
             changes = []
             for pname, bidx in self._variant.blocks:

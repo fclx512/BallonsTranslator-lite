@@ -20,6 +20,7 @@ from qtpy.QtGui import (QKeyEvent, QFont, QTextCursor,
 
 from utils.textblock import TextBlock
 from utils.imgproc_utils import xywh2xyxypoly
+from utils import face_resolver
 from utils.fontformat import (
     FontFormat,
     LineSpacingType,
@@ -1392,6 +1393,9 @@ class TextBlkItem(QGraphicsTextItem):
         fontformat.frgb = [color.red(), color.green(), color.blue()]
         fontformat.font_weight = font_weight_from_qt(font.weight())
         fontformat.font_family = font_family_for_project(font.family())
+        # face 回读文档实际值：deepcopy 的旧值会让数据层 face 与回读的
+        # weight/family 脱钩（字重失效根源之一）
+        fontformat._style_name = font.styleName() or ""
         if self.isEditing():
             fontformat.font_size = pt2px(font.pointSizeF())
         else:
@@ -1438,6 +1442,10 @@ class TextBlkItem(QGraphicsTextItem):
             self.document().defaultFont(),
             ffmat.font_family,
         )
+        # face 是 font_weight 的派生显示缓存（utils/face_resolver.py）：
+        # 显式写数据层值，覆盖 defaultFont 上残留的旧 styleName——残留名
+        # 精确命中 face 时 weight 完全被忽略，是字重失效的根源。
+        font.setStyleName(getattr(ffmat, "_style_name", "") or "")
         font.setPointSizeF(ffmat.size_pt)
         font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
         font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias | QFont.StyleStrategy.NoSubpixelAntialias)
@@ -1649,6 +1657,33 @@ class TextBlkItem(QGraphicsTextItem):
         cfmt.setFont(qfont_with_family(cfmt.font(), value))
         self.set_cursor_cfmt(cursor, cfmt)
 
+    def _sync_face_char_format(
+        self, cfmt: QTextCharFormat, weight=None, italic=None
+    ) -> None:
+        """weight/italic 变更时同次 merge 派生 face。
+
+        Qt 语义：styleName 精确命中 face 时 weight 完全被忽略，残留旧
+        face 必须与本次写入同次清除（defaultFont 与字符格式两处一起），
+        杜绝中间态（utils/face_resolver.py：face 为派生显示缓存）。
+        """
+        ffmt = self.fontformat
+        family = getattr(ffmt, "font_family", "")
+        if weight is None:
+            weight = getattr(ffmt, "font_weight", None)
+        if italic is None:
+            italic = bool(getattr(ffmt, "italic", False))
+        face = face_resolver.resolve_face(family, weight, bool(italic))
+        cfmt.setFontStyleName(face)
+        doc = self.document()
+        dfont = doc.defaultFont()
+        if dfont.styleName() != face or weight is not None:
+            dfont.setStyleName(face)
+            if weight is not None:
+                # defaultFont 与字符格式两处同次写（Qt 事实：残留 face
+                # 精确命中时 weight 被忽略，weight 过期同样污染 face 匹配）
+                dfont.setWeight(QFont.Weight(font_weight_to_qt(weight, qt6=QT6)))
+            doc.setDefaultFont(dfont)
+
     def setFontWeight(
         self,
         value: FontWeight,
@@ -1661,6 +1696,7 @@ class TextBlkItem(QGraphicsTextItem):
         cfmt.setFontWeight(
             QFont.Weight(font_weight_to_qt(value, qt6=QT6))
         )
+        self._sync_face_char_format(cfmt, weight=int(value))
         self.set_cursor_cfmt(cursor, cfmt, True)
         self._after_set_ffmt(cursor, repaint_background, restore_cursor, **after_kwargs)
 
@@ -1668,6 +1704,7 @@ class TextBlkItem(QGraphicsTextItem):
         cursor, after_kwargs = self._before_set_ffmt(set_selected, restore_cursor)
         cfmt = QTextCharFormat()
         cfmt.setFontItalic(value)
+        self._sync_face_char_format(cfmt, italic=bool(value))
         self.set_cursor_cfmt(cursor, cfmt, True)
         self._after_set_ffmt(cursor, repaint_background, restore_cursor, **after_kwargs)
 
