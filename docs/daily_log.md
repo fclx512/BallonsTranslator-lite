@@ -27,6 +27,22 @@
 
 ---
 
+### 撤销体系：效果参数并入格式化手势（一次手势=一步）+ 描边色自动跟随文字反色（含设置开关）
+
+**问题/需求：** 实机验收发现：① 描边/行距/字距等效果参数改一次要按好几次 Ctrl+Z 才撤完（除真正修改那一下其余按撤销无视觉变化）——根因=效果类 setter 走 per-emission `push_undostack=True` 单命令（一步一压），与内容参数的手势宏聚合不一致；② 追加新功能：未手动指定的描边色自动取文字颜色反色（黑字白边/白字黑边），默认无声机制、改字色即时跟随，手动指定即置「自定义」标记永久生效（无恢复），设置面板嵌字节加全局开关默认开。
+
+**改动要点：**
+
+- **效果参数并入手势**：`ui/fontformat_commands.py` 删 `TextStyleUndoCommand` 与 `font_formating` 的 `push_undostack` 分支；装饰器 wrapper 在格式变更时对画布会话 `note_formatting_edit` 显式登记（幂等——效果类 setter 不触发 on_content_changed 自登记）；闭合以「基线↔终值」一条 `FormatGestureCommand` 落账（一次手势一步）。隔离调用（无画布，单测直调 ffmt_change_*）跳过手势、仅应用。
+- **描边自动反色**：`utils/fontformat.py::FontFormat` 加块级标志 `stroke_color_custom` + `effective_stroke_color(*, auto_follow=True)`（默认自动取前景反色、手动则按 srgb）；`ui/text_engine/item.py` 的 set_fontformat/setFontColor/setStrokeWidth/setStrokeColorCustom 派生站点接入；`setFontColor` 改字色即时重派生反色（零延迟，面板 swatch 取色/右键应用两路径同步刷新）。
+- **设置开关**：`utils/config.py::ProgramConfig` 加 `stroke_auto_follow=True`；`ui/configpanel.py` 嵌字→Text formatting 加「描边色跟随文字颜色」勾选（默认开），关闭后未手动指定的块按存档 srgb 渲染、不再联动；手动指定的块（`stroke_color_custom=True`）不受开关影响。
+- **护网/测试**：`tests/test_format_gesture_undo.py` 增效果参数一次手势=一步回归用例（每参数独立单块画布隔离 QUndoStack 计数态）。
+- 验证：`verify.py` 全绿（语法/docs/审计/i18n/qm/冒烟——configpanel 属启动链）；pytest 相关套件（test_format_gesture_undo / test_fontfamily_style / test_selection_state_panel / test_config_fields / test_startup_imports）全过；实机已验收。
+
+**涉及文件：** `ui/fontformat_commands.py`、`ui/text_engine/item.py`、`ui/text_panel.py`、`ui/configpanel.py`、`utils/fontformat.py`、`utils/config.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_format_gesture_undo.py`、`docs/技术实现/撤销体系人工验收场景.md`
+
+---
+
 ## 2026-09-03
 
 ### 效果栈面板阶段 D-2 重做 + 两 bug 修复 + 点角标闪现弹窗修复

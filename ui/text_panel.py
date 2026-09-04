@@ -932,15 +932,36 @@ class FontFormatPanel(Widget):
     def changingColor(self):
         self.focusOnColorDialog = True
 
+    def _sync_stroke_color_after_change(self, param_name: str):
+        """颜色变更后的描边色状态同步（取色/右键应用共用）。
+
+        srgb：手动指定轮廓颜色 → 置「自定义」标记，此后该块完全按手动值渲染，
+        不再自动跟随文字反色（默认态无 UI，显式取色即成为自定义，无恢复场景）。
+        frgb：字体颜色变更 → 描边色自动跟随文字反色即时刷新（黑字白边/白字黑边），
+        无延迟（此前面板 swatch 需等选中态重载才更新）。
+        """
+        if param_name == "srgb":
+            C.active_format.stroke_color_custom = True
+        elif param_name == "frgb":
+            fmt = C.active_format
+            if fmt is not None and not fmt.stroke_color_custom:
+                self.strokeColorPicker.setPickerColor(
+                    fmt.effective_stroke_color(
+                        auto_follow=C.pcfg.stroke_auto_follow
+                    )
+                )
+
     def onColorLabelChanged(self, is_valid=True):
         self.focusOnColorDialog = False
         if is_valid:
             sender: ColorPickerLabel = self.sender()
             rgb = sender.rgb()
             self.on_param_changed(sender.param_name, rgb)
+            self._sync_stroke_color_after_change(sender.param_name)
 
     def on_apply_color(self, param_name, rgb):
         self.on_param_changed(param_name, rgb)
+        self._sync_stroke_color_after_change(param_name)
 
     def onLineSpacingCtrlChanged(self, delta: int):
         if C.active_format.line_spacing_type == LineSpacingType.Distance:
@@ -1049,7 +1070,11 @@ class FontFormatPanel(Widget):
             if idx >= 0:
                 self.stylebox.setCurrentIndex(idx)
         self.colorPicker.setPickerColor(font_format.foreground_color())
-        self.strokeColorPicker.setPickerColor(font_format.stroke_color())
+        self.strokeColorPicker.setPickerColor(
+            font_format.effective_stroke_color(
+                auto_follow=C.pcfg.stroke_auto_follow
+            )
+        )
         self.strokeWidthBox.setValue(font_format.stroke_width)
         self.lineSpacingBox.setValue(font_format.line_spacing)
         self.letterSpacingBox.setValue(font_format.letter_spacing)

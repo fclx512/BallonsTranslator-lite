@@ -217,6 +217,94 @@ class FormatGestureUndoTest(unittest.TestCase):
         self.canvas.undo()
         self.assertEqual(self._size(self.items[0]), self.baseline[0])
 
+    def _strokes(self, item):
+        return round(item.get_fontformat().stroke_width, 2)
+
+    def _line_spacing(self, item):
+        return round(item.get_fontformat().line_spacing, 3)
+
+    def _letter_spacing(self, item):
+        return round(item.get_fontformat().letter_spacing, 3)
+
+    def _change_param(self, func, param_name, value):
+        from utils.fontformat import FontFormat
+
+        func(param_name, value, FontFormat(), is_global=True)
+
+    def test_effect_param_one_step_per_gesture(self):
+        """描边/行距/字距等效果类参数也应并入格式化手势：一次调整=一步撤销。
+
+        撤销体系 3a 护网只测过 font_size（内容类，靠 on_content_changed 自登记）；
+        效果类 setter（描边/阴影/透明/行距/字距）不触发 on_content_changed，
+        靠 font_formating wrapper 显式登记。回归锁定：多次发射仍聚合成一条
+        FormatGestureCommand、单步撤销还原基线（修复前每次发射压一条命令，
+        撤销要多按几次、有的无视觉变化）。
+        """
+        from ui.fontformat_commands import (
+            ffmt_change_letter_spacing,
+            ffmt_change_line_spacing,
+            ffmt_change_stroke_width,
+        )
+
+        cases = [
+            (ffmt_change_stroke_width, "stroke_width", self._strokes, 1.5, 2.6),
+            (ffmt_change_line_spacing, "line_spacing", self._line_spacing, 1.4, 1.6),
+            (ffmt_change_letter_spacing, "letter_spacing", self._letter_spacing, 1.2, 1.3),
+        ]
+        for func, param_name, read, v1, v2 in cases:
+            canvas = self._fresh_single_item_canvas()
+            orig = self.SW.canvas
+            self.SW.canvas = canvas
+            try:
+                item = canvas._probe_item
+                baseline = read(item)
+                self._change_param(func, param_name, v1)
+                self._change_param(func, param_name, v2)
+                # 两次发射入同一手势：悬开时栈上无独立命令
+                self.assertTrue(canvas._format_gesture_open)
+                self.assertEqual(canvas.text_undo_stack.count(), 0)
+                canvas.commit_edit_sessions()
+                # 一次手势 = 恰好一条快照命令
+                self.assertEqual(canvas.text_undo_stack.count(), 1)
+                self.assertAlmostEqual(read(item), v2, places=2)
+                # 单步撤回到手势前基线
+                canvas.undo()
+                self.assertAlmostEqual(read(item), baseline, places=2)
+            finally:
+                self.SW.canvas = orig
+
+    def _fresh_single_item_canvas(self):
+        """independent canvas + 1 textblkitem，绑定 note_formatting_edit 分接。
+
+        每参数一独立画布，屏蔽 count()/手势状态跨 case 污染（undo 只回移
+        undo 索引、不清栈，QUndoStack.count() 不改）。
+        """
+        from ui.textitem import TextBlkItem as _TB
+
+        canvas = self.Canvas()
+        canvas.imgtrans_proj = SimpleNamespace(
+            img_valid=True, inpainted_valid=False
+        )
+        canvas.editor_index = 1
+        canvas.image_edit_mode = ImageEditMode.NONE
+        canvas.txtblkShapeControl = _SpyShapeControl()
+        canvas.alignment_enabled = False
+        canvas.gv.setScene(canvas)
+        xyxy = [100, 100, 380, 220]
+        blk = TextBlock(xyxy=xyxy, translation="测试文字")
+        blk._bounding_rect = list(xyxy)
+        item = _TB(blk=blk, idx=0)
+        canvas.addItem(item)
+        item.updateUndoSteps()
+        item.push_undo_stack.connect(
+            lambda steps, fmt, b=item: (
+                canvas.note_formatting_edit(b, None) if fmt else None
+            )
+        )
+        canvas.selected_text_items = lambda: [item]
+        canvas._probe_item = item
+        return canvas
+
     def test_gesture_dirty_state_clean_mechanism(self):
         """脏状态 = QUndoStack clean 机制 + 会话脏标记。
 

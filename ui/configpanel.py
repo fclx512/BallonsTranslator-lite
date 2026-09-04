@@ -1948,6 +1948,20 @@ class ConfigPanel(Widget):
             )
         )
 
+        self.stroke_auto_follow_checker = ConfigCheckBox(
+            self.tr("Stroke color follows text color")
+        )
+        self.stroke_auto_follow_checker.stateChanged.connect(
+            self.on_stroke_auto_follow_changed
+        )
+        ts_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.stroke_auto_follow_checker,
+                note=self.tr("<p>When a text block's stroke color is not manually set, automatically use the <b>inverse</b> of its font color (black text gets white stroke, white text gets black stroke). Disable to keep each block's stored stroke color and stop it from following the font color.</p>"),
+            )
+        )
+
         self.let_textstyle_indep_checker = ConfigCheckBox(
             self.tr("Independent text styles for each projects")
         )
@@ -2796,6 +2810,9 @@ class ConfigPanel(Widget):
     def on_auto_squeeze_changed(self):
         pcfg.auto_squeeze_after_run = self.auto_squeeze_checker.isChecked()
 
+    def on_stroke_auto_follow_changed(self):
+        pcfg.stroke_auto_follow = self.stroke_auto_follow_checker.isChecked()
+
     def on_textstyle_indep_changed(self):
         pcfg.let_textstyle_indep_flag = self.let_textstyle_indep_checker.isChecked()
         self.reload_textstyle.emit(pcfg.let_textstyle_indep_flag)
@@ -3146,6 +3163,7 @@ class ConfigPanel(Widget):
         self.let_writing_mode_combox.setCurrentIndex(pcfg.let_writing_mode_flag)
         self.let_uppercase_checker.setChecked(pcfg.let_uppercase_flag)
         self.auto_squeeze_checker.setChecked(pcfg.auto_squeeze_after_run)
+        self.stroke_auto_follow_checker.setChecked(pcfg.stroke_auto_follow)
         self.let_textstyle_indep_checker.setChecked(pcfg.let_textstyle_indep_flag)
         self.rst_imgformat_combobox.setCurrentText(
             pcfg.imgsave_ext.replace(".", "").upper()

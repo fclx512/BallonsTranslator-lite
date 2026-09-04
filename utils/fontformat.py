@@ -1133,6 +1133,9 @@ class FontFormat(Config):
     stroke_width: float = 0.0
     frgb: List = field(default_factory=lambda: [0, 0, 0])
     srgb: List = field(default_factory=lambda: [0, 0, 0])
+    # 描边色是否手动指定：False（默认）= 自动跟随文字前景色的反色（黑字白边/
+    # 白字黑边）；True = 完全按 srgb 手动值渲染（用户自定义。指定轮廓颜色即置位）。
+    stroke_color_custom: bool = False
     # Deprecated: 粗体样式已移除，视觉字重完全由 font_weight 承担。字段仅为
     # 旧项目数据兼容保留（text_panel/textitem 镜像写入），不参与样式 diff、
     # 查询谓词与任何 UI。
@@ -1501,3 +1504,20 @@ class FontFormat(Config):
 
     def stroke_color(self):
         return [max(0, min(255, int(round(x)))) for x in self.srgb]
+
+    def effective_stroke_color(self, *, auto_follow: bool = True):
+        """实际渲染的描边色：自动跟随文字前景反色，手动指定则按 srgb。
+
+        黑字→白边、白字→黑边（通道反色）；stroke_color_custom 为 True 时按
+        手动 srgb 渲染。auto_follow 为全局开关（默认开启）：关闭后未手动指定
+        的块也按存档 srgb 渲染，不再随字体颜色联动。描边宽为 0 时颜色无视觉
+        影响，但返回值为合法色。
+        """
+        if self.stroke_color_custom:
+            return self.stroke_color()
+        if auto_follow:
+            return [
+                max(0, min(255, 255 - int(round(x))))
+                for x in self.foreground_color()
+            ]
+        return self.stroke_color()

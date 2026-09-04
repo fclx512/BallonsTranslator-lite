@@ -1,12 +1,6 @@
-import copy
-from typing import Callable, Dict, List
+from typing import List
 
 from qtpy.QtGui import QFont
-
-try:
-    from qtpy.QtWidgets import QUndoCommand
-except ImportError:
-    from qtpy.QtGui import QUndoCommand
 
 from utils import face_resolver
 from utils.fontformat import FontFormat, TextTransformState, px2pt
@@ -41,21 +35,9 @@ def _mirror_to_global_format(act_ffmt: FontFormat, param_name: str, value) -> No
     _sync_active_face(gf, param_name)
 
 
-class TextStyleUndoCommand(QUndoCommand):
-    def __init__(
-        self, style_func: Callable, params: Dict, redo_values: List, undo_values: List
-    ):
-        super().__init__()
-        self.style_func = style_func
-        self.params = params
-        self.redo_values = redo_values
-        self.undo_values = undo_values
-
-    def redo(self) -> None:
-        self.style_func(values=self.redo_values, **self.params)
-
-    def undo(self) -> None:
-        self.style_func(values=self.undo_values, **self.params)
+def _active_formatpanel():
+    manager = getattr(SW, "st_manager", None)
+    return getattr(manager, "formatpanel", None) if manager is not None else None
 
 
 def wrap_fntformat_input(values: str, blkitems: List[TextBlkItem], is_global: bool):
@@ -68,7 +50,7 @@ def wrap_fntformat_input(values: str, blkitems: List[TextBlkItem], is_global: bo
     return blkitems, values
 
 
-def font_formating(push_undostack: bool = False, is_property=True):
+def font_formating(is_property=True):
 
     def func_wrapper(formatting_func):
 
@@ -96,33 +78,25 @@ def font_formating(push_undostack: bool = False, is_property=True):
                     _sync_active_face(act_ffmt, param_name)
                     if not is_global:
                         _mirror_to_global_format(act_ffmt, param_name, values[0])
-                if push_undostack:
-                    params = copy.deepcopy(kwargs)
-                    params.update(
-                        {
-                            "param_name": param_name,
-                            "act_ffmt": act_ffmt,
-                            "is_global": is_global,
-                            "blkitems": blkitems,
-                        }
-                    )
-                    undo_values = [
-                        getattr(blkitem.fontformat, param_name) for blkitem in blkitems
-                    ]
-                    cmd = TextStyleUndoCommand(
-                        formatting_func, params, values, undo_values
-                    )
-                    SW.canvas.push_undo_command(cmd)
-                else:
-                    formatting_func(
-                        param_name,
-                        values,
-                        act_ffmt,
-                        is_global,
-                        blkitems,
-                        *args,
-                        **kwargs,
-                    )
+                # 3a 格式化手势：块级格式化变更统一并入画布手势会话，闭合时以
+                # 「基线↔终值」一条 FormatGestureCommand 落账（一次手势一步）。
+                # 效果类 setter（描边/阴影/透明/行距/字距）不触发
+                # on_content_changed 以自登记，故在此显式登记（幂等）。
+                # 隔离调用（无画布，如单测直调 ffmt_change_*）跳过手势、仅应用。
+                panel = _active_formatpanel()
+                canvas = getattr(SW, "canvas", None)
+                if canvas is not None and hasattr(canvas, "note_formatting_edit"):
+                    for blkitem in blkitems:
+                        canvas.note_formatting_edit(blkitem, panel)
+                formatting_func(
+                    param_name,
+                    values,
+                    act_ffmt,
+                    is_global,
+                    blkitems,
+                    *args,
+                    **kwargs,
+                )
             if set_focus:
                 if not SW.canvas.hasFocus():
                     SW.canvas.setFocus()
@@ -223,7 +197,7 @@ def ffmt_change_bold(
         blkitem.setFontWeight(value, **set_kwargs)
 
 
-@font_formating(push_undostack=True)
+@font_formating()
 def ffmt_change_letter_spacing(
     param_name: str,
     values: str,
@@ -237,7 +211,7 @@ def ffmt_change_letter_spacing(
         blkitem.setLetterSpacing(value, **set_kwargs)
 
 
-@font_formating(push_undostack=True)
+@font_formating()
 def ffmt_change_line_spacing(
     param_name: str,
     values: str,
@@ -251,7 +225,7 @@ def ffmt_change_line_spacing(
         blkitem.setLineSpacing(value, **set_kwargs)
 
 
-@font_formating(push_undostack=True)
+@font_formating()
 def ffmt_change_vertical(
     param_name: str,
     values: bool,
@@ -278,7 +252,7 @@ def ffmt_change_frgb(
         blkitem.setFontColor(value, **set_kwargs)
 
 
-@font_formating(push_undostack=True)
+@font_formating()
 def ffmt_change_srgb(
     param_name: str,
     values: tuple,
@@ -292,7 +266,7 @@ def ffmt_change_srgb(
         blkitem.setStrokeColor(value, **set_kwargs)
 
 
-@font_formating(push_undostack=True)
+@font_formating()
 def ffmt_change_stroke_width(
     param_name: str,
     values: float,
@@ -304,6 +278,19 @@ def ffmt_change_stroke_width(
     set_kwargs = global_default_set_kwargs if is_global else local_default_set_kwargs
     for blkitem, value in zip(blkitems, values):
         blkitem.setStrokeWidth(value, **set_kwargs)
+
+
+@font_formating()
+def ffmt_change_stroke_color_custom(
+    param_name: str,
+    values,  # bool: True=手动自定义, False=自动跟随文字前景反色
+    act_ffmt: FontFormat,
+    is_global: bool,
+    blkitems: List[TextBlkItem],
+    **kwargs,
+):
+    for blkitem, value in zip(blkitems, values):
+        blkitem.setStrokeColorCustom(bool(value))
 
 
 @font_formating()
@@ -341,7 +328,7 @@ def ffmt_change_rel_font_size(
         blkitem.setRelFontSize(value, clip_size=clip_size, **set_kwargs)
 
 
-@font_formating(push_undostack=True)
+@font_formating()
 def ffmt_change_alignment(
     param_name: str,
     values: float,
@@ -355,7 +342,7 @@ def ffmt_change_alignment(
         blkitem.setAlignment(value, restore_cursor=restore_cursor)
 
 
-@font_formating(push_undostack=True)
+@font_formating()
 def ffmt_change_opacity(
     param_name: str,
     values: float,
@@ -368,7 +355,7 @@ def ffmt_change_opacity(
         blkitem.setOpacity(value)
 
 
-@font_formating(push_undostack=True)
+@font_formating()
 def ffmt_change_line_spacing_type(
     param_name: str,
     values: float,
@@ -382,7 +369,7 @@ def ffmt_change_line_spacing_type(
         blkitem.setLineSpacingType(value, restore_cursor=restore_cursor)
 
 
-@font_formating(push_undostack=False)
+@font_formating()
 def ffmt_change_punctuation_alignment(
     param_name: str,
     values: int,
@@ -396,7 +383,7 @@ def ffmt_change_punctuation_alignment(
     pass
 
 
-@font_formating(push_undostack=False, is_property=False)
+@font_formating(is_property=False)
 def ffmt_change_text_transform(
     param_name: str,
     values,
@@ -419,7 +406,7 @@ def ffmt_change_text_transform(
         blkitem.set_text_transform(state, preview=False)
 
 
-@font_formating(push_undostack=False, is_property=False)
+@font_formating(is_property=False)
 def ffmt_change_glyph_slant_angle(
     param_name: str,
     values,
@@ -439,7 +426,7 @@ def ffmt_change_glyph_slant_angle(
         blkitem.set_text_transform(state, preview=False)
 
 
-@font_formating(push_undostack=True)
+@font_formating()
 def ffmt_change_shadow_offset(
     param_name: str,
     values: float,

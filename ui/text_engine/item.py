@@ -21,6 +21,7 @@ from qtpy.QtGui import (QKeyEvent, QFont, QTextCursor,
 from utils.textblock import TextBlock
 from utils.imgproc_utils import xywh2xyxypoly
 from utils import face_resolver
+from utils.config import pcfg
 from utils.fontformat import (
     FontFormat,
     LineSpacingType,
@@ -1489,7 +1490,11 @@ class TextBlkItem(QGraphicsTextItem):
         # https://stackoverflow.com/questions/37160039/set-default-character-format-in-qtextdocument
         cursor.movePosition(QTextCursor.MoveOperation.Start)
         self.setTextCursor(cursor)
-        self.stroke_qcolor = QColor(*ffmat.stroke_color())
+        self.fontformat.stroke_color_custom = ffmat.stroke_color_custom
+        self.fontformat.frgb = list(ffmat.foreground_color())
+        self.stroke_qcolor = QColor(
+            *ffmat.effective_stroke_color(auto_follow=pcfg.stroke_auto_follow)
+        )
 
         if set_effect:
             self.setShadow(ffmat, repaint=False)
@@ -1498,7 +1503,11 @@ class TextBlkItem(QGraphicsTextItem):
                 f.stroke_width = ffmat.stroke_width
                 # 描边色只随非零宽度进栈；无描边块保持无卡语义。
                 if ffmat.stroke_width > 0:
-                    f.srgb = list(ffmat.srgb)
+                    f.srgb = list(
+                        ffmat.effective_stroke_color(
+                            auto_follow=pcfg.stroke_auto_follow
+                        )
+                    )
             self._commit_effect_fields(_apply_stroke)
         self.setOpacity(ffmat.opacity)
         
@@ -2000,8 +2009,18 @@ class TextBlkItem(QGraphicsTextItem):
         cfmt.setForeground(QColor(*value))
         self.set_cursor_cfmt(cursor, cfmt, True)
         self._after_set_ffmt(cursor, repaint_background=repaint_background, restore_cursor=restore_cursor, **after_kwargs)
+        # 前景色入库模型 frgb（get_fontformat 回读字符前景；模型 frgb 供
+        # effective_stroke_color 自动反色使用，须与实际渲染一致）
+        self.fontformat.frgb = list(value)
+        # 描边自动跟随：全局开关开启且非自定义时，前景色变更→重派生反色（黑字白边/白字黑边）
+        if not self.fontformat.stroke_color_custom and pcfg.stroke_auto_follow:
+            inv = [max(0, min(255, 255 - int(round(c)))) for c in value]
+            self.stroke_qcolor = QColor(*inv)
+            self._commit_effect_fields(lambda f: setattr(f, "srgb", inv))
 
     def setStrokeColor(self, scolor, **kwargs):
+        # 手动指定轮廓颜色 → 置自定义标记，完全按 scolor 渲染
+        self.fontformat.stroke_color_custom = True
         self.stroke_qcolor = scolor if isinstance(scolor, QColor) else QColor(*scolor)
         self._commit_effect_fields(
             lambda f: setattr(
@@ -2010,6 +2029,32 @@ class TextBlkItem(QGraphicsTextItem):
                 [self.stroke_qcolor.red(), self.stroke_qcolor.green(), self.stroke_qcolor.blue()],
             )
         )
+
+    def setStrokeColorCustom(self, custom: bool) -> None:
+        """描边色模式切换：custom=True 手动 / False 自动跟随文字反色。
+
+        自动态按当前前景色重派生描边色；手动态保持当前显示色作为手动基准
+        （颜色不跳变），后续由用户经颜色选择器再指定。
+        """
+        self.fontformat.stroke_color_custom = bool(custom)
+        if custom:
+            color = (
+                QColor(self.stroke_qcolor)
+                if self.stroke_qcolor.isValid()
+                else QColor(*self.fontformat.stroke_color())
+            )
+        else:
+            # 自动：按当前前景色反色重派生（黑字白边/白字黑边）
+            color = QColor(
+                *self.fontformat.effective_stroke_color(
+                    auto_follow=pcfg.stroke_auto_follow
+                )
+            )
+        self.stroke_qcolor = color
+        self._commit_effect_fields(
+            lambda f: setattr(f, "srgb", [color.red(), color.green(), color.blue()])
+        )
+        self.update()
 
     def setStrokeWidth(self, stroke_width: float, padding=True, repaint_background=True, restore_cursor=False, **kwargs):
 
@@ -2022,6 +2067,12 @@ class TextBlkItem(QGraphicsTextItem):
             self._update_effect_padding()
 
         self._after_set_ffmt(cursor, repaint_background, restore_cursor, **after_kwargs)
+        # 描边色按模式解出有效值（自动=文字反色、自定义=srgb），随宽度应用同步
+        self.stroke_qcolor = QColor(
+            *self.fontformat.effective_stroke_color(
+                auto_follow=pcfg.stroke_auto_follow
+            )
+        )
         if repaint_background:
             self.update()
 

@@ -1132,6 +1132,14 @@
             <source>Punctuation Position</source>
             <translation>标点位置</translation>
         </message>
+        <message>
+            <source>&lt;p&gt;When a text block's stroke color is not manually set, automatically use the &lt;b&gt;inverse&lt;/b&gt; of its font color (black text gets white stroke, white text gets black stroke). Disable to keep each block's stored stroke color and stop it from following the font color.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;当文字块的描边色未被手动指定时，自动取其字体颜色的反色（黑字白边、白字黑边）。关闭后各块按存档描边色渲染，不再随字体颜色联动。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Stroke color follows text color</source>
+            <translation>描边色跟随文字颜色</translation>
+        </message>
     </context>
     <context>
         <name>DependencyDialog</name>

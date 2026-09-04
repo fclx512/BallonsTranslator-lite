@@ -375,6 +375,9 @@ class ProgramConfig(Config):
     quick_insert_characters: str = "『』「」♥♡★☆※♩♬"
     let_uppercase_flag: bool = True
     auto_squeeze_after_run: bool = True
+    # 描边色自动跟随文字反色（黑字白边/白字黑边）全局开关；关闭后未手动指定的
+    # 块描边色按存档 srgb 渲染，不再随字体颜色联动。
+    stroke_auto_follow: bool = True
     use_notext_images: bool = True
     let_textstyle_indep_flag: bool = False
     text_styles_path: str = osp.join(shared.DEFAULT_TEXTSTYLE_DIR, "default.json")
