@@ -1615,6 +1615,12 @@ class Canvas(QGraphicsScene):
         for textitem in self.selected_text_items():
             if textitem.isEditing():
                 self.editing_textblkitem = textitem
+        # clear_states 只清引用不结束编辑态；选中项恢复扑空时以形状控件
+        # 绑定项兜底，保持 is_editting 与 editingTextItem 真值一致
+        if self.editing_textblkitem is None:
+            blk_item = self.txtblkShapeControl.blk_item
+            if blk_item is not None and blk_item.isEditing():
+                self.editing_textblkitem = blk_item
 
     def clear_states(self):
         if self._text_creation_cursor_active:

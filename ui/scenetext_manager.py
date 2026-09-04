@@ -1120,6 +1120,11 @@ class SceneTextManager(QObject):
     def on_transwidget_focus_in(self, idx: int):
         if self.is_editting():
             textitm = self.editingTextItem()
+            if textitm is None:
+                # clear_states（窗口激活切换/视图隐藏）只清 canvas.editing_textblkitem
+                # 引用、不结束块的编辑态；is_editting 的真值源是形状控件绑定项，
+                # 就地收尾，避免悬空编辑态（此前在此 AttributeError）
+                textitm = self.txtblkShapeControl.blk_item
             textitm.endEdit()
             self.pairwidget_list[textitm.idx].e_trans.setHoverEffect(False)
             self.textEditList.clearAllSelected()
