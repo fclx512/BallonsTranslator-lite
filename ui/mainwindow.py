@@ -392,7 +392,6 @@ class MainWindow(mainwindow_cls):
         pal = QApplication.instance().palette()
         link = theme_accent_color(theme)
         pal.setColor(QPalette.ColorRole.Link, link)
-        pal.setColor(QPalette.ColorRole.VisitedLink, link)
         QApplication.instance().setPalette(pal)
 
     def setupUi(self):
