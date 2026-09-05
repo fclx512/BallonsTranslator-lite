@@ -1152,7 +1152,7 @@ class SceneTextManager(QObject):
     def on_textedit_undo(self):
         self.canvas.undo_textedit()
 
-    def on_push_textitem_undostack(self, num_steps: int, is_formatting: bool):
+    def on_push_textitem_undostack(self, is_formatting: bool):
         # 3a 快照命令制：键入已由 propagate 登记（on_propagate_textitem_edit
         # → canvas.note_typing_edit），此处只接管格式化变更——并入 canvas
         # 的格式化手势，手势闭合时落一条 FormatGestureCommand。
@@ -1247,7 +1247,7 @@ class SceneTextManager(QObject):
         merged.merged = True
         return merged
 
-    def on_push_edit_stack(self, num_steps: int):
+    def on_push_edit_stack(self):
         # 3a 快照命令制：译文侧键入已由 propagate 登记
         # （on_propagate_transwidget_edit → canvas.note_typing_edit），此处只
         # 接管原文面板——原文无镜像可抓 before，靠 push 信号登记进 focus_in
@@ -1259,7 +1259,7 @@ class SceneTextManager(QObject):
             )
 
     def on_propagate_textitem_edit(
-        self, pos: int, removed: int, added_text: str, joint_previous: bool
+        self, pos: int, removed: int, added_text: str
     ):
         blk_item: TextBlkItem = self.sender()
         edit = self.pairwidget_list[blk_item.idx].e_trans
@@ -1269,9 +1269,7 @@ class SceneTextManager(QObject):
             before_text = edit.toPlainText()
             edit.in_acts = True
             try:
-                changed = sync_text_by_diff(
-                    edit, blk_item.toPlainText(), joint_previous
-                )
+                changed = sync_text_by_diff(edit, blk_item.toPlainText())
             finally:
                 edit.in_acts = False
             if changed:
@@ -1279,16 +1277,14 @@ class SceneTextManager(QObject):
                     blk_item, edit, before_text, pos, removed, len(added_text)
                 )
 
-    def on_propagate_transwidget_edit(self, joint_previous: bool):
+    def on_propagate_transwidget_edit(self):
         edit: TransTextEdit = self.sender()
         blk_item = self.textblk_item_list[edit.idx]
         if blk_item.isEditing():
             blk_item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
         # before 快照在镜像同步前抓：item 侧此时尚持旧文。
         before_text = blk_item.toPlainText()
-        if sync_text_by_diff(
-            blk_item, edit.toPlainText(), joint_previous
-        ):
+        if sync_text_by_diff(blk_item, edit.toPlainText()):
             self.canvas.note_typing_edit(
                 blk_item, edit, before_text,
                 edit.change_from, edit.change_removed, edit.change_added,

@@ -103,13 +103,11 @@ class UndoSafetyNetTest(unittest.TestCase):
         blk._bounding_rect = [100, 100, 380, 220]
         self.item = self.TextBlkItem(blk=blk, idx=0)
         self.canvas.addItem(self.item)
-        self.item.updateUndoSteps()
 
         # 面板真身。初始 setPlainText 必须在挂接信号之前，否则初始化同步
         # 会触发对账（文本不一致时会真的去改 item 文档）
         self.edit = self.TransTextEdit(0, None)
         self.edit.setPlainText("")
-        self.edit.updateUndoSteps()
 
         self._wire()
 
@@ -128,13 +126,13 @@ class UndoSafetyNetTest(unittest.TestCase):
     def _wire(self):
         item, edit = self.item, self.edit
         item.push_undo_stack.connect(
-            lambda ns, fmt: self._on_item_push_undo_stack(ns, fmt)
+            lambda fmt: self._on_item_push_undo_stack(fmt)
         )
         edit.push_undo_stack.connect(self._on_edit_push_undo_stack)
         item.propagate_user_edited.connect(self._on_propagate_item_edit)
         edit.propagate_user_edited.connect(self._on_propagate_edit)
 
-    def _on_item_push_undo_stack(self, num_steps, is_formatting):
+    def _on_item_push_undo_stack(self, is_formatting):
         # 对应 ui/scenetext_manager.py::on_push_textitem_undostack
         # 3a：键入已由 propagate 登记，此处只接管格式化 → 并入格式化手势
         if is_formatting:
@@ -142,7 +140,7 @@ class UndoSafetyNetTest(unittest.TestCase):
                 self.item, SimpleNamespace(textblk_item=None)
             )
 
-    def _on_edit_push_undo_stack(self, num_steps):
+    def _on_edit_push_undo_stack(self):
         # 对应 ui/scenetext_manager.py::on_push_edit_stack
         # 3a：译文侧键入已由 propagate 登记；仅原文编辑器走此路登记
         if type(self.edit) is self.SourceTextEdit:
@@ -153,7 +151,7 @@ class UndoSafetyNetTest(unittest.TestCase):
                 self.edit.change_added,
             )
 
-    def _on_propagate_item_edit(self, pos, removed, added_text, joint_previous):
+    def _on_propagate_item_edit(self, pos, removed, added_text):
         # 对应 ui/scenetext_manager.py::on_propagate_textitem_edit
         # before 快照在镜像同步前抓：e_trans 此时尚持旧文
         edit = self.edit
@@ -161,9 +159,7 @@ class UndoSafetyNetTest(unittest.TestCase):
             before_text = edit.toPlainText()
             edit.in_acts = True
             try:
-                changed = sync_text_by_diff(
-                    edit, self.item.toPlainText(), joint_previous
-                )
+                changed = sync_text_by_diff(edit, self.item.toPlainText())
             finally:
                 edit.in_acts = False
             if changed:
@@ -171,7 +167,7 @@ class UndoSafetyNetTest(unittest.TestCase):
                     self.item, edit, before_text, pos, removed, len(added_text)
                 )
 
-    def _on_propagate_edit(self, joint_previous):
+    def _on_propagate_edit(self):
         # 对应 ui/scenetext_manager.py::on_propagate_transwidget_edit
         # before 快照在镜像同步前抓：item 此时尚持旧文
         if self.item.isEditing():
@@ -179,7 +175,7 @@ class UndoSafetyNetTest(unittest.TestCase):
                 Qt.TextInteractionFlag.NoTextInteraction
             )
         before_text = self.item.toPlainText()
-        if sync_text_by_diff(self.item, self.edit.toPlainText(), joint_previous):
+        if sync_text_by_diff(self.item, self.edit.toPlainText()):
             self.canvas.note_typing_edit(
                 self.item, self.edit, before_text,
                 self.edit.change_from,
@@ -366,14 +362,11 @@ class RunBlkTransCommandUndoTest(unittest.TestCase):
         )
         blk._bounding_rect = [100, 100, 380, 220]
         item = self.TextBlkItem(blk=blk, idx=0)
-        item.updateUndoSteps()
 
         e_trans = self.TransTextEdit(0, None)
         e_trans.setPlainText("旧译")
-        e_trans.updateUndoSteps()
         e_source = self.SourceTextEdit(0, None)
         e_source.setPlainText("旧文")
-        e_source.updateUndoSteps()
 
         blk.translation = "新译"
         pairw = SimpleNamespace(e_trans=e_trans, e_source=e_source)
@@ -441,9 +434,8 @@ class FormatMacroPerfTest(unittest.TestCase):
             blk._bounding_rect = list(xyxy)
             item = self.TextBlkItem(blk=blk, idx=i)
             canvas.addItem(item)
-            item.updateUndoSteps()
             item.push_undo_stack.connect(
-                lambda ns, fmt, _it=item: fmt
+                lambda fmt, _it=item: fmt
                 and canvas.note_formatting_edit(
                     _it, SimpleNamespace(textblk_item=None)
                 )

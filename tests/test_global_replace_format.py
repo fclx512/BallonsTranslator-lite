@@ -196,7 +196,7 @@ class GlobalReplaceApplierTest(unittest.TestCase):
         blk, item, trans = self._make_live(text="foo bar")
         # 接上真实 app 的 edit→item 同步链（on_propagate_transwidget_edit 同款）
         trans.propagate_user_edited.connect(
-            lambda joint: sync_text_by_diff(item, trans.toPlainText(), joint)
+            lambda: sync_text_by_diff(item, trans.toPlainText())
         )
         cur = trans.textCursor()
         cur.movePosition(QTextCursor.MoveOperation.End)

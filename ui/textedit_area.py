@@ -53,11 +53,11 @@ class SourceTextEdit(QTextEdit):
     hover_enter = Signal(int)
     hover_leave = Signal(int)
     focus_in = Signal(int)
-    propagate_user_edited = Signal(bool)
+    propagate_user_edited = Signal()
     ensure_scene_visible = Signal()
     redo_signal = Signal()
     undo_signal = Signal()
-    push_undo_stack = Signal(int)
+    push_undo_stack = Signal()
     text_changed = Signal()
     show_select_menu = Signal(QPoint, str)
     focus_out = Signal(int)
@@ -71,7 +71,9 @@ class SourceTextEdit(QTextEdit):
         self.document().contentsChange.connect(self.on_content_changing)
         self.setAcceptRichText(False)
         self.setAttribute(Qt.WidgetAttribute.WA_InputMethodEnabled, True)
-        self.old_undo_steps = self.document().availableUndoSteps()
+        # 撤销体系 3b：文档私有栈全面禁用，撤销重做唯一入口是
+        # canvas.text_undo_stack 的快照命令（ui/canvas.py::undo_textedit）。
+        self.document().setUndoRedoEnabled(False)
         self.in_redo_undo = False
         self.text_content_changed = False
         self.highlighting = False
@@ -133,9 +135,6 @@ class SourceTextEdit(QTextEdit):
         self.blockSignals(block)
         self.document().blockSignals(block)
 
-    def updateUndoSteps(self):
-        self.old_undo_steps = self.document().availableUndoSteps()
-
     def on_content_changing(self, from_: int, removed: int, added: int):
         if not self.pre_editing:
             self.text_content_changed = True
@@ -163,17 +162,11 @@ class SourceTextEdit(QTextEdit):
     def handle_content_change(self):
         if not self.in_redo_undo:
             # 位置式差值重放已废弃：对账基于两份文档的当前全文现场计算，
-            # 这里只负责通知下游并维护撤销步数（见 sync_text_by_diff）。
-            # 3a 起 push_undo_stack 无条件发射：撤销落账由 canvas 编辑会话
-            # 按内容变更驱动（原文编辑器无镜像，靠本信号登记），不再以文档
-            # 步数增量为门——3b 禁用文档栈后 new_steps 恒为 0。
-            undo_steps = self.document().availableUndoSteps()
-            new_steps = undo_steps - self.old_undo_steps
-            joint_previous = new_steps == 0
-            self.propagate_user_edited.emit(joint_previous)
-
-            self.old_undo_steps = undo_steps
-            self.push_undo_stack.emit(new_steps)
+            # 这里只负责通知下游（见 sync_text_by_diff）。撤销落账由
+            # canvas 编辑会话按内容变更驱动（原文编辑器无镜像，靠本
+            # push 信号登记）。
+            self.propagate_user_edited.emit()
+            self.push_undo_stack.emit()
 
     def setHoverEffect(self, hover: bool):
         """Visual hover feedback handled via CSS :hover/:focus in stylesheet.css.
@@ -239,18 +232,6 @@ class SourceTextEdit(QTextEdit):
             self.textCursor().insertText("\n")
             return
         return super().keyPressEvent(e)
-
-    def undo(self) -> None:
-        self.in_redo_undo = True
-        self.document().undo()
-        self.in_redo_undo = False
-        self.old_undo_steps = self.document().availableUndoSteps()
-
-    def redo(self) -> None:
-        self.in_redo_undo = True
-        self.document().redo()
-        self.in_redo_undo = False
-        self.old_undo_steps = self.document().availableUndoSteps()
 
     def setPlainTextAndKeepUndoStack(self, text: str):
         cursor = QTextCursor(self.document())

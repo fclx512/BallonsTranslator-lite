@@ -24,26 +24,20 @@ from .textitem import TextBlkItem
 def sync_text_by_diff(
     target_edit: Union[TransTextEdit, TextBlkItem],
     source_text: str,
-    joint_previous: bool = False,
 ) -> bool:
     """把 source_text 以最小差异对账进 target_edit 的文档。
 
     取代旧的位置式差值重放（propagate_user_edit）：差异与插入点每次都基于
     两个文档的当前全文现场计算，不再有跨文档记录插入点导致的漂移；失焦/
-    漏同步的变更会在下一次变更时自动收敛。整个对账包在一个编辑块里，作为
-    目标文档的一个撤销步（Qt 把连续键入合并进前一步时，joint_previous
-    让目标文档也并入上一步，维持两侧撤销步数联动）；改动区外的字符格式
-    保留。返回是否发生了实际改动。
+    漏同步的变更会在下一次变更时自动收敛。整个对账包在一个编辑块里；
+    改动区外的字符格式保留。返回是否发生了实际改动。
     """
     target_doc = target_edit.document()
     target_text = target_doc.toPlainText()
     if source_text == target_text:
         return False
     cursor = QTextCursor(target_doc)
-    if joint_previous:
-        cursor.joinPreviousEditBlock()
-    else:
-        cursor.beginEditBlock()
+    cursor.beginEditBlock()
     try:
         # 编辑块内坐标按原始文本计算：逆序应用 opcode，左侧坐标不被动过。
         for tag, i1, i2, j1, j2 in reversed(
@@ -59,7 +53,6 @@ def sync_text_by_diff(
                 cursor.insertText(source_text[j1:j2])
     finally:
         cursor.endEditBlock()
-    target_edit.old_undo_steps = target_doc.availableUndoSteps()
     return True
 
 
@@ -559,21 +552,12 @@ def _suppress_change_sync(obj, value: bool):
 
     While set, content changes on the edit/item document no longer emit
     ``propagate_user_edited`` / ``push_undo_stack`` (see
-    ``TextBlkItem.on_content_changed`` / edit ``handle_content_change``);
-    callers must refresh ``updateUndoSteps()`` themselves afterwards.
+    ``TextBlkItem.on_content_changed`` / edit ``handle_content_change``).
     """
     try:
         obj.in_redo_undo = value
     except AttributeError:
         pass
-
-
-def _refresh_undo_steps(*objs):
-    for obj in objs:
-        try:
-            obj.updateUndoSteps()
-        except (RuntimeError, AttributeError):
-            pass
 
 
 class GlobalReplaceApplier:
@@ -668,7 +652,6 @@ class GlobalReplaceApplier:
         # 会在回滚后与文档状态错位
         item.document().clearUndoRedoStacks()
         edit.document().clearUndoRedoStacks()
-        _refresh_undo_steps(edit, item)
 
     def _stage_format_only(self, idx: int, fmt_change: Dict):
         item = _find_blk_item_in(self.scene_manager, idx)
@@ -680,7 +663,6 @@ class GlobalReplaceApplier:
         finally:
             _suppress_change_sync(item, False)
         item.document().clearUndoRedoStacks()
-        _refresh_undo_steps(item)
 
     def _stage_src(self, src_dict: Dict):
         edit = src_dict["edit"]
@@ -690,7 +672,6 @@ class GlobalReplaceApplier:
         finally:
             _suppress_change_sync(edit, False)
         edit.document().clearUndoRedoStacks()
-        _refresh_undo_steps(edit)
         src_dict.pop("replace", None)
 
     def _apply_format_data(self):

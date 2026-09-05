@@ -88,8 +88,6 @@ class FormatGestureUndoTest(unittest.TestCase):
             self.canvas.addItem(item)
             self.items.append(item)
             item.push_undo_stack.connect(self._make_handler(item))
-        for item in self.items:
-            item.updateUndoSteps()
 
         # ffmt 路径经 SW.canvas.selected_text_items() 取选中集合
         self._orig_canvas = self.SW.canvas
@@ -110,7 +108,7 @@ class FormatGestureUndoTest(unittest.TestCase):
         并入 canvas 的格式化手势。
         """
 
-        def handler(num_steps, is_formatting):
+        def handler(is_formatting):
             if is_formatting:
                 self.canvas.note_formatting_edit(
                     bound_item, SimpleNamespace(textblk_item=None)
@@ -295,9 +293,8 @@ class FormatGestureUndoTest(unittest.TestCase):
         blk._bounding_rect = list(xyxy)
         item = _TB(blk=blk, idx=0)
         canvas.addItem(item)
-        item.updateUndoSteps()
         item.push_undo_stack.connect(
-            lambda steps, fmt, b=item: (
+            lambda fmt, b=item: (
                 canvas.note_formatting_edit(b, None) if fmt else None
             )
         )

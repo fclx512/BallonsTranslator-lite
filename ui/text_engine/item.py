@@ -180,8 +180,8 @@ class TextBlkItem(QGraphicsTextItem):
     pasted = Signal(int)
     redo_signal = Signal()
     undo_signal = Signal()
-    push_undo_stack = Signal(int, bool)
-    propagate_user_edited = Signal(int, int, str, bool)
+    push_undo_stack = Signal(bool)
+    propagate_user_edited = Signal(int, int, str)
     visual_geometry_changed = Signal()
     inline_format_changed = Signal()
 
@@ -214,7 +214,6 @@ class TextBlkItem(QGraphicsTextItem):
         self.repaint_on_changed = True
 
         self.is_formatting = False
-        self.old_undo_steps = 0
         self.in_redo_undo = False
         self.change_from: int = 0
         self.change_removed: int = 0
@@ -226,6 +225,9 @@ class TextBlkItem(QGraphicsTextItem):
         self._vertical_navigation_y: Optional[float] = None
 
         self.layout: Union[VerticalTextDocumentLayout, HorizontalTextDocumentLayout] = None
+        # 撤销体系 3b：文档私有栈全面禁用，撤销重做唯一入口是
+        # canvas.text_undo_stack 的快照命令（ui/canvas.py::undo_textedit）。
+        self.document().setUndoRedoEnabled(False)
         self.document().setDocumentMargin(0)
         self.initTextBlock(blk, set_format=set_format)
         self.setBoundingRegionGranularity(0)
@@ -361,10 +363,6 @@ class TextBlkItem(QGraphicsTextItem):
         if (self.hasFocus() or self.is_formatting) and not self.pre_editing and not self.block_change_signal:   
             # self.content_changed.emit(self)
             if not self.in_redo_undo:
-                undo_steps = self.document().availableUndoSteps()
-                new_steps = undo_steps - self.old_undo_steps
-                joint_previous = new_steps == 0
-
                 if not self.is_formatting:
                     change_from = self.change_from
                     removed = self.change_removed
@@ -397,18 +395,13 @@ class TextBlkItem(QGraphicsTextItem):
                             change_from,
                             removed,
                             added_text,
-                            joint_previous,
                         )
                 self.change_added = 0
                 self.change_removed = 0
 
-                # 3a 起无条件发射：撤销落账改由 canvas 编辑会话按内容变更
-                # 驱动（每次变更都要续 idle 定时器/判相邻性），不再以文档
-                # 步数增量为发射门——3b 禁用文档栈后 new_steps 恒为 0，
-                # 若仍以它为门则发射整体停摆。num_steps 参数仅维持信号
-                # 签名兼容，3b 随步数记账一并删除。
-                self.old_undo_steps = undo_steps
-                self.push_undo_stack.emit(new_steps, self.is_formatting)
+                # 无条件发射：撤销落账由 canvas 编辑会话按内容变更驱动
+                # （每次变更都要续 idle 定时器/判相邻性）。
+                self.push_undo_stack.emit(self.is_formatting)
 
         if not (self.hasFocus() and self.pre_editing):
             # Text edits can change glyph overhang and effect extents
@@ -922,9 +915,6 @@ class TextBlkItem(QGraphicsTextItem):
         self.update()
         self.visual_geometry_changed.emit()
 
-    def updateUndoSteps(self):
-        self.old_undo_steps = self.document().availableUndoSteps()
-
     def on_content_changing(self, from_: int, removed: int, added: int):
         if not self.pre_editing:
             if self.hasFocus():
@@ -1005,18 +995,6 @@ class TextBlkItem(QGraphicsTextItem):
         super().keyPressEvent(e)
         self._emit_inline_format_changed()
         self._update_nonlinear_editing_ui()
-
-    def undo(self) -> None:
-        self.in_redo_undo = True
-        self.document().undo()
-        self.in_redo_undo = False
-        self.old_undo_steps = self.document().availableUndoSteps()
-
-    def redo(self) -> None:
-        self.in_redo_undo = True
-        self.document().redo()
-        self.in_redo_undo = False
-        self.old_undo_steps = self.document().availableUndoSteps()
 
     def on_document_enlarged(self):
         size = self.documentSize()
