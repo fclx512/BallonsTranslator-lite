@@ -591,7 +591,7 @@ class TextBlkItem(_EngineTextBlkItem):
     # set_fontformat / setFontFamily 无 fork 补丁：face 派生缓存由
     # utils/face_resolver.sync_face 在写入点维护，引擎 set_fontformat
     # 显式写数据层 _style_name、setFontWeight/setFontItalic 同次派生
-    # （2026-09 真值化，见 docs/技术实现/文本面板选中态与字重失效_修复计划.md）。
+    # （2026-09 真值化，写入点统一走 utils/face_resolver.sync_face）。
 
     # ── 格式 setter 兼容（引擎签名收敛，fork 消费方仍传旧 kwargs）───────
 

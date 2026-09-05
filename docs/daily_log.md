@@ -19,6 +19,67 @@
 
 ---
 
+### 撤销体系 3b 落地：文档栈全面禁用 + 旧机制删除（单栈快照命令制收官）
+
+**问题/需求：** 按《撤销体系重构计划》执行阶段 3b——文档私有栈已无存在意义（3a 起撤销/重放全走 text_undo_stack 快照命令），全面禁用并删除旧排水/记账/joint 机制，消除双栈并存的心智负担与内存开销。
+
+**改动要点：**
+
+- **文档栈禁用**：`ui/text_engine/item.py::TextBlkItem.__init__` 与 `ui/textedit_area.py::SourceTextEdit.__init__`（覆盖 TransTextEdit 子类）构造时即 `setUndoRedoEnabled(False)`——所有写入路径（键入/粘贴/程序写入/HTML 装载）天然覆盖；F 清单四处暂存文档（注解装载/剪贴板 MIME/描边克隆/字形测量/全局替换暂存）核实不冲突（保存旧值恢复或独立文档）。
+- **C 排水口删除**：item 与面板编辑器的文档级 `undo()`/`redo()` 方法（`document().undo()/redo()` + 步数回读）整体删除——活代码已无调用方（Ctrl+Z 走 `undo_signal` → canvas）。
+- **D 步数记账删除**：`old_undo_steps` 读写点、`updateUndoSteps` 方法（item/面板两侧）、`ui/textedit_commands.py::_refresh_undo_steps` 全删；`_suppress_change_sync` 的 `in_redo_undo` 抑制旗保留（重放守卫仍用）。信号签名瘦身：`push_undo_stack` 去步数参数、`propagate_user_edited` 去 `joint_previous` 参数，四个分接 handler（`ui/scenetext_manager.py`）同步改签名。
+- **E joint 链删除**：`ui/textedit_commands.py::sync_text_by_diff` 删 `joint_previous` 参数与 `joinPreviousEditBlock` 分支（对账恒为独立编辑块），删水位回写。
+- **H 观察项核实**：`setPlainTextAndKeepUndoStack` 的「保留文档历史」语义自然消解，调用方只依赖「全文替换保留区外字符格式」效果，名字保留。
+- **测试适配**：test_undo_safety_net / test_format_gesture_undo / test_render_sync / test_global_replace_format 按新信号签名更新布线；全部通过。
+- 验证：`verify.py` 全绿（含启动链冒烟）；**剩余：3b 实机人工验收（重点中文 IME 输入）**。
+
+**涉及文件：** `ui/text_engine/item.py`、`ui/textedit_area.py`、`ui/textedit_commands.py`、`ui/scenetext_manager.py`、`tests/test_undo_safety_net.py`、`tests/test_format_gesture_undo.py`、`tests/test_render_sync.py`、`tests/test_global_replace_format.py`、`docs/技术实现/撤销调用点普查.md`、`docs/技术实现/撤销体系重构计划.md`
+
+---
+
+### 技术文档清理：已完成计划/作废文档 3 篇删除 + 索引与状态同步
+
+**问题/需求：** 全量审计 `docs/技术实现/` 中「疑似计划而非技术记录」的文档，按 148483ca 先例清理已完结/作废的计划文档，同步索引与状态行，未决项集中盘点。
+
+**改动要点：**
+
+- **删除 3 篇**：《文本面板选中态与字重失效_修复计划》（阶段 1–5 已于 2026-09-04 全部落地）、《文本面板选中态与字重失效_问题分析》（根因已消化）、《反向移植_i18n补充计划》（2026-09-03 已作废，结论早已记录在反向移植规范 §10 记录表）。有长期价值的内容压缩沉淀：Qt styleName/字重关键事实与 face 派生架构、面板选中态语义 → `docs/基础速查/经验教训.md` 新增 §7「字体与文本渲染」。
+- **索引同步**（`docs/项目概述.md` §四）：删 2 行、改 2 行陈旧状态（撤销体系重构计划「待评审」→ 代码层完成剩余 3b 实机验收；查找替换设计方案标注已完结归档），补登记此前缺索引的 `撤销调用点普查.md` 与 `撤销体系人工验收场景.md`。
+- **状态回填**：查找替换设计方案 §8 阶段 3/4 行的「待实机目视验收」——阶段 3 与状态头对齐（已实机验收）；阶段 4 注明全局替换链路 2026-09-05 实机端到端复验、格式条件 UI 未单独目视验收。
+- **死链清理**：`docs/技术实现/反向移植_规范.md` §10 i18n 补充行删指向已删文档的引用；`ui/textitem.py` 与 2 个测试文件的注释中指向已删修复计划的「见 docs/...」指针摘除（正文说明自洽保留）。
+- 保留不动：撤销体系三篇（3b 验收进行中）、效果栈计划（挂起待重启基线）、翻译 agent 化/术语工作台（活交接）、其余记录类。
+
+**涉及文件：** `docs/项目概述.md`、`docs/基础速查/经验教训.md`、`docs/技术实现/反向移植_规范.md`、`docs/技术实现/查找替换与样式管理器重构_设计方案.md`、`ui/textitem.py`、`tests/test_fontfamily_style.py`、`tests/test_selection_state_panel.py`；删除 `docs/技术实现/文本面板选中态与字重失效_修复计划.md`、`docs/技术实现/文本面板选中态与字重失效_问题分析.md`、`docs/技术实现/反向移植_i18n补充计划.md`
+
+---
+
+### 收尾决策回填 + CUSTOM_FONT_FAMILIES 死常量清理
+
+**问题/需求：** 技术文档审计收尾：用户对遗留问题逐项拍板——① 查找替换格式条件 UI 已实机检视，验收关账；② 样式管理器与查找替换查询入口重叠问题暂无好方案，搁置；③ 上游 font_registry 字重选择器经评测不如本 fork 的 face 派生设计，不移植、缝关闭；④ 效果栈（阶段 D 重启 + §7.1 效果组缝）等有空处理；⑤ `CUSTOM_FONT_FAMILIES` 可选清理项按审计意见执行。
+
+**改动要点：**
+
+- **决策回填**：查找替换设计方案状态头改「已完结归档并实机验收」、§7.2 判定改「不移植（保留 face 派生设计）」、§7.3 移植顺序更新（效果组缝保留，指向效果栈计划文档）、§8 阶段 4 验收补检视确认、§10 观察项标搁置；项目概述索引行同步。
+- **死常量清理**：`utils/shared.py::CUSTOM_FONT_FAMILIES` 恒空且全库无写入点（`ALL_FONT_FAMILIES` 于 `utils/shared.py::init_font_list` 一次合并写入），删除该常量及两处死分支——`ui/text_panel.py::apply_fontfamily` 的「CUSTOM 归并映射」前置分支（条件恒 False）与 `ui/mainwindow.py::load_textstyle_from_proj_dir` 的 `only_custom` 参数分支（无任何调用方传 True，走该分支会得到空字体列表）。
+- 验证：pytest（fontfamily_style / selection_state_panel / font_exclude_dialog / font_scan / global_search_fontstyle）通过；`verify.py` 全绿。
+
+**涉及文件：** `utils/shared.py`、`ui/text_panel.py`、`ui/mainwindow.py`、`docs/技术实现/查找替换与样式管理器重构_设计方案.md`、`docs/项目概述.md`、`docs/基础速查/经验教训.md`
+
+---
+
+### 撤销体系 3b 实机人工验收通过（重构收官）+ 状态回填
+
+**问题/需求：** 用户实机跑完《撤销体系人工验收场景》全部场景（含中文 IME），确认满足预期，问题记录表为空——撤销体系重构（甲-1/甲-2 止血 + 阶段 0 护网/普查/探针 + 3a 单栈快照命令制 + 3b 文档栈禁用）全部收官。
+
+**改动要点：**
+
+- 《撤销体系重构计划》状态头改「已收官（2026-09-05）」，后续演进指向验收场景文档 §五；《撤销调用点普查》标注使命完成留作存档；《撤销体系人工验收场景》头部记录验收结果，保留双重价值（回归参考 + §五 阶段 4 决策记录：撤销上限/历史弹窗/跨页历史等 6 项已拍板待另立计划）；项目概述索引行同步。
+- 效果栈（阶段 D 重启 + 上游 §7.1 效果组缝）维持延后，等用户有空处理。
+
+**涉及文件：** `docs/技术实现/撤销体系重构计划.md`、`docs/技术实现/撤销调用点普查.md`、`docs/技术实现/撤销体系人工验收场景.md`、`docs/项目概述.md`
+
+---
+
 ## 2026-09-04
 
 ### 文本面板选中态与字重真值化五阶段重构落地 + 中间图截断闪退修复 + 启动日志噪音修复
@@ -79,20 +140,3 @@
 **涉及文件：** `ui/text_engine/effects/panel.py`、`ui/text_engine/effects/cards.py`、`ui/text_engine/effects/gradient_editor.py`、`ui/text_engine/effects/edit_session.py`、`ui/textitem.py`、`ui/text_engine/shape_control.py`、`ui/custom_widget/combobox.py`、`ui/custom_widget/view_panel.py`、`ui/style_format_editor.py`、`ui/text_panel.py`、`ui/mainwindow.py`、`ui/text_engine/rendering/shadow.py`、`ui/text_engine/rendering/__init__.py`、`ui/text_engine/editing/upstream_commands.py`、`utils/base_styles.py`、`utils/config.py`、`utils/style_query.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`icons/text-effect-*.svg`、`tests/*`、`scripts/audit_registry.json`、`ui/text_style_dock.py`（删除）
 
 ---
-
-## 2026-09-02
-
-### 术语工作台迁入主窗口左侧栏 + 面板 i18n 补全 + worker 未创建崩溃修复
-
-**问题/需求：** 实机反馈三问题：① 工作台此前误做成嵌字页窄栏 RailDockPanel（画布区浮层），应放主窗口左侧栏位（与全局搜索同槽位）并给更宽面板；② 面板视觉全是英文——zh_CN.ts 里 GlossaryAgentPanel/GlossaryAgentWorker 两个 context 的 24 条翻译全为空串（`<translation type="finished" />`），另有模块级表 `_STOP_REASONS`/`_ORIGIN_LABELS` 未包翻译；③ 未发送过指令时（worker 尚未创建）编辑梗概后焦点离开 → `eventFilter` → `_on_synopsis_edited` 读 `self._worker` NoneType AttributeError。
-
-**改动要点：**
-
-- 左侧栏迁移：`ui/mainwindow.py` 把 `GlossaryAgentPanel` 直接嵌入 `mainHLayout`（leftStackWidget 与 centralStackWidget 之间，global_search 旁），常量 `WORKBENCH_WIDTH = 460`（全局搜索 300 的加宽版）；复用 `_animate_panel_width` 宽度动画；新增 `_showWorkbenchPanel`/`_hideWorkbenchPanel`/`on_set_glossary_widget`，与页面列表、全局搜索三方互斥（`_showSearchOverlay`/`_showPageListOverlay` 反向隐藏工作台）。入口换到 `ui/mainwindowbars.py::LeftBar` 的 `glossaryChecker`（objectName 供 QSS 挂图标）。
-- 右侧入口拆除：`ui/text_panel.py` 删 `install_glossary_launcher`/`_ensure_glossary_dock` 等 4 方法及 `_iter_docks`、面板恢复元组里的 glossary 项；`ui/scenetext_manager.py` 删安装调用；`utils/config.py::ProgramConfig` 删失效字段 `glossary_dock_open`（旧 config.json 残留键由 nested_dataclass 静默忽略）；死图标 `icons/rail_glossary.svg` 删除并在 `scripts/audit_registry.json` 登记。
-- i18n：ts 填 24 条空翻译 + 新增 8 条（origin 标签 base/AI/you、`(no reply)`、3 条停止原因、LeftBar 的「术语与剧情」）；`_STOP_REASONS`/`_ORIGIN_LABELS` 在字面量定义处用 `QCoreApplication.translate` 显式标注上下文（注意：`translate(...)` 括号内尾逗号会让 i18n_check 的提取正则失配 → 误报孤儿）；FontFormatPanel context 的孤儿条目「Glossary & Story」删除。
-- worker 兜底：`GlossaryAgentPanel.showEvent` 即 `_ensure_worker()`（对齐文档「打开工作台时的基底载入」，草稿不再等首条指令）；全部用户编辑路径（梗概/双表/删除/停止/预填充）统一经 `_ensure_worker()` 兜底，NoneType 崩溃不可能复现。
-- 验证：`tests/test_glossary_agent_panel.py` 新增 None-worker 回归测试（8 例全过）；`verify.py` 除既有 tmp 缺失外全绿；实机目视验收——左栏书本图标开合、三页中文（对话/术语表/剧情、原文/译文/备注/来源、全局梗概/页段摘要）、梗概编辑焦点离开无报错、与页面列表互斥正常、控制台零 traceback。
-
-**涉及文件：** `ui/mainwindow.py`、`ui/mainwindowbars.py`、`ui/text_panel.py`、`ui/scenetext_manager.py`、`ui/glossary_agent_panel.py`、`utils/config.py`、`config/stylesheet.css`、`icons/leftbar_glossary.svg`（新增）、`icons/leftbar_glossary_activate.svg`（新增）、`icons/rail_glossary.svg`（删除）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`scripts/audit_registry.json`、`tests/test_glossary_agent_panel.py`、`docs/技术实现/翻译agent化_设计方案.md`、`docs/技术实现/翻译管线现状调研.md`
-

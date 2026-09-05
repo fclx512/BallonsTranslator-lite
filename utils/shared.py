@@ -113,7 +113,6 @@ CACHE_UPDATED = False
 check_local_file_hash = True
 
 FONT_FAMILIES: set = None
-CUSTOM_FONT_FAMILIES = []  # 去重后的自定义字体家族名
 ALL_FONT_FAMILIES = []  # 系统+自定义，去重合并，按字母排序
 
 # 已知可能触发 DirectWrite CreateFontFaceFromHDC 告警的 Windows 老旧字体

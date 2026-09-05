@@ -331,19 +331,6 @@ class FontFamilyComboBox(WidePopupComboMixin, QComboBox):
 
     def apply_fontfamily(self):
         ffamily = self.currentText()
-        # ===== 新增：处理归并映射 =====
-        # 如果用户选择的是归并后的规范名，但 Qt 内部用的是原始名，
-        # 需要确保能找到对应的样式
-        from utils import shared
-
-        if (
-            ffamily not in shared.ALL_FONT_FAMILIES
-            and ffamily in shared.CUSTOM_FONT_FAMILIES
-        ):
-            # 归并后的名字可能不在 Qt 的 families 列表中，但样式映射已建立
-            self.param_changed.emit("font_family", ffamily)
-            return
-        # ===== 新增结束 =====
         if ffamily in shared.ALL_FONT_FAMILIES:
             self.param_changed.emit("font_family", ffamily)
 

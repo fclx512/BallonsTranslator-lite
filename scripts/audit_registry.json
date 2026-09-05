@@ -107,6 +107,24 @@
   },
   "docs/技术实现/PSD导出_JSX路线.md": {
    "note": "2026-09-02 删除：JSX 路线已提交（fd90b31），字段换算由 tests/test_psd_jsx_export.py 锁定、保真策略/已知限制以代码注释为准；Phase 2 字符级样式扩展点由 payload schema 预留结构承载"
+  },
+  "docs/技术实现/文本面板选中态与字重失效_修复计划.md": {
+   "note": "2026-09-05 清理：阶段 1-5 已于 2026-09-04 全部落地（3010cf21）；Qt styleName/字重关键事实与 face 派生架构沉淀至 docs/基础速查/经验教训.md §7，完整决策见 daily_log 2026-09-04 与 git 历史",
+   "allowed_mentions": [
+    "docs/daily_log.md"
+   ]
+  },
+  "docs/技术实现/文本面板选中态与字重失效_问题分析.md": {
+   "note": "2026-09-05 清理：根因分析已随修复实现消化，结论沉淀至 docs/基础速查/经验教训.md §7.1",
+   "allowed_mentions": [
+    "docs/daily_log.md"
+   ]
+  },
+  "docs/技术实现/反向移植_i18n补充计划.md": {
+   "note": "2026-09-05 清理：2026-09-03 已作废（PR #1279/#1280/#1281 均被上游关闭未合并，前提消失），作废原因与结论以 docs/技术实现/反向移植_规范.md §10 记录表为准",
+   "allowed_mentions": [
+    "docs/daily_log.md"
+   ]
   }
  },
  "suspended": {

@@ -4,7 +4,7 @@
 参数（家族切换顺带按样式名同步字重），2026-09 字重真值化后该补丁退役——
 face 是 ``font_weight`` 的派生显示缓存（``utils/face_resolver.py``），
 字重落文档的唯一通道收敛为引擎 ``setFontWeight``/``setFontItalic``（同次
-merge 派生 face，见 docs/技术实现/文本面板选中态与字重失效_修复计划.md）。
+merge 派生 face）。
 
 本套件守护的新契约：weight 写入必须同时到达 defaultFont 与 fragment、
 不得拖动 fragment 字号、``setFontFamily`` 退化为纯家族变更（不接

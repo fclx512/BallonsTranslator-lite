@@ -1,9 +1,9 @@
 """Offscreen end-to-end tests for the FontFormatPanel selection-state rework.
 
-覆盖修复计划（docs/技术实现/文本面板选中态与字重失效_修复计划.md）阶段
-2/3 的面板链路：多选镜像副本（非 global_format）、编辑经选中项广播、新块
-默认跟随最近编辑、闲置回落、单选回读、重置默认格式、单选改字重全链
-（引擎同次派生 face + 镜像 + 默认跟随）。
+覆盖 2026-09 选中态重构阶段 2/3 的面板链路：多选镜像副本（非
+global_format）、编辑经选中项广播、新块默认跟随最近编辑、闲置回落、
+单选回读、重置默认格式、单选改字重全链（引擎同次派生 face + 镜像 +
+默认跟随）。
 
 真实运行时 ``SW.st_manager``/``SW.canvas`` 由 MainWindow 注入；离屏以 stub
 替代。offscreen 平台枚举不到系统字体，face 派生为 ""（Qt 渲染走 weight

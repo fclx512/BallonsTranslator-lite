@@ -1159,7 +1159,7 @@ class MainWindow(mainwindow_cls):
         if pcfg.let_textstyle_indep_flag and not shared.HEADLESS:
             self.load_textstyle_from_proj_dir(from_proj=True)
 
-    def load_textstyle_from_proj_dir(self, from_proj=False, only_custom: bool = False):
+    def load_textstyle_from_proj_dir(self, from_proj=False):
         if from_proj:
             if self.imgtrans_proj.directory is None:
                 return
@@ -1173,12 +1173,9 @@ class MainWindow(mainwindow_cls):
             pcfg.text_styles_path = text_style_path
             save_text_styles()
 
-        if only_custom:
-            font_list = shared.CUSTOM_FONT_FAMILIES
-        else:
-            # 与 refresh_font_list_exclusion 同源：走排除过滤，
-            # 否则打开项目时会把用户隐藏的字体重新灌回下拉
-            font_list = shared.get_filtered_font_list(pcfg.excluded_fonts)
+        # 与 refresh_font_list_exclusion 同源：走排除过滤，
+        # 否则打开项目时会把用户隐藏的字体重新灌回下拉
+        font_list = shared.get_filtered_font_list(pcfg.excluded_fonts)
 
         familybox = self.textPanel.formatpanel.familybox
         current_family = familybox.currentText()
