@@ -4,6 +4,7 @@ from typing import List, Tuple, Union
 import numpy as np
 from qtpy.QtCore import (
     QAbstractAnimation,
+    QCoreApplication,
     QEasingCurve,
     QObject,
     QParallelAnimationGroup,
@@ -71,7 +72,9 @@ from .textitem import TextBlkItem, TextBlock
 
 class CreateItemCommand(QUndoCommand):
     def __init__(self, blk_item: TextBlkItem, ctrl, parent=None):
-        super().__init__(parent)
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Create Text Block"), parent
+        )
         self.blk_item = blk_item
         self.ctrl: SceneTextManager = ctrl
         self.op_count = -1
@@ -92,12 +95,16 @@ class CreateItemCommand(QUndoCommand):
 
 class EmptyCommand(QUndoCommand):
     def __init__(self, parent=None):
-        super().__init__(parent=parent)
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Write"), parent=parent
+        )
 
 
 class DeleteBlkItemsCommand(QUndoCommand):
     def __init__(self, blk_list: List[TextBlkItem], mode: int, ctrl, parent=None):
-        super().__init__(parent)
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Delete"), parent
+        )
         self.op_counter = 0
         self.blk_list = []
         self.pwidget_list: List[TransPairWidget] = []
@@ -265,7 +272,9 @@ class PasteBlkItemsCommand(QUndoCommand):
         ctrl,
         parent=None,
     ):
-        super().__init__(parent)
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Paste"), parent
+        )
         self.op_counter = 0
         self.blk_list = blk_list
         self.ctrl: SceneTextManager = ctrl
@@ -303,7 +312,9 @@ class MergeTextBlksCommand(QUndoCommand):
         ctrl,
         parent=None,
     ):
-        super().__init__(parent)
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Merge Text Blocks"), parent
+        )
         self.survivor_blkitem = survivor_blkitem
         self.survivor_pairwidget = survivor_pairwidget
         self.removed_blkitems = removed_blkitems
@@ -368,7 +379,9 @@ class MergeTextBlksCommand(QUndoCommand):
 
 class PasteSrcItemsCommand(QUndoCommand):
     def __init__(self, src_list: List[SourceTextEdit], paste_list: List[str]):
-        super().__init__()
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Paste Source")
+        )
         self.src_list = src_list
         self.paste_list = paste_list
         self.ori_text_list = [src.toPlainText() for src in src_list]
@@ -384,7 +397,10 @@ class PasteSrcItemsCommand(QUndoCommand):
 
 class RearrangeBlksCommand(QUndoCommand):
     def __init__(self, rmap: Tuple, ctrl, parent=None):
-        super().__init__(parent)
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Reorder Text Blocks"),
+            parent,
+        )
         self.ctrl: SceneTextManager = ctrl
         self.src_ids, self.tgt_ids = rmap[0], rmap[1]
 
@@ -495,6 +511,7 @@ class TextPanel(Widget):
         self.formatpanel.install_emphasis_launcher(self.rail)
         self.formatpanel.install_transform_launcher(self.rail)
         self.formatpanel.install_textstyle_launcher(self.rail)
+        self.formatpanel.install_history_launcher(self.rail)
 
     def showEvent(self, event) -> None:
         self.formatpanel.on_textpanel_visibility(True)
@@ -1410,7 +1427,9 @@ class SceneTextManager(QObject):
         for blk_item, transwidget in zip(self.textblk_item_list, self.pairwidget_list):
             transwidget.e_trans.setPlainText(blk_item.blk.translation)
             blk_item.setPlainText(blk_item.blk.translation)
-        self.canvas.clear_text_stack()
+        # 阶段 4 页屏障：整页翻译回填后该页既有撤销历史过期（原为清栈，
+        # 跨页历史下改为仅标记该页命令僵尸，栈位置保留）
+        self.canvas.invalidate_text_history_for_page()
 
     def showTextblkItemRect(self, draw_rect: bool):
         for blk_item in self.textblk_item_list:

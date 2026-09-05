@@ -1,4 +1,4 @@
-from qtpy.QtCore import QDateTime
+from qtpy.QtCore import QDateTime, QCoreApplication
 from qtpy.QtGui import QImage, QPainter
 
 try:
@@ -13,14 +13,23 @@ import numpy as np
 from .canvas import Canvas, TextBlkItem
 from .image_edit import DrawingLayer
 from .textedit_area import TransPairWidget
-from .textedit_commands import replay_guard, sync_text_by_diff
+from .textedit_commands import (
+    command_page_stale,
+    replay_guard,
+    resolve_blk_entry,
+    sync_text_by_diff,
+)
 
 
 class StrokeItemUndoCommand(QUndoCommand):
     def __init__(
         self, target_layer: DrawingLayer, rect: Tuple[int], qimg: QImage, erasing=False
     ):
-        super().__init__()
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Eraser")
+            if erasing
+            else QCoreApplication.translate("UndoCommand", "Brush Stroke")
+        )
         self.qimg = qimg
         self.x = rect[0]
         self.y = rect[1]
@@ -53,7 +62,7 @@ class InpaintUndoCommand(QUndoCommand):
         inpaint_rect: List[int],
         merge_existing_mask=False,
     ):
-        super().__init__()
+        super().__init__(QCoreApplication.translate("UndoCommand", "Inpaint"))
         self.canvas = canvas
         img_array = self.canvas.imgtrans_proj.inpainted_array
         mask_array = self.canvas.imgtrans_proj.mask_array
@@ -103,7 +112,10 @@ class InpaintUndoCommand(QUndoCommand):
 
 class EmptyCommand(QUndoCommand):
     def __init__(self, parent=None):
-        super().__init__(parent=parent)
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Pipeline Write"),
+            parent=parent,
+        )
 
 
 class RunBlkTransCommand(QUndoCommand):
@@ -114,7 +126,9 @@ class RunBlkTransCommand(QUndoCommand):
         transpairw_list: List[TransPairWidget],
         mode: int,
     ):
-        super().__init__()
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Run Pipeline")
+        )
 
         self.empty_command = None
         if mode > 1:
@@ -127,8 +141,9 @@ class RunBlkTransCommand(QUndoCommand):
 
         # 3a 快照命令制：构造期抓前后快照（item 侧 HTML 全保真，面板侧纯
         # 文本），undo/redo = 内容重放，不再借道文本文档私有 undo 栈排水。
-        # entries = (blkitem, transpairw, before_item_html, after_item_html,
-        #            before_trans, after_trans, before_source, after_source)
+        # entries = (blkitem, transpairw, blk, before_item_html,
+        #            after_item_html, before_trans, after_trans,
+        #            before_source, after_source)
         self.text_entries = []
         if mode < 3:
             for blkitem, transpairw in zip(self.blkitems, self.transpairw_list):
@@ -154,6 +169,7 @@ class RunBlkTransCommand(QUndoCommand):
                     (
                         blkitem,
                         transpairw,
+                        blkitem.blk,
                         before_item_html,
                         blkitem.toHtml() if write_trans else None,
                         before_trans,
@@ -238,11 +254,17 @@ class RunBlkTransCommand(QUndoCommand):
         self._replay_text(after=True)
 
     def _replay_text(self, after: bool):
-        """文字部分快照重放。widget 随切页/重渲销毁后静默跳过该条
-        （僵尸防御：Qt 虚函数内异常会 qFatal，必须捕获 RuntimeError）。"""
+        """文字部分快照重放。跨页历史：命令存活跨越切页，重放前按 blk
+        锚点重解析 live widget（脱离场景的旧引用会静默写到隐形对象上）；
+        页屏障过期或锚点失效（页重写/块删除）时整条跳过。widget 已销毁
+        的兜底防御保留（Qt 虚函数内异常会 qFatal，必须捕获 RuntimeError）。
+        """
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return
         for (
             blkitem,
             transpairw,
+            blk,
             before_item_html,
             after_item_html,
             before_trans,
@@ -250,6 +272,10 @@ class RunBlkTransCommand(QUndoCommand):
             before_source,
             after_source,
         ) in self.text_entries:
+            resolved = resolve_blk_entry(blk, blkitem, transpairw)
+            if resolved is None:
+                continue
+            blkitem, transpairw = resolved
             try:
                 with replay_guard(
                     blkitem, transpairw.e_trans, transpairw.e_source

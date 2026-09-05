@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from difflib import SequenceMatcher
 from typing import Dict, List, Union
 
-from qtpy.QtCore import QPointF
+from qtpy.QtCore import QCoreApplication, QPointF
 from qtpy.QtGui import QTextCursor
 
 try:
@@ -94,6 +94,70 @@ def replay_guard(*widgets):
                 pass
 
 
+# ── 跨页历史：命令锚点解析与僵尸判定（阶段 4）────────────────────
+# 设计见 docs/技术实现/撤销体系阶段4计划.md 三.2/三.3。命令携带页标签
+# （pagename）+ 页代数捕获（page_generation）+ blk 锚点，undo/redo 前按
+# blk 身份从当前场景重解析 live widget；解析不到或页屏障过期 = 僵尸。
+
+
+def command_page_stale(cmd, proj=None) -> bool:
+    """命令所属页历史是否已过期（僵尸）：显式失效标记或页代数不一致。"""
+    if getattr(cmd, "_page_stale", False):
+        return True
+    pname = getattr(cmd, "pagename", None)
+    if pname is None or proj is None:
+        return False
+    gen_fn = getattr(proj, "page_generation", None)
+    gen0 = getattr(cmd, "page_generation", None)
+    if gen_fn is None or gen0 is None:
+        return False
+    return gen_fn(pname) != gen0
+
+
+def resolve_blk_entry(blk, item=None, pairw=None):
+    """按 blk 身份从当前场景重解析 live ``TextBlkItem`` 与配对面板。
+
+    跨页历史下命令存活跨越场景重建：捕获的 widget 引用在重建后虽是
+    活的 Python 对象，却已脱离场景（removeItem/removeWidget 不销毁），
+    直接重放会静默写到隐形对象上——因此一律优先按 blk 身份从场景
+    管理器重解析；解析不到 = 锚点已不在当前页（块被删/页重写），
+    调用方按僵尸条目跳过。
+
+    无场景管理器时（离线复现台无主窗口布线）回退捕获引用保持旧行为。
+    返回 ``(item, pairw)`` 或 None。
+    """
+    if blk is None:
+        return None
+    try:
+        from ui import shared_widget as SW
+
+        sm = getattr(SW, "st_manager", None)
+    except Exception:
+        sm = None
+    if sm is not None:
+        items = getattr(sm, "textblk_item_list", None)
+        pws = getattr(sm, "pairwidget_list", None)
+        if items is not None:
+            for i, it in enumerate(items):
+                if getattr(it, "blk", None) is blk:
+                    pw = pws[i] if pws is not None and i < len(pws) else None
+                    return it, pw
+            return None
+    if item is not None:
+        try:
+            if getattr(item, "blk", None) is blk:
+                return item, pairw
+        except RuntimeError:
+            return None
+    return None
+
+
+def resolve_blk_item(blk, captured=None):
+    """``resolve_blk_entry`` 的单 item 版（几何命令用）。"""
+    entry = resolve_blk_entry(blk, captured, None)
+    return entry[0] if entry is not None else None
+
+
 class TypingSessionCommand(QUndoCommand):
     """一次键入会话的快照命令：undo/redo = 前后全文 diff 重放。
 
@@ -109,10 +173,15 @@ class TypingSessionCommand(QUndoCommand):
         edit: Union[SourceTextEdit, TransTextEdit],
         before_text: str,
         after_text: str,
+        blk=None,
     ):
-        super().__init__()
+        super().__init__(QCoreApplication.translate("UndoCommand", "Typing"))
         self.blkitem = blkitem
+        # 跨页历史锚点：blk 身份引用（切页重建场景后据此重解析 live
+        # widget）；原文会话无画布 item，由提交方经 pairwidget 补锚点。
+        self.blk = blk if blk is not None else (blkitem.blk if blkitem else None)
         self.edit = edit
+        self.edit_is_src = type(edit) is SourceTextEdit
         self.before_text = before_text
         self.after_text = after_text
         self.op_counter = 0
@@ -126,17 +195,147 @@ class TypingSessionCommand(QUndoCommand):
     def undo(self):
         self._replay(self.before_text)
 
-    def _replay(self, text: str):
-        # 僵尸命令：widget 已随切页/重渲销毁时静默失效（批量重渲保栈路径，
-        # 见 _rerender_dirty_pages(clear_stack=False)）；Qt 虚函数内未捕获
-        # 异常会 qFatal 直接闪退。
+    def _resolve(self):
+        """重解析 (item, edit)；僵尸（锚点失效/页屏障过期）返回 None。"""
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return None
+        if self.blk is None:
+            # 无锚点（离线复现台/降级路径）：捕获引用仍活着就直接用
+            try:
+                self.edit.toPlainText()
+            except RuntimeError:
+                return None
+            return None, self.edit
+        entry = resolve_blk_entry(self.blk, self.blkitem, None)
+        if entry is None:
+            return None
+        item, pairw = entry
+        if self.edit_is_src:
+            edit = pairw.e_source if pairw is not None else self.edit
+        else:
+            edit = pairw.e_trans if pairw is not None else self.edit
         try:
-            with replay_guard(self.blkitem, self.edit):
-                if self.blkitem is not None:
-                    sync_text_by_diff(self.blkitem, text)
-                sync_text_by_diff(self.edit, text)
+            edit.toPlainText()
+        except RuntimeError:
+            return None
+        return item, edit
+
+    def _replay(self, text: str):
+        # 僵尸命令：锚点失效或 widget 已销毁时静默失效；Qt 虚函数内
+        # 未捕获异常会 qFatal 直接闪退。
+        resolved = self._resolve()
+        if resolved is None:
+            return
+        item, edit = resolved
+        try:
+            with replay_guard(item, edit):
+                if item is not None:
+                    sync_text_by_diff(item, text)
+                sync_text_by_diff(edit, text)
         except RuntimeError:
             return
+
+
+# 格式化手势的行名细化（阶段 4 验收反馈）：按手势实际变更的字段归组，
+# 给出 PS 式分类名而非笼统的「格式化」。键 = 字段名，值 = 翻译键。
+_FMT_FIELD_GROUPS = [
+    ("font_size", "Format: Font Size"),
+    ("font_family", "Format: Font Family"),
+    ("font_weight", "Format: Font Weight"),
+    ("frgb", "Format: Color"),
+    ("srgb", "Format: Color"),  # 描边色（含自动跟随）与填充色同归「颜色」
+    ("stroke_color_custom", "Format: Color"),
+    ("stroke_width", "Format: Stroke Width"),
+    ("alignment", "Format: Alignment"),
+    ("italic", "Format: Style"),
+    ("underline", "Format: Style"),
+    ("strikeout", "Format: Style"),
+    ("line_spacing", "Format: Line Spacing"),
+    ("line_spacing_type", "Format: Line Spacing"),
+    ("letter_spacing", "Format: Letter Spacing"),
+    ("opacity", "Format: Opacity"),
+    ("shadow_radius", "Format: Shadow"),
+    ("shadow_strength", "Format: Shadow"),
+    ("shadow_color", "Format: Shadow"),
+    ("shadow_offset", "Format: Shadow"),
+    ("shadow_include_stroke", "Format: Shadow"),
+    ("gradient_enabled", "Format: Gradient"),
+    ("gradient_start_color", "Format: Gradient"),
+    ("gradient_end_color", "Format: Gradient"),
+    ("gradient_angle", "Format: Gradient"),
+    ("gradient_size", "Format: Gradient"),
+    ("text_transform", "Format: Transform"),
+    ("glyph_slant_angle", "Format: Transform"),
+    ("text_effects", "Format: Effects"),
+    ("ligature_common", "Format: Typography"),
+    ("ligature_discretionary", "Format: Typography"),
+    ("ligature_contextual", "Format: Typography"),
+    ("oldstyle_nums", "Format: Typography"),
+    ("punctuation_alignment", "Format: Typography"),
+    ("standard_vertical_roman_alignment", "Format: Typography"),
+]
+
+
+def _tr_fmt_group(key: str) -> str:
+    """翻译键 → 行名。逐键字面量分支供 i18n 工具链提取（禁止变量查表）。"""
+    if key == "Format: Font Size":
+        return QCoreApplication.translate("UndoCommand", "Format: Font Size")
+    if key == "Format: Font Family":
+        return QCoreApplication.translate("UndoCommand", "Format: Font Family")
+    if key == "Format: Font Weight":
+        return QCoreApplication.translate("UndoCommand", "Format: Font Weight")
+    if key == "Format: Color":
+        return QCoreApplication.translate("UndoCommand", "Format: Color")
+    if key == "Format: Stroke Width":
+        return QCoreApplication.translate("UndoCommand", "Format: Stroke Width")
+    if key == "Format: Alignment":
+        return QCoreApplication.translate("UndoCommand", "Format: Alignment")
+    if key == "Format: Style":
+        return QCoreApplication.translate("UndoCommand", "Format: Style")
+    if key == "Format: Line Spacing":
+        return QCoreApplication.translate("UndoCommand", "Format: Line Spacing")
+    if key == "Format: Letter Spacing":
+        return QCoreApplication.translate("UndoCommand", "Format: Letter Spacing")
+    if key == "Format: Opacity":
+        return QCoreApplication.translate("UndoCommand", "Format: Opacity")
+    if key == "Format: Shadow":
+        return QCoreApplication.translate("UndoCommand", "Format: Shadow")
+    if key == "Format: Gradient":
+        return QCoreApplication.translate("UndoCommand", "Format: Gradient")
+    if key == "Format: Transform":
+        return QCoreApplication.translate("UndoCommand", "Format: Transform")
+    if key == "Format: Effects":
+        return QCoreApplication.translate("UndoCommand", "Format: Effects")
+    if key == "Format: Typography":
+        return QCoreApplication.translate("UndoCommand", "Format: Typography")
+    if key == "Format (Mixed)":
+        return QCoreApplication.translate("UndoCommand", "Format (Mixed)")
+    return QCoreApplication.translate("UndoCommand", "Format")
+
+
+def _format_gesture_title(entries: List[dict]) -> str:
+    """按手势实际变更的字段组生成细分类名。
+
+    对比各条目前后 FontFormat 的标量字段归组取并集：单组 → 细分类名；
+    多组 → 「格式化（多项）」；无标量变化（如纯逐字符 char format 改动
+    只体现在 HTML 里）→ 退回笼统「格式化」。"""
+    changed = set()
+    for entry in entries:
+        before = entry.get("before_fmt")
+        after = entry.get("after_fmt")
+        if before is None or after is None:
+            continue
+        for field, group in _FMT_FIELD_GROUPS:
+            try:
+                if getattr(before, field) != getattr(after, field):
+                    changed.add(group)
+            except (AttributeError, RuntimeError, TypeError):
+                continue
+    if not changed:
+        return QCoreApplication.translate("UndoCommand", "Format")
+    if len(changed) > 1:
+        return _tr_fmt_group("Format (Mixed)")
+    return _tr_fmt_group(changed.pop())
 
 
 class FormatGestureCommand(QUndoCommand):
@@ -147,11 +346,12 @@ class FormatGestureCommand(QUndoCommand):
     每条 entry = {item, before_html, after_html, before_rect, after_rect,
     before_fmt, after_fmt}；undo/redo = 富文本 HTML + 格式模型 + 几何
     整体重放（逐字符格式保真，含多字号块）。HTML 快照格式即保存链路同
-    款（0-c 探针验证往返保真）。
+    款（0-c 探针验证往返保真）。行名按实际变更字段组细分类（PS 式操作
+    描述，见 ``_format_gesture_title``）。
     """
 
     def __init__(self, entries: List[dict], formatpanel=None):
-        super().__init__()
+        super().__init__(_format_gesture_title(entries))
         self.entries = entries
         self.formatpanel = formatpanel
         self.op_counter = 0
@@ -166,9 +366,14 @@ class FormatGestureCommand(QUndoCommand):
         self._replay(after=False)
 
     def _replay(self, after: bool):
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return
         suffix = "after" if after else "before"
         for entry in self.entries:
-            item = entry["item"]
+            item = resolve_blk_item(entry.get("blk"), entry["item"])
+            if item is None:
+                # 僵尸条目：锚点已不在当前页场景，静默跳过
+                continue
             try:
                 with replay_guard(item):
                     item.repaint_on_changed = False
@@ -180,7 +385,7 @@ class FormatGestureCommand(QUndoCommand):
                         item.repaint_on_changed = True
                     item.repaint_background()
             except RuntimeError:
-                # 僵尸条目：item 已随切页/重渲销毁，静默跳过
+                # widget 已销毁的兜底防御（Qt 虚函数内异常会 qFatal）
                 continue
             if self.formatpanel is not None:
                 try:
@@ -197,8 +402,12 @@ class FormatGestureCommand(QUndoCommand):
 
 class MoveBlkItemsCommand(QUndoCommand):
     def __init__(self, items: List[TextBlkItem], shape_ctrl: TextBlkShapeControl):
-        super(MoveBlkItemsCommand, self).__init__()
+        super(MoveBlkItemsCommand, self).__init__(
+            QCoreApplication.translate("UndoCommand", "Move Text Blocks")
+        )
         self.items = items
+        # 跨页历史锚点：切页重建后按 blk 身份重解析
+        self.blks = [it.blk for it in items]
         self.old_pos_lst: List[QPointF] = []
         self.new_pos_lst: List[QPointF] = []
         self.shape_ctrl = shape_ctrl
@@ -209,8 +418,19 @@ class MoveBlkItemsCommand(QUndoCommand):
             self.new_pos_lst.append(item.pos() + padding)
             item.oldPos = item.pos()
 
+    def _live_items(self):
+        """重解析 live item 列表；僵尸条目以 None 占位（重放时跳过）。"""
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return [None] * len(self.blks)
+        return [
+            resolve_blk_item(blk, captured)
+            for blk, captured in zip(self.blks, self.items)
+        ]
+
     def redo(self):
-        for item, new_pos in zip(self.items, self.new_pos_lst):
+        for item, new_pos in zip(self._live_items(), self.new_pos_lst):
+            if item is None:
+                continue
             padding = item.padding()
             padding = QPointF(padding, padding)
             item.setPos(new_pos - padding)
@@ -219,7 +439,9 @@ class MoveBlkItemsCommand(QUndoCommand):
                 self.shape_ctrl.setPos(new_pos)
 
     def undo(self):
-        for item, old_pos in zip(self.items, self.old_pos_lst):
+        for item, old_pos in zip(self._live_items(), self.old_pos_lst):
+            if item is None:
+                continue
             padding = item.padding()
             padding = QPointF(padding, padding)
             item.setPos(old_pos - padding)
@@ -241,8 +463,11 @@ class ApplyFontformatCommand(QUndoCommand):
         trans_widget_lst: List[TransTextEdit],
         fontformat: FontFormat,
     ):
-        super(ApplyFontformatCommand, self).__init__()
+        super(ApplyFontformatCommand, self).__init__(
+            QCoreApplication.translate("UndoCommand", "Apply Font Format")
+        )
         self.items = items
+        self.blks = [it.blk for it in items]
         self.old_html_lst = []
         self.old_rect_lst = []
         self.old_fmt_lst = []
@@ -253,8 +478,29 @@ class ApplyFontformatCommand(QUndoCommand):
             self.old_fmt_lst.append(item.get_fontformat())
             self.old_rect_lst.append(item.absBoundingRect(qrect=True))
 
+    def _live_entries(self):
+        """重解析 (item, edit) 对，按原始条目序对齐；僵尸条目以 None 占位。"""
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return [None] * len(self.blks)
+        out = []
+        for blk, captured, edit in zip(
+            self.blks, self.items, self.trans_widget_lst
+        ):
+            entry = resolve_blk_entry(blk, captured, edit)
+            if entry is None:
+                out.append(None)
+                continue
+            item, pairw = entry
+            if pairw is not None:
+                edit = pairw.e_trans
+            out.append((item, edit))
+        return out
+
     def redo(self):
-        for item, edit in zip(self.items, self.trans_widget_lst):
+        for entry in self._live_entries():
+            if entry is None:
+                continue
+            item, edit = entry
             try:
                 with replay_guard(item, edit):
                     item.set_fontformat(self.new_fmt, set_char_format=True)
@@ -263,13 +509,15 @@ class ApplyFontformatCommand(QUndoCommand):
                 continue
 
     def undo(self):
-        for rect, item, html, fmt, edit in zip(
+        for entry, rect, html, fmt in zip(
+            self._live_entries(),
             self.old_rect_lst,
-            self.items,
             self.old_html_lst,
             self.old_fmt_lst,
-            self.trans_widget_lst,
         ):
+            if entry is None:
+                continue
+            item, edit = entry
             try:
                 with replay_guard(item, edit):
                     item.setHtml(html)
@@ -282,20 +530,32 @@ class ApplyFontformatCommand(QUndoCommand):
 
 class ReshapeItemCommand(QUndoCommand):
     def __init__(self, item: TextBlkItem):
-        super(ReshapeItemCommand, self).__init__()
+        super(ReshapeItemCommand, self).__init__(
+            QCoreApplication.translate("UndoCommand", "Resize")
+        )
         self.item = item
+        self.blk = item.blk
         self.oldRect = item.oldRect
         self.newRect = item.absBoundingRect(qrect=True)
         self.idx = -1
+
+    def _live_item(self):
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return None
+        return resolve_blk_item(self.blk, self.item)
 
     def redo(self):
         if self.idx < 0:
             self.idx += 1
             return
-        self.item.setRect(self.newRect)
+        item = self._live_item()
+        if item is not None:
+            item.setRect(self.newRect)
 
     def undo(self):
-        self.item.setRect(self.oldRect)
+        item = self._live_item()
+        if item is not None:
+            item.setRect(self.oldRect)
 
     def mergeWith(self, command: QUndoCommand):
         item = command.item
@@ -309,26 +569,40 @@ class RotateItemCommand(QUndoCommand):
     def __init__(
         self, item: TextBlkItem, new_angle: float, shape_ctrl: TextBlkShapeControl
     ):
-        super(RotateItemCommand, self).__init__()
+        super(RotateItemCommand, self).__init__(
+            QCoreApplication.translate("UndoCommand", "Rotate")
+        )
         self.item = item
+        self.blk = item.blk
         self.old_angle = item.rotation()
         self.new_angle = new_angle
         self.shape_ctrl = shape_ctrl
 
+    def _live_item(self):
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return None
+        return resolve_blk_item(self.blk, self.item)
+
     def redo(self):
-        self.item.setRotation(self.new_angle)
-        self.item.blk.angle = self.new_angle
+        item = self._live_item()
+        if item is None:
+            return
+        item.setRotation(self.new_angle)
+        item.blk.angle = self.new_angle
         if (
-            self.shape_ctrl.blk_item == self.item
+            self.shape_ctrl.blk_item == item
             and self.shape_ctrl.rotation() != self.new_angle
         ):
             self.shape_ctrl.setRotation(self.new_angle)
 
     def undo(self):
-        self.item.setRotation(self.old_angle)
-        self.item.blk.angle = self.old_angle
+        item = self._live_item()
+        if item is None:
+            return
+        item.setRotation(self.old_angle)
+        item.blk.angle = self.old_angle
         if (
-            self.shape_ctrl.blk_item == self.item
+            self.shape_ctrl.blk_item == item
             and self.shape_ctrl.rotation() != self.old_angle
         ):
             self.shape_ctrl.setRotation(self.old_angle)
@@ -343,19 +617,34 @@ class RotateItemCommand(QUndoCommand):
 
 class SqueezeCommand(QUndoCommand):
     def __init__(self, blkitem_lst: List[TextBlkItem], ctrl: TextBlkShapeControl):
-        super(SqueezeCommand, self).__init__()
+        super(SqueezeCommand, self).__init__(
+            QCoreApplication.translate("UndoCommand", "Squeeze")
+        )
         self.blkitem_lst = blkitem_lst
+        self.blks = [it.blk for it in blkitem_lst]
         self.old_rect_lst = []
         self.ctrl = ctrl
         for item in blkitem_lst:
             self.old_rect_lst.append(item.absBoundingRect(qrect=True))
 
+    def _live_items(self):
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return [None] * len(self.blks)
+        return [
+            resolve_blk_item(blk, captured)
+            for blk, captured in zip(self.blks, self.blkitem_lst)
+        ]
+
     def redo(self):
-        for blk in self.blkitem_lst:
+        for blk in self._live_items():
+            if blk is None:
+                continue
             blk.squeezeBoundingRect()
 
     def undo(self):
-        for blk, rect in zip(self.blkitem_lst, self.old_rect_lst):
+        for blk, rect in zip(self._live_items(), self.old_rect_lst):
+            if blk is None:
+                continue
             blk.setRect(rect, repaint=True)
             if blk.under_ctrl:
                 self.ctrl.updateBoundingRect()
@@ -363,7 +652,9 @@ class SqueezeCommand(QUndoCommand):
 
 class ResetAngleCommand(QUndoCommand):
     def __init__(self, blkitem_lst: List[TextBlkItem], ctrl: TextBlkShapeControl):
-        super(ResetAngleCommand, self).__init__()
+        super(ResetAngleCommand, self).__init__(
+            QCoreApplication.translate("UndoCommand", "Reset Rotation")
+        )
         self.blkitem_lst = blkitem_lst
         self.angle_lst = []
         self.ctrl = ctrl
@@ -374,15 +665,28 @@ class ResetAngleCommand(QUndoCommand):
                 self.angle_lst.append(rotation)
                 blkitem_lst.append(blk)
         self.blkitem_lst = blkitem_lst
+        self.blks = [it.blk for it in blkitem_lst]
+
+    def _live_items(self):
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return [None] * len(self.blks)
+        return [
+            resolve_blk_item(blk, captured)
+            for blk, captured in zip(self.blks, self.blkitem_lst)
+        ]
 
     def redo(self):
-        for blk in self.blkitem_lst:
+        for blk in self._live_items():
+            if blk is None:
+                continue
             blk.setAngle(0)
             if self.ctrl.blk_item == blk:
                 self.ctrl.setAngle(0)
 
     def undo(self):
-        for blk, angle in zip(self.blkitem_lst, self.angle_lst):
+        for blk, angle in zip(self._live_items(), self.angle_lst):
+            if blk is None:
+                continue
             blk.setAngle(angle)
             if self.ctrl.blk_item == blk:
                 self.ctrl.setAngle(angle)
@@ -396,7 +700,9 @@ class PageReplaceOneCommand(QUndoCommand):
     """
 
     def __init__(self, se: PageSearchWidget, parent=None):
-        super(PageReplaceOneCommand, self).__init__(parent)
+        super(PageReplaceOneCommand, self).__init__(
+            QCoreApplication.translate("UndoCommand", "Replace"), parent
+        )
         self.op_counter = 0
         self.sw = se
         self.reptxt = self.sw.replace_editor.toPlainText()
@@ -408,6 +714,9 @@ class PageReplaceOneCommand(QUndoCommand):
         self.edit: Union[SourceTextEdit, TransTextEdit] = self.sw.current_edit
         self.edit_is_src = type(self.edit) is SourceTextEdit
         self.blkitem = self.sw.textblk_item_list[self.sw.current_edit.idx]
+        # 跨页历史：blk 锚点 + 搜索面板反馈的存活判定（编辑器被搜索面板
+        # 换掉后不再做结果游标联动，只做文本重放）
+        self.blk = self.blkitem.blk
 
         if self.sw.current_edit is not None and self.sw.isVisible():
             move = self.sw.move_cursor(1)
@@ -443,12 +752,16 @@ class PageReplaceOneCommand(QUndoCommand):
             None if self.edit_is_src else self.blkitem.toPlainText()
         )
 
+    def _sw_feedback_alive(self) -> bool:
+        """搜索面板结果游标联动仅当面板仍指向构造期的同一编辑器。"""
+        return self.sw.current_edit is self.edit
+
     def redo(self):
         if self.op_counter == 0:
             self.op_counter += 1
             return
 
-        if self.sw.current_edit is not None and self.sw.isVisible():
+        if self.sw.current_edit is not None and self.sw.isVisible() and self._sw_feedback_alive():
             move = self.sw.move_cursor(1)
             if move == 0:
                 self.sw.result_pos = min(
@@ -461,7 +774,7 @@ class PageReplaceOneCommand(QUndoCommand):
 
     def undo(self):
         self._replay(after=False)
-        if self.sw.current_edit is not None and self.sw.isVisible():
+        if self.sw.current_edit is not None and self.sw.isVisible() and self._sw_feedback_alive():
             move = self.sw.move_cursor(-1)
             if move == 0:
                 self.sw.result_pos = max(self.sw.result_pos - 1, 0)
@@ -470,16 +783,25 @@ class PageReplaceOneCommand(QUndoCommand):
             self.sw.updateCounterText()
 
     def _replay(self, after: bool):
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return
+        entry = resolve_blk_entry(self.blk, self.blkitem, None)
+        if entry is None:
+            return
+        blkitem = entry[0]
+        edit = self.edit
+        if entry[1] is not None:
+            edit = entry[1].e_source if self.edit_is_src else entry[1].e_trans
         try:
             self.sw.update_cursor_on_insert = False
-            with replay_guard(self.blkitem, self.edit):
+            with replay_guard(blkitem, edit):
                 if not self.edit_is_src:
                     sync_text_by_diff(
-                        self.blkitem,
+                        blkitem,
                         self.after_item_text if after else self.before_item_text,
                     )
                 sync_text_by_diff(
-                    self.edit,
+                    edit,
                     self.after_edit_text if after else self.before_edit_text,
                 )
         except RuntimeError:
@@ -492,11 +814,11 @@ class PageReplaceAllCommand(QUndoCommand):
     """页面内替换全部：逐编辑器/逐块前后快照，undo/redo = diff 重放。"""
 
     def __init__(self, search_widget: PageSearchWidget) -> None:
-        super().__init__()
+        super().__init__(QCoreApplication.translate("UndoCommand", "Replace All"))
         self.op_counter = 0
         self.sw = search_widget
 
-        # entries = (edit, blkitem|None, before_edit, after_edit,
+        # entries = (edit, blkitem|None, blk, before_edit, after_edit,
         #            before_item|None, after_item|None)
         self.entries = []
         replace = self.sw.replace_editor.toPlainText()
@@ -506,6 +828,7 @@ class PageReplaceAllCommand(QUndoCommand):
             curpos_lst = list(highlighter.matched_map.values())
             is_trans = type(edit) is TransTextEdit
             blkitem = self.sw.textblk_item_list[edit.idx] if is_trans else None
+            blk = self.sw.textblk_item_list[edit.idx].blk
             before_edit = edit.toPlainText()
             before_item = blkitem.toPlainText() if is_trans else None
             with replay_guard(blkitem, edit):
@@ -517,6 +840,7 @@ class PageReplaceAllCommand(QUndoCommand):
                 (
                     edit,
                     blkitem,
+                    blk,
                     before_edit,
                     edit.toPlainText(),
                     before_item,
@@ -534,10 +858,20 @@ class PageReplaceAllCommand(QUndoCommand):
         self._replay(after=False)
 
     def _replay(self, after: bool):
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return
         for entry in self.entries:
-            edit, blkitem = entry[0], entry[1]
-            edit_text = entry[3] if after else entry[2]
-            item_text = entry[5] if after else entry[4]
+            edit, captured_item, blk = entry[0], entry[1], entry[2]
+            edit_text = entry[4] if after else entry[3]
+            item_text = entry[6] if after else entry[5]
+            is_src = type(edit) is SourceTextEdit
+            blkitem = captured_item
+            resolved = resolve_blk_entry(blk, captured_item, None)
+            if resolved is None:
+                continue
+            blkitem, pairw = resolved
+            if pairw is not None:
+                edit = pairw.e_source if is_src else pairw.e_trans
             try:
                 with replay_guard(blkitem, edit):
                     sync_text_by_diff(edit, edit_text)
@@ -695,14 +1029,14 @@ class MultiPasteCommand(QUndoCommand):
         blkitems: List[TextBlkItem],
         etrans: List[TransTextEdit],
     ) -> None:
-        super().__init__()
+        super().__init__(QCoreApplication.translate("UndoCommand", "Paste"))
         self.op_counter = -1
 
         if len(blkitems) > 0:
             if isinstance(text_list, str):
                 text_list = [text_list] * len(blkitems)
 
-        # entries = (blkitem, etran, before_html, after_html,
+        # entries = (blkitem, etran, blk, before_html, after_html,
         #            before_edit, after_edit)
         self.entries = []
         for blkitem, etran, text in zip(blkitems, etrans, text_list):
@@ -715,6 +1049,7 @@ class MultiPasteCommand(QUndoCommand):
                 (
                     blkitem,
                     etran,
+                    blkitem.blk,
                     before_html,
                     blkitem.toHtml(),
                     before_edit,
@@ -732,7 +1067,17 @@ class MultiPasteCommand(QUndoCommand):
         self._replay(after=False)
 
     def _replay(self, after: bool):
-        for blkitem, etran, before_html, after_html, before_edit, after_edit in self.entries:
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return
+        for entry in self.entries:
+            captured_item, captured_edit, blk = entry[0], entry[1], entry[2]
+            before_html, after_html = entry[3], entry[4]
+            before_edit, after_edit = entry[5], entry[6]
+            resolved = resolve_blk_entry(blk, captured_item, captured_edit)
+            if resolved is None:
+                continue
+            blkitem, pairw = resolved
+            etran = pairw.e_trans if pairw is not None else captured_edit
             try:
                 with replay_guard(blkitem, etran):
                     blkitem.load_rich_text_html(after_html if after else before_html)
@@ -759,7 +1104,9 @@ class NormalizeBreaksCommand(QUndoCommand):
             changes: 每项 ``{pagename, block_idx, old_translation, old_rich_text,
                 new_text, squeeze}``。当前页块额外存 ``old_html``/``old_rect``/``old_ffmt``。
         """
-        super().__init__()
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Normalize Line Breaks")
+        )
         self.proj = proj
         self.sm = scene_manager
         self.changes = changes

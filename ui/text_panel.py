@@ -853,6 +853,8 @@ class FontFormatPanel(Widget):
         self.transform_dock = None
         self.textstyle_launcher = None
         self.textstyle_dock = None
+        self.history_launcher = None
+        self.history_dock = None
 
         self.vlayout.setContentsMargins(0, 0, 0, 0)
         self.vlayout.setSpacing(7)
@@ -1379,7 +1381,7 @@ class FontFormatPanel(Widget):
         Launchers/docks are None until their ``install_*_launcher`` ran;
         ``getattr`` default keeps this safe on partially-built panels.
         """
-        for key in ("annotation", "emphasis", "transform", "textstyle"):
+        for key in ("annotation", "emphasis", "transform", "textstyle", "history"):
             yield (
                 key,
                 getattr(self, f"{key}_launcher", None),
@@ -1607,6 +1609,55 @@ class FontFormatPanel(Widget):
             with QSignalBlocker(self.textstyle_launcher):
                 self.textstyle_launcher.setChecked(False)
 
+    def install_history_launcher(self, rail) -> None:
+        """撤销历史浮层入口（一期：仅文本栈，同注解浮层模式）。
+
+        内容=``ui/history_panel.py::HistoryPanel``（QUndoView 点击跳转）；
+        无选中级作用域，全局模式也可用。开合记忆在
+        ``pcfg.history_dock_open``。绘制栈历史暂缺入口（窄栏仅在文本
+        模式可见），见撤销体系决策记录 §五。
+        """
+        from ui.panel_rail import RailLauncherButton
+
+        self.rail = rail
+        self.history_launcher = RailLauncherButton("rail_history")
+        self.history_launcher.setToolTip(self.tr("History"))
+        self.history_launcher.toggled.connect(
+            self._on_history_launcher_toggled
+        )
+        rail.add_launcher(self.history_launcher)
+
+    def _ensure_history_dock(self):
+        if self.history_dock is None:
+            from ui.custom_widget import RailDockPanel
+            from ui.history_panel import HistoryPanel
+
+            self._history_panel = HistoryPanel()
+            self.history_dock = RailDockPanel(
+                self.tr("History"),
+                self._history_panel,
+                rail=self.rail,
+                config_open="history_dock_open",
+            )
+            self.history_dock.closed.connect(
+                self._on_history_dock_closed
+            )
+        return self.history_dock
+
+    def _on_history_launcher_toggled(self, checked: bool):
+        if self.history_dock is None and not checked:
+            return
+        if checked:
+            self._close_other_docks("history")
+            self._ensure_history_dock().open_panel()
+        elif self.history_dock is not None:
+            self.history_dock.close_panel()
+
+    def _on_history_dock_closed(self):
+        if self.history_launcher is not None and self.history_launcher.isChecked():
+            with QSignalBlocker(self.history_launcher):
+                self.history_launcher.setChecked(False)
+
     def _update_textstyle_indicator(self):
         """Rail icon corner dot while the block carries a non-default style."""
         item = self.textblk_item
@@ -1682,6 +1733,12 @@ class FontFormatPanel(Widget):
                 self.textstyle_dock,
                 self._ensure_textstyle_dock,
                 "textstyle_dock_open",
+            ),
+            (
+                self.history_launcher,
+                self.history_dock,
+                self._ensure_history_dock,
+                "history_dock_open",
             ),
         )
         if visible:

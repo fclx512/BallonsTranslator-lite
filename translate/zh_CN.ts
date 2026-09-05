@@ -258,6 +258,22 @@
             <source>Show decorations while resizing</source>
             <translation>拖动时显示装饰</translation>
         </message>
+        <message>
+            <source>Undo: %1</source>
+            <translation>撤销：%1</translation>
+        </message>
+        <message>
+            <source>Next undo step is on page %1 — press again to continue</source>
+            <translation>下一步将撤销第 %1 页的编辑——再按一次继续</translation>
+        </message>
+        <message>
+            <source>Next redo step is on page %1 — press again to continue</source>
+            <translation>下一步将重做第 %1 页的编辑——再按一次继续</translation>
+        </message>
+        <message>
+            <source>Skipped: that page was rewritten by the pipeline</source>
+            <translation>已跳过：该页已被管线重写</translation>
+        </message>
     </context>
     <context>
         <name>CategoryCard</name>
@@ -1140,6 +1156,14 @@
             <source>Stroke color follows text color</source>
             <translation>描边色跟随文字颜色</translation>
         </message>
+        <message>
+            <source>&lt;p&gt;Maximum number of undo steps kept per page. &lt;b&gt;0&lt;/b&gt; means unlimited. Applies to both the text and drawing histories; the oldest steps are dropped first once the limit is reached. Changing the limit applies right away if the history is empty, otherwise after the next page switch.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;每页保留的最大撤销步数，&lt;b&gt;0&lt;/b&gt; 表示无限。对文本与绘制两个撤销栈同时生效；达到上限后优先丢弃最旧的步骤。历史为空时修改立即生效，否则在下一次切页清空历史后生效。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Undo Steps Limit</source>
+            <translation>撤销步数上限</translation>
+        </message>
     </context>
     <context>
         <name>DependencyDialog</name>
@@ -1633,6 +1657,10 @@ Hide them all? You can move them back later.</source>
         <message>
             <source>Reset the new-block default format</source>
             <translation>重置新块默认格式</translation>
+        </message>
+        <message>
+            <source>History</source>
+            <translation>历史记录</translation>
         </message>
     </context>
     <context>
@@ -6732,6 +6760,184 @@ This maps automatically to each provider's native parameter
         <message>
             <source>— turn %1: %2</source>
             <translation>— 第 %1 轮：%2</translation>
+        </message>
+    </context>
+    <context>
+        <name>HistoryPanel</name>
+        <message>
+            <source>Original</source>
+            <translation>原始状态</translation>
+        </message>
+        <message>
+            <source>stale</source>
+            <translation>已过期</translation>
+        </message>
+    </context>
+    <context>
+        <name>UndoCommand</name>
+        <message>
+            <source>Advanced Alignment</source>
+            <translation>高级对齐</translation>
+        </message>
+        <message>
+            <source>Apply Font Format</source>
+            <translation>应用字体格式</translation>
+        </message>
+        <message>
+            <source>Brush Stroke</source>
+            <translation>画笔涂抹</translation>
+        </message>
+        <message>
+            <source>Create Text Block</source>
+            <translation>新建文字块</translation>
+        </message>
+        <message>
+            <source>Delete</source>
+            <translation>删除</translation>
+        </message>
+        <message>
+            <source>Eraser</source>
+            <translation>橡皮擦</translation>
+        </message>
+        <message>
+            <source>Format</source>
+            <translation>格式化</translation>
+        </message>
+        <message>
+            <source>Format (Mixed)</source>
+            <translation>格式化（多项）</translation>
+        </message>
+        <message>
+            <source>Format: Alignment</source>
+            <translation>格式化：对齐</translation>
+        </message>
+        <message>
+            <source>Format: Color</source>
+            <translation>格式化：颜色</translation>
+        </message>
+        <message>
+            <source>Format: Effects</source>
+            <translation>格式化：效果</translation>
+        </message>
+        <message>
+            <source>Format: Font Family</source>
+            <translation>格式化：字体</translation>
+        </message>
+        <message>
+            <source>Format: Font Size</source>
+            <translation>格式化：字号</translation>
+        </message>
+        <message>
+            <source>Format: Font Weight</source>
+            <translation>格式化：字重</translation>
+        </message>
+        <message>
+            <source>Format: Gradient</source>
+            <translation>格式化：渐变</translation>
+        </message>
+        <message>
+            <source>Format: Letter Spacing</source>
+            <translation>格式化：字距</translation>
+        </message>
+        <message>
+            <source>Format: Line Spacing</source>
+            <translation>格式化：行距</translation>
+        </message>
+        <message>
+            <source>Format: Opacity</source>
+            <translation>格式化：不透明度</translation>
+        </message>
+        <message>
+            <source>Format: Shadow</source>
+            <translation>格式化：阴影</translation>
+        </message>
+        <message>
+            <source>Format: Stroke Width</source>
+            <translation>格式化：描边宽度</translation>
+        </message>
+        <message>
+            <source>Format: Style</source>
+            <translation>格式化：文字样式</translation>
+        </message>
+        <message>
+            <source>Format: Transform</source>
+            <translation>格式化：变换</translation>
+        </message>
+        <message>
+            <source>Format: Typography</source>
+            <translation>格式化：排版细节</translation>
+        </message>
+        <message>
+            <source>Transform</source>
+            <translation>变换</translation>
+        </message>
+        <message>
+            <source>Inpaint</source>
+            <translation>图像修复</translation>
+        </message>
+        <message>
+            <source>Merge Text Blocks</source>
+            <translation>合并文字块</translation>
+        </message>
+        <message>
+            <source>Move Text Blocks</source>
+            <translation>移动文字块</translation>
+        </message>
+        <message>
+            <source>Normalize Line Breaks</source>
+            <translation>整理换行</translation>
+        </message>
+        <message>
+            <source>Paste</source>
+            <translation>粘贴</translation>
+        </message>
+        <message>
+            <source>Paste Source</source>
+            <translation>粘贴原文</translation>
+        </message>
+        <message>
+            <source>Pipeline Write</source>
+            <translation>管线写入</translation>
+        </message>
+        <message>
+            <source>Reorder Text Blocks</source>
+            <translation>重排文字块</translation>
+        </message>
+        <message>
+            <source>Replace</source>
+            <translation>替换</translation>
+        </message>
+        <message>
+            <source>Replace All</source>
+            <translation>全部替换</translation>
+        </message>
+        <message>
+            <source>Reset Rotation</source>
+            <translation>重置旋转</translation>
+        </message>
+        <message>
+            <source>Resize</source>
+            <translation>调整大小</translation>
+        </message>
+        <message>
+            <source>Rotate</source>
+            <translation>旋转</translation>
+        </message>
+        <message>
+            <source>Run Pipeline</source>
+            <translation>管线运行</translation>
+        </message>
+        <message>
+            <source>Squeeze</source>
+            <translation>收缩</translation>
+        </message>
+        <message>
+            <source>Typing</source>
+            <translation>键入</translation>
+        </message>
+        <message>
+            <source>Write</source>
+            <translation>写入</translation>
         </message>
     </context>
 </TS>

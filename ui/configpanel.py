@@ -2320,6 +2320,22 @@ class ConfigPanel(Widget):
             )
         )
 
+        # ── Undo limit ─────────────────────────────────────────
+        self.undo_limit_spin = NoArrowsSpinBox()
+        self.undo_limit_spin.setRange(0, 500)
+        self.undo_limit_spin.setValue(pcfg.undo_steps_limit)
+        self.undo_limit_spin.setFixedWidth(CONFIG_COMBOBOX_SHORT)
+        self.undo_limit_spin.valueChanged.connect(
+            lambda v: setattr(pcfg, "undo_steps_limit", v)
+        )
+        interface_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Undo Steps Limit"),
+                self.undo_limit_spin,
+                note=self.tr("<p>Maximum number of undo steps kept per page. <b>0</b> means unlimited. Applies to both the text and drawing histories; the oldest steps are dropped first once the limit is reached. Changing the limit applies right away if the history is empty, otherwise after the next page switch.</p>"),
+            )
+        )
+
         # ── Original Compare ───────────────────────────────────
         interface_layout.addWidget(_section_header(self.tr("Original Compare")))
         self.orig_opacity_toggle_spin = NoArrowsSpinBox()

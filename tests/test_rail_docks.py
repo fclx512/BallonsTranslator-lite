@@ -67,6 +67,8 @@ class RailDockLauncherTest(unittest.TestCase):
         panel.transform_launcher = panel.transform_dock = None
         panel.textstyle_launcher = panel.textstyle_dock = None
         panel.glossary_launcher = panel.glossary_dock = None
+        # history dock（一期）也在 _iter_docks 清单里，未安装时同为 None
+        panel.history_launcher = panel.history_dock = None
         panel.install_annotation_launcher(rail)
         panel.install_emphasis_launcher(rail)
         panel.install_transform_launcher(rail)

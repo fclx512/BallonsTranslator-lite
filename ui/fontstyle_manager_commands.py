@@ -7,6 +7,8 @@ all pages of a project — not just the currently visible canvas page.
 
 from typing import Dict, List
 
+from qtpy.QtCore import QCoreApplication
+
 try:
     from qtpy.QtWidgets import QUndoCommand
 except ImportError:
@@ -46,7 +48,10 @@ class BatchFontformatCommand(QUndoCommand):
                 - new_ffmt: FontFormat (the new format to apply)
             description: Optional undo-stack label.
         """
-        super().__init__(description)
+        super().__init__(
+            description
+            or QCoreApplication.translate("UndoCommand", "Apply Font Format")
+        )
         self.proj = proj
         self.scene_manager = scene_manager
         self.changes: List[Dict] = changes

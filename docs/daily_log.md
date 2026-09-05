@@ -4,6 +4,26 @@
 
 ## 2026-09-05
 
+### 撤销体系阶段 4 第一批落地：跨页编辑历史 + 历史面板二期（按页分组/紧凑化/PS 式操作名）
+
+**问题/需求：** 撤销主重构（0→3b）收官后的阶段 4 演进：跨页历史（决策 3）、批量组化（决策 4）、修复瘦身（决策 5）分三批实施。用户三拍板：跨页边界体验=「再按一次才继续」、全局替换保持快照分治不并入栈、先做跨页历史。计划文档 `docs/技术实现/撤销体系阶段4计划.md` 入库。本批为第一批，已实机验收（含两项 UI 细化反馈当场落地）。
+
+**改动要点：**
+
+- **命令 blk 锚点化**：活文本命令不再持 `TextBlkItem`/widget 引用（切页重建后 Python 对象仍活但脱离场景，重放会静默写隐形对象），改持 `(pagename, TextBlock 对象)` 锚点 + 快照，undo/redo 前按 blk 身份从 `ui/scenetext_manager.py` 场景列表重解析 live item/配对面板（`ui/textedit_commands.py::resolve_blk_entry`；键入/格式/几何/替换/粘贴/管线运行命令全量改造）。原「RuntimeError 僵尸防御」实际防不住脱离场景的活对象，重解析是根治。
+- **切页不清文本栈**：`ui/mainwindow.py` 两处切页改 `commit_edit_sessions()`（旧页会话落账）+ `ui/canvas.py::prepare_page_switch`（仅清页级绘制栈）；清栈语义重定义——切页/翻译回填/当前页重载只作废该页历史，工程重载/txt 导入/批量重渲仍整栈 clear。
+- **页屏障双通道**：检测管线整体换 blk_list → `utils/proj_imgtrans.py::bump_page_generation`（页代数计数，命令入栈捕获、执行期不一致=僵尸）；原地整页重写（整页翻译回填 `updateTranslation`、txt 导入非当前页）→ `ui/canvas.py::invalidate_text_history_for_page` 显式标记。僵尸命令保留栈位置、undo/redo 无操作 + 「已跳过」toast + 面板灰显。
+- **armed 跨页撤销门**：`ui/canvas.py::_gate_cross_page`——下一命令所属页非当前页时第一按只 toast 提示、第二按经 `page_jump_requested` 信号 → `ui/mainwindow.py::on_undo_page_jump_requested` 走完整切页链路后续撤（一次按键=跳页+撤一步）；僵尸步不拦不跳页；历史面板行点击走 `auto_cross_page=True` 直接跳页（显式意图）。跳页链路可能落账旧页 transform 提交：门内重查下一栈位，已变则交还下次按键（线性序不被打破）。
+- **项目级保存点**：cleanIndex 语义升级为「此位置前所有页编辑均已保存」，与切页条件保存/项目落盘天然对齐；越 cleanIndex 撤销即正确转脏。
+- **历史面板二期**：QUndoStack 无公开列表模型（QUndoView 走私有模型不可分组），`ui/history_panel.py` 重写为自定义 `QAbstractListModel`——页头分组行 + 命令状态行 + 首行原始状态，行号=栈位置；紧凑行高/小字号/176px 默认宽/超长省略；保存点圆点、僵尸灰显加「已过期」后缀。
+- **PS 式操作名**：格式化手势落账对比前后 FontFormat 字段归组，行名细化为「格式化：字号/字体/字重/颜色/描边宽度/对齐/文字样式/行距/字距/不透明度/阴影/渐变/变换/效果/排版细节」，多组=「格式化（多项）」，纯逐字符改动回退笼统「格式化」；`ui/text_engine/editing/commands.py::SetTextTransformCommand` 补「变换」名（原空名）。
+- **存量测试修复**（HEAD 即失败，独立提交 54ca468）：test_base_styles 期望对齐 bold→font_weight 真值化语义；test_rail_docks 桩补 history launcher/dock 属性（`_iter_docks` 五键清单扩容后缺属性在 `__new__` 桩上 RuntimeError 并中断整条 pytest）。
+- **测试**：新增 `tests/test_undo_cross_page.py` 9 条（页标签/代数捕获、armed 二次确认、redo 对称、僵尸跳过、代数失效、切页保栈、场景重建重解析、面板分组）；test_history_panel/test_page_list_dirty_click 适配；`verify.py --full` 全绿。
+
+**涉及文件：** `utils/proj_imgtrans.py`、`ui/textedit_commands.py`、`ui/canvas.py`、`ui/drawing_commands.py`、`ui/mainwindow.py`、`ui/scenetext_manager.py`、`ui/module_manager.py`、`ui/history_panel.py`、`ui/text_engine/editing/commands.py`、`tests/test_undo_cross_page.py`（新）、`tests/test_history_panel.py`、`tests/test_page_list_dirty_click.py`、`tests/test_base_styles.py`、`tests/test_rail_docks.py`、`translate/zh_CN.ts`、`docs/技术实现/撤销体系阶段4计划.md`（新）、`docs/技术实现/撤销体系人工验收场景.md`
+
+---
+
 ### 全局替换静默空转修复（3a 回归：保存路径广播 textstack_changed）+ 当前页脏标记语义定稿
 
 **问题/需求：** 3a 人工验收抽查 S18-3 发现：全局搜索替换确认后无任何效果——文本不替换、不产生脏页、无回滚条。离线复现（真实 MainWindow + 两页项目）定位：`on_replace` 的 prepare 阶段同步落盘经 `ui/canvas.py::update_saved_undostep`，3a 重写该方法（clean 机制）时在末尾调 `on_textstack_changed()` 无条件广播 `textstack_changed`，主窗口接收槽误判"文档变更"调 `set_document_edited()`，把 `searched_pattern` 在收集前抹成 None → 收集器零命中走"无改动"分支静默返回。副作用不止替换：每次项目保存都会清空全局搜索结果面板。3a 前该方法只被动记账不广播，属回归。
@@ -77,6 +97,24 @@
 - 效果栈（阶段 D 重启 + 上游 §7.1 效果组缝）维持延后，等用户有空处理。
 
 **涉及文件：** `docs/技术实现/撤销体系重构计划.md`、`docs/技术实现/撤销调用点普查.md`、`docs/技术实现/撤销体系人工验收场景.md`、`docs/项目概述.md`
+
+---
+
+### 撤销体系增强：步数上限一期（决策 1）+ 撤回行为名提示 + PS 式历史面板一期（决策 2，文本栈）
+
+**问题/需求：** 撤销体系 3b 收官后的阶段 4 演进第一批：落实验收文档 §五 决策 1（Blender 式最大撤销步数）与决策 2（撤销历史可视化），另加撤回时显示行为名；用户拍板历史面板一期仅文本栈（绘制栈在窄栏无入口，搁置；撤回本身不受影响）。
+
+**改动要点：**
+
+- **撤销步数上限**：`utils/config.py::ProgramConfig` 新增 `undo_steps_limit`（默认 0=无限，范围 0–500，UI 直接显示数字 0 不用特殊文本）；`ui/canvas.py::apply_undo_limit` 两栈同效，`push_draw_command` 截断时同步平移绘制栈手工计数器（保存点被截落 -1 哨兵，保持「未保存」不误报）。**⚠️ Qt 限制（实测纠正）**：`setUndoLimit` 仅在空栈上生效、非空栈调用被忽略（Qt 文档化行为，Qt4 起如此；早期探针恰在空栈设置误判「惰性缩容」）——启动时栈空立即生效，会话中途改设置由下次清栈（切页/整页管线的各 `clear_*` 路径再应用）落地，UI 说明已注明。前置实测另固化：保存点被截断时 cleanIndex 落 -1、`isClean()` 恒 False，不假报「已保存」，无需自造判定。
+- **命令命名清单**：活代码 26 个 QUndoCommand 类（textedit_commands/scenetext_manager/drawing_commands/canvas/fontstyle_manager_commands/mainwindow）构造时统一带 `UndoCommand` 上下文翻译文本（原先全为空名），历史面板行名与撤回 toast 共用此清单。
+- **撤回 toast**：`ui/canvas.py::_notify_undo`——文本栈 undo 后通知中心显示「撤销：<行为名>」，key="undo" 去重刷新（连按不弹一排），空步不提示；历史面板跳转期间经 `_suppress_undo_toast` 抑制。Ctrl+Z 两条入口（`undo`/`undo_textedit`）都接。
+- **PS 式历史面板**：新增 `ui/history_panel.py::HistoryPanel`——QUndoView 渲染（`setEmptyLabel` 首行=原始状态；探针实测行号=栈位置直接映射，当前位高亮/截断/清栈自动跟随），点击行循环调用 `canvas.undo()/redo()` 逐步跳转（复用已验收的每步记账），cleanIndex 行右缘圆点标保存点；新增 `icons/rail_history.svg`，窄栏 launcher（`ui/text_panel.py::install_history_launcher`，开合记忆 `history_dock_open`，`_iter_docks` 互斥扩五）。
+- **测试**：新增 `tests/test_undo_limit.py`（10 例：Qt 截断×clean 语义固化 + 绘制栈计数镜像同步 + 非空栈 setUndoLimit 无效 + 中途改设置经切页生效）、`tests/test_history_panel.py`（6 例：命令命名抽查 / toast 守卫 / 跳转映射 / 截断后行映射）。
+- **文档**：验收场景 §五 决策 1/2 回填落地记录（决策 2 形态由「历史弹窗」改定为窄栏面板，跨页分组日后并入）。
+- 验证：`verify.py` 全绿（12 改动文件语法/文档/审计/i18n/qm/冒烟）；两测试文件全绿；实机已验收。
+
+**涉及文件：** `utils/config.py`、`ui/canvas.py`、`ui/configpanel.py`、`ui/mainwindow.py`、`ui/history_panel.py`、`ui/text_panel.py`、`ui/scenetext_manager.py`、`ui/textedit_commands.py`、`ui/drawing_commands.py`、`ui/fontstyle_manager_commands.py`、`icons/rail_history.svg`、`tests/test_undo_limit.py`、`tests/test_history_panel.py`、`translate/zh_CN.ts`、`docs/技术实现/撤销体系人工验收场景.md`
 
 ---
 

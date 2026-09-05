@@ -16,6 +16,7 @@ from qtpy.QtCore import (
     QElapsedTimer,
     QEvent,
     QEventLoop,
+    QCoreApplication,
     QPoint,
     QPointF,
     QRect,
@@ -156,7 +157,9 @@ class _PointAlignCommand(QUndoCommand):
     """
 
     def __init__(self, canvas, data_changes, item_changes=None):
-        super().__init__("Advanced Alignment")
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Advanced Alignment")
+        )
         self.canvas = canvas
         # (TextBlock, [old_x, old_y, old_w, old_h], [new_x, new_y, new_w, new_h])
         self.data_changes = list(data_changes)
@@ -485,6 +488,8 @@ class MainWindow(mainwindow_cls):
         self.canvas.drop_images.connect(self.openImages)
         self.canvas.copy_src_signal.connect(self.on_copy_src)
         self.canvas.paste_src_signal.connect(self.on_paste_src)
+        # 跨页撤销/历史面板跳转的页切换（阶段 4）
+        self.canvas.page_jump_requested.connect(self.on_undo_page_jump_requested)
 
         self.bottomBar.originalSlider.valueChanged.connect(
             self.canvas.setOriginalTransparencyBySlider
@@ -967,10 +972,12 @@ class MainWindow(mainwindow_cls):
         # Switch page if needed
         if proj.current_img != pagename:
             self.st_manager.formatpanel.resolve_text_transform_edits_for_page_change()
+            self.canvas.commit_edit_sessions()
             if self.save_on_page_changed:
                 self.conditional_save()
             proj.set_current_img(pagename)
-            self.canvas.clear_undostack(update_saved_step=True)
+            # 阶段 4 跨页历史：文本栈不清，仅清页级绘制栈
+            self.canvas.prepare_page_switch()
             self.canvas.updateCanvas()
             self.st_manager.updateSceneTextitems()
             self.titleBar.setTitleContent(page_name=pagename)
@@ -1692,6 +1699,9 @@ class MainWindow(mainwindow_cls):
 
     def save_config(self):
         save_config()
+        # 撤销步数上限等「保存即生效」项同步到画布
+        if getattr(self, "canvas", None) is not None:
+            self.canvas.apply_undo_limit()
 
     def onHideCanvas(self):
         self.canvas.clearToolStates()
@@ -1714,6 +1724,15 @@ class MainWindow(mainwindow_cls):
                 keep_exist_as_backup=keep_exist_as_backup,
             )
 
+    def on_undo_page_jump_requested(self, pagename: str):
+        """跨页撤销/历史面板跳转的页切换（canvas.page_jump_requested）。
+
+        经 pageList 设当前行走完整 pageListCurrentItemChanged 链路
+        （会话落账、条件保存、场景重建、脏页惰性重渲）后返回。"""
+        rows = self.pageList.findItems(pagename, Qt.MatchFlag.MatchExactly)
+        if rows:
+            self.pageList.setCurrentItem(rows[0])
+
     def pageListCurrentItemChanged(self):
         item = self.pageList.currentItem()
         self.page_changing = True
@@ -1721,11 +1740,14 @@ class MainWindow(mainwindow_cls):
             # Typed transform edits belong to the old page and must commit
             # before its dirty check. Live drags are previews and cancel.
             self.st_manager.formatpanel.resolve_text_transform_edits_for_page_change()
+            # 旧页键入会话先落账（命令归属旧页，切页后仍可跨页撤销）
+            self.canvas.commit_edit_sessions()
             if self.save_on_page_changed:
                 self.conditional_save()
             new_pagename = item.text()
             self.imgtrans_proj.set_current_img(new_pagename)
-            self.canvas.clear_undostack(update_saved_step=True)
+            # 阶段 4 跨页历史：文本栈不清，仅清页级绘制栈
+            self.canvas.prepare_page_switch()
             self.canvas._fit_to_window = self.opening_dir or pcfg.fit_window_on_page_switch
             self.canvas.updateCanvas()
             self.st_manager.updateSceneTextitems()
@@ -3260,6 +3282,13 @@ class MainWindow(mainwindow_cls):
             if pcfg.auto_tate_chu_yoko.enabled and pcfg.module.enable_translate:
                 apply_auto_tate_chu_yoko(blk_list, pcfg.auto_tate_chu_yoko)
 
+        # 页屏障（阶段 4）：整页管线写入（翻译/OCR/格式覆写）使该页既有
+        # 撤销历史过期。若随即切页，pageListCurrentItemChanged 不再清文本
+        # 栈，失效只能在这里做。
+        self.canvas.invalidate_text_history_for_page(
+            self.imgtrans_proj.idx2pagename(page_index)
+        )
+
         if page_index != self.pageList.currentIndex().row():
             self.pageList.setCurrentRow(page_index)
         else:
@@ -4002,6 +4031,11 @@ class MainWindow(mainwindow_cls):
             if self.imgtrans_proj.current_img in matched_pages:
                 self.canvas.clear_undostack(update_saved_step=True)
                 self.st_manager.updateSceneTextitems()
+            # 阶段 4 页屏障：txt 导入整页重写非当前页的译文数据，
+            # 这些页的既有撤销历史一并失效
+            for _pname in matched_pages:
+                if _pname != self.imgtrans_proj.current_img:
+                    self.canvas.invalidate_text_history_for_page(_pname)
 
             if all_matched:
                 msg = self.tr("Translation imported and matched successfully.")

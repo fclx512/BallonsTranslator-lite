@@ -7,6 +7,8 @@ snapshot-based: it never touches the QTextDocument undo stack.
 
 from typing import Callable, Optional, Sequence
 
+from qtpy.QtCore import QCoreApplication
+
 try:
     from qtpy.QtWidgets import QUndoCommand
 except ImportError:
@@ -26,7 +28,9 @@ class SetTextTransformCommand(QUndoCommand):
         after: Sequence[TextTransformState],
         refresh_callback: Optional[Callable[[], None]] = None,
     ):
-        super().__init__()
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Transform")
+        )
         self.items = tuple(items)
         if len(self.items) != len(before) or len(self.items) != len(after):
             raise ValueError("items, before, and after must have the same length")

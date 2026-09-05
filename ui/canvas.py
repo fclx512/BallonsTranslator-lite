@@ -2,7 +2,7 @@ import os
 from typing import List, Union
 
 import numpy as np
-from qtpy.QtCore import QDateTime, QLineF, QPoint, QPointF, QRectF, QSizeF, Qt, QTimer, Signal
+from qtpy.QtCore import QDateTime, QCoreApplication, QLineF, QPoint, QPointF, QRectF, QSizeF, Qt, QTimer, Signal
 from qtpy.QtGui import (
     QColor,
     QCursor,
@@ -49,7 +49,9 @@ from .page_search_widget import PageSearchWidget
 from .textedit_commands import (
     FormatGestureCommand,
     TypingSessionCommand,
+    command_page_stale,
     replay_guard,
+    resolve_blk_item,
 )
 from .texteditshapecontrol import (
     CONTROL_ITEM_DATA_KEY,
@@ -121,8 +123,11 @@ class MoveByKeyCommand(QUndoCommand):
         direction: QPointF,
         shape_ctrl: TextBlkShapeControl,
     ) -> None:
-        super().__init__()
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Move Text Blocks")
+        )
         self.blkitems = blkitems
+        self.blks = [it.blk for it in blkitems]
         self.direction = direction
         self.ori_pos_list = []
         self.end_pos_list = []
@@ -132,14 +137,27 @@ class MoveByKeyCommand(QUndoCommand):
             self.ori_pos_list.append(pos)
             self.end_pos_list.append(pos + direction)
 
+    def _live_items(self):
+        """跨页历史：按 blk 锚点重解析 live item；僵尸条目 None 占位。"""
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return [None] * len(self.blks)
+        return [
+            resolve_blk_item(blk, captured)
+            for blk, captured in zip(self.blks, self.blkitems)
+        ]
+
     def undo(self):
-        for blk, pos in zip(self.blkitems, self.ori_pos_list):
+        for blk, pos in zip(self._live_items(), self.ori_pos_list):
+            if blk is None:
+                continue
             blk.setPos(pos)
             if blk.under_ctrl and self.shape_ctrl.blk_item == blk:
                 self.shape_ctrl.updateBoundingRect()
 
     def redo(self):
-        for blk, pos in zip(self.blkitems, self.end_pos_list):
+        for blk, pos in zip(self._live_items(), self.end_pos_list):
+            if blk is None:
+                continue
             blk.setPos(pos)
             if blk.under_ctrl and self.shape_ctrl.blk_item == blk:
                 self.shape_ctrl.updateBoundingRect()
@@ -152,6 +170,15 @@ class MoveByKeyCommand(QUndoCommand):
 
     def id(self):
         return 1
+
+
+def _blk_of_panel_edit(edit):
+    """面板编辑器 → 配对 TextBlock（原文会话的跨页锚点）。"""
+    try:
+        pairw = edit.parentWidget()
+        return getattr(pairw, "textblock", None)
+    except RuntimeError:
+        return None
 
 
 class CustomGV(QGraphicsView):
@@ -338,6 +365,9 @@ class Canvas(QGraphicsScene):
     end_scale_tool = Signal()
     canvas_undostack_changed = Signal()
 
+    # 跨页撤销门请求跳页（mainwindow 接管切页，复用完整切页链路）
+    page_jump_requested = Signal(str)
+
     imgtrans_proj: ProjImgTrans = None
     painting_pen = QPen()
     painting_shape = 0
@@ -414,6 +444,7 @@ class Canvas(QGraphicsScene):
         self.draw_undo_stack = QUndoStack(self)
         self.text_undo_stack = QUndoStack(self)
         self.saved_drawundo_step = 0
+        self.apply_undo_limit()
 
         # 编辑会话管理（撤销体系 3a 快照命令制）：键入会话与格式化手势在此
         # 聚拢，闭合时各落一条快照命令（TypingSessionCommand /
@@ -422,6 +453,9 @@ class Canvas(QGraphicsScene):
         # 空闲定时器；见 docs/技术实现/撤销体系重构计划.md 4.5。
         self._typing_session = None   # dict | None，见 note_typing_edit
         self._format_gesture = None   # dict | None，见 note_formatting_edit
+        self._suppress_undo_toast = False  # 历史面板跳转期间抑制撤回提示
+        # 跨页撤销门：armed = (cmd, 'undo'|'redo')，等待二次确认（阶段 4）
+        self._cross_undo_armed = None
         self._edit_session_timer = QTimer(self)
         self._edit_session_timer.setSingleShot(True)
         self._edit_session_timer.setInterval(_EDIT_SESSION_IDLE_MS)
@@ -1815,11 +1849,16 @@ class Canvas(QGraphicsScene):
             return  # widget 已销毁（切页/重渲），改动随场景一起消失
         if after_text != session["before_text"]:
             item = None if session["is_source"] else session["item"]
-            self.text_undo_stack.push(
-                TypingSessionCommand(
-                    item, edit, session["before_text"], after_text
-                )
+            cmd = TypingSessionCommand(
+                item, edit, session["before_text"], after_text
             )
+            if item is None:
+                # 原文会话无画布 item：blk 锚点从配对面板取（跨页重解析用）
+                blk = _blk_of_panel_edit(edit)
+                if blk is not None:
+                    cmd.blk = blk
+            self._tag_text_command(cmd)
+            self.text_undo_stack.push(cmd)
         self.on_textstack_changed()
 
     def _commit_format_gesture(self):
@@ -1835,6 +1874,7 @@ class Canvas(QGraphicsScene):
                 entries.append(
                     {
                         "item": item,
+                        "blk": item.blk,
                         "before_html": before_html,
                         "before_rect": before_rect,
                         "before_fmt": before_fmt,
@@ -1847,9 +1887,9 @@ class Canvas(QGraphicsScene):
             except RuntimeError:
                 continue
         if entries:
-            self.text_undo_stack.push(
-                FormatGestureCommand(entries, gesture["formatpanel"])
-            )
+            cmd = FormatGestureCommand(entries, gesture["formatpanel"])
+            self._tag_text_command(cmd)
+            self.text_undo_stack.push(cmd)
         self.on_textstack_changed()
 
     def _cancel_format_gesture(self):
@@ -1914,6 +1954,107 @@ class Canvas(QGraphicsScene):
 
     # ── 命令栈推送 / 撤销重做 ────────────────────────────────────────
 
+    def _tag_text_command(self, command: QUndoCommand):
+        """跨页历史（阶段 4）：文本命令入栈前打页标签 + 捕获页代数。
+
+        页标签驱动跨页撤销门与历史面板分组；页代数用于页屏障判定
+        （栈外管线整体换新 blk_list 后，该页既有命令过期成僵尸）。"""
+        if command is None:
+            return
+        proj = self.imgtrans_proj
+        command._proj = proj
+        pname = getattr(proj, "current_img", None)
+        command.pagename = pname
+        gen_fn = getattr(proj, "page_generation", None)
+        command.page_generation = gen_fn(pname) if (gen_fn and pname) else 0
+
+    def _disarm_cross_undo(self):
+        self._cross_undo_armed = None
+
+    def _gate_cross_page(self, cmd: QUndoCommand, direction: str, auto=False) -> bool:
+        """跨页撤销门（阶段 4，用户拍板：再按一次才继续）。
+
+        返回 True = 本次按键被拦截（已提示，等待二次确认）。僵尸命令
+        无内容变更直接放行消费；命令所属页为当前页放行；跨页时第一次
+        按仅提示，第二次按跳页后放行——跳页经 page_jump_requested 复用
+        完整切页链路。auto=True 为历史面板行点击路径：点击即显式意图，
+        直接跳页不确认。"""
+        pname = getattr(cmd, "pagename", None)
+        if pname is None:
+            return False
+        if command_page_stale(cmd, getattr(cmd, "_proj", None)):
+            return False
+        if pname == self.imgtrans_proj.current_img:
+            self._cross_undo_armed = None
+            return False
+        armed = self._cross_undo_armed
+        if auto or (
+            armed is not None
+            and armed[0] is cmd
+            and armed[1] == direction
+        ):
+            self._cross_undo_armed = None
+            self.page_jump_requested.emit(pname)
+            # 跳页链路可能落账新命令（旧页 transform 提交等）：下一栈位
+            # 已变时不再强推本步，交还下一次按键（线性顺序不被打破）。
+            stack = self.text_undo_stack
+            if direction == "undo":
+                next_cmd = (
+                    stack.command(stack.index() - 1) if stack.index() > 0 else None
+                )
+            else:
+                next_cmd = (
+                    stack.command(stack.index())
+                    if stack.index() < stack.count()
+                    else None
+                )
+            if next_cmd is cmd:
+                return False
+            return True
+        self._cross_undo_armed = (cmd, direction)
+        if direction == "undo":
+            msg = self.tr("Next undo step is on page %1 — press again to continue")
+        else:
+            msg = self.tr("Next redo step is on page %1 — press again to continue")
+        notification.toast(
+            msg.replace("%1", pname), key="undo", duration=2500
+        )
+        return True
+
+    def _notify_skipped_step(self):
+        notification.toast(
+            self.tr("Skipped: that page was rewritten by the pipeline"),
+            key="undo",
+            duration=2000,
+        )
+
+    def invalidate_text_history_for_page(self, pagename: str = None):
+        """页屏障（整页写入路径）：把该页全部文本命令标记为僵尸。
+
+        翻译回填、整页重载等原地重写页内容的路径调用——blk 对象未换新
+        （代数不变），须显式标记。僵尸命令保留栈位置，undo/redo 无操作
+        跳过（历史面板灰显）。"""
+        pname = pagename or getattr(self.imgtrans_proj, "current_img", None)
+        if pname is None:
+            return
+        self._drop_edit_sessions()
+        self._disarm_cross_undo()
+        stack = self.text_undo_stack
+        for i in range(stack.count()):
+            cmd = stack.command(i)
+            if getattr(cmd, "pagename", None) == pname:
+                cmd._page_stale = True
+
+    def prepare_page_switch(self):
+        """切页撤销语义（阶段 4 跨页历史）：文本栈不清——命令以 blk 锚点
+        存活跨页，切页后仍可跨页撤销；绘制栈页级，照旧清空并复位保存
+        计数。调用时机在 set_current_img 之前由调用方负责会话落账。"""
+        self._disarm_cross_undo()
+        self.saved_drawundo_step = 0
+        self.num_pushed_drawstep = 0
+        self.draw_undo_stack.clear()
+        self.apply_undo_limit()
+
     def push_undo_command(self, command: QUndoCommand, update_pushed_step=True):
         # 任何外部命令推送都是会话边界：先闭合落账（保持时间序），再压新命令
         self.commit_edit_sessions()
@@ -1926,15 +2067,29 @@ class Canvas(QGraphicsScene):
 
     def push_draw_command(self, command: QUndoCommand, update_pushed_step=True):
         self.commit_edit_sessions()
+        self._disarm_cross_undo()
         if command is not None:
+            before = self.draw_undo_stack.index()
             self.draw_undo_stack.push(command)
+            # 撤销上限截断最旧命令时，手工计数器与栈坐标同步平移；保存点
+            # 被截掉则落 -1 不可达哨兵，保持「未保存」直到下次保存。
+            truncated = before + 1 - self.draw_undo_stack.index()
+            if truncated > 0:
+                self.num_pushed_drawstep = max(
+                    self.num_pushed_drawstep - truncated, 0
+                )
+                self.saved_drawundo_step = max(
+                    self.saved_drawundo_step - truncated, -1
+                )
         if update_pushed_step:
             self.num_pushed_drawstep += 1
             self.on_drawstack_changed()
 
     def push_text_command(self, command: QUndoCommand, update_pushed_step=True):
         self.commit_edit_sessions()
+        self._disarm_cross_undo()
         if command is not None:
+            self._tag_text_command(command)
             self.text_undo_stack.push(command)
         self.on_textstack_changed()
 
@@ -1965,8 +2120,7 @@ class Canvas(QGraphicsScene):
     def redo_textedit(self):
         # 预览悬开期间的 redo：先闭合手势落账（redo 无取消语义）
         self.commit_edit_sessions()
-        self.text_undo_stack.redo()
-        self.on_textstack_changed()
+        self._text_redo_step()
 
     def undo_textedit(self):
         # 目标行为 7：预览悬开期间按 Ctrl+Z = 取消手势恢复原值
@@ -1975,45 +2129,97 @@ class Canvas(QGraphicsScene):
             return
         # 键入会话先落账再撤销 → 本次 Ctrl+Z 撤销的正是刚键入的内容
         self._commit_typing_session()
-        self.text_undo_stack.undo()
-        self.on_textstack_changed()
+        self._text_undo_step()
 
-    def redo(self):
+    def _text_redo_step(self, auto_cross_page=False):
+        """文本栈重做一步（跨页门在重放前拦截）。"""
+        stack = self.text_undo_stack
+        stale = False
+        if stack.index() < stack.count():
+            cmd = stack.command(stack.index())
+            if self._gate_cross_page(cmd, "redo", auto_cross_page):
+                return
+            stale = command_page_stale(cmd, getattr(cmd, "_proj", None))
+        stack.redo()
+        self.on_textstack_changed()
+        self.txtblkShapeControl.updateBoundingRect()
+        if stale:
+            self._notify_skipped_step()
+
+    def _text_undo_step(self, auto_cross_page=False):
+        """文本栈撤销一步（跨页门在重放前拦截）。"""
+        stack = self.text_undo_stack
+        stale = False
+        if stack.index() > 0:
+            cmd = stack.command(stack.index() - 1)
+            if self._gate_cross_page(cmd, "undo", auto_cross_page):
+                return
+            stale = command_page_stale(cmd, getattr(cmd, "_proj", None))
+        undo_name = stack.undoText()
+        stack.undo()
+        self.on_textstack_changed()
+        self.txtblkShapeControl.updateBoundingRect()
+        if stale:
+            self._notify_skipped_step()
+        else:
+            self._notify_undo(undo_name)
+
+    def _notify_undo(self, undo_name: str):
+        # 撤回行为名提示（undoText 为空 = 无可撤步不提示；历史面板跳转
+        # 经 _suppress_undo_toast 抑制，避免跳转路径逐步刷 toast）
+        if not undo_name or self._suppress_undo_toast:
+            return
+        notification.toast(
+            self.tr("Undo: %1").replace("%1", undo_name),
+            key="undo",
+            duration=1500,
+        )
+
+    def redo(self, auto_cross_page=False):
         if self.textEditMode():
             self.commit_edit_sessions()
-            undo_stack = self.text_undo_stack
+            self._text_redo_step(auto_cross_page)
         elif self.drawMode():
             undo_stack = self.draw_undo_stack
             self.num_pushed_drawstep += 1
             self.on_drawstack_changed()
+            undo_stack.redo()
         else:
             return
-        if undo_stack is not None:
-            undo_stack.redo()
-            if undo_stack == self.text_undo_stack:
-                self.on_textstack_changed()
-                self.txtblkShapeControl.updateBoundingRect()
 
-    def undo(self):
+    def undo(self, auto_cross_page=False):
         if self.textEditMode():
             # 目标行为 7：预览悬开期间按 Ctrl+Z = 取消手势恢复原值
             if self._format_gesture is not None:
                 self._cancel_format_gesture()
                 return
             self._commit_typing_session()
-            undo_stack = self.text_undo_stack
+            self._text_undo_step(auto_cross_page)
         elif self.drawMode():
-            undo_stack = self.draw_undo_stack
             if self.num_pushed_drawstep > 0:
                 self.num_pushed_drawstep -= 1
             self.on_drawstack_changed()
+            self.draw_undo_stack.undo()
         else:
             return
-        if undo_stack is not None:
-            undo_stack.undo()
-            if undo_stack == self.text_undo_stack:
-                self.on_textstack_changed()
-                self.txtblkShapeControl.updateBoundingRect()
+
+    def clear_undostack(self, update_saved_step=False):
+        # 会话状态随栈一起丢弃（内容保持现状，不落账不恢复）
+        self._drop_edit_sessions()
+        self._disarm_cross_undo()
+        if update_saved_step:
+            self.saved_drawundo_step = 0
+            self.num_pushed_drawstep = 0
+        self.draw_undo_stack.clear()
+        self.text_undo_stack.clear()
+        # 清栈后栈空，撤销步数上限在此落地（中途改设置经此生效）
+        self.apply_undo_limit()
+
+    def clear_text_stack(self):
+        self._drop_edit_sessions()
+        self._disarm_cross_undo()
+        self.text_undo_stack.clear()
+        self.apply_undo_limit()
 
     def clear_undostack(self, update_saved_step=False):
         # 会话状态随栈一起丢弃（内容保持现状，不落账不恢复）
@@ -2023,14 +2229,31 @@ class Canvas(QGraphicsScene):
             self.num_pushed_drawstep = 0
         self.draw_undo_stack.clear()
         self.text_undo_stack.clear()
+        # 清栈后栈空，撤销步数上限在此落地（中途改设置经此生效）
+        self.apply_undo_limit()
 
     def clear_text_stack(self):
         self._drop_edit_sessions()
         self.text_undo_stack.clear()
+        self.apply_undo_limit()
 
     def clear_draw_stack(self):
         self.num_pushed_drawstep = 0
         self.draw_undo_stack.clear()
+        self.apply_undo_limit()
+
+    def apply_undo_limit(self):
+        # 撤销步数上限（pcfg.undo_steps_limit，0=无限）同时作用于文本/绘制
+        # 两栈。Qt 限制：setUndoLimit 仅在空栈上生效，非空栈上调用只打
+        # 警告并被忽略——启动时栈空立即生效；会话中途改设置由下次清栈
+        # （切页/整页管线）路径落地，见各 clear_* 处的再应用。
+        self._apply_undo_limit_to(self.text_undo_stack)
+        self._apply_undo_limit_to(self.draw_undo_stack)
+
+    @staticmethod
+    def _apply_undo_limit_to(stack):
+        if stack.count() == 0:
+            stack.setUndoLimit(pcfg.undo_steps_limit)
 
     def update_saved_undostep(self):
         # 保存点：未落账的会话先落账，再以 clean 机制记录干净位。
@@ -2038,6 +2261,7 @@ class Canvas(QGraphicsScene):
         # 广播会让 mainwindow 清空全局搜索结果；全局替换 prepare 阶段的
         # 同步落盘恰好经此路径抹掉 searched_pattern，替换静默空转。
         self.commit_edit_sessions()
+        self._disarm_cross_undo()
         self.saved_drawundo_step = self.num_pushed_drawstep
         self.text_undo_stack.setClean()
         self._refresh_save_state()

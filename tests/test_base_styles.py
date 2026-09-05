@@ -102,11 +102,13 @@ def test_compute_override_float_micro_difference_no_override():
 
 
 def test_compute_override_real_differences():
-    # bold 已弃用（字重全走 font_weight），不参与 override diff。
+    # bold 已弃用：构造期真值化进 font_weight（fontformat.py），bold 标志
+    # 本身不参与 diff；font_weight 是真 diff 字段，字重不同即进 override。
     base = FontFormat(font_family="Z", font_size=24.0, frgb=[0, 0, 0], bold=False)
     block = FontFormat(font_family="Z", font_size=40.0, frgb=[255, 0, 0], bold=True)
+    assert block.bold is False and block.font_weight == 700
     ov = compute_override(block, base)
-    assert ov == {"font_size": 40.0, "frgb": [255, 0, 0]}
+    assert ov == {"font_size": 40.0, "frgb": [255, 0, 0], "font_weight": 700}
     # Override stores the block's raw value (not a quantized key).
     assert ov["font_size"] == 40.0
     assert ov["frgb"] == [255, 0, 0]

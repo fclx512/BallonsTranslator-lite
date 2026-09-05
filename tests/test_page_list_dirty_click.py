@@ -74,6 +74,13 @@ class _FakeCanvas:
     def clear_undostack(self, update_saved_step=False):
         pass
 
+    # 阶段 4 跨页历史：切页路径改为会话落账 + 仅清绘制栈
+    def commit_edit_sessions(self):
+        pass
+
+    def prepare_page_switch(self):
+        pass
+
     def updateCanvas(self):
         self.update_calls += 1
 

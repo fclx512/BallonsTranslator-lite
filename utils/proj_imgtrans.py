@@ -106,6 +106,12 @@ class ProjImgTrans:
         # may survive on disk across sessions but is not offerable then.
         self._batch_backup_valid = False
 
+        # 页代数计数（撤销体系阶段 4 跨页历史的页屏障）：检测管线等栈外
+        # 写入整体换新 blk_list 时对应页 +1；撤销命令入栈时捕获当时的
+        # 代数值，执行期不一致即判定为僵尸命令（所属页历史已过期）。
+        # 纯会话内属性，不持久化。
+        self._page_generations: Dict[str, int] = {}
+
         self.not_found_pages: Dict[str, List[TextBlock]] = {}
         self.new_pages: List[str] = []
         self.proj_path: str = None
@@ -146,6 +152,19 @@ class ProjImgTrans:
 
     def page_needs_rerender(self, pagename: str) -> bool:
         return pagename in self._pages_needing_rerender
+
+    # ── 页代数（跨页历史的页屏障）──────────────────────────────────
+
+    def page_generation(self, pagename: str) -> int:
+        gens = getattr(self, "_page_generations", None)
+        return gens.get(pagename, 0) if gens else 0
+
+    def bump_page_generation(self, pagename: str):
+        """栈外写入整体换新某页 blk_list 后调用：该页既有撤销历史过期。"""
+        gens = getattr(self, "_page_generations", None)
+        if gens is None:
+            gens = self._page_generations = {}
+        gens[pagename] = gens.get(pagename, 0) + 1
 
     # ── 批量操作快照（单槽）─────────────────────────────────────────
     # 批量替换等批量操作的撤销不进逐命令撤销栈，而是操作前整项目
