@@ -2,6 +2,23 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，每次在对应日期中末尾写入日志。
 
+## 2026-09-05
+
+### 全局替换静默空转修复（3a 回归：保存路径广播 textstack_changed）+ 当前页脏标记语义定稿
+
+**问题/需求：** 3a 人工验收抽查 S18-3 发现：全局搜索替换确认后无任何效果——文本不替换、不产生脏页、无回滚条。离线复现（真实 MainWindow + 两页项目）定位：`on_replace` 的 prepare 阶段同步落盘经 `ui/canvas.py::update_saved_undostep`，3a 重写该方法（clean 机制）时在末尾调 `on_textstack_changed()` 无条件广播 `textstack_changed`，主窗口接收槽误判"文档变更"调 `set_document_edited()`，把 `searched_pattern` 在收集前抹成 None → 收集器零命中走"无改动"分支静默返回。副作用不止替换：每次项目保存都会清空全局搜索结果面板。3a 前该方法只被动记账不广播，属回归。
+
+**改动要点：**
+
+- `ui/canvas.py`：拆出私有 `_refresh_save_state()`（脏判定计算）；`on_textstack_changed` = 刷新 + 广播；`update_saved_undostep`（保存路径）只刷新保存状态、不再广播——保存不改文档内容。
+- **当前页脏标记语义定稿（用户决策）**：全局替换后当前页不标脏、不进重渲询问——`utils/proj_imgtrans.py::mark_page_needs_rerender` 的当前页排除语义维持（画布文本实时更新、结果图随保存/切页重渲）；删除 `ui/mainwindow.py::on_global_replace_finished` 里对当前页的无效标记调用（被排除语义吞掉的死代码）。决策记录补入验收文档附录第 7 条。
+- **回归测试**：`tests/test_format_gesture_undo.py` 增 `test_update_saved_undostep_does_not_emit_textstack_changed`（保存不广播、真实栈变更如 undo 仍广播）。
+- 验证：端到端离线复现脚本（真实 MainWindow + 两页项目）修复前复现、修复后替换落到画布/面板/数据/JSON 且脏页/回滚条正常；`verify.py` 全绿；test_format_gesture_undo / test_undo_safety_net / test_global_replace_commit / test_render_sync 全过；实机已验收。
+
+**涉及文件：** `ui/canvas.py`、`ui/mainwindow.py`、`tests/test_format_gesture_undo.py`、`docs/技术实现/撤销体系人工验收场景.md`
+
+---
+
 ## 2026-09-04
 
 ### 文本面板选中态与字重真值化五阶段重构落地 + 中间图截断闪退修复 + 启动日志噪音修复

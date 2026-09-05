@@ -4097,12 +4097,8 @@ class MainWindow(mainwindow_cls):
         # force_sync: the applier bypasses the undo stack, so the
         # unsaved-change probe cannot see the current-page edits.
         self._sync_and_commit_project(force_sync=True)
-        # The current page's result image must re-render too — mark it so
-        # the re-render prompt below covers it like any other dirty page.
-        if self.imgtrans_proj.current_img:
-            self.imgtrans_proj.mark_page_needs_rerender(
-                self.imgtrans_proj.current_img
-            )
+        # 当前页不标脏、不进重渲询问（mark_page_needs_rerender 的当前页
+        # 排除语义）：画布文本已实时更新，结果图随保存/切页重渲。
         self._ask_rerender_dirty_pages()
 
     def on_batch_rollback(self):

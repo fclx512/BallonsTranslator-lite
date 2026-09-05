@@ -1948,7 +1948,7 @@ class Canvas(QGraphicsScene):
         else:
             self.setProjSaveState(False)
 
-    def on_textstack_changed(self):
+    def _refresh_save_state(self):
         if (
             not self.text_undo_stack.isClean()
             or self._edit_session_dirty()
@@ -1957,6 +1957,9 @@ class Canvas(QGraphicsScene):
             self.setProjSaveState(True)
         else:
             self.setProjSaveState(False)
+
+    def on_textstack_changed(self):
+        self._refresh_save_state()
         self.textstack_changed.emit()
 
     def redo_textedit(self):
@@ -2030,11 +2033,14 @@ class Canvas(QGraphicsScene):
         self.draw_undo_stack.clear()
 
     def update_saved_undostep(self):
-        # 保存点：未落账的会话先落账，再以 clean 机制记录干净位
+        # 保存点：未落账的会话先落账，再以 clean 机制记录干净位。
+        # 只刷新保存状态、不广播 textstack_changed——保存不改文档内容，
+        # 广播会让 mainwindow 清空全局搜索结果；全局替换 prepare 阶段的
+        # 同步落盘恰好经此路径抹掉 searched_pattern，替换静默空转。
         self.commit_edit_sessions()
         self.saved_drawundo_step = self.num_pushed_drawstep
         self.text_undo_stack.setClean()
-        self.on_textstack_changed()
+        self._refresh_save_state()
 
     def text_change_unsaved(self) -> bool:
         # 3a 起走 QUndoStack clean 机制（保存时 setClean）+ 会话脏标记，

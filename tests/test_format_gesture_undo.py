@@ -329,6 +329,31 @@ class FormatGestureUndoTest(unittest.TestCase):
         self.canvas.redo()
         self.assertFalse(self.canvas.text_change_unsaved())
 
+    def test_update_saved_undostep_does_not_emit_textstack_changed(self):
+        """保存路径（update_saved_undostep）不得广播 textstack_changed。
+
+        保存不改文档内容，广播会被 mainwindow.on_textstack_changed 当作
+        文档变更而清空全局搜索结果——全局替换 prepare 阶段的同步落盘
+        恰好走此路径，在收集前抹掉 searched_pattern，替换静默空转
+        （实机验收 S18-3 抽查发现）。锁定：保存只刷新保存状态，信号仅在
+        真实栈变更（如 undo）时发射。
+        """
+        emissions = []
+        self.canvas.textstack_changed.connect(lambda: emissions.append(1))
+
+        self._type_size(35.0)
+        self.canvas.commit_edit_sessions()
+        self.assertTrue(self.canvas.text_change_unsaved())
+        emissions.clear()
+
+        self.canvas.update_saved_undostep()
+        self.assertFalse(self.canvas.text_change_unsaved())
+        self.assertEqual(emissions, [])
+
+        # 对照：真实栈变更仍广播
+        self.canvas.undo()
+        self.assertEqual(len(emissions), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
