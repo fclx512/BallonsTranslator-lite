@@ -455,7 +455,7 @@ class Canvas(QGraphicsScene):
         # 聚拢，闭合时各落一条快照命令（TypingSessionCommand /
         # FormatGestureCommand），文档私有 undo 栈不再承担回退。
         # 手势/会话边界：选区变化、失焦、撤销重做入口、新命令推送、清栈、
-        # 空闲定时器；见 docs/技术实现/撤销体系重构计划.md 4.5。
+        # 空闲定时器；机制细节见 tests/test_undo_safety_net.py 与验收场景文档。
         self._typing_session = None   # dict | None，见 note_typing_edit
         self._format_gesture = None   # dict | None，见 note_formatting_edit
         self._suppress_undo_toast = False  # 历史面板跳转期间抑制撤回提示

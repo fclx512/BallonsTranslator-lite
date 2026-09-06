@@ -95,7 +95,7 @@ def replay_guard(*widgets):
 
 
 # ── 跨页历史：命令锚点解析与僵尸判定（阶段 4）────────────────────
-# 设计见 docs/技术实现/撤销体系阶段4计划.md 三.2/三.3。命令携带页标签
+# 命令携带页标签
 # （pagename）+ 页代数捕获（page_generation）+ blk 锚点，undo/redo 前按
 # blk 身份从当前场景重解析 live widget；解析不到或页屏障过期 = 僵尸。
 

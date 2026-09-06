@@ -1,6 +1,6 @@
 """跨页批量组化 + 撤销确认弹窗护网（离屏，撤销体系阶段 4 第二批）。
 
-覆盖 docs/技术实现/撤销体系阶段4计划.md 四（第二批）的核心行为：
+覆盖撤销体系阶段 4 第二批（跨页批量组化+确认弹窗）的核心行为：
 
 - 组化命令标记：``NormalizeBreaksCommand`` / ``_PointAlignCommand``
   暴露 ``group_undo_summary``（页名→块数）与 ``group_page_generations``

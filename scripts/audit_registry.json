@@ -194,6 +194,24 @@
       "allowed_mentions": [
         "docs/技术实现/PSD导出_存档.md"
       ]
+    },
+    "docs/技术实现/撤销体系重构计划.md": {
+      "note": "撤销体系收官清理（2026-09-06）：主计划（甲-1/甲-2、阶段0→3b）与阶段4三批全部实机验收，实施细节以 daily_log、tests/test_undo_cross_page.py 等护网与 docs/技术实现/撤销体系人工验收场景.md（唯一存档）为准",
+      "allowed_mentions": [
+        "docs/daily_log.md"
+      ]
+    },
+    "docs/技术实现/撤销体系阶段4计划.md": {
+      "note": "撤销体系收官清理（2026-09-06）：阶段4三批（跨页历史/批量组化+确认弹窗/修复并入全局栈）全部落地，存档同撤销体系重构计划条目",
+      "allowed_mentions": [
+        "docs/daily_log.md"
+      ]
+    },
+    "docs/技术实现/撤销调用点普查.md": {
+      "note": "撤销体系收官清理（2026-09-06）：调用点普查为阶段0-a快照，3b 后边界全部落地、使命完成",
+      "allowed_mentions": [
+        "docs/daily_log.md"
+      ]
     }
   },
   "suspended": {

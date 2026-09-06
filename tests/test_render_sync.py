@@ -210,9 +210,8 @@ def run_all_checks():
 
     # ── 7. continuous typing converges item text ─────────────────────
     # 旧断言「panel/item 文档 undo 步数对等」已随撤销体系 3a 废除：步数
-    # 对等建立在 new_steps>0 门留下的陈旧水位伪象上（计划
-    # docs/技术实现/撤销体系重构计划.md 1.1/4.6——双侧文档步数联动正是
-    # 被重构废除的耦合假设，3b 起文档栈整体禁用）。真实不变量是双端文本
+    # 对等建立在 new_steps>0 门留下的陈旧水位伪象上（双侧文档步数联动
+    # 正是被重构废除的耦合假设，3b 起文档栈整体禁用）。真实不变量是双端文本
     # 收敛；命令级 undo 行为由 tests/test_undo_safety_net.py 锁定。
     scene3 = QGraphicsScene()
     item3 = make_item(scene3, "起")
