@@ -385,15 +385,6 @@ class TextStyleGroup(QFrame):
         shadow_row.addLayout(shadow_ctrl, 1)
         vlayout.addLayout(shadow_row)
 
-        ps_note = QLabel(
-            self.tr(
-                "Note: PSD export uses Photoshop's native drop shadow (glyph-only), regardless of this setting."
-            )
-        )
-        ps_note.setWordWrap(True)
-        ps_note.setStyleSheet("font-size: 11px; color: gray;")
-        vlayout.addWidget(ps_note)
-
         vlayout.addSpacing(4)
         vlayout.addWidget(_section_header(self.tr("Gradient")))
 

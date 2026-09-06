@@ -133,17 +133,25 @@ class _CommandCard(QFrame):
         lay.addWidget(badge)
 
     def set_used(self, used: bool):
-        """Track "already in this menu (current layout)" — the property stays
-        for the duplicate-add guard parity, but the *visual* dimming is
-        disabled for now (2026-08-16): on the user's machine the property
-        updates live yet the QSS never re-renders, root cause unknown —
-        parked until there is time to debug; keep this property mechanism
-        so restoring the look is a one-line stylesheet change."""
+        """Track "already in this menu (current layout)" and dim the card.
+
+        The 2026-08-16 attempt failed on the real machine (property updated
+        live yet the QSS never re-rendered; offscreen was fine, root cause
+        unknown). The restored look no longer relies on descendant-selector
+        refresh alone: the name label color is applied directly, and child
+        widgets are re-polished together with the card so cached child rules
+        get re-evaluated."""
         if self.property("used") == used:
             return
         self.setProperty("used", used)
-        self.style().unpolish(self)
-        self.style().polish(self)
+        if used:
+            self.name_label.setStyleSheet(
+                f"color: {shortcut_styles()['disabled_clr']};")
+        else:
+            self.name_label.setStyleSheet("")
+        for w in (self, *self.findChildren(QWidget)):
+            w.style().unpolish(w)
+            w.style().polish(w)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -208,6 +216,8 @@ class CommandPalette(QWidget):
             f"#PieCmdCard:hover {{ border-color: {accent}; }}"
             f"#PieCmdCard QLabel {{ color: {s['name_clr']};"
             f" background: transparent; border: none; }}"
+            f"#PieCmdCard[used=\"true\"] {{ background: {s['disabled_bg']}; }}"
+            f"#PieCmdCard[used=\"true\"] QLabel {{ color: {s['disabled_clr']}; }}"
         )
         for cmd_id, name, cat_label, cat_color in commands:
             card = _CommandCard(cmd_id, name, cat_label, cat_color, self)

@@ -1344,6 +1344,10 @@ class FontFormat(Config):
                 self.font_family = da["family"]
 
         self.font_weight = fix_fontweight_qt(self.font_weight)
+        # _style_name 是派生显示缓存：历史 bug 曾把 (名,字重,斜体) 元组写进
+        # 来并随项目落盘（JSON 数组），加载时归一为空串交渲染端字重匹配兜底
+        if not isinstance(self._style_name, str):
+            self._style_name = ""
         # bold 字段级折算：旧数据 bold=True 且字重未设/低于粗体时折算进
         # 真值 font_weight，随后 bold 复位 False（真值化后不再参与渲染）
         if self.bold:

@@ -483,14 +483,6 @@ class TitleBar(Widget):
         smartReorderAction = QAction(self.tr("Path Reorder…"), self)
         self.smart_reorder_trigger = smartReorderAction.triggered
 
-        # PSD 导出（暂时禁用 — JSX 批量路线已知问题待修复）
-        psdExportAction = QAction(self.tr("Export as PSD… (Under Repair)"), self)
-        psdExportAction.setEnabled(False)
-        psdExportAction.setToolTip(
-            self.tr("暂不可用 — PSD 导出功能修复中")
-        )
-        self.psd_export_triggered = psdExportAction.triggered
-
         # Quick Symbol dialog
         quickSymbolAction = QAction(self.tr("Quick Symbol"), self)
         self.quick_symbol_trigger = quickSymbolAction.triggered
@@ -518,7 +510,6 @@ class TitleBar(Widget):
         toolsMenu.addAction(advAlignAction)
         toolsMenu.addSeparator()
         # 导出 / 批量处理
-        toolsMenu.addAction(psdExportAction)
         toolsMenu.addAction(normalizeBreaksAction)
         toolsMenu.addSeparator()
         # 外部工具

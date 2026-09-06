@@ -2,6 +2,27 @@
 
 > 此文档用于跨 agent 同步当日改动。仅保留最近 3 天的记录，每次在对应日期中末尾写入日志。
 
+## 2026-09-06
+
+### 挂账清理批次：加粗拖拽残留 / 攸望竹竖排撑爆 / 饼菜单灰显 / PSD 导出删除 / face 元组崩溃 / 历史面板自开
+
+**问题/需求：** 记忆挂账批量清理 + 用户实机新报两 bug。全部经实机验收。
+
+**改动要点：**
+
+- **设置面板导航加粗拖拽残留**：`ui/configpanel.py::ConfigTable.selectionChanged` 以 `currentIndex()` 作加粗目标，但 Qt 按住拖拽路径下 select 信号先于 current 更新发出（滞后一拍），旧项被清粗体后又被重新加粗且无后续清理路径。改用本次真正选中的项（`selected.indexes()[0]`）。
+- **攸望竹带体竖排撑爆（方案 B）**：`ui/text_engine/layout.py::get_punc_rect` 加 `_rect_is_sane` 防护——DirectWrite 对零 advance 字形返回近 1e5 哨兵矩形，超字号 50 倍判退化回退 `boundingRect`，缓存层生效横竖排全覆盖。新增 `tests/test_punc_rect_sentinel.py`（mock 哨兵，offscreen 无法真复现）。
+- **饼菜单 used 灰显恢复**：2026-08-16 因实机不生效下线的视觉已恢复——`[used="true"]` QSS 规则加回 `ui/pie_menu_editor.py::CommandPalette.set_commands`，且不再单靠后代选择器刷新（当年实机根因）：`_CommandCard.set_used` 对 name_label 内联直接套 disabled_clr + 卡片及子控件一并 unpolish/polish。实机确认生效。
+- **PSD 导出功能整体删除**：JSX 路线实机问题无法收敛，等更强的 AI 修复能力再重启。删 11 文件（utils/psd_* 7 个 + font_mapping + ui/psd_export_dialog + 两个测试），连带清 mainwindow/mainwindowbars/io_thread 死线程/text_style_dock 提示/ts 条目/manifest 重生成；技术状态存档 `docs/技术实现/PSD导出_存档.md`（重启凭据=git fd90b31）；全部登记 audit_registry deprecated。`FONT_PS_NAMES` 保留（一键精简别名补录消费）。原技术文档已于 09-02 先行删除，存档文档为重启唯一凭据。
+- **face_resolver 元组崩溃（实机报错）**：`utils/face_resolver.py::resolve_face` 多候选并列兜底分支 `min(candidates, key=...)` 返回整个 `(名,字重,斜体)` 元组而非 `f[0]` 名字，写入 `_style_name` 后下游 `findText(tuple)` 崩。补 `[0]`；`utils/fontformat.py::__post_init__` 加非 str 归一（防已落盘的 JSON 数组残留）；回归测试入 test_face_resolver。
+- **历史面板启动自开**：`ui/mainwindow.py` 启动清 `*_dock_open` 清单漏了阶段 4 新增的 `history_dock_open`，上次会话的开合记忆复活。补入清单。
+- **ConfigComboBox(options=) 构造参数**：原只支持「先构造再 addItems」，构造期传 `options=` 直接 TypeError。`ui/custom_widget/combobox.py` 构造函数接受 `options=`（等价构造后 addItems）。回归测试 `tests/test_config_combobox_options.py`（新）。
+- **杂项清理**：删 `.git/backup-stale/`（08-13 仓库损坏事件的 88MB 残留包，远端恢复早已验证）；AGENTS.md/项目概述清掉「scene_textlayout.py 已废弃待删」过时描述（实际已随 a629ca5 删除）。
+
+**涉及文件：** `ui/configpanel.py`、`ui/text_engine/layout.py`、`tests/test_punc_rect_sentinel.py`（新）、`ui/pie_menu_editor.py`、`scripts/pie_menu_test.py`、`utils/face_resolver.py`、`utils/fontformat.py`、`tests/test_face_resolver.py`、`ui/mainwindow.py`、PSD 批次（`utils/psd_*.py`×7、`utils/font_mapping.py`、`ui/psd_export_dialog.py`、`tests/test_psd_*.py`×2、`ui/io_thread.py`、`ui/mainwindowbars.py`、`ui/text_style_dock.py`、`utils/shared.py`、`tests/test_font_scan.py`、`docs/技术实现/PSD导出_存档.md`（新）、`docs/项目概述.md`、`docs/技术实现/反向移植_规范.md`、`scripts/audit_registry.json`、`manifest.json`、`translate/zh_CN.ts`）
+
+---
+
 ## 2026-09-05
 
 ### 撤销体系阶段 4 第一批落地：跨页编辑历史 + 历史面板二期（按页分组/紧凑化/PS 式操作名）

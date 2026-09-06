@@ -677,14 +677,15 @@ class ConfigTable(QTreeView):
             if item is not None:
                 item.setBold(False)
 
-        index = self.currentIndex()
-        if index.isValid():
-            item = self.model().itemFromIndex(index)
-            if item is not None and item.isSelectable():
-                item.setBold(True)
-                section_key = item.data(Qt.ItemDataRole.UserRole)
-                if section_key is not None:
-                    self.section_pressed.emit(section_key)
+        # Bold must follow the newly selected item: currentIndex() lags one
+        # beat behind the selection during press-drag (select is emitted
+        # before current updates), which would re-bold just-cleared items
+        # and leave stale bolds behind.
+        if self.selected is not None and self.selected.isSelectable():
+            self.selected.setBold(True)
+            section_key = self.selected.data(Qt.ItemDataRole.UserRole)
+            if section_key is not None:
+                self.section_pressed.emit(section_key)
 
         super().selectionChanged(selected, deselected)
 

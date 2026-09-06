@@ -43,7 +43,7 @@ modules/
 | `ui/text_panel.py` | 文本编辑面板 |
 | `ui/panel_rail.py` | 嵌字页格式区左缘窄栏：功能图标列（画布浮层面板入口，见 `ui/custom_widget/rail_dock_panel.py`） |
 | `ui/io_thread.py` | 管线编排（检测→OCR→翻译→修复） |
-| `ui/textitem.py` / `ui/text_engine/` | 画布文字渲染（textitem 是 fork 适配层，渲染实现在 engine；旧 scene_textlayout.py 已废弃待删） |
+| `ui/textitem.py` / `ui/text_engine/` | 画布文字渲染（textitem 是 fork 适配层，渲染实现在 engine；） |
 | `ui/overlay_modal.py` | `OverlayModal` — 中心淡入/淡出模态（scrim 覆盖中央画布区，ConfigPanel 用它） |
 | `ui/overlay_slide.py` | `OverlaySlider` — 覆盖面板滑入滑出动画（GlobalSearchWidget、PageList 用它） |
 | `ui/custom_widget/` | 可复用控件库（`__init__.py` 统一导出，见下方"打包控件功能"） |

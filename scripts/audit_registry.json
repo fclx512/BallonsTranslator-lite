@@ -1,147 +1,216 @@
 {
- "_comment": "AI 审计登记表。机制见 .agents/skills/audit-docs/SKILL.md。deprecated = 已删待守（不得复活、残留引用必须清零或进 allowed_mentions）；suspended = 存在的休眠文件（不得被主 UI import）。删除文件前先在此登记。",
- "deprecated": {
-  "modules/glossary_extractor.py": {
-   "note": "术语工作台取代（2026-08-31）：频率启发式迁入 modules/context_agent/precollect.py，LLM one-shot 提取随 GlossaryExtractorDialog 一并删除；新入口=主窗口左侧栏工作台图标（ui/glossary_agent_panel.py，2026-09-02 自窄栏迁入左栏）",
-   "allowed_mentions": [
-    "docs/daily_log.md",
-    "modules/context_agent/precollect.py",
-    "modules/context_agent/__init__.py"
-   ]
+  "_comment": "AI 审计登记表。机制见 .agents/skills/audit-docs/SKILL.md。deprecated = 已删待守（不得复活、残留引用必须清零或进 allowed_mentions）；suspended = 存在的休眠文件（不得被主 UI import）。删除文件前先在此登记。",
+  "deprecated": {
+    "modules/glossary_extractor.py": {
+      "note": "术语工作台取代（2026-08-31）：频率启发式迁入 modules/context_agent/precollect.py，LLM one-shot 提取随 GlossaryExtractorDialog 一并删除；新入口=主窗口左侧栏工作台图标（ui/glossary_agent_panel.py，2026-09-02 自窄栏迁入左栏）",
+      "allowed_mentions": [
+        "docs/daily_log.md",
+        "modules/context_agent/precollect.py",
+        "modules/context_agent/__init__.py"
+      ]
+    },
+    "ui/glossary_extractor_dialog.py": {
+      "note": "术语工作台取代（2026-08-31）：one-shot LLM 提取对话框删除，新入口=主窗口左侧栏工作台图标（ui/glossary_agent_panel.py，2026-09-02 自窄栏迁入左栏）",
+      "allowed_mentions": [
+        "docs/daily_log.md"
+      ]
+    },
+    "modules/translators/context_batch.py": {
+      "note": "翻译 agent 化（docs/技术实现/翻译agent化_设计方案.md §11）合一删 beta：ContextBatchTranslator 2026-08-23 删除，agent 为唯一 LLM 翻译路径",
+      "allowed_mentions": [
+        "docs/技术实现/翻译agent化_设计方案.md"
+      ]
+    },
+    "ui/glossary_dialog.py": {
+      "note": "随阶段4删 beta 退役：CustomGlossaryDialog 唯一入口是运行窗口已删的 Custom... 按钮，2026-08-23 删除"
+    },
+    "ui/scene_textlayout.py": {
+      "note": "v1.5.12 移植后零引用的旧 fork 布局，2026-08-23 删除（渲染入口已切 ui/text_engine/）",
+      "allowed_mentions": [
+        "AGENTS.md",
+        "docs/项目概述.md",
+        "docs/技术实现/反向移植_规范.md"
+      ]
+    },
+    "ui/text_engine/transforms/controls.py": {
+      "note": "上游 v1.5.12 移植时对照留存的原始副本，功能已并入 panel.py（自研合并版），2026-08-23 删除"
+    },
+    "ui/shadow_gradient_dialog.py": {
+      "note": "2026-08-23 随文本样式 dock 化（ui/text_style_dock.py）退役的旧模态对话框"
+    },
+    "ui/text_advanced_format.py": {
+      "note": "2026-08-23 随文本样式 dock 化（ui/text_style_dock.py）退役的旧模态对话框"
+    },
+    "docs/技术实现/反向移植_完整流程.md": {
+      "note": "2026-08-23 并入 反向移植_规范.md §11（端到端操作手册），原文档删除",
+      "allowed_mentions": [
+        "docs/技术实现/反向移植_规范.md"
+      ]
+    },
+    "docs/技术实现/反向移植_工作进度交接.md": {
+      "note": "2026-08-23 删除：过期会话交接稿，信息已被 反向移植_规范.md §10 覆盖"
+    },
+    "docs/技术实现/快捷键系统.md": {
+      "note": "2026-08-23 并入 docs/基础速查/快捷键.md（动作清单重生成），原文档删除"
+    },
+    "docs/技术实现/排版技术.md": {
+      "note": "2026-08-23 删除：三节全部过时（旧布局实现已删、调研已消费）"
+    },
+    "icons/drawingtools_pen.svg": {
+      "note": "2026-08-26 Pen/B 画笔工具移除后成为死资产，图标重绘为统一 Material 集（drawingtools_rect/ai 补齐，hand/inpaint 同步更换）",
+      "allowed_mentions": [
+        "config/stylesheet.css"
+      ]
+    },
+    "icons/drawingtools_pen_activate.svg": {
+      "note": "2026-08-26 Pen/B 画笔工具移除后成为死资产，图标重绘为统一 Material 集（drawingtools_rect/ai 补齐，hand/inpaint 同步更换）",
+      "allowed_mentions": [
+        "config/stylesheet.css"
+      ]
+    },
+    "scripts/check_all.py": {
+      "note": "2026-08-27 并入 verify.py --full（ruff+pytest 两步）后删除：i18n+qm 两步与 verify 完全重复，且默认运行失败也 exit 0"
+    },
+    "scripts/run_module.py": {
+      "note": "2026-08-27 删除：上游遗留的 detector 单块调试脚本（blk_list[:1] hack），零引用"
+    },
+    "scripts/build_win.bat": {
+      "note": "2026-08-27 删除：Nuitka exe 路线废弃，实际发版走 build_portable.py 便携包；需要时从 git 历史恢复"
+    },
+    "scripts/render_sync_probe.py": {
+      "note": "2026-08-27 迁移为 tests/test_render_sync.py（pytest 化），删除 scripts 下原文件"
+    },
+    "ui/text_engine/effect_renderer.py": {
+      "note": "效果栈移植阶段C：v1.5.9 版 TextEffectRenderer 被 ui/text_engine/effects/renderer.py（上游 TextEffectStack 渲染引擎）取代，2026-08-31 删除",
+      "allowed_mentions": [
+        "docs/daily_log.md",
+        "docs/技术实现/效果栈移植与窄栏图标重绘_计划.md"
+      ]
+    },
+    "icons/rail_glossary.svg": {
+      "note": "2026-09-02 术语/剧情工作台入口自嵌字页窄栏迁至主窗口左侧栏（LeftBar），窄栏图标成死资产；LeftBar 用 icons/leftbar_glossary.svg（+_activate 变体）"
+    },
+    "docs/技术实现/点脏页跳转修复计划.md": {
+      "note": "2026-09-02 删除：修复已随 8b45049 落地并经实机验收（2026-08-28），行为由 tests/test_page_list_dirty_click.py 锁定；blockSignals 范围硬约束摘录至 docs/基础速查/经验教训.md §3.2"
+    },
+    "docs/技术实现/翻译管线现状调研.md": {
+      "note": "2026-09-02 删除：agent 化重构已全部收官，其描述的前 agent 管线现状（含已删 beta 翻译器）整体过时；架构基线见 docs/技术实现/翻译agent化_设计方案.md"
+    },
+    "docs/技术实现/图像修复区_审计与优化讨论.md": {
+      "note": "2026-09-02 删除：2026-08-26 三档修复分级方向定稿并全部实现（AI 修图独立图标/画笔移除/面板控件统一），审计+讨论稿使命完成，现状以代码与 tests/test_drawing_cursor.py 为准"
+    },
+    "docs/技术实现/文本编辑区UI重构.md": {
+      "note": "2026-09-02 删除：右栏三区重构已落地（89e57a7+efac5e5），与上游的刻意分歧已由 docs/技术实现/上游v1.5.12移植_完成记录.md 持久分歧节覆盖"
+    },
+    "docs/技术实现/侧栏图标_画布浮层面板实现.md": {
+      "note": "2026-09-02 删除：RailDockPanel 两批次已提交（75ad4e8/11046f0），行为由 tests/test_panel_rail.py 锁定，控件契约见 AGENTS.md 打包控件表"
+    },
+    "docs/技术实现/PSD导出_JSX路线.md": {
+      "note": "2026-09-02 删除（文档先行清理）；2026-09-05 起其内容被 docs/技术实现/PSD导出_存档.md 取代——PSD 导出功能整体移除，存档文档记录技术状态与 fd90b31 恢复入口",
+      "allowed_mentions": [
+        "docs/技术实现/PSD导出_存档.md"
+      ]
+    },
+    "docs/技术实现/文本面板选中态与字重失效_修复计划.md": {
+      "note": "2026-09-05 清理：阶段 1-5 已于 2026-09-04 全部落地（3010cf21）；Qt styleName/字重关键事实与 face 派生架构沉淀至 docs/基础速查/经验教训.md §7，完整决策见 daily_log 2026-09-04 与 git 历史",
+      "allowed_mentions": [
+        "docs/daily_log.md"
+      ]
+    },
+    "docs/技术实现/文本面板选中态与字重失效_问题分析.md": {
+      "note": "2026-09-05 清理：根因分析已随修复实现消化，结论沉淀至 docs/基础速查/经验教训.md §7.1",
+      "allowed_mentions": [
+        "docs/daily_log.md"
+      ]
+    },
+    "docs/技术实现/反向移植_i18n补充计划.md": {
+      "note": "2026-09-05 清理：2026-09-03 已作废（PR #1279/#1280/#1281 均被上游关闭未合并，前提消失），作废原因与结论以 docs/技术实现/反向移植_规范.md §10 记录表为准",
+      "allowed_mentions": [
+        "docs/daily_log.md"
+      ]
+    },
+    "utils/psd_exporter.py": {
+      "note": "PSD 导出功能 2026-09-05 整体移除（JSX 路线实机问题无法收敛，等待更强的 AI 修复能力再重启）；技术状态存档于 docs/技术实现/PSD导出_存档.md，完整实现可从 git fd90b31 取回",
+      "allowed_mentions": [
+        "docs/技术实现/PSD导出_存档.md"
+      ]
+    },
+    "utils/psd_jsx_exporter.py": {
+      "note": "PSD 导出功能 2026-09-05 整体移除（JSX 路线实机问题无法收敛，等待更强的 AI 修复能力再重启）；技术状态存档于 docs/技术实现/PSD导出_存档.md，完整实现可从 git fd90b31 取回",
+      "allowed_mentions": [
+        "docs/技术实现/PSD导出_存档.md"
+      ]
+    },
+    "utils/psd_binary_exporter.py": {
+      "note": "PSD 导出功能 2026-09-05 整体移除（JSX 路线实机问题无法收敛，等待更强的 AI 修复能力再重启）；技术状态存档于 docs/技术实现/PSD导出_存档.md，完整实现可从 git fd90b31 取回",
+      "allowed_mentions": [
+        "docs/技术实现/PSD导出_存档.md"
+      ]
+    },
+    "utils/psd_binary_writer.py": {
+      "note": "PSD 导出功能 2026-09-05 整体移除（JSX 路线实机问题无法收敛，等待更强的 AI 修复能力再重启）；技术状态存档于 docs/技术实现/PSD导出_存档.md，完整实现可从 git fd90b31 取回",
+      "allowed_mentions": [
+        "docs/技术实现/PSD导出_存档.md"
+      ]
+    },
+    "utils/psd_descriptor.py": {
+      "note": "PSD 导出功能 2026-09-05 整体移除（JSX 路线实机问题无法收敛，等待更强的 AI 修复能力再重启）；技术状态存档于 docs/技术实现/PSD导出_存档.md，完整实现可从 git fd90b31 取回",
+      "allowed_mentions": [
+        "docs/技术实现/PSD导出_存档.md"
+      ]
+    },
+    "utils/psd_engine_data.py": {
+      "note": "PSD 导出功能 2026-09-05 整体移除（JSX 路线实机问题无法收敛，等待更强的 AI 修复能力再重启）；技术状态存档于 docs/技术实现/PSD导出_存档.md，完整实现可从 git fd90b31 取回",
+      "allowed_mentions": [
+        "docs/技术实现/PSD导出_存档.md"
+      ]
+    },
+    "utils/psd_packbits.py": {
+      "note": "PSD 导出功能 2026-09-05 整体移除（JSX 路线实机问题无法收敛，等待更强的 AI 修复能力再重启）；技术状态存档于 docs/技术实现/PSD导出_存档.md，完整实现可从 git fd90b31 取回",
+      "allowed_mentions": [
+        "docs/技术实现/PSD导出_存档.md"
+      ]
+    },
+    "utils/font_mapping.py": {
+      "note": "PSD 导出功能 2026-09-05 整体移除（JSX 路线实机问题无法收敛，等待更强的 AI 修复能力再重启）；技术状态存档于 docs/技术实现/PSD导出_存档.md，完整实现可从 git fd90b31 取回",
+      "allowed_mentions": [
+        "docs/技术实现/PSD导出_存档.md"
+      ]
+    },
+    "ui/psd_export_dialog.py": {
+      "note": "PSD 导出功能 2026-09-05 整体移除（JSX 路线实机问题无法收敛，等待更强的 AI 修复能力再重启）；技术状态存档于 docs/技术实现/PSD导出_存档.md，完整实现可从 git fd90b31 取回",
+      "allowed_mentions": [
+        "docs/技术实现/PSD导出_存档.md"
+      ]
+    },
+    "tests/test_psd_binary.py": {
+      "note": "PSD 导出功能 2026-09-05 整体移除（JSX 路线实机问题无法收敛，等待更强的 AI 修复能力再重启）；技术状态存档于 docs/技术实现/PSD导出_存档.md，完整实现可从 git fd90b31 取回",
+      "allowed_mentions": [
+        "docs/技术实现/PSD导出_存档.md"
+      ]
+    },
+    "tests/test_psd_jsx_export.py": {
+      "note": "PSD 导出功能 2026-09-05 整体移除（JSX 路线实机问题无法收敛，等待更强的 AI 修复能力再重启）；技术状态存档于 docs/技术实现/PSD导出_存档.md，完整实现可从 git fd90b31 取回",
+      "allowed_mentions": [
+        "docs/技术实现/PSD导出_存档.md"
+      ]
+    }
   },
-  "ui/glossary_extractor_dialog.py": {
-   "note": "术语工作台取代（2026-08-31）：one-shot LLM 提取对话框删除，新入口=主窗口左侧栏工作台图标（ui/glossary_agent_panel.py，2026-09-02 自窄栏迁入左栏）",
-   "allowed_mentions": [
-    "docs/daily_log.md"
-   ]
-  },
-  "modules/translators/context_batch.py": {
-   "note": "翻译 agent 化（docs/技术实现/翻译agent化_设计方案.md §11）合一删 beta：ContextBatchTranslator 2026-08-23 删除，agent 为唯一 LLM 翻译路径",
-   "allowed_mentions": [
-    "docs/技术实现/翻译agent化_设计方案.md"
-   ]
-  },
-  "ui/glossary_dialog.py": {
-   "note": "随阶段4删 beta 退役：CustomGlossaryDialog 唯一入口是运行窗口已删的 Custom... 按钮，2026-08-23 删除"
-  },
-  "ui/scene_textlayout.py": {
-   "note": "v1.5.12 移植后零引用的旧 fork 布局，2026-08-23 删除（渲染入口已切 ui/text_engine/）",
-   "allowed_mentions": [
-    "AGENTS.md",
-    "docs/项目概述.md",
-    "docs/技术实现/反向移植_规范.md"
-   ]
-  },
-  "ui/text_engine/transforms/controls.py": {
-   "note": "上游 v1.5.12 移植时对照留存的原始副本，功能已并入 panel.py（自研合并版），2026-08-23 删除"
-  },
-  "ui/shadow_gradient_dialog.py": {
-   "note": "2026-08-23 随文本样式 dock 化（ui/text_style_dock.py）退役的旧模态对话框"
-  },
-  "ui/text_advanced_format.py": {
-   "note": "2026-08-23 随文本样式 dock 化（ui/text_style_dock.py）退役的旧模态对话框"
-  },
-  "docs/技术实现/反向移植_完整流程.md": {
-   "note": "2026-08-23 并入 反向移植_规范.md §11（端到端操作手册），原文档删除",
-   "allowed_mentions": [
-    "docs/技术实现/反向移植_规范.md"
-   ]
-  },
-  "docs/技术实现/反向移植_工作进度交接.md": {
-   "note": "2026-08-23 删除：过期会话交接稿，信息已被 反向移植_规范.md §10 覆盖"
-  },
-  "docs/技术实现/快捷键系统.md": {
-   "note": "2026-08-23 并入 docs/基础速查/快捷键.md（动作清单重生成），原文档删除"
-  },
-  "docs/技术实现/排版技术.md": {
-   "note": "2026-08-23 删除：三节全部过时（旧布局实现已删、调研已消费）"
-  },
-  "icons/drawingtools_pen.svg": {
-   "note": "2026-08-26 Pen/B 画笔工具移除后成为死资产，图标重绘为统一 Material 集（drawingtools_rect/ai 补齐，hand/inpaint 同步更换）",
-   "allowed_mentions": [
-    "config/stylesheet.css"
-   ]
-  },
-  "icons/drawingtools_pen_activate.svg": {
-   "note": "2026-08-26 Pen/B 画笔工具移除后成为死资产，图标重绘为统一 Material 集（drawingtools_rect/ai 补齐，hand/inpaint 同步更换）",
-   "allowed_mentions": [
-    "config/stylesheet.css"
-   ]
-  },
-  "scripts/check_all.py": {
-   "note": "2026-08-27 并入 verify.py --full（ruff+pytest 两步）后删除：i18n+qm 两步与 verify 完全重复，且默认运行失败也 exit 0"
-  },
-  "scripts/run_module.py": {
-   "note": "2026-08-27 删除：上游遗留的 detector 单块调试脚本（blk_list[:1] hack），零引用"
-  },
-  "scripts/build_win.bat": {
-   "note": "2026-08-27 删除：Nuitka exe 路线废弃，实际发版走 build_portable.py 便携包；需要时从 git 历史恢复"
-  },
-  "scripts/render_sync_probe.py": {
-   "note": "2026-08-27 迁移为 tests/test_render_sync.py（pytest 化），删除 scripts 下原文件"
-  },
-  "ui/text_engine/effect_renderer.py": {
-   "note": "效果栈移植阶段C：v1.5.9 版 TextEffectRenderer 被 ui/text_engine/effects/renderer.py（上游 TextEffectStack 渲染引擎）取代，2026-08-31 删除",
-   "allowed_mentions": [
-    "docs/daily_log.md",
-    "docs/技术实现/效果栈移植与窄栏图标重绘_计划.md"
-   ]
-  },
-  "icons/rail_glossary.svg": {
-   "note": "2026-09-02 术语/剧情工作台入口自嵌字页窄栏迁至主窗口左侧栏（LeftBar），窄栏图标成死资产；LeftBar 用 icons/leftbar_glossary.svg（+_activate 变体）"
-  },
-  "docs/技术实现/点脏页跳转修复计划.md": {
-   "note": "2026-09-02 删除：修复已随 8b45049 落地并经实机验收（2026-08-28），行为由 tests/test_page_list_dirty_click.py 锁定；blockSignals 范围硬约束摘录至 docs/基础速查/经验教训.md §3.2"
-  },
-  "docs/技术实现/翻译管线现状调研.md": {
-   "note": "2026-09-02 删除：agent 化重构已全部收官，其描述的前 agent 管线现状（含已删 beta 翻译器）整体过时；架构基线见 docs/技术实现/翻译agent化_设计方案.md"
-  },
-  "docs/技术实现/图像修复区_审计与优化讨论.md": {
-   "note": "2026-09-02 删除：2026-08-26 三档修复分级方向定稿并全部实现（AI 修图独立图标/画笔移除/面板控件统一），审计+讨论稿使命完成，现状以代码与 tests/test_drawing_cursor.py 为准"
-  },
-  "docs/技术实现/文本编辑区UI重构.md": {
-   "note": "2026-09-02 删除：右栏三区重构已落地（89e57a7+efac5e5），与上游的刻意分歧已由 docs/技术实现/上游v1.5.12移植_完成记录.md 持久分歧节覆盖"
-  },
-  "docs/技术实现/侧栏图标_画布浮层面板实现.md": {
-   "note": "2026-09-02 删除：RailDockPanel 两批次已提交（75ad4e8/11046f0），行为由 tests/test_panel_rail.py 锁定，控件契约见 AGENTS.md 打包控件表"
-  },
-  "docs/技术实现/PSD导出_JSX路线.md": {
-   "note": "2026-09-02 删除：JSX 路线已提交（fd90b31），字段换算由 tests/test_psd_jsx_export.py 锁定、保真策略/已知限制以代码注释为准；Phase 2 字符级样式扩展点由 payload schema 预留结构承载"
-  },
-  "docs/技术实现/文本面板选中态与字重失效_修复计划.md": {
-   "note": "2026-09-05 清理：阶段 1-5 已于 2026-09-04 全部落地（3010cf21）；Qt styleName/字重关键事实与 face 派生架构沉淀至 docs/基础速查/经验教训.md §7，完整决策见 daily_log 2026-09-04 与 git 历史",
-   "allowed_mentions": [
-    "docs/daily_log.md"
-   ]
-  },
-  "docs/技术实现/文本面板选中态与字重失效_问题分析.md": {
-   "note": "2026-09-05 清理：根因分析已随修复实现消化，结论沉淀至 docs/基础速查/经验教训.md §7.1",
-   "allowed_mentions": [
-    "docs/daily_log.md"
-   ]
-  },
-  "docs/技术实现/反向移植_i18n补充计划.md": {
-   "note": "2026-09-05 清理：2026-09-03 已作废（PR #1279/#1280/#1281 均被上游关闭未合并，前提消失），作废原因与结论以 docs/技术实现/反向移植_规范.md §10 记录表为准",
-   "allowed_mentions": [
-    "docs/daily_log.md"
-   ]
+  "suspended": {
+    "ui/text_engine/formatting/panel.py": {
+      "note": "上游休眠拷贝：仅被同休眠的 editing/manager.py 引用，未接主 UI（见 上游v1.5.12移植_完成记录.md 持久分歧）"
+    },
+    "ui/text_engine/editing/manager.py": {
+      "note": "上游休眠拷贝：无任何 import 者（见 上游v1.5.12移植_完成记录.md 持久分歧）"
+    },
+    "ui/text_engine/formatting/commands.py": {
+      "note": "引擎旧面板 FontFormatPanel 的命令面，随 panel.py 休眠（fork 渲染入口在 ui/text_engine/item.py，格式命令在 ui/fontformat_commands.py）；仅被休眠的 formatting/panel.py 引用，不得被主 UI import（2026-09-04 登记）"
+    },
+    "ui/text_engine/formatting/presets.py": {
+      "note": "引擎旧面板的预设胶囊 TextStylePresetPanel，随 panel.py 休眠（fork 活体为 ui/text_style_presets.py）；仅被休眠的 formatting/panel.py 引用，不得被主 UI import（2026-09-04 登记）"
+    },
+    "ui/text_engine/formatting/advanced.py": {
+      "note": "引擎旧面板的高级格式组 TextAdvancedFormatPanel，随 panel.py 休眠（fork 活体为注解浮层 ui/text_panel.py::AnnotationFormatGroup）；仅被休眠的 formatting/panel.py 引用，不得被主 UI import（2026-09-04 登记）"
+    }
   }
- },
- "suspended": {
-  "ui/text_engine/formatting/panel.py": {
-   "note": "上游休眠拷贝：仅被同休眠的 editing/manager.py 引用，未接主 UI（见 上游v1.5.12移植_完成记录.md 持久分歧）"
-  },
-  "ui/text_engine/editing/manager.py": {
-   "note": "上游休眠拷贝：无任何 import 者（见 上游v1.5.12移植_完成记录.md 持久分歧）"
-  },
-  "ui/text_engine/formatting/commands.py": {
-   "note": "引擎旧面板 FontFormatPanel 的命令面，随 panel.py 休眠（fork 渲染入口在 ui/text_engine/item.py，格式命令在 ui/fontformat_commands.py）；仅被休眠的 formatting/panel.py 引用，不得被主 UI import（2026-09-04 登记）"
-  },
-  "ui/text_engine/formatting/presets.py": {
-   "note": "引擎旧面板的预设胶囊 TextStylePresetPanel，随 panel.py 休眠（fork 活体为 ui/text_style_presets.py）；仅被休眠的 formatting/panel.py 引用，不得被主 UI import（2026-09-04 登记）"
-  },
-  "ui/text_engine/formatting/advanced.py": {
-   "note": "引擎旧面板的高级格式组 TextAdvancedFormatPanel，随 panel.py 休眠（fork 活体为注解浮层 ui/text_panel.py::AnnotationFormatGroup）；仅被休眠的 formatting/panel.py 引用，不得被主 UI import（2026-09-04 登记）"
-  }
- }
 }

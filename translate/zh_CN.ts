@@ -2548,28 +2548,6 @@ Failed: {f}/{t}</source>
             <translation>正在渲染 %1 (%2/%3)</translation>
         </message>
         <message>
-            <source>
-
-Each page is saved as an editable-text PSD.</source>
-            <translation>每页都会另存为一个带可编辑文本层的 PSD 文件。</translation>
-        </message>
-        <message>
-            <source> page(s).
-
-Open Photoshop → File → Scripts → Browse → run </source>
-            <translation> 个页面。
-
-打开 Photoshop → 文件 → 脚本 → 浏览，运行 </translation>
-        </message>
-        <message>
-            <source>Exported 1 ExtendScript covering </source>
-            <translation>已导出 1 个 ExtendScript，涵盖 </translation>
-        </message>
-        <message>
-            <source>Failed to export PSD script</source>
-            <translation>导出 PSD 脚本失败</translation>
-        </message>
-        <message>
             <source>Already up-to-date.</source>
             <translation>已是最新版本。</translation>
         </message>
@@ -3921,100 +3899,6 @@ Please check the URL and your network.</source>
         </message>
     </context>
     <context>
-        <name>PsdExportDialog</name>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="39" />
-            <source>Export PSD</source>
-            <translation>导出 PSD</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="77" />
-            <source>Page Range</source>
-            <translation>页码范围</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="113" />
-            <source>All Pages</source>
-            <translation>全部页面</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="147" />
-            <source>Output Directory</source>
-            <translation>输出目录</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="147" />
-            <source>Select output directory...</source>
-            <translation>选择输出目录...</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="148" />
-            <source>Browse</source>
-            <translation>浏览</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="161" />
-            <source>Font Compatibility</source>
-            <translation>字体兼容性</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="170" />
-            <source>Export</source>
-            <translation>导出</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="173" />
-            <source>Cancel</source>
-            <translation>取消</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="217" />
-            <source>No text blocks in project.</source>
-            <translation>项目中无文字块。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="227" />
-            <source>⚠  </source>
-            <translation>⚠  </translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="229" />
-            <source> font(s) may need manual adjustment in Photoshop: </source>
-            <translation> 个字体可能需要在 Photoshop 中手动调整：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="234" />
-            <source>✓ All fonts have known PS mappings.</source>
-            <translation>✓ 所有字体均有已知的 PS 映射。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="269" />
-            <source>Page </source>
-            <translation>第 </translation>
-        </message>
-        <message>
-            <location filename="..\ui\psd_export_dialog.py" line="288" />
-            <source>Select Output Directory</source>
-            <translation>选择输出目录</translation>
-        </message>
-        <message>
-            <source>Center text within its block (recommended)</source>
-            <translation>将文本在文字块内居中（推荐）</translation>
-        </message>
-        <message>
-            <source>Exports a single .jsx script for the selected pages.
-Run it once in Photoshop (File → Scripts → Browse);
-text layers are fully editable.</source>
-            <translation>为所选页面导出一个 .jsx 脚本。
-在 Photoshop 中运行一次（文件 → 脚本 → 浏览）；
-文字图层完全可编辑。</translation>
-        </message>
-        <message>
-            <source>Shift each text layer so its center matches the block box. Absorbs font-metric differences between the app and Photoshop.</source>
-            <translation>将每个文本图层移动到其文字块中心。可抵消应用与 Photoshop 之间的字体度量差异。</translation>
-        </message>
-    </context>
-    <context>
         <name>RectPanel</name>
         <message>
             <location filename="..\ui\drawingpanel.py" line="217" />
@@ -4148,11 +4032,6 @@ text layers are fully editable.</source>
             <location filename="\..\ui\text_style_dock.py" />
             <source>↔ Reverse</source>
             <translation>↔ 互换</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>Note: PSD export uses Photoshop's native drop shadow (glyph-only), regardless of this setting.</source>
-            <translation>注意：PSD 导出将使用 Photoshop 原生投影（仅字形），不受此设置影响。</translation>
         </message>
     </context>
     <context>
@@ -4592,14 +4471,6 @@ Orientation: {o}</source>
         <message>
             <source>About BallonsTranslator-lite</source>
             <translation>关于 BallonsTranslator-lite</translation>
-        </message>
-        <message>
-            <source>Export as PSD… (Under Repair)</source>
-            <translation>导出为 PSD… (维修中)</translation>
-        </message>
-        <message>
-            <source>暂不可用 — PSD 导出功能修复中</source>
-            <translation>暂不可用 — PSD 导出功能修复中</translation>
         </message>
     </context>
     <context>

@@ -43,12 +43,19 @@ class SmallComboBox(ComboBox):
 
 class ConfigComboBox(ComboBox):
     def __init__(
-        self, fix_size=True, scrollWidget: QWidget = None, *args, **kwargs
+        self,
+        fix_size=True,
+        scrollWidget: QWidget = None,
+        options: List[str] = None,
+        *args,
+        **kwargs,
     ) -> None:
         super().__init__(scrollWidget, *args, **kwargs)
         self.fix_size = fix_size
         self.adjustSize()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        if options:
+            self.addItems(options)
 
     def addItems(self, texts: List[str]) -> None:
         super().addItems(texts)

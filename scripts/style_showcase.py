@@ -125,11 +125,8 @@ def build_compare_tab():
     )
 
     def make_config_combo(options):
-        # 注意：ConfigComboBox(options=…) 会崩（父类构造期 addItems 早于
-        # fix_size 赋值），项目内惯例都是先构造再 addItems
-        cb = ConfigComboBox()
-        cb.addItems(options)
-        return cb
+        # options= 构造参数已支持（2026-09-06 修复）；两种写法均可用
+        return ConfigComboBox(options=options)
 
     opts = ["标准", "斜体", "粗偏移"]
     rows = [

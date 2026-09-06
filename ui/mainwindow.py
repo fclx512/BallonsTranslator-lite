@@ -111,7 +111,6 @@ from .mainwindowbars import BottomBar, LeftBar, TitleBar
 from .misc import QKEY, parse_stylesheet, set_html_family, theme_accent_color
 from .module_manager import ModuleManager
 from .overlay_modal import OverlayModal
-from .psd_export_dialog import PsdExportDialog
 from .scenetext_manager import PasteSrcItemsCommand, SceneTextManager, TextPanel
 from .textedit_area import SourceTextEdit, TransTextEdit
 from .text_engine.pipeline_formatting import (
@@ -741,6 +740,7 @@ class MainWindow(mainwindow_cls):
             "emphasis_dock_open",
             "textstyle_dock_open",
             "transform_dock_open",
+            "history_dock_open",
         ):
             setattr(pcfg, flag, False)
 
@@ -1789,7 +1789,6 @@ class MainWindow(mainwindow_cls):
         self.titleBar.stylemgr_trigger.connect(self.on_open_fontstyle_manager)
 
         self.titleBar.help_about_triggered.connect(self.show_about_dialog)
-        self.titleBar.psd_export_triggered.connect(self.on_export_psd)
         self.titleBar.quick_symbol_trigger.connect(self.on_open_quick_symbol)
         self.titleBar.adv_align_trigger.connect(self.on_open_advanced_align)
         self.titleBar.normalize_breaks_triggered.connect(
@@ -3915,55 +3914,6 @@ class MainWindow(mainwindow_cls):
             self.textPanel.formatpanel.textstyle_panel.setStyles(text_styles)
         except Exception as e:
             create_error_dialog(e, self.tr(f"Failed to load from {p}"))
-
-    def on_export_psd(self):
-        """Open the PSD export dialog, then generate a batch ExtendScript.
-
-        The generated .jsx recreates the project's text blocks as editable
-        text layers in Photoshop (run once via File → Scripts → Browse).
-        """
-        if self.imgtrans_proj.directory is None:
-            return
-        dialog = PsdExportDialog(self.imgtrans_proj, parent=self)
-        if not dialog.exec():
-            return
-
-        options = dialog.get_options()
-        pages_to_export = options.page_filter or list(
-            self.imgtrans_proj.pages.keys()
-        )
-        if not pages_to_export:
-            return
-
-        LOGGER.info(
-            "PSD export: %d/%d pages (filter: %s .. %s)",
-            len(pages_to_export),
-            len(self.imgtrans_proj.pages),
-            pages_to_export[0],
-            pages_to_export[-1],
-        )
-
-        from utils.psd_exporter import create_exporter
-
-        exporter = create_exporter(method=options.export_method)
-        try:
-            jsx_path = exporter.export_batch(
-                self.imgtrans_proj, pages_to_export, options
-            )
-        except Exception as e:
-            create_error_dialog(e, self.tr("Failed to export PSD script"))
-            return
-
-        msg = (
-            self.tr("Exported 1 ExtendScript covering ")
-            + str(len(pages_to_export))
-            + self.tr(
-                " page(s).\n\nOpen Photoshop → File → Scripts → Browse → run "
-            )
-            + osp.basename(jsx_path)
-            + self.tr("\n\nEach page is saved as an editable-text PSD.")
-        )
-        create_info_dialog(msg)
 
     def export_tstyles(self):
         ddir = osp.dirname(pcfg.text_styles_path)

@@ -125,6 +125,33 @@ class ResolveFaceTest(unittest.TestCase):
             # SemiBold/DemiBold 均 600：Qt 合成名 "Demi Bold" 命中 DemiBold
             self.assertEqual(resolve_face("TestFam", 600, False), "DemiBold")
 
+    def test_tie_break_fallback_returns_name_not_tuple(self):
+        # 无 Qt 合成名命中时按 短名→字典序 兜底；回归：兜底分支曾把整个
+        # (name, weight, italic) 元组当 face 名返回，下游 findText(tuple) 崩
+        faces = [("BB", 600, False), ("A Long", 600, False), ("Regular", 400, False)]
+
+        def styles(family):
+            return [f[0] for f in faces] if family == "TestFam" else []
+
+        def weight(family, style):
+            for name, w, i in faces:
+                if name == style:
+                    return w
+            return -1
+
+        def italic(family, style):
+            for name, w, i in faces:
+                if name == style:
+                    return i
+            return False
+
+        with patch.multiple(
+            "qtpy.QtGui.QFontDatabase", styles=styles, weight=weight, italic=italic
+        ):
+            resolved = resolve_face("TestFam", 600, False)
+        self.assertEqual(resolved, "BB")
+        self.assertIsInstance(resolved, str)
+
     def test_italic_relaxed_when_missing(self):
         with _stub_database(self):
             # 斜体 700 存在

@@ -1,3 +1,4 @@
+import math
 from functools import cached_property, lru_cache
 from typing import List, Optional, Sequence, Tuple
 
@@ -100,10 +101,23 @@ def _font_metrics(ffamily: str, size: float, weight: int, italic: bool) -> QFont
     font.setItalic(italic)
     return QFontMetricsF(font)
 
+def _rect_is_sane(rect: QRectF, size: float) -> bool:
+    """Reject non-finite or absurdly large glyph boxes (font size × 50 cap)."""
+    limit = max(size, 1.0) * 50
+    coords = (rect.left(), rect.top(), rect.width(), rect.height())
+    return all(math.isfinite(c) and abs(c) <= limit for c in coords)
+
+
 @lru_cache(maxsize=2048)
 def get_punc_rect(char: str, ffamily: str, size: float, weight: int, italic: bool) -> List[QRectF]:
     fm = _font_metrics(ffamily, size, weight, italic)
-    br = [fm.tightBoundingRect(char), fm.boundingRect(char)]
+    tbr = fm.tightBoundingRect(char)
+    # DirectWrite cannot outline some glyphs (e.g. zero-advance glyphs in
+    # certain fonts) and returns a sentinel rect near 1e5; such a value used
+    # as a layout advance blows the canvas up. Fall back to boundingRect.
+    if not _rect_is_sane(tbr, size):
+        tbr = fm.boundingRect(char)
+    br = [tbr, fm.boundingRect(char)]
     return br
 
 @lru_cache(maxsize=2048)

@@ -110,7 +110,7 @@ def resolve_face(
     for f in candidates:
         if _norm_key(f[0]) == target:
             return f[0]
-    return min(candidates, key=lambda f: (len(f[0]), f[0]))
+    return min(candidates, key=lambda f: (len(f[0]), f[0]))[0]
 
 
 def sync_face(ffmt) -> None:

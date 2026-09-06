@@ -1194,6 +1194,11 @@ def main():
           bool(editor.palette._cards["copy"].property("used"))
           and bool(editor.palette._cards["paste"].property("used"))
           and not editor.palette._cards["merge"].property("used"))
+    # visual restore (2026-09-05): the name label color is applied inline —
+    # deterministic even where the property-selector refresh fails
+    check("used-grey dims the name label inline",
+          editor.palette._cards["copy"].name_label.styleSheet() != ""
+          and editor.palette._cards["merge"].name_label.styleSheet() == "")
     editor._on_style_changed(1)   # -> list: grey now follows panels
     check("used-grey follows the list layout",
           bool(editor.palette._cards["merge"].property("used"))

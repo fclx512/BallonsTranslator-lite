@@ -11,7 +11,6 @@ import unittest
 from qtpy.QtWidgets import QApplication
 
 from utils import font_scan, shared
-from utils.font_mapping import resolve_font_name
 
 
 def _make_lookup(styles_map, weight_of_style):
@@ -566,39 +565,6 @@ class SharedSimplifyMapTest(unittest.TestCase):
             import os
 
             os.unlink(path)
-
-
-class ResolveFontNameScanFastPathTest(unittest.TestCase):
-    def setUp(self):
-        self._orig = shared.FONT_PS_NAMES
-        shared.FONT_PS_NAMES = {
-            "Microsoft YaHei": {400: "MicrosoftYaHei", 700: "MicrosoftYaHei-Bold"},
-            "MiSans VF": {300: "MiSansVF-Light", 400: "MiSansVF"},
-        }
-
-    def tearDown(self):
-        shared.FONT_PS_NAMES = self._orig
-
-    def test_exact_hit_prefers_regular(self):
-        self.assertEqual(resolve_font_name("Microsoft YaHei"), ("MicrosoftYaHei", True))
-
-    def test_exact_hit_respects_ps_available(self):
-        self.assertEqual(
-            resolve_font_name("Microsoft YaHei", {"MicrosoftYaHei"}), ("MicrosoftYaHei", True)
-        )
-        # 扫描名不在 PS 侧列表 → 退回旧解析链（静态表/模糊）
-        resolved, exact = resolve_font_name("Microsoft YaHei", {"Unrelated"})
-        self.assertFalse(exact)
-
-    def test_weight_instance_falls_back_to_base(self):
-        # 可变字体命名实例家族不在 name 表，退查基家族索引
-        shared.FONT_PS_NAMES["MiSans VF"] = {400: "MiSansVF"}
-        self.assertEqual(resolve_font_name("MiSans VF Bold"), ("MiSansVF", True))
-
-    def test_unknown_family_falls_through(self):
-        resolved, exact = resolve_font_name("Totally Unknown")
-        self.assertEqual(resolved, "Totally Unknown")
-        self.assertFalse(exact)
 
 
 if __name__ == "__main__":

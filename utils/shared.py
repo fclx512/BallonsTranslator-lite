@@ -123,7 +123,7 @@ LEGACY_FONTS = frozenset({
 })
 FONT_STYLES = {}  # 所有真实 Qt 家族名（含被归并隐藏的别名）→ 各自样式 { FamilyName: [Style1, Style2...] }
 FONT_FAMILY_ALIAS = {}  # 归并规范名 -> [被隐藏的别名家族名]（见 utils/font_scan.py）
-FONT_PS_NAMES = {}  # 任意家族名（规范名+别名）-> {OS/2 字重: PostScript 名}，PSD 导出用
+FONT_PS_NAMES = {}  # 任意家族名（规范名+别名）-> {OS/2 字重: PostScript 名}，供精简别名补录
 FONT_VARIABLE_AXES = {}  # { FamilyName: { 'wght': (min, max, default) } }
 pbar = {}
 runtime_widget_set = set()
