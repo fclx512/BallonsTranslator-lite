@@ -101,9 +101,24 @@ def replay_guard(*widgets):
 
 
 def command_page_stale(cmd, proj=None) -> bool:
-    """命令所属页历史是否已过期（僵尸）：显式失效标记或页代数不一致。"""
+    """命令所属页历史是否已过期（僵尸）：显式失效标记或页代数不一致。
+
+    组化命令（跨页批量，如整理换行/高级对齐）覆盖多页：任一所属页
+    代数变化即整组僵尸（计划 §四.4——栈外管线换新任一涉及页的
+    blk_list 后，按 (页,块序号) 记的端点快照会写错块）。"""
     if getattr(cmd, "_page_stale", False):
         return True
+    if proj is not None:
+        gen_fn = getattr(proj, "page_generation", None)
+        if gen_fn is not None:
+            group_gens = getattr(cmd, "group_page_generations", None)
+            if group_gens:
+                for pname, gen0 in group_gens.items():
+                    try:
+                        if gen_fn(pname) != gen0:
+                            return True
+                    except Exception:
+                        return True
     pname = getattr(cmd, "pagename", None)
     if pname is None or proj is None:
         return False
@@ -112,6 +127,14 @@ def command_page_stale(cmd, proj=None) -> bool:
     if gen_fn is None or gen0 is None:
         return False
     return gen_fn(pname) != gen0
+
+
+def capture_page_generations(proj, pagenames) -> dict:
+    """组化命令构造期捕获涉及页的代数快照（供 command_page_stale 判定）。"""
+    gen_fn = getattr(proj, "page_generation", None)
+    if gen_fn is None:
+        return {}
+    return {p: gen_fn(p) for p in dict.fromkeys(pagenames) if p}
 
 
 def resolve_blk_entry(blk, item=None, pairw=None):
@@ -1111,6 +1134,11 @@ class NormalizeBreaksCommand(QUndoCommand):
         self.sm = scene_manager
         self.changes = changes
         self._first_redo = False
+        # 组化命令（阶段 4 第二批）：多页代数快照 + 撤销影响面摘要，
+        # 供僵尸判定与撤销确认弹窗消费
+        self.group_page_generations = capture_page_generations(
+            proj, [ch["pagename"] for ch in changes]
+        )
 
         current_pname = proj.current_img
         for ch in changes:
@@ -1122,6 +1150,13 @@ class NormalizeBreaksCommand(QUndoCommand):
             ch["old_html"] = item.toHtml()
             ch["old_rect"] = item.absBoundingRect(qrect=True)
             ch["old_ffmt"] = item.get_fontformat()
+
+    def group_undo_summary(self) -> dict:
+        """撤销影响面：页名 → 块数（撤销确认弹窗/历史面板摘要用）。"""
+        pages = {}
+        for ch in self.changes:
+            pages[ch["pagename"]] = pages.get(ch["pagename"], 0) + 1
+        return pages
 
     def redo(self):
         if self._first_redo:
@@ -1148,6 +1183,8 @@ class NormalizeBreaksCommand(QUndoCommand):
                 else:
                     blk.translation = ch["old_translation"]
                     blk.rich_text = ch["old_rich_text"]
+                # 数据已变，结果图层过期（当前页不标脏语义不变）
+                self.proj.mark_page_needs_rerender(pname)
                 continue
 
             # 当前页：通过 live item 写

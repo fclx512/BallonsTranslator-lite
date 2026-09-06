@@ -117,7 +117,11 @@ from .text_engine.pipeline_formatting import (
     AutoTateChuYokoThread,
     apply_auto_tate_chu_yoko,
 )
-from .textedit_commands import GlobalReplaceApplier
+from .textedit_commands import (
+    GlobalReplaceApplier,
+    capture_page_generations,
+    resolve_blk_item,
+)
 from .textitem import TextBlkItem
 from .update_checker import AboutDialog, CommitUpdateDialog
 from .update_dialog import UpdateReleaseDialog
@@ -153,6 +157,10 @@ class _PointAlignCommand(QUndoCommand):
     Stores old/new ``_bounding_rect`` for every affected TextBlock,
     and for current-page items also old/new scene positions so the
     visual state stays in sync.
+
+    阶段 4 跨页历史：item 引用改存 blk 身份锚点（场景重建后按身份
+    重解析 live item，防止重放到脱离场景的隐形对象）；作为组化命令
+    捕获涉及页代数并暴露撤销影响面摘要。
     """
 
     def __init__(self, canvas, data_changes, item_changes=None):
@@ -162,27 +170,57 @@ class _PointAlignCommand(QUndoCommand):
         self.canvas = canvas
         # (TextBlock, [old_x, old_y, old_w, old_h], [new_x, new_y, new_w, new_h])
         self.data_changes = list(data_changes)
-        # (TextBlkItem, old_QPointF, new_QPointF)  —  current-page items
+        # (blk, old_QPointF, new_QPointF) — 跨页锚点，执行期重解析 item
+        # （调用方 execute_advanced_align 已按 blk 身份构建）
         self.item_changes = list(item_changes or [])
+        # 组化命令（阶段 4 第二批）：涉及页块数摘要 + 多页代数快照
+        proj = canvas.imgtrans_proj
+        wanted = {id(blk) for blk, _, _ in self.data_changes}
+        self._group_pages = {
+            pname: sum(1 for b in page if id(b) in wanted)
+            for pname, page in proj.pages.items()
+        }
+        self._group_pages = {
+            p: n for p, n in self._group_pages.items() if n
+        }
+        self.group_page_generations = capture_page_generations(
+            proj, self._group_pages.keys()
+        )
+
+    def group_undo_summary(self) -> dict:
+        """撤销影响面：页名 → 块数（撤销确认弹窗/历史面板摘要用）。"""
+        return dict(self._group_pages)
+
+    def _mark_affected_dirty(self):
+        """数据/位置已变，非当前页结果图层过期（mark 内部排除当前页）。"""
+        proj = self.canvas.imgtrans_proj
+        for pname in self._group_pages:
+            proj.mark_page_needs_rerender(pname)
 
     def _apply_data(self, changes):
         for blk, old_br, new_br in changes:
             blk._bounding_rect = list(new_br)
 
     def _apply_items(self, changes):
-        for item, old_pos, new_pos in changes:
+        for blk, old_pos, new_pos in changes:
+            item = resolve_blk_item(blk)
+            if item is None:
+                # 锚点不在当前场景（非当前页/块被删）：只落数据
+                continue
             item.oldPos = item.pos()
             item.setPos(new_pos)
 
     def redo(self):
         self._apply_data(self.data_changes)
         self._apply_items(self.item_changes)
+        self._mark_affected_dirty()
 
     def undo(self):
         rev_data = [(blk, new_br, old_br) for blk, old_br, new_br in self.data_changes]
-        rev_items = [(item, new_pos, old_pos) for item, old_pos, new_pos in self.item_changes]
+        rev_items = [(blk, new_pos, old_pos) for blk, old_pos, new_pos in self.item_changes]
         self._apply_data(rev_data)
         self._apply_items(rev_items)
+        self._mark_affected_dirty()
 
 
 mainwindow_cls = Widget if shared.HEADLESS else FramelessWindow
@@ -489,6 +527,9 @@ class MainWindow(mainwindow_cls):
         self.canvas.paste_src_signal.connect(self.on_paste_src)
         # 跨页撤销/历史面板跳转的页切换（阶段 4）
         self.canvas.page_jump_requested.connect(self.on_undo_page_jump_requested)
+        self.canvas.rerender_dirty_pages_requested.connect(
+            self._on_group_undo_rerender_requested
+        )
 
         self.bottomBar.originalSlider.valueChanged.connect(
             self.canvas.setOriginalTransparencyBySlider
@@ -2457,7 +2498,7 @@ class MainWindow(mainwindow_cls):
                             new_pos = old_pos + QPointF(delta, 0)
                         item.oldPos = old_pos
                         item.setPos(new_pos)
-                        item_changes.append((item, old_pos, new_pos))
+                        item_changes.append((blk, old_pos, new_pos))
                         break
 
         # ── 3. Push undo command (applies data + visual) ──────
@@ -2996,12 +3037,16 @@ class MainWindow(mainwindow_cls):
         except Exception as e:
             LOGGER.error(f"Failed to render result image: {e}")
 
-    def _rerender_dirty_pages(self):
+    def _rerender_dirty_pages(self, clear_history=True):
         """Non-disruptively re-render result images for all pages needing it.
 
         Iterates over every page marked by ``page_needs_rerender()``,
         loads it, rebuilds the scene, renders and saves the result image,
         then restores the original page the user was viewing.
+
+        ``clear_history=False``（组化命令撤销后的「同时重渲染」路径）：
+        保留撤销历史——该路径数据未变仅重渲图像，文本命令 blk 锚点
+        依然有效，清栈会让用户刚做的撤销丢掉 redo 能力。
         """
         dirty_pages = [
             p for p in self.imgtrans_proj.pages
@@ -3026,7 +3071,8 @@ class MainWindow(mainwindow_cls):
         for i, pname in enumerate(dirty_pages):
             progress.setValue(i)
             self.imgtrans_proj.set_current_img(pname)
-            self.canvas.clear_undostack(update_saved_step=True)
+            if clear_history:
+                self.canvas.clear_undostack(update_saved_step=True)
             self.canvas._fit_to_window = False
             self.canvas.updateCanvas()
             self.st_manager.updateSceneTextitems()
@@ -4109,6 +4155,10 @@ class MainWindow(mainwindow_cls):
         except Exception as e:
             LOGGER.error(f"rollback toast failed: {e}")
         self._ask_rerender_dirty_pages()
+
+    def _on_group_undo_rerender_requested(self):
+        """组化命令撤销确认弹窗勾选「同时重渲染」：重渲脏页但保留撤销历史。"""
+        self._rerender_dirty_pages(clear_history=False)
 
     def _ask_rerender_dirty_pages(self):
         """替换提交后固定询问是否立即重渲脏页（定稿策略：每次都问）。

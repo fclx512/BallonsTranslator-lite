@@ -274,6 +274,26 @@
             <source>Skipped: that page was rewritten by the pipeline</source>
             <translation>已跳过：该页已被管线重写</translation>
         </message>
+        <message>
+            <source>%1: %2 blocks</source>
+            <translation>%1：%2 块</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <source>Re-render affected pages</source>
+            <translation>同时重渲染受影响页面</translation>
+        </message>
+        <message>
+            <source>This step is a batch edit spanning %1 pages (%2 blocks)</source>
+            <translation>该步是跨 %1 页共 %2 块的批量编辑</translation>
+        </message>
+        <message>
+            <source>… and %1 more pages</source>
+            <translation>……等 %1 页</translation>
+        </message>
     </context>
     <context>
         <name>CategoryCard</name>
@@ -6642,6 +6662,10 @@ This maps automatically to each provider's native parameter
         <message>
             <source>stale</source>
             <translation>已过期</translation>
+        </message>
+        <message>
+            <source>%1 pages / %2 blocks</source>
+            <translation>%1 页 / %2 块</translation>
         </message>
     </context>
     <context>

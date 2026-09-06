@@ -16,7 +16,14 @@ QUndoStack 无公开列表模型（QUndoView 走私有 QUndoStackModel），分�
 + 按栈序穿插的页头与命令状态行。
 """
 
-from qtpy.QtCore import QPointF, QSize, Qt, QAbstractListModel, QModelIndex
+from qtpy.QtCore import (
+    QCoreApplication,
+    QPointF,
+    QSize,
+    Qt,
+    QAbstractListModel,
+    QModelIndex,
+)
 from qtpy.QtGui import QPalette, QPainter
 from qtpy.QtWidgets import (
     QAbstractItemView,
@@ -171,6 +178,18 @@ class _HistoryModel(QAbstractListModel):
                     last_page = pname
                 zombie = command_page_stale(cmd, proj)
                 text = cmd.text()
+                # 组化命令（阶段 4 第二批）：单行组名 + 影响面摘要
+                summary_fn = getattr(cmd, "group_undo_summary", None)
+                if callable(summary_fn):
+                    pages = summary_fn() or {}
+                    if pages:
+                        text = (
+                            f"{text} · "
+                            + QCoreApplication.translate(
+                                "HistoryPanel", "%1 pages / %2 blocks"
+                            ).replace("%1", str(len(pages)))
+                            .replace("%2", str(sum(pages.values())))
+                        )
                 if zombie:
                     text = f"{text} ({panel.zombie_label})"
                 rows.append({"kind": "state", "pos": i + 1, "text": text,

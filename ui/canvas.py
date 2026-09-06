@@ -19,6 +19,7 @@ from qtpy.QtGui import (
 )
 from qtpy.QtWidgets import (
     QApplication,
+    QCheckBox,
     QGraphicsItem,
     QGraphicsLineItem,
     QGraphicsPathItem,
@@ -28,6 +29,7 @@ from qtpy.QtWidgets import (
     QGraphicsSceneDragDropEvent,
     QGraphicsSceneMouseEvent,
     QGraphicsView,
+    QMessageBox,
     QRubberBand,
     QScrollBar,
 )
@@ -368,6 +370,9 @@ class Canvas(QGraphicsScene):
     # 跨页撤销门请求跳页（mainwindow 接管切页，复用完整切页链路）
     page_jump_requested = Signal(str)
 
+    # 组化命令撤销后请求重渲脏页（用户在确认弹窗勾选；mainwindow 接管）
+    rerender_dirty_pages_requested = Signal()
+
     imgtrans_proj: ProjImgTrans = None
     painting_pen = QPen()
     painting_shape = 0
@@ -456,6 +461,8 @@ class Canvas(QGraphicsScene):
         self._suppress_undo_toast = False  # 历史面板跳转期间抑制撤回提示
         # 跨页撤销门：armed = (cmd, 'undo'|'redo')，等待二次确认（阶段 4）
         self._cross_undo_armed = None
+        # 组化命令确认弹窗的「同时重渲染」勾选暂存（确认→撤销→emit 消费）
+        self._group_undo_rerender = False
         self._edit_session_timer = QTimer(self)
         self._edit_session_timer.setSingleShot(True)
         self._edit_session_timer.setInterval(_EDIT_SESSION_IDLE_MS)
@@ -2155,6 +2162,10 @@ class Canvas(QGraphicsScene):
             if self._gate_cross_page(cmd, "undo", auto_cross_page):
                 return
             stale = command_page_stale(cmd, getattr(cmd, "_proj", None))
+            if not stale and not auto_cross_page:
+                # 组化命令撤销前确认（取消则本步不执行）
+                if not self._confirm_group_undo(cmd):
+                    return
         undo_name = stack.undoText()
         stack.undo()
         self.on_textstack_changed()
@@ -2163,6 +2174,58 @@ class Canvas(QGraphicsScene):
             self._notify_skipped_step()
         else:
             self._notify_undo(undo_name)
+        if self._group_undo_rerender:
+            self._group_undo_rerender = False
+            self.rerender_dirty_pages_requested.emit()
+
+    def _confirm_group_undo(self, cmd) -> bool:
+        """组化命令撤销前确认（阶段 4 第二批，决策 4）。
+
+        跨页批量命令（整理换行/高级对齐）的 undo 一次还原多页数据，
+        先列影响面并给「同时重渲染」选项；取消则本步不执行。仅影响
+        当前页的组命令不弹（与普通撤销无异）；僵尸步与历史面板跳转
+        路径（auto_cross_page）不经此门。"""
+        self._group_undo_rerender = False
+        summary_fn = getattr(cmd, "group_undo_summary", None)
+        if not callable(summary_fn):
+            return True
+        pages = summary_fn() or {}
+        current = getattr(self.imgtrans_proj, "current_img", None)
+        if not any(p != current for p in pages):
+            return True
+        total = sum(pages.values())
+        views = self.views()
+        # 父对象取顶层窗口（应用惯例）：FramelessWindow 有 win32 原生定制，
+        # 原生模态对话框挂到非顶层子控件（gv）上会 access violation
+        box = QMessageBox(views[0].window() if views else None)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(cmd.text())
+        box.setText(
+            self.tr("This step is a batch edit spanning %1 pages (%2 blocks)")
+            .replace("%1", str(len(pages)))
+            .replace("%2", str(total))
+        )
+        lines = [
+            self.tr("%1: %2 blocks").replace("%1", p).replace("%2", str(n))
+            for p, n in list(pages.items())[:8]
+        ]
+        if len(pages) > 8:
+            lines.append(
+                self.tr("… and %1 more pages").replace("%1", str(len(pages) - 8))
+            )
+        box.setInformativeText("\n".join(lines))
+        # 复选框须构造期挂父：无父临时对象在 setCheckBox 接管前可能被
+        # PyQt GC 回收 → box 内部指针悬空，checkBox() 访问即 access violation
+        box.setCheckBox(QCheckBox(self.tr("Re-render affected pages"), box))
+        undo_btn = box.addButton(
+            self.tr("Undo"), QMessageBox.ButtonRole.AcceptRole
+        )
+        box.addButton(self.tr("Cancel"), QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is not undo_btn:
+            return False
+        self._group_undo_rerender = box.checkBox().isChecked()
+        return True
 
     def _notify_undo(self, undo_name: str):
         # 撤回行为名提示（undoText 为空 = 无可撤步不提示；历史面板跳转
