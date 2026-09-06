@@ -684,7 +684,21 @@ class DrawingPanel(Widget):
         masklayout.addWidget(ToolNameLabel(TOOL_LABEL_WIDTH, self.tr("Mask Opacity")))
         masklayout.addWidget(self.maskTransperancySlider)
 
-        layout = QVBoxLayout(self)
+        # 左缘窄栏（功能图标，浮层面板锚定其左侧画布区，同文本区
+        # scenetext_manager 的 format_row 模式）：修复历史入口不占
+        # 工具行的激活态，与四个编辑工具平行
+        from ui.panel_rail import PanelRail
+
+        body = QWidget(self)
+        layout = QVBoxLayout(body)
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        self.rail = PanelRail(self)
+        outer.addWidget(self.rail)
+        outer.addWidget(body, 1)
+        self.install_history_launcher()
+
         layout.addLayout(toolboxlayout)
         layout.addWidget(SeparatorWidget())
         layout.addWidget(self.toolConfigStackwidget)
@@ -956,6 +970,12 @@ class DrawingPanel(Widget):
         if self.currentTool is not None:
             self.currentTool.setChecked(False)
             self.currentTool.setChecked(True)
+        # 切回绘制模式按开合记忆恢复修复历史浮层（同文本区
+        # on_textpanel_visibility 语义：至多恢复一个，这里仅一个）
+        if self.history_launcher is not None and (
+            self.history_launcher.isChecked() or pcfg.inpaint_history_dock_open
+        ):
+            self._ensure_history_dock().open_panel()
         return super().showEvent(event)
 
     def on_finish_painting(self, stroke_item: StrokeImgItem):
@@ -1700,6 +1720,9 @@ class DrawingPanel(Widget):
 
     def hideEvent(self, e) -> None:
         self.clearInpaintItems()
+        # 修复历史浮层随面板隐藏（保留开合记忆与图标勾选，切回恢复）
+        if self.history_dock is not None and not self.history_dock.isHidden():
+            self.history_dock.hide_keep_state()
         # The crop frame lives on the canvas scene; hiding the panel leaves the
         # current tool as aiTool so without this the rect would stay visible in
         # text-edit / text-block modes. Re-evaluate it on hide.
@@ -1736,6 +1759,51 @@ class DrawingPanel(Widget):
         # Re-place the crop centered if the page's image size changed (e.g. it
         # was tiny before the image loaded).
         self._update_crop_visibility()
+        # 修复历史过滤视图按当前页过滤，切页即空、回页恢复（3b）
+        if self._history_panel is not None:
+            self._history_panel.model.rebuild()
+
+    def install_history_launcher(self):
+        """修复历史入口（阶段4-3b）：左缘窄栏图标 + 硬连接浮层（RailDockPanel），
+        与文本区各 dock 同款；内容 = 全局栈的当前页过滤视图，非第二份栈；
+        涂鸦栈历史仍无入口（页级、切页即丢，维持拍板）。dock 惰性创建——
+        构造期控件树未挂进主窗口，宿主/锚点解析不可靠。"""
+        from ui.panel_rail import RailLauncherButton
+
+        self._history_panel = None
+        self.history_dock = None
+        self.history_launcher = RailLauncherButton("rail_history")
+        self.history_launcher.setToolTip(self.tr("Inpaint History"))
+        self.history_launcher.toggled.connect(self._on_history_launcher_toggled)
+        self.rail.add_launcher(self.history_launcher)
+
+    def _ensure_history_dock(self):
+        if self.history_dock is None:
+            from ui.custom_widget import RailDockPanel
+            from ui.history_panel import HistoryPanel
+
+            self._history_panel = HistoryPanel(image_filter=True)
+            self.history_dock = RailDockPanel(
+                self.tr("Inpaint History"),
+                self._history_panel,
+                rail=self.rail,
+                config_open="inpaint_history_dock_open",
+            )
+            self.history_dock.closed.connect(self._on_history_dock_closed)
+        return self.history_dock
+
+    def _on_history_launcher_toggled(self, checked: bool):
+        if checked:
+            self._ensure_history_dock().open_panel()
+        elif self.history_dock is not None:
+            self.history_dock.close_panel()
+
+    def _on_history_dock_closed(self):
+        from qtpy.QtCore import QSignalBlocker
+
+        if self.history_launcher.isChecked():
+            with QSignalBlocker(self.history_launcher):
+                self.history_launcher.setChecked(False)
 
     # ── Photoshop external editing ──────────────────────────────────────
 

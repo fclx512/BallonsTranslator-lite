@@ -54,6 +54,10 @@ class StrokeItemUndoCommand(QUndoCommand):
 
 
 class InpaintUndoCommand(QUndoCommand):
+    # 图像命令标记（阶段4-3b）：入全局跨页栈，打页标签 + 图像代数，
+    # undo/redo 只在所属页为当前页时执行（armed 门保证）
+    image_history = True
+
     def __init__(
         self,
         canvas: Canvas,
@@ -82,6 +86,8 @@ class InpaintUndoCommand(QUndoCommand):
         self.inpaint_rect = inpaint_rect
 
     def redo(self) -> None:
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return
         inpaint_rect = self.inpaint_rect
         img_array = self.canvas.imgtrans_proj.inpainted_array
         mask_array = self.canvas.imgtrans_proj.mask_array
@@ -96,6 +102,8 @@ class InpaintUndoCommand(QUndoCommand):
         self.canvas.updateLayers()
 
     def undo(self) -> None:
+        if command_page_stale(self, getattr(self, "_proj", None)):
+            return
         inpaint_rect = self.inpaint_rect
         img_array = self.canvas.imgtrans_proj.inpainted_array
         mask_array = self.canvas.imgtrans_proj.mask_array

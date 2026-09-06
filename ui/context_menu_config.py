@@ -319,7 +319,8 @@ def _undo_enabled(mw) -> bool:
     if c.textEditMode():
         return c.text_undo_stack.canUndo()
     if c.drawMode():
-        return c.draw_undo_stack.canUndo()
+        # 与 canvas.undo 同路由：涂鸦栈优先，空则全局栈（3b 跨模态回退）
+        return c.draw_undo_stack.canUndo() or c.text_undo_stack.canUndo()
     return False
 
 
@@ -328,7 +329,7 @@ def _redo_enabled(mw) -> bool:
     if c.textEditMode():
         return c.text_undo_stack.canRedo()
     if c.drawMode():
-        return c.draw_undo_stack.canRedo()
+        return c.draw_undo_stack.canRedo() or c.text_undo_stack.canRedo()
     return False
 
 

@@ -40,7 +40,9 @@ class FloatDropPanel(Widget):
             host = central or window
         super().__init__(host)
         self._anchor = anchor
-        self._edge = edge if edge is not None else anchor.parentWidget()
+        # 锚点构造期往往尚未挂进任何布局（parentWidget() 为 None），
+        # 左缘参照留空，首次 _place 时惰性解析
+        self._edge = edge
         self._content = content_widget
 
         layout = QVBoxLayout(self)
@@ -115,6 +117,13 @@ class FloatDropPanel(Widget):
 
     # ── internals ────────────────────────────────────────────────
 
+    def _resolve_edge(self):
+        """左缘参照控件惰性解析：锚点所在侧栏；锚点还没进布局时兜底
+        用锚点自身（退化为锚点右缘展开，不崩溃）。"""
+        if self._edge is None:
+            self._edge = self._anchor.parentWidget() or self._anchor
+        return self._edge
+
     def _place(self) -> None:
         """左缘钉在侧栏右缘外侧、顶随锚点按钮，尺寸按内容给足。"""
         host = self.parentWidget()
@@ -122,8 +131,9 @@ class FloatDropPanel(Widget):
             return
         anchor_tl = self._anchor.mapTo(host, QPoint(0, 0))
         y = anchor_tl.y() + self._anchor.height() + 4
-        edge_tl = self._edge.mapTo(host, QPoint(0, 0))
-        left = edge_tl.x() + self._edge.width() + 4
+        edge = self._resolve_edge()
+        edge_tl = edge.mapTo(host, QPoint(0, 0))
+        left = edge_tl.x() + edge.width() + 4
         # 可用宽不足时收缩，保底 160（宿主几何未就绪的测试环境避免负宽）
         avail_w = max(host.width() - left - self.MARGIN, 160)
         w = max(self.MIN_WIDTH, self.sizeHint().width())

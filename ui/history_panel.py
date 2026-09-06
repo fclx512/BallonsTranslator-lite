@@ -9,7 +9,9 @@
 点击命令行 = 循环调用 canvas.undo()/redo() 逐步跳转（auto_cross_page
 路径：跨页自动切页，显式意图不二次确认）——复用每步记账（会话闭合、
 手势取消、边界刷新），跳转期间经 ``_suppress_undo_toast`` 抑制撤回
-toast。绘制栈历史暂缺入口（窄栏仅在文本模式可见）。
+toast。``image_filter=True`` 为修复区过滤视图（阶段4-3b）：只显示
+当前页的修复命令（全局栈的过滤，非第二份栈），绘制模式跳转强制
+全局栈步进。涂鸦（页级绘制栈）历史仍无入口，维持拍板。
 
 QUndoStack 无公开列表模型（QUndoView 走私有 QUndoStackModel），分组
 展示须自带模型；行结构 = 首行「原始状态」（对应 setEmptyLabel 语义）
@@ -27,6 +29,7 @@ from qtpy.QtCore import (
 from qtpy.QtGui import QPalette, QPainter
 from qtpy.QtWidgets import (
     QAbstractItemView,
+    QLabel,
     QListView,
     QSizePolicy,
     QStyledItemDelegate,
@@ -85,7 +88,9 @@ class _SavedDotDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         panel = self._panel
         stack = panel.stack
-        current_pos = stack.index() if stack is not None else -1
+        current_pos = panel.current_filtered_pos() if panel.image_filter else (
+            stack.index() if stack is not None else -1
+        )
         role = self._palette_role(option, index, current_pos)
         is_header = role == "header"
         painter.save()
@@ -161,39 +166,66 @@ class _HistoryModel(QAbstractListModel):
     def rebuild(self):
         self.beginResetModel()
         panel = self._panel
-        rows = [{"kind": "state", "pos": 0, "text": panel.empty_label,
-                 "zombie": False}]
+        rows = []
         stack = panel.stack
         if stack is not None:
             proj = getattr(panel._canvas, "imgtrans_proj", None)
-            last_page = None
-            for i in range(stack.count()):
-                cmd = stack.command(i)
-                pname = getattr(cmd, "pagename", None)
-                if pname is None:
-                    pname = "—"
-                if pname != last_page:
-                    rows.append({"kind": "header", "pos": None, "text": pname,
-                                 "zombie": False})
-                    last_page = pname
-                zombie = command_page_stale(cmd, proj)
-                text = cmd.text()
-                # 组化命令（阶段 4 第二批）：单行组名 + 影响面摘要
-                summary_fn = getattr(cmd, "group_undo_summary", None)
-                if callable(summary_fn):
-                    pages = summary_fn() or {}
-                    if pages:
-                        text = (
-                            f"{text} · "
-                            + QCoreApplication.translate(
-                                "HistoryPanel", "%1 pages / %2 blocks"
-                            ).replace("%1", str(len(pages)))
-                            .replace("%2", str(sum(pages.values())))
-                        )
-                if zombie:
-                    text = f"{text} ({panel.zombie_label})"
-                rows.append({"kind": "state", "pos": i + 1, "text": text,
-                             "zombie": zombie})
+            if panel.image_filter:
+                # 修复区过滤视图（阶段4-3b）：只显示当前页的修复命令，
+                # 行号仍 = 全局栈位置（点击跳转沿全局栈逐步走）。切页后
+                # 重建即空（handle_page_changed 钩子），回页恢复显示。
+                cur_page = getattr(proj, "current_img", None)
+                shown = [
+                    i
+                    for i in range(stack.count())
+                    if getattr(stack.command(i), "image_history", False)
+                    and getattr(stack.command(i), "pagename", None) == cur_page
+                ]
+                if shown:
+                    rows.append({"kind": "state", "pos": shown[0],
+                                 "text": panel.empty_label, "zombie": False})
+                else:
+                    rows.append({"kind": "state", "pos": stack.index(),
+                                 "text": panel.empty_label, "zombie": False})
+                for i in shown:
+                    cmd = stack.command(i)
+                    zombie = command_page_stale(cmd, proj)
+                    text = cmd.text()
+                    if zombie:
+                        text = f"{text} ({panel.zombie_label})"
+                    rows.append({"kind": "state", "pos": i + 1, "text": text,
+                                 "zombie": zombie})
+            else:
+                rows.append({"kind": "state", "pos": 0,
+                             "text": panel.empty_label, "zombie": False})
+                last_page = None
+                for i in range(stack.count()):
+                    cmd = stack.command(i)
+                    pname = getattr(cmd, "pagename", None)
+                    if pname is None:
+                        pname = "—"
+                    if pname != last_page:
+                        rows.append({"kind": "header", "pos": None,
+                                     "text": pname, "zombie": False})
+                        last_page = pname
+                    zombie = command_page_stale(cmd, proj)
+                    text = cmd.text()
+                    # 组化命令（阶段 4 第二批）：单行组名 + 影响面摘要
+                    summary_fn = getattr(cmd, "group_undo_summary", None)
+                    if callable(summary_fn):
+                        pages = summary_fn() or {}
+                        if pages:
+                            text = (
+                                f"{text} · "
+                                + QCoreApplication.translate(
+                                    "HistoryPanel", "%1 pages / %2 blocks"
+                                ).replace("%1", str(len(pages)))
+                                .replace("%2", str(sum(pages.values())))
+                            )
+                    if zombie:
+                        text = f"{text} ({panel.zombie_label})"
+                    rows.append({"kind": "state", "pos": i + 1, "text": text,
+                                 "zombie": zombie})
         self._rows = rows
         self.endResetModel()
 
@@ -216,17 +248,30 @@ class _HistoryModel(QAbstractListModel):
 
 
 class HistoryPanel(QWidget):
-    """撤销历史浮层内容：按页分组的命令历史 + 点击跳转，见模块 docstring。"""
+    """撤销历史浮层内容：按页分组的命令历史 + 点击跳转，见模块 docstring。
 
-    def __init__(self, parent=None):
+    ``image_filter=True`` 为修复区过滤视图（阶段4-3b）：只显示当前页的
+    修复命令（全局栈的当前页过滤，非第二份栈），顶部带提示文案；点击
+    跳转仍沿全局栈逐步走（途经的文本命令一并撤销/重做，线性史语义）。"""
+
+    def __init__(self, parent=None, image_filter=False):
         super().__init__(parent)
         self._canvas = None
         self.stack = None
+        self.image_filter = image_filter
         self.empty_label = self.tr("Original")
         self.zombie_label = self.tr("stale")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(0)
+        if image_filter:
+            hint_text = self.tr(
+                "Only shows repair history of the current page — use the text-side history panel to undo across pages"
+            )
+            hint = QLabel(hint_text, self)
+            hint.setWordWrap(True)
+            hint.setObjectName("HistoryPanelHint")
+            layout.addWidget(hint)
         self.model = _HistoryModel(self, self)
         self.view = QListView(self)
         self.view.setModel(self.model)
@@ -262,6 +307,19 @@ class HistoryPanel(QWidget):
             self.model.rebuild()
         super().showEvent(event)
 
+    def current_filtered_pos(self):
+        """过滤视图的当前位高亮：已显示状态行中 pos ≤ 栈位置的最大者
+        （栈顶未必是修复命令，直比 index 会失去高亮）。"""
+        if self.stack is None:
+            return -1
+        idx = self.stack.index()
+        best = -1
+        for row in self.model._rows:
+            pos = row.get("pos")
+            if row["kind"] == "state" and pos is not None and pos <= idx:
+                best = max(best, pos)
+        return best
+
     def _on_row_clicked(self, index):
         canvas, stack = self._canvas, self.stack
         if canvas is None or stack is None or not index.isValid():
@@ -276,13 +334,21 @@ class HistoryPanel(QWidget):
         if target == stack.index():
             return
         canvas._suppress_undo_toast = True
+        # 文本模式走完整 undo()/redo() 入口；绘制模式（修复区过滤视图）
+        # 必须强制全局栈步进——canvas.undo 的涂鸦栈优先路由会截胡，把
+        # 跳转变成了撤销涂鸦
+        if canvas.textEditMode():
+            undo_step, redo_step = canvas.undo, canvas.redo
+        else:
+            undo_step = canvas._text_undo_step
+            redo_step = canvas._text_redo_step
         try:
             guard = 0
             while stack.index() != target and guard < _JUMP_STEP_CAP:
                 if stack.index() > target:
-                    canvas.undo(auto_cross_page=True)
+                    undo_step(auto_cross_page=True)
                 else:
-                    canvas.redo(auto_cross_page=True)
+                    redo_step(auto_cross_page=True)
                 guard += 1
         finally:
             canvas._suppress_undo_toast = False

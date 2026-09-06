@@ -755,8 +755,10 @@ class ImgtransThread(QThread):
                         mask = np.bitwise_or(mask, existed_mask)
                 self.imgtrans_proj.pages[imgname] = blk_list
                 # 页屏障（阶段 4）：检测管线整体换新 blk_list，该页既有
-                # 撤销命令的 blk 锚点全部失效，代数 +1 使其判定为僵尸
+                # 撤销命令的 blk 锚点全部失效，代数 +1 使其判定为僵尸；
+                # 检测遮罩重写同属图像栈外写入（3b），图像代数一并 +1
                 self.imgtrans_proj.bump_page_generation(imgname)
+                self.imgtrans_proj.bump_page_image_generation(imgname)
 
                 if mask is not None and not cfg_module.enable_ocr:
                     self.imgtrans_proj.save_mask(imgname, mask)
@@ -824,6 +826,11 @@ class ImgtransThread(QThread):
                             )
                             self.imgtrans_proj.save_inpainted(
                                 imgname, inpainted
+                            )
+                            # 修复阶段直写图像（3b 页屏障）：该页修复撤销
+                            # 历史的端点已与磁盘态脱节，作废成僵尸
+                            self.imgtrans_proj.bump_page_image_generation(
+                                imgname
                             )
                         except Exception as e:
                             create_error_dialog(

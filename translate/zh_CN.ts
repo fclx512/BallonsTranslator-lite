@@ -1269,6 +1269,10 @@
     <context>
         <name>DrawingPanel</name>
         <message>
+            <source>Inpaint History</source>
+            <translation>修复历史</translation>
+        </message>
+        <message>
             <source>queued</source>
             <translation>排队</translation>
         </message>
@@ -6666,6 +6670,10 @@ This maps automatically to each provider's native parameter
         <message>
             <source>%1 pages / %2 blocks</source>
             <translation>%1 页 / %2 块</translation>
+        </message>
+        <message>
+            <source>Only shows repair history of the current page — use the text-side history panel to undo across pages</source>
+            <translation>仅显示当前页的修复历史——跨页撤销请在文本区历史面板继续</translation>
         </message>
     </context>
     <context>

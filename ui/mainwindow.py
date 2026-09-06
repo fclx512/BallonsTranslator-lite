@@ -782,6 +782,7 @@ class MainWindow(mainwindow_cls):
             "textstyle_dock_open",
             "transform_dock_open",
             "history_dock_open",
+            "inpaint_history_dock_open",
         ):
             setattr(pcfg, flag, False)
 
@@ -1786,6 +1787,17 @@ class MainWindow(mainwindow_cls):
             if self.save_on_page_changed:
                 self.conditional_save()
             new_pagename = item.text()
+            # 页屏障（阶段4-3b）：图像侧脏且未被条件保存落盘时，离页重载
+            # 会从磁盘换新图像缓冲——该页修复历史作废（僵尸化），避免陈旧
+            # 端点写回。条件保存成功则计数器已对齐，不触发。
+            old_pagename = self.imgtrans_proj.current_img
+            if self.save_on_page_changed:
+                self.conditional_save()
+            if (
+                old_pagename is not None
+                and self.canvas.saved_imgstep != self.canvas.num_imgstep
+            ):
+                self.imgtrans_proj.bump_page_image_generation(old_pagename)
             self.imgtrans_proj.set_current_img(new_pagename)
             # 阶段 4 跨页历史：文本栈不清，仅清页级绘制栈
             self.canvas.prepare_page_switch()
@@ -2156,23 +2168,32 @@ class MainWindow(mainwindow_cls):
     def on_redo(self):
         # A live transform preview must not leak across the history boundary.
         self.st_manager.formatpanel.resolve_text_transform_edits_for_history_change()
-        before = self._history_index()
+        before = self._history_index("redo")
         self.canvas.redo()
         self._notify_history("redo", before)
 
     def on_undo(self):
         self.st_manager.formatpanel.resolve_text_transform_edits_for_history_change()
-        before = self._history_index()
+        before = self._history_index("undo")
         self.canvas.undo()
         self._notify_history("undo", before)
 
-    def _history_index(self):
-        """当前模式撤销栈的历史位置；不在可撤销模式时返回 None。"""
-        if self.canvas.textEditMode():
-            return self.canvas.text_undo_stack.index()
-        if self.canvas.drawMode():
-            return self.canvas.draw_undo_stack.index()
+    def _active_history_stack(self, direction: str):
+        """当前模式下撤销/重做实际消费的栈（与 canvas.undo/redo 同路由）：
+        文本模式=全局栈；绘制模式涂鸦栈可动则涂鸦栈，否则回退全局栈。"""
+        c = self.canvas
+        if c.textEditMode():
+            return c.text_undo_stack
+        if c.drawMode():
+            draw = c.draw_undo_stack
+            can = draw.canUndo() if direction == "undo" else draw.canRedo()
+            return draw if can else c.text_undo_stack
         return None
+
+    def _history_index(self, direction: str):
+        """当前模式撤销/重做实际消费栈的历史位置；不可动时返回 None。"""
+        stack = self._active_history_stack(direction)
+        return None if stack is None else stack.index()
 
     def _notify_history(self, action: str, before):
         """画布左下角撤销/重做 toast：历史位置未变（无可撤销内容）则不提示；
@@ -2181,11 +2202,9 @@ class MainWindow(mainwindow_cls):
         if before is None:
             return
         try:
-            stack = (
-                self.canvas.text_undo_stack
-                if self.canvas.textEditMode()
-                else self.canvas.draw_undo_stack
-            )
+            stack = self._active_history_stack(action)
+            if stack is None:
+                return
             if stack.index() == before:
                 if (
                     action == "undo"
@@ -3070,6 +3089,16 @@ class MainWindow(mainwindow_cls):
 
         for i, pname in enumerate(dirty_pages):
             progress.setValue(i)
+            # 本循环直连 set_current_img 不走切页链路（无条件保存）：保留
+            # 历史的组化重渲路径（clear_history=False）下，离页图像侧脏
+            # 即重载换新缓冲，修复历史作废（僵尸化），防陈旧端点写回
+            if not clear_history:
+                _prev = self.imgtrans_proj.current_img
+                if (
+                    _prev is not None
+                    and self.canvas.saved_imgstep != self.canvas.num_imgstep
+                ):
+                    self.imgtrans_proj.bump_page_image_generation(_prev)
             self.imgtrans_proj.set_current_img(pname)
             if clear_history:
                 self.canvas.clear_undostack(update_saved_step=True)

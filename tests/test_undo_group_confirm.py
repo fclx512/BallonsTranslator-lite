@@ -271,6 +271,7 @@ class GroupConfirmTest(unittest.TestCase):
         panel = SimpleNamespace(
             empty_label="Original",
             zombie_label="stale",
+            image_filter=False,
             stack=self.canvas.text_undo_stack,
             _canvas=self.canvas,
         )

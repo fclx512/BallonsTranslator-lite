@@ -89,13 +89,14 @@ class TestInpaintMerge(unittest.TestCase):
         )
 
     def push(self, cmd):
-        self.canvas.push_draw_command(cmd)
+        # 3b 起修复命令经 push_undo_command 路由入全局栈（image_history）
+        self.canvas.push_undo_command(cmd)
 
     def test_same_rect_merges_to_single_step(self):
         self.push(self.make_cmd(1, 0))  # 0 → 1
         self.push(self.make_cmd(2, 1))  # 1 → 2，吸收
-        self.assertEqual(self.canvas.draw_undo_stack.count(), 1)
-        self.assertEqual(self.canvas.num_pushed_drawstep, 1)
+        self.assertEqual(self.canvas.text_undo_stack.count(), 1)
+        self.assertEqual(self.canvas.num_imgstep, 1)
         np.testing.assert_array_equal(self.img, 2)  # 末后端点已生效
 
     def test_absorb_keeps_first_before_not_intermediate(self):
@@ -116,34 +117,42 @@ class TestInpaintMerge(unittest.TestCase):
     def test_different_rect_no_merge(self):
         self.push(self.make_cmd(1, 0))
         self.push(self.make_cmd(2, 1, rect=[5, 5, 20, 15]))
-        self.assertEqual(self.canvas.draw_undo_stack.count(), 2)
+        self.assertEqual(self.canvas.text_undo_stack.count(), 2)
 
-    def test_other_command_between_breaks_merge(self):
+    def test_doodle_between_does_not_break_image_merge(self):
+        # 涂鸦走绘制层、不碰 inpainted_array：两修复在全局栈中相邻且
+        # 图像域连续，聚合仍成立（打断聚合的是全局栈顶为其他命令）
         self.push(self.make_cmd(1, 0))
-        self.push(OtherCmd())
+        self.push(OtherCmd())  # 无 image_history → 绘制模式路由入涂鸦栈
         self.push(self.make_cmd(2, 1))
-        self.assertEqual(self.canvas.draw_undo_stack.count(), 3)
+        self.assertEqual(self.canvas.text_undo_stack.count(), 1)
+        self.assertEqual(self.canvas.draw_undo_stack.count(), 1)
+        # 撤销路由：涂鸦栈优先先撤涂鸦，第二步才回退全局栈撤修复
+        self.canvas.undo()
+        np.testing.assert_array_equal(self.img, 2)
+        self.canvas.undo()
+        np.testing.assert_array_equal(self.img, 0)  # 撤销回首前
 
     def test_clean_state_no_merge(self):
         self.push(self.make_cmd(1, 0))
         self.canvas.update_saved_undostep()
         self.push(self.make_cmd(2, 1))  # 干净保存点上不聚合
-        self.assertEqual(self.canvas.draw_undo_stack.count(), 2)
+        self.assertEqual(self.canvas.text_undo_stack.count(), 2)
 
     def test_not_at_top_no_merge(self):
         self.push(self.make_cmd(1, 0))
         self.canvas.undo()  # 栈顶不再是 c1（有 redo 残尾）
         self.push(self.make_cmd(2, 9))  # 非栈顶不聚合，push 截掉残尾正常入栈
         np.testing.assert_array_equal(self.img, 2)
-        self.assertEqual(self.canvas.draw_undo_stack.count(), 1)
+        self.assertEqual(self.canvas.text_undo_stack.count(), 1)
         self.canvas.undo()
         np.testing.assert_array_equal(self.img, 9)  # 新命令自己的首前，非被吸收
 
     def test_dirty_accounting_survives_merge(self):
         self.push(self.make_cmd(1, 0))
         self.push(self.make_cmd(2, 1))  # 吸收：计数器与栈坐标都不动
-        self.assertEqual(self.canvas.num_pushed_drawstep, 1)
-        self.assertEqual(self.canvas.draw_undo_stack.index(), 1)
+        self.assertEqual(self.canvas.num_imgstep, 1)
+        self.assertEqual(self.canvas.text_undo_stack.index(), 1)
         self.assertTrue(self.canvas.draw_change_unsaved())
         self.canvas.update_saved_undostep()
         self.assertFalse(self.canvas.draw_change_unsaved())

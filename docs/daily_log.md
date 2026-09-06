@@ -4,6 +4,26 @@
 
 ## 2026-09-06
 
+### 撤销体系阶段 4 第三批落地：图像修复并入全局撤销栈（3a 同区域聚合 + 3b 单一栈双视图）+ 修复区历史入口窄栏化
+
+**问题/需求：** 用户实测第三批前状态：修复区改动在文本区历史面板不可见、须跳修复区撤销、切页丢历史。按计划 §五实施：3a（同区域连续修复聚合，随 cd2e364 先行提交）+ 3b（修复命令并入全局栈）。3b 实机验收两轮反馈：①点击修复区历史图标闪退；②入口占工具行激活态且图标不齐，用户建议改窄边侧栏。全部验收通过。
+
+**改动要点：**
+
+- **修复命令入全局栈**：`ui/drawing_commands.py::InpaintUndoCommand` 类标记 `image_history=True`，`ui/canvas.py::push_undo_command` 先于模式分流到 `push_image_command`；涂鸦留页级绘制栈（可推翻点）。undo/redo 补页代数自守卫（僵尸无操作）。
+- **图像代数独立计数**：`utils/proj_imgtrans.py::page_image_generation`/`bump_page_image_generation` 与文本代数分开（共享计数器会互相误杀）；`ui/textedit_commands.py::command_page_stale` 按属性分支比对。bump 点：检测/修复管线直写（`ui/module_manager.py`）、切页/重渲离页时图像侧仍脏（`ui/mainwindow.py`；条件保存成功不触发——磁盘重载精确复现保存点，跨页往返历史存活）。
+- **图像脏记账**：第二对计数器 `num_imgstep`/`saved_imgstep`（不变量=全局栈 [0,index) 图像命令数），驱动 `draw_change_unsaved`（修复图/遮罩落盘门语义不变）；`push_image_command` 处理 undoLimit 截断平移（公式 `index0 + 1 - 新 count`，恰好隔离前端截断）。
+- **撤销路由**：绘制模式涂鸦栈可动则涂鸦栈、否则回退全局栈（跨模态）；右键菜单 enabled 判定（`ui/context_menu_config.py`）与历史 toast（`_active_history_stack`）同路由。
+- **修复区历史入口（验收返工定稿）**：DrawingPanel 左缘 `ui/panel_rail.py::PanelRail` 窄栏图标 + `RailDockPanel` 惰性创建（构造期 rail.window() 不可靠），开合记忆 `pcfg.inpaint_history_dock_open`（已声明+进启动清名单）；切文本区浮层随隐保留状态、切回恢复。初版工具行图标 + FloatDropPanel 闪退根因：构造期 toolboxlayout 未上树 → `anchor.parentWidget()` 为 None → `_place` 对 None.mapTo 抛 AttributeError（PyQt6 槽内未捕获异常 qFatal）；`ui/custom_widget/float_drop_panel.py` 补 `_edge` 惰性解析（GlobalSearchWidget 仍用其）。
+- **历史面板过滤视图**：`ui/history_panel.py::HistoryPanel` 新增 `image_filter` 模式——只显示当前页修复命令、顶部跨页提示；行号=全局栈位置，绘制模式跳转强制 `_text_undo_step/_text_redo_step`（涂鸦优先路由会截胡）。
+- **侧栏浮层拖拽三向化（验收反馈）**：`ui/custom_widget/rail_dock_panel.py` 删左下角斜纹手柄图标，改左缘/下缘/左下角三向隐形拖拽区（专用子控件承载事件——面板本体被 body 子控件覆盖，边缘事件到不了 self；光标形状即提示）。
+- **历史条目悬停修复（验收反馈）**：hover 从未生效的根因=自定义 paint 短路了 QSS `::item:hover`；delegate 补 `@hoverBackgroundColor` 悬停底色，当前位行 Highlight 底色上加粗。
+- **护网**：`tests/test_undo_inpaint_global.py`（新 10 条）；`tests/test_inpaint_undo_merge.py` 迁移到全局栈路由；`tests/test_panel_rail.py` 手柄测试改三向拖拽；演练台场景验证入口开合/随隐/恢复全链路。
+
+**涉及文件：** `ui/drawing_commands.py`、`ui/canvas.py`、`ui/textedit_commands.py`、`utils/proj_imgtrans.py`、`ui/module_manager.py`、`ui/mainwindow.py`、`ui/context_menu_config.py`、`ui/drawingpanel.py`、`ui/history_panel.py`、`ui/text_panel.py`、`utils/config.py`、`ui/custom_widget/float_drop_panel.py`、`ui/custom_widget/rail_dock_panel.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`tests/test_undo_inpaint_global.py`（新）、`tests/test_inpaint_undo_merge.py`、`tests/test_undo_group_confirm.py`、`tests/test_panel_rail.py`、`docs/技术实现/撤销体系阶段4计划.md`
+
+---
+
 ### 挂账清理批次：加粗拖拽残留 / 攸望竹竖排撑爆 / 饼菜单灰显 / PSD 导出删除 / face 元组崩溃 / 历史面板自开
 
 **问题/需求：** 记忆挂账批量清理 + 用户实机新报两 bug。全部经实机验收。

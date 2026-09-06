@@ -1614,8 +1614,8 @@ class FontFormatPanel(Widget):
 
         内容=``ui/history_panel.py::HistoryPanel``（QUndoView 点击跳转）；
         无选中级作用域，全局模式也可用。开合记忆在
-        ``pcfg.history_dock_open``。绘制栈历史暂缺入口（窄栏仅在文本
-        模式可见），见撤销体系决策记录 §五。
+        ``pcfg.history_dock_open``。阶段4-3b 起全局栈含修复命令（按页
+        分组显示）；涂鸦页级栈仍无入口，见撤销体系决策记录 §五。
         """
         from ui.panel_rail import RailLauncherButton
 

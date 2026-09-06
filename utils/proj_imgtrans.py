@@ -166,6 +166,21 @@ class ProjImgTrans:
             gens = self._page_generations = {}
         gens[pagename] = gens.get(pagename, 0) + 1
 
+    # 图像侧代数与文本侧分开计数：管线重跑等图像栈外写入不应僵尸化
+    # 该页文本历史（blk 数据未变），反之文本重写也不该作废修复历史。
+
+    def page_image_generation(self, pagename: str) -> int:
+        gens = getattr(self, "_page_image_generations", None)
+        return gens.get(pagename, 0) if gens else 0
+
+    def bump_page_image_generation(self, pagename: str):
+        """栈外写入某页图像缓冲（遮罩/修复图落盘重载、管线修复阶段）后
+        调用：该页既有修复撤销命令过期成僵尸。"""
+        gens = getattr(self, "_page_image_generations", None)
+        if gens is None:
+            gens = self._page_image_generations = {}
+        gens[pagename] = gens.get(pagename, 0) + 1
+
     # ── 批量操作快照（单槽）─────────────────────────────────────────
     # 批量替换等批量操作的撤销不进逐命令撤销栈，而是操作前整项目
     # 快照、一键整体回滚，与逐块编辑的文档撤销栈严格分治（语义定稿

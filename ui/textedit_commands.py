@@ -122,6 +122,13 @@ def command_page_stale(cmd, proj=None) -> bool:
     pname = getattr(cmd, "pagename", None)
     if pname is None or proj is None:
         return False
+    # 图像命令（修复）比对图像侧代数——与文本代数分开计数，互不误杀
+    img_gen0 = getattr(cmd, "page_image_generation", None)
+    if img_gen0 is not None:
+        img_gen_fn = getattr(proj, "page_image_generation", None)
+        if img_gen_fn is None:
+            return False
+        return img_gen_fn(pname) != img_gen0
     gen_fn = getattr(proj, "page_generation", None)
     gen0 = getattr(cmd, "page_generation", None)
     if gen_fn is None or gen0 is None:

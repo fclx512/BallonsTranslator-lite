@@ -471,6 +471,8 @@ class ProgramConfig(Config):
     textstyle_dock_open: bool = False
     transform_dock_open: bool = False
     history_dock_open: bool = False
+    # 修复区历史浮层（左缘窄栏入口，DrawingPanel）开合记忆
+    inpaint_history_dock_open: bool = False
     show_seq_badge: bool = True
     snap_alignment: bool = True  # 画布文字块拖拽吸附对齐（饼菜单开关，记忆上次状态）
     overflow_mode: bool = False  # 过界模式 — 画布边界视觉指示 + 文字块跨边界裁剪

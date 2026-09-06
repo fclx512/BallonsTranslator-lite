@@ -533,6 +533,12 @@ class Canvas(QGraphicsScene):
 
         self.saved_drawundo_step = 0
         self.num_pushed_drawstep = 0
+        # 图像侧脏记账（阶段4-3b）：全局栈中修复命令的项目级脏标记，
+        # 维护不变量 = 栈内 [0, index) 区间的图像命令数（保存点对应
+        # saved_imgstep）。与涂鸦页级计数器分开——切页不清零（修复
+        # 历史跨页存活），涂鸦计数器照旧清零
+        self.num_imgstep = 0
+        self.saved_imgstep = 0
 
         self.clipboard_blks: List[TextBlock] = []
 
@@ -1965,13 +1971,21 @@ class Canvas(QGraphicsScene):
         """跨页历史（阶段 4）：文本命令入栈前打页标签 + 捕获页代数。
 
         页标签驱动跨页撤销门与历史面板分组；页代数用于页屏障判定
-        （栈外管线整体换新 blk_list 后，该页既有命令过期成僵尸）。"""
+        （栈外管线整体换新 blk_list 后，该页既有命令过期成僵尸）。
+        图像命令（修复，阶段4-3b）捕获图像侧代数——与文本代数分开
+        计数，管线重跑图像不僵尸化文本历史，反之亦然。"""
         if command is None:
             return
         proj = self.imgtrans_proj
         command._proj = proj
         pname = getattr(proj, "current_img", None)
         command.pagename = pname
+        if getattr(command, "image_history", False):
+            gen_fn = getattr(proj, "page_image_generation", None)
+            command.page_image_generation = (
+                gen_fn(pname) if (gen_fn and pname) else 0
+            )
+            return
         gen_fn = getattr(proj, "page_generation", None)
         command.page_generation = gen_fn(pname) if (gen_fn and pname) else 0
 
@@ -2049,13 +2063,18 @@ class Canvas(QGraphicsScene):
         stack = self.text_undo_stack
         for i in range(stack.count()):
             cmd = stack.command(i)
+            if getattr(cmd, "image_history", False):
+                # 修复命令的端点快照不依赖文本数据，文本原地重写不作废它
+                continue
             if getattr(cmd, "pagename", None) == pname:
                 cmd._page_stale = True
 
     def prepare_page_switch(self):
         """切页撤销语义（阶段 4 跨页历史）：文本栈不清——命令以 blk 锚点
-        存活跨页，切页后仍可跨页撤销；绘制栈页级，照旧清空并复位保存
-        计数。调用时机在 set_current_img 之前由调用方负责会话落账。"""
+        存活跨页，切页后仍可跨页撤销；修复命令（3b）同在全局栈，图像脏
+        计数器不清零（项目级，落盘状态跨页有效）；绘制栈页级（涂鸦），
+        照旧清空并复位保存计数。调用时机在 set_current_img 之前由调用方
+        负责会话落账。"""
         self._disarm_cross_undo()
         self.saved_drawundo_step = 0
         self.num_pushed_drawstep = 0
@@ -2065,34 +2084,61 @@ class Canvas(QGraphicsScene):
     def push_undo_command(self, command: QUndoCommand, update_pushed_step=True):
         # 任何外部命令推送都是会话边界：先闭合落账（保持时间序），再压新命令
         self.commit_edit_sessions()
-        if self.textEditMode():
+        if getattr(command, "image_history", False):
+            # 修复命令入全局跨页栈（阶段4-3b）：绘制栈不再承载修复历史
+            self.push_image_command(command, update_pushed_step)
+        elif self.textEditMode():
             self.push_text_command(command, update_pushed_step)
         elif self.drawMode():
             self.push_draw_command(command, update_pushed_step)
         else:
             return
 
+    def push_image_command(self, command: QUndoCommand, update_pushed_step=True):
+        """修复命令入全局栈（阶段4-3b）：打页标签+图像代数，与文本命令
+        按时间序交错。图像脏计数器（num_imgstep/saved_imgstep）随步记账，
+        是修复图/遮罩落盘门（draw_change_unsaved）与保存点的依据。
+        同区域连续修复聚合（3a）在此入口生效：栈顶同类命令吸收新端点，
+        仅栈顶且全局栈不干净（保存点之下）时聚合——对保存点上方的干净
+        命令聚合会让撤销越过保存点回不到已保存状态。"""
+        self._disarm_cross_undo()
+        if command is None:
+            return
+        stack = self.text_undo_stack
+        if stack.count() > 0 and stack.index() == stack.count() and not stack.isClean():
+            top = stack.command(stack.count() - 1)
+            try_absorb = getattr(top, "try_absorb", None)
+            if try_absorb is not None and try_absorb(command):
+                command.redo()  # 正常 push 由 Qt 调 redo，聚合路径手动等价执行
+                if update_pushed_step:
+                    self.on_textstack_changed()
+                return
+        index0 = stack.index()
+        # 截断同步预采集：undoLimit 截断最旧命令后已删命令不可查，先记
+        # 下栈内既有命令的图像标记，push 后按截断数平移计数器
+        front_img_flags = [
+            bool(getattr(stack.command(i), "image_history", False))
+            for i in range(index0)
+        ]
+        self._tag_text_command(command)
+        stack.push(command)
+        # 与 push_draw_command 同式：index0 + 1 - 新 count 恰好隔离 undoLimit
+        # 的最旧截断数（push 撤销残尾的删除在差值中相消，不影响计数器——
+        # num_imgstep 只数 [0, index) 区间，残尾本就在区间外）
+        front = index0 + 1 - stack.count()
+        if front > 0:
+            shifted = sum(front_img_flags[:front])
+            self.num_imgstep = max(self.num_imgstep - shifted, 0)
+            self.saved_imgstep = max(self.saved_imgstep - shifted, -1)
+        if update_pushed_step:
+            self.num_imgstep += 1
+        self.on_textstack_changed()
+
     def push_draw_command(self, command: QUndoCommand, update_pushed_step=True):
         self.commit_edit_sessions()
         self._disarm_cross_undo()
         if command is not None:
             stack = self.draw_undo_stack
-            # 同区域连续修复聚合（阶段4-3a）：栈顶同类修复命令吸收新端点，
-            # 不新增栈步。仅当处于栈顶（无 redo 残尾）且已有未保存改动时
-            # 聚合——对保存点所在的干净命令聚合会让撤销越过保存点，回不到
-            # 已保存状态。
-            if (
-                stack.count() > 0
-                and stack.index() == stack.count()
-                and self.saved_drawundo_step != self.num_pushed_drawstep
-            ):
-                top = stack.command(stack.count() - 1)
-                try_absorb = getattr(top, "try_absorb", None)
-                if try_absorb is not None and try_absorb(command):
-                    command.redo()  # 正常 push 由 Qt 调 redo，聚合路径手动等价执行
-                    if update_pushed_step:
-                        self.on_drawstack_changed()
-                    return
             before = stack.index()
             self.draw_undo_stack.push(command)
             # 撤销上限截断最旧命令时，手工计数器与栈坐标同步平移；保存点
@@ -2120,6 +2166,7 @@ class Canvas(QGraphicsScene):
     def on_drawstack_changed(self):
         if (
             self.num_pushed_drawstep != self.saved_drawundo_step
+            or self.num_imgstep != self.saved_imgstep
             or not self.text_undo_stack.isClean()
             or self._edit_session_dirty()
         ):
@@ -2132,6 +2179,7 @@ class Canvas(QGraphicsScene):
             not self.text_undo_stack.isClean()
             or self._edit_session_dirty()
             or self.num_pushed_drawstep != self.saved_drawundo_step
+            or self.num_imgstep != self.saved_imgstep
         ):
             self.setProjSaveState(True)
         else:
@@ -2156,22 +2204,29 @@ class Canvas(QGraphicsScene):
         self._text_undo_step()
 
     def _text_redo_step(self, auto_cross_page=False):
-        """文本栈重做一步（跨页门在重放前拦截）。"""
+        """全局栈重做一步（跨页门在重放前拦截）。图像命令（修复）按
+        不变量同步图像脏计数器：num_imgstep = 栈内 [0, index) 的图像
+        命令数，redo 越过图像命令 +1。"""
         stack = self.text_undo_stack
         stale = False
+        consumed = None
         if stack.index() < stack.count():
             cmd = stack.command(stack.index())
             if self._gate_cross_page(cmd, "redo", auto_cross_page):
                 return
             stale = command_page_stale(cmd, getattr(cmd, "_proj", None))
+            consumed = cmd
         stack.redo()
+        if consumed is not None and getattr(consumed, "image_history", False):
+            self.num_imgstep += 1
         self.on_textstack_changed()
         self.txtblkShapeControl.updateBoundingRect()
         if stale:
             self._notify_skipped_step()
 
     def _text_undo_step(self, auto_cross_page=False):
-        """文本栈撤销一步（跨页门在重放前拦截）。"""
+        """全局栈撤销一步（跨页门在重放前拦截）。图像命令（修复）按
+        不变量同步图像脏计数器：undo 越过图像命令 -1。"""
         stack = self.text_undo_stack
         stale = False
         if stack.index() > 0:
@@ -2185,6 +2240,10 @@ class Canvas(QGraphicsScene):
                     return
         undo_name = stack.undoText()
         stack.undo()
+        if stack.index() < stack.count():
+            consumed = stack.command(stack.index())
+            if getattr(consumed, "image_history", False):
+                self.num_imgstep = max(self.num_imgstep - 1, 0)
         self.on_textstack_changed()
         self.txtblkShapeControl.updateBoundingRect()
         if stale:
@@ -2260,10 +2319,13 @@ class Canvas(QGraphicsScene):
             self.commit_edit_sessions()
             self._text_redo_step(auto_cross_page)
         elif self.drawMode():
-            undo_stack = self.draw_undo_stack
-            self.num_pushed_drawstep += 1
-            self.on_drawstack_changed()
-            undo_stack.redo()
+            if self.draw_undo_stack.canRedo():
+                # 涂鸦栈优先（页级）；空则回退全局栈（修复/文本跨模态回退）
+                self.num_pushed_drawstep += 1
+                self.on_drawstack_changed()
+                self.draw_undo_stack.redo()
+            else:
+                self._text_redo_step(auto_cross_page)
         else:
             return
 
@@ -2276,10 +2338,14 @@ class Canvas(QGraphicsScene):
             self._commit_typing_session()
             self._text_undo_step(auto_cross_page)
         elif self.drawMode():
-            if self.num_pushed_drawstep > 0:
-                self.num_pushed_drawstep -= 1
-            self.on_drawstack_changed()
-            self.draw_undo_stack.undo()
+            if self.draw_undo_stack.canUndo():
+                # 涂鸦栈优先（页级）；空则回退全局栈（修复/文本跨模态回退）
+                if self.num_pushed_drawstep > 0:
+                    self.num_pushed_drawstep -= 1
+                self.on_drawstack_changed()
+                self.draw_undo_stack.undo()
+            else:
+                self._text_undo_step(auto_cross_page)
         else:
             return
 
@@ -2290,6 +2356,9 @@ class Canvas(QGraphicsScene):
         if update_saved_step:
             self.saved_drawundo_step = 0
             self.num_pushed_drawstep = 0
+            # 全栈清空 = 修复历史一并丢弃（txt 导入/批量回滚等项目级重写）
+            self.saved_imgstep = 0
+            self.num_imgstep = 0
         self.draw_undo_stack.clear()
         self.text_undo_stack.clear()
         # 清栈后栈空，撤销步数上限在此落地（中途改设置经此生效）
@@ -2298,22 +2367,6 @@ class Canvas(QGraphicsScene):
     def clear_text_stack(self):
         self._drop_edit_sessions()
         self._disarm_cross_undo()
-        self.text_undo_stack.clear()
-        self.apply_undo_limit()
-
-    def clear_undostack(self, update_saved_step=False):
-        # 会话状态随栈一起丢弃（内容保持现状，不落账不恢复）
-        self._drop_edit_sessions()
-        if update_saved_step:
-            self.saved_drawundo_step = 0
-            self.num_pushed_drawstep = 0
-        self.draw_undo_stack.clear()
-        self.text_undo_stack.clear()
-        # 清栈后栈空，撤销步数上限在此落地（中途改设置经此生效）
-        self.apply_undo_limit()
-
-    def clear_text_stack(self):
-        self._drop_edit_sessions()
         self.text_undo_stack.clear()
         self.apply_undo_limit()
 
@@ -2343,6 +2396,7 @@ class Canvas(QGraphicsScene):
         self.commit_edit_sessions()
         self._disarm_cross_undo()
         self.saved_drawundo_step = self.num_pushed_drawstep
+        self.saved_imgstep = self.num_imgstep
         self.text_undo_stack.setClean()
         self._refresh_save_state()
 
@@ -2352,7 +2406,11 @@ class Canvas(QGraphicsScene):
         return not self.text_undo_stack.isClean() or self._edit_session_dirty()
 
     def draw_change_unsaved(self) -> bool:
-        return self.saved_drawundo_step != self.num_pushed_drawstep
+        # 涂鸦页级计数器 + 修复命令项目级计数器（3b）任一脏即图像未保存
+        return (
+            self.saved_drawundo_step != self.num_pushed_drawstep
+            or self.saved_imgstep != self.num_imgstep
+        )
 
     def prepareClose(self):
         self.blockSignals(True)
