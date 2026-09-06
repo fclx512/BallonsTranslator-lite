@@ -2076,7 +2076,24 @@ class Canvas(QGraphicsScene):
         self.commit_edit_sessions()
         self._disarm_cross_undo()
         if command is not None:
-            before = self.draw_undo_stack.index()
+            stack = self.draw_undo_stack
+            # 同区域连续修复聚合（阶段4-3a）：栈顶同类修复命令吸收新端点，
+            # 不新增栈步。仅当处于栈顶（无 redo 残尾）且已有未保存改动时
+            # 聚合——对保存点所在的干净命令聚合会让撤销越过保存点，回不到
+            # 已保存状态。
+            if (
+                stack.count() > 0
+                and stack.index() == stack.count()
+                and self.saved_drawundo_step != self.num_pushed_drawstep
+            ):
+                top = stack.command(stack.count() - 1)
+                try_absorb = getattr(top, "try_absorb", None)
+                if try_absorb is not None and try_absorb(command):
+                    command.redo()  # 正常 push 由 Qt 调 redo，聚合路径手动等价执行
+                    if update_pushed_step:
+                        self.on_drawstack_changed()
+                    return
+            before = stack.index()
             self.draw_undo_stack.push(command)
             # 撤销上限截断最旧命令时，手工计数器与栈坐标同步平移；保存点
             # 被截掉则落 -1 不可达哨兵，保持「未保存」直到下次保存。

@@ -109,6 +109,21 @@ class InpaintUndoCommand(QUndoCommand):
         mask_view[:] = self.undo_mask
         self.canvas.updateLayers()
 
+    def try_absorb(self, other: "InpaintUndoCommand") -> bool:
+        """同区域连续修复聚合（阶段4-3a，决策5）：吸收另一条同矩形修复
+        命令的「修复后」端点，仅存首前末后，不保留中间态。吸收成功后由
+        入口对 other 调 redo() 应用新状态并丢弃——成功返回 true 即承诺
+        已接管 other 的 redo 端点，other 不再入栈。"""
+        if type(other) is not InpaintUndoCommand:
+            return False
+        if self.canvas is not other.canvas:
+            return False
+        if self.inpaint_rect != other.inpaint_rect:
+            return False
+        self.redo_img = other.redo_img
+        self.redo_mask = other.redo_mask
+        return True
+
 
 class EmptyCommand(QUndoCommand):
     def __init__(self, parent=None):
