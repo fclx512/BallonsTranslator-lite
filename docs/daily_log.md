@@ -23,6 +23,25 @@
 
 ---
 
+### 撤销体系阶段 4 第二批落地：跨页批量组化 + 撤销确认弹窗（含 GC 悬空闪退修复）+ MainWindow 在线演练台
+
+**问题/需求：** 三批节奏的第二批（决策 4）：整理换行/高级对齐等跨页批量命令撤销前弹确认框。用户另拍板两事：修复历史并入全局栈定稿（第三批方案，单一栈双视图+端点快照）、不常用功能工具箱收纳另立规划。本批已实机验收。
+
+**改动要点：**
+
+- **组化标记**：`ui/textedit_commands.py::NormalizeBreaksCommand` 与 `ui/mainwindow.py::_PointAlignCommand` 暴露 `group_undo_summary()`（页名→块数）+ `group_page_generations` 构造期多页代数快照——任一涉及页被管线重写即整组僵尸化（此前只查标签页，跨页端点快照会写错块）；`command_page_stale` 对组化命令逐页比对。
+- **撤销确认门**：`ui/canvas.py::_confirm_group_undo`——跨页组命令 undo 前弹确认框（标题=操作名、每页块数明细、勾选「同时重渲染」）；拒绝则本步不执行。豁免三路：僵尸步、历史面板跳转（auto_cross_page）、仅影响当前页；redo 不设确认。
+- **「同时重渲染」保留撤销历史**：`_rerender_dirty_pages` 加 `clear_history` 参数，组化撤销路径传 False（数据未变仅重渲，清栈会丢 redo 能力）；既有调用方不变。
+- **标脏补缺**：两条组化命令 redo/undo 对非当前涉及页 `mark_page_needs_rerender`（此前改他页数据不标脏）；**`_PointAlignCommand` 补齐锚点化**（item 引用改 blk 身份，执行期 `resolve_blk_item` 重解析——原实现重放到场景重建后的隐形 item）。
+- **闪退修复（实机验收发现，GC 悬空 AV）**：确认弹窗复选框无父构造传 `setCheckBox` 不留引用 → PyQt6/Qt6.11 下被 GC 回收 → 悬空指针 access violation 无声闪退，AV 行号随 GC 时机漂移极难定位。修复=构造期挂父 `QCheckBox(text, box)`。完整教训入经验教训 §3.3（PyQt6 所有权陷阱 + 竞态排查纪律：每配置 ≥4 轮，单轮结论不可信）。
+- **MainWindow 在线演练台常驻化**：`scripts/mw_repro.py`——拉真实主窗口（必须窗口模式）跑预设场景（`--scenario group-undo` 组化撤销全链路，自动点确认弹窗 ≥200ms）或 `--project` 只读打开真实工程；faulthandler+看门狗常开。登记 scripts/README 与 AGENTS 测试流程第 8 步。
+- **规划记录**：第三批定稿（修复并入全局栈：单一栈双视图+端点快照+页代数扩展图像侧+3a/3b 分步）与工具箱收纳规划回填计划文档；新立 `docs/技术实现/不常用功能工具箱_规划.md`（无排期）。
+- **护网**：`tests/test_undo_group_confirm.py`（新，11 条：摘要/多页代数僵尸/确认拒绝与放行/auto 豁免/单页豁免/标脏/blk 锚点重解析/面板摘要）；i18n 补 Canvas/HistoryPanel 上下文 6 条。
+
+**涉及文件：** `ui/canvas.py`、`ui/textedit_commands.py`、`ui/mainwindow.py`、`ui/history_panel.py`、`tests/test_undo_group_confirm.py`（新）、`translate/zh_CN.ts`、`scripts/mw_repro.py`（新）、`scripts/README.md`、`AGENTS.md`、`docs/技术实现/撤销体系阶段4计划.md`、`docs/技术实现/不常用功能工具箱_规划.md`（新）、`docs/基础速查/经验教训.md`
+
+---
+
 ## 2026-09-05
 
 ### 撤销体系阶段 4 第一批落地：跨页编辑历史 + 历史面板二期（按页分组/紧凑化/PS 式操作名）

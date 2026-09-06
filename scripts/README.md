@@ -38,6 +38,7 @@
 |---|---|---|
 | `scripts/style_showcase.py` | 自定义控件样式展示台（人工目视）：Tab1 原生 vs 封装对照（识别哪些类必须用 `ui/custom_widget` 封装），Tab2 全部可离线实例化控件分区展示；新增控件在对应分区 rows 追加一行。系统 Python 启动时自动切便携解释器重跑 | `python scripts/style_showcase.py` |
 | `scripts/pie_menu_test.py` | 饼菜单/快捷菜单离线功能测试（状态机/命中判定/命令注册，独立进程沙箱配置）；功能已上线，后续加功能卡片等小修小补可复用 | `python scripts/pie_menu_test.py` |
+| `scripts/mw_repro.py` | **MainWindow 在线演练台**：拉起真实主窗口（必须窗口模式，offscreen 起不来 FramelessWindow）做模拟复现与交互驱动——真实绘制路径/原生模态框/GC 时机类问题的排查工具。`--scenario group-undo` 跑组化撤销全链路（自动点确认弹窗，延迟须 ≥200ms），`--project` 只读打开真实工程，`--no-show`/`--no-panel`/`--watchdog` 控制形态；faulthandler 常开。起源=确认弹窗 GC 悬空 AV 闪退排查（经验教训 §3.3） | `python scripts/mw_repro.py [--scenario group-undo\|none] [--project DIR] [--pages 2 --blocks 8]` |
 
 渲染同步回归已迁至 `tests/test_render_sync.py`（pytest/直接运行均可）。
 

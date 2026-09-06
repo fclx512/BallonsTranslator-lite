@@ -149,6 +149,7 @@ modules/
 5. **qm 编译**：`./ballontrans_pylibs_win/python.exe scripts/qm_compile.py translate/zh_CN.ts translate/zh_CN.qm`
 6. **启动冒烟测试**：`./ballontrans_pylibs_win/python.exe tests/test_startup_imports.py`（单进程约 2s；模拟关键导入链，捕捉 `NameError` / `ImportError`，含 `ProfileManagerWidget` 实例化）
 7. **启动 app 目视确认**（可选，但推荐）：双击 `launch.bat` 或 `python launch.py`，确认导航、页面切换、新功能视觉效果正常
+8. **MainWindow 在线演练台**（可选，排查无声崩溃/模态框/GC 时机类问题时用）：`./ballontrans_pylibs_win/python.exe scripts/mw_repro.py`——拉起真实主窗口（必须窗口模式，offscreen 起不来 FramelessWindow）跑预设场景或 `--project` 只读打开真实工程；faulthandler 常开。用法见 `scripts/README.md`，方法论见经验教训 §3.3
 
 ## 快捷键系统
 
