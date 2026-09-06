@@ -62,6 +62,38 @@
 
 ---
 
+### 侧栏批次①排版打磨 + 行距类型回退 + 窄栏浮层改版立项定稿
+
+**问题/需求：** 用户反馈右栏格式区「太潦草」，讨论定稿紧凑行式打磨；实施后用户四点反馈中行距类型下拉被否决归位右栏（不常用 + 英文文案过长右栏放不下），整体回退原位。另立窄栏浮层内容件改版计划并完成形态定稿。批次①实机验收通过。
+
+**改动要点：**
+
+- 间距/宽度/对齐统一：格式区行距统一横 8 纵 6、字号/行距/字距三数字框统一 80px 成列、图标行左对齐、预设区下加 1px 分隔线（`_hsep`）；字距并回字号/行距同行，描边独占一行。
+- 裸控件换封装类：FontFamilyComboBox/FontStyleComboBox 基类从 QComboBox 换 `ui/custom_widget` 封装 ComboBox（含 `WidePopupComboMixin` 弹出列表撑宽、闭合态宽度稳定）。
+- 窄栏分组：`ui/panel_rail.py::PanelRail.add_group_gap` 在选中级（注解/着重号）与块级（变换/样式/历史）之间插入组间距，`ui/scenetext_manager.py` 调用。
+- 行距类型下拉留在旧文本样式浮层原位（`ui/text_style_dock.py`），首版归位右栏经实机反馈回退（ts 条目同步回滚、qm 重编译）。
+- **顺手修存量崩溃**：`tests/test_page_list_dirty_click.py` 的 _FakeCanvas 缺 3b 图像计数器 `saved_imgstep`/`num_imgstep`，槽内 AttributeError → exit 127（HEAD 即崩，与批次①无关）；修复后全量 626 passed。
+- **窄栏浮层改版计划**：`docs/技术实现/窄栏浮层面板改版_计划.md`（新）——五浮层内容件统一对齐 `ui/text_engine/transforms/panel.py::TransformParameterPanel` 规范（标签右对齐 | 22px 输入框行式网格、封装类控件）；形态已拍板：连字区四行规范式、着重号两行标签|下拉、注解/着重号保持分开、注音读音保留应用/移除显式按钮；逻辑零改动纯换皮。顺序：批次②效果栈重移植 → 本改版 → 批次③描边行退役+闪现弹窗排查。
+
+**涉及文件：** `ui/text_panel.py`、`ui/text_style_dock.py`、`ui/panel_rail.py`、`ui/scenetext_manager.py`、`tests/test_page_list_dirty_click.py`、`docs/技术实现/窄栏浮层面板改版_计划.md`（新）、`docs/项目概述.md`
+
+---
+
+### 撤销体系计划文档清理归档
+
+**问题/需求：** 撤销体系重构与阶段 4 三批已全部实机验收收官，计划类文档失去活文档价值，标记完成并清理。
+
+**改动要点：**
+
+- 删除三份计划/普查文档：`撤销体系重构计划.md`、`撤销体系阶段4计划.md`、`撤销调用点普查.md`，全部登记 `scripts/audit_registry.json` deprecated（白名单放行 daily_log）。
+- `撤销体系人工验收场景.md` 更新头部状态为「重构与阶段 4 三批均已实机验收收官」，成为回归参考唯一存档；正文两处对已删计划文档的引用改为「已随阶段 4 第 X 批落地并实机验收」。
+- 代码残留引用清零：`ui/canvas.py`、`ui/textedit_commands.py` 注释及六个测试文件 docstring 改指验收场景文档/测试自身。
+- `docs/项目概述.md` 索引同步（删两行、验收场景行改述）。
+
+**涉及文件：** `docs/技术实现/撤销体系人工验收场景.md`、`docs/项目概述.md`、`scripts/audit_registry.json`、`ui/canvas.py`、`ui/textedit_commands.py`、`tests/test_inpaint_undo_merge.py`、`tests/test_render_sync.py`、`tests/test_undo_cross_page.py`、`tests/test_undo_group_confirm.py`、`tests/test_undo_inpaint_global.py`、`tests/test_undo_safety_net.py`
+
+---
+
 ## 2026-09-05
 
 ### 撤销体系阶段 4 第一批落地：跨页编辑历史 + 历史面板二期（按页分组/紧凑化/PS 式操作名）

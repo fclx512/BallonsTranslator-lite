@@ -509,6 +509,7 @@ class TextPanel(Widget):
 
         self.formatpanel.install_annotation_launcher(self.rail)
         self.formatpanel.install_emphasis_launcher(self.rail)
+        self.rail.add_group_gap()
         self.formatpanel.install_transform_launcher(self.rail)
         self.formatpanel.install_textstyle_launcher(self.rail)
         self.formatpanel.install_history_launcher(self.rail)

@@ -70,6 +70,9 @@ class _FakeCanvas:
     def __init__(self):
         self._fit_to_window = False
         self.update_calls = 0
+        # 阶段 4-3b 图像代数计数器：相等即不触发页屏障 bump
+        self.saved_imgstep = 0
+        self.num_imgstep = 0
 
     def clear_undostack(self, update_saved_step=False):
         pass

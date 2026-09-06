@@ -235,6 +235,7 @@ class TextStyleGroup(QFrame):
             )
         )
 
+        # 行距类型：低频项，留在本浮层（右栏放不下英文长文案）
         self.linespacing_combo = SmallComboBox(parent=self)
         self.linespacing_combo.setSizeAdjustPolicy(
             QComboBox.SizeAdjustPolicy.AdjustToContents
@@ -496,7 +497,7 @@ class TextStyleGroup(QFrame):
             self.opacity_combo.blockSignals(False)
 
         self.linespacing_combo.blockSignals(True)
-        self.linespacing_combo.setCurrentIndex(fmt.line_spacing_type)
+        self.linespacing_combo.setCurrentIndex(int(fmt.line_spacing_type))
         self.linespacing_combo.blockSignals(False)
 
         self.shadow_dial.setColor(fmt.shadow_color)

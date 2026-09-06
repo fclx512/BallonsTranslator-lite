@@ -32,6 +32,7 @@ from . import funcmaps as FM
 from .custom_widget import (
     AlignmentChecker,
     ColorPickerLabel,
+    ComboBox,
     ConfigLineEdit,
     FlowLayout,
     NoBorderPushBtn,
@@ -283,8 +284,9 @@ class FontSizeBox(QFrame):
         self.fcombobox = SizeComboBox([1, 200], "font_size", self)
         self.fcombobox.addItems([str(v) for v in C.pcfg.font_size_presets])
         self.fcombobox.param_changed.connect(self.param_changed)
-        # 保证三位数（如 "200"）及多字号标记（如 "150+"）不被省略号截断
-        self.fcombobox.setMinimumWidth(90)
+        # 三位数（如 "200"）及多字号标记（如 "150+"）不被省略号截断；
+        # 与行距/字距框统一 80px 成列
+        self.fcombobox.setMinimumWidth(80)
 
         hlayout = QHBoxLayout(self)
         hlayout.addWidget(self.fcombobox)
@@ -321,7 +323,7 @@ class WidePopupComboMixin:
         super().showPopup()
 
 
-class FontFamilyComboBox(WidePopupComboMixin, QComboBox):
+class FontFamilyComboBox(WidePopupComboMixin, ComboBox):
     param_changed = Signal(str, object)
 
     def __init__(self, *args, **kwargs) -> None:
@@ -347,7 +349,7 @@ class FontFamilyComboBox(WidePopupComboMixin, QComboBox):
         self.apply_fontfamily()
 
 
-class FontStyleComboBox(WidePopupComboMixin, QComboBox):
+class FontStyleComboBox(WidePopupComboMixin, ComboBox):
     """字重选择框：闭合态宽度由布局拉伸固定（不随字重名变化），
     弹出列表经 WidePopupComboMixin 撑宽到最长条目。"""
 
@@ -598,6 +600,8 @@ class FontFormatPanel(Widget):
         self.lineSpacingBox.addItems([str(v) for v in C.pcfg.line_spacing_presets])
         self.lineSpacingBox.setToolTip(self.tr("Change line spacing"))
         self.lineSpacingBox.param_changed.connect(self.on_param_changed)
+        # 数值框统一 80px：容纳三位数与混合态标记（如 "150+"），三框同宽成列
+        self.lineSpacingBox.setMinimumWidth(80)
 
         self.colorPicker = ColorPickerLabel(self, param_name="frgb")
         self.colorPicker.setToolTip(self.tr("Change font color"))
@@ -671,7 +675,7 @@ class FontFormatPanel(Widget):
         self.letterSpacingBox = SizeComboBox([0, 10], "letter_spacing", self)
         self.letterSpacingBox.addItems([str(v) for v in C.pcfg.letter_spacing_presets])
         self.letterSpacingBox.setToolTip(self.tr("Change letter spacing"))
-        self.letterSpacingBox.setMinimumWidth(int(self.letterSpacingBox.height() * 2.5))
+        self.letterSpacingBox.setMinimumWidth(80)
         self.letterSpacingBox.param_changed.connect(self.on_param_changed)
 
         self.letterSpacingLabel = SizeControlLabel(
@@ -767,7 +771,7 @@ class FontFormatPanel(Widget):
         font_selector.addWidget(self.colorPicker)
         font_selector.addWidget(self.familybox, 3)
         font_selector.addWidget(self.stylebox, 2)
-        font_selector.setSpacing(4)
+        font_selector.setSpacing(shared.WIDGET_SPACING_CLOSE)
         font_selector.setContentsMargins(2, 0, 2, 0)
 
         # Row 2：格式图标行 对齐 | B/I/U/着重号 | 竖排(TCY/Roman)，竖线分组
@@ -777,8 +781,13 @@ class FontFormatPanel(Widget):
             sep.setFixedSize(1, 16)
             return sep
 
+        def _hsep() -> QFrame:
+            sep = QFrame(self)
+            sep.setObjectName("fmtGroupSeparator")
+            sep.setFixedHeight(1)
+            return sep
+
         format_icons = QHBoxLayout()
-        format_icons.setAlignment(Qt.AlignmentFlag.AlignCenter)
         format_icons.addWidget(self.alignBtnGroup)
         format_icons.addWidget(_vsep())
         format_icons.addWidget(self.formatBtnGroup)
@@ -790,11 +799,10 @@ class FontFormatPanel(Widget):
         vertical_layout.setSpacing(0)
         vertical_layout.setContentsMargins(0, 0, 0, 0)
         format_icons.addLayout(vertical_layout)
-        format_icons.setSpacing(6)
+        format_icons.setSpacing(shared.WIDGET_SPACING_CLOSE)
         format_icons.setContentsMargins(2, 0, 2, 0)
 
-        # Row 3：量测行 [字号] [行距] [字距]——排版数值一组；描边组宽
-        # 度放不进同行，单独一行
+        # Row 3：排版数值行 [字号] [行距] [字距]——数值框统一 80px 成列
         linesp_hlayout = QHBoxLayout()
         linesp_hlayout.addWidget(self.lineSpacingLabel)
         linesp_hlayout.addWidget(self.lineSpacingBox)
@@ -805,7 +813,10 @@ class FontFormatPanel(Widget):
         size_and_metrics.addLayout(linesp_hlayout)
         size_and_metrics.addLayout(lettersp_hlayout)
         size_and_metrics.setContentsMargins(2, 0, 2, 0)
-        size_and_metrics.setSpacing(13)
+        size_and_metrics.setSpacing(shared.WIDGET_SPACING_CLOSE)
+
+        # Row 4：描边（随效果栈回归退役；行距类型留旧文本样式浮层——
+        # 低频且英文文案过长，右栏放不下）
         stroke_row = QHBoxLayout()
         stroke_row.setAlignment(Qt.AlignmentFlag.AlignLeft)
         stroke_row.addLayout(stroke_hlayout)
@@ -816,9 +827,11 @@ class FontFormatPanel(Widget):
         basics.addLayout(format_icons)
         basics.addLayout(size_and_metrics)
         basics.addLayout(stroke_row)
-        basics.setSpacing(5)
+        # 纵向 6 / 横向 8（WIDGET_SPACING_CLOSE）：全栏统一间距档位
+        basics.setSpacing(6)
         basics.setContentsMargins(2, 3, 2, 3)
         self.vlayout.addLayout(basics)
+        self.vlayout.addWidget(_hsep())
 
         # ── Zone C：拓展样式 ──────────────────────────────────────
         # 样式(/变换) 内容外迁画布浮层（图标栏入口）。变换面板以
@@ -857,7 +870,7 @@ class FontFormatPanel(Widget):
         self.history_dock = None
 
         self.vlayout.setContentsMargins(0, 0, 0, 0)
-        self.vlayout.setSpacing(7)
+        self.vlayout.setSpacing(6)
 
         self.focusOnColorDialog = False
         C.active_format = self.global_format

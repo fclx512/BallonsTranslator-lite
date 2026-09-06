@@ -111,5 +111,10 @@ class PanelRail(QWidget):
             self.layout().count() - 1, button, 0, Qt.AlignmentFlag.AlignHCenter
         )
 
+    def add_group_gap(self, height: int = 12) -> None:
+        """在已装按钮后插入组间距——选中级（注解/着重号）与块级
+        （变换/样式/历史）之间的视觉分隔。"""
+        self.layout().insertSpacing(self.layout().count() - 1, height)
+
     def launcher_at(self, index: int) -> RailLauncherButton:
         return self.layout().itemAt(index).widget()
