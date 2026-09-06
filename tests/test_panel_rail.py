@@ -212,45 +212,66 @@ class RailDockPanelTest(unittest.TestCase):
         self.assertGreaterEqual(dock.x(), 0)
         self.assertGreaterEqual(dock.y(), 0)
 
-    def test_grip_at_bottom_left(self):
-        """面板从锚定右缘向左展开，缩放手柄在左下角（镜像斜纹+斜向光标）。"""
+    def test_edge_handles_cursors(self):
+        """三向隐形拖拽手柄（左/下/左下角）就位，光标形状即提示（无图标）。"""
         dock, _rail, _host = self._make_dock()
         dock.open_panel()
-        grip = dock._grip
-        self.assertEqual(grip.x(), 0)
-        self.assertEqual(grip.y(), dock.height() - grip.height())
-        self.assertEqual(
-            grip.cursor().shape(), Qt.CursorShape.SizeBDiagCursor
-        )
+        for zone, shape in (
+            ("left", Qt.CursorShape.SizeHorCursor),
+            ("bottom", Qt.CursorShape.SizeVerCursor),
+            ("left-bottom", Qt.CursorShape.SizeBDiagCursor),
+        ):
+            handle = dock._handles[zone]
+            self.assertEqual(handle.cursor().shape(), shape)
 
-    def test_grip_resizes_panel(self):
+    def _drag(self, dock, zone, local_from, local_to):
+        _mouse(dock._handles[zone], QEvent.Type.MouseButtonPress, local_from)
+        _mouse(dock._handles[zone], QEvent.Type.MouseMove, local_to)
+        _mouse(dock._handles[zone], QEvent.Type.MouseButtonRelease, local_to)
+
+    def test_corner_drag_resizes_both(self):
+        """左下角拖拽：向左/下拖 = 变大（右缘+顶部保持锚定）。"""
         dock, _rail, _host = self._make_dock()
         dock.open_panel()
         before = dock.size()
-        grip = dock._grip
-        # 左下角自由角：向左/下拖 = 变大（右缘+顶部保持锚定）
-        _mouse(grip, QEvent.Type.MouseButtonPress, QPointF(7, 7))
-        _mouse(grip, QEvent.Type.MouseMove, QPointF(-33, 32))
-        _mouse(grip, QEvent.Type.MouseButtonRelease, QPointF(-33, 32))
-        self.assertEqual(dock.size() - before, QSize(40, 25))
+        h = dock.height()
+        self._drag(dock, "left-bottom", QPointF(6, h - 6), QPointF(-27, h + 19))
+        self.assertEqual(dock.size() - before, QSize(33, 25))
 
-    def test_grip_cannot_shrink_below_floor(self):
+    def test_left_edge_drag_widens_only(self):
+        dock, _rail, _host = self._make_dock()
+        dock.open_panel()
+        before = dock.size()
+        h = dock.height()
+        self._drag(dock, "left", QPointF(3, h // 2), QPointF(-27, h // 2))
+        self.assertEqual(dock.width() - before.width(), 30)
+        self.assertEqual(dock.height(), before.height())
+
+    def test_bottom_edge_drag_heightens_only(self):
+        dock, _rail, _host = self._make_dock()
+        dock.open_panel()
+        before = dock.size()
+        w = dock.width()
+        self._drag(dock, "bottom", QPointF(w // 2, dock.height() - 3), QPointF(w // 2, dock.height() + 22))
+        self.assertEqual(dock.height() - before.height(), 25)
+        self.assertEqual(dock.width(), before.width())
+
+    def test_edge_drag_cannot_shrink_below_floor(self):
         """太小拖不进去：尺寸下限随内容布局（功能项不会被压成一线）。"""
         dock, _rail, _host = self._make_dock()
         dock.open_panel()
-        before = dock.size()
-        _mouse(dock._grip, QEvent.Type.MouseButtonPress, QPointF(7, 7))
-        _mouse(dock._grip, QEvent.Type.MouseMove, QPointF(500, 7))
-        _mouse(dock._grip, QEvent.Type.MouseButtonRelease, QPointF(500, 7))
-        self.assertEqual(dock.size(), before)
+        h = dock.height()
+        self._drag(dock, "left-bottom", QPointF(6, h - 6), QPointF(506, h - 500))
+        self.assertEqual(dock.size(), dock._clamp_size(dock.size()))
+        self.assertGreaterEqual(dock.width(), dock.minimumWidth())
+        self.assertGreaterEqual(dock.height(), dock.minimumHeight())
 
-    def test_grip_resize_clamped_to_host(self):
+    def test_edge_resize_clamped_to_host(self):
         dock, _rail, _host = self._make_dock()
         dock.open_panel()
         # 向左猛拉：宽度受宿主左缘（x>=0）约束，右缘仍贴住窄栏锚点
-        _mouse(dock._grip, QEvent.Type.MouseButtonPress, QPointF(7, 7))
-        _mouse(dock._grip, QEvent.Type.MouseMove, QPointF(-1000, 30))
-        _mouse(dock._grip, QEvent.Type.MouseButtonRelease, QPointF(-1000, 30))
+        h = dock.height()
+        self._drag(dock, "left-bottom", QPointF(6, h - 6), QPointF(-1000, h + 30))
         self.assertEqual(dock.x(), 0)
         self.assertLessEqual(dock.x() + dock.width(), _host.width())
 

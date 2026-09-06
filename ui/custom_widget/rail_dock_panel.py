@@ -6,9 +6,8 @@ window and stays above the canvas page.  It *opens* docked to the left of
 the rail (on the canvas area, never covering the text-edit column).  Its
 right edge and top are pinned to the rail, so the panel keeps a fixed,
 predictable connection to its launcher icon; it is **not** freely
-draggable.  Only the size is user-adjustable via the bottom-left grip
-(the panel grows leftward from the pinned right edge, so the free corner
-is bottom-left).  It re-anchors automatically when the host window is
+draggable.  The size is user-adjustable via invisible edge handles along
+the left edge, bottom edge and bottom-left corner (no visible grip icon).  It re-anchors automatically when the host window is
 resized or the rail moves, so it never drifts to a stale position.  The
 resize floor comes from the content layout — the panel can not be
 squashed into a single line of controls.  It never closes itself: only
@@ -21,7 +20,6 @@ automatically — no per-instance theme refresh needed.
 """
 
 from qtpy.QtCore import QEvent, QPoint, QSize, Qt, Signal
-from qtpy.QtGui import QColor, QPainter, QPen
 from qtpy.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -32,56 +30,38 @@ from qtpy.QtWidgets import (
 )
 
 
-class _ResizeGrip(QFrame):
-    """Bottom-left resize handle: diagonal dots, SizeBDiag cursor.
+class _EdgeHandle(QWidget):
+    """隐形拖拽手柄：贴面板左缘/下缘/左下角，光标形状即提示（无可见图标）。
 
-    The panel is pinned at its right edge + top, so it grows left/down
-    from the bottom-left free corner — the grip lives there.
+    必须是专用子控件——面板本体被 body 子控件完全覆盖，边缘鼠标事件到
+    不了面板自身。背景经 QSS ``QWidget#RailDockEdge`` 钉为透明（全局
+    QWidget 背景规则会给裸 QWidget 上底色）。
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent, zone: str, cursor_shape):
         super().__init__(parent)
-        # Transparent: the grip overlaps the panel's rounded bottom-left
-        # corner, so an opaque QWidget background would paint a square over
-        # the 6px corner radius.  ``stylesheet.css`` pins it transparent.
-        self.setObjectName("RailDockGrip")
-        self.setFrameShape(QFrame.Shape.NoFrame)
-        self.setAutoFillBackground(False)
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setFixedSize(14, 14)
-        self.setCursor(Qt.CursorShape.SizeBDiagCursor)
-
-    def paintEvent(self, event) -> None:
-        from ui.misc import get_theme_color
-
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        color = QColor(get_theme_color(key="@qwidgetForegroundColor"))
-        color.setAlpha(130)
-        pen = QPen(color)
-        pen.setWidthF(1.4)
-        painter.setPen(pen)
-        # 对角线从左下角向右上延伸（右下角手柄的镜像斜纹）
-        edge = self.width() - 4
-        for i in range(3):
-            painter.drawPoint(2 + 4 * i, edge - 4 * i)
-        painter.end()
+        self.setObjectName("RailDockEdge")
+        self.zone = zone
+        self.setCursor(cursor_shape)
 
 
 class RailDockPanel(QFrame):
     """Canvas-area panel hard-docked to ``ui/panel_rail.py``.
 
     Right edge + top are pinned to the rail so the panel always sits at a
-    predictable, connected location.  Resize-only (no free drag): the
-    bottom-left grip adjusts size, and host-resize / rail-move both
-    trigger a re-anchor so the panel never drifts (PS-style dock).
-    The resize floor follows the content layout so controls never squash
-    into a single line.
+    predictable, connected location.  Resize-only (no free drag): invisible
+    edge handles along the left edge, bottom edge and bottom-left corner
+    (no visible grip icon — the cursor shape is the affordance), and
+    host-resize / rail-move both trigger a re-anchor so the panel never
+    drifts (PS-style dock).  The resize floor follows the content layout
+    so controls never squash into a single line.
     """
 
     closed = Signal()
     HEADER_HEIGHT = 26
     ANCHOR_MARGIN = 8
+    EDGE_MARGIN = 6
+    CORNER_SIZE = 12
 
     def __init__(
         self,
@@ -97,8 +77,8 @@ class RailDockPanel(QFrame):
         self._sized = False  # size set on first anchor, then preserved
         self._press_pos = None
         self._press_size = None
+        self._press_zone = None
         self._header = None
-        self._grip = None
 
         self.setMinimumSize(230, 140)
 
@@ -138,10 +118,17 @@ class RailDockPanel(QFrame):
         content_widget.show()
         layout.addWidget(body, 1)
 
-        # ── Resize grip (bottom-left corner) ───────────────────────
-        grip = _ResizeGrip(self)
-        grip.installEventFilter(self)
-        self._grip = grip
+        # ── Invisible edge handles (left / bottom / bottom-left) ───
+        self._handles = {
+            "left": _EdgeHandle(self, "left", Qt.CursorShape.SizeHorCursor),
+            "bottom": _EdgeHandle(self, "bottom", Qt.CursorShape.SizeVerCursor),
+            "left-bottom": _EdgeHandle(
+                self, "left-bottom", Qt.CursorShape.SizeBDiagCursor
+            ),
+        }
+        for handle in self._handles.values():
+            handle.installEventFilter(self)
+        self._layout_handles()
         self._header = header
 
         # 宿主缩放 / 窄栏移动时自动重锚（位置补偿，保持硬连接）
@@ -262,28 +249,28 @@ class RailDockPanel(QFrame):
                 self._anchor_to_rail()
             elif obj is self._rail and et == QEvent.Type.Move:
                 self._anchor_to_rail()
-        if obj is self._grip:
+        if isinstance(obj, _EdgeHandle) and self._handles.get(obj.zone) is obj:
             if (
                 et == QEvent.Type.MouseButtonPress
                 and event.button() == Qt.MouseButton.LeftButton
             ):
                 self._press_pos = event.globalPosition().toPoint()
                 self._press_size = self.size()
+                self._press_zone = obj.zone
                 return True
             if (
                 et == QEvent.Type.MouseMove
                 and self._press_pos is not None
             ):
                 delta = event.globalPosition().toPoint() - self._press_pos
-                # 左下角自由角跟随光标：向左/下拖 = 变大（右缘+顶部锚定）
-                self.resize(
-                    self._clamp_size(
-                        QSize(
-                            self._press_size.width() - delta.x(),
-                            self._press_size.height() + delta.y(),
-                        )
-                    )
-                )
+                # 自由侧（左/下）跟光标：向左/下拖 = 变大（右缘+顶部锚定，
+                # resizeEvent 里 _anchor_to_rail 保持右缘钉住窄栏）
+                w, h = self._press_size.width(), self._press_size.height()
+                if "left" in self._press_zone:
+                    w -= delta.x()
+                if "bottom" in self._press_zone:
+                    h += delta.y()
+                self.resize(self._clamp_size(QSize(w, h)))
                 return True
             if (
                 et == QEvent.Type.MouseButtonRelease
@@ -292,16 +279,26 @@ class RailDockPanel(QFrame):
             ):
                 self._press_pos = None
                 self._press_size = None
+                self._press_zone = None
                 return True
         return super().eventFilter(obj, event)
 
+    def _layout_handles(self) -> None:
+        """隐形手柄贴边重摆（随面板尺寸变化）；左下角手柄盖住两缘交叠处。"""
+        w, h = self.width(), self.height()
+        self._handles["left"].setGeometry(0, 0, self.EDGE_MARGIN, h)
+        self._handles["bottom"].setGeometry(
+            0, h - self.EDGE_MARGIN, w, self.EDGE_MARGIN
+        )
+        self._handles["left-bottom"].setGeometry(
+            0, h - self.CORNER_SIZE, self.CORNER_SIZE, self.CORNER_SIZE
+        )
+        for handle in self._handles.values():
+            handle.raise_()
+
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        if self._grip is not None:
-            self._grip.move(
-                0,
-                self.height() - self._grip.height(),
-            )
+        self._layout_handles()
         # 每次尺寸变化都回到窄栏锚点，保持与图标硬连接（右缘+顶部固定）
         if self._sized:
             self._anchor_to_rail()

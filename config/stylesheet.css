@@ -1723,9 +1723,9 @@ QFrame#RailDockBody {
     border: none;
 }
 
-/* 左下角拉伸手柄：透明背景，只画对角线圆点 —— 否则它作为子控件盖上
-   面板的 6px 圆角，方形背景会切断圆角边缘 */
-QFrame#RailDockGrip {
+/* 隐形拖拽手柄（左缘/下缘/左下角）：全局 QWidget 背景规则会给裸
+   QWidget 上底色，须显式钉透明——无可见图标，光标形状即提示 */
+QWidget#RailDockEdge {
     background: transparent;
     border: none;
 }

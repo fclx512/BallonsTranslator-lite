@@ -26,12 +26,13 @@ from qtpy.QtCore import (
     QAbstractListModel,
     QModelIndex,
 )
-from qtpy.QtGui import QPalette, QPainter
+from qtpy.QtGui import QColor, QPalette, QPainter
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QLabel,
     QListView,
     QSizePolicy,
+    QStyle,
     QStyledItemDelegate,
     QVBoxLayout,
     QWidget,
@@ -60,7 +61,13 @@ def _row_font(option, is_header=False):
 
 
 class _SavedDotDelegate(QStyledItemDelegate):
-    """历史行渲染：页头/当前位高亮/僵尸灰显/保存点圆点。紧凑行高。"""
+    """历史行渲染：页头/当前位高亮加粗/悬停底色/僵尸灰显/保存点圆点。
+
+    自定义 paint 接管了整行绘制，QSS 的 ``QListView::item:hover`` 画不
+    上来（曾是 hover 无效的根因）——悬停底色在这里自绘（@hoverBackgroundColor
+    与全应用 hover 约定一致）；当前位行在 Highlight 底色上加粗。
+    紧凑行高。
+    """
 
     def __init__(self, panel, parent=None):
         super().__init__(parent)
@@ -95,7 +102,11 @@ class _SavedDotDelegate(QStyledItemDelegate):
         is_header = role == "header"
         painter.save()
         rect = option.rect
-        painter.setFont(_row_font(option, is_header))
+        font = _row_font(option, is_header)
+        if role == "current":
+            # 激活位加粗：光靠 Highlight 底色在暗色主题下不够醒目
+            font.setBold(True)
+        painter.setFont(font)
         metrics = painter.fontMetrics()
 
         if role == "header":
@@ -113,6 +124,14 @@ class _SavedDotDelegate(QStyledItemDelegate):
             )
             painter.restore()
             return
+
+        # 悬停底色自绘（QSS ::item:hover 被自定义 paint 短路，见类 docstring）
+        if option.state & QStyle.StateFlag.State_MouseOver:
+            from ui.misc import get_theme_color
+
+            painter.fillRect(
+                rect, QColor(get_theme_color(key="@hoverBackgroundColor"))
+            )
 
         if role == "current":
             painter.fillRect(rect, option.palette.color(QPalette.ColorRole.Highlight))
