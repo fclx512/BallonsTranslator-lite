@@ -515,11 +515,14 @@ class TextBlkItem(_EngineTextBlkItem):
     # ── 交互（fork：对齐吸附 + 块悬停光标 + 条件 moved 桥）──────────────
 
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
+        super().mouseMoveEvent(event)
+        # 吸附必须在 super() 移动之后执行：默认移动按事件增量覆写位置，
+        # 先吸附后移动会让修正被本次增量抵消（只出参考线不吸附，
+        # c097b41 引擎移植时写反的顺序，2026-09-06 复盘修复）
         if not self.isEditing():
             scene = self.scene()
             if scene is not None and getattr(scene, "alignment_enabled", False):
                 self._apply_snap()
-        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         super().mouseReleaseEvent(event)

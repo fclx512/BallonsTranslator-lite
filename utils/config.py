@@ -472,6 +472,7 @@ class ProgramConfig(Config):
     transform_dock_open: bool = False
     history_dock_open: bool = False
     show_seq_badge: bool = True
+    snap_alignment: bool = True  # 画布文字块拖拽吸附对齐（饼菜单开关，记忆上次状态）
     overflow_mode: bool = False  # 过界模式 — 画布边界视觉指示 + 文字块跨边界裁剪
     clip_text_overflow: bool = True  # 翻译填充时裁剪溢出文字并显示黄色提示框，拖拽调整后解除
     show_decorations_during_drag: bool = False  # 拖拽调整时保留描边/阴影（代价是帧率下降）

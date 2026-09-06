@@ -199,6 +199,21 @@
 
 ---
 
+### 拖拽吸附对齐失效修复 + 开关状态记忆
+
+**问题/需求：** 用户实机反馈吸附对齐从前几天起失效——拖拽时参考线正常显示但块不吸附；另要求给饼菜单「吸附对齐」开关加状态记忆（此前每次启动默认开）。
+
+**改动要点：**
+
+- **失效根因（回归定位）**：c097b41（上游 v1.5.12 移植节点2a）重写 `ui/textitem.py::TextBlkItem.mouseMoveEvent` 时把 `_apply_snap()` 从 `super().mouseMoveEvent(event)` 之后挪到了之前——Qt 默认移动按事件增量覆写位置，吸附修正随即被本次增量抵消，最终停靠位永远差一个增量；compute_snap 照跑所以参考线仍显示，呈现「UI 对齐有反应、实际不吸附」。修复=吸附移回 super() 之后并注释顺序约束。
+- **复现手法**：仿 `tests/test_box_select.py` 离屏 harness，QMouseEvent 直发 view 驱动真实 ItemIsMovable 拖拽链路，插桩记录 `_apply_snap` 前后 `absBoundingRect`——修复前右缘 225 不落 220，修复后精确吸附。
+- **状态记忆**：`utils/config.py::ProgramConfig` 加 `snap_alignment=True`；`ui/canvas.py` 初始化 `alignment_enabled` 改读 pcfg；`ui/context_menu_config.py::_snap_alignment_run` 切换时写回 pcfg 并 `save_config()`（与 seq_badge 等饼菜单开关持久化方式一致）。
+- 验证：`verify.py` 全绿；`tests/test_config_fields.py`、`tests/test_box_select.py`（18 例）通过。
+
+**涉及文件：** `ui/textitem.py`、`utils/config.py`、`ui/canvas.py`、`ui/context_menu_config.py`
+
+---
+
 ## 2026-09-03
 
 ### 效果栈面板阶段 D-2 重做 + 两 bug 修复 + 点角标闪现弹窗修复

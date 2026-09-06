@@ -373,6 +373,8 @@ _reg(CmdDef("next_page", QCoreApplication.translate("Canvas", "Next Page"),
 def _snap_alignment_run(mw):
     canvas = mw.canvas
     canvas.alignment_enabled = not canvas.alignment_enabled
+    pcfg.snap_alignment = canvas.alignment_enabled
+    mw.save_config()
 
 
 def _snap_alignment_checked(mw) -> bool:

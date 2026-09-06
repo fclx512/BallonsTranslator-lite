@@ -399,7 +399,7 @@ class Canvas(QGraphicsScene):
         self.scale_factor = 1.0
         self.text_transparency = 0
         self.textblock_mode = False
-        self.alignment_enabled = True
+        self.alignment_enabled = pcfg.snap_alignment
         self.snap_guide_item = SnapGuideItem()
         self.creating_textblock = False
         self._text_creation_cursor_active = False
