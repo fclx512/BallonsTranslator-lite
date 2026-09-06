@@ -99,23 +99,24 @@ class TextEffectsDataTest(unittest.TestCase):
         self.assertEqual(a.stroke_width, 0.8)
         self.assertEqual(c.stroke_width, 0.99)
 
-    def test_base_styles_diff_via_legacy_views(self):
-        # 阶段 B：diff/聚类仍走 opacity/stroke_width/srgb 视图，
-        # text_effects 本身不进 DIFF_FIELDS（避免与视图关联重复）。
+    def test_base_styles_diff_covers_text_effects(self):
+        # 批次②：效果栈成为 FontFormat 的唯一效果真值源，
+        # 旧 opacity/stroke_width 视图字段已退役，diff/聚类直接
+        # 消费 text_effects（量化为整体比较，不展开内部字段）。
         from utils.base_styles import (
             DIFF_FIELDS,
             compute_override,
         )
 
-        self.assertNotIn("text_effects", DIFF_FIELDS)
+        self.assertIn("text_effects", DIFF_FIELDS)
+        self.assertNotIn("opacity", DIFF_FIELDS)
+        self.assertNotIn("stroke_width", DIFF_FIELDS)
         base = FontFormat()
         self.assertEqual(compute_override(FontFormat(), base), {})
         overrides = compute_override(
             FontFormat(opacity=0.5, stroke_width=0.2), base
         )
-        self.assertIn("opacity", overrides)
-        self.assertIn("stroke_width", overrides)
-        self.assertNotIn("text_effects", overrides)
+        self.assertEqual(list(overrides), ["text_effects"])
 
 
 if __name__ == "__main__":

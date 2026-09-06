@@ -38,17 +38,13 @@ from .custom_widget import (
     NoBorderPushBtn,
     QFontChecker,
     SizeComboBox,
-    SizeControlLabel,
     SmallComboBox,
     SmallParamLabel,
     Widget,
 )
 from .text_style_presets import TextStylePresetPanel
-from .text_style_dock import (
-    GRADIENT_PARAMS,
-    SHADOW_PARAMS,
-    TextStyleGroup,
-)
+from .text_engine.effects.edit_session import TextEffectEditSession
+from .text_engine.effects.panel import TextEffectPanel
 from .text_engine.annotations import (
     DEFAULT_EMPHASIS_POSITION,
     EMPHASIS_GLYPHS,
@@ -587,19 +583,15 @@ class FontFormatPanel(Widget):
         self.fontsizebox.fcombobox.setToolTip(self.tr("Change font size"))
         self.fontsizebox.param_changed.connect(self.on_param_changed)
 
-        self.lineSpacingLabel = SizeControlLabel(
-            self, direction=1, transparent_bg=False
-        )
-        self.lineSpacingLabel.setObjectName("lineSpacingLabel")
-        self.lineSpacingLabel.size_ctrl_changed.connect(self.onLineSpacingCtrlChanged)
-        self.lineSpacingLabel.btn_released.connect(
-            lambda: self.on_param_changed("line_spacing", self.lineSpacingBox.value())
-        )
-
         self.lineSpacingBox = SizeComboBox([0, 100], "line_spacing", self)
         self.lineSpacingBox.addItems([str(v) for v in C.pcfg.line_spacing_presets])
         self.lineSpacingBox.setToolTip(self.tr("Change line spacing"))
         self.lineSpacingBox.param_changed.connect(self.on_param_changed)
+
+        # 行距拖拽灵敏度保留原 onLineSpacingCtrlChanged 语义：Distance 类型
+        # 步进更大（0.1/px → 5px=0.5），否则默认 5px=0.05。构造期
+        # active_format 可能为 None，故用惰性方法运行时再取。
+        self.lineSpacingBox.drag_step_provider = self._line_spacing_drag_step
         # 数值框统一 80px：容纳三位数与混合态标记（如 "150+"），三框同宽成列
         self.lineSpacingBox.setMinimumWidth(80)
 
@@ -648,18 +640,6 @@ class FontFormatPanel(Widget):
         self.strokeWidthBox.setToolTip(self.tr("Change stroke width"))
         self.strokeWidthBox.param_changed.connect(self.on_param_changed)
 
-        self.fontStrokeLabel = SizeControlLabel(self, 0, self.tr("Stroke"))
-        self.fontStrokeLabel.setObjectName("fontStrokeLabel")
-        font = self.fontStrokeLabel.font()
-        font.setPointSizeF(shared.CONFIG_FONTSIZE_CONTENT * 0.95)
-        self.fontStrokeLabel.setFont(font)
-        self.fontStrokeLabel.size_ctrl_changed.connect(
-            self.strokeWidthBox.changeByDelta
-        )
-        self.fontStrokeLabel.btn_released.connect(
-            lambda: self.on_param_changed("stroke_width", self.strokeWidthBox.value())
-        )
-
         self.strokeColorPicker = ColorPickerLabel(self, param_name="srgb")
         self.strokeColorPicker.setToolTip(self.tr("Change stroke color"))
         self.strokeColorPicker.changingColor.connect(self.changingColor)
@@ -667,7 +647,7 @@ class FontFormatPanel(Widget):
         self.strokeColorPicker.apply_color.connect(self.on_apply_color)
 
         stroke_hlayout = QHBoxLayout()
-        stroke_hlayout.addWidget(self.fontStrokeLabel)
+        stroke_hlayout.addWidget(SmallParamLabel(self.tr("Stroke")))
         stroke_hlayout.addWidget(self.strokeWidthBox)
         stroke_hlayout.addWidget(self.strokeColorPicker)
         stroke_hlayout.setSpacing(shared.WIDGET_SPACING_CLOSE)
@@ -678,21 +658,7 @@ class FontFormatPanel(Widget):
         self.letterSpacingBox.setMinimumWidth(80)
         self.letterSpacingBox.param_changed.connect(self.on_param_changed)
 
-        self.letterSpacingLabel = SizeControlLabel(
-            self, direction=0, transparent_bg=False
-        )
-        self.letterSpacingLabel.setObjectName("letterSpacingLabel")
-        self.letterSpacingLabel.size_ctrl_changed.connect(
-            self.letterSpacingBox.changeByDelta
-        )
-        self.letterSpacingLabel.btn_released.connect(
-            lambda: self.on_param_changed(
-                "letter_spacing", self.letterSpacingBox.value()
-            )
-        )
-
         lettersp_hlayout = QHBoxLayout()
-        lettersp_hlayout.addWidget(self.letterSpacingLabel)
         lettersp_hlayout.addWidget(self.letterSpacingBox)
         lettersp_hlayout.setSpacing(shared.WIDGET_SPACING_CLOSE)
 
@@ -710,15 +676,29 @@ class FontFormatPanel(Widget):
             self.on_active_stylename_edited
         )
 
-        # Text style group (opacity / shadow / gradient) — former modal
-        # TextStyleDialog, now a rail dock panel for live canvas editing.
-        self.textstyle_group = TextStyleGroup(self)
-        self.textstyle_group.preview_changed.connect(self._preview_style_param)
-        self.textstyle_group.commit_changed.connect(self._on_text_style_commit)
-        self.textstyle_group.shadow_include_stroke_changed.connect(
-            self._apply_shadow_include_stroke
+        # 效果面板（上游 v1.5.13 移植，scope 裁剪见效果栈移植计划 §六）。
+        # 效果栈整栈一个入口：原 ◐ 文本样式浮层退役，阴影/渐变/不透明度
+        # 由效果卡与整体不透明度取代；行距类型低频且英文文案长，迁到本
+        # 浮层顶部一行（2026-09-06 用户拍板留浮层）。
+        self.effects_panel = TextEffectPanel(
+            self.tr("Text Effects"),
+            config_name="show_text_effect_panel",
+            config_expand_name="expand_teffect_panel",
         )
-        self.textstyle_group.hide()
+        self.effects_editor = TextEffectEditSession(self, self.effects_panel)
+        # 行距类型提交走通用参数路径；效果增删/启停提交后即时刷新 rail 角标
+        self.effects_panel.line_spacing_type_requested.connect(
+            self._on_effect_line_spacing_type
+        )
+        for _sig in (
+            self.effects_panel.value_commit_requested,
+            self.effects_panel.add_effect_requested,
+            self.effects_panel.remove_effect_requested,
+            self.effects_panel.move_effect_requested,
+            self.effects_panel.hollow_enabled_requested,
+        ):
+            _sig.connect(self._update_effects_indicator)
+        self.effects_panel.hide()
 
         # Text transform panel (stage 5 node H) — owned by the same session
         # that talks to the scene controls; the panel is only its UI front.
@@ -737,6 +717,7 @@ class FontFormatPanel(Widget):
         for cfg in [
             "show_text_style_preset",
             "text_transform_panel",
+            "show_text_effect_panel",
         ]:
             shared.config_name_to_view_widget.pop(cfg, None)
         for p in [
@@ -804,7 +785,6 @@ class FontFormatPanel(Widget):
 
         # Row 3：排版数值行 [字号] [行距] [字距]——数值框统一 80px 成列
         linesp_hlayout = QHBoxLayout()
-        linesp_hlayout.addWidget(self.lineSpacingLabel)
         linesp_hlayout.addWidget(self.lineSpacingBox)
         linesp_hlayout.setSpacing(shared.WIDGET_SPACING_CLOSE)
         size_and_metrics = QHBoxLayout()
@@ -864,8 +844,8 @@ class FontFormatPanel(Widget):
         self.emphasis_dock = None
         self.transform_launcher = None
         self.transform_dock = None
-        self.textstyle_launcher = None
-        self.textstyle_dock = None
+        self.effects_launcher = None
+        self.effects_dock = None
         self.history_launcher = None
         self.history_dock = None
 
@@ -965,49 +945,16 @@ class FontFormatPanel(Widget):
         self.on_param_changed(param_name, rgb)
         self._sync_stroke_color_after_change(param_name)
 
-    def onLineSpacingCtrlChanged(self, delta: int):
-        if C.active_format.line_spacing_type == LineSpacingType.Distance:
-            mul = 0.1
-        else:
-            mul = 0.01
-        self.lineSpacingBox.setValue(self.lineSpacingBox.value() + delta * mul)
+    def _line_spacing_drag_step(self):
+        """行距拖拽灵敏度：Distance 类型 0.1/px（5px=0.5），否则默认 0.05。"""
+        fmt = C.active_format
+        if fmt is not None and fmt.line_spacing_type == LineSpacingType.Distance:
+            return 0.5
+        return 0.05
 
-    def _on_text_style_commit(self, name: str, value):
-        if name == "shadow_include_stroke":
-            self._apply_shadow_include_stroke(value)
-            return
-        self.on_param_changed(name, value)
-        self._update_textstyle_indicator()
-
-    def _preview_style_param(self, name: str, value):
-        """Live drag preview without an undo entry (rail Text Style dock).
-
-        Global mode has no block to preview onto — commits write the
-        global format anyway, so preview is a no-op there.
-        """
-        item = self.textblk_item
-        if item is None:
-            return
-        if name == "opacity":
-            item.setOpacity(value)
-        elif name in SHADOW_PARAMS:
-            item.setBGAttribute(name, value)
-        elif name in GRADIENT_PARAMS:
-            item.setGradientAttribute(name, value)
-        else:
-            self.on_param_changed(name, value)
-
-    def _apply_shadow_include_stroke(self, include_stroke: bool):
-        # shadow_include_stroke is project-wide (PS behavior): applies to
-        # ALL text blocks on the current page, not just the selection.
-        from .shared_widget import canvas as SW_canvas
-        from .textitem import TextBlkItem
-
-        for item in SW_canvas.items():
-            if isinstance(item, TextBlkItem):
-                item.setBGAttribute("shadow_include_stroke", include_stroke)
-                item.update()
-        self.global_format.shadow_include_stroke = include_stroke
+    def _on_effect_line_spacing_type(self, value: int):
+        """行距类型提交（效果浮层行；沿用通用参数路径落账撤销事务）。"""
+        self.on_param_changed("line_spacing_type", value)
 
     def _set_combo_mixed(self, combo: QComboBox, mixed: bool, current: str):
         """非可编辑下拉的混合态：插入禁用 "—" 占位项并选中。
@@ -1097,8 +1044,11 @@ class FontFormatPanel(Widget):
         self.formatBtnGroup.underlineBtn.setChecked(font_format.underline)
         self.formatBtnGroup.italicBtn.setChecked(font_format.italic)
         self.alignBtnGroup.setAlignment(font_format.alignment)
-        if getattr(self, "textstyle_group", None) is not None:
-            self.textstyle_group.set_from_format(font_format)
+        if getattr(self, "effects_panel", None) is not None:
+            self.effects_panel.set_active_format(font_format)
+            self.effects_panel.set_line_spacing_type(
+                int(font_format.line_spacing_type)
+            )
 
         self.familybox.blockSignals(False)
         self.stylebox.blockSignals(False)  # 新增
@@ -1386,6 +1336,12 @@ class FontFormatPanel(Widget):
         self.text_transform_editor.replace_targets(transform_items)
         if transform_items:
             self.texttransform_panel.set_transform_items(transform_items)
+        # 效果边界（选中）：先替目标（内部会取消残留预览），再以选中项
+        # 状态重建卡片；闲置路径由 set_active_format 走 global_format。
+        self.effects_editor.replace_targets(transform_items)
+        if transform_items:
+            self.effects_panel.set_effect_items(transform_items)
+        self._update_effects_indicator()
         self._sync_annotation_controls()
 
     def _iter_docks(self):
@@ -1394,7 +1350,7 @@ class FontFormatPanel(Widget):
         Launchers/docks are None until their ``install_*_launcher`` ran;
         ``getattr`` default keeps this safe on partially-built panels.
         """
-        for key in ("annotation", "emphasis", "transform", "textstyle", "history"):
+        for key in ("annotation", "emphasis", "transform", "effects", "history"):
             yield (
                 key,
                 getattr(self, f"{key}_launcher", None),
@@ -1573,54 +1529,53 @@ class FontFormatPanel(Widget):
                 title += " •"
             self.emphasis_dock.set_title(title)
 
-    def install_textstyle_launcher(self, rail) -> None:
-        """文本样式浮层入口（不透明度/阴影/渐变，同注解浮层模式）。
+    def install_effects_launcher(self, rail) -> None:
+        """效果浮层入口（原 ◐ 文本样式浮层位，rail_effects 图标沿用）。
 
-        图标暂借 rail_effects（层叠方片）：阶段 D 本浮层内容并入
-        效果栈后，图标与开合记忆直接沿用。内容=TextStyleGroup；非选中级
-        作用域：全局模式也可用（提交走
-        on_param_changed 落地全局格式，与旧对话框一致）。角标在当前块
-        带非默认样式（透明度≠1 / 阴影半径>0 / 阴影偏移非零 / 渐变开）
-        时点亮。开合记忆在 ``pcfg.textstyle_dock_open``。
+        内容=TextEffectPanel（效果卡堆栈+整体不透明度+镂空开关+行距
+        类型，行距类型自旧浮层迁来）。非选中级作用域：无选中时编辑
+        全局格式（TextEffectEditSession 空 items 走 global_format）。
+        角标在当前块带活跃效果栈（has_active_effects 或整体不透明度
+        ≠1）时点亮。开合记忆在 ``pcfg.effects_dock_open``。
         """
         from ui.panel_rail import RailLauncherButton
 
         self.rail = rail
-        self.textstyle_launcher = RailLauncherButton("rail_effects")
-        self.textstyle_launcher.setToolTip(self.tr("Text Style"))
-        self.textstyle_launcher.toggled.connect(
-            self._on_textstyle_launcher_toggled
+        self.effects_launcher = RailLauncherButton("rail_effects")
+        self.effects_launcher.setToolTip(self.tr("Text Effects"))
+        self.effects_launcher.toggled.connect(
+            self._on_effects_launcher_toggled
         )
-        rail.add_launcher(self.textstyle_launcher)
+        rail.add_launcher(self.effects_launcher)
 
-    def _ensure_textstyle_dock(self):
-        if self.textstyle_dock is None:
+    def _ensure_effects_dock(self):
+        if self.effects_dock is None:
             from ui.custom_widget import RailDockPanel
 
-            self.textstyle_dock = RailDockPanel(
-                self.tr("Text Style"),
-                self.textstyle_group,
+            self.effects_dock = RailDockPanel(
+                self.tr("Text Effects"),
+                self.effects_panel,
                 rail=self.rail,
-                config_open="textstyle_dock_open",
+                config_open="effects_dock_open",
             )
-            self.textstyle_dock.closed.connect(
-                self._on_textstyle_dock_closed
+            self.effects_dock.closed.connect(
+                self._on_effects_dock_closed
             )
-        return self.textstyle_dock
+        return self.effects_dock
 
-    def _on_textstyle_launcher_toggled(self, checked: bool):
-        if self.textstyle_dock is None and not checked:
+    def _on_effects_launcher_toggled(self, checked: bool):
+        if self.effects_dock is None and not checked:
             return
         if checked:
-            self._close_other_docks("textstyle")
-            self._ensure_textstyle_dock().open_panel()
-        elif self.textstyle_dock is not None:
-            self.textstyle_dock.close_panel()
+            self._close_other_docks("effects")
+            self._ensure_effects_dock().open_panel()
+        elif self.effects_dock is not None:
+            self.effects_dock.close_panel()
 
-    def _on_textstyle_dock_closed(self):
-        if self.textstyle_launcher is not None and self.textstyle_launcher.isChecked():
-            with QSignalBlocker(self.textstyle_launcher):
-                self.textstyle_launcher.setChecked(False)
+    def _on_effects_dock_closed(self):
+        if self.effects_launcher is not None and self.effects_launcher.isChecked():
+            with QSignalBlocker(self.effects_launcher):
+                self.effects_launcher.setChecked(False)
 
     def install_history_launcher(self, rail) -> None:
         """撤销历史浮层入口（一期：仅文本栈，同注解浮层模式）。
@@ -1671,25 +1626,24 @@ class FontFormatPanel(Widget):
             with QSignalBlocker(self.history_launcher):
                 self.history_launcher.setChecked(False)
 
-    def _update_textstyle_indicator(self):
-        """Rail icon corner dot while the block carries a non-default style."""
+    def _update_effects_indicator(self):
+        """Rail icon corner dot while the block carries an active effect stack."""
         item = self.textblk_item
         active = False
         if item is not None:
-            fmt = item.blk.fontformat
+            stack = item.blk.fontformat.text_effects
+            # has_active_effects 是 property（全新块有零宽默认描边、
+            # is_neutral 为假——勿用 len(effects) 判活跃）
             active = (
-                fmt.opacity != 1.0
-                or fmt.shadow_radius > 0.0
-                or fmt.shadow_offset != [0.0, 0.0]
-                or fmt.gradient_enabled
+                stack.overall_opacity != 1.0 or stack.has_active_effects
             )
-        if self.textstyle_launcher is not None:
-            self.textstyle_launcher.set_dot(active)
-        if self.textstyle_dock is not None:
-            title = self.tr("Text Style")
+        if self.effects_launcher is not None:
+            self.effects_launcher.set_dot(active)
+        if self.effects_dock is not None:
+            title = self.tr("Text Effects")
             if active:
                 title += " •"
-            self.textstyle_dock.set_title(title)
+            self.effects_dock.set_title(title)
 
     def _ensure_annotation_dock(self):
         if self.annotation_dock is None:
@@ -1742,10 +1696,10 @@ class FontFormatPanel(Widget):
                 "transform_dock_open",
             ),
             (
-                self.textstyle_launcher,
-                self.textstyle_dock,
-                self._ensure_textstyle_dock,
-                "textstyle_dock_open",
+                self.effects_launcher,
+                self.effects_dock,
+                self._ensure_effects_dock,
+                "effects_dock_open",
             ),
             (
                 self.history_launcher,
@@ -1796,7 +1750,7 @@ class FontFormatPanel(Widget):
             self.emphasis_launcher.setEnabled(has_item)
         self._update_annotation_indicator()
         self._update_emphasis_indicator()
-        self._update_textstyle_indicator()
+        self._update_effects_indicator()
         self._update_transform_indicator()
         if item is None:
             return
@@ -1891,12 +1845,16 @@ class FontFormatPanel(Widget):
         # Pending numeric edits are not dirty until they commit; resolve them
         # before the close-time/save-time dirty check.
         self.text_transform_editor.resolve_for_save()
+        self.effects_editor.resolve_for_save()
 
     def resolve_text_transform_edits_for_history_change(self):
         self.text_transform_editor.resolve_for_history_change()
+        self.effects_editor.resolve_for_history_change()
 
     def resolve_text_transform_edits_for_page_change(self):
         self.text_transform_editor.resolve_for_page_change()
+        self.effects_editor.resolve_for_page_change()
 
     def cancel_text_transform_edits_for_scene_change(self):
         self.text_transform_editor.cancel_for_scene_change()
+        self.effects_editor.cancel_for_scene_change()

@@ -21,7 +21,6 @@ from ...custom_widget import (
     SmallComboBox,
     SmallParamLabel,
     SmallSizeComboBox,
-    SmallSizeControlLabel,
     TextCheckerLabel,
 )
 from ...adaptive_wrap_layout import AdaptiveWrapLayout
@@ -79,60 +78,40 @@ class TextShadowGroup(QGroupBox):
         self.xoffset_box = SmallSizeComboBox([-2, 2], 'shadow_xoffset', self)
         self.xoffset_box.setToolTip(self.tr("Set X offset"))
         self.xoffset_box.param_changed.connect(self.on_offset_changed)
-        self.xoffset_label = SmallSizeControlLabel(
-            self,
-            direction=1,
-            text='X',
-            alignment=Qt.AlignmentFlag.AlignCenter,
+        self.xoffset_label = SmallParamLabel(
+            'X', alignment=Qt.AlignmentFlag.AlignCenter, parent=self
         )
-        self.xoffset_label.size_ctrl_changed.connect(self.xoffset_box.changeByDelta)
-        self.xoffset_label.btn_released.connect(self.on_offset_changed)
 
         self.yoffset_box = SmallSizeComboBox([-2, 2], 'shadow_yoffset', self)
         self.yoffset_box.setToolTip(self.tr("Set Y offset"))
         self.yoffset_box.param_changed.connect(self.on_offset_changed)
-        self.yoffset_label = SmallSizeControlLabel(
-            self,
-            direction=1,
-            text='Y',
-            alignment=Qt.AlignmentFlag.AlignCenter,
+        self.yoffset_label = SmallParamLabel(
+            'Y', alignment=Qt.AlignmentFlag.AlignCenter, parent=self
         )
-        self.yoffset_label.size_ctrl_changed.connect(self.yoffset_box.changeByDelta)
-        self.yoffset_label.btn_released.connect(self.on_offset_changed)
 
         self.color_label = SmallColorPickerLabel(self, param_name='shadow_color')
         self.strength_box = SmallSizeComboBox([0, 3], 'shadow_strength', self)
         self.strength_box.setToolTip(self.tr("Set Shadow Strength"))
         self.strength_box.param_changed.connect(self.on_param_changed)
-        self.strength_label = SmallSizeControlLabel(
-            self,
-            direction=1,
-            text=self.tr('Strength'),
-            alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-        )
-        _word_wrap_label(self.strength_label)
-        self.strength_label.size_ctrl_changed.connect(
-            lambda x: self.strength_box.changeByDelta(x, multiplier=0.03)
-        )
-        self.strength_label.btn_released.connect(
-            lambda: self.on_param_changed(
-                'shadow_strength', self.strength_box.value()
+        self.strength_box.drag_step_provider = 0.15  # 0.03/px × 5px
+        self.strength_label = _word_wrap_label(
+            SmallParamLabel(
+                self.tr('Strength'),
+                alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                parent=self,
             )
         )
 
         self.radius_box = SmallSizeComboBox([0, 2], 'shadow_radius', self)
         self.radius_box.setToolTip(self.tr("Set Shadow Radius"))
         self.radius_box.param_changed.connect(self.on_param_changed)
-        self.radius_label = SmallSizeControlLabel(
-            self,
-            direction=1,
-            text=self.tr('Radius'),
-            alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-        )
-        _word_wrap_label(self.radius_label)
-        self.radius_label.size_ctrl_changed.connect(self.radius_box.changeByDelta)
-        self.radius_label.btn_released.connect(
-            lambda: self.on_param_changed('shadow_radius', self.radius_box.value())
+        self.radius_box.drag_step_provider = 0.05  # 0.01/px × 5px
+        self.radius_label = _word_wrap_label(
+            SmallParamLabel(
+                self.tr('Radius'),
+                alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                parent=self,
+            )
         )
 
         self.offset_label = _word_wrap_label(
@@ -219,35 +198,25 @@ class TextGradientGroup(QGroupBox):
         self.angle_box = SmallSizeComboBox([0, 359], 'gradient_angle', self)
         self.angle_box.setToolTip(self.tr("Set Gradient Angle"))
         self.angle_box.param_changed.connect(self.on_param_changed)
-        self.angle_label = SmallSizeControlLabel(
-            self,
-            direction=1,
-            text=self.tr('Angle'),
-            alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-        )
-        _word_wrap_label(self.angle_label)
-        self.angle_label.size_ctrl_changed.connect(
-            lambda x: self.angle_box.changeByDelta(x, multiplier=1)
-        )
-        self.angle_label.btn_released.connect(
-            lambda: self.on_param_changed('gradient_angle', self.angle_box.value())
+        self.angle_box.drag_step_provider = 5.0  # 1/px × 5px
+        self.angle_label = _word_wrap_label(
+            SmallParamLabel(
+                self.tr('Angle'),
+                alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                parent=self,
+            )
         )
 
         self.size_box = SmallSizeComboBox([0.5, 2], 'gradient_size', self)
         self.size_box.setToolTip(self.tr("Set Gradient Size"))
         self.size_box.param_changed.connect(self.on_param_changed)
-        self.size_label = SmallSizeControlLabel(
-            self,
-            direction=1,
-            text=self.tr('Size'),
-            alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-        )
-        _word_wrap_label(self.size_label)
-        self.size_label.size_ctrl_changed.connect(
-            lambda x: self.size_box.changeByDelta(x, multiplier=0.02)
-        )
-        self.size_label.btn_released.connect(
-            lambda: self.on_param_changed('gradient_size', self.size_box.value())
+        self.size_box.drag_step_provider = 0.1  # 0.02/px × 5px
+        self.size_label = _word_wrap_label(
+            SmallParamLabel(
+                self.tr('Size'),
+                alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                parent=self,
+            )
         )
 
         self.start_color_unit = _atomic_unit(
@@ -531,16 +500,13 @@ class TextAdvancedFormatPanel(PanelArea):
         )
         self.opacity_box.setToolTip(self.tr("Set Text Opacity"))
         self.opacity_box.param_changed.connect(self.on_format_changed)
-        self.opacity_label = SmallSizeControlLabel(
-            self.top_section,
-            direction=1,
-            text=self.tr('Opacity'),
-            alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-        )
-        _word_wrap_label(self.opacity_label)
-        self.opacity_label.size_ctrl_changed.connect(self.opacity_box.changeByDelta)
-        self.opacity_label.btn_released.connect(
-            lambda: self.on_format_changed('opacity', self.opacity_box.value())
+        self.opacity_box.drag_step_provider = 0.05  # 0.01/px × 5px
+        self.opacity_label = _word_wrap_label(
+            SmallParamLabel(
+                self.tr('Opacity'),
+                alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                parent=self.top_section,
+            )
         )
         self.opacity_unit = _atomic_unit(
             self.top_section, self.opacity_label, self.opacity_box

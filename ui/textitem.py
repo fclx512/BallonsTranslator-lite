@@ -436,9 +436,29 @@ class TextBlkItem(_EngineTextBlkItem):
         self.effect_renderer.ensure_host_background(painter)
         background = self.effect_renderer.background_pixmap
         if background is not None:
-            # Point-based draw so the cache's devicePixelRatio governs
-            # raster resolution; the pixmap is already at device scale.
-            painter.drawPixmap(self.boundingRect().topLeft(), background)
+            # 渲染器只在 render_scale >= 1.0 时给缓存设 DPR（见
+            # renderer._new_effect_pixmap）：降档缓存（如 0.5 档）按
+            # 点绘制会被 1:1 画出半尺寸幽灵文本，须矩形拉伸（对齐渲染器
+            # 内部 _draw_surface_pixmap 的降档语义）。
+            dpr = background.devicePixelRatio() or 1.0
+            target = self.boundingRect()
+            logical_w = background.width() / dpr
+            logical_h = background.height() / dpr
+            if abs(logical_w - target.width()) > 0.5 or abs(
+                logical_h - target.height()
+            ) > 0.5:
+                painter.drawPixmap(
+                    QRectF(
+                        target.topLeft(),
+                        QRectF(target).size(),
+                    ),
+                    background,
+                    QRectF(background.rect()),
+                )
+            else:
+                # Point-based draw so the cache's devicePixelRatio governs
+                # raster resolution; the pixmap is already at device scale.
+                painter.drawPixmap(target.topLeft(), background)
 
     def _draw_accessories(self, painter: QPainter):
         br = self.boundingRect()

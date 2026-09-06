@@ -306,11 +306,6 @@ NoArrowsSpinBox, NoArrowsDoubleSpinBox {
 NoArrowsSpinBox:focus, NoArrowsDoubleSpinBox:focus {
     border: 1px solid @accentPrimary;
 }
-NoArrowsSpinBox::up-button, NoArrowsSpinBox::down-button,
-NoArrowsDoubleSpinBox::up-button, NoArrowsDoubleSpinBox::down-button {
-    width: 0px;
-    height: 0px;
-}
 NoArrowsSpinBox:disabled, NoArrowsDoubleSpinBox:disabled {
     background: transparent;
     border: 1px solid @disabledForegroundColor;
@@ -1917,6 +1912,159 @@ QToolButton#TextTransformCloseButton:hover {
     background: @hoverBackgroundColor;
 }
 QToolButton#TextTransformCloseButton:hover {
+    background: @dangerColor;
+}
+
+/* ── Text effect panel (effect stack cards) ────────────────── */
+/* 与变换面板同语言：填充输入框 + 圆角卡片；效果卡经 objectName
+   TextEffectParameterPanel 承载，参数编辑器共用 TextEffectParamEditor
+   （QLineEdit/QComboBox/QDoubleSpinBox 三类都要有规则——spinbox 匹配
+   不到 QLineEdit 规则，缺失会完全无样式）。 */
+QFrame#TextEffectParameterPanel {
+    background: @hoverBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+}
+QFrame#TextEffectParameterPanel[matched="true"] {
+    border: 1px solid @accentPrimary;
+}
+QLabel#TextEffectParameterTitle {
+    color: @textColor;
+    font-weight: bold;
+    background: transparent;
+}
+QLabel#TextEffectParamLabel {
+    color: @qwidgetForegroundColor;
+    background: transparent;
+}
+QLabel#TextEffectParameterIcon {
+    background: transparent;
+}
+QLineEdit#TextEffectParamEditor {
+    height: 22px;
+    padding: 0 4px;
+    font-size: 12px;
+    background: @inputBackgroundColor;
+    border-radius: 4px;
+}
+QLineEdit#TextEffectParamEditor:focus {
+    border: 1px solid @accentPrimary;
+}
+QLineEdit#TextEffectParamEditor:disabled {
+    background: transparent;
+    border: 1px solid @disabledForegroundColor;
+    color: @disabledForegroundColor;
+}
+QComboBox#TextEffectParamEditor {
+    height: 22px;
+    font-size: 12px;
+    padding-left: 4px;
+    padding-right: 16px;
+    background: @inputBackgroundColor;
+    border-radius: 4px;
+}
+QComboBox#TextEffectParamEditor:hover,
+QComboBox#TextEffectParamEditor:focus {
+    border: 1px solid @accentPrimary;
+}
+QComboBox#TextEffectParamEditor:disabled {
+    background: transparent;
+    color: @disabledForegroundColor;
+}
+QComboBox#EffectLineSpacingBox {
+    height: 22px;
+    font-size: 12px;
+    padding-left: 4px;
+    background: @inputBackgroundColor;
+    border-radius: 4px;
+}
+QDoubleSpinBox#TextEffectParamEditor {
+    height: 22px;
+    font-size: 12px;
+    padding: 0 4px;
+    background: @inputBackgroundColor;
+    border-radius: 4px;
+}
+QDoubleSpinBox#TextEffectParamEditor:focus {
+    border: 1px solid @accentPrimary;
+}
+QDoubleSpinBox#TextEffectParamEditor:disabled {
+    background: transparent;
+    color: @disabledForegroundColor;
+}
+QToolButton#AddTextEffectButton {
+    background: @pushBtnBackgroundColor;
+    color: @textColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding: 2px 8px;
+}
+QToolButton#AddTextEffectButton:hover {
+    border: 1px solid @accentPrimary;
+}
+QToolButton#AddTextEffectButton:pressed {
+    background: @hoverBackgroundColor;
+}
+QToolButton#TextEffectHollowButton {
+    background: @pushBtnBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+}
+QToolButton#TextEffectHollowButton:checked {
+    background: @accentPrimary;
+}
+QToolButton#TextEffectHollowButton[mixed="true"] {
+    color: @disabledForegroundColor;
+}
+QWidget#TextEffectControl,
+QWidget#TextEffectPanelActions,
+QWidget#InlineLinearGradientEditor {
+    background: transparent;
+}
+QToolButton#TextEffectBlendSelector {
+    background: @inputBackgroundColor;
+    color: @textColor;
+    border: none;
+    border-radius: 4px;
+    padding: 2px 18px 2px 6px;
+}
+QToolButton#TextEffectBlendSelector:hover {
+    background: @hoverBackgroundColor;
+}
+QToolButton#TextEffectPaintButton {
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+}
+QToolButton#TextEffectPaintButton:hover {
+    border: 1px solid @accentPrimary;
+}
+QToolButton#GradientStopColorPicker {
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+}
+QToolButton#GradientStopActionButton {
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+}
+QToolButton#GradientStopActionButton:hover {
+    background: @hoverBackgroundColor;
+}
+QToolButton#TextEffectMoveButton,
+QToolButton#TextEffectCloseButton,
+QToolButton#TextEffectVisibilityButton {
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+}
+QToolButton#TextEffectMoveButton:hover,
+QToolButton#TextEffectCloseButton:hover,
+QToolButton#TextEffectVisibilityButton:hover {
+    background: @hoverBackgroundColor;
+}
+QToolButton#TextEffectCloseButton:hover {
     background: @dangerColor;
 }
 

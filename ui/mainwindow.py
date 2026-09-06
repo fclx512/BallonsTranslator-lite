@@ -779,7 +779,7 @@ class MainWindow(mainwindow_cls):
         for flag in (
             "annotation_dock_open",
             "emphasis_dock_open",
-            "textstyle_dock_open",
+            "effects_dock_open",
             "transform_dock_open",
             "history_dock_open",
             "inpaint_history_dock_open",

@@ -13,9 +13,10 @@ from qtpy.QtWidgets import (
     QPushButton,
     QRadioButton,
     QSizePolicy,
-    QSpinBox,
     QVBoxLayout,
 )
+
+from ui.custom_widget import NoArrowsSpinBox
 
 
 class MergeDialog(QDialog):
@@ -151,18 +152,18 @@ class MergeDialog(QDialog):
         geo_layout.setSpacing(4)
         geo_layout.setContentsMargins(8, 6, 8, 6)
 
-        self.max_vertical_gap = QSpinBox()
+        self.max_vertical_gap = NoArrowsSpinBox()
         self.max_vertical_gap.setRange(0, 1000)
         self.max_vertical_gap.setValue(10)
-        self.min_width_overlap_ratio = QSpinBox()
+        self.min_width_overlap_ratio = NoArrowsSpinBox()
         self.min_width_overlap_ratio.setRange(0, 100)
         self.min_width_overlap_ratio.setValue(90)
         self.min_width_overlap_ratio.setSuffix(" %")
 
-        self.max_horizontal_gap = QSpinBox()
+        self.max_horizontal_gap = NoArrowsSpinBox()
         self.max_horizontal_gap.setRange(0, 1000)
         self.max_horizontal_gap.setValue(10)
-        self.min_height_overlap_ratio = QSpinBox()
+        self.min_height_overlap_ratio = NoArrowsSpinBox()
         self.min_height_overlap_ratio.setRange(0, 100)
         self.min_height_overlap_ratio.setValue(90)
         self.min_height_overlap_ratio.setSuffix(" %")

@@ -466,9 +466,9 @@ class ProgramConfig(Config):
     expand_ttransform_panel: bool = True
     # 注解停靠面板（PS 式图标栏入口，Ruby/连字/旧式数字）：记忆开合
     annotation_dock_open: bool = False
-    # 图标栏停靠面板开合记忆：着重号 / 文本样式 / 文本变换 / 撤销历史
+    # 图标栏停靠面板开合记忆：着重号 / 效果 / 文本变换 / 撤销历史
     emphasis_dock_open: bool = False
-    textstyle_dock_open: bool = False
+    effects_dock_open: bool = False
     transform_dock_open: bool = False
     history_dock_open: bool = False
     # 修复区历史浮层（左缘窄栏入口，DrawingPanel）开合记忆

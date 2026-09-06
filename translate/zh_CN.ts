@@ -1647,10 +1647,6 @@ Hide them all? You can move them back later.</source>
             <translation>纵中横不能与注释重叠</translation>
         </message>
         <message>
-            <source>Text Style</source>
-            <translation>文本样式</translation>
-        </message>
-        <message>
             <source>Text Transform</source>
             <translation>文本变换</translation>
         </message>
@@ -1685,6 +1681,10 @@ Hide them all? You can move them back later.</source>
         <message>
             <source>History</source>
             <translation>历史记录</translation>
+        </message>
+        <message>
+            <source>Text Effects</source>
+            <translation>文字效果</translation>
         </message>
     </context>
     <context>
@@ -3978,84 +3978,6 @@ Please check the URL and your network.</source>
             <location filename="..\ui\drawingpanel.py" line="242" />
             <source>Inpainter</source>
             <translation>修复工具</translation>
-        </message>
-    </context>
-    <context>
-        <name>TextStyleGroup</name>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>Opacity</source>
-            <translation>不透明度</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>Line Spacing</source>
-            <translation>行距类型</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>Proportional</source>
-            <translation>按比例</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>Distance</source>
-            <translation>绝对距离</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>Shadow</source>
-            <translation>阴影</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>Gradient</source>
-            <translation>渐变</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>Color</source>
-            <translation>颜色</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>Strength</source>
-            <translation>强度</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>Radius</source>
-            <translation>半径</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>Offset</source>
-            <translation>偏移</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>Include stroke in shadow</source>
-            <translation>阴影包含描边</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>(global)</source>
-            <translation>（全局生效）</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>Enable</source>
-            <translation>启用</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>Scale</source>
-            <translation>缩放</translation>
-        </message>
-        <message>
-            <location filename="\..\ui\text_style_dock.py" />
-            <source>↔ Reverse</source>
-            <translation>↔ 互换</translation>
         </message>
     </context>
     <context>
@@ -6456,12 +6378,8 @@ This maps automatically to each provider's native parameter
             <translation>{n} 个变换</translation>
         </message>
         <message>
-            <source>Shadow</source>
-            <translation>阴影</translation>
-        </message>
-        <message>
-            <source>Gradient</source>
-            <translation>渐变</translation>
+            <source>Text Effects</source>
+            <translation>文字效果</translation>
         </message>
     </context>
     <context>
@@ -6841,6 +6759,424 @@ This maps automatically to each provider's native parameter
         <message>
             <source>Write</source>
             <translation>写入</translation>
+        </message>
+        <message>
+            <source>Text Effect</source>
+            <translation>文字效果</translation>
+        </message>
+    </context>
+    <context>
+        <name>EffectDeleteButton</name>
+        <message>
+            <source>Delete</source>
+            <translation>删除</translation>
+        </message>
+    </context>
+    <context>
+        <name>EffectMoveDownButton</name>
+        <message>
+            <source>Move Down</source>
+            <translation>下移</translation>
+        </message>
+    </context>
+    <context>
+        <name>EffectMoveUpButton</name>
+        <message>
+            <source>Move Up</source>
+            <translation>上移</translation>
+        </message>
+    </context>
+    <context>
+        <name>EffectPaintButton</name>
+        <message>
+            <source>Choose Color</source>
+            <translation>选择颜色</translation>
+        </message>
+        <message>
+            <source>Edit Gradient</source>
+            <translation>编辑渐变</translation>
+        </message>
+    </context>
+    <context>
+        <name>EffectVisibilityButton</name>
+        <message>
+            <source>Hide</source>
+            <translation>隐藏</translation>
+        </message>
+        <message>
+            <source>Show</source>
+            <translation>显示</translation>
+        </message>
+    </context>
+    <context>
+        <name>GlowEffectCard</name>
+        <message>
+            <source>Choke</source>
+            <translation>收缩</translation>
+        </message>
+        <message>
+            <source>Choose Glow Color</source>
+            <translation>选择发光颜色</translation>
+        </message>
+        <message>
+            <source>Edit Glow Gradient</source>
+            <translation>编辑发光渐变</translation>
+        </message>
+        <message>
+            <source>Glow</source>
+            <translation>发光</translation>
+        </message>
+        <message>
+            <source>Glow Blend</source>
+            <translation>发光混合</translation>
+        </message>
+        <message>
+            <source>Glow Color</source>
+            <translation>发光颜色</translation>
+        </message>
+        <message>
+            <source>Glow Fill</source>
+            <translation>发光填充</translation>
+        </message>
+        <message>
+            <source>Glow Type</source>
+            <translation>发光类型</translation>
+        </message>
+        <message>
+            <source>Inner</source>
+            <translation>内部</translation>
+        </message>
+        <message>
+            <source>Opacity</source>
+            <translation>不透明度</translation>
+        </message>
+        <message>
+            <source>Outer</source>
+            <translation>外部</translation>
+        </message>
+        <message>
+            <source>Size</source>
+            <translation>大小</translation>
+        </message>
+        <message>
+            <source>Spread</source>
+            <translation>扩散</translation>
+        </message>
+    </context>
+    <context>
+        <name>GradientAngleDial</name>
+        <message>
+            <source>Drag to set gradient angle</source>
+            <translation>拖动以设置渐变角度</translation>
+        </message>
+        <message>
+            <source>Gradient Angle</source>
+            <translation>渐变角度</translation>
+        </message>
+    </context>
+    <context>
+        <name>GradientStopBar</name>
+        <message>
+            <source>Click the strip to add a stop; drag a stop to move it</source>
+            <translation>点击色条添加停点，拖动停点调整位置</translation>
+        </message>
+        <message>
+            <source>Gradient Stops</source>
+            <translation>渐变停点</translation>
+        </message>
+        <message>
+            <source>Mixed</source>
+            <translation>混合</translation>
+        </message>
+        <message>
+            <source>Mixed Gradient</source>
+            <translation>混合渐变</translation>
+        </message>
+        <message>
+            <source>Mixed Gradient Stops</source>
+            <translation>混合渐变停点</translation>
+        </message>
+    </context>
+    <context>
+        <name>InlineLinearGradientEditor</name>
+        <message>
+            <source>Add Stop</source>
+            <translation>添加停点</translation>
+        </message>
+        <message>
+            <source>Remove Stop</source>
+            <translation>移除停点</translation>
+        </message>
+        <message>
+            <source>Scale</source>
+            <translation>缩放</translation>
+        </message>
+        <message>
+            <source>Stop Color</source>
+            <translation>停点颜色</translation>
+        </message>
+        <message>
+            <source>°</source>
+            <translation>°</translation>
+        </message>
+    </context>
+    <context>
+        <name>ShadowEffectCard</name>
+        <message>
+            <source>Angle</source>
+            <translation>角度</translation>
+        </message>
+        <message>
+            <source>Blur</source>
+            <translation>模糊</translation>
+        </message>
+        <message>
+            <source>Choke</source>
+            <translation>收缩</translation>
+        </message>
+        <message>
+            <source>Choose Shadow Color</source>
+            <translation>选择阴影颜色</translation>
+        </message>
+        <message>
+            <source>Distance</source>
+            <translation>距离</translation>
+        </message>
+        <message>
+            <source>Drag to set shadow angle</source>
+            <translation>拖动以设置阴影角度</translation>
+        </message>
+        <message>
+            <source>Drop</source>
+            <translation>投影</translation>
+        </message>
+        <message>
+            <source>Edit Shadow Gradient</source>
+            <translation>编辑阴影渐变</translation>
+        </message>
+        <message>
+            <source>Inner</source>
+            <translation>内部</translation>
+        </message>
+        <message>
+            <source>Long / Extrude</source>
+            <translation>长投影 / 挤出</translation>
+        </message>
+        <message>
+            <source>Opacity</source>
+            <translation>不透明度</translation>
+        </message>
+        <message>
+            <source>Shadow</source>
+            <translation>阴影</translation>
+        </message>
+        <message>
+            <source>Shadow Angle</source>
+            <translation>阴影角度</translation>
+        </message>
+        <message>
+            <source>Shadow Blend</source>
+            <translation>阴影混合</translation>
+        </message>
+        <message>
+            <source>Shadow Color</source>
+            <translation>阴影颜色</translation>
+        </message>
+        <message>
+            <source>Shadow Fill</source>
+            <translation>阴影填充</translation>
+        </message>
+        <message>
+            <source>Shadow Type</source>
+            <translation>阴影类型</translation>
+        </message>
+        <message>
+            <source>Spread</source>
+            <translation>扩散</translation>
+        </message>
+    </context>
+    <context>
+        <name>StrokeEffectCard</name>
+        <message>
+            <source>Center</source>
+            <translation>居中</translation>
+        </message>
+        <message>
+            <source>Inside</source>
+            <translation>内部</translation>
+        </message>
+        <message>
+            <source>Opacity</source>
+            <translation>不透明度</translation>
+        </message>
+        <message>
+            <source>Outside</source>
+            <translation>外部</translation>
+        </message>
+        <message>
+            <source>Stroke</source>
+            <translation>描边</translation>
+        </message>
+        <message>
+            <source>Stroke Blend</source>
+            <translation>描边混合</translation>
+        </message>
+        <message>
+            <source>Stroke Color</source>
+            <translation>描边颜色</translation>
+        </message>
+        <message>
+            <source>Stroke Fill</source>
+            <translation>描边填充</translation>
+        </message>
+        <message>
+            <source>Stroke Position</source>
+            <translation>描边位置</translation>
+        </message>
+        <message>
+            <source>Width</source>
+            <translation>宽度</translation>
+        </message>
+    </context>
+    <context>
+        <name>TextEffectPanel</name>
+        <message>
+            <source>Add</source>
+            <translation>添加</translation>
+        </message>
+        <message>
+            <source>Add Effect</source>
+            <translation>添加效果</translation>
+        </message>
+        <message>
+            <source>Blend</source>
+            <translation>混合</translation>
+        </message>
+        <message>
+            <source>Color Burn</source>
+            <translation>颜色加深</translation>
+        </message>
+        <message>
+            <source>Color Dodge</source>
+            <translation>颜色减淡</translation>
+        </message>
+        <message>
+            <source>Darken</source>
+            <translation>变暗</translation>
+        </message>
+        <message>
+            <source>Darker Color</source>
+            <translation>深色</translation>
+        </message>
+        <message>
+            <source>Disable Hollow</source>
+            <translation>关闭镂空</translation>
+        </message>
+        <message>
+            <source>Distance</source>
+            <translation>距离</translation>
+        </message>
+        <message>
+            <source>Enable Hollow</source>
+            <translation>开启镂空</translation>
+        </message>
+        <message>
+            <source>Enable Hollow for All Selected Text</source>
+            <translation>为全部选中文字开启镂空</translation>
+        </message>
+        <message>
+            <source>Glow</source>
+            <translation>发光</translation>
+        </message>
+        <message>
+            <source>Gradient</source>
+            <translation>渐变</translation>
+        </message>
+        <message>
+            <source>Lighten</source>
+            <translation>变亮</translation>
+        </message>
+        <message>
+            <source>Lighter Color</source>
+            <translation>浅色</translation>
+        </message>
+        <message>
+            <source>Line Spacing Type</source>
+            <translation>行距类型</translation>
+        </message>
+        <message>
+            <source>Linear Burn</source>
+            <translation>线性加深</translation>
+        </message>
+        <message>
+            <source>Linear Dodge (Add)</source>
+            <translation>线性减淡（添加）</translation>
+        </message>
+        <message>
+            <source>Long / Extrude</source>
+            <translation>长投影 / 挤出</translation>
+        </message>
+        <message>
+            <source>Multiply</source>
+            <translation>正片叠底</translation>
+        </message>
+        <message>
+            <source>Normal</source>
+            <translation>正常</translation>
+        </message>
+        <message>
+            <source>Opacity</source>
+            <translation>不透明度</translation>
+        </message>
+        <message>
+            <source>Overall opacity of the text and all effects</source>
+            <translation>文字与全部效果的整体不透明度</translation>
+        </message>
+        <message>
+            <source>Proportional</source>
+            <translation>比例</translation>
+        </message>
+        <message>
+            <source>Screen</source>
+            <translation>滤色</translation>
+        </message>
+        <message>
+            <source>Shadow</source>
+            <translation>阴影</translation>
+        </message>
+        <message>
+            <source>Stroke</source>
+            <translation>描边</translation>
+        </message>
+    </context>
+    <context>
+        <name>TextFillEffectCard</name>
+        <message>
+            <source>Gradient</source>
+            <translation>渐变</translation>
+        </message>
+        <message>
+            <source>Gradient Blend</source>
+            <translation>渐变混合</translation>
+        </message>
+        <message>
+            <source>Opacity</source>
+            <translation>不透明度</translation>
+        </message>
+    </context>
+    <context>
+        <name>_EffectCardMixin</name>
+        <message>
+            <source>Fill</source>
+            <translation>填充</translation>
+        </message>
+        <message>
+            <source>Gradient</source>
+            <translation>渐变</translation>
+        </message>
+        <message>
+            <source>Solid</source>
+            <translation>纯色</translation>
         </message>
     </context>
 </TS>

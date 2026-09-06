@@ -65,20 +65,20 @@ class RailDockLauncherTest(unittest.TestCase):
         panel.annotation_launcher = panel.annotation_dock = None
         panel.emphasis_launcher = panel.emphasis_dock = None
         panel.transform_launcher = panel.transform_dock = None
-        panel.textstyle_launcher = panel.textstyle_dock = None
+        panel.effects_launcher = panel.effects_dock = None
         panel.glossary_launcher = panel.glossary_dock = None
         # history dock（一期）也在 _iter_docks 清单里，未安装时同为 None
         panel.history_launcher = panel.history_dock = None
         panel.install_annotation_launcher(rail)
         panel.install_emphasis_launcher(rail)
         panel.install_transform_launcher(rail)
-        panel.install_textstyle_launcher(rail)
+        panel.install_effects_launcher(rail)
         # Bare content stand-ins; the real groups are covered by their
-        # own unit tests (annotation/emphasis/text style sets).  The
-        # transform dock takes the panel *itself* as content (not a
-        # view_widget), so a plain QWidget stand-in is enough.
+        # own unit tests (annotation/emphasis sets).  The transform dock
+        # takes the panel *itself* as content (not a view_widget), so a
+        # plain QWidget stand-in is enough.
         panel.emphasis_group = QFrame()
-        panel.textstyle_group = QFrame()
+        panel.effects_panel = QFrame()
         panel.texttransform_panel = QFrame()
         harness.panel = panel
         harness.rail = rail
@@ -94,7 +94,7 @@ class RailDockLauncherTest(unittest.TestCase):
         self.assertIs(layout.itemAt(0).widget(), panel.annotation_launcher)
         self.assertIs(layout.itemAt(1).widget(), panel.emphasis_launcher)
         self.assertIs(layout.itemAt(2).widget(), panel.transform_launcher)
-        self.assertIs(layout.itemAt(3).widget(), panel.textstyle_launcher)
+        self.assertIs(layout.itemAt(3).widget(), panel.effects_launcher)
 
     def test_toggle_creates_dock_lazily_and_persists_state(self):
         from utils.config import pcfg
@@ -155,77 +155,33 @@ class RailDockLauncherTest(unittest.TestCase):
         panel._update_emphasis_indicator()
         self.assertFalse(panel.emphasis_launcher._dot)
 
-    def test_textstyle_dot_follows_block(self):
+    def test_effects_dot_follows_block(self):
         scene = QGraphicsScene()
         harness = self._panel_and_rail()
         panel = harness.panel
         item = self.TextBlkItem(blk=_make_blk(), idx=0)
         scene.addItem(item)
         panel.textblk_item = item
-        panel._update_textstyle_indicator()
-        self.assertFalse(panel.textstyle_launcher._dot)
-        item.blk.fontformat.shadow_radius = 0.25
-        panel._update_textstyle_indicator()
-        self.assertTrue(panel.textstyle_launcher._dot)
-        item.blk.fontformat.shadow_radius = 0.0
-        item.blk.fontformat.gradient_enabled = True
-        panel._update_textstyle_indicator()
-        self.assertTrue(panel.textstyle_launcher._dot)
+        panel._update_effects_indicator()
+        self.assertFalse(panel.effects_launcher._dot)
+        # 活跃效果卡 → 角标亮（判据=has_active_effects，勿用 len(effects)）
+        from utils.text_effects import StrokeEffect, TextEffectStack
 
-
-class TextStyleGroupTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.app = QApplication.instance() or QApplication([])
-
-    def _make_group(self):
-        from ui.text_style_dock import TextStyleGroup
-
-        return TextStyleGroup()
-
-    def test_preview_and_commit_are_split(self):
-        group = self._make_group()
-        previews, commits = [], []
-        group.preview_changed.connect(lambda n, v: previews.append((n, v)))
-        group.commit_changed.connect(lambda n, v: commits.append((n, v)))
-        # slider drag ticks → preview only on valueChanged
-        group.strength_slider.setValue(40)
-        self.assertEqual(previews[-1], ("shadow_strength", 0.4))
-        self.assertEqual(commits, [])
-        # release → one commit
-        group.strength_slider.sliderReleased.emit()
-        self.assertEqual(commits, [("shadow_strength", 0.4)])
-
-    def test_set_from_format_restores_without_emitting(self):
-        from utils.fontformat import FontFormat
-
-        group = self._make_group()
-        emissions = []
-        group.preview_changed.connect(lambda *v: emissions.append(v))
-        group.commit_changed.connect(lambda *v: emissions.append(v))
-        fmt = FontFormat()
-        fmt.shadow_radius = 0.5
-        fmt.shadow_strength = 0.75
-        fmt.shadow_color = [20, 30, 40]
-        fmt.gradient_enabled = True
-        fmt.gradient_angle = 30.0
-        fmt.gradient_start_color = [1, 2, 3]
-        fmt.gradient_size = 1.5
-        group.set_from_format(fmt)
-        self.assertEqual(emissions, [])
-        self.assertEqual(group.radius_slider.value(), 50)
-        self.assertEqual(group.strength_slider.value(), 75)
-        self.assertEqual(group.shadow_color_btn.color(), [20, 30, 40])
-        self.assertTrue(group.gradient_enable_cb.isChecked())
-        self.assertEqual(round(group.gradient_dial.angle()), 30)
-        self.assertEqual(group.scale_slider.value(), 150)
-
-    def test_include_stroke_projects(self):
-        group = self._make_group()
-        toggles = []
-        group.shadow_include_stroke_changed.connect(toggles.append)
-        group.include_stroke_cb.setChecked(True)
-        self.assertEqual(toggles, [True])
+        item.blk.fontformat.text_effects = TextEffectStack(
+            effects=(StrokeEffect(),)
+        )
+        panel._update_effects_indicator()
+        self.assertTrue(panel.effects_launcher._dot)
+        # 仅整体不透明度≠1 也算活跃
+        item.blk.fontformat.text_effects = TextEffectStack(
+            overall_opacity=0.5
+        )
+        panel._update_effects_indicator()
+        self.assertTrue(panel.effects_launcher._dot)
+        # 中性栈（全默认+全不透明）→ 角标灭
+        item.blk.fontformat.text_effects = TextEffectStack()
+        panel._update_effects_indicator()
+        self.assertFalse(panel.effects_launcher._dot)
 
 
 if __name__ == "__main__":

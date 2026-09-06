@@ -147,23 +147,35 @@ def test_format_condition_validation():
 
 
 def test_format_predicate_and_combination():
-    blk = FakeBlock(_ffmt(font_size=30.0, stroke_width=2.0))
+    blk = FakeBlock(_ffmt(font_size=30.0, letter_spacing=1.5))
     pred = FormatPredicate(
         conditions=[
             FormatCondition("font_size", "ge", 20),
-            FormatCondition("stroke_width", "eq", 2.0),
+            FormatCondition("letter_spacing", "eq", 1.5),
         ]
     )
     assert pred.matches(blk)
     pred.font_size_fail = FormatPredicate(
         conditions=[
             FormatCondition("font_size", "ge", 20),
-            FormatCondition("stroke_width", "eq", 0.0),
+            FormatCondition("letter_spacing", "eq", 0.0),
         ]
     )
     assert not pred.font_size_fail.matches(blk)
     assert not FormatPredicate().is_active
     assert FormatPredicate().matches(blk)  # inactive passes
+
+
+def test_format_condition_text_effects_queryable():
+    # 批次②：text_effects 进入 DIFF_FIELDS 后对谓词引擎免费可查，
+    # 整栈 eq 比较（中性栈 vs 默认栈相等，带描边则不等）。
+    from utils.text_effects import StrokeEffect, TextEffectStack  # noqa: E402
+
+    cond = FormatCondition("text_effects", "eq", TextEffectStack())
+    assert cond.matches(FakeBlock(_ffmt()))
+    assert not cond.matches(
+        FakeBlock(_ffmt(text_effects=TextEffectStack(effects=(StrokeEffect(),))))
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════

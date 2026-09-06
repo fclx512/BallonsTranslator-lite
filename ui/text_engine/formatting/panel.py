@@ -45,7 +45,7 @@ from ...custom_widget import (
     ColorPickerLabel,
     QFontChecker,
     SizeComboBox,
-    SizeControlLabel,
+    SmallParamLabel,
     TextCheckerLabel,
     Widget,
 )
@@ -665,19 +665,15 @@ class FontFormatPanel(Widget):
         self.fontsizebox.fcombobox.setToolTip(self.tr("Change font size"))
         self.fontsizebox.param_changed.connect(self.on_param_changed)
         
-        self.lineSpacingLabel = SizeControlLabel(self, direction=1, transparent_bg=False)
-        self.lineSpacingLabel.setObjectName("lineSpacingLabel")
-        self.lineSpacingLabel.size_ctrl_changed.connect(self.onLineSpacingCtrlChanged)
-        self.lineSpacingLabel.btn_released.connect(lambda : self.on_param_changed('line_spacing', self.lineSpacingBox.value()))
-
         self.lineSpacingBox = SizeComboBox([0, 100], 'line_spacing', self)
         self.lineSpacingBox.setObjectName("FontFormatSizeBox")
         self.lineSpacingBox.addItems(["1.0", "1.1", "1.2"])
         self.lineSpacingBox.setToolTip(self.tr("Change line spacing"))
         self.lineSpacingBox.param_changed.connect(self.on_param_changed)
+        # 行距拖拽灵敏度：Distance 类型步进更大（0.1/px → 5px=0.5）
+        self.lineSpacingBox.drag_step_provider = self._line_spacing_drag_step
 
         linesp_hlayout = QHBoxLayout()
-        linesp_hlayout.addWidget(self.lineSpacingLabel)
         linesp_hlayout.addWidget(self.lineSpacingBox)
         linesp_hlayout.setSpacing(7)
         
@@ -726,11 +722,6 @@ class FontFormatPanel(Widget):
         self.strokeWidthBox.setToolTip(self.tr("Change stroke width"))
         self.strokeWidthBox.param_changed.connect(self.on_param_changed)
 
-        self.fontStrokeLabel = SizeControlLabel(self, 0, self.tr("Stroke"))
-        self.fontStrokeLabel.setObjectName("fontStrokeLabel")
-        self.fontStrokeLabel.size_ctrl_changed.connect(self.strokeWidthBox.changeByDelta)
-        self.fontStrokeLabel.btn_released.connect(lambda : self.on_param_changed('stroke_width', self.strokeWidthBox.value()))
-        
         self.strokeColorPicker = ColorPickerLabel(self, param_name='srgb')
         self.strokeColorPicker.setObjectName('FontFormatColorPicker')
         self.strokeColorPicker.setToolTip(self.tr("Change stroke color"))
@@ -739,7 +730,7 @@ class FontFormatPanel(Widget):
         self.strokeColorPicker.apply_color.connect(self.on_apply_color)
 
         stroke_hlayout = QHBoxLayout()
-        stroke_hlayout.addWidget(self.fontStrokeLabel)
+        stroke_hlayout.addWidget(SmallParamLabel(self.tr("Stroke")))
         stroke_hlayout.addWidget(self.strokeWidthBox)
         stroke_hlayout.addWidget(self.strokeColorPicker)
         stroke_hlayout.setSpacing(7)
@@ -751,13 +742,7 @@ class FontFormatPanel(Widget):
         self.letterSpacingBox.setMinimumWidth(int(self.letterSpacingBox.height() * 2.5))
         self.letterSpacingBox.param_changed.connect(self.on_param_changed)
 
-        self.letterSpacingLabel = SizeControlLabel(self, direction=0, transparent_bg=False)
-        self.letterSpacingLabel.setObjectName("letterSpacingLabel")
-        self.letterSpacingLabel.size_ctrl_changed.connect(self.letterSpacingBox.changeByDelta)
-        self.letterSpacingLabel.btn_released.connect(lambda : self.on_param_changed('letter_spacing', self.letterSpacingBox.value()))
-
         lettersp_hlayout = QHBoxLayout()
-        lettersp_hlayout.addWidget(self.letterSpacingLabel)
         lettersp_hlayout.addWidget(self.letterSpacingBox)
         lettersp_hlayout.setSpacing(7)
 
@@ -1094,12 +1079,11 @@ class FontFormatPanel(Widget):
     def on_apply_color(self, param_name, rgb):
         self.on_param_changed(param_name, rgb)
 
-    def onLineSpacingCtrlChanged(self, delta: int):
-        if C.active_format.line_spacing_type == LineSpacingType.Distance:
-            mul = 0.1
-        else:
-            mul = 0.01
-        self.lineSpacingBox.setValue(self.lineSpacingBox.value() + delta * mul)
+    def _line_spacing_drag_step(self):
+        fmt = C.active_format
+        if fmt is not None and fmt.line_spacing_type == LineSpacingType.Distance:
+            return 0.5  # 0.1/px × 5px
+        return 0.05
 
     def sync_inline_format(
         self,

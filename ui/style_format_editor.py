@@ -27,7 +27,6 @@ from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
-    QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -43,7 +42,7 @@ from utils import shared
 from utils.base_styles import copy_value, quantize_field
 from utils.style_query import FIELD_GROUPS
 
-from .custom_widget import ColorPickerDialog, ColorSwatchBtn
+from .custom_widget import ColorPickerDialog, ColorSwatchBtn, NoArrowsDoubleSpinBox
 
 # ── 字段标签 / 分组标题（模块级字面量，定义处显式标注上下文）────────────
 
@@ -75,6 +74,7 @@ FIELD_LABELS: Dict[str, str] = {
     "ligature_contextual": QCoreApplication.translate("StyleFormatEditor", "Contextual Ligatures"),
     "oldstyle_nums": QCoreApplication.translate("StyleFormatEditor", "Oldstyle Numerals"),
     "standard_vertical_roman_alignment": QCoreApplication.translate("StyleFormatEditor", "Vertical Roman Alignment"),
+    "text_effects": QCoreApplication.translate("StyleFormatEditor", "Text Effects"),
     "glyph_slant_angle": QCoreApplication.translate("StyleFormatEditor", "Glyph Slant"),
 }
 
@@ -83,19 +83,20 @@ EFFECT_FIELDS: Tuple[str, ...] = FIELD_GROUPS["effects"]
 
 
 def effects_tokens(ffmt, only_fields=None) -> List[str]:
-    """笼统标记 *ffmt* 使用了哪些高级效果（阴影/渐变/变换/斜切）。
+    """笼统标记 *ffmt* 使用了哪些高级效果（效果栈/变换/斜切）。
 
     *only_fields*（变体模式）限定渲染字段：没有任何效果字段被覆盖时不展示。
-    激活语义与预览 chips 一致：阴影=radius>0，渐变=enabled，变换=栈非空，
-    斜切=角度非零。
+    激活语义与预览 chips 一致：效果=栈有活跃卡或整体不透明度≠1（预合成
+    整体条目，不细分卡型），变换=栈非空，斜切=角度非零。
     """
     if only_fields is not None and not (set(EFFECT_FIELDS) & set(only_fields)):
         return []
     tokens: List[str] = []
-    if getattr(ffmt, "shadow_radius", 0) > 0:
-        tokens.append(QCoreApplication.translate("StyleFormatEditor", "Shadow"))
-    if getattr(ffmt, "gradient_enabled", False):
-        tokens.append(QCoreApplication.translate("StyleFormatEditor", "Gradient"))
+    effect_stack = getattr(ffmt, "text_effects", None)
+    if effect_stack is not None and (
+        effect_stack.has_active_effects or effect_stack.overall_opacity != 1.0
+    ):
+        tokens.append(field_label("text_effects"))
     stack = getattr(ffmt, "text_transform", None)
     try:
         n = len(stack)
@@ -150,8 +151,8 @@ def field_label(fname: str) -> str:
 # ── 单字段编辑器 ────────────────────────────────────────────────────────
 
 
-def _spin(**kw) -> QDoubleSpinBox:
-    spin = QDoubleSpinBox()
+def _spin(**kw) -> NoArrowsDoubleSpinBox:
+    spin = NoArrowsDoubleSpinBox()
     spin.setRange(kw.get("lo", 0.0), kw.get("hi", 999.0))
     spin.setDecimals(kw.get("dec", 1))
     spin.setSingleStep(kw.get("step", 1.0))

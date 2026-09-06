@@ -94,6 +94,22 @@
 
 ---
 
+### Blender 式拖拽数值输入框 + 效果栈配置错位清理（含启动修复）
+
+**问题/需求：** 复刻 Blender 输入框交互：无箭头、按住横向拖拽调值、单击进键盘编辑。实装后借此清理全仓库数值交互（箭头 QSS、拖拽标签、原生残留）。另修复并行代理（频繁中断输出致代码质量问题）埋下的两处启动崩溃。
+
+**改动要点：**
+
+- **拖拽混入**：`ui/custom_widget/spinbox.py::DragAdjustMixin`——悬停 ↔、按住横拖连续调值（5px/步，Shift 精调 ×0.1）、位移 <4px 视为单击进编辑（全选）；`NoArrowsSpinBox`/`NoArrowsDoubleSpinBox`/`SizeComboBox` 全挂载。Qt5/Qt6 全局坐标（`shared.FLAG_QT6`）兼容。
+- **提交时序**：`SizeComboBox` 拖拽中静默刷新、`drag_finished` 才发一次 `param_changed`（对齐旧标签 btn_released 语义，避免撤销条目逐帧膨胀）；灵敏度经 `drag_step_provider` 钩子（行距 Distance 类型 0.5/其它 0.05）。`changeByDelta` 现无调用方，保留为公共 API。
+- **清理**：删 `config/stylesheet.css` 箭头 QSS 规则（改代码 `ButtonSymbols.NoButtons`）；`style_format_editor::_spin`、`merge_dialog` 原生 spinbox 转封装；`gradient_editor.py::GradientValueEditor` 改继承封装去重；按「有文案标签降级静态说明、纯手柄整删」退役约 15 处拖拽标签（`text_panel`/`formatting/panel`/`formatting/advanced`/`gradient_editor`）。`transform/panel.py::TransformDragLabel`（X/Y 位置语义）保留。
+- **启动修复一（active_format=None）**：`text_panel.py` 行距灵敏度原在构造期读 `C.active_format.line_spacing_type`（None），改惰性方法 `_line_spacing_drag_step` 运行时取 + None 守卫；`formatting/panel.py` 同法。
+- **启动修复二 + 效果栈配置错位**：并行代理效果栈入参 `text_effects_panel`/`expand_teffects_panel`（带 s）与 config.py 声明 `show_text_effect_panel`/`expand_teffect_panel` 三处不咬合，致 `setupRegisterWidget` 读未声明字段崩溃；`TextEffectPanel` 是像 `text_transform_panel` 一样的按需浮层（非 View 菜单持久面板），统一对齐声明字段 + 加入 View 菜单 pop 清单，`set_expend_area` 读 `pcfg.expand_teffect_panel` 不再炸。静态清扫确认全部 `config_name`/`config_expand_name` 与 ProgramConfig 字段一一对应。
+
+**涉及文件：** `ui/custom_widget/spinbox.py`、`ui/custom_widget/combobox.py`、`ui/style_format_editor.py`、`ui/merge_dialog.py`、`ui/text_engine/effects/gradient_editor.py`、`ui/text_panel.py`、`ui/text_engine/formatting/panel.py`、`ui/text_engine/formatting/advanced.py`、`config/stylesheet.css`、`scripts/style_showcase.py`、`AGENTS.md`、`utils/config.py`（字段声明已存）、`docs/daily_log.md`
+
+---
+
 ## 2026-09-05
 
 ### 撤销体系阶段 4 第一批落地：跨页编辑历史 + 历史面板二期（按页分组/紧凑化/PS 式操作名）

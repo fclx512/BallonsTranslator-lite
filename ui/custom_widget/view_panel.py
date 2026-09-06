@@ -1,4 +1,4 @@
-from qtpy.QtCore import Qt, Signal
+from qtpy.QtCore import QCoreApplication, QEvent, Qt, Signal
 from qtpy.QtGui import QFontMetrics, QIcon, QMouseEvent
 from qtpy.QtWidgets import (
     QHBoxLayout,
@@ -158,6 +158,8 @@ class PanelArea(QScrollArea):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         self.view_widget = ViewWidget(self, panel_name, title_capsule=title_capsule)
+        # 卡片堆栈面板的高度同步重入护栏（_sync_scroll_content_height）
+        self._syncing_content_height = False
         self.view_hide_btn_clicked = self.view_widget.view_hide_btn_clicked
         self.expand_changed = self.view_widget.expend_changed
         self.title = self.view_widget.title
@@ -175,6 +177,56 @@ class PanelArea(QScrollArea):
 
     def setContentLayout(self, layout):
         self.scrollContent.setLayout(layout)
+
+    def _sync_scroll_content_height(self, content_layout) -> None:
+        """把卡片布局的全高暴露给滚动区（效果面板卡片堆栈用）。
+
+        面板被父级分配小于 sizeHint 的高度时，内容仍保持自然高度。"""
+        if self._syncing_content_height:
+            return
+        self._syncing_content_height = True
+        try:
+            # 覆盖式滚动条不占布局宽度；viewport 尚未定稿尺寸时 frame 仍可靠
+            content_width = max(1, self.width() - 2 * self.frameWidth())
+            self.scrollContent.resize(
+                content_width,
+                max(1, self.scrollContent.height()),
+            )
+            content_layout.invalidate()
+            # 让响应式子控件先拿到最终宽度，再向布局索要该宽度下的高度
+            content_layout.activate()
+            content_height = (
+                content_layout.heightForWidth(content_width)
+                if content_layout.hasHeightForWidth()
+                else content_layout.sizeHint().height()
+            )
+            self.scrollContent.setMinimumHeight(content_height)
+            self.scrollContent.resize(
+                content_width,
+                max(content_height, self.viewport().height()),
+            )
+            content_layout.activate()
+            settled_height = (
+                content_layout.heightForWidth(content_width)
+                if content_layout.hasHeightForWidth()
+                else content_layout.sizeHint().height()
+            )
+            if settled_height != content_height:
+                self.scrollContent.setMinimumHeight(settled_height)
+                self.scrollContent.resize(
+                    content_width,
+                    max(settled_height, self.viewport().height()),
+                )
+                content_layout.activate()
+            self.scrollContent.updateGeometry()
+            self.updateGeometry()
+            self.view_widget.updateGeometry()
+            # 隐藏的可伸缩子控件 min height 变化后 QScrollArea 不一定刷新量程
+            QCoreApplication.sendEvent(
+                self, QEvent(QEvent.Type.LayoutRequest)
+            )
+        finally:
+            self._syncing_content_height = False
 
 
 class PanelGroupBox(Widget):

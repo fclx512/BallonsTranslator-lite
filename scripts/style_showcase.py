@@ -131,8 +131,8 @@ def build_compare_tab():
     opts = ["标准", "斜体", "粗偏移"]
     rows = [
         ("下拉框", lambda: QComboBox(), lambda: make_config_combo(opts)),
-        ("数字输入", lambda: QSpinBox(), lambda: NoArrowsSpinBox()),
-        ("浮点输入", lambda: QDoubleSpinBox(), lambda: NoArrowsDoubleSpinBox()),
+        ("数字输入（拖拽调值）", lambda: QSpinBox(), lambda: NoArrowsSpinBox()),
+        ("浮点输入（拖拽调值）", lambda: QDoubleSpinBox(), lambda: NoArrowsDoubleSpinBox()),
         ("单行输入", lambda: QLineEdit(), lambda: ConfigLineEdit("文本")),
         ("多行输入", lambda: QTextEdit(), lambda: ConfigTextEdit()),
         ("复选框", lambda: QCheckBox("启用"), lambda: ConfigCheckBox("启用")),
@@ -260,11 +260,11 @@ def build_gallery_tab():
         ("输入类（必须用封装类，原生类静默掉样式）", [
             ("ConfigComboBox", lambda: config_combo(["标准", "斜体", "粗偏移"])),
             ("ParamComboBox", lambda: ParamComboBox("translator", ["保留", "覆盖"])),
-            ("SizeComboBox", lambda: SizeComboBox([1, 100], init_value=24)),
+            ("SizeComboBox（拖拽调值）", lambda: SizeComboBox([1, 100], init_value=24)),
             ("SmallComboBox", lambda: SmallComboBox(options=["A", "B"])),
             ("SmallSizeComboBox", lambda: SmallSizeComboBox([1, 100], init_value=1.2)),
-            ("NoArrowsSpinBox", lambda: NoArrowsSpinBox()),
-            ("NoArrowsDoubleSpinBox", lambda: NoArrowsDoubleSpinBox()),
+            ("NoArrowsSpinBox（拖拽调值）", lambda: NoArrowsSpinBox()),
+            ("NoArrowsDoubleSpinBox（拖拽调值）", lambda: NoArrowsDoubleSpinBox()),
             ("ConfigLineEdit", lambda: ConfigLineEdit("单行文本")),
             ("ConfigTextEdit", ConfigTextEdit),
             ("ConfigCheckBox", lambda: ConfigCheckBox("启用")),

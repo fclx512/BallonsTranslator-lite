@@ -3,7 +3,7 @@
 Port of upstream v1.5.9 ``text_engine/rendering/shadow.py``.  The local
 ``ui/text_graphical_effect.py`` ``apply_shadow_effect`` was functionally
 identical; this module is the single upstream-aligned implementation and
-``ui/text_style_dock.py`` reuses it for the rail dock's shadow preview.
+the effect gradient editor reuses it for the swatch preview.
 """
 
 from __future__ import annotations

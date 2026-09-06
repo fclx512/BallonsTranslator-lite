@@ -3,8 +3,8 @@
 Full port of upstream v1.5.9 ``text_engine/rendering/*`` across Stage 3 and
 Stage 4:
 
-- ``shadow``: glyph-shadow compositing (shared with the local
-  ``text_style_dock`` preview).
+- ``shadow``: glyph-shadow compositing (shared with the effect
+  gradient-editor preview).
 - ``raster``: bounded full-surface / tile raster planning policy.
 - ``indexing``: Qt UTF-16 / grapheme indexing helpers.
 - ``glyph``: glyph-run ink extraction, glyph-local slant shear, and

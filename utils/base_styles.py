@@ -31,14 +31,15 @@ from utils.fontformat import FontFormat, TextTransformStack
 # ═══════════════════════════════════════════════════════════════════════
 
 # Fields entering the full-parameter signature (ungrouped clustering).
-# Kept identical to the historical FontStyleManager discovery so legacy
-# ungrouped entries cluster the same way.
+# Effect parameters enter as the single pre-composed ``text_effects`` stack
+# entry (预合成整体条目，效果栈移植计划 §六) — the legacy view fields
+# (opacity/shadow_*/gradient_*/stroke_width/srgb) are derived views of the
+# stack and would produce duplicate overrides.
 _SIGNATURE_FIELDS = [
     "font_family",
     "font_size",
-    "stroke_width",
+    "text_effects",
     "frgb",
-    "srgb",
     "italic",
     "underline",
     "alignment",
@@ -46,30 +47,14 @@ _SIGNATURE_FIELDS = [
     "font_weight",
     "line_spacing",
     "letter_spacing",
-    "opacity",
-    "shadow_radius",
-    "shadow_strength",
-    "shadow_color",
-    "shadow_offset",
-    "gradient_enabled",
-    "gradient_start_color",
-    "gradient_end_color",
-    "gradient_angle",
-    "gradient_size",
     "line_spacing_type",
 ]
 
 # Float fields are quantized before hashing/comparing.
 _FLOAT_QUANT = {
     "font_size": 0.5,
-    "stroke_width": 0.1,
     "line_spacing": 0.05,
     "letter_spacing": 0.05,
-    "opacity": 0.01,
-    "shadow_radius": 0.5,
-    "shadow_strength": 0.05,
-    "gradient_angle": 1.0,
-    "gradient_size": 1.0,
 }
 
 # Identity fields: (font_family, vertical) decides which base style a block
@@ -82,9 +67,8 @@ IDENTITY_FIELDS = ("font_family", "vertical")
 # ``deprecated_attributes``.
 DIFF_FIELDS = [
     "font_size",
-    "stroke_width",
+    "text_effects",
     "frgb",
-    "srgb",
     "italic",
     "underline",
     "strikeout",
@@ -97,17 +81,6 @@ DIFF_FIELDS = [
     "ligature_discretionary",
     "ligature_contextual",
     "oldstyle_nums",
-    "opacity",
-    "shadow_radius",
-    "shadow_strength",
-    "shadow_color",
-    "shadow_offset",
-    "shadow_include_stroke",
-    "gradient_enabled",
-    "gradient_start_color",
-    "gradient_end_color",
-    "gradient_angle",
-    "gradient_size",
     "line_spacing_type",
     "text_transform",
     "glyph_slant_angle",
@@ -129,6 +102,9 @@ def _quantize(fname: str, value: Any) -> Any:
     """Return a hashable, noise-free comparison key for one field value."""
     if fname == "text_transform":
         return _stack_key(value)
+    if fname == "text_effects":
+        # 冻结 dataclass 栈本身可哈希，直接回传
+        return value
     step = _FLOAT_QUANT.get(fname)
     if step is not None:
         return round(round(float(value) / step) * step, 4)
