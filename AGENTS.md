@@ -30,22 +30,24 @@ modules/
 | `launch.py` | 入口，命令行参数，PyTorch 设备 |
 | `utils/proj_imgtrans.py` | 项目管理（页面、文字块、撤销栈） |
 | `utils/textblock.py` | 核心数据单元（坐标、原文、译文、字体、遮罩） |
-| `utils/font_scan.py` | 字体名称表扫描与家族名归并：字重变体/中英双名/排版家族名归并为单一规范名（对齐 PS 组织方式，canonical 优先中文名），并建立精确 PS 名索引供 PSD 导出；`shared.init_font_list` 消费其结果；`compute_simplify_map` 为「一键精简」私有规则（扩展 heavy/ultra 后缀、无分隔符后缀、face 包含归并），产物写入 `pcfg.simplified_font_map`，由 FontExcludeDialog 的一键精简按钮管理 |
-| `utils/base_styles.py` | 项目级大样式 + 变体发现：块按 `(font_family, vertical)` 身份键归属大样式，override 量化 diff 派生子样式（同 override 自动聚类 + 自动命名）；`discover_style_tree` 驱动样式管理器树 |
-| `modules/translators/trans_agent.py` + `modules/translators/agent/` | 翻译 agent：`AgentTranslator`（继承 `LLM_API_Translator` 复用 profile/重试/RPM）作唯一 LLM 翻译路径；原生 function calling 多轮循环 + 只读探索工具 + 唯一 `submit_translations` 提交出口；`agent/` 包内为 loop/工具面/prompts/validator 纯逻辑 |
+| `utils/font_scan.py` | 字体名称表扫描与家族名归并（canonical 优先中文名）+ 精确 PS 名索引供 PSD 导出；`shared.init_font_list` 消费其结果；`compute_simplify_map` 为 FontExcludeDialog「一键精简」规则，产物写 `pcfg.simplified_font_map`（细则见各函数 docstring） |
+| `utils/base_styles.py` | 项目级大样式 + 变体发现（身份键 `(font_family, vertical)`，override 量化 diff 聚类派生子样式）；`discover_style_tree` 驱动样式管理器树 |
+| `modules/translators/trans_agent.py` + `modules/translators/agent/` | 翻译 agent：`AgentTranslator`（继承 `LLM_API_Translator`）作唯一 LLM 翻译路径；function calling 多轮循环 + 只读探索工具 + 唯一 `submit_translations` 提交出口；循环/工具/prompts/validator 纯逻辑在 `agent/` 包，设计见 `docs/技术实现/翻译agent化_设计方案.md` |
 | `utils/config.py` | 配置读写 |
 | `utils/shared.py` | 路径常量 |
 | `utils/structures.py` | `nested_dataclass`，`Config`/`Dict` 基类 |
-| `utils/profile_manager.py` | LLM API 配置数据层（加载/保存/查找/网络探测；翻译器/OCR/在线修复共用） |
-| `ui/llm_profile_cards.py` | LLM Profile 卡片式设置页（卡片列表 + 折叠详情 + 能力徽章分节 + 连接信息块 + 摘要行模型下拉与 `model_options` 清单；形态对齐上游 `ballontranslator/ui/llm_profile_widgets.py`） |
-| `utils/ai_tools.py` | 翻译 agent/术语工作台共享的只读探索工具执行器（4 只读工具 + `to_openai_tools`；写类工具已随旧 AI 助手移除） |
+| `utils/profile_manager.py` | LLM Profile 数据层（加载/保存/查找/网络探测，翻译器/OCR/在线修复共用）+ 同文件的选取解析层（`profile_is_usable`/`get_default_profile_name`/`resolve_profile`/`heal_profile_selector`，语义见 docstring；消费点不回退「列表第一项」） |
+| `ui/llm_profile_cards.py` | LLM Profile 卡片式设置页（形态对齐上游 `ballontranslator/ui/llm_profile_widgets.py`） |
+| `utils/ai_tools.py` | 翻译 agent/术语工作台共享的只读探索工具执行器（4 只读工具 + `to_openai_tools`） |
+| `utils/block_tags.py` | 块标签体系数据层：类型注册表（5 标签）+ 读写 + 「OCR 置信度低」自动挂标（分数存条目不喂 AI）；`TextBlock.tags` 随项目 JSON 保存；详见 `docs/基础速查/AI辅助标签体系使用说明.md` |
+| `utils/block_actions.py` | 框级 AI 动作（OCR 校正/重译）注册表 + vision 调用 + 选中跟随工具栏；载荷在主线程按前端观感组装；配套：执行器 `ui/block_action_runner.py`、确认卡 `ui/block_action_card.py`、撤销写回 `ui/textedit_commands.py::ApplyBlockTextCommand`、动作前数据一致性修复 `ui/mainwindow.py::_sync_block_data`；详见 `docs/基础速查/AI辅助标签体系使用说明.md` |
 | `ui/mainwindow.py` | 主窗口 |
 | `ui/configpanel.py` | 配置面板、快捷键编辑；四个管线页合并为一项「Pipeline」（页内标签，`ui/configpanel.py::_build_pipeline_page`），阶段只编辑当前引擎的参数 |
 | `ui/run_pipeline_dialog.py` | 运行对话框：启用模块网格（阶段图标开关 + 模块下拉）+ 各阶段折叠选项区；模块下拉写回底部栏选择器 |
 | `ui/text_panel.py` | 文本编辑面板 |
 | `ui/panel_rail.py` | 嵌字页格式区左缘窄栏：功能图标列（画布浮层面板入口，见 `ui/custom_widget/rail_dock_panel.py`） |
 | `ui/io_thread.py` | 管线编排（检测→OCR→翻译→修复） |
-| `ui/textitem.py` / `ui/text_engine/` | 画布文字渲染（textitem 是 fork 适配层，渲染实现在 engine；） |
+| `ui/textitem.py` / `ui/text_engine/` | 画布文字渲染（textitem 是 fork 适配层，渲染实现在 engine） |
 | `ui/overlay_modal.py` | `OverlayModal` — 中心淡入/淡出模态（scrim 覆盖中央画布区，ConfigPanel 用它） |
 | `ui/overlay_slide.py` | `OverlaySlider` — 覆盖面板滑入滑出动画（GlobalSearchWidget、PageList 用它） |
 | `ui/custom_widget/` | 可复用控件库（`__init__.py` 统一导出，见下方"打包控件功能"） |
@@ -68,16 +70,16 @@ modules/
 |-----------|----------|
 | `ConfigSubBlock` 禁用自动变灰 | `changeEvent` 自动处理禁用态 label 颜色 |
 | "—" 占位符模式 | 禁用数值字段时以 "—" 替代，`blockSignals` 防误触 |
-| `NoArrowsSpinBox` 族 | 无箭头、主题感知的数字/文本/下拉/滚动条控件族；`NoArrowsSpinBox`/`NoArrowsDoubleSpinBox`/`SizeComboBox` 支持 Blender 式横向拖拽调值（悬停 ↔、Shift 精调、单击/点选进编辑），拖拽中静默改显示、松手才经 `drag_finished` 提交一次。**数值输入默认用本族**，禁止裸 `QSpinBox`/`QDoubleSpinBox`（同「输入类必须用封装类」规则）。特例：变换面板的 committed 数值网格（`ui/text_engine/transforms/panel.py::CommittedTransformControl`）走「label 拖拽 + 画布实时预览 + 松手提交」的独立状态机（拖拽中途即更新模型、预览不进撤销栈）；效果卡的同类网格（`ui/text_engine/effects/cards.py::EffectNumericControl`）已改为「箱体直拖 + 实时预览 + 松手提交」（2026-09-08），label 退为纯描述文本 |
+| `NoArrowsSpinBox` 族 | 无箭头、主题感知的数字/文本/下拉/滚动条控件族；支持 Blender 式横向拖拽调值（拖拽中静默改显示、松手经 `drag_finished` 提交一次）。**数值输入默认用本族**，禁止裸 `QSpinBox`/`QDoubleSpinBox`；变换面板/效果卡两个特例见使用说明「模式 E」 |
 | `ColorSwatchBtn` | 色块按钮，`setColor()`/`color()` + `colorChanged` 信号 |
 | `pick_screen_color()` | 屏幕吸色管：全屏覆盖 + 8x 放大镜，左键取色、右键/Esc 取消（冻结帧采样，事件驱动不卡 UI） |
 | `ConfigScrollBar` | 全局统一的 8px 圆角滚动条（含悬停动画） |
 | `ClockDial` | 指针式角度/距离选择（影子方向用） |
 | `ConfigSectionHeader` | 配置面板章节标题 |
 | `GroupFrame` | 圆角边框分组容器 |
-| `NotificationCenter`（`ui/custom_widget/notification.py`） | 统一画布通知中心：toast / 活动 spinner / 状态角标，锚点堆叠避让、key 去重刷新、`post()` 线程桥接；模块级单例 `notification`，Canvas 初始化时 attach 后由各模块调用 |
-| `RailDockPanel` | 画布区浮层面板（主窗口内子控件，展开硬连接锚定窄栏左侧：右缘+顶部固定、宿主缩放/窄栏移动自动重锚、左下角手柄拉伸、尺寸下限随内容布局、Esc/× 关闭不自动关；开合记忆 `pcfg`） |
-| `FloatDropPanel`（`ui/custom_widget/float_drop_panel.py`） | 按钮锚定下拉浮层（`ui/global_search_widget.py` 格式条件用）：宿主为 `window.centralWidget()`（打开时惰性解析），左缘钉在锚点所在侧栏右缘、向画布方向按内容展开，不参与布局不撑宿主最小尺寸；Esc/×/再点锚点关闭，无开合记忆、无拉伸手柄（内容自带滚动）；QSS 复用 `RailDock*` objectName |
+| `NotificationCenter`（`ui/custom_widget/notification.py`） | 统一画布通知中心：toast / 活动 spinner / 状态角标；模块级单例 `notification`，Canvas 初始化时 attach 后由各模块调用 |
+| `RailDockPanel` | 画布区浮层面板（硬连接锚定窄栏左侧，开合记忆 `pcfg`） |
+| `FloatDropPanel`（`ui/custom_widget/float_drop_panel.py`） | 按钮锚定下拉浮层（`ui/global_search_widget.py` 用；无开合记忆）；与 RailDockPanel 的选型对比见使用说明 |
 
 新增控件时更新上表即可，无需展开详细用法。优先使用已有方案而非重新实现。
 
@@ -126,14 +128,13 @@ modules/
 - 所有 UI 文字用 `self.tr()` 包裹，严禁硬编码中文。
 - ts 中 `<context>` 对应类名，`<message>` 对应 tr 字符串。
 - 编译：`python scripts/qm_compile.py translate/zh_CN.ts translate/zh_CN.qm`
-- 验证：`python scripts/i18n_check.py`；发版前 `--ci`。
+- 验证：`python scripts/i18n_check.py`；发版前 `--ci`（报孤儿/缺失即真实问题，须修复）。
 - `self.tr()` 字符串必须是单个字符串，不要用隐式拼接（`"a" "b"`）—— `i18n_check.py` 按行扫描，检测不到跨行拼接。长字符串在 `tr(` 后换行即可。
-- **模块级翻译表禁止 `self.tr(variable)` 间接查表**（检查器看不见，必漏翻译）：在**字面量定义处**用 `QCoreApplication.translate("上下文", "...")` 显式标注上下文（快捷键名 `ui/configpanel.py::_ACTION_NAMES`、画布右键命令 `ui/context_menu_config.py`、饼菜单分区 `ui/pie_menu_editor.py`、线程错误消息 `ui/io_thread.py` 等），下游一律直接使用已翻译值（tr 对非匹配串原样返回）。孤儿白名单已清空（`scripts/i18n_common.py::KNOWN_ORPHAN_CONTEXTS` 为空集），`--ci` 报孤儿/缺失即真实问题，须修复。
-- 模块参数 `description`（`ParamWidget` 上下文）是纯数据，由 `scripts/i18n_common.py::extract_param_descriptions` 以 AST 规则从 dict 字面量提取：`modules/` 下含 `description` 键的 dict 全收（`agent/` 包除外）；其它目录须同时含 `value` 键（排除 LLM prompt 数据）。`modules/translators/agent/tools.py` 与 `utils/ai_tools.py` 的 description 是 LLM 提示词，不入 ts。跑 `ts_auto_fill.py` 即可自动同步。
-- **饼菜单默认名**（`utils/config.py::DEFAULT_PIE_MENUS` 的 `name`）因 config.py 导入早于翻译器安装，不能就地翻译；以 `ui/pie_menu.py::_DEFAULT_MENU_NAME_TR` 锚点字面量供工具链提取，勿删。
+- **模块级翻译表禁止 `self.tr(variable)` 间接查表**（检查器看不见，必漏翻译）：在**字面量定义处**用 `QCoreApplication.translate("上下文", "...")` 显式标注上下文（如 `ui/configpanel.py::_ACTION_NAMES`、`ui/context_menu_config.py`），下游一律直接使用已翻译值（tr 对非匹配串原样返回）。
+- 模块参数 `description`（纯数据）由 `scripts/i18n_common.py::extract_param_descriptions` AST 提取，跑 `ts_auto_fill.py` 自动同步；提取范围细则见 [`docs/基础速查/i18n.md`](docs/基础速查/i18n.md)。
+- **饼菜单默认名**经 `ui/pie_menu.py::_DEFAULT_MENU_NAME_TR` 锚点字面量供工具链提取（config.py 导入早于翻译器安装，不能就地翻译），勿删。
 - 无需翻译：日志、LLM prompt、字体测试字符、语言映射字典。
-- 常见问题：source 大小写不一致；context 放错；`type="obsolete"`；**ts 的 `<context>` 块必须平行嵌套**（曾出现 ParamWidget 嵌进 ParamComboBox 导致整块对解析器与 qm 编译隐形）。批量编辑 ts 用 Python 脚本直接操作文本。
-- **⚠️ QM 编码陷阱**：`scripts/qm_compile.py` 旧版用 `latin-1` 编码，会把 `—`/`→`/`⚠`/`✓` 等非 Latin-1 字符静默替换成 `?`，导致 Qt 哈希查找失败、翻译回退为英文。`self.tr()` 正确但运行时仍显英文 → 查 qm 是否被污染，确保 `_iso8859_str()` 用 `"utf-8"` 后重新编译。诊断脚本与细节见 [`docs/基础速查/i18n.md`](docs/基础速查/i18n.md)「常见问题」。
+- 其余坑（ts 结构嵌套、source 大小写、QM 编码陷阱等）统一见 [`docs/基础速查/i18n.md`](docs/基础速查/i18n.md)「常见问题」。
 
 ## 测试流程
 
@@ -141,27 +142,18 @@ modules/
 
 `./ballontrans_pylibs_win/python.exe scripts/verify.py`
 
-一条命令依次跑 语法 → 文档 → 审计 → 展示台覆盖 → i18n → qm → 冒烟；**成功每步只打一行，失败才完整打印报错（据此修复）**。各步自动判定：
-
-- **语法**：只查 git 改动涉及的 .py（`--all` 改查全部 ui/+utils/）
-- **文档**：全量校验 `AGENTS.md` 与 `docs/` 活文档里的路径/符号引用（`scripts/check_docs.py`）
-- **审计**：登记表契约（`scripts/check_audit.py` + `scripts/audit_registry.json`）——`deprecated` 已删文件不得复活、残留引用须清零（`allowed_mentions` 白名单外）；`suspended` 休眠文件不得被主 UI import；未登记删除仅提示不失败
-- **展示台覆盖**：`ui/custom_widget` 每个导出必须在 `scripts/style_showcase.py` 展示或 `EXCLUDED` 登记（`scripts/check_showcase.py`，纯 AST）
-- **i18n**：全量扫描；硬编码中文/缺失条目为失败，孤儿条目降级为警告（项目大量 `canvas.tr()`/`self.tr(variable)` 间接调用是已知噪音，详见上方 i18n 说明）
-- **qm**：ts 有改动时自动编译
-- **冒烟**：改动命中启动链文件（`launch.py`/`modules/base.py`/`utils/profile_manager.py`/`ui/configpanel.py`/`ui/mainwindow.py`）时自动触发，`--smoke` 可强制
-- **发版门禁**：`verify.py --full` 追加 ruff 风格检查 + pytest（`tests/`；ruff/pytest 未装或重依赖缺失时自动跳过并提示）。原独立全量门禁脚本已并入此 flag（2026-08-27，见 `scripts/audit_registry.json`）
+一条命令依次跑 语法 → 文档 → 审计 → 展示台覆盖 → i18n → qm → 冒烟；**成功每步只打一行，失败才完整打印报错（据此修复）**。判定要点：语法只查 git 改动涉及的 .py（`--all` 改查全部 ui/+utils/），其余各步全量；qm 在 ts 有改动时自动编译；冒烟在改动命中启动链文件（`launch.py`/`modules/base.py`/`utils/profile_manager.py`/`ui/configpanel.py`/`ui/mainwindow.py`）时自动触发，`--smoke` 可强制；`--full` 为发版门禁，追加 ruff 风格检查 + pytest（`tests/`，未装或重依赖缺失时自动跳过并提示）。判定细节见 `scripts/verify.py` 模块注释。
 
 需要时手动分步跑：
 
 1. **语法检查**：`./ballontrans_pylibs_win/python.exe scripts/check_syntax.py <文件...>`（支持多文件；查编译 + tab 字符 + UTF-8 BOM）
-2. **文档校验**：`./ballontrans_pylibs_win/python.exe scripts/check_docs.py`（校验 `AGENTS.md` + `docs/` 活文档的路径/符号引用）
-3. **审计登记表**：`./ballontrans_pylibs_win/python.exe scripts/check_audit.py`（死代码/休眠登记表 + 删除文件残留引用；**删除文件前先在 `scripts/audit_registry.json` 登记 `deprecated`**）
-4. **i18n 检查**：`./ballontrans_pylibs_win/python.exe scripts/i18n_check.py`；发版前 `--ci`；`--show-expected` 列出已知孤儿
+2. **文档校验**：`./ballontrans_pylibs_win/python.exe scripts/check_docs.py`
+3. **审计登记表**：`./ballontrans_pylibs_win/python.exe scripts/check_audit.py`（**删除文件前先在 `scripts/audit_registry.json` 登记 `deprecated`**）
+4. **i18n 检查**：`./ballontrans_pylibs_win/python.exe scripts/i18n_check.py`；发版前 `--ci`
 5. **qm 编译**：`./ballontrans_pylibs_win/python.exe scripts/qm_compile.py translate/zh_CN.ts translate/zh_CN.qm`
-6. **启动冒烟测试**：`./ballontrans_pylibs_win/python.exe tests/test_startup_imports.py`（单进程约 2s；模拟关键导入链，捕捉 `NameError` / `ImportError`，含 `LLMProfileListWidget` 实例化）
+6. **启动冒烟测试**：`./ballontrans_pylibs_win/python.exe tests/test_startup_imports.py`（约 2s，捕捉 NameError/ImportError）
 7. **启动 app 目视确认**（可选，但推荐）：双击 `launch.bat` 或 `python launch.py`，确认导航、页面切换、新功能视觉效果正常
-8. **MainWindow 在线演练台**（可选，排查无声崩溃/模态框/GC 时机类问题时用）：`./ballontrans_pylibs_win/python.exe scripts/mw_repro.py`——拉起真实主窗口（必须窗口模式，offscreen 起不来 FramelessWindow）跑预设场景或 `--project` 只读打开真实工程；faulthandler 常开。用法见 `scripts/README.md`，方法论见经验教训 §3.3
+8. **MainWindow 在线演练台**（可选，排查无声崩溃/模态框/GC 时机类问题）：`./ballontrans_pylibs_win/python.exe scripts/mw_repro.py`——拉起真实主窗口（须窗口模式，offscreen 起不来 FramelessWindow）跑预设场景或 `--project` 只读打开真实工程；用法见 `scripts/README.md`，方法论见经验教训 §3.3
 
 ## 快捷键系统
 
@@ -169,7 +161,9 @@ modules/
 
 ## 动画系统
 
-`ui/overlay_modal.py` 的 `OverlayModal`（中心淡入/淡出 + 压暗 scrim，scrim 仅覆盖 `centralStackWidget`；ConfigPanel 用它，duration 350ms, easing `InOutExpo`，`pcfg.animation_fps<0` 跳过）与 `ui/overlay_slide.py` 的 `OverlaySlider`（侧滑滑入；GlobalSearchWidget、PageList 用它）。`MainWindow` 中分别为 ConfigPanel（`_configModal`）、GlobalSearchWidget、PageList 各创建一个实例。`StateChecker`（`QCheckBox` 子类）实现 LeftBar 面板互斥切换。ConfigPanel 现为**内部分页**（`QStackedWidget`），NavList 点击切页而非滚动；子 `QDialog` 打开时经 `_run_modal_dialog` 暂停 backdrop 点击。
+- `ui/overlay_modal.py::OverlayModal` — 中心淡入/淡出模态（scrim 仅覆盖 `centralStackWidget`；ConfigPanel 用它）；`pcfg.animation_fps<0` 跳过
+- `ui/overlay_slide.py::OverlaySlider` — 侧滑滑入面板（GlobalSearchWidget、PageList 用它）
+- `ui/mainwindowbars.py::StateChecker`（`QCheckBox` 子类）实现 LeftBar 面板互斥切换；ConfigPanel 为**内部分页**（`QStackedWidget`，NavList 点击切页），子 `QDialog` 打开时经 `_run_modal_dialog` 暂停 backdrop 点击
 
 ## 开发日志
 
