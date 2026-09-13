@@ -550,7 +550,8 @@ class SymbolFloatPanel(FloatDropPanel):
 
     与按钮锚定的 ``FloatDropPanel`` 差异：锚定目标是**当前聚焦的编辑器**
     而非固定按钮——弹出时贴在编辑器外缘（默认画布侧，即编辑器左缘；
-    画布过窄时改贴右缘），焦点换编辑器时随迁（``open_at_editor``）；
+    画布过窄时改贴右缘），焦点换编辑器时随迁（``open_at_editor``；
+    已可见时随迁走位置滑动而非重播淡入）；
     宿主缩放、编辑器随滚动移动/改尺寸都自动重锚。
 
     弹出不抢焦点（编辑器光标须保持可见；键区按钮全部 NoFocus），
@@ -583,6 +584,14 @@ class SymbolFloatPanel(FloatDropPanel):
             editor.installEventFilter(self)
         if self.isVisible() and not self._hiding and prev is editor:
             self.raise_()  # 已在该编辑器旁：不重播动画
+            return
+        if self.isVisible():
+            # 已在其它编辑器旁（含正在收起途中）：随焦点滑到新锚点，
+            # 不重播淡入；顺带取消进行中的收起动画
+            if pcfg.animation_fps >= 0:
+                self._move_animated()
+            else:
+                self._place()
             return
         self.open_panel()
 
@@ -621,6 +630,18 @@ class SymbolFloatPanel(FloatDropPanel):
             start, QPoint(start.x() + self.ANIM_SLIDE, start.y()),
             on_done=self.hide,
         )
+
+    def _move_animated(self) -> None:
+        """焦点切换时的随迁动画：从当前位置滑向新锚点（不重播淡入），
+        并取消进行中的收起动画（面板保持可见）。"""
+        self._stop_anim()
+        old_pos = self.pos()
+        self._place()
+        new_pos = self.pos()
+        if old_pos == new_pos:
+            return
+        self.move(old_pos)
+        self._start_anim(old_pos, new_pos)
 
     def _start_anim(self, start, end, on_done=None) -> None:
         anim = QPropertyAnimation(self, b"pos", self)
