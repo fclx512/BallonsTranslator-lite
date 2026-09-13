@@ -603,40 +603,28 @@ TextEditListScrollArea {
 
 /* ====== Text Block Cards (Right Panel) ====== */
 
-/* Base card: border + rounded corners */
+/* Base card: border + rounded corners (radius 6 nests the 5px editors) */
 TransPairWidget {
     border: 1px solid @borderColor;
-    border-radius: 4px;
+    border-radius: 6px;
     background-color: @widgetBackgroundColor;
 }
 
 /* Hover and checked share the same accent-tinted background —
-   checked also shows a persistent accent bar on the left. */
+   checked also shows a persistent accent bar on the left. The tint is
+   the pre-blended opaque @accentPrimary20Solid (derived from
+   @accentPrimary20 over @widgetBackgroundColor at theme resolution,
+   ui/misc.py::_derive_solid_tints): a translucent tint here lets text
+   of cards underneath ghost through when cards stack in the drag pile. */
 TransPairWidget:hover,
 TransPairWidget[checked="true"] {
-    background-color: @accentPrimary20;
+    background-color: @accentPrimary20Solid;
 }
 
-/* Drag position indicators — thin accent border on target side */
-TransPairWidget[dragPos="top"] {
-    border-top: 3px solid @accentPrimary;
-}
-
-TransPairWidget[dragPos="bottom"] {
-    border-bottom: 3px solid @accentPrimary;
-}
-
-/* Rows-drag in progress (dnd=true set by TextEditListScrollArea during
-   QDrag.exec): neutral background on cards the pointer passes over so
-   reordering no longer flashes the accent tint (which shares its look with
-   the checked/selected state) on unintended cards. Real selection keeps its
-   tint; the dragPos border still marks the insert position. */
-TransPairWidget[dnd="true"] {
-    background-color: @widgetBackgroundColor;
-}
-
-TransPairWidget[dnd="true"][checked="true"] {
-    background-color: @accentPrimary20;
+/* Checked reinforces state with an accent border, matching the
+   editors' focus border language. */
+TransPairWidget[checked="true"] {
+    border: 1px solid @accentPrimary;
 }
 
 /* Left accent bar — color follows theme accent, visible only when checked */

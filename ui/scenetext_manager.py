@@ -737,8 +737,6 @@ class SceneTextManager(QObject):
         pair_widget.e_source.hover_leave.connect(self.on_row_leave)
         pair_widget.e_trans.hover_enter.connect(self.on_row_hover)
         pair_widget.e_trans.hover_leave.connect(self.on_row_leave)
-        pair_widget.drag_move.connect(self.textEditList.handle_drag_pos)
-        pair_widget.pw_drop.connect(self.textEditList.on_pw_dropped)
 
         self.new_textblk.emit(blk_item.idx)
         return blk_item

@@ -1,28 +1,23 @@
 from typing import List
 
-import numpy as np
 from qtpy.QtCore import (
+    QAbstractAnimation,
+    QEasingCurve,
     QEvent,
-    QMimeData,
     QPoint,
-    QRectF,
+    QPropertyAnimation,
     Qt,
     QTimer,
     Signal,
 )
 from qtpy.QtGui import (
     QColor,
-    QDrag,
-    QDragEnterEvent,
-    QDropEvent,
     QFocusEvent,
-    QFont,
-    QFontMetrics,
     QInputMethodEvent,
     QKeyEvent,
     QMouseEvent,
     QPainter,
-    QPixmap,
+    QPen,
     QTextCursor,
 )
 from qtpy.QtWidgets import (
@@ -34,7 +29,10 @@ from qtpy.QtWidgets import (
     QSizePolicy,
     QTextEdit,
     QVBoxLayout,
+    QWidget,
 )
+
+from utils.config import pcfg
 
 from ui.misc import get_theme_color
 
@@ -42,7 +40,7 @@ from .custom_widget import ScrollBar, Widget
 from .textitem import TextBlock
 
 # Styling moved to config/stylesheet.css with dynamic property selectors.
-# TransPairWidget card states (checked, hover, drag) are now controlled
+# TransPairWidget card states (checked, hover) are now controlled
 # via setProperty() + unpolish/polish, not setStyleSheet().
 
 # Width of the drag handle zone to the right of accent_bar (always shown)
@@ -258,8 +256,6 @@ class TransTextEdit(SourceTextEdit):
 
 class TransPairWidget(Widget):
     check_state_changed = Signal(object, bool, bool)
-    drag_move = Signal(int)
-    pw_drop = Signal()
 
     def __init__(
         self,
@@ -336,32 +332,6 @@ class TransPairWidget(Widget):
         hlayout.addLayout(vlayout)
         hlayout.setContentsMargins(0, 0, 0, 0)
         hlayout.setSpacing(0)  # all spacing managed by vlayout margins
-
-        self.setAcceptDrops(True)
-
-    def dragEnterEvent(self, e: QDragEnterEvent) -> None:
-        if isinstance(e.source(), TransPairWidget):
-            e.accept()
-        return super().dragEnterEvent(e)
-
-    def handle_drag(self, pos: QPoint):
-        y = pos.y()
-        to_pos = self.idx
-        if y > self.size().height() / 2:
-            to_pos += 1
-        self.drag_move.emit(to_pos)
-
-    def dragMoveEvent(self, e: QDragEnterEvent) -> None:
-        if isinstance(e.source(), TransPairWidget):
-            e.accept()
-            self.handle_drag(e.position())
-
-        return super().dragMoveEvent(e)
-
-    def dropEvent(self, e: QDropEvent) -> None:
-        if isinstance(e.source(), TransPairWidget):
-            e.acceptProposedAction()
-            self.pw_drop.emit()
 
     def _set_checked_state(self, checked: bool):
         """
@@ -452,6 +422,38 @@ class TransPairWidget(Widget):
             self.e_trans.idx = idx
 
 
+class _DragGapFrame(QFrame):
+    """落点槽位指示框：半透明强调色底 + 加粗虚线描边。
+
+    QSS 的 ``border-style: dashed`` 虚线段细且段长不可调，实测难以辨认，
+    改用 QPainter 自绘：笔宽 / 虚线段长 / 圆角全部可控，强调色走主题
+    变量（ui/misc.py::get_theme_color），随主题即时取色。
+    """
+
+    PEN_WIDTH = 3
+    # 单位=笔宽：3px 笔宽下虚线段 9px、间隔 5.4px
+    DASH_PATTERN = (3.0, 1.8)
+    RADIUS = 6
+    FILL_ALPHA = 46
+
+    def paintEvent(self, event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        accent = get_theme_color(key="@accentPrimary")
+        inset = self.PEN_WIDTH // 2 + 1
+        rect = self.rect().adjusted(inset, inset, -inset, -inset)
+        fill = QColor(accent)
+        fill.setAlpha(self.FILL_ALPHA)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(fill)
+        p.drawRoundedRect(rect, self.RADIUS, self.RADIUS)
+        pen = QPen(accent, self.PEN_WIDTH)
+        pen.setDashPattern(list(self.DASH_PATTERN))
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(rect, self.RADIUS, self.RADIUS)
+
+
 class TextEditListScrollArea(QScrollArea):
     textblock_list: List[TextBlock] = []
     pairwidget_list: List[TransPairWidget] = []
@@ -463,8 +465,36 @@ class TextEditListScrollArea(QScrollArea):
     textpanel_contextmenu_requested = Signal(QPoint, bool)
     focus_out = Signal()
 
+    # 类级默认：QScrollArea.setWidget 期间 Qt 会回调 eventFilter（早于
+    # __init__ 里的实例属性赋值），回调内读 _drag_active 不能踩空
+    _drag_active = False
+
+    # 堆叠折叠：多选拖拽时第 i 张卡相对堆顶下沉的像素（各卡头顶条连同
+    # 徽标依次可辨）；gap 槽高按折叠后的堆高取值
+    PILE_PEEK = 18
+    # 拖拽期间盖在非拖拽内容上的变暗遮罩不透明度（0-255，约 15%）
+    DIM_ALPHA = 38
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+
+        # ── 行拖拽状态（自定义抓取式，见 begin_rows_drag）──
+        # 必须先于 setWidget 初始化：eventFilter 在构造期即被回调
+        self._drag_pws: List[TransPairWidget] = []   # 被拖组（按原 idx 排序）
+        self._rest: List[TransPairWidget] = []       # 未拖行（原顺序）
+        self._rest_y = {}                            # 让位排布的目标 y
+        self._gap_slot = 0                           # 落点槽位（插在第 N 个 rest 行前）
+        self._spacing = 0
+        self._base_y = self._base_x = self._card_w = 0
+        self._gap_h = 0
+        self._drag_cursor_vp_y = 0.0
+        self._pile_offsets: List[int] = []           # 被拖组折叠偏移（堆顶=0）
+        self._drag_dim: QWidget = None
+        self._gap_frame: QFrame = None
+        self._pos_anims = {}
+        self._auto_timer: QTimer = None
+        self._auto_speed = 0
+
         self.scrollContent = Widget(parent=self)
         self.setWidget(self.scrollContent)
 
@@ -480,14 +510,10 @@ class TextEditListScrollArea(QScrollArea):
         self.vlayout = vlayout
         self.checked_list: List[TransPairWidget] = []
         self.sel_anchor_widget: TransPairWidget = None
-        self.drag: QDrag = None
         self.dragStartPosition = None
 
         self.source_visible = True
         self.trans_visible = True
-
-        self.drag_to_pos: int = -1
-        self._dnd_active = False
 
         self.setSizePolicy(
             self.sizePolicy().horizontalPolicy(), QSizePolicy.Policy.Expanding
@@ -495,20 +521,30 @@ class TextEditListScrollArea(QScrollArea):
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
 
     def mouseReleaseEvent(self, e: QMouseEvent):
+        if self._drag_active:
+            if e.button() == Qt.MouseButton.LeftButton:
+                self._finish_drag()
+            return  # 拖拽期间吞掉其它按键释放（右键菜单等）
         if e.button() == Qt.MouseButton.RightButton:
             pos = self.mapToGlobal(e.position()).toPoint()
             self.textpanel_contextmenu_requested.emit(pos, True)
+        self.dragStartPosition = None
         super().mouseReleaseEvent(e)
 
     def mousePressEvent(self, e: QMouseEvent) -> None:
+        if self._drag_active:
+            return
         if e.button() == Qt.MouseButton.LeftButton:
             self.dragStartPosition = e.pos()
         return super().mousePressEvent(e)
 
     def mouseMoveEvent(self, e: QMouseEvent) -> None:
+        if self._drag_active:
+            self._drag_cursor_vp_y = e.position().y()
+            self._update_drag_frame()
+            return
         if (
-            self.drag is None
-            and self.sel_anchor_widget is not None
+            self.sel_anchor_widget is not None
             and self.dragStartPosition is not None
         ):
             if (
@@ -516,133 +552,312 @@ class TextEditListScrollArea(QScrollArea):
             ).manhattanLength() < QApplication.startDragDistance():
                 return
             self.dragStartPosition = None
-            self.begin_rows_drag(self.sel_anchor_widget)
+            self.begin_rows_drag(e.position().y())
 
         return super().mouseMoveEvent(e)
 
-    def begin_rows_drag(self, source_widget: TransPairWidget) -> None:
-        """Start the row-reorder drag from *source_widget*."""
-        # While the drag is active, suppress the hover/checked accent tint on
-        # cards the pointer passes over — otherwise they flash the selected
-        # look during the gesture (same background for :hover and checked).
-        self._set_dnd(True)
-        drag = self.drag = QDrag(source_widget)
-        mime = QMimeData()
-        drag.setMimeData(mime)
+    def wheelEvent(self, e) -> None:
+        super().wheelEvent(e)
+        if self._drag_active:
+            # 滚轮照常滚动，但内容坐标变了，同步拖拽组与让位排布
+            self._update_drag_frame()
 
-        # Drag indicator: "Sel N" badge
-        if self.checked_list:
-            text = f"Sel {len(self.checked_list)}"
-            font = QFont()
-            font.setBold(True)
-            font.setPixelSize(12)
-            fm = QFontMetrics(font)
-            tw = fm.horizontalAdvance(text) + 12
-            th = fm.height() + 8
-            pm = QPixmap(int(tw), int(th))
-            pm.fill(Qt.GlobalColor.transparent)
-            p = QPainter(pm)
-            p.setRenderHint(QPainter.RenderHint.Antialiasing)
-            p.setBrush(QColor(0, 0, 0, 180))
-            p.setPen(Qt.PenStyle.NoPen)
-            p.drawRoundedRect(0, 0, int(tw), int(th), 4, 4)
-            p.setPen(Qt.GlobalColor.white)
-            p.setFont(font)
-            p.drawText(QRectF(0, 0, tw, th), Qt.AlignmentFlag.AlignCenter, text)
-            p.end()
-            drag.setPixmap(pm)
-            drag.setHotSpot(QPoint(int(tw) // 2, int(th) // 2))
+    # ── 行拖拽：抓取式实时让位 ─────────────────────────────────
+    # 与原生 QDrag 的差异：拖拽期间鼠标抓取在视口上（hover 不会串到
+    # 输入框），被拖组保持真身渲染、堆叠折叠跟随光标，非拖拽内容盖
+    # 变暗遮罩，落点处留自绘虚线指示框，其余行实时让位动画；块列表
+    # 顺序只在松手时经 rearrange_blks 落账，拖拽全程只动 UI 不动数据。
 
-        drag.exec(Qt.DropAction.MoveAction)
-        self.drag = None
-        self._set_dnd(False)
-        if self.drag_to_pos != -1:
-            self.set_drag_style(self.drag_to_pos, True)
-            self.drag_to_pos = -1
-
-    def _set_dnd(self, active: bool):
-        """Toggle the dnd visual override on every card during row drag."""
-        if self._dnd_active == active:
+    def begin_rows_drag(self, cursor_vp_y: float) -> None:
+        """启动行拖拽。*cursor_vp_y* 为触发时视口坐标 y（拖拽组锚定用）。"""
+        if self._drag_active:
             return
-        self._dnd_active = active
-        for pw in self.pairwidget_list:
-            pw.setProperty("dnd", active)
-            pw.style().unpolish(pw)
-            pw.style().polish(pw)
-
-    def set_drag_style(self, pos: int, clear_style: bool = False):
-        if pos == len(self.pairwidget_list):
-            pos -= 1
-            drag_val = "bottom"
-        else:
-            drag_val = "top"
-        if clear_style:
-            drag_val = ""
-        pw = self.pairwidget_list[pos]
-        pw.setProperty("dragPos", drag_val)
-        pw.style().unpolish(pw)
-        pw.style().polish(pw)
-
-    def clearDrag(self):
-        if self.drag_to_pos != -1 and self.drag_to_pos < len(self.pairwidget_list):
-            pw = self.pairwidget_list[self.drag_to_pos]
-            pw.setProperty("dragPos", "")
-            pw.style().unpolish(pw)
-            pw.style().polish(pw)
-        self.drag_to_pos = -1
-        self._set_dnd(False)
-        if self.drag is not None:
+        n = len(self.pairwidget_list)
+        drags = sorted(self.checked_list, key=lambda w: w.idx)
+        if n < 2 or not drags or len(drags) == n:
+            return
+        self._drag_active = True
+        self._drag_pws = drags
+        self._rest = [w for w in self.pairwidget_list if w not in drags]
+        self._gap_slot = drags[0].idx
+        self._spacing = self.vlayout.spacing()
+        self._base_y = min(w.y() for w in self.pairwidget_list)
+        self._base_x = self._rest[0].x()
+        self._card_w = self._rest[0].width()
+        # 多选折叠成堆：第 i 张卡相对堆顶下沉 i*PILE_PEEK，gap 槽高取
+        # 折叠后的实际堆高（松手落账的空位随之缩减）
+        self._pile_offsets = [i * self.PILE_PEEK for i in range(len(drags))]
+        self._gap_h = max(
+            off + w.height() for off, w in zip(self._pile_offsets, drags)
+        )
+        # 聚拢锚点 = 触发时鼠标的内容坐标（堆顶对齐光标），各卡从
+        # 原位聚拢动画飞向光标；此后堆顶以追随补间咬合光标
+        pile_top = int(cursor_vp_y + self.verticalScrollBar().value())
+        self._drag_cursor_vp_y = cursor_vp_y
+        # 上一局的退应动画可能仍在飞（快速连拖），先停干净再接管
+        for anim in self._pos_anims.values():
             try:
-                self.drag.cancel()
+                anim.stop()
             except RuntimeError:
                 pass
-            self.drag = None
+        self._pos_anims = {}
 
-    def handle_drag_pos(self, to_pos: int):
-        if self.drag_to_pos != to_pos:
-            if self.drag_to_pos is not None and self.drag_to_pos >= 0:
-                self.set_drag_style(self.drag_to_pos, True)
-            self.drag_to_pos = to_pos
-            self.set_drag_style(to_pos)
+        QApplication.instance().installEventFilter(self)
+        self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)
+        self.viewport().grabMouse()
 
-    def on_pw_dropped(self):
-        if self.drag_to_pos != -1:
-            to_pos = self.drag_to_pos
-            self.drag_to_pos = -1
-            self.drag = None
-            self.set_drag_style(to_pos, True)
-            num_pw = len(self.pairwidget_list)
-            num_drags = len(self.checked_list)
-            if num_pw < 2 or num_drags == num_pw:
-                return
+        # 布局接管：行全部移出布局改为手动定位。LayoutRequest 异步激活时
+        # 布局里只剩 stretch，不会动手动定位的行；最小高度兜底防
+        # widgetResizable 在布局塌缩后把 scrollContent 缩掉（滚动条失效）
+        self.scrollContent.setMinimumHeight(self.scrollContent.height())
+        for w in self.pairwidget_list:
+            self.vlayout.removeWidget(w)
 
-            tgt_pos = to_pos
-            drags = []
-            for pw in self.checked_list:
-                if pw.idx < tgt_pos:
-                    tgt_pos -= 1
-                drags.append(pw.idx)
-            new_pos = np.arange(num_drags, dtype=np.int32) + tgt_pos
-            drags = np.array(drags).astype(np.int32)
-            new_maps = np.where(drags != new_pos)
-            if len(new_maps) == 0:
-                return
+        # 变暗遮罩：盖住非拖拽内容（WA_StyledBackground 让纯 QWidget
+        # 生效 QSS 背景色），拖拽组与指示框浮在其上保持原生全分辨率渲染
+        self._drag_dim = QWidget(self.scrollContent)
+        self._drag_dim.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+        self._drag_dim.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._drag_dim.setStyleSheet(
+            f"background-color: rgba(0, 0, 0, {self.DIM_ALPHA});"
+        )
+        self._drag_dim.setGeometry(
+            0, 0, self.scrollContent.width(), self.scrollContent.height()
+        )
+        self._drag_dim.show()
 
-            drags_ori, drags_tgt = drags[new_maps], new_pos[new_maps]
-            result_list = list(range(len(self.pairwidget_list)))
-            to_insert = []
-            for ii, src_idx in enumerate(drags_ori):
-                pos = src_idx - ii
-                to_insert.append(result_list.pop(pos))
-            for ii, tgt_idx in enumerate(drags_tgt):
-                result_list.insert(tgt_idx, to_insert[ii])
-            drags_ori, drags_tgt = [], []
-            for ii, idx in enumerate(result_list):
-                if ii != idx:
-                    drags_ori.append(idx)
-                    drags_tgt.append(ii)
+        # 落点指示框（位置随 _apply_arrangement 刷新）
+        self._gap_frame = _DragGapFrame(self.scrollContent)
+        self._gap_frame.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
 
-            self.rearrange_blks.emit((drags_ori, drags_tgt))
+        # 被拖组保持真身可见：聚拢动画飞向光标锚点；z 序按原顺序
+        # 后位卡在上，各卡头顶条（含编号徽标）依次可见
+        for w, off in zip(drags, self._pile_offsets):
+            self._move_card(w, pile_top + off, animate=True)
+        self._apply_arrangement(animate=True)
+        self._gap_frame.show()
+        self._drag_dim.raise_()
+        self._gap_frame.raise_()
+        for w in drags:
+            w.raise_()
+
+    def _arrange_targets(self):
+        """让位排布：rest 行按序堆叠，拖拽组槽位（gap）插在第
+        ``_gap_slot`` 个 rest 行之前。返回 (各行目标 y, gap 顶 y)。"""
+        ys = {}
+        y = self._base_y
+        gap_top = self._base_y
+        placed = False
+        for i, w in enumerate(self._rest):
+            if i == self._gap_slot:
+                gap_top = y
+                y += self._gap_h + self._spacing
+                placed = True
+            ys[w] = y
+            y += w.height() + self._spacing
+        if not placed:
+            gap_top = y  # gap 在末尾：最后一行底下
+        return ys, gap_top
+
+    def _apply_arrangement(self, animate: bool):
+        ys, gap_top = self._arrange_targets()
+        self._rest_y = ys
+        for w, ty in ys.items():
+            self._move_card(w, ty, animate)
+        if self._gap_frame is not None:
+            self._gap_frame.setGeometry(
+                self._base_x, gap_top, self._card_w, self._gap_h
+            )
+
+    def _move_card(self, pw: TransPairWidget, target_y: int, animate: bool):
+        if pw.y() == target_y:
+            return
+        old = self._pos_anims.pop(pw, None)
+        if old is not None:
+            try:
+                old.stop()
+            except RuntimeError:
+                pass
+        if not animate or pcfg.animation_fps < 0:
+            pw.move(pw.x(), target_y)
+            return
+        anim = QPropertyAnimation(pw, b"pos", self)
+        anim.setDuration(140)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.setStartValue(pw.pos())
+        anim.setEndValue(QPoint(pw.x(), target_y))
+        self._pos_anims[pw] = anim
+
+        def _anim_cleanup():
+            # 只在仍登记的是本动画时移除（stop-重启场景不误删新动画）
+            if self._pos_anims.get(pw) is anim:
+                del self._pos_anims[pw]
+
+        anim.finished.connect(_anim_cleanup)
+        anim.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
+
+    def _update_gap(self, y_cursor: int):
+        """让位判定（邻行中点穿越）：光标越过 gap 上邻行的中点则 gap
+        上移一格，越过下邻行中点则下移。以让位排布的目标坐标（而非
+        动画当前位置）计算，避免与进行中的位移动画形成反馈；while 循环
+        吸收一次事件跨多行的快拖。"""
+        while True:
+            if self._gap_slot > 0:
+                above = self._rest[self._gap_slot - 1]
+                if y_cursor < self._rest_y[above] + above.height() / 2:
+                    self._gap_slot -= 1
+                    self._apply_arrangement(animate=True)
+                    continue
+            if self._gap_slot < len(self._rest):
+                below = self._rest[self._gap_slot]
+                if y_cursor > self._rest_y[below] + below.height() / 2:
+                    self._gap_slot += 1
+                    self._apply_arrangement(animate=True)
+                    continue
+            break
+
+    def _update_drag_frame(self):
+        sb = self.verticalScrollBar()
+        y_content = int(self._drag_cursor_vp_y + sb.value())
+        for w, off in zip(self._drag_pws, self._pile_offsets):
+            # 追随式跟随：拖拽组永远朝光标做补间（140ms OutCubic），
+            # 鼠标每动一次重定目标——聚拢动画天然可见，任何时刻都不
+            # 瞬移；目标未变则不重启（防高频鼠标事件反复创建动画对象）。
+            # 让位判定用的是光标坐标（_update_gap），不受视觉滞后影响。
+            ty = y_content + off
+            old = self._pos_anims.get(w)
+            if old is not None:
+                try:
+                    if old.endValue().y() == ty:
+                        continue
+                except RuntimeError:
+                    pass
+            self._move_card(w, ty, animate=True)
+        self._update_gap(y_content)
+        # 视口边缘自动滚动（靠近上下缘 30px 内，越近越快）
+        vp_h = self.viewport().height()
+        edge = 30
+        speed = 0
+        if self._drag_cursor_vp_y < edge:
+            speed = -max(3, int((edge - self._drag_cursor_vp_y) * 0.25))
+        elif self._drag_cursor_vp_y > vp_h - edge:
+            speed = max(3, int((self._drag_cursor_vp_y - (vp_h - edge)) * 0.25))
+        if speed:
+            self._auto_speed = speed
+            if self._auto_timer is None:
+                t = QTimer(self)
+                t.timeout.connect(self._auto_scroll_tick)
+                self._auto_timer = t
+                t.start(16)
+        elif self._auto_timer is not None:
+            self._auto_timer.stop()
+            self._auto_timer.deleteLater()
+            self._auto_timer = None
+
+    def _auto_scroll_tick(self):
+        sb = self.verticalScrollBar()
+        sb.setValue(sb.value() + self._auto_speed)
+        self._update_drag_frame()
+
+    def _restore_layout(self, order: List[TransPairWidget]):
+        for i, w in enumerate(order):
+            self.vlayout.insertWidget(i, w)
+        self.scrollContent.setMinimumHeight(0)
+
+    def _teardown_drag(self):
+        """拖拽收尾（落账/取消共用）：释放抓取、摘过滤器、清浮层与动画。"""
+        self._drag_active = False
+        QApplication.instance().removeEventFilter(self)
+        try:
+            self.viewport().releaseMouse()
+        except RuntimeError:
+            pass
+        self.viewport().unsetCursor()
+        if self._auto_timer is not None:
+            self._auto_timer.stop()
+            self._auto_timer.deleteLater()
+            self._auto_timer = None
+        for w in (self._drag_dim, self._gap_frame):
+            if w is not None:
+                w.hide()
+                w.deleteLater()
+        self._drag_dim = None
+        self._gap_frame = None
+        for anim in list(self._pos_anims.values()):
+            try:
+                anim.stop()
+            except RuntimeError:
+                pass
+        self._pos_anims = {}
+
+    def _finish_drag(self):
+        """松手落账：快照当前位置 → 布局按新序归还并同步激活到终态
+        → 经 rearrange_blks 即时落账（几何所见即终态，消费端补间自动
+        跳过，数据零延迟窗口）→ 把行搬回快照位置，整体退应飞向布局
+        终态（被拖组从堆叠展开落槽、rest 行从让位位微调），动画风格
+        与拖拽中的位移动画一致。"""
+        if not self._drag_active:
+            return
+        self._teardown_drag()
+        new_order = (
+            self._rest[: self._gap_slot] + self._drag_pws + self._rest[self._gap_slot:]
+        )
+        start_ys = {w: w.y() for w in self.pairwidget_list}
+        self._restore_layout(new_order)
+        # 强制同步激活布局：几何即刻到位，落账对比所见即终态
+        self.vlayout.activate()
+        self._drag_pws = []
+        self._rest = []
+        self._emit_rearrange_from_perm([w.idx for w in new_order])
+        self._settle_to_layout(start_ys)
+
+    def _settle_to_layout(self, start_ys: dict) -> None:
+        """退应动画：行从快照位置飞向（已同步激活的）布局终态；
+        关动画（animation_fps < 0）时保持就地终态不补间。"""
+        if pcfg.animation_fps < 0:
+            return
+        finals = {w: w.y() for w in self.pairwidget_list}
+        for w, sy in start_ys.items():
+            if sy == finals[w]:
+                continue
+            w.move(w.x(), sy)
+            self._move_card(w, finals[w], animate=True)
+
+    def _cancel_drag(self):
+        if not self._drag_active:
+            return
+        self._teardown_drag()
+        start_ys = {w: w.y() for w in self.pairwidget_list}
+        self._restore_layout(self.pairwidget_list)  # 原顺序原位
+        self.vlayout.activate()
+        self._drag_pws = []
+        self._rest = []
+        self._settle_to_layout(start_ys)
+
+    def clearDrag(self):
+        """外部清拖请求（焦点切走等）：拖拽进行中则取消。"""
+        if self._drag_active:
+            self._cancel_drag()
+
+    def eventFilter(self, obj, event) -> bool:
+        if self._drag_active:
+            t = event.type()
+            if t == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
+                self._cancel_drag()
+                return True
+            if t in (QEvent.Type.HoverEnter, QEvent.Type.HoverMove):
+                # 拖拽期间吞掉列表内部的 hover，防止输入框误亮
+                # （鼠标抓取理论上已隔离，此处兜底）
+                w = obj if isinstance(obj, QWidget) else None
+                while w is not None and w is not self.scrollContent:
+                    w = w.parentWidget()
+                if w is self.scrollContent:
+                    return True
+        return super().eventFilter(obj, event)
 
     def _emit_rearrange_from_perm(self, result_list):
         """Compute (drags_ori, drags_tgt) from a permutation list (each entry = old idx
@@ -733,7 +948,7 @@ class TextEditListScrollArea(QScrollArea):
     def on_widget_checkstate_changed(
         self, pwc: TransPairWidget, shift_pressed: bool, ctrl_pressed: bool
     ):
-        if self.drag is not None:
+        if self._drag_active:
             return
 
         idx = pwc.idx

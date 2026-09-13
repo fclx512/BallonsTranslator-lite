@@ -196,6 +196,32 @@ def load_all_themes() -> Dict:
     return C._load_all_themes()
 
 
+def _derive_solid_tints(theme: Dict) -> Dict:
+    """把 rgba 半透明强调色预混到卡片底色上，派生不透明变量
+    ``@accentPrimary20Solid``（视觉上与半透明版叠在
+    ``@widgetBackgroundColor`` 上一致）。
+
+    供需要"选中色不透底"的场景：行卡片拖拽堆叠时若选中底色仍是
+    rgba，下层卡片的文字会从半透明底里透出来形成重影。"""
+    tint = theme.get("@accentPrimary20")
+    base = theme.get("@widgetBackgroundColor")
+    if not tint or not base:
+        return theme
+    nums = re.findall(r"\d*\.?\d+", tint)
+    if len(nums) < 4:
+        return theme
+    r, g, b = (int(float(v)) for v in nums[:3])
+    alpha = float(nums[3])
+    if "%" in tint:
+        alpha /= 100.0
+    bc = QColor(base)
+    mix = lambda t, s: int(round(t * alpha + s * (1 - alpha)))
+    theme["@accentPrimary20Solid"] = QColor(
+        mix(r, bc.red()), mix(g, bc.green()), mix(b, bc.blue())
+    ).name()
+    return theme
+
+
 def _resolve_theme(theme: str) -> Dict:
     """Resolve a theme by name. Checks custom themes first, then built-in."""
     if not theme:
@@ -204,13 +230,13 @@ def _resolve_theme(theme: str) -> Dict:
         theme = pcfg.dark_theme if pcfg.darkmode else pcfg.light_theme
     custom = load_custom_themes()
     if theme in custom:
-        return dict(custom[theme])
+        return _derive_solid_tints(dict(custom[theme]))
     builtin = load_theme_dict()
     if theme in builtin:
-        return dict(builtin[theme])
+        return _derive_solid_tints(dict(builtin[theme]))
     # Fallback: first available built-in theme
     if builtin:
-        return dict(builtin[list(builtin.keys())[0]])
+        return _derive_solid_tints(dict(builtin[list(builtin.keys())[0]]))
     return {}
 
 
