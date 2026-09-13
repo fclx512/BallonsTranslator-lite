@@ -603,6 +603,13 @@ class TextEditListScrollArea(QScrollArea):
         self._pos_anims = {}
 
         QApplication.instance().installEventFilter(self)
+        # 失活取消主路径走信号：Windows 上 app 级过滤器收
+        # ApplicationDeactivate 事件不可靠（2026-08-18 教训，同
+        # ui/mainwindow.py 饼菜单的规避方案），applicationStateChanged
+        # 信号才是可靠送达的。
+        QApplication.instance().applicationStateChanged.connect(
+            self._on_app_state_changed
+        )
         self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)
         self.viewport().grabMouse()
 
@@ -773,6 +780,12 @@ class TextEditListScrollArea(QScrollArea):
         self._drag_active = False
         QApplication.instance().removeEventFilter(self)
         try:
+            QApplication.instance().applicationStateChanged.disconnect(
+                self._on_app_state_changed
+            )
+        except (TypeError, RuntimeError):
+            pass
+        try:
             self.viewport().releaseMouse()
         except RuntimeError:
             pass
@@ -843,12 +856,24 @@ class TextEditListScrollArea(QScrollArea):
         if self._drag_active:
             self._cancel_drag()
 
+    def _on_app_state_changed(self, state) -> None:
+        """应用整体失活（截图浮层/切走窗口等）即取消拖拽，行原位还原。"""
+        if self._drag_active and state != Qt.ApplicationState.ApplicationActive:
+            self._cancel_drag()
+
     def eventFilter(self, obj, event) -> bool:
         if self._drag_active:
             t = event.type()
             if t == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
                 self._cancel_drag()
                 return True
+            if t == QEvent.Type.ApplicationDeactivate:
+                # 失焦兜底（主路径是 applicationStateChanged 信号）：截图
+                # 浮层等外部窗口接管鼠标时拖拽组冻在原地却仍响应滚轮
+                # 移位，回来随手一点就会把冻结位置误落账。对齐原生
+                # QDrag 的失焦取消语义，直接取消还原。
+                self._cancel_drag()
+                return False
             if t in (QEvent.Type.HoverEnter, QEvent.Type.HoverMove):
                 # 拖拽期间吞掉列表内部的 hover，防止输入框误亮
                 # （鼠标抓取理论上已隔离，此处兜底）

@@ -183,8 +183,11 @@ class WindowsFramelessWindowBase:
             self.windowEffect.setBorderAccentColor(self.winId(), getSystemAccentColor())
             return True, 0
         elif msg.message == win32con.WM_KILLFOCUS:
+            # 不能 return True：吞掉失焦消息会让 Qt 收不到窗口失活，
+            # applicationStateChanged/ApplicationDeactivate 全部失灵
+            # （行拖拽失焦不取消、饼菜单失焦不关闭都是这个根因，
+            # 2026-09-13）。清理边框强调色后放行给 Qt 继续处理。
             self.windowEffect.removeBorderAccentColor(self.winId())
-            return True, 0
 
         return False, 0
 

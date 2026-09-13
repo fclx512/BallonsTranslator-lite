@@ -2,6 +2,18 @@
 
 > 记录**仓库层面**的改动（功能增删、远端分支变动、规范调整），供变更史查阅。踩坑细节、方案草稿与跨代理交接留在各代理侧的私有记忆（见 `AGENTS.md` 的「多代理协作」一节），不进仓库。仅保留最近 3 天的记录，每次在对应日期中末尾写入日志。
 
+## 2026-09-13
+
+### 行拖拽失焦不取消修复：放行 WM_KILLFOCUS + applicationStateChanged 主路径
+
+**问题/需求：** 行拖拽中触发截图等外部窗口接管前台时，拖拽组冻在原地仍响应滚轮，回主窗口点击会误落账；上游反向移植版（PR #1329）行为正确，fork 第一轮事件/信号修复实机均无效。
+
+**改动要点：** 真因在 `ui/framelesswindow/fw_qt6/win_frameless_window.py` 的 nativeEvent：`WM_KILLFOCUS` 分支自建仓起无条件 `return True` 吞掉 Qt 的失焦处理，`applicationStateChanged`/`ApplicationDeactivate` 从此失灵（2026-08-18 饼菜单「事件不可靠」教训实为误诊此坑）。修复=清理边框强调色后放行失焦消息；`ui/textedit_area.py::TextEditListScrollArea` 失活取消改以 `applicationStateChanged` 信号为主路径、eventFilter 分支降为兜底；`tests/test_row_drag.py` 失焦用例改信号驱动并补兜底分支直发验证（17 项全过 + verify 全绿）。上游 dev 同文件焦点分支从不 return True、无此坑，PR 无需补提交。
+
+**涉及文件：** `ui/framelesswindow/fw_qt6/win_frameless_window.py`、`ui/textedit_area.py`、`tests/test_row_drag.py`、`docs/daily_log.md`
+
+---
+
 ## 2026-09-12
 
 ### Tools 下拉栏软键盘项改勾选态并单独分组

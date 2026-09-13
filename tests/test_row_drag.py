@@ -230,6 +230,36 @@ class RowDragTest(unittest.TestCase):
         for w in area.pairwidget_list:
             self.assertTrue(w.isVisible())
 
+    def test_app_deactivate_cancels_and_restores(self):
+        """应用失活（截图浮层等外部窗口接管鼠标）：拖拽取消还原，不落账。
+
+        主路径走 applicationStateChanged 信号——Windows 上 app 级过滤器
+        收 ApplicationDeactivate 事件不可靠（2026-08-18 教训）；过滤器
+        分支保留为兜底。"""
+        self.area = area = self._make_area()
+        pw = area.pairwidget_list[1]
+        self._check(pw)
+        area.begin_rows_drag(pw.y() + pw.height() / 2)
+        h = area.pairwidget_list[2].height()
+        area._drag_cursor_vp_y = area._rest_y[area._rest[1]] + h / 2 + 4
+        area._update_drag_frame()
+        self.assertEqual(area._gap_slot, 2)
+
+        self.app.applicationStateChanged.emit(
+            Qt.ApplicationState.ApplicationInactive
+        )
+
+        self.assertFalse(area._drag_active)
+        self.assertEqual(area.emitted, [])
+        self.assertEqual(self._vlayout_order(area), list(area.pairwidget_list))
+
+        # 兜底路径：过滤器直收 ApplicationDeactivate 也能取消
+        self._check(pw)
+        area.begin_rows_drag(pw.y() + pw.height() / 2)
+        area.eventFilter(self.app, QEvent(QEvent.Type.ApplicationDeactivate))
+        self.assertFalse(area._drag_active)
+        self.assertEqual(area.emitted, [])
+
     # ── 多选组拖拽 ───────────────────────────────────────────
 
     def test_multi_select_group_drag(self):
