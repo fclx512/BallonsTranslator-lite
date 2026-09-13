@@ -701,6 +701,7 @@ class SceneTextManager(QObject):
             blk_item = blk
             blk_item.idx = len(self.textblk_item_list)
             blk_item.refresh_seq_badge()
+            blk_item.refresh_tag_badge()
         else:
             blk_item = TextBlkItem(
                 blk, len(self.textblk_item_list), show_rect=self.canvas.textblock_mode

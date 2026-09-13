@@ -46,6 +46,9 @@ class TextBlock:
     region_mask: np.ndarray = None
     region_inpaint_dict: Dict = None
 
+    # 标签体系（utils/block_tags.py）：tag_id -> {"source": ..., ...}，随 to_dict 全量导出
+    tags: Dict = field(default_factory=dict)
+
     fontformat: FontFormat = field(default_factory=lambda: FontFormat())
 
     # 字体识别相关属性

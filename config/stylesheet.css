@@ -1706,6 +1706,104 @@ QToolButton#RailDockCloseBtn:hover {
     background: @accentPrimary20;
 }
 
+/* ── 选中跟随标签工具栏（ui/tag_toolbar.py：紧凑栏 5 标签钮 + 展开钮，
+      展开后显示全类标签行；交互/视觉对齐 RailDockPanel） ─────────── */
+QWidget#TagToolbar {
+    background: @widgetBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+}
+
+QToolButton#TagTagBtn {
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: @qwidgetForegroundColor;
+    font-size: 13px;
+}
+
+QToolButton#TagTagBtn:hover {
+    background: @accentPrimary20;
+}
+
+QToolButton#TagTagBtn:checked {
+    background: @accentPrimary;
+    color: @widgetBackgroundColor;
+    font-weight: bold;
+}
+
+QFrame#TagTagPanel {
+    background: transparent;
+    border: none;
+    border-top: 1px solid @borderColor;
+}
+
+QPushButton#TagTagRowBtn {
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: @qwidgetForegroundColor;
+    padding: 3px 6px;
+    text-align: left;
+}
+
+QPushButton#TagTagRowBtn:hover {
+    background: @accentPrimary20;
+}
+
+QPushButton#TagTagRowBtn:checked {
+    background: @accentPrimary;
+    color: @widgetBackgroundColor;
+    font-weight: bold;
+}
+
+/* 上下文感知「处理」钮：与标签钮区分的强调描边 */
+QToolButton#TagActionBtn {
+    background: @accentPrimary20;
+    border: 1px solid @accentPrimary;
+    border-radius: 4px;
+    color: @qwidgetForegroundColor;
+    padding: 2px 6px;
+}
+
+QToolButton#TagActionBtn:hover {
+    background: @accentPrimary80;
+    color: @widgetBackgroundColor;
+}
+
+/* 框级 AI 动作就地确认卡片（ui/block_action_card.py） */
+QWidget#BlockActionCard {
+    background: @widgetBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+}
+
+QLabel#BlockActionSrcLabel {
+    color: @qwidgetForegroundColor;
+    background: transparent;
+}
+
+/* 上下文包（本次实际送出的信息）与错误行：弱化显示，不与草稿争焦点 */
+QLabel#BlockActionContextLabel {
+    color: @disabledForegroundColor;
+    background: transparent;
+    font-size: 11px;
+}
+
+/* 切图预览：与输入类控件同一底色的浅框 */
+QLabel#BlockActionPreview {
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding: 2px;
+}
+
+/* 逐行接受区滚动容器：透明无框，融入卡片 */
+QScrollArea#BlockActionScroll, QScrollArea#BlockActionScroll > QWidget > QWidget {
+    background: transparent;
+    border: none;
+}
+
 QLabel#CardTitle {
     font-weight: bold;
     font-size: 20px;
@@ -2319,6 +2417,27 @@ QLabel#LLMProfileName {
     font-weight: bold;
     color: @qwidgetForegroundColor;
     background: transparent;
+}
+
+/* 「使用」按钮：未激活低调描边，激活态用主题色底标出当前 profile */
+QPushButton#LLMProfileUseButton {
+    font-size: 11px;
+    padding: 1px 8px;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    background: transparent;
+    color: @disabledForegroundColor;
+}
+
+QPushButton#LLMProfileUseButton:hover {
+    border-color: @accentPrimary;
+    color: @qwidgetForegroundColor;
+}
+
+QPushButton#LLMProfileUseButton:checked {
+    border-color: @accentPrimary;
+    background-color: @accentPrimary20;
+    color: @accentPrimary;
 }
 
 QLabel#LLMProfileSummaryText,

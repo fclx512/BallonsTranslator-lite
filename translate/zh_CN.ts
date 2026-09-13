@@ -294,6 +294,22 @@
             <source>… and %1 more pages</source>
             <translation>……等 %1 页</translation>
         </message>
+        <message>
+            <source>Tag Badge</source>
+            <translation>标签徽标</translation>
+        </message>
+        <message>
+            <source>Next Tagged Block</source>
+            <translation>下一个带标签块</translation>
+        </message>
+        <message>
+            <source>Previous Tagged Block</source>
+            <translation>上一个带标签块</translation>
+        </message>
+        <message>
+            <source>Tag Toolbar</source>
+            <translation>标签工具栏</translation>
+        </message>
     </context>
     <context>
         <name>CategoryCard</name>
@@ -1234,6 +1250,24 @@
         <message>
             <source>Source box only</source>
             <translation>仅原文框</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Displays the &lt;b&gt;block tag&lt;/b&gt; badge at the top-right corner of each text block on the canvas (e.g. blocks flagged with low OCR confidence).&lt;/p&gt;</source>
+            <translation>
+                <p>在画布上每个文本块的右上角显示<b>块标签</b>徽标（例如被标记为 OCR 置信度低的块）。</p>
+            </translation>
+        </message>
+        <message>
+            <source>Tag Badge</source>
+            <translation>标签徽标</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Shows the floating &lt;b&gt;tag toolbar&lt;/b&gt; above the selected block. Disable to tag only via right-click menu, pie menu or shortcuts.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;在选中文字块上方显示&lt;b&gt;标签工具栏&lt;/b&gt;浮层。关闭后仅通过右键菜单、饼菜单或快捷键打标。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Tag Toolbar</source>
+            <translation>标签工具栏</translation>
         </message>
     </context>
     <context>
@@ -2559,13 +2593,25 @@ Failed: {f}/{t}</source>
             <source>This page has unrendered batch changes and will refresh automatically when opened</source>
             <translation>此页有未渲染的批量修改，翻到该页后将自动刷新</translation>
         </message>
-    </context>
-    <context>
-        <name>GlossaryExtractorDialog</name>
         <message>
-            <location filename="..\ui\glossary_extractor_dialog.py" />
-            <source>Extracted {} terms.</source>
-            <translation>已提取 {} 条术语。</translation>
+            <source>Block action cancelled (page switched).</source>
+            <translation>块动作已取消（已切换页面）。</translation>
+        </message>
+        <message>
+            <source>No vision API profile found. Configure one in Model Management first.</source>
+            <translation>未找到支持视觉的 API 配置，请先在模型管理中配置。</translation>
+        </message>
+        <message>
+            <source>Retranslate is not available for the current translator module.</source>
+            <translation>当前翻译器模块不支持单块重译。</translation>
+        </message>
+        <message>
+            <source>Vision profile is not ready. Configure it in Model Management.</source>
+            <translation>视觉接口尚未就绪，请先在模型管理里配置好。</translation>
+        </message>
+        <message>
+            <source>Active tag instructions</source>
+            <translation>生效的标签指令</translation>
         </message>
         <message>
             <location filename="..\ui\glossary_extractor_dialog.py" />
@@ -2589,6 +2635,26 @@ Set this file as the active glossary now?</source>
 {}
 
 立即将此文件设为活动术语表？</translation>
+        </message>
+        <message>
+            <source>Also injected</source>
+            <translation>另有注入</translation>
+        </message>
+        <message>
+            <source>Cannot prepare the block image for OCR fix.</source>
+            <translation>无法为 OCR 校正准备块图像。</translation>
+        </message>
+        <message>
+            <source>Neighbour blocks (±2)</source>
+            <translation>邻近块（±2）</translation>
+        </message>
+        <message>
+            <source>Source sent</source>
+            <translation>送出的原文</translation>
+        </message>
+        <message>
+            <source>Your extra requirement</source>
+            <translation>你的补充要求</translation>
         </message>
     </context>
     <context>
@@ -4394,6 +4460,34 @@ in Settings → Mirror Config, then click Retry.</source>
             <source>Soft Keyboard</source>
             <translation>软键盘</translation>
         </message>
+        <message>
+            <source>Tag: Confusing Translation</source>
+            <translation>打标：译文迷惑</translation>
+        </message>
+        <message>
+            <source>Tag: Handwritten</source>
+            <translation>打标：手写体</translation>
+        </message>
+        <message>
+            <source>Tag: Low OCR Confidence</source>
+            <translation>打标：OCR 置信度低</translation>
+        </message>
+        <message>
+            <source>Tag: Onomatopoeia</source>
+            <translation>打标：语气/拟声词</translation>
+        </message>
+        <message>
+            <source>Tag: Polish Translation</source>
+            <translation>打标：译文润色</translation>
+        </message>
+        <message>
+            <source>Next Tagged Block</source>
+            <translation>下一个带标签块</translation>
+        </message>
+        <message>
+            <source>Previous Tagged Block</source>
+            <translation>上一个带标签块</translation>
+        </message>
     </context>
     <context>
         <name>ShortcutEditor</name>
@@ -4431,6 +4525,10 @@ in Settings → Mirror Config, then click Retry.</source>
             <location filename="..\\ui\\configpanel.py" line="1030" />
             <source>General</source>
             <translation>通用</translation>
+        </message>
+        <message>
+            <source>Tagging</source>
+            <translation>打标</translation>
         </message>
     </context>
     <context>
@@ -6012,6 +6110,10 @@ in Settings → Mirror Config, then click Retry.</source>
             <source>Text Effect</source>
             <translation>文字效果</translation>
         </message>
+        <message>
+            <source>Apply AI Proposal</source>
+            <translation>应用 AI 提案</translation>
+        </message>
     </context>
     <context>
         <name>EffectDeleteButton</name>
@@ -6738,6 +6840,18 @@ in Settings → Mirror Config, then click Retry.</source>
             <source>Select Models</source>
             <translation>选择模型</translation>
         </message>
+        <message>
+            <source>In use</source>
+            <translation>使用中</translation>
+        </message>
+        <message>
+            <source>Make this the default profile for translation, OCR and inpainting.</source>
+            <translation>把此配置设为翻译、OCR 与修图的默认接口</translation>
+        </message>
+        <message>
+            <source>Use</source>
+            <translation>使用</translation>
+        </message>
     </context>
     <context>
         <name>LLMProfileListWidget</name>
@@ -6992,6 +7106,118 @@ No pipeline stages will be executed.</source>
         <message>
             <source>Symbols</source>
             <translation>符号</translation>
+        </message>
+    </context>
+    <context>
+        <name>BlockTags</name>
+        <message>
+            <source>Confusing Translation</source>
+            <translation>译文迷惑</translation>
+        </message>
+        <message>
+            <source>Handwritten</source>
+            <translation>手写体</translation>
+        </message>
+        <message>
+            <source>Low OCR Confidence</source>
+            <translation>OCR 置信度低</translation>
+        </message>
+        <message>
+            <source>Onomatopoeia</source>
+            <translation>语气/拟声词</translation>
+        </message>
+        <message>
+            <source>Polish Translation</source>
+            <translation>译文润色</translation>
+        </message>
+    </context>
+    <context>
+        <name>TagToolbar</name>
+        <message>
+            <source>Directive</source>
+            <translation>指示</translation>
+        </message>
+        <message>
+            <source>Doubt</source>
+            <translation>疑点</translation>
+        </message>
+        <message>
+            <source>Expand Panel</source>
+            <translation>展开面板</translation>
+        </message>
+    </context>
+    <context>
+        <name>BlockActionCard</name>
+        <message>
+            <source>Action failed:</source>
+            <translation>动作失败：</translation>
+        </message>
+        <message>
+            <source>Apply</source>
+            <translation>应用</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <source>Discard</source>
+            <translation>放弃</translation>
+        </message>
+        <message>
+            <source>Processing...</source>
+            <translation>处理中…</translation>
+        </message>
+        <message>
+            <source>Expand / Collapse</source>
+            <translation>展开 / 收起</translation>
+        </message>
+        <message>
+            <source>Ask the model again, this time with your requirement.</source>
+            <translation>带上你的补充要求再问一次模型。</translation>
+        </message>
+        <message>
+            <source>Click to enlarge</source>
+            <translation>点击放大</translation>
+        </message>
+        <message>
+            <source>Extra requirement (optional)</source>
+            <translation>补充要求（可选）</translation>
+        </message>
+        <message>
+            <source>Original</source>
+            <translation>原行</translation>
+        </message>
+        <message>
+            <source>Preview</source>
+            <translation>预览</translation>
+        </message>
+        <message>
+            <source>Regenerate</source>
+            <translation>重跑</translation>
+        </message>
+        <message>
+            <source>Uncheck to keep the original line</source>
+            <translation>取消勾选则保留原行</translation>
+        </message>
+    </context>
+    <context>
+        <name>BlockActions</name>
+        <message>
+            <source>Contextual Retranslate</source>
+            <translation>结合上下文重译</translation>
+        </message>
+        <message>
+            <source>Fix OCR</source>
+            <translation>校正识别</translation>
+        </message>
+        <message>
+            <source>Retranslate</source>
+            <translation>重译</translation>
+        </message>
+        <message>
+            <source>Vision OCR Fix</source>
+            <translation>视觉 OCR 校正</translation>
         </message>
     </context>
 </TS>

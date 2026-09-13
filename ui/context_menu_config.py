@@ -32,6 +32,8 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
 )
 
+from utils.block_actions import BLOCK_ACTIONS
+from utils.block_tags import TAG_DEFS, TAG_REGISTRY, has_tag, remove_tag, set_tag, toggle_on_blocks
 from utils.config import pcfg, save_config
 
 # ── Default layout (mirrors the current hardcoded order) ────
@@ -47,6 +49,9 @@ DEFAULT_ORDER: List[str] = [
     "behavior",
     "---",
     QCoreApplication.translate("Canvas", "translate"), "ocr", "ocr_translate", "ocr_translate_inpaint",
+    "---",
+    "tag_ocr_low_conf", "tag_handwritten", "tag_onomatopoeia", "tag_trans_confusing", "tag_trans_polish",
+    "act_ocr_fix", "act_retranslate",
 ]
 
 SEPARATOR_SENTINEL = "---"
@@ -57,6 +62,7 @@ CAT_TEXT = "text"          # reset_angle / squeeze / align directions
 CAT_PIPELINE = "pipeline"  # translate / ocr / ocr_translate ...
 CAT_VIEW = "view"          # fit to window / zoom / page navigation
 CAT_TOGGLE = "toggle"      # checkbox-form canvas options (Snap Alignment ...)
+CAT_TAGS = "tags"          # 块标签打标切换（utils/block_tags.py 标签体系）
 
 
 # ── Command definition ──────────────────────────────────────
@@ -423,6 +429,30 @@ _reg(CmdDef("seq_badge", QCoreApplication.translate("Canvas", "Sequence Badge"),
     hidden_in_customize=True,
     category=CAT_TOGGLE))
 
+
+def _tag_badge_run(mw):
+    mw.on_tag_badge_menu_toggled(not pcfg.show_tag_badge)
+
+
+_reg(CmdDef("tag_badge", QCoreApplication.translate("Canvas", "Tag Badge"),
+    run_fn=_tag_badge_run,
+    checked_fn=lambda mw: bool(pcfg.show_tag_badge),
+    is_toggle=True,
+    hidden_in_customize=True,
+    category=CAT_TOGGLE))
+
+
+def _tag_toolbar_run(mw):
+    mw.on_tag_toolbar_menu_toggled(not pcfg.show_tag_toolbar)
+
+
+_reg(CmdDef("tag_toolbar", QCoreApplication.translate("Canvas", "Tag Toolbar"),
+    run_fn=_tag_toolbar_run,
+    checked_fn=lambda mw: bool(pcfg.show_tag_toolbar),
+    is_toggle=True,
+    hidden_in_customize=True,
+    category=CAT_TOGGLE))
+
 _reg(CmdDef("clip_overflow", QCoreApplication.translate("Canvas", "Overflow Clip"),
     run_fn=_clip_overflow_run,
     checked_fn=lambda mw: bool(pcfg.clip_text_overflow),
@@ -436,6 +466,119 @@ _reg(CmdDef("overflow_mode", QCoreApplication.translate("Canvas", "Overflow Mode
     is_toggle=True,
     hidden_in_customize=True,
     category=CAT_TOGGLE))
+
+
+# --- Block tag toggles (right-click menu + pie palette, batch B) ---
+# 打标作用于当前选中块；多选翻转语义（非全员带→全挂，否则全摘）。
+# 标签显示名直接复用 TAG_REGISTRY 里已在字面量定义处翻译过的值。
+def _make_tag_cmd(tag_id: str):
+    def _run(mw):
+        items = mw.canvas.selected_text_items()
+        if not items:
+            return
+        toggle_on_blocks([it.blk for it in items], tag_id)
+        for it in items:
+            it.refresh_tag_badge()
+        mw.canvas.setProjSaveState(True)
+        toolbar = getattr(mw, "tagToolbar", None)
+        if toolbar is not None:
+            toolbar.sync_from_canvas()
+
+    def _checked(mw) -> bool:
+        items = mw.canvas.selected_text_items()
+        return bool(items) and all(has_tag(it.blk, tag_id) for it in items)
+
+    def _build(menu, canvas):
+        items = canvas.selected_text_items()
+        _act(menu, canvas, TAG_REGISTRY[tag_id].name,
+             checkable=True,
+             checked=bool(items) and all(has_tag(it.blk, tag_id) for it in items),
+             enabled=bool(items),
+             connect=lambda checked, tid=tag_id: _run_tag_checked(canvas, tid, checked))
+
+    return CmdDef(f"tag_{tag_id}", TAG_REGISTRY[tag_id].name,
+                  build_fn=_build,
+                  run_fn=_run,
+                  enabled_fn=lambda mw: bool(mw.canvas.selected_text_items()),
+                  checked_fn=_checked,
+                  is_toggle=True,
+                  category=CAT_TAGS)
+
+
+def _run_tag_checked(canvas, tag_id: str, checked: bool):
+    """右键菜单勾选路径：按动作携带的目标值写入（非翻转）。"""
+    items = canvas.selected_text_items()
+    if not items:
+        return
+    for it in items:
+        if checked:
+            set_tag(it.blk, tag_id, "manual")
+        else:
+            remove_tag(it.blk, tag_id)
+        it.refresh_tag_badge()
+    canvas.setProjSaveState(True)
+
+
+for _tag in TAG_DEFS:
+    _reg(_make_tag_cmd(_tag.id))
+
+
+# --- Block AI actions (frame-level, single-round; batch C) ---
+def _make_action_cmd(action):
+    def _run(mw):
+        items = mw.canvas.selected_text_items()
+        if len(items) != 1:
+            return
+        mw.start_block_action(action.id, items[0])
+
+    def _build(menu, canvas):
+        items = canvas.selected_text_items()
+        _act(menu, canvas, action.name,
+             enabled=len(items) == 1,
+             connect=lambda: _run_from_canvas(canvas, action.id))
+
+    def _enabled(mw) -> bool:
+        return len(mw.canvas.selected_text_items()) == 1
+
+    return CmdDef(action.id, action.name,
+                  build_fn=_build,
+                  run_fn=_run,
+                  enabled_fn=_enabled,
+                  category=CAT_TAGS)
+
+
+def _run_from_canvas(canvas, action_id: str):
+    items = canvas.selected_text_items()
+    if len(items) != 1:
+        return
+    # build_fn 只有 canvas 上下文，经视图 widget 找回 MainWindow
+    mw = canvas.gv.window()
+    if hasattr(mw, "start_block_action"):
+        mw.start_block_action(action_id, items[0])
+
+
+for _action in BLOCK_ACTIONS:
+    _reg(_make_action_cmd(_action))
+
+
+# --- Tagged-block navigation (review loop, §8.6: scan → jump → resolve) ---
+_reg(CmdDef("next_tagged_block",
+            QCoreApplication.translate("Canvas", "Next Tagged Block"),
+    run_fn=lambda mw: mw.jump_to_tagged_block(backward=False),
+    enabled_fn=lambda mw: any(
+        blk.tags for blks in mw.imgtrans_proj.pages.values() for blk in blks
+    ),
+    hidden_in_customize=True,
+    category=CAT_TAGS))
+
+_reg(CmdDef("prev_tagged_block",
+            QCoreApplication.translate("Canvas", "Previous Tagged Block"),
+    run_fn=lambda mw: mw.jump_to_tagged_block(backward=True),
+    enabled_fn=lambda mw: any(
+        blk.tags for blks in mw.imgtrans_proj.pages.values() for blk in blks
+    ),
+    hidden_in_customize=True,
+    category=CAT_TAGS))
 
 _reg(CmdDef("drag_decorations", QCoreApplication.translate("Canvas", "Show decorations while resizing"),
     run_fn=_drag_decorations_run,

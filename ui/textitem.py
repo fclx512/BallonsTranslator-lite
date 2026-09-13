@@ -13,12 +13,13 @@
 - fork 交互：对齐吸附、块悬停移动光标、``moved`` 仅在位置真正变化时发出。
 """
 
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 from qtpy.QtCore import QPointF, QRectF, Qt, Signal
 from qtpy.QtGui import (
     QColor,
     QFont,
+    QFontMetrics,
     QPainter,
     QPen,
     QTextCursor,
@@ -33,6 +34,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from utils.block_tags import TAG_REGISTRY, TagDef, sorted_tag_ids
 from utils.config import pcfg
 from utils.fontformat import (
     FontFormat,
@@ -42,6 +44,7 @@ from utils.fontformat import (
 from utils.text_alignment import SNAP_THRESHOLD, compute_snap
 from utils.textblock import TextBlock as TextBlock
 
+from ui.misc import get_theme_color
 from ui.text_engine.item import TextBlkItem as _EngineTextBlkItem
 
 TEXTRECT_SHOW_COLOR = QColor(30, 147, 229, 170)
@@ -50,6 +53,97 @@ TEXTRECT_SELECTED_COLOR = QColor(248, 64, 147, 170)
 
 def _textrect_show_color():
     return TEXTRECT_SHOW_COLOR
+
+
+class _TagBadgeItem(QGraphicsItem):
+    """块标签徽标：固定尺寸圆角签，锚在块轮廓右上角（复刻 _OrderBadgeItem 模式）。
+
+    多标签并挂时字形连排，底色按疑点优先（``NATURE_PRIORITY``）取色。
+    """
+
+    HORIZONTAL_PADDING = 4
+    VERTICAL_PADDING = 2
+
+    def __init__(self, parent: QGraphicsItem) -> None:
+        super().__init__(parent)
+        self._font = QFont()
+        self._font.setPixelSize(11)
+        self._tags: list[TagDef] = []
+        self._bounds = QRectF()
+        self._selected = False
+        self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self.setFlag(
+            QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations,
+            True,
+        )
+        # Keep the badge out of the parent's cached paint surface.
+        self.setCacheMode(QGraphicsItem.CacheMode.NoCache)
+        self.setZValue(100.0)
+        self.hide()
+
+    def boundingRect(self) -> QRectF:
+        return QRectF(self._bounds)
+
+    def set_tags(self, tags: List[TagDef]) -> None:
+        if self._tags == tags:
+            return
+        metrics = QFontMetrics(self._font)
+        text = "".join(t.glyph for t in tags)
+        width = metrics.horizontalAdvance(text) + 2 * self.HORIZONTAL_PADDING
+        height = metrics.height() + 2 * self.VERTICAL_PADDING
+        self.prepareGeometryChange()
+        self._tags = list(tags)
+        self._bounds = QRectF(0, -height, width, height)
+        self.update()
+        self._repaint_views()
+
+    def _repaint_views(self) -> None:
+        # ItemIgnoresTransformations 项缩小包围盒/隐藏时，场景按映射矩形算
+        # 出的失效区盖不住设备坐标里的旧迹（缩小留残影），对所在视图整域
+        # 重绘兜底。挂标是低频用户动作，整域重绘开销可忽略。
+        if self.scene() is None:
+            return
+        for view in self.scene().views():
+            view.viewport().update()
+
+    def paint(
+        self,
+        painter: QPainter,
+        _option: QStyleOptionGraphicsItem,
+        _widget: Optional[QWidget] = None,
+    ) -> None:
+        painter.save()
+        try:
+            painter.setCompositionMode(
+                QPainter.CompositionMode.CompositionMode_SourceOver
+            )
+            painter.setPen(Qt.PenStyle.NoPen)
+            # 选中共主题强调色；平时疑点暖色、指示冷色（可推翻的初版配色）
+            if self._selected:
+                bg = get_theme_color()
+                bg.setAlpha(200)
+            elif any(t.nature == "doubt" for t in self._tags):
+                bg = QColor(225, 88, 62, 220)
+            else:
+                bg = QColor(72, 132, 240, 220)
+            painter.setBrush(bg)
+            painter.drawRoundedRect(self._bounds, 3, 3)
+            painter.setPen(Qt.GlobalColor.white)
+            painter.setFont(self._font)
+            painter.drawText(
+                self._bounds,
+                Qt.AlignmentFlag.AlignCenter,
+                "".join(t.glyph for t in self._tags),
+            )
+        finally:
+            painter.restore()
+
+    def set_selected(self, selected: bool) -> None:
+        selected = bool(selected)
+        if self._selected == selected:
+            return
+        self._selected = selected
+        self.update()
 
 
 class TextBlkItem(_EngineTextBlkItem):
@@ -89,7 +183,11 @@ class TextBlkItem(_EngineTextBlkItem):
         self.visual_geometry_changed.connect(self._fork_bridge_doc_size_changed)
         # 半角括号自动替换（fork 特性，引擎侧无）
         self.document().contentsChange.connect(self._on_contents_change_for_hw)
+        # 标签徽标（复刻 _OrderBadgeItem 模式，锚块轮廓右上角）
+        self._tag_badge_item = _TagBadgeItem(self)
+        self.visual_geometry_changed.connect(self._sync_tag_badge)
         self.refresh_seq_badge()
+        self.refresh_tag_badge()
 
     # ── 属性别名（fork 消费者读写 oldPos/oldRect，引擎内部用 _old_pos/_old_rect）──
 
@@ -181,6 +279,46 @@ class TextBlkItem(_EngineTextBlkItem):
             or (pcfg.show_seq_badge and not self._hide_badge)
         )
         self._sync_order_badge()
+
+    def refresh_tag_badge(self) -> None:
+        """刷新标签徽标（开关 pcfg.show_tag_badge；导出隔离共用 _hide_badge）。"""
+        tags = []
+        if self.blk is not None and pcfg.show_tag_badge and not self._hide_badge:
+            tags = [
+                TAG_REGISTRY[tid]
+                for tid in sorted_tag_ids(self.blk)
+                if tid in TAG_REGISTRY
+            ]
+        self._tag_badge_item.set_tags(tags)
+        self._sync_tag_badge()
+
+    def _sync_tag_badge(self) -> None:
+        badge = self._tag_badge_item
+        was_visible = badge.isVisible()
+        if badge._tags:
+            outline = self.geometry_controller.visual_outline_in_item()
+            if not outline.isEmpty():
+                anchor = outline.boundingRect().topRight()
+                # 右上角对齐：徽标整体落在轮廓右上外侧
+                badge.setPos(anchor.x() - badge._bounds.width(), anchor.y())
+                badge.show()
+                if not was_visible:
+                    badge._repaint_views()
+                return
+        badge.hide()
+        if was_visible:
+            badge._repaint_views()
+
+    def itemChange(self, change, value):
+        # 选中态同步必须走 itemChange（ItemSelectedHasChanged 通知总会派发）而非
+        # 覆写 setSelected——后者非 Qt 虚方法，场景级 C++ 调用（clearSelection、
+        # 鼠标点选）不经过它，徽标会卡在选中样式（2026-09-13 拖拽调框变色教训）
+        if (
+            change == QGraphicsItem.GraphicsItemChange.ItemSelectedHasChanged
+            and self._tag_badge_item is not None
+        ):
+            self._tag_badge_item.set_selected(bool(value))
+        return super().itemChange(change, value)
 
     # ── 变换（fork 语义：TextTransformState；引擎侧 set_text_transform 传 stack）──
 

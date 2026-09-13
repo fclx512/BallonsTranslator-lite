@@ -74,6 +74,20 @@ from modules import (
     GET_VALID_TRANSLATORS,
 )
 from utils import shared
+from utils.block_actions import (
+    ACTION_REGISTRY,
+    build_context_lines,
+    build_ocr_fix_payload,
+    page_data_needs_sync,
+    parse_ocr_fix_reply,
+)
+from utils.block_tags import (
+    TAG_REGISTRY,
+    directive_instructions,
+    has_tag,
+    remove_tag,
+    set_tag,
+)
 from utils.config import (
     FontFormat,
     ProgramConfig,
@@ -118,6 +132,9 @@ from .misc import QKEY, parse_stylesheet, set_html_family, theme_accent_color
 from .module_manager import ModuleManager
 from .overlay_modal import OverlayModal
 from .scenetext_manager import PasteSrcItemsCommand, SceneTextManager, TextPanel
+from .block_action_card import BlockActionCard
+from .block_action_runner import BlockActionRunner
+from .tag_toolbar import TagToolbar
 from .textedit_area import SourceTextEdit, TransTextEdit
 from .text_engine.pipeline_formatting import (
     AutoTateChuYokoThread,
@@ -577,6 +594,23 @@ class MainWindow(mainwindow_cls):
             self.st_manager.on_page_replace_all
         )
 
+        # 选中跟随标签工具栏（挂画布区容器浮层，不参与布局；批次 B 主入口）
+        self.tagToolbar = TagToolbar(self.centralStackWidget, self.canvas)
+        self.canvas.incanvas_selection_changed.connect(
+            self.tagToolbar.sync_from_canvas
+        )
+        # 框级 AI 动作（批次 C）：执行器 + 就地确认卡片
+        self.blockActionRunner = BlockActionRunner(self)
+        self.blockActionCard = BlockActionCard(
+            self.centralStackWidget, self.canvas
+        )
+        self.tagToolbar.action_requested.connect(self.on_block_action_requested)
+        self.blockActionRunner.finished.connect(self.on_block_action_finished)
+        self.blockActionRunner.failed.connect(self.on_block_action_failed)
+        self.blockActionCard.apply_clicked.connect(self.on_block_action_apply)
+        self.blockActionCard.cancelled.connect(self.on_block_action_cancel)
+        self.blockActionCard.retry_requested.connect(self.on_block_action_retry)
+
         # comic trans pannel
         self.rightComicTransStackPanel = QStackedWidget(self)
         self.rightComicTransStackPanel.addWidget(self.drawingPanel)
@@ -859,6 +893,10 @@ class MainWindow(mainwindow_cls):
         self.configPanel.shortcuts_changed.connect(self.refreshShortcuts)
         self.configPanel.presets_changed.connect(self._on_presets_changed)
         self.configPanel.seq_badge_changed.connect(self._on_seq_badge_changed)
+        self.configPanel.tag_badge_changed.connect(self._on_tag_badge_changed)
+        self.configPanel.tag_toolbar_changed.connect(
+            self._on_tag_toolbar_changed
+        )
         self.configPanel.clip_overflow_changed.connect(self._on_clip_overflow_changed)
         self.titleBar.seq_badge_trigger.connect(self.on_seq_badge_menu_toggled)
         self.titleBar.clip_overflow_trigger.connect(
@@ -914,6 +952,332 @@ class MainWindow(mainwindow_cls):
         for item in self.canvas.textLayer.childItems():
             if isinstance(item, TextBlkItem):
                 item.refresh_seq_badge()
+
+    def _on_tag_badge_changed(self):
+        """Keep canvas tag badges in sync with the settings toggle."""
+        if not self.canvas:
+            return
+        for item in self.canvas.textLayer.childItems():
+            if isinstance(item, TextBlkItem):
+                item.refresh_tag_badge()
+
+    def on_tag_badge_menu_toggled(self, checked: bool):
+        pcfg.show_tag_badge = checked
+        self.configPanel.tag_badge_checker.blockSignals(True)
+        self.configPanel.tag_badge_checker.setChecked(checked)
+        self.configPanel.tag_badge_checker.blockSignals(False)
+        self._on_tag_badge_changed()
+        self.save_config()
+
+    def _on_tag_toolbar_changed(self):
+        """关掉时立即隐藏；再开时若有选中经 sync 复现。"""
+        if hasattr(self, "tagToolbar"):
+            self.tagToolbar.sync_from_canvas()
+
+    def on_tag_toolbar_menu_toggled(self, checked: bool):
+        pcfg.show_tag_toolbar = checked
+        self.configPanel.tag_toolbar_checker.blockSignals(True)
+        self.configPanel.tag_toolbar_checker.setChecked(checked)
+        self.configPanel.tag_toolbar_checker.blockSignals(False)
+        self._on_tag_toolbar_changed()
+        self.save_config()
+
+    def on_tag_shortcut(self, tag_id: str):
+        """标签翻转快捷键：多选翻转语义（非全员带→全挂，否则全摘）。"""
+        items = self.canvas.selected_text_items()
+        if not items or not self.canvas.textEditMode():
+            return
+        checked = not all(has_tag(it.blk, tag_id) for it in items)
+        for it in items:
+            if checked:
+                set_tag(it.blk, tag_id, "manual")
+            else:
+                remove_tag(it.blk, tag_id)
+            it.refresh_tag_badge()
+        self.canvas.setProjSaveState(True)
+        if hasattr(self, "tagToolbar"):
+            self.tagToolbar.sync_from_canvas()
+
+    # ── 框级 AI 动作（批次 C）：无工具单轮 → 就地确认卡 → 显式应用 ──
+
+    def on_block_action_requested(self, action_id: str):
+        items = self.canvas.selected_text_items()
+        if len(items) != 1:
+            return
+        self.start_block_action(action_id, items[0])
+
+    def _sync_block_data(self) -> None:
+        """框级动作前置：把数据层按画布重建（数据一致性修复）。
+
+        合并/撤销只改视觉层，`ui/scenetext_manager.py::updateTextBlkList`
+        要等保存等时机才让 `proj.pages` 跟上。动作读的是数据层，不先对齐
+        就会拿到合并前的子块（实测：合并块重译只返回第一个子块的内容），
+        裁图也会取错外框。判据见 `utils/block_actions.py::page_data_needs_sync`。
+        """
+        if not page_data_needs_sync(
+            self.imgtrans_proj.current_block_list(),
+            self.st_manager.textblk_item_list,
+        ):
+            return
+        self.st_manager.updateTextBlkList()
+
+    def _block_action_context_items(
+        self, src_text: str, context_lines, instructions, hint: str
+    ):
+        """本次动作实际送出的确定性信息（卡片「上下文包」逐项列出）。"""
+        items = [(self.tr("Source sent"), src_text)]
+        if context_lines:
+            items.append(
+                (self.tr("Neighbour blocks (±2)"), "\n".join(context_lines))
+            )
+        if instructions:
+            items.append(
+                (self.tr("Active tag instructions"), "\n".join(instructions))
+            )
+        if hint:
+            items.append((self.tr("Your extra requirement"), hint))
+        items.append(
+            (
+                self.tr("Also injected"),
+                self.tr(
+                    "Other blocks on this page, earlier pages and the story "
+                    "synopsis (assembled by the translator)."
+                ),
+            )
+        )
+        return items
+
+    def start_block_action(
+        self, action_id: str, blkitem, hint: str = ""
+    ) -> None:
+        action = ACTION_REGISTRY.get(action_id)
+        if action is None or self.blockActionRunner.is_busy():
+            return
+        # 先对齐数据层，再读原文/裁图/邻居（否则合并块读到的是合并前的子块）
+        self._sync_block_data()
+        blk = blkitem.blk
+        blk_idx = blkitem.idx
+        pagename = self.imgtrans_proj.current_img
+        blk_list = self.imgtrans_proj.current_block_list() or []
+        context_lines = build_context_lines(blk_list, blk_idx)
+        src_text = blk.get_text()
+        instructions = directive_instructions(blk)
+        context_items = self._block_action_context_items(
+            src_text, context_lines, instructions, hint
+        )
+
+        if action.kind == "ocr_fix":
+            from utils.profile_manager import (
+                get_vision_profiles,
+                profile_usage_hint,
+                resolve_profile,
+            )
+
+            # 取法：OCR 模块选定的 → 翻译器在用的 → 全局激活的 → 第一个可用
+            # 的视觉 profile（utils/profile_manager.py::resolve_profile 的池
+            # 过滤版本）。先前版本只认翻译器的 active profile，而它自己可能
+            # 就是坏的，于是框级动作在第一步就崩——前置条件检查放在这里。
+            ocr_module = self.module_manager.ocr
+            preferred = self._module_profile_name(
+                ocr_module
+            ) or self._translator_active_profile(self.module_manager.translator)
+            profile = resolve_profile(preferred, vision=True)
+            if profile is None:
+                if get_vision_profiles():
+                    notification.toast(
+                        self.tr(
+                            "Vision profile is not ready. Configure it in Model Management."
+                        )
+                        + f" ({profile_usage_hint(preferred)})",
+                        anchor="bottom-left",
+                        key="block_action",
+                    )
+                else:
+                    notification.toast(
+                        self.tr(
+                            "No vision API profile found. Configure one in Model Management first."
+                        ),
+                        anchor="bottom-left",
+                        key="block_action",
+                    )
+                return
+            # 载荷在主线程组装：按行透视纠正拼图 + 逐行现有 OCR 文本
+            try:
+                payload = build_ocr_fix_payload(
+                    self.imgtrans_proj.read_img(pagename),
+                    blk,
+                    context_lines,
+                    hint,
+                )
+            except Exception as e:
+                LOGGER.error(f"Block action {action_id} payload failed: {e}")
+                notification.toast(
+                    self.tr("Cannot prepare the block image for OCR fix.")
+                    + f" ({e})",
+                    anchor="bottom-left",
+                    key="block_action",
+                )
+                return
+            LOGGER.info(
+                f"Block action {action_id} uses vision profile: "
+                f"{profile.get('name', '')}"
+            )
+            self._block_action_ctx = (action_id, blk_idx)
+            self._block_action_payload = payload
+            self.blockActionCard.begin(
+                action.name,
+                blkitem,
+                src_text,
+                preview_b64=payload.preview_b64,
+                line_texts=payload.line_texts,
+                context_items=context_items,
+                per_line=payload.per_line,
+            )
+            self.blockActionRunner.start_ocr_fix(
+                pagename, blk_idx, profile, payload.messages
+            )
+        else:
+            translator = self.module_manager.translator
+            if translator is None or not hasattr(
+                translator, "translate_with_context"
+            ):
+                notification.toast(
+                    self.tr(
+                        "Retranslate is not available for the current translator module."
+                    ),
+                    anchor="bottom-left",
+                    key="block_action",
+                )
+                return
+            self._block_action_ctx = (action_id, blk_idx)
+            self._block_action_payload = None
+            self.blockActionCard.begin(
+                action.name,
+                blkitem,
+                src_text,
+                context_items=context_items,
+            )
+            self.blockActionRunner.start_retranslate(
+                translator,
+                self.imgtrans_proj,
+                pagename,
+                blk_idx,
+                src_text,
+                tag_instructions=instructions,
+                hint=hint,
+            )
+
+    def on_block_action_retry(self, hint: str) -> None:
+        """「补充要求」重跑：按当前选中块重新组装载荷（数据可能已变）。"""
+        blkitem = self.blockActionCard._blkitem
+        action_id, _ = getattr(self, "_block_action_ctx", (None, None))
+        if blkitem is None or action_id is None:
+            return
+        self.start_block_action(action_id, blkitem, hint=hint)
+
+    def on_block_action_finished(
+        self, action_id: str, pagename: str, blk_idx: int, result: str
+    ):
+        """结果回填：按 (pagename, blk_idx) 寻址，切页后的迟到结果丢弃。"""
+        if pagename != self.imgtrans_proj.current_img:
+            return
+        ctx = getattr(self, "_block_action_ctx", None)
+        if ctx != (action_id, blk_idx) or not self.blockActionCard.isVisible():
+            return
+        # 逐行回复能对齐行才给逐行取舍，否则退化为整块草稿（不猜对齐）
+        line_corrections = None
+        payload = getattr(self, "_block_action_payload", None)
+        if payload is not None and payload.per_line:
+            line_corrections = (
+                parse_ocr_fix_reply(result, len(payload.line_texts)) or None
+            )
+        self.blockActionCard.show_proposal(result, line_corrections)
+
+    def on_block_action_failed(
+        self, action_id: str, pagename: str, blk_idx: int, error: str
+    ):
+        LOGGER.error(f"Block action {action_id} failed: {error}")
+        if pagename != self.imgtrans_proj.current_img:
+            return
+        ctx = getattr(self, "_block_action_ctx", None)
+        if ctx != (action_id, blk_idx) or not self.blockActionCard.isVisible():
+            return
+        self.blockActionCard.show_error(error)
+
+    def on_block_action_apply(self, text: str):
+        """显式「应用」：写回进全局撤销栈 + 消除已消费的疑点标签。"""
+        from .textedit_commands import ApplyBlockTextCommand
+
+        blkitem = self.blockActionCard._blkitem
+        if blkitem is None:
+            self.blockActionCard.close_card()
+            return
+        action_id, _ = getattr(self, "_block_action_ctx", (None, None))
+        action = ACTION_REGISTRY.get(action_id)
+        pairw = self.st_manager.pairwidget_list[blkitem.idx]
+        field = "source" if (action and action.kind == "ocr_fix") else "translation"
+        self.canvas.push_undo_command(
+            ApplyBlockTextCommand(blkitem, pairw, field, text)
+        )
+        if action:
+            for tid in action.consumes:
+                # 疑点标签确认后消除；指示标签是持久属性，保留
+                if TAG_REGISTRY[tid].nature == "doubt":
+                    remove_tag(blkitem.blk, tid)
+            blkitem.refresh_tag_badge()
+        self.canvas.setProjSaveState(True)
+        self.blockActionCard.close_card()
+        self.tagToolbar.sync_from_canvas()
+
+    def on_block_action_cancel(self):
+        if self.blockActionRunner.is_busy():
+            self.blockActionRunner.cancel()
+        self.blockActionCard.close_card()
+
+    def cancel_block_action_on_page_switch(self):
+        """切页保护（§8.9）：提案未确认即无写入，直接取消并提示。"""
+        if self.blockActionCard.isVisible():
+            was_busy = self.blockActionRunner.is_busy()
+            self.on_block_action_cancel()
+            if was_busy:
+                notification.toast(
+                    self.tr("Block action cancelled (page switched)."),
+                    anchor="bottom-left",
+                    key="block_action",
+                )
+
+    def jump_to_tagged_block(self, backward: bool = False):
+        """跳到上/下一个带标签块（全书范围，§8.6 校对闭环：扫过去→跳过去→处理掉）。
+        起点为当前选中块（无选中则当前页端部），到头回绕。"""
+        proj = self.imgtrans_proj
+        entries = []
+        for pagename in sorted(
+            proj.pages.keys(), key=lambda n: proj._pagename2idx.get(n, 0)
+        ):
+            for idx, blk in enumerate(proj.pages[pagename]):
+                if blk.tags:
+                    entries.append(
+                        (proj._pagename2idx.get(pagename, 0), idx, pagename)
+                    )
+        if not entries:
+            return
+        cur_page = proj.current_img
+        sel = self.canvas.selected_text_items()
+        pidx = proj._pagename2idx.get(cur_page, 0)
+        if sel:
+            bidx = sel[0].idx
+        else:
+            bidx = (
+                len(proj.current_block_list()) if backward else -1
+            )
+        pos = (pidx, bidx)
+        if backward:
+            before = [e for e in entries if (e[0], e[1]) < pos]
+            target = max(before, default=entries[-1])
+        else:
+            after = [e for e in entries if (e[0], e[1]) > pos]
+            target = min(after, default=entries[0])
+        self._on_stylemgr_navigate(target[2], target[1])
 
     def _on_clip_overflow_changed(self):
         """Keep the View menu toggle in sync with the settings panel."""
@@ -1024,6 +1388,8 @@ class MainWindow(mainwindow_cls):
             return
         # Switch page if needed
         if proj.current_img != pagename:
+            if hasattr(self, "blockActionCard"):
+                self.cancel_block_action_on_page_switch()
             self.st_manager.formatpanel.resolve_text_transform_edits_for_page_change()
             self.canvas.commit_edit_sessions()
             if self.save_on_page_changed:
@@ -1789,6 +2155,9 @@ class MainWindow(mainwindow_cls):
     def pageListCurrentItemChanged(self):
         item = self.pageList.currentItem()
         self.page_changing = True
+        # 框级动作处理中切页 → 直接取消并提示（提案未确认即无写入，§8.9）
+        if hasattr(self, "blockActionCard"):
+            self.cancel_block_action_on_page_switch()
         if item is not None:
             # Typed transform edits belong to the old page and must commit
             # before its dirty check. Live drags are previews and cancel.
@@ -2029,6 +2398,20 @@ class MainWindow(mainwindow_cls):
         )
         self.shortcut_registry["merge_blks"] = self._make_shortcuts(
             "merge_blks", self.shortcutMergeBlks
+        )
+
+        # 块标签翻转键：选中态打标（多选翻转语义），画布编辑期间由
+        # 编辑器 ShortcutOverride 自然屏蔽
+        for tag_id in TAG_REGISTRY:
+            self.shortcut_registry[f"tag_{tag_id}"] = self._make_shortcuts(
+                f"tag_{tag_id}",
+                partial(self.on_tag_shortcut, tag_id),
+            )
+        self.shortcut_registry["next_tagged_block"] = self._make_shortcuts(
+            "next_tagged_block", lambda: self.jump_to_tagged_block(backward=False)
+        )
+        self.shortcut_registry["prev_tagged_block"] = self._make_shortcuts(
+            "prev_tagged_block", lambda: self.jump_to_tagged_block(backward=True)
         )
 
         drawpanel_info = {
@@ -3183,6 +3566,26 @@ class MainWindow(mainwindow_cls):
             tgt_selector.setCurrentText(text)
             tgt_selector.blockSignals(False)
 
+    @staticmethod
+    def _translator_active_profile(translator) -> str:
+        """安全读 active_profile：无参数表模块（TransNone 等）断言会炸。"""
+        if translator is None or not getattr(translator, "params", None):
+            return ""
+        try:
+            return translator.get_param_value("active_profile") or ""
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _module_profile_name(module) -> str:
+        """安全读模块的 ``profile`` 选择器值（无此参数的模块返回 ""）。"""
+        if module is None or not getattr(module, "params", None):
+            return ""
+        try:
+            return module.get_param_value("profile") or ""
+        except Exception:
+            return ""
+
     def _trans_model_menu_data(self):
         """Model submenu data: the translator's active profile model list.
 
@@ -3192,7 +3595,7 @@ class MainWindow(mainwindow_cls):
         translator = self.module_manager.translator
         if translator is None:
             return None
-        profile_name = translator.get_param_value("active_profile")
+        profile_name = self._translator_active_profile(translator)
         if not profile_name:
             return None
         profile = find_profile(profile_name)
@@ -3216,7 +3619,7 @@ class MainWindow(mainwindow_cls):
         translator = self.module_manager.translator
         if translator is None or not model:
             return
-        profile_name = translator.get_param_value("active_profile")
+        profile_name = self._translator_active_profile(translator)
         profiles = load_profiles()
         target = next(
             (p for p in profiles if p.get("name") == profile_name), None

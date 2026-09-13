@@ -679,6 +679,7 @@ class Canvas(QGraphicsScene):
             if isinstance(item, TextBlkItem):
                 item._hide_badge = True
                 item.refresh_seq_badge()
+                item.refresh_tag_badge()
                 # Re-evaluate stale overflow-clip state before painting the
                 # export: a leftover flag would clip text to an old box and
                 # draw the yellow overflow border into the result image.
@@ -704,6 +705,7 @@ class Canvas(QGraphicsScene):
             if isinstance(item, TextBlkItem):
                 item._hide_badge = False
                 item.refresh_seq_badge()
+                item.refresh_tag_badge()
 
         if tlayer_opacity_before != 1:
             self.textLayer.setOpacity(tlayer_opacity_before)

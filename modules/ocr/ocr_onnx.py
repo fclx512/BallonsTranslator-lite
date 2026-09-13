@@ -15,6 +15,11 @@ from typing import List
 import numpy as np
 
 from modules.ocr.base import DEVICE_SELECTOR, OCRBase, TextBlock, register_OCR
+from utils.block_tags import apply_ocr_confidence_tag
+
+# 「OCR 置信度低」自动挂标阈值：onnx score 语义，初版保守取值，
+# 待实机分数分布后调整（规划 §8.2；勿调高收录过滤阈值 0.3——那会丢行缺字）
+OCR_CONF_TAG_THRESHOLD = 0.6
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
@@ -269,17 +274,26 @@ class PaddleOCRv6ONNX(OCRBase):
         # Single batched call to the recognizer
         rec_results = self.recognizer(all_crops)
 
-        # Group recognised text back to each block
+        # Group recognised text back to each block, keeping every line score
+        # (dropped lines included) for the low-confidence auto tag — the worst
+        # line flags the whole block, and a fully-dropped block is tagged too.
         block_texts: list[list[str]] = [[] for _ in range(len(blk_list))]
+        blk_scores: dict[int, list[float]] = {}
         for i, blk_idx in enumerate(crop_to_blk):
             if i < len(rec_results):
                 text, score = rec_results[i]
+                blk_scores.setdefault(blk_idx, []).append(score)
                 if text and score >= 0.3:
                     block_texts[blk_idx].append(text)
 
         for blk_idx, texts in enumerate(block_texts):
             if texts:
-                blk_list[blk_idx].text = texts
+                blk = blk_list[blk_idx]
+                blk.text = texts
+        for blk_idx, scores in blk_scores.items():
+            apply_ocr_confidence_tag(
+                blk_list[blk_idx], min(scores), OCR_CONF_TAG_THRESHOLD
+            )
 
     def ocr_img(self, img: np.ndarray) -> str:
         self.logger.warning(

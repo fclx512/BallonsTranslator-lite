@@ -105,6 +105,10 @@ class AgentTranslator(LLM_API_Translator):
 
     # --- 翻译入口(覆写:agent loop + 回退链) ---
 
+    # 指示标签 → 逐块翻译指令（批次 D）：translate_textblk_lst 依此决定
+    # 是否传 tag_instructions
+    supports_tag_instructions = True
+
     def translate(
         self,
         text,
@@ -112,6 +116,7 @@ class AgentTranslator(LLM_API_Translator):
         project=None,
         page_key: Optional[str] = None,
         commit_history_window: bool = False,
+        tag_instructions: Optional[List] = None,
     ):
         if text_is_empty(text):
             return text
@@ -139,6 +144,7 @@ class AgentTranslator(LLM_API_Translator):
                 project=project,
                 page_key=page_key,
                 block_mode=single_block,
+                tag_instructions=tag_instructions,
             )
         except AgentTaskCancelled:
             raise
@@ -178,6 +184,46 @@ class AgentTranslator(LLM_API_Translator):
         result = [translations[i] for i in range(1, len(src_list) + 1)]
         return result if is_list else result[0]
 
+    def translate_with_context(
+        self,
+        text: str,
+        *,
+        project,
+        page_key: Optional[str],
+        tag_instructions: Optional[List] = None,
+        hint: str = "",
+    ) -> str:
+        """框级重译动作入口（批次 C）：强制 context 模式单框任务，不走
+        Plain 直译短路——该动作语义就是"结合上下文重译"。失败降级直译
+        而非抛错（草稿层宁可给个底稿）。取消走 request_agent_stop()。
+
+        ``hint`` 是确认卡片里的「补充要求」（用户对语气/情景的确定性
+        输入），原样并入任务消息。
+        """
+        if text_is_empty(text):
+            return text
+        if not self.all_model_loaded():
+            self.load_model()
+        self._agent_cancel = False
+        try:
+            translations = self._run_agent_task(
+                [text],
+                project=project,
+                page_key=page_key,
+                block_mode=True,
+                tag_instructions=tag_instructions,
+                hint=hint,
+            )
+            return translations.get(1, "")
+        except AgentTaskCancelled:
+            raise
+        except Exception as e:
+            self.logger.warning(
+                f"Contextual retranslate failed ({type(e).__name__}: {e}); "
+                "falling back to direct translation."
+            )
+            return super().translate(text)
+
     # --- agent 任务组装 ---
 
     def _run_agent_task(
@@ -187,11 +233,17 @@ class AgentTranslator(LLM_API_Translator):
         project=None,
         page_key: Optional[str] = None,
         block_mode: bool = False,
+        tag_instructions: Optional[List] = None,
+        hint: str = "",
     ) -> Dict[int, str]:
         api_key = self._select_api_key()
         if not api_key:
+            from utils.profile_manager import profile_usage_hint
+
             raise ConnectionError(
-                "No available API key. Check the active profile's api_key field."
+                "No available API key. "
+                + profile_usage_hint(self._active_profile.get("name", ""))
+                + ". Configure it in Model Management."
             )
         if not self.client or self.client.api_key != api_key:
             if not self._initialize_client(api_key):
@@ -241,7 +293,12 @@ class AgentTranslator(LLM_API_Translator):
             if page_ctx:
                 history = "\n\n".join(s for s in (history, page_ctx) if s)
         user_message = build_user_task_message(
-            src_list, page_label(project, page_key), history, matched_glossary
+            src_list,
+            page_label(project, page_key),
+            history,
+            matched_glossary,
+            tag_instructions=tag_instructions,
+            hint=hint,
         )
 
         # agent 模式下历史注入是模块固有行为(设计方案 §11),不再走旧 beta 编排

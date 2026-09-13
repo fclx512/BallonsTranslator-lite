@@ -809,9 +809,6 @@ def main():
 
     init_lazy_module_registries()
 
-    # Check model file existence (registries are now available)
-    _ensure_model_files_fallback()
-
     if not args.headless:
         ps = QGuiApplication.primaryScreen()
         shared.LDPI = ps.logicalDotsPerInch()
@@ -828,6 +825,12 @@ def main():
     if lang not in ("en_US", "English") and not osp.exists(qmp):
         LOGGER.warning(f"target display language file {qmp} doesnt exist.")
     LOGGER.info(f"set display language to {lang}")
+
+    # Check model file existence (registries are now available).  Must stay
+    # AFTER the translator install: resolve() really imports the configured
+    # module, and module-level QCoreApplication.translate tables (e.g.
+    # utils/block_tags.py TAG_DEFS) would otherwise be frozen untranslated.
+    _ensure_model_files_fallback()
 
     app_font = QFont("Microsoft YaHei UI")
     if not app_font.exactMatch():

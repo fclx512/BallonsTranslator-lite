@@ -80,6 +80,10 @@ class ModuleConfig(Config):
     load_model_on_demand: bool = True
     empty_runcache: bool = False
     model_profiles: str = ""
+    # 全局激活的 LLM profile 名（模型管理页「使用」按钮写）。各模块的选择器
+    # 默认跟随它；显式选了别的可用项则以模块选择器为准（见
+    # utils/profile_manager.py::resolve_profile）。
+    default_profile: str = ""
     finish_code: int = 15
 
     def get_params(self, module_key: str, for_saving=False) -> dict:
@@ -141,6 +145,8 @@ class ModuleConfig(Config):
             self.agent_translation_debug_log = False
         if not isinstance(self.llm_glossary_path, str):
             self.llm_glossary_path = ''
+        if not isinstance(self.default_profile, str):
+            self.default_profile = ''
         if self.llm_glossary_mode not in LLMGlossaryMode.Valid:
             self.llm_glossary_mode = LLMGlossaryMode.Matching
         if self.single_blk_translate_mode not in SingleBlkTranslateMode.Valid:
@@ -473,6 +479,8 @@ class ProgramConfig(Config):
     # 修复区历史浮层（左缘窄栏入口，DrawingPanel）开合记忆
     inpaint_history_dock_open: bool = False
     show_seq_badge: bool = True
+    show_tag_badge: bool = True  # 画布块标签徽标（utils/block_tags.py 标签体系）
+    show_tag_toolbar: bool = True  # 选中跟随标签工具栏（关掉后走右键/饼菜单/快捷键）
     snap_alignment: bool = True  # 画布文字块拖拽吸附对齐（饼菜单开关，记忆上次状态）
     overflow_mode: bool = False  # 过界模式 — 画布边界视觉指示 + 文字块跨边界裁剪
     clip_text_overflow: bool = True  # 翻译填充时裁剪溢出文字并显示黄色提示框，拖拽调整后解除

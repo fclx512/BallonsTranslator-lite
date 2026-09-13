@@ -401,6 +401,151 @@ def get_image_profile_names() -> List[str]:
     return [p.get("name", "") for p in get_image_profiles() if p.get("name")]
 
 
+# ── Profile resolution ──────────────────────────────────────────────
+#
+# 「出现在选择器里」和「能真正发出请求」是两回事：内置示例 profile 的
+# api_key 是空的（或占位 dummy-key），模型名也可能没填。四个消费点
+# （translator / llm_ocr / LLMInpaint / 术语工作台）各自存一个 profile 名，
+# 名字会因 key 被清、模型被删、profile 改名而失效。以下解析层把"当前该用
+# 哪个"收敛到一处：模块选择器显式选定的可用项优先，否则跟随全局激活的
+# profile，再否则取该消费点候选池里第一个可用项。
+
+#: 内置示例 profile 的占位 key，不算"用户已配置"。
+PLACEHOLDER_API_KEYS = frozenset({"dummy-key"})
+
+
+def _is_local_host(host: str) -> bool:
+    return "localhost" in host or "127.0.0.1" in host
+
+
+def profile_is_usable(profile: Optional[Dict], model_key: str = "model") -> bool:
+    """该 profile 现在能否真正发出请求。
+
+    要求 endpoint 与模型名都有，且 api_key 非空非占位——或者端点是本地
+    服务（LM Studio / Ollama 这类不需要 key）。缺任一项都会在请求前抛错。
+    """
+    if not isinstance(profile, dict):
+        return False
+    host = str(profile.get("api_host") or "").strip()
+    if not host:
+        return False
+    if not str(profile.get(model_key) or "").strip():
+        return False
+    key = str(profile.get("api_key") or "").strip()
+    if key and key not in PLACEHOLDER_API_KEYS:
+        return True
+    return _is_local_host(host)
+
+
+def get_default_profile_name() -> str:
+    """全局激活的 profile（用户在模型管理页选定的那个）的名字。
+
+    未指定、或指定的那个已不可用时，回退到按列表顺序的第一个可用项；
+    一个可用的都没有则返回空串（调用方据此走「未配置」引导）。
+    """
+    profiles = load_profiles()
+    explicit = str(pcfg.module.default_profile or "").strip()
+    if explicit:
+        target = next((p for p in profiles if p.get("name") == explicit), None)
+        if profile_is_usable(target):
+            return explicit
+    for profile in profiles:
+        if profile_is_usable(profile):
+            return str(profile.get("name", ""))
+    return ""
+
+
+def set_default_profile(name: str) -> None:
+    """记下全局激活的 profile 并落盘。"""
+    pcfg.module.default_profile = str(name or "")
+    save_config()
+
+
+def resolve_profile(
+    current_name: str,
+    *,
+    vision: bool = False,
+    image: bool = False,
+) -> Optional[Dict]:
+    """把某个消费点存的 profile 名解析成实际该用的 profile。
+
+    优先级：该消费点显式选定且可用的 → 全局激活的 → 该消费点候选池里第一
+    个可用项 → None（没有任何可用 profile）。
+    """
+    model_key = "image_model" if image else "model"
+    profiles = load_profiles()
+    if vision:
+        profiles = [p for p in profiles if p.get("vision_support", False)]
+    elif image:
+        profiles = [p for p in profiles if p.get("image_support", False)]
+
+    def _usable(profile: Optional[Dict]) -> bool:
+        return profile_is_usable(profile, model_key=model_key)
+
+    def _find(name: str) -> Optional[Dict]:
+        return next((p for p in profiles if p.get("name") == name), None)
+
+    explicit = _find(str(current_name or "").strip())
+    if _usable(explicit):
+        return explicit
+
+    fallback = _find(get_default_profile_name())
+    if _usable(fallback):
+        return fallback
+
+    return next((p for p in profiles if _usable(p)), None)
+
+
+def resolve_profile_name(current_name: str, **kwargs) -> str:
+    """``resolve_profile`` 的名字版（选择器回填用）。"""
+    profile = resolve_profile(current_name, **kwargs)
+    return str(profile.get("name", "")) if profile else ""
+
+
+def heal_profile_selector(
+    cfg: Dict,
+    *,
+    vision: bool = False,
+    image: bool = False,
+) -> str:
+    """把选择器参数（``{"options": [...], "value": ...}``）归位到可用 profile。
+
+    调用方先填好 ``options`` 再调。回填后返回值即实际该用的 profile 名。
+    一个可用的都没有时：旧值已不在候选池里就清空（留着等于挂了个不存在的
+    选择），仍在池里则保留——报错要靠这个名字指出缺哪个字段。返回空串由
+    调用方走「未配置」引导。
+    """
+    resolved = resolve_profile_name(cfg.get("value", ""), vision=vision, image=image)
+    if resolved:
+        cfg["value"] = resolved
+    elif cfg.get("value", "") not in (cfg.get("options") or []):
+        cfg["value"] = ""
+    return str(cfg.get("value", "") or "")
+
+
+def profile_usage_hint(name: str) -> str:
+    """给报错信息用的「这个 profile 缺什么」一句话。
+
+    用户看到的报错要能直接指向要改的字段，而不是"检查 active profile"。
+    """
+    profile = find_profile(name) if name else None
+    if profile is None:
+        return f'profile "{name}" not found'
+    missing = []
+    if not str(profile.get("api_host") or "").strip():
+        missing.append("api_host")
+    if not str(profile.get("model") or "").strip():
+        missing.append("model")
+    key = str(profile.get("api_key") or "").strip()
+    if (not key or key in PLACEHOLDER_API_KEYS) and not _is_local_host(
+        str(profile.get("api_host") or "")
+    ):
+        missing.append("api_key")
+    if not missing:
+        return f'profile "{name}" looks configured'
+    return f'profile "{name}" is missing: {", ".join(missing)}'
+
+
 # ── Image endpoint helpers (Test / Fetch Models for image inpainting) ──
 
 def _is_gemini_host(base_url: str) -> bool:

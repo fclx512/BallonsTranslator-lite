@@ -307,8 +307,12 @@ class GlossaryAgentWorker(QObject):
         translator = self._ensure_translator()
         api_key = translator._select_api_key()
         if not api_key:
+            from utils.profile_manager import profile_usage_hint
+
             raise RuntimeError(
-                "No available API key. Check the active profile's api_key."
+                "No available API key. "
+                + profile_usage_hint(translator._active_profile.get("name", ""))
+                + ". Configure it in Model Management."
             )
         if not translator.client or translator.client.api_key != api_key:
             if not translator._initialize_client(api_key):

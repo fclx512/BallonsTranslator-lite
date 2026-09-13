@@ -579,6 +579,14 @@ DEFAULT_SHORTCUTS = {
     "move_down": [],
     "move_top": [],
     "move_bottom": [],
+    # 块标签翻转键（选中态打标，多选翻转语义；编辑器输入经 ShortcutOverride 不受影响）
+    "tag_ocr_low_conf": ["1"],
+    "tag_handwritten": ["2"],
+    "tag_onomatopoeia": ["3"],
+    "tag_trans_confusing": ["4"],
+    "tag_trans_polish": ["5"],
+    "next_tagged_block": ["E"],
+    "prev_tagged_block": ["Q"],
 }
 
 # Display names are translated at table definition (QCoreApplication.translate
@@ -622,6 +630,13 @@ _ACTION_NAMES = {
     "move_down": QCoreApplication.translate("_ShortcutRow", "Move Down"),
     "move_top": QCoreApplication.translate("_ShortcutRow", "Move to Top"),
     "move_bottom": QCoreApplication.translate("_ShortcutRow", "Move to Bottom"),
+    "tag_ocr_low_conf": QCoreApplication.translate("_ShortcutRow", "Tag: Low OCR Confidence"),
+    "tag_handwritten": QCoreApplication.translate("_ShortcutRow", "Tag: Handwritten"),
+    "tag_onomatopoeia": QCoreApplication.translate("_ShortcutRow", "Tag: Onomatopoeia"),
+    "tag_trans_confusing": QCoreApplication.translate("_ShortcutRow", "Tag: Confusing Translation"),
+    "tag_trans_polish": QCoreApplication.translate("_ShortcutRow", "Tag: Polish Translation"),
+    "next_tagged_block": QCoreApplication.translate("_ShortcutRow", "Next Tagged Block"),
+    "prev_tagged_block": QCoreApplication.translate("_ShortcutRow", "Previous Tagged Block"),
 }
 
 # Actions whose factory default resolves through a Qt StandardKey so macOS
@@ -713,6 +728,18 @@ _SHORTCUT_GROUPS = [
     (
         QCoreApplication.translate("ShortcutEditor", "Search"),
         ["page_search", "global_search"],
+    ),
+    (
+        QCoreApplication.translate("ShortcutEditor", "Tagging"),
+        [
+            "tag_ocr_low_conf",
+            "tag_handwritten",
+            "tag_onomatopoeia",
+            "tag_trans_confusing",
+            "tag_trans_polish",
+            "next_tagged_block",
+            "prev_tagged_block",
+        ],
     ),
     (QCoreApplication.translate("ShortcutEditor", "General"), ["escape"]),
 ]
@@ -1284,6 +1311,8 @@ class ConfigPanel(Widget):
     shortcuts_changed = Signal()
     presets_changed = Signal()
     seq_badge_changed = Signal()
+    tag_badge_changed = Signal()
+    tag_toolbar_changed = Signal()
     clip_overflow_changed = Signal()
     apply_auto_tate_chu_yoko_requested = Signal()
     check_update = Signal()
@@ -2035,6 +2064,34 @@ class ConfigPanel(Widget):
             )
         )
 
+        self.tag_badge_checker = ConfigCheckBox(
+            self.tr("Tag Badge")
+        )
+        self.tag_badge_checker.setChecked(pcfg.show_tag_badge)
+        self.tag_badge_checker.stateChanged.connect(self.on_tag_badge_changed)
+        interface_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.tag_badge_checker,
+                note=self.tr("<p>Displays the <b>block tag</b> badge at the top-right corner of each text block on the canvas (e.g. blocks flagged with low OCR confidence).</p>"),
+            )
+        )
+
+        self.tag_toolbar_checker = ConfigCheckBox(
+            self.tr("Tag Toolbar")
+        )
+        self.tag_toolbar_checker.setChecked(pcfg.show_tag_toolbar)
+        self.tag_toolbar_checker.stateChanged.connect(
+            self.on_tag_toolbar_changed
+        )
+        interface_layout.addWidget(
+            ConfigFormRow(
+                "",
+                self.tag_toolbar_checker,
+                note=self.tr("<p>Shows the floating <b>tag toolbar</b> above the selected block. Disable to tag only via right-click menu, pie menu or shortcuts.</p>"),
+            )
+        )
+
         self.clip_overflow_checker = ConfigCheckBox(
             self.tr("Overflow Clip")
         )
@@ -2377,6 +2434,14 @@ class ConfigPanel(Widget):
     def on_seq_badge_changed(self):
         pcfg.show_seq_badge = self.seq_badge_checker.isChecked()
         self.seq_badge_changed.emit()
+
+    def on_tag_badge_changed(self):
+        pcfg.show_tag_badge = self.tag_badge_checker.isChecked()
+        self.tag_badge_changed.emit()
+
+    def on_tag_toolbar_changed(self):
+        pcfg.show_tag_toolbar = self.tag_toolbar_checker.isChecked()
+        self.tag_toolbar_changed.emit()
 
     def on_clip_overflow_changed(self):
         pcfg.clip_text_overflow = self.clip_overflow_checker.isChecked()

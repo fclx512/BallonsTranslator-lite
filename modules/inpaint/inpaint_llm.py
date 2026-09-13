@@ -160,15 +160,15 @@ class LLMInpaint(InpainterBase):
 
     def _load_inpaint_profiles(self):
         """Refresh the profile selector options from shared storage."""
-        from utils.profile_manager import get_image_profile_names
+        from utils.profile_manager import (
+            get_image_profile_names,
+            heal_profile_selector,
+        )
 
-        names = get_image_profile_names()
-        self.params["profile"]["options"] = names
-        current = self.params["profile"]["value"]
-        if current and current not in names:
-            self.params["profile"]["value"] = names[0] if names else ""
-        elif not current and names:
-            self.params["profile"]["value"] = names[0]
+        cfg = self.params["profile"]
+        cfg["options"] = get_image_profile_names()
+        # 图像候选池里归位到可用 profile（详见 profile_manager 解析层）。
+        heal_profile_selector(cfg, image=True)
 
     def _get_active_profile(self) -> dict:
         name = self.get_param_value("profile")

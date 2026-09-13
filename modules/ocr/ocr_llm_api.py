@@ -164,17 +164,17 @@ class LLM_OCR(OCRBase):
 
     def _load_vision_profiles(self):
         """Refresh the profile selector options from shared storage."""
-        from utils.profile_manager import get_vision_profile_names, load_profiles
+        from utils.profile_manager import (
+            get_vision_profile_names,
+            heal_profile_selector,
+            load_profiles,
+        )
 
         self._all_profiles = load_profiles()
-        names = get_vision_profile_names()
-        self.params["profile"]["options"] = names
-        # Reset selection if current value no longer valid
-        current = self.params["profile"]["value"]
-        if current and current not in names:
-            self.params["profile"]["value"] = names[0] if names else ""
-        elif not current and names:
-            self.params["profile"]["value"] = names[0]
+        cfg = self.params["profile"]
+        cfg["options"] = get_vision_profile_names()
+        # 视觉候选池里归位到可用 profile（详见 profile_manager 解析层）。
+        heal_profile_selector(cfg, vision=True)
 
     def _get_active_profile(self) -> dict:
         name = self.get_param_value("profile")
@@ -365,11 +365,16 @@ class LLM_OCR(OCRBase):
     def ocr(self, img_base64: str, prompt_override: str = None) -> str:
         profile = self._get_active_profile()
         if not profile:
-            return "[ERROR: No profile selected. Select a vision-capable profile in settings.]"
+            return (
+                "[ERROR: No vision profile selected. Configure one in "
+                "Model Management and pick it in the OCR module settings.]"
+            )
 
         api_key_to_use = self._select_api_key()
         if not api_key_to_use:
-            return "[ERROR: No available API key]"
+            from utils.profile_manager import profile_usage_hint
+
+            return f"[ERROR: No available API key. {profile_usage_hint(profile.get('name', ''))}]"
 
         if not self.client or self.client.api_key != api_key_to_use:
             self._initialize_client(api_key_to_use)

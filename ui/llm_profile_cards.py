@@ -46,12 +46,14 @@ from utils.profile_manager import (
     NetWorker,
     SAMPLE_PROFILES,
     fetch_image_models,
+    get_default_profile_name,
     get_profiles_raw,
     load_profiles,
     probe_connection,
     probe_model_list,
     remember_model_option,
     save_all_profiles,
+    set_default_profile,
 )
 from utils.shared import LINEEDIT_FIXHEIGHT
 
@@ -696,6 +698,7 @@ class LLMProfileCardWidget(QFrame):
 
     persist_requested = Signal()
     delete_requested = Signal(str)
+    use_requested = Signal(str)
 
     def __init__(
         self, profile: Dict, scrollWidget: Optional[QWidget] = None, parent=None
@@ -728,6 +731,21 @@ class LLMProfileCardWidget(QFrame):
         self._name_label = QLabel(header)
         self._name_label.setObjectName("LLMProfileName")
         header_layout.addWidget(self._name_label)
+        # 「使用」= 记成全局激活的 profile（pcfg.module.default_profile）：
+        # 翻译 / OCR / 修图的选择器默认跟随它，各自仍可单独覆盖。
+        self._use_btn = QPushButton(self.tr("Use"), header)
+        self._use_btn.setObjectName("LLMProfileUseButton")
+        self._use_btn.setCheckable(True)
+        self._use_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._use_btn.setToolTip(
+            self.tr(
+                "Make this the default profile for translation, OCR and inpainting."
+            )
+        )
+        self._use_btn.clicked.connect(
+            lambda: self.use_requested.emit(self.profile.get("name", ""))
+        )
+        header_layout.addWidget(self._use_btn)
         header_layout.addStretch()
         self._edit_btn = QToolButton(header)
         self._edit_btn.setObjectName("LLMProfileConfigButton")
@@ -877,11 +895,21 @@ class LLMProfileCardWidget(QFrame):
         self._image_badge.set_active(bool(self.profile.get("image_support", False)))
         self._sync_model_selectors()
         self._refresh_key_status()
+        self._refresh_use_state()
         builtin = bool(self.profile.get("builtin", False))
         self._delete_btn.setEnabled(not builtin)
         if builtin:
             self._delete_btn.setToolTip(self.tr("Built-in profiles cannot be deleted."))
         self._refresh_conditional_visibility()
+
+    def _refresh_use_state(self) -> None:
+        """标记这张卡是否是当前激活的 profile（含「没显式设过」的推断结果）。"""
+        name = self.profile.get("name", "")
+        active = bool(name) and name == get_default_profile_name()
+        self._use_btn.blockSignals(True)
+        self._use_btn.setChecked(active)
+        self._use_btn.blockSignals(False)
+        self._use_btn.setText(self.tr("In use") if active else self.tr("Use"))
 
     def set_expanded(self, expanded: bool) -> None:
         expanded = bool(expanded)
@@ -1241,6 +1269,7 @@ class LLMProfileListWidget(QWidget):
             card = LLMProfileCardWidget(profile, scrollWidget=self, parent=self)
             card.persist_requested.connect(self._persist)
             card.delete_requested.connect(self._on_delete_requested)
+            card.use_requested.connect(self._on_use_requested)
             card.set_modal_runner(self._modal_runner)
             self._cards_layout.addWidget(card)
             self._cards.append(card)
@@ -1248,6 +1277,23 @@ class LLMProfileListWidget(QWidget):
     def _persist(self) -> None:
         save_all_profiles(self._profiles)
         self._loaded_raw = get_profiles_raw()
+        self._sync_use_state()
+        self.profiles_changed.emit()
+
+    def _sync_use_state(self) -> None:
+        for card in self._cards:
+            card._refresh_use_state()
+
+    def _on_use_requested(self, name: str) -> None:
+        """激活某张卡：先落盘卡片上的编辑，再记激活项。
+
+        可用性判断读的是已保存的 profile，所以必须先 ``save_all_profiles``
+        ——否则刚填好的 key 还没生效就被判成不可用。
+        """
+        save_all_profiles(self._profiles)
+        self._loaded_raw = get_profiles_raw()
+        set_default_profile(name)
+        self._sync_use_state()
         self.profiles_changed.emit()
 
     def _unique_name(self, base: str) -> str:
@@ -1289,6 +1335,9 @@ class LLMProfileListWidget(QWidget):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
+        if get_default_profile_name() == name:
+            # 激活项随删除失效：清空显式记录，让解析层回退到下一个可用项
+            set_default_profile("")
         del self._profiles[index]
         self._persist()
         self._rebuild()

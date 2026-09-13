@@ -4,6 +4,16 @@
 
 ## 2026-09-13
 
+### LLM profile 选取链路修复：全局激活项 + 统一解析层
+
+**问题/需求：** 实测 AI 辅助框级动作时两个报错同源——OCR 校正一直提示「No API key configured for vision profile: OpenAI」，重译抛 `ConnectionError: No available API key`。根因是所有 profile 选择器的空值回退都写死「取列表第一项」，而 `SAMPLE_PROFILES` 第一项是没配 key 的 OpenAI；用户在模型管理里填好 key 的 profile 没有任何机制传导到那四个消费点（翻译器 / llm_ocr / LLMInpaint / 术语工作台），于是「配了却不用」。
+
+**改动要点：** 新增 `utils/profile_manager.py` 的选取解析层——`profile_is_usable`（有 host + 模型名，且 key 非空非占位或本地端点）、`get_default_profile_name` / `set_default_profile`（新配置字段 `utils/config.py::ModuleConfig.default_profile`）、`resolve_profile`（模块显式选的可用项 → 全局激活的 → 候选池第一个可用项）、`heal_profile_selector`（选择器归位，启动自愈，下拉框显示的永远是实际在用的）、`profile_usage_hint`（报错点名缺哪个字段）。四个消费点的「取列表第一项」全部替换；报错信息带 profile 名与缺失字段。模型管理页卡片头部加「使用 / 使用中」按钮标出并切换当前激活的 profile；框级 OCR 校正的 profile 取法从「翻译器的 active profile」改为「OCR 模块选定的 → 全局激活的 → 第一个可用视觉 profile」，并在无可用项时前置引导而非发请求等报错。注意 `merge_config_module_params` 会让 `pcfg` 与模块类参数共用同一份内层 dict，归位结果随常规保存落盘，不需要另行回写。
+
+**涉及文件：** `utils/profile_manager.py`、`utils/config.py`、`modules/translators/trans_llm_api.py`、`modules/translators/trans_agent.py`、`modules/ocr/ocr_llm_api.py`、`modules/inpaint/inpaint_llm.py`、`ui/module_manager.py`、`ui/llm_profile_cards.py`、`ui/mainwindow.py`、`ui/glossary_agent_panel.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`AGENTS.md`、`docs/技术实现/AI辅助功能_规划.md`、`docs/基础速查/AI辅助标签体系使用说明.md`、`docs/daily_log.md`
+
+---
+
 ### 行拖拽失焦不取消修复：放行 WM_KILLFOCUS + applicationStateChanged 主路径
 
 **问题/需求：** 行拖拽中触发截图等外部窗口接管前台时，拖拽组冻在原地仍响应滚轮，回主窗口点击会误落账；上游反向移植版（PR #1329）行为正确，fork 第一轮事件/信号修复实机均无效。
@@ -11,6 +21,47 @@
 **改动要点：** 真因在 `ui/framelesswindow/fw_qt6/win_frameless_window.py` 的 nativeEvent：`WM_KILLFOCUS` 分支自建仓起无条件 `return True` 吞掉 Qt 的失焦处理，`applicationStateChanged`/`ApplicationDeactivate` 从此失灵（2026-08-18 饼菜单「事件不可靠」教训实为误诊此坑）。修复=清理边框强调色后放行失焦消息；`ui/textedit_area.py::TextEditListScrollArea` 失活取消改以 `applicationStateChanged` 信号为主路径、eventFilter 分支降为兜底；`tests/test_row_drag.py` 失焦用例改信号驱动并补兜底分支直发验证（17 项全过 + verify 全绿）。上游 dev 同文件焦点分支从不 return True、无此坑，PR 无需补提交。
 
 **涉及文件：** `ui/framelesswindow/fw_qt6/win_frameless_window.py`、`ui/textedit_area.py`、`tests/test_row_drag.py`、`docs/daily_log.md`
+
+---
+
+### AI 辅助标签体系批次 A–D 实施
+
+**问题/需求：** 落实 [规划文档](../技术实现/AI辅助功能_规划.md) 的批次 A–D——把「人工做着麻烦、全交给 AI 又不靠谱」的校对工作，做成「程序自动筛选 → 人工打标定靶 → AI 定点单轮辅助 → 人工确认写回」的闭环；标签同时充当批量翻译的逐块指令载体。
+
+**改动要点：**
+
+- **批次 A（数据地基）**：新增 `utils/block_tags.py` 声明式标签注册表（5 类：OCR 置信度低 / 手写体 / 语气拟声词 / 译文迷惑 / 译文润色，分「疑点」「指示」两类，含进 prompt 的指令文案）+ 块标签读写 + 「OCR 置信度低」自动挂标；`utils/textblock.py::TextBlock` 加 `tags` 声明字段，随项目 JSON 保存，旧项目靠字段默认值兼容。两个本地 OCR 模块把原本算完即弃的分数透传出来（`modules/ocr/ocr_onnx.py` 的行 score、`modules/ocr/mit48px_ctc.py` 的逐字符 logprob 均值），取**最差行**聚合成块级分数、阈值 0.6 自动挂标，分数存进标签条目不喂给模型。画布徽标 `ui/textitem.py::_TagBadgeItem` 复刻序号徽标模式（多标签字形连排、选中变色、渲染导出前与序号徽标同一路径隐藏）。
+- **批次 B（交互入口）**：选中跟随工具栏 `ui/tag_toolbar.py::TagToolbar`（紧凑栏 + 展开面板，按块的标签状态切换「打标 / 处理」钮）+ 显隐开关 `pcfg.show_tag_toolbar` 四件套；右键与饼菜单打标命令（`ui/context_menu_config.py`）、`1`–`5` 标签快捷键。
+- **批次 C（框级 AI 动作）**：`utils/block_actions.py` 动作注册表（OCR 校正 / 重译，无工具单轮、代码预组装上下文）+ 执行器 `ui/block_action_runner.py::BlockActionRunner`（线程 + 取消）+ 就地确认卡 `ui/block_action_card.py::BlockActionCard` + 写回 `ui/textedit_commands.py::ApplyBlockTextCommand`（进全局撤销栈，疑点标签随应用消除）；处理中可取消、切页自动取消并提示。
+- **批次 D（管线与跳转）**：指示标签进批量翻译 prompt（`modules/translators/agent/prompts.py::build_user_task_message`）；`ui/mainwindow.py::jump_to_tagged_block` 提供全书 `E`/`Q` 带标签块跳转。
+
+**涉及文件：** `utils/block_tags.py`、`utils/block_actions.py`、`utils/textblock.py`、`utils/config.py`、`ui/tag_toolbar.py`、`ui/block_action_runner.py`、`ui/block_action_card.py`、`ui/textitem.py`、`ui/textedit_commands.py`、`ui/scenetext_manager.py`、`ui/canvas.py`、`ui/context_menu_config.py`、`ui/configpanel.py`、`ui/mainwindow.py`、`modules/ocr/ocr_onnx.py`、`modules/ocr/mit48px_ctc.py`、`modules/translators/base.py`、`modules/translators/trans_agent.py`、`modules/translators/agent/prompts.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`config/stylesheet.css`、`tests/test_block_tags.py`、`tests/test_block_actions.py`、`tests/test_tag_toolbar.py`、`AGENTS.md`、`docs/基础速查/AI辅助标签体系使用说明.md`
+
+---
+
+### 框级动作两轮改进：逐行切图重识别 + 数据层一致性 + 补充要求重跑
+
+**问题/需求：** 实测暴露两个痛点。① OCR 校正看着只是「把整块图重发一遍让多模态模型再识一次」，对模型而言输入结构还不如 OCR 模型自己的（轴对齐并集包围盒 vs 逐行透视矫正裁图），手写体上甚至更不可靠；② 选中**合并后**的块点重译，结果来自合并前的第一个子块，且卡片只给一个输入框，像个黑箱版单区翻译。用户诊断出 ② 的根因并拍板：不改存储机制（历史可回溯要求合并只在画布与渲染层生效），动作前把数据层按画布修一次即可。
+
+**改动要点：**
+
+- **数据一致性前置**：新增 `utils/block_actions.py::page_data_needs_sync`（块数 + 对象同一性双判据）与 `ui/mainwindow.py::_sync_block_data`，框级动作发起前若画布与 `proj.current_block_list()` 脱节就重建一次——合并块动作读到的原文从「合并前第一个子块」变为完整合并文本，兄弟类「worker 读到半更新数据」问题一并消除。
+- **OCR 校正改逐行**：`utils/block_actions.py::stitch_line_crops` 逐行取透视矫正裁图、统一缩放到目标行高后拼成一张竖排图（保留行序），配行数契约 prompt（`build_ocr_fix_line_messages` 要求「恰好 N 行、正确的行照抄、不加编号引号」）；回包用 `parse_ocr_fix_reply` 去编号、校验行数，对不上就退回整块草稿。
+- **主线程组装载荷**：`build_ocr_fix_payload` 在主线程完成切图 + base64 + messages 组装（`OcrFixPayload`），worker 只负责发请求；`ui/block_action_runner.py::BlockActionRunner` 相应改为接收预构建载荷。
+- **卡片升级**：`ui/block_action_card.py::BlockActionCard` 增加切图预览（可点开放大）、逐行可勾选核对（取消勾选保留原行）、忙碌中也显示已备好的输入预览、错误态保留编辑器允许手改后应用，以及「补充要求」重跑（`BlockActionRunner` + `modules/translators/trans_agent.py::translate_with_context` 的 `hint` 参数，经 prompt 末尾追加）。
+- **测试/文档**：`tests/test_block_actions.py` 扩到 27 例（切图、载荷、行解析、同步判据），`tests/test_tag_toolbar.py` 卡片用例扩到 11 例并修掉 `pcfg` 单例被前置测试文件污染的顺序依赖；使用说明与 `AGENTS.md` 同步。
+
+**涉及文件：** `utils/block_actions.py`、`ui/block_action_runner.py`、`ui/block_action_card.py`、`ui/mainwindow.py`、`modules/translators/trans_agent.py`、`modules/translators/agent/prompts.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_block_actions.py`、`tests/test_tag_toolbar.py`、`AGENTS.md`、`docs/技术实现/AI辅助功能_规划.md`、`docs/基础速查/AI辅助标签体系使用说明.md`
+
+---
+
+### AI 辅助标签体系结单，标注为长期维护优化类型
+
+**问题/需求：** 用户实机验收（「整体来说勉强符合我的整体预期」，后续在使用中挑痛点优化，例如通过工程化或提示词让 AI 被动/主动选择性地筛选要读取的数据——这类打磨急不得），拍板结单，并要求把本模块标注为需长期维护优化的类型。
+
+**改动要点：** 规划文档状态行改为「批次 A–D 已实施，2026-09-13 结单，本模块按需长期维护优化对待」，第 9 节未定项按结单落点逐条收敛，新增第 11 节「长期维护与优化」作为**唯一**余项清单（方向一：AI 读取数据的范围控制——被动筛选与受控只读工具面两种形态；方向二：批次 E 的批量编排与全局扫描建议队列；方向三：阈值入口与分档、多选批量打标与行级标签、交付门禁、管线消费可视化等长尾；另列「已明确不做」清单防重提）。使用说明文档状态行与「已知边界」同步标注长期维护语义并指向第 11 节。按 3 天保留惯例清理 daily_log 中 2026-09-10 及更早条目（历史在 git 中可查）。
+
+**涉及文件：** `docs/技术实现/AI辅助功能_规划.md`、`docs/基础速查/AI辅助标签体系使用说明.md`、`docs/daily_log.md`
 
 ---
 
@@ -112,120 +163,3 @@
 - **i18n/测试**：ts 清 3 孤儿（DL Module / Engine: %1 / 旧检测 note）+ 新 note 手填译文，qm 重编；`tests/test_pipeline_page_merge.py` 改断言选择行可见 + 新增镜像下拉行为测试（条目同步/文本跟随/activated 回流）。**坑**：裸 `ConfigPanel()` 的阶段面板没走 `addModulesParamWidgets`，`currentTextChanged → on_module_changed` 连接不存在，引擎切换信号链无法用 addItem 探测，故测镜像行为代替。`verify.py --full` 全绿。
 
 **涉及文件：** `ui/configpanel.py`、`ui/module_parse_widgets.py`、`ui/drawingpanel.py`、`ui/overlay_slide.py`（清注释残留）、`scripts/style_showcase.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_pipeline_page_merge.py`、`docs/技术实现/设置面板概述.md`、`docs/基础速查/设置面板排版思路.md`、`docs/基础速查/打包控件功能使用说明.md`
-
----
-
-## 2026-09-10
-
-### 设置面板管线页合并 + 运行窗口重做 + 杂项落位（三提交）
-
-**问题/需求：** 承接 2026-09-09 的调研结论：管线四页靠硬编码下标往基础布局里插杂项，四页骨架不一致（翻译页四个附加块全堆在 Parameters 标题上方、检测页复选框挤在模块下拉同一行、修复页附加项在参数下方）。用户拍板的方向：管线页**合并成一页**、页内用标签切换；模块选择交给底部栏（设置面板不再放）；常用管线开关搬进「运行」窗口（对齐上游「启用模块」网格）；搬剩的杂项并入 General 的 App 页。
-
-**改动要点：**
-
-- **管线页合并（`52d2d40`）**：`ui/configpanel.py::_build_pipeline_page` 用 `QTabBar` + `QStackedWidget` 承载四阶段，Modules 组导航 6 项 → 3 项（Module Actions / Pipeline / LLM Profile），全站 12 页 → 10 页。四个阶段面板**对象与信号链原样保留**（底部栏、`module_manager`、画布修复工具面板都持有引用），只经 `ui/module_parse_widgets.py::set_module_selector_visible(False)` 隐藏模块选择行、改为只读引擎名（`engine_label`）。`module_combobox` 只隐藏不删除——它仍是真值源。合并页整体不套 `_wrap_page`（否则标签栏随内容滚走），各标签内容单独 `_wrap_page` 并去掉左右留白。`focusOnDetect/OCR/Inpaint/Translator` 改为「选中 Pipeline + 切对应标签」，底部栏四个齿轮路径不变。删掉修复页 `showEvent`/`hideEvent` 往返搬运模块下拉的 hack；画布侧 `ui/drawingpanel.py::InpaintPanel` / `RectPanel` 改为在 `showEvent` 里显式点亮借来的下拉（不做显式隐藏——切工具时新面板的 show 可能先于旧面板的 hide）。
-- **运行窗口重做（`74b58b1`）**：内联在 `ui/mainwindow.py::run_imgtrans` 的约 400 行对话框抽成 `ui/run_pipeline_dialog.py`，按上游同名文件的形态重做——上半「启用模块」网格（每阶段 = 图标开关 + 模块下拉），下半各阶段折叠选项区（`ExpandingToolButton`）。阶段强调色取主题的 `@accentDetect`/`@accentOCR`/`@accentInpaint`/`@accentTranslate`（与 LLM Profile 徽章同一套），不移植上游硬编码调色板。模块下拉写回底部栏选择器（唯一真值源），不新增 ModuleManager 接口。搬入的选项：检测＝Keep Existing Lines、修复＝Skip simple cases、翻译＝源/目标语言 + 单块翻译模式 + LLM 上下文/术语表整块。保留 Render Only 批量渲染、页码 RangeSlider + All Pages、术语表状态指示、Run without update textstyle、清空二次确认。**刻意不移植**：无边框外壳与 `DialogCloseButton`、每阶段 hover 齿轮（运行窗口是模态的，无法在其上拉起设置浮层；底部栏齿轮已承担该入口）、上游 `page_range_progress`。资源补 4 个图标 + `RunPipeline*` QSS。`InpainterBase.check_need_inpaint` 初值改由 `module_manager` 从 pcfg 直接推入；翻译器异步加载完成后经 `_sync_run_dialog_translator` 刷新语言下拉。
-- **杂项落位（本提交）**：从管线页搬出的两项直接并入 General 的 **App 页**，不单设暂存页——`Misc` 这种名字会自己招来下一条无家可归的选项。App 页成为 Updates / External Editor / Workbench / Export Config / Import Config 五节，General 组 7 → 6 页、全站 10 → 9 页。Photoshop 路径（从修复页搬来，`ConfigPanel.ps_path_edit`）归 App 的 External Editor 节，工作台确认开关（从翻译页搬来，`ConfigPanel.confirm_costly_checker`）归 Workbench 节；`ui/drawingpanel.py` 的「未找到 Photoshop」提示同步改指 `Settings → App → Photoshop Path`。导航首项 `Module Actions` → `Models`（与该页自己的 `PanelGroupBox` 标题一致）。新增 `tests/test_settings_app_page.py`。
-- **i18n**：新增 `RunPipelineDialog` 上下文 33 条（译文复用既有条目）、ConfigPanel/DrawingPanel 补 11 条，清掉移出产生的 41 条孤儿，qm 重编。
-- **测试**：新增 `tests/test_pipeline_page_merge.py`（8 例）、`tests/test_run_pipeline_dialog.py`（13 例）、`tests/test_settings_app_page.py`（6 例）；冒烟测试补 `RunPipelineDialog` 实例化。`verify.py --full` 全绿。
-
-**涉及文件：** `ui/configpanel.py`、`ui/module_parse_widgets.py`、`ui/run_pipeline_dialog.py`（新）、`ui/drawingpanel.py`、`ui/mainwindow.py`、`ui/module_manager.py`、`config/stylesheet.css`、`icons/text_disabled.svg` 等 4 个图标（新）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_pipeline_page_merge.py`（新）、`tests/test_run_pipeline_dialog.py`（新）、`tests/test_settings_app_page.py`（新）、`tests/test_startup_imports.py`、`AGENTS.md`、`docs/技术实现/设置面板概述.md`、`docs/基础速查/设置面板排版思路.md`
-
-### 设置面板普查整理 + 运行窗口字号对齐（三提交）
-
-**问题/需求：** 用户实机验收三提交后反馈「运行界面的拓展管线功能项的**字号**需要对上游」，并要求在继续下一步前先改掉；随后要求对设置面板做**一次全面普查**，据此判断如何整理与编排。
-
-**改动要点：**
-
-- **运行窗口字号对齐**：折叠区内的标签与折叠头本来就在 QSS 里钉了上游的 12px，但区内的下拉落到了全局 `QComboBox` 的 14px，比同一行标签大一圈；复选框与数值框则未显式钉住，靠应用字体 9pt 凑巧对齐。补一组 `QWidget#RunPipelineSettingsSection` 规则（下拉 12px 且收到 20px 高、复选框 12px + 12px 指示器、数值框 12px），对齐上游同名规则。**顺带修一个离屏渲染才暴露的真 bug**：`ui/run_pipeline_dialog.py::_build_translate_options` 把「Source」标签 `addWidget` 到了整页布局而不是它自己那一行，实际渲染成 Translation 折叠区下方一行孤立的 Source；已改回 `lang_layout`，并补回归测试（断言页布局里没有裸 `QLabel`、Source 标签与下拉同行）。
-- **普查结论**（用户实机验收第一批后要求对设置面板做一次全面普查）：页面骨架本身是对的，问题集中在——Typesetting/App 有三处手写 `setContentsMargins` 没走 `ConfigFormRow`；另有三个死/错项（见后两条提交）。**明确不搬**：设置在面板外的大批持久项（画笔粗细/裁剪比例/搜索选项/暗色模式等）就地调整更自然，收进设置页只会把一次点击变成「开面板→找页→改→关」，违背本分支「交互路径越短」。设置面板只收「配置一次、之后不常改」的项——这条是持久取向。
-- **子行排版归一 + 清死项**：子选项缩进统一到一个写法（`ConfigFormRow("", 控件)` 套 24px 缩进 wrapper，Interface 页既有做法），替换 Typesetting 与 App 页各一处手写的 `QHBoxLayout` + 写死 158/134；App 页 Developer channel 行删掉与常显 `⚠` 行逐字重复的 `?` 备注；Typesetting 的 `Quick insert characters` 独立成「Quick Symbol Palette」节。清项：删零引用字段 `pcfg.expand_font_format_panel`（`nested_dataclass` 忽略多余键，旧 config.json 不受影响）、修两处把工作台确认开关指向已不存在的「翻译器页」的注释、补上术语面板「不再提示」后回写设置页复选框的同步（`ConfigPanel.setupConfig` 只在启动跑一次，不回写会停在旧值）。
-- **审计登记表新增 `dormant_symbols`**：普查发现 `ui/context_menu_config.py` 的右键菜单自定义对话框全仓无实例化（用户拍板本轮不接线也不删）。原有 `suspended` 是**文件级**契约，登记不了活文件里的一个符号，于是新增第三类（键 `路径::符号`）：文件里必须仍定义该符号，且定义文件之外全仓不得引用——一旦有人接线，检查失败并要求撤销登记，与 `deprecated` 的「残留引用必须清零」互为镜像。
-
-**涉及文件：** `ui/run_pipeline_dialog.py`、`ui/configpanel.py`、`ui/drawingpanel.py`、`ui/glossary_agent_panel.py`、`ui/module_parse_widgets.py`、`utils/config.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`scripts/check_audit.py`、`scripts/audit_registry.json`、`.agents/skills/audit-docs/SKILL.md`、`tests/test_run_pipeline_dialog.py`、`tests/test_settings_app_page.py`（新）、`docs/技术实现/设置面板概述.md`、`docs/基础速查/设置面板排版思路.md`
-
-### 部署可用性修复（用户报「源码包双击打不开」）+ 依赖声明理清
-
-**问题/需求：** 有用户按说明下载源码包 + CPU 依赖包、解压后**双击终端打不开**（窗口一闪而过）。该用户能正常启动上游，基本排除微软运行库缺失。开发环境数月未验证过可部署性，遂做一次系统排查——查出四个独立缺陷，其中三个会直接导致启动失败。
-
-**改动要点：**
-
-- **根因一：`.bat` 是 LF 行尾。** 本仓库自 2026-05-06 分叉（`6649de10`）后未再合并上游，而 `.gitattributes` 是上游 2026-07-16 才加入的，本分支谱系里从来没有该文件。缺了它，Windows 上 git 把 `launch.bat` 按 LF 存进 blob，GitHub 源码包（`git archive`）解出来也是 LF；cmd.exe 读 LF-only 批处理会解析错位后中止，且来不及执行到 `pause`，窗口一闪即关。恢复上游同款 `.gitattributes`（blob 与 `upstream-tmp/dev` 逐字节一致）：`* text=auto eol=lf`，`.bat`/`.cmd` 强制 `eol=crlf`。
-- **根因二：安装路径含括号。** 路径里有 `(` `)` 时，`launch.bat` 的 `echo ... %PYTHON%` 在括号块内被 cmd 解析期截断（`%VAR%` 在整块解析时展开，`)` 提前闭合块）→ 退出码 255 且零输出。三处改用延迟展开 `!PYTHON!`。
-- **根因三：更新器会把 `.bat` 改回 LF。** `raw.githubusercontent.com` 返回的是仓储 blob（`eol=crlf` 只作用于 checkout/archive 输出，不影响 blob 存储），manifest 增量更新下载 `launch.bat` 后按原样写入即变回 LF，把本来能用的启动器静默改坏——即使源码包修好了，装完第一次更新又会复发。`scripts/check_update.py` 新增 `_as_crlf()`，写盘前对 `.bat`/`.cmd` 强制 CRLF；新增 `tests/test_update_eol.py` 锁死该契约（含幂等性与后缀作用域，已验证修复前该用例会失败）。
-- **根因四：`download_models.bat` 存量损坏。** if 括号块里写了裸 `(` `)` 且不结行，第 24 行即 parse error 退出，任何模型都下载不了（与本次报障无关，但同属「照说明操作走不通」）。5 处转义为 `^(` `^)`。
-- **行尾口径统一：** 索引里残留两条 CRLF blob（`modules/textdetector/panel_finder.py`、`utils/merger.py`，`.gitattributes` 缺失期的历史遗留），`git add --renormalize` 一并规范化为 LF，使全仓文本文件口径一致。这两个文件在本提交里是**纯行尾改动**，无内容变化。
-- **依赖声明理清：** `ultralytics` 从 `requirements.txt` 移除（它会连带拉 torch + matplotlib），改为在 `modules/textdetector/detector_ysg.py` 按模块声明两处——`dependencies` 供懒加载 AST 扫描（模块管理对话框据此提示安装），`requires_packages` 供 `modules/base.py::BaseModule.ensure_dependencies` 在 `load_model` 与 `launch.py` 的模型文件回退路径读取。用户拍板「用源码的要么有一键包要么自己知道需要什么，需要给自由度」，故不塞进必修表。`pyproject.toml` 补 `fonttools`（原先是靠 ultralytics 传递引入，去掉后会失去来源）。删除 `scripts/build_portable.py`（产出的 `python_embeded/` + `run.bat` 与实际分发的 `ballontrans_pylibs_win/` + `launch.bat` 布局早已不符、拷贝清单漏 `icons/` 与 `scripts/`，且整目录拷贝 `config/` 会把含 API 密钥的 `config/config.json` 打进包里）与 `config/requirements_core.txt`（唯一生成方就是被删的脚本）。两个删除均已登记 `scripts/audit_registry.json` 的 `deprecated`。
-- **CPU 依赖包补齐：** 分发的 `ballontrans_pylibs_win` 缺 `numba`/`llvmlite`（`ui/text_engine/effects/paint_numba.py`、`ui/text_engine/transforms/grid_numba.py` 的加速路径，缺失时退回纯 NumPy），已补进依赖包目录，`docs/基础速查/依赖库说明.md` 的手动搭建步骤相应加第四批。
-
-**涉及文件：** `.gitattributes`（新增，内容同上游）、`launch.bat`、`scripts/download_models.bat`、`scripts/check_update.py`、`tests/test_update_eol.py`（新）、`requirements.txt`、`pyproject.toml`、`modules/textdetector/detector_ysg.py`、`scripts/build_portable.py`（删）、`config/requirements_core.txt`（删）、`scripts/check_docs.py`、`utils/updater.py`、`scripts/audit_registry.json`、`docs/基础速查/依赖库说明.md`、`docs/项目概述.md`、`scripts/README.md`、`modules/textdetector/panel_finder.py`、`utils/merger.py`（后两者仅行尾）
-
----
-
-## 2026-09-09
-
-### 设置面板 LLM Profile 页改卡片式（A 方案·精简版）
-
-**问题/需求：** 用户反馈设置面板开始堆屎山：LLM 页加入在线修复后比上游麻烦、管线页杂项排布乱。调研发现上游 1.5.14 走的是相反方向——管线合并成一页、LLM Profile 独立成卡片列表页（能力徽章 + 折叠详情 + 声明式分节），而 fork 是「下拉框 + 一张常显大表单」，所以每加一种能力页面必然变长。本批只做 LLM 页，形态对齐上游。
-
-**改动要点：**
-
-- **新增 `ui/llm_profile_cards.py`**：`LLMProfileListWidget`（工具栏 + 卡片列表）/ `LLMProfileCardWidget`（摘要 + 折叠详情）/ `LLMProfileDetailsWidget`（通用参数 + 三个能力分节，每节一个 `ParamWidget`）/ `LLMProfileBadge`（点击切换 `vision_support` / `image_support`）。参数定义走 `PROFILE_COMMON_PARAM_DEFS` / `PROFILE_SECTION_PARAM_DEFS`（镜像上游同名常量），写回类型转换走 `PROFILE_FIELD_TYPES`。
-- **数据层不动**：`utils/profile_manager.py` 退为纯数据/服务层，保留 dict 模型、`model_profiles` JSON 字符串、name 作主键与全部消费者；不移植上游的 `LLMProfile` dataclass / SecretStore / id 主键。保存时机保持「增删 / 恢复内置 / Fetch 成功 / 离开页面才落盘」，避免敲键即触发 `module_manager` 重建参数面板。
-- **删死代码**：`ProfileManagerDialog`（约 629 行，全仓无实例化）、`ProfileManagerWidget`（被新页取代）、`save_profile` / `delete_profile`（无调用者）与随之失效的导入；网络辅助改名公开（`NetWorker` / `probe_connection` / `probe_model_list`）供新 UI 复用。
-- **接线**：`ui/configpanel.py` 换用 `LLMProfileListWidget`，注入 `_run_modal_dialog`（顺带修掉 profile 子对话框打开时 scrim 可点关整面板的旧问题）；`focusOnLLMProfile(name)` 现在会展开并滚动到对应卡片。
-- **资源**：从上游拷 `icons/text.svg`、`eye.svg`、`image.svg`、`llm_key_ok.svg`、`llm_key_missing.svg`（上游禁用态与激活态形状相同，故只取 5 个，颜色改由 `render_svg_pixmap(override_fill=…)` 按主题与模态强调色着色）；`config/stylesheet.css` 追加 `LLMProfile*` 规则。
-- **i18n**：删 `ProfileManagerDialog`（66 条）与 `ProfileManagerWidget`（69 条）两个 context，新增 `LLMProfileCardWidget`（58 条）/ `LLMProfileListWidget`（7 条）；中文译文复用 git 历史里旧 context 的既有术语并补齐余项，qm 重编。
-- **测试**：`tests/test_startup_imports.py` 改为实例化 `LLMProfileListWidget`；新增 `tests/test_llm_profile_cards.py`（9 例：卡片数 / 初始折叠 / 徽章门控分节 / 字段写回与类型转换 / 内置禁删 / `hideEvent` 发信号 / 新增唯一名；写盘被 patch 掉以免污染真实 `config.json`）。
-
-**涉及文件：** `ui/llm_profile_cards.py`（新）、`utils/profile_manager.py`、`ui/configpanel.py`、`config/stylesheet.css`、`icons/text.svg` 等 5 个图标（新）、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_startup_imports.py`、`tests/test_llm_profile_cards.py`（新）、`AGENTS.md`、`docs/技术实现/设置面板概述.md`、`docs/基础速查/设置面板排版思路.md`
-
-### LLM 页模型切换对齐上游 + 上游 v1.5.13→v1.5.15 底层修复移植
-
-**问题/需求：** 用户审查卡片页后反馈「单供应商切模型体验不好，上游做得到位」。调研上游 v1.5.15 的机制：每个 profile 持久化一份模型清单（`PROVIDER_DEFAULTS` 预置供应商模型表），摘要行常驻模型下拉 + 增删按钮，底部模块栏还能一键切模型；上游**没有** Fetch Models。用户拍板：吸收上游的清单 + 下拉，保留 fork 的 Fetch Models 并升级为多选添加，**不维护固化的模型表**（清单只由抓取或手填产生）。同批按「底层性能/实现优先服从上游」的原则，把 v1.5.13→v1.5.15 的底层修复移植过来。
-
-**改动要点：**
-
-- **模型清单（无内置表）**：profile 增 `model_options` / `image_model_options` 两个字段（`utils/profile_manager.py::PROFILE_FIELDS`、`SAMPLE_PROFILES` 全空）；`utils/profile_manager.py::normalize_model_options` 在 `load_profiles` 时规整清单并把当前值补进列表，`utils/profile_manager.py::remember_model_option` 负责去重追加。存储格式与消费者（仍读 `profile["model"]`）不变。
-- **摘要行模型下拉**：新增 `ui/llm_profile_cards.py::_ModelSelector`（`ConfigComboBox` 拉伸模式 + `+` 手填 / `−` 删当前），文本模型常显、图像模型随 `image_support` 显隐；`model` / `image_model` 从详情参数里移除（不再有双入口），`_rebuild_details` 随之删除。切模型 / 增删是离散操作，立即落盘（`ui/module_manager.py::_on_profiles_changed` 只刷新类级选项，代价小）。
-- **Fetch Models 多选**：`utils/profile_manager.py::FilterableListDialog` 增 `multi_select`（`ExtendedSelection` + `selected_items`）；`ui/llm_profile_cards.py::_pick_model` 把选中项全部入清单、首个设为当前模型并落盘——网络只用于刷新清单，之后切模型完全离线。
-- **控件库**：`ui/custom_widget/combobox.py::ConfigComboBox` 增 `stretch` 参数（不做宽度分级锁定，交给布局横向拉伸）；`config/stylesheet.css` 补 `LLMProfileModelRow` / `LLMProfileFieldLabel` / `LLMProfileModelAddButton` / `LLMProfileModelRemoveButton` 规则。
-- **上游底层修复移植**：①效果栈瓦片——`ui/text_engine/rendering/raster.py::plan_effect_raster` 补取整余量（`-1`）与随缩放分层的 `tile_tier`，`ui/text_engine/effects/renderer.py::_draw_tiled_effects` 整块 staging 超光栅策略时不再抛错丢弃，改为逐瓦片裁剪直接绘制（大窗口 / 大描边半径下效果不再整块消失，上游 9b34135 + e88c655）；②LaMa 预处理改「补边对齐」而非重采样（`modules/inpaint/base.py`，上游 b36210b，保住网点与遮罩边缘）；③16-bit 灰度 PNG 读入取高字节（`utils/io_utils.py::imread`，上游 afad9f5）；④`ParamLineEditor` 的 `QDoubleValidator` 固定 C locale（`ui/module_parse_widgets.py`，上游 73741cf）；⑤Ctrl+C/V/X 改 `QKeySequence.StandardKey` 匹配（`ui/canvas.py`、`ui/text_engine/item.py`，上游 a86ebb1）；⑥水平排版单个空格软换行不再跳动（`ui/text_engine/horizontal_layout.py::_trailing_space_layout`，上游 595f6fd）。
-- **画笔粗细**：`ui/custom_widget/slider.py::Slider` 抽出 `_value_to_position_ratio` / `_position_ratio_to_value` 两个映射钩子（默认线性，groove 绘制与命中测试都走它）；`ui/drawingpanel.py::_BrushThicknessSlider` 重载为对数映射（小笔头不再挤在左端，数值仍是精确像素），`ui/drawingpanel.py::_create_thickness_control` 给两个画笔面板配 `NoArrowsSpinBox` 精确输入（双向同步，滑块程序化 setValue 也同步输入框）。
-- **未移植**：合成粗体（用户不感兴趣，此前已决定删除该特性）、上游 LLM 上下文/记忆/全页 OCR/PS Bridge/HayaiOCR/多语言 ts（依赖上游 `LLMProfile` 数据模型或方向相反）。
-- **测试**：`tests/test_llm_profile_cards.py` 扩到 18 例（清单只有当前值 / 下拉写回 / 手填追加 / 删当前选邻居 / Fetch 多选全入列 / 图像行随徽章显隐 / 数据层归一与对话框多选）；新增 `tests/test_image_io.py`（16-bit PNG）、`tests/test_effect_raster_policy.py`（瓦片余量 + tier 分层）、`tests/test_brush_thickness.py`（对数映射 + 精确输入框）。verify.py --full 全绿。
-
-**涉及文件：** `ui/llm_profile_cards.py`、`utils/profile_manager.py`、`ui/custom_widget/combobox.py`、`ui/custom_widget/slider.py`、`ui/drawingpanel.py`、`ui/text_engine/effects/renderer.py`、`ui/text_engine/rendering/raster.py`、`ui/text_engine/horizontal_layout.py`、`ui/text_engine/item.py`、`ui/canvas.py`、`ui/module_parse_widgets.py`、`modules/inpaint/base.py`、`utils/io_utils.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_llm_profile_cards.py`、`tests/test_image_io.py`（新）、`tests/test_effect_raster_policy.py`（新）、`tests/test_brush_thickness.py`（新）、`docs/技术实现/设置面板概述.md`、`docs/基础速查/设置面板排版思路.md`
-
-### LLM 页与修复面板实机反馈五修
-
-**问题/需求：** 上一批落地后实机验收提出五处：①摘要行模型下拉横向拉满整行，看着空且怪；②主机地址 / API Key 埋在杂项参数里不够显眼，图像修复端口也应并到一处；③画笔粗细的精确输入框挤占了滑条，滑条太短；④AI 修图页的比例提示被横向裁掉，且长句不如表格；⑤生图模型需要可手动输入（中转站可用性检查常误报）。
-
-**改动要点：**
-
-- **模型下拉按内容自适应**：`ui/llm_profile_cards.py::_ModelSelector` 去掉 `stretch`，改 `ConfigComboBox(fix_size=False)` + `AdjustToContents`（受分级上限兜底），`+` / `−` 紧跟其右并留尾部空白。
-- **连接信息块**：新增 `ui/llm_profile_cards.py::_ConnectionBlock`（`CONNECTION_PARAM_KEYS` 定序 `api_host` / `api_key` / `image_base_url`），标签在上 + 整行加高输入框（`LINEEDIT_FIXHEIGHT`），容器带强调左边条（`LLMProfileConnectionBlock` QSS）；`image_base_url` 随 `image_support` 显隐（`set_section_visible("image", …)` 同步）。这三个字段从 `PROFILE_COMMON_PARAM_DEFS` / 图像分节移出，详情页改为「连接信息 + 生成参数 + 三能力分节」。
-- **画笔粗细滑条恢复原长**：`ui/drawingpanel.py::_create_thickness_control` 改为 `(slider, spinbox, row_layout)`，数值框（宽 56）放进标签列右端、标签可省略（`_ElidedToolNameLabel`），滑条独占其余宽度——实测 86px → 166px（与加精确输入前一致）。
-- **AI 修图页比例支持表 + 裁剪修复**：面板最小宽从 388px 降到 253px（可用约 326px）。三处根因：`CropControls` 把「裁剪模式」复选框和比例下拉挤在同一行（改为独立一行）；`QComboBox` 默认把**最长条目宽度**算进 `minimumSizeHint`，长 profile / 模型名把面板顶宽——新增 `ui/drawingpanel.py::_shrinkable_combo`（`AdjustToMinimumContentsLengthWithIcon` + `minimumContentsLength(0)`）处理面板内所有下拉；整句比例说明换成 `InpaintAspectTable` 紧凑表格（模型 / 支持比例两列 + 其它模型脚注），比例单元格 `setWordWrap(True)` 窄栏换行而非撑宽。
-- **生图模型栏**：`ui/drawingpanel.py::AIConfigPanel` 在 Profile 下新增可编辑下拉（清单取所选 profile 的 `image_model_options`，`activated` / `editingFinished` 才提交），`_commit_image_model` 写回该 profile 的 `image_model` 并记进清单（`save_all_profiles`）。跨页写同一 profile，故 `ui/llm_profile_cards.py::LLMProfileListWidget.showEvent` 在 `pcfg.module.model_profiles` 与上次落盘值不一致时重载，避免旧副本在 `hideEvent` 覆盖。
-- **i18n**：新增 `Connection` / `Generation` / `Model` / `Ratios` / `Other models follow the Nano Banana set.` / `Image Model` / `Model name` 七条（中文：连接信息 / 生成参数 / 模型 / 支持比例 / 其它模型按 Nano Banana 的比例集处理。/ 生图模型 / 模型名称），删掉旧整句比例说明的孤儿条目，qm 重编。
-- **测试**：`tests/test_llm_profile_cards.py` 扩到 23 例（模型下拉非拉伸且有上限 / 连接块承载 host+key / 连接块写回 / 图像端口随徽章显隐 / `showEvent` 重载外部改动）；`tests/test_brush_thickness.py` 补「数值框在标签列内、滑条独占其余宽度」断言；新增 `tests/test_ai_inpaint_panel.py`（6 例：模型清单 / 手输与点选写回 profile / 比例表内容 / 比例单元格换行 / 面板最小宽 ≤ 326）。
-
-**涉及文件：** `ui/llm_profile_cards.py`、`ui/drawingpanel.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_llm_profile_cards.py`、`tests/test_brush_thickness.py`、`tests/test_ai_inpaint_panel.py`（新）、`docs/技术实现/设置面板概述.md`、`docs/基础速查/设置面板排版思路.md`
-
-### 修复面板实机反馈收尾：数值框去单位 + 按钮内边距 + 对齐普查
-
-**问题/需求：** 五修验收后用户反馈三点：①粗细数值框里的 `20 px` 被裁成 `20 p`，干脆去掉单位；②「修复 / 清除遮罩」按钮字紧贴边框；③顺带看看还有没有边距不合适或该对齐没对齐的地方。
-
-**改动要点：**
-
-- **数值框去单位**：`ui/drawingpanel.py::_create_thickness_control` 去掉 `setSuffix(" px")`（宽度 56 不变，够显示 4 位数）。
-- **按钮内边距**：stylesheet 新增 `DrawingPanel QPushButton { padding: 0 12px; }`——全局 `QPushButton` 无内边距，中文两字按钮的 sizeHint 就等于文字宽（实测 30px 宽装 28px 文字）。
-- **对齐普查**（实测离屏渲染 + 真实字号/译文逐控件量 x）：①内嵌体（画笔体 / 框选体 / `CropControls`）的布局 margins 归零，原来默认 9px 让这一组比上方字段整体右移；②粗细滑条行不再自设 `spacing(10)`，沿用父布局 14px，滑条起点与同栏下拉框同列（原来差 4px）；③`_shrinkable_combo` 统一锁高 `CONFIG_COMBOBOX_HEIGHT`（默认 29 vs 26 参差），修复工具下拉框（属设置页控件）在 `DrawingPanel` 构造时补锁一次；④框选页 `box_layout` 行距 8 → 14，与画笔 / AI 页同节奏。
-- **测试**：`tests/test_brush_thickness.py` 断言改为「无后缀」；`tests/test_ai_inpaint_panel.py` 补 2 例（滑条与下拉同列 / 面板按钮有内边距，含 `DrawingPanel` 类名一致性守卫）。
-
-**涉及文件：** `ui/drawingpanel.py`、`config/stylesheet.css`、`tests/test_brush_thickness.py`、`tests/test_ai_inpaint_panel.py`、`docs/基础速查/设置面板排版思路.md`
-
----
-
-

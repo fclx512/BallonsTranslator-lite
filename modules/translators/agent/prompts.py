@@ -224,6 +224,8 @@ def build_user_task_message(
     page_label_text: str,
     history_snippet: str,
     glossary_entries: Sequence[GlossaryEntry] = (),
+    tag_instructions: Optional[Sequence] = None,
+    hint: str = "",
 ) -> str:
     parts = []
     if page_label_text:
@@ -232,12 +234,25 @@ def build_user_task_message(
         "Translate the following text blocks and deliver them via "
         "submit_translations, covering every id:"
     )
-    parts.append(
-        json.dumps(
-            [{"id": i + 1, "text": text} for i, text in enumerate(src_list)],
-            ensure_ascii=False,
+    entries = []
+    for i, text in enumerate(src_list):
+        entry = {"id": i + 1, "text": text}
+        # 逐块指示标签指令（批次 D）：该块的持久翻译指令（如拟声词按
+        # 发声直译），None/空表不写字段保持 payload 干净
+        if tag_instructions is not None and i < len(tag_instructions):
+            inst = tag_instructions[i]
+            if inst:
+                entry["instructions"] = list(inst)
+        entries.append(entry)
+    parts.append(json.dumps(entries, ensure_ascii=False))
+    if tag_instructions is not None and any(
+        inst for inst in tag_instructions if inst
+    ):
+        parts.append(
+            "Blocks with an 'instructions' field carry persistent "
+            "per-block translation directives (from user tags): follow "
+            "them for those blocks."
         )
-    )
     if glossary_entries:
         parts.append(
             "Glossary constraints (must follow):\n"
@@ -245,4 +260,11 @@ def build_user_task_message(
         )
     if history_snippet:
         parts.append(history_snippet)
+    # 用户补充要求（框级确认卡片的确定性输入）：放最后，靠近生成位置
+    hint = (hint or "").strip()
+    if hint:
+        parts.append(
+            "Additional requirement from the user for this task (follow it; "
+            "it describes tone, wording or intent):\n" + hint
+        )
     return "\n\n".join(parts)

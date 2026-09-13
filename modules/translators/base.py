@@ -8,6 +8,7 @@ from utils.io_utils import text_is_empty
 from utils.logger import logger as LOGGER
 from utils.registries import TRANSLATORS
 from utils.textblock import TextBlock
+from utils.block_tags import directive_instructions
 
 from ..base import BaseModule
 from .exceptions import (
@@ -215,6 +216,15 @@ class BaseTranslator(BaseModule):
             )
 
         if len(text_list) > 0:
+            # 指示标签 → 逐块翻译指令（批次 D）：仅声明支持的翻译器接收
+            # （AgentTranslator），其余翻译器签名不含该参数不能盲传
+            if getattr(self, "supports_tag_instructions", False):
+                instructions = [
+                    directive_instructions(textblk_lst[ii])
+                    for ii in non_empty_ids
+                ]
+                if any(instructions):
+                    kwargs["tag_instructions"] = instructions
             _translations = self.translate(text_list, **kwargs)
             for ii, idx in enumerate(non_empty_ids):
                 translations[idx] = _translations[ii]

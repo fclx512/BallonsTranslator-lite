@@ -1582,13 +1582,17 @@ class ModuleManager(QObject):
             cfg_module.ocr_params, GET_VALID_OCR(), OCR.get
         )
         # Populate vision profile options for LLM OCR
-        from utils.profile_manager import get_vision_profile_names
+        from utils.profile_manager import (
+            get_vision_profile_names,
+            heal_profile_selector,
+        )
 
         for mod_key in ("llm_ocr",):
             if mod_key in ocr_params and isinstance(ocr_params[mod_key], dict):
                 profile_cfg = ocr_params[mod_key].get("profile")
                 if isinstance(profile_cfg, dict):
                     profile_cfg["options"] = get_vision_profile_names()
+                    heal_profile_selector(profile_cfg, vision=True)
         ocr_panel.addModulesParamWidgets(ocr_params, _build_dep_notes(OCR))
         ocr_panel.paramwidget_edited.connect(self.on_ocrparam_edited)
         ocr_panel.ocr_changed.connect(self.setOCR)
@@ -2091,16 +2095,15 @@ class ModuleManager(QObject):
             get_image_profile_names,
             get_profile_names,
             get_vision_profile_names,
+            heal_profile_selector,
         )
 
         ocr_cls = _OCR.module_dict.get("llm_ocr")
         if ocr_cls and hasattr(ocr_cls, "params"):
             profile_cfg = ocr_cls.params.get("profile")
             if isinstance(profile_cfg, dict):
-                vision_names = get_vision_profile_names()
-                profile_cfg["options"] = vision_names
-                if profile_cfg.get("value", "") not in vision_names:
-                    profile_cfg["value"] = vision_names[0] if vision_names else ""
+                profile_cfg["options"] = get_vision_profile_names()
+                heal_profile_selector(profile_cfg, vision=True)
         # Refresh translator active_profile options (class-level params)
         from modules import TRANSLATORS as _TRANS
 
@@ -2108,19 +2111,15 @@ class ModuleManager(QObject):
         if trans_cls and hasattr(trans_cls, "params"):
             active_cfg = trans_cls.params.get("active_profile")
             if isinstance(active_cfg, dict):
-                all_names = get_profile_names()
-                active_cfg["options"] = all_names
-                if active_cfg.get("value", "") not in all_names:
-                    active_cfg["value"] = all_names[0] if all_names else ""
+                active_cfg["options"] = get_profile_names()
+                heal_profile_selector(active_cfg)
         # Refresh inpaint LLM profile options (class-level params)
         inp_cls = _INP.module_dict.get("LLMInpaint")
         if inp_cls and hasattr(inp_cls, "params"):
             image_cfg = inp_cls.params.get("profile")
             if isinstance(image_cfg, dict):
-                image_names = get_image_profile_names()
-                image_cfg["options"] = image_names
-                if image_cfg.get("value", "") not in image_names:
-                    image_cfg["value"] = image_names[0] if image_names else ""
+                image_cfg["options"] = get_image_profile_names()
+                heal_profile_selector(image_cfg, image=True)
         # Invalidate cached param widgets so they get rebuilt with new options
         for panel, module_key in [
             (self.config_panel.ocr_config_panel, "llm_ocr"),

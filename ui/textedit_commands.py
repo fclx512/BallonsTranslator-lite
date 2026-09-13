@@ -1265,3 +1265,80 @@ def _find_blk_item_in(scene_manager, block_idx: int):
     except Exception:
         pass
     return None
+
+
+class ApplyBlockTextCommand(QUndoCommand):
+    """框级 AI 动作「应用」写回（批次 C）：快照命令制，与
+    RunBlkTransCommand 同构（item 侧 HTML 全保真 + 面板侧纯文本重放）。
+
+    field = "translation"：写译文（重译动作）；
+    field = "source"：写原文（疑难 OCR 校正动作），同步 e_source 与 blk.text。
+    """
+
+    def __init__(
+        self,
+        blkitem: TextBlkItem,
+        pairw,
+        field: str,
+        new_text: str,
+        parent=None,
+    ):
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Apply AI Proposal"),
+            parent,
+        )
+        self.blkitem = blkitem
+        self.pairw = pairw
+        self.field = field
+        blk = blkitem.blk
+
+        if field == "translation":
+            self.before_item_html = blkitem.toHtml()
+            self.before_panel = pairw.e_trans.toPlainText()
+            with replay_guard(blkitem, pairw.e_trans):
+                pairw.e_trans.setPlainTextAndKeepUndoStack(new_text)
+                blkitem.setPlainTextAndKeepUndoStack(new_text)
+            blk.translation = new_text
+            blk.rich_text = ""
+            self.after_item_html = blkitem.toHtml()
+            self.after_panel = new_text
+        else:  # source
+            self.before_panel = pairw.e_source.toPlainText()
+            with replay_guard(pairw.e_source):
+                pairw.e_source.setPlainTextAndKeepUndoStack(new_text)
+            blk.text = [new_text]
+            self.after_panel = new_text
+
+    def redo(self) -> None:
+        if self.field == "translation":
+            with replay_guard(self.blkitem, self.pairw.e_trans):
+                self.pairw.e_trans.setPlainTextAndKeepUndoStack(
+                    self.after_panel
+                )
+                self.blkitem.setPlainTextAndKeepUndoStack(self.after_item_html)
+            self.blkitem.blk.translation = self.after_panel
+            self.blkitem.blk.rich_text = ""
+        else:
+            with replay_guard(self.pairw.e_source):
+                self.pairw.e_source.setPlainTextAndKeepUndoStack(
+                    self.after_panel
+                )
+            self.blkitem.blk.text = [self.after_panel]
+        self.blkitem.refresh_tag_badge()
+
+    def undo(self) -> None:
+        if self.field == "translation":
+            with replay_guard(self.blkitem, self.pairw.e_trans):
+                self.pairw.e_trans.setPlainTextAndKeepUndoStack(
+                    self.before_panel
+                )
+                self.blkitem.setPlainTextAndKeepUndoStack(self.before_item_html)
+            self.blkitem.blk.translation = self.before_panel
+            self.blkitem.blk.rich_text = ""
+        else:
+            with replay_guard(self.pairw.e_source):
+                self.pairw.e_source.setPlainTextAndKeepUndoStack(
+                    self.before_panel
+                )
+            self.blkitem.blk.text = [self.before_panel]
+        self.blkitem.refresh_tag_badge()

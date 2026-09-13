@@ -141,12 +141,16 @@ class LLM_API_Translator(BaseTranslator):
         self._profiles_data = load_profiles()
 
     def _refresh_active_profile_options(self):
-        from utils.profile_manager import get_profile_names
+        from utils.profile_manager import get_profile_names, heal_profile_selector
 
         names = get_profile_names()
-        self.params["active_profile"]["options"] = names
-        if names and not self.params["active_profile"].get("value"):
-            self.params["active_profile"]["value"] = names[0]
+        cfg = self.params["active_profile"]
+        cfg["options"] = names
+        # 存的名字可能已失效（key 被清 / 模型被删 / profile 改名 / 从没设过）
+        # ——归位到全局激活的 profile，使选择器显示与实际使用一致。
+        # 归位结果经 patch_module_params 与 pcfg 共用同一份 dict，常规保存
+        # 会带上，不需要另行回写。
+        heal_profile_selector(cfg)
 
     def _get_profile_names(self) -> List[str]:
         from utils.profile_manager import get_profile_names
@@ -537,8 +541,12 @@ class LLM_API_Translator(BaseTranslator):
     ) -> str:
         current_api_key = self._select_api_key()
         if not current_api_key:
+            from utils.profile_manager import profile_usage_hint
+
             raise ConnectionError(
-                "No available API key. Check the active profile's api_key field."
+                "No available API key. "
+                + profile_usage_hint(self._active_profile.get("name", ""))
+                + ". Configure it in Model Management."
             )
 
         if not self.client or self.client.api_key != current_api_key:

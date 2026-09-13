@@ -14,6 +14,9 @@ import einops
 import numpy as np
 
 from utils.textblock import TextBlock
+from utils.block_tags import apply_ocr_confidence_tag
+
+OCR_CONF_TAG_THRESHOLD = 0.6
 
 
 class PositionalEncoding(nn.Module):
@@ -558,6 +561,7 @@ class OCR48pxCTC:
 
         perm = range(len(regions))
         chunck_idx = 0
+        blk_scores: dict = {}
         for indices in chunks(perm, chunk_size):
             N = len(indices)
             widths = [regions[i].shape[1] for i in indices]
@@ -599,6 +603,10 @@ class OCR48pxCTC:
                         total_bg(int(bg * 255))
                         total_bb(int(bb * 255))
                 prob = np.exp(total_logprob())
+                # 每行分数都记下（含被过滤丢弃的行）供置信度标签取 min
+                blk_scores.setdefault(textblk_lst_indices[i + chunck_idx], []).append(
+                    prob
+                )
                 if prob < 0.3:
                     continue
                 textblk.text.append("".join(cur_texts))
@@ -607,6 +615,13 @@ class OCR48pxCTC:
                     [int(total_br()), int(total_bg()), int(total_bb())],
                 )
             chunck_idx += N
+
+        # 「OCR 置信度低」自动挂标：取该块最差行分数，阈值按 mit prob 语义
+        # 初版保守取值，待实机分数分布后调整（勿调高过滤阈值 0.3——那会丢行缺字）
+        for blk_idx, scores in blk_scores.items():
+            apply_ocr_confidence_tag(
+                textblk_lst[blk_idx], min(scores), OCR_CONF_TAG_THRESHOLD
+            )
 
 
 # def test2() :
