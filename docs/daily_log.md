@@ -4,6 +4,43 @@
 
 ## 2026-09-12
 
+### Tools 下拉栏软键盘项改勾选态并单独分组
+
+**问题/需求：** 软键盘已是"功能开关"响应类型（窄栏图标勾选态驱动），但在 Tools 下拉栏里仍以普通触发项混在文字/样式工具组中，语义不符。
+
+**改动要点：** `ui/mainwindowbars.py` 的 Soft Keyboard 动作 `setCheckable(True)`，从文字/样式组移出，菜单末尾以分隔线单独分组（视图型开关与触发式工具区分）；动作引用存为 `ui/mainwindowbars.py::quickSymbolAction`。`ui/mainwindow.py` 接线双向同步：启动时按 `symbol_launcher.isChecked()` 对齐初始勾选，此后窄栏图标开合经 `toggled` 信号回写菜单勾选态；菜单点击仍走 `toggle_symbol_dock` 原路径。
+
+**涉及文件：** `ui/mainwindowbars.py`、`ui/mainwindow.py`、`docs/daily_log.md`
+
+---
+
+### 行拖拽交互重构：抓取式真身堆叠 + 实时让位 + 追随/退应动画
+
+**问题/需求：** 原生 QDrag 拖拽可视化差（凭输入框上下边缘 hover 样式判断落点）、拖拽中误触发输入框 hover、多选（尤其隔行选）时组内行渲染相互裁剪；用户期望"实时让位"的列表拖拽，状态只在松手后落账。
+
+**改动要点：**
+
+- **抓取式拖拽**：鼠标抓取在视口（`viewport().grabMouse()`）替代 QDrag，hover 误亮从根上隔离（app 级 eventFilter 兜底吞列表内 hover）；`ui/scenetext_manager.py` 的 `drag_move`/`pw_drop` 旧信号接线移除。
+- **实时让位**：拖拽中各行移出布局手动定位，落点槽位（gap）按"邻行中点穿越"规则实时移动（基于目标坐标计算避免与动画反馈振荡，while 循环吸收快拖跨行）；块顺序只在松手时经 `rearrange_blks` 既有命令链落账。
+- **真身堆叠 + 变暗遮罩**：被拖组保持原生全分辨率渲染（不再抓快照合成半透明幽灵），多选折叠成堆（第 i 张卡下沉 `ui/textedit_area.py::TextEditListScrollArea.PILE_PEEK` 阶梯、后位卡在上露各卡徽标），聚拢锚点=光标位置，gap 槽高取折叠后堆高；非拖拽内容盖约 15% 变暗遮罩（`DIM_ALPHA`）。
+- **追随 + 退应动画**：拖拽组永远朝光标做 140ms OutCubic 补间、鼠标移动只重定目标（聚拢动画天然可见、任何时刻不瞬移；目标未变不重启防抖）；松手/取消时快照→布局同步激活落账（消费端 ghost 自动跳过、数据零延迟窗口）→ 行搬回快照位置整体退应飞向终态（`_settle_to_layout`，落账与取消共用）；快速连拖前停净上一局残留动画。
+- **卡片样式消重影**：堆叠重影根因是选中/悬停底色为半透明 `@accentPrimary20`——`ui/misc.py::_derive_solid_tints` 在主题解析时派生预混不透明变量 `@accentPrimary20Solid`，卡片选中/悬停底色改实底（视觉一致不透底，自定义主题自动生效）；卡片圆角 4→6px、选中态加强调描边；落点指示框改 `_DragGapFrame` 自绘（3px 加粗虚线 + 半透明强调底，替代 QSS 细虚线）。
+- **测试**：新增 `tests/test_row_drag.py` 16 项（聚拢锚点/让位中点判定/落账置换/Esc 取消/追随不瞬移/退应动画/hover 吞噬/自动滚动等）。
+
+**涉及文件：** `ui/textedit_area.py`、`ui/scenetext_manager.py`、`config/stylesheet.css`、`ui/misc.py`、`tests/test_row_drag.py`（新）、`docs/daily_log.md`
+
+---
+
+### 软键盘焦点切换随迁动画
+
+**问题/需求：** 软键盘浮层在切换文本框焦点时重播淡入，观感突兀；期望已在其它编辑器旁显示时改为滑动随迁。
+
+**改动要点：** `ui/quick_symbol_panel.py::SymbolFloatPanel.open_at_editor` 新增分支：已在该编辑器旁不重播动画；在其它编辑器旁（含收起途中）取消进行中收起动画、由 `_move_animated` 从当前位置滑向新锚点（`pcfg.animation_fps` 门控），不重播淡入。
+
+**涉及文件：** `ui/quick_symbol_panel.py`、`docs/daily_log.md`
+
+---
+
 ### 底部栏翻译器模型子菜单 + Tools 下拉栏重排 + AI 辅助功能规划文档入库
 
 **问题/需求：** 底部栏 Translator 按钮菜单缺少模型快切入口（上游有但为三类 profile 的 555 行子系统，不合 fork 体量）；「不常用功能工具箱收纳」方向经用户复议废弃——功能不多，只需对 Tools 下拉菜单做一次重排版；另把多轮讨论定稿的 AI 辅助功能规划文档（框级打标 + 标签体系）入库。
