@@ -1854,6 +1854,12 @@ class MainWindow(mainwindow_cls):
 
         self.titleBar.help_about_triggered.connect(self.show_about_dialog)
         self.titleBar.quick_symbol_trigger.connect(self.on_open_quick_symbol)
+        # Tools 菜单软键盘项 = 窄栏开关的镜像：初始勾选态对齐，
+        # 此后窄栏图标开合经 toggled 反向同步到菜单勾选
+        _sym_launcher = self.textPanel.formatpanel.symbol_launcher
+        if _sym_launcher is not None:
+            self.titleBar.quickSymbolAction.setChecked(_sym_launcher.isChecked())
+            _sym_launcher.toggled.connect(self.titleBar.quickSymbolAction.setChecked)
         self.titleBar.adv_align_trigger.connect(self.on_open_advanced_align)
         self.titleBar.normalize_breaks_triggered.connect(
             self.on_open_normalize_breaks_dialog

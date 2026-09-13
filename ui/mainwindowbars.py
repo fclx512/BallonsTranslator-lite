@@ -484,7 +484,10 @@ class TitleBar(Widget):
         self.smart_reorder_trigger = smartReorderAction.triggered
 
         # Soft keyboard (kana / symbol input, text panel rail)
+        # 视图型开关：勾选态与窄栏图标（功能开关）双向同步
         quickSymbolAction = QAction(self.tr("Soft Keyboard"), self)
+        quickSymbolAction.setCheckable(True)
+        self.quickSymbolAction = quickSymbolAction
         self.quick_symbol_trigger = quickSymbolAction.triggered
 
         # Advanced Alignment
@@ -502,7 +505,6 @@ class TitleBar(Widget):
         toolsMenu = QMenu(self.toolsToolBtn)
         # 文字 / 样式工具
         toolsMenu.addAction(self._styleMgrAction)
-        toolsMenu.addAction(quickSymbolAction)
         toolsMenu.addAction(advAlignAction)
         toolsMenu.addAction(normalizeBreaksAction)
         toolsMenu.addSeparator()
@@ -510,6 +512,9 @@ class TitleBar(Widget):
         toolsMenu.addAction(mergeToolAction)
         toolsMenu.addAction(smartReorderAction)
         toolsMenu.addAction(noTextToolAction)
+        toolsMenu.addSeparator()
+        # 视图型开关（响应类型与上面的触发式工具不同，单独分组）
+        toolsMenu.addAction(quickSymbolAction)
         self.toolsToolBtn.setMenu(toolsMenu)
         self.toolsToolBtn.setPopupMode(QToolButton.InstantPopup)
 
