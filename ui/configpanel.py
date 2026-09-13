@@ -1069,8 +1069,10 @@ class FontExcludeDialog(QDialog):
         # Fork-private one-shot simplify button
         self.simplify_btn = QPushButton(self.tr("Simplify Font List"))
         self.simplify_btn.setObjectName("ConfigButton")
+        # 规则本身语言无关，但触发场景几乎全是中文字体的多重命名
+        # （字重后缀家族 + 中文/英文双名 + 简/繁变体），文案点明定位
         self.simplify_btn.setToolTip(
-            self.tr("Hide duplicate weight/language variants of the same font")
+            self.tr("Hide duplicate font name variants (mainly for CJK fonts)")
         )
         self.simplify_btn.clicked.connect(self._on_simplify)
         layout.addWidget(self.simplify_btn)
@@ -2275,19 +2277,26 @@ class ConfigPanel(Widget):
         ps_browse_btn = QPushButton(self.tr("Browse…"))
         ps_browse_btn.setObjectName("ConfigButton")
         ps_browse_btn.clicked.connect(self.on_ps_browse)
-        ps_row = QWidget()
-        ps_row_layout = QHBoxLayout(ps_row)
-        ps_row_layout.setContentsMargins(0, 0, 0, 0)
-        ps_row_layout.setSpacing(6)
-        ps_row_layout.addWidget(self.ps_path_edit)
-        ps_row_layout.addWidget(ps_browse_btn)
-        config_mgmt_layout.addWidget(
-            ConfigFormRow(
-                self.tr("Photoshop Path"),
-                ps_row,
-                note=self.tr("<p>Path to <b>Photoshop.exe</b> for editing inpainted images externally. If empty, the application will attempt to locate Photoshop via the Windows Registry automatically.</p>"),
-            )
-        )
+        # 两行布局：标签「Photoshop 路径」超出一行式表单的固定标签宽，
+        # 且完整安装路径也吃行内余量——标签行（含 ? 说明）+ 整宽输入行
+        ps_block = QWidget()
+        ps_v = QVBoxLayout(ps_block)
+        ps_v.setContentsMargins(16, 4, 16, 4)
+        ps_v.setSpacing(4)
+        ps_head = QHBoxLayout()
+        ps_head.setContentsMargins(0, 0, 0, 0)
+        ps_head.setSpacing(6)
+        ps_head.addWidget(QLabel(self.tr("Photoshop Path")))
+        ps_head.addStretch()
+        ps_head.addWidget(_make_note_btn(self.tr("<p>Path to <b>Photoshop.exe</b> for editing inpainted images externally. If empty, the application will attempt to locate Photoshop via the Windows Registry automatically.</p>")))
+        ps_v.addLayout(ps_head)
+        ps_edit_row = QHBoxLayout()
+        ps_edit_row.setContentsMargins(0, 0, 0, 0)
+        ps_edit_row.setSpacing(6)
+        ps_edit_row.addWidget(self.ps_path_edit, 1)
+        ps_edit_row.addWidget(ps_browse_btn)
+        ps_v.addLayout(ps_edit_row)
+        config_mgmt_layout.addWidget(ps_block)
 
         # Workbench section — the glossary/story workbench runs on AI, so its
         # costly actions can ask for confirmation first.

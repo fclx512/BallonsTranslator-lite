@@ -1639,6 +1639,9 @@ class MainWindow(mainwindow_cls):
             progress.setLabelText(self.tr("Updating interface..."))
             progress.setMinimumDuration(0)
             QApplication.processEvents()
+            # 换项目 = 旧撤销历史全部失效（命令锚定旧项目的 blk），清栈
+            # 经栈信号顺带刷新历史面板
+            self.canvas.clear_undostack(update_saved_step=True)
             self.st_manager.clearSceneTextitems()
             self.titleBar.setTitleContent(osp.basename(directory))
             self.updatePageList()
@@ -1797,6 +1800,9 @@ class MainWindow(mainwindow_cls):
         try:
             self.opening_dir = True
             self.imgtrans_proj.load_from_json(json_path)
+            # 换项目 = 旧撤销历史全部失效（命令锚定旧项目的 blk），清栈
+            # 经栈信号顺带刷新历史面板（同 openDir）
+            self.canvas.clear_undostack(update_saved_step=True)
             self.st_manager.clearSceneTextitems()
             self.leftBar.updateRecentProjList(self.imgtrans_proj.proj_path)
             self.updatePageList()

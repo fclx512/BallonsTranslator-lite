@@ -1471,10 +1471,6 @@ Settings → App → Photoshop Path</source>
             <translation>老旧</translation>
         </message>
         <message>
-            <source>Hide duplicate weight/language variants of the same font</source>
-            <translation>隐藏同一字体的重复字重/语言变体</translation>
-        </message>
-        <message>
             <source>No simplifiable font entries detected.</source>
             <translation>未检测到可精简的字体条目。</translation>
         </message>
@@ -1497,6 +1493,10 @@ Hide them all? You can move them back later.</source>
         <message>
             <source>Simplify Font List</source>
             <translation>一键精简字体列表</translation>
+        </message>
+        <message>
+            <source>Hide duplicate font name variants (mainly for CJK fonts)</source>
+            <translation>隐藏同一字体的重复命名变体（适用于中文字体）</translation>
         </message>
     </context>
     <context>
