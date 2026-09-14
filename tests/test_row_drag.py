@@ -7,7 +7,10 @@ follows the cursor while a dim mask covers the rest, the remaining rows
 shift aside live (midpoint-crossing gap rule, target-based to avoid
 feedback with running animations), and the block order only commits on
 release via ``rearrange_blks``. Also covers the drag-time hover swallow
-(editors must not light up under the pointer).
+(editors must not light up under the pointer) and the 2026-09-14
+drag-time lift of the pile to the window layer (escape the parent-bound
+clip so the grab-scale effect can overflow freely, focus restored on
+docking; skipped entirely when animations are disabled).
 
 Run from the repo root:
     ./ballontrans_pylibs_win/python.exe tests/test_row_drag.py
@@ -411,8 +414,51 @@ class RowDragTest(unittest.TestCase):
         area._drag_cursor_vp_y = y2
         area._update_drag_frame()
         anim = area._pos_anims[pw]
-        self.assertEqual(anim.endValue().y(), int(y2))  # 重定向到新光标位
+        # 重定向到新光标位（提层后动画目标为窗口坐标，= 内容 y 加
+        # scrollContent 原点在窗口里的偏移）
+        self.assertEqual(
+            anim.endValue().y(), area._pile_org_in_parent().y() + int(y2)
+        )
         area._finish_drag()
+
+    def test_lift_docks_back_and_restores_focus(self):
+        """提层（抓住缩放的防裁切配套）：动画开启时被拖组挂到窗口层，
+        收尾放回 scrollContent 且登记清空；提层挤掉的卡内输入框焦点
+        在落账后恢复。"""
+        pcfg.animation_fps = 60
+        self.area = area = self._make_area()
+        pw = area.pairwidget_list[1]
+        self._check(pw)
+        pw.e_trans.setFocus()
+        self.app.processEvents()
+        self.assertTrue(pw.e_trans.hasFocus())
+
+        area.begin_rows_drag(pw.y() + pw.height() / 2)
+        self.assertIs(area._pile_parent, area.window())
+        self.assertIs(pw.parentWidget(), area.window())
+        self.assertFalse(pw.e_trans.hasFocus())  # reparent 挤掉焦点
+
+        area._finish_drag()
+        self.app.processEvents()
+        self.assertIs(pw.parentWidget(), area.scrollContent)
+        self.assertIsNone(area._pile_parent)
+        self.assertTrue(pw.e_trans.hasFocus())  # 焦点物归原主
+        from qtpy.QtTest import QTest
+
+        QTest.qWait(300)  # 还原缩放动画结束才摘效果
+        self.assertEqual(area._scale_effects, {})
+
+    def test_lift_off_when_animation_disabled(self):
+        """关动画（animation_fps < 0）：不缩放也不提层，行为同旧版。"""
+        pcfg.animation_fps = -1
+        self.area = area = self._make_area()
+        pw = area.pairwidget_list[1]
+        self._check(pw)
+        area.begin_rows_drag(pw.y() + pw.height() / 2)
+        self.assertIsNone(area._pile_parent)
+        self.assertIs(pw.parentWidget(), area.scrollContent)
+        self.assertIsNone(pw.graphicsEffect())
+        area._cancel_drag()
 
     def test_finish_settle_animation(self):
         """松手退应：数据即时落账，行从快照位置（拖拽组仍堆叠在

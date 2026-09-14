@@ -5,9 +5,12 @@ from qtpy.QtCore import (
     QEasingCurve,
     QEvent,
     QPoint,
+    QPointF,
     QPropertyAnimation,
+    QRectF,
     Qt,
     QTimer,
+    Property,
     Signal,
 )
 from qtpy.QtGui import (
@@ -23,6 +26,7 @@ from qtpy.QtGui import (
 from qtpy.QtWidgets import (
     QApplication,
     QFrame,
+    QGraphicsEffect,
     QHBoxLayout,
     QLabel,
     QScrollArea,
@@ -454,6 +458,102 @@ class _DragGapFrame(QFrame):
         p.drawRoundedRect(rect, self.RADIUS, self.RADIUS)
 
 
+class _CardScaleEffect(QGraphicsEffect):
+    """拖拽抓住卡的纯绘制层缩放（顶中锚）。
+
+    绘制走 DeviceCoordinates 快照（Qt drop-shadow 同款模式）：快照按
+    boundingRectFor 外扩后的边界抓取，resetTransform 后围绕源矩形顶中
+    锚的设备坐标做 scale——只改绘制不改几何，layout 与落点指示框零感
+    知；顶中锚使堆顶（咬住光标的抓取点）在缩放中保持不动。boundingRect
+    按最大倍率一次性外扩（横向两侧均摊、纵向全在底部），动画改 factor
+    只需 update()，无需重报几何。
+
+    缩放动画以效果自身为父、驱动自身的 factor 属性（animate_to）：
+    效果被摘除/控件销毁时动画随之析构，回调链上没有任何指向拖拽区
+    的引用——引用循环会让拖拽区只能等 GC 拆环，级联析构时重入
+    Python 回调触碰已删 C++ 对象直接硬崩（测试套件批量回收 area 引爆）。
+    """
+
+    def __init__(self, max_factor: float):
+        super().__init__()
+        self._max_factor = max_factor
+        self._factor = 1.0
+        self._anim = None
+
+    def _get_factor(self) -> float:
+        return self._factor
+
+    def _set_factor(self, factor: float) -> None:
+        self._factor = factor
+        self.update()
+
+    factor = Property(float, _get_factor, _set_factor)
+
+    def animate_to(self, factor: float, duration: int, on_done=None) -> None:
+        """把 factor 补间到目标值；*on_done* 不得持有拖拽区（防引用
+        循环），且须容忍动画随效果析构时才触发的场景。"""
+        old = self._anim
+        if old is not None:
+            try:
+                old.stop()  # 同一效果不重定向，仅防重入兜底
+            except RuntimeError:
+                pass  # 上轮动画已随 DeleteWhenStopped 析构
+        anim = QPropertyAnimation(self, b"factor", self)
+        anim.setDuration(duration)
+        anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        anim.setStartValue(self._factor)
+        anim.setEndValue(factor)
+        if on_done is not None:
+            anim.finished.connect(on_done)
+        anim.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
+        self._anim = anim
+
+    def boundingRectFor(self, src: QRectF) -> QRectF:
+        extra_w = src.width() * (self._max_factor - 1.0)
+        extra_h = src.height() * (self._max_factor - 1.0)
+        return src.adjusted(-extra_w / 2.0, 0.0, extra_w / 2.0, extra_h)
+
+    def draw(self, painter: QPainter) -> None:
+        if self._factor <= 1.0:
+            self.drawSource(painter)
+            return
+        src = self.sourceBoundingRect()
+        pixmap, offset = self.sourcePixmap(
+            Qt.CoordinateSystem.DeviceCoordinates,
+            mode=QGraphicsEffect.PixmapPadMode.PadToEffectiveBoundingRect,
+        )
+        if pixmap.isNull():
+            return
+        pivot = painter.deviceTransform().map(
+            QPointF(src.x() + src.width() / 2.0, src.y())
+        )
+        painter.save()
+        painter.resetTransform()
+        painter.translate(pivot)
+        painter.scale(self._factor, self._factor)
+        painter.translate(-pivot)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        painter.drawPixmap(offset, pixmap)
+        painter.restore()
+
+
+def _detach_scale_effect(pw, eff):
+    """缩放还原到位后摘除效果（动画结束回调）。
+
+    延迟到事件循环下一轮执行：析构级联里 setGraphicsEffect 重入会
+    双删；下一轮时若控件已销毁或效果已被替换/摘除（身份不符）则跳过。
+    只持 pw/eff，不持拖拽区。"""
+
+    def _detach():
+        try:
+            if pw.graphicsEffect() is eff:
+                pw.setGraphicsEffect(None)
+        except RuntimeError:
+            pass  # 控件已销毁（效果随之析构）
+
+    QTimer.singleShot(0, _detach)
+
+
 class TextEditListScrollArea(QScrollArea):
     textblock_list: List[TextBlock] = []
     pairwidget_list: List[TransPairWidget] = []
@@ -474,6 +574,11 @@ class TextEditListScrollArea(QScrollArea):
     PILE_PEEK = 18
     # 拖拽期间盖在非拖拽内容上的变暗遮罩不透明度（0-255，约 15%）
     DIM_ALPHA = 38
+    # 抓住卡的放大倍率：纯绘制层效果（_CardScaleEffect 顶中锚），
+    # layout 与落点指示框不动；关动画（animation_fps < 0）时不启用
+    GRAB_SCALE = 1.1
+    # 放大/还原动画时长（与 _move_card 位移动画同时长同曲线）
+    SCALE_MS = 140
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -489,9 +594,13 @@ class TextEditListScrollArea(QScrollArea):
         self._gap_h = 0
         self._drag_cursor_vp_y = 0.0
         self._pile_offsets: List[int] = []           # 被拖组折叠偏移（堆顶=0）
+        self._pile_parent: QWidget = None            # 拖拽中被拖组的提层父级（主窗口层）
+        self._pile_focus_fw = None                   # 提层前的焦点控件（收尾恢复）
         self._drag_dim: QWidget = None
         self._gap_frame: QFrame = None
         self._pos_anims = {}
+        # 抓住缩放（_CardScaleEffect）：pw → 在册效果；动画由效果自驱
+        self._scale_effects = {}
         self._auto_timer: QTimer = None
         self._auto_speed = 0
 
@@ -567,6 +676,8 @@ class TextEditListScrollArea(QScrollArea):
     # 输入框），被拖组保持真身渲染、堆叠折叠跟随光标，非拖拽内容盖
     # 变暗遮罩，落点处留自绘虚线指示框，其余行实时让位动画；块列表
     # 顺序只在松手时经 rearrange_blks 落账，拖拽全程只动 UI 不动数据。
+    # 被拖组拖拽期间提层到主窗口：滚动层级的父边界会裁掉抓住放大的
+    # 溢出（Qt 子控件画不出父控件边界），提层后浮在一切之上自由绘制。
 
     def begin_rows_drag(self, cursor_vp_y: float) -> None:
         """启动行拖拽。*cursor_vp_y* 为触发时视口坐标 y（拖拽组锚定用）。"""
@@ -641,10 +752,30 @@ class TextEditListScrollArea(QScrollArea):
             Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
         )
 
+        # 提层：被拖组挂到主窗口层。滚动区/视口/内容的父边界会裁掉
+        # 放大溢出的部分（Qt 子控件画不出父控件边界），提层后浮在
+        # 一切之上，放大溢出自由绘制；坐标在消费处逐帧经
+        # _pile_org_in_parent 换算（滚动时 scrollContent 在窗口里移动）。
+        # 与缩放同门控：关动画（animation_fps < 0）时既不缩放也不提层，
+        # 行为与旧版完全一致。焦点控件先记账：reparent 会把它从卡内
+        # 输入框挤掉，收尾恢复。
+        if pcfg.animation_fps >= 0:
+            self._pile_parent = self.window()
+            self._pile_focus_fw = QApplication.focusWidget()
+            for w in drags:
+                gp = w.mapToGlobal(QPoint(0, 0))
+                w.setParent(self._pile_parent)
+                w.move(self._pile_parent.mapFromGlobal(gp))
+                w.show()
         # 被拖组保持真身可见：聚拢动画飞向光标锚点；z 序按原顺序
-        # 后位卡在上，各卡头顶条（含编号徽标）依次可见
+        # 后位卡在上，各卡头顶条（含编号徽标）依次可见。
+        # 抓住缩放：快速连拖时上一局的还原动画可能仍在飞，先清干净
+        # 再装效果并放大（与聚拢飞行同时进行）
+        self._clear_scale_effects()
+        self._install_scale_effects(drags)
+        pile_org_y = self._pile_org_in_parent().y()
         for w, off in zip(drags, self._pile_offsets):
-            self._move_card(w, pile_top + off, animate=True)
+            self._move_card(w, pile_org_y + pile_top + off, animate=True)
         self._apply_arrangement(animate=True)
         self._gap_frame.show()
         self._drag_dim.raise_()
@@ -707,6 +838,51 @@ class TextEditListScrollArea(QScrollArea):
         anim.finished.connect(_anim_cleanup)
         anim.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
 
+    # ── 抓住缩放：纯绘制层放大/还原（几何零感知）────────────────
+    # 动画由效果自身驱动（见 _CardScaleEffect.animate_to），area 只
+    # 登记「装着缩放效果」的卡片：还原一开始即出册，效果自驱还原并
+    # 在动画结束后自行摘除——登记表与效果/动画之间无引用循环。
+
+    def _install_scale_effects(self, pws):
+        """抓住：被拖组装上缩放效果并放大到 GRAB_SCALE（关动画不装）。"""
+        if pcfg.animation_fps < 0:
+            return
+        for pw in pws:
+            eff = _CardScaleEffect(self.GRAB_SCALE)
+            pw.setGraphicsEffect(eff)
+            self._scale_effects[pw] = eff
+            eff.animate_to(self.GRAB_SCALE, self.SCALE_MS)
+
+    def _release_scale_effects(self):
+        """放下/取消：缩放还原（与退应飞行并行），效果出册并自驱缩回、
+        动画结束后自行摘除。"""
+        for pw, eff in list(self._scale_effects.items()):
+            self._scale_effects.pop(pw, None)
+            try:
+                eff.factor
+            except RuntimeError:
+                continue  # 效果已随控件销毁，无事可做
+            eff.animate_to(
+                1.0,
+                self.SCALE_MS,
+                on_done=lambda pw=pw, eff=eff: _detach_scale_effect(pw, eff),
+            )
+
+    def _remove_scale_effect(self, pw):
+        """立即摘除缩放效果（重入清理/兜底）；效果析构连带其动画。"""
+        self._scale_effects.pop(pw, None)
+        try:
+            if pw.graphicsEffect() is not None:
+                pw.setGraphicsEffect(None)
+        except RuntimeError:
+            pass
+
+    def _clear_scale_effects(self):
+        """立即清掉全部缩放效果（重入接管）；已出册、自驱还原中的
+        效果不在册，由其自身的延迟摘除回调收尾（身份校验防误删新效果）。"""
+        for pw in list(self._scale_effects):
+            self._remove_scale_effect(pw)
+
     def _update_gap(self, y_cursor: int):
         """让位判定（邻行中点穿越）：光标越过 gap 上邻行的中点则 gap
         上移一格，越过下邻行中点则下移。以让位排布的目标坐标（而非
@@ -727,15 +903,25 @@ class TextEditListScrollArea(QScrollArea):
                     continue
             break
 
+    def _pile_org_in_parent(self) -> QPoint:
+        """scrollContent 原点在被拖组提层父级（主窗口层）里的位置。
+        逐帧调用：滚轮/自动滚动会移动 scrollContent，映射随之变化。
+        未提层（关动画）时返回原点，坐标退化为内容坐标。"""
+        if self._pile_parent is None:
+            return QPoint(0, 0)
+        return self.scrollContent.mapTo(self._pile_parent, QPoint(0, 0))
+
     def _update_drag_frame(self):
         sb = self.verticalScrollBar()
         y_content = int(self._drag_cursor_vp_y + sb.value())
+        pile_org_y = self._pile_org_in_parent().y()
         for w, off in zip(self._drag_pws, self._pile_offsets):
             # 追随式跟随：拖拽组永远朝光标做补间（140ms OutCubic），
             # 鼠标每动一次重定目标——聚拢动画天然可见，任何时刻都不
             # 瞬移；目标未变则不重启（防高频鼠标事件反复创建动画对象）。
             # 让位判定用的是光标坐标（_update_gap），不受视觉滞后影响。
-            ty = y_content + off
+            # ty 为提层父级坐标：内容 y 经 _pile_org_in_parent 换算。
+            ty = pile_org_y + y_content + off
             old = self._pos_anims.get(w)
             if old is not None:
                 try:
@@ -806,6 +992,24 @@ class TextEditListScrollArea(QScrollArea):
             except RuntimeError:
                 pass
         self._pos_anims = {}
+        # 放回滚动内容层：坐标从提层父级映射回内容坐标（落账快照与
+        # 退应动画都在内容坐标系里工作）；提层被挤掉的焦点控件物归原主
+        if self._pile_parent is not None:
+            for w in self._drag_pws:
+                gp = w.mapToGlobal(QPoint(0, 0))
+                w.setParent(self.scrollContent)
+                w.move(self.scrollContent.mapFromGlobal(gp))
+                w.show()
+            self._pile_parent = None
+        fw, self._pile_focus_fw = self._pile_focus_fw, None
+        if fw is not None:
+            try:
+                if not fw.hasFocus() and fw.isVisible():
+                    fw.setFocus(Qt.FocusReason.OtherFocusReason)
+            except RuntimeError:
+                pass
+        # 缩放还原与退应飞行并行（动画结束各自摘效果/自清登记）
+        self._release_scale_effects()
 
     def _finish_drag(self):
         """松手落账：快照当前位置 → 布局按新序归还并同步激活到终态
@@ -875,12 +1079,17 @@ class TextEditListScrollArea(QScrollArea):
                 self._cancel_drag()
                 return False
             if t in (QEvent.Type.HoverEnter, QEvent.Type.HoverMove):
-                # 拖拽期间吞掉列表内部的 hover，防止输入框误亮
-                # （鼠标抓取理论上已隔离，此处兜底）
+                # 拖拽期间吞掉列表内部与被拖组的 hover，防止输入框误亮
+                # （鼠标抓取理论上已隔离，此处兜底；被拖组提层后挂在
+                # 主窗口下，祖先链不含 scrollContent，需单独识别）
                 w = obj if isinstance(obj, QWidget) else None
-                while w is not None and w is not self.scrollContent:
+                while (
+                    w is not None
+                    and w is not self.scrollContent
+                    and w not in self._drag_pws
+                ):
                     w = w.parentWidget()
-                if w is self.scrollContent:
+                if w is self.scrollContent or w in self._drag_pws:
                     return True
         return super().eventFilter(obj, event)
 
