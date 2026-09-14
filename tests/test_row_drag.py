@@ -10,7 +10,14 @@ release via ``rearrange_blks``. Also covers the drag-time hover swallow
 (editors must not light up under the pointer) and the 2026-09-14
 drag-time lift of the pile to the window layer (escape the parent-bound
 clip so the grab-scale effect can overflow freely, focus restored on
-docking; skipped entirely when animations are disabled).
+docking; skipped entirely when animations are disabled), the high-DPI
+anchor of the grab scale (device-pixel snapshot drawn through a
+logical-coordinate painter: mixing the two shifted the card in
+proportion to its screen position, invisible at DPR 1), and the bare
+wrapper PyQt resurrects when that effect's Python instance is gone while
+its C++ half still sits on a card (state read in the virtual used to
+raise AttributeError, which PyQt answers with qFatal — the full suite
+aborted with exit 127).
 
 Run from the repo root:
     ./ballontrans_pylibs_win/python.exe tests/test_row_drag.py
@@ -27,8 +34,8 @@ os.chdir(APP_ROOT)
 os.environ["QT_API"] = "pyqt6"
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
-from qtpy.QtCore import QEvent, QPoint, QPointF, Qt  # noqa: E402
-from qtpy.QtGui import QKeyEvent, QMouseEvent  # noqa: E402
+from qtpy.QtCore import QEvent, QPoint, QPointF, QRectF, Qt  # noqa: E402
+from qtpy.QtGui import QColor, QImage, QKeyEvent, QMouseEvent, QPainter  # noqa: E402
 from qtpy.QtWidgets import QApplication, QWidget  # noqa: E402
 
 from utils.config import pcfg  # noqa: E402
@@ -384,8 +391,9 @@ class RowDragTest(unittest.TestCase):
         h = area.pairwidget_list[2].height()
         area._drag_cursor_vp_y = area._rest_y[area._rest[1]] + h / 2 + 4
         area._update_drag_frame()
-        # 聚拢补间（目标未变被守卫保留）+ rest 行让位补间
-        self.assertEqual(len(area._pos_anims), 2)
+        # 聚拢补间（目标未变被守卫保留）+ rest 行让位补间 + 指示框滑动补间
+        self.assertEqual(len(area._pos_anims), 3)
+        self.assertIn(area._gap_frame, area._pos_anims)
         from qtpy.QtTest import QTest
 
         QTest.qWait(300)
@@ -488,8 +496,68 @@ class RowDragTest(unittest.TestCase):
             area.pairwidget_list[0].y() + h0 + s,
         )
 
-    def test_autoscroll_timer_lifecycle(self):
-        """光标贴近视口下缘启动自动滚动定时器，离开后停止。"""
+    def test_gap_frame_slides_instead_of_jumping(self):
+        """落点指示框跨行时走与行同一条补间（跟着滑过去），不是瞬移到
+        目标槽位而行还在半路。"""
+        from qtpy.QtTest import QTest
+
+        pcfg.animation_fps = 60
+        self.area = area = self._make_area()
+        pw = area.pairwidget_list[1]
+        self._check(pw)
+        area.begin_rows_drag(pw.y() + pw.height() / 2)
+        frame = area._gap_frame
+        y0 = frame.y()
+        h = area.pairwidget_list[2].height()
+        area._drag_cursor_vp_y = area._rest_y[area._rest[1]] + h / 2 + 4
+        area._update_drag_frame()  # 光标越过邻行中点 → gap 下移一格
+
+        _, gap_top = area._arrange_targets()
+        self.assertNotEqual(y0, gap_top)
+        self.assertEqual(area._pos_anims[frame].endValue().y(), gap_top)
+        self.assertEqual(frame.y(), y0)  # 才起步，没瞬移到目标
+        QTest.qWait(300)
+        self.assertEqual(frame.y(), gap_top)
+
+    def test_chase_settle_durations_and_stagger(self):
+        """跟手时长比落位短；多选堆叠逐卡落后；抓取按下-弹起、松手还原
+        比行落位快。"""
+        pcfg.animation_fps = 60
+        self.area = area = self._make_area()
+        d0, d2 = area.pairwidget_list[0], area.pairwidget_list[2]
+        for w in (d0, d2):
+            w._set_checked_state(True)
+        area.checked_list = [d0, d2]
+        area.sel_anchor_widget = d0
+
+        area.begin_rows_drag(d0.y() + d0.height() / 2)
+        self.assertLess(area.CHASE_MS, area.SETTLE_MS)  # 跟手更跟得住
+        self.assertEqual(area._pos_anims[d0].duration(), area.CHASE_MS)
+        self.assertEqual(
+            area._pos_anims[d2].duration(), area.CHASE_MS + area.STAGGER_MS
+        )
+        eff = area._scale_effects[d0]
+        self.assertEqual(eff._anim.duration(), area.SCALE_IN_MS)
+        self.assertAlmostEqual(
+            eff._anim.keyValueAt(area.SCALE_PRESS_AT), area.SCALE_PRESS, places=6
+        )
+
+        area._finish_drag()
+        self.assertEqual(eff._anim.duration(), area.SCALE_OUT_MS)  # 还原更快
+        self.assertLess(area.SCALE_OUT_MS, area.SETTLE_MS)
+        # 展开逐卡落后：堆顶（rank 0）用落位时长，其后每张 +STAGGER_MS
+        # （堆顶可能原地落槽、无动画，故只强断言 rank 1）
+        self.assertEqual(
+            area._pos_anims[d2].duration(), area.SETTLE_MS + area.STAGGER_MS
+        )
+        if d0 in area._pos_anims:
+            self.assertEqual(area._pos_anims[d0].duration(), area.SETTLE_MS)
+
+    def test_autoscroll_ramps_and_cools_down(self):
+        """自动滚动：贴边启动定时器并给出目标速度，实际速度逐 tick 渐变
+        （不猛启）。离开边缘后目标归零，速度渐降到位才停表。"""
+        from qtpy.QtTest import QTest
+
         self.area = area = self._make_area()
         pw = area.pairwidget_list[1]
         self._check(pw)
@@ -498,9 +566,172 @@ class RowDragTest(unittest.TestCase):
         area._drag_cursor_vp_y = vp_h - 5
         area._update_drag_frame()
         self.assertIsNotNone(area._auto_timer)
+        self.assertGreater(area._auto_target, 0)
+        area._auto_scroll_tick()  # 首个 tick 只爬升一段，尚未到目标速度
+        self.assertLess(area._auto_speed, area._auto_target)
+
         area._drag_cursor_vp_y = vp_h / 2
         area._update_drag_frame()
+        self.assertEqual(area._auto_target, 0.0)
+        # 目标归零后不是立刻停：速度渐降，随后自行停表
+        QTest.qWait(300)
         self.assertIsNone(area._auto_timer)
+        self.assertEqual(area._auto_speed, 0.0)
+
+
+# 缩放锚点探针：卡片几何 + 顶中红角标（锚点）/ 底中绿角标（倍率基准）
+_SCALE_CARD = (100, 300, 100, 60)
+_SCALE_MARK = 6
+# 探针容器尺寸（逻辑像素，渲染时按 DPR 放大成设备像素）
+_SCALE_CANVAS = (400, 600)
+
+
+class _ScaleProbeCard(QWidget):
+    """带对角标的探针卡（角标质心即锚点与底部基准）。"""
+
+    def paintEvent(self, ev):
+        p = QPainter(self)
+        r = self.rect()
+        m = _SCALE_MARK
+        p.fillRect(r, QColor(30, 30, 30))
+        p.fillRect(QRectF(r.width() / 2 - m / 2, 0, m, m), QColor(255, 0, 0))
+        p.fillRect(QRectF(r.width() / 2 - m / 2, r.height() - m, m, m), QColor(0, 255, 0))
+
+
+def _centroids(img, dpr):
+    """图里两个角标的逻辑坐标质心 (顶中, 底中)；角标被裁掉则对应项为 None。"""
+
+    def centroid(pred):
+        xs, ys = [], []
+        for y in range(img.height()):
+            for x in range(img.width()):
+                c = img.pixelColor(x, y)
+                if pred(c):
+                    xs.append(x)
+                    ys.append(y)
+        if not xs:
+            return None
+        return (sum(xs) / len(xs) / dpr, sum(ys) / len(ys) / dpr)
+
+    top = centroid(lambda c: c.red() > 150 and c.green() < 100 and c.blue() < 100)
+    bottom = centroid(lambda c: c.green() > 150 and c.red() < 100 and c.blue() < 100)
+    return top, bottom
+
+
+class CardScaleAnchorTest(unittest.TestCase):
+    """抓住缩放的锚点换算（2026-09-14 高 DPI 回归）。
+
+    快照走 DeviceCoordinates（高 DPI 放大不糊），而 resetTransform 之后
+    painter 与 sourcePixmap 的 offset 都回到逻辑坐标：把 deviceTransform
+    映射出的设备像素锚点直接交给 painter，锚点会被再放大 DPR 倍，卡片按其
+    在屏上的位置成比例偏移（越靠下偏得越多，顶行还被裁掉）。DPR=1 的机器
+    上该错误恒等——当初在 100% 缩放的 Win10 上就是这么测过的，故用带 DPR
+    的 QImage 离屏直渲复现（离屏屏幕本身是 DPR 1，直接 grab 看不出来）。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        from ui.textedit_area import _CardScaleEffect
+
+        cls.app = QApplication.instance() or QApplication([])
+        cls.cont = QWidget()
+        cls.cont.resize(*_SCALE_CANVAS)
+        cls.cont.setStyleSheet("background: #000000;")
+        cls.card = _ScaleProbeCard(cls.cont)
+        cls.card.setGeometry(*_SCALE_CARD)
+        cls.eff = _CardScaleEffect(1.1)
+        cls.card.setGraphicsEffect(cls.eff)
+
+    @classmethod
+    def tearDownClass(cls):
+        # 先摘效果再放手：挂着图形效果的控件在 GC 回收时会硬崩（本套件
+        # 已踩过的坑），故不留悬挂效果给后续用例回收
+        cls.card.setGraphicsEffect(None)
+        cls.cont.close()
+        cls.cont = cls.card = cls.eff = None
+
+    def _measure(self, dpr):
+        """把探针卡渲进 *dpr* 倍的 QImage，返回两角标的逻辑坐标质心
+        （角标被裁掉则返回 None）。"""
+        img = QImage(
+            round(_SCALE_CANVAS[0] * dpr),
+            round(_SCALE_CANVAS[1] * dpr),
+            QImage.Format.Format_ARGB32_Premultiplied,
+        )
+        img.setDevicePixelRatio(dpr)
+        img.fill(QColor(0, 0, 0))
+        self.cont.render(img)
+        return _centroids(img, dpr)
+
+    def test_anchor_holds_and_scale_applies_across_dpr(self):
+        """DPR=1 / 1.25 / 1.5 / 2 下顶中锚点都不动，底中按 1.1 倍下移。"""
+        self.eff.factor = 1.1
+        cx = _SCALE_CARD[0] + _SCALE_CARD[2] / 2.0            # 顶中锚 x = 150
+        cy = float(_SCALE_CARD[1])                            # 顶中锚 y = 300
+        mark_cy = cy + _SCALE_MARK / 2.0                      # 顶中角标质心 y
+        bottom_cy = cy + _SCALE_CARD[3] - _SCALE_MARK / 2.0   # 未缩放底中角标质心
+        for dpr in (1.0, 1.25, 1.5, 2.0):
+            with self.subTest(dpr=dpr):
+                top, bottom = self._measure(dpr)
+                # 顶中角标（= 锚点本身）必须还在原地：偏移会被裁掉而整个消失
+                self.assertIsNotNone(top, f"dpr={dpr}: 顶中锚点漂移，角标被裁")
+                self.assertIsNotNone(bottom, f"dpr={dpr}: 底部角标被裁")
+                self.assertAlmostEqual(top[0], cx, delta=1.5, msg=f"dpr={dpr} 锚点 x 漂移")
+                self.assertAlmostEqual(top[1], mark_cy, delta=1.5, msg=f"dpr={dpr} 锚点 y 漂移")
+                # 底部角标 = 锚点 + 1.1 倍原距（倍率与锚点同时对）
+                self.assertAlmostEqual(
+                    bottom[1], cy + (bottom_cy - cy) * 1.1, delta=1.5, msg=f"dpr={dpr} 倍率不对"
+                )
+                self.assertAlmostEqual(bottom[0], cx, delta=1.5, msg=f"dpr={dpr} 卡片横向错位")
+
+    def test_scale_below_one_shrinks_toward_anchor(self):
+        """按下段（factor < 1）同样走缩放路径：锚点不动、底中向锚点收拢
+        （旧实现 factor<=1 直接画原图，这一路是抓取"按下-弹起"的前提）。
+        取 0.9 而非 SCALE_PRESS，让"是否真的缩了"有像素级余量。"""
+        self.eff.factor = 0.9
+        top, bottom = self._measure(1.0)
+        self.assertIsNotNone(top, "按下态没画出卡片")
+        self.assertIsNotNone(bottom, "按下态底部角标被裁")
+        cy = float(_SCALE_CARD[1])
+        base_bottom = cy + _SCALE_CARD[3] - _SCALE_MARK / 2.0
+        self.assertAlmostEqual(top[1], cy + _SCALE_MARK / 2.0, delta=1.5)
+        self.assertAlmostEqual(
+            bottom[1], cy + (base_bottom - cy) * 0.9, delta=1.5, msg="按下态未收拢"
+        )
+
+    def test_bare_instance_after_resurrection_is_safe(self):
+        """空壳实例（PyQt 复活路径）上虚拟方法不得抛异常。
+
+        setGraphicsEffect 之后效果归 Qt 所有，Python 实例状态可以先没掉而
+        C++ 对象仍装在被拖卡上——此后任何一次重绘都会让 PyQt 用「没走过
+        __init__ 的空壳」重建包装器。此处用「真 C++ 对象 + 清空 __dict__」
+        复刻该状态（套件里触发它依赖前序用例堆出的状态，不可稳定复现，但
+        空壳读属性的行为一致）。曾经 boundingRectFor 读 _max_factor 直接
+        AttributeError——虚拟回调里抛异常 PyQt 就 qFatal 硬崩，正是 2026-09-14
+        全量套件 exit 127 的真因。空壳态须退化为不缩放、画原图。
+        """
+        from ui.textedit_area import _CardScaleEffect
+
+        cont = QWidget()
+        cont.resize(*_SCALE_CANVAS)
+        cont.setStyleSheet("background: #000000;")
+        card = _ScaleProbeCard(cont)
+        card.setGeometry(*_SCALE_CARD)
+        eff = _CardScaleEffect(1.1)
+        card.setGraphicsEffect(eff)
+        eff.factor = 1.1
+        eff.__dict__.clear()  # 空壳：C++ 对象还活着，Python 侧状态没了
+
+        src = QRectF(0, 0, _SCALE_CARD[2], _SCALE_CARD[3])
+        self.assertEqual(eff.factor, 1.0, "空壳态应退化到不缩放")
+        self.assertEqual(eff.boundingRectFor(src), src, "空壳态不得外扩绘制边界")
+        img = QImage(*_SCALE_CANVAS, QImage.Format.Format_ARGB32_Premultiplied)
+        img.fill(QColor(0, 0, 0))
+        painter = QPainter(img)
+        eff.draw(painter)  # factor<=1 走 drawSource 分支，不得抛
+        painter.end()
+        card.setGraphicsEffect(None)  # 收尾摘除，别留给后续用例回收
+        cont.close()
 
 
 if __name__ == "__main__":

@@ -14,6 +14,26 @@
 
 ---
 
+### 抓住缩放两处修复：高 DPI 锚点单位混用 + PyQt 空壳包装器硬崩
+
+**问题/需求：** 上一提交（4d980866）在 125% 缩放的机器上实测，抓住卡片放大后明显偏移、顶行发虚（同一提交在 100% 缩放的 Win10 上正常）。根因是锚点单位混用：`painter.deviceTransform().map()` 输出的是**设备像素**，而 `resetTransform()` 之后 painter 仍按**逻辑坐标**绘制（`sourcePixmap(DeviceCoordinates)` 的 offset 也是逻辑坐标 + 自带 `devicePixelRatio` 的位图，DPR 由 Qt 在绘制时施加）。误差 = (1 − 倍率) × (DPR − 1) × 卡片在窗口里的坐标，DPR=1 时恒等故 Win10 看不出；高 DPI 屏上越靠下/靠右偏得越多，且因外扩只在底部（顶部为 0）把缩放后的上缘推出裁剪区。另跑全量测试发现 **`verify --full` 在 main 上本来就硬崩**（exit 127、无 traceback，二分定位同一提交：父提交 3/3 全绿 / HEAD 4/4 全崩）：`setGraphicsEffect` 后效果归 Qt 所有，Python 实例可以先没掉而 C++ 对象仍装在被拖卡上，此后任意一次重绘都会让 PyQt 用「没走过 `__init__` 的空壳」重建包装器，虚拟方法里读 `_max_factor` 抛 `AttributeError`，而虚拟回调里抛异常 PyQt 直接 qFatal。
+
+**改动要点：** ① 锚点除掉 `deviceTransform` 自身的线性缩放（m11/m22 = 屏幕 DPR）换算回逻辑坐标，DPR=1 时逐像素等价于旧实现（Win10 手感不变）；DPR 1/1.25/1.5/2 实测顶中锚点钉在原位、底中精确落在 1.1 倍处，顶中角标不再被裁。② `ui/textedit_area.py::_CardScaleEffect` 加类属性兜底（`_max_factor` / `_factor` / `_anim`），空壳态退化为「不缩放、画原图」（与 `factor <= 1` 同路径，视觉上等于效果已释放），虚拟方法不再可能抛异常——这不只是测试问题，应用里残留效果被重绘同样会整体 abort。③ `tests/test_row_drag.py::CardScaleAnchorTest` 新增两组用例：DPR 1/1.25/1.5/2 用带 DPR 的 QImage 离屏直渲断言锚点（离屏屏幕本身 DPR=1，直接 grab 看不出来）；空壳实例（真 C++ 对象 + 清空 `__dict__`）虚拟方法不抛。两组都反向验证过「改回旧写法必红」。诊断手法存档：崩点无 traceback 是 pytest 的 fd 捕获吞掉了致命输出，用外挂 `sys.excepthook`（写文件、不经 fd）才抓到 `AttributeError`，再以 `weakref` 探针确认「Python 实例先回收、C++ 仍活着」的时序。`verify.py --full` 恢复全绿（843 passed，3 次连跑稳定）。
+
+**涉及文件：** `ui/textedit_area.py`、`tests/test_row_drag.py`、`docs/daily_log.md`
+
+---
+
+### 行拖拽动画优化（遮罩淡入淡出弃用）
+
+**问题/需求：** 抓住缩放落地后收拾动画手感，前提是**性能优先、不引入投影/模糊**：跟手发飘、落点指示框瞬移、松手瞬间"一亮一暗"、多选堆叠三张一起飞、贴边自动滚动猛启猛停。
+
+**改动要点：** ① 落点指示框交给 `_move_card` 走同一条补间（跨行时跟着行滑过去，不再瞬移到目标槽位而行还在半路）。② `ui/textedit_area.py::_move_card` 加 `duration` 参数：跟手 `CHASE_MS=90`、落位 `SETTLE_MS=140`，并把「目标未变不重启」守卫从跟手路径内联集中进 `_move_card`（高频鼠标事件与连续跨行不再平白新建动画对象）。③ 多选堆叠逐卡落后 `STAGGER_MS=14`：聚拢（`begin_rows_drag`）与展开（`_settle_to_layout` 的 `unstack`）都按 rank 递增时长，读起来是"一张张码下去"。④ 抓取加「按下-弹起」：`_CardScaleEffect.animate_to` 支持 `dip`/`dip_at` 关键值（先缩到 `SCALE_PRESS=0.97` 再弹到 1.1），`draw()` 判据由 `factor <= 1.0` 改 `abs(factor − 1.0) <= 1e-3` 以支持 factor<1；还原 `SCALE_OUT_MS=110` 略快于落位。**约束记录**：`boundingRectFor` 的外扩余量只按 `GRAB_SCALE` 给足，日后改用带回弹过冲的曲线必须同步放大余量，否则两侧被裁。⑤ 自动滚动：速度向目标渐变（`AUTOSCROLL_RAMP=0.3`，离开边缘用 0.55 强衰减收尾）、亚像素累加步进（边缘不再整像素跳步）、定时器间隔改 `_frame_interval()`（沿用 `ui/pie_menu.py::_anim_interval` / `ui/configpanel.py::_scroll_interval` 的 animation_fps/刷新率惯例）。**遮罩淡入淡出（本期唯一被放弃项）**：两版实现——`QPropertyAnimation` 驱动 alpha、area 定时器推 alpha + 淡完进退休名单延迟退役——都引出罕见硬崩（全量 pytest 1/5、`-v` 1/4、standalone 最高 9/12；唯一抓到的栈指向 `ui/textedit_area.py::_DragGapFrame.paintEvent` 的 `drawRoundedRect` access violation），撤掉后全量 0/8、`-v` 0/4、standalone 0/10；`_DragDim` 保留自绘（不逐帧改 QSS、不挂图形效果）但 alpha 固定，视觉与改前一致。**排查手法存档**：standalone 的崩静默（`-X faulthandler` 不落盘 = qFatal 家族），pytest 自带 faulthandler 反而把这类 heisenbug"治好"、拿不到栈；判稳必须两边都收数字。性能实测不升反微降（20 行卡片、400 次重定向、60 帧整区渲染：1.63 vs 改前 1.74 ms/帧，动画对象 419 vs 426）。测试新增 `tests/test_row_drag.py::RowDragTest` 的指示框跟滑、跟手/落位时长与逐卡落后、`CardScaleAnchorTest::test_scale_below_one_shrinks_toward_anchor`（factor<1 渲染路径）各一组。
+
+**涉及文件：** `ui/textedit_area.py`、`tests/test_row_drag.py`、`docs/技术实现/泛用工作台_规划.md`、`docs/daily_log.md`
+
+---
+
 ## 2026-09-13
 
 ### LLM profile 选取链路修复：全局激活项 + 统一解析层

@@ -16,6 +16,7 @@ from qtpy.QtCore import (
 from qtpy.QtGui import (
     QColor,
     QFocusEvent,
+    QGuiApplication,
     QInputMethodEvent,
     QKeyEvent,
     QMouseEvent,
@@ -431,7 +432,8 @@ class _DragGapFrame(QFrame):
 
     QSS 的 ``border-style: dashed`` 虚线段细且段长不可调，实测难以辨认，
     改用 QPainter 自绘：笔宽 / 虚线段长 / 圆角全部可控，强调色走主题
-    变量（ui/misc.py::get_theme_color），随主题即时取色。
+    变量（ui/misc.py::get_theme_color），随主题即时取色。不读任何实例
+    状态（PyQt 复活出空壳实例也照画不误）。
     """
 
     PEN_WIDTH = 3
@@ -458,21 +460,60 @@ class _DragGapFrame(QFrame):
         p.drawRoundedRect(rect, self.RADIUS, self.RADIUS)
 
 
+class _DragDim(QWidget):
+    """拖拽变暗遮罩：自绘一层半透明黑。
+
+    不逐帧改 ``setStyleSheet``（每帧重解析 QSS），也不挂 QGraphicsEffect
+    （Python 子类效果的析构/空壳坑见 _CardScaleEffect 注释）；整块覆盖
+    scrollContent，一帧一次 fillRect，成本可忽略。类属性兜底（空壳实例
+    无实例字典时画不出东西，而不是抛异常）。
+    """
+
+    _alpha = 0.0
+
+    def __init__(self, parent: QWidget, alpha: int) -> None:
+        super().__init__(parent)
+        self._alpha = float(alpha)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+
+    def paintEvent(self, event) -> None:
+        a = int(round(self._alpha))
+        if a <= 0:
+            return
+        QPainter(self).fillRect(self.rect(), QColor(0, 0, 0, min(a, 255)))
+
+
 class _CardScaleEffect(QGraphicsEffect):
     """拖拽抓住卡的纯绘制层缩放（顶中锚）。
 
     绘制走 DeviceCoordinates 快照（Qt drop-shadow 同款模式）：快照按
     boundingRectFor 外扩后的边界抓取，resetTransform 后围绕源矩形顶中
-    锚的设备坐标做 scale——只改绘制不改几何，layout 与落点指示框零感
-    知；顶中锚使堆顶（咬住光标的抓取点）在缩放中保持不动。boundingRect
-    按最大倍率一次性外扩（横向两侧均摊、纵向全在底部），动画改 factor
-    只需 update()，无需重报几何。
+    锚做 scale——只改绘制不改几何，layout 与落点指示框零感知；顶中锚
+    使堆顶（咬住光标的抓取点）在缩放中保持不动。boundingRect 按最大
+    倍率一次性外扩（横向两侧均摊、纵向全在底部），动画改 factor 只需
+    update()，无需重报几何。
+
+    快照取设备像素（高 DPI 屏放大后不糊），而 resetTransform 之后
+    painter 与 sourcePixmap 的 offset 都回到逻辑坐标（DPR 由 Qt 在绘制
+    时施加、pixmap 自带 devicePixelRatio），故锚点须从设备像素换算回逻
+    辑坐标，见 draw 内注释。
 
     缩放动画以效果自身为父、驱动自身的 factor 属性（animate_to）：
     效果被摘除/控件销毁时动画随之析构，回调链上没有任何指向拖拽区
     的引用——引用循环会让拖拽区只能等 GC 拆环，级联析构时重入
     Python 回调触碰已删 C++ 对象直接硬崩（测试套件批量回收 area 引爆）。
     """
+
+    # 类属性兜底（勿删）：setGraphicsEffect 之后效果归 Qt 所有，Python
+    # 实例可能先被回收而 C++ 对象仍装在被拖卡上——此后任何一次重绘都会
+    # 让 PyQt 用「没走过 __init__ 的空壳」重建包装器，虚拟方法里读实例
+    # 属性即 AttributeError，而虚拟回调里抛异常 PyQt 直接 qFatal 硬崩
+    # （2026-09-14 全量套件 exit 127 的真因：套件里前序用例的残留效果在
+    # 后续用例建卡重绘时被唤醒）。空壳态退化为不缩放、画原图，与
+    # factor<=1 同一路径，视觉上等于「效果已释放」。
+    _max_factor = 1.0
+    _factor = 1.0
+    _anim = None
 
     def __init__(self, max_factor: float):
         super().__init__()
@@ -489,9 +530,15 @@ class _CardScaleEffect(QGraphicsEffect):
 
     factor = Property(float, _get_factor, _set_factor)
 
-    def animate_to(self, factor: float, duration: int, on_done=None) -> None:
+    def animate_to(
+        self, factor: float, duration: int, on_done=None, dip=None, dip_at=0.3
+    ) -> None:
         """把 factor 补间到目标值；*on_done* 不得持有拖拽区（防引用
-        循环），且须容忍动画随效果析构时才触发的场景。"""
+        循环），且须容忍动画随效果析构时才触发的场景。
+
+        *dip*（可选）在时间轴 *dip_at* 处插一个中间值：抓住时先缩到 *dip*
+        再弹到目标（squash→pop）。两端外的过冲不要用——``boundingRectFor``
+        只按 GRAB_SCALE 外扩，超出部分会被裁掉两侧。"""
         old = self._anim
         if old is not None:
             try:
@@ -502,6 +549,8 @@ class _CardScaleEffect(QGraphicsEffect):
         anim.setDuration(duration)
         anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         anim.setStartValue(self._factor)
+        if dip is not None:
+            anim.setKeyValueAt(dip_at, dip)
         anim.setEndValue(factor)
         if on_done is not None:
             anim.finished.connect(on_done)
@@ -514,7 +563,9 @@ class _CardScaleEffect(QGraphicsEffect):
         return src.adjusted(-extra_w / 2.0, 0.0, extra_w / 2.0, extra_h)
 
     def draw(self, painter: QPainter) -> None:
-        if self._factor <= 1.0:
+        # 恰好 1.0（含还原动画尾帧）直接走原图，省一次像素快照；其余含
+        # factor < 1 的按下压缩都走同一放大路径（顶中锚等比即可）
+        if abs(self._factor - 1.0) <= 1e-3:
             self.drawSource(painter)
             return
         src = self.sourceBoundingRect()
@@ -524,8 +575,16 @@ class _CardScaleEffect(QGraphicsEffect):
         )
         if pixmap.isNull():
             return
-        pivot = painter.deviceTransform().map(
-            QPointF(src.x() + src.width() / 2.0, src.y())
+        # 锚点换算：deviceTransform 映射出的是设备像素，而 resetTransform 之
+        # 后 painter 以逻辑坐标绘制（sourcePixmap 的 offset 与 pixmap 的
+        # devicePixelRatio 也都是逻辑单位，DPR 由 Qt 绘制时施加），故须除掉
+        # 自身的线性缩放（即屏幕 DPR）。混用会把锚点放大 DPR 倍，卡片按其在
+        # 屏上的位置成比例偏移：DPR=1 的屏上恒等（看不出），高 DPI 屏上越靠
+        # 下偏得越多，且顶行溢出后被裁掉。
+        dt = painter.deviceTransform()
+        pivot = dt.map(QPointF(src.x() + src.width() / 2.0, src.y()))
+        pivot = QPointF(
+            pivot.x() / (dt.m11() or 1.0), pivot.y() / (dt.m22() or 1.0)
         )
         painter.save()
         painter.resetTransform()
@@ -554,6 +613,24 @@ def _detach_scale_effect(pw, eff):
     QTimer.singleShot(0, _detach)
 
 
+def _frame_interval() -> int:
+    """手驱动定时器的帧间隔（ms）：沿用仓库惯例（ui/pie_menu.py::_anim_interval
+    / ui/configpanel.py::_scroll_interval）——``pcfg.animation_fps`` 优先，
+    否则按屏幕刷新率，兜底 16ms（60fps）。"""
+    fps = pcfg.animation_fps
+    if fps > 0:
+        return int(round(1000.0 / fps))
+    try:
+        app = QGuiApplication.instance()
+        screens = app.screens() if app is not None else []
+        hz = screens[0].refreshRate() if screens else 0
+        if hz <= 0:
+            return 16
+        return max(8, min(int(round(1000.0 / hz)), 16))
+    except Exception:
+        return 16
+
+
 class TextEditListScrollArea(QScrollArea):
     textblock_list: List[TextBlock] = []
     pairwidget_list: List[TransPairWidget] = []
@@ -575,10 +652,30 @@ class TextEditListScrollArea(QScrollArea):
     # 拖拽期间盖在非拖拽内容上的变暗遮罩不透明度（0-255，约 15%）
     DIM_ALPHA = 38
     # 抓住卡的放大倍率：纯绘制层效果（_CardScaleEffect 顶中锚），
-    # layout 与落点指示框不动；关动画（animation_fps < 0）时不启用
+    # layout 与落点指示框不动；关动画（animation_fps < 0）时不启用。
+    # 注意：效果的外扩余量按本值一次性给足（见 _CardScaleEffect
+    # .boundingRectFor），倍率若改用带回弹过冲的曲线，余量要一并放大，
+    # 否则过冲部分会被裁掉两侧。
     GRAB_SCALE = 1.1
-    # 放大/还原动画时长（与 _move_card 位移动画同时长同曲线）
-    SCALE_MS = 140
+    # 抓住瞬间先下压再弹起（squash→pop，手感上像"被手按了一下"）
+    SCALE_PRESS = 0.97
+    # 下压段在抓取动画时间轴上的位置（0-1）
+    SCALE_PRESS_AT = 0.28
+    # 抓取放大总时长（含下压段）与释放还原时长：还原比行落位（SETTLE_MS）
+    # 略快，卡片有"落进槽位"的层次感
+    SCALE_IN_MS = 160
+    SCALE_OUT_MS = 110
+    # 位移动画时长：跟手（拖拽中追随光标）要更短才不发飘；落位（让位/
+    # 退应）保持从容
+    CHASE_MS = 90
+    SETTLE_MS = 140
+    # 多选堆叠逐卡落后步长：聚拢/展开读起来是"码起来"而不是一起飞
+    STAGGER_MS = 14
+    # 自动滚动：触发边缘距离、速度爬升系数（向目标速度渐变，不猛启猛停）、
+    # 停下的速度阈值
+    AUTOSCROLL_EDGE = 30
+    AUTOSCROLL_RAMP = 0.3
+    AUTOSCROLL_MIN_STOP = 0.5
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -602,7 +699,9 @@ class TextEditListScrollArea(QScrollArea):
         # 抓住缩放（_CardScaleEffect）：pw → 在册效果；动画由效果自驱
         self._scale_effects = {}
         self._auto_timer: QTimer = None
-        self._auto_speed = 0
+        self._auto_speed = 0.0        # 当前滚动速度（px/tick，向目标渐变）
+        self._auto_target = 0.0       # 目标滚动速度（按接近边缘程度给）
+        self._scroll_acc = 0.0        # 亚像素累加：避免边缘处整像素跳步
 
         self.scrollContent = Widget(parent=self)
         self.setWidget(self.scrollContent)
@@ -731,25 +830,23 @@ class TextEditListScrollArea(QScrollArea):
         for w in self.pairwidget_list:
             self.vlayout.removeWidget(w)
 
-        # 变暗遮罩：盖住非拖拽内容（WA_StyledBackground 让纯 QWidget
-        # 生效 QSS 背景色），拖拽组与指示框浮在其上保持原生全分辨率渲染
-        self._drag_dim = QWidget(self.scrollContent)
-        self._drag_dim.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
-        )
-        self._drag_dim.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self._drag_dim.setStyleSheet(
-            f"background-color: rgba(0, 0, 0, {self.DIM_ALPHA});"
-        )
+        # 变暗遮罩：盖住非拖拽内容，拖拽组与指示框浮在其上保持原生
+        # 全分辨率渲染。自绘（不逐帧改 QSS、不挂图形效果）
+        self._drag_dim = _DragDim(self.scrollContent, self.DIM_ALPHA)
         self._drag_dim.setGeometry(
             0, 0, self.scrollContent.width(), self.scrollContent.height()
         )
         self._drag_dim.show()
 
-        # 落点指示框（位置随 _apply_arrangement 刷新）
+        # 落点指示框（位置随 _apply_arrangement 刷新）：先直接就位，跨行
+        # 才走补间——首帧从 (0,0) 飞进来会很怪
         self._gap_frame = _DragGapFrame(self.scrollContent)
         self._gap_frame.setAttribute(
             Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+        _, gap_top0 = self._arrange_targets()
+        self._gap_frame.setGeometry(
+            self._base_x, gap_top0, self._card_w, self._gap_h
         )
 
         # 提层：被拖组挂到主窗口层。滚动区/视口/内容的父边界会裁掉
@@ -767,15 +864,21 @@ class TextEditListScrollArea(QScrollArea):
                 w.setParent(self._pile_parent)
                 w.move(self._pile_parent.mapFromGlobal(gp))
                 w.show()
-        # 被拖组保持真身可见：聚拢动画飞向光标锚点；z 序按原顺序
-        # 后位卡在上，各卡头顶条（含编号徽标）依次可见。
+        # 被拖组保持真身可见：聚拢动画飞向光标锚点（逐卡落后 STAGGER_MS，
+        # 读起来是"码起来"而不是一起飞）；z 序按原顺序，后位卡在上，
+        # 各卡头顶条（含编号徽标）依次可见。
         # 抓住缩放：快速连拖时上一局的还原动画可能仍在飞，先清干净
         # 再装效果并放大（与聚拢飞行同时进行）
         self._clear_scale_effects()
         self._install_scale_effects(drags)
         pile_org_y = self._pile_org_in_parent().y()
-        for w, off in zip(drags, self._pile_offsets):
-            self._move_card(w, pile_org_y + pile_top + off, animate=True)
+        for i, (w, off) in enumerate(zip(drags, self._pile_offsets)):
+            self._move_card(
+                w,
+                pile_org_y + pile_top + off,
+                animate=True,
+                duration=self.CHASE_MS + i * self.STAGGER_MS,
+            )
         self._apply_arrangement(animate=True)
         self._gap_frame.show()
         self._drag_dim.raise_()
@@ -808,15 +911,31 @@ class TextEditListScrollArea(QScrollArea):
             self._move_card(w, ty, animate)
         if self._gap_frame is not None:
             self._gap_frame.setGeometry(
-                self._base_x, gap_top, self._card_w, self._gap_h
+                self._base_x,
+                self._gap_frame.y(),
+                self._card_w,
+                self._gap_h,
             )
+            # 指示框走与行同一条补间（跨行时框跟着行滑过去，而不是瞬移
+            # 到目标槽位、行还在半路）；登记进同一张 _pos_anims 表，
+            # 收尾一并停掉
+            self._move_card(self._gap_frame, gap_top, animate)
 
-    def _move_card(self, pw: TransPairWidget, target_y: int, animate: bool):
+    def _move_card(
+        self, pw: TransPairWidget, target_y: int, animate: bool, duration: int = None
+    ):
+        """把卡片补间到目标 y（x 不动）；*duration* 缺省用落位时长。
+
+        目标未变则不重启：高频鼠标事件与连续跨行会反复调用，重启只会
+        平白创建动画对象（拖拽中的跟手补间即靠这条合并重定向）。"""
         if pw.y() == target_y:
             return
         old = self._pos_anims.pop(pw, None)
         if old is not None:
             try:
+                if old.endValue().y() == target_y:
+                    self._pos_anims[pw] = old  # 已在飞向同一目标，留着
+                    return
                 old.stop()
             except RuntimeError:
                 pass
@@ -824,7 +943,7 @@ class TextEditListScrollArea(QScrollArea):
             pw.move(pw.x(), target_y)
             return
         anim = QPropertyAnimation(pw, b"pos", self)
-        anim.setDuration(140)
+        anim.setDuration(self.SETTLE_MS if duration is None else duration)
         anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         anim.setStartValue(pw.pos())
         anim.setEndValue(QPoint(pw.x(), target_y))
@@ -844,18 +963,24 @@ class TextEditListScrollArea(QScrollArea):
     # 在动画结束后自行摘除——登记表与效果/动画之间无引用循环。
 
     def _install_scale_effects(self, pws):
-        """抓住：被拖组装上缩放效果并放大到 GRAB_SCALE（关动画不装）。"""
+        """抓住：被拖组装上缩放效果并放大到 GRAB_SCALE（关动画不装）；
+        先下压再弹起（squash→pop），手上有「被抓住」的实感。"""
         if pcfg.animation_fps < 0:
             return
         for pw in pws:
             eff = _CardScaleEffect(self.GRAB_SCALE)
             pw.setGraphicsEffect(eff)
             self._scale_effects[pw] = eff
-            eff.animate_to(self.GRAB_SCALE, self.SCALE_MS)
+            eff.animate_to(
+                self.GRAB_SCALE,
+                self.SCALE_IN_MS,
+                dip=self.SCALE_PRESS,
+                dip_at=self.SCALE_PRESS_AT,
+            )
 
     def _release_scale_effects(self):
-        """放下/取消：缩放还原（与退应飞行并行），效果出册并自驱缩回、
-        动画结束后自行摘除。"""
+        """放下/取消：缩放还原（与退应飞行并行，略快于落位时长），效果
+        出册并自驱缩回、动画结束后自行摘除。"""
         for pw, eff in list(self._scale_effects.items()):
             self._scale_effects.pop(pw, None)
             try:
@@ -864,7 +989,7 @@ class TextEditListScrollArea(QScrollArea):
                 continue  # 效果已随控件销毁，无事可做
             eff.animate_to(
                 1.0,
-                self.SCALE_MS,
+                self.SCALE_OUT_MS,
                 on_done=lambda pw=pw, eff=eff: _detach_scale_effect(pw, eff),
             )
 
@@ -916,45 +1041,61 @@ class TextEditListScrollArea(QScrollArea):
         y_content = int(self._drag_cursor_vp_y + sb.value())
         pile_org_y = self._pile_org_in_parent().y()
         for w, off in zip(self._drag_pws, self._pile_offsets):
-            # 追随式跟随：拖拽组永远朝光标做补间（140ms OutCubic），
-            # 鼠标每动一次重定目标——聚拢动画天然可见，任何时刻都不
-            # 瞬移；目标未变则不重启（防高频鼠标事件反复创建动画对象）。
-            # 让位判定用的是光标坐标（_update_gap），不受视觉滞后影响。
-            # ty 为提层父级坐标：内容 y 经 _pile_org_in_parent 换算。
+            # 追随式跟随：拖拽组永远朝光标做补间（跟手用 CHASE_MS，比落位
+            # 短，抓着才不发飘），鼠标每动一次重定目标——聚拢动画天然可见，
+            # 任何时刻都不瞬移；目标未变则不重启（_move_card 内合并重定向，
+            # 防高频鼠标事件反复创建动画对象）。让位判定用光标坐标
+            # （_update_gap），不受视觉滞后影响。ty 为提层父级坐标：内容 y
+            # 经 _pile_org_in_parent 换算。
             ty = pile_org_y + y_content + off
-            old = self._pos_anims.get(w)
-            if old is not None:
-                try:
-                    if old.endValue().y() == ty:
-                        continue
-                except RuntimeError:
-                    pass
-            self._move_card(w, ty, animate=True)
+            self._move_card(w, ty, animate=True, duration=self.CHASE_MS)
         self._update_gap(y_content)
-        # 视口边缘自动滚动（靠近上下缘 30px 内，越近越快）
+        # 视口边缘自动滚动：把"接近边缘的程度"折算成目标速度（越近越快），
+        # 实际速度逐 tick 向目标渐变——起步/停下都不再是硬开关
         vp_h = self.viewport().height()
-        edge = 30
-        speed = 0
+        edge = self.AUTOSCROLL_EDGE
         if self._drag_cursor_vp_y < edge:
-            speed = -max(3, int((edge - self._drag_cursor_vp_y) * 0.25))
+            self._auto_target = -max(3.0, (edge - self._drag_cursor_vp_y) * 0.25)
         elif self._drag_cursor_vp_y > vp_h - edge:
-            speed = max(3, int((self._drag_cursor_vp_y - (vp_h - edge)) * 0.25))
-        if speed:
-            self._auto_speed = speed
-            if self._auto_timer is None:
-                t = QTimer(self)
-                t.timeout.connect(self._auto_scroll_tick)
-                self._auto_timer = t
-                t.start(16)
-        elif self._auto_timer is not None:
+            self._auto_target = max(
+                3.0, (self._drag_cursor_vp_y - (vp_h - edge)) * 0.25
+            )
+        else:
+            self._auto_target = 0.0
+        if self._auto_target and self._auto_timer is None:
+            t = QTimer(self)
+            t.timeout.connect(self._auto_scroll_tick)
+            self._auto_timer = t
+            t.start(_frame_interval())
+        # 目标为 0 时不在此处停表：让 _auto_scroll_tick 把速度渐降到阈值
+        # 再停（否则离缘瞬间的急停仍然突兀）
+
+    def _auto_scroll_tick(self):
+        # 向目标速度渐变；目标归零后用更强的衰减收尾（约 60ms 停下，
+        # 只多滚几个像素——不是惯性滑行）
+        ramp = self.AUTOSCROLL_RAMP if self._auto_target else 0.55
+        self._auto_speed += (self._auto_target - self._auto_speed) * ramp
+        if not self._auto_target and abs(self._auto_speed) < self.AUTOSCROLL_MIN_STOP:
+            self._stop_auto_scroll()
+            return
+        # 亚像素累加：速度 < 1px/tick 时也能按整数步进滚出去，
+        # 边缘处不再每次整像素跳步
+        self._scroll_acc += self._auto_speed
+        step = int(self._scroll_acc)
+        if step:
+            self._scroll_acc -= step
+            sb = self.verticalScrollBar()
+            sb.setValue(sb.value() + step)
+        self._update_drag_frame()
+
+    def _stop_auto_scroll(self):
+        if self._auto_timer is not None:
             self._auto_timer.stop()
             self._auto_timer.deleteLater()
             self._auto_timer = None
-
-    def _auto_scroll_tick(self):
-        sb = self.verticalScrollBar()
-        sb.setValue(sb.value() + self._auto_speed)
-        self._update_drag_frame()
+        self._auto_speed = 0.0
+        self._auto_target = 0.0
+        self._scroll_acc = 0.0
 
     def _restore_layout(self, order: List[TransPairWidget]):
         for i, w in enumerate(order):
@@ -976,16 +1117,8 @@ class TextEditListScrollArea(QScrollArea):
         except RuntimeError:
             pass
         self.viewport().unsetCursor()
-        if self._auto_timer is not None:
-            self._auto_timer.stop()
-            self._auto_timer.deleteLater()
-            self._auto_timer = None
-        for w in (self._drag_dim, self._gap_frame):
-            if w is not None:
-                w.hide()
-                w.deleteLater()
-        self._drag_dim = None
-        self._gap_frame = None
+        self._stop_auto_scroll()
+        self._retire_overlays()
         for anim in list(self._pos_anims.values()):
             try:
                 anim.stop()
@@ -1011,6 +1144,15 @@ class TextEditListScrollArea(QScrollArea):
         # 缩放还原与退应飞行并行（动画结束各自摘效果/自清登记）
         self._release_scale_effects()
 
+    def _retire_overlays(self):
+        """拖拽收尾：遮罩/指示框隐藏并交给事件循环销毁。"""
+        for w in (self._drag_dim, self._gap_frame):
+            if w is not None:
+                w.hide()
+                w.deleteLater()
+        self._drag_dim = None
+        self._gap_frame = None
+
     def _finish_drag(self):
         """松手落账：快照当前位置 → 布局按新序归还并同步激活到终态
         → 经 rearrange_blks 即时落账（几何所见即终态，消费端补间自动
@@ -1019,6 +1161,7 @@ class TextEditListScrollArea(QScrollArea):
         与拖拽中的位移动画一致。"""
         if not self._drag_active:
             return
+        drags = list(self._drag_pws)
         self._teardown_drag()
         new_order = (
             self._rest[: self._gap_slot] + self._drag_pws + self._rest[self._gap_slot:]
@@ -1030,30 +1173,38 @@ class TextEditListScrollArea(QScrollArea):
         self._drag_pws = []
         self._rest = []
         self._emit_rearrange_from_perm([w.idx for w in new_order])
-        self._settle_to_layout(start_ys)
+        self._settle_to_layout(start_ys, unstack=drags)
 
-    def _settle_to_layout(self, start_ys: dict) -> None:
+    def _settle_to_layout(self, start_ys: dict, unstack=()) -> None:
         """退应动画：行从快照位置飞向（已同步激活的）布局终态；
-        关动画（animation_fps < 0）时保持就地终态不补间。"""
+        *unstack*（被拖组）按堆叠顺序逐卡落后 STAGGER_MS——展开读起来是
+        一张张码下去；关动画（animation_fps < 0）时保持就地终态不补间。"""
         if pcfg.animation_fps < 0:
             return
         finals = {w: w.y() for w in self.pairwidget_list}
+        rank = {w: i for i, w in enumerate(unstack)}
         for w, sy in start_ys.items():
             if sy == finals[w]:
                 continue
             w.move(w.x(), sy)
-            self._move_card(w, finals[w], animate=True)
+            self._move_card(
+                w,
+                finals[w],
+                animate=True,
+                duration=self.SETTLE_MS + rank.get(w, 0) * self.STAGGER_MS,
+            )
 
     def _cancel_drag(self):
         if not self._drag_active:
             return
+        drags = list(self._drag_pws)
         self._teardown_drag()
         start_ys = {w: w.y() for w in self.pairwidget_list}
         self._restore_layout(self.pairwidget_list)  # 原顺序原位
         self.vlayout.activate()
         self._drag_pws = []
         self._rest = []
-        self._settle_to_layout(start_ys)
+        self._settle_to_layout(start_ys, unstack=drags)
 
     def clearDrag(self):
         """外部清拖请求（焦点切走等）：拖拽进行中则取消。"""
