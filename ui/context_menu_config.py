@@ -33,7 +33,14 @@ from qtpy.QtWidgets import (
 )
 
 from utils.block_actions import BLOCK_ACTIONS
-from utils.block_tags import TAG_DEFS, TAG_REGISTRY, has_tag, remove_tag, set_tag, toggle_on_blocks
+from utils.block_tags import (
+    MANUAL_TAG_DEFS,
+    TAG_REGISTRY,
+    has_tag,
+    remove_tag,
+    set_tag,
+    toggle_on_blocks,
+)
 from utils.config import pcfg, save_config
 
 # ── Default layout (mirrors the current hardcoded order) ────
@@ -519,7 +526,9 @@ def _run_tag_checked(canvas, tag_id: str, checked: bool):
     canvas.setProjSaveState(True)
 
 
-for _tag in TAG_DEFS:
+for _tag in MANUAL_TAG_DEFS:
+    # 程序专用标签（TagDef.program_only）不注册人工打标命令：不进右键菜单、
+    # 也不进自定义菜单的可选列表（规划 D2／D38）
     _reg(_make_tag_cmd(_tag.id))
 
 

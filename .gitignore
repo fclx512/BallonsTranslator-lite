@@ -7,6 +7,7 @@ local_*
 inpainted
 mask
 result
+.bt_batch_backup/
 data/models/*
 !data/models/ppocrv6_onnx/
 !data/models/ppocrv6_onnx/ppocrv6_dict_proper.txt

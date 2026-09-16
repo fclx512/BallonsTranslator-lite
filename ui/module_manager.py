@@ -1596,6 +1596,12 @@ class ModuleManager(QObject):
         ocr_panel.addModulesParamWidgets(ocr_params, _build_dep_notes(OCR))
         ocr_panel.paramwidget_edited.connect(self.on_ocrparam_edited)
         ocr_panel.ocr_changed.connect(self.setOCR)
+        # 误识别程序筛选器（规划 D39）：注册在 OCRBase 上、同类实例共享，
+        # 对基类注册一次即覆盖全部 OCR 模块（含当前零标签的 LLM OCR）。
+        # 回调自身短路 none_ocr，见 utils/block_tags.py::tag_misread_hook。
+        from utils.block_tags import tag_misread_hook
+
+        OCRBase.register_postprocess_hooks({"tag_misread": tag_misread_hook})
         config_panel.profiles_changed.connect(self._on_profiles_changed)
         config_panel.unload_models.connect(self.unload_all_models)
 

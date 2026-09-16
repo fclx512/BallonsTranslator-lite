@@ -32,6 +32,7 @@ from qtpy.QtWidgets import (
 
 from utils import shared as C
 from utils.base_styles import copy_value
+from utils.batch_versions import BatchVersionStore
 from utils.config import pcfg
 from utils.fontformat import FontFormat
 from utils.proj_imgtrans import ProjImgTrans
@@ -232,24 +233,30 @@ class GlobalSearchWidget(Widget):
     pages_dirtied = Signal()
     # Emitted right after the user confirms a replace and before any change
     # is applied: MainWindow syncs the current page UI into the model, saves
-    # the project and writes the single-slot batch snapshot (which must
-    # reflect the pre-replace state).
+    # the project and writes one batch version (which must reflect the
+    # pre-replace state) through utils/batch_versions.BatchVersionStore.
     replace_preparing = Signal()
     # (sceneitem_list, background_list, target_text, format_changes) —
     # emitted after a synchronous Replace All collection; MainWindow applies
     # the current-page changes via GlobalReplaceApplier (no undo stack —
-    # rollback goes through the batch snapshot), persists the project, then
+    # rollback goes through the batch version), persists the project, then
     # asks about re-rendering the dirty pages. format_changes 契约 =
     # utils/style_query.build_query_changes（old/new_ffmt 均为深拷贝）。
     replace_finished = Signal(object, object, str, object)
-    # Emitted when the user clicks the rollback strip button (already
-    # confirmed in-panel); MainWindow restores the batch snapshot and
-    # rebuilds the scene.
-    batch_rollback_requested = Signal()
+    # (version_seq) — emitted when the user clicks the rollback strip button
+    # (already confirmed in-panel); MainWindow restores that batch version
+    # and rebuilds the scene. Carries the version the strip was created for
+    # so a version superseded by a later batch operation can be rejected.
+    batch_rollback_requested = Signal(int)
 
     def __init__(self, parent: QWidget = None, *args, **kwargs) -> None:
         super().__init__(parent, *args, **kwargs)
         self.imgtrans_proj: ProjImgTrans = None
+        # 本面板回滚条对应的批量版本号（None＝当前无可回滚的替换）。
+        # MainWindow 在替换前写版本时回填；新一轮替换覆盖它，
+        # 更晚的批量操作写新版后本面板的回滚条自然失效（见
+        # active_replace_version）。
+        self._replace_version_seq: Optional[int] = None
 
         # Live per-page widget lists (the same list objects mutated in place by
         # SceneTextManager), used by Replace All for the current page.
@@ -304,8 +311,8 @@ class GlobalSearchWidget(Widget):
         sp.setHorizontalPolicy(QSizePolicy.Policy.Expanding)
         self.replace_btn.setSizePolicy(sp)
 
-        # 批量替换后的回滚条：批量操作的唯一撤销入口（快照回滚），
-        # 下一次替换或执行回滚后消失，不常驻
+        # 批量替换后的回滚条：替换这一批的撤销入口（批量版本回滚），
+        # 下一次替换、执行回滚或被更晚的批量操作顶掉后消失，不常驻
         self.rollback_strip = QWidget(self)
         self.rollback_strip.setObjectName("RollbackStrip")
         rollback_layout = QHBoxLayout(self.rollback_strip)
@@ -831,12 +838,13 @@ class GlobalSearchWidget(Widget):
 
     def on_replace(self):
         """Replace all matches synchronously; rollback goes through the
-        pre-replace batch snapshot, never through the undo stack."""
+        batch version written before the replace, never through the undo
+        stack."""
         if self.counter_sum < 1:
             return
         if not self._confirm_replace(self.tr("Replace all occurrences?")):
             return
-        # Snapshot + UI sync must happen before collection, which mutates
+        # Version + UI sync must happen before collection, which mutates
         # non-current pages in place.
         self.replace_preparing.emit()
         self._refresh_style_combo()
@@ -845,10 +853,13 @@ class GlobalSearchWidget(Widget):
             self._collect_replace_targets(target)
         )
         if not self._has_staged_changes(sceneitem_list, background_list, format_changes):
-            # No-op replace: the just-written snapshot only mirrors the
-            # current state, so it is worthless — drop it together with any
-            # rollback strip still showing a (now unrecoverable) batch.
-            self.imgtrans_proj.clear_batch_backup()
+            # No-op replace: the version just written only mirrors the current
+            # state, so it is worthless — drop it together with any rollback
+            # strip still showing a (now unrecoverable) batch.
+            BatchVersionStore(self.imgtrans_proj).discard_latest(
+                self._replace_version_seq
+            )
+            self.set_replace_version(None)
             self.hide_rollback_strip()
             self.set_document_edited()
             return
@@ -860,9 +871,37 @@ class GlobalSearchWidget(Widget):
 
     # ── 批量回滚条 ─────────────────────────────────────────────────
 
+    def set_replace_version(self, seq: Optional[int]):
+        """记下本次替换写入的批量版本号（MainWindow 在替换前写版本时调用）。
+
+        ``None`` 表示版本没写成——本次替换不提供回滚入口。
+        """
+        self._replace_version_seq = seq
+
+    def active_replace_version(self) -> Optional[int]:
+        """回滚条当前可撤销的版本号；不可撤销时返回 ``None``。
+
+        判据：面板记着一个版本号，且它**仍是备份目录里最新的一版**。
+        备份机制统一后（``utils/batch_versions.py::BatchVersionStore``），
+        版本目录由查找替换与工作台批量任务共用；若期间已有更晚的批量
+        操作写了新版，那条回滚条对应的旧版就不再是"上一次批量"，
+        点它只会在主窗口侧被拒——不如提前判为不可用，避免误导。
+        """
+        if self._replace_version_seq is None:
+            return None
+        latest = BatchVersionStore(self.imgtrans_proj).latest()
+        if latest is None or latest.seq != self._replace_version_seq:
+            return None
+        return self._replace_version_seq
+
     def _show_rollback_strip(
         self, sceneitem_list: dict, background_list: dict, format_changes: list = ()
     ):
+        if self.active_replace_version() is None:
+            # 版本没写成：本次替换无从回滚。宁可不显示回滚条，
+            # 也不显示一个点了没用的按钮。
+            self.hide_rollback_strip()
+            return
         current_img = self.imgtrans_proj.current_img
         block_keys = set()
         for rec in sceneitem_list["src"]:
@@ -882,10 +921,17 @@ class GlobalSearchWidget(Widget):
         self.rollback_strip.setVisible(True)
 
     def hide_rollback_strip(self):
+        """收起回滚条并忘掉那一版：此后本面板不再提供回滚入口。
+
+        版本号一并清掉，撤销见底提示（主窗口 ``_notify_history``）才不会
+        在回滚已完成后继续指引到面板。
+        """
         self.rollback_strip.setVisible(False)
+        self._replace_version_seq = None
 
     def _on_rollback_clicked(self):
-        if not self.imgtrans_proj.has_batch_backup():
+        seq = self.active_replace_version()
+        if seq is None:
             self.hide_rollback_strip()
             return
         confirmed = self._confirm_replace(
@@ -894,7 +940,7 @@ class GlobalSearchWidget(Widget):
             )
         )
         if confirmed:
-            self.batch_rollback_requested.emit()
+            self.batch_rollback_requested.emit(seq)
 
     def sizeHint(self) -> QSize:
         size = super().sizeHint()

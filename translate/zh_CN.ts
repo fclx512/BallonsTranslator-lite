@@ -1269,6 +1269,18 @@
             <source>Tag Toolbar</source>
             <translation>标签工具栏</translation>
         </message>
+        <message>
+            <source>&lt;p&gt;How many &lt;b&gt;batch operations&lt;/b&gt; stay undoable. A batch operation is &lt;b&gt;Replace All&lt;/b&gt; in the search panel or a batch task in the workbench: each one writes a backup version into a &lt;code&gt;.bt_batch_backup&lt;/code&gt; folder inside the project directory before it runs (the project data, plus the affected image regions for workbench tasks). &lt;b&gt;Undo&lt;/b&gt; takes the newest version back and consumes it, so &lt;b&gt;1&lt;/b&gt; means only the most recent batch operation can be undone; the oldest version is dropped once the limit is exceeded. Versions live in the project folder, so they travel with the project and outlive a restart.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;可撤销的&lt;b&gt;批量操作&lt;/b&gt;步数。&lt;b&gt;批量操作&lt;/b&gt;指查找替换面板的&lt;b&gt;全部替换&lt;/b&gt;或工作台的批量任务：每个操作执行前会在项目目录内的 &lt;code&gt;.bt_batch_backup&lt;/code&gt; 文件夹写一版备份（项目数据；工作台任务另含受影响的图像区域）。&lt;b&gt;撤销&lt;/b&gt;取最新一版覆盖当前数据并消耗掉它，所以 &lt;b&gt;1&lt;/b&gt; 表示只能撤销最近一次批量操作；超出上限即删掉最旧的一版。版本存在项目文件夹里，随项目一起搬动，重启程序后依然可用。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Backup</source>
+            <translation>备份</translation>
+        </message>
+        <message>
+            <source>Backup Versions</source>
+            <translation>备份版本数</translation>
+        </message>
     </context>
     <context>
         <name>DependencyDialog</name>
@@ -2655,6 +2667,14 @@ Set this file as the active glossary now?</source>
         <message>
             <source>Your extra requirement</source>
             <translation>你的补充要求</translation>
+        </message>
+        <message>
+            <source>Global replace</source>
+            <translation>全文替换</translation>
+        </message>
+        <message>
+            <source>Rollback failed: the backup version is missing or was superseded by a newer batch operation.</source>
+            <translation>回滚失败：备份版本已失效，或已被更晚的批量操作覆盖。</translation>
         </message>
     </context>
     <context>
@@ -7129,6 +7149,26 @@ No pipeline stages will be executed.</source>
         <message>
             <source>Polish Translation</source>
             <translation>译文润色</translation>
+        </message>
+        <message>
+            <source>Empty text</source>
+            <translation>空文本</translation>
+        </message>
+        <message>
+            <source>Misread Text</source>
+            <translation>误识别文本</translation>
+        </message>
+        <message>
+            <source>No kana/kanji</source>
+            <translation>无假名/汉字</translation>
+        </message>
+        <message>
+            <source>Numeric only</source>
+            <translation>纯数字</translation>
+        </message>
+        <message>
+            <source>Symbols only</source>
+            <translation>纯符号</translation>
         </message>
     </context>
     <context>

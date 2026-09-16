@@ -148,10 +148,28 @@ class TestTagToolbar(unittest.TestCase):
         self.toolbar.sync_from_canvas()
         self.toolbar.toggle_expanded()
         self.assertTrue(self.toolbar._panel.isVisible())
+        # 行数 = 可人工打标的标签数（程序专用标签不在此列，故仍是 5）
         self.assertEqual(len(self.toolbar._panel_rows), 5)
         # 收回
         self.toolbar.toggle_expanded()
         self.assertFalse(self.toolbar._panel.isVisible())
+
+    def test_program_only_tag_not_offered(self):
+        """D2／D38：程序专用标签（误识别文本）不提供人工打标途径。"""
+        from utils.block_tags import MANUAL_TAG_DEFS, MISREAD_TAG_ID
+
+        self.assertNotIn(MISREAD_TAG_ID, self.toolbar._compact_buttons)
+        self.assertNotIn(MISREAD_TAG_ID, self.toolbar._panel_rows)
+        self.assertEqual(len(self.toolbar._compact_buttons), len(MANUAL_TAG_DEFS))
+        # 选中块上带该标签时也不应变出按钮（_update_checks 遍历的是
+        # MANUAL_TAG_DEFS，不会因缺键抛 KeyError）
+        from utils.block_tags import apply_misread_tag
+
+        item = self._add_item()
+        apply_misread_tag(item.blk, ["empty"])
+        self.canvas._items = [item]
+        self.toolbar.sync_from_canvas()
+        self.assertNotIn(MISREAD_TAG_ID, self.toolbar._compact_buttons)
 
     def test_clamped_in_host(self):
         item = self._add_item()
@@ -339,6 +357,26 @@ class TestBlockActionCard(unittest.TestCase):
         self.card._hint_edit.setText("  语气更冲  ")
         self.card._on_retry()
         self.assertEqual(got, ["语气更冲"])
+
+
+class TestProgramOnlyTagEntries(unittest.TestCase):
+    """程序专用标签不进右键菜单，也不进自定义菜单的可选列表（D2／D38）。"""
+
+    def test_not_in_context_menu(self):
+        from ui.context_menu_config import COMMAND_REGISTRY, DEFAULT_ORDER
+        from utils.block_tags import MISREAD_TAG_ID
+
+        cmd_id = f"tag_{MISREAD_TAG_ID}"
+        self.assertNotIn(cmd_id, COMMAND_REGISTRY)
+        self.assertNotIn(cmd_id, DEFAULT_ORDER)
+
+    def test_manual_tags_still_registered(self):
+        from ui.context_menu_config import COMMAND_REGISTRY, DEFAULT_ORDER
+        from utils.block_tags import MANUAL_TAG_DEFS
+
+        for tag in MANUAL_TAG_DEFS:
+            self.assertIn(f"tag_{tag.id}", COMMAND_REGISTRY)
+            self.assertIn(f"tag_{tag.id}", DEFAULT_ORDER)
 
 
 if __name__ == "__main__":

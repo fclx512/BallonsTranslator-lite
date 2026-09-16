@@ -6,10 +6,11 @@
 经 live item 施加整块快照外的格式写入，非当前页走数据直写
 + ``mark_page_needs_rerender``。
 
-阶段 2.5（批量快照回滚）：施加器不再继承 QUndoCommand、不进任何撤销栈
-——批量替换的撤销 = 替换前项目快照整体回滚
-（``utils/proj_imgtrans.py::restore_batch_backup``），构造期施加后清空
-涉及文档的撤销栈（文档栈不再参与批量语义）。
+阶段 2.5（批量回滚）：施加器不再继承 QUndoCommand、不进任何撤销栈
+——批量替换的撤销 = 替换前写的批量版本整体回滚
+（``utils/batch_versions.py::BatchVersionStore``；2026-09-16 前是
+``utils/proj_imgtrans.py::restore_batch_backup`` 的单槽快照），构造期
+施加后清空涉及文档的撤销栈（文档栈不再参与批量语义）。
 
 Run:
     ./ballontrans_pylibs_win/python.exe -m pytest tests/test_global_replace_format.py -q

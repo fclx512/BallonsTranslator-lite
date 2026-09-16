@@ -74,6 +74,7 @@ from modules import (
     GET_VALID_TRANSLATORS,
 )
 from utils import shared
+from utils.batch_versions import BatchVersionStore
 from utils.block_actions import (
     ACTION_REGISTRY,
     build_context_lines,
@@ -2615,10 +2616,13 @@ class MainWindow(mainwindow_cls):
                 if (
                     action == "undo"
                     and self.imgtrans_proj is not None
-                    and self.imgtrans_proj.has_batch_backup()
+                    and self.global_search_widget.active_replace_version()
+                    is not None
                 ):
                     # 批量替换与逐块编辑分治：Ctrl+Z 撤不到批量操作，
-                    # 见底时提示真正的回滚入口
+                    # 见底时提示真正的回滚入口。判据取面板回滚条的可用性
+                    # （而非"备份目录里有版本"）：若最新一版已是别的批量
+                    # 操作写的，面板这条回滚条也撤不了，提示会误导。
                     notification.toast(
                         self.tr(
                             "Nothing left to undo. The last batch replace can be rolled back in the search panel."
@@ -4267,10 +4271,13 @@ class MainWindow(mainwindow_cls):
             self._hideSearchOverlay()
 
     def on_global_replace_preparing(self):
-        """替换施加前的最后准备：先同步当前页 UI → 数据并落盘，再写批量快照。
+        """替换施加前的最后准备：先同步当前页 UI → 数据并落盘，再写一版备份。
 
-        快照必须反映替换前的完整状态（含当前页未落盘的手动编辑），
-        因此同步落盘先行；快照须在收集器原地改写非当前页数据之前写好。
+        备份必须反映替换前的完整状态（含当前页未落盘的手动编辑），
+        因此同步落盘先行；备份须在收集器原地改写非当前页数据之前写好。
+        替换只改文本与样式、不碰像素，故不传 ``pixel_regions``（不产
+        像素前图）。写成的版本号回填给面板：回滚条据此确认自己那一版
+        还没被更晚的批量操作顶掉（``utils/batch_versions.py::BatchVersionStore``）。
         """
         self._sync_and_commit_project()
         dirty = [
@@ -4279,7 +4286,12 @@ class MainWindow(mainwindow_cls):
         ]
         if self.imgtrans_proj.current_img:
             dirty.append(self.imgtrans_proj.current_img)
-        self.imgtrans_proj.write_batch_backup(dirty)
+        meta = BatchVersionStore(self.imgtrans_proj).begin(
+            self.tr("Global replace"), dirty_pages=dirty
+        )
+        self.global_search_widget.set_replace_version(
+            meta.seq if meta is not None else None
+        )
 
     def on_global_replace_finished(
         self,
@@ -4291,7 +4303,7 @@ class MainWindow(mainwindow_cls):
         # Runs synchronously right after GlobalSearchWidget collected the
         # live widget references, so they are guaranteed to exist here.
         # No undo stack involvement: the batch is rolled back via the
-        # pre-replace snapshot written in on_global_replace_preparing.
+        # pre-replace batch version written in on_global_replace_preparing.
         GlobalReplaceApplier(
             sceneitem_list,
             target_text,
@@ -4311,20 +4323,31 @@ class MainWindow(mainwindow_cls):
         # 排除语义）：画布文本已实时更新，结果图随保存/切页重渲。
         self._ask_rerender_dirty_pages()
 
-    def on_batch_rollback(self):
-        """批量快照回滚：整体换回替换前的项目数据并重建当前页场景。
+    def on_batch_rollback(self, version_seq: int = None):
+        """批量回滚：用最新一版备份整体换回项目数据并重建当前页场景。
 
-        与逐块编辑撤销分治——本入口丢弃批量替换之后的全部修改（含其
-        后手动编辑），确认对话框在查找替换面板侧完成。
+        与逐块编辑撤销分治——本入口丢弃该批量操作之后的全部修改（含其
+        后手动编辑），确认对话框在查找替换面板侧完成。``version_seq`` 是
+        面板回滚条记下的版本号：只撤它那一版，若期间已有更晚的批量操作
+        写了新版则拒绝执行（避免撤错对象）。
         """
-        if not self.imgtrans_proj.has_batch_backup():
-            return
+        store = BatchVersionStore(self.imgtrans_proj)
         try:
-            self.imgtrans_proj.restore_batch_backup()
+            store.restore_latest(expect_seq=version_seq)
         except Exception as e:
             LOGGER.error(f"Batch rollback failed: {e}")
+            self.global_search_widget.hide_rollback_strip()
+            try:
+                notification.toast(
+                    self.tr(
+                        "Rollback failed: the backup version is missing or was superseded by a newer batch operation."
+                    ),
+                    anchor="bottom-left",
+                )
+            except Exception as err:
+                LOGGER.error(f"rollback toast failed: {err}")
             return
-        # 快照恢复是数据层的整体换入，与页栈中的任何命令都不再相干
+        # 版本恢复是数据层的整体换入，与页栈中的任何命令都不再相干
         self.canvas.clear_undostack(update_saved_step=True)
         self.canvas.updateCanvas()
         self.st_manager.updateSceneTextitems()

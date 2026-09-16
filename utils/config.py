@@ -393,6 +393,11 @@ class ProgramConfig(Config):
     # 下次保存（Qt cleanIndex 落 -1 哨兵，实测无假「已保存」）。
     undo_steps_limit: int = 0
 
+    # 批量操作落盘备份的版本数（规划 D35）：等同于「可连续撤销的批量操作
+    # 步数」。每个批量操作执行前写一版（项目 JSON + 受影响矩形的像素前图），
+    # 超出即删最旧；默认 1、上限 5（utils/batch_versions.py 内再夹一次）。
+    batch_backup_versions: int = 1
+
     fsearch_case: bool = False
     fsearch_whole_word: bool = False
     fsearch_regex: bool = False

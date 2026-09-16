@@ -1515,6 +1515,24 @@ class ConfigPanel(Widget):
             )
         )
 
+        # Backup
+        project_layout.addWidget(_section_header(self.tr("Backup")))
+
+        self.batch_versions_spin = NoArrowsSpinBox()
+        self.batch_versions_spin.setRange(1, 5)
+        self.batch_versions_spin.setValue(pcfg.batch_backup_versions)
+        self.batch_versions_spin.setFixedWidth(CONFIG_COMBOBOX_SHORT)
+        self.batch_versions_spin.valueChanged.connect(
+            lambda v: setattr(pcfg, "batch_backup_versions", v)
+        )
+        project_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Backup Versions"),
+                self.batch_versions_spin,
+                note=self.tr("<p>How many <b>batch operations</b> stay undoable. A batch operation is <b>Replace All</b> in the search panel or a batch task in the workbench: each one writes a backup version into a <code>.bt_batch_backup</code> folder inside the project directory before it runs (the project data, plus the affected image regions for workbench tasks). <b>Undo</b> takes the newest version back and consumes it, so <b>1</b> means only the most recent batch operation can be undone; the oldest version is dropped once the limit is exceeded. Versions live in the project folder, so they travel with the project and outlive a restart.</p>"),
+            )
+        )
+
         # Temporary Projects
         project_layout.addWidget(_section_header(self.tr("Temporary Projects")))
 

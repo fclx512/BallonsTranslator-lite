@@ -266,7 +266,7 @@ R2 是决定性的：外部宿主 agent 是**拉模式**，用户不说话它不
 5. **prompt 注入点**：`modules/translators/agent/prompts.py::build_user_task_message`（用户任务消息组装）、`modules/translators/agent/prompts.py::build_page_context_snippet`（页上下文）、`modules/translators/agent/prompts.py::select_matched_glossary`（术语命中）——指示标签的注入与上下文组装先例全在此文件。
 6. **视觉请求**：发图先例 `modules/inpaint/inpaint_llm.py`（base64 编码进消息）；块图裁剪可走 OCR 的 crop 逻辑或 `utils/textblock.py::get_transformed_region`；可用 profile 查询 `utils/profile_manager.py::get_vision_profiles`。
 7. **取消机制**：`ui/module_manager.py` 的 `cancel_event = threading.Event()` 线程安全取消模式。
-8. **脏页与批量备份**：`utils/proj_imgtrans.py::mark_page_needs_rerender` / `utils/proj_imgtrans.py::bump_page_generation` / `utils/proj_imgtrans.py::write_batch_backup`（按脏页快照、可回滚，批量语义现成）。
+8. **脏页与批量备份**：`utils/proj_imgtrans.py::mark_page_needs_rerender` / `utils/proj_imgtrans.py::bump_page_generation` / `utils/batch_versions.py::BatchVersionStore`（版本轮转备份：按脏页快照、可回滚，查找替换与工作台批量任务共用）。
 9. **跨页跳块与多页编排**：`ui/mainwindow.py::_on_stylemgr_navigate`（跳转到他页指定块）、`ui/mainwindow.py::finishTranslatePage` / `ui/mainwindow.py::on_pagtrans_finished`（逐页完成回调）。
 10. **选中驱动**：`ui/canvas.py::incanvas_selection_changed`；浮层定位钳制 `ui/custom_widget/rail_dock_panel.py::_clamp_pos`。
 11. **Profile 选取链路**（2026-09-13 实测补记）：规划 §7 写的「能力位已存在，无可用 profile 时引导用户点亮即可」只覆盖了「有没有开 vision」这一层。实测发现「能力位开着」与「真能发请求」是两回事——内置示例 profile 的 key 是空的、模型名也可能没填，而各消费点存的 profile 名会因 key 被清 / 模型被删 / 改名而失效。补了 `utils/profile_manager.py::resolve_profile` 做统一解析（模块显式选的可用项 → 全局激活的 → 候选池第一个可用项），并加 `pcfg.module.default_profile`（模型管理页「使用」按钮）作为「用户激活的那个 LLM」。各消费点不再回退到「列表第一项」。

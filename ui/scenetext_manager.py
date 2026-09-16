@@ -31,6 +31,7 @@ except ImportError:
     from qtpy.QtGui import QUndoCommand
 
 from utils import shared
+from utils.block_tags import prune_program_tags_after_source_edit
 from utils.fontformat import FontFormat
 from utils.imgproc_utils import get_block_mask
 from utils.text_alignment import (
@@ -1273,9 +1274,37 @@ class SceneTextManager(QObject):
         # 开启的键入会话。
         edit: Union[TransTextEdit, SourceTextEdit] = self.sender()
         if type(edit) is SourceTextEdit:
-            self.canvas.note_source_edit(
-                edit, edit.change_from, edit.change_removed, edit.change_added
-            )
+            self.handle_source_panel_edit(edit)
+
+    def handle_source_panel_edit(self, edit: SourceTextEdit):
+        """原文面板内容变更（键入／粘贴／软键盘插入）的统一处置。
+
+        ① 登记原文键入会话（原文无镜像可抓 before，靠 focus_in 预捕）；
+        ② 人工编辑即知情（D29）：清除该块程序来源临时标签。
+        """
+        self.canvas.note_source_edit(
+            edit, edit.change_from, edit.change_removed, edit.change_added
+        )
+        self._prune_program_tags_after_source_edit(edit)
+
+    def _prune_program_tags_after_source_edit(self, edit: SourceTextEdit):
+        """D29：面板原文偏离该块数据层（＝人工改写）时清其程序标签。
+
+        面板与块列表错位（合并／删除进行中）时不动；程序性面板回写两侧
+        一致，由判据挡掉（合并的标签并集语义见规划 D33c）。标签不进撤销
+        栈，故撤销原文编辑不恢复被清标签。
+        """
+        idx = getattr(edit, "idx", None)
+        if not isinstance(idx, int) or idx < 0:
+            return
+        if idx >= len(self.pairwidget_list) or idx >= len(self.textblk_item_list):
+            return
+        if self.pairwidget_list[idx].e_source is not edit:
+            return
+        blk_item = self.textblk_item_list[idx]
+        if prune_program_tags_after_source_edit(blk_item.blk, edit.toPlainText()):
+            blk_item.refresh_tag_badge()
+            self.canvas.setProjSaveState(True)
 
     def on_propagate_textitem_edit(
         self, pos: int, removed: int, added_text: str

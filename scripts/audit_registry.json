@@ -1,6 +1,13 @@
 {
     "_comment": "AI 审计登记表。机制见 .agents/skills/audit-docs/SKILL.md。deprecated = 已删待守（不得复活、残留引用必须清零或进 allowed_mentions）；suspended = 存在的休眠文件（不得被主 UI import）。删除文件前先在此登记。",
     "deprecated": {
+        "tests/test_batch_backup.py": {
+            "note": "批量备份归并（2026-09-16）：查找替换的单槽快照并入 utils/batch_versions.py::BatchVersionStore（与工作台批量任务共用），其语义迁入 tests/test_batch_versions.py（版本号校验/丢弃/base_styles 往返）与 tests/test_replace_rollback.py（回滚条接线），旧文件删除",
+            "allowed_mentions": [
+                "docs/技术实现/查找替换与样式管理器重构_设计方案.md",
+                "docs/技术实现/泛用工作台_规划.md"
+            ]
+        },
         "docs/技术实现/窄栏浮层面板改版_计划.md": {
             "note": "窄栏浮层改版已实施完成（连字四行规范式/着重号两行/注解与着重号分开等形态决策随批次①落地，验收记录见 docs/daily_log.md 2026-09-08），计划文档于 2026-09-08 工作区清理删除"
         },

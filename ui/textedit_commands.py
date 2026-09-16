@@ -11,6 +11,7 @@ try:
 except ImportError:
     from qtpy.QtGui import QUndoCommand
 
+from utils.block_tags import clear_program_tags
 from utils.fontformat import FontFormat
 from utils.proj_imgtrans import ProjImgTrans
 
@@ -928,9 +929,9 @@ class GlobalReplaceApplier:
     """全局替换的当前页施加器：把收集器暂存的 live widget 改动一次性落上。
 
     批量替换的撤销不走本类、也不进任何撤销栈：整体回滚由替换前的
-    项目快照负责（``utils/proj_imgtrans.py::write_batch_backup`` /
-    ``utils/proj_imgtrans.py::restore_batch_backup``），与逐块编辑的
-    文档撤销栈严格分治——快照回滚是批量操作的唯一撤销路径。原
+    批量版本负责（``utils/batch_versions.py::BatchVersionStore``），
+    与逐块编辑的
+    文档撤销栈严格分治——版本回滚是批量操作的唯一撤销路径。原
     GlobalReplaceCommand 的 undo/redo 与自动压栈的 TextEditCommand
     双重记账、场景重建后引用失效两类缺陷随命令栈路径一并移除。
 
@@ -1273,6 +1274,10 @@ class ApplyBlockTextCommand(QUndoCommand):
 
     field = "translation"：写译文（重译动作）；
     field = "source"：写原文（疑难 OCR 校正动作），同步 e_source 与 blk.text。
+
+    「写原文」＝该块原文被人工改定（人点了应用），故一并清除其程序来源
+    临时标签（D29：``utils/block_tags.py::clear_program_tags``）。标签不进
+    撤销栈：undo 只回滚文本，不恢复被清标签。
     """
 
     def __init__(
@@ -1307,6 +1312,8 @@ class ApplyBlockTextCommand(QUndoCommand):
             with replay_guard(pairw.e_source):
                 pairw.e_source.setPlainTextAndKeepUndoStack(new_text)
             blk.text = [new_text]
+            # D29：原文被人工改定 → 该块程序来源临时标签一并清除
+            clear_program_tags(blk)
             self.after_panel = new_text
 
     def redo(self) -> None:
@@ -1324,6 +1331,8 @@ class ApplyBlockTextCommand(QUndoCommand):
                     self.after_panel
                 )
             self.blkitem.blk.text = [self.after_panel]
+            # 重做同样落在「原文已被人工改定」状态：清标签保持幂等
+            clear_program_tags(self.blkitem.blk)
         self.blkitem.refresh_tag_badge()
 
     def undo(self) -> None:

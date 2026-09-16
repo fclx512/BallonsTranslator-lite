@@ -40,6 +40,8 @@ SKIP_DIRS = {
     "data",
     "node_modules",
     ".obsidian",
+    "tmp",  # 临时工作区（.gitignore 内、随时可清理）：pytest 日志/调试转储
+            # 天然会提到当时存在的文件名，变了就误报
 }
 SKIP_FILES = {
     "docs/daily_log.md",

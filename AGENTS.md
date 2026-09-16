@@ -39,8 +39,11 @@ modules/
 | `utils/profile_manager.py` | LLM Profile 数据层（加载/保存/查找/网络探测，翻译器/OCR/在线修复共用）+ 同文件的选取解析层（`profile_is_usable`/`get_default_profile_name`/`resolve_profile`/`heal_profile_selector`，语义见 docstring；消费点不回退「列表第一项」） |
 | `ui/llm_profile_cards.py` | LLM Profile 卡片式设置页（形态对齐上游 `ballontranslator/ui/llm_profile_widgets.py`） |
 | `utils/ai_tools.py` | 翻译 agent/术语工作台共享的只读探索工具执行器（4 只读工具 + `to_openai_tools`） |
-| `utils/block_tags.py` | 块标签体系数据层：类型注册表（5 标签）+ 读写 + 「OCR 置信度低」自动挂标（分数存条目不喂 AI）；`TextBlock.tags` 随项目 JSON 保存；详见 `docs/基础速查/AI辅助标签体系使用说明.md` |
+| `utils/block_tags.py` | 块标签体系数据层：类型注册表（6 标签，其中「误识别文本」为程序专用、不提供人工打标途径）+ 读写 + 审阅表态（`reviewed`）+ 人工改写原文后清该块程序标签（D29）+ 「OCR 置信度低」「误识别文本」自动挂标（分数存条目不喂 AI）；`TextBlock.tags` 随项目 JSON 保存；详见 `docs/基础速查/AI辅助标签体系使用说明.md` |
 | `utils/block_actions.py` | 框级 AI 动作（OCR 校正/重译）注册表 + vision 调用 + 选中跟随工具栏；载荷在主线程按前端观感组装；配套：执行器 `ui/block_action_runner.py`、确认卡 `ui/block_action_card.py`、撤销写回 `ui/textedit_commands.py::ApplyBlockTextCommand`、动作前数据一致性修复 `ui/mainwindow.py::_sync_block_data`；详见 `docs/基础速查/AI辅助标签体系使用说明.md` |
+| `ui/batch_ops.py` | 批量操作的写回范式（五步顺序：前置对齐 → 只改 `proj.pages` → 页代数 → 当前页 `updateSceneTextitems` → 此后禁止 `updateTextBlkList`）与事务外壳（落盘 → 写版本 → 写回 → 落盘）；验收判据＝完成后 `utils/block_actions.py::page_data_needs_sync` 为假 |
+| `ui/batch_inpaint.py` | 批量「简单背景」纯色修复（工作台任务，规划 D3／D34）：把 `modules/inpaint/base.py::classify_simple` 的判据跑遍全书页，**简单块纯色覆盖、复杂块完全不动**（`inpaint` 的 `only_simple` 模式，不加载模型），判据一律算原图、只写 `inpainted/` 层、跑完重载当前页、不标脏；整批走 `ui/batch_ops.py::BatchOperation` 的版本撤回 |
+| `utils/batch_versions.py` | **仓库唯一的批量备份口**：执行前写一版（项目数据 + 受影响矩形的像素前图）到项目目录内 `.bt_batch_backup/`，撤销取最新一版覆盖并消耗（`restore_latest`／`discard_latest` 支持 `expect_seq` 版本号校验）；版本数取 `utils/config.py::ProgramConfig` 的 `batch_backup_versions`（默认 1、上限 5），跨会话随项目保留。查找替换（`ui/global_search_widget.py`）与工作台批量任务共用 |
 | `ui/mainwindow.py` | 主窗口 |
 | `ui/configpanel.py` | 配置面板、快捷键编辑；四个管线页合并为一项「Pipeline」（页内标签，`ui/configpanel.py::_build_pipeline_page`），阶段只编辑当前引擎的参数 |
 | `ui/run_pipeline_dialog.py` | 运行对话框：启用模块网格（阶段图标开关 + 模块下拉）+ 各阶段折叠选项区；模块下拉写回底部栏选择器 |

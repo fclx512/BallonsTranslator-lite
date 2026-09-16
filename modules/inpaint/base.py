@@ -48,6 +48,49 @@ def inpaint_handle_alpha_channel(original_alpha, mask):
     return result_alpha
 
 
+def classify_simple(im: np.ndarray, msk: np.ndarray):
+    """判定该块是否「简单背景」（可用纯色覆盖、无需修复模型）。
+
+    判据链与管线逐块路径完全一致——``InpainterBase.inpaint`` 的逐块分支
+    就是调用本函数，别处（批量任务 ``ui/batch_inpaint.py::BatchSimpleInpaint``
+    的扫描与执行）也用它，判据单点维护：``utils/textblock_mask.py`` 的
+    ``extract_ballon_mask`` 取出气泡掩码与非文字掩码 → 非文字像素的中位色
+    与逐通道标准差 → ``std_max < inpaint_thresh``（阈值 7，整体标准差 ≤1
+    时放宽到 10）即判为简单。
+
+    Args:
+        im: 块的裁剪图。**按 D34 一律传原图**——传已修过或手工改过的修复图
+            会让复杂块被误判成"简单"而遭纯色覆盖，毁掉手工成果。
+        msk: 同区域的文本遮罩裁剪（只读，本函数不改它）。
+
+    Returns:
+        ``(need_inpaint, ballon_msk, average_bg_color)``：
+
+        - ``need_inpaint`` 为 True＝判据不满足（或判不出来），该块需走修复
+          模型；为 False＝简单块，可用 ``average_bg_color`` 覆盖 ``ballon_msk``；
+        - 后两项在判不出来时（裁剪区无文本像素、围不出气泡、无非文字像素）
+          为 ``None``，调用方据此**跳过**该块。
+    """
+    if msk is None or not np.any(msk):
+        # 裁剪区内没有文本遮罩像素：既围不出气泡也定不出背景色。既有实现会
+        # 在 extract_ballon_mask 内部的 findNonZero→boundingRect 处抛异常，
+        # 这里统一返回"需修复"（与 ballon_msk 为 None 同义），调用方跳过。
+        return True, None, None
+    ballon_msk, non_text_msk = extract_ballon_mask(im, msk)
+    if ballon_msk is None or non_text_msk is None:
+        return True, None, None
+    non_text_px = im[np.where(non_text_msk > 0)]
+    if non_text_px.shape[0] == 0:
+        return True, None, None
+    average_bg_color = np.median(non_text_px, axis=0)
+    std_rgb = np.std(non_text_px - average_bg_color, axis=0)
+    std_max = np.max(std_rgb)
+    inpaint_thresh = 7 if np.std(std_rgb) > 1 else 10
+    if std_max < inpaint_thresh:
+        return False, ballon_msk, average_bg_color
+    return True, ballon_msk, average_bg_color
+
+
 class InpainterBase(BaseModule):
     inpaint_by_block = True
     check_need_inpaint = True
@@ -99,9 +142,25 @@ class InpainterBase(BaseModule):
         mask: np.ndarray,
         textblock_list: List[TextBlock] = None,
         check_need_inpaint: bool = False,
+        only_simple: bool = False,
     ) -> np.ndarray:
+        """按块修复。
 
-        if not self.all_model_loaded():
+        默认行为（``only_simple=False``）：简单块纯色覆盖、其余块走修复模型。
+
+        Args:
+            check_need_inpaint: 本次调用启用「简单块」判定（管线侧开关，
+                ``utils/config.py::ModuleConfig`` 的 ``check_need_inpaint``
+                经类属性或运行对话框传进来）。
+            only_simple: **只处理简单块**（工作台批量任务用，默认关闭）。
+                开启时判据取真的块**一律跳过修复模型**（"复杂块完全不动"），
+                取假的块照常纯色覆盖；判定需要的像素来自传入的 ``img``，
+                故调用方须按 D34 传**原图**。此模式下**不加载模型**
+                （纯色覆盖用不到模型，也不该为它拉几百 MB 权重）。
+                仅逐块路径（``inpaint_by_block``）支持；判不出结果的块
+                （见 ``classify_simple``）按跳过处理。
+        """
+        if not only_simple and not self.all_model_loaded():
             self.load_model()
 
         # Handle RGBA images by preserving alpha channel
@@ -142,30 +201,28 @@ class InpainterBase(BaseModule):
             # Preserve original mask for transparency analysis
             original_mask = mask.copy()
 
+            # only_simple 时判据必须生效（否则分不出简单／复杂块）
+            judge_simple = self.check_need_inpaint or check_need_inpaint or only_simple
+
             for blk in textblock_list:
                 xyxy = blk.xyxy
                 xyxy_e = enlarge_window(xyxy, im_w, im_h, ratio=1.7)
                 im = inpainted[xyxy_e[1] : xyxy_e[3], xyxy_e[0] : xyxy_e[2]]
                 msk = mask[xyxy_e[1] : xyxy_e[3], xyxy_e[0] : xyxy_e[2]]
                 need_inpaint = True
-                if self.check_need_inpaint or check_need_inpaint:
-                    ballon_msk, non_text_msk = extract_ballon_mask(im, msk)
-                    if ballon_msk is not None:
-                        non_text_region = np.where(non_text_msk > 0)
-                        non_text_px = im[non_text_region]
-                        average_bg_color = np.median(non_text_px, axis=0)
-                        std_rgb = np.std(non_text_px - average_bg_color, axis=0)
-                        std_max = np.max(std_rgb)
-                        inpaint_thresh = 7 if np.std(std_rgb) > 1 else 10
-                        if std_max < inpaint_thresh:
-                            need_inpaint = False
-                            im[np.where(ballon_msk > 0)] = average_bg_color
-                        # cv2.imshow('im', im)
-                        # cv2.imshow('ballon', ballon_msk)
-                        # cv2.imshow('non_text', non_text_msk)
-                        # cv2.waitKey(0)
+                if judge_simple:
+                    need_inpaint, ballon_msk, average_bg_color = classify_simple(
+                        im, msk
+                    )
+                    if not need_inpaint:
+                        im[np.where(ballon_msk > 0)] = average_bg_color
+                    # cv2.imshow('im', im)
+                    # cv2.imshow('ballon', ballon_msk)
+                    # cv2.imshow('non_text', non_text_msk)
+                    # cv2.waitKey(0)
 
-                if need_inpaint:
+                # only_simple：判据取真的块（复杂块）保持原样，不调模型
+                if need_inpaint and not only_simple:
                     inpainted[xyxy_e[1] : xyxy_e[3], xyxy_e[0] : xyxy_e[2]] = (
                         self.memory_safe_inpaint(im, msk)
                     )

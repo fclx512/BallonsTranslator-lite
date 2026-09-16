@@ -6,6 +6,10 @@
 已获用户认同的裁剪）。打标不进撤销栈（轻量元数据），写回后刷新块徽
 标并标记项目未保存。
 
+数据源是 ``utils/block_tags.py::MANUAL_TAG_DEFS``——**程序专用标签**
+（``TagDef.program_only``，即「误识别文本」）不在此处出现：该标签只由
+OCR 后处理钩子自动挂，人只在工作台审查误杀（规划 D2／D38）。
+
 挂父在主窗口中央控件上防 GC，不参与布局；定位钳制在宿主范围内。
 QSS 容器样式走 objectName 选择器，必须开 WA_StyledBackground 才会
 绘制背景/边框（裸 QWidget 子类默认跳过 QSS 背景绘制）。
@@ -27,7 +31,7 @@ from qtpy.QtWidgets import (
 
 from utils.block_actions import BLOCK_ACTIONS, actions_for_block
 from utils.block_tags import (
-    TAG_DEFS,
+    MANUAL_TAG_DEFS,
     has_tag,
     remove_tag,
     set_tag,
@@ -74,7 +78,7 @@ class TagToolbar(QWidget):
         row.setSpacing(2)
         root.addLayout(row)
 
-        for tag in TAG_DEFS:
+        for tag in MANUAL_TAG_DEFS:
             btn = QToolButton(self)
             btn.setObjectName("TagTagBtn")
             btn.setText(tag.glyph)
@@ -123,7 +127,7 @@ class TagToolbar(QWidget):
         panel_layout = QVBoxLayout(self._panel)
         panel_layout.setContentsMargins(4, 2, 4, 3)
         panel_layout.setSpacing(1)
-        for tag in TAG_DEFS:
+        for tag in MANUAL_TAG_DEFS:
             # 行钮用 QPushButton：QToolButton 在本 Qt 版本无视 QSS
             # text-align（实测恒居中），QPushButton 按规则左对齐
             row_btn = QPushButton(self._panel)
@@ -172,7 +176,7 @@ class TagToolbar(QWidget):
     def _update_checks(self) -> None:
         """多选批量语义：全体选中块都带标签 → 勾选，否则不勾。紧凑栏与
         展开面板行是两套按钮，须同步刷。"""
-        for tag in TAG_DEFS:
+        for tag in MANUAL_TAG_DEFS:
             checked = all(has_tag(it.blk, tag.id) for it in self._items)
             for btn in (
                 self._compact_buttons[tag.id],

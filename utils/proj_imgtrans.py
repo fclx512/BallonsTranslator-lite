@@ -102,10 +102,6 @@ class ProjImgTrans:
         # result image has not yet been re-rendered.
         self._pages_needing_rerender: Set[str] = set()
 
-        # Session validity flag for the single-slot batch backup; the file
-        # may survive on disk across sessions but is not offerable then.
-        self._batch_backup_valid = False
-
         # 页代数计数（撤销体系阶段 4 跨页历史的页屏障）：检测管线等栈外
         # 写入整体换新 blk_list 时对应页 +1；撤销命令入栈时捕获当时的
         # 代数值，执行期不一致即判定为僵尸命令（所属页历史已过期）。
@@ -181,85 +177,12 @@ class ProjImgTrans:
             gens = self._page_image_generations = {}
         gens[pagename] = gens.get(pagename, 0) + 1
 
-    # ── 批量操作快照（单槽）─────────────────────────────────────────
-    # 批量替换等批量操作的撤销不进逐命令撤销栈，而是操作前整项目
-    # 快照、一键整体回滚，与逐块编辑的文档撤销栈严格分治（语义定稿
-    # 见 docs/技术实现/查找替换与样式管理器重构_设计方案.md §4.4）。
-
-    @property
-    def batch_backup_path(self):
-        if not self.proj_path:
-            return None
-        return osp.splitext(self.proj_path)[0] + ".batch_backup.json"
-
-    def has_batch_backup(self) -> bool:
-        """本会话内存在可回滚的批量快照；磁盘残留的跨会话文件不视为可用。"""
-        return (
-            self._batch_backup_valid
-            and self.batch_backup_path is not None
-            and osp.exists(self.batch_backup_path)
-        )
-
-    def write_batch_backup(self, dirty_pages=None) -> bool:
-        """把当前已落盘的项目 JSON 整体快照到单槽备份文件（覆盖旧槽）。
-
-        Args:
-            dirty_pages: 快照时刻已带脏标记的页面（含当前页），回滚后
-                据此整体重标脏——其中若已被重渲过，结果图此刻必然过期。
-        """
-        if not self.proj_path or not osp.exists(self.proj_path):
-            return False
-        try:
-            with open(self.proj_path, "r", encoding="utf8") as f:
-                proj_dict = json.load(f)
-            payload = {
-                "version": 1,
-                "dirty_pages": list(dirty_pages or []),
-                "proj": proj_dict,
-            }
-            tmp_path = self.batch_backup_path + ".tmp"
-            with open(tmp_path, "w", encoding="utf8") as f:
-                json.dump(payload, f, ensure_ascii=False)
-            os.replace(tmp_path, self.batch_backup_path)
-        except Exception as e:
-            LOGGER.error(f"Failed to write batch backup: {e}")
-            return False
-        self._batch_backup_valid = True
-        return True
-
-    def restore_batch_backup(self) -> List[str]:
-        """用快照整体换回项目数据，返回快照记录的脏页清单。
-
-        各页数据全部换回，但保持用户当前所在页不跳转；成功后消费
-        快照（删除备份文件并置会话标记失效）。快照缺失/损坏时抛
-        ``ProjectLoadFailureException``，备份文件保留不动。
-        """
-        if not self.has_batch_backup():
-            raise ProjectLoadFailureException("No batch backup available")
-        try:
-            with open(self.batch_backup_path, "r", encoding="utf8") as f:
-                payload = json.load(f)
-        except Exception as e:
-            raise ProjectLoadFailureException(e)
-        orig_page = self.current_img
-        self.load_from_dict(payload["proj"])
-        self._pages_needing_rerender = set(payload.get("dirty_pages", []))
-        if orig_page and orig_page in self.pages and orig_page != self.current_img:
-            self.set_current_img(orig_page)
-        self.clear_batch_backup()
-        return list(self._pages_needing_rerender)
-
-    def clear_batch_backup(self):
-        if self.batch_backup_path and osp.exists(self.batch_backup_path):
-            try:
-                os.remove(self.batch_backup_path)
-            except OSError as e:
-                LOGGER.error(f"Failed to remove batch backup: {e}")
-        self._batch_backup_valid = False
+    # 批量操作（查找替换／工作台任务）的备份与回滚见
+    # ``utils/batch_versions.py::BatchVersionStore``——本类原有的单槽快照
+    # （``*.batch_backup.json``）已于 2026-09-16 归并到那套版本轮转机制。
 
     def load(self, directory: str, json_path: str = None) -> bool:
         self.directory = directory
-        self._batch_backup_valid = False
         if json_path is None:
             self.proj_path = osp.join(self.directory, self.proj_name() + ".json")
         else:
