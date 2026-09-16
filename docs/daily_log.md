@@ -80,6 +80,18 @@
 
 ---
 
+### 行拖拽锚点改为「卡片纵向居中于光标」
+
+**问题/需求：** 右侧文本列表行拖拽起手时把被拖卡吸附到光标下方（堆顶贴光标＝光标咬住卡顶），实机用下来手感偏：往下拖时整卡吊在光标底下，贴到视口下缘时大半张卡已出视野。
+
+**改动要点：** `ui/textedit_area.py::TextEditListScrollArea.begin_rows_drag` 的聚拢锚点加一个固定偏移 `_pile_grab_dy = -(堆顶卡高 // 2)`，`ui/textedit_area.py::TextEditListScrollArea._update_drag_frame` 的跟手补间目标同加该偏移——抓取卡与光标的相对位置拖拽全程恒定，而不只是首帧偏一下；多选折叠堆同一规则（堆顶卡居中、其余卡按 `PILE_PEEK` 阶梯落在其下）。让位判定仍只看光标 y 且不随锚点变化，故语义变为「卡片中心越过邻行中点即换位」，与视觉一致。副产物：按在卡片中部附近起手时目标 y 与当前 y 相同，`_move_card` 的「目标未变不重启」守卫直接跳过，起手不再有位移跳变。**取舍记录**：居中后光标贴近列表上缘时卡片会有半张伸到列表上边界之外（动画开启时被拖组提层到主窗口绘制、会盖在面板上方，关动画时在该边界被裁），这是居中本身的必然结果，暂不做顶部钳制。
+
+**测试：** `tests/test_row_drag.py` 三处写死「堆顶 = 光标」的断言改为居中口径并补「卡片中心 == 光标」正向断言（`test_begin_pile_visible_and_rest_arranged`／`test_multi_select_gather_to_cursor`／`test_chase_follow_no_teleport`）；`test_chase_follow_no_teleport` 与 `test_chase_settle_durations_and_stagger` 原本把光标放在卡心，改动后聚拢不再产生位移、`_pos_anims` 为空，光标各挪开 40／60px 以重新覆盖跟手补间。24 项全过。
+
+**涉及文件：** `ui/textedit_area.py`、`tests/test_row_drag.py`、`docs/daily_log.md`
+
+---
+
 ## 2026-09-14
 
 ### 行拖拽抓住缩放 + 提层防父边界裁切

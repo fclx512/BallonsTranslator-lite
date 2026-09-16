@@ -111,8 +111,8 @@ class RowDragTest(unittest.TestCase):
     # ── 基础拖拽流程 ─────────────────────────────────────────
 
     def test_begin_pile_visible_and_rest_arranged(self):
-        """拖拽开始：被拖组保持真身可见并聚拢到光标（单卡偏移 0），
-        rest 行可见，遮罩/指示框就位，初始让位排布与其余行原位一致。"""
+        """拖拽开始：被拖组保持真身可见并聚拢到光标（单卡纵向居中于
+        光标），rest 行可见，遮罩/指示框就位，初始让位排布与其余行原位一致。"""
         self.area = area = self._make_area()
         pw = area.pairwidget_list[1]
         self._check(pw)
@@ -120,7 +120,10 @@ class RowDragTest(unittest.TestCase):
         area.begin_rows_drag(cursor_y)
         self.assertTrue(area._drag_active)
         self.assertTrue(pw.isVisible())
-        self.assertEqual(pw.y(), int(cursor_y))  # 堆顶聚拢到光标位置
+        # 居中锚：卡片中心落在光标处（旧行为是堆顶贴光标）
+        self.assertEqual(pw.y(), int(cursor_y) - pw.height() // 2)
+        self.assertEqual(pw.y() + pw.height() // 2, int(cursor_y))
+        self.assertEqual(area._pile_grab_dy, -(pw.height() // 2))
         for w in area.pairwidget_list:
             if w is not pw:
                 self.assertTrue(w.isVisible())
@@ -132,7 +135,8 @@ class RowDragTest(unittest.TestCase):
             self.assertEqual(w.y(), ty)
 
     def test_multi_select_gather_to_cursor(self):
-        """多选聚拢锚点 = 光标内容坐标：各卡按 PILE_PEEK 阶梯落到光标处。"""
+        """多选聚拢锚点 = 光标内容坐标（堆顶卡纵向居中于光标）：各卡按
+        PILE_PEEK 阶梯落在堆顶之下。"""
         self.area = area = self._make_area()
         d0, d2 = area.pairwidget_list[0], area.pairwidget_list[2]
         d0._set_checked_state(True)
@@ -142,8 +146,9 @@ class RowDragTest(unittest.TestCase):
 
         cursor_y = d0.y() + d0.height() / 2
         area.begin_rows_drag(cursor_y)
-        top = int(cursor_y)
+        top = int(cursor_y) - d0.height() // 2
         self.assertEqual(d0.y(), top)
+        self.assertEqual(d0.y() + d0.height() // 2, int(cursor_y))
         self.assertEqual(d2.y(), top + area.PILE_PEEK)
         self.assertTrue(d0.isVisible() and d2.isVisible())
 
@@ -411,21 +416,24 @@ class RowDragTest(unittest.TestCase):
         self.area = area = self._make_area()
         pw = area.pairwidget_list[1]
         self._check(pw)
-        cursor_y = pw.y() + pw.height() / 2
+        # 光标偏离卡心 40px：聚拢需要真正位移（否则卡已在居中锚点原地不动）
+        cursor_y = pw.y() + pw.height() / 2 + 40
         area.begin_rows_drag(cursor_y)
         area._drag_cursor_vp_y = cursor_y
         area._update_drag_frame()  # 目标与聚拢一致：守卫跳过，仍在追
         self.assertIn(pw, area._pos_anims)
-        self.assertNotEqual(pw.y(), int(cursor_y))  # 起飞中，未瞬移到位
+        # 起飞中，未瞬移到位（目标 = 光标上方半个卡高）
+        self.assertNotEqual(pw.y(), int(cursor_y) + area._pile_grab_dy)
 
         y2 = cursor_y + 80
         area._drag_cursor_vp_y = y2
         area._update_drag_frame()
         anim = area._pos_anims[pw]
-        # 重定向到新光标位（提层后动画目标为窗口坐标，= 内容 y 加
-        # scrollContent 原点在窗口里的偏移）
+        # 重定向到新光标位（提层后动画目标为窗口坐标，= 内容 y 减居中偏移
+        # 再加 scrollContent 原点在窗口里的偏移）
         self.assertEqual(
-            anim.endValue().y(), area._pile_org_in_parent().y() + int(y2)
+            anim.endValue().y(),
+            area._pile_org_in_parent().y() + int(y2) + area._pile_grab_dy,
         )
         area._finish_drag()
 
@@ -530,7 +538,8 @@ class RowDragTest(unittest.TestCase):
         area.checked_list = [d0, d2]
         area.sel_anchor_widget = d0
 
-        area.begin_rows_drag(d0.y() + d0.height() / 2)
+        # 光标偏离首卡卡心 60px：聚拢需要真正位移，各卡才有着跟手补间
+        area.begin_rows_drag(d0.y() + d0.height() / 2 + 60)
         self.assertLess(area.CHASE_MS, area.SETTLE_MS)  # 跟手更跟得住
         self.assertEqual(area._pos_anims[d0].duration(), area.CHASE_MS)
         self.assertEqual(

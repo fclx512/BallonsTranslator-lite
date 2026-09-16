@@ -690,6 +690,7 @@ class TextEditListScrollArea(QScrollArea):
         self._base_y = self._base_x = self._card_w = 0
         self._gap_h = 0
         self._drag_cursor_vp_y = 0.0
+        self._pile_grab_dy = 0                       # 堆顶相对光标的内容 y 偏移（居中抓取）
         self._pile_offsets: List[int] = []           # 被拖组折叠偏移（堆顶=0）
         self._pile_parent: QWidget = None            # 拖拽中被拖组的提层父级（主窗口层）
         self._pile_focus_fw = None                   # 提层前的焦点控件（收尾恢复）
@@ -800,9 +801,15 @@ class TextEditListScrollArea(QScrollArea):
         self._gap_h = max(
             off + w.height() for off, w in zip(self._pile_offsets, drags)
         )
-        # 聚拢锚点 = 触发时鼠标的内容坐标（堆顶对齐光标），各卡从
-        # 原位聚拢动画飞向光标；此后堆顶以追随补间咬合光标
-        pile_top = int(cursor_vp_y + self.verticalScrollBar().value())
+        # 聚拢锚点 = 触发时鼠标的内容坐标，堆顶卡**纵向居中**于光标：
+        # 光标咬住卡片腰部（旧行为是堆顶贴光标、整卡吊在光标下方，拖到
+        # 视口下缘时大半张卡已出视野，手感偏且落点指示框与卡片脱节感强）。
+        # 各卡从原位聚拢动画飞向光标；此后堆顶以追随补间咬合光标，
+        # 抓取卡与光标的相对偏移 _pile_grab_dy 全程恒定
+        self._pile_grab_dy = -(drags[0].height() // 2)
+        pile_top = (
+            int(cursor_vp_y + self.verticalScrollBar().value()) + self._pile_grab_dy
+        )
         self._drag_cursor_vp_y = cursor_vp_y
         # 上一局的退应动画可能仍在飞（快速连拖），先停干净再接管
         for anim in self._pos_anims.values():
@@ -1046,8 +1053,9 @@ class TextEditListScrollArea(QScrollArea):
             # 任何时刻都不瞬移；目标未变则不重启（_move_card 内合并重定向，
             # 防高频鼠标事件反复创建动画对象）。让位判定用光标坐标
             # （_update_gap），不受视觉滞后影响。ty 为提层父级坐标：内容 y
-            # 经 _pile_org_in_parent 换算。
-            ty = pile_org_y + y_content + off
+            # 经 _pile_org_in_parent 换算；_pile_grab_dy 是抓取时的居中
+            # 偏移（见 begin_rows_drag），拖拽全程恒定。
+            ty = pile_org_y + y_content + self._pile_grab_dy + off
             self._move_card(w, ty, animate=True, duration=self.CHASE_MS)
         self._update_gap(y_content)
         # 视口边缘自动滚动：把"接近边缘的程度"折算成目标速度（越近越快），
