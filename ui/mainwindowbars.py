@@ -104,9 +104,11 @@ class LeftBar(Widget):
         self.globalSearchChecker.setObjectName("GlobalSearchChecker")
         self.globalSearchChecker.setToolTip(self.tr("Global Search (Ctrl+G)"))
 
-        self.glossaryChecker = QCheckBox()
-        self.glossaryChecker.setObjectName("GlossaryChecker")
-        self.glossaryChecker.setToolTip(self.tr("Glossary & Story"))
+        # 泛用工作台（规划 D25）：术语/剧情与「问题清理」四个批量任务共用
+        # 这一个入口，任务切换在面板内部完成
+        self.workbenchChecker = QCheckBox()
+        self.workbenchChecker.setObjectName("WorkbenchChecker")
+        self.workbenchChecker.setToolTip(self.tr("Workbench"))
 
         self.imgTransChecker = StateChecker("imgtrans")
         self.imgTransChecker.setObjectName("ImgTransChecker")
@@ -183,7 +185,7 @@ class LeftBar(Widget):
         vlayout.addWidget(openBtnToolBar)
         vlayout.addWidget(self.showPageListLabel)
         vlayout.addWidget(self.globalSearchChecker)
-        vlayout.addWidget(self.glossaryChecker)
+        vlayout.addWidget(self.workbenchChecker)
         vlayout.addWidget(self.imgTransChecker)
         vlayout.addItem(QSpacerItem(0, 0, QSizePolicy.Minimum, QSizePolicy.Expanding))
         vlayout.addWidget(self.configChecker)

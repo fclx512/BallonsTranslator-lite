@@ -496,6 +496,7 @@ class BatchMerge:
         selection: Optional[Iterable[GroupKey]] = None,
         *,
         flatten_lines: bool = True,
+        reversed_groups: Optional[Iterable[GroupKey]] = None,
         label: Optional[str] = None,
         mark_dirty: bool = True,
     ) -> dict:
@@ -510,6 +511,11 @@ class BatchMerge:
                 **默认勾选**的组（D33d 的误聚组除外）。给了标识但已找不到的
                 组进报告的 ``stale``（块列表变过，应重新规划后再执行）。
             flatten_lines: ``text`` 逐行展开（D33a 默认）／按块分段。
+            reversed_groups: 审批界面「反转该组方向」按钮的产物（D32：组级
+                方向判定由人拍板）。命中的组在**本次重规划的结果**上翻转
+                组内阅读方向，据此重建 ``text``／``rich_text``／``lines``
+                （D40 契约一：三者同序），不改判定之外的任何口径——样式
+                来源仍是列表序首项（D33b），勾选范围也不变。
             label: 进版本元信息的任务名；缺省 ``DEFAULT_LABEL``。
             mark_dirty: 是否把改过的页标脏。默认真——合并改的是文本层，结果图
                 会过期，与人工编辑一致（与 ``ui/batch_inpaint.py`` 的像素类任务
@@ -563,6 +569,15 @@ class BatchMerge:
             report["error"] = "stale" if stale else "no-groups"
             report["stale"] = sorted(stale)
             return report
+
+        # D32：人拍板的"反转该组方向"。翻转只改组内拼接顺序，不改判定依据
+        # 之外的任何东西——列在本次重规划的结果上翻转，故 apply 的其余口径
+        # （样式来源 D33b、tags 并集 D33c、写回范围）全不受影响。
+        flipped = set(reversed_groups or ())
+        if flipped:
+            for group in chosen:
+                if group.key in flipped:
+                    group.vertical = not group.vertical
 
         page_edits: Dict[str, List[TextBlock]] = {}
         applied: List[GroupKey] = []

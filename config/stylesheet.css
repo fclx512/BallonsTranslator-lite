@@ -1150,20 +1150,20 @@ QCheckBox#GlobalSearchChecker::indicator:checked
     image: url(icons/search_activate.svg);
 }
 
-QCheckBox#GlossaryChecker::indicator{
+QCheckBox#WorkbenchChecker::indicator{
     height: 27px;
     width: 27px;
-    image: url(icons/leftbar_glossary.svg);
+    image: url(icons/leftbar_workbench.svg);
 }
 
-QCheckBox#GlossaryChecker::indicator:hover
+QCheckBox#WorkbenchChecker::indicator:hover
 {
-    image: url(icons/leftbar_glossary_activate.svg);
+    image: url(icons/leftbar_workbench_activate.svg);
 }
 
-QCheckBox#GlossaryChecker::indicator:checked
+QCheckBox#WorkbenchChecker::indicator:checked
 {
-    image: url(icons/leftbar_glossary_activate.svg);
+    image: url(icons/leftbar_workbench_activate.svg);
 }
 
 
@@ -2288,16 +2288,17 @@ QTableCornerButton::section {
     border-bottom: 1px solid @borderColor;
 }
 
-/* ── Glossary/Story agent workbench(pane 去框 + 面板底色 + chat bubbles) ──
+/* ── 泛用工作台(pane 去框 + 面板底色 + 任务导航/候选列表/预览) ──────
    QTabWidget::pane 无 QSS 时回落原生样式:Win10(windowsvista)画浅色框、
    Win11(windows11)画深色细线,跨系统观感不一——统一去框(上方表格段同款分歧)。
    工作台底色与画布页同源,以深一档的 @emptyContentBackgroundColor 保持边界;
-   QLabel 透明规则须在气泡规则之前,同优先级下后者按源顺序胜出保留底色。 */
+   QLabel 透明规则须在提示行规则之前,同优先级下后者按源顺序胜出保留底色。 */
 QTabWidget::pane {
     border: none;
     background: transparent;
 }
-QWidget#WorkbenchSurface {
+QWidget#WorkbenchSurface,
+QWidget#WorkbenchTaskNav {
     background: @emptyContentBackgroundColor;
 }
 QWidget#WorkbenchSurface QScrollArea {
@@ -2306,33 +2307,38 @@ QWidget#WorkbenchSurface QScrollArea {
 QWidget#WorkbenchSurface QLabel {
     background: transparent;
 }
-/* 气泡流容器/输入行宿主:全局 QWidget 规则会盖成不透明,透出面板底色 */
-QWidget#WorkbenchChatFlow,
-QWidget#WorkbenchInputStack {
-    background: transparent;
+QLabel#WorkbenchEmptyHint {
+    font-size: 13px;
+    color: @disabledForegroundColor;
 }
-QLabel#AIChatUserBubble {
+/* 任务导航钮：勾选态＝当前任务（一级导航，D20 第 ① 段） */
+QPushButton#WorkbenchTaskButton {
+    min-height: 24px;
+    padding: 2px 8px;
+    font-size: 12px;
+}
+QPushButton#WorkbenchTaskButton:checked {
     background: @accentPrimary20;
-    border-radius: 8px;
-    padding: 6px 10px;
-    color: @textColor;
+    color: @accentPrimary;
 }
-QLabel#AIChatAssistantBubble {
-    background: @bubbleAIBackground;
-    border-radius: 8px;
-    padding: 6px 10px;
-    color: @qwidgetForegroundColor;
-}
-QLabel#AIChatStatusLine {
+/* 任务说明与规划摘要：小字、次要色，不跟候选列表抢注意力 */
+QLabel#WorkbenchTaskHint {
     font-size: 11px;
     color: @disabledForegroundColor;
 }
-QLabel#AIChatErrorLine {
+QLabel#WorkbenchTaskSummary {
     font-size: 11px;
-    color: @dangerColor;
+    color: @qwidgetForegroundColor;
 }
-QLabel#WorkbenchEmptyHint {
-    font-size: 13px;
+/* 审批预览（100% 原比例，只滚动不缩放）：深一档底色把图边缘衬出来 */
+QScrollArea QLabel#WorkbenchPreviewImage {
+    background: @emptyContentBackgroundColor;
+}
+QPushButton#WorkbenchExecuteButton {
+    font-weight: bold;
+}
+QTextEdit#WorkbenchLogView {
+    font-size: 11px;
     color: @disabledForegroundColor;
 }
 

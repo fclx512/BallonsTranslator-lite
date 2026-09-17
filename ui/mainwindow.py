@@ -481,7 +481,7 @@ class MainWindow(mainwindow_cls):
         self.leftBar.imgTransChecked.connect(self.setupImgTransUI)
         self.leftBar.configChecked.connect(self.setupConfigUI)
         self.leftBar.globalSearchChecker.clicked.connect(self.on_set_gsearch_widget)
-        self.leftBar.glossaryChecker.clicked.connect(self.on_set_glossary_widget)
+        self.leftBar.workbenchChecker.clicked.connect(self.on_set_workbench_widget)
         self.leftBar.open_dir.connect(self.OpenProj)
         self.leftBar.open_json_proj.connect(self.openJsonProj)
         self.leftBar.open_images.connect(self.openImages)
@@ -517,10 +517,15 @@ class MainWindow(mainwindow_cls):
             self.on_search_result_item_clicked
         )
 
-        # Glossary/Story agent workbench: embedded left panel (widened
-        # GlobalSearch sibling), pushed into the same H layout slot.
+        # Workbench (泛用工作台): embedded left panel (widened GlobalSearch
+        # sibling), pushed into the same H layout slot. Hosts the four batch
+        # cleanup tasks plus the glossary/story drafts (规划 D20/D25).
         self.glossary_workbench = GlossaryAgentPanel(self.imgtrans_proj, self)
         self.glossary_workbench.setVisible(False)
+        self.glossary_workbench.jump_requested.connect(self.on_workbench_jump)
+        self.glossary_workbench.rollback_requested.connect(
+            self.on_workbench_rollback
+        )
 
         self.titleBar = TitleBar(self)
         self.titleBar.closebtn_clicked.connect(self.on_closebtn_clicked)
@@ -1436,8 +1441,10 @@ class MainWindow(mainwindow_cls):
 
     PAGE_LIST_WIDTH = 250
     SEARCH_WIDTH = 300
-    # Agent workbench (GlossaryAgentPanel): 4-column table + chat log need
-    # more room than the search panel — widened-GlobalSearch sibling.
+    # Workbench (GlossaryAgentPanel) width — D24: sized so the 100%-scale
+    # approval crops fit without scrolling (p90 group crop ≈ 280x288 px after
+    # the D31 expansion). Kept at 460; only this constant changes if it turns
+    # out too small, the panel itself is width-adaptive.
     WORKBENCH_WIDTH = 460
 
     def _animate_panel_width(self, widget, target_max_w, on_finished=None):
@@ -1570,11 +1577,11 @@ class MainWindow(mainwindow_cls):
         )
 
     def _on_workbench_hidden(self):
-        if self.leftBar.glossaryChecker.isChecked():
-            self.leftBar.glossaryChecker.setChecked(False)
+        if self.leftBar.workbenchChecker.isChecked():
+            self.leftBar.workbenchChecker.setChecked(False)
 
-    def on_set_glossary_widget(self):
-        setup = self.leftBar.glossaryChecker.isChecked()
+    def on_set_workbench_widget(self):
+        setup = self.leftBar.workbenchChecker.isChecked()
         if setup:
             self._hidePageListOverlay()
             self.leftBar.showPageListLabel.setChecked(False)
@@ -4504,6 +4511,49 @@ class MainWindow(mainwindow_cls):
         except Exception as e:
             LOGGER.error(f"rollback toast failed: {e}")
         self._ask_rerender_dirty_pages()
+
+    def on_workbench_jump(self, pagename: str, block_idx: int):
+        """工作台队列 → 画布跳转（规划 D26）。
+
+        走 ``pageList`` 的整条链路（``pageListCurrentItemChanged``）而不是
+        ``ui/mainwindow.py::MainWindow`` 的 ``_on_stylemgr_navigate``——前者
+        含脏页惰性重渲，跳过去看到的就是最终画面（复核文档 §9.3 的比较），
+        后者只切页与选中块、脏页会显示成过期结果图。
+        """
+        proj = self.imgtrans_proj
+        if pagename not in proj.pages:
+            return
+        try:
+            row = proj.pagename2idx(pagename)
+        except Exception as e:
+            LOGGER.error(f"Workbench jump could not resolve the page: {e}")
+            return
+        if row is None or row < 0:
+            return
+        if proj.current_img != pagename:
+            self.pageList.setCurrentRow(row)
+        # 切页是同步的；没落到位就不再往别的页的控件列表里索引
+        if proj.current_img != pagename:
+            return
+        items = self.st_manager.textblk_item_list
+        if not 0 <= block_idx < len(items):
+            return
+        for item in self.canvas.selected_text_items():
+            item.setSelected(False)
+        target = items[block_idx]
+        target.setSelected(True)
+        self.canvas.gv.centerOn(target)
+
+    def on_workbench_rollback(self, version_seq: int):
+        """工作台「撤销上次批量」：整体换回批量操作前的一版（规划 D4／D35）。
+
+        复用查找替换那条回滚链路（``ui/mainwindow.py::MainWindow`` 的
+        ``on_batch_rollback``：版本覆盖 → 清撤销栈 → 重画布 → 重建场景 →
+        落盘 → 刷页列表 → 问是否重渲脏页），随后让工作台作废版本号并重跑
+        当前队列的列表——数据整体换过了，旧列表全部失效。
+        """
+        self.on_batch_rollback(version_seq)
+        self.glossary_workbench.clear_batch_version()
 
     def _on_group_undo_rerender_requested(self):
         """组化命令撤销确认弹窗勾选「同时重渲染」：重渲脏页但保留撤销历史。"""

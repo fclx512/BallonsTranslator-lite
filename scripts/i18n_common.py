@@ -53,6 +53,11 @@ def extract_tr_calls(content: str):
     *Implicit* Python string concatenation across continuation lines
     is *not* supported (e.g. ``self.tr("part1 " "part2")``) — keep
     the whole translatable string as a single literal.
+
+    A **trailing comma** after the last argument is tolerated
+    (``self.tr("text",)`` / ``translate("ctx", "text",)``): multi-line
+    calls naturally end that way, and missing one is silent — the string
+    never reaches the .ts and ships in English.
     """
     # Position-index of class definitions so each tr() call is attributed
     # to its enclosing class (regardless of line breaks).
@@ -66,16 +71,18 @@ def extract_tr_calls(content: str):
                 return cn
         return "Unknown"
 
-    tr_re = re.compile(r'self\.tr\(\s*("(?:[^"\\]|\\.)*")\s*\)', re.DOTALL)
-    tr_sq_re = re.compile(r"self\.tr\(\s*('(?:[^'\\]|\\.)*')\s*\)", re.DOTALL)
+    tr_re = re.compile(r'self\.tr\(\s*("(?:[^"\\]|\\.)*")\s*,?\s*\)', re.DOTALL)
+    tr_sq_re = re.compile(r"self\.tr\(\s*('(?:[^'\\]|\\.)*')\s*,?\s*\)", re.DOTALL)
     # Explicit-context module-level tables (e.g. shortcut names in
     # ui/configpanel.py): first literal is the ts <context>.
     qt_translate_re = re.compile(
-        r'QCoreApplication\.translate\(\s*("(?:[^"\\]|\\.)*")\s*,\s*("(?:[^"\\]|\\.)*")\s*\)',
+        r'QCoreApplication\.translate\(\s*("(?:[^"\\]|\\.)*")\s*,\s*'
+        r'("(?:[^"\\]|\\.)*")\s*,?\s*\)',
         re.DOTALL,
     )
     qt_translate_sq_re = re.compile(
-        r"QCoreApplication\.translate\(\s*('(?:[^'\\]|\\.)*')\s*,\s*('(?:[^'\\]|\\.)*')\s*\)",
+        r"QCoreApplication\.translate\(\s*('(?:[^'\\]|\\.)*')\s*,\s*"
+        r"('(?:[^'\\]|\\.)*')\s*,?\s*\)",
         re.DOTALL,
     )
 

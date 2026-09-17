@@ -91,6 +91,28 @@
 
 **涉及文件：** `ui/region_redetect.py`、`tests/test_region_redetect.py`、`scripts/region_redetect_order.py`、`scripts/README.md`、`AGENTS.md`、`docs/技术实现/区域再检测_设计与实现.md`、`docs/daily_log.md`
 
+
+### 泛用工作台 D 组（工作台 UI）——规划收尾
+
+**问题/需求：** 泛用工作台的 A／B／C1～C4 六批引擎此前已落地，只剩 D 组界面层：把只服务术语／剧情的 `GlossaryAgentPanel` 改组成"任务容器"（规划 D19～D27），让四个批量清理任务与术语／剧情共用一套三段式。用户口述"此前已做完底层、剩下最后的 UI 层"，本批即该层。
+
+**改动要点：**
+
+- **三段式骨架（D20／D23）**：① 一级导航 `ui/glossary_agent_panel.py::WorkbenchTaskNav` 六个互斥任务钮，按 D16 的用户工作流顺序排列（误识别清理→合并→框扩张→背景修复→术语提取→剧情摘要），前四项缀「还有 N 个未处理」（D37）；② 每任务一整页（候选列表 + **列表下方 100% 原比例预览**，只滚动不缩放，D11／D23）；③ 执行行，无勾选即禁用，批量执行前一律弹 D27 告知窗。术语／剧情两页沿用原草稿表。
+- **砍 Chat（D19）及其三处连带**：`_on_prepare` 不再走 `_send_text`／用户气泡，直接 emit `instruction_requested`（信号面不变）；`_append_log` 的下家改成面板底部只读日志条（`setMaximumBlockCount` 自动丢最旧行）；`_on_busy_changed` 只切按钮可用性、不再切 tab 页。气泡流与 Tab 相关代码、QSS（`AIChat*`／`WorkbenchChatFlow`／`WorkbenchInputStack`）一并删除。
+- **新增数据侧适配层 `ui/workbench_tasks.py`（无 QWidget）**：四个 `BatchTask` 子类（`MisreadTask`／`MergeTask`／`ExpandTask`／`SimpleInpaintTask`）负责 plan 摆行、100% 原比例审批截图与叠加框、交回 apply 标识、D27 弹窗正文、D37 计数。界面据此**不写几何、不碰 `proj.pages`、不绕开 `ui/batch_ops.py`**（复核文档 §4.2 的接线纪律）；唯一的几何动作是截图外扩，复用 `utils/block_geometry.py::expand_limited`。扩张量按复核文档 §4.3 仍**不设默认值**（0 时列表为空、执行禁用）。
+- **新增 `ui/workbench_batch_view.py`（四个任务共用的视图）**：勾选列候选列表 + 预览 + 参数控件（由 `BatchTask.options_spec` 驱动的描述式控件）+ 执行行；错误码 → 文案表也在此。
+- **引擎补一处能力缺口**：`ui/batch_merge.py` 的 `apply` 新增 `reversed_groups`，落实 D32 的「反转该组方向」——只翻转本次重规划结果里该组的拼接方向（`text`／`rich_text`／`lines` 同序，D40 契约一），不改样式来源与勾选范围。
+- **入口改名（D25 单入口）**：左栏槽位由 `glossaryChecker` 改 `workbenchChecker`（objectName `WorkbenchChecker`、tooltip「Workbench」），QSS 3 条选择器与新增图标 `icons/leftbar_workbench.svg`／`_activate.svg` 同步；`ui/mainwindow.py` 的方法改 `on_set_workbench_widget`，并新增 `on_workbench_jump`（复用具脏页惰性重渲的 pageList 链路，D26）与 `on_workbench_rollback`（D35 的整批撤销）。宽度按 D24 维持 460。
+- **跳步提示可禁用（D37）**：新增 `utils/config.py::ProgramConfig.workbench_warn_skip_order`（默认 True），弹窗内「不再提示」与设置面板「应用 → Workbench」互相同步；计数口径抽成 `ui/glossary_agent_panel.py::earlier_pending`（只有前四项参与）。
+- **i18n 顺带修一个静默漏译**：`scripts/i18n_common.py::extract_tr_calls` 的正则原先要求引号后紧跟 `)`，多行 `QCoreApplication.translate(...)` 按 Black 风格末尾带逗号时**整条被漏掉且不报缺失**——本批新代码踩到 26 处，另有 `ui/llm_profile_cards.py` 8 处长期漏译。正则放宽为容忍尾随逗号，112 条新条目补 ts 并手填中文，陷阱写入 `docs/基础速查/i18n.md`。
+
+**测试：** 新增 `tests/test_workbench_panel.py`（26 项：四任务的 plan／预览不缩放／勾选口径／驳回可逆／误聚默认不勾选／扩张量必填／D27 正文含后果；面板侧：导航顺序、切入即规划、无候选禁用执行、预览 100%、apply 记版本、整批撤回、跳转信号、跳步提示可取消可禁用、砍 Chat 后日志仍在）。`tests/test_glossary_agent_panel.py` 与 `tests/test_settings_app_page.py` 随结构调整更新，均通过。
+
+**涉及文件：** `ui/glossary_agent_panel.py`、`ui/workbench_tasks.py`（新）、`ui/workbench_batch_view.py`（新）、`ui/batch_merge.py`、`ui/mainwindow.py`、`ui/mainwindowbars.py`、`ui/configpanel.py`、`utils/config.py`、`config/stylesheet.css`、`icons/leftbar_workbench.svg`（新）、`icons/leftbar_workbench_activate.svg`（新）、`scripts/i18n_common.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_workbench_panel.py`（新）、`tests/test_glossary_agent_panel.py`、`AGENTS.md`、`docs/技术实现/泛用工作台_规划.md`、`docs/技术实现/泛用工作台_复核与拆分.md`、`docs/技术实现/术语剧情工作台_交接.md`、`docs/技术实现/翻译agent化_设计方案.md`、`docs/基础速查/i18n.md`
+
+**遗留（两处只能真机复算，转交主力机）：** C1 判据命中率、C2 分组判据口径与 C3 扩张量默认值——方法与调参方向见 `docs/技术实现/泛用工作台_复核与拆分.md` §4.3。
+
 ---
 
 ## 2026-09-16

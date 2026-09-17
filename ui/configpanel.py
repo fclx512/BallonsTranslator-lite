@@ -2396,6 +2396,21 @@ class ConfigPanel(Widget):
         )
         config_mgmt_layout.addWidget(ConfigFormRow("", self.confirm_costly_checker))
 
+        # 跳步提示（规划 D37）：顺序是推荐与提示，不是门禁；关掉后仍可任意跳转
+        self.warn_skip_checker = ConfigCheckBox(
+            self.tr("Warn About Unprocessed Earlier Steps")
+        )
+        self.warn_skip_checker.setToolTip(
+            self.tr(
+                "Warn me when I jump to a later workbench step while an earlier cleanup step still has unprocessed items. The order is a recommendation only — jumping is always allowed."
+            )
+        )
+        self.warn_skip_checker.setChecked(bool(pcfg.workbench_warn_skip_order))
+        self.warn_skip_checker.toggled.connect(
+            lambda checked: setattr(pcfg, "workbench_warn_skip_order", checked)
+        )
+        config_mgmt_layout.addWidget(ConfigFormRow("", self.warn_skip_checker))
+
         # Export section
         config_mgmt_layout.addWidget(_section_header(self.tr("Export Config")))
 

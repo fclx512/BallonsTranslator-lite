@@ -1,43 +1,53 @@
-"""术语/剧情整合 agent 工作台(方案见 memory/context-agent-workbench-plan)。
+"""泛用工作台（规划见 docs/技术实现/泛用工作台_规划.md，本文件＝批次 D 的界面层）。
 
-- ``GlossaryAgentWorker``:QThread 内的权威状态持有者。AI patch 只落
-  worker 草稿(modules/context_agent/draft.py),经同步信号单向刷新
-  UI 镜像;落盘只经「应用」按钮。LLM 会话复用 AgentTranslator 的
-  profile/client/重试基建(translator 实例在 worker 线程内构造)。
-- ``GlossaryAgentPanel``:主窗口左侧嵌入栏内容(与全局搜索同槽位、
-  更宽,入口见 ui/mainwindowbars.py::LeftBar 的 glossaryChecker 与
-  ui/mainwindow.py::on_set_glossary_widget)。三页:Chat(气泡对话 +
-  常驻引导卡,流式刷新)、Glossary(草稿表)、Story(页段摘要 + 全局梗概)。
+**定位**：工作台是**任务容器**，不是聊天窗（D19 砍掉 Chat；D2 起就不做通用
+对话）。六个任务共用一套三段结构（D20）——
 
-替代原 GlossaryExtractorDialog(one-shot LLM 提取,已删)。
+1. **任务导航**（一级）：顶部六个任务钮，默认顺序＝用户工作流顺序（D16／§3）
+   误识别清理 → 合并相邻框 → 框扩张 → 背景修复 → 术语提取 → 剧情摘要。
+   前四项属「问题清理」任务族、参与跳步提示的"还有 N 个未处理"计数（D37），
+   术语／剧情是探索性任务、不计数。**运行时不禁跳步**，只提示。
+2. **候选列表**：任务自己的清单（批量任务见
+   ``ui/workbench_batch_view.py``，逐条可勾选、点选即在下方展开 100% 原比例
+   审批图——D23；术语／剧情见本文件的两个草稿页）。
+3. **执行／写回**：无候选时禁用；批量执行前一律弹窗告知后果（D27）。
+
+**批量任务的接线纪律**（复核文档 §4.2／§4.4）：界面只做"调 ``plan``→收勾选
+→把标识交回 ``apply``"，不自己写几何、不自己改 ``proj.pages``、不绕开
+``ui/batch_ops.py``；引擎与适配层在 ``ui/workbench_tasks.py``（Qt-free）与
+四个 ``ui/batch_*.py``。批量事务外壳（D35 版本 + D40 五步）在这里建好并
+注入，故版本快照会先落盘当前面板编辑。
+
+**D25 单入口**：主窗口左栏只有一个「工作台」入口（``ui/mainwindowbars.py::LeftBar``
+的 workbenchChecker 槽位），任务切换全在本面板内完成。
+
+术语／剧情两页仍是原 ``GlossaryAgentWorker`` 的镜像：AI 产物只落 worker 草稿，
+落盘只经「应用草稿…」。**Chat 砍掉后 worker 日志落在本面板底部的日志条**。
 """
 
 import json
 import logging
 
-from qtpy.QtCore import QCoreApplication, QObject, QThread, QTimer, Qt, Signal, Slot
+from qtpy.QtCore import QCoreApplication, QObject, QThread, Qt, Signal, Slot
 from qtpy.QtGui import QBrush
 from qtpy.QtWidgets import (
     QApplication,
     QCheckBox,
     QFileDialog,
-    QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QMessageBox,
     QPushButton,
-    QScrollArea,
-    QStackedLayout,
     QStackedWidget,
-    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from modules.context.glossary import GlossaryEntry, load_glossary
+from modules.context.glossary import load_glossary
 from modules.context_agent.draft import (
     ORIGIN_AI,
     ORIGIN_EXISTING,
@@ -63,8 +73,43 @@ from modules.context_agent.story import (
 from modules.context_agent.tools import build_context_tools, execute_context_tool
 from ui.custom_widget import ConfigTextEdit
 from ui.misc import get_theme_color
+from ui.workbench_batch_view import BatchTaskView
+from ui.workbench_tasks import (
+    CLEANUP_TASK_IDS,
+    EXPAND,
+    GLOSSARY,
+    MERGE,
+    MISREAD,
+    SIMPLE_INPAINT,
+    STORY,
+    build_batch_tasks,
+)
 
 logger = logging.getLogger("glossary_agent_panel")
+
+# 任务导航顺序（规划 §3／D16）：①–④「问题清理」任务族 → ⑤术语 ⑥剧情。
+# 只有前四项参与跳步提示计数（D37）。
+WORKBENCH_ORDER = (
+    MISREAD,
+    MERGE,
+    EXPAND,
+    SIMPLE_INPAINT,
+    GLOSSARY,
+    STORY,
+)
+
+# 导航钮的短标签（字面量定义处显式标注翻译上下文；模块级翻译表规则）。
+# "Glossary"/"Story" 沿用旧 tab 的源串，既有译文直接接上。
+_TASK_LABELS = {
+    MISREAD: QCoreApplication.translate("GlossaryAgentPanel", "Misread cleanup"),
+    MERGE: QCoreApplication.translate("GlossaryAgentPanel", "Merge blocks"),
+    EXPAND: QCoreApplication.translate("GlossaryAgentPanel", "Expand blocks"),
+    SIMPLE_INPAINT: QCoreApplication.translate(
+        "GlossaryAgentPanel", "Background fill"
+    ),
+    GLOSSARY: QCoreApplication.translate("GlossaryAgentPanel", "Glossary"),
+    STORY: QCoreApplication.translate("GlossaryAgentPanel", "Story"),
+}
 
 # 模块级翻译表在字面量定义处显式标注上下文(self.tr(variable) 间接查表
 # 检查器看不见,必漏翻译);launch.py 安装翻译器早于本模块导入。
@@ -98,21 +143,89 @@ _ORIGIN_THEME_KEYS = {
     ORIGIN_USER: "@successColor",
 }
 
-# _finish_stream 的 final_text 哨兵:区分「未提供(沿用已累积文本)」与
-# 「提供了空回复(要清空/删气泡)」
-_UNSET = object()
+
+class WorkbenchTaskNav(QWidget):
+    """一级导航：六个互斥任务钮（D20 第 ① 段；D25 单入口下的任务切换）。
+
+    互斥按仓库既有做法手写 ``setChecked(False)``（不引
+    ``QButtonGroup`` 的跨版本信号差异），且**不允许全不选**——工作台总有
+    一个当前任务。
+    """
+
+    task_selected = Signal(str)
+
+    def __init__(self, task_ids, parent=None):
+        super().__init__(parent)
+        self.setObjectName("WorkbenchTaskNav")
+        self._buttons = {}
+        grid = QGridLayout(self)
+        grid.setContentsMargins(6, 6, 6, 0)
+        grid.setSpacing(4)
+        for index, task_id in enumerate(task_ids):
+            button = QPushButton(_TASK_LABELS.get(task_id, task_id), self)
+            button.setObjectName("WorkbenchTaskButton")
+            button.setCheckable(True)
+            button.clicked.connect(
+                lambda _checked=False, tid=task_id: self._on_clicked(tid)
+            )
+            grid.addWidget(button, index // 3, index % 3)
+            self._buttons[task_id] = button
+
+    def _on_clicked(self, task_id: str):
+        button = self._buttons[task_id]
+        if button.isChecked():
+            self._select(task_id)
+        else:
+            # 不允许取消当前任务（工作台必须有一个当前任务）
+            button.setChecked(True)
+
+    def _select(self, task_id: str):
+        for other_id, other in self._buttons.items():
+            if other_id != task_id and other.isChecked():
+                other.blockSignals(True)
+                other.setChecked(False)
+                other.blockSignals(False)
+        self.task_selected.emit(task_id)
+
+    def select(self, task_id: str, *, emit: bool = True):
+        """程序性切换（打开项目回默认任务）。``emit=False`` 不触发跳步提示。"""
+        button = self._buttons.get(task_id)
+        if button is None:
+            return
+        if emit:
+            button.setChecked(True)
+            self._on_clicked(task_id)
+            return
+        for other_id, other in self._buttons.items():
+            other.blockSignals(True)
+            other.setChecked(other_id == task_id)
+            other.blockSignals(False)
+
+    def current(self) -> str:
+        for task_id, button in self._buttons.items():
+            if button.isChecked():
+                return task_id
+        return ""
+
+    def set_count(self, task_id: str, count) -> None:
+        """在任务钮上缀「还有 N 个未处理」（D37：余光扫得到的状态）。"""
+        label = _TASK_LABELS.get(task_id, task_id)
+        if count:
+            label = label + " (" + str(int(count)) + ")"
+        button = self._buttons.get(task_id)
+        if button is not None:
+            button.setText(label)
 
 
 class GlossaryAgentWorker(QObject):
     """worker 线程内的权威草稿 + LLM 会话执行体。
 
-    面板的所有操作入口都经 *:_requested 信号跨线程排队(QueuedConnection)
+    面板的所有操作入口都经 *:*_requested 信号跨线程排队(QueuedConnection)
     触发——直接方法调用会在调用者(主)线程同步执行,长任务会冻结 UI;
     唯一例外 request_stop:只写取消标志,直调让检查点尽早生效。
     """
 
     log_line = Signal(str)
-    chat_delta = Signal(str)  # 流式 content 增量(worker 线程 → UI 节流刷新)
     busy_changed = Signal(bool)
     glossary_synced = Signal(list)  # [(src, dst, note, origin)]
     story_synced = Signal(str, list)  # (synopsis, [(page, summary, origin)])
@@ -342,7 +455,6 @@ class GlossaryAgentWorker(QObject):
             status_cb=self._on_turn,
             log=lambda m: self.log_line.emit(m),
             history_tail=self._history_tail,
-            stream_cb=lambda d: self.chat_delta.emit(d),
         )
         self._history_tail = trim_session_messages(result.messages)[1:]
         self._sync_all()
@@ -406,7 +518,12 @@ class GlossaryAgentWorker(QObject):
 
 
 class GlossaryAgentPanel(QWidget):
-    """主窗口左侧栏内嵌的术语/剧情工作台(与全局搜索同槽位)。"""
+    """主窗口左侧栏内嵌的泛用工作台（与全局搜索同槽位、更宽）。"""
+
+    # 队列 → 画布跳转（D26：界面不做翻页控件，交给主窗口的页链路）
+    jump_requested = Signal(str, int)
+    # 撤回最近一次批量操作（D4／D35：整体一条撤回）
+    rollback_requested = Signal(int)
 
     def __init__(self, proj, parent=None):
         super().__init__(parent)
@@ -414,13 +531,11 @@ class GlossaryAgentPanel(QWidget):
         self._syncing = False
         self._worker = None
         self._thread = None
-        self._stream_label = None
-        self._stream_text = ""
-        self._user_bubbles = []
-        self._stream_flush_timer = QTimer(self)
-        self._stream_flush_timer.setInterval(80)
-        self._stream_flush_timer.setSingleShot(True)
-        self._stream_flush_timer.timeout.connect(self._flush_stream)
+        self._batch_tasks = {}
+        self._batch_views = {}
+        # 四个批量任务首次切入时各自规划一次；批量写回／回滚／换项目后重新标脏
+        self._dirty_tasks = set(CLEANUP_TASK_IDS)
+        self._last_version_seq = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -450,56 +565,60 @@ class GlossaryAgentPanel(QWidget):
         content_page.setObjectName("WorkbenchSurface")
         content_lay = QVBoxLayout(content_page)
         content_lay.setContentsMargins(0, 0, 0, 0)
+        content_lay.setSpacing(4)
 
-        self.tabs = QTabWidget(content_page)
-        content_lay.addWidget(self.tabs, 1)
+        # ① 一级导航
+        self.nav = WorkbenchTaskNav(WORKBENCH_ORDER, content_page)
+        self.nav.task_selected.connect(self._on_task_selected)
+        content_lay.addWidget(self.nav)
 
-        # ── Chat 页(气泡流,参考旧 AI 助手面板) ─────────────────
-        chat_tab = QWidget(self)
-        chat_tab.setObjectName("WorkbenchSurface")
-        chat_layout = QVBoxLayout(chat_tab)
-        chat_layout.setContentsMargins(0, 4, 0, 0)
-        self._chat_area = QScrollArea(chat_tab)
-        self._chat_area.setWidgetResizable(True)
-        self._chat_area.setFrameShape(QFrame.Shape.NoFrame)
-        self._chat_inner = QWidget()
-        self._chat_inner.setObjectName("WorkbenchChatFlow")
-        self._chat_layout = QVBoxLayout(self._chat_inner)
-        self._chat_layout.setContentsMargins(2, 2, 2, 2)
-        self._chat_layout.setSpacing(6)
-        self._chat_layout.addStretch(1)
-        self._chat_area.setWidget(self._chat_inner)
-        chat_layout.addWidget(self._chat_area, 1)
-        input_row = QHBoxLayout()
-        self.input_edit = ConfigTextEdit(chat_tab)
-        self.input_edit.setFixedHeight(52)
-        self.input_edit.setPlaceholderText(
-            self.tr("Instruction for the agent… (Ctrl+Enter to send)")
+        # ②③ 候选列表 + 执行（每个任务自己一整页）
+        self.pages = QStackedWidget(content_page)
+        content_lay.addWidget(self.pages, 1)
+        self._build_batch_pages()
+        self._build_glossary_page()
+        self._build_story_page()
+
+        # 底部：批量撤回 + worker 日志落点（砍 Chat 后的新落点）
+        content_lay.addWidget(self._build_bottom_row(content_page))
+
+        self._stack.addWidget(content_page)
+        self._stack.setCurrentIndex(1 if self.has_project() else 0)
+
+        # 默认停在第一个任务（§3 的用户工作流顺序）；emit=False 跳过跳步提示
+        self._current_task = ""
+        self.nav.select(WORKBENCH_ORDER[0], emit=False)
+        self._current_task = WORKBENCH_ORDER[0]
+
+        self._connect_signals()
+        QApplication.instance().aboutToQuit.connect(self._shutdown)
+
+    # ── 页面构建 ────────────────────────────────────────────────
+
+    def _build_batch_pages(self):
+        op = self._batch_op()
+        self._batch_tasks = build_batch_tasks(
+            self._proj,
+            op,
+            inpainter_provider=self._inpainter_provider,
+            on_changed=self._mark_project_changed,
         )
-        input_row.addWidget(self.input_edit, 1)
-        # Send/Stop 同槽位互斥切换(QStackedLayout 取两页最大尺寸约束):
-        # busy 切换不改变行高,避免整行布局跳动
-        self._send_stop_stack = QStackedLayout()
-        self._send_stop_stack.setSizeConstraint(
-            QStackedLayout.SizeConstraint.SetMinAndMaxSize
-        )
-        self.send_btn = QPushButton(self.tr("Send"), chat_tab)
-        self.stop_btn = QPushButton(self.tr("Stop"), chat_tab)
-        self._send_stop_stack.addWidget(self.send_btn)
-        self._send_stop_stack.addWidget(self.stop_btn)
-        stack_wrap = QWidget(chat_tab)
-        stack_wrap.setObjectName("WorkbenchInputStack")
-        stack_wrap.setLayout(self._send_stop_stack)
-        input_row.addWidget(stack_wrap, 0, Qt.AlignmentFlag.AlignVCenter)
-        chat_layout.addLayout(input_row)
-        self.tabs.addTab(chat_tab, self.tr("Chat"))
+        for task_id in CLEANUP_TASK_IDS:
+            task = self._batch_tasks[task_id]
+            view = BatchTaskView(task)
+            view.jump_requested.connect(self.jump_requested)
+            view.notify_requested.connect(self._toast)
+            view.status_requested.connect(self._append_log)
+            view.batch_applied.connect(self._on_batch_applied)
+            self._batch_views[task_id] = view
+            self.pages.addWidget(view)
 
-        # ── Glossary 页 ────────────────────────────────────────
-        glossary_tab = QWidget(self)
-        glossary_tab.setObjectName("WorkbenchSurface")
-        g_layout = QVBoxLayout(glossary_tab)
-        g_layout.setContentsMargins(0, 4, 0, 0)
-        self.glossary_table = QTableWidget(0, 4, glossary_tab)
+    def _build_glossary_page(self):
+        page = QWidget(self)
+        page.setObjectName("WorkbenchSurface")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(6, 4, 6, 4)
+        self.glossary_table = QTableWidget(0, 4, page)
         self.glossary_table.setHorizontalHeaderLabels(
             [
                 self.tr("Source"),
@@ -511,97 +630,293 @@ class GlossaryAgentPanel(QWidget):
         header = self.glossary_table.horizontalHeader()
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.glossary_table.verticalHeader().setVisible(False)
-        g_layout.addWidget(self.glossary_table, 1)
-        g_btn_row = QHBoxLayout()
-        self.prefill_btn = QPushButton(
-            self.tr("Extract by frequency"), glossary_tab
-        )
+        layout.addWidget(self.glossary_table, 1)
+        button_row = QHBoxLayout()
+        self.prefill_btn = QPushButton(self.tr("Extract by frequency"), page)
         self.prefill_btn.setToolTip(
             self.tr(
-                "Scan all pages' existing translations and merge recurring source→translation pairs into the draft. No AI involved — for AI proposals, send an instruction in the Chat tab."
+                "Scan all pages' existing translations and merge recurring source→translation pairs into the draft. No AI involved — use \"Prepare for translation…\" to ask the AI for the rest."
             )
         )
-        self.glossary_remove_btn = QPushButton(
-            self.tr("Remove selected"), glossary_tab
+        self.glossary_remove_btn = QPushButton(self.tr("Remove selected"), page)
+        button_row.addWidget(self.prefill_btn)
+        button_row.addStretch(1)
+        button_row.addWidget(self.glossary_remove_btn)
+        layout.addLayout(button_row)
+        self.prepare_btn = QPushButton(self.tr("Prepare for translation…"), page)
+        self.prepare_btn.setToolTip(
+            self.tr(
+                "One-click warmup: scan existing translations, then ask the AI to fill in missing glossary entries and page summaries. A confirmation lists the steps (and API cost) first."
+            )
         )
-        g_btn_row.addWidget(self.prefill_btn)
-        g_btn_row.addStretch(1)
-        g_btn_row.addWidget(self.glossary_remove_btn)
-        g_layout.addLayout(g_btn_row)
-        self.tabs.addTab(glossary_tab, self.tr("Glossary"))
+        self.stop_btn = QPushButton(self.tr("Stop"), page)
+        self.apply_btn = QPushButton(self.tr("Apply draft…"), page)
+        apply_row = QHBoxLayout()
+        apply_row.addWidget(self.prepare_btn)
+        apply_row.addWidget(self.stop_btn)
+        apply_row.addStretch(1)
+        apply_row.addWidget(self.apply_btn)
+        layout.addLayout(apply_row)
+        self.pages.addWidget(page)
+        self._glossary_page = page
+        self._glossary_page_index = self.pages.count() - 1
 
-        # ── Story 页 ───────────────────────────────────────────
-        story_tab = QWidget(self)
-        story_tab.setObjectName("WorkbenchSurface")
-        s_layout = QVBoxLayout(story_tab)
-        s_layout.setContentsMargins(0, 4, 0, 0)
-        s_layout.addWidget(QLabel(self.tr("Global synopsis"), story_tab))
-        self.synopsis_edit = ConfigTextEdit(story_tab)
+    def _build_story_page(self):
+        page = QWidget(self)
+        page.setObjectName("WorkbenchSurface")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.addWidget(QLabel(self.tr("Global synopsis"), page))
+        self.synopsis_edit = ConfigTextEdit(page)
         self.synopsis_edit.setFixedHeight(72)
-        s_layout.addWidget(self.synopsis_edit)
-        s_layout.addWidget(
-            QLabel(self.tr("Page summaries"), story_tab)
-        )
-        self.story_table = QTableWidget(0, 3, story_tab)
+        layout.addWidget(self.synopsis_edit)
+        layout.addWidget(QLabel(self.tr("Page summaries"), page))
+        self.story_table = QTableWidget(0, 3, page)
         self.story_table.setHorizontalHeaderLabels(
             [self.tr("Page"), self.tr("Summary"), self.tr("Origin")]
         )
         s_header = self.story_table.horizontalHeader()
         s_header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.story_table.verticalHeader().setVisible(False)
-        s_layout.addWidget(self.story_table, 1)
-        self.story_remove_btn = QPushButton(
-            self.tr("Remove selected"), story_tab
-        )
-        s_layout.addWidget(self.story_remove_btn, 0, Qt.AlignmentFlag.AlignRight)
-        self.tabs.addTab(story_tab, self.tr("Story"))
+        layout.addWidget(self.story_table, 1)
+        self.story_remove_btn = QPushButton(self.tr("Remove selected"), page)
+        layout.addWidget(self.story_remove_btn, 0, Qt.AlignmentFlag.AlignRight)
+        self.pages.addWidget(page)
+        self._story_page = page
+        self._story_page_index = self.pages.count() - 1
 
-        # ── Apply 行 ───────────────────────────────────────────
-        apply_row = QHBoxLayout()
-        self.prepare_btn = QPushButton(
-            self.tr("Prepare for translation…"), content_page
-        )
-        self.prepare_btn.setToolTip(
+    def _build_bottom_row(self, parent) -> QWidget:
+        holder = QWidget(parent)
+        holder.setObjectName("WorkbenchSurface")
+        row = QHBoxLayout(holder)
+        row.setContentsMargins(6, 0, 6, 6)
+        self.rollback_btn = QPushButton(self.tr("Undo last batch"), holder)
+        self.rollback_btn.setToolTip(
             self.tr(
-                "One-click warmup: scan existing translations, then ask the AI to fill in missing glossary entries and page summaries. A confirmation lists the steps (and API cost) first."
+                "Rolls the project back to the state before the last batch action (merge / expand / delete / background fill). The version is consumed, so it can be undone once."
             )
         )
-        apply_row.addWidget(self.prepare_btn)
-        apply_row.addStretch(1)
-        self.apply_btn = QPushButton(self.tr("Apply draft…"), content_page)
-        apply_row.addWidget(self.apply_btn)
-        content_lay.addLayout(apply_row)
+        self.rollback_btn.setEnabled(False)
+        row.addWidget(self.rollback_btn)
+        row.addStretch(1)
+        self._log_view = ConfigTextEdit(parent)
+        self._log_view.setObjectName("WorkbenchLogView")
+        self._log_view.setReadOnly(True)
+        self._log_view.setFixedHeight(56)
+        self._log_view.document().setMaximumBlockCount(200)
+        row.addWidget(self._log_view, 1)
+        return holder
 
-        self._stack.addWidget(content_page)
-        self._stack.setCurrentIndex(1 if self.has_project() else 0)
+    # ── 主窗口接线 ──────────────────────────────────────────────
 
-        self._update_tab_badges()
-        self._connect_signals()
-        QApplication.instance().aboutToQuit.connect(self._shutdown)
+    def _mainwindow(self):
+        """主窗口（提供 D40 前置对齐、落盘、模块实例、批量回滚）。"""
+        window = self.window()
+        if window is None or not hasattr(window, "_sync_block_data"):
+            return None
+        return window
+
+    def _batch_op(self):
+        """批量事务外壳：落盘 + 版本 + D40 前置对齐（复核文档 §4.2 的必传项）。"""
+        from ui.batch_ops import BatchOperation
+
+        window = self._mainwindow()
+        commit = getattr(window, "_sync_and_commit_project", None)
+        sync = getattr(window, "_sync_block_data", None)
+        return BatchOperation(self._proj, commit=commit, sync_block_data=sync)
+
+    def _inpainter_provider(self):
+        window = self._mainwindow()
+        manager = getattr(window, "module_manager", None)
+        return getattr(manager, "inpainter", None)
+
+    def _mark_project_changed(self):
+        """标签表态等程序外修改：置未保存位（标签不进撤销栈，D28）。"""
+        window = self._mainwindow()
+        canvas = getattr(window, "canvas", None)
+        if canvas is not None:
+            try:
+                canvas.setProjSaveState(True)
+            except Exception as error:  # 画布未就绪时不该打断队列操作
+                logger.error(f"Failed to mark project dirty: {error}")
+
+    def _toast(self, text: str, kind: str = "info"):
+        """面板内通知：批量回执与失败提示（kind 见通知中心的 KIND_STYLES）。"""
+        from ui.custom_widget import notification
+
+        try:
+            notification.toast(text, kind=kind, anchor="bottom-left")
+        except Exception as error:
+            logger.error(f"workbench toast failed: {error}")
+        self._append_log(text)
+
+    def _append_log(self, text: str):
+        """worker 日志与批量回执的落点（D19：砍 Chat 后日志不再无处可去）。"""
+        if not text:
+            return
+        # document 已设 maximumBlockCount，超长自动丢弃最旧的行
+        self._log_view.append(text)
+        scrollbar = self._log_view.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    # ── 任务导航 ────────────────────────────────────────────────
+
+    def _page_index(self, task_id: str) -> int:
+        if task_id == GLOSSARY:
+            return self._glossary_page_index
+        if task_id == STORY:
+            return self._story_page_index
+        return list(CLEANUP_TASK_IDS).index(task_id)
+
+    def current_task(self) -> str:
+        return self.nav.current()
+
+    def _on_task_selected(self, task_id: str):
+        previous = getattr(self, "_current_task", "")
+        if task_id == previous:
+            return
+        if self._warn_skip_order(previous, task_id):
+            self.nav.select(previous, emit=False)
+            return
+        self._current_task = task_id
+        self.pages.setCurrentIndex(self._page_index(task_id))
+        if task_id in (GLOSSARY, STORY):
+            self._ensure_worker()
+        else:
+            self._ensure_current_planned()
+        self._refresh_nav_counts()
+
+    def _ensure_current_planned(self):
+        """当前批量任务若标脏（还没规划过／数据变过）就跑一次只读 ``plan``。"""
+        current = self.current_task()
+        view = self._batch_views.get(current)
+        if view is None or current not in self._dirty_tasks:
+            return
+        self._dirty_tasks.discard(current)
+        view.replan()
+
+    def earlier_pending(self, target: str):
+        """``target`` 之前、仍有未处理条目的「问题清理」步骤：``[(标签, 计数)]``。
+
+        D37 的计数口径：只有前四项参与（术语／剧情是探索性任务、没有
+        "未处理标记"的概念）。计数一律取自任务自己的 ``pending``——误识别＝
+        未驳回块数（D28）、合并＝默认勾选的组数、扩张＝当前数值下的可扩框数、
+        背景修复＝已扫过那次的简单块数（它要读全书页图，不为提示重跑）。
+        """
+        pending = []
+        if target not in WORKBENCH_ORDER:
+            return pending
+        limit = WORKBENCH_ORDER.index(target)
+        for task_id in CLEANUP_TASK_IDS:
+            if WORKBENCH_ORDER.index(task_id) >= limit:
+                break
+            view = self._batch_views.get(task_id)
+            task = self._batch_tasks.get(task_id)
+            if view is None or task is None:
+                continue
+            try:
+                count = task.pending(view.options())
+            except Exception as error:
+                logger.error(f"Skip-order probe failed for {task_id}: {error}")
+                continue
+            if count:
+                pending.append((_TASK_LABELS.get(task_id, task_id), int(count)))
+        return pending
+
+    def _warn_skip_order(self, previous: str, target: str) -> bool:
+        """跳步提示（D37）：前序「问题清理」步骤还有未处理条目时提示，可禁用。
+
+        只在**往后跳**时提示（往前回看不打扰）；不门禁、可任意跳转，
+        提示里的「不再提示」写 ``pcfg.workbench_warn_skip_order``。
+        返回真＝用户取消，调用方应停原任务不动。
+        """
+        from utils.config import pcfg, save_config
+
+        if not pcfg.workbench_warn_skip_order:
+            return False
+        if not previous or previous not in WORKBENCH_ORDER:
+            return False
+        if WORKBENCH_ORDER.index(target) <= WORKBENCH_ORDER.index(previous):
+            return False
+        pending = self.earlier_pending(target)
+        if not pending:
+            return False
+        box = QMessageBox(self)
+        box.setWindowTitle(self.tr("Unprocessed items in earlier steps"))
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setText(self.tr("Earlier cleanup steps still have unprocessed items:"))
+        box.setInformativeText(
+            "<br>".join(label + ": " + str(count) for label, count in pending)
+        )
+        box.addButton(QMessageBox.StandardButton.Ok).setText(self.tr("Continue"))
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        dont_ask = QCheckBox(self.tr("Don't ask again"))
+        box.setCheckBox(dont_ask)
+        if box.exec() != QMessageBox.StandardButton.Ok:
+            return True
+        if dont_ask.isChecked():
+            pcfg.workbench_warn_skip_order = False
+            save_config()
+            self._sync_warn_skip_checkbox()
+        return False
+
+    def _sync_warn_skip_checkbox(self):
+        """把「不再提示」回写设置页复选框（ConfigPanel.setupConfig 只跑一次）。"""
+        from utils.config import pcfg
+
+        panel = getattr(self.window(), "configPanel", None)
+        checker = getattr(panel, "warn_skip_checker", None)
+        if checker is None:
+            return
+        checker.blockSignals(True)
+        checker.setChecked(pcfg.workbench_warn_skip_order)
+        checker.blockSignals(False)
+
+    def _refresh_nav_counts(self):
+        """导航钮上的「还有 N 个未处理」（D37；只有前四项参与计数）。"""
+        for task_id in CLEANUP_TASK_IDS:
+            view = self._batch_views.get(task_id)
+            task = self._batch_tasks.get(task_id)
+            if view is None or task is None:
+                continue
+            try:
+                count = task.pending(view.options())
+            except Exception as error:
+                logger.error(f"Nav count failed for {task_id}: {error}")
+                continue
+            self.nav.set_count(task_id, count)
+
+    # ── 项目状态 ────────────────────────────────────────────────
 
     def has_project(self) -> bool:
         """未打开项目(directory 为空)时工作台不可用。"""
         return bool(getattr(self._proj, "directory", None))
 
     def refresh_project_state(self):
-        """项目打开/切换后刷新:空态 ⇄ 内容页,worker 重建以载入新基底。"""
+        """项目打开/切换后刷新:空态 ⇄ 内容页,worker 与批量任务重建。"""
         if self._worker is not None:
             self._shutdown()
+        self._dirty_tasks = set(CLEANUP_TASK_IDS)
+        self._last_version_seq = None
+        self.rollback_btn.setEnabled(False)
+        for task in self._batch_tasks.values():
+            task.reset()
         if self.has_project():
             self._stack.setCurrentIndex(1)
+            self.nav.select(WORKBENCH_ORDER[0], emit=False)
+            self._current_task = WORKBENCH_ORDER[0]
+            self._dirty_tasks.discard(WORKBENCH_ORDER[0])
+            self.pages.setCurrentIndex(0)
             if self.isVisible():
                 self._ensure_worker()
+                self._ensure_current_planned()
+            self._refresh_nav_counts()
         else:
             self._stack.setCurrentIndex(0)
-        # 项目切换改变总页数,徽章随之刷新
-        self._update_tab_badges()
 
-    # ── 信号接线 ──────────────────────────────────────────────
+    # ── 信号接线 ────────────────────────────────────────────────
 
     def _connect_signals(self):
-        self.send_btn.clicked.connect(self._on_send)
-        self.input_edit.installEventFilter(self)
-        self.synopsis_edit.installEventFilter(self)
         self.stop_btn.clicked.connect(self._on_stop)
         self.prefill_btn.clicked.connect(self._on_prefill)
         self.prepare_btn.clicked.connect(self._on_prepare)
@@ -610,6 +925,8 @@ class GlossaryAgentPanel(QWidget):
         self.glossary_table.itemChanged.connect(self._on_glossary_item_changed)
         self.story_table.itemChanged.connect(self._on_story_item_changed)
         self.apply_btn.clicked.connect(self._on_apply)
+        self.rollback_btn.clicked.connect(self._on_rollback)
+        self.synopsis_edit.installEventFilter(self)
 
     def showEvent(self, event):
         """工作台首次露出时即建 worker 并载入基底(草稿不需要等首条指令);
@@ -617,19 +934,13 @@ class GlossaryAgentPanel(QWidget):
         super().showEvent(event)
         if self.has_project():
             self._ensure_worker()
+            self._ensure_current_planned()
 
     def eventFilter(self, obj, event):
-        """Ctrl+Enter 发送指令;synopsis 焦点离开时提交到 worker。"""
-        from qtpy.QtCore import QEvent, Qt as Qt2
+        """synopsis 焦点离开时提交到 worker。"""
+        from qtpy.QtCore import QEvent
 
-        if obj is self.input_edit and event.type() == QEvent.Type.KeyPress:
-            if (
-                event.key() == Qt2.Key.Key_Return
-                and event.modifiers() & Qt2.KeyboardModifier.ControlModifier
-            ):
-                self._on_send()
-                return True
-        elif (
+        if (
             obj is self.synopsis_edit
             and event.type() == QEvent.Type.FocusOut
             and not self._syncing
@@ -656,7 +967,6 @@ class GlossaryAgentPanel(QWidget):
         worker.round_finished.connect(self._on_round_finished)
         worker.round_failed.connect(self._on_round_failed)
         worker.applied.connect(self._append_log)
-        worker.chat_delta.connect(self._on_chat_delta)
         # UI → worker 操作入口(跨线程 Queued,长任务不占主线程)
         worker.instruction_requested.connect(worker.run_instruction)
         worker.prefill_requested.connect(worker.prefill_from_frequency)
@@ -682,6 +992,53 @@ class GlossaryAgentPanel(QWidget):
 
     def _on_prefill(self):
         self._ensure_worker().prefill_requested.emit()
+
+    def _on_rollback(self):
+        if self._last_version_seq is None:
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle(self.tr("Undo last batch"))
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setText(
+            self.tr(
+                "Roll the project back to the state before the last batch action?"
+            )
+        )
+        box.setInformativeText(
+            self.tr(
+                "Any manual edits made after that batch action are discarded too. The version is consumed, so each batch can only be undone once."
+            )
+        )
+        box.addButton(QMessageBox.StandardButton.Ok).setText(self.tr("Roll back"))
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        if box.exec() != QMessageBox.StandardButton.Ok:
+            return
+        self.rollback_requested.emit(int(self._last_version_seq))
+
+    def _on_batch_applied(self, version):
+        """一次批量写回后：记住版本号，并把其余任务的列表标脏（数据变了）。"""
+        seq = getattr(version, "seq", None)
+        self._last_version_seq = seq
+        self.rollback_btn.setEnabled(seq is not None)
+        self._dirty_tasks = set(CLEANUP_TASK_IDS)
+        self._dirty_tasks.discard(self.current_task())
+        self._refresh_nav_counts()
+
+    def clear_batch_version(self):
+        """批量已被撤销（主窗口回滚后调用）：版本已消耗，按钮随之失效。
+
+        数据是整体换入的，故所有队列列表都失效；当前任务立刻重跑一次，
+        其余任务等切过去时再补（``_dirty_tasks``）。
+        """
+        self._last_version_seq = None
+        self.rollback_btn.setEnabled(False)
+        self._dirty_tasks = set(CLEANUP_TASK_IDS)
+        current = self.current_task()
+        self._dirty_tasks.discard(current)
+        view = self._batch_views.get(current)
+        if view is not None:
+            view.replan()
+        self._refresh_nav_counts()
 
     # ── 一键准备(耗时/耗费操作,先弹确认) ─────────────────────
 
@@ -758,100 +1115,12 @@ class GlossaryAgentPanel(QWidget):
         if not self._prepare_confirmed():
             return
         # 先词频提取(无 AI,秒回)再发 AI 指令:两信号同线程按序排队,
-        # worker 依次执行
+        # worker 依次执行。指令直接入队——D19 砍掉 Chat 后不再有用户气泡,
+        # 但 instruction_requested 本身与 Chat 无关,原地保留。
         self._ensure_worker().prefill_requested.emit()
-        self._send_text(self._prepare_command())
+        self._ensure_worker().instruction_requested.emit(self._prepare_command())
 
-    # ── Chat 页:气泡流 ────────────────────────────────────────
-
-    def _bubble_max_width(self) -> int:
-        return max(160, int(self._chat_area.viewport().width() * 0.88))
-
-    def _add_user_bubble(self, text: str):
-        label = QLabel(text)
-        label.setObjectName("AIChatUserBubble")
-        label.setWordWrap(True)
-        label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-        label.setMaximumWidth(self._bubble_max_width())
-        self._user_bubbles.append(label)
-        wrap = QWidget()
-        wrap.setObjectName("WorkbenchChatFlow")
-        row = QHBoxLayout(wrap)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.addStretch(1)
-        row.addWidget(label)
-        self._insert_chat_widget(wrap)
-
-    def _add_ai_bubble(self, text: str) -> QLabel:
-        label = QLabel(text)
-        label.setObjectName("AIChatAssistantBubble")
-        label.setWordWrap(True)
-        label.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-        self._insert_chat_widget(label)
-        return label
-
-    def _add_status_line(self, text: str, error: bool = False):
-        label = QLabel(text)
-        label.setObjectName("AIChatErrorLine" if error else "AIChatStatusLine")
-        label.setWordWrap(True)
-        self._insert_chat_widget(label)
-
-    def _insert_chat_widget(self, widget: QWidget):
-        """插到末尾 stretch 之前并滚动到底。"""
-        self._chat_layout.insertWidget(self._chat_layout.count() - 1, widget)
-        QTimer.singleShot(0, self._scroll_chat_to_bottom)
-
-    def _scroll_chat_to_bottom(self):
-        sb = self._chat_area.verticalScrollBar()
-        sb.setValue(sb.maximum())
-
-    def _ensure_stream_label(self) -> QLabel:
-        if self._stream_label is None:
-            self._stream_text = ""
-            self._stream_label = self._add_ai_bubble("…")
-        return self._stream_label
-
-    def _on_chat_delta(self, delta: str):
-        self._ensure_stream_label()
-        self._stream_text += delta
-        if not self._stream_flush_timer.isActive():
-            self._stream_flush_timer.start()
-
-    def _flush_stream(self):
-        """节流合并的流式刷新:一次性回写已累积文本。"""
-        if self._stream_label is not None:
-            self._stream_label.setText(self._stream_text or "…")
-            QTimer.singleShot(0, self._scroll_chat_to_bottom)
-
-    def _finish_stream(self, final_text=_UNSET, *, keep=True):
-        """收束当前流式气泡;final_text 覆盖为最终回复,keep=False 删除。"""
-        if self._stream_label is None:
-            return
-        label = self._stream_label
-        text = self._stream_text
-        if final_text is not _UNSET:
-            text = final_text
-            label.setText(text)
-        self._stream_label = None
-        self._stream_flush_timer.stop()
-        if not keep or not text.strip():
-            label.parentWidget().deleteLater()
-
-    def _on_send(self):
-        if self._send_text(self.input_edit.toPlainText().strip()):
-            self.input_edit.clear()
-
-    def _send_text(self, text: str) -> bool:
-        if not text or (self._worker is not None and self._worker._busy):
-            return False
-        worker = self._ensure_worker()
-        self._add_user_bubble(text)
-        worker.instruction_requested.emit(text)
-        return True
+    # ── 术语/剧情：用户编辑与落盘 ──────────────────────────────
 
     def _on_apply(self):
         worker = self._ensure_worker()
@@ -925,54 +1194,20 @@ class GlossaryAgentPanel(QWidget):
         )
 
     def _on_busy_changed(self, busy: bool):
-        self._send_stop_stack.setCurrentIndex(1 if busy else 0)
         self.prefill_btn.setEnabled(not busy)
         self.prepare_btn.setEnabled(not busy)
         self.apply_btn.setEnabled(not busy)
         self.glossary_table.setEnabled(not busy)
         self.story_table.setEnabled(not busy)
-        if busy:
-            self.tabs.setCurrentIndex(0)
-
-    # ── worker → UI 镜像同步 ─────────────────────────────────
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        width = self._bubble_max_width()
-        for label in self._user_bubbles:
-            label.setMaximumWidth(width)
 
     def _on_round_finished(self, reply: str):
-        self._finish_stream(reply)
+        if (reply or "").strip():
+            self._append_log(self.tr("Reply: %1").replace("%1", reply.strip()))
 
     def _on_round_failed(self, err: str):
-        self._finish_stream(_UNSET, keep=False)
-        self._add_status_line(err, error=True)
+        self._append_log(err)
 
-    def _append_log(self, text: str):
-        """worker 日志(轮次状态/载入摘要/落盘回执) → 灰色状态行;
-        若有流式气泡先原样收束(空内容气泡随之移除)。"""
-        self._finish_stream()
-        self._add_status_line(text)
-
-    def _update_tab_badges(self):
-        """Tab 标题即状态总览:术语条数 / 摘要覆盖(已有/总页数)。
-
-        不点进去也能看出准备度——「不打扰」的核心:信息放在余光扫得到处。
-        """
-        n_glossary = self.glossary_table.rowCount()
-        self.tabs.setTabText(
-            1,
-            self.tr("Glossary (%1)").replace("%1", str(n_glossary)),
-        )
-        pages = getattr(self._proj, "pages", None) or {}
-        n_pages = len(pages) if self.has_project() else 0
-        self.tabs.setTabText(
-            2,
-            self.tr("Story (%1/%2)")
-            .replace("%1", str(self.story_table.rowCount()))
-            .replace("%2", str(n_pages)),
-        )
+    # ── worker → UI 镜像同步 ─────────────────────────────────
 
     @staticmethod
     def _origin_brush(origin: str) -> "QBrush | None":
@@ -997,7 +1232,6 @@ class GlossaryAgentPanel(QWidget):
                     self.glossary_table.setItem(r, c, item)
         finally:
             self._syncing = False
-        self._update_tab_badges()
 
     def _sync_story_tab(self, synopsis: str, rows: list):
         self._syncing = True
@@ -1021,4 +1255,3 @@ class GlossaryAgentPanel(QWidget):
                     self.story_table.setItem(r, c, item)
         finally:
             self._syncing = False
-        self._update_tab_badges()

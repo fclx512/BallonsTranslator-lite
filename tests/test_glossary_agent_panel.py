@@ -53,6 +53,8 @@ class GlossaryAgentPanelTest(unittest.TestCase):
         worker = GlossaryAgentWorker(self.proj)
         panel._worker = worker
         panel._wire_worker(worker)
+        # 面板未 show → 不会自起 QThread;替换掉 _worker 后残留线程会崩退出
+        self.addCleanup(panel._shutdown)
         return panel, worker
 
     def test_initialize_loads_base(self):
@@ -144,15 +146,22 @@ class GlossaryAgentPanelTest(unittest.TestCase):
         self.assertNotIn("Extract Glossary", bars_src)
 
 
-    def test_tab_badges_update(self):
-        # Tab 标题即状态总览:术语条数 / 摘要覆盖(已有/总页数)
+    def test_task_nav_reaches_glossary_and_story(self):
+        # 工作台一级导航（D20 第 ① 段）：术语/剧情不再是 tab，而是导航里的任务
+        from ui.glossary_agent_panel import WORKBENCH_ORDER
+        from ui.workbench_tasks import GLOSSARY, STORY
+
         panel, worker = self._panel()
         worker.initialize()
-        self.assertEqual(panel.tabs.tabText(1), "Glossary (0)")
-        self.assertEqual(panel.tabs.tabText(2), "Story (1/2)")
+        self.assertEqual(panel.current_task(), WORKBENCH_ORDER[0])
+        panel.nav.select(GLOSSARY)
+        self.assertEqual(panel.current_task(), GLOSSARY)
+        self.assertEqual(panel.pages.currentWidget(), panel._glossary_page)
+        panel.nav.select(STORY)
+        self.assertEqual(panel.pages.currentWidget(), panel._story_page)
         worker.glossary.apply_patch([{"src": "勇者", "dst": "Hero"}])
         worker._sync_all()
-        self.assertEqual(panel.tabs.tabText(1), "Glossary (1)")
+        self.assertEqual(panel.glossary_table.rowCount(), 1)
 
     def test_prepare_skips_dialog_when_confirm_disabled(self):
         # pcfg.workbench_confirm_costly=False:不弹窗直接执行
@@ -172,8 +181,10 @@ class GlossaryAgentPanelTest(unittest.TestCase):
             pcfg.workbench_confirm_costly = old
         self.assertEqual(len(sent), 1)
         self.assertIn("Prepare the drafts", sent[0])
-        # 指令以用户气泡形式上屏(透明可见)
-        self.assertIn("Prepare the drafts", panel._user_bubbles[-1].text())
+        # D19 砍掉 Chat 后不再有用户气泡:指令直接入队,日志条是 worker 的回执落点
+        self.assertFalse(hasattr(panel, "_user_bubbles"))
+        panel._append_log("worker said something")
+        self.assertIn("worker said something", panel._log_view.toPlainText())
 
     def test_empty_state_without_project(self):
         # 未打开项目(directory 空):空态页接管,不建 worker

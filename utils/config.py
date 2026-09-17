@@ -508,6 +508,11 @@ class ProgramConfig(Config):
     # API 花销；默认开启，弹窗内「不再提示」或设置面板「应用 → Workbench」
     # 可关闭/恢复（两处会互相同步）
     workbench_confirm_costly: bool = True
+    # 泛用工作台的跳步提示（规划 D37）：从某个「问题清理」步骤往后跳时，
+    # 若前序步骤还有未处理条目则弹窗提示「还有 N 个未处理」。默认开启，
+    # 弹窗内「不再提示」或设置面板「应用 → Workbench」可关闭/恢复。
+    # 顺序只是推荐与提示、不门禁——用户始终可以任意跳转。
+    workbench_warn_skip_order: bool = True
 
     # ── Right-click context menu customization ─────────────
     context_menu_order: List[str] = field(default_factory=lambda: [
