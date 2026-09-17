@@ -1,6 +1,7 @@
-"""文本框几何判据（批量任务共用的小工具）。
+"""文本框几何判据（批量任务与区域再检测共用的小工具）。
 
-「外扩到碰到邻框为止」在仓库里有两处消费点，语义相同、以前各写一份：
+**矩形部分**：「外扩到碰到邻框为止」在仓库里有两处消费点，语义相同、以前
+各写一份：
 
 - ``ui/batch_merge.py`` 的审批截图（规划 D31：外扩＝组包围盒短边 50%、
   遇邻框即停）；
@@ -12,9 +13,19 @@
 坐标系与 ``utils/textblock.py::TextBlock`` 一致：矩形为 ``[x1, y1, x2, y2]``
 （左上 + 右下，整型像素），无旋转（带 ``angle`` 的块由调用方排除——轴对齐
 的并集与外扩对旋转框无意义）。
+
+**四边形部分**（``poly_of`` 一族）：``ui/region_redetect.py`` 的判据一律按
+``TextBlock.lines`` 的**真实四边形**算，不能用 ``xyxy``——后者只是轴对齐
+外接矩形，倾斜框（检测器返回的 DB 四边形，实测 11.9°~16.7°）用外接矩形会
+误判邻居与重叠。返回 ``shapely`` 几何体（仓库既有依赖，
+``utils/textblock.py`` 已 import），面积类判据走它；轴对齐的"带重叠"仍用
+上面的 1-D ``overlap_ratio``，两处口径保持一致。
 """
 
 from typing import List, Optional, Sequence
+
+from shapely.geometry import MultiPoint
+from shapely.geometry.base import BaseGeometry
 
 Rect = List[int]
 
@@ -121,3 +132,96 @@ def _edge(
         if other >= edge:
             limit = min(limit, other)
     return max(limit, edge)
+
+
+# ── 四边形判据（区域再检测用）─────────────────────────────────────
+
+Point = List[float]
+
+
+def poly_of(blk) -> Optional[BaseGeometry]:
+    """块占位的真实多边形：``lines`` 全部顶点的凸包；取不到返回 ``None``。
+
+    - ``lines`` 是文字行四边形列表（检测器返回的 DB 四边形；合并块是多行），
+      凸包即该块在页面上实际覆盖的区域；
+    - 顶点全共线（退化框）时凸包退化为线段、面积为 0 → 返回 ``None``，调用方
+      按"判不出"处理，不要拿它去算重叠。
+    """
+    pts = quad_points(blk)
+    if len(pts) < 3:
+        return None
+    try:
+        hull = MultiPoint(pts).convex_hull
+    except Exception:
+        return None
+    if hull.is_empty or hull.area <= 0:
+        return None
+    return hull
+
+
+def quad_points(blk) -> List[Point]:
+    """``lines`` 的全部顶点（``[(x, y), ...]``）；缺失或形态异常时返回空表。"""
+    out: List[Point] = []
+    for line in getattr(blk, "lines", None) or []:
+        try:
+            for pnt in line:
+                x, y = float(pnt[0]), float(pnt[1])
+                out.append([x, y])
+        except (TypeError, ValueError, IndexError):
+            continue
+    return out
+
+
+def poly_center(blk) -> Optional[Point]:
+    """块中心＝四边形**顶点均值**（规划 §八.1 的口径，不是形心）。
+
+    取不到顶点时退回 ``xyxy`` 的几何中心；两者都没有返回 ``None``。
+    """
+    pts = quad_points(blk)
+    if pts:
+        return [
+            sum(p[0] for p in pts) / len(pts),
+            sum(p[1] for p in pts) / len(pts),
+        ]
+    rect = rect_of(blk)
+    if rect is None:
+        return None
+    return [(rect[0] + rect[2]) / 2.0, (rect[1] + rect[3]) / 2.0]
+
+
+def poly_bands(blk) -> Optional[Rect]:
+    """块的轴对齐范围（由四边形顶点取，非 ``xyxy``）；取不到返回 ``None``。
+
+    只用于"带重叠"这类粗判（沿一根轴比较），精细判据一律用多边形本身。
+    """
+    pts = quad_points(blk)
+    if not pts:
+        return None
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    return [int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys))]
+
+
+def poly_overlap_ratio(a, b, base: BaseGeometry = None) -> float:
+    """两个块（或现成形状）的重叠率：交集面积 / ``base`` 的面积。
+
+    ``base`` 缺省取**较小者**，即区域再检测的替换判据口径（决策 4）：无论
+    "新块落在已有块里"（区域级大框吃掉了整块文字）还是"已有块落在新块里"，
+    都算同一片文字被重新检出。任一边取不到有效多边形即返回 0.0（不替换）。
+    """
+    pa, pb = shape_of(a), shape_of(b)
+    if pa is None or pb is None:
+        return 0.0
+    if base is None or base.area <= 0:
+        base = pa if pa.area <= pb.area else pb
+    try:
+        return float(pa.intersection(pb).area) / float(base.area)
+    except Exception:
+        return 0.0
+
+
+def shape_of(obj) -> Optional[BaseGeometry]:
+    """块 → 多边形；已是有效几何体则原样返回；无效（空/退化）返回 ``None``。"""
+    if isinstance(obj, BaseGeometry):
+        return None if (obj.is_empty or obj.area <= 0) else obj
+    return poly_of(obj)

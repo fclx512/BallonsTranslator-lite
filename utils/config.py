@@ -398,6 +398,20 @@ class ProgramConfig(Config):
     # 超出即删最旧；默认 1、上限 5（utils/batch_versions.py 内再夹一次）。
     batch_backup_versions: int = 1
 
+    # 区域再检测（人工拉框 → 只在框内跑检测 + OCR）使用的检测器。默认
+    # ppocrv6_onnx：它的 DB 四边形在小裁剪里等效放大 1.5 倍，正是补 ysgyolo
+    # 漏检（成片漏检横排文本）的强项。该项**不需要频繁修改**——换检测器会在
+    # 首次触发时重建 ONNX 会话（数秒）。
+    region_redetect_detector: str = "ppocrv6_onnx"
+
+    # 区域再检测的检测器跑在哪个设备（"cpu" / "cuda"）。**默认 cpu**：实测
+    # （tmp/_mem_probe2.py、tmp/_mem_probe3b.py）同一个小裁剪，ONNX Runtime 的
+    # CUDA 会话一次就吃掉主机工作集 +835MB 且 `unload_model` 只回收 50MB（cudnn
+    # workspace/arena 已经长在进程里），而 CPU 会话只 +89~134MB 且卸载可回收；
+    # 单次推理 CPU 19~93ms vs CUDA 7~21ms，一次手势只差约 20ms。除非 CPU 实在太慢，
+    # 不要改成 cuda。
+    region_redetect_device: str = "cpu"
+
     fsearch_case: bool = False
     fsearch_whole_word: bool = False
     fsearch_regex: bool = False

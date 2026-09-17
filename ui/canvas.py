@@ -345,6 +345,9 @@ class SnapGuideItem(QGraphicsItem):
 class Canvas(QGraphicsScene):
     scalefactor_changed = Signal()
     end_create_textblock = Signal(QRectF)
+    # 区域再检测（人工拉框 → 只在框内跑检测 + OCR）：拖框结束的那一刻发一次，
+    # 由 ui/region_redetect_tool.py 接手。见 Canvas.region_redetect_mode。
+    region_redetect_rect = Signal(QRectF)
     paste2selected_textitems = Signal()
     end_create_rect = Signal(QRectF, int)
     finish_painting = Signal(StrokeImgItem)
@@ -400,6 +403,13 @@ class Canvas(QGraphicsScene):
         self.scale_factor = 1.0
         self.text_transparency = 0
         self.textblock_mode = False
+        # 区域再检测模式：复用手势、只换落点——「拉框」与建文本框同一条拖拽路径
+        # （Canvas.startCreateTextblock / endCreateTextblock），结束时改发
+        # region_redetect_rect 而不是 end_create_textblock。只在文本框编辑页生效
+        # （绘图模式下文本框层是隐藏的，检出的框看不见），故不是 ImageEditMode
+        # 的一员：ui/image_edit.py::ImageEditMode 的值会被 setPaintMode(False)
+        # 重置为 NONE，进文本框编辑页时必然被清掉。
+        self.region_redetect_mode = False
         self.alignment_enabled = pcfg.snap_alignment
         self.snap_guide_item = SnapGuideItem()
         self.creating_textblock = False
@@ -1024,7 +1034,12 @@ class Canvas(QGraphicsScene):
         self.txtblkShapeControl.hide()
         textblk_created = False
         rect = self.txtblkShapeControl.rect()
-        if self.creating_normal_rect:
+        if self.region_redetect_mode and self.textEditMode():
+            # 落点是"区域再检测"而不是"新建一个空文本框"
+            if rect.width() > 1 and rect.height() > 1:
+                self.region_redetect_rect.emit(rect)
+                textblk_created = True
+        elif self.creating_normal_rect:
             self.end_create_rect.emit(rect, btn)
             self.txtblkShapeControl.showControls()
         else:
@@ -1395,6 +1410,19 @@ class Canvas(QGraphicsScene):
             return
 
         if self.imgtrans_proj.img_valid:
+            # 区域再检测模式优先接管拖动：左键拉出来的矩形是「待重检测区域」而
+            # 不是橡皮筋多选框。**只接管左键**——右键是画布上的通用交互口
+            # （建文本框 / 上下文菜单），模式开着也不该把它顶掉。只在文本框编辑页
+            # 生效（绘图模式下走笔刷/矩形工具，且文本框层是隐藏的）。
+            if (
+                self.region_redetect_mode
+                and self.textEditMode()
+                and btn == Qt.MouseButton.LeftButton
+            ):
+                return self.startCreateTextblock(
+                    event.scenePos(), hide_control=True
+                )
+
             # Text-block creation mode (W / bottom-bar toggle, defaults ON via
             # pcfg.imgtrans_textblock): only the RIGHT press creates a new
             # block here — the LEFT press must fall through to the normal
@@ -1567,6 +1595,16 @@ class Canvas(QGraphicsScene):
 
     def setTextBlockMode(self, mode: bool):
         self.textblock_mode = mode
+
+    def setRegionRedetectMode(self, mode: bool):
+        """开关「区域再检测」模式（左键拉框改走 region_redetect_rect 信号）。"""
+        mode = bool(mode)
+        if mode == self.region_redetect_mode:
+            return
+        self.region_redetect_mode = mode
+        if self.creating_textblock:
+            # 拖拽中途切模式：本次拖拽作废（结束时的落点会和用户预期不符）
+            self.clear_states()
 
     def on_create_contextmenu(self, pos: QPoint, is_textpanel: bool):
         if self.textEditMode() and not self.creating_textblock:

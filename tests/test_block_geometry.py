@@ -7,6 +7,7 @@ Run:
     ./ballontrans_pylibs_win/python.exe -m pytest tests/test_block_geometry.py -q
 """
 
+import math
 import os
 import os.path as osp
 import sys
@@ -21,11 +22,34 @@ from utils.block_geometry import (  # noqa: E402
     expand_limited,
     gap_length,
     overlap_ratio,
+    poly_bands,
+    poly_center,
+    poly_of,
+    poly_overlap_ratio,
     rect_of,
 )
 from utils.textblock import TextBlock  # noqa: E402
 
 PAGE = (300, 400)
+
+
+def _quad_blk(x1, y1, x2, y2, *, rotate=0.0):
+    """带 ``lines`` 四边形的块；``rotate`` 为角度（deg，绕自身中心旋转）。"""
+    pts = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]]
+    if rotate:
+        cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+        rad = math.radians(rotate)
+        cos, sin = math.cos(rad), math.sin(rad)
+        pts = [
+            [
+                cx + (px - cx) * cos - (py - cy) * sin,
+                cy + (px - cx) * sin + (py - cy) * cos,
+            ]
+            for px, py in pts
+        ]
+    blk = TextBlock(lines=[pts])
+    blk.adjust_bbox()
+    return blk
 
 
 class RectOfTest(unittest.TestCase):
@@ -103,6 +127,58 @@ class ExpandLimitedTest(unittest.TestCase):
             [100, 100, 140, 200], 20, PAGE, [[110, 60, 130, 80], [110, 220, 130, 240]]
         )
         self.assertEqual((grown[1], grown[3]), (80, 220))
+
+
+class PolyGeometryTest(unittest.TestCase):
+    """四边形判据（区域再检测）：``xyxy`` 是外接矩形，倾斜框只能按 ``lines`` 算。"""
+
+    def test_poly_of_uses_line_vertices(self):
+        poly = poly_of(_quad_blk(10, 10, 60, 30))
+        self.assertAlmostEqual(poly.area, 50 * 20, places=3)
+
+    def test_poly_of_degenerate_is_none(self):
+        blk = TextBlock(lines=[[[0, 0], [10, 0], [10, 0], [0, 0]]])
+        self.assertIsNone(poly_of(blk))
+        self.assertIsNone(poly_of(TextBlock()))
+
+    def test_poly_center_is_vertex_mean(self):
+        self.assertEqual(poly_center(_quad_blk(10, 20, 50, 40)), [30.0, 30.0])
+
+    def test_poly_bands_follow_quad(self):
+        self.assertEqual(poly_bands(_quad_blk(10, 20, 50, 40)), [10, 20, 50, 40])
+
+    def test_overlap_ratio_denominator_is_smaller(self):
+        big = _quad_blk(0, 0, 100, 100)
+        small = _quad_blk(0, 0, 50, 50)
+        # 交集 2500；较小者 2500 → 1.0（"新块落在旧块里"也算同一片文字）
+        self.assertAlmostEqual(poly_overlap_ratio(small, big), 1.0, places=6)
+        self.assertAlmostEqual(poly_overlap_ratio(big, small), 1.0, places=6)
+
+    def test_overlap_ratio_partial(self):
+        a = _quad_blk(0, 0, 100, 100)
+        b = _quad_blk(50, 0, 150, 100)
+        # 交集 5000，较小者 10000 → 0.5
+        self.assertAlmostEqual(poly_overlap_ratio(a, b), 0.5, places=6)
+
+    def test_overlap_ratio_no_intersection_is_zero(self):
+        self.assertEqual(
+            poly_overlap_ratio(_quad_blk(0, 0, 10, 10), _quad_blk(50, 50, 60, 60)),
+            0.0,
+        )
+
+    def test_rotated_quad_overlap_uses_real_polygon(self):
+        """倾斜框：外接矩形会算出"重叠"，真实四边形不该算出。"""
+        rotated = _quad_blk(100, 100, 140, 100, rotate=45)  # 退化 → None
+        self.assertIsNone(poly_of(rotated))
+        tilted = _quad_blk(100, 100, 160, 130, rotate=20)
+        far_corner = _quad_blk(155, 100, 190, 130)
+        self.assertLess(poly_overlap_ratio(tilted, far_corner), 0.5)
+
+    def test_overlap_ratio_accepts_geometry(self):
+        shape = poly_of(_quad_blk(0, 0, 100, 100))
+        self.assertAlmostEqual(
+            poly_overlap_ratio(_quad_blk(50, 0, 150, 100), shape), 0.5, places=6
+        )
 
 
 if __name__ == "__main__":

@@ -65,6 +65,10 @@
             <source>Original Compare</source>
             <translation>原文对照</translation>
         </message>
+        <message>
+            <source>Region re-detect: drag a box on the canvas to re-run text detection (and OCR) inside it</source>
+            <translation>区域再检测：在画布上拉一个框，只在该框内重跑文字检测（含识别）</translation>
+        </message>
     </context>
     <context>
         <name>Canvas</name>
@@ -1280,6 +1284,30 @@
         <message>
             <source>Backup Versions</source>
             <translation>备份版本数</translation>
+        </message>
+        <message>
+            <source>Region Re-detect Detector</source>
+            <translation>区域再检测用的检测器</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Detector used by the bottom-bar &lt;b&gt;region re-detect&lt;/b&gt; tool: drag a box on the canvas and detection + OCR run inside it only. Its point is to run a &lt;b&gt;different&lt;/b&gt; detector than the pipeline's, so it is not tied to the bottom-bar selector.&lt;/p&gt;&lt;p&gt;&lt;b&gt;PP-OCRv6&lt;/b&gt; is the recommended value: a small crop is fed at native resolution, which makes it noticeably finer at catching text a whole-page pass misses.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;底部栏「区域再检测」工具使用的检测器：在画布上拉一个框后，只在框内跑检测 + 识别。它的立足点正是用&lt;b&gt;另一个&lt;/b&gt;检测器重跑，因此不跟随底部栏的管线选择器。&lt;/p&gt;&lt;p&gt;推荐保留 &lt;b&gt;PP-OCRv6&lt;/b&gt;：小裁剪按原尺寸送检，对整页检测漏掉的文字明显更细。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Region Re-detect Device</source>
+            <translation>区域再检测运行的设备</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Device the region re-detect detector runs on. &lt;b&gt;CPU&lt;/b&gt; is the default: this workload is one small crop at a time, and a GPU (CUDA) session costs several hundred MB of memory that cannot be reclaimed afterwards, for only ~20 ms less per gesture.&lt;/p&gt;&lt;p&gt;Pick &lt;b&gt;GPU&lt;/b&gt; only if the CPU feels too slow.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;区域再检测的检测器跑在哪个设备。&lt;b&gt;CPU&lt;/b&gt; 是默认值：这个负载每次只处理一小块裁剪图，而 GPU（CUDA）会话会占掉数百 MB 内存且事后无法回收，换来的只是每次手势快约 20ms。&lt;/p&gt;&lt;p&gt;只有觉得 CPU 太慢时才选 &lt;b&gt;GPU&lt;/b&gt;。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;For the memory that stays after a pipeline run: unloads all models, destroys the CUDA context and hands the working set back to Windows. The next run reloads models and rebuilds the session, so it is a few seconds slower.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;用于「跑完管线后仍然留在进程里」的那部分内存：卸载全部模型、销毁 CUDA 上下文，并把工作集交回系统。下一次运行会重新加载模型、重建会话，因此首次会慢几秒。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Release memory</source>
+            <translation>释放内存</translation>
         </message>
     </context>
     <context>
@@ -2675,6 +2703,40 @@ Set this file as the active glossary now?</source>
         <message>
             <source>Rollback failed: the backup version is missing or was superseded by a newer batch operation.</source>
             <translation>回滚失败：备份版本已失效，或已被更晚的批量操作覆盖。</translation>
+        </message>
+        <message>
+            <source>A pipeline or a background task is still running. Wait until it finishes, then release memory.</source>
+            <translation>还有管线或后台任务在跑，等它结束之后再释放内存。</translation>
+        </message>
+        <message>
+            <source>Release memory</source>
+            <translation>释放内存</translation>
+        </message>
+        <message>
+            <source>Unload all models, destroy the CUDA context and hand the working set back to Windows?
+
+What to expect next:
+ - the next pipeline run (or AI repair) reloads models and rebuilds the CUDA session, so the first run is a few seconds slower;
+ - the first interactions may stutter briefly while Windows pages data back in;
+ - keep the app idle while releasing; do not start a run at the same time.</source>
+            <translation>卸载全部模型、销毁 CUDA 上下文，并把工作集交回系统？
+
+接下来会发生的事：
+ - 下一次运行管线（或 AI 修图）会重新加载模型、重建 CUDA 会话，首次会慢几秒；
+ - 释放后的最初几次操作可能短暂卡顿（系统要把数据换回来）；
+ - 释放期间请保持窗口空闲，不要同时开跑。</translation>
+        </message>
+        <message>
+            <source>Memory released: working set %1 MB → %2 MB</source>
+            <translation>已释放内存：工作集 %1 MB → %2 MB</translation>
+        </message>
+        <message>
+            <source>Models could not be unloaded, so the CUDA context was left alone. Working set: %1 MB → %2 MB</source>
+            <translation>模型未能卸载，因此没有销毁 CUDA 上下文。工作集：%1 MB → %2 MB</translation>
+        </message>
+        <message>
+            <source>Working set returned to the system (%1 MB → %2 MB), but the CUDA context could not be released.</source>
+            <translation>工作集已交回系统（%1 MB → %2 MB），但 CUDA 上下文未能销毁。</translation>
         </message>
     </context>
     <context>
@@ -6134,6 +6196,10 @@ in Settings → Mirror Config, then click Retry.</source>
             <source>Apply AI Proposal</source>
             <translation>应用 AI 提案</translation>
         </message>
+        <message>
+            <source>Region Re-detect</source>
+            <translation>区域再检测</translation>
+        </message>
     </context>
     <context>
         <name>EffectDeleteButton</name>
@@ -7258,6 +7324,57 @@ No pipeline stages will be executed.</source>
         <message>
             <source>Vision OCR Fix</source>
             <translation>视觉 OCR 校正</translation>
+        </message>
+    </context>
+    <context>
+        <name>RegionRedetectTool</name>
+        <message>
+            <source>Region re-detect is already running</source>
+            <translation>区域再检测正在进行中</translation>
+        </message>
+        <message>
+            <source>Region re-detect is unavailable while the pipeline runs</source>
+            <translation>管线运行中，暂不能用区域再检测</translation>
+        </message>
+        <message>
+            <source>Region re-detect failed, see the log for details</source>
+            <translation>区域再检测失败，详见日志</translation>
+        </message>
+        <message>
+            <source>Page changed — region re-detect cancelled</source>
+            <translation>已切换页面，本次区域再检测已取消</translation>
+        </message>
+        <message>
+            <source>Region re-detect: added %1, replaced %2</source>
+            <translation>区域再检测：新增 %1 块，替换 %2 块</translation>
+        </message>
+        <message>
+            <source>Region re-detect OCR failed; blocks were added without source text</source>
+            <translation>区域再检测的文字识别失败；文本框已加入，但原文为空</translation>
+        </message>
+        <message>
+            <source>Region re-detect: loading detector %1 …</source>
+            <translation>区域再检测：正在加载检测器 %1 …</translation>
+        </message>
+        <message>
+            <source>Region re-detect: detecting …</source>
+            <translation>区域再检测：检测中 …</translation>
+        </message>
+        <message>
+            <source>The box is too small</source>
+            <translation>框太小</translation>
+        </message>
+        <message>
+            <source>Region re-detect needs the page image to run</source>
+            <translation>区域再检测需要页面原图</translation>
+        </message>
+        <message>
+            <source>No text detected in the region</source>
+            <translation>框内没有检出文字</translation>
+        </message>
+        <message>
+            <source>Region re-detect found nothing to do</source>
+            <translation>区域再检测没有可做的改动</translation>
         </message>
     </context>
 </TS>

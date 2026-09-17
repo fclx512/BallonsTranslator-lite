@@ -1087,6 +1087,24 @@ QCheckBox#TextblockChecker::indicator:checked{
     image: url(icons/bottombar_textblock_activate.svg);
 }
 
+QCheckBox#RedetectChecker::indicator{
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    height: 28px;
+    width: 28px;
+    image: url(icons/bottombar_redetect.svg);
+}
+
+QCheckBox#RedetectChecker::indicator:hover {
+    background-color: @accentPrimary20;
+}
+
+QCheckBox#RedetectChecker::indicator:checked{
+    image: url(icons/bottombar_redetect_activate.svg);
+}
+
 OpenBtn {
     border-style: none;
     image: url(icons/openbtn.svg);

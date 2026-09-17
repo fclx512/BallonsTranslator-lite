@@ -2,6 +2,61 @@
 
 > 记录**仓库层面**的改动（功能增删、远端分支变动、规范调整），供变更史查阅。踩坑细节、方案草稿与跨代理交接留在各代理侧的私有记忆（见 `AGENTS.md` 的「多代理协作」一节），不进仓库。仅保留最近 3 天的记录，每次在对应日期中末尾写入日志。
 
+## 2026-09-17
+
+### 区域再检测（人工拉框 → 只在框内跑「检测 + OCR」）
+
+**问题/需求：** 实际工作流是 ysgyolo 检测 + paddleocr_v6 识别。ysgyolo 干净，但会成片漏检**横排文本**（实测漏检率横排 20.5% vs 竖排 7.7%，全书约 47 个框），而全量双跑复核没有油水（两模型一致率 88%~92%）。做法：人工在画布上拉一个大概的矩形 → 只在该矩形内跑一次「检测 + OCR」→ 检出的新块并入本页数据。等于用第二个检测器的精细度补第一检测器的漏检，同时把它"到处拉框"的敏感性限制在人手指定的区域里。机制是小裁剪按原尺寸送检、等效比全页大 1.5 倍（ppocrv6 的 `limit_type='max'` 只缩不放）；主动再放大 2×/3× 实测零增益，故**不提供放大参数**。
+
+**改动要点：**
+
+- 新增 `ui/region_redetect.py`（任务层，无 Qt widget）：`plan` 只读 / `build_page` 纯函数 / `apply` 数据层写回。七项已拍板设计落成代码——区域外过滤按**四边形中心点**、重叠 **>50%** 的已有块替换（分母取两者较小者，才抓得住"ysgyolo 区域级大框被 ppocrv6 逐行小框压住"）、裁剪掩码**贴回页级**（否则后续修复不清原文，译文会叠在原文上）、新块样式继承同页最近块、阅读顺序按坐标插入且**三重兜底为追加到末尾**（宁可顺序不理想也不插错位置）。几何判据一律按 `TextBlock.lines` 四边形算，**不用 `xyxy`**（后者只是轴对齐外接矩形，倾斜框会误判邻居——DB 四边形实测 11.9°~16.7°）。
+- 新增 `ui/region_redetect_tool.py`（UI 层）：`RedetectCommand` 把"替换 + 新增 + OCR 文本 + 标签"合成**一步撤销**；检测（要建 ONNX 会话）与 OCR 都放后台线程；控制器接画布手势、给通知中心进度提示（决策 8：不预热，但"正在加载哪个模型"要说清楚）。OCR **不用** `ui/module_manager.py` 的 `_blktrans_pipeline`——那条路径收尾会压一条 `RunBlkTransCommand`，一次拉框就产生两个撤销步；改为与它同口径直接走 OCR 模块的 `run_ocr`（自动挂标随之保留）。
+- 掩码是**栈外图像写入**（`save_mask` + `bump_page_image_generation`，与管线修复阶段同构），撤销不回退；页代数**不** bump（栈内写入，与 `DeleteBlkItemsCommand` 同性质，bump 会把本命令自己的撤销一并僵尸化）。
+- 触发入口＝**底部栏新增独立开关**（`ui/mainwindowbars.py` 的 `RedetectChecker` + `icons/bottombar_redetect.svg`／`_activate` + QSS 两条），复用手势、只换落点：开关打开时画布**左键**拉框改发 `ui/canvas.py::Canvas.region_redetect_rect`（右键保持原语义，不被模式顶掉）。**不放 `ui/image_edit.py::ImageEditMode`**——`Canvas.setPaintMode(False)` 会把它重置为 `NONE`（进文本框编辑页必然被清掉），且绘图模式下文本框层是隐藏的、检出的框看不见。
+- 设置项「再检测用的检测器」落在 Interface 页 Canvas 区（`ui/configpanel.py`），值存 `utils/config.py::ProgramConfig.region_redetect_detector`（默认 `ppocrv6_onnx`），与底部栏的管线选择器解耦；换检测器时旧实例显式卸载重建。
+- `utils/block_geometry.py` 增补四边形判据（`poly_of`／`poly_center`／`poly_bands`／`poly_overlap_ratio`），与既有的"外扩碰到邻框即停"共用同一份实现。
+
+**测试：** 新增 `tests/test_region_redetect.py`（52 项：坐标回映射／区域外过滤／四种跳过码／替换判据／倾斜框按真实四边形／掩码并集与落盘／样式继承与字号量算／插入算法各分支与三重兜底／命令 redo-undo 双端点复原／落盘重开后新块仍在／画布手势落点分流／设备与释放策略／控制器接线与拒收路径）；`tests/test_block_geometry.py` 补 9 项四边形判据（含"倾斜框按外接矩形会误判"）。真机只读验收（可写副本 `D:\汉化\施工区副本`，脚本 `tmp/_rr_accept.py`）：063.jpg (350,265)-(690,435) 检出 **5 块、全部倾斜**（angle −11~−12，OCR 出 5 行日文）、047.jpeg 底部 **3 块**／左中 **2 块**，与方案实测一致；同一区域 ysgyolo 检出 **0 块**（`tmp/_rr_probe.py`）。`scripts/verify.py --full` 全绿（1112 项）；**用户已 GUI 验收通过**。
+
+**涉及文件：** `ui/region_redetect.py`、`ui/region_redetect_tool.py`、`ui/canvas.py`、`ui/mainwindowbars.py`、`ui/mainwindow.py`、`ui/configpanel.py`、`utils/block_geometry.py`、`utils/config.py`、`config/stylesheet.css`、`icons/bottombar_redetect.svg`、`icons/bottombar_redetect_activate.svg`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_region_redetect.py`、`tests/test_block_geometry.py`、`docs/技术实现/区域再检测_设计与实现.md`、`docs/基础速查/i18n.md`（补 4 条踩坑问答：隐式拼接的 tr 提取不到、硬编码中文检查的两处豁免边界、手写 ts 条目三条约束）、`AGENTS.md`、`docs/daily_log.md`
+
+---
+
+### 区域再检测：内存归因（CUDA 会话 +835MB）与默认改 CPU
+
+**问题/需求：** 用户验收时发现一次区域再检测后进程内存从 600MB 涨到 1700MB，且设置里的「清除模型缓存」无效。
+
+**改动要点（先测量后动手，脚本 `tmp/_mem_probe.py`／`_mem_probe2.py`／`_mem_probe3b.py`／`_mem_after_fix.py`）：**
+
+- **归因**：元凶是给这条路径**新建的 ONNX Runtime CUDA 会话**——同一个小裁剪，`CUDAExecutionProvider` 一次 `detect` 让主机工作集 **+835MB**（会话建立 +165、首次推理再 +670），而 `unload_model()` **只回收 50MB**（GPU 侧倒是能还）。cudnn 搜索模式（EXHAUSTIVE→DEFAULT/HEURISTIC）、`enable_cpu_mem_arena`、`arena_extend_strategy` 三个开关都试过，只把峰值从 835 压到 730、量级不变 ⇒ **事后清缓存救不回来**（设置里的「清除模型缓存」只卸管线模块，何况 ORT 分配器已长在进程里）。
+- **改法**：`RedetectConfig.device`／新增设置项 `utils/config.py::ProgramConfig` 的 `region_redetect_device` **默认 `cpu`**（CPU 同裁剪只 +89~134MB 且卸载可回收，单次推理 19~93ms vs CUDA 7~21ms——一次手势只差约 20ms，会话重建仅 0.17s）；控制器在**每次手势收尾**调 `unload_detector`（用完即卸，不留常驻）。设置面板新增「Region Re-detect Device」行（CPU／GPU）。
+- **复测**：峰值 **+148MB**（原 +835）、卸完相对基线 **+47MB**、单次手势 0.21~0.32s。链路里剩下的内存波动来自 **OCR 模块**（管线共用实例，首次 `run_ocr` 才懒加载其 CUDA 会话）——那是 app 既有行为，用户已跑过管线时不新增。
+- 设计与全部实测数字落进 `docs/技术实现/区域再检测_设计与实现.md`（原方案草稿在 `tmp/`，会随临时目录清理）。新增 `tests/test_region_redetect.py` 的 4 项设备/释放策略用例（设备按配置覆盖且换值重建、用完即卸三条路径）。
+
+**涉及文件：** `ui/region_redetect.py`、`ui/region_redetect_tool.py`、`ui/configpanel.py`、`utils/config.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_region_redetect.py`、`docs/技术实现/区域再检测_设计与实现.md`、`AGENTS.md`、`docs/daily_log.md`
+
+---
+
+### 手动释放内存（卸载模型 → 销毁 CUDA 上下文 → 交回工作集）
+
+**问题/需求：** 上一节的内存归因结论是「ORT 的 CUDA 会话长在进程里，卸载只还 50MB、**事后救不回来**」。用户问：如果能接受卸载的等待，能不能做成「跑完管线后用户按需手动卸载内存」？本轮先测再答，**推翻「事后救不回来」的后半句**，并把它做成设置页的一个手动按钮。
+
+**改动要点：**
+
+- **实测阶梯**（脚本 `tmp/_rr_release_probe.py`／`_rr_modules_probe.py`／`_rr_after_trim_probe.py`／`_rr_torch_after_reset.py`，读数用 `GetProcessMemoryInfo` 并逐条落盘防崩丢数据）：590MB（基线）→ **1503**（检测+OCR 各跑一次 CUDA）→ 1503（卸载全部模型：**几乎不掉**）→ 1503（`empty_cache`：不掉）→ **1295**（`cudaDeviceReset`：**−208MB，真还**，GPU 侧完全归还）→ **111**（`EmptyWorkingSet`：交回工作集）→ 之后再用一次 CUDA 只回升到 **420**（首次 0.33s、第二次 0.01s）。**两处更正**：① 不是"拉起了一个 CUDA 进程"——上下文与 ORT 会话都在本进程内，同时把驱动侧 DLL 加载了进来（模块工作集合计 350 → 407MB，`cublasLt64_13.dll` 单项 144MB），叠加私有内存才到 1500MB；② 不止"关进程"一条路。
+- **语义必须分清**：`cudaDeviceReset` 是**真释放**；`EmptyWorkingSet` 是**交回**——页退回系统备用内存（DLL 的干净文件映射页系统可立即丢弃给别的程序，私有脏页进 pagefile），任务管理器数字立刻回落、别的程序能拿到，但页表映射还在、**下次访问要 fault in**。对外文案一律按这个口径写，不写成"释放内存"。
+- **三条安全铁律（都有实测依据）**：① `cudaDeviceReset` 前**必须** `torch.cuda.empty_cache()` ——不先清就 reset，torch 进入损坏状态（`matmul` 报 `CUBLAS_STATUS_INTERNAL_ERROR`，随后任何分配报 `an illegal memory access was encountered`）；先清再 reset，则 torch 与 ORT 重建后都正常。② reset 时不能有 CUDA 活在跑（管线、四个"切换模块"线程、区域再检测的后台线程——它的检测器可配成 CUDA）。③ 卸载失败就不 reset（可能有活跃会话），此时只交回工作集并在提示里说明。
+- 新增 `utils/memory_release.py`：三步编排（读数函数与卸载回调都可注入，单测用替身、不碰真 CUDA）+ 报告对象（记录各步读数与成败，供界面拼提示）。
+- 入口＝设置页 Models → Management 新增「释放内存」按钮（`ui/configpanel.py::ConfigPanel` 发信号），流程在 `ui/mainwindow.py::MainWindow`：先挡"后台有活在跑"，再弹**确认框写清接下来会怎样**（下次跑管线／AI 修图会重新加载模型、重建会话、首次慢几秒；释放后首次交互可能短暂卡顿；释放期间别开跑），完成后用通知中心报读数 `工作集 %1 MB → %2 MB`。**不自动触发**——交回工作集会把界面也要用的页换出去，紧接着的交互会卡一下。`ui/module_manager.py` 的 `unload_all_models` 改为返回"是否卸干净"供此处判断。
+- **不做**：子进程隔离（那才是"真释放到进程外"，重建约 2~3s，但要把管线阶段搬出 GUI 进程，收益不抵架构改动）；也不新增第二套清缓存语义（`modules/base.py` 的 `soft_empty_cache` 仍是管线侧日常清理）。
+
+**测试：** 新增 `tests/test_memory_release.py`（14 项：步骤顺序与读数记录、卸载失败不做 reset、单步异常不外抛、`empty_cache` 必须排在 reset 之前、设备忙则放弃、报告取值回退）。`scripts/verify.py --full` 全绿。
+
+**涉及文件：** `utils/memory_release.py`、`ui/configpanel.py`、`ui/mainwindow.py`、`ui/module_manager.py`、`tests/test_memory_release.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/技术实现/内存释放_设计与实现.md`、`docs/技术实现/区域再检测_设计与实现.md`、`AGENTS.md`、`docs/daily_log.md`
+
+---
+
 ## 2026-09-16
 
 ### 复核文档补「接手端待办与易错点」一节

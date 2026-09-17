@@ -54,6 +54,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from modules import GET_VALID_TEXTDETECTORS
 from utils.config import export_config, import_config, pcfg
 from utils.message import create_error_dialog, create_info_dialog
 from utils.shortcut_conflicts import find_conflict_keys
@@ -1307,6 +1308,10 @@ class ConfigPanel(Widget):
 
     save_config = Signal()
     unload_models = Signal()
+    # 手动释放内存（卸载模型 + 销毁 CUDA 上下文 + 交回工作集，见
+    # utils/memory_release.py）：接线在 ui/mainwindow.py，因为它还要挡掉
+    # "还有后台 CUDA 活在跑"的状态。
+    release_memory = Signal()
     reload_textstyle = Signal(bool)
     font_exclusion_changed = Signal()
     profiles_changed = Signal()
@@ -1399,6 +1404,20 @@ class ConfigPanel(Widget):
                 self.tr("Unload models"),
                 unload_btn,
                 note=self.tr("<p>Immediately releases all loaded models from memory. Use this to free <b>GPU/CPU resources</b> without restarting the application.</p>"),
+            )
+        )
+
+        # 「释放内存」比上面那个按钮多两步：销毁 CUDA 上下文（真还 ~200MB）与把
+        # 工作集交回系统（实测 1503MB → 111MB）。点击后由 ui/mainwindow.py 弹确认
+        # 提示（要写清"接下来会怎样"），此处只发信号。
+        release_btn = QPushButton(self.tr("Release memory"))
+        release_btn.setObjectName("ConfigButton")
+        release_btn.clicked.connect(self.release_memory)
+        models_vlayout.addWidget(
+            ConfigFormRow(
+                self.tr("Release memory"),
+                release_btn,
+                note=self.tr("<p>For the memory that stays after a pipeline run: unloads all models, destroys the CUDA context and hands the working set back to Windows. The next run reloads models and rebuilds the session, so it is a few seconds slower.</p>"),
             )
         )
 
@@ -2156,6 +2175,49 @@ class ConfigPanel(Widget):
             )
         )
 
+        # ── Region re-detect (canvas drag gesture) ─────────────
+        # 「区域再检测」用的检测器：与管线检测器解耦——该工具的立足点正是"换一个
+        # 检测器在小裁剪里重跑"，所以不能跟着底部栏的管线选择器走。
+        self.redetect_detector_combo = ConfigComboBox(scrollWidget=self)
+        self.redetect_detector_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
+        redetect_detectors = list(GET_VALID_TEXTDETECTORS())
+        self.redetect_detector_combo.addItems(redetect_detectors)
+        if pcfg.region_redetect_detector in redetect_detectors:
+            self.redetect_detector_combo.setCurrentText(
+                pcfg.region_redetect_detector
+            )
+        self.redetect_detector_combo.activated.connect(
+            self.on_redetect_detector_changed
+        )
+        interface_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Region Re-detect Detector"),
+                self.redetect_detector_combo,
+                note=self.tr("<p>Detector used by the bottom-bar <b>region re-detect</b> tool: drag a box on the canvas and detection + OCR run inside it only. Its point is to run a <b>different</b> detector than the pipeline's, so it is not tied to the bottom-bar selector.</p><p><b>PP-OCRv6</b> is the recommended value: a small crop is fed at native resolution, which makes it noticeably finer at catching text a whole-page pass misses.</p>"),
+            )
+        )
+
+        # Device for the re-detect detector. Default CPU: an ONNX Runtime CUDA
+        # session for this one-off workload costs ~835 MB of host memory that
+        # unload does not give back, while CPU costs ~90-135 MB and is only
+        # ~20 ms slower per gesture (measured, see ui/region_redetect.py).
+        self.redetect_device_combo = ConfigComboBox(scrollWidget=self)
+        self.redetect_device_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
+        self.redetect_device_combo.addItems(["CPU", "GPU"])
+        self.redetect_device_combo.setCurrentIndex(
+            0 if str(pcfg.region_redetect_device).lower() != "cuda" else 1
+        )
+        self.redetect_device_combo.activated.connect(
+            self.on_redetect_device_changed
+        )
+        interface_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Region Re-detect Device"),
+                self.redetect_device_combo,
+                note=self.tr("<p>Device the region re-detect detector runs on. <b>CPU</b> is the default: this workload is one small crop at a time, and a GPU (CUDA) session costs several hundred MB of memory that cannot be reclaimed afterwards, for only ~20 ms less per gesture.</p><p>Pick <b>GPU</b> only if the CPU feels too slow.</p>"),
+            )
+        )
+
         # ── Original Compare ───────────────────────────────────
         interface_layout.addWidget(_section_header(self.tr("Original Compare")))
         self.orig_opacity_toggle_spin = NoArrowsSpinBox()
@@ -2749,6 +2811,19 @@ class ConfigPanel(Widget):
 
     def on_open_onstartup_changed(self):
         pcfg.open_recent_on_startup = self.open_on_startup_checker.isChecked()
+
+    def on_redetect_detector_changed(self):
+        """区域再检测换检测器：只写配置——旧实例由
+        ``ui/region_redetect.py::RegionRedetect`` 在下次触发时卸干净重建。"""
+        pcfg.region_redetect_detector = (
+            self.redetect_detector_combo.currentText()
+        )
+
+    def on_redetect_device_changed(self):
+        """区域再检测换设备（CPU／GPU）：只写配置，下次触发时生效。"""
+        pcfg.region_redetect_device = (
+            "cuda" if self.redetect_device_combo.currentIndex() == 1 else "cpu"
+        )
 
     def on_auto_clean_temp_changed(self):
         pcfg.auto_clean_temp_projects = self.temp_clean_checker.isChecked()

@@ -1605,8 +1605,22 @@ class ModuleManager(QObject):
         config_panel.profiles_changed.connect(self._on_profiles_changed)
         config_panel.unload_models.connect(self.unload_all_models)
 
-    def unload_all_models(self):
-        unload_modules(self, {"textdetector", "inpainter", "ocr", "translator"})
+    def unload_all_models(self) -> bool:
+        """卸载四个阶段的模型（设置页「卸载全部模型」与「释放内存」共用）。
+
+        返回"现在适合销毁 CUDA 上下文吗"：正常卸载（含"本来就没载东西"）为
+        ``True``；卸载过程抛异常为 ``False`` —— 此时可能有活跃的 CUDA 会话还
+        握着内存，再 reset 会让它拿到失效指针（实测见 `utils/memory_release.py`
+        模块 docstring），所以调用方（`ui/mainwindow.py::MainWindow` 的释放内存
+        流程）拿到 ``False`` 就只交回工作集、不销毁上下文。**卸载本身没清掉多少
+        内存**（实测 1503MB 只掉 0~75MB），真还靠后面两步。
+        """
+        try:
+            unload_modules(self, {"textdetector", "inpainter", "ocr", "translator"})
+        except Exception as e:
+            LOGGER.error(f"unload_all_models failed: {e}")
+            return False
+        return True
 
     def on_module_prepare_progress(self, payload: dict):
         """Update prepare progress dialog with current step."""

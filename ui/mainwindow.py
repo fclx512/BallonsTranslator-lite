@@ -99,6 +99,7 @@ from utils.config import (
     text_styles,
 )
 from utils.logger import logger as LOGGER
+from utils.memory_release import release_memory
 from utils.message import create_error_dialog, create_info_dialog
 from utils.profile_manager import (
     find_profile,
@@ -132,6 +133,7 @@ from .mainwindowbars import BottomBar, LeftBar, TitleBar
 from .misc import QKEY, parse_stylesheet, set_html_family, theme_accent_color
 from .module_manager import ModuleManager
 from .overlay_modal import OverlayModal
+from .region_redetect_tool import RegionRedetectTool
 from .scenetext_manager import PasteSrcItemsCommand, SceneTextManager, TextPanel
 from .block_action_card import BlockActionCard
 from .block_action_runner import BlockActionRunner
@@ -843,6 +845,10 @@ class MainWindow(mainwindow_cls):
             self.on_imgtrans_progressbox_showed
         )
         module_manager.blktrans_pipeline_finished.connect(self.on_blktrans_finished)
+        # 手动释放内存（设置页「释放内存」）：卸载模型 → 销毁 CUDA 上下文 → 交回
+        # 工作集。接线放在这里而不是 module_manager 内部，是为了顺带挡掉"还有后台
+        # CUDA 活在跑"的状态（见 _cuda_work_in_progress）。
+        self.configPanel.release_memory.connect(self.on_release_memory)
         module_manager.imgtrans_thread.post_process_mask = (
             self.drawingPanel.rectPanel.post_process_mask
         )
@@ -860,6 +866,18 @@ class MainWindow(mainwindow_cls):
         module_manager.setOCR()
         module_manager.setTranslator()
         module_manager.setInpainter()
+
+        # 区域再检测（底部栏开关 + 画布拉框手势）：单页单手势，走画布撤销栈，
+        # 与批量的备份版本机制（utils/batch_versions.py）无关。
+        self.region_redetect_tool = RegionRedetectTool(
+            self.imgtrans_proj, self.canvas, self.st_manager, module_manager
+        )
+        self.canvas.region_redetect_rect.connect(
+            self.region_redetect_tool.request
+        )
+        self.bottomBar.redetect_checkchanged.connect(
+            self.on_redetect_mode_changed
+        )
 
         self.leftBar.run_imgtrans_clicked.connect(self.run_imgtrans)
 
@@ -1905,6 +1923,9 @@ class MainWindow(mainwindow_cls):
         if self.auto_tate_chu_yoko_thread.isRunning():
             self.auto_tate_chu_yoko_thread.request_stop()
             self.auto_tate_chu_yoko_thread.wait()
+        redetect_tool = getattr(self, "region_redetect_tool", None)
+        if redetect_tool is not None:
+            redetect_tool.shutdown()
         self.st_manager.hovering_transwidget = None
         self.st_manager.blockSignals(True)
         self.canvas.prepareClose()
@@ -3245,12 +3266,32 @@ class MainWindow(mainwindow_cls):
         ):
             self.canvas.editing_textblkitem.endEdit()
 
+    def on_redetect_mode_changed(self):
+        """底部栏「区域再检测」开关（clicked）→ 同步画布模式。"""
+        self.setRegionRedetectMode(self.bottomBar.redetectChecker.isChecked())
+
+    def setRegionRedetectMode(self, enabled: bool):
+        """开关「区域再检测」模式：同步底部栏开关与画布状态。
+
+        该模式下画布左键拉框＝框选待重检测区域（不是橡皮筋多选）。只在文本框
+        编辑页可见／可用——绘图模式下文本框层是隐藏的，检出的框看不见。
+        """
+        enabled = bool(enabled)
+        if self.bottomBar.redetectChecker.isChecked() != enabled:
+            # setChecked 不触发 clicked（只发 toggled/stateChanged），不会回环
+            self.bottomBar.redetectChecker.setChecked(enabled)
+        tool = getattr(self, "region_redetect_tool", None)
+        if tool is not None:
+            tool.set_mode(enabled)
+
     def setPaintMode(self):
         if self.bottomBar.paintChecker.isChecked():
             if self.rightComicTransStackPanel.isHidden():
                 self.rightComicTransStackPanel.show()
             self.rightComicTransStackPanel.setCurrentIndex(0)
             self.canvas.setPaintMode(True)
+            # 绘图模式下文本框层隐藏，区域再检测没有意义
+            self.setRegionRedetectMode(False)
             self.bottomBar.originalSlider.show()
             self.bottomBar.textlayerSlider.show()
             self.bottomBar.textblockChecker.hide()
@@ -3264,11 +3305,15 @@ class MainWindow(mainwindow_cls):
             if self.rightComicTransStackPanel.isHidden():
                 self.rightComicTransStackPanel.show()
             self.bottomBar.textblockChecker.show()
+            self.bottomBar.redetectChecker.show()
             self.rightComicTransStackPanel.setCurrentIndex(1)
             self.st_manager.setTextEditMode(True)
             self.setTextBlockMode()
         else:
             self.bottomBar.textblockChecker.hide()
+            self.bottomBar.redetectChecker.hide()
+            # 模式不跨页保留：离开文本框编辑页即退出（免得下次进来一脸雾水）
+            self.setRegionRedetectMode(False)
             self.rightComicTransStackPanel.setHidden(True)
             self.st_manager.setTextEditMode(False)
         self.canvas.setPaintMode(False)
@@ -3707,6 +3752,96 @@ class MainWindow(mainwindow_cls):
             self.on_export_txt("source")
         if shared.HEADLESS:
             self.run_next_dir()
+
+    def _cuda_work_in_progress(self) -> bool:
+        """是否还有后台活在跑（手动释放内存前必须为空）。
+
+        销毁 CUDA 上下文会让"正在跑"的对象拿到失效指针，所以宁可拒绝也不冒险：
+        覆盖管线线程、四个"切换模块"线程、区域再检测的后台检测线程（它的检测器可
+        配成 CUDA）。画布 AI 修图走管线线程，已被第一条覆盖。
+        """
+        manager = getattr(self, "module_manager", None)
+        if manager is not None:
+            for name in (
+                "imgtrans_thread",
+                "textdetect_thread",
+                "ocr_thread",
+                "translate_thread",
+                "inpaint_thread",
+            ):
+                thread = getattr(manager, name, None)
+                if thread is None:
+                    continue
+                try:
+                    if thread.isRunning():
+                        return True
+                except RuntimeError:  # 线程对象已销毁
+                    continue
+        tool = getattr(self, "region_redetect_tool", None)
+        if tool is not None:
+            try:
+                if tool.is_running():
+                    return True
+            except Exception as e:
+                LOGGER.warning(f"region redetect busy check failed: {e}")
+        return False
+
+    def on_release_memory(self):
+        """设置页「释放内存」：用户手动要回跑完管线后留在进程里的那部分内存。
+
+        三步分工与实测数字见 `utils/memory_release.py`：卸载模型几乎不还内存
+        （实测 1503MB 只掉 0~75MB），销毁 CUDA 上下文真还 ~200MB，交回工作集把剩下
+        大部分退给系统——**那是"交回"不是 free**，页表映射还在、下次访问要 fault in。
+        所以先把"接下来会怎样"写清、用户确认后才动手；有后台活在跑时直接拒绝。
+        """
+        if self._cuda_work_in_progress():
+            QMessageBox.information(
+                self,
+                self.tr("Release memory"),
+                self.tr("A pipeline or a background task is still running. Wait until it finishes, then release memory."),
+            )
+            return
+        answer = QMessageBox.question(
+            self,
+            self.tr("Release memory"),
+            self.tr(
+                "Unload all models, destroy the CUDA context and hand the working set back to Windows?\n\nWhat to expect next:\n - the next pipeline run (or AI repair) reloads models and rebuilds the CUDA session, so the first run is a few seconds slower;\n - the first interactions may stutter briefly while Windows pages data back in;\n - keep the app idle while releasing; do not start a run at the same time."
+            ),
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        report = release_memory(self.module_manager.unload_all_models)
+        LOGGER.info(
+            f"release_memory: before={report.before_mb:.0f}MB "
+            f"after_unload={report.after_unload_mb} after_reset={report.after_reset_mb} "
+            f"after_trim={report.after_trim_mb} unloaded={report.unloaded} "
+            f"reset={report.context_reset} trim={report.working_set_returned} "
+            f"errors={report.errors}"
+        )
+        before = str(int(round(report.before_mb)))
+        after = str(int(round(report.after_mb)))
+        # 占位符用 `%1`/`%2` 而不是 `{}`：`scripts/i18n_common.py` 的提取器会**跳
+        # 过含 `{` 的字符串**（当作 format string），那样写 ts 里不会有条目、运行时
+        # 回退英文。字面量后面也**紧跟 `)`**，别挂 `.replace(...)`。
+        if report.unloaded is False:
+            kind = "warning"
+            text = self.tr("Models could not be unloaded, so the CUDA context was left alone. Working set: %1 MB → %2 MB")
+        elif not report.context_reset:
+            kind = "warning"
+            text = self.tr("Working set returned to the system (%1 MB → %2 MB), but the CUDA context could not be released.")
+        else:
+            kind = "info"
+            text = self.tr("Memory released: working set %1 MB → %2 MB")
+        try:
+            notification.toast(
+                text.replace("%1", before).replace("%2", after),
+                kind=kind,
+                anchor="bottom-left",
+                duration=3500,
+            )
+        except Exception as e:
+            LOGGER.error(f"release memory toast failed: {e}")
 
     def postprocess_translations(self, blk_list: List[TextBlock]) -> None:
         src_is_cjk = is_cjk(pcfg.module.translate_source)

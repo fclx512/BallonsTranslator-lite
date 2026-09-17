@@ -650,6 +650,7 @@ class BottomBar(Widget):
     textedit_checkchanged = Signal()
     paintmode_checkchanged = Signal()
     textblock_checkchanged = Signal()
+    redetect_checkchanged = Signal()
 
     def __init__(self, mainwindow: QMainWindow, *args, **kwargs) -> None:
         super().__init__(mainwindow, *args, **kwargs)
@@ -674,6 +675,14 @@ class BottomBar(Widget):
         self.textblockChecker = QCheckBox()
         self.textblockChecker.setObjectName("TextblockChecker")
         self.textblockChecker.clicked.connect(self.onTextblockCheckerClicked)
+        self.redetectChecker = QCheckBox()
+        self.redetectChecker.setObjectName("RedetectChecker")
+        # 注：整句必须是**单个**字符串字面量——scripts/i18n_common.py::extract_tr_calls
+        # 不认跨行的隐式拼接（那样这个 tr 既提取不到、译文也会静默退回英文）。
+        self.redetectChecker.setToolTip(
+            self.tr("Region re-detect: drag a box on the canvas to re-run text detection (and OCR) inside it")
+        )
+        self.redetectChecker.clicked.connect(self.onRedetectCheckerClicked)
 
         self.originalSlider = PaintQSlider(
             self.tr("Original Compare"), Qt.Orientation.Horizontal, self
@@ -708,6 +717,7 @@ class BottomBar(Widget):
         self.hlayout.addWidget(self.paintChecker)
         self.hlayout.addWidget(self.texteditChecker)
         self.hlayout.addWidget(self.textblockChecker)
+        self.hlayout.addWidget(self.redetectChecker)
         self.hlayout.setContentsMargins(60, 0, 10, WINDOW_BORDER_WIDTH)
 
     @staticmethod
@@ -734,3 +744,6 @@ class BottomBar(Widget):
 
     def onTextblockCheckerClicked(self):
         self.textblock_checkchanged.emit()
+
+    def onRedetectCheckerClicked(self):
+        self.redetect_checkchanged.emit()
