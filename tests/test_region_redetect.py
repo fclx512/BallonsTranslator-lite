@@ -47,6 +47,7 @@ from ui.region_redetect import (  # noqa: E402
     SKIP_TOO_SMALL,
     RedetectConfig,
     RegionRedetect,
+    group_center,
     insert_index,
     new_precedes,
     page_direction,
@@ -347,68 +348,119 @@ class MaskTest(_RedetectTestCase):
         self.assertFalse(task.paste_mask(plan))
 
 
-# ── 阅读顺序：坐标插入与兜底（方案 §八）──────────────────────────
+# ── 阅读顺序：整组坐标插入与兜底 ──────────────────────────────────
 
 
 class InsertionTest(unittest.TestCase):
-    def test_horizontal_inserts_between_rows(self):
+    def test_inserts_between_rows(self):
         blocks = [_blk(100, 10, 200, 30), _blk(100, 50, 200, 70), _blk(100, 90, 200, 110)]
-        idx, why = insert_index(_blk(100, 35, 200, 45), blocks, rtl=True)
+        idx, why = insert_index([_blk(100, 35, 200, 45)], blocks, rtl=True)
         self.assertEqual((idx, why), (1, INSERT_BEFORE))
 
-    def test_horizontal_before_first_and_after_last(self):
+    def test_before_first_and_after_last(self):
         blocks = [_blk(100, 50, 200, 70), _blk(100, 90, 200, 110)]
-        self.assertEqual(insert_index(_blk(100, 10, 200, 30), blocks, rtl=True)[0], 0)
         self.assertEqual(
-            insert_index(_blk(100, 200, 200, 220), blocks, rtl=True)[0], len(blocks)
+            insert_index([_blk(100, 10, 200, 30)], blocks, rtl=True)[0], 0
+        )
+        self.assertEqual(
+            insert_index([_blk(100, 200, 200, 220)], blocks, rtl=True)[0], len(blocks)
         )
 
-    def test_horizontal_same_row_uses_x(self):
-        blocks = [_blk(100, 50, 140, 70), _blk(200, 50, 240, 70)]
-        idx, why = insert_index(_blk(150, 50, 190, 70), blocks, rtl=True)
-        self.assertEqual((idx, why), (1, INSERT_BEFORE))
+    def test_same_row_follows_page_direction(self):
+        """同一行内比 x：已排好的两块分别是右到左／左到右，新块都落在中间。"""
+        rtl_blocks = [_blk(200, 50, 240, 70), _blk(100, 50, 140, 70)]
+        self.assertEqual(
+            insert_index([_blk(150, 50, 190, 70)], rtl_blocks, rtl=True),
+            (1, INSERT_BEFORE),
+        )
+        ltr_blocks = [_blk(100, 50, 140, 70), _blk(200, 50, 240, 70)]
+        self.assertEqual(
+            insert_index([_blk(150, 50, 190, 70)], ltr_blocks, rtl=False),
+            (1, INSERT_BEFORE),
+        )
 
-    def test_vertical_columns_follow_page_direction(self):
+    def test_lower_row_block_does_not_jump_to_the_front(self):
+        """跨行不比 x：右下角的框属于最后一行的队尾，不该插到最前面。
+
+        回归实测（``projects/004_819b9e93/004.jpeg``）：旧判据只比 x，右下角的
+        框比右上角的更靠右，于是被判成"排在已有块之前"，插到了第 1 位。
+        """
+        blocks = [
+            _blk(800, 130, 890, 280),  # 第一行（右）
+            _blk(620, 150, 670, 250),  # 第一行（左）
+            _blk(170, 970, 240, 1160),  # 第二行（左）
+        ]
+        idx, why = insert_index([_blk(760, 970, 860, 1170)], blocks, rtl=True)
+        self.assertEqual((idx, why), (2, INSERT_BEFORE))
+
+    def test_columns_follow_page_direction(self):
         blocks = [_blk(220, 10, 250, 120, vertical=True),
                   _blk(150, 10, 180, 120, vertical=True),
                   _blk(80, 10, 110, 120, vertical=True)]
-        idx, why = insert_index(_blk(185, 10, 215, 120, vertical=True), blocks, rtl=True)
+        idx, why = insert_index([_blk(185, 10, 215, 120, vertical=True)], blocks, rtl=True)
         self.assertEqual((idx, why), (1, INSERT_BEFORE))
 
-    def test_vertical_ltr_flips_the_column_order(self):
+    def test_ltr_flips_the_column_order(self):
         blocks = [_blk(80, 10, 110, 120, vertical=True),
                   _blk(150, 10, 180, 120, vertical=True)]
-        idx, _ = insert_index(_blk(185, 10, 215, 120, vertical=True), blocks, rtl=False)
+        idx, _ = insert_index([_blk(185, 10, 215, 120, vertical=True)], blocks, rtl=False)
         self.assertEqual(idx, len(blocks))
-        idx, _ = insert_index(_blk(120, 10, 145, 120, vertical=True), blocks, rtl=False)
+        idx, _ = insert_index([_blk(120, 10, 145, 120, vertical=True)], blocks, rtl=False)
         self.assertEqual(idx, 1)
 
-    def test_vertical_same_column_uses_y(self):
-        """同一列内的两段（y 带不重叠）按 y 自上而下。"""
+    def test_same_column_uses_y(self):
+        """同一列内的两段（纵向跨度不重叠）按 y 自上而下。"""
         blocks = [
             _blk(100, 10, 130, 50, vertical=True),
             _blk(100, 90, 130, 130, vertical=True),
         ]
-        idx, why = insert_index(_blk(100, 55, 130, 85, vertical=True), blocks, rtl=True)
+        idx, why = insert_index([_blk(100, 55, 130, 85, vertical=True)], blocks, rtl=True)
         self.assertEqual((idx, why), (1, INSERT_BEFORE))
 
-    def test_vertical_contained_in_a_longer_column_is_undecidable(self):
-        """新块整段落在已有长列里（两个方向带都重叠）→ 判不出 → 追加到末尾。"""
+    def test_same_row_and_position_is_undecidable(self):
+        """同一行、x 也分不出先后（新块整段落在一段更长的旧块里）→ 追加到末尾。"""
         blocks = [
             _blk(100, 10, 130, 60, vertical=True),
             _blk(100, 60, 130, 160, vertical=True),
         ]
-        idx, why = insert_index(_blk(100, 70, 130, 100, vertical=True), blocks, rtl=True)
+        idx, why = insert_index([_blk(100, 70, 130, 100, vertical=True)], blocks, rtl=True)
         self.assertEqual((idx, why), (2, INSERT_APPEND))
 
-    def test_falls_back_when_too_few_blocks(self):
-        idx, why = insert_index(_blk(100, 10, 200, 30), [_blk(100, 90, 200, 110)], rtl=True)
-        self.assertEqual((idx, why), (1, INSERT_FEW_BLOCKS))
+    def test_group_shares_one_index_and_stays_contiguous(self):
+        """一次手势的新块整组共用一个落点（组内保持检测器给的顺序）。"""
+        blocks = [
+            _blk(800, 130, 890, 280),  # 第一行
+            _blk(170, 970, 240, 1160),  # 第二行
+            _blk(80, 1130, 120, 1270),  # 第三行
+        ]
+        group = [_blk(840, 970, 880, 1160), _blk(760, 990, 800, 1150)]
+        self.assertEqual(insert_index(group, blocks, rtl=True), (1, INSERT_BEFORE))
+
+    def test_group_center_is_the_mean_of_member_centers(self):
+        group = [_blk(100, 100, 140, 140), _blk(200, 200, 240, 260)]
+        self.assertEqual(group_center(group), [170.0, 175.0])
+        self.assertIsNone(group_center([]))
+
+    def test_falls_back_when_no_reference_block(self):
+        idx, why = insert_index([_blk(100, 10, 200, 30)], [], rtl=True)
+        self.assertEqual((idx, why), (0, INSERT_FEW_BLOCKS))
+
+    def test_single_reference_block_is_enough(self):
+        """1 个参照块也够用：判据只在同行内才需要页方向。"""
+        blocks = [_blk(250, 300, 290, 340)]
+        self.assertEqual(
+            insert_index([_blk(120, 120, 180, 140)], blocks, rtl=True),
+            (0, INSERT_BEFORE),
+        )
+        self.assertEqual(
+            insert_index([_blk(120, 350, 180, 370)], blocks, rtl=True),
+            (1, INSERT_APPEND),
+        )
 
     def test_falls_back_when_undecidable(self):
-        """位置重合（主次方向都重叠）→ 判不出 → 追加到末尾。"""
+        """位置完全重合（同行且 x 相同）→ 追加到末尾。"""
         blocks = [_blk(100, 50, 200, 70), _blk(100, 50, 200, 70)]
-        idx, why = insert_index(_blk(100, 50, 200, 70), blocks, rtl=True)
+        idx, why = insert_index([_blk(100, 50, 200, 70)], blocks, rtl=True)
         self.assertEqual((idx, why), (2, INSERT_APPEND))
 
     def test_falls_back_when_comparison_raises(self):
@@ -420,7 +472,7 @@ class InsertionTest(unittest.TestCase):
         original = redetect_module.new_precedes
         redetect_module.new_precedes = _boom
         try:
-            idx, why = insert_index(_blk(100, 65, 200, 80), blocks, rtl=True)
+            idx, why = insert_index([_blk(100, 65, 200, 80)], blocks, rtl=True)
         finally:
             redetect_module.new_precedes = original
         self.assertEqual((idx, why), (2, INSERT_ERROR))
@@ -432,13 +484,23 @@ class InsertionTest(unittest.TestCase):
         ltr_blocks = list(reversed(rtl_blocks))
         self.assertEqual(page_direction(ltr_blocks), (False, "vote"))
 
+    def test_page_direction_ignores_cross_row_pairs(self):
+        """跨行的相邻对不投票：只有第一行的两块同行，投出右到左。"""
+        blocks = [
+            _blk(200, 10, 230, 100, vertical=True),
+            _blk(100, 10, 130, 100, vertical=True),
+            _blk(300, 400, 330, 500, vertical=True),  # 下一行，与上面两块都不同行
+        ]
+        self.assertEqual(page_direction(blocks), (True, "vote"))
+
     def test_page_direction_defaults_without_samples(self):
         self.assertEqual(page_direction([]), (True, "default"))
         self.assertEqual(page_direction([_blk(100, 10, 130, 100)]), (True, "default"))
 
-    def test_new_precedes_returns_none_for_coincident_blocks(self):
+    def test_new_precedes_returns_none_without_geometry(self):
         blk = _blk(100, 50, 200, 70)
-        self.assertIsNone(new_precedes(blk, _blk(100, 50, 200, 70), False, True))
+        blk.lines = []
+        self.assertIsNone(new_precedes([150.0, 60.0], blk, rtl=True))
 
 
 # ── build_page / apply ────────────────────────────────────────────
@@ -460,14 +522,24 @@ class BuildPageTest(_RedetectTestCase):
         self.assertIs(report["blocks"][3], c)
         self.assertEqual(report["inserted"], [(1, INSERT_BEFORE)])
 
-    def test_build_page_appends_with_single_neighbor(self):
+    def test_build_page_places_above_a_single_neighbor(self):
         only = _blk(250, 300, 290, 340)
         self._set_blocks([only])
         task, plan = self._plan([_blk(120, 120, 180, 140)])
         report = task.build_page(plan)
         self.assertEqual(len(report["blocks"]), 2)
-        self.assertIs(report["blocks"][0], only)
-        self.assertEqual(report["inserted"], [(1, INSERT_FEW_BLOCKS)])
+        self.assertIs(report["blocks"][1], only)
+        self.assertEqual(report["inserted"], [(0, INSERT_BEFORE)])
+
+    def test_build_page_keeps_a_group_together(self):
+        a = _blk(100, 105, 200, 125)
+        b = _blk(100, 170, 200, 190)
+        self._set_blocks([a, b])
+        task, plan = self._plan([_blk(120, 128, 160, 148), _blk(165, 128, 200, 148)])
+        report = task.build_page(plan)
+        self.assertEqual(report["inserted"], [(1, INSERT_BEFORE), (2, INSERT_BEFORE)])
+        self.assertIs(report["blocks"][0], a)
+        self.assertIs(report["blocks"][3], b)
 
     def test_apply_writes_pages(self):
         old = _blk(110, 110, 190, 150)
@@ -525,10 +597,10 @@ class CommandTest(_RedetectTestCase):
 
         self.canvas.push_undo_command(command)
         applied = list(self.proj.pages[PAGE])
-        # 被替换的 existing[0] 出局；新块按坐标插到保留块之后（追加兜底）
+        # 被替换的 existing[0] 出局；新块在保留块之上 → 插到它前面
         self.assertEqual(len(applied), 2)
-        self.assertIs(applied[0], existing[1])
-        self.assertEqual(applied[1].xyxy, [120, 120, 180, 140])
+        self.assertEqual(applied[0].xyxy, [120, 120, 180, 140])
+        self.assertIs(applied[1], existing[1])
         self.assertGreater(int(self.proj.mask_array[120:140, 120:180].sum()), 0)
         self.assertEqual(self.scene.rebuilds, 1)
 

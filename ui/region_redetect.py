@@ -42,8 +42,9 @@
   （它在裁剪坐标系里算出的字号/角度/距离对页级坐标同样有效，只是被检测器覆盖
   掉了），拿到按实际检出框量出来的字号，再写回 ``_detected_font_size``——
   继承字号只是碰运气，量出来的更准；
-- 阅读顺序：**不整页重排**，按坐标插入（见 ``insert_index``）；失误一律兜底为
-  追加到末尾，语义等同"新增文本框"；
+- 阅读顺序：**不整页重排**，一次手势的新块**整组**插到一个位置，判据与管线
+  排顺序的 ``utils/textblock.py::sort_regions`` 同源（见 ``insert_index``）；
+  失误一律兜底为追加到末尾，语义等同"新增文本框"；
 - 检测器：由 ``pcfg.region_redetect_detector`` 指定（默认 ``ppocrv6_onnx``），
   不频繁修改；**不预热**，只要 UI 层给明确的加载提示。
 
@@ -82,7 +83,6 @@ from typing import List, Optional, Sequence, Tuple
 import numpy as np
 
 from utils.block_geometry import (
-    overlap_ratio,
     poly_bands,
     poly_center,
     poly_of,
@@ -116,10 +116,10 @@ INSERT_BEFORE = "before"
 """插到了某个已有块之前（坐标插入成功，正常路径）。"""
 
 INSERT_FEW_BLOCKS = "few-blocks"
-"""页上已有块 < ``RedetectConfig.min_neighbors``：没有可参照的邻居，追加到末尾。"""
+"""页上已有块 < ``RedetectConfig.min_neighbors``：没有一个可参照的邻居，追加到末尾。"""
 
 INSERT_APPEND = "append"
-"""扫完全表都判不出先后（位置重合／方向矛盾），追加到末尾。"""
+"""新块整组排在所有已有块之后（或整组中心取不到），追加到末尾。"""
 
 INSERT_ERROR = "error"
 """插入点计算抛异常，追加到末尾（宁可不理想也不插错位置）。"""
@@ -138,8 +138,14 @@ class RedetectConfig:
     replace_overlap: float = 0.5
     """替换阈值（决策 4）：与已有块重叠率 **> 该值** 的已有块被替换。"""
 
-    min_neighbors: int = 2
-    """插入点算法的下限：页上已有块少于该数时一律追加到末尾。"""
+    min_neighbors: int = 1
+    """插入点算法的下限：页上参照块少于该数（即一个都没有）时追加到末尾。
+
+    早期取 2（"一个邻居推不出一行的方向"），那是给旧的成对判据兜底的：它跨行
+    比 x，没有两个样本就投不出页方向。现在判据以**已有块顺序**为准、只在同一
+    行内才用页方向，1 个参照块给出的落点已经确定（新块在它之上→插它前面，
+    否则追加），没有理由再退化成追加。
+    """
 
     device: Optional[str] = None
     """检测器跑在哪个设备；``None``＝读 ``pcfg.region_redetect_device``。
@@ -186,96 +192,120 @@ class RedetectPlan:
         return self.skip is None and bool(self.new_blocks)
 
 
-# ── 阅读顺序：坐标插入（方案 §八，含三重兜底）───────────────────────
+# ── 阅读顺序：整组按坐标插入（含兜底）─────────────────────────────
 
 
 def page_direction(blocks: Sequence[TextBlock]) -> Tuple[bool, str]:
     """用**当前页已有块的成对先后投票**推断页方向；返回 ``(rtl, basis)``。
 
-    ``ui/region_redetect.py`` 的插入判据不用 ``utils/textblock.py::sort_regions``
-    的 ``right_to_left`` 推断——它的判据有已知缺陷（分母是总块数，1 个竖排块
-    即判右到左）。这里按块列表序取相邻成对样本：后一块在更左边即投"右到左"。
+    按块列表序取相邻成对样本，后一块在更左边即投"右到左"；**但只让同一行的两块
+    投票**（一块的中心落在另一块的纵向跨度之内）——页方向问的本来就是"行内谁在
+    右"，跨行的两块（上一行的框 vs 下一行的框）投出来的是噪声。初版把每对相邻块
+    都算进去，实测在 ``004_819b9e93`` 上 8 票里有 3 票是跨行噪声，页上少一个块
+    就能把结论从右到左翻成左到右（``tmp/eval_insert.py`` 的 002.jpg [1]）——
+    那是"新块总往最前面插"的另一半原因。
 
-    ``basis`` 为 ``"vote"``（有成对样本）或 ``"default"``（样本不足——本仓库
+    判据不用 ``utils/textblock.py::sort_regions`` 的 ``right_to_left`` 推断——
+    它的分母是总块数，1 个竖排块即判右到左。
+
+    ``basis`` 为 ``"vote"``（有同行的成对样本）或 ``"default"``（样本不足——本仓库
     没有独立的阅读方向设置项，回落漫画竖排的通行约定：右到左）。
     """
     votes: List[bool] = []
-    prev = None
-    for blk in blocks:
-        center = poly_center(blk)
-        if center is None:
+    for prev_blk, blk in zip(blocks, blocks[1:]):
+        prev_band, band = poly_bands(prev_blk), poly_bands(blk)
+        prev_center, center = poly_center(prev_blk), poly_center(blk)
+        if None in (prev_band, band, prev_center, center):
             continue
-        if prev is not None and abs(center[0] - prev[0]) > 1e-6:
-            votes.append(center[0] < prev[0])
-        prev = center
+        same_row = (
+            band[1] <= prev_center[1] <= band[3]
+            or prev_band[1] <= center[1] <= prev_band[3]
+        )
+        if not same_row or abs(center[0] - prev_center[0]) <= 1e-6:
+            continue
+        votes.append(center[0] < prev_center[0])
     if not votes:
         return True, "default"
     return sum(1 for v in votes if v) * 2 >= len(votes), "vote"
 
 
-def _band_overlaps(blk_a, blk_b, axis: str) -> bool:
-    """两块在 ``axis`` 上的轴对齐带是否重叠（由四边形顶点取带，见 block_geometry）。"""
-    bands_a, bands_b = poly_bands(blk_a), poly_bands(blk_b)
-    if bands_a is None or bands_b is None:
-        return False
-    if axis == "x":
-        return overlap_ratio(bands_a[0], bands_a[2], bands_b[0], bands_b[2]) > 0
-    return overlap_ratio(bands_a[1], bands_a[3], bands_b[1], bands_b[3]) > 0
+def group_center(blocks: Sequence[TextBlock]) -> Optional[List[float]]:
+    """一组块的共同中心＝各块四边形中心（``poly_center``）的均值。
 
-
-def new_precedes(
-    new_blk: TextBlock, other: TextBlock, vertical: bool, rtl: bool
-) -> Optional[bool]:
-    """新块是否应排在 ``other`` **之前**；判不出返回 ``None``。
-
-    成对判据（方案 §八.3，方向一律取**新块**的方向——被摆的是它）：
-
-    - **主方向带不重叠**（竖排看 x 带、横排看 y 带）＝ 两块分处不同列／行：
-      竖排按页方向比 x（``rtl`` 大者在前、否则小者在前），横排恒为 y 小者在前；
-    - **主方向带重叠**（同一列／同一行内）：竖排比 y 小者在前（列内自上而下），
-      横排比 x 小者在前（行内自左而右——页方向只决定列的先后，与行内无关）；
-    - 两个方向都重叠（位置几乎重合）→ ``None``，插不下就交给兜底。
+    新增块**整组共用一个落点**（见 ``insert_index``），所以需要一个"这组落在
+    哪儿"的代表点。取均值而非并集包围盒中心：组内若有一个特别大的框
+    （ysgyolo 的区域级大框吃掉整个气泡），包围盒中心会被它带偏，均值仍代表
+    这批文字的重心。一块中心都取不到时返回 ``None``（调用方按判不出兜底）。
     """
-    center_new, center_other = poly_center(new_blk), poly_center(other)
-    if center_new is None or center_other is None:
+    centers = [c for c in (poly_center(b) for b in blocks) if c is not None]
+    if not centers:
         return None
-    if vertical:
-        if _band_overlaps(new_blk, other, "x"):
-            if _band_overlaps(new_blk, other, "y"):
-                return None
-            return center_new[1] < center_other[1]
-        return (
-            center_new[0] > center_other[0]
-            if rtl
-            else center_new[0] < center_other[0]
-        )
-    if _band_overlaps(new_blk, other, "y"):
-        if _band_overlaps(new_blk, other, "x"):
-            return None
-        return center_new[0] < center_other[0]
-    return center_new[1] < center_other[1]
+    return [
+        sum(c[0] for c in centers) / len(centers),
+        sum(c[1] for c in centers) / len(centers),
+    ]
+
+
+def new_precedes(center: Sequence[float], other: TextBlock, rtl: bool) -> Optional[bool]:
+    """中心在 ``center`` 的新块（或**整组**新块）是否应排在 ``other`` **之前**。
+
+    判据与管线自己排阅读顺序的 ``utils/textblock.py::sort_regions`` 同源——已有
+    块的顺序就是它排出来的，插入跟着它走才谈得上"插回原处"：
+
+    - ``center`` 落在 ``other`` 的纵向跨度**之下** → ``other`` 在前（``False``）；
+    - 落在跨度**之上** → 新块在前（``True``）；
+    - 落在跨度**之内**（同一行）→ 按页方向比 x：``rtl`` 时 x 大者在前。
+
+    **先纵向、再横向是关键**：漫画是**行优先**的（行自上而下、行内右起），
+    跨行的两块之间比 x 没有任何意义。2026-09-17 实测（``004_819b9e93/004.jpeg``，
+    见 ``tmp/eval_insert.py``）：只比 x 的旧判据把右下角的框判到了第 1 位——
+    它比右上角的框更靠右，但整行都在它上面。
+
+    判据不看新块的 ``src_is_vertical``：``sort_regions`` 也不看，横排页
+    （``rtl=False``）走的是同一套"先纵向排行、行内再比 x"。
+    """
+    other_band, other_center = poly_bands(other), poly_center(other)
+    if other_band is None or other_center is None:
+        return None
+    if center[1] > other_band[3]:
+        return False
+    if center[1] < other_band[1]:
+        return True
+    return center[0] > other_center[0] if rtl else center[0] < other_center[0]
 
 
 def insert_index(
-    new_blk: TextBlock,
+    new_blocks: Sequence[TextBlock],
     blocks: Sequence[TextBlock],
     rtl: bool,
     *,
     config: Optional[RedetectConfig] = None,
 ) -> Tuple[int, str]:
-    """新块在 ``blocks`` 里的插入下标与依据（方案 §八.2 的扫描 + 三重兜底）。
+    """**整组**新块在 ``blocks`` 里的插入下标与依据；返回值可直接交给 ``list.insert``。
 
-    ``blocks`` 是**当前**块列表（替换掉旧块的成员已不在其中）；返回值可直接
-    交给 ``list.insert``。**宁可顺序不理想，也不能插错位置**：页上块太少、
-    全表都判不出先后、计算抛异常，一律追加到末尾（依据码见 ``INSERT_*``）。
+    ``blocks`` 是**当前**块列表（替换掉旧块的成员已不在其中）。从表头往后扫，
+    找**第一个"新块应排在它前面"**的已有块 → 落点就是它的下标；一个都判不到
+    就是排在全表之后（追加）。
+
+    **为什么整组共用一个下标**：一次手势检出的几个框属于同一片区域，落位也该
+    连成一片。逐个算下标会让它们散开——实测同一片旁白检出的 2 个框，一个进
+    第 6 位、一个进第 8 位，中间隔着无关的旧块；而"第一个可插入位置"这种扫描
+    本身就不自洽（插进去一个，后面每个块的相对位置都变了）。组内维持检测器
+    给的阅读顺序（``modules/textdetector/detector_paddlev6.py`` 依
+    ``reading_order`` 排过）。
+
+    **宁可顺序不理想，也不能插错位置**：页上一个参照块都没有、整组中心取不到、
+    计算抛异常，一律追加到末尾（依据码见 ``INSERT_*``）。
     """
     cfg = config or RedetectConfig()
     if len(blocks) < cfg.min_neighbors:
         return len(blocks), INSERT_FEW_BLOCKS
-    vertical = bool(getattr(new_blk, "src_is_vertical", False))
     try:
+        center = group_center(new_blocks)
+        if center is None:
+            return len(blocks), INSERT_APPEND
         for idx, other in enumerate(blocks):
-            if new_precedes(new_blk, other, vertical, rtl) is True:
+            if new_precedes(center, other, rtl) is True:
                 return idx, INSERT_BEFORE
     except Exception as e:  # 单块几何异常不该放大成「整批不做」
         LOGGER.warning(f"Region redetect insertion failed, appending: {e}")
@@ -623,15 +653,16 @@ class RegionRedetect:
     def build_page(self, plan: RedetectPlan) -> dict:
         """把"替换 + 新增"算进页块列表，**不改任何东西**。
 
-        替换＝按下标剔除；新增＝按坐标逐个插入（``insert_index``），插入顺序取
-        检测器给的阅读顺序（``modules/textdetector/detector_paddlev6.py`` 内部
-        已按 ``reading_order`` 排过）。**替换掉旧块的成员也走坐标插入**而不钉在
-        原下标：它就在原地附近，坐标判据会把它放回同一相对位置，同时避免"钉住
-        旧下标"与"插入"两套索引记账互相打架。
+        替换＝按下标剔除；新增＝**整组**插到同一个下标（``insert_index`` 按整组
+        中心算一次），组内维持检测器给的阅读顺序
+        （``modules/textdetector/detector_paddlev6.py`` 内部已按 ``reading_order``
+        排过）。**替换掉旧块的成员也走坐标插入**而不钉在原下标：它就在原地附近，
+        坐标判据会把它放回同一相对位置，同时避免"钉住旧下标"与"插入"两套索引
+        记账互相打架。
 
         Returns:
             ``{"blocks", "kept", "replaced", "added", "inserted",
-            "direction"}``——``inserted`` 是 ``(下标, 依据码)`` 列表。
+            "direction"}``——``inserted`` 是每个新增块的 ``(下标, 依据码)``。
         """
         page_blocks = self._page_blocks(plan.page_key)
         replaced = sorted(set(plan.replaced_indices))
@@ -639,18 +670,14 @@ class RegionRedetect:
         kept = [b for i, b in enumerate(page_blocks) if i not in replaced_set]
         rtl, basis = page_direction(kept)
 
-        blocks = list(kept)
-        inserted: List[Tuple[int, str]] = []
-        for blk in plan.new_blocks:
-            idx, why = insert_index(blk, blocks, rtl, config=self.config)
-            blocks.insert(idx, blk)
-            inserted.append((idx, why))
+        idx, why = insert_index(plan.new_blocks, kept, rtl, config=self.config)
+        blocks = list(kept[:idx]) + list(plan.new_blocks) + list(kept[idx:])
         return {
             "blocks": blocks,
             "kept": len(kept),
             "replaced": replaced,
             "added": len(plan.new_blocks),
-            "inserted": inserted,
+            "inserted": [(idx + k, why) for k in range(len(plan.new_blocks))],
             "direction": (rtl, basis),
         }
 
@@ -723,6 +750,7 @@ __all__ = [
     "RedetectPlan",
     "RegionRedetect",
     "RegionRedetectError",
+    "group_center",
     "insert_index",
     "new_precedes",
     "page_direction",

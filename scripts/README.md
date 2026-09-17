@@ -40,6 +40,7 @@
 | `scripts/style_showcase.py` | 控件样式展示台（人工目视）：Tab1 原生 vs 封装对照（识别哪些类必须用 `ui/custom_widget` 封装），Tab2 按面板分区的全部控件（封装类 + 应用层复合控件），每行带样式来源徽章（类名/objectName/自绘/内联/全局兜底/无规则）+ `路径::符号` 一键复制，支持搜索、目录跳转、样式来源筛选、亮暗主题切换、状态矩阵（正常/禁用/悬停/聚焦）。系统 Python 启动时自动切便携解释器重跑；`--selftest` 无界面自检全部工厂 | `python scripts/style_showcase.py` |
 | `scripts/style_showcase.bat` | 展示台一键启动（双击即可，可透传参数如 `--selftest`）；优先用便携解释器，退回 `py`/`python`，非零退出码才 pause | 双击 或 `scripts\style_showcase.bat` |
 | `scripts/pie_menu_test.py` | 饼菜单/快捷菜单离线功能测试（状态机/命中判定/命令注册，独立进程沙箱配置）；功能已上线，后续加功能卡片等小修小补可复用 | `python scripts/pie_menu_test.py` |
+| `scripts/region_redetect_order.py` | **区域再检测的落点回归台**：把真工程每页的**每个已有框自己**当作拉框区域重跑检测，核对新块是否**连续**落回被替换块原来的下标（依赖"该页顺序已正确"这一功能前提；合成单测锁不到"这片漫画该怎么读"）。两段式——`--detect` 真跑检测并写缓存 `tmp/region_redetect_plans.json`（分钟级，顺带跑端到端核对），不带 `--detect` 则读缓存**离线**判（秒级，只走落点逻辑，不建 ONNX 会话）；`--candidates` 打印候选判据对比表（含被否掉的"逐块各自算"与"折线投影"），改判据前先用它确认新方案真的赢过现役。判据口径与实测数字见 `docs/技术实现/区域再检测_设计与实现.md` §5 | `python scripts/region_redetect_order.py [--project DIR] [--pages A,B] [--detect] [--candidates]` |
 | `scripts/mw_repro.py` | **MainWindow 在线演练台**：拉起真实主窗口（必须窗口模式，offscreen 起不来 FramelessWindow）做模拟复现与交互驱动——真实绘制路径/原生模态框/GC 时机类问题的排查工具。`--scenario group-undo` 跑组化撤销全链路（自动点确认弹窗，延迟须 ≥200ms），`--project` 只读打开真实工程，`--no-show`/`--no-panel`/`--watchdog` 控制形态；faulthandler 常开。起源=确认弹窗 GC 悬空 AV 闪退排查（经验教训 §3.3） | `python scripts/mw_repro.py [--scenario group-undo\|none] [--project DIR] [--pages 2 --blocks 8]` |
 
 渲染同步回归已迁至 `tests/test_render_sync.py`（pytest/直接运行均可）。
