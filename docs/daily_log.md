@@ -57,6 +57,23 @@
 
 ---
 
+### 运行窗口页码区复刻上游 + 拖拽调值的按下区补挂到编辑框
+
+**问题/需求：** ① 之前移植的 Blender 式拖拽调值在 `NoArrowsDoubleSpinBox` 上"看着支持、实际用不了"——只有边框那几像素能拖。② 运行窗口的页数区（`RangeSlider` + 起止框 + All Pages 复选框）交互自相矛盾：勾上「全部页面」就把滑条禁用，三者谁说了算看不出来。
+
+**改动要点：**
+
+- **根因**：数值框的编辑区是一个几乎铺满控件的 `QLineEdit` 子控件，鼠标按下先落到它身上、不会冒泡到 `QAbstractSpinBox.mousePressEvent`，于是按下区被原生文本选区行为接管；`SizeComboBox` 当年是用「lineEdit 事件过滤器」绕过这个坑的，拖拽混入却把这条路写在了子类里，数值框没接上。修法：把 lineEdit 代理收进 `ui/custom_widget/spinbox.py::DragAdjustMixin`（新增 `ui/custom_widget/spinbox.py::DragAdjustMixin._install_drag_edit_proxy`），数值框与可编辑组合框共用同一条三段式入口，`SizeComboBox` 里那份重复实现删除。数值框边框几像素的宿主直拖保留，两条入口行为一致（编辑区拖拽 / 单击全选进编辑态 / 悬停 ↔ 光标）。
+- **页码区换成上游控件**：新增 `ui/custom_widget/page_range_progress.py`（复刻上游 `ballontranslator/ui/page_range_progress.py` 三件套：`PageRangeSpinBox` 右端自绘 chevron 步进、`PageProgressRangeBar` 完成度轨 + 可拖闭区间 + 悬停读出页名/页码、`PageRangeProgressWidget` 页码行）。**「全部页面」复选框取消**——满区间就是全部页面；`page_filter()` 在区间覆盖全书时仍返回 `None`（沿用原语义，mainwindow 的"全部页面"路径不变）。完成度由 `ui/mainwindow.py::MainWindow` 开窗时按 `get_page_progress` 算好传入；区间跨窗记忆（与折叠区同款类级状态）。
+- **与上游的偏差**：强调色取 `themeColor()`（上游硬编码 `#2E93E5`，fork 换主题要跟着走）；去掉 PyQt5 兼容 shim；`PageRangeSpinBox` 不做拖拽调值（右端已是 chevron 按钮、页码是离散序号）。样式按类名选择器 `PageRangeSpinBox` 落在 `config/stylesheet.css`（`padding-right: 36px` 给 chevron 让位，实测编辑区 9~44px、按钮 45~78px 不重叠）。
+- `utils/proj_imgtrans.py` 的 `get_page_progress` 改成缺条目时按未跑完处理：逐页调用是它现在的唯一用法，缺 `_image_info` 条目的页会当场 KeyError、整个运行窗口开不出来。
+
+**测试：** 新增 `tests/test_spinbox_drag.py`（6 项：编辑区按下起拖、拖拽调值且只提交一次、单击进编辑态全选、边框直拖仍在、禁用态拒拖、`SizeComboBox` 同一代理）与 `tests/test_page_range_progress.py`（10 项：chevron 步进/框内其他位置落回原生编辑、区间夹取与去重发信号、就近手柄、两端重合按拖动方向拆开、完成度补齐截断、页码框与轨道双向同步、无页时禁用）；`tests/test_run_pipeline_dialog.py` 页码区用例改写（满区间 → `None`、区间切片、区间记忆跨窗、完成度喂给轨道共 5 项，注意还原类级 `_page_range`）。`scripts/style_showcase.py` 新增三行展示（`check_showcase.py` 强制登记）。真机（窗口模式、eva-dark）截图确认版面：`debug/real_dialog.png`／`debug/real_range_frame.png`；实测页码框编辑区 9~44px、chevron 45~78px 不重叠，悬停页名与页码同轴居中。`scripts/verify.py` 全绿。
+
+**涉及文件：** `ui/custom_widget/page_range_progress.py`、`ui/custom_widget/spinbox.py`、`ui/custom_widget/combobox.py`、`ui/custom_widget/__init__.py`、`ui/run_pipeline_dialog.py`、`ui/mainwindow.py`、`utils/proj_imgtrans.py`、`config/stylesheet.css`、`scripts/style_showcase.py`、`tests/test_spinbox_drag.py`、`tests/test_page_range_progress.py`、`tests/test_run_pipeline_dialog.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`docs/基础速查/打包控件功能使用说明.md`、`docs/基础速查/设置面板排版思路.md`、`docs/技术实现/设置面板概述.md`、`docs/daily_log.md`
+
+---
+
 ## 2026-09-16
 
 ### 复核文档补「接手端待办与易错点」一节

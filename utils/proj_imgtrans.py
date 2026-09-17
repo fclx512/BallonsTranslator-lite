@@ -296,7 +296,9 @@ class ProjImgTrans:
                 self.set_current_img_byidx(0)
 
     def get_page_progress(self, pagename: str):
-        fin_code = self._image_info[pagename]["finish_code"]
+        # 逐页问「跑完没有」是本方法的唯一用法（运行窗口的区间轨），缺条目
+        # 的页当面报 KeyError 会让整个对话框开不出来，按未跑完处理即可。
+        fin_code = self._image_info.get(pagename, {}).get("finish_code", 0)
         return (fin_code & pcfg.module.finish_code) == pcfg.module.finish_code
 
     def set_page_progress(self, pagename, code):

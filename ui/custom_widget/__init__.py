@@ -37,6 +37,11 @@ from .message import (
     TaskProgressBar,
 )
 from .notification import NotificationCenter, notification
+from .page_range_progress import (
+    PageProgressRangeBar,
+    PageRangeProgressWidget,
+    PageRangeSpinBox,
+)
 from .push_button import ExpandingToolButton, NoBorderPushBtn
 from .rail_dock_panel import RailDockPanel
 from .scroll_bar import ConfigScrollBar

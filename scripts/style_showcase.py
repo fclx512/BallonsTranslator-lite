@@ -233,6 +233,9 @@ def _sections():
         NoArrowsDoubleSpinBox,
         NoArrowsSpinBox,
         NoBorderPushBtn,
+        PageProgressRangeBar,
+        PageRangeProgressWidget,
+        PageRangeSpinBox,
         PaintQSlider,
         PanelGroupBox,
         ParamComboBox,
@@ -311,6 +314,27 @@ def _sections():
         bar = TaskProgressBar("正在检测文字…")
         bar.updateProgress(40)
         return bar
+
+    _demo_pages = ["%03d.jpg" % i for i in range(1, 41)]
+    _demo_finished = [True] * 11 + [False] * 6 + [True] * 4 + [False] * 19
+
+    def page_range_spin():
+        sb = PageRangeSpinBox()
+        sb.setRange(1, len(_demo_pages))
+        sb.setValue(7)
+        sb.setFixedWidth(82)
+        return sb
+
+    def page_range_bar():
+        bar = PageProgressRangeBar(_demo_pages)
+        bar.set_finished_pages(_demo_finished)
+        bar.set_range(3, 26, emit=False)
+        return bar
+
+    def page_range_progress():
+        holder = PageRangeProgressWidget(_demo_pages, start=3, end=26)
+        holder.set_finished_pages(_demo_finished)
+        return holder
 
     def sub_block():
         from ui.configpanel import ConfigSubBlock
@@ -510,6 +534,15 @@ def _sections():
                 lambda: PaintQSlider("不透明度"), wide=True),
             Row("RangeSlider", "ui/custom_widget/slider.py::RangeSlider",
                 lambda: RangeSlider(0, 100), wide=True),
+            Row("PageProgressRangeBar（页码区间轨，悬停读出页名/页码）",
+                "ui/custom_widget/page_range_progress.py::PageProgressRangeBar",
+                page_range_bar, wide=True),
+            Row("PageRangeSpinBox（页码框 + chevron 步进）",
+                "ui/custom_widget/page_range_progress.py::PageRangeSpinBox",
+                page_range_spin, wide=True),
+            Row("PageRangeProgressWidget（运行窗口页码行）",
+                "ui/custom_widget/page_range_progress.py::PageRangeProgressWidget",
+                page_range_progress, wide=True),
             Row("ClockDial（影子方向）", "ui/custom_widget/clock_dial.py::ClockDial", clock_dial),
             Row("TaskProgressBar", "ui/custom_widget/message.py::TaskProgressBar",
                 progress_bar, wide=True),

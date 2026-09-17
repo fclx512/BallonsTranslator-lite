@@ -4075,7 +4075,15 @@ class MainWindow(mainwindow_cls):
         from .run_pipeline_dialog import RunPipelineDialog
 
         page_names = list(self.imgtrans_proj.pages.keys())
-        dialog = RunPipelineDialog(self, page_names=page_names)
+        dialog = RunPipelineDialog(
+            self,
+            page_names=page_names,
+            # 区间轨上的完成度：哪几页已经跑完（页级 finish_code 位与）
+            finished_pages=[
+                bool(self.imgtrans_proj.get_page_progress(name))
+                for name in page_names
+            ],
+        )
         self._run_dialog = dialog
         dialog.stage_toggled.connect(self.on_enable_module)
         dialog.module_selected.connect(self.on_run_module_selected)

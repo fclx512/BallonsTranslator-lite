@@ -5,13 +5,17 @@
 样式由 ``config/stylesheet.css``（NoArrowsSpinBox / NoArrowsDoubleSpinBox
 选择器）负责，箭头经 ``ButtonSymbols.NoButtons`` 在代码层去除。
 
+按下区必须挂到内部 ``QLineEdit`` 上（``_install_drag_edit_proxy``）：
+数值框的编辑区几乎铺满整个控件，鼠标按下落在子控件身上、不会冒泡到
+``QAbstractSpinBox.mousePressEvent``，只在边框那几像素里重载才是生效的。
+
 提供：
   - :class:`DragAdjustMixin` — 拖拽调值混入（:class:`SizeComboBox` 亦复用）
   - :class:`NoArrowsSpinBox`  — ``QSpinBox``（整数）
   - :class:`NoArrowsDoubleSpinBox` — ``QDoubleSpinBox``（浮点）
 """
 
-from qtpy.QtCore import Qt, Signal
+from qtpy.QtCore import QEvent, QObject, Qt, Signal
 from qtpy.QtGui import QColor, QMouseEvent, QPalette
 from qtpy.QtWidgets import (
     QAbstractSpinBox,
@@ -33,8 +37,16 @@ class DragAdjustMixin:
 
     press → move 超过阈值进入拖拽态（emit drag_started）→ release 结束
     （emit drag_finished）；未达阈值的 press/release 视为单击，进入编辑态。
-    子类/宿主需实现 ``_apply_drag_value(value)``；QAbstractSpinBox 子类
-    直接混入即可（mousePress/Move/Release + 光标管理已接管）。
+    子类/宿主需实现 ``_apply_drag_value(value)``。
+
+    按下区接入方式二选一，两者可同时启用（数值框即如此：编辑区走代理、
+    边框几像素走宿主自己的事件）：
+
+    * ``drag_mixin_direct_mouse`` 为真时由宿主的 mousePress/Move/Release 处理；
+    * 调用 ``_install_drag_edit_proxy()`` 把三段式挂到内部 lineEdit 的事件
+      过滤器上。**数值框与可编辑组合框都必须用这一条**——它们的编辑区是
+      覆盖大部分面积的 ``QLineEdit`` 子控件，落在它身上的按下不会冒泡到
+      宿主，被覆盖区的原生选区行为吞掉后只剩犄角旮旯能拖。
     """
 
     drag_started = Signal()
@@ -44,8 +56,8 @@ class DragAdjustMixin:
     drag_px_per_step = 5.0
     #: 进入拖拽态的最小横向位移（px），小于此值的按住-松开视为单击
     drag_start_threshold = 4.0
-    #: QAbstractSpinBox 子类直接接管鼠标事件；经 lineEdit 事件代理接入的
-    #: 组合框置 False，避免吞掉下拉箭头区的点击
+    #: 宿主自己的鼠标事件是否接管三段式；经 lineEdit 事件代理接入的组合框
+    #: 置 False，避免吞掉下拉箭头区的点击
     drag_mixin_direct_mouse = True
 
     def _init_drag_state(self):
@@ -56,10 +68,51 @@ class DragAdjustMixin:
         self._drag_state = ""
         self._drag_hovered = False
         self._drag_base_palette = None
+        self._drag_proxy_edit = None
         try:
             self._drag_base_palette = self.lineEdit().palette()
         except Exception:
             self._drag_base_palette = None
+
+    def _install_drag_edit_proxy(self):
+        """把三段式挂到内部 ``lineEdit()``（数值框编辑区 / 组合框可编辑框）。
+
+        Qt 的鼠标事件先给到光标下的子控件，编辑区铺满控件时宿主只会在
+        边框拿到事件；同时 lineEdit 自带按下拖选文本，不拦下来就与横向
+        拖拽调值直接冲突。
+        """
+        try:
+            le = self.lineEdit()
+        except Exception:
+            le = None
+        if le is None or le is self._drag_proxy_edit:
+            return
+        self._drag_proxy_edit = le
+        le.installEventFilter(self)
+
+    def eventFilter(self, obj: QObject, ev) -> bool:
+        if obj is self._drag_proxy_edit:
+            t = ev.type()
+            if t == QEvent.Type.MouseButtonPress:
+                if self._drag_begin(ev):
+                    # 拖拽可能越出框体，需显式抓取路由后续事件
+                    obj.grabMouse()
+                    return True
+            elif t == QEvent.Type.MouseMove and (
+                self._drag_pending or self._drag_active
+            ):
+                self._drag_move(ev)
+                return True
+            elif t == QEvent.Type.MouseButtonRelease and (
+                self._drag_pending or self._drag_active
+            ):
+                if self._drag_end(ev):
+                    if obj.mouseGrabber() is obj:
+                        obj.releaseMouse()
+                    return True
+            elif t in (QEvent.Type.FocusIn, QEvent.Type.FocusOut):
+                self._drag_hover_cursor()
+        return super().eventFilter(obj, ev)
 
     # ---- 子类钩子 -------------------------------------------------------
 
@@ -88,7 +141,7 @@ class DragAdjustMixin:
     def _apply_drag_value(self, value: float):
         self.setValue(self._drag_value_for(value))
 
-    # ---- 三段式（QAbstractSpinBox 子类直接用；组合框经 eventFilter 调） —
+    # ---- 三段式（宿主与 lineEdit 代理两条入口共用） -----------------------
 
     def _drag_begin(self, ev: QMouseEvent) -> bool:
         if ev.button() != Qt.MouseButton.LeftButton or not self._drag_allowed():
@@ -279,6 +332,7 @@ class NoArrowsSpinBox(DragAdjustMixin, QSpinBox):
         super().__init__(parent)
         self.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self._init_drag_state()
+        self._install_drag_edit_proxy()
 
 
 class NoArrowsDoubleSpinBox(DragAdjustMixin, QDoubleSpinBox):
@@ -288,3 +342,4 @@ class NoArrowsDoubleSpinBox(DragAdjustMixin, QDoubleSpinBox):
         super().__init__(parent)
         self.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self._init_drag_state()
+        self._install_drag_edit_proxy()

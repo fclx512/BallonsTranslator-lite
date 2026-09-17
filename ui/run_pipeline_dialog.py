@@ -17,9 +17,10 @@ upstream behaviour would be worse here:
   the settings overlay above itself.  The bottom bar's per-stage gears already
   open the matching settings tab.  The grid therefore matches the reference
   design: icon plus selector only.
-* **fork page-range row** — ``RangeSlider`` plus start/end spinboxes and an
-  *All Pages* toggle, instead of upstream's ``ui/page_range_progress.py``
-  (absent from the fork, and it has no All Pages toggle).
+* **fork page-range row** — ``PageRangeProgressWidget`` (fork port of upstream's
+  ``ui/page_range_progress.py``): start/end page boxes plus a completion track.
+  Upstream's widget is now the reference implementation, so no *All Pages*
+  toggle is needed — the full range *is* all pages.
 * **themed stage accents** — ``@accentDetect`` / ``@accentOCR`` /
   ``@accentInpaint`` / ``@accentTranslate`` from ``config/themes.json`` instead
   of upstream's hardcoded modality palette, so the stage icons match the LLM
@@ -67,7 +68,7 @@ from .custom_widget import (
     ConfigComboBox,
     ExpandingToolButton,
     NoArrowsSpinBox,
-    RangeSlider,
+    PageRangeProgressWidget,
 )
 from .icon_rendering import render_svg_pixmap
 from .misc import get_theme_color, themed_icon_path
@@ -254,11 +255,15 @@ class RunPipelineDialog(QDialog):
     #: the dialog does not fold everything back up.
     _sections_expanded = {}
 
+    #: Last page range ``(start, end)`` of the session, 1-based inclusive.
+    _page_range = (1, None)
+
     def __init__(
         self,
         parent: QWidget = None,
         *,
         page_names=None,
+        finished_pages=None,
         translator=None,
     ) -> None:
         super().__init__(parent)
@@ -266,6 +271,7 @@ class RunPipelineDialog(QDialog):
         self.setSizeGripEnabled(False)
 
         self._page_names = list(page_names or [])
+        self._finished_pages = list(finished_pages or [])
         self._stage_activators = {}
         self._stage_sections = {}
         self._stage_headers = {}
@@ -389,82 +395,24 @@ class RunPipelineDialog(QDialog):
         return GET_VALID_TRANSLATORS()
 
     def _build_page_range(self) -> QWidget:
-        num_pages = max(len(self._page_names), 1)
         frame = QFrame()
         frame.setFrameShape(QFrame.Shape.StyledPanel)
         layout = QVBoxLayout(frame)
-
-        spins = QHBoxLayout()
-        spins.setContentsMargins(0, 0, 0, 0)
-        self.start_spin = NoArrowsSpinBox()
-        self.start_spin.setRange(1, num_pages)
-        self.start_spin.setValue(1)
-        self.start_spin.setFixedWidth(70)
-        self.end_spin = NoArrowsSpinBox()
-        self.end_spin.setRange(1, num_pages)
-        self.end_spin.setValue(num_pages)
-        self.end_spin.setFixedWidth(70)
-        spins.addStretch()
-        spins.addWidget(self.start_spin)
-        spins.addWidget(QLabel(" ~ "))
-        spins.addWidget(self.end_spin)
-        spins.addStretch()
-        layout.addLayout(spins)
-
-        self.range_slider = RangeSlider(0, num_pages - 1)
-        self.range_slider.setMinimumWidth(350)
-        layout.addWidget(self.range_slider)
-
-        self.range_info = QLabel()
-        layout.addWidget(self.range_info)
-
-        self.all_pages_cb = ConfigCheckBox(self.tr("All Pages"))
-        self.all_pages_cb.setChecked(True)
-        layout.addWidget(self.all_pages_cb)
-
-        def sync_spins():
-            for spin, value in (
-                (self.start_spin, self.range_slider.low() + 1),
-                (self.end_spin, self.range_slider.high() + 1),
-            ):
-                spin.blockSignals(True)
-                spin.setValue(value)
-                spin.blockSignals(False)
-
-        def on_spins_changed():
-            self.range_slider.blockSignals(True)
-            self.range_slider.set_range(
-                self.start_spin.value() - 1, self.end_spin.value() - 1
-            )
-            self.range_slider.blockSignals(False)
-            sync_spins()
-            self._update_range_info()
-
-        self.start_spin.valueChanged.connect(on_spins_changed)
-        self.end_spin.valueChanged.connect(on_spins_changed)
-        self.range_slider.rangeChanged.connect(
-            lambda lo, hi: (sync_spins(), self._update_range_info())
+        start, end = type(self)._page_range
+        self.page_range = PageRangeProgressWidget(
+            self._page_names,
+            start=start,
+            end=end,
+            parent=frame,
         )
-        self.all_pages_cb.toggled.connect(self._on_all_pages_toggled)
-        self._update_range_info()
+        self.page_range.set_finished_pages(self._finished_pages)
+        self.page_range.range_changed.connect(self._on_page_range_changed)
+        layout.addWidget(self.page_range)
         return frame
 
-    def _update_range_info(self) -> None:
-        lo = self.range_slider.low() + 1
-        hi = self.range_slider.high() + 1
-        self.range_info.setText(
-            self.tr("Page %1 ~ Page %2 (%3 pages)")
-            .replace("%1", str(lo))
-            .replace("%2", str(hi))
-            .replace("%3", str(hi - lo + 1))
-        )
-
-    def _on_all_pages_toggled(self, checked: bool) -> None:
-        if checked and self._page_names:
-            self.range_slider.set_range(0, len(self._page_names) - 1)
-        for widget in (self.range_slider, self.start_spin, self.end_spin):
-            widget.setEnabled(not checked)
-        self._update_range_info()
+    def _on_page_range_changed(self, start: int, end: int) -> None:
+        # Remembered for the process lifetime, like the section folds above.
+        type(self)._page_range = (start, end)
 
     # ── Collapsible stage sections ───────────────────────────────────
 
@@ -826,21 +774,15 @@ class RunPipelineDialog(QDialog):
     def run_without_textstyle_update(self) -> bool:
         return self.wo_update_cb.isChecked()
 
-    def selected_pages(self):
-        if not self._page_names:
-            return []
-        if not self.all_pages_cb.isChecked():
-            return []
-        return list(self._page_names)
-
     def page_filter(self):
-        """Page names in the selected range, or None when All Pages is on."""
-        if self.all_pages_cb.isChecked() or not self._page_names:
+        """Page names in the selected range, or None when it spans everything."""
+        total = len(self._page_names)
+        if not total:
             return None
-        return [
-            self._page_names[i]
-            for i in range(self.range_slider.low(), self.range_slider.high() + 1)
-        ]
+        start, end = self.page_range.range_values()
+        if start <= 1 and end >= total:
+            return None
+        return self._page_names[start - 1:end]
 
     # ── Layout ───────────────────────────────────────────────────────
 

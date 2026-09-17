@@ -68,6 +68,8 @@ class RunPipelineDialogTest(unittest.TestCase):
         self.addCleanup(
             lambda: [setattr(cfg, k, v) for k, v in snapshot.items()]
         )
+        # 区间记忆是类级状态：不复原就会被上一个用例的区间污染
+        self.Dialog._page_range = (1, None)
         self.dialog = self.Dialog(None, page_names=PAGE_NAMES)
 
     # ── stage grid ───────────────────────────────────────────────────
@@ -180,14 +182,38 @@ class RunPipelineDialogTest(unittest.TestCase):
 
     # ── page range / modes ───────────────────────────────────────────
 
-    def test_page_filter_all_pages_is_none(self):
-        self.assertTrue(self.dialog.all_pages_cb.isChecked())
+    def test_page_filter_defaults_to_all_pages(self):
+        self.assertEqual(self.dialog.page_range.range_values(), (1, len(PAGE_NAMES)))
         self.assertIsNone(self.dialog.page_filter())
 
     def test_page_filter_range(self):
-        self.dialog.all_pages_cb.setChecked(False)
-        self.dialog.range_slider.set_range(1, 3)
+        self.dialog.page_range.set_range(2, 4)
         self.assertEqual(self.dialog.page_filter(), PAGE_NAMES[1:4])
+
+    def test_page_filter_is_none_again_on_full_range(self):
+        self.dialog.page_range.set_range(2, 4)
+        self.dialog.page_range.set_range(1, len(PAGE_NAMES))
+        self.assertIsNone(self.dialog.page_filter())
+
+    def test_range_changes_emit_and_stick(self):
+        seen = []
+        self.dialog.page_range.range_changed.connect(
+            lambda lo, hi: seen.append((lo, hi))
+        )
+        self.dialog.page_range.range_start.setValue(3)
+        self.assertIn((3, len(PAGE_NAMES)), seen)
+        self.assertEqual(type(self.dialog)._page_range, (3, len(PAGE_NAMES)))
+        reopened = self.Dialog(None, page_names=PAGE_NAMES)
+        self.assertEqual(reopened.page_range.range_values(), (3, len(PAGE_NAMES)))
+
+    def test_finished_pages_feed_the_progress_track(self):
+        finished = [True, False] * 5
+        dialog = self.Dialog(
+            None, page_names=PAGE_NAMES, finished_pages=finished
+        )
+        bar = dialog.page_range.range_bar
+        self.assertEqual(bar.finished_pages, finished)
+        self.assertEqual(bar.finished_count, 5)
 
     def test_render_only_tab(self):
         self.assertFalse(self.dialog.is_render_only())

@@ -1,6 +1,6 @@
 from typing import Callable, List, Optional
 
-from qtpy.QtCore import QEvent, QObject, QSize, Qt, Signal
+from qtpy.QtCore import QSize, Qt, Signal
 from qtpy.QtGui import QDoubleValidator, QMouseEvent, QPalette, QWheelEvent
 from qtpy.QtWidgets import (
     QComboBox,
@@ -315,7 +315,7 @@ class SizeComboBox(DragAdjustMixin, QComboBox):
         if init_value is not None:
             self.setValue(init_value)
         self._init_drag_state()
-        self.lineEdit().installEventFilter(self)
+        self._install_drag_edit_proxy()
         # 拖拽结束提交一次（对齐旧标签 btn_released 语义）
         self.drag_finished.connect(
             lambda: self.param_changed.emit(self.param_name, self.value())
@@ -354,32 +354,7 @@ class SizeComboBox(DragAdjustMixin, QComboBox):
         self.lineEdit().selectAll()
         self._refresh_drag_appearance()
 
-    # ---- lineEdit 事件代理 ------------------------------------------------
-
-    def eventFilter(self, obj: QObject, ev) -> bool:
-        le = self.lineEdit()
-        if obj is le:
-            t = ev.type()
-            if t == QEvent.Type.MouseButtonPress and self._drag_begin(ev):
-                le.grabMouse()  # 拖拽可能越出框体，需显式抓取路由后续事件
-                return True
-            if t == QEvent.Type.MouseMove and (
-                self._drag_pending or self._drag_active
-            ):
-                self._drag_move(ev)
-                return True
-            if t == QEvent.Type.MouseButtonRelease and (
-                self._drag_pending or self._drag_active
-            ):
-                if self._drag_end(ev):
-                    if le.mouseGrabber() is le:
-                        le.releaseMouse()
-                    return True
-            if t == QEvent.Type.FocusIn:
-                self._drag_hover_cursor()
-            elif t == QEvent.Type.FocusOut:
-                self._drag_hover_cursor()
-        return super().eventFilter(obj, ev)
+    # ---- 鼠标：按下区由 DragAdjustMixin 的 lineEdit 事件代理接管 --------
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         if self.hasFocus():

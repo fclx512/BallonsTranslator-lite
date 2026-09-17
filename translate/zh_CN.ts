@@ -6995,11 +6995,6 @@ in Settings → Mirror Config, then click Retry.</source>
         </message>
         <message>
             <location filename="..\ui\run_pipeline_dialog.py" />
-            <source>All Pages</source>
-            <translation>全部页面</translation>
-        </message>
-        <message>
-            <location filename="..\ui\run_pipeline_dialog.py" />
             <source>Browse...</source>
             <translation>浏览...</translation>
         </message>
@@ -7067,11 +7062,6 @@ in Settings → Mirror Config, then click Retry.</source>
             <location filename="..\ui\run_pipeline_dialog.py" />
             <source>OCR</source>
             <translation>OCR</translation>
-        </message>
-        <message>
-            <location filename="..\ui\run_pipeline_dialog.py" />
-            <source>Page %1 ~ Page %2 (%3 pages)</source>
-            <translation>第 %1 页 ~ 第 %2 页（共 %3 页）</translation>
         </message>
         <message>
             <location filename="..\ui\run_pipeline_dialog.py" />
@@ -7149,6 +7139,19 @@ No pipeline stages will be executed.</source>
             <location filename="..\ui\run_pipeline_dialog.py" />
             <source>plain</source>
             <translation>直译</translation>
+        </message>
+    </context>
+    <context>
+        <name>PageRangeProgressWidget</name>
+        <message>
+            <location filename="..\ui\custom_widget\page_range_progress.py" />
+            <source>Pages to Run</source>
+            <translation>运行页数</translation>
+        </message>
+        <message>
+            <location filename="..\ui\custom_widget\page_range_progress.py" />
+            <source>progress</source>
+            <translation>进度</translation>
         </message>
     </context>
     <context>

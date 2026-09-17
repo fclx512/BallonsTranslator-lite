@@ -2641,3 +2641,37 @@ QWidget#RunPipelineSettingsSection QComboBox {
 QWidget#RunPipelineSettingsSection QSpinBox {
     font-size: 12px;
 }
+
+
+/* ── Run dialog: page range row ──────────────────────────────────
+   页码框（ui/custom_widget/page_range_progress.py::PageRangeSpinBox）右侧
+   自绘一对 chevron 步进按钮，故 padding-right 要留出两个按钮 + 间隙的宽度，
+   否则数字钻到按钮底下（实测编辑区 9~44px、按钮 45~78px）。
+   其余取 NoArrowsSpinBox 同款填充输入框外观，保持同一面板内输入控件一致。 */
+
+PageRangeSpinBox {
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    min-height: 24px;
+    max-height: 24px;
+    padding: 2px 36px 2px 8px;
+    font-size: 12px;
+}
+
+PageRangeSpinBox:focus {
+    border: 1px solid @accentPrimary;
+}
+
+PageRangeSpinBox:disabled {
+    background: transparent;
+    border: 1px solid @disabledForegroundColor;
+}
+
+/* 原生箭头已在代码层去掉（ButtonSymbols.NoButtons），显式归零防样式回灌 */
+PageRangeSpinBox::up-button,
+PageRangeSpinBox::down-button {
+    width: 0px;
+    height: 0px;
+    border: none;
+}
