@@ -4,8 +4,7 @@
         "tests/test_batch_backup.py": {
             "note": "批量备份归并（2026-09-16）：查找替换的单槽快照并入 utils/batch_versions.py::BatchVersionStore（与工作台批量任务共用），其语义迁入 tests/test_batch_versions.py（版本号校验/丢弃/base_styles 往返）与 tests/test_replace_rollback.py（回滚条接线），旧文件删除",
             "allowed_mentions": [
-                "docs/技术实现/查找替换与样式管理器重构_设计方案.md",
-                "docs/技术实现/泛用工作台_规划.md"
+                "docs/技术实现/查找替换与样式管理器重构_设计方案.md"
             ]
         },
         "docs/技术实现/窄栏浮层面板改版_计划.md": {
@@ -36,9 +35,7 @@
         },
         "ui/quick_symbol_dialog.py": {
             "note": "快捷符号改版（2026-09-12，2026-09-13 二次改版为软键盘）：置顶 QDialog 删除；现为文本面板窄栏软键盘 ui/quick_symbol_panel.py（窄栏图标=功能开关 pcfg.symbol_keyboard_enabled，焦点进入触发范围编辑器弹出），入口见 ui/text_panel.py::install_symbol_launcher",
-            "allowed_mentions": [
-                "docs/技术实现/上游v1.5.12移植_完成记录.md"
-            ]
+            "allowed_mentions": []
         },
         "ui/scene_textlayout.py": {
             "note": "v1.5.12 移植后零引用的旧 fork 布局，2026-08-23 删除（渲染入口已切 ui/text_engine/）",
@@ -122,7 +119,7 @@
             "note": "2026-09-02 删除：2026-08-26 三档修复分级方向定稿并全部实现（AI 修图独立图标/画笔移除/面板控件统一），审计+讨论稿使命完成，现状以代码与 tests/test_drawing_cursor.py 为准"
         },
         "docs/技术实现/文本编辑区UI重构.md": {
-            "note": "2026-09-02 删除：右栏三区重构已落地（89e57a7+efac5e5），与上游的刻意分歧已由 docs/技术实现/上游v1.5.12移植_完成记录.md 持久分歧节覆盖"
+            "note": "2026-09-02 删除：右栏三区重构已落地（89e57a7+efac5e5），与上游的刻意分歧以 ui/text_engine/ 各模块的注释为准"
         },
         "docs/技术实现/侧栏图标_画布浮层面板实现.md": {
             "note": "2026-09-02 删除：RailDockPanel 两批次已提交（75ad4e8/11046f0），行为由 tests/test_panel_rail.py 锁定，控件契约见 AGENTS.md 打包控件表"
@@ -241,6 +238,30 @@
                 "docs/daily_log.md",
                 "docs/技术实现/效果栈移植与窄栏图标重绘_计划.md"
             ]
+        },
+        "docs/技术实现/泛用工作台_复核与拆分.md": {
+            "note": "泛用工作台落地后收束（2026-09-18）：该文是立项期的现状断言核实 + 任务拆分草案 + 各批施工口径，A／B／C1～C4／D 全部落地后使命结束；其中仍有长期价值的四类内容（界面接线纪律、批量写回顺序、易错点、实测数字与调参方向）已并入 docs/技术实现/AI辅助功能_设计与实现.md，原文档删除",
+            "allowed_mentions": []
+        },
+        "docs/技术实现/AI辅助功能_规划.md": {
+            "note": "AI 辅助功能文档合并（2026-09-18）：与 术语剧情工作台_交接、泛用工作台_规划 三份合并为 docs/技术实现/AI辅助功能_设计与实现.md（六轮讨论草案、实施批次、已砍掉的 Chat 页 UI 等过程材料随合并减法删去）；标签体系与框级动作的设计、契约、调参与待办全部收进新文档",
+            "allowed_mentions": []
+        },
+        "docs/技术实现/术语剧情工作台_交接.md": {
+            "note": "同批合并（2026-09-18）：术语／剧情任务的数据流、草稿保护契约、线程模型、UI 结构与 i18n 已迁入 docs/技术实现/AI辅助功能_设计与实现.md 的「工作台」部分；原文档中已失效的 Chat 页一节未迁移",
+            "allowed_mentions": []
+        },
+        "docs/技术实现/泛用工作台_规划.md": {
+            "note": "同批合并（2026-09-18）：决策一览 D1–D41、13 项需实测调整的参数、未落地项与易错点整体迁入 docs/技术实现/AI辅助功能_设计与实现.md（代码注释里的「设计 §X」即指新文档节号），原文档删除",
+            "allowed_mentions": []
+        },
+        "docs/技术实现/上游v1.5.12移植_完成记录.md": {
+            "note": "2026-09-18 清理（用户判定过期，可直接删）：移植过程与节点落点已成为历史（各提交信息与 docs/daily_log.md 可查）；其「与上游的持久分歧」与「回归资产」两节未迁移，需要时从 git 历史取回",
+            "allowed_mentions": []
+        },
+        "docs/技术实现/不常用功能工具箱_规划.md": {
+            "note": "2026-09-18 清理：Tools 下拉栏重排已落地（ui/mainwindowbars.py 的菜单构建段即最终分组），原「激活式工具箱」方向早已废弃，文档使命结束",
+            "allowed_mentions": []
         }
     },
     "dormant_symbols": {
@@ -250,10 +271,10 @@
     },
     "suspended": {
         "ui/text_engine/formatting/panel.py": {
-            "note": "上游休眠拷贝：仅被同休眠的 editing/manager.py 引用，未接主 UI（见 上游v1.5.12移植_完成记录.md 持久分歧）"
+            "note": "上游休眠拷贝：仅被同休眠的 editing/manager.py 引用，未接主 UI"
         },
         "ui/text_engine/editing/manager.py": {
-            "note": "上游休眠拷贝：无任何 import 者（见 上游v1.5.12移植_完成记录.md 持久分歧）"
+            "note": "上游休眠拷贝：无任何 import 者"
         },
         "ui/text_engine/formatting/commands.py": {
             "note": "引擎旧面板 FontFormatPanel 的命令面，随 panel.py 休眠（fork 渲染入口在 ui/text_engine/item.py，格式命令在 ui/fontformat_commands.py）；仅被休眠的 formatting/panel.py 引用，不得被主 UI import（2026-09-04 登记）"

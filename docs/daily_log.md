@@ -2,6 +2,102 @@
 
 > 记录**仓库层面**的改动（功能增删、远端分支变动、规范调整），供变更史查阅。踩坑细节、方案草稿与跨代理交接留在各代理侧的私有记忆（见 `AGENTS.md` 的「多代理协作」一节），不进仓库。仅保留最近 3 天的记录，每次在对应日期中末尾写入日志。
 
+## 2026-09-18
+
+### D5：单块 Alt + 拖手柄 = 以中心缩放（PS 式即时修饰键）
+
+**问题/需求：** 泛用工作台 D5 要求给单块加「按住 Alt 拖手柄」的缩放：与默认的"拖哪条边/角、对侧钉住"不同，Alt 下中心不动、两侧对称扩张。这条此前从未实现（仓里与 Alt 有关的只有画布的笔刷尺寸缩放）。用户实测两轮后把口径钉成 PS 那种**换算**而非"重定基"：「在拖拽时按 alt 会将目前的拖拽进度转换为按住 alt 下的变换程度」。
+
+**改动要点：**
+
+- 落点 `ui/texteditshapecontrol.py`：`ControlBlockItem` 按下手柄时读 `AltModifier` → `beginResize(..., center_anchor=...)`；移动事件**每帧重读**修饰键 → `TextBlkShapeControl.setResizeCenterAnchor(bool)`。
+- **口径＝换算，不是重定基**：参考点与"场景↔本地"坐标映射**全部取自起手那一刻**（默认＝起手对角手柄位置、中心模式＝起手框中心，由 `_pinResizeAnchor` 统一落定），切换时用**上一次的光标位置把当前这一帧重算一遍** ⇒ 被拖的手柄始终钉在光标上、对侧当场镜像出去／收回来，"中途切换的结果 ≡ 一开始就处于该状态拖到同一位置"，来回按 Alt 不累积误差。中心模式的几何在 `resizeFromScene` 里按 `2*center - 被拖侧` 生成，并把"当前中心"回钉到初始中心。
+- **鼠标不动时也要生效** ⇒ 新增 `_ResizeModifierWatcher`（挂在 `QApplication` 上的键盘旁听器，`return False` 只旁听不拦截、不抢焦点以免顶掉画布 Alt+WASD 切块；`TextBlkShapeControl` 是 `QGraphicsRectItem` 不是 QObject，不能自己当过滤器）；一次手势装一次、`finishResize` 卸掉。过滤器里 `RuntimeError` 必须吞——**PyQt6 从事件过滤器逃出的异常会走 `qFatal` 直接终止进程**。
+- **两个坑**：① Qt 的 `event.modifiers()` 返回的是**事件之前**的状态——`KeyPress(Key_Alt)` 里读不到 `AltModifier`、`KeyRelease` 里反而读得到，所以一律按 `key()/type()` 判断；② `_beginProxyDrag` 的跟手锚点**必须仍是手柄位置**，把它改成中心会导致位移从中心量起（第一版踩过，已回退）。
+- 撤销沿用 `ReshapeItemCommand`，无新增命令。
+
+**测试：** `tests/test_text_transform_ui.py` 新增 6 条（Alt 拖角中心不动且对角镜像／同手势两种模式结果不同／中途按下与松开 Alt 的换算与收回／鼠标不动的键盘路径／切换本身不动几何／撤销往返）；PyQt6 不能构造 `QGraphicsSceneMouseEvent`，桩事件 `_StubDragEvent` 提为模块级、按下与移动共用。真机探针 `tmp/_alt_probe3.py` 9 组情形（旋转 0／30°／−45°／120°、角手柄与边手柄、中性块与 projective 形变块、两个切换方向）⇒ 跟手误差、中心漂移、对角漂移**恒为 0**。**手感仍待用户实机验收。**
+
+**遗留：** 手动版不套"碰到邻框即停"（那是批量扩张 D5 的引擎侧行为）。
+
+**涉及文件：** `ui/texteditshapecontrol.py`、`tests/test_text_transform_ui.py`
+
+---
+
+### 工作台两个参数设置项 + 「工作台（临时）」设置页
+
+**问题/需求：** 复核时点出两处"定了但没做"：D33d 要求的「设置内参数接口」只有 `ui/batch_merge.py::MergeConfig` 里的硬编码默认值；C3 的批量扩张量则明确"不给默认值"导致界面上每次都要手填。用户拍板：两项都做成设置项，**先放一个临时页**、排版方案定了再并入既有页；C3 默认量定 **10px**。
+
+**改动要点：**
+
+- `utils/config.py::ProgramConfig` 新增 `workbench_merge_oversize_ratio`（0.85）与 `workbench_expand_px`（10），字段注释里写明取值依据（0.85 在样本 435 组里只命中 2 组且 0.5~0.9 之间不敏感；10px 时 88% 的框四边可完整扩张、宽 +28%／高 +17%）。
+- 设置面板新增「工作台（临时）」页（`ui/configpanel.py`，导航 key `workbench_temp`，归在 General 下；页数 9 → 10）：误聚阈值（百分比）与默认扩张量（px）两个数值框，初值取自 pcfg、改动即回写。
+- **注入在任务层而非引擎**：`ui/workbench_tasks.py` 的 `MergeTask._engine` 传 `MergeConfig(oversize_ratio=...)`、`ExpandTask.options_spec` 的初值取 `pcfg.workbench_expand_px`；引擎继续保持"参数由调用方给"（`ExpandTask.plan` 在扩张量为 0 时仍返回空列表、执行按钮禁用），**裸脚本复算不受设置影响**。
+
+**测试：** `tests/test_settings_app_page.py` 页数断言 9 → 10 并新增"两个数值项初值取自 pcfg / 改动回写 pcfg"；`tests/test_workbench_panel.py` 两条按新语义重写。
+
+**遗留：** 临时页的归并——用户拍板**先不动**，不作为待办再问。
+
+**涉及文件：** `utils/config.py`、`ui/configpanel.py`、`ui/workbench_tasks.py`、`tests/test_settings_app_page.py`、`tests/test_workbench_panel.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+---
+
+### 工作台参数复算台与真机探针常驻（`scripts/`）
+
+**问题/需求：** C1／C2／C3／C4／D39 这些参数是"测出来的"，此前复算脚本全在 `tmp/`，一清理就失去复算能力（`ui/batch_merge.py` 里那句"实测脚本随 tmp 清理已不存在"就是欠的账）。
+
+**改动要点：**
+
+- 新增 `scripts/workbench_recalc.py`：六个**只读**子命令 `merge`（`--sweep` 加阈值扫描）／`c1`／`expand`／`queue`／`review`／`hook`／`list`，支持 `--project` 指向工作副本，脚本末尾**自证样本顶层文件 mtime 未变**（只读自证）。
+- 新增 `scripts/probes/`（11 个真机探针 + 自带 `README.md`）：内存归因与释放阶梯、区域再检测真机验收等——有真机/模型依赖，写明各自的前提与期望数字。
+- 登记到位：`scripts/README.md` 与 `AGENTS.md` 的 `scripts/` 行同步；`scripts/check_docs.py` 只扫 `scripts/` 顶层，子目录不强制登记（其说明由子目录自带）。
+
+**涉及文件：** `scripts/workbench_recalc.py`（新）、`scripts/probes/`（新）、`scripts/README.md`、`AGENTS.md`
+
+---
+
+### AI 辅助功能文档：三合一 + 删 6 份过期文档 + 全仓引用改指
+
+**问题/需求：** 泛用工作台的 A／B／C1～C4／D 全部落地后，围绕它的文档散成四份（规划／复核与拆分／术语剧情工作台_交接／AI辅助功能_规划）且互相交叠，读者要拼着看；另有 2 份上游移植期的过程材料已过期。
+
+**改动要点：**
+
+- **合并为一份**：`docs/技术实现/AI辅助功能_设计与实现.md`（400 行）＝总纲 → 体系总览 → Part I 标签体系与框级动作 → Part II 工作台（术语／剧情／四个批量任务＋写回契约＋**决策一览 D1–D41**）→ Part III 调参与待办。**保留 D 编号体系**——代码注释里约 200 处按编号与「设计 §X」引用，节号与编号不要乱动。用户拍板**翻译 agent 的架构基线仍独立**在 `docs/技术实现/翻译agent化_设计方案.md`，不并进来。
+- **删除 6 份并登记** `scripts/audit_registry.json`（现 55 条）：`AI辅助功能_规划`、`术语剧情工作台_交接`、`泛用工作台_规划`、`泛用工作台_复核与拆分`、`上游v1.5.12移植_完成记录`、`不常用功能工具箱_规划`。最后两份用户判定直接删（不迁移）；`上游v1.5.12移植_完成记录` 的「与上游的持久分歧」节改以 `ui/text_engine/` 各模块注释为准。
+- **引用改指**：除带文件名的引用（`check_audit` 会报漏）外，代码注释里还散着 30 处**不带文件名**的「规划 §X」节号——检查器不管但语义已失效。做法＝写脚本集中做「旧节号 → 新节号（`设计 §X`）」映射替换、**每对带期望命中数回显**，一次跑完再逐条核对（30 处里 1 处因同文件重复文本漏掉，补手工修），落到 15 个文件；另改 `.agents/skills/audit-docs/SKILL.md` 里指向已删文档的两处措辞。
+- 顺带修 `docs/技术实现/区域再检测_设计与实现.md` 一处指向 `tmp/` 生成物的失效引用（`verify.py` 的 docs 步由此转绿）。
+- 踩坑：**`check_audit` 的语料包含 `.agents/`**（SKIP_DIRS 里没有它）⇒ 技能文档里提到已删文件名同样会被判残留引用。
+
+**测试：** `check_docs` 22 篇全绿（原 27）／`check_audit` 55 条已删通过／`check_syntax` 通过／受影响测试 10 个文件全绿。
+
+**涉及文件：** `docs/技术实现/AI辅助功能_设计与实现.md`（新）与 6 份删除、`docs/项目概述.md`、`docs/基础速查/AI辅助标签体系使用说明.md`、`docs/技术实现/区域再检测_设计与实现.md`、`AGENTS.md`、`scripts/audit_registry.json`，以及 15 个代码／测试文件里的注释引用
+
+---
+
+### 页范围数值框：修「单跑过、连跑必红」的用例间残留
+
+**问题/需求：** 全量 pytest 里唯一的红是 `tests/test_page_range_progress.py::PageRangeSpinBoxTest::test_clicks_elsewhere_reach_the_native_editor`（`lineEdit().hasFocus()` 为假），单跑 PASS、与同文件前一个用例连跑 3/3 必失败。定位＝**用例间残留**：offscreen 平台上 `deleteLater` 不会立刻销毁前一个 top-level 窗口，它仍占着激活态 ⇒ 本用例新 `show()` 的窗口拿不到激活，Qt 就不把焦点交给它的 `QLineEdit`。控件本身经探针证明正常。
+
+**改动要点：** `_spin()` 里补 `spin.activateWindow()`；清理从裸 `deleteLater` 换成 `_close_spin`（`close()` + `deleteLater()` + `processEvents()`）。
+
+**测试：** 判据＝**先用 `git show HEAD:<path>` 导出改前版本复现出同一条失败**（1 failed / 9 passed），再跑新版本连跑 3 次全绿；全量 pytest 1185 passed / 1 skipped / 0 failed。
+
+**涉及文件：** `tests/test_page_range_progress.py`
+
+---
+
+### 软键盘不再随启动自动启用
+
+**问题/需求：** 软键盘（窄栏图标）是"功能开关"型入口，勾选态就是 `pcfg.symbol_keyboard_enabled`。它此前与其他窄栏浮层不同——**每次启动都会按上次会话的值自动启用**（其余浮层有"启动不自动展开"的清账名单），用户要求把软键盘也纳入名单。
+
+**改动要点：** `ui/mainwindow.py::MainWindow` 的启动清账 `for flag in (...)` 名单加入 `symbol_keyboard_enabled`。该字段在 `install_symbol_launcher`（构造 SceneTextManager 时，**早于清账段**）就已写进图标勾选态，所以除清字段外还要把图标复位，否则会出现「图标亮着、开关是关的」；复位走 `toggled`，槽里对此时尚为 `None` 的 `symbol_dock` 是空操作。清账只作用于启动，手点图标仍能正常启用。
+
+**测试：** 真机探针 `tmp/_s18_softkb_startup.py`（**必须窗口模式**，offscreen 起不来 `FramelessWindow`；`config/config.json` 先备份后还原）：模拟上次会话开着键盘构造主窗口 ⇒ 开关与图标都归零、dock 未创建；随后手点开／关仍正确。8 项断言全 PASS。
+
+**涉及文件：** `ui/mainwindow.py`
+
+---
+
 ## 2026-09-17
 
 ### 区域再检测（人工拉框 → 只在框内跑「检测 + OCR」）

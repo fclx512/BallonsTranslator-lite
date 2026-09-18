@@ -42,8 +42,11 @@
 | `scripts/pie_menu_test.py` | 饼菜单/快捷菜单离线功能测试（状态机/命中判定/命令注册，独立进程沙箱配置）；功能已上线，后续加功能卡片等小修小补可复用 | `python scripts/pie_menu_test.py` |
 | `scripts/region_redetect_order.py` | **区域再检测的落点回归台**：把真工程每页的**每个已有框自己**当作拉框区域重跑检测，核对新块是否**连续**落回被替换块原来的下标（依赖"该页顺序已正确"这一功能前提；合成单测锁不到"这片漫画该怎么读"）。两段式——`--detect` 真跑检测并写缓存 `tmp/region_redetect_plans.json`（分钟级，顺带跑端到端核对），不带 `--detect` 则读缓存**离线**判（秒级，只走落点逻辑，不建 ONNX 会话）；`--candidates` 打印候选判据对比表（含被否掉的"逐块各自算"与"折线投影"），改判据前先用它确认新方案真的赢过现役。判据口径与实测数字见 `docs/技术实现/区域再检测_设计与实现.md` §5 | `python scripts/region_redetect_order.py [--project DIR] [--pages A,B] [--detect] [--candidates]` |
 | `scripts/mw_repro.py` | **MainWindow 在线演练台**：拉起真实主窗口（必须窗口模式，offscreen 起不来 FramelessWindow）做模拟复现与交互驱动——真实绘制路径/原生模态框/GC 时机类问题的排查工具。`--scenario group-undo` 跑组化撤销全链路（自动点确认弹窗，延迟须 ≥200ms），`--project` 只读打开真实工程，`--no-show`/`--no-panel`/`--watchdog` 控制形态；faulthandler 常开。起源=确认弹窗 GC 悬空 AV 闪退排查（经验教训 §3.3） | `python scripts/mw_repro.py [--scenario group-undo\|none] [--project DIR] [--pages 2 --blocks 8]` |
+| `scripts/workbench_recalc.py` | **泛用工作台的参数复算台（只读）**：C1 判据命中率／C2 分组口径与阈值敏感度／C3 扩张量候选与可扩空间／C4 队列口径／已驳回链路自检（D28／D30／D33c）／D39 程序筛选器端到端（真机跑一次 OCR）——这些参数是"测出来的"，改判据或调默认值前后各跑一次做对比。六个子命令 `merge`（`--sweep` 加阈值扫描）/`c1`/`expand`/`queue`/`review`/`hook`/`list`，脚本末尾自证样本顶层文件 mtime 未变。实测数字与调参方向见 `docs/技术实现/AI辅助功能_设计与实现.md` 的「长期需要实测调整的参数」节 | `python scripts/workbench_recalc.py merge --project DIR [--sweep]` |
 
 渲染同步回归已迁至 `tests/test_render_sync.py`（pytest/直接运行均可）。
+
+**真机探针**在 `scripts/probes/`（内存归因与释放阶梯、区域再检测真机验收）——那是"测出来的"结论的可复算工具，有真机／模型依赖，前提与每个脚本的期望数字见 `scripts/probes/README.md`。本目录的登记检查只覆盖顶层，子目录自带说明。
 
 ---
 
