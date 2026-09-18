@@ -47,11 +47,12 @@ class SettingsAppPageTest(unittest.TestCase):
         self.assertFalse(hasattr(self.panel, "misc_block"))
         self.assertFalse(hasattr(self.panel, "label_misc"))
 
-    def test_page_count_is_nine(self):
+    def test_page_count_is_ten(self):
         # Modules (Models / Pipeline / LLM Profile) + General (Project /
-        # Typesetting / Interface / Shortcuts / Quick Menus / App).
-        self.assertEqual(self.panel.pageStack.count(), 9)
-        self.assertEqual(len(self.panel._nav_section_to_widget), 9)
+        # Typesetting / Interface / Shortcuts / Quick Menus / App) + the
+        # temporary Workbench page (2026-09-18; 排版方案定了之后并入既有页).
+        self.assertEqual(self.panel.pageStack.count(), 10)
+        self.assertEqual(len(self.panel._nav_section_to_widget), 10)
 
     def test_app_page_carries_both_options(self):
         self.assertTrue(hasattr(self.panel, "ps_path_edit"))
@@ -71,6 +72,31 @@ class SettingsAppPageTest(unittest.TestCase):
         self.assertTrue(pcfg.workbench_confirm_costly)
         self.panel.confirm_costly_checker.setChecked(False)
         self.assertFalse(pcfg.workbench_confirm_costly)
+
+    def test_workbench_temporary_page_writes_both_numbers(self):
+        """临时页（2026-09-18）的两个数值项：初值取自 pcfg，改动回写 pcfg。"""
+        snapshot = (
+            pcfg.workbench_merge_oversize_ratio,
+            pcfg.workbench_expand_px,
+        )
+        self.addCleanup(
+            lambda: (
+                setattr(pcfg, "workbench_merge_oversize_ratio", snapshot[0]),
+                setattr(pcfg, "workbench_expand_px", snapshot[1]),
+            )
+        )
+        self.assertIn("workbench_temp", self.panel._nav_section_to_widget)
+
+        self.panel.merge_oversize_spin.setValue(70)
+        self.assertAlmostEqual(pcfg.workbench_merge_oversize_ratio, 0.70, places=4)
+        self.panel.expand_default_spin.setValue(16)
+        self.assertEqual(pcfg.workbench_expand_px, 16)
+
+        # 与设置初值对齐：改成 85% / 10 后回到默认
+        self.panel.merge_oversize_spin.setValue(85)
+        self.panel.expand_default_spin.setValue(10)
+        self.assertAlmostEqual(pcfg.workbench_merge_oversize_ratio, 0.85, places=4)
+        self.assertEqual(pcfg.workbench_expand_px, 10)
 
     def test_pipeline_panels_no_longer_carry_them(self):
         self.assertFalse(hasattr(self.panel.inpaint_config_panel, "ps_path_edit"))

@@ -1,6 +1,6 @@
 """框级 AI 动作（批次 C）：注册表 + 上下文组装 + 单轮无工具 LLM 调用。
 
-设计见 docs/技术实现/AI辅助功能_规划.md §7：调用结构比 AgentTranslator
+设计见 docs/技术实现/AI辅助功能_设计与实现.md 的「框级动作」：调用结构比 AgentTranslator
 的收敛式 loop 更轻一级——无工具、单轮、代码预组装上下文、固定出口；
 边界靠"根本没有工具"结构保证。AI 只出草稿，写回由用户在确认卡片
 显式「应用」（人工在环总纲）。
@@ -15,7 +15,7 @@
 - OCR 校正送**按行透视纠正**的拼图（`TextBlock.get_transformed_region`，
   与 OCR 管线同一套裁剪），而不是整块轴对齐外接框；逐行附上现有 OCR 文本，
   回复按行对齐后用户可逐行取舍。
-- OCR 置信度分数不进 prompt（噪声，规划 §8.2）；指示/疑点标签的语义
+- OCR 置信度分数不进 prompt（噪声，设计 §4）；指示/疑点标签的语义
   以指令文本进 prompt。
 """
 
@@ -96,7 +96,7 @@ def page_data_needs_sync(blk_list, items) -> bool:
 def build_context_lines(
     blk_list: List[TextBlock], blk_idx: int, radius: int = 2
 ) -> List[str]:
-    """邻近块原文（上下文组装半径 ±radius，规划 §7 代码预组装）。"""
+    """邻近块原文（上下文组装半径 ±radius，设计 §5 的代码预组装）。"""
     lines = []
     for ii in range(
         max(0, blk_idx - radius), min(len(blk_list), blk_idx + radius + 1)
@@ -109,7 +109,7 @@ def build_context_lines(
 
 
 def _hint_section(hint: str) -> str:
-    """用户补充要求段（确定性输入：用户最懂具体情景，见规划 §8.12）。"""
+    """用户补充要求段（确定性输入：用户最懂具体情景，见设计 §5）。"""
     hint = (hint or "").strip()
     if not hint:
         return ""

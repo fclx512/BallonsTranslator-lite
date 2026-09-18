@@ -513,6 +513,17 @@ class ProgramConfig(Config):
     # 弹窗内「不再提示」或设置面板「应用 → Workbench」可关闭/恢复。
     # 顺序只是推荐与提示、不门禁——用户始终可以任意跳转。
     workbench_warn_skip_order: bool = True
+    # 泛用工作台 · 批量合并的「误聚」阈值（规划 D33d）：组包围盒任一边超过
+    # 页面对应边的这个比例即判误聚（默认不勾选 + 警示标，不静默剔除）。
+    # 0.85 是实测定稿——样本 435 组里只命中 2 组（都是跨栏大组），且阈值不敏感
+    # （0.5~0.9 之间组数变化 ≤4 组）。本项即 D33d 要求的「设置内参数接口」。
+    workbench_merge_oversize_ratio: float = 0.85
+    # 泛用工作台 · 批量框扩张的默认量（规划 D5／C3，2026-09-18 拍板定值）：
+    # 单位 px、每边各自扩张。取 10 的依据——合并后可扩空间中位 89px，10px 时
+    # 88% 的框四边都能完整扩张、宽 +28%／高 +17%（tmp/泛用工作台_实测报告）。
+    # 引擎自身仍**不设默认值**（要求调用方显式给），这里只是工作台输入框初值；
+    # D5 的「碰到邻框即停」上限由 ui/batch_expand.py 在引擎侧执行。
+    workbench_expand_px: int = 10
 
     # ── Right-click context menu customization ─────────────
     context_menu_order: List[str] = field(default_factory=lambda: [

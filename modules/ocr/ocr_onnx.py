@@ -18,7 +18,7 @@ from modules.ocr.base import DEVICE_SELECTOR, OCRBase, TextBlock, register_OCR
 from utils.block_tags import apply_ocr_confidence_tag
 
 # 「OCR 置信度低」自动挂标阈值：onnx score 语义，初版保守取值，
-# 待实机分数分布后调整（规划 §8.2；勿调高收录过滤阈值 0.3——那会丢行缺字）
+# 待实机分数分布后调整（设计 §4；勿调高收录过滤阈值 0.3——那会丢行缺字）
 OCR_CONF_TAG_THRESHOLD = 0.6
 
 # ── Paths ────────────────────────────────────────────────────────────────────

@@ -829,15 +829,24 @@ class MainWindow(mainwindow_cls):
 
         # 启动不自动展开窄栏浮层面板：清掉上次会话的开合记忆，浮层
         # 只随窄栏图标手动开（on_textpanel_visibility 首次可见时按
-        # pcfg.*_dock_open 复活上次打开的浮层）
+        # pcfg.*_dock_open 复活上次打开的浮层）。软键盘的开合记忆就是
+        # 它自己的功能开关 pcfg.symbol_keyboard_enabled——同属"不在启动
+        # 时自动生效"一类，一并清掉；该字段在 install_symbol_launcher
+        # （本段之前）已写进图标勾选态，故还要把图标复位，否则会出现
+        # 「图标亮着但开关是关的」。复位走 toggled，槽里对 None 的
+        # symbol_dock 是空操作。
         for flag in (
             "annotation_dock_open",
             "emphasis_dock_open",
             "transform_dock_open",
             "history_dock_open",
             "inpaint_history_dock_open",
+            "symbol_keyboard_enabled",
         ):
             setattr(pcfg, flag, False)
+        _symbol_launcher = self.textPanel.formatpanel.symbol_launcher
+        if _symbol_launcher is not None and _symbol_launcher.isChecked():
+            _symbol_launcher.setChecked(False)
 
         self.module_manager = module_manager = ModuleManager(self.imgtrans_proj)
         module_manager.finish_translate_page.connect(self.finishTranslatePage)
@@ -4517,7 +4526,7 @@ class MainWindow(mainwindow_cls):
 
         走 ``pageList`` 的整条链路（``pageListCurrentItemChanged``）而不是
         ``ui/mainwindow.py::MainWindow`` 的 ``_on_stylemgr_navigate``——前者
-        含脏页惰性重渲，跳过去看到的就是最终画面（复核文档 §9.3 的比较），
+        含脏页惰性重渲，跳过去看到的就是最终画面（见设计 §8 的跳转链路），
         后者只切页与选中块、脏页会显示成过期结果图。
         """
         proj = self.imgtrans_proj

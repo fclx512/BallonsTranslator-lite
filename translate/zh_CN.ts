@@ -1317,6 +1317,34 @@
             <source>Warn me when I jump to a later workbench step while an earlier cleanup step still has unprocessed items. The order is a recommendation only — jumping is always allowed.</source>
             <translation>跳到工作台靠后的步骤、而更早的清理步骤还有未处理条目时提示我。顺序只是推荐，始终允许跳转。</translation>
         </message>
+        <message>
+            <source> px</source>
+            <translation> px</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;In &lt;b&gt;Merge adjacent blocks&lt;/b&gt;, a group is flagged when its bounding box exceeds this share of the page on any side. Flagged groups are &lt;b&gt;never dropped&lt;/b&gt; — they are only left unchecked and marked, so you decide. &lt;b&gt;85%&lt;/b&gt; is the measured default: it flagged only the two cross-column groups in the 94-page sample.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;在「合并相邻框」里，组包围盒任一边超过页面对应边的该比例即被标记。被标记的组&lt;b&gt;不会&lt;/b&gt;被剔除——只是默认不勾选并加警示标，由你决定。默认 &lt;b&gt;85%&lt;/b&gt;：94 页样本里只标出了那两个跨栏大组。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Initial value of the batch &lt;b&gt;grow blocks&lt;/b&gt; amount: every side of a text box grows by this many pixels and stops at the neighbouring box. &lt;b&gt;10 px&lt;/b&gt; is the measured default (88% of the boxes grow on all four sides, +28% width / +17% height). It is only a starting value — the task always shows the numbers and asks before it runs.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;工作台「批量框扩张」的扩张量初值：文本框每边扩这么多像素，碰到邻框即停。&lt;b&gt;10 px&lt;/b&gt; 是实测默认值（88% 的框四边都能完整扩张，宽 +28%／高 +17%）。它只是起点——执行前一定会先把数字列出来并弹窗确认。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Batch Tasks</source>
+            <translation>批量任务</translation>
+        </message>
+        <message>
+            <source>Default grow amount</source>
+            <translation>默认扩张量</translation>
+        </message>
+        <message>
+            <source>False grouping threshold</source>
+            <translation>误聚阈值</translation>
+        </message>
+        <message>
+            <source>Workbench (temporary)</source>
+            <translation>工作台（临时）</translation>
+        </message>
     </context>
     <context>
         <name>DependencyDialog</name>

@@ -15,6 +15,9 @@ transformed visual outline reported by ``TextItemGeometryController``.
 * Corner drags freeze the drag coordinate system through
   ``capture_scene_to_source_mapper()`` and write the source rectangle back;
   the opposite handle is anchored so the dragged corner is the only mover.
+  Holding **Alt** switches the anchor to the box centre (PS-style): pressing
+  or releasing it mid-drag converts the displacement already dragged into the
+  new anchor's terms, live, without moving the cursor.
 * Rotation pivots on ``visual_rotation_center_in_scene()``.
 
 Undo semantics are unchanged: the item emits ``reshaped``/``rotated`` on drag
@@ -28,7 +31,7 @@ API adaptations (``blk_item.startReshape()/endReshape()``, the
 
 import math
 
-from qtpy.QtCore import QPoint, QPointF, QRectF, Qt
+from qtpy.QtCore import QEvent, QObject, QPoint, QPointF, QRectF, Qt
 from qtpy.QtGui import (
     QBrush,
     QColor,
@@ -39,6 +42,7 @@ from qtpy.QtGui import (
     QTransform,
 )
 from qtpy.QtWidgets import (
+    QApplication,
     QGraphicsItem,
     QGraphicsRectItem,
     QGraphicsSceneHoverEvent,
@@ -268,7 +272,17 @@ class ControlBlockItem(QGraphicsRectItem):
             if self.visible_rect.contains(event.pos()):
                 self.ctrl.reshaping = True
                 self.drag_mode = self.DRAG_RESHAPE
-                self.ctrl.beginResize(self.idx, event.scenePos())
+                # 按住 Alt 拖手柄 = 以框中心为基准缩放（规划 D5，借鉴 PS 的
+                # Alt 拖拽；不带 Alt 仍是"拖哪条边/角、对侧钉住"）。这里读的
+                # 只是起手那一刻的状态——拖拽途中改按/松 Alt 由
+                # setResizeCenterAnchor 当场重算（键鼠两条路都接）。
+                self.ctrl.beginResize(
+                    self.idx,
+                    event.scenePos(),
+                    center_anchor=bool(
+                        event.modifiers() & Qt.KeyboardModifier.AltModifier
+                    ),
+                )
                 blk_item.startReshape()
             else:
                 self.drag_mode = self.DRAG_ROTATE
@@ -304,6 +318,13 @@ class ControlBlockItem(QGraphicsRectItem):
         if blk_item is None:
             return
         if self.drag_mode == self.DRAG_RESHAPE:
+            # Alt 是即时修饰键（D5，语义同 PS）：按下/松开都把**当前已拖出的
+            # 位移**当场换算成新基准下的量。换基准这一步由
+            # setResizeCenterAnchor 用上一次的光标位置自己重算一遍；鼠标不动
+            # 时走键盘事件那条路（onModifierKeyEvent），所以这里每帧重读。
+            self.ctrl.setResizeCenterAnchor(
+                bool(event.modifiers() & Qt.KeyboardModifier.AltModifier)
+            )
             self.ctrl.resizeFromScene(self.idx, event.scenePos())
         elif self.drag_mode == self.DRAG_ROTATE:
             self.ctrl.rotateFromScene(
@@ -339,6 +360,38 @@ class ControlBlockItem(QGraphicsRectItem):
         return super().mouseReleaseEvent(event)
 
 
+class _ResizeModifierWatcher(QObject):
+    """缩放拖拽存续期间旁听键盘，让 Alt 的按下/松开**当帧**生效。
+
+    Alt 是即时修饰键（规划 D5）：按下就要把**已经拖出来的位移**换算成中心
+    基准下的量，松开就立刻回到"对侧手柄钉住"（PS 的 Alt 拖拽语义），两者都
+    得发生在按键那一刻——鼠标不动时 Qt 不发移动事件，所以必须有键盘入口。
+
+    走 QApplication 级事件过滤器是为了**不改焦点**：手柄 item 不去抢焦点
+    （抢了会顶掉画布的 Alt+WASD 切块），过滤器一律 `return False`，只旁听
+    不拦截。``TextBlkShapeControl`` 是 ``QGraphicsRectItem``（不是 QObject），
+    不能自己当过滤器，故用这个小 QObject 代劳；一次手势装一次、松手即卸。
+    """
+
+    def __init__(self, control: "TextBlkShapeControl") -> None:
+        super().__init__()
+        self._control = control
+
+    def eventFilter(self, watched, event) -> bool:
+        if event.type() in (
+            QEvent.Type.KeyPress,
+            QEvent.Type.KeyRelease,
+        ):
+            try:
+                self._control.onModifierKeyEvent(event)
+            except RuntimeError:
+                # 拖拽期间画布/文本项被销毁（关项目、关窗口）：底层 C++ 对象
+                # 已经不在，直接收摊。**必须吞掉**——PyQt6 里从事件过滤器逃出
+                # 的异常会走 qFatal 直接终止进程。
+                self._control._stopModifierWatch()
+        return False
+
+
 class TextBlkShapeControl(QGraphicsRectItem):
     """Render and manipulate the active text item's visual geometry."""
 
@@ -357,6 +410,11 @@ class TextBlkShapeControl(QGraphicsRectItem):
         self._updating_bounds = False
         self._resize_opposite_scene = None
         self._resize_opposite_idx = None
+        self._resize_center_anchor = False
+        self._resize_handle_idx = None
+        self._resize_initial_points = None
+        self._resize_last_scene_pos = None
+        self._modifier_watcher = None
         self._resize_initial_local = None
         self._resize_initial_abs = None
         self._resize_initial_source_handle = None
@@ -437,6 +495,17 @@ class TextBlkShapeControl(QGraphicsRectItem):
     @classmethod
     def _item_handle_points_in_scene(cls, item: TextBlkItem):
         return item.geometry_controller.visual_handle_points_in_scene()
+
+    @staticmethod
+    def _handle_points_center(points) -> QPointF:
+        """一组手柄点的质心——矩形框场景下就是框中心（D5 的中心锚点）。"""
+        if not points:
+            return QPointF()
+        count = len(points)
+        return QPointF(
+            sum(point.x() for point in points) / count,
+            sum(point.y() for point in points) / count,
+        )
 
     def setBlkItem(self, blk_item: TextBlkItem):
         if (
@@ -844,16 +913,32 @@ class TextBlkShapeControl(QGraphicsRectItem):
             ctrlblock.resetInteraction()
             ctrlblock.show()
 
-    def beginResize(self, idx: int, pointer_scene: QPointF = None):
+    def beginResize(
+        self, idx: int, pointer_scene: QPointF = None, center_anchor: bool = False
+    ):
+        """开始拖拽缩放。
+
+        ``center_anchor`` 为真时进入 **以中心为基准** 的模式（规划 D5：按住
+        Alt 拖手柄，借鉴 PS 的习惯）：被拖的那条边/角动多少，对侧镜像动多少，
+        中心全程不动；为假时是既有语义——对侧手柄钉在原位。
+
+        两种模式的**参考点都取起手那一刻的几何**（起手框中心／起手对角手柄
+        位置）：拖拽途中按下或松开 Alt 只是换用另一个参考点把当前光标位置
+        重算一遍（``setResizeCenterAnchor``）——被拖的手柄始终钉在光标上，
+        所以"已经拖出来的位移"会原样换算成新基准下的变换量，这就是 PS 的
+        手感。
+        """
+        self._resize_center_anchor = bool(center_anchor)
+        self._resize_handle_idx = idx
         if pointer_scene is not None:
+            # 跟手补偿仍以**手柄位置**为锚（拖多少动多少）；中心模式只改
+            # 「哪一点被钉住」——见下面的 _resize_opposite_*。
             self._beginProxyDrag(idx, pointer_scene)
+            # 存**原始**光标位置（不是代理映射后的）：再喂回 resizeFromScene
+            # 时还要过一次同一条映射，喂输出回去就不幂等了。
+            self._resize_last_scene_pos = QPointF(pointer_scene)
         item = self.blk_item
-        self._resize_opposite_idx = (idx + 4) % 8
-        self._resize_opposite_scene = QPointF(
-            self._item_handle_points_in_scene(item)[
-                self._resize_opposite_idx
-            ]
-        )
+        self._resize_initial_points = self._item_handle_points_in_scene(item)
         self._resize_initial_local = QRectF(item.logical_unpadded_rect())
         self._resize_initial_abs = QRectF(item.absBoundingRect(qrect=True))
         self._resize_initial_source_handle = QPointF(
@@ -862,18 +947,113 @@ class TextBlkShapeControl(QGraphicsRectItem):
         self._resize_previous_source = QPointF(
             self._resize_initial_source_handle
         )
+        # 坐标映射只冻结这一次：一次拖拽只用一个坐标系，映射跟着拖动中的
+        # 几何走会变成反馈（见 capture_scene_to_source_mapper 的说明）。
         self._resize_scene_to_source = (
             item.geometry_controller.capture_scene_to_source_mapper()
         )
+        self._pinResizeAnchor(idx)
+        self._startModifierWatch()
+
+    def _pinResizeAnchor(self, idx: int) -> None:
+        """把「被钉住的那一点」定到**起手那一刻**的几何。
+
+        中心模式＝起手时的框中心；默认模式＝起手时对角手柄的位置。两种模式各
+        有一个参考点，切换 Alt 只换参考点、不换参考系：被拖的手柄在两种模式下
+        都落在光标上（跟手误差恒为 0），差别只在另一侧跟着动还是钉住。
+        """
+        points = self._resize_initial_points
+        if not points and self.blk_item is not None:
+            points = self._item_handle_points_in_scene(self.blk_item)
+        if not points:
+            return
+        if self._resize_center_anchor:
+            # 中心模式下没有"对角手柄"：锚点就是起手时的框中心。
+            self._resize_opposite_idx = None
+            self._resize_opposite_scene = self._handle_points_center(points)
+        else:
+            self._resize_opposite_idx = (idx + 4) % 8
+            self._resize_opposite_scene = QPointF(
+                points[self._resize_opposite_idx]
+            )
+
+    def setResizeCenterAnchor(self, center_anchor: bool) -> bool:
+        """切换「以中心为基准」；返回是否真的换了模式。
+
+        规划 D5：Alt 是**即时**修饰键，语义同 PS——切换的瞬间就用新的参考点
+        把**当前这一帧重算一遍**（用上一次的光标位置），于是：
+
+        * 按下 Alt：已经拖出来的位移换算成中心基准的量 ⇒ 被拖的手柄仍留在
+          光标上、对侧当场镜像出去（几何立刻跳成对称的）；
+        * 松开 Alt：同一位移换回"对侧手柄钉住" ⇒ 当场跳回单侧增长。
+
+        参考点与坐标映射都取自**起手那一刻**（不做任何重定基），所以来回按
+        Alt 既不累积误差也不漂移；鼠标不动时照样换算——键盘那条路由
+        ``onModifierKeyEvent`` 进来（鼠标不动时 Qt 不发移动事件）。
+        """
+        center_anchor = bool(center_anchor)
+        if center_anchor == self._resize_center_anchor:
+            return False
+        self._resize_center_anchor = center_anchor
+        if self._resize_handle_idx is None or self.blk_item is None:
+            # 没有进行中的缩放拖拽：只记状态，不重算几何（按下手柄那一刻
+            # 读到的修饰键才是这条手势的起点）。
+            return False
+        self._pinResizeAnchor(self._resize_handle_idx)
+        if self._resize_last_scene_pos is not None:
+            self.resizeFromScene(
+                self._resize_handle_idx, self._resize_last_scene_pos
+            )
+        return True
 
     def finishResize(self) -> None:
+        self._stopModifierWatch()
         self._resize_opposite_scene = None
         self._resize_opposite_idx = None
+        self._resize_center_anchor = False
+        self._resize_handle_idx = None
+        self._resize_initial_points = None
+        self._resize_last_scene_pos = None
         self._resize_initial_local = None
         self._resize_initial_abs = None
         self._resize_initial_source_handle = None
         self._resize_previous_source = None
         self._resize_scene_to_source = None
+
+    def _startModifierWatch(self) -> None:
+        if self._modifier_watcher is not None:
+            return
+        app = QApplication.instance()
+        if app is None:
+            return
+        self._modifier_watcher = _ResizeModifierWatcher(self)
+        app.installEventFilter(self._modifier_watcher)
+
+    def _stopModifierWatch(self) -> None:
+        watcher, self._modifier_watcher = self._modifier_watcher, None
+        if watcher is None:
+            return
+        app = QApplication.instance()
+        if app is not None:
+            app.removeEventFilter(watcher)
+        watcher.deleteLater()
+
+    def onModifierKeyEvent(self, event) -> None:
+        """键盘事件到达时把 Alt 的当前状态同步到缩放基准（当帧生效）。
+
+        只看 ``Key_Alt`` 本身，不看 ``event.modifiers()``：Qt 文档写明
+        ``modifiers()`` 返回的是**事件发生之前**的状态，所以"按下 Alt"这个
+        事件里读不到 ``AltModifier``、而"松开 Alt"里反而读得到——用 key/type
+        判断才两头都对。非 Alt 的按键只在修饰键仍含 Alt 时保持中心基准。
+        """
+        if self._resize_handle_idx is None:
+            return
+        if event.key() == Qt.Key.Key_Alt:
+            self.setResizeCenterAnchor(event.type() == QEvent.Type.KeyPress)
+            return
+        self.setResizeCenterAnchor(
+            bool(event.modifiers() & Qt.KeyboardModifier.AltModifier)
+        )
 
     def resizeFromScene(self, idx: int, scene_pos: QPointF):
         if (
@@ -888,6 +1068,9 @@ class TextBlkShapeControl(QGraphicsRectItem):
             return
 
         item = self.blk_item
+        # 记原始光标位置：切换 Alt 时要拿它把当前这一帧按新基准重算一遍
+        # （存代理映射**之前**的值，重新喂进来才过同一条映射）。
+        self._resize_last_scene_pos = QPointF(scene_pos)
         scene_pos = self._proxySceneTarget(idx, scene_pos)
         initial_local = self._resize_initial_local
         mouse_local = self._resize_scene_to_source(
@@ -901,14 +1084,30 @@ class TextBlkShapeControl(QGraphicsRectItem):
         bottom = initial_local.bottom()
         minimum = 1.0
 
-        if idx in (0, 6, 7):
-            left = min(mouse_local.x(), right - minimum)
-        elif idx in (2, 3, 4):
-            right = max(mouse_local.x(), left + minimum)
-        if idx in (0, 1, 2):
-            top = min(mouse_local.y(), bottom - minimum)
-        elif idx in (4, 5, 6):
-            bottom = max(mouse_local.y(), top + minimum)
+        if self._resize_center_anchor:
+            # D5：以中心为基准 —— 被拖的那一侧移动多少，对侧镜像移动多少
+            center = initial_local.center()
+            if idx in (0, 6, 7):
+                left = min(mouse_local.x(), center.x() - minimum)
+                right = 2 * center.x() - left
+            elif idx in (2, 3, 4):
+                right = max(mouse_local.x(), center.x() + minimum)
+                left = 2 * center.x() - right
+            if idx in (0, 1, 2):
+                top = min(mouse_local.y(), center.y() - minimum)
+                bottom = 2 * center.y() - top
+            elif idx in (4, 5, 6):
+                bottom = max(mouse_local.y(), center.y() + minimum)
+                top = 2 * center.y() - bottom
+        else:
+            if idx in (0, 6, 7):
+                left = min(mouse_local.x(), right - minimum)
+            elif idx in (2, 3, 4):
+                right = max(mouse_local.x(), left + minimum)
+            if idx in (0, 1, 2):
+                top = min(mouse_local.y(), bottom - minimum)
+            elif idx in (4, 5, 6):
+                bottom = max(mouse_local.y(), top + minimum)
 
         new_local = QRectF(QPointF(left, top), QPointF(right, bottom))
         initial_abs = self._resize_initial_abs
@@ -920,9 +1119,15 @@ class TextBlkShapeControl(QGraphicsRectItem):
         )
         item.setRect(new_abs)
 
-        moved_anchor = self._item_handle_points_in_scene(item)[
-            self._resize_opposite_idx
-        ]
+        if self._resize_center_anchor:
+            # 中心模式下把"当前中心"钉回初始中心的位置
+            moved_anchor = self._handle_points_center(
+                self._item_handle_points_in_scene(item)
+            )
+        else:
+            moved_anchor = self._item_handle_points_in_scene(item)[
+                self._resize_opposite_idx
+            ]
         parent = item.parentItem()
         if parent is None:
             parent_delta = self._resize_opposite_scene - moved_anchor

@@ -2461,6 +2461,56 @@ class ConfigPanel(Widget):
             label_app, config_mgmt_widget, object_name="GroupGeneral"
         )
 
+        # === Workbench settings — temporary page (2026-09-18) ===
+        # 先把工作台相关的两个数值设置项集中放在一个临时页里；排版方案定了
+        # 之后把这两项并入既有页面即可（删本节 + 导航项，把控件挪走）。
+        self.workbench_settings_group = PanelGroupBox(
+            self.tr("Workbench (temporary)")
+        )
+        self.workbench_settings_group.setProperty("cfgPage", True)
+        self.workbench_settings_group.setObjectName("GroupWorkbenchSettings")
+        workbench_vlayout = self.workbench_settings_group.contentLayout()
+        workbench_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
+        workbench_vlayout.setSpacing(8)
+
+        workbench_vlayout.addWidget(_section_header(self.tr("Batch Tasks")))
+
+        self.merge_oversize_spin = NoArrowsSpinBox()
+        self.merge_oversize_spin.setRange(10, 100)
+        self.merge_oversize_spin.setSuffix("%")
+        self.merge_oversize_spin.setValue(
+            int(round(pcfg.workbench_merge_oversize_ratio * 100))
+        )
+        self.merge_oversize_spin.setFixedWidth(CONFIG_COMBOBOX_SHORT)
+        self.merge_oversize_spin.valueChanged.connect(
+            lambda v: setattr(pcfg, "workbench_merge_oversize_ratio", v / 100.0)
+        )
+        workbench_vlayout.addWidget(
+            ConfigFormRow(
+                self.tr("False grouping threshold"),
+                self.merge_oversize_spin,
+                note=self.tr("<p>In <b>Merge adjacent blocks</b>, a group is flagged when its bounding box exceeds this share of the page on any side. Flagged groups are <b>never dropped</b> — they are only left unchecked and marked, so you decide. <b>85%</b> is the measured default: it flagged only the two cross-column groups in the 94-page sample.</p>"),
+            )
+        )
+
+        self.expand_default_spin = NoArrowsSpinBox()
+        self.expand_default_spin.setRange(0, 500)
+        self.expand_default_spin.setSuffix(self.tr(" px"))
+        self.expand_default_spin.setValue(int(pcfg.workbench_expand_px))
+        self.expand_default_spin.setFixedWidth(CONFIG_COMBOBOX_SHORT)
+        self.expand_default_spin.valueChanged.connect(
+            lambda v: setattr(pcfg, "workbench_expand_px", v)
+        )
+        workbench_vlayout.addWidget(
+            ConfigFormRow(
+                self.tr("Default grow amount"),
+                self.expand_default_spin,
+                note=self.tr("<p>Initial value of the batch <b>grow blocks</b> amount: every side of a text box grows by this many pixels and stops at the neighbouring box. <b>10 px</b> is the measured default (88% of the boxes grow on all four sides, +28% width / +17% height). It is only a starting value — the task always shows the numbers and asks before it runs.</p>"),
+            )
+        )
+
+        self._add_page(self.workbench_settings_group)
+
         # === Navigation tree (upstream-style) ===
         self.configTable = ConfigTable()
         self.configTable.setObjectName("ConfigNavList")
@@ -2487,6 +2537,11 @@ class ConfigPanel(Widget):
             general_header, label_app, "config_mgmt",
             self.config_mgmt_block.section_widget,
         )
+        # 临时页（2026-09-18）：工作台的两个数值设置项集中放这里，排版后续再议
+        self.configTable.addSection(
+            general_header, self.tr("Workbench (temporary)"), "workbench_temp",
+            self.workbench_settings_group,
+        )
 
         # Expand all headers so children are visible
         self.configTable.expandAll()
@@ -2502,6 +2557,7 @@ class ConfigPanel(Widget):
             "shortcuts": self.shortcuts_editor,
             "quick_menus": self.quick_menus_editor,
             "config_mgmt": self.config_mgmt_block.section_widget,
+            "workbench_temp": self.workbench_settings_group,
         }
 
         # Select first section by default

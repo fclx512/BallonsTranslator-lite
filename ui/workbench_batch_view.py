@@ -9,7 +9,7 @@
 3. **执行行**：任务参数控件（由 ``ui/workbench_tasks.py::BatchTask.options_spec``
    描述）＋ 任务额外动作 ＋ 执行按钮；无勾选时执行按钮禁用。
 
-界面**只管三件事**（复核文档 §4.2）：调 ``plan`` 填列表／算数字 → 收勾选 →
+界面**只管三件事**（设计 §8）：调 ``plan`` 填列表／算数字 → 收勾选 →
 把标识交回 ``apply``。它不写几何、不改 ``proj.pages``、不绕开
 ``ui/batch_ops.py``——那些都在 ``ui/workbench_tasks.py`` 与各引擎里。
 
@@ -46,7 +46,7 @@ _ROLE_THEME_KEYS = {
     "new": "@successColor",
 }
 
-# 报告里的错误码 → 用户可见文案（复核文档 §4.2 的取值表；不自己猜含义）。
+# 报告里的错误码 → 用户可见文案（口径见设计 §13；不自己猜含义）。
 # 字面量定义处显式标注翻译上下文（i18n 模块级翻译表规则）。
 _ERROR_TEXT = {
     "cancelled": QCoreApplication.translate(

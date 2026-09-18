@@ -56,9 +56,19 @@ class PageRangeSpinBoxTest(unittest.TestCase):
         spin.setValue(7)
         spin.setFixedWidth(82)
         spin.show()
+        # 用例间隔离：`deleteLater` 在 offscreen 平台上不会立刻销毁上一个
+        # top-level 窗口，它仍是活动窗口 ⇒ 本用例新 `show()` 的窗口拿不到激活
+        # 态，Qt 就不把焦点交给它的 QLineEdit（`clicks_elsewhere` 因此必红）。
+        # 所以清理时既 `close()` 又 `deleteLater()`，并在返回前显式激活本窗口。
+        spin.activateWindow()
         self.app.processEvents()
-        self.addCleanup(spin.deleteLater)
+        self.addCleanup(self._close_spin, spin)
         return spin
+
+    def _close_spin(self, spin):
+        spin.close()
+        spin.deleteLater()
+        self.app.processEvents()
 
     def test_chevron_buttons_step_in_place(self):
         spin = self._spin()

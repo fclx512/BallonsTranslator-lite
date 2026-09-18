@@ -1,4 +1,4 @@
-"""泛用工作台（规划见 docs/技术实现/泛用工作台_规划.md，本文件＝批次 D 的界面层）。
+"""泛用工作台（设计见 docs/技术实现/AI辅助功能_设计与实现.md 的「工作台」部分，本文件＝界面层）。
 
 **定位**：工作台是**任务容器**，不是聊天窗（D19 砍掉 Chat；D2 起就不做通用
 对话）。六个任务共用一套三段结构（D20）——
@@ -12,7 +12,7 @@
    审批图——D23；术语／剧情见本文件的两个草稿页）。
 3. **执行／写回**：无候选时禁用；批量执行前一律弹窗告知后果（D27）。
 
-**批量任务的接线纪律**（复核文档 §4.2／§4.4）：界面只做"调 ``plan``→收勾选
+**批量任务的接线纪律**（设计 §8／§18）：界面只做"调 ``plan``→收勾选
 →把标识交回 ``apply``"，不自己写几何、不自己改 ``proj.pages``、不绕开
 ``ui/batch_ops.py``；引擎与适配层在 ``ui/workbench_tasks.py``（Qt-free）与
 四个 ``ui/batch_*.py``。批量事务外壳（D35 版本 + D40 五步）在这里建好并
@@ -87,7 +87,7 @@ from ui.workbench_tasks import (
 
 logger = logging.getLogger("glossary_agent_panel")
 
-# 任务导航顺序（规划 §3／D16）：①–④「问题清理」任务族 → ⑤术语 ⑥剧情。
+# 任务导航顺序（设计 §8／D16）：①–④「问题清理」任务族 → ⑤术语 ⑥剧情。
 # 只有前四项参与跳步提示计数（D37）。
 WORKBENCH_ORDER = (
     MISREAD,
@@ -717,7 +717,7 @@ class GlossaryAgentPanel(QWidget):
         return window
 
     def _batch_op(self):
-        """批量事务外壳：落盘 + 版本 + D40 前置对齐（复核文档 §4.2 的必传项）。"""
+        """批量事务外壳：落盘 + 版本 + D40 前置对齐（设计 §8）。"""
         from ui.batch_ops import BatchOperation
 
         window = self._mainwindow()

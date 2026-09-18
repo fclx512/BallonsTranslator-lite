@@ -1,7 +1,7 @@
 """块级标签体系：类型注册表 + 块标签读写 + OCR 置信度／误识别自动挂标。
 
-设计见 docs/技术实现/AI辅助功能_规划.md §8.3/§8.7 与
-docs/技术实现/泛用工作台_规划.md（D1／D2／D28／D38／D39）：
+设计见 docs/技术实现/AI辅助功能_设计与实现.md 的「标签数据模型」「程序筛选器」两节
+与「决策一览」（D1／D2／D28／D38／D39）：
 
 - 标签 = 块的持久属性 ``TextBlock.tags``（dict，键为类型 id），
   随 ``TextBlock.to_dict``（vars 全量导出）自动随项目 JSON 保存。
@@ -76,7 +76,7 @@ MANUAL_TAG_DEFS = [t for t in TAG_DEFS if not t.program_only]
 # 疑点优先：徽标取色与同类并挂取保守动作时按此排序
 NATURE_PRIORITY = {"doubt": 0, "directive": 1}
 
-# 指示标签 → 批量管线翻译指令（LLM prompt，不需翻译；规划 §8.3 消费时机）。
+# 指示标签 → 批量管线翻译指令（LLM prompt，不需翻译；设计 §3 的消费时机）。
 # 疑点标签不阻塞自动管线，不在此表。
 DIRECTIVE_INSTRUCTIONS = {
     "handwritten": (
@@ -196,7 +196,7 @@ def prune_program_tags_after_source_edit(blk: TextBlock, panel_text: str) -> int
     ``panel_text`` 与该块**数据层原文**不一致 ＝ 存在尚未落盘的人工编辑，
     此时清除该块全部程序来源标签（含已驳回条目）；两侧一致则是程序性
     面板回写（例如合并命令把并集文本同步回面板），**不清**——合并的标签
-    归组语义见规划 D33c（并集保留）。
+    归组语义见设计 §15 的 D33（并集保留）。
 
     返回清除的条目数（未触发或无可清条目时为 0）。
     """
@@ -218,7 +218,7 @@ def _program_entry_writable(blk: TextBlock, tag_id: str) -> bool:
 def apply_ocr_confidence_tag(
     blk: TextBlock, score: Optional[float], threshold: float
 ) -> None:
-    """按识别分数维护「OCR 置信度低」程序标签（分数不喂 AI，见规划 §8.2）。
+    """按识别分数维护「OCR 置信度低」程序标签（分数不喂 AI，见设计 §4）。
 
     - ``score`` 取该块各行的**最差**分数（min，由调用方聚合）；
     - 人工确认过的标签（source != program）不受程序覆写；

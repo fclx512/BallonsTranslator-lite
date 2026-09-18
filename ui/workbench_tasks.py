@@ -1,4 +1,4 @@
-"""泛用工作台的**批量任务适配层**（规划 D20／D27；接线清单见复核文档 §4.2）。
+"""泛用工作台的**批量任务适配层**（D20／D27；接线清单见设计 §8）。
 
 工作台把六个任务放进同一个容器：前四项是「问题清理」任务族的批量任务
 （误识别清理／合并相邻框／框扩张／简单背景修复），后两项是既有的
@@ -13,14 +13,15 @@
 （只读 ``plan`` ＋ 整批 ``apply``），界面据此只做三件事——填列表／算数字、
 收勾选、把标识传回去；把"哪个引擎、哪些字段"的差异收在这里，界面就
 不必为每个任务写一份。**界面不自己写几何判据、不自己改
-``proj.pages``、不绕开 ``ui/batch_ops.py``**（复核文档 §4.2），本模块同样：
+``proj.pages``、不绕开 ``ui/batch_ops.py``**（设计 §8），本模块同样：
 唯一的几何动作是审批截图的外扩，复用
 ``utils/block_geometry.py::expand_limited``（与引擎同一份实现）。
 
 **默认值一律来自引擎的 plan**，界面不自作主张：合并的默认勾选＝非误聚组
-（D33d）、误识别的默认勾选＝未驳回块（D28）、扩张量**没有默认值**
-（D5／复核文档 §4.3：必须由用户给——``ExpandTask.plan`` 在扩张量为 0 时
-直接返回空列表，界面因此没有可勾选的行、执行按钮保持禁用）。
+（D33d）、误识别的默认勾选＝未驳回块（D28）。扩张量在**引擎侧没有默认值**
+（D5：必须由调用方显式给），工作台的输入框初值则取自设置里的
+``utils/config.py::ProgramConfig`` 的 ``workbench_expand_px``（2026-09-18
+拍板定值 10px）——用户把该值改成 0 时列表为空、执行按钮保持禁用。
 
 文案一律在**字面量定义处**用 ``QCoreApplication.translate`` 显式标注上下文
 （i18n 模块级翻译表规则）：本模块没有 ``self``，间接的 ``tr(variable)``
@@ -39,14 +40,15 @@ from utils.block_tags import (
     misread_queue_summary,
     set_tags_reviewed,
 )
+from utils.config import pcfg
 from utils.io_utils import imread
 
 from .batch_delete import BatchDeleteMisread
 from .batch_expand import MODE_PX, MODE_RATIO, BatchExpand
-from .batch_merge import BatchMerge
+from .batch_merge import BatchMerge, MergeConfig
 from .batch_ops import BatchOperation
 
-# 任务 id 即导航顺序的依据（规划 §3／D16：误识别清理 → 合并 → 扩张 → 背景修复
+# 任务 id 即导航顺序的依据（设计 §8／D16：误识别清理 → 合并 → 扩张 → 背景修复
 # → 术语提取 → 剧情摘要）。前四项属「问题清理」任务族，参与跳步提示计数。
 MISREAD = "misread"
 MERGE = "merge"
@@ -125,7 +127,7 @@ class BatchTask:
             proj: 项目实例。
             op: 批量事务外壳（版本 + 落盘 + D40 前置对齐）；界面必须传带
                 ``commit``／``sync_block_data`` 的实例，好让版本快照反映
-                当前面板编辑（复核文档 §4.2）。
+                当前面板编辑（设计 §8）。
             on_changed: 任务改了项目数据（标签表态等）后通知界面置未保存位。
         """
         self.proj = proj
@@ -427,7 +429,15 @@ class MergeTask(BatchTask):
         )
 
     def _engine(self) -> BatchMerge:
-        return BatchMerge(self.proj, op=self.op)
+        # 误聚阈值取设置里的值（D33d 的「设置内参数接口」）；引擎本身仍按
+        # 调用方给的 config 工作，裸脚本复算不受设置影响。
+        return BatchMerge(
+            self.proj,
+            config=MergeConfig(
+                oversize_ratio=float(pcfg.workbench_merge_oversize_ratio)
+            ),
+            op=self.op,
+        )
 
     def plan(self, options: Dict[str, Any]) -> dict:
         report = self._engine().plan()
@@ -584,7 +594,7 @@ class MergeTask(BatchTask):
 
 
 class ExpandTask(BatchTask):
-    """只扩渲染区域（D5）；**扩张量没有默认值**，必须由用户给（复核文档 §4.3）。"""
+    """只扩渲染区域（D5）；引擎侧无默认扩张量，输入框初值取设置里的默认值。"""
 
     id = EXPAND
     stretch_column = 4  # 新旧矩形并排看，给后一列留宽度
@@ -708,7 +718,9 @@ class ExpandTask(BatchTask):
                 ),
                 "min": 0,
                 "max": 500,
-                "value": 0,
+                # 初值取设置里的默认扩张量（D5／C3，2026-09-18 定值 10px）。
+                # 引擎仍要求显式给 amount，这里只是输入框的起点，用户可改。
+                "value": max(0, int(pcfg.workbench_expand_px)),
                 "suffix": QCoreApplication.translate("WorkbenchTasks", " px"),
             },
             {

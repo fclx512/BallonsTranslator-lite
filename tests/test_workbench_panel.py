@@ -101,7 +101,7 @@ class _WorkbenchTestCase(unittest.TestCase):
         for name in (PAGE_A, PAGE_B):
             self.proj.save_mask(name, np.zeros((200, 200), dtype=np.uint8))
         self.window = QWidget()
-        # 主窗口侧的两个调用口（复核文档 §4.2 的必传项）
+        # 主窗口侧的两个调用口（设计 §8 的必传项：落盘 + 前置对齐）
         self.window._sync_block_data = lambda: None
         self.window._sync_and_commit_project = lambda force_sync=False: (
             self.proj.save()
@@ -294,17 +294,20 @@ class PanelTest(_WorkbenchTestCase):
         self.assertTrue(view._rows)
         self.assertNotIn(MERGE, panel._dirty_tasks)
 
-    def test_execute_disabled_without_candidates(self):
+    def test_expand_amount_starts_from_setting_and_zero_disables(self):
+        """扩张量初值取设置里的默认值（D5／C3 定值）；清零即无候选、执行禁用。"""
         panel = self._panel()
         panel.nav.select(EXPAND)
         self.app.processEvents()
         view = panel._batch_views[EXPAND]
-        self.assertFalse(view._rows)
-        self.assertFalse(view._execute_btn.isEnabled())
-        view._option_widgets["amount"].setValue(6)
-        view.replan()
+        spec = [s for s in view.task.options_spec() if s["key"] == "amount"][0]
+        self.assertEqual(spec["value"], int(pcfg.workbench_expand_px))
         self.assertTrue(view._rows)
         self.assertTrue(view._execute_btn.isEnabled())
+        view._option_widgets["amount"].setValue(0)
+        view.replan()
+        self.assertFalse(view._rows)
+        self.assertFalse(view._execute_btn.isEnabled())
 
     def test_preview_is_unscaled_and_shown_below_list(self):
         panel = self._panel()
@@ -366,11 +369,17 @@ class PanelTest(_WorkbenchTestCase):
         panel = self._panel()
         panel.nav.select(MERGE)
         pending = panel.earlier_pending(SIMPLE_INPAINT)
+        # 三项都在（扩张量有设置里给的初值 → 有可执行候选），顺序即 D16 的导航序
         self.assertEqual(
-            pending,
-            [(_TASK_LABELS[MISREAD], 1), (_TASK_LABELS[MERGE], 1)],
+            [label for label, _ in pending],
+            [
+                _TASK_LABELS[MISREAD],
+                _TASK_LABELS[MERGE],
+                _TASK_LABELS[EXPAND],
+            ],
         )
-        # 目标之后的步骤不计（扩张量未设 → 无计数），术语／剧情也不参与
+        self.assertTrue(all(count > 0 for _, count in pending))
+        # 目标之后的步骤不计（术语／剧情也不参与）
         self.assertEqual(panel.earlier_pending(STORY), pending)
         self.assertEqual(panel.earlier_pending(MISREAD), [])
 

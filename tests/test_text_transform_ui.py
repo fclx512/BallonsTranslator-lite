@@ -67,6 +67,39 @@ def transform_state(*transforms, glyph_slant_angle=0.0):
 NEUTRAL = transform_state()
 
 
+class _StubDragEvent:
+    """桩事件：驱动 ``ControlBlockItem`` 的按下/移动处理。
+
+    PyQt6 不允许构造 ``QGraphicsSceneMouseEvent``，而 ``ControlBlockItem``
+    的两个处理函数是 Python 层实现、只用到 ``button`` / ``modifiers`` /
+    ``pos`` / ``scenePos`` / ``accept`` 几个访问器，所以桩事件就够（这正是
+    不经过 C++ 派发的直接调用）。
+
+    ``modifiers`` 每次调用都返回构造时给的值——移动事件每帧都重读它，正是
+    「拖到一半按下/松开 Alt 立刻生效」的判据。
+    """
+
+    def __init__(self, pos, scene_pos, modifiers):
+        self._pos = pos
+        self._scene_pos = scene_pos
+        self._modifiers = modifiers
+
+    def button(self):
+        return Qt.MouseButton.LeftButton
+
+    def modifiers(self):
+        return self._modifiers
+
+    def pos(self):
+        return self._pos
+
+    def scenePos(self):
+        return self._scene_pos
+
+    def accept(self):
+        return None
+
+
 class TextTransformEditSessionTestBase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -998,6 +1031,478 @@ class TextBlkShapeControlTest(TextTransformEditSessionTestBase):
         self.assertEqual(item.rotation(), final)
         stack.undo()
         self.assertEqual(item.rotation(), original_angle)
+        control.setBlkItem(None)
+        scene.removeItem(item)
+
+    # ── D5：单块 Alt + 拖手柄 = 以中心为基准缩放 ──────────────────────
+
+    def test_alt_drag_scales_symmetrically_about_center(self):
+        """Alt 拖角：中心钉死，被拖的角与它的对角对称地往外走。"""
+        scene, _view, control = self._make_control()
+        item = self._make_item(0, TEST_LINES[0], False, xyxy=(0, 0, 600, 300))
+        scene.addItem(item)
+        control.setBlkItem(item)
+
+        before = item.absBoundingRect(qrect=True)
+        points = control._item_handle_points_in_scene(item)
+        center_before = control._handle_points_center(points)
+        corner_2 = QPointF(points[2])  # 右上
+        corner_6 = QPointF(points[6])  # 左下（对角）
+
+        item.startReshape()
+        control.beginResize(2, corner_2, center_anchor=True)
+        # 拖右上角向右 40、向上 30（scene 空间）
+        control.resizeFromScene(2, corner_2 + QPointF(40, -30))
+        points_after = control._item_handle_points_in_scene(item)
+        center_after = control._handle_points_center(points_after)
+
+        # 中心不动
+        self.assertAlmostEqual(center_after.x(), center_before.x(), places=2)
+        self.assertAlmostEqual(center_after.y(), center_before.y(), places=2)
+        # 被拖的角往外走
+        self.assertGreater(points_after[2].x(), corner_2.x() + 30)
+        self.assertLess(points_after[2].y(), corner_2.y() - 20)
+        # 对角镜像地往外走（这正是"以中心为基准"与默认模式的差别）
+        self.assertLess(points_after[6].x(), corner_6.x() - 30)
+        self.assertGreater(points_after[6].y(), corner_6.y() + 20)
+
+        after = item.absBoundingRect(qrect=True)
+        self.assertGreater(after.width(), before.width() + 60)
+        self.assertGreater(after.height(), before.height() + 40)
+        control.finishResize()
+        control.setBlkItem(None)
+        scene.removeItem(item)
+
+    def test_plain_drag_moves_center_but_alt_drag_does_not(self):
+        """同一条手势：不带 Alt 时对角钉住、中心平移；带 Alt 时中心不动。"""
+        deltas = []
+        for use_alt in (False, True):
+            scene, _view, control = self._make_control()
+            item = self._make_item(0, TEST_LINES[0], False, xyxy=(0, 0, 600, 300))
+            scene.addItem(item)
+            control.setBlkItem(item)
+            points = control._item_handle_points_in_scene(item)
+            center_before = control._handle_points_center(points)
+            corner_2 = QPointF(points[2])
+            corner_6 = QPointF(points[6])
+            item.startReshape()
+            control.beginResize(2, corner_2, center_anchor=use_alt)
+            control.resizeFromScene(2, corner_2 + QPointF(40, -30))
+            points_after = control._item_handle_points_in_scene(item)
+            center_after = control._handle_points_center(points_after)
+            deltas.append(
+                (
+                    center_after.x() - center_before.x(),
+                    center_after.y() - center_before.y(),
+                    points_after[6].x() - corner_6.x(),
+                    points_after[6].y() - corner_6.y(),
+                )
+            )
+            control.finishResize()
+            control.setBlkItem(None)
+            scene.removeItem(item)
+
+        plain, alt = deltas
+        # 默认模式：对角（idx 6）钉住，中心跟着平移
+        self.assertAlmostEqual(plain[2], 0.0, places=2)
+        self.assertAlmostEqual(plain[3], 0.0, places=2)
+        self.assertGreater(plain[0], 15)
+        self.assertLess(plain[1], -10)
+        # 中心模式：中心不动，对角镜像外扩
+        self.assertAlmostEqual(alt[0], 0.0, places=2)
+        self.assertAlmostEqual(alt[1], 0.0, places=2)
+        self.assertLess(alt[2], -30)
+        self.assertGreater(alt[3], 20)
+
+    def test_alt_drag_undo_roundtrip(self):
+        """Alt 缩放同样走 ReshapeItemCommand，可整步撤销。"""
+        from qtpy.QtGui import QUndoStack
+        from ui.textedit_commands import ReshapeItemCommand
+
+        scene, _view, control = self._make_control()
+        item = self._make_item(0, TEST_LINES[0], False, xyxy=(0, 0, 600, 300))
+        scene.addItem(item)
+        control.setBlkItem(item)
+
+        before = item.absBoundingRect(qrect=True)
+        corner_2 = QPointF(control._item_handle_points_in_scene(item)[2])
+        item.startReshape()
+        control.beginResize(2, corner_2, center_anchor=True)
+        control.resizeFromScene(2, corner_2 + QPointF(50, 20))
+        grew = item.absBoundingRect(qrect=True)
+        self.assertGreater(grew.width(), before.width() + 60)
+
+        stack = QUndoStack()
+        stack.push(ReshapeItemCommand(item))
+        item.endReshape()
+        control.finishResize()
+        stack.undo()
+        restored = item.absBoundingRect(qrect=True)
+        self.assertAlmostEqual(restored.width(), before.width(), places=2)
+        self.assertAlmostEqual(restored.height(), before.height(), places=2)
+        self.assertAlmostEqual(restored.left(), before.left(), places=2)
+        self.assertAlmostEqual(restored.top(), before.top(), places=2)
+        control.setBlkItem(None)
+        scene.removeItem(item)
+
+    def test_handle_press_with_alt_requests_center_anchor(self):
+        """接线：按住 Alt 按手柄 → 进入中心模式；不按则是默认模式。
+
+        PyQt6 不允许构造 ``QGraphicsSceneMouseEvent``，而
+        ``ControlBlockItem.mousePressEvent`` 是 Python 层实现、只用到
+        几个访问器，故用桩事件驱动（这正是不经过 C++ 派发的直接调用）。
+        """
+
+        scene, _view, control = self._make_control()
+        item = self._make_item(0, TEST_LINES[0], False, xyxy=(0, 0, 600, 300))
+        scene.addItem(item)
+        control.setBlkItem(item)
+        handle = control.ctrlblock_group[2]
+
+        for modifier, expected in (
+            (Qt.KeyboardModifier.AltModifier, True),
+            (Qt.KeyboardModifier.NoModifier, False),
+        ):
+            press_local = handle.visible_rect.center()
+            event = _StubDragEvent(
+                press_local,
+                handle.mapToScene(press_local),
+                modifier,
+            )
+            handle.mousePressEvent(event)
+            self.assertEqual(
+                control._resize_center_anchor,
+                expected,
+                "Alt 修饰键没有传到 beginResize(center_anchor=...)",
+            )
+            control.finishResize()
+        control.setBlkItem(None)
+        scene.removeItem(item)
+
+    # ── D5：Alt 是即时修饰键，语义同 PS（按下/松开当场换算已拖出的位移）──
+
+    def test_alt_pressed_mid_drag_converts_the_dragged_progress(self):
+        """中途按下 Alt：已拖出的位移当场换算成中心基准的量（PS 口径）。
+
+        不带 Alt 拖右上角 (+30, -20)：右上角跟手、左下角钉住、宽度 630。
+        此时按下 Alt ⇒ 同一位移改按"两侧对称"解读：右上角仍留在光标上、
+        左下角当场镜像到 (0,300)+(-30,+20)、中心回到起手中心 (300,150)、
+        宽度 660。**不需要移动鼠标**。
+        """
+        scene, _view, control = self._make_control()
+        item = self._make_item(0, TEST_LINES[0], False, xyxy=(0, 0, 600, 300))
+        scene.addItem(item)
+        control.setBlkItem(item)
+
+        points = control._item_handle_points_in_scene(item)
+        center_at_start = control._handle_points_center(points)
+        opposite_at_start = QPointF(points[6])
+        corner_2 = QPointF(points[2])
+        item.startReshape()
+        # 起手不带 Alt = 默认语义（对角手柄钉住）
+        control.beginResize(2, corner_2, center_anchor=False)
+
+        drag = QPointF(30, -20)
+        corner_2 = corner_2 + drag
+        control.resizeFromScene(2, corner_2)
+        single_side_width = item.absBoundingRect(qrect=True).width()
+        # 默认语义下对角确实还钉着（不然下面的对照就没有意义）
+        self.assertAlmostEqual(
+            control._item_handle_points_in_scene(item)[6].x(),
+            opposite_at_start.x(),
+            places=2,
+        )
+
+        self.assertTrue(
+            control.setResizeCenterAnchor(True),
+            "拖拽途中 setResizeCenterAnchor 没有切换模式",
+        )
+        after = control._item_handle_points_in_scene(item)
+        after_center = control._handle_points_center(after)
+
+        # 位移换算成"两侧各动一份"：宽度当场多出 drag.x()
+        self.assertAlmostEqual(
+            item.absBoundingRect(qrect=True).width(),
+            single_side_width + drag.x(),
+            places=2,
+        )
+        # 中心回到**起手**中心
+        self.assertAlmostEqual(after_center.x(), center_at_start.x(), places=2)
+        self.assertAlmostEqual(after_center.y(), center_at_start.y(), places=2)
+        # 被拖的角仍留在光标上
+        self.assertAlmostEqual(after[2].x(), corner_2.x(), places=2)
+        self.assertAlmostEqual(after[2].y(), corner_2.y(), places=2)
+        # 对角当场镜像出去（切换前它是钉住的）
+        self.assertAlmostEqual(
+            after[6].x(), opposite_at_start.x() - drag.x(), places=2
+        )
+        self.assertAlmostEqual(
+            after[6].y(), opposite_at_start.y() - drag.y(), places=2
+        )
+        self.assertFalse(
+            control.setResizeCenterAnchor(True), "同值重复调用不应再重算"
+        )
+
+        # 之后继续拖：中心锁在起手中心，对角始终是"累计位移"的镜像
+        total = drag + QPointF(30, -30)
+        corner_2 = corner_2 + QPointF(30, -30)
+        control.resizeFromScene(2, corner_2)
+        after = control._item_handle_points_in_scene(item)
+        after_center = control._handle_points_center(after)
+        self.assertAlmostEqual(after_center.x(), center_at_start.x(), places=2)
+        self.assertAlmostEqual(after_center.y(), center_at_start.y(), places=2)
+        self.assertAlmostEqual(after[2].x(), corner_2.x(), places=2)
+        self.assertAlmostEqual(after[6].x(), opposite_at_start.x() - total.x(), places=2)
+        self.assertAlmostEqual(after[6].y(), opposite_at_start.y() - total.y(), places=2)
+
+        control.finishResize()
+        control.setBlkItem(None)
+        scene.removeItem(item)
+
+    def test_alt_release_mid_drag_returns_to_single_side(self):
+        """中途松开 Alt：同一位移当场换回"对角手柄钉住"的单侧解读。"""
+        scene, _view, control = self._make_control()
+        item = self._make_item(0, TEST_LINES[0], False, xyxy=(0, 0, 600, 300))
+        scene.addItem(item)
+        control.setBlkItem(item)
+
+        points = control._item_handle_points_in_scene(item)
+        center_at_start = control._handle_points_center(points)
+        opposite_at_start = QPointF(points[6])
+        corner_2 = QPointF(points[2])
+        item.startReshape()
+        control.beginResize(2, corner_2, center_anchor=True)
+
+        drag = QPointF(30, -20)
+        corner_2 = corner_2 + drag
+        control.resizeFromScene(2, corner_2)
+        symmetric_width = item.absBoundingRect(qrect=True).width()
+        # 中心语义下中心没动、对角已镜像出去
+        self.assertAlmostEqual(
+            control._handle_points_center(
+                control._item_handle_points_in_scene(item)
+            ).x(),
+            center_at_start.x(),
+            places=2,
+        )
+        self.assertLess(
+            control._item_handle_points_in_scene(item)[6].x(),
+            opposite_at_start.x() - 5,
+        )
+
+        self.assertTrue(control.setResizeCenterAnchor(False))
+        after = control._item_handle_points_in_scene(item)
+        after_center = control._handle_points_center(after)
+
+        # 宽度当场收回单侧值，中心跟着移动半份位移
+        self.assertAlmostEqual(
+            item.absBoundingRect(qrect=True).width(),
+            symmetric_width - drag.x(),
+            places=2,
+        )
+        self.assertAlmostEqual(
+            after_center.x(), center_at_start.x() + drag.x() / 2, places=2
+        )
+        self.assertAlmostEqual(
+            after_center.y(), center_at_start.y() + drag.y() / 2, places=2
+        )
+        # 对角回到起手位置（钉住），被拖的角仍留在光标上
+        self.assertAlmostEqual(after[6].x(), opposite_at_start.x(), places=2)
+        self.assertAlmostEqual(after[6].y(), opposite_at_start.y(), places=2)
+        self.assertAlmostEqual(after[2].x(), corner_2.x(), places=2)
+        self.assertAlmostEqual(after[2].y(), corner_2.y(), places=2)
+
+        # 继续拖：对角一直钉着，中心持续跟着走
+        corner_2 = corner_2 + QPointF(60, 0)
+        control.resizeFromScene(2, corner_2)
+        after = control._item_handle_points_in_scene(item)
+        self.assertAlmostEqual(after[6].x(), opposite_at_start.x(), places=2)
+        self.assertAlmostEqual(after[6].y(), opposite_at_start.y(), places=2)
+        self.assertAlmostEqual(after[2].x(), corner_2.x(), places=2)
+
+        control.finishResize()
+        control.setBlkItem(None)
+        scene.removeItem(item)
+
+    def test_alt_key_event_converts_without_mouse_move(self):
+        """键盘那条路：鼠标一动不动，按下/松开 Alt 也当场换算。
+
+        这是 PS 手感的关键——不然"按下 Alt"要等到下一次移动才看得出效果。
+        Qt 对 Alt 有个坑：``event.modifiers()`` 返回的是事件**之前**的状态，
+        所以 KeyPress(Key_Alt) 里读不到 AltModifier、KeyRelease 里反而读得到；
+        这里刻意给"按下"事件配 ``AltModifier`` 修饰键、给"松开"配
+        ``NoModifier``，验证实现是按 key/type 判断而不是按 modifiers。
+        """
+        from qtpy.QtCore import QEvent
+        from qtpy.QtGui import QKeyEvent
+
+        scene, _view, control = self._make_control()
+        item = self._make_item(0, TEST_LINES[0], False, xyxy=(0, 0, 600, 300))
+        scene.addItem(item)
+        control.setBlkItem(item)
+
+        corner_2 = QPointF(control._item_handle_points_in_scene(item)[2])
+        item.startReshape()
+        control.beginResize(2, corner_2, center_anchor=False)
+
+        drag = QPointF(30, 0)
+        control.resizeFromScene(2, corner_2 + drag)
+        single_side_width = item.absBoundingRect(qrect=True).width()
+
+        control.onModifierKeyEvent(
+            QKeyEvent(
+                QEvent.Type.KeyPress,
+                Qt.Key.Key_Alt,
+                Qt.KeyboardModifier.AltModifier,
+            )
+        )
+        self.assertTrue(control._resize_center_anchor)
+        self.assertAlmostEqual(
+            item.absBoundingRect(qrect=True).width(),
+            single_side_width + drag.x(),
+            places=2,
+        )
+
+        control.onModifierKeyEvent(
+            QKeyEvent(
+                QEvent.Type.KeyRelease,
+                Qt.Key.Key_Alt,
+                Qt.KeyboardModifier.NoModifier,
+            )
+        )
+        self.assertFalse(control._resize_center_anchor)
+        self.assertAlmostEqual(
+            item.absBoundingRect(qrect=True).width(),
+            single_side_width,
+            places=2,
+        )
+
+        control.finishResize()
+        control.setBlkItem(None)
+        scene.removeItem(item)
+
+    def test_alt_toggle_matches_a_drag_that_had_alt_from_the_start(self):
+        """PS 口径的等价性：中途按/松 Alt 的结果 ≡ 一开始就处于该状态拖到同一位置。
+
+        这条性质把"换算"钉死：切换只是换参考点按同一光标重算一遍，不引入任何
+        新状态、也不改变参考系（所以来回按 Alt 不累积误差）。
+        """
+        scene_holder = []
+
+        def run(initial_alt, toggle_to, stops):
+            scene, _view, control = self._make_control()
+            item = self._make_item(0, TEST_LINES[0], False, xyxy=(0, 0, 600, 300))
+            scene.addItem(item)
+            control.setBlkItem(item)
+            corner_2 = QPointF(control._item_handle_points_in_scene(item)[2])
+            item.startReshape()
+            control.beginResize(2, corner_2, center_anchor=initial_alt)
+            rects = []
+            for stop in stops:
+                if stop == "toggle":
+                    control.setResizeCenterAnchor(toggle_to)
+                else:
+                    control.resizeFromScene(2, corner_2 + stop)
+                rect = item.absBoundingRect(qrect=True)
+                rects.append(
+                    (rect.x(), rect.y(), rect.width(), rect.height())
+                )
+            control.finishResize()
+            control.setBlkItem(None)
+            scene.removeItem(item)
+            scene_holder.append(scene)
+            return rects
+
+        def assert_same(left, right, message):
+            for index, name in enumerate(("x", "y", "w", "h")):
+                self.assertAlmostEqual(
+                    left[index], right[index], places=6, msg=message
+                )
+
+        half = QPointF(24, -13)
+        full = QPointF(48, -26)
+
+        # 中途按下 Alt：切换当帧就该等于"一开始就按着 Alt 拖到同一位置"
+        switched_on = run(False, True, [half, "toggle", full])
+        alt_from_start = run(True, None, [half, full])
+        assert_same(
+            switched_on[1],
+            alt_from_start[0],
+            "按下 Alt 的那一帧没有把已拖出的位移换算成中心基准的量",
+        )
+        assert_same(
+            switched_on[2],
+            alt_from_start[1],
+            "切换后的最终几何与全程按 Alt 不一致",
+        )
+
+        # 中途松开 Alt：同理回到"全程不按 Alt"的口径
+        switched_off = run(True, False, [half, "toggle", full])
+        plain_from_start = run(False, None, [half, full])
+        assert_same(
+            switched_off[1],
+            plain_from_start[0],
+            "松开 Alt 的那一帧没有换回单侧解读",
+        )
+        assert_same(
+            switched_off[2],
+            plain_from_start[1],
+            "松开 Alt 后的最终几何与全程不按 Alt 不一致",
+        )
+
+    def test_resize_move_event_reads_alt_every_frame(self):
+        """接线：拖动中每帧重读修饰键，且拖拽期间挂上键盘旁听器。
+
+        鼠标这条路由 ``ControlBlockItem.mouseMoveEvent`` 接；鼠标不动时按 Alt
+        走 ``_ResizeModifierWatcher``（QApplication 级事件过滤器，只旁听不吞
+        事件、不抢焦点）。两条路都汇到 ``setResizeCenterAnchor``。
+        """
+        scene, _view, control = self._make_control()
+        item = self._make_item(0, TEST_LINES[0], False, xyxy=(0, 0, 600, 300))
+        scene.addItem(item)
+        control.setBlkItem(item)
+        handle = control.ctrlblock_group[2]
+        press_local = handle.visible_rect.center()
+        start_scene = handle.mapToScene(press_local)
+
+        handle.mousePressEvent(
+            _StubDragEvent(
+                press_local, start_scene, Qt.KeyboardModifier.NoModifier
+            )
+        )
+        self.assertFalse(control._resize_center_anchor)
+        self.assertIsNotNone(
+            control._modifier_watcher, "拖拽期间没有挂键盘旁听器"
+        )
+
+        handle.mouseMoveEvent(
+            _StubDragEvent(
+                press_local,
+                start_scene + QPointF(20, 0),
+                Qt.KeyboardModifier.AltModifier,
+            )
+        )
+        self.assertTrue(
+            control._resize_center_anchor,
+            "移动事件里的 Alt 没有被读到（中途按下 Alt 不生效）",
+        )
+
+        handle.mouseMoveEvent(
+            _StubDragEvent(
+                press_local,
+                start_scene + QPointF(40, 0),
+                Qt.KeyboardModifier.NoModifier,
+            )
+        )
+        self.assertFalse(
+            control._resize_center_anchor,
+            "松开 Alt 后没有恢复默认基准",
+        )
+
+        control.finishResize()
+        self.assertIsNone(
+            control._modifier_watcher, "松手后没有卸掉键盘旁听器"
+        )
         control.setBlkItem(None)
         scene.removeItem(item)
 
