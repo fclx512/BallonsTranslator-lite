@@ -44,6 +44,8 @@
 | `scripts/mw_repro.py` | **MainWindow 在线演练台**：拉起真实主窗口（必须窗口模式，offscreen 起不来 FramelessWindow）做模拟复现与交互驱动——真实绘制路径/原生模态框/GC 时机类问题的排查工具。`--scenario group-undo` 跑组化撤销全链路（自动点确认弹窗，延迟须 ≥200ms），`--project` 只读打开真实工程，`--no-show`/`--no-panel`/`--watchdog` 控制形态；faulthandler 常开。起源=确认弹窗 GC 悬空 AV 闪退排查（经验教训 §3.3） | `python scripts/mw_repro.py [--scenario group-undo\|none] [--project DIR] [--pages 2 --blocks 8]` |
 | `scripts/workbench_recalc.py` | **泛用工作台的参数复算台（只读）**：C1 判据命中率／C2 分组口径与阈值敏感度／C3 扩张量候选与可扩空间／C4 队列口径／已驳回链路自检（D28／D30／D33c）／D39 程序筛选器端到端（真机跑一次 OCR）——这些参数是"测出来的"，改判据或调默认值前后各跑一次做对比。六个子命令 `merge`（`--sweep` 加阈值扫描）/`c1`/`expand`/`queue`/`review`/`hook`/`list`，脚本末尾自证样本顶层文件 mtime 未变。实测数字与调参方向见 `docs/技术实现/AI辅助功能_设计与实现.md` 的「长期需要实测调整的参数」节 | `python scripts/workbench_recalc.py merge --project DIR [--sweep]` |
 
+| `scripts/workbench_render.py` | **工作台布局的目视验收台**：合成一个带内容的工程，把 `ui/glossary_agent_panel.py::GlossaryAgentPanel` 的每个任务页（含未开项目的空态页）渲染成 PNG（默认 2 倍率），并在 stdout 回显两级导航结构（大类页签文字／chip 文字／可见 chip／计数）——不看图也能核对结构。**必须走默认 windows 平台插件**：offscreen 下 `QFontDatabase.families()` 为空，文字全是豆腐块（且设 `setFont` 救不回来）；同时按 `launch.py` 装字体＋语言＋主题，否则截图是白底裸控件 | `python scripts/workbench_render.py [--out DIR] [--scale N]` |
+
 渲染同步回归已迁至 `tests/test_render_sync.py`（pytest/直接运行均可）。
 
 **真机探针**在 `scripts/probes/`（内存归因与释放阶梯、区域再检测真机验收）——那是"测出来的"结论的可复算工具，有真机／模型依赖，前提与每个脚本的期望数字见 `scripts/probes/README.md`。本目录的登记检查只覆盖顶层，子目录自带说明。

@@ -244,6 +244,25 @@ class BatchVersionStoreTest(unittest.TestCase):
         self.assertTrue((arr[0:8, 0:8] == 10).all())
         self.assertTrue((arr[16:, 16:] == 200).all())
 
+    def test_rects_of_different_widths_are_all_restored(self):
+        """同一页多条**不等宽**矩形（简单背景修复的常态）也能写版本并还原。
+
+        拼带时按最大宽度左侧对齐补零；不补的话 ``np.concatenate`` 会抛
+        "all the input array dimensions ... must match exactly"，整批操作
+        在写版本这一步就中止（2026-09-18 实测：228 vs 130）。
+        """
+        self._write_inpainted(10)
+        rects = [[0, 0, 20, 8], [1, 10, 11, 18], [2, 20, 30, 28]]  # 20/10/28 宽
+        self.assertIsNotNone(self.store.begin("strip", pixel_regions={"a.png": rects}))
+        self._write_inpainted(200)
+        self.store.restore_latest()
+        arr = self._read_inpainted()
+        for x1, y1, x2, y2 in rects:
+            self.assertTrue(
+                (arr[y1:y2, x1:x2] == 10).all(), f"矩形 {x1,y1,x2,y2} 未还原"
+            )
+        self.assertTrue((arr[30:, :] == 200).all())  # 矩形外保留操作结果
+
     # ── 损坏与半成品 ────────────────────────────────────────────
 
     def test_corrupt_version_raises_and_keeps_dir(self):

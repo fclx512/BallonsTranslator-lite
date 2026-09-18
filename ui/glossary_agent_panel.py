@@ -3,9 +3,11 @@
 **定位**：工作台是**任务容器**，不是聊天窗（D19 砍掉 Chat；D2 起就不做通用
 对话）。六个任务共用一套三段结构（D20）——
 
-1. **任务导航**（一级）：顶部六个任务钮，默认顺序＝用户工作流顺序（D16／§3）
-   误识别清理 → 合并相邻框 → 框扩张 → 背景修复 → 术语提取 → 剧情摘要。
-   前四项属「问题清理」任务族、参与跳步提示的"还有 N 个未处理"计数（D37），
+1. **任务导航**（两级，见 ``WORKBENCH_CATEGORIES``）：一级是**任务大类**，
+   用管线阶段名——「文字与 OCR」「图像修复」「翻译」；二级才是具体任务，
+   默认顺序＝用户工作流顺序（D16／设计 §8）误识别清理 → 合并相邻框 → 框扩张 →
+   背景修复 → 术语提取 → 剧情摘要。前四项属「问题清理」任务族、参与跳步提示
+   的"还有 N 个未处理"计数（D37，二级 chip 与所属一级页签都缀），
    术语／剧情是探索性任务、不计数。**运行时不禁跳步**，只提示。
 2. **候选列表**：任务自己的清单（批量任务见
    ``ui/workbench_batch_view.py``，逐条可勾选、点选即在下方展开 100% 原比例
@@ -25,6 +27,7 @@
 落盘只经「应用草稿…」。**Chat 砍掉后 worker 日志落在本面板底部的日志条**。
 """
 
+import html
 import json
 import logging
 
@@ -34,7 +37,7 @@ from qtpy.QtWidgets import (
     QApplication,
     QCheckBox,
     QFileDialog,
-    QGridLayout,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -87,16 +90,35 @@ from ui.workbench_tasks import (
 
 logger = logging.getLogger("glossary_agent_panel")
 
-# 任务导航顺序（设计 §8／D16）：①–④「问题清理」任务族 → ⑤术语 ⑥剧情。
-# 只有前四项参与跳步提示计数（D37）。
-WORKBENCH_ORDER = (
-    MISREAD,
-    MERGE,
-    EXPAND,
-    SIMPLE_INPAINT,
-    GLOSSARY,
-    STORY,
+# 一级导航＝任务大类，用**管线阶段名**而不是任务名：不了解工作台的用户按
+# 「OCR／图像修复／翻译」找功能，按「误识别清理」是找不到的（D42）。
+CATEGORY_TEXT = "cat_text"
+CATEGORY_INPAINT = "cat_inpaint"
+CATEGORY_TRANSLATE = "cat_translate"
+
+# 大类 → 其下的任务（顺序即 D16 的用户工作流顺序；前四项仍是「问题清理」
+# 任务族，跳步提示计数口径见 ``earlier_pending`` 不变）
+WORKBENCH_CATEGORIES = (
+    (CATEGORY_TEXT, (MISREAD, MERGE, EXPAND)),
+    (CATEGORY_INPAINT, (SIMPLE_INPAINT,)),
+    (CATEGORY_TRANSLATE, (GLOSSARY, STORY)),
 )
+
+# 任务导航顺序（D16／设计 §8）：由大类摊平——四个批量清理任务在前
+# （CLEANUP_TASK_IDS），术语／剧情在后，跳步提示按下标比较仍成立。
+WORKBENCH_ORDER = tuple(
+    task_id for _category, task_ids in WORKBENCH_CATEGORIES for task_id in task_ids
+)
+
+# 大类页签文字（字面量定义处显式标注翻译上下文；模块级翻译表规则）。
+# 术语表／剧情归「翻译」（它们是翻译质量的上下文准备），背景修复归「图像修复」。
+# 上下文用本类名而非 GlossaryAgentPanel：后者已被术语表列头占用
+# （"Translation" → 译文），同 context 同 source 只能有一个译文。
+_CATEGORY_LABELS = {
+    CATEGORY_TEXT: QCoreApplication.translate("WorkbenchTaskNav", "Text & OCR"),
+    CATEGORY_INPAINT: QCoreApplication.translate("WorkbenchTaskNav", "Inpainting"),
+    CATEGORY_TRANSLATE: QCoreApplication.translate("WorkbenchTaskNav", "Translation"),
+}
 
 # 导航钮的短标签（字面量定义处显式标注翻译上下文；模块级翻译表规则）。
 # "Glossary"/"Story" 沿用旧 tab 的源串，既有译文直接接上。
@@ -144,77 +166,181 @@ _ORIGIN_THEME_KEYS = {
 }
 
 
-class WorkbenchTaskNav(QWidget):
-    """一级导航：六个互斥任务钮（D20 第 ① 段；D25 单入口下的任务切换）。
+def _with_count(label: str, count: int) -> str:
+    """导航钮文字＝标签 + 「(N)」；0 不缀（D37：只标"还有活"。）"""
+    count = int(count or 0)
+    return label + " (" + str(count) + ")" if count else label
 
-    互斥按仓库既有做法手写 ``setChecked(False)``（不引
-    ``QButtonGroup`` 的跨版本信号差异），且**不允许全不选**——工作台总有
-    一个当前任务。
+
+def _styled(widget: QWidget) -> QWidget:
+    """容器 QSS（底色/分隔线）生效的前提——纯 QWidget 不上屏 QSS 背景。
+
+    仓库既有做法（``ui/tag_toolbar.py``、``ui/run_pipeline_dialog.py``）：
+    objectName 选择器写了 background／border 就必须开 WA_StyledBackground，
+    否则规则静默失效。
+    """
+    widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    return widget
+
+
+def _page_hint(text: str, parent: QWidget) -> QLabel:
+    """任务页顶部的一行说明（与批量任务的 ``BatchTask.hint`` 同一观感）。
+
+    术语／剧情两页原先只有表格，没有一句话说清"这页是干什么的、什么时候
+    才落盘"；批量任务页都有说明行，这里补齐一致性。
+    """
+    hint = QLabel(text, parent)
+    hint.setObjectName("WorkbenchTaskHint")
+    hint.setWordWrap(True)
+    return hint
+
+
+class WorkbenchTaskNav(QWidget):
+    """两级任务导航：一级＝任务大类（管线阶段名），二级＝该大类下的任务 chip。
+
+    一级页签把六个任务名收进「文字与 OCR／图像修复／翻译」三个大类，二级
+    才列出该大类下的任务；切大类时落到**上次在该大类里用过的任务**（默认
+    第一个），不每次重置。未处理计数（D37）两级都缀：二级 chip 缀自己的，
+    一级页签缀本大类之和——切到别的大类时，未处理的信号仍在页签上可见。
+
+    互斥按仓库既有做法手写 ``setChecked(False)``（不引 ``QButtonGroup``
+    的跨版本信号差异），且**不允许全不选**——工作台总有一个当前任务。
     """
 
     task_selected = Signal(str)
 
-    def __init__(self, task_ids, parent=None):
+    def __init__(self, categories, parent=None):
         super().__init__(parent)
-        self.setObjectName("WorkbenchTaskNav")
-        self._buttons = {}
-        grid = QGridLayout(self)
-        grid.setContentsMargins(6, 6, 6, 0)
-        grid.setSpacing(4)
-        for index, task_id in enumerate(task_ids):
-            button = QPushButton(_TASK_LABELS.get(task_id, task_id), self)
-            button.setObjectName("WorkbenchTaskButton")
+        _styled(self).setObjectName("WorkbenchTaskNav")
+        self._buttons = {}  # 任务 id → 二级 chip（测试与 set_count 按此名取）
+        self._category_buttons = {}  # 大类 id → 一级页签
+        self._category_tasks = {cat: tuple(ids) for cat, ids in categories}
+        self._category_of = {
+            task_id: cat for cat, ids in categories for task_id in ids
+        }
+        self._last_task = {}  # 大类 id → 上次在该大类里选的任务
+        self._counts = {}  # 任务 id → 未处理数（供一级页签求和）
+
+        nav_lay = QVBoxLayout(self)
+        nav_lay.setContentsMargins(6, 6, 6, 0)
+        nav_lay.setSpacing(2)
+
+        # ① 大类页签
+        category_row = QHBoxLayout()
+        category_row.setContentsMargins(0, 0, 0, 0)
+        category_row.setSpacing(2)
+        for category_id, _task_ids in categories:
+            button = QPushButton(
+                _CATEGORY_LABELS.get(category_id, category_id), self
+            )
+            button.setObjectName("WorkbenchCategoryButton")
             button.setCheckable(True)
             button.clicked.connect(
+                lambda _checked=False, cid=category_id: self._on_category_clicked(cid)
+            )
+            category_row.addWidget(button)
+            self._category_buttons[category_id] = button
+        category_row.addStretch(1)
+        nav_lay.addLayout(category_row)
+
+        # ② 当前大类下的任务 chip（全部先建好，切换时只改可见性）
+        self._task_row = QHBoxLayout()
+        self._task_row.setContentsMargins(0, 0, 0, 0)
+        self._task_row.setSpacing(4)
+        for task_id in self._category_of:
+            chip = QPushButton(_TASK_LABELS.get(task_id, task_id), self)
+            chip.setObjectName("WorkbenchTaskButton")
+            chip.setCheckable(True)
+            chip.clicked.connect(
                 lambda _checked=False, tid=task_id: self._on_clicked(tid)
             )
-            grid.addWidget(button, index // 3, index % 3)
-            self._buttons[task_id] = button
+            chip.setVisible(False)
+            self._task_row.addWidget(chip)
+            self._buttons[task_id] = chip
+        self._task_row.addStretch(1)
+        nav_lay.addLayout(self._task_row)
+
+        # 初始状态：第一个大类（面板随即会 select 默认任务，这里只保证
+        # 「总有一个当前任务」的不变量成立）
+        if categories:
+            self._show_category(categories[0][0])
+
+    # ── 交互 ────────────────────────────────────────────────────
 
     def _on_clicked(self, task_id: str):
         button = self._buttons[task_id]
         if button.isChecked():
-            self._select(task_id)
+            self.select(task_id)
         else:
             # 不允许取消当前任务（工作台必须有一个当前任务）
             button.setChecked(True)
 
-    def _select(self, task_id: str):
-        for other_id, other in self._buttons.items():
-            if other_id != task_id and other.isChecked():
-                other.blockSignals(True)
-                other.setChecked(False)
-                other.blockSignals(False)
-        self.task_selected.emit(task_id)
+    def _on_category_clicked(self, category_id: str):
+        """点大类页签＝切到该大类上次的任务（页签本身不可取消）。"""
+        task_ids = self._category_tasks.get(category_id) or ()
+        if not task_ids:
+            return
+        target = self._last_task.get(category_id) or task_ids[0]
+        if target == self.current():
+            self._category_buttons[category_id].setChecked(True)
+            self._show_category(category_id)
+            return
+        self.select(target)
 
     def select(self, task_id: str, *, emit: bool = True):
-        """程序性切换（打开项目回默认任务）。``emit=False`` 不触发跳步提示。"""
-        button = self._buttons.get(task_id)
-        if button is None:
+        """切到某任务（同时摆好一级页签与二级 chip）。``emit=False`` 不触发
+        跳步提示（打开项目回默认任务、跳步提示被取消时回退原任务）。"""
+        category_id = self._category_of.get(task_id)
+        if category_id is None:
             return
+        self._last_task[category_id] = task_id
+        self._show_category(category_id)
+        for other_id, chip in self._buttons.items():
+            chip.blockSignals(True)
+            chip.setChecked(other_id == task_id)
+            chip.blockSignals(False)
+        for other_id, button in self._category_buttons.items():
+            button.blockSignals(True)
+            button.setChecked(other_id == category_id)
+            button.blockSignals(False)
         if emit:
-            button.setChecked(True)
-            self._on_clicked(task_id)
-            return
-        for other_id, other in self._buttons.items():
-            other.blockSignals(True)
-            other.setChecked(other_id == task_id)
-            other.blockSignals(False)
+            self.task_selected.emit(task_id)
+
+    def _show_category(self, category_id: str):
+        visible = set(self._category_tasks.get(category_id) or ())
+        for task_id, chip in self._buttons.items():
+            chip.setVisible(task_id in visible)
 
     def current(self) -> str:
-        for task_id, button in self._buttons.items():
-            if button.isChecked():
+        for task_id, chip in self._buttons.items():
+            if chip.isChecked():
                 return task_id
         return ""
 
     def set_count(self, task_id: str, count) -> None:
-        """在任务钮上缀「还有 N 个未处理」（D37：余光扫得到的状态）。"""
-        label = _TASK_LABELS.get(task_id, task_id)
-        if count:
-            label = label + " (" + str(int(count)) + ")"
-        button = self._buttons.get(task_id)
+        """在任务 chip 上缀「还有 N 个未处理」（D37：余光扫得到的状态）。
+
+        所属一级页签同步缀本大类之和——切到大类外时也能看见还有活没干。"""
+        self._counts[task_id] = int(count or 0)
+        chip = self._buttons.get(task_id)
+        if chip is not None:
+            chip.setText(self._task_label(task_id))
+        category_id = self._category_of.get(task_id)
+        button = self._category_buttons.get(category_id)
         if button is not None:
-            button.setText(label)
+            button.setText(self._category_label(category_id))
+
+    def _task_label(self, task_id: str) -> str:
+        return _with_count(
+            _TASK_LABELS.get(task_id, task_id), self._counts.get(task_id, 0)
+        )
+
+    def _category_label(self, category_id: str) -> str:
+        total = sum(
+            self._counts.get(task_id, 0)
+            for task_id in self._category_tasks.get(category_id, ())
+        )
+        return _with_count(_CATEGORY_LABELS.get(category_id, category_id), total)
 
 
 class GlossaryAgentWorker(QObject):
@@ -533,6 +659,10 @@ class GlossaryAgentPanel(QWidget):
         self._thread = None
         self._batch_tasks = {}
         self._batch_views = {}
+        # 任务 id → self.pages 下标（构建时登记，见 _page_index）
+        self._page_indices = {}
+        # 审批预览浮层（D44）：懒建，挂在主窗口中央区上（工作台之外）
+        self._preview_panel = None
         # 四个批量任务首次切入时各自规划一次；批量写回／回滚／换项目后重新标脏
         self._dirty_tasks = set(CLEANUP_TASK_IDS)
         self._last_version_seq = None
@@ -545,13 +675,11 @@ class GlossaryAgentPanel(QWidget):
         layout.addWidget(self._stack, 1)
 
         empty_page = QWidget(self)
-        empty_page.setObjectName("WorkbenchSurface")
+        _styled(empty_page).setObjectName("WorkbenchSurface")
         empty_lay = QVBoxLayout(empty_page)
         empty_lay.addStretch(1)
         empty_hint = QLabel(
-            self.tr(
-                "Open a project first — the workbench reads page texts from it."
-            ),
+            self.tr("Open a project to use the workbench."),
             empty_page,
         )
         empty_hint.setObjectName("WorkbenchEmptyHint")
@@ -562,13 +690,13 @@ class GlossaryAgentPanel(QWidget):
         self._stack.addWidget(empty_page)
 
         content_page = QWidget(self)
-        content_page.setObjectName("WorkbenchSurface")
+        _styled(content_page).setObjectName("WorkbenchSurface")
         content_lay = QVBoxLayout(content_page)
         content_lay.setContentsMargins(0, 0, 0, 0)
         content_lay.setSpacing(4)
 
-        # ① 一级导航
-        self.nav = WorkbenchTaskNav(WORKBENCH_ORDER, content_page)
+        # ① 一级导航（大类页签 + 二级任务 chip）
+        self.nav = WorkbenchTaskNav(WORKBENCH_CATEGORIES, content_page)
         self.nav.task_selected.connect(self._on_task_selected)
         content_lay.addWidget(self.nav)
 
@@ -607,17 +735,32 @@ class GlossaryAgentPanel(QWidget):
             task = self._batch_tasks[task_id]
             view = BatchTaskView(task)
             view.jump_requested.connect(self.jump_requested)
-            view.notify_requested.connect(self._toast)
-            view.status_requested.connect(self._append_log)
+            view.notify_requested.connect(
+                lambda text, kind="info", tid=task_id: self._toast(text, kind, tid)
+            )
+            view.status_requested.connect(
+                lambda text, tid=task_id: self._append_log(text, tid)
+            )
             view.batch_applied.connect(self._on_batch_applied)
+            view.preview_requested.connect(self._on_preview_requested)
+            view.preview_dismissed.connect(self._on_preview_dismissed)
+            # 参数一变候选就变（框扩张的扩张量），导航上的计数不能停在旧值
+            view.plan_changed.connect(self._refresh_nav_counts)
             self._batch_views[task_id] = view
             self.pages.addWidget(view)
+            self._page_indices[task_id] = self.pages.count() - 1
 
     def _build_glossary_page(self):
         page = QWidget(self)
-        page.setObjectName("WorkbenchSurface")
+        _styled(page).setObjectName("WorkbenchSurface")
         layout = QVBoxLayout(page)
         layout.setContentsMargins(6, 4, 6, 4)
+        layout.addWidget(
+            _page_hint(
+                self.tr("Glossary draft. Nothing is saved until you apply it."),
+                page,
+            )
+        )
         self.glossary_table = QTableWidget(0, 4, page)
         self.glossary_table.setHorizontalHeaderLabels(
             [
@@ -659,13 +802,21 @@ class GlossaryAgentPanel(QWidget):
         layout.addLayout(apply_row)
         self.pages.addWidget(page)
         self._glossary_page = page
-        self._glossary_page_index = self.pages.count() - 1
+        self._page_indices[GLOSSARY] = self.pages.count() - 1
 
     def _build_story_page(self):
         page = QWidget(self)
-        page.setObjectName("WorkbenchSurface")
+        _styled(page).setObjectName("WorkbenchSurface")
         layout = QVBoxLayout(page)
         layout.setContentsMargins(6, 4, 6, 4)
+        layout.addWidget(
+            _page_hint(
+                self.tr(
+                    "Story context for translation: global synopsis plus one summary per page."
+                ),
+                page,
+            )
+        )
         layout.addWidget(QLabel(self.tr("Global synopsis"), page))
         self.synopsis_edit = ConfigTextEdit(page)
         self.synopsis_edit.setFixedHeight(72)
@@ -683,28 +834,36 @@ class GlossaryAgentPanel(QWidget):
         layout.addWidget(self.story_remove_btn, 0, Qt.AlignmentFlag.AlignRight)
         self.pages.addWidget(page)
         self._story_page = page
-        self._story_page_index = self.pages.count() - 1
+        self._page_indices[STORY] = self.pages.count() - 1
 
     def _build_bottom_row(self, parent) -> QWidget:
-        holder = QWidget(parent)
-        holder.setObjectName("WorkbenchSurface")
+        """底部状态条：只读日志区 + 批量撤回钮。
+
+        日志是**只读状态区，不是输入框**（D43）——``ConfigTextEdit`` 自带领边
+        输入框外观，这里用 ``QTextEdit#WorkbenchLogView`` 规则覆盖成平底色，
+        并靠 ``WorkbenchStatusBar`` 的顶边线与上面的候选列表分开。
+        """
+        holder = _styled(QWidget(parent))
+        holder.setObjectName("WorkbenchStatusBar")
         row = QHBoxLayout(holder)
-        row.setContentsMargins(6, 0, 6, 6)
+        row.setContentsMargins(6, 4, 6, 6)
+        row.setSpacing(6)
+        self._log_view = ConfigTextEdit(parent)
+        self._log_view.setObjectName("WorkbenchLogView")
+        self._log_view.setReadOnly(True)
+        self._log_view.setFrameShape(QFrame.Shape.NoFrame)
+        self._log_view.setFixedHeight(52)
+        self._log_view.document().setMaximumBlockCount(200)
+        row.addWidget(self._log_view, 1)
         self.rollback_btn = QPushButton(self.tr("Undo last batch"), holder)
+        self.rollback_btn.setObjectName("WorkbenchRollbackButton")
         self.rollback_btn.setToolTip(
             self.tr(
                 "Rolls the project back to the state before the last batch action (merge / expand / delete / background fill). The version is consumed, so it can be undone once."
             )
         )
         self.rollback_btn.setEnabled(False)
-        row.addWidget(self.rollback_btn)
-        row.addStretch(1)
-        self._log_view = ConfigTextEdit(parent)
-        self._log_view.setObjectName("WorkbenchLogView")
-        self._log_view.setReadOnly(True)
-        self._log_view.setFixedHeight(56)
-        self._log_view.document().setMaximumBlockCount(200)
-        row.addWidget(self._log_view, 1)
+        row.addWidget(self.rollback_btn, 0, Qt.AlignmentFlag.AlignTop)
         return holder
 
     # ── 主窗口接线 ──────────────────────────────────────────────
@@ -725,6 +884,42 @@ class GlossaryAgentPanel(QWidget):
         sync = getattr(window, "_sync_block_data", None)
         return BatchOperation(self._proj, commit=commit, sync_block_data=sync)
 
+    def _on_preview_requested(self, pixmap, caption: str):
+        """把审批图交给浮层显示（D44：预览已不在任务页里）。"""
+        self._ensure_preview_panel().show_content(pixmap, caption)
+
+    def _on_preview_dismissed(self):
+        """收起审批浮层：行集重建或换任务后，旧图对应的行可能已不存在。"""
+        if self._preview_panel is not None:
+            self._preview_panel.close_panel()
+
+    def _on_preview_closed(self):
+        """用户关掉浮层（点画布／Esc）：转达给各任务视图"预览已收起"。
+
+        视图不这么做的话，**只有一行候选时**关掉浮层后再点那行会没反应
+        （选中行没变 → 不发 ``itemSelectionChanged`` → 浮层再也弹不出来）。
+        """
+        for view in self._batch_views.values():
+            view.forget_preview()
+
+    def _ensure_preview_panel(self):
+        """预览浮层的宿主＝主窗口中央区（与画布浮层同款，能盖在画布上、
+        跟着窗口走、不占工作台宽度）。拿不到中央区时退回主窗口本身。"""
+        if self._preview_panel is None:
+            from ui.workbench_preview import WorkbenchPreviewPanel
+
+            window = self._mainwindow()
+            host = (
+                getattr(window, "centralStackWidget", None)
+                or window
+                or self.window()  # 兜底：拿不到主窗口时别让浮层变成独立窗口
+            )
+            self._preview_panel = WorkbenchPreviewPanel(host)
+            # 用户关掉浮层（点画布／Esc）→ 任务视图要知道，否则"再点那一行"
+            # 不会重新取图（表格的选中行没变，不发 itemSelectionChanged）
+            self._preview_panel.closed.connect(self._on_preview_closed)
+        return self._preview_panel
+
     def _inpainter_provider(self):
         window = self._mainwindow()
         manager = getattr(window, "module_manager", None)
@@ -740,7 +935,7 @@ class GlossaryAgentPanel(QWidget):
             except Exception as error:  # 画布未就绪时不该打断队列操作
                 logger.error(f"Failed to mark project dirty: {error}")
 
-    def _toast(self, text: str, kind: str = "info"):
+    def _toast(self, text: str, kind: str = "info", task_id: str = ""):
         """面板内通知：批量回执与失败提示（kind 见通知中心的 KIND_STYLES）。"""
         from ui.custom_widget import notification
 
@@ -748,12 +943,25 @@ class GlossaryAgentPanel(QWidget):
             notification.toast(text, kind=kind, anchor="bottom-left")
         except Exception as error:
             logger.error(f"workbench toast failed: {error}")
-        self._append_log(text)
+        self._append_log(text, task_id)
 
-    def _append_log(self, text: str):
-        """worker 日志与批量回执的落点（D19：砍 Chat 后日志不再无处可去）。"""
+    def _append_log(self, text: str, task_id: str = ""):
+        """worker 日志与批量回执的落点（D19：砍 Chat 后日志不再无处可去）。
+
+        日志是**跨任务共用**的一小块区域，故批量任务的行前缀自己的任务名
+        （D43）：否则在术语表页读到「删除 2 个框」不知道是谁干的。页面级的
+        plan 摘要不写这里（它就在页面上），worker 的行不缀（草稿／会话本就
+        是这个面板自己的叙述）。
+        """
         if not text:
             return
+        label = _TASK_LABELS.get(task_id, "")
+        if label:
+            color = get_theme_color(key="@disabledForegroundColor").name()
+            text = (
+                '<span style="color:' + color + '">' + html.escape(label)
+                + "</span>&nbsp;" + html.escape(text)
+            )
         # document 已设 maximumBlockCount，超长自动丢弃最旧的行
         self._log_view.append(text)
         scrollbar = self._log_view.verticalScrollBar()
@@ -762,11 +970,8 @@ class GlossaryAgentPanel(QWidget):
     # ── 任务导航 ────────────────────────────────────────────────
 
     def _page_index(self, task_id: str) -> int:
-        if task_id == GLOSSARY:
-            return self._glossary_page_index
-        if task_id == STORY:
-            return self._story_page_index
-        return list(CLEANUP_TASK_IDS).index(task_id)
+        """任务 → ``self.pages`` 下标（构建时登记，不靠"添加顺序"的算术）。"""
+        return self._page_indices[task_id]
 
     def current_task(self) -> str:
         return self.nav.current()
@@ -778,6 +983,7 @@ class GlossaryAgentPanel(QWidget):
         if self._warn_skip_order(previous, task_id):
             self.nav.select(previous, emit=False)
             return
+        self._on_preview_dismissed()  # 换了任务，上一页的审批图不再对应当前列表
         self._current_task = task_id
         self.pages.setCurrentIndex(self._page_index(task_id))
         if task_id in (GLOSSARY, STORY):
@@ -896,6 +1102,8 @@ class GlossaryAgentPanel(QWidget):
         """项目打开/切换后刷新:空态 ⇄ 内容页,worker 与批量任务重建。"""
         if self._worker is not None:
             self._shutdown()
+        if self._preview_panel is not None:
+            self._preview_panel.close_panel()  # 换项目：旧页的审批图已过期
         self._dirty_tasks = set(CLEANUP_TASK_IDS)
         self._last_version_seq = None
         self.rollback_btn.setEnabled(False)
@@ -905,10 +1113,14 @@ class GlossaryAgentPanel(QWidget):
             self._stack.setCurrentIndex(1)
             self.nav.select(WORKBENCH_ORDER[0], emit=False)
             self._current_task = WORKBENCH_ORDER[0]
-            self._dirty_tasks.discard(WORKBENCH_ORDER[0])
-            self.pages.setCurrentIndex(0)
+            self.pages.setCurrentIndex(self._page_index(WORKBENCH_ORDER[0]))
             if self.isVisible():
                 self._ensure_worker()
+                # 标脏位只由 *它* 清（``_ensure_current_planned``）：面板不可见
+                # （打开项目时工作台通常还没开）就跳过规划，此处先前无条件清掉
+                # 会让首个任务"以为已规划过"，之后 showEvent 也不再补——列表
+                # 永远空白，而导航计数照旧（2026-09-18 实测：误识别清理 15 条
+                # 却点进去什么都没有）。
                 self._ensure_current_planned()
             self._refresh_nav_counts()
         else:

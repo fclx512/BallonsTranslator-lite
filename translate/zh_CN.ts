@@ -1318,16 +1318,12 @@
             <translation>跳到工作台靠后的步骤、而更早的清理步骤还有未处理条目时提示我。顺序只是推荐，始终允许跳转。</translation>
         </message>
         <message>
-            <source> px</source>
-            <translation> px</translation>
+            <source>&lt;p&gt;In &lt;b&gt;Merge adjacent blocks&lt;/b&gt;, a group whose bounding box exceeds this share of the page is flagged, not dropped — it only starts unchecked. &lt;b&gt;85%&lt;/b&gt; flagged just the two cross-column groups in the 94-page sample.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;「合并相邻框」里，组的包围盒任一边超过页面对应边的该比例即标记为疑似误聚——&lt;b&gt;不会丢弃&lt;/b&gt;，只是默认不勾选。94 页样本里 &lt;b&gt;85%&lt;/b&gt; 只命中两个跨栏组。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>&lt;p&gt;In &lt;b&gt;Merge adjacent blocks&lt;/b&gt;, a group is flagged when its bounding box exceeds this share of the page on any side. Flagged groups are &lt;b&gt;never dropped&lt;/b&gt; — they are only left unchecked and marked, so you decide. &lt;b&gt;85%&lt;/b&gt; is the measured default: it flagged only the two cross-column groups in the 94-page sample.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;在「合并相邻框」里，组包围盒任一边超过页面对应边的该比例即被标记。被标记的组&lt;b&gt;不会&lt;/b&gt;被剔除——只是默认不勾选并加警示标，由你决定。默认 &lt;b&gt;85%&lt;/b&gt;：94 页样本里只标出了那两个跨栏大组。&lt;/p&gt;</translation>
-        </message>
-        <message>
-            <source>&lt;p&gt;Initial value of the batch &lt;b&gt;grow blocks&lt;/b&gt; amount: every side of a text box grows by this many pixels and stops at the neighbouring box. &lt;b&gt;10 px&lt;/b&gt; is the measured default (88% of the boxes grow on all four sides, +28% width / +17% height). It is only a starting value — the task always shows the numbers and asks before it runs.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;工作台「批量框扩张」的扩张量初值：文本框每边扩这么多像素，碰到邻框即停。&lt;b&gt;10 px&lt;/b&gt; 是实测默认值（88% 的框四边都能完整扩张，宽 +28%／高 +17%）。它只是起点——执行前一定会先把数字列出来并弹窗确认。&lt;/p&gt;</translation>
+            <source>&lt;p&gt;Starting value for the batch &lt;b&gt;grow blocks&lt;/b&gt; amount. &lt;b&gt;10 px&lt;/b&gt; is the measured default: 88% of the boxes grow on all four sides (+28% width / +17% height). You can change it for each run.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;批量「框扩张」的初始扩张量。&lt;b&gt;10 px&lt;/b&gt; 是实测默认值：88% 的框四边都能完整扩张（宽 +28%／高 +17%）。每次执行前都可在界面里改。&lt;/p&gt;</translation>
         </message>
         <message>
             <source>Batch Tasks</source>
@@ -5924,8 +5920,16 @@ in Settings → Mirror Config, then click Retry.</source>
             <translation>用户</translation>
         </message>
         <message>
-            <source>Open a project first — the workbench reads page texts from it.</source>
-            <translation>请先打开项目——工作台需要读取其中的页面原文。</translation>
+            <source>Glossary draft. Nothing is saved until you apply it.</source>
+            <translation>术语表草稿；点「应用草稿…」才会落盘。</translation>
+        </message>
+        <message>
+            <source>Open a project to use the workbench.</source>
+            <translation>先打开项目，工作台读取其中的页面原文。</translation>
+        </message>
+        <message>
+            <source>Story context for translation: global synopsis plus one summary per page.</source>
+            <translation>翻译用的剧情上下文：全书梗概 + 每页摘要。</translation>
         </message>
         <message>
             <source>Extract by frequency</source>
@@ -7499,16 +7503,8 @@ No pipeline stages will be executed.</source>
             <translation>跳到画布</translation>
         </message>
         <message>
-            <source>No preview available for this row (the page image is missing).</source>
+            <source>No preview for this row (page image missing).</source>
             <translation>该行没有可用的预览（页面原图缺失）。</translation>
-        </message>
-        <message>
-            <source>Nothing to show.</source>
-            <translation>没有可显示的条目。</translation>
-        </message>
-        <message>
-            <source>Preview at 100% scale (%1 x %2 px)</source>
-            <translation>100% 原比例预览（%1 × %2 px）</translation>
         </message>
         <message>
             <source>Run</source>
@@ -7596,10 +7592,6 @@ No pipeline stages will be executed.</source>
     </context>
     <context>
         <name>WorkbenchTasks</name>
-        <message>
-            <source> px</source>
-            <translation> 像素</translation>
-        </message>
         <message>
             <source>%1 px per side</source>
             <translation>每边 %1 px</translation>
@@ -7761,10 +7753,6 @@ No pipeline stages will be executed.</source>
             <translation>短边百分比</translation>
         </message>
         <message>
-            <source>pixels</source>
-            <translation>像素</translation>
-        </message>
-        <message>
             <source>%1 block(s) can grow, %2 blocked already, %3 with at least one side clamped.</source>
             <translation>可扩张 %1 个框，%2 个已贴住扩不动，%3 个至少一条边被截。</translation>
         </message>
@@ -7785,8 +7773,20 @@ No pipeline stages will be executed.</source>
             <translation>%1 组疑似误聚，%2 组顺序存疑。</translation>
         </message>
         <message>
-            <source>Blocks whose OCR text looks like noise (empty, digits only, symbols only, or no kana/kanji). Reject the false positives, then delete the rest in one go.</source>
-            <translation>OCR 结果像噪声的块（空文本、纯数字、纯符号、无假名汉字）。先把被误杀的驳回，再把剩下的整批删掉。</translation>
+            <source>%1 · %2 block(s) to fill</source>
+            <translation>%1 · 待覆盖 %2 个块</translation>
+        </message>
+        <message>
+            <source>%1 · %2-block group</source>
+            <translation>%1 · %2 个框一组</translation>
+        </message>
+        <message>
+            <source>%1 · block %2</source>
+            <translation>%1 · 块 %2</translation>
+        </message>
+        <message>
+            <source>Blocks whose OCR text looks like noise. Reject the false positives first, then delete the rest in one go.</source>
+            <translation>OCR 结果像噪声的块。先驳回误杀的，再整批删掉。</translation>
         </message>
         <message>
             <source>Cancelling halfway rolls back what was already filled, so a cancelled run leaves nothing behind. The whole batch can be rolled back in one step.</source>
@@ -7805,8 +7805,8 @@ No pipeline stages will be executed.</source>
             <translation>用背景色覆盖 %2 页上的 %1 个简单背景块，只写修复图层。复杂块完全不动。</translation>
         </message>
         <message>
-            <source>Fills near-flat balloon interiors with their background colour and leaves complex backgrounds completely alone (no model is loaded). Only the inpainted layer is written; judgements always use the original image.</source>
-            <translation>把气泡内近乎纯色的区域用背景色覆盖，复杂背景完全不动（不加载模型）。只写修复图层；判据一律算原图。</translation>
+            <source>Fills near-flat balloon interiors with their background colour; complex backgrounds are left alone (no model is loaded). Writes the inpainted layer only.</source>
+            <translation>把近纯色的气泡内部用背景色覆盖，复杂背景完全不动（不加载模型）。只写修复图层。</translation>
         </message>
         <message>
             <source>Grows %1 block(s) across %2 page(s) by %3, stopping at a neighbouring block or the page edge.</source>
@@ -7821,8 +7821,8 @@ No pipeline stages will be executed.</source>
             <translation>合并 %1 组——%3 页上 %2 个框并成 %1 个块。样式取组内索引最小的成员，标签取并集，页内块顺序保持不变。</translation>
         </message>
         <message>
-            <source>One row per candidate group; rows are checked by default except suspected false groupings. Click a row for a 100% scale preview.</source>
-            <translation>一组一行；除疑似误聚组外默认勾选。点选某行可在下方展开 100% 原比例预览。</translation>
+            <source>One row per candidate group. Click a row to preview it; suspected false groupings start unchecked.</source>
+            <translation>一组一行。点选某行看审批图；疑似误聚组默认不勾选。</translation>
         </message>
         <message>
             <source>Only the rendering rectangle changes (mask and inpainted data are kept). The whole batch can be rolled back in one step.</source>
@@ -7833,8 +7833,45 @@ No pipeline stages will be executed.</source>
             <translation>整批可用一步撤销。</translation>
         </message>
         <message>
-            <source>Widens the rendering area only (masks and inpainted pixels stay). Growth stops at a neighbouring block or the page edge. Set an amount first — there is no default.</source>
-            <translation>只扩渲染区域（遮罩与修复像素原样保留）。碰到邻框或页边即停。请先设定扩张量——没有默认值。</translation>
+            <source>Grows the rendering rectangle only — masks and inpainted pixels are untouched. Growth stops at a neighbouring block or the page edge.</source>
+            <translation>只扩渲染区域，遮罩与修复像素原样保留；碰到邻框或页边即停。</translation>
+        </message>
+    </context>
+    <context>
+        <name>WorkbenchTaskNav</name>
+        <message>
+            <source>Inpainting</source>
+            <translation>图像修复</translation>
+        </message>
+        <message>
+            <source>Text &amp; OCR</source>
+            <translation>文字与 OCR</translation>
+        </message>
+        <message>
+            <source>Translation</source>
+            <translation>翻译</translation>
+        </message>
+    </context>
+    <context>
+        <name>WorkbenchPreviewPanel</name>
+        <message>
+            <source>Back to 100% scale (the review default)</source>
+            <translation>回到 100% 原比例（审批默认）</translation>
+        </message>
+        <message>
+            <source>Fit</source>
+            <translation>适应窗口</translation>
+        </message>
+        <message>
+            <source>Zoom out to fit the panel (double-clicking the image does the same)</source>
+            <translation>缩小到适应浮窗（双击图片同效）</translation>
+        </message>
+    </context>
+    <context>
+        <name>_PreviewCanvas</name>
+        <message>
+            <source>Nothing to preview.</source>
+            <translation>没有可预览的内容。</translation>
         </message>
     </context>
 </TS>

@@ -4,6 +4,43 @@
 
 ## 2026-09-18
 
+### 工作台 UI 审计与逐项优化（D44 浮层形态收口 + 一批观感/状态同步修复）
+
+**问题/需求：** 用 `scripts/workbench_render.py` 把六个任务页渲染成图做了一轮观感审计（列出 11 项），用户逐条拍板后落地。
+
+**改动要点：**
+
+- **审批浮层（D44）形态收口**（`ui/workbench_preview.py`）：① 尺寸**随图自适应**（图片 + 标题条 + 边距，上限仍是 620×520；用户拖过标题条／拉伸过之后就不再自动改）——原先恒开 620×520，单气泡截图 134×43 泡在空底里白占画布；② **去掉关闭钮**，点画布（宿主区域）或 Esc 关闭：两者走一个**只在浮层可见期间挂着**的应用级事件过滤器，且**一律不吞事件**（画布自己的 Esc 语义不受影响），关掉即摘掉过滤器不给全局留开销；③ **不再抢键盘焦点**——原 `show_content` 收尾 `setFocus` 会把焦点从候选列表夺走，↑/↓ 翻行当场失效；④ 标题改报「哪一页哪个框」（`ui/workbench_tasks.py::row_caption`，各任务按自己的行粒度覆盖；页面名过长才按省略号截断），原先那句「100% 原比例预览（134 × 43 px）」既每行都不同又与缩放读数重复；⑤ 重规划（含批量执行完）与换任务时自动收起——原先会留着**已被删掉那个块**的截图。
+- **按钮可读性**：标题条两个动作钮（适应窗口／`1:1`）加 1px 描边 + 正常前景色（`config/stylesheet.css`）；「回到 100%」改名 `1:1`，与右侧同为小字灰字的缩放读数彻底区分。
+- **参数控件**：`ui/workbench_batch_view.py` 的 bool 参数改用 `ConfigCheckBox`（裸 `QCheckBox` 的 indicator 走原生样式，白底深勾与表格里的勾选框两套观感）；数值框后缀随「单位」选项走（`suffix_map`：px 模式 `10 px`、比例模式 `10 %`），`px` 与 `1:1` 按通用单位记号**不翻译**（含设置页那个默认扩张量输入框）。
+- **状态同步**：参数一变即刷新导航上的「还有 N 个未处理」（新增 `plan_changed` 信号——原先改扩张量到 0、列表都空了，chip 还写着 (7)）；无选中行时「跳到画布」禁用（原先装了能点却什么都不做）。
+- **文案收短**：四个任务的说明、空态提示，以及术语表／剧情页各补一行说明（原先只有空表）；扩张页提示里「请先设定扩张量——没有默认值」与输入框预填 10 自相矛盾，删该句；设置页「工作台（临时）」两条备注重写为两句话。
+- **渲染台**：`scripts/workbench_render.py` 的宿主改 `WA_DontShowOnScreen` + `show()`——直接 `show()` 会被窗口管理器压到屏幕大小（本机 960×540 屏上 1180×900 变 962×531），截图随环境变且浮层被夹成"几乎铺满中央区"。
+
+**测试：** `tests/test_workbench_preview.py` 16 项（新增自适应尺寸、手动尺寸优先、点画布关闭 + 过滤器随开关挂摘）、`tests/test_workbench_panel.py` 35 项（新增换任务收起、参数变计数刷新）；`scripts/verify.py` 七步全绿。
+
+**遗留：** 浮层位置每次仍锚画布左上角（只记住"用户调过尺寸"这一状态）；设计文档 §17 第 9 条的同批待改项 ①③④ 仍开着。
+
+**涉及文件：** `ui/workbench_preview.py`、`ui/workbench_batch_view.py`、`ui/workbench_tasks.py`、`ui/glossary_agent_panel.py`、`ui/configpanel.py`、`config/stylesheet.css`、`scripts/workbench_render.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_workbench_preview.py`、`tests/test_workbench_panel.py`、`docs/技术实现/AI辅助功能_设计与实现.md`
+
+---
+
+### 三处实测缺陷修复（批量写版本崩溃 / 误识别清理列表空白 / 单行浮层弹不出）
+
+**问题/需求：** 用户实机跑「简单背景修复」报错、误识别清理「显示有 15 个处理项但点进去看不到任何内容」、审批浮层在只有一行候选时一旦关掉就再也呼不出来。
+
+**改动要点：**
+
+- **批量写版本崩在拼带**（`utils/batch_versions.py::_capture_pixels`）：一页的多个矩形裁片直接 `np.concatenate(axis=0)`，**要求各裁片同宽**；简单背景修复一页有多条不同宽的纯色带，必抛 "all the input array dimensions ... must match exactly"（实测 228 vs 130），`begin()` 吞异常返回 `None` ⇒ 整批在写版本这步中止。新增 `_stack_crops`：按最大宽度**左侧对齐补零**（还原侧逐条取 `strip[y:y+h, :w]`，多出来的右边距是死区、不会写回图像，故还原侧代码不动、旧版本仍可读）。
+- **误识别清理列表长期空白**（`ui/glossary_agent_panel.py::GlossaryAgentPanel.refresh_project_state`）：面板不可见时（打开项目时工作台通常还没开）跳过规划，却已经无条件把首个任务从 `_dirty_tasks` 摘掉 ⇒ 之后 `showEvent` 也不再补规划，列表永远空、而导航计数照旧显示 15 条。改为**标脏位只由 `_ensure_current_planned` 清**（它才真正跑规划）。
+- **单行浮层关掉后弹不出来**（`ui/workbench_batch_view.py`）：只有一行候选时，关掉浮层后再点那行，表格的选中行没变 ⇒ 不发 `itemSelectionChanged`，浮层再也不会被呼出（多行时点别行碰巧能弹，故表现为"时好时坏"）。补 `cellClicked` 补取预览，并让浮层的 `closed` 信号经面板转达成 `forget_preview`（视图据此知道"预览已收起"、下次点击该重新取图）。
+
+**测试：** 三条回归用例，且都实测过"旧实现下必失败"——`tests/test_batch_versions.py` 不等宽矩形写版本并逐条还原、`tests/test_batch_simple_inpaint.py` 一页两条不等宽简单块端到端（旧实现下 `report["started"]` 为假）、`tests/test_workbench_panel.py` 关掉后再点同一行可重开 + 面板后开时首任务仍会被规划。相关 10 个测试模块 214 项全过。
+
+**涉及文件：** `utils/batch_versions.py`、`ui/glossary_agent_panel.py`、`ui/workbench_batch_view.py`、`tests/test_batch_versions.py`、`tests/test_batch_simple_inpaint.py`、`tests/test_workbench_panel.py`
+
+---
+
 ### D5：单块 Alt + 拖手柄 = 以中心缩放（PS 式即时修饰键）
 
 **问题/需求：** 泛用工作台 D5 要求给单块加「按住 Alt 拖手柄」的缩放：与默认的"拖哪条边/角、对侧钉住"不同，Alt 下中心不动、两侧对称扩张。这条此前从未实现（仓里与 Alt 有关的只有画布的笔刷尺寸缩放）。用户实测两轮后把口径钉成 PS 那种**换算**而非"重定基"：「在拖拽时按 alt 会将目前的拖拽进度转换为按住 alt 下的变换程度」。
@@ -95,6 +132,64 @@
 **测试：** 真机探针 `tmp/_s18_softkb_startup.py`（**必须窗口模式**，offscreen 起不来 `FramelessWindow`；`config/config.json` 先备份后还原）：模拟上次会话开着键盘构造主窗口 ⇒ 开关与图标都归零、dock 未创建；随后手点开／关仍正确。8 项断言全 PASS。
 
 **涉及文件：** `ui/mainwindow.py`
+
+---
+
+### 工作台 UI 优化（一）：导航两级化 + 底部状态条 + 目视验收渲染台
+
+**问题/需求：** 用户启动工作台 UI 优化流程，点出三处：① 顶部六个任务钮平铺，对不了解工作台的用户没有分类线索——应当先给「OCR／图像修复／翻译」这种管线大类，大类下再放细分任务；② 底部「草稿已载入：术语 0 条…」明明只读却画成输入框（圆角描边），意义不明；③ 我方渲染脚本出的验收图全是方块（编码/字体问题），需要修好以便逐项判断。
+
+**改动要点：**
+
+- **导航两级化（D42）**：`ui/glossary_agent_panel.py::WorkbenchTaskNav` 由「六个互斥任务钮的 2×3 网格」改为「一级大类页签 + 二级任务 chip」。大类用**管线阶段名**（文字与 OCR／图像修复／翻译），归属：文字与 OCR＝误识别清理／合并相邻框／框扩张，图像修复＝背景修复，翻译＝术语表／剧情。`WORKBENCH_ORDER` 改为由 `WORKBENCH_CATEGORIES` 摊平 ⇒ 前四项仍是 `CLEANUP_TASK_IDS`，跳步提示的下标比较与 `earlier_pending` 口径不变（既有用例未改一行）。切大类落到**该大类上次用过的任务**（不是每次重置成第一个）。计数两级都缀：chip 缀自己的，一级页签缀本大类之和（切到别的大类也看得见还有活）。大类标签的翻译上下文用 `WorkbenchTaskNav` 而非 `GlossaryAgentPanel`——后者里 `"Translation"` 已被术语表列头占为「译文」，同 context 同 source 只能有一个译文（实测页签一度真的显示成「译文」）。
+- **底部状态条（D43）**：日志区改 `objectName="WorkbenchStatusBar"` 的容器承载，`QTextEdit#WorkbenchLogView` 规则（ID 选择器优先于类名选择器）抹掉 `ConfigTextEdit` 的输入框外观（平底色、去圆角、无边框、`NoFrame`），靠顶边线与候选列表分开；「撤销上次批量」移到右端、对齐顶部。顺带修两处日志噪声：日志跨任务共用，故批量任务的行**前缀自己的任务名**（`_append_log(text, task_id)`，`_toast` 同）；`ui/workbench_batch_view.py::BatchTaskView.replan` 在空列表时**不再把页面摘要抄进日志**（它就是页面上那行，抄进全局日志后会出现在别的任务页上）。
+- **容器底色原先空转**：`QWidget#WorkbenchSurface`／`WorkbenchTaskNav` 的 QSS 底色一直在，但纯 `QWidget` 不上屏 QSS background ⇒ 规则静默失效。按仓库既有做法（`ui/tag_toolbar.py`）统一走新增的 `_styled()` 开 `WA_StyledBackground`。
+- **目视验收渲染台**：`tmp/wb_render.py`（未纳入版本控制）正式化为 `scripts/workbench_render.py`，修两个致命问题——**不许设 `QT_QPA_PLATFORM=offscreen`**（离屏平台 `QFontDatabase.families()` 实测为 0，任何文字都是豆腐块，且 `setFont` 救不回来）、**要按 `launch.py` 装字体＋语言＋主题**（原先截图是白底裸控件，观感毫无参考价值）。默认 2 倍率，stdout 回显两级导航结构（页签文字／chip 文字／可见 chip／计数），不看图也能核对。
+
+**测试：** `tests/test_workbench_panel.py` 新增 4 条（两级结构与大类切换／页签计数＝本大类之和／切回大类落回上次任务／任务→页下标一一对应）＋ 1 条（日志行前缀任务名、worker 行不缀）。`test_workbench_panel.py` 31 项、`test_glossary_agent_panel.py` 12 项全绿。渲染台实跑：六页 + 空态页均正常出图，中文正常显示。
+
+**遗留（已登记进设计文档 §17 第 9 项）：** 空态下日志只有「草稿已载入」与当前任务无关；图像修复页无候选时仍有「跳到画布」；执行钮在无候选时用带计数的文字而非禁用＋原因；参数改动走 180ms 防抖、观感像"没反应"；预览区固定高度留白。逐条与用户确认后再改。
+
+**涉及文件：** `ui/glossary_agent_panel.py`、`ui/workbench_batch_view.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`scripts/workbench_render.py`（新）、`scripts/README.md`、`tests/test_workbench_panel.py`、`AGENTS.md`、`docs/技术实现/AI辅助功能_设计与实现.md`
+
+> **过程说明：** 本轮中途工作区被一次 `git reset --hard origin/main` 清过（HEAD 由 `5ecfad32` 前进到 `518398ba`），当时未提交的 `ui/`、`config/`、`translate/` 改动随之丢失（未纳入版本控制的渲染脚本与测试文件存活），上述改动按同一口径逐条重做，并在新基线上复核。工作区里同时有别的在途改动时，动 `reset --hard`／`checkout` 前请先看 `git status`（AGENTS.md「多代理协作」）。
+
+---
+
+### 工作台 UI 优化（二）：审批预览改浮层 + 简单背景判据补两条
+
+**问题/需求：** ① 预览框尺寸过小且固定（120~280px 高），用户实测 433×395px 的审批图就被截；要求支持滚轮缩放与拖拽平移，并倾向**放到工作台外面**做成浮层（不占工作台宽度与纵向空间），先做一版看过再定方向。② 背景修复里很多"明明是简单背景（甚至 100% 纯色气泡）却判不出"，需要优化检查逻辑。
+
+**改动要点：**
+
+- **预览浮层（D44）**：新增 `ui/workbench_preview.py::WorkbenchPreviewPanel`——in-window child of `MainWindow.centralStackWidget`（与 `ui/custom_widget/rail_dock_panel.py::RailDockPanel` 同款做法，跟着窗口走、盖在画布页上），拖标题条移动、四边四角拉伸、Esc/× 关闭；内容区滚轮**以光标为锚点**缩放（0.1x~8x）、左键拖拽平移（内容小于视口时自动居中，拖不出边界）、双击适应窗口，标题条给「适应窗口／100%」与当前倍率。`ui/workbench_batch_view.py::BatchTaskView` 删掉页内预览区（`_preview_box`／`_preview_area`／`_preview_image` 一并撤掉），改为新增 `preview_requested` 信号把 **100% 原比例**的图与标题交给浮层；面板懒建浮层并接线，换项目时收掉。**D23 的"100% 原比例"口径不变**：打开与换图都回 100%，不自动缩到适应窗口，缩放只能由用户发起。
+- **简单背景判据补两条（D45，阈值不动）**：先诊断清楚「判不出」是**几何/遮罩**判定失败而非颜色判据失败——判据靠"最外那条 1px 兜底外框"围出一个包住全部遮罩像素的闭合轮廓，于是 ① 遮罩贴到裁剪边界时 `AND (255 - mask)` 会把外框那一截擦掉，一个闭合轮廓都不剩；② 裁剪窗口是块的 1.7 倍外扩，**邻块遮罩落进来**会把遮罩包围盒撑成跨块并集，没有任何轮廓包得住它。改法：`utils/textblock_mask.py::extract_ballon_mask` 分析前**外补 3px**（图像 replicate、遮罩补 0），外框永远擦不掉；新增 `modules/inpaint/base.py::block_local_mask`（按连通域只留与本块矩形相交的遮罩，筛不出时原样返回、不把情况改坏），由 `modules/inpaint/base.py::classify_simple` 的新参数 `blk_rect` 与两条调用路径（`InpainterBase.inpaint` 逐块分支、`ui/batch_inpaint.py` 的扫描）一起传入本块矩形。
+- **量化（合成失败场景 A/B，"pad0＋无矩形"＝旧行为 对照 "pad3＋矩形"）**：「判不出」**4/4 → 0/4**；其中"紧邻框 + 纯色气泡"由判不出变**简单**，"遮罩压裁剪边界"由判不出变可判；两张反向对照（同样场景但气泡是渐变）**改前改后都判复杂**，没有被放过成简单。注意合成场景的遮罩必须画成**笔画**——盖满整块会把渐变背景一起盖掉，渐变块也会判成简单（第一版探针踩过）。
+- **文档口径**：「审批预览在列表下方展开、只滚动不缩放」这条随 D44 改写为「默认 100%、不自动适应窗口，缩放由用户显式发起」。
+
+**测试：** 新增 `tests/test_workbench_preview.py`（14 项：默认 100%／适应窗口只缩不放／小图不放大／滚轮以光标为锚点／缩放上下限／拖拽平移与边界钉住／小图居中／双击适应／无图显示原因／标题条拖动与宿主内夹取／角手柄拉伸与地板尺寸／左缘只动左缘／Esc 关闭／关闭后重选重开仍回 100%）。`tests/test_workbench_panel.py` 的预览用例改为断言「交给浮层的图不缩放 + 浮层默认 100%」；`tests/test_batch_simple_inpaint.py` 新增 7 项（块局部遮罩两条单元 + 邻块与渐变对照 + 遮罩贴边 + 补边不改干净区结论 + 端到端 plan 计数），并修正一条旧用例——它用 `img[:50, :50]` 却声称"裁剪区内没有掩码"（实际有、只是贴在裁剪边界上），补边后该裁剪区能正确判出「纯色气泡＝简单」，用例改用真的没有掩码的 `[:30, :30]`。`scripts/verify.py --smoke` 全绿。
+
+**遗留：** 气泡轮廓被裁剪区切断的块（如贴页边且框比气泡小的），轮廓围不出来时仍走兜底区域判成**复杂**（保守跳过，不会误涂）——要进一步吃下这批，方向是「兜底区域由整窗改为遮罩包围盒 + 小外扩」或镜像补边，属判据语义变更，等用户定。真工程命中率请跑 `scripts/workbench_recalc.py c1 --project <目录>` 与改前基线（401 简单／131 复杂／250 判不出）对比。
+
+**涉及文件：** `ui/workbench_preview.py`（新）、`ui/workbench_batch_view.py`、`ui/glossary_agent_panel.py`、`modules/inpaint/base.py`、`utils/textblock_mask.py`、`ui/batch_inpaint.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`scripts/workbench_render.py`、`tests/test_workbench_preview.py`（新）、`tests/test_workbench_panel.py`、`tests/test_batch_simple_inpaint.py`、`AGENTS.md`、`docs/技术实现/AI辅助功能_设计与实现.md`
+
+---
+
+### 默认文字检测器改为 ysgyolo（`label.other` 同步默认关闭）
+
+**问题/需求：** 用户确认把 ysgyolo 作为默认文字检测器（它刻意忽略难以识别的拟声词、只认清晰的气泡文本，与本项目主流工作流一致），并把当前配置里的参数作为代码默认；其中 `label.other` 保持关闭。
+
+**改动要点：**
+
+- `utils/config.py::ModuleConfig` 的 `textdetector` 默认值由 `ctd` 改为 `ysgyolo`（`ctd` 仍在注册表里，用户在设置页／运行对话框照旧可选）。
+- `modules/textdetector/detector_ysg.py::YSGYoloDetector` 的 `label.other` 默认由 `True` 改为 `False`，并在该处写明理由：`other` 拉的是覆盖整个气泡的**气泡级框**而不只是多一层遮罩——检出框一律进 `utils/textblock.py::mit_merge_textlines` 的合并池，于是多出若干「整只气泡」的 `TextBlock` 会被 OCR／翻译／渲染（实测同一页块数 9→15、页面遮罩覆盖 5.09%→15.03%）；对修复侧则是遮罩把裁剪窗吃光，简单背景判据的「无非文字像素」分支直接判不出（实测 6/15）。要不要利用它的「气泡本身」信息另议。
+- 其余参数（model path／confidence 0.3／IoU 0.5／detect size 1024／merge text lines／mask dilate size 2 等）代码默认已与当前配置一致，未动；`device` 保持 `modules/base.py::DEVICE_SELECTOR`（跟随本机可用设备），未钉成 `cpu`。
+
+**测试：** `scripts/verify.py` 七步全绿（含启动冒烟，因同批改动命中 `ui/configpanel.py`）。另静态确认全新 `utils/config.py::ModuleConfig()` 取到 `ysgyolo`、`YSGYoloDetector()` 默认有效标签为五项（不含 `other`）；`tests/` 与 `docs/` 中无「默认检测器＝ctd」的断言或表述需要同步。**注意**：ysgyolo 需 `ultralytics` 与 `data/models/ysgyolo_yolo26_2.0.pt`（模型文件被 gitignore），两者缺失时 `launch.py` 按既有兜底静默降级为 `none` 检测器——与原先默认 `ctd`（模型同样 gitignore）情形一致。
+
+**涉及文件：** `utils/config.py`、`modules/textdetector/detector_ysg.py`
+
+**遗留（用户已确认后做）：** 在检测器参数区加一段模型行为特性备注，方便用户选择，本轮不做。
 
 ---
 

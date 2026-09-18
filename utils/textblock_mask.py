@@ -472,6 +472,10 @@ def existing_mask(img, mask: np.ndarray):
     return mask, mask, bub_dict
 
 
+# 分析前在裁剪边界外补的像素圈数（见 extract_ballon_mask 里的说明）
+_BALLON_PAD = 3
+
+
 def extract_ballon_mask(
     img: np.ndarray, mask: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -482,6 +486,18 @@ def extract_ballon_mask(
     # Handle RGBA images by converting to RGB for processing
     if len(img.shape) == 3 and img.shape[2] == 4:
         img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
+
+    # 边界外补一圈再分析（图像 replicate、遮罩补 0）：本函数靠最外那条 1px
+    # 边框兜底，围出一个"包住全部遮罩"的闭合轮廓；而下面 `AND (255 - mask)`
+    # 会把边框上被遮罩压住的那一截擦掉 ⇒ 遮罩贴到裁剪边界时（块靠页边、
+    # 1.7 倍外扩被页边夹住）一个闭合轮廓都不剩 ⇒ 判不出。补一圈后边框落在
+    # 补出来的空白区上，永远擦不掉；真气泡轮廓仍按"最小包围轮廓"胜出。
+    orig_h, orig_w = img.shape[:2]
+    pad = _BALLON_PAD
+    img = cv2.copyMakeBorder(img, pad, pad, pad, pad, cv2.BORDER_REPLICATE)
+    mask = cv2.copyMakeBorder(
+        mask, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0
+    )
 
     img = cv2.GaussianBlur(img, (3, 3), cv2.BORDER_DEFAULT)
     h, w = img.shape[:2]
@@ -523,6 +539,10 @@ def extract_ballon_mask(
                 ballon_mask = tmp
     if ballon_mask is not None:
         non_text_mask = cv2.bitwise_and(ballon_mask, 255 - mask)
+        # 裁回原尺寸：补出来的那圈只在分析内部用（兜底轮廓落在补出的空白区，
+        # 裁回后等价于"整块裁剪区"，与原行为一致）
+        ballon_mask = ballon_mask[pad : pad + orig_h, pad : pad + orig_w]
+        non_text_mask = non_text_mask[pad : pad + orig_h, pad : pad + orig_w]
     #     cv2.imshow('ballon', ballon_mask)
     #     cv2.imshow('non_text', non_text_mask)
     # cv2.imshow('im', img)

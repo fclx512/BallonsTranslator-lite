@@ -2311,7 +2311,28 @@ QLabel#WorkbenchEmptyHint {
     font-size: 13px;
     color: @disabledForegroundColor;
 }
-/* 任务导航钮：勾选态＝当前任务（一级导航，D20 第 ① 段） */
+/* 任务导航＝两级（一级大类页签 + 二级任务 chip，D42），两级用两种画法区分：
+   页签＝下划线式 tab（透明底，选中才出强调色下划线＋加粗），chip＝描边圆角块。 */
+QPushButton#WorkbenchCategoryButton {
+    height: 26px;
+    padding: 0 6px;
+    font-size: 13px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0px;
+    color: @disabledForegroundColor;
+}
+QPushButton#WorkbenchCategoryButton:hover {
+    background: transparent;
+    color: @qwidgetForegroundColor;
+}
+QPushButton#WorkbenchCategoryButton:checked {
+    background: transparent;
+    color: @accentPrimary;
+    border-bottom: 2px solid @accentPrimary;
+    font-weight: bold;
+}
 QPushButton#WorkbenchTaskButton {
     min-height: 24px;
     padding: 2px 8px;
@@ -2330,16 +2351,77 @@ QLabel#WorkbenchTaskSummary {
     font-size: 11px;
     color: @qwidgetForegroundColor;
 }
-/* 审批预览（100% 原比例，只滚动不缩放）：深一档底色把图边缘衬出来 */
-QScrollArea QLabel#WorkbenchPreviewImage {
+/* ── 工作台审批预览浮层（D44：工作台之外的浮窗，滚轮缩放/拖拽平移。
+      视觉语言对齐画布浮层面板 RailDockPanel：1px 细描边 + 标题条底色分层）── */
+WorkbenchPreviewPanel {
+    background: @widgetBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+}
+QWidget#WorkbenchPreviewHeader {
     background: @emptyContentBackgroundColor;
+    border: none;
+    border-bottom: 1px solid @borderColor;
+    border-radius: 5px 5px 0 0;
+}
+QWidget#WorkbenchPreviewCanvas {
+    background: @emptyContentBackgroundColor;
+    border: none;
+}
+QLabel#WorkbenchPreviewTitle {
+    background: transparent;  /* 不声明会盖成调色板窗口色，遮住标题带底色 */
+    color: @qwidgetForegroundColor;
+    font-weight: bold;
+}
+QLabel#WorkbenchPreviewZoom {
+    background: transparent;
+    color: @disabledForegroundColor;
+    font-size: 11px;
+}
+QLabel#WorkbenchPreviewEmptyHint {
+    background: transparent;
+    color: @disabledForegroundColor;
+}
+/* 隐形拉伸手柄：全局 QWidget 背景规则会给裸 QWidget 上底色，须钉透明 */
+QWidget#WorkbenchPreviewEdge {
+    background: transparent;
+    border: none;
+}
+/* 标题条两个动作钮（适应窗口／1:1）：**带描边**——只留一行灰字的话，
+   与右侧同样小字的缩放读数分不清哪个能点。浮层是临时浮层，不设关闭钮。 */
+QToolButton#WorkbenchPreviewToolBtn {
+    background: transparent;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding: 0px 6px;
+    color: @qwidgetForegroundColor;
+    font-size: 11px;
+}
+QToolButton#WorkbenchPreviewToolBtn:hover {
+    background: @accentPrimary20;
+    border: 1px solid @accentPrimary;
 }
 QPushButton#WorkbenchExecuteButton {
     font-weight: bold;
 }
+/* 底部状态条（D43）：顶边一条分隔线把它与候选列表分开 */
+QWidget#WorkbenchStatusBar {
+    background: @emptyContentBackgroundColor;
+    border-top: 1px solid @borderColor;
+}
+QPushButton#WorkbenchRollbackButton {
+    height: 24px;
+    font-size: 12px;
+}
+/* 日志区是**只读状态区，不是输入框**：抹掉 ConfigTextEdit 的输入框外观
+   （ID 选择器优先于类名选择器），只留小字次要色。 */
 QTextEdit#WorkbenchLogView {
     font-size: 11px;
     color: @disabledForegroundColor;
+    background: transparent;
+    border: none;
+    border-radius: 0px;
+    padding: 2px 0px;
 }
 
 /* ── Update release dialog ─────────────────────────────────── */

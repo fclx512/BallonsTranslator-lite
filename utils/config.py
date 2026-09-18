@@ -49,7 +49,10 @@ class SingleBlkTranslateMode:
 
 @nested_dataclass
 class ModuleConfig(Config):
-    textdetector: str = "ctd"
+    # 默认检测器取 ysgyolo：它刻意忽略难以识别的拟声词、只认清晰的气泡文本，
+    # 正是本项目的主流工作流（下游的区域再检测另有自己的检测器设置项）。
+    # 它需要 ultralytics，缺依赖或缺模型文件时 launch.py 会按既有兜底降级。
+    textdetector: str = "ysgyolo"
     ocr: str = "none_ocr"
     inpainter: str = "lama_large_512px"
     translator: str = "None"

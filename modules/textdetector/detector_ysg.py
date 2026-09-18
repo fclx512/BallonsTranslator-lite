@@ -107,13 +107,18 @@ class YSGYoloDetector(TextDetectorBase):
             "display_name": "Device",
         },
         "label": {
+            # other 默认关闭：它拉的是覆盖整个气泡的**气泡级框**，而不只是多一层
+            # 遮罩——下面走 mit_merge_textlines 时该框按文字框一样收进合并池，
+            # 于是多出若干"整只气泡"的 TextBlock 会被 OCR／翻译／渲染；对修复
+            # 侧则是遮罩把裁剪窗吃光、简单背景判据直接判不出。要不要用它的
+            # "气泡本身"信息另议。
             "value": {
                 "balloon": True,
                 "qipao": True,
                 "shuqing": True,
                 "changfangtiao": True,
                 "hengxie": True,
-                "other": True,
+                "other": False,
             },
             "type": "check_group",
             "display_name": "Label",

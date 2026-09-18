@@ -31,6 +31,7 @@ from ui.batch_inpaint import (  # noqa: E402
 )
 from ui.batch_ops import BatchOperation  # noqa: E402
 from utils.config import pcfg  # noqa: E402
+from utils.imgproc_utils import enlarge_window  # noqa: E402
 from utils.io_utils import imread  # noqa: E402
 from utils.proj_imgtrans import ProjImgTrans  # noqa: E402
 from utils.textblock import TextBlock  # noqa: E402
@@ -131,8 +132,15 @@ class InpaintOnlySimpleTest(unittest.TestCase):
         self.assertIsNotNone(ballon)
 
     def test_classify_returns_none_when_no_text_mask(self):
-        """裁剪区内没有掩码像素：判不出来（既不覆盖也不炸）。"""
-        need, ballon, bg = classify_simple(self.img[:50, :50], self.mask[:50, :50])
+        """裁剪区内没有掩码像素：判不出来（既不覆盖也不炸）。
+
+        用的是**真的没有**掩码像素的裁剪区（掩码从 37 起）。原先这条用例用
+        ``[:50, :50]``——那里其实有掩码，只是贴在裁剪边界上，旧实现因此围不出
+        区域而返回 None；补边（D45）后同一个裁剪区能正确判出「纯色气泡＝简单」，
+        见 ``BlockLocalMaskTest``。
+        """
+        need, ballon, bg = classify_simple(self.img[:30, :30], self.mask[:30, :30])
+        self.assertFalse(np.any(self.mask[:30, :30]))
         self.assertTrue(need)
         self.assertIsNone(ballon)
         self.assertIsNone(bg)
@@ -173,6 +181,117 @@ class _FailStore:
 
     def latest(self):
         return None
+
+
+def _strokes_bubble(img, mask, xyxy, fill="flat", flush=False):
+    """气泡（描边 + 纯色／渐变填充）+ **笔画状**遮罩。
+
+    遮罩必须画成笔画：盖满整块会把背景一起盖掉，非文字采样区只剩气泡边一圈，
+    渐变块也会被判成"简单"——那是合成场景的毛病，不是判据的（实测过）。
+    ``flush=True`` 让笔画贴到框边，用来复刻"遮罩压在裁剪边界上"。
+    """
+    x1, y1, x2, y2 = xyxy
+    cv2.rectangle(img, (x1, y1), (x2, y2), (0, 0, 0), 2)
+    cv2.rectangle(img, (x1 + 2, y1 + 2), (x2 - 2, y2 - 2), (255, 255, 255), -1)
+    if fill == "grad":
+        span = np.linspace(0, 255, max(1, x2 - x1 - 4), dtype=np.uint8)
+        img[y1 + 2 : y2 - 2, x1 + 2 : x2 - 2] = np.tile(span, (y2 - y1 - 4, 1))[:, :, None]
+    gap = 0 if flush else 4
+    for row in (0, 1):
+        top = y1 + 4 + row * ((y2 - y1) // 2)
+        for col in range(3):
+            left = x1 + gap + col * max(6, (x2 - x1) // 4)
+            if left + 3 >= x2:
+                break
+            mask[top : top + max(4, (y2 - y1) // 4 - 8), left : left + 3] = 255
+
+
+def _crop(img, mask, xyxy):
+    """按批量的口径取块窗口：``(im, msk, rect)``，rect 是本块 xyxy 的裁剪区坐标。"""
+    x1, y1, x2, y2 = enlarge_window(list(xyxy), img.shape[1], img.shape[0], ratio=1.7)
+    rect = (xyxy[0] - x1, xyxy[1] - y1, xyxy[2] - x1, xyxy[3] - y1)
+    return img[y1:y2, x1:x2], mask[y1:y2, x1:x2], rect
+
+
+class BlockLocalMaskTest(unittest.TestCase):
+    """块局部遮罩 + 裁剪边界补边（D45）：「明明是纯色气泡却判不出」的两条机制。"""
+
+    PAGE = 200
+
+    def test_local_mask_keeps_own_component_drops_neighbour(self):
+        from modules.inpaint.base import block_local_mask
+
+        msk = np.zeros((60, 80), np.uint8)
+        msk[10:30, 5:20] = 255  # 本块
+        msk[10:30, 60:75] = 255  # 邻块
+        out = block_local_mask(msk, (5, 10, 20, 30))
+        self.assertTrue((out[:, :40] == msk[:, :40]).all())  # 自己的原样保留
+        self.assertEqual(int(out[:, 40:].sum()), 0)  # 邻块的整条去掉
+
+    def test_local_mask_untouched_when_rect_misses_every_component(self):
+        """几何错位（矩形不与任何遮罩相交）时不筛——别把情况改坏。"""
+        from modules.inpaint.base import block_local_mask
+
+        msk = np.zeros((40, 40), np.uint8)
+        msk[5:10, 5:10] = 255
+        out = block_local_mask(msk, (30, 30, 39, 39))
+        self.assertTrue((out == msk).all())
+
+    def test_neighbour_mask_in_window_no_longer_unknown(self):
+        """邻块遮罩落进窗口、且贴到裁剪边界：旧代码判不出，现在判得出。"""
+        img = np.full((self.PAGE, self.PAGE, 3), 255, np.uint8)
+        mask = np.zeros((self.PAGE, self.PAGE), np.uint8)
+        mine = [30, 60, 90, 120]
+        _strokes_bubble(img, mask, mine, "flat")
+        _strokes_bubble(img, mask, [92, 60, 152, 120], "flat")  # 紧邻，会落进窗口
+        im, msk, rect = _crop(img, mask, mine)
+        self.assertTrue(msk[:, -1].any())  # 邻块遮罩确实压在裁剪边界上
+
+        need, ballon, bg = classify_simple(im, msk, rect)
+        self.assertIsNotNone(ballon, "不该再是判不出")
+        self.assertFalse(need)
+        self.assertTrue(np.allclose(bg, 255))
+
+    def test_neighbour_gradient_still_complex(self):
+        """反向对照：同样场景但本块是渐变，不许被放过成"简单"。"""
+        img = np.full((self.PAGE, self.PAGE, 3), 255, np.uint8)
+        mask = np.zeros((self.PAGE, self.PAGE), np.uint8)
+        mine = [30, 60, 90, 120]
+        _strokes_bubble(img, mask, mine, "grad")
+        _strokes_bubble(img, mask, [92, 60, 152, 120], "flat")
+        im, msk, rect = _crop(img, mask, mine)
+        need, ballon, _bg = classify_simple(im, msk, rect)
+        self.assertIsNotNone(ballon)
+        self.assertTrue(need)
+
+    def test_mask_on_crop_border_is_not_unknown(self):
+        """遮罩压在裁剪边界上（块贴页边）：补边后仍能围出区域，不再判不出。"""
+        img = np.full((self.PAGE, self.PAGE, 3), 255, np.uint8)
+        mask = np.zeros((self.PAGE, self.PAGE), np.uint8)
+        mine = [0, 60, 60, 120]
+        _strokes_bubble(img, mask, mine, "flat", flush=True)
+        im, msk, rect = _crop(img, mask, mine)
+        self.assertTrue(msk[:, 0].any())
+        need, ballon, _bg = classify_simple(im, msk, rect)
+        self.assertIsNotNone(ballon)
+
+    def test_pad_ring_does_not_change_clean_crop_verdict(self):
+        """补边不改判据本身：干净的裁剪区（遮罩不贴边）结论不变。"""
+        img = np.full((self.PAGE, self.PAGE, 3), 255, np.uint8)
+        mask = np.zeros((self.PAGE, self.PAGE), np.uint8)
+        mine = [40, 40, 100, 100]
+        _strokes_bubble(img, mask, mine, "flat")
+        im, msk, rect = _crop(img, mask, mine)
+        need, _ballon, bg = classify_simple(im, msk, rect)
+        self.assertFalse(need)
+        self.assertTrue(np.allclose(bg, 255))
+        # 渐变块照旧判复杂
+        img2 = np.full((self.PAGE, self.PAGE, 3), 255, np.uint8)
+        mask2 = np.zeros((self.PAGE, self.PAGE), np.uint8)
+        _strokes_bubble(img2, mask2, mine, "grad")
+        im2, msk2, rect2 = _crop(img2, mask2, mine)
+        need2, _b, _bg = classify_simple(im2, msk2, rect2)
+        self.assertTrue(need2)
 
 
 class BatchSimpleInpaintTest(unittest.TestCase):
@@ -223,6 +342,32 @@ class BatchSimpleInpaintTest(unittest.TestCase):
 
         self.fake = _FakeInpainter()
         self.task = BatchSimpleInpaint(self.proj, self.fake)
+
+    def test_scan_counts_flat_bubble_next_to_another_block_as_simple(self):
+        """端到端：紧邻两块、邻块遮罩落进窗口 → 计划里算「简单」（旧实现判不出）。
+
+        锁的是 ``ui/batch_inpaint.py::_scan_page`` 真的把本块矩形交给了判据
+        （D45）——只测 ``classify_simple`` 看不出这条接线漏没漏。
+        """
+        page = np.full((self.PAGE_SIZE, self.PAGE_SIZE, 3), 255, np.uint8)
+        mask = np.zeros((self.PAGE_SIZE, self.PAGE_SIZE), np.uint8)
+        mine = [30, 60, 90, 120]
+        _strokes_bubble(page, mask, mine, "flat")
+        _strokes_bubble(page, mask, [92, 60, 152, 120], "flat")
+
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        cv2.imwrite(osp.join(tmp.name, "p.png"), page)
+        proj = ProjImgTrans(directory=tmp.name)
+        proj.pages["p.png"] = [_make_blk(mine)]
+        proj.save_mask("p.png", mask)
+        proj.save()
+        plan = BatchSimpleInpaint(proj, _FakeInpainter()).plan(["p.png"])
+        entry = plan["pages"]["p.png"]
+        self.assertEqual(entry["simple"], 1)
+        self.assertEqual(entry["unknown"], 0)
+
+    PAGE_SIZE = 200
 
     def tearDown(self):
         pcfg.intermediate_imgsave_ext = self._ext
@@ -340,6 +485,37 @@ class BatchSimpleInpaintTest(unittest.TestCase):
             open(osp.join(self.proj.inpainted_dir(), "01.png"), "rb").read(),
             self.base_bytes,
         )
+
+    def test_two_simple_blocks_of_different_widths_still_write_a_version(self):
+        """一页两条**不等宽**的简单块：写版本不能因拼带失败而整批中止。
+
+        2026-09-18 实测：``utils/batch_versions.py`` 把一页的各矩形裁片直接
+        ``np.concatenate(axis=0)``，宽度不等即抛 "all the input array
+        dimensions ... must match exactly"（228 vs 130）——简单背景修复
+        一跑就报错、版本没写成（``report["started"]`` 为假）。
+        """
+        wide = [20, 10, 140, 60]  # 120 宽
+        narrow = [20, 130, 70, 180]  # 50 宽
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        img, mask = _page_image([("simple", wide), ("simple", narrow)])
+        name = "10.png"
+        cv2.imwrite(osp.join(tmp.name, name), img)
+        proj = ProjImgTrans(directory=tmp.name)
+        proj.save_mask(name, mask)
+        proj.pages[name] = [_make_blk(wide), _make_blk(narrow)]
+        proj.save()
+        # 有既有修复图才会走"存矩形前图"那条路（没有则只登记 existed=False）
+        proj.save_inpainted(name, img.copy())
+
+        report = BatchSimpleInpaint(proj, _FakeInpainter()).apply()
+        self.assertTrue(report["started"], report)
+        self.assertIsNotNone(report["version"])
+        self.assertEqual(report["errors"], {})
+        self.assertEqual(report["blocks"], 2)
+        after = imread(proj.get_inpainted_path(name, get_last_modified=True))
+        self.assertEqual(after[35, 80].tolist(), [255, 255, 255])  # 宽块被覆盖
+        self.assertEqual(after[155, 45].tolist(), [255, 255, 255])  # 窄块被覆盖
 
     def test_apply_aborts_when_version_not_written(self):
         task = BatchSimpleInpaint(

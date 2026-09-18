@@ -2489,13 +2489,13 @@ class ConfigPanel(Widget):
             ConfigFormRow(
                 self.tr("False grouping threshold"),
                 self.merge_oversize_spin,
-                note=self.tr("<p>In <b>Merge adjacent blocks</b>, a group is flagged when its bounding box exceeds this share of the page on any side. Flagged groups are <b>never dropped</b> — they are only left unchecked and marked, so you decide. <b>85%</b> is the measured default: it flagged only the two cross-column groups in the 94-page sample.</p>"),
+                note=self.tr("<p>In <b>Merge adjacent blocks</b>, a group whose bounding box exceeds this share of the page is flagged, not dropped — it only starts unchecked. <b>85%</b> flagged just the two cross-column groups in the 94-page sample.</p>"),
             )
         )
 
         self.expand_default_spin = NoArrowsSpinBox()
         self.expand_default_spin.setRange(0, 500)
-        self.expand_default_spin.setSuffix(self.tr(" px"))
+        self.expand_default_spin.setSuffix(" px")  # 通用单位记号，不翻译
         self.expand_default_spin.setValue(int(pcfg.workbench_expand_px))
         self.expand_default_spin.setFixedWidth(CONFIG_COMBOBOX_SHORT)
         self.expand_default_spin.valueChanged.connect(
@@ -2505,7 +2505,7 @@ class ConfigPanel(Widget):
             ConfigFormRow(
                 self.tr("Default grow amount"),
                 self.expand_default_spin,
-                note=self.tr("<p>Initial value of the batch <b>grow blocks</b> amount: every side of a text box grows by this many pixels and stops at the neighbouring box. <b>10 px</b> is the measured default (88% of the boxes grow on all four sides, +28% width / +17% height). It is only a starting value — the task always shows the numbers and asks before it runs.</p>"),
+                note=self.tr("<p>Starting value for the batch <b>grow blocks</b> amount. <b>10 px</b> is the measured default: 88% of the boxes grow on all four sides (+28% width / +17% height). You can change it for each run.</p>"),
             )
         )
 

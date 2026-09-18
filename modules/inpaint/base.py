@@ -48,7 +48,36 @@ def inpaint_handle_alpha_channel(original_alpha, mask):
     return result_alpha
 
 
-def classify_simple(im: np.ndarray, msk: np.ndarray):
+def block_local_mask(msk: np.ndarray, rect) -> np.ndarray:
+    """只留与本块矩形相交的遮罩连通域（「块局部遮罩」）。
+
+    裁剪窗口是块的 1.7 倍外扩，邻块的文字遮罩会一起落进来：遮罩包围盒被撑成
+    跨块的并集，没有任何轮廓能"包住整个包围盒"⇒ ``extract_ballon_mask``
+    围不出气泡 ⇒ 判不出（实测"明明是纯色气泡却判不出"的主因之一）。
+
+    按**连通域**筛而不是按矩形硬裁：本块自己伸出矩形的笔画不会被切掉，筛不出
+    任何相交域时（几何已错位）原样返回，不把情况改坏。``rect`` 是本块 ``xyxy``
+    在裁剪区坐标下的矩形，可越界，函数内会夹到数组范围内。
+    """
+    height, width = msk.shape[:2]
+    x1, y1, x2, y2 = (int(v) for v in rect)
+    x1, x2 = max(0, min(x1, width)), max(0, min(x2, width))
+    y1, y2 = max(0, min(y1, height)), max(0, min(y2, height))
+    if x2 <= x1 or y2 <= y1:
+        return msk
+    count, labels = cv2.connectedComponents(
+        (msk > 0).astype(np.uint8), connectivity=8
+    )
+    if count <= 1:
+        return msk
+    inside = np.unique(labels[y1:y2, x1:x2])
+    inside = inside[inside > 0]
+    if inside.size == 0:
+        return msk
+    return np.where(np.isin(labels, inside), msk, 0).astype(msk.dtype)
+
+
+def classify_simple(im: np.ndarray, msk: np.ndarray, blk_rect=None):
     """判定该块是否「简单背景」（可用纯色覆盖、无需修复模型）。
 
     判据链与管线逐块路径完全一致——``InpainterBase.inpaint`` 的逐块分支
@@ -62,6 +91,9 @@ def classify_simple(im: np.ndarray, msk: np.ndarray):
         im: 块的裁剪图。**按 D34 一律传原图**——传已修过或手工改过的修复图
             会让复杂块被误判成"简单"而遭纯色覆盖，毁掉手工成果。
         msk: 同区域的文本遮罩裁剪（只读，本函数不改它）。
+        blk_rect: 本块 ``xyxy`` 在裁剪区坐标下的矩形；给了就先做「块局部
+            遮罩」（``block_local_mask``，D45）——裁剪区是 1.7 倍外扩，
+            邻块遮罩会把包围盒撑成跨块并集而"判不出"。不给＝保持旧行为。
 
     Returns:
         ``(need_inpaint, ballon_msk, average_bg_color)``：
@@ -76,6 +108,10 @@ def classify_simple(im: np.ndarray, msk: np.ndarray):
         # 在 extract_ballon_mask 内部的 findNonZero→boundingRect 处抛异常，
         # 这里统一返回"需修复"（与 ballon_msk 为 None 同义），调用方跳过。
         return True, None, None
+    if blk_rect is not None:
+        msk = block_local_mask(msk, blk_rect)
+        if not np.any(msk):
+            return True, None, None
     ballon_msk, non_text_msk = extract_ballon_mask(im, msk)
     if ballon_msk is None or non_text_msk is None:
         return True, None, None
@@ -211,8 +247,12 @@ class InpainterBase(BaseModule):
                 msk = mask[xyxy_e[1] : xyxy_e[3], xyxy_e[0] : xyxy_e[2]]
                 need_inpaint = True
                 if judge_simple:
+                    # 本块 xyxy 在裁剪区坐标下的矩形（块局部遮罩，D45）
+                    bx1, by1, bx2, by2 = xyxy
                     need_inpaint, ballon_msk, average_bg_color = classify_simple(
-                        im, msk
+                        im,
+                        msk,
+                        (bx1 - xyxy_e[0], by1 - xyxy_e[1], bx2 - xyxy_e[0], by2 - xyxy_e[1]),
                     )
                     if not need_inpaint:
                         im[np.where(ballon_msk > 0)] = average_bg_color

@@ -147,6 +147,19 @@ class BatchTask:
         """该行的审批预览（100% 原比例）；取不到图返回 ``None``。"""
         return None
 
+    def row_caption(self, row: TaskRow) -> str:
+        """审批浮层的标题：**说清在看哪一页的哪个框**。
+
+        图尺寸（"150 × 60 px"）对审阅没有意义——它既不是块尺寸也不是页尺寸，
+        还每行都不同；缩放与否看浮层标题条右侧的读数。子类按自己的行粒度
+        覆盖（组／页级任务给条数）。
+        """
+        if row.block_index is None:
+            return row.pagename
+        return QCoreApplication.translate(
+            "WorkbenchTasks", "%1 · block %2"
+        ).replace("%1", row.pagename).replace("%2", str(row.block_index))
+
     def apply(self, keys: Optional[Sequence], options: Dict[str, Any]) -> dict:
         """把勾选的标识交回引擎（``keys=None`` 表示用引擎缺省口径）。"""
         raise NotImplementedError
@@ -161,6 +174,8 @@ class BatchTask:
         ``kind`` 取值：``"int"``（``min``／``max``／``suffix``）、
         ``"choice"``（``items`` ＝ ``[(值, 已翻译标签)]``）、``"bool"``。
         参数值由界面收集进 ``options`` 字典回传 ``plan``／``apply``。
+        ``suffix_map`` ＝ ``(另一个选项的键, {该选项的值: 后缀})``，用于让
+        数值框的单位跟着模式走（后缀是通用单位记号，不翻译）。
         """
         return []
 
@@ -279,7 +294,7 @@ class MisreadTask(BatchTask):
         )
         self.hint = QCoreApplication.translate(
             "WorkbenchTasks",
-            "Blocks whose OCR text looks like noise (empty, digits only, symbols only, or no kana/kanji). Reject the false positives, then delete the rest in one go.",
+            "Blocks whose OCR text looks like noise. Reject the false positives first, then delete the rest in one go.",
         )
 
     def _engine(self) -> BatchDeleteMisread:
@@ -425,8 +440,17 @@ class MergeTask(BatchTask):
         self.title = self.label
         self.hint = QCoreApplication.translate(
             "WorkbenchTasks",
-            "One row per candidate group; rows are checked by default except suspected false groupings. Click a row for a 100% scale preview.",
+            "One row per candidate group. Click a row to preview it; suspected false groupings start unchecked.",
         )
+
+    def row_caption(self, row: TaskRow) -> str:
+        group = row.payload.get("group")
+        size = getattr(group, "size", None)
+        if size is None:
+            return row.pagename
+        return QCoreApplication.translate(
+            "WorkbenchTasks", "%1 · %2-block group"
+        ).replace("%1", row.pagename).replace("%2", str(size))
 
     def _engine(self) -> BatchMerge:
         # 误聚阈值取设置里的值（D33d 的「设置内参数接口」）；引擎本身仍按
@@ -611,7 +635,7 @@ class ExpandTask(BatchTask):
         self.title = self.label
         self.hint = QCoreApplication.translate(
             "WorkbenchTasks",
-            "Widens the rendering area only (masks and inpainted pixels stay). Growth stops at a neighbouring block or the page edge. Set an amount first — there is no default.",
+            "Grows the rendering rectangle only — masks and inpainted pixels are untouched. Growth stops at a neighbouring block or the page edge.",
         )
 
     def _engine(self) -> BatchExpand:
@@ -721,17 +745,16 @@ class ExpandTask(BatchTask):
                 # 初值取设置里的默认扩张量（D5／C3，2026-09-18 定值 10px）。
                 # 引擎仍要求显式给 amount，这里只是输入框的起点，用户可改。
                 "value": max(0, int(pcfg.workbench_expand_px)),
-                "suffix": QCoreApplication.translate("WorkbenchTasks", " px"),
+                # 后缀跟着「单位」走，且**不翻译**：px／% 是通用单位记号，
+                # 中文语境下同样一眼看懂（写死"像素"反而不通用）。
+                "suffix_map": ("mode", {MODE_PX: " px", MODE_RATIO: " %"}),
             },
             {
                 "key": "mode",
                 "kind": "choice",
                 "label": QCoreApplication.translate("WorkbenchTasks", "Unit"),
                 "items": [
-                    (
-                        MODE_PX,
-                        QCoreApplication.translate("WorkbenchTasks", "pixels"),
-                    ),
+                    (MODE_PX, "px"),
                     (
                         MODE_RATIO,
                         QCoreApplication.translate(
@@ -809,8 +832,16 @@ class SimpleInpaintTask(BatchTask):
         self.title = self.label
         self.hint = QCoreApplication.translate(
             "WorkbenchTasks",
-            "Fills near-flat balloon interiors with their background colour and leaves complex backgrounds completely alone (no model is loaded). Only the inpainted layer is written; judgements always use the original image.",
+            "Fills near-flat balloon interiors with their background colour; complex backgrounds are left alone (no model is loaded). Writes the inpainted layer only.",
         )
+
+    def row_caption(self, row: TaskRow) -> str:
+        count = row.cells[1] if len(row.cells) > 1 else None
+        if count is None:
+            return row.pagename
+        return QCoreApplication.translate(
+            "WorkbenchTasks", "%1 · %2 block(s) to fill"
+        ).replace("%1", row.pagename).replace("%2", count)
 
     def _engine(self):
         # 延迟导入：ui/batch_inpaint.py 会拉进修复模块（torch/cv2），而本模块

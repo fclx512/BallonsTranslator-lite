@@ -133,6 +133,26 @@ def _normalize_rects(rects: Sequence, w: int, h: int) -> List[List[int]]:
     return out
 
 
+def _stack_crops(crops: Sequence[np.ndarray]) -> np.ndarray:
+    """把一页的各矩形裁片竖着拼成一条带（还原时按 ``rects`` 顺序取回）。
+
+    **各裁片宽度不等**（这正是「简单背景修复」的常态：一页有好几条不同宽的
+    纯色带）时不能直接 ``np.concatenate``——它会抛
+    "all the input array dimensions except for the concatenation axis must
+    match exactly"（2026-09-18 的 `Failed to write batch version` 就是这么来的，
+    整批操作因此中止）。故窄的裁片**左侧对齐、右边补零**到最大宽度：
+    还原侧逐条取 ``strip[y:y+h, :w]``，多出来的右边距是死区、不会写回图像。
+    """
+    width = max(crop.shape[1] for crop in crops)
+    rows = []
+    for crop in crops:
+        if crop.shape[1] < width:
+            pad = [(0, 0), (0, width - crop.shape[1])] + [(0, 0)] * (crop.ndim - 2)
+            crop = np.pad(crop, pad, mode="constant")
+        rows.append(crop)
+    return np.concatenate(rows, axis=0)
+
+
 def _match_channels(crop: np.ndarray, base: np.ndarray) -> np.ndarray:
     """裁片与底图通道数对齐（修复图可能带 alpha，来源图不带）。"""
     if crop.ndim == 2 and base.ndim == 3:
@@ -286,8 +306,8 @@ class BatchVersionStore:
             if not norm:
                 pixels[pagename] = {"file": src_path, "existed": True, "rects": []}
                 continue
-            strip = np.concatenate(
-                [img[y1:y2, x1:x2] for x1, y1, x2, y2 in norm], axis=0
+            strip = _stack_crops(
+                [img[y1:y2, x1:x2] for x1, y1, x2, y2 in norm]
             )
             os.makedirs(px_dir, exist_ok=True)
             rel = f"{PIXEL_DIR_NAME}/{i:04d}.png"

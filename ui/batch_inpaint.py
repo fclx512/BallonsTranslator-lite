@@ -174,7 +174,13 @@ class BatchSimpleInpaint:
             if im.size == 0 or msk.size == 0:
                 entry["unknown"] += 1
                 continue
-            need_inpaint, ballon_msk, _bg = classify_simple(im, msk)
+            need_inpaint, ballon_msk, _bg = classify_simple(
+                im,
+                msk,
+                # 本块 xyxy 在裁剪区坐标下（块局部遮罩，D45）：窗口是 1.7 倍
+                # 外扩，邻块遮罩落进来会把包围盒撑大 → 围不出气泡 → 判不出
+                (blk.xyxy[0] - x1, blk.xyxy[1] - y1, blk.xyxy[2] - x1, blk.xyxy[3] - y1),
+            )
             if ballon_msk is None:
                 # 判不出来（裁剪区内无文本像素／围不出气泡）：不动它
                 entry["unknown"] += 1
