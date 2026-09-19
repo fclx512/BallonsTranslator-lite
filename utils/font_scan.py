@@ -121,16 +121,29 @@ def scan_font_faces(font_dirs: Optional[List[str]] = None) -> List[dict]:
     """
     try:
         from fontTools.ttLib import TTCollection, TTFont
+
+        # name/OS-2 是扫描唯一访问的两张表，也是畸形字体的主要报错源；
+        # ttLib 的表模块是懒加载的，不预导入的话其 logger 要到扫描中段
+        # 才创建，躲过下面的整树压制
+        from fontTools.ttLib.tables import _n_a_m_e, O_S_2f_2  # noqa: F401
     except Exception:
         return []
 
     faces: List[dict] = []
     # 系统字体目录里常有 name 表畸形的字体（Win10 尤多），fontTools 解析
     # 时会刷 ERROR 日志（"stringOffset incorrect"）；解析本身不失败、
-    # 扫描对异常已兜底，这里压掉纯噪音
-    ft_log = logging.getLogger("fontTools")
-    prev_level = ft_log.level
-    ft_log.setLevel(logging.CRITICAL)
+    # 扫描对异常已兜底，这里压掉纯噪音。
+    # 注意 utils/logger.py 全局 setLoggerClass(ColoredLogger)：fontTools 的
+    # 模块级子 logger 各自带 console handler 且级别 WARNING，只压根 logger
+    # 压不住子 logger 的自有 handler，须整棵树一起压。
+    ft_targets = [logging.getLogger("fontTools")] + [
+        logging.getLogger(name)
+        for name in list(logging.Logger.manager.loggerDict)
+        if isinstance(name, str) and name.startswith("fontTools.")
+    ]
+    prev_levels = [(lg, lg.level) for lg in ft_targets]
+    for lg in ft_targets:
+        lg.setLevel(logging.CRITICAL)
     try:
         for d in font_dirs if font_dirs is not None else _default_font_dirs():
             for path in sorted(glob.glob(os.path.join(d, "*"))):
@@ -148,7 +161,8 @@ def scan_font_faces(font_dirs: Optional[List[str]] = None) -> List[dict]:
                     if face:
                         faces.append(face)
     finally:
-        ft_log.setLevel(prev_level)
+        for lg, lvl in prev_levels:
+            lg.setLevel(lvl)
     return faces
 
 
