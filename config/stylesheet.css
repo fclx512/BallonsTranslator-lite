@@ -2258,14 +2258,21 @@ QTableWidget, QTableView {
     border-radius: 6px;
     outline: none;
     selection-background-color: @accentPrimary20;
-    selection-color: @textColor;
+    selection-color: @dragTextColor;
 }
 QTableWidget::item, QTableView::item {
     padding: 2px 4px;
 }
+/* hover 规则放在 :selected 之前：同优先级按源顺序后者胜出，
+   悬停已选中行时仍保持选中底色，不会被 hover 底色盖掉 */
+QTableWidget::item:hover, QTableView::item:hover {
+    background: @hoverBackgroundColor;
+}
+/* 选中文字用 @dragTextColor（主题里"高亮底上的可读文字"：暗色主题浅字、
+   浅色主题暗字）——@textColor 是中间调灰蓝，落在主题色染底上看不清 */
 QTableWidget::item:selected, QTableView::item:selected {
     background: @accentPrimary20;
-    color: @textColor;
+    color: @dragTextColor;
 }
 QHeaderView::section {
     background-color: @widgetBackgroundColor;

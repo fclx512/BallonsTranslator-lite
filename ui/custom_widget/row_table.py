@@ -37,7 +37,7 @@ from qtpy.QtCore import (  # noqa: E402
     Qt,
     Signal,
 )
-from qtpy.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen  # noqa: E402
+from qtpy.QtGui import QColor, QCursor, QFont, QFontMetrics, QPainter, QPainterPath, QPen  # noqa: E402
 from qtpy.QtWidgets import (  # noqa: E402
     QAbstractItemView,
     QHeaderView,
@@ -65,6 +65,23 @@ def _theme_color(key: str, alpha: int = 255) -> QColor:
     from ui.misc import get_theme_color
 
     return get_theme_color(key=key, alpha=alpha)
+
+
+def _luma(color: QColor) -> float:
+    """感知亮度（0~1，够用于挑对比色，不做精确的线性化）。"""
+    return (
+        0.2126 * color.redF() + 0.7152 * color.greenF() + 0.0722 * color.blueF()
+    )
+
+
+def _composite(tint: QColor, base: QColor) -> QColor:
+    """半透明染底叠在底色上的实际观感色（对比度要按它算）。"""
+    a = tint.alphaF()
+    return QColor.fromRgbF(
+        tint.redF() * a + base.redF() * (1 - a),
+        tint.greenF() * a + base.greenF() * (1 - a),
+        tint.blueF() * a + base.blueF() * (1 - a),
+    )
 
 
 class _RowModel(QAbstractTableModel):
@@ -145,6 +162,30 @@ class _RowDelegate(QStyledItemDelegate):
             self._color_cache[cache_key] = _theme_color(key, alpha)
         return self._color_cache[cache_key]
 
+    def selection_text(self):
+        """高亮态（选中染底）上的文字颜色：``(主文色, 次要色)``。
+
+        部分主题的 ``@dragTextColor`` 是暗色（浅色主题用它），落在深色
+        染底上就看不清——按染底的实际观感（主题色半透明叠在卡片底色上）
+        的明暗，在 ``@dragTextColor``／``@inverseTextColor`` 两个候选里
+        挑对比更高的那个（"反色"）；次要色取主文色降不透明度。
+        """
+        cached = self._color_cache.get("@_selection_text")
+        if cached is None:
+            bg = _composite(
+                self.color("@accentPrimary", 46),
+                self.color("@inputBackgroundColor"),
+            )
+            primary = max(
+                (self.color("@dragTextColor"), self.color("@inverseTextColor")),
+                key=lambda c: abs(_luma(c) - _luma(bg)),
+            )
+            sub = QColor(primary)
+            sub.setAlpha(170)
+            cached = (primary, sub)
+            self._color_cache["@_selection_text"] = cached
+        return cached
+
     # 尺寸 ───────────────────────────────────────────────────────────
 
     def sizeHint(self, option, index):
@@ -165,18 +206,25 @@ class _RowDelegate(QStyledItemDelegate):
         painter.save()
         row = index.data(Qt.ItemDataRole.UserRole) or {}
         selected = bool(option.state & QStyle.State_Selected)
+        hovered = (
+            not selected
+            and index.row() == getattr(self.view, "_hovered_row", -1)
+            and index.row() >= 0
+        )
         if self.view.mode == MODE_CARD:
             # 圆角卡/徽章/勾选框是形状绘制，须开 AA；文本不受该开关影响
             painter.setRenderHint(QPainter.Antialiasing, True)
-            self._paint_card(painter, option.rect, row, selected)
+            self._paint_card(painter, option.rect, row, selected, hovered)
         else:
-            self._paint_cell(painter, option, index, row, selected)
+            self._paint_cell(painter, option, index, row, selected, hovered)
         painter.restore()
 
-    def _paint_cell(self, painter, option, index, row, selected):
+    def _paint_cell(self, painter, option, index, row, selected, hovered):
         rect = QRectF(option.rect)
         if selected:
             painter.fillRect(option.rect, self.color("@accentPrimary", 46))
+        elif hovered:
+            painter.fillRect(option.rect, self.color("@hoverBackgroundColor", 90))
         # 行分隔线：每个格子画自己脚下的那段，拼起来即通栏细线
         painter.setPen(QPen(self.color("@borderColor", 70), 1))
         painter.drawLine(
@@ -192,15 +240,21 @@ class _RowDelegate(QStyledItemDelegate):
             return
         text = index.data(Qt.ItemDataRole.DisplayRole) or ""
         metrics = QFontMetrics(painter.font())
-        if row.get("rejected"):
+        if row.get("rejected") and not selected:
             font = painter.font()
             font.setStrikeOut(True)
             painter.setFont(font)
             painter.setPen(QPen(self.color("@disabledForegroundColor")))
         else:
-            painter.setPen(
-                QPen(self.color("@dragTextColor" if selected else "@textColor"))
-            )
+            if selected:
+                pen_color = self.selection_text()[0]
+            else:
+                pen_color = self.color("@textColor")
+            if row.get("rejected"):
+                font = painter.font()
+                font.setStrikeOut(True)
+                painter.setFont(font)
+            painter.setPen(QPen(pen_color))
         painter.drawText(
             rect.adjusted(4, 0, -6, 0),
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
@@ -209,7 +263,7 @@ class _RowDelegate(QStyledItemDelegate):
             ),
         )
 
-    def _paint_card(self, painter, rect, row, selected):
+    def _paint_card(self, painter, rect, row, selected, hovered):
         card = QRectF(rect).adjusted(2, 3, -2, -3)
         path = QPainterPath()
         path.addRoundedRect(card, _CARD_RADIUS, _CARD_RADIUS)
@@ -222,7 +276,10 @@ class _RowDelegate(QStyledItemDelegate):
             painter.drawPath(path)
         else:
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(self.color("@inputBackgroundColor"))
+            if hovered:
+                painter.setBrush(self.color("@hoverBackgroundColor", 90))
+            else:
+                painter.setBrush(self.color("@inputBackgroundColor"))
             painter.drawPath(path)
 
         rejected = bool(row.get("rejected"))
@@ -238,13 +295,15 @@ class _RowDelegate(QStyledItemDelegate):
         if rejected:
             font.setStrikeOut(True)
         painter.setFont(font)
-        painter.setPen(
-            QPen(
-                self.color(
-                    "@disabledForegroundColor" if rejected else "@dragTextColor"
-                )
+        # 高亮态（选中）文字按染底反色挑选；hover 只是轻微提亮底色，沿用常规色。
+        # 已驳回行选中时同样反色（可读性优先，驳回感由删除线传达）
+        if selected:
+            primary_pen = QPen(self.selection_text()[0])
+        else:
+            primary_pen = QPen(
+                self.color("@disabledForegroundColor" if rejected else "@dragTextColor")
             )
-        )
+        painter.setPen(primary_pen)
         painter.drawText(
             QRectF(text_left, card.top() + 8, text_right - text_left, 20),
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
@@ -254,7 +313,12 @@ class _RowDelegate(QStyledItemDelegate):
         sub_font.setPointSizeF(max(8.0, sub_font.pointSizeF() - 0.5))
         sub_font.setStrikeOut(rejected)
         painter.setFont(sub_font)
-        painter.setPen(QPen(self.color("@disabledForegroundColor")))
+        # 次行（元数据）原用 disabled 灰，落在选中染底上几乎不可见（2026-09-19
+        # 实测）：选中时改用反色挑选出的次要色，未选中维持原灰
+        if selected:
+            painter.setPen(QPen(self.selection_text()[1]))
+        else:
+            painter.setPen(QPen(self.color("@disabledForegroundColor")))
         painter.drawText(
             QRectF(text_left, card.top() + 29, text_right - text_left, 16),
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
@@ -361,6 +425,7 @@ class RowTable(QTableView):
         self.setObjectName("WorkbenchRowTable")
         self._stretch_column = -1
         self._column_cap = _COLUMN_WIDTH_CAP
+        self._hovered_row = -1  # 悬停高亮（delegate 读，见 _paint_card/_paint_cell）
 
         self._model = _RowModel(mode, self)
         self.setModel(self._model)
@@ -373,6 +438,8 @@ class RowTable(QTableView):
         self.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self.setShowGrid(False)
         self.setWordWrap(False)
+        # 悬停行高亮要收 mouse move（默认只在按压时才有 move 事件）
+        self.setMouseTracking(True)
 
         header = self.horizontalHeader()
         header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -480,6 +547,30 @@ class RowTable(QTableView):
 
     def _on_selection_changed(self, *_):
         self.rowSelected.emit(self.current_row())
+
+    def mouseMoveEvent(self, event):
+        self._update_hover(event.position().toPoint())
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event):
+        if self._hovered_row != -1:
+            self._hovered_row = -1
+            self.viewport().update()
+        super().leaveEvent(event)
+
+    def scrollContentsBy(self, dx, dy):
+        super().scrollContentsBy(dx, dy)
+        # 滚动后光标下的行变了但 move 事件不会来，跟着重算一次悬停行
+        if self.viewport().underMouse():
+            self._update_hover(self.viewport().mapFromGlobal(QCursor.pos()))
+
+    def _update_hover(self, pos):
+        index = self.indexAt(pos)
+        row = index.row() if index.isValid() else -1
+        if row != self._hovered_row:
+            self._hovered_row = row
+            # 行少、重绘便宜：整视口重绘比算新旧行区域并集更省心
+            self.viewport().update()
 
     def _on_clicked(self, index: QModelIndex):
         if index.isValid():
