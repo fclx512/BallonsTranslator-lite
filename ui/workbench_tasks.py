@@ -664,13 +664,21 @@ class ExpandTask(BatchTask):
     """只扩渲染区域（D5）；引擎侧无默认扩张量，输入框初值取设置里的默认值。"""
 
     id = EXPAND
-    stretch_column = 4  # 新旧矩形并排看，给后一列留宽度
+    stretch_column = 3  # 增长描述是唯一的长文本列
     columns = (
         QCoreApplication.translate("WorkbenchTasks", "Page"),
         QCoreApplication.translate("WorkbenchTasks", "Block"),
-        QCoreApplication.translate("WorkbenchTasks", "Old rect"),
-        QCoreApplication.translate("WorkbenchTasks", "New rect"),
+        QCoreApplication.translate("WorkbenchTasks", "Growth"),
     )
+
+    # 各边的短名（增长列的「受限边」描述用；字面量定义处标注翻译上下文）
+    _SIDE_KEYS = ("top", "bottom", "left", "right")
+    _SIDE_LABELS = {
+        "top": QCoreApplication.translate("WorkbenchTasks", "Top"),
+        "bottom": QCoreApplication.translate("WorkbenchTasks", "Bottom"),
+        "left": QCoreApplication.translate("WorkbenchTasks", "Left"),
+        "right": QCoreApplication.translate("WorkbenchTasks", "Right"),
+    }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -678,8 +686,29 @@ class ExpandTask(BatchTask):
         self.title = self.label
         self.hint = QCoreApplication.translate(
             "WorkbenchTasks",
-            "Grows the rendering rectangle only — masks and inpainted pixels are untouched. Growth stops at a neighbouring block or the page edge.",
+            "Makes room for typesetting: grows each text block's rect so the translated text has more room. Only the rect changes (masks and inpainted pixels are untouched); the text re-flows inside the new rect, centered if the block's alignment is set to centered.",
         )
+
+    @staticmethod
+    def _growth_text(entry: dict, want: int) -> str:
+        """一行的「增长」描述：只说每边长多少、哪边受限，不铺坐标数字。"""
+        old, new = entry["old"], entry["new"]
+        deltas = {
+            "top": old[1] - new[1],
+            "bottom": new[3] - old[3],
+            "left": old[0] - new[0],
+            "right": new[2] - old[2],
+        }
+        limited = [name for name in ExpandTask._SIDE_KEYS if deltas[name] < want]
+        if not limited:
+            return QCoreApplication.translate(
+                "WorkbenchTasks", "+%1 px on all sides"
+            ).replace("%1", str(want))
+        # _SIDE_LABELS 的值已在定义处翻译（i18n 模块级翻译表规则），直接用
+        names = "、".join(ExpandTask._SIDE_LABELS[name] for name in limited)
+        return QCoreApplication.translate(
+            "WorkbenchTasks", "+%1 px, %2 limited"
+        ).replace("%1", str(want)).replace("%2", names)
 
     def _engine(self) -> BatchExpand:
         return BatchExpand(self.proj, op=self.op)
@@ -715,22 +744,32 @@ class ExpandTask(BatchTask):
             }
         mode = self._mode(options)
         report = self._engine().plan(amount, mode)
-        rows = [
-            TaskRow(
-                key=(entry["pagename"], entry["index"]),
-                pagename=entry["pagename"],
-                cells=[
-                    entry["pagename"],
-                    str(entry["index"]),
-                    _rect_text(entry["old"]),
-                    _rect_text(entry["new"]),
-                ],
-                checked=True,
-                block_index=entry["index"],
-                payload={"old": entry["old"], "new": entry["new"]},
+        # 每边请求量：px 模式全表一个值；ratio 模式按各框短边算（同引擎口径）
+        want_px = int(round(amount)) if mode == MODE_PX else 0
+        rows = []
+        for entry in report["entries"]:
+            if mode == MODE_PX:
+                want = want_px
+            else:
+                short = min(
+                    entry["old"][2] - entry["old"][0],
+                    entry["old"][3] - entry["old"][1],
+                )
+                want = int(round(short * amount))
+            rows.append(
+                TaskRow(
+                    key=(entry["pagename"], entry["index"]),
+                    pagename=entry["pagename"],
+                    cells=[
+                        entry["pagename"],
+                        str(entry["index"]),
+                        self._growth_text(entry, want),
+                    ],
+                    checked=True,
+                    block_index=entry["index"],
+                    payload={"old": entry["old"], "new": entry["new"]},
+                )
             )
-            for entry in report["entries"]
-        ]
         summary = QCoreApplication.translate(
             "WorkbenchTasks",
             "%1 block(s) can grow, %2 blocked already, %3 with at least one side clamped.",
@@ -1004,7 +1043,3 @@ def build_batch_tasks(
         ),
     ]
     return {task.id: task for task in tasks}
-
-
-def _rect_text(rect: Sequence[int]) -> str:
-    return " ".join(str(int(v)) for v in rect)

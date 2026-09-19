@@ -19,15 +19,26 @@ D27 的告知弹窗在此处统一弹（正文由任务自己给，见 ``BatchTa
 **弹窗必须说清确认后会发生什么**，故四个任务的正文各不相同、都照实写。
 """
 
+import math
+
 import numpy as np
-from qtpy.QtCore import QCoreApplication, Qt, QTimer, Signal
-from qtpy.QtGui import QColor, QImage, QPainter, QPen, QPixmap
+from qtpy.QtCore import QCoreApplication, QPointF, QRectF, Qt, QTimer, Signal
+from qtpy.QtGui import (
+    QBrush,
+    QColor,
+    QImage,
+    QPainter,
+    QPen,
+    QPixmap,
+    QPolygonF,
+)
 from qtpy.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -89,6 +100,71 @@ _ERROR_TEXT = {
         "The change was applied but saving failed. The one-step rollback is still available.",
     ),
 }
+
+
+class RefreshButton(QToolButton):
+    """自绘刷新图标钮（循环箭头）：工作台批量任务页的「重扫列表」入口。
+
+    任务页的候选列表是懒规划的快照，而导航计数每次现算——用户在画布上
+    删框／改框后列表不会自己跟上，需要一个显式的刷新动作。图标不引 SVG
+    资源：一条弧线加一个箭头，QPainter 十几行画完，且自动跟主题（取色
+    与悬停描边同 ``ui/panel_rail.py::RailLauncherButton`` 的做法）。
+    """
+
+    ICON_SIZE = 16
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(24, 24)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip(
+            self.tr("Refresh: rescan the list from the current project data.")
+        )
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        # Python 子类匹配不到 QSS 的 hover 规则，悬停态在这里自己描边
+        if self.isEnabled() and self.underMouse():
+            pen = QPen(get_theme_color(key="@borderColor"))
+            pen.setWidthF(1.0)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(0, 0, self.width() - 1, self.height() - 1, 6, 6)
+        color = self.palette().text().color()
+        if not self.isEnabled():
+            color.setAlpha(110)
+        pen = QPen(color)
+        pen.setWidthF(1.6)
+        painter.setPen(pen)
+        painter.setBrush(QBrush(color))
+        side = self.width()
+        center = QPointF(side / 2, side / 2)
+        radius = self.ICON_SIZE / 2 - 1.5  # 给端点外的箭头留出余量
+        # 主弧：屏幕坐标下从 15° 顺时针扫 300°（缺口留在右上方）。Qt 角度
+        # 逆时针为正、y 轴向上，换算成 Qt 角＝起点 -15°、扫 -300°。
+        painter.drawArc(
+            QRectF(center.x() - radius, center.y() - radius, radius * 2, radius * 2),
+            -15 * 16,
+            -300 * 16,
+        )
+        # 弧终点（屏幕角 -45°）补实心箭头，指向顺时针切向（右下）
+        end_angle = math.radians(-45.0)
+        end = QPointF(
+            center.x() + radius * math.cos(end_angle),
+            center.y() + radius * math.sin(end_angle),
+        )
+        tangent = QPointF(-math.sin(end_angle), math.cos(end_angle))
+        radial = QPointF(math.cos(end_angle), math.sin(end_angle))
+        painter.drawPolygon(
+            QPolygonF(
+                (
+                    end + tangent * 3.6,
+                    end + radial * 2.0,
+                    end - radial * 2.0,
+                )
+            )
+        )
 
 
 class BatchTaskView(QWidget):
@@ -247,6 +323,11 @@ class BatchTaskView(QWidget):
 
     def _build_actions(self):
         self._action_buttons = []
+        # 刷新在最左（图标钮）：列表是懒规划快照，画布上改过数据后由用户
+        # 主动重扫（精简取向：不做数据变更信号的全量监听）
+        self._refresh_btn = RefreshButton(self)
+        self._refresh_btn.clicked.connect(self.replan)
+        self._actions_host.addWidget(self._refresh_btn)
         for spec in self.task.actions():
             button = QPushButton(spec["label"], self)
             button.clicked.connect(
