@@ -514,12 +514,17 @@ class _CardScaleEffect(QGraphicsEffect):
     _max_factor = 1.0
     _factor = 1.0
     _anim = None
+    # 源 pixmap 缓存的空壳兜底（同上）：None = 未缓存，下次 draw 重抓
+    _cached_pixmap = None
+    _cached_pad = None
 
     def __init__(self, max_factor: float):
         super().__init__()
         self._max_factor = max_factor
         self._factor = 1.0
         self._anim = None
+        self._cached_pixmap = None
+        self._cached_pad = None
 
     def _get_factor(self) -> float:
         return self._factor
@@ -566,22 +571,52 @@ class _CardScaleEffect(QGraphicsEffect):
         # 恰好 1.0（含还原动画尾帧）直接走原图，省一次像素快照；其余含
         # factor < 1 的按下压缩都走同一放大路径（顶中锚等比即可）
         if abs(self._factor - 1.0) <= 1e-3:
+            # 回 1.0 即弃缓存：此后（若有）内容可能已变，下次按新内容重抓
+            self._cached_pixmap = None
+            self._cached_pad = None
             self.drawSource(painter)
             return
         src = self.sourceBoundingRect()
-        pixmap, offset = self.sourcePixmap(
-            Qt.CoordinateSystem.DeviceCoordinates,
-            mode=QGraphicsEffect.PixmapPadMode.PadToEffectiveBoundingRect,
+        # 控件原点在 resetTransform 后参考系（窗口逻辑坐标）里的位置：
+        # deviceTransform 映射出设备像素，除掉自身线性缩放（= 屏幕 DPR）
+        # 换算回逻辑坐标（同下方锚点的换算）
+        dt = painter.deviceTransform()
+        origin_dev = dt.map(QPointF(0, 0))
+        origin = QPointF(
+            origin_dev.x() / (dt.m11() or 1.0), origin_dev.y() / (dt.m22() or 1.0)
         )
-        if pixmap.isNull():
-            return
+        # 源 pixmap 缓存：拖拽期间卡片内容冻结、只做平移，而几何变化会
+        # 失效 Qt 对效果源 pixmap 的缓存——没有这层的话跟手补间的每一帧
+        # 都要把整张卡（两个 QTextEdit 的富文本排版）重渲到一张设备分辨
+        # 率的离屏图，多选拖拽即 N 次/帧，是掉帧的大头。装上后首帧抓一
+        # 次，此后每帧只做缩放 blit；抓取/还原动画只改 factor，同一份缓
+        # 存全程有效。
+        # 注意 offset 是「当帧控件在窗口里的绝对位置」（随卡片移动逐帧变
+        # 化），不能直接缓存——直接缓存会把卡片永远画回抓取时刻的位置
+        # （被拖卡不跟手、只在损伤区里露出碎片，2026-09-19 实测）。缓存
+        # 「pixmap 左上相对控件原点」的常量偏移（PadToEffectiveBoundingRect
+        # 的外扩 padding，拖拽期间控件尺寸不变故恒定），每帧用当前原点
+        # 重算 offset。
+        if self._cached_pixmap is None:
+            pixmap, offset = self.sourcePixmap(
+                Qt.CoordinateSystem.DeviceCoordinates,
+                mode=QGraphicsEffect.PixmapPadMode.PadToEffectiveBoundingRect,
+            )
+            if pixmap.isNull():
+                return
+            self._cached_pixmap = pixmap
+            # offset 是 QPoint，显式转 QPointF 再做浮点运算（PyQt6 不做
+            # QPoint-QPointF 的隐式混算，直接减会在虚拟回调里抛 TypeError
+            # 被 PyQt qFatal 成硬崩）
+            self._cached_pad = QPointF(offset) - origin
+        pixmap = self._cached_pixmap
+        offset = origin + self._cached_pad
         # 锚点换算：deviceTransform 映射出的是设备像素，而 resetTransform 之
         # 后 painter 以逻辑坐标绘制（sourcePixmap 的 offset 与 pixmap 的
         # devicePixelRatio 也都是逻辑单位，DPR 由 Qt 绘制时施加），故须除掉
         # 自身的线性缩放（即屏幕 DPR）。混用会把锚点放大 DPR 倍，卡片按其在
         # 屏上的位置成比例偏移：DPR=1 的屏上恒等（看不出），高 DPI 屏上越靠
         # 下偏得越多，且顶行溢出后被裁掉。
-        dt = painter.deviceTransform()
         pivot = dt.map(QPointF(src.x() + src.width() / 2.0, src.y()))
         pivot = QPointF(
             pivot.x() / (dt.m11() or 1.0), pivot.y() / (dt.m22() or 1.0)
@@ -656,7 +691,7 @@ class TextEditListScrollArea(QScrollArea):
     # 注意：效果的外扩余量按本值一次性给足（见 _CardScaleEffect
     # .boundingRectFor），倍率若改用带回弹过冲的曲线，余量要一并放大，
     # 否则过冲部分会被裁掉两侧。
-    GRAB_SCALE = 1.1
+    GRAB_SCALE = 1.05
     # 抓住瞬间先下压再弹起（squash→pop，手感上像"被手按了一下"）
     SCALE_PRESS = 0.97
     # 下压段在抓取动画时间轴上的位置（0-1）
@@ -669,6 +704,12 @@ class TextEditListScrollArea(QScrollArea):
     # 退应）保持从容
     CHASE_MS = 90
     SETTLE_MS = 140
+    # 跟手补间重定向死区（px）：光标慢移时目标 y 以 1px 步进变化，不设
+    # 死区的话每变 1px 就停旧建新一个 QPropertyAnimation（N 张卡 × 每次
+    # 鼠标事件）。在册动画已飞向 ≤ 死区的邻近目标时沿用，最多滞后死区
+    # 像素、追手时长内收敛，观感不可辨；只作用于跟手路径，落位（让位/
+    # 退应）的目标是精确槽位，不受死区影响
+    RETARGET_DEADZONE = 2
     # 多选堆叠逐卡落后步长：聚拢/展开读起来是"码起来"而不是一起飞
     STAGGER_MS = 14
     # 自动滚动：触发边缘距离、速度爬升系数（向目标速度渐变，不猛启猛停）、
@@ -929,18 +970,25 @@ class TextEditListScrollArea(QScrollArea):
             self._move_card(self._gap_frame, gap_top, animate)
 
     def _move_card(
-        self, pw: TransPairWidget, target_y: int, animate: bool, duration: int = None
+        self,
+        pw: TransPairWidget,
+        target_y: int,
+        animate: bool,
+        duration: int = None,
+        dead_zone: int = 0,
     ):
         """把卡片补间到目标 y（x 不动）；*duration* 缺省用落位时长。
 
         目标未变则不重启：高频鼠标事件与连续跨行会反复调用，重启只会
-        平白创建动画对象（拖拽中的跟手补间即靠这条合并重定向）。"""
+        平白创建动画对象（拖拽中的跟手补间即靠这条合并重定向）。
+        *dead_zone* 放宽为「已飞向 ≤ *dead_zone* 的邻近目标则沿用」，只
+        给跟手路径用（见 RETARGET_DEADZONE）；落位保持 0 = 精确到位。"""
         if pw.y() == target_y:
             return
         old = self._pos_anims.pop(pw, None)
         if old is not None:
             try:
-                if old.endValue().y() == target_y:
+                if abs(old.endValue().y() - target_y) <= dead_zone:
                     self._pos_anims[pw] = old  # 已在飞向同一目标，留着
                     return
                 old.stop()
@@ -1056,7 +1104,10 @@ class TextEditListScrollArea(QScrollArea):
             # 经 _pile_org_in_parent 换算；_pile_grab_dy 是抓取时的居中
             # 偏移（见 begin_rows_drag），拖拽全程恒定。
             ty = pile_org_y + y_content + self._pile_grab_dy + off
-            self._move_card(w, ty, animate=True, duration=self.CHASE_MS)
+            self._move_card(
+                w, ty, animate=True, duration=self.CHASE_MS,
+                dead_zone=self.RETARGET_DEADZONE,
+            )
         self._update_gap(y_content)
         # 视口边缘自动滚动：把"接近边缘的程度"折算成目标速度（越近越快），
         # 实际速度逐 tick 向目标渐变——起步/停下都不再是硬开关

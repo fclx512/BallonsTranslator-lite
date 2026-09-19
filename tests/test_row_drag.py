@@ -562,6 +562,47 @@ class RowDragTest(unittest.TestCase):
         if d0 in area._pos_anims:
             self.assertEqual(area._pos_anims[d0].duration(), area.SETTLE_MS)
 
+
+    def test_chase_retarget_deadzone(self):
+        """跟手重定向死区：目标在死区内变化时沿用正在飞的动画（不重建
+        对象），超出死区才重定目标；落位路径不受影响（无死区）。"""
+        from qtpy.QtTest import QTest
+
+        pcfg.animation_fps = 60
+        self.area = area = self._make_area()
+        pw = area.pairwidget_list[1]
+        self._check(pw)
+        area.begin_rows_drag(pw.y() + pw.height() / 2)
+        QTest.qWait(300)  # 聚拢/抓取动画飞完，回到静止态再驱动跟手补间
+        self.assertEqual(area._pos_anims, {})
+
+        end0 = pw.y()
+        area._drag_cursor_vp_y = int(area._drag_cursor_vp_y) + 1
+        area._update_drag_frame()
+        anim = area._pos_anims.get(pw)
+        self.assertIsNotNone(anim)
+        self.assertEqual(anim.endValue().y(), end0 + 1)
+
+        # 死区内（目标再 +1）：沿用在册动画，不重建
+        area._drag_cursor_vp_y += 1
+        area._update_drag_frame()
+        self.assertIs(area._pos_anims[pw], anim)
+        self.assertEqual(anim.endValue().y(), end0 + 1)
+
+        # 超出死区：重定目标
+        area._drag_cursor_vp_y += area.RETARGET_DEADZONE + 2
+        area._update_drag_frame()
+        self.assertIsNot(area._pos_anims[pw], anim)
+        self.assertEqual(
+            area._pos_anims[pw].endValue().y(),
+            end0 + 1 + (area.RETARGET_DEADZONE + 2) + 1,
+        )
+        area._finish_drag()
+        # 排干收尾动画再走：在飞的缩放还原/退应动画若悬到进程退出，退出
+        # 期 GC 级联销毁挂着效果的控件会 AV 硬崩（套件铁律「不留悬挂效
+        # 果」，同 CardScaleAnchorTest.tearDownClass 注释）
+        QTest.qWait(300)
+
     def test_autoscroll_ramps_and_cools_down(self):
         """自动滚动：贴边启动定时器并给出目标速度，实际速度逐 tick 渐变
         （不猛启）。离开边缘后目标归零，速度渐降到位才停表。"""
@@ -707,6 +748,89 @@ class CardScaleAnchorTest(unittest.TestCase):
         self.assertAlmostEqual(
             bottom[1], cy + (base_bottom - cy) * 0.9, delta=1.5, msg="按下态未收拢"
         )
+
+
+    def test_source_snapshot_cached_across_draws(self):
+        """拖拽期间源 pixmap 只抓一次：连续 draw() 复用缓存（Qt 对几何
+        变化会失效自身的效果源缓存，无此缓存则跟手补间每帧重渲整卡，
+        多选即 N 次/帧）；factor 回 1.0 后缓存弃置、再放大时重抓。"""
+        from ui.textedit_area import _CardScaleEffect
+
+        cont = QWidget()
+        cont.resize(*_SCALE_CANVAS)
+        cont.setStyleSheet("background: #000000;")
+        card = _ScaleProbeCard(cont)
+        card.setGeometry(*_SCALE_CARD)
+        eff = _CardScaleEffect(1.1)
+        card.setGraphicsEffect(eff)
+
+        calls = []
+        orig = eff.sourcePixmap
+
+        def counting(*args, **kwargs):
+            calls.append(1)
+            return orig(*args, **kwargs)
+
+        eff.sourcePixmap = counting
+        img = QImage(*_SCALE_CANVAS, QImage.Format.Format_ARGB32_Premultiplied)
+        img.fill(QColor(0, 0, 0))
+
+        def draw_once():
+            # 经真实渲染路径触发效果（直接手调 draw() 时源尚未渲染过，
+            # sourcePixmap 返回空图，走的是 isNull 早退分支，测不到缓存）
+            img.fill(QColor(0, 0, 0))
+            cont.render(img)
+
+        eff.factor = 1.1
+        draw_once()
+        draw_once()
+        self.assertEqual(len(calls), 1, "同一段缩放内重复抓取源 pixmap")
+
+        eff.factor = 1.0  # 回 1.0：走 drawSource 并弃缓存
+        draw_once()
+        self.assertEqual(len(calls), 1)
+
+        eff.factor = 1.05
+        draw_once()
+        self.assertEqual(len(calls), 2, "缓存弃置后未按新内容重抓")
+
+        card.setGraphicsEffect(None)
+        cont.close()
+
+
+    def test_cached_snapshot_follows_widget_move(self):
+        """缓存快照必须跟手：控件移动后复用缓存重绘，绘制位置随控件新位
+        置走（offset 是当帧绝对位置，缓存它会把卡片钉在抓取时刻的位置——
+        2026-09-19 实测被拖卡不跟手、只在损伤区里露出碎片）。"""
+        from ui.textedit_area import _CardScaleEffect
+
+        cont = QWidget()
+        cont.resize(*_SCALE_CANVAS)
+        cont.setStyleSheet("background: #000000;")
+        card = _ScaleProbeCard(cont)
+        card.setGeometry(*_SCALE_CARD)
+        eff = _CardScaleEffect(1.1)
+        card.setGraphicsEffect(eff)
+        eff.factor = 1.1
+
+        def render_and_measure():
+            img = QImage(
+                *_SCALE_CANVAS, QImage.Format.Format_ARGB32_Premultiplied
+            )
+            img.fill(QColor(0, 0, 0))
+            cont.render(img)
+            return _centroids(img, 1.0)
+
+        dy = 50
+        top0, _ = render_and_measure()
+        card.move(_SCALE_CARD[0], _SCALE_CARD[1] + dy)
+        top1, _ = render_and_measure()
+        self.assertIsNotNone(top0)
+        self.assertAlmostEqual(
+            top1[1], top0[1] + dy, delta=1.5, msg="移动后快照仍画在旧位置"
+        )
+        card.setGraphicsEffect(None)
+        cont.close()
 
     def test_bare_instance_after_resurrection_is_safe(self):
         """空壳实例（PyQt 复活路径）上虚拟方法不得抛异常。
