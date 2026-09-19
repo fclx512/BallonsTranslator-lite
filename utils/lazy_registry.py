@@ -339,8 +339,8 @@ def _module_name_from_path(path: str) -> str:
     """Convert a file path to a dotted Python module name.
 
     Example:
-        >>> _module_name_from_path('/project/modules/ocr/ocr_mit.py')
-        'modules.ocr.ocr_mit'
+        >>> _module_name_from_path('/project/modules/ocr/ocr_onnx.py')
+        'modules.ocr.ocr_onnx'
     """
     path_obj = Path(path).resolve()
     try:
@@ -717,7 +717,7 @@ def init_lazy_module_registries(target_modules=None):
 
     Example:
         >>> init_lazy_module_registries('ocr')  # doctest: +SKIP
-        >>> OCR.get_spec('mit48px').resolved_class is None  # doctest: +SKIP
+        >>> OCR.get_spec('paddleocr_v6_onnx').resolved_class is None  # doctest: +SKIP
         True
     """
     from utils.registries import MODULE_SCRIPTS, MODULETYPE_TO_REGISTRIES

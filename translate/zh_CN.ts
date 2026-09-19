@@ -188,11 +188,6 @@
             <translation>合并</translation>
         </message>
         <message>
-            <location filename="..\ui\canvas.py" />
-            <source>Behavior</source>
-            <translation>行为设置</translation>
-        </message>
-        <message>
             <location filename="..\ui\canvas.py" line="348" />
             <source>No-text BG</source>
             <translation>无字图</translation>
@@ -313,6 +308,10 @@
         <message>
             <source>Tag Toolbar</source>
             <translation>标签工具栏</translation>
+        </message>
+        <message>
+            <source>Tags</source>
+            <translation>打标</translation>
         </message>
     </context>
     <context>
@@ -2770,6 +2769,34 @@ What to expect next:
             <source>Working set returned to the system (%1 MB → %2 MB), but the CUDA context could not be released.</source>
             <translation>工作集已交回系统（%1 MB → %2 MB），但 CUDA 上下文未能销毁。</translation>
         </message>
+        <message>
+            <source>Inpainting</source>
+            <translation>图像修复</translation>
+        </message>
+        <message>
+            <source>Missing Model Files</source>
+            <translation>缺少模型文件</translation>
+        </message>
+        <message>
+            <source>Model files were not found for the stages below. You can still run, but those stages may fail. Download prompts appear when selecting the module.</source>
+            <translation>以下阶段的模型文件未检测到。仍可运行，但这些阶段可能失败。选中对应模块时会弹出下载提示。</translation>
+        </message>
+        <message>
+            <source>OCR</source>
+            <translation>OCR</translation>
+        </message>
+        <message>
+            <source>Run Anyway</source>
+            <translation>仍要运行</translation>
+        </message>
+        <message>
+            <source>Text Detection</source>
+            <translation>文字检测</translation>
+        </message>
+        <message>
+            <source>Translation</source>
+            <translation>翻译</translation>
+        </message>
     </context>
     <context>
         <name>_ExtractWorker</name>
@@ -3493,34 +3520,6 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <translation>推理硬件设备（推荐使用 GPU）</translation>
         </message>
         <message>
-            <source>Sakura LLM API server base URL</source>
-            <translation>Sakura LLM API 服务器地址</translation>
-        </message>
-        <message>
-            <source>Path to the Sakura dictionary file (leave empty if not using a dictionary)</source>
-            <translation>Sakura 字典文件路径（不使用字典时留空）</translation>
-        </message>
-        <message>
-            <source>Sakura model version</source>
-            <translation>Sakura 模型版本</translation>
-        </message>
-        <message>
-            <source>Number of retry attempts on API connection failure</source>
-            <translation>API 连接失败后的重试次数</translation>
-        </message>
-        <message>
-            <source>API request timeout in seconds</source>
-            <translation>API 请求超时时间（秒）</translation>
-        </message>
-        <message>
-            <source>Maximum tokens in the model response</source>
-            <translation>模型响应的最大 token 数</translation>
-        </message>
-        <message>
-            <source>Threshold for detecting repeated text in translations</source>
-            <translation>翻译中检测重复文本的阈值</translation>
-        </message>
-        <message>
             <source>Scale factor applied to detected font size</source>
             <translation>应用于检测字号的缩放系数</translation>
         </message>
@@ -3535,14 +3534,6 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
         <message>
             <source>Dilation kernel size for text region mask</source>
             <translation>文字区域蒙版的膨胀核大小</translation>
-        </message>
-        <message>
-            <source>Input image size for text detection (larger = more accurate but slower)</source>
-            <translation>文字检测的输入图像尺寸（越大越精确但越慢）</translation>
-        </message>
-        <message>
-            <source>Maximum parallel batches when rearranging detected text blocks</source>
-            <translation>重排检测文字块时的最大并行批次数</translation>
         </message>
         <message>
             <source>Path to the YSGYolo model checkpoint file</source>
@@ -3581,32 +3572,8 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <translation>模型精度（bf16 在支持的 GPU 上更快，fp32 兼容性更好）</translation>
         </message>
         <message>
-            <source>Number of image pixel rows processed per batch (lower = less VRAM)</source>
-            <translation>每批处理的图像像素行数（越小占用显存越少）</translation>
-        </message>
-        <message>
-            <source>check it if you're running it locally on a single device and encountered a crash due to vram OOM</source>
-            <translation>如果在本地单设备运行时因显存不足崩溃，请勾选此项</translation>
-        </message>
-        <message>
-            <source>Enlarge small kana to normal size</source>
-            <translation>将小假名放大至正常大小</translation>
-        </message>
-        <message>
-            <source>ComicTextDetector</source>
-            <translation>漫画文字检测器</translation>
-        </message>
-        <message>
-            <source>manga-image-translator inpainter</source>
-            <translation>manga-image-translator 图像修复器</translation>
-        </message>
-        <message>
             <source>Not a OCR, just return original text.</source>
             <translation>非 OCR 模块，直接返回原始文本</translation>
-        </message>
-        <message>
-            <source>OCRMIT32px</source>
-            <translation>OCRMIT32px 文字识别</translation>
         </message>
         <message>
             <source>Language for OCR.</source>
@@ -3647,12 +3614,6 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
         <message>
             <source>Delay between retries in seconds.</source>
             <translation>重试间隔（秒）。</translation>
-        </message>
-        <message>
-            <source>Force apply the dictionary regardless of whether the terms appear in the original text 
- DO NOT CHECK THIS IF YOU ARE NOT SURE WHAT IT MEANS</source>
-            <translation>无论词条是否出现在原文中都强制应用词典
-不确定含义时不要勾选此项</translation>
         </message>
         <message>
             <source>HTTP timeout for image cleanup requests in seconds. Set to 0 to disable.</source>
@@ -7673,14 +7634,6 @@ No pipeline stages will be executed.</source>
             <translation>误识别清理</translation>
         </message>
         <message>
-            <source>New rect</source>
-            <translation>新矩形</translation>
-        </message>
-        <message>
-            <source>Old rect</source>
-            <translation>原矩形</translation>
-        </message>
-        <message>
             <source>Order suspect</source>
             <translation>顺序存疑</translation>
         </message>
@@ -7833,12 +7786,40 @@ No pipeline stages will be executed.</source>
             <translation>整批可用一步撤销。</translation>
         </message>
         <message>
-            <source>Grows the rendering rectangle only — masks and inpainted pixels are untouched. Growth stops at a neighbouring block or the page edge.</source>
-            <translation>只扩渲染区域，遮罩与修复像素原样保留；碰到邻框或页边即停。</translation>
-        </message>
-        <message>
             <source>%1 · %2 block(s)</source>
             <translation>%1 · %2 块</translation>
+        </message>
+        <message>
+            <source>+%1 px on all sides</source>
+            <translation>四边各 +%1 px</translation>
+        </message>
+        <message>
+            <source>+%1 px, %2 limited</source>
+            <translation>+%1 px，%2受限</translation>
+        </message>
+        <message>
+            <source>Bottom</source>
+            <translation>下</translation>
+        </message>
+        <message>
+            <source>Growth</source>
+            <translation>增长</translation>
+        </message>
+        <message>
+            <source>Left</source>
+            <translation>左</translation>
+        </message>
+        <message>
+            <source>Makes room for typesetting: grows each text block's rect so the translated text has more room. Only the rect changes (masks and inpainted pixels are untouched); the text re-flows inside the new rect, centered if the block's alignment is set to centered.</source>
+            <translation>为嵌字腾空间：把文本框向外扩一圈，给译文更多排布余地。只改渲染框（遮罩与修复像素不动）；文字会在新框内重新排布——需要居中效果就把块的对齐设为「居中」。</translation>
+        </message>
+        <message>
+            <source>Right</source>
+            <translation>右</translation>
+        </message>
+        <message>
+            <source>Top</source>
+            <translation>上</translation>
         </message>
     </context>
     <context>
@@ -7876,6 +7857,13 @@ No pipeline stages will be executed.</source>
         <message>
             <source>Nothing to preview.</source>
             <translation>没有可预览的内容。</translation>
+        </message>
+    </context>
+    <context>
+        <name>RefreshButton</name>
+        <message>
+            <source>Refresh: rescan the list from the current project data.</source>
+            <translation>刷新：按当前项目数据重新扫描列表</translation>
         </message>
     </context>
 </TS>

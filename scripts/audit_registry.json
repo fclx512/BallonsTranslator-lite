@@ -1,6 +1,60 @@
 {
     "_comment": "AI 审计登记表。机制见 .agents/skills/audit-docs/SKILL.md。deprecated = 已删待守（不得复活、残留引用必须清零或进 allowed_mentions）；suspended = 存在的休眠文件（不得被主 UI import）。删除文件前先在此登记。",
     "deprecated": {
+        "modules/textdetector/detector_ctd.py": {
+            "note": "模型精简（2026-09-19）：ComicTextDetector 与 ysgyolo（漫画专精，默认）／ppocrv6_onnx（轻量 CPU，区域再检测默认）定位重叠，用户长期实测属「不好不坏」档，删除；实现包 modules/textdetector/ctd/ 一并删除；utils/textblock.py::get_transformed_region 的 ctd 专属 bbox 扩张分支同步移除",
+            "allowed_mentions": [
+                "docs/daily_log.md"
+            ]
+        },
+        "modules/textdetector/ctd/basemodel.py": {
+            "note": "模型精简（2026-09-19）：随 detector_ctd.py（唯一使用者）一并删除",
+            "allowed_mentions": []
+        },
+        "modules/textdetector/ctd/inference.py": {
+            "note": "模型精简（2026-09-19）：随 detector_ctd.py（唯一使用者）一并删除",
+            "allowed_mentions": []
+        },
+        "modules/textdetector/ctd/textmask.py": {
+            "note": "模型精简（2026-09-19）：随 detector_ctd.py（唯一使用者）一并删除",
+            "allowed_mentions": []
+        },
+        "data/alphabet-all-v5.txt": {
+            "note": "模型精简（2026-09-19）：mit48px CTC 识别的字典文件，随 modules/ocr/ocr_mit.py（唯一使用者）一并删除；同目录未跟踪的 alphabet-all-v7.txt（无任何代码引用）同步清理",
+            "allowed_mentions": []
+        },
+        "icons/leftbar_imgtrans.svg": {
+            "note": "左栏精简（2026-09-19）：ImgTransChecker（画布/设置切换图标）随设置面板改浮层后失去存在意义而删除，样式表规则同步移除",
+            "allowed_mentions": []
+        },
+        "icons/leftbar_imgtrans_activate.svg": {
+            "note": "左栏精简（2026-09-19）：随 icons/leftbar_imgtrans.svg 一并删除",
+            "allowed_mentions": []
+        },
+        "modules/ocr/ocr_mit.py": {
+            "note": "模型精简（2026-09-19）：mit48px CTC 识别模块与 paddleocr_v6_onnx 定位重叠（且工作台置信度挂标闭环以 onnx 链路为准），用户长期实测属「不好不坏」档，删除",
+            "allowed_mentions": [
+                "docs/daily_log.md"
+            ]
+        },
+        "modules/ocr/mit48px_ctc.py": {
+            "note": "模型精简（2026-09-19）：OCR48pxCTC 模型定义，随 modules/ocr/ocr_mit.py（唯一使用者）一并删除",
+            "allowed_mentions": [
+                "docs/daily_log.md"
+            ]
+        },
+        "modules/inpaint/aot.py": {
+            "note": "模型精简（2026-09-19）：AOT 修复器与 lama_large_512px（质量与默认双占）定位重叠，唯一优势是显存小，用户长期实测属「不好不坏」档，删除；modules/inpaint/base.py 里的 AOTInpainter 注册类同步移除",
+            "allowed_mentions": [
+                "docs/daily_log.md"
+            ]
+        },
+        "modules/translators/trans_sakura.py": {
+            "note": "模型精简（2026-09-19）：Sakura/GalTrans 端点仅适用单框无上下文翻译，与本项目「LLM 全局剧情概览 + agent 多轮」流程冲突，删除；旧配置选择经 utils/config.py 迁移至 LLM_API_Translator",
+            "allowed_mentions": [
+                "docs/daily_log.md"
+            ]
+        },
         "tests/test_batch_backup.py": {
             "note": "批量备份归并（2026-09-16）：查找替换的单槽快照并入 utils/batch_versions.py::BatchVersionStore（与工作台批量任务共用），其语义迁入 tests/test_batch_versions.py（版本号校验/丢弃/base_styles 往返）与 tests/test_replace_rollback.py（回滚条接线），旧文件删除",
             "allowed_mentions": [

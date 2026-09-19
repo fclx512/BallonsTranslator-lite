@@ -277,8 +277,8 @@ def _ensure_module_fallback():
     Module type    Needs torch?    Needs onnxruntime?    Fallback
     ============== =============== ===================== ==============
     textdetector   yes (all)       no                    ``none``
+    ocr            depends         depends               *(kept as configured)*
     inpainter      yes (all)       no                    ``none``
-    mit48px_ctc    yes             no                    ``none_ocr``
     llm_ocr        no              no                    *(never)*
     translator     no              no                    *(never)*
     ============== =============== ===================== ==============

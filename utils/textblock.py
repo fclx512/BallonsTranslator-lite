@@ -417,19 +417,6 @@ class TextBlock:
 
         line = np.round(np.array(self.lines[idx])).astype(np.int64)
 
-        if not self.src_is_vertical and self.det_model == "ctd":
-            # ctd detected horizontal bbox is smaller than GT
-            expand_size = max(int(self._detected_font_size * 0.1), 3)
-            rad = np.deg2rad(self.angle)
-            shifted_vec = np.array([[[-1, -1], [1, -1], [1, 1], [-1, 1]]])
-            shifted_vec = (
-                shifted_vec * np.array([[[np.sin(rad), np.cos(rad)]]]) * expand_size
-            )
-            line = line + shifted_vec
-            line[..., 0] = np.clip(line[..., 0], 0, im_w)
-            line[..., 1] = np.clip(line[..., 1], 0, im_h)
-            line = np.round(line[0]).astype(np.int64)
-
         x1, y1, x2, y2 = (
             line[:, 0].min(),
             line[:, 1].min(),

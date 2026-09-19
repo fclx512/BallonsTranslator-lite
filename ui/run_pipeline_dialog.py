@@ -60,6 +60,7 @@ from modules import (
     GET_VALID_OCR,
     GET_VALID_TEXTDETECTORS,
     GET_VALID_TRANSLATORS,
+    HIDDEN_INPAINTERS,
 )
 from utils.config import SingleBlkTranslateMode, pcfg
 
@@ -71,7 +72,11 @@ from .custom_widget import (
     PageRangeProgressWidget,
 )
 from .icon_rendering import render_svg_pixmap
-from .misc import get_theme_color, themed_icon_path
+from .misc import (
+    get_theme_color,
+    mark_module_selector_status,
+    themed_icon_path,
+)
 
 #: Pipeline stage indices, matching ``ModuleConfig.stage_enabled``.
 STAGE_DETECT = 0
@@ -79,9 +84,8 @@ STAGE_OCR = 1
 STAGE_TRANSLATE = 2
 STAGE_INPAINT = 3
 
-#: The bottom bar hides the online inpainter (it lives behind the canvas
-#: "AI 修图" tool), so the run-time selector must hide it too.
-HIDDEN_INPAINTERS = {"LLMInpaint"}
+#: Inpainters hidden from the run-time selector (single source of truth in
+#: ``modules/__init__.py::HIDDEN_INPAINTERS``; the bottom bar hides them too).
 
 SETTINGS_BODY_INDENT = 18
 MODULE_SELECTOR_WIDTH = 150
@@ -206,6 +210,7 @@ class PipelineModuleActivator(QWidget):
         self.selector.setFixedWidth(MODULE_SELECTOR_WIDTH)
         self.selector.setCurrentText(module_name)
         self.selector.setToolTip(module_name)
+        mark_module_selector_status(self.selector, module_type)
         self.selector.currentTextChanged.connect(self._on_module_selected)
         layout.addWidget(self.selector)
         layout.addStretch(1)

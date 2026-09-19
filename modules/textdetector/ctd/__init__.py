@@ -1,1 +1,0 @@
-from .inference import TextDetector as CTDModel

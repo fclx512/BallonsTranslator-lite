@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple, Union
 
 import cv2
 import numpy as np
-from qtpy.QtCore import QPointF, Qt
+from qtpy.QtCore import QPointF, QCoreApplication, Qt
 from qtpy.QtGui import QColor, QImage, QPixmap, QTextCursor, QTextDocument
 
 from utils import shared as C
@@ -32,6 +32,38 @@ ARROWKEY2DIRECTION = {
     QKEY.Key_Up: QPointF(0.0, -1.0),
     QKEY.Key_Down: QPointF(0.0, 1.0),
 }
+
+# 选型下拉里「模型文件未检测到」条目的警示色：暗色/亮色主题下都可读的琥珀色
+MISSING_MODEL_ITEM_COLOR = QColor("#d2823c")
+
+
+def mark_module_selector_status(combo, module_type: str) -> None:
+    """给模块下拉里缺模型文件的选项染警示色并挂 tooltip。
+
+    只改 item 的 ForegroundRole/ToolTipRole，不改文本——选择逻辑按纯注册名
+    匹配，混入标记会破坏 setCurrentText 链路。存在性检查走
+    modules/__init__.py::GET_MISSING_MODEL_FILES（静态文件检查，不导入模块体）。
+    """
+    from modules import GET_MISSING_MODEL_FILES
+
+    model = combo.model()
+    for row in range(combo.count()):
+        name = combo.itemText(row)
+        if not name:
+            continue  # addItems 流程里的分隔行
+        missing = GET_MISSING_MODEL_FILES(module_type, name)
+        if not missing:
+            continue
+        idx = model.index(row, 0)
+        model.setData(idx, MISSING_MODEL_ITEM_COLOR, Qt.ForegroundRole)
+        model.setData(
+            idx,
+            QCoreApplication.translate(
+                "misc",
+                "Model files not found: {files}. Selecting this module offers to download them.",
+            ).format(files=", ".join(missing)),
+            Qt.ToolTipRole,
+        )
 
 
 # return bgr tuple
@@ -197,12 +229,14 @@ def load_all_themes() -> Dict:
 
 
 def _derive_solid_tints(theme: Dict) -> Dict:
-    """把 rgba 半透明强调色预混到卡片底色上，派生不透明变量
-    ``@accentPrimary20Solid``（视觉上与半透明版叠在
-    ``@widgetBackgroundColor`` 上一致）。
+    """从 ``@accentPrimary20`` 派生强调色变体，供主题无该变量的场景兜底：
 
-    供需要"选中色不透底"的场景：行卡片拖拽堆叠时若选中底色仍是
-    rgba，下层卡片的文字会从半透明底里透出来形成重影。"""
+    - ``@accentPrimary20Solid``：预混到卡片底色上的不透明版（视觉上与
+      半透明版叠在 ``@widgetBackgroundColor`` 上一致）。供需要"选中色
+      不透底"的场景：行卡片拖拽堆叠时若选中底色仍是 rgba，下层卡片的
+      文字会从半透明底里透出来形成重影。
+    - ``@accentPrimary35``：同色 35% 半透明版（hover 染底比 20% 更醒目）。
+      从 20% 变量派生保证自定义主题也自动可用，不会缺变量。"""
     tint = theme.get("@accentPrimary20")
     base = theme.get("@widgetBackgroundColor")
     if not tint or not base:
@@ -219,6 +253,7 @@ def _derive_solid_tints(theme: Dict) -> Dict:
     theme["@accentPrimary20Solid"] = QColor(
         mix(r, bc.red()), mix(g, bc.green()), mix(b, bc.blue())
     ).name()
+    theme["@accentPrimary35"] = f"rgba({r}, {g}, {b}, 35%)"
     return theme
 
 
@@ -311,17 +346,26 @@ def set_icon_theme(theme_name: str = ""):
         return
 
     # Build replacement map: every known icon fill → target fill
+    # （stroke 同步换色：线条风格图标以 stroke 上色，如底栏模式图标）
     replacements = {}
     all_colors = set()
     for t in theme_dict.values():
         if a := t.get("_iconFillActive"):
             all_colors.add(a)
             replacements[f'fill="{a}"'] = f'fill="{tgt_active}"'
+            replacements[f'stroke="{a}"'] = f'stroke="{tgt_active}"'
         if n := t.get("_iconFill"):
             all_colors.add(n)
             replacements[f'fill="{n}"'] = f'fill="{tgt_normal}"'
+            replacements[f'stroke="{n}"'] = f'stroke="{tgt_normal}"'
 
-    pattern = re.compile("|".join(re.escape(f'fill="{c}"') for c in all_colors))
+    pattern = re.compile(
+        "|".join(
+            re.escape(f'{attr}="{c}"')
+            for attr in ("fill", "stroke")
+            for c in all_colors
+        )
+    )
     for svgpath in ICON_LIST:
         with open(svgpath, "r", encoding="utf-8") as f:
             svg_content = f.read()

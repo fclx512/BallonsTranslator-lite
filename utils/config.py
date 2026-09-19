@@ -53,7 +53,7 @@ class ModuleConfig(Config):
     # 正是本项目的主流工作流（下游的区域再检测另有自己的检测器设置项）。
     # 它需要 ultralytics，缺依赖或缺模型文件时 launch.py 会按既有兜底降级。
     textdetector: str = "ysgyolo"
-    ocr: str = "none_ocr"
+    ocr: str = "paddleocr_v6_onnx"
     inpainter: str = "lama_large_512px"
     translator: str = "None"
     enable_detect: bool = True
@@ -595,6 +595,23 @@ class ProgramConfig(Config):
                 module_cfg["translator"] = "LLM_API_Translator"
             for removed in ("ChatGPT", "Gemini"):
                 trans_params.pop(removed, None)
+            # Migrate removed modules (模型精简 2026-09-19)
+            removed_modules = {
+                "textdetector": {"ctd": "ysgyolo"},
+                "ocr": {"mit48px_ctc": "paddleocr_v6_onnx"},
+                "translator": {"Sakura": "LLM_API_Translator"},
+                "inpainter": {"aot": "lama_large_512px"},
+            }
+            for stage, mapping in removed_modules.items():
+                old = module_cfg.get(stage)
+                if old in mapping:
+                    module_cfg[stage] = mapping[old]
+                stage_params = module_cfg.get(f"{stage}_params")
+                if isinstance(stage_params, dict):
+                    for removed in mapping:
+                        stage_params.pop(removed, None)
+            if config_dict.get("region_redetect_detector") == "ctd":
+                config_dict["region_redetect_detector"] = "ppocrv6_onnx"
 
         # Backward compat: single-menu pie_sectors -> pie_menus
         if "pie_menus" not in config_dict and "pie_sectors" in config_dict:
