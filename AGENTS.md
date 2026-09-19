@@ -94,6 +94,7 @@ modules/
 | `NotificationCenter`（`ui/custom_widget/notification.py`） | 统一画布通知中心：toast / 活动 spinner / 状态角标；模块级单例 `notification`，Canvas 初始化时 attach 后由各模块调用 |
 | `RailDockPanel` | 画布区浮层面板（硬连接锚定窄栏左侧，开合记忆 `pcfg`） |
 | `FloatDropPanel`（`ui/custom_widget/float_drop_panel.py`） | 按钮锚定下拉浮层（`ui/global_search_widget.py` 用；无开合记忆）；与 RailDockPanel 的选型对比见使用说明 |
+| `RowTable`（`ui/custom_widget/row_table.py`） | 自绘行列表（工作台批量候选列表专用，替换裸 QTableWidget）：`MODE_TABLE`＝列对齐紧凑表格（淡行分隔线、无竖网格）、`MODE_CARD`＝主文+次行元数据+右侧徽章的圆角审批卡；底色/选中染底/勾选框/徽章全在 delegate 自绘（行数据经 `Qt.UserRole` 传 dict），QSS 只管底色列头（`RowTable#WorkbenchRowTable`）；主题配色走 `get_theme_color`、缓存于 delegate 且 `StyleChange` 时失效 |
 
 新增控件时更新上表即可，无需展开详细用法。优先使用已有方案而非重新实现。
 

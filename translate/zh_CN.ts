@@ -7836,6 +7836,10 @@ No pipeline stages will be executed.</source>
             <source>Grows the rendering rectangle only — masks and inpainted pixels are untouched. Growth stops at a neighbouring block or the page edge.</source>
             <translation>只扩渲染区域，遮罩与修复像素原样保留；碰到邻框或页边即停。</translation>
         </message>
+        <message>
+            <source>%1 · %2 block(s)</source>
+            <translation>%1 · %2 块</translation>
+        </message>
     </context>
     <context>
         <name>WorkbenchTaskNav</name>

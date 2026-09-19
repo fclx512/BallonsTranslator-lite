@@ -112,6 +112,10 @@ class BatchTask:
     columns: Tuple[str, ...] = ()
     # 表格里拉伸的列号（含首列勾选框；<0 ＝取最后一列），长文本列给它
     stretch_column: int = -1
+    # 候选行的呈现模式（``ui/custom_widget/row_table.py``）：``"table"``＝
+    # 紧凑列对齐表格（默认，坐标/计数这类要逐位比较的数据型行）；
+    # ``"card"``＝审批卡片行（主文 + 元数据 + 徽章，字段少、靠预览图判断）。
+    row_view: str = "table"
     # apply 的版本元信息任务名（D35 的撤销提示会读它；子类用已翻译文案覆盖）
     label: str = ""
 
@@ -159,6 +163,15 @@ class BatchTask:
         return QCoreApplication.translate(
             "WorkbenchTasks", "%1 · block %2"
         ).replace("%1", row.pagename).replace("%2", str(row.block_index))
+
+    def card_fields(self, row: TaskRow) -> Optional[dict]:
+        """卡片模式（``row_view="card"``）的字段映射。
+
+        返回 ``{"primary", "meta", "badge", "badge_tone", "rejected"}``；
+        ``badge`` 为空串＝该行不画徽章。默认返回 ``None``，视图走通用兜底
+        （首列当主文、其余列拼接当元数据）。
+        """
+        return None
 
     def apply(self, keys: Optional[Sequence], options: Dict[str, Any]) -> dict:
         """把勾选的标识交回引擎（``keys=None`` 表示用引擎缺省口径）。"""
@@ -277,12 +290,27 @@ class MisreadTask(BatchTask):
 
     id = MISREAD
     stretch_column = 2  # 表格列号（含首列勾选框）：原文是该任务的宽列
+    row_view = "card"  # 字段少、靠预览图判断：主文＝原文，元数据＝页·子类型
     columns = (
         QCoreApplication.translate("WorkbenchTasks", "Page"),
         QCoreApplication.translate("WorkbenchTasks", "Source text"),
         QCoreApplication.translate("WorkbenchTasks", "Subtype"),
         QCoreApplication.translate("WorkbenchTasks", "Review"),
     )
+
+    def card_fields(self, row: TaskRow) -> Optional[dict]:
+        reviewed = bool(row.payload.get("reviewed"))
+        subtypes = row.cells[2] if len(row.cells) > 2 else ""
+        meta = " · ".join(
+            part for part in (row.pagename, subtypes) if part and part != "—"
+        )
+        return {
+            "primary": row.cells[1] if len(row.cells) > 1 else "",
+            "meta": meta,
+            "badge": row.cells[3] if len(row.cells) > 3 else "",
+            "badge_tone": "muted" if reviewed else "warning",
+            "rejected": reviewed,
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -425,12 +453,27 @@ class MergeTask(BatchTask):
 
     id = MERGE
     stretch_column = 4  # 标记列（误聚／顺序存疑）放长文案
+    row_view = "card"  # 组级行无逐位比较需求：主文＝方向·块数，徽章＝标记
     columns = (
         QCoreApplication.translate("WorkbenchTasks", "Page"),
         QCoreApplication.translate("WorkbenchTasks", "Blocks"),
         QCoreApplication.translate("WorkbenchTasks", "Direction"),
         QCoreApplication.translate("WorkbenchTasks", "Marks"),
     )
+
+    def card_fields(self, row: TaskRow) -> Optional[dict]:
+        marks = row.cells[3] if len(row.cells) > 3 else "—"
+        direction = row.cells[2] if len(row.cells) > 2 else ""
+        size = row.cells[1] if len(row.cells) > 1 else ""
+        return {
+            "primary": QCoreApplication.translate(
+                "WorkbenchTasks", "%1 · %2 block(s)"
+            ).replace("%1", direction).replace("%2", size),
+            "meta": row.pagename,
+            "badge": "" if marks == "—" else marks,
+            "badge_tone": "warning" if marks != "—" else "muted",
+            "rejected": False,  # 误聚组只是默认不勾选，不算已驳回
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

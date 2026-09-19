@@ -148,6 +148,8 @@ class Row:
 # 值 = 原因；键需与 ui/custom_widget/__init__.py 导出名一致（测试会比对）。
 EXCLUDED = {
     "ColorPickerDialog": "模态对话框；点 ColorPickerLabel / SmallColorPickerLabel 即可看到",
+    "MODE_CARD": "模式常量（RowTable 卡片模式），非控件；RowTable 卡片行即此模式",
+    "MODE_TABLE": "模式常量（RowTable 表格模式），非控件；RowTable 表格行即此模式",
     "MessageBox": "模态消息框，需宿主与交互",
     "FrameLessMessageBox": "无边框模态消息框，需宿主与交互",
     "ProgressMessageBox": "模态进度框，需任务流程驱动",
@@ -230,6 +232,8 @@ def _sections():
         ExpandLabel,
         FlowLayout,
         GroupFrame,
+        MODE_CARD,
+        MODE_TABLE,
         NoArrowsDoubleSpinBox,
         NoArrowsSpinBox,
         NoBorderPushBtn,
@@ -242,6 +246,7 @@ def _sections():
         ParamNameLabel,
         QFontChecker,
         RangeSlider,
+        RowTable,
         SeparatorWidget,
         SizeComboBox,
         SizeControlLabel,
@@ -455,6 +460,32 @@ def _sections():
         from ui.pie_menu_editor import CommandPalette
         return CommandPalette()
 
+    def row_table_demo(mode):
+        table = RowTable(mode)
+        if mode == MODE_TABLE:
+            table.set_header_labels(["页", "旧矩形", "新矩形"])
+            table.set_stretch_column(2)
+            table.set_rows([
+                {"checked": True, "cells": ["002.jpg", "24 26 132 56", "14 16 142 60"],
+                 "rejected": False, "tooltip": "002.jpg · 24 26 132 56"},
+                {"checked": False, "cells": ["002.jpg", "150 26 230 56", "142 16 240 60"],
+                 "rejected": False, "tooltip": "002.jpg · 150 26 230 56"},
+                {"checked": True, "cells": ["004.jpg", "24 116 132 146", "14 106 142 150"],
+                 "rejected": False, "tooltip": "004.jpg · 24 116 132 146"},
+            ])
+            table.setMinimumHeight(140)
+        else:
+            table.set_rows([
+                {"checked": True, "primary": "こんにちは", "meta": "002.jpg · 纯数字, 无假名",
+                 "badge": "待处理", "badge_tone": "warning", "rejected": False,
+                 "tooltip": "002.jpg"},
+                {"checked": False, "primary": "………", "meta": "003.jpg · 纯符号",
+                 "badge": "已驳回", "badge_tone": "muted", "rejected": True,
+                 "tooltip": "003.jpg"},
+            ])
+            table.setMinimumHeight(130)
+        return table
+
     return [
         ("输入类（必须用封装类，原生类静默掉样式）", [
             Row("ConfigComboBox", "ui/custom_widget/combobox.py::ConfigComboBox",
@@ -618,6 +649,12 @@ def _sections():
             Row("_ChipBar", "ui/fontstyle_manager.py::_ChipBar", chip_bar, wide=True),
             Row("CommandPalette", "ui/pie_menu_editor.py::CommandPalette",
                 command_palette, wide=True),
+        ]),
+        ("行列表（工作台批量候选，delegate 全自绘）", [
+            Row("RowTable 表格模式", "ui/custom_widget/row_table.py::RowTable",
+                lambda: row_table_demo(MODE_TABLE), wide=True),
+            Row("RowTable 卡片模式", "ui/custom_widget/row_table.py::RowTable",
+                lambda: row_table_demo(MODE_CARD), wide=True),
         ]),
     ]
 

@@ -2351,6 +2351,21 @@ QLabel#WorkbenchTaskSummary {
     font-size: 11px;
     color: @qwidgetForegroundColor;
 }
+/* 候选列表（RowTable：底色/选中染底/勾选框/徽章全在 delegate 自绘——
+   逐格 QSS 边框在 Qt 里渲染不全，且背景兜底规则只按裸 QTableView 匹配、
+   不及子类，这里类名+objectName 双保险） */
+RowTable#WorkbenchRowTable {
+    background: transparent;
+    border: none;
+}
+RowTable#WorkbenchRowTable QHeaderView::section {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid @borderColor;
+    color: @disabledForegroundColor;
+    font-size: 11px;
+    padding: 2px 4px 6px 4px;
+}
 /* ── 工作台审批预览浮层（D44：工作台之外的浮窗，滚轮缩放/拖拽平移。
       视觉语言对齐画布浮层面板 RailDockPanel：1px 细描边 + 标题条底色分层）── */
 WorkbenchPreviewPanel {

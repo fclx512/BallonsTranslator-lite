@@ -403,13 +403,7 @@ class PanelTest(_WorkbenchTestCase):
         panel = self._panel()
         view = panel._batch_views[MISREAD]
         view._rows[0].checked = False
-        from qtpy.QtCore import Qt
-
-        view._syncing = False
-        view._on_item_changed(
-            type("I", (), {"row": lambda self: 0, "column": lambda self: 0,
-                           "checkState": lambda self: Qt.CheckState.Unchecked})()
-        )
+        view._on_check_toggled(0, False)
         self.assertFalse(view._execute_btn.isEnabled())
 
     def test_apply_records_version_and_marks_others_dirty(self):

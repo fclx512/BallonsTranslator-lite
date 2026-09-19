@@ -25,17 +25,15 @@ from qtpy.QtGui import QColor, QImage, QPainter, QPen, QPixmap
 from qtpy.QtWidgets import (
     QApplication,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QMessageBox,
     QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from ui.custom_widget import ConfigCheckBox, ConfigComboBox, NoArrowsSpinBox
+from ui.custom_widget.row_table import MODE_CARD, MODE_TABLE, RowTable
 from ui.misc import get_theme_color
 
 # 预览叠加框的取色（主题变量，不硬编码色值）：目标块＝强调色，
@@ -96,11 +94,6 @@ _ERROR_TEXT = {
 class BatchTaskView(QWidget):
     """一个批量任务的三段视图（四个任务共用，差异由 ``BatchTask`` 描述）。"""
 
-    # 非拉伸列的宽度上限（超过就交给省略号 + tooltip，别把表撑出横向滚动条）
-    _COLUMN_WIDTH_CAP = 120
-    # 勾选框列宽（resizeColumnsToContents 会把它压到表头文字宽，故填完再钉回去）
-    _CHECK_COLUMN_WIDTH = 30
-
     jump_requested = Signal(str, int)  # (页名, 块下标)：跳画布（D26）
     # (QPixmap | None, 标题)：审批图交给面板的浮层显示（D44：它已不在这页里）
     preview_requested = Signal(object, str)
@@ -116,7 +109,6 @@ class BatchTaskView(QWidget):
         super().__init__(parent)
         self.task = task
         self._rows = []
-        self._syncing = False
         self._options = {"reversed_groups": set()}
         self._option_widgets = {}
         self._option_specs = {}
@@ -136,28 +128,18 @@ class BatchTaskView(QWidget):
         self._summary.setWordWrap(True)
         layout.addWidget(self._summary)
 
-        self._table = QTableWidget(0, 1 + len(task.columns), self)
-        self._table.setHorizontalHeaderLabels([""] + list(task.columns))
-        self._table.verticalHeader().setVisible(False)
-        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        header = self._table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-        self._table.setColumnWidth(0, self._CHECK_COLUMN_WIDTH)
+        self._card_mode = getattr(task, "row_view", "table") == MODE_CARD
+        self._table = RowTable(
+            MODE_CARD if self._card_mode else MODE_TABLE, self
+        )
+        if not self._card_mode:
+            self._table.set_header_labels(list(task.columns))
         stretch = getattr(task, "stretch_column", -1)
         if stretch < 0 or stretch > len(task.columns):
             stretch = len(task.columns)
-        self._stretch_column = stretch
-        for col in range(1, len(task.columns) + 1):
-            header.setSectionResizeMode(
-                col,
-                QHeaderView.ResizeMode.Stretch
-                if col == stretch
-                else QHeaderView.ResizeMode.Interactive,
-            )
-        self._table.itemChanged.connect(self._on_item_changed)
-        self._table.itemSelectionChanged.connect(self._on_row_selected)
+        self._table.set_stretch_column(stretch)
+        self._table.checkToggled.connect(self._on_check_toggled)
+        self._table.rowSelected.connect(self._on_row_selected)
         self._table.cellClicked.connect(self._on_cell_clicked)
         self._table.cellDoubleClicked.connect(self._on_double_clicked)
         layout.addWidget(self._table, 1)
@@ -290,7 +272,7 @@ class BatchTaskView(QWidget):
         return [row for row in self._rows if row.checked]
 
     def _current_row(self):
-        index = self._table.currentRow()
+        index = self._table.current_row()
         if 0 <= index < len(self._rows):
             return self._rows[index]
         return None
@@ -350,45 +332,37 @@ class BatchTaskView(QWidget):
         # 是跨任务共用的（在术语表页看见别任务的「将覆盖 0 页」纯属噪声）。
 
     def _fill_table(self, rows):
-        self._syncing = True
-        try:
-            self._table.setRowCount(len(rows))
-            for index, row in enumerate(rows):
-                check = QTableWidgetItem()
-                check.setFlags(
-                    Qt.ItemFlag.ItemIsEnabled
-                    | Qt.ItemFlag.ItemIsSelectable
-                    | Qt.ItemFlag.ItemIsUserCheckable
-                )
-                check.setCheckState(
-                    Qt.CheckState.Checked if row.checked else Qt.CheckState.Unchecked
-                )
-                self._table.setItem(index, 0, check)
-                for col, text in enumerate(row.cells, start=1):
-                    item = QTableWidgetItem(str(text))
-                    item.setToolTip(str(text))
-                    self._table.setItem(index, col, item)
-            # 非拉伸列按内容自适应但**设上限**：一列长文本（如误识别子类型
-            # 全列出来）会把表撑出横向滚动条、把拉伸列挤没；超出的部分交给
-            # Qt 省略号，全文在单元格 tooltip 里
-            self._table.resizeColumnsToContents()
-            self._table.setColumnWidth(0, self._CHECK_COLUMN_WIDTH)
-            for col in range(1, self._table.columnCount()):
-                if col == self._stretch_column:
-                    continue
-                if self._table.columnWidth(col) > self._COLUMN_WIDTH_CAP:
-                    self._table.setColumnWidth(col, self._COLUMN_WIDTH_CAP)
-        finally:
-            self._syncing = False
+        self._table.set_rows([self._row_visual(row) for row in rows])
 
-    def _on_item_changed(self, item):
-        if self._syncing or item.column() != 0:
-            return
-        index = item.row()
-        if 0 <= index < len(self._rows):
-            self._rows[index].checked = (
-                item.checkState() == Qt.CheckState.Checked
+    def _row_visual(self, row) -> dict:
+        """``TaskRow`` → 自绘行的 dict（形状见 ``ui/custom_widget/row_table.py``）。"""
+        visual = {"checked": row.checked, "tooltip": ""}
+        if self._card_mode:
+            fields = self.task.card_fields(row)
+            if fields is None:
+                cells = [str(c) for c in row.cells]
+                fields = {
+                    "primary": cells[0] if cells else "",
+                    "meta": " · ".join(cells[1:]),
+                    "badge": "",
+                    "badge_tone": "muted",
+                    "rejected": False,
+                }
+            visual.update(fields)
+            visual["tooltip"] = " · ".join(
+                str(c) for c in row.cells if c and c != "—"
             )
+        else:
+            visual["cells"] = [str(c) for c in row.cells]
+            visual["rejected"] = False
+            visual["tooltip"] = " · ".join(
+                str(c) for c in row.cells if c and c != "—"
+            )
+        return visual
+
+    def _on_check_toggled(self, row: int, checked: bool):
+        if 0 <= row < len(self._rows):
+            self._rows[row].checked = checked
         self._update_execute_state()
 
     def _update_execute_state(self):
@@ -453,7 +427,7 @@ class BatchTaskView(QWidget):
         才让这个毛病看起来"时好时坏"。选中行**变了**的那次点击不在这里
         重取（``itemSelectionChanged`` 已经发过图了，避免一次点击取两遍）。
         """
-        if self._preview_pixmap is None and row == self._table.currentRow():
+        if self._preview_pixmap is None and row == self._table.current_row():
             self._on_row_selected()
 
     def _on_double_clicked(self, *_):
