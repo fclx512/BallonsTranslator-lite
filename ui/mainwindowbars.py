@@ -179,9 +179,10 @@ class LeftBar(Widget):
         font = self.runImgtransBtn.font()
         font.setPixelSize(10)
         self.runImgtransBtn.setFont(font)
-        self.runImgtransBtn.setFixedSize(LEFTBTN_WIDTH, LEFTBTN_WIDTH)
+        # 宽度与上方 configChecker（33）一致：布局里两者同点左锚，宽度不同
+        # 则中心错开，运行按钮会比设置图标左移 2~3px
+        self.runImgtransBtn.setFixedSize(33, LEFTBTN_WIDTH)
         self.run_imgtrans_clicked = self.runImgtransBtn.clicked
-        self.runImgtransBtn.setFixedSize(LEFTBTN_WIDTH, LEFTBTN_WIDTH)
 
         vlayout = QVBoxLayout(self)
         vlayout.addWidget(openBtnToolBar)

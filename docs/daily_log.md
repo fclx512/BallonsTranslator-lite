@@ -40,6 +40,26 @@
 
 ---
 
+### 本批收尾：RowTable 可读性打磨 + 扩张页改版 + 文档瘦身等（分类型提交）
+
+**问题/需求：** 整理工作区挂起的修改按类型分批提交，另修一处对齐：左栏「运行」按钮与上方设置图标中心错开 2~3px（两者同点左锚但宽度不同：33 vs 28）。
+
+**改动要点：**
+
+- **RowTable 可读性**：悬停行淡染高亮（`setMouseTracking` 收 move，滚动后重算）；选中染底上的文字按染底实际观感色在 `@dragTextColor`／`@inverseTextColor` 里挑对比更高的（部分主题 `@dragTextColor` 是暗色，固定取会看不清），次行元数据选中时用降不透明度主色；全局 QSS 表格选中色同步改 `@dragTextColor` 且 `:hover` 规则置前防盖选中底色。
+- **扩张页改版**：`ui/workbench_tasks.py::ExpandTask` 列从「旧矩形/新矩形」坐标改单列「增长」描述（每边长多少、哪边受限，`stretch_column` 改 3）；hint 文案改说清用途与居中重排条件。新增探针 `scripts/probes/expand_centering_probe.py`：真机验证扩张后译文按新框重排，「是否居中」取决于块自身 alignment（块属性，扩张页决定不了）。`ui/workbench_batch_view.py` 加「重扫列表」刷新钮（自绘循环箭头 `RefreshButton`）并清理重复 import 块。
+- **font_scan 日志压制修复**：`utils/font_scan.py::scan_font_faces` 原先只压根 logger，压不住 fontTools 模块级子 logger 的自有 handler（`utils/logger.py` 全局 `setLoggerClass` 后每个子 logger 自带 console handler）——改为整棵 `fontTools.*` 树一起压，并预导入 `name`/`OS-2` 表模块防懒加载躲过压制。
+- **daily_log 3 天窗口自动裁剪**：新增 `scripts/trim_daily_log.py`（按 `## YYYY-MM-DD` 标题解析，无日期段恒保留）与 `scripts/hooks/pre-commit`（提交时自动裁，版本化副本，重 clone 后 cp 启用）。
+- **文档瘦身**：AGENTS.md 关键文件表改「一句话定位 + 最小约束 + 指针」；《经验教训》《上游参考》《依赖库说明》《新增设置项路线参考》《快捷键》砍历史细节与过期内容；《打包控件功能使用说明》RowTable 行同步。
+- **对齐修复**：`ui/mainwindowbars.py` 运行按钮宽度 28→33 与 configChecker 一致，中心重合（离屏探针实测 center 均 x=23）。
+- **新增调研文档**：`docs/技术实现/paddle-ocr-for-manga_接入调研.md`、`docs/技术实现/模型说明卡_规划.md`。
+
+**测试：** `scripts/verify.py` 七步全绿；对齐用离屏几何探针验证。
+
+**涉及文件：** `ui/custom_widget/row_table.py`、`ui/workbench_batch_view.py`、`ui/workbench_tasks.py`、`ui/mainwindowbars.py`、`utils/font_scan.py`、`config/stylesheet.css`、`scripts/trim_daily_log.py`（新）、`scripts/hooks/pre-commit`（新）、`scripts/probes/expand_centering_probe.py`（新）、`scripts/README.md`、`scripts/probes/README.md`、`AGENTS.md`、`docs/基础速查/`（6 篇）、`docs/技术实现/`（2 篇新）
+
+---
+
 ## 2026-09-18
 
 ### 工作台 UI 审计与逐项优化（D44 浮层形态收口 + 一批观感/状态同步修复）
