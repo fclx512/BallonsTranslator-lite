@@ -1069,6 +1069,9 @@ OpenBtn {
     border-radius: 6px;
     image: url(icons/openbtn.svg);
     background-color: @widgetBackgroundColor;
+    /* 按钮盒 33px 与下方 checker 同宽（左锚布局同轴）；QSS image 随盒缩放，
+       3px padding 把字形压回 28px 盒时代的尺寸 */
+    padding: 3px;
 
 }
 

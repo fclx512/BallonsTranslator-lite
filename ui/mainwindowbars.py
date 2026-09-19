@@ -1,5 +1,5 @@
 import os.path as osp
-from typing import List, Union
+from typing import List, Optional, Union
 
 from qtpy.QtCore import QEvent, QPoint, Qt, Signal
 from qtpy.QtGui import QActionGroup, QKeySequence, QMouseEvent
@@ -14,7 +14,6 @@ from qtpy.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSpacerItem,
-    QToolBar,
     QToolButton,
     QVBoxLayout,
 )
@@ -42,7 +41,27 @@ else:
 class ShowPageListChecker(QCheckBox): ...
 
 
-class OpenBtn(QToolButton): ...
+class OpenBtn(QToolButton):
+    """左栏打开菜单钮。
+
+    不走 ``QToolButton.setMenu``（InstantPopup 的菜单指示器在右侧保留
+    箭头位，把 QSS image 挤离按钮中心，且 QSS 归零 width/height/image
+    均无法收回该保留区），改为自持菜单、点击时手动弹出，按钮内无
+    箭头保留区，图标原生居中。
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._menu: Optional[QMenu] = None
+
+    def assignMenu(self, menu: QMenu) -> None:
+        self._menu = menu
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self._menu is not None:
+            self._menu.exec(self.mapToGlobal(self.rect().bottomLeft()))
+            return
+        super().mousePressEvent(event)
 
 
 class StatusButton(QPushButton):
@@ -165,13 +184,13 @@ class LeftBar(Widget):
             ]
         )
         self.openBtn = OpenBtn()
-        self.openBtn.setFixedSize(LEFTBTN_WIDTH, LEFTBTN_WIDTH)
-        self.openBtn.setMenu(openMenu)
-        self.openBtn.setPopupMode(QToolButton.InstantPopup)
-
-        openBtnToolBar = QToolBar(self)
-        openBtnToolBar.setFixedSize(LEFTBTN_WIDTH, LEFTBTN_WIDTH)
-        openBtnToolBar.addWidget(self.openBtn)
+        # 布局是左锚排列（vlayout 整体对齐、各项同点 x=7），所有件必须
+        # 同宽 33 才同轴（运行按钮同理）；旧实现外包 33px QToolBar 装 28px
+        # 按钮，QToolBar 边距把图标挤离轴线。菜单经 assignMenu 自持（不走
+        # QToolButton.setMenu——InstantPopup 的菜单指示器会在右侧保留箭头
+        # 位，把 QSS image 挤到左边，且 QSS 归零 width/height/image 均无效）
+        self.openBtn.setFixedSize(33, 33)
+        self.openBtn.assignMenu(openMenu)
 
         self.runImgtransBtn = QPushButton()
         self.runImgtransBtn.setObjectName("RunButton")
@@ -185,7 +204,7 @@ class LeftBar(Widget):
         self.run_imgtrans_clicked = self.runImgtransBtn.clicked
 
         vlayout = QVBoxLayout(self)
-        vlayout.addWidget(openBtnToolBar)
+        vlayout.addWidget(self.openBtn)
         vlayout.addWidget(self.showPageListLabel)
         vlayout.addWidget(self.globalSearchChecker)
         vlayout.addWidget(self.workbenchChecker)

@@ -2,6 +2,32 @@
 
 > 记录**仓库层面**的改动（功能增删、远端分支变动、规范调整），供变更史查阅。踩坑细节、方案草稿与跨代理交接留在各代理侧的私有记忆（见 `AGENTS.md` 的「多代理协作」一节），不进仓库。仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护），每次在对应日期中末尾写入日志。
 
+## 2026-09-20
+
+### 依赖兼容上游 + 共享环境「只增不升」补装
+
+**问题/需求：** 上游 BallonsTranslator 的依赖库两边高度通用，fork 想兼容共享同一环境（如把上游 `ballontrans_pylibs_win/` 链接过来用），需消除唯一硬版本冲突并保证补装不污染上游正在用的版本。
+
+**改动要点：** 解除 `pillow>=10.0,<11` 钉子（上游环境 pillow 12.2.0 + pillow-jxl-plugin 1.3.7 实测 JXL roundtrip 正常，2026-06 钉子已过时）；`pyproject.toml` 增 `acc` extra（numba 可选加速，缺失照旧回退纯 NumPy）；`utils/core_requirements.py::ensure_core_requirements` 补装前用 `importlib.metadata` 对已装发行版生成 `名称==版本` 快照，经 `utils/package_installer.py::build_install_command` 新增的 `constraints_file` 参数作 `-c` 约束传入——**只增不升**：缺的包照补，任何会升级既有包的解析直接失败、快照留盘交人工决策；`docs/基础速查/依赖库说明.md` 增「与上游共用同一依赖库」一节（差异清单 + 联接用法）。
+
+**测试：** `scripts/verify.py` 全绿；带约束的 `pip install -r requirements.txt --dry-run` 解析无报错无升级；`tests/test_dependency_startup.py` 8 通过。
+
+**涉及文件：** `pyproject.toml`、`requirements.txt`、`utils/package_installer.py`、`utils/core_requirements.py`、`docs/基础速查/依赖库说明.md`
+
+---
+
+### 左栏打开钮图标回归轴线（去 QToolBar 包裹 + 菜单自持）
+
+**问题/需求：** 左栏图标重绘与边距调整后，文件夹打开钮（openBtn）偏左、右侧显得多出边距，与下方四个 33px checker 不在同一条轴上。
+
+**改动要点：** 根因有二：① openBtn 外包一层 33px `QToolBar` 装 28px 按钮，QToolBar 自带边距把按钮挤出轴线；② 左栏 vlayout 实为**左锚排列**（各项同点 x=7），宽度不同即中心错开（与上次运行按钮 28→33 同理）。修法：去掉 QToolBar 包裹、openBtn 直接 33×33 进布局与 checker 同规格；QSS `image` 随按钮盒缩放，`OpenBtn` 规则加 `padding: 3px` 把字形压回原尺寸（实测 24.8 逻辑px 与旧版一致）；菜单改 `ui/mainwindowbars.py::OpenBtn` 自持（`assignMenu` + 点击手动弹出）——不走 `QToolButton.setMenu`，因 InstantPopup 的菜单指示器在右侧保留箭头位会把 QSS image 挤到左边，且 QSS 归零 width/height/image 均无法收回保留区。离屏渲染实测五图标中心 28.5~29.5 对齐（剩余 ±0.75px 为 SVG 内容 1px 不对称）。
+
+**测试：** `scripts/verify.py` 全绿；离屏拉起真实 LeftBar 逐图标量字形中心/宽度确认。
+
+**涉及文件：** `ui/mainwindowbars.py`、`config/stylesheet.css`
+
+---
+
 ## 2026-09-19
 
 ### 工作台批量任务页加刷新钮（重扫候选列表）
