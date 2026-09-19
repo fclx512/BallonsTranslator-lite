@@ -22,6 +22,7 @@
 | `scripts/i18n_check.py` | 审计 i18n（硬编码中文、缺失/多余的 .ts 条目），发版前 `--ci` | `python scripts/i18n_check.py` |
 | `scripts/qm_compile.py` | 编译 `.ts` → `.qm`（Qt 二进制翻译文件） | `python scripts/qm_compile.py translate/zh_CN.ts translate/zh_CN.qm` |
 | `scripts/ts_auto_fill.py` | 自动同步 `self.tr()` 调用与 `.ts` 文件，`--apply` 后自动重编 .qm | `python scripts/ts_auto_fill.py --apply` |
+| `scripts/trim_daily_log.py` | 将 `docs/daily_log.md` 裁剪到最近 3 天（按 `## YYYY-MM-DD` 标题解析，无日期段恒保留）；`--check` 仅校验，pre-commit 钩子（`scripts/hooks/`）自动执行 | `python scripts/trim_daily_log.py [--check]` |
 | `scripts/i18n_common.py` | i18n_check / ts_auto_fill 共用的提取逻辑与孤儿白名单（非入口，勿单独运行） | — |
 
 ### verify.py 两级用法

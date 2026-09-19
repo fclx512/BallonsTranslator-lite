@@ -1,0 +1,27 @@
+#!/bin/sh
+# Pre-commit hook: trim docs/daily_log.md to the last 3 days (scripts/trim_daily_log.py).
+# Versioned copy lives at scripts/hooks/pre-commit; after re-cloning reinstall with:
+#   cp scripts/hooks/pre-commit .git/hooks/pre-commit
+
+root="$(git rev-parse --show-toplevel)" || exit 0
+cd "$root" || exit 1
+
+if [ -x "ballontrans_pylibs_win/python.exe" ]; then
+    python_cmd=ballontrans_pylibs_win/python.exe
+else
+    python_cmd=python
+fi
+
+staged=$(git diff --cached --name-only -- docs/daily_log.md)
+modified=$(git diff --name-only -- docs/daily_log.md)
+if [ -z "$staged" ] && [ -z "$modified" ]; then
+    exit 0
+fi
+
+# Trim the worktree file; re-stage only when the log was already staged
+# (selective staging of other files must not drag the log into the commit).
+"$python_cmd" scripts/trim_daily_log.py || exit 1
+if [ -n "$staged" ]; then
+    git add docs/daily_log.md
+fi
+exit 0
