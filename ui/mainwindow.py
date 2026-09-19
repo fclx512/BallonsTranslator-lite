@@ -68,10 +68,12 @@ from qtpy.QtWidgets import (
 from tqdm import tqdm
 
 from modules import (
+    GET_MISSING_MODEL_FILES,
     GET_VALID_INPAINTERS,
     GET_VALID_OCR,
     GET_VALID_TEXTDETECTORS,
     GET_VALID_TRANSLATORS,
+    HIDDEN_INPAINTERS,
 )
 from utils import shared
 from utils.batch_versions import BatchVersionStore
@@ -130,7 +132,13 @@ from .global_search_widget import GlobalSearchWidget
 from .glossary_agent_panel import GlossaryAgentPanel
 from .io_thread import ImgSaveThread
 from .mainwindowbars import BottomBar, LeftBar, TitleBar
-from .misc import QKEY, parse_stylesheet, set_html_family, theme_accent_color
+from .misc import (
+    QKEY,
+    mark_module_selector_status,
+    parse_stylesheet,
+    set_html_family,
+    theme_accent_color,
+)
 from .module_manager import ModuleManager
 from .overlay_modal import OverlayModal
 from .region_redetect_tool import RegionRedetectTool
@@ -478,7 +486,6 @@ class MainWindow(mainwindow_cls):
 
         self.leftBar = LeftBar(self)
         self.leftBar.showPageListLabel.clicked.connect(self.pageLabelStateChanged)
-        self.leftBar.imgTransChecked.connect(self.setupImgTransUI)
         self.leftBar.configChecked.connect(self.setupConfigUI)
         self.leftBar.globalSearchChecker.clicked.connect(self.on_set_gsearch_widget)
         self.leftBar.workbenchChecker.clicked.connect(self.on_set_workbench_widget)
@@ -766,8 +773,15 @@ class MainWindow(mainwindow_cls):
             self.on_textdet_changed
         )
         self.bottomBar.inpaint_selector.selector.addItems(
-            [m for m in GET_VALID_INPAINTERS() if m != "LLMInpaint"]
+            [m for m in GET_VALID_INPAINTERS() if m not in HIDDEN_INPAINTERS]
         )
+        for module_type, selector in (
+            ("textdetector", self.bottomBar.textdet_selector.selector),
+            ("ocr", self.bottomBar.ocr_selector.selector),
+            ("translator", self.bottomBar.trans_selector.selector),
+            ("inpainter", self.bottomBar.inpaint_selector.selector),
+        ):
+            mark_module_selector_status(selector, module_type)
         self.bottomBar.inpaint_selector.selector.currentTextChanged.connect(
             self.on_inpaint_changed
         )
@@ -816,7 +830,7 @@ class MainWindow(mainwindow_cls):
         self.leftBar.showPageListLabel.setChecked(False)
         self.updatePageList()
         self.leftBar.save_config.connect(self.save_config)
-        self.leftBar.imgTransChecker.setChecked(True)
+        self.setupImgTransUI()
         self.st_manager.formatpanel.global_format = pcfg.global_fontformat
         self.st_manager.formatpanel.set_active_format(pcfg.global_fontformat)
 
@@ -3342,7 +3356,7 @@ class MainWindow(mainwindow_cls):
 
     def manual_save(self):
         if (
-            self.leftBar.imgTransChecker.isChecked()
+            self._is_canvas_mode()
             and self.imgtrans_proj.directory is not None
         ):
             LOGGER.debug("Manually saving...")
@@ -4090,6 +4104,15 @@ class MainWindow(mainwindow_cls):
 
         from .run_pipeline_dialog import RunPipelineDialog
 
+        # 重新标记底部栏下拉的缺模型状态（距启动时可能已下载/删除过权重）
+        for module_type, selector in (
+            ("textdetector", self.bottomBar.textdet_selector.selector),
+            ("ocr", self.bottomBar.ocr_selector.selector),
+            ("translator", self.bottomBar.trans_selector.selector),
+            ("inpainter", self.bottomBar.inpaint_selector.selector),
+        ):
+            mark_module_selector_status(selector, module_type)
+
         page_names = list(self.imgtrans_proj.pages.keys())
         dialog = RunPipelineDialog(
             self,
@@ -4127,6 +4150,42 @@ class MainWindow(mainwindow_cls):
 
         if wo_update:
             self._run_imgtrans_wo_textstyle_update = True
+
+        # 运行前静态检查启用阶段的模型文件：给可读提示而不是让管线在线程里报错
+        enabled_stages = (
+            ("textdetector", "textdetector", pcfg.module.enable_detect, self.tr("Text Detection")),
+            ("ocr", "ocr", pcfg.module.enable_ocr, self.tr("OCR")),
+            ("translator", "translator", pcfg.module.enable_translate, self.tr("Translation")),
+            ("inpainter", "inpainter", pcfg.module.enable_inpaint, self.tr("Inpainting")),
+        )
+        missing_lines = []
+        for module_type, cfg_key, enabled, stage_label in enabled_stages:
+            if not enabled:
+                continue
+            missing = GET_MISSING_MODEL_FILES(module_type, getattr(pcfg.module, cfg_key))
+            if missing:
+                missing_lines.append(
+                    "{} ({}): {}".format(
+                        stage_label, getattr(pcfg.module, cfg_key), ", ".join(missing)
+                    )
+                )
+        if missing_lines:
+            msgBox = QMessageBox(self)
+            msgBox.setIcon(QMessageBox.Warning)
+            msgBox.setWindowTitle(self.tr("Missing Model Files"))
+            msgBox.setText(
+                self.tr(
+                    "Model files were not found for the stages below. You can still run, but those stages may fail. Download prompts appear when selecting the module."
+                )
+                + "\n\n"
+                + "\n".join(missing_lines)
+            )
+            run_btn = msgBox.addButton(self.tr("Run Anyway"), QMessageBox.YesRole)
+            cancel_btn = msgBox.addButton(self.tr("Cancel"), QMessageBox.RejectRole)
+            msgBox.setDefaultButton(cancel_btn)
+            msgBox.exec_()
+            if msgBox.clickedButton() == cancel_btn:
+                return
 
         if (
             not self.imgtrans_proj.is_all_pages_no_text

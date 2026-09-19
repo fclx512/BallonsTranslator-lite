@@ -1016,30 +1016,7 @@ QToolButton#BottomBarModuleToolButton::menu-indicator {
     right: 8px;
 }
 
-QCheckBox#TransChecker::indicator {
-    padding-left: 8px;
-    padding-right: 8px;
-    padding-top: 3px;
-    padding-bottom: 3px;
-    height: 27px;
-    width: 27px;
-    image: url(icons/bottombar_translate.svg);
-}
-
-QCheckBox#TransChecker::indicator:checked {
-    image: url(icons/bottombar_translate_activate.svg);
-}
-
-QCheckBox#TransChecker::indicator:hover {
-    background-color: @accentPrimary20;
-}
-
 QCheckBox#PaintChecker::indicator {
-    padding-left: 8px;
-    padding-right: 8px;
-    padding-top: 8px;
-    height: 33px;
-    width: 33px;
     image: url(icons/bottombar_paintmode.svg);
 }
 
@@ -1052,12 +1029,6 @@ QCheckBox#PaintChecker::indicator:hover {
 }
 
 QCheckBox#TexteditChecker::indicator {
-    padding-left: 8px;
-    padding-right: 8px;
-    padding-top: 3px;
-    padding-bottom: 3px;
-    height: 28px;
-    width: 28px;
     image: url(icons/bottombar_textedit.svg);
 }
 
@@ -1070,12 +1041,6 @@ QCheckBox#TexteditChecker::indicator:hover {
 }
 
 QCheckBox#TextblockChecker::indicator{
-    padding-left: 8px;
-    padding-right: 8px;
-    padding-top: 3px;
-    padding-bottom: 3px;
-    height: 28px;
-    width: 28px;
     image: url(icons/bottombar_textblock.svg);
 }
 
@@ -1088,12 +1053,6 @@ QCheckBox#TextblockChecker::indicator:checked{
 }
 
 QCheckBox#RedetectChecker::indicator{
-    padding-left: 8px;
-    padding-right: 8px;
-    padding-top: 3px;
-    padding-bottom: 3px;
-    height: 28px;
-    width: 28px;
     image: url(icons/bottombar_redetect.svg);
 }
 
@@ -1107,6 +1066,7 @@ QCheckBox#RedetectChecker::indicator:checked{
 
 OpenBtn {
     border-style: none;
+    border-radius: 6px;
     image: url(icons/openbtn.svg);
     background-color: @widgetBackgroundColor;
 
@@ -1114,6 +1074,7 @@ OpenBtn {
 
 OpenBtn::hover {
     image: url(icons/openbtn_activate.svg);
+    background-color: @accentPrimary35;
 }
 
 OpenBtn::pressed {
@@ -1167,21 +1128,6 @@ QCheckBox#WorkbenchChecker::indicator:checked
 }
 
 
-StateChecker#ImgTransChecker::indicator{
-    height: 27px;
-    width: 27px;
-    image: url(icons/leftbar_imgtrans.svg);
-}
-
-StateChecker#ImgTransChecker::indicator:hover
-{
-    image: url(icons/leftbar_imgtrans_activate.svg);
-}
-StateChecker#ImgTransChecker::indicator:checked
-{
-    image: url(icons/leftbar_imgtrans_activate.svg);
-}
-
 StateChecker#ConfigChecker::indicator{
     height: 27px;
     width: 27px;
@@ -1195,6 +1141,52 @@ StateChecker#ConfigChecker::indicator:hover
 StateChecker#ConfigChecker::indicator:checked
 {
     image: url(icons/leftbar_config_activate.svg);
+}
+
+/* 左栏/底栏图标按钮的统一 hover/选中反馈：hover 圆角染底（35% 强调色，
+   比 20% 的旧版更醒目），选中常驻淡染底。染底画在 ::indicator 的尺寸盒内，
+   盒子尺寸＝图标本体＋垫距，必须与代码里 setFixedSize 钉的控件盒一致
+   （ui/mainwindowbars.py），超出的部分会被控件矩形裁掉。 */
+ShowPageListChecker::indicator,
+QCheckBox#GlobalSearchChecker::indicator,
+QCheckBox#WorkbenchChecker::indicator,
+StateChecker#ConfigChecker::indicator {
+    width: 27px;
+    height: 27px;
+    padding: 3px;
+    border-radius: 6px;
+}
+
+QCheckBox#PaintChecker::indicator,
+QCheckBox#TexteditChecker::indicator,
+QCheckBox#TextblockChecker::indicator,
+QCheckBox#RedetectChecker::indicator {
+    width: 26px;
+    height: 26px;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+ShowPageListChecker::indicator:hover,
+QCheckBox#GlobalSearchChecker::indicator:hover,
+QCheckBox#WorkbenchChecker::indicator:hover,
+StateChecker#ConfigChecker::indicator:hover,
+QCheckBox#PaintChecker::indicator:hover,
+QCheckBox#TexteditChecker::indicator:hover,
+QCheckBox#TextblockChecker::indicator:hover,
+QCheckBox#RedetectChecker::indicator:hover {
+    background-color: @accentPrimary35;
+}
+
+ShowPageListChecker::indicator:checked,
+QCheckBox#GlobalSearchChecker::indicator:checked,
+QCheckBox#WorkbenchChecker::indicator:checked,
+StateChecker#ConfigChecker::indicator:checked,
+QCheckBox#PaintChecker::indicator:checked,
+QCheckBox#TexteditChecker::indicator:checked,
+QCheckBox#TextblockChecker::indicator:checked,
+QCheckBox#RedetectChecker::indicator:checked {
+    background-color: @accentPrimary20;
 }
 
 /*https://github.com/PyQt5/PyQt/blob/master/QScrollBar/StyleScrollBar.py*/

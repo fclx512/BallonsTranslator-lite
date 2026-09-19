@@ -83,7 +83,6 @@ class StateChecker(QCheckBox):
 
 class LeftBar(Widget):
     recent_proj_list = []
-    imgTransChecked = Signal()
     configChecked = Signal()
     open_dir = Signal(str)
     open_json_proj = Signal(str)
@@ -96,26 +95,29 @@ class LeftBar(Widget):
         super().__init__(mainwindow, *args, **kwargs)
         self.mainwindow: QMainWindow = mainwindow
 
-        padding = (LEFTBAR_WIDTH - LEFTBTN_WIDTH) // 2
         self.setFixedWidth(LEFTBAR_WIDTH)
         self.showPageListLabel = ShowPageListChecker()
+
+        # hover 染底画在 ::indicator 的尺寸盒（图标本体 27px + 四周 3px 垫距
+        # ＝ 33px），控件盒必须钉成同尺寸，否则染底被控件矩形裁掉；左右
+        # 边距相应从 10px 收到 4px 让出空间（左栏宽度不变）
+        self.showPageListLabel.setFixedSize(33, 33)
 
         self.globalSearchChecker = QCheckBox()
         self.globalSearchChecker.setObjectName("GlobalSearchChecker")
         self.globalSearchChecker.setToolTip(self.tr("Global Search (Ctrl+G)"))
+        self.globalSearchChecker.setFixedSize(33, 33)
 
         # 泛用工作台（规划 D25）：术语/剧情与「问题清理」四个批量任务共用
         # 这一个入口，任务切换在面板内部完成
         self.workbenchChecker = QCheckBox()
         self.workbenchChecker.setObjectName("WorkbenchChecker")
         self.workbenchChecker.setToolTip(self.tr("Workbench"))
-
-        self.imgTransChecker = StateChecker("imgtrans")
-        self.imgTransChecker.setObjectName("ImgTransChecker")
-        self.imgTransChecker.checked.connect(self.stateCheckerChanged)
+        self.workbenchChecker.setFixedSize(33, 33)
 
         self.configChecker = StateChecker("config", uncheckable=True)
         self.configChecker.setObjectName("ConfigChecker")
+        self.configChecker.setFixedSize(33, 33)
         self.configChecker.checked.connect(self.stateCheckerChanged)
         self.configChecker.unchecked.connect(self.stateCheckerChanged)
 
@@ -186,12 +188,11 @@ class LeftBar(Widget):
         vlayout.addWidget(self.showPageListLabel)
         vlayout.addWidget(self.globalSearchChecker)
         vlayout.addWidget(self.workbenchChecker)
-        vlayout.addWidget(self.imgTransChecker)
         vlayout.addItem(QSpacerItem(0, 0, QSizePolicy.Minimum, QSizePolicy.Expanding))
         vlayout.addWidget(self.configChecker)
         vlayout.addWidget(self.runImgtransBtn)
         vlayout.setContentsMargins(
-            padding, LEFTBTN_WIDTH // 2, padding, LEFTBTN_WIDTH // 2
+            4, LEFTBTN_WIDTH // 2, 4, LEFTBTN_WIDTH // 2
         )
         vlayout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         vlayout.setSpacing(LEFTBTN_WIDTH * 3 // 4)
@@ -358,15 +359,8 @@ class LeftBar(Widget):
             self.open_images.emit(paths)
 
     def stateCheckerChanged(self, checker_type: str):
-        if checker_type == "imgtrans":
-            self.configChecker.setChecked(False)
-            self.imgTransChecked.emit()
-        elif checker_type == "config":
-            if self.configChecker.isChecked():
-                self.imgTransChecker.setChecked(False)
-                self.configChecked.emit()
-            else:
-                self.imgTransChecker.setChecked(True)
+        if checker_type == "config" and self.configChecker.isChecked():
+            self.configChecked.emit()
 
     def needleftStackWidget(self) -> bool:
         return self.showPageListLabel.isChecked()
@@ -686,6 +680,17 @@ class BottomBar(Widget):
         )
         self.redetectChecker.clicked.connect(self.onRedetectCheckerClicked)
 
+        # hover 染底画在 ::indicator 的尺寸盒（图标 26px + 上下 2px 垫距
+        # ＝ 30px），控件盒钉成同尺寸避免染底被裁；底栏定高 32px、下边距
+        # 收到 2px，正好放下 30px 的图标盒，不加高底栏
+        for checker in (
+            self.paintChecker,
+            self.texteditChecker,
+            self.textblockChecker,
+            self.redetectChecker,
+        ):
+            checker.setFixedSize(42, 30)
+
         self.originalSlider = PaintQSlider(
             self.tr("Original Compare"), Qt.Orientation.Horizontal, self
         )
@@ -720,7 +725,7 @@ class BottomBar(Widget):
         self.hlayout.addWidget(self.texteditChecker)
         self.hlayout.addWidget(self.textblockChecker)
         self.hlayout.addWidget(self.redetectChecker)
-        self.hlayout.setContentsMargins(60, 0, 10, WINDOW_BORDER_WIDTH)
+        self.hlayout.setContentsMargins(60, 0, 10, 2)
 
     @staticmethod
     def _make_vseparator() -> QFrame:

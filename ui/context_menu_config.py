@@ -57,7 +57,7 @@ DEFAULT_ORDER: List[str] = [
     "---",
     QCoreApplication.translate("Canvas", "translate"), "ocr", "ocr_translate", "ocr_translate_inpaint",
     "---",
-    "tag_ocr_low_conf", "tag_handwritten", "tag_onomatopoeia", "tag_trans_confusing", "tag_trans_polish",
+    "tags",
     "act_ocr_fix", "act_retranslate",
 ]
 
@@ -188,11 +188,9 @@ def _build_merge(menu: QMenu, canvas):
 
 
 def _build_behavior(menu: QMenu, canvas):
-    """Build the **Behavior** submenu — snap alignment."""
-    sub = menu.addMenu(QCoreApplication.translate("Canvas", "Behavior"))
-
-    # Snap Alignment (checkable toggle)
-    _act(sub, canvas, QCoreApplication.translate("Canvas", "Snap Alignment"), checkable=True,
+    """吸附对齐——原「行为设置」子菜单的唯一成员，提为直接勾选项。"""
+    _act(menu, canvas, QCoreApplication.translate("Canvas", "Snap Alignment"),
+         checkable=True,
          checked=canvas.alignment_enabled,
          connect=lambda checked: setattr(canvas, "alignment_enabled", checked))
 
@@ -296,8 +294,8 @@ _reg(CmdDef("merge", QCoreApplication.translate("Canvas", "Merge"),
     enabled_fn=lambda mw: _selected_count(mw.canvas) >= 2,
     category=CAT_TEXT))
 
-# --- Behavior submenu (snap alignment + merge direction) ---
-_reg(CmdDef("behavior", QCoreApplication.translate("Canvas", "Behavior"),
+# --- Behavior (snap alignment, single checkable item) ---
+_reg(CmdDef("behavior", QCoreApplication.translate("Canvas", "Snap Alignment"),
     build_fn=_build_behavior))
 
 # --- Pipeline actions ---
@@ -530,6 +528,19 @@ for _tag in MANUAL_TAG_DEFS:
     # 程序专用标签（TagDef.program_only）不注册人工打标命令：不进右键菜单、
     # 也不进自定义菜单的可选列表（规划 D2／D38）
     _reg(_make_tag_cmd(_tag.id))
+
+
+def _build_tags(menu: QMenu, canvas):
+    """「打标」子菜单——五个标签切换收纳进一层，右键菜单尾部不再平铺。"""
+    sub = menu.addMenu(QCoreApplication.translate("Canvas", "Tags"))
+    for _tag in MANUAL_TAG_DEFS:
+        cmd = COMMAND_REGISTRY.get(f"tag_{_tag.id}")
+        if cmd is not None and cmd.build_fn is not None:
+            cmd.build_fn(sub, canvas)
+
+
+_reg(CmdDef("tags", QCoreApplication.translate("Canvas", "Tags"),
+    build_fn=_build_tags))
 
 
 # --- Block AI actions (frame-level, single-round; batch C) ---

@@ -239,7 +239,7 @@ class _HueSlider(QWidget):
 
 
 class _AlphaSlider(QWidget):
-    """Vertical alpha slider: checkerboard under a transparent→opaque gradient."""
+    """Vertical alpha slider: checkerboard under an opaque→transparent gradient."""
 
     changed = Signal()
 
@@ -267,13 +267,14 @@ class _AlphaSlider(QWidget):
         p = QPainter(self)
         w, h = self.width(), self.height()
         _paint_checkerboard(p, QRectF(2, 0, w - 4, h))
+        # 顶部=不透明、底部=透明，与滑块映射（ay = (1-alpha)*(h-1)）一致
         grad = QLinearGradient(0, 0, 0, h)
         transparent = QColor(self._color)
         transparent.setAlpha(0)
         opaque = QColor(self._color)
         opaque.setAlpha(255)
-        grad.setColorAt(0.0, transparent)
-        grad.setColorAt(1.0, opaque)
+        grad.setColorAt(0.0, opaque)
+        grad.setColorAt(1.0, transparent)
         p.fillRect(2, 0, w - 4, h, grad)
 
         ay = int((1.0 - self._alpha) * (h - 1))
