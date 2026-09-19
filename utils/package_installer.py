@@ -56,10 +56,15 @@ def build_install_command(
     extra_args: str = "",
     env: Optional[dict] = None,
     python_executable: str = "",
+    constraints_file: str = "",
 ) -> List[str]:
     """Build a pip/uv install command without ``shell=True``.
 
     Duplicate requirements are deduplicated while preserving order.
+    ``constraints_file`` is passed as ``-c`` (supported by both pip and uv):
+    with a constraints file listing ``name==version``, pip resolves new
+    packages around the pinned versions — an already-installed package is
+    never upgraded; a requirement that would force an upgrade fails instead.
 
     >>> cmd = build_install_command(['openai>=2.8.1'], backend='pip', python_executable='python')
     >>> cmd[:5]
@@ -68,6 +73,8 @@ def build_install_command(
     reqs = list(dict.fromkeys(requirements))  # dedup, preserve order
     if requirements_file:
         reqs.extend(["-r", requirements_file])
+    if constraints_file:
+        reqs.extend(["-c", constraints_file])
     extra = shlex.split(extra_args or "")
     env = env or os.environ
     index_url = env.get("INDEX_URL")
@@ -109,12 +116,17 @@ def install(
     extra_args: str = "",
     env: Optional[dict] = None,
     progress_callback: Optional[Callable[[dict], None]] = None,
+    constraints_file: str = "",
 ) -> InstallResult:
     """Install Python packages and stream installer output to stdout.
 
     Returns an ``InstallResult`` with ``.ok`` indicating success.
     On Windows the output is captured and re-printed line-by-line
     (PTY is unavailable on Windows).
+
+    ``constraints_file``: optional pip/uv constraints file (``-c``) pinning
+    installed versions, used for additive-only installs into an environment
+    shared with other projects (see ``utils/core_requirements.py``).
     """
     command = build_install_command(
         requirements=requirements,
@@ -122,6 +134,7 @@ def install(
         backend=backend,
         extra_args=extra_args,
         env=env,
+        constraints_file=constraints_file,
     )
 
     if _can_stream_with_pty():

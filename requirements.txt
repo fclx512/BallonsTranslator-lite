@@ -11,7 +11,7 @@
 
 packaging>=23.0
 pydantic>=2.0
-pillow>=10.0,<11
+pillow>=10.0
 PyQt6-Qt6>=6.8.1
 PyQt6>=6.8.1
 numpy
@@ -20,6 +20,8 @@ numpy
 # YOLO detectors additionally need ultralytics:
 #   pip install ultralytics
 #   pip install transformers diffusers
+# numba (optional, effect-render acceleration; falls back to pure NumPy):
+#   pip install numba
 tqdm
 opencv-python>=4.10.0.84; sys_platform == 'win32' or sys_platform == 'linux' or sys_platform == 'darwin'
 shapely

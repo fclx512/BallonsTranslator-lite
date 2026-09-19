@@ -12,6 +12,7 @@ Two entry points:
 """
 
 import importlib
+import importlib.metadata
 import os
 import sys
 from pathlib import Path
@@ -83,6 +84,38 @@ def _drop_probe_modules(
     importlib.invalidate_caches()
 
 
+def _write_constraints_snapshot() -> Tuple[str, int]:
+    """Snapshot every installed distribution as a pip/uv constraints file.
+
+    Returns ``(path, count)``.  The file lists ``name==version`` for each
+    installed dist, so an install run with it as ``-c`` is additive-only:
+    missing packages are added, but nothing already present is upgraded —
+    a requirement that would force an upgrade fails resolution instead.
+
+    This is what makes pointing the app at an environment shared with
+    another project (e.g. upstream BallonsTranslator's bundled env) safe:
+    the supplement can add our extra packages without ever touching the
+    versions the other project is running.
+    """
+    import tempfile
+
+    versions = {}
+    for dist in importlib.metadata.distributions():
+        name = (dist.metadata.get("Name") or "").strip()
+        if name and dist.version:
+            versions.setdefault(name, dist.version)
+
+    fd, path = tempfile.mkstemp(prefix="bt_lite_constraints_", suffix=".txt")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(
+            "# Auto-generated snapshot of the currently installed distributions.\n"
+            "# Additive-only install guard: nothing listed here may be upgraded.\n"
+        )
+        for name in sorted(versions, key=str.lower):
+            f.write(f"{name}=={versions[name]}\n")
+    return path, len(versions)
+
+
 def ensure_core_requirements(
     repo_root: str = "",
     requirements_file: str = "",
@@ -128,11 +161,27 @@ def ensure_core_requirements(
     print(f"Installing core requirements from {req_path}...")
     print("―" * 50)
 
+    # Additive-only guard: pin every installed dist so the install can only
+    # ADD packages, never upgrade existing ones (safe for envs shared with
+    # other projects).  On a resolution conflict we keep the snapshot file
+    # and let the user decide rather than silently bumping shared versions.
+    constraints_path = ""
+    try:
+        constraints_path, pinned = _write_constraints_snapshot()
+        print(
+            f"Additive-only guard: {pinned} installed distributions pinned "
+            "via constraints — existing packages will NOT be upgraded."
+        )
+    except Exception as e:
+        print(f"Warning: could not write constraints snapshot ({e}); "
+              "installing without the no-upgrade guard.")
+
     result = _install_packages(
         requirements_file=str(req_path),
         backend=backend,
         env=env or os.environ.copy(),
         progress_callback=progress_callback,
+        constraints_file=constraints_path,
     )
 
     if not result.ok:
@@ -143,12 +192,24 @@ def ensure_core_requirements(
         print(f"  Exit code: {result.returncode}")
         if result.stderr:
             print(f"  Error: {result.stderr[:1000]}")
+        if constraints_path:
+            print()
+            print(f"Constraints snapshot kept for inspection: {constraints_path}")
+            print("A conflict here means a missing package needs a version that")
+            print("would upgrade something already installed — resolve manually")
+            print("or delete the snapshot file to retry unrestricted.")
         print()
         print("Please run manually:")
         print(f"  pip install -r {req_path}")
         print("!" * 50)
         print()
         return False
+
+    if constraints_path:
+        try:
+            os.remove(constraints_path)
+        except OSError:
+            pass
 
     _drop_probe_modules(probes)
     print()
