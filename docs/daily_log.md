@@ -2,6 +2,32 @@
 
 > 记录**仓库层面**的改动（功能增删、远端分支变动、规范调整），供变更史查阅。踩坑细节、方案草稿与跨代理交接留在各代理侧的私有记忆（见 `AGENTS.md` 的「多代理协作」一节），不进仓库。仅保留最近 3 天的记录，每次在对应日期中末尾写入日志。
 
+## 2026-09-19
+
+### 行拖拽逐帧绘制优化（多选掉帧）+ 抓住缩放改 1.05
+
+**问题/需求：** 用户实测多选拖拽时性能占用偏高、掉帧（疑似线程繁忙）。
+
+**改动要点：** 定位掉帧主因＝被拖卡装着 `ui/textedit_area.py::_CardScaleEffect`（抓住 1.1× 缩放），而 Qt 对几何变化的控件失效效果源 pixmap 缓存 ⇒ 跟手补间每帧都要把整张卡（两个 QTextEdit 的富文本排版）重渲到设备分辨率离屏图，多选即 N 次/帧。三处改动（`ui/textedit_area.py`）：① **效果源 pixmap 缓存**——拖拽期间卡片内容冻结，装上后首帧抓一次、`draw()` 复用缓存做缩放 blit，factor 回 1.0 弃缓存；缓存字段挂类属性兜底（同空壳实例防崩路径）。② **跟手重定向 2px 死区**（`_move_card` 新增 `dead_zone` 参数，只作用于 `_update_drag_frame` 的追手路径）——光标慢移 1px 步进不再反复停旧建新 `QPropertyAnimation`。③ `GRAB_SCALE` 1.1→1.05。中途实测暴露一处缓存坐标错误：`sourcePixmap(DeviceCoordinates)` 的 `offset` 是**当帧控件在窗口里的绝对位置**（随移动逐帧变化），直接缓存会把卡片钉死在抓取时刻的位置（被拖卡不跟手、只在损伤区露碎片）——改为缓存「pixmap 左上相对控件原点」的常量偏移（padding），每帧用 `deviceTransform` 现算原点重算 offset。
+
+**测试：** `tests/test_row_drag.py` 新增三组：缓存只抓一次（含回 1.0 弃缓存后重抓）、快照跟手移动（控件移动后绘制随新位置走）、跟手重定向死区；27 项连跑 10 次全绿，`scripts/verify.py` 七步全绿。新增用例曾引出套件约半数的退出期 access violation（悬挂效果的控件在解释器退出期 GC 级联中销毁；stdout 缓冲让崩溃看似发生在更早的用例）——用例结束前 `QTest.qWait(300)` 排干收尾动画后 10/10 稳定。
+
+**涉及文件：** `ui/textedit_area.py`、`tests/test_row_drag.py`
+
+---
+
+### RowTable 自绘行列表控件替换工作台裸 QTableWidget
+
+**问题/需求：** 工作台批量候选列表用裸 `QTableWidget`，逐格 QSS 边框渲染不全、背景兜底规则只按裸 QTableView 匹配不及子类，观感与主题接入受限。
+
+**改动要点：** 新增 `ui/custom_widget/row_table.py::RowTable`（经 `ui/custom_widget/__init__.py` 导出）：`MODE_TABLE`＝列对齐紧凑表格（淡行分隔线、无竖网格）、`MODE_CARD`＝主文+次行元数据+右侧徽章的圆角审批卡；底色/选中染底/勾选框/徽章全在 delegate 自绘（行数据经 `Qt.UserRole` 传 dict），QSS 只管底色列头（`RowTable#WorkbenchRowTable`，`config/stylesheet.css`）；主题配色走 `get_theme_color`、缓存于 delegate 且 `StyleChange` 时失效。工作台四个批量任务候选列表切换到该控件（`ui/workbench_batch_view.py` 勾选回调改 `_on_check_toggled`，`ui/workbench_tasks.py` 补卡片元数据与行说明文案）；展示台（`scripts/style_showcase.py`）与 AGENTS.md 控件表同步。
+
+**测试：** `tests/test_workbench_panel.py` 35 项过（勾选用例改走新回调）；i18n 新增 `%1 · %2 block(s)` 一条，`scripts/i18n_check.py` 与 qm 编译过。
+
+**涉及文件：** `ui/custom_widget/row_table.py`、`ui/custom_widget/__init__.py`、`ui/workbench_batch_view.py`、`ui/workbench_tasks.py`、`scripts/style_showcase.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_workbench_panel.py`、`AGENTS.md`
+
+---
+
 ## 2026-09-18
 
 ### 工作台 UI 审计与逐项优化（D44 浮层形态收口 + 一批观感/状态同步修复）
