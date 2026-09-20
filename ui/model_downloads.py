@@ -55,16 +55,19 @@ def gpu_required_message(display_name: str) -> str:
     """「本机没有 GPU，所以不下」的说明文案（配声明了 ``requires_gpu`` 的模块）。
 
     三段短句：结论（拒绝）、原因（CPU 上的时间开销远大于它给的结果）、出路（有 N 卡换
-    CUDA 版 torch／只有 CPU 就换内置模型）。两个入口共用这一处文案：「模型文件」页点
-    下载、选中模块时的自动补装（见 :func:`gpu_requirement_block`）。
+    CUDA 版 torch／只有 CPU 就换内置模型）。
 
     写给**普通用户**看，不出现 token／自回归／VLM 这类术语。措辞由用户定稿（2026-09-20
-    要求更简洁，删掉了原先「已经手工拿到文件」那条出路）。
+    要求更简洁，删掉了原先「已经手工拿到文件」那条出路），第二段只说不提供**下载**——
+    闸门本就只管下载，用户手工把权重放进去仍可运行（判据与取舍见设计 §5.5）。
+
+    两个入口共用这一处文案：「模型文件」页点下载、选中模块时的自动补装
+    （见 :func:`gpu_requirement_block`）。
     """
     return (
         QCoreApplication.translate("model_downloads", '"%1" needs a GPU, and this machine has no usable GPU acceleration — the download was refused.').replace("%1", display_name)
         + "\n\n"
-        + QCoreApplication.translate("model_downloads", "This model is very demanding: on CPU the time it costs far exceeds what it can deliver, so running and downloading it under a CPU-only PyTorch build are disabled. Install and use it under a GPU PyTorch build instead.")
+        + QCoreApplication.translate("model_downloads", "This model is very demanding: on CPU the time it costs far exceeds what it can deliver, so it is not offered for download under a CPU-only PyTorch build. Install and use it under a GPU PyTorch build instead.")
         + "\n\n"
         + QCoreApplication.translate("model_downloads", "If this machine has a supported NVIDIA GPU, run install_cuda.bat from the project folder to switch PyTorch to the CUDA build, then download this model. If you only have a CPU environment, use one of the built-in models instead.")
     )

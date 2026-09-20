@@ -8038,8 +8038,8 @@ Configure a mirror in Settings → Network &amp; Mirror Settings, then download 
             <translation>若本机具备支持的NVIDIA显卡，请运行项目内的install_cuda.bat，将PyTorch更换为CUDA版本，再来下载该模型。若仅有CPU运行环境请使用内置的其他模型。</translation>
         </message>
         <message>
-            <source>This model is very demanding: on CPU the time it costs far exceeds what it can deliver, so running and downloading it under a CPU-only PyTorch build are disabled. Install and use it under a GPU PyTorch build instead.</source>
-            <translation>本模型对性能需求高，CPU运行的时间开销远大于模型能力，故禁止了CPU torch环境下运行和下载，请在GPU torch环境下安装和使用。</translation>
+            <source>This model is very demanding: on CPU the time it costs far exceeds what it can deliver, so it is not offered for download under a CPU-only PyTorch build. Install and use it under a GPU PyTorch build instead.</source>
+            <translation>本模型对性能需求高，CPU运行的时间开销远大于模型能力，故在CPU torch环境下不提供下载，请在GPU torch环境下安装和使用。</translation>
         </message>
     </context>
 </TS>
