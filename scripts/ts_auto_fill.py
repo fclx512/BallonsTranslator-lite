@@ -5,16 +5,18 @@ Two operations:
   1. Fill missing: add self.tr() calls not yet in .ts as type="unfinished"
   2. Prune orphans: remove .ts entries with no matching self.tr() call
 
-Dry-run by default. Use --apply to write changes. After writing, the
-.qm is recompiled automatically.
+Dry-run only when **no** operation flag is given: `--fill-missing` and/or
+`--prune` write to the .ts (the .qm is recompiled right after). `--apply` is
+not a write switch — it only says "without a specific flag, do both"; passing
+`--fill-missing` on its own already writes. There is no flag-based dry-run for
+a single operation, so copy the .ts elsewhere first if you want a preview.
 
 Usage:
-  python scripts/ts_auto_fill.py                        # dry-run report
+  python scripts/ts_auto_fill.py                        # dry-run report (both)
   python scripts/ts_auto_fill.py --apply                 # fill + prune (write)
-  python scripts/ts_auto_fill.py --fill-missing          # dry-run fill only
-  python scripts/ts_auto_fill.py --fill-missing --apply  # fill only (write)
-  python scripts/ts_auto_fill.py --prune                 # dry-run prune only
-  python scripts/ts_auto_fill.py --prune --apply         # prune only (write)
+  python scripts/ts_auto_fill.py --fill-missing          # fill only (write!)
+  python scripts/ts_auto_fill.py --prune                 # prune only (write!)
+  python scripts/ts_auto_fill.py --fill-missing --prune  # fill + prune (write)
 """
 
 import argparse
@@ -145,17 +147,17 @@ def main():
     parser.add_argument(
         "--fill-missing",
         action="store_true",
-        help="Add missing entries as type='unfinished'.",
+        help="Add missing entries as type='unfinished' (this alone already writes).",
     )
     parser.add_argument(
         "--prune",
         action="store_true",
-        help="Remove orphan entries.",
+        help="Remove orphan entries (this alone already writes).",
     )
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="Actually write changes (without this, dry-run only).",
+        help="With no operation flag: do both. Not a write switch — the operation flags write on their own.",
     )
     args = parser.parse_args()
 
