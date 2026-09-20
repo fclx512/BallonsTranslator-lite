@@ -371,12 +371,20 @@ class TestProgramOnlyTagEntries(unittest.TestCase):
         self.assertNotIn(cmd_id, DEFAULT_ORDER)
 
     def test_manual_tags_still_registered(self):
+        """人工标签的**命令**仍注册，但只作为「打标」子菜单的构建源。
+
+        `ui/context_menu_config.py::DEFAULT_ORDER` 里平铺的是 ``tags`` 一项，
+        具体标签由 `ui/context_menu_config.py::_build_tags` 按 ``tag_<id>`` 从
+        ``COMMAND_REGISTRY`` 取出来挂进子菜单——所以断言两件事：命令在注册表里、
+        顶层顺序里没有它（2026-09-20 修：原断言写的是收纳前的平铺形态）。
+        """
         from ui.context_menu_config import COMMAND_REGISTRY, DEFAULT_ORDER
         from utils.block_tags import MANUAL_TAG_DEFS
 
         for tag in MANUAL_TAG_DEFS:
             self.assertIn(f"tag_{tag.id}", COMMAND_REGISTRY)
-            self.assertIn(f"tag_{tag.id}", DEFAULT_ORDER)
+            self.assertNotIn(f"tag_{tag.id}", DEFAULT_ORDER)
+        self.assertIn("tags", DEFAULT_ORDER)
 
 
 if __name__ == "__main__":

@@ -34,6 +34,7 @@ from ui.workbench_tasks import (  # noqa: E402
     MISREAD,
     SIMPLE_INPAINT,
     STORY,
+    ExpandTask,
     build_batch_tasks,
 )
 from utils.block_tags import (  # noqa: E402
@@ -238,7 +239,11 @@ class TaskAdapterTest(_WorkbenchTestCase):
         self.assertEqual(row.payload["old"], [10, 10, 60, 40])
         # 下边被下一框（y1=42）截住 → "碰到邻框即停"
         self.assertEqual(row.payload["new"], [4, 4, 66, 42])
-        self.assertEqual(row.cells[3], "4 4 66 42")
+        # 行内第三列是「增长描述」（页名 / 索引 / 增长），只讲每边长多少、哪边受限，
+        # 不铺坐标数字（2026-09-20 修：原断言写的是铺坐标的旧形态）。
+        self.assertEqual(len(row.cells), 3)
+        self.assertIn("+6 px", row.cells[2])
+        self.assertIn(ExpandTask._SIDE_LABELS["bottom"], row.cells[2])
 
     def test_expand_ratio_mode_takes_percent(self):
         task = self._tasks()[EXPAND]
