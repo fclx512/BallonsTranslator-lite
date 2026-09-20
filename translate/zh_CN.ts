@@ -670,11 +670,6 @@
             <translation>&lt;p&gt;管线运行后，将每个文本框收缩到贴合其译文大小。关闭此选项可保持文本框为你手动摆放的原始大小——适合先运行背景清理（修复）再翻译的工作流，否则空文本框会被收缩成一条细缝。&lt;/p&gt;</translation>
         </message>
         <message>
-            <location filename="..\ui\configpanel.py" line="1579" />
-            <source>Independent text styles for each projects</source>
-            <translation>在每个项目下建立独立的字体样式</translation>
-        </message>
-        <message>
             <location filename="..\ui\configpanel.py" line="0" />
             <source>Compact 「」『』 in vertical text (half-width style)</source>
             <translation>竖排文本中压缩「」『』为半角样式</translation>
@@ -839,10 +834,6 @@
         <message>
             <source>&lt;p&gt;Convert all translated text to uppercase. Useful for certain &lt;b&gt;typographic styles&lt;/b&gt; or all-caps conventions.&lt;/p&gt;</source>
             <translation>&lt;p&gt;将所有译文转换为大写。适用于特定&lt;b&gt;排版样式&lt;/b&gt;或全大写惯例。&lt;/p&gt;</translation>
-        </message>
-        <message>
-            <source>&lt;p&gt;When enabled, each project maintains its own &lt;b&gt;text style settings&lt;/b&gt; independently instead of using shared global styles.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;启用后，每个项目独立维护自己的&lt;b&gt;文本样式设置&lt;/b&gt;，而非使用共享的全局样式。&lt;/p&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;Hide selected fonts from all font selection dropdowns. Useful for filtering out &lt;b&gt;unusable or decorative&lt;/b&gt; fonts.&lt;/p&gt;</source>
@@ -1301,10 +1292,6 @@
             <translation>&lt;p&gt;区域再检测的检测器跑在哪个设备。&lt;b&gt;CPU&lt;/b&gt; 是默认值：这个负载每次只处理一小块裁剪图，而 GPU（CUDA）会话会占掉数百 MB 内存且事后无法回收，换来的只是每次手势快约 20ms。&lt;/p&gt;&lt;p&gt;只有觉得 CPU 太慢时才选 &lt;b&gt;GPU&lt;/b&gt;。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>&lt;p&gt;For the memory that stays after a pipeline run: unloads all models, destroys the CUDA context and hands the working set back to Windows. The next run reloads models and rebuilds the session, so it is a few seconds slower.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;用于「跑完管线后仍然留在进程里」的那部分内存：卸载全部模型、销毁 CUDA 上下文，并把工作集交回系统。下一次运行会重新加载模型、重建会话，因此首次会慢几秒。&lt;/p&gt;</translation>
-        </message>
-        <message>
             <source>Release memory</source>
             <translation>释放内存</translation>
         </message>
@@ -1339,6 +1326,10 @@
         <message>
             <source>Workbench (temporary)</source>
             <translation>工作台（临时）</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;For the memory that stays after a pipeline run: unloads all models and hands the working set back to Windows. The next run reloads models, so it is a few seconds slower.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;针对跑完管线后留在进程里的那部分内存：卸载全部模型，并把工作集交回 Windows。下次跑会自动重新加载模型，因此首次会慢几秒。&lt;/p&gt;</translation>
         </message>
     </context>
     <context>
@@ -1871,6 +1862,14 @@ Hide them all? You can move them back later.</source>
 Run detection + OCR to populate text blocks.</source>
             <translation>项目中无文字块。
 请先运行文本检测 + OCR 以填充文字块。</translation>
+        </message>
+        <message>
+            <source>Create a new style in the global style library</source>
+            <translation>在全局样式库中新建一个样式</translation>
+        </message>
+        <message>
+            <source>New Style</source>
+            <translation>新建样式</translation>
         </message>
     </context>
     <context>
@@ -2744,30 +2743,8 @@ Set this file as the active glossary now?</source>
             <translation>释放内存</translation>
         </message>
         <message>
-            <source>Unload all models, destroy the CUDA context and hand the working set back to Windows?
-
-What to expect next:
- - the next pipeline run (or AI repair) reloads models and rebuilds the CUDA session, so the first run is a few seconds slower;
- - the first interactions may stutter briefly while Windows pages data back in;
- - keep the app idle while releasing; do not start a run at the same time.</source>
-            <translation>卸载全部模型、销毁 CUDA 上下文，并把工作集交回系统？
-
-接下来会发生的事：
- - 下一次运行管线（或 AI 修图）会重新加载模型、重建 CUDA 会话，首次会慢几秒；
- - 释放后的最初几次操作可能短暂卡顿（系统要把数据换回来）；
- - 释放期间请保持窗口空闲，不要同时开跑。</translation>
-        </message>
-        <message>
             <source>Memory released: working set %1 MB → %2 MB</source>
             <translation>已释放内存：工作集 %1 MB → %2 MB</translation>
-        </message>
-        <message>
-            <source>Models could not be unloaded, so the CUDA context was left alone. Working set: %1 MB → %2 MB</source>
-            <translation>模型未能卸载，因此没有销毁 CUDA 上下文。工作集：%1 MB → %2 MB</translation>
-        </message>
-        <message>
-            <source>Working set returned to the system (%1 MB → %2 MB), but the CUDA context could not be released.</source>
-            <translation>工作集已交回系统（%1 MB → %2 MB），但 CUDA 上下文未能销毁。</translation>
         </message>
         <message>
             <source>Inpainting</source>
@@ -2776,10 +2753,6 @@ What to expect next:
         <message>
             <source>Missing Model Files</source>
             <translation>缺少模型文件</translation>
-        </message>
-        <message>
-            <source>Model files were not found for the stages below. You can still run, but those stages may fail. Download prompts appear when selecting the module.</source>
-            <translation>以下阶段的模型文件未检测到。仍可运行，但这些阶段可能失败。选中对应模块时会弹出下载提示。</translation>
         </message>
         <message>
             <source>OCR</source>
@@ -2796,6 +2769,32 @@ What to expect next:
         <message>
             <source>Translation</source>
             <translation>翻译</translation>
+        </message>
+        <message>
+            <source>Model files were not found for the stages below. Those stages may fail. Download them in Settings → Models → Model Files — the download runs in the background, and its progress is printed in the terminal.</source>
+            <translation>以下阶段的模型文件未找到，这些阶段会失败。请在「设置 → Models → 模型文件」里下载——下载在后台进行，进度打印在终端。</translation>
+        </message>
+        <message>
+            <source>Models were unloaded, but the working set could not be returned (%1 MB → %2 MB).</source>
+            <translation>模型已卸载，但工作集没能交回系统（%1 MB → %2 MB）。</translation>
+        </message>
+        <message>
+            <source>Models could not be unloaded. Working set: %1 MB → %2 MB</source>
+            <translation>模型没能卸载干净。工作集：%1 MB → %2 MB</translation>
+        </message>
+        <message>
+            <source>Unload all models and hand the working set back to Windows?
+
+What to expect next:
+ - the next pipeline run reloads the models, so the first run is a few seconds slower;
+ - the first interactions may stutter briefly while Windows pages data back in;
+ - keep the app idle while releasing; do not start a run at the same time.</source>
+            <translation>卸载全部模型，并把工作集交回 Windows 吗？
+
+接下来会怎样：
+ - 下次跑管线会重新加载模型，首次慢几秒；
+ - 释放后的头几次交互可能短暂卡顿（Windows 把数据换回来）；
+ - 释放期间请保持空闲，别同时开跑。</translation>
         </message>
     </context>
     <context>
@@ -3671,6 +3670,18 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <source>Skip text detection. No model needed.</source>
             <translation>跳过文字检测，无需模型。</translation>
         </message>
+        <message>
+            <source>Blocks decoded per generate() call. Keep 1 unless you want to experiment: batched left-padding with this model's mrope positions is not verified yet, and a wrong batch is silently a wrong result.</source>
+            <translation>每次 generate() 解码的块数。除实验外请保持 1：批量左 padding 与该模型 mrope 位置编码的兼容性尚未验证，批量错了会静默出错。</translation>
+        </message>
+        <message>
+            <source>Maximum tokens to generate per block. 256 is enough for a speech bubble; raise it for dense narration (much slower).</source>
+            <translation>每块最多生成的 token 数。一个对话气泡 256 够用；密集旁白可调大（会明显变慢）。</translation>
+        </message>
+        <message>
+            <source>PaddleOCR-VL-For-Manga — Japanese manga OCR quality-first (generative VLM, GPU strongly recommended)</source>
+            <translation>PaddleOCR-VL-For-Manga —— 日文漫画质量优先识别（生成式 VLM，强烈建议用 GPU）</translation>
+        </message>
     </context>
     <context>
         <name>RectPanel</name>
@@ -3808,26 +3819,6 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <translation>批量编辑字体样式</translation>
         </message>
         <message>
-            <location filename="..\ui\fontstyle_manager.py" line="498" />
-            <source>Apply Preset</source>
-            <translation>应用预设</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="756" />
-            <source>(Select a preset)</source>
-            <translation>（选择预设）</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="759" />
-            <source>(unnamed)</source>
-            <translation>（未命名）</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="777" />
-            <source>Apply preset style</source>
-            <translation>应用预设样式</translation>
-        </message>
-        <message>
             <location filename="..\ui\fontstyle_manager.py" line="0" />
             <source>Base style name</source>
             <translation>基础样式名称</translation>
@@ -3856,16 +3847,6 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <location filename="..\ui\fontstyle_manager.py" line="0" />
             <source>Create a base style from this parameter set; blocks with the same font and orientation will join it automatically.</source>
             <translation>以此参数组创建基础样式；相同字体与方向的文本框将自动归入。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="0" />
-            <source>Save as Preset</source>
-            <translation>另存为预设</translation>
-        </message>
-        <message>
-            <location filename="..\ui\fontstyle_manager.py" line="0" />
-            <source>Add this base style to the cross-project preset list</source>
-            <translation>将此基础样式加入跨项目预设列表</translation>
         </message>
         <message>
             <location filename="..\ui\fontstyle_manager.py" line="0" />
@@ -3928,6 +3909,50 @@ No block parameters change; its blocks move to Ungrouped.</source>
             <source>Blocks: {n}</source>
             <translation>文本框：{n}</translation>
         </message>
+        <message>
+            <source>Add to Library</source>
+            <translation>收藏到库</translation>
+        </message>
+        <message>
+            <source>Copy to Project</source>
+            <translation>复制到项目</translation>
+        </message>
+        <message>
+            <source>A library style named “{name}” already exists.
+Overwrite it with this base style?</source>
+            <translation>库中已存在同名样式“{name}”。
+要用此大样式覆盖它吗？</translation>
+        </message>
+        <message>
+            <source>A base style with the same font and orientation already exists in this project: “{name}”.
+Overwrite its parameters with the library style?</source>
+            <translation>项目中已存在相同字体与方向的大样式：“{name}”。
+要用库样式覆盖其参数吗？</translation>
+        </message>
+        <message>
+            <source>Delete library style “{name}”?</source>
+            <translation>删除库样式“{name}”？</translation>
+        </message>
+        <message>
+            <source>Create a project base style from this library entry</source>
+            <translation>由此库条目创建一个项目大样式</translation>
+        </message>
+        <message>
+            <source>Delete from Library</source>
+            <translation>从库中删除</translation>
+        </message>
+        <message>
+            <source>Global style — template only; copy it into the project to apply</source>
+            <translation>全局样式 — 仅模板；复制到项目后才会生效</translation>
+        </message>
+        <message>
+            <source>Remove this entry from the global style library</source>
+            <translation>把此条目从全局样式库移除</translation>
+        </message>
+        <message>
+            <source>Save this base style into the global style library</source>
+            <translation>把此大样式存入全局样式库</translation>
+        </message>
     </context>
     <context>
         <name>StyleTreeWidget</name>
@@ -3964,6 +3989,10 @@ Orientation: {o}</source>
         <message>
             <source>Underline</source>
             <translation>下划线</translation>
+        </message>
+        <message>
+            <source>Global Style Library</source>
+            <translation>全局样式库</translation>
         </message>
     </context>
     <context>
@@ -4245,64 +4274,9 @@ Please download the latest version from GitHub.</source>
     <context>
         <name>_InstallDialog</name>
         <message>
-            <location filename="..\ui\module_manager.py" line="871" />
-            <source>Install Dependencies</source>
-            <translation>安装依赖</translation>
-        </message>
-        <message>
             <location filename="..\ui\module_manager.py" line="995" />
             <source>Module "{name}" needs extra dependencies:</source>
             <translation>模块 "{name}" 需要额外依赖：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\module_manager.py" line="888" />
-            <source>Python packages:</source>
-            <translation>Python 包：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\module_manager.py" line="898" />
-            <source>Model files to download:</source>
-            <translation>要下载的模型文件：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\module_manager.py" line="1027" />
-            <source>⚠ HuggingFace model detected but &lt;b&gt;no mirror configured&lt;/b&gt;.&lt;br&gt;Open &lt;b&gt;Settings → Mirror Config&lt;/b&gt; and set &lt;tt&gt;hf_endpoint&lt;/tt&gt; to &lt;tt&gt;https://hf-mirror.com&lt;/tt&gt;.&lt;br&gt;Without a mirror, downloads will likely fail from China.</source>
-            <translation>⚠ 检测到 HuggingFace 模型但&lt;b&gt;未配置镜像&lt;/b&gt;。&lt;br&gt;请打开&lt;b&gt;设置 → 镜像配置&lt;/b&gt;并设置 &lt;tt&gt;hf_endpoint&lt;/tt&gt; 为 &lt;tt&gt;https://hf-mirror.com&lt;/tt&gt;。&lt;br&gt;不配置镜像的话下载在中国很可能失败。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\module_manager.py" line="950" />
-            <source>Network restricted? Open Settings → Mirror Config to configure download sources.</source>
-            <translation>网络受限？打开设置 → 镜像配置来配置下载源。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\module_manager.py" line="994" />
-            <source>Install All</source>
-            <translation>全部安装</translation>
-        </message>
-        <message>
-            <location filename="..\ui\module_manager.py" line="999" />
-            <source>Later</source>
-            <translation>稍后</translation>
-        </message>
-        <message>
-            <location filename="..\ui\module_manager.py" line="1147" />
-            <source>Retry</source>
-            <translation>重试</translation>
-        </message>
-        <message>
-            <location filename="..\ui\module_manager.py" line="1060" />
-            <source>Starting…</source>
-            <translation>正在开始……</translation>
-        </message>
-        <message>
-            <location filename="..\ui\module_manager.py" line="1182" />
-            <source>Step 1/2: Installing Python packages…</source>
-            <translation>第 1/2 步：正在安装 Python 包……</translation>
-        </message>
-        <message>
-            <location filename="..\ui\module_manager.py" line="1183" />
-            <source>Step 2/2: Downloading model files…</source>
-            <translation>第 2/2 步：正在下载模型文件……</translation>
         </message>
         <message>
             <location filename="..\ui\module_manager.py" line="1205" />
@@ -4310,38 +4284,6 @@ Please download the latest version from GitHub.</source>
 Check the log above for details.</source>
             <translation>安装 Python 包 "{pkg}" 失败。
 查看上方日志了解详情。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\module_manager.py" line="1210" />
-            <source>Download failed — HuggingFace is not accessible from your network.
-Go to Settings → Mirror Config, set hf_endpoint to https://hf-mirror.com,
-then click Retry.</source>
-            <translation>下载失败——当前网络无法访问 HuggingFace。
-请前往 设置 → 镜像配置，将 hf_endpoint 设为 https://hf-mirror.com，
-然后点击重试。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\module_manager.py" line="1215" />
-            <source>Download failed — HuggingFace may be blocked in your region.
-Go to Settings → Mirror Config to configure a mirror, then Retry.</source>
-            <translation>下载失败——HuggingFace 可能在您的地区被限制。
-请前往 设置 → 镜像配置 配置镜像源，然后重试。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\module_manager.py" line="1219" />
-            <source>Download failed — GitHub may not be reachable.
-Go to Settings → Mirror Config to set up a mirror, then Retry.</source>
-            <translation>下载失败——GitHub 可能无法访问。
-请前往 设置 → 镜像配置 配置镜像源，然后重试。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\module_manager.py" line="1223" />
-            <source>Download failed — check your network connection.
-If you are in a restricted region, try setting up a download mirror
-in Settings → Mirror Config, then click Retry.</source>
-            <translation>下载失败——请检查您的网络连接。
-如果您所在地区网络受限，请前往 设置 → 镜像配置
-配置镜像源，然后点击重试。</translation>
         </message>
     </context>
     <context>
@@ -7864,6 +7806,240 @@ No pipeline stages will be executed.</source>
         <message>
             <source>Refresh: rescan the list from the current project data.</source>
             <translation>刷新：按当前项目数据重新扫描列表</translation>
+        </message>
+    </context>
+    <context>
+        <name>ModelFilesSection</name>
+        <message>
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <source>Delete</source>
+            <translation>删除</translation>
+        </message>
+        <message>
+            <source>Delete model files</source>
+            <translation>删除模型文件</translation>
+        </message>
+        <message>
+            <source>Download</source>
+            <translation>下载</translation>
+        </message>
+        <message>
+            <source>Downloading…</source>
+            <translation>下载中…</translation>
+        </message>
+        <message>
+            <source>Failed to open the folder:
+%1</source>
+            <translation>无法打开目录：
+%1</translation>
+        </message>
+        <message>
+            <source>Inpainting</source>
+            <translation>图像修复</translation>
+        </message>
+        <message>
+            <source>Model Files</source>
+            <translation>模型文件</translation>
+        </message>
+        <message>
+            <source>No module with downloadable model files is registered.</source>
+            <translation>没有登记任何带可下载模型文件的模块。</translation>
+        </message>
+        <message>
+            <source>OCR</source>
+            <translation>OCR</translation>
+        </message>
+        <message>
+            <source>Open folder</source>
+            <translation>打开目录</translation>
+        </message>
+        <message>
+            <source>Ready</source>
+            <translation>已就绪</translation>
+        </message>
+        <message>
+            <source>Registered module: %1</source>
+            <translation>注册名：%1</translation>
+        </message>
+        <message>
+            <source>Some files could not be deleted:
+%1</source>
+            <translation>有文件未能删除：
+%1</translation>
+        </message>
+        <message>
+            <source>Text Detection</source>
+            <translation>文字检测</translation>
+        </message>
+        <message>
+            <source>The next run of this module will need to download them again.</source>
+            <translation>下次使用该模块时需要重新下载。</translation>
+        </message>
+        <message>
+            <source>These files are no longer recoverable in the recycle bin.</source>
+            <translation>这些文件删除后无法从回收站还原。</translation>
+        </message>
+        <message>
+            <source>They are moved to the recycle bin and can be restored.</source>
+            <translation>它们会被移到回收站，可以还原。</translation>
+        </message>
+        <message>
+            <source>Translation</source>
+            <translation>翻译</translation>
+        </message>
+        <message>
+            <source>about %1</source>
+            <translation>约 %1</translation>
+        </message>
+        <message>
+            <source>%1 files</source>
+            <translation>%1 个文件</translation>
+        </message>
+        <message>
+            <source>%1 model(s) · %2 selected · %3 on disk</source>
+            <translation>共 %1 个模型 · 已勾选 %2 个 · 占盘 %3</translation>
+        </message>
+        <message>
+            <source>%1%</source>
+            <translation>%1%</translation>
+        </message>
+        <message>
+            <source>About to delete %1 file(s) of %2 model(s) (%3):</source>
+            <translation>即将删除 %2 个模型的 %1 个文件（%3）：</translation>
+        </message>
+        <message>
+            <source>Downloads the ticked models in the background; progress is printed in the terminal.</source>
+            <translation>在后台下载勾选的模型，进度打印在终端。</translation>
+        </message>
+        <message>
+            <source>Missing %1</source>
+            <translation>缺 %1 项</translation>
+        </message>
+        <message>
+            <source>Missing package</source>
+            <translation>缺依赖</translation>
+        </message>
+        <message>
+            <source>Moves the ticked models' files to the recycle bin.</source>
+            <translation>把勾选模型的权重文件移到回收站。</translation>
+        </message>
+        <message>
+            <source>Open the folder of the ticked model.</source>
+            <translation>打开勾选模型所在的目录。</translation>
+        </message>
+        <message>
+            <source>Refresh: rescan which model files are on disk.</source>
+            <translation>刷新：重新扫描磁盘上的模型文件。</translation>
+        </message>
+        <message>
+            <source>Stops the download. Files already fetched are kept.</source>
+            <translation>停止下载。已经下载完成的文件会保留。</translation>
+        </message>
+        <message>
+            <source>Tick a model that has files on disk.</source>
+            <translation>请勾选一个磁盘上已有文件的模型。</translation>
+        </message>
+        <message>
+            <source>Tick a model that is not installed yet.</source>
+            <translation>请勾选一个尚未安装的模型。</translation>
+        </message>
+        <message>
+            <source>Tick a model, then use the buttons below. Downloads run in the background — progress and errors go to the terminal and to logs/.</source>
+            <translation>勾选模型后用下方按钮操作。下载在后台进行，进度与错误打印在终端和 logs/ 目录。</translation>
+        </message>
+        <message>
+            <source>Tick exactly one model to open its folder.</source>
+            <translation>打开目录需要恰好勾选一个模型。</translation>
+        </message>
+        <message>
+            <source>… and %1 more files</source>
+            <translation>……另有 %1 个文件</translation>
+        </message>
+        <message>
+            <source>Needs GPU</source>
+            <translation>需要 GPU</translation>
+        </message>
+    </context>
+    <context>
+        <name>model_downloads</name>
+        <message>
+            <source>Check the log in the terminal or in logs/ for details, then download again from Settings → Models → Model Files.</source>
+            <translation>详情见终端或 logs/ 目录的日志，然后在「设置 → Models → 模型文件」里重新下载。</translation>
+        </message>
+        <message>
+            <source>Check your network connection. If you are in a restricted region, configure a download mirror in Settings → Network &amp; Mirror Settings, then download again.</source>
+            <translation>请检查网络连接。若处于受限网络，先在「设置 → 网络与镜像设置」里配置下载镜像，再重新下载。</translation>
+        </message>
+        <message>
+            <source>Downloading model files (%1/%2)…</source>
+            <translation>正在下载模型文件（%1/%2）…</translation>
+        </message>
+        <message>
+            <source>GitHub may not be reachable.
+Configure a mirror in Settings → Network &amp; Mirror Settings, then download again.</source>
+            <translation>GitHub 可能无法访问。
+请在「设置 → 网络与镜像设置」里配置镜像，再重新下载。</translation>
+        </message>
+        <message>
+            <source>HuggingFace is not reachable and no mirror is configured.
+Open Settings → Network &amp; Mirror Settings, set hf_endpoint to
+https://hf-mirror.com, then download again.</source>
+            <translation>HuggingFace 无法访问，且未配置镜像。
+请打开「设置 → 网络与镜像设置」，把 hf_endpoint 设为
+https://hf-mirror.com，再重新下载。</translation>
+        </message>
+        <message>
+            <source>HuggingFace may be blocked in your region.
+Configure a mirror in Settings → Network &amp; Mirror Settings, then download again.</source>
+            <translation>HuggingFace 可能在你所处的网络被屏蔽。
+请在「设置 → 网络与镜像设置」里配置镜像，再重新下载。</translation>
+        </message>
+        <message>
+            <source>Installing %1…</source>
+            <translation>正在安装 %1…</translation>
+        </message>
+        <message>
+            <source>Installing required packages…</source>
+            <translation>正在安装所需依赖包…</translation>
+        </message>
+        <message>
+            <source>Open Settings → Models → Model Files and click Download. The download runs in the background and its progress is printed in the terminal.</source>
+            <translation>请打开「设置 → Models → 模型文件」并点「下载」。下载在后台进行，进度打印在终端。</translation>
+        </message>
+        <message>
+            <source>See the log in the terminal or in logs/ for details.</source>
+            <translation>详情见终端或 logs/ 目录的日志。</translation>
+        </message>
+        <message>
+            <source>You can also place the files manually — the expected file list is shown in Settings → Models → Model Files.</source>
+            <translation>也可以自己把文件放进去——期望的文件清单显示在「设置 → Models → 模型文件」里。</translation>
+        </message>
+        <message>
+            <source>Failed to install Python package "%1".</source>
+            <translation>安装 Python 包「%1」失败。</translation>
+        </message>
+        <message>
+            <source>Failed to prepare model files for "%1".</source>
+            <translation>「%1」的模型文件准备失败。</translation>
+        </message>
+        <message>
+            <source>Model files for "%1" are not downloaded yet.</source>
+            <translation>「%1」的模型文件尚未下载。</translation>
+        </message>
+        <message>
+            <source>"%1" needs a GPU, and this machine has no usable GPU acceleration — the download was refused.</source>
+            <translation>%1 需要GPU，此电脑无可用的GPU加速，下载已被拒绝。</translation>
+        </message>
+        <message>
+            <source>If this machine has a supported NVIDIA GPU, run install_cuda.bat from the project folder to switch PyTorch to the CUDA build, then download this model. If you only have a CPU environment, use one of the built-in models instead.</source>
+            <translation>若本机具备支持的NVIDIA显卡，请运行项目内的install_cuda.bat，将PyTorch更换为CUDA版本，再来下载该模型。若仅有CPU运行环境请使用内置的其他模型。</translation>
+        </message>
+        <message>
+            <source>This model is very demanding: on CPU the time it costs far exceeds what it can deliver, so running and downloading it under a CPU-only PyTorch build are disabled. Install and use it under a GPU PyTorch build instead.</source>
+            <translation>本模型对性能需求高，CPU运行的时间开销远大于模型能力，故禁止了CPU torch环境下运行和下载，请在GPU torch环境下安装和使用。</translation>
         </message>
     </context>
 </TS>

@@ -388,7 +388,6 @@ class ProgramConfig(Config):
     # 块描边色按存档 srgb 渲染，不再随字体颜色联动。
     stroke_auto_follow: bool = True
     use_notext_images: bool = True
-    let_textstyle_indep_flag: bool = False
     text_styles_path: str = osp.join(shared.DEFAULT_TEXTSTYLE_DIR, "default.json")
 
     # 撤销步数上限（Blender 式 Max Steps）：0=无限；文本/绘制两栈同时生效。

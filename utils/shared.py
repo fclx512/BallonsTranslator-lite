@@ -20,6 +20,8 @@ DEFAULT_TEXTSTYLE_DIR = osp.join(PROGRAM_PATH, "config/textstyles")
 if not osp.exists(DEFAULT_TEXTSTYLE_DIR):
     os.makedirs(DEFAULT_TEXTSTYLE_DIR)
 
+GLOBAL_STYLES_PATH = osp.join(PROGRAM_PATH, "config/global_styles.json")
+
 
 CONFIG_FONTSIZE_HEADER = 15
 CONFIG_FONTSIZE_TABLE = 13

@@ -873,10 +873,13 @@ class MainWindow(mainwindow_cls):
             self.on_imgtrans_progressbox_showed
         )
         module_manager.blktrans_pipeline_finished.connect(self.on_blktrans_finished)
-        # 手动释放内存（设置页「释放内存」）：卸载模型 → 销毁 CUDA 上下文 → 交回
-        # 工作集。接线放在这里而不是 module_manager 内部，是为了顺带挡掉"还有后台
-        # CUDA 活在跑"的状态（见 _cuda_work_in_progress）。
+        # 手动释放内存（设置页「释放内存」）：卸载模型 → 交回工作集。接线放在这里
+        # 而不是 module_manager 内部，是为了顺带挡掉"还有后台活在跑"的状态
+        # （见 _cuda_work_in_progress）。
         self.configPanel.release_memory.connect(self.on_release_memory)
+        self.configPanel.model_files_changed.connect(
+            self.refresh_module_selector_status
+        )
         module_manager.imgtrans_thread.post_process_mask = (
             self.drawingPanel.rectPanel.post_process_mask
         )
@@ -933,7 +936,6 @@ class MainWindow(mainwindow_cls):
 
         self.configPanel.setupConfig()
         self.configPanel.save_config.connect(self.save_config)
-        self.configPanel.reload_textstyle.connect(self.load_textstyle_from_proj_dir)
         self.configPanel.font_exclusion_changed.connect(
             self.refresh_font_list_exclusion
         )
@@ -944,11 +946,14 @@ class MainWindow(mainwindow_cls):
         self.configPanel.tag_toolbar_changed.connect(
             self._on_tag_toolbar_changed
         )
-        self.configPanel.clip_overflow_changed.connect(self._on_clip_overflow_changed)
+        self.configPanel.clip_overflow_changed.connect(self._sync_view_menu_actions)
         self.titleBar.seq_badge_trigger.connect(self.on_seq_badge_menu_toggled)
         self.titleBar.clip_overflow_trigger.connect(
             self.on_clip_overflow_menu_toggled
         )
+        # View 菜单的勾选态一律「弹出前现读」（见 _sync_view_menu_actions）：
+        # 菜单的勾选是 pcfg 的镜像，不靠自己记账。
+        self.titleBar.viewMenu.aboutToShow.connect(self._sync_view_menu_actions)
         # 使用过滤后的字体列表（排除用户已隐藏的字体）
         familybox = self.textPanel.formatpanel.familybox
         filtered = shared.get_filtered_font_list(pcfg.excluded_fonts)
@@ -993,7 +998,7 @@ class MainWindow(mainwindow_cls):
 
     def _on_seq_badge_changed(self):
         """Keep View menu + canvas badges in sync with the settings toggle."""
-        self.titleBar.seqBadgeAction.setChecked(pcfg.show_seq_badge)
+        self._sync_view_menu_actions()
         if not self.canvas:
             return
         for item in self.canvas.textLayer.childItems():
@@ -1326,10 +1331,6 @@ class MainWindow(mainwindow_cls):
             target = min(after, default=entries[0])
         self._on_stylemgr_navigate(target[2], target[1])
 
-    def _on_clip_overflow_changed(self):
-        """Keep the View menu toggle in sync with the settings panel."""
-        self.titleBar.clipOverflowAction.setChecked(pcfg.clip_text_overflow)
-
     def on_seq_badge_menu_toggled(self, checked: bool):
         pcfg.show_seq_badge = checked
         self.configPanel.seq_badge_checker.blockSignals(True)
@@ -1343,7 +1344,30 @@ class MainWindow(mainwindow_cls):
         self.configPanel.clip_overflow_checker.blockSignals(True)
         self.configPanel.clip_overflow_checker.setChecked(checked)
         self.configPanel.clip_overflow_checker.blockSignals(False)
+        self._sync_view_menu_actions()
         self.save_config()
+
+    def _sync_view_menu_actions(self):
+        """把 View 菜单里勾选型开关的勾选态按当前真值整体重刷一遍。
+
+        这些开关有多个改动入口：View 菜单自身、设置面板、画布快捷菜单 /
+        右键菜单（ui/context_menu_config.py 的 CAT_TOGGLE 命令）。真值只有
+        ``pcfg`` 一处——画板 / 编辑器例外，以底部栏两个 checker 为准，由
+        `_sync_view_mode_actions` 负责。任何入口改完真值都得让菜单勾选态
+        跟上，否则菜单显示的是上一次自己改出来的旧状态。
+
+        挂在 `ui/mainwindowbars.py::TitleBar` 的 viewMenu.aboutToShow 上，
+        等于「菜单弹出前读一次真值」：以后新增入口不必再逐处补回写。历史
+        教训（2026-09-20 用户报告）：快捷菜单复用 `on_clip_overflow_menu_toggled`
+        与 `on_overflow_triggered` 时，这两个 handler 只下行写 pcfg、没回写
+        action，View 菜单的「溢出裁剪 / 过界模式」勾选态就地失真（序号徽标
+        那条因为顺带跑了 `_on_seq_badge_changed` 才没坏）。
+        """
+        self.titleBar.darkModeAction.setChecked(pcfg.darkmode)
+        self.titleBar.overflowAction.setChecked(pcfg.overflow_mode)
+        self.titleBar.seqBadgeAction.setChecked(pcfg.show_seq_badge)
+        self.titleBar.clipOverflowAction.setChecked(pcfg.clip_text_overflow)
+        self._sync_view_mode_actions()
 
     def _sync_view_mode_actions(self):
         """Mirror bottom-bar paint/text-edit mode state onto View menu actions."""
@@ -1630,37 +1654,6 @@ class MainWindow(mainwindow_cls):
             self.openImages([proj_path])
         else:
             self.openJsonProj(proj_path)
-
-        if pcfg.let_textstyle_indep_flag and not shared.HEADLESS:
-            self.load_textstyle_from_proj_dir(from_proj=True)
-
-    def load_textstyle_from_proj_dir(self, from_proj=False):
-        if from_proj:
-            if self.imgtrans_proj.directory is None:
-                return
-            text_style_path = osp.join(self.imgtrans_proj.directory, "textstyles.json")
-        else:
-            text_style_path = "config/textstyles/default.json"
-        if osp.exists(text_style_path):
-            load_textstyle_from(text_style_path)
-            self.textPanel.formatpanel.textstyle_panel.setStyles(text_styles)
-        else:
-            pcfg.text_styles_path = text_style_path
-            save_text_styles()
-
-        # 与 refresh_font_list_exclusion 同源：走排除过滤，
-        # 否则打开项目时会把用户隐藏的字体重新灌回下拉
-        font_list = shared.get_filtered_font_list(pcfg.excluded_fonts)
-
-        familybox = self.textPanel.formatpanel.familybox
-        current_family = familybox.currentText()
-        familybox.update_font_list(font_list)
-
-        # 恢复选中状态并触发 Style 更新
-        if current_family in font_list:
-            familybox.setCurrentText(current_family)
-        elif len(font_list) > 0:
-            familybox.setCurrentIndex(0)
 
     def openDir(self, directory: str):
         try:
@@ -1956,6 +1949,11 @@ class MainWindow(mainwindow_cls):
         redetect_tool = getattr(self, "region_redetect_tool", None)
         if redetect_tool is not None:
             redetect_tool.shutdown()
+        # 后台模型下载线程不能带着活线程被销毁：请求取消并等它收尾
+        # （下载循环逐块检查取消标记，普通网速下几百毫秒内退出）
+        from .model_downloads import model_downloads
+
+        model_downloads().wait_all()
         self.st_manager.hovering_transwidget = None
         self.st_manager.blockSignals(True)
         self.canvas.prepareClose()
@@ -3786,9 +3784,10 @@ class MainWindow(mainwindow_cls):
     def _cuda_work_in_progress(self) -> bool:
         """是否还有后台活在跑（手动释放内存前必须为空）。
 
-        销毁 CUDA 上下文会让"正在跑"的对象拿到失效指针，所以宁可拒绝也不冒险：
-        覆盖管线线程、四个"切换模块"线程、区域再检测的后台检测线程（它的检测器可
-        配成 CUDA）。画布 AI 修图走管线线程，已被第一条覆盖。
+        正在跑的管线／后台推理线程手上就有模型与页：此时卸载会把在用的对象拽掉、
+        交回工作集也只是把马上要用的页换出去再 fault 回来（白折腾），所以宁可拒绝
+        也不冒险：覆盖管线线程、四个"切换模块"线程、区域再检测的后台检测线程。
+        画布 AI 修图走管线线程，已被第一条覆盖。
         """
         manager = getattr(self, "module_manager", None)
         if manager is not None:
@@ -3819,10 +3818,16 @@ class MainWindow(mainwindow_cls):
     def on_release_memory(self):
         """设置页「释放内存」：用户手动要回跑完管线后留在进程里的那部分内存。
 
-        三步分工与实测数字见 `utils/memory_release.py`：卸载模型几乎不还内存
-        （实测 1503MB 只掉 0~75MB），销毁 CUDA 上下文真还 ~200MB，交回工作集把剩下
-        大部分退给系统——**那是"交回"不是 free**，页表映射还在、下次访问要 fault in。
-        所以先把"接下来会怎样"写清、用户确认后才动手；有后台活在跑时直接拒绝。
+        两步分工与实测数字见 `utils/memory_release.py`：卸载模型几乎不还内存
+        （实测 1503MB 只掉 0~75MB），交回工作集才是大头——**那是"交回"不是 free**，
+        页表映射还在、下次访问要 fault in。所以先把"接下来会怎样"写清、用户确认后
+        才动手；有后台活在跑时直接拒绝。
+
+        这里**刻意不做** "销毁 CUDA 上下文"那一步：2026-09-20 实测它不可逆地毁掉本
+        进程的 CUDA（`torch.cuda.is_available()` 仍返回 True 骗人，第一次真实分配报
+        `cudaErrorInvalidValue`、另一处实测直接段错误 exit `0xC0000005`，进程内救不
+        回来），代价远大于它真还的那点内存。原委见 `utils/memory_release.py` docstring
+        与 `docs/技术实现/内存释放_设计与实现.md` §4。
         """
         if self._cuda_work_in_progress():
             QMessageBox.information(
@@ -3834,9 +3839,7 @@ class MainWindow(mainwindow_cls):
         answer = QMessageBox.question(
             self,
             self.tr("Release memory"),
-            self.tr(
-                "Unload all models, destroy the CUDA context and hand the working set back to Windows?\n\nWhat to expect next:\n - the next pipeline run (or AI repair) reloads models and rebuilds the CUDA session, so the first run is a few seconds slower;\n - the first interactions may stutter briefly while Windows pages data back in;\n - keep the app idle while releasing; do not start a run at the same time."
-            ),
+            self.tr("Unload all models and hand the working set back to Windows?\n\nWhat to expect next:\n - the next pipeline run reloads the models, so the first run is a few seconds slower;\n - the first interactions may stutter briefly while Windows pages data back in;\n - keep the app idle while releasing; do not start a run at the same time."),
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
@@ -3844,9 +3847,8 @@ class MainWindow(mainwindow_cls):
         report = release_memory(self.module_manager.unload_all_models)
         LOGGER.info(
             f"release_memory: before={report.before_mb:.0f}MB "
-            f"after_unload={report.after_unload_mb} after_reset={report.after_reset_mb} "
-            f"after_trim={report.after_trim_mb} unloaded={report.unloaded} "
-            f"reset={report.context_reset} trim={report.working_set_returned} "
+            f"after_unload={report.after_unload_mb} after_trim={report.after_trim_mb} "
+            f"unloaded={report.unloaded} trim={report.working_set_returned} "
             f"errors={report.errors}"
         )
         before = str(int(round(report.before_mb)))
@@ -3856,10 +3858,10 @@ class MainWindow(mainwindow_cls):
         # 回退英文。字面量后面也**紧跟 `)`**，别挂 `.replace(...)`。
         if report.unloaded is False:
             kind = "warning"
-            text = self.tr("Models could not be unloaded, so the CUDA context was left alone. Working set: %1 MB → %2 MB")
-        elif not report.context_reset:
+            text = self.tr("Models could not be unloaded. Working set: %1 MB → %2 MB")
+        elif not report.working_set_returned:
             kind = "warning"
-            text = self.tr("Working set returned to the system (%1 MB → %2 MB), but the CUDA context could not be released.")
+            text = self.tr("Models were unloaded, but the working set could not be returned (%1 MB → %2 MB).")
         else:
             kind = "info"
             text = self.tr("Memory released: working set %1 MB → %2 MB")
@@ -4097,6 +4099,24 @@ class MainWindow(mainwindow_cls):
             pcfg.display_lang = lang
             self.set_display_lang(lang)
 
+    def refresh_module_selector_status(self):
+        """重刷模块下拉里「模型文件未找到」的警示色与 tooltip。
+
+        四处触发：启动填完选择器、每次开运行对话框、设置页「模型文件」节
+        下载完成、以及那里删掉权重之后——距上次标记磁盘状态可能已经变了。
+        运行对话框若正开着也一并刷（它是独立的一份选择器）。
+        """
+        for module_type, selector in (
+            ("textdetector", self.bottomBar.textdet_selector.selector),
+            ("ocr", self.bottomBar.ocr_selector.selector),
+            ("translator", self.bottomBar.trans_selector.selector),
+            ("inpainter", self.bottomBar.inpaint_selector.selector),
+        ):
+            mark_module_selector_status(selector, module_type)
+        dialog = getattr(self, "_run_dialog", None)
+        if dialog is not None:
+            dialog.refresh_module_selector_status()
+
     def run_imgtrans(self):
         num_pages = self.imgtrans_proj.num_pages
         if num_pages == 0:
@@ -4105,13 +4125,7 @@ class MainWindow(mainwindow_cls):
         from .run_pipeline_dialog import RunPipelineDialog
 
         # 重新标记底部栏下拉的缺模型状态（距启动时可能已下载/删除过权重）
-        for module_type, selector in (
-            ("textdetector", self.bottomBar.textdet_selector.selector),
-            ("ocr", self.bottomBar.ocr_selector.selector),
-            ("translator", self.bottomBar.trans_selector.selector),
-            ("inpainter", self.bottomBar.inpaint_selector.selector),
-        ):
-            mark_module_selector_status(selector, module_type)
+        self.refresh_module_selector_status()
 
         page_names = list(self.imgtrans_proj.pages.keys())
         dialog = RunPipelineDialog(
@@ -4175,7 +4189,7 @@ class MainWindow(mainwindow_cls):
             msgBox.setWindowTitle(self.tr("Missing Model Files"))
             msgBox.setText(
                 self.tr(
-                    "Model files were not found for the stages below. You can still run, but those stages may fail. Download prompts appear when selecting the module."
+                    "Model files were not found for the stages below. Those stages may fail. Download them in Settings → Models → Model Files — the download runs in the background, and its progress is printed in the terminal."
                 )
                 + "\n\n"
                 + "\n".join(missing_lines)
@@ -4661,6 +4675,9 @@ class MainWindow(mainwindow_cls):
 
     def on_overflow_triggered(self, checked: bool):
         self.canvas.setOverflowMode(checked)
+        # 过界模式同时是 View 菜单的勾选项与快捷菜单 CAT_TOGGLE 命令，
+        # 后者走本函数（不经过 action 自己翻转），必须回写勾选态
+        self._sync_view_menu_actions()
 
     def on_copy_src(self):
         blks = self.canvas.selected_text_items()

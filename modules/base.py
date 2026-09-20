@@ -15,6 +15,32 @@ from utils.logger import logger as LOGGER
 GPUINTENSIVE_SET = {"cuda", "mps", "xpu", "privateuseone"}
 
 
+class MissingModelFilesError(RuntimeError):
+    """权重文件缺失，且该模块声明了不在加载期下载（``background_download_only``）。
+
+    只携带结构化信息——用户可见文案由 UI 层组装。``modules/`` 里不写中文
+    （i18n 硬编码检查会红），也不该知道设置页长什么样。
+    """
+
+    def __init__(
+        self,
+        module_name: str,
+        missing_files: List[str],
+        requires_gpu: bool = False,
+    ):
+        self.module_name = module_name
+        self.missing_files = list(missing_files)
+        #: 该模块是否要求加速设备——UI 据此换成「本机没有 GPU」的说明，而不是
+        #: 指路去设置页下载（那种机器上下载入口本身就会拒绝）
+        self.requires_gpu = bool(requires_gpu)
+        preview = ", ".join(self.missing_files[:3])
+        if len(self.missing_files) > 3:
+            preview += f" (+{len(self.missing_files) - 3} more)"
+        super().__init__(
+            f"Model files for '{module_name}' are not downloaded yet: {preview}"
+        )
+
+
 def register_hooks(
     hooks_registered: OrderedDict, callbacks: Union[List, Callable, Dict]
 ):
@@ -158,6 +184,17 @@ class BaseModule:
     download_file_list: List = None
     download_file_on_load = False
 
+    # 置 True 时 ``load_model`` 期只检查模型文件、绝不同步下载：缺文件就抛
+    # MissingModelFilesError，由 UI 引导用户去「设置 → Models → 模型文件」取。
+    # GB 级权重必须声明它——加载期同步下载会占住主线程把界面冻死。
+    # 小模型（ysgyolo 15MB、LaMa 195MB）不要声明，加载期顺手补下体验更顺。
+    background_download_only = False
+
+    # 包描述（可选）：``{"dir": 包根目录, "size_hint": "1.9 GB"}``。只用于界面
+    # 展示与「打开目录」；删除永远以 download_file_list 的 save_files 白名单为准，
+    # 绝不按目录删（设计 §4.3、§7.1）。
+    model_package: Dict = None
+
     _load_model_keys: set = None
 
     # Optional extra pip packages this module needs beyond what is
@@ -165,6 +202,12 @@ class BaseModule:
     # string (e.g. ``"torch>=2.0"``).  Checked & auto-installed on
     # first ``load_model()`` call via :meth:`ensure_dependencies`.
     requires_packages: List[str] = []
+
+    # 只在有加速设备的机器上才有实用价值的模块（例：CPU 上慢到没意义的生成式
+    # 模型）。置 True 后，**本机没有加速设备时下载入口一律拒绝**：权重与 pip
+    # 依赖都不下，并弹窗说明利害（``ui/model_downloads.py::gpu_required_message``）。
+    # 判据见 :func:`accelerator_available`。
+    requires_gpu: bool = False
 
     def __init__(self, **params) -> None:
         standardize_module_params(self.params)
@@ -277,14 +320,29 @@ class BaseModule:
         return
 
     def _ensure_model_files(self):
-        """Download declared model files if they are missing on disk.
+        """按声明确保模型文件在磁盘上。
 
-        This replaces the old startup-time forced download in
-        ``prepare_local_files_forall()`` — files are now fetched on
-        demand when a module is first loaded.
+        - 缺省：缺文件就地**同步**下载（``utils/download_util.py::download_and_check_files``），
+          沿用 ``prepare_local_files_forall()`` 被替换后的按需取用行为。
+        - ``background_download_only`` 置位（大模型）：**只检查，不下载**，
+          缺文件抛 :class:`MissingModelFilesError`。这类权重由后台任务取
+          （见 ``docs/技术实现/模型文件管理_设计方案.md`` §5.3）。
         """
         if not self.download_file_list:
             return
+
+        if self.background_download_only:
+            from utils.model_files import missing_declared_files
+
+            missing = missing_declared_files(self.download_file_list)
+            if missing:
+                raise MissingModelFilesError(
+                    getattr(self, "name", None) or self.__class__.__name__,
+                    missing,
+                    requires_gpu=self.requires_gpu,
+                )
+            return
+
         from utils.download_util import download_and_check_files
 
         for dl_entry in self.download_file_list:
@@ -470,6 +528,20 @@ def is_intel():
         if torch.version.xpu:
             return True
     return False
+
+
+def accelerator_available() -> bool:
+    """本机是否有可用的加速设备（cuda / xpu / mps / directml）。
+
+    判据就是导入期算好的 ``DEFAULT_DEVICE != "cpu"``：torch 装了但用不起来、
+    或没装 torch、或 ``BALLOONTRANS_CPU_ONLY=1`` 强制 CPU，都算「没有」。
+    给 ``requires_gpu`` 的模块在下载入口做拒绝用（见 ``modules/base.py`` 的
+    ``requires_gpu`` 声明与 ``ui/model_downloads.py::gpu_required_message``）。
+
+    刻意不用 ``torch.cuda.is_available()`` 之类单独判 CUDA：这个判据要回答的是
+    「跑得动吗」，xpu / mps / directml 同样跑得动。
+    """
+    return DEFAULT_DEVICE != "cpu"
 
 
 def soft_empty_cache():

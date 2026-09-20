@@ -173,13 +173,21 @@ def suspended_imports(path):
 def git_deleted_not_registered(registry):
     """工作区已删但未在登记表声明的文件列表（仅提示）。"""
     try:
-        out = subprocess.run(
-            ["git", "-c", "core.quotepath=false", "status", "--porcelain"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        ).stdout
+        out = (
+            subprocess.run(
+                ["git", "-c", "core.quotepath=false", "status", "--porcelain"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                # git 输出的是 UTF-8 路径字节；不指定编码就会拿系统 locale
+                # （中文 Windows 是 cp936）去解，撞到中文路径就炸掉读取线程，
+                # .stdout 变成 None，下面 .splitlines() 直接抛 AttributeError。
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+            ).stdout
+            or ""
+        )
     except (OSError, subprocess.SubprocessError):
         return []
     deleted = []

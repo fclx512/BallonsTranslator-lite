@@ -26,6 +26,19 @@ shutil.register_unpack_format("7zip", [".7z"], unpack_7zarchive)
 READ_DATA_CHUNK = 128 * 1024
 
 
+class DownloadCancelled(Exception):
+    """下载被用户取消。
+
+    与「下载失败」区分开：取消是预期行为，不该被记成错误、也不该触发重试或
+    排障提示。未写完的临时文件由 ``download_url_to_file`` 的 ``finally`` 清掉，
+    **已完成的文件保持原样**——下次再来时 ``check_local_file`` 会跳过它们。
+    """
+
+    def __init__(self, url: str = ""):
+        self.url = url
+        super().__init__(f"download cancelled: {url}" if url else "download cancelled")
+
+
 def calculate_sha256(filename):
     hash_sha256 = hashlib.sha256()
     blksize = 1024 * 1024
@@ -126,6 +139,7 @@ def download_url_to_file(
     hash_prefix: Optional[str] = None,
     progress: bool = True,
     timeout: float = 30.0,
+    cancel_check=None,
 ) -> None:
     r"""Download object at the given URL to a local path.
 
@@ -137,6 +151,10 @@ def download_url_to_file(
         progress (bool, optional): whether or not to display a progress bar to stderr
             Default: True
         timeout (float, optional): Connection/read timeout in seconds. Default: 30.0
+        cancel_check (callable, optional): 每读完一个数据块调用一次；返回真值即抛
+            :class:`DownloadCancelled`。GB 级权重（paddleocr-vl 的
+            ``model.safetensors`` 约 1.79GiB）必须能中途叫停，否则「取消」按钮
+            形同虚设。Default: None
 
     Example:
         >>> # xdoctest: +REQUIRES(env:TORCH_DOCTEST_HUB)
@@ -202,6 +220,8 @@ def download_url_to_file(
             unit_divisor=1024,
         ) as pbar:
             while True:
+                if cancel_check is not None and cancel_check():
+                    raise DownloadCancelled(url)
                 buffer = u.read(READ_DATA_CHUNK)
                 if len(buffer) == 0:
                     break
@@ -281,11 +301,14 @@ def try_download_files(
     cache_hash: bool = False,
     download_method: str = "",
     gdrive_file_id: str = None,
+    cancel_check=None,
 ):
 
     all_successful = True
 
     for file, savep, sha256_precal in zip(files, save_files, sha256_pre_calculated):
+        if cancel_check is not None and cancel_check():
+            raise DownloadCancelled(url)
         save_dir = osp.dirname(savep)
         if not osp.exists(save_dir):
             os.makedirs(save_dir)
@@ -313,7 +336,9 @@ def try_download_files(
                 download_file_from_google_drive(gdrive_file_id, savep)
             else:
                 LOGGER.info(f"downloading {savep} from {download_url} ...")
-                download_url_to_file(download_url, savep)
+                download_url_to_file(
+                    download_url, savep, cancel_check=cancel_check
+                )
             file_exists, valid_hash, sha256_calculated = check_local_file(
                 savep, sha256_precal, cache_hash=cache_hash
             )
@@ -324,6 +349,10 @@ def try_download_files(
                     f'Mismatch between newly downloaded {savep} and pre-calculated hash: "{sha256_calculated}" <-> "{sha256_precal.lower()}"'
                 )
 
+        except DownloadCancelled:
+            # 取消不是失败：立刻中止整批，不当错误记录、不继续下一个文件
+            LOGGER.info(f"Download cancelled, stopping at {savep}")
+            raise
         except Exception:
             err_msg = traceback.format_exc()
             all_successful = False
@@ -346,6 +375,7 @@ def download_and_check_files(
     save_dir: str = None,
     download_method: str = "torch_hub",
     gdrive_file_id: str = None,
+    cancel_check=None,
 ):
 
     def _wrap_up_checkinputs(
@@ -405,6 +435,7 @@ def download_and_check_files(
             cache_hash=True,
             download_method=download_method,
             gdrive_file_id=gdrive_file_id,
+            cancel_check=cancel_check,
         )
 
     # handle archived
@@ -430,6 +461,7 @@ def download_and_check_files(
         cache_hash=False,
         download_method=download_method,
         gdrive_file_id=gdrive_file_id,
+        cancel_check=cancel_check,
     )
     if not archive_downloaded:
         return False

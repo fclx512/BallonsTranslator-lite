@@ -75,9 +75,14 @@ def extract_tr_calls(content: str):
     tr_sq_re = re.compile(r"self\.tr\(\s*('(?:[^'\\]|\\.)*')\s*,?\s*\)", re.DOTALL)
     # Explicit-context module-level tables (e.g. shortcut names in
     # ui/configpanel.py): first literal is the ts <context>.
+    #
+    # 两个参数各自的引号风格独立匹配——**不能**拆成「全双引号」与「全单引号」两条
+    # 正则：``translate("ctx", '文本')`` 这种混合写法两条都匹配不到，字符串会静默
+    # 漏进 .ts（`ui/model_downloads.py` 的缺文件提示就这么在中文界面里显示了很久
+    # 英文，2026-09-20 发现）。一个参数一个 ``_STR``，四种组合都收。
+    _STR = r'("(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\')'
     qt_translate_re = re.compile(
-        r'QCoreApplication\.translate\(\s*("(?:[^"\\]|\\.)*")\s*,\s*'
-        r'("(?:[^"\\]|\\.)*")\s*,?\s*\)',
+        r"QCoreApplication\.translate\(\s*" + _STR + r"\s*,\s*" + _STR + r"\s*,?\s*\)",
         re.DOTALL,
     )
     qt_translate_sq_re = re.compile(

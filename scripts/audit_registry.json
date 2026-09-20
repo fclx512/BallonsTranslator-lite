@@ -316,6 +316,12 @@
         "docs/技术实现/不常用功能工具箱_规划.md": {
             "note": "2026-09-18 清理：Tools 下拉栏重排已落地（ui/mainwindowbars.py 的菜单构建段即最终分组），原「激活式工具箱」方向早已废弃，文档使命结束",
             "allowed_mentions": []
+        },
+        "scripts/download_models.bat": {
+            "note": "模型文件管理（2026-09-20）：权重获取收敛到应用内按需后台下载（docs/技术实现/模型文件管理_设计方案.md §5／§6），该脚本内容还停在上游时代（ctd / mit48px_ctc / aot / sugoi / manga-ocr 全是已删除模块的权重），删除。它被 .gitignore 覆盖、不在版本控制内，删除前备份在 tmp/backup_download_models.bat",
+            "allowed_mentions": [
+                "docs/技术实现/模型文件管理_设计方案.md"
+            ]
         }
     },
     "dormant_symbols": {

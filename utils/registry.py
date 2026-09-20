@@ -43,7 +43,19 @@ class ModuleSpec:
     params: Dict = None
     download_file_list: List = None
     download_file_on_load: bool = False
+    # 置 True 的模块在 ``load_model`` 期只检查模型文件、绝不同步下载
+    # （大模型由后台任务下载，见 docs/技术实现/模型文件管理_设计方案.md §5.3）。
+    background_download_only: bool = False
+    # 包描述（可选）：``{"dir": 包根目录, "size_hint": 预期体积文本}``。
+    # 只用于展示与「打开目录」；删除永远以 download_file_list 的 save_files 为准。
+    model_package: Dict = None
+    # 模块声明的额外 pip 依赖（PEP 508）。消费方一律读这个字段；
+    # ``dependencies`` 是旧名字，只在扫描时一并保留作回落。
+    requires_packages: List[str] = field(default_factory=list)
     dependencies: List[str] = field(default_factory=list)
+    # 只在有加速设备的机器上才有实用价值的模块：本机没有加速设备时下载入口
+    # 一律拒绝（``ui/model_downloads.py::gpu_required_message``）。
+    requires_gpu: bool = False
     supported_src_list: List[str] = None
     supported_tgt_list: List[str] = None
     available: bool = True
@@ -328,7 +340,13 @@ class Registry:
                     getattr(module, "download_file_list", None)
                 ),
                 download_file_on_load=getattr(module, "download_file_on_load", False),
+                background_download_only=getattr(
+                    module, "background_download_only", False
+                ),
+                model_package=deepcopy(getattr(module, "model_package", None)),
+                requires_packages=deepcopy(getattr(module, "requires_packages", [])),
                 dependencies=deepcopy(getattr(module, "dependencies", [])),
+                requires_gpu=bool(getattr(module, "requires_gpu", False)),
                 supported_src_list=deepcopy(
                     getattr(module, "supported_src_list", None)
                 ),

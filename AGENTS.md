@@ -39,6 +39,7 @@ modules/
 | `utils/shared.py` | 路径常量 |
 | `utils/structures.py` | `nested_dataclass`，`Config`/`Dict` 基类 |
 | `utils/profile_manager.py` | LLM Profile 数据层 + 选取解析层（`profile_is_usable`/`resolve_profile` 等，语义见 docstring；**消费点不回退「列表第一项」**）；翻译器/OCR/在线修复共用 |
+| `utils/global_styles.py` | 全局样式库数据层：跨项目持久样式模板（`config/global_styles.json`），条目与大样式同构；**库是纯模板存储、绝不自动应用到块**，双向复制语义与冲突规则见 `docs/技术实现/全局样式库_设计方案.md` |
 | `ui/llm_profile_cards.py` | LLM Profile 卡片式设置页（形态对齐上游 `ballontranslator/ui/llm_profile_widgets.py`） |
 | `utils/ai_tools.py` | 翻译 agent/术语工作台共享的只读探索工具执行器（4 只读工具 + `to_openai_tools`） |
 | `utils/block_tags.py` | 块标签体系数据层：类型注册表 + 读写 + 审阅表态（`reviewed`）+ 「OCR 置信度低」「误识别文本」自动挂标（分数存条目不喂 AI）；`TextBlock.tags` 随项目 JSON 保存；详见 `docs/基础速查/AI辅助标签体系使用说明.md` |
@@ -57,7 +58,11 @@ modules/
 | `ui/workbench_batch_view.py` | 工作台四个批量任务共用的三段视图（D20/D23/D27）；执行前统一弹 D27 告知窗；审批图不在本页（D44），经 `preview_requested` 信号交浮层 |
 | `utils/block_geometry.py` | 文本框几何小工具：矩形部分＝**「外扩到碰到邻框为止」的唯一实现**（`expand_limited`，批量合并审批截图、批量扩张共用）；四边形部分（`poly_*`）供区域再检测共用 |
 | `utils/batch_versions.py` | **仓库唯一的批量备份口**：执行前写一版（项目数据 + 受影响矩形像素前图）到项目内 `.bt_batch_backup/`，撤销取最新一版覆盖并消耗（`restore_latest`/`discard_latest` 支持 `expect_seq` 校验）；查找替换与工作台批量任务共用 |
-| `utils/memory_release.py` | 手动释放内存（设置页「释放内存」按钮）：卸载模型 → 销毁 CUDA 上下文（真还 ~200MB）→ 交回工作集（`EmptyWorkingSet`，是「交回」不是 free）；三条硬约束与全部实测数字见 `docs/技术实现/内存释放_设计与实现.md` |
+| `utils/memory_release.py` | 手动释放内存（设置页「释放内存」按钮）：卸载模型 → 交回工作集（`EmptyWorkingSet`，是**交回**不是 free）。**不做** `cudaDeviceReset`——实测它会不可逆地毁掉本进程的 CUDA（第一次分配报 `cudaErrorInvalidValue` 或直接段错误）且只多还 70~166MB，该能力已删除、`tests/test_memory_release.py::RemovedCapabilityTest` 钉着别加回来；实测数字与全部约束见 `docs/技术实现/内存释放_设计与实现.md` |
+| `utils/model_files.py` | 模型文件管理数据层：落盘判据（`missing_declared_files`）、体积、**删除走回收站**（`delete_paths`，只删模块声明过的 `save_files`、白名单保护 git 跟踪的字典文件；`SHFileOperation` 返回码不可信，判据是调用后文件还在不在）。**新增带权重的模块必须随附 `download_file_list` 落盘路径 + `model_package` 包描述**（`save_dir` 字段不可用），否则缺文件检查与体积展示全部失效；方案见 `docs/技术实现/模型文件管理_设计方案.md`，验收见 `docs/技术实现/模型文件管理_测试流程.md` |
+| `ui/model_downloads.py` | 后台下载任务层（单例注册表：起任务／防重复／取消／进度信号），「选模块」与设置页「模型文件」节共用；**下载不弹窗不阻断交互，进度只进终端**；大模型须置 `background_download_only = True`（否则会在 `load_model` 里同步下载冻界面）；**要求 GPU 的模块须在模块侧置 `requires_gpu = True`**——`ModelDownloadRegistry.start` 是本约束的硬闸门（本机无加速设备即拒下并弹 `gpu_required_message` 说明，判据与文案见设计 §5.5） |
+| `ui/model_files_panel.py` | 设置页 Models →「模型文件」节（`ui/configpanel.py` 只实例化 + 接线）：`ui/custom_widget/row_table.py::RowTable` 卡片列表，勾选＝本次要处理的模型 + 下方动作行（下载／取消／删除／打开目录／刷新）+ 底部状态条；徽章状态与选型下拉的缺文件警示色同源 |
+| `modules/ocr/ocr_vl_manga.py` | 首个「HF transformers 后端」OCR 模块（PaddleOCR-VL-For-Manga，日文漫画质量优先、GPU-only、逐块自回归）；要点：整块裁剪不逐行、`use_cache=True` 必传、processor 必须传 `add_prefix_space=None`（否则缺 sentencepiece 直接报 slow version 错）、`background_download_only`、`requires_gpu`（本机无 GPU 时下载入口拒下）；依据见 `docs/技术实现/paddle-ocr-for-manga_接入调研.md` |
 | `ui/mainwindow.py` | 主窗口 |
 | `ui/configpanel.py` | 配置面板、快捷键编辑；四个管线页合并为一项「Pipeline」（页内标签，`_build_pipeline_page`），阶段只编辑当前引擎的参数 |
 | `ui/run_pipeline_dialog.py` | 运行对话框：启用模块网格（阶段图标开关 + 模块下拉）+ 各阶段折叠选项区；模块下拉写回底部栏选择器 |

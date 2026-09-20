@@ -25,13 +25,13 @@ from modules import (
     TextDetectorBase,
     merge_config_module_params,
 )
-from modules.base import soft_empty_cache
+from modules.base import MissingModelFilesError, soft_empty_cache
 from modules.translators import MissingTranslatorParams
 from utils import shared
 from utils.config import RunStatus, pcfg
 from utils.imgproc_utils import enlarge_window
 from utils.logger import logger as LOGGER
-from utils.message import create_error_dialog
+from utils.message import create_error_dialog, create_info_dialog
 from utils.proj_imgtrans import ProjImgTrans
 from utils.registry import Registry
 from utils.textblock import TextBlock, sort_regions
@@ -39,7 +39,7 @@ from utils.textblock import TextBlock, sort_regions
 from .configpanel import ConfigPanel
 from .custom_widget import ImgtransProgressMessageBox, MessageBox, ParamComboBox, ProgressMessageBox
 from .funcmaps import get_maskseg_method
-from .misc import get_theme_color
+from .model_downloads import missing_model_files_hint
 
 modules.translators.SYSTEM_LANG = QLocale.system().name()
 cfg_module = pcfg.module
@@ -57,7 +57,10 @@ def _build_dep_notes(registry: Registry) -> dict[str, str]:
     for name in registry.module_dict:
         cls = registry.get(name)
         parts: list[str] = []
-        pkgs = getattr(cls, "requires_packages", None) or []
+        # 惰性 spec 与真实类都声明 requires_packages；dependencies 是旧名字作回落
+        pkgs = getattr(cls, "requires_packages", None) or getattr(
+            cls, "dependencies", None
+        ) or []
         for pkg in pkgs:
             if "torch" in pkg.lower():
                 parts.append("PyTorch")
@@ -217,6 +220,21 @@ class ModuleThread(QThread):
             new_module = None
             self.last_set_success = True
 
+        except MissingModelFilesError as e:
+            # 声明了 background_download_only 的模块加载期只检查不下载：缺文件时
+            # 给「去哪儿下」的明确指引，而不是让它去撞 from_pretrained 的路径错。
+            # 注意必须排在 RuntimeError 之前——它正是 RuntimeError 的子类，
+            # 落到那个分支会变成一声不吭（只记 last_error、不弹窗）。
+            self.module = None
+            self._discard_module_instance(new_module)
+            self._discard_module_instance(old_module)
+            self.last_error = e
+            create_error_dialog(
+                e,
+                missing_model_files_hint(
+                    e.module_name, requires_gpu=getattr(e, "requires_gpu", False)
+                ),
+            )
         except RuntimeError as e:
             if "cancelled" in str(e).lower():
                 LOGGER.info(f"Cancelled preparing {self.module_key} module {module_name}.")
@@ -944,495 +962,43 @@ def unload_modules(self, module_names):
         soft_empty_cache()
 
 
-def _ensure_module_deps(
-    module_cls,
-    parent_widget,
-) -> bool:
-    """Check module dependencies and show an install dialog if anything is
-    missing.  Returns ``True`` if all deps are satisfied (or the user chose to
-    skip), ``False`` if the module class is invalid.
+def _ensure_module_deps(module_type: str, key: str) -> bool:
+    """选中模块时把「缺的 pip 包 / 权重文件」交给后台下载任务，**立即返回**。
 
-    ``module_cls`` may be a class or a ``ModuleSpec`` — both are handled.
+    行为定稿见 ``docs/技术实现/模型文件管理_设计方案.md`` §5：选模块只负责
+    **启动**后台下载——不弹确认、不弹进度窗、不阻断交互，模块照常切换；
+    进度与结果只进终端与 ``logs/*.log``。真正「用不了」时才由运行前检查
+    （``ui/mainwindow.py`` 的 ``run_imgtrans``）与加载期异常弹窗（§5.4）。
 
-    The dialog shows:
-    - Python packages that need installing (from ``requires_packages``)
-    - Model files that need downloading (from ``download_file_list``)
-    - "Install all" / "Later" buttons
+    判定走 ``modules/__init__.py::GET_MODULE_REQUIREMENTS``——**只读注册表元数据，
+    不导入模块体**：resolve 会触发 torch/cv2 等重量级 C 扩展导入，在主线程上会
+    冻住界面好几秒。
 
-    IMPORTANT: ``ModuleSpec`` metadata (``download_file_list``,
-    ``dependencies``) is used directly **without** resolving/importing the
-    module.  Resolving would trigger heavy C-extension imports (torch, cv2)
-    on the **main thread** and freeze the UI for several seconds — only
-    resolve if the dialog actually needs to install something.
+    例外一条：模块声明了 ``requires_gpu`` 而本机没有加速设备时**不下**，改弹一次
+    说明窗（``ui/model_downloads.py::gpu_required_message``）——那种机器上装完也用
+    不了，白白吃掉 1.9GB 权重与 128MB 依赖。模块本身照常切换，缺文件后头还有运行前
+    检查兜着。
+
+    返回值恒为 ``True``，保留它只为调用点可读；原先 ``False`` 表示用户点了
+    「Later」、调用方要把选择器回滚回去，那个分支已随模态窗一起消失。
     """
-    from utils.registry import ModuleSpec
+    try:
+        from ui.model_downloads import gpu_requirement_block, model_downloads
 
-    is_spec = isinstance(module_cls, ModuleSpec)
-
-    # Keep ModuleSpec name for the dialog so the user sees the registration key.
-    mod_name = module_cls.key if is_spec else getattr(module_cls, "__name__", "?")
-
-    # ── Read metadata without resolving ──────────────────────────────
-    # ModuleSpec stores ``dependencies`` (like ``requires_packages``)
-    # and ``download_file_list`` from the AST scan.
-    if is_spec:
-        pkgs = getattr(module_cls, "dependencies", None) or []
-        dfl = getattr(module_cls, "download_file_list", None) or []
-        actual_cls = None  # resolved later only if needed
-    else:
-        pkgs = getattr(module_cls, "requires_packages", None) or []
-        dfl = getattr(module_cls, "download_file_list", None) or []
-        actual_cls = module_cls
-
-    # Check which packages are already installed
-    missing_pkgs: list[str] = []
-    if pkgs:
-        try:
-            import importlib.metadata as importlib_metadata
-
-            from packaging.requirements import Requirement
-            from packaging.utils import canonicalize_name
-        except ImportError:
-            missing_pkgs = list(pkgs)
-        else:
-            for req_str in pkgs:
-                try:
-                    req = Requirement(req_str)
-                    dist = importlib_metadata.distribution(canonicalize_name(req.name))
-                    if not req.specifier.contains(dist.version, prereleases=True):
-                        missing_pkgs.append(req_str)
-                except importlib_metadata.PackageNotFoundError:
-                    # Metadata name mismatch (e.g. onnxruntime installed as
-                    # onnxruntime-gpu).  Try a direct import as last resort —
-                    # if the top-level module can be loaded the dependency is
-                    # actually satisfied.
-                    try:
-                        importlib.import_module(req.name)
-                    except ImportError:
-                        missing_pkgs.append(req_str)
-
-    # Check which model files are already on disk.
-    # Use ``save_files`` (actual on-disk paths) when available, falling
-    # back to ``files`` (archive-internal names).
-    missing_model_labels: list[str] = []
-    for dl_entry in dfl:
-        check_paths = dl_entry.get("save_files") or dl_entry.get("files") or []
-        if isinstance(check_paths, str):
-            check_paths = [check_paths]
-        for fpath in check_paths:
-            if not osp.isabs(fpath):
-                fpath = osp.join(shared.PROGRAM_PATH, fpath)
-            if not osp.exists(fpath):
-                label = dl_entry.get("url", osp.basename(fpath))
-                missing_model_labels.append(label)
-                break  # one line per entry
-
-    if not missing_pkgs and not missing_model_labels:
-        return True  # everything already present
-
-    # --- Lazy resolve: only import the module if we actually need to
-    # install something.  The resolve() call does a real Python import
-    # (torch, cv2 etc.) --- keep it off the happy path. ----------
-    if is_spec and actual_cls is None:
-        try:
-            actual_cls = module_cls.resolve()
-        except Exception as e:
-            LOGGER.error(
-                "Failed to resolve module '%s' (import_path=%s): %s",
-                mod_name,
-                getattr(module_cls, "import_path", "?"),
-                e,
-            )
-            create_error_dialog(
-                e,
-                (
-                    f"Failed to load module '{mod_name}'.\n"
-                    "The module file may be corrupted or missing critical dependencies.\n"
-                    "Please check the log for details."
-                ),
-            )
-            return False
-
-    # ── Build and show the install dialog ──
-    from qtpy.QtWidgets import (
-        QDialog,
-        QHBoxLayout,
-        QLabel,
-        QPlainTextEdit,
-        QProgressBar,
-        QPushButton,
-        QVBoxLayout,
-    )
-
-    # ── Background install worker ──
-    class _InstallWorker(QThread):
-        """Install Python packages and download model files in a background thread."""
-        status = Signal(str)         # current operation text
-        log_line = Signal(str)       # log message
-        finished_with_result = Signal(bool)  # overall success
-
-        def __init__(self, mod_name, missing_pkgs, dfl, parent=None):
-            super().__init__(parent)
-            self.mod_name = mod_name
-            self.missing_pkgs = missing_pkgs
-            self.dfl = dfl  # raw download_file_list from the module
-
-        def run(self):
-            import shutil
-            import subprocess
-
-            success = True
-            failure_code = None
-            has_hf_no_mirror = self._check_hf_no_mirror()
-            # 1. Install Python packages
-            if self.missing_pkgs:
-                self.status.emit(
-                    "Step 1/2: Installing Python packages…"
-                )
-                self.log_line.emit(
-                    ">> Packages: " + ", ".join(self.missing_pkgs)
-                )
-
-                python = sys.executable
-                _uv_avail = (
-                    subprocess.run(
-                        [python, "-m", "uv", "--version"],
-                        capture_output=True, check=False,
-                    ).returncode == 0
-                )
-                _runners = []
-                if _uv_avail:
-                    _runners.append([python, "-m", "uv", "pip", "install"])
-                _runners.append([python, "-m", "pip", "install"])
-
-                def _pip_install(pkgs, *, no_deps=False):
-                    bases = _runners if not no_deps else _runners[::-1]
-                    for runner in bases:
-                        is_uv = "uv" in runner
-                        extra = []
-                        if no_deps:
-                            extra = ["--no-deps"]
-                        elif not is_uv:
-                            # pip supports --prefer-binary / --timeout; uv does not
-                            extra = ["--prefer-binary", "--timeout", "30"]
-                        try:
-                            subprocess.run(
-                                [*runner, *pkgs, *extra],
-                                timeout=300, check=True,
-                            )
-                            return True
-                        except Exception:
-                            continue
-                    sys_py = shutil.which("python")
-                    if sys_py and osp.realpath(sys_py) != osp.realpath(python):
-                        try:
-                            subprocess.run(
-                                [sys_py, "-m", "pip", "install",
-                                 *pkgs, "--prefer-binary", "--timeout", "30"],
-                                timeout=300, check=True,
-                            )
-                            return True
-                        except Exception:
-                            pass
-                    return False
-
-                for pkg in self.missing_pkgs:
-                    self.status.emit(f"Installing {pkg}…")
-                    self.log_line.emit(f">> Installing {pkg} …")
-                    if not _pip_install([pkg]):
-                        self.log_line.emit(
-                            f">> Package '{pkg}' failed with deps, retrying --no-deps …"
-                        )
-                        if not _pip_install([pkg], no_deps=True):
-                            self.log_line.emit(f">> FAILED: {pkg}")
-                            success = False
-                            failure_code = f"pip_failed:{pkg}"
-                            break
-
-                if success:
-                    self.log_line.emit(">> Package installation complete.")
-
-            # 2. Download model files
-            if success and self.dfl:
-                self.status.emit("Step 2/2: Downloading model files…")
-                for dl_entry in self.dfl:
-                    url = dl_entry.get("url", "?")
-                    fname = osp.basename(url) or url
-                    self.status.emit(f"Downloading {fname}…")
-                    self.log_line.emit(f">> Downloading: {fname}")
-                    self.log_line.emit(f"   from: {url}")
-                    try:
-                        from utils.download_util import download_and_check_files
-
-                        ok = download_and_check_files(**dl_entry)
-                    except Exception as e:
-                        self.log_line.emit(f">> Error: {e}")
-                        ok = False
-                    if ok:
-                        self.log_line.emit(f">> Downloaded: {fname}")
-                    else:
-                        self.log_line.emit(f">> FAILED: {fname}")
-                        success = False
-                        failure_code = self._classify_network_error(url, has_hf_no_mirror)
-
-            self.finished_with_result.emit(success)
-            # Emit any failure code after finished_with_result so the dialog
-            # can display it on the next signal dispatch. We store it on self.
-            self._failure_code = failure_code
-
-        # ── helpers run in the worker thread (no Qt calls) ──
-
-        def _check_hf_no_mirror(self):
-            """Return True if there are HF URLs but no mirror configured."""
-            if not self.dfl:
-                return False
-            try:
-                from utils.config import pcfg
-
-                if pcfg.mirror.hf_endpoint:
-                    return False
-                for dl_entry in self.dfl:
-                    url = dl_entry.get("url", "")
-                    if "huggingface.co" in url:
-                        return True
-            except Exception:
-                pass
-            return False
-
-        def _classify_network_error(self, url, has_hf_no_mirror):
-            """Return a short error code for the dialog to translate."""
-            if "huggingface.co" in url and has_hf_no_mirror:
-                return "network_hf_no_mirror"
-            if "huggingface.co" in url:
-                return "network_hf"
-            if "github.com" in url or "github" in url:
-                return "network_github"
-            return "network_other"
-
-    class _InstallDialog(QDialog):
-        def __init__(self, mod_name, pkgs, models, dfl, parent=None):
-            super().__init__(parent)
-            self._installed = False
-            self._worker = None
-            self._dfl = dfl
-            self.setWindowTitle(
-                self.tr("Install Dependencies")
-            )
-            self.setMinimumWidth(520)
-            self.setMinimumHeight(400)
-            layout = QVBoxLayout(self)
-
-            # ── Info section ──
-            layout.addWidget(
-                QLabel(
-                    self.tr('Module "{name}" needs extra dependencies:').format(
-                        name=mod_name
-                    )
-                )
-            )
-
-            if pkgs:
-                pkg_label = QLabel(self.tr("Python packages:"))
-                pkg_label.setStyleSheet("font-weight: bold; margin-top: 8px;")
-                layout.addWidget(pkg_label)
-                for p in pkgs:
-                    layout.addWidget(QLabel(f"  • {p}"))
-
-            if models:
-                model_label = QLabel(self.tr("Model files to download:"))
-                model_label.setStyleSheet("font-weight: bold; margin-top: 8px;")
-                layout.addWidget(model_label)
-                for m in models:
-                    layout.addWidget(QLabel(f"  • {m}"))
-
-            layout.addSpacing(12)
-
-            # Detect HuggingFace URLs with no mirror configured → show warning
-            _has_hf_no_mirror = False
-            if models:
-                try:
-                    if not pcfg.mirror.hf_endpoint:
-                        for m in models:
-                            if "huggingface.co" in m:
-                                _has_hf_no_mirror = True
-                                break
-                except Exception:
-                    pass
-
-            if _has_hf_no_mirror:
-                _hf_warn = QLabel(
-                    self.tr(
-                        '⚠ HuggingFace model detected but <b>no mirror configured</b>.<br>Open <b>Settings → Mirror Config</b> and set <tt>hf_endpoint</tt> to <tt>https://hf-mirror.com</tt>.<br>Without a mirror, downloads will likely fail from China.'
-                    )
-                )
-                _hf_warn.setWordWrap(True)
-                wc = get_theme_color(key="@warningColor")
-                _hf_warn.setStyleSheet(
-                    f"color: {wc.name()}; "
-                    f"background: rgba({wc.red()},{wc.green()},{wc.blue()},30); "
-                    f"border: 1px solid {wc.name()}; "
-                    "border-radius: 4px; padding: 8px; margin-top: 4px;"
-                )
-                layout.addWidget(_hf_warn)
-            else:
-                layout.addWidget(
-                    QLabel(
-                        self.tr(
-                            "Network restricted? Open Settings → Mirror Config to configure download sources."
-                        )
-                    )
-                )
-
-            # ── Status label ──
-            self._status_label = QLabel()
-            self._status_label.setVisible(False)
-            self._status_label.setWordWrap(True)
-            layout.addWidget(self._status_label)
-
-            # ── Progress bar (indeterminate during work) ──
-            self._progress = QProgressBar()
-            self._progress.setVisible(False)
-            layout.addWidget(self._progress)
-
-            # ── Log area (scrollable) ──
-            self._log_area = QPlainTextEdit()
-            self._log_area.setVisible(False)
-            self._log_area.setReadOnly(True)
-            self._log_area.setMaximumBlockCount(200)
-            lfg = get_theme_color(key="@qwidgetForegroundColor").name()
-            lbg = get_theme_color(key="@transtexteditBackgroundColor").name()
-            lbrd = get_theme_color(key="@borderColor").name()
-            self._log_area.setStyleSheet(
-                f"color: {lfg}; font-size: 11px; background: {lbg}; "
-                f"border: 1px solid {lbrd}; border-radius: 3px; padding: 4px;"
-            )
-            self._log_area.setFixedHeight(120)
-            layout.addWidget(self._log_area)
-
-            # ── Error hint label (shown on failure) ──
-            self._error_hint = QLabel()
-            self._error_hint.setVisible(False)
-            self._error_hint.setWordWrap(True)
-            ec = get_theme_color(key="@dangerColor")
-            self._error_hint.setStyleSheet(
-                f"color: {ec.name()}; font-size: 12px; "
-                f"background: rgba({ec.red()},{ec.green()},{ec.blue()},20); "
-                f"border: 1px solid {ec.name()}; border-radius: 4px; padding: 8px;"
-            )
-            layout.addWidget(self._error_hint)
-
-            # ── Buttons ──
-            btn_row = QHBoxLayout()
-            self._install_btn = QPushButton(
-                self.tr("Install All")
-            )
-            self._install_btn.clicked.connect(self._do_install)
-            btn_row.addWidget(self._install_btn)
-
-            self._skip_btn = QPushButton(self.tr("Later"))
-            self._skip_btn.clicked.connect(self.reject)
-            btn_row.addWidget(self._skip_btn)
-            layout.addLayout(btn_row)
-
-        def closeEvent(self, event):
-            """Prevent accidental close during installation."""
-            if self._worker and self._worker.isRunning():
-                event.ignore()
-                return
-            event.accept()
-
-        def _do_install(self):
-            self._install_btn.setEnabled(False)
-            self._skip_btn.setEnabled(False)
-            self._error_hint.setVisible(False)
-
-            # Indeterminate progress bar — we show what's happening via status label
-            self._progress.setVisible(True)
-            self._progress.setRange(0, 0)
-            self._status_label.setVisible(True)
-            self._status_label.setText(
-                self.tr("Starting…")
-            )
-            self._log_area.setVisible(True)
-            self._log_area.clear()
-
-            self._worker = _InstallWorker(
-                mod_name, missing_pkgs, self._dfl, self,
-            )
-            self._worker.status.connect(self._on_worker_status)
-            self._worker.log_line.connect(self._on_worker_log)
-            self._worker.finished_with_result.connect(self._on_worker_finished)
-            self._worker.start()
-
-        def _on_worker_status(self, text):
-            # Translate known fixed-status strings
-            _map = {
-                "Step 1/2: Installing Python packages…": self.tr(
-                    "Step 1/2: Installing Python packages…"
-                ),
-                "Step 2/2: Downloading model files…": self.tr(
-                    "Step 2/2: Downloading model files…"
-                ),
-            }
-            self._status_label.setText(_map.get(text, text))
-
-        def _on_worker_log(self, line):
-            self._log_area.appendPlainText(line)
-            # Auto-scroll to bottom
-            sb = self._log_area.verticalScrollBar()
-            sb.setValue(sb.maximum())
-            LOGGER.info(line)
-
-        def _on_worker_finished(self, success):
-            if success:
-                self._installed = True
-                self.accept()
-            else:
-                self._progress.setVisible(False)
-                self._log_area.setStyleSheet(
-                    "color: #a00; font-size: 11px; background: #fff0f0; "
-                    "border: 1px solid #e88; border-radius: 3px; padding: 4px;"
-                )
-                # Show user-friendly error hint (translated)
-                code = getattr(self._worker, "_failure_code", "")
-                hint = self._format_error_hint(code)
-                if hint:
-                    self._error_hint.setText(hint)
-                    self._error_hint.setVisible(True)
-                self._install_btn.setText(self.tr("Retry"))
-                self._install_btn.setEnabled(True)
-                self._skip_btn.setEnabled(True)
-
-        def _format_error_hint(self, code):
-            """Return a translated, user-friendly error message for *code*."""
-            if code.startswith("pip_failed:"):
-                pkg = code.split(":", 1)[1]
-                return self.tr(
-                    'Failed to install Python package "{pkg}".\nCheck the log above for details.'
-                ).format(pkg=pkg)
-            return {
-                "network_hf_no_mirror": self.tr(
-                    "Download failed — HuggingFace is not accessible from your network.\nGo to Settings → Mirror Config, set hf_endpoint to https://hf-mirror.com,\nthen click Retry."
-                ),
-                "network_hf": self.tr(
-                    "Download failed — HuggingFace may be blocked in your region.\nGo to Settings → Mirror Config to configure a mirror, then Retry."
-                ),
-                "network_github": self.tr(
-                    "Download failed — GitHub may not be reachable.\nGo to Settings → Mirror Config to set up a mirror, then Retry."
-                ),
-                "network_other": self.tr(
-                    "Download failed — check your network connection.\nIf you are in a restricted region, try setting up a download mirror\nin Settings → Mirror Config, then click Retry."
-                ),
-            }.get(code, "")
-
-    dlg = _InstallDialog(
-        mod_name,
-        missing_pkgs,
-        missing_model_labels,
-        dfl,  # raw download_file_list for the worker
-        parent_widget,
-    )
-    return dlg.exec() == QDialog.DialogCode.Accepted and dlg._installed
+        reason = gpu_requirement_block(module_type, key)
+        if reason:
+            create_info_dialog(reason, btn_type=QMessageBox.StandardButton.Ok)
+            return True
+        model_downloads().start(module_type, key)
+    except Exception as e:
+        # 起任务失败不该拦住模块切换——缺文件后头还有运行前检查兜着
+        LOGGER.warning(
+            "Failed to start background download for %s/%s: %s",
+            module_type,
+            key,
+            e,
+        )
+    return True
 
 
 class ModuleManager(QObject):
@@ -1604,16 +1170,30 @@ class ModuleManager(QObject):
         OCRBase.register_postprocess_hooks({"tag_misread": tag_misread_hook})
         config_panel.profiles_changed.connect(self._on_profiles_changed)
         config_panel.unload_models.connect(self.unload_all_models)
+        config_panel.model_unload_requested.connect(self.unload_module_for)
+
+    def unload_module_for(self, module_type: str):
+        """卸载某个阶段当前加载的模块。
+
+        「模型文件」节删除权重前必须先走这一步：Windows 上被加载的模型握着
+        文件句柄，直接删会失败（见 ``docs/技术实现/模型文件管理_设计方案.md`` §7.1）。
+        只卸该阶段而不是全部，免得删一个 OCR 权重顺手把检测器也从显存里赶走。
+        """
+        if module_type not in {"textdetector", "inpainter", "ocr", "translator"}:
+            LOGGER.warning("Unknown module type for unload: %s", module_type)
+            return
+        try:
+            unload_modules(self, {module_type})
+        except Exception as e:
+            LOGGER.error("unload_module_for(%s) failed: %s", module_type, e)
 
     def unload_all_models(self) -> bool:
         """卸载四个阶段的模型（设置页「卸载全部模型」与「释放内存」共用）。
 
-        返回"现在适合销毁 CUDA 上下文吗"：正常卸载（含"本来就没载东西"）为
-        ``True``；卸载过程抛异常为 ``False`` —— 此时可能有活跃的 CUDA 会话还
-        握着内存，再 reset 会让它拿到失效指针（实测见 `utils/memory_release.py`
-        模块 docstring），所以调用方（`ui/mainwindow.py::MainWindow` 的释放内存
-        流程）拿到 ``False`` 就只交回工作集、不销毁上下文。**卸载本身没清掉多少
-        内存**（实测 1503MB 只掉 0~75MB），真还靠后面两步。
+        返回"是否卸干净"：正常卸载（含"本来就没载东西"）为 ``True``；卸载过程抛
+        异常为 ``False``——调用方（`ui/mainwindow.py::MainWindow` 的释放内存流程）
+        据此把结果提示降级成 warning，后续的交回工作集照常走。**卸载本身没清掉多少
+        内存**（实测 1503MB 只掉 0~75MB），大头在交回工作集那一步。
         """
         try:
             unload_modules(self, {"textdetector", "inpainter", "ocr", "translator"})
@@ -1906,12 +1486,8 @@ class ModuleManager(QObject):
         if translator is None:
             translator = cfg_module.translator
         cls = TRANSLATORS.get(translator)
-        if cls and not _ensure_module_deps(cls, self.parent()):
-            if self.translator is not None:
-                self.config_panel.trans_config_panel.setModule(
-                    self.translator.name
-                )
-            return
+        if cls:
+            _ensure_module_deps("translator", translator)
         if self.translate_thread.isRunning():
             LOGGER.warning("Terminating a running translation thread.")
             self.translate_thread.terminate()
@@ -1945,12 +1521,8 @@ class ModuleManager(QObject):
 
     def _start_set_inpainter(self, inpainter: str):
         cls = INPAINTERS.get(inpainter)
-        if cls and not _ensure_module_deps(cls, self.parent()):
-            if self.inpainter is not None:
-                self.config_panel.inpaint_config_panel.setModule(
-                    self.inpainter.name
-                )
-            return
+        if cls:
+            _ensure_module_deps("inpainter", inpainter)
         self.prepare_msgbox.updateTaskProgress(
             0, self.tr("Preparing module: {module}...").format(module=inpainter)
         )
@@ -1996,12 +1568,8 @@ class ModuleManager(QObject):
         if textdetector is None:
             textdetector = cfg_module.textdetector
         cls = TEXTDETECTORS.get(textdetector)
-        if cls and not _ensure_module_deps(cls, self.parent()):
-            if self.textdetector is not None:
-                self.config_panel.detect_config_panel.setModule(
-                    self.textdetector.name
-                )
-            return
+        if cls:
+            _ensure_module_deps("textdetector", textdetector)
         # Refresh param widget after dep install so dynamic model lists
         # (e.g. ysgyolo's CKPT_LIST) are picked up.
         self._refresh_module_widget(
@@ -2020,10 +1588,8 @@ class ModuleManager(QObject):
         if ocr is None:
             ocr = cfg_module.ocr
         cls = OCR.get(ocr)
-        if cls and not _ensure_module_deps(cls, self.parent()):
-            if self.ocr is not None:
-                self.config_panel.ocr_config_panel.setModule(self.ocr.name)
-            return
+        if cls:
+            _ensure_module_deps("ocr", ocr)
         if self.ocr_thread.isRunning():
             LOGGER.warning("Terminating a running OCR thread.")
             self.ocr_thread.terminate()

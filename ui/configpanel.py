@@ -1308,11 +1308,14 @@ class ConfigPanel(Widget):
 
     save_config = Signal()
     unload_models = Signal()
-    # 手动释放内存（卸载模型 + 销毁 CUDA 上下文 + 交回工作集，见
-    # utils/memory_release.py）：接线在 ui/mainwindow.py，因为它还要挡掉
-    # "还有后台 CUDA 活在跑"的状态。
+    # 「模型文件」节删除权重前请求卸载对应阶段的模型（接线在 ui/module_manager.py）
+    model_unload_requested = Signal(str)
+    # 「模型文件」节改变了装载状态（下载完成 / 删除）——主窗据此重刷选择器警示色
+    model_files_changed = Signal()
+    # 手动释放内存（卸载模型 + 交回工作集，见 utils/memory_release.py；销毁 CUDA
+    # 上下文那一步已删除）：接线在 ui/mainwindow.py，因为它还要挡掉"还有后台活在
+    # 跑"的状态。
     release_memory = Signal()
-    reload_textstyle = Signal(bool)
     font_exclusion_changed = Signal()
     profiles_changed = Signal()
     shortcuts_changed = Signal()
@@ -1407,9 +1410,9 @@ class ConfigPanel(Widget):
             )
         )
 
-        # 「释放内存」比上面那个按钮多两步：销毁 CUDA 上下文（真还 ~200MB）与把
-        # 工作集交回系统（实测 1503MB → 111MB）。点击后由 ui/mainwindow.py 弹确认
-        # 提示（要写清"接下来会怎样"），此处只发信号。
+        # 「释放内存」比上面那个按钮多把工作集交回系统（实测 1503MB → 111MB，才是
+        # 大头；卸载本身只掉 0~75MB）。点击后由 ui/mainwindow.py 弹确认提示（要写清
+        # "接下来会怎样"），此处只发信号。
         release_btn = QPushButton(self.tr("Release memory"))
         release_btn.setObjectName("ConfigButton")
         release_btn.clicked.connect(self.release_memory)
@@ -1417,7 +1420,7 @@ class ConfigPanel(Widget):
             ConfigFormRow(
                 self.tr("Release memory"),
                 release_btn,
-                note=self.tr("<p>For the memory that stays after a pipeline run: unloads all models, destroys the CUDA context and hands the working set back to Windows. The next run reloads models and rebuilds the session, so it is a few seconds slower.</p>"),
+                note=self.tr("<p>For the memory that stays after a pipeline run: unloads all models and hands the working set back to Windows. The next run reloads models, so it is a few seconds slower.</p>"),
             )
         )
 
@@ -1431,6 +1434,18 @@ class ConfigPanel(Widget):
                 note=self.tr("<p>Configure network proxies, mirror servers, and download sources. Useful for systems behind <b>firewalls</b> or in restricted environments.</p>"),
             )
         )
+
+        # -- Model Files section --
+        # 权重文件的获取/总览/释放。落点排在 Model Loading / Management 之后：
+        # 前两节是「怎么载」与「怎么放」，这一节是「从哪来、占多大、怎么卸」。
+        from ui.model_files_panel import ModelFilesSection
+
+        self.model_files_section = ModelFilesSection()
+        self.model_files_section.unload_requested.connect(
+            self.model_unload_requested.emit
+        )
+        self.model_files_section.changed.connect(self.model_files_changed.emit)
+        models_vlayout.addWidget(self.model_files_section)
 
         # Register Models as its own page
         self._add_page(models_group)
@@ -1747,20 +1762,6 @@ class ConfigPanel(Widget):
                 "",
                 self.stroke_auto_follow_checker,
                 note=self.tr("<p>When you add a stroke to a text block, its color starts as the <b>inverse</b> of the block's font color (black text gets a white stroke, white text gets a black stroke). After that the stroke color is a manual value and no longer follows later font-color changes. Disable to start new strokes with the default black.</p>"),
-            )
-        )
-
-        self.let_textstyle_indep_checker = ConfigCheckBox(
-            self.tr("Independent text styles for each projects")
-        )
-        self.let_textstyle_indep_checker.stateChanged.connect(
-            self.on_textstyle_indep_changed
-        )
-        ts_layout.addWidget(
-            ConfigFormRow(
-                "",
-                self.let_textstyle_indep_checker,
-                note=self.tr("<p>When enabled, each project maintains its own <b>text style settings</b> independently instead of using shared global styles.</p>"),
             )
         )
 
@@ -2643,13 +2644,13 @@ class ConfigPanel(Widget):
 
         if export_config(savep, exclude_api_keys=exclude_keys):
             create_info_dialog(
-                self.tr("Configuration exported to ") + savep
+                self.tr("Configuration exported to ") + savep, parent=self
             )
         else:
-            create_error_dialog(
-                self.tr("Failed to export configuration"),
-                parent=self,
-            )
+            # create_error_dialog 的第一个参数是**异常对象**（error_msg 缺省时才用它做正文），
+            # 接受不了 parent（错误对话框是全局通道，见 utils/mainwindow 的 on_create_errdialog）。
+            # 旧写法传的是字符串 + parent= ，两个参数都不对 → 槽里抛 TypeError，PyQt6 会让整个应用退出。
+            create_error_dialog(RuntimeError(self.tr("Failed to export configuration")))
 
     def on_import_config(self):
         """Import configuration from a JSON file and merge into pcfg."""
@@ -2664,10 +2665,8 @@ class ConfigPanel(Widget):
 
         result = import_config(p)
         if not result["success"]:
-            create_error_dialog(
-                self.tr("Failed to import configuration"),
-                parent=self,
-            )
+            # 同上：create_error_dialog 收异常对象、不收 parent
+            create_error_dialog(RuntimeError(self.tr("Failed to import configuration")))
             return
 
         # Build summary message
@@ -2924,10 +2923,6 @@ class ConfigPanel(Widget):
 
     def on_stroke_auto_follow_changed(self):
         pcfg.stroke_auto_follow = self.stroke_auto_follow_checker.isChecked()
-
-    def on_textstyle_indep_changed(self):
-        pcfg.let_textstyle_indep_flag = self.let_textstyle_indep_checker.isChecked()
-        self.reload_textstyle.emit(pcfg.let_textstyle_indep_flag)
 
     def on_exclude_fonts_clicked(self):
         dialog = FontExcludeDialog(self)
@@ -3280,7 +3275,6 @@ class ConfigPanel(Widget):
         self.let_uppercase_checker.setChecked(pcfg.let_uppercase_flag)
         self.auto_squeeze_checker.setChecked(pcfg.auto_squeeze_after_run)
         self.stroke_auto_follow_checker.setChecked(pcfg.stroke_auto_follow)
-        self.let_textstyle_indep_checker.setChecked(pcfg.let_textstyle_indep_flag)
         self.rst_imgformat_combobox.setCurrentText(
             pcfg.imgsave_ext.replace(".", "").upper()
         )

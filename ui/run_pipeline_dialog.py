@@ -759,6 +759,15 @@ class RunPipelineDialog(QDialog):
                 activator.set_module(module_name)
                 return
 
+    def refresh_module_selector_status(self) -> None:
+        """重刷各阶段模块下拉的缺文件警示色。
+
+        构造时已标记过一次；设置页「模型文件」节下载完成／删除权重后，
+        主窗会再调一次——这期间磁盘状态可能已经变了。
+        """
+        for activator in self._stage_activators.values():
+            mark_module_selector_status(activator.selector, activator.module_type)
+
     def set_translator_metadata(
         self, lang_source, lang_target, supported_src_list, supported_tgt_list
     ) -> None:

@@ -1075,13 +1075,26 @@ OpenBtn {
 
 }
 
-OpenBtn::hover {
-    image: url(icons/openbtn_activate.svg);
-    background-color: @accentPrimary35;
+/* OpenBtn 是「点击弹出菜单」钮，不是开关：hover 只描 1px 圆角边——不填充、
+   不换图标，与左栏/底栏开关的激活态（强调色染底 + activate 图标）明确区分。
+   同形会让人把它误读成「这个功能已开启」，也会让关掉菜单后仍停在图标上的
+   光标看起来像按钮还亮着（2026-09-20 用户报告）。描边语言沿用窄栏启动钮
+   ui/panel_rail.py::RailLauncherButton 的 hover 约定。
+   1px 边框吃掉的 1px 四周垫距补回 padding，图标尺寸与位置不跳。 */
+OpenBtn:hover {
+    background-color: transparent;
+    border: 1px solid @borderColor;
+    padding: 2px;
 }
 
-OpenBtn::pressed {
+/* 菜单展开期间（ui/mainwindowbars.py::OpenBtn 起落的动态属性 menuOpen）：
+   瞬时切激活图标 + 强调染底，作为「菜单正开着、锚点在这」的定位反馈；
+   收起菜单即由代码清属性恢复常态。 */
+OpenBtn[menuOpen="true"] {
     image: url(icons/openbtn_activate.svg);
+    background-color: @accentPrimary35;
+    border-style: none;
+    padding: 3px;
 }
 
 ShowPageListChecker::indicator{
@@ -2439,6 +2452,29 @@ QTextEdit#WorkbenchLogView {
     border: none;
     border-radius: 0px;
     padding: 2px 0px;
+}
+
+/* ── 设置页 Models →「模型文件」节（ui/model_files_panel.py）─────
+   列表复用工作台那张自绘表（RowTable 卡片模式）——底色/选中染底/勾选框/徽章
+   全在 delegate 里画，这里只抹掉 QTableView 自带背景与边框；objectName 是
+   该表自己的，不与工作台共用（RowTable 的样式按 objectName 匹配）。 */
+RowTable#ModelFilesTable {
+    background: transparent;
+    border: none;
+}
+/* 说明行与底部状态条的读数：小字、次要色，不跟模型名抢注意力 */
+QLabel#ModelFilesHint {
+    font-size: 11px;
+    color: @disabledForegroundColor;
+}
+/* 底部状态条：顶边一条分隔线把它与列表分开（同工作台状态条） */
+QWidget#ModelFilesStatusBar {
+    background: @emptyContentBackgroundColor;
+    border-top: 1px solid @borderColor;
+}
+/* 下载是这一节的主操作 */
+QPushButton#ModelFilesPrimaryButton {
+    font-weight: bold;
 }
 
 /* ── Update release dialog ─────────────────────────────────── */

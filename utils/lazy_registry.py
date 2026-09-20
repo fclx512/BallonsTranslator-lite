@@ -24,6 +24,23 @@ from utils.registry import ModuleSpec
 
 UNKNOWN = object()
 
+# 惰性扫描会提取的类属性白名单。只往里加「UI 需要在导入模块体之前就读到」
+# 的元数据：params / 下载清单 / 依赖 / 后台下载声明 / 包描述。
+# 加新名字时务必同步 utils/registry.py::ModuleSpec 与
+# Registry.get_spec 的回落构造，否则非惰性路径读不到。
+LAZY_CLASS_ATTRS = frozenset(
+    {
+        "params",
+        "download_file_list",
+        "download_file_on_load",
+        "background_download_only",
+        "model_package",
+        "requires_packages",
+        "dependencies",
+        "requires_gpu",
+    }
+)
+
 # Project root — used to convert file paths to dotted module names.
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 
@@ -402,19 +419,9 @@ def _collect_class_attrs(
                 value = evaluator.eval(value_node)
                 if value is not UNKNOWN:
                     class_env[name] = value
-                    if name in {
-                        "params",
-                        "download_file_list",
-                        "download_file_on_load",
-                        "dependencies",
-                    }:
+                    if name in LAZY_CLASS_ATTRS:
                         attrs[name] = value
-                elif name in {
-                    "params",
-                    "download_file_list",
-                    "download_file_on_load",
-                    "dependencies",
-                }:
+                elif name in LAZY_CLASS_ATTRS:
                     warnings.append(
                         f"{class_node.name}.{name} could not be evaluated lazily"
                     )
@@ -431,9 +438,6 @@ def _collect_class_attrs(
     walk(class_node.body)
     if warnings:
         attrs["__metadata_warnings"] = warnings
-    return attrs
-
-    walk(class_node.body)
     return attrs
 
 
@@ -647,7 +651,13 @@ def _scan_file(path: str, module_type: str) -> List[ModuleSpec]:
                         params=attrs.get("params"),
                         download_file_list=attrs.get("download_file_list"),
                         download_file_on_load=attrs.get("download_file_on_load", False),
+                        background_download_only=attrs.get(
+                            "background_download_only", False
+                        ),
+                        model_package=deepcopy(attrs.get("model_package")),
+                        requires_packages=deepcopy(attrs.get("requires_packages", [])),
                         dependencies=deepcopy(attrs.get("dependencies", [])),
+                        requires_gpu=bool(attrs.get("requires_gpu", False)),
                         supported_src_list=src,
                         supported_tgt_list=tgt,
                         metadata_warnings=metadata_warnings,

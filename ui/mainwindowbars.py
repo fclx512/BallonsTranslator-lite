@@ -48,6 +48,11 @@ class OpenBtn(QToolButton):
     箭头位，把 QSS image 挤离按钮中心，且 QSS 归零 width/height/image
     均无法收回该保留区），改为自持菜单、点击时手动弹出，按钮内无
     箭头保留区，图标原生居中。
+
+    它**不是开关**，视觉语言必须与左栏其余开关（勾选态＝强调色染底 +
+    activate 图标）区分：hover 由 QSS 描边承担（见 config/stylesheet.css
+    的 OpenBtn:hover），只有「菜单正开着」才染底，展开态经动态属性
+    ``menuOpen`` 交给 QSS 的 ``OpenBtn[menuOpen="true"]``。
     """
 
     def __init__(self, *args, **kwargs) -> None:
@@ -57,9 +62,27 @@ class OpenBtn(QToolButton):
     def assignMenu(self, menu: QMenu) -> None:
         self._menu = menu
 
+    def _set_menu_open(self, open_: bool) -> None:
+        """菜单展开态起落；清属性必须 repolish，否则染底留在按钮上。
+
+        QSS 属性选择器只在重新 polish 时重算——这正是「菜单都收了、图标
+        还亮着」的成因（2026-09-20 用户报告）。
+        """
+        if bool(self.property("menuOpen")) == open_:
+            return
+        self.setProperty("menuOpen", open_)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
+
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.MouseButton.LeftButton and self._menu is not None:
-            self._menu.exec(self.mapToGlobal(self.rect().bottomLeft()))
+            self._set_menu_open(True)
+            try:
+                self._menu.exec(self.mapToGlobal(self.rect().bottomLeft()))
+            finally:
+                # 正常收起、Esc 取消、异常退出都必须落回常态
+                self._set_menu_open(False)
             return
         super().mousePressEvent(event)
 

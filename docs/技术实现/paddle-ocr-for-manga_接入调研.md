@@ -1,6 +1,15 @@
 # paddle-ocr-for-manga 接入调研
 
-> 调研日期 2026-09-19。应用户「添加 paddle-ocr-for-manga 模型支持」需求做的预研。**本机无 CUDA 环境，未做任何实测**，所有性能数字均为估算或官方数据；部署与验证在配置齐全的主力机上进行。
+> 调研日期 2026-09-19。应用户「添加 paddle-ocr-for-manga 模型支持」需求做的预研。
+> 撰写时本机无 CUDA 环境、未做实测，性能数字均为估算或官方数据。
+>
+> **更正与落地情况（2026-09-20 实测补记）**：撰写时对「本机」的判断已过时——**这台机器现在
+> 就是环境就绪的主力机**：torch `2.13.0+cu132`、`torch.cuda.is_available()` 为真、
+> GPU 为 RTX 5070 Ti Laptop（11.9GB、CC 12.0、**原生支持 bf16**）。故下文 §3 的 torch 行、
+> §5 部署清单第 1 步、§6 风险 8 均已不适用（原文保留，逐处加了更正标注）。
+> 模块已按本文与 `docs/技术实现/模型文件管理_设计方案.md` 落地为
+> `modules/ocr/ocr_vl_manga.py`；**2026-09-20 已端到端跑通实测，性能/显存/整页形态的数字
+> 回填在 §3**（复算工具见 `docs/技术实现/模型文件管理_测试流程.md` 第 4 层）。
 
 ## 0. 结论先行
 
@@ -25,6 +34,8 @@
 
 HF 权重仓库是自包含的：config + auto_map 自定义代码（modeling / processing / image_processing / configuration 四个 py 文件）+ tokenizer + chat template + processor 配置，共 15 个文件，加载时只需 `trust_remote_code=True` 指向本地目录，不需要联网、不需要基座仓库。
 
+**它不是「检测 + 识别二合一」，只做识别。** 权重仓库 README 把版面分析交给另一个模型（PP-DocLayoutV2），并特意注明「漫画的阅读顺序与版面很不一样」；作者教程也写明 Best Use Case 是 **manga text crops (individual text bubbles/regions, not full pages)**。2026-09-20 本机实测印证：块数最多的一页有 27 个文本块，整页一次喂只出 11 行、且**输出不带任何坐标**——即便它能认对一部分，也无从把文本填回各自的框里。所以**检测必须由本项目自己的检测器提供**（§4 的对接方案就是按这个前提写的：只换识别器，继续用自己的检测器）。
+
 ## 2. 推理契约与关键参数
 
 调用形态（官方示例与 demo 一致）：把 crop 转 RGB 后与 prompt `OCR:` 组成 chat message，`processor.apply_chat_template` + `processor(...)` 出张量，`model.generate` 贪心解码，`batch_decode` 取新增 token 即识别文本。
@@ -43,31 +54,49 @@ HF 权重仓库是自包含的：config + auto_map 自定义代码（modeling / 
 ## 3. 依赖与资源开销
 
 对照本机自带环境实测（ballontrans_pylibs_win，python 3.12.4）：torch 2.12.1+**cpu**、transformers **未安装**、einops 0.8.2 已有、Pillow 10.4 已有、numpy 2.5.0 已有。
+（2026-09-20 更正：torch 现为 `2.13.0+cu132` 且 CUDA 可用，见文首的更正段。）
 
 | 依赖 | 要求 | 说明 |
 | --- | --- | --- |
-| torch | **CUDA 12.x 构建** | 轮子自带 CUDA 运行时 DLL，只要求 NVIDIA 驱动；本项目 onnxruntime-gpu 路径本就借 torch lib 目录的 CUDA 12 DLL（见 modules/ocr/ocr_onnx.py::PaddleOCRv6ONNX 的 `_ensure_cuda_dll_path`），主力机若已在用 GPU 检测/修复，说明 torch 已是 CUDA 版，**无需再动** |
+| torch | **CUDA 12.x 构建** | 轮子自带 CUDA 运行时 DLL，只要求 NVIDIA 驱动；本项目 onnxruntime-gpu 路径本就借 torch lib 目录的 CUDA 12 DLL（见 modules/ocr/ocr_onnx.py::PaddleOCRv6ONNX 的 `_ensure_cuda_dll_path`），主力机若已在用 GPU 检测/修复，说明 torch 已是 CUDA 版，**无需再动**（2026-09-20 实测：本机已满足） |
 | torchvision | 与 torch 同源同版 | 仅当主力机在用 ysgyolo/ultralytics 检测器时需要，重装 torch 时必须连带 |
 | transformers | >=4.57.1, <5 | config 声明 transformers_version 4.57.1；远端代码用到 GradientCheckpointingLayer、check_model_inputs 等 4.56+ API。安装连带 tokenizers / safetensors / huggingface-hub |
 | accelerate | 仅 `device_map="auto"` 需要 | 用 `.to(device)` 加载则不需要 |
 | flash-attn | 不装 | 见 §2 |
 
-显存估算：权重 1.92GB + CUDA 上下文约 0.3～0.5GB + 激活与 KV cache（KV 极小：18 层 × 2 KV 头 × 128 维）≈ **峰值 3GB 上下**。显存 ≥6GB 可跑；与检测/修复模型共存建议 ≥8GB，或配合设置页「释放内存」分阶段用。
+显存与速度（**已实测**，2026-09-20，RTX 5070 Ti Laptop 11.9GB / torch 2.13.0+cu132 / bf16 / sdpa，`scripts/probes/ocr_vl_manga_accept.py`）：
 
-速度估算（**全部待主力机实测**）：每块自回归解码约 20～60 token，30 系卡估 0.3～1.5s/块；一页 10～40 块即 **10～60s/页**。CPU 推理不实用（估 10s+/块），本模块应按 GPU-only 对待，device 缺省即 cuda。
+| 项 | 实测 |
+| --- | --- |
+| 加载耗时 | **3.8s**（本地目录、无联网） |
+| 加载后显存 | allocated **1.80GB** / reserved 1.83GB |
+| 峰值显存 | allocated **2.51GB** / reserved 3.22GB（12 块 + 一次整页） |
+| 单块耗时 | 中位 **192ms**，最快 86ms，最慢 310ms；首块约 0.9s（预热） |
+| 一页估算 | 该页 27 块 ⇒ **约 6s/页**（0.9s 预热 + 26 × 0.19s） |
+
+原先「峰值 3GB 上下」的估算与实际相符（2.5GB）；但**「比 onnx 系慢约两个数量级」的估算偏悲观**——实测每块不到 0.2s，与 onnx 系同页差距在一个数量级以内，小气泡占多数的页面甚至更快。一个反直觉的耗因：processor 会把小 crop **放大到 `min_pixels = 147384`（≈384×384）** 再编码，所以几十像素的拟声词小框并不比整气泡便宜多少。
+
+CPU 推理仍不实用，本模块按 GPU-only 对待，device 缺省即 cuda。
+
+**依赖上的一个坑（2026-09-20 实测）**：**不需要 sentencepiece**。仓库 `tokenizer_config.json` 写的是 `tokenizer_class: LlamaTokenizer` ＋ `add_prefix_space: false`，这个组合会让 transformers 的 `LlamaTokenizerFast` 覆写 `from_slow=True`、绕开仓库自带的 `tokenizer.json` 去构造 slow 版；缺 sentencepiece 就报 `Cannot instantiate this tokenizer from a slow version`（**用户跑管线时遇到的「OCR 失败」就是这个**）。而 `tokenizer.json` 的 `pre_tokenizer` 为空、两条路径 token id 逐条一致，所以正确做法是加载时显式传 `add_prefix_space=None` 抑制 `from_slow`，不必引入 sentencepiece。复算：`scripts/probes/ocr_vl_tokenizer.py`。
 
 ## 4. 与本项目模块系统的对接方案（供实现阶段参考）
 
 新增识别-only OCR 模块（建议注册名 `paddleocr_vl_manga`，文件放 modules/ocr/ 下按 ocr_ 前缀命名规范），继承 modules/ocr/base.py::OCRBase，形态完全参照 modules/ocr/ocr_onnx.py::PaddleOCRv6ONNX：
 
 - **整块裁剪，不逐行**：VL 模型在 Manga109-s 的整块文本区域 crop 上训练，块内多行/多列一起喂才能借到模型自己的阅读顺序。取块内所有 lines 点集的 union 外接四边形，用 onnxocr.utils.get_rotate_crop_image 做透视校正。**不要**用 utils/textblock.py::TextBlock.get_transformed_region——那是渲染用的，会把竖排旋转成横排；竖排 crop 必须保持原始朝向。
+  （2026-09-20 落地更正：**没用** `onnxocr` 的裁剪函数——本模块只声明 `transformers`，引入它会多一个未声明的依赖。改为 `utils/block_geometry.py::poly_bands` 取顶点集的轴对齐外接范围后直接切片：训练 crop 本就是轴对齐外接框，切片无重采样，还省掉网点插值失真。）
 - 批量：整页所有块拼一个 batch 一次 generate。需把 processor.tokenizer 的 padding_side 设为 "left"（生成式批量推理的标配）；**批量左 padding 与该模型 mrope 位置编码的兼容性待实测**，不行就退化为逐块推理（质量不变，只慢些）。
+  （2026-09-20 落地：`padding_side` 已在 `_load_model` 里设好；因兼容性未验证，界面上 `batch_size` 缺省 1。）
 - 输出：按换行 split 后写入 blk.text（List[str]），与现有 OCR 契约一致；`ocr_img` 整图模式照 ocr_onnx 先例拒绝实现。
 - 置信度标签：生成式无分数，utils/block_tags.py::apply_ocr_confidence_tag 无从挂起——「OCR 置信度低」自动标签在本模块下不生效。后续可用输出 token 平均 logprob 造伪分数，另行评估。
 - 模块机制全部现成，无需新造：
   - `requires_packages = ["transformers>=4.57.1,<5"]` → modules/base.py::BaseModule.ensure_dependencies 在首次 load_model 时自动安装（torch CUDA 版换装无法自动化，见 §5 第 1 步）。
+    （2026-09-20 落地更正：改为**选中模块即起后台任务**安装，不再走加载期同步安装——1.9GB 权重同步下会冻住界面，见 `docs/技术实现/模型文件管理_设计方案.md` §5。）
   - `download_file_list` + modules/base.py::BaseModule._ensure_model_files 支持首次加载自动下载 15 个文件到 data/models/paddleocr_vl_manga/；注意 utils/download_util.py::download_and_check_files 默认走 torch_hub 下载，HF 直连在国内网络经常超时（本机实测直连超时、hf-mirror.com 可达），实现时要验证/给镜像方案，也允许用户手动放置。
+    （2026-09-20 落地更正：镜像**已内建**，无需新造——`utils/download_util.py::download_url_to_file` 会调 `utils/mirror.py::maybe_mirror_url`，设置页「网络与镜像设置」也有一键国内镜像。手工放置的入口＝设置页 Models →「模型文件」的「打开目录」＋期望清单。该模块**不在加载期下载**（`background_download_only`）。）
   - device 参数用 modules/base.py::DEVICE_SELECTOR；`_load_model_keys = {"model", "processor"}`；unload_model 置 None 即可。
+    （2026-09-20 落地：`_resolve_device` 额外兜了「配置里存着 cuda 但当前环境不可用」——降级到 CPU 并告警，而不是直接抛。）
   - params 的 description 自动进 i18n 提取链（scripts/i18n_common.py::extract_param_descriptions）。
 - UI 定位：与 paddleocr_v6_onnx（通用、快）、mit 系并列的日文漫画质量优先选项；默认检测器、默认 OCR 均不变。
 
@@ -76,7 +105,9 @@ HF 权重仓库是自包含的：config + auto_map 自定义代码（modeling / 
 前置：NVIDIA 驱动足够新（CUDA 12.x 轮子一般要求 ≥ 550 一档）；**不需要**安装 CUDA Toolkit 与 cuDNN。
 
 1. **核对 torch 构建**：`ballontrans_pylibs_win\python.exe -c "import torch; print(torch.__version__, torch.cuda.is_available())"`。版本号带 `+cpu` 才需要换装：先看 site-packages 里是否已装 torchvision（ultralytics 检测器依赖它），随后 `python.exe -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126` 一次性覆盖安装（cu126/cu128 按驱动选，版本与原 torch 大版本保持同档）。已是 CUDA 版则跳过。
+   （2026-09-20 更正：**本机实测已是 `2.13.0+cu132` 且 `cuda.is_available()` 为真，这一步无需执行**。）
 2. **装 transformers**：`python.exe -m pip install "transformers>=4.57.1,<5"`。
+   （2026-09-20 落地后：模块声明了 `requires_packages = ["transformers>=4.57.1,<5"]`，在应用里选中该模块即会**后台自动安装**，不必手工执行；本节保留作离线/排障用。）
 3. **下载权重**到项目 data/models/paddleocr_vl_manga/（目录名与将来模块实现保持一致）：
    - 命令行（推荐）：`set HF_ENDPOINT=https://hf-mirror.com` 后执行 `ballontrans_pylibs_win\python.exe -c "from huggingface_hub import snapshot_download; snapshot_download('jzhang533/PaddleOCR-VL-For-Manga', local_dir='data/models/paddleocr_vl_manga')"`（transformers 装好后 huggingface_hub 即可用）。
    - 或浏览器从镜像页逐文件下载（15 个文件，仅 safetensors 约 1.9GB 大）。
@@ -94,7 +125,8 @@ HF 权重仓库是自包含的：config + auto_map 自定义代码（modeling / 
        attn_implementation="sdpa",
    ).to("cuda").eval()
    processor = AutoProcessor.from_pretrained(
-       "data/models/paddleocr_vl_manga", trust_remote_code=True, use_fast=True
+       "data/models/paddleocr_vl_manga", trust_remote_code=True, use_fast=True,
+       add_prefix_space=None,   # 不可省：否则缺 sentencepiece 直接抛 ValueError（§3）
    )
 
    img = Image.open("examples/02.png").convert("RGB")
@@ -113,22 +145,26 @@ HF 权重仓库是自包含的：config + auto_map 自定义代码（modeling / 
    print(ans)
    ```
 
-   （示例图可直接用训练仓库 data/images 下的样例；老卡把 bfloat16 换 float16。）
+   （示例图可直接用训练仓库 data/images 下的样例；老卡把 bfloat16 换 float16。
+   `add_prefix_space=None` 的理由与实测见 §3；端到端一把跑完的版本是
+   `scripts/probes/ocr_vl_manga_accept.py`。）
 5. **应用内验收**：实现模块后选 `paddleocr_vl_manga` + device=cuda 跑一页，与 paddleocr_v6_onnx 的原文结果对比；重点看竖排块、拟声词、密集旁白。
 
-## 6. 风险与待验证项（本机无法验证，全部待主力机）
+## 6. 风险与待验证项
 
 | # | 项 | 说明 |
 | --- | --- | --- |
-| 1 | 实际速度/显存 | §3 全为估算，先跑 §5 自测脚本量 |
-| 2 | 竖排识别质量 | 训练数据含竖排（Manga109-s），理论上没问题，需真机确认 |
+| 1 | 实际速度/显存 | ✅ **已实测**（2026-09-20，§3）：加载 3.8s、峰值 2.51GB、单块中位 192ms、约 6s/页；原文的「慢两个数量级」估算偏悲观 |
+| 2 | 竖排识别质量 | 训练数据含竖排（Manga109-s），理论上没问题。2026-09-20 抽验那一页没有竖排块，**这一项仍需人看** |
 | 3 | 全半角/部首变体误差 | 官方自述的主要误差类型（§2）。可评估：喂翻译前做 NFKC 归一化（注意会连带全角字母数字转半角），或交给 LLM 翻译器自行消化——倾向后者，先不动 |
-| 4 | 批量左 padding | 与 mrope 的兼容性待实测（§4） |
-| 5 | HF 下载可达性 | 直连超时、镜像可用（本机实测）；自动下载链路同样要考虑镜像 |
-| 6 | transformers 版本漂移 | 必须 pin `>=4.57.1,<5`；transformers 5.x 移除 trust_remote_code 相关行为的风险需重审 |
-| 7 | use_cache 陷阱 | 忘传 True 慢数倍（§2），写进模块实现 |
-| 8 | 老 GPU | Pre-Ampere（20 系及更早）不支持 bf16 → 用 float16 |
-| 9 | 同进程双框架？ | 本路线只有 torch 一个运行时，无 paddle 共存问题；但注意与 onnxruntime CUDA 会话并存时的显存峰值 |
+| 4 | 批量左 padding | 与 mrope 的兼容性待实测（§4）。**落地时因此把 `batch_size` 默认设为 1**（逐块），要试批量得显式调大并逐块比对结果 |
+| 5 | HF 下载可达性 | 直连超时、镜像可用（本机实测）；自动下载链路同样要考虑镜像（**已内建**：`utils/download_util.py::download_url_to_file` 会走 `utils/mirror.py::maybe_mirror_url`，设置页也有一键国内镜像） |
+| 6 | transformers 版本漂移 | 必须 pin `>=4.57.1,<5`；transformers 5.x 移除 trust_remote_code 相关行为的风险需重审。**另加一条**：`add_prefix_space` 触发的 slow 路径依赖 transformers 内部行为，升级后要重跑 S3 那行 processor 加载 |
+| 7 | use_cache 陷阱 | 忘传 True 慢数倍（§2），写进模块实现（`modules/ocr/ocr_vl_manga.py::PaddleOCRVLManga` 已显式传） |
+| 8 | 老 GPU | Pre-Ampere（20 系及更早）不支持 bf16 → 用 float16（2026-09-20：本机 CC 12.0，原生支持 bf16，按 bf16 走） |
+| 9 | 与 onnxruntime CUDA 会话并存 | 本路线只有 torch 一个运行时，无 paddle 共存问题；本模块峰值仅 2.5GB，与检测/修复会话叠加在 11.9GB 卡上仍有余量（§3 实测） |
+| 10 | 整页模式 | ❌ **实测不可用**（同页 27 块 → 只出 11 行、无坐标）⇒ 检测必须由本项目检测器提供，本模块不能当「二合一」（§1） |
+| 11 | tokenizer 在缺 sentencepiece 时直接崩 | ✅ **已定案**：加载时传 `add_prefix_space=None`（§3）。它修的是「跑管线时 OCR 失败」这个已发生过的故障；权重更新后重跑 `scripts/probes/ocr_vl_tokenizer.py` |
 
 ## 7. 备选路线与放弃理由
 

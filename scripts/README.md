@@ -59,8 +59,7 @@
 |---|---|---|
 | `scripts/check_update.py` | 跨平台 | 启动时检查更新：git 增量 / manifest delta / zip 三种模式（`launch.bat`/`launch.py` 调用） |
 | `scripts/generate_manifest.py` | 跨平台 | 生成 `manifest.json`（全文件 SHA256 清单，供 delta 更新用）。**发版前必须重新生成并随版本提交** |
-| `scripts/download_models.bat` | Windows | 下载模型文件到 `data/models/` |
-| `scripts/download_models.sh` | Linux/macOS | 下载模型 + 编译 PyPatchMatch（`modules/inpaint/patch_match.py` 仍依赖） |
+| `scripts/download_models.sh` | Linux/macOS | 编译 PyPatchMatch（`modules/inpaint/patch_match.py` 仍依赖）。**其中的模型下载段是上游遗留、已与当前模型集合脱节**——权重请在应用内「设置 → Models → 模型文件」获取（见 `docs/技术实现/模型文件管理_设计方案.md`） |
 | `scripts/local_gitpull.bat` | Windows | 使用便携环境执行 `git pull` |
 
 ---

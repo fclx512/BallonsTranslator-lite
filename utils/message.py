@@ -45,9 +45,14 @@ def create_info_dialog(
     modal: bool = False,
     frame_less: bool = False,
     signal_slot_map_list: List[Dict] = None,
+    parent=None,
 ):
     """
-    Popup a info dialog in main thread
+        Popup a info dialog in main thread
+
+    Args:
+        parent: 可选父窗口。挂上后对话框会跟随父窗口居中（``ui/custom_widget`` 的
+            ``MessageBox`` 会把多余关键字透传给 ``QMessageBox``）。缺省不挂。
     """
     LOGGER.info(info_msg)
     if not shared.HEADLESS:
@@ -58,6 +63,7 @@ def create_info_dialog(
                 "modal": modal,
                 "frame_less": frame_less,
                 "signal_slot_map_list": signal_slot_map_list,
+                "parent": parent,
             }
         )
 

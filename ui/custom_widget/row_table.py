@@ -74,6 +74,14 @@ def _luma(color: QColor) -> float:
     )
 
 
+def _derive_small_font(base: QFont, strike: bool = False) -> QFont:
+    """卡片次行/徽章的字体（比正文小半号）。"""
+    font = QFont(base)
+    font.setPointSizeF(max(8.0, base.pointSizeF() - 0.5))
+    font.setStrikeOut(strike)
+    return font
+
+
 def _composite(tint: QColor, base: QColor) -> QColor:
     """半透明染底叠在底色上的实际观感色（对比度要按它算）。"""
     a = tint.alphaF()
@@ -289,9 +297,17 @@ class _RowDelegate(QStyledItemDelegate):
             bool(row.get("checked")),
         )
         text_left = card.left() + _CHECK_SIZE + 24
-        text_right = card.right() - (56 if row.get("badge") else 12)
+        badge = row.get("badge") or ""
+        # 让位宽度按徽章实际文字算：固定值会让长徽章（英文 "Missing package"
+        # 之类）压到主文上
+        reserve = 12
+        if badge:
+            badge_width, _ = self._badge_metrics(painter.font(), badge)
+            reserve = badge_width + 20
+        text_right = card.right() - reserve
         primary = row.get("primary") or ""
-        font = painter.font()
+        base_font = painter.font()  # 徽章按它派生字号（别用下面带删除线的副本）
+        font = QFont(base_font)
         if rejected:
             font.setStrikeOut(True)
         painter.setFont(font)
@@ -309,9 +325,7 @@ class _RowDelegate(QStyledItemDelegate):
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
             self._elided(painter, primary, text_right - text_left),
         )
-        sub_font = QFont(font)
-        sub_font.setPointSizeF(max(8.0, sub_font.pointSizeF() - 0.5))
-        sub_font.setStrikeOut(rejected)
+        sub_font = _derive_small_font(font, rejected)
         painter.setFont(sub_font)
         # 次行（元数据）原用 disabled 灰，落在选中染底上几乎不可见（2026-09-19
         # 实测）：选中时改用反色挑选出的次要色，未选中维持原灰
@@ -324,11 +338,22 @@ class _RowDelegate(QStyledItemDelegate):
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
             self._elided(painter, row.get("meta") or "", text_right - text_left),
         )
-        badge = row.get("badge") or ""
         if badge:
-            self._paint_badge(painter, card, badge, row.get("badge_tone") or "muted")
+            self._paint_badge(
+                painter, card, badge, row.get("badge_tone") or "muted", base_font
+            )
 
-    def _paint_badge(self, painter, card: QRectF, text: str, tone: str):
+    @staticmethod
+    def _badge_metrics(font: QFont, text: str):
+        """徽章尺寸（按 ``font`` 派生的小号字算）。
+
+        卡片主文/meta 的右边界要先按它让位——让位与绘制必须同源度量，
+        否则长徽章（英文 "Missing package" 之类）仍会压到文字上。
+        """
+        metrics = QFontMetrics(_derive_small_font(font))
+        return metrics.horizontalAdvance(text) + 16, metrics.height() + 4
+
+    def _paint_badge(self, painter, card: QRectF, text: str, tone: str, base_font: QFont):
         fg_key = {
             "warning": "@warningColor",
             "accent": "@accentPrimary",
@@ -336,9 +361,8 @@ class _RowDelegate(QStyledItemDelegate):
         fg = self.color(fg_key)
         bg = QColor(fg)
         bg.setAlpha(32 if tone != "muted" else 20)
-        metrics = QFontMetrics(painter.font())
-        width = metrics.horizontalAdvance(text) + 16
-        height = metrics.height() + 4
+        painter.setFont(_derive_small_font(base_font))
+        width, height = self._badge_metrics(base_font, text)
         rect = QRectF(
             card.right() - width - 10,
             card.center().y() - height / 2,
@@ -453,6 +477,10 @@ class RowTable(QTableView):
             _CARD_HEIGHT if mode == MODE_CARD else _ROW_HEIGHT
         )
 
+        # 卡片模式没有表头，`set_header_labels` 不会被调用——不在这里先套一次
+        # 列宽规则，那一列会停在默认宽度，卡片被压成窄条（2026-09-20 实测）
+        self._apply_header_layout()
+
         self.selectionModel().selectionChanged.connect(self._on_selection_changed)
         self.clicked.connect(self._on_clicked)
         self.doubleClicked.connect(self._on_double_clicked)
@@ -484,6 +512,19 @@ class RowTable(QTableView):
     def set_checked(self, row: int, checked: bool) -> None:
         """程序设置勾选（不发 ``checkToggled``）。"""
         self._set_check(row, checked)
+
+    def update_row(self, row: int, fields: dict) -> None:
+        """就地合并某行的字段并重绘该行（不重置模型）。
+
+        高频刷新（下载进度）用 ``set_rows`` 会 ``beginResetModel``：选中被清、
+        滚动位置跳回顶部、每帧重建整表。字段合并没有这些副作用。
+        """
+        if not (0 <= row < len(self._model.rows)):
+            return
+        self._model.rows[row].update(fields)
+        first = self._model.index(row, 0)
+        last = self._model.index(row, max(0, self._model.columnCount() - 1))
+        self._model.dataChanged.emit(first, last)
 
     def current_row(self) -> int:
         index = self.currentIndex()

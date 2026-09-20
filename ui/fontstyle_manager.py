@@ -43,7 +43,6 @@ from qtpy.QtGui import (
     QTextDocument,
 )
 from qtpy.QtWidgets import (
-    QComboBox,
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -51,7 +50,6 @@ from qtpy.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QStyle,
     QStyleOption,
     QStyledItemDelegate,
@@ -62,7 +60,9 @@ from qtpy.QtWidgets import (
 )
 
 from utils import shared
+from utils import global_styles as gstyle_store
 from utils.base_styles import (
+    BaseStyle,
     BaseStyleNode,
     StyleEntry,
     StyleTree,
@@ -227,6 +227,7 @@ class StyleTreeWidget(QTreeWidget):
     """Left panel: base styles → variants, plus an Ungrouped section.
 
     Node payloads (UserRole):
+      {"type": "global",  "name": str}  (global style library entry)
       {"type": "base",    "identity": (family, vertical)}
       {"type": "variant", "identity": (family, vertical), "key": tuple}
       {"type": "sig",     "signature": str}
@@ -247,9 +248,43 @@ class StyleTreeWidget(QTreeWidget):
         self.setItemDelegate(_StyleItemDelegate(self))
         self.currentItemChanged.connect(self._on_current_changed)
 
-    def populate(self, tree: StyleTree):
+    def populate(self, tree: StyleTree, library_styles=None):
         self.blockSignals(True)
         self.clear()
+
+        # ── Global style library section (templates, not project data) ──
+        if library_styles:
+            root = QTreeWidgetItem([self.tr("Global Style Library")])
+            root.setFlags(Qt.ItemFlag.ItemIsEnabled)  # header row, not selectable
+            bold = root.font(0)
+            bold.setBold(True)
+            root.setFont(0, bold)
+            for entry in library_styles:
+                ffmt = entry.fontformat
+                child = QTreeWidgetItem()
+                child.setData(
+                    0, Qt.ItemDataRole.UserRole, {"type": "global", "name": entry.name}
+                )
+                child.setData(
+                    0,
+                    _DISPLAY_ROLE,
+                    {
+                        "two_line": True,
+                        "title": entry.name,
+                        "sub": _base_summary(ffmt),
+                        "count": 0,
+                        "fg": [int(c) for c in ffmt.foreground_color()],
+                        "st": [int(c) for c in ffmt.stroke_color()]
+                        if ffmt.stroke_width > 0
+                        else None,
+                    },
+                )
+                child.setSizeHint(0, QSize(0, 42))
+                child.setToolTip(0, _base_summary(ffmt))
+                root.addChild(child)
+            root.setExpanded(True)
+            self.addTopLevelItem(root)
+
         for node in tree.nodes:
             base = node.base
             item = QTreeWidgetItem()
@@ -303,8 +338,9 @@ class StyleTreeWidget(QTreeWidget):
                     _DISPLAY_ROLE,
                     {
                         "two_line": True,
-                        "title": base.name,
-                        "sub": overrides_summary(var.overrides),
+                        # 行1 = 差异摘要（重复父名无信息量），行2 = 归属说明
+                        "title": overrides_summary(var.overrides),
+                        "sub": base.name,
                         "count": var.count,
                         "fg": [int(c) for c in fg[:3]],
                         "st": [int(c) for c in st[:3]] if st else None,
@@ -367,6 +403,8 @@ class StyleTreeWidget(QTreeWidget):
     def _payload_matches(data: dict, payload: dict) -> bool:
         if data.get("type") != payload.get("type"):
             return False
+        if data["type"] == "global":
+            return data["name"] == payload["name"]
         if data["type"] == "base":
             return data["identity"] == payload["identity"]
         if data["type"] == "variant":
@@ -534,6 +572,7 @@ class StyleDetail(QScrollArea):
     MODE_BASE = "base"
     MODE_VARIANT = "variant"
     MODE_SIG = "sig"
+    MODE_GLOBAL = "global"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -545,6 +584,7 @@ class StyleDetail(QScrollArea):
         self._base_node: BaseStyleNode | None = None
         self._variant: VariantEntry | None = None
         self._entry: StyleEntry | None = None
+        self._lib_style: BaseStyle | None = None
         self._proj = None
         self._scene_manager = None
 
@@ -581,22 +621,12 @@ class StyleDetail(QScrollArea):
 
         self._layout.addWidget(SeparatorWidget())
 
-        # ── Preset apply ─────────────────────────────────────────
-        self._preset_combo = QComboBox()
-        self._preset_combo.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        self._preset_btn = QPushButton(self.tr("Apply Preset"))
-        self._preset_btn.clicked.connect(self._apply_preset)
-        preset_row = QWidget()
-        preset_lay = QHBoxLayout(preset_row)
-        preset_lay.setContentsMargins(0, 1, 0, 1)
-        preset_lay.setSpacing(6)
-        preset_lay.addWidget(self._preset_combo, 1)
-        preset_lay.addWidget(self._preset_btn)
-        self._layout.addWidget(preset_row)
+        # ── Secondary actions — one shared row, buttons shown per mode ──
+        self._actions_row = QWidget()
+        actions_lay = QHBoxLayout(self._actions_row)
+        actions_lay.setContentsMargins(0, 1, 0, 1)
+        actions_lay.setSpacing(6)
 
-        # ── Mode-specific action buttons ─────────────────────────
         self._reset_base_btn = QPushButton(self.tr("Reset to Base"))
         self._reset_base_btn.setToolTip(
             self.tr(
@@ -604,7 +634,7 @@ class StyleDetail(QScrollArea):
             )
         )
         self._reset_base_btn.clicked.connect(self._reset_variant_to_base)
-        self._layout.addWidget(self._reset_base_btn)
+        actions_lay.addWidget(self._reset_base_btn)
 
         self._promote_btn = QPushButton(self.tr("Promote to Base Style"))
         self._promote_btn.setToolTip(
@@ -613,25 +643,37 @@ class StyleDetail(QScrollArea):
             )
         )
         self._promote_btn.clicked.connect(self._promote_to_base)
-        self._layout.addWidget(self._promote_btn)
+        actions_lay.addWidget(self._promote_btn)
 
-        base_actions = QWidget()
-        base_lay = QHBoxLayout(base_actions)
-        base_lay.setContentsMargins(0, 1, 0, 1)
-        base_lay.setSpacing(6)
-        self._save_preset_btn = QPushButton(self.tr("Save as Preset"))
-        self._save_preset_btn.setToolTip(
-            self.tr("Add this base style to the cross-project preset list")
+        self._add_library_btn = QPushButton(self.tr("Add to Library"))
+        self._add_library_btn.setToolTip(
+            self.tr("Save this base style into the global style library")
         )
-        self._save_preset_btn.clicked.connect(self._save_base_as_preset)
+        self._add_library_btn.clicked.connect(self._add_base_to_library)
+        actions_lay.addWidget(self._add_library_btn)
+
         self._delete_base_btn = QPushButton(self.tr("Delete Style"))
         self._delete_base_btn.setToolTip(
             self.tr("Delete this base style; its blocks move to Ungrouped")
         )
         self._delete_base_btn.clicked.connect(self._delete_base_style)
-        base_lay.addWidget(self._save_preset_btn)
-        base_lay.addWidget(self._delete_base_btn)
-        self._layout.addWidget(base_actions)
+        actions_lay.addWidget(self._delete_base_btn)
+
+        self._copy_project_btn = QPushButton(self.tr("Copy to Project"))
+        self._copy_project_btn.setToolTip(
+            self.tr("Create a project base style from this library entry")
+        )
+        self._copy_project_btn.clicked.connect(self._copy_global_to_project)
+        actions_lay.addWidget(self._copy_project_btn)
+
+        self._delete_library_btn = QPushButton(self.tr("Delete from Library"))
+        self._delete_library_btn.setToolTip(
+            self.tr("Remove this entry from the global style library")
+        )
+        self._delete_library_btn.clicked.connect(self._delete_library_style)
+        actions_lay.addWidget(self._delete_library_btn)
+
+        self._layout.addWidget(self._actions_row)
 
         # ── Single Apply button ──────────────────────────────────
         self._apply_all_btn = QPushButton(self.tr("Apply Changes"))
@@ -664,6 +706,7 @@ class StyleDetail(QScrollArea):
         self._base_node = node
         self._variant = None
         self._entry = None
+        self._lib_style = None
         base = node.base
         ffmt = base.fontformat
 
@@ -688,14 +731,17 @@ class StyleDetail(QScrollArea):
         self._name_edit.show()
         self._reset_base_btn.hide()
         self._promote_btn.hide()
-        self._save_preset_btn.show()
+        self._add_library_btn.show()
         self._delete_base_btn.show()
+        self._copy_project_btn.hide()
+        self._delete_library_btn.hide()
 
     def show_variant(self, node: BaseStyleNode, variant: VariantEntry):
         self._mode = self.MODE_VARIANT
         self._base_node = node
         self._variant = variant
         self._entry = None
+        self._lib_style = None
         base = node.base
 
         rep = self._representative_ffmt(variant, base.fontformat)
@@ -714,8 +760,10 @@ class StyleDetail(QScrollArea):
         self._name_edit.hide()
         self._reset_base_btn.show()
         self._promote_btn.hide()
-        self._save_preset_btn.hide()
+        self._add_library_btn.hide()
         self._delete_base_btn.hide()
+        self._copy_project_btn.hide()
+        self._delete_library_btn.hide()
 
     def show_entry(self, entry: StyleEntry):
         """Ungrouped signature entry (legacy view)."""
@@ -723,6 +771,7 @@ class StyleDetail(QScrollArea):
         self._base_node = None
         self._variant = None
         self._entry = entry
+        self._lib_style = None
         ffmt = entry.fontformat
 
         self._header_info.setText(
@@ -739,8 +788,41 @@ class StyleDetail(QScrollArea):
         self._name_edit.hide()
         self._reset_base_btn.hide()
         self._promote_btn.show()
-        self._save_preset_btn.hide()
+        self._add_library_btn.hide()
         self._delete_base_btn.hide()
+        self._copy_project_btn.hide()
+        self._delete_library_btn.hide()
+
+    def show_library_style(self, style: BaseStyle):
+        """Global style library entry: standalone template, no blocks."""
+        self._mode = self.MODE_GLOBAL
+        self._base_node = None
+        self._variant = None
+        self._entry = None
+        self._lib_style = style
+        ffmt = style.fontformat
+
+        self._name_edit.blockSignals(True)
+        self._name_edit.setText(style.name)
+        self._name_edit.blockSignals(False)
+
+        self._header_info.setText(
+            self.tr(
+                "Global style — template only; copy it into the project to apply"
+            )
+        )
+
+        self._panel.set_format(ffmt)
+        self._refresh_preview_and_chips(ffmt)
+        self._block_chips.clear_chips()
+
+        self._name_edit.show()
+        self._reset_base_btn.hide()
+        self._promote_btn.hide()
+        self._add_library_btn.hide()
+        self._delete_base_btn.hide()
+        self._copy_project_btn.show()
+        self._delete_library_btn.show()
 
     def _representative_ffmt(
         self, variant: VariantEntry, fallback: FontFormat
@@ -755,9 +837,6 @@ class StyleDetail(QScrollArea):
     # -- preview & chips ---------------------------------------------------
 
     def _refresh_preview_and_chips(self, ffmt: FontFormat):
-        # Reload preset list so it reflects the latest saved presets
-        self._load_presets()
-
         self._preview_card.set_format(ffmt)
 
         chips: List[Tuple[str, str, str | None]] = [
@@ -895,6 +974,21 @@ class StyleDetail(QScrollArea):
             self._apply_variant()
         elif self._mode == self.MODE_SIG:
             self._apply_sig()
+        elif self._mode == self.MODE_GLOBAL:
+            self._apply_library_entry()
+
+    def _apply_library_entry(self):
+        """Write the edited parameters back into the library entry."""
+        if self._lib_style is None:
+            return
+        if not self._collect_changed():
+            return
+        ffmt = self._lib_style.fontformat
+        self._panel.sync_into(ffmt)
+        # face 为派生显示缓存：family/weight 可被编辑，定型后重算
+        sync_face(ffmt)
+        gstyle_store.save_global_styles()
+        self.styles_changed.emit({"type": "global", "name": self._lib_style.name})
 
     def _apply_base(self):
         """Flatten the *changed* parameters onto every block of the style."""
@@ -1000,112 +1094,106 @@ class StyleDetail(QScrollArea):
             )
         return changes
 
-    # -- preset apply --------------------------------------------------------
-
-    def _load_presets(self):
-        """Reload the preset combo from utils.config.text_styles."""
-        from utils.config import text_styles
-
-        self._preset_combo.blockSignals(True)
-        self._preset_combo.clear()
-        self._preset_combo.addItem(self.tr("(Select a preset)"))
-        for ts in text_styles:
-            name = ts._style_name or self.tr("(unnamed)")
-            self._preset_combo.addItem(name, userData=ts)
-        self._preset_combo.blockSignals(False)
-
-    def _apply_preset(self):
-        if self._proj is None:
-            return
-        idx = self._preset_combo.currentIndex()
-        if idx <= 0:  # 0 is the placeholder "(Select a preset)"
-            return
-        preset_ffmt = self._preset_combo.itemData(idx, Qt.ItemDataRole.UserRole)
-        if preset_ffmt is None:
-            return
-
-        if self._mode == self.MODE_BASE and self._base_node is not None:
-            # Redefine the base style: full flatten of every differing field.
-            base_style = self._base_node.base
-            new_ffmt = preset_ffmt.deepcopy()
-            changed: Dict = {}
-            for k in self._panel.current_values():
-                v = getattr(new_ffmt, k, None)
-                old = getattr(base_style.fontformat, k, None)
-                if v is None:
-                    continue
-                if old is None or quantize_field(k, v) != quantize_field(k, old):
-                    changed[k] = v
-            if not changed:
-                return
-            # Same ordering contract as _apply_base: collect by the old key
-            # before re-keying the style.
-            changes = build_flatten_changes(self._proj, base_style, changed)
-            for k, v in changed.items():
-                setattr(base_style.fontformat, k, copy_value(v))
-            self._apply_ffmt_changes(
-                changes,
-                {"type": "base", "identity": base_style.identity},
-                self.tr("Apply preset style"),
-            )
-            return
-
-        # variant / sig modes: full-parameter replacement (legacy behavior)
-        new_ffmt = preset_ffmt.deepcopy()
-        # face 为派生显示缓存：整包定型后重算（快照之前）
-        sync_face(new_ffmt)
-        if self._mode == self.MODE_VARIANT and self._variant is not None:
-            changes = []
-            for pname, bidx in self._variant.blocks:
-                page = self._proj.pages.get(pname)
-                if page is None or not 0 <= bidx < len(page):
-                    continue
-                blk = page[bidx]
-                changes.append(
-                    {
-                        "pagename": pname,
-                        "block_idx": bidx,
-                        "old_ffmt": blk.fontformat.deepcopy(),
-                        "new_ffmt": new_ffmt.deepcopy(),
-                    }
-                )
-            reselect = (
-                {"type": "base", "identity": (new_ffmt.font_family, bool(new_ffmt.vertical))}
-            )
-        else:
-            changes = self._changes_for_targets(new_ffmt)
-            reselect = (
-                {"type": "base", "identity": (new_ffmt.font_family, bool(new_ffmt.vertical))}
-            )
-        if not changes:
-            return
-        self._apply_ffmt_changes(changes, reselect, self.tr("Apply preset style"))
-
     # -- base style management actions ------------------------------------
 
     def _on_name_edited(self):
+        new_name = self._name_edit.text().strip()
+        if not new_name:
+            return
+        if self._mode == self.MODE_BASE and self._base_node is not None:
+            base = self._base_node.base
+            if new_name != base.name:
+                base.name = new_name
+                self.data_committed.emit()
+                self.styles_changed.emit(
+                    {"type": "base", "identity": base.identity}
+                )
+        elif self._mode == self.MODE_GLOBAL and self._lib_style is not None:
+            entry = self._lib_style
+            if new_name == entry.name:
+                return
+            # 库内名字唯一：冲突时自动加后缀，不打扰
+            entry.name = gstyle_store.unique_name(new_name)
+            gstyle_store.save_global_styles()
+            self.styles_changed.emit({"type": "global", "name": entry.name})
+
+    def _add_base_to_library(self):
+        """Deepcopy the base style into the global library (项目 → 库)."""
         if self._mode != self.MODE_BASE or self._base_node is None:
             return
-        new_name = self._name_edit.text().strip()
         base = self._base_node.base
-        if new_name and new_name != base.name:
-            base.name = new_name
-            self.data_committed.emit()
-            self.styles_changed.emit(
-                {"type": "base", "identity": base.identity}
+        existing = gstyle_store.find_by_name(base.name)
+        reselect = {"type": "global", "name": base.name}
+        if existing is not None:
+            ret = QMessageBox.question(
+                self,
+                self.tr("Add to Library"),
+                self.tr("A library style named “{name}” already exists.\nOverwrite it with this base style?").format(name=base.name),
             )
+            if ret != QMessageBox.StandardButton.Yes:
+                return
+            existing.fontformat = base.fontformat.deepcopy()
+            sync_face(existing.fontformat)
+            gstyle_store.save_global_styles()
+        else:
+            entry = gstyle_store.add_style(base.name, base.fontformat)
+            reselect = {"type": "global", "name": entry.name}
+        self.styles_changed.emit(reselect)
 
-    def _save_base_as_preset(self):
-        """Add the base style to the cross-project preset list."""
-        if self._base_node is None:
+    def _copy_global_to_project(self):
+        """Create a project base style from the library entry (库 → 项目)."""
+        if self._mode != self.MODE_GLOBAL or self._lib_style is None:
             return
-        from utils.config import save_text_styles, text_styles
+        if self._proj is None:
+            return
+        entry = self._lib_style
+        identity = entry.identity
+        existing = next(
+            (bs for bs in self._proj.base_styles if bs.identity == identity),
+            None,
+        )
+        if existing is not None:
+            ret = QMessageBox.question(
+                self,
+                self.tr("Copy to Project"),
+                self.tr("A base style with the same font and orientation already exists in this project: “{name}”.\nOverwrite its parameters with the library style?").format(name=existing.name),
+            )
+            if ret != QMessageBox.StandardButton.Yes:
+                return
+        # 名字与项目内其他样式（不同身份键）冲突时自动加后缀，不打扰
+        taken = {
+            bs.name for bs in self._proj.base_styles if bs is not existing
+        }
+        final_name = entry.name
+        n = 2
+        while final_name in taken:
+            final_name = f"{entry.name} {n}"
+            n += 1
+        if existing is not None:
+            existing.fontformat = entry.fontformat.deepcopy()
+            existing.name = final_name
+            sync_face(existing.fontformat)
+        else:
+            self._proj.base_styles.append(
+                BaseStyle(final_name, entry.fontformat.deepcopy())
+            )
+        self.data_committed.emit()
+        self.styles_changed.emit({"type": "base", "identity": identity})
 
-        ffmt = self._base_node.base.fontformat.deepcopy()
-        ffmt._style_name = self._base_node.base.name
-        text_styles.append(ffmt)
-        save_text_styles()
-        self._load_presets()
+    def _delete_library_style(self):
+        if self._mode != self.MODE_GLOBAL or self._lib_style is None:
+            return
+        entry = self._lib_style
+        ret = QMessageBox.question(
+            self,
+            self.tr("Delete from Library"),
+            self.tr("Delete library style “{name}”?").format(name=entry.name),
+        )
+        if ret != QMessageBox.StandardButton.Yes:
+            return
+        gstyle_store.remove_style(entry)
+        self._lib_style = None
+        self.styles_changed.emit(None)
 
     def _delete_base_style(self):
         if self._base_node is None or self._proj is None:
@@ -1140,7 +1228,6 @@ class StyleDetail(QScrollArea):
                 self.tr("A base style with this font and orientation already exists."),
             )
             return
-        from utils.base_styles import BaseStyle
 
         new_style = BaseStyle(ffmt.font_family, ffmt.deepcopy())
         self._proj.base_styles.append(new_style)
@@ -1179,9 +1266,27 @@ class FontStyleManager(QWidget):
         self._node_map: Dict[tuple, BaseStyleNode] = {}
         self._sig_map: Dict[str, StyleEntry] = {}
 
-        # ── Left: StyleTree ──────────────────────────────────────
+        # ── Left: StyleTree (+ new-library-style action) ─────────
         self.styleTree = StyleTreeWidget()
         self.styleTree.node_selected.connect(self._on_node_selected)
+
+        self._new_style_btn = QPushButton(self.tr("New Style"))
+        self._new_style_btn.setToolTip(
+            self.tr("Create a new style in the global style library")
+        )
+        self._new_style_btn.clicked.connect(self._new_library_style)
+        btn_row = QWidget()
+        btn_lay = QHBoxLayout(btn_row)
+        btn_lay.setContentsMargins(4, 2, 4, 2)
+        btn_lay.addStretch(1)
+        btn_lay.addWidget(self._new_style_btn)
+
+        left_panel = QWidget()
+        left_lay = QVBoxLayout(left_panel)
+        left_lay.setContentsMargins(0, 0, 0, 0)
+        left_lay.setSpacing(2)
+        left_lay.addWidget(self.styleTree, 1)
+        left_lay.addWidget(btn_row)
 
         # ── Right: StyleDetail ───────────────────────────────────
         self.detailContent = StyleDetail()
@@ -1194,10 +1299,10 @@ class FontStyleManager(QWidget):
         hlayout = QHBoxLayout(self)
         hlayout.setContentsMargins(0, 0, 0, 0)
         hlayout.setSpacing(0)
-        hlayout.addWidget(self.styleTree)
+        hlayout.addWidget(left_panel)
         hlayout.addWidget(self.detailContent, 1)
 
-        self.styleTree.setFixedWidth(260)
+        left_panel.setFixedWidth(260)
 
         # ── Debounced live refresh on canvas edits ───────────────
         self._refresh_timer = QTimer(self)
@@ -1259,7 +1364,7 @@ class FontStyleManager(QWidget):
         self._node_map = {node.base.identity: node for node in tree.nodes}
         self._sig_map = {e.signature: e for e in tree.ungrouped}
 
-        if not tree.nodes and not tree.ungrouped:
+        if not tree.nodes and not tree.ungrouped and not gstyle_store.global_styles:
             self._empty_label.show()
             self.styleTree.hide()
             self.detailContent.hide()
@@ -1268,12 +1373,22 @@ class FontStyleManager(QWidget):
         self._empty_label.hide()
         self.styleTree.show()
         self.detailContent.show()
-        self.styleTree.populate(tree)
+        self.styleTree.populate(tree, gstyle_store.global_styles)
         if keep is not None:
             self.styleTree.select_payload(keep)
 
+    def _new_library_style(self):
+        """Create a fresh global library entry and open it for editing."""
+        entry = gstyle_store.add_style(self.tr("New Style"), FontFormat())
+        self.refresh()
+        self.styleTree.select_payload({"type": "global", "name": entry.name})
+
     def _on_node_selected(self, payload: dict):
-        if payload.get("type") == "base":
+        if payload.get("type") == "global":
+            entry = gstyle_store.find_by_name(payload["name"])
+            if entry is not None:
+                self.detailContent.show_library_style(entry)
+        elif payload.get("type") == "base":
             node = self._node_map.get(payload["identity"])
             if node is not None:
                 self.detailContent.show_base_style(node)

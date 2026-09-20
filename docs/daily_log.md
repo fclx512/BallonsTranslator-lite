@@ -28,6 +28,34 @@
 
 ---
 
+### 依赖政策：CPU 发行包刻意不装 transformers（`paddleocr_vl_manga` 专属依赖）
+
+**问题/需求：** 准备用 CPU 版依赖包重新打包分发，核对依赖完整性时发现包内缺 `transformers`——`paddleocr_vl_manga` 是唯一走 transformers 的模块，且该导入写在 `_load_model` 内（不在模块顶层），所以「把全部注册模块 import 一遍」这类模块级探针全绿也查不出来，缺包只在用户真正加载这个 OCR 时炸。补装并实测跑通后评估：该模块是「质量优先、GPU 强烈建议」的生成式 VLM，CPU 上逐块自回归解码无实用价值，而 CPU 发行包面向的正是没有独显、跑不了 CUDA 的用户，`transformers` 本体 113 MB 属白占 ⇒ **决定不随 CPU 包分发**。
+
+**改动要点：** `docs/基础速查/依赖库说明.md` 第 6 步由「`ultralytics` 等按需依赖打包时必须预装」改为加入一段明确的例外说明——CPU 包刻意不装 `transformers`，理由（GPU-only 模块 + 目标用户无独显 + 113 MB）、以及 GPU 用户换装 CUDA torch 后在应用里选中该模块即由 `modules/base.py::ensure_dependencies` 自动补装 `>=4.57.1,<5`（区间收在 `modules/ocr/ocr_vl_manga.py::requires_packages`）、不需要 sentencepiece；验证一节把 VL OCR 自检移出 CPU 包验收范围、注明属 GPU 包（`scripts/probes/ocr_vl_manga_accept.py` 要读 `torch.cuda.*` 显存读数，本就只能在 CUDA 包跑）。
+
+**测试：** 补装与卸载都用约束快照（对已装发行版生成 `名称==版本` 作 `-c`，只增不升；`--dry-run` 先确认解析为纯新增）。CPU 包实测：卸载后发行版数回到 79（与改动前一致）、`pip check` 与开发包同一基线（onnxocr 的 `--no-deps` 跳过项、ultralytics/polars 均为既有已知项）、`tests/test_startup_imports.py` 6 通过、14 个注册模块强制解析零失败、各模块声明的权重文件齐备（含 1.84GB 的 `paddleocr_vl_manga`）。顺带实测：该模块在 CPU 包上确实可跑（合成竖排日文图识别出 `ざわ / ざわ`，加载 3.0s、单块 1.7s，fp32），只是不随包分发。
+
+**涉及文件：** `docs/基础速查/依赖库说明.md`（依赖包本体在仓库外）
+
+---
+
+### GPU 硬闸门：无加速设备的机器上拒绝下载 GPU-only 模型（`requires_gpu`）
+
+**问题/需求：** CPU 发行包里 `paddleocr_vl_manga` 只在有 GPU 的机器上有实用价值，但用户在「模型文件」页点它的下载（或在选型界面选中它）仍会真的去拉 1.9GB 权重 + 128MB `transformers`，下完才发现 CPU 上逐块自回归慢到没法用。用户拍板：**CPU 环境弹窗说明利害并拒绝下载，只在 GPU 环境放行**。
+
+**改动要点：** 新增模块侧声明 `modules/base.py::BaseModule.requires_gpu`（贯通 `utils/registry.py::ModuleSpec`、`utils/lazy_registry.py::LAZY_CLASS_ATTRS`、`modules/__init__.py::GET_MODULE_REQUIREMENTS` 的新字段 `requires_gpu`），首用例 `modules/ocr/ocr_vl_manga.py` 置 True；判据 `modules/base.py::accelerator_available` 取 `DEFAULT_DEVICE != "cpu"`（刻意不用 `torch.cuda.is_available()`——xpu/mps/directml 同样跑得动，`BALLOONTRANS_CPU_ONLY=1` 也判无）；硬闸门放在 `ui/model_downloads.py::ModelDownloadRegistry.start`（命中即拒，pip 依赖与权重都不碰），文案与判据同处一地（`gpu_required_message` / `gpu_requirement_block`）。两个入口各按自己的惯例弹同一文案：「模型文件」页下载钮与 `ui/module_manager.py::_ensure_module_deps`（后者是 §5.1「选模块不弹窗」的有意例外，模块照常切换）；面板徽章由「缺失 15」改为「需要 GPU」（`ui/model_files_panel.py::_badge_of` 的 `_gpu_blocked` 分支），行仍可点、点下去就是解释；加载期缺文件提示也换成 GPU 口径（`missing_model_files_hint` 接 `requires_gpu`，`MissingModelFilesError` 带同名属性），不再指路去一个会拒绝你的下载按钮。
+
+**顺带修掉一个 i18n 提取器盲区：** `scripts/i18n_common.py` 的 `QCoreApplication.translate` 正则原先只认「两个参数同一种引号」，`translate("ctx", '文本')` 这种混合写法**两条正则都匹配不到、静默漏进 .ts**——`ui/model_downloads.py` 里三条文案（缺文件提示、pip 装失败、模型文件准备失败）因此在中文界面里一直显示英文。改为每个参数各自匹配引号风格后这 4 条（连同本次新增的拒绝说明）全部进 .ts 并补上中文译文。
+
+**文案由用户定稿**（`ui/model_downloads.py::gpu_required_message`，三句短话：需要 GPU / 下载已拒绝 → CPU 上时间开销远大于模型能力 → 有 N 卡换 CUDA torch、只有 CPU 用内置模型），比初稿删去「已经手工拿到文件」那条出路与 1.9 GB 体积数字。**文案里那句「禁止了 CPU torch 环境下运行和下载」按用户口径保留，而实现只拦下载**——运行侧仍是 `_resolve_device` 警告后退回 CPU，两者不一致已在设计 §5.5 注明。
+
+**测试：** CPU 依赖包实测：闸门拒绝（`start()` 返回 False、注册表无任务、其他 OCR 模块不受影响）；开发包（CUDA 可用）放行；开发包加 `BALLOONTRANS_CPU_ONLY=1` 也拒绝。`tests/test_model_downloads.py::TestGpuGate` 新增 7 项钉住拒绝分支（开发机自带 CUDA，不打补丁根本走不到这条路径）：判据开关、不误伤未声明模块、闸门先于任务创建、加载提示与面板徽章的口径切换、真实注册表里 `paddleocr_vl_manga` 的声明。i18n 三查通过、qm 重编、译文经 `QTranslator` 实测可载出中文。弹窗与徽章渲染图见 `tmp/00_gpu_refused_zh.png`、`tmp/01_gpu_refused_en.png`、`tmp/02_model_files_panel_zh.png`。`scripts/verify.py` 全绿；pytest 1322 通过，2 个失败（`test_tag_toolbar` 的 `context_menu_order` 残留、`test_workbench_panel::test_expand_needs_an_explicit_amount` 列改版后陈旧断言）与本次改动无关、为存量失败。
+
+**涉及文件：** `modules/base.py`、`modules/ocr/ocr_vl_manga.py`、`modules/__init__.py`、`utils/registry.py`、`utils/lazy_registry.py`、`ui/model_downloads.py`、`ui/model_files_panel.py`、`ui/module_manager.py`、`scripts/i18n_common.py`、`tests/test_model_downloads.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`AGENTS.md`、`docs/技术实现/模型文件管理_设计方案.md`（新增 §5.5）、`docs/基础速查/依赖库说明.md`
+
+---
+
 ## 2026-09-19
 
 ### 工作台批量任务页加刷新钮（重扫候选列表）

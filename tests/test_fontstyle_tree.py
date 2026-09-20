@@ -171,8 +171,10 @@ def test_two_line_tree_nodes(proj):
 
     var_data = top.child(0).data(0, _DISPLAY_ROLE)
     assert var_data["two_line"] and var_data["count"] == 2
-    # variant line-2 lists diff fields only (ASCII tokens from overrides)
-    assert "40px" in var_data["sub"] and "fg#FF0000" in var_data["sub"]
+    # variant line-1 carries the diff summary (ASCII tokens from overrides),
+    # line-2 shows which base style the variant belongs to
+    assert "40px" in var_data["title"] and "fg#FF0000" in var_data["title"]
+    assert var_data["sub"] == "Arial"
 
 
 def test_diff_first_group_behavior(proj):
