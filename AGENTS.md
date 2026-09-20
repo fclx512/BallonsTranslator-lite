@@ -25,7 +25,7 @@ modules/
 
 ## 关键文件
 
-一句话定位 + 改动前必须知道的最小约束；设计背景、实测数字与决策编号（D/N 编号）在指针指向的文档里，**改动相关文件前先读指针**。
+一句话定位 + 改动前必须知道的最小约束；设计背景、实测数字与决策编号（D/N 编号）在指针指向的文档里，**改动相关文件前先读指针**。**不常用的技术点只留一句定位 + 指针**，细节写进文档——这份文件每轮都进上下文，篇幅要省着用。
 
 | 路径 | 用途与最小约束 |
 | ------ | ------ |
@@ -58,11 +58,11 @@ modules/
 | `ui/workbench_batch_view.py` | 工作台四个批量任务共用的三段视图（D20/D23/D27）；执行前统一弹 D27 告知窗；审批图不在本页（D44），经 `preview_requested` 信号交浮层 |
 | `utils/block_geometry.py` | 文本框几何小工具：矩形部分＝**「外扩到碰到邻框为止」的唯一实现**（`expand_limited`，批量合并审批截图、批量扩张共用）；四边形部分（`poly_*`）供区域再检测共用 |
 | `utils/batch_versions.py` | **仓库唯一的批量备份口**：执行前写一版（项目数据 + 受影响矩形像素前图）到项目内 `.bt_batch_backup/`，撤销取最新一版覆盖并消耗（`restore_latest`/`discard_latest` 支持 `expect_seq` 校验）；查找替换与工作台批量任务共用 |
-| `utils/memory_release.py` | 手动释放内存（设置页「释放内存」按钮）：卸载模型 → 交回工作集（`EmptyWorkingSet`，是**交回**不是 free）。**不做** `cudaDeviceReset`——实测它会不可逆地毁掉本进程的 CUDA（第一次分配报 `cudaErrorInvalidValue` 或直接段错误）且只多还 70~166MB，该能力已删除、`tests/test_memory_release.py::RemovedCapabilityTest` 钉着别加回来；实测数字与全部约束见 `docs/技术实现/内存释放_设计与实现.md` |
-| `utils/model_files.py` | 模型文件管理数据层：落盘判据（`missing_declared_files`）、体积、**删除走回收站**（`delete_paths`，只删模块声明过的 `save_files`、白名单保护 git 跟踪的字典文件；`SHFileOperation` 返回码不可信，判据是调用后文件还在不在）。**新增带权重的模块必须随附 `download_file_list` 落盘路径 + `model_package` 包描述**（`save_dir` 字段不可用），否则缺文件检查与体积展示全部失效；方案见 `docs/技术实现/模型文件管理_设计方案.md`，验收见 `docs/技术实现/模型文件管理_测试流程.md` |
-| `ui/model_downloads.py` | 后台下载任务层（单例注册表：起任务／防重复／取消／进度信号），「选模块」与设置页「模型文件」节共用；**下载不弹窗不阻断交互，进度只进终端**；大模型须置 `background_download_only = True`（否则会在 `load_model` 里同步下载冻界面）；**要求 GPU 的模块须在模块侧置 `requires_gpu = True`**——`ModelDownloadRegistry.start` 是本约束的硬闸门（本机无加速设备即拒下并弹 `gpu_required_message` 说明，判据与文案见设计 §5.5） |
-| `ui/model_files_panel.py` | 设置页 Models →「模型文件」节（`ui/configpanel.py` 只实例化 + 接线）：`ui/custom_widget/row_table.py::RowTable` 卡片列表，勾选＝本次要处理的模型 + 下方动作行（下载／取消／删除／打开目录／刷新）+ 底部状态条；徽章状态与选型下拉的缺文件警示色同源 |
-| `modules/ocr/ocr_vl_manga.py` | 首个「HF transformers 后端」OCR 模块（PaddleOCR-VL-For-Manga，日文漫画质量优先、GPU-only、逐块自回归）；要点：整块裁剪不逐行、`use_cache=True` 必传、processor 必须传 `add_prefix_space=None`（否则缺 sentencepiece 直接报 slow version 错）、`background_download_only`、`requires_gpu`（本机无 GPU 时下载入口拒下）；依据见 `docs/技术实现/paddle-ocr-for-manga_接入调研.md` |
+| `utils/memory_release.py` | 手动释放内存（设置页按钮）：卸载模型 → 交回工作集。**不做** `cudaDeviceReset`——实测会不可逆地毁掉本进程 CUDA，该能力已删、`tests/test_memory_release.py::RemovedCapabilityTest` 钉着别加回来；实测数字与约束见 `docs/技术实现/内存释放_设计与实现.md` |
+| `utils/model_files.py` | 模型文件管理数据层：落盘判据、体积、删除走回收站（只删声明过的 `save_files`）。**新增带权重的模块必须随附 `download_file_list` 落盘路径 + `model_package` 包描述**（`save_dir` 字段不可用），否则缺文件检查与体积展示全部失效；方案与验收见 `docs/技术实现/模型文件管理_设计方案.md`、`docs/技术实现/模型文件管理_测试流程.md` |
+| `ui/model_downloads.py` | 后台下载任务层（单例注册表：起任务／防重复／取消／进度），「选模块」与设置页「模型文件」节共用；**下载不弹窗不阻断交互，进度只进终端**。模块侧两条声明由本层兜：大模型置 `background_download_only`（否则 `load_model` 里同步下载冻界面）、要 GPU 的置 `requires_gpu`（硬闸门在 `ModelDownloadRegistry.start`，判据与文案见设计 §5.5） |
+| `ui/model_files_panel.py` | 设置页 Models →「模型文件」节（`ui/configpanel.py` 只实例化 + 接线）：`ui/custom_widget/row_table.py::RowTable` 卡片列表 + 动作行（下载／取消／删除／打开目录／刷新）+ 状态条；其余细节见设计文档 |
+| `modules/ocr/ocr_vl_manga.py` | PaddleOCR-VL-For-Manga（HF transformers 后端；日文漫画质量优先、GPU-only、逐块自回归）；接入依据、参数坑与实测数字见 `docs/技术实现/paddle-ocr-for-manga_接入调研.md` |
 | `ui/mainwindow.py` | 主窗口 |
 | `ui/configpanel.py` | 配置面板、快捷键编辑；四个管线页合并为一项「Pipeline」（页内标签，`_build_pipeline_page`），阶段只编辑当前引擎的参数 |
 | `ui/run_pipeline_dialog.py` | 运行对话框：启用模块网格（阶段图标开关 + 模块下拉）+ 各阶段折叠选项区；模块下拉写回底部栏选择器 |
@@ -171,7 +171,8 @@ modules/
 
 ## 开发日志
 
-功能增删或修复经用户确认无误后，在 [`docs/daily_log.md`](docs/daily_log.md) 写简要记录。格式参照已有条目：日期标题 → 问题/需求描述 → 改动要点 → 涉及文件列表。每条之间用 `---` 分隔。
+功能增删或修复经用户确认无误后，在 [`docs/daily_log.md`](docs/daily_log.md) 记一条（**该文件的文件头即写法规范，照它写**）。**这份日志主要读者是 AI**（用户基本不看），因此按**可检索**写、不按可通读写：标题带关键符号名／配置字段名／D 编号，`**摘要：**` 2~4 句只写决策与理由，`**涉及文件：**` 必填；实现细节留给 commit body 与设计文档，一条 4~8 行。
 
 - **只保留最近 3 天记录，由脚本强制、不靠人记**：提交时 `pre-commit` 钩子（`.git/hooks/pre-commit`，版本化副本在 `scripts/hooks/pre-commit`；重新 clone 后 `cp scripts/hooks/pre-commit .git/hooks/pre-commit` 一次性启用）自动跑 `scripts/trim_daily_log.py` 裁掉超出窗口的日期节——写日志时直接写到当天日期标题下即可，无需清理旧条目。
+- **更早的记录去 git 找**（被裁掉的日期节仍完整留在提交历史里，这也是敢开 3 天窗口的前提）：`git log --grep <关键词>`／`git log --follow -p -- docs/daily_log.md`／`git show <rev>:docs/daily_log.md`；**提交信息与日志标题用同一批关键词**，`--grep` 才能一步命中，日志被裁掉也不丢线索。
 - 本文件只记**仓库层面**的改动（功能增删、远端分支变动、规范调整）；踩坑细节、方案草稿与跨代理交接留在各代理侧的私有记忆（见上方「多代理协作」），不进仓库。

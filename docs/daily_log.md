@@ -1,28 +1,34 @@
 # 每日开发日志
 
-> 记录**仓库层面**的改动（功能增删、远端分支变动、规范调整），供变更史查阅。踩坑细节、方案草稿与跨代理交接留在各代理侧的私有记忆（见 `AGENTS.md` 的「多代理协作」一节），不进仓库。仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护），每次在对应日期中末尾写入日志。
+> 记录**仓库层面**的改动（功能增删、远端分支变动、规范调整）。**主要读者是 AI**（用户基本不看），按**可检索**写、不按可通读写。每次在对应日期末尾写入，每条之间用 `---` 分隔：
+
+```markdown
+### <一句话标题：改了哪 + 关键符号名/配置字段名/D 编号>   ← 标题里带检索键，供 grep
+**摘要：** 问题 → 做法与理由（2~4 句，写决策不写实现细节）
+**涉及文件：** `路径`、`路径`                            ← 最常用的检索键，必填
+```
+
+> 可选再补一行 `**验证：**`（真机实测／测量类证据，或值得钉住的回归）与一行 `**遗留：**`（有意留开、已知不做的事）。**细节不写在这里**：设计决策写进 `docs/技术实现/`、就地约束写进代码注释、实现过程写进 commit body（本仓库 commit 已相当详细）——同一件事不要在四处各写一遍。长度参考**一条 4~8 行**，动辄 30~60 行的长段落既是反面教材、也让 grep 到的人被迫整段读完。踩坑细节、方案草稿与跨代理交接留在各代理侧的私有记忆（见 `AGENTS.md` 的「多代理协作」一节），不进仓库。
+>
+> 仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护）；被裁掉的日期节仍完整留在提交历史里，用 `git log --grep <关键词>`／`git log --follow -p -- docs/daily_log.md`／`git show <rev>:docs/daily_log.md` 回查。
 
 ## 2026-09-20
 
-### 依赖兼容上游 + 共享环境「只增不升」补装
+### 依赖兼容上游 + 共享环境「只增不升」补装（解 pillow 钉子 / `ensure_core_requirements`）
 
-**问题/需求：** 上游 BallonsTranslator 的依赖库两边高度通用，fork 想兼容共享同一环境（如把上游 `ballontrans_pylibs_win/` 链接过来用），需消除唯一硬版本冲突并保证补装不污染上游正在用的版本。
+**摘要：** 为与上游共享同一依赖库，解除 `pillow>=10.0,<11` 钉子（上游 pillow 12.2.0 + pillow-jxl-plugin 实测 JXL roundtrip 正常，该钉子已过时）。补装语义改为**只增不升**：`utils/core_requirements.py::ensure_core_requirements` 补装前对已装发行版生成 `名称==版本` 快照，经 `utils/package_installer.py::build_install_command` 新增的 `constraints_file` 参数作 pip `-c` 约束传入——缺的包照补，任何会升级既有包的解析直接失败、快照留盘交人工决策。另 `pyproject.toml` 增 `acc` extra（numba 可选加速，缺失照旧回退纯 NumPy）。
 
-**改动要点：** 解除 `pillow>=10.0,<11` 钉子（上游环境 pillow 12.2.0 + pillow-jxl-plugin 1.3.7 实测 JXL roundtrip 正常，2026-06 钉子已过时）；`pyproject.toml` 增 `acc` extra（numba 可选加速，缺失照旧回退纯 NumPy）；`utils/core_requirements.py::ensure_core_requirements` 补装前用 `importlib.metadata` 对已装发行版生成 `名称==版本` 快照，经 `utils/package_installer.py::build_install_command` 新增的 `constraints_file` 参数作 `-c` 约束传入——**只增不升**：缺的包照补，任何会升级既有包的解析直接失败、快照留盘交人工决策；`docs/基础速查/依赖库说明.md` 增「与上游共用同一依赖库」一节（差异清单 + 联接用法）。
-
-**测试：** `scripts/verify.py` 全绿；带约束的 `pip install -r requirements.txt --dry-run` 解析无报错无升级；`tests/test_dependency_startup.py` 8 通过。
+**验证：** 带约束的 `pip install -r requirements.txt --dry-run` 解析无报错无升级；`tests/test_dependency_startup.py` 8 通过。
 
 **涉及文件：** `pyproject.toml`、`requirements.txt`、`utils/package_installer.py`、`utils/core_requirements.py`、`docs/基础速查/依赖库说明.md`
 
 ---
 
-### 左栏打开钮图标回归轴线（去 QToolBar 包裹 + 菜单自持）
+### 左栏打开钮回归图标轴线（去 QToolBar 包裹 + `ui/mainwindowbars.py::OpenBtn` 菜单自持）
 
-**问题/需求：** 左栏图标重绘与边距调整后，文件夹打开钮（openBtn）偏左、右侧显得多出边距，与下方四个 33px checker 不在同一条轴上。
+**摘要：** openBtn 偏左、与下方四个 33px checker 不同轴，两个根因：外面包的 33px `QToolBar` 自带边距把 28px 按钮挤出轴线；左栏 vlayout 实为**左锚排列**（各项同点 x=7），宽度不同即中心错开。修法＝去掉 QToolBar 包裹、openBtn 直接 33×33 进布局（QSS `image` 随盒缩放，`OpenBtn` 规则加 `padding: 3px` 把字形压回原尺寸）；菜单改 `OpenBtn` 自持（`assignMenu` + 点击手动弹出），因为 `QToolButton.setMenu` 的菜单指示器会在右侧保留箭头位把 QSS image 挤到左边，且 QSS 归零 width/height/image 都收不回那块保留区。
 
-**改动要点：** 根因有二：① openBtn 外包一层 33px `QToolBar` 装 28px 按钮，QToolBar 自带边距把按钮挤出轴线；② 左栏 vlayout 实为**左锚排列**（各项同点 x=7），宽度不同即中心错开（与上次运行按钮 28→33 同理）。修法：去掉 QToolBar 包裹、openBtn 直接 33×33 进布局与 checker 同规格；QSS `image` 随按钮盒缩放，`OpenBtn` 规则加 `padding: 3px` 把字形压回原尺寸（实测 24.8 逻辑px 与旧版一致）；菜单改 `ui/mainwindowbars.py::OpenBtn` 自持（`assignMenu` + 点击手动弹出）——不走 `QToolButton.setMenu`，因 InstantPopup 的菜单指示器在右侧保留箭头位会把 QSS image 挤到左边，且 QSS 归零 width/height/image 均无法收回保留区。离屏渲染实测五图标中心 28.5~29.5 对齐（剩余 ±0.75px 为 SVG 内容 1px 不对称）。
-
-**测试：** `scripts/verify.py` 全绿；离屏拉起真实 LeftBar 逐图标量字形中心/宽度确认。
+**验证：** 离屏渲染实测五图标字形中心 28.5~29.5 对齐（余量 ±0.75px 为 SVG 内容 1px 不对称）。
 
 **涉及文件：** `ui/mainwindowbars.py`、`config/stylesheet.css`
 
@@ -30,65 +36,61 @@
 
 ### 依赖政策：CPU 发行包刻意不装 transformers（`paddleocr_vl_manga` 专属依赖）
 
-**问题/需求：** 准备用 CPU 版依赖包重新打包分发，核对依赖完整性时发现包内缺 `transformers`——`paddleocr_vl_manga` 是唯一走 transformers 的模块，且该导入写在 `_load_model` 内（不在模块顶层），所以「把全部注册模块 import 一遍」这类模块级探针全绿也查不出来，缺包只在用户真正加载这个 OCR 时炸。补装并实测跑通后评估：该模块是「质量优先、GPU 强烈建议」的生成式 VLM，CPU 上逐块自回归解码无实用价值，而 CPU 发行包面向的正是没有独显、跑不了 CUDA 的用户，`transformers` 本体 113 MB 属白占 ⇒ **决定不随 CPU 包分发**。
+**摘要：** `paddleocr_vl_manga` 是唯一走 transformers 的模块，且该导入写在 `_load_model` 内（不在模块顶层），所以「把注册模块全 import 一遍」查不出缺包。它是 GPU 才实用的生成式 VLM（CPU 上逐块自回归无实用价值），而 CPU 包面向的正是无独显用户，`transformers` 本体 113 MB 属白占 ⇒ **决定不随 CPU 包分发**；GPU 用户换 CUDA torch 后选中该模块即由 `modules/base.py::ensure_dependencies` 自动补装（区间收在 `modules/ocr/ocr_vl_manga.py::requires_packages`，不需要 sentencepiece）。CPU 包验收范围相应移出 VL OCR 自检。
 
-**改动要点：** `docs/基础速查/依赖库说明.md` 第 6 步由「`ultralytics` 等按需依赖打包时必须预装」改为加入一段明确的例外说明——CPU 包刻意不装 `transformers`，理由（GPU-only 模块 + 目标用户无独显 + 113 MB）、以及 GPU 用户换装 CUDA torch 后在应用里选中该模块即由 `modules/base.py::ensure_dependencies` 自动补装 `>=4.57.1,<5`（区间收在 `modules/ocr/ocr_vl_manga.py::requires_packages`）、不需要 sentencepiece；验证一节把 VL OCR 自检移出 CPU 包验收范围、注明属 GPU 包（`scripts/probes/ocr_vl_manga_accept.py` 要读 `torch.cuda.*` 显存读数，本就只能在 CUDA 包跑）。
-
-**测试：** 补装与卸载都用约束快照（对已装发行版生成 `名称==版本` 作 `-c`，只增不升；`--dry-run` 先确认解析为纯新增）。CPU 包实测：卸载后发行版数回到 79（与改动前一致）、`pip check` 与开发包同一基线（onnxocr 的 `--no-deps` 跳过项、ultralytics/polars 均为既有已知项）、`tests/test_startup_imports.py` 6 通过、14 个注册模块强制解析零失败、各模块声明的权重文件齐备（含 1.84GB 的 `paddleocr_vl_manga`）。顺带实测：该模块在 CPU 包上确实可跑（合成竖排日文图识别出 `ざわ / ざわ`，加载 3.0s、单块 1.7s，fp32），只是不随包分发。
+**验证：** 卸载后发行版数回到 79（与改动前一致）、`pip check` 与开发包同基线、`tests/test_startup_imports.py` 6 通过、14 个注册模块强制解析零失败、各模块声明的权重齐备。顺带实测该模块在 CPU 包上确实可跑（合成竖排日文识别出 `ざわ / ざわ`，加载 3.0s、单块 1.7s、fp32），只是不随包分发。
 
 **涉及文件：** `docs/基础速查/依赖库说明.md`（依赖包本体在仓库外）
 
 ---
 
-### GPU 硬闸门：无加速设备的机器上拒绝下载 GPU-only 模型（`requires_gpu`）
+### GPU 硬闸门：无可用加速设备时拒绝下载 GPU-only 模型（`requires_gpu`）
 
-**问题/需求：** CPU 发行包里 `paddleocr_vl_manga` 只在有 GPU 的机器上有实用价值，但用户在「模型文件」页点它的下载（或在选型界面选中它）仍会真的去拉 1.9GB 权重 + 128MB `transformers`，下完才发现 CPU 上逐块自回归慢到没法用。用户拍板：**CPU 环境弹窗说明利害并拒绝下载，只在 GPU 环境放行**。
+**摘要：** 新增模块侧声明 `modules/base.py::BaseModule.requires_gpu`（贯通 `utils/registry.py::ModuleSpec`、`utils/lazy_registry.py::LAZY_CLASS_ATTRS`、`modules/__init__.py::GET_MODULE_REQUIREMENTS`），首用例 `modules/ocr/ocr_vl_manga.py`；判据 `modules/base.py::accelerator_available` 取 `DEFAULT_DEVICE != "cpu"`（**刻意不用** `torch.cuda.is_available()`——xpu/mps/directml 同样跑得动）；硬闸门落在 `ui/model_downloads.py::ModelDownloadRegistry.start`（命中即拒，pip 依赖与权重都不碰），文案与判据同处一地（`gpu_required_message`／`gpu_requirement_block`）。两个入口各按自己的惯例弹同一文案：「模型文件」页下载钮，与 `ui/module_manager.py::_ensure_module_deps`（后者是 §5.1「选模块不弹窗」的有意例外，模块照常切换）；面板徽章改「需要 GPU」而行仍可点（`ui/model_files_panel.py::_badge_of`），加载期缺文件提示也换 GPU 口径、不再指路去一个会拒绝你的下载钮。
 
-**改动要点：** 新增模块侧声明 `modules/base.py::BaseModule.requires_gpu`（贯通 `utils/registry.py::ModuleSpec`、`utils/lazy_registry.py::LAZY_CLASS_ATTRS`、`modules/__init__.py::GET_MODULE_REQUIREMENTS` 的新字段 `requires_gpu`），首用例 `modules/ocr/ocr_vl_manga.py` 置 True；判据 `modules/base.py::accelerator_available` 取 `DEFAULT_DEVICE != "cpu"`（刻意不用 `torch.cuda.is_available()`——xpu/mps/directml 同样跑得动，`BALLOONTRANS_CPU_ONLY=1` 也判无）；硬闸门放在 `ui/model_downloads.py::ModelDownloadRegistry.start`（命中即拒，pip 依赖与权重都不碰），文案与判据同处一地（`gpu_required_message` / `gpu_requirement_block`）。两个入口各按自己的惯例弹同一文案：「模型文件」页下载钮与 `ui/module_manager.py::_ensure_module_deps`（后者是 §5.1「选模块不弹窗」的有意例外，模块照常切换）；面板徽章由「缺失 15」改为「需要 GPU」（`ui/model_files_panel.py::_badge_of` 的 `_gpu_blocked` 分支），行仍可点、点下去就是解释；加载期缺文件提示也换成 GPU 口径（`missing_model_files_hint` 接 `requires_gpu`，`MissingModelFilesError` 带同名属性），不再指路去一个会拒绝你的下载按钮。
+**闸门只拦下载、不设运行侧障碍**（用户拍板：提示到位就够了，没必要故意妨碍）——第二段文案相应说「不提供下载」，与实现同口径；运行侧仍是 `_resolve_device` 警告后退回 CPU，手工放入权重照样能跑。文案措辞**由用户 2026-09-20 定稿，改动前先问**；取舍的完整记录见 `docs/技术实现/模型文件管理_设计方案.md` §5.5。
 
-**顺带修掉一个 i18n 提取器盲区：** `scripts/i18n_common.py` 的 `QCoreApplication.translate` 正则原先只认「两个参数同一种引号」，`translate("ctx", '文本')` 这种混合写法**两条正则都匹配不到、静默漏进 .ts**——`ui/model_downloads.py` 里三条文案（缺文件提示、pip 装失败、模型文件准备失败）因此在中文界面里一直显示英文。改为每个参数各自匹配引号风格后这 4 条（连同本次新增的拒绝说明）全部进 .ts 并补上中文译文。
+**顺带修掉一个 i18n 提取器盲区：** `scripts/i18n_common.py` 的 `QCoreApplication.translate` 正则原先只认「两个参数同一种引号」，`translate("ctx", '文本')` 这种混合写法两条正则都匹配不到、静默漏进 .ts（三条既有文案因此在中文界面一直显示英文）。
 
-**文案由用户定稿**（`ui/model_downloads.py::gpu_required_message`，三句短话：需要 GPU / 下载已拒绝 → CPU 上时间开销远大于模型能力 → 有 N 卡换 CUDA torch、只有 CPU 用内置模型），比初稿删去「已经手工拿到文件」那条出路与 1.9 GB 体积数字。**闸门只拦下载、不设运行侧障碍**（用户拍板：提示到位即可，没必要故意妨碍）——第二段相应改说「不提供下载」，文案与实现同口径；运行侧仍是 `_resolve_device` 警告后退回 CPU，手工放入权重照样能跑。
-
-**测试：** CPU 依赖包实测：闸门拒绝（`start()` 返回 False、注册表无任务、其他 OCR 模块不受影响）；开发包（CUDA 可用）放行；开发包加 `BALLOONTRANS_CPU_ONLY=1` 也拒绝。`tests/test_model_downloads.py::TestGpuGate` 新增 7 项钉住拒绝分支（开发机自带 CUDA，不打补丁根本走不到这条路径）：判据开关、不误伤未声明模块、闸门先于任务创建、加载提示与面板徽章的口径切换、真实注册表里 `paddleocr_vl_manga` 的声明。i18n 三查通过、qm 重编、译文经 `QTranslator` 实测可载出中文。弹窗与徽章渲染图见 `tmp/00_gpu_refused_zh.png`、`tmp/01_gpu_refused_en.png`、`tmp/02_model_files_panel_zh.png`。`scripts/verify.py` 全绿；pytest 1322 通过，2 个失败（`test_tag_toolbar` 的 `context_menu_order` 残留、`test_workbench_panel::test_expand_needs_an_explicit_amount` 列改版后陈旧断言）与本次改动无关、为存量失败。
+**验证：** CPU 依赖包实测闸门拒绝（`start()` 返回 False、注册表无任务、其他 OCR 模块不受影响）、开发包放行、开发包加 `BALLOONTRANS_CPU_ONLY=1` 也拒绝；`tests/test_model_downloads.py::TestGpuGate` 新增 7 项钉住拒绝分支（开发机自带 CUDA，不打补丁走不到）；i18n 三查 + qm 重编 + `QTranslator` 实测载出中文，渲染图见 `tmp/00_gpu_refused_zh.png` 等三张。
 
 **涉及文件：** `modules/base.py`、`modules/ocr/ocr_vl_manga.py`、`modules/__init__.py`、`utils/registry.py`、`utils/lazy_registry.py`、`ui/model_downloads.py`、`ui/model_files_panel.py`、`ui/module_manager.py`、`scripts/i18n_common.py`、`tests/test_model_downloads.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`AGENTS.md`、`docs/技术实现/模型文件管理_设计方案.md`（新增 §5.5）、`docs/基础速查/依赖库说明.md`
+
+### 开发日志规范改「可检索优先」+ AGENTS.md 瘦身（不常用技术点只留钩子）
+
+**摘要：** 日志定位改为**主要给 AI 读的时间索引**（用户基本不看它）：格式固定三行——标题（带关键符号名／配置字段名／D 编号，供 grep）、`**摘要：**`（2~4 句，只写决策与理由）、`**涉及文件：**`（最常用的检索键），实现过程留给 commit body 与设计文档、一条 4~8 行；三天存量按此重写（25741 → 16666 字符，降 35%，19 条不丢）。3 天窗口保留，另写明更早记录的 git 回查口令（`git log --grep`／`git log --follow -p`／`git show <rev>:docs/daily_log.md`），配套要求**提交信息与日志标题用同一批关键词**，日志被裁掉也不丢线索。AGENTS.md 侧按「不常用的技术点只留一句定位 + 指针」收一遍：`modules/ocr/ocr_vl_manga.py` 的实现坑（整块裁剪不逐行、`use_cache`、`add_prefix_space=None`）已在 `docs/技术实现/paddle-ocr-for-manga_接入调研.md` 里，行内不再重复；模型文件管理四行与 `utils/memory_release.py` 同样只留约束与指针。
+
+**验证：** `scripts/trim_daily_log.py --check` 确认新格式仍能被窗口裁剪正确解析；`scripts/verify.py` 全绿。
+
+**涉及文件：** `AGENTS.md`、`docs/daily_log.md`
 
 ---
 
 ## 2026-09-19
 
-### 工作台批量任务页加刷新钮（重扫候选列表）
+### 工作台批量任务页加刷新钮（重扫候选列表，`ui/workbench_batch_view.py::RefreshButton`）
 
-**问题/需求：** 工作台页面没有主动刷新入口：导航的「还有 N 个未处理」每次现算，而候选列表是懒规划快照，用户在画布上删框／改框后列表不跟随，出现「计数有数、列表空／过期」（误识别清理尤其常见）。
+**摘要：** 候选列表是懒规划快照，用户在画布上删框／改框后列表不跟随，出现「计数有数、列表空／过期」（误识别清理尤其常见）。新增 `RefreshButton`（QPainter 自绘循环箭头图标钮，主题取色、悬停描边，不引 SVG 资源），在 `BatchTaskView._build_actions` 里置于执行行首位，点击即重跑既有 `replan()`（连带 `plan_changed` → 导航计数同步）。术语／剧情两页是草稿镜像、无此需求，不加。
 
-**改动要点：** 新增 `ui/workbench_batch_view.py::RefreshButton`（QPainter 自绘循环箭头图标钮，主题取色、悬停描边，不引 SVG 资源），在 `BatchTaskView._build_actions` 里置于执行行首位，点击即重跑既有 `replan()`（连带 `plan_changed` → 导航计数同步）。术语／剧情两页是草稿镜像、无此需求，不加。
-
-**测试：** `scripts/verify.py` 全绿；`scripts/workbench_render.py` 渲染并放大目视确认图标可认。
+**验证：** `scripts/verify.py` 全绿；`scripts/workbench_render.py` 渲染并放大目视确认图标可认。
 
 **涉及文件：** `ui/workbench_batch_view.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
 
 ---
 
-### 行拖拽逐帧绘制优化（多选掉帧）+ 抓住缩放改 1.05
+### 行拖拽逐帧绘制优化（多选掉帧）+ 抓住缩放改 1.05（`ui/textedit_area.py`）
 
-**问题/需求：** 用户实测多选拖拽时性能占用偏高、掉帧（疑似线程繁忙）。
+**摘要：** 掉帧主因＝被拖卡装着 `_CardScaleEffect`，而 Qt 对几何变化的控件会失效效果源 pixmap 缓存 ⇒ 跟手补间每帧都要把整张卡（两个 QTextEdit 的富文本排版）重渲到设备分辨率离屏图，多选即 N 次/帧。三处改动：① **效果源 pixmap 缓存**——拖拽期间卡片内容冻结，装上后首帧抓一次、`draw()` 复用缓存做缩放 blit，factor 回 1.0 弃缓存；② **跟手重定向 2px 死区**（只作用于 `_update_drag_frame` 的追手路径），避免光标慢移时反复停旧建新 `QPropertyAnimation`；③ `GRAB_SCALE` 1.1→1.05。中途踩到一处缓存坐标错误：`sourcePixmap(DeviceCoordinates)` 的 `offset` 是**当帧控件在窗口里的绝对位置**（随移动逐帧变化），直接缓存会把卡片钉死在抓取时刻的位置——改为缓存「pixmap 左上相对控件原点」的常量偏移，每帧用 `deviceTransform` 现算原点。
 
-**改动要点：** 定位掉帧主因＝被拖卡装着 `ui/textedit_area.py::_CardScaleEffect`（抓住 1.1× 缩放），而 Qt 对几何变化的控件失效效果源 pixmap 缓存 ⇒ 跟手补间每帧都要把整张卡（两个 QTextEdit 的富文本排版）重渲到设备分辨率离屏图，多选即 N 次/帧。三处改动（`ui/textedit_area.py`）：① **效果源 pixmap 缓存**——拖拽期间卡片内容冻结，装上后首帧抓一次、`draw()` 复用缓存做缩放 blit，factor 回 1.0 弃缓存；缓存字段挂类属性兜底（同空壳实例防崩路径）。② **跟手重定向 2px 死区**（`_move_card` 新增 `dead_zone` 参数，只作用于 `_update_drag_frame` 的追手路径）——光标慢移 1px 步进不再反复停旧建新 `QPropertyAnimation`。③ `GRAB_SCALE` 1.1→1.05。中途实测暴露一处缓存坐标错误：`sourcePixmap(DeviceCoordinates)` 的 `offset` 是**当帧控件在窗口里的绝对位置**（随移动逐帧变化），直接缓存会把卡片钉死在抓取时刻的位置（被拖卡不跟手、只在损伤区露碎片）——改为缓存「pixmap 左上相对控件原点」的常量偏移（padding），每帧用 `deviceTransform` 现算原点重算 offset。
-
-**测试：** `tests/test_row_drag.py` 新增三组：缓存只抓一次（含回 1.0 弃缓存后重抓）、快照跟手移动（控件移动后绘制随新位置走）、跟手重定向死区；27 项连跑 10 次全绿，`scripts/verify.py` 七步全绿。新增用例曾引出套件约半数的退出期 access violation（悬挂效果的控件在解释器退出期 GC 级联中销毁；stdout 缓冲让崩溃看似发生在更早的用例）——用例结束前 `QTest.qWait(300)` 排干收尾动画后 10/10 稳定。
+**验证：** `tests/test_row_drag.py` 新增三组（缓存只抓一次、快照跟手移动、死区重定向），27 项连跑 10 次全绿。新增用例曾引出套件约半数用例的退出期 access violation（悬挂效果的控件在解释器退出期 GC 级联中销毁；stdout 缓冲让崩溃看似发生在更早的用例），用例结束前 `QTest.qWait(300)` 排干收尾动画后 10/10 稳定。
 
 **涉及文件：** `ui/textedit_area.py`、`tests/test_row_drag.py`
 
 ---
 
-### RowTable 自绘行列表控件替换工作台裸 QTableWidget
+### RowTable 自绘行列表控件替换工作台裸 QTableWidget（`ui/custom_widget/row_table.py`）
 
-**问题/需求：** 工作台批量候选列表用裸 `QTableWidget`，逐格 QSS 边框渲染不全、背景兜底规则只按裸 QTableView 匹配不及子类，观感与主题接入受限。
-
-**改动要点：** 新增 `ui/custom_widget/row_table.py::RowTable`（经 `ui/custom_widget/__init__.py` 导出）：`MODE_TABLE`＝列对齐紧凑表格（淡行分隔线、无竖网格）、`MODE_CARD`＝主文+次行元数据+右侧徽章的圆角审批卡；底色/选中染底/勾选框/徽章全在 delegate 自绘（行数据经 `Qt.UserRole` 传 dict），QSS 只管底色列头（`RowTable#WorkbenchRowTable`，`config/stylesheet.css`）；主题配色走 `get_theme_color`、缓存于 delegate 且 `StyleChange` 时失效。工作台四个批量任务候选列表切换到该控件（`ui/workbench_batch_view.py` 勾选回调改 `_on_check_toggled`，`ui/workbench_tasks.py` 补卡片元数据与行说明文案）；展示台（`scripts/style_showcase.py`）与 AGENTS.md 控件表同步。
-
-**测试：** `tests/test_workbench_panel.py` 35 项过（勾选用例改走新回调）；i18n 新增 `%1 · %2 block(s)` 一条，`scripts/i18n_check.py` 与 qm 编译过。
+**摘要：** 裸 `QTableWidget` 逐格 QSS 边框渲染不全、背景兜底规则只按裸 `QTableView` 匹配不及子类。新增 `RowTable`（经 `ui/custom_widget/__init__.py` 导出）：`MODE_TABLE`＝列对齐紧凑表格（淡行分隔线、无竖网格），`MODE_CARD`＝主文+次行元数据+右侧徽章的圆角审批卡；底色／选中染底／勾选框／徽章全在 delegate 自绘（行数据经 `Qt.UserRole` 传 dict），QSS 只管底色与列头，主题配色走 `get_theme_color`、缓存于 delegate 且 `StyleChange` 时失效。工作台四个批量任务候选列表切到该控件，展示台与 AGENTS.md 控件表同步。
 
 **涉及文件：** `ui/custom_widget/row_table.py`、`ui/custom_widget/__init__.py`、`ui/workbench_batch_view.py`、`ui/workbench_tasks.py`、`scripts/style_showcase.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_workbench_panel.py`、`AGENTS.md`
 
@@ -96,19 +98,7 @@
 
 ### 本批收尾：RowTable 可读性打磨 + 扩张页改版 + 文档瘦身等（分类型提交）
 
-**问题/需求：** 整理工作区挂起的修改按类型分批提交，另修一处对齐：左栏「运行」按钮与上方设置图标中心错开 2~3px（两者同点左锚但宽度不同：33 vs 28）。
-
-**改动要点：**
-
-- **RowTable 可读性**：悬停行淡染高亮（`setMouseTracking` 收 move，滚动后重算）；选中染底上的文字按染底实际观感色在 `@dragTextColor`／`@inverseTextColor` 里挑对比更高的（部分主题 `@dragTextColor` 是暗色，固定取会看不清），次行元数据选中时用降不透明度主色；全局 QSS 表格选中色同步改 `@dragTextColor` 且 `:hover` 规则置前防盖选中底色。
-- **扩张页改版**：`ui/workbench_tasks.py::ExpandTask` 列从「旧矩形/新矩形」坐标改单列「增长」描述（每边长多少、哪边受限，`stretch_column` 改 3）；hint 文案改说清用途与居中重排条件。新增探针 `scripts/probes/expand_centering_probe.py`：真机验证扩张后译文按新框重排，「是否居中」取决于块自身 alignment（块属性，扩张页决定不了）。`ui/workbench_batch_view.py` 加「重扫列表」刷新钮（自绘循环箭头 `RefreshButton`）并清理重复 import 块。
-- **font_scan 日志压制修复**：`utils/font_scan.py::scan_font_faces` 原先只压根 logger，压不住 fontTools 模块级子 logger 的自有 handler（`utils/logger.py` 全局 `setLoggerClass` 后每个子 logger 自带 console handler）——改为整棵 `fontTools.*` 树一起压，并预导入 `name`/`OS-2` 表模块防懒加载躲过压制。
-- **daily_log 3 天窗口自动裁剪**：新增 `scripts/trim_daily_log.py`（按 `## YYYY-MM-DD` 标题解析，无日期段恒保留）与 `scripts/hooks/pre-commit`（提交时自动裁，版本化副本，重 clone 后 cp 启用）。
-- **文档瘦身**：AGENTS.md 关键文件表改「一句话定位 + 最小约束 + 指针」；《经验教训》《上游参考》《依赖库说明》《新增设置项路线参考》《快捷键》砍历史细节与过期内容；《打包控件功能使用说明》RowTable 行同步。
-- **对齐修复**：`ui/mainwindowbars.py` 运行按钮宽度 28→33 与 configChecker 一致，中心重合（离屏探针实测 center 均 x=23）。
-- **新增调研文档**：`docs/技术实现/paddle-ocr-for-manga_接入调研.md`、`docs/技术实现/模型说明卡_规划.md`。
-
-**测试：** `scripts/verify.py` 七步全绿；对齐用离屏几何探针验证。
+**摘要：** 把当天挂起的修改按类型分批提交；另修一处对齐——左栏「运行」按钮与设置图标同点左锚但宽度 33 vs 28，中心错开 2~3px。要点：RowTable 悬停行淡染，选中染底上的文字按实际观感色在 `@dragTextColor`／`@inverseTextColor` 里挑对比更高的（部分主题 `@dragTextColor` 是暗色，固定取会看不清）；`ExpandTask` 列由「旧矩形/新矩形」坐标改单列「增长」描述，并新增真机探针 `scripts/probes/expand_centering_probe.py`（扩张后译文按新框重排，「是否居中」取决于块自身 alignment）；`utils/font_scan.py::scan_font_faces` 的日志压制改为整棵 `fontTools.*` 树一起压（全局 `setLoggerClass` 后子 logger 自带 console handler，压根 logger 压不住）；新增 `scripts/trim_daily_log.py` 与 `scripts/hooks/pre-commit`（daily_log 3 天窗口自动裁剪）；文档瘦身（AGENTS.md 关键文件表改「一句话定位 + 最小约束 + 指针」，多篇速查砍历史细节与过期内容），并新增 `docs/技术实现/paddle-ocr-for-manga_接入调研.md`。
 
 **涉及文件：** `ui/custom_widget/row_table.py`、`ui/workbench_batch_view.py`、`ui/workbench_tasks.py`、`ui/mainwindowbars.py`、`utils/font_scan.py`、`config/stylesheet.css`、`scripts/trim_daily_log.py`（新）、`scripts/hooks/pre-commit`（新）、`scripts/probes/expand_centering_probe.py`（新）、`scripts/README.md`、`scripts/probes/README.md`、`AGENTS.md`、`docs/基础速查/`（6 篇）、`docs/技术实现/`（2 篇新）
 
@@ -116,22 +106,13 @@
 
 ## 2026-09-18
 
-### 工作台 UI 审计与逐项优化（D44 浮层形态收口 + 一批观感/状态同步修复）
+### 工作台 UI 审计与逐项优化（D44 浮层形态收口 + 一批观感／状态同步修复）
 
-**问题/需求：** 用 `scripts/workbench_render.py` 把六个任务页渲染成图做了一轮观感审计（列出 11 项），用户逐条拍板后落地。
+**摘要：** 用 `scripts/workbench_render.py` 把六个任务页渲染成图做了一轮观感审计（列 11 项），用户逐条拍板后落地。要点：审批浮层（D44，`ui/workbench_preview.py`）尺寸随图自适应（用户拖过之后不再自动改）、去掉关闭钮改点画布／Esc 关（两者走一个只在浮层可见期挂着、**一律不吞事件**的应用级过滤器）、不再抢键盘焦点（原先 `setFocus` 会把焦点从候选列表夺走，↑/↓ 翻行当场失效）、标题改报「哪一页哪个框」（`ui/workbench_tasks.py::row_caption`）、重规划与换任务时自动收起（原先会留着已被删掉那个块的截图）；参数区 bool 控件改 `ConfigCheckBox`、数值框后缀随单位走；新增 `plan_changed` 让导航计数随参数刷新、无选中行时「跳到画布」禁用；四个任务的说明与空态文案收短；渲染台宿主改 `WA_DontShowOnScreen` + `show()`（直接 `show()` 会被窗口管理器压到屏幕大小，截图随环境变）。
 
-**改动要点：**
+**验证：** `tests/test_workbench_preview.py` 16 项、`tests/test_workbench_panel.py` 35 项；`scripts/verify.py` 七步全绿。
 
-- **审批浮层（D44）形态收口**（`ui/workbench_preview.py`）：① 尺寸**随图自适应**（图片 + 标题条 + 边距，上限仍是 620×520；用户拖过标题条／拉伸过之后就不再自动改）——原先恒开 620×520，单气泡截图 134×43 泡在空底里白占画布；② **去掉关闭钮**，点画布（宿主区域）或 Esc 关闭：两者走一个**只在浮层可见期间挂着**的应用级事件过滤器，且**一律不吞事件**（画布自己的 Esc 语义不受影响），关掉即摘掉过滤器不给全局留开销；③ **不再抢键盘焦点**——原 `show_content` 收尾 `setFocus` 会把焦点从候选列表夺走，↑/↓ 翻行当场失效；④ 标题改报「哪一页哪个框」（`ui/workbench_tasks.py::row_caption`，各任务按自己的行粒度覆盖；页面名过长才按省略号截断），原先那句「100% 原比例预览（134 × 43 px）」既每行都不同又与缩放读数重复；⑤ 重规划（含批量执行完）与换任务时自动收起——原先会留着**已被删掉那个块**的截图。
-- **按钮可读性**：标题条两个动作钮（适应窗口／`1:1`）加 1px 描边 + 正常前景色（`config/stylesheet.css`）；「回到 100%」改名 `1:1`，与右侧同为小字灰字的缩放读数彻底区分。
-- **参数控件**：`ui/workbench_batch_view.py` 的 bool 参数改用 `ConfigCheckBox`（裸 `QCheckBox` 的 indicator 走原生样式，白底深勾与表格里的勾选框两套观感）；数值框后缀随「单位」选项走（`suffix_map`：px 模式 `10 px`、比例模式 `10 %`），`px` 与 `1:1` 按通用单位记号**不翻译**（含设置页那个默认扩张量输入框）。
-- **状态同步**：参数一变即刷新导航上的「还有 N 个未处理」（新增 `plan_changed` 信号——原先改扩张量到 0、列表都空了，chip 还写着 (7)）；无选中行时「跳到画布」禁用（原先装了能点却什么都不做）。
-- **文案收短**：四个任务的说明、空态提示，以及术语表／剧情页各补一行说明（原先只有空表）；扩张页提示里「请先设定扩张量——没有默认值」与输入框预填 10 自相矛盾，删该句；设置页「工作台（临时）」两条备注重写为两句话。
-- **渲染台**：`scripts/workbench_render.py` 的宿主改 `WA_DontShowOnScreen` + `show()`——直接 `show()` 会被窗口管理器压到屏幕大小（本机 960×540 屏上 1180×900 变 962×531），截图随环境变且浮层被夹成"几乎铺满中央区"。
-
-**测试：** `tests/test_workbench_preview.py` 16 项（新增自适应尺寸、手动尺寸优先、点画布关闭 + 过滤器随开关挂摘）、`tests/test_workbench_panel.py` 35 项（新增换任务收起、参数变计数刷新）；`scripts/verify.py` 七步全绿。
-
-**遗留：** 浮层位置每次仍锚画布左上角（只记住"用户调过尺寸"这一状态）；设计文档 §17 第 9 条的同批待改项 ①③④ 仍开着。
+**遗留：** 浮层位置每次仍锚画布左上角（只记住「用户调过尺寸」这一状态）；设计文档 §17 第 9 条的同批待改项 ①③④ 仍开着。
 
 **涉及文件：** `ui/workbench_preview.py`、`ui/workbench_batch_view.py`、`ui/workbench_tasks.py`、`ui/glossary_agent_panel.py`、`ui/configpanel.py`、`config/stylesheet.css`、`scripts/workbench_render.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_workbench_preview.py`、`tests/test_workbench_panel.py`、`docs/技术实现/AI辅助功能_设计与实现.md`
 
@@ -139,35 +120,21 @@
 
 ### 三处实测缺陷修复（批量写版本崩溃 / 误识别清理列表空白 / 单行浮层弹不出）
 
-**问题/需求：** 用户实机跑「简单背景修复」报错、误识别清理「显示有 15 个处理项但点进去看不到任何内容」、审批浮层在只有一行候选时一旦关掉就再也呼不出来。
+**摘要：** 三处都是真机报的，根因各自具体：① `utils/batch_versions.py::_capture_pixels` 一页多矩形直接 `np.concatenate(axis=0)`，该调用**要求各裁片同宽**，而简单背景修复一页有多条不同宽的纯色带必抛异常（实测 228 vs 130），`begin()` 吞掉后整批在写版本这步中止 ⇒ 新增 `_stack_crops` 按最大宽度**左侧对齐补零**（还原侧逐条取 `strip[y:y+h, :w]`，多出的右边距是死区、不写回图像，旧版本仍可读）。② `ui/glossary_agent_panel.py::GlossaryAgentPanel.refresh_project_state` 在面板不可见时跳过规划，却已无条件把首个任务从 `_dirty_tasks` 摘掉 ⇒ 之后 `showEvent` 也不再补规划，列表永空而导航计数照旧显示 15 条；改为脏位只由 `_ensure_current_planned` 清。③ 只有一行候选时关掉浮层后再点该行，表格选中行没变 ⇒ 不发 `itemSelectionChanged`，浮层再也弹不出来（多行时点别行碰巧能弹，故表现为「时好时坏」）⇒ 补 `cellClicked` 取预览，并让浮层 `closed` 信号经面板转达成 `forget_preview`。
 
-**改动要点：**
-
-- **批量写版本崩在拼带**（`utils/batch_versions.py::_capture_pixels`）：一页的多个矩形裁片直接 `np.concatenate(axis=0)`，**要求各裁片同宽**；简单背景修复一页有多条不同宽的纯色带，必抛 "all the input array dimensions ... must match exactly"（实测 228 vs 130），`begin()` 吞异常返回 `None` ⇒ 整批在写版本这步中止。新增 `_stack_crops`：按最大宽度**左侧对齐补零**（还原侧逐条取 `strip[y:y+h, :w]`，多出来的右边距是死区、不会写回图像，故还原侧代码不动、旧版本仍可读）。
-- **误识别清理列表长期空白**（`ui/glossary_agent_panel.py::GlossaryAgentPanel.refresh_project_state`）：面板不可见时（打开项目时工作台通常还没开）跳过规划，却已经无条件把首个任务从 `_dirty_tasks` 摘掉 ⇒ 之后 `showEvent` 也不再补规划，列表永远空、而导航计数照旧显示 15 条。改为**标脏位只由 `_ensure_current_planned` 清**（它才真正跑规划）。
-- **单行浮层关掉后弹不出来**（`ui/workbench_batch_view.py`）：只有一行候选时，关掉浮层后再点那行，表格的选中行没变 ⇒ 不发 `itemSelectionChanged`，浮层再也不会被呼出（多行时点别行碰巧能弹，故表现为"时好时坏"）。补 `cellClicked` 补取预览，并让浮层的 `closed` 信号经面板转达成 `forget_preview`（视图据此知道"预览已收起"、下次点击该重新取图）。
-
-**测试：** 三条回归用例，且都实测过"旧实现下必失败"——`tests/test_batch_versions.py` 不等宽矩形写版本并逐条还原、`tests/test_batch_simple_inpaint.py` 一页两条不等宽简单块端到端（旧实现下 `report["started"]` 为假）、`tests/test_workbench_panel.py` 关掉后再点同一行可重开 + 面板后开时首任务仍会被规划。相关 10 个测试模块 214 项全过。
+**验证：** 三条回归用例，且都实测过「旧实现下必失败」；相关 10 个测试模块 214 项全过。
 
 **涉及文件：** `utils/batch_versions.py`、`ui/glossary_agent_panel.py`、`ui/workbench_batch_view.py`、`tests/test_batch_versions.py`、`tests/test_batch_simple_inpaint.py`、`tests/test_workbench_panel.py`
 
 ---
 
-### D5：单块 Alt + 拖手柄 = 以中心缩放（PS 式即时修饰键）
+### D5：单块 Alt + 拖手柄 = 以中心缩放（PS 式即时修饰键，`ui/texteditshapecontrol.py`）
 
-**问题/需求：** 泛用工作台 D5 要求给单块加「按住 Alt 拖手柄」的缩放：与默认的"拖哪条边/角、对侧钉住"不同，Alt 下中心不动、两侧对称扩张。这条此前从未实现（仓里与 Alt 有关的只有画布的笔刷尺寸缩放）。用户实测两轮后把口径钉成 PS 那种**换算**而非"重定基"：「在拖拽时按 alt 会将目前的拖拽进度转换为按住 alt 下的变换程度」。
+**摘要：** 用户实测两轮后把口径钉成 PS 那种**换算**而非「重定基」：参考点与「场景↔本地」坐标映射全取自起手那一刻（由 `_pinResizeAnchor` 统一落定），切换时用上一次光标位置把当前帧重算一遍 ⇒ 被拖手柄始终钉在光标、对侧当场镜像出去／收回来，来回按 Alt 不累积误差。鼠标不动时也要生效 ⇒ 新增 `_ResizeModifierWatcher`（挂 `QApplication` 的键盘旁听器，`return False` 只旁听、不拦截不抢焦点，以免顶掉画布 Alt+WASD 切块）。两个坑：Qt 的 `event.modifiers()` 返回**事件之前**的状态（一律按 `key()/type()` 判断）；`_beginProxyDrag` 的跟手锚点必须仍是手柄位置。撤销沿用 `ReshapeItemCommand`。
 
-**改动要点：**
+**验证：** `tests/test_text_transform_ui.py` 新增 6 条（PyQt6 不能构造 `QGraphicsSceneMouseEvent`，桩事件提为模块级）；真机探针 9 组情形（旋转 0／30°／−45°／120°、角与边手柄、两种切换方向）跟手误差、中心漂移、对角漂移**恒为 0**。**手感仍待用户实机验收。**
 
-- 落点 `ui/texteditshapecontrol.py`：`ControlBlockItem` 按下手柄时读 `AltModifier` → `beginResize(..., center_anchor=...)`；移动事件**每帧重读**修饰键 → `TextBlkShapeControl.setResizeCenterAnchor(bool)`。
-- **口径＝换算，不是重定基**：参考点与"场景↔本地"坐标映射**全部取自起手那一刻**（默认＝起手对角手柄位置、中心模式＝起手框中心，由 `_pinResizeAnchor` 统一落定），切换时用**上一次的光标位置把当前这一帧重算一遍** ⇒ 被拖的手柄始终钉在光标上、对侧当场镜像出去／收回来，"中途切换的结果 ≡ 一开始就处于该状态拖到同一位置"，来回按 Alt 不累积误差。中心模式的几何在 `resizeFromScene` 里按 `2*center - 被拖侧` 生成，并把"当前中心"回钉到初始中心。
-- **鼠标不动时也要生效** ⇒ 新增 `_ResizeModifierWatcher`（挂在 `QApplication` 上的键盘旁听器，`return False` 只旁听不拦截、不抢焦点以免顶掉画布 Alt+WASD 切块；`TextBlkShapeControl` 是 `QGraphicsRectItem` 不是 QObject，不能自己当过滤器）；一次手势装一次、`finishResize` 卸掉。过滤器里 `RuntimeError` 必须吞——**PyQt6 从事件过滤器逃出的异常会走 `qFatal` 直接终止进程**。
-- **两个坑**：① Qt 的 `event.modifiers()` 返回的是**事件之前**的状态——`KeyPress(Key_Alt)` 里读不到 `AltModifier`、`KeyRelease` 里反而读得到，所以一律按 `key()/type()` 判断；② `_beginProxyDrag` 的跟手锚点**必须仍是手柄位置**，把它改成中心会导致位移从中心量起（第一版踩过，已回退）。
-- 撤销沿用 `ReshapeItemCommand`，无新增命令。
-
-**测试：** `tests/test_text_transform_ui.py` 新增 6 条（Alt 拖角中心不动且对角镜像／同手势两种模式结果不同／中途按下与松开 Alt 的换算与收回／鼠标不动的键盘路径／切换本身不动几何／撤销往返）；PyQt6 不能构造 `QGraphicsSceneMouseEvent`，桩事件 `_StubDragEvent` 提为模块级、按下与移动共用。真机探针 `tmp/_alt_probe3.py` 9 组情形（旋转 0／30°／−45°／120°、角手柄与边手柄、中性块与 projective 形变块、两个切换方向）⇒ 跟手误差、中心漂移、对角漂移**恒为 0**。**手感仍待用户实机验收。**
-
-**遗留：** 手动版不套"碰到邻框即停"（那是批量扩张 D5 的引擎侧行为）。
+**遗留：** 手动版不套「碰到邻框即停」（那是批量扩张的引擎侧行为）。
 
 **涉及文件：** `ui/texteditshapecontrol.py`、`tests/test_text_transform_ui.py`
 
@@ -175,15 +142,9 @@
 
 ### 工作台两个参数设置项 + 「工作台（临时）」设置页
 
-**问题/需求：** 复核时点出两处"定了但没做"：D33d 要求的「设置内参数接口」只有 `ui/batch_merge.py::MergeConfig` 里的硬编码默认值；C3 的批量扩张量则明确"不给默认值"导致界面上每次都要手填。用户拍板：两项都做成设置项，**先放一个临时页**、排版方案定了再并入既有页；C3 默认量定 **10px**。
+**摘要：** 复核时点出两处「定了但没做」：D33d 要求的「设置内参数接口」只有 `ui/batch_merge.py::MergeConfig` 里的硬编码默认值，C3 的批量扩张量则明确「不给默认值」导致每次都要手填。两项都做成设置项并**先放临时页**：`utils/config.py::ProgramConfig` 新增 `workbench_merge_oversize_ratio`（0.85）与 `workbench_expand_px`（10，用户定的默认），设置面板新增「工作台（临时）」页（导航 key `workbench_temp`，页数 9→10）。**注入在任务层而非引擎**：`ui/workbench_tasks.py` 的 `MergeTask._engine` 传 `MergeConfig(oversize_ratio=...)`、`ExpandTask.options_spec` 初值取 pcfg，引擎继续保持「参数由调用方给」，裸脚本复算不受设置影响。
 
-**改动要点：**
-
-- `utils/config.py::ProgramConfig` 新增 `workbench_merge_oversize_ratio`（0.85）与 `workbench_expand_px`（10），字段注释里写明取值依据（0.85 在样本 435 组里只命中 2 组且 0.5~0.9 之间不敏感；10px 时 88% 的框四边可完整扩张、宽 +28%／高 +17%）。
-- 设置面板新增「工作台（临时）」页（`ui/configpanel.py`，导航 key `workbench_temp`，归在 General 下；页数 9 → 10）：误聚阈值（百分比）与默认扩张量（px）两个数值框，初值取自 pcfg、改动即回写。
-- **注入在任务层而非引擎**：`ui/workbench_tasks.py` 的 `MergeTask._engine` 传 `MergeConfig(oversize_ratio=...)`、`ExpandTask.options_spec` 的初值取 `pcfg.workbench_expand_px`；引擎继续保持"参数由调用方给"（`ExpandTask.plan` 在扩张量为 0 时仍返回空列表、执行按钮禁用），**裸脚本复算不受设置影响**。
-
-**测试：** `tests/test_settings_app_page.py` 页数断言 9 → 10 并新增"两个数值项初值取自 pcfg / 改动回写 pcfg"；`tests/test_workbench_panel.py` 两条按新语义重写。
+**验证：** `tests/test_settings_app_page.py` 页数断言 9→10 并新增「初值取自 pcfg／改动回写」；`tests/test_workbench_panel.py` 两条按新语义重写。
 
 **遗留：** 临时页的归并——用户拍板**先不动**，不作为待办再问。
 
@@ -191,15 +152,9 @@
 
 ---
 
-### 工作台参数复算台与真机探针常驻（`scripts/`）
+### 工作台参数复算台与真机探针常驻（`scripts/workbench_recalc.py`、`scripts/probes/`）
 
-**问题/需求：** C1／C2／C3／C4／D39 这些参数是"测出来的"，此前复算脚本全在 `tmp/`，一清理就失去复算能力（`ui/batch_merge.py` 里那句"实测脚本随 tmp 清理已不存在"就是欠的账）。
-
-**改动要点：**
-
-- 新增 `scripts/workbench_recalc.py`：六个**只读**子命令 `merge`（`--sweep` 加阈值扫描）／`c1`／`expand`／`queue`／`review`／`hook`／`list`，支持 `--project` 指向工作副本，脚本末尾**自证样本顶层文件 mtime 未变**（只读自证）。
-- 新增 `scripts/probes/`（11 个真机探针 + 自带 `README.md`）：内存归因与释放阶梯、区域再检测真机验收等——有真机/模型依赖，写明各自的前提与期望数字。
-- 登记到位：`scripts/README.md` 与 `AGENTS.md` 的 `scripts/` 行同步；`scripts/check_docs.py` 只扫 `scripts/` 顶层，子目录不强制登记（其说明由子目录自带）。
+**摘要：** C1／C2／C3／C4／D39 这些参数是「测出来的」，此前复算脚本全在 `tmp/`，一清理就失去复算能力。新增 `scripts/workbench_recalc.py`（六个**只读**子命令 `merge`／`c1`／`expand`／`queue`／`review`／`hook`／`list`，`--sweep` 加阈值扫描，`--project` 指工作副本，脚本末尾自证样本顶层文件 mtime 未变）与 `scripts/probes/`（11 个真机探针 + 自带 README，写明各自前提与期望数字）。登记到位：`scripts/README.md` 与 AGENTS.md 同步；`scripts/check_docs.py` 只扫 `scripts/` 顶层，子目录不强制登记。
 
 **涉及文件：** `scripts/workbench_recalc.py`（新）、`scripts/probes/`（新）、`scripts/README.md`、`AGENTS.md`
 
@@ -207,81 +162,53 @@
 
 ### AI 辅助功能文档：三合一 + 删 6 份过期文档 + 全仓引用改指
 
-**问题/需求：** 泛用工作台的 A／B／C1～C4／D 全部落地后，围绕它的文档散成四份（规划／复核与拆分／术语剧情工作台_交接／AI辅助功能_规划）且互相交叠，读者要拼着看；另有 2 份上游移植期的过程材料已过期。
+**摘要：** 围绕泛用工作台的四份文档（规划／复核与拆分／术语剧情工作台_交接／AI辅助功能_规划）互相交叠，合并为 `docs/技术实现/AI辅助功能_设计与实现.md`（总纲 → 体系总览 → Part I 标签体系与框级动作 → Part II 工作台 → Part III 调参与待办）；**保留 D 编号体系**——代码注释里约 200 处按编号与「设计 §X」引用，节号与编号不要乱动；翻译 agent 的架构基线仍独立在 `docs/技术实现/翻译agent化_设计方案.md`。删 6 份并在 `scripts/audit_registry.json` 登记（现 55 条）。另外代码里还散着 30 处**不带文件名**的旧节号引用（检查器不管但语义已失效），用带期望命中数的映射脚本集中替换、落到 15 个文件。踩坑：**`check_audit` 的语料包含 `.agents/`**（SKIP_DIRS 里没有它），技能文档里提到已删文件名同样会被判残留引用。
 
-**改动要点：**
-
-- **合并为一份**：`docs/技术实现/AI辅助功能_设计与实现.md`（400 行）＝总纲 → 体系总览 → Part I 标签体系与框级动作 → Part II 工作台（术语／剧情／四个批量任务＋写回契约＋**决策一览 D1–D41**）→ Part III 调参与待办。**保留 D 编号体系**——代码注释里约 200 处按编号与「设计 §X」引用，节号与编号不要乱动。用户拍板**翻译 agent 的架构基线仍独立**在 `docs/技术实现/翻译agent化_设计方案.md`，不并进来。
-- **删除 6 份并登记** `scripts/audit_registry.json`（现 55 条）：`AI辅助功能_规划`、`术语剧情工作台_交接`、`泛用工作台_规划`、`泛用工作台_复核与拆分`、`上游v1.5.12移植_完成记录`、`不常用功能工具箱_规划`。最后两份用户判定直接删（不迁移）；`上游v1.5.12移植_完成记录` 的「与上游的持久分歧」节改以 `ui/text_engine/` 各模块注释为准。
-- **引用改指**：除带文件名的引用（`check_audit` 会报漏）外，代码注释里还散着 30 处**不带文件名**的「规划 §X」节号——检查器不管但语义已失效。做法＝写脚本集中做「旧节号 → 新节号（`设计 §X`）」映射替换、**每对带期望命中数回显**，一次跑完再逐条核对（30 处里 1 处因同文件重复文本漏掉，补手工修），落到 15 个文件；另改 `.agents/skills/audit-docs/SKILL.md` 里指向已删文档的两处措辞。
-- 顺带修 `docs/技术实现/区域再检测_设计与实现.md` 一处指向 `tmp/` 生成物的失效引用（`verify.py` 的 docs 步由此转绿）。
-- 踩坑：**`check_audit` 的语料包含 `.agents/`**（SKIP_DIRS 里没有它）⇒ 技能文档里提到已删文件名同样会被判残留引用。
-
-**测试：** `check_docs` 22 篇全绿（原 27）／`check_audit` 55 条已删通过／`check_syntax` 通过／受影响测试 10 个文件全绿。
+**验证：** `check_docs` 22 篇全绿（原 27）／`check_audit` 55 条通过／`check_syntax` 通过／受影响 10 个测试文件全绿。
 
 **涉及文件：** `docs/技术实现/AI辅助功能_设计与实现.md`（新）与 6 份删除、`docs/项目概述.md`、`docs/基础速查/AI辅助标签体系使用说明.md`、`docs/技术实现/区域再检测_设计与实现.md`、`AGENTS.md`、`scripts/audit_registry.json`，以及 15 个代码／测试文件里的注释引用
 
 ---
 
-### 页范围数值框：修「单跑过、连跑必红」的用例间残留
+### 页范围数值框：修「单跑过、连跑必红」的用例间残留（`tests/test_page_range_progress.py`）
 
-**问题/需求：** 全量 pytest 里唯一的红是 `tests/test_page_range_progress.py::PageRangeSpinBoxTest::test_clicks_elsewhere_reach_the_native_editor`（`lineEdit().hasFocus()` 为假），单跑 PASS、与同文件前一个用例连跑 3/3 必失败。定位＝**用例间残留**：offscreen 平台上 `deleteLater` 不会立刻销毁前一个 top-level 窗口，它仍占着激活态 ⇒ 本用例新 `show()` 的窗口拿不到激活，Qt 就不把焦点交给它的 `QLineEdit`。控件本身经探针证明正常。
+**摘要：** 全量 pytest 里唯一的红是 `test_clicks_elsewhere_reach_the_native_editor`（`lineEdit().hasFocus()` 为假），单跑 PASS、与同文件前一用例连跑必失败。定位＝**用例间残留**：offscreen 平台上 `deleteLater` 不会立刻销毁前一个 top-level 窗口，它仍占着激活态 ⇒ 本用例新 `show()` 的窗口拿不到激活，Qt 就不把焦点交给它的 `QLineEdit`（控件本身经探针证明正常）。改法：`_spin()` 里补 `activateWindow()`；清理从裸 `deleteLater` 换成 `_close_spin`（`close()` + `deleteLater()` + `processEvents()`）。
 
-**改动要点：** `_spin()` 里补 `spin.activateWindow()`；清理从裸 `deleteLater` 换成 `_close_spin`（`close()` + `deleteLater()` + `processEvents()`）。
-
-**测试：** 判据＝**先用 `git show HEAD:<path>` 导出改前版本复现出同一条失败**（1 failed / 9 passed），再跑新版本连跑 3 次全绿；全量 pytest 1185 passed / 1 skipped / 0 failed。
+**验证：** 判据是**先用 `git show HEAD:<path>` 导出改前版本复现出同一条失败**（1 failed / 9 passed），再跑新版本连跑 3 次全绿。
 
 **涉及文件：** `tests/test_page_range_progress.py`
 
 ---
 
-### 软键盘不再随启动自动启用
+### 软键盘不再随启动自动启用（`pcfg.symbol_keyboard_enabled`）
 
-**问题/需求：** 软键盘（窄栏图标）是"功能开关"型入口，勾选态就是 `pcfg.symbol_keyboard_enabled`。它此前与其他窄栏浮层不同——**每次启动都会按上次会话的值自动启用**（其余浮层有"启动不自动展开"的清账名单），用户要求把软键盘也纳入名单。
+**摘要：** 软键盘是「功能开关」型入口（勾选态即 `pcfg.symbol_keyboard_enabled`），此前每次启动都会按上次会话的值自动启用，用户要求纳入「启动不自动展开」清账名单 ⇒ `ui/mainwindow.py::MainWindow` 的启动清账名单加入 `symbol_keyboard_enabled`。注意该字段在 `install_symbol_launcher`（构造 SceneTextManager 时，**早于清账段**）就已写进图标勾选态，所以除清字段还要把图标复位，否则会出现「图标亮着、开关是关的」；复位走 `toggled`，槽里对此时尚为 `None` 的 `symbol_dock` 是空操作。清账只作用于启动，手点图标仍能正常启用。
 
-**改动要点：** `ui/mainwindow.py::MainWindow` 的启动清账 `for flag in (...)` 名单加入 `symbol_keyboard_enabled`。该字段在 `install_symbol_launcher`（构造 SceneTextManager 时，**早于清账段**）就已写进图标勾选态，所以除清字段外还要把图标复位，否则会出现「图标亮着、开关是关的」；复位走 `toggled`，槽里对此时尚为 `None` 的 `symbol_dock` 是空操作。清账只作用于启动，手点图标仍能正常启用。
-
-**测试：** 真机探针 `tmp/_s18_softkb_startup.py`（**必须窗口模式**，offscreen 起不来 `FramelessWindow`；`config/config.json` 先备份后还原）：模拟上次会话开着键盘构造主窗口 ⇒ 开关与图标都归零、dock 未创建；随后手点开／关仍正确。8 项断言全 PASS。
+**验证：** 真机探针（**必须窗口模式**，offscreen 起不来 `FramelessWindow`；`config/config.json` 先备份后还原）8 项断言全 PASS。
 
 **涉及文件：** `ui/mainwindow.py`
 
 ---
 
-### 工作台 UI 优化（一）：导航两级化 + 底部状态条 + 目视验收渲染台
+### 工作台 UI 优化（一）：导航两级化（D42）+ 底部状态条（D43）+ 目视验收渲染台
 
-**问题/需求：** 用户启动工作台 UI 优化流程，点出三处：① 顶部六个任务钮平铺，对不了解工作台的用户没有分类线索——应当先给「OCR／图像修复／翻译」这种管线大类，大类下再放细分任务；② 底部「草稿已载入：术语 0 条…」明明只读却画成输入框（圆角描边），意义不明；③ 我方渲染脚本出的验收图全是方块（编码/字体问题），需要修好以便逐项判断。
+**摘要：** ① **导航两级化（D42）**：一级＝管线阶段大类（文字与 OCR／图像修复／翻译），二级＝该大类下的任务 chip；计数两级都缀，切大类落回**该大类上次用过的任务**；`WORKBENCH_ORDER` 改由 `WORKBENCH_CATEGORIES` 摊平 ⇒ 前四项仍是 `CLEANUP_TASK_IDS`、跳步提示口径不变（既有用例未改一行）。大类标签的翻译上下文必须用 `WorkbenchTaskNav`——`GlossaryAgentPanel` 里 `"Translation"` 已被术语表列头占为「译文」，同 context 同 source 只能有一个译文。② **底部状态条（D43）**：日志区用 ID 选择器抹掉 `ConfigTextEdit` 的输入框外观；日志跨任务共用，故批量任务的行前缀任务名、空列表时不再把页面摘要抄进日志。③ 容器底色原先空转（纯 `QWidget` 不上屏 QSS background），按仓库既有做法开 `WA_StyledBackground`。④ `tmp/wb_render.py` 正式化为 `scripts/workbench_render.py`，**不许设 `QT_QPA_PLATFORM=offscreen`**（离屏平台字体族实测为 0，任何文字都是豆腐块）。
 
-**改动要点：**
-
-- **导航两级化（D42）**：`ui/glossary_agent_panel.py::WorkbenchTaskNav` 由「六个互斥任务钮的 2×3 网格」改为「一级大类页签 + 二级任务 chip」。大类用**管线阶段名**（文字与 OCR／图像修复／翻译），归属：文字与 OCR＝误识别清理／合并相邻框／框扩张，图像修复＝背景修复，翻译＝术语表／剧情。`WORKBENCH_ORDER` 改为由 `WORKBENCH_CATEGORIES` 摊平 ⇒ 前四项仍是 `CLEANUP_TASK_IDS`，跳步提示的下标比较与 `earlier_pending` 口径不变（既有用例未改一行）。切大类落到**该大类上次用过的任务**（不是每次重置成第一个）。计数两级都缀：chip 缀自己的，一级页签缀本大类之和（切到别的大类也看得见还有活）。大类标签的翻译上下文用 `WorkbenchTaskNav` 而非 `GlossaryAgentPanel`——后者里 `"Translation"` 已被术语表列头占为「译文」，同 context 同 source 只能有一个译文（实测页签一度真的显示成「译文」）。
-- **底部状态条（D43）**：日志区改 `objectName="WorkbenchStatusBar"` 的容器承载，`QTextEdit#WorkbenchLogView` 规则（ID 选择器优先于类名选择器）抹掉 `ConfigTextEdit` 的输入框外观（平底色、去圆角、无边框、`NoFrame`），靠顶边线与候选列表分开；「撤销上次批量」移到右端、对齐顶部。顺带修两处日志噪声：日志跨任务共用，故批量任务的行**前缀自己的任务名**（`_append_log(text, task_id)`，`_toast` 同）；`ui/workbench_batch_view.py::BatchTaskView.replan` 在空列表时**不再把页面摘要抄进日志**（它就是页面上那行，抄进全局日志后会出现在别的任务页上）。
-- **容器底色原先空转**：`QWidget#WorkbenchSurface`／`WorkbenchTaskNav` 的 QSS 底色一直在，但纯 `QWidget` 不上屏 QSS background ⇒ 规则静默失效。按仓库既有做法（`ui/tag_toolbar.py`）统一走新增的 `_styled()` 开 `WA_StyledBackground`。
-- **目视验收渲染台**：`tmp/wb_render.py`（未纳入版本控制）正式化为 `scripts/workbench_render.py`，修两个致命问题——**不许设 `QT_QPA_PLATFORM=offscreen`**（离屏平台 `QFontDatabase.families()` 实测为 0，任何文字都是豆腐块，且 `setFont` 救不回来）、**要按 `launch.py` 装字体＋语言＋主题**（原先截图是白底裸控件，观感毫无参考价值）。默认 2 倍率，stdout 回显两级导航结构（页签文字／chip 文字／可见 chip／计数），不看图也能核对。
-
-**测试：** `tests/test_workbench_panel.py` 新增 4 条（两级结构与大类切换／页签计数＝本大类之和／切回大类落回上次任务／任务→页下标一一对应）＋ 1 条（日志行前缀任务名、worker 行不缀）。`test_workbench_panel.py` 31 项、`test_glossary_agent_panel.py` 12 项全绿。渲染台实跑：六页 + 空态页均正常出图，中文正常显示。
-
-**遗留（已登记进设计文档 §17 第 9 项）：** 空态下日志只有「草稿已载入」与当前任务无关；图像修复页无候选时仍有「跳到画布」；执行钮在无候选时用带计数的文字而非禁用＋原因；参数改动走 180ms 防抖、观感像"没反应"；预览区固定高度留白。逐条与用户确认后再改。
+**遗留（已登记进设计文档 §17 第 9 项）：** 空态下日志与当前任务无关、无候选时执行钮仍用带计数文字而非禁用＋原因、参数改动 180ms 防抖像「没反应」、预览区固定高度留白等，逐条与用户确认后再改。
 
 **涉及文件：** `ui/glossary_agent_panel.py`、`ui/workbench_batch_view.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`scripts/workbench_render.py`（新）、`scripts/README.md`、`tests/test_workbench_panel.py`、`AGENTS.md`、`docs/技术实现/AI辅助功能_设计与实现.md`
 
-> **过程说明：** 本轮中途工作区被一次 `git reset --hard origin/main` 清过（HEAD 由 `5ecfad32` 前进到 `518398ba`），当时未提交的 `ui/`、`config/`、`translate/` 改动随之丢失（未纳入版本控制的渲染脚本与测试文件存活），上述改动按同一口径逐条重做，并在新基线上复核。工作区里同时有别的在途改动时，动 `reset --hard`／`checkout` 前请先看 `git status`（AGENTS.md「多代理协作」）。
+> **过程说明：** 本轮中途工作区被一次 `git reset --hard origin/main` 清过（HEAD 由 `5ecfad32` 前进到 `518398ba`），当时未提交的 `ui/`、`config/`、`translate/` 改动随之丢失，上述改动按同一口径逐条重做。工作区里同时有别的在途改动时，动 `reset --hard`／`checkout` 前请先看 `git status`（AGENTS.md「多代理协作」）。
 
 ---
 
-### 工作台 UI 优化（二）：审批预览改浮层 + 简单背景判据补两条
+### 工作台 UI 优化（二）：审批预览改浮层（D44）+ 简单背景判据补两条（D45）
 
-**问题/需求：** ① 预览框尺寸过小且固定（120~280px 高），用户实测 433×395px 的审批图就被截；要求支持滚轮缩放与拖拽平移，并倾向**放到工作台外面**做成浮层（不占工作台宽度与纵向空间），先做一版看过再定方向。② 背景修复里很多"明明是简单背景（甚至 100% 纯色气泡）却判不出"，需要优化检查逻辑。
+**摘要：** ① **预览改浮层（D44）**：新增 `ui/workbench_preview.py::WorkbenchPreviewPanel`——in-window child（同 `ui/custom_widget/rail_dock_panel.py::RailDockPanel` 做法，不占工作台宽度），滚轮**以光标为锚点**缩放、拖拽平移、双击适应窗口；页内预览区撤掉，改由 `preview_requested` 信号把图与标题交给浮层，**D23 的「100% 原比例」口径不变**（缩放只能由用户发起）。② **简单背景判据（D45，阈值不动）**：诊断出「判不出」是**几何／遮罩**判定失败而非颜色判据失败——判据靠最外那条 1px 兜底外框围出闭合轮廓，于是遮罩贴到裁剪边界时会把外框擦掉、邻块遮罩落进裁剪窗会把包围盒撑成跨块并集。改法：`utils/textblock_mask.py::extract_ballon_mask` 分析前**外补 3px**，新增 `modules/inpaint/base.py::block_local_mask`（按连通域只留与本块矩形相交的遮罩、筛不出时原样返回）并由 `classify_simple` 的新参数 `blk_rect` 与两条调用路径传入本块矩形。量化「判不出」**4/4 → 0/4**，两张渐变反向对照改前改后都判复杂（没被放过）。注意合成场景的遮罩必须画成**笔画**——盖满整块会把渐变背景一起盖掉。
 
-**改动要点：**
+**验证：** 新增 `tests/test_workbench_preview.py` 14 项、`tests/test_batch_simple_inpaint.py` 7 项；另修正一条旧用例（它用 `img[:50,:50]` 却声称「裁剪区内没有掩码」，实际有、只是贴在裁剪边界上）。真工程命中率对比跑 `scripts/workbench_recalc.py c1 --project <目录>`（改前基线 401 简单／131 复杂／250 判不出）。
 
-- **预览浮层（D44）**：新增 `ui/workbench_preview.py::WorkbenchPreviewPanel`——in-window child of `MainWindow.centralStackWidget`（与 `ui/custom_widget/rail_dock_panel.py::RailDockPanel` 同款做法，跟着窗口走、盖在画布页上），拖标题条移动、四边四角拉伸、Esc/× 关闭；内容区滚轮**以光标为锚点**缩放（0.1x~8x）、左键拖拽平移（内容小于视口时自动居中，拖不出边界）、双击适应窗口，标题条给「适应窗口／100%」与当前倍率。`ui/workbench_batch_view.py::BatchTaskView` 删掉页内预览区（`_preview_box`／`_preview_area`／`_preview_image` 一并撤掉），改为新增 `preview_requested` 信号把 **100% 原比例**的图与标题交给浮层；面板懒建浮层并接线，换项目时收掉。**D23 的"100% 原比例"口径不变**：打开与换图都回 100%，不自动缩到适应窗口，缩放只能由用户发起。
-- **简单背景判据补两条（D45，阈值不动）**：先诊断清楚「判不出」是**几何/遮罩**判定失败而非颜色判据失败——判据靠"最外那条 1px 兜底外框"围出一个包住全部遮罩像素的闭合轮廓，于是 ① 遮罩贴到裁剪边界时 `AND (255 - mask)` 会把外框那一截擦掉，一个闭合轮廓都不剩；② 裁剪窗口是块的 1.7 倍外扩，**邻块遮罩落进来**会把遮罩包围盒撑成跨块并集，没有任何轮廓包得住它。改法：`utils/textblock_mask.py::extract_ballon_mask` 分析前**外补 3px**（图像 replicate、遮罩补 0），外框永远擦不掉；新增 `modules/inpaint/base.py::block_local_mask`（按连通域只留与本块矩形相交的遮罩，筛不出时原样返回、不把情况改坏），由 `modules/inpaint/base.py::classify_simple` 的新参数 `blk_rect` 与两条调用路径（`InpainterBase.inpaint` 逐块分支、`ui/batch_inpaint.py` 的扫描）一起传入本块矩形。
-- **量化（合成失败场景 A/B，"pad0＋无矩形"＝旧行为 对照 "pad3＋矩形"）**：「判不出」**4/4 → 0/4**；其中"紧邻框 + 纯色气泡"由判不出变**简单**，"遮罩压裁剪边界"由判不出变可判；两张反向对照（同样场景但气泡是渐变）**改前改后都判复杂**，没有被放过成简单。注意合成场景的遮罩必须画成**笔画**——盖满整块会把渐变背景一起盖掉，渐变块也会判成简单（第一版探针踩过）。
-- **文档口径**：「审批预览在列表下方展开、只滚动不缩放」这条随 D44 改写为「默认 100%、不自动适应窗口，缩放由用户显式发起」。
-
-**测试：** 新增 `tests/test_workbench_preview.py`（14 项：默认 100%／适应窗口只缩不放／小图不放大／滚轮以光标为锚点／缩放上下限／拖拽平移与边界钉住／小图居中／双击适应／无图显示原因／标题条拖动与宿主内夹取／角手柄拉伸与地板尺寸／左缘只动左缘／Esc 关闭／关闭后重选重开仍回 100%）。`tests/test_workbench_panel.py` 的预览用例改为断言「交给浮层的图不缩放 + 浮层默认 100%」；`tests/test_batch_simple_inpaint.py` 新增 7 项（块局部遮罩两条单元 + 邻块与渐变对照 + 遮罩贴边 + 补边不改干净区结论 + 端到端 plan 计数），并修正一条旧用例——它用 `img[:50, :50]` 却声称"裁剪区内没有掩码"（实际有、只是贴在裁剪边界上），补边后该裁剪区能正确判出「纯色气泡＝简单」，用例改用真的没有掩码的 `[:30, :30]`。`scripts/verify.py --smoke` 全绿。
-
-**遗留：** 气泡轮廓被裁剪区切断的块（如贴页边且框比气泡小的），轮廓围不出来时仍走兜底区域判成**复杂**（保守跳过，不会误涂）——要进一步吃下这批，方向是「兜底区域由整窗改为遮罩包围盒 + 小外扩」或镜像补边，属判据语义变更，等用户定。真工程命中率请跑 `scripts/workbench_recalc.py c1 --project <目录>` 与改前基线（401 简单／131 复杂／250 判不出）对比。
+**遗留：** 气泡轮廓被裁剪区切断的块（如贴页边且框比气泡小的）仍走兜底判**复杂**（保守跳过、不会误涂）；进一步吃下属判据语义变更，等用户定。
 
 **涉及文件：** `ui/workbench_preview.py`（新）、`ui/workbench_batch_view.py`、`ui/glossary_agent_panel.py`、`modules/inpaint/base.py`、`utils/textblock_mask.py`、`ui/batch_inpaint.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`scripts/workbench_render.py`、`tests/test_workbench_preview.py`（新）、`tests/test_workbench_panel.py`、`tests/test_batch_simple_inpaint.py`、`AGENTS.md`、`docs/技术实现/AI辅助功能_设计与实现.md`
 
@@ -289,19 +216,14 @@
 
 ### 默认文字检测器改为 ysgyolo（`label.other` 同步默认关闭）
 
-**问题/需求：** 用户确认把 ysgyolo 作为默认文字检测器（它刻意忽略难以识别的拟声词、只认清晰的气泡文本，与本项目主流工作流一致），并把当前配置里的参数作为代码默认；其中 `label.other` 保持关闭。
+**摘要：** `utils/config.py::ModuleConfig` 的 `textdetector` 默认值由 `ctd` 改为 `ysgyolo`（`ctd` 仍在注册表里，照旧可选）；`modules/textdetector/detector_ysg.py::YSGYoloDetector` 的 `label.other` 默认由 `True` 改为 `False`——`other` 拉的是覆盖整个气泡的**气泡级框**（不只是多一层遮罩），而检出框一律进 `utils/textblock.py::mit_merge_textlines` 的合并池，于是多出若干「整只气泡」的 `TextBlock` 会被 OCR／翻译／渲染（实测同一页块数 9→15、遮罩覆盖 5.09%→15.03%）；对修复侧则把裁剪窗吃光，简单背景判据直接判不出（实测 6/15）。其余参数代码默认已与当前配置一致；`device` 保持 `modules/base.py::DEVICE_SELECTOR`（跟随本机可用设备），未钉成 `cpu`。
 
-**改动要点：**
+**注意：** ysgyolo 需 `ultralytics` 与 `data/models/ysgyolo_yolo26_2.0.pt`（模型文件被 gitignore），两者缺失时 `launch.py` 按既有兜底静默降级为 `none` 检测器——与原先默认 `ctd` 情形一致。
 
-- `utils/config.py::ModuleConfig` 的 `textdetector` 默认值由 `ctd` 改为 `ysgyolo`（`ctd` 仍在注册表里，用户在设置页／运行对话框照旧可选）。
-- `modules/textdetector/detector_ysg.py::YSGYoloDetector` 的 `label.other` 默认由 `True` 改为 `False`，并在该处写明理由：`other` 拉的是覆盖整个气泡的**气泡级框**而不只是多一层遮罩——检出框一律进 `utils/textblock.py::mit_merge_textlines` 的合并池，于是多出若干「整只气泡」的 `TextBlock` 会被 OCR／翻译／渲染（实测同一页块数 9→15、页面遮罩覆盖 5.09%→15.03%）；对修复侧则是遮罩把裁剪窗吃光，简单背景判据的「无非文字像素」分支直接判不出（实测 6/15）。要不要利用它的「气泡本身」信息另议。
-- 其余参数（model path／confidence 0.3／IoU 0.5／detect size 1024／merge text lines／mask dilate size 2 等）代码默认已与当前配置一致，未动；`device` 保持 `modules/base.py::DEVICE_SELECTOR`（跟随本机可用设备），未钉成 `cpu`。
+**验证：** `scripts/verify.py` 七步全绿（含启动冒烟）；另静态确认全新 `ModuleConfig()` 取到 `ysgyolo`、`YSGYoloDetector()` 默认有效标签为五项（不含 `other`）。
 
-**测试：** `scripts/verify.py` 七步全绿（含启动冒烟，因同批改动命中 `ui/configpanel.py`）。另静态确认全新 `utils/config.py::ModuleConfig()` 取到 `ysgyolo`、`YSGYoloDetector()` 默认有效标签为五项（不含 `other`）；`tests/` 与 `docs/` 中无「默认检测器＝ctd」的断言或表述需要同步。**注意**：ysgyolo 需 `ultralytics` 与 `data/models/ysgyolo_yolo26_2.0.pt`（模型文件被 gitignore），两者缺失时 `launch.py` 按既有兜底静默降级为 `none` 检测器——与原先默认 `ctd`（模型同样 gitignore）情形一致。
+**遗留（用户已确认后做）：** 在检测器参数区加一段模型行为特性备注，本轮不做。
 
 **涉及文件：** `utils/config.py`、`modules/textdetector/detector_ysg.py`
 
-**遗留（用户已确认后做）：** 在检测器参数区加一段模型行为特性备注，方便用户选择，本轮不做。
-
 ---
-
