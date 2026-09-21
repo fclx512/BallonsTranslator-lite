@@ -26,6 +26,26 @@
 
 ---
 
+### README 换新（部署/更新段按代码重写）+ 技术文档归档压缩（9 篇 `_存档`）
+
+**摘要：** ①README 正式替换：定位段与用前须知改写成「取舍标准 + 面向的用法」，去掉宣言式表述；**部署/更新段按代码核对后重写**——原「一键包不含 git、无法经启动脚本或应用内更新，应用内检查在 Help→About」三条全不成立：`launch.bat` 有 ZIP 形态分支（`--update`/`--check-update` → `scripts/check_update.py` 按 `manifest.json` 增量取源文件、下次启动应用），应用内更新在**设置 → 应用 → 更新**（`utils/updater.py::BallonsTranslatorUpdater` 下 release 源码 zip、原子替换白名单目录、不碰 `data/`），另有「开发者通道：检查提交更新」；CUDA 索引表补 `cu130` 档（`utils/env_diagnostic.py::_CUDA_TIERS` 是唯一真相）、模型下载时机改述为「选中模块时下载」。②技术文档归档：9 篇已完结文档改 `_存档` 后缀并压成「结论 + 约束与坑 + 指针」（效果栈 355→85 行、模型文件 352→205、区域再检测 267→134），「处理」那篇去前缀后清理陈旧表述（对照代码纠出 6 处与实现不符，如 guardrails.py 实为 validator.py、工具面复用 `utils/ai_tools.py::execute_tool`、`TOOL_RESULT_CHAR_CAP`=24000）。③`docs/项目概述.md` 索引拆成「活文档 / 已归档」两表并写明 `_存档` 命名约定。
+
+**验证：** `scripts/check_docs.py` 通过；归档改名引发的 64 处引用（代码 docstring、`AGENTS.md`、`scripts/audit_registry.json`、probes README）同步完毕。
+
+**涉及文件：** `README.md`、`README_EN.md`、`AGENTS.md`、`docs/项目概述.md`、`docs/技术实现/`（9 篇 `_存档` + `翻译agent化_设计方案.md` + `CUDA环境与索引_说明.md`）、`scripts/audit_registry.json`、`utils/global_styles.py`、`utils/memory_release.py`、`ui/fontstyle_manager.py`、`manifest.json`
+
+---
+
+### CUDA 索引分档收成唯一真相 + `install_cuda.bat` 重写 + 三层回归台
+
+**摘要：** ①分档阈值收进 `utils/env_diagnostic.py::_CUDA_TIERS`（CC≥10 → `cu132`、≥9 → `cu130`、≥6 → `cu126`、更低不支持），`install_cuda.bat` 与它同阈值，两侧不再各写一套。②删掉「`cu124`」「`nightly/cu128`」两条推荐：cu124 最后一个版本是 torch 2.6.0，装了会把已有更新版本的 torch 静默降级；nightly 通道版本天天漂。`ui/network_settings_dialog.py` 的 pip extra index 占位符同步改 `cu126`。③`launch.py` 取消 torch 版本钉死（原 `torch==2.7.1` 对已有更新版本的用户是降级，且 cu132 根本不发该版本、命令直接失败），`--reinstall-torch` 改为 `-U torch torchvision` 且不带 torchaudio（新索引不发、本项目无音频 IO）。④验证做成三层：L1 静态（`tests/test_cuda_install_env.py` 断言禁用写法与两侧映射一致）、L2 离网沙箱（`tests/cuda_sandbox.py` 用假 python.exe 驱动脚本全分支）、真机行为台（`tests/test_install_cuda_script.py` 真跑 cmd），另补只读体检台 `scripts/check_cuda_env.py`（回答"某索引还活着吗/本机现在什么状态"，不装不卸）。
+
+**验证：** 相关 6 个测试文件 pytest 111 passed；`scripts/verify.py` 全绿。
+
+**涉及文件：** `install_cuda.bat`、`utils/env_diagnostic.py`、`launch.py`、`ui/network_settings_dialog.py`、`scripts/check_cuda_env.py`、`tests/test_cuda_install_env.py`、`tests/cuda_sandbox.py`、`tests/test_install_cuda_script.py`、`tests/test_platform_torch_detect.py`、`docs/技术实现/CUDA环境与索引_说明.md`
+
+---
+
 ## 2026-09-20
 
 ### 引导包发行链路：`scripts/build_win_minimal.ps1` + 首启动镜像/uv/按需依赖（附四条修正）
@@ -104,17 +124,17 @@
 
 **摘要：** 新增模块侧声明 `modules/base.py::BaseModule.requires_gpu`（贯通 `utils/registry.py::ModuleSpec`、`utils/lazy_registry.py::LAZY_CLASS_ATTRS`、`modules/__init__.py::GET_MODULE_REQUIREMENTS`），首用例 `modules/ocr/ocr_vl_manga.py`；判据 `modules/base.py::accelerator_available` 取 `DEFAULT_DEVICE != "cpu"`（**刻意不用** `torch.cuda.is_available()`——xpu/mps/directml 同样跑得动）；硬闸门落在 `ui/model_downloads.py::ModelDownloadRegistry.start`（命中即拒，pip 依赖与权重都不碰），文案与判据同处一地（`gpu_required_message`／`gpu_requirement_block`）。两个入口各按自己的惯例弹同一文案：「模型文件」页下载钮，与 `ui/module_manager.py::_ensure_module_deps`（后者是 §5.1「选模块不弹窗」的有意例外，模块照常切换）；面板徽章改「需要 GPU」而行仍可点（`ui/model_files_panel.py::_badge_of`），加载期缺文件提示也换 GPU 口径、不再指路去一个会拒绝你的下载钮。
 
-**闸门只拦下载、不设运行侧障碍**（用户拍板：提示到位就够了，没必要故意妨碍）——第二段文案相应说「不提供下载」，与实现同口径；运行侧仍是 `_resolve_device` 警告后退回 CPU，手工放入权重照样能跑。文案措辞**由用户 2026-09-20 定稿，改动前先问**；取舍的完整记录见 `docs/技术实现/模型文件管理_设计方案.md` §5.5。
+**闸门只拦下载、不设运行侧障碍**（用户拍板：提示到位就够了，没必要故意妨碍）——第二段文案相应说「不提供下载」，与实现同口径；运行侧仍是 `_resolve_device` 警告后退回 CPU，手工放入权重照样能跑。文案措辞**由用户 2026-09-20 定稿，改动前先问**；取舍的完整记录见 `docs/技术实现/模型文件管理_设计方案_存档.md` §5.5。
 
 **顺带修掉一个 i18n 提取器盲区：** `scripts/i18n_common.py` 的 `QCoreApplication.translate` 正则原先只认「两个参数同一种引号」，`translate("ctx", '文本')` 这种混合写法两条正则都匹配不到、静默漏进 .ts（三条既有文案因此在中文界面一直显示英文）。
 
 **验证：** CPU 依赖包实测闸门拒绝（`start()` 返回 False、注册表无任务、其他 OCR 模块不受影响）、开发包放行、开发包加 `BALLOONTRANS_CPU_ONLY=1` 也拒绝；`tests/test_model_downloads.py::TestGpuGate` 新增 7 项钉住拒绝分支（开发机自带 CUDA，不打补丁走不到）；i18n 三查 + qm 重编 + `QTranslator` 实测载出中文，渲染图见 `tmp/00_gpu_refused_zh.png` 等三张。
 
-**涉及文件：** `modules/base.py`、`modules/ocr/ocr_vl_manga.py`、`modules/__init__.py`、`utils/registry.py`、`utils/lazy_registry.py`、`ui/model_downloads.py`、`ui/model_files_panel.py`、`ui/module_manager.py`、`scripts/i18n_common.py`、`tests/test_model_downloads.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`AGENTS.md`、`docs/技术实现/模型文件管理_设计方案.md`（新增 §5.5）、`docs/基础速查/依赖库说明.md`
+**涉及文件：** `modules/base.py`、`modules/ocr/ocr_vl_manga.py`、`modules/__init__.py`、`utils/registry.py`、`utils/lazy_registry.py`、`ui/model_downloads.py`、`ui/model_files_panel.py`、`ui/module_manager.py`、`scripts/i18n_common.py`、`tests/test_model_downloads.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`AGENTS.md`、`docs/技术实现/模型文件管理_设计方案_存档.md`（新增 §5.5）、`docs/基础速查/依赖库说明.md`
 
 ### 开发日志规范改「可检索优先」+ AGENTS.md 瘦身（不常用技术点只留钩子）
 
-**摘要：** 日志定位改为**主要给 AI 读的时间索引**（用户基本不看它）：格式固定三行——标题（带关键符号名／配置字段名／D 编号，供 grep）、`**摘要：**`（2~4 句，只写决策与理由）、`**涉及文件：**`（最常用的检索键），实现过程留给 commit body 与设计文档、一条 4~8 行；三天存量按此重写（25741 → 16666 字符，降 35%，19 条不丢）。3 天窗口保留，另写明更早记录的 git 回查口令（`git log --grep`／`git log --follow -p`／`git show <rev>:docs/daily_log.md`），配套要求**提交信息与日志标题用同一批关键词**，日志被裁掉也不丢线索。AGENTS.md 侧按「不常用的技术点只留一句定位 + 指针」收一遍：`modules/ocr/ocr_vl_manga.py` 的实现坑（整块裁剪不逐行、`use_cache`、`add_prefix_space=None`）已在 `docs/技术实现/paddle-ocr-for-manga_接入调研.md` 里，行内不再重复；模型文件管理四行与 `utils/memory_release.py` 同样只留约束与指针。
+**摘要：** 日志定位改为**主要给 AI 读的时间索引**（用户基本不看它）：格式固定三行——标题（带关键符号名／配置字段名／D 编号，供 grep）、`**摘要：**`（2~4 句，只写决策与理由）、`**涉及文件：**`（最常用的检索键），实现过程留给 commit body 与设计文档、一条 4~8 行；三天存量按此重写（25741 → 16666 字符，降 35%，19 条不丢）。3 天窗口保留，另写明更早记录的 git 回查口令（`git log --grep`／`git log --follow -p`／`git show <rev>:docs/daily_log.md`），配套要求**提交信息与日志标题用同一批关键词**，日志被裁掉也不丢线索。AGENTS.md 侧按「不常用的技术点只留一句定位 + 指针」收一遍：`modules/ocr/ocr_vl_manga.py` 的实现坑（整块裁剪不逐行、`use_cache`、`add_prefix_space=None`）已在 `docs/技术实现/paddle-ocr-for-manga_接入调研_存档.md` 里，行内不再重复；模型文件管理四行与 `utils/memory_release.py` 同样只留约束与指针。
 
 **验证：** `scripts/trim_daily_log.py --check` 确认新格式仍能被窗口裁剪正确解析；`scripts/verify.py` 全绿。
 
@@ -154,7 +174,7 @@
 
 ### 本批收尾：RowTable 可读性打磨 + 扩张页改版 + 文档瘦身等（分类型提交）
 
-**摘要：** 把当天挂起的修改按类型分批提交；另修一处对齐——左栏「运行」按钮与设置图标同点左锚但宽度 33 vs 28，中心错开 2~3px。要点：RowTable 悬停行淡染，选中染底上的文字按实际观感色在 `@dragTextColor`／`@inverseTextColor` 里挑对比更高的（部分主题 `@dragTextColor` 是暗色，固定取会看不清）；`ExpandTask` 列由「旧矩形/新矩形」坐标改单列「增长」描述，并新增真机探针 `scripts/probes/expand_centering_probe.py`（扩张后译文按新框重排，「是否居中」取决于块自身 alignment）；`utils/font_scan.py::scan_font_faces` 的日志压制改为整棵 `fontTools.*` 树一起压（全局 `setLoggerClass` 后子 logger 自带 console handler，压根 logger 压不住）；新增 `scripts/trim_daily_log.py` 与 `scripts/hooks/pre-commit`（daily_log 3 天窗口自动裁剪）；文档瘦身（AGENTS.md 关键文件表改「一句话定位 + 最小约束 + 指针」，多篇速查砍历史细节与过期内容），并新增 `docs/技术实现/paddle-ocr-for-manga_接入调研.md`。
+**摘要：** 把当天挂起的修改按类型分批提交；另修一处对齐——左栏「运行」按钮与设置图标同点左锚但宽度 33 vs 28，中心错开 2~3px。要点：RowTable 悬停行淡染，选中染底上的文字按实际观感色在 `@dragTextColor`／`@inverseTextColor` 里挑对比更高的（部分主题 `@dragTextColor` 是暗色，固定取会看不清）；`ExpandTask` 列由「旧矩形/新矩形」坐标改单列「增长」描述，并新增真机探针 `scripts/probes/expand_centering_probe.py`（扩张后译文按新框重排，「是否居中」取决于块自身 alignment）；`utils/font_scan.py::scan_font_faces` 的日志压制改为整棵 `fontTools.*` 树一起压（全局 `setLoggerClass` 后子 logger 自带 console handler，压根 logger 压不住）；新增 `scripts/trim_daily_log.py` 与 `scripts/hooks/pre-commit`（daily_log 3 天窗口自动裁剪）；文档瘦身（AGENTS.md 关键文件表改「一句话定位 + 最小约束 + 指针」，多篇速查砍历史细节与过期内容），并新增 `docs/技术实现/paddle-ocr-for-manga_接入调研_存档.md`。
 
 **涉及文件：** `ui/custom_widget/row_table.py`、`ui/workbench_batch_view.py`、`ui/workbench_tasks.py`、`ui/mainwindowbars.py`、`utils/font_scan.py`、`config/stylesheet.css`、`scripts/trim_daily_log.py`（新）、`scripts/hooks/pre-commit`（新）、`scripts/probes/expand_centering_probe.py`（新）、`scripts/README.md`、`scripts/probes/README.md`、`AGENTS.md`、`docs/基础速查/`（6 篇）、`docs/技术实现/`（2 篇新）
 

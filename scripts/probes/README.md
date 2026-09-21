@@ -16,7 +16,7 @@
 样本目录约定为**只读**（`D:\汉化\施工区`）；需要写操作的实验一律在副本
 （`D:\汉化\施工区副本`）上做。探针本身不写项目数据。
 
-## 一、内存归因与释放（文档：`docs/技术实现/内存释放_设计与实现.md`、`区域再检测_设计与实现.md`）
+## 一、内存归因与释放（文档：`docs/技术实现/内存释放_设计与实现_存档.md`、`区域再检测_设计与实现_存档.md`）
 
 | 脚本 | 做什么 | 关键数字 / 结论 |
 |---|---|---|
@@ -29,13 +29,13 @@
 | `release_module_attribution.py` | 那 ~690MB 是堆还是驱动/cuDNN DLL 的文件映射（决定进程内能不能救） | 模块工作集 350 → 407MB（`cublasLt64_13.dll` 单项 144MB） |
 | `release_after_trim.py` | 交回工作集之后再跑一次 CUDA：还能不能用、多慢、会不会涨回来 | 回升到 420MB，首次 0.33s |
 | `release_torch_after_reset.py` | **安全性质疑**：reset 前后 torch（caching allocator / cuBLAS）还能不能用 | 先 `empty_cache()` 再 reset 正常；**不先清就 reset → `CUBLAS_STATUS_INTERNAL_ERROR` + illegal access**（这条是硬约束） |
-| `release_cuda_context_aftermath.py` | 两件事：①验收现在的「释放内存」（卸载 + 交回工作集）之后 torch 与 `paddleocr_vl_manga` 是否照常；②复算**被删掉**的 `cudaDeviceReset` 那一步的后果（本地 ctypes 直调，不走应用代码） | ①工作集 832 → 4.5MB，torch 分配/matmul 照常、VL 加载 4.2s + 识别照常；②reset 之后 `torch.cuda.is_available()` **仍返回 True** 而第一次分配报 `CUDA error: invalid argument`，另一次实测直接段错误（exit `0xC0000005`）⇒ 只多还 70~166MB 却要重启应用、还可能崩进程，**该能力已从代码里删除**（用户 2026-09-20 拍板）。原委见 `docs/技术实现/内存释放_设计与实现.md` §4；探针第 2 步可能打崩进程，故放最后 |
+| `release_cuda_context_aftermath.py` | 两件事：①验收现在的「释放内存」（卸载 + 交回工作集）之后 torch 与 `paddleocr_vl_manga` 是否照常；②复算**被删掉**的 `cudaDeviceReset` 那一步的后果（本地 ctypes 直调，不走应用代码） | ①工作集 832 → 4.5MB，torch 分配/matmul 照常、VL 加载 4.2s + 识别照常；②reset 之后 `torch.cuda.is_available()` **仍返回 True** 而第一次分配报 `CUDA error: invalid argument`，另一次实测直接段错误（exit `0xC0000005`）⇒ 只多还 70~166MB 却要重启应用、还可能崩进程，**该能力已从代码里删除**（用户 2026-09-20 拍板）。原委见 `docs/技术实现/内存释放_设计与实现_存档.md` §4；探针第 2 步可能打崩进程，故放最后 |
 
 对应实现：`utils/memory_release.py`（两步编排：卸模型 → 交回工作集）+ 设置页
 Models → Management 的「释放内存」按钮；`pcfg.region_redetect_device` 默认 `cpu`
 就是上面第一条的产物。
 
-## 二、区域再检测真机验收（文档：`docs/技术实现/区域再检测_设计与实现.md` §6）
+## 二、区域再检测真机验收（文档：`docs/技术实现/区域再检测_设计与实现_存档.md` §6）
 
 | 脚本 | 做什么 | 期望值 |
 |---|---|---|
@@ -59,7 +59,7 @@ Models → Management 的「释放内存」按钮；`pcfg.region_redetect_device
 
 ## 四、paddleocr_vl_manga 接入验收（2026-09-20）
 
-文档：`docs/技术实现/paddle-ocr-for-manga_接入调研.md`（§3 的性能数字出自这里）、
+文档：`docs/技术实现/paddle-ocr-for-manga_接入调研_存档.md`（§3 的性能数字出自这里）、
 `docs/技术实现/模型文件管理_测试流程.md` 第 4 层。两个都**只读、不联网**（模型已在本地）。
 
 | 脚本 | 做什么 | 关键数字 / 结论 |

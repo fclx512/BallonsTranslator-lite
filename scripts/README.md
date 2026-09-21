@@ -19,6 +19,7 @@
 | `scripts/check_docs.py` | 校验 `AGENTS.md` 与 `docs/` 活文档的路径/符号引用 + scripts/README 登记齐全 | `python scripts/check_docs.py` |
 | `scripts/check_audit.py` | 审计登记表契约（deprecated 残留引用 / suspended 被 import） | `python scripts/check_audit.py` |
 | `scripts/check_showcase.py` | 展示台覆盖校验：`ui/custom_widget` 每个导出必须在 `scripts/style_showcase.py` 展示或 `EXCLUDED` 登记（纯 AST，不导入 Qt） | `python scripts/check_showcase.py` |
+| `scripts/check_cuda_env.py` | CUDA 索引存活 + 解释器环境**只读**体检（L3 真环境层，不安装任何东西）：索引是否仍可装（`cu124` 已 EOL 就是没查这个才漏掉的）、指定解释器的 torch/onnxruntime 状态与 onnxruntime 双发行名混合态 | `python scripts/check_cuda_env.py [--indexes\|--env] [--python <python.exe>] [--json]`；分层与判据见 `docs/技术实现/CUDA环境与索引_说明.md` |
 | `scripts/i18n_check.py` | 审计 i18n（硬编码中文、缺失/多余的 .ts 条目），发版前 `--ci` | `python scripts/i18n_check.py` |
 | `scripts/qm_compile.py` | 编译 `.ts` → `.qm`（Qt 二进制翻译文件） | `python scripts/qm_compile.py translate/zh_CN.ts translate/zh_CN.qm` |
 | `scripts/ts_auto_fill.py` | 自动同步 `self.tr()` 调用与 `.ts` 文件，`--apply` 后自动重编 .qm | `python scripts/ts_auto_fill.py --apply` |
@@ -41,7 +42,7 @@
 | `scripts/style_showcase.py` | 控件样式展示台（人工目视）：Tab1 原生 vs 封装对照（识别哪些类必须用 `ui/custom_widget` 封装），Tab2 按面板分区的全部控件（封装类 + 应用层复合控件），每行带样式来源徽章（类名/objectName/自绘/内联/全局兜底/无规则）+ `路径::符号` 一键复制，支持搜索、目录跳转、样式来源筛选、亮暗主题切换、状态矩阵（正常/禁用/悬停/聚焦）。系统 Python 启动时自动切便携解释器重跑；`--selftest` 无界面自检全部工厂 | `python scripts/style_showcase.py` |
 | `scripts/style_showcase.bat` | 展示台一键启动（双击即可，可透传参数如 `--selftest`）；优先用便携解释器，退回 `py`/`python`，非零退出码才 pause | 双击 或 `scripts\style_showcase.bat` |
 | `scripts/pie_menu_test.py` | 饼菜单/快捷菜单离线功能测试（状态机/命中判定/命令注册，独立进程沙箱配置）；功能已上线，后续加功能卡片等小修小补可复用 | `python scripts/pie_menu_test.py` |
-| `scripts/region_redetect_order.py` | **区域再检测的落点回归台**：把真工程每页的**每个已有框自己**当作拉框区域重跑检测，核对新块是否**连续**落回被替换块原来的下标（依赖"该页顺序已正确"这一功能前提；合成单测锁不到"这片漫画该怎么读"）。两段式——`--detect` 真跑检测并写缓存 `tmp/region_redetect_plans.json`（分钟级，顺带跑端到端核对），不带 `--detect` 则读缓存**离线**判（秒级，只走落点逻辑，不建 ONNX 会话）；`--candidates` 打印候选判据对比表（含被否掉的"逐块各自算"与"折线投影"），改判据前先用它确认新方案真的赢过现役。判据口径与实测数字见 `docs/技术实现/区域再检测_设计与实现.md` §5 | `python scripts/region_redetect_order.py [--project DIR] [--pages A,B] [--detect] [--candidates]` |
+| `scripts/region_redetect_order.py` | **区域再检测的落点回归台**：把真工程每页的**每个已有框自己**当作拉框区域重跑检测，核对新块是否**连续**落回被替换块原来的下标（依赖"该页顺序已正确"这一功能前提；合成单测锁不到"这片漫画该怎么读"）。两段式——`--detect` 真跑检测并写缓存 `tmp/region_redetect_plans.json`（分钟级，顺带跑端到端核对），不带 `--detect` 则读缓存**离线**判（秒级，只走落点逻辑，不建 ONNX 会话）；`--candidates` 打印候选判据对比表（含被否掉的"逐块各自算"与"折线投影"），改判据前先用它确认新方案真的赢过现役。判据口径与实测数字见 `docs/技术实现/区域再检测_设计与实现_存档.md` §5 | `python scripts/region_redetect_order.py [--project DIR] [--pages A,B] [--detect] [--candidates]` |
 | `scripts/mw_repro.py` | **MainWindow 在线演练台**：拉起真实主窗口（必须窗口模式，offscreen 起不来 FramelessWindow）做模拟复现与交互驱动——真实绘制路径/原生模态框/GC 时机类问题的排查工具。`--scenario group-undo` 跑组化撤销全链路（自动点确认弹窗，延迟须 ≥200ms），`--project` 只读打开真实工程，`--no-show`/`--no-panel`/`--watchdog` 控制形态；faulthandler 常开。起源=确认弹窗 GC 悬空 AV 闪退排查（经验教训 §3.3） | `python scripts/mw_repro.py [--scenario group-undo\|none] [--project DIR] [--pages 2 --blocks 8]` |
 | `scripts/workbench_recalc.py` | **泛用工作台的参数复算台（只读）**：C1 判据命中率／C2 分组口径与阈值敏感度／C3 扩张量候选与可扩空间／C4 队列口径／已驳回链路自检（D28／D30／D33c）／D39 程序筛选器端到端（真机跑一次 OCR）——这些参数是"测出来的"，改判据或调默认值前后各跑一次做对比。六个子命令 `merge`（`--sweep` 加阈值扫描）/`c1`/`expand`/`queue`/`review`/`hook`/`list`，脚本末尾自证样本顶层文件 mtime 未变。实测数字与调参方向见 `docs/技术实现/AI辅助功能_设计与实现.md` 的「长期需要实测调整的参数」节 | `python scripts/workbench_recalc.py merge --project DIR [--sweep]` |
 
@@ -62,7 +63,7 @@
 | `scripts/check_update.py` | 跨平台 | 启动时检查更新：git 增量 / manifest delta / zip 三种模式（`launch.bat`/`launch.py` 调用） |
 | `scripts/generate_manifest.py` | 跨平台 | 生成 `manifest.json`（全文件 SHA256 清单，供 delta 更新用）。**发版前必须重新生成并随版本提交** |
 | `scripts/build_win_minimal.ps1` | Windows | **构建引导包（bootstrap）**：源码 + 裸嵌入式 Python + pip + `uv.exe`，不预装依赖（产物约 32 MB）。重依赖由首启动（`utils/core_requirements.py`）与选中模块时（`modules/base.py::ensure_dependencies`）现场安装；预装好的一体包仍作网盘兜底。源码取材走 `git ls-files`，故 `config/config.json`（含 API 密钥）等被忽略的文件天然不入包，脚本还对此有硬校验。顺序＝提交 → `generate_manifest.py` → 打 tag → 本脚本（或 CI）→ 上传 | `powershell -ExecutionPolicy Bypass -File scripts/build_win_minimal.ps1`（`-KeepBuildDir` 保留中间目录，`-PythonVersion` 换 Python 版本，`-UvUrl` 钉 uv 版本） |
-| `scripts/download_models.sh` | Linux/macOS | 编译 PyPatchMatch（`modules/inpaint/patch_match.py` 仍依赖）。**其中的模型下载段是上游遗留、已与当前模型集合脱节**——权重请在应用内「设置 → Models → 模型文件」获取（见 `docs/技术实现/模型文件管理_设计方案.md`） |
+| `scripts/download_models.sh` | Linux/macOS | 编译 PyPatchMatch（`modules/inpaint/patch_match.py` 仍依赖）。**其中的模型下载段是上游遗留、已与当前模型集合脱节**——权重请在应用内「设置 → Models → 模型文件」获取（见 `docs/技术实现/模型文件管理_设计方案_存档.md`） |
 | `scripts/local_gitpull.bat` | Windows | 使用便携环境执行 `git pull` |
 
 ---

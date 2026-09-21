@@ -39,7 +39,7 @@ modules/
 | `utils/shared.py` | 路径常量 |
 | `utils/structures.py` | `nested_dataclass`，`Config`/`Dict` 基类 |
 | `utils/profile_manager.py` | LLM Profile 数据层 + 选取解析层（`profile_is_usable`/`resolve_profile` 等，语义见 docstring；**消费点不回退「列表第一项」**）；翻译器/OCR/在线修复共用 |
-| `utils/global_styles.py` | 全局样式库数据层：跨项目持久样式模板（`config/global_styles.json`），条目与大样式同构；**库是纯模板存储、绝不自动应用到块**，双向复制语义与冲突规则见 `docs/技术实现/全局样式库_设计方案.md` |
+| `utils/global_styles.py` | 全局样式库数据层：跨项目持久样式模板（`config/global_styles.json`），条目与大样式同构；**库是纯模板存储、绝不自动应用到块**，双向复制语义与冲突规则见 `docs/技术实现/全局样式库_设计方案_存档.md` |
 | `ui/llm_profile_cards.py` | LLM Profile 卡片式设置页（形态对齐上游 `ballontranslator/ui/llm_profile_widgets.py`） |
 | `utils/ai_tools.py` | 翻译 agent/术语工作台共享的只读探索工具执行器（4 只读工具 + `to_openai_tools`） |
 | `utils/block_tags.py` | 块标签体系数据层：类型注册表 + 读写 + 审阅表态（`reviewed`）+ 「OCR 置信度低」「误识别文本」自动挂标（分数存条目不喂 AI）；`TextBlock.tags` 随项目 JSON 保存；详见 `docs/基础速查/AI辅助标签体系使用说明.md` |
@@ -50,7 +50,7 @@ modules/
 | `ui/batch_merge.py` | 批量合并相邻框（D7/D8/D30～D33/D40）：`plan` 只读聚组（判据只看几何）+ `apply` 一次性重建（样式取组内最小索引成员、`tags` 取并集）+ `group_crop` 审批截图；**分组判据阈值收在 `ui/batch_merge.py::MergeConfig`**，主机复算用 `scripts/workbench_recalc.py` |
 | `ui/batch_delete.py` | 一键批量删除误框（D2/D27/D28）：队列＝带「误识别文本」标签的块，**只删文本框层、不碰遮罩与修复图**；缺省只删未驳回的块，非队列成员一律不删；删除前须弹窗告知后果（D27） |
 | `ui/batch_expand.py` | 批量框扩张（D5/D36）：只改 `_bounding_rect` 与 `xyxy`，**掩码与修复数据原样保留**；扩张量由调用方给定（`amount` + `mode`，不设默认值）；同页串行扩张；**写回走块副本**（原地改会让版本快照记成改动后状态、撤销失效） |
-| `ui/region_redetect.py` | 区域再检测任务层（`plan`/`build_page`/`apply`，无 Qt widget）；设计与实测数字见 `docs/技术实现/区域再检测_设计与实现.md`；**落点判据是几何启发式，改动必须过回归台 `scripts/region_redetect_order.py`** |
+| `ui/region_redetect.py` | 区域再检测任务层（`plan`/`build_page`/`apply`，无 Qt widget）；设计与实测数字见 `docs/技术实现/区域再检测_设计与实现_存档.md`；**落点判据是几何启发式，改动必须过回归台 `scripts/region_redetect_order.py`** |
 | `ui/region_redetect_tool.py` | 区域再检测 UI 层：**一次拉框 = 一步撤销**，检测/OCR 在后台线程（**不碰 QWidget**），每次手势收尾卸掉检测器；OCR 走模块本身的 `run_ocr`（不直接调识别模型，否则丢自动挂标） |
 | `ui/workbench_preview.py` | 工作台审批预览浮层（D44）：in-window 浮层（同 `ui/custom_widget/rail_dock_panel.py::RailDockPanel` 做法），不占工作台宽度；**默认 100% 原比例**（D23 口径不变），滚轮锚点缩放、拖拽平移、双击适应窗口 |
 | `ui/glossary_agent_panel.py` | 泛用工作台的容器（D19～D27、D42/D43）：两级导航 + 每任务一页 + 底部状态条；`GlossaryAgentWorker` 仍是术语/剧情的权威草稿持有者；入口＝左栏 `ui/mainwindowbars.py::LeftBar` 的 workbenchChecker（D25 单入口）；见 `docs/技术实现/AI辅助功能_设计与实现.md`「工作台」部分 |
@@ -58,11 +58,11 @@ modules/
 | `ui/workbench_batch_view.py` | 工作台四个批量任务共用的三段视图（D20/D23/D27）；执行前统一弹 D27 告知窗；审批图不在本页（D44），经 `preview_requested` 信号交浮层 |
 | `utils/block_geometry.py` | 文本框几何小工具：矩形部分＝**「外扩到碰到邻框为止」的唯一实现**（`expand_limited`，批量合并审批截图、批量扩张共用）；四边形部分（`poly_*`）供区域再检测共用 |
 | `utils/batch_versions.py` | **仓库唯一的批量备份口**：执行前写一版（项目数据 + 受影响矩形像素前图）到项目内 `.bt_batch_backup/`，撤销取最新一版覆盖并消耗（`restore_latest`/`discard_latest` 支持 `expect_seq` 校验）；查找替换与工作台批量任务共用 |
-| `utils/memory_release.py` | 手动释放内存（设置页按钮）：卸载模型 → 交回工作集。**不做** `cudaDeviceReset`——实测会不可逆地毁掉本进程 CUDA，该能力已删、`tests/test_memory_release.py::RemovedCapabilityTest` 钉着别加回来；实测数字与约束见 `docs/技术实现/内存释放_设计与实现.md` |
-| `utils/model_files.py` | 模型文件管理数据层：落盘判据、体积、删除走回收站（只删声明过的 `save_files`）。**新增带权重的模块必须随附 `download_file_list` 落盘路径 + `model_package` 包描述**（`save_dir` 字段不可用），否则缺文件检查与体积展示全部失效；方案与验收见 `docs/技术实现/模型文件管理_设计方案.md`、`docs/技术实现/模型文件管理_测试流程.md` |
+| `utils/memory_release.py` | 手动释放内存（设置页按钮）：卸载模型 → 交回工作集。**不做** `cudaDeviceReset`——实测会不可逆地毁掉本进程 CUDA，该能力已删、`tests/test_memory_release.py::RemovedCapabilityTest` 钉着别加回来；实测数字与约束见 `docs/技术实现/内存释放_设计与实现_存档.md` |
+| `utils/model_files.py` | 模型文件管理数据层：落盘判据、体积、删除走回收站（只删声明过的 `save_files`）。**新增带权重的模块必须随附 `download_file_list` 落盘路径 + `model_package` 包描述**（`save_dir` 字段不可用），否则缺文件检查与体积展示全部失效；方案与验收见 `docs/技术实现/模型文件管理_设计方案_存档.md`、`docs/技术实现/模型文件管理_测试流程.md` |
 | `ui/model_downloads.py` | 后台下载任务层（单例注册表：起任务／防重复／取消／进度），「选模块」与设置页「模型文件」节共用；**下载不弹窗不阻断交互，进度只进终端**。模块侧两条声明由本层兜：大模型置 `background_download_only`（否则 `load_model` 里同步下载冻界面）、要 GPU 的置 `requires_gpu`（硬闸门在 `ModelDownloadRegistry.start`，判据与文案见设计 §5.5） |
 | `ui/model_files_panel.py` | 设置页 Models →「模型文件」节（`ui/configpanel.py` 只实例化 + 接线）：`ui/custom_widget/row_table.py::RowTable` 卡片列表 + 动作行（下载／取消／删除／打开目录／刷新）+ 状态条；其余细节见设计文档 |
-| `modules/ocr/ocr_vl_manga.py` | PaddleOCR-VL-For-Manga（HF transformers 后端；日文漫画质量优先、GPU-only、逐块自回归）；接入依据、参数坑与实测数字见 `docs/技术实现/paddle-ocr-for-manga_接入调研.md` |
+| `modules/ocr/ocr_vl_manga.py` | PaddleOCR-VL-For-Manga（HF transformers 后端；日文漫画质量优先、GPU-only、逐块自回归）；接入依据、参数坑与实测数字见 `docs/技术实现/paddle-ocr-for-manga_接入调研_存档.md` |
 | `ui/mainwindow.py` | 主窗口 |
 | `ui/configpanel.py` | 配置面板、快捷键编辑；四个管线页合并为一项「Pipeline」（页内标签，`_build_pipeline_page`），阶段只编辑当前引擎的参数 |
 | `ui/run_pipeline_dialog.py` | 运行对话框：启用模块网格（阶段图标开关 + 模块下拉）+ 各阶段折叠选项区；模块下拉写回底部栏选择器 |

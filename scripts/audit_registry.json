@@ -58,7 +58,7 @@
         "tests/test_batch_backup.py": {
             "note": "批量备份归并（2026-09-16）：查找替换的单槽快照并入 utils/batch_versions.py::BatchVersionStore（与工作台批量任务共用），其语义迁入 tests/test_batch_versions.py（版本号校验/丢弃/base_styles 往返）与 tests/test_replace_rollback.py（回滚条接线），旧文件删除",
             "allowed_mentions": [
-                "docs/技术实现/查找替换与样式管理器重构_设计方案.md"
+                "docs/技术实现/查找替换与样式管理器重构_设计方案_存档.md"
             ]
         },
         "docs/技术实现/窄栏浮层面板改版_计划.md": {
@@ -157,7 +157,7 @@
             "note": "效果栈移植阶段C：v1.5.9 版 TextEffectRenderer 被 ui/text_engine/effects/renderer.py（上游 TextEffectStack 渲染引擎）取代，2026-08-31 删除",
             "allowed_mentions": [
                 "docs/daily_log.md",
-                "docs/技术实现/效果栈移植与窄栏图标重绘_计划.md"
+                "docs/技术实现/效果栈移植与窄栏图标重绘_计划_存档.md"
             ]
         },
         "icons/rail_glossary.svg": {
@@ -269,7 +269,7 @@
             ]
         },
         "docs/技术实现/撤销体系重构计划.md": {
-            "note": "撤销体系收官清理（2026-09-06）：主计划（甲-1/甲-2、阶段0→3b）与阶段4三批全部实机验收，实施细节以 daily_log、tests/test_undo_cross_page.py 等护网与 docs/技术实现/撤销体系人工验收场景.md（唯一存档）为准",
+            "note": "撤销体系收官清理（2026-09-06）：主计划（甲-1/甲-2、阶段0→3b）与阶段4三批全部实机验收，实施细节以 daily_log、tests/test_undo_cross_page.py 等护网与 docs/技术实现/撤销体系人工验收场景_存档.md（唯一存档）为准",
             "allowed_mentions": [
                 "docs/daily_log.md"
             ]
@@ -290,7 +290,7 @@
             "note": "效果面板取代（2026-09-06，批次②效果栈重移植）：◐ 文本样式浮层退役，效果卡/整体不透明度/镂空由 ui/text_engine/effects/panel.py::TextEffectPanel 承接，行距类型迁至效果浮层顶部行",
             "allowed_mentions": [
                 "docs/daily_log.md",
-                "docs/技术实现/效果栈移植与窄栏图标重绘_计划.md"
+                "docs/技术实现/效果栈移植与窄栏图标重绘_计划_存档.md"
             ]
         },
         "docs/技术实现/泛用工作台_复核与拆分.md": {
@@ -318,9 +318,9 @@
             "allowed_mentions": []
         },
         "scripts/download_models.bat": {
-            "note": "模型文件管理（2026-09-20）：权重获取收敛到应用内按需后台下载（docs/技术实现/模型文件管理_设计方案.md §5／§6），该脚本内容还停在上游时代（ctd / mit48px_ctc / aot / sugoi / manga-ocr 全是已删除模块的权重），删除。它被 .gitignore 覆盖、不在版本控制内，删除前备份在 tmp/backup_download_models.bat",
+            "note": "模型文件管理（2026-09-20）：权重获取收敛到应用内按需后台下载（docs/技术实现/模型文件管理_设计方案_存档.md §5／§6），该脚本内容还停在上游时代（ctd / mit48px_ctc / aot / sugoi / manga-ocr 全是已删除模块的权重），删除。它被 .gitignore 覆盖、不在版本控制内，删除前备份在 tmp/backup_download_models.bat",
             "allowed_mentions": [
-                "docs/技术实现/模型文件管理_设计方案.md"
+                "docs/技术实现/模型文件管理_设计方案_存档.md"
             ]
         }
     },
