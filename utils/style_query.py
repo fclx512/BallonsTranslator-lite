@@ -1,6 +1,6 @@
 """Block query engine: text × format predicates over project pages.
 
-纯数据层查询引擎（设计见 docs/技术实现/查找替换与样式管理器重构_设计方案.md §3）：
+纯数据层查询引擎（设计见 docs/技术实现/查找替换与样式管理器重构_设计方案_存档.md §3）：
 
 * ``TextPredicate`` 文本谓词，匹配语义对齐
   ``ui/global_search_widget.py::get_regex_pattern``（正则/大小写/全词）。

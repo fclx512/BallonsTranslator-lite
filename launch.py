@@ -270,18 +270,21 @@ def _detect_user_torch():
     _gpu_info = detect_gpu_info()
     if _gpu_info:
         _gen = _gpu_info["generation"]
-        if _gen == "Kepler":
-            print("  PyTorch 2.x may not support your Kepler GPU.")
-        elif _gen == "Blackwell":
+        if _gpu_info["torch_index"] is None:
             print(
-                "  Blackwell GPU requires CUDA 12.8+.\n"
-                "    If using the one-click bundle, run install_cuda.bat.\n"
-                "    Otherwise: pip install torch --index-url https://download.pytorch.org/whl/nightly/cu128"
+                f"  PyTorch 2.x does not support your {_gen} GPU."
+                "  Use CPU mode: python launch.py --cpu"
             )
         else:
+            _cc = _gpu_info.get("compute_cap")
+            _cc_txt = f", CC {_cc}.x" if _cc is not None else ""
+            _idx = _gpu_info["torch_index"].rsplit("/", 1)[-1]
             print(
                 f"  Recommended CUDA {_gpu_info['recommended_cuda']}"
-                f" for your {_gen} GPU."
+                f" for your {_gen} GPU{_cc_txt}.\n"
+                "    If using the one-click bundle, run install_cuda.bat.\n"
+                f"    Otherwise: pip install -U torch torchvision"
+                f" --index-url {_gpu_info['torch_index']}"
             )
     else:
         print("  Consider installing PyTorch with CUDA for GPU acceleration.")
@@ -927,8 +930,9 @@ def prepare_environment() -> bool:
     ensure_uv()
 
     # Detect NVIDIA GPU architecture to pick the right CUDA version.
-    # CUDA wheels are NVIDIA-only; without an NVIDIA GPU (e.g. macOS) the
-    # cu124 index has no usable wheels, so torch should be installed normally.
+    # CUDA wheels are NVIDIA-only; without an NVIDIA GPU (e.g. macOS) there
+    # is nothing to install from the PyTorch CUDA indexes, so torch should
+    # be installed normally instead.
     _gpu_info = detect_gpu_info()
     if _gpu_info:
         print(_gpu_info["message"])
@@ -944,18 +948,21 @@ def prepare_environment() -> bool:
         )
         return False
 
-    _torch_index = (_gpu_info or {}).get("torch_index") or "https://download.pytorch.org/whl/cu124"
+    _torch_index = (_gpu_info or {}).get("torch_index") or "https://download.pytorch.org/whl/cu126"
 
-    if "nightly" in _torch_index:
-        torch_command = os.environ.get(
-            "TORCH_COMMAND",
-            f"uv pip install torch torchvision torchaudio --index-url {_torch_index}",
-        )
-    else:
-        torch_command = os.environ.get(
-            "TORCH_COMMAND",
-            f"uv pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --index-url {_torch_index}",
-        )
+    # Install the newest torch the chosen index serves, WITHOUT pinning a
+    # version.  Pinning was actively harmful: the old hardcoded
+    # ``torch==2.7.1`` downgraded users who already had a newer build, and
+    # the version was not even present on every index (cu132 serves no
+    # 2.7.1 at all, so the command simply failed).
+    #
+    # torchaudio is excluded for the same reason it is excluded from
+    # install_cuda.bat: newer indexes do not ship it, and this app does
+    # no audio I/O.
+    torch_command = os.environ.get(
+        "TORCH_COMMAND",
+        f"uv pip install -U torch torchvision --index-url {_torch_index}",
+    )
 
     run(
         f'"{python}" -m {torch_command}',

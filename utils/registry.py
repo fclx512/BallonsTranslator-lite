@@ -44,7 +44,7 @@ class ModuleSpec:
     download_file_list: List = None
     download_file_on_load: bool = False
     # 置 True 的模块在 ``load_model`` 期只检查模型文件、绝不同步下载
-    # （大模型由后台任务下载，见 docs/技术实现/模型文件管理_设计方案.md §5.3）。
+    # （大模型由后台任务下载，见 docs/技术实现/模型文件管理_设计方案_存档.md §5.3）。
     background_download_only: bool = False
     # 包描述（可选）：``{"dir": 包根目录, "size_hint": 预期体积文本}``。
     # 只用于展示与「打开目录」；删除永远以 download_file_list 的 save_files 为准。

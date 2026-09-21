@@ -80,12 +80,29 @@ class ReinstallTorchPlatformTests(unittest.TestCase):
         run_mock.assert_not_called()  # 未尝试 CUDA wheel 安装
 
     def test_windows_nvidia_selects_cuda_index(self):
-        info = {"message": "x", "generation": "Ampere", "torch_index": "https://cu124"}
+        info = {"message": "x", "generation": "Ampere", "torch_index": "https://cu126"}
         ret, run_mock = self._prepare("win32", info)
         self.assertFalse(ret)
         run_mock.assert_called_once()
         command = run_mock.call_args[0][0]
-        self.assertIn("cu124", command)
+        self.assertIn("cu126", command)
+
+    def test_reinstall_torch_does_not_pin_versions(self):
+        """不得再钉死 pytorch 版本。
+
+        旧实现硬编码 ``torch==2.7.1``：对已有更新 torch 的用户是降级，
+        而且 cu132 索引根本不提供 2.7.1，命令必然失败。
+        """
+        info = {"message": "x", "generation": "Blackwell", "torch_index": "https://cu132"}
+        ret, run_mock = self._prepare("win32", info)
+        self.assertFalse(ret)
+        run_mock.assert_called_once()
+        command = run_mock.call_args[0][0]
+        self.assertNotIn("torch==", command, "仍在钉死 torch 版本：" + command)
+        self.assertNotIn("torchvision==", command)
+        self.assertNotIn("2.7.1", command)
+        # torchaudio 不装（新索引不提供它，且本应用无音频 I/O）
+        self.assertNotIn("torchaudio", command)
 
     def test_old_nvidia_no_index_skips(self):
         info = {"message": "old", "generation": "Kepler", "torch_index": None}

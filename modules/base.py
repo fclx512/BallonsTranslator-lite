@@ -326,7 +326,7 @@ class BaseModule:
           沿用 ``prepare_local_files_forall()`` 被替换后的按需取用行为。
         - ``background_download_only`` 置位（大模型）：**只检查，不下载**，
           缺文件抛 :class:`MissingModelFilesError`。这类权重由后台任务取
-          （见 ``docs/技术实现/模型文件管理_设计方案.md`` §5.3）。
+          （见 ``docs/技术实现/模型文件管理_设计方案_存档.md`` §5.3）。
         """
         if not self.download_file_list:
             return

@@ -16,12 +16,117 @@ from typing import Any, Dict, List, Optional
 
 _GPU_INFO_CACHE: Optional[dict] = None
 
+# ── CUDA index selection (single source of truth) ──────────────────────────
+#
+# The CUDA index a machine should install from is determined by compute
+# capability (CC), NOT by GPU marketing names.  ``install_cuda.bat`` uses
+# exactly the same thresholds, so the two never disagree.
+#
+# Why cu124 must never come back: the cu124 index stops at torch 2.6.0
+# while this project ships 2.13.x, so selecting it silently downgrades
+# torch by several minor versions.  Verified against the live indexes:
+#
+#   cu118 -> 2.0.0 .. 2.7.1        (alive, but not offered: CC < 6 is unsupported)
+#   cu124 -> 2.4.0 .. 2.6.0        (EOL)
+#   cu126 -> 2.6.0 .. 2.14.0       (default for CC 6..8)
+#   cu130 -> 2.9.0 .. 2.14.0
+#   cu132 -> 2.12.0 .. 2.14.0
+#
+# ``nightly/cu128`` used to be handed out for Blackwell.  It is NOT dead
+# (it serves nightly 2.12.0) — it is simply the wrong thing to hand a
+# normal user, because a nightly channel drifts every night.  CC >= 10
+# maps to the stable cu132 instead.
+_CUDA_TIERS = (
+    # (min_compute_capability, index_tag, label, onnxruntime-spec)
+    (10, "cu132", "13.2", "onnxruntime-gpu>=1.20,<1.29"),
+    (9, "cu130", "13.0", "onnxruntime-gpu>=1.20,<1.29"),
+    (6, "cu126", "12.6", "onnxruntime-gpu>=1.20,<1.29"),
+)
+
+
+def pick_cuda_index(compute_cap: Optional[int]) -> Optional[dict]:
+    """Map a compute capability major version to a CUDA install target.
+
+    Returns a dict with ``index_tag``, ``url``, ``label`` (for messages)
+    and ``onnxruntime_spec``, or ``None`` when the GPU is too old for any
+    CUDA PyTorch build (CC < 6 — Kepler and earlier).
+
+    This is the authoritative mapping shared with ``install_cuda.bat``;
+    keep the two in step when indexes are added or retired.
+    """
+    if compute_cap is None:
+        return None
+    for min_cc, tag, label, ort_spec in _CUDA_TIERS:
+        if compute_cap >= min_cc:
+            return {
+                "index_tag": tag,
+                "url": f"https://download.pytorch.org/whl/{tag}",
+                "label": label,
+                "onnxruntime_spec": ort_spec,
+            }
+    return None
+
+
+def _query_compute_cap() -> Optional[int]:
+    """Return the GPU's compute capability major version, or None.
+
+    Prefers ``nvidia-smi --query-gpu=compute_cap``; older drivers do not
+    support that field, in which case we fall back to inferring it from
+    the GPU name (see :func:`_cc_from_name`).
+    """
+    try:
+        proc = subprocess.run(
+            ["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            first = proc.stdout.strip().splitlines()[0].split(".")[0].strip()
+            if first.isdigit():
+                return int(first)
+    except Exception:
+        pass
+    return None
+
+
+# Name → compute capability major, for drivers whose nvidia-smi predates
+# the compute_cap query field.  Only the families this app realistically
+# meets are listed; unknown names fall through to the default tier.
+def _cc_from_name(name_upper: str) -> Optional[int]:
+    """Infer a compute capability major from the GPU's marketing name.
+
+    Only used when ``nvidia-smi`` cannot answer the ``compute_cap`` query
+    (pre-Turing drivers).  Unknown names return ``None`` so the caller can
+    pick a safe default.
+    """
+    m = re.search(r"(?:RTX|GTX)\s*(\d+)", name_upper)
+    if m:
+        model = m.group(1)
+        series = int(model[:2]) if len(model) == 4 else int(model[0])
+        if series >= 50:
+            return 12  # Blackwell
+        if series >= 30:
+            return 8  # Ada Lovelace (8.9) / Ampere (8.6)
+        if series >= 20 or series == 16:
+            return 7  # Turing (7.5)
+        if series >= 10:
+            return 6  # Pascal (6.1)
+        if series >= 8:
+            return 5  # Maxwell
+        return 3  # Kepler
+    if "TITAN RTX" in name_upper:
+        return 7
+    if "TITAN" in name_upper:
+        return 6
+    return None
+
 
 def detect_gpu_info() -> Optional[dict]:
     """Detect NVIDIA GPU via ``nvidia-smi`` and return architecture info.
 
     Returns a dict with keys:
-        name, generation, recommended_cuda, torch_index, message.
+        name, generation, compute_cap, recommended_cuda, torch_index, message.
     Returns ``None`` if no NVIDIA GPU is detected.
     Result is cached (nvidia-smi runs once).
     """
@@ -39,139 +144,65 @@ def detect_gpu_info() -> Optional[dict]:
         if _nvsmi.returncode != 0 or not _nvsmi.stdout.strip():
             _GPU_INFO_CACHE = None
             return None
-        _gpu_name = _nvsmi.stdout.strip()
+        _gpu_name = _nvsmi.stdout.strip().splitlines()[0].strip()
     except Exception:
         _GPU_INFO_CACHE = None
         return None
 
     name_upper = _gpu_name.upper()
 
-    # 1) Blackwell — RTX 50 series, needs CUDA 12.8+ nightly
-    if any(
-        n in name_upper
-        for n in ["RTX 5090", "RTX 5080", "RTX 5070", "RTX 5060", "RTX 50"]
-    ):
-        info = dict(
-            name=_gpu_name,
-            generation="Blackwell",
-            recommended_cuda="12.8+",
-            torch_index="https://download.pytorch.org/whl/nightly/cu128",
-            message=(
-                f"Detected Blackwell GPU ({_gpu_name}) — "
-                "requires CUDA 12.8+ (nightly PyTorch build)."
-            ),
-        )
-        _GPU_INFO_CACHE = info
-        return info
+    # Compute capability decides the CUDA target, exactly like the .bat.
+    cc = _query_compute_cap()
+    if cc is None:
+        cc = _cc_from_name(name_upper)
+    if cc is None:
+        cc = 8  # unknown name but a real NVIDIA card: assume a safe modern tier
 
-    # 2) Try to extract series number from consumer GPU names
-    m = re.search(r"(?:RTX|GTX)\s*(\d+)", name_upper)
-    if m:
-        model = m.group(1)
-        series = int(model[:2]) if len(model) == 4 else int(model[0])
-
-        if series >= 40:
-            info = dict(
-                name=_gpu_name,
-                generation="Ada Lovelace",
-                recommended_cuda="12.4",
-                torch_index="https://download.pytorch.org/whl/cu124",
-                message=(
-                    f"Detected Ada Lovelace GPU ({_gpu_name}) — CUDA 12.4 recommended."
-                ),
-            )
-        elif series >= 30:
-            info = dict(
-                name=_gpu_name,
-                generation="Ampere",
-                recommended_cuda="12.4",
-                torch_index="https://download.pytorch.org/whl/cu124",
-                message=f"Detected Ampere GPU ({_gpu_name}) — CUDA 12.4 recommended.",
-            )
-        elif series >= 20 or series == 16:
-            info = dict(
-                name=_gpu_name,
-                generation="Turing",
-                recommended_cuda="12.4",
-                torch_index="https://download.pytorch.org/whl/cu124",
-                message=(
-                    f"Detected Turing GPU ({_gpu_name}) — CUDA 12.4 is supported."
-                ),
-            )
-        elif series >= 10:
-            info = dict(
-                name=_gpu_name,
-                generation="Pascal",
-                recommended_cuda="11.8 / 12.4",
-                torch_index="https://download.pytorch.org/whl/cu124",
-                message=(
-                    f"Detected Pascal GPU ({_gpu_name}) — older architecture.\n"
-                    "  CUDA 12.4 is supported. If you have an older NVIDIA driver\n"
-                    "  and CUDA 12.4 fails, try CUDA 11.8 instead:\n"
-                    "    pip uninstall torch torchvision torchaudio -y\n"
-                    "    pip install torch torchvision torchaudio"
-                    " --index-url https://download.pytorch.org/whl/cu118"
-                ),
-            )
-        elif series >= 8:
-            info = dict(
-                name=_gpu_name,
-                generation="Maxwell",
-                recommended_cuda="11.8",
-                torch_index="https://download.pytorch.org/whl/cu118",
-                message=(
-                    f"Detected Maxwell GPU ({_gpu_name}) — older architecture.\n"
-                    "  CUDA 11.8 recommended. If it fails, try CPU mode:\n"
-                    "    python launch.py --cpu\n"
-                    "  Or install CUDA 11.8 PyTorch:\n"
-                    "    pip install torch torchvision torchaudio"
-                    " --index-url https://download.pytorch.org/whl/cu118"
-                ),
-            )
-        else:
-            info = dict(
-                name=_gpu_name,
-                generation="Kepler",
-                recommended_cuda="N/A",
-                torch_index=None,
-                message=(
-                    f"Detected Kepler GPU ({_gpu_name}) — very old architecture.\n"
-                    "  PyTorch 2.x may not support this GPU.\n"
-                    "  Consider using CPU mode: python launch.py --cpu"
-                ),
-            )
-        _GPU_INFO_CACHE = info
-        return info
-
-    # 3) Titan variants without RTX/GTX prefix
-    if "TITAN RTX" in name_upper:
-        info = dict(
-            name=_gpu_name,
-            generation="Turing",
-            recommended_cuda="12.4",
-            torch_index="https://download.pytorch.org/whl/cu124",
-            message=f"Detected Turing GPU ({_gpu_name}) — CUDA 12.4 is supported.",
-        )
-    elif "TITAN" in name_upper:
-        info = dict(
-            name=_gpu_name,
-            generation="Titan (legacy)",
-            recommended_cuda="11.8",
-            torch_index="https://download.pytorch.org/whl/cu118",
-            message=(
-                f"Detected legacy Titan GPU ({_gpu_name}) — older architecture.\n"
-                "  CUDA 11.8 recommended."
-            ),
-        )
+    # Human-readable generation, derived from the same CC number.
+    if cc >= 10:
+        generation = "Blackwell"
+    elif cc >= 9:
+        generation = "Hopper"
+    elif cc >= 8:
+        generation = "Ada Lovelace / Ampere"
+    elif cc >= 7:
+        generation = "Turing"
+    elif cc >= 6:
+        generation = "Pascal"
+    elif cc >= 5:
+        generation = "Maxwell"
     else:
+        generation = "Kepler"
+
+    target = pick_cuda_index(cc)
+    if target is None:
         info = dict(
             name=_gpu_name,
-            generation="Unknown",
-            recommended_cuda="12.4",
-            torch_index="https://download.pytorch.org/whl/cu124",
-            message=f"Detected GPU: {_gpu_name}",
+            generation=generation,
+            compute_cap=cc,
+            recommended_cuda="N/A",
+            torch_index=None,
+            message=(
+                f"Detected {generation} GPU ({_gpu_name}, CC {cc}.x) — "
+                "very old architecture.\n"
+                "  PyTorch 2.x may not support this GPU.\n"
+                "  Consider using CPU mode: python launch.py --cpu"
+            ),
         )
+        _GPU_INFO_CACHE = info
+        return info
 
+    info = dict(
+        name=_gpu_name,
+        generation=generation,
+        compute_cap=cc,
+        recommended_cuda=target["label"],
+        torch_index=target["url"],
+        message=(
+            f"Detected {generation} GPU ({_gpu_name}, CC {cc}.x) — "
+            f"CUDA {target['label']} recommended."
+        ),
+    )
     _GPU_INFO_CACHE = info
     return info
 

@@ -167,7 +167,7 @@ class RemovedCapabilityTest(unittest.TestCase):
     第一次真实分配报 `cudaErrorInvalidValue`，同一段代码另一次直接段错误
     （exit `0xC0000005`），进程内救不回来（只能重启）。它真还的内存只有 ~70~170MB，
     代价是"本次会话的 GPU 模型全废"；用户实测后确认"正常交回就够"。
-    原委：`utils/memory_release.py` docstring、`docs/技术实现/内存释放_设计与实现.md` §4。
+    原委：`utils/memory_release.py` docstring、`docs/技术实现/内存释放_设计与实现_存档.md` §4。
     """
 
     def test_reset_api_is_intentionally_absent(self):

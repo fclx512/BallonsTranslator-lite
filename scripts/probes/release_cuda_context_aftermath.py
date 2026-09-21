@@ -159,7 +159,7 @@ emit(f"- 现路径（卸载 + 交回工作集）：torch CUDA 照常 = **{safe_c
      f"`paddleocr_vl_manga` 照常 = **{vl_ok if vl_ok is not None else '未测'}**")
 emit(f"- 销毁上下文：之后 torch CUDA 可用 = **{deep_ok}** ⇒ 只多还几十~一百多 MB，"
      "却要重启应用、还可能崩进程，**已删除**。")
-emit("- 详见 `docs/技术实现/内存释放_设计与实现.md` §4。")
+emit("- 详见 `docs/技术实现/内存释放_设计与实现_存档.md` §4。")
 
 _fh.close()
 print("report written:", REPORT)

@@ -5,7 +5,7 @@
 transformers（PyTorch）加载，**不需要** paddlepaddle。定位是「质量优先」的
 日文漫画 OCR：逐块自回归解码，比 onnx 系慢约两个数量级，**不要**当默认识别器。
 
-实现要点（调研与实测依据见 ``docs/技术实现/paddle-ocr-for-manga_接入调研.md``）：
+实现要点（调研与实测依据见 ``docs/技术实现/paddle-ocr-for-manga_接入调研_存档.md``）：
 
 1. **整块裁剪，不逐行**。模型在整块文本区域 crop 上训练，块内多行/多列一起喂
    才能借到模型自己的阅读顺序。取块内 ``lines`` 顶点集的轴对齐外接范围

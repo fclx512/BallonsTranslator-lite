@@ -965,7 +965,7 @@ def unload_modules(self, module_names):
 def _ensure_module_deps(module_type: str, key: str) -> bool:
     """选中模块时把「缺的 pip 包 / 权重文件」交给后台下载任务，**立即返回**。
 
-    行为定稿见 ``docs/技术实现/模型文件管理_设计方案.md`` §5：选模块只负责
+    行为定稿见 ``docs/技术实现/模型文件管理_设计方案_存档.md`` §5：选模块只负责
     **启动**后台下载——不弹确认、不弹进度窗、不阻断交互，模块照常切换；
     进度与结果只进终端与 ``logs/*.log``。真正「用不了」时才由运行前检查
     （``ui/mainwindow.py`` 的 ``run_imgtrans``）与加载期异常弹窗（§5.4）。
@@ -1176,7 +1176,7 @@ class ModuleManager(QObject):
         """卸载某个阶段当前加载的模块。
 
         「模型文件」节删除权重前必须先走这一步：Windows 上被加载的模型握着
-        文件句柄，直接删会失败（见 ``docs/技术实现/模型文件管理_设计方案.md`` §7.1）。
+        文件句柄，直接删会失败（见 ``docs/技术实现/模型文件管理_设计方案_存档.md`` §7.1）。
         只卸该阶段而不是全部，免得删一个 OCR 权重顺手把检测器也从显存里赶走。
         """
         if module_type not in {"textdetector", "inpainter", "ocr", "translator"}:

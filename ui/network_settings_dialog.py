@@ -180,7 +180,7 @@ class NetworkSettingsDialog(QDialog):
         adv.addWidget(QLabel(self.tr("Extra pip index (for PyTorch, etc.):")))
         self._extra_input = ConfigLineEdit()
         self._extra_input.setMinimumHeight(34)
-        self._extra_input.setPlaceholderText("https://download.pytorch.org/whl/cu124")
+        self._extra_input.setPlaceholderText("https://download.pytorch.org/whl/cu126")
         adv.addWidget(self._extra_input)
 
         # Custom HF endpoint

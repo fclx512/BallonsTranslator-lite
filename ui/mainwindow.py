@@ -3828,7 +3828,7 @@ class MainWindow(mainwindow_cls):
         进程的 CUDA（`torch.cuda.is_available()` 仍返回 True 骗人，第一次真实分配报
         `cudaErrorInvalidValue`、另一处实测直接段错误 exit `0xC0000005`，进程内救不
         回来），代价远大于它真还的那点内存。原委见 `utils/memory_release.py` docstring
-        与 `docs/技术实现/内存释放_设计与实现.md` §4。
+        与 `docs/技术实现/内存释放_设计与实现_存档.md` §4。
         """
         if self._cuda_work_in_progress():
             QMessageBox.information(

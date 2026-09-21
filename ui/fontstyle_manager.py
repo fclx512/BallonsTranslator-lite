@@ -6,7 +6,7 @@ line 2 = gray parameter summary; variants list only their diff fields)
 painted by ``_StyleItemDelegate``.
 
 Right panel (StyleDetail) is diff-first (2026-08-30 rework, design doc
-查找替换与样式管理器重构_设计方案.md §5): preview card + key-parameter
+查找替换与样式管理器重构_设计方案_存档.md §5): preview card + key-parameter
 chip row + four collapsible field groups (``ui/style_format_editor.py``,
 shared with the find/replace format editor) + per-page block chips.
 Modes keep their previous semantics:

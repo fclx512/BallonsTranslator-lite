@@ -1,7 +1,7 @@
 """Reusable FontFormat field editors grouped per FIELD_GROUPS.
 
 样式管理器右栏（阶段 3）与查找替换格式条件编辑器（阶段 4）共用的控件层
-（设计见 docs/技术实现/查找替换与样式管理器重构_设计方案.md §5.2/§6）：
+（设计见 docs/技术实现/查找替换与样式管理器重构_设计方案_存档.md §5.2/§6）：
 
 * ``FormatEditorPanel`` — 四组 ``FormatGroupCard``（文本/颜色与描边/排版/效果），
   可编辑字段清单来自 ``utils/style_query.py::FIELD_GROUPS``。效果组（阴影/渐变/

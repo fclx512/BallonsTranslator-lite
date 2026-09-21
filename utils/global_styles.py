@@ -1,6 +1,6 @@
 """Global style library — user-curated cross-project style templates.
 
-Aegisub 式分层（设计见 docs/技术实现/全局样式库_设计方案.md）：
+Aegisub 式分层（设计见 docs/技术实现/全局样式库_设计方案_存档.md）：
 
 * 全局样式库（本模块）＝持久化的命名样式模板集合，存
   ``config/global_styles.json``；条目与项目内大样式
