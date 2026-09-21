@@ -1304,14 +1304,6 @@
             <translation>跳到工作台靠后的步骤、而更早的清理步骤还有未处理条目时提示我。顺序只是推荐，始终允许跳转。</translation>
         </message>
         <message>
-            <source>&lt;p&gt;In &lt;b&gt;Merge adjacent blocks&lt;/b&gt;, a group whose bounding box exceeds this share of the page is flagged, not dropped — it only starts unchecked. &lt;b&gt;85%&lt;/b&gt; flagged just the two cross-column groups in the 94-page sample.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;「合并相邻框」里，组的包围盒任一边超过页面对应边的该比例即标记为疑似误聚——&lt;b&gt;不会丢弃&lt;/b&gt;，只是默认不勾选。94 页样本里 &lt;b&gt;85%&lt;/b&gt; 只命中两个跨栏组。&lt;/p&gt;</translation>
-        </message>
-        <message>
-            <source>&lt;p&gt;Starting value for the batch &lt;b&gt;grow blocks&lt;/b&gt; amount. &lt;b&gt;10 px&lt;/b&gt; is the measured default: 88% of the boxes grow on all four sides (+28% width / +17% height). You can change it for each run.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;批量「框扩张」的初始扩张量。&lt;b&gt;10 px&lt;/b&gt; 是实测默认值：88% 的框四边都能完整扩张（宽 +28%／高 +17%）。每次执行前都可在界面里改。&lt;/p&gt;</translation>
-        </message>
-        <message>
             <source>Batch Tasks</source>
             <translation>批量任务</translation>
         </message>
@@ -1324,12 +1316,28 @@
             <translation>误聚阈值</translation>
         </message>
         <message>
-            <source>Workbench (temporary)</source>
-            <translation>工作台（临时）</translation>
-        </message>
-        <message>
             <source>&lt;p&gt;For the memory that stays after a pipeline run: unloads all models and hands the working set back to Windows. The next run reloads models, so it is a few seconds slower.&lt;/p&gt;</source>
             <translation>&lt;p&gt;针对跑完管线后留在进程里的那部分内存：卸载全部模型，并把工作集交回 Windows。下次跑会自动重新加载模型，因此首次会慢几秒。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Model Files</source>
+            <translation>模型文件</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Groups covering more than this share of the page start unchecked in &lt;b&gt;Merge adjacent blocks&lt;/b&gt;.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;「合并相邻框」里，包围盒超过页面该比例的组默认不勾选。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;Initial amount for the batch &lt;b&gt;Grow Blocks&lt;/b&gt;; editable for each run.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;批量「框扩张」的初始扩张量，每次执行前可改。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Import / Export</source>
+            <translation>导入导出</translation>
+        </message>
+        <message>
+            <source>Workbench Prompts</source>
+            <translation>工作台提示</translation>
         </message>
     </context>
     <context>
@@ -2795,6 +2803,10 @@ What to expect next:
  - 下次跑管线会重新加载模型，首次慢几秒；
  - 释放后的头几次交互可能短暂卡顿（Windows 把数据换回来）；
  - 释放期间请保持空闲，别同时开跑。</translation>
+        </message>
+        <message>
+            <source>These stages are missing Python packages. Picking the module installs them in the background — its progress is printed in the terminal. Restart the app once the install finishes, then run again.</source>
+            <translation>以下阶段缺少 Python 依赖包。重新选中该模块会在后台自动安装，进度打印在终端里；装完重启应用再运行。</translation>
         </message>
     </context>
     <context>
@@ -7839,10 +7851,6 @@ No pipeline stages will be executed.</source>
         <message>
             <source>Inpainting</source>
             <translation>图像修复</translation>
-        </message>
-        <message>
-            <source>Model Files</source>
-            <translation>模型文件</translation>
         </message>
         <message>
             <source>No module with downloadable model files is registered.</source>

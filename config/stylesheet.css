@@ -670,22 +670,80 @@ QStackedWidget#leftStackWidget {
     background: @emptyContentBackgroundColor;
 }
 
-/* ── Config panel nav list ─────────────────────────────────── */
-#ConfigNavList {
-    border: none;
-    background: @emptyContentBackgroundColor;
-    outline: none;
-    padding-top: 8px;
+/* ── Config panel：凹陷工作面 + 卡片 ──────────────────────────
+   面板底与页面底走 @emptyContentBackgroundColor（凹），卡片走
+   @widgetBackgroundColor（浮）+ 1px 描边：卡片之间与四周露出的凹陷色
+   就是"阴影槽"，不依赖 QGraphicsEffect（见 docs/基础速查/经验教训.md：
+   Python 子类化的 effect 会 qFatal、opacity effect 进 QScrollArea 必坏）。 */
+#ConfigPanel,
+Widget#ConfigPageBody {
+    background-color: @emptyContentBackgroundColor;
 }
 
-#ConfigNavList::item {
-    padding: 5px 10px 5px 14px;
+/* 页内排版容器一律不画底色（ui/configpanel.py::ConfigFlatContainer）：
+   卡片描边画在卡片矩形上，而子控件后画、且不随父级圆角裁剪——中间任何一层
+   不透明填充都会吃掉描边与圆角（下缘/左右缘整段消失），卡片之间还会被同色
+   填充连成一片、看不出分界。
+   注意这条按**类名**选：裸 QWidget 会落回上面的全局 QWidget 规则，改本条的
+   位置即可（同一特异性下后声明者胜）。ConfigSubBlock / ConfigFormRow 派生
+   自该类，因此一并透明。 */
+ConfigFlatContainer {
+    background: transparent;
 }
 
-#ConfigNavList::item:selected {
+
+/* 卡内文字与复选框同理：全局规则只给了 QLabel/QCheckBox 字色，底色来自
+   QWidget 兜底；标签紧贴卡片内缘时同样吃掉描边。设置面板里没有靠底色
+   存在的标签（徽章、提示行自己都写了 transparent），故整片关掉。
+   后文若出现带底色的 ID 规则（同特异性后声明者胜）会正常覆盖本条。 */
+#ConfigPanel QLabel,
+#ConfigPanel QCheckBox {
+    background: transparent;
+}
+
+/* 导航条与页面同处一片凹陷面：滚动区 / 视口 / 内容体都要透明。
+   漏了这条，它们会落到全局 `QWidget` 规则上（@qwidgetBackgroundColor），
+   导航列比页面亮一档、分组卡也跟着失去浮起感（实测像素：导航底 #282c34、
+   页面底 #21252b）。 */
+#ConfigNavScroll,
+#ConfigNavScroll > QWidget > QWidget,
+#ConfigNavBody {
     background: transparent;
     border: none;
-    color: @qwidgetForegroundColor;
+}
+
+/* 导航：分组卡 + 项 chip（ConfigNavRail/Group/Item，见 ui/configpanel.py） */
+QFrame#ConfigNavGroup {
+    background: @widgetBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 7px;
+}
+
+QLabel#ConfigNavGroupTitle {
+    background: transparent;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 8px 10px 4px 10px;
+}
+
+QPushButton#ConfigNavItem {
+    text-align: left;
+    padding: 0 10px;
+    height: 26px;
+    font-size: 16px;
+    border: 1px solid rgba(128, 128, 128, 0.25);
+    border-radius: 5px;
+    background: transparent;
+}
+
+QPushButton#ConfigNavItem:hover {
+    background: @hoverBackgroundColor;
+}
+
+QPushButton#ConfigNavItem:checked {
+    background: @accentPrimary20Solid;
+    border: 1px solid @accentPrimary;
+    font-weight: bold;
 }
 
 
@@ -1646,7 +1704,13 @@ PanelArea {
 PanelGroupBox {
     border: 1px solid @borderColor;
     border-radius: 7px;
-    background-color: @emptyContentBackgroundColor;
+    background-color: @widgetBackgroundColor;
+}
+
+/* 分节卡（compact）：设置页里一个分节一张卡，标题降到页标题之下 */
+PanelGroupBox[compact="true"] QLabel#CardTitle {
+    font-size: 16px;
+    padding: 8px 16px 4px 16px;
 }
 
 /* Config-panel pages: full frame dropped after the paged refactor;
@@ -1922,12 +1986,6 @@ DeleteStyleButton {
 DeleteStyleButton::hover {
     background-color: @dangerColor;
 }
-#CompactDelegationFrame {
-    background-color: @widgetBackgroundColor;
-    border: 1px solid @borderColor;
-    border-radius: 6px;
-}
-
 /* ── Text transform panel (stage 5 node H) ─────────────────── */
 QFrame#TextTransformParameterPanel {
     background: @hoverBackgroundColor;
@@ -2239,7 +2297,7 @@ QTabBar::close-button:hover {
 
 /* ── PieMenuEditor toolbar card (tabs + per-menu props) ───── */
 QFrame#PieMenuToolbar {
-    background: @emptyContentBackgroundColor;
+    background: @widgetBackgroundColor;
     border: 1px solid @borderColor;
     border-radius: 6px;
 }
@@ -2469,7 +2527,9 @@ QLabel#ModelFilesHint {
 }
 /* 底部状态条：顶边一条分隔线把它与列表分开（同工作台状态条） */
 QWidget#ModelFilesStatusBar {
-    background: @emptyContentBackgroundColor;
+    /* 只留顶边分隔线：本状态条现在坐在「模型文件」分节卡内，用页面凹陷色当底
+       会在卡片上开个洞，还会盖住卡片左右描边（卡片内部只该由卡片自己画底）。 */
+    background: transparent;
     border-top: 1px solid @borderColor;
 }
 /* 下载是这一节的主操作 */

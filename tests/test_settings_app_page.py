@@ -50,7 +50,7 @@ class SettingsAppPageTest(unittest.TestCase):
     def test_page_count_is_ten(self):
         # Modules (Models / Pipeline / LLM Profile) + General (Project /
         # Typesetting / Interface / Shortcuts / Quick Menus / App) + the
-        # temporary Workbench page (2026-09-18; 排版方案定了之后并入既有页).
+        # Workbench page (2026-09-18, made a regular page 2026-09-21).
         self.assertEqual(self.panel.pageStack.count(), 10)
         self.assertEqual(len(self.panel._nav_section_to_widget), 10)
 
@@ -73,8 +73,9 @@ class SettingsAppPageTest(unittest.TestCase):
         self.panel.confirm_costly_checker.setChecked(False)
         self.assertFalse(pcfg.workbench_confirm_costly)
 
-    def test_workbench_temporary_page_writes_both_numbers(self):
-        """临时页（2026-09-18）的两个数值项：初值取自 pcfg，改动回写 pcfg。"""
+    def test_workbench_page_writes_both_numbers(self):
+        """工作台页（2026-09-18 建，2026-09-21 去掉「临时」字样）的两个数值项：
+        初值取自 pcfg，改动回写 pcfg。"""
         snapshot = (
             pcfg.workbench_merge_oversize_ratio,
             pcfg.workbench_expand_px,

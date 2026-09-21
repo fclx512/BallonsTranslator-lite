@@ -47,6 +47,8 @@
 
 | `scripts/workbench_render.py` | **工作台布局的目视验收台**：合成一个带内容的工程，把 `ui/glossary_agent_panel.py::GlossaryAgentPanel` 的每个任务页（含未开项目的空态页）渲染成 PNG（默认 2 倍率），并在 stdout 回显两级导航结构（大类页签文字／chip 文字／可见 chip／计数）——不看图也能核对结构。**必须走默认 windows 平台插件**：offscreen 下 `QFontDatabase.families()` 为空，文字全是豆腐块（且设 `setFont` 救不回来）；同时按 `launch.py` 装字体＋语言＋主题，否则截图是白底裸控件 | `python scripts/workbench_render.py [--out DIR] [--scale N]` |
 
+| `scripts/settings_render.py` | **设置面板的目视验收台**：把 `ui/configpanel.py::ConfigPanel` 的 10 个页面渲染成 PNG（暗/亮两套主题各一目录，`--theme` 选），stdout 回显导航结构（分组卡／项 chip／页数）。改设置页样式或版式前后各看一眼；改卡片配色/间距时它比描述文字管用。`--diag` 切**诊断配色**（页面凹面/Widget 面/裸 QWidget/描边 = 品红/绿/橙/白），用来查"底是谁画的、谁盖了谁"——默认主题里这几层常常同色，肉眼看不出来（判读见 `docs/基础速查/经验教训.md` §3.6）。同样**必须走默认 windows 平台插件 + 装字体/翻译/主题**；进程内把 `save_config` 短路（截图工具不该动用户配置，且本进程没有 ModuleManager，真落盘会在 `get_saving_params` 里 KeyError） | `python scripts/settings_render.py [--out DIR] [--scale N] [--theme dark\|light\|both] [--diag]` |
+
 渲染同步回归已迁至 `tests/test_render_sync.py`（pytest/直接运行均可）。
 
 **真机探针**在 `scripts/probes/`（内存归因与释放阶梯、区域再检测真机验收）——那是"测出来的"结论的可复算工具，有真机／模型依赖，前提与每个脚本的期望数字见 `scripts/probes/README.md`。本目录的登记检查只覆盖顶层，子目录自带说明。
@@ -59,6 +61,7 @@
 |---|---|---|
 | `scripts/check_update.py` | 跨平台 | 启动时检查更新：git 增量 / manifest delta / zip 三种模式（`launch.bat`/`launch.py` 调用） |
 | `scripts/generate_manifest.py` | 跨平台 | 生成 `manifest.json`（全文件 SHA256 清单，供 delta 更新用）。**发版前必须重新生成并随版本提交** |
+| `scripts/build_win_minimal.ps1` | Windows | **构建引导包（bootstrap）**：源码 + 裸嵌入式 Python + pip + `uv.exe`，不预装依赖（产物约 32 MB）。重依赖由首启动（`utils/core_requirements.py`）与选中模块时（`modules/base.py::ensure_dependencies`）现场安装；预装好的一体包仍作网盘兜底。源码取材走 `git ls-files`，故 `config/config.json`（含 API 密钥）等被忽略的文件天然不入包，脚本还对此有硬校验。顺序＝提交 → `generate_manifest.py` → 打 tag → 本脚本（或 CI）→ 上传 | `powershell -ExecutionPolicy Bypass -File scripts/build_win_minimal.ps1`（`-KeepBuildDir` 保留中间目录，`-PythonVersion` 换 Python 版本，`-UvUrl` 钉 uv 版本） |
 | `scripts/download_models.sh` | Linux/macOS | 编译 PyPatchMatch（`modules/inpaint/patch_match.py` 仍依赖）。**其中的模型下载段是上游遗留、已与当前模型集合脱节**——权重请在应用内「设置 → Models → 模型文件」获取（见 `docs/技术实现/模型文件管理_设计方案.md`） |
 | `scripts/local_gitpull.bat` | Windows | 使用便携环境执行 `git pull` |
 

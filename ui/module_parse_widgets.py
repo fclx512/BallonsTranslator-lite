@@ -1,6 +1,6 @@
 from typing import Callable
 
-from qtpy.QtCore import QLocale, QSignalBlocker, Qt, Signal
+from qtpy.QtCore import QCoreApplication, QLocale, QSignalBlocker, Qt, Signal
 from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
     QCheckBox,
@@ -33,11 +33,11 @@ from .custom_widget import (
     ConfigCheckBox,
     ConfigComboBox,
     ConfigLineEdit,
-    ConfigSectionHeader,
     ConfigTextEdit,
     ParamComboBox,
     ParamNameLabel,
 )
+from .custom_widget.view_panel import add_section_card
 
 
 class ParamCheckGroup(QWidget):
@@ -374,6 +374,15 @@ class ModuleParseWidgets(QWidget):
 
 
 class ModuleConfigParseWidget(QWidget):
+    """一个管线阶段的引擎选择行 + 参数表（设置页「管线」页的标签内容）。
+
+    **必须保持裸 ``QWidget``**：面板自己不画底色，页体的凹陷面（``Widget#ConfigPageBody``）
+    才透得上来，参数卡才有"浮起"的观感。换成 ``ui/custom_widget/widget.py::Widget``
+    （WA_StyledBackground）就会把全局 ``QWidget`` 底色刷满一页、填平卡片之间的
+    凹陷槽——``tests/test_config_card_painting.py::test_pipeline_stage_panel_paints_no_background``
+    钉着这条。
+    """
+
     module_changed = Signal(str)
     paramwidget_edited = Signal(str, dict)
 
@@ -400,13 +409,28 @@ class ModuleConfigParseWidget(QWidget):
         p_layout.addWidget(self.module_label)
         p_layout.addWidget(self.module_combobox)
         p_layout.addStretch(-1)
+        # 16px 横向内边距：与卡内行（ConfigFormRow 同一口径）对齐
+        p_layout.setContentsMargins(16, 4, 16, 4)
         self.p_layout = p_layout
 
         layout = QVBoxLayout(self)
+        # 左右 8px 显式写死：给布局留边距时 Qt 会填样式默认值（实测 9px），
+        # 卡片左缘就会比模型管理页那张右移 1px（同一个坑见
+        # ui/configpanel.py::_add_grouped_page 的 sublock 清零）。8 与页框容器的
+        # GROUPBOX_CONTENT_MARGINS 同值，卡片才落在其它页同一条竖线上。
+        layout.setContentsMargins(8, 0, 8, 0)
         self.param_widget_map = {}
         layout.addLayout(p_layout)
-        layout.addWidget(ConfigSectionHeader(self.tr("Parameters")))
-        layout.addLayout(self.params_layout)
+        # 参数表 = 一张分节卡：管线标签页与其余设置页共用同一套分节样式
+        # （页体凹陷由 Widget#ConfigPageBody 画，本面板自己不画底色）
+        # 上下文写死：self.tr 在子类实例上按 **子类名** 查表（TextDetectConfigPanel
+        # …），ts 里的 ModuleConfigParseWidget 条目永远命中不了，"参数" 会被翻成
+        # 英文原文。字面量处显式标上下文，见 AGENTS.md「i18n 翻译」。
+        self.params_card = add_section_card(
+            layout, QCoreApplication.translate("ModuleConfigParseWidget", "Parameters")
+        )
+        self.params_layout.setContentsMargins(16, 4, 16, 4)
+        self.params_card.contentLayout().addLayout(self.params_layout)
         layout.setSpacing(14)
         self.vlayout = layout
 
@@ -611,17 +635,17 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
         # per-run choice); the bottom bar keeps its own language submenu.
 
         # ── Active Profile section ───────────────────────────────
-        profile_section = QWidget()
-        ps_layout = QVBoxLayout(profile_section)
-        ps_layout.setContentsMargins(0, 0, 0, 0)
-        ps_layout.setSpacing(4)
-
-        ps_header = ConfigSectionHeader(self.tr("API Profile"))
-        ps_layout.addWidget(ps_header)
+        # 排在参数卡之前：先选好用哪个账号，再看这张账号下的参数表
+        self._profile_section = add_section_card(self.vlayout, self.tr("API Profile"))
+        self.vlayout.insertWidget(
+            self.vlayout.indexOf(self.params_card), self._profile_section
+        )
+        ps_layout = self._profile_section.contentLayout()
 
         # Combo + button row
         profile_row = QHBoxLayout()
         profile_row.setSpacing(6)
+        profile_row.setContentsMargins(16, 4, 16, 4)
 
         self._profile_combo = ConfigComboBox(scrollWidget=scrollWidget)
         self._profile_combo.setFixedWidth(CONFIG_COMBOBOX_LONG)
@@ -639,8 +663,6 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
 
         ps_layout.addLayout(profile_row)
 
-        self.vlayout.insertWidget(2, profile_section)
-        self._profile_section = profile_section
         self._profile_section.setVisible(False)
 
         self._profile_combo.currentTextChanged.connect(self._on_profile_changed)

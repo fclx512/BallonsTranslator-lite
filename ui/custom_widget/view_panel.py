@@ -273,6 +273,25 @@ class PanelGroupBox(Widget):
         return self._content_layout
 
 
+def add_section_card(root_layout, title: str) -> PanelGroupBox:
+    """Append a compact section card to ``root_layout``; return the card.
+
+    One section = one card, so section boundaries are visible at a glance.
+    Add the section's rows to ``card.contentLayout()``; the card floats because
+    the page behind it is a sunken work surface (``Widget#ConfigPageBody``).
+
+    Body padding is horizontal 0 on purpose: rows keep their own 16px insets,
+    so a row's absolute x does not move when its section gets boxed.
+    """
+    card = PanelGroupBox(title)
+    card.setProperty("compact", True)
+    body = card.contentLayout()
+    body.setContentsMargins(0, 2, 0, 6)
+    body.setSpacing(0)
+    root_layout.addWidget(card)
+    return card
+
+
 class PanelAreaContent(Widget):
     after_resized = Signal()
 

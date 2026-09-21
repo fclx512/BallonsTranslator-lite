@@ -36,17 +36,41 @@ class InstallResult:
         return shlex.join(self.command)
 
 
-def resolve_backend(backend: str = "auto", env: Optional[dict] = None) -> str:
+def find_uv(env: Optional[dict] = None, python_executable: str = "") -> str:
+    """Return a usable ``uv`` executable path, or ``""`` when unavailable.
+
+    Lookup order: ``PATH`` first, then the directory holding the target
+    interpreter.  The release bundle puts ``uv.exe`` next to ``python.exe``
+    inside ``ballontrans_pylibs_win/`` and does **not** add that directory to
+    ``PATH`` (``launch.bat`` calls the interpreter by absolute path), so a
+    PATH-only lookup would silently fall back to pip — several times slower
+    on the ~520 MB core dependency set.
+    """
+    env = env or os.environ
+    found = shutil.which("uv", path=env.get("PATH"))
+    if found:
+        return found
+
+    exe_dir = os.path.dirname(python_executable or sys.executable)
+    if exe_dir:
+        for name in ("uv.exe", "uv"):
+            candidate = os.path.join(exe_dir, name)
+            if os.path.isfile(candidate):
+                return candidate
+    return ""
+
+
+def resolve_backend(
+    backend: str = "auto", env: Optional[dict] = None, python_executable: str = ""
+) -> str:
     """Resolve the installer backend.
 
-    ``auto`` picks ``uv`` if found on PATH, otherwise ``pip``.
+    ``auto`` picks ``uv`` if one is found (PATH or next to the interpreter),
+    otherwise ``pip``.
     """
     if backend != "auto":
         return backend if backend in BACKENDS else "auto"
-    env = env or os.environ
-    if shutil.which("uv", path=env.get("PATH")):
-        return "uv"
-    return "pip"
+    return "uv" if find_uv(env, python_executable) else "pip"
 
 
 def build_install_command(
@@ -80,11 +104,13 @@ def build_install_command(
     index_url = env.get("INDEX_URL")
     index_args = ["--index-url", index_url] if index_url else []
     python_executable = python_executable or sys.executable
-    resolved_backend = resolve_backend(backend, env=env)
+    resolved_backend = resolve_backend(
+        backend, env=env, python_executable=python_executable
+    )
 
     if resolved_backend == "uv":
         return [
-            "uv",
+            find_uv(env, python_executable) or "uv",
             "pip",
             "install",
             "--python",

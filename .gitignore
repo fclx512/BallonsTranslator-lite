@@ -16,6 +16,10 @@ data/font_demo_cache.bin
 config/textstyles
 release
 .btrans_cache
+# scripts/build_win_minimal.ps1 的工作目录
+build_temp
+# launch.bat --update 的暂存目录（正常应用后自删，中断时会残留）
+_update
 
 tmp.py
 dummy_scripts.py

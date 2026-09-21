@@ -131,80 +131,75 @@ class ConfigPanelNode3Test(unittest.TestCase):
         self.assertEqual(pcfg.quick_insert_characters, "♥♡")
 
     def test_typesetting_section_order(self):
-        """竖排设置归入 Vertical Text 分组，quick insert 前置不混排；
-        字体管理项归 Fonts 组并前移（不再悬挂在 Vertical Text 之后）。"""
-        from qtpy.QtWidgets import QCheckBox, QLabel, QLineEdit, QPushButton
+        """竖排设置归入 Vertical Text 分节卡，quick insert 前置不混排；
+        字体管理项归 Fonts 卡并前移（不再悬挂在 Vertical Text 之后）。
 
-        layout = self.panel.typesetting_block.widget.layout()
-        widgets = [
-            layout.itemAt(i).widget() for i in range(layout.count())
-        ]
+        卡片化（2026-09-20）后行为断言按「这一行属于哪张卡」判：先在页面
+        布局里按顺序取出分节卡，再用 ``isAncestorOf`` 判定归属、用卡内布局
+        下标判定同卡内的先后。
+        """
+        from ui.custom_widget import PanelGroupBox
 
-        def row_of(control, child_type):
-            return next(
-                w
-                for w in widgets
-                if w is not None
-                and w is not control
-                and control in w.findChildren(child_type)
+        page = self.panel.typesetting_block.widget
+        layout = page.layout()
+        cards = []
+        for i in range(layout.count()):
+            widget = layout.itemAt(i).widget()
+            if isinstance(widget, PanelGroupBox) and widget.property("compact"):
+                cards.append(widget)
+        titles = [card.title_label.text() for card in cards]
+
+        def card(title):
+            self.assertIn(title, titles)
+            return cards[titles.index(title)]
+
+        def row_index(card_widget, control):
+            """该控件所在行在卡内的下标（行 = 卡内容布局的直接子项）。"""
+            body = card_widget.contentLayout()
+            for i in range(body.count()):
+                widget = body.itemAt(i).widget()
+                if widget is not None and (
+                    widget is control or widget.isAncestorOf(control)
+                ):
+                    return i
+            self.fail(
+                f"{control} 不在 {card_widget.title_label.text()} 卡内"
             )
 
-        def header_of(text):
-            return next(
-                w
-                for w in widgets
-                if w is not None
-                and w.objectName() == "ConfigSectionHeader"
-                and any(
-                    isinstance(c, QLabel) and c.text() == text
-                    for c in w.findChildren(QLabel)
-                )
-            )
+        fonts = card("Fonts")
+        vertical = card("Vertical Text")
+        quick = card("Quick Symbol Palette")
 
-        quick_row = row_of(self.panel.quick_insert_characters_edit, QLineEdit)
-        vertical_header = header_of("Vertical Text")
-        compact_row = row_of(self.panel.compact_punctuation_checker, QCheckBox)
-        fonts_header = header_of("Fonts")
-        exclusion_row = row_of(self.panel.exclude_fonts_btn, QPushButton)
+        # Edge-aligned punctuation setting was restored (fork「标点靠边」)
+        self.assertTrue(vertical.isAncestorOf(self.panel.punctuation_position_combo))
+        self.assertTrue(
+            vertical.isAncestorOf(self.panel.compact_punctuation_checker),
+            "Compact punctuation must sit inside the Vertical Text card",
+        )
+        self.assertLess(
+            row_index(vertical, self.panel.punctuation_position_combo),
+            row_index(vertical, self.panel.compact_punctuation_checker),
+            "Punctuation Position must precede the compact punctuation row",
+        )
 
-        self.assertLess(
-            widgets.index(quick_row),
-            widgets.index(vertical_header),
-            "Quick insert characters must sit before the Vertical Text header",
+        self.assertTrue(
+            fonts.isAncestorOf(self.panel.exclude_fonts_btn),
+            "Font Exclusion must sit inside the Fonts card",
         )
         self.assertLess(
-            widgets.index(vertical_header),
-            widgets.index(compact_row),
-            "Compact punctuation must sit inside the Vertical Text section",
-        )
-        self.assertLess(
-            widgets.index(fonts_header),
-            widgets.index(exclusion_row),
-            "Font Exclusion must sit inside the Fonts section",
-        )
-        self.assertLess(
-            widgets.index(exclusion_row),
-            widgets.index(vertical_header),
+            titles.index("Fonts"),
+            titles.index("Vertical Text"),
             "Fonts section must precede the Vertical Text section",
         )
-        # Edge-aligned punctuation setting was restored (fork「标点靠边」):
-        # it must exist again and sit at the top of the Vertical Text section.
-        punctuation_row = row_of(
-            self.panel.punctuation_position_combo, type(self.panel.punctuation_position_combo)
-        )
-        self.assertIsNotNone(
-            punctuation_row,
-            "Punctuation Position must be present in the Vertical Text section",
+
+        self.assertTrue(
+            quick.isAncestorOf(self.panel.quick_insert_characters_edit),
+            "Quick insert characters must sit inside the Quick Symbol Palette card",
         )
         self.assertLess(
-            widgets.index(vertical_header),
-            widgets.index(punctuation_row),
-            "Punctuation Position must sit inside the Vertical Text section",
-        )
-        self.assertLess(
-            widgets.index(punctuation_row),
-            widgets.index(compact_row),
-            "Punctuation Position must precede the compact punctuation row",
+            titles.index("Quick Symbol Palette"),
+            titles.index("Vertical Text"),
+            "Quick insert characters must sit before the Vertical Text section",
         )
 
 

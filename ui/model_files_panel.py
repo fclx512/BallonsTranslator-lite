@@ -66,13 +66,11 @@ class ModelFilesSection(QWidget):
     # ── 构建 ─────────────────────────────────────────────────────────────
 
     def _build(self):
-        from ui.configpanel import _section_header
-
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addWidget(_section_header(self.tr("Model Files")))
 
+        # 标题不在这里画：本节由设置页的分节卡承载（标题＝卡片的「模型文件」）
         # 译文串必须是**单个字面量**：i18n 提取器不认隐式拼接（scripts/i18n_common.py）
         hint = QLabel(
             self.tr(
@@ -81,7 +79,7 @@ class ModelFilesSection(QWidget):
         )
         hint.setObjectName("ModelFilesHint")
         hint.setWordWrap(True)
-        hint.setContentsMargins(16, 0, 16, 6)
+        hint.setContentsMargins(16, 8, 16, 6)
         layout.addWidget(hint)
 
         self._table = RowTable(MODE_CARD)

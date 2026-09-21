@@ -142,8 +142,8 @@ def run_pip(args, desc=None):
 UV_AVAILABLE = False
 
 
-def _uv_available():
-    """Check if uv is available in the target Python interpreter."""
+def _uv_module_available():
+    """Check if uv is importable as a module of this interpreter."""
     try:
         r = subprocess.run(
             [sys.executable, "-m", "uv", "--version"],
@@ -153,6 +153,17 @@ def _uv_available():
         return r.returncode == 0
     except (subprocess.SubprocessError, FileNotFoundError):
         return False
+
+
+def _uv_available():
+    """Check whether uv is usable — as a module, or as an executable beside
+    this interpreter (the release bundle ships ``uv.exe`` next to
+    ``python.exe`` without installing the Python module)."""
+    if _uv_module_available():
+        return True
+    from utils.package_installer import find_uv
+
+    return bool(find_uv())
 
 
 def ensure_uv():
@@ -186,8 +197,21 @@ def run_uv(args, desc=None):
     if skip_install:
         return
     index_url_line = f" --index-url {index_url}" if index_url != "" else ""
+    if _uv_module_available():
+        return run(
+            f'"{python}" -m uv pip {args}{index_url_line} --disable-pip-version-check',
+            desc=f"Installing {desc}",
+            errdesc=f"Couldn't install {desc}",
+            live=True,
+        )
+
+    # 发行包把 uv.exe 与 python.exe 放在同一个 ballontrans_pylibs_win/ 里，
+    # 那种 uv 没有 Python 模块，只能直接执行，并显式指定目标解释器。
+    from utils.package_installer import find_uv
+
+    uv_exe = find_uv() or "uv"
     return run(
-        f'"{python}" -m uv pip {args}{index_url_line} --disable-pip-version-check',
+        f'"{uv_exe}" pip {args}{index_url_line} --python "{python}" --disable-pip-version-check',
         desc=f"Installing {desc}",
         errdesc=f"Couldn't install {desc}",
         live=True,
@@ -304,7 +328,7 @@ def _ensure_module_fallback():
     except ImportError:
         _has_onnxocr = False
 
-    from utils.config import pcfg
+    from utils.config import pcfg, record_auto_downgrade
 
     changed = []
 
@@ -312,6 +336,7 @@ def _ensure_module_fallback():
     if not _has_torch and pcfg.module.textdetector not in ("none",):
         _old = pcfg.module.textdetector
         pcfg.module.textdetector = "none"
+        record_auto_downgrade(pcfg.module, "textdetector", "none", _old)
         changed.append(f"textdetector: {_old} → none")
 
     # ── OCR: rely on config default (none_ocr) or user's saved choice ──
@@ -322,6 +347,7 @@ def _ensure_module_fallback():
     if not _has_torch and pcfg.module.inpainter not in ("none",):
         _old = pcfg.module.inpainter
         pcfg.module.inpainter = "none"
+        record_auto_downgrade(pcfg.module, "inpainter", "none", _old)
         changed.append(f"inpainter: {_old} → none")
 
     if changed:
@@ -375,7 +401,7 @@ def _ensure_model_files_fallback():
     import os.path as osp
 
     from utils import shared
-    from utils.config import pcfg
+    from utils.config import pcfg, record_auto_downgrade
 
     # Lazy-import registries (safe after init_lazy_module_registries)
     try:
@@ -421,6 +447,7 @@ def _ensure_model_files_fallback():
 
         if _missing_pkg:
             setattr(pcfg.module, _cfg_key, _fallback)
+            record_auto_downgrade(pcfg.module, _cfg_key, _fallback, _module_name)
             changed.append(
                 f"{_type}: {_module_name} → {_fallback} (package {_missing_pkg} missing)"
             )
@@ -452,6 +479,7 @@ def _ensure_model_files_fallback():
 
         if not _all_entries_ok:
             setattr(pcfg.module, _cfg_key, _fallback)
+            record_auto_downgrade(pcfg.module, _cfg_key, _fallback, _module_name)
             changed.append(
                 f"{_type}: {_module_name} → {_fallback} (model files missing)"
             )
@@ -545,6 +573,18 @@ def main():
     print(f"Version: {VERSION}")
     print(f"Branch: {BRANCH}")
     print(f"Commit hash: {commit}")
+
+    # ── Network mirror bootstrap (must precede dependency installation) ──
+    #     首次运行按地区自动补写 config.json 的 mirror 节，并把 pip 源落到
+    #     环境变量上。位置必须在 ensure_core_requirements 之前：那是首启动
+    #     拉全套依赖的一步，而 config 那时还读不了（它依赖 numpy/PyQt6）。
+    #     config.mirror.* 的正式读取仍在下方 config 加载之后。
+    from utils.network_mirrors import apply_pip_mirror_env, auto_fill_mirrors
+
+    auto_fill_mirrors(shared.CONFIG_PATH)
+    _early_index_url = apply_pip_mirror_env(shared.CONFIG_PATH)
+    if _early_index_url:
+        print(f"Using pip index: {_early_index_url}")
 
     # ── Ensure core requirements before GPU detection ─────────────────
     #     Must run BEFORE the GPU/CPU decision so that numpy, qtpy, etc.
@@ -664,11 +704,7 @@ def main():
     # ── Config and mirror setup (requires numpy/PyQt6) ──
     from utils import config as program_config
 
-    # Auto-detect network mirrors on first run (before config load, so the
-    # written mirrors are picked up immediately).
-    from utils.network_mirrors import auto_fill_mirrors
-
-    auto_fill_mirrors(shared.CONFIG_PATH)
+    # 自动镜像是本函数更早那一步（依赖安装之前）做的，这里不再重复。
 
     # Auto-detect system display language (only applies on first launch,
     # before any saved config.json exists — subsequent launches use the

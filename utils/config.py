@@ -770,6 +770,48 @@ def load_config(config_path: str = shared.CONFIG_PATH):
     migrate_old_profiles()
 
 
+# ── Auto-downgraded module selections must not be persisted ──────────
+# launch.py 在缺依赖/缺模型时把选中的模块自动降级成 ``none``，好让应用能起来。
+# 那次降级只对本次运行有效：写盘会把用户（或默认）的选择永久抹掉，而它自己的
+# 提示语还写着「Install PyTorch to enable local models, then restart」—— 配置
+# 若已被改成 none，重启后那句话就落空了（2026-09-20 修）。这里登记降级，落盘
+# 时换回原值；用户若在界面上另选了别的模块，则以用户为准。
+_AUTO_DOWNGRADES: Dict[tuple, tuple] = {}
+
+
+def record_auto_downgrade(obj, field: str, downgraded_value, original_value) -> None:
+    """Register an in-memory-only module downgrade.
+
+    Call immediately after overwriting ``obj.<field>`` with
+    ``downgraded_value``, passing the value it held before.  ``save_config``
+    then writes ``original_value`` instead, so a degraded launch does not
+    rewrite the persisted selection.
+    """
+    _AUTO_DOWNGRADES.setdefault(
+        (id(obj), field), (obj, field, downgraded_value, original_value)
+    )
+
+
+def _suspend_auto_downgrades() -> List[tuple]:
+    """Swap registered downgrades back to their original values for a dump.
+
+    Only fields still holding the downgraded value are swapped — a value the
+    user or another code path changed since is left alone.  Returns the swaps
+    so :func:`_resume_auto_downgrades` can restore them.
+    """
+    applied = []
+    for (_, field), (obj, _, downgraded, original) in _AUTO_DOWNGRADES.items():
+        if getattr(obj, field, None) == downgraded:
+            setattr(obj, field, original)
+            applied.append((obj, field, downgraded))
+    return applied
+
+
+def _resume_auto_downgrades(applied: List[tuple]) -> None:
+    for obj, field, downgraded in applied:
+        setattr(obj, field, downgraded)
+
+
 def json_dump_program_config(obj, **kwargs):
     def _default(obj):
         if isinstance(obj, (np.ndarray, np.ScalarType)):
@@ -785,6 +827,7 @@ def json_dump_program_config(obj, **kwargs):
 
 def save_config():
     global pcfg
+    applied = _suspend_auto_downgrades()
     try:
         tmp_save_tgt = shared.CONFIG_PATH + ".tmp"
         with open(tmp_save_tgt, "w", encoding="utf8") as f:
@@ -793,6 +836,8 @@ def save_config():
         LOGGER.error(f"Failed save config to {tmp_save_tgt}: {e}")
         LOGGER.error(traceback.format_exc())
         return False
+    finally:
+        _resume_auto_downgrades(applied)
 
     os.replace(tmp_save_tgt, shared.CONFIG_PATH)
     LOGGER.info("Config saved")

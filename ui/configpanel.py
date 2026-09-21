@@ -7,9 +7,7 @@ from qtpy.QtCore import (
     QEasingCurve,
     QElapsedTimer,
     QEvent,
-    QItemSelection,
     QPoint,
-    QSize,
     Qt,
     QTimer,
     Signal,
@@ -21,13 +19,12 @@ from qtpy.QtGui import (
     QIntValidator,
     QKeySequence,
     QShortcut,
-    QStandardItem,
-    QStandardItemModel,
     QValidator,
 )
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QButtonGroup,
     QCheckBox,
     QDialog,
     QDialogButtonBox,
@@ -49,7 +46,6 @@ from qtpy.QtWidgets import (
     QSpacerItem,
     QStackedWidget,
     QTabBar,
-    QTreeView,
     QVBoxLayout,
     QWidget,
 )
@@ -64,8 +60,6 @@ from utils.shared import (
     CONFIG_COMBOBOX_MIDEAN,
     CONFIG_COMBOBOX_SHORT,
     CONFIG_FONTSIZE_CONTENT,
-    CONFIG_FONTSIZE_HEADER,
-    CONFIG_FONTSIZE_TABLE,
     CONFIG_SUBBLOCK_SPACING,
     CONFIGBLOCK_CONTENT_MARGINS,
     GROUPBOX_CONTENT_MARGINS,
@@ -78,11 +72,11 @@ from .custom_widget import (
     ConfigComboBox,
     ConfigLineEdit,
     ConfigScrollBar,
-    ConfigSectionHeader,
     NoArrowsSpinBox,
     PanelGroupBox,
     Widget,
 )
+from .custom_widget.view_panel import add_section_card
 from .module_parse_widgets import (
     InpaintConfigPanel,
     OCRConfigPanel,
@@ -205,7 +199,20 @@ def _make_note_btn(note_text: str) -> QPushButton:
     return btn
 
 
-class ConfigSubBlock(Widget):
+class ConfigFlatContainer(QWidget):
+    """只做排版分组、**不画底色**的容器（QSS: ConfigFlatContainer）。
+
+    设置页里唯一该画底色的是卡片（``PanelGroupBox``）：卡片描边画在卡片自己的
+    矩形上，而子控件是后画的、且不随父级圆角裁剪，所以任何不透明的中间容器都会
+    把描边和圆角整段吃掉；卡片之间也会被同色填充连成一片，看不出分界。
+
+    裸 ``QWidget`` 会落回全局 ``QWidget { background-color }`` 规则（值通常是
+    ``@widgetBackgroundColor``，与卡片同色，默认主题里看不出来、换主题就露馅）。
+    本类覆盖该规则为透明，构造函数也用不到 ``Widget`` 的 ``WA_StyledBackground``。
+    """
+
+
+class ConfigSubBlock(ConfigFlatContainer):
     def __init__(
         self,
         widget: Union[QWidget, QLayout] = None,
@@ -224,7 +231,7 @@ class ConfigSubBlock(Widget):
         self.name = name
         if name is not None and note is not None:
             # Name row: label + ? button
-            name_row = QWidget()
+            name_row = ConfigFlatContainer()
             name_row_layout = QHBoxLayout(name_row)
             name_row_layout.setContentsMargins(0, 0, 0, 0)
             name_row_layout.setSpacing(4)
@@ -297,7 +304,7 @@ class ConfigFormRow(ConfigSubBlock):
         label_width: int = 110,
         parent: QWidget = None,
     ) -> None:
-        row_widget = QWidget(parent)
+        row_widget = ConfigFlatContainer(parent)
         row_layout = QHBoxLayout(row_widget)
         row_layout.setContentsMargins(0, 0, 0, 0)
         row_layout.setSpacing(8)
@@ -337,11 +344,23 @@ class ConfigFormRow(ConfigSubBlock):
         )
 
 
-def _section_header(text: str) -> ConfigSectionHeader:
-    """Compact section header for dense form pages."""
-    header = ConfigSectionHeader(text)
-    header.layout().setContentsMargins(16, 8, 16, 4)
-    return header
+def _section_body(root_layout, title: str) -> QVBoxLayout:
+    """Open a new section card inside ``root_layout``; return its rows' layout.
+
+    Every row added after the call lands inside the card, and the *next*
+    section is opened from the page's own layout again::
+
+        page_root = page_layout                  # the page's own layout
+        page_layout = _section_body(page_root, self.tr(...))
+        page_layout.addWidget(row)               # → inside that section's card
+        page_layout = _section_body(page_root, self.tr(...))
+
+    The card is a ``PanelGroupBox`` with the ``compact`` title — the same box
+    the Shortcuts page uses, and the same one the pipeline tabs build with
+    ``ui/custom_widget/view_panel.py::add_section_card`` (pipeline panel code
+    cannot import from here: this module imports it).
+    """
+    return add_section_card(root_layout, title).contentLayout()
 
 
 def _scroll_interval() -> int:
@@ -434,113 +453,110 @@ class ConfigNotePopup(QFrame):
             self._effect.setOpacity(1.0)
 
 
-class TableItem(QStandardItem):
-    """Item for the nav tree.  Ported from upstream with font-size support."""
+class ConfigNavItem(QPushButton):
+    """One navigable settings page: a checkable chip on a group card.
 
-    def __init__(self, text, fontsize, section_key=None, target_widget=None):
-        super().__init__()
-        font = self.font()
-        font.setPointSizeF(fontsize)
-        self.setFont(font)
-        self.setText(text)
-        self.setEditable(False)
-        if section_key is not None:
-            self.setData(section_key, Qt.ItemDataRole.UserRole)
-        if target_widget is not None:
-            self.setData(id(target_widget), Qt.ItemDataRole.UserRole + 1)
+    Was a ``QTreeView`` row before 2026-09-20 — the tree's list styling read
+    as "a bigger row" rather than a group heading, and the only selected-state
+    cue was bold text.  A checkable button gives hover/pressed/checked states
+    the stylesheet can express (``QPushButton#ConfigNavItem``), so "where am
+    I" no longer depends on guessing the font weight.
+    """
 
-    def setBold(self, bold: bool):
-        font = self.font()
-        font.setBold(bold)
-        self.setFont(font)
+    def __init__(self, text: str, section_key: str, parent=None):
+        super().__init__(text, parent)
+        self.section_key = section_key
+        self.setObjectName("ConfigNavItem")
+        self.setCheckable(True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip(text)  # 窄栏下长标签可能被裁，tooltip 兜底
 
 
-class TreeModel(QStandardItemModel):
-    """Provides size hints matching upstream's row height calculation."""
+class ConfigNavGroup(QFrame):
+    """A card holding one group's items, title centred on top."""
 
-    # https://stackoverflow.com/questions/32229314/pyqt-how-can-i-set-row-heights-of-qtreeview
-    def data(self, index, role):
-        if not index.isValid():
-            return None
-        if role == Qt.ItemDataRole.SizeHintRole:
-            size = QSize()
-            item = self.itemFromIndex(index)
-            size.setHeight(item.font().pointSize() + 14)
-            return size
-        else:
-            return super().data(index, role)
+    def __init__(self, title: str, parent=None):
+        super().__init__(parent)
+        self.setObjectName("ConfigNavGroup")
+        self.setFrameShape(QFrame.Shape.NoFrame)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(6, 0, 6, 6)
+        layout.setSpacing(4)
+
+        self.title_label = QLabel(title)
+        self.title_label.setObjectName("ConfigNavGroupTitle")
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.title_label)
+        self.items_layout = layout
+
+    def add_item(self, item: ConfigNavItem):
+        self.items_layout.addWidget(item)
 
 
-class ConfigTable(QTreeView):
-    """Upstream-style navigation tree.
+class ConfigNavRail(QScrollArea):
+    """Card-based settings navigation (replaces the old nav tree).
 
-    Ported from upstream's ``ConfigTable`` with native expand/collapse
-    enabled on header items.  Selection is indicated by bold text.
+    Keeps the API the panel already wires against — ``section_pressed``,
+    ``addHeader`` / ``addSection`` / ``section_items`` / ``setCurrentSection``
+    — so page switching, ``_nav_select`` and the ``focusOn*`` entries are
+    unchanged.  One ``QButtonGroup`` spans every group, so exactly one chip is
+    checked at a time.
     """
 
     section_pressed = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-
-        treeModel = TreeModel()
-        self.setModel(treeModel)
-        self.selected: TableItem = None
-        self.setHeaderHidden(True)
+        self.setObjectName("ConfigNavScroll")
+        self.setWidgetResizable(True)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBar(ConfigScrollBar(self))
         self.setMinimumWidth(NAVLIST_WIDTH)
         self.setMaximumWidth(NAVLIST_WIDTH)
-        self.section_items = {}
 
-        # Native expand/collapse on header items
-        self.setIndentation(20)
-        self.setFrameShape(QFrame.Shape.NoFrame)
+        body = QWidget()
+        body.setObjectName("ConfigNavBody")
+        self._body_layout = QVBoxLayout(body)
+        self._body_layout.setContentsMargins(8, 8, 8, 8)
+        self._body_layout.setSpacing(8)
+        self._body_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.setWidget(body)
 
-    def addHeader(self, header: str) -> TableItem:
-        rootNode = self.model().invisibleRootItem()
-        ti = TableItem(header, CONFIG_FONTSIZE_TABLE + 3)
-        ti.setSelectable(False)
-        rootNode.appendRow(ti)
-        return ti
+        self.section_items: Dict[str, ConfigNavItem] = {}
+        self._button_group = QButtonGroup(self)
+        self._button_group.setExclusive(True)
+        self._current_key = None
 
-    def addSection(self, parent: TableItem, text: str, section_key: str, target_widget=None) -> TableItem:
-        item = TableItem(text, CONFIG_FONTSIZE_TABLE, section_key, target_widget)
-        parent.appendRow(item)
+    def addHeader(self, header: str) -> ConfigNavGroup:
+        group = ConfigNavGroup(header)
+        self._body_layout.addWidget(group)
+        return group
+
+    def addSection(
+        self, parent: ConfigNavGroup, text: str, section_key: str, target_widget=None
+    ) -> ConfigNavItem:
+        item = ConfigNavItem(text, section_key)
+        item.clicked.connect(lambda _=False, key=section_key: self._on_item_clicked(key))
+        parent.add_item(item)
+        self._button_group.addButton(item)
         self.section_items[section_key] = item
         return item
 
-    def selectionChanged(self, selected: QItemSelection, deselected: QItemSelection):
-        sel = selected.indexes()
-        model = self.model()
-
-        self.selected = model.itemFromIndex(sel[0]) if len(sel) > 0 else None
-        for i in deselected.indexes():
-            item = self.model().itemFromIndex(i)
-            if item is not None:
-                item.setBold(False)
-
-        # Bold must follow the newly selected item: currentIndex() lags one
-        # beat behind the selection during press-drag (select is emitted
-        # before current updates), which would re-bold just-cleared items
-        # and leave stale bolds behind.
-        if self.selected is not None and self.selected.isSelectable():
-            self.selected.setBold(True)
-            section_key = self.selected.data(Qt.ItemDataRole.UserRole)
-            if section_key is not None:
-                self.section_pressed.emit(section_key)
-
-        super().selectionChanged(selected, deselected)
+    def _on_item_clicked(self, section_key: str):
+        # Clicking the checked chip again re-emits — same behaviour the tree
+        # had via its mousePressEvent, and what the bottom-bar gears rely on
+        # when the panel is already showing the requested page.
+        self._current_key = section_key
+        self.section_pressed.emit(section_key)
 
     def setCurrentSection(self, section_key: str):
         item = self.section_items.get(section_key)
-        if item is not None and self.currentIndex() != item.index():
-            self.setCurrentIndex(item.index())
-
-    def mousePressEvent(self, event):
-        super().mousePressEvent(event)
-        if self.selected is not None:
-            section_key = self.selected.data(Qt.ItemDataRole.UserRole)
-            if section_key is not None:
-                self.section_pressed.emit(section_key)
+        if item is None or self._current_key == section_key:
+            return
+        self._current_key = section_key
+        item.setChecked(True)
 
 
 DEFAULT_SHORTCUTS = {
@@ -774,8 +790,7 @@ class _ShortcutRow(QWidget):
         h.addWidget(name)
 
         # Shortcuts pills — middle column (stretches)
-        self.shortcuts_widget = QWidget()
-        self.shortcuts_widget.setStyleSheet("background: transparent; border: none;")
+        self.shortcuts_widget = ConfigFlatContainer()
         self.shortcuts_layout = QHBoxLayout(self.shortcuts_widget)
         self.shortcuts_layout.setContentsMargins(0, 0, 0, 0)
         self.shortcuts_layout.setSpacing(4)
@@ -783,9 +798,8 @@ class _ShortcutRow(QWidget):
         h.addWidget(self.shortcuts_widget, 1)
 
         # Buttons — right column
-        btn_container = QWidget()
+        btn_container = ConfigFlatContainer()
         btn_container.setFixedWidth(86)
-        btn_container.setStyleSheet("background: transparent; border: none;")
         btn_layout = QHBoxLayout(btn_container)
         btn_layout.setContentsMargins(0, 0, 0, 0)
         btn_layout.setSpacing(2)
@@ -957,7 +971,8 @@ class ShortcutEditor(QWidget):
         self._rows = {}
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        # 8px 横向留白 = 让分组卡与其它页的分节卡同处一条竖线（页边距 24 + 8）
+        layout.setContentsMargins(8, 0, 8, 0)
         layout.setSpacing(0)
 
         # Build grouped layout
@@ -967,7 +982,10 @@ class ShortcutEditor(QWidget):
 
         for group_name, action_ids in _SHORTCUT_GROUPS:
             group_box = PanelGroupBox(group_name)
+            group_box.setProperty("compact", True)  # 与设置页分节卡同一套标题
             group_layout = group_box.contentLayout()
+            # 卡片标题的内边距是 16px：行只有 2px 自己的边距，这里补齐对齐
+            group_layout.setContentsMargins(16, 2, 16, 6)
 
             for idx, action_id in enumerate(action_ids):
                 if idx > 0:
@@ -981,7 +999,7 @@ class ShortcutEditor(QWidget):
                 group_layout.addWidget(row)
 
             layout.addWidget(group_box)
-            layout.addSpacing(6)
+            layout.addSpacing(10)
 
         layout.addStretch()
 
@@ -1368,9 +1386,11 @@ class ConfigPanel(Widget):
         models_vlayout = models_group.contentLayout()
         models_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
         models_vlayout.setSpacing(8)
+        # 分节卡从 models_root 开（见 _section_body）；models_vlayout 之后指向"当前分节"
+        models_root = models_vlayout
 
         # -- Model Loading section --
-        models_vlayout.addWidget(_section_header(self.tr("Model Loading")))
+        models_vlayout = _section_body(models_root, self.tr("Model Loading"))
 
         self.load_model_checker = ConfigCheckBox(
             self.tr("Load models on demand to save memory.")
@@ -1397,7 +1417,7 @@ class ConfigPanel(Widget):
         )
 
         # -- Management section --
-        models_vlayout.addWidget(_section_header(self.tr("Management")))
+        models_vlayout = _section_body(models_root, self.tr("Management"))
 
         unload_btn = QPushButton(self.tr("Unload All Models"))
         unload_btn.setObjectName("ConfigButton")
@@ -1445,6 +1465,8 @@ class ConfigPanel(Widget):
             self.model_unload_requested.emit
         )
         self.model_files_section.changed.connect(self.model_files_changed.emit)
+        # 这一节也由卡片承载：标题由卡片给，ModelFilesSection 不再自画标题
+        models_vlayout = _section_body(models_root, self.tr("Model Files"))
         models_vlayout.addWidget(self.model_files_section)
 
         # Register Models as its own page
@@ -1480,10 +1502,12 @@ class ConfigPanel(Widget):
         self._add_page(self.llm_profiles_panel)
 
         # === General: Project (startup + save merged) ===
-        project_widget = QWidget()
+        project_widget = ConfigFlatContainer()
         project_layout = QVBoxLayout(project_widget)
         project_layout.setContentsMargins(0, 0, 0, 0)
-        project_layout.setSpacing(0)
+        # 卡片之间留出凹陷底色（见 _section_body）
+        project_layout.setSpacing(10)
+        project_root = project_layout
 
         # Startup
         self.open_on_startup_checker = ConfigCheckBox(
@@ -1492,7 +1516,7 @@ class ConfigPanel(Widget):
         self.open_on_startup_checker.stateChanged.connect(
             self.on_open_onstartup_changed
         )
-        project_layout.addWidget(_section_header(self.tr("Startup")))
+        project_layout = _section_body(project_root, self.tr("Startup"))
         project_layout.addWidget(
             ConfigFormRow(
                 "",
@@ -1502,7 +1526,7 @@ class ConfigPanel(Widget):
         )
 
         # Output
-        project_layout.addWidget(_section_header(self.tr("Output")))
+        project_layout = _section_body(project_root, self.tr("Output"))
 
         self.rst_imgformat_combobox = ConfigComboBox(scrollWidget=self)
         self.rst_imgformat_combobox.addItems(["PNG", "JPG", "WEBP", "JXL"])
@@ -1550,7 +1574,7 @@ class ConfigPanel(Widget):
         )
 
         # Backup
-        project_layout.addWidget(_section_header(self.tr("Backup")))
+        project_layout = _section_body(project_root, self.tr("Backup"))
 
         self.batch_versions_spin = NoArrowsSpinBox()
         self.batch_versions_spin.setRange(1, 5)
@@ -1568,7 +1592,9 @@ class ConfigPanel(Widget):
         )
 
         # Temporary Projects
-        project_layout.addWidget(_section_header(self.tr("Temporary Projects")))
+        project_layout = _section_body(
+            project_root, self.tr("Temporary Projects")
+        )
 
         self.temp_clean_checker = ConfigCheckBox(
             self.tr("Clean up imported image projects on exit")
@@ -1610,21 +1636,22 @@ class ConfigPanel(Widget):
             )
 
         # Build typesetting wrapper widget
-        ts_widget = QWidget()
+        ts_widget = ConfigFlatContainer()
         ts_layout = QVBoxLayout(ts_widget)
         ts_layout.setContentsMargins(0, 0, 0, 0)
-        ts_layout.setSpacing(0)
+        ts_layout.setSpacing(10)
+        ts_root = ts_layout
 
         # Default Font Format section
-        ts_layout.addWidget(_section_header(self.tr("Default Font Format")))
+        ts_layout = _section_body(ts_root, self.tr("Default Font Format"))
 
-        delegation_frame = QFrame()
-        delegation_frame.setObjectName("CompactDelegationFrame")
+        # 边框与底色由分节卡提供（曾是 #CompactDelegationFrame，卡片化后退役）
+        delegation_frame = ConfigFlatContainer()
         delegation_layout = QVBoxLayout(delegation_frame)
         delegation_layout.setContentsMargins(16, 8, 16, 8)
         delegation_layout.setSpacing(8)
 
-        global_fntfmt_widget = QWidget()
+        global_fntfmt_widget = ConfigFlatContainer()
         global_fntfmt_layout = QGridLayout(global_fntfmt_widget)
         global_fntfmt_layout.setContentsMargins(0, 0, 0, 0)
         global_fntfmt_layout.setHorizontalSpacing(16)
@@ -1635,7 +1662,7 @@ class ConfigPanel(Widget):
         DELEGATION_COMBO_WIDTH = 140
 
         def _add_fontfmt_cell(row, col, label, items, signal, attr_name, tooltip=None):
-            cell = QWidget()
+            cell = ConfigFlatContainer()
             cell_layout = QVBoxLayout(cell)
             cell_layout.setContentsMargins(0, 0, 0, 0)
             cell_layout.setSpacing(2)
@@ -1696,7 +1723,7 @@ class ConfigPanel(Widget):
 
         # Fonts section — font-management items (dropdown filtering and the
         # render-time size clamp); kept out of the vertical-typography group.
-        ts_layout.addWidget(_section_header(self.tr("Fonts")))
+        ts_layout = _section_body(ts_root, self.tr("Fonts"))
 
         self.exclude_fonts_btn = QPushButton(self.tr("Exclude Fonts..."), parent=self)
         self.exclude_fonts_btn.setObjectName("ConfigButton")
@@ -1725,7 +1752,7 @@ class ConfigPanel(Widget):
         )
 
         # Text formatting section
-        ts_layout.addWidget(_section_header(self.tr("Text formatting")))
+        ts_layout = _section_body(ts_root, self.tr("Text formatting"))
 
         self.let_uppercase_checker = ConfigCheckBox(self.tr("To uppercase"))
         self.let_uppercase_checker.stateChanged.connect(self.on_uppercase_changed)
@@ -1766,7 +1793,7 @@ class ConfigPanel(Widget):
         )
 
         # Text Format Presets section — values offered in the font format panel dropdowns
-        ts_layout.addWidget(_section_header(self.tr("Text Format Presets")))
+        ts_layout = _section_body(ts_root, self.tr("Text Format Presets"))
 
         preset_hint = ConfigTextLabel(
             self.tr("Comma-separated values — used in font format panel dropdowns."),
@@ -1786,7 +1813,7 @@ class ConfigPanel(Widget):
 
         # Quick Symbol palette — its own section: the character list has
         # nothing to do with the dropdown presets above.
-        ts_layout.addWidget(_section_header(self.tr("Quick Symbol Palette")))
+        ts_layout = _section_body(ts_root, self.tr("Quick Symbol Palette"))
 
         self.quick_insert_characters_edit = ConfigLineEdit()
         self.quick_insert_characters_edit.setText(pcfg.quick_insert_characters)
@@ -1822,7 +1849,7 @@ class ConfigPanel(Widget):
         )
 
         # Vertical Text section — vertical-only typography controls
-        ts_layout.addWidget(_section_header(self.tr("Vertical Text")))
+        ts_layout = _section_body(ts_root, self.tr("Vertical Text"))
 
         # Punctuation Position
         self.punctuation_position_combo = ConfigComboBox(fix_size=False)
@@ -1904,7 +1931,7 @@ class ConfigPanel(Widget):
         self._halfwidth_horizontal_sublock.setVisible(
             pcfg.halfwidth_jp_corner_brackets
         )
-        halfwidth_horizontal_wrapper = QWidget()
+        halfwidth_horizontal_wrapper = ConfigFlatContainer()
         hw_layout = QVBoxLayout(halfwidth_horizontal_wrapper)
         hw_layout.setContentsMargins(24, 0, 0, 0)
         hw_layout.addWidget(self._halfwidth_horizontal_sublock)
@@ -1932,7 +1959,7 @@ class ConfigPanel(Widget):
         self.auto_tate_chu_yoko_apply_btn.clicked.connect(
             self.on_apply_auto_tate_chu_yoko_clicked
         )
-        auto_tcy_row = QWidget()
+        auto_tcy_row = ConfigFlatContainer()
         auto_tcy_row_layout = QHBoxLayout(auto_tcy_row)
         auto_tcy_row_layout.setContentsMargins(0, 0, 0, 0)
         auto_tcy_row_layout.setSpacing(8)
@@ -1986,7 +2013,7 @@ class ConfigPanel(Widget):
             self.on_auto_tate_chu_yoko_additional_chars_changed
         )
 
-        auto_tcy_category_row = QWidget()
+        auto_tcy_category_row = ConfigFlatContainer()
         auto_tcy_category_layout = QHBoxLayout(auto_tcy_category_row)
         auto_tcy_category_layout.setContentsMargins(0, 0, 0, 0)
         auto_tcy_category_layout.setSpacing(16)
@@ -1994,7 +2021,7 @@ class ConfigPanel(Widget):
         auto_tcy_category_layout.addWidget(self.auto_tate_chu_yoko_letters)
         auto_tcy_category_layout.addStretch()
 
-        self.auto_tcy_options_widget = QWidget()
+        self.auto_tcy_options_widget = ConfigFlatContainer()
         auto_tcy_options_layout = QVBoxLayout(self.auto_tcy_options_widget)
         auto_tcy_options_layout.setContentsMargins(24, 0, 0, 0)
         auto_tcy_options_layout.setSpacing(4)
@@ -2031,13 +2058,14 @@ class ConfigPanel(Widget):
         # === Save controls moved into Project group above ===
 
         # === General: Interface (canvas behavior + appearance) ===
-        interface_widget = QWidget()
+        interface_widget = ConfigFlatContainer()
         interface_layout = QVBoxLayout(interface_widget)
         interface_layout.setContentsMargins(0, 0, 0, 0)
-        interface_layout.setSpacing(0)
+        interface_layout.setSpacing(10)
+        interface_root = interface_layout
 
         # Appearance section — UI animation smoothness
-        interface_layout.addWidget(_section_header(self.tr("Appearance")))
+        interface_layout = _section_body(interface_root, self.tr("Appearance"))
 
         self.anim_combo = ConfigComboBox(scrollWidget=self)
         self.anim_combo.setFixedWidth(CONFIG_COMBOBOX_MIDEAN)
@@ -2059,7 +2087,7 @@ class ConfigPanel(Widget):
         )
 
         # Canvas section — canvas viewing & editing behaviors
-        interface_layout.addWidget(_section_header(self.tr("Canvas")))
+        interface_layout = _section_body(interface_root, self.tr("Canvas"))
 
         self.fit_window_checker = ConfigCheckBox(
             self.tr("Fit image to window when opening")
@@ -2084,7 +2112,7 @@ class ConfigPanel(Widget):
         self._fit_page_sublock = ConfigFormRow("", self.fit_window_page_checker)
         self._fit_page_sublock.setVisible(False)
         # Same 24px hierarchy indent as the half-width bracket sub-option
-        fit_sublock_wrapper = QWidget()
+        fit_sublock_wrapper = ConfigFlatContainer()
         fsl_layout = QVBoxLayout(fit_sublock_wrapper)
         fsl_layout.setContentsMargins(24, 0, 0, 0)
         fsl_layout.addWidget(self._fit_page_sublock)
@@ -2220,7 +2248,9 @@ class ConfigPanel(Widget):
         )
 
         # ── Original Compare ───────────────────────────────────
-        interface_layout.addWidget(_section_header(self.tr("Original Compare")))
+        interface_layout = _section_body(
+            interface_root, self.tr("Original Compare")
+        )
         self.orig_opacity_toggle_spin = NoArrowsSpinBox()
         self.orig_opacity_toggle_spin.setRange(0, 99)
         self.orig_opacity_toggle_spin.setValue(pcfg.original_transparency_preset)
@@ -2256,13 +2286,14 @@ class ConfigPanel(Widget):
 
         # === App (Updates + Config Import/Export) ===
         label_app = self.tr("App")
-        config_mgmt_widget = QWidget()
+        config_mgmt_widget = ConfigFlatContainer()
         config_mgmt_layout = QVBoxLayout(config_mgmt_widget)
         config_mgmt_layout.setContentsMargins(0, 0, 0, 0)
-        config_mgmt_layout.setSpacing(0)
+        config_mgmt_layout.setSpacing(10)
+        config_mgmt_root = config_mgmt_layout
 
         # Updates section (moved from Project)
-        config_mgmt_layout.addWidget(_section_header(self.tr("Updates")))
+        config_mgmt_layout = _section_body(config_mgmt_root, self.tr("Updates"))
 
         self.check_update_on_startup_checker = ConfigCheckBox(
             self.tr("Check update on startup")
@@ -2281,7 +2312,7 @@ class ConfigPanel(Widget):
         )
 
         # Update status row: Check update button + current/latest version labels
-        update_status_widget = QWidget()
+        update_status_widget = ConfigFlatContainer()
         update_status_widget.setObjectName("ConfigInlineRow")
         update_status_layout = QHBoxLayout(update_status_widget)
         update_status_layout.setContentsMargins(0, 0, 0, 0)
@@ -2339,7 +2370,7 @@ class ConfigPanel(Widget):
             f"color: {get_theme_color(key='@warningColor').name()}; font-size: 12px;"
         )
         risk_row = ConfigFormRow("", commit_risk)
-        risk_wrapper = QWidget()
+        risk_wrapper = ConfigFlatContainer()
         risk_layout = QVBoxLayout(risk_wrapper)
         risk_layout.setContentsMargins(24, 0, 0, 0)
         risk_layout.addWidget(risk_row)
@@ -2347,7 +2378,9 @@ class ConfigPanel(Widget):
 
         # External editor section — the canvas inpaint tool launches this
         # executable to touch up a repair by hand.
-        config_mgmt_layout.addWidget(_section_header(self.tr("External Editor")))
+        config_mgmt_layout = _section_body(
+            config_mgmt_root, self.tr("External Editor")
+        )
 
         self.ps_path_edit = ConfigLineEdit()
         self.ps_path_edit.setText(pcfg.drawpanel.photoshop_path)
@@ -2360,7 +2393,7 @@ class ConfigPanel(Widget):
         ps_browse_btn.clicked.connect(self.on_ps_browse)
         # 两行布局：标签「Photoshop 路径」超出一行式表单的固定标签宽，
         # 且完整安装路径也吃行内余量——标签行（含 ? 说明）+ 整宽输入行
-        ps_block = QWidget()
+        ps_block = ConfigFlatContainer()
         ps_v = QVBoxLayout(ps_block)
         ps_v.setContentsMargins(16, 4, 16, 4)
         ps_v.setSpacing(4)
@@ -2379,9 +2412,13 @@ class ConfigPanel(Widget):
         ps_v.addLayout(ps_edit_row)
         config_mgmt_layout.addWidget(ps_block)
 
-        # Workbench section — the glossary/story workbench runs on AI, so its
-        # costly actions can ask for confirmation first.
-        config_mgmt_layout.addWidget(_section_header(self.tr("Workbench")))
+        # Workbench prompts section — the glossary/story workbench runs on AI,
+        # so its costly actions can ask for confirmation first. (The workbench
+        # page next door in the nav holds its batch-task parameters instead;
+        # this card is titled "Prompts" so the two do not read as duplicates.)
+        config_mgmt_layout = _section_body(
+            config_mgmt_root, self.tr("Workbench Prompts")
+        )
 
         self.confirm_costly_checker = ConfigCheckBox(
             self.tr("Confirm Costly Workbench Actions")
@@ -2412,8 +2449,12 @@ class ConfigPanel(Widget):
         )
         config_mgmt_layout.addWidget(ConfigFormRow("", self.warn_skip_checker))
 
-        # Export section
-        config_mgmt_layout.addWidget(_section_header(self.tr("Export Config")))
+        # Import / Export section — one card: both directions of the same
+        # thing (a .json copy of the settings), and the export-only exclusion
+        # toggle only makes sense next to them.
+        config_mgmt_layout = _section_body(
+            config_mgmt_root, self.tr("Import / Export")
+        )
 
         self.export_exclude_keys = ConfigCheckBox(
             self.tr("Exclude API keys when exporting")
@@ -2442,9 +2483,6 @@ class ConfigPanel(Widget):
             )
         )
 
-        # Import section
-        config_mgmt_layout.addWidget(_section_header(self.tr("Import Config")))
-
         import_btn = QPushButton(self.tr("Import Config..."))
         import_btn.setObjectName("ConfigButton")
         import_btn.clicked.connect(self.on_import_config)
@@ -2462,19 +2500,19 @@ class ConfigPanel(Widget):
             label_app, config_mgmt_widget, object_name="GroupGeneral"
         )
 
-        # === Workbench settings — temporary page (2026-09-18) ===
-        # 先把工作台相关的两个数值设置项集中放在一个临时页里；排版方案定了
-        # 之后把这两项并入既有页面即可（删本节 + 导航项，把控件挪走）。
-        self.workbench_settings_group = PanelGroupBox(
-            self.tr("Workbench (temporary)")
-        )
+        # === Workbench settings page ===
+        # 工作台的批量任务参数（误聚阈值 / 默认扩张量）。2026-09-18 建时为"临时
+        # 页"，原打算排版定案后并入既有页面；2026-09-21 用户拍板不当临时页、
+        # 直接作为正式页「工作台」保留（导航 key 仍是 workbench_temp）。
+        self.workbench_settings_group = PanelGroupBox(self.tr("Workbench"))
         self.workbench_settings_group.setProperty("cfgPage", True)
         self.workbench_settings_group.setObjectName("GroupWorkbenchSettings")
         workbench_vlayout = self.workbench_settings_group.contentLayout()
         workbench_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
         workbench_vlayout.setSpacing(8)
+        workbench_root = workbench_vlayout
 
-        workbench_vlayout.addWidget(_section_header(self.tr("Batch Tasks")))
+        workbench_vlayout = _section_body(workbench_root, self.tr("Batch Tasks"))
 
         self.merge_oversize_spin = NoArrowsSpinBox()
         self.merge_oversize_spin.setRange(10, 100)
@@ -2490,7 +2528,7 @@ class ConfigPanel(Widget):
             ConfigFormRow(
                 self.tr("False grouping threshold"),
                 self.merge_oversize_spin,
-                note=self.tr("<p>In <b>Merge adjacent blocks</b>, a group whose bounding box exceeds this share of the page is flagged, not dropped — it only starts unchecked. <b>85%</b> flagged just the two cross-column groups in the 94-page sample.</p>"),
+                note=self.tr("<p>Groups covering more than this share of the page start unchecked in <b>Merge adjacent blocks</b>.</p>"),
             )
         )
 
@@ -2506,46 +2544,42 @@ class ConfigPanel(Widget):
             ConfigFormRow(
                 self.tr("Default grow amount"),
                 self.expand_default_spin,
-                note=self.tr("<p>Starting value for the batch <b>grow blocks</b> amount. <b>10 px</b> is the measured default: 88% of the boxes grow on all four sides (+28% width / +17% height). You can change it for each run.</p>"),
+                note=self.tr("<p>Initial amount for the batch <b>Grow Blocks</b>; editable for each run.</p>"),
             )
         )
 
         self._add_page(self.workbench_settings_group)
 
-        # === Navigation tree (upstream-style) ===
-        self.configTable = ConfigTable()
-        self.configTable.setObjectName("ConfigNavList")
-        self.configTable.section_pressed.connect(self._on_nav_section_pressed)
+        # === Navigation rail (card style; was an upstream-style tree) ===
+        self.configNav = ConfigNavRail()
+        self.configNav.section_pressed.connect(self._on_nav_section_pressed)
 
-        # Build section tree with group headers
-        module_header = self.configTable.addHeader(self.tr("Modules"))
+        # Build the two group cards with their items
+        module_header = self.configNav.addHeader(self.tr("Modules"))
         # Label matches the page's own group title (``PanelGroupBox``), so the
         # nav entry and the heading the user lands on say the same thing.
-        self.configTable.addSection(module_header, self.tr("Models"), "models", self.models_group)
-        self.configTable.addSection(module_header, self.tr("Pipeline"), "pipeline", self.pipeline_page)
-        self.configTable.addSection(module_header, self.tr("LLM Profile"), "llm_profile", self.llm_profiles_panel)
+        self.configNav.addSection(module_header, self.tr("Models"), "models", self.models_group)
+        self.configNav.addSection(module_header, self.tr("Pipeline"), "pipeline", self.pipeline_page)
+        self.configNav.addSection(module_header, self.tr("LLM Profile"), "llm_profile", self.llm_profiles_panel)
 
-        general_header = self.configTable.addHeader(self.tr("General"))
-        self.configTable.addSection(general_header, label_project, "project", self.project_block.section_widget)
-        self.configTable.addSection(general_header, label_typesetting, "typesetting", self.typesetting_block.section_widget)
-        self.configTable.addSection(general_header, label_interface, "interface", self.interface_block.section_widget)
-        self.configTable.addSection(general_header, label_shortcuts, "shortcuts", self.shortcuts_editor)
+        general_header = self.configNav.addHeader(self.tr("General"))
+        self.configNav.addSection(general_header, label_project, "project", self.project_block.section_widget)
+        self.configNav.addSection(general_header, label_typesetting, "typesetting", self.typesetting_block.section_widget)
+        self.configNav.addSection(general_header, label_interface, "interface", self.interface_block.section_widget)
+        self.configNav.addSection(general_header, label_shortcuts, "shortcuts", self.shortcuts_editor)
         label_quick_menus = self.tr("Quick Menus")
-        self.configTable.addSection(
+        self.configNav.addSection(
             general_header, label_quick_menus, "quick_menus", self.quick_menus_editor
         )
-        self.configTable.addSection(
+        self.configNav.addSection(
             general_header, label_app, "config_mgmt",
             self.config_mgmt_block.section_widget,
         )
-        # 临时页（2026-09-18）：工作台的两个数值设置项集中放这里，排版后续再议
-        self.configTable.addSection(
-            general_header, self.tr("Workbench (temporary)"), "workbench_temp",
+        # 正式页（2026-09-21 去「临时」字样）：工作台的批量任务参数
+        self.configNav.addSection(
+            general_header, self.tr("Workbench"), "workbench_temp",
             self.workbench_settings_group,
         )
-
-        # Expand all headers so children are visible
-        self.configTable.expandAll()
 
         # Map: section_key -> widget for page switching
         self._nav_section_to_widget = {
@@ -2562,13 +2596,13 @@ class ConfigPanel(Widget):
         }
 
         # Select first section by default
-        self.configTable.setCurrentSection("models")
+        self.configNav.setCurrentSection("models")
 
-        # Layout: fixed horizontal layout with nav tree | page stack
+        # Layout: fixed horizontal layout with nav rail | page stack
         main_layout = QHBoxLayout(self)
         main_layout.setSpacing(2)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(self.configTable)
+        main_layout.addWidget(self.configNav)
         main_layout.addWidget(self.pageStack, 1)
 
         # Esc closes the settings window
@@ -2718,8 +2752,14 @@ class ConfigPanel(Widget):
 
         create_info_dialog("\n".join(lines), parent=self)
 
-    def _wrap_page(self, content: QWidget, margins=None) -> QScrollArea:
-        """Wrap a section widget into a scrollable page container."""
+    def _wrap_page(self, content: QWidget, margins=None, recessed=True) -> QScrollArea:
+        """Wrap a section widget into a scrollable page container.
+
+        ``recessed`` paints the page body with the sunken "work surface"
+        token so the section cards float above it (see ``_section_body``).
+        The pipeline tabs pass ``False``: their content is a module parameter
+        form, kept on the plain panel tone as before.
+        """
         if margins is None:
             margins = CONFIGBLOCK_CONTENT_MARGINS
         area = QScrollArea()
@@ -2727,7 +2767,10 @@ class ConfigPanel(Widget):
         area.setContentsMargins(0, 0, 0, 0)
         area.setFrameShape(QFrame.Shape.NoFrame)
         area.setVerticalScrollBar(ConfigScrollBar(area))
-        page = QWidget()
+        page = Widget() if recessed else QWidget()
+        if recessed:
+            # Widget 基类保证 WA_StyledBackground；样式见 stylesheet 的 #ConfigPageBody
+            page.setObjectName("ConfigPageBody")
         lay = QVBoxLayout(page)
         lay.setContentsMargins(*margins)
         lay.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -2755,8 +2798,14 @@ class ConfigPanel(Widget):
         ``ModuleManager.set*`` slots mirror the change into the bottom bar).
         The stage panels keep their identity and signals so the bottom bar,
         the module manager and the canvas inpaint tool panel are unaffected.
+
+        The page is a sunken work surface — the same ``Widget#ConfigPageBody``
+        the carded pages use — and each stage's parameter table is a section
+        card inside it (``ui/module_parse_widgets.py``). The outer page is NOT
+        put in a scroll area, so the tab bar stays pinned while a tab scrolls.
         """
-        page = QWidget()
+        page = Widget()
+        page.setObjectName("ConfigPageBody")
         layout = QVBoxLayout(page)
         layout.setContentsMargins(
             CONFIGBLOCK_CONTENT_MARGINS[0],
@@ -2842,7 +2891,18 @@ class ConfigPanel(Widget):
         group_vlayout.setContentsMargins(*GROUPBOX_CONTENT_MARGINS)
         group_vlayout.setSpacing(0)
 
-        sublock = ConfigSubBlock(widget, name=name, description=description, note=note)
+        # 横向内边距 0：分节卡自己就是容器，卡片的左缘只要页边距（与模型管理页
+        # 对齐到同一条竖线）；行的 16px 内边距仍在行自己身上。**必须**同时把
+        # ConfigSubBlock 的布局边距清零——它建布局时没设过，留着 Qt 的样式默认值
+        # （实测 9px），不清的话 content_margins 白填、卡片比模型管理页右移 9px。
+        sublock = ConfigSubBlock(
+            widget,
+            name=name,
+            description=description,
+            note=note,
+            content_margins=(0, 6, 0, 6),
+        )
+        sublock.layout().setContentsMargins(0, 0, 0, 0)
         group_vlayout.addWidget(sublock)
 
         # Hide the panel-internal module_label — PanelGroupBox title already
@@ -3110,7 +3170,7 @@ class ConfigPanel(Widget):
 
     def _nav_select(self, section_key: str):
         """Select the nav-tree section by key."""
-        self.configTable.setCurrentSection(section_key)
+        self.configNav.setCurrentSection(section_key)
 
     def _focus_pipeline_stage(self, stage: int):
         """Open the merged pipeline page on the given stage tab."""

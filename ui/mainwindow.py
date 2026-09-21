@@ -69,6 +69,7 @@ from tqdm import tqdm
 
 from modules import (
     GET_MISSING_MODEL_FILES,
+    GET_MISSING_PACKAGES,
     GET_VALID_INPAINTERS,
     GET_VALID_OCR,
     GET_VALID_TEXTDETECTORS,
@@ -4165,7 +4166,9 @@ class MainWindow(mainwindow_cls):
         if wo_update:
             self._run_imgtrans_wo_textstyle_update = True
 
-        # 运行前静态检查启用阶段的模型文件：给可读提示而不是让管线在线程里报错
+        # 运行前静态检查启用阶段的模型文件与 pip 依赖：给可读提示而不是让管线
+        # 在线程里报错。依赖检查覆盖「选中模块后后台还在装」的那段窗口——那时
+        # 模型文件可能已经在了，但包还没装完。
         enabled_stages = (
             ("textdetector", "textdetector", pcfg.module.enable_detect, self.tr("Text Detection")),
             ("ocr", "ocr", pcfg.module.enable_ocr, self.tr("OCR")),
@@ -4173,27 +4176,36 @@ class MainWindow(mainwindow_cls):
             ("inpainter", "inpainter", pcfg.module.enable_inpaint, self.tr("Inpainting")),
         )
         missing_lines = []
+        missing_pkg_lines = []
         for module_type, cfg_key, enabled, stage_label in enabled_stages:
             if not enabled:
                 continue
-            missing = GET_MISSING_MODEL_FILES(module_type, getattr(pcfg.module, cfg_key))
+            module_name = getattr(pcfg.module, cfg_key)
+            missing = GET_MISSING_MODEL_FILES(module_type, module_name)
             if missing:
                 missing_lines.append(
-                    "{} ({}): {}".format(
-                        stage_label, getattr(pcfg.module, cfg_key), ", ".join(missing)
-                    )
+                    "{} ({}): {}".format(stage_label, module_name, ", ".join(missing))
                 )
-        if missing_lines:
+            missing_pkgs = GET_MISSING_PACKAGES(module_type, module_name)
+            if missing_pkgs:
+                missing_pkg_lines.append(
+                    "{} ({}): {}".format(stage_label, module_name, ", ".join(missing_pkgs))
+                )
+        if missing_lines or missing_pkg_lines:
             msgBox = QMessageBox(self)
             msgBox.setIcon(QMessageBox.Warning)
             msgBox.setWindowTitle(self.tr("Missing Model Files"))
-            msgBox.setText(
-                self.tr(
-                    "Model files were not found for the stages below. Those stages may fail. Download them in Settings → Models → Model Files — the download runs in the background, and its progress is printed in the terminal."
-                )
-                + "\n\n"
-                + "\n".join(missing_lines)
+            message = self.tr(
+                "Model files were not found for the stages below. Those stages may fail. Download them in Settings → Models → Model Files — the download runs in the background, and its progress is printed in the terminal."
             )
+            if missing_lines:
+                message += "\n\n" + "\n".join(missing_lines)
+            if missing_pkg_lines:
+                message += "\n\n" + self.tr(
+                    "These stages are missing Python packages. Picking the module installs them in the background — its progress is printed in the terminal. Restart the app once the install finishes, then run again."
+                )
+                message += "\n" + "\n".join(missing_pkg_lines)
+            msgBox.setText(message)
             run_btn = msgBox.addButton(self.tr("Run Anyway"), QMessageBox.YesRole)
             cancel_btn = msgBox.addButton(self.tr("Cancel"), QMessageBox.RejectRole)
             msgBox.setDefaultButton(cancel_btn)

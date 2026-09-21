@@ -17,8 +17,20 @@ from typing import Iterable, Optional, Set
 
 HUGGINGFACE_ORIGIN = "https://huggingface.co"
 DEFAULT_HUGGINGFACE_MIRROR = "https://hf-mirror.com"
-DEFAULT_PYPI_MIRROR = "https://mirrors.aliyun.com/pypi/simple"
-MIRROR_FIELDS = ("huggingface", "pypi")
+DEFAULT_PYPI_MIRROR = "https://mirrors.aliyun.com/pypi/simple/"
+
+# 本模块用简名指代两个镜像，落盘时必须写进 ``utils/config.py::MirrorConfig``
+# 的实际字段——**节名是单数 ``mirror``、键名是字段名**（如 ``pip_index_url``）。
+# 曾经写成 ``mirrors.pypi`` 这种自造结构，而全仓没有任何读取点，自动配置一直
+# 是空转（2026-09-20 修）。``github_mirror`` 刻意不自动填：没有可靠默认值，
+# 填错会让更新检查整条失效。
+_MIRROR_CONFIG_SECTION = "mirror"
+_MIRROR_FIELD_KEYS = {
+    "huggingface": "hf_endpoint",
+    "pypi": "pip_index_url",
+}
+#: 自动配置能填的镜像字段（简名）。
+MIRROR_FIELDS = tuple(_MIRROR_FIELD_KEYS)
 
 
 # ---------------------------------------------------------------------------
@@ -96,19 +108,30 @@ def _read_raw_config(config_path: str) -> Optional[dict]:
         return None
 
 
-def _mirror_fields_missing(config_path: str) -> Set[str]:
-    """Return mirror fields that are absent from the persisted config."""
+def _mirror_section(config_path: str) -> dict:
+    """Return the persisted ``mirror`` config section, ``{}`` when absent."""
     data = _read_raw_config(config_path)
     if not isinstance(data, dict):
-        return set(MIRROR_FIELDS)
-    mirrors = data.get("mirrors")
-    if not isinstance(mirrors, dict):
-        return set(MIRROR_FIELDS)
-    return {f for f in MIRROR_FIELDS if f not in mirrors}
+        return {}
+    section = data.get(_MIRROR_CONFIG_SECTION)
+    return section if isinstance(section, dict) else {}
+
+
+def _mirror_fields_missing(config_path: str) -> Set[str]:
+    """Return mirror fields that are absent from the persisted config.
+
+    ``MirrorConfig`` documents an empty string as "use the official source",
+    which is a deliberate user choice — so only a **missing** key counts as
+    unconfigured, never an empty one.
+    """
+    section = _mirror_section(config_path)
+    return {
+        field for field, key in _MIRROR_FIELD_KEYS.items() if key not in section
+    }
 
 
 def auto_fill_mirrors(config_path: str) -> list:
-    """If config.json is missing the mirrors section and the system is in
+    """If config.json is missing the mirror fields and the system is in
     mainland China, write sensible defaults and return the updated field names.
 
     Returns an empty list when no action was taken.
@@ -128,12 +151,14 @@ def auto_fill_mirrors(config_path: str) -> list:
     data = _read_raw_config(config_path) or {}
     if not isinstance(data, dict):
         return []
-    data.setdefault("mirrors", {})
+    section = data.setdefault(_MIRROR_CONFIG_SECTION, {})
+    if not isinstance(section, dict):
+        return []
     for field in missing:
         if field == "huggingface":
-            data["mirrors"]["huggingface"] = DEFAULT_HUGGINGFACE_MIRROR
+            section[_MIRROR_FIELD_KEYS[field]] = DEFAULT_HUGGINGFACE_MIRROR
         elif field == "pypi":
-            data["mirrors"]["pypi"] = DEFAULT_PYPI_MIRROR
+            section[_MIRROR_FIELD_KEYS[field]] = DEFAULT_PYPI_MIRROR
 
     try:
         tmp = config_path + ".tmp"
@@ -145,3 +170,29 @@ def auto_fill_mirrors(config_path: str) -> list:
 
     print(f"Auto-configured network mirrors for mainland China: {', '.join(missing)}")
     return list(missing)
+
+
+def apply_pip_mirror_env(config_path: str, env: Optional[dict] = None) -> str:
+    """Export the persisted pip mirror as ``INDEX_URL`` for installers.
+
+    ``launch.py`` installs core requirements **before** ``utils.config`` can be
+    imported (that needs numpy/PyQt6), so the usual ``config.mirror.*`` →
+    env-var path is not available yet on a first run — exactly the run that
+    pulls the whole dependency set.  This reads the raw JSON with stdlib only
+    and sets the variables ``pip`` / ``uv`` and ``utils.package_installer``
+    consume, so a first-run install goes through the mirror too.
+
+    Returns the effective index URL (empty when none is configured).
+    """
+    target = os.environ if env is None else env
+    section = _mirror_section(config_path)
+
+    index_url = str(section.get(_MIRROR_FIELD_KEYS["pypi"]) or "").strip()
+    if index_url:
+        target.setdefault("INDEX_URL", index_url)
+
+    extra_url = str(section.get("pip_extra_index_url") or "").strip()
+    if extra_url:
+        target.setdefault("UV_EXTRA_INDEX_URL", extra_url)
+
+    return index_url
