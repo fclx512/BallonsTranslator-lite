@@ -752,25 +752,57 @@ QPushButton#ConfigNavItem:checked {
     background: @widgetBackgroundColor;
 }
 
-#StyleList {
-    border: none;
-    border-right: 1px solid @borderColor;
-    background: @emptyContentBackgroundColor;
-    outline: none;
-}
-
-#StyleList::item {
-    padding: 0px;
-    border: none;
-}
-
-#StyleList::item:selected {
-    background: @hoverBackgroundColor;
-}
+/* 左树走通用 QTreeView 规则。原 #StyleList 三条（border-right 分隔线那套）
+   是已删除的 StyleBlockList 的遗留，当前树 objectName 是 StyleTree，早已
+   匹配不到 —— 2026-09-23 随区带化一并清掉。 */
 
 #StyleDetail {
     border: none;
     background: @widgetBackgroundColor;
+}
+
+/* 右栏无选中态：整套内容收起、只留这一句引导（六个动作按钮都不出现） */
+QLabel#StyleDetailHint {
+    color: @disabledForegroundColor;
+    font-size: 13px;
+    padding: 24px;
+}
+
+/* 按钮角色色：风格管理器的一行次要动作靠颜色区分语义，不只靠文案。
+   primary = 确认/应用（主题色实底），accent = 库↔项目转移（强调色描边，
+   非破坏性的"新建/复制"一律走这个），danger = 删除（危险红描边，
+   hover 才染实底）。属性选择器比类型选择器更具体，能盖住全局
+   QPushButton::hover。 */
+QPushButton[btnRole="primary"] {
+    background-color: @accentPrimary;
+    color: @inverseTextColor;
+    border: 1px solid @accentPrimary;
+    font-weight: bold;
+}
+
+QPushButton[btnRole="primary"]:hover {
+    background-color: @accentPrimary80;
+}
+
+QPushButton[btnRole="accent"] {
+    background: transparent;
+    color: @accentPrimary;
+    border: 1px solid @accentPrimary;
+}
+
+QPushButton[btnRole="accent"]:hover {
+    background-color: @accentPrimary20;
+}
+
+QPushButton[btnRole="danger"] {
+    background: transparent;
+    color: @dangerColor;
+    border: 1px solid @dangerColor;
+}
+
+QPushButton[btnRole="danger"]:hover {
+    background-color: @dangerColor;
+    color: @inverseTextColor;
 }
 
 #StyleApplyAllBtn {

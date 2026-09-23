@@ -81,6 +81,8 @@ def _select(fsm, payload):
 def test_library_section_in_tree(proj):
     from qtpy.QtCore import Qt
 
+    from ui.fontstyle_manager import _DISPLAY_ROLE
+
     gs.add_style("库样式", FontFormat(font_family="SimSun", vertical=False))
     fsm = _make_manager(proj)
     top = fsm.styleTree.topLevelItem(0)
@@ -90,6 +92,33 @@ def test_library_section_in_tree(proj):
         "type": "global",
         "name": "库样式",
     }
+    # 库条目带「模板」标签（委托据此在右侧块数槽画来源胶囊）——它是库条目与
+    # 项目样式的唯一行内区分，键名一改就静默失效、两边又混在一起
+    assert child.data(0, _DISPLAY_ROLE)["tag"] == fsm.styleTree.tr("Template")
+
+
+def test_actions_hidden_until_a_style_is_selected(proj):
+    """未选中时右栏的动作按钮全部收起。
+
+    它们的显隐只写在对模式的 ``show_*`` 里，"没有模式"这条路曾谁都没隐藏——
+    刚打开管理器时六个按钮挤成一行被裁、且全都无从触发（用户实测反馈）。
+    """
+    fsm = _make_manager(proj)
+    detail = fsm.detailContent
+    buttons = (
+        detail._reset_base_btn,
+        detail._promote_btn,
+        detail._add_library_btn,
+        detail._delete_base_btn,
+        detail._copy_project_btn,
+        detail._delete_library_btn,
+        detail._apply_all_btn,
+    )
+    # 测试里窗口不上屏，可见性要用 isVisibleTo(祖先)
+    assert not any(b.isVisibleTo(detail) for b in buttons)
+
+    _select(fsm, {"type": "base", "identity": ("Arial", True)})
+    assert detail._apply_all_btn.isVisibleTo(detail)
 
 
 def test_library_entry_detail_mode(proj):

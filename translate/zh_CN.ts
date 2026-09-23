@@ -1879,6 +1879,10 @@ Run detection + OCR to populate text blocks.</source>
             <source>New Style</source>
             <translation>新建样式</translation>
         </message>
+        <message>
+            <source>New Library Style</source>
+            <translation>新建库样式</translation>
+        </message>
     </context>
     <context>
         <name>GlobalSearchWidget</name>
@@ -3796,6 +3800,10 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <translation>应用更改</translation>
         </message>
         <message>
+            <source>Select a style on the left to edit it</source>
+            <translation>在左侧选择一个样式进行编辑</translation>
+        </message>
+        <message>
             <location filename="..\ui\fontstyle_manager.py" line="500" />
             <source>Blocks Using This Style</source>
             <translation>使用此样式的文本框</translation>
@@ -4005,6 +4013,14 @@ Orientation: {o}</source>
         <message>
             <source>Global Style Library</source>
             <translation>全局样式库</translation>
+        </message>
+        <message>
+            <source>Project Styles</source>
+            <translation>本项目样式</translation>
+        </message>
+        <message>
+            <source>Template</source>
+            <translation>模板</translation>
         </message>
     </context>
     <context>

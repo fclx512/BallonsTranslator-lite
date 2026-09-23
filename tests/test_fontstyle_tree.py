@@ -164,7 +164,11 @@ def test_two_line_tree_nodes(proj):
 
     fsm = _make_manager(proj)
     fsm.styleTree.populate(fsm._tree)
-    top = fsm.styleTree.topLevelItem(0)
+    top = fsm.styleTree.topLevelItem(0).child(0)  # 区带行 → Arial 大样式
+    # 区带行必须已展开：setExpanded 在 addTopLevelItem **之前**调是空操作
+    # （item 未入 view，展开态存不下来），曾让库区/未分区默认收起、库标题
+    # 紧贴项目样式连成一片
+    assert fsm.styleTree.topLevelItem(0).isExpanded()
     data = top.data(0, _DISPLAY_ROLE)
     assert data["two_line"] and data["title"] == "Arial" and data["count"] == 4
     assert top.sizeHint(0).height() == 42
@@ -276,6 +280,9 @@ def test_delete_base_style_moves_blocks_to_ungrouped(proj):
     fsm._on_styles_changed(None)
     assert fsm._tree.nodes == []
     assert len(fsm._tree.ungrouped) >= 1
+    # 选中项没了要退回无选中态，而不是停在被删样式的快照上（动作按钮此时
+    # 会指向不存在的目标）
+    assert fsm.detailContent._mode is None
 
 
 def test_promote_ungrouped_creates_base_style(proj):

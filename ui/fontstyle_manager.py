@@ -1,9 +1,11 @@
 """
 Font Style Manager — base styles + derived variants across the project.
 
-Left panel: two-line tree nodes (line 1 = swatch + name + block count,
-line 2 = gray parameter summary; variants list only their diff fields)
-painted by ``_StyleItemDelegate``.
+Left panel: three banded sections (global library → project styles →
+ungrouped), each row a two-line node (line 1 = swatch + name + block count,
+line 2 = gray parameter summary; variants list only their diff fields) painted
+by ``_StyleItemDelegate``. Library entries carry a source capsule instead of a
+block count so they can't be mistaken for project styles.
 
 Right panel (StyleDetail) is diff-first (2026-08-30 rework, design doc
 查找替换与样式管理器重构_设计方案_存档.md §5): preview card + key-parameter
@@ -127,31 +129,113 @@ def _base_summary(ffmt: FontFormat) -> str:
 _DISPLAY_ROLE = Qt.ItemDataRole.UserRole + 1
 
 
+# 主题色缓存：ui/misc.py 的解析每次都要读主题 JSON，逐行重绘里不能直接调
+# （见「QSS 之外上色」的既有做法：其它调用点都在构造期取一次色）。
+# 键含主题名，换肤后自动重算。
+_ACCENT_CACHE: Dict[tuple, QColor] = {}
+
+
+def _theme_accent(alpha: int = 255) -> QColor:
+    """Current theme's ``@accentPrimary`` as a QColor (cached per theme)."""
+    from utils.config import pcfg
+
+    key = (pcfg.darkmode, pcfg.dark_theme, pcfg.light_theme, alpha)
+    color = _ACCENT_CACHE.get(key)
+    if color is None:
+        from ui.misc import get_theme_color
+
+        color = get_theme_color(alpha=alpha)
+        _ACCENT_CACHE[key] = color
+    return color
+
+
 class _StyleItemDelegate(QStyledItemDelegate):
-    """Two-line tree node: swatch + name + count / gray summary."""
+    """Tree rows: section band / two-line node (swatch + name + count or tag).
+
+    Section band — ``{"section": True, "title": …, "count": n}``; painted
+    full-width with a translucent fill so the three groups (library /
+    project / ungrouped) read as separate blocks instead of one flat list.
+
+    Node row — optional ``"tag"`` replaces the right-hand block count with an
+    accent capsule (library entries: 块数对模板没有意义，来源才是信息)。
+    """
 
     _SWATCH = 14
 
     def paint(self, painter: QPainter, option, index):
         data = index.data(_DISPLAY_ROLE)
-        if not data or not data.get("two_line"):
+        if not data:
             super().paint(painter, option, index)
             return
+        if data.get("section"):
+            self._paint_section(painter, option, data)
+            return
+        if not data.get("two_line"):
+            super().paint(painter, option, index)
+            return
+        self._paint_node(painter, option, data)
 
+    def _paint_section(self, painter: QPainter, option, data: dict):
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(option.rect).adjusted(0, 3, -6, -3)
+
+        text_color = option.palette.color(QPalette.ColorRole.Text)
+        painter.setPen(Qt.PenStyle.NoPen)
+        band = QColor(text_color)
+        band.setAlpha(22)
+        painter.setBrush(band)
+        painter.drawRoundedRect(rect, 5, 5)
+
+        font = painter.font()
+        font.setBold(True)
+        font.setPixelSize(13)
+        painter.setFont(font)
+        painter.setPen(text_color)
+        count_txt = str(data["count"]) if data.get("count") else ""
+        count_w = (
+            QFontMetrics(font).horizontalAdvance(count_txt) + 8 if count_txt else 0.0
+        )
+        inner = rect.adjusted(6, 0, -8, 0)
+        title = data.get("title", "")
+        avail = inner.width() - count_w
+        fm = QFontMetrics(font)
+        if fm.horizontalAdvance(title) > avail:
+            title = fm.elidedText(title, Qt.TextElideMode.ElideRight, int(avail))
+        painter.drawText(
+            QRectF(inner.left(), inner.top(), avail, inner.height()),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            title,
+        )
+        if count_txt:
+            sub = QColor(text_color)
+            sub.setAlpha(150)
+            painter.setPen(sub)
+            painter.drawText(
+                QRectF(
+                    inner.right() - count_w,
+                    inner.top(),
+                    count_w,
+                    inner.height(),
+                ),
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                count_txt,
+            )
+        painter.restore()
+
+    def _paint_node(self, painter: QPainter, option, data: dict):
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = QRectF(option.rect).adjusted(4, 2, -4, -2)
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
         if selected:
+            # 用主题强调色而不是 palette.Highlight：QSS 给整行铺的是
+            # @accentPrimary20（含缩进/箭头区），两层不同色会在色板处留接缝。
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(option.palette.color(QPalette.ColorRole.Highlight))
+            painter.setBrush(_theme_accent(alpha=51))
             painter.drawRoundedRect(rect, 4, 4)
 
-        text_color = (
-            option.palette.color(QPalette.ColorRole.HighlightedText)
-            if selected
-            else option.palette.color(QPalette.ColorRole.Text)
-        )
+        text_color = option.palette.color(QPalette.ColorRole.Text)
         sub_color = QColor(text_color)
         sub_color.setAlpha(150)
 
@@ -171,12 +255,12 @@ class _StyleItemDelegate(QStyledItemDelegate):
             painter.drawRoundedRect(sw_rect, sw / 3, sw / 3)
             x += sw + 8
 
-        count_txt = ""
-        if data.get("count"):
-            count_txt = str(data["count"])
-        count_w = (
-            QFontMetrics(option.font).horizontalAdvance(count_txt) + 6
-            if count_txt
+        # 右侧槽：库条目显示来源胶囊（块数对模板无意义），其余显示块数
+        tag = data.get("tag") or ""
+        right_txt = tag or (str(data["count"]) if data.get("count") else "")
+        right_w = (
+            QFontMetrics(option.font).horizontalAdvance(right_txt) + (14 if tag else 6)
+            if right_txt
             else 0.0
         )
 
@@ -185,7 +269,7 @@ class _StyleItemDelegate(QStyledItemDelegate):
         title_font.setBold(True)
         title_font.setPixelSize(12)
         painter.setFont(title_font)
-        avail = rect.right() - count_w - x
+        avail = rect.right() - right_w - x
         title = data.get("title", "")
         fm = QFontMetrics(title_font)
         if fm.horizontalAdvance(title) > avail:
@@ -196,12 +280,27 @@ class _StyleItemDelegate(QStyledItemDelegate):
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
             title,
         )
-        if count_txt:
+        if tag:
+            chip = QRectF(
+                rect.right() - right_w, rect.top() + 3, right_w - 2, line1_h - 6
+            )
+            accent = _theme_accent()
+            pen = painter.pen()
+            pen.setColor(accent)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(chip, 4, 4)
+            chip_font = painter.font()
+            chip_font.setBold(False)
+            chip_font.setPixelSize(10)
+            painter.setFont(chip_font)
+            painter.drawText(chip, Qt.AlignmentFlag.AlignCenter, tag)
+        elif right_txt:
             painter.setPen(sub_color)
             painter.drawText(
-                QRectF(rect.right() - count_w, rect.top(), count_w, line1_h),
+                QRectF(rect.right() - right_w, rect.top(), right_w, line1_h),
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
-                count_txt,
+                right_txt,
             )
 
         # Line 2: gray parameter summary.
@@ -224,7 +323,7 @@ class _StyleItemDelegate(QStyledItemDelegate):
 
 
 class StyleTreeWidget(QTreeWidget):
-    """Left panel: base styles → variants, plus an Ungrouped section.
+    """Left panel: three banded sections — global library / project / ungrouped.
 
     Node payloads (UserRole):
       {"type": "global",  "name": str}  (global style library entry)
@@ -232,7 +331,11 @@ class StyleTreeWidget(QTreeWidget):
       {"type": "variant", "identity": (family, vertical), "key": tuple}
       {"type": "sig",     "signature": str}
 
-    Display data for the two-line delegate lives in ``_DISPLAY_ROLE``.
+    Section headers carry no UserRole (not selectable) and hold their display
+    data in ``_DISPLAY_ROLE`` — the delegate paints them as bands. ``populate``
+    expands every section *after* insertion: ``QTreeWidgetItem.setExpanded``
+    before ``addTopLevelItem`` is a no-op, so the sections used to come up
+    collapsed (库区收起的直接后果＝库标题紧贴项目样式，两段连成一片).
     """
 
     node_selected = Signal(dict)
@@ -248,126 +351,120 @@ class StyleTreeWidget(QTreeWidget):
         self.setItemDelegate(_StyleItemDelegate(self))
         self.currentItemChanged.connect(self._on_current_changed)
 
+    def _add_section(self, title: str, count: int) -> QTreeWidgetItem:
+        """Append a non-selectable band row carrying its own display payload."""
+        root = QTreeWidgetItem([title])
+        root.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        root.setData(
+            0, _DISPLAY_ROLE, {"section": True, "title": title, "count": count}
+        )
+        root.setSizeHint(0, QSize(0, 26))
+        self.addTopLevelItem(root)
+        return root
+
+    def _add_node(self, parent: QTreeWidgetItem, payload: dict, display: dict, tip: str):
+        child = QTreeWidgetItem()
+        child.setData(0, Qt.ItemDataRole.UserRole, payload)
+        child.setData(0, _DISPLAY_ROLE, display)
+        child.setSizeHint(0, QSize(0, 42))
+        child.setToolTip(0, tip)
+        parent.addChild(child)
+        return child
+
     def populate(self, tree: StyleTree, library_styles=None):
         self.blockSignals(True)
         self.clear()
+        sections: List[QTreeWidgetItem] = []
 
-        # ── Global style library section (templates, not project data) ──
+        # ── Section 1: global style library (templates, not project data) ──
         if library_styles:
-            root = QTreeWidgetItem([self.tr("Global Style Library")])
-            root.setFlags(Qt.ItemFlag.ItemIsEnabled)  # header row, not selectable
-            bold = root.font(0)
-            bold.setBold(True)
-            root.setFont(0, bold)
+            root = self._add_section(
+                self.tr("Global Style Library"), len(library_styles)
+            )
             for entry in library_styles:
                 ffmt = entry.fontformat
-                child = QTreeWidgetItem()
-                child.setData(
-                    0, Qt.ItemDataRole.UserRole, {"type": "global", "name": entry.name}
-                )
-                child.setData(
-                    0,
-                    _DISPLAY_ROLE,
+                self._add_node(
+                    root,
+                    {"type": "global", "name": entry.name},
                     {
                         "two_line": True,
                         "title": entry.name,
                         "sub": _base_summary(ffmt),
-                        "count": 0,
+                        "tag": self.tr("Template"),
                         "fg": [int(c) for c in ffmt.foreground_color()],
                         "st": [int(c) for c in ffmt.stroke_color()]
                         if ffmt.stroke_width > 0
                         else None,
                     },
+                    self.tr("Font: {f}\nOrientation: {o}").format(
+                        f=ffmt.font_family,
+                        o=self.tr("Vertical")
+                        if ffmt.vertical
+                        else self.tr("Horizontal"),
+                    ),
                 )
-                child.setSizeHint(0, QSize(0, 42))
-                child.setToolTip(0, _base_summary(ffmt))
-                root.addChild(child)
-            root.setExpanded(True)
-            self.addTopLevelItem(root)
+            sections.append(root)
 
-        for node in tree.nodes:
-            base = node.base
-            item = QTreeWidgetItem()
-            item.setData(
-                0, Qt.ItemDataRole.UserRole, {"type": "base", "identity": base.identity}
-            )
-            item.setData(
-                0,
-                _DISPLAY_ROLE,
-                {
-                    "two_line": True,
-                    "title": base.name,
-                    "sub": _base_summary(base.fontformat),
-                    "count": node.total_count,
-                    "fg": [int(c) for c in base.fontformat.foreground_color()],
-                    "st": [int(c) for c in base.fontformat.stroke_color()]
-                    if base.fontformat.stroke_width > 0
-                    else None,
-                },
-            )
-            item.setSizeHint(0, QSize(0, 42))
-            item.setToolTip(
-                0,
-                self.tr("Font: {f}\nOrientation: {o}").format(
-                    f=base.fontformat.font_family,
-                    o=self.tr("Vertical")
-                    if base.fontformat.vertical
-                    else self.tr("Horizontal"),
-                ),
-            )
-            self.addTopLevelItem(item)
-            for var in node.variants:
-                child = QTreeWidgetItem()
-                child.setData(
-                    0,
-                    Qt.ItemDataRole.UserRole,
-                    {"type": "variant", "identity": base.identity, "key": var.key},
-                )
-                fg = var.overrides.get("frgb")
-                st = var.overrides.get("srgb")
-                if fg is None:
-                    fg = [int(c) for c in base.fontformat.foreground_color()]
-                if st is None:
-                    st = (
-                        [int(c) for c in base.fontformat.stroke_color()]
-                        if base.fontformat.stroke_width > 0
-                        else None
-                    )
-                child.setData(
-                    0,
-                    _DISPLAY_ROLE,
+        # ── Section 2: this project's base styles → variants ──────────────
+        if tree.nodes:
+            root = self._add_section(self.tr("Project Styles"), len(tree.nodes))
+            for node in tree.nodes:
+                base = node.base
+                item = self._add_node(
+                    root,
+                    {"type": "base", "identity": base.identity},
                     {
                         "two_line": True,
-                        # 行1 = 差异摘要（重复父名无信息量），行2 = 归属说明
-                        "title": overrides_summary(var.overrides),
-                        "sub": base.name,
-                        "count": var.count,
-                        "fg": [int(c) for c in fg[:3]],
-                        "st": [int(c) for c in st[:3]] if st else None,
+                        "title": base.name,
+                        "sub": _base_summary(base.fontformat),
+                        "count": node.total_count,
+                        "fg": [int(c) for c in base.fontformat.foreground_color()],
+                        "st": [int(c) for c in base.fontformat.stroke_color()]
+                        if base.fontformat.stroke_width > 0
+                        else None,
                     },
+                    self.tr("Font: {f}\nOrientation: {o}").format(
+                        f=base.fontformat.font_family,
+                        o=self.tr("Vertical")
+                        if base.fontformat.vertical
+                        else self.tr("Horizontal"),
+                    ),
                 )
-                child.setSizeHint(0, QSize(0, 42))
-                child.setToolTip(0, variant_display_name(base.name, var.overrides))
-                item.addChild(child)
-            item.setExpanded(True)
+                for var in node.variants:
+                    fg = var.overrides.get("frgb")
+                    st = var.overrides.get("srgb")
+                    if fg is None:
+                        fg = [int(c) for c in base.fontformat.foreground_color()]
+                    if st is None:
+                        st = (
+                            [int(c) for c in base.fontformat.stroke_color()]
+                            if base.fontformat.stroke_width > 0
+                            else None
+                        )
+                    self._add_node(
+                        item,
+                        {"type": "variant", "identity": base.identity, "key": var.key},
+                        {
+                            "two_line": True,
+                            # 行1 = 差异摘要（重复父名无信息量），行2 = 归属说明
+                            "title": overrides_summary(var.overrides),
+                            "sub": base.name,
+                            "count": var.count,
+                            "fg": [int(c) for c in fg[:3]],
+                            "st": [int(c) for c in st[:3]] if st else None,
+                        },
+                        variant_display_name(base.name, var.overrides),
+                    )
+            sections.append(root)
 
+        # ── Section 3: ungrouped signatures ───────────────────────────────
         if tree.ungrouped:
-            root = QTreeWidgetItem([self.tr("Ungrouped")])
-            root.setFlags(Qt.ItemFlag.ItemIsEnabled)  # header row, not selectable
-            bold = root.font(0)
-            bold.setBold(True)
-            root.setFont(0, bold)
+            root = self._add_section(self.tr("Ungrouped"), len(tree.ungrouped))
             for entry in tree.ungrouped:
                 ffmt = entry.fontformat
-                child = QTreeWidgetItem()
-                child.setData(
-                    0,
-                    Qt.ItemDataRole.UserRole,
+                self._add_node(
+                    root,
                     {"type": "sig", "signature": entry.signature},
-                )
-                child.setData(
-                    0,
-                    _DISPLAY_ROLE,
                     {
                         "two_line": True,
                         "title": f"{ffmt.font_family} {ffmt.font_size:.0f}px",
@@ -378,26 +475,35 @@ class StyleTreeWidget(QTreeWidget):
                         if ffmt.stroke_width > 0
                         else None,
                     },
+                    _base_summary(ffmt),
                 )
-                child.setSizeHint(0, QSize(0, 42))
-                child.setToolTip(0, _base_summary(ffmt))
-                root.addChild(child)
+            sections.append(root)
+
+        for root in sections:
             root.setExpanded(True)
-            self.addTopLevelItem(root)
         self.blockSignals(False)
 
     def select_payload(self, payload: dict) -> bool:
         """Programmatically select the item matching *payload*."""
         if not payload:
             return False
-        for i in range(self.topLevelItemCount()):
-            top = self.topLevelItem(i)
-            for item in [top] + [top.child(j) for j in range(top.childCount())]:
-                data = item.data(0, Qt.ItemDataRole.UserRole)
-                if data is not None and self._payload_matches(data, payload):
-                    self.setCurrentItem(item)
-                    return True
+        for item in self._iter_items():
+            data = item.data(0, Qt.ItemDataRole.UserRole)
+            if data is not None and self._payload_matches(data, payload):
+                self.setCurrentItem(item)
+                return True
         return False
+
+    def _iter_items(self):
+        """Depth-first walk over every item (sections added one more level)."""
+        stack = [
+            self.topLevelItem(i) for i in range(self.topLevelItemCount() - 1, -1, -1)
+        ]
+        while stack:
+            item = stack.pop()
+            yield item
+            for j in range(item.childCount() - 1, -1, -1):
+                stack.append(item.child(j))
 
     @staticmethod
     def _payload_matches(data: dict, payload: dict) -> bool:
@@ -589,9 +695,24 @@ class StyleDetail(QScrollArea):
         self._scene_manager = None
 
         container = QWidget()
-        self._layout = QVBoxLayout(container)
+        outer = QVBoxLayout(container)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # 无选中态（刚打开 / 选中项被删）：显示提示、整套内容收起。六个动作
+        # 按钮只在各自模式的 show_* 里显隐，"没有模式"这条路没人隐藏它们，
+        # 曾导致刚打开时六个按钮挤在一行被裁、且全都无从触发。
+        self._hint = QLabel(self.tr("Select a style on the left to edit it"))
+        self._hint.setObjectName("StyleDetailHint")
+        self._hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._hint.setWordWrap(True)
+        outer.addWidget(self._hint, 1)
+
+        self._content = QWidget()
+        self._layout = QVBoxLayout(self._content)
         self._layout.setSpacing(4)
         self._layout.setContentsMargins(12, 8, 12, 8)
+        outer.addWidget(self._content, 1)
 
         # ── Header (rename + info) ────────────────────────────────
         self._name_edit = QLineEdit()
@@ -622,6 +743,8 @@ class StyleDetail(QScrollArea):
         self._layout.addWidget(SeparatorWidget())
 
         # ── Secondary actions — one shared row, buttons shown per mode ──
+        # 每个按钮带 btnRole 属性（config/stylesheet.css 按角色上色）：删除=危险红、
+        # 库↔项目转移=强调色描边、重置/提升=中性。文案之外再给一层视觉语义。
         self._actions_row = QWidget()
         actions_lay = QHBoxLayout(self._actions_row)
         actions_lay.setContentsMargins(0, 1, 0, 1)
@@ -646,6 +769,7 @@ class StyleDetail(QScrollArea):
         actions_lay.addWidget(self._promote_btn)
 
         self._add_library_btn = QPushButton(self.tr("Add to Library"))
+        self._add_library_btn.setProperty("btnRole", "accent")
         self._add_library_btn.setToolTip(
             self.tr("Save this base style into the global style library")
         )
@@ -653,6 +777,7 @@ class StyleDetail(QScrollArea):
         actions_lay.addWidget(self._add_library_btn)
 
         self._delete_base_btn = QPushButton(self.tr("Delete Style"))
+        self._delete_base_btn.setProperty("btnRole", "danger")
         self._delete_base_btn.setToolTip(
             self.tr("Delete this base style; its blocks move to Ungrouped")
         )
@@ -660,6 +785,7 @@ class StyleDetail(QScrollArea):
         actions_lay.addWidget(self._delete_base_btn)
 
         self._copy_project_btn = QPushButton(self.tr("Copy to Project"))
+        self._copy_project_btn.setProperty("btnRole", "accent")
         self._copy_project_btn.setToolTip(
             self.tr("Create a project base style from this library entry")
         )
@@ -667,6 +793,7 @@ class StyleDetail(QScrollArea):
         actions_lay.addWidget(self._copy_project_btn)
 
         self._delete_library_btn = QPushButton(self.tr("Delete from Library"))
+        self._delete_library_btn.setProperty("btnRole", "danger")
         self._delete_library_btn.setToolTip(
             self.tr("Remove this entry from the global style library")
         )
@@ -678,6 +805,7 @@ class StyleDetail(QScrollArea):
         # ── Single Apply button ──────────────────────────────────
         self._apply_all_btn = QPushButton(self.tr("Apply Changes"))
         self._apply_all_btn.setObjectName("StyleApplyAllBtn")
+        self._apply_all_btn.setProperty("btnRole", "primary")
         self._apply_all_btn.clicked.connect(self._apply_all)
         self._layout.addWidget(self._apply_all_btn)
 
@@ -691,6 +819,7 @@ class StyleDetail(QScrollArea):
 
         self._layout.addStretch()
         self.setWidget(container)
+        self.show_empty()
 
     # ── Public API ─────────────────────────────────────────────────
 
@@ -699,9 +828,29 @@ class StyleDetail(QScrollArea):
         self._proj = proj
         self._scene_manager = scene_manager
 
+    def show_empty(self):
+        """Clear the panel back to the "nothing selected" state.
+
+        Called on construction and whenever the tree ends up without a
+        selection (fresh open, or the selected style was just deleted).
+        """
+        self._mode = None
+        self._base_node = None
+        self._variant = None
+        self._entry = None
+        self._lib_style = None
+        self._content.hide()
+        self._hint.show()
+
+    def _enter_mode(self):
+        """Switch from the empty state to a populated detail view."""
+        self._content.show()
+        self._hint.hide()
+
     # -- mode dispatch -------------------------------------------------
 
     def show_base_style(self, node: BaseStyleNode):
+        self._enter_mode()
         self._mode = self.MODE_BASE
         self._base_node = node
         self._variant = None
@@ -737,6 +886,7 @@ class StyleDetail(QScrollArea):
         self._delete_library_btn.hide()
 
     def show_variant(self, node: BaseStyleNode, variant: VariantEntry):
+        self._enter_mode()
         self._mode = self.MODE_VARIANT
         self._base_node = node
         self._variant = variant
@@ -767,6 +917,7 @@ class StyleDetail(QScrollArea):
 
     def show_entry(self, entry: StyleEntry):
         """Ungrouped signature entry (legacy view)."""
+        self._enter_mode()
         self._mode = self.MODE_SIG
         self._base_node = None
         self._variant = None
@@ -795,6 +946,7 @@ class StyleDetail(QScrollArea):
 
     def show_library_style(self, style: BaseStyle):
         """Global style library entry: standalone template, no blocks."""
+        self._enter_mode()
         self._mode = self.MODE_GLOBAL
         self._base_node = None
         self._variant = None
@@ -1270,7 +1422,8 @@ class FontStyleManager(QWidget):
         self.styleTree = StyleTreeWidget()
         self.styleTree.node_selected.connect(self._on_node_selected)
 
-        self._new_style_btn = QPushButton(self.tr("New Style"))
+        self._new_style_btn = QPushButton(self.tr("New Library Style"))
+        self._new_style_btn.setProperty("btnRole", "accent")
         self._new_style_btn.setToolTip(
             self.tr("Create a new style in the global style library")
         )
@@ -1374,8 +1527,10 @@ class FontStyleManager(QWidget):
         self.styleTree.show()
         self.detailContent.show()
         self.styleTree.populate(tree, gstyle_store.global_styles)
-        if keep is not None:
-            self.styleTree.select_payload(keep)
+        # 重选旧选中项；节点没了（如刚被删）就退回无选中态——否则右栏会一直
+        # 停在被删样式的快照上，动作按钮还指向不存在的目标。
+        if keep is None or not self.styleTree.select_payload(keep):
+            self.detailContent.show_empty()
 
     def _new_library_style(self):
         """Create a fresh global library entry and open it for editing."""

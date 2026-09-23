@@ -50,6 +50,8 @@
 
 | `scripts/settings_render.py` | **设置面板的目视验收台**：把 `ui/configpanel.py::ConfigPanel` 的 10 个页面渲染成 PNG（暗/亮两套主题各一目录，`--theme` 选），stdout 回显导航结构（分组卡／项 chip／页数）。改设置页样式或版式前后各看一眼；改卡片配色/间距时它比描述文字管用。`--diag` 切**诊断配色**（页面凹面/Widget 面/裸 QWidget/描边 = 品红/绿/橙/白），用来查"底是谁画的、谁盖了谁"——默认主题里这几层常常同色，肉眼看不出来（判读见 `docs/基础速查/经验教训.md` §3.6）。同样**必须走默认 windows 平台插件 + 装字体/翻译/主题**；进程内把 `save_config` 短路（截图工具不该动用户配置，且本进程没有 ModuleManager，真落盘会在 `get_saving_params` 里 KeyError） | `python scripts/settings_render.py [--out DIR] [--scale N] [--theme dark\|light\|both] [--diag]` |
 
+| `scripts/stylemgr_render.py` | **样式管理器（`ui/fontstyle_manager.py`）的目视验收台**：合成一个工程（2 个带变体的大样式 + 未分组 + 3 条与项目同字体同方向的库模板，用来检验「库 / 项目样式」的辨识度），把面板渲染成 PNG（暗/亮两套，三个场景：刚打开／选中库条目／选中项目大样式），stdout 回显三区带结构与展开态。左树是自绘委托（区带行、色板、库条目「模板」标签），改配色或版式只能看图判断。同款三坑：必须默认 windows 平台插件、翻译器早于 `ui.*` 导入、**切主题要连 `pcfg.darkmode` 一起切**（委托取强调色走 `pcfg`，只换样式表会让两套主题的强调色对不上，出图上像产品 bug）；另外短路了 `save_config`/`save_global_styles`，不碰用户配置与真实样式库 | `python scripts/stylemgr_render.py [--out DIR] [--scale N] [--theme dark\|light\|both]` |
+
 渲染同步回归已迁至 `tests/test_render_sync.py`（pytest/直接运行均可）。
 
 **真机探针**在 `scripts/probes/`（内存归因与释放阶梯、区域再检测真机验收）——那是"测出来的"结论的可复算工具，有真机／模型依赖，前提与每个脚本的期望数字见 `scripts/probes/README.md`。本目录的登记检查只覆盖顶层，子目录自带说明。
