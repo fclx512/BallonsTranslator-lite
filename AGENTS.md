@@ -122,6 +122,7 @@ modules/
 - **"提交" = `git add -A`** — 暂存工作区全部修改（含未跟踪文件）。
 - **提交聚合原则：** 工作完成后，用 `git reset --soft <基准>` + `git commit` 将同批次逻辑相关的多个提交聚合为一个原子提交再推送。避免给远端推送碎片化小提交。聚合前先向用户确认消息内容。
 - **禁止 `git commit --amend`：** amend 会重写 commit hash。如果旧 hash 已被推送（包括 git GUI 自动推送），本地与远程历史分叉，`git pull` 必然产生多余的 merge 提交。要修改已推送的 commit，用 `git reset --soft <基准>` + 重提交 + `git push --force-with-lease`，且须先经用户同意。
+- **提交文案：** 标题保留前缀（`fix(ui):` / `feat:` / `docs:`），但正文直白——写成「修复了 xxx 的 xxx 问题」这类一眼看懂的说法，不用代码抽象名（不写"区带化收成唯一真相"这种只有作者懂的措辞）。正文只写"改了哪里 + 为什么"，不逐条罗列实现；要看细节直接读代码。
 - **禁止在 commit 信息中添加 AI 署名。** 作者只为 `提交者自己`，不添加 `Co-Authored-By` 或任何其他协作署名行。
 - **禁止使用 `git push --tags`：** 会把本地所有 tag（含上游 remote 拉下来的残留 tag）一并推送到 fork 远端，造成混淆。**发版推送 tag 时用精准推送：`git push origin vx.y.z`**（只推送指定 tag）。如果误推了多余 tag，用 `git push --delete origin <tag>` 逐个清理。
 
@@ -158,6 +159,8 @@ modules/
 6. **启动冒烟测试**：`./ballontrans_pylibs_win/python.exe tests/test_startup_imports.py`（约 2s，捕捉 NameError/ImportError）
 7. **启动 app 目视确认**（可选，但推荐）：双击 `launch.bat` 或 `python launch.py`，确认导航、页面切换、新功能视觉效果正常
 8. **MainWindow 在线演练台**（可选，排查无声崩溃/模态框/GC 时机类问题）：`./ballontrans_pylibs_win/python.exe scripts/mw_repro.py`——拉起真实主窗口（须窗口模式，offscreen 起不来 FramelessWindow）跑预设场景或 `--project` 只读打开真实工程；用法见 `scripts/README.md`，方法论见经验教训 §3.3
+
+**写用例的口径：只钉"会动"的契约。** 只有会被后续改动碰到的行为契约值得新写用例（用户实测反馈过的缺陷；改个键名就静默失效的协议）。其余不留：功能定型后几乎不再变动的结构/配置断言、"把自己刚写的实现再断言一遍"的用例都不要——默认只跑冒烟即可，真要钉就在既有用例上补一两行。
 
 ## 快捷键系统
 
