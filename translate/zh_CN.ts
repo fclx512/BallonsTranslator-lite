@@ -7477,6 +7477,10 @@ No pipeline stages will be executed.</source>
             <source>rolled back</source>
             <translation>已回滚</translation>
         </message>
+        <message>
+            <source>Content changed after this list was built — click refresh to rebuild it.</source>
+            <translation>列表生成后内容已改动——点刷新重新生成。</translation>
+        </message>
     </context>
     <context>
         <name>WorkbenchBatchView</name>

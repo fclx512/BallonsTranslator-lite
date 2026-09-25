@@ -587,7 +587,15 @@ class VerticalTextDocumentLayout(SceneTextLayout):
 
     def updateDrawOffsets(self):
         if self._is_painting_stroke and len(self._draw_offset) > 0:
-            return
+            if self._draw_offset_shape_matches():
+                return
+            # Stroke clones share the live layout's offset list. Structural
+            # drift between the two documents (the HTML round-trip drops
+            # letter-spacing; bitmap font advances change on first outline
+            # paint) would index the stale shape out of range, so rebuild
+            # into a detached list — clearing the shared object would
+            # clobber the live layout that still owns it.
+            self._draw_offset = []
         self._draw_offset.clear()
         doc = self.document()
         block = doc.firstBlock()
@@ -782,6 +790,24 @@ class VerticalTextDocumentLayout(SceneTextLayout):
 
                 xy_offsets[0], xy_offsets[1] = xoff, yoff
             block = block.next()
+
+    def _draw_offset_shape_matches(self) -> bool:
+        """Whether the (possibly shared) offsets match this document's lines.
+
+        >>> callable(VerticalTextDocumentLayout._draw_offset_shape_matches)
+        True
+        """
+        doc = self.document()
+        block = doc.firstBlock()
+        block_count = 0
+        while block.isValid():
+            if block_count >= len(self._draw_offset):
+                return False
+            if len(self._draw_offset[block_count]) != block.layout().lineCount():
+                return False
+            block_count += 1
+            block = block.next()
+        return block_count == len(self._draw_offset)
 
     def _line_record(
         self,

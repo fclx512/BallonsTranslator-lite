@@ -231,5 +231,72 @@ class TestVerticalEditSelectionRender(unittest.TestCase):
         self._render_editing_item(vertical=False)
 
 
+class StrokeCloneOffsetGuardTest(unittest.TestCase):
+    """描边克隆共享 _draw_offset 的形状失配守卫（快速切图闪退回归）。
+
+    渲染描边时 effects/renderer 用克隆文档共享原布局的 ``_draw_offset``；
+    两文档结构漂移（toHtml 往返丢 letter-spacing、bitmap 字体首次 outline
+    绘制改变 advance）曾让克隆用原布局的旧行结构索引自身新结构，
+    在 ``vertical_line_placement`` 处 IndexError 闪退。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _clone_layout(self, doc, layout, shared_offsets):
+        from qtpy.QtGui import QTextDocument
+
+        clone = QTextDocument()
+        clone.setUndoRedoEnabled(False)
+        clone.setDocumentMargin(layout.effectPadding())
+        clone.setDefaultFont(doc.defaultFont())
+        clone.setHtml(doc.toHtml())
+        clone.setDefaultTextOption(doc.defaultTextOption())
+        clone_layout = VerticalTextDocumentLayout(
+            clone, FontFormat(vertical=True)
+        )
+        clone_layout._is_painting_stroke = True
+        clone_layout._draw_offset = shared_offsets
+        clone_layout.setMaxSize(layout.max_width, layout.max_height, False)
+        return clone, clone_layout
+
+    @staticmethod
+    def _offset_shape(layout):
+        return [len(entries) for entries in layout._draw_offset]
+
+    @staticmethod
+    def _doc_line_shape(doc):
+        block = doc.firstBlock()
+        shape = []
+        while block.isValid():
+            shape.append(block.layout().lineCount())
+            block = block.next()
+        return shape
+
+    def test_shared_offsets_shape_mismatch_rebuilds_detached(self):
+        doc, layout = _make_layout("描边克隆漂移回归测试文本")
+        shared = [[0.0, 0.0]]  # 模拟漂移后的旧形状：行数与克隆文档不符
+        clone, clone_layout = self._clone_layout(doc, layout, shared)
+        clone.setDocumentLayout(clone_layout)  # 修复前：IndexError 闪退
+        clone_layout.relayout_on_changed = False
+        self.assertEqual(
+            self._offset_shape(clone_layout), self._doc_line_shape(clone)
+        )
+        # 失配时须脱离共享列表重建，且不污染原布局仍持有的对象
+        self.assertIsNot(clone_layout._draw_offset, shared)
+        self.assertEqual(len(shared), 1)
+
+    def test_matching_shared_offsets_stay_shared(self):
+        doc, layout = _make_layout("描边克隆共享保持测试文本")
+        clone, clone_layout = self._clone_layout(
+            doc, layout, layout._draw_offset
+        )
+        clone.setDocumentLayout(clone_layout)
+        clone_layout.relayout_on_changed = False
+        # 形状一致时保持共享（描边与正文按同一偏移绘制的前提）
+        self.assertIs(clone_layout._draw_offset, layout._draw_offset)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

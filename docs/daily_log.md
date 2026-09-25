@@ -12,6 +12,28 @@
 >
 > 仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护）；被裁掉的日期节仍完整留在提交历史里，用 `git log --grep <关键词>`／`git log --follow -p -- docs/daily_log.md`／`git show <rev>:docs/daily_log.md` 回查。
 
+## 2026-09-25
+
+### 竖排描边克隆 _draw_offset 形状失配闪退修复（updateDrawOffsets 守卫）+ 演练台 stroke-switch 场景
+
+**摘要：** 用户反馈快速切图闪退（IndexError @ `ui/text_engine/vertical_layout.py::vertical_line_placement`）：描边渲染的克隆文档与原布局共享 `_draw_offset`，而字号/文本应用等事务在 `relayout_on_changed=False` 窗口内改文档后，同步 contentsChanged → `repaint_background` 生成描边光栅走克隆路径，拿旧表索引新结构，行数变多即越界。修法＝`ui/text_engine/vertical_layout.py::updateDrawOffsets` 守卫先形状校验（`_draw_offset_shape_matches`），失配时 rebind 新列表按本文档重建、不 clear 共享对象。漂移真因是抑制窗口本身（不是字距——竖排每字符占一行，字号不改 lineCount）；上游同款代码，反向移植时连带。
+
+**验证：** `tests/test_vertical_engine.py::StrokeCloneOffsetGuardTest` 红绿（还原修复即复现用户同款调用栈）；演练台 `scripts/mw_repro.py --scenario stroke-switch` 修复前复现同款栈、修复后通过。
+
+**涉及文件：** `ui/text_engine/vertical_layout.py`、`tests/test_vertical_engine.py`、`scripts/mw_repro.py`、`scripts/README.md`
+
+---
+
+### 工作台批量任务刷新前置对齐（pre_replan）+ 内容改动过时灯（content_modified → mark_stale）
+
+**摘要：** 用户实测「刷新无效」：`plan` 直读数据层 `proj.pages`，画布上手动增删框／键入只落在视觉层。修法＝`ui/workbench_batch_view.py::BatchTaskView` 重扫前先跑面板注入的 `pre_replan`（`ui/glossary_agent_panel.py::_sync_before_plan`：`text_change_unsaved` 门控 `updateTextBlkList` + `_sync_block_data` 兜结构性增删，对齐失败不挡重扫）。另加**只亮灯不自动重扫**的过时提示：`Canvas.content_modified`（置脏每次调用都广播——状态翻转信号对重复置脏会漏报）→ `mark_content_changed` 给已规划页亮「列表可能过时」，replan 熄灯、换项目 `forget_plan` 作废；管线完成与全局替换两条不走画布置脏口的路径直连广播。
+
+**验证：** `tests/test_workbench_panel.py` 新增重扫顺序与过时灯生命周期两用例；`scripts/verify.py` 全绿。
+
+**涉及文件：** `ui/canvas.py`、`ui/mainwindow.py`、`ui/glossary_agent_panel.py`、`ui/workbench_batch_view.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_workbench_panel.py`
+
+---
+
 ## 2026-09-23
 
 ### 样式管理器左树区带化（库/本项目/未分组）+ `setExpanded` 顺序 bug + 动作按钮 `btnRole` 色彩语义
@@ -23,40 +45,6 @@
 **涉及文件：** `ui/fontstyle_manager.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`scripts/stylemgr_render.py`、`scripts/README.md`、`tests/test_fontstyle_tree.py`、`tests/test_global_styles_ui.py`、`docs/技术实现/全局样式库_设计方案_存档.md`、`docs/技术实现/查找替换与样式管理器重构_设计方案_存档.md`
 
 **遗留：** 区带行不响应点击（不可选中、无 payload，只作分区）；左树仍无搜索/过滤框，库条目涨到几十条时要靠折叠区带自己找。另顺手补了 `docs/技术实现/模型文件管理_设计方案_存档.md` 一处失效路径引用（引 `tmp/` 下备份文件，本就不入库，`check_docs` 一直红着）。
-
----
-
-## 2026-09-21
-
-### 设置面板三件收尾：管线页并入分节卡、应用页导入导出并成一节、工作台页摘掉「临时」
-
-**摘要：** 三处「上一轮没做完/明显该合」的收尾。①**管线标签页补上卡片**（09-20 卡片化时唯一被留在门外的页）：外层页与标签页体都改凹陷面，`ModuleConfigParseWidget` 里的「参数」与 `TranslatorConfigPanel` 的「API Profile」改为 `ui/custom_widget/view_panel.py::add_section_card` 建的卡（`ui/configpanel.py::_section_body` 降为它的薄封装——管线面板不能反向 import `ui/configpanel.py`）；API 配置卡排在参数卡之前，顺带把「参数」标题从只盖住 API 配置块纠正为真盖住参数表。②**应用页「导出配置」「导入配置」两张卡并成一张「导入导出 / Import / Export」**（同一件事的两个方向，导出那两条含纯界面态的「排除 API 密钥」，紧邻才有意义；应用页 5 卡 → 4 卡）。③**工作台页去掉「临时」字样**：导航与页标题都改「工作台 / Workbench」，两行的 `note=` 收成一句话（实测数字本来就在设计文档的参数表里，气泡里重复一遍既冗长、又和表里数字对不上）；导航 key 仍留 `workbench_temp`（改名只动显示文案，key 一动要连坐 4 处测试与渲染脚本）。
-
-**验证：** `scripts/settings_render.py` 暗/亮两套逐页目视（管线页新增卡片、应用页 4 卡）；`tests/test_config_section_cards.py`（应用页卡数 5→4、新增「管线标签页也套卡 + API 配置卡在参数卡之前」）、`tests/test_config_card_painting.py`（管线页纳入描边连续性 + 新增「阶段面板不得画底色」一条）随改同步；`scripts/i18n_check.py` PASS（`ts_auto_fill` 增 4 条、删 3 条孤儿，中文补齐后重编 qm）。
-
-**涉及文件：** `ui/configpanel.py`、`ui/module_parse_widgets.py`、`ui/custom_widget/view_panel.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_config_section_cards.py`、`tests/test_config_card_painting.py`、`tests/test_settings_app_page.py`、`docs/基础速查/设置面板_功能项清单.md`、`docs/基础速查/设置面板排版思路.md`、`docs/技术实现/设置面板概述.md`、`docs/技术实现/AI辅助功能_设计与实现.md`
-
-**遗留：** `ui/custom_widget/section_header.py::ConfigSectionHeader` 现已无应用内调用者（只剩 `scripts/style_showcase.py` 展示行），本轮决定留作控件库原语不删；要收就删「类 + 展示行 + `__init__` 导出」三处并登记 `audit_registry.json`。另：渲染台里管线四标签的参数表本来就是空的（进程没有 `ui/module_manager.py`），本轮用一次性脚本注入假参数补了目视核查，真机四个标签未逐个点过。
-
----
-
-### README 换新（部署/更新段按代码重写）+ 技术文档归档压缩（9 篇 `_存档`）
-
-**摘要：** ①README 正式替换：定位段与用前须知改写成「取舍标准 + 面向的用法」，去掉宣言式表述；**部署/更新段按代码核对后重写**——原「一键包不含 git、无法经启动脚本或应用内更新，应用内检查在 Help→About」三条全不成立：`launch.bat` 有 ZIP 形态分支（`--update`/`--check-update` → `scripts/check_update.py` 按 `manifest.json` 增量取源文件、下次启动应用），应用内更新在**设置 → 应用 → 更新**（`utils/updater.py::BallonsTranslatorUpdater` 下 release 源码 zip、原子替换白名单目录、不碰 `data/`），另有「开发者通道：检查提交更新」；CUDA 索引表补 `cu130` 档（`utils/env_diagnostic.py::_CUDA_TIERS` 是唯一真相）、模型下载时机改述为「选中模块时下载」。②技术文档归档：9 篇已完结文档改 `_存档` 后缀并压成「结论 + 约束与坑 + 指针」（效果栈 355→85 行、模型文件 352→205、区域再检测 267→134），「处理」那篇去前缀后清理陈旧表述（对照代码纠出 6 处与实现不符，如 guardrails.py 实为 validator.py、工具面复用 `utils/ai_tools.py::execute_tool`、`TOOL_RESULT_CHAR_CAP`=24000）。③`docs/项目概述.md` 索引拆成「活文档 / 已归档」两表并写明 `_存档` 命名约定。
-
-**验证：** `scripts/check_docs.py` 通过；归档改名引发的 64 处引用（代码 docstring、`AGENTS.md`、`scripts/audit_registry.json`、probes README）同步完毕。
-
-**涉及文件：** `README.md`、`README_EN.md`、`AGENTS.md`、`docs/项目概述.md`、`docs/技术实现/`（9 篇 `_存档` + `翻译agent化_设计方案.md` + `CUDA环境与索引_说明.md`）、`scripts/audit_registry.json`、`utils/global_styles.py`、`utils/memory_release.py`、`ui/fontstyle_manager.py`、`manifest.json`
-
----
-
-### CUDA 索引分档收成唯一真相 + `install_cuda.bat` 重写 + 三层回归台
-
-**摘要：** ①分档阈值收进 `utils/env_diagnostic.py::_CUDA_TIERS`（CC≥10 → `cu132`、≥9 → `cu130`、≥6 → `cu126`、更低不支持），`install_cuda.bat` 与它同阈值，两侧不再各写一套。②删掉「`cu124`」「`nightly/cu128`」两条推荐：cu124 最后一个版本是 torch 2.6.0，装了会把已有更新版本的 torch 静默降级；nightly 通道版本天天漂。`ui/network_settings_dialog.py` 的 pip extra index 占位符同步改 `cu126`。③`launch.py` 取消 torch 版本钉死（原 `torch==2.7.1` 对已有更新版本的用户是降级，且 cu132 根本不发该版本、命令直接失败），`--reinstall-torch` 改为 `-U torch torchvision` 且不带 torchaudio（新索引不发、本项目无音频 IO）。④验证做成三层：L1 静态（`tests/test_cuda_install_env.py` 断言禁用写法与两侧映射一致）、L2 离网沙箱（`tests/cuda_sandbox.py` 用假 python.exe 驱动脚本全分支）、真机行为台（`tests/test_install_cuda_script.py` 真跑 cmd），另补只读体检台 `scripts/check_cuda_env.py`（回答"某索引还活着吗/本机现在什么状态"，不装不卸）。
-
-**验证：** 相关 6 个测试文件 pytest 111 passed；`scripts/verify.py` 全绿。
-
-**涉及文件：** `install_cuda.bat`、`utils/env_diagnostic.py`、`launch.py`、`ui/network_settings_dialog.py`、`scripts/check_cuda_env.py`、`tests/test_cuda_install_env.py`、`tests/cuda_sandbox.py`、`tests/test_install_cuda_script.py`、`tests/test_platform_torch_detect.py`、`docs/技术实现/CUDA环境与索引_说明.md`
 
 ---
 

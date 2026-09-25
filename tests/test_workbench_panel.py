@@ -663,6 +663,55 @@ class PanelTest(_WorkbenchTestCase):
         panel._append_log("Draft loaded.", "")
         self.assertIn("Draft loaded.", panel._log_view.toPlainText())
 
+    # ── 刷新前置对齐 + 过时灯（2026-09-23 用户实测「刷新无效」）──────
+
+    def test_replan_runs_pre_sync_before_plan(self):
+        """刷新按钮的修复点：重扫**先对齐数据层再规划**——顺序反了等于没修
+        （对齐跑在 plan 之后，plan 读到的仍是旧 proj.pages）。"""
+        from ui.workbench_batch_view import BatchTaskView
+
+        task = self._tasks()[MISREAD]
+        order = []
+        original_plan = task.plan
+
+        def spy_plan(options):
+            order.append("plan")
+            return original_plan(options)
+
+        task.plan = spy_plan
+        view = BatchTaskView(task, pre_replan=lambda: order.append("sync"))
+        view.replan()
+        self.assertEqual(order, ["sync", "plan"])
+        # 无对齐口（离屏台场景）时重扫照常工作
+        bare = BatchTaskView(task)
+        bare.replan()
+        self.assertTrue(bare._rows)
+
+    def test_stale_light_lifecycle(self):
+        """内容改动 → 已规划的页亮「列表可能过时」；replan 熄灯；未规划的
+        页不打扰（没有可过时的列表）；换项目一并作废。"""
+        panel = self._panel()
+        planned = panel._batch_views[MISREAD]
+        unplanned = panel._batch_views[MERGE]
+        self.assertTrue(planned._planned)
+        self.assertFalse(unplanned._planned)
+
+        panel.mark_content_changed()
+        self.assertFalse(planned._stale_label.isHidden())  # 亮
+        self.assertTrue(unplanned._stale_label.isHidden())  # 不打扰
+
+        planned.replan()  # 刷新出口：灯灭、列表重建
+        self.assertTrue(planned._stale_label.isHidden())
+        # 灭灯后再改一次内容 → 再亮（灯不是一次性的）
+        panel.mark_content_changed()
+        self.assertFalse(planned._stale_label.isHidden())
+
+        # 换项目：旧列表与灯一并作废
+        planned.forget_plan()
+        self.assertTrue(planned._stale_label.isHidden())
+        panel.mark_content_changed()
+        self.assertTrue(planned._stale_label.isHidden())
+
 
 if __name__ == "__main__":
     unittest.main()

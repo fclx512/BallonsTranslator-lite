@@ -2456,6 +2456,12 @@ QLabel#WorkbenchTaskSummary {
     font-size: 11px;
     color: @qwidgetForegroundColor;
 }
+/* 过时提示：内容在列表建好后被改过（只亮灯，刷新钮才是出口）——
+   警告色小字，压在摘要与候选列表之间 */
+QLabel#WorkbenchStaleHint {
+    font-size: 11px;
+    color: @warningColor;
+}
 /* 候选列表（RowTable：底色/选中染底/勾选框/徽章全在 delegate 自绘——
    逐格 QSS 边框在 Qt 里渲染不全，且背景兜底规则只按裸 QTableView 匹配、
    不及子类，这里类名+objectName 双保险） */

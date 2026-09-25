@@ -385,6 +385,10 @@ class Canvas(QGraphicsScene):
 
     projstate_unsaved = False
     proj_savestate_changed = Signal(bool)
+    # 内容被改动过（泛用工作台「列表可能过时」的判据）：与翻转信号不同，
+    # 置脏的每次调用都发——打标等不走撤销栈的路径在已脏状态下重复置脏，
+    # 只靠 proj_savestate_changed 的状态翻转会漏报
+    content_modified = Signal()
     textstack_changed = Signal()
     drop_open_folder = Signal(str)
     drop_images = Signal(list)  # list of image file paths from drag-drop
@@ -1738,6 +1742,11 @@ class Canvas(QGraphicsScene):
             self.removeItem(self.stroke_img_item)
 
     def setProjSaveState(self, un_saved: bool):
+        # 置脏的每次调用都广播内容改动；True→False 的保存落账也广播
+        # （updateTextBlkList 在保存时把面板编辑冲进数据层，行集同样会变）；
+        # 已干净状态下的重复 False（无事发生）不发
+        if un_saved or self.projstate_unsaved:
+            self.content_modified.emit()
         if un_saved == self.projstate_unsaved:
             return
         else:

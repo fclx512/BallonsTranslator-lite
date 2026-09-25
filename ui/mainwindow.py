@@ -562,6 +562,10 @@ class MainWindow(mainwindow_cls):
         self.canvas.gv.hide_canvas.connect(self.onHideCanvas)
         self.canvas.proj_savestate_changed.connect(self.on_savestate_changed)
         self.canvas.textstack_changed.connect(self.on_textstack_changed)
+        # 内容改动广播 → 工作台亮「列表可能过时」（只亮灯，不自动重扫）
+        self.canvas.content_modified.connect(
+            self.glossary_workbench.mark_content_changed
+        )
         self.canvas.run_blktrans.connect(self.on_run_blktrans)
         self.canvas.drop_open_folder.connect(self.dropOpenDir)
         self.canvas.drop_images.connect(self.openImages)
@@ -868,6 +872,10 @@ class MainWindow(mainwindow_cls):
         module_manager.imgtrans_pipeline_finished.connect(
             self.on_imgtrans_pipeline_finished
         )
+        # 管线直改数据层（检测增块／OCR 改字／自动挂标），不走画布置脏口
+        module_manager.imgtrans_pipeline_finished.connect(
+            self.glossary_workbench.mark_content_changed
+        )
         module_manager.page_trans_finished.connect(self.on_pagtrans_finished)
         module_manager.setupThread(self.configPanel, self.imgtrans_progress_msgbox)
         module_manager.progress_msgbox.showed.connect(
@@ -927,6 +935,10 @@ class MainWindow(mainwindow_cls):
         )
         self.global_search_widget.replace_finished.connect(
             self.on_global_replace_finished
+        )
+        # 全局替换绕开撤销栈直改数据层（force_sync 落盘），画布置脏口看不见
+        self.global_search_widget.replace_finished.connect(
+            self.glossary_workbench.mark_content_changed
         )
         self.global_search_widget.replace_preparing.connect(
             self.on_global_replace_preparing

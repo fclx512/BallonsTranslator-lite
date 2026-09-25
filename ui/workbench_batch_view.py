@@ -15,6 +15,16 @@
 把标识交回 ``apply``。它不写几何、不改 ``proj.pages``、不绕开
 ``ui/batch_ops.py``——那些都在 ``ui/workbench_tasks.py`` 与各引擎里。
 
+**重扫前置对齐**（2026-09-23）：``plan`` 读的是数据层 ``proj.pages``，
+而画布上手动增删框／键入只落在视觉层（同步点只有保存、切页等少数时机）
+——不先对齐，刷新按钮扫到的还是旧数据（实测「点了没反应」）。对齐调用
+口由面板以 ``pre_replan`` 传入（``ui/glossary_agent_panel.py`` 的
+``_sync_before_plan``），本层拿不到主窗口。
+
+**过时提示**：内容在列表建好后被改动过时，面板广播 ``mark_stale`` 亮一行
+「列表可能过时」——**不自动重扫**（精简取向：不做数据变更信号的全量
+监听），出口仍是刷新钮，``replan`` 熄灯。
+
 D27 的告知弹窗在此处统一弹（正文由任务自己给，见 ``BatchTask.confirm_html``）：
 **弹窗必须说清确认后会发生什么**，故四个任务的正文各不相同、都照实写。
 """
@@ -106,7 +116,8 @@ class RefreshButton(QToolButton):
     """自绘刷新图标钮（循环箭头）：工作台批量任务页的「重扫列表」入口。
 
     任务页的候选列表是懒规划的快照，而导航计数每次现算——用户在画布上
-    删框／改框后列表不会自己跟上，需要一个显式的刷新动作。图标不引 SVG
+    删框／改框后列表不会自己跟上，需要一个显式的刷新动作（内容被改过时
+    页面上会亮「列表可能过时」提示，指向的就是这个钮）。图标不引 SVG
     资源：一条弧线加一个箭头，QPainter 十几行画完，且自动跟主题（取色
     与悬停描边同 ``ui/panel_rail.py::RailLauncherButton`` 的做法）。
     """
@@ -181,10 +192,18 @@ class BatchTaskView(QWidget):
     status_requested = Signal(str)  # 面板底部日志行
     batch_applied = Signal(object)  # 本次批量写的版本号（供「撤销上次批量」）
 
-    def __init__(self, task, parent=None):
+    def __init__(self, task, parent=None, *, pre_replan=None):
+        """
+        Args:
+            pre_replan: 重扫前的前置对齐回调（面板传
+                ``GlossaryAgentPanel._sync_before_plan``；``None`` ＝跳过，
+                离屏台／无主窗口场景用）。
+        """
         super().__init__(parent)
         self.task = task
+        self._pre_replan = pre_replan
         self._rows = []
+        self._planned = False  # 规划过才有「过时」可言（空列表也算）
         self._options = {"reversed_groups": set()}
         self._option_widgets = {}
         self._option_specs = {}
@@ -203,6 +222,20 @@ class BatchTaskView(QWidget):
         self._summary.setObjectName("WorkbenchTaskSummary")
         self._summary.setWordWrap(True)
         layout.addWidget(self._summary)
+
+        # 过时提示（默认灭）：内容在列表建好后被改过 → 面板广播 mark_stale
+        # 亮起，指向刷新钮；replan 熄灯。显隐只看这个子控件的 hide/show，
+        # 面板整体可见性不影响它的「灯亮着」状态。
+        self._stale_label = QLabel(
+            self.tr(
+                "Content changed after this list was built — click refresh to rebuild it."
+            ),
+            self,
+        )
+        self._stale_label.setObjectName("WorkbenchStaleHint")
+        self._stale_label.setWordWrap(True)
+        self._stale_label.hide()
+        layout.addWidget(self._stale_label)
 
         self._card_mode = getattr(task, "row_view", "table") == MODE_CARD
         self._table = RowTable(
@@ -381,13 +414,33 @@ class BatchTaskView(QWidget):
 
     # ── 规划与列表填充 ──────────────────────────────────────────────
 
+    def mark_stale(self):
+        """内容在列表建好后被改动过：亮「列表可能过时」提示。
+
+        门控是**规划过**（``_planned``）而非有行：规划出的空列表同样是
+        快照，用户刚加了框它最该亮灯。``replan`` 熄灯。面板在画布内容
+        信号（``canvas.content_modified``）里广播到这里。
+        """
+        if self._planned:
+            self._stale_label.show()
+
+    def forget_plan(self):
+        """换项目：旧列表与过时灯一并作废（等下次 ``replan`` 重建）。"""
+        self._planned = False
+        self._stale_label.hide()
+
     def replan(self):
         """调引擎的只读 ``plan`` 重填列表（数据一变就得重跑）。"""
+        # 先熄灯再重建：重建失败列表也会被清空，同样不存在「过时的列表」
+        self._stale_label.hide()
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
+            if self._pre_replan is not None:
+                self._pre_replan()
             plan = self.task.plan(self.options())
         except Exception as error:  # 引擎不该抛，抛了也要让面板活着
             self._rows = []
+            self._planned = False
             self._fill_table([])
             self._summary.setText(
                 self.tr("Could not build the list: %1").replace(
@@ -399,6 +452,7 @@ class BatchTaskView(QWidget):
         finally:
             QApplication.restoreOverrideCursor()
         self._rows = list(plan.get("rows") or [])
+        self._planned = True
         # 行集重建＝旧预览图作废（执行完批量后，原行可能已不存在）：先收起
         # 浮层再填表，填表若恢复选中行会重新发一张图上来。
         self._dismiss_preview()

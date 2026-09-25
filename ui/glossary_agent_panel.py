@@ -733,7 +733,9 @@ class GlossaryAgentPanel(QWidget):
         )
         for task_id in CLEANUP_TASK_IDS:
             task = self._batch_tasks[task_id]
-            view = BatchTaskView(task)
+            # pre_replan＝重扫前的前置对齐（修「刷新按钮读旧数据」）：本层
+            # 拿不到主窗口，对齐口子由面板注入
+            view = BatchTaskView(task, pre_replan=self._sync_before_plan)
             view.jump_requested.connect(self.jump_requested)
             view.notify_requested.connect(
                 lambda text, kind="info", tid=task_id: self._toast(text, kind, tid)
@@ -883,6 +885,45 @@ class GlossaryAgentPanel(QWidget):
         commit = getattr(window, "_sync_and_commit_project", None)
         sync = getattr(window, "_sync_block_data", None)
         return BatchOperation(self._proj, commit=commit, sync_block_data=sync)
+
+    def _sync_before_plan(self):
+        """重扫（``replan``）前的前置对齐：把画布/面板上未回写的编辑冲进
+        ``proj.pages``，刷新按钮读到的才是当前数据（2026-09-23 实测「刷新
+        无效」的根因：``plan`` 直读数据层，而手动增删框／键入只落在视觉层）。
+
+        两道判据各管一类，都是现成口子：``text_change_unsaved`` 门控
+        ``updateTextBlkList``（纯文字键入——对象身份不变，
+        ``page_data_needs_sync`` 查不出）；``_sync_block_data`` 兜结构性增删
+        （加框/删框改长度与对象身份）。只需对齐当前页：其余页在切页时已被
+        ``conditional_save`` 冲刷。对齐失败不挡重扫（记日志后照常规划，
+        与旧行为一致）。
+        """
+        window = self._mainwindow()
+        if window is None:
+            return
+        canvas = getattr(window, "canvas", None)
+        st_manager = getattr(window, "st_manager", None)
+        if canvas is not None and st_manager is not None:
+            try:
+                if canvas.text_change_unsaved():
+                    st_manager.updateTextBlkList()
+            except Exception as error:
+                logger.error(f"Pre-replan text flush failed: {error}")
+        try:
+            window._sync_block_data()
+        except Exception as error:
+            logger.error(f"Pre-replan block sync failed: {error}")
+
+    def mark_content_changed(self, *_):
+        """画布内容改动过（``canvas.content_modified`` 广播）：给**已规划出
+        列表**的任务页亮「列表可能过时」。
+
+        只亮灯不重扫（精简取向：不做数据变更信号的全量监听），出口仍是各页
+        刷新钮——``replan`` 熄灯。未规划的页没有可过时的列表，不打扰；
+        术语/剧情页无候选列表概念，不参与。
+        """
+        for view in self._batch_views.values():
+            view.mark_stale()
 
     def _on_preview_requested(self, pixmap, caption: str):
         """把审批图交给浮层显示（D44：预览已不在任务页里）。"""
@@ -1109,6 +1150,8 @@ class GlossaryAgentPanel(QWidget):
         self.rollback_btn.setEnabled(False)
         for task in self._batch_tasks.values():
             task.reset()
+        for view in self._batch_views.values():
+            view.forget_plan()  # 旧项目的列表与过时灯都不该带进新项目
         if self.has_project():
             self._stack.setCurrentIndex(1)
             self.nav.select(WORKBENCH_ORDER[0], emit=False)
@@ -1234,6 +1277,8 @@ class GlossaryAgentPanel(QWidget):
         self.rollback_btn.setEnabled(seq is not None)
         self._dirty_tasks = set(CLEANUP_TASK_IDS)
         self._dirty_tasks.discard(self.current_task())
+        # 数据变了：其余已规划的任务页亮过时灯（当前页紧随 replan 熄灯）
+        self.mark_content_changed()
         self._refresh_nav_counts()
 
     def clear_batch_version(self):
@@ -1245,6 +1290,8 @@ class GlossaryAgentPanel(QWidget):
         self._last_version_seq = None
         self.rollback_btn.setEnabled(False)
         self._dirty_tasks = set(CLEANUP_TASK_IDS)
+        # 数据整体换入：先给所有已规划页亮过时灯，当前页紧随 replan 熄灯
+        self.mark_content_changed()
         current = self.current_task()
         self._dirty_tasks.discard(current)
         view = self._batch_views.get(current)
