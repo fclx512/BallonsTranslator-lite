@@ -1655,6 +1655,30 @@ class FontFormatPanel(Widget):
             return
         self.symbol_launcher.setChecked(not self.symbol_launcher.isChecked())
 
+    def install_symbol_convert_launcher(self, rail) -> None:
+        """符号连字转换开关（窄栏图标＝开关，无浮层，纯输入辅助）。
+
+        开启后右栏文本编辑器打字／粘贴时自动把可合并的符号序列换成
+        连字符号（``！！``→``‼``、``！？``→``⁉``，表见
+        ``utils/symbol_convert.py``），替换范围在编辑器内短暂高亮。
+        与软键盘同组的辅助小功能，不参与停靠面板互斥。
+        """
+        from ui.panel_rail import RailLauncherButton
+
+        self.rail = rail
+        self.symbol_convert_launcher = RailLauncherButton("rail_convert")
+        self.symbol_convert_launcher.setToolTip(self.tr("Auto Symbol Conversion"))
+        self.symbol_convert_launcher.toggled.connect(
+            self._on_symbol_convert_toggled
+        )
+        rail.add_launcher(self.symbol_convert_launcher)
+        self.symbol_convert_launcher.setChecked(
+            C.pcfg.symbol_convert_enabled
+        )
+
+    def _on_symbol_convert_toggled(self, checked: bool) -> None:
+        C.pcfg.symbol_convert_enabled = checked
+
 
     def _ensure_annotation_dock(self):
         if self.annotation_dock is None:

@@ -2289,6 +2289,7 @@ class Canvas(QGraphicsScene):
         stack = self.text_undo_stack
         stale = False
         consumed = None
+        redo_name = stack.redoText()
         if stack.index() < stack.count():
             cmd = stack.command(stack.index())
             if self._gate_cross_page(cmd, "redo", auto_cross_page):
@@ -2302,6 +2303,8 @@ class Canvas(QGraphicsScene):
         self.txtblkShapeControl.updateBoundingRect()
         if stale:
             self._notify_skipped_step()
+        else:
+            self._notify_redo(redo_name)
 
     def _text_undo_step(self, auto_cross_page=False):
         """全局栈撤销一步（跨页门在重放前拦截）。图像命令（修复）按
@@ -2393,6 +2396,16 @@ class Canvas(QGraphicsScene):
             duration=1500,
         )
 
+    def _notify_redo(self, redo_name: str):
+        # 与 _notify_undo 对称：重做提示也由画布统一发（同 key 刷新同一条）
+        if not redo_name or self._suppress_undo_toast:
+            return
+        notification.toast(
+            self.tr("Redo: %1").replace("%1", redo_name),
+            key="undo",
+            duration=1500,
+        )
+
     def redo(self, auto_cross_page=False):
         if self.textEditMode():
             self.commit_edit_sessions()
@@ -2402,7 +2415,9 @@ class Canvas(QGraphicsScene):
                 # 涂鸦栈优先（页级）；空则回退全局栈（修复/文本跨模态回退）
                 self.num_pushed_drawstep += 1
                 self.on_drawstack_changed()
+                redo_name = self.draw_undo_stack.redoText()
                 self.draw_undo_stack.redo()
+                self._notify_redo(redo_name)
             else:
                 self._text_redo_step(auto_cross_page)
         else:
@@ -2422,7 +2437,9 @@ class Canvas(QGraphicsScene):
                 if self.num_pushed_drawstep > 0:
                     self.num_pushed_drawstep -= 1
                 self.on_drawstack_changed()
+                undo_name = self.draw_undo_stack.undoText()
                 self.draw_undo_stack.undo()
+                self._notify_undo(undo_name)
             else:
                 self._text_undo_step(auto_cross_page)
         else:

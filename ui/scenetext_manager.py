@@ -510,6 +510,7 @@ class TextPanel(Widget):
 
         # 快捷符号是文本输入工具，与选中级格式浮层分开一组置顶
         self.formatpanel.install_symbol_launcher(self.rail)
+        self.formatpanel.install_symbol_convert_launcher(self.rail)
         self.rail.add_group_gap()
         self.formatpanel.install_annotation_launcher(self.rail)
         self.formatpanel.install_emphasis_launcher(self.rail)

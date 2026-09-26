@@ -22,6 +22,7 @@ from qtpy.QtGui import (
     QMouseEvent,
     QPainter,
     QPen,
+    QTextCharFormat,
     QTextCursor,
 )
 from qtpy.QtWidgets import (
@@ -80,6 +81,10 @@ class SourceTextEdit(QTextEdit):
         self.in_redo_undo = False
         self.text_content_changed = False
         self.highlighting = False
+        # 符号连字转换（pcfg.symbol_convert_enabled）：替换自身引发的文档
+        # 变化经此标志抑制，不再递归触发；_convert_flash_timer 撤高亮
+        self._symbol_converting = False
+        self._convert_flash_timer = None
         # 最近一次内容变更的坐标参数（contentsChange 原样记录），编辑会话
         # 管理器据此判断键入相邻性（burst 边界），见
         # ui/canvas.py::Canvas.note_typing_edit
@@ -161,6 +166,7 @@ class SourceTextEdit(QTextEdit):
             and not self.in_acts
         ):
             self.handle_content_change()
+            self._apply_symbol_conversion()
 
     def handle_content_change(self):
         if not self.in_redo_undo:
@@ -170,6 +176,82 @@ class SourceTextEdit(QTextEdit):
             # push 信号登记）。
             self.propagate_user_edited.emit()
             self.push_undo_stack.emit()
+
+    def _apply_symbol_conversion(self):
+        """符号连字自动转换（``pcfg.symbol_convert_enabled`` 时生效）。
+
+        全文扫描（气泡文本很短，逐字开销可忽略），把 ``utils/symbol_convert``
+        映射表命中的序列替换成连字符号，并就地短暂高亮提示用户——反馈放在
+        编辑器内而非 toast，因为编辑发生在右栏、视线在这里。**只转换聚焦中
+        的编辑器**（打字／粘贴／软键盘插入）：页面加载、翻译回填等程序性
+        写入不动，避免开页就静默改数据。撤销重放（``in_redo_undo``）不转换：
+        撤掉连字必须能还原成原序列。
+        """
+        if (
+            not pcfg.symbol_convert_enabled
+            or self._symbol_converting
+            or self.in_redo_undo
+            or self.pre_editing
+            or not self.hasFocus()
+        ):
+            return
+        from utils.symbol_convert import find_conversions
+
+        conversions = find_conversions(self.toPlainText())
+        if not conversions:
+            return
+        cursor_pos = self.textCursor().position()
+        self._symbol_converting = True
+        try:
+            doc = self.document()
+            flashes = []
+            # 从后往前替换：前面的区间坐标不受影响；高亮区间按替换后的
+            # 最终文本坐标记录（替换只缩不涨位移点，start 即新起点）
+            for start, end, replacement in reversed(conversions):
+                cursor = QTextCursor(doc)
+                cursor.setPosition(start)
+                cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+                cursor.insertText(replacement)
+                flashes.append((start, start + len(replacement)))
+            # 光标跟随：跨过被替换段的位移量补偿，别让光标跳走
+            new_pos = cursor_pos
+            for start, end, replacement in conversions:
+                shrink = (end - start) - len(replacement)
+                if end <= cursor_pos:
+                    new_pos -= shrink
+                elif start < cursor_pos:  # 光标在段内：贴到替换段末尾
+                    new_pos = start + len(replacement)
+            cursor = self.textCursor()
+            cursor.setPosition(new_pos)
+            self.setTextCursor(cursor)
+            self._flash_conversion(flashes)
+        finally:
+            self._symbol_converting = False
+
+    _CONVERT_FLASH_MS = 1200
+
+    def _flash_conversion(self, spans):
+        """替换范围短暂染底（琥珀色），到时自动清除；连续转换刷新计时。"""
+        fmt = QTextCharFormat()
+        fmt.setBackground(QColor(224, 150, 30, 90))
+        selections = []
+        for start, end in spans:
+            sel = QTextEdit.ExtraSelection()
+            sel.format = fmt
+            cursor = QTextCursor(self.document())
+            cursor.setPosition(start)
+            cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+            sel.cursor = cursor
+            selections.append(sel)
+        self.setExtraSelections(selections)
+        if self._convert_flash_timer is None:
+            self._convert_flash_timer = QTimer(self)
+            self._convert_flash_timer.setSingleShot(True)
+            self._convert_flash_timer.timeout.connect(self._clear_convert_flash)
+        self._convert_flash_timer.start(self._CONVERT_FLASH_MS)
+
+    def _clear_convert_flash(self):
+        self.setExtraSelections([])
 
     def setHoverEffect(self, hover: bool):
         """Visual hover feedback handled via CSS :hover/:focus in stylesheet.css.

@@ -2678,39 +2678,30 @@ class MainWindow(mainwindow_cls):
         return None if stack is None else stack.index()
 
     def _notify_history(self, action: str, before):
-        """画布左下角撤销/重做 toast：历史位置未变（无可撤销内容）则不提示；
-        同 key 让连续撤销刷新同一条通知而不是堆叠。纯附加提示——任何异常
-        只记日志，绝不拖垮已完成的撤销/重做本身。"""
-        if before is None:
+        """撤销/重做提示的兜底：常规步骤的 toast 由画布侧统一发
+        （``ui/canvas.py::_notify_undo``，带撤销行为描述）；这里只兜
+        "Ctrl+Z 撤到底但还有批量替换版本"的场景——批量替换与逐块编辑
+        分治，Ctrl+Z 撤不到批量操作，提示真正的回滚入口。判据取面板
+        回滚条的可用性（而非"备份目录里有版本"）：若最新一版已是别的
+        批量操作写的，面板这条回滚条也撤不了，提示会误导。
+        纯附加提示——任何异常只记日志，绝不拖垮已完成的撤销/重做本身。"""
+        if before is None or action != "undo":
             return
         try:
             stack = self._active_history_stack(action)
-            if stack is None:
+            if stack is None or stack.index() != before:
                 return
-            if stack.index() == before:
-                if (
-                    action == "undo"
-                    and self.imgtrans_proj is not None
-                    and self.global_search_widget.active_replace_version()
-                    is not None
-                ):
-                    # 批量替换与逐块编辑分治：Ctrl+Z 撤不到批量操作，
-                    # 见底时提示真正的回滚入口。判据取面板回滚条的可用性
-                    # （而非"备份目录里有版本"）：若最新一版已是别的批量
-                    # 操作写的，面板这条回滚条也撤不了，提示会误导。
-                    notification.toast(
-                        self.tr(
-                            "Nothing left to undo. The last batch replace can be rolled back in the search panel."
-                        ),
-                        anchor="bottom-left",
-                        key="history",
-                    )
-                return
-            notification.toast(
-                self.tr("Undone") if action == "undo" else self.tr("Redone"),
-                anchor="bottom-left",
-                key="history",
-            )
+            if (
+                self.imgtrans_proj is not None
+                and self.global_search_widget.active_replace_version() is not None
+            ):
+                notification.toast(
+                    self.tr(
+                        "Nothing left to undo. The last batch replace can be rolled back in the search panel."
+                    ),
+                    anchor="bottom-left",
+                    key="history",
+                )
         except Exception as e:
             LOGGER.error(f"history toast failed: {e}")
 

@@ -497,6 +497,9 @@ class ProgramConfig(Config):
     # 软键盘（左缘窄栏入口）功能开关与触发范围（默认仅原文框）
     symbol_keyboard_enabled: bool = False
     symbol_keyboard_source_only: bool = True
+    # 符号连字转换（左缘窄栏开关，无浮层）：右栏编辑器自动把 ！！→‼、
+    # ！？→⁉ 一类序列换成连字符号（utils/symbol_convert.py），替换处短暂高亮
+    symbol_convert_enabled: bool = False
     # 修复区历史浮层（左缘窄栏入口，DrawingPanel）开合记忆
     inpaint_history_dock_open: bool = False
     show_seq_badge: bool = True
