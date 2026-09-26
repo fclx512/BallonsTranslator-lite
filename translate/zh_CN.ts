@@ -298,20 +298,24 @@
             <translation>标签徽标</translation>
         </message>
         <message>
-            <source>Next Tagged Block</source>
-            <translation>下一个带标签块</translation>
-        </message>
-        <message>
-            <source>Previous Tagged Block</source>
-            <translation>上一个带标签块</translation>
-        </message>
-        <message>
             <source>Tag Toolbar</source>
             <translation>标签工具栏</translation>
         </message>
         <message>
             <source>Tags</source>
             <translation>打标</translation>
+        </message>
+        <message>
+            <source>Redo: %1</source>
+            <translation>重做：%1</translation>
+        </message>
+        <message>
+            <source>Next Pending Problem</source>
+            <translation>下一个待处理问题</translation>
+        </message>
+        <message>
+            <source>Previous Pending Problem</source>
+            <translation>上一个待处理问题</translation>
         </message>
     </context>
     <context>
@@ -1223,7 +1227,7 @@
         <message>
             <location filename="..\ui\configpanel.py" />
             <source>Ask for confirmation before workbench actions that call the AI (e.g. Prepare for translation).</source>
-            <translation>工作台中会调用 AI 的操作（如「一键准备」）执行前先弹窗确认。</translation>
+            <translation>工作台中会调用 AI 的操作（如「翻译准备」）执行前先弹窗确认。</translation>
         </message>
         <message>
             <source>Quick Symbol Palette</source>
@@ -1296,20 +1300,8 @@
             <translation>释放内存</translation>
         </message>
         <message>
-            <source>Warn About Unprocessed Earlier Steps</source>
-            <translation>未处理的前序步骤提示</translation>
-        </message>
-        <message>
-            <source>Warn me when I jump to a later workbench step while an earlier cleanup step still has unprocessed items. The order is a recommendation only — jumping is always allowed.</source>
-            <translation>跳到工作台靠后的步骤、而更早的清理步骤还有未处理条目时提示我。顺序只是推荐，始终允许跳转。</translation>
-        </message>
-        <message>
             <source>Batch Tasks</source>
             <translation>批量任务</translation>
-        </message>
-        <message>
-            <source>Default grow amount</source>
-            <translation>默认扩张量</translation>
         </message>
         <message>
             <source>False grouping threshold</source>
@@ -1326,10 +1318,6 @@
         <message>
             <source>&lt;p&gt;Groups covering more than this share of the page start unchecked in &lt;b&gt;Merge adjacent blocks&lt;/b&gt;.&lt;/p&gt;</source>
             <translation>&lt;p&gt;「合并相邻框」里，包围盒超过页面该比例的组默认不勾选。&lt;/p&gt;</translation>
-        </message>
-        <message>
-            <source>&lt;p&gt;Initial amount for the batch &lt;b&gt;Grow Blocks&lt;/b&gt;; editable for each run.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;批量「框扩张」的初始扩张量，每次执行前可改。&lt;/p&gt;</translation>
         </message>
         <message>
             <source>Import / Export</source>
@@ -1861,6 +1849,10 @@ Hide them all? You can move them back later.</source>
             <source>Soft Keyboard</source>
             <translation>软键盘</translation>
         </message>
+        <message>
+            <source>Auto Symbol Conversion</source>
+            <translation>符号自动转换</translation>
+        </message>
     </context>
     <context>
         <name>FontStyleManager</name>
@@ -2291,14 +2283,6 @@ Run detection + OCR to populate text blocks.</source>
         <message>
             <source>Later</source>
             <translation>稍后处理</translation>
-        </message>
-        <message>
-            <source>Undone</source>
-            <translation>已撤销</translation>
-        </message>
-        <message>
-            <source>Redone</source>
-            <translation>已重做</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" line="742" />
@@ -4506,32 +4490,28 @@ Check the log above for details.</source>
             <translation>软键盘</translation>
         </message>
         <message>
-            <source>Tag: Confusing Translation</source>
-            <translation>打标：译文迷惑</translation>
-        </message>
-        <message>
             <source>Tag: Handwritten</source>
             <translation>打标：手写体</translation>
-        </message>
-        <message>
-            <source>Tag: Low OCR Confidence</source>
-            <translation>打标：OCR 置信度低</translation>
         </message>
         <message>
             <source>Tag: Onomatopoeia</source>
             <translation>打标：语气/拟声词</translation>
         </message>
         <message>
-            <source>Tag: Polish Translation</source>
-            <translation>打标：译文润色</translation>
+            <source>Next Pending Problem</source>
+            <translation>下一个待处理问题</translation>
         </message>
         <message>
-            <source>Next Tagged Block</source>
-            <translation>下一个带标签块</translation>
+            <source>Previous Pending Problem</source>
+            <translation>上一个待处理问题</translation>
         </message>
         <message>
-            <source>Previous Tagged Block</source>
-            <translation>上一个带标签块</translation>
+            <source>Tag: Retranslate Later</source>
+            <translation>打标：稍后重译</translation>
+        </message>
+        <message>
+            <source>Tag: Review Source Later</source>
+            <translation>打标：稍后校对</translation>
         </message>
     </context>
     <context>
@@ -5851,16 +5831,8 @@ Check the log above for details.</source>
             <translation>用户</translation>
         </message>
         <message>
-            <source>Glossary draft. Nothing is saved until you apply it.</source>
-            <translation>术语表草稿；点「应用草稿…」才会落盘。</translation>
-        </message>
-        <message>
             <source>Open a project to use the workbench.</source>
             <translation>先打开项目，工作台读取其中的页面原文。</translation>
-        </message>
-        <message>
-            <source>Story context for translation: global synopsis plus one summary per page.</source>
-            <translation>翻译用的剧情上下文：全书梗概 + 每页摘要。</translation>
         </message>
         <message>
             <source>Extract by frequency</source>
@@ -5868,11 +5840,11 @@ Check the log above for details.</source>
         </message>
         <message>
             <source>Prepare for translation</source>
-            <translation>一键准备</translation>
+            <translation>翻译准备</translation>
         </message>
         <message>
             <source>Prepare for translation…</source>
-            <translation>一键准备…</translation>
+            <translation>翻译准备…</translation>
         </message>
         <message>
             <source>Start</source>
@@ -5915,30 +5887,6 @@ Check the log above for details.</source>
             <translation>该批量操作之后的手工编辑也会一并丢弃。版本会被消耗，每次批量只能撤销一次。</translation>
         </message>
         <message>
-            <source>Background fill</source>
-            <translation>背景修复</translation>
-        </message>
-        <message>
-            <source>Continue</source>
-            <translation>继续</translation>
-        </message>
-        <message>
-            <source>Earlier cleanup steps still have unprocessed items:</source>
-            <translation>更早的清理步骤还有未处理条目：</translation>
-        </message>
-        <message>
-            <source>Expand blocks</source>
-            <translation>框扩张</translation>
-        </message>
-        <message>
-            <source>Merge blocks</source>
-            <translation>合并相邻框</translation>
-        </message>
-        <message>
-            <source>Misread cleanup</source>
-            <translation>误识别清理</translation>
-        </message>
-        <message>
             <source>Reply: %1</source>
             <translation>回复：%1</translation>
         </message>
@@ -5951,10 +5899,6 @@ Check the log above for details.</source>
             <translation>把项目回滚到最近一次批量操作之前的状态？</translation>
         </message>
         <message>
-            <source>Rolls the project back to the state before the last batch action (merge / expand / delete / background fill). The version is consumed, so it can be undone once.</source>
-            <translation>把项目回滚到最近一次批量操作（合并／扩张／删除／背景修复）之前的状态。版本会被消耗，只能撤销一次。</translation>
-        </message>
-        <message>
             <source>Scan all pages' existing translations and merge recurring source→translation pairs into the draft. No AI involved — use "Prepare for translation…" to ask the AI for the rest.</source>
             <translation>扫描全书已有译文，把反复出现的原文→译文对并入草稿。全程不用 AI；其余内容用「为翻译做准备…」交给 AI。</translation>
         </message>
@@ -5963,8 +5907,36 @@ Check the log above for details.</source>
             <translation>撤销上次批量</translation>
         </message>
         <message>
-            <source>Unprocessed items in earlier steps</source>
-            <translation>更早的步骤还有未处理条目</translation>
+            <source>Merge text blocks</source>
+            <translation>合并文本框</translation>
+        </message>
+        <message>
+            <source>Simple background fill</source>
+            <translation>简单背景修复</translation>
+        </message>
+        <message>
+            <source>Suspicious blocks</source>
+            <translation>可疑框</translation>
+        </message>
+        <message>
+            <source>Applies both drafts: the glossary goes to its json file, the story context into the project. This is not part of the batch rollback.</source>
+            <translation>同时应用两份草稿：术语写入它的 json 文件，剧情写入项目。此操作不在批量回滚范围内。</translation>
+        </message>
+        <message>
+            <source>Retranslate</source>
+            <translation>译文待重译</translation>
+        </message>
+        <message>
+            <source>Review source text</source>
+            <translation>原文待校对</translation>
+        </message>
+        <message>
+            <source>Translation preparation: glossary entries and story context, each with its own draft. Nothing is saved until you apply the drafts.</source>
+            <translation>翻译准备：术语条目与剧情信息各有一份草稿，点击「应用草稿」之前不会保存任何内容。</translation>
+        </message>
+        <message>
+            <source>Rolls the project back to the state before the last batch action (merge / delete / background fill). Only batch actions are covered — applying the translation drafts or a single-block card is not part of it. The version is consumed, so it can be undone once.</source>
+            <translation>把项目回滚到最近一次批量操作之前的状态（合并／删除／背景覆盖）。只覆盖批量操作——应用翻译草稿或单框卡片不在其中。版本会被消耗，每次批量只能撤销一次。</translation>
         </message>
     </context>
     <context>
@@ -7274,6 +7246,14 @@ No pipeline stages will be executed.</source>
             <source>Symbols only</source>
             <translation>纯符号</translation>
         </message>
+        <message>
+            <source>Retranslate Later</source>
+            <translation>稍后重译</translation>
+        </message>
+        <message>
+            <source>Review Source Later</source>
+            <translation>稍后校对</translation>
+        </message>
     </context>
     <context>
         <name>TagToolbar</name>
@@ -7528,20 +7508,8 @@ No pipeline stages will be executed.</source>
     <context>
         <name>WorkbenchTasks</name>
         <message>
-            <source>%1 px per side</source>
-            <translation>每边 %1 px</translation>
-        </message>
-        <message>
-            <source>%1% of each block's short side per side</source>
-            <translation>每边为块短边的 %1%</translation>
-        </message>
-        <message>
             <source>Apply to %1 row(s)</source>
             <translation>应用到 %1 行</translation>
-        </message>
-        <message>
-            <source>Block</source>
-            <translation>块</translation>
         </message>
         <message>
             <source>Blocks</source>
@@ -7556,20 +7524,8 @@ No pipeline stages will be executed.</source>
             <translation>删除 %1 个框</translation>
         </message>
         <message>
-            <source>Delete misread blocks</source>
-            <translation>删除误识别框</translation>
-        </message>
-        <message>
             <source>Direction</source>
             <translation>方向</translation>
-        </message>
-        <message>
-            <source>Expand %1 block(s)</source>
-            <translation>扩张 %1 个框</translation>
-        </message>
-        <message>
-            <source>Expand blocks</source>
-            <translation>扩张文本框</translation>
         </message>
         <message>
             <source>False grouping</source>
@@ -7584,10 +7540,6 @@ No pipeline stages will be executed.</source>
             <translation>把各成员的行铺平成一个大列表</translation>
         </message>
         <message>
-            <source>Grow each side by</source>
-            <translation>每边外扩</translation>
-        </message>
-        <message>
             <source>Horizontal</source>
             <translation>横排</translation>
         </message>
@@ -7600,14 +7552,6 @@ No pipeline stages will be executed.</source>
             <translation>合并 %1 组</translation>
         </message>
         <message>
-            <source>Merge adjacent blocks</source>
-            <translation>合并相邻框</translation>
-        </message>
-        <message>
-            <source>Misread cleanup</source>
-            <translation>误识别清理</translation>
-        </message>
-        <message>
             <source>Order suspect</source>
             <translation>顺序存疑</translation>
         </message>
@@ -7616,32 +7560,8 @@ No pipeline stages will be executed.</source>
             <translation>页</translation>
         </message>
         <message>
-            <source>Pending</source>
-            <translation>待处理</translation>
-        </message>
-        <message>
-            <source>Reject / un-reject selection</source>
-            <translation>驳回／取消驳回所选</translation>
-        </message>
-        <message>
-            <source>Rejected</source>
-            <translation>已驳回</translation>
-        </message>
-        <message>
-            <source>Rejected %1 block(s).</source>
-            <translation>已驳回 %1 个块。</translation>
-        </message>
-        <message>
             <source>Reverse direction of selected group</source>
             <translation>反转所选组的方向</translation>
-        </message>
-        <message>
-            <source>Review</source>
-            <translation>状态</translation>
-        </message>
-        <message>
-            <source>Set an amount to preview the expansion.</source>
-            <translation>先设定扩张量，才能预览扩张结果。</translation>
         </message>
         <message>
             <source>Simple</source>
@@ -7660,14 +7580,6 @@ No pipeline stages will be executed.</source>
             <translation>子类型</translation>
         </message>
         <message>
-            <source>Un-rejected %1 block(s).</source>
-            <translation>已取消驳回 %1 个块。</translation>
-        </message>
-        <message>
-            <source>Unit</source>
-            <translation>单位</translation>
-        </message>
-        <message>
             <source>Unknown</source>
             <translation>判不出</translation>
         </message>
@@ -7676,20 +7588,8 @@ No pipeline stages will be executed.</source>
             <translation>竖排</translation>
         </message>
         <message>
-            <source>percent of the short side</source>
-            <translation>短边百分比</translation>
-        </message>
-        <message>
-            <source>%1 block(s) can grow, %2 blocked already, %3 with at least one side clamped.</source>
-            <translation>可扩张 %1 个框，%2 个已贴住扩不动，%3 个至少一条边被截。</translation>
-        </message>
-        <message>
             <source>%1 group(s) covering %2 block(s); %3 excluded (unrejected misread); %4 rotated skipped.</source>
             <translation>%1 组、涉及 %2 个框；已排除 %3 个（未驳回的误识别框）；跳过 %4 个旋转框。</translation>
-        </message>
-        <message>
-            <source>%1 in the queue, %2 rejected, %3 to delete by default.</source>
-            <translation>队列 %1 条，已驳回 %2 条，默认删除 %3 条。</translation>
         </message>
         <message>
             <source>%1 page(s) will be filled (%2 block(s) in total); %3 complex and %4 undecided block(s) across the book stay untouched.</source>
@@ -7712,10 +7612,6 @@ No pipeline stages will be executed.</source>
             <translation>%1 · 块 %2</translation>
         </message>
         <message>
-            <source>Blocks whose OCR text looks like noise. Reject the false positives first, then delete the rest in one go.</source>
-            <translation>OCR 结果像噪声的块。先驳回误杀的，再整批删掉。</translation>
-        </message>
-        <message>
             <source>Cancelling halfway rolls back what was already filled, so a cancelled run leaves nothing behind. The whole batch can be rolled back in one step.</source>
             <translation>中途取消会把本次已覆盖的部分一并撤回，取消不留半成品。整批可用一步撤销。</translation>
         </message>
@@ -7732,28 +7628,12 @@ No pipeline stages will be executed.</source>
             <translation>用背景色覆盖 %2 页上的 %1 个简单背景块，只写修复图层。复杂块完全不动。</translation>
         </message>
         <message>
-            <source>Fills near-flat balloon interiors with their background colour; complex backgrounds are left alone (no model is loaded). Writes the inpainted layer only.</source>
-            <translation>把近纯色的气泡内部用背景色覆盖，复杂背景完全不动（不加载模型）。只写修复图层。</translation>
-        </message>
-        <message>
-            <source>Grows %1 block(s) across %2 page(s) by %3, stopping at a neighbouring block or the page edge.</source>
-            <translation>把 %2 页上的 %1 个块每边外扩 %3，碰到邻框或页边即停。</translation>
-        </message>
-        <message>
             <source>Inpainting left in the inpainted layer (if you ran inpaint before) is not reverted — use the inpaint undo for that. The whole batch can be rolled back in one step.</source>
             <translation>此前跑过修复而留在修复图层上的痕迹不会因此还原——要还原请用修复侧自己的撤销。整批可用一步撤销。</translation>
         </message>
         <message>
             <source>Merges %1 group(s) — %2 block(s) become %1 block(s) across %3 page(s). Styles come from the lowest-index member, tags are unioned, and block order on the page is preserved.</source>
             <translation>合并 %1 组——%3 页上 %2 个框并成 %1 个块。样式取组内索引最小的成员，标签取并集，页内块顺序保持不变。</translation>
-        </message>
-        <message>
-            <source>One row per candidate group. Click a row to preview it; suspected false groupings start unchecked.</source>
-            <translation>一组一行。点选某行看审批图；疑似误聚组默认不勾选。</translation>
-        </message>
-        <message>
-            <source>Only the rendering rectangle changes (mask and inpainted data are kept). The whole batch can be rolled back in one step.</source>
-            <translation>只改渲染矩形（遮罩与修复数据原样保留）。整批可用一步撤销。</translation>
         </message>
         <message>
             <source>The whole batch can be rolled back in one step.</source>
@@ -7764,51 +7644,229 @@ No pipeline stages will be executed.</source>
             <translation>%1 · %2 块</translation>
         </message>
         <message>
-            <source>+%1 px on all sides</source>
-            <translation>四边各 +%1 px</translation>
+            <source>%1 %2 page(s)</source>
+            <translation>%1 页 · %2</translation>
         </message>
         <message>
-            <source>+%1 px, %2 limited</source>
-            <translation>+%1 px，%2受限</translation>
+            <source>%1 suspicious block(s) found; %2 marked as false positives, %3 selected for deletion by default.</source>
+            <translation>共 %1 个可疑框；%2 个已标为误报，%3 个默认勾选删除。</translation>
         </message>
         <message>
-            <source>Bottom</source>
-            <translation>下</translation>
+            <source>Action</source>
+            <translation>处理</translation>
         </message>
         <message>
-            <source>Growth</source>
-            <translation>增长</translation>
+            <source>Delete by default</source>
+            <translation>默认删除</translation>
         </message>
         <message>
-            <source>Left</source>
-            <translation>左</translation>
+            <source>Delete suspicious text blocks</source>
+            <translation>删除可疑文本框</translation>
         </message>
         <message>
-            <source>Makes room for typesetting: grows each text block's rect so the translated text has more room. Only the rect changes (masks and inpainted pixels are untouched); the text re-flows inside the new rect, centered if the block's alignment is set to centered.</source>
-            <translation>为嵌字腾空间：把文本框向外扩一圈，给译文更多排布余地。只改渲染框（遮罩与修复像素不动）；文字会在新框内重新排布——需要居中效果就把块的对齐设为「居中」。</translation>
+            <source>False positive — keep</source>
+            <translation>误报，保留</translation>
         </message>
         <message>
-            <source>Right</source>
-            <translation>右</translation>
+            <source>Fills near-flat balloon interiors with their background colour; complex backgrounds are left alone (no model is loaded). Writes the inpainted layer only. Click a row to preview the original image above the canvas.</source>
+            <translation>将接近纯色的气泡内部用其背景色填充；复杂背景完全不动（不加载模型）。只写修复图层。点行可在画布上方预览原图。</translation>
         </message>
         <message>
-            <source>Top</source>
-            <translation>上</translation>
+            <source>Mark / unmark false positive</source>
+            <translation>标记/取消误报</translation>
+        </message>
+        <message>
+            <source>Marked %1 block(s) as false positives.</source>
+            <translation>已将 %1 个框标记为误报。</translation>
+        </message>
+        <message>
+            <source>Merge adjacent text blocks</source>
+            <translation>合并相邻文本框</translation>
+        </message>
+        <message>
+            <source>No candidates</source>
+            <translation>无候选</translation>
+        </message>
+        <message>
+            <source>No pages were skipped.</source>
+            <translation>没有页被跳过。</translation>
+        </message>
+        <message>
+            <source>One row per candidate group. Suspected false groupings start unchecked. Click a row to preview the original image above the canvas.</source>
+            <translation>每个候选组一行；疑似误聚的组默认不勾选。点行可在画布上方预览原图。</translation>
+        </message>
+        <message>
+            <source>Removed the false-positive mark from %1 block(s).</source>
+            <translation>已取消 %1 个框的误报标记。</translation>
+        </message>
+        <message>
+            <source>Skipped: %1.</source>
+            <translation>跳过：%1。</translation>
+        </message>
+        <message>
+            <source>Source: OCR post-processing rules. If this list is empty, OCR may not have run, may be disabled, may be set to none_ocr, or may simply have found no suspicious text.</source>
+            <translation>来源：OCR 后处理规则。若列表为空，可能是尚未运行 OCR、OCR 已关闭、当前为 none_ocr，或确实没有可疑文本。</translation>
+        </message>
+        <message>
+            <source>Suspicious text-block cleanup</source>
+            <translation>可疑文本框清理</translation>
+        </message>
+        <message>
+            <source>available</source>
+            <translation>可用</translation>
+        </message>
+        <message>
+            <source>groups</source>
+            <translation>组</translation>
+        </message>
+        <message>
+            <source>mask size does not match the page</source>
+            <translation>掩码尺寸与页面不符</translation>
+        </message>
+        <message>
+            <source>no mask</source>
+            <translation>无掩码</translation>
+        </message>
+        <message>
+            <source>no merge groups</source>
+            <translation>无可合并组</translation>
+        </message>
+        <message>
+            <source>no simple-background blocks</source>
+            <translation>无简单背景块</translation>
+        </message>
+        <message>
+            <source>no text blocks</source>
+            <translation>无文本框</translation>
+        </message>
+        <message>
+            <source>page image unavailable</source>
+            <translation>页面图像缺失</translation>
+        </message>
+        <message>
+            <source>pages</source>
+            <translation>页</translation>
+        </message>
+        <message>
+            <source>%1 block(s) recorded by you; %2 low-confidence suggestion(s).</source>
+            <translation>你记下待校对 %1 个块；程序低置信度建议 %2 个。</translation>
+        </message>
+        <message>
+            <source>%1 block(s) waiting for retranslation.</source>
+            <translation>%1 个块待重译。</translation>
+        </message>
+        <message>
+            <source>Blocks you recorded for proofreading, plus low-confidence blocks found by OCR. Nothing here is deleted or rewritten: open a block on the canvas to proofread it, or remove the record once you are done. The suggestions below are only hints and can be ignored.</source>
+            <translation>这里是你记下要校对的块，以及 OCR 报出的低置信度块。这里不删框、也不改文字：到画布上打开该块校对，处理完把记录移除即可。下面的建议只是提示，可以忽略。</translation>
+        </message>
+        <message>
+            <source>Blocks you recorded for retranslation later. Nothing here is rewritten: open a block on the canvas and use the retranslate card, then remove the record once you are done.</source>
+            <translation>这里是你记下稍后重译的块。这里不改写任何内容：到画布上打开该块用重译卡处理，处理完把记录移除即可。</translation>
+        </message>
+        <message>
+            <source>Ignore suggestion</source>
+            <translation>忽略该建议</translation>
+        </message>
+        <message>
+            <source>Ignored %1 suggestion(s).</source>
+            <translation>已忽略 %1 条建议。</translation>
+        </message>
+        <message>
+            <source>Low confidence</source>
+            <translation>低置信度</translation>
+        </message>
+        <message>
+            <source>Low-confidence suggestions</source>
+            <translation>程序低置信度建议</translation>
+        </message>
+        <message>
+            <source>No block is recorded for proofreading. Select a block on the canvas and record it for later.</source>
+            <translation>还没有记下待校对的块。在画布上选中一个块，选择「稍后校对」。</translation>
+        </message>
+        <message>
+            <source>No block is waiting for retranslation. Select a block on the canvas after translating and record it for later.</source>
+            <translation>还没有记下待重译的块。翻译后在画布上选中该块，选择「稍后重译」。</translation>
+        </message>
+        <message>
+            <source>Nothing to remove here.</source>
+            <translation>没有可移除的记录。</translation>
+        </message>
+        <message>
+            <source>OCR reported no low-confidence block. Only engines that report a score produce suggestions — a missing score is not treated as a low one.</source>
+            <translation>OCR 没有报出低置信度的块。只有会给出分数的引擎才会产生建议——缺分数不会被当成「低」。</translation>
+        </message>
+        <message>
+            <source>Recorded by you</source>
+            <translation>你记下的</translation>
+        </message>
+        <message>
+            <source>Remove from my list</source>
+            <translation>从待办里移除</translation>
+        </message>
+        <message>
+            <source>Removed %1 block(s) from the retranslation list.</source>
+            <translation>已从重译待办里移除 %1 个块。</translation>
+        </message>
+        <message>
+            <source>Removed %1 block(s) from the review list.</source>
+            <translation>已从校对待办里移除 %1 个块。</translation>
+        </message>
+        <message>
+            <source>Removing a record only clears your note, and ignoring a suggestion only marks it as reviewed. Neither deletes a block, changes the source text or the translation, nor clears the handwritten/onomatopoeia directives.</source>
+            <translation>移除记录只清掉这条笔记，忽略建议只表示已看过。两者都不会删框、不会改原文或译文，也不会清掉手写字/拟声词这类翻译指示。</translation>
+        </message>
+        <message>
+            <source>Removing a record only clears your note. It changes no text and starts no retranslation — that happens on the canvas, one block at a time.</source>
+            <translation>移除记录只清掉这条笔记：不改文字，也不会开始重译——重译在画布上逐块进行。</translation>
+        </message>
+        <message>
+            <source>Retranslate</source>
+            <translation>译文待重译</translation>
+        </message>
+        <message>
+            <source>Review source text</source>
+            <translation>原文待校对</translation>
+        </message>
+        <message>
+            <source>To retranslate</source>
+            <translation>待重译</translation>
+        </message>
+        <message>
+            <source>Waiting for retranslation</source>
+            <translation>待重译</translation>
+        </message>
+        <message>
+            <source>block %1</source>
+            <translation>块 %1</translation>
+        </message>
+        <message>
+            <source>items</source>
+            <translation>条</translation>
+        </message>
+        <message>
+            <source>score %1</source>
+            <translation>分数 %1</translation>
+        </message>
+        <message>
+            <source>Confirm before deleting</source>
+            <translation>确认后删除</translation>
+            <translation>确认后删除</translation>
+        </message>
+        <message>
+            <source>OCR rules flagged these text blocks as suspicious. They are selected for deletion by default; rows whose text has no kana or kanji start unchecked, because a real Latin word or onomatopoeia can hide there. Mark a false positive to keep a block. Marking a false positive and selecting a block for deletion are separate decisions. Click a row to preview the original image above the canvas.</source>
+            <translation>OCR 规则将这些文本框标为可疑，默认勾选删除；无假名/汉字的行默认不勾选，因为那里可能藏着真实的拉丁词或拟声词。标为误报即保留该框。「标为误报」与「勾选删除」是两件独立的事。点行可在画布上方预览原图。</translation>
+            <translation>OCR 规则将这些文本框标为可疑，默认勾选删除；无假名/汉字的行默认不勾选，因为那里可能藏着真实的拉丁词或拟声词。标为误报即保留该框。「标为误报」与「勾选删除」是两件独立的事。点行可在画布上方预览原图。</translation>
         </message>
     </context>
     <context>
         <name>WorkbenchTaskNav</name>
         <message>
-            <source>Inpainting</source>
-            <translation>图像修复</translation>
-        </message>
-        <message>
-            <source>Text &amp; OCR</source>
-            <translation>文字与 OCR</translation>
-        </message>
-        <message>
             <source>Translation</source>
             <translation>翻译</translation>
+        </message>
+        <message>
+            <source>Source and image</source>
+            <translation>原文与图像</translation>
         </message>
     </context>
     <context>
@@ -8068,6 +8126,41 @@ Configure a mirror in Settings → Network &amp; Mirror Settings, then download 
         <message>
             <source>This model is very demanding: on CPU the time it costs far exceeds what it can deliver, so it is not offered for download under a CPU-only PyTorch build. Install and use it under a GPU PyTorch build instead.</source>
             <translation>本模型对性能需求高，CPU运行的时间开销远大于模型能力，故在CPU torch环境下不提供下载，请在GPU torch环境下安装和使用。</translation>
+        </message>
+    </context>
+    <context>
+        <name>ReviewQueueView</name>
+        <message>
+            <source>%1 (%2)</source>
+            <translation>%1（%2）</translation>
+        </message>
+        <message>
+            <source>Content changed after this list was built — click refresh to rebuild it.</source>
+            <translation>列表生成后内容有改动——点刷新重建。</translation>
+        </message>
+        <message>
+            <source>Could not build the list: %1</source>
+            <translation>无法生成列表：%1</translation>
+        </message>
+        <message>
+            <source>No preview for this row (page image missing).</source>
+            <translation>这一行没有可预览的图（页面图像缺失）。</translation>
+        </message>
+        <message>
+            <source>Select a row first.</source>
+            <translation>请先选中一行。</translation>
+        </message>
+        <message>
+            <source>Open the %1 card for the selected block here.</source>
+            <translation>为当前选中的块打开 %1 卡片。</translation>
+        </message>
+        <message>
+            <source>Go to canvas</source>
+            <translation>跳到画布</translation>
+        </message>
+        <message>
+            <source>Switch to the row's page and select its block on the canvas.</source>
+            <translation>切换到该行所在页，并在画布上选中对应块。</translation>
         </message>
     </context>
 </TS>
