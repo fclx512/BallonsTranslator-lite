@@ -597,11 +597,11 @@ DEFAULT_SHORTCUTS = {
     "move_top": [],
     "move_bottom": [],
     # 块标签翻转键（选中态打标，多选翻转语义；编辑器输入经 ShortcutOverride 不受影响）
-    "tag_ocr_low_conf": ["1"],
+    # 只覆盖前台四项：两个人工待办（稍后校对／稍后重译）+ 两个持久翻译指示
+    "tag_ocr_review_pending": ["1"],
     "tag_handwritten": ["2"],
     "tag_onomatopoeia": ["3"],
-    "tag_trans_confusing": ["4"],
-    "tag_trans_polish": ["5"],
+    "tag_trans_review_pending": ["4"],
     "next_tagged_block": ["E"],
     "prev_tagged_block": ["Q"],
 }
@@ -647,13 +647,12 @@ _ACTION_NAMES = {
     "move_down": QCoreApplication.translate("_ShortcutRow", "Move Down"),
     "move_top": QCoreApplication.translate("_ShortcutRow", "Move to Top"),
     "move_bottom": QCoreApplication.translate("_ShortcutRow", "Move to Bottom"),
-    "tag_ocr_low_conf": QCoreApplication.translate("_ShortcutRow", "Tag: Low OCR Confidence"),
+    "tag_ocr_review_pending": QCoreApplication.translate("_ShortcutRow", "Tag: Review Source Later"),
     "tag_handwritten": QCoreApplication.translate("_ShortcutRow", "Tag: Handwritten"),
     "tag_onomatopoeia": QCoreApplication.translate("_ShortcutRow", "Tag: Onomatopoeia"),
-    "tag_trans_confusing": QCoreApplication.translate("_ShortcutRow", "Tag: Confusing Translation"),
-    "tag_trans_polish": QCoreApplication.translate("_ShortcutRow", "Tag: Polish Translation"),
-    "next_tagged_block": QCoreApplication.translate("_ShortcutRow", "Next Tagged Block"),
-    "prev_tagged_block": QCoreApplication.translate("_ShortcutRow", "Previous Tagged Block"),
+    "tag_trans_review_pending": QCoreApplication.translate("_ShortcutRow", "Tag: Retranslate Later"),
+    "next_tagged_block": QCoreApplication.translate("_ShortcutRow", "Next Pending Problem"),
+    "prev_tagged_block": QCoreApplication.translate("_ShortcutRow", "Previous Pending Problem"),
 }
 
 # Actions whose factory default resolves through a Qt StandardKey so macOS
@@ -749,11 +748,10 @@ _SHORTCUT_GROUPS = [
     (
         QCoreApplication.translate("ShortcutEditor", "Tagging"),
         [
-            "tag_ocr_low_conf",
+            "tag_ocr_review_pending",
             "tag_handwritten",
             "tag_onomatopoeia",
-            "tag_trans_confusing",
-            "tag_trans_polish",
+            "tag_trans_review_pending",
             "next_tagged_block",
             "prev_tagged_block",
         ],
@@ -2434,21 +2432,6 @@ class ConfigPanel(Widget):
         )
         config_mgmt_layout.addWidget(ConfigFormRow("", self.confirm_costly_checker))
 
-        # 跳步提示（规划 D37）：顺序是推荐与提示，不是门禁；关掉后仍可任意跳转
-        self.warn_skip_checker = ConfigCheckBox(
-            self.tr("Warn About Unprocessed Earlier Steps")
-        )
-        self.warn_skip_checker.setToolTip(
-            self.tr(
-                "Warn me when I jump to a later workbench step while an earlier cleanup step still has unprocessed items. The order is a recommendation only — jumping is always allowed."
-            )
-        )
-        self.warn_skip_checker.setChecked(bool(pcfg.workbench_warn_skip_order))
-        self.warn_skip_checker.toggled.connect(
-            lambda checked: setattr(pcfg, "workbench_warn_skip_order", checked)
-        )
-        config_mgmt_layout.addWidget(ConfigFormRow("", self.warn_skip_checker))
-
         # Import / Export section — one card: both directions of the same
         # thing (a .json copy of the settings), and the export-only exclusion
         # toggle only makes sense next to them.
@@ -2501,9 +2484,10 @@ class ConfigPanel(Widget):
         )
 
         # === Workbench settings page ===
-        # 工作台的批量任务参数（误聚阈值 / 默认扩张量）。2026-09-18 建时为"临时
-        # 页"，原打算排版定案后并入既有页面；2026-09-21 用户拍板不当临时页、
-        # 直接作为正式页「工作台」保留（导航 key 仍是 workbench_temp）。
+        # 工作台的批量任务参数（目前只剩批量合并的误聚阈值）。2026-09-18 建时
+        # 为"临时页"，原打算排版定案后并入既有页面；2026-09-21 用户拍板不当
+        # 临时页、直接作为正式页「工作台」保留（导航 key 仍是 workbench_temp）。
+        # 2026-09-26：批量框扩张退役，其「默认扩张量」数值项随之删除。
         self.workbench_settings_group = PanelGroupBox(self.tr("Workbench"))
         self.workbench_settings_group.setProperty("cfgPage", True)
         self.workbench_settings_group.setObjectName("GroupWorkbenchSettings")
@@ -2529,22 +2513,6 @@ class ConfigPanel(Widget):
                 self.tr("False grouping threshold"),
                 self.merge_oversize_spin,
                 note=self.tr("<p>Groups covering more than this share of the page start unchecked in <b>Merge adjacent blocks</b>.</p>"),
-            )
-        )
-
-        self.expand_default_spin = NoArrowsSpinBox()
-        self.expand_default_spin.setRange(0, 500)
-        self.expand_default_spin.setSuffix(" px")  # 通用单位记号，不翻译
-        self.expand_default_spin.setValue(int(pcfg.workbench_expand_px))
-        self.expand_default_spin.setFixedWidth(CONFIG_COMBOBOX_SHORT)
-        self.expand_default_spin.valueChanged.connect(
-            lambda v: setattr(pcfg, "workbench_expand_px", v)
-        )
-        workbench_vlayout.addWidget(
-            ConfigFormRow(
-                self.tr("Default grow amount"),
-                self.expand_default_spin,
-                note=self.tr("<p>Initial amount for the batch <b>Grow Blocks</b>; editable for each run.</p>"),
             )
         )
 

@@ -47,6 +47,21 @@ def _pack_preferred_widths(
     return rows
 
 
+def wrap_rows(
+    preferred_widths: Sequence[int],
+    available_width: int,
+    spacing: int,
+) -> list[tuple[int, ...]]:
+    """Row packing of :class:`AdaptiveWrapLayout`, exposed for pre-layout budgets.
+
+    Callers that must decide item widths *before* the layout runs (a chip row
+    budgeting widths against a row limit) need the very same packing rules, or
+    the budget and the actual arrangement drift apart. This is that same
+    implementation, not a copy.
+    """
+    return _pack_preferred_widths(preferred_widths, available_width, spacing)
+
+
 class AdaptiveWrapLayout(QLayout):
     """Height-for-width layout that never splits an atomic control unit.
 

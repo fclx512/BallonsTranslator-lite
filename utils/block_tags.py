@@ -13,9 +13,18 @@
   不进标签工具栏、不进右键菜单，也不进自定义菜单的可选列表（D2／D38）。
   判据是这条声明，不是 ``source``（``ocr_low_conf`` 的 source 同为
   program，却仍可人工打标）。
-- **审阅表态**用条目内 ``reviewed`` 字段（D28）：布尔、可逆、粒度＝块级
-  （一次驳回作用于该块全部 program 来源条目）；挂标处对已驳回条目跳过，
-  故重跑 OCR 后驳回记忆存活。``reviewed`` 不参与画布徽标过滤（D15）。
+- **审阅表态**用条目内 ``reviewed`` 字段（D28）：布尔、可逆、**粒度＝该条
+  程序问题自己**（``set_tags_reviewed`` 带 ``tag_id``；不传则是旧调用方的
+  块级全量语义）。驳回后条目仍在、从活动集合移除；挂标处对已驳回条目跳过，
+  故重跑 OCR 后驳回记忆存活。粒度必须是「一个问题一条表态」：否则驳回误框
+  误报会把同一块的低置信度建议一起永久冻结。``reviewed`` 不参与画布徽标
+  过滤（D15）。
+- **人工待办与旧 ID 兼容**（交接 §4.2③⑥、§5）：前台只有两个人工待办 ID
+  （``ocr_review_pending``／``trans_review_pending``，见 ``REVIEW_PENDING_IDS``），
+  持久翻译指示仍是 ``handwritten``／``onomatopoeia``。旧项目里人工来源的
+  ``ocr_low_conf`` 在读侧算「稍后校对」、``trans_confusing``／``trans_polish``
+  读作同一条「稍后重译」；**加载时不静默重写整本项目**，只在用户真去
+  取消那条待办时顺手清掉旧 ID（``set_manual_tag`` 的 ``_clear_legacy_review``）。
 - **人工编辑即知情**（D29）：该块**原文**被人工改写后清除其全部程序标签
   （``prune_program_tags_after_source_edit`` 供原文面板链路用，写原文的
   框级动作命令直接调 ``clear_program_tags``）。**译文编辑不清**——两个程序
@@ -45,21 +54,42 @@ class TagDef:
     program_only: bool = False  # 程序专用：不提供人工打标途径（D2／D38）
 
 
+# 前台标签 id（人工待办两个、程序问题两个、持久翻译指示两个）＋ 只读兼容的旧 id
+OCR_REVIEW_ID = "ocr_review_pending"
+TRANS_REVIEW_ID = "trans_review_pending"
+LOW_CONF_ID = "ocr_low_conf"
+HANDWRITTEN_ID = "handwritten"
+ONOMATOPOEIA_ID = "onomatopoeia"
+# 旧 id（只读兼容：读侧归一到上面两个待办；不再出现在任何前台入口）
+LEGACY_TRANS_REVIEW_IDS = ("trans_confusing", "trans_polish")
+
+# 人工待办的两个前台 ID（「稍后校对」「稍后重译」）。人工取消待办时把旧 ID
+# 一并清掉——**不在加载时静默重写整本项目**，兼容读旧、写新，旧条目等用户
+# 真去操作它的那一天才被清。
+REVIEW_PENDING_IDS = (OCR_REVIEW_ID, TRANS_REVIEW_ID)
+
 TAG_DEFS = [
     # 名称在字面量定义处显式标注翻译上下文（i18n 模块级翻译表规则）
-    TagDef("ocr_low_conf",
+    TagDef(OCR_REVIEW_ID,
+           QCoreApplication.translate("BlockTags", "Review Source Later"),
+           "doubt", "manual", "!"),
+    TagDef(TRANS_REVIEW_ID,
+           QCoreApplication.translate("BlockTags", "Retranslate Later"),
+           "doubt", "manual", "?"),
+    TagDef(LOW_CONF_ID,
            QCoreApplication.translate("BlockTags", "Low OCR Confidence"),
            "doubt", "program", "!"),
-    TagDef("handwritten",
+    TagDef(HANDWRITTEN_ID,
            QCoreApplication.translate("BlockTags", "Handwritten"),
            "directive", "manual", "✎"),
-    TagDef("onomatopoeia",
+    TagDef(ONOMATOPOEIA_ID,
            QCoreApplication.translate("BlockTags", "Onomatopoeia"),
            "directive", "manual", "♪"),
-    TagDef("trans_confusing",
+    # 旧译文疑点 id：只读兼容（读作一条「稍后重译」），不再有前台入口
+    TagDef(LEGACY_TRANS_REVIEW_IDS[0],
            QCoreApplication.translate("BlockTags", "Confusing Translation"),
            "doubt", "manual", "?"),
-    TagDef("trans_polish",
+    TagDef(LEGACY_TRANS_REVIEW_IDS[1],
            QCoreApplication.translate("BlockTags", "Polish Translation"),
            "doubt", "manual", "✦"),
     # 误识别类（D9／D38）：单标签 + 条目内子类型，仅由 OCR 后处理钩子自动挂
@@ -70,8 +100,10 @@ TAG_DEFS = [
 
 TAG_REGISTRY: Dict[str, TagDef] = {t.id: t for t in TAG_DEFS}
 
-# 供人工打标的标签（排除程序专用）——标签工具栏与右键菜单的数据源
-MANUAL_TAG_DEFS = [t for t in TAG_DEFS if not t.program_only]
+# 前台只暴露人工待办与持久翻译指示；其余 id 仅用于兼容读取。
+MANUAL_TAG_IDS = (OCR_REVIEW_ID, TRANS_REVIEW_ID, HANDWRITTEN_ID, ONOMATOPOEIA_ID)
+
+MANUAL_TAG_DEFS = [t for t in TAG_DEFS if t.id in MANUAL_TAG_IDS]
 
 # 疑点优先：徽标取色与同类并挂取保守动作时按此排序
 NATURE_PRIORITY = {"doubt": 0, "directive": 1}
@@ -79,11 +111,11 @@ NATURE_PRIORITY = {"doubt": 0, "directive": 1}
 # 指示标签 → 批量管线翻译指令（LLM prompt，不需翻译；设计 §3 的消费时机）。
 # 疑点标签不阻塞自动管线，不在此表。
 DIRECTIVE_INSTRUCTIONS = {
-    "handwritten": (
+    HANDWRITTEN_ID: (
         "This block is handwritten; the OCR result may be unreliable. "
         "Infer the intended text from the context and translate its meaning."
     ),
-    "onomatopoeia": (
+    ONOMATOPOEIA_ID: (
         "This block is an onomatopoeia/sound effect with no literal "
         "meaning: render it phonetically (by its sound) in the target "
         "language, not semantically."
@@ -91,9 +123,25 @@ DIRECTIVE_INSTRUCTIONS = {
 }
 
 
+# 旧 ID → 前台 ID 的显示归一（徽标只画一条，不让同一个待办显成两个记号）
+def _display_id(blk: TextBlock, tag_id: str) -> str:
+    """把旧的人工待办 ID 归一到新 ID；程序来源的 ``ocr_low_conf`` 原样保留。"""
+    if tag_id == LOW_CONF_ID and has_ocr_review_pending(blk):
+        return OCR_REVIEW_ID
+    if tag_id in LEGACY_TRANS_REVIEW_IDS and has_trans_review_pending(blk):
+        return TRANS_REVIEW_ID
+    return tag_id
+
+
 def sorted_tag_ids(blk: TextBlock) -> List[str]:
-    """块上挂着的标签 id，疑点在前、注册表顺序次之。"""
-    ids = [tid for tid in blk.tags if tid in TAG_REGISTRY]
+    """块上挂着的标签 id，旧 ID 归一去重后：疑点在前、注册表顺序次之。"""
+    ids: List[str] = []
+    for tag_id in blk.tags:
+        if tag_id not in TAG_REGISTRY:
+            continue
+        tag_id = _display_id(blk, tag_id)
+        if tag_id not in ids:
+            ids.append(tag_id)
     return sorted(
         ids,
         key=lambda tid: (
@@ -128,6 +176,32 @@ def directive_instructions(blk: TextBlock) -> List[str]:
     ]
 
 
+def _clear_legacy_review(blk: TextBlock, tag_id: str) -> None:
+    """清掉该待办对应的旧 ID（新 ID 的写入/取消共用这一步）。"""
+    if tag_id == OCR_REVIEW_ID:
+        entry = blk.tags.get(LOW_CONF_ID)
+        # 程序来源的 ocr_low_conf 是「程序建议」，不能被人工作业顺手抹掉
+        if isinstance(entry, dict) and entry.get("source") == "manual":
+            remove_tag(blk, LOW_CONF_ID)
+    elif tag_id == TRANS_REVIEW_ID:
+        for legacy in LEGACY_TRANS_REVIEW_IDS:
+            remove_tag(blk, legacy)
+
+
+def set_manual_tag(blk: TextBlock, tag_id: str, checked: bool) -> None:
+    """人工打标／取消的**唯一写入点**（工具栏、右键菜单、快捷键、饼菜单共用）。
+
+    对两个人工待办 ID 而言「取消」必须连旧 ID 一起清——否则旧项目里
+    取消过一次、待办却还在队列里（读侧认得旧 ID）。指示标签原样写入。
+    """
+    if checked:
+        set_tag(blk, tag_id, "manual")
+    else:
+        remove_tag(blk, tag_id)
+    if tag_id in REVIEW_PENDING_IDS:
+        _clear_legacy_review(blk, tag_id)
+
+
 def toggle_on_blocks(blks: List[TextBlock], tag_id: str) -> bool:
     """多选批量切换（入口三件套共用）：非全员带标签 → 全部挂上，否则全部摘除。
 
@@ -135,10 +209,7 @@ def toggle_on_blocks(blks: List[TextBlock], tag_id: str) -> bool:
     """
     checked = not all(has_tag(b, tag_id) for b in blks)
     for b in blks:
-        if checked:
-            set_tag(b, tag_id, "manual")
-        else:
-            remove_tag(b, tag_id)
+        set_manual_tag(b, tag_id, checked)
     return checked
 
 
@@ -160,14 +231,20 @@ def is_tag_reviewed(blk: TextBlock, tag_id: str) -> bool:
     return isinstance(entry, dict) and bool(entry.get("reviewed"))
 
 
-def set_tags_reviewed(blk: TextBlock, reviewed: bool = True) -> int:
-    """驳回／取消驳回该块**全部**程序来源条目（D28：粒度＝块级）。
+def set_tags_reviewed(
+    blk: TextBlock, reviewed: bool = True, tag_id: Optional[str] = None
+) -> int:
+    """驳回或恢复**指定**程序问题（D28 修订：粒度＝一条问题，不是一个块）。
 
-    取消驳回即清掉这些 ``reviewed``（条目本身保留）；返回实际改动的条目数。
-    """
+    ``tag_id=None`` 是旧调用方的块级全量语义（测试与导入旧数据的兜底）；
+    生产路径一律带 ID——否则驳回误框误报会把同一块的低置信度建议一起
+    永久冻结，两轴再也分不开。返回实际改动的条目数。"""
     changed = 0
-    for tid in program_tag_ids(blk):
-        entry = blk.tags[tid]
+    ids = [tag_id] if tag_id is not None else program_tag_ids(blk)
+    for tid in ids:
+        entry = blk.tags.get(tid)
+        if not isinstance(entry, dict) or entry.get("source") != "program":
+            continue
         if reviewed:
             if not entry.get("reviewed"):
                 entry["reviewed"] = True
@@ -175,6 +252,65 @@ def set_tags_reviewed(blk: TextBlock, reviewed: bool = True) -> int:
         elif entry.pop("reviewed", None) is not None:
             changed += 1
     return changed
+
+
+def has_ocr_review_pending(blk: TextBlock) -> bool:
+    """该块是否被人工记为「稍后校对」（含旧项目的旧 ID，读侧兼容）。"""
+    return OCR_REVIEW_ID in blk.tags or (
+        isinstance(blk.tags.get(LOW_CONF_ID), dict)
+        and blk.tags[LOW_CONF_ID].get("source") == "manual"
+    )
+
+
+def has_trans_review_pending(blk: TextBlock) -> bool:
+    """该块是否被人工记为「稍后重译」；旧的两个 ID 读作同一条待办。"""
+    return any(tag_id in blk.tags for tag_id in (TRANS_REVIEW_ID,) + LEGACY_TRANS_REVIEW_IDS)
+
+
+def has_ocr_suggestion(blk: TextBlock) -> bool:
+    """程序给出的「低置信度」建议：仍有条目且未被驳回（缺分数不算低）。"""
+    entry = blk.tags.get(LOW_CONF_ID)
+    return (
+        isinstance(entry, dict)
+        and entry.get("source") == "program"
+        and not entry.get("reviewed")
+    )
+
+
+def active_review_ids(blk: TextBlock) -> List[str]:
+    """该块上**活动待处理问题**的 id（E／Q 跳转、菜单可用性、徽标口径共用）。
+
+    只列「还没处理掉的」：人工待办（原文／译文）、程序建议（低置信度、
+    误识别）中尚未驳回的那些。**不含持久翻译指示**（手写字／拟声词是块的
+    属性，处理完也不消失，拿它当跳转靶子会把用户反复送回同一批块），
+    也不含已被驳回的程序建议与历史未知 ID。
+    """
+    active = []
+    if has_ocr_review_pending(blk) or has_ocr_suggestion(blk):
+        active.append(OCR_REVIEW_ID)
+    if has_trans_review_pending(blk):
+        active.append(TRANS_REVIEW_ID)
+    if MISREAD_TAG_ID in blk.tags and not is_tag_reviewed(blk, MISREAD_TAG_ID):
+        active.append(MISREAD_TAG_ID)
+    return active
+
+
+def has_active_review(blk: TextBlock) -> bool:
+    """该块是否还有活动待处理问题（跳转与菜单可用性的统一判据）。"""
+    return bool(active_review_ids(blk))
+
+
+def iter_active_review_blocks(pages: Dict) -> Iterator[Tuple[str, int, TextBlock]]:
+    """遍历项目页字典，产出 ``(页名, 块序号, 块)``——仍有活动待处理问题的块。"""
+    for pagename, blks in (pages or {}).items():
+        for idx, blk in enumerate(blks or []):
+            if has_active_review(blk):
+                yield pagename, idx, blk
+
+
+def count_active_review(pages: Dict) -> int:
+    """活动待处理问题的块数（全量只读扫描；口径与 ``active_review_ids`` 同）。"""
+    return sum(1 for _ in iter_active_review_blocks(pages))
 
 
 def clear_program_tags(blk: TextBlock) -> int:
@@ -225,12 +361,12 @@ def apply_ocr_confidence_tag(
     - 已驳回（``reviewed``）的条目跳过，重跑 OCR 后驳回记忆存活（D28）；
     - 分数回好后自动摘除程序标签，重跑 OCR 即可刷新。
     """
-    if not _program_entry_writable(blk, "ocr_low_conf"):
+    if not _program_entry_writable(blk, LOW_CONF_ID):
         return
     if score is not None and score < threshold:
-        set_tag(blk, "ocr_low_conf", "program", score=round(float(score), 4))
+        set_tag(blk, LOW_CONF_ID, "program", score=round(float(score), 4))
     else:
-        remove_tag(blk, "ocr_low_conf")
+        remove_tag(blk, LOW_CONF_ID)
 
 
 # ── 误识别类程序筛选器（D2／D9／D38／D39）──────────────────────────

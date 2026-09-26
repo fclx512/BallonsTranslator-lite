@@ -1,7 +1,7 @@
 """``utils/block_geometry.py`` 的几何判据回归。
 
-这是"碰到邻框即停"的唯一实现——``ui/batch_merge.py`` 的审批截图（D31）与
-``ui/batch_expand.py`` 的批量框扩张（D5）共用，故单独锁行为。
+这是"碰到邻框即停"的唯一实现——``ui/batch_merge.py`` 与
+``ui/workbench_tasks.py`` 的审批截图共用，故单独锁行为。
 
 Run:
     ./ballontrans_pylibs_win/python.exe -m pytest tests/test_block_geometry.py -q

@@ -818,8 +818,8 @@ class BatchMerge:
         """截图矩形：并集框外扩组包围盒短边的 ``expand_ratio``（D31），遇邻框即停。
 
         邻框＝同页**非本组**的框（含 D30 被排除的误识别框——它们视觉上还在，
-        外扩压过去同样是越界）。外扩本身是通用件（``utils/block_geometry.py::expand_limited``），
-        与 ``ui/batch_expand.py`` 的批量框扩张共用同一份"碰到邻框即停"。
+        外扩压过去同样是越界）。外扩本身是通用件
+        (``utils/block_geometry.py::expand_limited``，"碰到邻框即停"的唯一实现)。
         """
         ratio = self.config.expand_ratio if expand_ratio is None else expand_ratio
         x1, y1, x2, y2 = group.bbox

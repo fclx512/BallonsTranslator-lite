@@ -104,7 +104,7 @@ class SectionCardTest(unittest.TestCase):
             (interface, "Appearance", self.panel.anim_combo),
             (interface, "Canvas", self.panel.undo_limit_spin),
             (app_page, "External Editor", self.panel.ps_path_edit),
-            (app_page, "Workbench Prompts", self.panel.warn_skip_checker),
+            (app_page, "Workbench Prompts", self.panel.confirm_costly_checker),
         ]
         for page, title, control in cases:
             card = self._card(page, title)

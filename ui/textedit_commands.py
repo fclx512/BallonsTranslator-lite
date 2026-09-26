@@ -11,7 +11,7 @@ try:
 except ImportError:
     from qtpy.QtGui import QUndoCommand
 
-from utils.block_tags import clear_program_tags
+from utils.block_tags import clear_program_tags, program_tag_ids, remove_tag
 from utils.fontformat import FontFormat
 from utils.proj_imgtrans import ProjImgTrans
 
@@ -1276,8 +1276,13 @@ class ApplyBlockTextCommand(QUndoCommand):
     field = "source"：写原文（疑难 OCR 校正动作），同步 e_source 与 blk.text。
 
     「写原文」＝该块原文被人工改定（人点了应用），故一并清除其程序来源
-    临时标签（D29：``utils/block_tags.py::clear_program_tags``）。标签不进
-    撤销栈：undo 只回滚文本，不恢复被清标签。
+    临时标签（D29：``utils/block_tags.py::clear_program_tags``）。
+
+    **文字与问题记录是同一条命令**（交接 §5 的撤销一致性）：``consumed_tags``
+    由调用方给出本次动作处理掉的问题 ID（``utils/block_actions.py`` 的
+    ``BlockActionDef.consumes``）；撤销时标签随文字一起复原、redo 时再一起
+    清掉——否则会出现「文字退回去了、待办却永久丢了」的无声状态。持久翻译
+    指示（手写／拟声）不在清除范围。
     """
 
     def __init__(
@@ -1287,6 +1292,7 @@ class ApplyBlockTextCommand(QUndoCommand):
         field: str,
         new_text: str,
         parent=None,
+        consumed_tags=(),
     ):
         super().__init__(
             QCoreApplication.translate("UndoCommand", "Apply AI Proposal"),
@@ -1296,6 +1302,13 @@ class ApplyBlockTextCommand(QUndoCommand):
         self.pairw = pairw
         self.field = field
         blk = blkitem.blk
+        self.affected_tag_ids = set(consumed_tags)
+        if field == "source":
+            self.affected_tag_ids.update(program_tag_ids(blk))
+        self.before_tags = {
+            tag_id: copy.deepcopy(blk.tags[tag_id])
+            for tag_id in self.affected_tag_ids if tag_id in blk.tags
+        }
 
         if field == "translation":
             self.before_item_html = blkitem.toHtml()
@@ -1315,6 +1328,11 @@ class ApplyBlockTextCommand(QUndoCommand):
             # D29：原文被人工改定 → 该块程序来源临时标签一并清除
             clear_program_tags(blk)
             self.after_panel = new_text
+        self._remove_consumed_tags()
+
+    def _remove_consumed_tags(self) -> None:
+        for tag_id in self.affected_tag_ids:
+            remove_tag(self.blkitem.blk, tag_id)
 
     def redo(self) -> None:
         if self.field == "translation":
@@ -1333,6 +1351,7 @@ class ApplyBlockTextCommand(QUndoCommand):
             self.blkitem.blk.text = [self.after_panel]
             # 重做同样落在「原文已被人工改定」状态：清标签保持幂等
             clear_program_tags(self.blkitem.blk)
+        self._remove_consumed_tags()
         self.blkitem.refresh_tag_badge()
 
     def undo(self) -> None:
@@ -1350,4 +1369,11 @@ class ApplyBlockTextCommand(QUndoCommand):
                     self.before_panel
                 )
             self.blkitem.blk.text = [self.before_panel]
+        for tag_id in self.affected_tag_ids:
+            if tag_id in self.before_tags:
+                self.blkitem.blk.tags[tag_id] = copy.deepcopy(
+                    self.before_tags[tag_id]
+                )
+            else:
+                remove_tag(self.blkitem.blk, tag_id)
         self.blkitem.refresh_tag_badge()

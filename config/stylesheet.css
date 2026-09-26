@@ -2416,36 +2416,12 @@ QLabel#WorkbenchEmptyHint {
     font-size: 13px;
     color: @disabledForegroundColor;
 }
-/* 任务导航＝两级（一级大类页签 + 二级任务 chip，D42），两级用两种画法区分：
-   页签＝下划线式 tab（透明底，选中才出强调色下划线＋加粗），chip＝描边圆角块。 */
-QPushButton#WorkbenchCategoryButton {
-    height: 26px;
-    padding: 0 6px;
-    font-size: 13px;
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid transparent;
-    border-radius: 0px;
-    color: @disabledForegroundColor;
-}
-QPushButton#WorkbenchCategoryButton:hover {
-    background: transparent;
-    color: @qwidgetForegroundColor;
-}
-QPushButton#WorkbenchCategoryButton:checked {
-    background: transparent;
-    color: @accentPrimary;
-    border-bottom: 2px solid @accentPrimary;
-    font-weight: bold;
-}
+/* 任务导航＝chip 流（批次 D 修订）：chip 自绘圆角底与省略号文字（QPushButton
+   自己不会省略、放不下就从中间硬裁，绘制由 ui/glossary_agent_panel.py::
+   WorkbenchTaskChip 接管），故这里只钉字号——高度与宽度分配都在那边定。
+   组标题行已去掉，分组改由两组 chip 之间的细分隔线表达（同文件 paintEvent 自绘）。 */
 QPushButton#WorkbenchTaskButton {
-    min-height: 24px;
-    padding: 2px 8px;
     font-size: 12px;
-}
-QPushButton#WorkbenchTaskButton:checked {
-    background: @accentPrimary20;
-    color: @accentPrimary;
 }
 /* 任务说明与规划摘要：小字、次要色，不跟候选列表抢注意力 */
 QLabel#WorkbenchTaskHint {
@@ -2455,6 +2431,10 @@ QLabel#WorkbenchTaskHint {
 QLabel#WorkbenchTaskSummary {
     font-size: 11px;
     color: @qwidgetForegroundColor;
+}
+QLabel#WorkbenchTaskDetail {
+    font-size: 11px;
+    color: @disabledForegroundColor;
 }
 /* 过时提示：内容在列表建好后被改过（只亮灯，刷新钮才是出口）——
    警告色小字，压在摘要与候选列表之间 */

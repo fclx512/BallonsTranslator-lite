@@ -18,7 +18,7 @@ os.chdir(APP_ROOT)
 
 from utils.block_actions import (  # noqa: E402
     ACTION_REGISTRY,
-    actions_for_block,
+    BLOCK_ACTIONS,
     block_crop_base64,
     build_context_lines,
     build_ocr_fix_messages,
@@ -41,23 +41,34 @@ class TestActionRegistry(unittest.TestCase):
         self.assertTrue(ACTION_REGISTRY["act_ocr_fix"].needs_vision)
         self.assertFalse(ACTION_REGISTRY["act_retranslate"].needs_vision)
 
-    def test_actions_for_block(self):
-        blk = TextBlock()
-        self.assertEqual(actions_for_block(blk), [])
-        set_tag(blk, "ocr_low_conf", "program")
-        self.assertEqual(
-            [a.id for a in actions_for_block(blk)], ["act_ocr_fix"]
+    def test_consumes_declares_the_problems_each_action_resolves(self):
+        """``consumes`` ＝「应用这一份草稿后哪几条问题算处理完了」。
+
+        两个动作对任何单选块都开放（交接 §4.1），所以这里钉的是**清哪些
+        记录**：OCR 校正确认后清人工待办与低置信度建议；重译确认后清人工
+        待办与两个旧译文疑点 ID。持久翻译指示（手写／拟声）不在此列——
+        处理原文不消除它。
+        """
+        from utils.block_tags import (
+            HANDWRITTEN_ID,
+            LOW_CONF_ID,
+            OCR_REVIEW_ID,
+            REVIEW_PENDING_IDS,
+            TRANS_REVIEW_ID,
         )
-        set_tag(blk, "handwritten", "manual")
-        # 同一动作被多标签命中时不重复
+
         self.assertEqual(
-            [a.id for a in actions_for_block(blk)], ["act_ocr_fix"]
+            set(ACTION_REGISTRY["act_ocr_fix"].consumes),
+            {OCR_REVIEW_ID, LOW_CONF_ID},
         )
-        set_tag(blk, "trans_polish", "manual")
         self.assertEqual(
-            sorted(a.id for a in actions_for_block(blk)),
-            ["act_ocr_fix", "act_retranslate"],
+            set(ACTION_REGISTRY["act_retranslate"].consumes),
+            {TRANS_REVIEW_ID, "trans_confusing", "trans_polish"},
         )
+        # 人工待办的旧 ID 兼容必须落在 consumes 里，否则老项目标记清不掉
+        for action in BLOCK_ACTIONS:
+            self.assertTrue(set(action.consumes) & set(REVIEW_PENDING_IDS))
+            self.assertNotIn(HANDWRITTEN_ID, action.consumes)
 
 
 class TestContextAssembly(unittest.TestCase):

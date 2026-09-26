@@ -28,7 +28,10 @@ from utils.block_tags import (  # noqa: E402
     classify_misread_text,
     clear_program_tags,
     get_tag,
+    has_ocr_review_pending,
+    has_ocr_suggestion,
     has_tag,
+    has_trans_review_pending,
     is_tag_reviewed,
     iter_misread_blocks,
     misread_queue_summary,
@@ -74,14 +77,32 @@ class TestTagRegistry(unittest.TestCase):
         self.assertFalse(TAG_REGISTRY["ocr_low_conf"].program_only)
         self.assertTrue(TAG_REGISTRY["ocr_low_conf"].name)
 
-    def test_manual_tag_defs_exclude_program_only(self):
-        ids = [t.id for t in MANUAL_TAG_DEFS]
-        self.assertNotIn(MISREAD_TAG_ID, ids)
-        self.assertEqual(
-            sorted(ids), sorted(t.id for t in TAG_DEFS if not t.program_only)
+    def test_front_stage_exposes_only_the_four_tasks(self):
+        """前台只有「稍后校对／稍后重译」两个人工待办 + 两个持久翻译指示。
+
+        程序问题（低置信度／误识别）与旧 ID 都不出现在任何人工入口里；
+        旧 ID 仍在注册表中只为读侧兼容（徽标与队列要认得它）。
+        """
+        from utils.block_tags import (
+            HANDWRITTEN_ID,
+            LOW_CONF_ID,
+            OCR_REVIEW_ID,
+            ONOMATOPOEIA_ID,
+            TRANS_REVIEW_ID,
         )
-        # 其余 5 类保持可人工打标（工具栏行数契约不变）
-        self.assertEqual(len(MANUAL_TAG_DEFS), 5)
+
+        ids = [t.id for t in MANUAL_TAG_DEFS]
+        self.assertEqual(
+            ids,
+            [OCR_REVIEW_ID, TRANS_REVIEW_ID, HANDWRITTEN_ID, ONOMATOPOEIA_ID],
+        )
+        self.assertNotIn(MISREAD_TAG_ID, ids)
+        self.assertNotIn(LOW_CONF_ID, ids)
+        self.assertNotIn("trans_confusing", ids)
+        self.assertNotIn("trans_polish", ids)
+        # 旧 ID 仍在注册表里：徽标与队列读侧认得，否则老项目静默丢标记
+        self.assertIn("trans_confusing", TAG_REGISTRY)
+        self.assertIn("trans_polish", TAG_REGISTRY)
 
     def test_misread_subtypes_declared(self):
         self.assertEqual(len(MISREAD_SUBTYPES), 4)
@@ -110,11 +131,32 @@ class TestBlockTags(unittest.TestCase):
     def test_sorted_tag_ids_doubt_first(self):
         set_tag(self.blk, "handwritten", "manual")  # directive
         set_tag(self.blk, "ocr_low_conf", "program")  # doubt
-        set_tag(self.blk, "trans_polish", "manual")  # doubt
+        set_tag(self.blk, "trans_polish", "manual")  # 旧 ID → 归一为新待办
         self.assertEqual(
             sorted_tag_ids(self.blk),
-            ["ocr_low_conf", "trans_polish", "handwritten"],
+            ["ocr_low_conf", "trans_review_pending", "handwritten"],
         )
+
+    def test_legacy_manual_ids_collapse_into_one_badge(self):
+        """旧译文疑点并存（confusing + polish）只画一条待重译；旧人工低置信度
+        归一成「稍后校对」而不是另画一条。"""
+        from utils.block_tags import OCR_REVIEW_ID, TRANS_REVIEW_ID
+
+        set_tag(self.blk, "ocr_low_conf", "manual")
+        set_tag(self.blk, "trans_confusing", "manual")
+        set_tag(self.blk, "trans_polish", "manual")
+        self.assertEqual(
+            sorted_tag_ids(self.blk), [OCR_REVIEW_ID, TRANS_REVIEW_ID]
+        )
+        # 新 ID 已存在时旧 ID 不再另算一条
+        set_tag(self.blk, TRANS_REVIEW_ID, "manual")
+        self.assertEqual(
+            sorted_tag_ids(self.blk), [OCR_REVIEW_ID, TRANS_REVIEW_ID]
+        )
+        # 程序来源的 ocr_low_conf 不是待办，原样保留自己的徽标
+        prog = TextBlock()
+        set_tag(prog, "ocr_low_conf", "program", score=0.3)
+        self.assertEqual(sorted_tag_ids(prog), ["ocr_low_conf"])
 
     def test_unknown_ids_ignored_in_sort(self):
         self.blk.tags["ghost_tag"] = {"source": "manual"}
@@ -288,6 +330,103 @@ class TestMisreadTag(unittest.TestCase):
         blk = TextBlock(text=[])
         tag_misread_hook(textblocks=[blk], img=None, ocr_module=_Mod())
         self.assertFalse(has_tag(blk, MISREAD_TAG_ID))
+
+
+class TestManualPendingCompat(unittest.TestCase):
+    """人工待办的新旧 ID 契约（交接 §5）：写新、读旧、取消时清旧。"""
+
+    def setUp(self):
+        self.blk = TextBlock(text=["あ"])
+
+    def test_set_manual_tag_writes_new_id(self):
+        from utils.block_tags import OCR_REVIEW_ID, set_manual_tag
+
+        set_manual_tag(self.blk, OCR_REVIEW_ID, True)
+        self.assertTrue(has_ocr_review_pending(self.blk))
+        # 取消：新 ID 与旧 ID 一起清，否则取消过的旧项目待办还在队列里
+        set_manual_tag(self.blk, "ocr_low_conf", True)
+        set_manual_tag(self.blk, OCR_REVIEW_ID, False)
+        self.assertFalse(has_ocr_review_pending(self.blk))
+        self.assertNotIn("ocr_low_conf", self.blk.tags)
+
+    def test_cancelling_new_id_clears_legacy_trans_ids(self):
+        from utils.block_tags import TRANS_REVIEW_ID, set_manual_tag
+
+        set_tag(self.blk, "trans_confusing", "manual")
+        set_tag(self.blk, "trans_polish", "manual")
+        set_manual_tag(self.blk, TRANS_REVIEW_ID, False)
+        self.assertFalse(has_trans_review_pending(self.blk))
+        self.assertEqual(self.blk.tags, {})
+
+    def test_program_suggestion_survives_manual_cancel(self):
+        """程序来源的 ocr_low_conf 是建议、不是人工待办，取消待办不得顺手抹掉。"""
+        from utils.block_tags import OCR_REVIEW_ID, set_manual_tag
+
+        set_tag(self.blk, "ocr_low_conf", "program", score=0.2)
+        set_manual_tag(self.blk, OCR_REVIEW_ID, False)
+        self.assertTrue(has_ocr_suggestion(self.blk))
+        self.assertEqual(self.blk.tags["ocr_low_conf"]["score"], 0.2)
+
+    def test_legacy_manual_low_conf_reads_as_pending(self):
+        set_tag(self.blk, "ocr_low_conf", "manual")
+        self.assertTrue(has_ocr_review_pending(self.blk))
+        self.assertFalse(has_ocr_suggestion(self.blk))
+
+    def test_legacy_trans_pair_reads_as_one_pending(self):
+        for tag_id in ("trans_confusing", "trans_polish"):
+            blk = TextBlock()
+            set_tag(blk, tag_id, "manual")
+            self.assertTrue(has_trans_review_pending(blk))
+
+    def test_active_review_ids_skip_directives_and_rejected(self):
+        from utils.block_tags import (
+            HANDWRITTEN_ID,
+            OCR_REVIEW_ID,
+            TRANS_REVIEW_ID,
+            active_review_ids,
+            set_manual_tag,
+        )
+
+        set_tag(self.blk, HANDWRITTEN_ID, "manual")
+        self.assertEqual(active_review_ids(self.blk), [])  # 指示不算待处理
+        set_manual_tag(self.blk, OCR_REVIEW_ID, True)
+        set_manual_tag(self.blk, TRANS_REVIEW_ID, True)
+        apply_misread_tag(self.blk, ["no_japanese"])
+        self.assertEqual(
+            active_review_ids(self.blk),
+            [OCR_REVIEW_ID, TRANS_REVIEW_ID, MISREAD_TAG_ID],
+        )
+        # 驳回误框误报不影响另两条待办（粒度＝一个问题）
+        set_tags_reviewed(self.blk, True, MISREAD_TAG_ID)
+        self.assertEqual(
+            active_review_ids(self.blk), [OCR_REVIEW_ID, TRANS_REVIEW_ID]
+        )
+        # 低置信度程序建议：未驳回算活动，驳回后立刻退出
+        set_tag(self.blk, "ocr_low_conf", "program", score=0.2)
+        prog = TextBlock()
+        set_tag(prog, "ocr_low_conf", "program", score=0.2)
+        self.assertEqual(active_review_ids(prog), [OCR_REVIEW_ID])
+        set_tags_reviewed(prog, True, "ocr_low_conf")
+        self.assertEqual(active_review_ids(prog), [])
+        self.assertEqual(active_review_ids(self.blk), [OCR_REVIEW_ID, TRANS_REVIEW_ID])
+
+    def test_iter_active_review_blocks_and_count(self):
+        from utils.block_tags import (
+            OCR_REVIEW_ID,
+            count_active_review,
+            iter_active_review_blocks,
+            set_manual_tag,
+        )
+
+        pending = TextBlock(text=["あ"])
+        set_manual_tag(pending, OCR_REVIEW_ID, True)
+        pages = {"p1": [self.blk, pending], "p2": []}
+        self.assertEqual(
+            [(p, i) for p, i, _ in iter_active_review_blocks(pages)],
+            [("p1", 1)],
+        )
+        self.assertEqual(count_active_review(pages), 1)
+        self.assertEqual(count_active_review({}), 0)
 
 
 class TestReviewState(unittest.TestCase):

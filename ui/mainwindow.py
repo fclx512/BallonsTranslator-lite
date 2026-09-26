@@ -86,11 +86,10 @@ from utils.block_actions import (
     parse_ocr_fix_reply,
 )
 from utils.block_tags import (
-    TAG_REGISTRY,
+    MANUAL_TAG_IDS,
     directive_instructions,
-    has_tag,
-    remove_tag,
-    set_tag,
+    has_active_review,
+    toggle_on_blocks,
 )
 from utils.config import (
     FontFormat,
@@ -531,6 +530,7 @@ class MainWindow(mainwindow_cls):
         self.glossary_workbench = GlossaryAgentPanel(self.imgtrans_proj, self)
         self.glossary_workbench.setVisible(False)
         self.glossary_workbench.jump_requested.connect(self.on_workbench_jump)
+        self.glossary_workbench.action_requested.connect(self.on_workbench_action)
         self.glossary_workbench.rollback_requested.connect(
             self.on_workbench_rollback
         )
@@ -1048,16 +1048,16 @@ class MainWindow(mainwindow_cls):
         self.save_config()
 
     def on_tag_shortcut(self, tag_id: str):
-        """标签翻转快捷键：多选翻转语义（非全员带→全挂，否则全摘）。"""
+        """人工待办／指示标签的翻转快捷键（非全员带→全挂，否则全摘）。
+
+        写入统一走 ``utils/block_tags.py::toggle_on_blocks``：它对新待办 ID 会
+        连旧 ID 一起清，否则取消过一次、队列里却还留着（读侧认得旧 ID）。
+        """
         items = self.canvas.selected_text_items()
         if not items or not self.canvas.textEditMode():
             return
-        checked = not all(has_tag(it.blk, tag_id) for it in items)
+        toggle_on_blocks([it.blk for it in items], tag_id)
         for it in items:
-            if checked:
-                set_tag(it.blk, tag_id, "manual")
-            else:
-                remove_tag(it.blk, tag_id)
             it.refresh_tag_badge()
         self.canvas.setProjSaveState(True)
         if hasattr(self, "tagToolbar"):
@@ -1270,7 +1270,13 @@ class MainWindow(mainwindow_cls):
         self.blockActionCard.show_error(error)
 
     def on_block_action_apply(self, text: str):
-        """显式「应用」：写回进全局撤销栈 + 消除已消费的疑点标签。"""
+        """显式「应用」：写回与「问题记录出队」是**同一条撤销命令**。
+
+        早先版本先推入文本命令、再在命令之外删标签——撤销只能把文字退回去，
+        待办却永久丢了（交接 §5 的「无声状态」）。现在把 ``action.consumes``
+        交给命令快照：撤销时标签随文字一起复原，redo 时一起清掉。
+        持久翻译指示（手写／拟声）不在 ``consumes`` 里，应用动作不动它。
+        """
         from .textedit_commands import ApplyBlockTextCommand
 
         blkitem = self.blockActionCard._blkitem
@@ -1282,14 +1288,14 @@ class MainWindow(mainwindow_cls):
         pairw = self.st_manager.pairwidget_list[blkitem.idx]
         field = "source" if (action and action.kind == "ocr_fix") else "translation"
         self.canvas.push_undo_command(
-            ApplyBlockTextCommand(blkitem, pairw, field, text)
+            ApplyBlockTextCommand(
+                blkitem,
+                pairw,
+                field,
+                text,
+                consumed_tags=action.consumes if action else (),
+            )
         )
-        if action:
-            for tid in action.consumes:
-                # 疑点标签确认后消除；指示标签是持久属性，保留
-                if TAG_REGISTRY[tid].nature == "doubt":
-                    remove_tag(blkitem.blk, tid)
-            blkitem.refresh_tag_badge()
         self.canvas.setProjSaveState(True)
         self.blockActionCard.close_card()
         self.tagToolbar.sync_from_canvas()
@@ -1312,15 +1318,21 @@ class MainWindow(mainwindow_cls):
                 )
 
     def jump_to_tagged_block(self, backward: bool = False):
-        """跳到上/下一个带标签块（全书范围，§8.6 校对闭环：扫过去→跳过去→处理掉）。
-        起点为当前选中块（无选中则当前页端部），到头回绕。"""
+        """跳到上/下一个**活动待处理**块（全书范围，§8.6 校对闭环）。
+
+        靶子口径＝``utils/block_tags.py::active_review_ids``：人工待办与
+        尚未驳回的程序问题。**不跳持久翻译指示**（手写字／拟声词处理完也不
+        消失，拿它当靶子会把用户反复送回同一批块），也不跳已驳回、已完成
+        或历史未知 ID。菜单可用性判定与这里同源（不再用 ``if blk.tags``）。
+        起点为当前选中块（无选中则当前页端部），到头回绕。
+        """
         proj = self.imgtrans_proj
         entries = []
         for pagename in sorted(
             proj.pages.keys(), key=lambda n: proj._pagename2idx.get(n, 0)
         ):
             for idx, blk in enumerate(proj.pages[pagename]):
-                if blk.tags:
+                if has_active_review(blk):
                     entries.append(
                         (proj._pagename2idx.get(pagename, 0), idx, pagename)
                     )
@@ -2469,9 +2481,10 @@ class MainWindow(mainwindow_cls):
             "merge_blks", self.shortcutMergeBlks
         )
 
-        # 块标签翻转键：选中态打标（多选翻转语义），画布编辑期间由
-        # 编辑器 ShortcutOverride 自然屏蔽
-        for tag_id in TAG_REGISTRY:
+        # 块标签翻转键：只注册前台那四项（两个人工待办 + 两个持久翻译指示）。
+        # 旧 ID 与程序专用标签不再占键位——注册全量 TAG_REGISTRY 会给已无
+        # 入口的历史 ID 留下一排永远打不中的键（交接 §4.1／§5）。
+        for tag_id in MANUAL_TAG_IDS:
             self.shortcut_registry[f"tag_{tag_id}"] = self._make_shortcuts(
                 f"tag_{tag_id}",
                 partial(self.on_tag_shortcut, tag_id),
@@ -4649,6 +4662,19 @@ class MainWindow(mainwindow_cls):
         target = items[block_idx]
         target.setSelected(True)
         self.canvas.gv.centerOn(target)
+
+    def on_workbench_action(self, pagename: str, block_idx: int, action_id: str):
+        """待办队列 → 直接打开框级确认卡（交接 §4.2③⑥）。
+
+        卡片本身就挂在画布的选中块上，所以先走同一条跳转链路（切页 + 选中 +
+        居中），再把动作交给既有的 ``ui/mainwindow.py::MainWindow`` 入口——
+        写回仍要人在卡片上点「应用」，这里不写任何数据。
+        """
+        self.on_workbench_jump(pagename, block_idx)
+        items = self.canvas.selected_text_items()
+        if len(items) != 1:
+            return
+        self.start_block_action(action_id, items[0])
 
     def on_workbench_rollback(self, version_seq: int):
         """工作台「撤销上次批量」：整体换回批量操作前的一版（规划 D4／D35）。

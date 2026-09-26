@@ -36,9 +36,9 @@ from utils.block_actions import BLOCK_ACTIONS
 from utils.block_tags import (
     MANUAL_TAG_DEFS,
     TAG_REGISTRY,
+    has_active_review,
     has_tag,
-    remove_tag,
-    set_tag,
+    set_manual_tag,
     toggle_on_blocks,
 )
 from utils.config import pcfg, save_config
@@ -511,15 +511,16 @@ def _make_tag_cmd(tag_id: str):
 
 
 def _run_tag_checked(canvas, tag_id: str, checked: bool):
-    """右键菜单勾选路径：按动作携带的目标值写入（非翻转）。"""
+    """右键菜单勾选路径：按动作携带的目标值写入（非翻转）。
+
+    写入统一走 ``utils/block_tags.py::set_manual_tag``：人工待办取消时连旧
+    ID 一起清，否则旧项目里取消过、队列和徽标却还留着那条待办。
+    """
     items = canvas.selected_text_items()
     if not items:
         return
     for it in items:
-        if checked:
-            set_tag(it.blk, tag_id, "manual")
-        else:
-            remove_tag(it.blk, tag_id)
+        set_manual_tag(it.blk, tag_id, checked)
         it.refresh_tag_badge()
     canvas.setProjSaveState(True)
 
@@ -581,21 +582,27 @@ for _action in BLOCK_ACTIONS:
     _reg(_make_action_cmd(_action))
 
 
-# --- Tagged-block navigation (review loop, §8.6: scan → jump → resolve) ---
+# --- Pending-problem navigation (review loop, §8.6: scan → jump → resolve) ---
+# 靶子＝活动待处理问题（人工待办 + 未驳回的程序问题），不是"块上有没有 tags"
+# ——持久翻译指示不该被反复跳回来，已驳回/已完成的也不该再出现（交接 §4.1）。
 _reg(CmdDef("next_tagged_block",
-            QCoreApplication.translate("Canvas", "Next Tagged Block"),
+            QCoreApplication.translate("Canvas", "Next Pending Problem"),
     run_fn=lambda mw: mw.jump_to_tagged_block(backward=False),
     enabled_fn=lambda mw: any(
-        blk.tags for blks in mw.imgtrans_proj.pages.values() for blk in blks
+        has_active_review(blk)
+        for blks in mw.imgtrans_proj.pages.values()
+        for blk in blks
     ),
     hidden_in_customize=True,
     category=CAT_TAGS))
 
 _reg(CmdDef("prev_tagged_block",
-            QCoreApplication.translate("Canvas", "Previous Tagged Block"),
+            QCoreApplication.translate("Canvas", "Previous Pending Problem"),
     run_fn=lambda mw: mw.jump_to_tagged_block(backward=True),
     enabled_fn=lambda mw: any(
-        blk.tags for blks in mw.imgtrans_proj.pages.values() for blk in blks
+        has_active_review(blk)
+        for blks in mw.imgtrans_proj.pages.values()
+        for blk in blks
     ),
     hidden_in_customize=True,
     category=CAT_TAGS))

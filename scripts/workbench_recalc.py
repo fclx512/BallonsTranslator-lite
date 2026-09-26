@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """泛用工作台的参数复算台（只读）。
 
-为什么常驻：C1／C2／C3／C4 的判据与参数是"测出来的"——分组阈值、判据命中率、
-扩张量默认值都要靠真实项目**反复复算**来调整（`ui/batch_merge.py::MergeConfig`
-的阈值、`ui/batch_expand.py` 的扩张量、`ProgramConfig` 里的两个工作台设置项）。
-本工具把这些复算收成一个入口，改判据前后各跑一次即可对比。
+为什么常驻：C1／C2／C4 的判据与参数是"测出来的"——分组阈值、判据命中率都要
+靠真实项目**反复复算**来调整（`ui/batch_merge.py::MergeConfig` 的阈值、
+`ProgramConfig` 的工作台设置项）。本工具把这些复算收成一个入口，改判据前后
+各跑一次即可对比。
 
 子命令（全部只读；脚本末尾自证样本顶层文件 mtime 未变）：
 
@@ -12,13 +12,12 @@
                                      oversize／suspect；--sweep 追加阈值敏感度扫描
     c1                               批量简单背景修复的判据命中率
                                      （simple／complex／unknown）
-    expand  [--amount N] [--mode px|ratio]
-                                     扩张量：候选表（changed／clamped／完整率）
-                                     + 每框单边可扩空间分布
     queue                            误框队列口径（四类子类型计数、待处理数）
     review                           已驳回链路自检（内存构造，不落盘）
     hook    [--page NAME]            D39 程序筛选器端到端（真机跑一次 OCR）
     list                             只打印样本概况（页数／块数／标签）
+
+（原 ``expand`` 子命令随批量框扩张退役，2026-09-26。）
 
 用法：
 
@@ -35,7 +34,6 @@ import itertools
 import json
 import os
 import os.path as osp
-import statistics
 import sys
 import time
 
@@ -243,105 +241,6 @@ def cmd_c1(args) -> int:
     return 0
 
 
-# ── expand：C3 扩张量 ─────────────────────────────────────────
-
-
-def cmd_expand(args) -> int:
-    from ui.batch_expand import MODE_PX, MODE_RATIO, BatchExpand
-    from utils.block_geometry import expand_limited, rect_of
-
-    proj = load_project(args.project)
-    stats = project_stats(proj)
-    print("样本：%s" % args.project)
-    print("页数=%d 块数=%d" % (stats["pages"], stats["blocks"]))
-    task = BatchExpand(proj)
-
-    candidates = (
-        [(args.mode, args.amount)]
-        if args.amount is not None
-        else [
-            (MODE_PX, 5), (MODE_PX, 10), (MODE_PX, 16), (MODE_PX, 20), (MODE_PX, 30),
-            (MODE_RATIO, 0.10), (MODE_RATIO, 0.15), (MODE_RATIO, 0.20), (MODE_RATIO, 0.30),
-        ]
-    )
-    print("")
-    print("=== 候选扩张量（--amount 指定时只跑这一个）===")
-    print("mode  amount | blocks changed unchanged clamped 完整率 每边最小扩张(中位)")
-    for mode, amount in candidates:
-        plan = task.plan(amount, mode)
-        blocks, changed = plan["blocks"], plan["changed"]
-        clamped = plan["clamped"]
-        mins = [
-            min(e["old"][0] - e["new"][0], e["old"][1] - e["new"][1],
-                e["new"][2] - e["old"][2], e["new"][3] - e["old"][3])
-            for e in plan["entries"]
-        ]
-        med = statistics.median(mins) if mins else 0
-        full = (changed - clamped) / changed * 100 if changed else 0.0
-        print("%5s %6s | %6d %7d %9d %7d %6.1f%% %10.1f px"
-              % (mode, amount, blocks, changed, blocks - changed, clamped, full, med))
-    print(
-        "（「被截断」不等于越界：expand_limited 的语义是「碰到邻框即停」，"
-        "截断只是扩得少。默认值 = 设置项 workbench_expand_px，当前 %d。）"
-        % _pcfg_expand_px()
-    )
-
-    print("")
-    print("=== 每框单边可扩空间（几何上限，不含同页串行影响）===")
-    caps, all_edges, widths, heights = [], [], [], []
-    skipped = 0
-    for pagename, blks in proj.pages.items():
-        info = proj._image_info.get(pagename) or {}
-        w, h = info.get("width"), info.get("height")
-        if not w or not h:
-            skipped += 1
-            continue
-        rects = [rect_of(b) for b in blks]
-        for i, rect in enumerate(rects):
-            if rect is None or getattr(blks[i], "angle", 0):
-                continue
-            widths.append(rect[2] - rect[0])
-            heights.append(rect[3] - rect[1])
-            neighbors = [r for j, r in enumerate(rects) if j != i and r]
-            lim = expand_limited(rect, 10 ** 6, (int(w), int(h)), neighbors)
-            d = [int(rect[0] - lim[0]), int(rect[1] - lim[1]),
-                 int(lim[2] - rect[2]), int(lim[3] - rect[3])]
-            caps.append(min(d))
-            all_edges.extend(d)
-    if caps:
-        n = len(caps)
-        p = _percentiles(caps, (0.10, 0.25, 0.50, 0.75, 0.90, 1.0))
-        print("参与框=%d（无页尺寸被跳过的页 %d）" % (n, skipped))
-        print("四边最小可扩 min/p10/p25/中位/p75/p90/max = %s px" % " / ".join(map(str, [
-            min(caps), *p[:5], max(caps)])))
-        for want in (0.5, 0.75, 0.9):
-            idx = max(0, int(n * want) - 1)
-            print("  想让 %d%% 的框四边都完整扩张 → 每边约 %d px"
-                  % (int(want * 100), sorted(caps)[idx]))
-    if widths:
-        print("框宽 min/中位/p90 = %s px；框高 min/中位/p90 = %s px"
-              % (" / ".join(map(str, [
-                  min(widths), statistics.median(widths),
-                  _percentiles(widths, (0.90,))[0]])),
-                 " / ".join(map(str, [
-                     min(heights), statistics.median(heights),
-                     _percentiles(heights, (0.90,))[0]]))))
-    if args.json:
-        print(json.dumps({"blocks": stats["blocks"], "caps_median":
-                          int(statistics.median(caps)) if caps else 0},
-                         ensure_ascii=False))
-    return 0
-
-
-def _pcfg_expand_px() -> int:
-    try:
-        from utils.config import pcfg
-
-        return int(pcfg.workbench_expand_px)
-    except Exception:
-        return -1
-
-
 # ── queue：误框队列口径 ────────────────────────────────────────
 
 
@@ -411,13 +310,18 @@ def cmd_review(args) -> int:
     print("目标块：%s[%d] text=%r subtypes=%s"
           % (pagename, idx, blk.get_text(), before_entry.get("subtypes")))
 
-    changed = set_tags_reviewed(blk, True)
+    # 粒度＝一条问题（D28 修订）：表态必须带 tag_id，否则会连带冻结同块的
+    # 其它程序问题（如低置信度建议）
+    changed = set_tags_reviewed(blk, True, MISREAD_TAG_ID)
     after = dict(get_tag(blk, MISREAD_TAG_ID) or {})
     summary = misread_queue_summary(pages)
     print("")
-    print("=== 1. 驳回（D28：块级、可逆、卡片保留）===")
+    print("=== 1. 驳回（D28：针对这一条问题、可逆、条目保留）===")
     print("改动 program 条目=%d 条目仍在=%s reviewed=%s"
           % (changed, MISREAD_TAG_ID in blk.tags, after.get("reviewed")))
+    if "ocr_low_conf" in (blk.tags or {}):
+        print("同块的低置信度建议未被牵连：reviewed=%s"
+              % is_tag_reviewed(blk, "ocr_low_conf"))
     print("队列=%s（期望 total 不变、rejected=%d、pending=%d）"
           % (summary, base["rejected"] + 1, base["pending"] - 1))
 
@@ -445,9 +349,9 @@ def cmd_review(args) -> int:
 
     print("")
     print("=== 4. D30：已驳回的误框重新参与合并 ===")
-    set_tags_reviewed(blk, False)
+    set_tags_reviewed(blk, False, MISREAD_TAG_ID)
     unrev = BatchMerge(proj, config=MergeConfig()).plan()
-    set_tags_reviewed(blk, True)
+    set_tags_reviewed(blk, True, MISREAD_TAG_ID)
     rev = BatchMerge(proj, config=MergeConfig()).plan()
     print("未驳回：excluded=%d member=%d / 已驳回：excluded=%d member=%d"
           % (unrev["excluded"], unrev["member_count"],
@@ -464,7 +368,7 @@ def cmd_review(args) -> int:
         if tried >= 60:
             break
         tried += 1
-        set_tags_reviewed(probe, True)
+        set_tags_reviewed(probe, True, MISREAD_TAG_ID)
         rep = BatchMerge(proj, config=MergeConfig()).plan()
         hit = next(
             (g for g in rep["groups"]
@@ -476,7 +380,7 @@ def cmd_review(args) -> int:
             print("找到一个可成组的已驳回误框：%s[%d]（试了 %d 个）"
                   % (probe_page, probe_idx, tried))
             break
-        set_tags_reviewed(probe, False)
+        set_tags_reviewed(probe, False, MISREAD_TAG_ID)
 
     if group is None:
         print("尝试 %d 个队列块，都不与邻框构成候选组 —— 该样本上无法验证"
@@ -499,7 +403,7 @@ def cmd_review(args) -> int:
                 break
         if victim is None:
             victim = pages[group.pagename][group.indices[0]]
-            set_tags_reviewed(victim, False)
+            set_tags_reviewed(victim, False, MISREAD_TAG_ID)
         else:
             set_tag(victim, MISREAD_TAG_ID, "program", subtypes=["no_japanese"])
         merged2 = BatchMerge(proj, config=MergeConfig()).build_merged_block(
@@ -626,7 +530,7 @@ def main() -> int:
         epilog=__doc__.split("用法：")[-1],
     )
     parser.add_argument("command",
-                        choices=["merge", "c1", "expand", "queue", "review",
+                        choices=["merge", "c1", "queue", "review",
                                  "hook", "list"])
     parser.add_argument("--project", required=True,
                         help="项目目录（含 imgtrans_*.json 与图片）")
@@ -634,10 +538,6 @@ def main() -> int:
                         help="额外打印一行机器可读 JSON")
     parser.add_argument("--sweep", action="store_true",
                         help="merge：追加阈值敏感度扫描")
-    parser.add_argument("--amount", type=float, default=None,
-                        help="expand：扩张量（缺省跑候选表）")
-    parser.add_argument("--mode", choices=["px", "ratio"], default="px",
-                        help="expand：扩张量单位")
     parser.add_argument("--oversize-ratio", type=float, default=None,
                         help="merge：误聚阈值（缺省取设置里的值）")
     parser.add_argument("--page", default=None, help="hook：要跑 OCR 的页")
@@ -650,7 +550,7 @@ def main() -> int:
 
     before = snapshot(args.project)
     handlers = {
-        "merge": cmd_merge, "c1": cmd_c1, "expand": cmd_expand,
+        "merge": cmd_merge, "c1": cmd_c1,
         "queue": cmd_queue, "review": cmd_review, "hook": cmd_hook,
         "list": cmd_list,
     }

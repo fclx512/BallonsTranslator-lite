@@ -148,8 +148,12 @@ class TestTagToolbar(unittest.TestCase):
         self.toolbar.sync_from_canvas()
         self.toolbar.toggle_expanded()
         self.assertTrue(self.toolbar._panel.isVisible())
-        # 行数 = 可人工打标的标签数（程序专用标签不在此列，故仍是 5）
-        self.assertEqual(len(self.toolbar._panel_rows), 5)
+        # 行数 = 前台任务数（两个人工待办 + 两个持久翻译指示）：
+        # 程序问题与旧 ID 都不提供人工打标途径
+        from utils.block_tags import MANUAL_TAG_DEFS
+
+        self.assertEqual(len(self.toolbar._panel_rows), len(MANUAL_TAG_DEFS))
+        self.assertEqual(len(MANUAL_TAG_DEFS), 4)
         # 收回
         self.toolbar.toggle_expanded()
         self.assertFalse(self.toolbar._panel.isVisible())
@@ -196,21 +200,23 @@ class TestTagToolbar(unittest.TestCase):
         self.toolbar.sync_from_canvas()
         self.assertTrue(self.toolbar.isVisible())
 
-    def test_action_buttons_context_aware(self):
-        """「处理」钮：单选 + 疑点标签命中才出现。"""
+    def test_action_buttons_open_on_single_selection(self):
+        """「处理」钮：单选一块即出现，**不需要预先挂标签**（交接 §4.1）。
+
+        现场看到可疑就走「校对原文／重译」，AI 结果仍只落确认卡；
+        标签只决定应用后清掉哪几条问题记录（``BlockActionDef.consumes``）。
+        """
         item = self._add_item()
         self.canvas._items = [item]
         self.toolbar.sync_from_canvas()
+        # 未挂任何标签也是两块可用的现场入口
+        self.assertEqual(item.blk.tags, {})
         for btn in self.toolbar._action_buttons.values():
-            self.assertFalse(btn.isVisible())
-        from utils.block_tags import set_tag
-
-        set_tag(item.blk, "ocr_low_conf", "program")
-        self.toolbar.sync_from_canvas()
-        self.assertTrue(self.toolbar._action_buttons["act_ocr_fix"].isVisible())
-        self.assertFalse(
-            self.toolbar._action_buttons["act_retranslate"].isVisible()
-        )
+            self.assertTrue(btn.isVisible())
+        seen = []
+        self.toolbar.action_requested.connect(seen.append)
+        self.toolbar._action_buttons["act_ocr_fix"].click()
+        self.assertEqual(seen, ["act_ocr_fix"])
         # 多选 → 不显示（批量动作不在 v1 范围）
         item2 = TextBlkItem(_make_blk(), 1)
         self.scene.addItem(item2)

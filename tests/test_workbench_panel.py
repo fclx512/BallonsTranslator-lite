@@ -1,9 +1,11 @@
-"""泛用工作台（批次 D）回归：任务适配层 + 面板接线。
+"""泛用工作台回归：任务适配层 + 面板接线。
 
-覆盖规划 D20（三段式：任务导航 → 候选列表 → 执行）、D23／D11（审批预览
-100% 原比例）、D26（跳转信号）、D27（批量告知弹窗）、D28（驳回可逆、与
-勾选两轴正交）、D33d（误聚组默认不勾选）、D35（整批一条撤回）、D37
-（跳步提示可禁用）、D5（扩张量无默认值）。
+覆盖 D20（三段式：任务导航 → 候选列表 → 执行）、D23／D11（审批预览
+100% 原比例）、D26（跳转信号）、D27（批量告知弹窗）、D28（驳回可逆、
+且粒度＝单个问题）、D33d（误聚组默认不勾选）、D35（整批一条撤回），以及
+批次 C 的减法与加法：**扁平六项导航**（不再两级、不再跳步门禁）、
+**两个非删除待办队列**（人工待办／程序建议分区，退出＝从列表移除／忽略）、
+**批量框扩张退役**（2026-09-26，见 scripts/audit_registry.json）。
 
 Run:
     ./ballontrans_pylibs_win/python.exe -m pytest tests/test_workbench_panel.py -q
@@ -28,17 +30,22 @@ from qtpy.QtWidgets import QApplication, QWidget  # noqa: E402
 from ui.batch_ops import BatchOperation  # noqa: E402
 from ui.workbench_tasks import (  # noqa: E402
     CLEANUP_TASK_IDS,
-    EXPAND,
     GLOSSARY,
     MERGE,
     MISREAD,
+    OCR_REVIEW,
     SIMPLE_INPAINT,
     STORY,
-    ExpandTask,
+    TRANS_REVIEW,
     build_batch_tasks,
+    build_review_tasks,
 )
 from utils.block_tags import (  # noqa: E402
     MISREAD_TAG_ID,
+    OCR_REVIEW_ID,
+    has_ocr_review_pending,
+    has_tag,
+    has_trans_review_pending,
     is_tag_reviewed,
     set_tag,
 )
@@ -74,8 +81,6 @@ class _WorkbenchTestCase(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
-        self._warn = pcfg.workbench_warn_skip_order
-        pcfg.workbench_warn_skip_order = False
         self._limit = pcfg.batch_backup_versions
         pcfg.batch_backup_versions = 1
         self._tmp = tempfile.TemporaryDirectory()
@@ -111,7 +116,6 @@ class _WorkbenchTestCase(unittest.TestCase):
         self.window.show()
 
     def tearDown(self):
-        pcfg.workbench_warn_skip_order = self._warn
         pcfg.batch_backup_versions = self._limit
         self.window.close()
         self._tmp.cleanup()
@@ -125,6 +129,9 @@ class _WorkbenchTestCase(unittest.TestCase):
 
     def _tasks(self):
         return build_batch_tasks(self.proj, self._op())
+
+    def _review_tasks(self):
+        return build_review_tasks(self.proj)
 
     def _panel(self, *, show=True):
         from ui.glossary_agent_panel import GlossaryAgentPanel
@@ -156,9 +163,38 @@ class TaskAdapterTest(_WorkbenchTestCase):
         self.assertEqual(row.pagename, PAGE_A)
         self.assertEqual(row.block_index, 1)
         self.assertTrue(row.checked)  # 未驳回 → 默认勾选（D28）
-        self.assertIn("1 in the queue, 0 rejected, 1 to delete", plan["summary"])
+        self.assertIn(
+            "1 suspicious block(s) found; 0 marked as false positives, 1 selected for deletion",
+            plan["summary"],
+        )
+        self.assertIn("Source: OCR post-processing rules.", plan["detail"])
         self.assertEqual(row.cells[2], "Numeric only")  # 子类名来自标签体系
         self.assertEqual(task.pending({}), 1)
+
+    def test_no_japanese_rows_start_unchecked(self):
+        """交接 §4.2①：「无假名汉字」最容易误伤真实拉丁文本与拟声词，默认不勾选。
+
+        含多子类型时以含它为准（不能靠"别的子类型更确定"替它背书），且这
+        与"驳回"无关——它只是**默认勾选口径**，用户仍可手动勾上删除。
+        """
+        from utils.block_tags import apply_misread_tag  # noqa: E402
+
+        blk = _blk("SS", (10, 106, 60, 136))
+        apply_misread_tag(blk, ["no_japanese"])
+        self.proj.pages[PAGE_A].append(blk)
+        task = self._tasks()[MISREAD]
+        rows = {row.block_index: row for row in task.plan({})["rows"]}
+        risky = rows[3]
+        self.assertFalse(risky.checked)
+        self.assertEqual(risky.cells[3], "Confirm before deleting")
+        # 纯数字那行不受影响：仍按 D28 默认勾选
+        self.assertTrue(rows[1].checked)
+        self.assertEqual(rows[1].cells[3], "Delete by default")
+        # 队列计数口径不变（默认勾选只影响勾选，不改"待审校条数"）
+        self.assertEqual(task.pending({}), 2)
+        # 摘要第三个数字必须＝**实际默认勾选的行数**：摘要不能替勾选框说话
+        # （含 no_japanese 的行不勾选，2 个可疑框里只有 1 个默认要删）
+        self.assertIn("1 selected for deletion by default", task.plan({})["summary"])
 
     def test_misread_reject_is_reversible_and_block_level(self):
         task = self._tasks()[MISREAD]
@@ -228,32 +264,23 @@ class TaskAdapterTest(_WorkbenchTestCase):
         self.assertFalse(rows[0].checked)
         self.assertIn("False grouping", rows[0].cells[3])
 
-    def test_expand_needs_an_explicit_amount(self):
-        task = self._tasks()[EXPAND]
-        plan = task.plan({})
-        self.assertEqual(plan["rows"], [])
-        self.assertIsNone(task.pending({}))
-        plan = task.plan({"amount": 6, "mode": "px"})
-        self.assertTrue(plan["rows"])
-        row = plan["rows"][0]
-        self.assertEqual(row.payload["old"], [10, 10, 60, 40])
-        # 下边被下一框（y1=42）截住 → "碰到邻框即停"
-        self.assertEqual(row.payload["new"], [4, 4, 66, 42])
-        # 行内第三列是「增长描述」（页名 / 索引 / 增长），只讲每边长多少、哪边受限，
-        # 不铺坐标数字（2026-09-20 修：原断言写的是铺坐标的旧形态）。
-        self.assertEqual(len(row.cells), 3)
-        self.assertIn("+6 px", row.cells[2])
-        self.assertIn(ExpandTask._SIDE_LABELS["bottom"], row.cells[2])
+    def test_batch_family_is_three_tasks_and_expand_is_gone(self):
+        """批量框扩张退役（2026-09-26）：工厂与导航都不再有它。
 
-    def test_expand_ratio_mode_takes_percent(self):
-        task = self._tasks()[EXPAND]
-        # 短边 30 的 20% ＝ 6px，与 px 模式给 6 等价
-        by_px = task.plan({"amount": 6, "mode": "px"})
-        by_ratio = task.plan({"amount": 20, "mode": "ratio"})
+        退役依据＝只有机械几何写入、没有可靠的自动排版消费；登记见
+        ``scripts/audit_registry.json``。
+        """
+        from ui import workbench_tasks as wt
+
         self.assertEqual(
-            [r.payload["new"] for r in by_px["rows"]],
-            [r.payload["new"] for r in by_ratio["rows"]],
+            set(self._tasks()), {MISREAD, MERGE, SIMPLE_INPAINT}
         )
+        self.assertEqual(set(wt.CLEANUP_TASK_IDS), set(self._tasks()))
+        self.assertFalse(hasattr(wt, "ExpandTask"))
+        self.assertFalse(hasattr(wt, "EXPAND"))
+        from utils.config import ProgramConfig
+
+        self.assertNotIn("workbench_expand_px", ProgramConfig.__annotations__)
 
     def test_simple_inpaint_rows_are_pages(self):
         task = self._tasks()[SIMPLE_INPAINT]
@@ -272,9 +299,9 @@ class TaskAdapterTest(_WorkbenchTestCase):
         merge = tasks[MERGE].plan({})["rows"]
         html = tasks[MERGE].confirm_html(merge, {})
         self.assertIn("styles", html.lower())
-        expand = tasks[EXPAND].plan({"amount": 6, "mode": "px"})["rows"]
-        html = tasks[EXPAND].confirm_html(expand, {"amount": 6, "mode": "px"})
-        self.assertIn("rendering rectangle", html)
+        inpaint = tasks[SIMPLE_INPAINT].plan({})["rows"]
+        html = tasks[SIMPLE_INPAINT].confirm_html(inpaint, {})
+        self.assertIn("inpainted layer", html)
 
 
 # ── 面板接线 ──────────────────────────────────────────────────────
@@ -282,14 +309,22 @@ class TaskAdapterTest(_WorkbenchTestCase):
 
 class PanelTest(_WorkbenchTestCase):
     def test_nav_order_and_default_task(self):
+        """扁平六项导航（批次 C）：一行一个任务，顺序＝用户工作流顺序。"""
+        from ui.glossary_agent_panel import WORKBENCH_ORDER
+
         panel = self._panel()
+        self.assertEqual(WORKBENCH_ORDER, (
+            MISREAD, MERGE, OCR_REVIEW, SIMPLE_INPAINT,
+            # 翻译准备是一个入口（术语与剧情是它的两个子页）
+            "translation_prep", TRANS_REVIEW,
+        ))
         self.assertEqual(panel.pages.count(), 6)
         self.assertEqual(panel.current_task(), MISREAD)
         self.assertTrue(panel.nav._buttons[MISREAD].isChecked())
-        # D16／§3：导航顺序＝用户工作流顺序
-        from ui.glossary_agent_panel import WORKBENCH_ORDER
-
-        self.assertEqual(WORKBENCH_ORDER[:4], CLEANUP_TASK_IDS)
+        # 组标题只是视觉分段：每个任务都有自己的钮，没有两级选择
+        self.assertFalse(hasattr(panel.nav, "_category_buttons"))
+        for task_id in WORKBENCH_ORDER:
+            self.assertIn(task_id, panel.nav._buttons)
 
     def test_switching_plans_the_task_once(self):
         panel = self._panel()
@@ -300,20 +335,95 @@ class PanelTest(_WorkbenchTestCase):
         self.assertTrue(view._rows)
         self.assertNotIn(MERGE, panel._dirty_tasks)
 
-    def test_expand_amount_starts_from_setting_and_zero_disables(self):
-        """扩张量初值取设置里的默认值（D5／C3 定值）；清零即无候选、执行禁用。"""
+    def test_nav_chip_flow_fits_two_rows_with_complete_active_label(self):
+        """导航＝按需换行的 chip 流（批次 D 修订）：常态两行、激活项不省略。
+
+        会动的三条契约：① 整条导航的高度按行数收紧（原先六项各占一行、外加两行
+        组标题＝8 行高，把页内信息挤没了）；② **当前任务**的完整标签必须排得下
+        ——压缩与省略只发生在未激活项上，中英文两套标签各排一遍（英文更长）；
+        ③ ``text()`` 始终是完整逻辑标签（省略只在渲染层）。宽度读
+        ``target_width``／``full_width``（分配结果，补间动画进行中也真），故离屏
+        环境不依赖动画。
+        """
+        from ui.glossary_agent_panel import WORKBENCH_ORDER, _TASK_LABELS
+
         panel = self._panel()
-        panel.nav.select(EXPAND)
-        self.app.processEvents()
-        view = panel._batch_views[EXPAND]
-        spec = [s for s in view.task.options_spec() if s["key"] == "amount"][0]
-        self.assertEqual(spec["value"], int(pcfg.workbench_expand_px))
-        self.assertTrue(view._rows)
-        self.assertTrue(view._execute_btn.isEnabled())
-        view._option_widgets["amount"].setValue(0)
+        # 标签源取模块表本身（不是 chip 上的文本——那里已缀过计数）
+        english = {task_id: _TASK_LABELS[task_id] for task_id in WORKBENCH_ORDER}
+        self._assert_active_chip_never_elides(panel, english)
+        chinese = self._chinese_nav_labels(english)
+        if chinese:
+            # 真取到了译文才算排过第二套（否则只是把英文再排一遍）
+            self.assertNotEqual(chinese["translation_prep"], english["translation_prep"])
+            self._assert_active_chip_never_elides(panel, chinese)
+
+    def _assert_active_chip_never_elides(self, panel, labels):
+        """给定一套标签逐项激活：激活项完整、行数不超两行、逻辑文本不缩短。"""
+        from ui import glossary_agent_panel as gap
+        from ui.glossary_agent_panel import WORKBENCH_ORDER
+
+        nav = panel.nav
+        # 标签源就是这张表（真机上由启动时装的 qm 决定），换语言＝换表内容
+        original = dict(gap._TASK_LABELS)
+        gap._TASK_LABELS.update(labels)
+        self.addCleanup(gap._TASK_LABELS.update, original)
+        for task_id in WORKBENCH_ORDER:
+            nav.set_count(task_id, 0)  # 把新标签推给 chip
+        nav._relayout(animate=False)
+        self.assertLessEqual(nav.height(), 56)  # ≤ 两行 chip（6 + 22 + 4 + 22）
+        for task_id in WORKBENCH_ORDER:
+            nav.select(task_id)
+            self.app.processEvents()
+            chip = nav._buttons[task_id]
+            self.assertTrue(chip.isChecked())
+            # 逻辑文本永远是完整标签（计数只是后缀），省略只发生在渲染层
+            self.assertTrue(chip.text().startswith(labels[task_id]))
+            self.assertGreaterEqual(chip.target_width, chip.full_width())
+            self.assertLessEqual(nav.height(), 56)
+
+    def _chinese_nav_labels(self, english):
+        """同一 source 的 ``zh_CN`` 译文；qm 还没编出来时返回 ``{}``（跳过该套）。"""
+        from qtpy.QtCore import QCoreApplication, QTranslator
+
+        from utils import shared
+
+        translator = QTranslator()
+        if not translator.load("zh_CN", shared.TRANSLATE_DIR):
+            return {}
+        self.app.installTranslator(translator)
+        try:
+            return {
+                task_id: QCoreApplication.translate("GlossaryAgentPanel", label)
+                for task_id, label in english.items()
+            }
+        finally:
+            self.app.removeTranslator(translator)
+
+    def test_nav_order_and_default_task(self):
+        """扁平六项导航（批次 C/D）：chip 流按需换行，顺序＝用户工作流顺序。"""
+        from ui.glossary_agent_panel import WORKBENCH_ORDER
+
+        panel = self._panel()
+        self.assertEqual(WORKBENCH_ORDER, (
+            MISREAD, MERGE, OCR_REVIEW, SIMPLE_INPAINT,
+            # 翻译准备是一个入口（术语与剧情是它的两个子页）
+            "translation_prep", TRANS_REVIEW,
+        ))
+        self.assertEqual(panel.pages.count(), 6)
+        self.assertEqual(panel.current_task(), MISREAD)
+        self.assertTrue(panel.nav._buttons[MISREAD].isChecked())
+        # 组标题只是视觉分段：每个任务都有自己的钮，没有两级选择
+        self.assertFalse(hasattr(panel.nav, "_category_buttons"))
+        for task_id in WORKBENCH_ORDER:
+            self.assertIn(task_id, panel.nav._buttons)
+
+    def test_plan_detail_line_is_visible(self):
+        """plan 的 detail（原因/来源说明）落在页面可见的说明行，不再藏 tooltip。"""
+        panel = self._panel()
+        view = panel._batch_views[MISREAD]
         view.replan()
-        self.assertFalse(view._rows)
-        self.assertFalse(view._execute_btn.isEnabled())
+        self.assertTrue(view._detail.isVisibleTo(view))
+        self.assertIn("OCR post-processing rules", view._detail.text())
 
     def test_preview_is_unscaled_and_handed_to_the_float(self):
         """D11／D23 口径不变：交给浮层的图是 100% 原比例（界面不缩不放）。
@@ -371,20 +481,23 @@ class PanelTest(_WorkbenchTestCase):
         self.assertTrue(panel._preview_panel.is_open())
         self.assertIsNotNone(panel._preview_panel.canvas._pixmap)
 
-    def test_replan_updates_nav_count(self):
-        """参数一变候选就变，导航上的「还有 N 个未处理」不能停在旧值。"""
+    def test_nav_order_and_default_task(self):
+        """扁平六项导航（批次 C）：一行一个任务，顺序＝用户工作流顺序。"""
+        from ui.glossary_agent_panel import WORKBENCH_ORDER
+
         panel = self._panel()
-        view = panel._batch_views[EXPAND]
-        view._option_widgets["amount"].setValue(0)
-        view.replan()
-        self.app.processEvents()
-        self.assertFalse(view._rows)
-        self.assertNotIn("(", panel.nav._buttons[EXPAND].text())  # 0 不缀数
-        view._option_widgets["amount"].setValue(20)
-        view.replan()
-        self.app.processEvents()
-        self.assertTrue(view._rows)
-        self.assertIn(str(len(view._rows)), panel.nav._buttons[EXPAND].text())
+        self.assertEqual(WORKBENCH_ORDER, (
+            MISREAD, MERGE, OCR_REVIEW, SIMPLE_INPAINT,
+            # 翻译准备是一个入口（术语与剧情是它的两个子页）
+            "translation_prep", TRANS_REVIEW,
+        ))
+        self.assertEqual(panel.pages.count(), 6)
+        self.assertEqual(panel.current_task(), MISREAD)
+        self.assertTrue(panel.nav._buttons[MISREAD].isChecked())
+        # 组标题只是视觉分段：每个任务都有自己的钮，没有两级选择
+        self.assertFalse(hasattr(panel.nav, "_category_buttons"))
+        for task_id in WORKBENCH_ORDER:
+            self.assertIn(task_id, panel.nav._buttons)
 
     def test_first_task_is_planned_when_workbench_opens_late(self):
         """打开项目时工作台还没开：首个任务不能"以为已规划过"。
@@ -442,90 +555,23 @@ class PanelTest(_WorkbenchTestCase):
         view._jump_btn.click()
         self.assertEqual(seen, [(PAGE_A, 1)])
 
-    def test_earlier_pending_counts_cleanup_steps_only(self):
-        """D37 的计数口径：只有前四项「问题清理」参与，且带标签名。"""
-        from ui.glossary_agent_panel import _TASK_LABELS
+    def test_jumping_steps_is_never_gated(self):
+        """批次 C：跳步弹窗与 ``workbench_warn_skip_order`` 一并去掉。
 
-        panel = self._panel()
-        panel.nav.select(MERGE)
-        pending = panel.earlier_pending(SIMPLE_INPAINT)
-        # 三项都在（扩张量有设置里给的初值 → 有可执行候选），顺序即 D16 的导航序
-        self.assertEqual(
-            [label for label, _ in pending],
-            [
-                _TASK_LABELS[MISREAD],
-                _TASK_LABELS[MERGE],
-                _TASK_LABELS[EXPAND],
-            ],
+        顺序仍按用户工作流排列（导航顺序即提示），但**不门禁、不弹窗**：
+        前序队列里还有东西也照常切过去。
+        """
+        from utils.config import ProgramConfig
+        from ui.glossary_agent_panel import GlossaryAgentPanel
+
+        self.assertNotIn(
+            "workbench_warn_skip_order", ProgramConfig.__annotations__
         )
-        self.assertTrue(all(count > 0 for _, count in pending))
-        # 目标之后的步骤不计（术语／剧情也不参与）
-        self.assertEqual(panel.earlier_pending(STORY), pending)
-        self.assertEqual(panel.earlier_pending(MISREAD), [])
-
-    def test_skip_order_prompt_blocks_on_cancel(self):
-        """D37：跳步提示取消即停在原任务（顺序是提示，不是门禁）。"""
-        from ui.glossary_agent_panel import QMessageBox
-
+        self.assertFalse(hasattr(GlossaryAgentPanel, "earlier_pending"))
         panel = self._panel()
-        pcfg.workbench_warn_skip_order = True
-        original = QMessageBox.exec
-        shown = []
-
-        def _cancel(self):
-            shown.append(True)
-            return QMessageBox.StandardButton.Cancel
-
-        QMessageBox.exec = _cancel
-        try:
-            panel.nav.select(MERGE)
-        finally:
-            QMessageBox.exec = original
-        self.assertTrue(shown)
-        self.assertEqual(panel.current_task(), MISREAD)
-        self.assertTrue(panel.nav._buttons[MISREAD].isChecked())
-        self.assertFalse(panel.nav._buttons[MERGE].isChecked())
-
-    def test_skip_order_prompt_dont_ask_writes_config(self):
-        """勾「不再提示」→ 写 pcfg.workbench_warn_skip_order=False（并落盘）。"""
-        from ui import glossary_agent_panel as gap
-        from utils import config as config_module
-
-        panel = self._panel()
-        pcfg.workbench_warn_skip_order = True
-        saved = []
-        original_exec = gap.QMessageBox.exec
-        original_box = gap.QCheckBox
-        original_save = config_module.save_config
-
-        gap.QMessageBox.exec = lambda self: gap.QMessageBox.StandardButton.Ok
-
-        class _AlwaysCheckedBox(original_box):
-            def isChecked(self):
-                return True
-
-        gap.QCheckBox = _AlwaysCheckedBox
-        config_module.save_config = lambda *a, **k: saved.append(True)
-        try:
-            panel.nav.select(MERGE)
-        finally:
-            gap.QMessageBox.exec = original_exec
-            gap.QCheckBox = original_box
-            config_module.save_config = original_save
-        self.assertFalse(pcfg.workbench_warn_skip_order)
-        self.assertTrue(saved)
-        # 用户确认后即切过去（提示只是提示，不门禁）
-        self.assertEqual(panel.current_task(), MERGE)
-
-    def test_skip_order_silent_when_nothing_pending(self):
-        panel = self._panel()
-        pcfg.workbench_warn_skip_order = True
-        # 先清空队列（未驳回的全部驳回）→ 前序步骤没有未处理项 → 不弹窗
-        from utils.block_tags import set_tags_reviewed
-
-        set_tags_reviewed(self.proj.pages[PAGE_A][1], True)
-        panel.nav.select(MERGE)
-        self.assertEqual(panel.current_task(), MERGE)
+        self.assertTrue(self._tasks()[MISREAD].pending({}) > 0)  # 前序确有未处理
+        panel.nav.select(TRANS_REVIEW)
+        self.assertEqual(panel.current_task(), TRANS_REVIEW)
 
     def test_chat_is_gone_but_log_survives(self):
         """D19：砍 Chat；worker 日志改落底部日志条。"""
@@ -536,7 +582,7 @@ class PanelTest(_WorkbenchTestCase):
         self.assertIn("hello from worker", panel._log_view.toPlainText())
 
     def test_prepare_emits_instruction_without_bubble(self):
-        """D19：一键准备不再经 Chat 气泡链路，指令直接入队。"""
+        """D19：翻译准备不再经 Chat 气泡链路，指令直接入队。"""
         from ui.glossary_agent_panel import GlossaryAgentWorker
 
         panel = self._panel(show=False)
@@ -563,77 +609,6 @@ class PanelTest(_WorkbenchTestCase):
         self.assertFalse(panel.has_project())
         self.assertEqual(panel._stack.currentIndex(), 0)
 
-    # ── 两级导航（UI 优化 D41）──────────────────────────────────────
-
-    def _visible_chips(self, panel):
-        return [
-            task_id
-            for task_id, chip in panel.nav._buttons.items()
-            if chip.isVisible()
-        ]
-
-    def test_nav_is_two_level_categories(self):
-        """一级＝管线阶段大类，二级＝该大类下的任务；切大类即换 chip 行。"""
-        from ui.glossary_agent_panel import (
-            CATEGORY_INPAINT,
-            CATEGORY_TEXT,
-            CATEGORY_TRANSLATE,
-        )
-
-        panel = self._panel()
-        self.assertEqual(
-            list(panel.nav._category_buttons),
-            [CATEGORY_TEXT, CATEGORY_INPAINT, CATEGORY_TRANSLATE],
-        )
-        # 开局停在第一个大类，只露出它的三个任务
-        self.assertTrue(panel.nav._category_buttons[CATEGORY_TEXT].isChecked())
-        self.assertFalse(panel.nav._category_buttons[CATEGORY_TRANSLATE].isChecked())
-        self.assertEqual(self._visible_chips(panel), [MISREAD, MERGE, EXPAND])
-        # 切到别的大类：页签高亮跟着走，chip 行只剩该大类的
-        panel.nav.select(GLOSSARY)
-        self.assertTrue(panel.nav._category_buttons[CATEGORY_TRANSLATE].isChecked())
-        self.assertFalse(panel.nav._category_buttons[CATEGORY_TEXT].isChecked())
-        self.assertEqual(self._visible_chips(panel), [GLOSSARY, STORY])
-        self.assertFalse(panel.nav._buttons[MISREAD].isVisible())
-
-    def test_category_tab_repeats_its_tasks_pending_count(self):
-        """一级页签缀本大类未处理之和——切到大类外也看得见还有活（D37）。"""
-        from ui.glossary_agent_panel import (
-            CATEGORY_TEXT,
-            _CATEGORY_LABELS,
-            _TASK_LABELS,
-            _with_count,
-        )
-
-        panel = self._panel()
-        panel._refresh_nav_counts()
-        expected = 0
-        for task_id in (MISREAD, MERGE, EXPAND):
-            task = panel._batch_tasks[task_id]
-            view = panel._batch_views[task_id]
-            expected += task.pending(view.options())
-            # 二级 chip 缀自己的计数
-            self.assertEqual(
-                panel.nav._buttons[task_id].text(),
-                _with_count(_TASK_LABELS[task_id], task.pending(view.options())),
-            )
-        self.assertGreater(expected, 0)
-        self.assertEqual(
-            panel.nav._category_buttons[CATEGORY_TEXT].text(),
-            _with_count(_CATEGORY_LABELS[CATEGORY_TEXT], expected),
-        )
-
-    def test_category_switch_returns_to_last_task_of_that_category(self):
-        """切回大类＝回到上次在该大类里的任务，不重置成第一个。"""
-        from ui.glossary_agent_panel import CATEGORY_TEXT
-
-        panel = self._panel()
-        panel.nav.select(MERGE)
-        panel.nav.select(GLOSSARY)
-        panel.nav._category_buttons[CATEGORY_TEXT].click()
-        self.assertEqual(panel.current_task(), MERGE)
-        self.assertTrue(panel.nav._buttons[MERGE].isChecked())
-
     def test_page_index_maps_every_task(self):
         """任务→页下标是显式登记，切任务必落到它自己那页。"""
         from ui.glossary_agent_panel import WORKBENCH_ORDER
@@ -655,8 +630,9 @@ class PanelTest(_WorkbenchTestCase):
 
         panel = self._panel()
         panel._append_log("deleted 2 blocks", MISREAD)
+        # 署名与正文之间带分隔符，否则两段文字粘成一句
         self.assertIn(
-            _TASK_LABELS[MISREAD] + " deleted 2 blocks",
+            _TASK_LABELS[MISREAD] + " · deleted 2 blocks",
             panel._log_view.toPlainText().replace("\xa0", " "),
         )
         # worker 的行（无任务归属）不缀前缀
@@ -686,6 +662,214 @@ class PanelTest(_WorkbenchTestCase):
         bare = BatchTaskView(task)
         bare.replan()
         self.assertTrue(bare._rows)
+
+    # ── 非删除待办队列（批次 C 新增）───────────────────────────────
+
+    def _seed_reviews(self):
+        """给合成工程挂上各类记录：人工待办两条 + 旧 ID 一条 + 程序建议一条。"""
+        from utils.block_tags import (
+            OCR_REVIEW_ID,
+            TRANS_REVIEW_ID,
+            set_manual_tag,
+            set_tag,
+        )
+
+        manual_ocr = self.proj.pages[PAGE_B][0]
+        set_manual_tag(manual_ocr, OCR_REVIEW_ID, True)
+        pending_trans = self.proj.pages[PAGE_B][1]
+        set_manual_tag(pending_trans, TRANS_REVIEW_ID, True)
+        pending_trans.translation = "old"
+        # 旧项目的旧 ID：读侧算同一条待办，取消时连它一起清
+        legacy = _blk("legacy", (10, 62, 80, 92))
+        set_tag(legacy, "trans_polish", "manual")
+        self.proj.pages[PAGE_B].append(legacy)
+        # 程序建议：低置信度（未驳回才是建议）
+        suggest = self.proj.pages[PAGE_A][0]
+        set_tag(suggest, "ocr_low_conf", "program", score=0.31)
+        return manual_ocr, pending_trans, legacy, suggest
+
+    def test_review_queue_sections_and_no_batch_semantics(self):
+        """人工待办与程序建议分区呈现，且这个队列**没有**批量写回与版本。"""
+        self._seed_reviews()
+        task = self._review_tasks()[OCR_REVIEW]
+        plan = task.plan()
+        self.assertEqual(set(plan["sections"]), {"manual", "suggestions"})
+        self.assertEqual(len(plan["sections"]["manual"]), 1)
+        self.assertEqual(len(plan["sections"]["suggestions"]), 1)
+        self.assertIn("recorded by you", plan["summary"])
+        # 行的单元格是「页名 + 原文摘要」，没有删除列、没有勾选默认值
+        self.assertEqual(plan["sections"]["manual"][0].cells[0], PAGE_B)
+        # 待办队列没有 apply / confirm_html / options_spec 这套批量语义
+        self.assertFalse(hasattr(task, "apply"))
+        self.assertFalse(hasattr(task, "confirm_html"))
+        self.assertFalse(hasattr(task, "options_spec"))
+        # 行的默认勾选＝未选中（勾选只是"选中这条"，不是"要执行"）
+        self.assertFalse(plan["sections"]["manual"][0].checked)
+
+    def test_review_pending_count_only_manual(self):
+        """导航计数只数人工承诺的工作，程序建议不冒充待办（交接 §4.2③）。"""
+        manual_ocr, pending_trans, legacy, suggest = self._seed_reviews()
+        self.assertEqual(self._review_tasks()[OCR_REVIEW].pending(), 1)
+        # 旧 ID 也是一条待办（读侧兼容），故这里 2 条
+        self.assertEqual(self._review_tasks()[TRANS_REVIEW].pending(), 2)
+        self.assertIn(
+            "1", self._review_tasks()[OCR_REVIEW].summary_text({"manual": 1, "suggestions": 3})
+        )
+
+    def test_dropping_records_clears_only_the_record(self):
+        manual_ocr, pending_trans, legacy, suggest = self._seed_reviews()
+        tasks = self._review_tasks()
+        rows = tasks[TRANS_REVIEW].plan()["sections"]["pending"]
+        self.assertEqual(len(rows), 2)
+        out = tasks[TRANS_REVIEW].run_section_action("pending", rows)
+        self.assertTrue(out["replan"])
+        # 待办清空，但**译文一个字没改**、块本身还在
+        self.assertFalse(has_trans_review_pending(pending_trans))
+        self.assertFalse(has_trans_review_pending(legacy))
+        self.assertEqual(pending_trans.translation, "old")
+        self.assertIs(self.proj.pages[PAGE_B][1], pending_trans)
+        self.assertNotIn("trans_polish", legacy.tags)
+        self.assertEqual(tasks[TRANS_REVIEW].pending(), 0)
+
+    def test_manual_record_drop_keeps_directives_and_program_suggestion(self):
+        from utils.block_tags import set_manual_tag
+
+        blk = self.proj.pages[PAGE_B][0]
+        set_manual_tag(blk, OCR_REVIEW_ID, True)
+        set_tag(blk, "handwritten", "manual")  # 持久翻译指示
+        set_tag(blk, "ocr_low_conf", "program", score=0.2)  # 程序建议
+        task = self._review_tasks()[OCR_REVIEW]
+        rows = task.plan()["sections"]["manual"]
+        task.run_section_action("manual", rows)
+        # 只清这份记录：指示与程序建议都还在（交接 §3.2）
+        self.assertFalse(has_ocr_review_pending(blk))
+        self.assertTrue(has_tag(blk, "handwritten"))
+        self.assertIn("ocr_low_conf", blk.tags)
+        # 丢掉人工记录后，那块仍以程序建议的身份留在列表里
+        self.assertEqual(
+            [r.pagename for r in task.plan()["sections"]["suggestions"]],
+            [PAGE_B],
+        )
+
+    def test_ignoring_a_suggestion_marks_that_problem_only(self):
+        from utils.block_tags import (
+            MISREAD_TAG_ID,
+            apply_misread_tag,
+            set_tag,
+        )
+
+        blk = self.proj.pages[PAGE_A][0]
+        set_tag(blk, "ocr_low_conf", "program", score=0.2)
+        apply_misread_tag(blk, ["no_japanese"])
+        task = self._review_tasks()[OCR_REVIEW]
+        rows = task.plan()["sections"]["suggestions"]
+        task.run_section_action("suggestions", rows)
+        # 驳回的是"低置信度"这一条：误框那一条不受影响（粒度＝一个问题）
+        self.assertTrue(is_tag_reviewed(blk, "ocr_low_conf"))
+        self.assertFalse(is_tag_reviewed(blk, MISREAD_TAG_ID))
+        self.assertEqual(task.plan()["sections"]["suggestions"], [])
+
+    def test_canvas_side_record_updates_nav_count(self):
+        """画布上记下／处理掉一条，工作台导航计数立刻跟上（交接批次 B）。
+
+        工作台与画布同屏，所以「现场处理完成时正确更新活动计数」不能等切任务
+        ——``canvas.content_modified`` 的落点（``mark_content_changed``）顺手
+        刷一遍便宜计数。
+        """
+        from ui.glossary_agent_panel import _TASK_LABELS
+        from utils.block_tags import OCR_REVIEW_ID, set_manual_tag
+
+        panel = self._panel()
+        panel._refresh_nav_counts()
+        self.assertNotIn("(", panel.nav._buttons[OCR_REVIEW].text())  # 0 不缀数
+        set_manual_tag(self.proj.pages[PAGE_A][0], OCR_REVIEW_ID, True)
+        panel.mark_content_changed()  # canvas.content_modified 的落点
+        # 块口径的队列只报数字（标签已带「待校对」，「待审校」是重复说法）
+        self.assertEqual(
+            panel.nav._buttons[OCR_REVIEW].text(),
+            _TASK_LABELS[OCR_REVIEW] + " (1)",
+        )
+        # 处理完把记录移除 → 数字跟着回落
+        set_manual_tag(self.proj.pages[PAGE_A][0], OCR_REVIEW_ID, False)
+        panel.mark_content_changed()
+        self.assertNotIn("(", panel.nav._buttons[OCR_REVIEW].text())
+
+    def test_content_change_only_refreshes_cheap_counts(self):
+        """内容一变只刷纯内存能数的队列：合并组数要跑全书 plan，不在这里重算。"""
+        panel = self._panel()
+        merge = panel._batch_tasks[MERGE]
+        original = merge.pending
+        called = []
+
+        def spy(options):
+            called.append(1)
+            return original(options)
+
+        merge.pending = spy
+        panel.mark_content_changed()
+        self.assertEqual(called, [])  # 便宜档不碰引擎
+        panel._refresh_nav_counts()
+        self.assertEqual(called, [1])  # 显式全刷时才跑
+
+    def test_review_page_uses_queue_view(self):
+        """待办任务进的是 ReviewQueueView（不是在批量视图上塞待办语义）。"""
+        from ui.workbench_review_view import ReviewQueueView
+
+        panel = self._panel()
+        panel.nav.select(OCR_REVIEW)
+        self.app.processEvents()
+        view = panel._review_views[OCR_REVIEW]
+        self.assertIsInstance(view, ReviewQueueView)
+        self.assertIs(panel.pages.widget(panel._page_index(OCR_REVIEW)), view)
+
+    def test_review_row_opens_the_same_card_directly(self):
+        """③⑥ 的第二条出口：不跳过去，直接开同一张框级确认卡（交接 §4.2）。
+
+        两条出口共用同一行寻址；这里只钉「信号带的是页/块/动作 id」与
+        「动作 id 就是画布上那两个现场动作」，真正的卡片拉起在画布侧。
+        """
+        from utils.block_actions import ACTION_REGISTRY
+
+        self._seed_reviews()
+        panel = self._panel()
+        # 首行分别是「人工记下的校对记录」(PAGE_B 第 0 块) 与「待重译记录」
+        # (PAGE_B 第 1 块，第 2 块是旧 ID 那条)
+        for task_id, action_id, expected in (
+            (OCR_REVIEW, "act_ocr_fix", (PAGE_B, 0)),
+            (TRANS_REVIEW, "act_retranslate", (PAGE_B, 1)),
+        ):
+            panel.nav.select(task_id)
+            self.app.processEvents()
+            view = panel._review_views[task_id]
+            self.assertEqual(view.task.action_id, action_id)
+            self.assertIn(action_id, ACTION_REGISTRY)
+            self.assertEqual(
+                view._sections[0].process_btn.text(),
+                ACTION_REGISTRY[action_id].short_label,
+            )
+            seen = []
+            view.action_requested.connect(
+                lambda page, idx, aid: seen.append((page, idx, aid))
+            )
+            table, rows = view.tables()[0]
+            table.setCurrentCell(0, 0)
+            self.app.processEvents()
+            view._sections[0].process_btn.click()
+            self.assertEqual(seen, [(*expected, action_id)])
+
+    def test_review_jump_signal_carries_page_and_block(self):
+        manual_ocr, _p, _l, _s = self._seed_reviews()
+        panel = self._panel()
+        panel.nav.select(OCR_REVIEW)
+        self.app.processEvents()
+        seen = []
+        panel.jump_requested.connect(lambda page, idx: seen.append((page, idx)))
+        view = panel._review_views[OCR_REVIEW]
+        table, rows = view.tables()[0]
+        table.setCurrentCell(0, 0)
+        self.app.processEvents()
+        view._on_jump("manual")
+        self.assertEqual(seen, [(PAGE_B, 0)])
 
     def test_stale_light_lifecycle(self):
         """内容改动 → 已规划的页亮「列表可能过时」；replan 熄灯；未规划的

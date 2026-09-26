@@ -1,14 +1,19 @@
 """选中跟随标签工具栏（PS 式浮动工具栏，AI 辅助批次 B 主入口）。
 
-选中文字块时在选区上方出现，紧凑栏 = 每类标签一枚切换钮 + 展开钮 +
-上下文感知「处理」钮；展开后显示全类标签面板（名称 + 性质标注）。
-选中清空即隐，紧凑态与展开态一致执行（即用即走，无特例——设计 §6
-已获用户认同的裁剪）。打标不进撤销栈（轻量元数据），写回后刷新块徽
-标并标记项目未保存。
+选中文字块时在选区上方出现。栏内两类按钮，各管一件事（交接 §4.1）：
 
-数据源是 ``utils/block_tags.py::MANUAL_TAG_DEFS``——**程序专用标签**
-（``TagDef.program_only``，即「误识别文本」）不在此处出现：该标签只由
-OCR 后处理钩子自动挂，人只在工作台审查误杀（规划 D2／D38）。
+- **现场处理**（`utils/block_actions.py::BLOCK_ACTIONS` 的短标签「Fix OCR／
+  Retranslate」）：单选即出现，**不需要先挂任何标签**——看图校对原文、
+  按上下文重译，经确认卡显式「应用」才写回；
+- **稍后处理／持久翻译指示**（`utils/block_tags.py::MANUAL_TAG_DEFS`）：
+  两个人工待办（稍后校对／稍后重译）与手写字／拟声词指示，均为选中态切换钮。
+
+展开面板列出四项的完整名称 + 性质标注。选中清空即隐，紧凑态与展开态一致
+执行（即用即走，无特例——设计 §6 已获用户认同的裁剪）。打标不进撤销栈
+（轻量元数据），写回后刷新块徽标并标记项目未保存。
+
+**程序专用标签**（`TagDef.program_only`，即「误识别文本」）不在此处出现：
+该标签只由 OCR 后处理钩子自动挂，人只在工作台审查误杀（规划 D2／D38）。
 
 挂父在主窗口中央控件上防 GC，不参与布局；定位钳制在宿主范围内。
 QSS 容器样式走 objectName 选择器，必须开 WA_StyledBackground 才会
@@ -29,12 +34,11 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from utils.block_actions import BLOCK_ACTIONS, actions_for_block
+from utils.block_actions import BLOCK_ACTIONS
 from utils.block_tags import (
     MANUAL_TAG_DEFS,
     has_tag,
-    remove_tag,
-    set_tag,
+    set_manual_tag,
 )
 from utils.config import pcfg
 from utils.textblock import TextBlock
@@ -95,8 +99,7 @@ class TagToolbar(QWidget):
 
         row.addSpacing(6)
 
-        # 上下文感知「处理」钮（§8.8）：选中单块且块上有疑点标签时出现，
-        # 点击发起对应框级 AI 动作（多选批量动作不在 v1 范围）
+        # 现场处理钮：单选块即出现（不需预先打标），点击发起对应框级 AI 动作
         for action in BLOCK_ACTIONS:
             act_btn = QToolButton(self)
             act_btn.setObjectName("TagActionBtn")
@@ -188,13 +191,10 @@ class TagToolbar(QWidget):
         self._update_action_buttons()
 
     def _update_action_buttons(self) -> None:
-        """「处理」钮：单选 + 块上带该动作消费的疑点标签时出现。"""
-        applicable = set()
-        if len(self._items) == 1:
-            applicable = {a.id for a in actions_for_block(self._items[0].blk)}
+        """「处理」钮：单选一块即可校对／重译（不用先挂标签，交接 §4.1）。"""
+        visible = len(self._items) == 1
         changed = False
-        for aid, btn in self._action_buttons.items():
-            visible = aid in applicable
+        for btn in self._action_buttons.values():
             if btn.isVisibleTo(self) != visible:
                 btn.setVisible(visible)
                 changed = True
@@ -203,15 +203,16 @@ class TagToolbar(QWidget):
 
     def _apply_tag(self, tag_id: str, checked: bool) -> None:
         """工具栏按钮触发：勾选/取消勾选按钮值直接写（与快捷键的批量
-        翻转语义不同）；但多选时若按钮呈半挂状态，按钮值即目标值。"""
+        翻转语义不同）；但多选时若按钮呈半挂状态，按钮值即目标值。
+
+        写入走 ``utils/block_tags.py::set_manual_tag``：对两个人工待办 ID
+        会连旧 ID 一起清（否则旧项目里取消过、队列里却还在）。
+        """
         if not self._items:
             return
         for item in self._items:
             blk: TextBlock = item.blk
-            if checked:
-                set_tag(blk, tag_id, "manual")
-            else:
-                remove_tag(blk, tag_id)
+            set_manual_tag(blk, tag_id, checked)
             item.refresh_tag_badge()
         self._update_checks()
         # 打标不进撤销栈，但属于项目数据变更 → 标记未保存

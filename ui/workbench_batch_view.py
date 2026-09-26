@@ -223,6 +223,12 @@ class BatchTaskView(QWidget):
         self._summary.setWordWrap(True)
         layout.addWidget(self._summary)
 
+        self._detail = QLabel("", self)
+        self._detail.setObjectName("WorkbenchTaskDetail")
+        self._detail.setWordWrap(True)
+        self._detail.hide()
+        layout.addWidget(self._detail)
+
         # 过时提示（默认灭）：内容在列表建好后被改过 → 面板广播 mark_stale
         # 亮起，指向刷新钮；replan 熄灯。显隐只看这个子控件的 hide/show，
         # 面板整体可见性不影响它的「灯亮着」状态。
@@ -376,7 +382,7 @@ class BatchTaskView(QWidget):
         self._jump_btn.clicked.connect(self._on_jump)
         self._actions_host.addWidget(self._jump_btn)
         self._actions_host.addStretch(1)
-        self._execute_btn = QPushButton(self.task.execute_label(0), self)
+        self._execute_btn = QPushButton(self.task.no_candidates_label(), self)
         self._execute_btn.setObjectName("WorkbenchExecuteButton")
         self._execute_btn.setEnabled(False)  # 未规划（无候选）时不可执行
         self._execute_btn.clicked.connect(self._on_execute)
@@ -459,6 +465,9 @@ class BatchTaskView(QWidget):
         self._fill_table(self._rows)
         self._summary.setText(plan.get("summary") or "")
         hint = plan.get("options_hint") or ""
+        detail = plan.get("detail") or hint
+        self._detail.setText(detail)
+        self._detail.setVisible(bool(detail))
         self._summary.setToolTip(hint)
         self._update_execute_state()
         # 计数口径跟着行集走（参数一变候选就变），故规划完通知面板刷新导航
@@ -502,7 +511,9 @@ class BatchTaskView(QWidget):
 
     def _update_execute_state(self):
         count = len(self._selected_rows())
-        self._execute_btn.setText(self.task.execute_label(count))
+        self._execute_btn.setText(
+            self.task.execute_label(count) if count else self.task.no_candidates_label()
+        )
         self._execute_btn.setEnabled(count > 0)
         self._jump_btn.setEnabled(self._current_row() is not None)
         for spec, button in getattr(self, "_action_buttons", []):
@@ -530,11 +541,11 @@ class BatchTaskView(QWidget):
                 self.tr("No preview for this row (page image missing)."),
             )
             return
-        pixmap = _to_pixmap(preview.image)
+        pixmap = to_pixmap(preview.image)
         if pixmap is None:
             self._dismiss_preview()
             return
-        _draw_overlays(pixmap, preview)
+        draw_overlays(pixmap, preview)
         self._preview_pixmap = pixmap
         # 标题说清"在看哪一页的哪个框"：图尺寸／"100% 原比例"对审阅没有意义
         # （缩放与否看标题条右侧的读数）
@@ -647,7 +658,7 @@ class BatchTaskView(QWidget):
         return ", ".join(parts) or self.tr("Done.")
 
 
-def _to_pixmap(image) -> "QPixmap | None":
+def to_pixmap(image) -> "QPixmap | None":
     """RGB ``ndarray`` → ``QPixmap``（**不缩放**：D11 要求 100% 原比例）。"""
     if image is None:
         return None
@@ -672,22 +683,35 @@ def _to_pixmap(image) -> "QPixmap | None":
     return QPixmap.fromImage(qimage.copy())
 
 
-def _draw_overlays(pixmap: QPixmap, preview) -> None:
-    """把页面坐标系的叠加框画到截图上（视图坐标 ＝ 页面坐标 − 原点）。"""
+def draw_overlays(pixmap: QPixmap, preview) -> None:
+    """把页面坐标系的叠加框画到截图上（视图坐标 ＝ 页面坐标 − 原点）。
+
+    ``rect`` 画轴对齐矩形；``poly`` 画多边形（斜框的真实四边形，见
+    ``ui/workbench_tasks.py::block_overlays``）。本函数与 ``to_pixmap`` 被
+    ``ui/workbench_review_view.py`` 共用——两个视图对审批图的转换口径必须是
+    同一份，才不会一个缩了一个没缩。
+    """
     if not preview.overlays:
         return
     origin_x, origin_y = preview.origin
     painter = QPainter(pixmap)
     try:
         for overlay in preview.overlays:
-            rect = overlay.get("rect")
-            if not rect:
-                continue
             key = _ROLE_THEME_KEYS.get(overlay.get("role"))
             color = get_theme_color(key=key) if key else QColor("#1e93e5")
             pen = QPen(color)
             pen.setWidth(2)
             painter.setPen(pen)
+            poly = overlay.get("poly")
+            if poly:
+                points = [
+                    QPointF(int(x) - origin_x, int(y) - origin_y) for x, y in poly
+                ]
+                painter.drawPolygon(QPolygonF(points))
+                continue
+            rect = overlay.get("rect")
+            if not rect:
+                continue
             painter.drawRect(
                 int(rect[0]) - origin_x,
                 int(rect[1]) - origin_y,

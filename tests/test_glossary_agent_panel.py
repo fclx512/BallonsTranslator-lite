@@ -146,19 +146,26 @@ class GlossaryAgentPanelTest(unittest.TestCase):
         self.assertNotIn("Extract Glossary", bars_src)
 
 
-    def test_task_nav_reaches_glossary_and_story(self):
-        # 工作台一级导航（D20 第 ① 段）：术语/剧情不再是 tab，而是导航里的任务
+    def test_translation_prep_holds_glossary_and_story_subpages(self):
+        """「翻译准备」是一个导航入口，术语/剧情是它内部的两个子页。
+
+        批次 C（交接 §4.2⑤）：只合导航，**不合草稿与落盘事务**——两块草稿
+        仍各归自己的 apply 路径，worker 也仍是同一个权威草稿持有者。
+        """
         from ui.glossary_agent_panel import WORKBENCH_ORDER
-        from ui.workbench_tasks import GLOSSARY, STORY
+        from ui.workbench_tasks import GLOSSARY, STORY, TRANSLATION_PREP
 
         panel, worker = self._panel()
         worker.initialize()
         self.assertEqual(panel.current_task(), WORKBENCH_ORDER[0])
-        panel.nav.select(GLOSSARY)
-        self.assertEqual(panel.current_task(), GLOSSARY)
-        self.assertEqual(panel.pages.currentWidget(), panel._glossary_page)
-        panel.nav.select(STORY)
-        self.assertEqual(panel.pages.currentWidget(), panel._story_page)
+        # 子页 id 不是导航任务：直接 select 忽略，必须走 select_prep_tab
+        self.assertNotIn(GLOSSARY, panel.nav._buttons)
+        panel.select_prep_tab(GLOSSARY)
+        self.assertEqual(panel.current_task(), TRANSLATION_PREP)
+        self.assertEqual(panel.pages.currentWidget(), panel._prep_tabs.parentWidget())
+        self.assertEqual(panel._prep_tabs.currentWidget(), panel._glossary_page)
+        panel.select_prep_tab(STORY)
+        self.assertEqual(panel._prep_tabs.currentWidget(), panel._story_page)
         worker.glossary.apply_patch([{"src": "勇者", "dst": "Hero"}])
         worker._sync_all()
         self.assertEqual(panel.glossary_table.rowCount(), 1)

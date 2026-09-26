@@ -322,6 +322,23 @@
             "allowed_mentions": [
                 "docs/技术实现/模型文件管理_设计方案_存档.md"
             ]
+        },
+        "ui/batch_expand.py": {
+            "note": "批量框扩张退役（2026-09-26，交接批次 C）：只有机械几何写入、没有可靠的自动排版消费（用户判定「扩了也不解决填不满／塞不下」），整条能力删除——引擎 ui/batch_expand.py、工作台适配 ui/workbench_tasks.py::ExpandTask、设置项 ProgramConfig.workbench_expand_px、复算台 expand 子命令与工作台导航项一并清掉；utils/block_geometry.py::expand_limited 保留（批量合并的审批截图仍在用），单块 Alt 拖拽缩放（ui/texteditshapecontrol.py）不在退役范围",
+            "allowed_mentions": [
+                "docs/daily_log.md",
+                "docs/技术实现/AI辅助功能_设计与实现.md"
+            ]
+        },
+        "tests/test_batch_expand.py": {
+            "note": "批量框扩张退役（2026-09-26）：被测引擎 ui/batch_expand.py 整条删除，用例随之删除；「碰到邻框即停」的几何判据仍在 tests/test_block_geometry.py 里锁着，批量写回五步顺序与版本撤回由 tests/test_batch_writeback.py 覆盖",
+            "allowed_mentions": []
+        },
+        "scripts/probes/expand_centering_probe.py": {
+            "note": "批量框扩张退役（2026-09-26）：探针的生产路径 ui/batch_expand.py::BatchExpand.apply 已删，探针无法运行故一并删除。它的测量方法（同一批块填占位译文、扩张前后各渲染一遍做目视对比）若要用于日后的「自动排版／译文居中」研究线，可从 git 历史取回",
+            "allowed_mentions": [
+                "docs/技术实现/AI辅助功能_设计与实现.md"
+            ]
         }
     },
     "dormant_symbols": {

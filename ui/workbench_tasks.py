@@ -1,27 +1,36 @@
-"""泛用工作台的**批量任务适配层**（D20／D27；接线清单见设计 §8）。
+"""泛用工作台的**任务数据侧**（批量任务 ＋ 非删除待办队列；接线见设计 §8）。
 
-工作台把六个任务放进同一个容器：前四项是「问题清理」任务族的批量任务
-（误识别清理／合并相邻框／框扩张／简单背景修复），后两项是既有的
-术语提取／剧情摘要。本模块只服务前四项的**数据侧**——
+工作台把六项任务收进同一个容器（顺序见
+``ui/glossary_agent_panel.py::WORKBENCH_ORDER``）：① 可疑框清理 ② 合并相邻
+文本框 ③ 原文待校对 ④ 简单背景修复 ⑤ 翻译准备（术语／剧情草稿）⑥ 译文待重译。
+本模块服务其中的**数据侧**，分两层——
 
-- 调引擎的只读 ``plan``，把结果摆成列表行（``TaskRow``）；
-- 给审批预览准备 **100% 原比例**（D11／D23）的截图与叠加框；
-- 把用户勾选的标识交回引擎的 ``apply``。
+1. ``BatchTask`` 族（①②④）：调引擎的只读 ``plan``，把结果摆成列表行
+   （``TaskRow``）；给审批预览准备 **100% 原比例**（D11／D23）的截图与叠加框；
+   把用户勾选的标识交回引擎的 ``apply``（整批写回 ＋ ``utils/batch_versions.py``
+   版本快照）。
+2. ``ReviewQueueTask`` 族（③⑥）：**没有删除、没有整批写回、没有版本**——
+   行是人工记下的待办或程序给出的建议，分区呈现（``ReviewSection``），出口
+   只有「跳画布处理」与「把这条从列表移除／忽略」。不复用 ``BatchTask`` 的
+   ``apply`` 语义（那是「勾选＝本次要改／要删」，见批次 C 交接 §8）。
 
 **这里没有 QWidget**（Qt 只用于取已翻译文案），界面在
-``ui/glossary_agent_panel.py``。之所以要这一层：四个引擎是同一个形状
+``ui/glossary_agent_panel.py``、``ui/workbench_batch_view.py`` 与
+``ui/workbench_review_view.py``。之所以要这一层：批量引擎是同一个形状
 （只读 ``plan`` ＋ 整批 ``apply``），界面据此只做三件事——填列表／算数字、
 收勾选、把标识传回去；把"哪个引擎、哪些字段"的差异收在这里，界面就
 不必为每个任务写一份。**界面不自己写几何判据、不自己改
 ``proj.pages``、不绕开 ``ui/batch_ops.py``**（设计 §8），本模块同样：
 唯一的几何动作是审批截图的外扩，复用
-``utils/block_geometry.py::expand_limited``（与引擎同一份实现）。
+``utils/block_geometry.py::expand_limited``（与引擎同一份实现）与
+``block_overlays``（斜框按真实四边形画，不平成外接矩形）。
 
 **默认值一律来自引擎的 plan**，界面不自作主张：合并的默认勾选＝非误聚组
-（D33d）、误识别的默认勾选＝未驳回块（D28）。扩张量在**引擎侧没有默认值**
-（D5：必须由调用方显式给），工作台的输入框初值则取自设置里的
-``utils/config.py::ProgramConfig`` 的 ``workbench_expand_px``（2026-09-18
-拍板定值 10px）——用户把该值改成 0 时列表为空、执行按钮保持禁用。
+（D33d）、误识别的默认勾选＝未驳回块（D28）。
+
+（原第三个批量任务「框扩张」已于 2026-09-26 退役：只有机械几何写入、
+没有可靠的自动排版消费，用户判定「扩了也不解决填不满／塞不下」。
+登记见 ``scripts/audit_registry.json``；单块 Alt 拖拽缩放不在退役范围。）
 
 文案一律在**字面量定义处**用 ``QCoreApplication.translate`` 显式标注上下文
 （i18n 模块级翻译表规则）：本模块没有 ``self``，间接的 ``tr(variable)``
@@ -37,33 +46,53 @@ from qtpy.QtCore import QCoreApplication
 from utils.block_geometry import expand_limited, rect_of
 from utils.block_tags import (
     MISREAD_SUBTYPE_LABELS,
+    OCR_REVIEW_ID,
+    TRANS_REVIEW_ID,
+    has_ocr_review_pending,
+    has_trans_review_pending,
+    is_tag_reviewed,
     misread_queue_summary,
+    remove_tag,
     set_tags_reviewed,
 )
 from utils.config import pcfg
 from utils.io_utils import imread
 
 from .batch_delete import BatchDeleteMisread
-from .batch_expand import MODE_PX, MODE_RATIO, BatchExpand
-from .batch_merge import BatchMerge, MergeConfig
+from .batch_merge import (
+    SKIP_NO_BLOCKS as MERGE_SKIP_NO_BLOCKS,
+    SKIP_NO_GROUPS as MERGE_SKIP_NO_GROUPS,
+    BatchMerge,
+    MergeConfig,
+)
 from .batch_ops import BatchOperation
 
-# 任务 id 即导航顺序的依据（设计 §8／D16：误识别清理 → 合并 → 扩张 → 背景修复
-# → 术语提取 → 剧情摘要）。前四项属「问题清理」任务族，参与跳步提示计数。
+# 任务 id。导航顺序定在 ``ui/glossary_agent_panel.py::WORKBENCH_ORDER``
+# （扁平六项：可疑框清理 → 合并 → 原文待校对 → 简单背景修复 → 翻译准备 →
+# 译文待重译）。
 MISREAD = "misread"
 MERGE = "merge"
-EXPAND = "expand"
 SIMPLE_INPAINT = "simple_inpaint"
+# 非删除待办队列：只读列表 + 「跳画布处理／从列表移除」，无批量写回、无版本
+OCR_REVIEW = "ocr_review"
+TRANS_REVIEW = "trans_review"
+# 翻译准备＝一个导航入口下的术语／剧情两块草稿（子页 id 仍分列，见面板）
+TRANSLATION_PREP = "translation_prep"
 GLOSSARY = "glossary"
 STORY = "story"
 
-CLEANUP_TASK_IDS = (MISREAD, MERGE, EXPAND, SIMPLE_INPAINT)
-
-# 扩张量的单位（与 ui/batch_expand.py 的模式常量一一对应）
-AMOUNT_MODE_KEYS = (MODE_PX, MODE_RATIO)
+# 批量任务（``BatchTask`` ＋ ``ui/workbench_batch_view.py::BatchTaskView``）：
+# 只读 ``plan`` ＋ 整批 ``apply`` ＋ ``utils/batch_versions.py`` 快照，**撤销池
+# 只管这一族**。
+CLEANUP_TASK_IDS = (MISREAD, MERGE, SIMPLE_INPAINT)
 
 # 预览外扩量（D31：审批截图＝并集框短边的 50%、遇邻框即停）
 PREVIEW_EXPAND_RATIO = 0.5
+
+# 「无假名/汉字」这一类最容易误伤真实存在的拉丁文本、外来语与拟声词（D9），
+# 故它出现的行**默认不勾选**——含多子类型时以含它为准（交接 §4.2①：先审后删，
+# 绝不把"另一个检测器没框到"变成勾选依据）。其余子类型仍按 D28 的默认勾选口径。
+_NO_JAPANESE = "no_japanese"
 
 # 页面图像缓存条数——逐行翻看审批图时不必反复解码同一张大图
 _PAGE_CACHE_SIZE = 2
@@ -77,6 +106,123 @@ def _clip(text: str, limit: int = 42) -> str:
     return flat if len(flat) <= limit else flat[: limit - 1] + "…"
 
 
+def block_row_caption(pagename: str, block_index: Optional[int]) -> str:
+    """块级行的浮层标题：**说清在看哪一页的哪个框**。
+
+    图尺寸（"150 × 60 px"）对审阅没有意义——它既不是块尺寸也不是页尺寸，
+    还每行都不同；缩放与否看浮层标题条右侧的读数。组／页级任务按自己的
+    行粒度覆盖（``BatchTask.row_caption``）。
+    """
+    if block_index is None:
+        return pagename
+    return QCoreApplication.translate(
+        "WorkbenchTasks", "%1 · block %2"
+    ).replace("%1", pagename).replace("%2", str(block_index))
+
+
+_SKIP_REASON_LABELS = {
+    MERGE_SKIP_NO_BLOCKS: QCoreApplication.translate(
+        "WorkbenchTasks", "no text blocks"
+    ),
+    MERGE_SKIP_NO_GROUPS: QCoreApplication.translate(
+        "WorkbenchTasks", "no merge groups"
+    ),
+    "no-mask": QCoreApplication.translate("WorkbenchTasks", "no mask"),
+    "no-image": QCoreApplication.translate("WorkbenchTasks", "page image unavailable"),
+    "mask-size-mismatch": QCoreApplication.translate(
+        "WorkbenchTasks", "mask size does not match the page"
+    ),
+    "no-simple-blocks": QCoreApplication.translate(
+        "WorkbenchTasks", "no simple-background blocks"
+    ),
+}
+
+
+def _format_skipped(skipped: Dict[str, str]) -> str:
+    """Aggregate engine skip codes into one short, user-facing detail line."""
+    counts: Dict[str, int] = {}
+    for reason in (skipped or {}).values():
+        counts[reason] = counts.get(reason, 0) + 1
+    if not counts:
+        return ""
+    parts = []
+    for reason, count in sorted(counts.items()):
+        label = _SKIP_REASON_LABELS.get(reason, reason)
+        parts.append(
+            QCoreApplication.translate("WorkbenchTasks", "%1 %2 page(s)")
+            .replace("%1", str(count))
+            .replace("%2", label)
+        )
+    return QCoreApplication.translate(
+        "WorkbenchTasks", "Skipped: %1."
+    ).replace("%1", ", ".join(parts))
+
+
+# ── 叠加框形状（斜框预览）────────────────────────────────────────────
+
+
+def _line_quad_points(line) -> Optional[List[Tuple[float, float]]]:
+    """一行 ``lines`` 条目 → 顶点列表（兼容 4 个 ``[x, y]`` 对与扁平 8 数）；
+    形态异常返回 ``None``。"""
+    if line is None:
+        return None
+    values: List[float] = []
+    try:
+        for pnt in line:
+            if hasattr(pnt, "__len__"):
+                values.extend((float(pnt[0]), float(pnt[1])))
+            else:
+                values.append(float(pnt))
+    except (TypeError, ValueError, IndexError):
+        return None
+    if len(values) < 6:
+        return None
+    if len(values) % 2:
+        return None
+    return list(zip(values[::2], values[1::2]))
+
+
+def _quad_is_axis_aligned(pts, tol: float = 1.5) -> bool:
+    """四边形是否轴对齐：x、y 各自的顶点值聚簇后都 ≤ 2 簇（即矩形两列／两行）。"""
+    def clusters(values) -> int:
+        ordered = sorted(values)
+        n = 1
+        for a, b in zip(ordered, ordered[1:]):
+            if b - a > tol:
+                n += 1
+        return n
+
+    return clusters(p[0] for p in pts) <= 2 and clusters(p[1] for p in pts) <= 2
+
+
+def block_overlays(blk, role: str) -> List[dict]:
+    """块 → 预览叠加框：轴对齐块给 ``rect``，斜块给 ``lines`` 的真实四边形。
+
+    ``xyxy`` 只是轴对齐外接矩形，斜框（检测器返回的 DB 四边形）用它会被画平
+    ——仅渲染问题，批处理本身不受影响。判据按四边形顶点几何算（``angle``
+    在 3° 以内会被归零，不可信）；只要有一行带斜率，全部行都按 ``poly`` 画，
+    多行块能看到每行的实际占位。
+    """
+    rect = rect_of(blk)
+    if rect is None:
+        return []
+    quads = []
+    slanted = False
+    for line in getattr(blk, "lines", None) or []:
+        pts = _line_quad_points(line)
+        if pts is None:
+            continue
+        aligned = _quad_is_axis_aligned(pts)
+        slanted = slanted or not aligned
+        quads.append(pts)
+    if not quads or not slanted:
+        return [{"rect": rect, "role": role}]
+    return [
+        {"poly": [[round(x), round(y)] for x, y in pts], "role": role}
+        for pts in quads
+    ]
+
+
 # ── 审批预览（D11／D23：100% 原比例）────────────────────────────────
 
 
@@ -87,8 +233,10 @@ class Preview:
     image: Any
     origin: Tuple[int, int]
     overlays: List[dict] = field(default_factory=list)
-    """``[{"rect": [x1, y1, x2, y2], "role": "target"|"old"|"new"}, ...]``
-    ——``rect`` 是**页面坐标**，视图自行减去 ``origin`` 换算到图上。"""
+    """``[{"rect": [x1, y1, x2, y2], ...}, {"poly": [[x, y], ...], ...}, ...]``
+    ——坐标都是**页面坐标**，视图自行减去 ``origin`` 换算到图上；``role``
+    取 ``"target"|"old"|"new"``。轴对齐范围用 ``rect``，斜框（检测器返回的
+    四边形带斜率）用 ``poly``——见 ``block_overlays``。"""
 
 
 @dataclass
@@ -103,7 +251,97 @@ class TaskRow:
     payload: dict = field(default_factory=dict)
 
 
-class BatchTask:
+class _PageImageCache:
+    """页面原图小缓存 ＋ 审批截图裁剪（批量任务与待办队列共用一份实现）。
+
+    几何一律复用现成实现：外扩量＝矩形短边的 ``ratio``、上限"碰到邻框即停"
+    （``utils/block_geometry.py::expand_limited``，与 ``ui/batch_merge.py``
+    的审批截图同一份）。**不在这里写第二套几何判据。**
+    """
+
+    def _init_page_cache(self) -> None:
+        self._pages: Dict[str, Any] = {}
+        self._order: List[str] = []
+
+    def page_image(self, pagename: str):
+        """页面原图（RGB）；缺图返回 ``None``。带小缓存，见 ``_PAGE_CACHE_SIZE``。"""
+        if pagename in self._pages:
+            return self._pages[pagename]
+        image = None
+        if self.proj is not None and getattr(self.proj, "directory", None):
+            image = imread(osp.join(self.proj.directory, pagename))
+        self._pages[pagename] = image
+        self._order.append(pagename)
+        while len(self._order) > _PAGE_CACHE_SIZE:
+            self._pages.pop(self._order.pop(0), None)
+        return image
+
+    def page_size(self, pagename: str) -> Optional[Tuple[int, int]]:
+        """页面像素尺寸：先用项目已存的宽高，取不到再看图片（与引擎同序）。"""
+        info = getattr(self.proj, "_image_info", None) or {}
+        entry = info.get(pagename) or {}
+        width, height = entry.get("width"), entry.get("height")
+        if width and height:
+            return int(width), int(height)
+        image = self.page_image(pagename)
+        if image is None:
+            return None
+        return int(image.shape[1]), int(image.shape[0])
+
+    def block_at(self, pagename: str, block_index: Optional[int]):
+        """``(块, 外接矩形)``；页／下标越界或缺坐标时给 ``(None, None)``。"""
+        blk_list = self.proj.pages.get(pagename) or []
+        if block_index is None or not 0 <= block_index < len(blk_list):
+            return None, None
+        blk = blk_list[block_index]
+        return blk, rect_of(blk)
+
+    def crop_around(
+        self,
+        pagename: str,
+        rect: Sequence[int],
+        *,
+        exclude: Iterable[int] = (),
+        ratio: float = PREVIEW_EXPAND_RATIO,
+    ) -> Optional[Tuple[Any, Tuple[int, int]]]:
+        """裁出 ``rect`` 外扩后的区域，**不缩放**（D11）。"""
+        image = self.page_image(pagename)
+        if image is None:
+            return None
+        height, width = image.shape[:2]
+        skip = set(exclude)
+        neighbors = [
+            r
+            for idx, blk in enumerate(self.proj.pages.get(pagename) or [])
+            if idx not in skip
+            for r in [rect_of(blk)]
+            if r is not None
+        ]
+        amount = int(round(min(rect[2] - rect[0], rect[3] - rect[1]) * ratio))
+        x1, y1, x2, y2 = expand_limited(
+            list(rect), amount, (width, height), neighbors
+        )
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(width, x2), min(height, y2)
+        if x2 <= x1 or y2 <= y1:
+            return None
+        return image[y1:y2, x1:x2], (x1, y1)
+
+    def block_preview(self, pagename: str, block_index: Optional[int]) -> Optional["Preview"]:
+        """单块的审批预览：原图裁区 ＋ 该块的真实轮廓（``block_overlays``）。"""
+        blk, rect = self.block_at(pagename, block_index)
+        if blk is None or rect is None:
+            return None
+        cropped = self.crop_around(pagename, rect, exclude={block_index})
+        if cropped is None:
+            return None
+        image, origin = cropped
+        return Preview(
+            image=image, origin=origin, overlays=block_overlays(blk, "target")
+        )
+
+
+class BatchTask(_PageImageCache):
     """一个批量任务的数据侧适配（子类实现 plan／preview／apply）。"""
 
     id: str = ""
@@ -137,14 +375,18 @@ class BatchTask:
         self.proj = proj
         self.op = op or BatchOperation(proj)
         self.on_changed = on_changed
-        self._pages: Dict[str, Any] = {}
-        self._order: List[str] = []
+        self._init_page_cache()
         self._last_plan: Optional[dict] = None
 
     # ── 子类接口 ────────────────────────────────────────────────────
 
     def plan(self, options: Dict[str, Any]) -> dict:
-        """只读规划。返回 ``{"rows", "summary", "options_hint"}``。"""
+        """只读规划。
+
+        返回 ``{"rows", "summary", "options_hint", "detail"}``；其中
+        ``detail`` 是页面上可见的原因／补充说明，``options_hint`` 保留给
+        兼容旧调用方的 tooltip。
+        """
         raise NotImplementedError
 
     def preview(self, row: TaskRow) -> Optional[Preview]:
@@ -152,17 +394,8 @@ class BatchTask:
         return None
 
     def row_caption(self, row: TaskRow) -> str:
-        """审批浮层的标题：**说清在看哪一页的哪个框**。
-
-        图尺寸（"150 × 60 px"）对审阅没有意义——它既不是块尺寸也不是页尺寸，
-        还每行都不同；缩放与否看浮层标题条右侧的读数。子类按自己的行粒度
-        覆盖（组／页级任务给条数）。
-        """
-        if row.block_index is None:
-            return row.pagename
-        return QCoreApplication.translate(
-            "WorkbenchTasks", "%1 · block %2"
-        ).replace("%1", row.pagename).replace("%2", str(row.block_index))
+        """审批浮层的标题（块级行的通用形态见 ``block_row_caption``）。"""
+        return block_row_caption(row.pagename, row.block_index)
 
     def card_fields(self, row: TaskRow) -> Optional[dict]:
         """卡片模式（``row_view="card"``）的字段映射。
@@ -198,6 +431,18 @@ class BatchTask:
             "WorkbenchTasks", "Apply to %1 row(s)"
         ).replace("%1", str(count))
 
+    def no_candidates_label(self) -> str:
+        """无候选时的禁用按钮文案，避免显示成一次真实操作。"""
+        return QCoreApplication.translate("WorkbenchTasks", "No candidates")
+
+    def count_label(self) -> str:
+        """导航计数的单位说明；``pending`` 的数值口径保持不变。
+
+        返回空串＝只报数字（块口径的队列用这个：标签已说清数的是什么，
+        再缀「待审校」是重复说法，见 ``MisreadTask.count_label``）。
+        """
+        return QCoreApplication.translate("WorkbenchTasks", "available")
+
     def confirm_html(self, rows: Sequence[TaskRow], options: Dict[str, Any]) -> str:
         """D27 的告知弹窗正文：**在弹窗里说清确认后会做什么**。"""
         raise NotImplementedError
@@ -220,67 +465,6 @@ class BatchTask:
         self._order.clear()
         self._last_plan = None
 
-    def page_image(self, pagename: str):
-        """页面原图（RGB）；缺图返回 ``None``。带小缓存，见 ``_PAGE_CACHE_SIZE``。"""
-        if pagename in self._pages:
-            return self._pages[pagename]
-        image = None
-        if self.proj is not None and getattr(self.proj, "directory", None):
-            image = imread(osp.join(self.proj.directory, pagename))
-        self._pages[pagename] = image
-        self._order.append(pagename)
-        while len(self._order) > _PAGE_CACHE_SIZE:
-            self._pages.pop(self._order.pop(0), None)
-        return image
-
-    def page_size(self, pagename: str) -> Optional[Tuple[int, int]]:
-        """页面像素尺寸：先用项目已存的宽高，取不到再看图片（与引擎同序）。"""
-        info = getattr(self.proj, "_image_info", None) or {}
-        entry = info.get(pagename) or {}
-        width, height = entry.get("width"), entry.get("height")
-        if width and height:
-            return int(width), int(height)
-        image = self.page_image(pagename)
-        if image is None:
-            return None
-        return int(image.shape[1]), int(image.shape[0])
-
-    def crop_around(
-        self,
-        pagename: str,
-        rect: Sequence[int],
-        *,
-        exclude: Iterable[int] = (),
-        ratio: float = PREVIEW_EXPAND_RATIO,
-    ) -> Optional[Tuple[Any, Tuple[int, int]]]:
-        """裁出 ``rect`` 外扩后的区域，**不缩放**（D11）。
-
-        外扩量＝矩形短边的 ``ratio``，上限"碰到邻框即停"——与
-        ``ui/batch_merge.py`` 的审批截图共用
-        ``utils/block_geometry.py::expand_limited``。
-        """
-        image = self.page_image(pagename)
-        if image is None:
-            return None
-        height, width = image.shape[:2]
-        skip = set(exclude)
-        neighbors = [
-            r
-            for idx, blk in enumerate(self.proj.pages.get(pagename) or [])
-            if idx not in skip
-            for r in [rect_of(blk)]
-            if r is not None
-        ]
-        amount = int(round(min(rect[2] - rect[0], rect[3] - rect[1]) * ratio))
-        x1, y1, x2, y2 = expand_limited(
-            list(rect), amount, (width, height), neighbors
-        )
-        x1, y1 = max(0, x1), max(0, y1)
-        x2, y2 = min(width, x2), min(height, y2)
-        if x2 <= x1 or y2 <= y1:
-            return None
-        return image[y1:y2, x1:x2], (x1, y1)
-
 
 # ── 误识别清理（ui/batch_delete.py）─────────────────────────────────
 
@@ -295,7 +479,7 @@ class MisreadTask(BatchTask):
         QCoreApplication.translate("WorkbenchTasks", "Page"),
         QCoreApplication.translate("WorkbenchTasks", "Source text"),
         QCoreApplication.translate("WorkbenchTasks", "Subtype"),
-        QCoreApplication.translate("WorkbenchTasks", "Review"),
+        QCoreApplication.translate("WorkbenchTasks", "Action"),
     )
 
     def card_fields(self, row: TaskRow) -> Optional[dict]:
@@ -315,14 +499,14 @@ class MisreadTask(BatchTask):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.label = QCoreApplication.translate(
-            "WorkbenchTasks", "Delete misread blocks"
+            "WorkbenchTasks", "Delete suspicious text blocks"
         )
         self.title = QCoreApplication.translate(
-            "WorkbenchTasks", "Misread cleanup"
+            "WorkbenchTasks", "Suspicious text-block cleanup"
         )
         self.hint = QCoreApplication.translate(
             "WorkbenchTasks",
-            "Blocks whose OCR text looks like noise. Reject the false positives first, then delete the rest in one go.",
+            "OCR rules flagged these text blocks as suspicious. They are selected for deletion by default; rows whose text has no kana or kanji start unchecked, because a real Latin word or onomatopoeia can hide there. Mark a false positive to keep a block. Marking a false positive and selecting a block for deletion are separate decisions. Click a row to preview the original image above the canvas.",
         )
 
     def _engine(self) -> BatchDeleteMisread:
@@ -335,50 +519,55 @@ class MisreadTask(BatchTask):
             subtypes = ", ".join(
                 MISREAD_SUBTYPE_LABELS.get(s, s) for s in entry.subtypes
             )
-            review = (
-                QCoreApplication.translate("WorkbenchTasks", "Rejected")
-                if entry.reviewed
-                else QCoreApplication.translate("WorkbenchTasks", "Pending")
-            )
+            if entry.reviewed:
+                review = QCoreApplication.translate(
+                    "WorkbenchTasks", "False positive — keep"
+                )
+            elif _NO_JAPANESE in entry.subtypes:
+                review = QCoreApplication.translate(
+                    "WorkbenchTasks", "Confirm before deleting"
+                )
+            else:
+                review = QCoreApplication.translate(
+                    "WorkbenchTasks", "Delete by default"
+                )
             cells = [entry.pagename, _clip(entry.text), subtypes or "—", review]
             rows.append(
                 TaskRow(
                     key=entry.key,
                     pagename=entry.pagename,
                     cells=cells,
-                    checked=not entry.reviewed,
+                    checked=not entry.reviewed
+                    and _NO_JAPANESE not in entry.subtypes,
                     block_index=entry.index,
                     payload={"reviewed": entry.reviewed},
                 )
             )
+        # 第三个数字是**实际默认勾选的行数**，不是"未驳回块数"——两者在
+        # 「无假名/汉字」默认不勾选之后不再相等，摘要不能替勾选框说话。
+        default_checked = sum(1 for row in rows if row.checked)
         summary = QCoreApplication.translate(
             "WorkbenchTasks",
-            "%1 in the queue, %2 rejected, %3 to delete by default.",
+            "%1 suspicious block(s) found; %2 marked as false positives, %3 selected for deletion by default.",
+        )
+        detail = QCoreApplication.translate(
+            "WorkbenchTasks",
+            "Source: OCR post-processing rules. If this list is empty, OCR may not have run, may be disabled, may be set to none_ocr, or may simply have found no suspicious text.",
         )
         plan = {
             "rows": rows,
             "summary": summary.replace("%1", str(report["queue"]))
             .replace("%2", str(report["rejected"]))
-            .replace("%3", str(report["pending"])),
+            .replace("%3", str(default_checked)),
             "options_hint": "",
+            "detail": detail,
         }
         self._last_plan = plan
         return plan
 
     def preview(self, row: TaskRow) -> Optional[Preview]:
-        blk_list = self.proj.pages.get(row.pagename) or []
-        if row.block_index is None or row.block_index >= len(blk_list):
-            return None
-        rect = rect_of(blk_list[row.block_index])
-        if rect is None:
-            return None
-        cropped = self.crop_around(row.pagename, rect, exclude={row.block_index})
-        if cropped is None:
-            return None
-        image, origin = cropped
-        return Preview(
-            image=image, origin=origin, overlays=[{"rect": rect, "role": "target"}]
-        )
+        # 单块截图＝原图裁区 ＋ 该块轮廓：与待办队列共用同一份实现
+        return self.block_preview(row.pagename, row.block_index)
 
     def apply(self, keys, options):
         return self._engine().apply(keys, label=self.label)
@@ -409,7 +598,7 @@ class MisreadTask(BatchTask):
             {
                 "key": "reject",
                 "label": QCoreApplication.translate(
-                    "WorkbenchTasks", "Reject / un-reject selection"
+                    "WorkbenchTasks", "Mark / unmark false positive"
                 ),
                 "needs_rows": True,
             }
@@ -426,19 +615,23 @@ class MisreadTask(BatchTask):
             blk_list = self.proj.pages.get(row.pagename) or []
             if row.block_index is None or row.block_index >= len(blk_list):
                 continue
-            changed += set_tags_reviewed(blk_list[row.block_index], target)
+            changed += set_tags_reviewed(blk_list[row.block_index], target, "ocr_misread")
             row.payload["reviewed"] = target
         if changed and self.on_changed is not None:
             self.on_changed()
         if target:
             notify = QCoreApplication.translate(
-                "WorkbenchTasks", "Rejected %1 block(s)."
+                "WorkbenchTasks", "Marked %1 block(s) as false positives."
             ).replace("%1", str(changed))
         else:
             notify = QCoreApplication.translate(
-                "WorkbenchTasks", "Un-rejected %1 block(s)."
+                "WorkbenchTasks", "Removed the false-positive mark from %1 block(s)."
             ).replace("%1", str(changed))
         return {"replan": True, "notify": notify}
+
+    def count_label(self) -> str:
+        # 任务名已含「可疑框」，单位「待审校」是重复说法；块口径的队列只留数字
+        return ""
 
     def pending(self, options) -> Optional[int]:
         # 队列口径见 D28：待处理＝队列内块数 − 已驳回块数（纯内存遍历，便宜）
@@ -478,12 +671,12 @@ class MergeTask(BatchTask):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.label = QCoreApplication.translate(
-            "WorkbenchTasks", "Merge adjacent blocks"
+            "WorkbenchTasks", "Merge adjacent text blocks"
         )
         self.title = self.label
         self.hint = QCoreApplication.translate(
             "WorkbenchTasks",
-            "One row per candidate group. Click a row to preview it; suspected false groupings start unchecked.",
+            "One row per candidate group. Suspected false groupings start unchecked. Click a row to preview the original image above the canvas.",
         )
 
     def row_caption(self, row: TaskRow) -> str:
@@ -556,6 +749,10 @@ class MergeTask(BatchTask):
             )
             .replace("%1", str(report["oversize"]))
             .replace("%2", str(report["suspect"])),
+            "detail": _format_skipped(report.get("skipped"))
+            or QCoreApplication.translate(
+                "WorkbenchTasks", "No pages were skipped."
+            ),
         }
         self._last_plan = plan
         return plan
@@ -652,242 +849,12 @@ class MergeTask(BatchTask):
             )
         }
 
+    def count_label(self) -> str:
+        return QCoreApplication.translate("WorkbenchTasks", "groups")
+
     def pending(self, options) -> Optional[int]:
         # 默认勾选口径＝非误聚组（D33d），与 apply 的缺省一致
         return self._engine().plan()["apply_default"]
-
-
-# ── 批量框扩张（ui/batch_expand.py）─────────────────────────────────
-
-
-class ExpandTask(BatchTask):
-    """只扩渲染区域（D5）；引擎侧无默认扩张量，输入框初值取设置里的默认值。"""
-
-    id = EXPAND
-    stretch_column = 3  # 增长描述是唯一的长文本列
-    columns = (
-        QCoreApplication.translate("WorkbenchTasks", "Page"),
-        QCoreApplication.translate("WorkbenchTasks", "Block"),
-        QCoreApplication.translate("WorkbenchTasks", "Growth"),
-    )
-
-    # 各边的短名（增长列的「受限边」描述用；字面量定义处标注翻译上下文）
-    _SIDE_KEYS = ("top", "bottom", "left", "right")
-    _SIDE_LABELS = {
-        "top": QCoreApplication.translate("WorkbenchTasks", "Top"),
-        "bottom": QCoreApplication.translate("WorkbenchTasks", "Bottom"),
-        "left": QCoreApplication.translate("WorkbenchTasks", "Left"),
-        "right": QCoreApplication.translate("WorkbenchTasks", "Right"),
-    }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.label = QCoreApplication.translate("WorkbenchTasks", "Expand blocks")
-        self.title = self.label
-        self.hint = QCoreApplication.translate(
-            "WorkbenchTasks",
-            "Makes room for typesetting: grows each text block's rect so the translated text has more room. Only the rect changes (masks and inpainted pixels are untouched); the text re-flows inside the new rect, centered if the block's alignment is set to centered.",
-        )
-
-    @staticmethod
-    def _growth_text(entry: dict, want: int) -> str:
-        """一行的「增长」描述：只说每边长多少、哪边受限，不铺坐标数字。"""
-        old, new = entry["old"], entry["new"]
-        deltas = {
-            "top": old[1] - new[1],
-            "bottom": new[3] - old[3],
-            "left": old[0] - new[0],
-            "right": new[2] - old[2],
-        }
-        limited = [name for name in ExpandTask._SIDE_KEYS if deltas[name] < want]
-        if not limited:
-            return QCoreApplication.translate(
-                "WorkbenchTasks", "+%1 px on all sides"
-            ).replace("%1", str(want))
-        # _SIDE_LABELS 的值已在定义处翻译（i18n 模块级翻译表规则），直接用
-        names = "、".join(ExpandTask._SIDE_LABELS[name] for name in limited)
-        return QCoreApplication.translate(
-            "WorkbenchTasks", "+%1 px, %2 limited"
-        ).replace("%1", str(want)).replace("%2", names)
-
-    def _engine(self) -> BatchExpand:
-        return BatchExpand(self.proj, op=self.op)
-
-    @staticmethod
-    def _raw_amount(options: Dict[str, Any]) -> float:
-        """界面控件里的原始数值（``ratio`` 模式下是百分数）。"""
-        try:
-            return float(options.get("amount") or 0)
-        except (TypeError, ValueError):
-            return 0.0
-
-    @staticmethod
-    def _mode(options: Dict[str, Any]) -> str:
-        mode = options.get("mode") or MODE_PX
-        return mode if mode in AMOUNT_MODE_KEYS else MODE_PX
-
-    def _amount(self, options: Dict[str, Any]) -> float:
-        """给引擎的扩张量：``ratio`` 模式下把百分数换成短边比例。"""
-        raw = self._raw_amount(options)
-        return raw / 100.0 if self._mode(options) == MODE_RATIO else raw
-
-    def plan(self, options: Dict[str, Any]) -> dict:
-        amount = self._amount(options)
-        if amount <= 0:
-            self._last_plan = None
-            return {
-                "rows": [],
-                "summary": QCoreApplication.translate(
-                    "WorkbenchTasks", "Set an amount to preview the expansion."
-                ),
-                "options_hint": "",
-            }
-        mode = self._mode(options)
-        report = self._engine().plan(amount, mode)
-        # 每边请求量：px 模式全表一个值；ratio 模式按各框短边算（同引擎口径）
-        want_px = int(round(amount)) if mode == MODE_PX else 0
-        rows = []
-        for entry in report["entries"]:
-            if mode == MODE_PX:
-                want = want_px
-            else:
-                short = min(
-                    entry["old"][2] - entry["old"][0],
-                    entry["old"][3] - entry["old"][1],
-                )
-                want = int(round(short * amount))
-            rows.append(
-                TaskRow(
-                    key=(entry["pagename"], entry["index"]),
-                    pagename=entry["pagename"],
-                    cells=[
-                        entry["pagename"],
-                        str(entry["index"]),
-                        self._growth_text(entry, want),
-                    ],
-                    checked=True,
-                    block_index=entry["index"],
-                    payload={"old": entry["old"], "new": entry["new"]},
-                )
-            )
-        summary = QCoreApplication.translate(
-            "WorkbenchTasks",
-            "%1 block(s) can grow, %2 blocked already, %3 with at least one side clamped.",
-        )
-        plan = {
-            "rows": rows,
-            "summary": summary.replace("%1", str(report["changed"]))
-            .replace("%2", str(report["unchanged"]))
-            .replace("%3", str(report["clamped"])),
-            "options_hint": "",
-        }
-        self._last_plan = plan
-        return plan
-
-    def preview(self, row: TaskRow) -> Optional[Preview]:
-        old = row.payload.get("old")
-        new = row.payload.get("new")
-        if not old or not new:
-            return None
-        # 预览框取新旧并集再外扩，好让"扩到哪"看得见（D5 的数值就靠这个挑）
-        union = [
-            min(old[0], new[0]),
-            min(old[1], new[1]),
-            max(old[2], new[2]),
-            max(old[3], new[3]),
-        ]
-        cropped = self.crop_around(row.pagename, union, exclude={row.block_index})
-        if cropped is None:
-            return None
-        image, origin = cropped
-        return Preview(
-            image=image,
-            origin=origin,
-            overlays=[
-                {"rect": old, "role": "old"},
-                {"rect": new, "role": "new"},
-            ],
-        )
-
-    def apply(self, keys, options):
-        return self._engine().apply(
-            self._amount(options), self._mode(options), keys, label=self.label
-        )
-
-    def options_spec(self) -> List[dict]:
-        return [
-            {
-                "key": "amount",
-                "kind": "int",
-                "label": QCoreApplication.translate(
-                    "WorkbenchTasks", "Grow each side by"
-                ),
-                "min": 0,
-                "max": 500,
-                # 初值取设置里的默认扩张量（D5／C3，2026-09-18 定值 10px）。
-                # 引擎仍要求显式给 amount，这里只是输入框的起点，用户可改。
-                "value": max(0, int(pcfg.workbench_expand_px)),
-                # 后缀跟着「单位」走，且**不翻译**：px／% 是通用单位记号，
-                # 中文语境下同样一眼看懂（写死"像素"反而不通用）。
-                "suffix_map": ("mode", {MODE_PX: " px", MODE_RATIO: " %"}),
-            },
-            {
-                "key": "mode",
-                "kind": "choice",
-                "label": QCoreApplication.translate("WorkbenchTasks", "Unit"),
-                "items": [
-                    (MODE_PX, "px"),
-                    (
-                        MODE_RATIO,
-                        QCoreApplication.translate(
-                            "WorkbenchTasks", "percent of the short side"
-                        ),
-                    ),
-                ],
-                "value": MODE_PX,
-            },
-        ]
-
-    def execute_label(self, count: int) -> str:
-        return QCoreApplication.translate(
-            "WorkbenchTasks", "Expand %1 block(s)"
-        ).replace("%1", str(count))
-
-    def confirm_html(self, rows, options) -> str:
-        amount = self._amount(options)
-        if self._mode(options) == MODE_RATIO:
-            size = QCoreApplication.translate(
-                "WorkbenchTasks", "%1% of each block's short side per side"
-            ).replace("%1", str(round(amount * 100, 1)))
-        else:
-            size = QCoreApplication.translate(
-                "WorkbenchTasks", "%1 px per side"
-            ).replace("%1", str(round(amount)))
-        pages = len({row.pagename for row in rows})
-        body = QCoreApplication.translate(
-            "WorkbenchTasks",
-            "Grows %1 block(s) across %2 page(s) by %3, stopping at a neighbouring block or the page edge.",
-        )
-        note = QCoreApplication.translate(
-            "WorkbenchTasks",
-            "Only the rendering rectangle changes (mask and inpainted data are kept). The whole batch can be rolled back in one step.",
-        )
-        return (
-            "<p>"
-            + body.replace("%1", str(len(rows)))
-            .replace("%2", str(pages))
-            .replace("%3", size)
-            + "</p><p>"
-            + note
-            + "</p>"
-        )
-
-    def pending(self, options) -> Optional[int]:
-        if self._amount(options) <= 0:
-            return None
-        return self._engine().plan(
-            self._amount(options), self._mode(options)
-        )["changed"]
 
 
 # ── 批量简单背景修复（ui/batch_inpaint.py）──────────────────────────
@@ -914,7 +881,7 @@ class SimpleInpaintTask(BatchTask):
         self.title = self.label
         self.hint = QCoreApplication.translate(
             "WorkbenchTasks",
-            "Fills near-flat balloon interiors with their background colour; complex backgrounds are left alone (no model is loaded). Writes the inpainted layer only.",
+            "Fills near-flat balloon interiors with their background colour; complex backgrounds are left alone (no model is loaded). Writes the inpainted layer only. Click a row to preview the original image above the canvas.",
         )
 
     def row_caption(self, row: TaskRow) -> str:
@@ -961,6 +928,10 @@ class SimpleInpaintTask(BatchTask):
             .replace("%3", str(report["complex"]))
             .replace("%4", str(report["unknown"])),
             "options_hint": "",
+            "detail": _format_skipped(report.get("skipped"))
+            or QCoreApplication.translate(
+                "WorkbenchTasks", "No pages were skipped."
+            ),
         }
         self._last_plan = plan
         return plan
@@ -1015,12 +986,14 @@ class SimpleInpaintTask(BatchTask):
             + "</p>"
         )
 
+    def count_label(self) -> str:
+        return QCoreApplication.translate("WorkbenchTasks", "pages")
+
     def pending(self, options) -> Optional[int]:
-        # plan 要把全书页图读一遍（判据算原图，D34），跳步提示不值得为它重跑
-        # 一遍——只回报**已经扫过**的那次结果
+        # plan 要把全书页图读一遍（判据算原图，D34），导航只回报已扫描的结果。
         if not self._last_plan:
             return None
-        return sum(int(row.cells[1]) for row in self._last_plan["rows"])
+        return len(self._last_plan["rows"])
 
 
 # ── 工厂 ────────────────────────────────────────────────────────────
@@ -1033,13 +1006,412 @@ def build_batch_tasks(
     inpainter_provider: Optional[Callable[[], Any]] = None,
     on_changed: Optional[Callable[[], None]] = None,
 ) -> Dict[str, BatchTask]:
-    """按导航顺序建四个批量任务（D16 的默认顺序见 ``CLEANUP_TASK_IDS``）。"""
+    """按用户工作流顺序建三个批量任务（顺序见设计 §8）。"""
     tasks: List[BatchTask] = [
         MisreadTask(proj, op, on_changed=on_changed),
         MergeTask(proj, op, on_changed=on_changed),
-        ExpandTask(proj, op, on_changed=on_changed),
         SimpleInpaintTask(
             proj, op, inpainter_provider=inpainter_provider, on_changed=on_changed
         ),
+    ]
+    return {task.id: task for task in tasks}
+
+
+# ── 非删除待办队列（原文待校对／译文待重译）─────────────────────────
+#
+# 与批量任务的根本区别（批次 C 交接 §4.2③⑥、§8）：
+#
+# - **没有删除、没有整批写回、没有版本快照**：行是「我稍后处理」的记录或
+#   程序给出的建议，出口只有「跳画布处理」与「把这条从列表移除／忽略」；
+# - 人工记录与程序建议**分区呈现**（``ReviewSection``）：前者是用户的明确
+#   待办、可取消记录，后者可安全忽略，不混成一张表、不共用勾选语义；
+# - 故**不复用** ``BatchTask``（它的 ``apply`` 语义是「勾选＝本次要改／要删」），
+#   只共用 ``_PageImageCache`` 的页面缓存与审批截图。
+#
+# "移除记录／忽略建议"只动这份记录本身：不改原文、不改译文、不清手写／拟声
+# 这类**持久翻译指示**（指示与原文是否待校对是两件事，见交接 §3.2）。
+
+
+@dataclass(frozen=True)
+class ReviewSection:
+    """待办队列的一个分区（界面按此建一段列表 ＋ 自己的处置按钮）。"""
+
+    id: str
+    title: str  # 分区标题（已翻译）
+    empty: str  # 空态说明（已翻译）
+    action_label: str  # 处置按钮文案（已翻译）
+    notify: str  # 处置回执模板（%1 ＝ 实际移除的块数）
+    badge: str  # 行的徽章文案（已翻译）
+    tone: str = "muted"  # 徽章色调（``ui/custom_widget/row_table.py`` 的取值）
+
+
+class ReviewQueueTask(_PageImageCache):
+    """只读待办队列的数据侧（界面在 ``ui/workbench_review_view.py``）。"""
+
+    id: str = ""
+    title: str = ""
+    hint: str = ""
+    row_view = "card"
+    # 现场处理动作 id：界面据此给出「直接开确认卡」的按钮（与「跳画布」并列
+    # 的第二条出口，交接 §4.2③⑥）。空＝本队列没有现场动作。
+    action_id: str = ""
+
+    def __init__(self, proj, *, on_changed: Optional[Callable[[], None]] = None):
+        self.proj = proj
+        self.on_changed = on_changed
+        self._init_page_cache()
+        self._last_plan: Optional[dict] = None
+
+    # ── 子类接口 ────────────────────────────────────────────────────
+
+    def sections(self) -> Sequence[ReviewSection]:
+        """本队列的分区（顺序即界面的呈现顺序）。"""
+        raise NotImplementedError
+
+    def collect(self) -> Dict[str, List[TaskRow]]:
+        """各分区的行（一个块只进一个区，子类实现）。"""
+        raise NotImplementedError
+
+    def summary_text(self, counts: Dict[str, int]) -> str:
+        raise NotImplementedError
+
+    def detail_text(self) -> str:
+        raise NotImplementedError
+
+    def drop_record(self, section_id: str, blk) -> int:
+        """移除这条记录／忽略这条建议；返回改动条数（0／1）。子类实现。"""
+        raise NotImplementedError
+
+    # ── 共用实现 ────────────────────────────────────────────────────
+
+    def _make_row(
+        self,
+        spec: ReviewSection,
+        pagename: str,
+        idx: int,
+        blk,
+        *,
+        detail: str = "",
+    ) -> TaskRow:
+        """块 → 列表行。``checked=False``：勾选是「选中这条待办」，不是默认口径。"""
+        cells = [pagename, _clip(blk.get_text() or "")]
+        if detail:
+            cells.append(detail)
+        return TaskRow(
+            key=(pagename, idx),
+            pagename=pagename,
+            cells=cells,
+            checked=False,
+            block_index=idx,
+            payload={"section": spec.id, "badge": spec.badge, "tone": spec.tone},
+        )
+
+    def _section(self, section_id: str) -> Optional[ReviewSection]:
+        return next(
+            (spec for spec in self.sections() if spec.id == section_id), None
+        )
+
+    def plan(self) -> dict:
+        """只读规划：各分区的行 ＋ 摘要 ＋ 页面上的说明行。"""
+        rows = self.collect()
+        counts = {section_id: len(items) for section_id, items in rows.items()}
+        plan = {
+            "sections": rows,
+            "summary": self.summary_text(counts),
+            "detail": self.detail_text(),
+        }
+        self._last_plan = plan
+        return plan
+
+    def preview(self, row: TaskRow) -> Optional[Preview]:
+        return self.block_preview(row.pagename, row.block_index)
+
+    def row_caption(self, row: TaskRow) -> str:
+        return block_row_caption(row.pagename, row.block_index)
+
+    def card_fields(self, row: TaskRow) -> Optional[dict]:
+        """卡片行：主文＝原文摘要，次行＝页 · 块号，徽章＝这份记录的来源。"""
+        meta = [row.pagename]
+        if row.block_index is not None:
+            meta.append(
+                QCoreApplication.translate("WorkbenchTasks", "block %1").replace(
+                    "%1", str(row.block_index)
+                )
+            )
+        detail = row.cells[2] if len(row.cells) > 2 else ""
+        if detail:
+            meta.append(detail)
+        return {
+            "primary": row.cells[1] if len(row.cells) > 1 else "",
+            "meta": " · ".join(part for part in meta if part),
+            "badge": row.payload.get("badge", ""),
+            "badge_tone": row.payload.get("tone", "muted"),
+            "rejected": False,  # 待办队列没有「已驳回」这一态
+        }
+
+    def run_section_action(
+        self, section_id: str, rows: Sequence[TaskRow]
+    ) -> Optional[dict]:
+        """处置一批行（分区动作）：只动这份记录本身。``None`` ＝ 没有可做的。"""
+        spec = self._section(section_id)
+        if spec is None or not rows:
+            return None
+        changed = 0
+        for row in rows:
+            blk, _rect = self.block_at(row.pagename, row.block_index)
+            if blk is None:
+                continue
+            changed += self.drop_record(section_id, blk)
+        if changed and self.on_changed is not None:
+            self.on_changed()
+        if not changed:
+            return {
+                "replan": True,
+                "notify": QCoreApplication.translate(
+                    "WorkbenchTasks", "Nothing to remove here."
+                ),
+            }
+        return {"replan": True, "notify": spec.notify.replace("%1", str(changed))}
+
+    def pending(self, options: Optional[dict] = None) -> Optional[int]:
+        """导航计数；子类按"这算不算用户承诺的工作"各自给口径。"""
+        return None
+
+    def count_label(self) -> str:
+        return QCoreApplication.translate("WorkbenchTasks", "items")
+
+    def reset(self) -> None:
+        self._pages.clear()
+        self._order.clear()
+        self._last_plan = None
+
+
+class OcrReviewTask(ReviewQueueTask):
+    """原文待校对：人工记录的待办在前，程序低置信度**建议**在后（不共用语义）。"""
+
+    id = OCR_REVIEW
+
+    action_id = "act_ocr_fix"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.label = QCoreApplication.translate("WorkbenchTasks", "Review source text")
+        self.title = self.label
+        self.hint = QCoreApplication.translate(
+            "WorkbenchTasks",
+            "Blocks you recorded for proofreading, plus low-confidence blocks found by OCR. Nothing here is deleted or rewritten: open a block on the canvas to proofread it, or remove the record once you are done. The suggestions below are only hints and can be ignored.",
+        )
+
+    def sections(self) -> Sequence[ReviewSection]:
+        return (
+            ReviewSection(
+                id="manual",
+                title=QCoreApplication.translate("WorkbenchTasks", "Recorded by you"),
+                empty=QCoreApplication.translate(
+                    "WorkbenchTasks",
+                    "No block is recorded for proofreading. Select a block on the canvas and record it for later.",
+                ),
+                action_label=QCoreApplication.translate(
+                    "WorkbenchTasks", "Remove from my list"
+                ),
+                notify=QCoreApplication.translate(
+                    "WorkbenchTasks", "Removed %1 block(s) from the review list."
+                ),
+                badge=QCoreApplication.translate(
+                    "WorkbenchTasks", "Recorded by you"
+                ),
+                tone="warning",
+            ),
+            ReviewSection(
+                id="suggestions",
+                title=QCoreApplication.translate(
+                    "WorkbenchTasks", "Low-confidence suggestions"
+                ),
+                empty=QCoreApplication.translate(
+                    "WorkbenchTasks",
+                    "OCR reported no low-confidence block. Only engines that report a score produce suggestions — a missing score is not treated as a low one.",
+                ),
+                action_label=QCoreApplication.translate(
+                    "WorkbenchTasks", "Ignore suggestion"
+                ),
+                notify=QCoreApplication.translate(
+                    "WorkbenchTasks", "Ignored %1 suggestion(s)."
+                ),
+                badge=QCoreApplication.translate("WorkbenchTasks", "Low confidence"),
+            ),
+        )
+
+    def collect(self) -> Dict[str, List[TaskRow]]:
+        specs = {spec.id: spec for spec in self.sections()}
+        rows: Dict[str, List[TaskRow]] = {section_id: [] for section_id in specs}
+        for pagename, blks in (self.proj.pages or {}).items():
+            for idx, blk in enumerate(blks or []):
+                # 人工记录优先：同一个块不再进"建议"区（前者是用户的明确待办）
+                if has_ocr_review_pending(blk):
+                    rows["manual"].append(
+                        self._make_row(specs["manual"], pagename, idx, blk)
+                    )
+                    continue
+                entry = blk.tags.get("ocr_low_conf")
+                if (
+                    isinstance(entry, dict)
+                    and entry.get("source") == "program"
+                    and not is_tag_reviewed(blk, "ocr_low_conf")
+                ):
+                    score = entry.get("score")
+                    detail = (
+                        ""
+                        if score is None
+                        else QCoreApplication.translate(
+                            "WorkbenchTasks", "score %1"
+                        ).replace("%1", f"{float(score):.2f}")
+                    )
+                    rows["suggestions"].append(
+                        self._make_row(
+                            specs["suggestions"], pagename, idx, blk, detail=detail
+                        )
+                    )
+        return rows
+
+    def summary_text(self, counts: Dict[str, int]) -> str:
+        return (
+            QCoreApplication.translate(
+                "WorkbenchTasks",
+                "%1 block(s) recorded by you; %2 low-confidence suggestion(s).",
+            )
+            .replace("%1", str(counts.get("manual", 0)))
+            .replace("%2", str(counts.get("suggestions", 0)))
+        )
+
+    def detail_text(self) -> str:
+        return QCoreApplication.translate(
+            "WorkbenchTasks",
+            "Removing a record only clears your note, and ignoring a suggestion only marks it as reviewed. Neither deletes a block, changes the source text or the translation, nor clears the handwritten/onomatopoeia directives.",
+        )
+
+    def drop_record(self, section_id: str, blk) -> int:
+        if section_id == "suggestions":
+            return set_tags_reviewed(blk, True, "ocr_low_conf")
+        changed = 0
+        if OCR_REVIEW_ID in blk.tags:
+            remove_tag(blk, OCR_REVIEW_ID)
+            changed += 1
+        entry = blk.tags.get("ocr_low_conf")
+        if isinstance(entry, dict) and entry.get("source") == "manual":
+            remove_tag(blk, "ocr_low_conf")
+            changed += 1
+        return 1 if changed else 0
+
+    def pending(self, options: Optional[dict] = None) -> Optional[int]:
+        # 只数人工记下的：程序建议不冒充用户承诺要做的工作（交接 §4.2③）
+        return sum(
+            1
+            for blks in (self.proj.pages or {}).values()
+            for blk in blks or []
+            if has_ocr_review_pending(blk)
+        )
+
+    def count_label(self) -> str:
+        # 标签「原文待校对」已说清口径，再缀「待审校」是重复；只留数字
+        return ""
+
+
+class TransReviewTask(ReviewQueueTask):
+    """译文待重译：只列人工记下的待办，**不假装能自动检测词不达意**。"""
+
+    id = TRANS_REVIEW
+
+    action_id = "act_retranslate"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.label = QCoreApplication.translate("WorkbenchTasks", "Retranslate")
+        self.title = self.label
+        self.hint = QCoreApplication.translate(
+            "WorkbenchTasks",
+            "Blocks you recorded for retranslation later. Nothing here is rewritten: open a block on the canvas and use the retranslate card, then remove the record once you are done.",
+        )
+
+    def sections(self) -> Sequence[ReviewSection]:
+        return (
+            ReviewSection(
+                id="pending",
+                title=QCoreApplication.translate(
+                    "WorkbenchTasks", "Waiting for retranslation"
+                ),
+                empty=QCoreApplication.translate(
+                    "WorkbenchTasks",
+                    "No block is waiting for retranslation. Select a block on the canvas after translating and record it for later.",
+                ),
+                action_label=QCoreApplication.translate(
+                    "WorkbenchTasks", "Remove from my list"
+                ),
+                notify=QCoreApplication.translate(
+                    "WorkbenchTasks",
+                    "Removed %1 block(s) from the retranslation list.",
+                ),
+                badge=QCoreApplication.translate(
+                    "WorkbenchTasks", "To retranslate"
+                ),
+            ),
+        )
+
+    def collect(self) -> Dict[str, List[TaskRow]]:
+        spec = self.sections()[0]
+        rows: List[TaskRow] = []
+        for pagename, blks in (self.proj.pages or {}).items():
+            for idx, blk in enumerate(blks or []):
+                if not has_trans_review_pending(blk):
+                    continue
+                rows.append(
+                    self._make_row(
+                        spec,
+                        pagename,
+                        idx,
+                        blk,
+                        detail=_clip(blk.translation) if blk.translation else "",
+                    )
+                )
+        return {spec.id: rows}
+
+    def summary_text(self, counts: Dict[str, int]) -> str:
+        return QCoreApplication.translate(
+            "WorkbenchTasks", "%1 block(s) waiting for retranslation."
+        ).replace("%1", str(counts.get("pending", 0)))
+
+    def detail_text(self) -> str:
+        return QCoreApplication.translate(
+            "WorkbenchTasks",
+            "Removing a record only clears your note. It changes no text and starts no retranslation — that happens on the canvas, one block at a time.",
+        )
+
+    def drop_record(self, section_id: str, blk) -> int:
+        changed = 0
+        for tag_id in (TRANS_REVIEW_ID, "trans_confusing", "trans_polish"):
+            if tag_id in blk.tags:
+                remove_tag(blk, tag_id)
+                changed += 1
+        return 1 if changed else 0
+
+    def pending(self, options: Optional[dict] = None) -> Optional[int]:
+        return sum(
+            1
+            for blks in (self.proj.pages or {}).values()
+            for blk in blks or []
+            if has_trans_review_pending(blk)
+        )
+
+    def count_label(self) -> str:
+        # 同 OcrReviewTask：标签已含「待重译」，只留数字（组/页的单位才保留）
+        return ""
+
+
+def build_review_tasks(
+    proj, *, on_changed: Optional[Callable[[], None]] = None
+) -> Dict[str, ReviewQueueTask]:
+    """按导航顺序建两个待办队列（原文待校对 → 译文待重译）。"""
+    tasks: List[ReviewQueueTask] = [
+        OcrReviewTask(proj, on_changed=on_changed),
+        TransReviewTask(proj, on_changed=on_changed),
     ]
     return {task.id: task for task in tasks}

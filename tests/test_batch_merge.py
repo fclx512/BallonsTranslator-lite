@@ -441,6 +441,56 @@ class MergedBlockTest(_MergeTestCase):
         self.assertIn("ocr_low_conf", merged.tags)
         self.assertEqual(merged.tags["ocr_low_conf"]["score"], 0.4)
 
+    def test_manual_pending_and_directives_survive_the_merge(self):
+        """合并不得丢人工待办与持久翻译指示（交接 §4.2②）。
+
+        冲突规则：同一 id 取组内阅读顺序中**第一个带它的成员**的条目；
+        不同成员各带不同的待办时两者都留下（它们本来就是两件事）。
+        """
+        from utils.block_tags import (
+            HANDWRITTEN_ID,
+            OCR_REVIEW_ID,
+            TRANS_REVIEW_ID,
+            has_ocr_review_pending,
+            has_trans_review_pending,
+            set_manual_tag,
+        )
+
+        first = _row(10, ["a"], vertical=False)
+        set_manual_tag(first, OCR_REVIEW_ID, True)
+        set_tag(first, HANDWRITTEN_ID, "manual")
+        second = _row(45, ["b"], vertical=False)
+        set_manual_tag(second, TRANS_REVIEW_ID, True)
+        merged = self._merged_from_group([first, second], [0, 1])
+        self.assertTrue(has_ocr_review_pending(merged))
+        self.assertTrue(has_trans_review_pending(merged))
+        self.assertIn(HANDWRITTEN_ID, merged.tags)
+        # 译文待办本身不该带译文（成员译文为空，合并块也没有凭空生成）
+        self.assertEqual(merged.tags[TRANS_REVIEW_ID], {"source": "manual"})
+
+    def test_legacy_pending_id_and_new_one_merge_into_one_task(self):
+        """旧 id 与新 id 各在一个成员上：合并后两条并存，读侧仍算一条待办。"""
+        from utils.block_tags import (
+            TRANS_REVIEW_ID,
+            has_trans_review_pending,
+            remove_tag,
+            set_manual_tag,
+            set_tag,
+        )
+
+        first = _row(10, ["a"], vertical=False)
+        set_tag(first, "trans_polish", "manual")
+        second = _row(45, ["b"], vertical=False)
+        set_manual_tag(second, TRANS_REVIEW_ID, True)
+        merged = self._merged_from_group([first, second], [0, 1])
+        self.assertIn("trans_polish", merged.tags)
+        self.assertIn(TRANS_REVIEW_ID, merged.tags)
+        self.assertTrue(has_trans_review_pending(merged))
+        # 用户取消这条待办：新旧 id 一并清掉，队列里不再出现
+        remove_tag(merged, TRANS_REVIEW_ID)
+        remove_tag(merged, "trans_polish")
+        self.assertFalse(has_trans_review_pending(merged))
+
     def test_reviewed_survives_only_when_all_members_reviewed(self):
         """D33c：不静默洗白——有一个成员未驳回，合并块就仍是未驳回。"""
         mixed_a = _row(10, ["a"], vertical=False)

@@ -73,31 +73,25 @@ class SettingsAppPageTest(unittest.TestCase):
         self.panel.confirm_costly_checker.setChecked(False)
         self.assertFalse(pcfg.workbench_confirm_costly)
 
-    def test_workbench_page_writes_both_numbers(self):
-        """工作台页（2026-09-18 建，2026-09-21 去掉「临时」字样）的两个数值项：
-        初值取自 pcfg，改动回写 pcfg。"""
-        snapshot = (
-            pcfg.workbench_merge_oversize_ratio,
-            pcfg.workbench_expand_px,
-        )
+    def test_workbench_page_writes_the_merge_threshold(self):
+        """工作台页唯一的数值项（批量合并误聚阈值）：初值取自 pcfg，改动回写。
+
+        2026-09-26：批量框扩张退役，原先并列的「默认扩张量」数值项已删除
+        （整条能力下线，登记见 ``scripts/audit_registry.json``）。
+        """
+        snapshot = pcfg.workbench_merge_oversize_ratio
         self.addCleanup(
-            lambda: (
-                setattr(pcfg, "workbench_merge_oversize_ratio", snapshot[0]),
-                setattr(pcfg, "workbench_expand_px", snapshot[1]),
-            )
+            setattr, pcfg, "workbench_merge_oversize_ratio", snapshot
         )
         self.assertIn("workbench_temp", self.panel._nav_section_to_widget)
 
         self.panel.merge_oversize_spin.setValue(70)
         self.assertAlmostEqual(pcfg.workbench_merge_oversize_ratio, 0.70, places=4)
-        self.panel.expand_default_spin.setValue(16)
-        self.assertEqual(pcfg.workbench_expand_px, 16)
 
-        # 与设置初值对齐：改成 85% / 10 后回到默认
+        # 与设置初值对齐：改成 85% 后回到默认
         self.panel.merge_oversize_spin.setValue(85)
-        self.panel.expand_default_spin.setValue(10)
         self.assertAlmostEqual(pcfg.workbench_merge_oversize_ratio, 0.85, places=4)
-        self.assertEqual(pcfg.workbench_expand_px, 10)
+        self.assertFalse(hasattr(self.panel, "expand_default_spin"))
 
     def test_pipeline_panels_no_longer_carry_them(self):
         self.assertFalse(hasattr(self.panel.inpaint_config_panel, "ps_path_edit"))

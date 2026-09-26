@@ -17,6 +17,10 @@
   回复按行对齐后用户可逐行取舍。
 - OCR 置信度分数不进 prompt（噪声，设计 §4）；指示/疑点标签的语义
   以指令文本进 prompt。
+
+**两个动作对任何单选块都开放**（交接 §4.1）：现场看到可疑就走「校对原文／
+重译」，不必先挂标签；`BlockActionDef.consumes` 只声明「应用这一份草稿后，
+哪几条问题记录算处理完了」。
 """
 
 import base64
@@ -28,6 +32,11 @@ import cv2
 import numpy as np
 from PyQt6.QtCore import QCoreApplication
 
+from .block_tags import (
+    LOW_CONF_ID,
+    OCR_REVIEW_ID,
+    TRANS_REVIEW_ID,
+)
 from .textblock import TextBlock
 
 # 拼图参数：行高归一（与 OCR 管线 collect_textblock_regions 的 text_height
@@ -46,36 +55,34 @@ class BlockActionDef:
     name: str  # 已翻译显示名
     short_label: str  # 工具栏紧凑钮短标签（已翻译）
     kind: str  # "ocr_fix"（写原文，需 vision） / "retranslate"（写译文）
-    consumes: Tuple[str, ...]  # 消费（确认后消除）的疑点标签
+    consumes: Tuple[str, ...]  # 确认后清除的问题标签（含旧 ID，见下）
     needs_vision: bool
 
 
 BLOCK_ACTIONS = [
     # 名称在字面量定义处显式标注翻译上下文（i18n 模块级翻译表规则）
+    #
+    # ``consumes`` ＝ 该动作「处理完了」的那几条问题（含旧 ID，好让老项目的
+    # 旧标记也被一次应用清掉）。**持久翻译指示不在此列**：手写字／拟声词是块
+    # 的属性，处理原文不消除它。这两个动作对**任何**单选块都开放（交接 §4.1：
+    # 不需要预先挂标签即可校对／重译），``consumes`` 只决定应用后清哪几条记录。
     BlockActionDef(
         "act_ocr_fix",
         QCoreApplication.translate("BlockActions", "Vision OCR Fix"),
         QCoreApplication.translate("BlockActions", "Fix OCR"),
-        "ocr_fix", ("ocr_low_conf", "handwritten"), True,
+        "ocr_fix", (OCR_REVIEW_ID, LOW_CONF_ID), True,
     ),
     BlockActionDef(
         "act_retranslate",
         QCoreApplication.translate("BlockActions", "Contextual Retranslate"),
         QCoreApplication.translate("BlockActions", "Retranslate"),
-        "retranslate", ("trans_confusing", "trans_polish"), False,
+        "retranslate",
+        (TRANS_REVIEW_ID, "trans_confusing", "trans_polish"),
+        False,
     ),
 ]
 
 ACTION_REGISTRY: Dict[str, BlockActionDef] = {a.id: a for a in BLOCK_ACTIONS}
-
-
-def actions_for_block(blk: TextBlock) -> List[BlockActionDef]:
-    """块上疑点标签可触发的动作（工具栏上下文感知「处理」钮的数据源）。"""
-    out = []
-    for action in BLOCK_ACTIONS:
-        if any(tid in blk.tags for tid in action.consumes):
-            out.append(action)
-    return out
 
 
 def page_data_needs_sync(blk_list, items) -> bool:

@@ -85,8 +85,13 @@ def build_app(scale: int) -> QApplication:
 
 
 def build_project():
-    """合成一个能体现各任务差异的小工程（两页，含误识别标签与可合并的邻框）。"""
-    from utils.block_tags import MISREAD_TAG_ID, set_tag
+    """合成一个能体现各任务差异的小工程（两页，含各类标签与可合并的邻框）。"""
+    from utils.block_tags import (
+        MISREAD_TAG_ID,
+        OCR_REVIEW_ID,
+        TRANS_REVIEW_ID,
+        set_tag,
+    )
     from utils.proj_imgtrans import ProjImgTrans
     from utils.textblock import TextBlock
 
@@ -111,12 +116,25 @@ def build_project():
     for name in (PAGE_A, PAGE_B):
         cv2.imwrite(osp.join(tmp.name, name), img)
 
+    # 人工待办：原文待校对（新 ID）、译文待重译；程序侧再造一条低置信度建议，
+    # 好让两个待办页的分区（人工记录／程序建议）都有内容可看
+    pending = blk("むずかしい漢字", (24, 92, 132, 106))
+    set_tag(pending, OCR_REVIEW_ID, "manual")
+    retrans = blk("ありがとう", (150, 92, 230, 106))
+    set_tag(retrans, TRANS_REVIEW_ID, "manual")
+    retrans.translation = "谢谢"
+    low_conf = blk("てがみ", (150, 120, 230, 146))
+    set_tag(low_conf, "ocr_low_conf", "program", score=0.52)
+
     proj = ProjImgTrans(directory=tmp.name)
     proj.pages[PAGE_A] = [
         blk("こんにちは", (24, 26, 132, 56)),
         misread("8", (24, 60, 132, 86), ("numeric", "no_japanese")),
         misread("……", (150, 26, 230, 56), ("symbolic",)),
         blk("ありがとう", (150, 60, 230, 86)),
+        pending,
+        retrans,
+        low_conf,
     ]
     proj.pages[PAGE_B] = [
         blk("おはよう", (24, 116, 132, 146)),
@@ -140,6 +158,34 @@ def build_project():
     return proj, tmp
 
 
+def _settle_animation(app: QApplication, ms: int = 260) -> None:
+    """截图前等导航 chip 的展开／收回动画跑完。
+
+    chip 宽度是补间动画，而 ``QApplication.processEvents()`` **不推进动画**
+    （要让定时器真的走起来：真实事件循环或 ``QTest.qWait``）——不等的话截到的
+    是中间帧，激活项看着还是压缩状态，图就没法当验收依据。
+    """
+    from qtpy.QtTest import QTest
+
+    QTest.qWait(ms)
+
+
+def _first_table_with_rows(view):
+    """任务页里第一个有行的表（批量页一张表，待办队列页分区多张）。
+
+    选中一行才会出审批预览；没有行的页不选（空表选首行会把浮层弹成"取不到图"）。
+    """
+    tables = getattr(view, "tables", None)
+    if callable(tables):  # ui/workbench_review_view.py::ReviewQueueView
+        for table, rows in tables():
+            if rows:
+                return table
+        return None
+    if view is not None and getattr(view, "_rows", None):
+        return getattr(view, "_table", None)
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", default=osp.join("tmp", "workbench_render"))
@@ -149,11 +195,6 @@ def main() -> int:
     args = parser.parse_args()
 
     app = build_app(args.scale)
-
-    from utils.config import pcfg
-
-    # 跳步提示会弹模态框卡住渲染；本进程内关掉，不写回配置
-    pcfg.workbench_warn_skip_order = False
 
     from ui.glossary_agent_panel import GlossaryAgentPanel, WORKBENCH_ORDER
     from utils.proj_imgtrans import ProjImgTrans
@@ -200,19 +241,30 @@ def main() -> int:
     for index, task_id in enumerate(WORKBENCH_ORDER, start=1):
         panel.nav.select(task_id)
         app.processEvents()
-        view = panel._batch_views.get(task_id)
-        if view is not None and getattr(view, "_rows", None):
-            view._table.setCurrentCell(0, 1)  # 选中首行，展开审批预览
+        _settle_animation(app)  # 导航 chip 展开到位再截图
+        view = panel._batch_views.get(task_id) or panel._review_views.get(task_id)
+        table = _first_table_with_rows(view)
+        if table is not None:
+            table.setCurrentCell(0, 0)  # 选中首行，展开审批预览
             app.processEvents()
         name = f"{index:02d}_{task_id}.png"
         host.grab().save(osp.join(out, name))
         print("saved", osp.join(out, name))
 
-    # 导航结构回显：不打开图也能核对两级关系与计数
-    print("category:", [b.text() for b in panel.nav._category_buttons.values()])
-    print("chips:", {t: c.text() for t, c in panel.nav._buttons.items()})
-    print("visible chips:", [t for t, c in panel.nav._buttons.items() if c.isVisible()])
+    # 导航结构回显：不打开图也能核对扁平顺序与各项计数
+    print("nav:", [(t, b.text()) for t, b in panel.nav._buttons.items()])
     print("current task:", panel.current_task(), "page:", panel.pages.currentIndex())
+
+    # 翻译准备是**一个入口两个子页**：两块草稿各截一张，否则只看到术语那一页
+    from ui.workbench_tasks import GLOSSARY, STORY
+
+    for label, sub_id in (("glossary", GLOSSARY), ("story", STORY)):
+        panel.select_prep_tab(sub_id)
+        app.processEvents()
+        _settle_animation(app)
+        name = f"05b_prep_{label}.png"
+        host.grab().save(osp.join(out, name))
+        print("saved", osp.join(out, name))
 
     # 退出前收掉 worker 线程（否则解释器退出时残留线程会崩）
     panel._shutdown()

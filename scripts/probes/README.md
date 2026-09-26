@@ -44,16 +44,17 @@ Models → Management 的「释放内存」按钮；`pcfg.region_redetect_device
 
 落点判据的回归台不在本目录，它是常驻入口：`scripts/region_redetect_order.py`。
 
-## 二点五、框扩张 → 译文居中实测（2026-09-19）
+## 二点五、框扩张 → 译文居中实测（2026-09-19，探针已于 2026-09-26 删除）
 
-| 脚本 | 做什么 | 结论 |
-|---|---|---|
-| `expand_centering_probe.py` | 把 `projects/004_819b9e93` 拷到 `tmp/`，真机拉起主窗口，全书填占位译文，扩张前后各渲染一遍结果图，逐块同窗口并排裁剪到 `tmp/expand_centering/crop/` | 扩张后文本**确实按新框重排**（能多排字/换行）；「是否居中」取决于块自身 `fontformat.alignment`（居中＝新框内重排居中，左＝锚定左上）——对齐是块属性，不是扩张页能决定的。该工程 37 块默认全是左对齐 |
+批量框扩张已退役，该探针随之删除（登记见 `scripts/audit_registry.json`）。
+保留结论备查：扩张后文本**确实按新框重排**（能多排字/换行）；「是否居中」
+取决于块自身 `fontformat.alignment`（居中＝新框内重排居中，左＝锚定左上）
+——对齐是块属性，不是扩张动作能决定的。该工程 37 块默认全是左对齐。
 
 ## 三、泛用工作台的参数复算
 
 不在本目录——已通用化为常驻入口 `scripts/workbench_recalc.py`
-（`merge`／`c1`／`expand`／`queue`／`review`／`hook`／`list`，只读、带 `--project`）。
+（`merge`／`c1`／`queue`／`review`／`hook`／`list`，只读、带 `--project`）。
 那份是长期要反复跑的（阈值与默认值靠实战调整），所以做成了带命令行参数的正式脚本，
 而不是这里的一次性探针。
 
