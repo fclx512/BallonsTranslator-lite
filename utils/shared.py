@@ -17,8 +17,6 @@ CUSTOM_THEME_PATH = osp.join(PROGRAM_PATH, "config/custom_themes.json")
 CONFIG_PATH = osp.join(PROGRAM_PATH, "config/config.json")
 
 DEFAULT_TEXTSTYLE_DIR = osp.join(PROGRAM_PATH, "config/textstyles")
-if not osp.exists(DEFAULT_TEXTSTYLE_DIR):
-    os.makedirs(DEFAULT_TEXTSTYLE_DIR)
 
 GLOBAL_STYLES_PATH = osp.join(PROGRAM_PATH, "config/global_styles.json")
 

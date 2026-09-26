@@ -17,6 +17,44 @@ _pylibs_sp = PATH_ROOT / "ballontrans_pylibs_win" / "Lib" / "site-packages"
 if _pylibs_sp.exists() and str(_pylibs_sp) not in sys.path:
     sys.path.append(str(_pylibs_sp))
 
+# ── Python version gate ──────────────────────────────────────────────
+# Must reject unsupported interpreters BEFORE importing any project-local
+# module (``utils.*`` below): those imports use 3.10+ syntax and would fail
+# with a confusing SyntaxError instead of an actionable message.  Mirrors
+# ``pyproject.toml`` ``requires-python = ">=3.10"``.
+MIN_PYTHON = (3, 10)
+
+
+def python_version_supported(version_info=None) -> bool:
+    """Whether ``version_info`` satisfies the project's minimum Python."""
+    info = sys.version_info if version_info is None else version_info
+    return tuple(info[:2]) >= MIN_PYTHON
+
+
+def python_version_error(version_info=None) -> str:
+    """Actionable rejection message, or ``""`` when the version is supported."""
+    if python_version_supported(version_info):
+        return ""
+    info = sys.version_info if version_info is None else version_info
+    current = ".".join(str(part) for part in tuple(info[:3]))
+    return (
+        f"BallonsTranslator-lite requires Python {MIN_PYTHON[0]}.{MIN_PYTHON[1]} "
+        f"or newer, but this interpreter is Python {current}.\n"
+        f"Install Python {MIN_PYTHON[0]}.{MIN_PYTHON[1]}+ from "
+        "https://www.python.org/downloads/ and launch again with it."
+    )
+
+
+def enforce_python_version() -> None:
+    """Exit(1) with a clear message on an unsupported interpreter."""
+    message = python_version_error()
+    if message:
+        print(message, file=sys.stderr)
+        sys.exit(1)
+
+
+enforce_python_version()
+
 import utils.shared as shared  # noqa: E402
 from utils.env_diagnostic import detect_gpu_info  # noqa: E402
 
@@ -232,35 +270,65 @@ def commit_hash():
     return stored_commit_hash
 
 
+def _probe_import(module_name: str):
+    """Import ``module_name``, capturing any failure as data.
+
+    Binary wheels (torch, Pillow, onnxruntime) can raise ``OSError`` — a
+    missing VC runtime or a half-installed DLL payload — or a plain
+    ``ImportError``.  Both must be diagnosable instead of aborting startup, so
+    this returns ``(module, error_message)`` with ``module`` set to ``None``
+    and a non-empty message on any failure.
+    """
+    import importlib
+
+    try:
+        return importlib.import_module(module_name), ""
+    except Exception as e:  # noqa: BLE001 — any import failure is reportable
+        return None, f"{type(e).__name__}: {e}"
+
+
 def _detect_user_torch():
     """Check if the current Python process has GPU-accelerated PyTorch.
 
     Unlike the old implementation, this does NOT search other Pythons on
     the system.  It only checks ``import torch`` within the current process,
     then verifies an accelerator is available: CUDA on NVIDIA GPUs or MPS on
-    Apple Silicon.
+    Apple Silicon.  A torch that is present but unloadable (DLL error) is
+    reported and treated as "no accelerator", so the app degrades to CPU /
+    no-model mode instead of crashing.
 
     Returns:
         True if an accelerated PyTorch is available in the current process.
         False otherwise.
     """
-    try:
-        import torch
-    except ImportError:
-        print("  PyTorch not installed in this Python environment.")
+    torch, _torch_err = _probe_import("torch")
+    if torch is None:
+        if _torch_err:
+            print(f"  PyTorch is installed but failed to load ({_torch_err}).")
+            print(
+                "  Falling back to CPU/no-model mode. Reinstall PyTorch to "
+                "enable local models."
+            )
+        else:
+            print("  PyTorch not installed in this Python environment.")
         return False
 
-    if torch.cuda.is_available():
-        print("  CUDA PyTorch available: " + str(torch.__file__))
-        return True
+    try:
+        if torch.cuda.is_available():
+            print("  CUDA PyTorch available: " + str(torch.__file__))
+            return True
 
-    if (
-        hasattr(torch, "backends")
-        and hasattr(torch.backends, "mps")
-        and torch.backends.mps.is_available()
-    ):
-        print("  MPS (Apple Silicon) PyTorch available: " + str(torch.__file__))
-        return True
+        if (
+            hasattr(torch, "backends")
+            and hasattr(torch.backends, "mps")
+            and torch.backends.mps.is_available()
+        ):
+            print("  MPS (Apple Silicon) PyTorch available: " + str(torch.__file__))
+            return True
+    except Exception as e:
+        print(f"  PyTorch loaded but its accelerator probe failed ({type(e).__name__}: {e}).")
+        print("  Using CPU mode.")
+        return False
 
     # torch exists but no GPU accelerator available
     print("  PyTorch found but no GPU accelerator (CUDA/MPS) is available.")
@@ -305,31 +373,21 @@ def _ensure_module_fallback():
     ============== =============== ===================== ==============
     textdetector   yes (all)       no                    ``none``
     ocr            depends         depends               *(kept as configured)*
-    inpainter      yes (all)       no                    ``none``
+    inpainter      yes except      no                    ``none`` (patchmatch
+                   ``patchmatch``                         is kept)
     llm_ocr        no              no                    *(never)*
     translator     no              no                    *(never)*
     ============== =============== ===================== ==============
     """
-    try:
-        import torch  # noqa: F401
-
-        _has_torch = True
-    except ImportError:
-        _has_torch = False
-
-    try:
-        import onnxruntime  # noqa: F401
-
-        _has_onnx = True
-    except ImportError:
-        _has_onnx = False
-
-    try:
-        import onnxocr  # noqa: F401
-
-        _has_onnxocr = True
-    except ImportError:
-        _has_onnxocr = False
+    # Probe with _probe_import so a broken binary (DLL load failure) is
+    # treated the same as a missing one — degrade to no-model modules rather
+    # than letting the exception bubble out of startup.
+    _torch_mod, _torch_err = _probe_import("torch")
+    _onnx_mod, _onnx_err = _probe_import("onnxruntime")
+    _onnxocr_mod, _onnxocr_err = _probe_import("onnxocr")
+    _has_torch = _torch_mod is not None
+    _has_onnx = _onnx_mod is not None
+    _has_onnxocr = _onnxocr_mod is not None
 
     from utils.config import pcfg, record_auto_downgrade
 
@@ -346,8 +404,11 @@ def _ensure_module_fallback():
     # Previously this block forcibly reset non-none/non-llm OCR modules back
     # to none_ocr; now we trust whatever the user configured.
 
-    # ── Inpainter: all real inpainters need torch ──
-    if not _has_torch and pcfg.module.inpainter not in ("none",):
+    # ── Inpainter: torch-backed models need torch; PatchMatch does not ──
+    # PatchMatch is the lightweight, non-model repair path shipped with the
+    # minimal package.  It loads its native DLL lazily, so missing torch must
+    # never replace it with ``none`` during startup.
+    if not _has_torch and pcfg.module.inpainter not in ("none", "patchmatch"):
         _old = pcfg.module.inpainter
         pcfg.module.inpainter = "none"
         record_auto_downgrade(pcfg.module, "inpainter", "none", _old)
@@ -365,6 +426,13 @@ def _ensure_module_fallback():
             f"{', '.join(_missing)} not available"
             " — automatically switched to no-model modules:"
         )
+        for _name, _err in (
+            ("PyTorch", _torch_err),
+            ("onnxruntime", _onnx_err),
+            ("onnxocr", _onnxocr_err),
+        ):
+            if _err:
+                print(f"  {_name} failed to load: {_err}")
         for c in changed:
             print(f"  {c}")
         if not _has_torch:
@@ -494,12 +562,47 @@ def _ensure_model_files_fallback():
         print()
 
 
-def restart():
+#: Cap on chained automatic startup restarts.  A restart only exists to load
+#: freshly installed packages, so if three installs in a row still don't make
+#: the app usable, another exec would just repeat the loop.
+MAX_STARTUP_RESTARTS = 3
+RESTART_COUNT_ENV = "BTRANSLATOR_RESTART_COUNT"
+
+
+def _restart_count() -> int:
+    try:
+        return max(0, int(os.environ.get(RESTART_COUNT_ENV, "") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def restart(reason: str = "", guard: bool = False) -> bool:
+    """Re-exec this interpreter.
+
+    ``guard=True`` marks an automatic startup restart: the number of chained
+    re-execs is capped so an install that keeps "succeeding" without making
+    imports work cannot loop forever.  Returns ``False`` when the guard
+    refuses to restart (callers should then report instead of looping).
+    """
     global BT
-    print("restarting...\n")
+    if guard:
+        count = _restart_count()
+        if count >= MAX_STARTUP_RESTARTS:
+            print(
+                f"Startup restart limit reached ({MAX_STARTUP_RESTARTS} automatic "
+                "restarts) — not restarting again.\n"
+                "The install did not make the app usable. Resolve the environment "
+                "manually, then start again:\n"
+                "  pip install -r requirements.txt"
+            )
+            return False
+        os.environ[RESTART_COUNT_ENV] = str(count + 1)
+
+    print(f"restarting... ({reason})\n" if reason else "restarting...\n")
     if BT:
         BT.close()
     os.execv(sys.executable, ["python"] + sys.argv)
+    return True
 
 
 def setup_locks():
@@ -508,6 +611,25 @@ def setup_locks():
     from utils.lock import RUNTIME_LOCKS
 
     RUNTIME_LOCKS["model_loading"] = QMutex()
+
+
+def setup_startup_logging() -> bool:
+    """Attach file logging and crash hooks; never fatal.
+
+    Called before any heavy work so crashes during dependency setup are still
+    recorded.  Both ``setup_logging`` and ``install_exception_hooks`` already
+    degrade internally; the try/except here is the last line of defence, since
+    a logging failure must never be able to block startup.
+    """
+    try:
+        from utils.logger import install_exception_hooks, setup_logging
+
+        ok = setup_logging(shared.LOGGING_PATH, shared.MAX_NUM_LOG)
+        install_exception_hooks()
+        return ok
+    except Exception as e:
+        print(f"Warning: file logging unavailable ({e}); using console output only.")
+        return False
 
 
 def main():
@@ -520,6 +642,9 @@ def main():
         print("CPU mode forced via --cpu flag")
 
     os.environ["QT_API"] = args.qt_api
+
+    # ── File logging + crash hooks (stdlib only, never fatal) ──────────
+    setup_startup_logging()
 
     # Preload MSVC runtime DLLs before PyQt6 registers its Qt bin directory
     # (which can make later PyTorch DLL resolution pick up the wrong version).
@@ -577,17 +702,27 @@ def main():
     print(f"Branch: {BRANCH}")
     print(f"Commit hash: {commit}")
 
-    # ── Network mirror bootstrap (must precede dependency installation) ──
+    # ── Network mirror + system proxy bootstrap (must precede installs) ──
     #     首次运行按地区自动补写 config.json 的 mirror 节，并把 pip 源落到
     #     环境变量上。位置必须在 ensure_core_requirements 之前：那是首启动
     #     拉全套依赖的一步，而 config 那时还读不了（它依赖 numpy/PyQt6）。
     #     config.mirror.* 的正式读取仍在下方 config 加载之后。
-    from utils.network_mirrors import apply_pip_mirror_env, auto_fill_mirrors
+    #     Windows 系统代理同样在这里落地：它的消费点也是 pip/uv 与 HF 下载，
+    #     晚于首次安装就来不及了。用户已显式配置的代理（任意大小写）不覆盖。
+    from utils.network_mirrors import (
+        apply_pip_mirror_env,
+        apply_system_proxy_env,
+        auto_fill_mirrors,
+    )
 
     auto_fill_mirrors(shared.CONFIG_PATH)
     _early_index_url = apply_pip_mirror_env(shared.CONFIG_PATH)
     if _early_index_url:
         print(f"Using pip index: {_early_index_url}")
+
+    _system_proxy = apply_system_proxy_env()
+    if _system_proxy:
+        print(f"Auto-detected system proxy: {_system_proxy}")
 
     # ── Ensure core requirements before GPU detection ─────────────────
     #     Must run BEFORE the GPU/CPU decision so that numpy, qtpy, etc.
@@ -596,7 +731,7 @@ def main():
     from utils.core_requirements import ensure_core_requirements
 
     if ensure_core_requirements(APP_DIR):
-        restart()
+        restart("core requirements installed", guard=True)
         return
 
     # ── GPU / CPU decision ────────────────────────────────────────────
@@ -632,32 +767,6 @@ def main():
                 os.environ["BALLOONTRANS_CPU_ONLY"] = "1"
         # else: Path A without GPU requested → CPU mode by default
 
-    # ── Auto-detect Windows system proxy ──
-    if os.name == "nt" and not os.environ.get("HTTP_PROXY"):
-        try:
-            import platform
-
-            if platform.system() == "Windows":
-                import winreg
-
-                with winreg.OpenKey(
-                    winreg.HKEY_CURRENT_USER,
-                    r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
-                ) as key:
-                    enabled = winreg.QueryValueEx(key, "ProxyEnable")[0]
-                    server = winreg.QueryValueEx(key, "ProxyServer")[0]
-                    if enabled and server:
-                        if not server.startswith("http://"):
-                            server = f"http://{server}"
-                        os.environ.setdefault("HTTP_PROXY", server)
-                        os.environ.setdefault("HTTPS_PROXY", server)
-                        os.environ.setdefault("http_proxy", server)
-                        os.environ.setdefault("https_proxy", server)
-                        os.environ.setdefault("NO_PROXY", "localhost,127.0.0.1,.local")
-                        print(f"Auto-detected system proxy: {server}")
-        except Exception:
-            pass  # non-fatal — user can set env vars manually
-
     # ── Basic logging and shared state (stdlib only, no third-party deps) ──
     from utils.logger import logger as LOGGER
 
@@ -673,7 +782,31 @@ def main():
     #     installed packages are importable without stale module state.
     if prepare_environment():
         print("核心依赖已安装，正在重启以加载新环境...")
-        restart()
+        restart("environment prepared", guard=True)
+
+    # ── Deep probe: packages can satisfy metadata checks yet be broken ──
+    #     Check the actual submodule imports the app uses (Pillow's C
+    #     extensions are the usual DLL-load culprit) and force-reinstall any
+    #     that fail.  This runs BEFORE the fatal core-import check so a broken
+    #     binary gets a repair + restart chance instead of a dead end.
+    _BROKEN = []
+    if _probe_import("PIL.Image")[0] is None:
+        _BROKEN.append("pillow")
+
+    if _BROKEN:
+        print("[WARN] Some core packages are installed but broken. Forcing reinstall ...")
+        _pip = run_uv if UV_AVAILABLE else run_pip
+        try:
+            for _pkg in _BROKEN:
+                _pip(f"install --force-reinstall {_pkg}", f"force-reinstall {_pkg}")
+        except Exception as _e:
+            # A failed repair must not abort startup; the user gets an
+            # actionable command instead (the app can still run without the
+            # optional JXL/Image extras in many cases).
+            print(f"[WARN] Could not reinstall {', '.join(_BROKEN)}: {_e}")
+            print(f"       Run manually: pip install --force-reinstall {' '.join(_BROKEN)}")
+        else:
+            restart("broken core packages reinstalled", guard=True)
 
     # ── Verify core imports after potential restart ──
     from utils.core_requirements import warn_missing_core_imports
@@ -685,24 +818,6 @@ def main():
         print("   请运行以下命令安装依赖：")
         print(f"   pip install -r {args.requirements}")
         sys.exit(1)
-
-    # ── Deep probe: some packages may satisfy metadata checks yet be broken ──
-    #     Check the actual submodule imports the app uses and force-reinstall
-    #     any that fail.  This runs AFTER the core-imports check so the more
-    #     common case (package entirely missing) is handled first with a clear
-    #     message above.
-    _BROKEN = []
-    try:
-        from PIL import Image  # noqa: F401
-    except Exception:
-        _BROKEN.append("pillow")
-
-    if _BROKEN:
-        print("[WARN] Some core packages are installed but broken. Forcing reinstall ...")
-        _pip = run_uv if UV_AVAILABLE else run_pip
-        for _pkg in _BROKEN:
-            _pip(f"install --force-reinstall {_pkg}", f"force-reinstall {_pkg}")
-        restart()
 
     # ── Config and mirror setup (requires numpy/PyQt6) ──
     from utils import config as program_config
@@ -759,7 +874,7 @@ def main():
                         errdesc="Failed to update repository.",
                     )
                     print("Repository updated. Restarting to apply updates...")
-                    restart()
+                    restart("repository updated", guard=True)
                     return
                 else:
                     print("No updates found.")

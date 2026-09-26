@@ -40,13 +40,15 @@ def GET_VALID_OCR() -> list:
     return list(OCR.module_dict.keys())
 
 
-# 不进选型界面（运行对话框 / 底部栏）的修复器，注册保留：
-# LLMInpaint 只在模块参数页配置；patchmatch 仅适合涂简单背景，
-# 藏起来避免被当成常规修复模型选用。
-HIDDEN_INPAINTERS = frozenset({"LLMInpaint", "patchmatch"})
+# 不进选型界面（运行对话框 / 底部栏 / 设置页）的修复器，注册保留：
+# LLMInpaint 只在模块参数页配置、由画布的「AI 修图」工具触发。
+# patchmatch **不再隐藏**：它是精简包随包携带的非模型基础能力（不需要 torch、
+# 无权重），精简包用户得能从 GUI 直接选到它——隐藏语义只留给 LLM 修复器。
+HIDDEN_INPAINTERS = frozenset({"LLMInpaint"})
 
 # 模型文件与注册名解耦的模块：none 系无需模型；LLM 系依赖 Profile；
-# patchmatch 走 OpenCV 内置算法。（ysgyolo 有自己的 download_file_list，
+# patchmatch 走随包携带的原生 DLL（不是要从网络下载的权重，见
+# modules/inpaint/patch_match.py）。（ysgyolo 有自己的 download_file_list，
 # 但落盘文件名允许飘，故 GET_MISSING_MODEL_FILES 对它单独按通配判断。）
 _NO_DOWNLOAD_LIST_KEYS = frozenset(
     {"none", "none_ocr", "None", "llm_ocr", "LLMInpaint",

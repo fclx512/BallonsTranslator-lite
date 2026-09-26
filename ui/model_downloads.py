@@ -38,6 +38,7 @@ from qtpy.QtCore import QCoreApplication, QObject, QThread, Signal
 
 from utils.download_util import DownloadCancelled
 from utils.logger import logger as LOGGER
+from utils.package_installer import NO_DEPS_PACKAGES
 from utils.message import create_info_dialog
 
 __all__ = [
@@ -272,14 +273,21 @@ class ModelDownloadTask(QThread):
                 QCoreApplication.translate("model_downloads", "Installing %1…").replace("%1", package)
             )
             self._log(f">> Installing {package} …")
-            if not _pip_install([package]):
-                self._log(
-                    f">> Package '{package}' failed with deps, retrying --no-deps …"
-                )
-                if not _pip_install([package], no_deps=True):
-                    self._log(f">> FAILED: {package}")
-                    self._failure_code = f"pip_failed:{package}"
-                    return False
+            if package in NO_DEPS_PACKAGES:
+                # onnxocr 之类钉了冲突依赖（numpy<2）——直接裸装，绝不给
+                # 解析器"顺手降级 numpy"的机会（见 utils/package_installer.py）。
+                ok = _pip_install([package], no_deps=True)
+            else:
+                ok = _pip_install([package])
+                if not ok:
+                    self._log(
+                        f">> Package '{package}' failed with deps, retrying --no-deps …"
+                    )
+                    ok = _pip_install([package], no_deps=True)
+            if not ok:
+                self._log(f">> FAILED: {package}")
+                self._failure_code = f"pip_failed:{package}"
+                return False
         self._log(">> Package installation complete.")
         return True
 

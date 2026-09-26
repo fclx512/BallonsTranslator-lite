@@ -1,7 +1,7 @@
-"""引导包（bootstrap 发行）相关改动的回归测试。
+"""精简包（bootstrap 发行）相关改动的回归测试。
 
-用户 2026-09-20 拍板跟进上游发行策略：发「源码 + 裸嵌入式 Python + pip + uv.exe」
-的小包，重依赖首启动/按需安装（见 `scripts/build_win_minimal.ps1`）。这条路线把
+用户 2026-09-20 拍板跟进上游发行策略：发「源码 + 嵌入式 Python + pip + uv.exe + 基本依赖」
+的精简包，重依赖/模型按需安装（见 `scripts/build_win_minimal.ps1`）。这条路线把
 四件原本被「预装好的一体包」掩盖的问题暴露出来，本文件逐个钉住：
 
 1. `utils/network_mirrors.py::auto_fill_mirrors` 写错了配置节（自造的
@@ -13,7 +13,7 @@
 3. ``launch.py`` 的自动降级（缺依赖/缺模型 → 模块换成 none）会**落盘**，把用户
    或默认的选择永久抹掉，而它的提示语还写着「then restart」——重启后配置已是
    none，那句话就落空（`utils/config.py::record_auto_downgrade`）。
-4. 默认修复器 ``lama_large_512px`` 需要 torch 却没有声明，引导包里没人会装它
+4. 默认修复器 ``lama_large_512px`` 需要 torch 却没有声明，精简包里没人会装它
    （`modules/inpaint/base.py` 的 ``LamaLarge.requires_packages``）。
 
 Run:
@@ -129,6 +129,94 @@ class TestApplyPipMirrorEnv(unittest.TestCase):
             network_mirrors.apply_pip_mirror_env(self.config_path, env=env), ""
         )
         self.assertNotIn("INDEX_URL", env)
+
+
+class TestSystemProxyHelpers(unittest.TestCase):
+    """Windows 系统代理探测抽成 stdlib 辅助函数后的契约。"""
+
+    def test_normalize_proxy_server_forms(self):
+        self.assertEqual(
+            network_mirrors.normalize_proxy_server("127.0.0.1:7890"),
+            "http://127.0.0.1:7890",
+        )
+        self.assertEqual(
+            network_mirrors.normalize_proxy_server("http://127.0.0.1:7890"),
+            "http://127.0.0.1:7890",
+        )
+        self.assertEqual(
+            network_mirrors.normalize_proxy_server(
+                "http=10.0.0.1:8080;https=10.0.0.1:8443"
+            ),
+            "http://10.0.0.1:8080",
+        )
+        self.assertEqual(network_mirrors.normalize_proxy_server(""), "")
+
+    def test_detect_uses_injected_reader_and_tolerates_failure(self):
+        self.assertEqual(
+            network_mirrors.detect_windows_system_proxy(
+                reader=lambda: (True, "127.0.0.1:7890")
+            ),
+            "http://127.0.0.1:7890",
+        )
+        self.assertEqual(
+            network_mirrors.detect_windows_system_proxy(
+                reader=lambda: (False, "127.0.0.1:7890")
+            ),
+            "",
+        )
+
+        def _boom():
+            raise OSError("registry unavailable")
+
+        self.assertEqual(
+            network_mirrors.detect_windows_system_proxy(reader=_boom), ""
+        )
+
+    def test_apply_sets_every_casing_and_no_proxy(self):
+        env = {}
+        applied = network_mirrors.apply_system_proxy_env(
+            env=env, reader=lambda: (True, "127.0.0.1:7890")
+        )
+        self.assertEqual(applied, "http://127.0.0.1:7890")
+        for name in network_mirrors.PROXY_ENV_VARS:
+            self.assertEqual(env[name], "http://127.0.0.1:7890")
+        self.assertIn("127.0.0.1", env["NO_PROXY"])
+
+    def test_apply_never_overwrites_explicit_proxy_any_casing(self):
+        env = {"http_proxy": "http://mine:1"}
+        applied = network_mirrors.apply_system_proxy_env(
+            env=env, reader=lambda: (True, "10.0.0.1:8080")
+        )
+        self.assertEqual(applied, "")
+        self.assertEqual(env["http_proxy"], "http://mine:1")
+        self.assertNotIn("HTTP_PROXY", env)
+
+    def test_apply_noop_when_registry_disabled(self):
+        env = {}
+        self.assertEqual(
+            network_mirrors.apply_system_proxy_env(env=env, reader=lambda: (False, "x")),
+            "",
+        )
+        self.assertEqual(env, {})
+
+
+class TestStartupNetworkOrdering(unittest.TestCase):
+    """代理与日志必须在首次核心依赖安装之前就位。"""
+
+    def setUp(self):
+        self.source = (REPO_ROOT / "launch.py").read_text(encoding="utf8")
+
+    def test_proxy_applied_before_core_requirements(self):
+        self.assertLess(
+            self.source.index("apply_system_proxy_env()"),
+            self.source.index("ensure_core_requirements(APP_DIR)"),
+        )
+
+    def test_logging_setup_before_core_requirements(self):
+        self.assertLess(
+            self.source.index("\n    setup_startup_logging()\n"),
+            self.source.index("ensure_core_requirements(APP_DIR)"),
+        )
 
 
 class TestBundledUvDiscovery(unittest.TestCase):

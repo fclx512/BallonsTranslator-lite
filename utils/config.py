@@ -582,15 +582,23 @@ class ProgramConfig(Config):
 
         if "module" in config_dict:
             module_cfg = config_dict["module"]
-            trans_params = module_cfg["translator_params"]
+            if not isinstance(module_cfg, dict):
+                module_cfg = {}
+                config_dict["module"] = module_cfg
+            # Hand-edited / partially written configs may lack this key; the
+            # migration checks below must not turn that into a KeyError.
+            trans_params = module_cfg.get("translator_params")
+            if not isinstance(trans_params, dict):
+                trans_params = {}
+                module_cfg["translator_params"] = trans_params
             repl_pairs = {"chatgpt": "ChatGPT"}
             for k, i in repl_pairs.items():
                 if k in trans_params:
                     trans_params[i] = trans_params.pop(k)
-            if module_cfg["translator"] in repl_pairs:
+            if module_cfg.get("translator") in repl_pairs:
                 module_cfg["translator"] = repl_pairs[module_cfg["translator"]]
             # Migrate removed translators
-            if module_cfg["translator"] in ("ChatGPT", "Gemini"):
+            if module_cfg.get("translator") in ("ChatGPT", "Gemini"):
                 module_cfg["translator"] = "LLM_API_Translator"
             for removed in ("ChatGPT", "Gemini"):
                 trans_params.pop(removed, None)
@@ -709,23 +717,78 @@ def sanitize_shortcuts(shortcuts: dict) -> dict:
     return cleaned
 
 
+def _try_load_program_config(path: str):
+    """Load ``path`` into a ``ProgramConfig``; ``None`` when unreadable/invalid."""
+    try:
+        return ProgramConfig.load(path)
+    except Exception as e:
+        LOGGER.warning(f"Could not read config file {path}: {e}")
+        return None
+
+
+def _quarantine_corrupt_config(path: str) -> str:
+    """Move an unusable config aside as ``<path>.corrupt-<timestamp>``.
+
+    Keeping the broken file lets the user inspect or hand-repair it; returns
+    the backup path, or ``""`` when the file could not be moved.
+    """
+    backup = f"{path}.corrupt-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    try:
+        os.replace(path, backup)
+    except OSError as e:
+        LOGGER.error(f"Could not back up corrupt config {path}: {e}")
+        return ""
+    return backup
+
+
+def _recover_config_from_tmp(tmp_path: str, cfg_path: str):
+    """Return a config salvaged from a leftover ``.tmp`` and adopt it, else None.
+
+    ``save_config`` writes ``config.json.tmp`` then atomically replaces the
+    real file, so a valid ``.tmp`` is a complete, newer config left behind by
+    an interrupted save — recovering it beats silently resetting the user.
+    """
+    if not osp.exists(tmp_path):
+        return None
+    config = _try_load_program_config(tmp_path)
+    if config is None:
+        return None
+    try:
+        os.replace(tmp_path, cfg_path)
+        LOGGER.warning(f"Recovered config from interrupted save: {tmp_path}")
+    except OSError as e:
+        LOGGER.warning(f"Using recovered config from {tmp_path} without adopting it: {e}")
+    return config
+
+
 def load_config(config_path: str = shared.CONFIG_PATH):
     if config_path != shared.CONFIG_PATH:
         shared.CONFIG_PATH = config_path
         LOGGER.info(f"Using specified config file at {shared.CONFIG_PATH}")
 
-    if osp.exists(shared.CONFIG_PATH):
-        try:
-            config = ProgramConfig.load(shared.CONFIG_PATH)
-        except Exception as e:
-            LOGGER.exception(e)
-            LOGGER.warning("Failed to load config file, using default config")
-            config = ProgramConfig()
+    cfg_path = shared.CONFIG_PATH
+    tmp_path = cfg_path + ".tmp"
+
+    config = None
+    if osp.exists(cfg_path):
+        config = _try_load_program_config(cfg_path)
+        if config is None:
+            backup = _quarantine_corrupt_config(cfg_path)
+            if backup:
+                LOGGER.error(
+                    f"Config file {cfg_path} was invalid and is kept as {backup}"
+                )
+            config = _recover_config_from_tmp(tmp_path, cfg_path)
+            if config is None:
+                LOGGER.warning("Falling back to the default config.")
+                config = ProgramConfig()
     else:
-        LOGGER.info(
-            f"{shared.CONFIG_PATH} does not exist, new config file will be created."
-        )
-        config = ProgramConfig()
+        config = _recover_config_from_tmp(tmp_path, cfg_path)
+        if config is None:
+            LOGGER.info(
+                f"{cfg_path} does not exist, new config file will be created."
+            )
+            config = ProgramConfig()
 
     global pcfg
     pcfg.merge(config)
@@ -752,17 +815,28 @@ def load_config(config_path: str = shared.CONFIG_PATH):
         else:
             pcfg.light_theme = old
 
-    p = pcfg.text_styles_path
-    if not osp.exists(pcfg.text_styles_path):
-        dp = osp.join(shared.DEFAULT_TEXTSTYLE_DIR, "default.json")
-        if p != dp and osp.exists(dp):
-            p = dp
-            LOGGER.warning(f"Text style {p} does not exist, use the default from {dp}.")
-        else:
-            with open(dp, "w", encoding="utf8") as f:
-                f.write(json.dumps([], ensure_ascii=False))
-            LOGGER.info(f"New text style file created at {dp}.")
-    load_textstyle_from(p)
+    # Text styles are optional startup data: a read-only config directory must
+    # degrade to "no persisted styles" (empty list), not abort startup.  This
+    # is also the one explicit write point that creates the default style file.
+    try:
+        p = pcfg.text_styles_path
+        if not osp.exists(p):
+            dp = osp.join(shared.DEFAULT_TEXTSTYLE_DIR, "default.json")
+            if p != dp and osp.exists(dp):
+                p = dp
+                LOGGER.warning(f"Text style {p} does not exist, use the default from {dp}.")
+            else:
+                os.makedirs(osp.dirname(dp), exist_ok=True)
+                with open(dp, "w", encoding="utf8") as f:
+                    f.write(json.dumps([], ensure_ascii=False))
+                LOGGER.info(f"New text style file created at {dp}.")
+                p = dp
+        load_textstyle_from(p)
+    except Exception as e:
+        LOGGER.error(
+            f"Text styles unavailable ({e}); continuing without persisted styles. "
+            f"Check write permission on {shared.DEFAULT_TEXTSTYLE_DIR}."
+        )
 
     # Migrate profiles from old translator storage to new shared location
     from .profile_manager import migrate_old_profiles
@@ -829,6 +903,12 @@ def save_config():
     global pcfg
     applied = _suspend_auto_downgrades()
     try:
+        # Explicit write point: the config directory may not exist yet when a
+        # custom --config_path points outside the repo (utils/shared.py no
+        # longer creates directories at import time).
+        cfg_dir = osp.dirname(shared.CONFIG_PATH)
+        if cfg_dir:
+            os.makedirs(cfg_dir, exist_ok=True)
         tmp_save_tgt = shared.CONFIG_PATH + ".tmp"
         with open(tmp_save_tgt, "w", encoding="utf8") as f:
             f.write(json_dump_program_config(pcfg))
@@ -911,17 +991,28 @@ def _compare_export_schema(data, ref_obj, prefix=""):
 
 
 def _get_app_version():
-    """Return the application version string, or 'unknown' if unavailable."""
+    """Return the current application version string.
+
+    Single source is ``pyproject.toml`` via ``utils/version.py::APP_VERSION``
+    (it also covers ``importlib.metadata`` and a final fallback).  The old
+    implementation asked ``importlib.metadata`` for the wrong distribution
+    name and then a non-existent ``launch.__version__``, so exports were
+    stamped with a hardcoded, stale version.
+    """
+    try:
+        from .version import APP_VERSION
+
+        if APP_VERSION:
+            return APP_VERSION
+    except Exception:
+        pass
     try:
         from importlib.metadata import version
-        return version("ballonstranslator")
+
+        return version("BallonsTranslator-lite")
     except Exception:
         pass
-    try:
-        return __import__("launch").__version__
-    except Exception:
-        pass
-    return "0.3.0"
+    return "unknown"
 
 
 def export_config(path, exclude_api_keys=True, exclude_recent_projects=False):

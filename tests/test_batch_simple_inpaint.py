@@ -5,6 +5,8 @@
 ``ui/batch_inpaint.py::BatchSimpleInpaint``：判据一律算原图、只写
 ``inpainted/`` 层、复杂块完全不动（``only_simple`` 不加载模型）、既有修复图
 上复杂块成果与矩形外像素保留、整批走版本仓库可撤回、原图文件字节不变。
+末尾 ``PatchmatchCarrierTest`` 钉 PatchMatch 也能当这个任务的引擎（阶段三第 4
+条：非模型修复器、不加载模型、连原生 DLL 都不碰）。
 
 Run:
     ./ballontrans_pylibs_win/python.exe -m pytest tests/test_batch_simple_inpaint.py -q
@@ -15,6 +17,7 @@ import os.path as osp
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 APP_ROOT = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path.insert(0, APP_ROOT)
@@ -579,6 +582,70 @@ class BatchSimpleInpaintTest(unittest.TestCase):
         )
         task.apply()
         self.assertEqual([(i, n) for i, n, _ in seen], [(1, 2), (2, 2)])
+
+
+class PatchmatchCarrierTest(unittest.TestCase):
+    """PatchMatch 当 ``BatchSimpleInpaint`` 的载体（阶段三第 4 条）。
+
+    PatchMatch 是精简包随包携带的非模型修复器，逐块能力继承基类，所以批量
+    「简单背景」任务可以直接拿它当引擎：只走判据 + 纯色覆盖
+    （``only_simple=True``），**简单块纯色覆盖、复杂块原样不动、不加载模型**。
+    原生 DLL 同样不该被碰——附件缺失（源码运行没备 data/libs、或精简包被解压
+    坏）时这个批量任务照样能给简单背景上色。
+    """
+
+    def setUp(self):
+        self._ext = pcfg.intermediate_imgsave_ext
+        self._limit = pcfg.batch_backup_versions
+        pcfg.intermediate_imgsave_ext = ".png"
+        pcfg.batch_backup_versions = 1
+        self.addCleanup(self._restore_cfg)
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.dir = self._tmp.name
+        img, mask = _page_image([("simple", SIMPLE_XYXY), ("complex", COMPLEX_XYXY)])
+        cv2.imwrite(osp.join(self.dir, "01.png"), img)
+        self.proj = ProjImgTrans(directory=self.dir)
+        self.proj.save_mask("01.png", mask)
+        self.proj.pages["01.png"] = [
+            _make_blk(SIMPLE_XYXY),
+            _make_blk(COMPLEX_XYXY),
+        ]
+        self.proj.save()
+
+    def _restore_cfg(self):
+        pcfg.intermediate_imgsave_ext = self._ext
+        pcfg.batch_backup_versions = self._limit
+
+    def test_apply_fills_without_model_or_native_lib(self):
+        from modules.inpaint import patch_match
+        from modules.inpaint.inpaint_patchmatch import PatchmatchInpainter
+
+        previous = patch_match.PMLIB
+        self.addCleanup(setattr, patch_match, "PMLIB", previous)
+        patch_match.PMLIB = None
+
+        inpainter = PatchmatchInpainter()
+        self.assertIsNone(patch_match.PMLIB, "构造实例不该加载原生库")
+
+        missing = "data/libs/native-attachment-missing.dll"
+        with mock.patch.object(
+            patch_match, "required_native_files", return_value=[missing]
+        ):
+            task = BatchSimpleInpaint(self.proj, inpainter)
+            plan = task.plan()
+            self.assertEqual(plan["simple"], 1)
+            self.assertEqual(plan["complex"], 1)
+            report = task.apply()
+
+        self.assertTrue(report["started"], report)
+        self.assertEqual(report["errors"], {})
+        self.assertEqual(report["blocks"], 1)
+        after = imread(self.proj.get_inpainted_path("01.png", get_last_modified=True))
+        self.assertEqual(after[40, 40].tolist(), [255, 255, 255])  # 简单块被覆盖
+        self.assertEqual(after[50, 140].tolist(), [0, 0, 0])  # 复杂块原样不动
+        self.assertIsNone(patch_match.PMLIB, "批量简单背景不该加载原生库")
 
 
 if __name__ == "__main__":

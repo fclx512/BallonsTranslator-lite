@@ -475,7 +475,7 @@ if torch is not None:
         # requirements.txt 刻意不含 torch（体积大、CPU/GPU 版本要人挑）。
         # 声明出来之后，选中它时 ui/module_manager.py::_ensure_module_deps 的
         # 后台任务会把 torch 装上（PyPI 上 Windows 版即 CPU 版）；GPU 用户仍
-        # 走 install_cuda.bat 装 CUDA 版。少了这条声明，引导包里就没人装它。
+        # 走 install_cuda.bat 装 CUDA 版。少了这条声明，精简包里就没人装它。
         requires_packages = ["torch"]
 
         params = {

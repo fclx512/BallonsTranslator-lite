@@ -22,6 +22,11 @@ from utils.package_installer import install as _install_packages
 
 # (module_name, (required_attr, …))
 #  — attr tuple is empty when merely importing the module suffices.
+#
+# Scope: packages the ordinary startup / translation path imports, i.e. the
+# non-optional half of ``requirements.txt``.  Model backends (torch,
+# ultralytics, onnxruntime, transformers, numba) are deliberately absent —
+# they are installed on demand per module and must not gate startup.
 CORE_IMPORT_PROBES: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
     ("packaging", ()),
     ("qtpy", ()),
@@ -35,6 +40,17 @@ CORE_IMPORT_PROBES: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
     ("colorama", ()),
     ("natsort", ()),
     ("cv2", ("IMREAD_COLOR", "IMREAD_GRAYSCALE", "cvtColor")),
+    # Hard imports on the normal path: shapely/networkx back the text-block
+    # geometry (utils/textblock.py), httpx backs the LLM profile layer loaded
+    # during config init, pydantic backs the OpenAI client, pyclipper backs
+    # the detector post-processing, and PyYAML is imported by detector/model
+    # code.  A missing wheel here surfaces as a NameError mid-run otherwise.
+    ("shapely", ()),
+    ("networkx", ()),
+    ("httpx", ()),
+    ("pydantic", ()),
+    ("pyclipper", ()),
+    ("yaml", ()),
 )
 
 
@@ -212,6 +228,25 @@ def ensure_core_requirements(
             pass
 
     _drop_probe_modules(probes)
+
+    # Re-probe in this process before telling the caller to restart.  A restart
+    # is only useful if the install actually made the packages importable;
+    # otherwise the caller would re-exec, install "successfully" again, and loop
+    # forever.  Anything still failing is reported as an actionable error.
+    still_missing = check_core_imports(probes)
+    if still_missing:
+        print()
+        print("!" * 50)
+        print("Packages were installed but are still not importable in this process.")
+        for f in still_missing:
+            print(f)
+        print("Not restarting — a restart would repeat the same install.")
+        print("Resolve the environment manually, then start again:")
+        print(f"  pip install -r {req_path}")
+        print("!" * 50)
+        print()
+        return False
+
     print()
     print("Core Python requirements installed successfully.")
     print("Restarting to load new packages...")

@@ -85,7 +85,10 @@ STAGE_TRANSLATE = 2
 STAGE_INPAINT = 3
 
 #: Inpainters hidden from the run-time selector (single source of truth in
-#: ``modules/__init__.py::HIDDEN_INPAINTERS``; the bottom bar hides them too).
+#: ``modules/__init__.py::HIDDEN_INPAINTERS``; the bottom bar and the settings
+#: page hide the same set).  Only the online ``LLMInpaint`` is hidden now —
+#: ``patchmatch`` is a non-model capability shipped with the minimal package
+#: and must stay selectable here (``modules/inpaint/inpaint_patchmatch.py``).
 
 SETTINGS_BODY_INDENT = 18
 MODULE_SELECTOR_WIDTH = 150

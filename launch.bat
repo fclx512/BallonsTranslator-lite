@@ -32,8 +32,17 @@ set "PYTHON=%~dp0ballontrans_pylibs_win\python.exe"
 if exist "%PYTHON%" (
     "%PYTHON%" -c "" >nul 2>&1
     if !ERRORLEVEL! == 0 (
-        echo [OK] Using embedded Python: !PYTHON!
-        goto :python_found
+        "%PYTHON%" -c "import sys; exit(0 if sys.version_info >= (3,10) else 1)" >nul 2>&1
+        if !ERRORLEVEL! == 0 (
+            echo [OK] Using embedded Python: !PYTHON!
+            goto :python_found
+        ) else (
+            echo [WARN] Embedded Python at !PYTHON!
+            echo [WARN]   is older than Python 3.10, which this project requires.
+            echo [WARN]   Download the current release bundle, or install a
+            echo [WARN]   system Python 3.10+ and run launch.bat with it.
+            echo.
+        )
     ) else (
         echo [WARN] Found embedded Python at !PYTHON!
         echo [WARN]   but it failed to run (exit code: !ERRORLEVEL!^).
@@ -81,9 +90,15 @@ where python3 >nul 2>nul
 if %ERRORLEVEL% == 0 (
     python3 -c "" >nul 2>nul
     if !ERRORLEVEL! == 0 (
-        for /f "delims=" %%P in ('python3 -c "import sys; print(sys.executable)" 2^>nul') do set "PYTHON=%%P"
-        echo [INFO] Using Python 3 via python3: !PYTHON!
-        goto :python_found
+        python3 -c "import sys; exit(0 if sys.version_info >= (3,10) else 1)" >nul 2>nul
+        if !ERRORLEVEL! == 0 (
+            for /f "delims=" %%P in ('python3 -c "import sys; print(sys.executable)" 2^>nul') do set "PYTHON=%%P"
+            echo [INFO] Using Python 3 via python3: !PYTHON!
+            goto :python_found
+        ) else (
+            echo [WARN] `python3` on PATH is older than Python 3.10 ^(required^)
+            echo [WARN] Skipping — will try alternative Python discovery.
+        )
     )
 )
 
@@ -92,11 +107,17 @@ rem     Also handle the WindowsApps stub: it passes `-c ""` but fails on real im
 rem     We verify by checking that python can actually import a module.
 where python >nul 2>nul
 if %ERRORLEVEL% == 0 (
-    python -c "import sys; exit(0)" >nul 2>nul
+    python -c "" >nul 2>nul
     if !ERRORLEVEL! == 0 (
-        set "PYTHON=python"
-        echo [INFO] Using system Python
-        goto :python_found
+        python -c "import sys; exit(0 if sys.version_info >= (3,10) else 1)" >nul 2>nul
+        if !ERRORLEVEL! == 0 (
+            set "PYTHON=python"
+            echo [INFO] Using system Python
+            goto :python_found
+        ) else (
+            echo [WARN] `python` on PATH is older than Python 3.10 ^(required^)
+            echo [WARN] Skipping — will try alternative Python discovery.
+        )
     ) else (
         echo [WARN] `python` found on PATH but failed to run ^(WindowsApps stub?^)
         echo [WARN] Skipping — will try alternative Python discovery.
@@ -108,11 +129,13 @@ echo [ERROR] ============================================================
 echo [ERROR]  Python could not be found or started.
 echo [ERROR] ============================================================
 echo.
+echo   This project requires Python 3.10 or newer.
+echo.
 echo    Locations checked:
 echo      1. ballontrans_pylibs_win\python.exe (embedded/distributed)
 echo      2. py launcher ^(requires Python 3.10+^)
-echo      3. python3 on PATH
-echo      4. python on PATH
+echo      3. python3 on PATH ^(requires 3.10+^)
+echo      4. python on PATH ^(requires 3.10+^)
 echo.
 echo    Common causes:
 echo      - Missing VC++ Redistributable 2015-2022 (needed by embedded Python)

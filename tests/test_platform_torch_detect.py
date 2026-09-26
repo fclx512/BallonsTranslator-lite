@@ -57,6 +57,27 @@ class DetectTorchTests(unittest.TestCase):
             self.assertFalse(launch._detect_user_torch())
 
 
+class BrokenTorchDegradeTests(unittest.TestCase):
+    """坏 torch（DLL 加载失败）必须降级，而不是让异常冒泡出启动路径。"""
+
+    def test_unloadable_torch_is_treated_as_absent(self):
+        with mock.patch.object(
+            launch, "_probe_import", lambda name: (None, "OSError: DLL load failed")
+        ):
+            self.assertFalse(launch._detect_user_torch())
+
+    def test_accelerator_probe_exception_degrades_to_cpu(self):
+        def _boom():
+            raise OSError("cuda dll broken")
+
+        torch_mod = types.SimpleNamespace(
+            __file__="/fake/torch/__init__.py",
+            cuda=types.SimpleNamespace(is_available=_boom),
+        )
+        with mock.patch.dict(sys.modules, {"torch": torch_mod}):
+            self.assertFalse(launch._detect_user_torch())
+
+
 class ReinstallTorchPlatformTests(unittest.TestCase):
     def _prepare(self, platform, gpu_info):
         args = types.SimpleNamespace(reinstall_torch=True, frozen=False)

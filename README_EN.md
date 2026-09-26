@@ -16,12 +16,18 @@ A fork of BallonsTranslator for comic/image translation. The upstream five-stage
 
 - **OS**: Windows 10+ x64 (macOS see below; other platforms unverified)
 - **GPU**: Optional. An NVIDIA GPU can accelerate (see [GPU Acceleration](#gpu-acceleration)); CPU-only works
-- **Disk space**: One-click bundle approx. **2.1 GB** (embedded Python environment ~1.4 GB + model files ~700 MB); enabling GPU acceleration adds approx. **2.2 GB** (CUDA PyTorch ~2 GB + onnxruntime-gpu ~214 MB)
+- **Disk space**: The minimal package is approx. **550–600 MB** (embedded Python + basic dependencies + PatchMatch native libraries, no models); the offline full bundle is approx. **1.7–2.1 GB** (including model backends and weights); enabling GPU acceleration adds approx. **2.2 GB** (CUDA PyTorch ~2 GB + onnxruntime-gpu ~214 MB)
 - **VC++ Runtime**: [VC++ Redistributable 2015-2022 x64](https://aka.ms/vs/17/release/vc_redist.x64.exe) (required by the embedded Python)
 
 ## Quick Start
 
-### One-Click Bundle (recommended)
+### Minimal Package (recommended)
+
+The minimal package is a bootstrap package with the basic dependencies already installed, approximately **550–600 MB** (estimate; the actual artifact decides). It does not include torch, YOLO/ONNX/Transformers model backends, or model weights. The PatchMatch native libraries are included as a low-overhead basic capability. Extract it anywhere, run `launch.bat`, and download model backends and weights on demand from the GUI.
+
+> The minimal package is **not released yet** (build and out-of-the-box acceptance are still in progress). For now, use the full one-click bundle below or run from source. See `scripts/build_win_minimal.ps1` and the "Minimal package release" section in `scripts/README.md` for how it is built.
+
+### Full One-Click Bundle (offline fallback)
 
 Download the complete bundle (dependencies and models included) from the file hosts, extract it to any directory and run `launch.bat`:
 
@@ -31,7 +37,7 @@ Download the complete bundle (dependencies and models included) from the file ho
 ```
 BallonsTranslator-lite/
 ├── ballontrans_pylibs_win/   # Embedded Python 3.12 + all dependencies (~1.4 GB)
-├── data/                     # Model files and native libraries (~700 MB)
+├── data/                     # Model files and PatchMatch native libraries (~700 MB)
 ├── config/                   # Configuration and themes (config.json is created on first run)
 ├── ui/  modules/  utils/     # Application source
 └── launch.bat                # Double-click to start
@@ -39,7 +45,7 @@ BallonsTranslator-lite/
 
 `launch.bat` locates a usable Python by itself (the bundled environment first), determines whether a usable GPU is present, and distinguishes the one-click bundle from a git install — no manual configuration needed.
 
-If the large bundle is inconvenient to download, a trimmed bundle without model files is available: extract it and run `launch.bat` the same way — missing dependencies are installed automatically on first launch, and model weights download once you select the corresponding module.
+The minimal package already contains the `requirements.txt` basic dependencies, so it can enter the GUI without network access. Manual typesetting, multi-page workbench operations, Photoshop integration, and PatchMatch simple-background repair work directly. When you select an automated pipeline module, the GUI installs its torch/ultralytics/onnxruntime/onnxocr/transformers backend and downloads weights on demand. Use the full bundle above when a usable network is unavailable.
 
 ### Running from Source
 
@@ -55,7 +61,7 @@ python launch.py --update   # pull code updates before launching
 - Requires **Python 3.10+** (the official installer or the Microsoft Store version; the Store version creates a project-local `.venv` automatically).
 - On first launch the pip mirror is written automatically based on your region (the `mirror` section of `config/config.json`), so no manual mirror setup is needed in mainland China.
 - If automatic dependency installation fails, run `pip install -r requirements.txt` manually. The heavy dependencies needed for model inference (`torch` / `transformers` etc.) are not part of it — install them as needed (see [GPU Acceleration](#gpu-acceleration)).
-- The **PatchMatch inpainter** depends on native libraries under `data/libs/`, which is not tracked by git: for a source install you need to take these files from the one-click bundle; without them, use a PyTorch-based inpainter instead.
+- The **PatchMatch inpainter** is a low-overhead basic capability included in the minimal package. It needs `data/libs/patchmatch_inpaint.dll` and `data/libs/opencv_world455.dll`. Source installs or manually rebuilt environments must copy these native files from the minimal/full bundle; the app still starts without them, but using PatchMatch will show a readable missing-attachment message.
 - See `python launch.py --help` for all arguments (e.g. `--proj-dir` to open a project at startup, `--headless` to run without a GUI).
 
 ## GPU Acceleration
@@ -123,7 +129,7 @@ python launch.py
 - Requires Python 3.10 or newer; 3.12 recommended (the bundle ships 3.12; 3.13 and above are unverified).
 - **Apple Silicon (M series)**: PyTorch uses MPS acceleration automatically, no CUDA needed; Intel Macs or systems without MPS fall back to CPU.
 - `launch.bat` and `install_cuda.bat` are Windows-only.
-- The PatchMatch inpainter has no macOS native library and is unavailable — use a PyTorch-based inpainter instead.
+- PatchMatch native libraries are currently shipped only in the Windows minimal/full packages; macOS has no corresponding attachment, so use a PyTorch-based inpainter instead.
 
 ## Acknowledgement
 

@@ -19,6 +19,15 @@ from typing import Callable, Iterable, List, Optional, Tuple
 BACKENDS = ("auto", "pip", "uv")
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
+# Packages whose declared dependencies conflict with this app's pinned
+# versions (onnxocr requires numpy<2 while the app ships numpy 2.x) and
+# whose actually-needed deps are already covered by requirements.txt.
+# Both install paths (``modules/base.py::BaseModule.ensure_dependencies``
+# and the GUI download task ``ui/model_downloads.py``) must install these
+# bare with ``--no-deps``: letting the resolver "satisfy" the declaration
+# would silently downgrade numpy and break everything else.
+NO_DEPS_PACKAGES = frozenset({"onnxocr"})
+
 
 @dataclass
 class InstallResult:

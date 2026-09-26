@@ -361,8 +361,14 @@ class BaseModule:
         """Check and auto-install extra pip packages declared in
         ``requires_packages``.
 
-        Only packages NOT already satisfied are installed.  Uses uv if
-        available, falls back to pip.
+        Only packages NOT already satisfied are installed.  Reuses the
+        launcher's installer backend (``utils/package_installer.py``) so a
+        standalone ``uv.exe`` shipped next to the interpreter is picked up
+        the same way as during startup (``python -m uv`` does not exist in
+        the minimal package).  Per-package ``--no-deps`` retry mirrors the
+        GUI download path (``ui/model_downloads.py``): onnxocr pins deps
+        that can conflict with the environment, and the module only needs
+        the package itself importable.
         """
         if not self.requires_packages:
             return
@@ -385,46 +391,43 @@ class BaseModule:
                 # Metadata name mismatch (e.g. onnxruntime installed as
                 # onnxruntime-gpu).  Try a direct import as last resort —
                 # if the top-level module can be loaded the dependency is
-                # actually satisfied.
+                # actually satisfied.  OSError = present but broken binary;
+                # counting it as missing gets a reinstall attempt queued.
                 import importlib as _il
 
                 try:
                     _il.import_module(req.name)
-                except ImportError:
+                except (ImportError, OSError):
                     missing.append(req_str)
 
         if not missing:
             return
 
-        import subprocess
-        import sys
+        from utils.package_installer import NO_DEPS_PACKAGES, install
 
-        python = sys.executable
-        # Prefer uv (does NOT support pip-specific --prefer-binary), fall back to pip
-        try:
-            subprocess.run(
-                [python, "-m", "uv", "pip", "install", *missing],
-                capture_output=True,
-                timeout=300,
-                check=True,
+        for package in missing:
+            # onnxocr-class packages: resolve nothing, install bare —
+            # see utils/package_installer.py::NO_DEPS_PACKAGES.
+            forced_no_deps = package in NO_DEPS_PACKAGES
+            result = install(
+                requirements=[package],
+                backend="auto",
+                extra_args="--no-deps" if forced_no_deps else "",
             )
-            self.logger.info(
-                f"Auto-installed extra deps for {self.__class__.__name__}: {missing}"
-            )
-        except Exception:
-            try:
-                subprocess.run(
-                    [python, "-m", "pip", "install", *missing, "--prefer-binary"],
-                    capture_output=True,
-                    timeout=300,
-                    check=True,
-                )
+            if not result.ok and not forced_no_deps:
+                # Same fallback as the GUI download path: some packages pin
+                # deps that conflict with the environment — retry bare, the
+                # module only needs the package itself importable.
+                result = install(requirements=[package], extra_args="--no-deps")
+            if result.ok:
                 self.logger.info(
-                    f"Auto-installed extra deps (via pip) for {self.__class__.__name__}: {missing}"
+                    f"Auto-installed extra deps for {self.__class__.__name__}: {package}"
                 )
-            except Exception as e:
+            else:
                 self.logger.warning(
-                    f"Failed to auto-install extra deps for {self.__class__.__name__}: {e}"
+                    f"Failed to auto-install extra deps for "
+                    f"{self.__class__.__name__}: {package} "
+                    f"(exit {result.returncode}{' — ' + result.error if result.error else ''})"
                 )
 
     def _load_model(self):
@@ -512,7 +515,11 @@ try:
         "fp16": torch.float16,
         "bf16": torch.bfloat16,
     }
-except ImportError:
+except (ImportError, OSError):
+    # ImportError: simply not installed.  OSError: installed but broken —
+    # a DLL load failure raises OSError on Windows, and treating it the
+    # same as "missing" keeps startup alive to degrade to no-model modules
+    # (same policy as launch.py::_probe_import).
     pass
 
 
