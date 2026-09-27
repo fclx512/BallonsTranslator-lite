@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "created": "2026-09-27T12:54:49.733625+00:00",
+  "created": "2026-09-27T13:00:31.094015+00:00",
   "files": {
     ".gitattributes": "sha256:302266a0b9a482b15b10e052bdde95531ddd827a64b2b674243cebdc91299720",
     ".github/ISSUE_TEMPLATE/bug_report_en.yaml": "sha256:74bd921e60b98d041077d2a72066cfe408b2bb90f1254fcd21a5648a98bea588",
@@ -18,7 +18,7 @@
     "data/models/.gitkeep": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "data/models/ppocrv6_onnx/ppocrv6_dict_proper.txt": "sha256:95703cbba4e9d4cc812e05f774b5d69a0bbfb0f16e8e85af8d6bd4b89c6f497d",
     "data/pkusegscores.json": "sha256:ca6b8c6b8ba70d4370b0f2de6bd128ebb0f5f64ff06f01ba6358e49a776b0c3f",
-    "docs/daily_log.md": "sha256:cbc481ec5bc40981416c4b80bc4dcee209616c251c503073391b55917667e5c0",
+    "docs/daily_log.md": "sha256:c1e8d90a143c4d1748df4d3e1803ad30d89ac4ea8f30b756bee076076d0b670f",
     "docs/发版说明_lite-v1.0.0.md": "sha256:84fc442c52797c91976e61286fcc24c719a935d2cee708b73bc459607e2a6ec2",
     "docs/基础速查/AI辅助标签体系使用说明.md": "sha256:1ec28f4ca03234a55b17fcf58357d96470c4c5701093592eb6f92c1685c06dbc",
     "docs/基础速查/i18n.md": "sha256:cbfa768d756a0e593089cbc05d381cc5fab3daa0c30e48a2ca7b2592af3f4701",
