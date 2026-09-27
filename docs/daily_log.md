@@ -50,7 +50,7 @@
 
 **涉及文件：** `pyproject.toml`、`utils/updater.py`、`scripts/build_win_minimal.ps1`、`modules/inpaint/inpaint_patchmatch.py`、`modules/inpaint/patch_match.py`、`modules/__init__.py`、`ui/module_parse_widgets.py`、`README.md`、`README_EN.md`、`scripts/README.md`、`docs/项目概述.md`、`docs/基础速查/依赖库说明.md`、`tests/test_updater_version.py`、`tests/test_inpaint_patchmatch.py`、`tests/test_minimal_package_contract.py`
 
-**验证：** `tests/test_updater_version.py`（tag 剥离与升级路径 5 用例）新增全过；patchmatch 契约 58 passed；构建脚本 PSParser 解析通过、`tests/test_minimal_package_contract.py` 4 passed；**首次端到端真实构建产出 32.3 MB 小包 + 53 MB 资产**，开箱首启验收发现 `utils/core_requirements.py` 把 pywin32 的 `.pth` 类失败误判成「重启无用」、装完依赖撞「缺少核心依赖」硬闸门拒启——补 `_restart_resolvable_failures` 子进程复测（等价重启后探测）让首启装完自动重启收尾，3 新用例钉住。**遗留：** 发版动作（打 tag `lite-v1.0.0`／挂资产／push）等用户发话。
+**验证：** `tests/test_updater_version.py`（tag 剥离与升级路径 5 用例）新增全过；patchmatch 契约 58 passed；构建脚本 PSParser 解析通过、`tests/test_minimal_package_contract.py` 4 passed；**首次端到端真实构建产出 32.3 MB 小包 + 53 MB 资产**，开箱首启验收发现 `utils/core_requirements.py` 把 pywin32 的 `.pth` 类失败误判成「重启无用」、装完依赖撞「缺少核心依赖」硬闸门拒启——补 `_restart_resolvable_failures` 子进程复测（等价重启后探测）让首启装完自动重启收尾，3 新用例钉住。**发版：** 已于当日执行，见下方「lite-v1.0.0 发版执行」条。
 
 ---
 
@@ -59,6 +59,16 @@
 **摘要：** 0.6.0→lite-v1.0.0 共 139 提交的改动整理成仓内更新说明文档（面向老用户，发版页只引用不抄正文）；README/README_EN 撤「尚未正式发布」标注、补 Releases 下载指引，并修掉与发版形态矛盾的三处旧口径（一键完整包段误写「精简包预装依赖」、源码段「PatchMatch 随包需手工补回」、macOS 段附件说法）；「功能展示」占位行按要求继续搁置。
 
 **涉及文件：** `docs/发版说明_lite-v1.0.0.md`、`README.md`、`README_EN.md`、`docs/基础速查/依赖库说明.md`
+
+---
+
+### lite-v1.0.0 发版执行（tag 推送 + 三资产 Release + 旧 7 Release/v0.x tag 清理）
+
+**摘要：** 首个 `lite-v*` 版本正式发布：tag `lite-v1.0.0`（指向 `8f5c5744`）推送，GitHub Release（id 397650844）挂三件资产——小包 ZIP 33,855,393 B + 两个 PatchMatch DLL（50,176 / 55,521,280 B，sha256 与 `modules/inpaint/inpaint_patchmatch.py::download_file_list` 钉死值逐一吻合，`releases/latest/download` 直链自此可用）；旧 7 个零资产 Release（v0.2.0～v0.6.0）连同远端/本地同名 tag 删除，上游 v1.5.x 系 tag 保留（origin 上本就没有）。发版页正文只引用 `docs/发版说明_lite-v1.0.0.md`。本机无 `gh`，全程走 GitHub API（token 取自 git 凭据）。
+
+**涉及文件：** 本条为远端动作记录，仓内仅 `docs/daily_log.md`
+
+**验证：** Release 资产清单 3 项尺寸逐一核对；`releases/latest/download/patchmatch_inpaint.dll` 实拉哈希一致；远端 releases 剩 1 个、`git ls-remote --tags` 只剩 `lite-v1.0.0`。
 
 ---
 
