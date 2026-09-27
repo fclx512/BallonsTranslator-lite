@@ -12,6 +12,38 @@
 >
 > 仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护）；被裁掉的日期节仍完整留在提交历史里，用 `git log --grep <关键词>`／`git log --follow -p -- docs/daily_log.md`／`git show <rev>:docs/daily_log.md` 回查。
 
+## 2026-09-27
+
+### 字号输入上限跟随 `pcfg.max_font_size`（`SizeComboBox.set_max_val`）
+
+**摘要：** 右栏文本面板与嵌字页面板的字号框原来分别钉死 200/1000，设置页「最大字号」只约束渲染不约束输入，拖拽/手输都能越过上限。`SizeComboBox` 增加运行时可更新的 `set_max_val`，两处字号框改读 `pcfg.max_font_size`，并在每次回显前同步（面板只在启动时构造一次，不同步会被旧上限钳住）。
+
+**涉及文件：** `ui/custom_widget/combobox.py`、`ui/text_engine/formatting/panel.py`、`ui/text_panel.py`
+
+**验证：** `scripts/verify.py --full` 全绿。
+
+---
+
+### 样式管理器子样式字体迁移（`StyleFontMigration`）+ 大样式编辑快照撤销（`BatchFontformatCommand` 的 `base_snapshot`）
+
+**摘要：** 子样式详情新增「更换字体」卡：只把该子样式的文本框迁到目标大样式（或未分组），迁移前按实时发现重核成员、确认后一步撤销。大样式编辑补两个一致性缺口——目标身份已属于其它大样式时拒绝应用（不再静默生成重复身份）；模板 `fontformat` 的旧/新格式经 `base_snapshot` 随批量命令一起撤销/重做，无匹配块的模板编辑也能撤。
+
+**涉及文件：** `ui/fontstyle_manager.py`、`ui/fontstyle_manager_commands.py`、`scripts/stylemgr_render.py`、`config/stylesheet.css`、`tests/test_fontstyle_tree.py`、`tests/test_global_search_fontstyle.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
+
+**验证：** 新增 7 个用例（迁移/未分组重检/身份冲突/身份变更撤销/base_snapshot 三态）全过；`scripts/stylemgr_render.py` 场景 4 变体验收底图。
+
+---
+
+### 模型文件列表整行点击勾选（`RowTable.set_row_click_toggles_check`）+ 展示台两级目录检索
+
+**摘要：** 模型文件卡片的 13px 勾选框太难点，`RowTable` 增加默认关闭的整行点击勾选（只认「按下-抬起同一行且未拖动」的一次点击，仍走 `_user_toggled` 唯一写路径），仅 `ui/model_files_panel.py` 开启——工作台候选列表靠点行预览、不能开。展示台左侧目录改「分区→控件」两级并与搜索/样式筛选同步，加行计数与 Ctrl+F/Enter/Esc，修样式来源徽章把类型规则误判成类名的问题；给裸 `QToolButton` 补全局紧凑兜底。
+
+**涉及文件：** `ui/custom_widget/row_table.py`、`ui/model_files_panel.py`、`scripts/style_showcase.py`、`config/stylesheet.css`、`docs/基础速查/打包控件功能使用说明.md`、`tests/test_model_files.py`
+
+**验证：** 真实鼠标事件 7 用例（主体勾选/复选框单次触发/拖动不勾/默认关闭）全过。
+
+---
+
 ## 2026-09-26
 
 ### 标签待办体系重构（`ocr_review_pending` / `trans_review_pending` + `consumed_tags` 撤销一致性）+ 工作台六项扁平导航与非删除待办队列（D46/D48/D49）

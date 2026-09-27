@@ -31,6 +31,10 @@ os.chdir(APP_ROOT)
 os.environ.setdefault("QT_API", "pyqt6")
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from qtpy.QtCore import QEvent, QPoint, QPointF, Qt  # noqa: E402
+from qtpy.QtGui import QMouseEvent  # noqa: E402
+from qtpy.QtWidgets import QApplication  # noqa: E402
+
 from utils.model_files import (  # noqa: E402
     GIT_TRACKED_MODEL_FILES,
     declared_save_files,
@@ -54,6 +58,45 @@ def _dl_entry(files, save_files=None):
     if save_files is not None:
         entry["save_files"] = save_files
     return entry
+
+
+# ── 真实鼠标事件（走 Qt 分发，不是直接调 _user_toggled） ─────────────
+
+def _send_mouse(widget, etype, pos, buttons=None):
+    button = {
+        QEvent.Type.MouseButtonPress: Qt.MouseButton.LeftButton,
+        QEvent.Type.MouseButtonRelease: Qt.MouseButton.LeftButton,
+        QEvent.Type.MouseMove: Qt.MouseButton.NoButton,
+    }.get(etype, Qt.MouseButton.LeftButton)
+    buttons = button if buttons is None else buttons
+    local = QPointF(pos)
+    event = QMouseEvent(
+        etype,
+        local,
+        QPointF(widget.mapToGlobal(pos)),
+        button,
+        buttons,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    QApplication.sendEvent(widget, event)
+
+
+def _click(widget, pos, buttons=None):
+    """在 *widget* 上完整走一遍按下 + 抬起。"""
+    _send_mouse(widget, QEvent.Type.MouseButtonPress, pos, buttons)
+    _send_mouse(widget, QEvent.Type.MouseButtonRelease, pos, buttons)
+
+
+def _drag(widget, start, end):
+    """按下 → 移动超阈值 → 抬起（模拟拖动，不该被算成点击勾选）。"""
+    _send_mouse(widget, QEvent.Type.MouseButtonPress, start)
+    _send_mouse(
+        widget,
+        QEvent.Type.MouseMove,
+        end,
+        buttons=Qt.MouseButton.LeftButton,
+    )
+    _send_mouse(widget, QEvent.Type.MouseButtonRelease, end)
 
 
 class TestDeclaredFiles(unittest.TestCase):
@@ -313,6 +356,122 @@ class TestRowTableCard(unittest.TestCase):
         self.assertGreater(long, short)
 
 
+class TestRowClickTogglesCheck(unittest.TestCase):
+    """整行点击勾选（``RowTable.set_row_click_toggles_check``，默认关闭）。
+
+    本节列表点行只有一个含义（勾选），所以开了这个选项；工作台的候选列表
+    点行是预览，绝不能全局翻转。四条判据都用真实鼠标事件走一遍：
+    卡片主体可勾/可取消、复选框仍只翻转一次、拖动不算点击、默认关闭时
+    点主体无效而点复选框照旧。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def _make_table(self, enabled: bool):
+        from ui.custom_widget import MODE_CARD, RowTable
+
+        table = RowTable(MODE_CARD)
+        table.set_row_click_toggles_check(enabled)
+        table.set_rows([{"primary": "A", "meta": "m"}, {"primary": "B", "meta": "m"}])
+        table.resize(400, 120)
+        table.show()
+        self.app.processEvents()
+        return table
+
+    def _states(self, table):
+        return [row.get("checked") for row in table._model.rows]
+
+    def _body_point(self, table, row: int) -> QPoint:
+        """行内远离勾选框（左侧 12~26px）的一点。"""
+        rect = table.visualRect(table.model().index(row, 0))
+        return QPoint(rect.left() + 120, rect.center().y())
+
+    def _check_point(self, table, row: int) -> QPoint:
+        """勾选框正中（与 ``_RowDelegate._check_rect`` 同源几何）。"""
+        rect = table.visualRect(table.model().index(row, 0))
+        box = table._delegate._check_rect(rect, inside_card=True)
+        return box.center()
+
+    def test_default_off_body_click_does_nothing(self):
+        table = self._make_table(enabled=False)
+        self.addCleanup(table.deleteLater)
+        toggled = []
+        table.checkToggled.connect(lambda r, c: toggled.append((r, c)))
+
+        _click(table.viewport(), self._body_point(table, 0))
+        self.app.processEvents()
+
+        self.assertEqual(self._states(table), [None, None], "默认关闭时点主体不该勾选")
+        self.assertEqual(toggled, [])
+
+    def test_default_off_checkbox_still_toggles(self):
+        table = self._make_table(enabled=False)
+        self.addCleanup(table.deleteLater)
+        toggled = []
+        table.checkToggled.connect(lambda r, c: toggled.append((r, c)))
+        point = self._check_point(table, 0)
+
+        _click(table.viewport(), point)
+        self.app.processEvents()
+        self.assertEqual(self._states(table), [True, None])
+        self.assertEqual(toggled, [(0, True)])
+
+    def test_enabled_body_click_ticks_and_untick(self):
+        table = self._make_table(enabled=True)
+        self.addCleanup(table.deleteLater)
+        toggled = []
+        table.checkToggled.connect(lambda r, c: toggled.append((r, c)))
+
+        _click(table.viewport(), self._body_point(table, 1))
+        self.app.processEvents()
+        self.assertEqual(self._states(table), [None, True], "点卡片主体应勾选该行")
+        self.assertEqual(toggled, [(1, True)])
+
+        _click(table.viewport(), self._body_point(table, 1))
+        self.app.processEvents()
+        self.assertEqual(self._states(table), [None, False], "再点一次应取消")
+        self.assertEqual(toggled, [(1, True), (1, False)])
+
+    def test_enabled_checkbox_click_toggles_exactly_once(self):
+        """勾选框命中与整行命中不能各翻一次（否则互相抵消、看着没反应）。"""
+        table = self._make_table(enabled=True)
+        self.addCleanup(table.deleteLater)
+        toggled = []
+        table.checkToggled.connect(lambda r, c: toggled.append((r, c)))
+
+        _click(table.viewport(), self._check_point(table, 0))
+        self.app.processEvents()
+
+        self.assertEqual(self._states(table), [True, None])
+        self.assertEqual(toggled, [(0, True)], "同一次点击必须只发一次 checkToggled")
+
+    def test_drag_does_not_toggle(self):
+        """拖动（跨行或行内大位移）不该被算成点击。"""
+        table = self._make_table(enabled=True)
+        self.addCleanup(table.deleteLater)
+        toggled = []
+        table.checkToggled.connect(lambda r, c: toggled.append((r, c)))
+
+        # 跨行拖：按下第 0 行、拖到第 1 行再松手
+        _drag(
+            table.viewport(),
+            self._body_point(table, 0),
+            self._body_point(table, 1),
+        )
+        self.app.processEvents()
+        # 行内大位移拖（仍超 startDragDistance，落在同一行）
+        start = QPoint(self._body_point(table, 0).x(), table.visualRect(
+            table.model().index(0, 0)
+        ).top() + 4)
+        _drag(table.viewport(), start, QPoint(start.x(), start.y() + 48))
+        self.app.processEvents()
+
+        self.assertEqual(self._states(table), [None, None], "拖动不该翻转勾选")
+        self.assertEqual(toggled, [])
+
+
 class TestModelFilesSection(unittest.TestCase):
     """设置页「模型文件」节（卡片列表 + 勾选驱动的动作行）"""
 
@@ -447,6 +606,33 @@ class TestModelFilesSection(unittest.TestCase):
         self.assertNotEqual(row["badge"], "Ready")
         self.assertTrue(self.section._download_btn.isEnabled())
         self.assertFalse(self.section._delete_btn.isEnabled())
+
+    def test_mouse_click_on_card_body_ticks_and_enables_download(self):
+        """本节开了整行点击勾选：真实点卡片主体即勾选，动作行跟着联动。
+
+        （勾选走 ``RowTable._user_toggled`` → ``checkToggled`` →
+        ``_on_check_toggled``，不是直接调 ``set_checked``。）
+        """
+        self.section.resize(560, 240)
+        self.section.show()
+        self.app.processEvents()
+        table = self.section._table
+        # absent_ocr 是第 2 行：缺文件 → 勾上应放开下载、仍不给删除
+        rect = table.visualRect(table.model().index(1, 0))
+        point = QPoint(rect.left() + 120, rect.center().y())
+
+        _click(table.viewport(), point)
+        self.app.processEvents()
+        self.assertTrue(self._row("absent_ocr")["checked"])
+        self.assertTrue(self.section._download_btn.isEnabled())
+        self.assertFalse(self.section._delete_btn.isEnabled())
+        self.assertIn("1 selected", self.section._status.text())
+
+        _click(table.viewport(), point)
+        self.app.processEvents()
+        self.assertFalse(self._row("absent_ocr")["checked"])
+        self.assertFalse(self.section._download_btn.isEnabled())
+        self.assertIn("0 selected", self.section._status.text())
 
 
 if __name__ == "__main__":

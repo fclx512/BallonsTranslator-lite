@@ -9,12 +9,15 @@
      封装类与应用层复合控件（配置面板 / 模块参数 / 变换面板 / 效果栈 …）。
      每行带样式来源徽章（类名 / objectName / 自绘 / 内联 / 全局兜底 /
      无规则）与 `路径::符号`，右上角一键复制，方便直接指定优化目标。
-  3. 排查开关 —— 搜索框 + 左侧目录跳转、样式来源筛选、亮暗主题切换、
-     状态矩阵（正常 / 禁用 / 悬停 / 聚焦）。
+  3. 排查开关 —— 左侧「分区 → 控件」两级目录（与搜索 / 样式来源筛选同步，
+     过滤后目录里也只剩命中的条目）、行计数与空结果提示、搜索框 +
+     样式来源筛选、亮暗主题切换、状态矩阵（正常 / 禁用 / 悬停 / 聚焦）。
+     快捷键：Ctrl+F 聚焦搜索、Enter 跳首个结果、Esc 清空筛选回到目录。
 
 维护方式：新增控件时在 `_sections()` 对应分区的 rows 列表里追加一行
 `Row(说明, "路径::符号", 工厂函数)`；无法离线实例化的控件登记到文件中部
-`EXCLUDED` 字典（会渲染成「未纳入展示」分区）。`tests/test_showcase_coverage.py`
+`EXCLUDED` 字典（会渲染成「未纳入展示」分区，符号路径由 ``_export_symbols``
+从 `ui/custom_widget/__init__.py` 的导入表解析，无需手工写）。`tests/test_showcase_coverage.py`
 会比对 `ui/custom_widget/__init__.py` 导出清单与这里的展示/排除名单，
 新增导出而没登记即测试失败。
 
@@ -22,6 +25,7 @@
     ./ballontrans_pylibs_win/python.exe scripts/style_showcase.py
     ./ballontrans_pylibs_win/python.exe scripts/style_showcase.py --selftest
 """
+import ast
 import os
 import re
 import subprocess
@@ -50,6 +54,7 @@ _reexec_bundled_python()
 
 try:
     from qtpy.QtCore import Qt, QTimer
+    from qtpy.QtGui import QKeySequence
     from qtpy.QtWidgets import (
         QApplication,
         QCheckBox,
@@ -60,11 +65,10 @@ try:
         QHBoxLayout,
         QLabel,
         QLineEdit,
-        QListWidget,
-        QListWidgetItem,
         QPushButton,
         QRadioButton,
         QScrollArea,
+        QShortcut,
         QSpinBox,
         QTabWidget,
         QTextEdit,
@@ -102,7 +106,50 @@ def _qss_text():
 
 
 def _has_selector(token):
+    """Return whether a token appears in any QSS selector.
+
+    This intentionally keeps the old broad check for object names.  A type
+    selector needs the stricter ``_has_type_selector`` check below because
+    ``QToolButton#SomeButton`` must not be mistaken for a global
+    ``QToolButton`` rule.
+    """
     return re.search(rf"(?<![\w-]){re.escape(token)}(?![\w-])", _qss_text()) is not None
+
+
+def _has_type_selector(token):
+    """Return whether ``token`` is used as a bare QSS type selector."""
+    text = re.sub(r"/\*.*?\*/", "", _qss_text(), flags=re.S)
+    token = re.escape(token)
+    for match in re.finditer(rf"(?<![\w-]){token}(?![\w-])", text):
+        suffix = text[match.end():].lstrip()
+        next_char = suffix[:1]
+        # ``QToolButton#Foo`` / ``QToolButton.foo`` / attribute selectors
+        # target a particular widget and are not a type-wide fallback.
+        # ``::menu-indicator`` is a subcontrol rule; a single ``:hover`` or
+        # ``:checked`` remains a valid type-wide state rule.
+        if next_char not in ("#", ".", "[") and not suffix.startswith("::"):
+            return True
+    return False
+
+
+def _qt_base_names(widget):
+    """Yield Qt base class names from the complete Python MRO."""
+    for cls in type(widget).__mro__:
+        module = getattr(cls, "__module__", "")
+        if module.split(".", 1)[0] in ("PyQt5", "PyQt6", "PySide2", "PySide6"):
+            yield cls.__name__
+
+
+def _custom_class_names(widget):
+    """Yield application class names, including wrapper classes in the MRO."""
+    qt_names = set(_qt_base_names(widget))
+    meta_name = widget.metaObject().className()
+    if meta_name and meta_name not in qt_names:
+        yield meta_name
+    for cls in type(widget).__mro__:
+        module = getattr(cls, "__module__", "")
+        if module.split(".", 1)[0] not in ("PyQt5", "PyQt6", "PySide2", "PySide6"):
+            yield cls.__name__
 
 
 def _is_self_painted(cls):
@@ -116,18 +163,18 @@ def _is_self_painted(cls):
 
 def _style_source(widget):
     """这个控件的样式到底从哪来？决定该改 QSS 还是改代码。"""
-    cls_name = widget.metaObject().className()
-    if _has_selector(cls_name):
-        return "类名"
+    # objectName 规则比类型规则更具体；优先报告它，避免把
+    # ``QToolButton#SomeButton`` 误报成「类名」或「全局兜底」。
     obj_name = widget.objectName()
     if obj_name and _has_selector("#" + obj_name):
         return "objectName"
+    if any(_has_type_selector(name) for name in _custom_class_names(widget)):
+        return "类名"
     if _is_self_painted(type(widget)):
         return "自绘"
     if widget.styleSheet():
         return "内联"
-    base = next((c.__name__ for c in type(widget).__mro__ if c.__name__.startswith("Q")), "")
-    if base and _has_selector(base):
+    if any(_has_type_selector(name) for name in _qt_base_names(widget)):
         return "全局兜底"
     return "无规则"
 
@@ -313,6 +360,11 @@ def _sections():
     def config_button():
         btn = QPushButton("配置按钮")
         btn.setObjectName("ConfigButton")
+        return btn
+
+    def tool_button():
+        btn = QToolButton()
+        btn.setText("工具按钮")
         return btn
 
     def progress_bar():
@@ -525,9 +577,11 @@ def _sections():
             Row("QFontChecker 下划线", "ui/custom_widget/checkbox.py::QFontChecker",
                 _icon_checker(QFontChecker, "FontUnderlineChecker")),
         ]),
-        ("按钮类（全局 QPushButton 兜底）", [
+        ("按钮类（全局 QPushButton / QToolButton 兜底）", [
             Row("QPushButton（原生参照）", "PyQt6.QtWidgets::QPushButton",
                 lambda: QPushButton("普通按钮")),
+            Row("QToolButton（原生参照）", "PyQt6.QtWidgets::QToolButton",
+                tool_button),
             Row("NoBorderPushBtn", "ui/custom_widget/push_button.py::NoBorderPushBtn",
                 lambda: NoBorderPushBtn("无边框按钮")),
             Row("ExpandingToolButton", "ui/custom_widget/push_button.py::ExpandingToolButton",
@@ -748,6 +802,55 @@ def _restore_button(button):
         pass
 
 
+def _copy_button(symbol, tooltip="复制 路径::符号，直接粘给 AI 说「优化这个」"):
+    """全部「复制」按钮共用（展示行与 EXCLUDED 行外观必须一致）。"""
+    button = QToolButton()
+    button.setText("复制")
+    button.setFixedWidth(44)
+    button.setToolTip(tooltip)
+    button.clicked.connect(lambda _, s=symbol, b=button: _copy_symbol(b, s))
+    return button
+
+
+def _symbol_label(symbol, width=140) -> QLabel:
+    """定宽省略号符号标签（右侧簇里与其它行纵向对齐）。"""
+    label = QLabel()
+    label.setStyleSheet("background: transparent; color: gray; font-size: 11px;")
+    label.setToolTip(symbol)
+    label.setFixedWidth(width)
+    metrics = label.fontMetrics()
+    if metrics.horizontalAdvance(symbol) > width:
+        label.setText(metrics.elidedText(symbol, Qt.TextElideMode.ElideMiddle, width))
+    else:
+        label.setText(symbol)
+    return label
+
+
+def _export_symbols() -> dict:
+    """``ui/custom_widget/__init__.py`` 的导出名 → ``路径::符号``。
+
+    EXCLUDED 里只有名字，没有路径；用与 ``scripts/check_showcase.py`` 同一份
+    导出清单解析（AST，不导入 Qt）补出路径，登记项也能一键复制符号。
+    """
+    path = os.path.join(ROOT, "ui", "custom_widget", "__init__.py")
+    with open(path, encoding="utf-8") as f:
+        tree = ast.parse(f.read())
+    symbols = {}
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module:
+            rel = f"ui/custom_widget/{node.module}.py"
+            for alias in node.names:
+                name = alias.asname or alias.name
+                symbols[name] = f"{rel}::{name}"
+        elif isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            symbols[node.name] = f"ui/custom_widget/__init__.py::{node.name}"
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    symbols[target.id] = f"ui/custom_widget/__init__.py::{target.id}"
+    return symbols
+
+
 def _build_row(row, show_states, records):
     outer = QWidget()
     outer.setStyleSheet("background: transparent;")
@@ -804,23 +907,9 @@ def _build_row(row, show_states, records):
     badge.setToolTip("样式命中来源：决定该改 config/stylesheet.css 还是改代码")
     cl.addWidget(badge)
 
-    symbol = QLabel()
-    symbol.setStyleSheet("background: transparent; color: gray; font-size: 11px;")
-    symbol.setToolTip(row.symbol)
-    symbol.setFixedWidth(140)
-    metrics = symbol.fontMetrics()
-    if metrics.horizontalAdvance(row.symbol) > 140:
-        symbol.setText(metrics.elidedText(row.symbol, Qt.TextElideMode.ElideMiddle, 140))
-    else:
-        symbol.setText(row.symbol)
-    cl.addWidget(symbol)
+    cl.addWidget(_symbol_label(row.symbol, 140))
 
-    copy_btn = QToolButton()
-    copy_btn.setText("复制")
-    copy_btn.setFixedWidth(44)
-    copy_btn.setToolTip("复制 路径::符号，直接粘给 AI 说「优化这个」")
-    copy_btn.clicked.connect(lambda _, s=row.symbol, b=copy_btn: _copy_symbol(b, s))
-    cl.addWidget(copy_btn)
+    cl.addWidget(_copy_button(row.symbol))
     lay.addWidget(cluster)
     root.addWidget(line)
 
@@ -836,6 +925,8 @@ def _build_row(row, show_states, records):
 
     records.append({
         "widget": outer,
+        "name": row.name,
+        "symbol": row.symbol,
         "badge": badge_kind,
         "blob": f"{row.name} {row.symbol} {badge_kind}".lower(),
     })
@@ -910,6 +1001,7 @@ class GalleryTab(QWidget):
         super().__init__()
         self._theme_name = theme_name
         self._sections = []
+        self._empty_label = None  # _rebuild 里按当前页重建
         # rebuild 里 _grab_state 会 processEvents（抓悬停/聚焦态必须），
         # 重建耗时期间再点开关/切主题就会重入：内层 setWidget 删掉外层
         # 已登记的区块，外层 _rebuild_index 拿到已析构对象 → RuntimeError 闪退。
@@ -923,9 +1015,12 @@ class GalleryTab(QWidget):
         outer.setContentsMargins(8, 8, 8, 8)
         outer.setSpacing(8)
 
-        self.index = QListWidget()
-        self.index.setFixedWidth(220)
-        self.index.currentRowChanged.connect(self._jump)
+        # 两级目录：分区 → 控件（与右侧内容、搜索/样式过滤同步）
+        self.index = QTreeWidget()
+        self.index.setFixedWidth(240)
+        self.index.setHeaderHidden(True)
+        self.index.setToolTip("分区 → 控件；点条目跳到对应行")
+        self.index.currentItemChanged.connect(self._jump)
         outer.addWidget(self.index)
 
         right = QVBoxLayout()
@@ -933,7 +1028,8 @@ class GalleryTab(QWidget):
 
         bar = QHBoxLayout()
         self.search = ConfigLineEdit()
-        self.search.setPlaceholderText("搜索控件 / 文件 / 面板…")
+        self.search.setPlaceholderText("搜索控件 / 文件 / 面板…（Ctrl+F）")
+        self.search.setToolTip("按名称 / 路径::符号 / 样式来源过滤；Enter 跳到首个结果，Esc 清空")
         self.search.textChanged.connect(self._apply_filter)
         bar.addWidget(self.search, 1)
 
@@ -956,12 +1052,24 @@ class GalleryTab(QWidget):
         self.states_check.setToolTip("每个控件并排显示 正常 / 禁用 / 悬停 / 聚焦")
         self.states_check.stateChanged.connect(lambda _: self.rebuild())
         bar.addWidget(self.states_check)
+
+        self.count_label = QLabel("")
+        self.count_label.setStyleSheet("background: transparent; color: gray; font-size: 11px;")
+        bar.addWidget(self.count_label)
         right.addLayout(bar)
 
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         right.addWidget(self.scroll, 1)
+
+        # 快捷键：Ctrl+F 聚焦搜索、Enter 跳首个结果、Esc 清空筛选
+        find = QShortcut(QKeySequence.StandardKey.Find, self)
+        find.activated.connect(self._focus_search)
+        jump = QShortcut(QKeySequence(Qt.Key.Key_Return), self)
+        jump.activated.connect(self._on_enter)
+        clear = QShortcut(QKeySequence(Qt.Key.Key_Escape), self)
+        clear.activated.connect(self._on_escape)
 
         self.rebuild()
 
@@ -981,41 +1089,26 @@ class GalleryTab(QWidget):
             self._rebuild_pending = False
             self.rebuild()
 
-    def _rebuild(self):
-        self._sections = []
-        show_states = self.states_check.isChecked()
-        inner = QWidget()
-        lay = QVBoxLayout(inner)
-        lay.setSpacing(2)
-
-        for title, rows in _sections():
-            sec = QWidget()
-            sec.setStyleSheet("background: transparent;")
-            sv = QVBoxLayout(sec)
-            sv.setContentsMargins(12, 10, 12, 4)
-            sv.setSpacing(4)
-            caption = QLabel(title)
-            caption.setStyleSheet("font-weight: bold; font-size: 14px; background: transparent;")
-            sv.addWidget(caption)
-
-            records = []
-            for row in rows:
-                sv.addWidget(_build_row(row, show_states, records))
-            sv.addStretch(1)
-            lay.addWidget(sec)
-            self._sections.append({"widget": sec, "rows": records})
-
-        # 未纳入展示分区（登记在 EXCLUDED 的控件）
+    @staticmethod
+    def _add_section(lay, title):
+        """开一个分区（标题 + 内容盒），返回 ``(区控件, 内容布局)``。"""
         sec = QWidget()
         sec.setStyleSheet("background: transparent;")
-        sv = QVBoxLayout(sec)
-        sv.setContentsMargins(12, 10, 12, 4)
-        sv.setSpacing(2)
-        caption = QLabel("未纳入展示（需宿主 / 模态 / 交互）")
+        box = QVBoxLayout(sec)
+        box.setContentsMargins(12, 10, 12, 4)
+        box.setSpacing(4)
+        caption = QLabel(title)
         caption.setStyleSheet("font-weight: bold; font-size: 14px; background: transparent;")
-        sv.addWidget(caption)
+        box.addWidget(caption)
+        lay.addWidget(sec)
+        return sec, box
+
+    def _excluded_records(self, box) -> list:
+        """「未纳入展示」行：名称 + 原因 + 可复制的 ``路径::符号``。"""
+        symbols = _export_symbols()
         records = []
         for name, reason in EXCLUDED.items():
+            symbol = symbols.get(name, "")
             line = QWidget()
             line.setStyleSheet("background: transparent;")
             ll = QHBoxLayout(line)
@@ -1028,15 +1121,58 @@ class GalleryTab(QWidget):
             reason_label = QLabel(reason)
             reason_label.setStyleSheet("background: transparent; color: gray; font-size: 11px;")
             ll.addWidget(reason_label, 1)
-            sv.addWidget(line)
+            if symbol:
+                # 右侧簇与展示行同宽同序（仅少一个徽章位，用弹性留白顶上），
+                # 复制按钮与符号列才能和上面的行纵向对齐
+                cluster = QWidget()
+                cluster.setStyleSheet("background: transparent;")
+                cluster.setFixedWidth(262)
+                cl = QHBoxLayout(cluster)
+                cl.setContentsMargins(0, 0, 0, 0)
+                cl.setSpacing(6)
+                cl.addStretch(1)
+                cl.addWidget(_symbol_label(symbol, 140))
+                cl.addWidget(_copy_button(symbol))
+                ll.addWidget(cluster)
+            box.addWidget(line)
             records.append({
                 "widget": line,
+                "name": name,
+                "symbol": symbol,
                 "badge": "排除",
-                "blob": f"{name} {reason}".lower(),
+                "blob": f"{name} {reason} {symbol}".lower(),
             })
-        sv.addStretch(1)
-        lay.addWidget(sec)
-        self._sections.append({"widget": sec, "rows": records})
+        return records
+
+    def _rebuild(self):
+        self._sections = []
+        show_states = self.states_check.isChecked()
+        inner = QWidget()
+        lay = QVBoxLayout(inner)
+        lay.setSpacing(2)
+
+        for title, rows in _sections():
+            sec, box = self._add_section(lay, title)
+            records = []
+            for row in rows:
+                box.addWidget(_build_row(row, show_states, records))
+            box.addStretch(1)
+            self._sections.append({"widget": sec, "title": title, "rows": records})
+
+        # 未纳入展示分区（登记在 EXCLUDED 的控件）
+        title = "未纳入展示（需宿主 / 模态 / 交互）"
+        sec, box = self._add_section(lay, title)
+        records = self._excluded_records(box)
+        box.addStretch(1)
+        self._sections.append({"widget": sec, "title": title, "rows": records})
+
+        self._empty_label = QLabel("没有匹配的控件 —— 清空搜索框或把样式来源切回「全部」")
+        self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_label.setStyleSheet(
+            "color: gray; font-size: 13px; background: transparent; padding: 24px;"
+        )
+        self._empty_label.setVisible(False)
+        lay.addWidget(self._empty_label)
 
         lay.addStretch(1)
         self.scroll.setWidget(inner)
@@ -1044,38 +1180,98 @@ class GalleryTab(QWidget):
         self._apply_filter()
 
     def _rebuild_index(self):
+        """重建分区 + 控件两级目录；每条目记下要跳转的控件。"""
         self.index.blockSignals(True)
         self.index.clear()
         for sec in self._sections:
-            try:
-                caption = sec["widget"].findChild(QLabel)
-            except RuntimeError:  # 防御：极端情况下区块已被析构
-                caption = None
-            title = caption.text() if caption else ""
-            item = QListWidgetItem(title)
-            item.setToolTip(title)
-            self.index.addItem(item)
-        self.index.setCurrentRow(0)
+            item = QTreeWidgetItem([sec["title"]])
+            item.setToolTip(0, sec["title"])
+            item.setData(0, Qt.ItemDataRole.UserRole, sec["widget"])
+            self.index.addTopLevelItem(item)
+            sec["item"] = item
+            for record in sec["rows"]:
+                child = QTreeWidgetItem([record["name"]])
+                child.setToolTip(0, record.get("symbol") or record["name"])
+                child.setData(0, Qt.ItemDataRole.UserRole, record["widget"])
+                item.addChild(child)
+                record["item"] = child
+            item.setExpanded(True)
         self.index.blockSignals(False)
+        if self.index.topLevelItemCount():
+            self.index.setCurrentItem(self.index.topLevelItem(0))
 
     # ── 交互 ────────────────────────────────────────────────────
 
-    def _jump(self, index):
-        if 0 <= index < len(self._sections):
-            self.scroll.ensureWidgetVisible(self._sections[index]["widget"], 0, 0)
+    def _jump(self, current, _previous=None):
+        if current is None:
+            return
+        target = current.data(0, Qt.ItemDataRole.UserRole)
+        if target is not None:
+            self.scroll.ensureWidgetVisible(target, 0, 0)
 
-    def _apply_filter(self):
+    def _apply_filter(self, *_args):
+        """按搜索词 + 样式来源过滤；同步隐藏目录条目并更新计数/空结果提示。"""
         query = self.search.text().strip().lower()
         kind = self.kind_filter.currentText()
+        shown = total = 0
         for sec in self._sections:
             visible = 0
             for record in sec["rows"]:
+                total += 1
                 match = (not query or query in record["blob"]) and (
                     kind == "全部" or record["badge"] == kind
                 )
                 record["widget"].setVisible(match)
+                item = record.get("item")
+                if item is not None:
+                    item.setHidden(not match)
                 visible += int(match)
             sec["widget"].setVisible(visible > 0)
+            item = sec.get("item")
+            if item is not None:
+                item.setHidden(visible == 0)
+            shown += visible
+        if self._empty_label is not None:
+            try:
+                self._empty_label.setVisible(shown == 0)
+            except RuntimeError:  # 重建间隙旧标签已被析构
+                pass
+        self.count_label.setText(f"显示 {shown} / {total} 行")
+
+    # ── 快捷键 ──────────────────────────────────────────────────
+
+    def _focus_search(self):
+        self.search.setFocus()
+        self.search.selectAll()
+
+    def _on_enter(self):
+        """搜索框里有词就跳首个可见结果，否则跳当前目录项。"""
+        if self.search.text().strip():
+            self._jump_first_visible()
+        else:
+            self._jump(self.index.currentItem())
+
+    def _jump_first_visible(self):
+        for sec in self._sections:
+            for record in sec["rows"]:
+                if record["widget"].isVisible():
+                    item = record.get("item")
+                    if item is not None:
+                        self.index.blockSignals(True)
+                        self.index.setCurrentItem(item)
+                        self.index.scrollToItem(item)
+                        self.index.blockSignals(False)
+                    self.scroll.ensureWidgetVisible(record["widget"], 0, 0)
+                    return
+
+    def _on_escape(self):
+        """Esc：清空搜索与样式来源筛选，焦点还给目录。"""
+        self.search.clear()  # 有词时触发 _apply_filter
+        if self.kind_filter.currentIndex() != 0:
+            self.kind_filter.setCurrentIndex(0)
+        else:
+            self._apply_filter()
+        self.index.setFocus()
 
     def _switch_theme(self, index):
         from utils.config import pcfg
@@ -1169,6 +1365,37 @@ def selftest():
                 widget.deleteLater()
             except Exception as exc:
                 failures.append((row.symbol, f"{type(exc).__name__}: {exc}"))
+
+    # 控件一览页的目录 / 过滤契约（不建 GalleryTab 就测不到这条新路径）。
+    # 注意用 isHidden() 而不是 isVisible()：页面没 show()，子控件的 isVisible()
+    # 恒为假，只有 isHidden()/tree item 的隐藏状态与父窗口无关。
+    try:
+        gallery = GalleryTab(_theme)
+        sections = len(gallery._sections)
+        total = sum(len(sec["rows"]) for sec in gallery._sections)
+        all_text = f"显示 {total} / {total} 行"
+        if gallery.index.topLevelItemCount() != sections:
+            raise AssertionError("目录条目数 ≠ 分区数")
+        first = gallery.index.topLevelItem(0)
+        if first is None or first.childCount() == 0:
+            raise AssertionError("目录没有控件子项")
+        if gallery.count_label.text() != all_text:
+            raise AssertionError(f"行计数不对：{gallery.count_label.text()}")
+        gallery.search.setText("zzz-no-such-widget")
+        if gallery._empty_label.isHidden():
+            raise AssertionError("空结果没有给出提示")
+        if not gallery.count_label.text().startswith("显示 0 /"):
+            raise AssertionError(f"空结果计数不对：{gallery.count_label.text()}")
+        if not first.isHidden():
+            raise AssertionError("过滤后目录里的空分区没被隐藏")
+        gallery._on_escape()
+        if gallery.search.text() or gallery.count_label.text() != all_text:
+            raise AssertionError("Esc 没有恢复筛选")
+        gallery._jump(first.child(0))
+        gallery.deleteLater()
+    except Exception as exc:
+        failures.append(("GalleryTab（控件一览页）", f"{type(exc).__name__}: {exc}"))
+
     print(f"checked {count} rows, {len(failures)} failures")
     for symbol, error in failures:
         print(f"FAIL {symbol}: {error}")

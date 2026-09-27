@@ -387,7 +387,8 @@ class FontSizeBox(QFrame):
         self.downBtn.setObjectName("FsizeIncrementDown")
         self.upBtn.clicked.connect(self.onUpBtnClicked)
         self.downBtn.clicked.connect(self.onDownBtnClicked)
-        self.fcombobox = SizeComboBox([1, 1000], 'font_size', self)
+        # 拖拽/手输上限跟随设置页「最大字号」（pcfg.max_font_size）
+        self.fcombobox = SizeComboBox([1, C.pcfg.max_font_size], 'font_size', self)
         # 字号是粗调字段：5px=1pt（0.2/px），拖拽吸附整数避免小数抖动
         self.fcombobox.drag_step_provider = 1.0
         self.fcombobox.precision = 1
@@ -421,7 +422,7 @@ class FontSizeBox(QFrame):
         new_size = int(round(size * ratio))
         if new_size == size:
             new_size += 1 if ratio > 1 else -1
-        new_size = min(1000, max(1, new_size))
+        new_size = min(self.fcombobox.max_val, max(1, new_size))
         if new_size == size:
             return
 
@@ -1180,6 +1181,9 @@ class FontFormatPanel(Widget):
         *,
         update_transform_panel: bool = True,
     ) -> None:
+        # 上限跟随设置实时同步（面板只在启动时构造一次）；
+        # 必须在回显字号之前做，否则 setValue 会被旧上限钳住
+        self.fontsizebox.fcombobox.set_max_val(C.pcfg.max_font_size)
         self.sync_inline_format(
             font_format,
             multi_size,

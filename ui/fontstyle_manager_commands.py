@@ -5,7 +5,8 @@ BatchFontformatCommand applies a FontFormat change to text blocks across
 all pages of a project — not just the currently visible canvas page.
 """
 
-from typing import Dict, List
+import copy
+from typing import Dict, List, Optional, Tuple
 
 from qtpy.QtCore import QCoreApplication
 
@@ -27,6 +28,12 @@ class BatchFontformatCommand(QUndoCommand):
     other pages are restored at the TextBlock data level. Every change dict
     carries its block's own old/new FontFormat (captured at collect time), so
     undo restores each block's exact previous format.
+
+    A base-style edit (``utils/base_styles.py::BaseStyle.fontformat`` changed in
+    place by the style manager before the command is pushed) is undone through
+    the optional *base_snapshot*: the live ``BaseStyle`` object plus its
+    pre-edit and post-edit ``FontFormat``. It is restored on undo/redo even when
+    *changes* is empty (a base style with no blocks is still an undoable edit).
     """
 
     def __init__(
@@ -35,6 +42,8 @@ class BatchFontformatCommand(QUndoCommand):
         scene_manager,
         changes: List[Dict],
         description: str = "",
+        *,
+        base_snapshot: Optional[Tuple] = None,
     ):
         """Initialize the batch command.
 
@@ -47,6 +56,10 @@ class BatchFontformatCommand(QUndoCommand):
                 - old_ffmt: FontFormat (deep copy before modification)
                 - new_ffmt: FontFormat (the new format to apply)
             description: Optional undo-stack label.
+            base_snapshot: Optional ``(base_style, old_ffmt, new_ffmt)`` where
+                *base_style* is the live ``BaseStyle`` and the two formats are
+                its pre-edit / post-edit values. Both are deep-copied here, so
+                a caller may pass the live (already mutated) object safely.
         """
         super().__init__(
             description
@@ -56,6 +69,17 @@ class BatchFontformatCommand(QUndoCommand):
         self.scene_manager = scene_manager
         self.changes: List[Dict] = changes
         self._first_redo = True
+
+        # Deep copies freeze the base style's pre/post formats: the caller
+        # mutates base_style.fontformat in place, so an aliased snapshot would
+        # be corrupted by the very edit it is meant to undo.
+        self._base_style = None
+        self._base_old_ffmt = None
+        self._base_new_ffmt = None
+        if base_snapshot:
+            self._base_style, old_ffmt, new_ffmt = base_snapshot
+            self._base_old_ffmt = _copy_ffmt(old_ffmt)
+            self._base_new_ffmt = _copy_ffmt(new_ffmt)
 
         # For current-page blocks we need to capture pre-change state
         # from live TextBlkItem instances so we can restore HTML + rect.
@@ -78,11 +102,26 @@ class BatchFontformatCommand(QUndoCommand):
             self._first_redo = False
             return
         self._apply_format("new")
+        self._apply_base_format("new")
 
     def undo(self):
         self._apply_format("old")
+        self._apply_base_format("old")
 
     # ── helpers ──────────────────────────────────────────────────────
+
+    def _apply_base_format(self, which: str):
+        """Restore the base style's FontFormat to its *old* or *new* snapshot.
+
+        Assigns a fresh deep copy so the live style never aliases the frozen
+        snapshot; runs independently of *changes* (empty change list is fine).
+        """
+        if self._base_style is None:
+            return
+        snapshot = self._base_old_ffmt if which == "old" else self._base_new_ffmt
+        if snapshot is None:
+            return
+        self._base_style.fontformat = _copy_ffmt(snapshot)
 
     def _apply_format(self, which: str):
         """Apply *old* or *new* FontFormat to every block in the change list."""
@@ -134,6 +173,16 @@ class BatchFontformatCommand(QUndoCommand):
 
 
 # ── module helpers ───────────────────────────────────────────────────
+
+
+def _copy_ffmt(ffmt):
+    """Deep-copy a FontFormat-like object (``.deepcopy`` when available)."""
+    if ffmt is None:
+        return None
+    deep = getattr(ffmt, "deepcopy", None)
+    if callable(deep):
+        return deep()
+    return copy.deepcopy(ffmt)
 
 
 def _find_blk_item(scene_manager, block_idx: int):

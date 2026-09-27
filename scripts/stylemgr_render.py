@@ -10,9 +10,17 @@
     ./ballontrans_pylibs_win/python.exe scripts/stylemgr_render.py
     ... scripts/stylemgr_render.py --out tmp/stylemgr_render --scale 2
 
-输出：``<out>/<theme>_<序号>_<场景>.png``（默认暗/亮两套主题）。三个场景：
+输出：``<out>/<theme>_<序号>_<场景>.png``（默认暗/亮两套主题）。四个场景：
 1_asis = 刚打开（区带默认展开）；2/3 = 分别选中库条目 / 项目大样式（看右栏
-动作区与选中高亮）。
+动作区与选中高亮）；4 = **选中已有变体**（走数据层的 ``VariantEntry`` + 既有的
+``select_payload`` 接口，不碰任何 UI 私有控件名），并把右栏的 ``text`` 字体组
+展开、滚动条归零——变体模式下"字体迁移卡 + 字体字段组"（改 font_family 让块
+换归属）都挤在右栏顶部，这样一张图里能同时看到迁移卡与它下面的字段区。
+
+场景 4 的选择与实际分布都不依赖 UI 新增控件名：变体 payload 从 ``fsm._tree``
+（发现结果）现算，画面只做"展开 text 组 + 回顶"两件不碰私有的动作，迁移卡
+（``StyleFontMigration``）的存在与否只影响诊断行，不影响能不能出图。右侧 UI
+还在并行改动时，这张图就是后续字体迁移区域的验收底图。
 
 **三个必须照抄 app 启动过程的点**（同 ``scripts/settings_render.py``）：
 
@@ -154,6 +162,99 @@ def build_scene():
     return proj
 
 
+def _pick_variant(fsm):
+    """One existing variant of the synthetic project: ``(payload, node, variant)``.
+
+    变体不从 UI 控件里捞——UI 还在并行改，名字随时会变。这里直接读 discover
+    结果 ``fsm._tree``（``utils/base_styles.py::BaseStyleNode.variants``），
+    payload 形状与 ``StyleTreeWidget`` 的 UserRole 约定一致，走既有
+    ``select_payload`` 选中。优先挑覆盖「字体区」（``FIELD_GROUPS["text"]``，
+    含 font_size / font_family 等）的变体：变体只渲染 override 字段，字体区
+    有内容才谈得上验收字体迁移那块。找不到变体返回 ``(None, None, None)``。
+    """
+    from utils.style_query import FIELD_GROUPS
+
+    nodes = getattr(getattr(fsm, "_tree", None), "nodes", None) or []
+    fallback = None
+    for node in nodes:
+        for var in node.variants:
+            payload = {
+                "type": "variant",
+                "identity": node.base.identity,
+                "key": var.key,
+            }
+            if fallback is None:
+                fallback = (payload, node, var)
+            if set(var.overrides) & set(FIELD_GROUPS["text"]):
+                return payload, node, var
+    return fallback if fallback is not None else (None, None, None)
+
+
+def _frame_font_region(fsm) -> None:
+    """Expand the font field group and keep the panel top in frame.
+
+    字体迁移卡贴在右栏顶部（预览卡/参数 chips 之下、四个字段组之上，objectName
+    ``StyleFontMigration``），而变体模式下四个组默认全收起（基线＝自身 → 无
+    改动）。这里只展开 ``text`` 组、**不** ``ensureWidgetVisible`` 滚过去——
+    滚到字段组会把迁移卡顶出画面；展开后把滚动条归零，让"迁移卡 + 字体组"
+    同框。UI 改名/换结构时各步 getattr 兜底，退化成不调整而不是崩掉。
+    """
+    detail = fsm.detailContent
+    card = (getattr(getattr(detail, "_panel", None), "_cards", None) or {}).get("text")
+    expand = getattr(card, "set_collapsed", None)
+    if expand is not None:
+        expand(False)
+    bar_fn = getattr(detail, "verticalScrollBar", None)
+    if bar_fn is not None:
+        bar_fn().setValue(0)
+
+
+def _print_variant_state(theme: str, fsm, node, variant) -> None:
+    """Echo the variant detail state (mode / visible groups / font-area fields).
+
+    与模块其余部分同一口径：不看图也能核对分区与字段。``_panel``/``_cards``
+    等私有名一律 getattr 兜底——并行期 UI 改名只该让这行诊断退化成问号，
+    不该让渲染台崩掉。
+    """
+    from utils.style_query import FIELD_GROUPS
+
+    detail = fsm.detailContent
+    panel = getattr(detail, "_panel", None)
+    cards = getattr(panel, "_cards", None) or {}
+    editors = getattr(panel, "_editors", None) or {}
+    print(
+        f"  [{theme}] 变体: base={node.base.name!r} identity={node.base.identity} "
+        f"count={variant.count} overrides={sorted(variant.overrides)}"
+    )
+    header = getattr(detail, "_header_info", None)
+    print(
+        f"      header={(header.text() if header is not None else '?')!r} "
+        f"mode={getattr(detail, '_mode', '?')}"
+    )
+    for key in FIELD_GROUPS:
+        card = cards.get(key)
+        if card is None:
+            continue
+        collapsed_fn = getattr(card, "is_collapsed", None)
+        status_lbl = getattr(card, "_status", None)
+        print(
+            f"      group {key}: visible={card.isVisible()} "
+            f"collapsed={collapsed_fn() if collapsed_fn else '?'} "
+            f"status={(status_lbl.text() if status_lbl is not None else '')!r}"
+        )
+    shown = [
+        f for f in FIELD_GROUPS["text"] if f in editors and editors[f].isVisible()
+    ]
+    print(f"      text 组可见字段（字体区）= {shown}")
+    card = getattr(detail, "_font_migration", None)
+    if card is not None:
+        hint = getattr(detail, "_migrate_hint", None)
+        print(
+            f"      StyleFontMigration 卡: visible={card.isVisible()} "
+            f"hint={(hint.text() if hint is not None else '')!r}"
+        )
+
+
 def render(app: QApplication, out_dir: str, theme: str, darkmode: bool) -> None:
     from ui.fontstyle_manager import FontStyleManager, _DISPLAY_ROLE
 
@@ -203,7 +304,22 @@ def render(app: QApplication, out_dir: str, theme: str, darkmode: bool) -> None:
         fsm._on_node_selected(payload)
         app.processEvents()
         fsm.grab().save(osp.join(out_dir, f"{theme}_{suffix}.png"))
-    print(f"[{theme}] saved 3 shots -> {out_dir}")
+
+    # ── 场景 4：选中已有变体（字体迁移区域的验收底图）────────────────
+    saved = 3
+    payload, node, variant = _pick_variant(fsm)
+    if payload is None:
+        print(f"  [{theme}] 变体场景: 合成工程没有变体，跳过 4_variant_selected")
+    else:
+        tree.select_payload(payload)
+        fsm._on_node_selected(payload)
+        app.processEvents()
+        _frame_font_region(fsm)
+        app.processEvents()
+        fsm.grab().save(osp.join(out_dir, f"{theme}_4_variant_selected.png"))
+        _print_variant_state(theme, fsm, node, variant)
+        saved += 1
+    print(f"[{theme}] saved {saved} shots -> {out_dir}")
 
 
 def main() -> int:

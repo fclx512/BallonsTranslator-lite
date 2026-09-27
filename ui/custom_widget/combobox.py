@@ -379,6 +379,14 @@ class SizeComboBox(DragAdjustMixin, QComboBox):
         except (ValueError, TypeError):
             return self._value
 
+    def set_max_val(self, max_val: float):
+        # 上限可在运行中随设置变化（如字号上限跟随 pcfg.max_font_size），
+        # 需同步更新拖拽/setValue 钳制与输入校验器
+        self.max_val = max_val
+        validator = self.validator()
+        if validator is not None:
+            validator.setTop(max_val)
+
     def setValue(self, value: float):
         value = min(self.max_val, max(self.min_val, value))
         self.setCurrentText(_format_drag_value(round(value, self.precision)))

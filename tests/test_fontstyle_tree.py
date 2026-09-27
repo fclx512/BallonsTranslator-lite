@@ -61,6 +61,7 @@ class FakeCanvas:
 
     def push_text_command(self, cmd, *args):
         self.pushed.append(cmd)
+        cmd.redo()
 
 
 class FakeSceneManager:
@@ -263,6 +264,9 @@ def test_flatten_applies_changed_param_and_keeps_other_overrides():
     assert b1.fontformat.font_size != 42.0
     assert b3.fontformat.font_size == 40.0
     assert b5.fontformat.font_size != 42.0
+    assert proj.base_styles[0].fontformat.font_size == 24.0
+    sm.canvas.pushed[0].redo()
+    assert proj.base_styles[0].fontformat.font_size == 42.0
 
 
 def test_delete_base_style_moves_blocks_to_ungrouped(proj):
@@ -307,3 +311,128 @@ def test_promote_ungrouped_creates_base_style(proj):
     fsm._on_node_selected({"type": "sig", "signature": "nonexistent"})
     fsm.detailContent._promote_to_base()
     assert len(empty_proj.base_styles) == 1
+
+
+def test_variant_font_migration_to_base_and_undo(proj, monkeypatch):
+    from qtpy.QtWidgets import QMessageBox
+    from utils.base_styles import discover_style_tree
+    from utils import shared
+
+    proj.base_styles.append(
+        BaseStyle("Noto", FontFormat(font_family="Noto", vertical=True))
+    )
+    sm = FakeSceneManager([FakeItem(b) for b in proj.pages["p1.png"]])
+    fsm = _make_manager(proj, sm)
+    variant = next(n for n in fsm._tree.nodes if n.base.name == "Arial").variants[0]
+    payload = {"type": "variant", "identity": ("Arial", True), "key": variant.key}
+    fsm._on_node_selected(payload)
+    detail = fsm.detailContent
+    monkeypatch.setattr(shared, "ALL_FONT_FAMILIES", ["Arial", "Noto"])
+    monkeypatch.setattr(shared, "get_filtered_font_list", lambda _: ["Arial", "Noto"])
+    detail._populate_migration_fonts("Arial")
+    detail._migrate_combo.setCurrentText("Noto")
+    assert detail._migrate_btn.isEnabled()
+    assert "Noto" in detail._migrate_hint.text()
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes)
+    detail._migrate_variant_font()
+    assert fsm.styleTree.current_payload() == {
+        "type": "base", "identity": ("Noto", True)
+    }
+
+    moved = proj.pages["p1.png"][2:4]
+    assert all(b.fontformat.font_family == "Noto" for b in moved)
+    assert all(b.fontformat.frgb == [255, 0, 0] for b in moved)
+    assert all(b.fontformat.font_family == "Arial" for b in proj.pages["p1.png"][:2])
+    assert len(sm.canvas.pushed) == 1
+    target_node = next(
+        node for node in discover_style_tree(proj, proj.base_styles).nodes
+        if node.base.identity == ("Noto", True)
+    )
+    assert target_node.total_count == 2
+    sm.canvas.pushed[0].undo()
+    assert all(b.fontformat.font_family == "Arial" for b in moved)
+    sm.canvas.pushed[0].redo()
+    assert all(b.fontformat.font_family == "Noto" for b in moved)
+
+
+def test_variant_font_migration_to_ungrouped_rechecks_membership(proj, monkeypatch):
+    from qtpy.QtWidgets import QMessageBox
+    from utils import shared
+    from utils.base_styles import discover_style_tree
+
+    sm = FakeSceneManager([FakeItem(b) for b in proj.pages["p1.png"]])
+    fsm = _make_manager(proj, sm)
+    variant = fsm._tree.nodes[0].variants[0]
+    fsm._on_node_selected(
+        {"type": "variant", "identity": ("Arial", True), "key": variant.key}
+    )
+    detail = fsm.detailContent
+    monkeypatch.setattr(shared, "ALL_FONT_FAMILIES", ["Arial", "Noto"])
+    monkeypatch.setattr(shared, "get_filtered_font_list", lambda _: ["Arial", "Noto"])
+    detail._populate_migration_fonts("Arial")
+    detail._migrate_combo.setCurrentText("Noto")
+    assert "Ungrouped" in detail._migrate_hint.text()
+    proj.pages["p1.png"][3].fontformat.frgb = [0, 20, 30]
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes)
+    detail._migrate_variant_font()
+    assert proj.pages["p1.png"][2].fontformat.font_family == "Noto"
+    assert proj.pages["p1.png"][3].fontformat.font_family == "Arial"
+    assert fsm.styleTree.current_payload()["type"] == "sig"
+    assert any(e.fontformat.font_family == "Noto" for e in discover_style_tree(proj, proj.base_styles).ungrouped)
+
+
+def test_base_identity_conflict_and_empty_base_undo(monkeypatch):
+    from qtpy.QtWidgets import QMessageBox
+    from utils import shared
+
+    monkeypatch.setattr(shared, "ALL_FONT_FAMILIES", ["Arial", "Noto"])
+    monkeypatch.setattr(shared, "get_filtered_font_list", lambda _: ["Arial", "Noto"])
+    base = BaseStyle("Arial", FontFormat(font_family="Arial", vertical=False))
+    target = BaseStyle("Noto", FontFormat(font_family="Noto", vertical=False))
+    proj = FakeProj({"p1.png": []})
+    proj.base_styles = [base, target]
+    sm = FakeSceneManager([])
+    fsm = _make_manager(proj, sm)
+    fsm._on_node_selected({"type": "base", "identity": base.identity})
+    detail = fsm.detailContent
+    warnings = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *a, **k: warnings.append(a))
+    detail._panel.set_field_value("font_family", "Noto")
+    detail._apply_base()
+    assert warnings and base.identity == ("Arial", False)
+    assert sm.canvas.pushed == []
+    detail._panel.set_field_value("font_family", "Arial")
+    detail._panel.set_field_value("font_size", 32)
+    detail._apply_base()
+    assert base.fontformat.font_size == 32 and len(sm.canvas.pushed) == 1
+    sm.canvas.pushed[0].undo()
+    assert base.fontformat.font_size == 24
+    sm.canvas.pushed[0].redo()
+    assert base.fontformat.font_size == 32
+
+
+def test_base_identity_change_undo_restores_style_membership(monkeypatch):
+    from utils import shared
+    from utils.base_styles import discover_style_tree
+
+    monkeypatch.setattr(shared, "ALL_FONT_FAMILIES", ["Arial", "Noto"])
+    monkeypatch.setattr(shared, "get_filtered_font_list", lambda _: ["Arial", "Noto"])
+    blk = FakeBlk(font_family="Arial", vertical=False, frgb=[255, 0, 0])
+    proj = FakeProj({"p1.png": [blk]})
+    base = BaseStyle("Body", FontFormat(font_family="Arial", vertical=False))
+    proj.base_styles.append(base)
+    sm = FakeSceneManager([FakeItem(blk)])
+    fsm = _make_manager(proj, sm)
+    fsm._on_node_selected({"type": "base", "identity": base.identity})
+    fsm.detailContent._panel.set_field_value("font_family", "Noto")
+    fsm.detailContent._apply_base()
+    assert base.identity == ("Noto", False)
+    assert blk.fontformat.font_family == "Noto"
+    assert blk.fontformat.frgb == [255, 0, 0]
+    sm.canvas.pushed[0].undo()
+    assert base.identity == ("Arial", False)
+    assert blk.fontformat.font_family == "Arial"
+    assert discover_style_tree(proj, proj.base_styles).nodes[0].total_count == 1
+    sm.canvas.pushed[0].redo()
+    assert base.identity == ("Noto", False)
+    assert blk.fontformat.font_family == "Noto"

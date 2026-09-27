@@ -423,6 +423,107 @@ class BatchFontformatCommandTest(unittest.TestCase):
         cmd.undo()  # must not raise
         cmd.redo()
 
+    def test_base_snapshot_restored_on_undo_redo(self):
+        from qtpy.QtGui import QUndoStack
+
+        from ui.fontstyle_manager_commands import BatchFontformatCommand
+        from utils.base_styles import BaseStyle
+
+        blk = _make_blk(translation="a")
+        blk.font_size = 24.0
+        base = BaseStyle("Base", blk.fontformat.deepcopy())
+        old_ffmt = base.fontformat.deepcopy()
+        new_ffmt = base.fontformat.deepcopy()
+        new_ffmt.font_size = 32.0
+        proj = FakeProj({"p2.png": [blk]}, "cur.png")
+        changes = [
+            {
+                "pagename": "p2.png",
+                "block_idx": 0,
+                "old_ffmt": old_ffmt.deepcopy(),
+                "new_ffmt": new_ffmt.deepcopy(),
+            }
+        ]
+        cmd = BatchFontformatCommand(
+            proj,
+            None,
+            changes,
+            "test",
+            base_snapshot=(base, old_ffmt, new_ffmt),
+        )
+
+        stack = QUndoStack()
+        stack.push(cmd)  # first redo is skipped
+        # Caller's sequence: base style edited in place, blocks applied.
+        base.fontformat.font_size = 32.0
+        blk.fontformat = new_ffmt.deepcopy()
+
+        stack.undo()
+        self.assertEqual(base.fontformat.font_size, 24.0)
+        self.assertEqual(blk.fontformat.font_size, 24.0)
+
+        stack.redo()
+        self.assertEqual(base.fontformat.font_size, 32.0)
+        self.assertEqual(blk.fontformat.font_size, 32.0)
+
+    def test_base_snapshot_restored_with_empty_changes(self):
+        from qtpy.QtGui import QUndoStack
+
+        from ui.fontstyle_manager_commands import BatchFontformatCommand
+        from utils.base_styles import BaseStyle
+
+        blk = _make_blk(translation="a")
+        blk.font_size = 24.0
+        base = BaseStyle("Base", blk.fontformat.deepcopy())
+        old_ffmt = base.fontformat.deepcopy()
+        new_ffmt = base.fontformat.deepcopy()
+        new_ffmt.font_size = 40.0
+        new_ffmt.italic = True
+        proj = FakeProj({"p2.png": [blk]}, "cur.png")
+        cmd = BatchFontformatCommand(
+            proj,
+            None,
+            [],
+            "test",
+            base_snapshot=(base, old_ffmt, new_ffmt),
+        )
+
+        stack = QUndoStack()
+        stack.push(cmd)  # first redo skipped; base already edited by caller
+        base.fontformat.font_size = 40.0
+        base.fontformat.italic = True
+
+        stack.undo()
+        self.assertEqual(base.fontformat.font_size, 24.0)
+        self.assertFalse(base.fontformat.italic)
+        self.assertEqual(blk.fontformat.font_size, 24.0)  # blocks untouched
+
+        stack.redo()
+        self.assertEqual(base.fontformat.font_size, 40.0)
+        self.assertTrue(base.fontformat.italic)
+
+    def test_base_snapshot_freezes_aliased_live_format(self):
+        from ui.fontstyle_manager_commands import BatchFontformatCommand
+        from utils.base_styles import BaseStyle
+
+        blk = _make_blk(translation="a")
+        blk.font_size = 24.0
+        base = BaseStyle("Base", blk.fontformat.deepcopy())
+        new_ffmt = base.fontformat.deepcopy()
+        new_ffmt.font_size = 32.0
+        proj = FakeProj({}, "cur.png")
+
+        # Caller lazily passes the live object as the "old" side; the command
+        # must freeze it before the caller mutates it in place.
+        live_ffmt = base.fontformat
+        cmd = BatchFontformatCommand(
+            proj, None, [], "test", base_snapshot=(base, live_ffmt, new_ffmt)
+        )
+        base.fontformat.font_size = 32.0  # in-place edit of the live object
+
+        cmd.undo()
+        self.assertEqual(base.fontformat.font_size, 24.0)
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # 阶段 4：格式条件搜索 / 格式替换（文本 × 格式四象限）

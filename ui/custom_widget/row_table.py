@@ -24,6 +24,11 @@ QTableWidgetItem 无法画徽章/卡片。行 dict 的字段：
 主题配色走 ``ui/misc.py::get_theme_color``（按 key 现查），缓存于 delegate、
 在 ``StyleChange``（全局换肤会重发样式表）时失效——不要在 paint 里直接
 ``_resolve_theme``（每次 json 落盘读，滚动会卡）。
+
+整行点击勾选是**默认关闭的可选行为**（``set_row_click_toggles_check``）：
+开启后点行内任意位置都切换勾选，不必瞄准 13px 的小方框。工作台的候选列表
+把勾选当「本次要操作哪些行」，与选中/点击预览是两回事，不能全局翻转——
+只有 ``ui/model_files_panel.py`` 这类「勾选即唯一选择方式」的列表才开。
 """
 
 from qtpy.QtCore import (  # noqa: E402
@@ -40,6 +45,7 @@ from qtpy.QtCore import (  # noqa: E402
 from qtpy.QtGui import QColor, QCursor, QFont, QFontMetrics, QPainter, QPainterPath, QPen  # noqa: E402
 from qtpy.QtWidgets import (  # noqa: E402
     QAbstractItemView,
+    QApplication,
     QHeaderView,
     QStyle,
     QStyledItemDelegate,
@@ -160,6 +166,10 @@ class _RowDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self.view = view
         self._color_cache: dict = {}
+        # 整行点击勾选的按下锚点（见 editorEvent）：只认「按下-抬起同一行
+        # 且没拖动」的一次完整点击，避免把滚动/框选的抬手算成勾选
+        self._press_row = -1
+        self._press_pos = None
 
     def invalidate_colors(self):
         self._color_cache.clear()
@@ -417,22 +427,50 @@ class _RowDelegate(QStyledItemDelegate):
             text, Qt.TextElideMode.ElideRight, max(10, int(width))
         )
 
-    # 用户点在勾选框上 → 切换（编辑事件不走 paint，须在此命中判定） ──────
+    # 用户点击 → 切换（编辑事件不走 paint，须在此命中判定） ──────────────
 
     def editorEvent(self, event, model, option, index):
-        if event.type() == QEvent.Type.MouseButtonRelease and index.column() == 0:
-            rect = self._check_rect(
+        if index.column() != 0:
+            return super().editorEvent(event, model, option, index)
+        etype = event.type()
+        pos = (
+            event.position().toPoint() if hasattr(event, "position") else event.pos()
+        )
+        if etype == QEvent.Type.MouseButtonPress:
+            # 只记锚点，不消费：按下仍要走 view 的选中处理（返回 True 会吞掉）
+            self._press_row = index.row()
+            self._press_pos = pos
+        elif etype == QEvent.Type.MouseButtonRelease:
+            hit_check = self._check_rect(
                 option.rect, inside_card=self.view.mode == MODE_CARD
-            )
-            pos = (
-                event.position().toPoint()
-                if hasattr(event, "position")
-                else event.pos()
-            )
-            if rect.contains(pos):
+            ).contains(pos)
+            # 勾选框命中与整行命中互斥（if/elif 效果）：同一次抬手只切换一次
+            if hit_check or (
+                self.view.row_click_toggles_check()
+                and self._is_plain_click(index.row(), pos)
+            ):
+                self._press_row = -1
+                self._press_pos = None
                 self.view._user_toggled(index.row())
                 return True
+            self._press_row = -1
+            self._press_pos = None
         return super().editorEvent(event, model, option, index)
+
+    def _is_plain_click(self, row: int, pos) -> bool:
+        """整行勾选的防误触判据：按下与抬起在同一行、且位移未达拖动阈值。
+
+        拖动（滚动条拖拽、框选、拖到别行）的抬手 Qt 本就不会再送
+        editorEvent（view 进了拖拽状态），这里的锚点判定是第二道保险，
+        也让「同一次点击只切换一次」有明确依据。
+        """
+        if self._press_row != row or self._press_pos is None:
+            return False
+        delta = pos - self._press_pos
+        return (
+            abs(delta.x()) <= QApplication.startDragDistance()
+            and abs(delta.y()) <= QApplication.startDragDistance()
+        )
 
 
 class RowTable(QTableView):
@@ -450,6 +488,8 @@ class RowTable(QTableView):
         self._stretch_column = -1
         self._column_cap = _COLUMN_WIDTH_CAP
         self._hovered_row = -1  # 悬停高亮（delegate 读，见 _paint_card/_paint_cell）
+        # 整行点击勾选：默认关闭（工作台的候选列表靠点行预览、勾选另有语义）
+        self._row_click_toggles_check = False
 
         self._model = _RowModel(mode, self)
         self.setModel(self._model)
@@ -501,6 +541,20 @@ class RowTable(QTableView):
         """拉伸列号（含勾选列的表格列号；<0 ＝最后一列）。"""
         self._stretch_column = column
         self._apply_header_layout()
+
+    def set_row_click_toggles_check(self, enabled: bool) -> None:
+        """整行点击即切换勾选（默认关闭）。
+
+        只给「勾选就是唯一选择方式」的列表开（``ui/model_files_panel.py``）：
+        那类列表点行没有别的含义，13px 的勾选框太难点。工作台的候选列表
+        不能开——它用点行预览、复选框批处理，整行翻转会混淆两种语义。
+        仍然只经 ``_user_toggled`` 这一条写路径，且照旧只认一次完整点击
+        （按下-抬起同行、位移未达拖动阈值），不会与勾选框命中重复触发。
+        """
+        self._row_click_toggles_check = bool(enabled)
+
+    def row_click_toggles_check(self) -> bool:
+        return self._row_click_toggles_check
 
     def set_rows(self, rows) -> None:
         """整表替换行（dict 形状见模块 docstring）。"""

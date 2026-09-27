@@ -3957,6 +3957,66 @@ Overwrite its parameters with the library style?</source>
             <source>Save this base style into the global style library</source>
             <translation>把此大样式存入全局样式库</translation>
         </message>
+        <message>
+            <source>A project style with this font and orientation already exists. No changes were applied.</source>
+            <translation>已有相同字体和文本方向的项目样式，未应用更改。</translation>
+        </message>
+        <message>
+            <source>Apply your other edits before changing the font.</source>
+            <translation>请先应用其他格式修改，再更换字体。</translation>
+        </message>
+        <message>
+            <source>Change font</source>
+            <translation>更换字体</translation>
+        </message>
+        <message>
+            <source>Change the font of %1 blocks to %2? Other formatting stays unchanged. Destination: %3.</source>
+            <translation>将 %1 个文本框的字体更换为 %2？其他格式保持不变。迁移后归属：%3。</translation>
+        </message>
+        <message>
+            <source>Change variant font</source>
+            <translation>更换子样式字体</translation>
+        </message>
+        <message>
+            <source>Destination: %1 · only this variant's blocks move.</source>
+            <translation>迁移后归属：%1 · 只更改此子样式的文本框。</translation>
+        </message>
+        <message>
+            <source>Destination: Ungrouped · no matching project style.</source>
+            <translation>迁移后归属：未分组 · 项目中暂无对应的大样式。</translation>
+        </message>
+        <message>
+            <source>Only this variant's blocks move; other styles stay unchanged.</source>
+            <translation>只更改此子样式的文本框，其他样式不受影响。</translation>
+        </message>
+        <message>
+            <source>Style already exists</source>
+            <translation>样式已存在</translation>
+        </message>
+        <message>
+            <source>Style changed</source>
+            <translation>样式已变化</translation>
+        </message>
+        <message>
+            <source>This variant no longer has matching blocks. Refresh and try again.</source>
+            <translation>此子样式已没有匹配的文本框，请刷新后重试。</translation>
+        </message>
+        <message>
+            <source>Ungrouped</source>
+            <translation>未分组</translation>
+        </message>
+        <message>
+            <source>Change this variant's font · %1</source>
+            <translation>更换此子样式的字体 · %1</translation>
+        </message>
+        <message>
+            <source>Horizontal</source>
+            <translation>横排</translation>
+        </message>
+        <message>
+            <source>Vertical</source>
+            <translation>竖排</translation>
+        </message>
     </context>
     <context>
         <name>StyleTreeWidget</name>

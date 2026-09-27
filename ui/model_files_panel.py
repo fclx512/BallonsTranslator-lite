@@ -83,6 +83,8 @@ class ModelFilesSection(QWidget):
         layout.addWidget(hint)
 
         self._table = RowTable(MODE_CARD)
+        # 本节的勾选就是「唯一选择方式」，点行任意处即勾选（工作台不能开）
+        self._table.set_row_click_toggles_check(True)
         # RowTable 默认 objectName 是工作台那张表，这里换成自己的（见 stylesheet）
         self._table.setObjectName("ModelFilesTable")
         # 表格自带的最小宽度建议偏大，放着不管窄窗口下会把设置页撑出横向滚动条

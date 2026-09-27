@@ -334,6 +334,27 @@ FieldEditor[modified="true"] {
     background: transparent;
 }
 
+/* ── 字体迁移卡（StyleDetail 内，2026-09-27）─────────────────── */
+/* 容器与预览卡同族（中性底 + 描边、同圆角），让"迁移"读作右栏里的另一块
+   卡片而不是新的一栏；标题用前景色加粗，提示句降级为次要灰。
+   只锚各自的 objectName，不写 StyleDetail 全局后代选择器——右栏还在并行
+   改动，越窄的选择器越不会被邻居牵连。 */
+#StyleFontMigration {
+    background: @emptyContentBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
+}
+
+#StyleFontMigrationTitle {
+    color: @qwidgetForegroundColor;
+    font-weight: 600;
+}
+
+#StyleFontMigrationHint {
+    color: @disabledForegroundColor;
+    font-size: 11px;
+}
+
 SizeComboBox {
     padding-left: 0px;
     padding-right: 0px;
@@ -914,6 +935,36 @@ QPushButton:disabled {
     background-color: @emptyContentBackgroundColor;
     color: rgba(128, 128, 128, 0.5);
     border: 1px solid rgba(128, 128, 128, 0.25);
+}
+
+/* ── Tool buttons (global fallback) ────────────────────────────
+   Most specialized tool buttons below use objectName rules.  This fallback
+   keeps unnamed text buttons (for example BlockActionCard actions and the
+   showcase copy button) in the same compact language as QPushButton.  A
+   transparent border reserves the hover outline without changing layout. */
+QToolButton {
+    min-height: 24px;
+    padding: 2px 8px;
+    color: @qwidgetForegroundColor;
+    background-color: @pushBtnBackgroundColor;
+    border: 1px solid transparent;
+    border-radius: 4px;
+}
+
+QToolButton:hover {
+    background-color: @hoverBackgroundColor;
+    border: 1px solid @borderColor;
+}
+
+QToolButton:pressed {
+    background-color: @emptyContentBackgroundColor;
+    border: 1px solid @accentPrimary;
+}
+
+QToolButton:disabled {
+    background-color: @emptyContentBackgroundColor;
+    color: rgba(128, 128, 128, 0.5);
+    border: 1px solid transparent;
 }
 
 /* ── Radio buttons (dark‑theme support) ────────────────────── */

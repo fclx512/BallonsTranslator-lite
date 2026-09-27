@@ -81,7 +81,7 @@ from utils.base_styles import (
 from utils.face_resolver import sync_face
 from utils.fontformat import FontFormat
 
-from .custom_widget import ColorPickerDialog, SeparatorWidget
+from .custom_widget import ColorPickerDialog, ConfigComboBox, SeparatorWidget
 from .style_format_editor import FormatEditorPanel
 
 # Re-exported for legacy importers (tests import these from this module).
@@ -734,6 +734,32 @@ class StyleDetail(QScrollArea):
 
         self._layout.addWidget(SeparatorWidget())
 
+        self._font_migration = QWidget()
+        self._font_migration.setObjectName("StyleFontMigration")
+        migrate_layout = QVBoxLayout(self._font_migration)
+        migrate_layout.setContentsMargins(10, 8, 10, 8)
+        migrate_layout.setSpacing(5)
+        self._migrate_title = QLabel()
+        self._migrate_title.setObjectName("StyleFontMigrationTitle")
+        migrate_layout.addWidget(self._migrate_title)
+        migrate_controls = QHBoxLayout()
+        migrate_controls.setContentsMargins(0, 0, 0, 0)
+        migrate_controls.setSpacing(6)
+        self._migrate_combo = ConfigComboBox(fix_size=False, stretch=True)
+        self._migrate_combo.currentIndexChanged.connect(self._update_migration_hint)
+        migrate_controls.addWidget(self._migrate_combo, 1)
+        self._migrate_btn = QPushButton(self.tr("Change font"))
+        self._migrate_btn.setProperty("btnRole", "accent")
+        self._migrate_btn.clicked.connect(self._migrate_variant_font)
+        migrate_controls.addWidget(self._migrate_btn)
+        migrate_layout.addLayout(migrate_controls)
+        self._migrate_hint = QLabel()
+        self._migrate_hint.setObjectName("StyleFontMigrationHint")
+        self._migrate_hint.setWordWrap(True)
+        migrate_layout.addWidget(self._migrate_hint)
+        self._layout.addWidget(self._font_migration)
+        self._font_migration.hide()
+
         # ── Four diff-first field groups ──────────────────────────
         self._panel = FormatEditorPanel()
         self._panel.field_changed.connect(self._on_field_changed)
@@ -869,6 +895,8 @@ class StyleDetail(QScrollArea):
             )
         )
 
+        self._panel.setMinimumHeight(200)
+        self._panel.setMaximumHeight(16777215)
         self._panel.set_format(ffmt)
         self._refresh_preview_and_chips(ffmt)
 
@@ -878,6 +906,7 @@ class StyleDetail(QScrollArea):
         self._populate_block_list(blocks)
 
         self._name_edit.show()
+        self._font_migration.hide()
         self._reset_base_btn.hide()
         self._promote_btn.hide()
         self._add_library_btn.show()
@@ -902,12 +931,20 @@ class StyleDetail(QScrollArea):
         )
 
         # 差异优先：变体只渲染 override 字段，其余组隐藏
+        self._panel.setMinimumHeight(110)
+        self._panel.setMaximumHeight(200)
         self._panel.set_format(rep, only_fields=set(variant.overrides))
         self._refresh_preview_and_chips(rep)
 
         self._populate_block_list(variant.blocks)
 
         self._name_edit.hide()
+        orientation = self.tr("Vertical") if base.fontformat.vertical else self.tr("Horizontal")
+        self._migrate_title.setText(
+            self.tr("Change this variant's font · %1").replace("%1", orientation)
+        )
+        self._populate_migration_fonts(base.fontformat.font_family)
+        self._font_migration.show()
         self._reset_base_btn.show()
         self._promote_btn.hide()
         self._add_library_btn.hide()
@@ -924,6 +961,8 @@ class StyleDetail(QScrollArea):
         self._entry = entry
         self._lib_style = None
         ffmt = entry.fontformat
+        self._panel.setMinimumHeight(200)
+        self._panel.setMaximumHeight(16777215)
 
         self._header_info.setText(
             self.tr("Ungrouped — applied to {n} blocks across {p} pages").format(
@@ -937,6 +976,7 @@ class StyleDetail(QScrollArea):
         self._populate_block_list(entry.blocks)
 
         self._name_edit.hide()
+        self._font_migration.hide()
         self._reset_base_btn.hide()
         self._promote_btn.show()
         self._add_library_btn.hide()
@@ -953,6 +993,8 @@ class StyleDetail(QScrollArea):
         self._entry = None
         self._lib_style = style
         ffmt = style.fontformat
+        self._panel.setMinimumHeight(200)
+        self._panel.setMaximumHeight(16777215)
 
         self._name_edit.blockSignals(True)
         self._name_edit.setText(style.name)
@@ -969,12 +1011,121 @@ class StyleDetail(QScrollArea):
         self._block_chips.clear_chips()
 
         self._name_edit.show()
+        self._font_migration.hide()
         self._reset_base_btn.hide()
         self._promote_btn.hide()
         self._add_library_btn.hide()
         self._delete_base_btn.hide()
         self._copy_project_btn.show()
         self._delete_library_btn.show()
+
+    def _populate_migration_fonts(self, current_family: str):
+        from utils.config import pcfg
+
+        if not shared.ALL_FONT_FAMILIES:
+            shared.init_font_list()
+        families = list(shared.get_filtered_font_list(pcfg.excluded_fonts))
+        self._migrate_combo.blockSignals(True)
+        self._migrate_combo.clear()
+        if current_family and current_family not in families:
+            self._migrate_combo.addItem(current_family)
+        for family in families:
+            self._migrate_combo.addItem(family)
+        self._migrate_combo.setCurrentText(current_family)
+        self._migrate_combo.blockSignals(False)
+        self._update_migration_hint()
+
+    def _update_migration_hint(self, *_args):
+        if self._base_node is None or self._proj is None:
+            self._migrate_btn.setEnabled(False)
+            return
+        family = self._migrate_combo.currentText()
+        current = self._base_node.base.fontformat
+        pending = self._mode == self.MODE_VARIANT and bool(self._panel.changed_values())
+        self._migrate_btn.setEnabled(
+            bool(family) and family != current.font_family and not pending
+        )
+        if pending:
+            self._migrate_hint.setText(
+                self.tr("Apply your other edits before changing the font.")
+            )
+            return
+        if not family or family == current.font_family:
+            self._migrate_hint.setText(
+                self.tr("Only this variant's blocks move; other styles stay unchanged.")
+            )
+            return
+        target = next(
+            (bs for bs in self._proj.base_styles
+             if bs.identity == (family, bool(current.vertical))),
+            None,
+        )
+        self._migrate_hint.setText(
+            self.tr("Destination: %1 · only this variant's blocks move.").replace(
+                "%1", target.name
+            )
+            if target is not None
+            else self.tr("Destination: Ungrouped · no matching project style.")
+        )
+
+    def _migrate_variant_font(self):
+        if (
+            self._mode != self.MODE_VARIANT
+            or self._variant is None
+            or self._base_node is None
+            or self._proj is None
+            or self._panel.changed_values()
+        ):
+            return
+        base = self._base_node.base
+        family = self._migrate_combo.currentText()
+        from utils.config import pcfg
+
+        available = set(shared.get_filtered_font_list(pcfg.excluded_fonts))
+        if not family or family == base.fontformat.font_family or family not in available:
+            return
+        node = next(
+            (node for node in discover_style_tree(self._proj, self._proj.base_styles).nodes
+             if node.base is base),
+            None,
+        )
+        variant = next(
+            (entry for entry in node.variants if entry.key == self._variant.key),
+            None,
+        ) if node is not None else None
+        if variant is None or not variant.blocks:
+            QMessageBox.information(
+                self, self.tr("Style changed"),
+                self.tr("This variant no longer has matching blocks. Refresh and try again."),
+            )
+            self.styles_changed.emit(None)
+            return
+        target = next(
+            (bs for bs in self._proj.base_styles
+             if bs.identity == (family, bool(base.fontformat.vertical))),
+            None,
+        )
+        destination = target.name if target is not None else self.tr("Ungrouped")
+        message = self.tr(
+            "Change the font of %1 blocks to %2? Other formatting stays unchanged. Destination: %3."
+        ).replace("%1", str(variant.count)).replace("%2", family).replace("%3", destination)
+        if QMessageBox.question(
+            self, self.tr("Change variant font"), message,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        changes = build_variant_changes(
+            variant.blocks, self._proj, {"font_family": family}
+        )
+        if not changes:
+            return
+        reselect = (
+            {"type": "base", "identity": target.identity}
+            if target is not None
+            else {"type": "sig", "signature": compute_signature(changes[0]["new_ffmt"])}
+        )
+        self._apply_ffmt_changes(changes, reselect, self.tr("Change variant font"))
 
     def _representative_ffmt(
         self, variant: VariantEntry, fallback: FontFormat
@@ -1024,6 +1175,8 @@ class StyleDetail(QScrollArea):
         ffmt = self._panel.baseline_copy()
         self._panel.sync_into(ffmt)
         self._refresh_preview_and_chips(ffmt)
+        if self._mode == self.MODE_VARIANT:
+            self._update_migration_hint()
 
     # -- block distribution -------------------------------------------------
 
@@ -1066,16 +1219,19 @@ class StyleDetail(QScrollArea):
         """
         return self._panel.changed_values()
 
-    def _apply_ffmt_changes(self, changes: List[Dict], reselect, description: str):
+    def _apply_ffmt_changes(
+        self, changes: List[Dict], reselect, description: str, *, base_snapshot=None
+    ):
         """Shared batch-apply flow: undo command → apply → rebuild → refresh."""
         # 1. Create the command FIRST — its constructor captures the current
         #    live-item state (HTML / rect) for undo BEFORE we modify anything.
-        if changes:
+        if changes or base_snapshot is not None:
             if self._scene_manager is not None:
                 from .fontstyle_manager_commands import BatchFontformatCommand
 
                 cmd = BatchFontformatCommand(
-                    self._proj, self._scene_manager, changes, description
+                    self._proj, self._scene_manager, changes, description,
+                    base_snapshot=base_snapshot,
                 )
                 self._scene_manager.canvas.push_text_command(cmd)
             self._apply_changes_to_blocks(changes)
@@ -1150,16 +1306,32 @@ class StyleDetail(QScrollArea):
         if not changed:
             return
         base_style = self._base_node.base
+        new_identity = (
+            changed.get("font_family", base_style.fontformat.font_family),
+            bool(changed.get("vertical", base_style.fontformat.vertical)),
+        )
+        if new_identity != base_style.identity and any(
+            bs is not base_style and bs.identity == new_identity
+            for bs in self._proj.base_styles
+        ):
+            QMessageBox.warning(
+                self, self.tr("Style already exists"),
+                self.tr("A project style with this font and orientation already exists. No changes were applied."),
+            )
+            return
+        old_ffmt = base_style.fontformat.deepcopy()
         # Collect first (blocks are matched by the *current* identity key),
         # then update the base — a family/orientation change would otherwise
         # re-key the style before its own blocks are gathered.
         changes = build_flatten_changes(self._proj, base_style, changed)
         for k, v in changed.items():
             setattr(base_style.fontformat, k, copy_value(v))
+        sync_face(base_style.fontformat)
         self._apply_ffmt_changes(
             changes,
             {"type": "base", "identity": base_style.identity},
             self.tr("Edit base style"),
+            base_snapshot=(base_style, old_ffmt, base_style.fontformat.deepcopy()),
         )
 
     def _apply_variant(self):

@@ -279,7 +279,8 @@ class FontSizeBox(QFrame):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.fcombobox = SizeComboBox([1, 200], "font_size", self)
+        # 拖拽/手输上限跟随设置页「最大字号」（pcfg.max_font_size）
+        self.fcombobox = SizeComboBox([1, C.pcfg.max_font_size], "font_size", self)
         # 字号是粗调字段：5px=1pt（0.2/px），拖拽吸附整数避免小数抖动
         self.fcombobox.drag_step_provider = 1.0
         self.fcombobox.precision = 1
@@ -994,6 +995,8 @@ class FontFormatPanel(Widget):
         from utils.config import pcfg
 
         mixed = mixed or set()
+        # 上限跟随设置实时同步（面板只在启动时构造一次）
+        self.fontsizebox.fcombobox.set_max_val(pcfg.max_font_size)
         font_size = min(round(font_format.font_size, 1), pcfg.max_font_size)
         if int(font_size) == font_size:
             font_size = str(int(font_size))
