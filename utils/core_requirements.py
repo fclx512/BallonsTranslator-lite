@@ -14,6 +14,8 @@ Two entry points:
 import importlib
 import importlib.metadata
 import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Tuple
@@ -132,6 +134,34 @@ def _write_constraints_snapshot() -> Tuple[str, int]:
     return path, len(versions)
 
 
+def _restart_resolvable_failures(failures: Iterable[str]) -> List[str]:
+    """筛出「重启后就能导入」的失败项（子进程复测）。
+
+    pywin32 一类包靠 ``.pth`` 在**解释器启动时**配路径：安装进程里无论怎么
+    重试都导不进，但重启后的新进程可以。同解释器子进程 ``import`` 等价于
+    「重启后的那次探测」——子进程能过、本进程过不去，重启就有用；子进程也
+    过不去才是真缺包/坏包。只复测「导入失败」项，属性缺失项与重启无关。
+    """
+    resolvable: List[str] = []
+    for desc in failures:
+        if "missing required attribute" in desc:
+            continue
+        name = desc.strip().split(":", 1)[0].strip()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", name or ""):
+            continue
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-c", f"import {name}"],
+                capture_output=True,
+                timeout=60,
+            )
+        except Exception:
+            continue
+        if proc.returncode == 0:
+            resolvable.append(desc)
+    return resolvable
+
+
 def ensure_core_requirements(
     repo_root: str = "",
     requirements_file: str = "",
@@ -142,9 +172,11 @@ def ensure_core_requirements(
 ) -> bool:
     """Check core imports and auto-install any missing packages.
 
-    Returns ``True`` if packages were installed (caller should restart
-    the process so the new packages are fully loaded).  Returns ``False``
-    if everything is already satisfied.
+    Returns ``True`` if a restart is needed — either because packages were
+    just installed, or because the remaining failures only resolve in a fresh
+    interpreter (``.pth``-configured paths; see
+    :func:`_restart_resolvable_failures`).  Returns ``False`` if everything
+    is already satisfied.
 
     When installation fails, prints an error and returns ``False`` instead
     of raising — the app continues with warnings so the user can manually
@@ -229,12 +261,25 @@ def ensure_core_requirements(
 
     _drop_probe_modules(probes)
 
-    # Re-probe in this process before telling the caller to restart.  A restart
-    # is only useful if the install actually made the packages importable;
-    # otherwise the caller would re-exec, install "successfully" again, and loop
-    # forever.  Anything still failing is reported as an actionable error.
+    # Re-probe in this process before telling the caller to restart.  If the
+    # leftovers only resolve in a FRESH interpreter (pywin32's .pth path setup
+    # runs at startup, not mid-process), a restart is exactly what finishes the
+    # job — the caller re-execs once and the post-restart probe passes.  Only
+    # failures that a subprocess re-probe also hits are reported as actionable
+    # errors; launch.py's restart guard caps any pathological re-exec chain.
     still_missing = check_core_imports(probes)
     if still_missing:
+        resolvable = _restart_resolvable_failures(still_missing)
+        if resolvable:
+            print()
+            print(
+                "Installed packages need one restart to become importable "
+                "(their path setup happens at interpreter startup):"
+            )
+            for f in resolvable:
+                print(f)
+            print("Restarting to load new packages...")
+            return True
         print()
         print("!" * 50)
         print("Packages were installed but are still not importable in this process.")

@@ -65,6 +65,48 @@ print(f"OK: {len(CORE_IMPORT_PROBES)} probes loaded")
 """)
         self.assertEqual(rc, 0, f"stderr: {stderr}")
 
+    def test_restart_resolvable_separates_pth_case(self):
+        """子进程复测：能导入的（.pth 类）算「重启可解」，缺包与属性缺失不算。"""
+        from utils.core_requirements import _restart_resolvable_failures
+
+        failures = [
+            "  json: No module named 'json' (simulated in-process failure)",
+            "  zzz_no_such_module_xyz: No module named 'zzz_no_such_module_xyz'",
+            "  numpy: missing required attribute(s): some_attr",
+        ]
+        resolvable = _restart_resolvable_failures(failures)
+        # json 在子进程里真实可导入（等价于重启后 .pth 生效）；另外两项不许算
+        self.assertEqual(resolvable, [failures[0]])
+
+    def test_ensure_returns_true_when_restart_resolves_leftovers(self):
+        """装完后只剩 .pth 类失败 → 返回 True，让 launch 重启一次收尾。"""
+        from unittest import mock
+
+        from utils import core_requirements as cr
+
+        fake_fail = ["  json: No module named 'json' (simulated in-process)"]
+        install_ok = mock.Mock(ok=True)
+        with mock.patch.object(cr, "_install_packages", return_value=install_ok), \
+             mock.patch.object(cr, "_drop_probe_modules"), \
+             mock.patch.object(cr, "check_core_imports", side_effect=[fake_fail, fake_fail]):
+            self.assertTrue(
+                cr.ensure_core_requirements(),
+                ".pth 类失败必须触发一次重启，而不是带警告继续启动",
+            )
+
+    def test_ensure_gives_up_when_subprocess_still_fails(self):
+        """子进程也导不进＝真缺包：不许无限重启，走可操作报错返回 False。"""
+        from unittest import mock
+
+        from utils import core_requirements as cr
+
+        fake_fail = ["  zzz_no_such_module_xyz: No module named 'zzz_no_such_module_xyz'"]
+        install_ok = mock.Mock(ok=True)
+        with mock.patch.object(cr, "_install_packages", return_value=install_ok), \
+             mock.patch.object(cr, "_drop_probe_modules"), \
+             mock.patch.object(cr, "check_core_imports", side_effect=[fake_fail, fake_fail]):
+            self.assertFalse(cr.ensure_core_requirements())
+
 
 class TestWarnMissingCoreImports(unittest.TestCase):
     """Tests for warn_missing_core_imports return type and behavior."""

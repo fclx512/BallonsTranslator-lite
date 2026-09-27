@@ -50,7 +50,7 @@
 
 **涉及文件：** `pyproject.toml`、`utils/updater.py`、`scripts/build_win_minimal.ps1`、`modules/inpaint/inpaint_patchmatch.py`、`modules/inpaint/patch_match.py`、`modules/__init__.py`、`ui/module_parse_widgets.py`、`README.md`、`README_EN.md`、`scripts/README.md`、`docs/项目概述.md`、`docs/基础速查/依赖库说明.md`、`tests/test_updater_version.py`、`tests/test_inpaint_patchmatch.py`、`tests/test_minimal_package_contract.py`
 
-**验证：** `tests/test_updater_version.py`（tag 剥离与升级路径 5 用例）新增全过；patchmatch 契约 58 passed；构建脚本 PSParser 解析通过、`tests/test_minimal_package_contract.py` 4 passed。**遗留：** 端到端真实构建 + 开箱自验 + 发版（bump/tag/挂资产/push）等用户发话。
+**验证：** `tests/test_updater_version.py`（tag 剥离与升级路径 5 用例）新增全过；patchmatch 契约 58 passed；构建脚本 PSParser 解析通过、`tests/test_minimal_package_contract.py` 4 passed；**首次端到端真实构建产出 32.3 MB 小包 + 53 MB 资产**，开箱首启验收发现 `utils/core_requirements.py` 把 pywin32 的 `.pth` 类失败误判成「重启无用」、装完依赖撞「缺少核心依赖」硬闸门拒启——补 `_restart_resolvable_failures` 子进程复测（等价重启后探测）让首启装完自动重启收尾，3 新用例钉住。**遗留：** 发版动作（打 tag `lite-v1.0.0`／挂资产／push）等用户发话。
 
 ---
 
