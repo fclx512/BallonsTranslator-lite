@@ -25,7 +25,7 @@ A fork of BallonsTranslator for comic/image translation. The upstream five-stage
 
 The release package is a small bootstrap bundle containing only the **basic boot environment** (source + embedded Python, approx. 30 MB compressed): dependencies are not pre-installed — running `launch.bat` after extracting installs the basic `requirements.txt` dependencies and restarts, leaving a local environment of roughly 600 MB. It ships no torch, YOLO/ONNX/Transformers backends and no model weights; the two PatchMatch native libraries (approx. 53 MB) are downloaded in the background the first time that inpainter is selected. Model backends and weights can then be downloaded on demand from the GUI model files page.
 
-> The release package is **not released yet** (first build and out-of-the-box acceptance are still in progress). For now, use the full one-click bundle below or run from source. See `scripts/build_win_minimal.ps1` and the "Minimal package release" section in `scripts/README.md` for how it is built.
+Download `BallonsTranslator-lite_win_min.zip` from the [Releases page](https://github.com/fclx512/BallonsTranslator-lite/releases/latest) and extract it to use; see `scripts/build_win_minimal.ps1` and the "发版包发行" section in `scripts/README.md` for how it is built.
 
 ### Full One-Click Bundle (offline fallback)
 
@@ -45,7 +45,7 @@ BallonsTranslator-lite/
 
 `launch.bat` locates a usable Python by itself (the bundled environment first), determines whether a usable GPU is present, and distinguishes the one-click bundle from a git install — no manual configuration needed.
 
-The minimal package already contains the `requirements.txt` basic dependencies, so it can enter the GUI without network access. Manual typesetting, multi-page workbench operations, Photoshop integration, and PatchMatch simple-background repair work directly. When you select an automated pipeline module, the GUI installs its torch/ultralytics/onnxruntime/onnxocr/transformers backend and downloads weights on demand. Use the full bundle above when a usable network is unavailable.
+The full bundle ships the basic dependencies and model backends pre-installed, so it enters the GUI without network access: manual typesetting, multi-page workbench operations, Photoshop integration, PatchMatch simple-background repair and the automated pipeline all work out of the box (any weights not bundled download on demand in the GUI). Use this bundle when no usable network is available — the release package needs the network on its first launch to install dependencies.
 
 ### Running from Source
 
@@ -61,7 +61,7 @@ python launch.py --update   # pull code updates before launching
 - Requires **Python 3.10+** (the official installer or the Microsoft Store version; the Store version creates a project-local `.venv` automatically).
 - On first launch the pip mirror is written automatically based on your region (the `mirror` section of `config/config.json`), so no manual mirror setup is needed in mainland China.
 - If automatic dependency installation fails, run `pip install -r requirements.txt` manually. The heavy dependencies needed for model inference (`torch` / `transformers` etc.) are not part of it — install them as needed (see [GPU Acceleration](#gpu-acceleration)).
-- The **PatchMatch inpainter** is a low-overhead basic capability included in the minimal package. It needs `data/libs/patchmatch_inpaint.dll` and `data/libs/opencv_world455.dll`. Source installs or manually rebuilt environments must copy these native files from the minimal/full bundle; the app still starts without them, but using PatchMatch will show a readable missing-attachment message.
+- The **PatchMatch inpainter** is a low-overhead basic capability. Its two native libraries (`data/libs/patchmatch_inpaint.dll` and `data/libs/opencv_world455.dll`, approx. 53 MB) are distributed as Release assets: they download in the background the first time the inpainter is selected, or fetch them manually on the Settings → Models → Model Files page (the full bundle already includes them). The app still starts without them, but using PatchMatch will show a readable missing-attachment message.
 - See `python launch.py --help` for all arguments (e.g. `--proj-dir` to open a project at startup, `--headless` to run without a GUI).
 
 ## GPU Acceleration
@@ -129,7 +129,7 @@ python launch.py
 - Requires Python 3.10 or newer; 3.12 recommended (the bundle ships 3.12; 3.13 and above are unverified).
 - **Apple Silicon (M series)**: PyTorch uses MPS acceleration automatically, no CUDA needed; Intel Macs or systems without MPS fall back to CPU.
 - `launch.bat` and `install_cuda.bat` are Windows-only.
-- PatchMatch native libraries are currently shipped only in the Windows minimal/full packages; macOS has no corresponding attachment, so use a PyTorch-based inpainter instead.
+- PatchMatch native libraries are Windows-only (downloaded automatically from Release assets when selected; the full bundle includes them); macOS has no corresponding library, so use a PyTorch-based inpainter instead.
 
 ## Acknowledgement
 

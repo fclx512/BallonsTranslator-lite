@@ -54,6 +54,14 @@
 
 ---
 
+### 发版说明文档落库 `docs/发版说明_lite-v1.0.0.md` + README 发版口径更正
+
+**摘要：** 0.6.0→lite-v1.0.0 共 139 提交的改动整理成仓内更新说明文档（面向老用户，发版页只引用不抄正文）；README/README_EN 撤「尚未正式发布」标注、补 Releases 下载指引，并修掉与发版形态矛盾的三处旧口径（一键完整包段误写「精简包预装依赖」、源码段「PatchMatch 随包需手工补回」、macOS 段附件说法）；「功能展示」占位行按要求继续搁置。
+
+**涉及文件：** `docs/发版说明_lite-v1.0.0.md`、`README.md`、`README_EN.md`、`docs/基础速查/依赖库说明.md`
+
+---
+
 ## 2026-09-26
 
 ### 标签待办体系重构（`ocr_review_pending` / `trans_review_pending` + `consumed_tags` 撤销一致性）+ 工作台六项扁平导航与非删除待办队列（D46/D48/D49）

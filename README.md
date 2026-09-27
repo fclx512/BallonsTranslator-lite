@@ -25,7 +25,7 @@ BallonsTranslator 的分支版漫画/图片翻译工具。上游的五阶段管�
 
 发版包是只含**基本启动环境**的引导小包（源码 + 嵌入式 Python，压缩后约 30 MB）：依赖不预装，解压后运行 `launch.bat` 会自动安装 `requirements.txt` 基本依赖并重启，装完后的本机环境约 600 MB。它不预装 torch、YOLO/ONNX/Transformers 等模型后端，也不带模型权重；PatchMatch 的两个原生库（约 53 MB）首次选中该修复器时在后台自动下载。之后可随时在 GUI 的模型文件页按需下载模型后端和权重。
 
-> 发版包**尚未正式发布**（首次构建与开箱验收还在进行中），当前请先用下方一键完整包或源码运行；构建方式见 `scripts/build_win_minimal.ps1` 与 `scripts/README.md`「发版包发行」一节。
+从 [Releases 页面](https://github.com/fclx512/BallonsTranslator-lite/releases/latest) 下载 `BallonsTranslator-lite_win_min.zip` 解压使用；构建方式见 `scripts/build_win_minimal.ps1` 与 `scripts/README.md`「发版包发行」一节。
 
 ### 一键完整包（离线兜底）
 
@@ -45,7 +45,7 @@ BallonsTranslator-lite/
 
 `launch.bat` 会自行寻找可用的 Python（内置环境优先）、判断是否有可用 GPU，并区分一键包与 git 安装两种形态，无需手工配置。
 
-精简包已经预装 `requirements.txt` 的基本依赖，因此解压后无需联网即可进入 GUI，人工嵌字、多页整理、PS 联动和 PatchMatch 简单背景修复可直接使用。选择需要自动化管线的模块后，再在 GUI 内按需安装 torch、ultralytics、onnxruntime/onnxocr、transformers 等后端并下载权重；没有可用网络时仍可使用上面的网盘完整包。
+一键完整包已预装基本依赖与模型后端，解压后无需联网即可进入 GUI：人工嵌字、多页整理、PS 联动、PatchMatch 简单背景修复和自动化管线开箱可用，个别未随包的权重在 GUI 内按需下载。没有可用网络的机器请用这份包（发版包首启需要联网安装依赖）。
 
 ### 源码运行
 
@@ -61,7 +61,7 @@ python launch.py --update   # 先拉取代码更新再启动
 - 需要 **Python 3.10+**（官方安装包或 Microsoft Store 版均可；Store 版会在项目目录内自动创建 `.venv`）。
 - 首次启动会按所在地区自动写入 pip 镜像（`config/config.json` 的 `mirror` 节），国内网络无需手工配源。
 - 自动装依赖失败时手动执行 `pip install -r requirements.txt`。模型推理所需的 `torch` / `transformers` 等重依赖不在其中，按需安装（见 [GPU 加速](#gpu-加速)）。
-- **PatchMatch 修复器**是精简包随附的低占用基础能力，依赖 `data/libs/patchmatch_inpaint.dll` 与 `data/libs/opencv_world455.dll`。源码运行或手工重建环境时，需从精简包/一键完整包补回这两个原生库；缺失时应用仍可启动，但使用 PatchMatch 时会给出明确提示。
+- **PatchMatch 修复器**是低占用基础能力，其两个原生库（`data/libs/patchmatch_inpaint.dll` 与 `data/libs/opencv_world455.dll`，约 53 MB）以 Release 资产分发：首次选中该修复器时后台自动下载，也可在 **设置 → 模型 → 模型文件** 页手动获取（一键完整包已随包）。缺失时应用仍可启动，但使用 PatchMatch 时会给出明确提示。
 - 完整参数见 `python launch.py --help`（如 `--proj-dir` 启动时打开工程、`--headless` 无界面运行）。
 
 ## GPU 加速
@@ -129,7 +129,7 @@ python launch.py
 - 需要 Python 3.10 以上，推荐 3.12（一键包内置 3.12；更高的 3.13 及以上未经验证）。
 - **Apple Silicon（M 系列）**：PyTorch 自动使用 MPS 加速，无需 CUDA；Intel Mac 或不支持 MPS 时退回 CPU。
 - `launch.bat`、`install_cuda.bat` 为 Windows 专用。
-- PatchMatch 修复器目前只随 Windows 精简包/完整包提供原生库；macOS 没有对应附件，改用基于 PyTorch 的修复器。
+- PatchMatch 的原生库只提供 Windows 版（Release 资产选中即自动下载，一键完整包已随包）；macOS 没有对应库，改用基于 PyTorch 的修复器。
 
 ## 致谢
 
