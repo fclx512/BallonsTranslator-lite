@@ -92,6 +92,12 @@ class UpdateResult:
 def normalize_version_tag(version: str) -> str:
     """Normalize a release tag for version comparison and filenames.
 
+    本项目的发布 tag 从 ``lite-v1.0.0`` 起步（与上游 ``v1.x.x`` 区分，
+    发行口径见 ``scripts/README.md``「发版包发行」）；``lite-v`` 必须排在
+    ``v`` 之前剥离，否则版本比较会退化到字典序回退路径。
+
+    >>> normalize_version_tag('lite-v1.0.0')
+    '1.0.0'
     >>> normalize_version_tag('v1.4.1')
     '1.4.1'
     >>> normalize_version_tag(' release-2.0 ')
@@ -99,7 +105,7 @@ def normalize_version_tag(version: str) -> str:
     """
 
     value = version.strip()
-    for prefix in ("release-", "Release-", "v", "V"):
+    for prefix in ("lite-v", "lite-V", "release-", "Release-", "v", "V"):
         if value.startswith(prefix):
             value = value[len(prefix) :]
     return value

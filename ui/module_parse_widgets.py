@@ -758,8 +758,8 @@ class InpaintConfigPanel(ModuleConfigParseWidget):
         # The online LLM inpainter is no longer a per-tool engine choice — it
         # lives behind the dedicated "AI 修图" canvas tool.  Hide it from the
         # brush/box/settings dropdown (it stays registered for that tool).
-        # patchmatch 不在这里：它是精简包随包携带的非模型基础能力，得能选到
-        # （见 modules/inpaint/inpaint_patchmatch.py 的模块说明）。
+        # patchmatch 不在这里：它是非模型基础能力（原生库缺失会按需下载），
+        # 得能选到（见 modules/inpaint/inpaint_patchmatch.py 的模块说明）。
         self.exclude_modules = {"LLMInpaint"}
         self.inpainter_changed = self.module_changed
         self.setInpainter = self.setModule

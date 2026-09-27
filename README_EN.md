@@ -16,16 +16,16 @@ A fork of BallonsTranslator for comic/image translation. The upstream five-stage
 
 - **OS**: Windows 10+ x64 (macOS see below; other platforms unverified)
 - **GPU**: Optional. An NVIDIA GPU can accelerate (see [GPU Acceleration](#gpu-acceleration)); CPU-only works
-- **Disk space**: The minimal package is approx. **550–600 MB** (embedded Python + basic dependencies + PatchMatch native libraries, no models); the offline full bundle is approx. **1.7–2.1 GB** (including model backends and weights); enabling GPU acceleration adds approx. **2.2 GB** (CUDA PyTorch ~2 GB + onnxruntime-gpu ~214 MB)
+- **Disk space**: The release package is approx. **30 MB** (bootstrap; after the first-run install the local environment is approx. **600 MB**, models excluded); the offline full bundle is approx. **1.7–2.1 GB** (including model backends and weights); enabling GPU acceleration adds approx. **2.2 GB** (CUDA PyTorch ~2 GB + onnxruntime-gpu ~214 MB)
 - **VC++ Runtime**: [VC++ Redistributable 2015-2022 x64](https://aka.ms/vs/17/release/vc_redist.x64.exe) (required by the embedded Python)
 
 ## Quick Start
 
-### Minimal Package (recommended)
+### Release Package (recommended)
 
-The minimal package is a bootstrap package with the basic dependencies already installed, approximately **550–600 MB** (estimate; the actual artifact decides). It does not include torch, YOLO/ONNX/Transformers model backends, or model weights. The PatchMatch native libraries are included as a low-overhead basic capability. Extract it anywhere, run `launch.bat`, and download model backends and weights on demand from the GUI.
+The release package is a small bootstrap bundle containing only the **basic boot environment** (source + embedded Python, approx. 30 MB compressed): dependencies are not pre-installed — running `launch.bat` after extracting installs the basic `requirements.txt` dependencies and restarts, leaving a local environment of roughly 600 MB. It ships no torch, YOLO/ONNX/Transformers backends and no model weights; the two PatchMatch native libraries (approx. 53 MB) are downloaded in the background the first time that inpainter is selected. Model backends and weights can then be downloaded on demand from the GUI model files page.
 
-> The minimal package is **not released yet** (build and out-of-the-box acceptance are still in progress). For now, use the full one-click bundle below or run from source. See `scripts/build_win_minimal.ps1` and the "Minimal package release" section in `scripts/README.md` for how it is built.
+> The release package is **not released yet** (first build and out-of-the-box acceptance are still in progress). For now, use the full one-click bundle below or run from source. See `scripts/build_win_minimal.ps1` and the "Minimal package release" section in `scripts/README.md` for how it is built.
 
 ### Full One-Click Bundle (offline fallback)
 

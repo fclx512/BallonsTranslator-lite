@@ -44,6 +44,16 @@
 
 ---
 
+### 发版形态改版：发版包＝约 30 MB 引导小包 + 发布 tag 换 `lite-v*` 前缀 + PatchMatch 原生库改 Release 资产用时下载
+
+**摘要：** 用户拍板把发行物从预装式 600 MB 拨回**引导小包**（源码 + 嵌入式 Python + pip/uv、依赖首启现装，约 30 MB、对齐上游 `Ballonstranslator_win_minium.zip`）；600 MB 预装环境只是本机运行状态、不分发。发布 tag 换新格式 **`lite-vX.Y.Z`** 与上游 `v1.x.x` 区分（pyproject 升 `1.0.0`，`utils/updater.py::normalize_version_tag` 剥离新前缀——`lite-v` 必须排在 `v` 之前）。PatchMatch 两个原生 DLL（约 53 MB）不再随包：`scripts/build_win_minimal.ps1` 同批产出 `release_assets\` 独立资产，模块声明 `download_file_list`（`releases/latest/download` 直链 + sha256 钉死），**选中 patchmatch 即后台下载**（`_NO_DOWNLOAD_LIST_KEYS` 摘出后，缺文件检查/选型警示/运行前警告/模型文件页全链路认领同一份声明）。
+
+**涉及文件：** `pyproject.toml`、`utils/updater.py`、`scripts/build_win_minimal.ps1`、`modules/inpaint/inpaint_patchmatch.py`、`modules/inpaint/patch_match.py`、`modules/__init__.py`、`ui/module_parse_widgets.py`、`README.md`、`README_EN.md`、`scripts/README.md`、`docs/项目概述.md`、`docs/基础速查/依赖库说明.md`、`tests/test_updater_version.py`、`tests/test_inpaint_patchmatch.py`、`tests/test_minimal_package_contract.py`
+
+**验证：** `tests/test_updater_version.py`（tag 剥离与升级路径 5 用例）新增全过；patchmatch 契约 58 passed；构建脚本 PSParser 解析通过、`tests/test_minimal_package_contract.py` 4 passed。**遗留：** 端到端真实构建 + 开箱自验 + 发版（bump/tag/挂资产/push）等用户发话。
+
+---
+
 ## 2026-09-26
 
 ### 标签待办体系重构（`ocr_review_pending` / `trans_review_pending` + `consumed_tags` 撤销一致性）+ 工作台六项扁平导航与非删除待办队列（D46/D48/D49）
@@ -82,7 +92,7 @@
 
 **涉及文件：** `launch.py`、`launch.bat`、`utils/logger.py`、`utils/network_mirrors.py`、`utils/core_requirements.py`、`utils/config.py`、`utils/shared.py`、`modules/base.py`、`modules/inpaint/patch_match.py`、`modules/inpaint/inpaint_patchmatch.py`、`ui/module_parse_widgets.py`、`ui/run_pipeline_dialog.py`、`ui/model_downloads.py`、`utils/package_installer.py`、`scripts/build_win_minimal.ps1`、`scripts/README.md`、`README.md`、`README_EN.md`、`docs/基础速查/依赖库说明.md`、`docs/项目概述.md`
 
-**验证：** `scripts/verify.py` 全绿；pytest 1474 passed / 1 skipped。**端到端真实构建未跑**（需干净树 + 网络下载），发版前按 `scripts/README.md`「精简包发行」流程执行。
+**验证：** `scripts/verify.py` 全绿；pytest 1474 passed / 1 skipped。**端到端真实构建未跑**（需干净树 + 网络下载），发版前按 `scripts/README.md`「发版包发行」流程执行（该节 2026-09-27 已改口径：发行物＝约 30 MB 引导小包，预装式不再发行）。
 
 ---
 

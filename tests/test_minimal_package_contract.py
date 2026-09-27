@@ -4,7 +4,7 @@
 维护的：模型后端拆进 `pyproject.toml` 的 optional-dependencies 之后，两者之间没有
 任何机制保证同步。往 pyproject 里新加一个重后端（或换名字）而忘了同步构建脚本的
 清单，构建校验不会失败——残包会被当成精简包发出去，而且没有任何报错线索。
-这里把这层同步钉住（`scripts/README.md`「精简包发行」一节是同一份口径的文字版）。
+这里把这层同步钉住（`scripts/README.md`「发版包发行」一节是同一份口径的文字版）。
 
 Run:
     ./ballontrans_pylibs_win/python.exe -m pytest tests/test_minimal_package_contract.py -v

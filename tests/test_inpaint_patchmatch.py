@@ -1,9 +1,9 @@
-"""PatchMatch 修复器在精简包里的可用性契约（阶段三回归）。
+"""PatchMatch 修复器的可用性契约（阶段三回归 + 2026-09-27 发行形态改版）。
 
-精简包的正式口径：预装 `requirements.txt` 基本依赖，**不预装** torch /
-ultralytics / onnxruntime / onnxocr / transformers / numba，也**不带模型权重**；
-`data/libs/` 下的两个原生 DLL 随包携带——PatchMatch 是随包的基础能力，精简包
-用户必须能从 GUI 直接选到它。
+发行口径（2026-09-27）：发版包＝源码 + 嵌入式 Python 的小包（2-30MB），依赖
+由首启现场安装；`data/libs/` 下的两个原生 DLL 以 Release 资产分发、**不进
+小包**，缺失时选中 patchmatch 模块即后台下载——PatchMatch 仍必须能从 GUI
+直接选到它，且缺文件必须被静态判出来（驱动选型警示与运行前警告）。
 
 本文件钉住四件事：
 
@@ -13,8 +13,10 @@ ultralytics / onnxruntime / onnxocr / transformers / numba，也**不带模型�
    （``launch.py::_ensure_module_fallback`` 的"没 torch 就换 none"必须豁免它）；
 3. **缺原生附件可读失败**：不抛裸 OSError——查得到可读原因，真跑时抛
    ``PatchMatchUnavailableError``；只查文件时不加载 DLL；
-4. **不进模型下载清单**，但保持逐块能力（``ui/batch_inpaint.py`` 的载体，
-   见 tests/test_batch_simple_inpaint.py::PatchmatchCarrierTest）。
+4. **原生库走模型下载基建**：声明进 ``GET_MODEL_PACKAGES``、缺文件检查认它
+   （选中即 ``ui/model_downloads.py`` 后台下载），不带 pip 依赖；并保持逐块
+   能力（``ui/batch_inpaint.py`` 的载体，见
+   tests/test_batch_simple_inpaint.py::PatchmatchCarrierTest）。
 
 Run:
     ./ballontrans_pylibs_win/python.exe -m pytest tests/test_inpaint_patchmatch.py -q
@@ -275,7 +277,7 @@ class NativeLibraryAvailabilityTest(unittest.TestCase):
                     np.zeros((8, 8, 3), np.uint8), np.zeros((8, 8), np.uint8)
                 )
         self.assertIn(missing, str(ctx.exception))
-        self.assertIn("re-extract", str(ctx.exception))
+        self.assertIn("Settings → Models → Model Files", str(ctx.exception))
         self.assertIsInstance(ctx.exception, RuntimeError)
         self.assertNotIsInstance(ctx.exception, OSError)
 
@@ -333,8 +335,8 @@ class RealNativeInpaintTest(unittest.TestCase):
         self.assertGreater(int(out[24, 24].min()), 0)
 
 
-class NotInModelDownloadListTest(unittest.TestCase):
-    """不进模型下载清单：它没有权重、没有 pip 依赖，也不是 native 附件下载项。"""
+class NativeAssetsDownloadableTest(unittest.TestCase):
+    """原生库走模型下载基建：进清单、缺文件判得出、无 pip 依赖。"""
 
     @classmethod
     def setUpClass(cls):
@@ -343,22 +345,52 @@ class NotInModelDownloadListTest(unittest.TestCase):
         modules.init_module_registries()
         cls.modules = modules
 
-    def test_absent_from_model_packages(self):
-        keys = [entry["key"] for entry in self.modules.GET_MODEL_PACKAGES()]
-        self.assertNotIn("patchmatch", keys)
-
-    def test_no_requirements_entry(self):
-        self.assertIsNone(
-            self.modules.GET_MODULE_REQUIREMENTS("inpainter", "patchmatch")
+    def test_declared_in_model_packages(self):
+        entries = {e["key"]: e for e in self.modules.GET_MODEL_PACKAGES()}
+        self.assertIn("patchmatch", entries)
+        info = entries["patchmatch"]
+        # 文件型包（无 dir）：删除只按白名单走，绝不按目录删
+        self.assertIsNone(info["package_dir"])
+        self.assertEqual(
+            info["files"],
+            [
+                "data/libs/patchmatch_inpaint.dll",
+                "data/libs/opencv_world455.dll",
+            ],
         )
+        self.assertFalse(info["requires_gpu"])
 
-    def test_no_declared_packages_and_no_missing_files(self):
+    def test_requirements_expose_release_asset_urls(self):
+        info = self.modules.GET_MODULE_REQUIREMENTS("inpainter", "patchmatch")
+        self.assertIsNotNone(info)
+        self.assertEqual(len(info["download_file_list"]), 2)
+        for entry in info["download_file_list"]:
+            self.assertTrue(
+                entry["url"].startswith(
+                    "https://github.com/fclx512/BallonsTranslator-lite/"
+                    "releases/latest/download/"
+                ),
+                entry["url"],
+            )
+            self.assertTrue(entry["files"].startswith("data/libs/"), entry["files"])
+            # 钉死哈希：资产内容漂移必须被发现并强制重下
+            self.assertRegex(entry["sha256_pre_calculated"], r"^[0-9a-f]{64}$")
+
+    def test_missing_files_reported_when_absent(self):
+        """文件不在盘上必须判得出——选型警示、运行前警告、选中即下载都靠它。"""
+        from utils import model_files
+
+        with mock.patch.object(
+            model_files, "missing_declared_files", return_value=["data/libs/x.dll"]
+        ):
+            missing = self.modules.GET_MISSING_MODEL_FILES(
+                "inpainter", "patchmatch"
+            )
+        self.assertEqual(missing, ["data/libs/x.dll"])
+
+    def test_no_pip_dependencies(self):
         self.assertEqual(
             self.modules.GET_MISSING_PACKAGES("inpainter", "patchmatch"), []
-        )
-        # 原生附件不是"缺的模型文件"，别让它落进运行前的"去下载"提示
-        self.assertIsNone(
-            self.modules.GET_MISSING_MODEL_FILES("inpainter", "patchmatch")
         )
 
     def test_block_capable_for_batch_simple_inpaint(self):

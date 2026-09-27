@@ -16,16 +16,16 @@ BallonsTranslator 的分支版漫画/图片翻译工具。上游的五阶段管�
 
 - **操作系统**：Windows 10+ x64（macOS 见下文，其他平台未验证）
 - **显卡**：可选。NVIDIA 显卡可加速（见 [GPU 加速](#gpu-加速)），纯 CPU 可运行
-- **磁盘空间**：精简包约 **550–600 MB**（嵌入式 Python + 基本依赖 + PatchMatch 原生库，不含模型）；网盘完整包约 **1.7–2.1 GB**（另含模型与模型后端）；启用 GPU 加速再加约 **2.2 GB**（CUDA PyTorch ~2 GB + onnxruntime-gpu ~214 MB）
+- **磁盘空间**：发版包约 **30 MB**（引导小包；首启安装依赖后本机环境约 **600 MB**，不含模型）；网盘完整包约 **1.7–2.1 GB**（另含模型与模型后端）；启用 GPU 加速再加约 **2.2 GB**（CUDA PyTorch ~2 GB + onnxruntime-gpu ~214 MB）
 - **VC++ 运行时**：[VC++ Redistributable 2015-2022 x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)（嵌入式 Python 依赖它）
 
 ## 快速开始
 
-### 精简包（推荐）
+### 发版包（推荐）
 
-精简包是“基本依赖已安装、模型按需补全”的引导包，约 **550–600 MB**（估算，以实际产物为准）。它不预装 torch、YOLO/ONNX/Transformers 等模型后端，也不带模型权重；PatchMatch 原生库随包提供，可直接用于低占用的简单背景修复。解压到任意目录后运行 `launch.bat`，之后在 GUI 的模型文件页按需下载模型后端和权重。
+发版包是只含**基本启动环境**的引导小包（源码 + 嵌入式 Python，压缩后约 30 MB）：依赖不预装，解压后运行 `launch.bat` 会自动安装 `requirements.txt` 基本依赖并重启，装完后的本机环境约 600 MB。它不预装 torch、YOLO/ONNX/Transformers 等模型后端，也不带模型权重；PatchMatch 的两个原生库（约 53 MB）首次选中该修复器时在后台自动下载。之后可随时在 GUI 的模型文件页按需下载模型后端和权重。
 
-> 精简包**尚未正式发布**（构建与开箱验收还在进行中），当前请先用下方一键完整包或源码运行；构建方式见 `scripts/build_win_minimal.ps1` 与 `scripts/README.md`「精简包发行」一节。
+> 发版包**尚未正式发布**（首次构建与开箱验收还在进行中），当前请先用下方一键完整包或源码运行；构建方式见 `scripts/build_win_minimal.ps1` 与 `scripts/README.md`「发版包发行」一节。
 
 ### 一键完整包（离线兜底）
 

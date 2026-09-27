@@ -587,11 +587,11 @@ class BatchSimpleInpaintTest(unittest.TestCase):
 class PatchmatchCarrierTest(unittest.TestCase):
     """PatchMatch 当 ``BatchSimpleInpaint`` 的载体（阶段三第 4 条）。
 
-    PatchMatch 是精简包随包携带的非模型修复器，逐块能力继承基类，所以批量
+    PatchMatch 是免模型的非学习式修复器，逐块能力继承基类，所以批量
     「简单背景」任务可以直接拿它当引擎：只走判据 + 纯色覆盖
     （``only_simple=True``），**简单块纯色覆盖、复杂块原样不动、不加载模型**。
-    原生 DLL 同样不该被碰——附件缺失（源码运行没备 data/libs、或精简包被解压
-    坏）时这个批量任务照样能给简单背景上色。
+    原生 DLL 同样不该被碰——附件缺失（data/libs 没备齐、或 Release 资产还没
+    下载完）时这个批量任务照样能给简单背景上色。
     """
 
     def setUp(self):

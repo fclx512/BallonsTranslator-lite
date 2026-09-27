@@ -52,8 +52,9 @@ class PatchMatchUnavailableError(RuntimeError):
     """
 
 
-#: 原生库目录（仓库相对路径）。精简包随包携带这几个文件；目录不入 git
-#: （``*.dll`` 在 .gitignore 内），源码运行需自备。
+#: 原生库目录（仓库相对路径）。目录不入 git（``*.dll`` 在 .gitignore 内）；
+#: Windows 两个文件以 Release 资产分发，缺失时选中 patchmatch 模块即后台下载
+#: （声明见 ``modules/inpaint/inpaint_patchmatch.py::download_file_list``）。
 LIB_DIR = 'data/libs'
 
 #: 各平台的 patchmatch 原生库文件名（其余平台按 Linux 名）
@@ -63,7 +64,7 @@ _PATCHMATCH_FILENAMES = {
 }
 _FALLBACK_PATCHMATCH_FILENAME = 'libpatchmatch.so'
 
-#: Windows 的 patchmatch DLL 依赖它：实测缺了就直接加载失败。精简包两个一起带。
+#: Windows 的 patchmatch DLL 依赖它：实测缺了就直接加载失败，成对分发、成对下载。
 _WINDOWS_OPENCV_WORLD = 'opencv_world455.dll'
 
 #: 已加载的原生库句柄（惰性填充；None＝还没加载，或上次加载失败）
@@ -109,16 +110,16 @@ def _missing_files() -> List[str]:
 
 def _missing_message(missing: List[str]) -> str:
     return (
-        'PatchMatch native files are missing: %s. They ship inside the '
-        'minimal package (data/libs) and are not tracked by git - re-extract '
-        'the package, or copy its data/libs folder back.' % ', '.join(missing)
+        'PatchMatch native files are missing: %s. They download automatically '
+        'when the PatchMatch module is selected; you can also fetch them in '
+        'Settings → Models → Model Files.' % ', '.join(missing)
     )
 
 
 def _load_failed_message(exc: OSError) -> str:
     return (
-        'PatchMatch native library failed to load: %s (%s). Re-extract the '
-        'minimal package so that %s are the packaged files.'
+        'PatchMatch native library failed to load: %s (%s). Re-download the '
+        'native files in Settings → Models → Model Files (expected: %s).'
         % (patchmatch_filename(), exc, ', '.join(required_native_files()))
     )
 
@@ -146,7 +147,7 @@ def load_native_lib() -> ctypes.CDLL:
     """取原生库句柄（幂等，首次调用时加载并声明函数原型）。
 
     不可用时抛 :class:`PatchMatchUnavailableError`，消息即
-    :func:`native_lib_status` 的原因——用户需要的是"重新解压精简包"，不是
+    :func:`native_lib_status` 的原因——用户需要的是"去哪儿补齐"的指路，不是
     ``Could not find module ...`` 这种加载器原话。
     """
     ok, reason = native_lib_status(try_load=True)

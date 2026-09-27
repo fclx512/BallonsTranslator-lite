@@ -42,17 +42,18 @@ def GET_VALID_OCR() -> list:
 
 # 不进选型界面（运行对话框 / 底部栏 / 设置页）的修复器，注册保留：
 # LLMInpaint 只在模块参数页配置、由画布的「AI 修图」工具触发。
-# patchmatch **不再隐藏**：它是精简包随包携带的非模型基础能力（不需要 torch、
-# 无权重），精简包用户得能从 GUI 直接选到它——隐藏语义只留给 LLM 修复器。
+# patchmatch **不再隐藏**：它是非模型基础能力（不需要 torch、无权重），用户
+# 得能从 GUI 直接选到它——隐藏语义只留给 LLM 修复器。
 HIDDEN_INPAINTERS = frozenset({"LLMInpaint"})
 
-# 模型文件与注册名解耦的模块：none 系无需模型；LLM 系依赖 Profile；
-# patchmatch 走随包携带的原生 DLL（不是要从网络下载的权重，见
-# modules/inpaint/patch_match.py）。（ysgyolo 有自己的 download_file_list，
-# 但落盘文件名允许飘，故 GET_MISSING_MODEL_FILES 对它单独按通配判断。）
+# 模型文件与注册名解耦的模块：none 系无需模型；LLM 系依赖 Profile。
+# patchmatch 已移出本清单：它的原生 DLL 改由 Release 资产分发、选中模块即
+# 后台下载（声明见 modules/inpaint/inpaint_patchmatch.py::download_file_list）。
+# （ysgyolo 有自己的 download_file_list，但落盘文件名允许飘，故
+# GET_MISSING_MODEL_FILES 对它单独按通配判断。）
 _NO_DOWNLOAD_LIST_KEYS = frozenset(
     {"none", "none_ocr", "None", "llm_ocr", "LLMInpaint",
-     "LLM_API_Translator", "LLM_Agent_Translator", "patchmatch"}
+     "LLM_API_Translator", "LLM_Agent_Translator"}
 )
 
 

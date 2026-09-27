@@ -1,17 +1,26 @@
 ﻿<#
 .SYNOPSIS
-    构建 BallonsTranslator-lite 的 Windows 精简包（lite package）。
+    构建 BallonsTranslator-lite 的 Windows 发版小包（bootstrap package）与
+    PatchMatch 原生库的 Release 资产。
 
 .DESCRIPTION
-    产物是一个解压即用的自包含 ZIP（压缩后约 550–600 MB，实际以产物为准）：
+    主产物是一个解压即用的**引导小包** ZIP（压缩后约 30 MB，与上游
+    `Ballonstranslator_win_minium.zip` 同量级，实际以产物为准）：
 
       - `git ls-files` 跟踪的源码（含 docs/tests/scripts——**初版刻意不裁剪**，
         保持与 updater/manifest 的受管文件范围一致，否则增量更新会把砍掉的
         开发文件重新拉回来）；
-      - 嵌入式 Python（版本可参数化）+ pip + **固定版本**的 uv.exe；
-      - 用 staging 里的 python/uv 预装 `requirements.txt` 的基本依赖；
-      - `data/libs/patchmatch_inpaint.dll` + `data/libs/opencv_world455.dll`：
-        PatchMatch 是低占用、非模型的基础修复能力，精简包必须开箱可用。
+      - 嵌入式 Python（版本可参数化）+ pip + **固定版本**的 uv.exe。
+
+    **刻意不预装依赖**：`requirements.txt` 由首次启动现场安装
+    （`launch.bat` → `utils/core_requirements.py::ensure_core_requirements`，
+    装完自动重启）。装完依赖后的本机环境（约 600 MB）只是**运行状态**——
+    俗称的「精简包」——**不作为发行物分发**。
+
+    同批产出两个**独立 Release 资产**（`release_assets\*.dll`，合计约 53 MB，
+    不进 ZIP，否则小包体积失控）：PatchMatch 的两个原生库改由 Release 资产
+    分发，运行时选中 patchmatch 模块即后台下载
+    （`modules/inpaint/inpaint_patchmatch.py::download_file_list`）。
 
     刻意不入包（也不允许混进来，脚本会硬校验）：
 
@@ -26,11 +35,12 @@
     「Models → 模型文件」（`ui/model_downloads.py` 后台下载）。
     ~1.7 GB 的预装完整包继续留在网盘，作为没有可用网络时的离线兜底。
 
-    发版顺序：提交 → `scripts/generate_manifest.py` → 打 tag → 本脚本 →
-    上传 ZIP。默认（发行门禁）要求工作区干净；`manifest.json` 与
+    发版顺序：提交 → `scripts/generate_manifest.py` → 打 tag（`lite-vX.Y.Z`，
+    与上游 `v1.x.x` 区分）→ 本脚本 → 上传 ZIP + `release_assets\` 下的两个
+    DLL 资产。默认（发行门禁）要求工作区干净；`manifest.json` 与
     `pyproject.toml` 的版本必须一致——不一致直接失败，不是提醒。
     `-AllowDirtyWorkTree` 只放宽「工作区干净 + manifest 覆盖/哈希」这两项
-    发行门禁供日常调试；版本一致性、原生资产、精简包成分校验不受它影响。
+    发行门禁供日常调试；版本一致性、原生资产、成分校验不受它影响。
 
 .PARAMETER StaticCheck
     只跑不依赖网络与产物的校验（源一致性、版本钉定、原生资产），并打印
@@ -46,8 +56,8 @@
     # 离线预检（不下载、不产出）
     powershell -ExecutionPolicy Bypass -File scripts\build_win_minimal.ps1 -StaticCheck -AllowDirtyWorkTree
 
-    # 内网/镜像构建：把三个下载指到本地归档或镜像
-    powershell -ExecutionPolicy Bypass -File scripts\build_win_minimal.ps1 -IndexUrl https://mirror.example/simple -UvUrl D:\archives\uv-0.12.19.zip
+    # 内网/镜像构建：把下载指到本地归档或镜像
+    powershell -ExecutionPolicy Bypass -File scripts\build_win_minimal.ps1 -UvUrl D:\archives\uv-0.12.19.zip
 #>
 param(
     # 必须是有官方 embeddable 构建的版本（python.org）。
@@ -66,14 +76,12 @@ param(
     [string]$PythonZipSha256 = "",
     [string]$UvZipSha256 = "",
 
-    # 装依赖时用的 pip 源（如国内镜像）。留空用官方源。
-    [string]$IndexUrl = "",
-
     # pip 引导脚本：嵌入式 Python 不含 ensurepip，必须外部引导。
     [string]$GetPipUrl = "https://bootstrap.pypa.io/get-pip.py",
 
     # 原生资产。两个 DLL 都被 `.gitignore` 忽略（`*.dll`），所以它们只能是
-    # 显式构建输入，不能靠 git ls-files 带进来；缺任一文件直接失败。
+    # 显式构建输入，不能靠 git ls-files 带进来；缺任一文件直接失败——
+    # 它们要作为独立 Release 资产产出（运行时按需下载）。
     [string]$PatchMatchDll = "",
     [string]$OpencvWorldDll = "",
 
@@ -81,7 +89,7 @@ param(
     [string]$Output = "",
 
     # 调试用：放宽发行门禁（工作区干净 + manifest 覆盖/哈希）。版本一致性、
-    # 精简包成分、原生资产校验仍然强制。
+    # 成分、原生资产校验仍然强制。
     [switch]$AllowDirtyWorkTree,
 
     # 只做离线校验并打印计划成分，不下载、不产出。
@@ -92,16 +100,18 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$TotalSteps = 11
+$TotalSteps = 10
 
 # ---------------------------------------------------------------------------
-# 精简包的两份清单：允许出现的 site-packages，与绝不允许出现的东西
+# 绝不允许出现的东西：重依赖（模型后端 + 加速）与模型权重
 # ---------------------------------------------------------------------------
 
-# 不允许进入精简包的重依赖（模型后端 + 加速）。与 pyproject.toml
+# 不允许进入小包的重依赖（模型后端 + 加速）。与 pyproject.toml
 # [project.optional-dependencies] 的 gpu / acc / onnx 三组 + onnxocr（由模块
 # requires_packages 安装、不在 pyproject 里）保持同步：
 # tests/test_minimal_package_contract.py 会核对这份清单没有漏项。
+# 小包不预装依赖，这份清单现在是"结构层兜底"（防将来有人重新加预装步骤），
+# 但禁用清单本身与 pyproject 的同步契约仍然有效。
 # 按前缀匹配（torch 同时盖住 torchvision），大小写与 -/_ 差异都归一化。
 $ForbiddenPackages = @(
     "torch",
@@ -122,17 +132,6 @@ $WeightExtensions = @(
     ".pdparams", ".bin"
 )
 
-# 包内必须能找到的发行版（按 `<name>-<version>.dist-info/METADATA` 匹配，避免
-# 依赖某个 wheel 的模块目录布局）。核心 import 的权威检查在 staging 上跑
-# utils/core_requirements.py::check_core_imports；这份清单是 zip 结构层的复核。
-$ExpectedDistInfos = @(
-    "numpy", "pillow", "pillow_jxl_plugin", "opencv_python", "pyqt6",
-    "pyqt6_qt6", "shapely", "pyclipper", "pydantic", "httpx", "requests",
-    "pyyaml", "pywin32", "packaging", "py7zr", "openai", "spacy_pkuseg",
-    "tqdm", "qtpy", "fonttools", "einops", "natsort", "networkx", "colorama",
-    "termcolor", "opencc_python_reimplemented"
-)
-
 # ---------------------------------------------------------------------------
 # 路径
 # ---------------------------------------------------------------------------
@@ -141,10 +140,10 @@ $DestName = "BallonsTranslator-lite"
 $BuildDir = Join-Path $RepoRoot "build_temp"
 $DestDir = Join-Path $BuildDir $DestName
 $PyLibsDir = Join-Path $DestDir "ballontrans_pylibs_win"
-$SitePackages = Join-Path $PyLibsDir "Lib\site-packages"
 $RequirementsFile = Join-Path $RepoRoot "requirements.txt"
 $PyprojectFile = Join-Path $RepoRoot "pyproject.toml"
 $ManifestFile = Join-Path $RepoRoot "manifest.json"
+$ReleaseAssetsDir = Join-Path $RepoRoot "release_assets"
 
 if (-not $Output) {
     $Output = Join-Path $RepoRoot "${DestName}_win_min.zip"
@@ -164,8 +163,9 @@ if (-not $UvUrl) {
     }
     $UvUrl = "https://github.com/astral-sh/uv/releases/download/$UvVersion/uv-x86_64-pc-windows-msvc.zip"
 }
-# 期望随包携带的两个原生资产（名字必须与 data/libs 下的真名一致，否则
-# 运行时 modules/inpaint/patch_match.py 按 'data/libs/<name>' 找不到）。
+# 两个原生 DLL 作为**独立 Release 资产**产出到 release_assets\（资产名＝文件名，
+# 运行时按 releases/latest/download/<name> 直链下载）。它们不进 ZIP——53 MB 的
+# opencv_world 会把 30 MB 的小包顶爆。
 $NativeAssets = @(
     @{ Name = "patchmatch_inpaint.dll"; Path = $PatchMatchDll },
     @{ Name = "opencv_world455.dll"; Path = $OpencvWorldDll }
@@ -280,9 +280,10 @@ function Format-Size {
 }
 
 function Assert-PackageArchive {
-    # 打开产物逐条核对——"看起来打包成功"不算过：python.exe/pip/uv.exe/基本依赖
-    # 是否在位、两个原生 DLL 的条目与大小、以及精简包成分（模型后端/numba、权重、
-    # config.json、logs 一个都不许有）都在这里兜。
+    # 打开产物逐条核对——"看起来打包成功"不算过：python.exe/pip/uv.exe 是否
+    # 在位、成分（模型后端/numba、权重、config.json、logs 一个都不许有）都在
+    # 这里兜。依赖按设计**不预装**，核心 import 不在结构层复核——首启
+    # utils/core_requirements.py::ensure_core_requirements 才是权威检查。
     param([string]$ArchivePath)
 
     $SitePkgsEntryPrefix = "$DestName/ballontrans_pylibs_win/Lib/site-packages/"
@@ -312,23 +313,12 @@ function Assert-PackageArchive {
         }
     }
 
-    # 两个原生 DLL：条目存在 + 大小与源文件完全一致。
+    # 原生 DLL 不在包里（独立 Release 资产另行上传）——误把它们打进 ZIP 时
+    # 体积会暴增，这里按 data/libs 条目拦一道。
     foreach ($Asset in $NativeAssets) {
         $EntryName = "$DestName/data/libs/$($Asset.Name)"
-        if (-not $Entries.ContainsKey($EntryName)) {
-            throw "产物里缺少原生资产：$EntryName"
-        }
-        if ($Entries[$EntryName].Length -ne $Asset.Size) {
-            throw "产物里的 $($Asset.Name) 大小不符：$($Entries[$EntryName].Length) 字节，源文件 $($Asset.Size) 字节。"
-        }
-    }
-
-    # 基本依赖在位（按 dist-info 复核，避免绑死某个 wheel 的模块布局；核心
-    # import 的权威检查已在 staging 上跑过 check_core_imports）。
-    foreach ($DistName in $ExpectedDistInfos) {
-        $Hit = $Entries.Keys | Where-Object { $_ -like "$SitePkgsEntryPrefix$DistName-*.dist-info/METADATA" }
-        if (-not $Hit) {
-            throw "产物 site-packages 里找不到预期的包：$DistName（requirements.txt 的基本依赖没装全）。"
+        if ($Entries.ContainsKey($EntryName)) {
+            throw "产物里混进了原生资产：$EntryName（应作为独立 Release 资产上传，不进 ZIP）。"
         }
     }
 
@@ -354,7 +344,7 @@ function Assert-PackageArchive {
     }
     if ($ForbiddenEntryHits.Count -gt 0) {
         $ForbiddenEntryHits | Select-Object -First 10 | ForEach-Object { Write-Host "      $_" }
-        throw "产物里混进了 $($ForbiddenEntryHits.Count) 个模型后端/numba 条目——这不是精简包，是残包。"
+        throw "产物里混进了 $($ForbiddenEntryHits.Count) 个模型后端/numba 条目——这不是小包，是残包。"
     }
 
     # 密钥与运行时垃圾：config.json（API 密钥）、logs/、模型权重。
@@ -468,12 +458,13 @@ if ($AllowDirtyWorkTree) {
     Write-Host "      manifest 覆盖 $($ManifestFiles.Count) 个跟踪文件且哈希全部一致"
 }
 
-# —— 原生资产（无条件硬校验：缺任一 DLL 就拒绝产出"看着完整但 PatchMatch 不可用"的包）——
+# —— 原生资产（无条件硬校验：两个 DLL 要作为独立 Release 资产发布，缺一个就
+#    拒绝产出——否则 PatchMatch 的按需下载会指向不存在的资产）——
 foreach ($Asset in $NativeAssets) {
     if (-not (Test-Path -LiteralPath $Asset.Path -PathType Leaf)) {
         throw @"
 原生资产缺失：$($Asset.Path)
-  精简包必须随包携带 data/libs 下的两个 DLL（PatchMatch 是基础修复能力）。
+  这两个 DLL 要作为 Release 资产发布（PatchMatch 选中时按需下载）。
   源码运行/重新构建时请先从网盘的一键包中取回 data/libs/ 下的这几个文件。
   也可以用 -PatchMatchDll / -OpencvWorldDll 指到别处的副本。
 "@
@@ -483,7 +474,7 @@ foreach ($Asset in $NativeAssets) {
         throw "原生资产为空文件：$($Asset.Path)"
     }
     if ((Split-Path -Leaf $Asset.Path) -ne $Asset.Name) {
-        throw "原生资产文件名不符：期望 $($Asset.Name)，实际 $(Split-Path -Leaf $Asset.Path)（运行时要按 data/libs/$($Asset.Name) 加载）。"
+        throw "原生资产文件名不符：期望 $($Asset.Name)，实际 $(Split-Path -Leaf $Asset.Path)（资产名必须＝文件名，运行时按 releases/latest/download/$($Asset.Name) 下载）。"
     }
     $Asset.Size = $Item.Length
     $Asset.Sha256 = (Get-FileHash -LiteralPath $Asset.Path -Algorithm SHA256).Hash.ToLower()
@@ -497,12 +488,11 @@ if ($StaticCheck) {
     Write-Host "=== 离线预检通过（-StaticCheck，未下载、未产出）==="
     Write-Host "计划打包成分："
     Write-Host "  源码：(git ls-files) $($TrackedFiles.Count) 个跟踪文件（含 docs/tests/scripts）"
-    Write-Host "  运行时：嵌入式 Python $PythonVersion + pip + uv $UvVersion"
-    Write-Host "  依赖：requirements.txt 预装到 ballontrans_pylibs_win\Lib\site-packages"
-    Write-Host "  原生：data/libs/patchmatch_inpaint.dll、data/libs/opencv_world455.dll"
+    Write-Host "  运行时：嵌入式 Python $PythonVersion + pip + uv $UvVersion（依赖不预装）"
+    Write-Host "  资产：release_assets\patchmatch_inpaint.dll、release_assets\opencv_world455.dll（独立上传，不进 ZIP）"
     Write-Host "  排除：$($ForbiddenPackages -join ' / ')、data/models 权重、config/config.json、logs/"
-    Write-Host "  预期体积：约 550–600 MB（压缩后；实际以产物为准）"
-    Write-Host "  模型后端与权重由 GUI 按需补全；PatchMatch 是随包的基础能力。"
+    Write-Host "  预期体积：ZIP 约 30 MB（与上游 33 MB 同量级；实际以产物为准）"
+    Write-Host "  依赖首启现装；PatchMatch 原生库由选中模块时后台下载。"
     Write-Host ""
     Write-Host "正式构建请去掉 -StaticCheck（默认发行门禁要求工作区干净）。"
     foreach ($Scratch in @("git_out.txt", "git_err.txt")) {
@@ -521,6 +511,9 @@ if (Test-Path -LiteralPath $BuildDir) {
 }
 if (Test-Path -LiteralPath $Output) {
     Remove-Item -Force $Output
+}
+if (Test-Path -LiteralPath $ReleaseAssetsDir) {
+    Remove-Item -Recurse -Force $ReleaseAssetsDir
 }
 $OutputParent = Split-Path -Parent $Output
 if ($OutputParent -and -not (Test-Path -LiteralPath $OutputParent)) {
@@ -558,14 +551,17 @@ if ($Missing.Count -gt 0) {
 }
 
 # ---------------------------------------------------------------------------
-# 4. 原生资产：PatchMatch + OpenCV world
+# 4. 原生资产：两个 DLL 作为独立 Release 资产产出（不进 ZIP）
 # ---------------------------------------------------------------------------
-Step 4 "放入原生资产 data/libs/"
-$DllDestDir = Join-Path $DestDir "data\libs"
-New-Item -ItemType Directory -Force -Path $DllDestDir | Out-Null
+Step 4 "产出独立 Release 资产 release_assets\"
+New-Item -ItemType Directory -Force -Path $ReleaseAssetsDir | Out-Null
 foreach ($Asset in $NativeAssets) {
-    Copy-Item -LiteralPath $Asset.Path -Destination (Join-Path $DllDestDir $Asset.Name) -Force
-    Write-Host "      data/libs/$($Asset.Name)  $(Format-Size $Asset.Size)"
+    Copy-Item -LiteralPath $Asset.Path -Destination (Join-Path $ReleaseAssetsDir $Asset.Name) -Force
+    $CopiedAsset = Get-Item -LiteralPath (Join-Path $ReleaseAssetsDir $Asset.Name)
+    if ($CopiedAsset.Length -ne $Asset.Size) {
+        throw "资产拷贝后大小不符：$($Asset.Name)"
+    }
+    Write-Host "      release_assets\$($Asset.Name)  $(Format-Size $Asset.Size)"
 }
 
 # ---------------------------------------------------------------------------
@@ -650,98 +646,19 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # ---------------------------------------------------------------------------
-# 9. 用 staging 的 uv/pip 预装 requirements.txt
+# 9. staging 成分校验（依赖刻意不预装——只查"不该有的东西"与文件完整性）
 # ---------------------------------------------------------------------------
-Step 9 "安装 requirements.txt 到 staging 环境"
-# 绝不允许构建机上的用户级 site-packages 混进来：否则"核心 import 检查"会在
-# 构建机上通过，而包里其实缺包。
-$env:PYTHONNOUSERSITE = "1"
-# uv 只许用 staging 的解释器，不许自己去下 Python。
-$env:UV_PYTHON_DOWNLOADS = "never"
+Step 9 "校验 staging 成分（禁用包 / 权重 / 密钥 / 日志 / 文件计数）"
 
-# uv 与 pip 的镜像参数拼写不同，不能互相抄：uv 只认 --default-index
-# （--index-url 在 0.12 已标记 deprecated），pip 只认 --index-url。
-# uv 也不接受 pip 的 --no-warn-script-location（0.12.19 实测报
-# "unexpected argument"）——把 pip 的参数抄给 uv 会让主装路静默退化成 pip。
-$UvIndexArgs = @()
-$PipIndexArgs = @()
-if ($IndexUrl) {
-    $UvIndexArgs = @("--default-index", $IndexUrl)
-    $PipIndexArgs = @("--index-url", $IndexUrl)
-    Write-Host "      使用 pip 源：$IndexUrl"
-}
-
-$Installed = $false
-$UvInstallArgs = @("pip", "install", "--python", $PyExe, "-r", $RequirementsFile) + $UvIndexArgs
-Write-Host "      uv pip install --python <staging python> -r requirements.txt"
-& $UvExe @UvInstallArgs
-if ($LASTEXITCODE -eq 0) {
-    $Installed = $true
-} else {
-    Write-Warning "uv 安装失败（exit $LASTEXITCODE），回退到 staging 自带的 pip（结果等价，只是慢一些）。"
-}
-if (-not $Installed) {
-    $PipInstallArgs = @("-m", "pip", "install", "-r", $RequirementsFile, "--prefer-binary", "--disable-pip-version-check", "--no-warn-script-location") + $PipIndexArgs
-    & $PyExe @PipInstallArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "pip install -r requirements.txt 失败（exit $LASTEXITCODE）。"
-    }
-}
-
-if (-not (Test-Path -LiteralPath $SitePackages)) {
-    throw "安装后仍没有 $SitePackages —— uv/pip 没有装进 staging 环境。"
-}
-$SitePackageCount = @(Get-ChildItem -LiteralPath $SitePackages -Directory -Force).Count
-if ($SitePackageCount -lt 10) {
-    throw "site-packages 里只有 $SitePackageCount 个目录，依赖安装明显没成功。"
-}
-Write-Host "      site-packages：$SitePackageCount 个目录，$(Format-Size ((Get-ChildItem -LiteralPath $SitePackages -File -Recurse -Force | Measure-Object -Property Length -Sum).Sum))"
-
-# ---------------------------------------------------------------------------
-# 10. staging 校验：核心 import + 精简包成分
-# ---------------------------------------------------------------------------
-Step 10 "校验 staging 环境（核心 import + 精简包成分）"
-
-# 核心 import 的权威判据来自仓库自身：直接调
-# utils/core_requirements.py::check_core_imports，避免在这里复制一份探针清单。
-$VerifyScript = Join-Path $BuildDir "verify_staged_env.py"
-Set-Content -LiteralPath $VerifyScript -Encoding UTF8 -Value @'
-import sys
-
-repo_root, site_packages = sys.argv[1], sys.argv[2]
-# Mirror launch.py at runtime: the embedded interpreter's own site-packages must
-# be importable even if site.main() alone did not add it.
-if site_packages not in sys.path:
-    sys.path.append(site_packages)
-sys.path.insert(0, repo_root)
-
-from utils.core_requirements import check_core_imports
-
-failures = check_core_imports()
-if failures:
-    print("staged environment is missing required packages:")
-    for line in failures:
-        print(line)
-    sys.exit(1)
-print("core imports OK")
-'@
-& $PyExe $VerifyScript $RepoRoot $SitePackages
-if ($LASTEXITCODE -ne 0) {
-    throw @"
-staging 环境的核心 import 校验未通过——精简包会带着缺包发布。
-  上一条命令列出了缺哪些包：requirements.txt 装完后仍缺，说明依赖声明或
-  安装源有问题，修好再构建（不要靠构建机的用户级 site-packages 蒙过去）。
-"@
-}
-
-# 允许普通 site-packages，但模型后端/加速一个都不许进精简包。
-$StagedForbidden = @(Get-ForbiddenHitsInDir -Directory $SitePackages)
+# 禁用包兜底扫描：小包不预装依赖，site-packages 里只该有 pip 引导出的那几个。
+# 这条现在几乎恒绿，防的是将来有人重新加预装步骤把模型后端带进来。
+$StagedSitePackages = Join-Path $PyLibsDir "Lib\site-packages"
+$StagedForbidden = @(Get-ForbiddenHitsInDir -Directory $StagedSitePackages)
 if ($StagedForbidden.Count -gt 0) {
     throw @"
-精简包里出现了不该有的重依赖：$($StagedForbidden -join ' / ')
+小包里出现了不该有的重依赖：$($StagedForbidden -join ' / ')
   模型后端（torch/ultralytics/onnxruntime/onnxocr/transformers）与 numba 由
-  GUI 按需安装，不能预装进精简包。requirements.txt 不该把它们拉进来——
-  检查是谁的传递依赖（多半是 requirements.txt 或 extra 配置被改过）。
+  GUI 按需安装，绝不能预装进小包——检查是谁把预装步骤加回来的。
 "@
 }
 Write-Host "      没有模型后端/numba：$($ForbiddenPackages -join ' / ')"
@@ -751,7 +668,7 @@ $StagedWeights = @(Get-ChildItem -LiteralPath (Join-Path $DestDir "data\models")
     Where-Object { $WeightExtensions -contains $_.Extension.ToLower() })
 if ($StagedWeights.Count -gt 0) {
     $StagedWeights | Select-Object -First 10 | ForEach-Object { Write-Host "      权重：$($_.FullName)" }
-    throw "data/models 下出现了模型权重文件——精简包不携带任何权重。"
+    throw "data/models 下出现了模型权重文件——小包不携带任何权重。"
 }
 
 # config.json（API 密钥）与 logs 绝不能入包——这是当年删掉 build_portable.py 的原因。
@@ -766,20 +683,20 @@ if (-not (Test-Path -LiteralPath (Join-Path $DestDir "launch.py"))) {
     throw "staging 里缺 launch.py。"
 }
 
-# 每个跟踪文件都必须落地（外加两个原生资产）。这条检查最便宜，也正是当年
-# 能抓住乱码路径 bug 的那条。
+# 每个跟踪文件都必须落地（原生 DLL 不进包、由资产步骤另行产出）。这条检查
+# 最便宜，也正是当年能抓住乱码路径 bug 的那条。
 $StagedCount = @(Get-ChildItem -LiteralPath $DestDir -File -Recurse -Force |
     Where-Object { $_.FullName -notmatch '[\\/]ballontrans_pylibs_win[\\/]' }).Count
-$ExpectedCount = $TrackedFiles.Count + $NativeAssets.Count
+$ExpectedCount = $TrackedFiles.Count
 if ($StagedCount -ne $ExpectedCount) {
-    throw "staging 里有 $StagedCount 个源码/资产文件，期望 $ExpectedCount（$($TrackedFiles.Count) 个跟踪文件 + $($NativeAssets.Count) 个原生资产）——包会不完整或混入多余文件。"
+    throw "staging 里有 $StagedCount 个源码文件，期望 $ExpectedCount（$($TrackedFiles.Count) 个跟踪文件）——包会不完整或混入多余文件。"
 }
-Write-Host "      文件计数 OK：$StagedCount（$($TrackedFiles.Count) 跟踪 + $($NativeAssets.Count) 原生资产）"
+Write-Host "      文件计数 OK：$StagedCount（全部为跟踪文件）"
 
 # ---------------------------------------------------------------------------
-# 11. 打包 + 产物结构校验
+# 10. 打包 + 产物结构校验
 # ---------------------------------------------------------------------------
-Step 11 "打包并校验 ZIP 结构"
+Step 10 "打包并校验 ZIP 结构"
 Write-Host "      创建 $Output ..."
 try {
     # ZipArchiveMode 住在 System.IO.Compression 里：Windows PowerShell 5.1 上只
@@ -813,9 +730,9 @@ Assert-PackageArchive -ArchivePath $Output
 
 # —— 体积统计 ——
 $PyLibsBytes = (Get-ChildItem -LiteralPath $PyLibsDir -File -Recurse -Force | Measure-Object -Property Length -Sum).Sum
-$NativeBytes = ($NativeAssets | Measure-Object -Property Size -Sum).Sum
 $DestBytes = (Get-ChildItem -LiteralPath $DestDir -File -Recurse -Force | Measure-Object -Property Length -Sum).Sum
-$SourceBytes = $DestBytes - $PyLibsBytes - $NativeBytes
+$SourceBytes = $DestBytes - $PyLibsBytes
+$AssetsDirBytes = (Get-ChildItem -LiteralPath $ReleaseAssetsDir -File -Force | Measure-Object -Property Length -Sum).Sum
 $SizeMb = [math]::Round((Get-Item -LiteralPath $Output).Length / 1MB, 1)
 
 if (-not $KeepBuildDir) {
@@ -823,20 +740,21 @@ if (-not $KeepBuildDir) {
 }
 
 Write-Host ""
-Write-Host "=== 构建完成（精简包）==="
+Write-Host "=== 构建完成（发版小包 + 原生库资产）==="
 Write-Host "产物：      $Output"
-Write-Host "压缩后：    $SizeMb MB（精简包预期约 550–600 MB；实际以产物为准）"
-Write-Host "构成：      源码 $(Format-Size $SourceBytes) | 嵌入式环境 $(Format-Size $PyLibsBytes) | 原生 DLL $(Format-Size $NativeBytes)"
-Write-Host "运行时：    嵌入式 Python $PythonVersion + pip + uv $UvVersion；requirements.txt 已预装"
-Write-Host "原生能力：  data/libs/patchmatch_inpaint.dll（PatchMatch 基础修复，开箱可用）"
-Write-Host "            data/libs/opencv_world455.dll"
+Write-Host "压缩后：    $SizeMb MB（小包预期约 30 MB，与上游 33 MB 同量级；实际以产物为准）"
+Write-Host "构成：      源码 $(Format-Size $SourceBytes) | 嵌入式环境 $(Format-Size $PyLibsBytes)"
+Write-Host "资产：      $ReleaseAssetsDir（合计 $(Format-Size $AssetsDirBytes)，与小包一起上传到 Release）"
+Write-Host "运行时：    嵌入式 Python $PythonVersion + pip + uv $UvVersion；依赖不预装，首启现场安装"
+Write-Host "原生能力：  PatchMatch 两个 DLL 以独立资产分发——选中 patchmatch 模块时后台下载"
 Write-Host "不含：      $($ForbiddenPackages -join ' / ')、模型权重、config/config.json、logs/"
 Write-Host ""
-Write-Host "模型后端与权重由 GUI 按需补全："
+Write-Host "依赖与模型由 GUI 按需补全："
+Write-Host "  依赖：首启 launch.bat → ensure_core_requirements 装 requirements.txt（装完自动重启）"
 Write-Host "  后端：选中模块时由 modules/base.py::ensure_dependencies 安装"
 Write-Host "  权重：设置 → Models → 模型文件（后台下载，进度只进终端）"
-Write-Host "  GPU： CUDA 版 torch/onnxruntime 仍由 install_cuda.bat 负责（精简包之外的操作）"
+Write-Host "  GPU： CUDA 版 torch/onnxruntime 仍由 install_cuda.bat 负责（小包之外的操作）"
 Write-Host "没有可用网络的用户仍走网盘上 ~1.7 GB 的预装完整包（离线兜底）。"
-if ($SizeMb -gt 800) {
-    Write-Warning "产物 $SizeMb MB 明显超出精简包预期——检查是否混入了未列在禁用清单里的重依赖。"
+if ($SizeMb -gt 60) {
+    Write-Warning "产物 $SizeMb MB 明显超出小包预期（约 30 MB）——检查是否混入了依赖或原生 DLL。"
 }

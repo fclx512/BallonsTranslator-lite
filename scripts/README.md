@@ -64,26 +64,33 @@
 |---|---|---|
 | `scripts/check_update.py` | 跨平台 | 启动时检查更新：git 增量 / manifest delta / zip 三种模式（`launch.bat`/`launch.py` 调用） |
 | `scripts/generate_manifest.py` | 跨平台 | 生成 `manifest.json`（全文件 SHA256 清单，供 delta 更新用）。**发版前必须重新生成并随版本提交** |
-| `scripts/build_win_minimal.ps1` | Windows | **构建精简包（发行版）**：跟踪源码 + 嵌入式 Python + pip/uv + 预装 `requirements.txt` + `data/libs` 两个原生 DLL，压缩后约 550–600 MB（实际以产物为准）。成分、排除项与发行门禁见下方「精简包发行」小节 | `powershell -ExecutionPolicy Bypass -File scripts\build_win_minimal.ps1`（`-StaticCheck` 只做离线校验，`-AllowDirtyWorkTree` 调试构建，`-KeepBuildDir` 留中间目录） |
+| `scripts/build_win_minimal.ps1` | Windows | **构建发版包 + 原生库资产（发行版）**：跟踪源码 + 嵌入式 Python + pip/uv（**不预装依赖**），ZIP 约 30 MB；同批产出 `release_assets\` 两个 PatchMatch DLL（独立 Release 资产，不进 ZIP）。成分、排除项与发行门禁见下方「发版包发行」小节 | `powershell -ExecutionPolicy Bypass -File scripts\build_win_minimal.ps1`（`-StaticCheck` 只做离线校验，`-AllowDirtyWorkTree` 调试构建，`-KeepBuildDir` 留中间目录） |
 | `scripts/download_models.sh` | Linux/macOS | 编译 PyPatchMatch（`modules/inpaint/patch_match.py` 仍依赖）。**其中的模型下载段是上游遗留、已与当前模型集合脱节**——权重请在应用内「设置 → Models → 模型文件」获取（见 `docs/技术实现/模型文件管理_设计方案_存档.md`） |
 | `scripts/local_gitpull.bat` | Windows | 使用便携环境执行 `git pull` |
 
-### 精简包发行（`scripts/build_win_minimal.ps1`）
+### 发版包发行（`scripts/build_win_minimal.ps1`）
 
-**包里有什么：** `git ls-files` 跟踪的全部源码（**初版刻意不裁剪 `docs/tests/scripts`**，与
-updater/manifest 的受管文件范围保持一致，否则增量更新会把砍掉的开发文件重新拉回来）、
-嵌入式 Python（`-PythonVersion`，默认 3.12.4）、pip 与钉定版 `uv.exe`（`-UvVersion`，
-默认 0.12.19，**禁止 `latest`**）、用 staging 的 uv/pip 预装的 `requirements.txt` 基本依赖，
-以及 `data/libs/patchmatch_inpaint.dll` 与 `data/libs/opencv_world455.dll`。
-压缩后约 **550–600 MB**（实际以产物为准）。
+**包里有什么（约 30 MB 的引导小包，与上游 `Ballonstranslator_win_minium.zip` 同量级）：**
+`git ls-files` 跟踪的全部源码（**刻意不裁剪 `docs/tests/scripts`**，与 updater/manifest 的
+受管文件范围保持一致，否则增量更新会把砍掉的开发文件重新拉回来）、嵌入式 Python
+（`-PythonVersion`，默认 3.12.4）、pip 与钉定版 `uv.exe`（`-UvVersion`，默认 0.12.19，
+**禁止 `latest`**）。**依赖不预装**：`requirements.txt` 由首启 `launch.bat` →
+`utils/core_requirements.py::ensure_core_requirements` 现场安装（装完自动重启）；
+装完依赖的本机环境（约 600 MB）只是运行状态，俗称「精简包」，**不作为发行物分发**。
+
+**同批产出的 Release 资产：** `release_assets\patchmatch_inpaint.dll` +
+`release_assets\opencv_world455.dll`（合计约 53 MB，**不进 ZIP**——否则 30 MB 的小包
+体积失控）。上传到同一 release 后，运行时按 `releases/latest/download/<文件名>` 直链、
+选中 patchmatch 模块时后台下载（`modules/inpaint/inpaint_patchmatch.py::download_file_list`，
+sha256 钉死资产内容）。
 
 **包里刻意没有：** `torch`／`torchvision`／`transformers`／`diffusers`／`ultralytics`／
 `onnxruntime`／`onnxocr`（模型后端）与 `numba`／`llvmlite`（加速），也不含任何模型权重、
-`config/config.json`（含 API 密钥）、`logs/`——脚本对这几类都有硬校验。模型后端在选中
-模块时由 `modules/base.py::ensure_dependencies` 安装，权重走设置页「Models → 模型文件」
-后台下载（`ui/model_downloads.py`）；**PatchMatch 是随包的基础能力**（低占用、非模型），
-所以两个原生 DLL 缺任一就直接失败，不产出"看着完整但 PatchMatch 不可用"的包。
-网盘上 ~1.7 GB 的预装完整包继续留在原处，作为没有可用网络时的离线兜底。
+`config/config.json`（含 API 密钥）、`logs/`、原生 DLL——脚本对这几类都有硬校验。
+模型后端在选中模块时由 `modules/base.py::ensure_dependencies` 安装，权重走设置页
+「Models → 模型文件」后台下载（`ui/model_downloads.py`）；两个原生 DLL 缺任一源文件就
+直接失败，不产出"资产发不出去"的包。网盘上 ~1.7 GB 的预装完整包继续留在原处，作为
+没有可用网络时的离线兜底。
 
 **发行门禁（默认开启）：** 工作区必须干净；`manifest.json` 与 `pyproject.toml` 版本必须
 一致、manifest 的文件集合与 `git ls-files` 完全对应、逐个文件哈希一致——不一致直接失败，
@@ -91,10 +98,11 @@ updater/manifest 的受管文件范围保持一致，否则增量更新会把砍
 `-StaticCheck` 只跑离线校验（源一致性 / 版本钉定 / 原生资产）并打印计划成分，不下载、
 不产出，适合在没网或本机缺 DLL 时核对逻辑。
 
-发版顺序：提交 → `scripts/generate_manifest.py` → 打 tag → 本脚本 → 上传 ZIP。
+发版顺序：提交 → `scripts/generate_manifest.py` → 打 tag（`lite-vX.Y.Z`，与上游
+`v1.x.x` 区分）→ 本脚本 → 上传 ZIP + `release_assets\` 两个 DLL 资产。
 三个下载都能指向本地归档或内网镜像（`-PythonEmbedUrl`／`-UvUrl`／`-GetPipUrl`），
-国内装依赖用 `-IndexUrl` 指定 pip 源，原生资产可用 `-PatchMatchDll`／`-OpencvWorldDll`
-指到别处的副本；`-PythonZipSha256`／`-UvZipSha256` 可钉定归档哈希。
+原生资产可用 `-PatchMatchDll`／`-OpencvWorldDll` 指到别处的副本；
+`-PythonZipSha256`／`-UvZipSha256` 可钉定归档哈希。
 
 > 脚本源码是 **UTF-8 with BOM**（与 `launch.bat`、`install_cuda.bat` 同一惯例）：
 > 里面是中文提示语，Windows PowerShell 5.1 读不带 BOM 的 UTF-8 会按 ANSI 解码并报

@@ -3,22 +3,25 @@
 PatchMatch: A Randomized Correspondence Algorithm for Structural Image Editing
 (C) Barnes, Shechtman, Finkelstein & Goldman, SIGGRAPH 2009
 
-依赖随包携带的原生库：``data/libs/patchmatch_inpaint.dll``（Windows，该 DLL
+依赖 ``data/libs`` 下的原生库：``patchmatch_inpaint.dll``（Windows，该 DLL
 还依赖同目录的 ``opencv_world455.dll``）／``libpatchmatch.so``（Linux）。
+Windows 两个文件以 GitHub Release 资产分发（不进小包，保持 2-30MB 体积），
+缺失时选中本模块即由后台下载补齐——声明见本类 ``download_file_list``。
 
 三条边界别改坏：
 
-- **不隐藏**：PatchMatch 是精简包随包携带的**非模型基础能力**（无 torch、无
-  权重、无下载），精简包用户必须能从 GUI 直接选到它。它不在
-  ``modules/__init__.py::HIDDEN_INPAINTERS`` 里（那个集合只留 ``LLMInpaint``）。
+- **不隐藏**：PatchMatch 是**非模型基础能力**（无 torch、无权重），用户必须
+  能从 GUI 直接选到它。它不在 ``modules/__init__.py::HIDDEN_INPAINTERS`` 里
+  （那个集合只留 ``LLMInpaint``）。
 - **不该被 torch 降级**：基础包不带 torch，但 PatchMatch 不需要 torch——
   ``launch.py::_ensure_module_fallback`` 的"没 torch 就换 none"不能作用到它
-  （换掉等于把本来能用的功能关死）。它也不进模型下载清单
-  （``modules/__init__.py`` 的 ``_NO_DOWNLOAD_LIST_KEYS``）。
+  （换掉等于把本来能用的功能关死）。原生库缺口则走**正常下载清单**：选中即
+  ``ui/model_downloads.py`` 后台下载，缺文件标识、运行前警告与「模型文件」页
+  都认这份声明。
 - **原生库惰性加载**：构造实例与选型扫描都不碰 DLL（缺附件不该影响启动）；
   真跑修复时才经 ``.patch_match`` 加载，缺库抛带提示语的
   ``modules/inpaint/patch_match.py::PatchMatchUnavailableError`` 而不是裸
-  ``OSError``（用户要的是"重新解压精简包"，不是加载器错误码）。
+  ``OSError``（用户要的是"去哪儿补齐"的指路，不是加载器错误码）。
 """
 
 from typing import List, Tuple
@@ -44,6 +47,27 @@ class PatchmatchInpainter(InpainterBase):
     路径的判据与纯色覆盖（``only_simple=True``：简单块纯色覆盖、复杂块完全
     不动），连原生库和模型都不会碰。
     """
+
+    # 原生库＝Release 资产（发版时与小包一起上传，资产名＝文件名，
+    # releases/latest/download 直链恒指向最新版）。选中本模块即后台下载；
+    # 缺文件检查、「模型文件」页下载按钮与删除白名单共用这份声明。
+    # sha256 钉死资产内容——DLL 不该漂移，漂了就按哈希不匹配强制重下。
+    download_file_list = [
+        {
+            "url": "https://github.com/fclx512/BallonsTranslator-lite/releases/latest/download/patchmatch_inpaint.dll",
+            "files": "data/libs/patchmatch_inpaint.dll",
+            "sha256_pre_calculated": "0ba60cfe664c97629daa7e4d05c0888ebfe3edcb3feaf1ed5a14544079c6d7af",
+        },
+        {
+            "url": "https://github.com/fclx512/BallonsTranslator-lite/releases/latest/download/opencv_world455.dll",
+            "files": "data/libs/opencv_world455.dll",
+            "sha256_pre_calculated": "3b7619caa29dc3352b939de4e9981217a9585a13a756e1101a50c90c100acd8d",
+        },
+    ]
+    model_package = {
+        "name": "PatchMatch",
+        "size_hint": "53 MB",
+    }
 
     def __init__(self, **params) -> None:
         super().__init__(**params)
