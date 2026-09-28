@@ -14,6 +14,16 @@
 
 ## 2026-09-28
 
+### 备注问号弹层支持演示动画（`ConfigNotePopup` anim 键 + `gen_help_anim.py` 离屏生成管线）
+
+**摘要：** 纯文本备注讲不清"切换后有过程的视觉效果"，增加代码生成演示动画：`scripts/gen_help_anim.py` 离屏渲染（offscreen + `QT_QPA_FONTDIR` 补字体）按帧号确定性步进逐帧 grab，Pillow 编码无损动画 WebP（体积敏感场景实测 33 帧 ≈ 40 KB）落 `config/help_anims/` 同名产物；备注经 `anim="<key>"` 可选键挂载，`ConfigNotePopup` 文字上方 QLabel+QMovie 循环播放，关层即停、全局动画关闭时只显首帧，文件缺失静默跳过。首个实例挂「标点位置」；适用判断与制作规则沉淀在 `docs/基础速查/备注演示动画使用说明.md`，静态左右对比图形态有意留作后续。
+
+**涉及文件：** `scripts/gen_help_anim.py`、`config/help_anims/punctuation_position.webp`、`ui/configpanel.py`、`docs/基础速查/备注演示动画使用说明.md`、`scripts/README.md`
+
+**验证：** 逐帧 PNG 目检（覆盖层 QSS 底色、drawText 基线双减两坑修复后）+ 离屏抓弹层实拍确认动画标签在位；`scripts/verify.py` 全绿（含启动冒烟）。
+
+---
+
 ### 检测方向判定修复：合并路径单行块恒判竖排（`mit_merge_textlines` 投票阈值）+ 方向探针/矩阵
 
 **摘要：** ysgyolo「Merge Text Lines」开启时所有检测框经 `utils/textblock.py::mit_merge_textlines` 聚组投票判向，阈值 `nv >= len//2` 在单行块（len//2==0）恒真，横排单行块全被误判竖排（用户实测：横排内容 OCR 正确但渲染方向竖排，曾被误疑为全局样式覆盖）。阈值改 `max(len//2, 1)`：单行块跟随该行自身方向，多行组投票口径不变。ppocrv6 逐框 `sort_pnts` 判向本就不受影响，一并真图核验。

@@ -16,8 +16,10 @@ from qtpy.QtGui import (
     QFocusEvent,
     QFont,
     QGuiApplication,
+    QImageReader,
     QIntValidator,
     QKeySequence,
+    QMovie,
     QShortcut,
     QValidator,
 )
@@ -65,6 +67,7 @@ from utils.shared import (
     GROUPBOX_CONTENT_MARGINS,
     LINEEDIT_FIXHEIGHT,
     NAVLIST_WIDTH,
+    PROGRAM_PATH,
 )
 
 from .custom_widget import (
@@ -164,13 +167,16 @@ class ConfigTextLabel(QLabel):
         )
 
 
-def _make_note_btn(note_text: str) -> QPushButton:
+def _make_note_btn(note_text: str, anim_key: str = None) -> QPushButton:
     """Build a themed ``?`` button that pops up ``note_text`` on click.
 
-    The note text is captured in the click closure so the popup never loses
+    ``anim_key`` names a demo animation under ``config/help_anims/`` (see
+    ``scripts/gen_help_anim.py``); it plays above the note text. The note
+    text is captured in the click closure so the popup never loses
     it (the old per-instance ``_note_text`` attribute was clobbered by
     ConfigSubBlock.__init__ when a subclass passed ``name=None``).
     """
+    anim_path = _help_anim_path(anim_key) if anim_key else None
     btn = QPushButton("?")
     btn.setFixedSize(20, 20)
     btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -191,7 +197,7 @@ def _make_note_btn(note_text: str) -> QPushButton:
     )
 
     def _show_note_popup(checked: bool = False):
-        popup = ConfigNotePopup(btn, note_text)
+        popup = ConfigNotePopup(btn, note_text, anim_path)
         popup.show()
         btn._note_popup = popup  # keep alive: popup has no parent
 
@@ -219,6 +225,7 @@ class ConfigSubBlock(ConfigFlatContainer):
         name: str = None,
         description: str = None,
         note: str = None,
+        anim: str = None,
         vertical_layout=True,
         insert_stretch: bool = False,
         content_margins=(24, 6, 24, 6),
@@ -240,7 +247,7 @@ class ConfigSubBlock(ConfigFlatContainer):
             )
             self.name_label = textlabel
             name_row_layout.addWidget(textlabel)
-            self._note_btn = _make_note_btn(note)
+            self._note_btn = _make_note_btn(note, anim)
             name_row_layout.addWidget(self._note_btn)
             name_row_layout.addStretch()
             layout.addWidget(name_row)
@@ -301,6 +308,7 @@ class ConfigFormRow(ConfigSubBlock):
         label: str,
         widget: Union[QWidget, QLayout],
         note: str = None,
+        anim: str = None,
         label_width: int = 110,
         parent: QWidget = None,
     ) -> None:
@@ -325,7 +333,7 @@ class ConfigFormRow(ConfigSubBlock):
             row_layout.addLayout(widget)
 
         if note is not None:
-            self._note_btn = _make_note_btn(note)
+            self._note_btn = _make_note_btn(note, anim)
             row_layout.addWidget(self._note_btn)
         else:
             self._note_btn = None
@@ -384,13 +392,23 @@ def _scroll_interval() -> int:
         return 8
 
 
+HELP_ANIM_DIR = osp.join(PROGRAM_PATH, "config", "help_anims")
+
+
+def _help_anim_path(anim_key: str) -> str:
+    """备注演示动画的落盘路径（scripts/gen_help_anim.py 的产物）。"""
+    return osp.join(HELP_ANIM_DIR, f"{anim_key}.webp")
+
+
 class ConfigNotePopup(QFrame):
     """Floating popup for ConfigSubBlock notes. Anchors to a ? button and
-    auto-closes on focus loss via Qt.Popup flag."""
+    auto-closes on focus loss via Qt.Popup flag. An optional demo animation
+    (``anim_path``) plays above the text; the loop file itself carries the
+    repeat count (generated with ``loop=0`` = infinite)."""
 
     _DURATION = 200
 
-    def __init__(self, anchor: QWidget, text: str):
+    def __init__(self, anchor: QWidget, text: str, anim_path: str = None):
         super().__init__(
             None, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
         )
@@ -402,9 +420,22 @@ class ConfigNotePopup(QFrame):
         self._anim_timer.setTimerType(Qt.TimerType.PreciseTimer)
         self._anim_timer.timeout.connect(self._tick)
         self._elapsed = QElapsedTimer()
+        self._movie = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 10, 14, 10)
+        if anim_path and osp.exists(anim_path):
+            reader = QImageReader(anim_path)
+            frame_size = reader.size()
+            movie_label = QLabel()
+            self._movie = QMovie(anim_path)
+            self._movie.setCacheMode(QMovie.CacheMode.CacheAll)
+            movie_label.setMovie(self._movie)
+            if frame_size.isValid():
+                # 先钉住首帧尺寸，adjustSize 才不会按 0 高算
+                movie_label.setFixedSize(frame_size.width(), frame_size.height())
+            layout.addWidget(movie_label)
+            layout.addSpacing(6)
         label = QLabel(text)
         label.setWordWrap(True)
         label.setMaximumWidth(320)
@@ -437,6 +468,12 @@ class ConfigNotePopup(QFrame):
         self.move(x, y)
 
         super().show()
+        if self._movie is not None:
+            if pcfg.animation_fps < 0:
+                # 全局动画关闭：只显示静态首帧，不播放
+                self._movie.jumpToFrame(0)
+            else:
+                self._movie.start()
         if pcfg.animation_fps < 0:
             self._effect.setOpacity(1.0)
             return
@@ -451,6 +488,14 @@ class ConfigNotePopup(QFrame):
         if progress >= 1.0:
             self._anim_timer.stop()
             self._effect.setOpacity(1.0)
+
+    def hideEvent(self, event):
+        if (
+            self._movie is not None
+            and self._movie.state() == QMovie.MovieState.Running
+        ):
+            self._movie.stop()
+        super().hideEvent(event)
 
 
 class ConfigNavItem(QPushButton):
@@ -1864,6 +1909,7 @@ class ConfigPanel(Widget):
                 self.tr("Punctuation Position"),
                 self.punctuation_position_combo,
                 note=self.tr("<p>Choose punctuation alignment:</p><p><b>Centered</b> — traditional CJK style (Traditional Chinese / Japanese)<br/><b>Edge-aligned</b> — modern style (Simplified Chinese)</p>"),
+                anim="punctuation_position",
             )
         )
 
