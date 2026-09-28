@@ -89,3 +89,8 @@ projects/
 skills-lock.json
 
 config/global_styles.json
+# 备注演示动画的本机覆盖层（按钮重生成的产物；仓库跟踪的默认在 config/help_anims/）
+config/help_anims_local/
+
+# 动画/探针等验证中间产物
+build/
