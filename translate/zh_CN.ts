@@ -1327,6 +1327,74 @@
             <source>Workbench Prompts</source>
             <translation>工作台提示</translation>
         </message>
+        <message>
+            <source>Demo animation generation failed.</source>
+            <translation>演示动画生成失败。</translation>
+        </message>
+        <message>
+            <source>Failed</source>
+            <translation>失败</translation>
+        </message>
+        <message>
+            <source>Generating...</source>
+            <translation>正在生成…</translation>
+        </message>
+        <message>
+            <source>No error output was captured; check the terminal.</source>
+            <translation>没有捕获到错误输出，请查看终端。</translation>
+        </message>
+        <message>
+            <source>Note Animations</source>
+            <translation>备注演示动画</translation>
+        </message>
+        <message>
+            <source>Note animations:</source>
+            <translation>演示动画：</translation>
+        </message>
+        <message>
+            <source>Regenerate demo animations</source>
+            <translation>重新生成演示动画</translation>
+        </message>
+        <message>
+            <source>Regenerate the 7 note demo animations now?</source>
+            <translation>现在重新生成 7 段备注演示动画吗？</translation>
+        </message>
+        <message>
+            <source>Run</source>
+            <translation>开始生成</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;All animation files in the local override folder will be deleted and note popups fall back to the repository default animations. The repository defaults themselves are not touched.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;将删除本机覆盖层目录里的全部动画文件，问号弹层回退到仓库默认动画。仓库默认文件本身不受影响。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;The 7 animations will be re-rendered in the background using this machine's screen scaling and system fonts and written to the local override folder, which takes priority for display. It takes a few dozen seconds and progress is printed to the terminal; note popups opened afterwards use the new animations.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;7 个动画将在后台用本机的屏幕缩放与系统字体重新渲染，写入本机覆盖层目录（展示时优先使用）。耗时几十秒，进度打印到终端；完成后新打开的问号弹层即用新动画。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>&lt;p&gt;The popup demo animations are rendered with the screen scaling and system fonts of the machine that generated them. The repository ships default animations for distribution; regenerating writes a local override that takes priority for display, and the restore button deletes the override to fall back to the defaults.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;问号弹层演示动画按生成机器的屏幕缩放与系统字体渲染。仓库自带默认动画用于分发；点「重新生成」会写一份本机覆盖层（展示时优先），「恢复默认」按钮删除覆盖层即回退默认。&lt;/p&gt;</translation>
+        </message>
+        <message>
+            <source>Delete</source>
+            <translation>删除</translation>
+        </message>
+        <message>
+            <source>Delete the locally generated demo animations?</source>
+            <translation>删除本机生成的演示动画？</translation>
+        </message>
+        <message>
+            <source>Local overrides</source>
+            <translation>本机适配</translation>
+        </message>
+        <message>
+            <source>Repository default</source>
+            <translation>仓库默认</translation>
+        </message>
+        <message>
+            <source>Restore default animations</source>
+            <translation>恢复默认动画</translation>
+        </message>
     </context>
     <context>
         <name>DependencyDialog</name>

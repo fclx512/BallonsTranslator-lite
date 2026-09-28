@@ -1,15 +1,22 @@
+import html
+import os
 import os.path as osp
+import sys
 from functools import partial
 from typing import Dict, List, Union
 
 from qtpy.QtCore import (
     QCoreApplication,
+    QBuffer,
     QEasingCurve,
     QElapsedTimer,
     QEvent,
+    QIODevice,
     QPoint,
+    QProcess,
     Qt,
     QTimer,
+    QTime,
     Signal,
 )
 from qtpy.QtGui import (
@@ -20,6 +27,8 @@ from qtpy.QtGui import (
     QIntValidator,
     QKeySequence,
     QMovie,
+    QPainter,
+    QPen,
     QShortcut,
     QValidator,
 )
@@ -32,7 +41,6 @@ from qtpy.QtWidgets import (
     QDialogButtonBox,
     QFileDialog,
     QFrame,
-    QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
     QKeySequenceEdit,
@@ -51,6 +59,8 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from ui.misc import get_theme_color, parse_stylesheet
 
 from modules import GET_VALID_TEXTDETECTORS
 from utils.config import export_config, import_config, pcfg
@@ -171,12 +181,14 @@ def _make_note_btn(note_text: str, anim_key: str = None) -> QPushButton:
     """Build a themed ``?`` button that pops up ``note_text`` on click.
 
     ``anim_key`` names a demo animation under ``config/help_anims/`` (see
-    ``scripts/gen_help_anim.py``); it plays above the note text. The note
-    text is captured in the click closure so the popup never loses
-    it (the old per-instance ``_note_text`` attribute was clobbered by
-    ConfigSubBlock.__init__ when a subclass passed ``name=None``).
+    ``scripts/gen_help_anim.py``); it plays above the note text. The path is
+    resolved at click time (``_help_anim_path`` prefers the local override
+    folder), so popups opened after a regeneration pick up the new files
+    without rebuilding this panel. The note text is captured in the click
+    closure so the popup never loses it (the old per-instance
+    ``_note_text`` attribute was clobbered by ConfigSubBlock.__init__ when
+    a subclass passed ``name=None``).
     """
-    anim_path = _help_anim_path(anim_key) if anim_key else None
     btn = QPushButton("?")
     btn.setFixedSize(20, 20)
     btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -197,6 +209,7 @@ def _make_note_btn(note_text: str, anim_key: str = None) -> QPushButton:
     )
 
     def _show_note_popup(checked: bool = False):
+        anim_path = _help_anim_path(anim_key) if anim_key else None
         popup = ConfigNotePopup(btn, note_text, anim_path)
         popup.show()
         btn._note_popup = popup  # keep alive: popup has no parent
@@ -393,10 +406,21 @@ def _scroll_interval() -> int:
 
 
 HELP_ANIM_DIR = osp.join(PROGRAM_PATH, "config", "help_anims")
+# 本机覆盖层：按钮重生成的产物落这里（.gitignore），展示优先于仓库默认
+HELP_ANIM_LOCAL_DIR = osp.join(PROGRAM_PATH, "config", "help_anims_local")
+
+# 备注演示动画的显示口径：产物为 1x 逻辑像素（scripts/gen_help_anim.py，
+# 460×262），播放严格 1 图像像素 = 1 设备像素——每帧 pixmap 标真实屏幕
+# DPR、label 逻辑尺寸 = 物理尺寸 / DPR，任何缩放比的屏幕都不插值。
 
 
 def _help_anim_path(anim_key: str) -> str:
-    """备注演示动画的落盘路径（scripts/gen_help_anim.py 的产物）。"""
+    """备注演示动画的落盘路径：本机覆盖层（``HELP_ANIM_LOCAL_DIR``）优先，
+    回落仓库默认（``HELP_ANIM_DIR``）。覆盖层是点击时才查的，按钮重生成
+    之后新开的弹层立即换新动画。"""
+    local = osp.join(HELP_ANIM_LOCAL_DIR, f"{anim_key}.webp")
+    if osp.exists(local):
+        return local
     return osp.join(HELP_ANIM_DIR, f"{anim_key}.webp")
 
 
@@ -404,7 +428,17 @@ class ConfigNotePopup(QFrame):
     """Floating popup for ConfigSubBlock notes. Anchors to a ? button and
     auto-closes on focus loss via Qt.Popup flag. An optional demo animation
     (``anim_path``) plays above the text; the loop file itself carries the
-    repeat count (generated with ``loop=0`` = infinite)."""
+    repeat count (generated with ``loop=0`` = infinite).
+
+    The stylesheet is set on the popup itself: this is a parentless top-level
+    window, so the MainWindow-level ``setStyleSheet`` never reaches it.
+    弹层自己的底色不走 QSS——原生透明窗口（WA_TranslucentBackground）上
+    QSS 底在真机合成路径下不画（除子控件外全透明，实测），改由
+    ``paintEvent`` 自绘圆角矩形 + 描边；QSS 仍负责子控件的前景色。
+    淡入用原生 ``setWindowOpacity``（窗口级不透明度，Windows 分层窗口原生
+    支持），**不用** QGraphicsOpacityEffect——图形效果接管重绘后透明窗口
+    的 QSS 底会丢，且本仓库有 QGraphicsEffect alpha 淡入 qFatal 的前科。
+    """
 
     _DURATION = 200
 
@@ -413,7 +447,13 @@ class ConfigNotePopup(QFrame):
             None, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        self.setAutoFillBackground(True)
+        # 自持样式表：弹层是顶层 Popup，不是主窗口后代，收不到挂在 MainWindow
+        # 上的 QSS（结果会落到 Qt 默认调色板 = 白底直角框）。build 有缓存、
+        # 弹层又是点击才创建，解析开销可忽略；每次创建即取当前主题。
+        # 只管子控件（QLabel 前景色等）；弹层底色在 paintEvent 里自绘。
+        self.setStyleSheet(parse_stylesheet())
+        # 真圆角需要：露出 paintEvent 圆角矩形之外的四个角
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setObjectName("ConfigNotePopup")
         self._anchor = anchor
         self._anim_timer = QTimer(self)
@@ -421,19 +461,43 @@ class ConfigNotePopup(QFrame):
         self._anim_timer.timeout.connect(self._tick)
         self._elapsed = QElapsedTimer()
         self._movie = None
+        self._frame_size = None   # (w, h) 图像像素；show 时按屏幕 DPR 换算
+        self._dpr = 1.0
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 10, 14, 10)
+        self._movie_label = None
         if anim_path and osp.exists(anim_path):
-            reader = QImageReader(anim_path)
+            # QMovie 从内存缓冲播放：文件字节读进 QBuffer、QMovie.setDevice，
+            # 全程不持文件句柄。此前 QMovie(路径) 只要弹层开着就一直握着
+            # webp 的文件句柄，重生成脚本 os.replace 的目标被占即
+            # WinError 5（拒绝访问）——这里是弹层文件锁的根修。
+            with open(anim_path, "rb") as fh:
+                raw = fh.read()
+            probe = QBuffer()
+            probe.setData(raw)
+            probe.open(QIODevice.OpenModeFlag.ReadOnly)
+            reader = QImageReader(probe)
+            reader.setFormat(b"webp")
             frame_size = reader.size()
             movie_label = QLabel()
-            self._movie = QMovie(anim_path)
+            self._movie = QMovie(self)
+            buffer = QBuffer(self._movie)  # parent 给 movie，同生命周期保活
+            buffer.setData(raw)
+            buffer.open(QIODevice.OpenModeFlag.ReadOnly)
+            self._movie.setDevice(buffer)
+            self._movie.setFormat(b"webp")
             self._movie.setCacheMode(QMovie.CacheMode.CacheAll)
-            movie_label.setMovie(self._movie)
             if frame_size.isValid():
-                # 先钉住首帧尺寸，adjustSize 才不会按 0 高算
-                movie_label.setFixedSize(frame_size.width(), frame_size.height())
+                # 产物 1x 逻辑像素（如 460×262）；显示严格 1 图像像素 =
+                # 1 设备像素：label 逻辑尺寸 = 物理/DPR、每帧 pixmap 标屏幕
+                # DPR（show 时定，见 _apply_frame）。DPR 在 show 前拿不到
+                # 屏幕真值，这里先不钉尺寸。
+                self._frame_size = (frame_size.width(), frame_size.height())
+                self._movie_label = movie_label
+                self._movie.frameChanged.connect(self._apply_frame)
+            else:
+                movie_label.setMovie(self._movie)
             layout.addWidget(movie_label)
             layout.addSpacing(6)
         label = QLabel(text)
@@ -448,11 +512,43 @@ class ConfigNotePopup(QFrame):
         )
         layout.addWidget(label)
 
-        self._effect = QGraphicsOpacityEffect(self)
-        self._effect.setOpacity(0.0)
-        self.setGraphicsEffect(self._effect)
+    def paintEvent(self, event):
+        """弹层底色自绘：原生透明窗口上 QSS 底不可靠（真机实测除子控件外
+        全透明），QPainter 画圆角矩形照原 QSS 规则的视觉。"""
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(QPen(get_theme_color(key="@borderColor"), 1))
+        p.setBrush(get_theme_color(key="@widgetBackgroundColor"))
+        p.drawRoundedRect(self.rect().adjusted(0, 0, -1, -1), 8, 8)
+
+    def _apply_frame(self, _index: int = 0):
+        """把当前帧按设备像素 1:1 贴到 label 上（每帧 pixmap 标屏幕 DPR）。"""
+        if self._movie is None or self._movie_label is None:
+            return
+        pixmap = self._movie.currentPixmap()
+        if pixmap.isNull():
+            return
+        pixmap.setDevicePixelRatio(self._dpr)
+        self._movie_label.setPixmap(pixmap)
+
+    def _pin_movie_label(self):
+        """按真实屏幕 DPR 把动画 label 钉成 物理/DPR 的逻辑尺寸。"""
+        if self._frame_size is None:
+            return
+        w, h = self._frame_size
+        self._movie_label.setFixedSize(
+            round(w / self._dpr), round(h / self._dpr)
+        )
 
     def show(self):
+        # 真实屏幕缩放比：show 前弹层还没落到屏幕上，先按锚点所在屏取
+        # （弹层贴着锚点弹），show 后再校正一次并重贴首帧
+        screen = self._anchor.screen()
+        self._dpr = (
+            screen.devicePixelRatio() if screen is not None
+            else self.devicePixelRatioF()
+        ) or 1.0
+        self._pin_movie_label()
         # Position: to the left of anchor, vertically centered
         btn_global = self._anchor.mapToGlobal(QPoint(0, 0))
         btn_h = self._anchor.height()
@@ -461,22 +557,29 @@ class ConfigNotePopup(QFrame):
         ph = self.sizeHint().height()
         x = btn_global.x() - pw - 12
         y = btn_global.y() + (btn_h - ph) // 2
-        screen = QGuiApplication.primaryScreen().availableGeometry()
-        if x < screen.left():
+        screen_rect = QGuiApplication.primaryScreen().availableGeometry()
+        if x < screen_rect.left():
             x = btn_global.x() + self._anchor.width() + 12
-        y = max(screen.top(), min(y, screen.bottom() - ph))
+        y = max(screen_rect.top(), min(y, screen_rect.bottom() - ph))
         self.move(x, y)
 
         super().show()
+        # show 落屏后 DPR 才是弹层自己的真值；换了屏/混合 DPI 时重钉尺寸
+        real_dpr = self.devicePixelRatioF() or 1.0
+        if abs(real_dpr - self._dpr) > 0.01:
+            self._dpr = real_dpr
+            self._pin_movie_label()
+            self.adjustSize()
         if self._movie is not None:
-            if pcfg.animation_fps < 0:
-                # 全局动画关闭：只显示静态首帧，不播放
-                self._movie.jumpToFrame(0)
-            else:
+            # 先贴首帧再起播：frameChanged 首触发前 label 不能空着
+            self._movie.jumpToFrame(0)
+            self._apply_frame()
+            if pcfg.animation_fps >= 0:
                 self._movie.start()
         if pcfg.animation_fps < 0:
-            self._effect.setOpacity(1.0)
+            self.setWindowOpacity(1.0)
             return
+        self.setWindowOpacity(0.0)
         self._elapsed.start()
         self._anim_timer.start(_scroll_interval())
 
@@ -484,10 +587,10 @@ class ConfigNotePopup(QFrame):
         elapsed = self._elapsed.elapsed()
         progress = min(elapsed / self._DURATION, 1.0)
         eased = QEasingCurve(QEasingCurve.Type.OutCubic).valueForProgress(progress)
-        self._effect.setOpacity(eased)
+        self.setWindowOpacity(eased)
         if progress >= 1.0:
             self._anim_timer.stop()
-            self._effect.setOpacity(1.0)
+            self.setWindowOpacity(1.0)
 
     def hideEvent(self, event):
         if (
@@ -1403,6 +1506,10 @@ class ConfigPanel(Widget):
         ConfigPanel._active_panel = self
         self._modal_ref = None  # OverlayModal, injected by MainWindow
         self._outside_click_filter_installed = False
+        # 备注演示动画重生成子进程（QProcess，见 on_regen_help_anim）
+        self._help_anim_proc: QProcess | None = None
+        self._help_anim_done = 0
+        self._help_anim_stderr = ""
 
         # Right-hand side is now a page stack: each nav item switches a page
         # (no long scroll). ``configContent`` is kept as a back-compat alias
@@ -1928,6 +2035,7 @@ class ConfigPanel(Widget):
                 "",
                 self.compact_punctuation_checker,
                 note=self.tr("<p>Remove extra spacing around punctuation in <b>vertical</b> text.</p>"),
+                anim="punct_spacing",
             )
         )
 
@@ -1946,6 +2054,7 @@ class ConfigPanel(Widget):
                 "",
                 self.halfwidth_corner_bracket_checker,
                 note=self.tr("<p>When enabled, 「」『』 <b>corner brackets</b> in <b>vertical</b> text use half-width compact layout, matching narrow half-width punctuation width instead of full-width CJK character width. Use the sub-option below to also apply the effect to <b>horizontal</b> text.</p>"),
+                anim="bracket_halfwidth",
             )
         )
 
@@ -2015,6 +2124,7 @@ class ConfigPanel(Widget):
                 "",
                 auto_tcy_row,
                 note=self.tr("<p>Automatically combine matching character runs into one upright horizontal unit in <b>vertical</b> text. Applied to translated results after each run, or to the whole project via <b>Apply</b>.</p>"),
+                anim="tcy",
             )
         )
 
@@ -2173,6 +2283,7 @@ class ConfigPanel(Widget):
                 "",
                 self.seq_badge_checker,
                 note=self.tr("<p>Displays the block <b>sequence number</b> at the top-left corner of each text block on the canvas. Disable to avoid occlusion when working with small fonts.</p>"),
+                anim="block_index",
             )
         )
 
@@ -2186,6 +2297,7 @@ class ConfigPanel(Widget):
                 "",
                 self.tag_badge_checker,
                 note=self.tr("<p>Displays the <b>block tag</b> badge at the top-right corner of each text block on the canvas (e.g. blocks flagged with low OCR confidence).</p>"),
+                anim="tag_badge",
             )
         )
 
@@ -2214,6 +2326,7 @@ class ConfigPanel(Widget):
                 "",
                 self.clip_overflow_checker,
                 note=self.tr("<p>When translation text exceeds the block boundary, <b>clip it</b> instead of enlarging the block. A <b>yellow border</b> indicates clipping. Drag a corner handle to resize and un-clip.</p>"),
+                anim="clip_text",
             )
         )
 
@@ -2525,6 +2638,52 @@ class ConfigPanel(Widget):
             )
         )
 
+        # Note animations section — regenerate the ? popup demo WebPs
+        # (scripts/gen_help_anim.py) on this machine. Rendering runs in a
+        # QProcess child: Qt forbids touching QWidget from a worker thread.
+        # 双轨：仓库跟踪的 config/help_anims/ 是固化默认，按钮产物写本机
+        # 覆盖层 config/help_anims_local/（_help_anim_path 展示优先），清除
+        # 按钮删覆盖层即回退默认。
+        config_mgmt_layout = _section_body(
+            config_mgmt_root, self.tr("Note Animations")
+        )
+
+        anim_row_widget = ConfigFlatContainer()
+        anim_row_widget.setObjectName("ConfigInlineRow")
+        anim_row_layout = QHBoxLayout(anim_row_widget)
+        anim_row_layout.setContentsMargins(0, 0, 0, 0)
+        anim_row_layout.setSpacing(12)
+        anim_row_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        self.regen_help_anim_btn = QPushButton(
+            self.tr("Regenerate demo animations")
+        )
+        self.regen_help_anim_btn.setObjectName("ConfigButton")
+        self.regen_help_anim_btn.clicked.connect(self.on_regen_help_anim)
+        anim_row_layout.addWidget(self.regen_help_anim_btn)
+
+        self.restore_help_anim_btn = QPushButton(
+            self.tr("Restore default animations")
+        )
+        self.restore_help_anim_btn.setObjectName("ConfigButton")
+        self.restore_help_anim_btn.clicked.connect(self.on_restore_help_anim)
+        anim_row_layout.addWidget(self.restore_help_anim_btn)
+
+        self.regen_help_anim_status = ConfigTextLabel("", CONFIG_FONTSIZE_CONTENT)
+        anim_row_layout.addWidget(self.regen_help_anim_status)
+        anim_row_layout.addStretch()
+
+        config_mgmt_layout.addWidget(
+            ConfigFormRow(
+                self.tr("Note animations:"),
+                anim_row_widget,
+                note=self.tr(
+                    "<p>The popup demo animations are rendered with the screen scaling and system fonts of the machine that generated them. The repository ships default animations for distribution; regenerating writes a local override that takes priority for display, and the restore button deletes the override to fall back to the defaults.</p>"
+                ),
+            )
+        )
+        self._refresh_help_anim_status()
+
         self.config_mgmt_block = generalConfigPanel.addGroupedBlock(
             label_app, config_mgmt_widget, object_name="GroupGeneral"
         )
@@ -2765,6 +2924,150 @@ class ConfigPanel(Widget):
         )
 
         create_info_dialog("\n".join(lines), parent=self)
+
+    # ── 备注演示动画重生成（QProcess 子进程渲染）────────────────────
+    # Qt 不允许非 GUI 线程碰 QWidget，渲染必须整个交给子进程
+    # scripts/gen_help_anim.py --all；本侧只解析其 stdout 汇报进度。
+
+    def _help_anim_local_count(self) -> int:
+        """本机覆盖层里现存的 webp 数（＝状态条「本机适配 n/7」的 n）。"""
+        if not osp.isdir(HELP_ANIM_LOCAL_DIR):
+            return 0
+        return sum(
+            1
+            for name in os.listdir(HELP_ANIM_LOCAL_DIR)
+            if name.lower().endswith(".webp")
+        )
+
+    def _refresh_help_anim_status(self):
+        """空闲态状态条：显示当前是「本机适配 n/7」还是「仓库默认」，并据此
+        钉清除按钮的可用性（覆盖层为空时置灰）。"""
+        count = self._help_anim_local_count()
+        if count > 0:
+            self._set_help_anim_status(self.tr("Local overrides") + f" {count}/7")
+        else:
+            self._set_help_anim_status(self.tr("Repository default"))
+        self.restore_help_anim_btn.setEnabled(
+            count > 0 and self._help_anim_proc is None
+        )
+
+    def on_regen_help_anim(self):
+        proc = self._help_anim_proc
+        if proc is not None and proc.state() != QProcess.ProcessState.NotRunning:
+            return  # 防重复：已在生成中（按钮同时置灰）
+        # 确认窗（D27 告知范式，同 ui/workbench_batch_view.py::_confirm）
+        box = QMessageBox(self)
+        box.setWindowTitle(self.tr("Regenerate demo animations"))
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setText(self.tr("Regenerate the 7 note demo animations now?"))
+        box.setTextFormat(Qt.TextFormat.RichText)
+        box.setInformativeText(
+            self.tr(
+                "<p>The 7 animations will be re-rendered in the background using this machine's screen scaling and system fonts and written to the local override folder, which takes priority for display. It takes a few dozen seconds and progress is printed to the terminal; note popups opened afterwards use the new animations.</p>"
+            )
+        )
+        box.addButton(QMessageBox.StandardButton.Ok).setText(self.tr("Run"))
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        if box.exec() != QMessageBox.StandardButton.Ok:
+            return
+
+        proc = QProcess(self)
+        proc.setWorkingDirectory(PROGRAM_PATH)
+        proc.setProcessChannelMode(QProcess.ProcessChannelMode.SeparateChannels)
+        proc.readyReadStandardOutput.connect(self._on_help_anim_stdout)
+        proc.readyReadStandardError.connect(self._on_help_anim_stderr)
+        proc.finished.connect(self._on_help_anim_finished)
+        self._help_anim_proc = proc
+        self._help_anim_done = 0
+        self._help_anim_stderr = ""
+        self.regen_help_anim_btn.setEnabled(False)
+        self.restore_help_anim_btn.setEnabled(False)
+        self._set_help_anim_status(self.tr("Generating...") + " 0/7")
+        proc.start(
+            sys.executable,
+            [
+                osp.join(PROGRAM_PATH, "scripts", "gen_help_anim.py"),
+                "--all",
+                "--out-dir",
+                HELP_ANIM_LOCAL_DIR,
+            ],
+        )
+
+    def on_restore_help_anim(self):
+        """清除本机适配：删除本机覆盖层里全部 webp，回退仓库默认动画。"""
+        if self._help_anim_proc is not None:
+            return
+        if self._help_anim_local_count() <= 0:
+            return  # 无覆盖层（按钮平时已置灰，此处兜底）
+        box = QMessageBox(self)
+        box.setWindowTitle(self.tr("Restore default animations"))
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setText(self.tr("Delete the locally generated demo animations?"))
+        box.setTextFormat(Qt.TextFormat.RichText)
+        box.setInformativeText(
+            self.tr(
+                "<p>All animation files in the local override folder will be deleted and note popups fall back to the repository default animations. The repository defaults themselves are not touched.</p>"
+            )
+        )
+        box.addButton(QMessageBox.StandardButton.Ok).setText(self.tr("Delete"))
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        if box.exec() != QMessageBox.StandardButton.Ok:
+            return
+        for name in os.listdir(HELP_ANIM_LOCAL_DIR):
+            if not name.lower().endswith(".webp"):
+                continue
+            try:
+                os.remove(osp.join(HELP_ANIM_LOCAL_DIR, name))
+            except OSError:
+                pass
+        self._refresh_help_anim_status()
+
+    def _set_help_anim_status(self, text: str):
+        self.regen_help_anim_status.setText(text)
+
+    def _on_help_anim_stdout(self):
+        proc = self.sender()
+        text = bytes(proc.readAllStandardOutput()).decode("utf-8", "replace")
+        print(text, end="")  # 子进程进度照抄到终端
+        for line in text.splitlines():
+            if line.startswith("OK "):
+                self._help_anim_done += 1
+                self._set_help_anim_status(
+                    self.tr("Generating...") + f" {self._help_anim_done}/7"
+                )
+
+    def _on_help_anim_stderr(self):
+        proc = self.sender()
+        text = bytes(proc.readAllStandardError()).decode("utf-8", "replace")
+        self._help_anim_stderr = (self._help_anim_stderr + text)[-2000:]
+
+    def _on_help_anim_finished(self, code, _status):
+        proc = self._help_anim_proc
+        self._help_anim_proc = None
+        if proc is not None:
+            proc.deleteLater()
+        self.regen_help_anim_btn.setEnabled(True)
+        if code == 0 and self._help_anim_done >= 7:
+            stamp = QTime.currentTime().toString("HH:mm")
+            self._set_help_anim_status(
+                self.tr("Local overrides") + f" 7/7 · {stamp}"
+            )
+        else:
+            self._set_help_anim_status(self.tr("Failed"))
+            # 非阻塞警告：show() 不 exec()，不拦界面
+            warn = QMessageBox(self)
+            warn.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+            warn.setWindowTitle(self.tr("Regenerate demo animations"))
+            warn.setIcon(QMessageBox.Icon.Warning)
+            warn.setText(self.tr("Demo animation generation failed."))
+            tail = self._help_anim_stderr.strip().splitlines()[-6:]
+            warn.setInformativeText(
+                "<pre>" + html.escape("\n".join(tail)) + "</pre>"
+                if tail
+                else self.tr("No error output was captured; check the terminal.")
+            )
+            warn.show()
+        self.restore_help_anim_btn.setEnabled(self._help_anim_local_count() > 0)
 
     def _wrap_page(self, content: QWidget, margins=None, recessed=True) -> QScrollArea:
         """Wrap a section widget into a scrollable page container.

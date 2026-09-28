@@ -34,6 +34,16 @@
 
 ---
 
+### 备注演示动画扩展至 7 场景 + 弹层样式/清晰度四修 + 本机重生成双轨（`help_anims_local` 覆盖层、`gen_help_anim.py` windows 原生渲染）
+
+**摘要：** 动画从 1 场景扩到 7（紧凑标点间距/竖排括号半角/纵横组合/序号徽标/标签徽标/溢出裁剪），场景适配规则立规：行为对比类开关＝改前/改后双文案+明暗互换（边框滑动方案被用户收回），外观展示类开关（两徽标）＝单条常显说明，溢出裁剪三拍演示开关两侧行为。弹层四修：白底直角框＝parentless 顶层弹窗收不到挂 MainWindow 的 QSS（自持样式表 + paintEvent 自绘底 + 原生 `setWindowOpacity`——透明窗口上 `QGraphicsOpacityEffect` 会吃掉 QSS 底且离屏复现不了）；发虚＝offscreen 默认字体落 Arial 且只有灰度 AA（生成器改 windows 平台原生渲染 + 显式 Microsoft YaHei UI + 按屏幕 DPR 出图，显示 1:1 设备像素）；重生成 WinError 5＝开过的弹层 QMovie 握文件句柄（改 QBuffer 内存播放）；既有 webp 脏帧＝`Image.fromarray(QImage)` 只是视图（改 `frombytes`）。新增双轨：仓库 `config/help_anims/`=固化默认，用户重生成写 `config/help_anims_local/` 覆盖层优先展示、可一键清除回退；重生成走 QProcess 子进程（Qt 禁止非 GUI 线程碰 QWidget），系统语言有意不纳入适配。
+
+**涉及文件：** `scripts/gen_help_anim.py`、`ui/configpanel.py`、`config/help_anims/`（7 个 webp）、`translate/zh_CN.ts`、`.gitignore`、`docs/基础速查/备注演示动画使用说明.md`
+
+**验证：** 竖排三场景与真机引擎（TextBlkItem+VerticalTextDocumentLayout）逐字比对格框 0.00px；每轮 `scripts/verify.py` 全绿；用户真机确认弹层样式与动画交互。
+
+---
+
 ## 2026-09-27
 
 ### 字号输入上限跟随 `pcfg.max_font_size`（`SizeComboBox.set_max_val`）
