@@ -42,6 +42,8 @@ SKIP_DIRS = {
     ".obsidian",
     "tmp",  # 临时工作区（.gitignore 内、随时可清理）：pytest 日志/调试转储
             # 天然会提到当时存在的文件名，变了就误报
+    ".btrans_cache",  # 自更新缓存（.gitignore 内）：last_version 存整份旧版仓库，
+                      # 自带旧 audit_registry.json，会把已删文件全数误报
 }
 SKIP_FILES = {
     "docs/daily_log.md",

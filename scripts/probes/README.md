@@ -70,3 +70,10 @@ Models → Management 的「释放内存」按钮；`pcfg.region_redetect_device
 
 第二条的样本目录常量 `PROJ_DIR` 指向 `D:\汉化\施工区副本`（换机器要改）。
 报告是 UTF-8，**别让脚本输出走 PowerShell 管道**——控制台是 GBK，非 ASCII 会乱码。
+
+## 五、检测方向判定核验（2026-09-28）
+
+| 脚本 | 做什么 | 期望值 |
+|---|---|---|
+| `direction_matrix.py` | `mit_merge_textlines` 方向判定合成矩阵（无需模型）：单行/多行/混合/斜 8° 共 10 组 + `sort_pnts` 直测 4 组；钉住单行修复与多行组既有投票口径（两行平票判竖、三行一票即竖） | 全部 ✅；改投票逻辑前后各跑一次做对比 |
+| `direction_probe.py` | 对命令行给出的图片跑**指定检测器**（`--detector`，默认取 config 当前值）真实检测，逐块打印外接框宽高与 `src_is_vertical`；修 `mit_merge_textlines` 单行块恒判竖排的 bug 后核验用（修前横排单行块也全判竖排）。ysgyolo 与 ppocrv6_onnx 都已核验 | 宽扁框（w>h）→ `False`，高瘦框 → `True` |

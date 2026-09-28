@@ -12,6 +12,18 @@
 >
 > 仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护）；被裁掉的日期节仍完整留在提交历史里，用 `git log --grep <关键词>`／`git log --follow -p -- docs/daily_log.md`／`git show <rev>:docs/daily_log.md` 回查。
 
+## 2026-09-28
+
+### 检测方向判定修复：合并路径单行块恒判竖排（`mit_merge_textlines` 投票阈值）+ 方向探针/矩阵
+
+**摘要：** ysgyolo「Merge Text Lines」开启时所有检测框经 `utils/textblock.py::mit_merge_textlines` 聚组投票判向，阈值 `nv >= len//2` 在单行块（len//2==0）恒真，横排单行块全被误判竖排（用户实测：横排内容 OCR 正确但渲染方向竖排，曾被误疑为全局样式覆盖）。阈值改 `max(len//2, 1)`：单行块跟随该行自身方向，多行组投票口径不变。ppocrv6 逐框 `sort_pnts` 判向本就不受影响，一并真图核验。
+
+**涉及文件：** `utils/textblock.py`、`scripts/probes/direction_probe.py`、`scripts/probes/direction_matrix.py`、`scripts/probes/README.md`、`scripts/check_audit.py`
+
+**验证：** 合成矩阵 14 项全过（钉住单行修复与「两行平票判竖、三行一票即竖」的既有口径）；ysgyolo 与 ppocrv6 分别对混排测试图实测，宽扁框判横排、高瘦框判竖排；`scripts/verify.py` 全绿。顺带：`check_audit.py` SKIP_DIRS 排除 `.btrans_cache`——自更新缓存 last_version 内的旧版登记表会误报 125 处「删除后残留引用」。
+
+---
+
 ## 2026-09-27
 
 ### 字号输入上限跟随 `pcfg.max_font_size`（`SizeComboBox.set_max_val`）
@@ -111,28 +123,6 @@
 **涉及文件：** `launch.py`、`launch.bat`、`utils/logger.py`、`utils/network_mirrors.py`、`utils/core_requirements.py`、`utils/config.py`、`utils/shared.py`、`modules/base.py`、`modules/inpaint/patch_match.py`、`modules/inpaint/inpaint_patchmatch.py`、`ui/module_parse_widgets.py`、`ui/run_pipeline_dialog.py`、`ui/model_downloads.py`、`utils/package_installer.py`、`scripts/build_win_minimal.ps1`、`scripts/README.md`、`README.md`、`README_EN.md`、`docs/基础速查/依赖库说明.md`、`docs/项目概述.md`
 
 **验证：** `scripts/verify.py` 全绿；pytest 1474 passed / 1 skipped。**端到端真实构建未跑**（需干净树 + 网络下载），发版前按 `scripts/README.md`「发版包发行」流程执行（该节 2026-09-27 已改口径：发行物＝约 30 MB 引导小包，预装式不再发行）。
-
----
-
-## 2026-09-25
-
-### 竖排描边克隆 _draw_offset 形状失配闪退修复（updateDrawOffsets 守卫）+ 演练台 stroke-switch 场景
-
-**摘要：** 用户反馈快速切图闪退（IndexError @ `ui/text_engine/vertical_layout.py::vertical_line_placement`）：描边渲染的克隆文档与原布局共享 `_draw_offset`，而字号/文本应用等事务在 `relayout_on_changed=False` 窗口内改文档后，同步 contentsChanged → `repaint_background` 生成描边光栅走克隆路径，拿旧表索引新结构，行数变多即越界。修法＝`ui/text_engine/vertical_layout.py::updateDrawOffsets` 守卫先形状校验（`_draw_offset_shape_matches`），失配时 rebind 新列表按本文档重建、不 clear 共享对象。漂移真因是抑制窗口本身（不是字距——竖排每字符占一行，字号不改 lineCount）；上游同款代码，反向移植时连带。
-
-**验证：** `tests/test_vertical_engine.py::StrokeCloneOffsetGuardTest` 红绿（还原修复即复现用户同款调用栈）；演练台 `scripts/mw_repro.py --scenario stroke-switch` 修复前复现同款栈、修复后通过。
-
-**涉及文件：** `ui/text_engine/vertical_layout.py`、`tests/test_vertical_engine.py`、`scripts/mw_repro.py`、`scripts/README.md`
-
----
-
-### 工作台批量任务刷新前置对齐（pre_replan）+ 内容改动过时灯（content_modified → mark_stale）
-
-**摘要：** 用户实测「刷新无效」：`plan` 直读数据层 `proj.pages`，画布上手动增删框／键入只落在视觉层。修法＝`ui/workbench_batch_view.py::BatchTaskView` 重扫前先跑面板注入的 `pre_replan`（`ui/glossary_agent_panel.py::_sync_before_plan`：`text_change_unsaved` 门控 `updateTextBlkList` + `_sync_block_data` 兜结构性增删，对齐失败不挡重扫）。另加**只亮灯不自动重扫**的过时提示：`Canvas.content_modified`（置脏每次调用都广播——状态翻转信号对重复置脏会漏报）→ `mark_content_changed` 给已规划页亮「列表可能过时」，replan 熄灯、换项目 `forget_plan` 作废；管线完成与全局替换两条不走画布置脏口的路径直连广播。
-
-**验证：** `tests/test_workbench_panel.py` 新增重扫顺序与过时灯生命周期两用例；`scripts/verify.py` 全绿。
-
-**涉及文件：** `ui/canvas.py`、`ui/mainwindow.py`、`ui/glossary_agent_panel.py`、`ui/workbench_batch_view.py`、`config/stylesheet.css`、`translate/zh_CN.ts`、`translate/zh_CN.qm`、`tests/test_workbench_panel.py`
 
 ---
 

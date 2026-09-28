@@ -1031,7 +1031,9 @@ def mit_merge_textlines(
         for txtln in txtlns:
             if txtln.direction == "v":
                 nv += 1
-        is_vertical = nv >= len(txtlns) // 2
+        # max(..., 1)：单行块的 //2 得 0，nv>=0 恒真，横排单行会被误判竖排；
+        # 抬到 1 后单行块跟随该行自己的 direction，多行块投票阈值不变
+        is_vertical = nv >= max(len(txtlns) // 2, 1)
         region = TextBlock(
             lines=lines,
             text=texts,
