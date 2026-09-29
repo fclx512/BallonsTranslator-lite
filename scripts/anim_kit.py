@@ -514,22 +514,48 @@ def qimage_to_pil(img: QImage) -> Image.Image:
     return Image.frombytes("RGBA", (w, h), arr.tobytes())
 
 
-def render_frames(app: QApplication, scene: AnimScene, dump_dir: str = None) -> list:
-    """按帧号确定性步进逐帧 grab（不 show，windows 平台下无闪窗）。"""
-    frames = []
+def iter_frames(app: QApplication, scene: AnimScene, dump_dir: str = None,
+                camera=None):
+    """按帧号确定性步进逐帧 grab（不 show，windows 平台下无闪窗）。
+
+    生成器形态：大画幅场景全帧留内存会到几百 MB，改为一帧一产出、由编码端
+    消费。``camera(f) -> QRectF|None`` 为可选视口钩子（README 大画幅的
+    「镜头跟随光标」）：返回逻辑坐标裁切矩形时按其裁切输出，None 输出整幅。
+    裁切在 grab 后立即做，迭代过程中至多持有当前一帧。
+    """
     for f in range(scene.N_FRAMES):
         scene.set_state(f)
         app.processEvents()
-        frames.append(qimage_to_pil(scene.grab().toImage()))
+        frame = qimage_to_pil(scene.grab().toImage())
+        if camera is not None:
+            rect = camera(f)
+            if rect is not None:
+                scale = frame.width / scene.width()
+                x0 = round(rect.x() * scale)
+                y0 = round(rect.y() * scale)
+                w = round(rect.width() * scale)
+                h = round(rect.height() * scale)
+                frame = frame.crop((
+                    max(0, x0), max(0, y0),
+                    min(frame.width, x0 + w), min(frame.height, y0 + h),
+                ))
         if dump_dir:
             os.makedirs(dump_dir, exist_ok=True)
-            frames[-1].save(osp.join(dump_dir, f"frame_{f:03d}.png"))
-    return frames
+            frame.save(osp.join(dump_dir, f"frame_{f:03d}.png"))
+        yield frame
 
 
-def save_webp(frames: list, out: str, fps: int, lossless: bool = True) -> float:
+def render_frames(app: QApplication, scene: AnimScene, dump_dir: str = None,
+                  camera=None) -> list:
+    """``iter_frames`` 的列表形态（弹层流程既有调用面保持不变）。"""
+    return list(iter_frames(app, scene, dump_dir, camera))
+
+
+def save_webp(frames, out: str, fps: int, lossless: bool = True) -> float:
     """编码并落盘，返回产物体积 KB。
 
+    ``frames`` 接受任意可迭代（list 或生成器）：生成器形态下 Pillow 逐帧
+    消费、内存至多持有当前一帧，大画幅长时长的唯一可行形态。
     先写 ``<out>.tmp`` 再 ``os.replace``：显示侧 QMovie 可能仍握着旧文件句柄，
     直接覆写会失败。replace 失败（Windows 上是 PermissionError/OSError）重试
     一次，仍失败则抛出、由调用方按场景点名，不中断其他场景。弹层产物走无损
@@ -537,11 +563,13 @@ def save_webp(frames: list, out: str, fps: int, lossless: bool = True) -> float:
     """
     os.makedirs(osp.dirname(out), exist_ok=True)
     tmp = out + ".tmp"
-    frames[0].save(
+    it = iter(frames)
+    first = next(it)
+    first.save(
         tmp,
         "WEBP",
         save_all=True,
-        append_images=frames[1:],
+        append_images=it,
         duration=int(1000 / fps),
         loop=0,
         lossless=lossless,

@@ -14,6 +14,16 @@
 
 ## 2026-09-29
 
+### README 大画幅演示动画流程落地（`scripts/gen_readme_anim.py` 首个场景 `format_tour` + `anim_kit` 流式/裁切改造）
+
+**摘要：** 首个 README 演示落地，同时实战验证组件化机制层：场景（主页面右侧格式面板基础排版巡礼，镜头跟随光标一镜到底）全部用既有原语组装，机制层只动了两处——`scripts/anim_kit.py::iter_frames` 增视口裁切钩子（camera 回调逐帧裁切）、`save_webp` 改流式（生成器喂 `append_images`，大画幅内存至多持有当前一帧）。画布文本块走真机引擎（`ui/textitem.py::TextBlkItem` + 引擎 setter），竖排几何天然正确、弹层流程的手绘探针验收消失；实测无损编码仍优于有损（纯色 UI），镜头目标须钳在画布内否则帧尺寸漂移。制作坑（布局惰性激活致航点全错、真弹层 grab 抓不到须画覆盖层、须从仓库根运行）写入使用说明 README 流程节。
+
+**涉及文件：** `scripts/gen_readme_anim.py`（新增）、`scripts/anim_kit.py`、`scripts/README.md`、`docs/基础速查/备注演示动画使用说明.md`
+
+**验证：** 弹层 7 场景重生成产物逐字节一致（`anim_kit` 改造零回归）；真机 `mw_repro.py` 临时场景查看通过（测后接线已拆除）；产物 1760×1120 无损 2.9MB，210 帧 @20fps。
+
+---
+
 ### 演示动画生成管线组件化（`scripts/anim_kit.py` 机制库 + `CursorPlan`/`AnimScene` + `CheckboxDemoScene` 预设）
 
 **摘要：** 原 `_DemoScene` 把机制与"复选框单点叙事"的版式/节奏焊死，叙事不匹配的功能只能硬套或整个重写。拆成共享机制库 `scripts/anim_kit.py`（确定性时间轴原语、光标编排 `CursorPlan`、场景基类 `AnimScene`、文案/绘制组件、渲染编码，对画布尺寸/文案位置零假设）+ `scripts/gen_help_anim.py`（弹层版式常量与 7 个场景）；复选框场景走 `CheckboxDemoScene` 预设，下拉选择类照 `PunctuationScene` 自行组装，`clip_text` 三拍光标交 `CursorPlan`、删掉整段 `set_state` 覆写。为 README 大画幅流程留好接口，流程约束（独立注册表、镜头跟随光标、可损编码）写入使用说明，脚本首个演示落地时再建。
