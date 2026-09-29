@@ -1509,6 +1509,9 @@ class ConfigPanel(Widget):
         # 备注演示动画重生成子进程（QProcess，见 on_regen_help_anim）
         self._help_anim_proc: QProcess | None = None
         self._help_anim_done = 0
+        # 场景总数从子进程 stdout 的 TOTAL 行解析（缺省回落 7）——
+        # 新增弹层场景时状态条不再静默错
+        self._help_anim_total = 7
         self._help_anim_stderr = ""
 
         # Right-hand side is now a page stack: each nav item switches a page
@@ -2944,7 +2947,9 @@ class ConfigPanel(Widget):
         钉清除按钮的可用性（覆盖层为空时置灰）。"""
         count = self._help_anim_local_count()
         if count > 0:
-            self._set_help_anim_status(self.tr("Local overrides") + f" {count}/7")
+            self._set_help_anim_status(
+                self.tr("Local overrides") + f" {count}/{self._help_anim_total}"
+            )
         else:
             self._set_help_anim_status(self.tr("Repository default"))
         self.restore_help_anim_btn.setEnabled(
@@ -2979,10 +2984,13 @@ class ConfigPanel(Widget):
         proc.finished.connect(self._on_help_anim_finished)
         self._help_anim_proc = proc
         self._help_anim_done = 0
+        self._help_anim_total = 7
         self._help_anim_stderr = ""
         self.regen_help_anim_btn.setEnabled(False)
         self.restore_help_anim_btn.setEnabled(False)
-        self._set_help_anim_status(self.tr("Generating...") + " 0/7")
+        self._set_help_anim_status(
+            self.tr("Generating...") + f" 0/{self._help_anim_total}"
+        )
         proc.start(
             sys.executable,
             [
@@ -3030,10 +3038,16 @@ class ConfigPanel(Widget):
         text = bytes(proc.readAllStandardOutput()).decode("utf-8", "replace")
         print(text, end="")  # 子进程进度照抄到终端
         for line in text.splitlines():
-            if line.startswith("OK "):
+            if line.startswith("TOTAL "):
+                try:
+                    self._help_anim_total = max(1, int(line[6:].strip()))
+                except ValueError:
+                    pass
+            elif line.startswith("OK "):
                 self._help_anim_done += 1
                 self._set_help_anim_status(
-                    self.tr("Generating...") + f" {self._help_anim_done}/7"
+                    self.tr("Generating...")
+                    + f" {self._help_anim_done}/{self._help_anim_total}"
                 )
 
     def _on_help_anim_stderr(self):
@@ -3047,10 +3061,11 @@ class ConfigPanel(Widget):
         if proc is not None:
             proc.deleteLater()
         self.regen_help_anim_btn.setEnabled(True)
-        if code == 0 and self._help_anim_done >= 7:
+        if code == 0 and self._help_anim_done >= self._help_anim_total:
             stamp = QTime.currentTime().toString("HH:mm")
             self._set_help_anim_status(
-                self.tr("Local overrides") + f" 7/7 · {stamp}"
+                self.tr("Local overrides")
+                + f" {self._help_anim_total}/{self._help_anim_total} · {stamp}"
             )
         else:
             self._set_help_anim_status(self.tr("Failed"))

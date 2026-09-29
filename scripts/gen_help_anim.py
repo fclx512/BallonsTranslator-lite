@@ -6,24 +6,27 @@
          --fps 帧率 / --theme 主题名（默认取当前配置主题）/
          --platform windows|offscreen / --dump-frames 目录（逐帧导出 PNG，供目视检查）
 
-管线要点：
+机制（确定性时间轴原语、光标编排 CursorPlan、场景基类 AnimScene、文案组件、
+渲染/编码管线）在 ``scripts/anim_kit.py``，本文件只保留弹层流程：460×262
+版式常量、场景与 CLI。
+
+弹层管线要点：
 - QT_QPA_PLATFORM 默认 windows（原生 DPR 就是真实屏幕值，**不设** QT_SCALE_FACTOR
   避免叠乘）；显式覆盖用环境变量或 ``--platform offscreen``（调试用）。windows
   平台下不 show 窗口也能直接 grab()，无闪窗。
-- 产物分辨率 = 460×262 × 屏幕真实 DPR：windows 平台下 grab() 天然返回 DPR
-  缩放后的物理像素；显示侧取屏幕 DPR 折算逻辑尺寸
+- 产物分辨率 = 460×262 × 渲染 DPR，**DPR 双轨**（``_resolve_dpr``）：写仓库默认
+  目录自动**钉定 DPR 1.25**（QT_ENABLE_HIGHDPI_SCALING=0 + QT_SCALE_FACTOR=1.25，
+  先于 QApplication 设置）——入库产物跨工作机逐字节一致；其余输出（本机覆盖层
+  config/help_anims_local/、显式 --out/--out-dir）按本机屏幕真实 DPR（覆盖层的
+  意义就是本机适配）；``--dpr`` 显式覆盖。显示侧取屏幕 DPR 折算逻辑尺寸
   （ui/configpanel.py::ConfigNotePopup），生成 DPR = 显示 DPR 时 1 图像像素 =
-  1 设备像素。产物物理尺寸绑定生成机的屏幕——跨机器不匹配时显示侧不插值、
-  依然逐像素清晰，只是逻辑尺寸偏大/偏小，用设置页的重新生成按钮重出即可。
-- 字体：预览字符与 UI 标签统一显式家族 "Microsoft YaHei UI"（GUI 的真实默认；
-  offscreen 的"系统默认"会落到 Arial，中文走错回退链且只有灰度 AA，是产物
-  发虚的根因），预览字符保持 DemiBold 字重提可读性；家族缺失时 Qt 自动回退。
-- 帧号确定性步进：所有动画状态由帧号推算（set_state），不依赖真实时钟，
-  生成结果可复现；界面改版后重跑本脚本即再生成。
+  1 设备像素；钉定产物换机器显示时用设置页的重新生成按钮重出本机适配版。
 - 样式复用 config/stylesheet.css + 用户主题（ui.misc.parse_stylesheet），
-  下拉框用真实 ConfigComboBox，保证与设置页观感一致。
-- 编码：Pillow 无损动画 WebP（lossless + method=6）；纯色 UI 内容下体积
-  最小，且 PyQt6 自带 qwebp 插件，QMovie 可直接播放。
+  组合框等直接用 ui/custom_widget 封装控件，保证与设置页观感一致。
+- 场景形态：``punctuation_position``（下拉选择叙事）直接继承 AnimScene 自行
+  组装；其余 6 个走 ``CheckboxDemoScene`` 预设（复选框单点叙事：光标入场 →
+  点击 → 过渡 → 文案明暗互换）。**不匹配该叙事的功能别硬套**——参照
+  PunctuationScene 的做法用 AnimScene + 组件自行组装。
 - 文案方案分两类：**行为对比类**（开关改变渲染行为，如标点布局/引号宽度/
   tcy/裁剪/块放大）用改前/改后两条**从头到尾同时显示**（改前在上、改后在
   下），未激活一条降到约 35% 不透明度、激活的全亮；点击后两条用 out_cubic
@@ -32,14 +35,9 @@
   都用 rgba 前景色调 alpha，**不用** QGraphicsOpacityEffect、**没有**高亮
   边框。
 - 竖排列的几何一律照 ui/text_engine/vertical_layout.py::layoutBlock /
-  updateDrawOffsets 的数学：**进给/格高**用 QFontMetricsF.tightBoundingRect
-  （引擎 get_punc_rect 用的就是它），**墨迹摆位**用字形真实轮廓
-  （QPainterPath.addText，引擎画的就是向量轮廓，两者同一字形能差 ~1px）。
-  改动这些场景后跑一次性探针与真机引擎逐字比对（见 docs 使用说明「验收」）。
+  updateDrawOffsets 的数学（两把尺子的口径见 anim_kit 模块注释）。改动这些
+  场景后跑一次性探针与真机引擎逐字比对（见 docs 使用说明「验收」）。
 - 每个场景自带 N_FRAMES（时长不同），main() 按场景类属性循环。
-- 除标点场景外的 6 个场景都继承 _DemoScene：设置行（真实 ConfigCheckBox）
-  + 预览卡 + 右侧两条常显文案，光标/点击涟漪/下拉画在置顶透明覆盖层上
-  （构建完成后统一 raise_，保证盖过包括文案在内的所有子控件）。
 
 动画内文字为烘焙像素、不走 i18n（演示面向中文用户，直书中文）。
 """
@@ -56,42 +54,61 @@ os.environ.setdefault("QT_QPA_PLATFORM", "windows")
 # 指定字体目录，否则中文全是豆腐块
 if os.environ.get("QT_QPA_PLATFORM", "").lower() == "offscreen":
     os.environ.setdefault("QT_QPA_FONTDIR", "C:/Windows/Fonts")
-# 产物分辨率 = 460×262 × 屏幕真实 DPR（windows 平台下 grab 天然返回物理像素），
-# 显示侧按屏幕 DPR 折算逻辑尺寸（ui/configpanel.py::ConfigNotePopup）。
 
 ROOT = osp.dirname(osp.dirname(osp.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+# 便携解释器带 PYTHONSAFEPATH，脚本目录不自动进 sys.path（anim_kit 同目录）
+SCRIPT_DIR = osp.dirname(osp.abspath(__file__))
+for _p in (SCRIPT_DIR, ROOT):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
-import numpy as np
-from PIL import Image
 from qtpy.QtCore import QPointF, QRectF, Qt
 from qtpy.QtGui import (
     QColor,
     QFont,
     QFontMetrics,
     QFontMetricsF,
-    QImage,
     QPainter,
-    QPainterPath,
     QPen,
 )
-from qtpy.QtWidgets import QApplication, QLabel, QPushButton, QWidget
+from qtpy.QtWidgets import QLabel, QPushButton
 
+from anim_kit import (
+    BADGE_H_PAD,
+    BADGE_V_PAD,
+    CLIP_WARN_COLOR,
+    CursorPlan,
+    AnimScene,
+    HANDLE_BORDER_COLOR,
+    HANDLE_FILL_COLOR,
+    HANDLE_SIZE,
+    SEQ_BADGE_COLOR,
+    TAG_BADGE_DIRECTIVE_COLOR,
+    TAG_BADGE_DOUBT_COLOR,
+    TEXTRECT_SELECTED_COLOR,
+    TEXTRECT_SHOW_COLOR,
+    UI_FONT_FAMILY,
+    clamp01,
+    draw_block_frame,
+    draw_cell_guide,
+    draw_ink_center,
+    draw_rotated_ink,
+    draw_ink_top_right,
+    guide_alpha,
+    init_app,
+    ink_pen,
+    make_caption_labels,
+    make_single_caption,
+    move_progress,
+    out_cubic,
+    outline_ink,
+    preview_font,
+    render_frames,
+    save_webp,
+    set_caption_emphasis,
+)
 from ui.custom_widget import ConfigCheckBox, ConfigComboBox
-from ui.misc import get_theme_color, parse_stylesheet
-from utils.config import load_config
 from utils.shared import CONFIG_COMBOBOX_HEIGHT, CONFIG_COMBOBOX_SHORT
-
-# ── 标点场景的时间轴（帧号，@10fps → 2.5s）──────────────────────
-# 其余场景的时间轴在各自类里（_DemoScene 的 F_* 与类属性 N_FRAMES）
-F_CURSOR_ARRIVE = 6   # 光标移动到下拉框
-F_PRESS = 7           # 按下下拉框
-F_OPEN = 8            # 下拉列表展开（两帧展开动画）
-F_CLICK = 12          # 点选「靠边」
-F_MOVE_START = 13     # 标点开始移动 + 两条文案开始明暗互换
-F_MOVE_END = 18       # 标点到位（互换也完成，共 6 帧）
-F_CURSOR_FADE = 20    # 光标开始淡出（4 帧）
 
 OPT_CENTER = "居中（繁体中文/日文）"
 OPT_EDGE = "靠边（简体中文）"
@@ -114,283 +131,24 @@ CELL = 30
 COL_GAP = 18
 
 
-def clamp01(v):
-    return max(0.0, min(1.0, v))
+class PunctuationScene(AnimScene):
+    """460x262 的单场景画布：设置行（真实控件）+ 竖排预览（自绘）。
 
-
-def out_cubic(t):
-    t = clamp01(t)
-    return 1.0 - (1.0 - t) ** 3
-
-
-# ── 画布取色/尺寸常量（照抄真实实现，来源写在各自注释里）────────────
-TEXTRECT_SHOW_COLOR = QColor(30, 147, 229, 170)       # ui/textitem.py
-TEXTRECT_SELECTED_COLOR = QColor(248, 64, 147, 170)    # ui/textitem.py
-CLIP_WARN_COLOR = QColor(255, 200, 0, 200)             # ui/textitem.py 黄框
-SEQ_BADGE_COLOR = QColor(0, 0, 0, 170)                 # 序号徽标底色
-TAG_BADGE_DOUBT_COLOR = QColor(225, 88, 62, 220)       # 疑点类标签徽标
-TAG_BADGE_DIRECTIVE_COLOR = QColor(72, 132, 240, 220)  # 指示类标签徽标
-HANDLE_FILL_COLOR = QColor(200, 200, 200, 125)         # shape_control 手柄
-HANDLE_BORDER_COLOR = QColor(75, 75, 75)
-HANDLE_SIZE = 15.0    # CBEDGE_WIDTH(30) / 2：手柄实画边长
-BADGE_H_PAD = 4       # 徽标内边距（引擎 _OrderBadgeItem / _TagBadgeItem）
-BADGE_V_PAD = 2
-
-
-# ── 字形墨迹的两把尺子（与引擎一致，别混用）──────────────────────
-# 引擎：进给/格高来自 QFontMetricsF.tightBoundingRect（layout.py::get_punc_rect，
-# 结果按整数取整）；墨迹摆位来自向量轮廓（rendering/glyph.py::glyph_geometry）。
-# 本脚本照抄这两把尺子：格高用 tight，摆墨迹用轮廓——混用会让整体错 ~1px。
-_INK_CACHE = {}
-
-
-def outline_ink(font: QFont, ch: str) -> QRectF:
-    """字形真实轮廓墨迹框（原点在基线，y 向下）。"""
-    key = (font.family(), font.pixelSize(), font.weight(), ch)
-    rect = _INK_CACHE.get(key)
-    if rect is None:
-        path = QPainterPath()
-        path.addText(0.0, 0.0, font, ch)
-        rect = path.boundingRect()
-        _INK_CACHE[key] = rect
-    return QRectF(rect)
-
-
-def ink_pen(ink: QRectF, ink_left: float, ink_top: float) -> QPointF:
-    """把墨迹左上角放到 (ink_left, ink_top) 时的 drawText 基线坐标。
-
-    drawText 收的是基线坐标，须减去墨迹框偏移——**只减一次**（重复减会让整列
-    字下坠错位，首个场景踩过）。
+    下拉选择叙事的组装样本：光标入场 → 按下展开下拉 → 移到菜单项点选 →
+    标点移动 + 文案明暗互换。时间轴（@10fps → 2.5s）：
+    F_OPEN=8 展开 / F_CLICK=12 点选 / 13～18 标点移动 / 20 光标淡出。
     """
-    return QPointF(ink_left - ink.left(), ink_top - ink.top())
-
-
-# ── 共用绘制小件（标点场景与本文件其余场景共用，观感语言一致）────────
-
-def _cursor_path(point: QPointF, scale: float) -> QPainterPath:
-    """鼠标箭头路径（原 PunctuationScene 的形状）。"""
-    pts = (
-        (0, 0), (0, 14.5), (3.1, 11.8), (5.6, 17.2), (8.0, 16.2),
-        (5.6, 10.6), (10.2, 10.6),
-    )
-    path = QPainterPath()
-    path.moveTo(point)
-    for x, y in pts[1:]:
-        path.lineTo(point + QPointF(x * scale, y * scale))
-    path.closeSubpath()
-    return path
-
-
-def paint_cursor(painter: QPainter, point: QPointF, alpha: float,
-                 pressed: bool, color: QColor):
-    """白色箭头光标；按下时缩到 85%。"""
-    if alpha <= 0.01:
-        return
-    c = QColor(color)
-    c.setAlpha(int(255 * alpha))
-    painter.setPen(QPen(c, 1.2))
-    painter.setBrush(QColor(255, 255, 255, int(255 * alpha)))
-    painter.drawPath(_cursor_path(point, 1.4 * (0.85 if pressed else 1.0)))
-
-
-def paint_click_ring(painter: QPainter, point: QPointF, k: float, color: QColor):
-    """点击涟漪，k 从 0 走到 1。"""
-    if k <= 0.0:
-        return
-    c = QColor(color)
-    c.setAlpha(int(220 * (1.0 - k)))
-    painter.setPen(QPen(c, 2))
-    painter.setBrush(Qt.BrushStyle.NoBrush)
-    r = 10 + 8 * k
-    painter.drawEllipse(point, r, r)
-
-
-# 显式家族：GUI 的真实默认。offscreen/裸默认的"系统默认"会落到 Arial，
-# 中文走错回退链且只有灰度 AA，是产物发虚的根因；家族缺失时 Qt 自动回退。
-UI_FONT_FAMILY = "Microsoft YaHei UI"
-
-
-def preview_font(pixel_size: int) -> QFont:
-    """预览字符字体：显式 YaHei UI 家族 + DemiBold 字重。
-
-    用户点名的痛点：默认字重的黑体在小字号下渲染出来发虚，竖排预览字符
-    统一提半档字重。家族显式钉 UI_FONT_FAMILY，不依赖平台默认解析。
-    """
-    font = QFont(UI_FONT_FAMILY)
-    font.setPixelSize(pixel_size)
-    font.setWeight(QFont.Weight.DemiBold)
-    return font
-
-
-def set_caption_emphasis(labels, k: float, color: QColor):
-    """两条常显文案的明暗互换：未激活一条降到约 35% 不透明度，激活的全亮。
-
-    k=0 改前条全亮（改后条暗），k=1 反转；点击复选框/下拉项后用 out_cubic
-    约 5 帧交叉淡化互换，与预览过渡同步。实现是 QLabel.setStyleSheet 调
-    rgba 前景色的 alpha，**禁止用 QGraphicsOpacityEffect**（图形效果接管
-    重绘后在透明窗口上不可靠，见 ui/configpanel.py::ConfigNotePopup）。
-    """
-    hi = 210
-    lo = round(hi * 0.35)
-    rgb = f"{color.red()},{color.green()},{color.blue()}"
-    alphas = (hi + (lo - hi) * k, lo + (hi - lo) * k)
-    for label, alpha in zip(labels, alphas):
-        label.setStyleSheet(
-            f"color: rgba({rgb},{round(alpha)});"
-            "background: transparent; font-size: 12px;"
-        )
-
-
-def make_caption_labels(parent: QWidget, fg: QColor, captions) -> list:
-    """两条常显文案（改前在上、改后在下）；返回 labels。
-
-    初始强调状态 = 改前条全亮（k=0）。
-    """
-    labels = []
-    for index, text in enumerate(captions):
-        label = QLabel(parent)
-        label.setWordWrap(True)
-        label.setTextFormat(Qt.TextFormat.RichText)
-        label.setAlignment(
-            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
-        )
-        label.setGeometry(CAPTION_X, CAPTION_Y[index], CAPTION_W, CAPTION_H)
-        label.setText(text)
-        labels.append(label)
-    set_caption_emphasis(labels, 0.0, fg)
-    return labels
-
-
-def make_single_caption(parent: QWidget, fg: QColor, text: str) -> QLabel:
-    """外观展示类场景的**单条常显说明**（无改前/改后前缀、无明暗互换）。
-
-    适用判据：开关只是「显示/不显示」某个装饰（无布局行为差异）时，改前条
-    「不显示 XX」没有信息量，改单条直述该功能呈现什么。行为对比类（开关改变
-    渲染行为）仍走 ``make_caption_labels`` 的双条 + 明暗互换。
-    """
-    label = QLabel(parent)
-    label.setWordWrap(True)
-    label.setTextFormat(Qt.TextFormat.RichText)
-    label.setAlignment(
-        Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
-    )
-    label.setGeometry(CAPTION_X, CAPTION_Y[0], CAPTION_W, CAPTION_H)
-    rgb = f"{fg.red()},{fg.green()},{fg.blue()}"
-    label.setStyleSheet(
-        f"color: rgba({rgb},210);"
-        "background: transparent; font-size: 12px;"
-    )
-    label.setText(text)
-    return label
-
-
-def draw_cell_guide(painter: QPainter, rect: QRectF, color: QColor, alpha: float):
-    """虚线字格提示（标点场景的画法：强调「这个字占多大格」）。"""
-    if alpha <= 0.01:
-        return
-    c = QColor(color)
-    c.setAlpha(int(200 * alpha))
-    pen = QPen(c, 1, Qt.PenStyle.DashLine)
-    pen.setDashPattern([3, 2])
-    painter.setPen(pen)
-    painter.setBrush(Qt.BrushStyle.NoBrush)
-    painter.drawRect(rect)
-
-
-def draw_block_frame(painter: QPainter, rect: QRectF, color: QColor, width: float,
-                     dashed: bool = False):
-    """文本框描边（画布上的常规/选中描边与溢出黄框共用）。"""
-    pen = QPen(color, width,
-               Qt.PenStyle.DashLine if dashed else Qt.PenStyle.SolidLine)
-    painter.setPen(pen)
-    painter.setBrush(Qt.BrushStyle.NoBrush)
-    painter.drawRect(rect)
-
-
-def draw_ink_center(painter: QPainter, fm: QFontMetricsF, ch: str, rect: QRectF,
-                    color: QColor, ink: QRectF = None, font: QFont = None):
-    """墨迹在 rect 里水平垂直居中（引擎对全宽字与直立西文的摆法）。
-
-    引擎居中用的是**轮廓**墨迹（updateDrawOffsets 的 act_rect），给了 font 就
-    按轮廓摆，否则退回 tightBoundingRect（徽标等小字示意用）。
-    """
-    if ink is None and font is not None:
-        ink = outline_ink(font, ch)
-    if ink is None:
-        ink = fm.tightBoundingRect(ch)
-    painter.setPen(color)
-    painter.drawText(
-        ink_pen(ink, rect.center().x() - ink.width() / 2,
-                rect.center().y() - ink.height() / 2),
-        ch,
-    )
-
-
-def draw_ink_top_right(painter: QPainter, fm: QFontMetricsF, ch: str, rect: QRectF,
-                       color: QColor, ink: QRectF = None, font: QFont = None):
-    """墨迹贴 rect 右上角（引擎 Simplified 靠边分支：墨迹顶格顶、右齐列宽）。
-
-    引擎该分支是 xoff = -act_rect.left() + base_width - act_rect.width()、
-    yoff = -act_rect.top()——即墨迹右边齐 base_width（= 列宽）、上边齐格顶，
-    **没有**内缩余量。
-    """
-    if ink is None and font is not None:
-        ink = outline_ink(font, ch)
-    if ink is None:
-        ink = fm.tightBoundingRect(ch)
-    painter.setPen(color)
-    painter.drawText(
-        ink_pen(ink, rect.right() - ink.width(), rect.top()),
-        ch,
-    )
-
-
-def draw_rotated_ink(painter: QPainter, ink: QRectF, ch: str, col_left: float,
-                     col_w: float, cell_top: float, color: QColor, opening: bool,
-                     shift: float = 0.0):
-    """竖排里需旋转的字（「」『』）：顺时针转 90° 画在字格列里。
-
-    摆位照 ui/text_engine/vertical_layout.py::updateDrawOffsets 的旋转分支：
-    - 屏幕 y（沿列方向）= 格顶 + 墨迹左旁距；闭括号在 ALIGNL 分支整体减去该旁距
-      （等价于墨迹贴格顶），开括号另有半角补偿 shift；
-    - 屏幕 x：开括号贴列右缘（PUNSET_ROTATE_ALIGNR），闭括号贴列左缘
-      （PUNSET_ROTATE_ALIGNL）。
-    """
-    if opening:
-        tx = col_left + col_w + ink.top()      # 旋转后墨迹右缘齐列右缘
-        ty = cell_top - shift
-    else:
-        tx = col_left + ink.bottom()           # 旋转后墨迹左缘齐列左缘
-        ty = cell_top - ink.left()             # 等价于沿列贴格顶
-    painter.save()
-    try:
-        painter.translate(tx, ty)
-        painter.rotate(90)
-        painter.setPen(color)
-        painter.drawText(QPointF(0.0, 0.0), ch)
-    finally:
-        painter.restore()
-
-
-class PunctuationScene(QWidget):
-    """460x262 的单场景画布：设置行（真实控件）+ 竖排预览（自绘）。"""
 
     SIZE = (460, 262)
     N_FRAMES = 25
     ROW_Y = 18
     PANEL = (16, 58, 170, 182)  # x, y, w, h（竖排预览卡，模拟漫画页面）
+    F_OPEN = 8
+    F_CLICK = 12
+    F_MOVE_START = 13
+    F_MOVE_END = 18
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        w, h = self.SIZE
-        self.setFixedSize(w, h)
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-
-        self.fg = get_theme_color(key="@qwidgetForegroundColor")
-        self.accent = get_theme_color(key="@accentPrimary")
-        self.border = get_theme_color(key="@borderColor")
-        self.card = get_theme_color(key="@qwidgetBackgroundColor")
-
+    def _build(self):
         row_h = CONFIG_COMBOBOX_HEIGHT
         combo_w = 250
         self.combo = ConfigComboBox(options=[OPT_CENTER, OPT_EDGE])
@@ -409,70 +167,41 @@ class PunctuationScene(QWidget):
         )
         label.setGeometry(16, self.ROW_Y, 100, row_h)
 
-        self.caption_labels = make_caption_labels(self, self.fg, CAPTIONS)
+        self.caption_labels = make_caption_labels(
+            self, self.fg, CAPTIONS, CAPTION_X, CAPTION_Y, CAPTION_W, CAPTION_H
+        )
 
-        self._cursor = QPointF(w - 30, h - 26)
-        self._cursor_alpha = 1.0
-        self._cursor_press = False
         self._open_t = 0.0
         self._hover = -1
-        self._ring_k = 0.0
         self._move_t = 0.0
         self._guide_a = 0.0
 
-        # 光标/下拉列表画在置顶的透明覆盖层上，保证盖过真实子控件；
-        # 覆盖层是裸 QWidget，必须显式抵消全局 QSS 的 QWidget 底色规则
-        self._overlay = QWidget(self)
-        self._overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self._overlay.setStyleSheet("background: transparent;")
-        self._overlay.setGeometry(0, 0, w, h)
-        self._overlay.paintEvent = self._paint_overlay
-        # 层级兜底：所有子控件建完后统一把覆盖层顶到最上层——
-        # 下拉列表/光标要永远盖过包括文案 label 在内的一切子控件
-        self._overlay.raise_()
+        # 光标轨迹：入场（f/6）→ 下拉框 → 按下展开 → 移向菜单项（8 起步、
+        # 12 到位）→ 点选。两处涟漪都钉在下拉框上（历史产物如此，保持）。
+        self.plan = (
+            CursorPlan(QPointF(self.width() - 30, self.height() - 26))
+            .go(self._combo_click_point(), arrive=6)
+            .press(7)
+            .go(self._item_point(1), arrive=self.F_CLICK, start=self.F_OPEN)
+            .press(self.F_CLICK, at=self._combo_click_point())
+            .fade(20)
+        )
 
     # ── 状态推进 ────────────────────────────────────────────────
-    def set_state(self, f: int):
-        idx = 1 if f >= F_CLICK else 0
+    def _update(self, f: int):
+        idx = 1 if f >= self.F_CLICK else 0
         if self.combo.currentIndex() != idx:
             self.combo.setCurrentIndex(idx)
 
-        if F_OPEN <= f < F_CLICK:
-            self._open_t = out_cubic((f - F_OPEN + 1) / 2.0)
+        if self.F_OPEN <= f < self.F_CLICK:
+            self._open_t = out_cubic((f - self.F_OPEN + 1) / 2.0)
         else:
             self._open_t = 0.0
 
-        self._hover = 1 if F_OPEN + 3 <= f < F_CLICK else -1
+        self._hover = 1 if self.F_OPEN + 3 <= f < self.F_CLICK else -1
 
-        # 光标轨迹：入场 → 下拉框 → 菜单项，随后原地淡出
-        target = self._combo_click_point()
-        item_pt = self._item_point(1)
-        if f <= F_CURSOR_ARRIVE:
-            t = out_cubic(f / F_CURSOR_ARRIVE)
-            start = QPointF(self.width() - 30, self.height() - 26)
-            self._cursor = start + (target - start) * t
-        elif f < F_OPEN:
-            self._cursor = target
-        else:
-            t = out_cubic(clamp01((f - F_OPEN) / 4.0))
-            self._cursor = target + (item_pt - target) * t
-        self._cursor_alpha = (
-            1.0 if f <= F_CURSOR_FADE else 1.0 - clamp01((f - F_CURSOR_FADE) / 4.0)
-        )
-        self._cursor_press = f in (F_PRESS, F_CLICK)
-
-        if F_PRESS <= f <= F_PRESS + 1:
-            self._ring_k = (f - F_PRESS + 1) / 2.0
-        elif F_CLICK <= f <= F_CLICK + 1:
-            self._ring_k = (f - F_CLICK + 1) / 2.0
-        else:
-            self._ring_k = 0.0
-
-        steps = F_MOVE_END - F_MOVE_START + 1
-        self._move_t = out_cubic((f - F_MOVE_START + 1) / steps)
-        guide_in = clamp01((f - F_MOVE_START + 2) / 3.0)
-        guide_out = 1.0 - clamp01((f - F_MOVE_END) / 3.0)
-        self._guide_a = min(guide_in, guide_out)
+        self._move_t = move_progress(f, self.F_MOVE_START, self.F_MOVE_END)
+        self._guide_a = guide_alpha(f, self.F_MOVE_START, self.F_MOVE_END)
         set_caption_emphasis(self.caption_labels, self._move_t, self.fg)
 
     def _combo_click_point(self) -> QPointF:
@@ -521,8 +250,9 @@ class PunctuationScene(QWidget):
                 ink = outline_ink(font, ch)
                 is_punct = (ci, i) in PUNCT_CELLS
                 if is_punct:
-                    self._draw_cell_guide(
-                        p, QRectF(col_cx - CELL / 2, cell_top, CELL, CELL)
+                    draw_cell_guide(
+                        p, QRectF(col_cx - CELL / 2, cell_top, CELL, CELL),
+                        self.accent, self._guide_a,
                     )
                     cx = col_cx - ink.width() / 2 - ink.left()
                     cy = cell_cy - ink.height() / 2 - ink.top()
@@ -544,27 +274,7 @@ class PunctuationScene(QWidget):
                 # x/y 已是基线坐标（目标墨迹左上角 - 墨迹框偏移）
                 p.drawText(QPointF(x, y), ch)
 
-    def _draw_cell_guide(self, p: QPainter, rect: QRectF):
-        if self._guide_a <= 0.01:
-            return
-        c = QColor(self.accent)
-        c.setAlpha(int(200 * self._guide_a))
-        pen = QPen(c, 1, Qt.PenStyle.DashLine)
-        pen.setDashPattern([3, 2])
-        p.setPen(pen)
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawRect(rect)
-
-    def _paint_overlay(self, event):
-        p = QPainter(self._overlay)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        self._paint_dropdown(p)
-        if self._ring_k > 0:
-            self._paint_ring(p)
-        if self._cursor_alpha > 0.01:
-            self._paint_cursor(p)
-
-    def _paint_dropdown(self, p: QPainter):
+    def _paint_overlay_content(self, p: QPainter):
         if self._open_t <= 0.01:
             return
         full = self._dropdown_rect()
@@ -601,22 +311,19 @@ class PunctuationScene(QWidget):
                 text,
             )
 
-    def _paint_ring(self, p: QPainter):
-        paint_click_ring(p, self._combo_click_point(), self._ring_k, self.accent)
 
-    def _paint_cursor(self, p: QPainter):
-        paint_cursor(p, self._cursor, self._cursor_alpha, self._cursor_press,
-                     self.fg)
+class CheckboxDemoScene(AnimScene):
+    """复选框单点叙事的预设编排：设置行（真实 ConfigCheckBox）+ 预览卡 +
+    右侧文案，光标入场点复选框后过渡。
 
-
-class _DemoScene(QWidget):
-    """设置行（真实 ConfigCheckBox）+ 预览卡 + 右侧文案的通用骨架。
-
-    子类只填 ``CHECK_TEXT`` / ``CAPTIONS``（改前、改后两条）并覆写
-    ``_paint_content``（在预览白卡里作画）与 ``_advance``（按帧号推进自己的
-    状态），并把 ``N_FRAMES`` 设成自己的时长。光标与点击涟漪由本类统一驱
-    动；``_t`` 是预览的过渡进度，也是两条文案明暗互换的进度（两者同步，
-    见 ``set_caption_emphasis``）。
+    这只是最常见演示形态的**便捷预设**（全部由 anim_kit 组件组装而成，不是
+    固定基类）：叙事不匹配的功能直接继承 ``AnimScene`` 自行组装（见
+    ``PunctuationScene``）。子类填 ``CHECK_TEXT`` / ``CAPTIONS``（外观展示类
+    置空并覆写 ``_build_captions`` 走单条文案）、覆写 ``_paint_content``
+    （在预览白卡里作画）与 ``_advance``（按帧号推进自有状态），并按需调
+    ``N_FRAMES`` 与时间轴类属性。光标与点击涟漪由 ``CursorPlan`` 统一驱动；
+    ``_t`` 是预览的过渡进度，也是两条文案明暗互换的进度（``EMPH_SEG`` 可
+    单独覆写，默认与 MOVE 段同步，见 ``set_caption_emphasis``）。
     """
 
     SIZE = (460, 262)
@@ -633,17 +340,9 @@ class _DemoScene(QWidget):
     F_MOVE_START = 9
     F_MOVE_END = 14
     F_FADE = 15
+    EMPH_SEG = None              # 明暗互换帧段，None = 跟随 MOVE 段
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        w, h = self.SIZE
-        self.setFixedSize(w, h)
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-
-        self.fg = get_theme_color(key="@qwidgetForegroundColor")
-        self.accent = get_theme_color(key="@accentPrimary")
-        self.border = get_theme_color(key="@borderColor")
-
+    def _build(self):
         row_h = CONFIG_COMBOBOX_HEIGHT
         self.check = ConfigCheckBox(self.CHECK_TEXT)
         self.check.setParent(self)
@@ -652,32 +351,31 @@ class _DemoScene(QWidget):
         self.check.setChecked(False)
 
         self._build_row_extra()
+        self._build_captions()
 
-        self.caption_labels = make_caption_labels(self, self.fg, self.CAPTIONS)
-
-        self._f = 0
-        self._cursor = QPointF(w - 30, h - 26)
-        self._cursor_alpha = 1.0
-        self._cursor_press = False
-        self._ring_k = 0.0
-        self._ring_point = QPointF()
         self._t = 0.0        # 场景主进度：0 = 关闭态，1 = 开启态
         self._emph = 0.0     # 文案明暗互换进度：0 = 改前条亮，1 = 改后条亮
 
-        # 光标/涟漪画在置顶透明覆盖层上，保证盖过真实子控件；
-        # 覆盖层是裸 QWidget，必须显式抵消全局 QSS 的 QWidget 底色规则
-        self._overlay = QWidget(self)
-        self._overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self._overlay.setStyleSheet("background: transparent;")
-        self._overlay.setGeometry(0, 0, w, h)
-        self._overlay.paintEvent = self._paint_overlay
-        # 层级兜底：所有子控件建完后统一把覆盖层顶到最上层——
-        # 下拉列表/光标要永远盖过包括文案 label 在内的一切子控件
-        self._overlay.raise_()
+        # 指示器 13x13（config/stylesheet.css 的 QCheckBox#ConfigCheckBox::indicator）
+        self.plan = (
+            CursorPlan(QPointF(self.width() - 30, self.height() - 26))
+            .go(QPointF(self.CHECK_X + 10, self.ROW_Y + row_h / 2),
+                arrive=self.F_ARRIVE)
+            .press(self.F_PRESS)
+            .press(self.F_CLICK)
+            .fade(self.F_FADE)
+        )
 
     # ── 供子类覆写 ──────────────────────────────────────────────
     def _build_row_extra(self):
         """在设置行里复选框之后追加真实控件（如 tcy 行的「应用」按钮）。"""
+
+    def _build_captions(self):
+        """文案区：默认行为对比类的双条 + 明暗互换；外观展示类覆写走单条。"""
+        self.caption_labels = make_caption_labels(
+            self, self.fg, self.CAPTIONS, CAPTION_X, CAPTION_Y, CAPTION_W,
+            CAPTION_H,
+        )
 
     def _advance(self, f: int):
         """按帧号推进场景自有状态（子类覆写）。"""
@@ -686,44 +384,15 @@ class _DemoScene(QWidget):
         """在预览白卡内作画（子类覆写）。"""
 
     # ── 状态推进 ────────────────────────────────────────────────
-    def set_state(self, f: int):
-        self._f = f
+    def _update(self, f: int):
         checked = f >= self.F_CLICK
         if self.check.isChecked() != checked:
             self.check.setChecked(checked)
-        self._step_cursor(f, self._click_point(), self.F_ARRIVE, self.F_FADE,
-                          (self.F_PRESS, self.F_CLICK),
-                          (self.F_PRESS, self.F_CLICK))
-        steps = max(1, self.F_MOVE_END - self.F_MOVE_START + 1)
-        self._t = out_cubic((f - self.F_MOVE_START + 1) / steps)
-        self._emph = self._t           # 明暗互换与预览过渡同步
+        self._t = move_progress(f, self.F_MOVE_START, self.F_MOVE_END)
+        emph_seg = self.EMPH_SEG or (self.F_MOVE_START, self.F_MOVE_END)
+        self._emph = move_progress(f, emph_seg[0], emph_seg[1])
         set_caption_emphasis(self.caption_labels, self._emph, self.fg)
         self._advance(f)
-
-    def _click_point(self) -> QPointF:
-        # 指示器 13x13（config/stylesheet.css 的 QCheckBox#ConfigCheckBox::indicator）
-        return QPointF(self.check.x() + 10,
-                       self.check.y() + self.check.height() / 2)
-
-    def _step_cursor(self, f: int, target: QPointF, arrive: int, fade: int,
-                     press_frames, ring_frames):
-        """光标入场 → 停在 target；fade 之后淡出，press/ring 帧段出按下反馈。"""
-        if f <= arrive:
-            t = out_cubic(f / max(1, arrive))
-            start = QPointF(self.width() - 30, self.height() - 26)
-            self._cursor = start + (target - start) * t
-        else:
-            self._cursor = QPointF(target)
-        self._cursor_alpha = (
-            1.0 if f <= fade else 1.0 - clamp01((f - fade) / 4.0)
-        )
-        self._cursor_press = f in press_frames
-        self._ring_point = QPointF(target)
-        self._ring_k = 0.0
-        for f0 in ring_frames:
-            if f0 <= f <= f0 + 1:
-                self._ring_k = (f - f0 + 1) / 2.0
-                break
 
     # ── 绘制 ────────────────────────────────────────────────────
     def paintEvent(self, event):
@@ -734,13 +403,6 @@ class _DemoScene(QWidget):
         p.setBrush(QColor(255, 255, 255))
         p.drawRoundedRect(QRectF(px, py, pw, ph), 6, 6)
         self._paint_content(p)
-
-    def _paint_overlay(self, event):
-        p = QPainter(self._overlay)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        paint_click_ring(p, self._ring_point, self._ring_k, self.accent)
-        paint_cursor(p, self._cursor, self._cursor_alpha, self._cursor_press,
-                     self.fg)
 
     def _demo_font(self, pixel_size: int) -> tuple:
         font = preview_font(pixel_size)
@@ -756,7 +418,7 @@ class _DemoScene(QWidget):
         )
 
 
-class _VerticalColumnScene(_DemoScene):
+class _VerticalColumnScene(CheckboxDemoScene):
     """竖排文字列场景的共用量：进给/列宽都按引擎的两把尺子量。
 
     - 整字进给 = ``CharFontFormat.tbr.height()``（「啊」「木」紧墨迹的并集，
@@ -787,9 +449,7 @@ class _VerticalColumnScene(_DemoScene):
         return QRectF(left, mu.top(), right - left, mu.height())
 
     def _guide_alpha(self, start: int, end: int) -> float:
-        guide_in = clamp01((self._f - start + 2) / 3.0)
-        guide_out = 1.0 - clamp01((self._f - end) / 3.0)
-        return min(guide_in, guide_out)
+        return guide_alpha(self._f, start, end)
 
     def _paint_content(self, p: QPainter):
         p.setFont(self._font)
@@ -1026,7 +686,7 @@ class TateChuYokoScene(_VerticalColumnScene):
                             font=self._font)
 
 
-class _BadgePageScene(_DemoScene):
+class _BadgePageScene(CheckboxDemoScene):
     """块徽标两个场景的共用版式：漫画页卡 + 两个文本框（内含竖排小字）。"""
 
     # 面板内偏移 (x, y, w, h, 右起两列示意文字)
@@ -1079,7 +739,8 @@ class SeqBadgeScene(_BadgePageScene):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        make_single_caption(self, self.fg, self.NOTE)
+        make_single_caption(self, self.fg, self.NOTE,
+                            CAPTION_X, CAPTION_Y[0], CAPTION_W, CAPTION_H)
         font = QFont(UI_FONT_FAMILY)
         font.setBold(True)
         font.setPixelSize(11)
@@ -1129,7 +790,8 @@ class TagBadgeScene(_BadgePageScene):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        make_single_caption(self, self.fg, self.NOTE)
+        make_single_caption(self, self.fg, self.NOTE,
+                            CAPTION_X, CAPTION_Y[0], CAPTION_W, CAPTION_H)
         font = QFont(UI_FONT_FAMILY)
         font.setPixelSize(11)
         self._font = font
@@ -1159,7 +821,7 @@ class TagBadgeScene(_BadgePageScene):
             p.drawText(rect, Qt.AlignmentFlag.AlignCenter, glyphs)
 
 
-class ClipTextScene(_DemoScene):
+class ClipTextScene(CheckboxDemoScene):
     """「溢出裁剪」三拍演示：先展示关闭态行为，再对比开启态行为。
 
     - 第一拍（开关**关闭**）：译文超出块边界 → 块自动放大到放得下文字，
@@ -1187,7 +849,8 @@ class ClipTextScene(_DemoScene):
         "<b>改前：</b>译文超出块边界时，块自动放大到放得下文字",
         "<b>改后：</b>同样的文字被裁切到框内，描边变<b>黄框</b>警示",
     )
-    # 时间轴（@10fps）：三拍
+    # 时间轴（@10fps）：三拍。明暗互换跟「开关点开」走：改前条讲关闭态行为、
+    # 改后条讲开启态行为，第三拍是过程、不另配文案
     F_GROW_END = 5            # 第一拍：关闭态块自动长高到放得下文字
     F_CB_ARRIVE = 7           # 光标抵达复选框
     F_CB_PRESS = 8            # 按下复选框
@@ -1198,11 +861,25 @@ class ClipTextScene(_DemoScene):
     F_DRAG_START = 20
     F_DRAG_END = 31           # 拖拽放大完成，黄框消失
     F_FADE = 31               # 光标淡出（32～35 共 4 帧）
+    EMPH_SEG = (F_CLICK, F_SHRINK_END)
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def _build(self):
+        super()._build()
         self._font, self._fm = self._demo_font(self.FONT_PX)
-        self._h = float(self.BOX[3])   # 当前块高（set_state 按帧推进）
+        self._h = float(self.BOX[3])   # 当前块高（按帧推进）
+        # 光标三拍：入场 → 复选框 → 角部手柄（拖拽期骑在手柄上随块移动，
+        # go 的落点给 callable，pose 每帧现算）
+        self.plan = (
+            CursorPlan(QPointF(self.width() - 30, self.height() - 26))
+            .go(QPointF(self.CHECK_X + 10,
+                        self.ROW_Y + CONFIG_COMBOBOX_HEIGHT / 2),
+                arrive=self.F_CB_ARRIVE)
+            .press(self.F_CB_PRESS)
+            .go(self._handle_center, arrive=self.F_HANDLE_PRESS - 1,
+                start=self.F_HANDLE_MOVE_START - 1)
+            .press(self.F_HANDLE_PRESS)
+            .fade(self.F_FADE)
+        )
 
     # ── 几何 ────────────────────────────────────────────────────
     def _box_rect(self) -> QRectF:
@@ -1240,50 +917,8 @@ class ClipTextScene(_DemoScene):
         return small + (fit - small) * drag
 
     # ── 状态推进 ────────────────────────────────────────────────
-    def set_state(self, f: int):
-        self._f = f
-        checked = f >= self.F_CLICK
-        if self.check.isChecked() != checked:
-            self.check.setChecked(checked)
+    def _advance(self, f: int):
         self._h = self._height_at(f)
-        # 明暗互换跟「开关点开」走：改前条讲关闭态行为、改后条讲开启态行为，
-        # 第三拍是过程、不另配文案
-        emph = 0.0
-        if f >= self.F_CLICK:
-            emph = out_cubic(
-                (f - self.F_CLICK + 1) / (self.F_SHRINK_END - self.F_CLICK + 1)
-            )
-        self._emph = emph
-        set_caption_emphasis(self.caption_labels, self._emph, self.fg)
-        # 光标：入场 → 复选框 → 角部手柄（拖拽期骑在手柄上随块移动）
-        start = QPointF(self.width() - 30, self.height() - 26)
-        cb = self._click_point()
-        handle = self._handle_center()
-        if f <= self.F_CB_ARRIVE:
-            t = out_cubic(f / self.F_CB_ARRIVE)
-            self._cursor = start + (cb - start) * t
-        elif f < self.F_HANDLE_MOVE_START:
-            self._cursor = cb
-        elif f < self.F_HANDLE_PRESS:
-            t = out_cubic(
-                (f - self.F_HANDLE_MOVE_START + 1)
-                / (self.F_HANDLE_PRESS - self.F_HANDLE_MOVE_START)
-            )
-            self._cursor = cb + (handle - cb) * t
-        else:
-            self._cursor = handle
-        self._cursor_press = f in (self.F_CB_PRESS, self.F_HANDLE_PRESS)
-        self._cursor_alpha = (
-            1.0 if f <= self.F_FADE else 1.0 - clamp01((f - self.F_FADE) / 4.0)
-        )
-        self._ring_k = 0.0
-        for f0, point in ((self.F_CB_PRESS, cb), (self.F_HANDLE_PRESS, handle)):
-            if f0 <= f <= f0 + 1:
-                self._ring_k = (f - f0 + 1) / 2.0
-                self._ring_point = point
-                break
-        else:
-            self._ring_point = handle
 
     # ── 绘制 ────────────────────────────────────────────────────
     def _paint_content(self, p: QPainter):
@@ -1326,68 +961,28 @@ SCENES = {
 }
 DEFAULT_OUT_DIR = osp.join(ROOT, "config", "help_anims")
 
-
-def qimage_to_pil(img: QImage) -> Image.Image:
-    img = img.convertToFormat(QImage.Format.Format_RGBA8888)
-    w, h = img.width(), img.height()
-    bpl = img.bytesPerLine()
-    n = img.sizeInBytes()
-    ptr = img.constBits()
-    ptr.setsize(n)
-    arr = np.frombuffer(ptr, dtype=np.uint8, count=n)
-    arr = arr.reshape(h, bpl)[:, : w * 4].reshape(h, w, 4)
-    # 必须拷贝成自持内存：arr 只是 QImage 内存的视图，grab() 的临时 QImage
-    # 一析构这块内存就归 Qt 复用，等最后统一编码 WebP 时读到的是被覆写的
-    # 像素——实测会 access violation 崩在 Pillow 的 tobytes，即便侥幸不崩
-    # 产物也可能是脏帧。
-    return Image.frombytes("RGBA", (w, h), arr.tobytes())
+# 入库产物的钉定 DPR：仓库默认目录的产物固定按 1.25 渲染（与既有固化产物
+# 同尺寸），不同工作机重出尺寸不漂；README 流程不受此约束
+PINNED_DPR = 1.25
 
 
-def _save_webp(frames: list, out: str, fps: int) -> float:
-    """编码并落盘，返回产物体积 KB。
-
-    先写 ``<out>.tmp`` 再 ``os.replace``：显示侧 QMovie 可能仍握着旧文件句柄，
-    直接覆写会失败。replace 失败（Windows 上是 PermissionError/OSError）重试
-    一次，仍失败则抛出、由调用方按场景点名，不中断其他场景。
-    """
-    os.makedirs(osp.dirname(out), exist_ok=True)
-    tmp = out + ".tmp"
-    frames[0].save(
-        tmp,
-        "WEBP",
-        save_all=True,
-        append_images=frames[1:],
-        duration=int(1000 / fps),
-        loop=0,
-        lossless=True,
-        method=6,
-        exact=True,
+def _resolve_dpr(args):
+    """产物 DPR 口径：写仓库默认目录 → 钉 ``PINNED_DPR``（None 返回值 = 本机）。"""
+    if args.dpr:
+        if args.dpr.lower() == "native":
+            return None
+        return float(args.dpr)
+    if args.out:
+        out_dir = osp.dirname(osp.abspath(args.out))
+    elif args.out_dir:
+        out_dir = args.out_dir
+    else:
+        out_dir = DEFAULT_OUT_DIR
+    return (
+        PINNED_DPR
+        if osp.normcase(osp.abspath(out_dir)) == osp.normcase(osp.abspath(DEFAULT_OUT_DIR))
+        else None
     )
-    try:
-        os.replace(tmp, out)
-    except OSError:
-        time.sleep(0.5)
-        try:
-            os.replace(tmp, out)
-        except OSError:
-            try:
-                os.remove(tmp)
-            except OSError:
-                pass
-            raise
-    return osp.getsize(out) / 1024
-
-
-def _render_frames(app: QApplication, scene, dump_dir: str = None) -> list:
-    frames = []
-    for f in range(scene.N_FRAMES):
-        scene.set_state(f)
-        app.processEvents()
-        frames.append(qimage_to_pil(scene.grab().toImage()))
-        if dump_dir:
-            os.makedirs(dump_dir, exist_ok=True)
-            frames[-1].save(osp.join(dump_dir, f"frame_{f:03d}.png"))
-    return frames
 
 
 def _parse_args():
@@ -1401,6 +996,10 @@ def _parse_args():
                          "设置页按钮传 config/help_anims_local/（本机覆盖层）")
     ap.add_argument("--fps", type=int, default=10)
     ap.add_argument("--theme", default="", help="主题名，默认取当前配置")
+    ap.add_argument("--dpr", default=None, metavar="NATIVE|数值",
+                    help="渲染 DPR：默认自动——写仓库默认目录时钉 %.2f（入库"
+                         "产物跨工作机尺寸一致），其余按本机屏幕；NATIVE 强制"
+                         "本机真实 DPR，数字强制指定" % PINNED_DPR)
     ap.add_argument("--dump-frames", dest="dump_frames", default=None,
                     help="逐帧导出 PNG 目录（--all 时按 <目录>/<key> 分场景）")
     ap.add_argument("--platform", default=None, choices=["windows", "offscreen"],
@@ -1415,19 +1014,21 @@ def main():
         if args.platform == "offscreen":
             os.environ.setdefault("QT_QPA_FONTDIR", "C:/Windows/Fonts")
 
-    load_config()
-    app = QApplication.instance() or QApplication(sys.argv)
-    # UI 标签（QLabel 等）字体显式钉到 GUI 真实默认家族：offscreen 的"系统
-    # 默认"落到 Arial 是发虚根因之一。只钉家族、不动解析出的字号，windows
-    # 平台下本就解析成该家族，此处是跨平台兜底。
-    ui_font = app.font()
-    ui_font.setFamily(UI_FONT_FAMILY)
-    app.setFont(ui_font)
-    app.setStyleSheet(parse_stylesheet(args.theme))
+    # 钉 DPR 须先于 QApplication：关掉平台原生缩放再给全局缩放因子，任何
+    # 屏幕缩放设置的机器上得到的 DPR 都是同一值（本机覆盖层走本机真实 DPR，
+    # 覆盖层的意义就是本机适配）
+    dpr_pin = _resolve_dpr(args)
+    if dpr_pin is not None:
+        os.environ["QT_ENABLE_HIGHDPI_SCALING"] = "0"
+        os.environ["QT_SCALE_FACTOR"] = str(dpr_pin)
+
+    app = init_app(args.theme)
 
     keys = sorted(SCENES) if args.all else [args.scene]
     dpr = app.primaryScreen().devicePixelRatio() if app.screens() else 1.0
-    print(f"生成 DPR {dpr:g}（产物物理尺寸 = 460x262 逻辑 × DPR）")
+    mode = "钉定" if dpr_pin is not None else "本机"
+    print(f"TOTAL {len(keys)}")
+    print(f"生成 DPR {dpr:g}（{mode}；产物物理尺寸 = 460x262 逻辑 × DPR）")
     t0 = time.perf_counter()
     failures = []
     for key in keys:
@@ -1441,11 +1042,11 @@ def main():
                 osp.join(args.dump_frames, key)
                 if args.dump_frames and args.all else args.dump_frames
             )
-            frames = _render_frames(app, scene, dump_dir)
+            frames = render_frames(app, scene, dump_dir)
             out = args.out if (not args.all and args.out) else osp.join(
                 args.out_dir or DEFAULT_OUT_DIR, f"{key}.webp"
             )
-            size_kb = _save_webp(frames, out, args.fps)
+            size_kb = save_webp(frames, out, args.fps)
             print(f"OK {key}  {frames[0].width}x{frames[0].height} px  "
                   f"{size_kb:.1f} KB  {scene.N_FRAMES} frames @ {args.fps}fps")
         except Exception as exc:  # noqa: BLE001 单场景失败不拖垮整批

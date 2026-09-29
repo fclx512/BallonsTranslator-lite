@@ -12,6 +12,28 @@
 >
 > 仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护）；被裁掉的日期节仍完整留在提交历史里，用 `git log --grep <关键词>`／`git log --follow -p -- docs/daily_log.md`／`git show <rev>:docs/daily_log.md` 回查。
 
+## 2026-09-29
+
+### 演示动画生成管线组件化（`scripts/anim_kit.py` 机制库 + `CursorPlan`/`AnimScene` + `CheckboxDemoScene` 预设）
+
+**摘要：** 原 `_DemoScene` 把机制与"复选框单点叙事"的版式/节奏焊死，叙事不匹配的功能只能硬套或整个重写。拆成共享机制库 `scripts/anim_kit.py`（确定性时间轴原语、光标编排 `CursorPlan`、场景基类 `AnimScene`、文案/绘制组件、渲染编码，对画布尺寸/文案位置零假设）+ `scripts/gen_help_anim.py`（弹层版式常量与 7 个场景）；复选框场景走 `CheckboxDemoScene` 预设，下拉选择类照 `PunctuationScene` 自行组装，`clip_text` 三拍光标交 `CursorPlan`、删掉整段 `set_state` 覆写。为 README 大画幅流程留好接口，流程约束（独立注册表、镜头跟随光标、可损编码）写入使用说明，脚本首个演示落地时再建。
+
+**涉及文件：** `scripts/anim_kit.py`（新增）、`scripts/gen_help_anim.py`、`docs/基础速查/备注演示动画使用说明.md`、`scripts/README.md`
+
+**验证：** 重构前后 `--all --dump-frames` 逐帧逐像素比对，7 场景 161 帧 0 差异（仓库 webp 产物零变更）；`scripts/verify.py` 全绿。
+
+---
+
+### 入库演示动画钉定 DPR 1.25（`gen_help_anim.py::_resolve_dpr`）+ 重生成总数改读 `TOTAL` 行
+
+**摘要：** 仓库默认动画此前按生成机屏幕 DPR 渲染，换工作机重出尺寸会漂。改为双轨：写仓库默认目录自动钉 DPR 1.25（`QT_ENABLE_HIGHDPI_SCALING=0` + `QT_SCALE_FACTOR=1.25`，先于 QApplication 设置），跨机重出逐字节一致（实测与既有产物逐字节相同）；本机覆盖层（设置页按钮）仍按本机真实 DPR（覆盖层的意义就是本机适配）；`--dpr` 显式覆盖。README 流程不受此约束。附带：`ui/configpanel.py` 重生成状态条总数不再写死 7，从子进程 stdout 的 `TOTAL n` 行解析。
+
+**涉及文件：** `scripts/gen_help_anim.py`、`ui/configpanel.py`、`docs/基础速查/备注演示动画使用说明.md`、`scripts/README.md`
+
+**验证：** 本机连续两次 `--all` 产物逐字节一致；与仓库既有 webp 逐字节相同（原生 125% 渲染与钉定渲染等价，产物无需变更）。
+
+---
+
 ## 2026-09-28
 
 ### 备注问号弹层支持演示动画（`ConfigNotePopup` anim 键 + `gen_help_anim.py` 离屏生成管线）
@@ -101,48 +123,6 @@
 **涉及文件：** 本条为远端动作记录，仓内仅 `docs/daily_log.md`
 
 **验证：** Release 资产清单 3 项尺寸逐一核对；`releases/latest/download/patchmatch_inpaint.dll` 实拉哈希一致；远端 releases 剩 1 个、`git ls-remote --tags` 只剩 `lite-v1.0.0`。
-
----
-
-## 2026-09-26
-
-### 标签待办体系重构（`ocr_review_pending` / `trans_review_pending` + `consumed_tags` 撤销一致性）+ 工作台六项扁平导航与非删除待办队列（D46/D48/D49）
-
-**摘要：** 前台标签由「六个 id 都是按钮」收成**两个人工待办**（稍后校对／稍后重译）＋**两个持久翻译指示**（手写字／拟声词）：旧 ID（人工来源 `ocr_low_conf`、`trans_confusing`、`trans_polish`）**只读兼容、加载时不迁移**，只在用户取消那条待办时顺手清（`_clear_legacy_review`），避免静默重写整本项目；`reviewed` 粒度由块级收窄到**单个问题 ID**，否则驳回一条误框会把同块的低置信度建议一起永久冻结。确认卡「应用」的文字写回与标签出队并进**同一条撤销命令**（`ui/textedit_commands.py::ApplyBlockTextCommand` 的 `consumed_tags`），撤销时文字与待办一起复原。工作台导航由两级收成**扁平六项**（`WORKBENCH_ORDER`），形态＝按需换行的 **chip 流**（`ui/glossary_agent_panel.py::WorkbenchTaskNav`：组标题行去掉、只用组间细分隔线，激活项完整显示、放不下的非激活项压到可用宽度并在渲染层省略），新增两个**非删除待办队列**（`ui/workbench_review_view.py::ReviewQueueView`，只有「跳画布／出队」两条出口，复用 `BatchTask.apply` 会把「稍后处理」显示成「勾选＝要删」）；跳步弹窗与 `workbench_warn_skip_order` 一并删除（顺序是推荐，导航顺序本身就是提示）。校对原文与重译改为**单选块即出现场钮**，不再要求先挂标签。
-
-**涉及文件：** `utils/block_tags.py`、`utils/block_actions.py`、`ui/textedit_commands.py`、`ui/mainwindow.py`、`ui/tag_toolbar.py`、`ui/context_menu_config.py`、`ui/glossary_agent_panel.py`、`ui/workbench_tasks.py`、`ui/workbench_review_view.py`、`translate/zh_CN.ts`、`docs/技术实现/AI辅助功能_设计与实现.md`
-
-**验证：** `scripts/verify.py --full` 六步全过；pytest 1398 passed / 1 skipped（ruff 未安装跳过）；只读真样本复算（`D:/汉化/施工区副本`）通过。
-
-**遗留：** 双检测器（`ppocrv6_onnx` ＋ `ysgyolo`）仍为**离线实验、未接入默认流程**：九页 A/B 只有几何覆盖等自动指标、无人工真值，人工看图已见 ysg 漏真文字（`047.jpeg`／`063.jpg`）；不加配置、不改默认检测/OCR 流程。
-
----
-
-### 批量框扩张退役（`ui/batch_expand.py`／`workbench_expand_px`／复算台 `expand`，D47）+ 跳步提示退役（`workbench_warn_skip_order`，D37 → D49）
-
-**摘要：** 用户实测结论是「扩了也不解决填不满／塞不下」——批量框扩张只有机械几何写入（改 `_bounding_rect`／`xyxy`），没有可靠的自动排版消费，故整条删除：引擎、工作台适配 `ExpandTask`、设置项 `workbench_expand_px`、复算台 `expand` 子命令、导航项与那条真机探针一并清掉，删前按审计规范登记。审批截图仍在用的 `utils/block_geometry.py::expand_limited`（「碰到邻框即停」）与单块 Alt 拖拽缩放不在退役范围。同批删除跳步弹窗与其配置项：顺序仍是推荐，但不做跳步拦截。误框批量删除补一条默认口径——命中 `no_japanese` 子类型的行默认不勾选（该类最容易误伤真实拉丁文本与拟声词，含多子类型时以含它为准）。
-
-**涉及文件：** `ui/batch_expand.py`（删）、`tests/test_batch_expand.py`（删）、`scripts/probes/expand_centering_probe.py`（删）、`ui/workbench_tasks.py`、`utils/config.py`、`ui/configpanel.py`、`ui/glossary_agent_panel.py`、`scripts/workbench_recalc.py`、`scripts/audit_registry.json`、`docs/基础速查/设置面板_功能项清单.md`
-
-**验证：** 三个保留的批量任务（可疑框清理／合并／简单背景修复）照常运行；`scripts/verify.py --full` 全过。
-
----
-
-### 符号连字自动转换（`utils/symbol_convert.py` + `ProgramConfig.symbol_convert_enabled`）+ 重做提示统一画布 toast
-
-**摘要：** 右栏编辑器打字／粘贴时把可合并符号序列自动换成连字（`！！`→`‼`、`！？`→`⁉`，映射表在 `utils/symbol_convert.py`）：只对**聚焦中的编辑器**生效，页面加载／翻译回填等程序性写入与撤销重放不转换，替换处就地短暂高亮；嵌字页窄栏开关 `rail_convert`，状态存 `ProgramConfig.symbol_convert_enabled`。撤销／重做提示统一由画布侧发（`ui/canvas.py::_notify_redo` 与撤销对称、同 key 刷新同一条），主窗口只兜「Ctrl+Z 撤到底还有批量替换版本」的场景。
-
-**涉及文件：** `utils/symbol_convert.py`、`ui/textedit_area.py`、`ui/text_panel.py`、`ui/scenetext_manager.py`、`ui/canvas.py`、`ui/mainwindow.py`、`utils/config.py`、`icons/rail_convert.svg`、`tests/test_symbol_convert.py`
-
----
-
-### 启动可靠性止血 + 精简包构建闭环（`scripts/build_win_minimal.ps1`）+ PatchMatch 随包可用与按需安装对齐
-
-**摘要：** 针对「用户机启动失败难诊断」：Python 3.10+ 闸门、文件日志 + `sys.excepthook`/`threading.excepthook`、损坏配置隔离（`.corrupt-*`）与 `.tmp` 恢复、坏 torch（OSError）按缺失降级、重启循环守卫、pip 镜像在装依赖前落到环境变量。精简包定义定稿＝嵌入式 Python + pip/uv + **预装 `requirements.txt`** + 随包 `data/libs` 两个 PatchMatch DLL（约 550–600 MB 估算、不带模型后端与权重），构建脚本带发行门禁（干净树 + manifest 覆盖与哈希归一 + 版本一致）。`modules/base.py::ensure_dependencies` 复用 `utils/package_installer`（支持解释器旁独立 `uv.exe`），onnxocr 强制 `--no-deps`（`utils/package_installer.py::NO_DEPS_PACKAGES`，numpy<2 冲突）；PatchMatch 原生库改惰性加载、缺 DLL 给可读提示且不再从修复器选项隐藏。文档全渠道同步、README 标注精简包尚未发布。
-
-**涉及文件：** `launch.py`、`launch.bat`、`utils/logger.py`、`utils/network_mirrors.py`、`utils/core_requirements.py`、`utils/config.py`、`utils/shared.py`、`modules/base.py`、`modules/inpaint/patch_match.py`、`modules/inpaint/inpaint_patchmatch.py`、`ui/module_parse_widgets.py`、`ui/run_pipeline_dialog.py`、`ui/model_downloads.py`、`utils/package_installer.py`、`scripts/build_win_minimal.ps1`、`scripts/README.md`、`README.md`、`README_EN.md`、`docs/基础速查/依赖库说明.md`、`docs/项目概述.md`
-
-**验证：** `scripts/verify.py` 全绿；pytest 1474 passed / 1 skipped。**端到端真实构建未跑**（需干净树 + 网络下载），发版前按 `scripts/README.md`「发版包发行」流程执行（该节 2026-09-27 已改口径：发行物＝约 30 MB 引导小包，预装式不再发行）。
 
 ---
 
