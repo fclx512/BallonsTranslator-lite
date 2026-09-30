@@ -1306,7 +1306,13 @@ class FontFormatPanel(Widget):
                 # （块格式经文档编辑 + 回读落账），避免与镜像双重写。
                 if self.textblk_item is not None:
                     # Save all format properties including gradient state
-                    self.textblk_item.fontformat = copy.deepcopy(C.active_format)
+                    # 同一对象同时写 item 与 blk：initTextBlock 里两者本就
+                    # 别名互指，只替 item 侧会打断别名——之后引擎对
+                    # item.fontformat 的写不再落到 blk.fontformat（数据层
+                    # 陈旧，样式管理器显示旧值）。
+                    blk_fmt = copy.deepcopy(C.active_format)
+                    self.textblk_item.fontformat = blk_fmt
+                    self.textblk_item.blk.fontformat = blk_fmt
                     self.textblk_item = None
                 self._active_multi_items = None
                 self.set_active_format(self.global_format)

@@ -1345,8 +1345,32 @@ class TextBlkItem(QGraphicsTextItem):
                 letter_spacing_fallback=self.fontformat.letter_spacing,
                 vertical=self.fontformat.vertical,
             )
+            self._strip_paragraph_alignment()
         finally:
             self.block_change_signal = block_change_signal
+
+    def _strip_paragraph_alignment(self) -> None:
+        """清掉段落级 blockFormat 对齐，渲染对齐只由数据层决定。
+
+        旧工程/上游导出的 rich_text 段落自带 align 属性：块级对齐会
+        脱离 ``fontformat.alignment``（参数居中、渲染靠右），且
+        ``set_fontformat`` 只写 doc 默认 option 治不了——加载时归一是
+        唯一收口。Qt 的合并规则（实测）：blockFormat 对齐 ≠ AlignLeft
+        时覆盖 doc 默认 option，写回 AlignLeft 即恢复「跟随默认」；
+        AlignAbsolute 反而是显式覆盖，不能当未设值用。本工具自产
+        HTML 不含对齐属性，此步对正常工程是零成本 no-op。
+        """
+        doc = self.document()
+        default_align = int(Qt.AlignmentFlag.AlignLeft)
+        cursor = QTextCursor(doc)
+        block = doc.firstBlock()
+        while block.isValid():
+            bf = block.blockFormat()
+            if int(bf.alignment()) != default_align:
+                bf.setAlignment(Qt.AlignmentFlag.AlignLeft)
+                cursor.setPosition(block.position())
+                cursor.setBlockFormat(bf)
+            block = block.next()
 
     def insert_from_mime_data(self, mime: QMimeData) -> bool:
         cursor = self.textCursor()

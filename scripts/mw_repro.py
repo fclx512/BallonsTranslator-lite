@@ -40,9 +40,10 @@ def _parse_args():
     parser.add_argument("--blocks", type=int, default=8, help="每页块数")
     parser.add_argument(
         "--scenario",
-        choices=["group-undo", "stroke-switch", "none"], default="group-undo",
+        choices=["group-undo", "stroke-switch", "fmt-sync", "none"], default="group-undo",
         help="group-undo=高级对齐→组化确认弹窗→撤销→重渲 全链路；"
-        "stroke-switch=竖排描边块快速切页（闪退回归演练）",
+        "stroke-switch=竖排描边块快速切页（闪退回归演练）；"
+        "fmt-sync=数据层与渲染态对齐分叉探针（样式同步排查）",
     )
     parser.add_argument(
         "--switch-rounds", type=int, default=12,
@@ -278,6 +279,151 @@ def _scenario_stroke_switch(window, app, args):
     print("[mw_repro] SCENARIO OK: stroke-switch", flush=True)
 
 
+def _align_int(flag) -> int:
+    """Qt.AlignmentFlag → TextAlignment 值（0 左 / 1 中 / 2 右）。"""
+    from qtpy.QtCore import Qt
+
+    f = int(flag)
+    if f & int(Qt.AlignmentFlag.AlignHCenter):
+        return 1
+    if f & int(Qt.AlignmentFlag.AlignRight):
+        return 2
+    return 0
+
+
+def _scenario_fmt_sync(window, app, args):
+    """数据层 blk.fontformat 与 item 渲染态（QTextDocument）的对齐分叉探针。
+
+    背景：两份状态只在 TextBlkItem.set_fontformat 被调用时同步，任何
+    单侧写入都会分叉（面板显示居中、画布渲染靠右一类）。本场景用合成
+    工程逐一验证候选根源与治愈手段，只读用户数据（工程在临时目录）：
+
+    A0 基线：数据层居中 + 无 align 属性的 HTML → 三处应一致；
+    A1a/A1b 旧项目方向：HTML 段落自带对齐（上游/旧版可能写出），数据层
+       居中 → 修复前在此分叉（参数居中、渲染靠右）；修复后
+       load_rich_text_html 的 _strip_paragraph_alignment 归一，应一致；
+    A2 对 A1 的活 item 整包 set_fontformat 重应用 → 修复前治不了
+       （alignment 只写 doc 默认 option，块级 blockFormat 不受影响）；
+    B0/B1 数据侧直写（管线 postprocess 同款 blk.alignment=...，item 在场）
+       → 渲染陈旧分叉（机制演示；管线收尾实际有整页重建兜底）；
+    B2 set_fontformat 重应用 → 验证 B 方向可以治愈；
+    C  样式管理器空 diff 门：changed_values 对「已是目标值」的编辑返回
+       空 → _apply_* 直接 return，解释「先改成别的再改回来」现象。
+    """
+    from qtpy.QtCore import Qt
+
+    from utils.textblock import TextAlignment
+
+    proj = window.imgtrans_proj
+    pages = list(proj.pages.keys())
+    if len(pages) < 1:
+        raise SystemExit("[mw_repro] fmt-sync 需要 1 页以上")
+
+    findings = []
+
+    def rebuild():
+        window.st_manager.updateSceneTextitems()
+        for _ in range(8):
+            app.processEvents()
+
+    def snap(label: str) -> bool:
+        app.processEvents()
+        blk = proj.current_block_list()[0]
+        item = window.st_manager.textblk_item_list[0]
+        doc = item.document()
+        data = int(blk.fontformat.alignment)
+        doc_default = _align_int(doc.defaultTextOption().alignment())
+        blk_fmt = _align_int(doc.firstBlock().blockFormat().alignment())
+        blk_opt = _align_int(doc.firstBlock().layout().textOption().alignment())
+        html_align = 'align' in (blk.rich_text or '')
+        # 渲染真值 = 块级 blockFormat 对齐（非 0）优先，否则 doc 默认
+        render = blk_fmt if blk_fmt else doc_default
+        ok = data == render
+        findings.append((label, ok))
+        print(
+            f"[mw_repro] fmt-sync {label}: 数据层={data} doc默认={doc_default} "
+            f"块blockFormat={blk_fmt} 首块option={blk_opt} "
+            f"rich_text带align={html_align} → 渲染真值={render} "
+            f"{'一致' if ok else '★分叉'}",
+            flush=True,
+        )
+        return ok
+
+    def live_item():
+        return window.st_manager.textblk_item_list[0]
+
+    blk = proj.current_block_list()[0]
+
+    # ---- A0 基线：数据层居中 + 无 align 的 HTML，重建后应一致 ----
+    blk.alignment = TextAlignment.Center
+    blk.rich_text = '<p style="color:#222">基线文本：无段落对齐属性</p>'
+    rebuild()
+    snap("A0 基线（数据居中/HTML无align）")
+
+    # 我们自己的 toHtml 是否会把 doc 默认对齐写进段落属性
+    # （决定「本工具保存的工程」会不会自带 align）
+    probe_html = live_item().toHtml()
+    print(
+        f"[mw_repro] fmt-sync 自产toHtml含align属性: "
+        f"{'align=' in probe_html}",
+        flush=True,
+    )
+
+    # ---- A1 旧项目方向：HTML 自带段落对齐，数据层仍居中 ----
+    # 两种写法都试：旧式 align 属性与 CSS text-align（Qt 解析行为可能不同）
+    blk.rich_text = (
+        '<p align="right">旧项目文本A：HTML 段落自带 align 属性</p>'
+    )
+    blk.fontformat.alignment = TextAlignment.Center
+    rebuild()
+    snap("A1a <p align=right>（模拟旧工程）")
+    blk.rich_text = (
+        '<p style="text-align:right">旧项目文本B：CSS text-align 右对齐，'
+        "用于模拟旧版/上游工程保存的富文本</p>"
+    )
+    rebuild()
+    snap("A1b <p style=text-align:right>（模拟旧工程）")
+
+    # ---- A2 对活 item 整包重应用：能否治愈 A1 ----
+    live_item().set_fontformat(blk.fontformat, set_char_format=True)
+    snap("A2 set_fontformat整包重应用后")
+
+    # ---- B0/B1/B2 数据侧直写方向（postprocess 同款） ----
+    blk.rich_text = '<p style="color:#222">探针B文本：无段落对齐属性</p>'
+    blk.alignment = TextAlignment.Center
+    rebuild()
+    snap("B0 重建基线（数据居中）")
+    blk.alignment = TextAlignment.Right  # item 在场，只写数据层
+    snap("B1 数据侧直写Right后（渲染应仍居中）")
+    live_item().set_fontformat(blk.fontformat, set_char_format=True)
+    snap("B2 set_fontformat重应用后")
+
+    # ---- C 样式管理器空 diff 门（只读演示，不改工程） ----
+    try:
+        from ui.style_format_editor import FormatEditorPanel
+
+        panel = FormatEditorPanel()
+        panel.set_format(blk.fontformat.deepcopy())
+        changed = panel.changed_values()
+        gate = "空 dict" if not changed else str(changed)
+        print(
+            f"[mw_repro] fmt-sync C 空diff门: 编辑器与数据层同值时 "
+            f"changed_values={gate} → _apply_* 直接 return，不会触发重建",
+            flush=True,
+        )
+    except Exception as e:  # 面板实例化失败不影响前面的探针结论
+        print(f"[mw_repro] fmt-sync C 演示跳过: {e}", flush=True)
+
+    n_ok = sum(1 for _, ok in findings if ok)
+    print(
+        f"[mw_repro] fmt-sync 汇总: {n_ok}/{len(findings)} 处一致"
+        f"（A1a/A1b/A2 一致=段落对齐归一生效，分叉=修复失效；"
+        f"B1 为数据侧直写的机制演示，分叉属预期，B2 验证可治愈）",
+        flush=True,
+    )
+    print("[mw_repro] SCENARIO OK: fmt-sync", flush=True)
+
+
 def main():
     args = _parse_args()
     if args.project and args.scenario != "none":
@@ -310,6 +456,8 @@ def main():
         _scenario_group_undo(window, app, args)
     elif args.scenario == "stroke-switch":
         _scenario_stroke_switch(window, app, args)
+    elif args.scenario == "fmt-sync":
+        _scenario_fmt_sync(window, app, args)
     else:
         print("[mw_repro] scenario=none：主窗口已就绪，进入事件循环", flush=True)
 
