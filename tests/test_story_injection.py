@@ -162,6 +162,26 @@ def test_project_synopsis_bad_value_normalized():
     assert proj.llm_compact_memory == ""
 
 
+def test_project_synopsis_upstream_dict_compat():
+    # 上游把梗概存成 dict {version, text, covered_pages}；lite 只用 text 语义
+    proj = ProjImgTrans()
+    proj.load_from_dict(
+        {
+            "pages": {},
+            "llm_compact_memory": {
+                "version": 1,
+                "text": "上游梗概",
+                "covered_pages": ["p1.png"],
+            },
+        }
+    )
+    assert proj.llm_compact_memory == "上游梗概"
+    proj.load_from_dict(
+        {"pages": {}, "llm_compact_memory": {"version": 1, "text": ""}}
+    )
+    assert proj.llm_compact_memory == ""
+
+
 # ── AgentTranslator 编排接线 ─────────────────────────────────────────
 
 

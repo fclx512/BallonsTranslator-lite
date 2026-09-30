@@ -2864,6 +2864,14 @@ What to expect next:
             <source>These stages are missing Python packages. Picking the module installs them in the background — its progress is printed in the terminal. Restart the app once the install finishes, then run again.</source>
             <translation>以下阶段缺少 Python 依赖包。重新选中该模块会在后台自动安装，进度打印在终端里；装完重启应用再运行。</translation>
         </message>
+        <message>
+            <source>Import named styles</source>
+            <translation>导入命名样式</translation>
+        </message>
+        <message>
+            <source>This project has no font style table (upstream/legacy format). {n} named styles covering {m} text blocks can be imported as project base styles by preset name. Import now?</source>
+            <translation>该项目没有字体样式表（上游/旧版格式）。检测到 {n} 个命名样式、覆盖 {m} 个文本框，可按预设名导入为项目大样式。现在导入吗？</translation>
+        </message>
     </context>
     <context>
         <name>_ExtractWorker</name>

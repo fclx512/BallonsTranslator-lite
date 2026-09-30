@@ -26,6 +26,7 @@ from utils.base_styles import (  # noqa: E402
     BaseStyle,
     build_flatten_changes,
     build_variant_changes,
+    collect_style_name_groups,
     compute_override,
     compute_signature,
     copy_value,
@@ -33,6 +34,7 @@ from utils.base_styles import (  # noqa: E402
     ensure_default_base_styles,
     overrides_summary,
     quantize_field,
+    seed_base_styles_from_style_names,
     variant_display_name,
     DIFF_FIELDS,
     IDENTITY_FIELDS,
@@ -253,6 +255,48 @@ def test_ensure_default_base_styles_seed_none_uses_default():
     # 更早的测试 reload 成开发者本机 config.json 的内容。
     assert lst[0].name == FontFormat().font_family
     assert lst[0].fontformat.font_family == FontFormat().font_family
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# seed_base_styles_from_style_names（上游/旧版项目一次性导入）
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def test_collect_style_name_groups_counts():
+    p1 = [
+        FakeBlock(FontFormat(font_family="A", font_size=24, _style_name="标题")),
+        FakeBlock(FontFormat(font_family="A", font_size=30, _style_name="标题")),
+        FakeBlock(FontFormat(font_family="C", font_size=20)),  # 无名 → 不入组
+    ]
+    groups = collect_style_name_groups(FakeProj({"p1.png": p1}))
+    assert list(groups) == ["标题"]
+    assert len(groups["标题"]) == 2
+
+
+def test_seed_base_styles_from_style_names_grouping():
+    p1 = [
+        # 同预设名同字体 → 一个大样式，代表格式取首块（30 的漂移走变体）
+        FakeBlock(FontFormat(font_family="A", font_size=24, _style_name="标题")),
+        FakeBlock(FontFormat(font_family="A", font_size=30, _style_name="标题")),
+        # 同预设名但异字体：首块与「标题」同身份 → 并入先组不建新样式；
+        # 次块字体 B 是新身份 → 以「旁白」建样式
+        FakeBlock(FontFormat(font_family="A", font_size=40, _style_name="旁白")),
+        FakeBlock(FontFormat(font_family="B", font_size=20, _style_name="旁白")),
+        FakeBlock(FontFormat(font_family="C", font_size=20)),  # 无名 → 不播种
+    ]
+    styles = seed_base_styles_from_style_names(FakeProj({"p1.png": p1}))
+    assert [bs.name for bs in styles] == ["标题", "旁白"]
+    assert styles[0].identity == ("A", False)
+    assert styles[0].fontformat.font_size == 24
+    assert styles[0].fontformat._style_name == "标题"
+    assert styles[1].identity == ("B", False)
+
+    # 播种结果直接可被发现树消费：A 的 3 块全归「标题」，B 归「旁白」
+    tree = discover_style_tree(FakeProj({"p1.png": p1}), styles)
+    node = {n.base.name: n for n in tree.nodes}
+    assert node["标题"].total_count == 3
+    assert node["旁白"].total_count == 1
+    assert sum(e.count for e in tree.ungrouped) == 1  # 无名 C 块
 
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -118,6 +118,26 @@ class TextEffectsDataTest(unittest.TestCase):
         )
         self.assertEqual(list(overrides), ["text_effects"])
 
+    def test_unknown_effect_passthrough(self):
+        # 上游效果类型（如 synthetic_bold 假粗体）本构建不实现：加载时
+        # 告警但原样透传，序列化往返不丢（此前直接丢弃，保存即永久丢失）。
+        from utils.text_effects import UnknownEffect
+
+        raw = {
+            "effect_type": "synthetic_bold",
+            "enabled": True,
+            "shape": "ellipse",
+            "x": 0.02,
+            "y": 0.02,
+        }
+        f = FontFormat(text_effects={"overall_opacity": 1.0, "effects": [raw]})
+        self.assertIsInstance(f.text_effects[0], UnknownEffect)
+        self.assertTrue(f.text_effects.is_neutral())  # 不参与渲染
+        # 聚类路径要求效果栈可哈希（payload 含任意 JSON 值也不能炸）
+        hash(f.text_effects)
+        g = FontFormat(**f.to_serializable_dict())
+        self.assertEqual(g.text_effects[0].to_serializable_dict(), raw)
+
 
 if __name__ == "__main__":
     unittest.main()

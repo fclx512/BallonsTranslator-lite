@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Tuple
 
@@ -163,6 +164,54 @@ def ensure_default_base_styles(
         seed = FontFormat()
     base_styles.append(BaseStyle(seed.font_family, seed.deepcopy()))
     return True
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Upstream project seeding (style-compat import)
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def collect_style_name_groups(proj) -> "OrderedDict[str, List[Tuple[str, int, FontFormat]]]":
+    """Group blocks by non-empty ``fontformat._style_name`` (scan order).
+
+    上游项目没有项目级样式表：命名样式只是每块 ``_style_name``——最后
+    应用过的预设名（陈旧缓存，改参数不更新）。这里只做聚组统计（弹窗
+    计数与播种共用），不做任何写操作。
+    """
+    groups: OrderedDict[str, List[Tuple[str, int, FontFormat]]] = OrderedDict()
+    for pname, blklist in proj.pages.items():
+        for bidx, blk in enumerate(blklist):
+            name = getattr(blk.fontformat, "_style_name", "") or ""
+            if not name:
+                continue
+            groups.setdefault(name, []).append((pname, bidx, blk.fontformat))
+    return groups
+
+
+def seed_base_styles_from_style_names(proj) -> List[BaseStyle]:
+    """Seed base styles from block-level ``_style_name`` groups.
+
+    用于打开无 ``base_styles`` 的上游/旧版项目时的一次性导入（调用方先
+    弹窗确认）：代表格式取该组首块 deepcopy 并盖上预设名，其余块与大样
+    式的参数漂移交给变体机制展示。身份键 ``(font_family, vertical)``
+    项目内唯一（discover_style_tree 对重复身份 first-wins），因此按
+    「预设名 × 身份」建样式：每个新身份用它首次出现的预设组命名；身份
+    已被占的组不重复建，那些块靠身份键自然归属。``_style_name`` 为空的
+    块不播种，照旧走未分组签名聚类。
+    """
+    styles: List[BaseStyle] = []
+    by_identity: Dict[Tuple[str, bool], BaseStyle] = {}
+    for name, members in collect_style_name_groups(proj).items():
+        for _pname, _bidx, ffmt in members:
+            ident = (ffmt.font_family, bool(ffmt.vertical))
+            if ident in by_identity:
+                continue
+            rep = ffmt.deepcopy()
+            rep._style_name = name
+            bs = BaseStyle(name, rep)
+            by_identity[ident] = bs
+            styles.append(bs)
+    return styles
 
 
 # ═══════════════════════════════════════════════════════════════════════

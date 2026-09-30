@@ -724,6 +724,40 @@ class FilterEffect:
         return not self.enabled
 
 
+@dataclass(frozen=True)
+class UnknownEffect:
+    """Opaque passthrough for effect types this build cannot interpret.
+
+    上游/更新版本可能持久化本构建未实现的效果类型（如 ``synthetic_bold``
+    假粗体）。此前这类条目在加载时告警并丢弃，下次保存即永久丢失；现在
+    原始 payload 原样携带、原样回吐（FilterEffect 的「未知透传」同款设计），
+    渲染与效果面板按未知类型自然跳过（``is_neutral()`` 恒真）。
+
+    >>> effect = coerce_text_effect({'effect_type': 'synthetic_bold', 'x': 0.02})
+    >>> effect.to_serializable_dict() == {'effect_type': 'synthetic_bold', 'x': 0.02}
+    True
+    >>> effect_phase(effect) == ''
+    True
+    """
+
+    effect_type: str
+    payload: tuple = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.effect_type, str) or not self.effect_type:
+            raise ValueError('unknown effect type must be a non-empty string')
+
+    def to_serializable_dict(self) -> dict:
+        return dict(self.payload)
+
+    def is_neutral(self) -> bool:
+        return True
+
+    def __hash__(self) -> int:
+        # payload 值可能含 dict 等不可哈希对象，按 repr 稳定散列
+        return hash(('unknown', self.effect_type, repr(self.payload)))
+
+
 TextEffect = Union[
     StrokeEffect,
     ShadowEffect,
@@ -732,6 +766,7 @@ TextEffect = Union[
     TextFillEffect,
     ImageEffect,
     FilterEffect,
+    UnknownEffect,
 ]
 
 
@@ -757,6 +792,9 @@ def effect_phase(effect: TextEffect) -> str:
         return 'image'
     if isinstance(effect, FilterEffect):
         return 'filter'
+    if isinstance(effect, UnknownEffect):
+        # 未知效果不参与任何渲染相位；空串与所有已知相位都不相等
+        return ''
     raise TypeError('effect_phase requires a typed text effect')
 
 
@@ -811,6 +849,7 @@ class TextEffectStack:
                     TextFillEffect,
                     ImageEffect,
                     FilterEffect,
+                    UnknownEffect,
                 ),
             )
             for effect in effects
@@ -963,6 +1002,7 @@ def coerce_text_effect(value: Union[TextEffect, dict]) -> TextEffect:
             TextFillEffect,
             ImageEffect,
             FilterEffect,
+            UnknownEffect,
         ),
     ):
         return value
@@ -1079,6 +1119,14 @@ def coerce_text_effect(value: Union[TextEffect, dict]) -> TextEffect:
         )
         payload.pop('effect_type')
         return FilterEffect(**payload)
+    if isinstance(effect_type, str) and effect_type:
+        # 未实现的效果类型原样透传（见 UnknownEffect），只告警不丢弃
+        LOGGER.warning(
+            'Carrying unsupported text effect %r verbatim; '
+            'it will be preserved on save.',
+            effect_type,
+        )
+        return UnknownEffect(effect_type, tuple(payload.items()))
     raise ValueError('unsupported or missing text effect type')
 
 

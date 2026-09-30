@@ -1442,6 +1442,46 @@ class MainWindow(mainwindow_cls):
         if self.leftBar.configChecker.isChecked():
             self.leftBar.configChecker.setChecked(False)
 
+    def _maybe_seed_upstream_styles(self):
+        """上游/旧版项目首次导入：按块级预设名播种大样式（弹窗确认）。
+
+        上游项目没有项目级样式表，load_from_dict 对无 ``base_styles`` 键的
+        项目只登记一个全局格式默认样式，块上的命名样式（``_style_name``，
+        上游预设机制的显示缓存）全部掉进未分组。加载完成后在这里问一次；
+        取消则维持现状。播种结果随项目下次保存落盘。
+        """
+        from utils.base_styles import (
+            collect_style_name_groups,
+            seed_base_styles_from_style_names,
+        )
+
+        proj = self.imgtrans_proj
+        if not getattr(proj, "loaded_without_base_styles", False):
+            return
+        proj.loaded_without_base_styles = False  # 无论选择如何，本次加载只问一次
+        groups = collect_style_name_groups(proj)
+        if not groups:
+            return
+        n_blocks = sum(len(members) for members in groups.values())
+        ret = QMessageBox.question(
+            self,
+            self.tr("Import named styles"),
+            self.tr(
+                "This project has no font style table (upstream/legacy format). {n} named styles covering {m} text blocks can be imported as project base styles by preset name. Import now?"
+            ).format(n=len(groups), m=n_blocks),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if ret != QMessageBox.StandardButton.Yes:
+            return
+        proj.base_styles = seed_base_styles_from_style_names(proj)
+        if self._styleMgrDialog is not None and self._styleMgrDialog.isVisible():
+            from .fontstyle_manager import FontStyleManager
+
+            fsm = self._styleMgrDialog.findChild(FontStyleManager)
+            if fsm is not None:
+                fsm.refresh()
+
     def on_open_fontstyle_manager(self):
         """Open Font Style Manager as a standalone dialog."""
         if self._styleMgrDialog is not None and self._styleMgrDialog.isVisible():
@@ -1716,6 +1756,7 @@ class MainWindow(mainwindow_cls):
             self.opening_dir = False
             progress.close()
             self.glossary_workbench.refresh_project_state()
+            self._maybe_seed_upstream_styles()
         except Exception as e:
             self.opening_dir = False
             create_error_dialog(e, self.tr("Failed to load project ") + directory)
@@ -1877,6 +1918,7 @@ class MainWindow(mainwindow_cls):
             self.opening_dir = False
             self.canvas._update_hint_visibility()
             self.glossary_workbench.refresh_project_state()
+            self._maybe_seed_upstream_styles()
         except Exception as e:
             self.opening_dir = False
             create_error_dialog(e, self.tr("Failed to load project from") + json_path)

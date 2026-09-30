@@ -113,6 +113,9 @@ class ProjImgTrans:
         self.proj_path: str = None
         # Project-level base styles (identity: font_family + vertical).
         self.base_styles: List[BaseStyle] = []
+        # Set by load_from_dict: project JSON carried no "base_styles" key
+        # (upstream/legacy project). Consumed by the MainWindow import prompt.
+        self.loaded_without_base_styles = False
 
         # Project-level story synopsis (upstream vision_context key); the
         # glossary workbench "apply" writes it, agent translation injects it.
@@ -253,11 +256,17 @@ class ProjImgTrans:
             self._image_info = {}
 
         # Project-level story synopsis; legacy projects carry none.
+        # 上游存 dict {version, text, covered_pages}，lite 只用 text 语义。
         memory = proj_dict.get("llm_compact_memory", "")
+        if isinstance(memory, dict):
+            memory = memory.get("text") or ""
         self.llm_compact_memory = memory if isinstance(memory, str) else ""
 
         # Project-level base styles; legacy projects carry none → register a
         # default one seeded from the global format (see ensure_default_base_styles).
+        # 无 base_styles 键即上游/旧版项目，主窗口据此询问是否按预设名导入
+        # 大样式（seed_base_styles_from_style_names）；仅本次加载有效。
+        self.loaded_without_base_styles = "base_styles" not in proj_dict
         self.base_styles = []
         for bs_dict in proj_dict.get("base_styles", []):
             try:
@@ -432,6 +441,8 @@ class ProjImgTrans:
             self._pagename2idx[imgname] = ii
             self._idx2pagename[ii] = imgname
             self._image_info[imgname] = {"finish_code": 0}
+        self.base_styles = []
+        self.loaded_without_base_styles = False
         self.set_current_img_byidx(0)
         self.save()
 
