@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from qtpy.QtCore import QCoreApplication, Qt, Signal
-from qtpy.QtGui import QColor, QFont
+from qtpy.QtGui import QColor, QFont, QFontMetrics
 from qtpy.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -466,8 +466,16 @@ class FormatGroupCard(QFrame):
         self._toggle.setArrowType(Qt.ArrowType.DownArrow)
         self._toggle.setCheckable(True)
         self._toggle.setChecked(True)
-        self._toggle.setStyleSheet("QToolButton { border: none; background: transparent; font-weight: bold; }")
-        self._toggle.setFixedWidth(110)
+        self._toggle.setStyleSheet("QToolButton { border: none; background: transparent; }")
+        font = self._toggle.font()
+        font.setBold(True)
+        self._toggle.setFont(font)
+        # 标题完整显示优先：宽度随译文实宽自适应（旧实现钉 110px，Qt6 对放
+        # 不下的 QToolButton 文字做中缀省略，「颜色与描边」变「颜…边」）。
+        # +40 = 箭头图标 + 内边距 + QSS polish 后字体度量偏差的余量。
+        self._toggle.setFixedWidth(
+            max(110, QFontMetrics(font).horizontalAdvance(self.title()) + 40)
+        )
         self._toggle.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         self._toggle.toggled.connect(self._on_toggled)
 

@@ -42,6 +42,7 @@ from qtpy.QtGui import (
     QFontMetrics,
     QPalette,
     QPainter,
+    QPen,
     QTextDocument,
 )
 from qtpy.QtWidgets import (
@@ -137,15 +138,24 @@ _ACCENT_CACHE: Dict[tuple, QColor] = {}
 
 def _theme_accent(alpha: int = 255) -> QColor:
     """Current theme's ``@accentPrimary`` as a QColor (cached per theme)."""
+    return _theme_var_color("@accentPrimary", alpha)
+
+
+def _theme_var_color(key: str, alpha: int = 255) -> QColor:
+    """Arbitrary theme variable as a QColor (cached per theme + key).
+
+    与 _ACCENT_CACHE 同一缓存策略：ui/misc.py 的解析每次都读主题 JSON，
+    只适合构造期调用；绘制路径里须走这里。
+    """
     from utils.config import pcfg
 
-    key = (pcfg.darkmode, pcfg.dark_theme, pcfg.light_theme, alpha)
-    color = _ACCENT_CACHE.get(key)
+    ck = (pcfg.darkmode, pcfg.dark_theme, pcfg.light_theme, key, alpha)
+    color = _ACCENT_CACHE.get(ck)
     if color is None:
         from ui.misc import get_theme_color
 
-        color = get_theme_color(alpha=alpha)
-        _ACCENT_CACHE[key] = color
+        color = get_theme_color(alpha=alpha, key=key)
+        _ACCENT_CACHE[ck] = color
     return color
 
 
@@ -612,6 +622,7 @@ class StylePreviewCard(QWidget):
         self.setFixedHeight(64)
         self._doc = QTextDocument(self)
         self._doc.setDefaultFont(QFont())
+        self._fg = QColor(0, 0, 0)
 
     def set_format(self, ffmt: FontFormat):
         sample = self.SAMPLE
@@ -619,6 +630,7 @@ class StylePreviewCard(QWidget):
             sample = "\n".join(self.SAMPLE.replace(" ", ""))
         weight = "bold" if ffmt.bold or (ffmt.font_weight or 0) >= 600 else "normal"
         fg = ffmt.foreground_color()
+        self._fg = QColor(int(fg[0]), int(fg[1]), int(fg[2]))
         css = (
             f"font-family: '{ffmt.font_family}'; "
             f"font-size: {max(12, min(int(ffmt.font_size), 32))}px; "
@@ -634,13 +646,39 @@ class StylePreviewCard(QWidget):
         )
         self.update()
 
+    @staticmethod
+    def _rel_lum(c: QColor) -> float:
+        def chan(v: int) -> float:
+            x = v / 255.0
+            return x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4
+
+        return 0.2126 * chan(c.red()) + 0.7152 * chan(c.green()) + 0.0722 * chan(c.blue())
+
+    @classmethod
+    def _contrast_ratio(cls, a: QColor, b: QColor) -> float:
+        la, lb = cls._rel_lum(a), cls._rel_lum(b)
+        hi, lo = max(la, lb), min(la, lb)
+        return (hi + 0.05) / (lo + 0.05)
+
     def paintEvent(self, event):
         painter = QPainter(self)
-        opt = QStyleOption()
-        opt.initFrom(self)
-        self.style().drawPrimitive(
-            QStyle.PrimitiveElement.PE_Widget, opt, painter, self
-        )
+        theme_bg = _theme_var_color("@emptyContentBackgroundColor")
+        if self._contrast_ratio(self._fg, theme_bg) < 3.0:
+            # 自动反色：样式的文字色与面板底色对比不足时，按文字明度反相铺底
+            # （深字铺浅底、浅字铺深底），保证任意文字色下预览可读。
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            dark = self._rel_lum(self._fg) >= 0.5
+            painter.setPen(
+                QPen(_theme_var_color("@borderColor"), 1)
+            )
+            painter.setBrush(QColor(30, 33, 40) if dark else QColor(245, 246, 248))
+            painter.drawRoundedRect(self.rect().adjusted(0, 0, -1, -1), 6, 6)
+        else:
+            opt = QStyleOption()
+            opt.initFrom(self)
+            self.style().drawPrimitive(
+                QStyle.PrimitiveElement.PE_Widget, opt, painter, self
+            )
         self._doc.setTextWidth(self.width() - 16)
         self._doc.drawContents(
             painter, QRectF(8, 4, self.width() - 16, self.height() - 8)
