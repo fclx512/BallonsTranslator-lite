@@ -65,7 +65,9 @@ class SectionCardTest(unittest.TestCase):
             "project": 4,
             "typesetting": 6,
             "interface": 3,
-            "app": 4,
+            # Updates / External Editor / Workbench Prompts / Import-Export /
+            # Note Animations（0c0c4cbc 起新增备注动画节）
+            "app": 5,
             "models": 3,
             "workbench_temp": 1,
         }

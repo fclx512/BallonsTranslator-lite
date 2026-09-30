@@ -12,6 +12,36 @@
 >
 > 仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护）；被裁掉的日期节仍完整留在提交历史里，用 `git log --grep <关键词>`／`git log --follow -p -- docs/daily_log.md`／`git show <rev>:docs/daily_log.md` 回查。
 
+## 2026-09-30
+
+### 样式管理器字体预览自动反色（`StylePreviewCard._contrast_ratio`）+ 分组标题完整显示（`FormatGroupCard` 宽度自适应）
+
+**摘要：** 预览卡文字色直接取样式 `frgb`（常为黑），暗色主题底 `@emptyContentBackgroundColor` 上不可读；改为绘制时按 WCAG 对比度判定，低于 3.0 就按文字明度反相铺底（深字浅底/浅字深底），够对比则保持主题原底。主题色读取沿用按主题缓存模式（`_theme_var_color`）避免绘制路径反复读 JSON。另修复「颜色与描边」被钉 110px 宽裁成「颜…边」：宽度按译文实宽自适应（Qt6 对放不下的 QToolButton 文字做中缀省略），加粗从内联 QSS 移到 `setFont` 保证度量一致。
+
+**涉及文件：** `ui/fontstyle_manager.py`、`ui/style_format_editor.py`
+
+**验证：** `scripts/stylemgr_render.py` 暗/亮两主题 4 场景目验 + 白/灰/黑文字 × 双主题 6 张预览卡逐一核对反色分支；`scripts/verify.py` 全绿。
+
+---
+
+### 上游项目字体样式兼容导入（`seed_base_styles_from_style_names` + 主窗口弹窗）+ 上游数据两处保命兼容
+
+**摘要：** 上游项目没有项目级样式表，命名样式只是块级 `fontformat._style_name`（预设名缓存），lite 打开后全部掉进未分组——用户反馈的"样式不兼容"实为此。现打开无 `base_styles` 键的项目时弹窗询问一次（`ui/mainwindow.py::_maybe_seed_upstream_styles`，挂 `openDir`/`openJsonProj`），确认后按「预设名 × 身份键」播种大样式（同身份去重、代表格式取组首块、无名块照旧未分组），随下次保存落盘。捎带修两处真实数据丢失：上游 `synthetic_bold` 假粗体效果由丢弃改为 `UnknownEffect` 原样透传（渲染/面板自然跳过、序列化原样回吐，FilterEffect 同款设计）；`llm_compact_memory` 上游 dict 结构取 `text` 字段兼容。不做设置项开关（用户拍板）。
+
+**涉及文件：** `utils/base_styles.py`、`utils/proj_imgtrans.py`、`ui/mainwindow.py`、`utils/text_effects.py`、`translate/zh_CN.ts`
+
+**验证：** 真 94 页工程（782 块）构造上游格式实测：播种 2 样式全量覆盖、假粗体保存存活、llm 梗概恢复、二次打开不重复弹窗（`tmp/accept_seed_popup.py` 走真实主窗口弹窗链路）；`tests/test_base_styles.py`/`test_text_effects_data.py`/`test_story_injection.py` 补钉。
+
+---
+
+### 补钉应用页分节卡契约数量（`test_config_section_cards.py` app 页 4→5）
+
+**摘要：** `0c0c4cbc` 往应用页新增「Note Animations」节后没更新这份契约钉子，`verify.py --full` 自该提交起一直红。按现状补 4→5，非本次改动引入。
+
+**涉及文件：** `tests/test_config_section_cards.py`
+
+---
+
 ## 2026-09-29
 
 ### README 大画幅演示动画流程落地（`scripts/gen_readme_anim.py` 首个场景 `format_tour` + `anim_kit` 流式/裁切改造）
@@ -73,66 +103,6 @@
 **涉及文件：** `scripts/gen_help_anim.py`、`ui/configpanel.py`、`config/help_anims/`（7 个 webp）、`translate/zh_CN.ts`、`.gitignore`、`docs/基础速查/备注演示动画使用说明.md`
 
 **验证：** 竖排三场景与真机引擎（TextBlkItem+VerticalTextDocumentLayout）逐字比对格框 0.00px；每轮 `scripts/verify.py` 全绿；用户真机确认弹层样式与动画交互。
-
----
-
-## 2026-09-27
-
-### 字号输入上限跟随 `pcfg.max_font_size`（`SizeComboBox.set_max_val`）
-
-**摘要：** 右栏文本面板与嵌字页面板的字号框原来分别钉死 200/1000，设置页「最大字号」只约束渲染不约束输入，拖拽/手输都能越过上限。`SizeComboBox` 增加运行时可更新的 `set_max_val`，两处字号框改读 `pcfg.max_font_size`，并在每次回显前同步（面板只在启动时构造一次，不同步会被旧上限钳住）。
-
-**涉及文件：** `ui/custom_widget/combobox.py`、`ui/text_engine/formatting/panel.py`、`ui/text_panel.py`
-
-**验证：** `scripts/verify.py --full` 全绿。
-
----
-
-### 样式管理器子样式字体迁移（`StyleFontMigration`）+ 大样式编辑快照撤销（`BatchFontformatCommand` 的 `base_snapshot`）
-
-**摘要：** 子样式详情新增「更换字体」卡：只把该子样式的文本框迁到目标大样式（或未分组），迁移前按实时发现重核成员、确认后一步撤销。大样式编辑补两个一致性缺口——目标身份已属于其它大样式时拒绝应用（不再静默生成重复身份）；模板 `fontformat` 的旧/新格式经 `base_snapshot` 随批量命令一起撤销/重做，无匹配块的模板编辑也能撤。
-
-**涉及文件：** `ui/fontstyle_manager.py`、`ui/fontstyle_manager_commands.py`、`scripts/stylemgr_render.py`、`config/stylesheet.css`、`tests/test_fontstyle_tree.py`、`tests/test_global_search_fontstyle.py`、`translate/zh_CN.ts`、`translate/zh_CN.qm`
-
-**验证：** 新增 7 个用例（迁移/未分组重检/身份冲突/身份变更撤销/base_snapshot 三态）全过；`scripts/stylemgr_render.py` 场景 4 变体验收底图。
-
----
-
-### 模型文件列表整行点击勾选（`RowTable.set_row_click_toggles_check`）+ 展示台两级目录检索
-
-**摘要：** 模型文件卡片的 13px 勾选框太难点，`RowTable` 增加默认关闭的整行点击勾选（只认「按下-抬起同一行且未拖动」的一次点击，仍走 `_user_toggled` 唯一写路径），仅 `ui/model_files_panel.py` 开启——工作台候选列表靠点行预览、不能开。展示台左侧目录改「分区→控件」两级并与搜索/样式筛选同步，加行计数与 Ctrl+F/Enter/Esc，修样式来源徽章把类型规则误判成类名的问题；给裸 `QToolButton` 补全局紧凑兜底。
-
-**涉及文件：** `ui/custom_widget/row_table.py`、`ui/model_files_panel.py`、`scripts/style_showcase.py`、`config/stylesheet.css`、`docs/基础速查/打包控件功能使用说明.md`、`tests/test_model_files.py`
-
-**验证：** 真实鼠标事件 7 用例（主体勾选/复选框单次触发/拖动不勾/默认关闭）全过。
-
----
-
-### 发版形态改版：发版包＝约 30 MB 引导小包 + 发布 tag 换 `lite-v*` 前缀 + PatchMatch 原生库改 Release 资产用时下载
-
-**摘要：** 用户拍板把发行物从预装式 600 MB 拨回**引导小包**（源码 + 嵌入式 Python + pip/uv、依赖首启现装，约 30 MB、对齐上游 `Ballonstranslator_win_minium.zip`）；600 MB 预装环境只是本机运行状态、不分发。发布 tag 换新格式 **`lite-vX.Y.Z`** 与上游 `v1.x.x` 区分（pyproject 升 `1.0.0`，`utils/updater.py::normalize_version_tag` 剥离新前缀——`lite-v` 必须排在 `v` 之前）。PatchMatch 两个原生 DLL（约 53 MB）不再随包：`scripts/build_win_minimal.ps1` 同批产出 `release_assets\` 独立资产，模块声明 `download_file_list`（`releases/latest/download` 直链 + sha256 钉死），**选中 patchmatch 即后台下载**（`_NO_DOWNLOAD_LIST_KEYS` 摘出后，缺文件检查/选型警示/运行前警告/模型文件页全链路认领同一份声明）。
-
-**涉及文件：** `pyproject.toml`、`utils/updater.py`、`scripts/build_win_minimal.ps1`、`modules/inpaint/inpaint_patchmatch.py`、`modules/inpaint/patch_match.py`、`modules/__init__.py`、`ui/module_parse_widgets.py`、`README.md`、`README_EN.md`、`scripts/README.md`、`docs/项目概述.md`、`docs/基础速查/依赖库说明.md`、`tests/test_updater_version.py`、`tests/test_inpaint_patchmatch.py`、`tests/test_minimal_package_contract.py`
-
-**验证：** `tests/test_updater_version.py`（tag 剥离与升级路径 5 用例）新增全过；patchmatch 契约 58 passed；构建脚本 PSParser 解析通过、`tests/test_minimal_package_contract.py` 4 passed；**首次端到端真实构建产出 32.3 MB 小包 + 53 MB 资产**，开箱首启验收发现 `utils/core_requirements.py` 把 pywin32 的 `.pth` 类失败误判成「重启无用」、装完依赖撞「缺少核心依赖」硬闸门拒启——补 `_restart_resolvable_failures` 子进程复测（等价重启后探测）让首启装完自动重启收尾，3 新用例钉住。**发版：** 已于当日执行，见下方「lite-v1.0.0 发版执行」条。
-
----
-
-### 发版说明文档落库 `docs/发版说明_lite-v1.0.0.md` + README 发版口径更正
-
-**摘要：** 0.6.0→lite-v1.0.0 共 139 提交的改动整理成仓内更新说明文档（面向老用户，发版页只引用不抄正文）；README/README_EN 撤「尚未正式发布」标注、补 Releases 下载指引，并修掉与发版形态矛盾的三处旧口径（一键完整包段误写「精简包预装依赖」、源码段「PatchMatch 随包需手工补回」、macOS 段附件说法）；「功能展示」占位行按要求继续搁置。
-
-**涉及文件：** `docs/发版说明_lite-v1.0.0.md`、`README.md`、`README_EN.md`、`docs/基础速查/依赖库说明.md`
-
----
-
-### lite-v1.0.0 发版执行（tag 推送 + 三资产 Release + 旧 7 Release/v0.x tag 清理）
-
-**摘要：** 首个 `lite-v*` 版本正式发布：tag `lite-v1.0.0`（指向 `8f5c5744`）推送，GitHub Release（id 397650844）挂三件资产——小包 ZIP 33,855,393 B + 两个 PatchMatch DLL（50,176 / 55,521,280 B，sha256 与 `modules/inpaint/inpaint_patchmatch.py::download_file_list` 钉死值逐一吻合，`releases/latest/download` 直链自此可用）；旧 7 个零资产 Release（v0.2.0～v0.6.0）连同远端/本地同名 tag 删除，上游 v1.5.x 系 tag 保留（origin 上本就没有）。发版页正文只引用 `docs/发版说明_lite-v1.0.0.md`。本机无 `gh`，全程走 GitHub API（token 取自 git 凭据）。
-
-**涉及文件：** 本条为远端动作记录，仓内仅 `docs/daily_log.md`
-
-**验证：** Release 资产清单 3 项尺寸逐一核对；`releases/latest/download/patchmatch_inpaint.dll` 实拉哈希一致；远端 releases 剩 1 个、`git ls-remote --tags` 只剩 `lite-v1.0.0`。
 
 ---
 
