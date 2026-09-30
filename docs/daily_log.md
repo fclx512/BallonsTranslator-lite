@@ -106,3 +106,30 @@
 
 ---
 
+### 样式参数与画布渲染脱节两处收口（`_strip_paragraph_alignment` + `ui/text_panel.py` 别名保持）
+
+**摘要：** 用户实测「参数居中、渲染靠右」且样式管理器批量修改要改两步才生效——数据层 `blk.fontformat` 与 item 渲染态（QTextDocument）只在 `set_fontformat` 时同步，单侧写即分叉。探针（`scripts/mw_repro.py --scenario fmt-sync`）钉出两根源：① 旧工程 rich_text 段落自带 align 属性，块级 blockFormat 对齐脱离数据层且 `set_fontformat` 治不了（只写 doc 默认 option），加载后统一清回 AlignLeft（Qt 实测：块对齐 ≠ AlignLeft 才覆盖默认 option，AlignAbsolute 反而是显式覆盖）；② 文本面板切回全局格式的整包回写只替 item 侧对象，打断 `initTextBlock` 的 item↔blk 别名，改两侧同对象。样式管理器「两步走」本身不修：空 diff 门（`changed_values`）是防压块级 override 的正确设计。
+
+**涉及文件：** `ui/text_engine/item.py`、`ui/text_panel.py`、`scripts/mw_repro.py`、`scripts/README.md`、`tests/test_format_sync.py`
+
+**验证：** fmt-sync 探针修复前 A1a/A1b/A2 分叉、修复后 6/7 一致（B1 分叉为机制演示属预期）；`tests/test_format_sync.py` 5 断言 + rich-text 路径相关 7 个既有测试全绿。
+
+---
+### 启动模块降级链路移除（`_ensure_model_files_fallback` 删除 + `ModuleManager.setXxx(offer_deps=False)`）
+
+**摘要：** 无 CUDA/缺包机器上每次启动把 OCR 强制降级 none_ocr，保存期「换回原值」保护又反复复活旧选择，用户改选永不粘；`_ensure_model_files_fallback` 与运行时自愈链路（`load_model` = `ensure_dependencies` 自动装包 → `_ensure_model_files` 自动补权重 → `MissingModelFilesError` 带指引弹窗）冲突，整体删除。另将启动初始化四个 `ModuleManager.setXxx()` 改为 `offer_deps=False`：启动只按配置静默装载，补下载/GPU 说明窗只响应用户主动选模块。`_ensure_module_fallback`（torch 探针，保启动命）保留不动。
+
+**涉及文件：** `launch.py`、`ui/mainwindow.py`、`ui/module_manager.py`
+
+**验证：** 真机两轮端到端（`tmp/launch_ocr_probe.py` 走真实启动链）：vl_manga 启动安静选中不弹窗、改选 paddleocr_v6_onnx 正确落盘、重启保持不回退；`scripts/verify.py` 全绿。
+
+---
+### 启动模块强制降级移除（`_ensure_model_files_fallback` 删除）+ 启动静默装载（`ModuleManager.setXxx(offer_deps=False)`）
+
+**摘要：** 用户实测无 CUDA 机器上「改选的 OCR 模型重启即丢、启动必弹提示/事件链路」。根源一：`launch.py::_ensure_model_files_fallback` 启动时查到缺包/缺权重就把 `pcfg.module.ocr` 换成 `none_ocr`（打印提示），而 `save_config` 的"换回原值"保护（`_suspend_auto_downgrades`）在用户改选未成功落盘时反复把旧值写回 config——选择永远逃不出；且该降级与应用已有的运行时自愈链路（`load_model` = `ensure_dependencies` 自动装包 + `_ensure_model_files` 补文件/加载期弹窗）冲突，把用户锁死在 none。整段删除。根源二：启动初始化四个 `setXxx()` 照常走 `_ensure_module_deps`，对 GPU-only 模块每启必弹拒绝窗——加 `offer_deps` 开关，启动传 False 静默装载，主动选模块才触发补装链路。
+
+**涉及文件：** `launch.py`、`ui/mainwindow.py`、`ui/module_manager.py`
+
+**验证：** 真机启动链探针（`tmp/launch_ocr_probe.py`，实测后未入库）：改选 `paddleocr_v6_onnx` → 关闭落盘 → 重启安静选中新值，全程零弹窗零降级；`scripts/verify.py` 全绿（含冒烟）。
+
+---

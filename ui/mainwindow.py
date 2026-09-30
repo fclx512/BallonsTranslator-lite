@@ -902,10 +902,13 @@ class MainWindow(mainwindow_cls):
             self.on_finish_setdetector
         )
         module_manager.ocr_thread.finish_set_module.connect(self.on_finish_setocr)
-        module_manager.setTextDetector()
-        module_manager.setOCR()
-        module_manager.setTranslator()
-        module_manager.setInpainter()
+        # 启动初始化只按配置装载模块，不触发「选模块」的补下载/GPU 说明
+        # 链路——那是对用户主动选择行为的响应；缺什么由运行前检查与
+        # 加载期异常弹窗兜底（ui/module_manager.py::_ensure_module_deps）。
+        module_manager.setTextDetector(offer_deps=False)
+        module_manager.setOCR(offer_deps=False)
+        module_manager.setTranslator(offer_deps=False)
+        module_manager.setInpainter(offer_deps=False)
 
         # 区域再检测（底部栏开关 + 画布拉框手势）：单页单手势，走画布撤销栈，
         # 与批量的备份版本机制（utils/batch_versions.py）无关。

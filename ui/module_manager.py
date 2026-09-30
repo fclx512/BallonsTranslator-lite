@@ -1482,11 +1482,11 @@ class ModuleManager(QObject):
         self.progress_msgbox.hide()
         self.imgtrans_pipeline_finished.emit()
 
-    def setTranslator(self, translator: str = None):
+    def setTranslator(self, translator: str = None, offer_deps: bool = True):
         if translator is None:
             translator = cfg_module.translator
         cls = TRANSLATORS.get(translator)
-        if cls:
+        if cls and offer_deps:
             _ensure_module_deps("translator", translator)
         if self.translate_thread.isRunning():
             LOGGER.warning("Terminating a running translation thread.")
@@ -1497,7 +1497,7 @@ class ModuleManager(QObject):
         self.prepare_msgbox.show()
         self.translate_thread.setTranslator(translator)
 
-    def setInpainter(self, inpainter: str = None):
+    def setInpainter(self, inpainter: str = None, offer_deps: bool = True):
         if inpainter is None:
             inpainter = cfg_module.inpainter
         if not self.inpaint_thread.isRunning() and self.block_set_inpainter:
@@ -1517,11 +1517,11 @@ class ModuleManager(QObject):
             self._show_wait_inpainter_dialog(inpainter)
             self.check_inpaint_fin_timer.start(300)
             return
-        self._start_set_inpainter(inpainter)
+        self._start_set_inpainter(inpainter, offer_deps=offer_deps)
 
-    def _start_set_inpainter(self, inpainter: str):
+    def _start_set_inpainter(self, inpainter: str, offer_deps: bool = True):
         cls = INPAINTERS.get(inpainter)
-        if cls:
+        if cls and offer_deps:
             _ensure_module_deps("inpainter", inpainter)
         self.prepare_msgbox.updateTaskProgress(
             0, self.tr("Preparing module: {module}...").format(module=inpainter)
@@ -1564,11 +1564,11 @@ class ModuleManager(QObject):
             except Exception:
                 pass
 
-    def setTextDetector(self, textdetector: str = None):
+    def setTextDetector(self, textdetector: str = None, offer_deps: bool = True):
         if textdetector is None:
             textdetector = cfg_module.textdetector
         cls = TEXTDETECTORS.get(textdetector)
-        if cls:
+        if cls and offer_deps:
             _ensure_module_deps("textdetector", textdetector)
         # Refresh param widget after dep install so dynamic model lists
         # (e.g. ysgyolo's CKPT_LIST) are picked up.
@@ -1584,11 +1584,11 @@ class ModuleManager(QObject):
         self.prepare_msgbox.show()
         self.textdetect_thread.setTextDetector(textdetector)
 
-    def setOCR(self, ocr: str = None):
+    def setOCR(self, ocr: str = None, offer_deps: bool = True):
         if ocr is None:
             ocr = cfg_module.ocr
         cls = OCR.get(ocr)
-        if cls:
+        if cls and offer_deps:
             _ensure_module_deps("ocr", ocr)
         if self.ocr_thread.isRunning():
             LOGGER.warning("Terminating a running OCR thread.")

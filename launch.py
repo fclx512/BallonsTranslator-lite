@@ -452,116 +452,6 @@ def _ensure_module_fallback():
         print()
 
 
-def _ensure_model_files_fallback():
-    """Check if declared model files exist for the currently configured
-    detection / OCR / inpainting modules, and whether required Python
-    packages are importable.
-
-    If **all** model files for a module are missing on disk (e.g. after a
-    directory restructure), silently fall back to the corresponding "none"
-    module so the app starts without a blocking dependency dialog.  Also
-    falls back if the module declares ``requires_packages`` and they aren't
-    importable.  The user can later re-download files via the Model Files
-    panel.
-
-    This function is intended to be called **after**
-    ``init_lazy_module_registries()`` so that ``download_file_list``
-    attributes are accessible.
-    """
-    import importlib
-    import os.path as osp
-
-    from utils import shared
-    from utils.config import pcfg, record_auto_downgrade
-
-    # Lazy-import registries (safe after init_lazy_module_registries)
-    try:
-        from modules import INPAINTERS, OCR, TEXTDETECTORS
-    except Exception:
-        return
-
-    _REGISTRIES = {
-        "textdetector": (TEXTDETECTORS, "none"),
-        "ocr": (OCR, "none_ocr"),
-        "inpainter": (INPAINTERS, "none"),
-    }
-    changed = []
-
-    for _type, (_registry, _fallback) in _REGISTRIES.items():
-        _cfg_key = _type  # e.g. "textdetector", "ocr", "inpainter"
-        _module_name = getattr(pcfg.module, _cfg_key, "")
-        if not _module_name or _module_name.startswith("none") or _module_name == "llm_ocr":
-            continue
-
-        _spec = _registry.get(_module_name)
-        if not _spec:
-            continue
-
-        # ── Check requires_packages by resolving the spec ────────
-        # This does a real import, only for the currently configured
-        # module — acceptable at startup.
-        _req_pkgs = []
-        try:
-            _resolved = _spec.resolve()
-            _req_pkgs = getattr(_resolved, "requires_packages", None) or []
-        except Exception:
-            pass  # can't resolve → skip package check, still try model file check
-
-        _missing_pkg = None
-        for _pkg_req in _req_pkgs:
-            _pkg_name = _pkg_req.split(">=")[0].split("==")[0].split("!=")[0].strip()
-            try:
-                importlib.import_module(_pkg_name)
-            except ImportError:
-                _missing_pkg = _pkg_req
-                break
-
-        if _missing_pkg:
-            setattr(pcfg.module, _cfg_key, _fallback)
-            record_auto_downgrade(pcfg.module, _cfg_key, _fallback, _module_name)
-            changed.append(
-                f"{_type}: {_module_name} → {_fallback} (package {_missing_pkg} missing)"
-            )
-            continue
-
-        # ── Check model files on disk ────────────────────────────
-        _dfl = getattr(_spec, "download_file_list", None) or []
-        if not _dfl:
-            continue
-
-        # Check that **every** download entry has at least one file on disk.
-        # For multi-entry modules (e.g. ppocrv6_onnx has separate entries for
-        # det.onnx, rec.onnx, dict.txt), a single dict file is not enough.
-        _all_entries_ok = True
-        for _dl_entry in _dfl:
-            _paths = _dl_entry.get("save_files") or _dl_entry.get("files") or []
-            if isinstance(_paths, str):
-                _paths = [_paths]
-            _entry_has_file = False
-            for _fpath in _paths:
-                if not osp.isabs(_fpath):
-                    _fpath = osp.join(shared.PROGRAM_PATH, _fpath)
-                if osp.exists(_fpath):
-                    _entry_has_file = True
-                    break
-            if not _entry_has_file:
-                _all_entries_ok = False
-                break
-
-        if not _all_entries_ok:
-            setattr(pcfg.module, _cfg_key, _fallback)
-            record_auto_downgrade(pcfg.module, _cfg_key, _fallback, _module_name)
-            changed.append(
-                f"{_type}: {_module_name} → {_fallback} (model files missing)"
-            )
-
-    if changed:
-        print("Model files not found — automatically switched to no-model modules:")
-        for c in changed:
-            print(f"  {c}")
-        print()
-
-
 #: Cap on chained automatic startup restarts.  A restart only exists to load
 #: freshly installed packages, so if three installs in a row still don't make
 #: the app usable, another exec would just repeat the loop.
@@ -979,12 +869,6 @@ def main():
     if lang not in ("en_US", "English") and not osp.exists(qmp):
         LOGGER.warning(f"target display language file {qmp} doesnt exist.")
     LOGGER.info(f"set display language to {lang}")
-
-    # Check model file existence (registries are now available).  Must stay
-    # AFTER the translator install: resolve() really imports the configured
-    # module, and module-level QCoreApplication.translate tables (e.g.
-    # utils/block_tags.py TAG_DEFS) would otherwise be frozen untranslated.
-    _ensure_model_files_fallback()
 
     app_font = QFont("Microsoft YaHei UI")
     if not app_font.exactMatch():
