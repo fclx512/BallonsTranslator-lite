@@ -1,11 +1,10 @@
 """Qt font-family compatibility at the text-engine boundary."""
 
-from hashlib import sha1
 import re
+from hashlib import sha1
 from typing import Callable, Iterable, Sequence
 
 from qtpy.QtGui import QFont, QFontDatabase, QTextCursor, QTextDocument
-
 
 _QT_FAMILY_BY_PROJECT_NAME: dict[str, str] = {}
 _PROJECT_FAMILY_BY_QT_NAME: dict[str, str] = {}

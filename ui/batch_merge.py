@@ -760,7 +760,12 @@ class BatchMerge:
         """
         if not any(blk.rich_text for _, blk in ordered):
             return ""
-        from qtpy.QtGui import QTextCharFormat, QTextCursor, QTextDocument, QTextDocumentFragment
+        from qtpy.QtGui import (
+            QTextCharFormat,
+            QTextCursor,
+            QTextDocument,
+            QTextDocumentFragment,
+        )
 
         from .text_engine.annotations import to_rich_text_html
         from .text_engine.pipeline_formatting import _load_text_block_document

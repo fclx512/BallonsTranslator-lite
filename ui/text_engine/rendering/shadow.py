@@ -12,9 +12,9 @@ from typing import Tuple, Union
 
 import cv2
 import numpy as np
-from qtpy.QtGui import QColor, QPixmap, QImage
+from qtpy.QtGui import QColor, QImage, QPixmap
 
-from ui.misc import pixmap2ndarray, ndarray2pixmap
+from ui.misc import ndarray2pixmap, pixmap2ndarray
 
 
 def apply_shadow_effect(

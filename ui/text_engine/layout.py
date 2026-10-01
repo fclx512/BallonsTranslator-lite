@@ -2,7 +2,7 @@ import math
 from functools import cached_property, lru_cache
 from typing import List, Optional, Sequence, Tuple
 
-from qtpy.QtCore import QPointF, QRectF, Signal, QSizeF
+from qtpy.QtCore import QPointF, QRectF, QSizeF, Signal
 from qtpy.QtGui import (
     QAbstractTextDocumentLayout,
     QFont,
@@ -16,8 +16,9 @@ from qtpy.QtGui import (
 )
 
 from utils.fontformat import FontFormat, LineSpacingType, pt2px
-from .font_family import qfont_with_family
+
 from .annotations import letter_spacing_value, line_spacing_values
+from .font_family import qfont_with_family
 
 
 def selection_segments_excluding(
@@ -235,7 +236,7 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
         self._effect_padding = max(0.0, float(doc.documentMargin()))
 
         # relative bottom/right
-        self.shrink_height = 0 
+        self.shrink_height = 0
         self.shrink_width = 0
 
         # The upstream vertical-stroke renderer clones a document and reuses
@@ -369,7 +370,7 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
         if not self.relayout_on_changed:
             return
         self.reLayoutEverything()
-        
+
     def reLayoutEverything(self):
         self._max_font_size = -1
         block = self.document().firstBlock()
@@ -426,7 +427,7 @@ class SceneTextLayout(QAbstractTextDocumentLayout):
 
     def minSize(self):
         return (self.shrink_height + self.text_padding, self.shrink_width + self.text_padding)
-    
+
     def get_char_fontfmt(self, block_number: int, char_idx: int) -> CharFontFormat:
         charidx2frag_map = self._map_charidx2frag[block_number]
         if len(charidx2frag_map) == 0:

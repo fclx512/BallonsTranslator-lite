@@ -1,13 +1,12 @@
 """Immutable typed text-effect values and stack editing helpers."""
 
-from dataclasses import dataclass, field, replace
 import math
+from dataclasses import dataclass, field, replace
 from numbers import Integral, Real
 from typing import Iterator, Mapping, Optional, Sequence, Tuple, Union
 
 from .logger import logger as LOGGER
 from .raster_assets import RasterAssetRef, coerce_raster_asset_ref
-
 
 SHADOW_DISTANCE_LIMIT = 10.0
 SHADOW_BLUR_LIMIT = 10.0

@@ -1,11 +1,10 @@
 """Generic immutable references to project-managed raster assets."""
 
+import re
 from dataclasses import dataclass
 from numbers import Integral
 from pathlib import PurePosixPath
-import re
 from typing import Mapping, Union
-
 
 _RASTER_ASSET_PATH_PATTERN = re.compile(
     r'^assets/(?P<digest>[0-9a-f]{64})\.[a-z0-9]+$'

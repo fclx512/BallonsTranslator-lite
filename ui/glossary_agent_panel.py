@@ -49,8 +49,8 @@ from qtpy.QtCore import (
     QRect,
     QRectF,
     QSize,
-    QThread,
     Qt,
+    QThread,
     Signal,
     Slot,
 )
@@ -977,8 +977,8 @@ class GlossaryAgentWorker(QObject):
 
     def _ensure_translator(self):
         if self._translator is None:
-            from utils.config import pcfg
             from modules.translators.trans_agent import AgentTranslator
+            from utils.config import pcfg
 
             self._translator = AgentTranslator(
                 pcfg.module.translate_source,

@@ -19,19 +19,18 @@ QUndoStack 无公开列表模型（QUndoView 走私有 QUndoStackModel），分�
 """
 
 from qtpy.QtCore import (
+    QAbstractListModel,
     QCoreApplication,
+    QModelIndex,
     QPointF,
     QSize,
     Qt,
-    QAbstractListModel,
-    QModelIndex,
 )
-from qtpy.QtGui import QColor, QPalette, QPainter
+from qtpy.QtGui import QColor, QPainter, QPalette
 from qtpy.QtWidgets import (
     QAbstractItemView,
     QLabel,
     QListView,
-    QSizePolicy,
     QStyle,
     QStyledItemDelegate,
     QVBoxLayout,
@@ -87,7 +86,7 @@ class _SavedDotDelegate(QStyledItemDelegate):
 
     def sizeHint(self, option, index):
         is_header = index.data(_ROLE_KIND) == "header"
-        font = _row_font(option, is_header)
+        _row_font(option, is_header)
         metrics = option.fontMetrics
         height = metrics.height() + (4 if is_header else 3)
         return QSize(metrics.horizontalAdvance(" ") * 24, height)

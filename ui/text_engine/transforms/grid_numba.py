@@ -7,14 +7,12 @@ import threading
 
 from utils import shared
 
-
 NUMBA_CACHE_DIR = osp.join(shared.cache_dir, 'numba')
 # Configure the documented cache boundary before Numba reads its environment.
 os.environ['NUMBA_CACHE_DIR'] = NUMBA_CACHE_DIR
 
-import numpy as np
-from numba import njit, prange
-
+import numpy as np  # noqa: E402 - cache environment is configured first
+from numba import njit, prange  # noqa: E402
 
 _warmup_lock = threading.Lock()
 _warmup_complete = False

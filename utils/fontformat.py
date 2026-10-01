@@ -23,7 +23,6 @@ from .text_effects import (
     with_primary_stroke,
 )
 
-
 TEXT_TRANSFORM_SCALE_MIN = 0.1
 TEXT_TRANSFORM_SCALE_MAX = 4.0
 TEXT_TRANSFORM_PROJECTIVE_SLANT_MIN = -85.0
@@ -1041,7 +1040,6 @@ def _migrate_legacy_text_effects(payload: dict) -> TextEffectStack:
                 position="outside",
             )
 
-    effects: list = []
     gradient_stack = stroke_stack
     if payload.get("gradient_enabled", False) in (True, 1):
         try:

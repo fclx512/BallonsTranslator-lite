@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass
 import importlib.util
 import logging
 import math
-from pathlib import Path
 import sys
+from dataclasses import dataclass
+from pathlib import Path
 from types import MappingProxyType, ModuleType
 from typing import Callable, Mapping, Optional, Tuple
 
@@ -16,7 +16,6 @@ import numpy as np
 
 from utils.fontformat import TEXT_TRANSFORM_PRECISION
 from utils.text_effects import FilterEffect, FilterScalar
-
 
 LOGGER = logging.getLogger(__name__)
 _PARAM_KINDS = frozenset(('float', 'int', 'bool', 'choice'))

@@ -16,8 +16,8 @@ from qtpy.QtGui import QPainter, QPixmap
 from qtpy.QtWidgets import QStyleOptionGraphicsItem, QWidget
 
 from ui.misc import ndarray2pixmap, pixmap2ndarray
-from .raster import EffectRasterAllocationError, plan_effect_raster
 
+from .raster import EffectRasterAllocationError, plan_effect_raster
 
 PaintSource = Callable[
     [QPainter, QStyleOptionGraphicsItem, Optional[QWidget]], None

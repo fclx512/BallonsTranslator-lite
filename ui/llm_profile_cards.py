@@ -42,9 +42,9 @@ from ui.icon_rendering import render_svg_pixmap
 from ui.misc import get_theme_color, themed_icon_path
 from ui.module_parse_widgets import ParamWidget
 from utils.profile_manager import (
+    SAMPLE_PROFILES,
     FilterableListDialog,
     NetWorker,
-    SAMPLE_PROFILES,
     fetch_image_models,
     get_default_profile_name,
     get_profiles_raw,

@@ -4,7 +4,6 @@ from qtpy.QtCore import QCoreApplication, QLocale, QSignalBlocker, Qt, Signal
 from qtpy.QtGui import QDoubleValidator
 from qtpy.QtWidgets import (
     QCheckBox,
-    QFileDialog,
     QGridLayout,
     QHBoxLayout,
     QPushButton,
@@ -30,7 +29,6 @@ from utils.shared import (
 )
 
 from .custom_widget import (
-    ConfigCheckBox,
     ConfigComboBox,
     ConfigLineEdit,
     ConfigTextEdit,

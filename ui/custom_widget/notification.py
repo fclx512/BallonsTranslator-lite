@@ -15,7 +15,15 @@
 信号队列到 GUI 线程），禁止跨线程直接触碰 QWidget。
 """
 
-from qtpy.QtCore import QEasingCurve, QEvent, QObject, QPropertyAnimation, Qt, QTimer, Signal
+from qtpy.QtCore import (
+    QEasingCurve,
+    QEvent,
+    QObject,
+    QPropertyAnimation,
+    Qt,
+    QTimer,
+    Signal,
+)
 from qtpy.QtWidgets import QGraphicsOpacityEffect, QLabel
 
 from utils.config import pcfg

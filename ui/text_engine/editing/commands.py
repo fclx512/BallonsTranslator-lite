@@ -14,9 +14,9 @@ try:
 except ImportError:
     from qtpy.QtGui import QUndoCommand
 
+from ui.textitem import TextBlkItem
 from utils.fontformat import TextTransformState
 from utils.text_effects import TextEffectStack
-from ui.textitem import TextBlkItem
 
 
 class SetTextTransformCommand(QUndoCommand):

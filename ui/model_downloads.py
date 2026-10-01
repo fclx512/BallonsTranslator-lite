@@ -38,8 +38,8 @@ from qtpy.QtCore import QCoreApplication, QObject, QThread, Signal
 
 from utils.download_util import DownloadCancelled
 from utils.logger import logger as LOGGER
-from utils.package_installer import NO_DEPS_PACKAGES
 from utils.message import create_info_dialog
+from utils.package_installer import NO_DEPS_PACKAGES
 
 __all__ = [
     "ModelDownloadTask",

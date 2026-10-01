@@ -1,5 +1,6 @@
 from typing import Callable
 
+from qtpy.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer, Signal
 from qtpy.QtWidgets import (
     QApplication,
     QComboBox,
@@ -13,8 +14,10 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from qtpy.QtCore import QEvent, QPoint, QRect, QSize, QTimer, Signal, Qt
 
+from utils.fontformat import FontFormat
+
+from ...adaptive_wrap_layout import AdaptiveWrapLayout
 from ...custom_widget import (
     PanelArea,
     SmallColorPickerLabel,
@@ -23,8 +26,6 @@ from ...custom_widget import (
     SmallSizeComboBox,
     TextCheckerLabel,
 )
-from ...adaptive_wrap_layout import AdaptiveWrapLayout
-from utils.fontformat import FontFormat
 from ..annotations import (
     FONT_FEATURES_AVAILABLE,
     LIGATURE_AXIS_VALUES,
@@ -33,6 +34,7 @@ from ..annotations import (
     LIGATURE_DISCRETIONARY,
     OLDSTYLE_NUMS,
 )
+
 
 def _word_wrap_label(label: QLabel):
     label.setWordWrap(True)

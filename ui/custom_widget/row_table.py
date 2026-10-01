@@ -42,7 +42,15 @@ from qtpy.QtCore import (  # noqa: E402
     Qt,
     Signal,
 )
-from qtpy.QtGui import QColor, QCursor, QFont, QFontMetrics, QPainter, QPainterPath, QPen  # noqa: E402
+from qtpy.QtGui import (  # noqa: E402
+    QColor,
+    QCursor,
+    QFont,
+    QFontMetrics,
+    QPainter,
+    QPainterPath,
+    QPen,
+)
 from qtpy.QtWidgets import (  # noqa: E402
     QAbstractItemView,
     QApplication,

@@ -9,7 +9,6 @@ import numpy as np
 from qtpy.QtCore import QPointF, QRectF
 from qtpy.QtGui import QPainterPath
 
-
 MAX_BEND_SWEEP = math.radians(350.0)
 BEND_RADIAL_GUARD_RATIO = 0.02
 BEND_OUTLINE_TOLERANCE = 0.25

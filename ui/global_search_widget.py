@@ -44,10 +44,10 @@ from .custom_widget import (
     NoBorderPushBtn,
     Widget,
 )
-from .misc import doc_replace, doc_replace_no_shift
+from .misc import doc_replace
 from .page_search_widget import SearchEditor, _search_highlight_color
 from .style_format_editor import FormatEditorPanel
-from .textedit_area import SourceTextEdit, TransPairWidget, TransTextEdit
+from .textedit_area import TransPairWidget
 from .textitem import TextBlkItem, TextBlock
 
 SEARCHRST_FONTSIZE = 10.3

@@ -1,26 +1,27 @@
 from difflib import SequenceMatcher
 from typing import Callable, List, Optional, Sequence, Union
 
-from qtpy.QtGui import QTextCharFormat, QTextCursor, QTextDocument
 from qtpy.QtCore import QPointF
+from qtpy.QtGui import QTextCharFormat, QTextCursor, QTextDocument
+
 try:
     from qtpy.QtWidgets import QUndoCommand
-except:
+except ImportError:
     from qtpy.QtGui import QUndoCommand
 
-from ..item import TextBlkItem, TextBlock
-from ..annotations import prepare_ruby_insertion
-from ..rendering.indexing import _utf16_boundaries
-from .widgets import TransTextEdit, SourceTextEdit
 from utils.fontformat import (
     FontFormat,
-    TextTransformStack,
 )
-from ...misc import doc_replace, doc_replace_no_shift
-from ..shape_control import TextBlkShapeControl
-from ...page_search_widget import PageSearchWidget, Matched
 from utils.proj_imgtrans import ProjImgTrans
 from utils.text_processing import capitalize_sentences
+
+from ...misc import doc_replace, doc_replace_no_shift
+from ...page_search_widget import Matched, PageSearchWidget
+from ..annotations import prepare_ruby_insertion
+from ..item import TextBlkItem, TextBlock
+from ..rendering.indexing import _utf16_boundaries
+from ..shape_control import TextBlkShapeControl
+from .widgets import SourceTextEdit, TransTextEdit
 
 
 def propagate_user_edit(
@@ -259,7 +260,7 @@ class ApplyFontformatCommand(QUndoCommand):
             item.setRect(rect)
             edit.document().clearUndoRedoStacks()
 
-    
+
 class ReshapeItemCommand(QUndoCommand):
     def __init__(self, item: TextBlkItem):
         super(ReshapeItemCommand, self).__init__()
@@ -340,7 +341,7 @@ class AutoLayoutCommand(QUndoCommand):
             item.setPlainText('')
             item.setRect(rect, repaint=False)
             item.load_rich_text_html(html)
-            
+
     def undo(self):
         for item, trans_widget, html, rect  in zip(self.items, self.trans_widget_lst, self.old_html_lst, self.old_rect_lst):
             trans_widget.setPlainText(item.toPlainText())
@@ -357,7 +358,7 @@ class SqueezeCommand(QUndoCommand):
         self.ctrl = ctrl
         for item in blkitem_lst:
             self.old_rect_lst.append(item.absBoundingRect(qrect=True))
-    
+
     def redo(self):
         for blk in self.blkitem_lst:
             blk.squeezeBoundingRect()
@@ -380,7 +381,7 @@ class ResetAngleCommand(QUndoCommand):
                 self.angle_lst.append(rotation)
                 blkitem_lst.append(blk)
         self.blkitem_lst = blkitem_lst
-    
+
     def redo(self):
         for blk in self.blkitem_lst:
             blk.setAngle(0)
@@ -409,7 +410,7 @@ class TextItemEditCommand(QUndoCommand):
         if self.op_counter == 0:
             self.op_counter += 1
             return
-        
+
         self.blkitem.repaint_on_changed = False
         if self.new_ffmt_values is not None:
             for k, v in self.new_ffmt_values.items():
@@ -477,7 +478,7 @@ class PageReplaceOneCommand(QUndoCommand):
         self.oritxt = self.sw.current_cursor.selectedText()
         self.ori_len = len(self.oritxt)
         self.edit: Union[SourceTextEdit, TransTextEdit] = self.sw.current_edit
-        self.edit_is_src = type(self.edit) == SourceTextEdit
+        self.edit_is_src = type(self.edit) is SourceTextEdit
         self.blkitem = self.sw.textblk_item_list[self.sw.current_edit.idx]
 
         if self.sw.current_edit is not None and self.sw.isVisible():
@@ -548,7 +549,7 @@ class PageReplaceAllCommand(QUndoCommand):
 
         replace = self.sw.replace_editor.toPlainText()
         for edit, curpos_lst in zip(self.rstedit_list, curpos_list):
-            redo_blk = type(edit) == TransTextEdit
+            redo_blk = type(edit) is TransTextEdit
             if redo_blk:
                 blkitem = self.sw.textblk_item_list[edit.idx]
                 self.blkitem_list.append(blkitem)

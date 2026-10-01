@@ -25,7 +25,6 @@ from . import shared
 from .logger import logger as LOGGER
 from .version import get_version
 
-
 RELEASES_URL = "https://github.com/fclx512/BallonsTranslator-lite/releases"
 LATEST_RELEASE_API_URL = "https://api.github.com/repos/fclx512/BallonsTranslator-lite/releases/latest"
 RELEASE_RESPONSE_CACHE_FILENAME = "github_release_response.json"

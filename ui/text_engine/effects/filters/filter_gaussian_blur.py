@@ -7,14 +7,14 @@ from typing import Mapping
 
 import numpy as np
 
+from utils.text_effects import FilterScalar
+
 from ._gaussian import (
     finite_gaussian,
     premultiply_rgba_float32,
     unpremultiply_rgba_float32,
 )
 from .registry import FilterContext
-from utils.text_effects import FilterScalar
-
 
 FILTER_META = {
     'filter_id': 'builtin:gaussian_blur',

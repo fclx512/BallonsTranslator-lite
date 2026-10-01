@@ -1,6 +1,19 @@
 from typing import Iterable, Union
 
 from qtpy import QT6
+from qtpy.QtCore import QSignalBlocker, Qt, Signal
+from qtpy.QtGui import (
+    QActionGroup,
+    QColor,
+    QFocusEvent,
+    QFontDatabase,
+    QIcon,
+    QKeyEvent,
+    QPainter,
+    QPen,
+    QPixmap,
+    QTextCursor,
+)
 from qtpy.QtWidgets import (
     QApplication,
     QComboBox,
@@ -15,30 +28,15 @@ from qtpy.QtWidgets import (
     QToolTip,
     QVBoxLayout,
 )
-from qtpy.QtCore import QSignalBlocker, Signal, Qt
-from qtpy.QtGui import (
-    QActionGroup,
-    QColor,
-    QFocusEvent,
-    QFontDatabase,
-    QIcon,
-    QKeyEvent,
-    QPainter,
-    QPen,
-    QPixmap,
-    QTextCursor,
-)
 
-from utils import shared
 from utils import config as C
+from utils import shared
 from utils.fontformat import (
     FontFormat,
     LineSpacingType,
 )
-from ..font_weight import (
-    FontWeight,
-    font_weight_from_qt,
-)
+
+from ... import shared_widget as SW
 from ...custom_widget import (
     AlignmentChecker,
     CheckableLabel,
@@ -49,7 +47,6 @@ from ...custom_widget import (
     TextCheckerLabel,
     Widget,
 )
-from ..item import TextBlkItem
 from ..annotations import (
     DEFAULT_EMPHASIS_POSITION,
     EMPHASIS_GLYPHS,
@@ -58,12 +55,17 @@ from ..annotations import (
     OLDSTYLE_NUMS,
     RubyValidationError,
 )
-from .advanced import TextAdvancedFormatPanel
+from ..font_weight import (
+    FontWeight,
+    font_weight_from_qt,
+)
+from ..item import TextBlkItem
 from ..transforms.edit_session import TextTransformEditSession
 from ..transforms.panel import TextTransformPanel
-from .presets import TextStylePresetPanel
+from .advanced import TextAdvancedFormatPanel
 from .commands import handle_ffmt_change, restore_canvas_view_focus
-from ... import shared_widget as SW
+from .presets import TextStylePresetPanel
+
 
 class LineEdit(QLineEdit):
 
@@ -139,7 +141,7 @@ class AlignmentBtnGroup(QFrame):
             self.alignLeftChecker.setChecked(False)
             self.alignRightChecker.setChecked(False)
             self.param_changed.emit('alignment', 1)
-    
+
     def setAlignment(self, alignment: int):
         if alignment == 0:
             self.alignLeftChecker.setChecked(True)
@@ -375,7 +377,7 @@ class FormatGroupBtn(QFrame):
 
     def setUnderline(self):
         self.param_changed.emit('underline', self.underlineBtn.isChecked())
-    
+
 
 class FontSizeBox(QFrame):
     param_changed = Signal(str, float)
@@ -442,7 +444,7 @@ class FontSizeBox(QFrame):
 
     def onDownBtnClicked(self) -> None:
         self._change_font_size(0.75)
-    
+
 
 class FontWeightComboBox(QComboBox):
     param_changed = Signal(str, object)
@@ -570,7 +572,7 @@ class FontFamilyComboBox(QFontComboBox):
         self.weight_aliases = {}
         self.canonical_weight_aliases = {}
         self._weight_alias_source = None
-        
+
     def apply_fontfamily(self) -> None:
         ffamily = self.currentText()
         if ffamily in shared.FONT_FAMILIES:
@@ -634,7 +636,7 @@ class FontFamilyComboBox(QFontComboBox):
 
 
 class FontFormatPanel(Widget):
-    
+
     textblk_item: TextBlkItem = None
     text_cursor: QTextCursor = None
     global_format: FontFormat = None
@@ -669,7 +671,7 @@ class FontFormatPanel(Widget):
         self.fontsizebox.setObjectName("FontSizeBox")
         self.fontsizebox.fcombobox.setToolTip(self.tr("Change font size"))
         self.fontsizebox.param_changed.connect(self.on_param_changed)
-        
+
         self.lineSpacingBox = SizeComboBox([0, 100], 'line_spacing', self)
         self.lineSpacingBox.setObjectName("FontFormatSizeBox")
         self.lineSpacingBox.addItems(["1.0", "1.1", "1.2"])
@@ -681,7 +683,7 @@ class FontFormatPanel(Widget):
         linesp_hlayout = QHBoxLayout()
         linesp_hlayout.addWidget(self.lineSpacingBox)
         linesp_hlayout.setSpacing(7)
-        
+
         self.colorPicker = ColorPickerLabel(self, param_name='frgb')
         self.colorPicker.setObjectName('FontFormatColorPicker')
         self.colorPicker.setToolTip(self.tr("Change font color"))
@@ -796,12 +798,12 @@ class FontFormatPanel(Widget):
         color_label.changingColor.connect(self.changingColor)
         color_label.colorChanged.connect(self.onColorLabelChanged)
         color_label.apply_color.connect(self.on_apply_color)
-        
+
         color_label = self.textadvancedfmt_panel.gradient_group.end_picker
         color_label.changingColor.connect(self.changingColor)
         color_label.colorChanged.connect(self.onColorLabelChanged)
         color_label.apply_color.connect(self.on_apply_color)
-        
+
         self.foldTextBtn = CheckableLabel(self.tr("Unfold"), self.tr("Fold"), False)
         self.sourceBtn = TextCheckerLabel(self.tr("Source"))
         self.transBtn = TextCheckerLabel(self.tr("Translation"))
@@ -871,7 +873,7 @@ class FontFormatPanel(Widget):
 
     def global_mode(self):
         return id(C.active_format) == id(self.global_format)
-    
+
     def active_text_style_label(self):
         return self.textstyle_panel.active_text_style_label
 
@@ -1298,7 +1300,7 @@ class FontFormatPanel(Widget):
                 self.set_globalfmt_title()
             if transform_items:
                 self.texttransform_panel.set_transform_items(transform_items)
-            
+
         else:
             if not self.restoring_textblk:
                 blk_fmt = textblk_item.get_fontformat()

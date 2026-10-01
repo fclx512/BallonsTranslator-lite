@@ -40,13 +40,12 @@ from qtpy.QtGui import (
     QColor,
     QFont,
     QFontMetrics,
-    QPalette,
     QPainter,
+    QPalette,
     QPen,
     QTextDocument,
 )
 from qtpy.QtWidgets import (
-    QDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -54,16 +53,16 @@ from qtpy.QtWidgets import (
     QPushButton,
     QScrollArea,
     QStyle,
-    QStyleOption,
     QStyledItemDelegate,
+    QStyleOption,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from utils import shared
 from utils import global_styles as gstyle_store
+from utils import shared
 from utils.base_styles import (
     BaseStyle,
     BaseStyleNode,
@@ -76,13 +75,13 @@ from utils.base_styles import (
     copy_value,
     discover_style_tree,
     overrides_summary,
-    quantize_field,
     variant_display_name,
 )
 from utils.face_resolver import sync_face
 from utils.fontformat import FontFormat
+from utils.textblock import TextBlock
 
-from .custom_widget import ColorPickerDialog, ConfigComboBox, SeparatorWidget
+from .custom_widget import ConfigComboBox, SeparatorWidget
 from .style_format_editor import FormatEditorPanel
 
 # Re-exported for legacy importers (tests import these from this module).

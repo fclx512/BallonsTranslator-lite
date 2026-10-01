@@ -1,6 +1,7 @@
 from typing import List
 
 from qtpy.QtCore import (
+    Property,
     QAbstractAnimation,
     QEasingCurve,
     QEvent,
@@ -10,7 +11,6 @@ from qtpy.QtCore import (
     QRectF,
     Qt,
     QTimer,
-    Property,
     Signal,
 )
 from qtpy.QtGui import (
@@ -38,9 +38,8 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from utils.config import pcfg
-
 from ui.misc import get_theme_color
+from utils.config import pcfg
 
 from .custom_widget import ScrollBar, Widget
 from .textitem import TextBlock

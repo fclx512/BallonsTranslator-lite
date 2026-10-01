@@ -125,7 +125,7 @@ def scan_font_faces(font_dirs: Optional[List[str]] = None) -> List[dict]:
         # name/OS-2 是扫描唯一访问的两张表，也是畸形字体的主要报错源；
         # ttLib 的表模块是懒加载的，不预导入的话其 logger 要到扫描中段
         # 才创建，躲过下面的整树压制
-        from fontTools.ttLib.tables import _n_a_m_e, O_S_2f_2  # noqa: F401
+        from fontTools.ttLib.tables import O_S_2f_2, _n_a_m_e  # noqa: F401
     except Exception:
         return []
 

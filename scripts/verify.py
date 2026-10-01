@@ -108,7 +108,8 @@ def _run_full_steps(failures):
     """--full release gate: ruff + pytest (both skipped gracefully if absent)."""
 
     # ── ruff ─────────────────────────────────────────────────────────────
-    r = _run([_py(), "-m", "ruff", "check", "--select", "I,F,E,W",
+    # Extend the project rules so its configured ignores (e.g. E501) survive.
+    r = _run([_py(), "-m", "ruff", "check", "--extend-select", "W",
               "ui/", "utils/", "modules/"])
     if "No module named" in (r.stderr + r.stdout):
         print("⏭  ruff: 未安装，跳过（--install 或 pip install ruff 后可用）")

@@ -1,4 +1,4 @@
-from qtpy.QtCore import QDateTime, QCoreApplication
+from qtpy.QtCore import QCoreApplication, QDateTime
 from qtpy.QtGui import QImage, QPainter
 
 try:

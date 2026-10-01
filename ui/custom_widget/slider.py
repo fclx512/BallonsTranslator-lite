@@ -10,7 +10,15 @@ from qtpy.QtCore import (
     Qt,
     Signal,
 )
-from qtpy.QtGui import QBrush, QColor, QFontMetrics, QMouseEvent, QPainter, QPainterPath, QPen
+from qtpy.QtGui import (
+    QBrush,
+    QColor,
+    QFontMetrics,
+    QMouseEvent,
+    QPainter,
+    QPainterPath,
+    QPen,
+)
 from qtpy.QtWidgets import QGraphicsOpacityEffect, QSlider, QWidget
 
 from utils.config import pcfg

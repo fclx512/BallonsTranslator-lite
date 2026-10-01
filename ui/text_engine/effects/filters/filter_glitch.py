@@ -7,12 +7,12 @@ from typing import Mapping
 
 import numpy as np
 
+from utils.text_effects import FilterScalar
+
 from ._procedural import (
     coordinate_noise,
 )
 from .registry import FilterContext
-from utils.text_effects import FilterScalar
-
 
 FILTER_META = {
     'filter_id': 'builtin:glitch',

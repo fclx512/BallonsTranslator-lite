@@ -43,8 +43,8 @@ from typing import Callable, Dict, List, Optional, Sequence
 import numpy as np
 
 from modules.inpaint.base import InpainterBase, classify_simple
-from utils.io_utils import imread
 from utils.imgproc_utils import enlarge_window
+from utils.io_utils import imread
 from utils.logger import logger as LOGGER
 from utils.proj_imgtrans import ProjImgTrans
 

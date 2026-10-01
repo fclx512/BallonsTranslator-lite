@@ -20,6 +20,7 @@ from qtpy.QtGui import (
 from utils import shared as C
 from utils.config import pcfg
 from utils.fontformat import FontFormat, PunctuationPosition, TextAlignment
+
 from .annotations import text_combine_upright_ranges
 from .cache import KeyedLruCache
 from .layout import (
@@ -41,11 +42,6 @@ from .rendering.indexing import (
     _utf16_length,
     _utf16_slice,
 )
-from .rendering.tate_chu_yoko import (
-    tate_chu_yoko_ink_bounds,
-    tate_chu_yoko_natural_bounds,
-    tate_chu_yoko_transform,
-)
 from .rendering.ruby import (
     RubyBlockMetrics,
     RubyPlacement,
@@ -55,6 +51,11 @@ from .rendering.ruby import (
     ruby_placement,
     ruby_side_margins,
     vertical_ruby_metrics,
+)
+from .rendering.tate_chu_yoko import (
+    tate_chu_yoko_ink_bounds,
+    tate_chu_yoko_natural_bounds,
+    tate_chu_yoko_transform,
 )
 
 PUNSET_HALF = {chr(i) for i in range(0x21, 0x7F)}

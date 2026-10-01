@@ -8,18 +8,19 @@ application-owned values.
 
 from __future__ import annotations
 
+import math
+import re
 from dataclasses import dataclass, replace
 from enum import IntEnum
 from html import escape, unescape
 from html.parser import HTMLParser
-import math
-import re
 from typing import AbstractSet, Callable, Optional
 from uuid import uuid4
 
 from qtpy import QT6
 from qtpy.QtCore import QByteArray, QMimeData
 from qtpy.QtGui import (
+    QFont,
     QTextBlock,
     QTextBlockFormat,
     QTextCharFormat,
@@ -27,21 +28,20 @@ from qtpy.QtGui import (
     QTextDocument,
     QTextDocumentFragment,
     QTextFormat,
-    QFont,
 )
 
 from utils.fontformat import LineSpacingType
-from .font_weight import (
-    export_font_weight_html,
-    import_font_weight_html,
-)
 from utils.logger import logger as LOGGER
+
 from .font_family import (
     normalize_document_font_families,
     restore_project_font_families_in_html,
 )
+from .font_weight import (
+    export_font_weight_html,
+    import_font_weight_html,
+)
 from .rendering.indexing import _grapheme_ranges, _utf16_length, _utf16_slice
-
 
 RICH_TEXT_MIME_TYPE = 'application/x-ballonstranslator-rich-text'
 MAX_RICH_TEXT_MIME_BYTES = 16 * 1024 * 1024

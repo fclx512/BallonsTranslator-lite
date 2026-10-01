@@ -6,8 +6,8 @@ enters the matrix in this module.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from numbers import Real
 from typing import Any, Optional, Sequence, Tuple, Union
 
@@ -22,6 +22,7 @@ from utils.fontformat import (
     SineTextTransform,
     TextTransformStack,
 )
+
 from .bend import BendMapper
 from .grid import GridMapper
 from .sine import SineMapper

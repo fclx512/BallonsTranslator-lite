@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 
 from . import shared
+from .base_styles import BaseStyle, ensure_default_base_styles
 from .config import RunStatus, pcfg
 from .exceptions import (
     ImgnameNotInProjectException,
@@ -17,7 +18,6 @@ from .exceptions import (
 )
 from .io_utils import NumpyEncoder, find_all_imgs, imread, imwrite
 from .logger import logger as LOGGER
-from .base_styles import BaseStyle, ensure_default_base_styles
 from .textblock import FontFormat, TextBlock
 
 

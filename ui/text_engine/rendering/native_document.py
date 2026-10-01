@@ -16,7 +16,6 @@ from qtpy.QtGui import (
 
 from ..cache import KeyedLruCache
 
-
 NATIVE_DOCUMENT_CACHE_MAX_ENTRIES = 128
 
 

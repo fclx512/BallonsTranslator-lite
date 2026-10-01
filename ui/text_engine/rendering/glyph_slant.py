@@ -15,7 +15,7 @@ Local adaptations:
 from __future__ import annotations
 
 from itertools import count
-from typing import Hashable, Iterator, Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Hashable, Iterator, Optional, Tuple
 
 from qtpy.QtCore import QPointF, QRectF, Qt
 from qtpy.QtGui import (
@@ -34,14 +34,15 @@ from utils.fontformat import (
     TEXT_TRANSFORM_GLYPH_SLANT_MIN,
     normalize_text_transform_value,
 )
+
 from .glyph import (
     GLOBAL_GLYPH_GEOMETRY_CACHE,
     GLOBAL_GLYPH_PREVIEW_GEOMETRY_CACHE,
+    GlyphGeometry,
     draw_slanted_glyph_mask,
     draw_slanted_line,
     draw_uniform_glyph_geometries,
     slanted_line_geometry,
-    GlyphGeometry,
 )
 from .indexing import _utf16_char_at, _utf16_length
 

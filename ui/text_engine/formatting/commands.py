@@ -1,5 +1,5 @@
-from typing import List, Callable, Dict
 import copy
+from typing import Callable, Dict, List
 
 from qtpy.QtWidgets import (
     QAbstractSlider,
@@ -10,15 +10,17 @@ from qtpy.QtWidgets import (
     QPlainTextEdit,
     QTextEdit,
 )
+
 try:
     from qtpy.QtWidgets import QUndoCommand
 except ImportError:
     from qtpy.QtGui import QUndoCommand
 
-from ... import shared_widget as SW
 from utils.fontformat import FontFormat, px2pt
-from ..font_weight import FontWeight
 from utils.io_utils import empty_func
+
+from ... import shared_widget as SW
+from ..font_weight import FontWeight
 from ..item import TextBlkItem
 
 global_default_set_kwargs = dict(set_selected=False, restore_cursor=False)
@@ -97,7 +99,7 @@ def font_formating(push_undostack: bool = False, is_property = True):
             if set_focus:
                 restore_canvas_view_focus()
         return wrapper
-    
+
     return func_wrapper
 
 @font_formating()

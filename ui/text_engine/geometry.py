@@ -17,9 +17,9 @@ Localization notes (compared with upstream):
   order for blocks without a completed foreground).
 """
 
-from contextlib import contextmanager
 import math
-from typing import Optional, TYPE_CHECKING
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from qtpy.QtCore import QPointF, QRect, QRectF, QSizeF, Qt
@@ -30,13 +30,12 @@ from qtpy.QtWidgets import (
     QStyleOptionGraphicsItem,
 )
 
-from utils.fontformat import (
-    GridTextTransform,
-    ProjectiveTextTransform,
-    TextTransformStack,
-    TextTransformState,
+from ui.text_engine.rendering.glyph_slant import GlyphSlantLayoutRenderer
+from ui.text_engine.rendering.raster import (
+    RASTER_BOUNDARY_FAILURES,
+    EffectRasterAllocationError,
 )
-from utils.textblock import TextAlignment
+from ui.text_engine.rendering.surface import NonlinearTextSurfaceRenderer
 from ui.text_engine.transforms.mapping import (
     CompiledTextTransform,
     CompositeTextTransformMapper,
@@ -44,12 +43,13 @@ from ui.text_engine.transforms.mapping import (
     grid_transform_stage,
 )
 from ui.text_engine.transforms.registry import compile_text_transform_stack
-from ui.text_engine.rendering.glyph_slant import GlyphSlantLayoutRenderer
-from ui.text_engine.rendering.surface import NonlinearTextSurfaceRenderer
-from ui.text_engine.rendering.raster import (
-    EffectRasterAllocationError,
-    RASTER_BOUNDARY_FAILURES,
+from utils.fontformat import (
+    GridTextTransform,
+    ProjectiveTextTransform,
+    TextTransformStack,
+    TextTransformState,
 )
+from utils.textblock import TextAlignment
 
 if TYPE_CHECKING:
     from ui.textitem import TextBlkItem
@@ -610,7 +610,6 @@ class TextItemGeometryController:
     ) -> None:
         """Set logical geometry while keeping paint padding derived."""
         item = self.item
-        old_logical_rect = self.logical_rect()
         if isinstance(rect, list):
             rect = QRectF(*rect)
         else:

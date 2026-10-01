@@ -246,7 +246,6 @@ class BatchVersionStore:
         if not self._usable():
             LOGGER.error("Batch version store unusable (no project dir or pages)")
             return None
-        root = self.root_dir()
         versions = self.list_versions()
         seq = versions[-1].seq + 1 if versions else 1
         vdir = self._version_dir(seq)

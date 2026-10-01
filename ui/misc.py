@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple, Union
 
 import cv2
 import numpy as np
-from qtpy.QtCore import QPointF, QCoreApplication, Qt
+from qtpy.QtCore import QCoreApplication, QPointF, Qt
 from qtpy.QtGui import QColor, QImage, QPixmap, QTextCursor, QTextDocument
 
 from utils import shared as C
@@ -249,7 +249,8 @@ def _derive_solid_tints(theme: Dict) -> Dict:
     if "%" in tint:
         alpha /= 100.0
     bc = QColor(base)
-    mix = lambda t, s: int(round(t * alpha + s * (1 - alpha)))
+    def mix(t, s):
+        return int(round(t * alpha + s * (1 - alpha)))
     theme["@accentPrimary20Solid"] = QColor(
         mix(r, bc.red()), mix(g, bc.green()), mix(b, bc.blue())
     ).name()

@@ -61,7 +61,6 @@ from .cursor import (
 from .text_engine.transforms.mapping import rect_polygon
 from .textitem import TextBlkItem
 
-
 CBEDGE_WIDTH = 30
 VISUALIZE_HITBOX = False
 PROXY_HANDLE_VIEWPORT_INSET = 12.0

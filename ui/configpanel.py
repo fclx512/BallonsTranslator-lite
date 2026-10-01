@@ -6,8 +6,8 @@ from functools import partial
 from typing import Dict, List, Union
 
 from qtpy.QtCore import (
-    QCoreApplication,
     QBuffer,
+    QCoreApplication,
     QEasingCurve,
     QElapsedTimer,
     QEvent,
@@ -15,8 +15,8 @@ from qtpy.QtCore import (
     QPoint,
     QProcess,
     Qt,
-    QTimer,
     QTime,
+    QTimer,
     Signal,
 )
 from qtpy.QtGui import (
@@ -36,7 +36,6 @@ from qtpy.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QButtonGroup,
-    QCheckBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -53,32 +52,28 @@ from qtpy.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
-    QSpacerItem,
     QStackedWidget,
     QTabBar,
     QVBoxLayout,
     QWidget,
 )
 
-from ui.misc import get_theme_color, parse_stylesheet
-
 from modules import GET_VALID_TEXTDETECTORS
+from ui.misc import get_theme_color, parse_stylesheet
 from utils.config import export_config, import_config, pcfg
 from utils.message import create_error_dialog, create_info_dialog
-from utils.shortcut_conflicts import find_conflict_keys
-from utils.version import APP_VERSION
 from utils.shared import (
     CONFIG_COMBOBOX_LONG,
     CONFIG_COMBOBOX_MIDEAN,
     CONFIG_COMBOBOX_SHORT,
     CONFIG_FONTSIZE_CONTENT,
-    CONFIG_SUBBLOCK_SPACING,
     CONFIGBLOCK_CONTENT_MARGINS,
     GROUPBOX_CONTENT_MARGINS,
-    LINEEDIT_FIXHEIGHT,
     NAVLIST_WIDTH,
     PROGRAM_PATH,
 )
+from utils.shortcut_conflicts import find_conflict_keys
+from utils.version import APP_VERSION
 
 from .custom_widget import (
     ConfigCheckBox,
@@ -3329,7 +3324,7 @@ class ConfigPanel(Widget):
 
     def _set_quality_visual_state(self, enabled: bool):
         """Toggle quality subblock + show "—" placeholder when disabled.
-        
+
         Label dimming is handled automatically by ``ConfigSubBlock.changeEvent``.
         """
         self.rst_quality_sublock.setEnabled(enabled)

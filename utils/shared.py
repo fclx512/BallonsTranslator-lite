@@ -254,7 +254,8 @@ def get_filtered_font_list(excluded=None) -> list:
 config_name_to_view_widget = {}
 action_to_view_config_name = {}
 # MainWindow 启动时会注入真正的实现；未注入前（如离屏测试）为 no-op。
-register_view_widget = lambda *args, **kwargs: None
+def register_view_widget(*args, **kwargs):
+    return None
 
 
 def _load_all_themes() -> dict:

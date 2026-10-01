@@ -37,8 +37,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from utils import face_resolver
-from utils import shared
+from utils import face_resolver, shared
 from utils.base_styles import copy_value, quantize_field
 from utils.style_query import FIELD_GROUPS
 

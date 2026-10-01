@@ -8,7 +8,6 @@ from qtpy.QtGui import QPainterPath
 
 from utils.fontformat import GridTextTransform
 
-
 # Stage 4 ships the pure-NumPy inverse path. ``grid_numba.py`` is deliberately
 # not ported (see 文本引擎架构跟进.md 阶段 4); the lazy backend probe below
 # falls back to ``_inverse_normalized`` + ``_retry_bilinear_inverse`` exactly

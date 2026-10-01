@@ -10,21 +10,18 @@ texture cards.
 import math
 import threading
 
-import cv2
 import numpy as np
-
 from qtpy.QtCore import QRectF
 from qtpy.QtGui import QImage, QPainter, QPalette
 
+from utils.logger import logger as LOGGER
 from utils.text_effects import (
     GeneratedEffectPaint,
     LinearGradientPaint,
     SolidPaint,
 )
-from utils.logger import logger as LOGGER
 
 from ...misc import ndarray2pixmap
-
 
 _numba_colorize_linear_gradient_rgba = None
 

@@ -16,9 +16,9 @@ and ``horizontal_shifts`` parameters (with ``_split_paint_spans``) that the
 
 from __future__ import annotations
 
-from collections import OrderedDict
-from bisect import bisect_right
 import math
+from bisect import bisect_right
+from collections import OrderedDict
 from typing import (
     Any,
     Callable,
@@ -32,14 +32,13 @@ from typing import (
 
 import cv2
 import numpy as np
-
 from qtpy.QtCore import QPointF, QRectF, Qt
 from qtpy.QtGui import (
     QAbstractTextDocumentLayout,
     QBrush,
     QColor,
-    QGlyphRun,
     QFontMetricsF,
+    QGlyphRun,
     QImage,
     QPainter,
     QPainterPath,
@@ -60,7 +59,6 @@ from utils.fontformat import (
     TEXT_TRANSFORM_GLYPH_SLANT_MIN,
     normalize_text_transform_value,
 )
-
 
 GLYPH_STROKE_FORMAT_PROPERTY = 0x100000 + 1239
 GLYPH_DILATED_STROKE_FORMAT_PROPERTY = 0x100000 + 1240

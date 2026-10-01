@@ -4,7 +4,7 @@ Used by the shortcut editor (``ShortcutEditor``) and the pie-menu trigger
 editor — both manage user-assignable key sequences that must not collide.
 """
 
-from typing import Dict, Iterable, List, Set
+from typing import Dict, Iterable, Set
 
 
 def find_conflict_keys(mapping: Dict[str, Iterable[str]]) -> Set[str]:

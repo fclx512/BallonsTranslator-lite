@@ -1,6 +1,5 @@
-from functools import cached_property
-
 import math
+from functools import cached_property
 
 from qtpy.QtCore import QPointF, Qt
 from qtpy.QtGui import QCursor, QPixmap

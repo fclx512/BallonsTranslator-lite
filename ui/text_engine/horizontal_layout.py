@@ -7,15 +7,16 @@ from qtpy.QtGui import (
     QPalette,
     QTextBlock,
     QTextDocument,
+    QTextFormat,
     QTextLayout,
     QTextLine,
     QTextOption,
-    QTextFormat,
     QTransform,
 )
 
 from utils import shared as C
 from utils.fontformat import FontFormat, LineSpacingType
+
 from .layout import (
     SceneTextLayout,
     _block_cursor_position,
@@ -28,12 +29,12 @@ from .rendering.emphasis import (
     emphasis_ink_bounds,
     emphasis_margins,
 )
+from .rendering.glyph import draw_slanted_line
 from .rendering.indexing import (
     _grapheme_ranges,
     _utf16_length,
     _utf16_slice,
 )
-from .rendering.glyph import draw_slanted_line
 from .rendering.ruby import (
     RubyBlockMetrics,
     RubyPlacement,
@@ -44,6 +45,7 @@ from .rendering.ruby import (
     ruby_placement,
     ruby_side_margins,
 )
+
 
 class HorizontalTextDocumentLayout(SceneTextLayout):
 
@@ -1151,10 +1153,10 @@ class HorizontalTextDocumentLayout(SceneTextLayout):
                     elif not sel.cursor.hasSelection() \
                         and sel.format.hasProperty(QTextFormat.FullWidthSelection) \
                         and block.contains(sel.cursor.position()):
-                        l = layout.lineForTextPosition(sel.cursor.position() - blpos)
+                        line = layout.lineForTextPosition(sel.cursor.position() - blpos)
                         for start, end in selection_segments_excluding(
-                            l.textStart(),
-                            l.textStart() + l.textLength(),
+                            line.textStart(),
+                            line.textStart() + line.textLength(),
                             self._relocated_spaces[
                                 block.blockNumber()
                             ].values(),

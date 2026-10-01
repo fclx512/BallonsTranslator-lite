@@ -17,8 +17,6 @@ import openai
 from modules.context.errors import is_context_length_error, provider_error_message
 from modules.context.glossary import load_glossary
 from modules.context_agent.story import project_synopsis
-from modules.translators.base import register_translator
-from modules.translators.trans_llm_api import LLM_API_Translator
 from modules.translators.agent.loop import (
     AgentTaskCancelled,
     AgentUnsupportedTools,
@@ -38,6 +36,8 @@ from modules.translators.agent.tools import (
     execute_agent_tool,
     submit_tool_def,
 )
+from modules.translators.base import register_translator
+from modules.translators.trans_llm_api import LLM_API_Translator
 from utils.ai_tools import to_openai_tools
 from utils.config import SingleBlkTranslateMode, pcfg
 from utils.io_utils import text_is_empty

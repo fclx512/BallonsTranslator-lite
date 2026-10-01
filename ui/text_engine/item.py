@@ -1,69 +1,66 @@
-import numpy as np
 from typing import Callable, List, Optional, Tuple, Union
 
+import numpy as np
 from qtpy import QT6
+from qtpy.QtCore import QMimeData, QPoint, QPointF, QRect, QRectF, Qt, Signal
+from qtpy.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QFontMetrics,
+    QInputMethodEvent,
+    QKeyEvent,
+    QKeySequence,
+    QPainter,
+    QPen,
+    QTextBlockFormat,
+    QTextCharFormat,
+    QTextCursor,
+)
 from qtpy.QtWidgets import (
     QApplication,
     QGraphicsItem,
-    QWidget,
     QGraphicsSceneContextMenuEvent,
     QGraphicsSceneHoverEvent,
+    QGraphicsSceneMouseEvent,
     QGraphicsTextItem,
     QStyleOptionGraphicsItem,
-    QGraphicsSceneMouseEvent,
+    QWidget,
 )
-from qtpy.QtCore import Qt, QRect, QRectF, QPoint, QPointF, QMimeData, Signal
-from qtpy.QtGui import (QKeyEvent, QKeySequence, QFont, QTextCursor,
-                       QInputMethodEvent, QPainter, QColor, QTextCharFormat,
-                       QBrush, QFontMetrics, QPen,
-                       QTextBlockFormat)
 
-from utils.textblock import TextBlock
-from utils.imgproc_utils import xywh2xyxypoly
 from utils import face_resolver
 from utils.config import pcfg
 from utils.fontformat import (
+    _LEGACY_EFFECT_VIEW_NAMES,
     FontFormat,
     LineSpacingType,
     TextEffectStack,
     TextTransformStack,
-    _LEGACY_EFFECT_VIEW_NAMES,
     pt2px,
 )
-from .font_weight import (
-    FontWeight,
-    font_weight_from_qt,
-    font_weight_to_qt,
-)
-from .font_family import (
-    font_family_for_project,
-    qfont_with_family,
-)
-from .editing.context_menu import create_text_edit_context_menu
-from ..misc import get_theme_color, td_pattern, table_pattern
-from .horizontal_layout import HorizontalTextDocumentLayout
-from .vertical_layout import VerticalTextDocumentLayout
-from .effects.renderer import TextEffectRenderer
-from .geometry import TextItemGeometryController
+from utils.imgproc_utils import xywh2xyxypoly
+from utils.textblock import TextBlock
+
+from ..misc import get_theme_color, table_pattern, td_pattern
 from .annotations import (
-    AnnotationProperty,
     LIGATURE_COMMON,
     LIGATURE_CONTEXTUAL,
     LIGATURE_DISCRETIONARY,
     TEXT_COMBINE_ALL,
+    AnnotationProperty,
     apply_emphasis,
-    apply_ligature_axis,
-    apply_oldstyle_nums,
-    apply_line_spacing,
     apply_letter_spacing,
+    apply_ligature_axis,
+    apply_line_spacing,
+    apply_oldstyle_nums,
     apply_ruby,
     apply_text_combine_upright,
     canonical_letter_spacing,
     create_rich_text_mime,
     emphasis_values,
     insert_rich_text_mime,
-    ligature_axis_value,
     letter_spacing_value,
+    ligature_axis_value,
     line_spacing_values,
     load_rich_text_html,
     oldstyle_nums_value,
@@ -79,6 +76,20 @@ from .annotations import (
     to_rich_text_html,
     validated_line_spacing,
 )
+from .editing.context_menu import create_text_edit_context_menu
+from .effects.renderer import TextEffectRenderer
+from .font_family import (
+    font_family_for_project,
+    qfont_with_family,
+)
+from .font_weight import (
+    FontWeight,
+    font_weight_from_qt,
+    font_weight_to_qt,
+)
+from .geometry import TextItemGeometryController
+from .horizontal_layout import HorizontalTextDocumentLayout
+from .vertical_layout import VerticalTextDocumentLayout
 
 TEXTRECT_SHOW_COLOR = QColor(30, 147, 229, 170)
 TEXTRECT_SELECTED_COLOR = QColor(248, 64, 147, 170)
@@ -207,7 +218,7 @@ class TextBlkItem(QGraphicsTextItem):
         self._ffmt_gesture_baseline = None
 
         self.idx = idx
-        
+
         self.stroke_qcolor = QColor(0, 0, 0)
         self._old_pos = QPointF()
         self._old_rect = QRectF()
@@ -357,10 +368,10 @@ class TextBlkItem(QGraphicsTextItem):
             and controller.uses_surface_warp()
         ):
             self.update()
-        
+
     def on_content_changed(self):
         self.geometry_controller.invalidate_surface_cache()
-        if (self.hasFocus() or self.is_formatting) and not self.pre_editing and not self.block_change_signal:   
+        if (self.hasFocus() or self.is_formatting) and not self.pre_editing and not self.block_change_signal:
             # self.content_changed.emit(self)
             if not self.in_redo_undo:
                 if not self.is_formatting:
@@ -464,7 +475,7 @@ class TextBlkItem(QGraphicsTextItem):
 
         if blk.angle != 0:
             self.setRotation(blk.angle)
-        
+
         set_char_fmt = False
         if blk.translation:
             set_char_fmt = True
@@ -753,7 +764,7 @@ class TextBlkItem(QGraphicsTextItem):
 
         if valid_layout:
             rect = self.rect() if self.layout is not None else None
-        
+
         self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
         doc.documentLayout().blockSignals(True)
 
@@ -1189,7 +1200,7 @@ class TextBlkItem(QGraphicsTextItem):
                 it += 1
             block = block.next()
         return False
-    
+
     def minFontSize(self, to_px=True):
         doc = self.document()
         block = doc.firstBlock()
@@ -1214,9 +1225,9 @@ class TextBlkItem(QGraphicsTextItem):
             super().mouseDoubleClickEvent(event)
         self._emit_inline_format_changed()
         self._update_nonlinear_editing_ui()
-        
+
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
-        super().mouseMoveEvent(event)  
+        super().mouseMoveEvent(event)
         if self.textInteractionFlags() == Qt.TextInteractionFlag.TextEditorInteraction:
             self._emit_inline_format_changed()
             self._update_nonlinear_editing_ui()
@@ -1518,9 +1529,9 @@ class TextBlkItem(QGraphicsTextItem):
                     )
             self._commit_effect_fields(_apply_stroke)
         self.setOpacity(ffmat.opacity)
-        
+
         self.setAlignment(ffmat.alignment, repaint_background=False)
-        
+
         if set_char_format:
             self._set_line_spacing_pair(
                 ffmat.line_spacing,
@@ -1538,7 +1549,7 @@ class TextBlkItem(QGraphicsTextItem):
             self.layout.linespacing_type = ffmat.line_spacing_type
             if fallback_changed:
                 self.layout.reLayout()
-        
+
         # Apply while the canonical model still contains the previous
         # transform; merging first would skip live geometry recompilation.
         self.set_text_transform(ffmat.text_transform)
@@ -1610,7 +1621,7 @@ class TextBlkItem(QGraphicsTextItem):
         return cursor, dict(cursor_pos=cursor_pos, has_set_all=has_set_all)
 
     def _after_set_ffmt(self, cursor: QTextCursor, repaint_background: bool, restore_cursor: bool, cursor_pos: Tuple, has_set_all: bool):
-        
+
         if restore_cursor:
             if cursor_pos is not None:
                 pos1, pos2 = cursor_pos
@@ -1654,7 +1665,7 @@ class TextBlkItem(QGraphicsTextItem):
             it = block.begin()
             while not it.atEnd():
                 fragment = it.fragment()
-                
+
                 frag_start = fragment.position()
                 frag_end = frag_start + fragment.length()
                 pos2 = min(frag_end, sel_end)
@@ -2118,13 +2129,13 @@ class TextBlkItem(QGraphicsTextItem):
             self.squeezeBoundingRect(True, repaint=False)
 
         self._after_set_ffmt(cursor, repaint_background, restore_cursor, **after_kwargs)
-        
+
 
     def setFontSize(self, value: float, repaint_background: bool = False, set_selected: bool = False, restore_cursor: bool = False, clip_size: bool = False, **kwargs):
         '''
         value should be point size
         '''
-        
+
         cursor, after_kwargs = self._before_set_ffmt(set_selected=set_selected, restore_cursor=restore_cursor)
         self.layout.relayout_on_changed = False
         if self.fontformat.stroke_width > 0 or (
@@ -2189,7 +2200,7 @@ class TextBlkItem(QGraphicsTextItem):
 
     def get_char_fmts(self) -> List[QTextCharFormat]:
         cursor = self.textCursor()
-        
+
         cursor.movePosition(QTextCursor.MoveOperation.Start)
         char_fmts = []
         while True:

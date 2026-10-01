@@ -169,7 +169,7 @@ class PaddleOCRVLManga(OCRBase):
     def _load_model(self):
         """从本地目录加载权重与 processor（离线，不联网）。"""
         try:
-            import torch
+            import torch  # noqa: F401 - validate the optional runtime before loading
             from transformers import AutoModelForCausalLM, AutoProcessor
         except ImportError as e:
             raise RuntimeError(

@@ -8,8 +8,8 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from .base import InpainterBase, register_inpainter
 from ..textdetector import TextBlock
+from .base import InpainterBase, register_inpainter
 
 # Only highlight the mask as a repair marker while it covers a genuine partial
 # region. If the mask covers nearly the whole crop there is no surrounding

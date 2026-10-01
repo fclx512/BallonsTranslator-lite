@@ -67,28 +67,18 @@ from utils.text_effects import (
     TextEffect,
     TextEffectStack,
     TextFillEffect,
-    effect_phase,
     effect_paint_fallback_color,
+    effect_phase,
     hollow_effect,
     primary_stroke,
 )
+
 from ...misc import ndarray2pixmap, pixmap2ndarray
 from ..horizontal_layout import HorizontalTextDocumentLayout
-from ..vertical_layout import (
-    VerticalTextDocumentLayout as EngineVerticalTextDocumentLayout,
-)
-from .blend import CUSTOM_BLEND_MODES, composite_custom_blend_rgba
-from .paint import colorize_effect_paint_rgba
 from ..rendering.glyph import (
     GLYPH_DILATED_STROKE_FORMAT_PROPERTY,
     GLYPH_FEEDBACK_ONLY_FORMAT_PROPERTY,
     GLYPH_STROKE_FORMAT_PROPERTY,
-)
-from .shadow import render_glow_alpha, render_shadow_alpha
-from .filters import (
-    FilterContext,
-    FilterRuntime,
-    get_filter_registry,
 )
 from ..rendering.raster import (
     EFFECT_CACHE_MAX_BYTES,
@@ -104,7 +94,17 @@ from ..rendering.raster import (
     plan_effect_raster,
     quality_raster_request,
 )
-
+from ..vertical_layout import (
+    VerticalTextDocumentLayout as EngineVerticalTextDocumentLayout,
+)
+from .blend import CUSTOM_BLEND_MODES, composite_custom_blend_rgba
+from .filters import (
+    FilterContext,
+    FilterRuntime,
+    get_filter_registry,
+)
+from .paint import colorize_effect_paint_rgba
+from .shadow import render_glow_alpha, render_shadow_alpha
 
 STROKE_ALIGNMENT_LAYOUT_FORMAT_PROPERTY = 0x100000 + 1241
 _STROKE_ALIGNMENT_RANGE_LENGTH = 0x7FFFFFFF
@@ -3507,6 +3507,7 @@ class TextEffectRenderer:
                     br, plan.tier, nodes=retained
                 )
             except EFFECT_RASTER_FAILURES as error:
+                failure_error = error
                 # A higher tier may fail despite satisfying the deterministic
                 # caps. Retry the smallest full tier before degrading.
                 retry = plan_effect_raster(br.width(), br.height(), 1.0)
@@ -3517,7 +3518,7 @@ class TextEffectRenderer:
                         )
                         plan = retry
                     except EFFECT_RASTER_FAILURES as retry_error:
-                        error = retry_error
+                        failure_error = retry_error
                         target_map = None
                 else:
                     target_map = None
@@ -3539,7 +3540,7 @@ class TextEffectRenderer:
                             self._retained_strokes(retained)
                         )
                     )
-                    self._warn_effect_allocation_once(error)
+                    self._warn_effect_allocation_once(failure_error)
                     return
 
             self.background_pixmap = target_map

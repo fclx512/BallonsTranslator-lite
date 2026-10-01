@@ -14,6 +14,14 @@
 
 ## 2026-10-01
 
+### Ruff 检查整理（`scripts/verify.py` / `NUMBA_CACHE_DIR`）
+
+**摘要：** 安装并启用 Ruff，整理导入与空白，删除无用绑定并补齐类型注解；保留用于检查可选依赖的导入和 Numba 缓存设置的先后顺序。验证入口改用追加规则，遵守 `pyproject.toml` 已声明的忽略项，避免命令行选择器重新启用长行检查。
+**涉及文件：** `scripts/verify.py`、`pyproject.toml`（沿用原配置）、`ui/`、`utils/`、`modules/`
+**验证：** `ruff check --extend-select W ui/ utils/ modules/` 无报错，`scripts/verify.py --full` 全部通过；真窗口正常关闭通过。
+
+---
+
 ### 统一文字外观浮层（`TextAppearancePanel` / `AppearanceEntry`）与镂空删除（`set_hollow_enabled`）
 
 **摘要：** 效果和变换共用画布侧浮层，右栏保留固定高度摘要，避免效果数量挤压原文／译文输入区。参数卡改为单项展开并去掉重复套框，重绘侧栏、镂空与关闭图标；镂空关闭即从栈删除，避免隐藏的禁用条目留下计数。同步修复变换后效果表面偏移、网格拖拽收尾及多选／取色的编辑目标保持。
@@ -83,4 +91,3 @@
 **验证：** 本机连续两次 `--all` 产物逐字节一致；与仓库既有 webp 逐字节相同（原生 125% 渲染与钉定渲染等价，产物无需变更）。
 
 ---
-

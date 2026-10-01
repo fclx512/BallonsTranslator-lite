@@ -1,14 +1,22 @@
 import os
 import re
-import weakref
 import threading
+import weakref
 from typing import List, Set
 
-from qtpy.QtCore import Qt, QTimer, QThread, Signal, QSize, QObject
-from qtpy.QtGui import QSyntaxHighlighter, QTextCharFormat, QColor
+from qtpy.QtCore import QObject, QSize, Qt, QThread, Signal
+from qtpy.QtGui import QColor, QSyntaxHighlighter, QTextCharFormat
 from qtpy.QtWidgets import (
-    QListWidget, QHBoxLayout, QVBoxLayout, QPushButton,
-    QLineEdit, QDialog, QLabel, QWidget, QListWidgetItem, QTextEdit
+    QDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
 
 from utils import shared
@@ -163,7 +171,7 @@ class SpellCheckManager(QObject):
                     if os.path.exists(dict_path):
                         self._parse_and_load_file_to_set(dict_path, temp_words)
                         loaded_repos += 1
-            
+
             # Load multiple external dictionaries
             ext_paths = getattr(pcfg, 'spellcheck_external_dict_path', '').split(';')
             loaded_externals = 0
@@ -172,14 +180,14 @@ class SpellCheckManager(QObject):
                 if path and os.path.exists(path):
                     self._parse_and_load_file_to_set(path, temp_words)
                     loaded_externals += 1
-                    
+
             LOGGER.info(
                 f"SpellCheckManager: loaded {len(temp_words)} words "
                 f"(from {loaded_repos} repo dictionaries, {loaded_externals} external dictionaries)"
             )
         except Exception as e:
             LOGGER.error(f"Error loading dictionaries: {e}")
-            
+
         self.external_words = temp_words
         for hl in list(self.highlighters):
             hl.clear_cache()
@@ -198,7 +206,7 @@ class SpellCheckManager(QObject):
         if hasattr(self, '_loading_thread') and self._loading_thread and self._loading_thread.is_alive():
             self._reload_queued = True
             return
-        
+
         self._reload_queued = False
 
         def bg_load():
@@ -272,7 +280,7 @@ class SpellCheckManager(QObject):
         if self._is_available is not None:
             return self._is_available
         try:
-            import spellchecker
+            import spellchecker  # noqa: F401 - importing validates availability
             self._is_available = True
             return True
         except ImportError:
@@ -291,7 +299,7 @@ class SpellCheckManager(QObject):
                 return
             else:
                 self.spell = None
-        
+
         try:
             from spellchecker import SpellChecker
             # Load English and Russian dictionaries with configured distance
@@ -311,7 +319,7 @@ class SpellCheckManager(QObject):
         word_lower = word.lower()
         if word_lower in self.custom_words or word_lower in self.external_words:
             return True
-        
+
         # If it contains digits or special chars, ignore it
         if not word_lower.isalpha():
             return True
@@ -339,7 +347,7 @@ class SpellCheckManager(QObject):
         if self.spell is None:
             self.load_spellchecker_async()
             return []
-        
+
         word_lower = word.lower()
         try:
             candidates = self.spell.candidates(word_lower)
@@ -347,16 +355,16 @@ class SpellCheckManager(QObject):
             return []
         if not candidates:
             return []
-        
+
         # Sort or filter if needed, limit to 5
         suggestions = list(candidates)[:5]
-        
+
         # Match casing if possible (e.g. capitalized)
         if word.istitle():
             suggestions = [s.capitalize() for s in suggestions]
         elif word.isupper():
             suggestions = [s.upper() for s in suggestions]
-            
+
         return suggestions
 
     def add_to_dictionary(self, word: str):
@@ -454,7 +462,7 @@ class SpellCheckHighlighter(QSyntaxHighlighter):
         self.manager = SpellCheckManager.get_instance()
         self.manager.register_highlighter(self)
         self._cache = {}
-        
+
         self.misspelled_format = QTextCharFormat()
         self.misspelled_format.setUnderlineColor(QColor(235, 75, 75)) # Sleek red
         self.misspelled_format.setUnderlineStyle(QTextCharFormat.UnderlineStyle.WaveUnderline)
@@ -487,7 +495,7 @@ class SpellCheckHighlighter(QSyntaxHighlighter):
             doc_parent = editor.parent()
             if doc_parent and isinstance(doc_parent, QTextEdit):
                 editor = doc_parent
-        
+
         if editor and isinstance(editor, QTextEdit):
             editor_class = editor.__class__.__name__
             if editor_class == 'SourceTextEdit':
@@ -500,11 +508,11 @@ class SpellCheckHighlighter(QSyntaxHighlighter):
             word = match.group(0)
             if len(word) <= 1:
                 continue
-            
+
             word_lower = word.lower()
             if word_lower not in self._cache:
                 self._cache[word_lower] = self.manager.is_correct(word_lower)
-                
+
             if not self._cache[word_lower]:
                 start = match.start()
                 length = match.end() - start
@@ -643,7 +651,7 @@ class AddWordItemWidget(QWidget):
         self.input_field.setPlaceholderText(self.tr("Add new word..."))
         self.input_field.setFixedHeight(26)
         self.input_field.setStyleSheet("font-family: 'Segoe UI', Arial; font-size: 13px;")
-        
+
         self.input_field.add_requested.connect(self.trigger_add)
 
         self.add_btn = QPushButton("+", self)

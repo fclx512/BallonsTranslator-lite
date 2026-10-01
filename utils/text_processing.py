@@ -139,14 +139,14 @@ def _seg_ch_pkg(text: str) -> list:
                 word_next, tag_next = segments[ii + 1]
                 len_next = len(word_next)
                 next_valid = True
-                if tag_next != 'w' and not word_next in PKUSEG_PUNCSET:
+                if tag_next != 'w' and word_next not in PKUSEG_PUNCSET:
                     score_next = PKUSEGSCORES[tag][tag_next]
 
             if ii > 0:
                 word_prev, tag_prev = words[-1], segments[ii - 1][1]
                 len_prev = len(word_prev)
                 prev_valid = True
-                if tag_prev != 'w' and not word_prev[-1] in PKUSEG_PUNCSET:
+                if tag_prev != 'w' and word_prev[-1] not in PKUSEG_PUNCSET:
                     score_prev = PKUSEGSCORES[tag_prev][tag]
 
             append_prev, append_next = False, False

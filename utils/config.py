@@ -870,16 +870,16 @@ def _suspend_auto_downgrades() -> List[tuple]:
     so :func:`_resume_auto_downgrades` can restore them.
     """
     applied = []
-    for (_, field), (obj, _, downgraded, original) in _AUTO_DOWNGRADES.items():
-        if getattr(obj, field, None) == downgraded:
-            setattr(obj, field, original)
-            applied.append((obj, field, downgraded))
+    for (_, field_name), (obj, _, downgraded, original) in _AUTO_DOWNGRADES.items():
+        if getattr(obj, field_name, None) == downgraded:
+            setattr(obj, field_name, original)
+            applied.append((obj, field_name, downgraded))
     return applied
 
 
 def _resume_auto_downgrades(applied: List[tuple]) -> None:
-    for obj, field, downgraded in applied:
-        setattr(obj, field, downgraded)
+    for obj, field_name, downgraded in applied:
+        setattr(obj, field_name, downgraded)
 
 
 def json_dump_program_config(obj, **kwargs):

@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING
 
 from utils import config as C
 from utils.fontformat import (
+    TEXT_TRANSFORM_PRECISION,
     GridTextTransform,
     ProjectiveTextTransform,
-    TEXT_TRANSFORM_PRECISION,
     TextTransformStack,
     create_text_transform,
 )

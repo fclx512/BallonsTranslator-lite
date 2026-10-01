@@ -1,14 +1,5 @@
 import math
 
-from qtpy.QtWidgets import (
-    QGraphicsItem,
-    QGraphicsRectItem,
-    QGraphicsSceneHoverEvent,
-    QGraphicsSceneMouseEvent,
-    QLabel,
-    QStyleOptionGraphicsItem,
-    QWidget,
-)
 from qtpy.QtCore import QPoint, QPointF, QRectF, Qt
 from qtpy.QtGui import (
     QBrush,
@@ -19,16 +10,24 @@ from qtpy.QtGui import (
     QPolygonF,
     QTransform,
 )
+from qtpy.QtWidgets import (
+    QGraphicsItem,
+    QGraphicsRectItem,
+    QGraphicsSceneHoverEvent,
+    QGraphicsSceneMouseEvent,
+    QLabel,
+    QStyleOptionGraphicsItem,
+    QWidget,
+)
 
 from ..cursor import (
-    resizeCursorList,
     resize_handle_scene_angle,
+    resizeCursorList,
     rotateCursorList,
     scene_angle_to_cursor_index,
 )
 from .item import TextBlkItem
 from .transforms.mapping import rect_polygon
-
 
 CBEDGE_WIDTH = 30
 VISUALIZE_HITBOX = False

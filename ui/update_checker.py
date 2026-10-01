@@ -14,7 +14,6 @@ import sys
 from qtpy.QtCore import Qt, QThread, Signal
 from qtpy.QtWidgets import (
     QDialog,
-    QFrame,
     QHBoxLayout,
     QLabel,
     QProgressBar,

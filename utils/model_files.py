@@ -21,8 +21,8 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from .logger import logger as LOGGER
 from . import shared
+from .logger import logger as LOGGER
 
 __all__ = [
     "GIT_TRACKED_MODEL_FILES",

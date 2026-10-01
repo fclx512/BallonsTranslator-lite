@@ -1,7 +1,7 @@
 """UI/runtime registration for supported text-transform variants."""
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from typing import Callable, Sequence, Tuple, Union
 
 from qtpy.QtCore import QCoreApplication, QRectF
@@ -38,8 +38,8 @@ from utils.fontformat import (
 
 from .mapping import (
     CompiledTextTransform,
-    CompositeTextTransformMapper,
     CompiledTransformStage,
+    CompositeTextTransformMapper,
     MatrixTransformMapper,
     TransformStageContext,
     bend_transform_stage,

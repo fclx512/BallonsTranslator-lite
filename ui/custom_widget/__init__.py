@@ -13,6 +13,7 @@ from .combobox import (
     SmallSizeComboBox,
     WidePopupComboMixin,
 )
+from .float_drop_panel import FloatDropPanel
 from .flow_layout import FlowLayout
 from .group_frame import GroupFrame
 from .helper import borderColor, isDarkTheme, themeColor, widgetBackgroundColor
@@ -28,7 +29,6 @@ from .label import (
     SmallSizeControlLabel,
     TextCheckerLabel,
 )
-from .float_drop_panel import FloatDropPanel
 from .message import (
     FrameLessMessageBox,
     ImgtransProgressMessageBox,
@@ -45,9 +45,9 @@ from .page_range_progress import (
 from .push_button import ExpandingToolButton, NoBorderPushBtn
 from .rail_dock_panel import RailDockPanel
 from .row_table import MODE_CARD, MODE_TABLE, RowTable
+from .screen_picker import pick_screen_color
 from .scroll_bar import ConfigScrollBar
 from .scrollbar import ScrollBar
-from .screen_picker import pick_screen_color
 from .section_header import ConfigSectionHeader
 from .slider import PaintQSlider, RangeSlider
 from .spinbox import NoArrowsDoubleSpinBox, NoArrowsSpinBox

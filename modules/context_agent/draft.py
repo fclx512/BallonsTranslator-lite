@@ -12,7 +12,7 @@
 """
 
 from dataclasses import dataclass, replace
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 ORIGIN_EXISTING = "existing"
 ORIGIN_AI = "ai"

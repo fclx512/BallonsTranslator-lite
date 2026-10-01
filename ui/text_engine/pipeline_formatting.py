@@ -14,10 +14,9 @@ from qtpy.QtGui import (
 )
 
 from utils.config import AutoTateChuYokoConfig
-from .font_weight import font_weight_to_qt
 from utils.message import create_error_dialog
 from utils.textblock import TextBlock
-from .font_family import qfont_with_family
+
 from .annotations import (
     apply_auto_text_combine_upright,
     apply_letter_spacing,
@@ -25,6 +24,8 @@ from .annotations import (
     load_rich_text_html,
     to_rich_text_html,
 )
+from .font_family import qfont_with_family
+from .font_weight import font_weight_to_qt
 
 
 def _load_text_block_document(block: TextBlock) -> QTextDocument:

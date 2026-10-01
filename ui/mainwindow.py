@@ -12,11 +12,11 @@ from typing import List, Optional, Tuple, Union
 from uuid import uuid4
 
 from qtpy.QtCore import (
+    QCoreApplication,
     QEasingCurve,
     QElapsedTimer,
     QEvent,
     QEventLoop,
-    QCoreApplication,
     QPoint,
     QPointF,
     QRect,
@@ -52,14 +52,12 @@ from qtpy.QtWidgets import (
     QDialog,
     QFileDialog,
     QHBoxLayout,
-    QLabel,
     QListWidget,
     QListWidgetItem,
     QMenu,
     QMessageBox,
     QPlainTextEdit,
     QProgressDialog,
-    QPushButton,
     QShortcut,
     QStackedWidget,
     QTextEdit,
@@ -115,6 +113,8 @@ from utils.text_processing import is_cjk
 from utils.textblock import TextAlignment, TextBlock
 
 from . import shared_widget as SW
+from .block_action_card import BlockActionCard
+from .block_action_runner import BlockActionRunner
 from .canvas import Canvas
 from .configpanel import ConfigPanel, default_keys_for
 from .custom_widget import (
@@ -144,14 +144,12 @@ from .module_manager import ModuleManager
 from .overlay_modal import OverlayModal
 from .region_redetect_tool import RegionRedetectTool
 from .scenetext_manager import PasteSrcItemsCommand, SceneTextManager, TextPanel
-from .block_action_card import BlockActionCard
-from .block_action_runner import BlockActionRunner
 from .tag_toolbar import TagToolbar
-from .textedit_area import SourceTextEdit, TransTextEdit
 from .text_engine.pipeline_formatting import (
     AutoTateChuYokoThread,
     apply_auto_tate_chu_yoko,
 )
+from .textedit_area import SourceTextEdit, TransTextEdit
 from .textedit_commands import (
     GlobalReplaceApplier,
     capture_page_generations,
@@ -2442,8 +2440,8 @@ class MainWindow(mainwindow_cls):
         A single app-level filter also handles Esc / click-outside cancel
         while the menu is pinned, and swallows any QShortcut bound to Tab.
         """
-        from .pie_menu import PieMenu
         from .context_menu_config import run_cmd
+        from .pie_menu import PieMenu
 
         self.pie_menu = PieMenu(self.canvas, mw=self, parent=self)
         self.pie_menu.command_triggered.connect(

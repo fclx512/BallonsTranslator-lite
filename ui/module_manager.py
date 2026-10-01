@@ -37,7 +37,12 @@ from utils.registry import Registry
 from utils.textblock import TextBlock, sort_regions
 
 from .configpanel import ConfigPanel
-from .custom_widget import ImgtransProgressMessageBox, MessageBox, ParamComboBox, ProgressMessageBox
+from .custom_widget import (
+    ImgtransProgressMessageBox,
+    MessageBox,
+    ParamComboBox,
+    ProgressMessageBox,
+)
 from .funcmaps import get_maskseg_method
 from .model_downloads import missing_model_files_hint
 
@@ -1209,23 +1214,23 @@ class ModuleManager(QObject):
         module_key = payload.get("module_key", "")
         module_name = payload.get("module", "")
         if event == "installing_packages":
-            self.prepare_msgbox.updateTaskProgress(0, 
+            self.prepare_msgbox.updateTaskProgress(0,
                 self.tr("Installing packages for {module}...").format(module=module_name or module_key)
             )
         elif event == "checking_dependencies":
-            self.prepare_msgbox.updateTaskProgress(0, 
+            self.prepare_msgbox.updateTaskProgress(0,
                 self.tr("Checking dependencies for {module}...").format(module=module_name or module_key)
             )
         elif event == "downloading":
-            self.prepare_msgbox.updateTaskProgress(0, 
+            self.prepare_msgbox.updateTaskProgress(0,
                 self.tr("Downloading files for {module}...").format(module=module_name or module_key)
             )
         elif event == "importing":
-            self.prepare_msgbox.updateTaskProgress(0, 
+            self.prepare_msgbox.updateTaskProgress(0,
                 self.tr("Importing {module}...").format(module=module_name or module_key)
             )
         elif event == "loading_model":
-            self.prepare_msgbox.updateTaskProgress(0, 
+            self.prepare_msgbox.updateTaskProgress(0,
                 self.tr("Loading model for {module}...").format(module=module_name or module_key)
             )
         else:
@@ -1491,7 +1496,7 @@ class ModuleManager(QObject):
         if self.translate_thread.isRunning():
             LOGGER.warning("Terminating a running translation thread.")
             self.translate_thread.terminate()
-        self.prepare_msgbox.updateTaskProgress(0, 
+        self.prepare_msgbox.updateTaskProgress(0,
             self.tr("Preparing module: {module}...").format(module=translator)
         )
         self.prepare_msgbox.show()
@@ -1578,7 +1583,7 @@ class ModuleManager(QObject):
         if self.textdetect_thread.isRunning():
             LOGGER.warning("Terminating a running text detection thread.")
             self.textdetect_thread.terminate()
-        self.prepare_msgbox.updateTaskProgress(0, 
+        self.prepare_msgbox.updateTaskProgress(0,
             self.tr("Preparing module: {module}...").format(module=textdetector)
         )
         self.prepare_msgbox.show()
@@ -1593,7 +1598,7 @@ class ModuleManager(QObject):
         if self.ocr_thread.isRunning():
             LOGGER.warning("Terminating a running OCR thread.")
             self.ocr_thread.terminate()
-        self.prepare_msgbox.updateTaskProgress(0, 
+        self.prepare_msgbox.updateTaskProgress(0,
             self.tr("Preparing module: {module}...").format(module=ocr)
         )
         self.prepare_msgbox.show()
@@ -1676,7 +1681,8 @@ class ModuleManager(QObject):
     def _on_profiles_changed(self):
         """Refresh profile-dependent selectors after profiles are edited."""
         # Refresh OCR vision profile options (class-level params)
-        from modules import OCR as _OCR, INPAINTERS as _INP
+        from modules import INPAINTERS as _INP
+        from modules import OCR as _OCR
         from utils.profile_manager import (
             get_image_profile_names,
             get_profile_names,

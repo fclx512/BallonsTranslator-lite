@@ -22,7 +22,7 @@ QSS 容器样式走 objectName 选择器，必须开 WA_StyledBackground 才会
 
 from typing import List
 
-from qtpy.QtCore import QCoreApplication, Signal, Qt
+from qtpy.QtCore import QCoreApplication, Qt, Signal
 from qtpy.QtWidgets import (
     QFrame,
     QHBoxLayout,

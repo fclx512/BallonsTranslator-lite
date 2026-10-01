@@ -29,7 +29,6 @@ from typing import List, Optional, Tuple, Union
 import numpy as np
 from PIL import Image
 
-
 __all__ = [
     'set_random_seed',
     'set_verbose',

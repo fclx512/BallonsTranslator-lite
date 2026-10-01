@@ -2,7 +2,6 @@
 
 import numpy as np
 
-
 CUSTOM_BLEND_MODES = frozenset({
     'linear_burn',
     'darker_color',

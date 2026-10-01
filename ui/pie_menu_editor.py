@@ -32,8 +32,6 @@ import json
 import re
 from pathlib import Path
 
-import utils.config
-
 from qtpy.QtCore import QCoreApplication, QMimeData, Qt, Signal
 from qtpy.QtGui import QDrag, QKeySequence
 from qtpy.QtWidgets import (
@@ -50,8 +48,10 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+import utils.config
 from utils.config import pcfg, save_config
 from utils.shortcut_conflicts import find_conflict_keys
+
 from .context_menu_config import (
     CAT_BASIC,
     CAT_PIPELINE,
@@ -60,12 +60,6 @@ from .context_menu_config import (
     CAT_VIEW,
     COMMAND_REGISTRY,
 )
-from .pie_menu import (
-    SECTOR_MAX_CARDS,
-    PieMenu,
-    normalize_pie_menu,
-    pie_menu_display_name,
-)
 from .custom_widget import (
     ConfigComboBox,
     ConfigLineEdit,
@@ -73,6 +67,12 @@ from .custom_widget import (
     GroupFrame,
 )
 from .misc import get_theme_color
+from .pie_menu import (
+    SECTOR_MAX_CARDS,
+    PieMenu,
+    normalize_pie_menu,
+    pie_menu_display_name,
+)
 from .theme_helpers import shortcut_styles
 
 _SECTOR_CHOICES = (4, 6, 8)
@@ -649,7 +649,10 @@ class PieMenuEditor(QWidget):
             t = m.get("trigger", "")
             if t:
                 mapping[f"pie_menu_{i}"] = [t]
-        from .configpanel import DEFAULT_SHORTCUTS, default_keys_for  # lazy: avoid circular import
+        from .configpanel import (  # lazy: avoid circular import
+            DEFAULT_SHORTCUTS,
+            default_keys_for,
+        )
         for aid in DEFAULT_SHORTCUTS:
             keys = (pcfg.shortcuts or {}).get(aid) or default_keys_for(aid) or []
             mapping[aid] = [k for k in keys if k]

@@ -1,6 +1,7 @@
-from math import log
 import os
 import os.path as osp
+from math import log
+
 import cv2
 import numpy as np
 from qtpy.QtCore import (
@@ -60,7 +61,7 @@ from .custom_widget import (
     Widget,
 )
 from .custom_widget.notification import notification
-from .drawing_commands import InpaintUndoCommand, StrokeItemUndoCommand
+from .drawing_commands import InpaintUndoCommand
 from .funcmaps import get_maskseg_method
 from .image_edit import ImageEditMode, PenShape, PixmapItem, StrokeImgItem
 from .misc import ndarray2pixmap

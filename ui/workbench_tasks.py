@@ -61,7 +61,11 @@ from utils.io_utils import imread
 from .batch_delete import BatchDeleteMisread
 from .batch_merge import (
     SKIP_NO_BLOCKS as MERGE_SKIP_NO_BLOCKS,
+)
+from .batch_merge import (
     SKIP_NO_GROUPS as MERGE_SKIP_NO_GROUPS,
+)
+from .batch_merge import (
     BatchMerge,
     MergeConfig,
 )

@@ -1,7 +1,7 @@
 from typing import Callable, List, Optional
 
 from qtpy.QtCore import QSize, Qt, Signal
-from qtpy.QtGui import QDoubleValidator, QMouseEvent, QPalette, QWheelEvent
+from qtpy.QtGui import QDoubleValidator, QPalette, QWheelEvent
 from qtpy.QtWidgets import (
     QComboBox,
     QSizePolicy,

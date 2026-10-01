@@ -17,16 +17,16 @@ from qtpy.QtCore import (
     QRectF,
     QSignalBlocker,
     QSize,
-    Signal,
     Qt,
+    Signal,
 )
 from qtpy.QtGui import (
     QColor,
     QIcon,
     QKeyEvent,
     QMouseEvent,
-    QPaintEvent,
     QPainter,
+    QPaintEvent,
     QPen,
 )
 from qtpy.QtWidgets import (
@@ -39,11 +39,11 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from utils.text_effects import GradientStop, LinearGradientPaint
-
 from ui.custom_widget import NoArrowsDoubleSpinBox
 from ui.custom_widget.color_picker import ColorPickerDialog, _paint_checkerboard
 from ui.misc import themed_icon_path
+from utils.text_effects import GradientStop, LinearGradientPaint
+
 from .paint import paint_effect_paint_preview
 
 

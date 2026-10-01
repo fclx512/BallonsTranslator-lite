@@ -3,17 +3,43 @@ import threading
 import traceback
 from typing import List
 
-from qtpy.QtWidgets import QStackedWidget, QSizePolicy, QTextEdit, QScrollArea, QGraphicsDropShadowEffect, QVBoxLayout, QApplication, QHBoxLayout, QLabel, QLineEdit, QWidget, QPushButton
-from qtpy.QtCore import Signal, Qt, QMimeData, QEvent, QPoint, QSize
-from qtpy.QtGui import QContextMenuEvent, QIntValidator, QColor, QFocusEvent, QInputMethodEvent, QDragEnterEvent, QDropEvent, QKeyEvent, QTextCursor, QMouseEvent, QDrag, QPixmap
 import numpy as np
+from qtpy.QtCore import QEvent, QMimeData, QPoint, QSize, Qt, Signal
+from qtpy.QtGui import (
+    QColor,
+    QContextMenuEvent,
+    QDrag,
+    QDragEnterEvent,
+    QDropEvent,
+    QFocusEvent,
+    QInputMethodEvent,
+    QIntValidator,
+    QKeyEvent,
+    QMouseEvent,
+    QPixmap,
+    QTextCursor,
+)
+from qtpy.QtWidgets import (
+    QApplication,
+    QGraphicsDropShadowEffect,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QStackedWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
-from ...custom_widget import ScrollBar, Widget, SeparatorWidget
+from utils.config import pcfg
+
+from ...custom_widget import ScrollBar, SeparatorWidget, Widget
+from ...spellcheck import SpellCheckHighlighter, SpellCheckManager
 from ..item import TextBlock
 from .context_menu import create_text_edit_context_menu
-from utils.config import pcfg
-from ...spellcheck import SpellCheckManager, SpellCheckHighlighter
-
 
 STYLE_TRANSPAIR_CHECKED = "background-color: rgba(30, 147, 229, 20%);"
 STYLE_TRANSPAIR_BOTTOM = "border-width: 5px; border-bottom-style: solid; border-color: rgb(30, 147, 229);"
@@ -30,7 +56,7 @@ class FloatingSuggestionLabel(QWidget):
         self.main_layout = QHBoxLayout(self)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
-        
+
         # Horizontal scroll area for suggestions only
         self.scroll_area = QScrollArea(self)
         self.scroll_area.setWidgetResizable(True)
@@ -38,18 +64,18 @@ class FloatingSuggestionLabel(QWidget):
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroll_area.setFixedHeight(28)
         self.scroll_area.wheelEvent = self.wheelEvent
-        
+
         self.scroll_content = QWidget()
         self.scroll_content.setObjectName("scroll_content")
         self.scroll_content.setStyleSheet("background: transparent;")
-        
+
         self.buttons_layout = QHBoxLayout(self.scroll_content)
         self.buttons_layout.setContentsMargins(0, 0, 0, 0)
         self.buttons_layout.setSpacing(0)
-        
+
         self.scroll_area.setWidget(self.scroll_content)
         self.main_layout.addWidget(self.scroll_area)
-        
+
         # Add static "Add to Dict" button outside scroll area
         self.add_dict_btn = QPushButton(self)
         self.add_dict_btn.setObjectName("add_to_dict")
@@ -58,19 +84,19 @@ class FloatingSuggestionLabel(QWidget):
         self.add_dict_btn.setMouseTracking(True)
         self.add_dict_btn.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         self.main_layout.addWidget(self.add_dict_btn)
-        
+
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(6)
         shadow.setColor(QColor(0, 0, 0, 150))
         shadow.setOffset(0, 2)
         self.setGraphicsEffect(shadow)
-        
+
         # Hide the suggestion popup automatically when application focus changes
         app = QApplication.instance()
         if app:
             app.focusChanged.connect(self.on_focus_changed)
             app.installEventFilter(self)
-            
+
         self.hide()
 
     def eventFilter(self, watched, event):
@@ -110,19 +136,19 @@ class FloatingSuggestionLabel(QWidget):
         is_dark = pcfg.darkmode
         border_color = "rgba(255, 255, 255, 12%)" if is_dark else "rgba(0, 0, 0, 12%)"
         hover_bg = "rgba(255, 255, 255, 16%)" if is_dark else "rgba(0, 0, 0, 10%)"
-        
+
         while self.buttons_layout.count() > 0:
             item = self.buttons_layout.takeAt(0)
             w = item.widget()
             if w:
                 w.deleteLater()
-                
+
         for i, sug in enumerate(suggestions):
             btn = QPushButton(sug, self.scroll_content)
             btn.setProperty('suggestion', sug)
             btn.clicked.connect(self._apply_clicked_suggestion)
             self.buttons_layout.addWidget(btn)
-            
+
             # Stylize borders and round corners so they form a single seamless block
             border_right = "none" if i == len(suggestions) - 1 else f"1px solid {border_color}"
             left_radius = "4px" if i == 0 else "0px"
@@ -161,23 +187,23 @@ class FloatingSuggestionLabel(QWidget):
                 color: #ffffff;
             }}
         """)
-            
+
         self.scroll_content.adjustSize()
         suggestions_width = self.scroll_content.width()
-        
+
         self.add_dict_btn.adjustSize()
         add_btn_width = self.add_dict_btn.width()
         self.add_dict_btn.setFixedWidth(add_btn_width)
-        
+
         # Calculate horizontal sizes
         scroll_area_width = min(suggestions_width, 180) if len(suggestions) > 0 else 0
         self.scroll_area.setFixedWidth(scroll_area_width)
-        
+
         if len(suggestions) == 0:
             self.scroll_area.hide()
         else:
             self.scroll_area.show()
-            
+
         popup_width = scroll_area_width + add_btn_width
         self.setFixedSize(popup_width, 28)
 
@@ -187,7 +213,7 @@ class FloatingSuggestionLabel(QWidget):
             suggestion = button.property('suggestion')
             if suggestion is not None:
                 self.apply_suggestion(str(suggestion))
-        
+
     def apply_suggestion(self, replacement):
         self.editor._replace_word(self.cursor, replacement)
         self.hide()
@@ -249,7 +275,7 @@ class SourceTextEdit(QTextEdit):
         else:
             self.min_height = 45
             self.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
-            
+
 
     def _replace_word(self, cursor, replacement):
         self.setFocus()
@@ -257,11 +283,11 @@ class SourceTextEdit(QTextEdit):
         tc.setPosition(cursor.selectionStart())
         tc.setPosition(cursor.selectionEnd(), QTextCursor.MoveMode.KeepAnchor)
         self.setTextCursor(tc)
-        
+
         tc.beginEditBlock()
         tc.insertText(replacement)
         tc.endEditBlock()
-        
+
         self.handle_content_change()
 
     def on_selection_changed(self):
@@ -285,7 +311,7 @@ class SourceTextEdit(QTextEdit):
             if len(selected_text) > 1 and re.match(pattern, selected_text):
                 if not manager.is_correct(selected_text):
                     self.current_suggestion_word = selected_text
-                    
+
                     # Fetch suggestions in background thread to avoid freezing the UI thread
                     def fetch_bg(c, w):
                         try:
@@ -293,7 +319,7 @@ class SourceTextEdit(QTextEdit):
                             self.suggestions_ready.emit(c, w, sugs)
                         except Exception:
                             pass
-                            
+
                     t = threading.Thread(target=fetch_bg, args=(cursor, selected_text), daemon=True)
                     t.start()
                     return
@@ -301,39 +327,39 @@ class SourceTextEdit(QTextEdit):
             if hasattr(self, 'suggestion_popup') and self.suggestion_popup:
                 self.suggestion_popup.hide()
             self.current_suggestion_word = None
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
 
     def show_suggestions_popup(self, cursor, word, suggestions):
         try:
             if getattr(self, 'current_suggestion_word', None) != word:
                 return
-                
+
             if not self.suggestion_popup:
                 self.suggestion_popup = FloatingSuggestionLabel(self)
-            
+
             self.suggestion_popup.set_suggestions(cursor, word, suggestions)
             self.suggestion_popup.adjustSize()
-                
+
             rect = self.cursorRect()
-            
+
             # Position above the selection inside the editor viewport
             px = rect.left() + (rect.width() - self.suggestion_popup.width()) // 2
             py = rect.top() - self.suggestion_popup.height() - 4
-            
+
             # Guard boundaries
             # If it goes off the top of the viewport, show it below the cursor
             if py < 0:
                 py = rect.bottom() + 4
-                
+
             px = max(5, min(px, self.viewport().width() - self.suggestion_popup.width() - 5))
-            
+
             # Map viewport local coordinates to global screen coordinates
             global_pos = self.viewport().mapToGlobal(QPoint(px, py))
-            
+
             self.suggestion_popup.move(global_pos)
             self.suggestion_popup.show()
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
 
     def contextMenuEvent(self, event):
@@ -374,24 +400,24 @@ class SourceTextEdit(QTextEdit):
             self.text_content_changed = False
             if not self.highlighting:
                 self.text_changed.emit()
-                
+
         if self.hasFocus() and not self.pre_editing and not self.highlighting and not self.in_acts:
             self.handle_content_change()
 
     def handle_content_change(self):
         if not self.in_redo_undo:
-            
+
             change_from = self.change_from
             removed = self.change_removed
             added_text = ''
-            
+
             if self.paste_flag:
                 self.paste_flag = False
                 cursor = self.textCursor()
                 cursor.setPosition(change_from)
                 cursor.setPosition(self.textCursor().position(), QTextCursor.MoveMode.KeepAnchor)
                 added_text = cursor.selectedText()
-            
+
             else:
                 if self.input_method_from != -1:
                     added_text = self.input_method_text
@@ -402,7 +428,7 @@ class SourceTextEdit(QTextEdit):
                 elif self.change_added > 0:
                     cursor = self.textCursor()
                     cursor.setPosition(change_from)
-                    cursor.setPosition(change_from + self.change_added, QTextCursor.MoveMode.KeepAnchor) 
+                    cursor.setPosition(change_from + self.change_added, QTextCursor.MoveMode.KeepAnchor)
                     added_text = cursor.selectedText()
 
             undo_steps = self.document().availableUndoSteps()
@@ -542,7 +568,7 @@ class SourceTextEdit(QTextEdit):
         cursor.select(QTextCursor.SelectionType.Document)
         cursor.insertText(text)
 
-        
+
 class TransTextEdit(SourceTextEdit):
     def contextMenuEvent(self, event: QContextMenuEvent) -> None:
         cursor = self.textCursor()
@@ -589,7 +615,7 @@ class TransTextEdit(SourceTextEdit):
 class RowIndexEditor(QLineEdit):
 
     focus_out = Signal()
-    
+
     def __init__(self, parent=None):
         super().__init__(parent=parent)
         self.setValidator(QIntValidator())
@@ -603,11 +629,11 @@ class RowIndexEditor(QLineEdit):
     def minimumSizeHint(self):
         size = super().minimumSizeHint()
         return QSize(1, size.height())
-    
+
     def sizeHint(self):
         size = super().sizeHint()
         return QSize(1, size.height())
-    
+
 
 class RowIndexLabel(QStackedWidget):
 
@@ -671,7 +697,7 @@ class RowIndexLabel(QStackedWidget):
     def mousePressEvent(self, e: QMouseEvent) -> None:
         e.ignore()
         return super().mousePressEvent(e)
- 
+
 
 class TransPairWidget(Widget):
 
@@ -716,14 +742,14 @@ class TransPairWidget(Widget):
         if isinstance(e.source(), TransPairWidget):
             e.accept()
         return super().dragEnterEvent(e)
-    
+
     def handle_drag(self, pos: QPoint):
         y = pos.y()
         to_pos = self.idx
         if y > self.size().height() / 2:
             to_pos += 1
         self.drag_move.emit(to_pos)
-    
+
     def dragMoveEvent(self, e: QDragEnterEvent) -> None:
         if isinstance(e.source(), TransPairWidget):
             e.accept()
@@ -832,7 +858,7 @@ class TextEditListScrollArea(QScrollArea):
             pixmap = QPixmap(w.size())
             w.render(pixmap)
             drag.setPixmap(pixmap)
-            ac = drag.exec(Qt.DropAction.MoveAction)
+            drag.exec(Qt.DropAction.MoveAction)
             self.drag = None
             if self.drag_to_pos != -1:
                 self.set_drag_style(self.drag_to_pos, True)
@@ -840,7 +866,7 @@ class TextEditListScrollArea(QScrollArea):
             pass
 
         return super().mouseMoveEvent(e)
-    
+
     def set_drag_style(self, pos: int, clear_style: bool = False):
         if pos == len(self.pairwidget_list):
             pos -= 1
@@ -854,7 +880,7 @@ class TextEditListScrollArea(QScrollArea):
             style += STYLE_TRANSPAIR_CHECKED
         style = "TransPairWidget{" + style + "}"
         pw.setStyleSheet(style)
-    
+
     def clearDrag(self):
         self.drag_to_pos = -1
         if self.drag is not None:
@@ -863,7 +889,7 @@ class TextEditListScrollArea(QScrollArea):
             except RuntimeError:
                 pass
             self.drag = None
-    
+
     def handle_drag_pos(self, to_pos: int):
         if self.drag_to_pos != to_pos:
             if self.drag_to_pos is not None:
@@ -881,7 +907,7 @@ class TextEditListScrollArea(QScrollArea):
             num_drags = len(self.checked_list)
             if num_pw < 2 or num_drags == num_pw:
                 return
-            
+
             tgt_pos = to_pos
             drags = []
             for pw in self.checked_list:
@@ -919,7 +945,7 @@ class TextEditListScrollArea(QScrollArea):
         if src_idx == tgt_idx:
             return
         ids_ori, ids_tgt = [src_idx], [tgt_idx]
-        
+
         if src_idx < tgt_idx:
             for idx in range(src_idx+1, tgt_idx+1):
                 ids_ori.append(idx)
@@ -951,7 +977,7 @@ class TextEditListScrollArea(QScrollArea):
     ) -> None:
         if self.drag is not None:
             return
-        
+
         idx = pwc.idx
         if shift_pressed:
             checked = True
@@ -994,7 +1020,7 @@ class TextEditListScrollArea(QScrollArea):
                     checked = True
             if checked:
                 new_check_list.append(idx)
-        
+
         new_check_set = set(new_check_list)
         check_changed = False
         for oidx in old_idx_set:
@@ -1009,7 +1035,7 @@ class TextEditListScrollArea(QScrollArea):
                 check_changed = True
                 pw._set_checked_state(True)
             self.checked_list.append(pw)
-            
+
         num_new = len(new_check_list)
         if num_new == 0:
             self.sel_anchor_widget = None
@@ -1077,11 +1103,11 @@ class TextEditListScrollArea(QScrollArea):
             if self.sel_anchor_widget is None and self.checked_list:
                 self.sel_anchor_widget = self.checked_list[0]
         self.vlayout.removeWidget(widget)
-    
+
     def focusOutEvent(self, e: QFocusEvent) -> None:
         self.focus_out.emit()
         super().focusOutEvent(e)
-    
+
     def setFoldTextarea(self, fold: bool):
         for pw in self.pairwidget_list:
             pw.e_trans.setFold(fold)

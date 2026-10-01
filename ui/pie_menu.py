@@ -36,13 +36,24 @@ trigger key, Esc) while it is open.
 
 from math import atan2, cos, hypot, pi, radians, sin
 
-from qtpy.QtCore import (QCoreApplication, QEasingCurve, QElapsedTimer,
-                         QEvent, QMimeData, QPoint, QPointF, QRectF, Qt,
-                         QTimer, Signal)
+from qtpy.QtCore import (
+    QCoreApplication,
+    QEasingCurve,
+    QElapsedTimer,
+    QEvent,
+    QMimeData,
+    QPoint,
+    QPointF,
+    QRectF,
+    Qt,
+    QTimer,
+    Signal,
+)
 from qtpy.QtGui import QColor, QDrag, QFontMetrics, QPainter, QPainterPath, QPen
 from qtpy.QtWidgets import QApplication, QWidget
 
 from utils.config import pcfg
+
 from .context_menu_config import (
     COMMAND_REGISTRY,
     SEPARATOR_SENTINEL,

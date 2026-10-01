@@ -23,7 +23,6 @@ from qtpy.QtGui import (
     QTransform,
 )
 
-from ..layout import get_punc_rect
 from ..annotations import (
     AnnotationProperty,
     RubyContainerRange,
@@ -31,6 +30,7 @@ from ..annotations import (
     letter_spacing_value,
     ruby_containers_in_block,
 )
+from ..layout import get_punc_rect
 from .glyph import (
     FallbackGlyph,
     GlyphGeometry,
@@ -49,7 +49,6 @@ from .native_document import (
     draw_native_text_document,
     native_text_document,
 )
-
 
 RUBY_FONT_SCALE = 0.5
 RUBY_GAP_SCALE = 0.06

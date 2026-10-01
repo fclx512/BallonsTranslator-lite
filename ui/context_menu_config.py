@@ -763,7 +763,7 @@ class ContextMenuCustomizeDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-	# -- Menu preview list --------------------------------
+        # -- Menu preview list --------------------------------
         self.list_widget = QListWidget()
         self.list_widget.setDragDropMode(QListWidget.InternalMove)
         self.list_widget.setDefaultDropAction(Qt.DropAction.MoveAction)

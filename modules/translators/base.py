@@ -4,11 +4,11 @@ import urllib.request
 from collections import OrderedDict
 from typing import Dict, List, Union
 
+from utils.block_tags import directive_instructions
 from utils.io_utils import text_is_empty
 from utils.logger import logger as LOGGER
 from utils.registries import TRANSLATORS
 from utils.textblock import TextBlock
-from utils.block_tags import directive_instructions
 
 from ..base import BaseModule
 from .exceptions import (

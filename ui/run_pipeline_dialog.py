@@ -37,7 +37,6 @@ from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import (
     QAbstractButton,
     QApplication,
-    QCheckBox,
     QDialog,
     QFileDialog,
     QFrame,
@@ -45,7 +44,6 @@ from qtpy.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSizePolicy,
     QStackedWidget,
     QStyle,
     QStyleOptionButton,

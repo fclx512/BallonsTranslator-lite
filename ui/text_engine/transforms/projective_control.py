@@ -1,7 +1,7 @@
 """Fixed-size 3D rotation control for one selected Projective stage."""
 
-from dataclasses import replace
 import math
+from dataclasses import replace
 
 from qtpy.QtCore import QPointF, QRectF, Qt
 from qtpy.QtGui import (
@@ -16,20 +16,19 @@ from qtpy.QtGui import (
 from qtpy.QtWidgets import QGraphicsEllipseItem, QGraphicsItem, QGraphicsPathItem
 
 from utils.fontformat import (
-    ProjectiveTextTransform,
+    TEXT_TRANSFORM_PRECISION,
     TEXT_TRANSFORM_PROJECTIVE_ROTATION_XY_MAX,
     TEXT_TRANSFORM_PROJECTIVE_ROTATION_XY_MIN,
     TEXT_TRANSFORM_PROJECTIVE_ROTATION_Z_MAX,
     TEXT_TRANSFORM_PROJECTIVE_ROTATION_Z_MIN,
-    TEXT_TRANSFORM_PRECISION,
     TEXT_TRANSFORM_SCALE_MAX,
     TEXT_TRANSFORM_SCALE_MIN,
+    ProjectiveTextTransform,
 )
 
 from ...cursor import rotateCursorList
-from .modal import ModalPointTransform
 from ..shape_control import CONTROL_ITEM_DATA_KEY
-
+from .modal import ModalPointTransform
 
 PROJECTIVE_CONTROL_RADIUS = 68.0
 PROJECTIVE_CONTROL_PEN_WIDTH = 4.0
