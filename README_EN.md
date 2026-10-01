@@ -31,7 +31,8 @@ Download `BallonsTranslator-lite_win_min.zip` from the [Releases page](https://g
 
 Download the complete bundle (dependencies and models included) from the file hosts, extract it to any directory and run `launch.bat`:
 
-- [123 Cloud Drive](https://1815181720.share.123865.com/123pan/sKBtVv-Zs1Vd) (preferred)
+- [139 Cloud (China Mobile)](https://yun.139.com/shareweb/#/w/i/2xTrJSfJTx8m8) (extraction code: `8xys`)
+- [Baidu Netdisk](https://pan.baidu.com/s/1QfPub2loKQ7Zp9lyhYtSnA?pwd=1111) (extraction code: `1111`)
 - [Google Drive](https://drive.google.com/drive/folders/1WJXjcQt7UzHvRpH3QfwcOokL8Fm7l0zT?usp=sharing) (updates may lag behind)
 
 ```
@@ -59,7 +60,7 @@ python launch.py --update   # pull code updates before launching
 ```
 
 - Requires **Python 3.10+** (the official installer or the Microsoft Store version; the Store version creates a project-local `.venv` automatically).
-- On first launch the pip mirror is written automatically based on your region (the `mirror` section of `config/config.json`), so no manual mirror setup is needed in mainland China.
+- All dependency and model downloads default to the **official sources**. If you need a mirror (e.g. in mainland China), configure it manually under **Settings → Network & Mirrors** (the `mirror` section of `config/config.json`).
 - If automatic dependency installation fails, run `pip install -r requirements.txt` manually. The heavy dependencies needed for model inference (`torch` / `transformers` etc.) are not part of it — install them as needed (see [GPU Acceleration](#gpu-acceleration)).
 - The **PatchMatch inpainter** is a low-overhead basic capability. Its two native libraries (`data/libs/patchmatch_inpaint.dll` and `data/libs/opencv_world455.dll`, approx. 53 MB) are distributed as Release assets: they download in the background the first time the inpainter is selected, or fetch them manually on the Settings → Models → Model Files page (the full bundle already includes them). The app still starts without them, but using PatchMatch will show a readable missing-attachment message.
 - See `python launch.py --help` for all arguments (e.g. `--proj-dir` to open a project at startup, `--headless` to run without a GUI).

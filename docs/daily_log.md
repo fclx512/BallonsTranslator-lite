@@ -30,6 +30,14 @@
 
 ---
 
+### 下载渠道官方源化（删 `utils/network_mirrors.py::auto_fill_mirrors` 地区自动填镜像）+ README 网盘换 139/百度
+
+**摘要：** 用户实测阿里云源极慢、开代理无改善、反不如官方源，且第三方源依赖不齐，拍板所有依赖/模型下载默认走官方源：删首启按地区自动填镜像整套（含 HF 镜像与两个默认常量、locale/时区探测），镜像仅留设置页手动配置（小白由一键完整包兜底）；保留手动配置读回（`apply_pip_mirror_env`）与系统代理探测；已装机 config.json 里已写入的镜像不受影响。README/README_EN 一键包渠道删 123 云盘，换 139 移动云盘（提取码 8xys）+ 百度网盘（提取码 1111）。
+**涉及文件：** `utils/network_mirrors.py`、`launch.py`、`ui/network_settings_dialog.py`、`tests/test_bootstrap_launch.py`、`README.md`、`README_EN.md`
+**验证：** `scripts/verify.py` 全绿（冒烟命中 launch.py）；`tests/test_bootstrap_launch.py` 17 用例通过（自动填充契约随功能删除）。
+
+---
+
 ## 2026-09-30
 
 ### 样式管理器字体预览自动反色（`StylePreviewCard._contrast_ratio`）+ 分组标题完整显示（`FormatGroupCard` 宽度自适应）

@@ -2,12 +2,13 @@
 
 用户 2026-09-20 拍板跟进上游发行策略：发「源码 + 嵌入式 Python + pip + uv.exe + 基本依赖」
 的精简包，重依赖/模型按需安装（见 `scripts/build_win_minimal.ps1`）。这条路线把
-四件原本被「预装好的一体包」掩盖的问题暴露出来，本文件逐个钉住：
+几件原本被「预装好的一体包」掩盖的问题暴露出来，本文件逐个钉住：
 
-1. `utils/network_mirrors.py::auto_fill_mirrors` 写错了配置节（自造的
-   ``mirrors.pypi``，而读取点是 ``mirror.pip_index_url``），首次运行自动配镜像
-   其实一直是空转；且首启动装依赖发生在 config 能加载之前，镜像必须更早落到
+1. 首启动装依赖发生在 config 能加载之前，用户手动配置的镜像必须更早落到
    环境变量上（`utils/network_mirrors.py::apply_pip_mirror_env`）。
+   2026-10-01 起不再按地区自动填充镜像（用户拍板：所有下载默认走官方源，
+   镜像仅作设置页高级手动项——第三方源依赖不齐且实测阿里云极慢），
+   原自动填充契约（写对配置节/键名）随功能一起退役。
 2. 发行包把 ``uv.exe`` 放在 ``python.exe`` 旁边而不入 PATH，只看 PATH 会静默
    退回 pip（`utils/package_installer.py::find_uv`）。
 3. ``launch.py`` 的自动降级（缺依赖/缺模型 → 模块换成 none）会**落盘**，把用户
@@ -41,59 +42,8 @@ def _write_config(path: Path, mirror_section: dict) -> None:
     )
 
 
-class TestAutoFillMirrorsWritesRealSection(unittest.TestCase):
-    """自动补镜像必须写进 utils/config.py::MirrorConfig 真正读的节与键名。"""
-
-    def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
-        self.config_path = str(Path(self._tmp.name) / "config.json")
-
-    def tearDown(self):
-        self._tmp.cleanup()
-
-    def test_writes_mirror_section_with_config_field_names(self):
-        original = network_mirrors.should_use_china_mirrors
-        network_mirrors.should_use_china_mirrors = lambda: True
-        try:
-            updated = network_mirrors.auto_fill_mirrors(self.config_path)
-        finally:
-            network_mirrors.should_use_china_mirrors = original
-
-        self.assertEqual(sorted(updated), ["huggingface", "pypi"])
-        data = json.loads(Path(self.config_path).read_text(encoding="utf8"))
-        self.assertIn("mirror", data)
-        self.assertNotIn("mirrors", data)
-        # 关键不变量：写进去的每个键都必须是 MirrorConfig 的真实字段——原先的
-        # bug 正是自造了 mirrors.pypi 这种没有读取点的结构。
-        valid_fields = set(program_config.MirrorConfig.__dataclass_fields__)
-        written = set(data["mirror"])
-        self.assertTrue(
-            written <= valid_fields, f"unknown config keys written: {written - valid_fields}"
-        )
-        self.assertEqual(
-            data["mirror"]["pip_index_url"], network_mirrors.DEFAULT_PYPI_MIRROR
-        )
-        self.assertEqual(
-            data["mirror"]["hf_endpoint"], network_mirrors.DEFAULT_HUGGINGFACE_MIRROR
-        )
-
-    def test_absent_keys_are_filled_but_empty_values_are_left_alone(self):
-        """空串是「用官方源」的显式选择（MirrorConfig docstring），不能覆盖。"""
-        _write_config(Path(self.config_path), {"pip_index_url": ""})
-        self.assertNotIn(
-            "pypi", network_mirrors._mirror_fields_missing(self.config_path)
-        )
-        self.assertIn(
-            "huggingface", network_mirrors._mirror_fields_missing(self.config_path)
-        )
-
-    def test_no_config_file_means_everything_is_missing(self):
-        missing = network_mirrors._mirror_fields_missing(self.config_path)
-        self.assertEqual(sorted(missing), ["huggingface", "pypi"])
-
-
 class TestApplyPipMirrorEnv(unittest.TestCase):
-    """首启动装核心依赖时，pip 源要能走到镜像（config 那时还读不了）。"""
+    """首启动装核心依赖时，手动配置的 pip 源要能生效（config 那时还读不了）。"""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()

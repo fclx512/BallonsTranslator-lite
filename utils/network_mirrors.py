@@ -1,23 +1,21 @@
-"""Auto-detect network mirror configuration on first run.
+"""Read manually configured mirrors into the environment for installers.
 
-Detects whether the system is in mainland China via locale / timezone,
-and writes default Hugging Face / PyPI mirrors to config.json so that
-dependency installation and model downloads work without manual setup.
+Mirrors are **manual, advanced-user settings** (Settings → network page);
+there is no region auto-configuration any more — every dependency/model
+download defaults to the official source, and the offline full bundle
+covers users who cannot set up mirrors themselves.  What remains here is
+the stdlib-only read-back of ``config.json``'s ``mirror`` section for the
+first-run dependency install (``launch.py`` installs core requirements
+before ``utils.config`` can be imported — that needs numpy/PyQt6), plus
+the Windows system proxy detection.
 
 The existing mirror read-back in launch.py (config.mirror.* → env vars)
-handles subsequent launches — this module is only needed for **first run**
-when ``config.json`` does not yet exist.
+handles subsequent launches.
 """
 
 import json
-import locale
 import os
-import time
-from typing import Iterable, Optional, Set
-
-HUGGINGFACE_ORIGIN = "https://huggingface.co"
-DEFAULT_HUGGINGFACE_MIRROR = "https://hf-mirror.com"
-DEFAULT_PYPI_MIRROR = "https://mirrors.aliyun.com/pypi/simple/"
+from typing import Optional
 
 #: WinINET key holding the user's system proxy settings.
 _WINDOWS_INTERNET_SETTINGS = (
@@ -33,79 +31,13 @@ PROXY_ENV_VARS = ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy")
 NO_PROXY_VALUE = "localhost,127.0.0.1,.local"
 NO_PROXY_ENV_VARS = ("NO_PROXY", "no_proxy")
 
-# 本模块用简名指代两个镜像，落盘时必须写进 ``utils/config.py::MirrorConfig``
+# 本模块用简名指代镜像，读取点必须是 ``utils/config.py::MirrorConfig``
 # 的实际字段——**节名是单数 ``mirror``、键名是字段名**（如 ``pip_index_url``）。
-# 曾经写成 ``mirrors.pypi`` 这种自造结构，而全仓没有任何读取点，自动配置一直
-# 是空转（2026-09-20 修）。``github_mirror`` 刻意不自动填：没有可靠默认值，
-# 填错会让更新检查整条失效。
+# 曾经写成 ``mirrors.pypi`` 这种自造结构，而全仓没有任何读取点（2026-09-20 修）。
 _MIRROR_CONFIG_SECTION = "mirror"
 _MIRROR_FIELD_KEYS = {
-    "huggingface": "hf_endpoint",
     "pypi": "pip_index_url",
 }
-#: 自动配置能填的镜像字段（简名）。
-MIRROR_FIELDS = tuple(_MIRROR_FIELD_KEYS)
-
-
-# ---------------------------------------------------------------------------
-# Locale / timezone heuristics
-# ---------------------------------------------------------------------------
-
-def _collect_locale_names() -> list:
-    candidates = [
-        os.environ.get("LC_ALL", ""),
-        os.environ.get("LC_MESSAGES", ""),
-        os.environ.get("LANG", ""),
-    ]
-    try:
-        candidates.append(locale.getlocale()[0] or "")
-    except Exception:
-        pass
-    return _unique_nonempty(candidates)
-
-
-def _collect_timezone_names() -> list:
-    candidates = [os.environ.get("TZ", "")]
-    candidates.extend(name for name in time.tzname if name)
-    return _unique_nonempty(candidates)
-
-
-def _has_mainland_china_locale(names: Iterable[str]) -> bool:
-    for value in names:
-        if not value:
-            continue
-        normalized = str(value).strip().split(".", 1)[0].replace("-", "_")
-        lower = normalized.lower()
-        if lower == "zh_cn" or lower.endswith("_cn") or "_cn_" in lower:
-            return True
-    return False
-
-
-def _has_mainland_china_timezone(names: Iterable[str]) -> bool:
-    for value in names:
-        if not value:
-            continue
-        normalized = str(value).strip().lower().replace("\\", "/")
-        if normalized in {"asia/shanghai", "prc"}:
-            return True
-        if "china standard time" in normalized or "中国标准时间" in normalized:
-            return True
-    return False
-
-
-def _unique_nonempty(values: Iterable[str]) -> list:
-    seen = []
-    for v in values:
-        if v and v not in seen:
-            seen.append(v)
-    return seen
-
-
-def should_use_china_mirrors() -> bool:
-    """Return whether the system locale/timezone hints at mainland China."""
-    return _has_mainland_china_locale(
-        _collect_locale_names()
-    ) or _has_mainland_china_timezone(_collect_timezone_names())
 
 
 # ---------------------------------------------------------------------------
@@ -217,70 +149,17 @@ def _mirror_section(config_path: str) -> dict:
     return section if isinstance(section, dict) else {}
 
 
-def _mirror_fields_missing(config_path: str) -> Set[str]:
-    """Return mirror fields that are absent from the persisted config.
-
-    ``MirrorConfig`` documents an empty string as "use the official source",
-    which is a deliberate user choice — so only a **missing** key counts as
-    unconfigured, never an empty one.
-    """
-    section = _mirror_section(config_path)
-    return {
-        field for field, key in _MIRROR_FIELD_KEYS.items() if key not in section
-    }
-
-
-def auto_fill_mirrors(config_path: str) -> list:
-    """If config.json is missing the mirror fields and the system is in
-    mainland China, write sensible defaults and return the updated field names.
-
-    Returns an empty list when no action was taken.
-    """
-    if not config_path:
-        return []
-
-    missing = _mirror_fields_missing(config_path)
-    if not missing:
-        # Everything already configured — nothing to do.
-        return []
-
-    if not should_use_china_mirrors():
-        return []
-
-    # Read existing config, merge mirrors in, write back.
-    data = _read_raw_config(config_path) or {}
-    if not isinstance(data, dict):
-        return []
-    section = data.setdefault(_MIRROR_CONFIG_SECTION, {})
-    if not isinstance(section, dict):
-        return []
-    for field in missing:
-        if field == "huggingface":
-            section[_MIRROR_FIELD_KEYS[field]] = DEFAULT_HUGGINGFACE_MIRROR
-        elif field == "pypi":
-            section[_MIRROR_FIELD_KEYS[field]] = DEFAULT_PYPI_MIRROR
-
-    try:
-        tmp = config_path + ".tmp"
-        with open(tmp, "w", encoding="utf8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-        os.replace(tmp, config_path)
-    except Exception:
-        return []
-
-    print(f"Auto-configured network mirrors for mainland China: {', '.join(missing)}")
-    return list(missing)
-
-
 def apply_pip_mirror_env(config_path: str, env: Optional[dict] = None) -> str:
-    """Export the persisted pip mirror as ``INDEX_URL`` for installers.
+    """Export the manually configured pip mirror as ``INDEX_URL`` for installers.
 
     ``launch.py`` installs core requirements **before** ``utils.config`` can be
     imported (that needs numpy/PyQt6), so the usual ``config.mirror.*`` →
     env-var path is not available yet on a first run — exactly the run that
     pulls the whole dependency set.  This reads the raw JSON with stdlib only
     and sets the variables ``pip`` / ``uv`` and ``utils.package_installer``
-    consume, so a first-run install goes through the mirror too.
+    consume.  Only a **manually configured** mirror lands here; nothing is
+    auto-filled any more, so an untouched install goes through the official
+    source.
 
     Returns the effective index URL (empty when none is configured).
     """

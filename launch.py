@@ -593,19 +593,18 @@ def main():
     print(f"Commit hash: {commit}")
 
     # ── Network mirror + system proxy bootstrap (must precede installs) ──
-    #     首次运行按地区自动补写 config.json 的 mirror 节，并把 pip 源落到
-    #     环境变量上。位置必须在 ensure_core_requirements 之前：那是首启动
-    #     拉全套依赖的一步，而 config 那时还读不了（它依赖 numpy/PyQt6）。
+    #     把用户**手动**配置的 pip 源落到环境变量上（不再按地区自动填充
+    #     镜像：所有下载默认走官方源，镜像只作设置页的高级手动项）。
+    #     位置必须在 ensure_core_requirements 之前：那是首启动拉全套依赖
+    #     的一步，而 config 那时还读不了（它依赖 numpy/PyQt6）。
     #     config.mirror.* 的正式读取仍在下方 config 加载之后。
     #     Windows 系统代理同样在这里落地：它的消费点也是 pip/uv 与 HF 下载，
     #     晚于首次安装就来不及了。用户已显式配置的代理（任意大小写）不覆盖。
     from utils.network_mirrors import (
         apply_pip_mirror_env,
         apply_system_proxy_env,
-        auto_fill_mirrors,
     )
 
-    auto_fill_mirrors(shared.CONFIG_PATH)
     _early_index_url = apply_pip_mirror_env(shared.CONFIG_PATH)
     if _early_index_url:
         print(f"Using pip index: {_early_index_url}")

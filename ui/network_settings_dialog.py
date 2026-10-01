@@ -253,7 +253,9 @@ class NetworkSettingsDialog(QDialog):
     def _quick_cn(self):
         self._row_updates.set_value("https://gitclone.com")
         self._row_packages.set_value("https://pypi.tuna.tsinghua.edu.cn/simple")
-        self._extra_input.setText("https://mirrors.aliyun.com/pypi/simple/")
+        # extra index 刻意留空：PyPI 镜像对 CUDA torch 无效（那些 wheel 只在
+        # download.pytorch.org），且实测阿里云极慢、代理也无改善。
+        self._extra_input.clear()
         self._hf_input.setText("https://hf-mirror.com")
         self._adv_group.setChecked(True)
 

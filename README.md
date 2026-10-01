@@ -31,7 +31,8 @@ BallonsTranslator 的分支版漫画/图片翻译工具。上游的五阶段管�
 
 从网盘下载含依赖与模型的完整包，解压到任意目录后运行 `launch.bat`：
 
-- [123 云盘](https://1815181720.share.123865.com/123pan/sKBtVv-Zs1Vd)（优先）
+- [139 移动云盘](https://yun.139.com/shareweb/#/w/i/2xTrJSfJTx8m8)（提取码：`8xys`）
+- [百度网盘](https://pan.baidu.com/s/1QfPub2loKQ7Zp9lyhYtSnA?pwd=1111)（提取码：`1111`）
 - [Google Drive](https://drive.google.com/drive/folders/1WJXjcQt7UzHvRpH3QfwcOokL8Fm7l0zT?usp=sharing)（更新可能有延迟）
 
 ```
@@ -59,7 +60,7 @@ python launch.py --update   # 先拉取代码更新再启动
 ```
 
 - 需要 **Python 3.10+**（官方安装包或 Microsoft Store 版均可；Store 版会在项目目录内自动创建 `.venv`）。
-- 首次启动会按所在地区自动写入 pip 镜像（`config/config.json` 的 `mirror` 节），国内网络无需手工配源。
+- 所有依赖与模型下载默认走**官方源**；国内网络如需镜像，在 **设置 → 网络与镜像** 手动配置（`config/config.json` 的 `mirror` 节）。
 - 自动装依赖失败时手动执行 `pip install -r requirements.txt`。模型推理所需的 `torch` / `transformers` 等重依赖不在其中，按需安装（见 [GPU 加速](#gpu-加速)）。
 - **PatchMatch 修复器**是低占用基础能力，其两个原生库（`data/libs/patchmatch_inpaint.dll` 与 `data/libs/opencv_world455.dll`，约 53 MB）以 Release 资产分发：首次选中该修复器时后台自动下载，也可在 **设置 → 模型 → 模型文件** 页手动获取（一键完整包已随包）。缺失时应用仍可启动，但使用 PatchMatch 时会给出明确提示。
 - 完整参数见 `python launch.py --help`（如 `--proj-dir` 启动时打开工程、`--headless` 无界面运行）。
