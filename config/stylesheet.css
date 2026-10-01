@@ -316,7 +316,8 @@ ParamChip:hover {
 }
 #FormatGroupCard {
     background: transparent;
-    border: none;
+    border: 1px solid @borderColor;
+    border-radius: 6px;
 }
 #GroupStatus {
     color: @disabledForegroundColor;
@@ -771,6 +772,23 @@ QPushButton#ConfigNavItem:checked {
 /* ── Font Style Manager ────────────────────────────────────── */
 #FontStyleManager {
     background: @widgetBackgroundColor;
+}
+
+/* 管理器按钮紧凑化：全局 QDialog QPushButton（padding 5px 15px）+ 32px 定高
+   对右栏一行七八个动作按钮太占地方，容器内收成小号。ParamChip 不在选择器
+   覆盖内（走自己的胶囊规则），左树只有底部按钮行一个容器。 */
+StyleDetail QPushButton,
+#StyleMgrBtnRow QPushButton {
+    height: 24px;
+    font-size: 14px;
+    padding: 2px 10px;
+}
+
+/* 上面的紧凑规则比裸 ParamChip 权重高、会把胶囊顶高，这里同权重后置钉回 */
+StyleDetail ParamChip {
+    height: 20px;
+    font-size: 13px;
+    padding: 1px 8px;
 }
 
 /* 左树走通用 QTreeView 规则。原 #StyleList 三条（border-right 分隔线那套）

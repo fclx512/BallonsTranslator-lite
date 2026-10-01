@@ -1493,7 +1493,7 @@ class MainWindow(mainwindow_cls):
             QMessageBox.Icon.Question,
             self.tr("Import named styles"),
             self.tr(
-                "This project has no font style table (upstream/legacy format). {n} named styles covering {m} text blocks can be imported as project base styles by preset name. Import now?"
+                "This project has no font style table (upstream/legacy format). {n} named styles covering {m} text blocks can be imported as project base styles by preset name and added to the quick style list. Import now?"
             ).format(n=len(groups), m=n_blocks),
             parent=self,
         )
@@ -1506,6 +1506,18 @@ class MainWindow(mainwindow_cls):
         if box.exec() != QMessageBox.StandardButton.Yes:
             return
         proj.base_styles = seed_base_styles_from_style_names(proj)
+        # 同步进右栏快速样式条（全局 text_styles，不是全局样式库）：按预设名
+        # 去重、deepcopy 隔离，避免项目样式与快速条互相串改。
+        existing_names = {fs._style_name for fs in text_styles}
+        added = False
+        for bs in proj.base_styles:
+            if bs.name and bs.name not in existing_names:
+                existing_names.add(bs.name)
+                text_styles.append(bs.fontformat.deepcopy())
+                added = True
+        if added:
+            save_text_styles()
+            self.textPanel.formatpanel.textstyle_panel.setStyles(text_styles)
         if self._styleMgrDialog is not None and self._styleMgrDialog.isVisible():
             from .fontstyle_manager import FontStyleManager
 

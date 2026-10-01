@@ -99,3 +99,11 @@
 **验证：** 本机连续两次 `--all` 产物逐字节一致；与仓库既有 webp 逐字节相同（原生 125% 渲染与钉定渲染等价，产物无需变更）。
 
 ---
+
+### 上游样式导入同步右栏快速样式条（`_maybe_seed_upstream_styles`）+ 样式管理器清理未使用样式与观感修复（`_clean_unused_styles`/`StylePreviewCard`/`FormatEditorPanel`）
+
+**摘要：** 上游项目导入的命名样式原本只进项目 `base_styles`、右栏快速样式条（全局 `text_styles`）看不到：播种后按预设名去重 deepcopy 并入并刷新面板，只在导入发生一次、不随重开回灌。管理器左栏新增「清理未使用样式」（判据 discovery `total_count == 0`，只删零引用项目大样式、不碰样式库模板）；预览卡改为按文档实尺寸水平垂直居中绘制（不传裁剪矩形，字形上缘不再被裁）；参数行标签宽随当前语言最长译文自适应（原钉 100px 裁「竖排罗马字对齐」），分组卡 `FormatGroupCard` 加描边圆角；管理器按钮收 24px 紧凑尺寸（`StyleDetail`/`#StyleMgrBtnRow` 域内 QSS，后置规则钉回 ParamChip 胶囊尺寸）。
+**涉及文件：** `ui/mainwindow.py`、`ui/fontstyle_manager.py`、`ui/style_format_editor.py`、`config/stylesheet.css`、`translate/zh_CN.ts`
+**验证：** `scripts/verify.py` 全绿；离屏行为验证清理只删零引用样式、取消与空路径不误删；渲染探针暗/亮两主题目视验收（预览居中、长标签完整、边框与紧凑按钮生效）。
+
+---

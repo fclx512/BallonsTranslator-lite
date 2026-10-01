@@ -621,6 +621,9 @@ class StylePreviewCard(QWidget):
         self.setFixedHeight(64)
         self._doc = QTextDocument(self)
         self._doc.setDefaultFont(QFont())
+        opt = self._doc.defaultTextOption()
+        opt.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        self._doc.setDefaultTextOption(opt)
         self._fg = QColor(0, 0, 0)
 
     def set_format(self, ffmt: FontFormat):
@@ -679,9 +682,14 @@ class StylePreviewCard(QWidget):
                 QStyle.PrimitiveElement.PE_Widget, opt, painter, self
             )
         self._doc.setTextWidth(self.width() - 16)
-        self._doc.drawContents(
-            painter, QRectF(8, 4, self.width() - 16, self.height() - 8)
+        # 直接水平垂直居中绘制，不传裁剪矩形：固定原点/裁剪矩形都会把字形
+        # 上缘裁掉（HTML 行高与文档 size 的度量差），由控件自身边界兜底
+        doc_size = self._doc.size()
+        painter.translate(
+            (self.width() - doc_size.width()) / 2,
+            (self.height() - doc_size.height()) / 2,
         )
+        self._doc.drawContents(painter)
         painter.end()
 
 
@@ -1637,10 +1645,18 @@ class FontStyleManager(QWidget):
             self.tr("Create a new style in the global style library")
         )
         self._new_style_btn.clicked.connect(self._new_library_style)
+        self._clean_unused_btn = QPushButton(self.tr("Clean Unused Styles"))
+        self._clean_unused_btn.setToolTip(
+            self.tr("Delete project styles that no text block uses any more")
+        )
+        self._clean_unused_btn.clicked.connect(self._clean_unused_styles)
         btn_row = QWidget()
+        btn_row.setObjectName("StyleMgrBtnRow")
         btn_lay = QHBoxLayout(btn_row)
         btn_lay.setContentsMargins(4, 2, 4, 2)
+        btn_lay.setSpacing(4)
         btn_lay.addStretch(1)
+        btn_lay.addWidget(self._clean_unused_btn)
         btn_lay.addWidget(self._new_style_btn)
 
         left_panel = QWidget()
@@ -1746,6 +1762,40 @@ class FontStyleManager(QWidget):
         entry = gstyle_store.add_style(self.tr("New Style"), FontFormat())
         self.refresh()
         self.styleTree.select_payload({"type": "global", "name": entry.name})
+
+    def _clean_unused_styles(self):
+        """Delete project base styles whose identity key no block hits.
+
+        判据直接取最近一次 discovery 的 ``total_count == 0``（纯零引用，含
+        只有变体、没有纯块的情形不可能出现——变体本来就挂在命中样式下）。
+        只动项目大样式，样式库模板不参与「未使用」判定。
+        """
+        if self._proj is None or self._tree is None:
+            return
+        unused = [node.base for node in self._tree.nodes if node.total_count == 0]
+        if not unused:
+            QMessageBox.information(
+                self,
+                self.tr("Clean Unused Styles"),
+                self.tr("Every project style still has blocks."),
+            )
+            return
+        ret = QMessageBox.question(
+            self,
+            self.tr("Clean Unused Styles"),
+            self.tr(
+                "Delete {n} unused project style(s)?\n"
+                "No block parameters change; the styles just leave the list."
+            ).format(n=len(unused)),
+        )
+        if ret != QMessageBox.StandardButton.Yes:
+            return
+        unused_ids = {id(bs) for bs in unused}
+        self._proj.base_styles = [
+            bs for bs in self._proj.base_styles if id(bs) not in unused_ids
+        ]
+        self.data_committed.emit()
+        self.refresh()
 
     def _on_node_selected(self, payload: dict):
         if payload.get("type") == "global":

@@ -407,14 +407,16 @@ class FieldEditor(QWidget):
 
     value_changed = Signal(str)
 
-    def __init__(self, fname: str, parent=None):
+    def __init__(self, fname: str, label_width: int = 100, parent=None):
         super().__init__(parent)
         self.fname = fname
         self._control, self._getter, self._setter, self._wire = _build_control(fname)
         self.editable = True
 
         self._label = QLabel(field_label(fname))
-        self._label.setFixedWidth(100)
+        # 宽度随译文实宽自适应（钉死 100px 会把「竖排罗马字对齐」这类长
+        # 标签裁掉），同一面板内各行共用同一宽度保证左列对齐
+        self._label.setFixedWidth(label_width)
 
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 1, 0, 1)
@@ -493,7 +495,8 @@ class FormatGroupCard(QFrame):
         self._body_lay.setSpacing(0)
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 2, 0, 2)
+        # 内容离边框留白（边框见 stylesheet.css #FormatGroupCard）
+        lay.setContentsMargins(8, 3, 8, 7)
         lay.setSpacing(0)
         lay.addLayout(header)
         lay.addWidget(self._body)
@@ -601,6 +604,13 @@ class FormatEditorPanel(QScrollArea):
         self._cards: Dict[str, FormatGroupCard] = {}
         self._only_fields: Optional[set] = None
 
+        # 行标签列宽 = 当前语言下最长字段标签的实宽（上限 180 兜底）
+        fm = QFontMetrics(self.font())
+        label_w = min(
+            180,
+            max(fm.horizontalAdvance(t) for t in FIELD_LABELS.values()) + 8,
+        )
+
         inner = QWidget()
         lay = QVBoxLayout(inner)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -613,7 +623,7 @@ class FormatEditorPanel(QScrollArea):
                 # 效果组只读摘要：不建编辑器，set_format 时填摘要徽标
                 continue
             for fname in fnames:
-                ed = FieldEditor(fname)
+                ed = FieldEditor(fname, label_width=label_w)
                 ed.value_changed.connect(self._on_field_changed)
                 self._editors[fname] = ed
                 if fname == "font_family":

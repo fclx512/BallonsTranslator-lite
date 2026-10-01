@@ -1963,6 +1963,24 @@ Run detection + OCR to populate text blocks.</source>
             <source>New Library Style</source>
             <translation>新建库样式</translation>
         </message>
+        <message>
+            <source>Clean Unused Styles</source>
+            <translation>清理未使用样式</translation>
+        </message>
+        <message>
+            <source>Delete project styles that no text block uses any more</source>
+            <translation>删除已没有任何文本框使用的项目样式</translation>
+        </message>
+        <message>
+            <source>Every project style still has blocks.</source>
+            <translation>所有项目样式都还有文本块在使用。</translation>
+        </message>
+        <message>
+            <source>Delete {n} unused project style(s)?
+No block parameters change; the styles just leave the list.</source>
+            <translation>删除 {n} 个未使用的项目样式？
+不会改动任何文本块参数，样式只是从列表中移除。</translation>
+        </message>
     </context>
     <context>
         <name>GlobalSearchWidget</name>
@@ -2889,8 +2907,8 @@ What to expect next:
             <translation>导入命名样式</translation>
         </message>
         <message>
-            <source>This project has no font style table (upstream/legacy format). {n} named styles covering {m} text blocks can be imported as project base styles by preset name. Import now?</source>
-            <translation>该项目没有字体样式表（上游/旧版格式）。检测到 {n} 个命名样式、覆盖 {m} 个文本框，可按预设名导入为项目大样式。现在导入吗？</translation>
+            <source>This project has no font style table (upstream/legacy format). {n} named styles covering {m} text blocks can be imported as project base styles by preset name and added to the quick style list. Import now?</source>
+            <translation>该项目没有字体样式表（上游/旧版格式）。检测到 {n} 个命名样式、覆盖 {m} 个文本框，可按预设名导入为项目大样式并加入快速样式条。现在导入吗？</translation>
         </message>
         <message>
             <source>Don't show this notice again</source>
