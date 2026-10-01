@@ -54,6 +54,22 @@
 
 ---
 
+### 上游可读的落盘口径（`FontFormat.to_serializable_dict` 只写非默认值 + `TextBlock.text_layout_version`）
+
+**摘要：** lite 工程在上游打开时逐块报 `Ignoring unsupported font format fields`、且竖排对齐被整体改成靠右，两条都是落盘口径问题：四个 fork 独有字段（`strikeout`/`stroke_color_custom`/`shadow_include_stroke`/`punctuation_alignment`）被无条件写进每个块，上游把未知键收进 `deprecated_attributes`、警告后清空并在它自己的保存里丢掉；块缺上游 v1.5.13 引入的 `text_layout_version`，上游按版本 0 旧数据升级＝竖排块一律 `alignment=Right` 并回写文件（用户报的「改一个块靠右后全部靠右」实为此，触发点是 lite 的任意一次保存）。现在四个字段只在非默认值时写（`punctuation_alignment` 已废弃成全局设置，一律不写），`TextBlock` 补上 `text_layout_version: int = 1` 并原样保留上游给的值。
+**涉及文件：** `utils/fontformat.py`、`utils/textblock.py`、`tests/test_upstream_writer_compat.py`
+**验证：** `scripts/probes/probe_upstream_style_compat.py fork-to-upstream` 四条未知字段警告清零、上游加载后 `alignment` 保持 1（竖排/横排各一例）；真工程 JSON 往返只少了三个默认值键、块级多出 `text_layout_version`；`scripts/verify.py --full` 全绿。
+
+---
+
+### 清理未使用样式前先冲画布数据（`FontStyleManager._flush_canvas_edits` + 删除后 toast）
+
+**摘要：** 「清理未使用样式」判据取自 `discover_style_tree` 的 `total_count`，而 discovery 直读 `proj.pages`——画布上删掉的块要等切页保存才回写，所以刚删完块点清理会把样式仍算作在用，用户必须先切一次页。现在清理前按 `ui/glossary_agent_panel.py` 同一套两道判据（撤销栈脏 / `page_data_needs_sync`）先冲一次当前页再重扫，不必再记得切页；删除成功后补一条 `notification` toast 报数量（此前该操作没有任何反馈）。
+**涉及文件：** `ui/fontstyle_manager.py`、`tests/test_fontstyle_tree.py`、`translate/zh_CN.ts`（qm 同步编译）
+**验证：** 新增 `test_clean_unused_styles_syncs_canvas_first`（撤销栈脏／结构性增删两路参数化）红绿；`scripts/verify.py --full` 全绿。
+
+---
+
 ## 2026-09-30
 
 ### 样式管理器字体预览自动反色（`StylePreviewCard._contrast_ratio`）+ 分组标题完整显示（`FormatGroupCard` 宽度自适应）

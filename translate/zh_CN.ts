@@ -1981,6 +1981,10 @@ No block parameters change; the styles just leave the list.</source>
             <translation>删除 {n} 个未使用的项目样式？
 不会改动任何文本块参数，样式只是从列表中移除。</translation>
         </message>
+        <message>
+            <source>Removed %1 unused project style(s).</source>
+            <translation>已清理 %1 个未使用的项目样式。</translation>
+        </message>
     </context>
     <context>
         <name>GlobalSearchWidget</name>

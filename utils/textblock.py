@@ -55,6 +55,14 @@ class TextBlock:
     _detected_font_name: str = ""  # 识别出的字体名称
     _detected_font_confidence: float = 0.0  # 识别置信度
 
+    # 布局版本标记（上游 v1.5.13 引入的同名块级键）。上游把缺失该键的块当成
+    # 版本 0 旧数据，升级动作是「竖排块一律 alignment=Right」并回写；本 fork 的
+    # 竖排渲染同样按存档 alignment 走（ui/text_engine/vertical_layout.py 的
+    # _alignment_column_shift），语义等同上游版本 1，所以落盘必须带这个键——
+    # 不带就等于自称旧数据，lite 保存一次工程，上游打开会把竖排对齐全部改掉。
+    # 加载时原样保留上游给的值，未来版本号更不要改写。
+    text_layout_version: int = 1
+
     deprecated_attributes: dict = field(default_factory=lambda: dict())
 
     @property

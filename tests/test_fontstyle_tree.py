@@ -436,3 +436,68 @@ def test_base_identity_change_undo_restores_style_membership(monkeypatch):
     sm.canvas.pushed[0].redo()
     assert base.identity == ("Noto", False)
     assert blk.fontformat.font_family == "Noto"
+
+
+# ── 清理未使用样式：判据必须在「画布现状」上算，而不是等用户切页 ─────────
+
+
+class _CleanableProj(FakeProj):
+    def current_block_list(self):
+        return self.pages.setdefault(self.current_img, [])
+
+
+class _CleanableCanvas:
+    def __init__(self, dirty):
+        self.dirty = dirty
+
+    def text_change_unsaved(self):
+        return self.dirty
+
+
+class _CleanableScene:
+    """真实场景管理器的最小替身：``updateTextBlkList`` 按画布重建数据层。"""
+
+    def __init__(self, proj, items, dirty):
+        self.imgtrans_proj = proj
+        self.canvas = _CleanableCanvas(dirty)
+        self.textblk_item_list = items
+        self.flushed = 0
+
+    def updateTextBlkList(self):
+        self.flushed += 1
+        cbl = self.imgtrans_proj.current_block_list()
+        cbl.clear()
+        cbl.extend(item.blk for item in self.textblk_item_list)
+
+
+def _unused_style_fixture(dirty):
+    """Arial 的块已在画布上删掉，数据层还没跟上（未切页/未保存）。"""
+
+    kept = FakeBlk(font_family="SimSun", vertical=True)
+    removed = FakeBlk(font_family="Arial", vertical=True)
+    proj = _CleanableProj({"p1.png": [removed, kept]})
+    proj.base_styles = [
+        BaseStyle("Arial", FontFormat(font_family="Arial", vertical=True)),
+        BaseStyle("SimSun", FontFormat(font_family="SimSun", vertical=True)),
+    ]
+    return proj, _CleanableScene(proj, [FakeItem(kept)], dirty)
+
+
+@pytest.mark.parametrize("dirty", [True, False])
+def test_clean_unused_styles_syncs_canvas_first(monkeypatch, dirty):
+    """清理前先冲一次画布未回写的编辑（两道门都要能触发）。"""
+
+    from qtpy.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes
+    )
+    monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: None)
+    proj, scene = _unused_style_fixture(dirty)
+    fsm = _make_manager(proj, scene)
+    assert {node.base.name for node in fsm._tree.nodes} == {"Arial", "SimSun"}
+
+    fsm._clean_unused_styles()
+
+    assert scene.flushed == 1
+    assert [bs.name for bs in proj.base_styles] == ["SimSun"]

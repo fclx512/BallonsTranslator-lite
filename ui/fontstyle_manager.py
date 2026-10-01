@@ -26,6 +26,7 @@ emit pages_dirtied / data_committed like before.
 
 from __future__ import annotations
 
+import logging
 from typing import Dict, List, Tuple
 
 from qtpy.QtCore import (
@@ -77,12 +78,16 @@ from utils.base_styles import (
     overrides_summary,
     variant_display_name,
 )
+from utils.block_actions import page_data_needs_sync
 from utils.face_resolver import sync_face
 from utils.fontformat import FontFormat
 from utils.textblock import TextBlock
 
 from .custom_widget import ConfigComboBox, SeparatorWidget
+from .custom_widget.notification import notification
 from .style_format_editor import FormatEditorPanel
+
+logger = logging.getLogger("font_style_manager")
 
 # Re-exported for legacy importers (tests import these from this module).
 __all__ = [
@@ -1763,15 +1768,44 @@ class FontStyleManager(QWidget):
         self.refresh()
         self.styleTree.select_payload({"type": "global", "name": entry.name})
 
+    def _flush_canvas_edits(self) -> None:
+        """把当前页画布上的增删/格式编辑冲进 ``proj.pages``。
+
+        ``utils/base_styles.py::discover_style_tree`` 直读数据层，而画布上的
+        删除、合并只改视觉层，要等 ``ui/scenetext_manager.py::SceneTextManager.updateTextBlkList``
+        才落回 ``proj.pages``（平时只在切页保存时跑）。清理未使用样式若直接读
+        上一次 discovery，刚删掉块的样式仍被算作「在用」，用户得先切一次页才
+        看到效果。两道判据与 ``ui/glossary_agent_panel.py`` 的前置对齐同一套：
+        撤销栈脏兜格式/文字编辑，``page_data_needs_sync`` 兜结构性增删。
+        """
+        scene = getattr(self, "_scene_manager", None)
+        if scene is None or self._proj is None:
+            return
+        canvas = getattr(scene, "canvas", None)
+        try:
+            if canvas is not None and canvas.text_change_unsaved():
+                scene.updateTextBlkList()
+            elif page_data_needs_sync(
+                self._proj.current_block_list(), scene.textblk_item_list
+            ):
+                scene.updateTextBlkList()
+        except Exception as error:
+            logger.error(f"Pre-clean block sync failed: {error}")
+
     def _clean_unused_styles(self):
         """Delete project base styles whose identity key no block hits.
 
-        判据直接取最近一次 discovery 的 ``total_count == 0``（纯零引用，含
-        只有变体、没有纯块的情形不可能出现——变体本来就挂在命中样式下）。
-        只动项目大样式，样式库模板不参与「未使用」判定。
+        判据取 discovery 的 ``total_count == 0``（纯零引用，含只有变体、没有
+        纯块的情形不可能出现——变体本来就挂在命中样式下）。只动项目大样式，
+        样式库模板不参与「未使用」判定。
+
+        重扫前先冲一次画布未回写的编辑（``_flush_canvas_edits``），否则判据看
+        的是陈旧数据。
         """
         if self._proj is None or self._tree is None:
             return
+        self._flush_canvas_edits()
+        self.refresh()
         unused = [node.base for node in self._tree.nodes if node.total_count == 0]
         if not unused:
             QMessageBox.information(
@@ -1796,6 +1830,12 @@ class FontStyleManager(QWidget):
         ]
         self.data_committed.emit()
         self.refresh()
+        notification.toast(
+            self.tr("Removed %1 unused project style(s).").replace(
+                "%1", str(len(unused))
+            ),
+            kind="success",
+        )
 
     def _on_node_selected(self, payload: dict):
         if payload.get("type") == "global":

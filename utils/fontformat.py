@@ -1465,6 +1465,20 @@ class FontFormat(Config):
         serialized['gradient_size'] = (
             fill.paint.scale / 2.0 if gradient_on else 1.0
         )
+        # 本 fork 独有的字段只在非默认值时才落盘：上游
+        # (ballontranslator/utils/fontformat.py) 不声明它们，未知键会被收进
+        # deprecated_attributes、逐块打一条 "Ignoring unsupported font format
+        # fields" 警告，再随它的下一次保存丢掉。写默认值等于给每个块白送一条
+        # 警告，也让这些字段在往返中凭空消失。punctuation_alignment 已废弃成
+        # 全局设置（pcfg.punctuation_position），渲染路径无人读，一律不写。
+        serialized.pop('punctuation_alignment', None)
+        for _fork_only in (
+            'strikeout',
+            'shadow_include_stroke',
+            'stroke_color_custom',
+        ):
+            if not serialized.get(_fork_only):
+                serialized.pop(_fork_only, None)
         return serialized
 
     def deepcopy(self):
