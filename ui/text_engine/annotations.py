@@ -37,7 +37,6 @@ from .font_weight import (
 )
 from utils.logger import logger as LOGGER
 from .font_family import (
-    html_uses_project_font_family,
     normalize_document_font_families,
     restore_project_font_families_in_html,
 )
@@ -1486,8 +1485,9 @@ def load_rich_text_html(
             _preprocess_ruby_html(html), qt6=QT6
         )
         document.setHtml(qt_html)
-        if html_uses_project_font_family(qt_html):
-            normalize_document_font_families(document)
+        # 家族名失配（空格变体/内部别名）在 setHtml 后只会落到 Qt 默认
+        # 字体——必须落盘后逐片段归一。可解析的文档零写入（见函数 docstring）。
+        normalize_document_font_families(document)
         lowered_html = qt_html.lower()
         extension_ranges, paragraph_distances = (
             _rich_text_extensions_from_html(document, qt_html)

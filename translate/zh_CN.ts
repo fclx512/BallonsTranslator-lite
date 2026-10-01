@@ -2872,6 +2872,22 @@ What to expect next:
             <source>This project has no font style table (upstream/legacy format). {n} named styles covering {m} text blocks can be imported as project base styles by preset name. Import now?</source>
             <translation>该项目没有字体样式表（上游/旧版格式）。检测到 {n} 个命名样式、覆盖 {m} 个文本框，可按预设名导入为项目大样式。现在导入吗？</translation>
         </message>
+        <message>
+            <source>Don't show this notice again</source>
+            <translation>不再提示</translation>
+        </message>
+        <message>
+            <source>Fonts used by this project but not installed on this machine fall back to the system default font; install the font and reopen the project to restore. Text effects introduced in newer upstream versions (such as synthetic bold) are kept in the data but not rendered by this build.</source>
+            <translation>本项目用到的字体若本机未安装，对应文字会以系统默认字体显示，装好字体后重新打开项目即可恢复。上游新版本引入的文字效果（如合成粗体）本版暂不渲染，但数据原样保留、不会丢失。</translation>
+        </message>
+        <message>
+            <source>This project was made with upstream BallonsTranslator or an older version. It opens in compatibility mode.</source>
+            <translation>该项目来自上游 BallonsTranslator 或旧版本，正以兼容方式打开。</translation>
+        </message>
+        <message>
+            <source>Upstream/legacy project</source>
+            <translation>上游/旧版项目</translation>
+        </message>
     </context>
     <context>
         <name>_ExtractWorker</name>

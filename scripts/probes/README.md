@@ -77,3 +77,33 @@ Models → Management 的「释放内存」按钮；`pcfg.region_redetect_device
 |---|---|---|
 | `direction_matrix.py` | `mit_merge_textlines` 方向判定合成矩阵（无需模型）：单行/多行/混合/斜 8° 共 10 组 + `sort_pnts` 直测 4 组；钉住单行修复与多行组既有投票口径（两行平票判竖、三行一票即竖） | 全部 ✅；改投票逻辑前后各跑一次做对比 |
 | `direction_probe.py` | 对命令行给出的图片跑**指定检测器**（`--detector`，默认取 config 当前值）真实检测，逐块打印外接框宽高与 `src_is_vertical`；修 `mit_merge_textlines` 单行块恒判竖排的 bug 后核验用（修前横排单行块也全判竖排）。ysgyolo 与 ppocrv6_onnx 都已核验 | 宽扁框（w>h）→ `False`，高瘦框 → `True` |
+
+## 六、上游 ↔ fork 字体/样式数据交叉往返（2026-10-01）
+
+上游克隆路径常量 `BT_UPSTREAM_ROOT` 默认 `D:\ruanjian\BallonsTranslator`（工作树含未提交
+FontRegistry/效果栈新架构，本探针测的就是「上游将来的形态」）。单进程同时挂两套包
+（fork=`utils.*`、上游=`ballontranslator.*`），跑法：
+
+```bash
+./ballontrans_pylibs_win/python.exe scripts/probes/probe_upstream_style_compat.py all
+```
+
+| 脚本 | 做什么 | 关键结论（2026-10-01 实测） |
+|---|---|---|
+| `probe_upstream_style_compat.py` | 双向各构造一个带全部新特性的块（含 synthetic_bold 效果、bend 变换、`_style_name`、字重 700），序列化 → 对方加载 → 再序列化，逐字段裁决 | **方向 A（上游项目→fork）数据层无损**：synthetic_bold 以 `UnknownEffect` 原样透传回吐，工程级 `loaded_without_base_styles` 正确触发；**方向 B（fork 项目→上游）三处差异**：①块无 `text_layout_version` 键（上游 2026-08-29 v1.5.13 才引入）→ 上游按版本 0 升级、**竖排 alignment 被强制改写为 Right(2)**；②块级 `tags` 被上游静默丢弃（deprecated_attributes 都没收）；③fork-only FontFormat 字段（`strikeout`/`punctuation_alignment`/`shadow_include_stroke`/`stroke_color_custom`）上游警告忽略。工程级互开：双方都容忍对方多出的顶层键，pages 均正常加载 |
+
+## 七、家族名空格变体归一验收（2026-10-01）
+
+上游项目转 lite 画布回退宋体的根因：Qt 对家族名按名精确匹配，本机有 8 个
+Qt 注册名自带尾随空格的字体（攸望系列，字体文件元数据如此），项目数据里
+差一个空格的名字就整体失配。修复在 `ui/text_engine/font_family.py`（空白
+折叠索引）+ `ui/text_engine/annotations.py::load_rich_text_html`（setHtml
+后逐片段归一）。**必须真机 windows 平台**（offscreen 无字体库），跑法：
+
+```bash
+./ballontrans_pylibs_win/python.exe scripts/probes/probe_font_family_spacing.py
+```
+
+| 脚本 | 做什么 | 期望值（2026-10-01 实测） |
+|---|---|---|
+| `probe_font_family_spacing.py` | 四判据：①全字体库身份解析（每个注册名必须原样返回）；②全部空白/大小写变体必须映射到真实注册名；③剥空格名经 `qfont_with_family` 用 `QFontInfo` 解析回正确字体（与修前直接喂 QFont 的回退行为对照）；④富文本 HTML 路径 `load_rich_text_html` 后片段归一 | 368/368 身份通过；8 个带空格注册名（攸望系列）的剥空格名修前回退 Tahoma、修后全部解析回原字体；判据 ④ 片段归一到带空格注册名。改 `font_family.py` / 文档归一逻辑后必须重跑 |

@@ -518,6 +518,10 @@ class ProgramConfig(Config):
     # 0.85 是实测定稿——样本 435 组里只命中 2 组（都是跨栏大组），且阈值不敏感
     # （0.5~0.9 之间组数变化 ≤4 组）。本项即 D33d 要求的「设置内参数接口」。
     workbench_merge_oversize_ratio: float = 0.85
+    # 上游/旧版项目打开时的差异提示弹窗（ui/mainwindow.py
+    #::_maybe_seed_upstream_styles）：勾选「不再提示」后置 True，仅静音
+    # 差异说明部分；样式导入询问不受它控制。
+    upstream_diff_notice_dismissed: bool = False
 
     # ── Right-click context menu customization ─────────────
     context_menu_order: List[str] = field(default_factory=lambda: [

@@ -4,7 +4,7 @@ from hashlib import sha1
 import re
 from typing import Callable, Iterable, Sequence
 
-from qtpy.QtGui import QFont, QTextCursor, QTextDocument
+from qtpy.QtGui import QFont, QFontDatabase, QTextCursor, QTextDocument
 
 
 _QT_FAMILY_BY_PROJECT_NAME: dict[str, str] = {}
@@ -13,6 +13,31 @@ _FONT_FAMILY_DECLARATION = re.compile(
     r'font-family\s*:[^;>]*',
     re.IGNORECASE,
 )
+
+# Qt 注册家族名的两种键：精确名集合 + 空白折叠名→精确名。项目数据里的
+# 家族名可能因字体元数据自带首尾空格、或各版本归并口径不同，与 Qt 注册
+# 名差在空白上；QFont 按名精确匹配，差一个空格就整体失配回退默认字体。
+# 索引只建一次，字体库未就绪（尚无 QApplication）时留待下次调用再建。
+_QT_FAMILY_EXACT: set[str] = set()
+_QT_FAMILY_BY_NORM_KEY: dict[str, str] = {}
+_NORM_INDEX_READY = False
+
+
+def _norm_key(value: str) -> str:
+    return ' '.join(value.casefold().split())
+
+
+def _ensure_qt_family_index() -> None:
+    global _NORM_INDEX_READY
+    if _NORM_INDEX_READY:
+        return
+    families = QFontDatabase.families()
+    if not families:
+        return
+    _QT_FAMILY_EXACT.update(families)
+    for family in families:
+        _QT_FAMILY_BY_NORM_KEY.setdefault(_norm_key(family), family)
+    _NORM_INDEX_READY = True
 
 
 def _safe_font_family_alias(family: str, used_names: set[str]) -> str:
@@ -67,7 +92,15 @@ def register_qt_font_family_aliases(
 
 def font_family_for_qt(family: str) -> str:
     """Return the internal family name Qt can resolve correctly."""
-    return _QT_FAMILY_BY_PROJECT_NAME.get(family.casefold(), family)
+    resolved = _QT_FAMILY_BY_PROJECT_NAME.get(family.casefold())
+    if resolved is not None:
+        return resolved
+    if not family or family in _QT_FAMILY_EXACT:
+        return family
+    _ensure_qt_family_index()
+    # 差在空白/大小写上的名字映射回真实注册名；映射不到（字体未装、
+    # 名字真不存在）时原样返回，交回 Qt 既有回退行为，不臆造替换。
+    return _QT_FAMILY_BY_NORM_KEY.get(_norm_key(family), family)
 
 
 def font_family_for_project(family: str) -> str:
@@ -87,19 +120,13 @@ def qfont_with_family(font: QFont, family: str) -> QFont:
     return result
 
 
-def html_uses_project_font_family(html: str) -> bool:
-    """Return whether HTML can require internal family normalization."""
-    if not _QT_FAMILY_BY_PROJECT_NAME:
-        return False
-    folded_html = html.casefold()
-    return any(
-        family in folded_html
-        for family in _QT_FAMILY_BY_PROJECT_NAME
-    )
-
-
 def normalize_document_font_families(document: QTextDocument) -> int:
-    """Replace project-facing aliases in a live document with Qt-safe names."""
+    """Rewrite unresolvable font families in a live document to Qt-safe names.
+
+    覆盖两类：内部别名（``_QT_FAMILY_BY_PROJECT_NAME``，当前无注册方）与
+    差在空白/大小写上的家族名变体。家族名本可解析的片段原样跳过、不改
+    一个字节，因此对正常文档零写入。
+    """
     replacements = 0
     default_font = document.defaultFont()
     resolved_default = font_family_for_qt(default_font.family())

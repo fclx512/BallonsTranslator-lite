@@ -48,6 +48,7 @@ from qtpy.QtGui import (
 from qtpy.QtWidgets import (
     QAction,
     QApplication,
+    QCheckBox,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -1446,12 +1447,17 @@ class MainWindow(mainwindow_cls):
             self.leftBar.configChecker.setChecked(False)
 
     def _maybe_seed_upstream_styles(self):
-        """上游/旧版项目首次导入：按块级预设名播种大样式（弹窗确认）。
+        """上游/旧版项目首次导入：弹一次差异提示 + 按块级预设名播种大样式。
 
         上游项目没有项目级样式表，load_from_dict 对无 ``base_styles`` 键的
         项目只登记一个全局格式默认样式，块上的命名样式（``_style_name``，
         上游预设机制的显示缓存）全部掉进未分组。加载完成后在这里问一次；
         取消则维持现状。播种结果随项目下次保存落盘。
+
+        同一次弹窗顺带交代与上游的已知差异（未装字体回退默认字体、上游新
+        效果不渲染但数据保留），让用户打开前有预期；勾选「不再提示」写入
+        ``pcfg.upstream_diff_notice_dismissed``，只静音说明部分——有命名
+        样式时的导入询问仍照常弹。
         """
         from utils.base_styles import (
             collect_style_name_groups,
@@ -1463,19 +1469,43 @@ class MainWindow(mainwindow_cls):
             return
         proj.loaded_without_base_styles = False  # 无论选择如何，本次加载只问一次
         groups = collect_style_name_groups(proj)
+        notice = (
+            "" if pcfg.upstream_diff_notice_dismissed else self._upstream_diff_notice()
+        )
         if not groups:
+            if not notice:
+                return
+            box = QMessageBox(
+                QMessageBox.Icon.Information,
+                self.tr("Upstream/legacy project"),
+                self.tr(
+                    "This project was made with upstream BallonsTranslator or an older version. It opens in compatibility mode."
+                ),
+                parent=self,
+            )
+            box.setInformativeText(notice)
+            box.setCheckBox(QCheckBox(self.tr("Don't show this notice again")))
+            box.exec()
+            if box.checkBox().isChecked():
+                pcfg.upstream_diff_notice_dismissed = True
+                save_config()
             return
         n_blocks = sum(len(members) for members in groups.values())
-        ret = QMessageBox.question(
-            self,
+        box = QMessageBox(
+            QMessageBox.Icon.Question,
             self.tr("Import named styles"),
             self.tr(
                 "This project has no font style table (upstream/legacy format). {n} named styles covering {m} text blocks can be imported as project base styles by preset name. Import now?"
             ).format(n=len(groups), m=n_blocks),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
+            parent=self,
         )
-        if ret != QMessageBox.StandardButton.Yes:
+        if notice:
+            box.setInformativeText(notice)
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        box.setDefaultButton(QMessageBox.StandardButton.Yes)
+        if box.exec() != QMessageBox.StandardButton.Yes:
             return
         proj.base_styles = seed_base_styles_from_style_names(proj)
         if self._styleMgrDialog is not None and self._styleMgrDialog.isVisible():
@@ -1484,6 +1514,11 @@ class MainWindow(mainwindow_cls):
             fsm = self._styleMgrDialog.findChild(FontStyleManager)
             if fsm is not None:
                 fsm.refresh()
+
+    def _upstream_diff_notice(self) -> str:
+        return self.tr(
+            "Fonts used by this project but not installed on this machine fall back to the system default font; install the font and reopen the project to restore. Text effects introduced in newer upstream versions (such as synthetic bold) are kept in the data but not rendered by this build."
+        )
 
     def on_open_fontstyle_manager(self):
         """Open Font Style Manager as a standalone dialog."""

@@ -127,5 +127,101 @@ class FontFamilyStyleTest(unittest.TestCase):
         item.setLineSpacingType(0, restore_cursor=True)
 
 
+class FontFamilySpacingResolutionTest(unittest.TestCase):
+    """家族名空格变体归一（ui/text_engine/font_family.py）。
+
+    背景：Qt 对家族名按名精确匹配，字体元数据自带尾随空格（实测攸望系列）
+    或项目数据与 Qt 注册名差在空白上时整体失配、回退默认字体（用户实测
+    宋体）。契约：差在空白/大小写上的名字映射回真实注册名；可解析名与
+    未知名一律原样返回（不臆造替换，防止「修名字」修丢字体）。索引直接
+    注入，不依赖真实字体库（offscreen 平台本就无字体）。
+    """
+
+    REAL = "攸望竹带体（简繁）Medium  "  # Qt 注册名自带 2 个尾随空格
+    OTHER = "Microsoft YaHei UI"
+
+    def setUp(self):
+        from ui.text_engine import font_family as ff
+
+        self.ff = ff
+        self._saved = (
+            ff._QT_FAMILY_EXACT,
+            ff._QT_FAMILY_BY_NORM_KEY,
+            ff._NORM_INDEX_READY,
+        )
+        ff._QT_FAMILY_EXACT = {self.REAL, self.OTHER}
+        ff._QT_FAMILY_BY_NORM_KEY = {
+            ff._norm_key(self.REAL): self.REAL,
+            ff._norm_key(self.OTHER): self.OTHER,
+        }
+        ff._NORM_INDEX_READY = True
+
+    def tearDown(self):
+        (
+            self.ff._QT_FAMILY_EXACT,
+            self.ff._QT_FAMILY_BY_NORM_KEY,
+            self.ff._NORM_INDEX_READY,
+        ) = self._saved
+
+    def test_exact_and_project_alias_take_priority(self):
+        # 精确名原样返回；项目别名机制优先于空格归一。
+        self.assertEqual(self.ff.font_family_for_qt(self.REAL), self.REAL)
+        self.ff._QT_FAMILY_BY_PROJECT_NAME["自定义别名"] = self.OTHER
+        try:
+            self.assertEqual(self.ff.font_family_for_qt("自定义别名"), self.OTHER)
+        finally:
+            self.ff._QT_FAMILY_BY_PROJECT_NAME.clear()
+
+    def test_whitespace_variants_map_to_registered_name(self):
+        for variant in (
+            self.REAL.strip(),  # 尾随空格全被剥掉（上游旧数据形态）
+            self.REAL + " ",  # 空格数比注册名多
+            self.REAL[:-1],  # 少 1 个空格
+            self.REAL.casefold(),  # 大小写变体
+        ):
+            self.assertEqual(self.ff.font_family_for_qt(variant), self.REAL)
+
+    def test_unknown_name_passes_through(self):
+        # 字体未装/名字真不存在：原样返回，交回 Qt 既有回退行为。
+        self.assertEqual(self.ff.font_family_for_qt("不存在的字体"), "不存在的字体")
+        self.assertEqual(self.ff.font_family_for_qt(""), "")
+
+    def test_qfont_with_family_resolves_variant(self):
+        from qtpy.QtGui import QFont
+
+        font = self.ff.qfont_with_family(QFont(), self.REAL.strip())
+        self.assertEqual(font.families()[0], self.REAL)
+
+    def test_document_normalization_fixes_variants_only(self):
+        # HTML 里嵌的失配名（富文本渲染的实际路径）在 setHtml 后逐片段
+        # 归一；可解析文档零写入（count==0），归一幂等。
+        from qtpy.QtGui import QFont, QTextDocument
+
+        from ui.text_engine.annotations import load_rich_text_html
+
+        doc = QTextDocument()
+        load_rich_text_html(
+            doc,
+            '<p style="font-family:\'' + self.REAL.strip() + '\'">字</p>',
+        )
+        frag = doc.firstBlock().begin().fragment()
+        self.assertEqual(frag.charFormat().font().family(), self.REAL)
+
+        doc2 = QTextDocument()
+        load_rich_text_html(
+            doc2,
+            '<p style="font-family:\'' + self.OTHER + '\'">字</p>',
+        )
+        self.assertEqual(
+            doc2.firstBlock().begin().fragment().charFormat().font().family(),
+            self.OTHER,
+        )
+        # 再归一一次应零写入（幂等，不产生数据搅动）。
+        from ui.text_engine.font_family import normalize_document_font_families
+
+        self.assertEqual(normalize_document_font_families(doc2), 0)
+        self.assertEqual(normalize_document_font_families(doc), 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
