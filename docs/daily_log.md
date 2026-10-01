@@ -38,6 +38,22 @@
 
 ---
 
+### 上游样式导入同步右栏快速样式条（`_maybe_seed_upstream_styles`）+ 样式管理器清理未使用样式与观感修复（`_clean_unused_styles`/`StylePreviewCard`/`FormatEditorPanel`）
+
+**摘要：** 上游项目导入的命名样式原本只进项目 `base_styles`、右栏快速样式条（全局 `text_styles`）看不到：播种后按预设名去重 deepcopy 并入并刷新面板，只在导入发生一次、不随重开回灌。管理器左栏新增「清理未使用样式」（判据 discovery `total_count == 0`，只删零引用项目大样式、不碰样式库模板）；预览卡改为按文档实尺寸水平垂直居中绘制（不传裁剪矩形，字形上缘不再被裁）；参数行标签宽随当前语言最长译文自适应（原钉 100px 裁「竖排罗马字对齐」），分组卡 `FormatGroupCard` 加描边圆角；管理器按钮收 24px 紧凑尺寸（`StyleDetail`/`#StyleMgrBtnRow` 域内 QSS，后置规则钉回 ParamChip 胶囊尺寸）。
+**涉及文件：** `ui/mainwindow.py`、`ui/fontstyle_manager.py`、`ui/style_format_editor.py`、`config/stylesheet.css`、`translate/zh_CN.ts`
+**验证：** `scripts/verify.py` 全绿；离屏行为验证清理只删零引用样式、取消与空路径不误删；渲染探针暗/亮两主题目视验收（预览居中、长标签完整、边框与紧凑按钮生效）。
+
+---
+
+### 上游兼容提示窗闪退修复（`_maybe_seed_upstream_styles` 复选框挂父）+ 提示补样式刷新说明
+
+**摘要：** 用户实测打开上游工程「弹出兼容提示后卡死闪退、终端无报错」：提示窗的「不再提示」复选框用了无父 `QCheckBox` 临时对象，PyQt6 认定它归 Python 所有、语句结束即回收 C++ 控件，`QMessageBox` 内部指针随之悬空，弹窗一绘制就是 access violation（同一坑此前在画布组化确认弹窗踩过，`ui/canvas.py` 留有注释）。改为构造期挂父 `QCheckBox(tr(...), box)`；提示文案补一句「带来的样式要应用到文本块一次后才会正确刷新」（用户实测口径）。
+**涉及文件：** `ui/mainwindow.py`、`translate/zh_CN.ts`、`tests/test_upstream_notice_dialog.py`、`scripts/probes/probe_open_upstream_project.py`、`scripts/probes/README.md`
+**验证：** 真机探针在 94 页上游工程复现原崩（faulthandler 报 access violation）；修后两条打开路径（UI `openDir`／构造期开项目）与有/无命名样式两个分支均干净退出；`tests/test_upstream_notice_dialog.py` 红绿各一次；全量 pytest 1512 通过。
+
+---
+
 ## 2026-09-30
 
 ### 样式管理器字体预览自动反色（`StylePreviewCard._contrast_ratio`）+ 分组标题完整显示（`FormatGroupCard` 宽度自适应）
@@ -97,13 +113,5 @@
 **涉及文件：** `scripts/gen_help_anim.py`、`ui/configpanel.py`、`docs/基础速查/备注演示动画使用说明.md`、`scripts/README.md`
 
 **验证：** 本机连续两次 `--all` 产物逐字节一致；与仓库既有 webp 逐字节相同（原生 125% 渲染与钉定渲染等价，产物无需变更）。
-
----
-
-### 上游样式导入同步右栏快速样式条（`_maybe_seed_upstream_styles`）+ 样式管理器清理未使用样式与观感修复（`_clean_unused_styles`/`StylePreviewCard`/`FormatEditorPanel`）
-
-**摘要：** 上游项目导入的命名样式原本只进项目 `base_styles`、右栏快速样式条（全局 `text_styles`）看不到：播种后按预设名去重 deepcopy 并入并刷新面板，只在导入发生一次、不随重开回灌。管理器左栏新增「清理未使用样式」（判据 discovery `total_count == 0`，只删零引用项目大样式、不碰样式库模板）；预览卡改为按文档实尺寸水平垂直居中绘制（不传裁剪矩形，字形上缘不再被裁）；参数行标签宽随当前语言最长译文自适应（原钉 100px 裁「竖排罗马字对齐」），分组卡 `FormatGroupCard` 加描边圆角；管理器按钮收 24px 紧凑尺寸（`StyleDetail`/`#StyleMgrBtnRow` 域内 QSS，后置规则钉回 ParamChip 胶囊尺寸）。
-**涉及文件：** `ui/mainwindow.py`、`ui/fontstyle_manager.py`、`ui/style_format_editor.py`、`config/stylesheet.css`、`translate/zh_CN.ts`
-**验证：** `scripts/verify.py` 全绿；离屏行为验证清理只删零引用样式、取消与空路径不误删；渲染探针暗/亮两主题目视验收（预览居中、长标签完整、边框与紧凑按钮生效）。
 
 ---

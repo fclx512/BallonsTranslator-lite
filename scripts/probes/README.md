@@ -107,3 +107,21 @@ Qt 注册名自带尾随空格的字体（攸望系列，字体文件元数据�
 | 脚本 | 做什么 | 期望值（2026-10-01 实测） |
 |---|---|---|
 | `probe_font_family_spacing.py` | 四判据：①全字体库身份解析（每个注册名必须原样返回）；②全部空白/大小写变体必须映射到真实注册名；③剥空格名经 `qfont_with_family` 用 `QFontInfo` 解析回正确字体（与修前直接喂 QFont 的回退行为对照）；④富文本 HTML 路径 `load_rich_text_html` 后片段归一 | 368/368 身份通过；8 个带空格注册名（攸望系列）的剥空格名修前回退 Tahoma、修后全部解析回原字体；判据 ④ 片段归一到带空格注册名。改 `font_family.py` / 文档归一逻辑后必须重跑 |
+
+## 八、上游/旧版工程打开全链路验收（2026-10-01）
+
+缘起：用户实测「打开上游工程 → 弹出兼容提示 → 卡死闪退，终端无报错」。真因是
+兼容提示窗把无父 `QCheckBox` 临时对象交给 `QMessageBox.setCheckBox`，PyQt6 语句
+结束即回收 C++ 对象、box 内部指针悬空（修法与护网见
+`ui/mainwindow.py::_maybe_seed_upstream_styles` 与 `tests/test_upstream_notice_dialog.py`）。
+本探针把「真实主窗口打开上游工程」整条链路（弹窗 → 点击 → 播种 → 快速样式条同步）
+打点跑通，**必须窗口模式**（FramelessWindow 在 offscreen 起不来）。
+
+```bash
+./ballontrans_pylibs_win/python.exe scripts/probes/probe_open_upstream_project.py "D:\\汉化\\施工区"
+```
+
+| 脚本 | 做什么 | 期望值（2026-10-01 实测） |
+|---|---|---|
+| `probe_open_upstream_project.py` | 打开指定工程目录，`QMessageBox.exec` 打点（文案/按钮/复选框存活/子对象数）、延迟自动点击可接受按钮、`faulthandler` 看门狗兜卡死；开完打印 `base_styles` 与快速样式条内容。`PROBE_OPEN_AT_STARTUP=1` 走构造期开项目（弹窗出现在 `window.show()` 之前），`PROBE_TICK_CHECKBOX=1` 顺带验证「不再提示」（会写用户 `config.json`，测完记得复位） | 无命名样式的工程：`Icon.Information` 提示窗（OK 由 showEvent 补上、复选框活子对象 1 个）→ 点 OK → `openDir` 正常返回，两条打开路径（UI openDir / 构造期）均干净退出；有命名样式的工程：`Icon.Question` 导入询问（Yes/No，无复选框）→ 点 Yes → 按「预设名 × 身份键」播种大样式、快速样式条同名去重并入、退出零异常 |
+

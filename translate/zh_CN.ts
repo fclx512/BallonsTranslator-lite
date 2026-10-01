@@ -2919,6 +2919,10 @@ What to expect next:
             <translation>本项目用到的字体若本机未安装，对应文字会以系统默认字体显示，装好字体后重新打开项目即可恢复。上游新版本引入的文字效果（如合成粗体）本版暂不渲染，但数据原样保留、不会丢失。</translation>
         </message>
         <message>
+            <source>Styles brought over with this project refresh correctly only after they have been applied to a text block once.</source>
+            <translation>从该项目带来的样式，需要先应用到文本块一次，之后才会正确刷新。</translation>
+        </message>
+        <message>
             <source>This project was made with upstream BallonsTranslator or an older version. It opens in compatibility mode.</source>
             <translation>该项目来自上游 BallonsTranslator 或旧版本，正以兼容方式打开。</translation>
         </message>

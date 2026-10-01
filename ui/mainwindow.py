@@ -1453,7 +1453,8 @@ class MainWindow(mainwindow_cls):
         取消则维持现状。播种结果随项目下次保存落盘。
 
         同一次弹窗顺带交代与上游的已知差异（未装字体回退默认字体、上游新
-        效果不渲染但数据保留），让用户打开前有预期；勾选「不再提示」写入
+        效果不渲染但数据保留、带来的样式要先应用到文本块一次才刷新），
+        让用户打开前有预期；勾选「不再提示」写入
         ``pcfg.upstream_diff_notice_dismissed``，只静音说明部分——有命名
         样式时的导入询问仍照常弹。
         """
@@ -1482,7 +1483,12 @@ class MainWindow(mainwindow_cls):
                 parent=self,
             )
             box.setInformativeText(notice)
-            box.setCheckBox(QCheckBox(self.tr("Don't show this notice again")))
+            # 复选框须构造期挂父：无父临时对象被 PyQt 回收后 box 内部指针
+            # 悬空，弹窗布局/checkBox() 访问即 access violation（同
+            # ui/canvas.py::Canvas._confirm_group_undo）
+            box.setCheckBox(
+                QCheckBox(self.tr("Don't show this notice again"), box)
+            )
             box.exec()
             if box.checkBox().isChecked():
                 pcfg.upstream_diff_notice_dismissed = True
@@ -1526,8 +1532,18 @@ class MainWindow(mainwindow_cls):
                 fsm.refresh()
 
     def _upstream_diff_notice(self) -> str:
-        return self.tr(
-            "Fonts used by this project but not installed on this machine fall back to the system default font; install the font and reopen the project to restore. Text effects introduced in newer upstream versions (such as synthetic bold) are kept in the data but not rendered by this build."
+        # 两段独立 tr：①与上游的已知差异 ②带来的样式要应用过一次才刷新
+        # （用户实测口径）。两段都在同一个 informative 文本里，两个弹窗
+        # （纯提示 / 样式导入询问）都显示。
+        return " ".join(
+            (
+                self.tr(
+                    "Fonts used by this project but not installed on this machine fall back to the system default font; install the font and reopen the project to restore. Text effects introduced in newer upstream versions (such as synthetic bold) are kept in the data but not rendered by this build."
+                ),
+                self.tr(
+                    "Styles brought over with this project refresh correctly only after they have been applied to a text block once."
+                ),
+            )
         )
 
     def on_open_fontstyle_manager(self):
