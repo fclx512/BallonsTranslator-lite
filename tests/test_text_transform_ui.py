@@ -692,6 +692,10 @@ class TextTransformPanelTest(TextTransformEditSessionTestBase):
         ]
         control.editor.setText('2')
         control.editor.textEdited.emit('2')
+        self.assertFalse(panel.transform_panels[0].property('selected'))
+        # Grid parameters do not silently activate canvas handles.
+        panel._set_canvas_edit_available(True)
+        panel.transform_panels[0].grid_edit_button.click()
         self.assertTrue(panel.transform_panels[0].property('selected'))
         self.assertEqual(selected, [1, -1, 0])
 
@@ -828,6 +832,36 @@ class TextTransformPanelTest(TextTransformEditSessionTestBase):
         integer.set_model_value(64)
         integer._step_integer(1)
         self.assertEqual(integer_steps, [1.0])
+
+    def test_reset_grid_in_place_is_one_undo_and_done_keeps_committed_work(self):
+        from qtpy.QtGui import QUndoStack
+
+        panel = self._make_panel()
+        item = self._make_item(0, TEST_LINES[0], False)
+        deformed = GridTextTransform().normalized().with_control_points(
+            ((0.1, 0.0), (1.0, 0.2), (0.0, 0.8), (0.9, 1.0))
+        )
+        original = transform_state(BendTextTransform(0.3), deformed)
+        item.set_text_transform(original)
+        stack = QUndoStack()
+        self._make_stack_canvas(stack)
+        session = TextTransformEditSession(panel)
+        session.replace_targets([item])
+        session.refresh_controls()
+        panel.transform_panels[1].reset_button.click()
+        self.assertEqual(stack.count(), 1)
+        self.assertEqual(item.blk.fontformat.text_transform[0], original.stack[0])
+        self.assertEqual(item.blk.fontformat.text_transform[1], GridTextTransform().normalized())
+        stack.undo()
+        self.assertEqual(self._current_state(item), original)
+        panel.transform_panels[1].grid_edit_button.click()
+        self.assertEqual(session.selected_index, 1)
+        session.begin_grid_edit(1)
+        session.preview_grid_points(1, GridTextTransform().normalized().control_points)
+        session.finish_canvas_edit()
+        self.assertIsNone(session.selected_index)
+        self.assertEqual(item._effective_text_transform(), original)
+        self.assertEqual(stack.index(), 0)
 
 
 class TextBlkShapeControlTest(TextTransformEditSessionTestBase):
@@ -1832,6 +1866,15 @@ class GridTransformControlTest(TextTransformEditSessionTestBase):
         self.assertTrue(control.finish_handle_drag())
         self.assertEqual(calls["commit"], 0)
         self.assertEqual(calls["cancel"], 1)
+        # Escape cancels the active gesture; releasing afterward cannot commit.
+        from qtpy.QtGui import QKeyEvent
+        from qtpy.QtCore import QEvent
+        control.begin_handle_drag(0, control.handles[0].scenePos(), Qt.KeyboardModifier.NoModifier)
+        control.move_handle_drag(control.handles[0].scenePos() + QPointF(20, 0))
+        control.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier))
+        self.assertFalse(control.finish_handle_drag())
+        self.assertEqual(calls["commit"], 0)
+        self.assertEqual(calls["cancel"], 2)
         scene.removeItem(item)
 
     def test_session_dispatches_grid_control_binding(self):
@@ -1885,6 +1928,7 @@ class GridTransformControlTest(TextTransformEditSessionTestBase):
                     "preview_points",
                     "commit_points",
                     "cancel_edit",
+                    "finish_edit",
                 ]
             ),
         )

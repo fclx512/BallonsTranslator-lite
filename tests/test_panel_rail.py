@@ -353,8 +353,9 @@ class AnnotationLauncherLogicTest(unittest.TestCase):
         panel.annotation_dock = None
         panel.emphasis_launcher = RailLauncherButton("rail_emphasis")
         panel.emphasis_dock = None
-        panel.transform_launcher = RailLauncherButton("rail_transform")
-        panel.transform_dock = None
+        panel.appearance_launcher = RailLauncherButton("rail_transform")
+        panel.appearance_dock = None
+        panel.appearance_effects_button = None
         return panel
 
     def test_global_mode_disables_launcher(self):
@@ -394,12 +395,13 @@ class AnnotationLauncherLogicTest(unittest.TestCase):
         panel.annotation_dock = None
         panel.emphasis_launcher = None
         panel.emphasis_dock = None
-        panel.transform_launcher = None
-        panel.transform_dock = None
+        panel.appearance_launcher = None
+        panel.appearance_dock = None
+        panel.appearance_effects_button = None
         # must not raise before install_*_launcher ran
         panel._update_annotation_indicator()
         panel._update_emphasis_indicator()
-        panel._update_transform_indicator()
+        panel._update_appearance_indicator()
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

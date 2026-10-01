@@ -35,7 +35,7 @@ class RailLauncherButton(QToolButton):
     border outline instead of a fill.
     """
 
-    ICON_SIZE = 18
+    ICON_SIZE = 20
 
     def __init__(self, icon_name: str, parent=None):
         super().__init__(parent)
@@ -44,6 +44,7 @@ class RailLauncherButton(QToolButton):
         self.setCheckable(True)
         self.setFixedSize(26, 26)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTipDuration(6000)
 
     def set_dot(self, dot: bool) -> None:
         if self._dot != dot:

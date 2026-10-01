@@ -6,10 +6,10 @@ controls module was a dead duplicate and was dropped), keeping the exact
 session-facing contract the
 stage-5 ``TextTransformEditSession`` (``transforms/editor.py``) relies on:
 
-* 8 signals: ``transform_commit_requested`` / ``transform_preview_requested`` /
+* Edit signals: ``transform_commit_requested`` / ``transform_preview_requested`` /
   ``transform_drag_commit_requested`` / ``transform_preview_canceled`` /
   ``transform_add_requested`` / ``transform_remove_requested`` /
-  ``transform_move_requested`` / ``transform_selected``.
+  ``transform_move_requested`` / ``transform_reset_requested`` / ``transform_selected``.
 * Panel methods: ``set_transform_items`` / ``set_transform`` /
   ``set_active_format`` / ``select_transform`` / ``clear_transform_selection`` /
   ``finish_pending_transform_edits`` / ``cancel_transform_previews`` /
@@ -18,8 +18,8 @@ stage-5 ``TextTransformEditSession`` (``transforms/editor.py``) relies on:
 Local differences from upstream:
 
 * Built on the local ``PanelArea`` (``ui/custom_widget/view_panel.py``) and
-  ``SizeControlLabel`` drag labels; numeric editors are compact themed
-  ``QLineEdit`` (integer editors draw the chevron steppers from the local icon
+  shared numeric-box drag gestures; numeric editors are compact themed
+  ``ConfigLineEdit`` (integer editors draw the chevron steppers from the local icon
   set, mirroring the page-range steppers in ``ui/custom_widget``).
 * The add menu is text-only — the local icon set has no per-variant SVGs.
 * Everything else (value/drag state machine, mixed-selection aggregation,
@@ -35,18 +35,16 @@ from qtpy.QtCore import (
     QPoint,
     QRect,
     QSize,
+    Qt,
     QTimer,
     Signal,
-    Qt,
 )
 from qtpy.QtGui import QIcon, QKeyEvent, QPainter
 from qtpy.QtWidgets import (
-    QComboBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMenu,
     QSizePolicy,
     QToolButton,
@@ -54,13 +52,22 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from utils.fontformat import FontFormat, TextTransformState
-from ui.custom_widget import GroupFrame, PanelArea, SeparatorWidget, SizeControlLabel
+from ui.custom_widget import (
+    ConfigComboBox,
+    ConfigLineEdit,
+    GroupFrame,
+    PanelArea,
+    SizeControlLabel,
+)
+from ui.custom_widget.spinbox import _drag_global_x
 from ui.misc import get_theme_color
 from ui.text_engine.transforms.registry import (
     GLYPH_SLANT_CONTROL,
     TEXT_TRANSFORM_VARIANTS,
 )
+from utils.fontformat import FontFormat, TextTransformState
+
+from ..appearance import AppearanceEntry
 
 
 def _icon(name: str) -> QIcon:
@@ -127,7 +134,7 @@ class TransformDragLabel(SizeControlLabel):
         return super().keyPressEvent(event)
 
 
-class _TransformValueEdit(QLineEdit):
+class _TransformValueEdit(ConfigLineEdit):
     """Line edit with the transform-panel logical width contract."""
 
     def sizeHint(self):
@@ -148,7 +155,7 @@ class _TransformIntegerEdit(_TransformValueEdit):
     ICON_SIZE = 12
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(parent=parent)
         self.setProperty('integerStepper', True)
         self.setMouseTracking(True)
         self._hover_button = ''
@@ -241,6 +248,8 @@ class _TransformIntegerEdit(_TransformValueEdit):
 class CommittedTransformControl(QWidget):
     """One committed numeric transform editor."""
 
+    DRAG_THRESHOLD = 4.0
+
     IDLE = 'IDLE'
     PENDING_TEXT = 'PENDING_TEXT'
     DRAG_PREVIEW = 'DRAG_PREVIEW'
@@ -290,17 +299,21 @@ class CommittedTransformControl(QWidget):
             text=title,
             alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
         )
+        self.label.drag_enabled = False
+        self.label.setCursor(Qt.CursorShape.ArrowCursor)
+        self.label.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.label.setObjectName('TextTransformParamLabel')
         self.label.setWordWrap(True)
         self.label.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred
         )
         self.editor = (
-            _TransformIntegerEdit(self)
+            _TransformIntegerEdit(parent=self)
             if self.decimals == 0
-            else _TransformValueEdit(self)
+            else _TransformValueEdit(parent=self)
         )
         self.editor.setObjectName('TextTransformParamEditor')
+        self.editor.setToolTip(QCoreApplication.translate('TextTransformPanel', 'Drag to adjust; Shift for fine control. Click to type.'))
         self.editor.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.editor.setFixedSize(80 if self.decimals == 0 else 56, 22)
         self.editor.setSizePolicy(
@@ -308,6 +321,13 @@ class CommittedTransformControl(QWidget):
         )
         self.editor.textEdited.connect(self._on_text_edited)
         self.editor.returnPressed.connect(self.commit_pending)
+        self._drag_pending = False
+        self._drag_active = False
+        self._drag_press_x = 0.0
+        self._drag_last_x = 0.0
+        self._drag_hovered = False
+        self._drag_state = ''
+        self.editor.setMouseTracking(True)
         self.editor.installEventFilter(self)
         if isinstance(self.editor, _TransformIntegerEdit):
             self.editor.step_requested.connect(self._step_integer)
@@ -321,6 +341,102 @@ class CommittedTransformControl(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.label)
         layout.addWidget(self.editor)
+
+    # ---- Blender 式箱体拖拽 ---------------------------------------------
+
+    def _editor_stepper_hit(self, event) -> bool:
+        """整数编辑器右侧的上下步进按钮不吃拖拽（交给原生点击）。"""
+        if not isinstance(self.editor, _TransformIntegerEdit):
+            return False
+        pos = event.position().toPoint()
+        up_rect, down_rect = self.editor._button_rects()
+        return up_rect.contains(pos) or down_rect.contains(pos)
+
+    def _editor_drag_event(self, event) -> bool:
+        etype = event.type()
+        if etype == QEvent.Type.Enter:
+            self._drag_hovered = True
+            self._sync_editor_drag_appearance()
+        elif etype == QEvent.Type.Leave:
+            self._drag_hovered = False
+            self._sync_editor_drag_appearance()
+        elif etype == QEvent.Type.MouseButtonPress:
+            if (
+                event.button() == Qt.MouseButton.LeftButton
+                and self.isEnabled()
+                and not self._editor_stepper_hit(event)
+            ):
+                self._drag_pending = True
+                self._drag_active = False
+                self._drag_press_x = _drag_global_x(event)
+                self._drag_last_x = self._drag_press_x
+            return False  # 先让点击落到 QLineEdit：没拖动就是进文本编辑
+        elif etype == QEvent.Type.MouseMove:
+            if self._drag_pending or self._drag_active:
+                x = _drag_global_x(event)
+                if (
+                    not self._drag_active
+                    and abs(x - self._drag_press_x) >= self.DRAG_THRESHOLD
+                ):
+                    self._drag_active = True
+                    self._drag_last_x = x
+                    self._start_drag()
+                    self.editor.deselect()
+                if self._drag_active:
+                    delta = x - self._drag_last_x
+                    if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+                        delta *= 0.1
+                    self._move_drag(delta)
+                    self._drag_last_x = x
+                    self._sync_editor_drag_appearance()
+                    return True
+        elif etype == QEvent.Type.MouseButtonRelease:
+            if (
+                event.button() == Qt.MouseButton.LeftButton
+                and (self._drag_pending or self._drag_active)
+            ):
+                was_active = self._drag_active
+                self._drag_pending = False
+                self._drag_active = False
+                if was_active:
+                    self._finish_drag()
+                    self._sync_editor_drag_appearance()
+                    return True
+                self._sync_editor_drag_appearance()
+        elif (
+            etype == QEvent.Type.KeyPress
+            and event.key() == Qt.Key.Key_Escape
+            and self._drag_active
+        ):
+            self._drag_active = False
+            self._drag_pending = False
+            self.cancel_preview()
+            self._sync_editor_drag_appearance()
+            return True
+        return False
+
+    def _sync_editor_drag_appearance(self) -> None:
+        if self._drag_active:
+            state = 'drag'
+        elif self._drag_pending or (
+            self._drag_hovered and not self.editor.hasFocus()
+        ):
+            state = 'hover'
+        else:
+            state = ''
+        if self._drag_state != state:
+            self._drag_state = state
+            self.editor.setProperty('dragState', state)
+            style = self.editor.style()
+            style.unpolish(self.editor)
+            style.polish(self.editor)
+        if self._drag_active or self._drag_pending:
+            cursor = Qt.CursorShape.SizeHorCursor
+        elif self._drag_hovered and not self.editor.hasFocus():
+            cursor = Qt.CursorShape.SizeHorCursor
+        else:
+            cursor = Qt.CursorShape.IBeamCursor
+        self.editor.setCursor(cursor)
 
     def _canonical_to_display(self, value: float) -> float:
         return value * self.display_factor
@@ -394,11 +510,13 @@ class CommittedTransformControl(QWidget):
             self._restore_display()
 
     def eventFilter(self, watched, event):
+        if watched is self.editor and self._editor_drag_event(event):
+            return True
         if watched is self.editor:
             if (
                 event.type() == QEvent.Type.ShortcutOverride
                 and event.key() == Qt.Key.Key_Escape
-                and self.state == self.PENDING_TEXT
+                and (self.state == self.PENDING_TEXT or self._drag_active)
             ):
                 event.accept()
                 return True
@@ -491,6 +609,9 @@ class CommittedTransformControl(QWidget):
             )
 
     def cancel_preview(self):
+        self._drag_pending = False
+        self._drag_active = False
+        self._sync_editor_drag_appearance()
         self.label.abort_drag_session()
         if self.state != self.DRAG_PREVIEW:
             return
@@ -550,7 +671,7 @@ class CommittedTransformChoiceControl(QWidget):
         self.label = QLabel(title, self)
         self.label.setObjectName('TextTransformParamLabel')
         self.label.setWordWrap(True)
-        self.combobox = QComboBox(self)
+        self.combobox = ConfigComboBox(scrollWidget=self, stretch=True)
         self.combobox.setObjectName('TextTransformParamEditor')
         for value, label in self.choices:
             self.combobox.addItem(label(), value)
@@ -589,6 +710,7 @@ class TransformParameterPanel(QFrame):
     drag_commit_requested = Signal(int, str, float)
     preview_canceled = Signal(int, str)
     remove_requested = Signal(int)
+    reset_requested = Signal(int)
     move_requested = Signal(int, int)
     card_clicked = Signal(int)
     selected = Signal(int)
@@ -598,6 +720,8 @@ class TransformParameterPanel(QFrame):
         self.index = int(index)
         self._hovered = False
         self._selected = False
+        self._is_grid = variant.transform_type == 'grid'
+        self._canvas_edit_available = False
         self.setObjectName('TextTransformParameterPanel')
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setSizePolicy(
@@ -637,6 +761,20 @@ class TransformParameterPanel(QFrame):
             lambda: self.remove_requested.emit(self.index)
         )
 
+        self.reset_button = QToolButton(self)
+        self.reset_button.setText(self.tr('Reset'))
+        self.reset_button.setToolTip(self.tr('Reset Transform'))
+        self.reset_button.clicked.connect(
+            lambda: self.reset_requested.emit(self.index)
+        )
+        self.grid_edit_button = QToolButton(self)
+        self.grid_edit_button.setCheckable(True)
+        self.grid_edit_button.setText(self.tr('Edit Grid'))
+        self.grid_edit_button.setVisible(variant.transform_type == 'grid')
+        self.grid_edit_button.clicked.connect(
+            lambda: self.card_clicked.emit(self.index)
+        )
+
         action_widget = QWidget(self)
         action_widget.setObjectName('TextTransformPanelActions')
         action_widget.setFixedWidth(66)
@@ -658,6 +796,16 @@ class TransformParameterPanel(QFrame):
         header_layout.setSpacing(6)
         header_layout.addWidget(self.title_label)
         header_layout.addWidget(action_widget)
+
+        edit_layout = QHBoxLayout()
+        edit_layout.setContentsMargins(0, 0, 0, 0)
+        edit_layout.addWidget(self.grid_edit_button)
+        edit_layout.addStretch()
+        edit_layout.addWidget(self.reset_button)
+        self.grid_hint = QLabel(self.tr('Drag handles on the canvas. Esc cancels the current drag.'), self)
+        self.grid_hint.setObjectName('TextTransformParamLabel')
+        self.grid_hint.setWordWrap(True)
+        self.grid_hint.setVisible(variant.transform_type == 'grid')
 
         self.controls = {}
         self.controls_widget = QWidget(self)
@@ -687,10 +835,6 @@ class TransformParameterPanel(QFrame):
                     controls_widget,
                     decimals=spec.decimals,
                 )
-                if spec.shortcut is not None:
-                    shortcut = spec.shortcut()
-                    control.label.setToolTip(shortcut)
-                    control.editor.setToolTip(shortcut)
             control.layout().setSpacing(8)
             control.label.setWordWrap(False)
             control.label.setAlignment(
@@ -708,7 +852,7 @@ class TransformParameterPanel(QFrame):
                 self.commit_requested.emit(self.index, name, value)
             )
             control.user_interacted.connect(
-                lambda self=self: self.selected.emit(self.index)
+                lambda self=self: self.selected.emit(self.index) if not self._is_grid else None
             )
             if isinstance(control, CommittedTransformControl):
                 control.preview_requested.connect(
@@ -760,6 +904,8 @@ class TransformParameterPanel(QFrame):
         layout.setSpacing(6)
         layout.addLayout(header_layout)
         layout.addWidget(controls_widget)
+        layout.addLayout(edit_layout)
+        layout.addWidget(self.grid_hint)
 
         self._sync_action_visibility()
 
@@ -813,9 +959,8 @@ class TransformParameterPanel(QFrame):
         """Choose the largest column count that still fits each section."""
         if width <= 0 or not self._section_controls_data:
             return
-        # The controls widget fills the card width minus the outer margins
-        # (8 left, 12 right) and the grid's own left margin.
-        base_width = max(1, width - 20)
+        # Compact rows leave two pixels on either side of the controls.
+        base_width = max(1, width - 4)
         for section_data in self._section_controls_data:
             grid = section_data['grid']
             controls = section_data['controls']
@@ -848,10 +993,23 @@ class TransformParameterPanel(QFrame):
         if self._selected == selected:
             return
         self._selected = selected
+        self._sync_grid_edit_button()
+        self._sync_action_visibility()
         self.setProperty('selected', selected)
         self.style().unpolish(self)
         self.style().polish(self)
         self.update()
+
+    def set_canvas_edit_available(self, available):
+        self._canvas_edit_available = bool(available)
+        self.grid_edit_button.setEnabled(available)
+        self.grid_hint.setVisible(available and self._is_grid)
+        self._sync_grid_edit_button()
+
+    def _sync_grid_edit_button(self):
+        editing = self._selected and self._canvas_edit_available
+        self.grid_edit_button.setChecked(editing)
+        self.grid_edit_button.setText(self.tr('Done') if editing else self.tr('Edit Grid'))
 
     def set_values(self, transforms) -> None:
         for name, control in self.controls.items():
@@ -874,13 +1032,15 @@ class TransformParameterPanel(QFrame):
             control.cancel_pending()
 
     def _sync_action_visibility(self) -> None:
-        self.action_widget.setVisible(self._hovered)
+        entry = getattr(self, 'appearance_entry', None)
+        visible = self._hovered or self._selected or (entry is not None and entry.expanded)
+        self.action_widget.setVisible(visible)
         for button in (
             self.move_up_button,
             self.move_down_button,
             self.close_button,
         ):
-            button.setVisible(self._hovered)
+            button.setVisible(visible)
 
     def enterEvent(self, event):
         self._hovered = True
@@ -893,7 +1053,7 @@ class TransformParameterPanel(QFrame):
         return super().leaveEvent(event)
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton and not self._is_grid:
             self.card_clicked.emit(self.index)
         return super().mousePressEvent(event)
 
@@ -907,8 +1067,12 @@ class TextTransformPanel(PanelArea):
     transform_preview_canceled = Signal(int, str)
     transform_add_requested = Signal(str)
     transform_remove_requested = Signal(int)
+    transform_reset_requested = Signal(int)
     transform_move_requested = Signal(int, int)
     transform_selected = Signal(int)
+    content_geometry_changed = Signal()
+    state_changed = Signal()
+    entry_change_requested = Signal()
 
     MAX_CONTENT_HEIGHT = 480
 
@@ -1010,14 +1174,16 @@ class TextTransformPanel(PanelArea):
 
         self.transform_rows_layout = QVBoxLayout()
         self.transform_rows_layout.setContentsMargins(0, 0, 0, 0)
-        self.transform_rows_layout.setSpacing(10)
+        self.transform_rows_layout.setSpacing(2)
+        self.transform_rows_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.transform_panels = []
         self._transform_panel_types = ()
         self._selected_transform_index = None
 
         self.transform_layout = QVBoxLayout()
-        self.transform_layout.setContentsMargins(8, 8, 8, 8)
+        self.transform_layout.setContentsMargins(8, 6, 8, 6)
         self.transform_layout.setSpacing(6)
+        self.transform_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.transform_header_layout = QHBoxLayout()
         self.transform_header_layout.setContentsMargins(0, 0, 0, 0)
         self.transform_header_layout.setSpacing(8)
@@ -1037,19 +1203,13 @@ class TextTransformPanel(PanelArea):
         self.cards_frame = GroupFrame(self.scrollContent)
         self.cards_frame.setObjectName('TextTransformCardsFrame')
         self.cards_frame.setVisible(False)
+        self.cards_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         cards_layout = QVBoxLayout(self.cards_frame)
-        cards_layout.setContentsMargins(6, 6, 6, 6)
-        cards_layout.setSpacing(8)
+        cards_layout.setContentsMargins(0, 0, 0, 0)
+        cards_layout.setSpacing(2)
         cards_layout.addLayout(self.transform_rows_layout)
 
-        self.cards_separator = SeparatorWidget(self.scrollContent)
-        self.cards_separator.setObjectName('TextTransformCardsSeparator')
-        self.cards_separator.setVisible(False)
-
         self.transform_layout.addLayout(self.transform_header_layout)
-        self.transform_layout.addSpacing(4)
-        self.transform_layout.addWidget(self.cards_separator)
-        self.transform_layout.addSpacing(4)
         self.transform_layout.addWidget(self.transform_mixed_label)
         self.transform_layout.addWidget(self.cards_frame)
         self.setContentLayout(self.transform_layout)
@@ -1110,7 +1270,8 @@ class TextTransformPanel(PanelArea):
                 content_height + 2 * self.frameWidth(),
                 self.MAX_CONTENT_HEIGHT,
             )
-            self.setMinimumHeight(target)
+            height_changed = target != self.minimumHeight()
+            self.setMinimumHeight(0 if getattr(self, 'inspector_hosted', False) else target)
             self.scrollContent.updateGeometry()
             self.updateGeometry()
             self.view_widget.updateGeometry()
@@ -1121,6 +1282,8 @@ class TextTransformPanel(PanelArea):
             )
         finally:
             self._syncing_geometry = False
+        if height_changed:
+            self.content_geometry_changed.emit()
 
     def sizeHint(self):
         hint = super().sizeHint()
@@ -1180,9 +1343,14 @@ class TextTransformPanel(PanelArea):
             panel.remove_requested.connect(
                 self.transform_remove_requested.emit
             )
+            panel.reset_requested.connect(self.transform_reset_requested.emit)
             panel.move_requested.connect(self.transform_move_requested.emit)
             panel.card_clicked.connect(self.toggle_transform)
             panel.selected.connect(self.select_transform)
+            panel.appearance_entry = AppearanceEntry(panel, self._sync_content_height)
+            panel.appearance_entry.expanded_requested.connect(
+                lambda expanded, panel=panel: self._on_entry_expanded(panel, expanded)
+            )
             self.transform_rows_layout.addWidget(panel)
             self.transform_panels.append(panel)
         self._transform_panel_types = transform_types
@@ -1191,16 +1359,19 @@ class TextTransformPanel(PanelArea):
             panel.set_index(index)
             panel.set_move_enabled(index > 0, index + 1 < count)
             panel.set_selected(index == self._selected_transform_index)
+            panel.appearance_entry.set_expanded(index == 0)
         if (
             self._selected_transform_index is not None
             and self._selected_transform_index >= count
         ):
             self.clear_transform_selection()
         self.cards_frame.setVisible(count > 0)
-        self.cards_separator.setVisible(
-            self.transform_mixed_label.isVisible() or self.cards_frame.isVisible()
-        )
         self._sync_content_height()
+
+    def _on_entry_expanded(self, panel, expanded):
+        self.entry_change_requested.emit()
+        for other in self.transform_panels:
+            other.appearance_entry.set_expanded(expanded and other is panel)
 
     def select_transform(self, index: int, *, emit: bool = True):
         index = int(index)
@@ -1211,6 +1382,7 @@ class TextTransformPanel(PanelArea):
             return
         self._selected_transform_index = index
         for panel_index, panel in enumerate(self.transform_panels):
+            panel.appearance_entry.set_expanded(panel_index == index)
             panel.set_selected(panel_index == index)
         if emit:
             self.transform_selected.emit(index)
@@ -1263,14 +1435,27 @@ class TextTransformPanel(PanelArea):
         if mixed:
             self.clear_transform_selection()
             self._rebuild_transform_panels(())
+            self.state_changed.emit()
             return
         self._rebuild_transform_panels(common_sequence)
         for index, panel in enumerate(self.transform_panels):
             panel.set_values([state.stack[index] for state in states])
+            controls = tuple(panel.controls.values())
+            if panel._is_grid:
+                horizontal = panel.controls['horizontal_divisions'].editor.text()
+                vertical = panel.controls['vertical_divisions'].editor.text()
+                panel.appearance_entry.set_summary(f'{horizontal} × {vertical}')
+            elif controls:
+                control = controls[0]
+                editor = getattr(control, 'editor', None)
+                value = editor.text() if editor is not None else control.combobox.currentText()
+                panel.appearance_entry.set_summary(value)
         self._sync_content_height()
+        self.state_changed.emit()
 
     def set_active_format(self, font_format: FontFormat):
         self._set_transform_states([font_format])
+        self._set_canvas_edit_available(False)
 
     def set_transform_items(self, items):
         self._set_transform_states(
@@ -1282,9 +1467,15 @@ class TextTransformPanel(PanelArea):
                 for item in items
             ]
         )
+        self._set_canvas_edit_available(len(items) == 1)
 
     def set_transform(self, state):
         self._set_transform_states([state])
+        self._set_canvas_edit_available(False)
+
+    def _set_canvas_edit_available(self, available):
+        for panel in self.transform_panels:
+            panel.set_canvas_edit_available(available)
 
     def iter_transform_controls(self):
         yield self.glyph_slant_control

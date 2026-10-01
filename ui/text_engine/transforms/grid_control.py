@@ -18,7 +18,7 @@ The canvas owns one instance; ``bind()`` / ``clear()`` follow the selected
 Grid stage reported by ``TextTransformEditSession._sync_transform_controller``.
 """
 
-from qtpy.QtCore import QPointF, QRectF, Qt
+from qtpy.QtCore import QPointF, Qt
 from qtpy.QtGui import QBrush, QColor, QPainterPath, QPen
 from qtpy.QtWidgets import QGraphicsEllipseItem, QGraphicsItem, QGraphicsPathItem
 
@@ -50,7 +50,7 @@ class GridControlPointItem(QGraphicsEllipseItem):
             QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations,
             True,
         )
-        self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
+        self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton | Qt.MouseButton.RightButton)
         self.setData(CONTROL_ITEM_DATA_KEY, True)
         pen = QPen(QColor(30, 147, 229), 1.5)
         pen.setCosmetic(True)
@@ -60,6 +60,10 @@ class GridControlPointItem(QGraphicsEllipseItem):
         self.setBrush(QBrush(QColor(255, 255, 255)))
 
     def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.RightButton:
+            self.controller.cancel_handle_drag()
+            event.accept()
+            return
         if self.controller.begin_handle_drag(
             self.index, event.scenePos(), event.modifiers()
         ):
@@ -103,6 +107,7 @@ class TextGridTransformControl(QGraphicsPathItem):
         self._preview_points = None
         self._commit_points = None
         self._cancel_edit = None
+        self._finish_edit = None
         self._drag_mapping = None
         self._drag_index = None
         self._drag_start_grid = None
@@ -119,6 +124,7 @@ class TextGridTransformControl(QGraphicsPathItem):
         preview_points,
         commit_points,
         cancel_edit,
+        finish_edit=None,
     ):
         """Attach to *item*'s Grid stage at *stack_index* and show the overlay."""
         if self.item is not item:
@@ -127,17 +133,19 @@ class TextGridTransformControl(QGraphicsPathItem):
             item.visual_geometry_changed.connect(self.requestGeometryRefresh)
             item.moving.connect(self.requestGeometryRefresh)
         elif self.stack_index != stack_index:
-            self._clear_drag()
+            self.cancel_handle_drag()
         self.stack_index = int(stack_index)
         self._begin_edit = begin_edit
         self._preview_points = preview_points
         self._commit_points = commit_points
         self._cancel_edit = cancel_edit
+        self._finish_edit = finish_edit
         self.show()
         self.requestGeometryRefresh()
 
     def clear(self):
         """Detach, remove every handle, and hide the overlay."""
+        self.cancel_handle_drag()
         if self.item is not None:
             try:
                 self.item.visual_geometry_changed.disconnect(
@@ -278,6 +286,7 @@ class TextGridTransformControl(QGraphicsPathItem):
         self._drag_latest_points = self._drag_initial_points
         if self._begin_edit is not None:
             self._begin_edit(self.stack_index)
+        self.setFocus(Qt.FocusReason.MouseFocusReason)
         return True
 
     def move_handle_drag(self, scene_pos):
@@ -307,6 +316,27 @@ class TextGridTransformControl(QGraphicsPathItem):
         elif self._commit_points is not None:
             self._commit_points(self.stack_index, points)
         return True
+
+    def cancel_handle_drag(self):
+        """Cancel before calling the session so a later release cannot commit."""
+        if self._drag_mapping is None:
+            return False
+        self._clear_drag()
+        if self._cancel_edit is not None:
+            self._cancel_edit(self.stack_index)
+        return True
+
+    def handle_key_press(self, event):
+        if event.key() != Qt.Key.Key_Escape or not self.isVisible():
+            return False
+        if not self.cancel_handle_drag() and self._finish_edit is not None:
+            self._finish_edit()
+        event.accept()
+        return True
+
+    def keyPressEvent(self, event):
+        if not self.handle_key_press(event):
+            super().keyPressEvent(event)
 
     def _clear_drag(self):
         self._drag_mapping = None

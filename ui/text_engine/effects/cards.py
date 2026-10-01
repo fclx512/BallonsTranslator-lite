@@ -21,9 +21,9 @@ from qtpy.QtCore import (
     QEvent,
     QRectF,
     QSignalBlocker,
-    Signal,
     QSize,
     Qt,
+    Signal,
 )
 from qtpy.QtGui import (
     QAction,
@@ -31,8 +31,8 @@ from qtpy.QtGui import (
     QColor,
     QIcon,
     QMouseEvent,
-    QPaintEvent,
     QPainter,
+    QPaintEvent,
 )
 from qtpy.QtWidgets import (
     QDialog,
@@ -48,10 +48,12 @@ from qtpy.QtWidgets import (
 )
 
 from ui.custom_widget.color_picker import ColorPickerDialog
-
+from ui.custom_widget.combobox import BottomBorderComboBox
+from ui.custom_widget.view_panel import chevron_down_small, chevron_right_small
+from ui.icon_rendering import render_svg_pixmap
+from ui.misc import themed_icon_path
 from utils.text_effects import (
     EFFECT_MAGNITUDE_LIMIT,
-    EffectPaint,
     FilterEffect,
     GeneratedEffectPaint,
     GlowEffect,
@@ -62,23 +64,17 @@ from utils.text_effects import (
     TextFillEffect,
 )
 
-from ui.custom_widget.combobox import BottomBorderComboBox
-from ui.custom_widget.spinbox import _drag_global_x
-from ui.custom_widget.view_panel import chevron_down_small, chevron_right_small
-from ui.icon_rendering import render_svg_pixmap
-from ui.misc import themed_icon_path
 from ..transforms.panel import (
     CommittedTransformControl,
-    _TransformIntegerEdit,
 )
-from .gradient_editor import GradientAngleDial, InlineLinearGradientEditor
-from .paint import paint_effect_paint_preview
 from .filters import (
     FilterParamSpec,
     FilterSpec,
     FilterUnavailableError,
     get_filter_registry,
 )
+from .gradient_editor import GradientAngleDial, InlineLinearGradientEditor
+from .paint import paint_effect_paint_preview
 
 
 def _filter_ui_text(spec: FilterSpec, text: str) -> str:
@@ -274,7 +270,8 @@ class _EffectCard(QFrame):
         self._sync_action_icons()
 
     def _sync_action_icons(self) -> None:
-        visible = self._hovered or self._keyboard_focused_action is not None
+        entry = getattr(self, 'appearance_entry', None)
+        visible = self._hovered or self._keyboard_focused_action is not None or (entry is not None and entry.expanded)
         for button, icon in self._hover_actions:
             button.setIcon(icon if visible else QIcon())
 
@@ -611,9 +608,6 @@ class EffectNumericControl(CommittedTransformControl):
     value_preview_requested = Signal(str, object)
     value_preview_canceled = Signal(str)
 
-    #: 与 ui/custom_widget/spinbox.py::DragAdjustMixin.drag_start_threshold 一致
-    DRAG_THRESHOLD = 4.0
-
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.setObjectName('TextEffectControl')
@@ -639,114 +633,6 @@ class EffectNumericControl(CommittedTransformControl):
         self.layout().setSpacing(8)
         self.layout().setStretch(0, 0)
         self.layout().setStretch(1, 1)
-        self._drag_pending = False
-        self._drag_active = False
-        self._drag_press_x = 0.0
-        self._drag_last_x = 0.0
-        self._drag_hovered = False
-        self._drag_state = ''
-        self.editor.setMouseTracking(True)
-        # 基类已装过一次同一个过滤器；重复安装会让每个事件走两遍本类逻辑
-        self.editor.removeEventFilter(self)
-        self.editor.installEventFilter(self)
-
-    # ---- Blender 式箱体拖拽 ---------------------------------------------
-
-    def _editor_stepper_hit(self, event) -> bool:
-        """整数编辑器右侧的上下步进按钮不吃拖拽（交给原生点击）。"""
-        if not isinstance(self.editor, _TransformIntegerEdit):
-            return False
-        pos = event.position().toPoint()
-        up_rect, down_rect = self.editor._button_rects()
-        return up_rect.contains(pos) or down_rect.contains(pos)
-
-    def _editor_drag_event(self, event) -> bool:
-        etype = event.type()
-        if etype == QEvent.Type.Enter:
-            self._drag_hovered = True
-            self._sync_editor_drag_appearance()
-        elif etype == QEvent.Type.Leave:
-            self._drag_hovered = False
-            self._sync_editor_drag_appearance()
-        elif etype == QEvent.Type.MouseButtonPress:
-            if (
-                event.button() == Qt.MouseButton.LeftButton
-                and self.isEnabled()
-                and not self._editor_stepper_hit(event)
-            ):
-                self._drag_pending = True
-                self._drag_active = False
-                self._drag_press_x = _drag_global_x(event)
-                self._drag_last_x = self._drag_press_x
-            return False  # 先让点击落到 QLineEdit：没拖动就是进文本编辑
-        elif etype == QEvent.Type.MouseMove:
-            if self._drag_pending or self._drag_active:
-                x = _drag_global_x(event)
-                if (
-                    not self._drag_active
-                    and abs(x - self._drag_press_x) >= self.DRAG_THRESHOLD
-                ):
-                    self._drag_active = True
-                    self._drag_last_x = x
-                    self._start_drag()
-                    self.editor.deselect()
-                if self._drag_active:
-                    self._move_drag(x - self._drag_last_x)
-                    self._drag_last_x = x
-                    self._sync_editor_drag_appearance()
-                    return True
-        elif etype == QEvent.Type.MouseButtonRelease:
-            if (
-                event.button() == Qt.MouseButton.LeftButton
-                and (self._drag_pending or self._drag_active)
-            ):
-                was_active = self._drag_active
-                self._drag_pending = False
-                self._drag_active = False
-                if was_active:
-                    self._finish_drag()
-                    self._sync_editor_drag_appearance()
-                    return True
-                self._sync_editor_drag_appearance()
-        elif (
-            etype == QEvent.Type.KeyPress
-            and event.key() == Qt.Key.Key_Escape
-            and self._drag_active
-        ):
-            self._drag_active = False
-            self._drag_pending = False
-            self.cancel_preview()
-            self._sync_editor_drag_appearance()
-            return True
-        return False
-
-    def _sync_editor_drag_appearance(self) -> None:
-        if self._drag_active:
-            state = 'drag'
-        elif self._drag_pending or (
-            self._drag_hovered and not self.editor.hasFocus()
-        ):
-            state = 'hover'
-        else:
-            state = ''
-        if self._drag_state != state:
-            self._drag_state = state
-            self.editor.setProperty('dragState', state)
-            style = self.editor.style()
-            style.unpolish(self.editor)
-            style.polish(self.editor)
-        if self._drag_active or self._drag_pending:
-            cursor = Qt.CursorShape.SizeHorCursor
-        elif self._drag_hovered and not self.editor.hasFocus():
-            cursor = Qt.CursorShape.SizeHorCursor
-        else:
-            cursor = Qt.CursorShape.IBeamCursor
-        self.editor.setCursor(cursor)
-
-    def eventFilter(self, watched, event) -> bool:
-        if watched is self.editor and self._editor_drag_event(event):
-            return True
-        return super().eventFilter(watched, event)
 
     def _on_text_edited(self) -> None:
         super()._on_text_edited()

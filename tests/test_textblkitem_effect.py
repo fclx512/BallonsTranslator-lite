@@ -88,6 +88,51 @@ class TextBlkItemEffectTest(unittest.TestCase):
         red = (arr[..., 0] > 200) & (arr[..., 1] < 100) & (arr[..., 2] < 100)
         self.assertGreater(int(red.sum()), 100, "expected red stroke pixels")
 
+    def test_transformed_stroke_source_matches_one_aligned_composite(self):
+        """The fork host must consume source pixels once, before the warp."""
+        from qtpy.QtWidgets import QStyleOptionGraphicsItem
+        from ui.text_engine.rendering.surface import NonlinearTextSurfaceRenderer
+        from utils.fontformat import (
+            BendTextTransform, GridTextTransform, ProjectiveTextTransform,
+            TextTransformStack, TextTransformState,
+        )
+
+        grid = GridTextTransform().normalized().with_control_points(
+            ((0.15, 0.05), (0.95, 0.2), (0.05, 0.9), (0.9, 0.98))
+        )
+        for vertical, text in ((False, '测试'), (True, '竖排多列描边变换测试' * 7)):
+            item, _ = self._new_item(
+                xyxy=(0, 0, 300, 420), translation=text, vertical=vertical,
+                font_size=42, stroke_width=0.08, srgb=[255, 0, 0],
+            )
+            er = item.effect_renderer
+            for transform in (BendTextTransform(0.3), grid, ProjectiveTextTransform(rotation_y=40)):
+                for slant in (0, 12):
+                    item.set_text_transform(TextTransformState(TextTransformStack((transform,)), slant))
+                    # Overflow clipping/badges are a separate host contract.
+                    item._text_overflows = False
+                    item.draw_rect = False
+                    for scale in (0.5, 1, 2):
+                        with self.subTest(vertical=vertical, transform=transform.transform_type, slant=slant, scale=scale):
+                            rect = er.boundingRect()
+                            option = QStyleOptionGraphicsItem()
+
+                            def actual(p, opt, widget):
+                                er.paint_item(p, opt, widget, item._paint_native)
+
+                            def reference(p, opt, widget):
+                                er._draw_surface_pixmap(p, rect, er.background_pixmap, er.background_pixmap_scale)
+                                er.in_graphics_paint = True
+                                try:
+                                    item._paint_native(p, opt, widget)
+                                finally:
+                                    er.in_graphics_paint = False
+
+                            capture = NonlinearTextSurfaceRenderer._capture_source
+                            got = self.misc.pixmap2ndarray(capture(rect, scale, option, actual))
+                            want = self.misc.pixmap2ndarray(capture(rect, scale, option, reference))
+                            np.testing.assert_array_equal(got, want)
+
     # ── shadow renders and shadow_include_stroke changes the source ──────
 
     def test_shadow_renders_and_include_stroke_differs(self):

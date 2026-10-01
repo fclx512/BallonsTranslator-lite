@@ -10,7 +10,8 @@ QSS reuses the ``RailDock*`` objectNames and the float-panel rule so it
 looks identical to the canvas rail panels.
 """
 
-from qtpy.QtCore import QEvent, QPoint, Qt, Signal
+from qtpy.QtCore import QEvent, QPoint, QSize, Qt, Signal
+from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import QHBoxLayout, QLabel, QToolButton, QVBoxLayout, QWidget
 
 from .widget import Widget
@@ -63,8 +64,11 @@ class FloatDropPanel(Widget):
         self._title_label.setObjectName("RailDockTitle")
         close_btn = QToolButton(header)
         close_btn.setObjectName("RailDockCloseBtn")
-        close_btn.setText("×")
-        close_btn.setFixedSize(22, 22)
+        from ..misc import themed_icon_path
+
+        close_btn.setIcon(QIcon(themed_icon_path('panel_close.svg')))
+        close_btn.setIconSize(QSize(16, 16))
+        close_btn.setFixedSize(24, 24)
         close_btn.setToolTip(self.tr("Close"))
         close_btn.clicked.connect(self.close_panel)
         header_layout.addWidget(self._title_label, 1)

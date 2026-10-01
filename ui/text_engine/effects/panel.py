@@ -7,19 +7,20 @@ transform dock hosting contract: the panel is a ``PanelArea`` passed
 directly to ``RailDockPanel``.
 """
 
-from typing import Iterator, Optional, Sequence, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterator, Optional, Sequence, Tuple
 
-from qtpy.QtCore import QSignalBlocker, QTimer, Signal, QSize, Qt
+from qtpy.QtCore import QSignalBlocker, QSize, Qt, QTimer, Signal
 from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import (
     QHBoxLayout,
     QMenu,
-    QMessageBox,
     QSizePolicy,
     QToolButton,
     QVBoxLayout,
 )
 
+from ui.custom_widget import PanelArea
+from ui.misc import themed_icon_path
 from utils.fontformat import FontFormat
 from utils.text_effects import (
     FilterEffect,
@@ -32,9 +33,7 @@ from utils.text_effects import (
     effect_structure_key,
 )
 
-from ... import shared_widget as SW
-from ui.custom_widget import PanelArea
-from ui.misc import themed_icon_path
+from ..appearance import AppearanceEntry
 from .cards import (
     EffectNumericControl,
     FilterEffectCard,
@@ -69,6 +68,8 @@ class TextEffectPanel(PanelArea):
     remove_effect_requested = Signal(int)
     move_effect_requested = Signal(int, int)
     color_dialog_active_changed = Signal(bool)
+    state_changed = Signal()
+    entry_change_requested = Signal()
 
     MAX_CONTENT_HEIGHT = 480
 
@@ -135,8 +136,8 @@ class TextEffectPanel(PanelArea):
         self.hollow_toggle_button.setIcon(
             QIcon(themed_icon_path('text-effect-hollow.svg'))
         )
-        self.hollow_toggle_button.setIconSize(QSize(16, 16))
-        self.hollow_toggle_button.setFixedSize(26, 26)
+        self.hollow_toggle_button.setIconSize(QSize(20, 20))
+        self.hollow_toggle_button.setFixedSize(30, 28)
         self.hollow_toggle_button.setCheckable(True)
         self.hollow_toggle_button.setProperty('mixed', False)
         self.hollow_toggle_button.clicked.connect(
@@ -196,7 +197,7 @@ class TextEffectPanel(PanelArea):
 
         self.cards_layout = QVBoxLayout()
         self.cards_layout.setContentsMargins(0, 0, 0, 0)
-        self.cards_layout.setSpacing(8)
+        self.cards_layout.setSpacing(2)
         self.effect_cards = []
         self._effect_types = None
         self._pending_visible_effect_index: Optional[int] = None
@@ -210,8 +211,8 @@ class TextEffectPanel(PanelArea):
         self.base_card_layout.setContentsMargins(0, 0, 0, 0)
 
         layout = QVBoxLayout()
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(8)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(4)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addLayout(top_row)
         layout.addLayout(self.base_card_layout)
@@ -312,6 +313,10 @@ class TextEffectPanel(PanelArea):
             card.move_requested.connect(self._move_visual_effect)
             card.remove_requested.connect(self.remove_effect_requested.emit)
             card.geometry_changed.connect(self._sync_content_height)
+            card.appearance_entry = AppearanceEntry(card, self._sync_content_height)
+            card.appearance_entry.expanded_requested.connect(
+                lambda expanded, card=card: self._on_entry_expanded(card, expanded)
+            )
             (
                 self.base_card_layout
                 if isinstance(card, TextFillEffectCard)
@@ -319,6 +324,13 @@ class TextEffectPanel(PanelArea):
             ).addWidget(card)
             card.show()
             self.effect_cards.append(card)
+        for position, card in enumerate(self.effect_cards):
+            card.appearance_entry.set_expanded(position == 0)
+
+    def _on_entry_expanded(self, card, expanded):
+        self.entry_change_requested.emit()
+        for other in self.effect_cards:
+            other.appearance_entry.set_expanded(expanded and other is card)
 
     def _move_visual_effect(self, index: int, direction: int) -> None:
         self.move_effect_requested.emit(index, -direction)
@@ -400,6 +412,10 @@ class TextEffectPanel(PanelArea):
             card_matched = len(states) > 1 and card.index in matched
             card.set_matched(card_matched)
             card.set_value(value)
+            controls = tuple(card.iter_controls())
+            if controls:
+                control = next((getattr(card, name) for name in ('width_control', 'distance_control', 'size_control') if hasattr(card, name)), controls[0])
+                card.appearance_entry.set_summary(control.label.text() + ' ' + control.editor.text())
             if isinstance(card, TextFillEffectCard):
                 position = fill_indices.index(card.index)
                 reorder_enabled = not card_matched or fill_aligned
@@ -415,6 +431,8 @@ class TextEffectPanel(PanelArea):
                     reorder_enabled and position > 0,
                 )
         self._sync_content_height()
+
+        self.state_changed.emit()
 
     def set_active_format(self, font_format: FontFormat) -> None:
         self._block_items = ()
@@ -476,6 +494,8 @@ class TextEffectPanel(PanelArea):
             None,
         )
         if card is not None:
+            for other in self.effect_cards:
+                other.appearance_entry.set_expanded(other is card)
             self.ensureWidgetVisible(card, 0, self.cards_layout.spacing())
 
     def sizeHint(self) -> QSize:

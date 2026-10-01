@@ -20,6 +20,7 @@ automatically — no per-instance theme refresh needed.
 """
 
 from qtpy.QtCore import QEvent, QPoint, QSize, Qt, Signal
+from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -59,7 +60,7 @@ class RailDockPanel(QFrame):
 
     closed = Signal()
     HEADER_HEIGHT = 26
-    ANCHOR_MARGIN = 8
+    ANCHOR_MARGIN = 4
     EDGE_MARGIN = 6
     CORNER_SIZE = 12
 
@@ -97,8 +98,11 @@ class RailDockPanel(QFrame):
         self._title_label.setObjectName("RailDockTitle")
         close_btn = QToolButton(header)
         close_btn.setObjectName("RailDockCloseBtn")
-        close_btn.setText("×")
-        close_btn.setFixedSize(22, 22)
+        from ..misc import themed_icon_path
+
+        close_btn.setIcon(QIcon(themed_icon_path('panel_close.svg')))
+        close_btn.setIconSize(QSize(16, 16))
+        close_btn.setFixedSize(24, 24)
         close_btn.setToolTip(self.tr("Close"))
         close_btn.clicked.connect(self.close_panel)
         header_layout.addWidget(self._title_label, 1)
@@ -109,7 +113,8 @@ class RailDockPanel(QFrame):
         body = QFrame(self)
         body.setObjectName("RailDockBody")
         body_layout = QVBoxLayout(body)
-        body_layout.setContentsMargins(8, 4, 8, 8)
+        body_layout.setContentsMargins(4, 2, 4, 4)
+        body_layout.setSpacing(0)
         self._content = content_widget
         body_layout.addWidget(content_widget)
         # QLayout 计算 sizeHint 时忽略显式隐藏的子控件；内容组在
@@ -198,6 +203,7 @@ class RailDockPanel(QFrame):
             )
             self._sized = True
             self.resize(size)
+        self.resize(self._clamp_size(self.size()))
         if self._rail is not None and self.parentWidget() is not None:
             tl = self._rail.mapTo(self.parentWidget(), QPoint(0, 0))
             pos = QPoint(tl.x() - self.ANCHOR_MARGIN - self.width(), tl.y())

@@ -353,8 +353,8 @@ class PanelRoutingTest(unittest.TestCase):
             "annotation_dock",
             "emphasis_launcher",
             "emphasis_dock",
-            "transform_launcher",
-            "transform_dock",
+            "appearance_launcher",
+            "appearance_dock",
             "textstyle_launcher",
             "textstyle_dock",
         ):

@@ -12,6 +12,16 @@
 >
 > 仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护）；被裁掉的日期节仍完整留在提交历史里，用 `git log --grep <关键词>`／`git log --follow -p -- docs/daily_log.md`／`git show <rev>:docs/daily_log.md` 回查。
 
+## 2026-10-01
+
+### 统一文字外观浮层（`TextAppearancePanel` / `AppearanceEntry`）与镂空删除（`set_hollow_enabled`）
+
+**摘要：** 效果和变换共用画布侧浮层，右栏保留固定高度摘要，避免效果数量挤压原文／译文输入区。参数卡改为单项展开并去掉重复套框，重绘侧栏、镂空与关闭图标；镂空关闭即从栈删除，避免隐藏的禁用条目留下计数。同步修复变换后效果表面偏移、网格拖拽收尾及多选／取色的编辑目标保持。
+**涉及文件：** `ui/text_panel.py`、`ui/text_appearance_panel.py`、`ui/text_engine/appearance.py`、`ui/text_engine/effects/`、`ui/text_engine/transforms/`、`ui/textitem.py`、`ui/canvas.py`、`ui/panel_rail.py`、`ui/custom_widget/rail_dock_panel.py`、`config/stylesheet.css`、`icons/`、`tests/`、`scripts/probes/probe_text_appearance_ui.py`、`scripts/probes/probe_transform_effect_ui.py`
+**验证：** 真窗口检查输入区高度、镂空开关计数与撤销、拖拽取消／提交、切页、渐变取色、多选；125%／150% 缩放布局通过，`scripts/verify.py --full` 全部通过。
+
+---
+
 ## 2026-09-30
 
 ### 样式管理器字体预览自动反色（`StylePreviewCard._contrast_ratio`）+ 分组标题完整显示（`FormatGroupCard` 宽度自适应）
@@ -74,62 +84,3 @@
 
 ---
 
-## 2026-09-28
-
-### 备注问号弹层支持演示动画（`ConfigNotePopup` anim 键 + `gen_help_anim.py` 离屏生成管线）
-
-**摘要：** 纯文本备注讲不清"切换后有过程的视觉效果"，增加代码生成演示动画：`scripts/gen_help_anim.py` 离屏渲染（offscreen + `QT_QPA_FONTDIR` 补字体）按帧号确定性步进逐帧 grab，Pillow 编码无损动画 WebP（体积敏感场景实测 33 帧 ≈ 40 KB）落 `config/help_anims/` 同名产物；备注经 `anim="<key>"` 可选键挂载，`ConfigNotePopup` 文字上方 QLabel+QMovie 循环播放，关层即停、全局动画关闭时只显首帧，文件缺失静默跳过。首个实例挂「标点位置」；适用判断与制作规则沉淀在 `docs/基础速查/备注演示动画使用说明.md`，静态左右对比图形态有意留作后续。
-
-**涉及文件：** `scripts/gen_help_anim.py`、`config/help_anims/punctuation_position.webp`、`ui/configpanel.py`、`docs/基础速查/备注演示动画使用说明.md`、`scripts/README.md`
-
-**验证：** 逐帧 PNG 目检（覆盖层 QSS 底色、drawText 基线双减两坑修复后）+ 离屏抓弹层实拍确认动画标签在位；`scripts/verify.py` 全绿（含启动冒烟）。
-
----
-
-### 检测方向判定修复：合并路径单行块恒判竖排（`mit_merge_textlines` 投票阈值）+ 方向探针/矩阵
-
-**摘要：** ysgyolo「Merge Text Lines」开启时所有检测框经 `utils/textblock.py::mit_merge_textlines` 聚组投票判向，阈值 `nv >= len//2` 在单行块（len//2==0）恒真，横排单行块全被误判竖排（用户实测：横排内容 OCR 正确但渲染方向竖排，曾被误疑为全局样式覆盖）。阈值改 `max(len//2, 1)`：单行块跟随该行自身方向，多行组投票口径不变。ppocrv6 逐框 `sort_pnts` 判向本就不受影响，一并真图核验。
-
-**涉及文件：** `utils/textblock.py`、`scripts/probes/direction_probe.py`、`scripts/probes/direction_matrix.py`、`scripts/probes/README.md`、`scripts/check_audit.py`
-
-**验证：** 合成矩阵 14 项全过（钉住单行修复与「两行平票判竖、三行一票即竖」的既有口径）；ysgyolo 与 ppocrv6 分别对混排测试图实测，宽扁框判横排、高瘦框判竖排；`scripts/verify.py` 全绿。顺带：`check_audit.py` SKIP_DIRS 排除 `.btrans_cache`——自更新缓存 last_version 内的旧版登记表会误报 125 处「删除后残留引用」。
-
----
-
-### 备注演示动画扩展至 7 场景 + 弹层样式/清晰度四修 + 本机重生成双轨（`help_anims_local` 覆盖层、`gen_help_anim.py` windows 原生渲染）
-
-**摘要：** 动画从 1 场景扩到 7（紧凑标点间距/竖排括号半角/纵横组合/序号徽标/标签徽标/溢出裁剪），场景适配规则立规：行为对比类开关＝改前/改后双文案+明暗互换（边框滑动方案被用户收回），外观展示类开关（两徽标）＝单条常显说明，溢出裁剪三拍演示开关两侧行为。弹层四修：白底直角框＝parentless 顶层弹窗收不到挂 MainWindow 的 QSS（自持样式表 + paintEvent 自绘底 + 原生 `setWindowOpacity`——透明窗口上 `QGraphicsOpacityEffect` 会吃掉 QSS 底且离屏复现不了）；发虚＝offscreen 默认字体落 Arial 且只有灰度 AA（生成器改 windows 平台原生渲染 + 显式 Microsoft YaHei UI + 按屏幕 DPR 出图，显示 1:1 设备像素）；重生成 WinError 5＝开过的弹层 QMovie 握文件句柄（改 QBuffer 内存播放）；既有 webp 脏帧＝`Image.fromarray(QImage)` 只是视图（改 `frombytes`）。新增双轨：仓库 `config/help_anims/`=固化默认，用户重生成写 `config/help_anims_local/` 覆盖层优先展示、可一键清除回退；重生成走 QProcess 子进程（Qt 禁止非 GUI 线程碰 QWidget），系统语言有意不纳入适配。
-
-**涉及文件：** `scripts/gen_help_anim.py`、`ui/configpanel.py`、`config/help_anims/`（7 个 webp）、`translate/zh_CN.ts`、`.gitignore`、`docs/基础速查/备注演示动画使用说明.md`
-
-**验证：** 竖排三场景与真机引擎（TextBlkItem+VerticalTextDocumentLayout）逐字比对格框 0.00px；每轮 `scripts/verify.py` 全绿；用户真机确认弹层样式与动画交互。
-
----
-
-### 样式参数与画布渲染脱节两处收口（`_strip_paragraph_alignment` + `ui/text_panel.py` 别名保持）
-
-**摘要：** 用户实测「参数居中、渲染靠右」且样式管理器批量修改要改两步才生效——数据层 `blk.fontformat` 与 item 渲染态（QTextDocument）只在 `set_fontformat` 时同步，单侧写即分叉。探针（`scripts/mw_repro.py --scenario fmt-sync`）钉出两根源：① 旧工程 rich_text 段落自带 align 属性，块级 blockFormat 对齐脱离数据层且 `set_fontformat` 治不了（只写 doc 默认 option），加载后统一清回 AlignLeft（Qt 实测：块对齐 ≠ AlignLeft 才覆盖默认 option，AlignAbsolute 反而是显式覆盖）；② 文本面板切回全局格式的整包回写只替 item 侧对象，打断 `initTextBlock` 的 item↔blk 别名，改两侧同对象。样式管理器「两步走」本身不修：空 diff 门（`changed_values`）是防压块级 override 的正确设计。
-
-**涉及文件：** `ui/text_engine/item.py`、`ui/text_panel.py`、`scripts/mw_repro.py`、`scripts/README.md`、`tests/test_format_sync.py`
-
-**验证：** fmt-sync 探针修复前 A1a/A1b/A2 分叉、修复后 6/7 一致（B1 分叉为机制演示属预期）；`tests/test_format_sync.py` 5 断言 + rich-text 路径相关 7 个既有测试全绿。
-
----
-### 启动模块降级链路移除（`_ensure_model_files_fallback` 删除 + `ModuleManager.setXxx(offer_deps=False)`）
-
-**摘要：** 无 CUDA/缺包机器上每次启动把 OCR 强制降级 none_ocr，保存期「换回原值」保护又反复复活旧选择，用户改选永不粘；`_ensure_model_files_fallback` 与运行时自愈链路（`load_model` = `ensure_dependencies` 自动装包 → `_ensure_model_files` 自动补权重 → `MissingModelFilesError` 带指引弹窗）冲突，整体删除。另将启动初始化四个 `ModuleManager.setXxx()` 改为 `offer_deps=False`：启动只按配置静默装载，补下载/GPU 说明窗只响应用户主动选模块。`_ensure_module_fallback`（torch 探针，保启动命）保留不动。
-
-**涉及文件：** `launch.py`、`ui/mainwindow.py`、`ui/module_manager.py`
-
-**验证：** 真机两轮端到端（`tmp/launch_ocr_probe.py` 走真实启动链）：vl_manga 启动安静选中不弹窗、改选 paddleocr_v6_onnx 正确落盘、重启保持不回退；`scripts/verify.py` 全绿。
-
----
-### 启动模块强制降级移除（`_ensure_model_files_fallback` 删除）+ 启动静默装载（`ModuleManager.setXxx(offer_deps=False)`）
-
-**摘要：** 用户实测无 CUDA 机器上「改选的 OCR 模型重启即丢、启动必弹提示/事件链路」。根源一：`launch.py::_ensure_model_files_fallback` 启动时查到缺包/缺权重就把 `pcfg.module.ocr` 换成 `none_ocr`（打印提示），而 `save_config` 的"换回原值"保护（`_suspend_auto_downgrades`）在用户改选未成功落盘时反复把旧值写回 config——选择永远逃不出；且该降级与应用已有的运行时自愈链路（`load_model` = `ensure_dependencies` 自动装包 + `_ensure_model_files` 补文件/加载期弹窗）冲突，把用户锁死在 none。整段删除。根源二：启动初始化四个 `setXxx()` 照常走 `_ensure_module_deps`，对 GPU-only 模块每启必弹拒绝窗——加 `offer_deps` 开关，启动传 False 静默装载，主动选模块才触发补装链路。
-
-**涉及文件：** `launch.py`、`ui/mainwindow.py`、`ui/module_manager.py`
-
-**验证：** 真机启动链探针（`tmp/launch_ocr_probe.py`，实测后未入库）：改选 `paddleocr_v6_onnx` → 关闭落盘 → 重启安静选中新值，全程零弹窗零降级；`scripts/verify.py` 全绿（含冒烟）。
-
----

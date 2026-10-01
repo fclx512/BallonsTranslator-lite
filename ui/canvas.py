@@ -2,7 +2,19 @@ import os
 from typing import List, Union
 
 import numpy as np
-from qtpy.QtCore import QDateTime, QCoreApplication, QLineF, QPoint, QPointF, QRectF, QSizeF, Qt, QTimer, Signal
+from qtpy.QtCore import (
+    QCoreApplication,
+    QDateTime,
+    QEvent,
+    QLineF,
+    QPoint,
+    QPointF,
+    QRectF,
+    QSizeF,
+    Qt,
+    QTimer,
+    Signal,
+)
 from qtpy.QtGui import (
     QColor,
     QCursor,
@@ -49,6 +61,10 @@ from .custom_widget.notification import notification
 from .image_edit import DrawingLayer, ImageEditMode, StrokeImgItem
 from .misc import ARROWKEY2DIRECTION, QKEY, ndarray2pixmap
 from .page_search_widget import PageSearchWidget
+from .text_engine.transforms.grid_control import (
+    GridControlPointItem,
+    TextGridTransformControl,
+)
 from .textedit_commands import (
     FormatGestureCommand,
     TypingSessionCommand,
@@ -60,10 +76,6 @@ from .texteditshapecontrol import (
     CONTROL_ITEM_DATA_KEY,
     ControlBlockItem,
     TextBlkShapeControl,
-)
-from .text_engine.transforms.grid_control import (
-    GridControlPointItem,
-    TextGridTransformControl,
 )
 from .textitem import TextBlkItem, TextBlock
 
@@ -265,6 +277,14 @@ class CustomGV(QGraphicsView):
         return super().hideEvent(event)
 
     def event(self, e):
+        if (
+            e.type() == QEvent.Type.ShortcutOverride
+            and e.key() == Qt.Key.Key_Escape
+            and self.canvas is not None
+            and self.canvas.textGridControl.isVisible()
+        ):
+            e.accept()
+            return True
         if isinstance(e, QNativeGestureEvent):
             if e.gestureType() == Qt.NativeGestureType.ZoomNativeGesture:
                 self.scale_with_value.emit(e.value() + 1)
@@ -938,6 +958,7 @@ class Canvas(QGraphicsScene):
         preview_points,
         commit_points,
         cancel_edit,
+        finish_edit=None,
     ):
         """Bind the Grid overlay to *item*'s selected Grid stage.
 
@@ -951,6 +972,7 @@ class Canvas(QGraphicsScene):
             preview_points=preview_points,
             commit_points=commit_points,
             cancel_edit=cancel_edit,
+            finish_edit=finish_edit,
         )
 
     def clear_text_transform_controls(self):
@@ -972,6 +994,8 @@ class Canvas(QGraphicsScene):
             self.incanvas_selection_changed.emit()
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
+        if self.textGridControl.handle_key_press(event):
+            return
         key = event.key()
 
         modifiers = event.modifiers()

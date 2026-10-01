@@ -72,6 +72,22 @@ class EffectsCardTest(unittest.TestCase):
         host.update_text_style_label = lambda: None
         return host, TextEffectEditSession(host, self.panel)
 
+    def test_disabling_hollow_removes_its_hidden_stack_entry(self):
+        from utils.text_effects import HollowEffect, StrokeEffect, TextEffectStack
+
+        host, session = self._make_session()
+        stroke = StrokeEffect(width=0.2)
+        host.global_format.text_effects = TextEffectStack(effects=(stroke,))
+        self.assertTrue(session.set_hollow_enabled(True))
+        self.assertEqual(len(host.global_format.text_effects.effects), 2)
+        self.assertTrue(session.set_hollow_enabled(False))
+        self.assertEqual(host.global_format.text_effects.effects, (stroke,))
+        # Legacy disabled entries must also disappear when switched off.
+        host.global_format.text_effects = TextEffectStack(effects=(HollowEffect(enabled=False), stroke))
+        self.assertTrue(session.set_hollow_enabled(False))
+        self.assertEqual(host.global_format.text_effects.effects, (stroke,))
+        self.assertFalse(session.set_hollow_enabled(False))
+
     def test_stroke_card_returns_with_collapsed_advanced(self):
         from ui.text_engine.effects.cards import StrokeEffectCard
         from utils.text_effects import StrokeEffect, TextEffectStack

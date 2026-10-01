@@ -7,10 +7,9 @@ hollow / filter / overall opacity survive here.
 """
 
 from dataclasses import replace
-from typing import Dict, List, Optional, Sequence, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple
 
 from utils import config as C
-from utils.logger import logger as LOGGER
 from utils.text_effects import (
     EffectPaint,
     FilterEffect,
@@ -22,22 +21,23 @@ from utils.text_effects import (
     ShadowEffect,
     SolidPaint,
     StrokeEffect,
-    TextFillEffect,
     TextEffect,
     TextEffectStack,
-    effect_structure_key,
+    TextFillEffect,
     effect_paint_fallback_color,
+    effect_structure_key,
     without_project_raster_effects,
 )
 
 from ... import shared_widget as SW
-from .filters import get_filter_registry
 from ..editing.commands import SetTextEffectStackCommand
+from .filters import get_filter_registry
 
 if TYPE_CHECKING:
-    from .panel import TextEffectPanel
     from ui.text_panel import FontFormatPanel
+
     from ..item import TextBlkItem
+    from .panel import TextEffectPanel
 
 
 OVERALL_OPACITY_INDEX = -1
@@ -764,7 +764,7 @@ class TextEffectEditSession:
         return self._insert_effect(before, effect)
 
     def set_hollow_enabled(self, enabled: bool) -> bool:
-        """Enable the unique Hollow value, inserting it when first used.
+        """Insert Hollow when enabled and remove it completely when disabled.
 
         >>> from types import SimpleNamespace
         >>> owner = SimpleNamespace(text_effects=TextEffectStack())
@@ -795,8 +795,10 @@ class TextEffectEditSession:
                     effects.insert(
                         self._insertion_index(state, effect), effect
                     )
-            elif effects[index].enabled != enabled:
-                effects[index] = replace(effects[index], enabled=enabled)
+            elif not enabled:
+                del effects[index]
+            elif not effects[index].enabled:
+                effects[index] = replace(effects[index], enabled=True)
             after.append(replace(state, effects=tuple(effects)))
         return self._commit_complete_states(before, after)
 

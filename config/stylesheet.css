@@ -1849,6 +1849,48 @@ QWidget#RailDockHeader {
     border-radius: 5px 5px 0 0;
 }
 
+QWidget#TextAppearancePanel,
+QWidget#AppearanceEntryBody {
+    background: transparent;
+    border: none;
+}
+QToolButton#AppearanceTab {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0px;
+    padding: 2px 8px;
+}
+QToolButton#AppearanceTab:checked {
+    color: @accentPrimary;
+    border-bottom: 2px solid @accentPrimary;
+}
+QToolButton#AppearanceTab:hover,
+QToolButton#AppearanceEntryToggle:hover {
+    background: @accentPrimary20;
+}
+QToolButton#AppearanceEntryToggle {
+    background: transparent;
+    border: none;
+    padding: 2px 0;
+    font-weight: bold;
+}
+QLabel#AppearanceEntrySummary {
+    color: @disabledForegroundColor;
+    background: transparent;
+    font-size: 11px;
+}
+QToolButton#AppearanceSummaryButton {
+    min-height: 0px;
+    background: @inputBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+QToolButton#AppearanceSummaryButton:hover {
+    border: 1px solid @accentPrimary;
+}
+
 QFrame#RailDockBody {
     background: transparent;
     border: none;
@@ -1868,6 +1910,8 @@ QLabel#RailDockTitle {
 }
 
 QToolButton#RailDockCloseBtn {
+    min-height: 0px;
+    padding: 0px;
     background: transparent;
     border: none;
     border-radius: 4px;
@@ -2071,12 +2115,13 @@ DeleteStyleButton::hover {
 }
 /* ── Text transform panel (stage 5 node H) ─────────────────── */
 QFrame#TextTransformParameterPanel {
-    background: @hoverBackgroundColor;
-    border: 1px solid @borderColor;
-    border-radius: 6px;
+    background: transparent;
+    border: none;
+    border-top: 1px solid @borderColor;
+    border-radius: 0px;
 }
 QFrame#TextTransformParameterPanel[selected="true"] {
-    border: 1px solid @accentPrimary;
+    border-top: 1px solid @accentPrimary;
 }
 QLabel#TextTransformParameterTitle {
     color: @textColor;
@@ -2145,8 +2190,7 @@ QToolButton#AddTextTransformButton:pressed {
 }
 QFrame#TextTransformCardsFrame {
     background: transparent;
-    border: 1px solid @borderColor;
-    border-radius: 6px;
+    border: none;
 }
 QWidget#TextTransformControl,
 QWidget#TextTransformPanelActions,
@@ -2158,6 +2202,7 @@ QToolButton#TextTransformCloseButton {
     background: transparent;
     border: none;
     border-radius: 3px;
+    padding: 0px;
 }
 QToolButton#TextTransformMoveButton:hover,
 QToolButton#TextTransformCloseButton:hover {
@@ -2173,12 +2218,13 @@ QToolButton#TextTransformCloseButton:hover {
    （QLineEdit/QComboBox/QDoubleSpinBox 三类都要有规则——spinbox 匹配
    不到 QLineEdit 规则，缺失会完全无样式）。 */
 QFrame#TextEffectParameterPanel {
-    background: @hoverBackgroundColor;
-    border: 1px solid @borderColor;
-    border-radius: 6px;
+    background: transparent;
+    border: none;
+    border-top: 1px solid @borderColor;
+    border-radius: 0px;
 }
 QFrame#TextEffectParameterPanel[matched="true"] {
-    border: 1px solid @accentPrimary;
+    border-top: 1px solid @accentPrimary;
 }
 QLabel#TextEffectParameterTitle {
     color: @textColor;
@@ -2208,11 +2254,13 @@ QLineEdit#TextEffectParamEditor:disabled {
     color: @disabledForegroundColor;
 }
 /* 效果卡数值框的 Blender 式箱体拖拽外观（与 NoArrowsSpinBox 同套变量） */
-QLineEdit#TextEffectParamEditor[dragState="hover"] {
+QLineEdit#TextEffectParamEditor[dragState="hover"],
+QLineEdit#TextTransformParamEditor[dragState="hover"] {
     background: @dragHoverBgColor;
     border: 1px solid @accentPrimary;
 }
-QLineEdit#TextEffectParamEditor[dragState="drag"] {
+QLineEdit#TextEffectParamEditor[dragState="drag"],
+QLineEdit#TextTransformParamEditor[dragState="drag"] {
     background: @dragActiveBgColor;
     border: 1px solid @accentPrimary;
 }
@@ -2267,6 +2315,8 @@ QToolButton#AddTextEffectButton:pressed {
     background: @hoverBackgroundColor;
 }
 QToolButton#TextEffectHollowButton {
+    min-height: 0px;
+    padding: 0px;
     background: @pushBtnBackgroundColor;
     border: 1px solid @borderColor;
     border-radius: 4px;
@@ -2337,6 +2387,7 @@ QToolButton#TextEffectVisibilityButton {
     background: transparent;
     border: none;
     border-radius: 3px;
+    padding: 0px;
 }
 QToolButton#TextEffectMoveButton:hover,
 QToolButton#TextEffectCloseButton:hover,

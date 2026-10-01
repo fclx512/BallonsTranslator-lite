@@ -18,13 +18,13 @@ from qtpy.QtWidgets import (
     QMessageBox,
     QSizePolicy,
     QStyledItemDelegate,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from utils import config as C
-from utils import face_resolver
-from utils import shared
+from utils import face_resolver, shared
 from utils.base_styles import DIFF_FIELDS, quantize_field
 from utils.fontformat import FontFormat, LineSpacingType, fix_fontweight_qt
 
@@ -38,17 +38,14 @@ from .custom_widget import (
     NoBorderPushBtn,
     QFontChecker,
     SizeComboBox,
+    SizeControlLabel,
     SmallComboBox,
     SmallParamLabel,
-    SizeControlLabel,
     WidePopupComboMixin,
     Widget,
 )
-from .text_style_presets import TextStylePresetPanel
-from .text_engine.effects.edit_session import TextEffectEditSession
-from .text_engine.effects.panel import TextEffectPanel
+from .text_appearance_panel import TextAppearancePanel
 from .text_engine.annotations import (
-    DEFAULT_EMPHASIS_POSITION,
     EMPHASIS_GLYPHS,
     EMPHASIS_POSITIONS,
     EMPHASIS_STYLES,
@@ -60,8 +57,11 @@ from .text_engine.annotations import (
     OLDSTYLE_NUMS,
     RubyValidationError,
 )
+from .text_engine.effects.edit_session import TextEffectEditSession
+from .text_engine.effects.panel import TextEffectPanel
 from .text_engine.transforms.editor import TextTransformEditSession
 from .text_engine.transforms.panel import TextTransformPanel
+from .text_style_presets import TextStylePresetPanel
 from .textitem import TextBlkItem
 
 # 混合态占位符（符号免译）；下拉里以禁用项呈现
@@ -693,15 +693,16 @@ class FontFormatPanel(Widget):
         )
 
         # 效果面板（上游 v1.5.13 移植，scope 裁剪见效果栈移植计划 §六）。
-        # 铺右栏（用户拍板）：效果栈整栈一个可折叠 Section，直接经
-        # view_widget 嵌进右栏格式面板（上游 formatting/panel.py 同款结构），
-        # 不再走窄栏浮层。阴影/渐变/不透明度由效果卡与整体不透明度取代。
+        # 效果与变换共用画布侧外观浮层，右栏只保留固定高度摘要入口。
+        # 两个原会话继续负责值写入、预览取消和撤销边界。
         self.effects_panel = TextEffectPanel(
             self.tr("Text Effects"),
             config_name="show_text_effect_panel",
             config_expand_name="expand_teffect_panel",
         )
         self.effects_editor = TextEffectEditSession(self, self.effects_panel)
+        self.effects_panel.color_dialog_active_changed.connect(self._on_effect_color_dialog_active_changed)
+        self.effects_panel.entry_change_requested.connect(self.effects_editor.resolve_for_save)
 
         # Text transform panel (stage 5 node H) — owned by the same session
         # that talks to the scene controls; the panel is only its UI front.
@@ -714,6 +715,12 @@ class FontFormatPanel(Widget):
             self.texttransform_panel
         )
         self.text_transform_editor.global_format = self.global_format
+        self.texttransform_panel.entry_change_requested.connect(self.text_transform_editor.finish_canvas_edit)
+        self.appearance_panel = TextAppearancePanel(self.effects_panel, self.texttransform_panel)
+        self.appearance_panel.page_changing.connect(self._finish_appearance_edits)
+        self.appearance_panel.hide()
+        self.effects_panel.view_widget.hide()
+        self.texttransform_panel.view_widget.hide()
 
         # Remove View menu entries for these built-in panels (keep the panels
         # functional; prevent accidental hide via View menu). 折叠栏的隐藏
@@ -812,11 +819,21 @@ class FontFormatPanel(Widget):
         self.vlayout.addLayout(basics)
         self.vlayout.addWidget(_hsep())
 
-        # ── 效果 Section（铺右栏，用户拍板）─────────────────────────
-        # 可折叠 PanelArea：默认收起成标题条、展开才占高（右栏不滚动，
-        # 靠折叠撑住，与上游 formatting/panel.py 的 view_widget 同款结构）。
-        self.vlayout.addWidget(self.effects_panel.view_widget)
-        self.vlayout.addWidget(_hsep())
+        # The inspector owns all advanced appearance controls. This fixed
+        # summary row never grows with either stack, protecting text inputs.
+        summary = QHBoxLayout()
+        summary.setContentsMargins(2, 0, 2, 0)
+        summary.setSpacing(6)
+        self.appearance_effects_button = QToolButton(self)
+        self.appearance_transforms_button = QToolButton(self)
+        for index, button in enumerate((self.appearance_effects_button, self.appearance_transforms_button)):
+            button.setObjectName('AppearanceSummaryButton')
+            button.setFixedHeight(30)
+            button.clicked.connect(lambda _checked=False, index=index: self.open_appearance_page(index))
+            summary.addWidget(button, 1)
+        self.vlayout.addLayout(summary)
+        self.effects_panel.state_changed.connect(self._update_appearance_indicator)
+        self.texttransform_panel.state_changed.connect(self._update_appearance_indicator)
 
         # ── Zone C：拓展样式 ──────────────────────────────────────
         # 样式(/变换) 内容外迁画布浮层（图标栏入口）。变换面板以
@@ -847,19 +864,20 @@ class FontFormatPanel(Widget):
         self.annotation_dock = None
         self.emphasis_launcher = None
         self.emphasis_dock = None
-        self.transform_launcher = None
-        self.transform_dock = None
+        self.appearance_launcher = None
+        self.appearance_dock = None
         self.history_launcher = None
         self.history_dock = None
         self.symbol_launcher = None
         self.symbol_dock = None
         self._symbol_panel = None
 
-        self.vlayout.setContentsMargins(0, 0, 0, 0)
+        self.vlayout.setContentsMargins(0, 0, 0, 4)
         self.vlayout.setSpacing(6)
 
         self.focusOnColorDialog = False
         C.active_format = self.global_format
+        self._update_appearance_indicator()
 
         if shared.ALL_FONT_FAMILIES:
             from utils.config import pcfg
@@ -1284,22 +1302,16 @@ class FontFormatPanel(Widget):
             self._set_multi_selection(multi_items, textblk_item)
         elif textblk_item is None:
             focus_w = self.app.focusWidget()
-            focus_p = None if focus_w is None else focus_w.parentWidget()
-            focus_on_fmtoptions = False
-            if self.focusOnColorDialog:
-                focus_on_fmtoptions = True
-            elif focus_p:
-                if focus_p == self or focus_p.parentWidget() == self:
-                    focus_on_fmtoptions = True
+            focus_on_fmtoptions = self.focusOnColorDialog or self._owns_format_widget(focus_w) or self._owns_format_widget(QApplication.activePopupWidget())
             preserve_local_owner = (
                 not transform_items
-                and self.textblk_item is not None
+                and (self.textblk_item is not None or bool(self._active_multi_items))
                 and focus_on_fmtoptions
             )
             if preserve_local_owner:
                 # Formatting focus can briefly clear the canvas selection; use
-                # the retained local item when comparing effective owners.
-                transform_items = [self.textblk_item]
+                # the retained selection when comparing effective owners.
+                transform_items = list(self._active_multi_items or [self.textblk_item])
             if not focus_on_fmtoptions:
                 # Store the current text block's format before switching to global.
                 # 整包 deepcopy 回写仅保留单选→闲置路径：多选镜像副本不回写
@@ -1346,6 +1358,7 @@ class FontFormatPanel(Widget):
         self.effects_editor.replace_targets(transform_items)
         if transform_items:
             self.effects_panel.set_effect_items(transform_items)
+        self._update_appearance_indicator()
         self._sync_annotation_controls()
 
     def _iter_docks(self):
@@ -1353,12 +1366,11 @@ class FontFormatPanel(Widget):
 
         Launchers/docks are None until their ``install_*_launcher`` ran;
         ``getattr`` default keeps this safe on partially-built panels.
-        "effects" was a rail dock until 2026-09-07, when the effect stack
-        moved into the right format panel (铺右栏) and its launcher retired.
+        Appearance hosts both effects and transforms in one inspector.
         The soft keyboard is deliberately NOT in this list: it floats beside
         the focused editor and coexists with rail docks (no slot sharing).
         """
-        for key in ("annotation", "emphasis", "transform", "history"):
+        for key in ("annotation", "emphasis", "appearance", "history"):
             yield (
                 key,
                 getattr(self, f"{key}_launcher", None),
@@ -1401,80 +1413,99 @@ class FontFormatPanel(Widget):
         )
         rail.add_launcher(self.annotation_launcher)
 
-    def install_transform_launcher(self, rail) -> None:
-        """文本变换浮层入口（同注解浮层模式）。
-
-        变换面板不是选中级作用域：无选中项时编辑全局格式
-        （TextTransformEditSession 空 items 走 global_format），所以
-        launcher 在全局模式保持可用、不做禁用。角标在当前块存在
-        变换（变换栈非空或字形斜角非 0）时点亮。开合记忆在
-        ``pcfg.transform_dock_open``。
-        """
+    def install_appearance_launcher(self, rail) -> None:
+        """One effects/transform launcher; retain the existing open-state key."""
         from ui.panel_rail import RailLauncherButton
 
         self.rail = rail
-        self.transform_launcher = RailLauncherButton("rail_transform")
-        self.transform_launcher.setToolTip(self.tr("Text Transform"))
-        self.transform_launcher.toggled.connect(
-            self._on_transform_launcher_toggled
+        self.appearance_launcher = RailLauncherButton("rail_transform")
+        self.appearance_launcher.setToolTip(self.tr("Text Appearance: Effects and Transforms"))
+        self.appearance_launcher.setAccessibleName(self.tr("Text Appearance"))
+        self.appearance_launcher.toggled.connect(
+            self._on_appearance_launcher_toggled
         )
-        rail.add_launcher(self.transform_launcher)
+        rail.add_launcher(self.appearance_launcher)
 
-    def _ensure_transform_dock(self):
-        if self.transform_dock is None:
+    def _ensure_appearance_dock(self):
+        if self.appearance_dock is None:
             from ui.custom_widget import RailDockPanel
 
-            # Content is the panel itself, not its view_widget: the dock
-            # header already carries the "Text Transform" title, so the
-            # panel's own collapsible/fold title bar is dropped and the
-            # scroll content fills the dock width directly (its width-sync
-            # reflows the transform cards to whatever the dock is sized to).
-            self.transform_dock = RailDockPanel(
-                self.tr("Text Transform"),
-                self.texttransform_panel,
+            self.appearance_dock = RailDockPanel(
+                self.tr("Text Appearance"),
+                self.appearance_panel,
                 rail=self.rail,
                 config_open="transform_dock_open",
             )
             # The transform section grids (2-3 columns of label+editor) need
             # real width; 230px is far too cramped, so pin a wider floor.
             # The user can still drag wider; no lower than this.
-            self.transform_dock.setMinimumWidth(340)
-            self.transform_dock.closed.connect(
-                self._on_transform_dock_closed
+            self.appearance_dock.setMinimumSize(340, 240)
+            self.appearance_dock.resize(380, 460)
+            self.appearance_dock._sized = True
+            self.appearance_dock.closed.connect(
+                self._on_appearance_dock_closed
             )
-        return self.transform_dock
+            self._update_appearance_indicator()
+        return self.appearance_dock
 
-    def _on_transform_launcher_toggled(self, checked: bool):
-        if self.transform_dock is None and not checked:
+    def _finish_appearance_edits(self):
+        self.effects_editor.resolve_for_save()
+        self.text_transform_editor.finish_canvas_edit()
+
+    def _on_effect_color_dialog_active_changed(self, active):
+        self.focusOnColorDialog = bool(active)
+
+    def _owns_format_widget(self, widget):
+        if widget is None:
+            return False
+        return any(owner is widget or owner.isAncestorOf(widget) for owner in (self, self.appearance_panel))
+
+    def open_appearance_page(self, index):
+        self.appearance_panel.show_page(index)
+        self._on_appearance_launcher_toggled(True)
+        if self.appearance_launcher is not None:
+            with QSignalBlocker(self.appearance_launcher):
+                self.appearance_launcher.setChecked(True)
+
+    def _on_appearance_launcher_toggled(self, checked: bool):
+        if self.appearance_dock is None and not checked:
             return
         if checked:
-            self._close_other_docks("transform")
-            self._ensure_transform_dock().open_panel()
-        elif self.transform_dock is not None:
-            self.transform_dock.close_panel()
+            self._close_other_docks("appearance")
+            self._ensure_appearance_dock().open_panel()
+        elif self.appearance_dock is not None:
+            self.appearance_dock.close_panel()
 
-    def _on_transform_dock_closed(self):
-        if self.transform_launcher is not None and self.transform_launcher.isChecked():
-            with QSignalBlocker(self.transform_launcher):
-                self.transform_launcher.setChecked(False)
+    def _on_appearance_dock_closed(self):
+        self._finish_appearance_edits()
+        if self.appearance_launcher is not None and self.appearance_launcher.isChecked():
+            with QSignalBlocker(self.appearance_launcher):
+                self.appearance_launcher.setChecked(False)
 
-    def _update_transform_indicator(self):
-        """Rail icon corner dot while the block holds any transform."""
+    def _update_appearance_indicator(self):
+        """Update fixed summaries and explicit scope from canonical data."""
         item = self.textblk_item
-        active = False
-        if item is not None:
-            fmt = item.blk.fontformat
-            transform_active = bool(fmt.text_transform) or (
-                fmt.glyph_slant_angle != 0.0
-            )
-            active = bool(transform_active)
-        if self.transform_launcher is not None:
-            self.transform_launcher.set_dot(active)
-        if self.transform_dock is not None:
-            title = self.tr("Text Transform")
-            if active:
-                title += " •"
-            self.transform_dock.set_title(title)
+        items = self._active_multi_items or ([item] if item is not None else [])
+        formats = [selected.blk.fontformat for selected in items]
+        if not formats:
+            formats = [getattr(self, 'global_format', None)]
+        effect_counts = [len(fmt.text_effects.effects) if fmt is not None else 0 for fmt in formats]
+        transform_counts = [len(fmt.text_transform) + int(fmt.glyph_slant_angle != 0) if fmt is not None else 0 for fmt in formats]
+        def count_label(counts):
+            low, high = min(counts), max(counts)
+            return str(low) if low == high else f'{low}–{high}'
+        effect_count = count_label(effect_counts)
+        transform_count = count_label(transform_counts)
+        if getattr(self, 'appearance_launcher', None) is not None:
+            self.appearance_launcher.set_dot(bool(any(effect_counts) or any(transform_counts)))
+        effects_button = getattr(self, 'appearance_effects_button', None)
+        if effects_button is not None:
+            effects_button.setText(self.tr('Text Effects') + f' · {effect_count}')
+            self.appearance_transforms_button.setText(self.tr('Text Transform') + f' · {transform_count}')
+            self.appearance_panel.set_counts(effect_count, transform_count)
+        if getattr(self, 'appearance_dock', None) is not None:
+            scope = self.tr('Selected Text · {0}').format(len(items)) if len(items) > 1 else (self.tr('Text Block #{0}').format(item.idx + 1) if item is not None else self.tr('New Text Default'))
+            self.appearance_dock.set_title(self.tr('Text Appearance') + ' · ' + scope)
 
     def install_emphasis_launcher(self, rail) -> None:
         """着重号浮层入口（同注解浮层模式，选中级作用域）。
@@ -1720,6 +1751,8 @@ class FontFormatPanel(Widget):
 
     def on_textpanel_visibility(self, visible: bool):
         """嵌字页显隐时同步浮层：页面隐藏则随隐（保留开合状态与勾选）。"""
+        if not visible:
+            self._finish_appearance_edits()
         docks = (
             (
                 self.annotation_launcher,
@@ -1734,9 +1767,9 @@ class FontFormatPanel(Widget):
                 "emphasis_dock_open",
             ),
             (
-                self.transform_launcher,
-                self.transform_dock,
-                self._ensure_transform_dock,
+                self.appearance_launcher,
+                self.appearance_dock,
+                self._ensure_appearance_dock,
                 "transform_dock_open",
             ),
             (
@@ -1791,7 +1824,7 @@ class FontFormatPanel(Widget):
             self.emphasis_launcher.setEnabled(has_item)
         self._update_annotation_indicator()
         self._update_emphasis_indicator()
-        self._update_transform_indicator()
+        self._update_appearance_indicator()
         if item is None:
             return
         with QSignalBlocker(group), QSignalBlocker(self.tcyChecker):

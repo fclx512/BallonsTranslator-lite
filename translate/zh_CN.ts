@@ -1921,6 +1921,26 @@ Hide them all? You can move them back later.</source>
             <source>Auto Symbol Conversion</source>
             <translation>符号自动转换</translation>
         </message>
+        <message>
+            <source>Text Appearance</source>
+            <translation>文字外观</translation>
+        </message>
+        <message>
+            <source>Text Appearance: Effects and Transforms</source>
+            <translation>文字外观：效果与变换</translation>
+        </message>
+        <message>
+            <source>New Text Default</source>
+            <translation>新块默认格式</translation>
+        </message>
+        <message>
+            <source>Text Block #{0}</source>
+            <translation>文本块 #{0}</translation>
+        </message>
+        <message>
+            <source>Selected Text · {0}</source>
+            <translation>已选文本 · {0}</translation>
+        </message>
     </context>
     <context>
         <name>FontStyleManager</name>
@@ -5104,6 +5124,10 @@ Check the log above for details.</source>
             <source>Mixed</source>
             <translation>混合</translation>
         </message>
+        <message>
+            <source>Drag to adjust; Shift for fine control. Click to type.</source>
+            <translation>横向拖动调值，Shift 精调；单击输入。</translation>
+        </message>
     </context>
     <context>
         <name>TransformParameterPanel</name>
@@ -5118,6 +5142,26 @@ Check the log above for details.</source>
         <message>
             <source>Delete Transform</source>
             <translation>删除变换</translation>
+        </message>
+        <message>
+            <source>Reset</source>
+            <translation>重置</translation>
+        </message>
+        <message>
+            <source>Reset Transform</source>
+            <translation>重置此变换</translation>
+        </message>
+        <message>
+            <source>Edit Grid</source>
+            <translation>编辑网格</translation>
+        </message>
+        <message>
+            <source>Done</source>
+            <translation>完成</translation>
+        </message>
+        <message>
+            <source>Drag handles on the canvas. Esc cancels the current drag.</source>
+            <translation>拖动画布上的控制点；Esc 取消本次拖动。</translation>
         </message>
     </context>
     <context>
@@ -8313,6 +8357,17 @@ Configure a mirror in Settings → Network &amp; Mirror Settings, then download 
         <message>
             <source>Switch to the row's page and select its block on the canvas.</source>
             <translation>切换到该行所在页，并在画布上选中对应块。</translation>
+        </message>
+    </context>
+    <context>
+        <name>TextAppearancePanel</name>
+        <message>
+            <source>Effects</source>
+            <translation>效果</translation>
+        </message>
+        <message>
+            <source>Transforms</source>
+            <translation>变换</translation>
         </message>
     </context>
 </TS>

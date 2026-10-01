@@ -19,8 +19,10 @@ Local differences from upstream:
   in node I, and the session starts dispatching automatically from there on.
 """
 
-from typing import List, Optional, Sequence, Union
+from typing import List
 
+from ui import shared_widget as SW
+from ui.text_engine.editing.commands import SetTextTransformCommand
 from utils.fontformat import (
     GridTextTransform,
     ProjectiveTextTransform,
@@ -28,10 +30,6 @@ from utils.fontformat import (
     TextTransformState,
     create_text_transform,
 )
-
-from ui import shared_widget as SW
-from ui.text_engine.editing.commands import SetTextTransformCommand
-
 
 GLYPH_SLANT_INDEX = -1
 
@@ -62,6 +60,8 @@ class TextTransformEditSession:
             controls.transform_preview_canceled.connect(self.cancel_preview)
             controls.transform_add_requested.connect(self.add_transform)
             controls.transform_remove_requested.connect(self.remove_transform)
+            if hasattr(controls, 'transform_reset_requested'):
+                controls.transform_reset_requested.connect(self.reset_transform)
             controls.transform_move_requested.connect(self.move_transform)
             controls.transform_selected.connect(self.select_transform)
 
@@ -150,6 +150,7 @@ class TextTransformEditSession:
                     preview_points=self.preview_grid_points,
                     commit_points=self.commit_grid_points,
                     cancel_edit=self.cancel_grid_edit,
+                    finish_edit=self.finish_canvas_edit,
                 )
                 return
             if (
@@ -226,6 +227,7 @@ class TextTransformEditSession:
             for current, replacement in zip(self.items, items)
         )
         if targets_changed:
+            self._cancel_canvas_drag()
             self.cancel_control_previews()
         else:
             # A focus-only refresh keeps the physical press alive but restores
@@ -256,6 +258,7 @@ class TextTransformEditSession:
         self._commit_states(before, after)
 
     def _prepare_structure_change(self) -> None:
+        self._cancel_canvas_drag()
         # A typed value owns an earlier transaction and must land before the
         # operation list changes its indices.
         if self.controls is not None:
@@ -322,6 +325,27 @@ class TextTransformEditSession:
                 )
             )
         self._commit_states(before, after)
+
+    def reset_transform(self, index: int) -> None:
+        """Restore one stage in place, keeping order and one undo boundary."""
+        self._prepare_structure_change()
+        before = self._current_states()
+        if (
+            not before or not self._has_common_stack_shape(before)
+            or index < 0 or any(index >= len(state.stack) for state in before)
+        ):
+            return
+        after = []
+        for state in before:
+            transforms = list(state.stack)
+            transforms[index] = create_text_transform(transforms[index].transform_type)
+            after.append(TextTransformState(TextTransformStack(tuple(transforms)), state.glyph_slant_angle))
+        self._commit_states(before, after)
+
+    def finish_canvas_edit(self) -> None:
+        """Leave canvas editing, retaining committed gestures and typed values."""
+        self.resolve_for_save()
+        self.select_transform(-1)
 
     def move_transform(self, index: int, direction: int) -> None:
         self._prepare_structure_change()
@@ -596,13 +620,20 @@ class TextTransformEditSession:
 
     def resolve_for_save(self) -> None:
         """Commit typed values and cancel any still-held drag preview."""
+        self._cancel_canvas_drag()
         if self.controls is not None:
             self.controls.finish_pending_transform_edits()
         self.cancel_control_previews()
 
     def resolve_for_history_change(self) -> None:
         """Cancel a live preview before application undo or redo."""
+        self._cancel_canvas_drag()
         self.cancel_control_previews()
+
+    def _cancel_canvas_drag(self) -> None:
+        control = getattr(getattr(SW, 'canvas', None), 'textGridControl', None)
+        if control is not None and control.item in self.items:
+            control.cancel_handle_drag()
 
     def resolve_for_page_change(self) -> None:
         """End transform ownership before the old page is saved and removed."""

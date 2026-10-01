@@ -13,7 +13,7 @@
 - fork 交互：对齐吸附、块悬停移动光标、``moved`` 仅在位置真正变化时发出。
 """
 
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Union
 
 from qtpy.QtCore import QPointF, QRectF, Qt, Signal
 from qtpy.QtGui import (
@@ -34,18 +34,16 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from ui.misc import get_theme_color
+from ui.text_engine.item import TextBlkItem as _EngineTextBlkItem
 from utils.block_tags import TAG_REGISTRY, TagDef, sorted_tag_ids
 from utils.config import pcfg
 from utils.fontformat import (
-    FontFormat,
-    TextTransformState,
     TextTransformStack,
+    TextTransformState,
 )
 from utils.text_alignment import SNAP_THRESHOLD, compute_snap
 from utils.textblock import TextBlock as TextBlock
-
-from ui.misc import get_theme_color
-from ui.text_engine.item import TextBlkItem as _EngineTextBlkItem
 
 TEXTRECT_SHOW_COLOR = QColor(30, 147, 229, 170)
 TEXTRECT_SELECTED_COLOR = QColor(248, 64, 147, 170)
@@ -571,32 +569,22 @@ class TextBlkItem(_EngineTextBlkItem):
 
     def _draw_effects_pixmap(self, painter: QPainter):
         """Draw the stroke/shadow cache at the active device scale."""
+        # The effect renderer owns composition while painting a completed
+        # foreground or a layout distortion. Its native callback only paints
+        # interaction/text; drawing the cache again would duplicate effects.
+        if self.effect_renderer.in_graphics_paint:
+            return
         self.effect_renderer.ensure_host_background(painter)
         background = self.effect_renderer.background_pixmap
         if background is not None:
-            # 渲染器只在 render_scale >= 1.0 时给缓存设 DPR（见
-            # renderer._new_effect_pixmap）：降档缓存（如 0.5 档）按
-            # 点绘制会被 1:1 画出半尺寸幽灵文本，须矩形拉伸（对齐渲染器
-            # 内部 _draw_surface_pixmap 的降档语义）。
-            dpr = background.devicePixelRatio() or 1.0
-            target = self.boundingRect()
-            logical_w = background.width() / dpr
-            logical_h = background.height() / dpr
-            if abs(logical_w - target.width()) > 0.5 or abs(
-                logical_h - target.height()
-            ) > 0.5:
-                painter.drawPixmap(
-                    QRectF(
-                        target.topLeft(),
-                        QRectF(target).size(),
-                    ),
-                    background,
-                    QRectF(background.rect()),
-                )
-            else:
-                # Point-based draw so the cache's devicePixelRatio governs
-                # raster resolution; the pixmap is already at device scale.
-                painter.drawPixmap(target.topLeft(), background)
+            # Cache pixels are source-local even while item bounds contain
+            # warped overhang. Use the renderer's common DPR/tier draw path.
+            self.effect_renderer._draw_surface_pixmap(
+                painter,
+                self.effect_renderer.boundingRect(),
+                background,
+                self.effect_renderer.background_pixmap_scale or 1.0,
+            )
 
     def _draw_accessories(self, painter: QPainter):
         br = self.boundingRect()
