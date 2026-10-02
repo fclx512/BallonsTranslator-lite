@@ -531,6 +531,8 @@ class SceneTextManager(QObject):
             self.addTextBlock(textblock)
         if self.auto_textlayout_flag:
             self.updateTextBlkList()
+        # 整本对齐模式开着时换页：新页块项就位后通知对话框重算幽灵预览
+        self.canvas.notify_align_page_refreshed()
 
     def updateSceneTextitems(
         self,

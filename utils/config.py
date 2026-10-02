@@ -414,6 +414,13 @@ class ProgramConfig(Config):
     # 不要改成 cuda。
     region_redetect_device: str = "cpu"
 
+    # 整本对齐（原「高级对齐」）对话框的记忆项：方向 / 各轴对齐边 / 范围口径，
+    # 下次打开按此恢复（目标坐标是页面相关值，不记忆）。
+    point_align_axis: str = "y"  # "x" | "y"
+    point_align_edge_y: str = "top"  # top | center | bottom
+    point_align_edge_x: str = "left"  # left | center | right
+    point_align_all_pages: bool = True
+
     fsearch_case: bool = False
     fsearch_whole_word: bool = False
     fsearch_regex: bool = False

@@ -529,8 +529,8 @@ class TitleBar(Widget):
         self.quickSymbolAction = quickSymbolAction
         self.quick_symbol_trigger = quickSymbolAction.triggered
 
-        # Advanced Alignment
-        advAlignAction = QAction(self.tr("Advanced Alignment"), self)
+        # Whole-book Alignment（整本对齐，原「高级对齐」）
+        advAlignAction = QAction(self.tr("Whole-book Alignment"), self)
         self.adv_align_trigger = advAlignAction.triggered
 
         # 整理换行

@@ -4368,11 +4368,6 @@ Orientation: {o}</source>
         </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" />
-            <source>Advanced Alignment</source>
-            <translation>高级对齐</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindowbars.py" />
             <source>Normalize Breaks…</source>
             <translation>整理换行…</translation>
         </message>
@@ -4397,6 +4392,10 @@ Orientation: {o}</source>
         <message>
             <source>Soft Keyboard</source>
             <translation>软键盘</translation>
+        </message>
+        <message>
+            <source>Whole-book Alignment</source>
+            <translation>整本对齐</translation>
         </message>
     </context>
     <context>
@@ -4634,11 +4633,6 @@ Check the log above for details.</source>
             <translation>合并工具</translation>
         </message>
         <message>
-            <location filename="..\ui\configpanel.py" line="808" />
-            <source>Advanced Alignment</source>
-            <translation>高级对齐</translation>
-        </message>
-        <message>
             <location filename="..\ui\configpanel.py" line="756" />
             <source>Toggle Original Compare</source>
             <translation>切换原文对照</translation>
@@ -4711,6 +4705,10 @@ Check the log above for details.</source>
             <source>Tag: Review Source Later</source>
             <translation>打标：稍后校对</translation>
         </message>
+        <message>
+            <source>Whole-book Alignment</source>
+            <translation>整本对齐</translation>
+        </message>
     </context>
     <context>
         <name>ShortcutEditor</name>
@@ -4765,24 +4763,9 @@ Check the log above for details.</source>
     <context>
         <name>PointAlignDialog</name>
         <message>
-            <location filename="..\ui\point_align_dialog.py" line="54" />
-            <source>Advanced Alignment</source>
-            <translation>高级对齐</translation>
-        </message>
-        <message>
             <location filename="..\ui\point_align_dialog.py" line="85" />
             <source>Target Position</source>
             <translation>目标位置</translation>
-        </message>
-        <message>
-            <location filename="..\ui\point_align_dialog.py" line="96" />
-            <source>Pick</source>
-            <translation>拾取</translation>
-        </message>
-        <message>
-            <location filename="..\ui\point_align_dialog.py" line="106" />
-            <source>Alignment Mode</source>
-            <translation>对齐模式</translation>
         </message>
         <message>
             <location filename="..\ui\point_align_dialog.py" line="122" />
@@ -4810,47 +4793,48 @@ Check the log above for details.</source>
             <translation>第%1页 ~ 第%2页（共%3页）</translation>
         </message>
         <message>
-            <location filename="..\\ui\\point_align_dialog.py" line="66" />
-            <source>Alignment Axis</source>
-            <translation>对齐轴</translation>
+            <source>Align</source>
+            <translation>对齐</translation>
         </message>
         <message>
-            <location filename="..\\ui\\point_align_dialog.py" line="69" />
-            <source>X Axis</source>
-            <translation>X 轴</translation>
+            <source>Bottom Edges</source>
+            <translation>下边缘</translation>
         </message>
         <message>
-            <location filename="..\\ui\\point_align_dialog.py" line="70" />
-            <source>Y Axis</source>
-            <translation>Y 轴</translation>
+            <source>Drag the guide line on canvas, click a block to take its edge, or type a value</source>
+            <translation>拖动画布基准线、点击文字块取边，或直接输入</translation>
         </message>
         <message>
-            <source>Align Left Edges</source>
-            <translation>左边缘对齐</translation>
+            <source>Horizontal (X)</source>
+            <translation>水平（X）</translation>
         </message>
         <message>
-            <source>Align Centers</source>
-            <translation>中心对齐</translation>
+            <source>Horizontal Centers</source>
+            <translation>水平居中</translation>
         </message>
         <message>
-            <source>Align Right Edges</source>
-            <translation>右边缘对齐</translation>
+            <source>Left Edges</source>
+            <translation>左边缘</translation>
         </message>
         <message>
-            <source>Align Top Edges</source>
-            <translation>顶边缘对齐</translation>
+            <source>Right Edges</source>
+            <translation>右边缘</translation>
         </message>
         <message>
-            <source>Align Bottom Edges</source>
-            <translation>底边缘对齐</translation>
+            <source>Top Edges</source>
+            <translation>上边缘</translation>
         </message>
         <message>
-            <source>X:</source>
-            <translation>X:</translation>
+            <source>Vertical (Y)</source>
+            <translation>垂直（Y）</translation>
         </message>
         <message>
-            <source>Y:</source>
-            <translation>Y:</translation>
+            <source>Vertical Centers</source>
+            <translation>垂直居中</translation>
+        </message>
+        <message>
+            <source>Whole-book Alignment</source>
+            <translation>整本对齐</translation>
         </message>
     </context>
     <context>
@@ -6222,10 +6206,6 @@ Check the log above for details.</source>
     <context>
         <name>UndoCommand</name>
         <message>
-            <source>Advanced Alignment</source>
-            <translation>高级对齐</translation>
-        </message>
-        <message>
             <source>Apply Font Format</source>
             <translation>应用字体格式</translation>
         </message>
@@ -6396,6 +6376,10 @@ Check the log above for details.</source>
         <message>
             <source>Region Re-detect</source>
             <translation>区域再检测</translation>
+        </message>
+        <message>
+            <source>Whole-book Alignment</source>
+            <translation>整本对齐</translation>
         </message>
     </context>
     <context>

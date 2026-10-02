@@ -16,6 +16,7 @@ from qtpy.QtCore import (
     Signal,
 )
 from qtpy.QtGui import (
+    QBrush,
     QColor,
     QCursor,
     QHideEvent,
@@ -59,7 +60,12 @@ from utils.proj_imgtrans import ProjImgTrans
 from .custom_widget import ScrollBar
 from .custom_widget.notification import notification
 from .image_edit import DrawingLayer, ImageEditMode, StrokeImgItem
-from .misc import ARROWKEY2DIRECTION, QKEY, ndarray2pixmap
+from .misc import (
+    ARROWKEY2DIRECTION,
+    QKEY,
+    get_theme_color,
+    ndarray2pixmap,
+)
 from .page_search_widget import PageSearchWidget
 from .text_engine.transforms.grid_control import (
     GridControlPointItem,
@@ -416,7 +422,6 @@ class Canvas(QGraphicsScene):
     incanvas_selection_changed = Signal()
     align_textblks = Signal(str)
     merge_textblks = Signal()
-    position_picked = Signal(int)
     switch_text_item = Signal(int, QKeyEvent)
 
     # Path-reorder mode
@@ -438,8 +443,10 @@ class Canvas(QGraphicsScene):
         self.snap_guide_item = SnapGuideItem()
         self.creating_textblock = False
         self._text_creation_cursor_active = False
-        self._pick_axis = None  # "x" | "y" | None — canvas coordinate pick mode
-        self._pick_line = None
+        self._align_axis = None  # "x" | "y" — 整本对齐模式（None=未激活）
+        self._align_line: QGraphicsLineItem = None
+        self._align_ghosts: List[QGraphicsRectItem] = []
+        self._align_dragging = False
         # Path-reorder mode (replaces grid-based Smart Reorder)
         self._reorder_mode = False
         self._reorder_drawing = False       # left button currently held
@@ -1077,15 +1084,13 @@ class Canvas(QGraphicsScene):
         return textblk_created
 
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent) -> None:
-        if self._pick_axis is not None and self._pick_line is not None:
-            pos = event.scenePos()
-            scene_w = max(self.sceneRect().width() or 2000, 2000)
-            scene_h = max(self.sceneRect().height() or 2000, 2000)
-            if self._pick_axis == "y":
-                self._pick_line.setLine(0, pos.y(), scene_w, pos.y())
-            else:
-                self._pick_line.setLine(pos.x(), 0, pos.x(), scene_h)
-            self._pick_line.show()
+        # 整本对齐模式 — 拖动基准线实时回推目标值
+        if self.is_align_mode():
+            if self._align_dragging:
+                pos = event.scenePos()
+                val = round(pos.y() if self._align_axis == "y" else pos.x())
+                self._place_align_line(val)
+                self.align_target_changed.emit(val)
             return
 
         # Path-reorder mode — extend stroke and check intersections
@@ -1169,42 +1174,47 @@ class Canvas(QGraphicsScene):
             sel_textitems.sort(key=lambda x: x.idx)
         return sel_textitems
 
-    # ── Coordinate pick mode (for Advanced Alignment) ─────────
+    # ── Whole-book align mode (整本对齐) ─────────────────────────
+    # 对话框（非模态）打开期间的画布随行状态：基准线可拖动、点击文字块
+    # 取其对齐边、点空白直接落线；幽灵预览矩形由对话框按当前轴/对齐边/
+    # 目标计算后经 set_align_ghosts 推送，画布只负责渲染。
 
-    def enter_pick_mode(self, axis: str):
-        """Enter coordinate picking mode on the given axis.
+    align_target_changed = Signal(int)  # 拖线/点空白 → 新目标（场景坐标整数）
+    align_block_picked = Signal(object)  # 点击到文字块 → TextBlkItem
+    align_page_refreshed = Signal()  # 对齐模式下页面场景重建完成（换页刷预览）
 
-        Args:
-            axis: ``"x"`` for vertical line (picks X), ``"y"`` for horizontal (picks Y).
-        """
-        self._pick_axis = axis
-        self.gv.setCursor(Qt.CursorShape.CrossCursor)
+    _ALIGN_GRAB_PX = 10  # 抓取基准线的屏幕像素容差
+
+    def enter_align_mode(self, axis: str, target: float):
+        """进入整本对齐模式：画一条可拖动的基准线。"""
+        self._align_axis = axis
+        self._align_dragging = False
         self.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
-        scene_w = max(self.sceneRect().width() or 2000, 2000)
-        scene_h = max(self.sceneRect().height() or 2000, 2000)
-        self._pick_line = QGraphicsLineItem()
-        pen = QPen(QColor(255, 0, 255), 0)  # magenta, cosmetic
+        self.gv.setCursor(Qt.CursorShape.CrossCursor)
+        self.set_canvas_cursor(Qt.CursorShape.CrossCursor)
+        self._align_line = QGraphicsLineItem()
+        pen = QPen(get_theme_color(), 0)  # 主题强调色，cosmetic（屏幕等宽）
         pen.setStyle(Qt.PenStyle.DashLine)
-        self._pick_line.setPen(pen)
-        self._pick_line.setZValue(200)  # above everything
-        if axis == "y":
-            self._pick_line.setLine(0, 0, scene_w, 0)
-        else:
-            self._pick_line.setLine(0, 0, 0, scene_h)
-        self.addItem(self._pick_line)
-        self._pick_line.hide()
+        self._align_line.setPen(pen)
+        self._align_line.setZValue(200)  # above everything
+        self.addItem(self._align_line)
+        self._place_align_line(target)
+        self._align_line.show()
 
-    def exit_pick_mode(self):
-        """Exit coordinate picking mode and clean up the guide line.
-
-        Does NOT restore drag mode — call :meth:`restore_drag_mode`
-        after the dialog fully closes so mouse events settle.
-        """
-        self._pick_axis = None
+    def leave_align_mode(self):
+        """退出整本对齐模式并清理基准线与幽灵预览。"""
+        self._align_axis = None
+        self._align_dragging = False
+        self.clear_align_ghosts()
+        if self._align_line is not None:
+            self.removeItem(self._align_line)
+            self._align_line = None
+        # enter_align_mode 把十字丝同时挂在视图与 baseLayer（防块项光标
+        # 顶掉），收尾要两处都清——只清视图的话场景层十字丝会残留成
+        # 「精确选择」粘在画布上（同 exitReorderMode 三件套）。
         self.gv.unsetCursor()
-        if self._pick_line is not None:
-            self.removeItem(self._pick_line)
-            self._pick_line = None
+        self.clear_canvas_cursor()
+        self.restore_drag_mode()
 
     def restore_drag_mode(self):
         """Restore the normal canvas drag mode — NoDrag, because left-drag is
@@ -1218,9 +1228,74 @@ class Canvas(QGraphicsScene):
         self.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
         self.gv.setCursor(Qt.CursorShape.ArrowCursor)
 
-    def is_picking(self) -> bool:
-        """Return whether we are in coordinate picking mode."""
-        return self._pick_axis is not None
+    def is_align_mode(self) -> bool:
+        return self._align_axis is not None
+
+    def _place_align_line(self, target: float):
+        """按当前轴把基准线摆到 target（场景坐标）。"""
+        if self._align_line is None:
+            return
+        scene_w = max(self.sceneRect().width() or 2000, 2000)
+        scene_h = max(self.sceneRect().height() or 2000, 2000)
+        if self._align_axis == "y":
+            self._align_line.setLine(0, target, scene_w, target)
+        else:
+            self._align_line.setLine(target, 0, target, scene_h)
+
+    def set_align_guide(self, axis: str, target: float):
+        """对话框侧目标变化（数值框/轴/对齐边）→ 同步基准线。"""
+        if self._align_axis is None:
+            return
+        if axis != self._align_axis:
+            self._align_axis = axis
+        self._place_align_line(target)
+
+    def clear_align_ghosts(self):
+        for it in self._align_ghosts:
+            self.removeItem(it)
+        self._align_ghosts.clear()
+
+    def set_align_ghosts(self, rects: List[QRectF]):
+        """重建幽灵预览矩形（对话框已按目标算好的落点，场景坐标）。"""
+        self.clear_align_ghosts()
+        if self._align_axis is None:
+            return
+        color = QColor(get_theme_color())
+        color.setAlpha(46)
+        border = QColor(get_theme_color())
+        border.setAlpha(140)
+        for r in rects:
+            item = QGraphicsRectItem(r)
+            item.setBrush(QBrush(color))
+            item.setPen(QPen(border, 0))
+            item.setZValue(190)  # 在块上方、基准线下
+            item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+            self.addItem(item)
+            self._align_ghosts.append(item)
+
+    def notify_align_page_refreshed(self):
+        """换页等场景重建后由场景文本重建层调用，通知对话框刷预览。"""
+        if self.is_align_mode():
+            # 基准线长度随新页面场景矩形重摆（位置不变，由对话框回推）
+            self.align_page_refreshed.emit()
+
+    def _align_hit_line(self, pos: QPointF) -> bool:
+        """落点是否在基准线的屏幕像素容差内。"""
+        if self._align_line is None:
+            return False
+        m11 = self.gv.transform().m11() or 1.0
+        tol = self._ALIGN_GRAB_PX / m11
+        line = self._align_line.line()
+        if self._align_axis == "y":
+            return abs(pos.y() - line.y1()) <= tol
+        return abs(pos.x() - line.x1()) <= tol
+
+    def _align_top_item_at(self, pos: QPointF):
+        """落点处最上层的文字块 item（无则 None）。"""
+        for it in self.items(pos):
+            if isinstance(it, TextBlkItem):
+                return it
+        return None
 
     # ── Path-reorder mode ───────────────────────────────────────
 
@@ -1420,11 +1495,20 @@ class Canvas(QGraphicsScene):
         # that still slips through for any reason (2026-08-18).
         self._dismiss_open_pie_menu()
 
-        # Coordinate picking mode — capture scene X or Y on any click
-        if self._pick_axis is not None and btn == Qt.MouseButton.LeftButton:
+        # Whole-book align mode — 抓线拖动 / 点块取对齐边 / 点空白落线
+        if self.is_align_mode() and btn == Qt.MouseButton.LeftButton:
             pos = event.scenePos()
-            val = round(pos.y() if self._pick_axis == "y" else pos.x())
-            self.position_picked.emit(val)
+            if self._align_hit_line(pos):
+                self._align_dragging = True
+                return
+            blk_item = self._align_top_item_at(pos)
+            if blk_item is not None:
+                self.align_block_picked.emit(blk_item)
+                return
+            val = round(pos.y() if self._align_axis == "y" else pos.x())
+            self._place_align_line(val)
+            self.align_target_changed.emit(val)
+            self._align_dragging = True
             return
 
         # Path-reorder mode — start drawing a stroke
@@ -1519,6 +1603,11 @@ class Canvas(QGraphicsScene):
 
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent) -> None:
         btn = event.button()
+
+        # Whole-book align mode — end guide drag
+        if self.is_align_mode() and btn == Qt.MouseButton.LeftButton:
+            self._align_dragging = False
+            return
 
         # Path-reorder mode — finish stroke and emit results
         if self._reorder_drawing and btn == Qt.MouseButton.LeftButton:

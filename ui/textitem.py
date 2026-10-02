@@ -697,7 +697,11 @@ class TextBlkItem(_EngineTextBlkItem):
         (2026-08-25).
         """
         canvas = self.scene()
-        if canvas is not None and getattr(canvas, "_reorder_mode", False):
+        if canvas is not None and (
+            getattr(canvas, "_reorder_mode", False)
+            # 整本对齐模式：块上保持十字丝，避免移动光标误导拖拽
+            or canvas.is_align_mode()
+        ):
             self.unsetCursor()
             return
         if self.is_editting():

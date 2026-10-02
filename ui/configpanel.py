@@ -782,7 +782,7 @@ _ACTION_NAMES = {
     "ai_tool": QCoreApplication.translate("_ShortcutRow", "AI Inpaint"),
     "merge_tool": QCoreApplication.translate("_ShortcutRow", "Merge Tool"),
     "quick_symbol": QCoreApplication.translate("_ShortcutRow", "Soft Keyboard"),
-    "advanced_align": QCoreApplication.translate("_ShortcutRow", "Advanced Alignment"),
+    "advanced_align": QCoreApplication.translate("_ShortcutRow", "Whole-book Alignment"),
     "merge_blks": QCoreApplication.translate("_ShortcutRow", "Merge Text Blocks"),
     "toggle_original_opacity": QCoreApplication.translate("_ShortcutRow", "Toggle Original Compare"),
     "path_reorder": QCoreApplication.translate("_ShortcutRow", "Path Reorder"),

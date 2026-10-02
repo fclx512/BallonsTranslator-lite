@@ -12,6 +12,24 @@
 >
 > 仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护）；被裁掉的日期节仍完整留在提交历史里，用 `git log --grep <关键词>`／`git log --follow -p -- docs/daily_log.md`／`git show <rev>:docs/daily_log.md` 回查。
 
+## 2026-10-02
+
+### 高级对齐改名「整本对齐」并重构交互（`PointAlignDialog` / `canvas.enter_align_mode` / `pcfg.point_align_*`）
+
+**摘要：** 该功能实际只服务全竖排差分本，原名不达意，改为「整本对齐 / Whole-book Alignment」（内部符号与快捷键 id `advanced_align` 不变）。交互从「选轴→手填/隐藏对话框取点坐标→确定」重做为非模态＋画布对齐模式：点块取对齐边、基准线可拖实时回推、当前页幽灵落点预览、打开时目标＝当前页对齐边众数（`smart_default_target`）、方向/对齐边/范围口径记忆在 `pcfg.point_align_axis/edge_y/edge_x/all_pages`；对齐模式换 `_SegmentedBar` 自绘分段条（带示意图标，仅对话框专用不入 custom_widget）。用户验收报「退出后鼠标粘住精确选择」＝`leave_align_mode` 漏清 `baseLayer` 场景层十字丝（同 `exitReorderMode` 三件套），已修并钉进演练台断言。
+**涉及文件：** `ui/point_align_dialog.py`、`ui/canvas.py`、`ui/mainwindow.py`、`ui/mainwindowbars.py`、`ui/configpanel.py`、`ui/textitem.py`、`ui/text_engine/editing/manager.py`、`utils/config.py`、`scripts/mw_repro.py`、`translate/zh_CN.ts`
+**验证：** 演练台新场景 `align-dialog` 全链路（智能默认/拖线/点块/换轴/幽灵/确定落位/画布清理/光标两处清）；`scripts/verify.py` 全绿；pytest 1542 passed；用户真机验收（交互）通过。
+
+---
+
+### 单选按钮全局改「圆环＋主题色圆点」（`config/stylesheet.css` QRadioButton）
+
+**摘要：** 原选中态是整圆涂满强调色，观感笨重。改为细描边圆环＋radial gradient 硬过渡画的中心圆点，走 `@accentPrimary` 主题变量随深浅主题换色；未选中态与复选框统一 1px 边框＋输入底色。不用 SVG 图标方案：`icons/checkbox_checked.svg` 对勾色写死 `#1e93e5` 深色主题不换色（既有不一致，用户确认维持现状）。
+**涉及文件：** `config/stylesheet.css`
+**验证：** 离屏渲染浅色/深色/禁用四态目视；真机验收通过。
+
+---
+
 ## 2026-10-01
 
 ### Ruff 检查整理（`scripts/verify.py` / `NUMBA_CACHE_DIR`）
@@ -100,34 +118,3 @@
 
 ---
 
-## 2026-09-29
-
-### README 大画幅演示动画流程落地（`scripts/gen_readme_anim.py` 首个场景 `format_tour` + `anim_kit` 流式/裁切改造）
-
-**摘要：** 首个 README 演示落地，同时实战验证组件化机制层：场景（主页面右侧格式面板基础排版巡礼，镜头跟随光标一镜到底）全部用既有原语组装，机制层只动了两处——`scripts/anim_kit.py::iter_frames` 增视口裁切钩子（camera 回调逐帧裁切）、`save_webp` 改流式（生成器喂 `append_images`，大画幅内存至多持有当前一帧）。画布文本块走真机引擎（`ui/textitem.py::TextBlkItem` + 引擎 setter），竖排几何天然正确、弹层流程的手绘探针验收消失；实测无损编码仍优于有损（纯色 UI），镜头目标须钳在画布内否则帧尺寸漂移。制作坑（布局惰性激活致航点全错、真弹层 grab 抓不到须画覆盖层、须从仓库根运行）写入使用说明 README 流程节。
-
-**涉及文件：** `scripts/gen_readme_anim.py`（新增）、`scripts/anim_kit.py`、`scripts/README.md`、`docs/基础速查/备注演示动画使用说明.md`
-
-**验证：** 弹层 7 场景重生成产物逐字节一致（`anim_kit` 改造零回归）；真机 `mw_repro.py` 临时场景查看通过（测后接线已拆除）；产物 1760×1120 无损 2.9MB，210 帧 @20fps。
-
----
-
-### 演示动画生成管线组件化（`scripts/anim_kit.py` 机制库 + `CursorPlan`/`AnimScene` + `CheckboxDemoScene` 预设）
-
-**摘要：** 原 `_DemoScene` 把机制与"复选框单点叙事"的版式/节奏焊死，叙事不匹配的功能只能硬套或整个重写。拆成共享机制库 `scripts/anim_kit.py`（确定性时间轴原语、光标编排 `CursorPlan`、场景基类 `AnimScene`、文案/绘制组件、渲染编码，对画布尺寸/文案位置零假设）+ `scripts/gen_help_anim.py`（弹层版式常量与 7 个场景）；复选框场景走 `CheckboxDemoScene` 预设，下拉选择类照 `PunctuationScene` 自行组装，`clip_text` 三拍光标交 `CursorPlan`、删掉整段 `set_state` 覆写。为 README 大画幅流程留好接口，流程约束（独立注册表、镜头跟随光标、可损编码）写入使用说明，脚本首个演示落地时再建。
-
-**涉及文件：** `scripts/anim_kit.py`（新增）、`scripts/gen_help_anim.py`、`docs/基础速查/备注演示动画使用说明.md`、`scripts/README.md`
-
-**验证：** 重构前后 `--all --dump-frames` 逐帧逐像素比对，7 场景 161 帧 0 差异（仓库 webp 产物零变更）；`scripts/verify.py` 全绿。
-
----
-
-### 入库演示动画钉定 DPR 1.25（`gen_help_anim.py::_resolve_dpr`）+ 重生成总数改读 `TOTAL` 行
-
-**摘要：** 仓库默认动画此前按生成机屏幕 DPR 渲染，换工作机重出尺寸会漂。改为双轨：写仓库默认目录自动钉 DPR 1.25（`QT_ENABLE_HIGHDPI_SCALING=0` + `QT_SCALE_FACTOR=1.25`，先于 QApplication 设置），跨机重出逐字节一致（实测与既有产物逐字节相同）；本机覆盖层（设置页按钮）仍按本机真实 DPR（覆盖层的意义就是本机适配）；`--dpr` 显式覆盖。README 流程不受此约束。附带：`ui/configpanel.py` 重生成状态条总数不再写死 7，从子进程 stdout 的 `TOTAL n` 行解析。
-
-**涉及文件：** `scripts/gen_help_anim.py`、`ui/configpanel.py`、`docs/基础速查/备注演示动画使用说明.md`、`scripts/README.md`
-
-**验证：** 本机连续两次 `--all` 产物逐字节一致；与仓库既有 webp 逐字节相同（原生 125% 渲染与钉定渲染等价，产物无需变更）。
-
----

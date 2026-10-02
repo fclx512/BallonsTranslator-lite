@@ -198,7 +198,7 @@ class _PointAlignCommand(QUndoCommand):
 
     def __init__(self, canvas, data_changes, item_changes=None):
         super().__init__(
-            QCoreApplication.translate("UndoCommand", "Advanced Alignment")
+            QCoreApplication.translate("UndoCommand", "Whole-book Alignment")
         )
         self.canvas = canvas
         # (TextBlock, [old_x, old_y, old_w, old_h], [new_x, new_y, new_w, new_h])
@@ -2416,7 +2416,7 @@ class MainWindow(mainwindow_cls):
         if _sym_launcher is not None:
             self.titleBar.quickSymbolAction.setChecked(_sym_launcher.isChecked())
             _sym_launcher.toggled.connect(self.titleBar.quickSymbolAction.setChecked)
-        self.titleBar.adv_align_trigger.connect(self.on_open_advanced_align)
+        self.titleBar.adv_align_trigger.connect(self.on_open_whole_book_align)
         self.titleBar.normalize_breaks_triggered.connect(
             self.on_open_normalize_breaks_dialog
         )
@@ -2563,7 +2563,7 @@ class MainWindow(mainwindow_cls):
             "quick_symbol", self.on_open_quick_symbol
         )
         self.shortcut_registry["advanced_align"] = self._make_shortcuts(
-            "advanced_align", self.on_open_advanced_align
+            "advanced_align", self.on_open_whole_book_align
         )
         self.shortcut_registry["toggle_original_opacity"] = self._make_shortcuts(
             "toggle_original_opacity", self.shortcutToggleOriginalOpacity
@@ -2880,10 +2880,9 @@ class MainWindow(mainwindow_cls):
         """Toggle the Quick Symbol rail dock (text panel format rail)."""
         self.textPanel.formatpanel.toggle_symbol_dock()
 
-    def on_open_advanced_align(self):
-        """Open Advanced Alignment dialog."""
-        num_pages = self.imgtrans_proj.num_pages
-        if num_pages == 0:
+    def on_open_whole_book_align(self):
+        """打开整本对齐对话框（非模态，画布同步进入对齐模式）。"""
+        if self.imgtrans_proj.num_pages == 0:
             from qtpy.QtWidgets import QMessageBox
 
             QMessageBox.warning(
@@ -2891,69 +2890,34 @@ class MainWindow(mainwindow_cls):
             )
             return
 
-        from .point_align_dialog import PointAlignDialog
-
-        dialog = PointAlignDialog(num_pages, self)
-        canvas = self.canvas
-
-        # Use QEventLoop instead of exec_() so hide() during pick
-        # doesn't cause exec_() to return Rejected (Qt behavior:
-        # hide() on a modal dialog during exec_() returns Rejected).
-        _picking = False
-        _accepted = False
-        loop = QEventLoop()
-
-        def on_pick():
-            """Dialog 'Pick' button clicked — enter canvas pick mode."""
-            nonlocal _picking
-            if _picking:
-                return
-            _picking = True
-            dialog.hide()
-            canvas.enter_pick_mode(dialog.alignment_axis())
-
-        def on_position_picked(val: int):
-            """Canvas emitted a coordinate — restore dialog after event unwind."""
-            nonlocal _picking
-            if not _picking:
-                return
-            _picking = False
-            canvas.exit_pick_mode()  # keeps NoDrag — drag restored in on_accepted/on_rejected
-            dialog.set_picked_value(val)
-            # Defer show() so mouseReleaseEvent can unwind normally
-            from qtpy.QtCore import QTimer
-            QTimer.singleShot(0, dialog.show)
-
-        def on_accepted():
-            nonlocal _accepted
-            _accepted = True
-            if _picking:
-                canvas.exit_pick_mode()
-            canvas.restore_drag_mode()
-            loop.quit()
-
-        def on_rejected():
-            """Dialog cancelled — ensure canvas is clean."""
-            if _picking:
-                canvas.exit_pick_mode()
-            canvas.restore_drag_mode()
-            loop.quit()
-
-        dialog.pick_clicked.connect(on_pick)
-        canvas.position_picked.connect(on_position_picked)
-        dialog.accepted.connect(on_accepted)
-        dialog.rejected.connect(on_rejected)
-
-        # Show modeless (not modal) — hide() during pick won't cancel it
-        dialog.show()
-        loop.exec_()
-
-        if not _accepted:
+        if (
+            hasattr(self, "_align_dialog")
+            and self._align_dialog is not None
+            and self._align_dialog.isVisible()
+        ):
+            self._align_dialog.raise_()
+            self._align_dialog.activateWindow()
             return
 
+        from .point_align_dialog import PointAlignDialog
+
+        dialog = PointAlignDialog(
+            self.imgtrans_proj, self.st_manager, self.canvas, self
+        )
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.finished.connect(self._on_align_dialog_finished)
+        self._align_dialog = dialog
+        dialog.show()
+
+    def _on_align_dialog_finished(self, result):
+        """对齐对话框关闭：确定则按当前配置执行整本对齐。"""
+        dialog = self.sender()
+        self._align_dialog = None
+        if result != QDialog.Accepted or dialog is None:
+            return
         target = dialog.target_value()
-        axis = dialog.alignment_axis()
-        mode = dialog.alignment_mode()
+        axis = dialog.axis()
+        edge = dialog.edge()
         raw_filter = dialog.page_filter()
 
         # Resolve page filter
@@ -2965,7 +2929,7 @@ class MainWindow(mainwindow_cls):
                 self.imgtrans_proj.idx2pagename(i) for i in range(lo, hi + 1)
             ]
 
-        self.execute_advanced_align(page_filter, target, mode, axis)
+        self.execute_advanced_align(page_filter, target, edge, axis)
 
     def on_open_normalize_breaks_dialog(self):
         """打开批量整理换行对话框。"""
@@ -3409,7 +3373,13 @@ class MainWindow(mainwindow_cls):
         edit.setTextCursor(cursor)
 
     def shortcutEscape(self):
-        if self.canvas.search_widget.isVisible():
+        if (
+            getattr(self, "_align_dialog", None) is not None
+            and self._align_dialog.isVisible()
+        ):
+            # 整本对齐模式开着：Esc＝取消对齐（关对话框并清画布基准线）
+            self._align_dialog.reject()
+        elif self.canvas.search_widget.isVisible():
             self.canvas.search_widget.hide()
         elif (
             self.canvas.editing_textblkitem is not None

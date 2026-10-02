@@ -40,10 +40,12 @@ def _parse_args():
     parser.add_argument("--blocks", type=int, default=8, help="每页块数")
     parser.add_argument(
         "--scenario",
-        choices=["group-undo", "stroke-switch", "fmt-sync", "none"], default="group-undo",
-        help="group-undo=高级对齐→组化确认弹窗→撤销→重渲 全链路；"
+        choices=["group-undo", "stroke-switch", "fmt-sync", "align-dialog", "none"],
+        default="group-undo",
+        help="group-undo=整本对齐→组化确认弹窗→撤销→重渲 全链路；"
         "stroke-switch=竖排描边块快速切页（闪退回归演练）；"
-        "fmt-sync=数据层与渲染态对齐分叉探针（样式同步排查）",
+        "fmt-sync=数据层与渲染态对齐分叉探针（样式同步排查）；"
+        "align-dialog=整本对齐对话框交互链路（智能默认/点块取边/拖线/确定执行）",
     )
     parser.add_argument(
         "--switch-rounds", type=int, default=12,
@@ -279,6 +281,138 @@ def _scenario_stroke_switch(window, app, args):
     print("[mw_repro] SCENARIO OK: stroke-switch", flush=True)
 
 
+def _scenario_align_dialog(window, app, args):
+    """整本对齐对话框交互链路演练（合成工程）。
+
+    覆盖：智能默认（当前页对齐边众数）→ 画布对齐模式 → 拖线回推 →
+    点块取边 → 换轴（对齐边标签/目标重取）→ 幽灵预览在场 →
+    确定执行（全页数据层落位）→ 画布清理。撤销路径由 group-undo 场景
+    覆盖，此处不重复。
+    """
+    import faulthandler
+
+    from ui.point_align_dialog import block_edge_value, smart_default_target
+    from utils.config import pcfg
+
+    proj = window.imgtrans_proj
+    canvas = window.canvas
+
+    faulthandler.dump_traceback_later(args.watchdog, exit=True)
+
+    # 记忆项强制为已知默认（用户真机用过后 config.json 里可能是任意值，
+    # 换轴恢复记忆是设计行为，不隔离会让精确值断言随用户配置漂移）
+    _saved_align_cfg = (
+        pcfg.point_align_axis,
+        pcfg.point_align_edge_y,
+        pcfg.point_align_edge_x,
+        pcfg.point_align_all_pages,
+    )
+    pcfg.point_align_axis = "y"
+    pcfg.point_align_edge_y = "top"
+    pcfg.point_align_edge_x = "left"
+    pcfg.point_align_all_pages = True
+
+    # 等合成布局事件全部落定（几何连续两次 pump 无变化），否则对话框的
+    # 智能默认/点块取边会在落定窗口内被后台 relayout 改写，精确值断言抖动
+    def _geo_snapshot():
+        return [
+            tuple(it.blk._bounding_rect or tuple(it.blk.xyxy))
+            for it in window.st_manager.textblk_item_list
+        ]
+
+    last = None
+    for _ in range(100):
+        app.processEvents()
+        cur = _geo_snapshot()
+        if cur and cur == last:
+            break
+        last = cur
+
+    # 期望值必须在 on_open 之前取快照：对话框在打开瞬间同步算智能默认，
+    # 若在其后取数，期间跑掉的布局事件可能已改写块几何，比较就不成立
+    page = proj.pages[proj.current_img]
+    expect = smart_default_target(page, "y", "top")
+
+    window.on_open_whole_book_align()
+    for _ in range(5):
+        app.processEvents()
+    dlg = window._align_dialog
+    assert dlg is not None and dlg.isVisible(), "对话框未打开"
+    assert canvas.is_align_mode(), "画布未进入对齐模式"
+
+    assert dlg.target_value() == expect, (
+        f"智能默认 {dlg.target_value()} != 期望 {expect}"
+    )
+    print(f"[mw_repro] align-dialog: 智能默认 target={expect}", flush=True)
+
+    # 拖线：画布回推目标值
+    canvas.align_target_changed.emit(222)
+    for _ in range(3):
+        app.processEvents()
+    assert dlg.target_value() == 222, "拖线未联动数值框"
+
+    # 点块：取该块当前轴（y）对齐边（top）
+    items = window.st_manager.textblk_item_list
+    canvas.align_block_picked.emit(items[0])
+    for _ in range(3):
+        app.processEvents()
+    expect = int(round(block_edge_value(items[0].blk._bounding_rect, "y", "top")))
+    assert dlg.target_value() == expect, "点块未取对齐边"
+    print(f"[mw_repro] align-dialog: 点块取边 target={expect}", flush=True)
+
+    # 换轴 X：对齐边换标签、目标从点选块重取（left）
+    dlg._axis_bar.set_current(1, emit=True)
+    for _ in range(3):
+        app.processEvents()
+    assert dlg.axis() == "x"
+    expect = int(round(block_edge_value(items[0].blk._bounding_rect, "x", "left")))
+    assert dlg.target_value() == expect, (
+        f"换轴后未从点选块重取: dlg={dlg.target_value()} expect={expect} "
+        f"edge_idx={dlg._edge_bar.current()}"
+    )
+
+    # 拖到新位置再确定 → 幽灵预览在场（目标偏离众数 80，应有落点矩形）
+    canvas.align_target_changed.emit(300)
+    for _ in range(3):
+        app.processEvents()
+    assert dlg.target_value() == 300
+    assert len(canvas._align_ghosts) > 0, "幽灵预览为空"
+    dlg.accept()
+    for _ in range(10):
+        app.processEvents()
+
+    assert window._align_dialog is None, "对话框引用未清"
+    assert not canvas.is_align_mode(), "画布对齐模式未退出"
+    assert canvas._align_ghosts == [] and canvas._align_line is None, "画布未清理"
+    # 退出后光标必须两处都清（视图 + baseLayer 场景层），
+    # 否则 baseLayer 十字丝残留成「精确选择」粘在画布上
+    assert not canvas.baseLayer.hasCursor(), "baseLayer 十字丝残留"
+    for pname, blks in proj.pages.items():
+        for blk in blks:
+            if blk.angle != 0:
+                continue
+            got = blk._bounding_rect[0] if blk._bounding_rect is not None else blk.xyxy[0]
+            assert abs(got - 300) < 0.5, f"{pname}: 块 left={got} 未对齐到 300"
+    print(
+        f"[mw_repro] align-dialog: {proj.num_pages} 页全部块 left→300，撤销栈 count="
+        f"{canvas.text_undo_stack.count()}",
+        flush=True,
+    )
+
+    faulthandler.cancel_dump_traceback_later()
+    # 还原用户原记忆项并落盘（对话框 done() 已把演练值写进 config.json）
+    (
+        pcfg.point_align_axis,
+        pcfg.point_align_edge_y,
+        pcfg.point_align_edge_x,
+        pcfg.point_align_all_pages,
+    ) = _saved_align_cfg
+    from utils.config import save_config
+
+    save_config()
+    print("[mw_repro] SCENARIO OK: align-dialog", flush=True)
+
+
 def _align_int(flag) -> int:
     """Qt.AlignmentFlag → TextAlignment 值（0 左 / 1 中 / 2 右）。"""
     from qtpy.QtCore import Qt
@@ -458,6 +592,8 @@ def main():
         _scenario_stroke_switch(window, app, args)
     elif args.scenario == "fmt-sync":
         _scenario_fmt_sync(window, app, args)
+    elif args.scenario == "align-dialog":
+        _scenario_align_dialog(window, app, args)
     else:
         print("[mw_repro] scenario=none：主窗口已就绪，进入事件循环", flush=True)
 
