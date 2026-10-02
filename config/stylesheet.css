@@ -996,22 +996,34 @@ QRadioButton {
 QRadioButton::indicator {
     width: 14px;
     height: 14px;
-    border: 2px solid @borderColor;
-    border-radius: 9px;
-    background: @emptyContentBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 7px;
+    background: @inputBackgroundColor;
 }
 
+/* 选中态 = 细描边圆环 + 中心主题色圆点（radial gradient 硬过渡画点，
+   随 @accentPrimary 换主题；SVG 图标方案取不到主题变量，故不用） */
 QRadioButton::indicator:checked {
-    background: @accentPrimary;
-    border: 2px solid @accentPrimary;
+    border: 1px solid @accentPrimary;
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+        stop:0 @accentPrimary, stop:0.3 @accentPrimary,
+        stop:0.42 @inputBackgroundColor, stop:1 @inputBackgroundColor);
 }
 
 QRadioButton::indicator:hover {
-    border: 2px solid @accentPrimary;
+    border: 1px solid @accentPrimary;
 }
 
 QRadioButton::indicator:disabled {
-    border: 2px solid @disabledForegroundColor;
+    border: 1px solid @disabledForegroundColor;
+    background: @emptyContentBackgroundColor;
+}
+
+QRadioButton::indicator:checked:disabled {
+    border: 1px solid @disabledForegroundColor;
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+        stop:0 @disabledForegroundColor, stop:0.3 @disabledForegroundColor,
+        stop:0.42 @emptyContentBackgroundColor, stop:1 @emptyContentBackgroundColor);
 }
 
 /* ── Plain checkboxes ─────────────────────────────────────────── */
