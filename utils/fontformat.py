@@ -583,7 +583,12 @@ def create_text_transform(transform_type: str) -> TextTransform:
 
 
 def coerce_text_transform(value: Union[TextTransform, dict]) -> TextTransform:
-    """Normalize a live value or construct a canonical persisted payload.
+    """Normalize a live value or construct one persisted payload.
+
+    上游的同类函数只构造不归一，所以上游工程里存在非 canonical 的持久化
+    变形值。这里照宽进原则只告警并归一，不整级丢弃；真不认识的输入（非
+    dict 且非 TextTransform、缺 transform_type、未知 transform_type、
+    不支持的字段名）仍然抛错。
 
     >>> transform = coerce_text_transform(
     ...     {'transform_type': 'projective', 'rotation_z': 5}
@@ -592,10 +597,8 @@ def coerce_text_transform(value: Union[TextTransform, dict]) -> TextTransform:
     5.0
     >>> coerce_text_transform(
     ...     {'transform_type': 'projective', 'horizontal_scale': 5}
-    ... )
-    Traceback (most recent call last):
-    ...
-    ValueError: persisted projective transform values must be canonical
+    ... ).horizontal_scale
+    4.0
     """
     if isinstance(value, TextTransform):
         return value.normalized()
@@ -623,8 +626,13 @@ def coerce_text_transform(value: Union[TextTransform, dict]) -> TextTransform:
             control_points=normalized.control_points,
         )
     if comparison != normalized:
-        raise ValueError(
-            f'persisted {transform_type} transform values must be canonical'
+        # 宽进：上游落盘值可能非 canonical（超出范围/未取整），归一后继续用，
+        # 只留一条诊断告警。
+        LOGGER.warning(
+            'Persisted %s transform values are not canonical (%r); '
+            'using the normalized value.',
+            transform_type,
+            payload,
         )
     return normalized
 
@@ -1353,6 +1361,30 @@ class FontFormat(Config):
             if "family" in da:
                 self.font_family = da["family"]
 
+        # 竖排罗马字对齐与四个连字/旧体数字开关是枚举量：上游对非法值回默认
+        # 并告警，这里照做，避免非法值一路带进渲染。
+        if not isinstance(self.standard_vertical_roman_alignment, bool):
+            LOGGER.warning(
+                'Ignoring invalid standard vertical Roman alignment value '
+                '(%r); using the enabled default.',
+                self.standard_vertical_roman_alignment,
+            )
+            self.standard_vertical_roman_alignment = True
+
+        for name in (
+            'ligature_common',
+            'ligature_discretionary',
+            'ligature_contextual',
+            'oldstyle_nums',
+        ):
+            if getattr(self, name) not in {'default', 'enabled', 'disabled'}:
+                LOGGER.warning(
+                    'Ignoring invalid %s value (%r); using default.',
+                    name,
+                    getattr(self, name),
+                )
+                setattr(self, name, 'default')
+
         self.font_weight = fix_fontweight_qt(self.font_weight)
         # _style_name 是派生显示缓存：历史 bug 曾把 (名,字重,斜体) 元组写进
         # 来并随项目落盘（JSON 数组），加载时归一为空串交渲染端字重匹配兜底
@@ -1410,6 +1442,14 @@ class FontFormat(Config):
         object.__setattr__(self, "text_effects", text_effects)
         for name in _LEGACY_EFFECT_VIEW_NAMES:
             self.__dict__.pop(name, None)
+        # 未知键（上游超集之外、或上游工程带本 fork 不认的字段）此前被静默
+        # 丢掉；留一条诊断告警，行为仍是丢弃。size/weight/family 是已折算的
+        # 旧兼容键，不算未知。
+        unknown = set(da) - {'size', 'weight', 'family'}
+        if unknown:
+            LOGGER.warning(
+                'Ignoring unsupported font format fields: %s.', sorted(unknown)
+            )
         self.deprecated_attributes = {}
 
     def to_serializable_dict(self) -> dict:

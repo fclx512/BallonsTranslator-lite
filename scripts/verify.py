@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""One-shot dev verification: syntax -> docs -> audit -> i18n -> qm -> smoke.
+"""One-shot dev verification: syntax -> docs -> audit -> showcase -> upstream
+drift -> i18n -> qm -> smoke.
 
 Combines the AGENTS.md 测试流程 steps into a single command so the AI runs
 one tool call instead of five.  Prints a one-line summary per step on
@@ -14,6 +15,8 @@ Step activation:
             文件不得被主 UI import；未登记删除仅提示不失败）
   - showcase: always (check_showcase.py: ui/custom_widget 导出清单 vs
             scripts/style_showcase.py 展示/排除登记，防新增控件漏展示)
+  - upstream: always (check_upstream_drift.py: 上游富文本契约漂移——**提醒不阻断**；
+            上游包根不存在时自动跳过)
   - i18n   : always (scans whole ui/modules/utils; known orphans exempted)
   - qm     : only when a .ts file changed
   - smoke  : with --smoke, or automatically when a startup-chain file changed
@@ -204,6 +207,17 @@ def main():
     else:
         failures += 1
         print("❌ showcase: 展示台漏登记 / 重复登记 / 陈旧登记")
+        _dump(r)
+
+    # ── 3c. upstream drift (non-blocking: 提醒，不计入失败) ─────────────
+    r = _run([_py(), str(ROOT / "scripts" / "check_upstream_drift.py")])
+    if r.returncode == 0:
+        if "跳过" in r.stdout:
+            print("⏭  上游巡检: 未找到上游包根，跳过")
+        else:
+            print("✅ 上游巡检: 富文本契约无漂移")
+    else:
+        print("⚠ 上游巡检: 检测到上游契约漂移（不阻断，需人工评估兼容影响）")
         _dump(r)
 
     # ── 4. i18n ──────────────────────────────────────────────────────────

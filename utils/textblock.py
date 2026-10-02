@@ -10,6 +10,7 @@ from shapely.geometry import Polygon
 
 from .fontformat import FontFormat, TextAlignment, fix_fontweight_qt
 from .imgproc_utils import color_difference, rotate_polygons, union_area, xywh2xyxypoly
+from .logger import logger as LOGGER
 from .split_text_region import split_textblock as split_text_region
 from .structures import nested_dataclass
 from .textblock_mask import canny_flood
@@ -21,6 +22,10 @@ LANGCLS2IDX = {"eng": 0, "ja": 1, "unknown": 2}
 # https://ayaka.shn.hk/hanregex/
 # https://medium.com/the-artificial-impostor/detecting-chinese-characters-in-unicode-strings-4ac839ba313a
 CJKPATTERN = re.compile(r"[\uac00-\ud7a3\u3040-\u30ff\u4e00-\u9FFF]")
+
+# 上游同名的当前布局版本号。字段默认值保持字面量 1（scripts/check_upstream_drift.py
+# 比对的就是默认值源码），这里只给升级逻辑一个可引用的名字。
+TEXT_LAYOUT_VERSION = 1
 
 
 @nested_dataclass
@@ -60,7 +65,8 @@ class TextBlock:
     # 竖排渲染同样按存档 alignment 走（ui/text_engine/vertical_layout.py 的
     # _alignment_column_shift），语义等同上游版本 1，所以落盘必须带这个键——
     # 不带就等于自称旧数据，lite 保存一次工程，上游打开会把竖排对齐全部改掉。
-    # 加载时原样保留上游给的值，未来版本号更不要改写。
+    # 加载侧同样照上游语义升级版本 0 的竖排块（见 __post_init__），否则同一个
+    # 旧工程在两侧显示不一致；更新的版本号原样保留，不要降级。
     text_layout_version: int = 1
 
     deprecated_attributes: dict = field(default_factory=lambda: dict())
@@ -264,6 +270,35 @@ class TextBlock:
                         tgt_k = deprecated_blk_fmt_keys[src_k]
                     setattr(self.fontformat, tgt_k, v)
             self.font_weight = fix_fontweight_qt(self.font_weight)
+
+        # 布局版本升级，照抄上游 TextBlock.__post_init__ 的判定与回写：版本 0 是
+        # 上游实现竖排对齐之前的旧数据，那时竖排块物理上一律右对齐、与存档
+        # alignment 无关，所以要强制成 Right 才和上游显示一致；改写一次即幂等
+        # （回写成 1 后不再命中）。判竖排取 self.vertical（fontformat.vertical），
+        # 与上游判据一致——竖排渲染也正是由它决定的；版本 0 的工程不带
+        # src_is_vertical，__post_init__ 开头已把它回退成 vertical，两者同值。
+        version = self.text_layout_version
+        if (
+            isinstance(version, bool)
+            or not isinstance(version, int)
+            or version < 0
+        ):
+            LOGGER.warning(
+                "Ignoring invalid text layout version %r; treating the "
+                "text block as legacy.",
+                version,
+            )
+            version = 0
+        if version == 0:
+            if self.vertical:
+                self.alignment = TextAlignment.Right
+            self.text_layout_version = TEXT_LAYOUT_VERSION
+        elif version > TEXT_LAYOUT_VERSION:
+            LOGGER.warning(
+                "Text block uses newer text layout version %s; preserving "
+                "its stored layout values.",
+                version,
+            )
 
         del self.deprecated_attributes
 

@@ -13,6 +13,9 @@ UI):
   implemented locally).
 * one local-only test: with ``glyph_slant_angle != 0`` the tatechuyoko guard
   keeps vertical runs unrotated (A/B pixel comparison).
+* ``PersistedTransformToleranceTest`` — local-only wide-in contract: non-
+  canonical persisted transform values are normalized and warned about instead
+  of raising, while genuinely unknown payloads still raise ``ValueError``.
 
 Run under an offscreen QApplication (mandatory — the document layout machinery
 hard-crashes otherwise, see stage-4 node D doc).
@@ -42,6 +45,7 @@ from utils.fontformat import (  # noqa: E402
     SineTextTransform,
     TextTransformStack,
     TextTransformState,
+    coerce_text_transform,
 )
 from ui.text_engine.transforms.bend import BendMapper  # noqa: E402
 from ui.text_engine.transforms.grid import GridMapper  # noqa: E402
@@ -646,6 +650,42 @@ class ExtendedTextTransformModelTest(TextTransformTestBase):
                 self.assertAlmostEqual(
                     visual_y[index], expected.y(), places=6
                 )
+
+
+class PersistedTransformToleranceTest(unittest.TestCase):
+    """持久化变形值的宽进契约（本地-only，上游无对应用例）。
+
+    上游的 ``coerce_text_transform`` 只构造不归一，所以上游工程里存在非
+    canonical 的持久化值。本地若对它们抛错，整个变形级会被静默丢弃；这里
+    钉住「非 canonical 归一后保留 + 告警」，以及「真不认识的输入仍然抛」。
+    """
+
+    def test_non_canonical_persisted_values_are_normalized_not_dropped(self):
+        # horizontal_scale 上限 4.0：上游落盘的 5 超范围但语义明确，归一化后
+        # 保留这一级，并留一条诊断告警。
+        with self.assertLogs('BallonsTranslator-lite', level='WARNING') as logs:
+            transform = coerce_text_transform(
+                {'transform_type': 'projective', 'horizontal_scale': 5}
+            )
+        self.assertEqual(transform.transform_type, 'projective')
+        self.assertEqual(transform.horizontal_scale, 4.0)
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn('not canonical', logs.records[0].getMessage())
+
+    def test_real_errors_still_raise(self):
+        cases = (
+            {'horizontal_scale': 2.0},  # 缺 transform_type
+            {'transform_type': 'warp', 'bend': 0.2},  # 未知 transform_type
+            {
+                'transform_type': 'projective',
+                'horizontal_scale': 1.5,
+                'not_a_field': 1,
+            },  # 不支持的字段名
+        )
+        for payload in cases:
+            with self.subTest(payload=sorted(payload)):
+                with self.assertRaises(ValueError):
+                    coerce_text_transform(payload)
 
 
 class TextTransformUndoTest(TextTransformTestBase):

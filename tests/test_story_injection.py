@@ -147,7 +147,8 @@ def test_project_synopsis_roundtrip():
         proj = ProjImgTrans(directory=tmp)
         proj.llm_compact_memory = "全局梗概"
         payload = proj.to_dict()
-        assert payload["llm_compact_memory"] == "全局梗概"
+        # 按上游结构落盘：{version, text, covered_pages}（写侧只认 dict）
+        assert payload["llm_compact_memory"]["text"] == "全局梗概"
 
         restored = ProjImgTrans(directory=tmp)
         restored.load_from_dict(dict(payload))

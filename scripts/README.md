@@ -9,16 +9,17 @@
 
 ## 一、质量保障 / 自动化检查
 
-**统一入口是 `verify.py`**（语法 → 文档 → 审计 → 展示台覆盖 → i18n → qm → 冒烟），
-日常开发跑它即可；发版前加 `--full`（追加 ruff + pytest）。
+**统一入口是 `verify.py`**（语法 → 文档 → 审计 → 展示台覆盖 → 上游巡检 → i18n → qm → 冒烟），
+日常开发跑它即可；发版前加 `--full`（追加 ruff + pytest）。上游巡检只提醒不阻断。
 
 | 脚本 | 用途 | 运行方式 |
 |---|---|---|
-| `scripts/verify.py` | **一键检查**：语法 → 文档 → 审计 → 展示台覆盖 → i18n → qm → 冒烟；成功每步只打一行 | `python scripts/verify.py`（`--smoke` 强制冒烟，`--all` 全量语法，`--full` 发版门禁追加 ruff+pytest） |
+| `scripts/verify.py` | **一键检查**：语法 → 文档 → 审计 → 展示台覆盖 → 上游巡检 → i18n → qm → 冒烟；成功每步只打一行（上游巡检漂移只告警不失败） | `python scripts/verify.py`（`--smoke` 强制冒烟，`--all` 全量语法，`--full` 发版门禁追加 ruff+pytest） |
 | `scripts/check_syntax.py` | 语法检查（编译 + 混合缩进 + UTF-8 BOM） | `python scripts/check_syntax.py <文件...>` |
 | `scripts/check_docs.py` | 校验 `AGENTS.md` 与 `docs/` 活文档的路径/符号引用 + scripts/README 登记齐全 | `python scripts/check_docs.py` |
 | `scripts/check_audit.py` | 审计登记表契约（deprecated 残留引用 / suspended 被 import） | `python scripts/check_audit.py` |
 | `scripts/check_showcase.py` | 展示台覆盖校验：`ui/custom_widget` 每个导出必须在 `scripts/style_showcase.py` 展示或 `EXCLUDED` 登记（纯 AST，不导入 Qt） | `python scripts/check_showcase.py` |
+| `scripts/check_upstream_drift.py` | **上游契约漂移巡检**（纯 AST，不 import 两侧代码）：比对 `TextBlock`/`FontFormat` 字段与默认值、效果类型注册表、工程写入键，只报「相对基线的新变化」；上游不存在时自动跳过 | `python scripts/check_upstream_drift.py`（`--update-baseline` 重算基线，`--print` 打印契约面）；上游路径用 `--upstream` 或环境变量 `BT_UPSTREAM_ROOT` |
 | `scripts/check_cuda_env.py` | CUDA 索引存活 + 解释器环境**只读**体检（L3 真环境层，不安装任何东西）：索引是否仍可装（`cu124` 已 EOL 就是没查这个才漏掉的）、指定解释器的 torch/onnxruntime 状态与 onnxruntime 双发行名混合态 | `python scripts/check_cuda_env.py [--indexes\|--env] [--python <python.exe>] [--json]`；分层与判据见 `docs/技术实现/CUDA环境与索引_说明.md` |
 | `scripts/i18n_check.py` | 审计 i18n（硬编码中文、缺失/多余的 .ts 条目），发版前 `--ci` | `python scripts/i18n_check.py` |
 | `scripts/qm_compile.py` | 编译 `.ts` → `.qm`（Qt 二进制翻译文件） | `python scripts/qm_compile.py translate/zh_CN.ts translate/zh_CN.qm` |

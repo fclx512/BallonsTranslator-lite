@@ -43,6 +43,68 @@ def get_last_modified_file(file_prefix, exts, ext_fallback=None):
 page_start_pattern = re.compile(r"^###\s+", re.MULTILINE)
 text_blkid_start_pattern = re.compile(r"^\d+\.", re.MULTILINE)
 
+# 块级平铺的遗留效果键（旧版本/上游旧工程把效果直接挂在块对象上，而非
+# fontformat 里）。上游 utils/textblock.py 的同名表把 default_stroke_width、
+# bg_colors 分别折到 fontformat 的 stroke_width、srgb，这里沿用同一映射。
+# 本 fork 的 TextBlock 只认 deprecated_blk_fmt_keys 里登记过的块级键，未登记
+# 的会被 nested_dataclass 收进 deprecated_attributes 后静默丢弃——打开上游
+# 旧工程时描边/渐变/阴影就这么没了，故构造前先把这些键搬进 fontformat。
+_BLOCK_FLAT_EFFECT_FIELDS = {
+    "text_effects": "text_effects",
+    "opacity": "opacity",
+    "default_stroke_width": "stroke_width",
+    "stroke_width": "stroke_width",
+    "bg_colors": "srgb",
+    "srgb": "srgb",
+    "shadow_radius": "shadow_radius",
+    "shadow_strength": "shadow_strength",
+    "shadow_color": "shadow_color",
+    "shadow_offset": "shadow_offset",
+    "gradient_enabled": "gradient_enabled",
+    "gradient_start_color": "gradient_start_color",
+    "gradient_end_color": "gradient_end_color",
+    "gradient_angle": "gradient_angle",
+    "gradient_size": "gradient_size",
+}
+
+# 上游项目级记忆的结构版本号（上游 utils/proj_imgtrans.py 的
+# LLM_COMPACT_MEMORY_VERSION），落到 llm_compact_memory 记录里供上游校验。
+_LLM_COMPACT_MEMORY_VERSION = 1
+
+
+def _llm_compact_memory_record(text: str) -> dict:
+    """按上游结构打包项目级记忆：{version, text, covered_pages}。
+
+    上游的校验只认这个形状的 dict（fork 旧版写的裸 str 会被整条丢弃），
+    covered_pages 是上游的「已覆盖页」记账，fork 无此概念，写空列表。
+    """
+    return {
+        "version": _LLM_COMPACT_MEMORY_VERSION,
+        "text": text,
+        "covered_pages": [],
+    }
+
+
+def _normalize_textblock_effect_payload(blk_dict: dict) -> dict:
+    """把块字典里平铺的效果键折进其 fontformat 子字典，返回副本。
+
+    幂等（已归一化的块没有平铺键，再跑一次原样返回）、对缺失键安全、
+    不抛异常：加载路径上任何脏数据都不该把整个工程判为不支持。
+    fontformat 不是 dict（内存中已是 FontFormat 实例）时原样透传。
+    """
+    if not isinstance(blk_dict, dict):
+        return blk_dict
+    normalized = dict(blk_dict)
+    raw_fontformat = normalized.get("fontformat", {})
+    if not isinstance(raw_fontformat, dict):
+        return normalized
+    fontformat_payload = dict(raw_fontformat)
+    for source, target in _BLOCK_FLAT_EFFECT_FIELDS.items():
+        if source in normalized:
+            fontformat_payload[target] = normalized.pop(source)
+    normalized["fontformat"] = fontformat_payload
+    return normalized
+
 
 def parse_txt_translation(file_path: str):
     with open(file_path, "r", encoding="utf8") as f:
@@ -235,7 +297,8 @@ class ProjImgTrans:
             for ii, imname in enumerate(found_pages):
                 if imname in page_dict:
                     self.pages[imname] = [
-                        TextBlock(**blk_dict) for blk_dict in page_dict[imname]
+                        TextBlock(**_normalize_textblock_effect_payload(blk_dict))
+                        for blk_dict in page_dict[imname]
                     ]
                     not_found_pages.remove(imname)
                 else:
@@ -245,7 +308,8 @@ class ProjImgTrans:
                 self._idx2pagename[ii] = imname
             for imname in not_found_pages:
                 self.not_found_pages[imname] = [
-                    TextBlock(**blk_dict) for blk_dict in page_dict[imname]
+                    TextBlock(**_normalize_textblock_effect_payload(blk_dict))
+                    for blk_dict in page_dict[imname]
                 ]
         except Exception as e:
             raise ProjectNotSupportedException(e)
@@ -474,8 +538,13 @@ class ProjImgTrans:
             "current_img": self.current_img,
             "image_info": image_info,
             "base_styles": [bs.to_dict() for bs in self.base_styles],
-            "llm_compact_memory": self.llm_compact_memory,
         }
+        # 项目记忆按上游的结构写：上游校验只认 {version, text, covered_pages}
+        # 形状的 dict，fork 旧版写的裸 str 会被它整条丢弃（用户记忆永久丢失）。
+        # 上游同样只在有内容时落这个键，空记忆跟着不写，省掉上游侧的告警。
+        memory = self.llm_compact_memory
+        if isinstance(memory, str) and memory.strip():
+            proj_dict["llm_compact_memory"] = _llm_compact_memory_record(memory)
         return proj_dict
 
     def read_img(self, imgname: str) -> np.ndarray:

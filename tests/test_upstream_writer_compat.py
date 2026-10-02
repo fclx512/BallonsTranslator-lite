@@ -9,7 +9,9 @@
   字段必须只在非默认值时落盘，否则常规工程每个块白送一条警告。
 * 上游把块级 ``text_layout_version`` 缺失当成版本 0 旧数据，升级动作是
   「竖排块一律 alignment=Right」并回写。本 fork 的竖排渲染按存档 alignment
-  走，语义等同上游版本 1，所以落盘必须带上这个键。
+  走，语义等同上游版本 1，所以落盘必须带上这个键；加载时对版本 0 的竖排块
+  按同一语义升级成 Right 并回写成 1，这样同一个旧工程在两侧打开显示一致。
+  落盘仍恒写当前版本，更新版本号往返保留、不降级。
 
     QT_QPA_PLATFORM=offscreen ./ballontrans_pylibs_win/python.exe -m pytest tests/test_upstream_writer_compat.py -q
 """
@@ -26,7 +28,7 @@ os.chdir(APP_ROOT)
 os.environ["QT_API"] = "pyqt6"
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
-from utils.fontformat import FontFormat  # noqa: E402
+from utils.fontformat import FontFormat, TextAlignment  # noqa: E402
 from utils.proj_imgtrans import TextBlkEncoder  # noqa: E402
 from utils.textblock import TextBlock  # noqa: E402
 
@@ -85,6 +87,49 @@ class LayoutVersionWriteTest(unittest.TestCase):
         self.assertEqual(blk.text_layout_version, 2)
         again = json.loads(json.dumps(blk, cls=TextBlkEncoder))
         self.assertEqual(again["text_layout_version"], 2)
+
+
+class LayoutVersionUpgradeTest(unittest.TestCase):
+    """版本 0 旧数据的加载侧升级，语义照上游。"""
+
+    def _reload(self, version, vertical, alignment):
+        payload = _blk_dict()
+        payload["text_layout_version"] = version
+        payload["fontformat"]["vertical"] = vertical
+        payload["fontformat"]["alignment"] = int(alignment)
+        return payload, TextBlock(**payload)
+
+    def test_vertical_legacy_block_is_upgraded_to_right(self):
+        _, blk = self._reload(0, True, TextAlignment.Left)
+        self.assertEqual(blk.alignment, int(TextAlignment.Right))
+        self.assertEqual(blk.text_layout_version, 1)
+
+    def test_upgrade_is_idempotent(self):
+        _, blk = self._reload(0, True, TextAlignment.Left)
+        again = json.loads(json.dumps(blk, cls=TextBlkEncoder))
+        self.assertEqual(again["text_layout_version"], 1)
+        reloaded = TextBlock(**again)
+        self.assertEqual(reloaded.alignment, int(TextAlignment.Right))
+        self.assertEqual(reloaded.text_layout_version, 1)
+
+    def test_horizontal_legacy_block_keeps_alignment(self):
+        _, blk = self._reload(0, False, TextAlignment.Center)
+        self.assertEqual(blk.alignment, int(TextAlignment.Center))
+        self.assertEqual(blk.text_layout_version, 1)
+
+    def test_invalid_version_is_treated_as_legacy(self):
+        for bad in ("0", -1, True):
+            with self.subTest(version=bad):
+                with self.assertLogs("BallonsTranslator-lite", level="WARNING"):
+                    _, blk = self._reload(bad, True, TextAlignment.Left)
+                self.assertEqual(blk.alignment, int(TextAlignment.Right))
+                self.assertEqual(blk.text_layout_version, 1)
+
+    def test_newer_version_keeps_stored_alignment(self):
+        with self.assertLogs("BallonsTranslator-lite", level="WARNING"):
+            _, blk = self._reload(2, True, TextAlignment.Left)
+        self.assertEqual(blk.alignment, int(TextAlignment.Left))
+        self.assertEqual(blk.text_layout_version, 2)
 
 
 if __name__ == "__main__":

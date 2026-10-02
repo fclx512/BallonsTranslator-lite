@@ -1,0 +1,53 @@
+{
+  "generated": "2026-10-02 12:42:19",
+  "upstream_root": "D:\\ruanjian\\BallonsTranslator\\ballontranslator",
+  "diff": {
+    "fields": {
+      "TextBlock": {
+        "only_upstream": [
+          "text_alpha_mask"
+        ],
+        "only_fork": [
+          "tags"
+        ],
+        "changed": {
+          "text_layout_version.default": {
+            "upstream": "0",
+            "fork": "1"
+          }
+        }
+      },
+      "FontFormat": {
+        "only_upstream": [],
+        "only_fork": [
+          "bold",
+          "glyph_slant_angle",
+          "punctuation_alignment",
+          "shadow_include_stroke",
+          "strikeout",
+          "stroke_color_custom"
+        ],
+        "changed": {
+          "font_weight.annotation": {
+            "upstream": "FontWeight",
+            "fork": "int"
+          }
+        }
+      }
+    },
+    "effects": {
+      "only_upstream": {
+        "SyntheticBoldEffect": "synthetic_bold"
+      },
+      "only_fork": {},
+      "changed": {}
+    },
+    "project_keys": {
+      "unavailable": false,
+      "only_upstream": [],
+      "only_fork": [
+        "base_styles"
+      ]
+    }
+  }
+}
