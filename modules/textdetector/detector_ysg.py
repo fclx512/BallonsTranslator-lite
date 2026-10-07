@@ -102,6 +102,12 @@ class YSGYoloDetector(TextDetectorBase):
             "value": 1024,
             "description": "Input image size for text detection",
         },
+        "extract colors": {
+            "display_name": "Extract Colors",
+            "type": "checkbox",
+            "value": True,
+            "description": "Extract per-block font colors from the image (classical binarization; this detector has no prob map)",
+        },
         "device": {
             **DEVICE_SELECTOR(),
             "display_name": "Device",
@@ -280,6 +286,10 @@ class YSGYoloDetector(TextDetectorBase):
                 cv2.MORPH_ELLIPSE, (2 * ksize + 1, 2 * ksize + 1), (ksize, ksize)
             )
             mask = cv2.dilate(mask, element)
+
+        # 字体颜色提取：本检测器没有概率图，走经典二值化兜底（同一套判定逻辑）
+        palette = getattr(proj, "fg_palette", None) if proj is not None else None
+        self.extract_colors(img, blk_list, palette=palette)
 
         return mask, blk_list
 

@@ -1866,6 +1866,14 @@ class ConfigPanel(Widget):
                 "Keep existing: Preserve each block's existing font family (if set). Always use global setting: Override all blocks with the global default font family."
             ),
         )
+        _add_fontfmt_cell(
+            1, 2, self.tr("Font Color"),
+            [dec_program_str, use_global_str],
+            self.on_fntcolor_flag_changed, "let_fntcolor_combox",
+            tooltip=self.tr(
+                "decide by program: Use the color auto-extracted from the source image for each block. Stroke color still follows the global setting."
+            ),
+        )
 
         ts_layout.addWidget(ConfigSubBlock(delegation_frame, content_margins=(16, 4, 16, 4)))
 
@@ -3486,6 +3494,9 @@ class ConfigPanel(Widget):
     def on_family_flag_changed(self):
         pcfg.let_family_flag = self.let_family_combox.currentIndex()
 
+    def on_fntcolor_flag_changed(self):
+        pcfg.let_fntcolor_flag = self.let_fntcolor_combox.currentIndex()
+
     def _on_nav_section_pressed(self, section_key: str):
         """Switch page stack to the section for the selected nav item."""
         widget = self._nav_section_to_widget.get(section_key)
@@ -3658,6 +3669,7 @@ class ConfigPanel(Widget):
         self.let_fntstroke_combox.setCurrentIndex(pcfg.let_fntstroke_flag)
         self.let_alignment_combox.setCurrentIndex(pcfg.let_alignment_flag)
         self.let_family_combox.setCurrentIndex(pcfg.let_family_flag)
+        self.let_fntcolor_combox.setCurrentIndex(pcfg.let_fntcolor_flag)
         self.let_writing_mode_combox.setCurrentIndex(pcfg.let_writing_mode_flag)
         self.let_uppercase_checker.setChecked(pcfg.let_uppercase_flag)
         self.auto_squeeze_checker.setChecked(pcfg.auto_squeeze_after_run)

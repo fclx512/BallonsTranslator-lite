@@ -1395,6 +1395,14 @@
             <source>Restore default animations</source>
             <translation>恢复默认动画</translation>
         </message>
+        <message>
+            <source>Font Color</source>
+            <translation>字体颜色</translation>
+        </message>
+        <message>
+            <source>decide by program: Use the color auto-extracted from the source image for each block. Stroke color still follows the global setting.</source>
+            <translation>由程序决定：使用从原图自动提取的每块字体颜色。描边色仍随全局设置。</translation>
+        </message>
     </context>
     <context>
         <name>DependencyDialog</name>
@@ -3820,6 +3828,14 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <source>PaddleOCR-VL-For-Manga — Japanese manga OCR quality-first (generative VLM, GPU strongly recommended)</source>
             <translation>PaddleOCR-VL-For-Manga —— 日文漫画质量优先识别（生成式 VLM，强烈建议用 GPU）</translation>
         </message>
+        <message>
+            <source>Extract per-block font/background colors from the image (DBNet prob map based)</source>
+            <translation>从原图提取每块的字体/背景颜色（基于 DBNet 概率图）</translation>
+        </message>
+        <message>
+            <source>Extract per-block font colors from the image (classical binarization; this detector has no prob map)</source>
+            <translation>从原图提取每块的字体颜色（经典二值化；本检测器没有概率图）</translation>
+        </message>
     </context>
     <context>
         <name>RectPanel</name>
@@ -6144,6 +6160,62 @@ Check the log above for details.</source>
             <source>Rolls the project back to the state before the last batch action (merge / delete / background fill). Only batch actions are covered — applying the translation drafts or a single-block card is not part of it. The version is consumed, so it can be undone once.</source>
             <translation>把项目回滚到最近一次批量操作之前的状态（合并／删除／背景覆盖）。只覆盖批量操作——应用翻译草稿或单框卡片不在其中。版本会被消耗，每次批量只能撤销一次。</translation>
         </message>
+        <message>
+            <source>Font color palette</source>
+            <translation>取色调板</translation>
+        </message>
+        <message>
+            <source>(no translated-source lines matched this color)</source>
+            <translation>（该颜色没有匹配到任何台词样本）</translation>
+        </message>
+        <message>
+            <source>Ask the AI to propose real character names for the palette's placeholder speakers (Speaker A, …), using their lines and the glossary. Suggestions go to the log; edit the palette rows yourself.</source>
+            <translation>让 AI 结合台词与术语表，为调板占位名（Speaker A…）推测真实角色名。建议只进日志；请自行到调板行订正。</translation>
+        </message>
+        <message>
+            <source>Ask the AI to read the sampled speakers' lines and the glossary, then propose real character names for the palette placeholders (API call, may incur cost). Suggestions only go to the log; nothing is written until you edit the palette rows yourself.</source>
+            <translation>让 AI 阅读各说话人的台词样本与术语表，为调板占位名推测真实角色名（调用 API，可能产生费用）。建议只进日志；在您亲自到调板行订正之前不写入任何内容。</translation>
+        </message>
+        <message>
+            <source>Assign real character names to the palette's placeholder speakers: infer each speaker's name from their lines, the existing glossary and the story, then reply with a suggestion table (speaker → proposed name, with the supporting lines). This is a suggestion only: do not modify the glossary or story drafts — the user will edit the palette manually.</source>
+            <translation>为调板占位名推测真实角色名：结合各说话人的台词、现有术语表与剧情推断名字，然后以建议表（说话人 → 建议名＋依据台词）回复。本指令只产建议：不要改动术语表与剧情草稿——用户会自行编辑调板。</translation>
+        </message>
+        <message>
+            <source>Assign speaker names</source>
+            <translation>为说话人赋名</translation>
+        </message>
+        <message>
+            <source>Assign speaker names…</source>
+            <translation>说话人赋名…</translation>
+        </message>
+        <message>
+            <source>Existing glossary:</source>
+            <translation>现有术语表：</translation>
+        </message>
+        <message>
+            <source>No placeholder speakers to assign: sample colors in the palette page first.</source>
+            <translation>没有可赋名的占位：请先到取色调板页取样颜色。</translation>
+        </message>
+        <message>
+            <source>Palette (text color → speaker):</source>
+            <translation>调板（文字颜色 → 说话人）：</translation>
+        </message>
+        <message>
+            <source>Sample lines per speaker:</source>
+            <translation>各说话人的台词样本：</translation>
+        </message>
+        <message>
+            <source>Cannot start sampling: another canvas mode is active (whole-book align, path reorder or region redetect).</source>
+            <translation>无法开始取色：画布上已有其它模式在运行（整本对齐、路径重排或区域再检测）。</translation>
+        </message>
+        <message>
+            <source>Sampling colors — click a text glyph on the canvas (Esc to stop)</source>
+            <translation>正在取色——点击画布上的文字笔画（按 Esc 退出）</translation>
+        </message>
+        <message>
+            <source>Sampling needs the canvas: open a project first.</source>
+            <translation>取色需要画布：请先打开一个项目。</translation>
+        </message>
     </context>
     <context>
         <name>GlossaryAgentWorker</name>
@@ -8378,6 +8450,163 @@ Configure a mirror in Settings → Network &amp; Mirror Settings, then download 
         <message>
             <source>Transforms</source>
             <translation>变换</translation>
+        </message>
+    </context>
+    <context>
+        <name>_PaletteRow</name>
+        <message>
+            <source>Remove this color</source>
+            <translation>移除该颜色</translation>
+        </message>
+    </context>
+    <context>
+        <name>FgPalettePage</name>
+        <message>
+            <source>%1 is already in the palette</source>
+            <translation>%1 已在调板里</translation>
+        </message>
+        <message>
+            <source>Clear Palette</source>
+            <translation>清空调板</translation>
+        </message>
+        <message>
+            <source>Failed to load page image: %1</source>
+            <translation>页面图加载失败：%1</translation>
+        </message>
+        <message>
+            <source>No blocks updated (nothing passed the confidence gate).</source>
+            <translation>没有块被更新（没有块过置信度闸）。</translation>
+        </message>
+        <message>
+            <source>Re-extract Current Page</source>
+            <translation>重取当前页颜色</translation>
+        </message>
+        <message>
+            <source>Re-extract Whole Book</source>
+            <translation>重取整本颜色</translation>
+        </message>
+        <message>
+            <source>Re-extract refills existing blocks' font colors from the source image (palette colors take priority).</source>
+            <translation>重取色会按原图重算已有块的字体颜色（调板色优先）。</translation>
+        </message>
+        <message>
+            <source>Re-extracted font colors for %1/%2 blocks</source>
+            <translation>已按调板重取 %1/%2 块的字体颜色</translation>
+        </message>
+        <message>
+            <source>Removed %1; the color was used by %2 block(s)</source>
+            <translation>已移除 %1；该颜色此前被 %2 个块使用</translation>
+        </message>
+        <message>
+            <source>added to palette as %1 (%2 colors)</source>
+            <translation>已加入调板：%1（共 %2 色）</translation>
+        </message>
+        <message>
+            <source>Click a text glyph on the canvas to sample its color. Pages keep sampling while the mode is on (use the canvas page shortcuts), and Esc turns it off. The palette is saved with the project; auto color extraction snaps to the nearest palette color. Each color gets a placeholder name you can replace with the character's name — tagged colors are injected to the translator as speaker hints.</source>
+            <translation>在画布上点击文字笔画即可取色。取色模式开着时翻页仍可取色（用画布的翻页快捷键），按 Esc 退出。调板随项目保存；自动取色会按最近原则吸附到调板色。每个颜色先得到占位名，你可以把它改成角色名——标了角色的颜色会作为说话人线索注入翻译器。</translation>
+        </message>
+        <message>
+            <source>No colors yet. Turn on sampling and click text on the canvas. Each sampled color gets a placeholder name (A, B, …) for speaker hints.</source>
+            <translation>还没有颜色。打开取样开关，在画布上点击文字即可取色。每个取到的颜色先得到占位名（A、B、…），供说话人线索使用。</translation>
+        </message>
+        <message>
+            <source>Sample on Canvas</source>
+            <translation>在画布上取色</translation>
+        </message>
+        <message>
+            <source>Sampling is on: click a text glyph on the canvas (Esc stops it)</source>
+            <translation>正在取色：点击画布上的文字笔画（按 Esc 退出）</translation>
+        </message>
+        <message>
+            <source>Sampling… (click glyph)</source>
+            <translation>取色中…（点字形）</translation>
+        </message>
+        <message>
+            <source>Toggle sampling, then click text glyphs on the canvas</source>
+            <translation>打开取色开关，然后在画布上点击文字笔画</translation>
+        </message>
+        <message>
+            <source>%1 blocks scanned, %2 with a color; %3 colors found</source>
+            <translation>共 %1 块，其中 %2 块已取到颜色；发现 %3 种颜色</translation>
+        </message>
+        <message>
+            <source>(%1 more color(s) appear only once)</source>
+            <translation>（另有 %1 种仅出现 1 次）</translation>
+        </message>
+        <message>
+            <source>Add Checked to Palette</source>
+            <translation>勾选的加入调板</translation>
+        </message>
+        <message>
+            <source>Added %1 color(s) to the palette. To align already-extracted block colors, run "Re-extract Whole Book".</source>
+            <translation>已加入 %1 个颜色；要让已提取的块颜色对齐调板，点「重新取色（整本）」。</translation>
+        </message>
+        <message>
+            <source>Candidate color changed to %1</source>
+            <translation>候选色已改为 %1</translation>
+        </message>
+        <message>
+            <source>Click a text glyph on the canvas to replace the candidate's color; Esc stops sampling</source>
+            <translation>在画布上点字形替换该候选色；按 Esc 停止取样</translation>
+        </message>
+        <message>
+            <source>List the text colors already extracted on blocks across the book. Suggestions only — nothing is added to the palette until you tick colors and apply.</source>
+            <translation>列出全书块上已提取的文字色。只是建议——勾选并应用之前不会写入调板。</translation>
+        </message>
+        <message>
+            <source>No project pages to scan.</source>
+            <translation>没有可扫描的项目页面。</translation>
+        </message>
+        <message>
+            <source>Sampling… (recolor candidate)</source>
+            <translation>取样中…（改候选色）</translation>
+        </message>
+        <message>
+            <source>Scan Book Colors</source>
+            <translation>扫描全书文字色</translation>
+        </message>
+        <message>
+            <source>Scan the book to see which text colors already exist on blocks. Candidates are suggestions — check the ones that are really text and add them; nothing is written before that.</source>
+            <translation>扫描全书，看块上已有哪些文字色。候选只是建议——确认是文字色的才勾选并加入；在此之前不写任何数据。</translation>
+        </message>
+        <message>
+            <source>Select None</source>
+            <translation>全不选</translation>
+        </message>
+        <message>
+            <source>Show colors that appear only once</source>
+            <translation>显示仅出现 1 次的颜色</translation>
+        </message>
+    </context>
+    <context>
+        <name>_CandidateRow</name>
+        <message>
+            <source>%1 block(s)</source>
+            <translation>%1 块</translation>
+        </message>
+        <message>
+            <source>Jump to this block</source>
+            <translation>跳到该块</translation>
+        </message>
+        <message>
+            <source>No displayable area</source>
+            <translation>无可显示区域</translation>
+        </message>
+        <message>
+            <source>Recolor</source>
+            <translation>改色</translation>
+        </message>
+        <message>
+            <source>Sample a glyph on the canvas to replace this candidate's color (no new palette entry).</source>
+            <translation>在画布上点字形替换该候选色（不追加新调板条目）。</translation>
+        </message>
+        <message>
+            <source>Within the palette snap distance; nothing to add.</source>
+            <translation>在调板吸附距离内，无需再加入。</translation>
+        </message>
+        <message>
+            <source>[In palette]</source>
+            <translation>[已在调板]</translation>
         </message>
     </context>
 </TS>

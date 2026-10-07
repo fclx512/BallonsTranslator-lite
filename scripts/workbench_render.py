@@ -95,15 +95,27 @@ def build_project():
     from utils.proj_imgtrans import ProjImgTrans
     from utils.textblock import TextBlock
 
-    def blk(text, xyxy):
+    def blk(text, xyxy, fg=None):
         block = TextBlock(xyxy=list(xyxy), text=[text])
         block._bounding_rect = [xyxy[0], xyxy[1], xyxy[2] - xyxy[0], xyxy[3] - xyxy[1]]
+        if fg is not None:
+            block.fg_colors = list(fg)
         return block
 
-    def misread(text, xyxy, subtypes=("numeric",)):
-        block = blk(text, xyxy)
+    def misread(text, xyxy, subtypes=("numeric",), fg=None):
+        block = blk(text, xyxy, fg)
         set_tag(block, MISREAD_TAG_ID, "program", subtypes=list(subtypes))
         return block
+
+    # 块上给文字色（检测阶段本就会写 ``fg_colors``）：取色调板页的「全书扫描」
+    # 要靠它才有候选可看——三种重复色 + 一种只出现一次，顺带把「仅出现 1 次」
+    # 的过滤开关也照出来（见 docs/技术实现/字体自动取色_设计与实现.md）。
+    (red, blue, orange, teal) = (
+        [214, 26, 27],
+        [27, 25, 50],
+        [246, 154, 86],
+        [45, 130, 120],
+    )
 
     tmp = tempfile.TemporaryDirectory()
     width, height = PAGE_SIZE
@@ -118,33 +130,44 @@ def build_project():
 
     # 人工待办：原文待校对（新 ID）、译文待重译；程序侧再造一条低置信度建议，
     # 好让两个待办页的分区（人工记录／程序建议）都有内容可看
-    pending = blk("むずかしい漢字", (24, 92, 132, 106))
+    pending = blk("むずかしい漢字", (24, 92, 132, 106), red)
     set_tag(pending, OCR_REVIEW_ID, "manual")
-    retrans = blk("ありがとう", (150, 92, 230, 106))
+    retrans = blk("ありがとう", (150, 92, 230, 106), orange)
     set_tag(retrans, TRANS_REVIEW_ID, "manual")
     retrans.translation = "谢谢"
-    low_conf = blk("てがみ", (150, 120, 230, 146))
+    low_conf = blk("てがみ", (150, 120, 230, 146), orange)
     set_tag(low_conf, "ocr_low_conf", "program", score=0.52)
 
     proj = ProjImgTrans(directory=tmp.name)
     proj.pages[PAGE_A] = [
-        blk("こんにちは", (24, 26, 132, 56)),
-        misread("8", (24, 60, 132, 86), ("numeric", "no_japanese")),
-        misread("……", (150, 26, 230, 56), ("symbolic",)),
-        blk("ありがとう", (150, 60, 230, 86)),
+        blk("こんにちは", (24, 26, 132, 56), red),
+        misread("8", (24, 60, 132, 86), ("numeric", "no_japanese"), red),
+        misread("……", (150, 26, 230, 56), ("symbolic",), blue),
+        blk("ありがとう", (150, 60, 230, 86), red),
         pending,
         retrans,
         low_conf,
     ]
     proj.pages[PAGE_B] = [
-        blk("おはよう", (24, 116, 132, 146)),
-        blk("ございます", (24, 150, 132, 176)),
-        blk("またね", (150, 116, 230, 146)),
+        blk("おはよう", (24, 116, 132, 146), red),
+        blk("ございます", (24, 150, 132, 176), blue),
+        blk("またね", (150, 116, 230, 146), teal),
     ]
     proj._image_info = {
         PAGE_A: {"width": width, "height": height},
         PAGE_B: {"width": width, "height": height},
     }
+    # 取色调板页要有行才看得出角色名下拉与删除钮的形态：三态各给一条
+    # （占位名 / 已改真名 / 未赋名）。角色名可在页内直接改，见
+    # docs/技术实现/字体自动取色_设计与实现.md 的「说话人颜色标记」节。
+    from utils.proj_imgtrans import palette_seq_to_name
+
+    proj.fg_palette = [
+        {"rgb": [182, 154, 25], "role": palette_seq_to_name(1)},
+        {"rgb": [253, 156, 252], "role": "Alice"},
+        {"rgb": [246, 154, 86], "role": ""},
+    ]
+    proj.fg_palette_seq = 1
     proj.save()
     proj.set_current_img(PAGE_A)
     # 遮罩按块文字区画（贴内 3px）——不画遮罩的话「背景修复」页全是"判不出"，
@@ -196,7 +219,8 @@ def main() -> int:
 
     app = build_app(args.scale)
 
-    from ui.glossary_agent_panel import GlossaryAgentPanel, WORKBENCH_ORDER
+    from ui.glossary_agent_panel import WORKBENCH_ORDER, GlossaryAgentPanel
+    from ui.workbench_tasks import FG_PALETTE
     from utils.proj_imgtrans import ProjImgTrans
 
     out = args.out
@@ -241,6 +265,11 @@ def main() -> int:
     for index, task_id in enumerate(WORKBENCH_ORDER, start=1):
         panel.nav.select(task_id)
         app.processEvents()
+        if task_id == FG_PALETTE:
+            # 候选区是「全书扫描」按钮点出来的，页面初始态是空的——不替用户
+            # 点一下，这张截图就看不到候选行的真实形态（缩略图/勾选/过滤开关）
+            panel._palette_view._on_scan_colors()
+            app.processEvents()
         _settle_animation(app)  # 导航 chip 展开到位再截图
         view = panel._batch_views.get(task_id) or panel._review_views.get(task_id)
         table = _first_table_with_rows(view)

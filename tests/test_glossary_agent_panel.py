@@ -31,6 +31,8 @@ def _make_proj():
         idx2pagename=lambda i: ["p01", "p02"][i],
         # 已打开项目语义(directory 非空)——空态页不接管内容页
         directory="C:/fake_proj",
+        # 取色调板页读写的项目级字段（ui/workbench_palette.py::FgPalettePage）
+        fg_palette=[],
         _image_info={
             "p01": {"width": 800, "height": 1200, "llm_visual_summary": "old"},
             "p02": {"width": 800, "height": 1200},

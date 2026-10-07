@@ -37,6 +37,7 @@
 import html
 import json
 import logging
+from typing import Dict, Optional
 
 from qtpy.QtCore import (
     Property,
@@ -104,6 +105,7 @@ from ui.workbench_batch_view import BatchTaskView
 from ui.workbench_review_view import ReviewQueueView
 from ui.workbench_tasks import (
     CLEANUP_TASK_IDS,
+    FG_PALETTE,
     GLOSSARY,
     MERGE,
     MISREAD,
@@ -122,12 +124,13 @@ logger = logging.getLogger("glossary_agent_panel")
 # 扁平任务导航（批次 C 交接 §4.2）：单入口下按处理先后列出六项，**不再要求
 # 先选大类再选 chip**；分组只做视觉分段（不参与选择，也没有空的大类）。
 # 顺序＝用户工作流：可疑框清理 → 合并 → 原文待校对 → 简单背景修复 →
-# 翻译准备 → 译文待重译。
+# 取色调板 → 翻译准备 → 译文待重译。
 WORKBENCH_ORDER = (
     MISREAD,
     MERGE,
     OCR_REVIEW,
     SIMPLE_INPAINT,
+    FG_PALETTE,
     TRANSLATION_PREP,
     TRANS_REVIEW,
 )
@@ -151,7 +154,7 @@ WORKBENCH_NAV_GROUPS = (
     ),
     (
         QCoreApplication.translate("WorkbenchTaskNav", "Translation"),
-        (TRANSLATION_PREP, TRANS_REVIEW),
+        (FG_PALETTE, TRANSLATION_PREP, TRANS_REVIEW),
     ),
 )
 
@@ -171,6 +174,7 @@ _TASK_LABELS = {
     SIMPLE_INPAINT: QCoreApplication.translate(
         "GlossaryAgentPanel", "Simple background fill"
     ),
+    FG_PALETTE: QCoreApplication.translate("GlossaryAgentPanel", "Font color palette"),
     TRANSLATION_PREP: QCoreApplication.translate(
         "GlossaryAgentPanel", "Prepare for translation"
     ),
@@ -1052,6 +1056,8 @@ class GlossaryAgentPanel(QWidget):
         self._page_indices = {}
         # 审批预览浮层（D44）：懒建，挂在主窗口中央区上（工作台之外）
         self._preview_panel = None
+        # 取色模式是否已接线（画布取色 ↔ 调板页）；画布自行退出时在这里解除
+        self._palette_wired = False
         # 首次切入某任务时才规划它（列表懒规划）；批量写回／回滚／换项目后
         # 全部重新标脏。待办队列同样参与（读取便宜，但口径保持一致）。
         self._dirty_tasks = set(CLEANUP_TASK_IDS) | {OCR_REVIEW, TRANS_REVIEW}
@@ -1095,6 +1101,7 @@ class GlossaryAgentPanel(QWidget):
         content_lay.addWidget(self.pages, 1)
         self._build_batch_pages()
         self._build_review_pages()
+        self._build_palette_page()
         self._build_translation_prep_page()
 
         # 底部：批量撤回 + worker 日志落点（砍 Chat 后的新落点）
@@ -1170,6 +1177,27 @@ class GlossaryAgentPanel(QWidget):
             self._review_views[task_id] = view
             self.pages.addWidget(view)
             self._page_indices[task_id] = self.pages.count() - 1
+
+    def _build_palette_page(self):
+        """取色调板页（``ui/workbench_palette.py::FgPalettePage``）。
+
+        工具页而非任务页：无 plan/apply、无计数（同翻译准备不计数）。
+        数据属主是项目（``fg_palette``），本页自己读写；画布当前页的
+        视觉层刷新经注入回调走主窗口。
+        """
+        from ui.workbench_palette import FgPalettePage
+
+        self._palette_view = FgPalettePage(
+            self._proj, refresh_canvas=self._refresh_canvas_after_write
+        )
+        self._palette_view.notify_requested.connect(self._toast)
+        # 取样开关 → 画布取色模式（真正的取样发生在画布上）；开关被拒绝时
+        # 由 set_palette_sampling 回灌 set_sampling_state(False) + toast 原因。
+        self._palette_view.sampling_toggled.connect(self.set_palette_sampling)
+        # 候选/样本 → 跳画布：直接转发面板已有的 jump_requested（W3 用）
+        self._palette_view.jump_requested.connect(self.jump_requested)
+        self.pages.addWidget(self._palette_view)
+        self._page_indices[FG_PALETTE] = self.pages.count() - 1
 
     def _build_glossary_page(self):
         """术语草稿子页（翻译准备页的第一个子页）。"""
@@ -1262,6 +1290,16 @@ class GlossaryAgentPanel(QWidget):
                 "One-click warmup: scan existing translations, then ask the AI to fill in missing glossary entries and page summaries. A confirmation lists the steps (and API cost) first."
             )
         )
+        # 说话人赋名（方案评估 §3.4 第一期）：固定按钮拼指令，AI 只产建议，
+        # 人工到调板行订正——AI 不直接写调板
+        self.assign_speakers_btn = QPushButton(
+            self.tr("Assign speaker names…"), page
+        )
+        self.assign_speakers_btn.setToolTip(
+            self.tr(
+                "Ask the AI to propose real character names for the palette's placeholder speakers (Speaker A, …), using their lines and the glossary. Suggestions go to the log; edit the palette rows yourself."
+            )
+        )
         self.stop_btn = QPushButton(self.tr("Stop"), page)
         self.apply_btn = QPushButton(self.tr("Apply draft…"), page)
         self.apply_btn.setToolTip(
@@ -1271,6 +1309,7 @@ class GlossaryAgentPanel(QWidget):
         )
         apply_row = QHBoxLayout()
         apply_row.addWidget(self.prepare_btn)
+        apply_row.addWidget(self.assign_speakers_btn)
         apply_row.addWidget(self.stop_btn)
         apply_row.addStretch(1)
         apply_row.addWidget(self.apply_btn)
@@ -1443,6 +1482,127 @@ class GlossaryAgentPanel(QWidget):
             except Exception as error:  # 画布未就绪时不该打断队列操作
                 logger.error(f"Failed to mark project dirty: {error}")
 
+    def _refresh_canvas_after_write(self):
+        """数据侧写回后刷新画布当前页（取色调板重取色注入给页面的回调）。
+
+        画布未就绪时静默跳过：重取色本身不依赖画布，刷新只是即时反馈。
+        """
+        window = self._mainwindow()
+        canvas = getattr(window, "canvas", None)
+        st_manager = getattr(window, "st_manager", None)
+        if canvas is not None:
+            try:
+                canvas.updateCanvas()
+            except Exception as error:
+                logger.error(f"Failed to refresh canvas after palette write: {error}")
+        if st_manager is not None:
+            try:
+                st_manager.updateSceneTextitems()
+            except Exception as error:
+                logger.error(f"Failed to rebuild scene text after palette write: {error}")
+
+    # ── 取色调板：画布取色模式接线（W1）─────────────────────────
+
+    def _canvas(self):
+        """主窗口画布（取样开关要接管它的左键）；未就绪返回 None。"""
+        window = self._mainwindow()
+        return getattr(window, "canvas", None)
+
+    def set_palette_sampling(self, on: bool) -> bool:
+        """调板页取样开关 → 画布取色模式；返回是否真的武装。
+
+        开机（``on=True``）：画布拒绝时（没开工程／被整本对齐、路径重排、
+        区域再检测占用）不改任何状态，回灌 False 并 toast 原因——开关不能
+        停在一个假的「正在取样」上。关机：解除画布模式并收掉接线与常驻提示。
+        """
+        if not on:
+            canvas = self._canvas()
+            if canvas is not None:
+                try:
+                    canvas.leave_color_sample_mode()
+                except Exception as error:
+                    logger.error(f"Failed to leave color sample mode: {error}")
+            self._release_palette_sampling()
+            return True
+        canvas = self._canvas()
+        refused = False
+        if canvas is None:
+            refused = True
+        elif not canvas.is_color_sample_mode():
+            try:
+                refused = not canvas.enter_color_sample_mode()
+            except Exception as error:
+                logger.error(f"Failed to enter color sample mode: {error}")
+                refused = True
+        if refused:
+            self._palette_view.set_sampling_state(False)
+            self._toast(self._palette_sampling_refused_text(canvas), "warning")
+            return False
+        self._wire_palette_sampling(canvas)
+        return True
+
+    def _palette_sampling_refused_text(self, canvas) -> str:
+        proj = getattr(canvas, "imgtrans_proj", None) if canvas is not None else None
+        if not getattr(proj, "img_valid", False):
+            return self.tr("Sampling needs the canvas: open a project first.")
+        return self.tr(
+            "Cannot start sampling: another canvas mode is active (whole-book align, path reorder or region redetect)."
+        )
+
+    def _wire_palette_sampling(self, canvas):
+        """接上画布取色信号并亮常驻提示；重复调用不重复接线。
+
+        常驻 activity 提示是刻意的（交接 §3.4／§6.8）：武装期间左键语义被
+        换掉了，用户必须能一眼看到「现在在取色」，并且看到它是可关的。
+        """
+        from ui.custom_widget import notification
+
+        if not self._palette_wired:
+            self._palette_wired = True
+            canvas.color_sampled.connect(self._palette_view.accept_canvas_sample)
+            canvas.color_sample_mode_changed.connect(
+                self._on_palette_sample_mode_changed
+            )
+        self._palette_view.set_sampling_state(True)
+        notification.activity(
+            "palette-sampling",
+            True,
+            self.tr("Sampling colors — click a text glyph on the canvas (Esc to stop)"),
+            anchor="top-center",
+        )
+
+    def _release_palette_sampling(self):
+        """收掉画布取色接线与常驻提示（可重复调用）。"""
+        from ui.custom_widget import notification
+
+        if self._palette_wired:
+            self._palette_wired = False
+            canvas = self._canvas()
+            if canvas is not None:
+                for signal, slot in (
+                    (canvas.color_sampled, self._palette_view.accept_canvas_sample),
+                    (
+                        canvas.color_sample_mode_changed,
+                        self._on_palette_sample_mode_changed,
+                    ),
+                ):
+                    try:
+                        signal.disconnect(slot)
+                    except (TypeError, RuntimeError):
+                        pass
+        self._palette_view.set_sampling_state(False)
+        notification.activity("palette-sampling", False)
+
+    def _on_palette_sample_mode_changed(self, on: bool):
+        """画布取色模式状态回流：同步开关；画布自行退出时收线（Esc/模式切换）。
+
+        页面开关与面板武装态都跟着画布走——「开关显示 False 但面板还在
+        拦截信号」这种半解除状态会让下一次开机静默失效。
+        """
+        self._palette_view.set_sampling_state(on)
+        if not on:
+            self._release_palette_sampling()
+
     def _toast(self, text: str, kind: str = "info", task_id: str = ""):
         """面板内通知：批量回执与失败提示（kind 见通知中心的 KIND_STYLES）。"""
         from ui.custom_widget import notification
@@ -1580,6 +1740,9 @@ class GlossaryAgentPanel(QWidget):
             list(self._batch_views.values()) + list(self._review_views.values())
         ):
             view.forget_plan()  # 旧项目的列表与过时灯都不该带进新项目
+        # 换项目/关工程：取色模式必须强制解除（新工程不该继承旧画布的武装态）
+        self.set_palette_sampling(False)
+        self._palette_view.refresh_state()  # 调板随项目走：色表重挂、开关归位
         if self.has_project():
             self._stack.setCurrentIndex(1)
             self.nav.select(WORKBENCH_ORDER[0], emit=False)
@@ -1604,6 +1767,7 @@ class GlossaryAgentPanel(QWidget):
         self.stop_btn.clicked.connect(self._on_stop)
         self.prefill_btn.clicked.connect(self._on_prefill)
         self.prepare_btn.clicked.connect(self._on_prepare)
+        self.assign_speakers_btn.clicked.connect(self._on_assign_speakers)
         self.glossary_remove_btn.clicked.connect(self._on_glossary_remove)
         self.story_remove_btn.clicked.connect(self._on_story_remove)
         self.glossary_table.itemChanged.connect(self._on_glossary_item_changed)
@@ -1814,6 +1978,133 @@ class GlossaryAgentPanel(QWidget):
         self._ensure_worker().prefill_requested.emit()
         self._ensure_worker().instruction_requested.emit(self._prepare_command())
 
+    # ── 说话人赋名（方案评估 §3.4 第一期）────────────────────────
+
+    def _on_assign_speakers(self):
+        if not self.has_project():
+            return
+        if self._worker is not None and self._worker._busy:
+            return
+        command = self._assign_speakers_command()
+        if command is None:
+            return
+        if not self._costly_confirmed(
+            self.tr("Assign speaker names"),
+            self.tr(
+                "Ask the AI to read the sampled speakers' lines and the glossary, then propose real character names for the palette placeholders (API call, may incur cost). Suggestions only go to the log; nothing is written until you edit the palette rows yourself."
+            ),
+        ):
+            return
+        self._ensure_worker().instruction_requested.emit(command)
+
+    def _costly_confirmed(self, title: str, text: str) -> bool:
+        """耗时/耗费确认的通用壳（与 _prepare_confirmed 同一开关与落盘）。"""
+        from utils.config import pcfg, save_config
+
+        if not pcfg.workbench_confirm_costly:
+            return True
+        box = QMessageBox(self)
+        box.setWindowTitle(title)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setText(text)
+        box.addButton(QMessageBox.StandardButton.Ok).setText(self.tr("Start"))
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        dont_ask = QCheckBox(self.tr("Don't ask again"))
+        box.setCheckBox(dont_ask)
+        if box.exec() != QMessageBox.StandardButton.Ok:
+            return False
+        if dont_ask.isChecked():
+            pcfg.workbench_confirm_costly = False
+            save_config()
+        return True
+
+    def _assign_speakers_command(self) -> Optional[str]:
+        """拼「为调板角色赋真名」指令（调板 + 术语表快照 + 台词样本内联）。
+
+        返回 None 表示没有可赋名的占位（空调板/全部已有真名），此时只记
+        日志不打扰。术语表快照取**已应用**的 json（与 has_glossary_base 同
+        源）——草稿里的 AI 候选不算「就绪」。
+        """
+        from utils.proj_imgtrans import (
+            is_placeholder_role,
+            normalize_rgb,
+            speaker_display_name,
+        )
+
+        placeholders = []
+        for entry in getattr(self._proj, "fg_palette", None) or []:
+            role = entry.get("role", "") if isinstance(entry, dict) else ""
+            rgb = normalize_rgb(entry.get("rgb") if isinstance(entry, dict) else None)
+            if rgb is None or not is_placeholder_role(role):
+                continue
+            placeholders.append((rgb, str(role)))
+        if not placeholders:
+            self._append_log(
+                self.tr(
+                    "No placeholder speakers to assign: sample colors in the palette page first."
+                ),
+                TRANSLATION_PREP,
+            )
+            return None
+
+        role_by_rgb = {tuple(rgb): role for rgb, role in placeholders}
+        samples: Dict[str, list] = {role: [] for _, role in placeholders}
+        _MAX_SAMPLES = 8
+        for pagename, blk_list in (getattr(self._proj, "pages", None) or {}).items():
+            for blk in blk_list:
+                fg = normalize_rgb(getattr(blk, "fg_colors", None))
+                role = role_by_rgb.get(tuple(fg)) if fg is not None else None
+                if role is None:
+                    continue
+                text = " ".join(str(blk.get_text() or "").split())
+                if not text:
+                    continue
+                if len(samples[role]) < _MAX_SAMPLES:
+                    samples[role].append(f'"{text}" ("{pagename}")')
+
+        parts = [
+            self.tr(
+                "Assign real character names to the palette's placeholder speakers: infer each speaker's name from their lines, the existing glossary and the story, then reply with a suggestion table (speaker → proposed name, with the supporting lines). This is a suggestion only: do not modify the glossary or story drafts — the user will edit the palette manually."
+            ),
+            self.tr("Palette (text color → speaker):"),
+        ]
+        for rgb, role in placeholders:
+            parts.append(
+                f"- #{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}: "
+                + speaker_display_name(role)
+            )
+        parts.append(self.tr("Sample lines per speaker:"))
+        for rgb, role in placeholders:
+            lines = samples[role]
+            if lines:
+                parts.append(f"- {speaker_display_name(role)}: " + ", ".join(lines))
+            else:
+                parts.append(
+                    f"- {speaker_display_name(role)}: "
+                    + self.tr("(no translated-source lines matched this color)")
+                )
+        glossary_text = self._glossary_snapshot_text()
+        if glossary_text:
+            parts.append(self.tr("Existing glossary:"))
+            parts.append(glossary_text)
+        return "\n".join(parts)
+
+    def _glossary_snapshot_text(self) -> str:
+        """已应用术语表的只读快照（内联进指令用，draft 候选不算）。"""
+        from utils.config import pcfg
+
+        try:
+            path = pcfg.module.llm_glossary_path or ""
+            entries = load_glossary(path) if path else ()
+        except Exception:
+            return ""
+        lines = [
+            f"- {e.source} → {e.translation}"
+            for e in entries
+            if str(e.source).strip()
+        ]
+        return "\n".join(lines[:200])
+
     # ── 术语/剧情：用户编辑与落盘 ──────────────────────────────
 
     def _on_apply(self):
@@ -1890,6 +2181,7 @@ class GlossaryAgentPanel(QWidget):
     def _on_busy_changed(self, busy: bool):
         self.prefill_btn.setEnabled(not busy)
         self.prepare_btn.setEnabled(not busy)
+        self.assign_speakers_btn.setEnabled(not busy)
         self.apply_btn.setEnabled(not busy)
         self.glossary_table.setEnabled(not busy)
         self.story_table.setEnabled(not busy)

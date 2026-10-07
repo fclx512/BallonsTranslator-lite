@@ -309,16 +309,18 @@ class TaskAdapterTest(_WorkbenchTestCase):
 
 class PanelTest(_WorkbenchTestCase):
     def test_nav_order_and_default_task(self):
-        """扁平六项导航（批次 C）：一行一个任务，顺序＝用户工作流顺序。"""
+        """扁平七项导航：一行一个任务，顺序＝用户工作流顺序。"""
         from ui.glossary_agent_panel import WORKBENCH_ORDER
 
         panel = self._panel()
         self.assertEqual(WORKBENCH_ORDER, (
             MISREAD, MERGE, OCR_REVIEW, SIMPLE_INPAINT,
+            # 取色调板＝翻译侧工具页（后续给色加角色标签辅译）
+            "fg_palette",
             # 翻译准备是一个入口（术语与剧情是它的两个子页）
             "translation_prep", TRANS_REVIEW,
         ))
-        self.assertEqual(panel.pages.count(), 6)
+        self.assertEqual(panel.pages.count(), 7)
         self.assertEqual(panel.current_task(), MISREAD)
         self.assertTrue(panel.nav._buttons[MISREAD].isChecked())
         # 组标题只是视觉分段：每个任务都有自己的钮，没有两级选择
@@ -336,7 +338,7 @@ class PanelTest(_WorkbenchTestCase):
         self.assertNotIn(MERGE, panel._dirty_tasks)
 
     def test_nav_chip_flow_fits_two_rows_with_complete_active_label(self):
-        """导航＝按需换行的 chip 流（批次 D 修订）：常态两行、激活项不省略。
+        """导航＝按需换行的 chip 流（批次 D 修订）：激活项不省略、行数按内容收紧（七项英文≤三行）。
 
         会动的三条契约：① 整条导航的高度按行数收紧（原先六项各占一行、外加两行
         组标题＝8 行高，把页内信息挤没了）；② **当前任务**的完整标签必须排得下
@@ -370,7 +372,9 @@ class PanelTest(_WorkbenchTestCase):
         for task_id in WORKBENCH_ORDER:
             nav.set_count(task_id, 0)  # 把新标签推给 chip
         nav._relayout(animate=False)
-        self.assertLessEqual(nav.height(), 56)  # ≤ 两行 chip（6 + 22 + 4 + 22）
+        # 取色调板入列后共七项：英文标签下换行到三行（460px 面板宽），契约
+        # 随项数演进——收紧「行数按内容计算、不超三行」，核心仍是激活不省略
+        self.assertLessEqual(nav.height(), 80)
         for task_id in WORKBENCH_ORDER:
             nav.select(task_id)
             self.app.processEvents()
@@ -379,7 +383,7 @@ class PanelTest(_WorkbenchTestCase):
             # 逻辑文本永远是完整标签（计数只是后缀），省略只发生在渲染层
             self.assertTrue(chip.text().startswith(labels[task_id]))
             self.assertGreaterEqual(chip.target_width, chip.full_width())
-            self.assertLessEqual(nav.height(), 56)
+            self.assertLessEqual(nav.height(), 80)
 
     def _chinese_nav_labels(self, english):
         """同一 source 的 ``zh_CN`` 译文；qm 还没编出来时返回 ``{}``（跳过该套）。"""
@@ -400,16 +404,18 @@ class PanelTest(_WorkbenchTestCase):
             self.app.removeTranslator(translator)
 
     def test_nav_order_and_default_task(self):
-        """扁平六项导航（批次 C/D）：chip 流按需换行，顺序＝用户工作流顺序。"""
+        """扁平七项导航（批次 C/D 基础上增取色调板）：chip 流按需换行，顺序＝用户工作流顺序。"""
         from ui.glossary_agent_panel import WORKBENCH_ORDER
 
         panel = self._panel()
         self.assertEqual(WORKBENCH_ORDER, (
             MISREAD, MERGE, OCR_REVIEW, SIMPLE_INPAINT,
+            # 取色调板＝翻译侧工具页（后续给色加角色标签辅译）
+            "fg_palette",
             # 翻译准备是一个入口（术语与剧情是它的两个子页）
             "translation_prep", TRANS_REVIEW,
         ))
-        self.assertEqual(panel.pages.count(), 6)
+        self.assertEqual(panel.pages.count(), 7)
         self.assertEqual(panel.current_task(), MISREAD)
         self.assertTrue(panel.nav._buttons[MISREAD].isChecked())
         # 组标题只是视觉分段：每个任务都有自己的钮，没有两级选择
@@ -482,16 +488,18 @@ class PanelTest(_WorkbenchTestCase):
         self.assertIsNotNone(panel._preview_panel.canvas._pixmap)
 
     def test_nav_order_and_default_task(self):
-        """扁平六项导航（批次 C）：一行一个任务，顺序＝用户工作流顺序。"""
+        """扁平七项导航：一行一个任务，顺序＝用户工作流顺序。"""
         from ui.glossary_agent_panel import WORKBENCH_ORDER
 
         panel = self._panel()
         self.assertEqual(WORKBENCH_ORDER, (
             MISREAD, MERGE, OCR_REVIEW, SIMPLE_INPAINT,
+            # 取色调板＝翻译侧工具页（后续给色加角色标签辅译）
+            "fg_palette",
             # 翻译准备是一个入口（术语与剧情是它的两个子页）
             "translation_prep", TRANS_REVIEW,
         ))
-        self.assertEqual(panel.pages.count(), 6)
+        self.assertEqual(panel.pages.count(), 7)
         self.assertEqual(panel.current_task(), MISREAD)
         self.assertTrue(panel.nav._buttons[MISREAD].isChecked())
         # 组标题只是视觉分段：每个任务都有自己的钮，没有两级选择

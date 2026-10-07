@@ -72,14 +72,17 @@ from .batch_merge import (
 from .batch_ops import BatchOperation
 
 # 任务 id。导航顺序定在 ``ui/glossary_agent_panel.py::WORKBENCH_ORDER``
-# （扁平六项：可疑框清理 → 合并 → 原文待校对 → 简单背景修复 → 翻译准备 →
-# 译文待重译）。
+# （扁平七项：可疑框清理 → 合并 → 原文待校对 → 简单背景修复 → 取色调板 →
+# 翻译准备 → 译文待重译）。
 MISREAD = "misread"
 MERGE = "merge"
 SIMPLE_INPAINT = "simple_inpaint"
 # 非删除待办队列：只读列表 + 「跳画布处理／从列表移除」，无批量写回、无版本
 OCR_REVIEW = "ocr_review"
 TRANS_REVIEW = "trans_review"
+# 取色调板＝工具页（非任务）：人工采样各角色文字色，检测取色按最近原则吸附；
+# 后续计划给色加角色标签，翻译时作为角色线索喂给翻译 agent。
+FG_PALETTE = "fg_palette"
 # 翻译准备＝一个导航入口下的术语／剧情两块草稿（子页 id 仍分列，见面板）
 TRANSLATION_PREP = "translation_prep"
 GLOSSARY = "glossary"
@@ -255,13 +258,22 @@ class TaskRow:
     payload: dict = field(default_factory=dict)
 
 
-class _PageImageCache:
-    """页面原图小缓存 ＋ 审批截图裁剪（批量任务与待办队列共用一份实现）。
+class PageImageCache:
+    """页面原图小缓存 ＋ 审批截图裁剪（批量任务／待办队列／取色调板页共用）。
 
     几何一律复用现成实现：外扩量＝矩形短边的 ``ratio``、上限"碰到邻框即停"
     （``utils/block_geometry.py::expand_limited``，与 ``ui/batch_merge.py``
     的审批截图同一份）。**不在这里写第二套几何判据。**
+
+    两种用法：``BatchTask``／``ReviewQueueTask`` 继承它，在自身 ``__init__``
+    里先设好 ``self.proj`` 再调 ``_init_page_cache``；页面（如
+    ``ui/workbench_palette.py::FgPalettePage``）直接组合
+    ``PageImageCache(proj)`` 借用裁剪几何。
     """
+
+    def __init__(self, proj=None):
+        self.proj = proj
+        self._init_page_cache()
 
     def _init_page_cache(self) -> None:
         self._pages: Dict[str, Any] = {}
@@ -345,7 +357,7 @@ class _PageImageCache:
         )
 
 
-class BatchTask(_PageImageCache):
+class BatchTask(PageImageCache):
     """一个批量任务的数据侧适配（子类实现 plan／preview／apply）。"""
 
     id: str = ""
@@ -1030,7 +1042,7 @@ def build_batch_tasks(
 # - 人工记录与程序建议**分区呈现**（``ReviewSection``）：前者是用户的明确
 #   待办、可取消记录，后者可安全忽略，不混成一张表、不共用勾选语义；
 # - 故**不复用** ``BatchTask``（它的 ``apply`` 语义是「勾选＝本次要改／要删」），
-#   只共用 ``_PageImageCache`` 的页面缓存与审批截图。
+#   只共用 ``PageImageCache`` 的页面缓存与审批截图。
 #
 # "移除记录／忽略建议"只动这份记录本身：不改原文、不改译文、不清手写／拟声
 # 这类**持久翻译指示**（指示与原文是否待校对是两件事，见交接 §3.2）。
@@ -1049,7 +1061,7 @@ class ReviewSection:
     tone: str = "muted"  # 徽章色调（``ui/custom_widget/row_table.py`` 的取值）
 
 
-class ReviewQueueTask(_PageImageCache):
+class ReviewQueueTask(PageImageCache):
     """只读待办队列的数据侧（界面在 ``ui/workbench_review_view.py``）。"""
 
     id: str = ""

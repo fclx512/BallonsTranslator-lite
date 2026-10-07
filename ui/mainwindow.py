@@ -4033,9 +4033,13 @@ class MainWindow(mainwindow_cls):
                         blk.recalulate_alignment()
                     if override_writing_mode:
                         blk.vertical = gf.vertical
-                    # Always apply global font/background colors and effects
-                    # (removed "decide by program" — it did nothing meaningful)
-                    blk.set_font_colors(fg_colors=gf.frgb, bg_colors=gf.srgb)
+                    # 前景色：程序决定态保留块上颜色（检测器自动取色结果或
+                    # 用户已改值），只有「使用全局设置」才用全局前景覆盖。
+                    # 描边色（srgb）与其余效果始终随全局，与开关无关。
+                    if pcfg.let_fntcolor_flag == 1:
+                        blk.set_font_colors(fg_colors=gf.frgb, bg_colors=gf.srgb)
+                    else:
+                        blk.bg_colors = gf.srgb
                     blk.opacity = gf.opacity
                     blk.shadow_color = gf.shadow_color
                     blk.shadow_radius = gf.shadow_radius

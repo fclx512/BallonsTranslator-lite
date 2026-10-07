@@ -109,6 +109,10 @@ class AgentTranslator(LLM_API_Translator):
     # 是否传 tag_instructions
     supports_tag_instructions = True
 
+    # 说话人颜色线索（调板角色 → 逐块说话人）：translate_textblk_lst 依此
+    # 决定是否传 speaker_hints
+    supports_speaker_hints = True
+
     def translate(
         self,
         text,
@@ -117,6 +121,7 @@ class AgentTranslator(LLM_API_Translator):
         page_key: Optional[str] = None,
         commit_history_window: bool = False,
         tag_instructions: Optional[List] = None,
+        speaker_hints: Optional[List] = None,
     ):
         if text_is_empty(text):
             return text
@@ -145,6 +150,7 @@ class AgentTranslator(LLM_API_Translator):
                 page_key=page_key,
                 block_mode=single_block,
                 tag_instructions=tag_instructions,
+                speaker_hints=speaker_hints,
             )
         except AgentTaskCancelled:
             raise
@@ -235,6 +241,7 @@ class AgentTranslator(LLM_API_Translator):
         block_mode: bool = False,
         tag_instructions: Optional[List] = None,
         hint: str = "",
+        speaker_hints: Optional[List] = None,
     ) -> Dict[int, str]:
         api_key = self._select_api_key()
         if not api_key:
@@ -299,6 +306,7 @@ class AgentTranslator(LLM_API_Translator):
             matched_glossary,
             tag_instructions=tag_instructions,
             hint=hint,
+            speaker_hints=speaker_hints,
         )
 
         # agent 模式下历史注入是模块固有行为(设计方案 §11),不再走旧 beta 编排

@@ -81,6 +81,10 @@ class PPOCRv6Detector(TextDetectorBase):
             "value": 2,
             "description": "Dilation kernel size for text region mask",
         },
+        "extract colors": {
+            "value": True,
+            "description": "Extract per-block font/background colors from the image (DBNet prob map based)",
+        },
         "description": "PP-OCRv6 ONNX DBNet text detector via ONNX Runtime (no PaddlePaddle)",
     }
 
@@ -261,6 +265,46 @@ class PPOCRv6Detector(TextDetectorBase):
 
     # ── TextDetectorBase interface ──────────────────────────────────────
 
+    def _forward_with_probmap(self, img: np.ndarray):
+        """Run the DBNet ONNX forward once; return ``(dt_boxes, probmap)``.
+
+        ``onnxocr`` 的包装层 ``TextDetector.__call__`` 把前向输出的概率图
+        直接丢掉只留框，而概率图正是字体颜色提取（``utils/color_extract``）
+        需要的笔画级掩膜。这里复刻包装层的预处理/后处理（全部公开属性），
+        一次前向同时产出检测框与全分辨率概率图。
+        """
+        from onnxocr.imaug import transform
+
+        det = self.detector
+        data = transform({"image": img}, det.preprocess_op)
+        det_input, shape_list = data
+        if det_input is None:
+            return None, None
+        det_input = np.expand_dims(det_input, axis=0).copy()
+        shape_list = np.expand_dims(shape_list, axis=0)
+
+        input_feed = det.get_input_feed(det.det_input_name, det_input)
+        outputs = det.det_onnx_session.run(det.det_output_name, input_feed=input_feed)
+
+        # outputs[0] 为 (1,1,H,W) 概率图，DBPostProcess 语义同包装层
+        post_result = det.postprocess_op({"maps": outputs[0]}, shape_list)
+        dt_boxes = post_result[0]["points"] if post_result else []
+        if len(dt_boxes) == 0:
+            return None, None
+
+        if det.args.det_box_type == "poly":
+            dt_boxes = det.filter_tag_det_res_only_clip(dt_boxes, img.shape)
+        else:
+            dt_boxes = det.filter_tag_det_res(dt_boxes, img.shape)
+
+        # 概率图上采样到整页分辨率：取色是区域统计，对边缘模糊不敏感
+        prob = outputs[0][0, 0]
+        prob_full = cv2.resize(
+            prob, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR
+        )
+        self._last_probmap = prob_full  # 探针/调试复算用
+        return dt_boxes, prob_full
+
     def _detect(
         self, img: np.ndarray, proj: ProjImgTrans
     ) -> Tuple[np.ndarray, List[TextBlock]]:
@@ -268,8 +312,8 @@ class PPOCRv6Detector(TextDetectorBase):
 
         Returns a binary mask and a sorted list of TextBlocks.
         """
-        # 1. Run detection
-        dt_boxes = self.detector(img)  # ndarray [N, 4, 2] or None
+        # 1. Run detection (single forward yields both boxes and prob map)
+        dt_boxes, prob_full = self._forward_with_probmap(img)
 
         if dt_boxes is None or len(dt_boxes) == 0:
             return np.zeros(img.shape[:2], dtype=np.uint8), []
@@ -288,6 +332,11 @@ class PPOCRv6Detector(TextDetectorBase):
 
         # 3. Sort by reading order
         blk_list = self._sort_blocks(blk_list)
+
+        # 3.5 Per-block font color extraction (prob map = stroke-level mask)
+        # 调板（项目人工取样色）非空时按最近原则吸附，专治启发式误挑背景/描边簇
+        palette = getattr(proj, "fg_palette", None) if proj is not None else None
+        self.extract_colors(img, blk_list, prob=prob_full, palette=palette)
 
         # 4. Build binary mask from block polygons
         mask = np.zeros(img.shape[:2], dtype=np.uint8)

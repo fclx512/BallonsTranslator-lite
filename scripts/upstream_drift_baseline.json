@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-02 12:42:19",
+  "generated": "2026-10-03 16:41:14",
   "upstream_root": "D:\\ruanjian\\BallonsTranslator\\ballontranslator",
   "diff": {
     "fields": {
@@ -46,7 +46,9 @@
       "unavailable": false,
       "only_upstream": [],
       "only_fork": [
-        "base_styles"
+        "base_styles",
+        "fg_palette",
+        "fg_palette_seq"
       ]
     }
   }

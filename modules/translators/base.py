@@ -225,6 +225,20 @@ class BaseTranslator(BaseModule):
                 ]
                 if any(instructions):
                     kwargs["tag_instructions"] = instructions
+            # 说话人颜色线索（调板角色 → 逐块显示名）：同样按支持声明传，
+            # 与 tag_instructions 对齐到非空块；列表保持含 None 占位（注入侧
+            # 按位置还原块 id），调板无角色标注时零开销
+            if getattr(self, "supports_speaker_hints", False):
+                from utils.proj_imgtrans import speaker_hints_for_blocks
+
+                project = kwargs.get("project")
+                palette = getattr(project, "fg_palette", None)
+                if palette:
+                    hints = speaker_hints_for_blocks(
+                        [textblk_lst[ii] for ii in non_empty_ids], palette
+                    )
+                    if any(hints):
+                        kwargs["speaker_hints"] = hints
             _translations = self.translate(text_list, **kwargs)
             for ii, idx in enumerate(non_empty_ids):
                 translations[idx] = _translations[ii]

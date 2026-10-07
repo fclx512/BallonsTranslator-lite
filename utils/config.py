@@ -371,6 +371,10 @@ class ProgramConfig(Config):
 
     let_fntsize_flag: int = 0
     let_fntstroke_flag: int = 0
+    # 字体颜色：0=由程序决定（检测器自动取色，回落块自身颜色），
+    # 1=使用全局设置（管线结束后用全局样式的前景色覆盖所有块）。
+    # 描边色（srgb）不受本开关影响，仍随全局样式下发。
+    let_fntcolor_flag: int = 0
     let_alignment_flag: int = 0
     let_writing_mode_flag: int = 0
     let_family_flag: int = 0

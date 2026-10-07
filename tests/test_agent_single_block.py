@@ -112,7 +112,7 @@ def test_single_block_context_runs_agent(monkeypatch, trans):
     calls = {}
 
     def fake_task(src_list, *, project=None, page_key=None, block_mode=False,
-                  tag_instructions=None):
+                  tag_instructions=None, speaker_hints=None):
         calls["src_list"] = list(src_list)
         calls["block_mode"] = block_mode
         return {1: "你好"}
@@ -131,7 +131,7 @@ def test_multi_block_always_full_agent(monkeypatch, trans):
     calls = {}
 
     def fake_task(src_list, *, project=None, page_key=None, block_mode=False,
-                  tag_instructions=None):
+                  tag_instructions=None, speaker_hints=None):
         calls["block_mode"] = block_mode
         return {i + 1: f"t{i}" for i in range(len(src_list))}
 

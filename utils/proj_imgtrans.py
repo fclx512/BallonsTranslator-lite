@@ -2,7 +2,7 @@ import json
 import os
 import os.path as osp
 import re
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set
 
 import cv2
 import numpy as np
@@ -42,6 +42,86 @@ def get_last_modified_file(file_prefix, exts, ext_fallback=None):
 
 page_start_pattern = re.compile(r"^###\s+", re.MULTILINE)
 text_blkid_start_pattern = re.compile(r"^\d+\.", re.MULTILINE)
+
+# ── 说话人调板：占位名与角色标注 ────────────────────────────────────
+# 占位名 1-based Excel 列式（A…Z、AA…），入板即固化进 role、删除不复用；
+# 形态 ^[A-Z]{1,3}$ 同时是「还叫占位」的识别口径（真名撞形纯大写短串的
+# 概率留给用户自己避开，与独立 seq 字段方案的取舍见方案评估文档 §3.2）。
+
+_PLACEHOLDER_RE = re.compile(r"^[A-Z]{1,3}$")
+
+
+def _as_int(value) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def normalize_rgb(value) -> Optional[List[int]]:
+    """len-3、0~255 的 RGB 列表，否则 None（脏条目丢弃的统一判据）。"""
+    try:
+        rgb = [int(v) for v in list(value)[:3]]
+    except (TypeError, ValueError):
+        return None
+    if len(rgb) == 3 and all(0 <= v <= 255 for v in rgb):
+        return rgb
+    return None
+
+
+def palette_seq_to_name(seq: int) -> str:
+    """1-based 序号 → Excel 列式占位名（1→A, 26→Z, 27→AA），永不耗尽。"""
+    name = ""
+    seq = max(0, int(seq))
+    while seq > 0:
+        seq, rem = divmod(seq - 1, 26)
+        name = chr(ord("A") + rem) + name
+    return name
+
+
+def palette_role_to_seq(name: str) -> int:
+    """占位名 → 序号；非占位形态返回 0。"""
+    if not _PLACEHOLDER_RE.match(str(name or "")):
+        return 0
+    seq = 0
+    for ch in str(name):
+        seq = seq * 26 + (ord(ch) - ord("A") + 1)
+    return seq
+
+
+def is_placeholder_role(role: str) -> bool:
+    return bool(_PLACEHOLDER_RE.match(str(role or "")))
+
+
+def speaker_display_name(role: str) -> str:
+    """注入文本/UI 里的显示形态：占位名拼「Speaker A」，真名原样。"""
+    role = str(role or "")
+    return f"Speaker {role}" if is_placeholder_role(role) else role
+
+
+def speaker_hints_for_blocks(blk_list, palette) -> List[Optional[str]]:
+    """逐块返回说话人显示名（与 blk_list 对齐，未命中为 None）。
+
+    命中判据＝块前景色（font_color 取整口径）与调板**有角色条目**的 rgb
+    精确相等——只有吸附/人工写入的块色才是调板色原值，启发式自取色天然
+    不命中（宁缺毋滥）。多色一角色天然合并：同 role 的多个色条给同名。
+    """
+    role_by_rgb: Dict[tuple, str] = {}
+    for entry in palette or []:
+        if not isinstance(entry, dict) or not entry.get("role"):
+            continue
+        rgb = normalize_rgb(entry.get("rgb"))
+        if rgb is not None:
+            role_by_rgb[tuple(rgb)] = str(entry["role"])
+    if not role_by_rgb:
+        return [None] * len(blk_list)
+    hints: List[Optional[str]] = []
+    for blk in blk_list:
+        fg = getattr(blk, "fg_colors", None)
+        rgb = normalize_rgb(fg) if fg is not None and len(fg) == 3 else None
+        role = role_by_rgb.get(tuple(rgb)) if rgb is not None else None
+        hints.append(speaker_display_name(role) if role else None)
+    return hints
 
 # 块级平铺的遗留效果键（旧版本/上游旧工程把效果直接挂在块对象上，而非
 # fontformat 里）。上游 utils/textblock.py 的同名表把 default_stroke_width、
@@ -183,6 +263,16 @@ class ProjImgTrans:
         # glossary workbench "apply" writes it, agent translation injects it.
         self.llm_compact_memory: str = ""
 
+        # 项目人工取样调板：用户在画布上对原图点选的文字颜色，
+        # 检测取色时按最近原则吸附（utils/color_extract.py::PALETTE_SNAP_DIST）。
+        # 每本书的字色是创作侧定死的（分角色配色），人工采一次即可全程校正。
+        # 条目结构 {"rgb": [r,g,b], "role": str}：role 是颜色→角色标注，
+        # 翻译时作为说话人线索注入 agent（空串=未赋名）。占位名（A/B/…列式）
+        # 在入板/旧工程宽进时分配并固化进 role，删除不复用——分配序号
+        # fg_palette_seq 随项目持久化，防「删到 0 后重头分配」造成漂移。
+        self.fg_palette: List[Dict] = []
+        self.fg_palette_seq: int = 0
+
         self.current_img: str = None
         self.img_array: np.ndarray = None
         self.mask_array: np.ndarray = None
@@ -197,6 +287,11 @@ class ProjImgTrans:
     def pagename2idx(self, pagename: str) -> int:
         if pagename in self.pages:
             return self._pagename2idx[pagename]
+
+    def next_palette_role(self) -> str:
+        """分配下一个占位名并推进计数器（删除不复用的唯一入口）。"""
+        self.fg_palette_seq += 1
+        return palette_seq_to_name(self.fg_palette_seq)
         return -1
 
     def proj_name(self) -> str:
@@ -339,6 +434,31 @@ class ProjImgTrans:
                 LOGGER.warning(f"Ignoring invalid base style entry: {e}")
         if ensure_default_base_styles(self.base_styles, pcfg.global_fontformat):
             LOGGER.debug("Registered default base style for legacy project")
+
+        # 人工取样调板：坏条目跳过不崩，保住其余颜色（脏数据不该毁开工程）。
+        # 宽进两种历史形态：裸 [r,g,b]（首版调板）与 {"rgb": …}（role 空不落键）。
+        # 旧裸三元组条目在载入即补占位名（一次性迁移，落盘后不再走这条）；
+        # 用户手清的空 role 保持为空，不重复赋名。
+        self.fg_palette = []
+        self.fg_palette_seq = max(0, _as_int(proj_dict.get("fg_palette_seq", 0)))
+        for c in proj_dict.get("fg_palette", []):
+            if isinstance(c, dict):
+                rgb = normalize_rgb(c.get("rgb"))
+                role = str(c.get("role") or "")
+            else:
+                rgb = normalize_rgb(c)
+                role = None
+            if rgb is None:
+                continue
+            if role is None:
+                role = self.next_palette_role()
+            self.fg_palette.append({"rgb": rgb, "role": role})
+        if self.fg_palette_seq <= 0 and self.fg_palette:
+            # 兜底：工程 JSON 被手改丢掉序号时，从现存占位名推最大序，
+            # 至少保证新分配不与现存占位名重名
+            self.fg_palette_seq = max(
+                (palette_role_to_seq(e["role"]) for e in self.fg_palette), default=0
+            )
 
         for p in self.pages:
             if p not in self._image_info:
@@ -545,6 +665,17 @@ class ProjImgTrans:
         memory = self.llm_compact_memory
         if isinstance(memory, str) and memory.strip():
             proj_dict["llm_compact_memory"] = _llm_compact_memory_record(memory)
+        # 调板同上游记忆策略：空调板不落键，避免上游侧多余告警键。
+        # role 空的条目不落 role 键；分配序号单独落键（删除不复用的保证，
+        # fork 独有键，上游 loader 忽略未知项目级键）。
+        if self.fg_palette:
+            proj_dict["fg_palette"] = [
+                {"rgb": list(e["rgb"]),
+                 **({"role": e["role"]} if e.get("role") else {})}
+                for e in self.fg_palette
+            ]
+        if self.fg_palette_seq > 0:
+            proj_dict["fg_palette_seq"] = int(self.fg_palette_seq)
         return proj_dict
 
     def read_img(self, imgname: str) -> np.ndarray:

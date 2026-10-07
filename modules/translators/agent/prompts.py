@@ -226,7 +226,13 @@ def build_user_task_message(
     glossary_entries: Sequence[GlossaryEntry] = (),
     tag_instructions: Optional[Sequence] = None,
     hint: str = "",
+    speaker_hints: Optional[Sequence] = None,
 ) -> str:
+    """speaker_hints: 与 src_list 对齐的说话人显示名（None/空串=该块无标注）。
+
+    由 ``utils/proj_imgtrans.py::speaker_hints_for_blocks`` 按调板角色生成，
+    仅「块前景色与调板有角色色精确相等」的块非空（宁缺毋滥）。
+    """
     parts = []
     if page_label_text:
         parts.append(f"Current task page: {page_label_text}.")
@@ -258,6 +264,20 @@ def build_user_task_message(
             "Glossary constraints (must follow):\n"
             + render_glossary(glossary_entries)
         )
+    # 说话人颜色线索：独立小节列「块 id → 说话人」，宁缺毋滥（无标注整节省略）
+    if speaker_hints:
+        hint_lines = [
+            f"- id {i + 1}: {name}"
+            for i, name in enumerate(speaker_hints)
+            if name
+        ]
+        if hint_lines:
+            parts.append(
+                "Speaker hints (the text color of a block matches a "
+                "color-character entry in the project palette; treat as "
+                "a clue about who is speaking, not a hard rule):\n"
+                + "\n".join(hint_lines)
+            )
     if history_snippet:
         parts.append(history_snippet)
     # 用户补充要求（框级确认卡片的确定性输入）：放最后，靠近生成位置

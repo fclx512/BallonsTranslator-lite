@@ -125,3 +125,20 @@ Qt 注册名自带尾随空格的字体（攸望系列，字体文件元数据�
 |---|---|---|
 | `probe_open_upstream_project.py` | 打开指定工程目录，`QMessageBox.exec` 打点（文案/按钮/复选框存活/子对象数）、延迟自动点击可接受按钮、`faulthandler` 看门狗兜卡死；开完打印 `base_styles` 与快速样式条内容。`PROBE_OPEN_AT_STARTUP=1` 走构造期开项目（弹窗出现在 `window.show()` 之前），`PROBE_TICK_CHECKBOX=1` 顺带验证「不再提示」（会写用户 `config.json`，测完记得复位） | 无命名样式的工程：`Icon.Information` 提示窗（OK 由 showEvent 补上、复选框活子对象 1 个）→ 点 OK → `openDir` 正常返回，两条打开路径（UI openDir / 构造期）均干净退出；有命名样式的工程：`Icon.Question` 导入询问（Yes/No，无复选框）→ 点 Yes → 按「预设名 × 身份键」播种大样式、快速样式条同名去重并入、退出零异常 |
 
+
+## 九、字体自动取色抽查（2026-10-03）
+
+缘起：检测器不产颜色，文字颜色与图片无关。新增掩膜取色（概率图/经典二值化
+两条路），判定逻辑见 `docs/技术实现/字体自动取色_设计与实现.md`。本探针把每块
+**裁剪成小图**（只含 OCR 文本区）拼成一页给人工目视，避免整页画面进入审查。
+
+```bash
+./ballontrans_pylibs_win/python.exe scripts/probes/probe_color_extract.py <图片或目录> --pages 0:19
+./ballontrans_pylibs_win/python.exe scripts/probes/probe_color_extract.py <目录> --no-prob
+# 带人工调板（模拟项目调板吸附，吸附后 fg 精确等于调板色）
+./ballontrans_pylibs_win/python.exe scripts/probes/probe_color_extract.py <目录> --page 12 --palette "#1b19d6,#ffffff,#000000"
+```
+
+| 脚本 | 做什么 | 期望值（2026-10-03 实测） |
+|---|---|---|
+| `probe_color_extract.py` | 跑 ppocrv6 检测 + 逐块取色，打印 `fg/bg/conf/cov` 表并把每块裁剪图（竖排旋转 90°）拼成 `<页名>.png` 落 `out/color_extract/`；`--no-prob` 走经典二值化兜底；`--palette` 模拟项目人工调板吸附。**读图用仓库 `imread`（RGB），与项目管线同口径**——早先用 `cv2.imread`（BGR）掩盖了提取器与管线的通道口径差，探针全对、应用里颜色整体反转（教训记录在设计文档「通道口径」节） | 样张 176 页 / 1220 块：无失败、无低于闸门（0.45）的块；黑字白边取黑、彩字取彩、跨页同角色色值稳定；两条掩膜路径结果一致；带 `--palette "#1b19d6,…"` 时蓝字块 fg 精确等于 `#1b19d6` |

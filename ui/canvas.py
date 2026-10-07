@@ -1,5 +1,6 @@
+import math
 import os
-from typing import List, Union
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 from qtpy.QtCore import (
@@ -137,6 +138,44 @@ def _segment_rect_entry(
     return max(0.0, min(1.0, entry))
 
 
+def page_pixel_from_scene(pos, scale_factor, page_size) -> Optional[Tuple[int, int]]:
+    """Scene coordinates → page pixel (integer) coordinates, or None.
+
+    ``Canvas.baseLayer`` is scaled by ``Canvas.scale_factor``, so
+    ``event.scenePos()`` is in *display* coordinates: the page pixel is
+    ``scenePos / scale_factor`` (same conversion as
+    ``ui/canvas.py::startCreateTextblock``).  Getting this division wrong is
+    silently off by the zoom factor and only visible at 200%, hence the pure
+    helper + unit contract.
+
+    ``page_size`` accepts a ``QSize``/``QSizeF`` (``baseLayer.rect().size()``)
+    or a ``(width, height)`` pair.  Coordinates outside the page, a
+    non-positive scale or unparseable arguments all return ``None``.
+    """
+    try:
+        scale = float(scale_factor)
+        if not math.isfinite(scale) or scale <= 0:
+            return None
+        if page_size is None:
+            return None
+        if isinstance(page_size, (tuple, list)):
+            if len(page_size) != 2:
+                return None
+            width, height = float(page_size[0]), float(page_size[1])
+        else:
+            width, height = float(page_size.width()), float(page_size.height())
+        # floor（不是 int()）：x ∈ (-1, 0) 的落点必须判越界，int() 会截成 0
+        x = int(math.floor(float(pos.x()) / scale))
+        y = int(math.floor(float(pos.y()) / scale))
+    except (AttributeError, TypeError, ValueError):
+        return None
+    if not (math.isfinite(width) and math.isfinite(height)):
+        return None
+    if 0 <= x < width and 0 <= y < height:
+        return x, y
+    return None
+
+
 class MoveByKeyCommand(QUndoCommand):
     def __init__(
         self,
@@ -244,6 +283,17 @@ class CustomGV(QGraphicsView):
         if key == QKEY.Key_Control:
             self.ctrl_pressed = True
 
+        # Esc 退出取色模式（画布获得焦点时）：ShortcutOverride 已在 event()
+        # 里接受，全局 Esc 快捷键不会把这次按键吃掉。
+        if (
+            key == QKEY.Key_Escape
+            and self.canvas is not None
+            and self.canvas.is_color_sample_mode()
+        ):
+            self.canvas.leave_color_sample_mode()
+            e.accept()
+            return
+
         modifiers = e.modifiers()
         # 用标准键位匹配，兼容非英文键盘布局与 Ctrl+Insert 等别名（上游 a86ebb1）。
         if e.matches(QKeySequence.StandardKey.Paste):
@@ -287,8 +337,14 @@ class CustomGV(QGraphicsView):
             e.type() == QEvent.Type.ShortcutOverride
             and e.key() == Qt.Key.Key_Escape
             and self.canvas is not None
-            and self.canvas.textGridControl.isVisible()
+            and (
+                self.canvas.textGridControl.isVisible()
+                or self.canvas.is_color_sample_mode()
+            )
         ):
+            # Accepting the ShortcutOverride keeps the global Esc shortcut
+            # (mainwindow.shortcutEscape) from swallowing the key, so
+            # keyPressEvent below can leave the color-sample mode.
             e.accept()
             return True
         if isinstance(e, QNativeGestureEvent):
@@ -374,6 +430,10 @@ class Canvas(QGraphicsScene):
     # 区域再检测（人工拉框 → 只在框内跑检测 + OCR）：拖框结束的那一刻发一次，
     # 由 ui/region_redetect_tool.py 接手。见 Canvas.region_redetect_mode。
     region_redetect_rect = Signal(QRectF)
+    # 取色模式（工作台「取色调板」页的人工取样）：左键点字形 → (页名, x, y)
+    # 页像素坐标；进出模式都发 mode_changed，UI 据此同步开关与常驻提示。
+    color_sampled = Signal(str, int, int)
+    color_sample_mode_changed = Signal(bool)
     paste2selected_textitems = Signal()
     end_create_rect = Signal(QRectF, int)
     finish_painting = Signal(StrokeImgItem)
@@ -439,6 +499,9 @@ class Canvas(QGraphicsScene):
         # 的一员：ui/image_edit.py::ImageEditMode 的值会被 setPaintMode(False)
         # 重置为 NONE，进文本框编辑页时必然被清掉。
         self.region_redetect_mode = False
+        # 取色模式（工作台「取色调板」的人工取样）：独占左键，与整本对齐/
+        # 路径重排/区域再检测互斥；标志挂 Canvas 上，换页与场景重建都不清。
+        self._color_sample_mode = False
         self.alignment_enabled = pcfg.snap_alignment
         self.snap_guide_item = SnapGuideItem()
         self.creating_textblock = False
@@ -1187,6 +1250,7 @@ class Canvas(QGraphicsScene):
 
     def enter_align_mode(self, axis: str, target: float):
         """进入整本对齐模式：画一条可拖动的基准线。"""
+        self.leave_color_sample_mode()  # 独占模式互斥（进对齐即解除取色）
         self._align_axis = axis
         self._align_dragging = False
         self.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
@@ -1230,6 +1294,59 @@ class Canvas(QGraphicsScene):
 
     def is_align_mode(self) -> bool:
         return self._align_axis is not None
+
+    # ── Color sample mode (取色模式) ─────────────────────────────
+    # 独占画布左键：把点到的页像素发给调板页（工作台「取色调板」）。入口只有
+    # 一个（``enter_color_sample_mode``），三个互斥模式各自进入时把它请出去，
+    # 保证任何时刻最多一个独占模式。右/中键行为不变（右键菜单、中键平移）。
+
+    def enter_color_sample_mode(self) -> bool:
+        """进入取色模式；被其它画布模式占用或无页面时返回 False（不改状态）。"""
+        if self._color_sample_mode:
+            return True
+        if self.is_align_mode() or self._reorder_mode or self.region_redetect_mode:
+            return False
+        if not getattr(self.imgtrans_proj, "img_valid", False):
+            return False
+        self._color_sample_mode = True
+        # 选中态与形状控件让位：手柄自带光标与命中测试，会抢掉「点字形取样」
+        self.clearSelection()
+        self.txtblkShapeControl.setBlkItem(None)
+        self.clear_text_transform_controls()
+        self.gv.setCursor(Qt.CursorShape.CrossCursor)
+        self.set_canvas_cursor(Qt.CursorShape.CrossCursor)
+        self.gv.setDragMode(QGraphicsView.DragMode.NoDrag)
+        self.color_sample_mode_changed.emit(True)
+        return True
+
+    def leave_color_sample_mode(self) -> None:
+        """退出取色模式（幂等）。
+
+        光标两处都清——只清视图的话场景层十字丝会残留成「精确选择」
+        （同 ``ui/canvas.py::leave_align_mode`` 的三件套）。
+        """
+        if not self._color_sample_mode:
+            return
+        self._color_sample_mode = False
+        self.gv.unsetCursor()
+        self.clear_canvas_cursor()
+        self.restore_drag_mode()
+        self.color_sample_mode_changed.emit(False)
+
+    def is_color_sample_mode(self) -> bool:
+        return self._color_sample_mode
+
+    def _emit_color_sample(self, scene_pos: QPointF) -> None:
+        """左键落点 → 页像素（除缩放）→ ``color_sampled``；越界不发。"""
+        pagename = getattr(self.imgtrans_proj, "current_img", None)
+        if not pagename:
+            return
+        pixel = page_pixel_from_scene(
+            scene_pos, self.scale_factor, self.baseLayer.rect().size()
+        )
+        if pixel is None:
+            return
+        self.color_sampled.emit(pagename, pixel[0], pixel[1])
 
     def _place_align_line(self, target: float):
         """按当前轴把基准线摆到 target（场景坐标）。"""
@@ -1305,6 +1422,7 @@ class Canvas(QGraphicsScene):
         The user draws one or more strokes across text blocks on the canvas.
         Blocks are reordered in the sequence they are first touched.
         """
+        self.leave_color_sample_mode()  # 独占模式互斥（进重排即解除取色）
         self._reorder_mode = True
         self._reorder_drawing = False
         self._reorder_path = QPainterPath()
@@ -1516,6 +1634,12 @@ class Canvas(QGraphicsScene):
             self._reorder_start_stroke(event.scenePos())
             return
 
+        # Color sample mode — 左键点字形取色。**只接管左键**：右键菜单与
+        # 中键平移照旧；落点越界或除缩放后不在页内不发信号。
+        if self._color_sample_mode and btn == Qt.MouseButton.LeftButton:
+            self._emit_color_sample(event.scenePos())
+            return
+
         if btn == Qt.MouseButton.MiddleButton:
             self.mid_btn_pressed = True
             self.pan_initial_pos = event.screenPos()
@@ -1614,6 +1738,10 @@ class Canvas(QGraphicsScene):
             self._reorder_end_stroke()
             return
 
+        # Color sample mode — 该次左键已在按下时消费，松开不落任何选择/建框
+        if self._color_sample_mode and btn == Qt.MouseButton.LeftButton:
+            return
+
         box_selecting = self.rubber_band_dragged
         self.hide_rubber_band()
 
@@ -1667,6 +1795,11 @@ class Canvas(QGraphicsScene):
             self._fit_to_window = False  # reset after use
 
         self.setDrawingLayer()
+        # 换页/重扫会整体重建场景：取色模式标志挂在 Canvas 上本就不清，这里
+        # 再补一次光标，保证十字丝在重建后仍是当前交互的唯一提示。
+        if self._color_sample_mode:
+            self.gv.setCursor(Qt.CursorShape.CrossCursor)
+            self.set_canvas_cursor(Qt.CursorShape.CrossCursor)
 
     def setDrawingLayer(self, img: Union[QPixmap, np.ndarray] = None):
 
@@ -1718,6 +1851,8 @@ class Canvas(QGraphicsScene):
         mode = bool(mode)
         if mode == self.region_redetect_mode:
             return
+        if mode:
+            self.leave_color_sample_mode()  # 独占模式互斥（进区域再检测即解除取色）
         self.region_redetect_mode = mode
         if self.creating_textblock:
             # 拖拽中途切模式：本次拖拽作废（结束时的落点会和用户预期不符）
