@@ -6,11 +6,18 @@ filter pipeline) and the parameter area laid out to the
 ``TransformParameterPanel`` spec: right-aligned labels, 22px editors,
 two-column grid with span-2 rows for fill, blend, and the gradient
 editor (2026-09-03 user decision, kept for the re-port).
+删掉的三类卡**勿顺手复活**：图像纹理需要整套项目资产持久层
+（``utils/raster_assets.py`` 只有引用结构，无落盘/哈希/GC），AI 生成图
+需要 API 传输层——都与 fork 减法导向冲突；alpha 遮罩如重启须从
+``utils/text_effects.py::TextEffectStack`` 现状重新评估。
 Fork restores the standalone stroke card and retires the main panel
 stroke row instead (2026-09-08 用户拍板：描边只走栈——顺序与位置/混合等
 高级参数都需要卡片承载，常驻行与卡片双视图的分离方案实现起来别扭)。
-卡片按渐进披露原则分层：高频参数常显，低频项收进默认收起的「高级」
-子层（展开状态不记忆，每次重建都回到收起）。QColorDialog 一律换 fork
+卡片按渐进披露原则分层，定稿规则＝**每卡常显「类型 + 几何 + 颜色」**，
+低频项（各卡不透明度/混合模式/Spread 类）收进默认收起的「高级」子层
+（展开状态不记忆，每次重建都回到收起；高级项含非默认值时折叠行右侧
+点亮标记点）。例外：描边卡「位置」保持常显——它与宽度同行、收进去那行
+右半空着难看；滤镜卡参数全常显、无折叠行。QColorDialog 一律换 fork
 自己的 ``ui/custom_widget/color_picker.py::ColorPickerDialog``。
 """
 

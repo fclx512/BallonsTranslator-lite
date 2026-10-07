@@ -33,6 +33,13 @@ class RailLauncherButton(QToolButton):
     "current block has content in this panel" hint.  Checked (panel
     open) paints the accent background procedurally; hover draws a 1px
     border outline instead of a fill.
+
+    ``rail_*`` 图标的 SVG 硬约定（2026-09-08 定稿）：24×24 Material 网格
+    （``viewBox="0 0 24 24"``，坐标取整数或 .5，缩到 16–18px 仍清晰）；
+    单色纯 fill——需要「线条」的形状一律用填充路径勾勒，不用渐变/多色/
+    内嵌 CSS：本类状态换色走 ``override_fill``，只替换 ``fill=`` 字面量，
+    stroke 不会跟着变。**不加 ``*_activate`` 变体**——窄栏选中态是 accent
+    圆角底 + 白色图形，accent 色图形落在 accent 底上会消失。
     """
 
     ICON_SIZE = 20

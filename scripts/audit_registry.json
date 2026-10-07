@@ -156,8 +156,7 @@
         "ui/text_engine/effect_renderer.py": {
             "note": "效果栈移植阶段C：v1.5.9 版 TextEffectRenderer 被 ui/text_engine/effects/renderer.py（上游 TextEffectStack 渲染引擎）取代，2026-08-31 删除",
             "allowed_mentions": [
-                "docs/daily_log.md",
-                "docs/技术实现/效果栈移植与窄栏图标重绘_计划_存档.md"
+                "docs/daily_log.md"
             ]
         },
         "icons/rail_glossary.svg": {
@@ -289,8 +288,7 @@
         "ui/text_style_dock.py": {
             "note": "效果面板取代（2026-09-06，批次②效果栈重移植）：◐ 文本样式浮层退役，效果卡/整体不透明度/镂空由 ui/text_engine/effects/panel.py::TextEffectPanel 承接，行距类型迁至效果浮层顶部行",
             "allowed_mentions": [
-                "docs/daily_log.md",
-                "docs/技术实现/效果栈移植与窄栏图标重绘_计划_存档.md"
+                "docs/daily_log.md"
             ]
         },
         "docs/技术实现/泛用工作台_复核与拆分.md": {
@@ -338,6 +336,24 @@
             "note": "批量框扩张退役（2026-09-26）：探针的生产路径 ui/batch_expand.py::BatchExpand.apply 已删，探针无法运行故一并删除。它的测量方法（同一批块填占位译文、扩张前后各渲染一遍做目视对比）若要用于日后的「自动排版／译文居中」研究线，可从 git 历史取回",
             "allowed_mentions": [
                 "docs/技术实现/AI辅助功能_设计与实现.md"
+            ]
+        },
+        "docs/技术实现/paddle-ocr-for-manga_接入调研_存档.md": {
+            "note": "文档清理（2026-10-07 用户拍板）：模型已实际接入（modules/ocr/ocr_vl_manga.py），调研论证过时；仍活的参数坑与实测数字浓缩进该模块 docstring，端到端实测数字在 scripts/probes/README.md §四。原引用点（AGENTS.md、docs/项目概述.md、模型说明卡片_规划、模型文件管理两篇、scripts/probes/README.md）已改指 modules/ocr/ocr_vl_manga.py",
+            "allowed_mentions": [
+                "docs/daily_log.md"
+            ]
+        },
+        "docs/技术实现/效果卡渐进披露_验收清单_存档.md": {
+            "note": "文档清理（2026-10-07 用户拍板）：验收批次已完结（2026-09-08），分层结论已由代码承载；仍活的定稿规则（每卡常显＝类型+几何+颜色、描边卡「位置」常显的例外理由、滤镜卡无折叠行）并入 ui/text_engine/effects/cards.py 模块 docstring，过程性坑修复记录丢弃（回归已钉 tests/test_text_effects_cards.py）",
+            "allowed_mentions": [
+                "docs/daily_log.md"
+            ]
+        },
+        "docs/技术实现/效果栈移植与窄栏图标重绘_计划_存档.md": {
+            "note": "文档清理（2026-10-07 用户拍板）：批次已完结（2026-09-08）；活约束搬迁——「长期搁置勿复活」清单（图像纹理缺项目资产持久层／AI 生成图需 API 传输层／alpha 遮罩重启再评估）并入 ui/text_engine/effects/cards.py 与 renderer.py docstring，rail_* 图标 SVG 硬规范并入 ui/panel_rail.py::RailLauncherButton docstring（原「禁 stroke」条已过时：ui/misc.py::set_icon_theme 现已同步替换 stroke），过程性计划与验收读数丢弃",
+            "allowed_mentions": [
+                "docs/daily_log.md"
             ]
         }
     },

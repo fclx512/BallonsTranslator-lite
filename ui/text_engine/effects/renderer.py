@@ -4,7 +4,8 @@ Port of upstream ``ballontranslator/ui/text_engine/effects/renderer.py``
 (``TextEffectRenderer``) onto the fork's tier raster pipeline.  Untouched
 methods stay byte-identical to upstream; the deviations are:
 
-- Postponed card kinds are not ported (计划第六节"后续待办"): Image/
+- Postponed card kinds are not ported (scope trim, see the cards.py
+  module docstring): Image/
   texture, AI generation and the block alpha mask.  Their methods and cache
   namespaces are removed; ``_ordered_surface_nodes`` skips those effect
   kinds defensively should data ever contain them.  Filter is ported in
@@ -438,7 +439,8 @@ class TextEffectRenderer:
             self.effective_text_effects().effects
         ))):
             if isinstance(effect, ImageEffect):
-                # Postponed card kinds (计划第六节): no data path creates
+                # Postponed card kinds (image/texture/AI/alpha-mask, see cards.py
+                # module docstring): no data path creates
                 # them yet; skip defensively instead of resolving assets.
                 continue
             if isinstance(effect, FilterEffect):

@@ -30,7 +30,6 @@ from ui.custom_widget import (
     NoBorderPushBtn,
     RangeSlider,
 )
-
 from utils.config import pcfg, save_config
 
 

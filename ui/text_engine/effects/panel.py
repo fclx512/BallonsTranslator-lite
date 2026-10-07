@@ -1,7 +1,8 @@
 """Selection and stack orchestration for item-wide text effects.
 
 Port of upstream v1.5.13 ``panel.py`` with the fork scope trim: mask /
-texture / image families are out of scope (效果栈移植计划 §六).  Filter is
+texture / image families are out of scope (勿复活理由见 ``cards.py``
+模块 docstring).  Filter is
 ported in this batch (pipeline, cards, panel).  Layout follows the
 transform dock hosting contract: the panel is a ``PanelArea`` passed
 directly to ``RailDockPanel``.

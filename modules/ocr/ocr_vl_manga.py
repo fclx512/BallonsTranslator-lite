@@ -3,16 +3,21 @@
 模型：``jzhang533/PaddleOCR-VL-For-Manga``（0.9B，Apache-2.0），Manga109-s 文本
 区域 crop 微调；Manga109-s 整句准确率 70%（基座同测 27%）。走 HuggingFace
 transformers（PyTorch）加载，**不需要** paddlepaddle。定位是「质量优先」的
-日文漫画 OCR：逐块自回归解码，比 onnx 系慢约两个数量级，**不要**当默认识别器。
+日文漫画 OCR：逐块自回归解码。实测（RTX 5070 Ti Laptop 11.9GB / bf16 / sdpa，
+端到端脚本 ``scripts/probes/ocr_vl_manga_accept.py``）：加载约 3.8s、峰值显存
+约 2.5GB、单块中位 192ms（首块约 0.9s 预热）、27 块一页约 6s——比 onnx 系慢
+但在同一数量级，**不要**当默认识别器。
 
-实现要点（调研与实测依据见 ``docs/技术实现/paddle-ocr-for-manga_接入调研_存档.md``）：
+实现要点：
 
 1. **整块裁剪，不逐行**。模型在整块文本区域 crop 上训练，块内多行/多列一起喂
    才能借到模型自己的阅读顺序。取块内 ``lines`` 顶点集的轴对齐外接范围
    （``utils/block_geometry.py::poly_bands``，口径同区域再检测），**不做**透视
    校正与重采样：Manga109-s 的训练 crop 就是轴对齐外接框，再采样只会引入网点
    失真。也**不用** ``utils/textblock.py::TextBlock.get_transformed_region``——
-   那是渲染用的，会把竖排转成横排，竖排 crop 必须保持原始朝向。
+   那是渲染用的，会把竖排转成横排，竖排 crop 必须保持原始朝向。**整页一次喂
+   实测不可用**（块多的一页只出一部分行、且输出不带任何坐标），检测必须由本
+   项目自己的检测器提供，本模块只做识别。
 2. **``use_cache`` 必须显式传 True**。权重仓库的 config 与 generation_config 都
    写死 ``use_cache: false``（训练侧习惯），不覆盖则自回归解码不走 KV cache，
    慢数倍。官方两份推理代码都显式传了 True。
@@ -20,7 +25,7 @@ transformers（PyTorch）加载，**不需要** paddlepaddle。定位是「质�
    更老的卡用 fp16，CPU 用 fp32。
 4. **不做置信度标签**。生成式模型只有 token 概率、没有可信的分数，故
    ``utils/block_tags.py::apply_ocr_confidence_tag`` 在本模块下不启用——
-   「OCR 置信度低」自动标签对生成式 OCR 不生效（调研 §4）。
+   「OCR 置信度低」自动标签对生成式 OCR 不生效。
 5. **权重走后台下载**（``background_download_only``）：1.9GB 在加载期同步下会
    冻住主界面。缺文件时抛 ``modules.base.MissingModelFilesError``，由 UI 指路到
    设置页 Models → 模型文件。
@@ -30,6 +35,11 @@ transformers（PyTorch）加载，**不需要** paddlepaddle。定位是「质�
    ``Cannot instantiate this tokenizer from a slow version`` —— 就是 2026-09-20 用户
    跑管线时遇到的「OCR 失败」。两条路径 token id 实测等价，故不必引入 sentencepiece
    依赖；权重更新后重跑 ``scripts/probes/ocr_vl_tokenizer.py`` 再下结论。
+7. **processor 会把小 crop 放大到 ``min_pixels``（约 384×384）再编码**：几十像素的
+   拟声词小框并不比整气泡便宜多少，耗时别按像素面积估。
+8. **已知误差类型**（官方自述）：全角/半角混排（``！？`` vs ``!?``）与 CJK 部首
+   变体字（``⼈`` vs ``人``）。倾向交 LLM 翻译消化，不做 NFKC 预归一化（会连带
+   把全角字母数字转半角）。
 """
 
 import os.path as osp

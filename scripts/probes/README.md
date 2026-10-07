@@ -60,8 +60,8 @@ Models → Management 的「释放内存」按钮；`pcfg.region_redetect_device
 
 ## 四、paddleocr_vl_manga 接入验收（2026-09-20）
 
-文档：`docs/技术实现/paddle-ocr-for-manga_接入调研_存档.md`（§3 的性能数字出自这里）、
-`docs/技术实现/模型文件管理_测试流程.md` 第 4 层。两个都**只读、不联网**（模型已在本地）。
+性能数字与参数坑见 `modules/ocr/ocr_vl_manga.py` 模块 docstring；模型文件侧流程见
+`docs/技术实现/模型文件管理_测试流程.md` 第 4 层（**只读、不联网**，模型已在本地）。
 
 | 脚本 | 做什么 | 关键数字 / 结论 |
 |---|---|---|
