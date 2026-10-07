@@ -1323,10 +1323,23 @@ class FontExcludeDialog(QDialog):
             item = self.excluded_list.item(i)
             item.setHidden(bool(text) and text not in self._real_name(item).lower())
 
+    def _move_to_hidden(self, font_name: str, simplified: bool = False):
+        """把一个家族从可用列表移入隐藏列表（只动 widget，确定时才落盘）。
+
+        必须走增量移动而非 ``_populate_lists()`` 重建：重建只认持久化的
+        ``pcfg.excluded_fonts``，会把本会话内已隐藏但尚未确定的条目
+        （老旧字体/手动 >）冲回可用列表——「老旧→精简」互相覆盖的根因。
+        """
+        self._add_font_item(self.excluded_list, font_name, simplified=simplified)
+        for i in range(self.available_list.count()):
+            if self._real_name(self.available_list.item(i)) == font_name:
+                self.available_list.takeItem(i)
+                break
+
     def _hide_fonts(self):
         for item in self.available_list.selectedItems():
             self.available_list.takeItem(self.available_list.row(item))
-            self._add_font_item(self.excluded_list, self._real_name(item))
+            self._move_to_hidden(self._real_name(item))
 
     def _show_fonts(self):
         for item in self.excluded_list.selectedItems():
@@ -1376,7 +1389,10 @@ class FontExcludeDialog(QDialog):
             return
 
         self._simplify_map.update(mapping)
-        self._populate_lists()
+        # 增量并入隐藏列表（与「老旧字体」按钮同路径），不重建列表，
+        # 否则本会话内已隐藏的条目会被冲回可用列表
+        for font in sorted(mapping):
+            self._move_to_hidden(font, simplified=True)
 
     def _on_add_legacy_fonts(self):
         """Detect legacy Windows fonts and add them to the hidden list automatically."""
@@ -1399,12 +1415,7 @@ class FontExcludeDialog(QDialog):
             return
 
         for font_name in to_add:
-            self._add_font_item(self.excluded_list, font_name)
-            # Remove from available list
-            for i in range(self.available_list.count()):
-                if self._real_name(self.available_list.item(i)) == font_name:
-                    self.available_list.takeItem(i)
-                    break
+            self._move_to_hidden(font_name)
 
         QMessageBox.information(
             self,

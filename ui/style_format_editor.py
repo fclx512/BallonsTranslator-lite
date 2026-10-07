@@ -41,7 +41,12 @@ from utils import face_resolver, shared
 from utils.base_styles import copy_value, quantize_field
 from utils.style_query import FIELD_GROUPS
 
-from .custom_widget import ColorPickerDialog, ColorSwatchBtn, NoArrowsDoubleSpinBox
+from .custom_widget import (
+    ColorPickerDialog,
+    ColorSwatchBtn,
+    NoArrowsDoubleSpinBox,
+)
+from .custom_widget.combobox import mark_unlisted_combo_item
 
 # ── 字段标签 / 分组标题（模块级字面量，定义处显式标注上下文）────────────
 
@@ -662,10 +667,15 @@ class FormatEditorPanel(QScrollArea):
             families = shared.get_filtered_font_list(pcfg.excluded_fonts)
             # 当前字体族必须可见可选：不在过滤列表（未安装/被排除/离屏
             # 空字体库）时补插首项，否则下拉会静默回落到别的字体。
-            if family and family not in families:
+            inserted = bool(family) and family not in families
+            if inserted:
                 families = [family] + list(families)
             if families:
                 combo.addItems(families)
+            if inserted:
+                mark_unlisted_combo_item(
+                    combo, 0, family in shared.ALL_FONT_FAMILIES
+                )
             idx = combo.findText(family)
             if idx >= 0:
                 combo.setCurrentIndex(idx)

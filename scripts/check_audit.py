@@ -98,19 +98,31 @@ def deprecated_refs(path, allowed_mentions):
     name = Path(path).name
     # 全路径形态 ui/x.py
     path_re = re.compile(re.escape(posix))
-    # 文件名形态 x.py，整词匹配：test_annotation_controls.py 不算引用 controls.py
-    name_re = re.compile(rf"(?<![A-Za-z0-9_.]){re.escape(name)}(?![A-Za-z0-9_])")
+    # 文件名/模块名形态只在 basename 全仓库唯一时启用：存活副本会让
+    # 「panel.py」「from .panel import」这类匹配误伤同名兄弟文件
+    # （ui/text_engine/ 下 effects/panel.py、transforms/panel.py 各有一份），
+    # 此时只按全路径匹配。
+    basename_ambiguous = any(p.name == name for p, _ in corpus_files())
+    name_re = (
+        None
+        if basename_ambiguous
+        else re.compile(rf"(?<![A-Za-z0-9_.]){re.escape(name)}(?![A-Za-z0-9_])")
+    )
     # 模块引用形态：import controls / from .controls import X。
     # 不做裸词匹配——常见英文作文件名的模块（如 controls.py）会被
     # self.controls、docstring 散文误判为残留引用。
     # from 分支要求后随 import（from X.controls import Y），避免误伤
     # "yield from panel.iter_controls()" 这类生成器 from。
     stem, ext = os.path.splitext(name)
+    # 模块路径按完整点分段匹配（(?:\w+\.)*，段内不允许截断）：
+    # profile_manager / contextmanager 这类「词尾恰好是 stem」的名字
+    # 会被 [\w.]*\.? 前缀模式误吞。
     mod_re = (
         re.compile(
-            rf"(?:from\s+[\w.]*\.?{re.escape(stem)}\s+import|import\s+[\w.]*\.?{re.escape(stem)})(?![A-Za-z0-9_])"
+            rf"(?:from\s+\.*(?:\w+\.)*{re.escape(stem)}\s+import"
+            rf"|import\s+\.*(?:\w+\.)*{re.escape(stem)})(?![A-Za-z0-9_])"
         )
-        if ext == ".py"
+        if ext == ".py" and not basename_ambiguous
         else None
     )
     allowed = set(allowed_mentions or ())
@@ -121,7 +133,9 @@ def deprecated_refs(path, allowed_mentions):
         except Exception:
             continue
         for lineno, line in enumerate(text.splitlines(), 1):
-            if path_re.search(line) or name_re.search(line) or (
+            if path_re.search(line) or (
+                name_re is not None and name_re.search(line)
+            ) or (
                 mod_re is not None and mod_re.search(line)
             ):
                 if rel not in allowed:

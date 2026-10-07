@@ -1,6 +1,14 @@
 {
     "_comment": "AI 审计登记表。机制见 .agents/skills/audit-docs/SKILL.md。deprecated = 已删待守（不得复活、残留引用必须清零或进 allowed_mentions）；suspended = 存在的休眠文件（不得被主 UI import）。删除文件前先在此登记。",
     "deprecated": {
+        "ui/text_engine/formatting/panel.py": {
+            "note": "死代码清理（2026-10-07）：text_engine 内嵌 FontFormatPanel（1310 行）未接入主窗口，活实现是 ui/text_panel.py::FontFormatPanel；其引用的 shared.FONT_FAMILIES 恒为 None（TypeError 地雷），随删除一并移除",
+            "allowed_mentions": []
+        },
+        "ui/text_engine/editing/manager.py": {
+            "note": "死代码清理（2026-10-07）：text_engine 内嵌 TextPanel（1313 行）全仓库无任何导入方，唯一价值是给同样未接入的 formatting/panel.py 当宿主，一并删除",
+            "allowed_mentions": []
+        },
         "modules/textdetector/detector_ctd.py": {
             "note": "模型精简（2026-09-19）：ComicTextDetector 与 ysgyolo（漫画专精，默认）／ppocrv6_onnx（轻量 CPU，区域再检测默认）定位重叠，用户长期实测属「不好不坏」档，删除；实现包 modules/textdetector/ctd/ 一并删除；utils/textblock.py::get_transformed_region 的 ctd 专属 bbox 扩张分支同步移除",
             "allowed_mentions": [
@@ -363,12 +371,6 @@
         }
     },
     "suspended": {
-        "ui/text_engine/formatting/panel.py": {
-            "note": "上游休眠拷贝：仅被同休眠的 editing/manager.py 引用，未接主 UI"
-        },
-        "ui/text_engine/editing/manager.py": {
-            "note": "上游休眠拷贝：无任何 import 者"
-        },
         "ui/text_engine/formatting/commands.py": {
             "note": "引擎旧面板 FontFormatPanel 的命令面，随 panel.py 休眠（fork 渲染入口在 ui/text_engine/item.py，格式命令在 ui/fontformat_commands.py）；仅被休眠的 formatting/panel.py 引用，不得被主 UI import（2026-09-04 登记）"
         },

@@ -171,6 +171,41 @@ class FontExcludeDialogSimplifyTest(unittest.TestCase):
         finally:
             dlg.deleteLater()
 
+    def test_legacy_then_simplify_same_session(self):
+        """用户实测缺陷：「老旧字体」后点「一键精简」会互相覆盖、需交互两次。
+
+        根因是精简曾整表重建列表（只认 pcfg 持久态），把本会话内已隐藏
+        但未确定的条目冲回可用列表。两个操作都必须增量并入，同会话叠加。
+        """
+        from unittest.mock import MagicMock, patch
+
+        from utils import font_scan
+        from ui import configpanel as _cp
+
+        dlg = self._dialog()
+        try:
+            stub_msgbox = MagicMock()
+            stub_msgbox.StandardButton = _cp.QMessageBox.StandardButton
+            stub_msgbox.question.return_value = _cp.QMessageBox.StandardButton.Yes
+            with patch.object(shared, "LEGACY_FONTS", frozenset({"FontA"})), \
+                 patch.object(
+                     font_scan, "compute_simplify_map",
+                     return_value={"FontC": "FontA"},
+                 ), \
+                 patch.object(_cp, "QMessageBox", stub_msgbox):
+                dlg._on_add_legacy_fonts()
+                dlg._on_simplify()
+
+            hidden = self._names(dlg.excluded_list)
+            self.assertIn("FontA", hidden)
+            self.assertIn("FontC", hidden)
+            self.assertNotIn("FontA", self._names(dlg.available_list))
+            self.assertNotIn("FontC", self._names(dlg.available_list))
+            self.assertEqual(dlg.get_excluded_fonts(), ["FontA", "FontC"])
+            self.assertEqual(dlg.get_simplify_map(), {"FontC": "FontA"})
+        finally:
+            dlg.deleteLater()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

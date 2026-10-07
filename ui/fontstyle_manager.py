@@ -84,6 +84,7 @@ from utils.fontformat import FontFormat
 from utils.textblock import TextBlock
 
 from .custom_widget import ConfigComboBox, SeparatorWidget
+from .custom_widget.combobox import mark_unlisted_combo_item
 from .custom_widget.notification import notification
 from .style_format_editor import FormatEditorPanel
 
@@ -1079,6 +1080,9 @@ class StyleDetail(QScrollArea):
         self._migrate_combo.clear()
         if current_family and current_family not in families:
             self._migrate_combo.addItem(current_family)
+            mark_unlisted_combo_item(
+                self._migrate_combo, 0, current_family in shared.ALL_FONT_FAMILIES
+            )
         for family in families:
             self._migrate_combo.addItem(family)
         self._migrate_combo.setCurrentText(current_family)
