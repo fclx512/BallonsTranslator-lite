@@ -1,6 +1,6 @@
 from typing import Callable, List, Optional
 
-from qtpy.QtCore import QSize, Qt, Signal
+from qtpy.QtCore import QCoreApplication, QSize, Qt, Signal
 from qtpy.QtGui import QDoubleValidator, QPalette, QWheelEvent
 from qtpy.QtWidgets import (
     QComboBox,
@@ -29,6 +29,33 @@ def _format_drag_value(value: float) -> str:
     if "." in text:
         text = text.rstrip("0").rstrip(".")
     return text
+
+
+def mark_unlisted_combo_item(combo: QComboBox, index: int, installed: bool) -> None:
+    """把补插进下拉的「过滤列表外」条目置灰并加提示。
+
+    条目文字保持真名（值语义不受影响），只灰显 + tooltip 标明来源：
+    未安装的字体过幽灵字体闸门也进不了主列表，但项目数据回显时仍会
+    补插成选项——不标记的话「下拉里有名字却渲染不出来」的幽灵观感
+    无人解释。供样式格式编辑器与样式迁移下拉两处回显点共用。
+    """
+    from qtpy.QtGui import QStandardItemModel
+
+    model = combo.model()
+    item = model.item(index) if isinstance(model, QStandardItemModel) else None
+    if item is None:
+        return
+    item.setForeground(combo.palette().color(QPalette.ColorRole.PlaceholderText))
+    if installed:
+        item.setToolTip(
+            QCoreApplication.translate(
+                "ComboBox", "Hidden by the font exclusion settings"
+            )
+        )
+    else:
+        item.setToolTip(
+            QCoreApplication.translate("ComboBox", "Not installed on this system")
+        )
 
 
 def themed_icon(filename: str) -> str:

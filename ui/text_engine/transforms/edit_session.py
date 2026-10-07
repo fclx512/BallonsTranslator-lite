@@ -16,7 +16,7 @@ from ... import shared_widget as SW
 from ..editing.commands import SetTextTransformCommand
 
 if TYPE_CHECKING:
-    from ..formatting.panel import FontFormatPanel
+    from ui.text_panel import FontFormatPanel
     from ..item import TextBlkItem
     from .panel import TextTransformPanel
 

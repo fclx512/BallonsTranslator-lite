@@ -1734,10 +1734,6 @@ Hide them all? You can move them back later.</source>
     <context>
         <name>FontFormatPanel</name>
         <message>
-            <source>Advanced Text Format</source>
-            <translation>进阶字体格式</translation>
-        </message>
-        <message>
             <source>Annotations</source>
             <translation>注解</translation>
         </message>
@@ -1762,16 +1758,6 @@ Hide them all? You can move them back later.</source>
             <translation>修改行距</translation>
         </message>
         <message>
-            <location filename="..\ui\text_panel.py" line="313" />
-            <source>Change stroke color</source>
-            <translation>改变文字轮廓颜色</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_panel.py" line="297" />
-            <source>Change stroke width</source>
-            <translation>修改轮廓宽度</translation>
-        </message>
-        <message>
             <source>Combine the selected text into one upright vertical cell</source>
             <translation>将所选文本合并为竖排中的一个横排单元</translation>
         </message>
@@ -1779,10 +1765,6 @@ Hide them all? You can move them back later.</source>
             <location filename="..\ui\text_panel.py" />
             <source>Emphasis Marks</source>
             <translation>着重号</translation>
-        </message>
-        <message>
-            <source>Fold</source>
-            <translation>折叠</translation>
         </message>
         <message>
             <location filename="..\ui\text_panel.py" line="241" />
@@ -1800,82 +1782,20 @@ Hide them all? You can move them back later.</source>
             <translation>字体样式</translation>
         </message>
         <message>
-            <source>Font Weight</source>
-            <translation>字重</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_panel.py" line="348" />
-            <source>Global Font Format</source>
-            <translation>全局字体格式</translation>
-        </message>
-        <message>
-            <source>Mono Ruby needs one whitespace-separated reading per base grapheme.</source>
-            <translation>单字注释要求每个基文字符对应一个以空格分隔的读音</translation>
-        </message>
-        <message>
             <source>Ruby</source>
             <translation>注音（Ruby）</translation>
-        </message>
-        <message>
-            <source>Ruby base text cannot contain paragraph or forced line breaks.</source>
-            <translation>注释基文不能包含段落或强制换行</translation>
-        </message>
-        <message>
-            <source>Ruby cannot overlap Tate-chu-yoko.</source>
-            <translation>注释不能与纵中横重叠</translation>
-        </message>
-        <message>
-            <source>Ruby cannot partially overlap an existing container.</source>
-            <translation>注释范围不能与现有注释范围部分重叠</translation>
-        </message>
-        <message>
-            <source>Ruby text cannot be empty.</source>
-            <translation>注释文本不能为空</translation>
-        </message>
-        <message>
-            <source>Select base text to apply Ruby.</source>
-            <translation>请选择要添加注释的基文</translation>
-        </message>
-        <message>
-            <source>Source</source>
-            <translation>原文</translation>
         </message>
         <message>
             <source>Standard Vertical Roman Alignment</source>
             <translation>标准垂直罗马对齐方式</translation>
         </message>
         <message>
-            <location filename="..\ui\text_panel.py" line="300" />
-            <source>Stroke</source>
-            <translation>轮廓</translation>
-        </message>
-        <message>
             <source>Tate-chu-yoko</source>
             <translation>直排内横排</translation>
         </message>
         <message>
-            <source>Tate-chu-yoko cannot overlap Ruby.</source>
-            <translation>纵中横不能与注释重叠</translation>
-        </message>
-        <message>
             <source>Text Transform</source>
             <translation>文本变换</translation>
-        </message>
-        <message>
-            <source>Translation</source>
-            <translation>译文</translation>
-        </message>
-        <message>
-            <source>Unable to apply Ruby to this selection.</source>
-            <translation>无法为当前选区应用注释</translation>
-        </message>
-        <message>
-            <source>Unable to apply Tate-chu-yoko to this selection.</source>
-            <translation>无法为当前选区应用纵中横</translation>
-        </message>
-        <message>
-            <source>Unfold</source>
-            <translation>展开</translation>
         </message>
         <message>
             <source>New Block Default Format</source>
@@ -5432,94 +5352,6 @@ Check the log above for details.</source>
         </message>
     </context>
     <context>
-        <name>EmphasisToolButton</name>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Emphasis Marks</source>
-            <translation>着重号</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Filled Circle</source>
-            <translation>实心圆</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Filled Dot</source>
-            <translation>实心圆点</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Filled Double Circle</source>
-            <translation>实心双圆</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Filled Sesame</source>
-            <translation>实心芝麻点</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Filled Triangle</source>
-            <translation>实心三角</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Marks</source>
-            <translation>符号</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Open Circle</source>
-            <translation>空心圆</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Open Dot</source>
-            <translation>空心小圆点</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Open Double Circle</source>
-            <translation>空心双圆</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Open Sesame</source>
-            <translation>空心芝麻点</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Open Triangle</source>
-            <translation>空心三角</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Over / Left</source>
-            <translation>上方 / 左侧</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Over / Right</source>
-            <translation>上方 / 右侧</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Position</source>
-            <translation>位置</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Under / Left</source>
-            <translation>下方 / 左侧</translation>
-        </message>
-        <message>
-            <location filename="..\ui\text_engine\formatting\panel.py" />
-            <source>Under / Right</source>
-            <translation>下方 / 右侧</translation>
-        </message>
-    </context>
-    <context>
         <name>FloatingSuggestionLabel</name>
         <message>
             <source>Add</source>
@@ -5531,45 +5363,6 @@ Check the log above for details.</source>
         <message>
             <source>Close</source>
             <translation>关闭</translation>
-        </message>
-    </context>
-    <context>
-        <name>FontWeightComboBox</name>
-        <message>
-            <source>Black</source>
-            <translation>黑体</translation>
-        </message>
-        <message>
-            <source>Bold</source>
-            <translation>粗体</translation>
-        </message>
-        <message>
-            <source>Demi Bold</source>
-            <translation>半粗</translation>
-        </message>
-        <message>
-            <source>Extra Bold</source>
-            <translation>中黑</translation>
-        </message>
-        <message>
-            <source>Extra Light</source>
-            <translation>超细</translation>
-        </message>
-        <message>
-            <source>Light</source>
-            <translation>细体</translation>
-        </message>
-        <message>
-            <source>Medium</source>
-            <translation>中等</translation>
-        </message>
-        <message>
-            <source>Normal</source>
-            <translation>常规</translation>
-        </message>
-        <message>
-            <source>Thin</source>
-            <translation>瘦体</translation>
         </message>
     </context>
     <context>
@@ -8378,6 +8171,17 @@ Configure a mirror in Settings → Network &amp; Mirror Settings, then download 
         <message>
             <source>Transforms</source>
             <translation>变换</translation>
+        </message>
+    </context>
+    <context>
+        <name>ComboBox</name>
+        <message>
+            <source>Hidden by the font exclusion settings</source>
+            <translation>已被字体排除设置隐藏</translation>
+        </message>
+        <message>
+            <source>Not installed on this system</source>
+            <translation>本机未安装</translation>
         </message>
     </context>
 </TS>

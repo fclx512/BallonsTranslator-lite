@@ -125,3 +125,15 @@ Qt 注册名自带尾随空格的字体（攸望系列，字体文件元数据�
 |---|---|---|
 | `probe_open_upstream_project.py` | 打开指定工程目录，`QMessageBox.exec` 打点（文案/按钮/复选框存活/子对象数）、延迟自动点击可接受按钮、`faulthandler` 看门狗兜卡死；开完打印 `base_styles` 与快速样式条内容。`PROBE_OPEN_AT_STARTUP=1` 走构造期开项目（弹窗出现在 `window.show()` 之前），`PROBE_TICK_CHECKBOX=1` 顺带验证「不再提示」（会写用户 `config.json`，测完记得复位） | 无命名样式的工程：`Icon.Information` 提示窗（OK 由 showEvent 补上、复选框活子对象 1 个）→ 点 OK → `openDir` 正常返回，两条打开路径（UI openDir / 构造期）均干净退出；有命名样式的工程：`Icon.Question` 导入询问（Yes/No，无复选框）→ 点 Yes → 按「预设名 × 身份键」播种大样式、快速样式条同名去重并入、退出零异常 |
 
+
+## 九、幽灵字体探针（2026-10-07）
+
+缘起：用户反馈字体下拉有「幽灵字体」——有选项、无任何样式、应用后仍是默认字体。
+真因是 `QFontDatabase.families()` 能枚举、DirectWrite 却加载不了的家族（GDI 老光栅
+字体、方括号铸字厂名），选中后 Qt 静默替换成默认字体。生产闸门在
+`utils/shared.py::_drop_unloadable_families`（`init_font_list` 时过滤，判据＝
+QFontInfo 解析结果不落回自身或同归并组，另有 >20% 失配的环境不可信保险丝）。
+
+| 脚本 | 做什么 | 期望值（2026-10-07 实测） |
+|---|---|---|
+| `font_ghost_probe.py` | 用生产判据复算本机幽灵字体并列明细（解析到哪、有无 styles、是否在 `LEGACY_FONTS`） | 221 个显示家族中幽灵 1 个：`'Courier'` 解析到 `'Courier New'`（有 GDI styles 但渲染是替代字体）；本地化双名零误判。报「某字体是幽灵」时先跑这个核对 |

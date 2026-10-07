@@ -112,7 +112,6 @@ cache_path: str = osp.join(PROGRAM_PATH, ".btrans_cache/cache.json")
 CACHE_UPDATED = False
 check_local_file_hash = True
 
-FONT_FAMILIES: set = None
 ALL_FONT_FAMILIES = []  # 系统+自定义，去重合并，按字母排序
 
 # 已知可能触发 DirectWrite CreateFontFaceFromHDC 告警的 Windows 老旧字体
@@ -180,22 +179,67 @@ def dump_cache():
     CACHE_UPDATED = False
 
 
+def _drop_unloadable_families(display_families, alias_to_canonical):
+    """幽灵字体闸门：挑出「QFontDatabase 能枚举、QFontInfo 却解析不回来」的家族。
+
+    这类家族（GDI 老光栅字体如 Courier、方括号铸字厂名）会进下拉列表，
+    但选中后 Qt 静默替换成默认字体——即「有选项、无样式、用上去仍是
+    默认字体」的幽灵。解析结果落在同一归并组内的（大小写/空白差异或
+    另一语言名）视为可用，避免误杀本地化双名。失配比例异常高时认为
+    探针环境不可信（如无字体数据库的离屏平台），放弃过滤保留全量。
+    """
+    from qtpy.QtGui import QGuiApplication, QFont, QFontInfo
+
+    if QGuiApplication.instance() is None:
+        return display_families
+
+    def norm(value: str) -> str:
+        return " ".join(value.casefold().split())
+
+    canon_of = {}
+    for family in display_families:
+        canon_of[norm(family)] = family
+    for alias, canonical in alias_to_canonical.items():
+        canon_of.setdefault(norm(alias), canonical)
+
+    unloaded = []
+    for family in display_families:
+        resolved = QFontInfo(QFont(family)).family()
+        target = canon_of.get(norm(family), norm(family))
+        actual = canon_of.get(norm(resolved), norm(resolved)) if resolved else ""
+        if actual != target:
+            unloaded.append(family)
+    if len(unloaded) > max(1, len(display_families) // 5):
+        print(
+            f"[shared] ghost-font probe aborted: {len(unloaded)}/"
+            f"{len(display_families)} families failed to resolve, keeping full list"
+        )
+        return display_families
+    if unloaded:
+        print(f"[shared] dropped unloadable font families (ghost fonts): {unloaded}")
+    return [f for f in display_families if f not in set(unloaded)]
+
+
 def init_font_list():
     """枚举系统字体并归并重复家族名（详见 utils/font_scan.py）。
 
     ``ALL_FONT_FAMILIES`` 只保留归并后的规范名（同一字体的字重变体与
-    中英双名各留一项，对齐 Photoshop 的组织方式）；``FONT_STYLES`` 仍
-    覆盖所有真实 Qt 家族名（含被隐藏的别名），保证旧项目数据按原名
-    回显字重不受影响。「一键精简」条目存在 ``pcfg.excluded_fonts`` 里
-    （与手动排除同一条落盘路径），在 ``get_filtered_font_list`` 过滤，
-    不在此处剔除——否则会话内恢复要重启才生效。
+    中英双名各留一项，对齐 Photoshop 的组织方式），并经幽灵字体闸门
+    （``_drop_unloadable_families``）剔除实际加载不了的家族；
+    ``FONT_STYLES`` 仍覆盖所有真实 Qt 家族名（含被隐藏的别名），保证
+    旧项目数据按原名回显字重不受影响。「一键精简」条目存在
+    ``pcfg.excluded_fonts`` 里（与手动排除同一条落盘路径），在
+    ``get_filtered_font_list`` 过滤，不在此处剔除——否则会话内恢复要
+    重启才生效。
     """
     from utils import font_scan
     from utils.config import pcfg
 
     global ALL_FONT_FAMILIES, FONT_STYLES, FONT_FAMILY_ALIAS, FONT_PS_NAMES
     data = font_scan.build_font_data()
-    ALL_FONT_FAMILIES = data["display_families"]
+    ALL_FONT_FAMILIES = _drop_unloadable_families(
+        data["display_families"], data["alias_to_canonical"]
+    )
     FONT_STYLES = data["styles"]
     FONT_FAMILY_ALIAS = data["canonical_to_aliases"]
     FONT_PS_NAMES = data["ps_index"]
