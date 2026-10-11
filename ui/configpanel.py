@@ -1644,6 +1644,12 @@ class ConfigPanel(Widget):
         self.trans_config_panel.navigate_to_llm_profile.connect(
             self.focusOnLLMProfile
         )
+        self.ocr_config_panel.navigate_to_llm_profile.connect(
+            self.focusOnLLMProfile
+        )
+        self.inpaint_config_panel.navigate_to_llm_profile.connect(
+            self.focusOnLLMProfile
+        )
         # One merged page, one tab per stage (see ``_build_pipeline_page``).
         self.pipeline_page = self._build_pipeline_page()
         # Registered without an outer scroll area: the tab bar stays pinned

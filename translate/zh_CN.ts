@@ -7016,6 +7016,34 @@ Check the log above for details.</source>
             <source>Request responses with the translation JSON schema. Disable if the provider rejects it.</source>
             <translation>请求按翻译 JSON schema 返回。若提供方拒绝则关闭。</translation>
         </message>
+        <message>
+            <source>API key</source>
+            <translation>API 密钥</translation>
+        </message>
+        <message>
+            <source>Double-click to rename</source>
+            <translation>双击改名</translation>
+        </message>
+        <message>
+            <source>Ready to send requests.</source>
+            <translation>可正常发起请求。</translation>
+        </message>
+        <message>
+            <source>host</source>
+            <translation>主机地址</translation>
+        </message>
+        <message>
+            <source>model</source>
+            <translation>模型</translation>
+        </message>
+        <message>
+            <source>Edit image model list</source>
+            <translation>编辑图像模型清单</translation>
+        </message>
+        <message>
+            <source>Edit model list</source>
+            <translation>编辑模型清单</translation>
+        </message>
     </context>
     <context>
         <name>LLMProfileListWidget</name>
@@ -7046,6 +7074,14 @@ Check the log above for details.</source>
         <message>
             <source>Restored</source>
             <translation>已恢复</translation>
+        </message>
+        <message>
+            <source>It is currently the active profile; the default will be cleared.</source>
+            <translation>它是当前激活的配置文件，默认项将被清空。</translation>
+        </message>
+        <message>
+            <source>Rename Profile</source>
+            <translation>重命名配置文件</translation>
         </message>
     </context>
     <context>
@@ -8411,6 +8447,44 @@ Configure a mirror in Settings → Network &amp; Mirror Settings, then download 
         <message>
             <source>Not installed on this system</source>
             <translation>本机未安装</translation>
+        </message>
+    </context>
+    <context>
+        <name>OCRConfigPanel</name>
+        <message>
+            <source>Manage…</source>
+            <translation>管理…</translation>
+        </message>
+    </context>
+    <context>
+        <name>_ModelListEditDialog</name>
+        <message>
+            <source>Add models, separate multiple entries with commas or spaces</source>
+            <translation>添加模型，多个用逗号或空格分隔</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <source>Check All</source>
+            <translation>全部保留</translation>
+        </message>
+        <message>
+            <source>Current model</source>
+            <translation>当前模型</translation>
+        </message>
+        <message>
+            <source>OK</source>
+            <translation>确定</translation>
+        </message>
+        <message>
+            <source>Search...</source>
+            <translation>搜索…</translation>
+        </message>
+        <message>
+            <source>Uncheck All</source>
+            <translation>全不保留</translation>
         </message>
     </context>
 </TS>

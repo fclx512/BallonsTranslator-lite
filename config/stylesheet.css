@@ -1087,6 +1087,33 @@ QDialog QCheckBox::indicator:disabled {
     background-color: @emptyContentBackgroundColor;
 }
 
+/* Checkable items in dialogs (e.g. model list batch editor): same look as
+   QDialog QCheckBox::indicator — without this the native indicator renders
+   cramped and clipped inside QListWidget rows. */
+QDialog QListView::indicator {
+    width: 13px;
+    height: 13px;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    background-color: @inputBackgroundColor;
+    margin-left: 4px;
+}
+
+QDialog QListView::indicator:hover {
+    border: 1px solid @accentPrimary;
+}
+
+QDialog QListView::indicator:checked {
+    border: 1px solid @borderColor;
+    background-color: @inputBackgroundColor;
+    image: url(icons/checkbox_checked.svg);
+}
+
+QDialog QListView::indicator:disabled {
+    border: 1px solid @borderColor;
+    background-color: @emptyContentBackgroundColor;
+}
+
 QPushButton#minBtn {
     border-radius: 0px;
     background-color: rgba(0, 0, 0, 0);
@@ -2788,6 +2815,21 @@ QLabel#LLMProfileName {
     background: transparent;
 }
 
+/* 名称就地改名的输入框容器与输入框本身透明 */
+QWidget#LLMProfileNameEdit {
+    background: transparent;
+}
+
+/* 可用性状态点：绿=可发请求，灰=缺字段（usable 属性驱动） */
+QLabel#LLMProfileStatusDot {
+    border-radius: 4px;
+    background-color: @disabledForegroundColor;
+}
+
+QLabel#LLMProfileStatusDot[usable="true"] {
+    background-color: @successColor;
+}
+
 /* 「使用」按钮：未激活低调描边，激活态用主题色底标出当前 profile */
 QPushButton#LLMProfileUseButton {
     font-size: 11px;
@@ -2826,7 +2868,8 @@ QLabel#LLMProfileKeyStatusIcon {
 QToolButton#LLMProfileConfigButton,
 QToolButton#LLMProfileDeleteButton,
 QToolButton#LLMProfileModelAddButton,
-QToolButton#LLMProfileModelRemoveButton {
+QToolButton#LLMProfileModelRemoveButton,
+QToolButton#LLMProfileModelManageButton {
     border: none;
     background: transparent;
     padding: 0px;
@@ -2835,7 +2878,8 @@ QToolButton#LLMProfileModelRemoveButton {
 QToolButton#LLMProfileConfigButton:hover,
 QToolButton#LLMProfileDeleteButton:hover,
 QToolButton#LLMProfileModelAddButton:hover,
-QToolButton#LLMProfileModelRemoveButton:hover {
+QToolButton#LLMProfileModelRemoveButton:hover,
+QToolButton#LLMProfileModelManageButton:hover {
     background-color: @hoverBackgroundColor;
     border-radius: 4px;
 }
