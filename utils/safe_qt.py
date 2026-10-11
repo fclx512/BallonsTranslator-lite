@@ -32,6 +32,9 @@ _SUPPRESSED_PREFIXES = (
     "QColor::fromRgbF: RGB parameters out of range",
     "QColor::fromHsv: HSV parameters out of range",
     "QColor::fromCmyk: CMYK parameters out of range",
+    # GDI 老光栅字体（Terminal/Courier 等）被 QFontInfo 探针触碰时的平台层噪音，
+    # 幽灵字体闸门（utils/shared.py::_drop_unloadable_families）的固有副作用
+    "DirectWrite: CreateFontFaceFromHDC() failed",
 )
 
 _DEBUG_FILTER = os.environ.get("BALLOONTRANS_DEBUG_QT_WARNINGS") == "1"
