@@ -48,6 +48,8 @@ import os
 import os.path as osp
 import sys
 import time
+from dataclasses import dataclass
+from typing import Type
 
 os.environ.setdefault("QT_QPA_PLATFORM", "windows")
 # offscreen（仅显式覆盖时才走）平台用基础字体库、不读系统字体注册表，须显式
@@ -77,6 +79,9 @@ from anim_kit import (
     BADGE_H_PAD,
     BADGE_V_PAD,
     CLIP_WARN_COLOR,
+    RHYTHM_STANDARD,
+    RHYTHM_THREE_BEAT,
+    RhythmProfile,
     CursorPlan,
     AnimScene,
     HANDLE_BORDER_COLOR,
@@ -88,6 +93,7 @@ from anim_kit import (
     TEXTRECT_SELECTED_COLOR,
     TEXTRECT_SHOW_COLOR,
     UI_FONT_FAMILY,
+    apply_timeline,
     clamp01,
     draw_block_frame,
     draw_cell_guide,
@@ -320,10 +326,19 @@ class CheckboxDemoScene(AnimScene):
     固定基类）：叙事不匹配的功能直接继承 ``AnimScene`` 自行组装（见
     ``PunctuationScene``）。子类填 ``CHECK_TEXT`` / ``CAPTIONS``（外观展示类
     置空并覆写 ``_build_captions`` 走单条文案）、覆写 ``_paint_content``
-    （在预览白卡里作画）与 ``_advance``（按帧号推进自有状态），并按需调
-    ``N_FRAMES`` 与时间轴类属性。光标与点击涟漪由 ``CursorPlan`` 统一驱动；
-    ``_t`` 是预览的过渡进度，也是两条文案明暗互换的进度（``EMPH_SEG`` 可
-    单独覆写，默认与 MOVE 段同步，见 ``set_caption_emphasis``）。
+    （在预览白卡里作画）与 ``_advance``（按帧号推进自有状态）。
+
+    时间轴两种给法，二选一：
+    - **节奏预设**：类属性 ``RHYTHM = RHYTHM_STANDARD``（或 ``RHYTHM_FAST``、
+      自建档位），``__init__`` 会按档位时长自动算出全部 F_*，不必再手填；
+    - **手填常量**（默认 ``RHYTHM = None``）：沿用下面这组历史节奏，向后兼容。
+
+    设了 RHYTHM 仍可**单独覆写某个常量**：档位只补本类未自己声明的键，
+    本类里手写的 ``F_FADE = 18`` 之类照旧生效（覆盖在实例上，不改类属性）。
+
+    光标与点击涟漪由 ``CursorPlan`` 统一驱动；``_t`` 是预览的过渡进度，也是
+    两条文案明暗互换的进度（``EMPH_SEG`` 可单独覆写，默认与 MOVE 段同步，
+    见 ``set_caption_emphasis``）。
     """
 
     SIZE = (460, 262)
@@ -333,7 +348,11 @@ class CheckboxDemoScene(AnimScene):
     CHECK_X = 118                # 空标签行里复选框的起点（标签 110 + 间距 8）
     CHECK_TEXT = ""
     CAPTIONS = ()
-    # 时间轴（与标点场景同一套观感语言）；MOVE 段 6 帧 ≈ 5 帧明暗互换
+    # 节奏预设（None = 用手填常量，见上）；档位时长 → F_* 的换算是
+    # anim_kit.py::RhythmProfile 的 compute_timeline 方法
+    RHYTHM: RhythmProfile | None = None
+    # 时间轴（与标点场景同一套观感语言）；MOVE 段 6 帧 ≈ 5 帧明暗互换。
+    # RHYTHM 非 None 时以下 F_* 被算出的值覆写（数值一致，见 RHYTHM_STANDARD）
     F_ARRIVE = 6
     F_PRESS = 7
     F_CLICK = 8
@@ -341,6 +360,14 @@ class CheckboxDemoScene(AnimScene):
     F_MOVE_END = 14
     F_FADE = 15
     EMPH_SEG = None              # 明暗互换帧段，None = 跟随 MOVE 段
+
+    def __init__(self, parent=None):
+        # 节奏预设：须在 super().__init__() 之前算好——AnimScene.__init__ 末尾
+        # 就会调 _build()，届时 F_* 必须已就绪。解析口径唯一在
+        # ``anim_kit.apply_timeline``（= 本类手写 F_* 优先、档位补继承值），
+        # 校验器读同一函数，实例与校验不会各看一套（假绿灯根因）。
+        apply_timeline(self)
+        super().__init__(parent)
 
     def _build(self):
         row_h = CONFIG_COMBOBOX_HEIGHT
@@ -468,7 +495,7 @@ class PunctSpacingScene(_VerticalColumnScene):
       收缩的只是格子，于是后面的字整体上移——「多余间距」消失靠的是格变短。
     """
 
-    N_FRAMES = 20
+    RHYTHM = RHYTHM_STANDARD      # 节奏预设：时间轴自动算，不再手填 F_*
     CHECK_TEXT = "紧凑标点间距"
     COLUMN = "あ、い。"
     PUNCT = "、。"
@@ -524,7 +551,7 @@ class BracketHalfwidthScene(_VerticalColumnScene):
     （11.5），半角开关只剩 11.5→8 的细差，看不出本体。
     """
 
-    N_FRAMES = 20
+    RHYTHM = RHYTHM_STANDARD      # 节奏预设：时间轴自动算，不再手填 F_*
     CHECK_TEXT = "竖排文本中压缩「」『』为半角样式"
     COLUMN = "あ「い」"
     BRACKETS = "「」"
@@ -589,7 +616,7 @@ class TateChuYokoScene(_VerticalColumnScene):
       的 tate_chu_yoko_transform 就是一次平移居中）。
     """
 
-    N_FRAMES = 20
+    RHYTHM = RHYTHM_STANDARD      # 节奏预设：时间轴自动算，不再手填 F_*
     CHECK_TEXT = "自动直排内横排"
     COLUMN = "12あ"
     RUN = "12"
@@ -732,7 +759,7 @@ class SeqBadgeScene(_BadgePageScene):
     (0, -h, w, h)，所以整体贴在块左上角**外上方**。
     """
 
-    N_FRAMES = 20
+    RHYTHM = RHYTHM_STANDARD      # 节奏预设：时间轴自动算，不再手填 F_*
     CHECK_TEXT = "序号徽标"
     CAPTIONS = ()   # 外观展示类：无改前/改后双条
     NOTE = "开启后：序号按阅读顺序贴在每块左上角"
@@ -782,7 +809,7 @@ class TagBadgeScene(_BadgePageScene):
     对齐块右上角）；底色按标签性质取疑点暖色 / 指示冷色，多标签时字形连排。
     """
 
-    N_FRAMES = 20
+    RHYTHM = RHYTHM_STANDARD      # 节奏预设：时间轴自动算，不再手填 F_*
     CHECK_TEXT = "标签徽标"
     TAGS = (("!", TAG_BADGE_DOUBT_COLOR), ("♪", TAG_BADGE_DIRECTIVE_COLOR))
     CAPTIONS = ()   # 外观展示类：无改前/改后双条
@@ -838,7 +865,11 @@ class ClipTextScene(CheckboxDemoScene):
     （CBEDGE_WIDTH/2）的浅灰方块、2px 深灰边。
     """
 
-    N_FRAMES = 36
+    # 三拍公共骨架：光标入场/按下、点击与淡出/总长由档位算出（F_ARRIVE=7、
+    # F_PRESS=8、F_CLICK=9、F_FADE=31、N_FRAMES=36，与历史手填值同值——逐帧
+    # 像素不变）；拍内特有常量另填（F_GROW_END 第一拍长高、F_SHRINK_END 第二拍
+    # 收缩、F_HANDLE_*/F_DRAG_* 第三拍拖拽）。F_CLICK 因被 EMPH_SEG 引用而同值声明。
+    RHYTHM = RHYTHM_THREE_BEAT
     CHECK_TEXT = "溢出裁剪"
     TEXT = "だめだよ！"
     BOX = (62, 22, 52, 92)         # 预览卡内的内容框（x, y, w, h）
@@ -852,15 +883,13 @@ class ClipTextScene(CheckboxDemoScene):
     # 时间轴（@10fps）：三拍。明暗互换跟「开关点开」走：改前条讲关闭态行为、
     # 改后条讲开启态行为，第三拍是过程、不另配文案
     F_GROW_END = 5            # 第一拍：关闭态块自动长高到放得下文字
-    F_CB_ARRIVE = 7           # 光标抵达复选框
-    F_CB_PRESS = 8            # 按下复选框
-    F_CLICK = 9               # 点开「溢出裁剪」→ 第二拍开始
+    F_CLICK = 9               # 点开开关 → 第二拍（= 档位 arrive+press，同值声明供 EMPH_SEG 引用）
     F_SHRINK_END = 13         # 块缩回设定尺寸，文字被裁切 + 黄框（互换同期完成）
     F_HANDLE_MOVE_START = 14  # 光标开始移向角部手柄
     F_HANDLE_PRESS = 19       # 按下手柄 → 第三拍开始
     F_DRAG_START = 20
     F_DRAG_END = 31           # 拖拽放大完成，黄框消失
-    F_FADE = 31               # 光标淡出（32～35 共 4 帧）
+    # 互换与「收缩段」同期（比 MOVE 段早一帧起），故显式覆写档位给的 EMPH_SEG
     EMPH_SEG = (F_CLICK, F_SHRINK_END)
 
     def _build(self):
@@ -868,13 +897,13 @@ class ClipTextScene(CheckboxDemoScene):
         self._font, self._fm = self._demo_font(self.FONT_PX)
         self._h = float(self.BOX[3])   # 当前块高（按帧推进）
         # 光标三拍：入场 → 复选框 → 角部手柄（拖拽期骑在手柄上随块移动，
-        # go 的落点给 callable，pose 每帧现算）
+        # go 的落点给 callable，pose 每帧现算）。F_ARRIVE/F_PRESS 由档位给。
         self.plan = (
             CursorPlan(QPointF(self.width() - 30, self.height() - 26))
             .go(QPointF(self.CHECK_X + 10,
                         self.ROW_Y + CONFIG_COMBOBOX_HEIGHT / 2),
-                arrive=self.F_CB_ARRIVE)
-            .press(self.F_CB_PRESS)
+                arrive=self.F_ARRIVE)
+            .press(self.F_PRESS)
             .go(self._handle_center, arrive=self.F_HANDLE_PRESS - 1,
                 start=self.F_HANDLE_MOVE_START - 1)
             .press(self.F_HANDLE_PRESS)
@@ -950,15 +979,79 @@ class ClipTextScene(CheckboxDemoScene):
             top += self.CELL
 
 
+@dataclass
+class SceneMetadata:
+    """场景元数据（消除硬编码计数，未来可扩展校验）。"""
+    key: str
+    scene_class: type  # Type[AnimScene] 在 Python 3.9+ 可用，这里用 type 兼容
+    kind: str  # "behavior" | "appearance"
+    title: str
+    description: str
+
+
 SCENES = {
-    "punctuation_position": PunctuationScene,
-    "punct_spacing": PunctSpacingScene,
-    "bracket_halfwidth": BracketHalfwidthScene,
-    "tcy": TateChuYokoScene,
-    "block_index": SeqBadgeScene,
-    "tag_badge": TagBadgeScene,
-    "clip_text": ClipTextScene,
+    "punctuation_position": SceneMetadata(
+        key="punctuation_position",
+        scene_class=PunctuationScene,
+        kind="behavior",
+        title="标点位置",
+        description="竖排时标点的摆放方式：居中或贴边"
+    ),
+    "punct_spacing": SceneMetadata(
+        key="punct_spacing",
+        scene_class=PunctSpacingScene,
+        kind="behavior",
+        title="紧凑标点间距",
+        description="竖排标点占半字高，进给收紧"
+    ),
+    "bracket_halfwidth": SceneMetadata(
+        key="bracket_halfwidth",
+        scene_class=BracketHalfwidthScene,
+        kind="behavior",
+        title="竖排括号半角",
+        description="竖排括号收到半字高"
+    ),
+    "tcy": SceneMetadata(
+        key="tcy",
+        scene_class=TateChuYokoScene,
+        kind="behavior",
+        title="自动直排内横排",
+        description="竖排中的数字串自动横向排列"
+    ),
+    "block_index": SceneMetadata(
+        key="block_index",
+        scene_class=SeqBadgeScene,
+        kind="appearance",
+        title="序号徽标",
+        description="在文本块左上角显示阅读序号"
+    ),
+    "tag_badge": SceneMetadata(
+        key="tag_badge",
+        scene_class=TagBadgeScene,
+        kind="appearance",
+        title="标签徽标",
+        description="在文本块右上角显示问题标签"
+    ),
+    "clip_text": SceneMetadata(
+        key="clip_text",
+        scene_class=ClipTextScene,
+        kind="behavior",
+        title="溢出裁剪",
+        description="文本超出框时裁切并显示黄框警告"
+    ),
 }
+
+
+def get_scene_count() -> int:
+    """返回场景数量（供 ui/configpanel.py 消除硬编码）。"""
+    return len(SCENES)
+
+
+def get_scene_class(key: str) -> Type[AnimScene]:
+    """获取场景类（供 main 使用）。"""
+    return SCENES[key].scene_class
+
+
 DEFAULT_OUT_DIR = osp.join(ROOT, "config", "help_anims")
 
 # 入库产物的钉定 DPR：仓库默认目录的产物固定按 1.25 渲染（与既有固化产物
@@ -1033,7 +1126,7 @@ def main():
     failures = []
     for key in keys:
         try:
-            scene = SCENES[key]()
+            scene = SCENES[key].scene_class()
             # 不 show（windows 平台下不 show 也能 grab，无闪窗）；polish 兜底
             # 保证 QSS/字体解析与 show 后一致，几何与旧产物零漂移
             scene.ensurePolished()

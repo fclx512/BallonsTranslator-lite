@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """One-shot dev verification: syntax -> docs -> audit -> showcase -> upstream
-drift -> i18n -> qm -> smoke.
+drift -> i18n -> anim rhythm -> anim cursor -> qm -> smoke.
 
 Combines the AGENTS.md 测试流程 steps into a single command so the AI runs
 one tool call instead of five.  Prints a one-line summary per step on
@@ -18,6 +18,13 @@ Step activation:
   - upstream: always (check_upstream_drift.py: 上游富文本契约漂移——**提醒不阻断**；
             上游包根不存在时自动跳过)
   - i18n   : always (scans whole ui/modules/utils; known orphans exempted)
+  - anim   : always (check_anim_rhythm.py: 演示动画**有效时间轴**不变量——由
+            anim_kit.resolve_timeline 解析（渲染侧同源，杜绝类属性假绿灯）、
+            N_FRAMES 下限、F_* 顺序、EMPH_SEG 合法，另校验 CursorPlan 帧序；
+            脚本缺失时跳过)
+  - animcur: when an animation/panel-geometry file changed
+            (check_anim_cursor.py: README 大画幅场景落点必须等于控件/弹层真实
+            几何、覆盖层每帧置顶且不被手绘弹层裁剪/调暗；Qt 不可用时跳过)
   - qm     : only when a .ts file changed
   - smoke  : with --smoke, or automatically when a startup-chain file changed
   - ruff   : with --full (skipped when ruff is not installed)
@@ -46,6 +53,21 @@ INIT_FILES = (
     "utils/profile_manager.py",
     "ui/configpanel.py",
     "ui/mainwindow.py",
+)
+
+# Animation-cursor check triggers: the README 大画幅 generators, the shared
+# anim kit, and the panel/widgets whose real geometry the cursor waypoints are
+# derived from (a layout change here can desync "光标落点" from "控件位置").
+ANIM_TRIGGERS = (
+    "scripts/anim_kit.py",
+    "scripts/check_anim_rhythm.py",
+    "scripts/check_anim_cursor.py",
+    "scripts/gen_readme_anim.py",
+    "scripts/gen_readme_showcase.py",
+    "ui/text_panel.py",
+    "ui/custom_widget/label.py",
+    "ui/custom_widget/checkbox.py",
+    "ui/custom_widget/combobox.py",
 )
 
 
@@ -105,6 +127,24 @@ def _dump(result):
 def _orphan_only(code):
     """True when i18n_check exited with ONLY the orphan bit (bit 4)."""
     return code != 0 and not (code & 3)
+
+
+def check_anim_rhythm():
+    """演示动画节奏校验（check_anim_rhythm.py）。
+
+    脚本不存在时跳过（向后兼容）；失败时完整打印，便于照报告定位。
+    """
+    script = ROOT / "scripts" / "check_anim_rhythm.py"
+    if not script.exists():
+        print("⏭  动画节奏: 校验脚本不存在，跳过")
+        return True
+    r = _run([_py(), str(script)])
+    if r.returncode == 0:
+        print(f"✅ 动画节奏: {r.stdout.strip()}")
+        return True
+    print("❌ 动画节奏: 时间轴不变量校验失败")
+    _dump(r)
+    return False
 
 
 def _run_full_steps(failures):
@@ -237,6 +277,27 @@ def main():
             "⚠ i18n: 存在孤儿条目（间接 tr() 调用已知噪音，可忽略；"
             "需核对时手动跑 i18n_check.py --show-expected）"
         )
+
+    # ── 4b. anim rhythm ──────────────────────────────────────────────────
+    if not check_anim_rhythm():
+        failures += 1
+
+    # ── 4c. anim cursor alignment (geometry-derived waypoints) ───────────
+    anim_hit = [p.as_posix() for p in changed if p.as_posix() in ANIM_TRIGGERS]
+    if anim_hit:
+        script = ROOT / "scripts" / "check_anim_cursor.py"
+        if not script.exists():
+            print("⏭  动画光标落点: 校验脚本不存在，跳过")
+        else:
+            r = _run([_py(), str(script)], timeout=180)
+            if r.returncode == 0:
+                print(f"✅ 动画光标落点: {r.stdout.strip().splitlines()[-1]}")
+            else:
+                failures += 1
+                print("❌ 动画光标落点: 航点与控件几何不一致")
+                _dump(r)
+    else:
+        print("⏭  动画光标落点: 未触发（未改动动画/面板几何文件）")
 
     # ── 5. qm ────────────────────────────────────────────────────────────
     if ts_changed:

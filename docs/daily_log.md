@@ -12,28 +12,13 @@
 >
 > 仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护）；被裁掉的日期节仍完整留在提交历史里，用 `git log --grep <关键词>`／`git log --follow -p -- docs/daily_log.md`／`git show <rev>:docs/daily_log.md` 回查。
 
-## 2026-10-07
+## 2026-10-14
 
-### 字体排除「老旧→精简」互覆盖修复 + 幽灵字体闸门（`FontExcludeDialog._move_to_hidden` / `shared._drop_unloadable_families`）
+### 演示动画：有效时间轴同源 + 覆盖层层级修复 + README 几何/时序收敛（`anim_kit.resolve_timeline` / `CameraScene` / `PopupPalette`）
 
-**摘要：** 用户实测两问题。①「添加老旧字体」后点「一键精简」会互相覆盖：精简曾整表重建列表、只认持久态，把会话内未确定的隐藏条目冲回；改三入口（手动＞/老旧/精简）统一走增量移动 `_move_to_hidden`，一次确定全部落盘。②幽灵字体（有选项、无样式、应用仍是默认）＝QFontDatabase 能枚举、DirectWrite 加载不了的家族被 Qt 静默替换：`init_font_list` 加 QFontInfo 探针闸门过滤（解析落回同归并组视为可用，>20% 失配保险丝），次级下拉补插的未安装/被排除条目置灰加 tooltip（`combobox.py::mark_unlisted_combo_item`）。测试口径收紧：仅新增一条钉该用户实测缺陷的回归用例。
-**涉及文件：** `ui/configpanel.py`、`utils/shared.py`、`ui/custom_widget/combobox.py`、`ui/style_format_editor.py`、`ui/fontstyle_manager.py`、`tests/test_font_exclude_dialog.py`、`scripts/probes/font_ghost_probe.py`、`translate/zh_CN.ts`
-**验证：** 本机探针 221 显示家族唯一幽灵 `'Courier'`→`'Courier New'`、本地化双名零误判；`scripts/verify.py` 全绿（docs 一步为上游遗留失效引用，与本批无关）。
-
----
-
-### 死代码清理：text_engine 内嵌格式面板与 `FONT_FAMILIES` 地雷 + check_audit 误伤修复
-
-**摘要：** 删除未接入主窗口的 `ui/text_engine/formatting/panel.py` 与 `ui/text_engine/editing/manager.py`（约 2600 行，活实现是 `ui/text_panel.py::FontFormatPanel`）及恒为 None 的 `shared.FONT_FAMILIES`（仅死代码引用的 TypeError 地雷）；两文件由 suspended 移入 deprecated 登记，ts 顺带清 45 条孤儿。check_audit 修两处误伤：basename 在仓库有同名存活文件时只按全路径匹配（panel.py 在 effects/、transforms/ 各一份）；模块名改完整点分段匹配，`profile_manager`/`contextmanager` 类词尾同名不再误报。
-**涉及文件：** `scripts/check_audit.py`、`scripts/audit_registry.json`、`ui/text_engine/transforms/edit_session.py`、`translate/zh_CN.ts`
-**遗留：** 字体应用失败的静默回退（`ui/text_panel.py` 守卫与 Qt 替换）未加提示，按减法原则有意不做。
+**摘要：** 弹层与 README 两条演示流程的检查假绿灯与观感缺陷一并修掉。① 时间轴校验改读 `scripts/anim_kit.py::resolve_timeline`（渲染侧 `apply_timeline` 同源）——旧检查只读类属性，`RHYTHM` 场景实际校验到继承的旧时间轴（`clip_text` 的 N_FRAMES/F_FADE 校验成 20/15 而非实例 36/31）。② 覆盖层改为每帧 `raise_()`（徽标场景的单条文案建在覆盖层之后、把光标盖住）+ 置顶内容 save/restore 隔离（手绘下拉残留的 clip/opacity 会裁掉/调暗光圈与光标）。③ README 两个场景的手绘色板/下拉收成 `PopupPalette`/`PopupDropdown`（绘制与落点同体）、镜头字幕收成 `CameraScene`、每拍移动收成 `CursorPlan.move_after_press`。首版试验脚本 `scripts/gen_readme_demo.py` 效果未达预期，用户授权删除并登记 deprecated。
+**涉及文件：** `scripts/anim_kit.py`、`scripts/gen_help_anim.py`、`scripts/gen_readme_anim.py`、`scripts/gen_readme_showcase.py`、`scripts/check_anim_rhythm.py`、`scripts/check_anim_cursor.py`、`scripts/verify.py`、`scripts/README.md`、`scripts/audit_registry.json`、`tests/test_anim_checks.py`、`docs/基础速查/备注演示动画使用说明.md`
+**验证：** 弹层 7 场景逐帧哈希回归——迁移类场景 0 差异；`punctuation_position` 3 帧、`tag_badge` 1 帧、README 两场景各 4 帧为**预期内的层级修复差异**（只在光标/涟漪处）。`tests/test_anim_checks.py` 用「还原旧写法」的对照组证明节奏/层级/裁剪检查器确实报错。
 
 ---
 
-### 文档清理：删三份已完结存档，活约束并入代码注释（`ocr_vl_manga.py` / `effects/cards.py` / `panel_rail.py::RailLauncherButton`）
-
-**摘要：** 用户拍板删除效果栈两份存档与 paddle-ocr-for-manga 接入调研（批次均已完结、调研论证过时）。仍活的约束搬迁：「长期搁置勿复活」清单与效果卡分层定稿规则并入 `ui/text_engine/effects/cards.py` 模块 docstring，rail_* 图标 SVG 硬规范并入 `ui/panel_rail.py::RailLauncherButton` docstring（原「禁 stroke」条已过时，`ui/misc.py::set_icon_theme` 现已同步替换 stroke），参数坑与实测数字并入 `modules/ocr/ocr_vl_manga.py` docstring（顺带修正「比 onnx 系慢两个数量级」的过时估算——实测单块中位 192ms、约 6s/页）。三份文件登记 `scripts/audit_registry.json` deprecated；AGENTS.md 与 `docs/项目概述.md` 索引指针同步改指新落点。
-**涉及文件：** `docs/技术实现/paddle-ocr-for-manga_接入调研_存档.md`、`docs/技术实现/效果卡渐进披露_验收清单_存档.md`、`docs/技术实现/效果栈移植与窄栏图标重绘_计划_存档.md`、`modules/ocr/ocr_vl_manga.py`、`ui/text_engine/effects/cards.py`、`ui/text_engine/effects/panel.py`、`ui/text_engine/effects/renderer.py`、`ui/panel_rail.py`、`AGENTS.md`、`docs/项目概述.md`、`docs/技术实现/模型文件管理_设计方案_存档.md`、`docs/技术实现/模型文件管理_测试流程.md`、`docs/技术实现/模型说明卡片_规划.md`、`docs/技术实现/查找替换与样式管理器重构_设计方案_存档.md`、`scripts/probes/README.md`、`scripts/audit_registry.json`
-**验证：** `scripts/check_docs.py` 与 `scripts/check_audit.py` 全绿。
-
----

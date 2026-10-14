@@ -1356,8 +1356,8 @@
             <translation>重新生成演示动画</translation>
         </message>
         <message>
-            <source>Regenerate the 7 note demo animations now?</source>
-            <translation>现在重新生成 7 段备注演示动画吗？</translation>
+            <source>Regenerate the {count} note demo animations now?</source>
+            <translation>现在重新生成 {count} 段备注演示动画吗？</translation>
         </message>
         <message>
             <source>Run</source>
@@ -1368,8 +1368,8 @@
             <translation>&lt;p&gt;将删除本机覆盖层目录里的全部动画文件，问号弹层回退到仓库默认动画。仓库默认文件本身不受影响。&lt;/p&gt;</translation>
         </message>
         <message>
-            <source>&lt;p&gt;The 7 animations will be re-rendered in the background using this machine's screen scaling and system fonts and written to the local override folder, which takes priority for display. It takes a few dozen seconds and progress is printed to the terminal; note popups opened afterwards use the new animations.&lt;/p&gt;</source>
-            <translation>&lt;p&gt;7 个动画将在后台用本机的屏幕缩放与系统字体重新渲染，写入本机覆盖层目录（展示时优先使用）。耗时几十秒，进度打印到终端；完成后新打开的问号弹层即用新动画。&lt;/p&gt;</translation>
+            <source>&lt;p&gt;The {count} animations will be re-rendered in the background using this machine's screen scaling and system fonts and written to the local override folder, which takes priority for display. It takes a few dozen seconds and progress is printed to the terminal; note popups opened afterwards use the new animations.&lt;/p&gt;</source>
+            <translation>&lt;p&gt;{count} 个动画将在后台用本机的屏幕缩放与系统字体重新渲染，写入本机覆盖层目录（展示时优先使用）。耗时几十秒，进度打印到终端；完成后新打开的问号弹层即用新动画。&lt;/p&gt;</translation>
         </message>
         <message>
             <source>&lt;p&gt;The popup demo animations are rendered with the screen scaling and system fonts of the machine that generated them. The repository ships default animations for distribution; regenerating writes a local override that takes priority for display, and the restore button deletes the override to fall back to the defaults.&lt;/p&gt;</source>
