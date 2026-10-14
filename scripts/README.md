@@ -9,12 +9,12 @@
 
 ## 一、质量保障 / 自动化检查
 
-**统一入口是 `verify.py`**（语法 → 文档 → 审计 → 展示台覆盖 → 上游巡检 → i18n → qm → 冒烟），
+**统一入口是 `verify.py`**（语法 → 文档 → 审计 → 展示台覆盖 → 上游巡检 → i18n → 动画节奏 → qm → 冒烟），
 日常开发跑它即可；发版前加 `--full`（追加 ruff + pytest）。上游巡检只提醒不阻断。
 
 | 脚本 | 用途 | 运行方式 |
 |---|---|---|
-| `scripts/verify.py` | **一键检查**：语法 → 文档 → 审计 → 展示台覆盖 → 上游巡检 → i18n → qm → 冒烟；成功每步只打一行（上游巡检漂移只告警不失败） | `python scripts/verify.py`（`--smoke` 强制冒烟，`--all` 全量语法，`--full` 发版门禁追加 ruff+pytest） |
+| `scripts/verify.py` | **一键检查**：语法 → 文档 → 审计 → 展示台覆盖 → 上游巡检 → i18n → 动画节奏 → qm → 冒烟；成功每步只打一行（上游巡检漂移只告警不失败） | `python scripts/verify.py`（`--smoke` 强制冒烟，`--all` 全量语法，`--full` 发版门禁追加 ruff+pytest） |
 | `scripts/check_syntax.py` | 语法检查（编译 + 混合缩进 + UTF-8 BOM） | `python scripts/check_syntax.py <文件...>` |
 | `scripts/check_docs.py` | 校验 `AGENTS.md` 与 `docs/` 活文档的路径/符号引用 + scripts/README 登记齐全 | `python scripts/check_docs.py` |
 | `scripts/check_audit.py` | 审计登记表契约（deprecated 残留引用 / suspended 被 import） | `python scripts/check_audit.py` |
@@ -22,6 +22,8 @@
 | `scripts/check_upstream_drift.py` | **上游契约漂移巡检**（纯 AST，不 import 两侧代码）：比对 `TextBlock`/`FontFormat` 字段与默认值、效果类型注册表、工程写入键，只报「相对基线的新变化」；上游不存在时自动跳过 | `python scripts/check_upstream_drift.py`（`--update-baseline` 重算基线，`--print` 打印契约面）；上游路径用 `--upstream` 或环境变量 `BT_UPSTREAM_ROOT` |
 | `scripts/check_cuda_env.py` | CUDA 索引存活 + 解释器环境**只读**体检（L3 真环境层，不安装任何东西）：索引是否仍可装（`cu124` 已 EOL 就是没查这个才漏掉的）、指定解释器的 torch/onnxruntime 状态与 onnxruntime 双发行名混合态 | `python scripts/check_cuda_env.py [--indexes\|--env] [--python <python.exe>] [--json]`；分层与判据见 `docs/技术实现/CUDA环境与索引_说明.md` |
 | `scripts/i18n_check.py` | 审计 i18n（硬编码中文、缺失/多余的 .ts 条目），发版前 `--ci` | `python scripts/i18n_check.py` |
+| `scripts/check_anim_rhythm.py` | **演示动画节奏校验器**：检查 `scripts/gen_help_anim.py::SCENES` 全部场景的**有效时间轴**——由 `scripts/anim_kit.py::resolve_timeline` 解析（本类手写 F_* 优先 → `RHYTHM` 档位算出 → 继承值，渲染侧 `scripts/anim_kit.py::apply_timeline` 同源，杜绝"校验读类属性、渲染读实例覆写"的假绿灯）；不变量：`EMPH_SEG` 合法（`None` = 跟随 MOVE 段）、`N_FRAMES >= 10` 且大于 `F_FADE`、`F_PRESS < F_CLICK <= F_MOVE_START <= F_MOVE_END < F_FADE`（点击可就地触发过渡故非严格）。`verify_timeline` / `verify_scene_timeline`（类属性，不建 Qt）与 `verify_plan`（`CursorPlan` 按下/航点/淡出帧序，覆盖无 F_* 常量的 README 大画幅场景）两条线 | `python scripts/check_anim_rhythm.py` |
+| `scripts/check_anim_cursor.py` | **演示动画落点/层级/裁剪校验器**：构造 `scripts/gen_readme_anim.py::FormatTourScene` 与 `scripts/gen_readme_showcase.py::ShowcaseScene`，核对①航点 == 控件场景中心（`scripts/anim_kit.py::widget_scene_center`）/ 手绘色板格子·下拉行落点 == 布点对象（`scripts/anim_kit.py::PopupPalette` / `scripts/anim_kit.py::PopupDropdown`）/ 画布块 == `scripts/anim_kit.py::graphics_item_scene_rect` 中心（**先把布局推进到渲染期最终态再比**：`ensurePolished`+`processEvents`+`grab`，否则构造期读数自洽会把"漏激活布局"漏掉）；②覆盖层每帧置顶（`scripts/anim_kit.py::AnimScene`）；③光标不被手绘弹层裁剪/调暗（`verify_cursor_paint`）。需 QApplication，环境不可用时跳过不阻断；负向回归见 `tests/test_anim_checks.py` | `python scripts/check_anim_cursor.py` |
 | `scripts/qm_compile.py` | 编译 `.ts` → `.qm`（Qt 二进制翻译文件） | `python scripts/qm_compile.py translate/zh_CN.ts translate/zh_CN.qm` |
 | `scripts/ts_auto_fill.py` | 自动同步 `self.tr()` 调用与 `.ts` 文件，`--apply` 后自动重编 .qm | `python scripts/ts_auto_fill.py --apply` |
 | `scripts/trim_daily_log.py` | 将 `docs/daily_log.md` 裁剪到最近 3 天（按 `## YYYY-MM-DD` 标题解析，无日期段恒保留）；`--check` 仅校验，pre-commit 钩子（`scripts/hooks/`）自动执行 | `python scripts/trim_daily_log.py [--check]` |
@@ -29,7 +31,7 @@
 
 ### verify.py 两级用法
 
-- 默认（无参数）：开发时频繁跑的快循环 —— 语法/文档/审计/i18n/qm/冒烟，
+- 默认（无参数）：开发时频繁跑的快循环 —— 语法/文档/审计/i18n/动画节奏/qm/冒烟，
   不含 pytest（测试需要重依赖、开销大）。
 - `--full`：合入或发版前的全量门禁 —— 追加 ruff 风格检查和 `tests/` 的
   pytest（两者未安装时自动跳过并提示）。
@@ -50,9 +52,10 @@
 | `scripts/workbench_render.py` | **工作台布局的目视验收台**：合成一个带内容的工程，把 `ui/glossary_agent_panel.py::GlossaryAgentPanel` 的每个任务页（含未开项目的空态页）渲染成 PNG（默认 2 倍率），并在 stdout 回显两级导航结构（大类页签文字／chip 文字／可见 chip／计数）——不看图也能核对结构。**必须走默认 windows 平台插件**：offscreen 下 `QFontDatabase.families()` 为空，文字全是豆腐块（且设 `setFont` 救不回来）；同时按 `launch.py` 装字体＋语言＋主题，否则截图是白底裸控件 | `python scripts/workbench_render.py [--out DIR] [--scale N]` |
 
 | `scripts/settings_render.py` | **设置面板的目视验收台**：把 `ui/configpanel.py::ConfigPanel` 的 10 个页面渲染成 PNG（暗/亮两套主题各一目录，`--theme` 选），stdout 回显导航结构（分组卡／项 chip／页数）。改设置页样式或版式前后各看一眼；改卡片配色/间距时它比描述文字管用。`--diag` 切**诊断配色**（页面凹面/Widget 面/裸 QWidget/描边 = 品红/绿/橙/白），用来查"底是谁画的、谁盖了谁"——默认主题里这几层常常同色，肉眼看不出来（判读见 `docs/基础速查/经验教训.md` §3.6）。同样**必须走默认 windows 平台插件 + 装字体/翻译/主题**；进程内把 `save_config` 短路（截图工具不该动用户配置，且本进程没有 ModuleManager，真落盘会在 `get_saving_params` 里 KeyError） | `python scripts/settings_render.py [--out DIR] [--scale N] [--theme dark\|light\|both] [--diag]` |
-| `scripts/anim_kit.py` | **演示动画共享机制库（无版式假设）**：确定性时间轴原语（`move_progress`/`guide_alpha`）、光标编排 `CursorPlan`（航点/按下涟漪/淡出，落点支持 callable 跟随移动目标）、场景基类 `AnimScene`（画布尺寸/时长场景自声明，置顶覆盖层统一驱动）、文案组件、与 `ui/text_engine` 引擎对齐的绘制小件、渲染/编码管线（无损动画 WebP，`save_webp` 留有损参数给 README 大画幅流程）。弹层与未来 README 两个流程共用 | 非运行脚本（被 `scripts/gen_help_anim.py` 导入） |
-| `scripts/gen_help_anim.py` | **备注问号弹层的演示动画生成器**：按帧号确定性步进画演示场景（windows 平台渲染；**写仓库默认目录自动钉定 DPR 1.25**，入库产物跨工作机逐字节一致，本机覆盖层/显式输出走本机真实 DPR，`--dpr` 可覆盖），Pillow 编码**无损动画 WebP**（QMovie 可直接播放）到 `config/help_anims/`。7 个场景：`punctuation_position` 走下拉选择叙事（直接组装 `anim_kit` 组件），其余 6 个走 `CheckboxDemoScene` 预设（复选框单点叙事）——**叙事不匹配的功能别硬套预设**，参照 `PunctuationScene` 自行组装；新增场景在 `SCENES` 注册即可，`--dump-frames` 导出逐帧 PNG 供目视/像素回归（用法见 `docs/基础速查/备注演示动画使用说明.md`） | `python scripts/gen_help_anim.py --scene punctuation_position [--all] [--out-dir DIR] [--dump-frames DIR]` |
-| `scripts/gen_readme_anim.py` | **README 大画幅演示动画生成器（首个场景）**：`format_tour` = 主页面右侧格式面板基础排版巡礼（选中块→颜色/字体→对齐/斜体→竖排→行距拖拽，一镜到底）。与弹层流程共用 `scripts/anim_kit.py` 但独立注册表；**镜头跟随光标**（`camera_rect` 每帧声明视口、`anim_kit.iter_frames` 裁切，流式编码控内存）；**画布文本块走真机引擎**（`TextBlkItem` + `QGraphicsScene`，与产品同渲染路径，无需弹层场景的手绘探针）；DPR 默认钉 2.0；须从仓库根目录运行（`SizeControlLabel` 的 SVG 图标按相对路径加载） | `python scripts/gen_readme_anim.py --scene format_tour [--lossy] [--dump-frames DIR] [--dpr N]` |
+| `scripts/anim_kit.py` | **演示动画共享机制库（无版式假设）**：确定性时间轴原语（`move_progress`/`guide_alpha`/`caption_alpha`）、节奏档位 `RhythmProfile` + 有效时间轴解析 `resolve_timeline`/`apply_timeline`（渲染与校验同源）、光标编排 `CursorPlan`（航点/按下涟漪/淡出，落点支持 callable；`move_after_press` 收共享点击/移动时序）、场景基类 `AnimScene`（画布尺寸/时长场景自声明，置顶覆盖层每帧重顶、置顶内容 save/restore 隔离 clip·opacity）与 README 骨架 `CameraScene`（DPR 量化镜头裁切）、手绘弹层对象 `PopupPalette`/`PopupDropdown`（绘制与落点同体）、与 `ui/text_engine` 引擎对齐的绘制小件、渲染/编码管线（无损动画 WebP）。弹层与 README 两个流程共用 | 非运行脚本（被 `scripts/gen_help_anim.py` 等导入） |
+| `scripts/gen_help_anim.py` | **备注问号弹层的演示动画生成器**：按帧号确定性步进画演示场景（windows 平台渲染；**写仓库默认目录自动钉定 DPR 1.25**，入库产物跨工作机逐字节一致，本机覆盖层/显式输出走本机真实 DPR，`--dpr` 可覆盖），Pillow 编码**无损动画 WebP**（QMovie 可直接播放）到 `config/help_anims/`。7 个场景：`punctuation_position` 走下拉选择叙事（直接组装 `anim_kit` 组件），其余 6 个走 `CheckboxDemoScene` 预设（复选框单点叙事，时间轴由 `RHYTHM` 档位算出）——**叙事不匹配的功能别硬套预设**，参照 `PunctuationScene` 自行组装；新增场景在 `SCENES`（`SceneMetadata`，`scene_class` 指向场景类）注册即可，`--dump-frames` 导出逐帧 PNG 供目视/像素回归（用法见 `docs/基础速查/备注演示动画使用说明.md`） | `python scripts/gen_help_anim.py --scene punctuation_position [--all] [--out-dir DIR] [--dump-frames DIR]` |
+| `scripts/gen_readme_anim.py` | **README 大画幅演示动画生成器（首个场景）**：`format_tour` = 主页面右侧格式面板基础排版巡礼（选中块→颜色/字体→对齐/斜体→竖排→行距拖拽，一镜到底）。与弹层流程共用 `scripts/anim_kit.py` 但独立注册表；**镜头跟随光标**（`CameraScene.camera_rect` 每帧声明视口、`anim_kit.iter_frames` 裁切，流式编码控内存）；**画布文本块走真机引擎**（`TextBlkItem` + `QGraphicsScene`，与产品同渲染路径）；**光标落点全部由控件/弹层几何推导**（`anim_kit.activate_layout_tree` / `widget_scene_center` / `graphics_item_scene_rect` / `PopupPalette` / `PopupDropdown`，绘制与落点同体）；DPR 默认钉 2.0；须从仓库根目录运行（`SizeControlLabel` 的 SVG 图标按相对路径加载） | `python scripts/gen_readme_anim.py --scene format_tour [--lossy] [--dump-frames DIR] [--dpr N]` |
+| `scripts/gen_readme_showcase.py` | **README 首页展示动画生成器**：`showcase` = 精简版样式编辑演示（约 13s，开场标题→选色→换字体→一键竖排→收尾），与 `scripts/gen_readme_anim.py` 同款大画幅约束（`CameraScene` 镜头跟随光标 + 真机引擎画布块），光标落点同样全部由控件/弹层几何推导（`PopupPalette` / `PopupDropdown` 绘制与落点同体）；DPR 默认钉 2.0 | `python scripts/gen_readme_showcase.py [--out-dir DIR] [--fps N] [--lossy] [--dump-frames DIR] [--dpr N]` |
 
 | `scripts/stylemgr_render.py` | **样式管理器（`ui/fontstyle_manager.py`）的目视验收台**：合成一个工程（2 个带变体的大样式 + 未分组 + 3 条与项目同字体同方向的库模板，用来检验「库 / 项目样式」的辨识度），把面板渲染成 PNG（暗/亮两套，三个场景：刚打开／选中库条目／选中项目大样式），stdout 回显三区带结构与展开态。左树是自绘委托（区带行、色板、库条目「模板」标签），改配色或版式只能看图判断。同款三坑：必须默认 windows 平台插件、翻译器早于 `ui.*` 导入、**切主题要连 `pcfg.darkmode` 一起切**（委托取强调色走 `pcfg`，只换样式表会让两套主题的强调色对不上，出图上像产品 bug）；另外短路了 `save_config`/`save_global_styles`，不碰用户配置与真实样式库 | `python scripts/stylemgr_render.py [--out DIR] [--scale N] [--theme dark\|light\|both]` |
 

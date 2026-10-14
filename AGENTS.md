@@ -149,7 +149,7 @@ modules/
 
 `./ballontrans_pylibs_win/python.exe scripts/verify.py`
 
-一条命令依次跑 语法 → 文档 → 审计 → 展示台覆盖 → i18n → qm → 冒烟；**成功每步只打一行，失败才完整打印报错（据此修复）**。判定要点：语法只查 git 改动涉及的 .py（`--all` 改查全部 ui/+utils/），其余各步全量；qm 在 ts 有改动时自动编译；冒烟在改动命中启动链文件（`launch.py`/`modules/base.py`/`utils/profile_manager.py`/`ui/configpanel.py`/`ui/mainwindow.py`）时自动触发，`--smoke` 可强制；`--full` 为发版门禁，追加 ruff 风格检查 + pytest（`tests/`，未装或重依赖缺失时自动跳过并提示）。判定细节见 `scripts/verify.py` 模块注释。
+一条命令依次跑 语法 → 文档 → 审计 → 展示台覆盖 → 上游巡检 → i18n → 动画节奏 → 动画光标落点 → qm → 冒烟；**成功每步只打一行，失败才完整打印报错（据此修复）**。判定要点：语法只查 git 改动涉及的 .py（`--all` 改查全部 ui/+utils/），其余各步全量；动画节奏每次跑（弹层场景有效时间轴，纯类属性不建 Qt），动画光标落点在改动动画/面板几何文件（`scripts/anim_kit.py`、`scripts/gen_readme_anim.py`、`scripts/gen_readme_showcase.py`、`ui/text_panel.py`、`ui/custom_widget/{label,checkbox,combobox}.py`）时触发（需 Qt，不可用则跳过）；qm 在 ts 有改动时自动编译；冒烟在改动命中启动链文件（`launch.py`/`modules/base.py`/`utils/profile_manager.py`/`ui/configpanel.py`/`ui/mainwindow.py`）时自动触发，`--smoke` 可强制；`--full` 为发版门禁，追加 ruff 风格检查 + pytest（`tests/`，未装或重依赖缺失时自动跳过并提示）。判定细节见 `scripts/verify.py` 模块注释。
 
 需要时手动分步跑：
 

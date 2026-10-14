@@ -12,18 +12,13 @@
 >
 > 仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护）；被裁掉的日期节仍完整留在提交历史里，用 `git log --grep <关键词>`／`git log --follow -p -- docs/daily_log.md`／`git show <rev>:docs/daily_log.md` 回查。
 
-## 2026-10-11
+## 2026-10-14
 
-### LLM Profile 卡片页批次：双击改名落定+状态点+模型清单批量编辑（`_EditableNameLabel` / `rename_profile` / `_ModelListEditDialog`）
+### 演示动画：有效时间轴同源 + 覆盖层层级修复 + README 几何/时序收敛（`anim_kit.resolve_timeline` / `CameraScene` / `PopupPalette`）
 
-**摘要：** 卡片标题双击就地改名，数据层新增 `rename_profile` 把激活项与四个模块存储的 profile 引用（`_PROFILE_REF_SLOTS`）一并迁移；修复提交后标题标签不刷新（`_on_rename_requested` 成功分支按新名补 setText）。模型行新增清单批量编辑对话框（勾选保留/取消勾选删除 + 搜索 + 批量添加输入框），`+` 快速添加支持逗号/空白分隔一次多个（`_split_model_names`）；OCR/在线修复参数面板含 profile 选择器时显示「Manage…」跳转入口（`navigate_to_llm_profile`）；卡片加可用性状态点（复用 `profile_is_usable`）。样式表补 `QDialog QListView::indicator`（勾选列表指示器）与 `LLMProfileModelManageButton` 规则，修图标被全局 QToolButton 兜底裁剪、复选框显示不全两处观感。
-**涉及文件：** `ui/llm_profile_cards.py`、`utils/profile_manager.py`、`ui/configpanel.py`、`ui/module_parse_widgets.py`、`config/stylesheet.css`、`icons/model_list.svg`、`translate/zh_CN.ts`
-**验证：** 离屏探针实测改名全链与批量编辑各路径（多粘贴/勾删/取消/空清单引导）；`scripts/verify.py` 全绿。
+**摘要：** 弹层与 README 两条演示流程的检查假绿灯与观感缺陷一并修掉。① 时间轴校验改读 `scripts/anim_kit.py::resolve_timeline`（渲染侧 `apply_timeline` 同源）——旧检查只读类属性，`RHYTHM` 场景实际校验到继承的旧时间轴（`clip_text` 的 N_FRAMES/F_FADE 校验成 20/15 而非实例 36/31）。② 覆盖层改为每帧 `raise_()`（徽标场景的单条文案建在覆盖层之后、把光标盖住）+ 置顶内容 save/restore 隔离（手绘下拉残留的 clip/opacity 会裁掉/调暗光圈与光标）。③ README 两个场景的手绘色板/下拉收成 `PopupPalette`/`PopupDropdown`（绘制与落点同体）、镜头字幕收成 `CameraScene`、每拍移动收成 `CursorPlan.move_after_press`。首版试验脚本 `scripts/gen_readme_demo.py` 效果未达预期，用户授权删除并登记 deprecated。
+**涉及文件：** `scripts/anim_kit.py`、`scripts/gen_help_anim.py`、`scripts/gen_readme_anim.py`、`scripts/gen_readme_showcase.py`、`scripts/check_anim_rhythm.py`、`scripts/check_anim_cursor.py`、`scripts/verify.py`、`scripts/README.md`、`scripts/audit_registry.json`、`tests/test_anim_checks.py`、`docs/基础速查/备注演示动画使用说明.md`
+**验证：** 弹层 7 场景逐帧哈希回归——迁移类场景 0 差异；`punctuation_position` 3 帧、`tag_badge` 1 帧、README 两场景各 4 帧为**预期内的层级修复差异**（只在光标/涟漪处）。`tests/test_anim_checks.py` 用「还原旧写法」的对照组证明节奏/层级/裁剪检查器确实报错。
 
 ---
-
-### 启动期字体警告收敛：safe_qt 前缀过滤 DirectWrite + ghost fonts 打印 DEBUG 门控
-
-**摘要：** `DirectWrite: CreateFontFaceFromHDC() failed` ＝幽灵字体探针触碰 GDI 老光栅字体的平台层噪音，`utils/safe_qt.py` 抑制列表加前缀；`shared._drop_unloadable_families` 的 ghost fonts 输出本是闸门正常结果，改 `BALLOONTRANS_DEBUG_QT_WARNINGS`/DEBUG 门控不再刷屏。均无行为改动。
-**涉及文件：** `utils/safe_qt.py`、`utils/shared.py`
 

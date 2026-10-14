@@ -363,6 +363,12 @@
             "allowed_mentions": [
                 "docs/daily_log.md"
             ]
+        },
+        "scripts/gen_readme_demo.py": {
+            "note": "试验脚本删除（2026-10-14 用户拍板）：首版「完整主窗口演示」未达满意效果，用户明确授权删除。README 展示改由 scripts/gen_readme_anim.py（format_tour）与 scripts/gen_readme_showcase.py（showcase）承担，二者复用 scripts/anim_kit.py 的几何推导与覆盖层机制；如日后仍需该画幅可从 git 历史取回",
+            "allowed_mentions": [
+                "docs/基础速查/备注演示动画使用说明.md"
+            ]
         }
     },
     "dormant_symbols": {

@@ -21,7 +21,6 @@ import argparse
 import os
 import os.path as osp
 import sys
-import time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "windows")
 
@@ -47,15 +46,21 @@ from qtpy.QtWidgets import (
 )
 
 from anim_kit import (
-    AnimScene,
+    CameraScene,
     CursorPlan,
-    UI_FONT_FAMILY,
+    PopupDropdown,
+    PopupPalette,
+    activate_layout_tree,
+    caption_alpha,
     clamp01,
+    graphics_item_scene_rect,
     init_app,
     iter_frames,
     move_progress,
     out_cubic,
     save_webp,
+    widget_scene_center,
+    widget_scene_rect,
 )
 from ui.custom_widget.checkbox import QFontChecker
 from ui.custom_widget.combobox import SizeComboBox
@@ -77,6 +82,25 @@ PANEL = QRectF(776, 16, 328, 548)  # 右栏格式面板
 
 DEMO_TEXT = "这是一段演示文字，样式随右侧面板调整"
 PICK_COLOR = QColor(30, 147, 229)  # 演示选中的文字色（取主题蓝）
+
+# ── 手绘弹层对象（绘制与光标落点同一份几何，见 anim_kit）──────────
+PALETTE = PopupPalette(
+    origin_off=QPointF(-4, 30),   # 卡片左上角相对色块控件左上角
+    pad=12, cell=26, gap=10, cols=4,
+    colors=[
+        QColor(0, 0, 0), QColor(255, 255, 255), QColor(200, 60, 60),
+        QColor(240, 160, 40), QColor(80, 170, 80), QColor(PICK_COLOR),
+        QColor(120, 90, 200), QColor(120, 120, 120),
+    ],
+    pick_idx=5,                   # 演示选中的那一格（PICK_COLOR）
+    width=164, height=84,
+)
+DROPDOWN = PopupDropdown(
+    gap=2, pad=4, row_h=28, min_w=150, text_inset=12,
+    items=["Microsoft YaHei UI", "KaiTi", "SimHei"],
+    pick_idx=1,                   # 演示选中的那一行（KaiTi 高亮）
+    baseline=0.68,
+)
 
 # 分镜帧号（20fps，共 210 帧 ≈ 10.5s）。节奏口径：只压光标移动段（约减半），
 # 每拍点击后的静止展示时长与弹层版次版一致
@@ -105,9 +129,11 @@ CAPTION_BEATS = [
 ]
 
 
-class FormatTourScene(AnimScene):
+class FormatTourScene(CameraScene):
     SIZE = (1120, 580)
     N_FRAMES = 210
+    VIEW_W, VIEW_H = VIEW_W, VIEW_H
+    CANVAS = CANVAS
 
     # ── 版式搭建 ────────────────────────────────────────────────
     def _build(self):
@@ -128,7 +154,9 @@ class FormatTourScene(AnimScene):
         )
 
         self._build_plan()
-        self._cam = QPointF(*self._panorama_target())
+        # DPR 与相机：DPR 由 main() 从实测 devicePixelRatio 注入（默认 2.0），
+        # 字幕与镜头裁切共用同一取整口径（见 anim_kit.CameraScene）
+        self._init_camera()
 
     def _build_page(self):
         """画布区：QGraphicsView + 合成示意页（白卡 + 气泡 + 灰条假文）。"""
@@ -207,7 +235,7 @@ class FormatTourScene(AnimScene):
         self.colorPicker.setFixedSize(26, 26)
         self.colorPicker.setPickerColor(QColor(0, 0, 0))
         self.familybox = FontFamilyComboBox(parent=panel)
-        self.familybox.addItems(["Microsoft YaHei UI", "KaiTi", "SimHei"])
+        self.familybox.addItems(DROPDOWN.items)
         self.stylebox = FontStyleComboBox()
         self.stylebox.addItems(["Regular", "Bold"])
         row1.addWidget(self.colorPicker)
@@ -310,51 +338,61 @@ class FormatTourScene(AnimScene):
     def _build_plan(self):
         """光标航点（按分镜帧号顺序）。
 
-        航点取自子控件几何——必须先强制激活布局：QVBoxLayout 惰性激活，
-        构造期所有子控件还停在 (0,0)（grab 时才补算），直接 mapTo 全部
-        落到面板左上角、光标"原地蠕动"。
+        所有落点都由**控件/弹层的实际几何**推出，不手填像素坐标：
+
+        - 激活布局树（``activate_layout_tree``）——含容器控件自己的 layout，
+          否则容器子控件停在 (0,0)，落点偏一整个按钮宽；
+        - 文本块落点走 ``graphics_item_scene_rect``（gfx→视口→控件坐标），
+          不用手估的画布坐标；
+        - 色板格子 / 下拉行取 ``PALETTE`` / ``DROPDOWN`` 对象（``PopupPalette``
+          / ``PopupDropdown``），与 ``_paint_palette`` / ``_paint_dropdown``
+          同一份几何。
         """
-        self.panel.layout().activate()
+        activate_layout_tree(self)
 
-        def w(widget, dx=0.5, dy=0.5):
-            pos = widget.mapTo(self, QPointF(
-                widget.width() * dx, widget.height() * dy))
-            return QPointF(pos)
+        # 色板锚点 = 色块控件左上角 + 固定偏移；格子中心由网格公式算
+        self._palette_origin = PALETTE.origin(
+            widget_scene_rect(self, self.colorPicker).topLeft())
+        self._palette_cell_pos = PALETTE.pick_point(self._palette_origin)
+        # 下拉行落点：x 取行内文字左内缩处、y 取行中线
+        fb_rect = widget_scene_rect(self, self.familybox)
+        self._kai_row_pos = DROPDOWN.row_point(
+            fb_rect.topLeft(), fb_rect.height(), DROPDOWN.pick_idx,
+            DROPDOWN.width(fb_rect.width()))
 
-        block_target = QPointF(470, 130)
-        # 色板里 PICK_COLOR 在第 2 行第 2 格（见 _paint_palette 的格子布点）
-        self._palette_cell_pos = self.colorPicker.mapTo(self, QPointF(0, 0)) \
-            + QPointF(57, 91)
-        self._kai_row_pos = self.familybox.mapTo(self, QPointF(13, 13)) \
-            + QPointF(0, 66)
-        drag_start = self.lineSpacingLabel.mapTo(self, QPointF(8, 8))
+        block_rect = graphics_item_scene_rect(self, self.view, self.item)
+        block_target = block_rect.center()
+        self.block_rect = block_rect
+        drag_start = widget_scene_rect(
+            self, self.lineSpacingLabel).topLeft() + QPointF(8, 8)
 
         self.plan = CursorPlan(QPointF(40, 640))
         self.plan.go(block_target, arrive=F_SEL_PRESS - 1)
         self.plan.press(F_SEL_PRESS, block_target)
-        # press 后光标在落点停 2 帧再启程（start 压住段起点），点击指向性更强
-        self.plan.go(w(self.colorPicker), arrive=F_COLOR_OPEN - 1,
-                     start=F_SEL_PRESS + 2)
+        # 每拍：按下后按共享时序（anim_kit.PRESS_SETTLE / MOVE_LEAD）移到下一点，
+        # 点击指向性更强（press 后在落点静止 2 帧再启程）
+        self.plan.move_after_press(
+            widget_scene_center(self, self.colorPicker), F_COLOR_OPEN)
         self.plan.press(F_COLOR_OPEN)
-        self.plan.go(self._palette_cell_pos, arrive=F_COLOR_PICK - 1,
-                     start=F_COLOR_OPEN + 2)
+        self.plan.move_after_press(self._palette_cell_pos, F_COLOR_PICK)
         self.plan.press(F_COLOR_PICK)
-        self.plan.go(w(self.familybox), arrive=F_FAMILY_OPEN - 1,
-                     start=F_COLOR_PICK + 2)
+        self.plan.move_after_press(
+            widget_scene_center(self, self.familybox), F_FAMILY_OPEN)
         self.plan.press(F_FAMILY_OPEN)
-        self.plan.go(self._kai_row_pos, arrive=F_FAMILY_PICK - 1,
-                     start=F_FAMILY_OPEN + 2)
+        self.plan.move_after_press(self._kai_row_pos, F_FAMILY_PICK)
         self.plan.press(F_FAMILY_PICK)
-        self.plan.go(w(self.alignGroup.alignCenterChecker),
-                     arrive=F_ALIGN_PRESS - 1, start=F_FAMILY_PICK + 2)
+        self.plan.move_after_press(
+            widget_scene_center(self, self.alignGroup.alignCenterChecker),
+            F_ALIGN_PRESS)
         self.plan.press(F_ALIGN_PRESS)
-        self.plan.go(w(self.formatGroup.italicBtn), arrive=F_ITALIC_PRESS - 1,
-                     start=F_ALIGN_PRESS + 2)
+        self.plan.move_after_press(
+            widget_scene_center(self, self.formatGroup.italicBtn),
+            F_ITALIC_PRESS)
         self.plan.press(F_ITALIC_PRESS)
-        self.plan.go(w(self.verticalChecker), arrive=F_VERT_PRESS - 1,
-                     start=F_ITALIC_PRESS + 2)
+        self.plan.move_after_press(
+            widget_scene_center(self, self.verticalChecker), F_VERT_PRESS)
         self.plan.press(F_VERT_PRESS)
-        self.plan.go(drag_start, arrive=F_DRAG0 - 1, start=F_VERT_PRESS + 2)
+        self.plan.move_after_press(drag_start, F_DRAG0)
         self.plan.press(F_DRAG0)
         # 拖拽段：光标下行 84px，目标随帧移动
         drag_dy = {"v": 0.0}
@@ -365,12 +403,6 @@ class FormatTourScene(AnimScene):
         self.plan.fade(F_END, frames=3)
 
     # ── 镜头 ────────────────────────────────────────────────────
-    def _panorama_target(self):
-        # 全景=画布区居中；负值钳到 0（否则裁切贴边界时输出尺寸会缩水）
-        x = min(max(CANVAS.center().x() - VIEW_W / 2, 0), self.SIZE[0] - VIEW_W)
-        y = min(max(CANVAS.center().y() - VIEW_H / 2, 0), self.SIZE[1] - VIEW_H)
-        return (x, y)
-
     def _cam_target(self, f):
         pan = QPointF(*self._panorama_target())
         pose = self.plan.pose(f)
@@ -384,14 +416,11 @@ class FormatTourScene(AnimScene):
         t = t_open * (1.0 - t_end)
         return pan + (fol - pan) * t
 
-    def camera_rect(self, f):
-        return QRectF(self._cam.x(), self._cam.y(), VIEW_W, VIEW_H)
-
     # ── 状态推进 ─────────────────────────────────────────────────
     def _update(self, f):
-        # 镜头平滑跟随（指数趋近，确定性）
-        target = self._cam_target(f)
-        self._cam += (target - self._cam) * 0.25
+        # 镜头平滑跟随（指数趋近，确定性）：量化交给基类 _crop_origin 在读取时
+        # 统一做（不把量化结果反馈回平滑，避免死区）
+        self._advance_camera(f)
 
         # 节拍动作
         if f == F_SEL_PRESS:
@@ -445,9 +474,7 @@ class FormatTourScene(AnimScene):
         if text is None:
             return
         # 淡入 4 帧、下一拍前 4 帧淡出
-        a_in = clamp01((f - start) / 4.0)
-        a_out = 1.0 - clamp01((f - (next_start - 4)) / 4.0)
-        alpha = min(a_in, a_out)
+        alpha = caption_alpha(f, start, next_start, fade_in=4.0, fade_out=4.0)
         # 深色半透明底 + 白字：亮/暗主题下都压得住底图，字号提一档保辨识度
         self.caption.setStyleSheet(
             f"color: rgba(255,255,255,{round(235 * alpha)});"
@@ -456,9 +483,11 @@ class FormatTourScene(AnimScene):
         )
         if self.caption.text() != text:
             self.caption.setText(text)
-        cam = self.camera_rect(f)
+        # 贴视口左下角：原点与裁切共用 _crop_origin（同一取整口径），
+        # 避免 DPR>1 下字幕随镜头 ±1 设备像素抖动
+        o = self._crop_origin()
         self.caption.setGeometry(
-            int(cam.x()) + 14, int(cam.y()) + VIEW_H - 56,
+            int(o.x()) + 14, int(o.y()) + VIEW_H - 56,
             VIEW_W - 28, 40,
         )
 
@@ -472,53 +501,15 @@ class FormatTourScene(AnimScene):
             e = move_progress(f, F_FAMILY_OPEN, F_FAMILY_OPEN + 4)
             self._paint_dropdown(p, e)
 
-    def _paint_panel_card(self, p, rect):
-        p.setPen(self.border)
-        p.setBrush(QColor(self.card))
-        p.drawRoundedRect(rect, 5, 5)
-
     def _paint_palette(self, p, e):
-        anchor = self.colorPicker.mapTo(self, QPointF(0, 0))
-        x, y = anchor.x() - 4, anchor.y() + 30
-        w, h = 164, 84
-        rect = QRectF(x, y, w * e, h * e)
-        self._paint_panel_card(p, rect)
-        colors = [QColor(0, 0, 0), QColor(255, 255, 255), QColor(200, 60, 60),
-                  QColor(240, 160, 40), QColor(80, 170, 80),
-                  QColor(PICK_COLOR), QColor(120, 90, 200), QColor(120, 120, 120)]
-        cw, ch = 26, 26
-        for i, c in enumerate(colors):
-            cx = x + 12 + (i % 4) * (cw + 10)
-            cy = y + 12 + (i // 4) * (ch + 10)
-            cell = QRectF(cx, cy, cw * e, ch * e)
-            p.setPen(QColor(150, 150, 150))
-            p.setBrush(c)
-            p.drawRoundedRect(cell, 4, 4)
-            if c == PICK_COLOR:
-                p.setPen(self.accent)
-                p.setBrush(Qt.BrushStyle.NoBrush)
-                p.drawRoundedRect(cell.adjusted(-2, -2, 2, 2), 5, 5)
+        PALETTE.paint(p, self._palette_origin, e, border=self.border,
+                      card=self.card, accent=self.accent)
 
     def _paint_dropdown(self, p, e):
-        anchor = self.familybox.mapTo(self, QPointF(0, 0))
-        x = anchor.x()
-        y = anchor.y() + self.familybox.height() + 2
-        w = max(self.familybox.width(), 150)
-        rows = ["Microsoft YaHei UI", "KaiTi", "SimHei"]
-        rh = 28
-        rect = QRectF(x, y, w, (rh * len(rows) + 8) * e)
-        self._paint_panel_card(p, rect)
-        for i, name in enumerate(rows):
-            ry = y + 4 + i * rh
-            if i == 1:  # 高亮 KaiTi 行（光标落点）
-                p.setPen(Qt.PenStyle.NoPen)
-                p.setBrush(self.accent)
-                p.setOpacity(0.85 * e)
-                p.drawRoundedRect(QRectF(x + 3, ry, w - 6, rh), 3, 3)
-                p.setOpacity(1.0)
-            p.setPen(QColor(255, 255, 255) if i == 1 else self.fg)
-            p.drawText(QPointF(x + 12, ry + rh * 0.68), name)
-        p.setOpacity(e)
+        fb = widget_scene_rect(self, self.familybox)
+        DROPDOWN.paint(p, fb.topLeft(), fb.height(), fb.width(), e,
+                       border=self.border, card=self.card, accent=self.accent,
+                       fg=self.fg)
 
 
 # ── CLI ──────────────────────────────────────────────────────────
@@ -542,6 +533,9 @@ def main():
     for key in keys:
         try:
             scene = SCENES[key]()
+            # 注入实测 DPR：字幕/裁切共用的取整口径依赖它（args.dpr 只是
+            # 请求值，实际每屏 DPR 以 devicePixelRatio 为准）
+            scene._dpr = dpr
             scene.ensurePolished()
             app.processEvents()
             frames = iter_frames(

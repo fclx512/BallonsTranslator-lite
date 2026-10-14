@@ -419,6 +419,23 @@ def _help_anim_path(anim_key: str) -> str:
     return osp.join(HELP_ANIM_DIR, f"{anim_key}.webp")
 
 
+def _get_help_anim_scene_count() -> int:
+    """动态获取演示动画场景数量（消除硬编码「7」）。
+
+    延迟导入避免循环依赖；失败回退到 7（兜底，理论上不会触发）。
+    """
+    try:
+        import sys
+        import os.path as osp
+        script_dir = osp.join(PROGRAM_PATH, "scripts")
+        if script_dir not in sys.path:
+            sys.path.insert(0, script_dir)
+        from gen_help_anim import get_scene_count
+        return get_scene_count()
+    except Exception:
+        return 7  # 回退默认值
+
+
 class ConfigNotePopup(QFrame):
     """Floating popup for ConfigSubBlock notes. Anchors to a ? button and
     auto-closes on focus loss via Qt.Popup flag. An optional demo animation
@@ -1515,9 +1532,9 @@ class ConfigPanel(Widget):
         # 备注演示动画重生成子进程（QProcess，见 on_regen_help_anim）
         self._help_anim_proc: QProcess | None = None
         self._help_anim_done = 0
-        # 场景总数从子进程 stdout 的 TOTAL 行解析（缺省回落 7）——
+        # 场景总数从子进程 stdout 的 TOTAL 行解析，兜底用场景表动态数量——
         # 新增弹层场景时状态条不再静默错
-        self._help_anim_total = 7
+        self._help_anim_total = _get_help_anim_scene_count()
         self._help_anim_stderr = ""
 
         # Right-hand side is now a page stack: each nav item switches a page
@@ -2980,16 +2997,21 @@ class ConfigPanel(Widget):
         proc = self._help_anim_proc
         if proc is not None and proc.state() != QProcess.ProcessState.NotRunning:
             return  # 防重复：已在生成中（按钮同时置灰）
+        count = _get_help_anim_scene_count()
         # 确认窗（D27 告知范式，同 ui/workbench_batch_view.py::_confirm）
         box = QMessageBox(self)
         box.setWindowTitle(self.tr("Regenerate demo animations"))
         box.setIcon(QMessageBox.Icon.Information)
-        box.setText(self.tr("Regenerate the 7 note demo animations now?"))
+        box.setText(
+            self.tr("Regenerate the {count} note demo animations now?").format(
+                count=count
+            )
+        )
         box.setTextFormat(Qt.TextFormat.RichText)
         box.setInformativeText(
             self.tr(
-                "<p>The 7 animations will be re-rendered in the background using this machine's screen scaling and system fonts and written to the local override folder, which takes priority for display. It takes a few dozen seconds and progress is printed to the terminal; note popups opened afterwards use the new animations.</p>"
-            )
+                "<p>The {count} animations will be re-rendered in the background using this machine's screen scaling and system fonts and written to the local override folder, which takes priority for display. It takes a few dozen seconds and progress is printed to the terminal; note popups opened afterwards use the new animations.</p>"
+            ).format(count=count)
         )
         box.addButton(QMessageBox.StandardButton.Ok).setText(self.tr("Run"))
         box.addButton(QMessageBox.StandardButton.Cancel)
@@ -3004,7 +3026,7 @@ class ConfigPanel(Widget):
         proc.finished.connect(self._on_help_anim_finished)
         self._help_anim_proc = proc
         self._help_anim_done = 0
-        self._help_anim_total = 7
+        self._help_anim_total = count  # 已在上面获取
         self._help_anim_stderr = ""
         self.regen_help_anim_btn.setEnabled(False)
         self.restore_help_anim_btn.setEnabled(False)
