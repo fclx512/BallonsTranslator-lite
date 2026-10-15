@@ -530,6 +530,7 @@ class MainWindow(mainwindow_cls):
         self.glossary_workbench.setVisible(False)
         self.glossary_workbench.jump_requested.connect(self.on_workbench_jump)
         self.glossary_workbench.action_requested.connect(self.on_workbench_action)
+        self.glossary_workbench.revision_requested.connect(self.on_revision_requested)
         self.glossary_workbench.rollback_requested.connect(
             self.on_workbench_rollback
         )
@@ -677,6 +678,10 @@ class MainWindow(mainwindow_cls):
         mainVBoxLayout = QVBoxLayout(self)
         mainVBoxLayout.addWidget(self.titleBar)
         mainVBoxLayout.addLayout(mainHLayout)
+        # 管线进度不做底部状态条：改为盖在画布区的覆盖层，随任务起落
+        # （见 ui/pipeline_tasks.py、ui/pipeline_progress_overlay.py）
+        from .pipeline_tasks import PipelineTasks
+        self.pipeline_tasks = PipelineTasks(self)
         mainVBoxLayout.addWidget(self.bottomBar)
         margin = mainVBoxLayout.contentsMargins()
         self.main_margin = margin
@@ -1117,6 +1122,8 @@ class MainWindow(mainwindow_cls):
     def start_block_action(
         self, action_id: str, blkitem, hint: str = ""
     ) -> None:
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         action = ACTION_REGISTRY.get(action_id)
         if action is None or self.blockActionRunner.is_busy():
             return
@@ -1777,6 +1784,8 @@ class MainWindow(mainwindow_cls):
     _IMG_EXTS = frozenset({".bmp", ".jpg", ".png", ".jpeg", ".webp", ".jxl"})
 
     def OpenProj(self, proj_path: str):
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         if osp.isdir(proj_path):
             self.openDir(proj_path)
         elif osp.splitext(proj_path)[1].lower() in self._IMG_EXTS:
@@ -1785,6 +1794,8 @@ class MainWindow(mainwindow_cls):
             self.openJsonProj(proj_path)
 
     def openDir(self, directory: str):
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         try:
             self.opening_dir = True
 
@@ -1874,6 +1885,8 @@ class MainWindow(mainwindow_cls):
             self.OpenProj(directory)
 
     def openImages(self, filepaths: List[str]):
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         """Create a temp project from dragged/opened image files.
 
         If a project is already open, this is a no-op — users must close the
@@ -1904,6 +1917,8 @@ class MainWindow(mainwindow_cls):
         self.leftBar.updateRecentProjList(work_dir)
 
     def saveProjectAs(self):
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         """Save the current project to a new location (Ctrl+Shift+S).
 
         Copies the entire project directory (images, JSON, mask/, inpainted/,
@@ -1969,6 +1984,8 @@ class MainWindow(mainwindow_cls):
             self.canvas._update_hint_visibility()
 
     def openJsonProj(self, json_path: str):
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         try:
             self.opening_dir = True
             self.imgtrans_proj.load_from_json(json_path)
@@ -2065,6 +2082,11 @@ class MainWindow(mainwindow_cls):
         pcfg.show_page_list = setup
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.busy():
+            self.pipeline_tasks.close_when_done = True
+            self.pipeline_tasks.cancel()
+            event.ignore()
+            return
         # Pending numeric transform edits are not dirty until they commit;
         # resolve them before the close-time dirty check.
         self.st_manager.formatpanel.resolve_text_transform_edits_for_save()
@@ -3392,6 +3414,8 @@ class MainWindow(mainwindow_cls):
         self.setRegionRedetectMode(self.bottomBar.redetectChecker.isChecked())
 
     def setRegionRedetectMode(self, enabled: bool):
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         """开关「区域再检测」模式：同步底部栏开关与画布状态。
 
         该模式下画布左键拉框＝框选待重检测区域（不是橡皮筋多选）。只在文本框
@@ -3717,6 +3741,8 @@ class MainWindow(mainwindow_cls):
         # Source / target now come from the bottom bar submenu or from the run
         # dialog.  The dialog is modal, so the two can never be live at once:
         # the only mirror that matters is the bottom bar's own submenu.
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         sender = self.sender()
         text = sender.currentText()
         translator = self.module_manager.translator
@@ -3730,6 +3756,8 @@ class MainWindow(mainwindow_cls):
             src_selector.blockSignals(False)
 
     def on_trans_tgt_changed(self):
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         sender = self.sender()
         text = sender.currentText()
         translator = self.module_manager.translator
@@ -3787,6 +3815,8 @@ class MainWindow(mainwindow_cls):
         return {"options": options, "current": str(profile.get("model") or "")}
 
     def on_trans_model_changed(self, model: str):
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         """Write a model picked in the bottom-bar submenu back to the profile.
 
         The translator re-reads the profile per request, so the next
@@ -3814,6 +3844,8 @@ class MainWindow(mainwindow_cls):
             tgt_selector.setCurrentText(module)
 
     def on_transpagebtn_pressed(self, run_target: bool):
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         page_key = self.imgtrans_proj.current_img
         if page_key is None:
             return
@@ -3827,6 +3859,8 @@ class MainWindow(mainwindow_cls):
 
     def translateBlkitemList(self, blkitem_list: List, mode: int) -> bool:
 
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         tgt_img = self.imgtrans_proj.img_array
         if tgt_img is None:
             return False
@@ -3882,6 +3916,10 @@ class MainWindow(mainwindow_cls):
         也不冒险：覆盖管线线程、四个"切换模块"线程、区域再检测的后台检测线程。
         画布 AI 修图走管线线程，已被第一条覆盖。
         """
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.busy():
+            return True
+        if getattr(self, "blockActionRunner", None) and self.blockActionRunner.is_busy():
+            return True
         manager = getattr(self, "module_manager", None)
         if manager is not None:
             for name in (
@@ -4215,6 +4253,8 @@ class MainWindow(mainwindow_cls):
             dialog.refresh_module_selector_status()
 
     def run_imgtrans(self):
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         num_pages = self.imgtrans_proj.num_pages
         if num_pages == 0:
             return
@@ -4228,6 +4268,8 @@ class MainWindow(mainwindow_cls):
         dialog = RunPipelineDialog(
             self,
             page_names=page_names,
+            progress_codes=[self.imgtrans_proj._image_info.get(name, {}).get("finish_code", 0)
+                            for name in page_names],
             # 区间轨上的完成度：哪几页已经跑完（页级 finish_code 位与）
             finished_pages=[
                 bool(self.imgtrans_proj.get_page_progress(name))
@@ -4235,7 +4277,6 @@ class MainWindow(mainwindow_cls):
             ],
         )
         self._run_dialog = dialog
-        dialog.stage_toggled.connect(self.on_enable_module)
         dialog.module_selected.connect(self.on_run_module_selected)
         dialog.translate_source_changed.connect(self.on_trans_src_changed)
         dialog.translate_target_changed.connect(self.on_trans_tgt_changed)
@@ -4248,6 +4289,10 @@ class MainWindow(mainwindow_cls):
         render_mode = dialog.is_render_only()
         page_filter = dialog.page_filter()
         wo_update = dialog.run_without_textstyle_update()
+        task_mode = dialog.task_mode()
+        overwrite = dialog.overwrite_cb.isChecked()
+        selected_stages = {stage: activator.button.isChecked()
+                           for stage, activator in dialog._stage_activators.items()}
         dialog.deleteLater()
 
         # The glossary path was committed to pcfg while browsing, so it stays
@@ -4258,6 +4303,9 @@ class MainWindow(mainwindow_cls):
         if render_mode:
             self.run_imgtrans_render_only(page_filter)
             return
+
+        for stage, enabled in selected_stages.items():
+            self.on_enable_module(stage, enabled)
 
         if wo_update:
             self._run_imgtrans_wo_textstyle_update = True
@@ -4310,7 +4358,8 @@ class MainWindow(mainwindow_cls):
                 return
 
         if (
-            not self.imgtrans_proj.is_all_pages_no_text
+            pcfg.module.enable_detect
+            and not self.imgtrans_proj.is_all_pages_no_text
             and not pcfg.module.keep_exist_textlines
         ):
             msgBox = QMessageBox(self)
@@ -4325,7 +4374,7 @@ class MainWindow(mainwindow_cls):
 
             if msgBox.clickedButton() == cancel_btn:
                 return
-        self.on_run_imgtrans(page_filter=page_filter)
+        self.pipeline_tasks.start(task_mode, page_filter, overwrite=overwrite)
 
     def _sync_run_dialog_translator(self, dialog) -> None:
         """Seed the run dialog's language selectors from the loaded translator."""
@@ -4353,6 +4402,8 @@ class MainWindow(mainwindow_cls):
         selector.setSelectedValue(module_name, block_signals=False)
 
     def run_imgtrans_render_only(self, page_filter=None) -> None:
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         """Iterate the selected pages, render and save each, then restore."""
         orig_page = self.imgtrans_proj.current_img
         orig_save = self.save_on_page_changed
@@ -4412,6 +4463,8 @@ class MainWindow(mainwindow_cls):
         subprocess.Popen([sys.executable, tool_path])
 
     def on_run_imgtrans(self, page_filter=None):
+        if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
+            return
         self.backup_blkstyles.clear()
 
         if self.bottomBar.textblockChecker.isChecked():
@@ -4701,6 +4754,9 @@ class MainWindow(mainwindow_cls):
         except Exception as e:
             LOGGER.error(f"rollback toast failed: {e}")
         self._ask_rerender_dirty_pages()
+
+    def on_revision_requested(self, targets, hint):
+        self.pipeline_tasks.start("revise", list(targets), targets=targets, hint=hint)
 
     def on_workbench_jump(self, pagename: str, block_idx: int):
         """工作台队列 → 画布跳转（规划 D26）。

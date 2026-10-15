@@ -102,6 +102,7 @@ class ReviewQueueView(QWidget):
     # (页名, 块下标, 动作 id)：**直接打开**该块对应的框级确认卡（交接 §4.2 ③⑥：
     # 「跳画布」与「打开同一张原文校对卡／重译卡」是两条并列出口）
     action_requested = Signal(str, int, str)
+    revision_requested = Signal(object, str)
     preview_requested = Signal(object, str)  # (QPixmap | None, 标题)
     preview_dismissed = Signal()
     notify_requested = Signal(str, str)  # (文案, kind)
@@ -189,7 +190,30 @@ class ReviewQueueView(QWidget):
             self._section_by_id[spec.id] = widgets
         # 多分区同屏：分段各自按内容高（见 _fit_table），余量留在最下方，
         # 不让每个分区的表都去平分页面高度（那会在行下方留出大片空白）
+        if task.action_id == "act_retranslate":
+            from ui.custom_widget import ConfigLineEdit
+            self.revision_hint = ConfigLineEdit()
+            self.revision_hint.setPlaceholderText(self.tr("Revision instructions (optional)"))
+            layout.addWidget(self.revision_hint)
+            self.revision_btn = QPushButton(self.tr("Generate revisions for selected rows"))
+            self.revision_btn.setEnabled(False)
+            self.revision_btn.clicked.connect(self._generate_revisions)
+            layout.addWidget(self.revision_btn)
         layout.addStretch(1)
+
+    def _generate_revisions(self):
+        if not self._stale_label.isHidden():
+            self.notify_requested.emit(self._stale_label.text(), "warning")
+            return
+        targets = {}
+        for section in self._sections:
+            for row in section.rows:
+                if row.checked and row.block_index is not None:
+                    indexes = targets.setdefault(row.pagename, [])
+                    if row.block_index not in indexes:
+                        indexes.append(row.block_index)
+        if targets:
+            self.revision_requested.emit(targets, self.revision_hint.text().strip())
 
     # ── 面板用的读取口 ──────────────────────────────────────────────
 
@@ -324,6 +348,11 @@ class ReviewQueueView(QWidget):
         has_row = self._current_row(widgets.spec.id) is not None
         widgets.jump_btn.setEnabled(has_row)
         widgets.process_btn.setEnabled(has_row)
+        if hasattr(self, "revision_btn"):
+            count = sum(row.checked and row.block_index is not None
+                        for section in self._sections for row in section.rows)
+            self.revision_btn.setEnabled(count > 0)
+            self.revision_btn.setText(self.tr("Generate revisions for selected rows") + f" ({count})")
 
     def _on_section_action(self, section_id: str):
         rows = self._action_rows(section_id)

@@ -239,13 +239,17 @@ def test_loop_partial_submit_demands_missing():
     chat = ScriptedChat(
         [
             (_Message(tool_calls=[submit_call("a", {"1": "你好"})]), 10),
+            (_Message(tool_calls=[submit_call("invalid", {"1": "wrong", "3": "foreign"})]), 10),
             (_Message(tool_calls=[submit_call("b", {"2": "世界"})]), 10),
         ]
     )
-    result, _ = _run(chat)
+    result, _ = _run(chat, strict_ids=True)
     assert result == {1: "你好", 2: "世界"}
     tool_msg = [m for m in chat.calls[1]["messages"] if m["role"] == "tool"][0]
     assert json.loads(tool_msg["content"])["missing_ids"] == [2]
+    rejected = [m for m in chat.calls[2]["messages"] if m["role"] == "tool"][-1]
+    assert json.loads(rejected["content"])["missing_ids"] == [2]
+    assert "error" in json.loads(rejected["content"])
 
 
 def test_loop_forced_convergence_on_turn_exhaustion():

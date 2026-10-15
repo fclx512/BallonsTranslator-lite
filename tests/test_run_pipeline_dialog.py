@@ -178,7 +178,7 @@ class RunPipelineDialogTest(unittest.TestCase):
             for i in range(page_layout.count())
             if isinstance(page_layout.itemAt(i).widget(), QLabel)
         ]
-        self.assertEqual(strays, [])
+        self.assertEqual(strays, [self.dialog.task_hint])
 
     # ── page range / modes ───────────────────────────────────────────
 
@@ -214,6 +214,42 @@ class RunPipelineDialogTest(unittest.TestCase):
         bar = dialog.page_range.range_bar
         self.assertEqual(bar.finished_pages, finished)
         self.assertEqual(bar.finished_count, 5)
+
+    def test_task_modes_limit_stages_and_filter_progress(self):
+        from utils.config import RunStatus
+        dialog = self.Dialog(None, page_names=PAGE_NAMES,
+                             progress_codes=[RunStatus.FIN_TRANSLATE] * len(PAGE_NAMES))
+        for mode, expected in (("translate", {self.STAGE_TRANSLATE}),
+                               ("inpaint", {self.STAGE_INPAINT}),
+                               ("recognize", {self.STAGE_DETECT, self.STAGE_OCR})):
+            dialog.task_combo.setCurrentIndex(dialog.task_combo.findData(mode))
+            self.assertEqual(dialog.task_mode(), mode)
+            for stage, activator in dialog._stage_activators.items():
+                self.assertEqual(activator.isVisibleTo(dialog), stage in expected)
+                self.assertEqual(activator.button.isChecked(), stage in expected)
+            self.assertEqual(dialog.overwrite_cb.isVisibleTo(dialog), mode == "translate")
+            self.assertEqual(dialog.page_range.range_bar.finished_count,
+                             len(PAGE_NAMES) if mode == "translate" else 0)
+        dialog._stage_activators[self.STAGE_DETECT].button.setChecked(False)
+        self.assertTrue(dialog.run_btn.isEnabled())
+        dialog._stage_activators[self.STAGE_OCR].button.setChecked(False)
+        self.assertFalse(dialog.run_btn.isEnabled())
+        dialog.tab_bar.setCurrentIndex(1)
+        self.assertTrue(dialog.run_btn.isEnabled())
+
+    def test_mainwindow_passes_raw_stage_codes(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock, patch
+        from ui.mainwindow import MainWindow
+        from utils.config import RunStatus
+        project = SimpleNamespace(num_pages=2, pages={"a.png": [], "b.png": []},
+                                  _image_info={"a.png": {"finish_code": RunStatus.FIN_ALL}},
+                                  get_page_progress=Mock(return_value=True))
+        window = SimpleNamespace(imgtrans_proj=project, refresh_module_selector_status=Mock())
+        with patch("ui.run_pipeline_dialog.RunPipelineDialog", side_effect=ValueError("captured")) as dialog:
+            with self.assertRaisesRegex(ValueError, "captured"):
+                MainWindow.run_imgtrans(window)
+        self.assertEqual(dialog.call_args.kwargs["progress_codes"], [RunStatus.FIN_ALL, 0])
 
     def test_render_only_tab(self):
         self.assertFalse(self.dialog.is_render_only())

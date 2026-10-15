@@ -65,6 +65,7 @@ def _handle_submission(
     source_map=None,
     glossary_terms=(),
     warned_ids,
+    strict_ids=False,
 ) -> Tuple[Dict[str, Any], bool]:
     """校验并吸收一次提交。返回 (tool 结果, 是否收齐)。
 
@@ -77,12 +78,14 @@ def _handle_submission(
         source_map=source_map,
         glossary_terms=glossary_terms,
         warned_ids=frozenset(warned_ids),
+        strict_ids=strict_ids,
     )
     if accepted is None:
         for rid in rejected_ids:
             # 整单被拒也要移除警告轮残留的旧条目(否则缺失检查误判已覆盖)
             translations.pop(rid, None)
-        return {"error": feedback or "Invalid submission."}, False
+        return {"error": feedback or "Invalid submission.",
+                "missing_ids": sorted(valid_ids - set(translations))}, False
     translations.update(accepted)
     warned_ids.update(newly_warned)
     for rid in rejected_ids:
@@ -118,16 +121,18 @@ def run_agent_task(
     max_turns: int = 8,
     token_budget: int = 0,
     cancel_check: Optional[Callable[[], bool]] = None,
-    status_cb: Optional[Callable[[int, List[str], Optional[int]], None]] = None,
+    status_cb: Optional[Callable[[int, List[str], Optional[int], int, int], None]] = None,
     source_map: Optional[Dict[int, str]] = None,
     glossary_terms: Sequence = (),
     log: Optional[Callable[[str], None]] = None,
+    strict_ids: bool = False,
 ) -> Dict[int, str]:
     """跑一个 agent 翻译任务,返回 {id: 译文}(可能部分完成,由调用方补漏)。
 
     chat(messages, tools, tool_choice) -> (message, usage_total);
     execute_tool_fn(name, arguments) -> dict(只读工具;抛 ToolError 回给模型);
-    status_cb(turn, tool_names, usage_total) 每轮回调一次(不黑盒,供 UI/日志);
+    status_cb(turn, tool_names, usage_total, covered, total) 每轮回调一次
+    (不黑盒,供 UI/日志;covered 是本轮已接受的译文条数,进度条靠它);
     source_map 为 {id: 原文}(译文=原文/术语残留校验用);glossary_terms 为
     [(src, dst)] 命中术语对。
     """
@@ -187,7 +192,13 @@ def run_agent_task(
         call_names = [tc.function.name for tc in tool_calls]
         _log(f"[agent] turn {turns}: {call_names if call_names else 'text only'}")
         if status_cb:
-            status_cb(turns, call_names, usage)
+            try:
+                status_cb(turns, call_names, usage, len(translations), len(src_list))
+            except TypeError:
+                # 兼容仍使用旧三参数协议的调用方，状态上报不应中断翻译。
+                status_cb(turns, call_names, usage)
+        if cancel_check and cancel_check():
+            raise AgentTaskCancelled("Agent translation cancelled after response.")
 
         if not tool_calls:
             if force:
@@ -237,6 +248,7 @@ def run_agent_task(
                     source_map=source_map,
                     glossary_terms=glossary_terms,
                     warned_ids=warned_ids,
+                    strict_ids=strict_ids,
                 )
                 _append_tool_result(messages, tc.id, result)
                 finished = finished or finished_now

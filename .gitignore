@@ -98,3 +98,6 @@ config/help_anims_local/
 # 动画/探针等验证中间产物
 build/
 scripts/probes/out/
+/out/pipeline-tasks-*/
+/.tmp_text_mask_probe/
+/.tmp_overlay_shot/

@@ -1087,6 +1087,33 @@ QDialog QCheckBox::indicator:disabled {
     background-color: @emptyContentBackgroundColor;
 }
 
+/* Checkable items in dialogs (e.g. model list batch editor): same look as
+   QDialog QCheckBox::indicator — without this the native indicator renders
+   cramped and clipped inside QListWidget rows. */
+QDialog QListView::indicator {
+    width: 13px;
+    height: 13px;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    background-color: @inputBackgroundColor;
+    margin-left: 4px;
+}
+
+QDialog QListView::indicator:hover {
+    border: 1px solid @accentPrimary;
+}
+
+QDialog QListView::indicator:checked {
+    border: 1px solid @borderColor;
+    background-color: @inputBackgroundColor;
+    image: url(icons/checkbox_checked.svg);
+}
+
+QDialog QListView::indicator:disabled {
+    border: 1px solid @borderColor;
+    background-color: @emptyContentBackgroundColor;
+}
+
 QPushButton#minBtn {
     border-radius: 0px;
     background-color: rgba(0, 0, 0, 0);
@@ -2788,6 +2815,21 @@ QLabel#LLMProfileName {
     background: transparent;
 }
 
+/* 名称就地改名的输入框容器与输入框本身透明 */
+QWidget#LLMProfileNameEdit {
+    background: transparent;
+}
+
+/* 可用性状态点：绿=可发请求，灰=缺字段（usable 属性驱动） */
+QLabel#LLMProfileStatusDot {
+    border-radius: 4px;
+    background-color: @disabledForegroundColor;
+}
+
+QLabel#LLMProfileStatusDot[usable="true"] {
+    background-color: @successColor;
+}
+
 /* 「使用」按钮：未激活低调描边，激活态用主题色底标出当前 profile */
 QPushButton#LLMProfileUseButton {
     font-size: 11px;
@@ -2826,7 +2868,8 @@ QLabel#LLMProfileKeyStatusIcon {
 QToolButton#LLMProfileConfigButton,
 QToolButton#LLMProfileDeleteButton,
 QToolButton#LLMProfileModelAddButton,
-QToolButton#LLMProfileModelRemoveButton {
+QToolButton#LLMProfileModelRemoveButton,
+QToolButton#LLMProfileModelManageButton {
     border: none;
     background: transparent;
     padding: 0px;
@@ -2835,7 +2878,8 @@ QToolButton#LLMProfileModelRemoveButton {
 QToolButton#LLMProfileConfigButton:hover,
 QToolButton#LLMProfileDeleteButton:hover,
 QToolButton#LLMProfileModelAddButton:hover,
-QToolButton#LLMProfileModelRemoveButton:hover {
+QToolButton#LLMProfileModelRemoveButton:hover,
+QToolButton#LLMProfileModelManageButton:hover {
     background-color: @hoverBackgroundColor;
     border-radius: 4px;
 }
@@ -3025,4 +3069,181 @@ PageRangeSpinBox::down-button {
     width: 0px;
     height: 0px;
     border: none;
+}
+
+/* ── 管线运行进度覆盖层：盖住画布区的模态进度卡片 ──────────────────
+   in-window 浮层（同 WorkbenchPreviewPanel / RailDockPanel 的做法），
+   视觉语言也沿用那一套：1px 细描边 + 层次靠底色深浅（不投阴影）。
+   遮罩本身画半透明底压暗画布，面板在中间做实体卡片。
+   阶段状态一律走 [state="..."] 动态属性选择器（改属性后须 unpolish/polish），
+   四种态：waiting 灰 / running 强调色 / done 绿 / error 红。 */
+QWidget#PipelineProgressOverlay {
+    background-color: rgba(0, 0, 0, 0.62);
+}
+
+PipelineProgressPanel {
+    background: @widgetBackgroundColor;
+    border: 1px solid @borderColor;
+    border-radius: 8px;
+}
+
+/* 超出宽限期转警示：整块面板换描边与标题色，比只改一行小字显眼 */
+PipelineProgressPanel[state="warning"] {
+    border: 1px solid @warningColor;
+}
+
+QLabel#PipelineProgressTitle {
+    background: transparent;  /* 不声明会盖成调色板窗口色，遮住卡片底色 */
+    color: @qwidgetForegroundColor;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+PipelineProgressPanel[state="warning"] QLabel#PipelineProgressTitle {
+    color: @warningColor;
+}
+
+QLabel#PipelineProgressPage {
+    background: transparent;
+    color: @disabledForegroundColor;
+    font-size: 11px;
+}
+
+/* 阶段行：靠一层浅底与面板本体分层，不加边框（行内已经有图标与进度条） */
+PipelineStageCard {
+    background: @emptyContentBackgroundColor;
+    border: none;
+    border-radius: 5px;
+}
+
+QLabel#PipelineStageIcon {
+    background: transparent;
+    color: @disabledForegroundColor;
+    font-size: 12px;
+}
+
+PipelineStageCard[state="running"] QLabel#PipelineStageIcon {
+    color: @accentPrimary;
+}
+
+PipelineStageCard[state="done"] QLabel#PipelineStageIcon {
+    color: @successColor;
+}
+
+PipelineStageCard[state="error"] QLabel#PipelineStageIcon {
+    color: @dangerColor;
+}
+
+QLabel#PipelineStageTitle {
+    background: transparent;
+    color: @qwidgetForegroundColor;
+    font-size: 12px;
+}
+
+QLabel#PipelineStageStatus {
+    background: transparent;
+    color: @disabledForegroundColor;
+    font-size: 11px;
+}
+
+PipelineStageCard[state="running"] QLabel#PipelineStageStatus {
+    color: @accentPrimary;
+}
+
+PipelineStageCard[state="done"] QLabel#PipelineStageStatus {
+    color: @successColor;
+}
+
+PipelineStageCard[state="error"] QLabel#PipelineStageStatus {
+    color: @dangerColor;
+}
+
+QLabel#PipelineStageSummary,
+QLabel#PipelineStageDetails {
+    background: transparent;
+    color: @disabledForegroundColor;
+    font-size: 11px;
+}
+
+QLabel#PipelineStageDetails {
+    color: @qwidgetForegroundColor;
+}
+
+/* 阶段进度条：全局 QProgressBar 规则把高度压到 3px、底色取描边色，
+   这里按 ID 覆盖回 4px —— 卡片里 3px 细得看不见 */
+QProgressBar#PipelineStageBar {
+    border: none;
+    border-radius: 2px;
+    max-height: 4px;
+    background-color: @borderColor;
+}
+
+QProgressBar#PipelineStageBar::chunk {
+    border-radius: 2px;
+    background-color: @accentPrimary;
+}
+
+/* 展开箭头：无框小三角，只做一个可点的提示 */
+QToolButton#PipelineStageExpand {
+    background: transparent;
+    border: none;
+    color: @disabledForegroundColor;
+    font-size: 10px;
+    min-height: 16px;
+    padding: 0px 2px;
+}
+
+QToolButton#PipelineStageExpand:hover {
+    color: @accentPrimary;
+}
+
+QFrame#PipelineProgressDivider {
+    background: @borderColor;
+    border: none;
+    max-height: 1px;
+}
+
+QLabel#PipelineProgressSummary {
+    background: transparent;
+    color: @disabledForegroundColor;
+    font-size: 11px;
+}
+
+QLabel#PipelineProgressNotice {
+    background: transparent;
+    color: @disabledForegroundColor;
+    font-size: 11px;
+}
+
+QLabel#PipelineProgressNotice[state="warning"] {
+    color: @warningColor;
+}
+
+/* 优雅停止：低调描边（默认动作，不抢视线） */
+QPushButton#PipelineStopGraceful {
+    height: 26px;
+    padding: 0px 14px;
+    font-size: 12px;
+}
+
+/* 强制停止：危险语义，常驻描边红字——它旁边就是要丢在途结果的后果说明，
+   长得和中性的"关闭"一样会让人误按 */
+QPushButton#PipelineStopForce {
+    height: 26px;
+    padding: 0px 14px;
+    font-size: 12px;
+    background: transparent;
+    color: @dangerColor;
+    border: 1px solid @dangerColor;
+}
+
+QPushButton#PipelineStopForce:hover {
+    background-color: @dangerColor;
+    color: @inverseTextColor;
+}
+
+QPushButton#PipelineStopForce:disabled {
+    background: transparent;
+    color: @disabledForegroundColor;
+    border: 1px solid @borderColor;
 }

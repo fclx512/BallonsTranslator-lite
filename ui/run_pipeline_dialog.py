@@ -270,6 +270,7 @@ class RunPipelineDialog(QDialog):
         *,
         page_names=None,
         finished_pages=None,
+        progress_codes=None,
         translator=None,
     ) -> None:
         super().__init__(parent)
@@ -278,6 +279,7 @@ class RunPipelineDialog(QDialog):
 
         self._page_names = list(page_names or [])
         self._finished_pages = list(finished_pages or [])
+        self._progress_codes = progress_codes
         self._stage_activators = {}
         self._stage_sections = {}
         self._stage_headers = {}
@@ -304,6 +306,9 @@ class RunPipelineDialog(QDialog):
         # The glossary path is committed straight to ``pcfg`` while browsing,
         # so it survives a Cancel — matching the old dialog's behaviour.
         self._refresh_stage_sections()
+        self.task_combo.currentIndexChanged.connect(self.activate_task_mode)
+        self.tab_bar.currentChanged.connect(self._refresh_run_button)
+        self.activate_task_mode()
         self._resize_to_fit()
 
     # ── Pipeline page ────────────────────────────────────────────────
@@ -315,7 +320,14 @@ class RunPipelineDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
-        layout.addWidget(self._section_divider(self.tr("Activate Modules")))
+        self.task_combo = ConfigComboBox()
+        self.task_combo.addItem(self.tr("Recognize source (Detection / OCR)"), "recognize")
+        self.task_combo.addItem(self.tr("Translate reviewed source"), "translate")
+        self.task_combo.addItem(self.tr("Repair images"), "inpaint")
+        layout.addWidget(self.task_combo)
+        self.task_hint = QLabel(self.tr("Review source and prepare context in the workbench before translating."))
+        self.task_hint.setWordWrap(True)
+        layout.addWidget(self.task_hint)
         layout.addWidget(self._build_stage_grid())
 
         self.range_frame = self._build_page_range()
@@ -330,9 +342,37 @@ class RunPipelineDialog(QDialog):
             builder(layout)
 
         self.wo_update_cb = ConfigCheckBox(self.tr("Run without update textstyle"))
-        layout.addWidget(self.wo_update_cb)
+        self.wo_update_cb.hide()
+        self.overwrite_cb = ConfigCheckBox(self.tr("Replace existing translations"))
+        layout.addWidget(self.overwrite_cb)
         layout.addStretch(1)
         return page
+
+    def task_mode(self):
+        return self.task_combo.currentData()
+
+    def activate_task_mode(self, *_):
+        allowed = {"recognize": {STAGE_DETECT, STAGE_OCR},
+                   "translate": {STAGE_TRANSLATE}, "inpaint": {STAGE_INPAINT}}[self.task_mode()]
+        for stage, activator in self._stage_activators.items():
+            activator.setVisible(stage in allowed)
+            activator.button.setChecked(stage in allowed)
+            self.stage_toggled.emit(stage, stage in allowed)
+        self.overwrite_cb.setVisible(self.task_mode() == "translate")
+        self._refresh_stage_sections()
+        self._refresh_run_button()
+
+    def _refresh_run_button(self, *_):
+        self.run_btn.setEnabled(self.is_render_only() or any(a.button.isChecked() for a in self._stage_activators.values()))
+        if self._progress_codes is not None:
+            from utils.config import RunStatus
+            bits = {STAGE_DETECT: RunStatus.FIN_DET, STAGE_OCR: RunStatus.FIN_OCR,
+                    STAGE_TRANSLATE: RunStatus.FIN_TRANSLATE, STAGE_INPAINT: RunStatus.FIN_INPAINT}
+            wanted = 0
+            for stage, activator in self._stage_activators.items():
+                if activator.button.isChecked():
+                    wanted |= bits[stage]
+            self.page_range.set_finished_pages([bool(wanted) and code & wanted == wanted for code in self._progress_codes])
 
     def _build_stage_grid(self) -> QWidget:
         frame = QFrame()
@@ -496,7 +536,7 @@ class RunPipelineDialog(QDialog):
     def _on_stage_toggled(self, stage: int, checked: bool) -> None:
         self.stage_toggled.emit(stage, checked)
         self._refresh_stage_sections()
-        self.run_btn.setEnabled(not pcfg.module.all_stages_disabled())
+        self._refresh_run_button()
 
     # ── Stage options ────────────────────────────────────────────────
 

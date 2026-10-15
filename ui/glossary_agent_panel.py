@@ -1038,6 +1038,7 @@ class GlossaryAgentPanel(QWidget):
     jump_requested = Signal(str, int)
     # 待办队列 → 直接开框级确认卡（交接 §4.2③⑥：与「跳画布」并列的第二条出口）
     action_requested = Signal(str, int, str)
+    revision_requested = Signal(object, str)
     # 撤回最近一次批量操作（D4／D35：整体一条撤回）
     rollback_requested = Signal(int)
 
@@ -1171,6 +1172,7 @@ class GlossaryAgentPanel(QWidget):
                 lambda text, tid=task_id: self._append_log(text, tid)
             )
             view.action_requested.connect(self.action_requested)
+            view.revision_requested.connect(self.revision_requested)
             view.preview_requested.connect(self._on_preview_requested)
             view.preview_dismissed.connect(self._on_preview_dismissed)
             view.plan_changed.connect(self._refresh_nav_counts)
@@ -1187,15 +1189,11 @@ class GlossaryAgentPanel(QWidget):
         """
         from ui.workbench_palette import FgPalettePage
 
-        self._palette_view = FgPalettePage(
-            self._proj, refresh_canvas=self._refresh_canvas_after_write
-        )
+        self._palette_view = FgPalettePage(self._proj)
         self._palette_view.notify_requested.connect(self._toast)
         # 取样开关 → 画布取色模式（真正的取样发生在画布上）；开关被拒绝时
         # 由 set_palette_sampling 回灌 set_sampling_state(False) + toast 原因。
         self._palette_view.sampling_toggled.connect(self.set_palette_sampling)
-        # 候选/样本 → 跳画布：直接转发面板已有的 jump_requested（W3 用）
-        self._palette_view.jump_requested.connect(self.jump_requested)
         self.pages.addWidget(self._palette_view)
         self._page_indices[FG_PALETTE] = self.pages.count() - 1
 
@@ -1482,24 +1480,6 @@ class GlossaryAgentPanel(QWidget):
             except Exception as error:  # 画布未就绪时不该打断队列操作
                 logger.error(f"Failed to mark project dirty: {error}")
 
-    def _refresh_canvas_after_write(self):
-        """数据侧写回后刷新画布当前页（取色调板重取色注入给页面的回调）。
-
-        画布未就绪时静默跳过：重取色本身不依赖画布，刷新只是即时反馈。
-        """
-        window = self._mainwindow()
-        canvas = getattr(window, "canvas", None)
-        st_manager = getattr(window, "st_manager", None)
-        if canvas is not None:
-            try:
-                canvas.updateCanvas()
-            except Exception as error:
-                logger.error(f"Failed to refresh canvas after palette write: {error}")
-        if st_manager is not None:
-            try:
-                st_manager.updateSceneTextitems()
-            except Exception as error:
-                logger.error(f"Failed to rebuild scene text after palette write: {error}")
 
     # ── 取色调板：画布取色模式接线（W1）─────────────────────────
 

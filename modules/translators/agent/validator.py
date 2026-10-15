@@ -87,6 +87,7 @@ def validate_submission(
     source_map: Optional[Dict[int, str]] = None,
     glossary_terms: Sequence = (),
     warned_ids: FrozenSet[int] = frozenset(),
+    strict_ids: bool = False,
 ) -> Tuple[Optional[Dict[int, str]], Optional[str], List[str], List[int], List[int]]:
     """校验一次 submit_translations 提交。
 
@@ -111,6 +112,7 @@ def validate_submission(
     residue_warned: List[int] = []
     residue_rejected: List[int] = []
     newly_warned: List[int] = []
+    seen_ids = set()
 
     for raw_id, raw_text in items:
         try:
@@ -121,6 +123,9 @@ def validate_submission(
         if block_id not in valid_ids:
             invalid_ids.append(str(raw_id))
             continue
+        if strict_ids and (block_id in seen_ids or not isinstance(raw_text, str)):
+            return None, "Duplicate id or non-string translation; resubmit the task IDs exactly once.", [], [], []
+        seen_ids.add(block_id)
         text = clean_translation(raw_text)
         if not text:
             empty_ids.append(block_id)
@@ -148,6 +153,8 @@ def validate_submission(
                 residue_warned.append(block_id)
         translations[block_id] = text
 
+    if strict_ids and invalid_ids:
+        return None, "Out-of-task IDs are forbidden; resubmit only the task IDs.", [], [], []
     problems = []
     if invalid_ids:
         shown = [str(i) for i in invalid_ids[:10]]

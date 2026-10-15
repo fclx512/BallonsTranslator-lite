@@ -7016,6 +7016,34 @@ Check the log above for details.</source>
             <source>Request responses with the translation JSON schema. Disable if the provider rejects it.</source>
             <translation>请求按翻译 JSON schema 返回。若提供方拒绝则关闭。</translation>
         </message>
+        <message>
+            <source>API key</source>
+            <translation>API 密钥</translation>
+        </message>
+        <message>
+            <source>Double-click to rename</source>
+            <translation>双击改名</translation>
+        </message>
+        <message>
+            <source>Ready to send requests.</source>
+            <translation>可正常发起请求。</translation>
+        </message>
+        <message>
+            <source>host</source>
+            <translation>主机地址</translation>
+        </message>
+        <message>
+            <source>model</source>
+            <translation>模型</translation>
+        </message>
+        <message>
+            <source>Edit image model list</source>
+            <translation>编辑图像模型清单</translation>
+        </message>
+        <message>
+            <source>Edit model list</source>
+            <translation>编辑模型清单</translation>
+        </message>
     </context>
     <context>
         <name>LLMProfileListWidget</name>
@@ -7047,6 +7075,14 @@ Check the log above for details.</source>
             <source>Restored</source>
             <translation>已恢复</translation>
         </message>
+        <message>
+            <source>It is currently the active profile; the default will be cleared.</source>
+            <translation>它是当前激活的配置文件，默认项将被清空。</translation>
+        </message>
+        <message>
+            <source>Rename Profile</source>
+            <translation>重命名配置文件</translation>
+        </message>
     </context>
     <context>
         <name>LLMProfileDetailsWidget</name>
@@ -7061,11 +7097,6 @@ Check the log above for details.</source>
     </context>
     <context>
         <name>RunPipelineDialog</name>
-        <message>
-            <location filename="..\ui\run_pipeline_dialog.py" />
-            <source>Activate Modules</source>
-            <translation>启用模块</translation>
-        </message>
         <message>
             <location filename="..\ui\run_pipeline_dialog.py" />
             <source>All</source>
@@ -7217,6 +7248,26 @@ No pipeline stages will be executed.</source>
             <location filename="..\ui\run_pipeline_dialog.py" />
             <source>plain</source>
             <translation>直译</translation>
+        </message>
+        <message>
+            <source>Recognize source (Detection / OCR)</source>
+            <translation>识别原文（检测 / OCR）</translation>
+        </message>
+        <message>
+            <source>Repair images</source>
+            <translation>修复图片</translation>
+        </message>
+        <message>
+            <source>Replace existing translations</source>
+            <translation>覆盖已有译文</translation>
+        </message>
+        <message>
+            <source>Review source and prepare context in the workbench before translating.</source>
+            <translation>翻译前，请先校对原文，并在工作台准备术语和剧情。</translation>
+        </message>
+        <message>
+            <source>Translate reviewed source</source>
+            <translation>翻译已校对原文</translation>
         </message>
     </context>
     <context>
@@ -7831,8 +7882,8 @@ No pipeline stages will be executed.</source>
             <translation>这里是你记下要校对的块，以及 OCR 报出的低置信度块。这里不删框、也不改文字：到画布上打开该块校对，处理完把记录移除即可。下面的建议只是提示，可以忽略。</translation>
         </message>
         <message>
-            <source>Blocks you recorded for retranslation later. Nothing here is rewritten: open a block on the canvas and use the retranslate card, then remove the record once you are done.</source>
-            <translation>这里是你记下稍后重译的块。这里不改写任何内容：到画布上打开该块用重译卡处理，处理完把记录移除即可。</translation>
+            <source>Blocks you recorded for retranslation later. Open a block's retranslate card, or check rows below to generate candidates. Review and apply each change yourself.</source>
+            <translation>这里是你记下稍后重译的块。可打开单框重译卡，也可勾选下面的条目生成候选；每项修改都由你审阅后应用。</translation>
         </message>
         <message>
             <source>Ignore suggestion</source>
@@ -7887,8 +7938,8 @@ No pipeline stages will be executed.</source>
             <translation>移除记录只清掉这条笔记，忽略建议只表示已看过。两者都不会删框、不会改原文或译文，也不会清掉手写字/拟声词这类翻译指示。</translation>
         </message>
         <message>
-            <source>Removing a record only clears your note. It changes no text and starts no retranslation — that happens on the canvas, one block at a time.</source>
-            <translation>移除记录只清掉这条笔记：不改文字，也不会开始重译——重译在画布上逐块进行。</translation>
+            <source>Removing a record only clears your note. Generating candidates leaves the current text unchanged until you apply a revision.</source>
+            <translation>移除记录只清掉这条笔记。生成候选不会改动当前文字，只有点「应用此修改」才写回。</translation>
         </message>
         <message>
             <source>Retranslate</source>
@@ -8233,6 +8284,14 @@ Configure a mirror in Settings → Network &amp; Mirror Settings, then download 
             <source>Switch to the row's page and select its block on the canvas.</source>
             <translation>切换到该行所在页，并在画布上选中对应块。</translation>
         </message>
+        <message>
+            <source>Generate revisions for selected rows</source>
+            <translation>为所选项生成重译候选</translation>
+        </message>
+        <message>
+            <source>Revision instructions (optional)</source>
+            <translation>补充重译要求（可选）</translation>
+        </message>
     </context>
     <context>
         <name>TextAppearancePanel</name>
@@ -8267,40 +8326,12 @@ Configure a mirror in Settings → Network &amp; Mirror Settings, then download 
             <translation>页面图加载失败：%1</translation>
         </message>
         <message>
-            <source>No blocks updated (nothing passed the confidence gate).</source>
-            <translation>没有块被更新（没有块过置信度闸）。</translation>
-        </message>
-        <message>
-            <source>Re-extract Current Page</source>
-            <translation>重取当前页颜色</translation>
-        </message>
-        <message>
-            <source>Re-extract Whole Book</source>
-            <translation>重取整本颜色</translation>
-        </message>
-        <message>
-            <source>Re-extract refills existing blocks' font colors from the source image (palette colors take priority).</source>
-            <translation>重取色会按原图重算已有块的字体颜色（调板色优先）。</translation>
-        </message>
-        <message>
-            <source>Re-extracted font colors for %1/%2 blocks</source>
-            <translation>已按调板重取 %1/%2 块的字体颜色</translation>
-        </message>
-        <message>
             <source>Removed %1; the color was used by %2 block(s)</source>
             <translation>已移除 %1；该颜色此前被 %2 个块使用</translation>
         </message>
         <message>
             <source>added to palette as %1 (%2 colors)</source>
             <translation>已加入调板：%1（共 %2 色）</translation>
-        </message>
-        <message>
-            <source>Click a text glyph on the canvas to sample its color. Pages keep sampling while the mode is on (use the canvas page shortcuts), and Esc turns it off. The palette is saved with the project; auto color extraction snaps to the nearest palette color. Each color gets a placeholder name you can replace with the character's name — tagged colors are injected to the translator as speaker hints.</source>
-            <translation>在画布上点击文字笔画即可取色。取色模式开着时翻页仍可取色（用画布的翻页快捷键），按 Esc 退出。调板随项目保存；自动取色会按最近原则吸附到调板色。每个颜色先得到占位名，你可以把它改成角色名——标了角色的颜色会作为说话人线索注入翻译器。</translation>
-        </message>
-        <message>
-            <source>No colors yet. Turn on sampling and click text on the canvas. Each sampled color gets a placeholder name (A, B, …) for speaker hints.</source>
-            <translation>还没有颜色。打开取样开关，在画布上点击文字即可取色。每个取到的颜色先得到占位名（A、B、…），供说话人线索使用。</translation>
         </message>
         <message>
             <source>Sample on Canvas</source>
@@ -8319,87 +8350,12 @@ Configure a mirror in Settings → Network &amp; Mirror Settings, then download 
             <translation>打开取色开关，然后在画布上点击文字笔画</translation>
         </message>
         <message>
-            <source>%1 blocks scanned, %2 with a color; %3 colors found</source>
-            <translation>共 %1 块，其中 %2 块已取到颜色；发现 %3 种颜色</translation>
+            <source>No colors yet. Turn on sampling and click text on the canvas.</source>
+            <translation>还没有颜色。打开取样开关，在画布上点击文字即可取色。</translation>
         </message>
         <message>
-            <source>(%1 more color(s) appear only once)</source>
-            <translation>（另有 %1 种仅出现 1 次）</translation>
-        </message>
-        <message>
-            <source>Add Checked to Palette</source>
-            <translation>勾选的加入调板</translation>
-        </message>
-        <message>
-            <source>Added %1 color(s) to the palette. To align already-extracted block colors, run "Re-extract Whole Book".</source>
-            <translation>已加入 %1 个颜色；要让已提取的块颜色对齐调板，点「重新取色（整本）」。</translation>
-        </message>
-        <message>
-            <source>Candidate color changed to %1</source>
-            <translation>候选色已改为 %1</translation>
-        </message>
-        <message>
-            <source>Click a text glyph on the canvas to replace the candidate's color; Esc stops sampling</source>
-            <translation>在画布上点字形替换该候选色；按 Esc 停止取样</translation>
-        </message>
-        <message>
-            <source>List the text colors already extracted on blocks across the book. Suggestions only — nothing is added to the palette until you tick colors and apply.</source>
-            <translation>列出全书块上已提取的文字色。只是建议——勾选并应用之前不会写入调板。</translation>
-        </message>
-        <message>
-            <source>No project pages to scan.</source>
-            <translation>没有可扫描的项目页面。</translation>
-        </message>
-        <message>
-            <source>Sampling… (recolor candidate)</source>
-            <translation>取样中…（改候选色）</translation>
-        </message>
-        <message>
-            <source>Scan Book Colors</source>
-            <translation>扫描全书文字色</translation>
-        </message>
-        <message>
-            <source>Scan the book to see which text colors already exist on blocks. Candidates are suggestions — check the ones that are really text and add them; nothing is written before that.</source>
-            <translation>扫描全书，看块上已有哪些文字色。候选只是建议——确认是文字色的才勾选并加入；在此之前不写任何数据。</translation>
-        </message>
-        <message>
-            <source>Select None</source>
-            <translation>全不选</translation>
-        </message>
-        <message>
-            <source>Show colors that appear only once</source>
-            <translation>显示仅出现 1 次的颜色</translation>
-        </message>
-    </context>
-    <context>
-        <name>_CandidateRow</name>
-        <message>
-            <source>%1 block(s)</source>
-            <translation>%1 块</translation>
-        </message>
-        <message>
-            <source>Jump to this block</source>
-            <translation>跳到该块</translation>
-        </message>
-        <message>
-            <source>No displayable area</source>
-            <translation>无可显示区域</translation>
-        </message>
-        <message>
-            <source>Recolor</source>
-            <translation>改色</translation>
-        </message>
-        <message>
-            <source>Sample a glyph on the canvas to replace this candidate's color (no new palette entry).</source>
-            <translation>在画布上点字形替换该候选色（不追加新调板条目）。</translation>
-        </message>
-        <message>
-            <source>Within the palette snap distance; nothing to add.</source>
-            <translation>在调板吸附距离内，无需再加入。</translation>
-        </message>
-        <message>
-            <source>[In palette]</source>
-            <translation>[已在调板]</translation>
+            <source>Turn sampling on, then click text on the canvas to pick its color (Esc stops). Colors are saved with the project; rename a color to a character name to send it to the translator as a speaker hint.</source>
+            <translation>打开取样开关后，在画布上点击文字即可取色（按 Esc 退出）。调板随项目保存；把颜色改成角色名，它会作为说话人线索发给翻译器。</translation>
         </message>
     </context>
     <context>
@@ -8411,6 +8367,313 @@ Configure a mirror in Settings → Network &amp; Mirror Settings, then download 
         <message>
             <source>Not installed on this system</source>
             <translation>本机未安装</translation>
+        </message>
+    </context>
+    <context>
+        <name>OCRConfigPanel</name>
+        <message>
+            <source>Manage…</source>
+            <translation>管理…</translation>
+        </message>
+    </context>
+    <context>
+        <name>_ModelListEditDialog</name>
+        <message>
+            <source>Add models, separate multiple entries with commas or spaces</source>
+            <translation>添加模型，多个用逗号或空格分隔</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>取消</translation>
+        </message>
+        <message>
+            <source>Check All</source>
+            <translation>全部保留</translation>
+        </message>
+        <message>
+            <source>Current model</source>
+            <translation>当前模型</translation>
+        </message>
+        <message>
+            <source>OK</source>
+            <translation>确定</translation>
+        </message>
+        <message>
+            <source>Search...</source>
+            <translation>搜索…</translation>
+        </message>
+        <message>
+            <source>Uncheck All</source>
+            <translation>全不保留</translation>
+        </message>
+    </context>
+    <context>
+        <name>PipelineTasks</name>
+        <message>
+            <source>A required module is not ready. Select it in Settings and retry.</source>
+            <translation>所需模块尚未就绪，请在设置中选择模块后重试。</translation>
+        </message>
+        <message>
+            <source>Apply revision</source>
+            <translation>应用此修改</translation>
+        </message>
+        <message>
+            <source>Cancelled</source>
+            <translation>已取消</translation>
+        </message>
+        <message>
+            <source>Edited during the task; rerun this page: </source>
+            <translation>运行中有编辑，已保留当前内容，请重跑此页：</translation>
+        </message>
+        <message>
+            <source>Images could not be saved. Fix the save error before starting.</source>
+            <translation>图片未能保存，请先解决保存错误再运行。</translation>
+        </message>
+        <message>
+            <source>Keep original</source>
+            <translation>保留原译</translation>
+        </message>
+        <message>
+            <source>Review revision</source>
+            <translation>审阅重译候选</translation>
+        </message>
+        <message>
+            <source>Review revisions</source>
+            <translation>审阅重译候选</translation>
+        </message>
+        <message>
+            <source>Task finished</source>
+            <translation>任务已结束</translation>
+        </message>
+        <message>
+            <source>This block changed. Keep the current text and generate a new revision.</source>
+            <translation>此框已被修改，请保留当前内容并重新生成候选。</translation>
+        </message>
+        <message>
+            <source>Wait for the current background task to finish.</source>
+            <translation>请等待当前后台任务结束。</translation>
+        </message>
+        <message>
+            <source>Current translation</source>
+            <translation>当前译文</translation>
+        </message>
+        <message>
+            <source>Data and canvas are out of sync.</source>
+            <translation>项目数据与画布不同步。</translation>
+        </message>
+        <message>
+            <source>Proposed translation (editable)</source>
+            <translation>重译候选（可编辑）</translation>
+        </message>
+        <message>
+            <source>%1 blocks processed</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>%1 blocks translated</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>%1 s</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>%1 text boxes</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>&lt;b&gt;Round %1&lt;/b&gt;</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Blocks accepted: %1/%2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Blocks done: %1/%2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Close</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Could not start</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Detecting text regions...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Done</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Elapsed: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>End program</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Errors: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Force stop</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Keep waiting</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Mode: non-thinking request (DeepSeek)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Pages saved: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Recognizing text (0/%1)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Recognizing text...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Rejected pages: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Rendering...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Repair finished</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Repairing image...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Round %1 · %2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Saved page result: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Saving page result...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Skipped: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Tokens reported: %1; requests without usage: %2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Tokens used: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Tools: %1</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Translating (%1/%2 blocks)</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Translating...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Waiting on the model: %1 s</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Working...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>waiting for the model</source>
+            <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
+        <name>PipelineProgressPanel</name>
+        <message>
+            <source>Force stop</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Image repair</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>No response</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>OCR</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Page %1 of %2</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Render result</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Running</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Stop</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Stopping</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Stopping...</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Text detection</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Translation</source>
+            <translation type="unfinished" />
+        </message>
+    </context>
+    <context>
+        <name>StageProgressCard</name>
+        <message>
+            <source>Done</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Failed</source>
+            <translation type="unfinished" />
+        </message>
+        <message>
+            <source>Waiting</source>
+            <translation type="unfinished" />
         </message>
     </context>
 </TS>

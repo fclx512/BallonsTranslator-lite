@@ -1,9 +1,13 @@
-"""说话人调板（调板角色标注 → 翻译注入 speaker hints）回归。
+"""说话人调板（人工取样 → 调板角色标注 → 翻译注入 speaker hints）回归。
 
 覆盖方案评估（2026-10-03 拍板 v2）钉的会动契约：
 - 旧裸三元组宽进（载入即补占位名）与占位名删除不复用（fg_palette_seq 持久化）；
 - 落盘口径：role 空不落键、空调板不落键；
-- 注入三态：有角色 / 无角色 / 多色一角色，及 build_user_task_message 小节组装。
+- 注入三态：有角色 / 无角色 / 多色一角色，及 build_user_task_message 小节组装；
+- 人工取样路径：画布取色入板 + 判重、换项目页图缓存作废、画布侧状态回流。
+
+候选扫描（全书扫描 → 候选 → 勾选入库）已随页面收敛移除（2026-10-15），
+只针对它的用例一并删除。
 
 Run:
     ./ballontrans_pylibs_win/python.exe -m pytest tests/test_fg_palette_roles.py -q
@@ -249,7 +253,7 @@ class PalettePageUiTest(unittest.TestCase):
 
         ``ui/workbench_tasks.py::PageImageCache`` 只按页名索引，而主窗口是
         **同一个 ProjImgTrans 原地换项目**（``refresh_project_state``）：
-        不随项目作废的话，取样色与候选缩略图都拿旧项目的图，且不报任何错。
+        不随项目作废的话，取样色会拿旧项目的图，且不报任何错。
         """
         page = self._page()
         page.accept_canvas_sample("a.png", 12, 12)
@@ -328,135 +332,6 @@ class PalettePageUiTest(unittest.TestCase):
         page.set_sampling_state(False)
         self.assertFalse(page.sample_btn.isChecked())
         self.assertEqual(seen, [])
-
-
-class PaletteCandidateTest(unittest.TestCase):
-    """全书扫描 → 候选 → 勾选入调板 / 改色路由（草稿态、不落项目 JSON）。
-
-    只钉会动的契约：勾选才入库且占位名续号、已在调板者禁勾不入库、单次色
-    默认隐藏（关掉时不可见行不得被带走）、改色只改候选不追加条目。
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        cls.app = QApplication.instance() or QApplication([])
-
-    def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
-        self.proj_dir = self._tmp.name
-        img = np.full((200, 200, 3), 240, np.uint8)
-        img[10:40, 10:60] = [200, 30, 30]
-        img[60:90, 10:60] = [210, 40, 40]
-        img[120:150, 10:60] = [30, 200, 30]
-        cv2.imwrite(osp.join(self.proj_dir, "a.png"), img)
-        self.proj = ProjImgTrans(directory=self.proj_dir)
-
-        def blk(fg, xyxy):
-            b = TextBlock(xyxy=list(xyxy), text="こんにちは")
-            b.fg_colors = list(fg)
-            return b
-
-        self.proj.pages["a.png"] = [
-            blk([200, 30, 30], (10, 10, 60, 40)),
-            blk([200, 30, 30], (10, 60, 60, 90)),  # 与上同色 → 2 块
-            blk([30, 200, 30], (10, 120, 60, 150)),  # 单次色
-        ]
-        self.proj._image_info = {"a.png": {"width": 200, "height": 200}}
-        self.proj.save()
-        self.proj.set_current_img("a.png")
-
-    def tearDown(self):
-        self._tmp.cleanup()
-
-    def _page(self):
-        from ui.workbench_palette import FgPalettePage
-
-        page = FgPalettePage(self.proj)
-        self.notifies = []
-        self.jumps = []
-        page.notify_requested.connect(
-            lambda text, kind: self.notifies.append((text, kind))
-        )
-        page.jump_requested.connect(
-            lambda pagename, index: self.jumps.append((pagename, index))
-        )
-        return page
-
-    def test_scan_hides_singletons_then_apply_adds_checked(self):
-        page = self._page()
-        page._on_scan_colors()
-        # 两条候选：2 块的主色 + 单次色；单次色默认不显示
-        self.assertEqual([c["rgb"] for c in page._candidates], [[200, 30, 30], [30, 200, 30]])
-        self.assertEqual(len(page._candidate_rows), 1)
-        self.assertIn("1 colors found", page._summary_label.text())
-        self.assertIn("appear only once", page._summary_label.text())
-
-        page._candidate_rows[0].check.setChecked(True)
-        self.assertTrue(page._add_checked_btn.isEnabled())
-        page._on_add_checked()
-        self.assertEqual(self.proj.fg_palette[0]["rgb"], [200, 30, 30])
-        self.assertEqual(self.proj.fg_palette[0]["role"], palette_seq_to_name(1))
-        # 入库后候选保留并标「已在调板」（复选框禁勾）
-        self.assertTrue(page._candidates[0]["in_palette"])
-        self.assertTrue(page._candidate_rows[0].check.isEnabled() is False)
-        self.assertIn("Re-extract Whole Book", self.notifies[-1][0])
-        # 落盘往返：占位名序号落在项目里（删除不复用的前提）
-        fresh = ProjImgTrans(directory=self.proj_dir)
-        self.assertEqual(fresh.fg_palette[0]["role"], palette_seq_to_name(1))
-        self.assertEqual(fresh.fg_palette_seq, 1)
-        # 候选本身不进项目 JSON
-        self.assertNotIn("candidates", self.proj.to_dict())
-
-    def test_singleton_toggle_hides_and_unchecks(self):
-        page = self._page()
-        page._on_scan_colors()
-        self.assertEqual(len(page._candidate_rows), 1)
-        page._singleton_check.setChecked(True)
-        self.assertEqual(len(page._candidate_rows), 2)
-        self.assertNotIn("appear only once", page._summary_label.text())
-        # 勾上单次色后再关掉显示：不可见的行不能被「应用」带走
-        page._candidate_rows[1].check.setChecked(True)
-        self.assertTrue(page._candidates[1]["checked"])
-        page._singleton_check.setChecked(False)
-        self.assertFalse(page._candidates[1]["checked"])
-        self.assertEqual(len(page._candidate_rows), 1)
-
-    def test_existing_palette_colour_is_blocked(self):
-        self.proj.fg_palette = [{"rgb": [200, 30, 30], "role": "A"}]
-        page = self._page()
-        page._on_scan_colors()
-        self.assertTrue(page._candidates[0]["in_palette"])
-        self.assertFalse(page._candidate_rows[0].check.isEnabled())
-        # 即便被强制勾上，入库也要跳过「已在调板」的候选
-        page._candidates[0]["checked"] = True
-        page._on_add_checked()
-        self.assertEqual(len(self.proj.fg_palette), 1)
-
-    def test_recolor_target_updates_candidate_not_palette(self):
-        page = self._page()
-        page._on_scan_colors()
-        seen = []
-        page.sampling_toggled.connect(seen.append)
-        page.set_sample_target(0)
-        self.assertTrue(page.sample_btn.isChecked())
-        self.assertEqual(seen, [True])  # 走既有 sampling_toggled 链路武装画布
-        page.accept_canvas_sample("a.png", 15, 125)  # 绿色像素
-        self.assertEqual(page._candidates[0]["rgb"], [30, 200, 30])
-        self.assertEqual(self.proj.fg_palette, [])  # 改色不追加条目
-        self.assertIsNone(page._sample_target)  # 目标一次性
-        # 目标清掉后，下一次取样回到「追加新条目」的既有语义
-        page.accept_canvas_sample("a.png", 15, 125)
-        self.assertEqual(self.proj.fg_palette[0]["rgb"], [30, 200, 30])
-
-    def test_sample_thumbnail_jumps_to_block(self):
-        from ui.workbench_palette import _SampleThumb
-
-        page = self._page()
-        page._on_scan_colors()
-        thumbs = page._candidate_rows[0].findChildren(_SampleThumb)
-        self.assertTrue(thumbs)  # 有真实裁剪证据（经共享 PageImageCache 裁出）
-        thumbs[0].clicked.emit()
-        self.assertEqual(self.jumps, [("a.png", 0)])
 
 
 class PagePixelFromSceneTest(unittest.TestCase):

@@ -743,6 +743,8 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
 
 
 class InpaintConfigPanel(ModuleConfigParseWidget):
+    navigate_to_llm_profile = Signal()
+
     def __init__(
         self, module_name: str, scrollWidget: QWidget = None, *args, **kwargs
     ) -> None:
@@ -783,6 +785,8 @@ class TextDetectConfigPanel(ModuleConfigParseWidget):
 
 
 class OCRConfigPanel(ModuleConfigParseWidget):
+    navigate_to_llm_profile = Signal()
+
     def __init__(
         self, module_name: str, scrollWidget: QWidget = None, *args, **kwargs
     ) -> None:
@@ -791,3 +795,17 @@ class OCRConfigPanel(ModuleConfigParseWidget):
         )
         self.ocr_changed = self.module_changed
         self.setOCR = self.setModule
+
+        # llm_ocr 模块参数里有 profile 选择器；在它旁边放一个「Manage…」
+        # 入口，跳到 LLM Profile 卡片页（与翻译面板同一约定）。
+        self._manage_btn = QPushButton(self.tr("Manage…"))
+        self._manage_btn.setObjectName("ConfigButton")
+        self._manage_btn.clicked.connect(self.navigate_to_llm_profile.emit)
+        self._manage_btn.setVisible(False)
+        # 放到模块下拉那一行的右侧
+        self.p_layout.insertWidget(self.p_layout.indexOf(self.module_combobox) + 1, self._manage_btn)
+
+    def updateModuleParamWidget(self):
+        super().updateModuleParamWidget()
+        params = self.module_dict.get(self.module_combobox.currentText())
+        self._manage_btn.setVisible(bool(params and "profile" in params))

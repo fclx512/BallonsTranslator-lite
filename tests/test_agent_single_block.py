@@ -202,6 +202,40 @@ def test_config_default_and_validation():
     assert cfg.single_blk_translate_mode == SingleBlkTranslateMode.Context
 
 
+def test_selection_uses_full_budget_strict_ids_and_next_page(monkeypatch, trans):
+    from utils.textblock import TextBlock
+    source = TextBlock(text=["こんにちは"])
+    following = TextBlock(text=["次のページ"])
+    project = SimpleNamespace(pages={"p1": [source], "p2": [following]}, fg_palette=[])
+    captured = {}
+    def fake_run(chat, execute, src_list, **kwargs):
+        captured.update(kwargs)
+        return {1: "你好"}
+    monkeypatch.setattr(trans_agent, "run_agent_task", fake_run)
+    assert trans.translate_selection_with_context([source], project=project, page_key="p1") == ["你好"]
+    assert captured["max_turns"] == int(trans.get_param_value("agent_max_turns"))
+    assert captured["strict_ids"] is True
+    assert "次のページ" in captured["user_message"]
+    assert not trans._selection_task
+
+
+def test_deepseek_compatibility_is_task_scoped(monkeypatch, trans):
+    monkeypatch.setattr(AgentTranslator, "_effective_api_host", property(lambda self: "https://api.deepseek.com"))
+    monkeypatch.setattr(trans, "_respect_delay", lambda: None)
+    calls = []
+    def create(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(usage=None, choices=[SimpleNamespace(
+            message=SimpleNamespace(content="ok", tool_calls=[]), finish_reason="stop")])
+    trans.client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    trans._selection_task = True
+    trans._agent_chat([], [], "auto")
+    assert calls[-1]["extra_body"]["thinking"] == {"type": "disabled"}
+    trans._selection_task = False
+    trans._agent_chat([], [], "auto")
+    assert "thinking" not in calls[-1].get("extra_body", {})
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

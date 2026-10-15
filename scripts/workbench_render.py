@@ -265,11 +265,6 @@ def main() -> int:
     for index, task_id in enumerate(WORKBENCH_ORDER, start=1):
         panel.nav.select(task_id)
         app.processEvents()
-        if task_id == FG_PALETTE:
-            # 候选区是「全书扫描」按钮点出来的，页面初始态是空的——不替用户
-            # 点一下，这张截图就看不到候选行的真实形态（缩略图/勾选/过滤开关）
-            panel._palette_view._on_scan_colors()
-            app.processEvents()
         _settle_animation(app)  # 导航 chip 展开到位再截图
         view = panel._batch_views.get(task_id) or panel._review_views.get(task_id)
         table = _first_table_with_rows(view)

@@ -103,6 +103,11 @@ class AgentTranslator(LLM_API_Translator):
         """取消信号:编排层请求停止当前 agent 任务(loop 每轮检查)。"""
         self._agent_cancel = True
 
+    def _check_task_cancel(self):
+        check = getattr(self, "_task_cancel_check", None)
+        if getattr(self, "_agent_cancel", False) or (check and check()):
+            raise AgentTaskCancelled("Translation cancelled")
+
     # --- 翻译入口(覆写:agent loop + 回退链) ---
 
     # 指示标签 → 逐块翻译指令（批次 D）：translate_textblk_lst 依此决定
@@ -230,6 +235,39 @@ class AgentTranslator(LLM_API_Translator):
             )
             return super().translate(text)
 
+    def translate_selection_with_context(
+        self, blocks, *, project, page_key, hint="", cancel_check=None,
+    ) -> List[str]:
+        """Bounded revision/batch task; incomplete submissions never fall back silently.
+
+        Only consecutive task IDs are writable. The frozen project's other
+        blocks remain read-only context, including the next page's original.
+        """
+        from utils.block_tags import directive_instructions
+        from utils.proj_imgtrans import speaker_hints_for_blocks
+
+        if cancel_check and cancel_check():
+            raise AgentTaskCancelled("Translation cancelled")
+        if not self.all_model_loaded():
+            self.load_model()
+        self._agent_cancel = False
+        self._task_cancel_check = cancel_check
+        self._selection_task = True
+        self._task_request_mode = "profile"
+        try:
+            translations = self._run_agent_task(
+                [block.get_text() for block in blocks], project=project,
+                page_key=page_key, selection_mode=True, hint=hint,
+                tag_instructions=[directive_instructions(block) for block in blocks],
+                speaker_hints=speaker_hints_for_blocks(blocks, project.fg_palette),
+            )
+            if set(translations) != set(range(1, len(blocks) + 1)):
+                raise RuntimeError("Incomplete translation submission; retry the failed page")
+            return [translations[i] for i in range(1, len(blocks) + 1)]
+        finally:
+            self._task_cancel_check = None
+            self._selection_task = False
+
     # --- agent 任务组装 ---
 
     def _run_agent_task(
@@ -242,6 +280,7 @@ class AgentTranslator(LLM_API_Translator):
         tag_instructions: Optional[List] = None,
         hint: str = "",
         speaker_hints: Optional[List] = None,
+        selection_mode: bool = False,
     ) -> Dict[int, str]:
         api_key = self._select_api_key()
         if not api_key:
@@ -295,10 +334,16 @@ class AgentTranslator(LLM_API_Translator):
                     pcfg.module.llm_prior_context_token_budget, synopsis
                 ),
             )
-        if block_mode and project is not None and page_key:
+        if (block_mode or selection_mode) and project is not None and page_key:
             page_ctx = build_page_context_snippet(project, page_key, exclude=src_list)
             if page_ctx:
                 history = "\n\n".join(s for s in (history, page_ctx) if s)
+            if selection_mode:
+                pages = list(project.pages)
+                next_index = pages.index(page_key) + 1
+                if next_index < len(pages):
+                    following = "\n".join(b.get_text() for b in project.pages[pages[next_index]])[:4000]
+                    history += "\n\nNext page original (read-only context; never submit these blocks):\n" + following
         user_message = build_user_task_message(
             src_list,
             page_label(project, page_key),
@@ -331,17 +376,26 @@ class AgentTranslator(LLM_API_Translator):
                 glossary_entries=glossary_entries,
             )
 
-        def _status(turn: int, tool_names, usage) -> None:
-            """每轮状态:转发 UI 回调 + 按开关写 debug 日志(阶段 5 F 类)。"""
+        def _status(turn: int, tool_names, usage, covered=0, total=0) -> None:
+            """每轮状态:转发 UI 回调 + 按开关写 debug 日志(阶段 5 F 类)。
+
+            ``covered``/``total`` 是本轮已接受的译文条数与该页目标条数——UI
+            的翻译进度条靠它们，不看这两项就只有一个转圈。
+            """
             if self._status_cb:
-                self._status_cb(page_key, turn, tool_names)
+                try:
+                    self._status_cb(page_key, turn, tool_names, usage, covered, total)
+                except TypeError:
+                    # 第三方/旧回调只收四个参数，别让状态上报把翻译打断
+                    self._status_cb(page_key, turn, tool_names, usage)
             if pcfg.module.agent_translation_debug_log:
                 from utils.debug_log import debug_logger
 
                 debug_logger.start()
                 debug_logger.write(
                     f"[agent] page={page_key} turn={turn} "
-                    f"tools={tool_names or 'text only'} tokens={usage}"
+                    f"tools={tool_names or 'text only'} tokens={usage} "
+                    f"covered={covered}/{total}"
                 )
 
         return run_agent_task(
@@ -354,8 +408,12 @@ class AgentTranslator(LLM_API_Translator):
             submit_tool_openai=submit_openai,
             max_turns=max_turns,
             token_budget=token_budget,
-            cancel_check=lambda: self._agent_cancel,
+            cancel_check=lambda: self._agent_cancel or bool(
+                getattr(self, "_task_cancel_check", None)
+                and self._task_cancel_check()
+            ),
             status_cb=_status,
+            strict_ids=selection_mode,
             source_map={i + 1: str(src) for i, src in enumerate(src_list)},
             glossary_terms=[
                 (e.source, e.translation) for e in matched_glossary
@@ -377,7 +435,9 @@ class AgentTranslator(LLM_API_Translator):
         """
         retry_attempt = 0
         while True:
+            self._check_task_cancel()
             self._respect_delay()
+            self._check_task_cancel()
             profile = self._active_profile
             api_args = {
                 "model": self._effective_model,
@@ -409,6 +469,18 @@ class AgentTranslator(LLM_API_Translator):
             presence_penalty = profile.get("presence_penalty")
             if presence_penalty:
                 api_args["presence_penalty"] = float(presence_penalty)
+
+            # The bounded task uses named-tool convergence. DeepSeek's
+            # thinking protocol requires a different round-trip contract;
+            # scope non-thinking compatibility to this task, never the profile.
+            from urllib.parse import urlparse
+            host = urlparse(self._effective_api_host).hostname or ""
+            if getattr(self, "_selection_task", False) and (host == "deepseek.com" or host.endswith(".deepseek.com")):
+                extra = dict(api_args.get("extra_body", {}))
+                extra["thinking"] = {"type": "disabled"}
+                api_args["extra_body"] = extra
+                api_args.pop("reasoning_effort", None)
+                self._task_request_mode = "deepseek_non_thinking"
 
             try:
                 response = self.client.chat.completions.create(**api_args)
@@ -450,7 +522,10 @@ class AgentTranslator(LLM_API_Translator):
                 )
                 if retry_attempt >= self.retry_attempts:
                     raise
-                time.sleep(self.retry_timeout)
+                until = time.monotonic() + self.retry_timeout
+                while time.monotonic() < until:
+                    self._check_task_cancel()
+                    time.sleep(min(0.1, max(0, until - time.monotonic())))
                 continue
             except Exception as e:
                 self.logger.error(f"API request failed: {e}")
@@ -464,6 +539,8 @@ class AgentTranslator(LLM_API_Translator):
                 usage_total = response.usage.total_tokens
                 self.token_count += response.usage.total_tokens
                 self.token_count_last = response.usage.total_tokens
+            if response.choices and getattr(response.choices[0], "finish_reason", None) == "length":
+                raise RuntimeError("Translation response was truncated; reduce the page scope or raise the output limit")
             message = (
                 response.choices[0].message
                 if response.choices and response.choices[0].message

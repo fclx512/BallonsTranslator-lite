@@ -1345,7 +1345,7 @@ class TransReviewTask(ReviewQueueTask):
         self.title = self.label
         self.hint = QCoreApplication.translate(
             "WorkbenchTasks",
-            "Blocks you recorded for retranslation later. Nothing here is rewritten: open a block on the canvas and use the retranslate card, then remove the record once you are done.",
+            "Blocks you recorded for retranslation later. Open a block's retranslate card, or check rows below to generate candidates. Review and apply each change yourself.",
         )
 
     def sections(self) -> Sequence[ReviewSection]:
@@ -1398,7 +1398,7 @@ class TransReviewTask(ReviewQueueTask):
     def detail_text(self) -> str:
         return QCoreApplication.translate(
             "WorkbenchTasks",
-            "Removing a record only clears your note. It changes no text and starts no retranslation — that happens on the canvas, one block at a time.",
+            "Removing a record only clears your note. Generating candidates leaves the current text unchanged until you apply a revision.",
         )
 
     def drop_record(self, section_id: str, blk) -> int:

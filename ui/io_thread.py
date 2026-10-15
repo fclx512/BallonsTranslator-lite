@@ -43,6 +43,7 @@ class ImgSaveThread(ThreadBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.im_save_list = []
+        self.failure_count = 0
 
     def saveImg(
         self,
@@ -75,6 +76,7 @@ class ImgSaveThread(ThreadBase):
             self.im_save_list.pop(0)
 
     def on_exec_failed(self):
+        self.failure_count += 1
         if len(self.im_save_list) > 0:
             self.im_save_list.pop(0)
             if len(self.im_save_list) == 0:

@@ -13,21 +13,28 @@
     ProfileDetailsWidget -> LLMProfileDetailsWidget
     CapabilityBadgeLabel -> LLMProfileBadge
 
-与上游的取舍：本版不做双击就地改名与右键菜单；模型选择是「摘要行下拉 +
-手动增删 + Fetch Models 多选添加」，但**不预置任何供应商模型表**（清单
-只由抓取或手填产生）。字段集合与消费者行为保持不变。
+与上游的取舍：本版不做右键菜单；名称支持双击就地改名（迁移引用键由
+``utils/profile_manager.py::rename_profile`` 负责）；模型选择是「摘要行下拉 +
+手动快速添加（支持一次粘贴多个，逗号/空白分隔）+ 清单批量编辑对话框
+（勾选保留 / 取消勾选删除）+ Fetch Models 多选添加」，但**不预置任何供应商
+模型表**（清单只由抓取或手填产生）。字段集合与消费者行为保持不变。
 """
 
 from typing import Dict, List, Optional, Tuple
+
+import re
 
 import httpx
 from qtpy.QtCore import QCoreApplication, Qt, Signal
 from qtpy.QtGui import QFontMetrics, QIcon
 from qtpy.QtWidgets import (
     QComboBox,
+    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -42,6 +49,7 @@ from ui.icon_rendering import render_svg_pixmap
 from ui.misc import get_theme_color, themed_icon_path
 from ui.module_parse_widgets import ParamWidget
 from utils.profile_manager import (
+    PLACEHOLDER_API_KEYS,
     SAMPLE_PROFILES,
     FilterableListDialog,
     NetWorker,
@@ -51,6 +59,7 @@ from utils.profile_manager import (
     load_profiles,
     probe_connection,
     probe_model_list,
+    profile_is_usable,
     remember_model_option,
     save_all_profiles,
     set_default_profile,
@@ -549,11 +558,118 @@ class LLMProfileDetailsWidget(QWidget):
             section.setVisible(bool(visible))
 
 
+def _split_model_names(text: str) -> List[str]:
+    """把一段输入拆成模型名：逗号 / 分号（含全角）与空白都算分隔符。
+
+    模型 ID 本身不含这些字符，粘贴 "gpt-4o, gpt-4o-mini" 这类多值串时
+    能一次性拆干净。
+    """
+    return [p for p in re.split(r"[,，;；\s]+", str(text or "").strip()) if p]
+
+
+class _ModelListEditDialog(QDialog):
+    """模型清单批量编辑：勾选=保留，取消勾选=删除；底部输入框批量添加。
+
+    打开时现有清单全部勾选、当前模型加粗；确认后按原始顺序输出保留项，
+    新添加的模型名追加在尾部。若当前模型被取消勾选，由调用方把当前值
+    落到保留项的首个。
+    """
+
+    def __init__(self, parent, title: str, options: List[str], current: str) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setMinimumSize(420, 480)
+        self._current = str(current or "")
+
+        layout = QVBoxLayout(self)
+
+        self._search = ConfigLineEdit(parent=self)
+        self._search.setPlaceholderText(self.tr("Search..."))
+        self._search.textChanged.connect(self._filter)
+        layout.addWidget(self._search)
+
+        self._list = QListWidget(self)
+        for name in [str(o) for o in options]:
+            item = QListWidgetItem(name)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked)
+            if name == self._current:
+                font = item.font()
+                font.setBold(True)
+                item.setFont(font)
+                item.setToolTip(self.tr("Current model"))
+            self._list.addItem(item)
+        layout.addWidget(self._list, 1)
+
+        toggle_row = QHBoxLayout()
+        check_all_btn = QPushButton(self.tr("Check All"), self)
+        check_all_btn.setObjectName("ConfigButton")
+        check_all_btn.clicked.connect(
+            lambda: self._set_all_checks(Qt.CheckState.Checked)
+        )
+        uncheck_all_btn = QPushButton(self.tr("Uncheck All"), self)
+        uncheck_all_btn.setObjectName("ConfigButton")
+        uncheck_all_btn.clicked.connect(
+            lambda: self._set_all_checks(Qt.CheckState.Unchecked)
+        )
+        toggle_row.addWidget(check_all_btn)
+        toggle_row.addWidget(uncheck_all_btn)
+        toggle_row.addStretch()
+        layout.addLayout(toggle_row)
+
+        self._add_edit = ConfigLineEdit(parent=self)
+        self._add_edit.setPlaceholderText(
+            self.tr("Add models, separate multiple entries with commas or spaces")
+        )
+        layout.addWidget(self._add_edit)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        ok_btn = QPushButton(self.tr("OK"), self)
+        ok_btn.clicked.connect(self.accept)
+        cancel_btn = QPushButton(self.tr("Cancel"), self)
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(ok_btn)
+        btn_row.addWidget(cancel_btn)
+        layout.addLayout(btn_row)
+
+        self._search.setFocus()
+
+    def _filter(self, text: str) -> None:
+        for i in range(self._list.count()):
+            item = self._list.item(i)
+            item.setHidden(
+                bool(text) and text.lower() not in item.text().lower()
+            )
+
+    def _set_all_checks(self, state: Qt.CheckState) -> None:
+        for i in range(self._list.count()):
+            self._list.item(i).setCheckState(state)
+
+    def kept_options(self) -> List[str]:
+        """确认后的清单：勾选保留项（原顺序）+ 输入框新增项（去重）。"""
+        kept = [
+            self._list.item(i).text()
+            for i in range(self._list.count())
+            if self._list.item(i).checkState() == Qt.CheckState.Checked
+        ]
+        for name in _split_model_names(self._add_edit.text()):
+            if name not in kept:
+                kept.append(name)
+        return kept
+
+    def kept_current(self, options: List[str]) -> str:
+        """当前模型仍在清单则保持，否则落到首个保留项。"""
+        if self._current in options:
+            return self._current
+        return options[0] if options else ""
+
+
 class _ModelSelector(QWidget):
-    """摘要行的模型选择器：下拉 + 手动添加 / 删除当前。
+    """摘要行的模型选择器：下拉 + 手动快速添加 / 删除当前 / 清单批量编辑。
 
     清单是 profile 自己的 ``model_options`` / ``image_model_options``，不预置
-    任何供应商模型名——只由 Fetch Models 多选或这里的 ``+`` 手填产生。
+    任何供应商模型名——只由 Fetch Models 多选、``+`` 手填或批量编辑对话框产生。
     """
 
     # (新的清单, 新的当前值)
@@ -565,12 +681,14 @@ class _ModelSelector(QWidget):
         placeholder: str,
         add_tip: str,
         remove_tip: str,
+        manage_tip: str,
         scrollWidget: Optional[QWidget] = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("LLMProfileModelRow")
         self._placeholder = placeholder
+        self._label_text = label
         self._editing = False
         self._previous = ""
 
@@ -609,7 +727,19 @@ class _ModelSelector(QWidget):
         self._remove_btn.setToolTip(remove_tip)
         self._remove_btn.clicked.connect(self._remove_current)
         layout.addWidget(self._remove_btn)
+
+        self._manage_btn = QToolButton(self)
+        self._manage_btn.setObjectName("LLMProfileModelManageButton")
+        self._manage_btn.setFixedSize(18, 18)
+        self._manage_btn.setIcon(QIcon(themed_icon_path("model_list.svg")))
+        self._manage_btn.setToolTip(manage_tip)
+        self._manage_btn.clicked.connect(self._open_list_editor)
+        layout.addWidget(self._manage_btn)
         layout.addStretch()
+        self._modal_runner = None
+
+    def set_modal_runner(self, runner) -> None:
+        self._modal_runner = runner
 
     # ── 状态 ──
 
@@ -625,18 +755,34 @@ class _ModelSelector(QWidget):
         try:
             self.combo.setEditable(False)
             self.combo.clear()
-            self.combo.addItems([str(o) for o in options])
-            current = str(current or "")
-            if current and self.combo.findText(current) < 0:
-                self.combo.addItem(current)
-            self.combo.setCurrentText(current)
+            options = [str(o) for o in options]
+            if options:
+                self._empty_guide = False
+                self.combo.addItems(options)
+                current = str(current or "")
+                if current and self.combo.findText(current) < 0:
+                    self.combo.addItem(current)
+                self.combo.setCurrentText(current)
+            else:
+                # 空清单给一条不可选的引导占位，避免下拉看起来「坏了」
+                self._empty_guide = True
+                self.combo.addItem(self._placeholder)
+                self.combo.model().item(0).setEnabled(False)
         finally:
             self.combo.blockSignals(False)
+
+    def current_options(self) -> List[str]:
+        if getattr(self, "_empty_guide", False):
+            return []
+        return self.options()
 
     # ── 交互 ──
 
     def _on_text_changed(self, text: str) -> None:
         if self._editing:
+            return
+        # 空清单的引导占位不可选，但若被程序化触发也不应写回
+        if getattr(self, "_empty_guide", False):
             return
         self.changed.emit(self.options(), str(text))
 
@@ -644,7 +790,7 @@ class _ModelSelector(QWidget):
         if self._editing:
             return
         self._editing = True
-        self._previous = self.combo.currentText()
+        self._previous = "" if getattr(self, "_empty_guide", False) else self.combo.currentText()
         self.combo.setEditable(True)
         editor = self.combo.lineEdit()
         if editor is None:
@@ -669,19 +815,47 @@ class _ModelSelector(QWidget):
         if editor is not None:
             editor.setPlaceholderText("")
         self.combo.setEditable(False)
-        if not text:
+        # 支持一次粘贴多个（逗号/空白分隔），全有效才动清单
+        names = _split_model_names(text)
+        if not names:
             self.combo.blockSignals(True)
             self.combo.setCurrentText(self._previous)
             self.combo.blockSignals(False)
             return
         self.combo.blockSignals(True)
-        if self.combo.findText(text) < 0:
-            self.combo.addItem(text)
-        self.combo.setCurrentText(text)
+        first_new = None
+        for name in names:
+            if self.combo.findText(name) < 0:
+                self.combo.addItem(name)
+                if first_new is None:
+                    first_new = name
+        self.combo.setCurrentText(first_new if first_new is not None else names[0])
         self.combo.blockSignals(False)
-        self.changed.emit(self.options(), text)
+        self.changed.emit(self.options(), self.combo.currentText())
+
+    def _open_list_editor(self) -> None:
+        """清单批量编辑：勾选保留 / 取消勾选删除 / 输入框批量添加。"""
+        if getattr(self, "_empty_guide", False):
+            options: List[str] = []
+            current = ""
+        else:
+            options = self.options()
+            current = self.combo.currentText()
+        dialog = _ModelListEditDialog(self, self._label_text, options, current)
+        if self._modal_runner is not None:
+            code = self._modal_runner(dialog)
+        else:
+            code = dialog.exec()
+        if code != QDialog.DialogCode.Accepted:
+            return
+        new_options = dialog.kept_options()
+        new_current = dialog.kept_current(new_options)
+        self.set_options(new_options, new_current)
+        self.changed.emit(self.options(), new_current)
 
     def _remove_current(self) -> None:
+        if getattr(self, "_empty_guide", False):
+            return
         current = self.combo.currentText()
         options = self.options()
         if current not in options:
@@ -693,12 +867,93 @@ class _ModelSelector(QWidget):
         self.changed.emit(self.options(), next_value)
 
 
+class _EditableNameLabel(QWidget):
+    """卡片标题的名称标签：双击就地改名。
+
+    常态是一个加粗 QLabel；双击（或卡片详情按钮）切成同行宽的
+    ``ConfigLineEdit``，回车 / 失焦提交，Esc 取消。提交统一走
+    ``rename_committed``（携带新名字），由外层列表做重名校验与落盘——
+    name 是引用键，迁移逻辑在 ``utils/profile_manager.py::rename_profile``。
+    """
+
+    rename_committed = Signal(str)
+    # 改名输入框弹出时，让外层把「重命名」提示暂时挪到输入框上
+    edit_started = Signal()
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("LLMProfileNameEdit")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        self._label = QLabel(self)
+        self._label.setObjectName("LLMProfileName")
+        self._edit = ConfigLineEdit(parent=self)
+        self._edit.setObjectName("LLMProfileNameLineEdit")
+        self._edit.setFixedHeight(24)
+        self._edit.hide()
+        layout.addWidget(self._label)
+        layout.addWidget(self._edit)
+        layout.addStretch()
+        self._edit.editingFinished.connect(self._commit)
+        self._committing = False
+
+    def text(self) -> str:
+        return self._label.text()
+
+    def setText(self, text: str) -> None:
+        self._label.setText(text or "")
+        if self._edit.isVisible():
+            self._edit.setText(text or "")
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.start_rename()
+        super().mouseDoubleClickEvent(event)
+
+    def start_rename(self) -> None:
+        if self._edit.isVisible():
+            return
+        self._edit.setText(self._label.text())
+        self._label.hide()
+        self._edit.show()
+        self._edit.setFocus()
+        self._edit.selectAll()
+        self.edit_started.emit()
+
+    def _commit(self) -> None:
+        if self._committing or not self._edit.isVisible():
+            return
+        self._committing = True
+        try:
+            new_name = self._edit.text().strip()
+            self._edit.hide()
+            self._label.show()
+            if new_name and new_name != self._label.text():
+                self.rename_committed.emit(new_name)
+        finally:
+            self._committing = False
+
+    def keyPressEvent(self, event) -> None:
+        if (
+            self._edit.isVisible()
+            and event.key() == Qt.Key.Key_Escape
+        ):
+            self._edit.blockSignals(True)
+            self._edit.hide()
+            self._edit.blockSignals(False)
+            self._label.show()
+            return
+        super().keyPressEvent(event)
+
+
 class LLMProfileCardWidget(QFrame):
     """单张 profile 卡片：折叠态摘要 + 展开态详情 + 能力徽章。"""
 
     persist_requested = Signal()
     delete_requested = Signal(str)
     use_requested = Signal(str)
+    rename_requested = Signal(str, str)  # (旧名, 新名)
 
     def __init__(
         self, profile: Dict, scrollWidget: Optional[QWidget] = None, parent=None
@@ -728,8 +983,14 @@ class LLMProfileCardWidget(QFrame):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(6)
-        self._name_label = QLabel(header)
-        self._name_label.setObjectName("LLMProfileName")
+        # 可用性状态点：绿=可发请求，灰=缺 host/model/key（复用解析层判据）。
+        self._status_dot = QLabel(header)
+        self._status_dot.setObjectName("LLMProfileStatusDot")
+        self._status_dot.setFixedSize(8, 8)
+        header_layout.addWidget(self._status_dot)
+        self._name_label = _EditableNameLabel(header)
+        self._name_label.rename_committed.connect(self._on_rename_committed)
+        self._name_label.setToolTip(self.tr("Double-click to rename"))
         header_layout.addWidget(self._name_label)
         # 「使用」= 记成全局激活的 profile（pcfg.module.default_profile）：
         # 翻译 / OCR / 修图的选择器默认跟随它，各自仍可单独覆盖。
@@ -811,6 +1072,7 @@ class LLMProfileCardWidget(QFrame):
             self.tr("Model name"),
             self.tr("Add model"),
             self.tr("Delete current model"),
+            self.tr("Edit model list"),
         )
         self._build_model_row(
             body,
@@ -819,6 +1081,7 @@ class LLMProfileCardWidget(QFrame):
             self.tr("Image model name"),
             self.tr("Add image model"),
             self.tr("Delete current image model"),
+            self.tr("Edit image model list"),
         )
 
         self._actions = self._build_actions()
@@ -833,12 +1096,14 @@ class LLMProfileCardWidget(QFrame):
         placeholder: str,
         add_tip: str,
         remove_tip: str,
+        manage_tip: str,
     ) -> None:
         selector = _ModelSelector(
             label,
             placeholder,
             add_tip,
             remove_tip,
+            manage_tip,
             scrollWidget=self._scrollWidget,
             parent=self,
         )
@@ -847,6 +1112,8 @@ class LLMProfileCardWidget(QFrame):
                 key, options, current
             )
         )
+        # 详情控件是惰性构建的，此时卡片已带上列表层传入的 modal runner
+        selector.set_modal_runner(self._exec_dialog)
         selector.combo.setToolTip(
             PROFILE_PARAM_DESCRIPTIONS.get(key, label) or label
         )
@@ -896,11 +1163,35 @@ class LLMProfileCardWidget(QFrame):
         self._sync_model_selectors()
         self._refresh_key_status()
         self._refresh_use_state()
+        self._refresh_usable_dot()
         builtin = bool(self.profile.get("builtin", False))
         self._delete_btn.setEnabled(not builtin)
         if builtin:
             self._delete_btn.setToolTip(self.tr("Built-in profiles cannot be deleted."))
         self._refresh_conditional_visibility()
+
+    def _refresh_usable_dot(self) -> None:
+        """状态点 + 提示：可发请求为绿，缺字段为灰并列出缺什么。"""
+        usable = profile_is_usable(self.profile)
+        self._status_dot.setProperty("usable", usable)
+        # 触发 QSS 按新属性重绘
+        self._status_dot.style().unpolish(self._status_dot)
+        self._status_dot.style().polish(self._status_dot)
+        if usable:
+            tip = self.tr("Ready to send requests.")
+        else:
+            missing = []
+            if not str(self.profile.get("api_host") or "").strip():
+                missing.append(self.tr("host"))
+            if not str(self.profile.get("model") or "").strip():
+                missing.append(self.tr("model"))
+            key = str(self.profile.get("api_key") or "").strip()
+            host = str(self.profile.get("api_host") or "")
+            is_local = "localhost" in host or "127.0.0.1" in host
+            if (not key or key in PLACEHOLDER_API_KEYS) and not is_local:
+                missing.append(self.tr("API key"))
+            tip = self.tr("Missing: {fields}").format(fields=", ".join(missing))
+        self._status_dot.setToolTip(tip)
 
     def _refresh_use_state(self) -> None:
         """标记这张卡是否是当前激活的 profile（含「没显式设过」的推断结果）。"""
@@ -1003,6 +1294,9 @@ class LLMProfileCardWidget(QFrame):
             self._refresh_summary_text()
         if key == "api_key":
             self._refresh_key_status()
+        if key in ("api_host", "api_key", "model"):
+            # 这三个字段决定可用性状态点
+            self._refresh_usable_dot()
 
     def _on_model_options_changed(
         self, key: str, options: List[str], current: str
@@ -1013,6 +1307,7 @@ class LLMProfileCardWidget(QFrame):
         ]
         self.profile[key] = str(current or "").strip()
         self._sync_model_selectors()
+        self._refresh_usable_dot()
         self.persist_requested.emit()
 
     def _sync_model_selectors(self) -> None:
@@ -1053,6 +1348,8 @@ class LLMProfileCardWidget(QFrame):
         )
         self._vision_badge.set_active(bool(self.profile["vision_support"]))
         self._refresh_conditional_visibility()
+        # 离散开关（影响 OCR 选择器候选池），立即落盘
+        self.persist_requested.emit()
 
     def _toggle_image_support(self) -> None:
         self.profile["image_support"] = not bool(
@@ -1060,6 +1357,11 @@ class LLMProfileCardWidget(QFrame):
         )
         self._image_badge.set_active(bool(self.profile["image_support"]))
         self._refresh_conditional_visibility()
+        # 离散开关（影响在线修复 / AI 修图选择器候选池），立即落盘
+        self.persist_requested.emit()
+
+    def _on_rename_committed(self, new_name: str) -> None:
+        self.rename_requested.emit(self.profile.get("name", ""), new_name)
 
     # ── 网络（Test / Fetch，走后台线程）──
 
@@ -1109,6 +1411,9 @@ class LLMProfileCardWidget(QFrame):
         )
 
     def _test_success(self) -> None:
+        # 探活成功说明配置有效，顺手把内存里的编辑落盘并刷新状态点
+        self.persist_requested.emit()
+        self._refresh_usable_dot()
         QMessageBox.information(
             self,
             self.tr("Connection Successful"),
@@ -1134,6 +1439,7 @@ class LLMProfileCardWidget(QFrame):
             remember_model_option(self.profile, key, name)
         self.profile[key] = picked[0]
         self._sync_model_selectors()
+        self._refresh_usable_dot()
         self.persist_requested.emit()
 
     def _on_test_connection(self) -> None:
@@ -1152,6 +1458,8 @@ class LLMProfileCardWidget(QFrame):
             )
             return
         proxy = str(self.profile.get("proxy", "") or "")
+        # 先落盘当前编辑（Test 读的是内存值，落盘保证崩溃不丢 + 模块侧同步）
+        self.persist_requested.emit()
         self._start_net(
             lambda: probe_connection(host, key, proxy),
             lambda _r: self._test_success(),
@@ -1169,6 +1477,7 @@ class LLMProfileCardWidget(QFrame):
             )
             return
         proxy = str(self.profile.get("proxy", "") or "")
+        self.persist_requested.emit()
         self._start_net(
             lambda: probe_model_list(host, key, proxy),
             lambda names: self._pick_model(names, "model"),
@@ -1184,6 +1493,7 @@ class LLMProfileCardWidget(QFrame):
             )
             return
         proxy = str(self.profile.get("proxy", "") or "")
+        self.persist_requested.emit()
         self._start_net(
             lambda: fetch_image_models(base_url, key, proxy=proxy),
             lambda _r: self._test_success(),
@@ -1199,6 +1509,7 @@ class LLMProfileCardWidget(QFrame):
             )
             return
         proxy = str(self.profile.get("proxy", "") or "")
+        self.persist_requested.emit()
         self._start_net(
             lambda: fetch_image_models(base_url, key, proxy=proxy),
             lambda names: self._pick_model(names, "image_model"),
@@ -1270,6 +1581,7 @@ class LLMProfileListWidget(QWidget):
             card.persist_requested.connect(self._persist)
             card.delete_requested.connect(self._on_delete_requested)
             card.use_requested.connect(self._on_use_requested)
+            card.rename_requested.connect(self._on_rename_requested)
             card.set_modal_runner(self._modal_runner)
             self._cards_layout.addWidget(card)
             self._cards.append(card)
@@ -1327,20 +1639,58 @@ class LLMProfileListWidget(QWidget):
             return
         if self._profiles[index].get("builtin"):
             return
+        is_default = get_default_profile_name() == name
+        message = self.tr('Delete profile "{name}"?').format(name=name)
+        if is_default:
+            message += "\n\n" + self.tr(
+                "It is currently the active profile; the default will be cleared."
+            )
         reply = QMessageBox.question(
             self,
             self.tr("Confirm Delete"),
-            self.tr('Delete profile "{name}"?').format(name=name),
+            message,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        if get_default_profile_name() == name:
+        if is_default:
             # 激活项随删除失效：清空显式记录，让解析层回退到下一个可用项
             set_default_profile("")
         del self._profiles[index]
         self._persist()
         self._rebuild()
+
+    def _on_rename_requested(self, old_name: str, new_name: str) -> None:
+        """改名：数据层负责迁移引用（激活项 + 各模块存储值）并落盘。"""
+        from utils.profile_manager import rename_profile
+
+        new_name = str(new_name or "").strip()
+        if not new_name or new_name == old_name:
+            return
+        if any(
+            p.get("name") == new_name and p.get("name") != old_name
+            for p in self._profiles
+        ):
+            QMessageBox.warning(
+                self,
+                self.tr("Rename Profile"),
+                self.tr('A profile named "{name}" already exists.').format(
+                    name=new_name
+                ),
+            )
+            # 卡片上的编辑框已关掉，名称标签仍是旧名，无需回滚
+            return
+        if rename_profile(self._profiles, old_name, new_name):
+            # rename_profile 原地改 target["name"]，卡片持有同一 dict；
+            # _commit 只切回标签显示、不写文本，这里负责把标题刷成新名
+            for card in self._cards:
+                if card.profile.get("name") == new_name:
+                    card._name_label.setText(new_name)
+                    break
+            self._loaded_raw = get_profiles_raw()
+            self._sync_use_state()
+            self.profiles_changed.emit()
+        # rename_profile 失败（理论上不该发生，重名已先拦）时卡片标签保持旧名
 
     def _on_restore_builtins(self) -> None:
         default_map = {

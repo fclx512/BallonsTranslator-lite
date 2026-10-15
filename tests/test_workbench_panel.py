@@ -865,6 +865,29 @@ class PanelTest(_WorkbenchTestCase):
             view._sections[0].process_btn.click()
             self.assertEqual(seen, [(*expected, action_id)])
 
+    def test_revisions_only_request_checked_rows(self):
+        self._seed_reviews()
+        panel = self._panel()
+        panel.nav.select(TRANS_REVIEW)
+        self.app.processEvents()
+        view = panel._review_views[TRANS_REVIEW]
+        table, rows = view.tables()[0]
+        seen = []
+        panel.revision_requested.connect(lambda targets, hint: seen.append((targets, hint)))
+        table.setCurrentCell(0, 0)
+        self.assertFalse(view.revision_btn.isEnabled())
+        view._generate_revisions()
+        self.assertEqual(seen, [])
+        view._on_check_toggled("pending", 1, True)
+        self.assertTrue(view.revision_btn.isEnabled())
+        view.revision_hint.setText("  concise  ")
+        view.revision_btn.click()
+        self.assertEqual(seen, [({PAGE_B: [rows[1].block_index]}, "concise")])
+        view._on_check_toggled("pending", 1, False)
+        self.assertFalse(view.revision_btn.isEnabled())
+        view._generate_revisions()
+        self.assertEqual(len(seen), 1)
+
     def test_review_jump_signal_carries_page_and_block(self):
         manual_ocr, _p, _l, _s = self._seed_reviews()
         panel = self._panel()

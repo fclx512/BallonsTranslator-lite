@@ -210,12 +210,13 @@ def _drop_unloadable_families(display_families, alias_to_canonical):
         if actual != target:
             unloaded.append(family)
     if len(unloaded) > max(1, len(display_families) // 5):
-        print(
-            f"[shared] ghost-font probe aborted: {len(unloaded)}/"
-            f"{len(display_families)} families failed to resolve, keeping full list"
-        )
+        if DEBUG:
+            print(
+                f"[shared] ghost-font probe aborted: {len(unloaded)}/"
+                f"{len(display_families)} families failed to resolve, keeping full list"
+            )
         return display_families
-    if unloaded:
+    if unloaded and DEBUG:
         print(f"[shared] dropped unloadable font families (ghost fonts): {unloaded}")
     return [f for f in display_families if f not in set(unloaded)]
 

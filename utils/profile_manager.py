@@ -461,6 +461,58 @@ def set_default_profile(name: str) -> None:
     save_config()
 
 
+# (pcfg.module 下的参数字典, 模块注册名, 存 profile 名的参数键)
+# 改名时除全局激活项外，这些模块里「显式选过这个 profile」的存储值也要一起
+# 迁移，否则下次加载按名字匹配不上、被解析层静默归位到别的 profile。
+# 画布「AI 修图」工具的 profile 选择就写在 inpainter_params["LLMInpaint"] 里
+# （ui/drawingpanel.py），无需单列。
+_PROFILE_REF_SLOTS = (
+    ("translator_params", "LLM_API_Translator", "active_profile"),
+    ("translator_params", "LLM_Agent_Translator", "active_profile"),
+    ("ocr_params", "llm_ocr", "profile"),
+    ("inpainter_params", "LLMInpaint", "profile"),
+)
+
+
+def rename_profile(profiles: List[Dict], old_name: str, new_name: str) -> bool:
+    """把 ``profiles`` 里名为 ``old_name`` 的 profile 改名为 ``new_name`` 并落盘。
+
+    name 同时是显示名与引用键：翻译 / OCR / 修复模块与画布 AI 修图工具都按
+    名字找 profile，全局激活项 ``pcfg.module.default_profile`` 也是名字。
+    因此改名必须同步迁移这些存储值。``profiles`` 须为 ``load_profiles()``
+    返回的那份（改名直接在它上面做，再整体写回）。
+
+    新名为空、与旧名相同、或与其它 profile 重名时不做任何事并返回 False。
+    """
+    new = str(new_name or "").strip()
+    old = str(old_name or "")
+    if not new or new == old:
+        return False
+    target = next((p for p in profiles if p.get("name") == old), None)
+    if target is None:
+        return False
+    if any(p is not target and p.get("name") == new for p in profiles):
+        return False
+    target["name"] = new
+
+    if str(pcfg.module.default_profile or "").strip() == old:
+        pcfg.module.default_profile = new
+    for params_attr, module_key, param_key in _PROFILE_REF_SLOTS:
+        module_cfg = getattr(pcfg.module, params_attr, None)
+        if not isinstance(module_cfg, dict):
+            continue
+        slot = module_cfg.get(module_key)
+        if not isinstance(slot, dict):
+            continue
+        param = slot.get(param_key)
+        if isinstance(param, dict) and str(param.get("value") or "") == old:
+            param["value"] = new
+
+    save_all_profiles(profiles)  # 内部已 save_config()
+    LOGGER.info(f'Renamed profile "{old}" to "{new}".')
+    return True
+
+
 def resolve_profile(
     current_name: str,
     *,

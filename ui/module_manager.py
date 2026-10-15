@@ -406,7 +406,7 @@ class TranslateThread(ModuleThread):
         super().__init__("translator", TRANSLATORS, *args, **kwargs)
         self.translator: BaseTranslator = self.module
 
-    def _emit_agent_status(self, page_key, turn, tool_names):
+    def _emit_agent_status(self, page_key, turn, tool_names, usage=None):
         self.agent_status.emit(page_key, turn, tool_names)
 
     def _set_translator(self, translator: str):
@@ -492,7 +492,6 @@ class TranslateThread(ModuleThread):
                 continue
 
             page_key = self.pipeline_pagekey_queue.pop(0)
-            self.blockSignals(True)
             trans_success = True
             try:
                 self._translate_page(
@@ -513,7 +512,6 @@ class TranslateThread(ModuleThread):
 
                 self.blockSignals(False)
                 create_error_dialog(e, msg, "TranslationFailed")
-            self.blockSignals(False)
             self.finished_counter += 1
             if trans_success:
                 self.imgtrans_proj.update_page_progress(
@@ -913,7 +911,6 @@ class ImgtransThread(QThread):
     def translate_finished(self) -> bool:
         if (
             self.imgtrans_proj is None
-            or not cfg_module.enable_ocr
             or not cfg_module.enable_translate
         ):
             return True
@@ -1178,6 +1175,8 @@ class ModuleManager(QObject):
         config_panel.model_unload_requested.connect(self.unload_module_for)
 
     def unload_module_for(self, module_type: str):
+        if getattr(self, "background_task_active", False):
+            return False
         """卸载某个阶段当前加载的模块。
 
         「模型文件」节删除权重前必须先走这一步：Windows 上被加载的模型握着
@@ -1193,6 +1192,8 @@ class ModuleManager(QObject):
             LOGGER.error("unload_module_for(%s) failed: %s", module_type, e)
 
     def unload_all_models(self) -> bool:
+        if getattr(self, "background_task_active", False):
+            return False
         """卸载四个阶段的模型（设置页「卸载全部模型」与「释放内存」共用）。
 
         返回"是否卸干净"：正常卸载（含"本来就没载东西"）为 ``True``；卸载过程抛
@@ -1273,6 +1274,8 @@ class ModuleManager(QObject):
         return self.ocr_thread.ocr
 
     def translatePage(self, run_target: bool, page_key: str):
+        if getattr(self, "background_task_active", False):
+            return False
         if not run_target:
             if self.translate_thread.isRunning():
                 LOGGER.warning("Terminating a running translation thread.")
@@ -1291,6 +1294,8 @@ class ModuleManager(QObject):
         inpaint_rect=None,
         **kwargs,
     ):
+        if getattr(self, "background_task_active", False):
+            return False
         if self.inpaint_thread.isRunning():
             LOGGER.warning("Waiting for inpainting to finish")
             return
@@ -1324,6 +1329,8 @@ class ModuleManager(QObject):
             self.setInpainter(pending)
 
     def runImgtransPipeline(self, pages_to_process=None):
+        if getattr(self, "background_task_active", False):
+            return False
         if self.imgtrans_proj.is_empty:
             LOGGER.info("proj file is empty, nothing to do")
             self.progress_msgbox.hide()
@@ -1363,6 +1370,8 @@ class ModuleManager(QObject):
         tgt_mask,
         page_key: str = None,
     ):
+        if getattr(self, "background_task_active", False):
+            return False
         self.terminateRunningThread()
         self.progress_msgbox.hide_all_bars()
         if mode >= 0 and mode < 3:
@@ -1488,6 +1497,8 @@ class ModuleManager(QObject):
         self.imgtrans_pipeline_finished.emit()
 
     def setTranslator(self, translator: str = None, offer_deps: bool = True):
+        if getattr(self, "background_task_active", False):
+            return False
         if translator is None:
             translator = cfg_module.translator
         cls = TRANSLATORS.get(translator)
@@ -1503,6 +1514,8 @@ class ModuleManager(QObject):
         self.translate_thread.setTranslator(translator)
 
     def setInpainter(self, inpainter: str = None, offer_deps: bool = True):
+        if getattr(self, "background_task_active", False):
+            return False
         if inpainter is None:
             inpainter = cfg_module.inpainter
         if not self.inpaint_thread.isRunning() and self.block_set_inpainter:
@@ -1570,6 +1583,8 @@ class ModuleManager(QObject):
                 pass
 
     def setTextDetector(self, textdetector: str = None, offer_deps: bool = True):
+        if getattr(self, "background_task_active", False):
+            return False
         if textdetector is None:
             textdetector = cfg_module.textdetector
         cls = TEXTDETECTORS.get(textdetector)
@@ -1590,6 +1605,8 @@ class ModuleManager(QObject):
         self.textdetect_thread.setTextDetector(textdetector)
 
     def setOCR(self, ocr: str = None, offer_deps: bool = True):
+        if getattr(self, "background_task_active", False):
+            return False
         if ocr is None:
             ocr = cfg_module.ocr
         cls = OCR.get(ocr)
@@ -1613,6 +1630,8 @@ class ModuleManager(QObject):
             self.run_canvas_inpaint = False
 
     def canvas_inpaint(self, inpaint_dict, inpainter=None):
+        if getattr(self, "background_task_active", False):
+            return False
         """Dispatch a canvas repair.
 
         Returns ``True`` when the request was handed to the inpainting thread,
@@ -1657,11 +1676,15 @@ class ModuleManager(QObject):
         return self._ai_inpainter
 
     def on_translatorparam_edited(self, param_key: str, param_content: dict):
+        if getattr(self, "background_task_active", False):
+            return False
         if self.translator is not None:
             self.updateModuleSetupParam(self.translator, param_key, param_content)
             cfg_module.translator_params[self.translator.name] = self.translator.params
 
     def on_inpainterparam_edited(self, param_key: str, param_content: dict):
+        if getattr(self, "background_task_active", False):
+            return False
         if self.inpainter is not None:
             self.updateModuleSetupParam(self.inpainter, param_key, param_content)
             cfg_module.inpainter_params[self.inpainter.name] = self.inpainter.params
