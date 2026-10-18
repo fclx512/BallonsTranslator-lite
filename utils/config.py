@@ -79,7 +79,9 @@ class ModuleConfig(Config):
     # agent 翻译每轮状态写 utils/debug_log.py(阶段 5 F 类;原 beta 的
     # context_translation_debug_log 已合并进此开关)
     agent_translation_debug_log: bool = False
-    check_need_inpaint: bool = True
+    # 「跳过简单情况」默认关闭：它只是省一次修复模型的提速，半透明气泡
+    # 仍有被整只涂平的风险（#1364）。在运行对话框显式勾选后才启用。
+    check_need_inpaint: bool = False
     load_model_on_demand: bool = True
     empty_runcache: bool = False
     render_after_pipeline: bool = True
@@ -106,7 +108,10 @@ class ModuleConfig(Config):
                 if pk.startswith("__"):
                     continue
                 if isinstance(pv, dict):
-                    pv = pv["value"]
+                    # 正常路径是已合并的 {type, value} 模板；配置刚加载、尚未
+                    # 经 merge_config_module_params 时，嵌套值参数本身就是裸值
+                    # （如 label 的 dict），按原样保存即可。
+                    pv = pv.get("value", pv)
                 saving_module_params[pk] = pv
         return sd
 
@@ -351,6 +356,51 @@ class AutoTateChuYokoConfig(Config):
                     f"Discard invalid auto_tate_chu_yoko.{setting.name} config."
                 )
                 setattr(self, setting.name, setting.default)
+
+
+# ysg_ctd 配置段在参数继承修复之前可能留着模板里的失效默认路径；这个值
+# 从未在盘上存在过，保留它会让检测器静默回退到 OBB 权重。
+LEGACY_YSG_CTD_MODEL_PATHS = {
+    "data/models/ysgyolo_1.2_OS1.0.pt",
+    "ysgyolo_1.2_OS1.0.pt",
+}
+
+
+def migrate_legacy_ysg_ctd_params(textdet_params: dict):
+    """Adopt the configured ysgyolo checkpoint in a stale ysg_ctd section.
+
+    Example:
+        >>> params = {
+        ...     'ysgyolo': {'model path': 'ysgyolo_yolo26_2.0.pt'},
+        ...     'ysg_ctd': {'model path': 'data/models/ysgyolo_1.2_OS1.0.pt'},
+        ... }
+        >>> migrate_legacy_ysg_ctd_params(params)
+        >>> params['ysg_ctd']['model path']
+        'ysgyolo_yolo26_2.0.pt'
+    """
+
+    if not isinstance(textdet_params, dict):
+        return
+    ysg_ctd = textdet_params.get("ysg_ctd")
+    ysgyolo = textdet_params.get("ysgyolo")
+    if not isinstance(ysg_ctd, dict) or not isinstance(ysgyolo, dict):
+        return
+    model_path = ysg_ctd.get("model path")
+    ysg_model_path = ysgyolo.get("model path")
+    if (
+        isinstance(model_path, str)
+        and model_path in LEGACY_YSG_CTD_MODEL_PATHS
+        and isinstance(ysg_model_path, str)
+        and ysg_model_path
+        and ysg_model_path != model_path
+    ):
+        LOGGER.info(
+            "Migrated ysg_ctd model path from legacy default %r to the configured "
+            "ysgyolo checkpoint %r.",
+            model_path,
+            ysg_model_path,
+        )
+        ysg_ctd["model path"] = ysg_model_path
 
 
 @nested_dataclass
@@ -625,6 +675,7 @@ class ProgramConfig(Config):
                 if isinstance(stage_params, dict):
                     for removed in mapping:
                         stage_params.pop(removed, None)
+            migrate_legacy_ysg_ctd_params(module_cfg.get("textdetector_params"))
             if config_dict.get("region_redetect_detector") == "ctd":
                 config_dict["region_redetect_detector"] = "ppocrv6_onnx"
 

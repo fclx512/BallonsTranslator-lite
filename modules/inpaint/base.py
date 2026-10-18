@@ -219,7 +219,9 @@ class InpainterBase(BaseModule):
                     inpaint_thresh = 7 if np.std(std_rgb) > 1 else 10
                     if std_max < inpaint_thresh:
                         result_rgb = img_rgb.copy()
-                        result_rgb[np.where(ballon_msk > 0)] = average_bg_color
+                        # 只覆盖修复掩膜内的像素（#1364）：气泡轮廓通常大于
+                        # 掩膜，按轮廓填会把半透明气泡整只涂平。
+                        result_rgb[np.where(mask > 127)] = average_bg_color
                         # Recombine with alpha if original was RGBA
                         if original_alpha is not None:
                             return np.concatenate([result_rgb, original_alpha], axis=2)
@@ -249,13 +251,15 @@ class InpainterBase(BaseModule):
                 if judge_simple:
                     # 本块 xyxy 在裁剪区坐标下的矩形（块局部遮罩，D45）
                     bx1, by1, bx2, by2 = xyxy
-                    need_inpaint, ballon_msk, average_bg_color = classify_simple(
-                        im,
+                    local_msk = block_local_mask(
                         msk,
                         (bx1 - xyxy_e[0], by1 - xyxy_e[1], bx2 - xyxy_e[0], by2 - xyxy_e[1]),
                     )
+                    need_inpaint, _, average_bg_color = classify_simple(im, local_msk)
                     if not need_inpaint:
-                        im[np.where(ballon_msk > 0)] = average_bg_color
+                        # 只覆盖修复掩膜内的像素（#1364）。用块局部掩膜而不是
+                        # 原始裁剪窗：1.7 倍外扩会把邻块文字一起涂掉。
+                        im[np.where(local_msk > 127)] = average_bg_color
                     # cv2.imshow('im', im)
                     # cv2.imshow('ballon', ballon_msk)
                     # cv2.imshow('non_text', non_text_msk)

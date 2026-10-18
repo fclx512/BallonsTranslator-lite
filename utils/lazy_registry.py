@@ -103,6 +103,34 @@ def _device_selector(not_supported=None):
     }
 
 
+def _find_model_paths(model_dir, prefixes):
+    """Mirror of the detector's ``find_model_paths`` for lazy metadata.
+
+    Bundled default checkpoints come first so the primary model is also the
+    fallback when a saved config points at a missing file. Returned names are
+    bare filenames (relative to ``data/models``), matching the runtime helper.
+
+    Example:
+        >>> import tempfile
+        >>> with tempfile.TemporaryDirectory() as tmp:
+        ...     _ = Path(tmp, 'ysgyolo_demo.pt').write_text('')
+        ...     _find_model_paths(tmp, ('ysgyolo',))[2]
+        'ysgyolo_demo.pt'
+    """
+    if isinstance(prefixes, str):
+        prefixes = (prefixes,)
+    defaults = ("ysgyolo_yolo26_2.0.pt", "ysgyolo_yolo26OBB_2.0.pt")
+    ordered = [name for name in defaults if name.startswith(tuple(prefixes))]
+    try:
+        names = sorted(os.listdir(model_dir))
+    except OSError:
+        return ordered
+    for name in names:
+        if name.startswith(tuple(prefixes)) and name not in ordered:
+            ordered.append(name)
+    return ordered
+
+
 class SafeEval:
     """Evaluate the small literal subset needed for lazy module metadata.
 
@@ -328,6 +356,8 @@ class SafeEval:
             return platform.machine()
         if func_name in {"os.path.join", "osp.join"}:
             return os.path.join(*args)
+        if func_name == "find_model_paths" and len(args) == 2:
+            return _find_model_paths(*args)
         # Fallback: handle method calls on previously-evaluated objects
         # e.g. lang_map.keys() where lang_map is a dict in the environment.
         if "." in func_name:

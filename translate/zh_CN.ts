@@ -1,4 +1,5 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
 <TS version="2.1" language="zh_CN" sourcelanguage="en">
     <context>
         <name>AboutDialog</name>
@@ -3754,6 +3755,18 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
         <message>
             <source>Extract per-block font colors from the image (classical binarization; this detector has no prob map)</source>
             <translation>从原图提取每块的字体颜色（经典二值化；本检测器没有概率图）</translation>
+        </message>
+        <message>
+            <source>Detect text boxes with ysgyolo, then refine the mask with ComicTextDetector inside those boxes</source>
+            <translation>先用 ysgyolo 检测文本框，再用 ComicTextDetector 在框内生成贴合文字轮廓的掩膜</translation>
+        </message>
+        <message>
+            <source>Input image size for the ComicTextDetector mask refinement</source>
+            <translation>ComicTextDetector 精细掩膜的输入尺寸</translation>
+        </message>
+        <message>
+            <source>Maximum parallel batches when rearranging detected text blocks</source>
+            <translation>重排检测文本框时的最大并行批次数</translation>
         </message>
     </context>
     <context>

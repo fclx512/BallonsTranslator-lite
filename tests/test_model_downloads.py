@@ -345,6 +345,11 @@ class TestEnsureModuleDeps(unittest.TestCase):
         from qtpy.QtWidgets import QApplication
 
         cls.app = QApplication.instance() or QApplication([])
+        # setOCR/select_module 会先查注册表再准备模块；单独跑本文件时启动期
+        # 的注册表初始化没有执行过，这里补上。
+        import modules
+
+        modules.init_module_registries()
 
     def test_starts_background_task_and_returns_true(self):
         from ui import module_manager

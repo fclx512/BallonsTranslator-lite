@@ -20,7 +20,11 @@ from .base import (
 )
 from .inpaint import INPAINTERS, InpainterBase
 from .ocr import OCR, OCRBase
-from .textdetector import TEXTDETECTORS, TextDetectorBase
+from .textdetector import (
+    TEXTDETECTOR_PARAM_INHERITANCE,
+    TEXTDETECTORS,
+    TextDetectorBase,
+)
 from .translators import TRANSLATORS, BaseTranslator
 
 
@@ -63,7 +67,8 @@ def GET_MISSING_MODEL_FILES(module_type: str, key: str):
     返回缺失文件路径列表（相对程序根目录，每个 download 条目一行）；
     空列表＝齐备；``None``＝无法静态判定（none 系／LLM profile 类等无模型模块）。
     ``ysgyolo`` 例外：它的 ``_load_model`` 接受 ``data/models/`` 下任意
-    ``ysgyolo*`` 权重，故按通配判断而不看声明文件名。
+    ``ysgyolo*`` 权重，故按通配判断而不看声明文件名。``ysg_ctd`` 的
+    ysgyolo 半区沿用同一口径，CTD 两个权重仍逐个核对。
 
     落盘判据与 ``utils/model_files.py::missing_declared_files`` 同源
     （save_files 优先，回落 files），供选型 UI 的状态标识、运行前检查与
@@ -75,18 +80,30 @@ def GET_MISSING_MODEL_FILES(module_type: str, key: str):
         return None
     if key in _NO_DOWNLOAD_LIST_KEYS:
         return None
-    if key == "ysgyolo":
-        model_dir = osp.join(osp.dirname(osp.dirname(osp.abspath(__file__))), "data", "models")
-        if osp.isdir(model_dir) and any(
-            name.startswith(("ysgyolo", "ultralyticsyolo"))
-            for name in os.listdir(model_dir)
-        ):
-            return []
-        return ["data/models/ysgyolo_*.pt"]
 
     from utils.model_files import missing_declared_files
 
-    return missing_declared_files(getattr(spec, "download_file_list", None))
+    def _ysg_model_present() -> bool:
+        model_dir = osp.join(
+            osp.dirname(osp.dirname(osp.abspath(__file__))), "data", "models"
+        )
+        return osp.isdir(model_dir) and any(
+            name.startswith(("ysgyolo", "ultralyticsyolo"))
+            for name in os.listdir(model_dir)
+        )
+
+    if key == "ysgyolo":
+        return [] if _ysg_model_present() else ["data/models/ysgyolo_*.pt"]
+
+    missing = missing_declared_files(getattr(spec, "download_file_list", None))
+    if key == "ysg_ctd" and _ysg_model_present():
+        # 权重文件名允许飘：ysgyolo 半区只看通配，CTD 半区逐个核对。
+        missing = [
+            path
+            for path in missing
+            if not osp.basename(path).startswith(("ysgyolo", "ultralyticsyolo"))
+        ]
+    return missing
 
 
 # 管线阶段顺序，「模型文件」页按它列出各阶段的权重包

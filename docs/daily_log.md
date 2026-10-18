@@ -12,13 +12,13 @@
 >
 > 仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护）；被裁掉的日期节仍完整留在提交历史里，用 `git log --grep <关键词>`／`git log --follow -p -- docs/daily_log.md`／`git show <rev>:docs/daily_log.md` 回查。
 
-## 2026-10-14
+## 2026-10-18
 
-### 演示动画：有效时间轴同源 + 覆盖层层级修复 + README 几何/时序收敛（`anim_kit.resolve_timeline` / `CameraScene` / `PopupPalette`）
+### ysg_ctd 混合检测器 + 「跳过简单情况」只填修复掩膜（`detector_ysg.py::YSGYoloCTDDetector` / `InpainterBase.inpaint` / `check_need_inpaint`）
 
-**摘要：** 弹层与 README 两条演示流程的检查假绿灯与观感缺陷一并修掉。① 时间轴校验改读 `scripts/anim_kit.py::resolve_timeline`（渲染侧 `apply_timeline` 同源）——旧检查只读类属性，`RHYTHM` 场景实际校验到继承的旧时间轴（`clip_text` 的 N_FRAMES/F_FADE 校验成 20/15 而非实例 36/31）。② 覆盖层改为每帧 `raise_()`（徽标场景的单条文案建在覆盖层之后、把光标盖住）+ 置顶内容 save/restore 隔离（手绘下拉残留的 clip/opacity 会裁掉/调暗光圈与光标）。③ README 两个场景的手绘色板/下拉收成 `PopupPalette`/`PopupDropdown`（绘制与落点同体）、镜头字幕收成 `CameraScene`、每拍移动收成 `CursorPlan.move_after_press`。首版试验脚本 `scripts/gen_readme_demo.py` 效果未达预期，用户授权删除并登记 deprecated。
-**涉及文件：** `scripts/anim_kit.py`、`scripts/gen_help_anim.py`、`scripts/gen_readme_anim.py`、`scripts/gen_readme_showcase.py`、`scripts/check_anim_rhythm.py`、`scripts/check_anim_cursor.py`、`scripts/verify.py`、`scripts/README.md`、`scripts/audit_registry.json`、`tests/test_anim_checks.py`、`docs/基础速查/备注演示动画使用说明.md`
-**验证：** 弹层 7 场景逐帧哈希回归——迁移类场景 0 差异；`punctuation_position` 3 帧、`tag_badge` 1 帧、README 两场景各 4 帧为**预期内的层级修复差异**（只在光标/涟漪处）。`tests/test_anim_checks.py` 用「还原旧写法」的对照组证明节奏/层级/裁剪检查器确实报错。
+**摘要：** 从上游 1.5.19 更新包移植 PR #1365／#1364。① 新增 `ysg_ctd`：ysgyolo 出框、ComicTextDetector 在框内出精细字形掩膜，两者求交，框外拟声词像素仍被排除；恢复 `modules/textdetector/ctd/` 实现包与 `comictextdetector.pt(.onnx)` 权重，但不恢复 `ctd` 检测器注册。② 新增派生模块参数继承 `TEXTDETECTOR_PARAM_INHERITANCE`，`ysg_ctd` 首次建配置时从已保存的 `ysgyolo` 播种，避免回退到 OBB 权重。③ 「跳过简单情况」纯色填充改为只覆盖修复掩膜内像素（块路径用块局部掩膜），默认值改 `False`。
+**涉及文件：** `modules/textdetector/detector_ysg.py`、`modules/textdetector/ctd/`、`modules/base.py`、`modules/__init__.py`、`modules/textdetector/__init__.py`、`ui/module_manager.py`、`modules/inpaint/base.py`、`ui/drawingpanel.py`、`utils/config.py`、`utils/lazy_registry.py`、`scripts/audit_registry.json`、`tests/test_ysg_ctd_detector.py`、`tests/test_textdetector_param_inheritance.py`、`tests/test_inpaint_mask_scope.py`
+**验证：** 真实工程「织姬嵌字【完成】」20 页／127 块：53 个简单块旧实现会填 2,042,425 px、新实现 1,510,757 px，越界涂平 531,668 px；修复后掩膜外 0 像素被改。`ysg_ctd` 三页实测块几何与 ysgyolo 完全一致、框外像素 0。
 
 ---
 

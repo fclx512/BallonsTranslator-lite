@@ -17,6 +17,7 @@ from modules import (
     GET_VALID_TRANSLATORS,
     INPAINTERS,
     OCR,
+    TEXTDETECTOR_PARAM_INHERITANCE,
     TEXTDETECTORS,
     TRANSLATORS,
     BaseTranslator,
@@ -1127,7 +1128,10 @@ class ModuleManager(QObject):
 
         self.textdetect_panel = textdetector_panel = config_panel.detect_config_panel
         textdetector_params = merge_config_module_params(
-            cfg_module.textdetector_params, GET_VALID_TEXTDETECTORS(), TEXTDETECTORS.get
+            cfg_module.textdetector_params,
+            GET_VALID_TEXTDETECTORS(),
+            TEXTDETECTORS.get,
+            inherit_from=TEXTDETECTOR_PARAM_INHERITANCE,
         )
         textdetector_panel.addModulesParamWidgets(
             textdetector_params, _build_dep_notes(TEXTDETECTORS)

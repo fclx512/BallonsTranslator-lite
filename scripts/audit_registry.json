@@ -10,22 +10,10 @@
             "allowed_mentions": []
         },
         "modules/textdetector/detector_ctd.py": {
-            "note": "模型精简（2026-09-19）：ComicTextDetector 与 ysgyolo（漫画专精，默认）／ppocrv6_onnx（轻量 CPU，区域再检测默认）定位重叠，用户长期实测属「不好不坏」档，删除；实现包 modules/textdetector/ctd/ 一并删除；utils/textblock.py::get_transformed_region 的 ctd 专属 bbox 扩张分支同步移除",
+            "note": "模型精简（2026-09-19）：ComicTextDetector 与 ysgyolo（漫画专精，默认）／ppocrv6_onnx（轻量 CPU，区域再检测默认）定位重叠，用户长期实测属「不好不坏」档，删除；utils/textblock.py::get_transformed_region 的 ctd 专属 bbox 扩张分支同步移除。实现包 modules/textdetector/ctd/ 已于 2026-10-18 为 ysg_ctd 混合检测器恢复，但不再注册 ctd 检测器",
             "allowed_mentions": [
                 "docs/daily_log.md"
             ]
-        },
-        "modules/textdetector/ctd/basemodel.py": {
-            "note": "模型精简（2026-09-19）：随 detector_ctd.py（唯一使用者）一并删除",
-            "allowed_mentions": []
-        },
-        "modules/textdetector/ctd/inference.py": {
-            "note": "模型精简（2026-09-19）：随 detector_ctd.py（唯一使用者）一并删除",
-            "allowed_mentions": []
-        },
-        "modules/textdetector/ctd/textmask.py": {
-            "note": "模型精简（2026-09-19）：随 detector_ctd.py（唯一使用者）一并删除",
-            "allowed_mentions": []
         },
         "data/alphabet-all-v5.txt": {
             "note": "模型精简（2026-09-19）：mit48px CTC 识别的字典文件，随 modules/ocr/ocr_mit.py（唯一使用者）一并删除；同目录未跟踪的 alphabet-all-v7.txt（无任何代码引用）同步清理",

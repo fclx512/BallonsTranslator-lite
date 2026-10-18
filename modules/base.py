@@ -134,13 +134,97 @@ def patch_module_params(cfg_param, module_params, module_name: str = ""):
     return cfg_param
 
 
+def _param_value(param):
+    if isinstance(param, dict) and "value" in param:
+        return param["value"]
+    return param
+
+
+def _inherit_module_params(
+    config_params: Dict,
+    preexisting_modules: set,
+    inherit_from: Dict[str, str],
+    module_defaults: Dict[str, Dict],
+):
+    """Seed a derived module's shared params from another module's config.
+
+    Derived modules that are documented to reuse another module's runtime
+    settings (e.g. a hybrid detector wrapping a base detector) still keep an
+    independent config section. Without seeding, a freshly created section
+    silently starts from template defaults, which can differ from what the
+    user configured for the base module. Shared keys are adopted only when the
+    section was just created or still holds the module default, so deliberate
+    per-detector settings survive.
+
+    Example:
+        >>> config = {
+        ...     'base': {'confidence': {'value': 0.2}},
+        ...     'derived': {'confidence': {'value': 0.3}},
+        ... }
+        >>> _inherit_module_params(
+        ...     config, {'base', 'derived'}, {'derived': 'base'},
+        ...     {'derived': {'confidence': {'value': 0.3}}})
+        >>> config['derived']['confidence']['value']
+        0.2
+    """
+
+    for derived_key, base_key in inherit_from.items():
+        derived_params = config_params.get(derived_key)
+        base_params = config_params.get(base_key)
+        if not isinstance(derived_params, dict) or not isinstance(base_params, dict):
+            continue
+        defaults = module_defaults.get(derived_key) or {}
+        is_new = derived_key not in preexisting_modules
+        for key, base_param in base_params.items():
+            if key.startswith("__") or key == "description" or key not in derived_params:
+                continue
+            base_value = _param_value(base_param)
+            derived_param = derived_params[key]
+            derived_value = _param_value(derived_param)
+            if base_value == derived_value:
+                continue
+            default_param = defaults.get(key)
+            default_value = (
+                _param_value(default_param) if default_param is not None else None
+            )
+            if not (is_new or derived_value == default_value):
+                continue
+            if isinstance(derived_param, dict) and "value" in derived_param:
+                derived_param["value"] = deepcopy(base_value)
+            else:
+                derived_params[key] = deepcopy(base_value)
+            LOGGER.info(
+                "Inherited %s.%s from %s: %r", derived_key, key, base_key, base_value
+            )
+
+
 def merge_config_module_params(
-    config_params: Dict, module_keys: List, get_module: Callable
+    config_params: Dict,
+    module_keys: List,
+    get_module: Callable,
+    inherit_from: Dict[str, str] = None,
 ) -> Dict:
+    """Merge saved config with module defaults.
+
+    ``inherit_from`` maps a derived module key to its base module key; shared
+    params of a newly created derived section are seeded from the base section.
+    """
+    preexisting_modules = {
+        module_key
+        for module_key, module_params in config_params.items()
+        if isinstance(module_params, dict)
+    }
+    module_defaults = {}
     for module_key in module_keys:
         module_params = get_module(module_key).params
         if module_params is None:
             module_params = {}
+        else:
+            # patch_module_params mutates its argument; don't leak saved values
+            # back into the class/spec template.
+            module_params = deepcopy(module_params)
+        if inherit_from and module_key in inherit_from:
+            module_defaults[module_key] = deepcopy(module_params)
         if module_key not in config_params or config_params[module_key] is None:
             config_params[module_key] = module_params
         else:
@@ -148,6 +232,11 @@ def merge_config_module_params(
                 patch_module_params(
                     config_params[module_key], module_params, module_key
                 )
+
+    if inherit_from:
+        _inherit_module_params(
+            config_params, preexisting_modules, inherit_from, module_defaults
+        )
 
     # Auto-select best available device on each startup,
     # overriding any stale "cpu" setting from a previous CPU-mode run.
