@@ -145,6 +145,7 @@ def _inherit_module_params(
     preexisting_modules: set,
     inherit_from: Dict[str, str],
     module_defaults: Dict[str, Dict],
+    inherit_exclude: Dict[str, set] = None,
 ):
     """Seed a derived module's shared params from another module's config.
 
@@ -174,9 +175,14 @@ def _inherit_module_params(
         if not isinstance(derived_params, dict) or not isinstance(base_params, dict):
             continue
         defaults = module_defaults.get(derived_key) or {}
+        excluded = (inherit_exclude or {}).get(derived_key, set())
         is_new = derived_key not in preexisting_modules
         for key, base_param in base_params.items():
             if key.startswith("__") or key == "description" or key not in derived_params:
+                continue
+            if key in excluded:
+                # 同一参数在两种掩膜类型下需要的值不同（如矩形框 vs 字形
+                # 掩膜的扩张尺寸），由派生模块保留自己的默认值。
                 continue
             base_value = _param_value(base_param)
             derived_param = derived_params[key]
@@ -203,11 +209,14 @@ def merge_config_module_params(
     module_keys: List,
     get_module: Callable,
     inherit_from: Dict[str, str] = None,
+    inherit_exclude: Dict[str, set] = None,
 ) -> Dict:
     """Merge saved config with module defaults.
 
     ``inherit_from`` maps a derived module key to its base module key; shared
     params of a newly created derived section are seeded from the base section.
+    ``inherit_exclude`` lists keys the derived module must keep from its own
+    template even when the base module has a different value.
     """
     preexisting_modules = {
         module_key
@@ -235,7 +244,11 @@ def merge_config_module_params(
 
     if inherit_from:
         _inherit_module_params(
-            config_params, preexisting_modules, inherit_from, module_defaults
+            config_params,
+            preexisting_modules,
+            inherit_from,
+            module_defaults,
+            inherit_exclude,
         )
 
     # Auto-select best available device on each startup,

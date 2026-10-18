@@ -22,6 +22,7 @@ from .inpaint import INPAINTERS, InpainterBase
 from .ocr import OCR, OCRBase
 from .textdetector import (
     TEXTDETECTOR_PARAM_INHERITANCE,
+    TEXTDETECTOR_PARAM_INHERITANCE_EXCLUDE,
     TEXTDETECTORS,
     TextDetectorBase,
 )

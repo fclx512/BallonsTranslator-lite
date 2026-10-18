@@ -7,6 +7,7 @@ from pathlib import Path
 
 from modules import (
     TEXTDETECTOR_PARAM_INHERITANCE,
+    TEXTDETECTOR_PARAM_INHERITANCE_EXCLUDE,
     TEXTDETECTORS,
     init_module_registries,
 )
@@ -115,6 +116,7 @@ class ParamInheritanceTest(unittest.TestCase):
             "ysgyolo": {
                 "model path": "ysgyolo_yolo26_2.0.pt",
                 "confidence threshold": 0.2,
+                "mask dilate size": 3,
             },
         }
 
@@ -123,11 +125,14 @@ class ParamInheritanceTest(unittest.TestCase):
             ["ysgyolo", "ysg_ctd"],
             TEXTDETECTORS.get,
             inherit_from=TEXTDETECTOR_PARAM_INHERITANCE,
+            inherit_exclude=TEXTDETECTOR_PARAM_INHERITANCE_EXCLUDE,
         )
 
         derived = config["ysg_ctd"]
         self.assertEqual(derived["confidence threshold"]["value"], 0.2)
         self.assertEqual(derived["model path"]["value"], "ysgyolo_yolo26_2.0.pt")
+        # 掩膜扩张尺寸不继承：字形掩膜需要盖住描边，默认从 8px 起步。
+        self.assertEqual(derived["mask dilate size"]["value"], 8)
         self.assertIn("ctd detect size", derived)
         self.assertNotIn("ctd detect size", config["ysgyolo"])
 

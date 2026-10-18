@@ -1,5 +1,6 @@
 """ysg_ctd 混合检测器：CTD 精细掩膜 ∩ ysgyolo 文本框（PR #1365）。"""
 import unittest
+from copy import deepcopy
 from unittest import mock
 
 import numpy as np
@@ -131,11 +132,16 @@ class TestCombineRefinedMask(unittest.TestCase):
 
 class TestHybridDetector(unittest.TestCase):
     def setUp(self):
+        # BaseModule 的 params 是类级共享模板；用例改参数后必须还原，
+        # 否则会污染后面的继承/默认值断言。
+        original = YSGYoloCTDDetector.params
+        YSGYoloCTDDetector.params = deepcopy(original)
+        self.addCleanup(setattr, YSGYoloCTDDetector, "params", original)
         self.detector = YSGYoloCTDDetector()
         self.detector.set_param_value("merge text lines", False)
-        self.detector.set_param_value("mask dilate size", 0)
 
     def test_hybrid_detect_keeps_blocks_and_refines_mask(self):
+        self.detector.set_param_value("mask dilate size", 0)
         img = np.zeros((60, 60, 3), np.uint8)
         fine_mask = np.zeros((60, 60), np.uint8)
         fine_mask[20:23, 20:23] = 255
@@ -172,9 +178,29 @@ class TestHybridDetector(unittest.TestCase):
         self.detector.updateParam("ctd detect size", 1024)
         self.assertIsNone(self.detector.ctd_model)
 
+    def test_dilated_mask_stays_inside_the_yolo_box(self):
+        """扩张用来吃掉描边，但不应越出检测框污染框外背景。"""
+        img = np.zeros((60, 60, 3), np.uint8)
+        fine_mask = np.zeros((60, 60), np.uint8)
+        fine_mask[20:23, 20:23] = 255
+        self.detector.set_param_value("mask dilate size", 8)
+        self.detector.model = FakeYoloModel(np.array([[10, 10, 40, 30]], np.float32))
+        self.detector.ctd_model = FakeCtdModel(
+            fine_mask, [TextBlock(xyxy=[12, 12, 38, 28])]
+        )
+
+        mask, blk_list = self.detector._detect(img, None)
+
+        box = _build_box_mask(blk_list, 60, 60)
+        self.assertFalse(np.any(mask[box == 0] > 0))
+
     def test_hybrid_detector_is_registered(self):
         self.assertIn("ysg_ctd", TEXTDETECTORS.module_dict)
         self.assertIn("ctd detect size", YSGYoloCTDDetector.params)
+        # 字形掩膜默认扩张到 8px（覆盖普通描边），不从 ysgyolo 继承 2px。
+        self.assertEqual(
+            YSGYoloCTDDetector.params["mask dilate size"]["value"], 8
+        )
         # 一个 ysgyolo 条目 + 一个 CTD 条目（CTD 条目里含 pt/onnx 两个文件）
         self.assertEqual(len(YSGYoloCTDDetector.download_file_list), 2)
 

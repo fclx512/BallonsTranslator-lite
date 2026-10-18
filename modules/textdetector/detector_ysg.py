@@ -477,6 +477,15 @@ class YSGYoloCTDDetector(YSGYoloDetector):
 
     params = {
         **deepcopy(_YSGYOLO_PARAMS),
+        # 字形掩膜只覆盖深色笔画，文字的描边/白边不在掩膜内；2px 会留下
+        # 文字形状的白影，8px 是普通描边的可靠档。这个值与 ysgyolo 的矩形
+        # 掩膜需求不同，故不从基础检测器继承（见继承排除表）。
+        "mask dilate size": {
+            "display_name": "Mask Expansion Size",
+            "type": "line_editor",
+            "value": 8,
+            "description": "Mask dilation in pixels. Glyph masks only cover the dark ink; outlined lettering needs a larger value (typically 8-20)",
+        },
         "ctd detect size": {
             "display_name": "CTD Detect Size",
             "type": "selector",
@@ -555,6 +564,8 @@ class YSGYoloCTDDetector(YSGYoloDetector):
         box_mask = _build_box_mask(blk_list, im_w, im_h)
         mask = _combine_refined_mask(box_mask, fine_mask, blk_list, ctd_blk_list)
         mask = _dilate_mask(mask, self.get_param_value("mask dilate size"))
+        # 扩张会吃掉描边，但也可能越出检测框；裁回框内，避免污染框外背景。
+        mask = cv2.bitwise_and(mask, box_mask)
         return mask, blk_list
 
     def updateParam(self, param_key: str, param_content):

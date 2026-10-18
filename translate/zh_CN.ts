@@ -3768,6 +3768,10 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <source>Maximum parallel batches when rearranging detected text blocks</source>
             <translation>重排检测文本框时的最大并行批次数</translation>
         </message>
+        <message>
+            <source>Mask dilation in pixels. Glyph masks only cover the dark ink; outlined lettering needs a larger value (typically 8-20)</source>
+            <translation>掩膜向外扩张的像素数。字形掩膜只覆盖深色笔画，带描边的文字需要调大（通常 8～20）</translation>
+        </message>
     </context>
     <context>
         <name>RectPanel</name>

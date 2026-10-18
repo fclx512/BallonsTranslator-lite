@@ -16,9 +16,9 @@
 
 ### ysg_ctd 混合检测器 + 「跳过简单情况」只填修复掩膜（`detector_ysg.py::YSGYoloCTDDetector` / `InpainterBase.inpaint` / `check_need_inpaint`）
 
-**摘要：** 从上游 1.5.19 更新包移植 PR #1365／#1364。① 新增 `ysg_ctd`：ysgyolo 出框、ComicTextDetector 在框内出精细字形掩膜，两者求交，框外拟声词像素仍被排除；恢复 `modules/textdetector/ctd/` 实现包与 `comictextdetector.pt(.onnx)` 权重，但不恢复 `ctd` 检测器注册。② 新增派生模块参数继承 `TEXTDETECTOR_PARAM_INHERITANCE`，`ysg_ctd` 首次建配置时从已保存的 `ysgyolo` 播种，避免回退到 OBB 权重。③ 「跳过简单情况」纯色填充改为只覆盖修复掩膜内像素（块路径用块局部掩膜），默认值改 `False`。
+**摘要：** 从上游 1.5.19 更新包移植 PR #1365／#1364。① 新增 `ysg_ctd`：ysgyolo 出框、ComicTextDetector 在框内出精细字形掩膜，两者求交，框外拟声词像素仍被排除；恢复 `modules/textdetector/ctd/` 实现包与 `comictextdetector.pt(.onnx)` 权重，但不恢复 `ctd` 检测器注册。② 新增派生模块参数继承 `TEXTDETECTOR_PARAM_INHERITANCE`，`ysg_ctd` 首次建配置时从已保存的 `ysgyolo` 播种，避免回退到 OBB 权重；掩膜扩张尺寸例外（`TEXTDETECTOR_PARAM_INHERITANCE_EXCLUDE`）——字形掩膜需要盖住文字描边，默认 8px，矩形框仍是 2px。③ 「跳过简单情况」纯色填充改为只覆盖修复掩膜内像素（块路径用块局部掩膜），默认值改 `False`。④ 扩张后裁回 YOLO 框，避免污染框外背景。
 **涉及文件：** `modules/textdetector/detector_ysg.py`、`modules/textdetector/ctd/`、`modules/base.py`、`modules/__init__.py`、`modules/textdetector/__init__.py`、`ui/module_manager.py`、`modules/inpaint/base.py`、`ui/drawingpanel.py`、`utils/config.py`、`utils/lazy_registry.py`、`scripts/audit_registry.json`、`tests/test_ysg_ctd_detector.py`、`tests/test_textdetector_param_inheritance.py`、`tests/test_inpaint_mask_scope.py`
-**验证：** 真实工程「织姬嵌字【完成】」20 页／127 块：53 个简单块旧实现会填 2,042,425 px、新实现 1,510,757 px，越界涂平 531,668 px；修复后掩膜外 0 像素被改。`ysg_ctd` 三页实测块几何与 ysgyolo 完全一致、框外像素 0。
+**验证：** 真实工程「织姬嵌字【完成】」20 页／127 块：53 个简单块旧实现会填 2,042,425 px、新实现 1,510,757 px，越界涂平 531,668 px；修复后掩膜外 0 像素被改。`ysg_ctd` 三页实测块几何与 ysgyolo 完全一致、框外像素 0。复杂块用 `lama_large_512px` 实测：扩张 8px 时框内保留背景是矩形掩膜的约 3.8 倍；CTD 只认深色笔画，带粗描边的字需人工把扩张调到 12～20。
 
 ---
 
