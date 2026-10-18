@@ -10,8 +10,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest
-from qtpy.QtCore import QObject, Signal, QEvent
-from qtpy.QtWidgets import QApplication, QWidget
+from qtpy.QtCore import QObject, Signal, QEvent, Qt
+from qtpy.QtTest import QTest
+from qtpy.QtWidgets import QApplication, QPushButton, QWidget
 
 from ui.pipeline_progress_overlay import PipelineProgressOverlay
 from ui.pipeline_tasks import PipelineTasks, STOP_GRACE_SECONDS
@@ -24,6 +25,9 @@ def app():
 
 def test_overlay_stages_and_input_boundary(app):
     host = QWidget()
+    outside = QPushButton("Outside", host)
+    invoked = Mock()
+    outside.clicked.connect(invoked)
     host.resize(900, 700)
     host.show()
     overlay = PipelineProgressOverlay(host)
@@ -41,32 +45,54 @@ def test_overlay_stages_and_input_boundary(app):
     event = QEvent(QEvent.Type.KeyPress)
     assert overlay.event(event)
     assert event.isAccepted()
+    overlay.panel.activity_log.setFocus()
+    for _ in range(6):
+        QTest.keyClick(app.focusWidget(), Qt.Key.Key_Tab)
+        assert overlay.panel.isAncestorOf(app.focusWidget())
+    for _ in range(6):
+        QTest.keyClick(app.focusWidget(), Qt.Key.Key_Backtab)
+        assert overlay.panel.isAncestorOf(app.focusWidget())
+    invoked.assert_not_called()
     overlay.close_overlay()
     host.close()
 
 
-def test_translation_details_are_collapsible_and_trimmed(app):
+def test_page_change_resets_stage_counts_and_keeps_plain_activity(app):
+    import time
     host = QWidget()
+    host.canvas = _Canvas()
+    host.resize(900, 700)
     host.show()
-    overlay = PipelineProgressOverlay(host)
+    controller = PipelineTasks(host)
+    overlay = controller.overlay = PipelineProgressOverlay(host)
     overlay.show()
     overlay.panel.show()
-    card = overlay.panel.stage_cards["translate"]
-    card.set_summary("Round 2 · check_next_block")
-    card.set_details("Round 2<br>Tools: check_next_block<br><i>Reasoning hidden</i>")
-
-    assert card.expand_btn.isVisible()
-    assert not card.is_expanded()
-    assert card.summary.isVisible()
-    assert not card.details.isVisible()
-    assert "translation" not in card.details.text().lower()
-
-    card.expand_btn.click()
-    assert card.is_expanded()
-    assert not card.summary.isVisible()
-    assert card.details.isVisible()
-    card.expand_btn.click()
-    assert not card.is_expanded()
+    controller.runner = SimpleNamespace(pages=["a.png", "b.png"], mode="translate",
+                                        report={"skipped": [], "failed": {}},
+                                        total_blocks=8, known_tokens=120, unknown_usage=1)
+    controller.started = time.monotonic()
+    controller.applied = controller.conflicts = controller.blocks = 0
+    controller.errors = []
+    controller.activity({"waiting": True, "page": "a.png", "number": 1, "total": 2})
+    controller.activity({"stage": "translate", "state": "running", "total": 7})
+    controller.activity({"turn": 2, "tools": ["<b>literal</b>"], "covered": 3, "covered_total": 7})
+    controller.activity({"stage": "translate", "state": "done", "total": 7, "seconds": 3.0})
+    panel = overlay.panel
+    assert panel.stage_cards["translate"].property("state") == "done"
+    assert "<b>literal</b>" in panel.activity_log.toPlainText()
+    controller.activity({"waiting": True, "page": "b.png", "number": 2, "total": 2})
+    assert panel.stage_cards["translate"].property("state") == "waiting"
+    assert panel.stage_cards["translate"].bar.isHidden()
+    assert panel.page_facts["target"][1].text() == "—"
+    assert panel.page_facts["round"][1].text() == "—"
+    assert "total" not in controller.state
+    assert panel.progress.value() == 1
+    assert panel.progress.maximum() == 2
+    # 小宿主中正文滚动，操作区仍在面板内。
+    host.resize(480, 340)
+    app.processEvents()
+    assert overlay.rect().contains(panel.geometry())
+    assert panel.rect().contains(panel.stop_graceful.mapTo(panel, panel.stop_graceful.rect().bottomRight()))
     overlay.close_overlay()
     host.close()
 
@@ -95,6 +121,22 @@ def test_watchdog_enters_unresponsive_without_force_exit(app):
     assert controller.stop_state == "unresponsive"
     assert controller.overlay.panel.title.text() == controller.tr("No response")
     assert controller.overlay.panel.stop_force.isEnabled()
+    controller._teardown_overlay()
+    window.close()
+
+
+def test_start_failure_close_does_not_force_exit(app):
+    controller, window = _controller(app)
+    controller._controls = Mock()
+    force = Mock()
+    controller.overlay.stop_force_requested.connect(force)
+    controller._fail_to_start("<b>save failed</b>")
+    panel = controller.overlay.panel
+    assert panel.notice.text() == "<b>save failed</b>"
+    assert panel.progress.maximum() == 1
+    panel.stop_force.click()
+    assert controller.overlay is None
+    force.assert_not_called()
     controller._teardown_overlay()
     window.close()
 

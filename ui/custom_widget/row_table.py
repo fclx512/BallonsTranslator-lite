@@ -216,7 +216,7 @@ class _RowDelegate(QStyledItemDelegate):
 
     def sizeHint(self, option, index):
         if self.view.mode == MODE_CARD:
-            return QSize(120, _CARD_HEIGHT)
+            return QSize(120, 52 if self.view.compact_rows else _CARD_HEIGHT)
         width = _ROW_HEIGHT  # 首列：勾选框列
         if index.column() > 0:
             text = index.data(Qt.ItemDataRole.DisplayRole) or ""
@@ -240,7 +240,10 @@ class _RowDelegate(QStyledItemDelegate):
         if self.view.mode == MODE_CARD:
             # 圆角卡/徽章/勾选框是形状绘制，须开 AA；文本不受该开关影响
             painter.setRenderHint(QPainter.Antialiasing, True)
-            self._paint_card(painter, option.rect, row, selected, hovered)
+            if self.view.compact_rows:
+                self._paint_compact(painter, option.rect, row, selected, hovered)
+            else:
+                self._paint_card(painter, option.rect, row, selected, hovered)
         else:
             self._paint_cell(painter, option, index, row, selected, hovered)
         painter.restore()
@@ -288,6 +291,41 @@ class _RowDelegate(QStyledItemDelegate):
                 text, Qt.TextElideMode.ElideRight, max(10, int(rect.width()) - 10)
             ),
         )
+
+    def _paint_compact(self, painter, rect, row, selected, hovered):
+        if selected:
+            painter.fillRect(rect, self.color("@accentPrimary20Solid"))
+        elif hovered:
+            painter.fillRect(rect, self.color("@hoverBackgroundColor"))
+        painter.setPen(self.color("@borderColor", 90))
+        painter.drawLine(rect.bottomLeft(), rect.bottomRight())
+        self._paint_check(painter, self._check_rect(rect, inside_card=True), bool(row.get("checked")))
+        font = QFont(painter.font())
+        font.setPixelSize(13)
+        font.setStrikeOut(bool(row.get("rejected")))
+        painter.setFont(font)
+        painter.setPen(self.color("@dragTextColor"))
+        width = max(0, rect.width() - 46)
+        badge = row.get("badge") or ""
+        badge_font = QFont(font)
+        badge_font.setPixelSize(12)
+        badge_font.setStrikeOut(False)
+        badge_width = min(int(width * .45), QFontMetrics(badge_font).horizontalAdvance(badge)) if badge else 0
+        primary_width = max(0, width - badge_width - (12 if badge else 0))
+        painter.drawText(QRectF(rect.left()+38, rect.top()+4, primary_width, 22),
+                         Qt.AlignmentFlag.AlignVCenter, self._elided(painter, row.get("primary") or "", primary_width))
+        if badge:
+            painter.setFont(badge_font)
+            painter.setPen(self.color("@warningColor" if row.get("badge_tone") == "warning" else "@qwidgetForegroundColor"))
+            painter.drawText(QRectF(rect.right()-badge_width-8, rect.top()+4, badge_width, 22),
+                             Qt.AlignmentFlag.AlignVCenter, self._elided(painter, badge, badge_width))
+        font.setPixelSize(12)
+        font.setStrikeOut(False)
+        painter.setFont(font)
+        meta = row.get("meta") or ""
+        painter.setPen(self.color("@qwidgetForegroundColor", 195))
+        painter.drawText(QRectF(rect.left()+38, rect.top()+28, width, 19),
+                         Qt.AlignmentFlag.AlignVCenter, self._elided(painter, meta, width))
 
     def _paint_card(self, painter, rect, row, selected, hovered):
         card = QRectF(rect).adjusted(2, 3, -2, -3)
@@ -492,6 +530,7 @@ class RowTable(QTableView):
     def __init__(self, mode=MODE_TABLE, parent=None):
         super().__init__(parent)
         self.mode = mode
+        self.compact_rows = False
         self.setObjectName("WorkbenchRowTable")
         self._stretch_column = -1
         self._column_cap = _COLUMN_WIDTH_CAP
@@ -534,6 +573,15 @@ class RowTable(QTableView):
         self.doubleClicked.connect(self._on_double_clicked)
 
     # ── 对外 API ─────────────────────────────────────────────────────
+
+    def set_compact_rows(self, enabled: bool):
+        """工作台两行紧凑列表；不改变点击预览与勾选的独立语义。"""
+        self.compact_rows = enabled
+        self.verticalHeader().setDefaultSectionSize(
+            52 if enabled and self.mode == MODE_CARD else
+            (_CARD_HEIGHT if self.mode == MODE_CARD else _ROW_HEIGHT)
+        )
+        self.viewport().update()
 
     def set_header_labels(self, labels) -> None:
         """表格模式列头（不含勾选列）。"""

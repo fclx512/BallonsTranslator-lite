@@ -15,16 +15,16 @@
 不是为"边跑边改"专门写的——队列里排着的图还在写盘、后台其他线程也可能碰
 项目，那些不经过覆盖层，所以这层校验一步都不能省。
 
-**逐页渲染**：每页写回后立刻重建当前页画布，不留"标脏等下次访问再补渲染"
-（旧版那一下同步渲染正好砸在用户切页的瞬间，就是跳转卡顿的来源）。非当前页
-只落盘，用户切过去时按正常切页路径加载——不需要管线替它渲染，那条路本来
-就会读盘。
+**逐页渲染**：默认写回后生成结果图，非当前页使用独立场景，不切换用户画布。
+等待图像保存回执后才清脏并放行下一页；关闭此选项则只保存数据，访问时补渲染。
 """
+import copy
 import os
 import time
 
-from qtpy.QtCore import QObject, QTimer, Qt
-from qtpy.QtWidgets import QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout
+from qtpy.QtCore import QObject, QRectF, QTimer, Qt
+from qtpy.QtGui import QPainter
+from qtpy.QtWidgets import QDialog, QGraphicsScene, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout
 
 from utils.config import pcfg, RunStatus
 from ui.custom_widget import ConfigTextEdit
@@ -39,6 +39,43 @@ STOP_GRACE_SECONDS = 30
 #: 强制退出前给还在写盘的图留的时间。超时也走，宁可少一张结果图，也不能
 #: 因为一个后台写盘卡住就永远退不出去。
 FORCE_EXIT_SAVE_WAIT = 3.0
+
+
+def render_page_image(project, page):
+    """Render a non-current page on the GUI thread without changing the canvas."""
+    from ui.misc import ndarray2pixmap
+    from ui.textitem import TextBlkItem
+
+    view = copy.copy(project)
+    view.set_current_img(page)
+    base = view.notext_array if view.notext_array is not None else view.inpainted_array
+    image = ndarray2pixmap(base, return_qimg=True).copy()
+    scene = QGraphicsScene()
+    rect = QRectF(0, 0, image.width(), image.height())
+    scene.setSceneRect(rect)
+    items = []
+    try:
+        for index, block in enumerate(project.pages[page]):
+            item = TextBlkItem(copy.deepcopy(block), index)
+            items.append(item)
+            item._hide_badge = True
+            item.refresh_seq_badge()
+            item.refresh_tag_badge()
+            item.settle_overflow_state()
+            scene.addItem(item)
+        painter = QPainter(image)
+        try:
+            painter.setRenderHints(QPainter.RenderHint.Antialiasing |
+                                   QPainter.RenderHint.TextAntialiasing |
+                                   QPainter.RenderHint.SmoothPixmapTransform)
+            scene.render(painter, rect, rect)
+        finally:
+            painter.end()
+        return image
+    finally:
+        for item in items:
+            item.release_render_resources()
+        scene.clear()
 
 
 class PipelineTasks(QObject):
@@ -62,6 +99,8 @@ class PipelineTasks(QObject):
         self.watchdog.timeout.connect(self._check_stop_timeout)
         self.dialog = None
         self.image_edits = set()
+        self.processed = 0
+        self.state = {}
         window.canvas.content_modified.connect(self._note_edit)
 
     # ── 状态查询 ────────────────────────────────────────────────────
@@ -105,7 +144,7 @@ class PipelineTasks(QObject):
 
     def _enabled_stages(self, mode: str) -> set:
         """本次真正会跑的阶段。没开的阶段不占界面（整行收掉，少四行噪音）。"""
-        stages = {"render"}
+        stages = set() if mode == "revise" else {"render"}
         if mode == "recognize":
             if pcfg.module.enable_detect:
                 stages.add("detect")
@@ -127,6 +166,12 @@ class PipelineTasks(QObject):
         self.overlay.stop_graceful_requested.connect(self.request_graceful_stop)
         self.overlay.stop_force_requested.connect(self.request_force_stop)
         self.overlay.panel.set_stages(self._enabled_stages(mode))
+        self.overlay.panel.title.setText({
+            "recognize": self.tr("Recognize original text"),
+            "translate": self.tr("Translate original text"),
+            "inpaint": self.tr("Repair images"),
+            "revise": self.tr("Generate revision candidates"),
+        }.get(mode, self.tr("Running")))
         self.overlay.show()
         self.overlay.raise_()
 
@@ -148,6 +193,8 @@ class PipelineTasks(QObject):
         self.pending = True
         self._show_overlay(mode)
         self._controls(False)
+        if self.overlay is not None:
+            self.overlay.panel.append_activity(self.tr("Saving current work before starting..."))
         save_failures = w.imsave_thread.failure_count
         try:
             w.conditional_save()
@@ -173,6 +220,9 @@ class PipelineTasks(QObject):
                 modules = {name: getattr(manager, name) for name in names}
                 if not names or any(value is None for value in modules.values()):
                     raise RuntimeError(self.tr("A required module is not ready. Select it in Settings and retry."))
+                if any(getattr(module, "name", None) != getattr(pcfg.module, name)
+                       for name, module in modules.items()):
+                    raise RuntimeError(self.tr("A required module is not ready. Select it in Settings and retry."))
                 self.runner = PipelineRunner(project, pages if pages is not None else list(project.pages),
                                              mode, pcfg.module, modules, overwrite=overwrite,
                                              targets=targets, hint=hint, await_settlement=True, parent=self)
@@ -180,9 +230,22 @@ class PipelineTasks(QObject):
                 self.candidates = [c for c in self.candidates if c.get("project") is project]
                 self.image_edits.clear()
                 self.applied = self.conflicts = self.blocks = 0
+                self.task_mode = mode
+                self.processed = 0
                 self.errors = []
                 self.state = {}
                 self.started = self.last_activity = time.monotonic()
+                if self.overlay is not None:
+                    panel = self.overlay.panel
+                    engines = [str(getattr(module, "name", "") or getattr(module, "module_name", "") or type(module).__name__) for module in modules.values()]
+                    context = self.tr("Engines: %1").replace("%1", " / ".join(engines))
+                    if mode == "translate":
+                        context += " · " + (self.tr("Replace existing translations") if overwrite else self.tr("Only empty translations"))
+                    elif mode == "revise":
+                        context += " · " + self.tr("Candidates require review before applying")
+                        panel.footer_hint.setText(self.tr("Candidates are kept for review in this session."))
+                    panel.context.setText(context)
+                    panel.append_activity(self.tr("Task started"))
                 self.stop_state = "none"
                 self.runner.activity.connect(self.activity)
                 self.runner.page_ready.connect(self.receive)
@@ -205,6 +268,12 @@ class PipelineTasks(QObject):
         self.timer.stop()
         self.watchdog.stop()
         self._panel_as_notice(self.tr("Could not start"), message)
+        if self.overlay is not None:
+            panel = self.overlay.panel
+            panel.progress.setRange(0, 1)
+            panel.progress.setValue(0)
+            panel.progress_label.setText(self.tr("Task did not start"))
+            panel.append_activity(message)
 
     def _panel_as_notice(self, title: str, message: str):
         """把进度面板改造成"只有一句话 + 一个关闭钮"的告知卡。
@@ -216,12 +285,7 @@ class PipelineTasks(QObject):
         if self.overlay is None:
             return
         panel = self.overlay.panel
-        for card in panel.stage_cards.values():
-            card.hide()
-        panel.title.setText(title)
-        panel.page_label.setText("")
-        panel.stop_graceful.hide()
-        panel.set_notice(message)
+        panel.show_result(title, message)
         panel.stop_force.setText(self.tr("Close"))
         panel.stop_force.setEnabled(True)
         panel.stop_force.setObjectName("PipelineStopGraceful")
@@ -241,7 +305,7 @@ class PipelineTasks(QObject):
         self.request_graceful_stop()
 
     def request_graceful_stop(self):
-        """优雅停止：跑完当前页就收。已保存的页保留，在途结果丢弃。"""
+        """协作停止：等当前调用返回，丢弃未结算结果，保留已保存页面。"""
         if self.stop_state != "none":
             return
         self.stop_state = "graceful"
@@ -270,17 +334,9 @@ class PipelineTasks(QObject):
         """二次确认。文案必须写明"已完成的页会保存、在途页会丢、程序会关闭"。"""
         box = QMessageBox(self.window)
         box.setIcon(QMessageBox.Icon.Warning)
-        box.setWindowTitle(self.tr("Force stop"))
+        box.setWindowTitle(self.tr("End program"))
         waited = int(time.monotonic() - self.stop_requested_at) if self.stop_requested_at else 0
-        box.setText(
-            self.tr(
-                "The background call has not returned after %1 s. Forcing a stop "
-                "ends the program immediately.\n\n"
-                "Pages already saved stay in the project. The page in flight is "
-                "discarded. A model or network call that is still running is cut "
-                "off, so restart the app afterwards."
-            ).replace("%1", str(waited))
-        )
+        box.setText(self.tr("The current call has not returned after %1 s. End the program now?\n\nSaved pages stay in the project. Unsaved results and revision candidates will be lost. You will need to restart the app.").replace("%1", str(waited)))
         wait_btn = box.addButton(self.tr("Keep waiting"), QMessageBox.ButtonRole.RejectRole)
         force_btn = box.addButton(self.tr("End program"), QMessageBox.ButtonRole.DestructiveRole)
         box.setDefaultButton(wait_btn)
@@ -329,68 +385,85 @@ class PipelineTasks(QObject):
 
     # ── 进度刷新 ────────────────────────────────────────────────────
 
+    def _log_activity(self, message):
+        if self.overlay is not None:
+            self.overlay.panel.append_activity(self._format_elapsed() + "  " + message)
+
     def activity(self, state):
+        panel = self.overlay.panel if self.overlay is not None else None
         if state.get("waiting"):
-            for key in ("error", "tools", "turn", "covered", "covered_total"):
-                self.state.pop(key, None)
-        self.state.update(state)
+            # 页首 total 是页数，阶段 total 是块数，不能混进同一个字段。
+            self.state = {"page": state["page"], "number": state["number"]}
+            self.processed = max(self.processed, state["number"] - 1)
+            if panel is not None:
+                panel.reset_page()
+            self._log_activity(self.tr("Started page: %1").replace("%1", state["page"]))
+        else:
+            if state.get("error") and not self.state.get("stage"):
+                # 读图等阶段前错误不能沿用 runner 上一页的 current_stage。
+                state = {key: value for key, value in state.items() if key != "stage"}
+            if state.get("state") == "running":
+                for key in ("total", "seconds", "error", "turn", "tools", "covered", "covered_total"):
+                    self.state.pop(key, None)
+            self.state.update(state)
+            if state.get("error"):
+                self.processed = max(self.processed, self.state.get("number", 0))
+                self._log_activity(state.get("page", "") + ": " + state["error"])
+            elif state.get("stage"):
+                stage = state["stage"]
+                message = (self._stage_done_text(stage, state) if state.get("state") == "done"
+                           else self._stage_running_text(stage, state.get("total")))
+                self._log_activity(message)
+            elif state.get("turn"):
+                message = self.tr("Response received: round %1").replace("%1", str(state["turn"]))
+                if state.get("tools"):
+                    message += " · " + self.tr("Requested tools: %1").replace("%1", self._tool_names(state["tools"]))
+                self._log_activity(message)
         self.last_activity = time.monotonic()
         self.refresh()
 
     def refresh(self):
-        if self.overlay is None:
+        if self.overlay is None or self.runner is None:
             return
         panel = self.overlay.panel
-        state = self.state
-
-        number = state.get("number", 0)
-        total_pages = len(self.runner.pages) if self.runner is not None else state.get("total", 0)
-        panel.update_current_page(number, total_pages, state.get("page", ""))
-
-        self._update_stages(panel, state)
+        panel.update_current_page(self.state.get("number", 0), len(self.runner.pages), self.state.get("page", ""))
+        self._update_stages(panel, self.state)
         self._update_summary(panel)
 
-    def _update_stages(self, panel, state: dict):
-        """把 runner 上报的单条 activity 落成各卡片状态。
-
-        只认识自己关心的那几种 payload（阶段开始/结束、翻译轮次、错误），
-        其余一律当噪音忽略。
-        """
+    def _update_stages(self, panel, state):
         stage = state.get("stage")
         phase = state.get("state")
-        error = state.get("error")
-        page = state.get("page", "")
-
-        if error and stage:
-            card = panel.stage_cards.get(stage)
+        card = panel.stage_cards.get(stage)
+        if state.get("error"):
+            panel.current_status.setText(state["error"])
             if card is not None:
-                card.set_failed(error)
-        elif stage and phase == "running":
-            card = panel.stage_cards.get(stage)
-            if card is not None:
-                total = state.get("total")
-                card.set_running(self._stage_running_text(stage, total), 0, total or None)
-        elif stage and phase == "done":
-            card = panel.stage_cards.get(stage)
-            if card is not None:
-                card.set_completed(self._stage_done_text(stage, state))
+                card.set_failed()
+            return
+        if card is not None:
+            if phase == "running":
+                card.set_running()
+                panel.current_status.setText(self._stage_running_text(stage, state.get("total")))
+            elif phase == "done":
+                card.set_completed()
+                panel.current_status.setText(self._stage_done_text(stage, state))
+        if stage in {"ocr", "translate"} and state.get("total") is not None:
+            panel.set_fact("target", self.tr("%1 blocks").replace("%1", str(state["total"])))
+        if stage == "translate" and state.get("turn"):
+            self._update_translate_card(panel, state, state.get("page", ""))
+        if stage == "translate" and phase == "done":
+            count = state.get("total", 0)
+            panel.set_fact("accepted", self.tr("%1 / %2 blocks").replace("%1", str(count)).replace("%2", str(count)))
 
-        # 翻译是唯一有轮次细节的阶段：摘要行 + 可展开详情
-        if state.get("turn"):
-            self._update_translate_card(panel, state, page)
-
-    def _stage_running_text(self, stage: str, total) -> str:
-        if stage == "ocr" and total:
-            return self.tr("Recognizing text (0/%1)").replace("%1", str(total))
+    def _stage_running_text(self, stage, total):
         return {
             "detect": self.tr("Detecting text regions..."),
             "ocr": self.tr("Recognizing text..."),
-            "translate": self.tr("Translating..."),
+            "translate": self.tr("Processing translation..."),
             "inpaint": self.tr("Repairing image..."),
-            "render": self.tr("Rendering..."),
+            "render": self.tr("Saving page result..."),
         }.get(stage, self.tr("Working..."))
 
-    def _stage_done_text(self, stage: str, state: dict) -> str:
+    def _stage_done_text(self, stage, state):
         total = state.get("total")
         seconds = state.get("seconds")
         suffix = ""
@@ -404,75 +477,48 @@ class PipelineTasks(QObject):
             return self.tr("%1 blocks translated").replace("%1", str(total)) + suffix
         if stage == "inpaint":
             return self.tr("Repair finished") + suffix
+        if stage == "render":
+            return self.tr("Page result saved")
         return self.tr("Done") + suffix
 
-    def _update_translate_card(self, panel, state: dict, page: str):
-        """翻译卡片：折叠给摘要行，展开给轮次/工具/用量——**不给思维链与译文**。
+    def _update_translate_card(self, panel, state, page):
+        # 回调发生在模型整轮返回、工具执行之前；不是流式输出或工具成功回执。
+        panel.set_fact("round", self.tr("Round %1").replace("%1", str(state["turn"])))
+        panel.set_fact("tools", self._tool_names(state.get("tools") or []) or self.tr("No tool requested"))
+        covered, total = state.get("covered"), state.get("covered_total")
+        if covered is not None and total:
+            panel.set_fact("accepted", self.tr("%1 / %2 blocks").replace("%1", str(covered)).replace("%2", str(total)))
+            if state.get("state") == "running":
+                panel.stage_cards["translate"].set_running(progress=covered, total=total)
 
-        思维链和完整译文会把面板撑爆，而且它们跑完就能在文本框里看到，
-        实时滚一遍没有信息量。省略了什么要写在界面上，否则用户以为卡了。
-        """
-        card = panel.stage_cards.get("translate")
-        if card is None:
-            return
-        turn = state.get("turn", 0)
-        tools = list(state.get("tools") or [])
-        covered = state.get("covered")
-        covered_total = state.get("covered_total")
-
-        if covered is not None and covered_total:
-            card.set_running(
-                self.tr("Translating (%1/%2 blocks)")
-                .replace("%1", str(covered)).replace("%2", str(covered_total)),
-                covered, covered_total,
-            )
-
-        shown = ", ".join(tools[:2])
-        if len(tools) > 2:
-            shown += ", ..."
-        if not shown:
-            shown = self.tr("waiting for the model")
-        card.set_summary(
-            self.tr("Round %1 · %2").replace("%1", str(turn)).replace("%2", shown)
-        )
-
-        lines = [self.tr("<b>Round %1</b>").replace("%1", str(turn))]
-        if tools:
-            lines.append("└─ " + self.tr("Tools: %1").replace("%1", ", ".join(tools)))
-        if covered is not None and covered_total:
-            lines.append("└─ " + self.tr("Blocks accepted: %1/%2")
-                         .replace("%1", str(covered)).replace("%2", str(covered_total)))
-        tokens = state.get("tokens")
-        if tokens is not None:
-            unknown = state.get("unknown", 0)
-            usage = str(tokens)
-            if unknown:
-                usage += " + ?" + ("  ×" + str(unknown) if unknown > 1 else "")
-            lines.append("└─ " + self.tr("Tokens used: %1").replace("%1", usage))
-        if state.get("request_mode") == "deepseek_non_thinking":
-            lines.append("└─ " + self.tr("Mode: non-thinking request (DeepSeek)"))
-        lines.append("")
-        lines.append("<i>" + self.tr(
-            "Reasoning and full translations are hidden here. "
-            "Read them in the text panel once the page is done."
-        ) + "</i>")
-        card.set_details("<br>".join(lines))
+    def _tool_names(self, tools):
+        names = {
+            "list_pages": self.tr("List pages"),
+            "read_pages": self.tr("Read page text"),
+            "search_blocks": self.tr("Search text"),
+            "get_page_info": self.tr("Read page information"),
+            "search_glossary": self.tr("Search glossary"),
+            "submit_translations": self.tr("Submit translations"),
+        }
+        return ", ".join(names.get(name, name) for name in tools)
 
     def _update_summary(self, panel):
+        runner = self.runner
+        panel.update_progress(self.processed, len(runner.pages), self._format_elapsed())
         parts = [self.tr("Pages saved: %1").replace("%1", str(self.applied))]
-        if self.started:
-            parts.append(self.tr("Elapsed: %1").replace("%1", self._format_elapsed()))
-        if self.errors:
-            parts.append(self.tr("Errors: %1").replace("%1", str(len(self.errors))))
-        if self.conflicts:
-            parts.append(self.tr("Rejected pages: %1").replace("%1", str(self.conflicts)))
-        if self.runner is not None and self.runner.mode in {"translate", "revise"}:
-            parts.append(self.tr("Blocks done: %1/%2")
-                         .replace("%1", str(self.blocks)).replace("%2", str(self.runner.total_blocks)))
+        if runner.mode == "revise":
+            parts = [self.tr("Revision candidates: %1 / %2").replace("%1", str(self.blocks)).replace("%2", str(runner.total_blocks))]
+        elif runner.mode == "translate":
+            parts.append(self.tr("Blocks saved: %1 / %2").replace("%1", str(self.blocks)).replace("%2", str(runner.total_blocks)))
+        parts.append(self.tr("Skipped: %1").replace("%1", str(len(runner.report["skipped"]))))
+        errors = len(self.errors) + len(runner.report["failed"])
+        parts.append(self.tr("Errors: %1 (including %2 conflicts)").replace("%1", str(errors)).replace("%2", str(self.conflicts)))
+        panel.update_summary("    ·    ".join(parts))
+        if runner.mode in {"translate", "revise"}:
+            panel.usage.show()
+            panel.usage.setText(self.tr("Task tokens reported: %1 · Responses without usage: %2").replace("%1", str(runner.known_tokens)).replace("%2", str(runner.unknown_usage)))
         idle = int(time.monotonic() - self.last_activity)
-        if idle >= 5:
-            parts.append(self.tr("Waiting on the model: %1 s").replace("%1", str(idle)))
-        panel.update_summary("  |  ".join(parts))
+        panel.activity_age.setText(self.tr("Last status update %1 s ago").replace("%1", str(idle)))
 
     def _format_elapsed(self) -> str:
         seconds = int(time.monotonic() - self.started)
@@ -490,6 +536,7 @@ class PipelineTasks(QObject):
             return
         page = result["page"]
         accepted = None
+        waiting_for_image = False
         try:
             if runner.cancel_event.is_set():
                 return
@@ -501,19 +548,15 @@ class PipelineTasks(QObject):
                     or page_signature(self.project, page) != runner.signatures[page]):
                 self.conflicts += 1
                 self.errors.append(self.tr("Edited during the task; rerun this page: ") + page)
-                if self.overlay is not None:
-                    message = self.tr("Edited during the task; rerun this page: ") + page
-                    card = self.overlay.panel.stage_cards.get(
-                        "translate" if runner.mode in {"translate", "revise"} else runner.mode
-                    )
-                    if card is not None and card.isVisible():
-                        card.set_failed(message)
+                self.state["error"] = self.errors[-1]
+                self._log_activity(self.errors[-1])
                 return
             if runner.mode == "revise":
                 for proposal in result["proposals"]:
                     proposal["project"] = self.project
                 self.candidates.extend(result["proposals"])
                 self.blocks += len(result["proposals"])
+                self._log_activity(self.tr("Revision candidates ready: %1").replace("%1", str(len(result["proposals"]))))
                 return
             if runner.mode == "translate":
                 translated = [result["blocks"][i] for i in result["indexes"]]
@@ -528,8 +571,10 @@ class PipelineTasks(QObject):
                     if not block.font_family:
                         block.font_family = pcfg.global_fontformat.font_family
             render_card = self.overlay.panel.stage_cards.get("render") if self.overlay is not None else None
+            self.state.update(stage="render", state="running")
             if render_card is not None and render_card.isVisible():
-                render_card.set_running(self.tr("Saving page result..."))
+                render_card.set_running()
+                self.overlay.panel.current_status.setText(self.tr("Saving page result..."))
             if result["mask"] is not None:
                 self.project.save_mask(page, result["mask"])
             if result["inpainted"] is not None:
@@ -551,28 +596,81 @@ class PipelineTasks(QObject):
             for key in ("width", "height"):
                 if key in result.get("image_info", {}):
                     self.project._image_info[page][key] = result["image_info"][key]
-            w.canvas.setProjSaveState(True)
             self.project.save()
             if current_page:
                 # 逐页渲染：当前页结果一到就重建画布，不留"标脏等下次访问"。
                 # 旧版那一下补渲染正好落在用户切页的瞬间，就是跳转卡顿的来源。
                 w.canvas.updateCanvas()
+                w.canvas.setProjSaveState(True)
             accepted = self.project.pages[page]
+            self.project.mark_page_needs_rerender(page, include_current=True)
+            if runner.config.render_after_pipeline:
+                image = w.canvas.render_result_img() if current_page else render_page_image(self.project, page)
+                failures = w.imsave_thread.failure_count
+                w.imsave_thread.saveImg(
+                    self.project.get_result_path(page), image, page,
+                    save_params={"ext": self.project.get_result_ext(page),
+                                 "quality": pcfg.imgsave_quality},
+                    keep_alpha=image.hasAlphaChannel(),
+                )
+                waiting_for_image = True
+                self._image_settlement = runner
+                self._finish_page_image(runner, page, accepted, result, failures)
+                return
             self.applied += 1
             self.blocks += result.get("count", len(result["blocks"]))
             w.glossary_workbench.mark_content_changed()
+            self.state.update(stage="render", state="done")
+            self._log_activity(self.tr("Saved page result: %1").replace("%1", page))
             if render_card is not None and render_card.isVisible():
-                render_card.set_completed(
-                    self.tr("Saved page result: %1").replace("%1", page))
+                render_card.set_completed()
         except Exception as error:
             self.errors.append(page + ": " + str(error))
+            self.state["error"] = self.errors[-1]
+            self._log_activity(self.errors[-1])
         finally:
+            if not runner.cancel_event.is_set():
+                self.processed = max(self.processed, self.state.get("number", 0))
+            self.last_activity = time.monotonic()
+            if not waiting_for_image:
+                runner.acknowledge(accepted)
+                self.refresh()
+
+    def _finish_page_image(self, runner, page, accepted, result, failures):
+        """Keep the worker waiting until the result-image save has a receipt."""
+        if runner is not self.runner:
+            return
+        if self.window.imsave_thread.isRunning():
+            QTimer.singleShot(50, lambda: self._finish_page_image(runner, page, accepted, result, failures))
+            return
+        try:
+            if self.window.imsave_thread.failure_count != failures:
+                raise RuntimeError(self.tr("Images could not be saved. Fix the save error before starting."))
+            self.project.clear_page_needs_rerender(page)
+            if page == self.project.current_img:
+                self.window.canvas.setProjSaveState(False)
+                self.window.canvas.update_saved_undostep()
+            self.applied += 1
+            self.blocks += result.get("count", len(result["blocks"]))
+            self.window.glossary_workbench.mark_content_changed()
+            self.state.update(stage="render", state="done")
+            self._log_activity(self.tr("Saved page result: %1").replace("%1", page))
+        except Exception as error:
+            self.errors.append(page + ": " + str(error))
+            self.state["error"] = self.errors[-1]
+            self._log_activity(self.errors[-1])
+        finally:
+            self._image_settlement = None
+            self.last_activity = time.monotonic()
             runner.acknowledge(accepted)
-        self.refresh()
+            self.refresh()
 
     # ── 收尾 ────────────────────────────────────────────────────────
 
     def finished(self):
+        if self.window.imsave_thread.isRunning() or getattr(self, "_image_settlement", None) is not None:
+            QTimer.singleShot(50, self.finished)
+            return
         runner = self.runner
         self.timer.stop()
         self.watchdog.stop()
@@ -581,36 +679,33 @@ class PipelineTasks(QObject):
         self.stop_requested_at = 0.0
         report = runner.report
         errors = self.errors + [page + ": " + error for page, error in report["failed"].items()]
-        # runner 马上要被清掉，用量这两个数先落下来（finish 报告还要用）
-        known_tokens, unknown_usage = runner.known_tokens, runner.unknown_usage
+        # 线程清理前冻结最终进度与用量；completed 只表示结算，不能当作保存数。
+        processed_pages = set(report["completed"]) | set(report["skipped"]) | (set(report["failed"]) & set(runner.pages))
+        self.processed = max(self.processed, len(processed_pages))
+        if self.overlay is not None:
+            self._update_summary(self.overlay.panel)
         self.runner = None
         runner.deleteLater()
         if pcfg.module.empty_runcache:
             self.window.module_manager.unload_all_models()
         self.window.updatePageList()
-        self._show_finished_report(report, errors, known_tokens, unknown_usage)
+        self._show_finished_report(report, errors)
         if self.close_when_done:
             self.window.close()
 
-    def _show_finished_report(self, report, errors, known_tokens, unknown_usage):
+    def _show_finished_report(self, report, errors):
         """任务结束：面板改成结果摘要，给个关闭钮；重译候选另开入口。"""
         if self.overlay is None:
             return
-        errors_text = "\n".join(errors[:3]) if errors else ""
+        errors_text = "\n".join(errors)
         self._panel_as_notice(
-            self.tr("Cancelled") if report["cancelled"] else self.tr("Task finished"),
+            self.tr("Cancelled") if report["cancelled"] else (self.tr("Task ended with errors") if errors else self.tr("Task finished")),
             errors_text,
         )
         panel = self.overlay.panel
-        parts = [
-            self.tr("Pages saved: %1").replace("%1", str(self.applied)),
-            self.tr("Skipped: %1").replace("%1", str(len(report["skipped"]))),
-            self.tr("Rejected pages: %1").replace("%1", str(self.conflicts)),
-            self.tr("Errors: %1").replace("%1", str(len(errors))),
-            self.tr("Tokens reported: %1; requests without usage: %2")
-            .replace("%1", str(known_tokens)).replace("%2", str(unknown_usage)),
-        ]
-        panel.update_summary("  |  ".join(parts))
+        panel.append_activity(panel.title.text())
+        if self.task_mode == "revise":
+            panel.footer_hint.setText(self.tr("Candidates require review before applying"))
         if self.candidates:
             panel.stop_graceful.setText(self.tr("Review revisions"))
             panel.stop_graceful.setEnabled(True)

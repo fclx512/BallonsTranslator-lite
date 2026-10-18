@@ -34,6 +34,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from ui.adaptive_wrap_layout import AdaptiveWrapLayout
 from ui.custom_widget.row_table import MODE_CARD, RowTable
 from ui.workbench_batch_view import RefreshButton, draw_overlays, to_pixmap
 
@@ -62,9 +63,10 @@ class _SectionWidgets:
         self.spec = spec
         self.rows = []
         self.caption = QLabel(spec.title, view)
-        self.caption.setObjectName("WorkbenchTaskHint")
+        self.caption.setObjectName("WorkbenchSectionTitle")
         self.caption.setWordWrap(True)
         self.table = RowTable(MODE_CARD, view)
+        self.table.set_compact_rows(True)
         self.table.checkToggled.connect(
             lambda row, checked, sid=spec.id: view._on_check_toggled(sid, row, checked)
         )
@@ -124,13 +126,28 @@ class ReviewQueueView(QWidget):
         self._preview_pixmap = None
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(6)
 
+        heading = QHBoxLayout()
+        title = QLabel(task.label, self)
+        title.setObjectName("WorkbenchPageTitle")
+        title.setWordWrap(True)
+        heading.addWidget(title, 1)
+        self._refresh_btn = RefreshButton(self)
+        self._refresh_btn.clicked.connect(self.replan)
+        heading.addWidget(self._refresh_btn)
+        layout.addLayout(heading)
+        help_btn = QPushButton(self.tr("How this task works"), self)
+        help_btn.setObjectName("WorkbenchHelpButton")
+        help_btn.setCheckable(True)
+        heading.insertWidget(1, help_btn)
         self._hint = QLabel(task.hint, self)
         self._hint.setObjectName("WorkbenchTaskHint")
         self._hint.setWordWrap(True)
         layout.addWidget(self._hint)
+        self._hint.hide()
+        help_btn.toggled.connect(self._hint.setVisible)
 
         top_row = QHBoxLayout()
         top_row.setSpacing(6)
@@ -138,9 +155,7 @@ class ReviewQueueView(QWidget):
         self._summary.setObjectName("WorkbenchTaskSummary")
         self._summary.setWordWrap(True)
         top_row.addWidget(self._summary, 1)
-        self._refresh_btn = RefreshButton(self)
-        self._refresh_btn.clicked.connect(self.replan)
-        top_row.addWidget(self._refresh_btn, 0, Qt.AlignmentFlag.AlignTop)
+
         layout.addLayout(top_row)
 
         self._detail = QLabel("", self)
@@ -163,8 +178,7 @@ class ReviewQueueView(QWidget):
 
         for spec in task.sections():
             widgets = _SectionWidgets(spec, self)
-            actions = QHBoxLayout()
-            actions.setSpacing(6)
+            actions = AdaptiveWrapLayout(horizontal_spacing=6, vertical_spacing=6)
             actions.addWidget(widgets.jump_btn)
             if task.action_id:
                 from utils.block_actions import ACTION_REGISTRY
@@ -181,7 +195,6 @@ class ReviewQueueView(QWidget):
             else:
                 widgets.process_btn.hide()
             actions.addWidget(widgets.action_btn)
-            actions.addStretch(1)
             layout.addWidget(widgets.caption)
             layout.addWidget(widgets.empty)
             layout.addWidget(widgets.table)
@@ -196,6 +209,7 @@ class ReviewQueueView(QWidget):
             self.revision_hint.setPlaceholderText(self.tr("Revision instructions (optional)"))
             layout.addWidget(self.revision_hint)
             self.revision_btn = QPushButton(self.tr("Generate revisions for selected rows"))
+            self.revision_btn.setObjectName("WorkbenchExecuteButton")
             self.revision_btn.setEnabled(False)
             self.revision_btn.clicked.connect(self._generate_revisions)
             layout.addWidget(self.revision_btn)

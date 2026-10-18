@@ -261,6 +261,17 @@ class RunPipelineDialogTest(unittest.TestCase):
         self.dialog.wo_update_cb.setChecked(True)
         self.assertTrue(self.dialog.run_without_textstyle_update())
 
+    def test_render_option_follows_saved_preference_without_writing_on_cancel(self):
+        from unittest.mock import patch
+        for enabled in (True, False):
+            with patch.object(pcfg.module, "render_after_pipeline", enabled):
+                dialog = self.Dialog(page_names=PAGE_NAMES)
+                self.assertEqual(dialog.render_after_cb.isChecked(), enabled)
+                dialog.render_after_cb.setChecked(not enabled)
+                dialog.reject()
+                self.assertEqual(pcfg.module.render_after_pipeline, enabled)
+                dialog.deleteLater()
+
 
 if __name__ == "__main__":
     unittest.main()

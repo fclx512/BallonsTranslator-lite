@@ -20,7 +20,7 @@
 本页不再调用。
 """
 
-from qtpy.QtCore import Signal
+from qtpy.QtCore import Signal, Qt
 from qtpy.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -32,12 +32,6 @@ from qtpy.QtWidgets import (
 
 from ui.custom_widget import ConfigComboBox
 from ui.workbench_tasks import PageImageCache
-
-# 色表滚动区上限：再多颜色也不把页撑长（滚动看；行内有角色名下拉故放高些）
-_LIST_MAX_H = 180
-# 角色名下拉的固定宽度：占位名短，真名给到能看全常用长度
-_ROLE_COMBO_W = 130
-
 
 def _fmt_hex(rgb) -> str:
     return "#{:02x}{:02x}{:02x}".format(
@@ -75,7 +69,7 @@ class _PaletteRow(QWidget):
         layout.addWidget(QLabel(_fmt_hex(rgb), self))
 
         self.role_combo = ConfigComboBox(self)
-        self.role_combo.setFixedWidth(_ROLE_COMBO_W)
+        self.role_combo.setMinimumWidth(90)
         self.role_combo.setEditable(True)
         editor = self.role_combo.lineEdit()
         if editor is not None:
@@ -83,12 +77,9 @@ class _PaletteRow(QWidget):
             editor.editingFinished.connect(self._on_edit_finished)
         self.role_combo.activated.connect(self._on_activated)
         self.set_role(self._role, role_candidates)
-        layout.addWidget(self.role_combo)
+        layout.addWidget(self.role_combo, 1)
 
-        layout.addStretch(1)
-
-        del_btn = QPushButton("✕", self)
-        del_btn.setFixedSize(22, 22)
+        del_btn = QPushButton(self.tr("Remove"), self)
         del_btn.setToolTip(self.tr("Remove this color"))
         del_btn.clicked.connect(self.remove_requested.emit)
         layout.addWidget(del_btn)
@@ -166,7 +157,10 @@ class FgPalettePage(QWidget):
         self._crops = PageImageCache(proj)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setContentsMargins(12, 10, 12, 10)
+        title = QLabel(self.tr("Color palette"), self)
+        title.setObjectName("WorkbenchPageTitle")
+        layout.addWidget(title)
         layout.setSpacing(6)
 
         # ── 取样开关（真正的取样发生在画布上）─────────────────
@@ -186,6 +180,7 @@ class FgPalettePage(QWidget):
             ),
             self,
         )
+        hint.setObjectName("WorkbenchTaskHint")
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
@@ -194,13 +189,14 @@ class FgPalettePage(QWidget):
         self._rows_layout = QVBoxLayout(self._list_host)
         self._rows_layout.setContentsMargins(0, 0, 0, 0)
         self._rows_layout.setSpacing(4)
+        self._rows_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
         scroll.setWidget(self._list_host)
-        scroll.setMaximumHeight(_LIST_MAX_H)
+        scroll.setMinimumHeight(100)
         scroll.setObjectName("WorkbenchPaletteList")
         self._scroll = scroll
-        layout.addWidget(scroll)
+        layout.addWidget(scroll, 1)
 
         self._empty_label = QLabel(
             self.tr("No colors yet. Turn on sampling and click text on the canvas."),
@@ -212,8 +208,7 @@ class FgPalettePage(QWidget):
         self.clear_btn = QPushButton(self.tr("Clear Palette"), self)
         self.clear_btn.setObjectName("ConfigButton")
         self.clear_btn.clicked.connect(self._on_clear)
-        layout.addWidget(self.clear_btn)
-        layout.addStretch(1)
+        layout.addWidget(self.clear_btn, 0, Qt.AlignmentFlag.AlignRight)
 
         self.refresh_state()
 

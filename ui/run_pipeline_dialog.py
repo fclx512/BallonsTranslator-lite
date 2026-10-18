@@ -345,6 +345,10 @@ class RunPipelineDialog(QDialog):
         self.wo_update_cb.hide()
         self.overwrite_cb = ConfigCheckBox(self.tr("Replace existing translations"))
         layout.addWidget(self.overwrite_cb)
+        self.render_after_cb = ConfigCheckBox(self.tr("Render modified pages after processing"))
+        self.render_after_cb.setChecked(pcfg.module.render_after_pipeline)
+        self.render_after_cb.setToolTip(self.tr("Turn off to save project data only; result images will refresh when opened."))
+        layout.addWidget(self.render_after_cb)
         layout.addStretch(1)
         return page
 

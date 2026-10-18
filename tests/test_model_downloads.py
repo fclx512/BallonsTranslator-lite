@@ -362,6 +362,45 @@ class TestEnsureModuleDeps(unittest.TestCase):
             getter.return_value.start.side_effect = RuntimeError("boom")
             self.assertTrue(module_manager._ensure_module_deps("ocr", "anything"))
 
+    def test_ocr_choice_is_saved_before_preparation_and_survives_restart(self):
+        import json
+        import tempfile
+        from types import SimpleNamespace
+        from pathlib import Path
+        from ui import module_manager
+        from utils import config
+
+        host = SimpleNamespace(background_task_active=False)
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(config.shared, "CONFIG_PATH", str(Path(directory) / "config.json")), \
+                mock.patch.object(config.pcfg.module, "ocr", "paddleocr_vl_manga"), \
+                mock.patch.object(module_manager, "_ensure_module_deps", side_effect=RuntimeError("not ready")):
+            for name in ("paddleocr_v6_onnx", "none_ocr", "paddleocr_vl_manga"):
+                with self.assertRaisesRegex(RuntimeError, "not ready"):
+                    module_manager.ModuleManager.setOCR(host, name)
+                saved = json.loads(Path(config.shared.CONFIG_PATH).read_text(encoding="utf-8"))
+                self.assertEqual(config.ProgramConfig(**saved).module.ocr, name)
+
+    def test_unknown_ocr_does_not_load_first_registered_engine(self):
+        from ui import module_manager
+        thread = module_manager.OCRThread()
+        with mock.patch.object(thread, "_prepare_module_class") as prepare, \
+                mock.patch.object(module_manager, "create_error_dialog"):
+            thread._set_module("removed_ocr")
+        prepare.assert_not_called()
+        self.assertFalse(thread.last_set_success)
+        self.assertIsNone(thread.module)
+
+    def test_explicit_none_replaces_startup_auto_downgrade(self):
+        from utils import config
+        with mock.patch.dict(config._AUTO_DOWNGRADES, {}, clear=True), \
+                mock.patch.object(config.pcfg.module, "textdetector", "none"), \
+                mock.patch.object(config, "save_config"):
+            config.record_auto_downgrade(config.pcfg.module, "textdetector", "none", "ysgyolo")
+            config.select_module("textdetector", "none")
+            self.assertEqual(config._suspend_auto_downgrades(), [])
+            self.assertEqual(config.pcfg.module.textdetector, "none")
+
 
 class TestModuleMetadataQueries(unittest.TestCase):
     """清单与依赖缺口查询（面板行与下载任务的唯一采集口）"""

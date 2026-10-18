@@ -28,7 +28,7 @@ from modules import (
 from modules.base import MissingModelFilesError, soft_empty_cache
 from modules.translators import MissingTranslatorParams
 from utils import shared
-from utils.config import RunStatus, pcfg
+from utils.config import RunStatus, pcfg, select_module
 from utils.imgproc_utils import enlarge_window
 from utils.logger import logger as LOGGER
 from utils.message import create_error_dialog, create_info_dialog
@@ -165,19 +165,7 @@ class ModuleThread(QThread):
 
         try:
             if module_name not in self.module_register.module_dict:
-                available = list(self.module_register.module_dict.keys())
-                if available:
-                    fallback = available[0]
-                    LOGGER.warning(
-                        f"Module '{module_name}' not available, falling back to '{fallback}'"
-                    )
-                    module_name = fallback
-                else:
-                    LOGGER.warning(
-                        f"No modules available for '{self.module_key}', skipping."
-                    )
-                    self.finish_set_module.emit()
-                    return
+                raise KeyError(f"Unknown {self.module_key} module: {module_name}")
 
             # Skip re-load if already loaded and complete
             same_module = old_module is not None and old_module.name == module_name
@@ -1108,6 +1096,7 @@ class ModuleManager(QObject):
         translator_panel.addModulesParamWidgets(
             translator_params, _build_dep_notes(TRANSLATORS)
         )
+        translator_panel.setModule(cfg_module.translator)
         translator_panel.translator_changed.connect(self.setTranslator)
         translator_panel.paramwidget_edited.connect(self.on_translatorparam_edited)
         from modules.translators.hooks import chs2cht
@@ -1129,6 +1118,7 @@ class ModuleManager(QObject):
         inpainter_panel.addModulesParamWidgets(
             inpainter_params, _build_dep_notes(INPAINTERS)
         )
+        inpainter_panel.setModule(cfg_module.inpainter)
         inpainter_panel.paramwidget_edited.connect(self.on_inpainterparam_edited)
         inpainter_panel.inpainter_changed.connect(self.setInpainter)
         # "Skip simple cases" moved to the run dialog; push the persisted value
@@ -1142,6 +1132,7 @@ class ModuleManager(QObject):
         textdetector_panel.addModulesParamWidgets(
             textdetector_params, _build_dep_notes(TEXTDETECTORS)
         )
+        textdetector_panel.setModule(cfg_module.textdetector)
         textdetector_panel.paramwidget_edited.connect(self.on_textdetectorparam_edited)
         textdetector_panel.detector_changed.connect(self.setTextDetector)
 
@@ -1162,6 +1153,7 @@ class ModuleManager(QObject):
                     profile_cfg["options"] = get_vision_profile_names()
                     heal_profile_selector(profile_cfg, vision=True)
         ocr_panel.addModulesParamWidgets(ocr_params, _build_dep_notes(OCR))
+        ocr_panel.setModule(cfg_module.ocr)
         ocr_panel.paramwidget_edited.connect(self.on_ocrparam_edited)
         ocr_panel.ocr_changed.connect(self.setOCR)
         # 误识别程序筛选器（规划 D39）：注册在 OCRBase 上、同类实例共享，
@@ -1501,6 +1493,8 @@ class ModuleManager(QObject):
             return False
         if translator is None:
             translator = cfg_module.translator
+        if offer_deps:
+            select_module("translator", translator)
         cls = TRANSLATORS.get(translator)
         if cls and offer_deps:
             _ensure_module_deps("translator", translator)
@@ -1538,6 +1532,8 @@ class ModuleManager(QObject):
         self._start_set_inpainter(inpainter, offer_deps=offer_deps)
 
     def _start_set_inpainter(self, inpainter: str, offer_deps: bool = True):
+        if offer_deps:
+            select_module("inpainter", inpainter)
         cls = INPAINTERS.get(inpainter)
         if cls and offer_deps:
             _ensure_module_deps("inpainter", inpainter)
@@ -1587,6 +1583,8 @@ class ModuleManager(QObject):
             return False
         if textdetector is None:
             textdetector = cfg_module.textdetector
+        if offer_deps:
+            select_module("textdetector", textdetector)
         cls = TEXTDETECTORS.get(textdetector)
         if cls and offer_deps:
             _ensure_module_deps("textdetector", textdetector)
@@ -1609,6 +1607,8 @@ class ModuleManager(QObject):
             return False
         if ocr is None:
             ocr = cfg_module.ocr
+        if offer_deps:
+            select_module("ocr", ocr)
         cls = OCR.get(ocr)
         if cls and offer_deps:
             _ensure_module_deps("ocr", ocr)

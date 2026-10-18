@@ -337,53 +337,89 @@ class PanelTest(_WorkbenchTestCase):
         self.assertTrue(view._rows)
         self.assertNotIn(MERGE, panel._dirty_tasks)
 
-    def test_nav_chip_flow_fits_two_rows_with_complete_active_label(self):
-        """导航＝按需换行的 chip 流（批次 D 修订）：激活项不省略、行数按内容收紧（七项英文≤三行）。
-
-        会动的三条契约：① 整条导航的高度按行数收紧（原先六项各占一行、外加两行
-        组标题＝8 行高，把页内信息挤没了）；② **当前任务**的完整标签必须排得下
-        ——压缩与省略只发生在未激活项上，中英文两套标签各排一遍（英文更长）；
-        ③ ``text()`` 始终是完整逻辑标签（省略只在渲染层）。宽度读
-        ``target_width``／``full_width``（分配结果，补间动画进行中也真），故离屏
-        环境不依赖动画。
-        """
-        from ui.glossary_agent_panel import WORKBENCH_ORDER, _TASK_LABELS
-
-        panel = self._panel()
-        # 标签源取模块表本身（不是 chip 上的文本——那里已缀过计数）
-        english = {task_id: _TASK_LABELS[task_id] for task_id in WORKBENCH_ORDER}
-        self._assert_active_chip_never_elides(panel, english)
-        chinese = self._chinese_nav_labels(english)
-        if chinese:
-            # 真取到了译文才算排过第二套（否则只是把英文再排一遍）
-            self.assertNotEqual(chinese["translation_prep"], english["translation_prep"])
-            self._assert_active_chip_never_elides(panel, chinese)
-
-    def _assert_active_chip_never_elides(self, panel, labels):
-        """给定一套标签逐项激活：激活项完整、行数不超两行、逻辑文本不缩短。"""
-        from ui import glossary_agent_panel as gap
+    def test_nav_has_two_stable_rows(self):
+        """切换任务、更新长计数时七个入口保持原位置，完整标签保留在 tooltip。"""
         from ui.glossary_agent_panel import WORKBENCH_ORDER
-
+        panel = self._panel()
         nav = panel.nav
-        # 标签源就是这张表（真机上由启动时装的 qm 决定），换语言＝换表内容
-        original = dict(gap._TASK_LABELS)
-        gap._TASK_LABELS.update(labels)
-        self.addCleanup(gap._TASK_LABELS.update, original)
-        for task_id in WORKBENCH_ORDER:
-            nav.set_count(task_id, 0)  # 把新标签推给 chip
-        nav._relayout(animate=False)
-        # 取色调板入列后共七项：英文标签下换行到三行（460px 面板宽），契约
-        # 随项数演进——收紧「行数按内容计算、不超三行」，核心仍是激活不省略
-        self.assertLessEqual(nav.height(), 80)
+        self.app.processEvents()
+        positions = {key: button.geometry() for key, button in nav._buttons.items()}
+        self.assertEqual(len({rect.top() for rect in positions.values()}), 2)
         for task_id in WORKBENCH_ORDER:
             nav.select(task_id)
+            nav.set_count(task_id, 12345, "groups")
             self.app.processEvents()
-            chip = nav._buttons[task_id]
-            self.assertTrue(chip.isChecked())
-            # 逻辑文本永远是完整标签（计数只是后缀），省略只发生在渲染层
-            self.assertTrue(chip.text().startswith(labels[task_id]))
-            self.assertGreaterEqual(chip.target_width, chip.full_width())
-            self.assertLessEqual(nav.height(), 80)
+            self.assertEqual(positions, {key: b.geometry() for key, b in nav._buttons.items()})
+            self.assertIn("12345", nav._buttons[task_id].text())
+            self.assertIn(nav._buttons[task_id].text(), nav._buttons[task_id].toolTip())
+
+    def test_activity_is_scoped_and_history_is_plain_text(self):
+        from ui.workbench_tasks import TRANSLATION_PREP
+        panel = self._panel()
+        panel._append_log("deleted 2 blocks", MISREAD)
+        panel._append_log("<b>draft</b>\nsecond line", TRANSLATION_PREP)
+        self.assertEqual(panel._latest_status.text(), "deleted 2 blocks")
+        self.assertIn("<b>draft</b>", panel._log_view.toPlainText())
+        self.assertTrue(panel._log_view.isHidden())
+        panel._activity_toggle.click()
+        self.assertFalse(panel._log_view.isHidden())
+        panel.nav.select(TRANSLATION_PREP)
+        self.assertEqual(panel._latest_status.text(), "<b>draft</b>")
+        self.assertIn("second line", panel._latest_status.toolTip())
+        panel._activity_toggle.click()
+        self.assertTrue(panel._log_view.isHidden())
+        self.assertIn("deleted 2 blocks", panel._log_view.toPlainText())
+
+    def test_activity_history_does_not_pull_reader_to_bottom(self):
+        panel = self._panel()
+        panel._activity_toggle.setChecked(True)
+        for i in range(50):
+            panel._append_log("activity %s" % i, MISREAD)
+        self.app.processEvents()
+        bar = panel._log_view.verticalScrollBar()
+        bar.setValue(0)
+        panel._append_log("last activity", MISREAD)
+        self.app.processEvents()
+        self.assertEqual(bar.value(), 0)
+        self.assertEqual(panel._latest_status.text(), "last activity")
+
+    def test_palette_notifications_belong_to_palette(self):
+        from unittest.mock import patch
+        from ui.workbench_tasks import FG_PALETTE, TRANSLATION_PREP
+        panel = self._panel(show=False)
+        panel.nav.select(FG_PALETTE)
+        panel._palette_view.notify_requested.emit("palette warning", "warning")
+        self.assertEqual(panel._latest_activity[FG_PALETTE], "palette warning")
+        self.assertNotIn(TRANSLATION_PREP, panel._latest_activity)
+        with patch.object(panel, "_canvas", return_value=None), patch.object(panel, "_toast") as toast:
+            self.assertFalse(panel.set_palette_sampling(True))
+            self.assertEqual(toast.call_args.args[2], FG_PALETTE)
+
+    def test_expanded_activity_does_not_force_other_pages_to_grow(self):
+        panel = self._panel()
+        panel.nav.select(MERGE)
+        panel._activity_toggle.setChecked(True)
+        self.app.processEvents()
+        self.assertEqual(panel._page_scroll.verticalScrollBar().maximum(), 0)
+        panel.nav.select(OCR_REVIEW)
+        self.app.processEvents()
+        panel.nav.select(MERGE)
+        self.app.processEvents()
+        self.assertEqual(panel._page_scroll.verticalScrollBar().maximum(), 0)
+
+    def test_switch_task_resets_page_scroll(self):
+        from ui.workbench_tasks import TRANSLATION_PREP
+        panel = self._panel()
+        panel.resize(420, 500)
+        panel._activity_toggle.setChecked(True)
+        panel.nav.select(TRANSLATION_PREP)
+        self.app.processEvents()
+        bar = panel._page_scroll.verticalScrollBar()
+        self.assertGreater(bar.maximum(), 0)
+        bar.setValue(bar.maximum())
+        panel.nav.select(OCR_REVIEW)
+        self.app.processEvents()
+        self.assertEqual(bar.value(), 0)
 
     def _chinese_nav_labels(self, english):
         """同一 source 的 ``zh_CN`` 译文；qm 还没编出来时返回 ``{}``（跳过该套）。"""

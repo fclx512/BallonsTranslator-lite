@@ -82,6 +82,7 @@ class ModuleConfig(Config):
     check_need_inpaint: bool = True
     load_model_on_demand: bool = True
     empty_runcache: bool = False
+    render_after_pipeline: bool = True
     model_profiles: str = ""
     # 全局激活的 LLM profile 名（模型管理页「使用」按钮写）。各模块的选择器
     # 默认跟随它；显式选了别的可用项则以模块选择器为准（见
@@ -871,6 +872,15 @@ def record_auto_downgrade(obj, field: str, downgraded_value, original_value) -> 
     _AUTO_DOWNGRADES.setdefault(
         (id(obj), field), (obj, field, downgraded_value, original_value)
     )
+
+
+def select_module(module_type: str, name: str) -> None:
+    """Persist an explicit user choice, including a previously auto-selected none."""
+    if module_type not in {"textdetector", "ocr", "translator", "inpainter"}:
+        raise ValueError(module_type)
+    setattr(pcfg.module, module_type, name)
+    _AUTO_DOWNGRADES.pop((id(pcfg.module), module_type), None)
+    save_config()
 
 
 def _suspend_auto_downgrades() -> List[tuple]:

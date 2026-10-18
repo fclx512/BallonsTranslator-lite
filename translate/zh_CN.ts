@@ -1,5 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!DOCTYPE TS>
+<?xml version='1.0' encoding='utf-8'?>
 <TS version="2.1" language="zh_CN" sourcelanguage="en">
     <context>
         <name>AboutDialog</name>
@@ -6009,6 +6008,22 @@ Check the log above for details.</source>
             <source>Sampling needs the canvas: open a project first.</source>
             <translation>取色需要画布：请先打开一个项目。</translation>
         </message>
+        <message>
+            <source>Activity</source>
+            <translation>活动记录</translation>
+        </message>
+        <message>
+            <source>Apply submits both glossary and story drafts. Batch undo does not cover this action.</source>
+            <translation>同时应用术语与剧情草稿；此操作不属于批量撤销。</translation>
+        </message>
+        <message>
+            <source>No recent activity for this task.</source>
+            <translation>当前任务暂无活动记录。</translation>
+        </message>
+        <message>
+            <source>Show or hide recent activity (up to 200 lines).</source>
+            <translation>展开或收起近期活动记录（最多保留 200 行）。</translation>
+        </message>
     </context>
     <context>
         <name>GlossaryAgentWorker</name>
@@ -7098,6 +7113,14 @@ Check the log above for details.</source>
     <context>
         <name>RunPipelineDialog</name>
         <message>
+            <source>Render modified pages after processing</source>
+            <translation>处理后渲染已修改页面</translation>
+        </message>
+        <message>
+            <source>Turn off to save project data only; result images will refresh when opened.</source>
+            <translation>关闭后只保存项目数据，结果图将在打开页面时更新。</translation>
+        </message>
+        <message>
             <location filename="..\ui\run_pipeline_dialog.py" />
             <source>All</source>
             <translation>全文</translation>
@@ -7582,6 +7605,10 @@ No pipeline stages will be executed.</source>
         <message>
             <source>Content changed after this list was built — click refresh to rebuild it.</source>
             <translation>列表生成后内容已改动——点刷新重新生成。</translation>
+        </message>
+        <message>
+            <source>How this task works</source>
+            <translation>操作说明</translation>
         </message>
     </context>
     <context>
@@ -8292,6 +8319,10 @@ Configure a mirror in Settings → Network &amp; Mirror Settings, then download 
             <source>Revision instructions (optional)</source>
             <translation>补充重译要求（可选）</translation>
         </message>
+        <message>
+            <source>How this task works</source>
+            <translation>操作说明</translation>
+        </message>
     </context>
     <context>
         <name>TextAppearancePanel</name>
@@ -8309,6 +8340,10 @@ Configure a mirror in Settings → Network &amp; Mirror Settings, then download 
         <message>
             <source>Remove this color</source>
             <translation>移除该颜色</translation>
+        </message>
+        <message>
+            <source>Remove</source>
+            <translation>移除</translation>
         </message>
     </context>
     <context>
@@ -8356,6 +8391,10 @@ Configure a mirror in Settings → Network &amp; Mirror Settings, then download 
         <message>
             <source>Turn sampling on, then click text on the canvas to pick its color (Esc stops). Colors are saved with the project; rename a color to a character name to send it to the translator as a speaker hint.</source>
             <translation>打开取样开关后，在画布上点击文字即可取色（按 Esc 退出）。调板随项目保存；把颜色改成角色名，它会作为说话人线索发给翻译器。</translation>
+        </message>
+        <message>
+            <source>Color palette</source>
+            <translation>取色调板</translation>
         </message>
     </context>
     <context>
@@ -8467,213 +8506,345 @@ Configure a mirror in Settings → Network &amp; Mirror Settings, then download 
         </message>
         <message>
             <source>%1 blocks processed</source>
-            <translation type="unfinished" />
+            <translation>已识别 %1 框</translation>
         </message>
         <message>
             <source>%1 blocks translated</source>
-            <translation type="unfinished" />
+            <translation>已翻译 %1 框</translation>
         </message>
         <message>
             <source>%1 s</source>
-            <translation type="unfinished" />
+            <translation>%1 秒</translation>
         </message>
         <message>
             <source>%1 text boxes</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>&lt;b&gt;Round %1&lt;/b&gt;</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Blocks accepted: %1/%2</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Blocks done: %1/%2</source>
-            <translation type="unfinished" />
+            <translation>检测到 %1 个文本框</translation>
         </message>
         <message>
             <source>Close</source>
-            <translation type="unfinished" />
+            <translation>关闭</translation>
         </message>
         <message>
             <source>Could not start</source>
-            <translation type="unfinished" />
+            <translation>无法启动任务</translation>
         </message>
         <message>
             <source>Detecting text regions...</source>
-            <translation type="unfinished" />
+            <translation>正在检测文本区域…</translation>
         </message>
         <message>
             <source>Done</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Elapsed: %1</source>
-            <translation type="unfinished" />
+            <translation>已完成</translation>
         </message>
         <message>
             <source>End program</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Errors: %1</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Force stop</source>
-            <translation type="unfinished" />
+            <translation>结束程序</translation>
         </message>
         <message>
             <source>Keep waiting</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Mode: non-thinking request (DeepSeek)</source>
-            <translation type="unfinished" />
+            <translation>继续等待</translation>
         </message>
         <message>
             <source>Pages saved: %1</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Recognizing text (0/%1)</source>
-            <translation type="unfinished" />
+            <translation>已保存 %1 页</translation>
         </message>
         <message>
             <source>Recognizing text...</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Rejected pages: %1</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Rendering...</source>
-            <translation type="unfinished" />
+            <translation>正在识别文字…</translation>
         </message>
         <message>
             <source>Repair finished</source>
-            <translation type="unfinished" />
+            <translation>修复完成</translation>
         </message>
         <message>
             <source>Repairing image...</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Round %1 · %2</source>
-            <translation type="unfinished" />
+            <translation>正在修复图片…</translation>
         </message>
         <message>
             <source>Saved page result: %1</source>
-            <translation type="unfinished" />
+            <translation>页面结果已保存：%1</translation>
         </message>
         <message>
             <source>Saving page result...</source>
-            <translation type="unfinished" />
+            <translation>正在保存页面结果…</translation>
         </message>
         <message>
             <source>Skipped: %1</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Tokens reported: %1; requests without usage: %2</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Tokens used: %1</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Tools: %1</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Translating (%1/%2 blocks)</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Translating...</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Waiting on the model: %1 s</source>
-            <translation type="unfinished" />
+            <translation>已跳过 %1 页</translation>
         </message>
         <message>
             <source>Working...</source>
-            <translation type="unfinished" />
+            <translation>正在处理…</translation>
         </message>
         <message>
-            <source>waiting for the model</source>
-            <translation type="unfinished" />
+            <source>%1 / %2 blocks</source>
+            <translation>%1 / %2 框</translation>
+        </message>
+        <message>
+            <source>%1 blocks</source>
+            <translation>%1 框</translation>
+        </message>
+        <message>
+            <source>Blocks saved: %1 / %2</source>
+            <translation>已保存译文 %1 / %2 框</translation>
+        </message>
+        <message>
+            <source>Candidates are kept for review in this session.</source>
+            <translation>候选暂存在本次会话中，等待审阅。</translation>
+        </message>
+        <message>
+            <source>Candidates require review before applying</source>
+            <translation>重译候选需审阅后应用</translation>
+        </message>
+        <message>
+            <source>Engines: %1</source>
+            <translation>引擎：%1</translation>
+        </message>
+        <message>
+            <source>Errors: %1 (including %2 conflicts)</source>
+            <translation>错误 %1 项（含冲突 %2 页）</translation>
+        </message>
+        <message>
+            <source>Generate revision candidates</source>
+            <translation>生成重译候选</translation>
+        </message>
+        <message>
+            <source>Last status update %1 s ago</source>
+            <translation>距上次状态更新 %1 秒</translation>
+        </message>
+        <message>
+            <source>No tool requested</source>
+            <translation>无工具请求</translation>
+        </message>
+        <message>
+            <source>Only empty translations</source>
+            <translation>仅填充空译文</translation>
+        </message>
+        <message>
+            <source>Page result saved</source>
+            <translation>页面结果已保存</translation>
+        </message>
+        <message>
+            <source>Processing translation...</source>
+            <translation>正在处理翻译…</translation>
+        </message>
+        <message>
+            <source>Recognize original text</source>
+            <translation>识别原文</translation>
+        </message>
+        <message>
+            <source>Repair images</source>
+            <translation>修复图片</translation>
+        </message>
+        <message>
+            <source>Replace existing translations</source>
+            <translation>覆盖已有译文</translation>
+        </message>
+        <message>
+            <source>Requested tools: %1</source>
+            <translation>请求工具：%1</translation>
+        </message>
+        <message>
+            <source>Response received: round %1</source>
+            <translation>收到第 %1 轮响应</translation>
+        </message>
+        <message>
+            <source>Revision candidates ready: %1</source>
+            <translation>已生成 %1 条重译候选</translation>
+        </message>
+        <message>
+            <source>Revision candidates: %1 / %2</source>
+            <translation>重译候选 %1 / %2 框</translation>
+        </message>
+        <message>
+            <source>Round %1</source>
+            <translation>第 %1 轮</translation>
+        </message>
+        <message>
+            <source>Running</source>
+            <translation>进行中</translation>
+        </message>
+        <message>
+            <source>Saving current work before starting...</source>
+            <translation>正在保存当前工作，随后启动任务…</translation>
+        </message>
+        <message>
+            <source>Started page: %1</source>
+            <translation>开始处理：%1</translation>
+        </message>
+        <message>
+            <source>Task did not start</source>
+            <translation>任务未启动</translation>
+        </message>
+        <message>
+            <source>Task ended with errors</source>
+            <translation>任务已结束，存在错误</translation>
+        </message>
+        <message>
+            <source>Task started</source>
+            <translation>任务已启动</translation>
+        </message>
+        <message>
+            <source>Task tokens reported: %1 · Responses without usage: %2</source>
+            <translation>本次累计 token：%1 · 未报告用量的响应：%2 次</translation>
+        </message>
+        <message>
+            <source>Translate original text</source>
+            <translation>翻译原文</translation>
+        </message>
+        <message>
+            <source>List pages</source>
+            <translation>列出页面</translation>
+        </message>
+        <message>
+            <source>Read page information</source>
+            <translation>读取页面信息</translation>
+        </message>
+        <message>
+            <source>Read page text</source>
+            <translation>读取页面文本</translation>
+        </message>
+        <message>
+            <source>Search glossary</source>
+            <translation>检索术语</translation>
+        </message>
+        <message>
+            <source>Search text</source>
+            <translation>检索文本</translation>
+        </message>
+        <message>
+            <source>Submit translations</source>
+            <translation>提交译文</translation>
+        </message>
+        <message>
+            <source>The current call has not returned after %1 s. End the program now?
+
+Saved pages stay in the project. Unsaved results and revision candidates will be lost. You will need to restart the app.</source>
+            <translation>当前调用已等待 %1 秒仍未返回。是否立即结束程序？
+
+已保存页面会保留在项目中。未保存的结果和重译候选将丢失，之后需要重新启动应用。</translation>
         </message>
     </context>
     <context>
         <name>PipelineProgressPanel</name>
         <message>
-            <source>Force stop</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
             <source>Image repair</source>
-            <translation type="unfinished" />
+            <translation>图像修复</translation>
         </message>
         <message>
             <source>No response</source>
-            <translation type="unfinished" />
+            <translation>仍未响应</translation>
         </message>
         <message>
             <source>OCR</source>
-            <translation type="unfinished" />
+            <translation>文字识别</translation>
         </message>
         <message>
             <source>Page %1 of %2</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Render result</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Running</source>
-            <translation type="unfinished" />
-        </message>
-        <message>
-            <source>Stop</source>
-            <translation type="unfinished" />
+            <translation>本次第 %1 / %2 页</translation>
         </message>
         <message>
             <source>Stopping</source>
-            <translation type="unfinished" />
+            <translation>正在停止</translation>
         </message>
         <message>
             <source>Stopping...</source>
-            <translation type="unfinished" />
+            <translation>正在停止…</translation>
         </message>
         <message>
             <source>Text detection</source>
-            <translation type="unfinished" />
+            <translation>文本检测</translation>
         </message>
         <message>
             <source>Translation</source>
-            <translation type="unfinished" />
+            <translation>翻译</translation>
+        </message>
+        <message>
+            <source>Elapsed %1</source>
+            <translation>已用时 %1</translation>
+        </message>
+        <message>
+            <source>End program</source>
+            <translation>结束程序</translation>
+        </message>
+        <message>
+            <source>Latest response</source>
+            <translation>最近响应</translation>
+        </message>
+        <message>
+            <source>Page target</source>
+            <translation>本页目标</translation>
+        </message>
+        <message>
+            <source>Preparing page data...</source>
+            <translation>正在准备页面数据…</translation>
+        </message>
+        <message>
+            <source>Preparing task</source>
+            <translation>正在准备任务</translation>
+        </message>
+        <message>
+            <source>Processed %1 / %2 pages</source>
+            <translation>已处理 %1 / %2 页</translation>
+        </message>
+        <message>
+            <source>Recent activity</source>
+            <translation>近期活动</translation>
+        </message>
+        <message>
+            <source>Requested tools</source>
+            <translation>请求工具</translation>
+        </message>
+        <message>
+            <source>Save results</source>
+            <translation>保存结果</translation>
+        </message>
+        <message>
+            <source>Saved pages are kept when stopping.</source>
+            <translation>停止后保留已保存页面。</translation>
+        </message>
+        <message>
+            <source>Stop task</source>
+            <translation>停止任务</translation>
+        </message>
+        <message>
+            <source>Task ended. Review the results before continuing.</source>
+            <translation>任务已结束，请检查处理结果。</translation>
+        </message>
+        <message>
+            <source>The current call has not returned after %1 s. You can keep waiting or end the program. Ending the program discards unsaved results.</source>
+            <translation>当前调用已等待 %1 秒仍未返回。可以继续等待或结束程序；结束程序会丢弃尚未保存的结果。</translation>
+        </message>
+        <message>
+            <source>Translations accepted</source>
+            <translation>已接收译文</translation>
+        </message>
+        <message>
+            <source>Waiting for the current call to return (%1 s). Unsaved results will be discarded; saved pages are kept.</source>
+            <translation>正在等待当前调用返回（%1 秒）。未保存的结果将丢弃，已保存页面保留。</translation>
+        </message>
+        <message>
+            <source>Waiting to start</source>
+            <translation>等待启动</translation>
         </message>
     </context>
     <context>
         <name>StageProgressCard</name>
         <message>
             <source>Done</source>
-            <translation type="unfinished" />
+            <translation>已完成</translation>
         </message>
         <message>
             <source>Failed</source>
-            <translation type="unfinished" />
+            <translation>失败</translation>
         </message>
         <message>
             <source>Waiting</source>
-            <translation type="unfinished" />
+            <translation>等待</translation>
+        </message>
+        <message>
+            <source>Running</source>
+            <translation>进行中</translation>
         </message>
     </context>
 </TS>

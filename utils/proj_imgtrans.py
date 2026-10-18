@@ -297,9 +297,9 @@ class ProjImgTrans:
     def proj_name(self) -> str:
         return self.type + "_" + osp.basename(self.directory)
 
-    def mark_page_needs_rerender(self, pagename: str):
-        """Mark a page as modified by a batch operation; result image is stale."""
-        if pagename != self.current_img:
+    def mark_page_needs_rerender(self, pagename: str, *, include_current=False):
+        """Mark a result image stale; pipeline saves also track the current page."""
+        if include_current or pagename != self.current_img:
             self._pages_needing_rerender.add(pagename)
 
     def clear_page_needs_rerender(self, pagename: str):

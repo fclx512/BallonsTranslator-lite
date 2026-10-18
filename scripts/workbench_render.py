@@ -9,7 +9,7 @@
     ... scripts/workbench_render.py --scale 2 --out tmp/workbench_render
 
 输出：``tmp/workbench_render/`` 下每任务一张 PNG（``00_empty`` 是未开项目的
-空态页），并在 stdout 打印导航状态（一级页签／二级 chip／计数），便于不看图
+空态页），并在 stdout 打印导航状态（两行任务按钮／当前项／计数），便于不看图
 也能核对结构。
 
 **两个必须照抄 app 启动过程的点**（否则截图没有参考价值）：
@@ -52,7 +52,7 @@ PAGE_A, PAGE_B = "002.jpg", "004.jpg"
 PAGE_SIZE = (320, 240)
 
 
-def build_app(scale: int) -> QApplication:
+def build_app(scale: int, theme=None, language=None) -> QApplication:
     """按 ``launch.py`` 的方式起 QApplication（字体 + 语言 + 主题 + 缩放）。"""
     os.environ["QT_SCALE_FACTOR"] = str(scale)
     app = QApplication([])
@@ -67,6 +67,15 @@ def build_app(scale: int) -> QApplication:
     from utils.config import load_config, pcfg
 
     load_config()
+    # 仅当前渲染进程覆盖，不保存用户配置。
+    if theme:
+        pcfg.darkmode = "dark" in theme
+        if pcfg.darkmode:
+            pcfg.dark_theme = theme
+        else:
+            pcfg.light_theme = theme
+    if language:
+        pcfg.display_lang = language
     # 翻译器必须早于 ui.* 导入装好：模块级 QCoreApplication.translate 表
     # （导航标签等）在导入时求值，晚了就冻成英文。引用要挂在 app 上——
     # installTranslator 不接管所有权，局部变量一出函数就可能被 GC。
@@ -181,18 +190,6 @@ def build_project():
     return proj, tmp
 
 
-def _settle_animation(app: QApplication, ms: int = 260) -> None:
-    """截图前等导航 chip 的展开／收回动画跑完。
-
-    chip 宽度是补间动画，而 ``QApplication.processEvents()`` **不推进动画**
-    （要让定时器真的走起来：真实事件循环或 ``QTest.qWait``）——不等的话截到的
-    是中间帧，激活项看着还是压缩状态，图就没法当验收依据。
-    """
-    from qtpy.QtTest import QTest
-
-    QTest.qWait(ms)
-
-
 def _first_table_with_rows(view):
     """任务页里第一个有行的表（批量页一张表，待办队列页分区多张）。
 
@@ -215,9 +212,13 @@ def main() -> int:
     parser.add_argument(
         "--scale", type=int, default=2, help="渲染倍率（默认 2，小字看得清）"
     )
+    parser.add_argument("--theme", help="仅覆盖渲染进程主题，如 eva-light")
+    parser.add_argument("--language", help="仅覆盖渲染进程语言，如 en_US")
+    parser.add_argument("--height", type=int, default=900)
+    parser.add_argument("--width", type=int, default=460, help="工作台逻辑宽度")
     args = parser.parse_args()
 
-    app = build_app(args.scale)
+    app = build_app(args.scale, args.theme, args.language)
 
     from ui.glossary_agent_panel import WORKBENCH_ORDER, GlossaryAgentPanel
     from ui.workbench_tasks import FG_PALETTE
@@ -231,14 +232,14 @@ def main() -> int:
     host = QWidget()
     # 不开原生窗口：否则窗口管理器会把宿主压到屏幕大小（见模块 docstring）
     host.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
-    host.resize(1180, 900)
+    host.resize(1180, args.height)
     host_lay = QHBoxLayout(host)
     host_lay.setContentsMargins(0, 0, 0, 0)
     host_lay.setSpacing(0)
     # 面板要拿主窗口的落盘/对齐回调，渲染时用替身（真跑批量才需要实现）
     host._sync_block_data = lambda: None
     slot = QWidget(host)  # 左栏槽位：面板与浮层都挂在这里（浮层宿主＝host）
-    slot.setFixedWidth(460)
+    slot.setFixedWidth(args.width)
     slot_lay = QVBoxLayout(slot)
     slot_lay.setContentsMargins(0, 0, 0, 0)
     host_lay.addWidget(slot)
@@ -265,7 +266,7 @@ def main() -> int:
     for index, task_id in enumerate(WORKBENCH_ORDER, start=1):
         panel.nav.select(task_id)
         app.processEvents()
-        _settle_animation(app)  # 导航 chip 展开到位再截图
+        app.processEvents()  # 布局稳定后截图；导航不再有宽度动画。
         view = panel._batch_views.get(task_id) or panel._review_views.get(task_id)
         table = _first_table_with_rows(view)
         if table is not None:
@@ -273,6 +274,7 @@ def main() -> int:
             app.processEvents()
         name = f"{index:02d}_{task_id}.png"
         host.grab().save(osp.join(out, name))
+        panel.grab().save(osp.join(out, "panel_" + name))
         print("saved", osp.join(out, name))
 
     # 导航结构回显：不打开图也能核对扁平顺序与各项计数
@@ -285,10 +287,58 @@ def main() -> int:
     for label, sub_id in (("glossary", GLOSSARY), ("story", STORY)):
         panel.select_prep_tab(sub_id)
         app.processEvents()
-        _settle_animation(app)
+        app.processEvents()
         name = f"05b_prep_{label}.png"
         host.grab().save(osp.join(out, name))
         print("saved", osp.join(out, name))
+
+    # 富内容状态只写视图，不提交草稿、不触发模型调用。
+    from qtpy.QtTest import QTest
+    from modules.context_agent.draft import ORIGIN_AI, ORIGIN_USER
+    from ui.workbench_tasks import TRANSLATION_PREP, MISREAD
+    QTest.qWait(40)  # 等 worker 的初始空草稿同步完成
+    panel._sync_glossary_table([
+        ("千尋", "千寻", "人物名，统一用此译法", ORIGIN_USER),
+        ("ハク", "白龙", "人物名", ORIGIN_AI),
+        ("湯屋", "澡堂", "场所名称；较长备注用来检查列宽与全文提示", ORIGIN_AI),
+    ])
+    panel._sync_story_tab("少女来到陌生世界，与白龙相遇，开始寻找回家的办法。", [
+        (PAGE_A, "白龙让千寻在原地等待，并承诺很快回来。", ORIGIN_AI),
+        (PAGE_B, "两人继续前往澡堂。", ORIGIN_USER),
+    ])
+    panel._append_log("删除完成：2 个文本框，图像与修复层保留。", MISREAD)
+    panel.select_prep_tab(GLOSSARY)
+    panel._append_log("角色建议：A 可对应千寻。请核对台词后在取色调板修改角色名。\n这是一条合成回复，用于检查多行活动记录。", TRANSLATION_PREP)
+    panel._activity_toggle.setChecked(True)
+    app.processEvents()
+    current = panel.pages.currentWidget()
+    print("prep geometry:", {
+        "viewport": panel._page_scroll.viewport().height(),
+        "pages": panel.pages.height(), "page": current.height(),
+        "min_hint": current.minimumSizeHint().height(),
+        "hfw": current.heightForWidth(current.width()),
+        "minimum": current.minimumHeight(),
+        "tabs_min": panel._prep_tabs.minimumSizeHint().height(),
+        "scroll": panel._page_scroll.verticalScrollBar().maximum(),
+    })
+    host.grab().save(osp.join(out, "08_prep_activity.png"))
+    panel.grab().save(osp.join(out, "panel_08_prep_activity.png"))
+    panel.select_prep_tab(STORY)
+    app.processEvents()
+    host.grab().save(osp.join(out, "09_story_activity.png"))
+    panel._on_busy_changed(True)
+    app.processEvents()
+    host.grab().save(osp.join(out, "10_prep_busy.png"))
+    panel._on_busy_changed(False)
+    panel._activity_toggle.setChecked(False)
+    panel.nav.select(MISREAD)
+    panel._last_version_seq = 1  # 只显示撤销入口，不执行
+    panel._update_rollback_scope()
+    app.processEvents()
+    host.grab().save(osp.join(out, "11_batch_undo.png"))
+    print("geometry:", {"host": (host.width(), host.height()), "panel": (panel.width(), panel.height()),
+                       "nav_rows": len({b.y() for b in panel.nav._buttons.values()}),
+                       "body_scroll": panel._page_scroll.verticalScrollBar().maximum()})
 
     # 退出前收掉 worker 线程（否则解释器退出时残留线程会崩）
     panel._shutdown()

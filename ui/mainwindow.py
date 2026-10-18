@@ -784,6 +784,7 @@ class MainWindow(mainwindow_cls):
         self.bottomBar.inpaint_selector.selector.addItems(
             [m for m in GET_VALID_INPAINTERS() if m not in HIDDEN_INPAINTERS]
         )
+        self.bottomBar.inpaint_selector.setSelectedValue(pcfg.module.inpainter)
         for module_type, selector in (
             ("textdetector", self.bottomBar.textdet_selector.selector),
             ("ocr", self.bottomBar.ocr_selector.selector),
@@ -4291,6 +4292,7 @@ class MainWindow(mainwindow_cls):
         wo_update = dialog.run_without_textstyle_update()
         task_mode = dialog.task_mode()
         overwrite = dialog.overwrite_cb.isChecked()
+        render_after = dialog.render_after_cb.isChecked()
         selected_stages = {stage: activator.button.isChecked()
                            for stage, activator in dialog._stage_activators.items()}
         dialog.deleteLater()
@@ -4306,6 +4308,8 @@ class MainWindow(mainwindow_cls):
 
         for stage, enabled in selected_stages.items():
             self.on_enable_module(stage, enabled)
+        pcfg.module.render_after_pipeline = render_after
+        save_config()
 
         if wo_update:
             self._run_imgtrans_wo_textstyle_update = True

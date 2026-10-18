@@ -39,12 +39,18 @@ def project(tmp_path):
     project.pages["a.png"] = [TextBlock(xyxy=[1, 1, 10, 10], text=["hello"], translation=""),
                               TextBlock(xyxy=[12, 1, 20, 10], text=["world"], translation="existing")]
     project.pages["b.png"] = [TextBlock(xyxy=[1, 1, 10, 10], text=["next"], translation="")]
+    for blocks in project.pages.values():
+        for block in blocks:
+            x1, y1, x2, y2 = block.xyxy
+            block.lines = np.array([[[x1, y1], [x2, y1], [x2, y2], [x1, y2]]])
+            block.font_size = 8
     project.save()
     return project
 
 
 class Translator:
     def __init__(self):
+        self.name = pcfg.module.translator
         self.calls = []
         self._status_cb = None
 
@@ -168,7 +174,10 @@ class Canvas(QObject):
         super().__init__()
         self.invalidate_text_history_for_page = Mock()
         self.setProjSaveState = Mock()
+        self.update_saved_undostep = Mock()
         self.updateCanvas = Mock()
+        from qtpy.QtGui import QImage
+        self.render_result_img = Mock(return_value=QImage(40, 40, QImage.Format.Format_RGB32))
     def draw_change_unsaved(self):
         return False
 
@@ -178,7 +187,11 @@ def fake_window(project):
     w.imgtrans_proj = project
     w.canvas = Canvas()
     w._sync_block_data = Mock()
-    w.imsave_thread = SimpleNamespace(isRunning=lambda: False)
+    def save_image(path, image, *args, **kwargs):
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        assert image.save(path)
+    w.imsave_thread = SimpleNamespace(isRunning=lambda: False, failure_count=0,
+                                     saveImg=Mock(side_effect=save_image))
     w.postprocess_translations = Mock()
     def rebuild():
         w.st_manager.textblk_item_list = [SimpleNamespace(blk=block) for block in project.current_block_list()]
@@ -335,6 +348,12 @@ def test_real_worker_lifecycle_waits_for_ui_and_releases_ownership(app, project)
         unload_all_models=Mock(),
     )
     controller = PipelineTasks(w)
+    selected_name = translator.name
+    translator.name = "previous engine"
+    controller.start("translate")
+    assert not controller.busy()
+    assert not w.module_manager.background_task_active
+    translator.name = selected_name
     controller.start("translate")
     assert controller.busy()
     assert w.module_manager.background_task_active
@@ -351,7 +370,54 @@ def test_real_worker_lifecycle_waits_for_ui_and_releases_ownership(app, project)
     assert not w.module_manager.background_task_active
     assert project.pages["a.png"][0].translation == "translated hello"
     assert project.pages["a.png"][1].translation == "existing"
+    for page in project.pages:
+        assert Path(project.get_result_path(page)).is_file()
+        assert not project.page_needs_rerender(page)
+    assert w.canvas.setProjSaveState.call_args.args == (False,)
+    w.canvas.update_saved_undostep.assert_called_once()
     w.pageList.setCurrentRow.assert_not_called()
+
+
+@pytest.mark.parametrize("render", [True, False])
+@pytest.mark.parametrize("page", ["a.png", "b.png"])
+@pytest.mark.parametrize("outcome", ["failure", "cancelled"])
+def test_render_option_and_save_receipt(app, project, render, page, outcome):
+    from qtpy.QtTest import QTest
+    w = fake_window(project)
+    controller = PipelineTasks(w)
+    runner = controller.runner = make_runner(project)
+    runner.config.render_after_pipeline = render
+    controller.project = project
+    controller.applied = controller.conflicts = controller.blocks = 0
+    controller.errors = []
+    controller.refresh = lambda: None
+    busy = {"value": False}
+    w.imsave_thread.isRunning = lambda: busy["value"]
+    w.imsave_thread.saveImg.side_effect = lambda *a, **kw: busy.update(value=True)
+    current = project.current_img
+    controller.receive(runner._process_page(page))
+    assert project.current_img == current
+    assert project.page_needs_rerender(page)
+    if render:
+        assert not runner._settled_page.is_set()
+        assert controller.applied == 0
+        if outcome == "failure":
+            w.imsave_thread.failure_count += 1
+        else:
+            runner.cancel()
+        busy["value"] = False
+        QTest.qWait(100)
+        app.processEvents()
+        assert runner._settled_page.is_set()
+        assert bool(controller.errors) == (outcome == "failure")
+        assert controller.applied == (0 if outcome == "failure" else 1)
+        assert controller._image_settlement is None
+    else:
+        w.imsave_thread.saveImg.assert_not_called()
+        assert runner._settled_page.is_set()
+        assert controller.applied == 1
+        assert not controller.errors
+    assert project.page_needs_rerender(page) == (not render or outcome == "failure")
 
 
 @pytest.mark.parametrize("jump_ok", [True, False])

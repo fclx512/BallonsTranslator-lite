@@ -210,13 +210,28 @@ class BatchTaskView(QWidget):
         self._preview_pixmap = None
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(6)
 
+        heading = QHBoxLayout()
+        title = QLabel(task.label, self)
+        title.setObjectName("WorkbenchPageTitle")
+        title.setWordWrap(True)
+        heading.addWidget(title, 1)
+        self._refresh_btn = RefreshButton(self)
+        self._refresh_btn.clicked.connect(self.replan)
+        heading.addWidget(self._refresh_btn)
+        layout.addLayout(heading)
+        help_btn = QPushButton(self.tr("How this task works"), self)
+        help_btn.setObjectName("WorkbenchHelpButton")
+        help_btn.setCheckable(True)
+        heading.insertWidget(1, help_btn)
         self._hint = QLabel(task.hint, self)
         self._hint.setObjectName("WorkbenchTaskHint")
         self._hint.setWordWrap(True)
         layout.addWidget(self._hint)
+        self._hint.hide()
+        help_btn.toggled.connect(self._hint.setVisible)
 
         self._summary = QLabel("", self)
         self._summary.setObjectName("WorkbenchTaskSummary")
@@ -247,6 +262,8 @@ class BatchTaskView(QWidget):
         self._table = RowTable(
             MODE_CARD if self._card_mode else MODE_TABLE, self
         )
+        self._table.set_compact_rows(True)
+        self._table.setMinimumHeight(150)
         if not self._card_mode:
             self._table.set_header_labels(list(task.columns))
         stretch = getattr(task, "stretch_column", -1)
@@ -268,11 +285,12 @@ class BatchTaskView(QWidget):
         layout.addLayout(options_row)
         self._build_options()
 
-        actions_row = QHBoxLayout()
-        actions_row.setSpacing(6)
+        from ui.adaptive_wrap_layout import AdaptiveWrapLayout
+        actions_row = AdaptiveWrapLayout(horizontal_spacing=6, vertical_spacing=6)
         self._actions_host = actions_row
         layout.addLayout(actions_row)
         self._build_actions()
+        self._actions_host.addWidget(self._execute_btn)
 
         self._replan_timer = QTimer(self)
         self._replan_timer.setSingleShot(True)
@@ -364,9 +382,6 @@ class BatchTaskView(QWidget):
         self._action_buttons = []
         # 刷新在最左（图标钮）：列表是懒规划快照，画布上改过数据后由用户
         # 主动重扫（精简取向：不做数据变更信号的全量监听）
-        self._refresh_btn = RefreshButton(self)
-        self._refresh_btn.clicked.connect(self.replan)
-        self._actions_host.addWidget(self._refresh_btn)
         for spec in self.task.actions():
             button = QPushButton(spec["label"], self)
             button.clicked.connect(
@@ -381,12 +396,11 @@ class BatchTaskView(QWidget):
         self._jump_btn.setEnabled(False)  # 没选中行时无目标，按钮别装成可点
         self._jump_btn.clicked.connect(self._on_jump)
         self._actions_host.addWidget(self._jump_btn)
-        self._actions_host.addStretch(1)
         self._execute_btn = QPushButton(self.task.no_candidates_label(), self)
         self._execute_btn.setObjectName("WorkbenchExecuteButton")
         self._execute_btn.setEnabled(False)  # 未规划（无候选）时不可执行
         self._execute_btn.clicked.connect(self._on_execute)
-        self._actions_host.addWidget(self._execute_btn)
+
 
     def _selected_rows(self):
         return [row for row in self._rows if row.checked]

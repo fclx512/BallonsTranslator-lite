@@ -2575,32 +2575,8 @@ QLabel#WorkbenchEmptyHint {
     font-size: 13px;
     color: @disabledForegroundColor;
 }
-/* 任务导航＝chip 流（批次 D 修订）：chip 自绘圆角底与省略号文字（QPushButton
-   自己不会省略、放不下就从中间硬裁，绘制由 ui/glossary_agent_panel.py::
-   WorkbenchTaskChip 接管），故这里只钉字号——高度与宽度分配都在那边定。
-   组标题行已去掉，分组改由两组 chip 之间的细分隔线表达（同文件 paintEvent 自绘）。 */
-QPushButton#WorkbenchTaskButton {
-    font-size: 12px;
-}
-/* 任务说明与规划摘要：小字、次要色，不跟候选列表抢注意力 */
-QLabel#WorkbenchTaskHint {
-    font-size: 11px;
-    color: @disabledForegroundColor;
-}
-QLabel#WorkbenchTaskSummary {
-    font-size: 11px;
-    color: @qwidgetForegroundColor;
-}
-QLabel#WorkbenchTaskDetail {
-    font-size: 11px;
-    color: @disabledForegroundColor;
-}
-/* 过时提示：内容在列表建好后被改过（只亮灯，刷新钮才是出口）——
-   警告色小字，压在摘要与候选列表之间 */
-QLabel#WorkbenchStaleHint {
-    font-size: 11px;
-    color: @warningColor;
-}
+/* 固定两行任务按钮自绘标签/计数，任务文字层级由下面 WorkbenchRoot 规则定义。 */
+QPushButton#WorkbenchTaskButton { font-size: 12px; }
 /* 候选列表（RowTable：底色/选中染底/勾选框/徽章全在 delegate 自绘——
    逐格 QSS 边框在 Qt 里渲染不全，且背景兜底规则只按裸 QTableView 匹配、
    不及子类，这里类名+objectName 双保险） */
@@ -2666,29 +2642,82 @@ QToolButton#WorkbenchPreviewToolBtn:hover {
     background: @accentPrimary20;
     border: 1px solid @accentPrimary;
 }
-QPushButton#WorkbenchExecuteButton {
-    font-weight: bold;
-}
-/* 底部状态条（D43）：顶边一条分隔线把它与候选列表分开 */
 QWidget#WorkbenchStatusBar {
     background: @emptyContentBackgroundColor;
     border-top: 1px solid @borderColor;
 }
-QPushButton#WorkbenchRollbackButton {
-    height: 24px;
+/* 工作台集中布局：局部覆盖，其他面板继续使用其原有控件样式。 */
+QWidget#WorkbenchRoot { font-size: 13px; }
+QWidget#WorkbenchRoot QLabel { background: transparent; font-size: 13px; }
+QWidget#WorkbenchRoot QComboBox { font-size: 13px; min-height: 24px; max-height: 24px; }
+QWidget#WorkbenchRoot QCheckBox { font-size: 13px; spacing: 6px; }
+QWidget#WorkbenchRoot QCheckBox::indicator { width: 14px; height: 14px; }
+QWidget#WorkbenchRoot QScrollArea#WorkbenchPaletteList { border: none; }
+QWidget#WorkbenchRoot QPushButton {
     font-size: 12px;
+    min-height: 22px;
+    padding: 3px 8px;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+    background: @widgetBackgroundColor;
 }
-/* 日志区是**只读状态区，不是输入框**：抹掉 ConfigTextEdit 的输入框外观
-   （ID 选择器优先于类名选择器），只留小字次要色。 */
-QTextEdit#WorkbenchLogView {
-    font-size: 11px;
+QWidget#WorkbenchRoot QPushButton:hover { background: @hoverBackgroundColor; }
+QWidget#WorkbenchRoot QPushButton:checked { background: @accentPrimary20; }
+QWidget#WorkbenchRoot QPushButton:disabled { color: @disabledForegroundColor; }
+QWidget#WorkbenchRoot QPushButton#WorkbenchExecuteButton {
+    color: @widgetBackgroundColor;
+    background: @dragTextColor;
+    border-color: @dragTextColor;
+    font-weight: bold;
+}
+QWidget#WorkbenchRoot QPushButton#WorkbenchExecuteButton:disabled {
     color: @disabledForegroundColor;
-    background: transparent;
-    border: none;
-    border-radius: 0px;
-    padding: 2px 0px;
+    background: @widgetBackgroundColor;
+    border-color: @borderColor;
 }
+QWidget#WorkbenchRoot QPushButton#WorkbenchHelpButton {
+    border: none;
+    background: transparent;
+    padding: 0;
+    min-height: 20px;
+    color: @accentPrimary;
+}
+QWidget#WorkbenchRoot QLabel#WorkbenchPageTitle {
+    font-size: 17px;
+    font-weight: bold;
+    color: @dragTextColor;
+}
+QWidget#WorkbenchRoot QLabel#WorkbenchSectionTitle,
+QWidget#WorkbenchRoot QLabel#WorkbenchTaskSummary {
+    font-size: 13px;
+    color: @qwidgetForegroundColor;
+}
+QWidget#WorkbenchRoot QLabel#WorkbenchSectionTitle { font-weight: bold; padding-top: 8px; }
+QWidget#WorkbenchRoot QLabel#WorkbenchTaskHint,
+QWidget#WorkbenchRoot QLabel#WorkbenchTaskDetail {
+    font-size: 12px;
+    color: @qwidgetForegroundColor;
+}
+QWidget#WorkbenchRoot QLabel#WorkbenchStaleHint { font-size: 12px; color: @warningColor; }
+QWidget#WorkbenchRoot QLabel#WorkbenchLatestStatus { font-size: 12px; color: @qwidgetForegroundColor; }
+QWidget#WorkbenchRoot QTextEdit#WorkbenchLogView {
+    font-size: 12px;
+    color: @qwidgetForegroundColor;
+    background: @widgetBackgroundColor;
+    padding: 6px;
+    border: 1px solid @borderColor;
+    border-radius: 4px;
+}
+QWidget#WorkbenchRoot QScrollArea#WorkbenchPageScroll { border: none; background: transparent; }
+QWidget#WorkbenchRoot RowTable#WorkbenchRowTable { font-size: 13px; }
+QWidget#WorkbenchRoot QHeaderView::section { font-size: 12px; color: @qwidgetForegroundColor; padding: 5px; }
+QWidget#WorkbenchRoot QTableWidget { font-size: 13px; border: none; }
+QWidget#WorkbenchRoot QTabBar::tab { font-size: 13px; padding: 6px 12px; }
 
+QWidget#WorkbenchRoot QTableWidget { color: @dragTextColor; }
+QWidget#WorkbenchRoot QPushButton { color: @dragTextColor; }
+QWidget#WorkbenchRoot QPushButton#WorkbenchExecuteButton { color: @widgetBackgroundColor; }
+QWidget#WorkbenchRoot QPushButton#WorkbenchExecuteButton:disabled { color: @disabledForegroundColor; }
 /* ── 设置页 Models →「模型文件」节（ui/model_files_panel.py）─────
    列表复用工作台那张自绘表（RowTable 卡片模式）——底色/选中染底/勾选框/徽章
    全在 delegate 里画，这里只抹掉 QTableView 自带背景与边框；objectName 是
@@ -3071,179 +3100,110 @@ PageRangeSpinBox::down-button {
     border: none;
 }
 
-/* ── 管线运行进度覆盖层：盖住画布区的模态进度卡片 ──────────────────
-   in-window 浮层（同 WorkbenchPreviewPanel / RailDockPanel 的做法），
-   视觉语言也沿用那一套：1px 细描边 + 层次靠底色深浅（不投阴影）。
-   遮罩本身画半透明底压暗画布，面板在中间做实体卡片。
-   阶段状态一律走 [state="..."] 动态属性选择器（改属性后须 unpolish/polish），
-   四种态：waiting 灰 / running 强调色 / done 绿 / error 红。 */
+/* 管线集中任务视图：中性工作面、对齐信息、纯文本状态。 */
 QWidget#PipelineProgressOverlay {
     background-color: rgba(0, 0, 0, 0.62);
 }
-
-PipelineProgressPanel {
+QFrame#PipelineProgressPanel {
     background: @widgetBackgroundColor;
     border: 1px solid @borderColor;
-    border-radius: 8px;
+    border-radius: 6px;
 }
-
-/* 超出宽限期转警示：整块面板换描边与标题色，比只改一行小字显眼 */
-PipelineProgressPanel[state="warning"] {
-    border: 1px solid @warningColor;
+QFrame#PipelineProgressPanel[state="warning"] {
+    border-color: @warningColor;
 }
-
-QLabel#PipelineProgressTitle {
-    background: transparent;  /* 不声明会盖成调色板窗口色，遮住卡片底色 */
+QScrollArea#PipelineProgressScroll,
+QWidget#PipelineProgressBody,
+QWidget#PipelineCurrentPage,
+QWidget#PipelineStageColumn,
+QWidget#PipelineProgressFooter,
+QFrame#PipelineProgressPanel QLabel {
+    background: transparent;
+    border: none;
+}
+QFrame#PipelineProgressPanel QLabel {
     color: @qwidgetForegroundColor;
-    font-size: 15px;
+    font-size: 13px;
+}
+QFrame#PipelineProgressPanel QLabel#PipelineProgressTitle {
+    font-size: 17px;
     font-weight: bold;
 }
-
-PipelineProgressPanel[state="warning"] QLabel#PipelineProgressTitle {
-    color: @warningColor;
+QFrame#PipelineProgressPanel QLabel#PipelineProgressPage,
+QFrame#PipelineProgressPanel QLabel#PipelineProgressCount {
+    font-size: 14px;
+    font-weight: bold;
 }
-
-QLabel#PipelineProgressPage {
+QFrame#PipelineProgressPanel QLabel#PipelineProgressContext,
+QFrame#PipelineProgressPanel QLabel#PipelineProgressElapsed,
+QFrame#PipelineProgressPanel QLabel#PipelineFactCaption,
+QFrame#PipelineProgressPanel QLabel#PipelineStageStatus {
+    color: @qwidgetForegroundColor;
+    font-size: 12px;
+}
+QWidget#PipelineStageColumn {
+    border-right: 1px solid @borderColor;
+}
+QFrame#PipelineStageCard {
     background: transparent;
-    color: @disabledForegroundColor;
-    font-size: 11px;
+    border: none;
+    border-radius: 4px;
 }
-
-/* 阶段行：靠一层浅底与面板本体分层，不加边框（行内已经有图标与进度条） */
-PipelineStageCard {
+QFrame#PipelineStageCard[state="running"] {
     background: @emptyContentBackgroundColor;
-    border: none;
-    border-radius: 5px;
 }
-
-QLabel#PipelineStageIcon {
-    background: transparent;
-    color: @disabledForegroundColor;
-    font-size: 12px;
-}
-
-PipelineStageCard[state="running"] QLabel#PipelineStageIcon {
+QFrame#PipelineStageCard[state="running"] QLabel#PipelineStageStatus {
     color: @accentPrimary;
 }
-
-PipelineStageCard[state="done"] QLabel#PipelineStageIcon {
-    color: @successColor;
-}
-
-PipelineStageCard[state="error"] QLabel#PipelineStageIcon {
+QFrame#PipelineStageCard[state="error"] QLabel#PipelineStageStatus,
+QFrame#PipelineProgressPanel QLabel#PipelineProgressNotice {
     color: @dangerColor;
 }
-
-QLabel#PipelineStageTitle {
-    background: transparent;
-    color: @qwidgetForegroundColor;
-    font-size: 12px;
-}
-
-QLabel#PipelineStageStatus {
-    background: transparent;
-    color: @disabledForegroundColor;
-    font-size: 11px;
-}
-
-PipelineStageCard[state="running"] QLabel#PipelineStageStatus {
-    color: @accentPrimary;
-}
-
-PipelineStageCard[state="done"] QLabel#PipelineStageStatus {
-    color: @successColor;
-}
-
-PipelineStageCard[state="error"] QLabel#PipelineStageStatus {
-    color: @dangerColor;
-}
-
-QLabel#PipelineStageSummary,
-QLabel#PipelineStageDetails {
-    background: transparent;
-    color: @disabledForegroundColor;
-    font-size: 11px;
-}
-
-QLabel#PipelineStageDetails {
-    color: @qwidgetForegroundColor;
-}
-
-/* 阶段进度条：全局 QProgressBar 规则把高度压到 3px、底色取描边色，
-   这里按 ID 覆盖回 4px —— 卡片里 3px 细得看不见 */
-QProgressBar#PipelineStageBar {
-    border: none;
-    border-radius: 2px;
-    max-height: 4px;
-    background-color: @borderColor;
-}
-
-QProgressBar#PipelineStageBar::chunk {
-    border-radius: 2px;
-    background-color: @accentPrimary;
-}
-
-/* 展开箭头：无框小三角，只做一个可点的提示 */
-QToolButton#PipelineStageExpand {
-    background: transparent;
-    border: none;
-    color: @disabledForegroundColor;
-    font-size: 10px;
-    min-height: 16px;
-    padding: 0px 2px;
-}
-
-QToolButton#PipelineStageExpand:hover {
-    color: @accentPrimary;
-}
-
-QFrame#PipelineProgressDivider {
-    background: @borderColor;
-    border: none;
-    max-height: 1px;
-}
-
-QLabel#PipelineProgressSummary {
-    background: transparent;
-    color: @disabledForegroundColor;
-    font-size: 11px;
-}
-
-QLabel#PipelineProgressNotice {
-    background: transparent;
-    color: @disabledForegroundColor;
-    font-size: 11px;
-}
-
-QLabel#PipelineProgressNotice[state="warning"] {
+QFrame#PipelineProgressPanel[state="warning"] QLabel#PipelineProgressTitle,
+QFrame#PipelineProgressPanel[state="warning"] QLabel#PipelineProgressNotice {
     color: @warningColor;
 }
-
-/* 优雅停止：低调描边（默认动作，不抢视线） */
-QPushButton#PipelineStopGraceful {
-    height: 26px;
-    padding: 0px 14px;
+QFrame#PipelineProgressPanel QLabel#PipelineSectionTitle {
     font-size: 12px;
+    font-weight: bold;
 }
-
-/* 强制停止：危险语义，常驻描边红字——它旁边就是要丢在途结果的后果说明，
-   长得和中性的"关闭"一样会让人误按 */
-QPushButton#PipelineStopForce {
-    height: 26px;
-    padding: 0px 14px;
+QProgressBar#PipelineStageBar,
+QProgressBar#PipelineOverallBar {
+    border: none;
+    border-radius: 2px;
+    max-height: 6px;
+    background: @emptyContentBackgroundColor;
+}
+QProgressBar#PipelineStageBar::chunk,
+QProgressBar#PipelineOverallBar::chunk {
+    background: @accentPrimary;
+    border-radius: 2px;
+}
+QTextEdit#PipelineActivityLog {
+    background: @emptyContentBackgroundColor;
+    color: @qwidgetForegroundColor;
+    border: none;
+    border-radius: 4px;
+    padding: 8px;
     font-size: 12px;
+    selection-background-color: @accentPrimary;
+    selection-color: @inverseTextColor;
+}
+QWidget#PipelineProgressFooter {
+    border-top: 1px solid @borderColor;
+}
+QPushButton#PipelineStopGraceful,
+QPushButton#PipelineStopForce {
+    min-height: 28px;
+    padding: 0px 14px;
+    font-size: 13px;
+    border-radius: 4px;
+}
+QPushButton#PipelineStopForce {
     background: transparent;
     color: @dangerColor;
-    border: 1px solid @dangerColor;
-}
-
-QPushButton#PipelineStopForce:hover {
-    background-color: @dangerColor;
-    color: @inverseTextColor;
-}
-
-QPushButton#PipelineStopForce:disabled {
-    background: transparent;
-    color: @disabledForegroundColor;
     border: 1px solid @borderColor;
+}
+QPushButton#PipelineStopForce:hover {
+    border-color: @dangerColor;
 }
