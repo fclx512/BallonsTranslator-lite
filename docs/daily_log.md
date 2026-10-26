@@ -53,3 +53,18 @@
 
 ---
 
+### ysg_ctd 检测器吸收上游 v1.5.20 优化（`detector_ysg.py::_detect` / `updateParam`）
+
+**摘要：** 上游 PR #1371（v1.5.20）的 standalone ysg-ctd 仍是「YSG 出框 + CTD 精修掩膜」双模型拼凑，与 fork 10-18 移植版同源，整替会丢 provides_glyph_mask／自动取色／8px 裁框，故只择三处低风险改进：无有效标签时返回 `(mask, blocks)` 顺序修正（旧顺序让子类对 ndarray 做布尔判断抛 ValueError）、CTD 尺寸/批量参数热更新不再重载模型、YSG 输出整批一次 `.cpu()`。
+**涉及文件：** `modules/textdetector/detector_ysg.py`、`tests/test_ysg_ctd_detector.py`
+**验证：** 新增空结果红绿用例与 CTD 参数热更新用例；真机无标签页不再异常。
+
+---
+
+### 设置页管线各阶段「使用说明」静态文案（`model_intros.py` / `_refresh_module_intro`）
+
+**摘要：** 设置 → 管线四个阶段在引擎下拉下方展示该引擎的能力/特点/资源需求说明，随引擎切换。文案表键＝`阶段:模块名`（同名 `none` 靠阶段区分），在 `ui/model_intros.py` 字面量处用 `QCoreApplication.translate("ModelIntros", …)` 标注上下文，英文源串 + 中文在 ts。先以可编辑文本框收集用户定稿，确认后固化为静态 QLabel 并删除草稿持久化机制。
+**涉及文件：** `ui/model_intros.py`、`ui/module_parse_widgets.py`、`translate/zh_CN.ts`、`tests/test_model_intros.py`
+
+---
+

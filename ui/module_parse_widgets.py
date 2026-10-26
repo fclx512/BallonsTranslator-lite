@@ -6,6 +6,7 @@ from qtpy.QtWidgets import (
     QCheckBox,
     QGridLayout,
     QHBoxLayout,
+    QLabel,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
@@ -36,6 +37,7 @@ from .custom_widget import (
     ParamNameLabel,
 )
 from .custom_widget.view_panel import add_section_card
+from .model_intros import intro_for
 
 
 class ParamCheckGroup(QWidget):
@@ -384,6 +386,10 @@ class ModuleConfigParseWidget(QWidget):
     module_changed = Signal(str)
     paramwidget_edited = Signal(str, dict)
 
+    # 使用说明的草稿键前缀（"textdetector"/"ocr"/"inpainter"/"translator"）；
+    # 子类各自声明，见 utils/model_intros.py。
+    stage_key = ""
+
     def __init__(
         self,
         module_name: str,
@@ -419,6 +425,21 @@ class ModuleConfigParseWidget(QWidget):
         layout.setContentsMargins(8, 0, 8, 0)
         self.param_widget_map = {}
         layout.addLayout(p_layout)
+        # 使用说明：文案表在 ui/model_intros.py，随引擎下拉切换（静态文本，
+        # 不可编辑；新增引擎时到表中补一行）。
+        self.intro_card = add_section_card(
+            layout,
+            QCoreApplication.translate("ModuleConfigParseWidget", "Usage"),
+        )
+        self.intro_label = QLabel(self)
+        self.intro_label.setWordWrap(True)
+        self.intro_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        intro_row = QHBoxLayout()
+        intro_row.setContentsMargins(16, 8, 16, 10)
+        intro_row.addWidget(self.intro_label)
+        self.intro_card.contentLayout().addLayout(intro_row)
         # 参数表 = 一张分节卡：管线标签页与其余设置页共用同一套分节样式
         # （页体凹陷由 Widget#ConfigPageBody 画，本面板自己不画底色）
         # 上下文写死：self.tr 在子类实例上按 **子类名** 查表（TextDetectConfigPanel
@@ -600,10 +621,16 @@ class ModuleConfigParseWidget(QWidget):
             else:
                 widget.show()
             self.visibleWidget = widget
+        self._refresh_module_intro()
 
     def on_module_changed(self):
         self.updateModuleParamWidget()
         self.module_changed.emit(self.module_combobox.currentText())
+
+    # ── 使用说明 ────────────────────────────────────────────────
+    def _refresh_module_intro(self):
+        module = self.module_combobox.currentText()
+        self.intro_label.setText(intro_for(self.stage_key, module))
 
 
 class TranslatorConfigPanel(ModuleConfigParseWidget):
@@ -616,6 +643,8 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
     """
 
     navigate_to_llm_profile = Signal()
+
+    stage_key = "translator"
 
     def __init__(
         self, module_name, scrollWidget: QWidget = None, *args, **kwargs
@@ -709,6 +738,7 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
             else:
                 widget.show()
             self.visibleWidget = widget
+        self._refresh_module_intro()
 
     # ── Profile section ──────────────────────────────────────────
 
@@ -745,6 +775,8 @@ class TranslatorConfigPanel(ModuleConfigParseWidget):
 class InpaintConfigPanel(ModuleConfigParseWidget):
     navigate_to_llm_profile = Signal()
 
+    stage_key = "inpainter"
+
     def __init__(
         self, module_name: str, scrollWidget: QWidget = None, *args, **kwargs
     ) -> None:
@@ -769,6 +801,8 @@ class InpaintConfigPanel(ModuleConfigParseWidget):
 
 
 class TextDetectConfigPanel(ModuleConfigParseWidget):
+    stage_key = "textdetector"
+
     def __init__(
         self, module_name: str, scrollWidget: QWidget = None, *args, **kwargs
     ) -> None:
@@ -786,6 +820,8 @@ class TextDetectConfigPanel(ModuleConfigParseWidget):
 
 class OCRConfigPanel(ModuleConfigParseWidget):
     navigate_to_llm_profile = Signal()
+
+    stage_key = "ocr"
 
     def __init__(
         self, module_name: str, scrollWidget: QWidget = None, *args, **kwargs

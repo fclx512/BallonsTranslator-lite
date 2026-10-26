@@ -4965,6 +4965,93 @@ Check the log above for details.</source>
             <source>Parameters</source>
             <translation>参数</translation>
         </message>
+        <message>
+            <location filename="..\ui\module_parse_widgets.py" />
+            <source>Usage</source>
+            <translation>使用说明</translation>
+        </message>
+    </context>
+    <context>
+        <name>ModelIntros</name>
+        <message>
+            <location filename="..\ui\model_intros.py" />
+            <source>YSG-Yolo detector (default)
+Identifies manga balloon text cleanly and separates body text from sound effects; the output mask is rectangle-level.
+Requires ultralytics + torch; a GPU is recommended.</source>
+            <translation>YSG-Yolo 检测器（默认）
+对漫画气泡正文识别干净，能较好区分正文与拟声词；输出的掩膜是矩形框级别。
+需要 ultralytics + torch，推荐使用 GPU。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\model_intros.py" />
+            <source>YSG-Yolo + ComicTextDetector hybrid
+YSG proposes boxes and CTD refines the glyph mask inside them. The mask hugs the strokes, suits outlined text on busy backgrounds, and feeds the glyph-mask font-size estimation;
+requires both model sets, so VRAM use and runtime are higher than ysgyolo.</source>
+            <translation>YSG-Yolo + ComicTextDetector 混合检测
+YSG 出框，CTD 在框内精修字形掩膜。掩膜贴合笔画，适合带描边和复杂背景的文字，也是字形掩膜字号估计的来源；
+需要两套权重，显存占用与耗时都高于 ysgyolo。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\model_intros.py" />
+            <source>Runs on CPU and is relatively fast; the default model for region re-detection.
+Tends to produce one box per line and is less robust than ysgyolo, so misdetections are more likely.</source>
+            <translation>支持CPU运行、速度较快，区域再检测默认模型。
+倾向于一行一框，抗干扰能力弱于 ysgyolo，易产生误识别。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\model_intros.py" />
+            <source>Skips text detection entirely.</source>
+            <translation>选择该项会跳过文字检测。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\model_intros.py" />
+            <source>PP-OCRv6 ONNX recognition
+Runs on CPU and is fast, suitable for conventional black-and-white manga dialogue.</source>
+            <translation>PP-OCRv6 ONNX 识别
+CPU 可跑、速度快，适合常规黑白漫画对白。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\model_intros.py" />
+            <source>Vision-language recognition for Japanese manga; autoregressive per block with quality first.
+GPU-only, the slowest option with high VRAM use.</source>
+            <translation>面向日文漫画的视觉语言模型识别，逐块自回归，质量优先。
+仅支持 GPU，速度最慢、显存占用高。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\model_intros.py" />
+            <source>Recognizes text with a multimodal model from your LLM profile. Suits stylized lettering and handwriting that regular OCR misses; requires a vision-capable API, with speed and cost set by the provider.</source>
+            <translation>用 LLM Profile 里的多模态模型识别文字。适合艺术字、手写体等常规 OCR 认不出的内容；需要支持视觉的 API，速度与费用取决于服务商。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\model_intros.py" />
+            <source>Skips OCR. Use it when source text already exists (e.g. an imported project) or only later stages need to run.</source>
+            <translation>不做 OCR。适用于原文已存在（如导入工程）或只需重跑后续阶段的情况。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\model_intros.py" />
+            <source>PatchMatch (classical inpainting): no model, no VRAM, and the fastest option; suits flat or simple backgrounds, weaker on complex textures. If the native library is missing it downloads in the background on first use.</source>
+            <translation>PatchMatch 传统修复：非模型、无显存需求、速度最快，适合纯色或简单背景；复杂纹理效果一般。原生库缺失时首次使用会后台下载。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\model_intros.py" />
+            <source>LaMa Large 512px neural inpainting: better results; needs torch and VRAM, suits complex backgrounds and screentone.</source>
+            <translation>LaMa Large 512px 神经网络修复：效果更好，需要 torch 与显存，适合复杂背景和网点纸。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\model_intros.py" />
+            <source>Skips inpainting: original lettering stays in place and translated text is drawn over it.</source>
+            <translation>不做图像修复：保留原文字区域，只把译文渲染叠加在上面。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\model_intros.py" />
+            <source>Translation agent (recommended): multi-turn tool calls plus a whole-story overview, with glossary, speaker hints and batch draft review for consistent names and tone; the slowest and most expensive option.</source>
+            <translation>翻译 agent（推荐）：多轮工具调用 + 全局剧情概览，支持术语表、说话人提示与批量译稿审阅，译名与语气更一致；耗时和 API 费用最高。</translation>
+        </message>
+        <message>
+            <location filename="..\ui\model_intros.py" />
+            <source>Single-turn translation straight through the LLM API: fast and cheap, but without global context or the review workflow; prefer the translation agent for new projects.</source>
+            <translation>直接调用 LLM API 的单轮翻译：速度快、费用低，但没有全局上下文与审阅流程；新工程建议用翻译 agent。</translation>
+        </message>
     </context>
     <context>
         <name>TextTransformPanel</name>
