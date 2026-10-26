@@ -449,6 +449,13 @@ class TextBlock:
 
     def to_dict(self, deep_copy=False):
         blk_dict = vars(self)
+        # 字形掩膜量出的字号指标只在本次管线内使用，不进入工程存档。
+        if "_glyph_font_metrics" in blk_dict:
+            blk_dict = {
+                key: value
+                for key, value in blk_dict.items()
+                if key != "_glyph_font_metrics"
+            }
         if deep_copy:
             blk_dict = copy.deepcopy(blk_dict)
         return blk_dict

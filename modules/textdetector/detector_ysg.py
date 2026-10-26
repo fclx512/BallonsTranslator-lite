@@ -473,6 +473,10 @@ class YSGYoloCTDDetector(YSGYoloDetector):
 
     requires_packages = ["ultralytics", "einops"]
 
+    # 掩膜是字形级而非矩形级，OCR 之后可由 utils/font_size_estimate.py
+    # 反推原文字号；其它检测器不声明该能力，保持原字号逻辑不变。
+    provides_glyph_mask = True
+
     _load_model_keys = {"model", "ctd_model"}
 
     params = {
@@ -560,6 +564,11 @@ class YSGYoloCTDDetector(YSGYoloDetector):
         fine_mask, ctd_blk_list = self._detect_fine_text_mask(img)
         if fine_mask is None:
             return mask, blk_list
+        # 原始 CTD 精细掩膜只在这里存在；先量出字形指标供 OCR 后估字号，
+        # 后面的合并/膨胀掩膜用于修复，不适合当字形尺寸来源。
+        from utils.font_size_estimate import attach_glyph_font_metrics
+
+        attach_glyph_font_metrics(blk_list, fine_mask)
         im_h, im_w = img.shape[:2]
         box_mask = _build_box_mask(blk_list, im_w, im_h)
         mask = _combine_refined_mask(box_mask, fine_mask, blk_list, ctd_blk_list)

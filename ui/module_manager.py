@@ -31,6 +31,7 @@ from modules.base import MissingModelFilesError, soft_empty_cache
 from modules.translators import MissingTranslatorParams
 from utils import shared
 from utils.config import RunStatus, pcfg, select_module
+from utils.font_size_estimate import apply_mask_font_sizes_from_detector
 from utils.imgproc_utils import enlarge_window
 from utils.logger import logger as LOGGER
 from utils.message import create_error_dialog, create_info_dialog
@@ -796,6 +797,17 @@ class ImgtransThread(QThread):
                             e, self.tr("OCR Failed."), "OCRFailed"
                         )
                 self.ocr_counter += 1
+
+                # 字形掩膜 -> 原文字号；只有声明 provides_glyph_mask 的检测器生效。
+                estimates = apply_mask_font_sizes_from_detector(
+                    blk_list, mask, self.textdetector
+                )
+                if estimates:
+                    LOGGER.debug(
+                        "glyph-mask font size: %d blocks, %d matched",
+                        len(estimates),
+                        sum(1 for estimate in estimates if estimate.final_em),
+                    )
 
                 self.imgtrans_proj.update_page_progress(imgname, RunStatus.FIN_OCR)
                 self.update_ocr_progress.emit(self.ocr_counter)

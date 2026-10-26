@@ -16,6 +16,7 @@ from qtpy.QtCore import QThread, Signal
 
 from modules.translators.agent.loop import AgentTaskCancelled
 from utils.config import RunStatus
+from utils.font_size_estimate import apply_mask_font_sizes_from_detector
 from utils.proj_imgtrans import TextBlkEncoder
 from utils.textblock import sort_regions
 
@@ -204,6 +205,10 @@ class PipelineRunner(QThread):
                 self._stage(page, "ocr", "running", total=len(blocks))
                 started = time.monotonic()
                 self.modules["ocr"].run_ocr(image, blocks)
+                # 字形掩膜 -> 原文字号；无掩膜或检测器未声明能力时为空操作。
+                apply_mask_font_sizes_from_detector(
+                    blocks, result.get("mask"), self.modules.get("textdetector")
+                )
                 self._stage(page, "ocr", "done", total=len(blocks),
                             seconds=time.monotonic() - started)
                 result["bits"] |= RunStatus.FIN_OCR

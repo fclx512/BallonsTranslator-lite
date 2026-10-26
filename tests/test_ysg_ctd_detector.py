@@ -178,6 +178,9 @@ class TestHybridDetector(unittest.TestCase):
         self.detector.updateParam("ctd detect size", 1024)
         self.assertIsNone(self.detector.ctd_model)
 
+    def test_provides_glyph_mask(self):
+        self.assertTrue(YSGYoloCTDDetector.provides_glyph_mask)
+
     def test_dilated_mask_stays_inside_the_yolo_box(self):
         """扩张用来吃掉描边，但不应越出检测框污染框外背景。"""
         img = np.zeros((60, 60, 3), np.uint8)
