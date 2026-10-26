@@ -40,6 +40,7 @@ Exit code: 0 all pass, 1 any step failed.
 """
 
 import argparse
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
@@ -129,6 +130,27 @@ def _orphan_only(code):
     return code != 0 and not (code & 3)
 
 
+def _config_snapshot():
+    """Record content and write timestamps, without exposing config values."""
+    directory = ROOT / "config"
+    return {
+        path.relative_to(directory).as_posix(): (
+            hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_mtime_ns
+        )
+        for path in directory.rglob("*") if path.is_file()
+    }
+
+
+def _check_config_unchanged(before):
+    after = _config_snapshot()
+    changed = sorted(name for name in before.keys() | after.keys() if before.get(name) != after.get(name))
+    if changed:
+        print("❌ 配置保护: 检查期间真实配置发生变化：" + ", ".join(changed))
+        return False
+    print(f"✅ 配置保护: {len(before)} 个真实配置文件内容与修改时间未变")
+    return True
+
+
 def check_anim_rhythm():
     """演示动画节奏校验（check_anim_rhythm.py）。
 
@@ -195,6 +217,7 @@ def main():
         help="Release gate: also run ruff and pytest (skipped gracefully if absent)",
     )
     args = parser.parse_args()
+    config_before = _config_snapshot()
 
     tracked, untracked = changed_files()
     changed = [Path(p) for p in tracked + untracked]
@@ -335,6 +358,9 @@ def main():
     # ── 7. --full release gate: ruff + pytest ────────────────────────────
     if args.full:
         failures = _run_full_steps(failures)
+
+    if not _check_config_unchanged(config_before):
+        failures += 1
 
     print()
     if failures == 0:

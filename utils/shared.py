@@ -188,7 +188,7 @@ def _drop_unloadable_families(display_families, alias_to_canonical):
     另一语言名）视为可用，避免误杀本地化双名。失配比例异常高时认为
     探针环境不可信（如无字体数据库的离屏平台），放弃过滤保留全量。
     """
-    from qtpy.QtGui import QGuiApplication, QFont, QFontInfo
+    from qtpy.QtGui import QFont, QFontInfo, QGuiApplication
 
     if QGuiApplication.instance() is None:
         return display_families

@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "family": "win-py312-v1",
+  "python_series": "3.12",
+  "profiles": ["cpu", "cu126", "cu130", "cu132"],
+  "required_models": [
+    "textdetector:ppocrv6_onnx",
+    "textdetector:ysgyolo",
+    "textdetector:ysg_ctd",
+    "ocr:paddleocr_v6_onnx",
+    "inpainter:patchmatch",
+    "inpainter:lama_large_512px"
+  ]
+}

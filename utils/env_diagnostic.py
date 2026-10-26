@@ -38,9 +38,9 @@ _GPU_INFO_CACHE: Optional[dict] = None
 # maps to the stable cu132 instead.
 _CUDA_TIERS = (
     # (min_compute_capability, index_tag, label, onnxruntime-spec)
-    (10, "cu132", "13.2", "onnxruntime-gpu>=1.20,<1.29"),
-    (9, "cu130", "13.0", "onnxruntime-gpu>=1.20,<1.29"),
-    (6, "cu126", "12.6", "onnxruntime-gpu>=1.20,<1.29"),
+    (10, "cu132", "13.2", "onnxruntime-gpu==1.27.0"),
+    (9, "cu130", "13.0", "onnxruntime-gpu==1.27.0"),
+    (6, "cu126", "12.6", "onnxruntime-gpu==1.20.1"),
 )
 
 
@@ -70,9 +70,8 @@ def pick_cuda_index(compute_cap: Optional[int]) -> Optional[dict]:
 def _query_compute_cap() -> Optional[int]:
     """Return the GPU's compute capability major version, or None.
 
-    Prefers ``nvidia-smi --query-gpu=compute_cap``; older drivers do not
-    support that field, in which case we fall back to inferring it from
-    the GPU name (see :func:`_cc_from_name`).
+    Uses ``nvidia-smi --query-gpu=compute_cap`` strictly. Unsupported fields
+    return None; only the diagnostic display may infer from the GPU name.
     """
     try:
         proc = subprocess.run(
@@ -156,7 +155,10 @@ def detect_gpu_info() -> Optional[dict]:
     if cc is None:
         cc = _cc_from_name(name_upper)
     if cc is None:
-        cc = 8  # unknown name but a real NVIDIA card: assume a safe modern tier
+        # An unknown device/driver must not receive a guessed CUDA wheel.
+        return dict(name=_gpu_name, generation="Unknown", compute_cap=None,
+                    recommended_cuda="N/A", torch_index=None,
+                    message="GPU compute capability is unknown; CUDA installation requires a compatible complete package.")
 
     # Human-readable generation, derived from the same CC number.
     if cc >= 10:

@@ -16,18 +16,12 @@ BallonsTranslator 的分支版漫画/图片翻译工具。上游的五阶段管�
 
 - **操作系统**：Windows 10+ x64（macOS 见下文，其他平台未验证）
 - **显卡**：可选。NVIDIA 显卡可加速（见 [GPU 加速](#gpu-加速)），纯 CPU 可运行
-- **磁盘空间**：发版包约 **30 MB**（引导小包；首启安装依赖后本机环境约 **600 MB**，不含模型）；网盘完整包约 **1.7–2.1 GB**（另含模型与模型后端）；启用 GPU 加速再加约 **2.2 GB**（CUDA PyTorch ~2 GB + onnxruntime-gpu ~214 MB）
+- **磁盘空间**：推荐的网盘完整包约 **1.7–2.1 GB**（含匹配的 Python 环境、模型后端和部分模型）；GPU 完整包按配置更大。约 30 MB 的轻量包需要显式联网修复依赖，仅适合有网络的维护者/高级用户。
 - **VC++ 运行时**：[VC++ Redistributable 2015-2022 x64](https://aka.ms/vs/17/release/vc_redist.x64.exe)（嵌入式 Python 依赖它）
 
 ## 快速开始
 
-### 发版包（推荐）
-
-发版包是只含**基本启动环境**的引导小包（源码 + 嵌入式 Python，压缩后约 30 MB）：依赖不预装，解压后运行 `launch.bat` 会自动安装 `requirements.txt` 基本依赖并重启，装完后的本机环境约 600 MB。它不预装 torch、YOLO/ONNX/Transformers 等模型后端，也不带模型权重；PatchMatch 的两个原生库（约 53 MB）首次选中该修复器时在后台自动下载。之后可随时在 GUI 的模型文件页按需下载模型后端和权重。
-
-从 [Releases 页面](https://github.com/fclx512/BallonsTranslator-lite/releases/latest) 下载 `BallonsTranslator-lite_win_min.zip` 解压使用；构建方式见 `scripts/build_win_minimal.ps1` 与 `scripts/README.md`「发版包发行」一节。
-
-### 一键完整包（离线兜底）
+### 一键完整包（推荐）
 
 从网盘下载含依赖与模型的完整包，解压到任意目录后运行 `launch.bat`：
 
@@ -44,39 +38,43 @@ BallonsTranslator-lite/
 └── launch.bat                # 双击启动
 ```
 
-`launch.bat` 会自行寻找可用的 Python（内置环境优先）、判断是否有可用 GPU，并区分一键包与 git 安装两种形态，无需手工配置。
+`launch.bat` 只使用包内的 `ballontrans_pylibs_win/python.exe`，不依赖系统 Python、PATH 或用户 site-packages；缺少该环境时会提示重新解压匹配的完整包。它会判断可用 GPU 并选择 CPU/GPU 路径。
 
-一键完整包已预装基本依赖与模型后端，解压后无需联网即可进入 GUI：人工嵌字、多页整理、PS 联动、PatchMatch 简单背景修复和自动化管线开箱可用，个别未随包的权重在 GUI 内按需下载。没有可用网络的机器请用这份包（发版包首启需要联网安装依赖）。
+完整包带有与源码相匹配的 Python 环境及已装依赖/模型后端，解压后可离线启动；模型权重以包内实际内容为准，缺失权重仍可在 GUI 的模型文件页下载。CPU 与 CUDA 包应选择对应档位，不要在 CPU 包上临时拼装不同 CUDA 组件。
+
+### 轻量发版包（维护者/高级用户）
+
+约 30 MB 的轻量包只含源码和嵌入式 Python，不预装核心依赖、模型后端或权重；普通启动不会自动联网补装。只有明确同意在线修复时才运行 `launch.bat --repair-deps`。首次使用仍需网络下载依赖，模型与部分原生资产也需另行取得。普通用户和离线用户请使用上面的网盘完整包。
+
+从 [Releases 页面](https://github.com/fclx512/BallonsTranslator-lite/releases/latest) 下载 `BallonsTranslator-lite_win_min.zip`；它是维护者引导包，不等同于完整发行环境。构建方式见 `scripts/build_win_minimal.ps1` 与 `scripts/README.md`「轻量包构建」一节。
 
 ### 源码运行
 
-```bash
+Windows 源码用户也建议下载匹配版本的网盘完整包，将其中的 `ballontrans_pylibs_win/` 解压到仓库根目录，再使用 `launch.bat`。不要依赖系统 Python 作为默认或回退环境。
+
+```cmd
 git clone https://github.com/fclx512/BallonsTranslator-lite.git
 cd BallonsTranslator-lite
-
-python launch.py            # 首次启动自动补装缺失依赖后重启
-python launch.py --cpu      # 强制 CPU 模式
-python launch.py --update   # 先拉取代码更新再启动
+rem 将匹配的 ballontrans_pylibs_win/ 放在此目录后：
+launch.bat --cpu
+launch.bat --update
 ```
 
-- 需要 **Python 3.10+**（官方安装包或 Microsoft Store 版均可；Store 版会在项目目录内自动创建 `.venv`）。
+- 没有配套环境时，核心依赖缺失会停止并给出提示；只有明确选择在线修复才运行 `launch.bat --repair-deps`。轻量包首启联网安装不是推荐安装方式。
 - 所有依赖与模型下载默认走**官方源**；国内网络如需镜像，在 **设置 → 网络与镜像** 手动配置（`config/config.json` 的 `mirror` 节）。
-- 自动装依赖失败时手动执行 `pip install -r requirements.txt`。模型推理所需的 `torch` / `transformers` 等重依赖不在其中，按需安装（见 [GPU 加速](#gpu-加速)）。
+- 模型推理依赖及模型文件与 CPU/CUDA 档位有关；优先获取匹配的完整环境包，不建议在发行环境中手工混装。
 - **PatchMatch 修复器**是低占用基础能力，其两个原生库（`data/libs/patchmatch_inpaint.dll` 与 `data/libs/opencv_world455.dll`，约 53 MB）以 Release 资产分发：首次选中该修复器时后台自动下载，也可在 **设置 → 模型 → 模型文件** 页手动获取（一键完整包已随包）。缺失时应用仍可启动，但使用 PatchMatch 时会给出明确提示。
 - 完整参数见 `python launch.py --help`（如 `--proj-dir` 启动时打开工程、`--headless` 无界面运行）。
 
 ## GPU 加速
 
-仅 NVIDIA 显卡可用（AMD / Intel 显卡走 CPU）。**一键包用户**直接运行：
+仅 NVIDIA 显卡可用（AMD / Intel 显卡走 CPU）。普通用户应下载与显卡档位匹配的 CUDA 完整包。`install_cuda.bat` 是联网维护工具：默认只检查并显示环境方案，不会安装；确认要修改包内环境后才运行：
 
 ```cmd
-install_cuda.bat
+install_cuda.bat --install
 ```
 
-脚本会检测显卡计算能力、匹配对应的 CUDA 索引，把 CUDA 版 PyTorch（约 2 GB）与 onnxruntime-gpu（约 214 MB）装进嵌入式 Python 环境；已装好的部分自动跳过。装完照常用 `launch.bat` 启动，GPU 模式自动生效。
-
-- `install_cuda.bat --manual`：只打印命令，不装任何东西（源码运行、自建 venv、conda 环境用这个）
-- `install_cuda.bat --replace`：强制装进一键包的嵌入式环境
+`install_cuda.bat` 默认只读检查；`install_cuda.bat --json` 输出机器可读检查结果，也不修改环境。`--install` 会联网更换包内 PyTorch/ONNX Runtime 组件，属于维护者操作；完成后必须重新检查运行与发行包清单。该工具只操作 `ballontrans_pylibs_win`，不会安装到系统 Python 或任意 venv。
 
 索引按显卡计算能力选择（阈值与 `utils/env_diagnostic.py` 中的映射同一套）：
 
@@ -87,13 +85,9 @@ install_cuda.bat
 | RTX 50 系（Blackwell）                  | 10.x / 12.x | `cu132`   |
 | Kepler（GTX 6xx / 7xx）及更早             | < 6         | 不支持，用 CPU |
 
-**源码运行**不要执行 `install_cuda.bat`（它默认装进一键包的内置环境），在自己的环境里装：
+自行维护的 CUDA 环境请按官方 PyTorch 安装页选择匹配命令，并独立验证 Torch、TorchVision 和 ONNX Runtime 组合；版本配对以官方说明为准：
 
-```bash
-pip install -U torch torchvision --index-url https://download.pytorch.org/whl/cu126
-```
-
-也可用 `install_cuda.bat --manual` 打印与本机显卡匹配的命令，或 `python launch.py --reinstall-torch` 让启动脚本按显卡自动选索引重装。
+[PyTorch 官方版本配对说明](https://pytorch.org/get-started/previous-versions/)
 
 两个索引不要用：
 

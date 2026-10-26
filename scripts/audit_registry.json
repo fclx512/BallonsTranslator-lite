@@ -357,6 +357,14 @@
             "allowed_mentions": [
                 "docs/基础速查/备注演示动画使用说明.md"
             ]
+        },
+        "tests/cuda_sandbox.py": {
+            "note": "死测试辅助删除（2026-10-26）：install_cuda.bat 重写为薄包装、逻辑移入 scripts/install_cuda_bundle.py 后，tests/test_cuda_install_env.py 不再引用此沙箱替身，全仓无导入方",
+            "allowed_mentions": [
+                "out/bundle-cu132-accept-20261023/source-snapshot.json",
+                "out/bundle-cu132-accept-20261023/followup-20261023/source-snapshot-current-before-config-isolation.json",
+                "out/bundle-cu132-accept-20261023/followup-20261023/source-snapshot-current.json"
+            ]
         }
     },
     "dormant_symbols": {

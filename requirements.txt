@@ -1,5 +1,7 @@
 # ==============================================================================
-# Project dependencies -- installed by launch.py via pip install -r requirements.txt
+# Project dependency ranges. Normal startup checks these locally; online repair is
+# explicit (Windows: launch.bat --repair-deps). See pyproject.toml for the
+# canonical PEP 621 declarations and docs/基础速查/依赖库说明.md for offline bundles.
 # Canonical declaration: pyproject.toml -> [project].dependencies (PEP 621).
 # Heavy model-inference packages are NOT listed here; install what you need:
 #   torch / torchvision / transformers / diffusers / ultralytics
@@ -7,22 +9,24 @@
 # requires_packages, so the app installs it on demand when you pick such a
 # detector.  See pyproject.toml [project.optional-dependencies].
 # ==============================================================================
-# GPU PyTorch: https://pytorch.org/
+# GPU environment profiles and the explicit maintenance installer:
+# docs/技术实现/CUDA环境与索引_说明.md; ordinary users should use a matched full bundle.
 
 packaging>=23.0
 pydantic>=2.0
 pillow>=10.0
-PyQt6-Qt6>=6.8.1
-PyQt6>=6.8.1
-numpy
-# Local models need PyTorch, installed separately:
-#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+PyQt6-Qt6>=6.11.1
+PyQt6>=6.11.0
+numpy>=1.22
+# Model-inference backends (PyTorch / ONNX Runtime / Transformers, etc.) are
+# profile-specific and are not installed by this core requirements file.
+# Prepare them from a matching complete environment bundle; see the CUDA guide.
 # YOLO detectors additionally need ultralytics:
 #   pip install ultralytics
 #   pip install transformers diffusers
 # numba (optional, effect-render acceleration; falls back to pure NumPy):
 #   pip install numba
-tqdm
+tqdm>=4.66.3
 opencv-python>=4.10.0.84; sys_platform == 'win32' or sys_platform == 'linux' or sys_platform == 'darwin'
 shapely
 pyclipper
@@ -32,7 +36,7 @@ spacy-pkuseg
 termcolor
 qtpy
 opencc-python-reimplemented
-requests
+requests>=2.32.4
 colorama
 openai>=2.8.1
 pyyaml

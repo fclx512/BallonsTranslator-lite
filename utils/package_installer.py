@@ -7,12 +7,14 @@ Port of upstream ``ballontranslator.utils.package_installer``, adapted
 for the lite launcher's startup dependency management.
 """
 
+import importlib.metadata
 import os
 import re
 import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from typing import Callable, Iterable, List, Optional, Tuple
 
@@ -48,7 +50,7 @@ class InstallResult:
 def find_uv(env: Optional[dict] = None, python_executable: str = "") -> str:
     """Return a usable ``uv`` executable path, or ``""`` when unavailable.
 
-    Lookup order: ``PATH`` first, then the directory holding the target
+    Lookup order: the directory holding the target interpreter, then ``PATH``
     interpreter.  The release bundle puts ``uv.exe`` next to ``python.exe``
     inside ``ballontrans_pylibs_win/`` and does **not** add that directory to
     ``PATH`` (``launch.bat`` calls the interpreter by absolute path), so a
@@ -56,16 +58,17 @@ def find_uv(env: Optional[dict] = None, python_executable: str = "") -> str:
     on the ~520 MB core dependency set.
     """
     env = env or os.environ
-    found = shutil.which("uv", path=env.get("PATH"))
-    if found:
-        return found
-
     exe_dir = os.path.dirname(python_executable or sys.executable)
     if exe_dir:
         for name in ("uv.exe", "uv"):
             candidate = os.path.join(exe_dir, name)
             if os.path.isfile(candidate):
                 return candidate
+    if "ballontrans_pylibs_win" in exe_dir.lower():
+        return ""  # Never borrow an unrelated uv for the bundled interpreter.
+    found = shutil.which("uv", path=env.get("PATH"))
+    if found:
+        return found
     return ""
 
 
@@ -117,9 +120,10 @@ def build_install_command(
         backend, env=env, python_executable=python_executable
     )
 
-    if resolved_backend == "uv":
+    uv_path = find_uv(env, python_executable) if resolved_backend == "uv" else ""
+    if resolved_backend == "uv" and uv_path:
         return [
-            find_uv(env, python_executable) or "uv",
+            uv_path,
             "pip",
             "install",
             "--python",
@@ -152,6 +156,8 @@ def install(
     env: Optional[dict] = None,
     progress_callback: Optional[Callable[[dict], None]] = None,
     constraints_file: str = "",
+    additive_only: bool = True,
+    verify_imports: bool = False,
 ) -> InstallResult:
     """Install Python packages and stream installer output to stdout.
 
@@ -163,8 +169,51 @@ def install(
     installed versions, used for additive-only installs into an environment
     shared with other projects (see ``utils/core_requirements.py``).
     """
+    req_list = list(requirements)
+    no_deps = "--no-deps" in shlex.split(extra_args or "")
+    # A requirements-file repair must also work when packaging itself is missing.
+    parsed = []
+    if req_list:
+        try:
+            from packaging.requirements import Requirement
+            parsed = [Requirement(req) for req in req_list]
+        except Exception as exc:
+            return InstallResult(False, [], returncode=-1, error=f"Invalid requirements: {exc}")
+    if no_deps and (requirements_file or not parsed or
+                    any(req.name.lower() not in NO_DEPS_PACKAGES for req in parsed)):
+        return InstallResult(False, [], returncode=-1,
+                             error="--no-deps is reserved for declared exceptions")
+    for req in parsed:
+        if req.marker and not req.marker.evaluate():
+            continue
+        name = req.name.lower().replace("_", "-")
+        if name == "onnxruntime-gpu" and "ballontrans_pylibs_win" in sys.executable.lower():
+            return InstallResult(False, [], returncode=-1,
+                                 error="GPU ONNX Runtime must match Torch's CUDA profile. Use a matching complete package or install_cuda.bat --install.")
+        other = {"onnxruntime": "onnxruntime-gpu", "onnxruntime-gpu": "onnxruntime"}.get(name)
+        if other:
+            try:
+                importlib.metadata.version(other)
+            except importlib.metadata.PackageNotFoundError:
+                pass
+            else:
+                return InstallResult(False, [], returncode=-1,
+                                     error="ONNX Runtime CPU/GPU packages overlap. Use a matching complete package or install_cuda.bat.")
+    owned_snapshot = ""
+    if additive_only and not constraints_file:
+        try:
+            fd, owned_snapshot = tempfile.mkstemp(prefix="bt-installed-", suffix=".txt")
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                from utils.runtime_compatibility import installed_inventory
+                versions = installed_inventory()
+                for name, version in sorted(versions.items()):
+                    stream.write(f"{name}=={version}\n")
+            constraints_file = owned_snapshot
+        except Exception as exc:
+            return InstallResult(False, [], returncode=-1,
+                                 error=f"Cannot protect installed packages: {exc}")
     command = build_install_command(
-        requirements=requirements,
+        requirements=req_list,
         requirements_file=requirements_file,
         backend=backend,
         extra_args=extra_args,
@@ -195,12 +244,41 @@ def install(
         output = _stream_process_output(process, progress_callback=progress_callback)
         returncode = process.wait()
 
+    verified = returncode == 0
+    verification_errors = []
+    if verified and verify_imports:
+        import_names = {"opencv-python": "cv2", "pillow": "PIL.Image",
+                        "pyyaml": "yaml", "onnxruntime-gpu": "onnxruntime",
+                        "pillow-jxl-plugin": "pillow_jxl", "pyqt6": "PyQt6.QtCore",
+                        "pyqt6-qt6": "PyQt6.QtCore", "pywin32": "win32api",
+                        "opencc-python-reimplemented": "opencc", "fonttools": "fontTools"}
+        for requirement in parsed:
+            if requirement.marker and not requirement.marker.evaluate():
+                continue
+            name = requirement.name.lower()
+            module = import_names.get(name, name.replace("-", "_"))
+            try:
+                probe = subprocess.run(
+                    [sys.executable, "-c", "import importlib,sys; importlib.import_module(sys.argv[1])", module],
+                    capture_output=True, text=True, timeout=60,
+                )
+                failure = probe.returncode != 0
+                detail = probe.stderr[-1000:]
+            except Exception as exc:
+                failure, detail = True, str(exc)
+            if failure:
+                verified = False
+                verification_errors.append(f"Installed {requirement} but cannot import {module}: {detail}")
+                output += "\n" + verification_errors[-1]
+    if owned_snapshot and verified:
+        os.remove(owned_snapshot)
     return InstallResult(
-        returncode == 0,
+        verified,
         command,
-        returncode=returncode,
+        returncode=returncode if verified else (returncode or 1),
         stdout=output,
         stderr="",
+        error="\n".join(verification_errors) or (output[-2000:] if not verified else ""),
     )
 
 

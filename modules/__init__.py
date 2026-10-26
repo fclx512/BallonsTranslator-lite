@@ -141,15 +141,31 @@ def GET_MISSING_PACKAGES(module_type: str, key: str) -> list:
         try:
             req = Requirement(req_str)
         except Exception:
+            missing.append(req_str)
+            continue
+        if req.marker and not req.marker.evaluate():
             continue
         try:
             dist = importlib_metadata.distribution(canonicalize_name(req.name))
             if not req.specifier.contains(dist.version, prereleases=True):
                 missing.append(req_str)
         except importlib_metadata.PackageNotFoundError:
+            # GPU ONNX Runtime shares the onnxruntime import name, but its
+            # distribution version must still satisfy the declared spec.
+            if canonicalize_name(req.name) == "onnxruntime":
+                try:
+                    gpu_dist = importlib_metadata.distribution("onnxruntime-gpu")
+                    if not req.specifier.contains(gpu_dist.version, prereleases=True):
+                        missing.append(req_str)
+                    continue
+                except importlib_metadata.PackageNotFoundError:
+                    pass
+            if req.specifier or req.extras:
+                missing.append(req_str)
+                continue
             try:
                 importlib.import_module(req.name)
-            except ImportError:
+            except (ImportError, OSError):
                 missing.append(req_str)
     return missing
 

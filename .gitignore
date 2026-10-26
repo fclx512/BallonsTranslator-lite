@@ -98,6 +98,7 @@ config/help_anims_local/
 # 动画/探针等验证中间产物
 build/
 scripts/probes/out/
-/out/pipeline-tasks-*/
+# out/ 探针与验收产物（字号估计探针、bundle 验收报告等，只留本机）
+/out/
 /.tmp_text_mask_probe/
 /.tmp_overlay_shot/

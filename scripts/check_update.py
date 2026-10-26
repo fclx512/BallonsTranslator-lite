@@ -24,6 +24,13 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from utils.runtime_compatibility import (
+    RuntimeCompatibilityError,
+    preflight_directory,
+    preflight_zip,
+)
+
 REPO_OWNER = "fclx512"
 REPO_NAME = "BallonsTranslator-lite"
 BRANCH = "main"
@@ -211,11 +218,13 @@ def _download_manifest_update(remote_sha: str) -> bool:
 
     if failed:
         print(f"  Warning: {len(failed)} files failed to download")
-        # Continue anyway — the update will be partial
+        return False  # Never mark a partial source update ready.
 
     print(f"  Downloaded {downloaded}/{len(changed)} files")
 
+    preflight_directory(_project_root(), files_dir, delta=True, deleted=deleted)
     # Step 4: Write deleted list
+    (upd / DELETED_LIST).unlink(missing_ok=True)
     if deleted:
         (upd / DELETED_LIST).write_text("\n".join(deleted) + "\n", encoding="utf-8")
 
@@ -251,6 +260,7 @@ def _download_and_extract():
         tmp_zip = os.path.join(tmp, "repo.zip")
         with open(tmp_zip, "wb") as f:
             f.write(zip_data)
+        preflight_zip(_project_root(), tmp_zip)
 
         extract_to = os.path.join(tmp, "extracted")
         with zipfile.ZipFile(tmp_zip, "r") as zf:
@@ -316,15 +326,36 @@ def check_and_download() -> str:
         return "DOWNLOAD_FAILED"
 
 
+def validate_pending():
+    upd = _update_dir()
+    delta = (upd / FILES_SUBDIR).is_dir()
+    deleted_path = upd / DELETED_LIST
+    deleted = deleted_path.read_text(encoding="utf-8").splitlines() if deleted_path.exists() else []
+    for rel in deleted:
+        target = (_project_root() / rel).resolve()
+        if not target.is_relative_to(_project_root().resolve()):
+            raise RuntimeCompatibilityError("Invalid deletion path in update")
+    preflight_directory(_project_root(), upd / FILES_SUBDIR if delta else upd,
+                        delta=delta, deleted=deleted)
+
+
 def main():
     if sys.version_info < (3, 8):
         print("Python 3.8+ required for update check.")
         sys.exit(1)
 
     try:
+        if "--validate-pending" in sys.argv:
+            validate_pending()
+            return
         status = check_and_download()
+    except RuntimeCompatibilityError as exc:
+        print(f"Update refused: {exc}")
+        sys.exit(1)
     except Exception:
         traceback.print_exc()
+        if "--validate-pending" in sys.argv:
+            sys.exit(1)
         status = "ERROR"
 
     # Always exit 0 — update failure should never block launch

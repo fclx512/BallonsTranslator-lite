@@ -4,8 +4,6 @@ Shows all declared dependencies (core + optional) with install status
 and version numbers.  Provides one-click install for missing packages.
 """
 
-import subprocess
-import sys
 from pathlib import Path
 
 from packaging.requirements import Requirement
@@ -124,6 +122,10 @@ def _check_req(req_str: str) -> tuple[str, str]:
     if not ver:
         return "missing", ver
     if req.specifier.contains(ver, prereleases=True):
+        if req.extras:
+            from utils.core_requirements import check_declared_core_requirements
+            if check_declared_core_requirements(requirements_text=req_str):
+                return "mismatch", ver
         return "installed", ver
     return "mismatch", ver
 
@@ -139,66 +141,17 @@ class _InstallWorker(QThread):
     def __init__(self, reqs: list[str], parent=None):
         super().__init__(parent)
         self.reqs = reqs
-        self._install_cmd, self._using_uv = self._detect_installer()
-
-    @staticmethod
-    def _strip_marker(req_str: str) -> str:
-        """Strip environment markers so pip never mis-evaluates them on CLI.
-
-        ``"tomli; python_version < '3.11'"`` → ``"tomli"``
-        ``"opencv-python>=4.10.0.84; sys_platform == 'win32'"`` → ``"opencv-python>=4.10.0.84"``
-        """
-        req = Requirement(req_str)
-        return f"{req.name}{req.specifier}" if req.specifier else req.name
-
-    @staticmethod
-    def _detect_installer() -> tuple[list[str], bool]:
-        """Return (cmd_base, using_uv) for the best available installer.
-
-        uv is preferred when available, but we must NOT pass pip-specific
-        flags (``--prefer-binary``) to it — uv doesn't support them.
-        """
-        python = sys.executable
-        try:
-            subprocess.run(
-                [python, "-m", "uv", "--version"],
-                capture_output=True,
-                timeout=5,
-                check=True,
-            )
-            return [python, "-m", "uv", "pip", "install"], True
-        except Exception:
-            return [python, "-m", "pip", "install"], False
 
     def run(self):
+        from utils.package_installer import install
+
         total = len(self.reqs)
-        pip_fallback = [sys.executable, "-m", "pip", "install", "--prefer-binary"]
         for i, req in enumerate(self.reqs):
-            stripped = self._strip_marker(req)
-            success = False
-            # Try preferred installer first
-            try:
-                subprocess.run(
-                    [*self._install_cmd, stripped],
-                    capture_output=True,
-                    timeout=300,
-                    check=True,
-                )
-                success = True
-            except Exception:
-                # If uv failed, fall back to pip
-                if self._using_uv:
-                    try:
-                        subprocess.run(
-                            [*pip_fallback, stripped],
-                            capture_output=True,
-                            timeout=300,
-                            check=True,
-                        )
-                        success = True
-                    except Exception:
-                        pass
-            self.finished_one.emit(req, success)
+            result = install(requirements=[req], verify_imports=True)
+            if not result.ok:
+                LOGGER.error("Dependency installation failed for %s: %s", req,
+                             result.error or result.stdout[-1000:])
+            self.finished_one.emit(req, result.ok)
             self.progress.emit(i + 1, total)
         self.all_done.emit()
 

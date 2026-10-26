@@ -51,16 +51,13 @@ class PythonVersionGateTests(unittest.TestCase):
 
 
 class LaunchBatVersionGateTests(unittest.TestCase):
-    def test_every_discovery_branch_checks_version(self):
-        """四条发现分支都要有 ``sys.version_info >= (3,10)`` 检查。
-
-        Option B（py launcher）此前已有；A/C/D 是本轮补的。
-        """
+    def test_only_bundled_interpreter_is_checked(self):
+        """完整包只接受自带解释器，且检查最低版本。"""
         bat = (REPO_ROOT / "launch.bat").read_text(encoding="utf8")
         checks = re.findall(r"sys\.version_info\s*>=\s*\(3,\s*10\)", bat)
-        self.assertGreaterEqual(
-            len(checks), 4, f"expected a version check per branch, found {len(checks)}"
-        )
+        self.assertEqual(len(checks), 1)
+        self.assertIn("ballontrans_pylibs_win\\python.exe", bat)
+        self.assertNotIn("where python", bat.lower())
 
 
 if __name__ == "__main__":

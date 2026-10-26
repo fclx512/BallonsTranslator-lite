@@ -56,6 +56,53 @@ CORE_IMPORT_PROBES: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
 )
 
 
+def check_declared_core_requirements(requirements_file: str = "", *, requirements_text=None) -> List[str]:
+    """Check every applicable core distribution and version without installing.
+
+    Import probes catch broken binary wheels; this catches missing or too-old
+    distributions that happen not to be imported during startup.
+    """
+    try:
+        from packaging.requirements import Requirement
+    except Exception as exc:
+        return [f"  packaging: cannot check declared requirements ({exc})"]
+    path = Path(requirements_file or Path(__file__).resolve().parent.parent / "requirements.txt")
+    failures = []
+    try:
+        lines = (path.read_text(encoding="utf-8") if requirements_text is None else requirements_text).splitlines()
+    except OSError as exc:
+        return [f"  requirements.txt: {exc}"]
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            req = Requirement(line)
+            if req.marker and not req.marker.evaluate():
+                continue
+            dist = importlib.metadata.distribution(req.name)
+            if req.specifier and not req.specifier.contains(dist.version, prereleases=True):
+                failures.append(f"  {req.name}: {dist.version} does not satisfy {req.specifier}")
+            for extra in req.extras:
+                for child_line in dist.requires or []:
+                    child = Requirement(child_line)
+                    if child.marker and not child.marker.evaluate({"extra": extra}):
+                        continue
+                    if not child.marker:
+                        continue  # Normal dependencies are checked by import/pip metadata.
+                    try:
+                        child_dist = importlib.metadata.distribution(child.name)
+                        if child.specifier and not child.specifier.contains(child_dist.version):
+                            failures.append(f"  {req.name}[{extra}]: {child.name} version mismatch")
+                    except importlib.metadata.PackageNotFoundError:
+                        failures.append(f"  {req.name}[{extra}]: missing {child.name}")
+        except importlib.metadata.PackageNotFoundError:
+            failures.append(f"  {req.name}: distribution not installed")
+        except Exception as exc:
+            failures.append(f"  {line}: invalid declaration ({exc})")
+    return failures
+
+
 def _platform_probes() -> Tuple[Tuple[str, Tuple[str, ...]], ...]:
     if sys.platform == "win32":
         return (("win32api", ()),)
@@ -117,11 +164,8 @@ def _write_constraints_snapshot() -> Tuple[str, int]:
     """
     import tempfile
 
-    versions = {}
-    for dist in importlib.metadata.distributions():
-        name = (dist.metadata.get("Name") or "").strip()
-        if name and dist.version:
-            versions.setdefault(name, dist.version)
+    from utils.runtime_compatibility import installed_inventory
+    versions = installed_inventory()
 
     fd, path = tempfile.mkstemp(prefix="bt_lite_constraints_", suffix=".txt")
     with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -193,7 +237,7 @@ def ensure_core_requirements(
     )
 
     probes = tuple(CORE_IMPORT_PROBES) + _platform_probes()
-    failures = check_core_imports(probes)
+    failures = check_core_imports(probes) + check_declared_core_requirements(str(req_path))
     if not force and not failures:
         return False
 
@@ -221,8 +265,8 @@ def ensure_core_requirements(
             "via constraints — existing packages will NOT be upgraded."
         )
     except Exception as e:
-        print(f"Warning: could not write constraints snapshot ({e}); "
-              "installing without the no-upgrade guard.")
+        print(f"Cannot protect installed packages ({e}); refusing online repair.")
+        return False
 
     result = _install_packages(
         requirements_file=str(req_path),
@@ -240,15 +284,15 @@ def ensure_core_requirements(
         print(f"  Exit code: {result.returncode}")
         if result.stderr:
             print(f"  Error: {result.stderr[:1000]}")
+        if result.error:
+            print(f"  Error: {result.error[:1000]}")
         if constraints_path:
             print()
             print(f"Constraints snapshot kept for inspection: {constraints_path}")
             print("A conflict here means a missing package needs a version that")
-            print("would upgrade something already installed — resolve manually")
-            print("or delete the snapshot file to retry unrestricted.")
+            print("would change the release environment. Get the matching complete package.")
         print()
-        print("Please run manually:")
-        print(f"  pip install -r {req_path}")
+        print("Restore the matching complete package before retrying.")
         print("!" * 50)
         print()
         return False
@@ -267,7 +311,7 @@ def ensure_core_requirements(
     # job — the caller re-execs once and the post-restart probe passes.  Only
     # failures that a subprocess re-probe also hits are reported as actionable
     # errors; launch.py's restart guard caps any pathological re-exec chain.
-    still_missing = check_core_imports(probes)
+    still_missing = check_core_imports(probes) + check_declared_core_requirements(str(req_path))
     if still_missing:
         resolvable = _restart_resolvable_failures(still_missing)
         if resolvable:
@@ -286,8 +330,7 @@ def ensure_core_requirements(
         for f in still_missing:
             print(f)
         print("Not restarting — a restart would repeat the same install.")
-        print("Resolve the environment manually, then start again:")
-        print(f"  pip install -r {req_path}")
+        print("Restore the matching complete package, then start again.")
         print("!" * 50)
         print()
         return False
@@ -308,7 +351,7 @@ def warn_missing_core_imports(
 
     Returns the list of failure descriptions (empty = everything is fine).
     """
-    failures = check_core_imports(probes)
+    failures = check_core_imports(probes) + check_declared_core_requirements()
 
     # Deep probe PIL.Image (a submodule, not loaded by import PIL alone)
     try:

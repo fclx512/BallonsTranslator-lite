@@ -16,18 +16,12 @@ A fork of BallonsTranslator for comic/image translation. The upstream five-stage
 
 - **OS**: Windows 10+ x64 (macOS see below; other platforms unverified)
 - **GPU**: Optional. An NVIDIA GPU can accelerate (see [GPU Acceleration](#gpu-acceleration)); CPU-only works
-- **Disk space**: The release package is approx. **30 MB** (bootstrap; after the first-run install the local environment is approx. **600 MB**, models excluded); the offline full bundle is approx. **1.7–2.1 GB** (including model backends and weights); enabling GPU acceleration adds approx. **2.2 GB** (CUDA PyTorch ~2 GB + onnxruntime-gpu ~214 MB)
+- **Disk space**: The recommended full bundle is approx. **1.7–2.1 GB** (matching Python environment, model backends and some models). CUDA bundles vary by profile. The approx. 30 MB lightweight package requires explicit online dependency repair and is intended for maintainers or advanced users.
 - **VC++ Runtime**: [VC++ Redistributable 2015-2022 x64](https://aka.ms/vs/17/release/vc_redist.x64.exe) (required by the embedded Python)
 
 ## Quick Start
 
-### Release Package (recommended)
-
-The release package is a small bootstrap bundle containing only the **basic boot environment** (source + embedded Python, approx. 30 MB compressed): dependencies are not pre-installed — running `launch.bat` after extracting installs the basic `requirements.txt` dependencies and restarts, leaving a local environment of roughly 600 MB. It ships no torch, YOLO/ONNX/Transformers backends and no model weights; the two PatchMatch native libraries (approx. 53 MB) are downloaded in the background the first time that inpainter is selected. Model backends and weights can then be downloaded on demand from the GUI model files page.
-
-Download `BallonsTranslator-lite_win_min.zip` from the [Releases page](https://github.com/fclx512/BallonsTranslator-lite/releases/latest) and extract it to use; see `scripts/build_win_minimal.ps1` and the "发版包发行" section in `scripts/README.md` for how it is built.
-
-### Full One-Click Bundle (offline fallback)
+### Full One-Click Bundle (recommended)
 
 Download the complete bundle (dependencies and models included) from the file hosts, extract it to any directory and run `launch.bat`:
 
@@ -44,39 +38,43 @@ BallonsTranslator-lite/
 └── launch.bat                # Double-click to start
 ```
 
-`launch.bat` locates a usable Python by itself (the bundled environment first), determines whether a usable GPU is present, and distinguishes the one-click bundle from a git install — no manual configuration needed.
+`launch.bat` uses only the bundled `ballontrans_pylibs_win/python.exe`; it does not depend on system Python, PATH, or user site-packages. If the runtime is missing, it asks you to extract the matching full bundle. It also detects an available GPU and selects the CPU/GPU path.
 
-The full bundle ships the basic dependencies and model backends pre-installed, so it enters the GUI without network access: manual typesetting, multi-page workbench operations, Photoshop integration, PatchMatch simple-background repair and the automated pipeline all work out of the box (any weights not bundled download on demand in the GUI). Use this bundle when no usable network is available — the release package needs the network on its first launch to install dependencies.
+The full bundle includes a Python environment matching the source, with dependencies and model backends already installed, so it can start offline. Included model weights depend on the selected bundle; missing weights can be downloaded from the GUI. Choose the matching CPU or CUDA profile; avoid manually mixing CUDA components into a release environment.
+
+### Lightweight Release Package (maintainers / advanced users)
+
+The approx. 30 MB lightweight package contains source and embedded Python only; core dependencies, model backends, and weights are not pre-installed. Normal startup does not install dependencies online. Run `launch.bat --repair-deps` only when you explicitly agree to an online repair. This requires network access, and some model files or native assets may also need separate downloads. Ordinary and offline users should use the full bundle above.
+
+The [Releases page](https://github.com/fclx512/BallonsTranslator-lite/releases/latest) provides `BallonsTranslator-lite_win_min.zip`, a maintainer bootstrap package rather than a complete runtime. See `scripts/build_win_minimal.ps1` and the "Lightweight Package Build" section in `scripts/README.md`.
 
 ### Running from Source
 
-```bash
+Windows source users should also download the matching full bundle and extract its `ballontrans_pylibs_win/` beside the source, then start with `launch.bat`. Do not depend on system Python as the default or fallback.
+
+```cmd
 git clone https://github.com/fclx512/BallonsTranslator-lite.git
 cd BallonsTranslator-lite
-
-python launch.py            # first launch installs missing dependencies, then restarts
-python launch.py --cpu      # force CPU mode
-python launch.py --update   # pull code updates before launching
+rem After placing the matching ballontrans_pylibs_win/ here:
+launch.bat --cpu
+launch.bat --update
 ```
 
-- Requires **Python 3.10+** (the official installer or the Microsoft Store version; the Store version creates a project-local `.venv` automatically).
+- If the matching environment is absent, startup stops with a message when core dependencies are missing. Use `launch.bat --repair-deps` only to explicitly opt into online repair; first-run internet installation is not the recommended setup.
 - All dependency and model downloads default to the **official sources**. If you need a mirror (e.g. in mainland China), configure it manually under **Settings → Network & Mirrors** (the `mirror` section of `config/config.json`).
-- If automatic dependency installation fails, run `pip install -r requirements.txt` manually. The heavy dependencies needed for model inference (`torch` / `transformers` etc.) are not part of it — install them as needed (see [GPU Acceleration](#gpu-acceleration)).
+- Model inference dependencies vary by CPU/CUDA profile. Prefer the matching full environment bundle; avoid manual mixing in a release environment.
 - The **PatchMatch inpainter** is a low-overhead basic capability. Its two native libraries (`data/libs/patchmatch_inpaint.dll` and `data/libs/opencv_world455.dll`, approx. 53 MB) are distributed as Release assets: they download in the background the first time the inpainter is selected, or fetch them manually on the Settings → Models → Model Files page (the full bundle already includes them). The app still starts without them, but using PatchMatch will show a readable missing-attachment message.
 - See `python launch.py --help` for all arguments (e.g. `--proj-dir` to open a project at startup, `--headless` to run without a GUI).
 
 ## GPU Acceleration
 
-NVIDIA GPUs only (AMD / Intel GPUs run on CPU). **One-click bundle users** just run:
+NVIDIA GPUs only (AMD / Intel GPUs run on CPU). Ordinary users should download a CUDA full bundle matching their GPU profile. `install_cuda.bat` is an online maintenance tool: it only checks and displays a plan by default. To deliberately modify the bundled environment, run:
 
 ```cmd
-install_cuda.bat
+install_cuda.bat --install
 ```
 
-The script detects the GPU's compute capability, matches the corresponding CUDA index, and installs CUDA PyTorch (approx. 2 GB) plus onnxruntime-gpu (approx. 214 MB) into the embedded Python environment; anything already installed is skipped. Afterwards launch as usual with `launch.bat` — GPU mode takes effect automatically.
-
-- `install_cuda.bat --manual`: prints the commands only, installs nothing (for source installs, your own venv, conda environments)
-- `install_cuda.bat --replace`: force installation into the one-click bundle's embedded environment
+`install_cuda.bat` performs a read-only check by default; `install_cuda.bat --json` prints machine-readable results and remains read-only. `--install` downloads and changes the bundled PyTorch/ONNX Runtime components. This is a maintainer operation; recheck runtime behavior and the package manifest afterwards. The tool operates only on `ballontrans_pylibs_win`, never system Python or an arbitrary venv.
 
 The index is selected by compute capability (same thresholds as the mapping in `utils/env_diagnostic.py`):
 
@@ -87,13 +85,9 @@ The index is selected by compute capability (same thresholds as the mapping in `
 | RTX 50 series (Blackwell) | 10.x / 12.x | `cu132` |
 | Kepler (GTX 6xx / 7xx) and older | < 6 | Not supported, use CPU |
 
-**Source installs** should not run `install_cuda.bat` (it installs into the bundle's embedded environment by default); install into your own environment instead:
+For a separately maintained CUDA environment, use the official PyTorch installation selector and independently validate the Torch, TorchVision, and ONNX Runtime combination. A single command does not guarantee a compatible release environment:
 
-```bash
-pip install -U torch torchvision --index-url https://download.pytorch.org/whl/cu126
-```
-
-You can also run `install_cuda.bat --manual` to print the command matching your GPU, or `python launch.py --reinstall-torch` to let the launcher pick the index automatically.
+[Official PyTorch version pairs](https://pytorch.org/get-started/previous-versions/)
 
 Two indexes to avoid:
 

@@ -22,6 +22,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from scripts.test_config_sandbox import install_config_sandbox  # noqa: E402
+
+install_config_sandbox()
+
 # Everything runs offscreen — no window pops up during the smoke test.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -71,8 +75,9 @@ class TestStartupImports(unittest.TestCase):
     def test_07_run_pipeline_dialog_init(self):
         """RunPipelineDialog can be built (catches missing icons/imports).
 
-        The dialog is constructed by ``MainWindow.run_imgtrans``, which the
-        smoke test cannot reach, so build it here instead.
+        The desktop run entry is the embedded PipelineWorkbench opened by
+        ``MainWindow.run_imgtrans``, which the smoke test cannot reach, so
+        build the base dialog here instead.
         """
         import qtpy.QtWidgets as QW
         app = QW.QApplication.instance() or QW.QApplication(

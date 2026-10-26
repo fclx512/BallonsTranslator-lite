@@ -29,9 +29,6 @@
 """
 
 import os.path as osp
-import shutil
-import subprocess
-import sys
 import threading
 
 from qtpy.QtCore import QCoreApplication, QObject, QThread, Signal
@@ -210,61 +207,9 @@ class ModelDownloadTask(QThread):
     def _install_packages(self) -> bool:
         self.status.emit(QCoreApplication.translate("model_downloads", "Installing required packages…"))
         self._log(">> Packages: " + ", ".join(self.missing_packages))
+        from packaging.requirements import Requirement
 
-        python = sys.executable
-        uv_available = (
-            subprocess.run(
-                [python, "-m", "uv", "--version"],
-                capture_output=True,
-                check=False,
-            ).returncode
-            == 0
-        )
-        runners = []
-        if uv_available:
-            runners.append([python, "-m", "uv", "pip", "install"])
-        runners.append([python, "-m", "pip", "install"])
-
-        def _pip_install(pkgs, *, no_deps=False):
-            bases = runners if not no_deps else runners[::-1]
-            for runner in bases:
-                is_uv = "uv" in runner
-                extra = []
-                if no_deps:
-                    extra = ["--no-deps"]
-                elif not is_uv:
-                    # pip 支持 --prefer-binary / --timeout，uv 不支持
-                    extra = ["--prefer-binary", "--timeout", "30"]
-                try:
-                    subprocess.run(
-                        [*runner, *pkgs, *extra],
-                        timeout=300,
-                        check=True,
-                    )
-                    return True
-                except Exception:
-                    continue
-            sys_py = shutil.which("python")
-            if sys_py and osp.realpath(sys_py) != osp.realpath(python):
-                try:
-                    subprocess.run(
-                        [
-                            sys_py,
-                            "-m",
-                            "pip",
-                            "install",
-                            *pkgs,
-                            "--prefer-binary",
-                            "--timeout",
-                            "30",
-                        ],
-                        timeout=300,
-                        check=True,
-                    )
-                    return True
-                except Exception:
-                    pass
-            return False
+        from utils.package_installer import install
 
         for package in self.missing_packages:
             if self._cancel_event.is_set():
@@ -273,19 +218,15 @@ class ModelDownloadTask(QThread):
                 QCoreApplication.translate("model_downloads", "Installing %1…").replace("%1", package)
             )
             self._log(f">> Installing {package} …")
-            if package in NO_DEPS_PACKAGES:
-                # onnxocr 之类钉了冲突依赖（numpy<2）——直接裸装，绝不给
-                # 解析器"顺手降级 numpy"的机会（见 utils/package_installer.py）。
-                ok = _pip_install([package], no_deps=True)
-            else:
-                ok = _pip_install([package])
-                if not ok:
-                    self._log(
-                        f">> Package '{package}' failed with deps, retrying --no-deps …"
-                    )
-                    ok = _pip_install([package], no_deps=True)
-            if not ok:
+            result = install(
+                requirements=[package],
+                extra_args="--no-deps" if Requirement(package).name.lower() in NO_DEPS_PACKAGES else "",
+                verify_imports=True,
+            )
+            if not result.ok:
                 self._log(f">> FAILED: {package}")
+                if result.error:
+                    self._log(result.error)
                 self._failure_code = f"pip_failed:{package}"
                 return False
         self._log(">> Package installation complete.")

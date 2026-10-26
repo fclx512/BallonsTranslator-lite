@@ -11,16 +11,21 @@
 
 **统一入口是 `verify.py`**（语法 → 文档 → 审计 → 展示台覆盖 → 上游巡检 → i18n → 动画节奏 → qm → 冒烟），
 日常开发跑它即可；发版前加 `--full`（追加 ruff + pytest）。上游巡检只提醒不阻断。
+pytest 与独立启动冒烟自动启用 `scripts/test_config_sandbox.py` 的配置隔离；
+`scripts/verify.py::_check_config_unchanged` 还会核对整个真实 config 目录的文件内容和修改时间，发现变化则门禁失败。
 
 | 脚本 | 用途 | 运行方式 |
 |---|---|---|
 | `scripts/verify.py` | **一键检查**：语法 → 文档 → 审计 → 展示台覆盖 → 上游巡检 → i18n → 动画节奏 → qm → 冒烟；成功每步只打一行（上游巡检漂移只告警不失败） | `python scripts/verify.py`（`--smoke` 强制冒烟，`--all` 全量语法，`--full` 发版门禁追加 ruff+pytest） |
+| `scripts/test_config_sandbox.py` | 测试配置隔离：pytest 收集前与独立启动冒烟共用临时配置目录；Python audit hook 拒绝对真实 config 目录的写入、替换及删除，持续至进程退出 | 非独立入口；由 `tests/conftest.py` 与 `tests/test_startup_imports.py` 自动启用 |
 | `scripts/check_syntax.py` | 语法检查（编译 + 混合缩进 + UTF-8 BOM） | `python scripts/check_syntax.py <文件...>` |
 | `scripts/check_docs.py` | 校验 `AGENTS.md` 与 `docs/` 活文档的路径/符号引用 + scripts/README 登记齐全 | `python scripts/check_docs.py` |
 | `scripts/check_audit.py` | 审计登记表契约（deprecated 残留引用 / suspended 被 import） | `python scripts/check_audit.py` |
 | `scripts/check_showcase.py` | 展示台覆盖校验：`ui/custom_widget` 每个导出必须在 `scripts/style_showcase.py` 展示或 `EXCLUDED` 登记（纯 AST，不导入 Qt） | `python scripts/check_showcase.py` |
 | `scripts/check_upstream_drift.py` | **上游契约漂移巡检**（纯 AST，不 import 两侧代码）：比对 `TextBlock`/`FontFormat` 字段与默认值、效果类型注册表、工程写入键，只报「相对基线的新变化」；上游不存在时自动跳过 | `python scripts/check_upstream_drift.py`（`--update-baseline` 重算基线，`--print` 打印契约面）；上游路径用 `--upstream` 或环境变量 `BT_UPSTREAM_ROOT` |
 | `scripts/check_cuda_env.py` | CUDA 索引存活 + 解释器环境**只读**体检（L3 真环境层，不安装任何东西）：索引是否仍可装（`cu124` 已 EOL 就是没查这个才漏掉的）、指定解释器的 torch/onnxruntime 状态与 onnxruntime 双发行名混合态 | `python scripts/check_cuda_env.py [--indexes\|--env] [--python <python.exe>] [--json]`；分层与判据见 `docs/技术实现/CUDA环境与索引_说明.md` |
+| `scripts/install_cuda_bundle.py` | 检查配套 Windows Python 的 GPU 档位与 Torch/ONNX Runtime 运行状态；默认检查不改动，`--json` 仍只读；仅显式 `--install` 才联网更换 bundle 内组件 | `ballontrans_pylibs_win\python.exe scripts\install_cuda_bundle.py [--json\|--install]`；普通用户应下载档位匹配的完整包 |
+| `scripts/check_bundle.py` | 离线核对发行目录的源码兼容契约、Python/profile、精确 distributions 与模型文件；可选写入该发行包的 `runtime-manifest.json`。静态成功不等于真实推理验收 | `ballontrans_pylibs_win\python.exe scripts\check_bundle.py --profile cpu\|cu126\|cu130\|cu132 [--include-vl] [--write-manifest --bundle-id ID]`；发行范围见 `runtime_compatibility.json` 与 `docs/基础速查/依赖库说明.md` |
 | `scripts/i18n_check.py` | 审计 i18n（硬编码中文、缺失/多余的 .ts 条目），发版前 `--ci` | `python scripts/i18n_check.py` |
 | `scripts/check_anim_rhythm.py` | **演示动画节奏校验器**：检查 `scripts/gen_help_anim.py::SCENES` 全部场景的**有效时间轴**——由 `scripts/anim_kit.py::resolve_timeline` 解析（本类手写 F_* 优先 → `RHYTHM` 档位算出 → 继承值，渲染侧 `scripts/anim_kit.py::apply_timeline` 同源，杜绝"校验读类属性、渲染读实例覆写"的假绿灯）；不变量：`EMPH_SEG` 合法（`None` = 跟随 MOVE 段）、`N_FRAMES >= 10` 且大于 `F_FADE`、`F_PRESS < F_CLICK <= F_MOVE_START <= F_MOVE_END < F_FADE`（点击可就地触发过渡故非严格）。`verify_timeline` / `verify_scene_timeline`（类属性，不建 Qt）与 `verify_plan`（`CursorPlan` 按下/航点/淡出帧序，覆盖无 F_* 常量的 README 大画幅场景）两条线 | `python scripts/check_anim_rhythm.py` |
 | `scripts/check_anim_cursor.py` | **演示动画落点/层级/裁剪校验器**：构造 `scripts/gen_readme_anim.py::FormatTourScene` 与 `scripts/gen_readme_showcase.py::ShowcaseScene`，核对①航点 == 控件场景中心（`scripts/anim_kit.py::widget_scene_center`）/ 手绘色板格子·下拉行落点 == 布点对象（`scripts/anim_kit.py::PopupPalette` / `scripts/anim_kit.py::PopupDropdown`）/ 画布块 == `scripts/anim_kit.py::graphics_item_scene_rect` 中心（**先把布局推进到渲染期最终态再比**：`ensurePolished`+`processEvents`+`grab`，否则构造期读数自洽会把"漏激活布局"漏掉）；②覆盖层每帧置顶（`scripts/anim_kit.py::AnimScene`）；③光标不被手绘弹层裁剪/调暗（`verify_cursor_paint`）。需 QApplication，环境不可用时跳过不阻断；负向回归见 `tests/test_anim_checks.py` | `python scripts/check_anim_cursor.py` |
@@ -71,19 +76,19 @@
 |---|---|---|
 | `scripts/check_update.py` | 跨平台 | 启动时检查更新：git 增量 / manifest delta / zip 三种模式（`launch.bat`/`launch.py` 调用） |
 | `scripts/generate_manifest.py` | 跨平台 | 生成 `manifest.json`（全文件 SHA256 清单，供 delta 更新用）。**发版前必须重新生成并随版本提交** |
-| `scripts/build_win_minimal.ps1` | Windows | **构建发版包 + 原生库资产（发行版）**：跟踪源码 + 嵌入式 Python + pip/uv（**不预装依赖**），ZIP 约 30 MB；同批产出 `release_assets\` 两个 PatchMatch DLL（独立 Release 资产，不进 ZIP）。成分、排除项与发行门禁见下方「发版包发行」小节 | `powershell -ExecutionPolicy Bypass -File scripts\build_win_minimal.ps1`（`-StaticCheck` 只做离线校验，`-AllowDirtyWorkTree` 调试构建，`-KeepBuildDir` 留中间目录） |
+| `scripts/build_win_minimal.ps1` | Windows | 构建维护者用的轻量引导包 + 原生库 Release 资产：源码 + 嵌入式 Python，不预装核心依赖、模型后端或权重；普通启动不联网补装。它不是网盘完整环境包的构建器。成分、排除项与发行门禁见下方「轻量包构建」小节 | `powershell -ExecutionPolicy Bypass -File scripts\build_win_minimal.ps1`（`-StaticCheck` 只做离线校验，`-AllowDirtyWorkTree` 调试构建，`-KeepBuildDir` 留中间目录） |
 | `scripts/download_models.sh` | Linux/macOS | 编译 PyPatchMatch（`modules/inpaint/patch_match.py` 仍依赖）。**其中的模型下载段是上游遗留、已与当前模型集合脱节**——权重请在应用内「设置 → Models → 模型文件」获取（见 `docs/技术实现/模型文件管理_设计方案_存档.md`） |
 | `scripts/local_gitpull.bat` | Windows | 使用便携环境执行 `git pull` |
 
-### 发版包发行（`scripts/build_win_minimal.ps1`）
+### 轻量包构建（`scripts/build_win_minimal.ps1`）
 
-**包里有什么（约 30 MB 的引导小包，与上游 `Ballonstranslator_win_minium.zip` 同量级）：**
+**包里有什么（约 30 MB 的维护者引导小包，与上游 `Ballonstranslator_win_minium.zip` 同量级）：**
 `git ls-files` 跟踪的全部源码（**刻意不裁剪 `docs/tests/scripts`**，与 updater/manifest 的
 受管文件范围保持一致，否则增量更新会把砍掉的开发文件重新拉回来）、嵌入式 Python
 （`-PythonVersion`，默认 3.12.4）、pip 与钉定版 `uv.exe`（`-UvVersion`，默认 0.12.19，
-**禁止 `latest`**）。**依赖不预装**：`requirements.txt` 由首启 `launch.bat` →
-`utils/core_requirements.py::ensure_core_requirements` 现场安装（装完自动重启）；
-装完依赖的本机环境（约 600 MB）只是运行状态，俗称「精简包」，**不作为发行物分发**。
+**禁止 `latest`**）。**依赖不预装**：普通启动只检查核心依赖并提示缺失，不会自动联网安装；
+只有用户明确同意在线修复时才运行 `launch.bat --repair-deps`。装完依赖的本机环境不是本脚本
+发行产物，不能把它与经验证的网盘完整环境混称。
 
 **同批产出的 Release 资产：** `release_assets\patchmatch_inpaint.dll` +
 `release_assets\opencv_world455.dll`（合计约 53 MB，**不进 ZIP**——否则 30 MB 的小包
@@ -94,10 +99,15 @@ sha256 钉死资产内容）。
 **包里刻意没有：** `torch`／`torchvision`／`transformers`／`diffusers`／`ultralytics`／
 `onnxruntime`／`onnxocr`（模型后端）与 `numba`／`llvmlite`（加速），也不含任何模型权重、
 `config/config.json`（含 API 密钥）、`logs/`、原生 DLL——脚本对这几类都有硬校验。
-模型后端在选中模块时由 `modules/base.py::ensure_dependencies` 安装，权重走设置页
-「Models → 模型文件」后台下载（`ui/model_downloads.py`）；两个原生 DLL 缺任一源文件就
-直接失败，不产出"资产发不出去"的包。网盘上 ~1.7 GB 的预装完整包继续留在原处，作为
-没有可用网络时的离线兜底。
+模型后端与权重不随轻量包分发；完整包用户应事先取得已配好的匹配环境，模型文件页可按需
+下载缺失权重（`ui/model_downloads.py`）。两个原生 DLL 缺任一源文件就直接失败，不产出
+"资产发不出去"的包。网盘完整包是普通用户的推荐安装方式与离线使用路径。
+
+完整环境发行时，按 `runtime_compatibility.json` 选择 profile，再对待发布目录运行
+`ballontrans_pylibs_win\python.exe scripts\check_bundle.py --profile <cpu|cu126|cu130|cu132>`。
+确认待发布环境与模型文件后，才用 `--write-manifest --bundle-id <唯一发行标识>` 写入
+该包的 `runtime-manifest.json`。不要从当前开发环境生成或宣传发行快照；静态清单也不替代
+真实启动、模块加载和推理验收。
 
 **发行门禁（默认开启）：** 工作区必须干净；`manifest.json` 与 `pyproject.toml` 版本必须
 一致、manifest 的文件集合与 `git ls-files` 完全对应、逐个文件哈希一致——不一致直接失败，

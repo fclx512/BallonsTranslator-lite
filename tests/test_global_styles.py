@@ -33,7 +33,12 @@ def _ffmt(family: str = "Test Font", size: float = 40.0, vertical: bool = False)
 
 
 @pytest.fixture(autouse=True)
-def _clean_library():
+def _clean_library(tmp_path, monkeypatch):
+    # add_style/remove_style save without an explicit path. Redirect their
+    # callee's bound default as well as the explicit roundtrip test paths.
+    library_path = str(tmp_path / "global_styles.json")
+    monkeypatch.setattr(gs.save_global_styles, "__defaults__", (library_path,))
+    monkeypatch.setattr(gs.load_global_styles, "__defaults__", (library_path,))
     gs.global_styles.clear()
     yield
     gs.global_styles.clear()
@@ -89,11 +94,13 @@ class TestNaming:
     def test_unique_name_passthrough_when_free(self):
         assert gs.unique_name("新样式") == "新样式"
 
-    def test_unique_name_suffixes_on_conflict(self):
+    def test_unique_name_suffixes_on_conflict(self, tmp_path):
         gs.add_style("样式", _ffmt())
         assert gs.unique_name("样式") == "样式 2"
         gs.add_style("样式 2", _ffmt())
         assert gs.unique_name("样式") == "样式 3"
+        saved = json.loads((tmp_path / "global_styles.json").read_text(encoding="utf8"))
+        assert [entry["name"] for entry in saved] == ["样式", "样式 2"]
 
     def test_find_by_name(self):
         entry = gs.add_style("目标", _ffmt())

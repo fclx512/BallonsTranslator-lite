@@ -12,10 +12,10 @@
         开发文件重新拉回来）；
       - 嵌入式 Python（版本可参数化）+ pip + **固定版本**的 uv.exe。
 
-    **刻意不预装依赖**：`requirements.txt` 由首次启动现场安装
-    （`launch.bat` → `utils/core_requirements.py::ensure_core_requirements`，
-    装完自动重启）。装完依赖后的本机环境（约 600 MB）只是**运行状态**——
-    俗称的「精简包」——**不作为发行物分发**。
+    **刻意不预装依赖**：普通启动检查并提示缺失，不会自动联网补装。
+    用户明确同意在线修复时才运行 `launch.bat --repair-deps`。装完依赖后的本机环境
+    不是本脚本的发行产物；该 ZIP 是面向维护者/高级用户的轻量引导包，不是普通用户
+    或离线用户的默认下载项。推荐发行路径是分发匹配档位的完整环境包。
 
     同批产出两个**独立 Release 资产**（`release_assets\*.dll`，合计约 53 MB，
     不进 ZIP，否则小包体积失控）：PatchMatch 的两个原生库改由 Release 资产
@@ -30,10 +30,10 @@
       - `data/models` 下的任何模型权重；
       - `config/config.json`（含 API 密钥）、`logs/`。
 
-    模型后端与权重由 GUI 按需补全：后端在加载模块时由
-    `modules/base.py::ensure_dependencies` 安装，权重走设置页
-    「Models → 模型文件」（`ui/model_downloads.py` 后台下载）。
-    ~1.7 GB 的预装完整包继续留在网盘，作为没有可用网络时的离线兜底。
+    模型后端与权重不随轻量包分发。普通用户应下载网盘上的 CPU/CUDA 完整包；
+    缺失的权重可在设置页「Models → 模型文件」按需获取（`ui/model_downloads.py`）。
+    发布完整包时按源码兼容契约检查实际环境，并为该包生成精确 runtime manifest；
+    清单不替代真实启动和推理验收。
 
     发版顺序：提交 → `scripts/generate_manifest.py` → 打 tag（`lite-vX.Y.Z`，
     与上游 `v1.x.x` 区分）→ 本脚本 → 上传 ZIP + `release_assets\` 下的两个
@@ -282,8 +282,8 @@ function Format-Size {
 function Assert-PackageArchive {
     # 打开产物逐条核对——"看起来打包成功"不算过：python.exe/pip/uv.exe 是否
     # 在位、成分（模型后端/numba、权重、config.json、logs 一个都不许有）都在
-    # 这里兜。依赖按设计**不预装**，核心 import 不在结构层复核——首启
-    # utils/core_requirements.py::ensure_core_requirements 才是权威检查。
+    # 这里兜。依赖按设计**不预装**，核心 import 不在结构层复核；普通启动提示缺失，
+    # 只有显式 launch.bat --repair-deps 才联网修复。完整包须单独检查实际运行环境。
     param([string]$ArchivePath)
 
     $SitePkgsEntryPrefix = "$DestName/ballontrans_pylibs_win/Lib/site-packages/"
@@ -492,7 +492,7 @@ if ($StaticCheck) {
     Write-Host "  资产：release_assets\patchmatch_inpaint.dll、release_assets\opencv_world455.dll（独立上传，不进 ZIP）"
     Write-Host "  排除：$($ForbiddenPackages -join ' / ')、data/models 权重、config/config.json、logs/"
     Write-Host "  预期体积：ZIP 约 30 MB（与上游 33 MB 同量级；实际以产物为准）"
-    Write-Host "  依赖首启现装；PatchMatch 原生库由选中模块时后台下载。"
+    Write-Host "  核心依赖不预装；在线修复需显式 launch.bat --repair-deps。"
     Write-Host ""
     Write-Host "正式构建请去掉 -StaticCheck（默认发行门禁要求工作区干净）。"
     foreach ($Scratch in @("git_out.txt", "git_err.txt")) {
@@ -745,16 +745,13 @@ Write-Host "产物：      $Output"
 Write-Host "压缩后：    $SizeMb MB（小包预期约 30 MB，与上游 33 MB 同量级；实际以产物为准）"
 Write-Host "构成：      源码 $(Format-Size $SourceBytes) | 嵌入式环境 $(Format-Size $PyLibsBytes)"
 Write-Host "资产：      $ReleaseAssetsDir（合计 $(Format-Size $AssetsDirBytes)，与小包一起上传到 Release）"
-Write-Host "运行时：    嵌入式 Python $PythonVersion + pip + uv $UvVersion；依赖不预装，首启现场安装"
+Write-Host "运行时：    嵌入式 Python $PythonVersion + pip + uv $UvVersion；核心依赖不预装"
 Write-Host "原生能力：  PatchMatch 两个 DLL 以独立资产分发——选中 patchmatch 模块时后台下载"
 Write-Host "不含：      $($ForbiddenPackages -join ' / ')、模型权重、config/config.json、logs/"
 Write-Host ""
-Write-Host "依赖与模型由 GUI 按需补全："
-Write-Host "  依赖：首启 launch.bat → ensure_core_requirements 装 requirements.txt（装完自动重启）"
-Write-Host "  后端：选中模块时由 modules/base.py::ensure_dependencies 安装"
-Write-Host "  权重：设置 → Models → 模型文件（后台下载，进度只进终端）"
-Write-Host "  GPU： CUDA 版 torch/onnxruntime 仍由 install_cuda.bat 负责（小包之外的操作）"
-Write-Host "没有可用网络的用户仍走网盘上 ~1.7 GB 的预装完整包（离线兜底）。"
+Write-Host "维护者轻量包：缺核心依赖时需用户显式运行 launch.bat --repair-deps（联网修复）"
+Write-Host "GPU 维护工具：install_cuda.bat 默认只读检查；仅 --install 会更改配套环境"
+Write-Host "普通用户请下载网盘中匹配 CPU/CUDA 档位的完整环境包。"
 if ($SizeMb -gt 60) {
     Write-Warning "产物 $SizeMb MB 明显超出小包预期（约 30 MB）——检查是否混入了依赖或原生 DLL。"
 }

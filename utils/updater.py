@@ -23,6 +23,7 @@ from urllib.request import Request, urlopen
 
 from . import shared
 from .logger import logger as LOGGER
+from .runtime_compatibility import preflight_zip
 from .version import get_version
 
 RELEASES_URL = "https://github.com/fclx512/BallonsTranslator-lite/releases"
@@ -50,6 +51,7 @@ SOURCE_UPDATE_FILES = (
     "launch.py",
     "pyproject.toml",
     "requirements.txt",
+    "runtime_compatibility.json",
     "manifest.json",
     "README.md",
     "README_EN.md",
@@ -241,8 +243,9 @@ class BallonsTranslatorUpdater:
 
     def apply_update(self, release_info: ReleaseInfo, current_version: str = None) -> UpdateResult:
         current_version = current_version or get_version(str(self.program_path))
-        self.backup_source()
         zip_path = self.download_source_zip(release_info)
+        preflight_zip(self.program_path, zip_path)
+        self.backup_source()
         self.prepare_git_worktree(release_info.version)
         self.install_source_zip(zip_path)
         self._notify("done", 100, release_info.version)
@@ -415,6 +418,7 @@ class BallonsTranslatorUpdater:
         return message
 
     def install_source_zip(self, zip_path: Path) -> None:
+        preflight_zip(self.program_path, zip_path)
         self._notify("extract_source", 80, zip_path.name)
         extract_root = self.cache_dir / f"{zip_path.stem}_extracted"
         if extract_root.exists():

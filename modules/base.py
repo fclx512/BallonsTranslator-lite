@@ -467,10 +467,9 @@ class BaseModule:
         launcher's installer backend (``utils/package_installer.py``) so a
         standalone ``uv.exe`` shipped next to the interpreter is picked up
         the same way as during startup (``python -m uv`` does not exist in
-        the minimal package).  Per-package ``--no-deps`` retry mirrors the
-        GUI download path (``ui/model_downloads.py``): onnxocr pins deps
-        that can conflict with the environment, and the module only needs
-        the package itself importable.
+        the minimal package). ``--no-deps`` is limited to explicit exceptions
+        shared with the GUI download path (``ui/model_downloads.py``), such
+        as onnxocr. Resolver failures are not retried without dependencies.
         """
         if not self.requires_packages:
             return
@@ -485,11 +484,21 @@ class BaseModule:
         missing: list[str] = []
         for req_str in self.requires_packages:
             req = Requirement(req_str)
+            if req.marker and not req.marker.evaluate():
+                continue
             try:
                 dist = importlib_metadata.distribution(canonicalize_name(req.name))
                 if not req.specifier.contains(dist.version, prereleases=True):
                     missing.append(req_str)
             except importlib_metadata.PackageNotFoundError:
+                if canonicalize_name(req.name) == "onnxruntime":
+                    try:
+                        gpu_dist = importlib_metadata.distribution("onnxruntime-gpu")
+                        if not req.specifier.contains(gpu_dist.version, prereleases=True):
+                            missing.append(req_str)
+                        continue
+                    except importlib_metadata.PackageNotFoundError:
+                        pass
                 # Metadata name mismatch (e.g. onnxruntime installed as
                 # onnxruntime-gpu).  Try a direct import as last resort —
                 # if the top-level module can be loaded the dependency is
@@ -497,6 +506,9 @@ class BaseModule:
                 # counting it as missing gets a reinstall attempt queued.
                 import importlib as _il
 
+                if req.specifier or req.extras:
+                    missing.append(req_str)
+                    continue
                 try:
                     _il.import_module(req.name)
                 except (ImportError, OSError):
@@ -510,17 +522,13 @@ class BaseModule:
         for package in missing:
             # onnxocr-class packages: resolve nothing, install bare —
             # see utils/package_installer.py::NO_DEPS_PACKAGES.
-            forced_no_deps = package in NO_DEPS_PACKAGES
+            forced_no_deps = Requirement(package).name.lower() in NO_DEPS_PACKAGES
             result = install(
                 requirements=[package],
                 backend="auto",
                 extra_args="--no-deps" if forced_no_deps else "",
+                verify_imports=True,
             )
-            if not result.ok and not forced_no_deps:
-                # Same fallback as the GUI download path: some packages pin
-                # deps that conflict with the environment — retry bare, the
-                # module only needs the package itself importable.
-                result = install(requirements=[package], extra_args="--no-deps")
             if result.ok:
                 self.logger.info(
                     f"Auto-installed extra deps for {self.__class__.__name__}: {package}"

@@ -8,14 +8,29 @@ from platform import platform
 
 PATH_ROOT = Path(__file__).parent
 
+# Windows releases are self-contained.  Never borrow wheels from an unrelated
+# system Python (different ABI, CUDA runtime or user-site packages).
+# Guarded by __name__ so ``import launch`` (tests, tools) never hijacks the
+# importing process with execve/SystemExit; ``python launch.py`` still
+# redirects here, before any project-local import below.
+if __name__ == "__main__" and sys.platform == "win32":
+    _bundle_python = (PATH_ROOT / "ballontrans_pylibs_win" / "python.exe").resolve()
+    if not _bundle_python.is_file():
+        raise SystemExit(
+            "Missing ballontrans_pylibs_win/python.exe. Extract the matching "
+            "complete Windows package beside launch.py."
+        )
+    if Path(sys.executable).resolve() != _bundle_python:
+        _clean_env = os.environ.copy()
+        _clean_env.pop("PYTHONPATH", None)
+        _clean_env.pop("PYTHONHOME", None)
+        _clean_env["PYTHONNOUSERSITE"] = "1"
+        os.execve(str(_bundle_python), [str(_bundle_python), __file__, *sys.argv[1:]], _clean_env)
+
 # Embedded Python's ._pth file overrides sys.path, so ensure project root is in path
 # before any project-local imports (e.g. utils.*)
 if str(PATH_ROOT) not in sys.path:
     sys.path.insert(0, str(PATH_ROOT))
-
-_pylibs_sp = PATH_ROOT / "ballontrans_pylibs_win" / "Lib" / "site-packages"
-if _pylibs_sp.exists() and str(_pylibs_sp) not in sys.path:
-    sys.path.append(str(_pylibs_sp))
 
 # ── Python version gate ──────────────────────────────────────────────
 # Must reject unsupported interpreters BEFORE importing any project-local
@@ -76,7 +91,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--reinstall-torch",
     action="store_true",
-    help="launch.py argument: install the appropriate version of torch even if you have some version already installed",
+    help="Legacy flag; use a matching complete package or install_cuda.bat --install",
 )
 parser.add_argument(
     "--proj-dir", default="", type=str, help="Open project directory on startup"
@@ -87,8 +102,10 @@ else:
     parser.add_argument("--qt-api", default="pyqt6", choices=QT_APIS, help="Set qt api")
 parser.add_argument("--debug", action="store_true")
 parser.add_argument("--requirements", default="requirements.txt")
+parser.add_argument("--repair-deps", action="store_true",
+                    help="Explicitly install missing core dependencies online")
 parser.add_argument("--headless", action="store_true", help="run without GUI")
-parser.add_argument("--no-venv", action="store_true", help="skip auto-venv creation for Store Python")
+parser.add_argument("--no-venv", action="store_true", help=argparse.SUPPRESS)
 parser.add_argument(
     "--exec_dirs",
     default="",
@@ -536,24 +553,9 @@ def main():
     # ── File logging + crash hooks (stdlib only, never fatal) ──────────
     setup_startup_logging()
 
-    # Preload MSVC runtime DLLs before PyQt6 registers its Qt bin directory
-    # (which can make later PyTorch DLL resolution pick up the wrong version).
-    # Best-effort; safe to ignore on non-Windows or if VC runtime is unavailable.
-    if sys.platform == "win32":
-        _msvc_loaded = False
-        for _dll in ("vcruntime140.dll", "msvcp140.dll", "vcruntime140_1.dll"):
-            try:
-                import ctypes
-
-                ctypes.CDLL(_dll)
-                _msvc_loaded = True
-            except OSError:
-                if _dll == "msvcp140.dll":
-                    print(
-                        "Microsoft Visual C++ Redistributable is not installed or "
-                        "not visible to this process. Deep learning modules may "
-                        "fail to load until the x64 VC runtime is installed."
-                    )
+    # Resolve C++ runtimes from the complete package before Qt/PyTorch imports.
+    from utils.bundled_runtime import prepare_bundled_dlls
+    prepare_bundled_dlls()
 
     commit = commit_hash()
 
@@ -562,31 +564,17 @@ def main():
 
     APP_DIR = os.path.dirname(os.path.abspath(__file__))
     os.chdir(APP_DIR)
-
-    # ── Microsoft Store Python: auto-create local .venv ──────────────────
-    # Store Python lives in a read-only system directory
-    # (Program Files\WindowsApps) where pip/uv cannot install packages.
-    # Detect it and redirect into a project-local venv.
-    if not args.no_venv and (
-        "WindowsApps" in sys.executable or "PythonSoftwareFoundation" in sys.executable
-    ):
-        _venv_dir = os.path.join(APP_DIR, ".venv")
-        _venv_python = os.path.join(_venv_dir, "Scripts", "python.exe")
-        if not os.path.isfile(_venv_python):
-            print("Microsoft Store Python detected — creating local virtual environment...")
-            try:
-                subprocess.run(
-                    [sys.executable, "-m", "venv", _venv_dir],
-                    check=True, capture_output=True, timeout=60,
-                )
-                print(f"  Virtual environment created at {_venv_dir}")
-            except Exception as _e:
-                print(f"  Warning: failed to create venv ({_e})")
-                print("  Continuing with system Python — some operations may fail.")
-                _venv_python = None  # Don't re-exec
-        if _venv_python and os.path.isfile(_venv_python):
-            print("  Switching to virtual environment Python...")
-            os.execv(_venv_python, [_venv_python] + sys.argv)
+    from utils.runtime_compatibility import (
+        RuntimeCompatibilityError,
+        check_runtime,
+        source_update_preflight,
+    )
+    if sys.platform == "win32":
+        try:
+            for warning in check_runtime(APP_DIR):
+                print(warning)
+        except RuntimeCompatibilityError as exc:
+            raise SystemExit(str(exc)) from exc
 
     print(f"Version: {VERSION}")
     print(f"Branch: {BRANCH}")
@@ -595,8 +583,8 @@ def main():
     # ── Network mirror + system proxy bootstrap (must precede installs) ──
     #     把用户**手动**配置的 pip 源落到环境变量上（不再按地区自动填充
     #     镜像：所有下载默认走官方源，镜像只作设置页的高级手动项）。
-    #     位置必须在 ensure_core_requirements 之前：那是首启动拉全套依赖
-    #     的一步，而 config 那时还读不了（它依赖 numpy/PyQt6）。
+    #     位置必须在显式 --repair-deps 修复之前；config 此时还读不了
+    #     （它依赖 numpy/PyQt6）。普通启动只做本地检查。
     #     config.mirror.* 的正式读取仍在下方 config 加载之后。
     #     Windows 系统代理同样在这里落地：它的消费点也是 pip/uv 与 HF 下载，
     #     晚于首次安装就来不及了。用户已显式配置的代理（任意大小写）不覆盖。
@@ -615,11 +603,11 @@ def main():
 
     # ── Ensure core requirements before GPU detection ─────────────────
     #     Must run BEFORE the GPU/CPU decision so that numpy, qtpy, etc.
-    #     are available regardless of CPU mode.  If packages are missing,
-    #     auto-install them and restart.
+    #     are available regardless of CPU mode. Online repair requires the
+    #     explicit --repair-deps flag.
     from utils.core_requirements import ensure_core_requirements
 
-    if ensure_core_requirements(APP_DIR):
+    if args.repair_deps and ensure_core_requirements(APP_DIR):
         restart("core requirements installed", guard=True)
         return
 
@@ -648,7 +636,7 @@ def main():
                 if _is_embedded:
                     print("\n" + "=" * 60)
                     print("CUDA PyTorch not found in the bundled Python environment.")
-                    print("To enable GPU acceleration, run: install_cuda.bat")
+                    print("Use a matching CUDA complete package; install_cuda.bat provides a read-only diagnosis.")
                     print("Or continue with CPU mode (no action needed).")
                     print("=" * 60 + "\n")
                 print("Switching to CPU mode automatically.")
@@ -663,12 +651,7 @@ def main():
     shared.HEADLESS = args.headless
     shared.load_cache()
 
-    # ── Install missing dependencies first ──
-    #     This must run BEFORE importing utils.config (which triggers numpy
-    #     via utils.fontformat).  On fresh clones where system Python is used
-    #     without the embedded bundle, numpy/PyQt6 aren't installed yet.
-    #     Restart if anything was installed — gives a clean process where newly-
-    #     installed packages are importable without stale module state.
+    # Retain the legacy CLI entry point; it only explains the maintenance path.
     if prepare_environment():
         print("核心依赖已安装，正在重启以加载新环境...")
         restart("environment prepared", guard=True)
@@ -682,18 +665,22 @@ def main():
     if _probe_import("PIL.Image")[0] is None:
         _BROKEN.append("pillow")
 
-    if _BROKEN:
+    if _BROKEN and args.repair_deps:
         print("[WARN] Some core packages are installed but broken. Forcing reinstall ...")
-        _pip = run_uv if UV_AVAILABLE else run_pip
+        from utils.package_installer import install as install_package
         try:
             for _pkg in _BROKEN:
-                _pip(f"install --force-reinstall {_pkg}", f"force-reinstall {_pkg}")
+                result = install_package(requirements=[_pkg],
+                                         extra_args="--force-reinstall",
+                                         verify_imports=True)
+                if not result.ok:
+                    raise RuntimeError(result.error or result.stdout[-1000:])
         except Exception as _e:
             # A failed repair must not abort startup; the user gets an
             # actionable command instead (the app can still run without the
             # optional JXL/Image extras in many cases).
             print(f"[WARN] Could not reinstall {', '.join(_BROKEN)}: {_e}")
-            print(f"       Run manually: pip install --force-reinstall {' '.join(_BROKEN)}")
+            print("       Restore the matching complete package if online repair fails.")
         else:
             restart("broken core packages reinstalled", guard=True)
 
@@ -703,20 +690,20 @@ def main():
     missing = warn_missing_core_imports()
     if missing:
         print()
-        print("❌ 缺少核心依赖，无法启动。")
-        print("   请运行以下命令安装依赖：")
-        print(f"   pip install -r {args.requirements}")
+        print("The bundled dependency environment is incomplete or broken.")
+        print("Extract the matching complete package again, or run")
+        print("  launch.bat --repair-deps")
+        print("to explicitly repair core packages online.")
         sys.exit(1)
 
     # ── Config and mirror setup (requires numpy/PyQt6) ──
-    from utils import config as program_config
-
     # 自动镜像是本函数更早那一步（依赖安装之前）做的，这里不再重复。
-
     # Auto-detect system display language (only applies on first launch,
     # before any saved config.json exists — subsequent launches use the
     # persisted display_lang from config.json instead).
     from qtpy.QtCore import QLocale
+
+    from utils import config as program_config
     _sys_lang = QLocale.system().name().replace("en_CN", "zh_CN")
     if _sys_lang not in shared.VALID_LANG_SET:
         _sys_lang = "English"
@@ -756,6 +743,11 @@ def main():
                 latest_commit = run(f"{git} rev-parse origin/{BRANCH}").strip()
 
                 if current_commit != latest_commit:
+                    def read_incoming(name):
+                        result = subprocess.run([git, "show", f"{latest_commit}:{name}"],
+                                                capture_output=True, text=True, encoding="utf-8")
+                        return result.stdout if result.returncode == 0 else None
+                    source_update_preflight(APP_DIR, read_incoming)
                     print("New updates found. Updating repository...")
                     run(
                         f"{git} pull origin {BRANCH}",
@@ -767,6 +759,9 @@ def main():
                     return
                 else:
                     print("No updates found.")
+            except RuntimeCompatibilityError as e:
+                print(f"Update refused: {e}")
+                return
             except Exception as e:
                 print(f"Git update failed: {e}")
                 print("Falling back to direct download...")
@@ -900,80 +895,9 @@ def main():
 
 
 def prepare_environment() -> bool:
-    """GPU / torch dependency setup.
-
-    Core requirements (numpy, qtpy, ...) are already handled by
-    ``ensure_core_requirements()`` earlier in ``main()``.
-
-    This function only handles the ``--reinstall-torch`` flag for
-    force-reinstalling PyTorch with the appropriate CUDA version.
-    Returns False (no restart needed from this function).
-    """
-
-    # Bundled portable Python manages its own dependencies
-    if "ballontrans_pylibs_win" in sys.executable:
-        return False
-
-    if getattr(sys, "frozen", False):
-        return False
-
-    if args.frozen:
-        return False
-
-    # --reinstall-torch is only meaningful for non-embedded Python
-    if not args.reinstall_torch:
-        return False
-
-    # Bootstrap uv (fast installer) — falls back to pip if unavailable
-    ensure_uv()
-
-    # Detect NVIDIA GPU architecture to pick the right CUDA version.
-    # CUDA wheels are NVIDIA-only; without an NVIDIA GPU (e.g. macOS) there
-    # is nothing to install from the PyTorch CUDA indexes, so torch should
-    # be installed normally instead.
-    _gpu_info = detect_gpu_info()
-    if _gpu_info:
-        print(_gpu_info["message"])
-        if not _gpu_info["torch_index"]:
-            # torch_index is None → GPU too old for CUDA PyTorch (e.g. Kepler)
-            print("  Skipping CUDA PyTorch setup for this GPU.")
-            return False
-    elif sys.platform != "win32":
-        print(
-            "--reinstall-torch only handles NVIDIA CUDA PyTorch.\n"
-            "  No NVIDIA GPU detected; install torch normally instead:\n"
-            "    pip install torch torchvision torchaudio"
-        )
-        return False
-
-    _torch_index = (_gpu_info or {}).get("torch_index") or "https://download.pytorch.org/whl/cu126"
-
-    # Install the newest torch the chosen index serves, WITHOUT pinning a
-    # version.  Pinning was actively harmful: the old hardcoded
-    # ``torch==2.7.1`` downgraded users who already had a newer build, and
-    # the version was not even present on every index (cu132 serves no
-    # 2.7.1 at all, so the command simply failed).
-    #
-    # torchaudio is excluded for the same reason it is excluded from
-    # install_cuda.bat: newer indexes do not ship it, and this app does
-    # no audio I/O.
-    torch_command = os.environ.get(
-        "TORCH_COMMAND",
-        f"uv pip install -U torch torchvision --index-url {_torch_index}",
-    )
-
-    run(
-        f'"{python}" -m {torch_command}',
-        "Installing torch and torchvision",
-        "Couldn't install torch",
-        live=True,
-    )
-
-    import importlib
-    import site
-
-    importlib.reload(site)
-
+    """Legacy flag compatibility; CUDA conversion is a separate explicit tool."""
+    if args.reinstall_torch:
+        print("Use a matching complete CUDA package or install_cuda.bat --install.")
     return False
 
 

@@ -1,4 +1,4 @@
-"""launch.py 平台加速器检测与 --reinstall-torch 平台分支的单元测试。
+"""launch.py 平台加速器检测与旧 --reinstall-torch 安全兼容入口测试。
 
 只测平台决策逻辑，不真实 import torch（用最小 fake module 注入 sys.modules），
 也不触发真实 pip / nvidia-smi（mock detect_gpu_info / ensure_uv / run）。
@@ -14,7 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import launch
+import launch  # noqa: E402 — repository path is needed by standalone unittest runs
 
 
 def _fake_torch(cuda=False, mps=False, mps_attr=True):
@@ -81,8 +81,7 @@ class BrokenTorchDegradeTests(unittest.TestCase):
 class ReinstallTorchPlatformTests(unittest.TestCase):
     def _prepare(self, platform, gpu_info):
         args = types.SimpleNamespace(reinstall_torch=True, frozen=False)
-        # prepare_environment 对捆绑解释器（路径含 ballontrans_pylibs_win）直接
-        # 早退，仓库测试恰用该解释器，须伪装成普通路径才走得到分支逻辑。
+        # 即便来自旧的源码启动命令，兼容参数也不得直接重装 CUDA 库。
         with mock.patch("sys.executable", "/usr/bin/python3"), mock.patch.object(
             sys, "platform", platform
         ), mock.patch.object(
@@ -100,30 +99,24 @@ class ReinstallTorchPlatformTests(unittest.TestCase):
         self.assertFalse(ret)
         run_mock.assert_not_called()  # 未尝试 CUDA wheel 安装
 
-    def test_windows_nvidia_selects_cuda_index(self):
+    def test_windows_nvidia_legacy_flag_does_not_install(self):
         info = {"message": "x", "generation": "Ampere", "torch_index": "https://cu126"}
         ret, run_mock = self._prepare("win32", info)
         self.assertFalse(ret)
-        run_mock.assert_called_once()
-        command = run_mock.call_args[0][0]
-        self.assertIn("cu126", command)
+        run_mock.assert_not_called()
 
-    def test_reinstall_torch_does_not_pin_versions(self):
-        """不得再钉死 pytorch 版本。
-
-        旧实现硬编码 ``torch==2.7.1``：对已有更新 torch 的用户是降级，
-        而且 cu132 索引根本不提供 2.7.1，命令必然失败。
-        """
+    def test_legacy_flag_points_to_explicit_maintenance(self):
+        """新硬件同样不能通过旧启动参数绕过完整包/CUDA 维护入口。"""
         info = {"message": "x", "generation": "Blackwell", "torch_index": "https://cu132"}
-        ret, run_mock = self._prepare("win32", info)
+        with mock.patch("builtins.print") as output, \
+             mock.patch("subprocess.run") as subprocess_run, \
+             mock.patch("utils.package_installer.install") as install:
+            ret, run_mock = self._prepare("win32", info)
         self.assertFalse(ret)
-        run_mock.assert_called_once()
-        command = run_mock.call_args[0][0]
-        self.assertNotIn("torch==", command, "仍在钉死 torch 版本：" + command)
-        self.assertNotIn("torchvision==", command)
-        self.assertNotIn("2.7.1", command)
-        # torchaudio 不装（新索引不提供它，且本应用无音频 I/O）
-        self.assertNotIn("torchaudio", command)
+        run_mock.assert_not_called()
+        subprocess_run.assert_not_called()
+        install.assert_not_called()
+        self.assertIn("install_cuda.bat --install", output.call_args.args[0])
 
     def test_old_nvidia_no_index_skips(self):
         info = {"message": "old", "generation": "Kepler", "torch_index": None}

@@ -64,17 +64,17 @@ class EnsureDependenciesTest(unittest.TestCase):
         self.assertEqual(kwargs.get("requirements"), ["some-missing-backend"])
         self.assertEqual(kwargs.get("backend"), "auto")
 
-    def test_failed_with_deps_retries_bare(self):
+    def test_failed_with_deps_does_not_retry_bare(self):
         module = _Module()
         module.requires_packages = ["some-missing-backend"]
         with mock.patch(
             "utils.package_installer.install",
-            side_effect=[_result(False), _result(True)],
+            return_value=_result(False),
         ) as install:
             module.ensure_dependencies()
         self.assertEqual(
             [call.kwargs.get("extra_args") for call in install.call_args_list],
-            ["", "--no-deps"],
+            [""],
         )
 
     def test_no_deps_package_never_resolves_dependencies(self):
