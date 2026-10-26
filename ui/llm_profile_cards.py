@@ -20,9 +20,8 @@
 模型表**（清单只由抓取或手填产生）。字段集合与消费者行为保持不变。
 """
 
-from typing import Dict, List, Optional, Tuple
-
 import re
+from typing import Dict, List, Optional, Tuple
 
 import httpx
 from qtpy.QtCore import QCoreApplication, Qt, Signal

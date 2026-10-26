@@ -425,8 +425,8 @@ def _get_help_anim_scene_count() -> int:
     延迟导入避免循环依赖；失败回退到 7（兜底，理论上不会触发）。
     """
     try:
-        import sys
         import os.path as osp
+        import sys
         script_dir = osp.join(PROGRAM_PATH, "scripts")
         if script_dir not in sys.path:
             sys.path.insert(0, script_dir)

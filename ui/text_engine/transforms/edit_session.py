@@ -17,6 +17,7 @@ from ..editing.commands import SetTextTransformCommand
 
 if TYPE_CHECKING:
     from ui.text_panel import FontFormatPanel
+
     from ..item import TextBlkItem
     from .panel import TextTransformPanel
 

@@ -541,6 +541,7 @@ class AnnotationFormatGroup(QFrame):
 
 
 class FontFormatPanel(Widget):
+    palette_requested = Signal()
     textblk_item: TextBlkItem = None
     text_cursor: QTextCursor = None
     global_format: FontFormat = None
@@ -752,6 +753,12 @@ class FontFormatPanel(Widget):
         # 弹出列表自行撑宽完整显示（WidePopupComboMixin）
         font_selector = QHBoxLayout()
         font_selector.addWidget(self.colorPicker)
+        self.palette_btn = QToolButton(self)
+        self.palette_btn.setText("…")
+        self.palette_btn.setToolTip(self.tr("Colors and speakers…"))
+        self.palette_btn.setFixedWidth(22)
+        self.palette_btn.clicked.connect(self.palette_requested.emit)
+        font_selector.addWidget(self.palette_btn)
         font_selector.addWidget(self.familybox, 3)
         font_selector.addWidget(self.stylebox, 2)
         font_selector.setSpacing(shared.WIDGET_SPACING_CLOSE)

@@ -9,8 +9,17 @@ from __future__ import annotations
 from qtpy.QtCore import QEvent, Qt, Signal
 from qtpy.QtGui import QTextCursor
 from qtpy.QtWidgets import (
-    QApplication, QFrame, QGridLayout, QHBoxLayout, QLabel, QProgressBar, QPushButton,
-    QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
+    QApplication,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
 
 from ui.custom_widget import ConfigTextEdit

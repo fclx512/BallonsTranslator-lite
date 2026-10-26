@@ -32,11 +32,13 @@ toggles, module picks and language picks back through signals.
 
 import os.path as osp
 
-from qtpy.QtCore import QEvent, QSize, Qt, Signal
+from qtpy.QtCore import QCoreApplication, QEvent, QSize, Qt, Signal
 from qtpy.QtGui import QIcon
 from qtpy.QtWidgets import (
     QAbstractButton,
     QApplication,
+    QBoxLayout,
+    QButtonGroup,
     QDialog,
     QFileDialog,
     QFrame,
@@ -44,6 +46,8 @@ from qtpy.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QStyle,
     QStyleOptionButton,
@@ -587,6 +591,7 @@ class RunPipelineDialog(QDialog):
             pcfg.module.check_need_inpaint,
             on_toggle,
         )
+        on_toggle(self.skip_simple_cb.isChecked())
 
     def _build_translate_options(self, layout: QVBoxLayout) -> None:
         body = self._add_settings_section(
@@ -857,3 +862,339 @@ class RunPipelineDialog(QDialog):
                 max_height, int(screen.availableGeometry().height() * 0.9)
             )
         self.setFixedSize(self.width(), max_height)
+
+
+class WorkbenchStage(QWidget):
+    """侧栏中的阶段开关与引擎选择，沿用运行配置的模块接口。"""
+
+    module_selected = Signal(str, str)
+
+    def __init__(self, module_type, label, parent=None):
+        super().__init__(parent)
+        self.module_type = module_type
+        self.setObjectName("PipelineWorkbenchStage")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 5, 0, 5)
+        self.button = ConfigCheckBox(label, self)
+        layout.addWidget(self.button, 1)
+        options = list(RunPipelineDialog._module_options(module_type))
+        current = pcfg.module[module_type]
+        if current and current not in options:
+            options.append(current)
+        self.selector = ConfigComboBox(fix_size=False, options=options)
+        self.selector.setMinimumWidth(0)
+        self.selector.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.selector.setFixedWidth(126)
+        self.set_module(current)
+        mark_module_selector_status(self.selector, module_type)
+        self.selector.currentTextChanged.connect(
+            lambda name: self.module_selected.emit(module_type, name)
+        )
+        self.button.toggled.connect(self._refresh_active_state)
+        layout.addWidget(self.selector)
+
+    def set_module(self, name):
+        self.selector.blockSignals(True)
+        if name and self.selector.findText(name) < 0:
+            self.selector.addItem(name)
+        self.selector.setCurrentText(name)
+        self.selector.setToolTip(name)
+        self.selector.blockSignals(False)
+
+    def _refresh_active_state(self, active):
+        self.selector.setEnabled(active)
+
+
+class PipelineWorkbench(RunPipelineDialog):
+    """画布旁的常驻任务配置；只发运行请求，执行与进度仍由主窗口负责。
+
+    复用运行配置的参数表单与公共 API，以 QWidget 标志嵌入侧栏，不调用 exec。
+    任务限制与 runner 模式一致；菜单工具、收费调用与批量写回不在这里执行。
+    """
+
+    run_requested = Signal()
+    materials_requested = Signal()
+
+    def tr(self, source, disambiguation=None, n=-1):
+        # 共用表单仍使用原运行配置的翻译；本侧栏新增文案独立登记。
+        text = QCoreApplication.translate("PipelineWorkbench", source, disambiguation, n)
+        if text == source:
+            text = QCoreApplication.translate("RunPipelineDialog", source, disambiguation, n)
+        return text
+
+    def __init__(self, project, parent=None):
+        self._project = project
+        self._scope = "all"
+        self._project_key = None
+        self._current_page = None
+        super().__init__(parent)
+        self.setWindowFlags(Qt.WindowType.Widget)
+        self.setObjectName("PipelineWorkbench")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.tab_bar.hide()
+        self.layout().setContentsMargins(14, 16, 14, 14)
+        self.layout().setSpacing(12)
+        self.layout().setStretch(1, 1)
+        self.refresh_project_state()
+
+    def _build_pipeline_page(self):
+        page = QWidget(self)
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        title = QLabel(self.tr("Translation pipeline"), page)
+        title.setObjectName("PipelineWorkbenchTitle")
+        layout.addWidget(title)
+        self.empty_hint = QLabel(self.tr("Open a project to configure a task."), page)
+        self.empty_hint.setWordWrap(True)
+        layout.addWidget(self.empty_hint)
+
+        self._scroll = QScrollArea(page)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.setObjectName("PipelineWorkbenchScroll")
+        layout.addWidget(self._scroll, 1)
+        self._form = QWidget()
+        form = QVBoxLayout(self._form)
+        form.setContentsMargins(0, 8, 0, 0)
+        form.setSpacing(12)
+        self._scroll.setWidget(self._form)
+        form.addWidget(self._setting_label(self.tr("Task")))
+        self.task_combo = ConfigComboBox(fix_size=False, stretch=True)
+        for label, mode in ((self.tr("Recognize source text"), "recognize"),
+                            (self.tr("Translate text"), "translate"),
+                            (self.tr("Repair images"), "inpaint"),
+                            (self.tr("Render result images"), "render")):
+            self.task_combo.addItem(label, mode)
+        mode = ("recognize" if pcfg.module.enable_detect or pcfg.module.enable_ocr
+                else "translate" if pcfg.module.enable_translate else "inpaint")
+        self.task_combo.setCurrentIndex(self.task_combo.findData(mode))
+        form.addWidget(self.task_combo)
+
+        form.addWidget(self._setting_label(self.tr("Pages")))
+        scope_row = QHBoxLayout()
+        scope_row.setSpacing(4)
+        self.scope_group = QButtonGroup(self)
+        self.scope_buttons = {}
+        for key, label in (("current", self.tr("Current page")),
+                           ("all", self.tr("All pages")),
+                           ("range", self.tr("Page range"))):
+            button = QPushButton(label, page)
+            button.setCheckable(True)
+            button.clicked.connect(lambda _checked, value=key: self.set_scope(value))
+            self.scope_group.addButton(button)
+            self.scope_buttons[key] = button
+            scope_row.addWidget(button, 1)
+        self.scope_buttons["all"].setChecked(True)
+        form.addLayout(scope_row)
+        self.range_frame = QWidget(page)
+        range_layout = QVBoxLayout(self.range_frame)
+        range_layout.setContentsMargins(0, 0, 0, 0)
+        self.page_range = PageRangeProgressWidget([], parent=self.range_frame)
+        self.page_range.range_changed.connect(self._on_page_range_changed)
+        range_layout.addWidget(self.page_range)
+        self.range_frame.hide()
+        form.addWidget(self.range_frame)
+
+        form.addWidget(self._setting_label(self.tr("Stages")))
+        form.addWidget(self._build_stage_grid())
+        # 参数区沿用原运行表单，收在一个可滚动的高级选项区。
+        self.more_btn = ExpandingToolButton(page)
+        self.more_btn.setText(self.tr("More options"))
+        self.more_btn.setCheckable(True)
+        self.more_btn.setObjectName("PipelineWorkbenchMore")
+        self.more_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.more_btn.setIcon(QIcon(self._chevron_pixmap(False)))
+        self.more_btn.toggled.connect(
+            lambda expanded: self.more_btn.setIcon(QIcon(self._chevron_pixmap(expanded)))
+        )
+        self.advanced = QWidget(page)
+        advanced_layout = QVBoxLayout(self.advanced)
+        advanced_layout.setContentsMargins(0, 0, 0, 0)
+        for builder in (self._build_detect_options, self._build_ocr_options,
+                        self._build_inpaint_options, self._build_translate_options):
+            builder(advanced_layout)
+
+        # 语言是翻译任务的常用设置，放在折叠区之外。
+        language_row = self.source_combobox.parentWidget()
+        language_layout = language_row.layout()
+        while language_layout.count():
+            item = language_layout.takeAt(0)
+            if item.widget() not in (None, self.source_combobox, self.target_combobox):
+                item.widget().hide()
+        for combo in (self.source_combobox, self.target_combobox):
+            combo.setMinimumWidth(0)
+            combo.setMaximumWidth(16777215)
+            combo.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        language_layout.setSpacing(5)
+        language_layout.addWidget(self.source_combobox, 1)
+        language_layout.addWidget(QLabel("→", language_row))
+        language_layout.addWidget(self.target_combobox, 1)
+        self._stage_bodies[STAGE_TRANSLATE].layout().removeWidget(language_row)
+        self.language_row = language_row
+        form.addWidget(language_row)
+
+        # 将旧弹窗的宽行改为纵向，长路径也必须能在侧栏内换行。
+        for control in (self.single_blk_combo, self.history_cb,
+                        self.glossary_status, self.glossary_mode_combo):
+            row_layout = control.parentWidget().layout()
+            if isinstance(row_layout, QBoxLayout):
+                row_layout.setDirection(QBoxLayout.Direction.TopToBottom)
+        self.glossary_status.setWordWrap(True)
+        self.wo_update_cb = ConfigCheckBox(self.tr("Run without update textstyle"), page)
+        self.wo_update_cb.hide()
+        self.overwrite_cb = ConfigCheckBox(self.tr("Replace existing translations"), page)
+        self.render_after_cb = ConfigCheckBox(self.tr("Render result images after processing"), page)
+        self.render_after_cb.setChecked(pcfg.module.render_after_pipeline)
+        form.addWidget(self.overwrite_cb)
+        form.addWidget(self.render_after_cb)
+        self.render_after_cb.toggled.connect(
+            lambda checked: setattr(pcfg.module, "render_after_pipeline", checked)
+        )
+        form.addWidget(self.more_btn)
+        materials = QPushButton(self.tr("Manage translation materials…"), self.advanced)
+        materials.clicked.connect(self.materials_requested.emit)
+        advanced_layout.addWidget(materials)
+        self.more_btn.toggled.connect(self.advanced.setVisible)
+        self.advanced.hide()
+        form.addWidget(self.advanced)
+        form.addStretch(1)
+        return page
+
+    def _build_stage_grid(self):
+        frame = QWidget(self)
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(3)
+        for stage, module_type, label in (
+            (STAGE_DETECT, "textdetector", self.tr("Detect text")),
+            (STAGE_OCR, "ocr", self.tr("Recognize text")),
+            (STAGE_TRANSLATE, "translator", self.tr("Translate text")),
+            (STAGE_INPAINT, "inpainter", self.tr("Repair images")),
+        ):
+            row = WorkbenchStage(module_type, label, frame)
+            row.button.toggled.connect(lambda checked, s=stage: self._on_stage_toggled(s, checked))
+            row.module_selected.connect(self.module_selected.emit)
+            self._stage_activators[stage] = row
+            layout.addWidget(row)
+        return frame
+
+    def _build_button_row(self):
+        layout = QVBoxLayout()
+        self.run_summary = QLabel(self)
+        self.run_summary.setObjectName("PipelineWorkbenchSummary")
+        self.run_summary.setWordWrap(True)
+        layout.addWidget(self.run_summary)
+        self.run_btn = QPushButton(self.tr("Start task"), self)
+        self.run_btn.setObjectName("PipelineWorkbenchRun")
+        self.run_btn.setMinimumHeight(34)
+        self.run_btn.clicked.connect(self.run_requested.emit)
+        layout.addWidget(self.run_btn)
+        return layout
+
+    def activate_task_mode(self, *_):
+        allowed = {"recognize": {STAGE_DETECT, STAGE_OCR},
+                   "translate": {STAGE_TRANSLATE}, "inpaint": {STAGE_INPAINT},
+                   "render": set()}[self.task_mode()]
+        for stage, row in self._stage_activators.items():
+            row.button.setEnabled(stage in allowed)
+            row.button.setChecked(stage in allowed)
+            row._refresh_active_state(stage in allowed)
+        self.overwrite_cb.setVisible(self.task_mode() == "translate")
+        self.language_row.setVisible(self.task_mode() == "translate")
+        self.render_after_cb.setVisible(not self.is_render_only())
+        self.more_btn.setVisible(not self.is_render_only())
+        self.advanced.setVisible(not self.is_render_only() and self.more_btn.isChecked())
+        self._refresh_stage_sections()
+        self._refresh_run_button()
+
+    def _refresh_run_button(self, *_):
+        super()._refresh_run_button()
+        pages = self.page_filter()
+        count = len(self._page_names if pages is None else pages)
+        self.run_btn.setEnabled(bool(count) and self.run_btn.isEnabled())
+        labels = {"recognize": self.tr("Start recognition"), "translate": self.tr("Start translation"),
+                  "inpaint": self.tr("Start repair"), "render": self.tr("Generate images")}
+        self.run_btn.setText(labels[self.task_mode()])
+        self.run_summary.setText(self.tr("%1 · %2 page(s)").replace(
+            "%1", self.task_combo.currentText()).replace("%2", str(count)))
+
+    def _on_page_range_changed(self, start, end):
+        super()._on_page_range_changed(start, end)
+        self._refresh_run_button()
+
+    def set_scope(self, scope):
+        if scope not in self.scope_buttons:
+            return
+        self._scope = scope
+        self.scope_buttons[scope].setChecked(True)
+        self.range_frame.setVisible(scope == "range")
+        self._refresh_run_button()
+
+    def is_render_only(self):
+        return self.task_mode() == "render"
+
+    def page_filter(self):
+        if self._scope == "current":
+            current = self._project.current_img
+            return [current] if current in self._page_names else []
+        if self._scope == "all":
+            return None
+        return super().page_filter()
+
+    def refresh_project_state(self):
+        names = list(self._project.pages)
+        key = (self._project.directory, tuple(names))
+        if key != self._project_key:
+            self._project_key = key
+            old = self.page_range
+            old.range_changed.disconnect()
+            self._page_names = names
+            self.page_range = PageRangeProgressWidget(names, parent=self.range_frame)
+            row = self.page_range.range_start.parentWidget()
+            row.findChildren(QLabel)[0].hide()
+            row.layout().removeWidget(self.page_range.progress_label)
+            self.page_range.layout().addWidget(self.page_range.progress_label)
+            self.range_frame.layout().replaceWidget(old, self.page_range)
+            old.hide()
+            old.deleteLater()
+            self.page_range.range_changed.connect(self._on_page_range_changed)
+            self.set_scope("all")
+        self._progress_codes = [self._project._image_info.get(name, {}).get("finish_code", 0)
+                                for name in names]
+        self.empty_hint.setVisible(not names)
+        self._scroll.setVisible(bool(names))
+        self._refresh_run_button()
+
+    def set_translator_metadata(self, *args):
+        super().set_translator_metadata(*args)
+        for combo in (self.source_combobox, self.target_combobox):
+            combo.setMinimumWidth(0)
+            combo.setMaximumWidth(16777215)
+
+    def sync_runtime_options(self):
+        """侧栏常驻，打开时静默回显设置页改过的配置。"""
+        for control, value in ((self.keep_lines_cb, pcfg.module.keep_exist_textlines),
+                               (self.skip_simple_cb, pcfg.module.check_need_inpaint),
+                               (self.history_cb, pcfg.module.llm_translate_context),
+                               (self.story_cb, pcfg.module.llm_story_context),
+                               (self.glossary_cb, bool(pcfg.module.llm_glossary_path)),
+                               (self.render_after_cb, pcfg.module.render_after_pipeline)):
+            control.blockSignals(True)
+            control.setChecked(bool(value))
+            control.blockSignals(False)
+        self.token_spin.blockSignals(True)
+        self.token_spin.setValue(pcfg.module.llm_prior_context_token_budget)
+        self.token_spin.blockSignals(False)
+        for combo, value in ((self.single_blk_combo, pcfg.module.single_blk_translate_mode),
+                              (self.glossary_mode_combo, pcfg.module.llm_glossary_mode)):
+            combo.blockSignals(True)
+            combo.setCurrentIndex(max(0, combo.findData(value)))
+            combo.blockSignals(False)
+        self._refresh_token_visibility(self.history_cb.isChecked())
+        self._refresh_glossary()
+
+    def _resize_to_fit(self):
+        # 嵌入控件由父布局决定大小；高级参数过长时在内容区滚动。
+        self.updateGeometry()

@@ -2961,6 +2961,62 @@ QLineEdit#LLMProfileConnectionEdit:focus {
    阶段网格（图标开关 + 模块下拉）与折叠选项区。图标本身的着色在代码里
    完成（render_svg_pixmap 按 @accentXxx 覆写 fill），这里只管背景与悬停。 */
 
+/* 画布旁的翻译管线工作台：主题色、紧凑行与固定运行区。 */
+QWidget#PipelineWorkbench {
+    background: @emptyContentBackgroundColor;
+    font-size: 13px;
+}
+QWidget#PipelineWorkbench QLabel {
+    background: transparent;
+}
+QLabel#PipelineWorkbenchTitle {
+    font-size: 17px;
+    font-weight: 600;
+    padding-bottom: 8px;
+}
+QWidget#PipelineWorkbench QScrollArea,
+QWidget#PipelineWorkbench QScrollArea > QWidget > QWidget {
+    background: transparent;
+    border: none;
+}
+QWidget#PipelineWorkbench QComboBox {
+    font-size: 12px;
+    min-height: 24px;
+}
+QWidget#PipelineWorkbenchStage {
+    border: none;
+    border-bottom: 1px solid @borderColor;
+}
+QWidget#PipelineWorkbench QPushButton {
+    padding: 6px 7px;
+    font-size: 12px;
+}
+QWidget#PipelineWorkbench QPushButton:checked {
+    background: @accentPrimary20;
+}
+QLabel#PipelineWorkbenchSummary {
+    font-size: 12px;
+    padding-top: 9px;
+    border-top: 1px solid @borderColor;
+}
+QWidget#PipelineWorkbench QPushButton#PipelineWorkbenchRun {
+    background: @dragTextColor;
+    color: @widgetBackgroundColor;
+    border: none;
+    font-weight: 600;
+}
+QWidget#PipelineWorkbench QPushButton#PipelineWorkbenchRun:disabled {
+    background: @hoverBackgroundColor;
+    color: @disabledForegroundColor;
+}
+QToolButton#PipelineWorkbenchMore {
+    border: none;
+    background: transparent;
+    text-align: left;
+    padding: 6px 0px;
+    font-size: 12px;
+}
+
 QLabel#RunPipelineSectionTitle {
     color: @qwidgetForegroundColor;
     font-size: 13px;

@@ -20,7 +20,7 @@
 本页不再调用。
 """
 
-from qtpy.QtCore import Signal, Qt
+from qtpy.QtCore import Qt, Signal
 from qtpy.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -32,6 +32,7 @@ from qtpy.QtWidgets import (
 
 from ui.custom_widget import ConfigComboBox
 from ui.workbench_tasks import PageImageCache
+
 
 def _fmt_hex(rgb) -> str:
     return "#{:02x}{:02x}{:02x}".format(

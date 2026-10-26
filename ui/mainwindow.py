@@ -143,6 +143,7 @@ from .misc import (
 from .module_manager import ModuleManager
 from .overlay_modal import OverlayModal
 from .region_redetect_tool import RegionRedetectTool
+from .run_pipeline_dialog import PipelineWorkbench
 from .scenetext_manager import PasteSrcItemsCommand, SceneTextManager, TextPanel
 from .tag_toolbar import TagToolbar
 from .text_engine.pipeline_formatting import (
@@ -383,10 +384,6 @@ class MainWindow(mainwindow_cls):
         self.app = app
         self.backup_blkstyles = []
         self._run_imgtrans_wo_textstyle_update = False
-        # Live run dialog, so an asynchronous translator load can refresh the
-        # language selectors it is showing (None while the dialog is closed).
-        self._run_dialog = None
-
 
         self.setupThread()
         # 字体枚举必须先于任何 FormatEditorPanel 消费方（如 setupUi 中的
@@ -523,10 +520,8 @@ class MainWindow(mainwindow_cls):
             self.on_search_result_item_clicked
         )
 
-        # Workbench (泛用工作台): embedded left panel (widened GlobalSearch
-        # sibling), pushed into the same H layout slot. Hosts the four batch
-        # cleanup tasks plus the glossary/story drafts (规划 D20/D25).
-        self.glossary_workbench = GlossaryAgentPanel(self.imgtrans_proj, self)
+        # 菜单工具保留同一份草稿与批量事务；不再占用管线工作台的侧栏。
+        self.glossary_workbench = GlossaryAgentPanel(self.imgtrans_proj, self, menu_mode=True)
         self.glossary_workbench.setVisible(False)
         self.glossary_workbench.jump_requested.connect(self.on_workbench_jump)
         self.glossary_workbench.action_requested.connect(self.on_workbench_action)
@@ -534,11 +529,27 @@ class MainWindow(mainwindow_cls):
         self.glossary_workbench.rollback_requested.connect(
             self.on_workbench_rollback
         )
+        self._workbench_tool_dialog = QDialog(self, Qt.WindowType.Tool)
+        self._workbench_tool_dialog.resize(680, 650)
+        tool_layout = QVBoxLayout(self._workbench_tool_dialog)
+        tool_layout.setContentsMargins(0, 0, 0, 0)
+        tool_layout.addWidget(self.glossary_workbench)
+        self.glossary_workbench.show()
+
+        self.pipeline_workbench = PipelineWorkbench(self.imgtrans_proj, self)
+        self.pipeline_workbench.hide()
+        self.pipeline_workbench.run_requested.connect(self.start_pipeline_workbench)
+        self.pipeline_workbench.module_selected.connect(self.on_run_module_selected)
+        self.pipeline_workbench.translate_source_changed.connect(self.on_trans_src_changed)
+        self.pipeline_workbench.translate_target_changed.connect(self.on_trans_tgt_changed)
+        self.pipeline_workbench.materials_requested.connect(self.open_translation_materials)
 
         self.titleBar = TitleBar(self)
         self.titleBar.closebtn_clicked.connect(self.on_closebtn_clicked)
         self.titleBar.display_lang_changed.connect(self.on_display_lang_changed)
         self.titleBar.launch_notext_tool.connect(self.on_launch_notext_tool)
+        self.titleBar.workbench_tool_requested.connect(self.open_workbench_tool)
+        self.titleBar.toolsToolBtn.menu().aboutToShow.connect(self.refresh_workbench_tool_menu)
         self.bottomBar = BottomBar(self)
         self.bottomBar.textedit_checkchanged.connect(self.setTextEditMode)
         self.bottomBar.paintmode_checkchanged.connect(self.setPaintMode)
@@ -550,7 +561,7 @@ class MainWindow(mainwindow_cls):
         mainHLayout.addWidget(self.leftBar)
         mainHLayout.addWidget(self.leftStackWidget)
         mainHLayout.addWidget(self.global_search_widget)
-        mainHLayout.addWidget(self.glossary_workbench)
+        mainHLayout.addWidget(self.pipeline_workbench)
         mainHLayout.addSpacing(5)
         mainHLayout.addWidget(self.centralStackWidget)
         mainHLayout.setContentsMargins(0, 0, 0, 0)
@@ -588,6 +599,7 @@ class MainWindow(mainwindow_cls):
             self.canvas, self.configPanel.inpaint_config_panel
         )
         self.textPanel = TextPanel(self.app)
+        self.textPanel.formatpanel.palette_requested.connect(self.open_color_palette)
         self.textPanel.sourceBtn.checkStateChanged.connect(
             self.show_source_text
         )
@@ -699,6 +711,7 @@ class MainWindow(mainwindow_cls):
             pcfg.module.textdetector = name
             self.configPanel.detect_config_panel.setDetector(name)
             self.bottomBar.textdet_selector.setSelectedValue(name)
+            self.pipeline_workbench.set_module_selection("textdetector", name)
             LOGGER.info("Text detector set to {}".format(name))
 
     def on_finish_setocr(self):
@@ -708,6 +721,7 @@ class MainWindow(mainwindow_cls):
             pcfg.module.ocr = name
             self.configPanel.ocr_config_panel.setOCR(name)
             self.bottomBar.ocr_selector.setSelectedValue(name)
+            self.pipeline_workbench.set_module_selection("ocr", name)
             LOGGER.info("OCR set to {}".format(name))
 
     def on_finish_setinpainter(self):
@@ -717,6 +731,7 @@ class MainWindow(mainwindow_cls):
             pcfg.module.inpainter = name
             self.configPanel.inpaint_config_panel.setInpainter(name)
             self.bottomBar.inpaint_selector.setSelectedValue(name)
+            self.pipeline_workbench.set_module_selection("inpainter", name)
             LOGGER.info("Inpainter set to {}".format(name))
 
     def on_finish_settranslator(self):
@@ -734,9 +749,9 @@ class MainWindow(mainwindow_cls):
                 translator.lang_target,
             )
             self.configPanel.trans_config_panel.finishSetTranslator(translator)
+            self.pipeline_workbench.set_module_selection("translator", name)
+            self._sync_run_dialog_translator(self.pipeline_workbench)
             LOGGER.info("Translator set to {}".format(name))
-            if self._run_dialog is not None:
-                self._sync_run_dialog_translator(self._run_dialog)
         else:
             LOGGER.error("invalid translator")
 
@@ -1625,11 +1640,7 @@ class MainWindow(mainwindow_cls):
 
     PAGE_LIST_WIDTH = 250
     SEARCH_WIDTH = 300
-    # Workbench (GlossaryAgentPanel) width — D24: sized so the 100%-scale
-    # approval crops fit without scrolling (p90 group crop ≈ 280x288 px after
-    # the D31 expansion). Kept at 460; only this constant changes if it turns
-    # out too small, the panel itself is width-adaptive.
-    WORKBENCH_WIDTH = 460
+    WORKBENCH_WIDTH = 340
 
     def _animate_panel_width(self, widget, target_max_w, on_finished=None):
         """Animate a panel's width between collapsed and expanded.
@@ -1750,14 +1761,18 @@ class MainWindow(mainwindow_cls):
             self.leftBar.showPageListLabel.setChecked(False)
 
     def _showWorkbenchPanel(self):
-        self.glossary_workbench.setFocus()
-        self._animate_panel_width(self.glossary_workbench, self.WORKBENCH_WIDTH)
+        self.pipeline_workbench.refresh_project_state()
+        self.pipeline_workbench.sync_runtime_options()
+        self._sync_run_dialog_translator(self.pipeline_workbench)
+        self.pipeline_workbench.setFocus()
+        self._animate_panel_width(self.pipeline_workbench, self.WORKBENCH_WIDTH)
 
     def _hideWorkbenchPanel(self):
-        if not self.glossary_workbench.isVisible():
+        if not self.pipeline_workbench.isVisible():
             return
+        save_config()
         self._animate_panel_width(
-            self.glossary_workbench, 0, on_finished=self._on_workbench_hidden
+            self.pipeline_workbench, 0, on_finished=self._on_workbench_hidden
         )
 
     def _on_workbench_hidden(self):
@@ -1774,6 +1789,36 @@ class MainWindow(mainwindow_cls):
             self._showWorkbenchPanel()
         else:
             self._hideWorkbenchPanel()
+
+    def open_translation_materials(self):
+        from .workbench_tasks import TRANSLATION_PREP
+        self.open_workbench_tool(TRANSLATION_PREP)
+
+    def open_color_palette(self):
+        from .workbench_tasks import FG_PALETTE
+        self.open_workbench_tool(FG_PALETTE)
+
+    def refresh_workbench_tool_menu(self):
+        from .workbench_tasks import OCR_REVIEW, TRANS_REVIEW
+        actions = self.titleBar.workbench_tool_actions
+        for task_id, action in actions.items():
+            action.setEnabled(bool(self.imgtrans_proj.num_pages) and not self.pipeline_tasks.busy())
+        for task_id, label in ((OCR_REVIEW, self.tr("Review source text…")),
+                               (TRANS_REVIEW, self.tr("Retranslate…"))):
+            count = self.glossary_workbench.tool_count(task_id)
+            actions[task_id].setText(label + (f" ({count})" if count else ""))
+
+    def open_workbench_tool(self, task_id):
+        if self.pipeline_tasks.guard() or not self.imgtrans_proj.num_pages:
+            return
+        action = self.titleBar.workbench_tool_actions.get(task_id)
+        if action is None:
+            return
+        self._workbench_tool_dialog.setWindowTitle(action.text().rstrip("…"))
+        self.glossary_workbench.open_tool(task_id)
+        self._workbench_tool_dialog.show()
+        self._workbench_tool_dialog.raise_()
+        self._workbench_tool_dialog.activateWindow()
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
@@ -1831,7 +1876,9 @@ class MainWindow(mainwindow_cls):
             self.canvas._update_hint_visibility()
             self.opening_dir = False
             progress.close()
+            self._workbench_tool_dialog.hide()
             self.glossary_workbench.refresh_project_state()
+            self.pipeline_workbench.refresh_project_state()
             self._maybe_seed_upstream_styles()
         except Exception as e:
             self.opening_dir = False
@@ -1999,7 +2046,9 @@ class MainWindow(mainwindow_cls):
             self.titleBar.setTitleContent(osp.basename(self.imgtrans_proj.proj_path))
             self.opening_dir = False
             self.canvas._update_hint_visibility()
+            self._workbench_tool_dialog.hide()
             self.glossary_workbench.refresh_project_state()
+            self.pipeline_workbench.refresh_project_state()
             self._maybe_seed_upstream_styles()
         except Exception as e:
             self.opening_dir = False
@@ -3722,30 +3771,31 @@ class MainWindow(mainwindow_cls):
 
     def on_textdet_changed(self):
         module = self.bottomBar.textdet_selector.selector.currentText()
+        self.pipeline_workbench.set_module_selection("textdetector", module)
         tgt_selector = self.configPanel.detect_config_panel.module_combobox
         if tgt_selector.currentText() != module and module in GET_VALID_TEXTDETECTORS():
             tgt_selector.setCurrentText(module)
 
     def on_ocr_changed(self):
         module = self.bottomBar.ocr_selector.selector.currentText()
+        self.pipeline_workbench.set_module_selection("ocr", module)
         tgt_selector = self.configPanel.ocr_config_panel.module_combobox
         if tgt_selector.currentText() != module and module in GET_VALID_OCR():
             tgt_selector.setCurrentText(module)
 
     def on_trans_changed(self):
         module = self.bottomBar.trans_selector.selector.currentText()
+        self.pipeline_workbench.set_module_selection("translator", module)
         tgt_selector = self.configPanel.trans_config_panel.module_combobox
         if tgt_selector.currentText() != module and module in GET_VALID_TRANSLATORS():
             tgt_selector.setCurrentText(module)
 
-    def on_trans_src_changed(self):
-        # Source / target now come from the bottom bar submenu or from the run
-        # dialog.  The dialog is modal, so the two can never be live at once:
-        # the only mirror that matters is the bottom bar's own submenu.
+    def on_trans_src_changed(self, text=None):
         if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
             return
         sender = self.sender()
-        text = sender.currentText()
+        if not isinstance(text, str):
+            text = sender.currentText()
         translator = self.module_manager.translator
         if translator is not None:
             translator.set_source(text)
@@ -3755,12 +3805,18 @@ class MainWindow(mainwindow_cls):
             src_selector.blockSignals(True)
             src_selector.setCurrentText(text)
             src_selector.blockSignals(False)
+        combo = self.pipeline_workbench.source_combobox
+        combo.blockSignals(True)
+        combo.setCurrentText(text)
+        combo.blockSignals(False)
+        save_config()
 
-    def on_trans_tgt_changed(self):
+    def on_trans_tgt_changed(self, text=None):
         if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
             return
         sender = self.sender()
-        text = sender.currentText()
+        if not isinstance(text, str):
+            text = sender.currentText()
         translator = self.module_manager.translator
         if translator is not None:
             translator.set_target(text)
@@ -3770,6 +3826,11 @@ class MainWindow(mainwindow_cls):
             tgt_selector.blockSignals(True)
             tgt_selector.setCurrentText(text)
             tgt_selector.blockSignals(False)
+        combo = self.pipeline_workbench.target_combobox
+        combo.blockSignals(True)
+        combo.setCurrentText(text)
+        combo.blockSignals(False)
+        save_config()
 
     @staticmethod
     def _translator_active_profile(translator) -> str:
@@ -3840,6 +3901,7 @@ class MainWindow(mainwindow_cls):
 
     def on_inpaint_changed(self):
         module = self.bottomBar.inpaint_selector.selector.currentText()
+        self.pipeline_workbench.set_module_selection("inpainter", module)
         tgt_selector = self.configPanel.inpaint_config_panel.module_combobox
         if tgt_selector.currentText() != module and module in GET_VALID_INPAINTERS():
             tgt_selector.setCurrentText(module)
@@ -4238,9 +4300,8 @@ class MainWindow(mainwindow_cls):
     def refresh_module_selector_status(self):
         """重刷模块下拉里「模型文件未找到」的警示色与 tooltip。
 
-        四处触发：启动填完选择器、每次开运行对话框、设置页「模型文件」节
+        四处触发：启动填完选择器、每次打开管线工作台、设置页「模型文件」节
         下载完成、以及那里删掉权重之后——距上次标记磁盘状态可能已经变了。
-        运行对话框若正开着也一并刷（它是独立的一份选择器）。
         """
         for module_type, selector in (
             ("textdetector", self.bottomBar.textdet_selector.selector),
@@ -4249,44 +4310,20 @@ class MainWindow(mainwindow_cls):
             ("inpainter", self.bottomBar.inpaint_selector.selector),
         ):
             mark_module_selector_status(selector, module_type)
-        dialog = getattr(self, "_run_dialog", None)
-        if dialog is not None:
-            dialog.refresh_module_selector_status()
+        self.pipeline_workbench.refresh_module_selector_status()
 
     def run_imgtrans(self):
         if getattr(self, "pipeline_tasks", None) and self.pipeline_tasks.guard():
             return
-        num_pages = self.imgtrans_proj.num_pages
-        if num_pages == 0:
-            return
-
-        from .run_pipeline_dialog import RunPipelineDialog
-
-        # 重新标记底部栏下拉的缺模型状态（距启动时可能已下载/删除过权重）
         self.refresh_module_selector_status()
+        self.leftBar.workbenchChecker.setChecked(True)
+        self.on_set_workbench_widget()
 
-        page_names = list(self.imgtrans_proj.pages.keys())
-        dialog = RunPipelineDialog(
-            self,
-            page_names=page_names,
-            progress_codes=[self.imgtrans_proj._image_info.get(name, {}).get("finish_code", 0)
-                            for name in page_names],
-            # 区间轨上的完成度：哪几页已经跑完（页级 finish_code 位与）
-            finished_pages=[
-                bool(self.imgtrans_proj.get_page_progress(name))
-                for name in page_names
-            ],
-        )
-        self._run_dialog = dialog
-        dialog.module_selected.connect(self.on_run_module_selected)
-        dialog.translate_source_changed.connect(self.on_trans_src_changed)
-        dialog.translate_target_changed.connect(self.on_trans_tgt_changed)
-        self._sync_run_dialog_translator(dialog)
-
-        try:
-            accepted = dialog.exec() == QDialog.DialogCode.Accepted
-        finally:
-            self._run_dialog = None
+    def start_pipeline_workbench(self):
+        if self.pipeline_tasks.guard() or not self.imgtrans_proj.num_pages:
+            return
+        dialog = self.pipeline_workbench
+        dialog.refresh_project_state()
         render_mode = dialog.is_render_only()
         page_filter = dialog.page_filter()
         wo_update = dialog.run_without_textstyle_update()
@@ -4295,11 +4332,7 @@ class MainWindow(mainwindow_cls):
         render_after = dialog.render_after_cb.isChecked()
         selected_stages = {stage: activator.button.isChecked()
                            for stage, activator in dialog._stage_activators.items()}
-        dialog.deleteLater()
-
-        # The glossary path was committed to pcfg while browsing, so it stays
-        # even when the dialog is cancelled (the pre-translation state shows it).
-        if not accepted:
+        if page_filter == []:
             return
 
         if render_mode:
@@ -4458,6 +4491,7 @@ class MainWindow(mainwindow_cls):
 
     def run_imgtrans_wo_textstyle_update(self):
         self._run_imgtrans_wo_textstyle_update = True
+        self.pipeline_workbench.wo_update_cb.setChecked(True)
         self.run_imgtrans()
 
     def on_launch_notext_tool(self):
@@ -4760,6 +4794,7 @@ class MainWindow(mainwindow_cls):
         self._ask_rerender_dirty_pages()
 
     def on_revision_requested(self, targets, hint):
+        self._workbench_tool_dialog.hide()
         self.pipeline_tasks.start("revise", list(targets), targets=targets, hint=hint)
 
     def on_workbench_jump(self, pagename: str, block_idx: int):
@@ -4773,6 +4808,7 @@ class MainWindow(mainwindow_cls):
         proj = self.imgtrans_proj
         if pagename not in proj.pages:
             return
+        self._workbench_tool_dialog.hide()
         try:
             row = proj.pagename2idx(pagename)
         except Exception as e:

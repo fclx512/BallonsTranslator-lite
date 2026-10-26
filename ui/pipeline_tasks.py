@@ -22,15 +22,23 @@ import copy
 import os
 import time
 
-from qtpy.QtCore import QObject, QRectF, QTimer, Qt
+from qtpy.QtCore import QObject, QRectF, Qt, QTimer
 from qtpy.QtGui import QPainter
-from qtpy.QtWidgets import QDialog, QGraphicsScene, QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout
+from qtpy.QtWidgets import (
+    QDialog,
+    QGraphicsScene,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+)
 
-from utils.config import pcfg, RunStatus
-from ui.custom_widget import ConfigTextEdit
 from ui.batch_ops import BatchWriteback
+from ui.custom_widget import ConfigTextEdit
 from ui.pipeline_progress_overlay import PipelineProgressOverlay
-from ui.pipeline_runner import PipelineRunner, page_signature, block_signature
+from ui.pipeline_runner import PipelineRunner, block_signature, page_signature
+from utils.config import RunStatus, pcfg
 
 #: 宽限期：点了优雅停止之后等多久转"疑似无响应"。模型调用与网络请求都不可
 #: 中断，正常收尾一般几秒内就完；30 秒还没动静基本就是卡住了。
@@ -124,9 +132,14 @@ class PipelineTasks(QObject):
         w = self.window
         # 配置、模块选择、工作台共用引擎，运行期间必须停用；画布由覆盖层压住
         for widget in (w.configPanel, w.glossary_workbench,
+                       getattr(w, "pipeline_workbench", None),
                        w.bottomBar.textdet_selector, w.bottomBar.ocr_selector,
                        w.bottomBar.inpaint_selector, w.bottomBar.trans_selector):
-            widget.setEnabled(enabled)
+            if widget is not None:
+                widget.setEnabled(enabled)
+        titlebar = getattr(w, "titleBar", None)
+        if titlebar is not None:
+            titlebar.toolsToolBtn.setEnabled(enabled)
         w.module_manager.background_task_active = not enabled
         # QShortcut 挂在主窗口上，覆盖层挡不住它（快捷键不走鼠标事件）：
         # 不禁用的话，运行中按翻页键还是会把画布翻走
@@ -562,7 +575,9 @@ class PipelineTasks(QObject):
                 translated = [result["blocks"][i] for i in result["indexes"]]
                 w.postprocess_translations(translated)
                 if pcfg.auto_tate_chu_yoko.enabled:
-                    from ui.text_engine.pipeline_formatting import apply_auto_tate_chu_yoko
+                    from ui.text_engine.pipeline_formatting import (
+                        apply_auto_tate_chu_yoko,
+                    )
                     apply_auto_tate_chu_yoko(translated, pcfg.auto_tate_chu_yoko)
             elif runner.mode == "recognize" and runner.config.enable_detect:
                 for block in result["blocks"]:
@@ -689,6 +704,9 @@ class PipelineTasks(QObject):
         if pcfg.module.empty_runcache:
             self.window.module_manager.unload_all_models()
         self.window.updatePageList()
+        workbench = getattr(self.window, "pipeline_workbench", None)
+        if workbench is not None:
+            workbench.refresh_project_state()
         self._show_finished_report(report, errors)
         if self.close_when_done:
             self.window.close()

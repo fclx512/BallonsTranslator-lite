@@ -237,19 +237,81 @@ class RunPipelineDialogTest(unittest.TestCase):
         dialog.tab_bar.setCurrentIndex(1)
         self.assertTrue(dialog.run_btn.isEnabled())
 
-    def test_mainwindow_passes_raw_stage_codes(self):
+    def test_workbench_refreshes_raw_stage_codes(self):
         from types import SimpleNamespace
-        from unittest.mock import Mock, patch
-        from ui.mainwindow import MainWindow
+        from ui.run_pipeline_dialog import PipelineWorkbench
         from utils.config import RunStatus
-        project = SimpleNamespace(num_pages=2, pages={"a.png": [], "b.png": []},
-                                  _image_info={"a.png": {"finish_code": RunStatus.FIN_ALL}},
-                                  get_page_progress=Mock(return_value=True))
-        window = SimpleNamespace(imgtrans_proj=project, refresh_module_selector_status=Mock())
-        with patch("ui.run_pipeline_dialog.RunPipelineDialog", side_effect=ValueError("captured")) as dialog:
-            with self.assertRaisesRegex(ValueError, "captured"):
-                MainWindow.run_imgtrans(window)
-        self.assertEqual(dialog.call_args.kwargs["progress_codes"], [RunStatus.FIN_ALL, 0])
+        project = SimpleNamespace(directory="project", current_img="a.png",
+                                  pages={"a.png": [], "b.png": []},
+                                  _image_info={"a.png": {"finish_code": RunStatus.FIN_ALL}})
+        panel = PipelineWorkbench(project)
+        self.addCleanup(panel.deleteLater)
+        self.assertEqual(panel._progress_codes, [RunStatus.FIN_ALL, 0])
+        project._image_info["b.png"] = {"finish_code": RunStatus.FIN_ALL}
+        panel.refresh_project_state()
+        self.assertEqual(panel.page_range.range_bar.finished_count, 2)
+
+    def test_workbench_scope_and_project_switch_do_not_reuse_old_pages(self):
+        from types import SimpleNamespace
+        from ui.run_pipeline_dialog import PipelineWorkbench
+        project = SimpleNamespace(directory="first", current_img="002.jpg",
+                                  pages=dict.fromkeys(PAGE_NAMES, []), _image_info={})
+        panel = PipelineWorkbench(project)
+        self.addCleanup(panel.deleteLater)
+        panel.set_scope("current")
+        self.assertEqual(panel.page_filter(), ["002.jpg"])
+        project.current_img = "003.jpg"
+        self.assertEqual(panel.page_filter(), ["003.jpg"])
+        panel.set_scope("range")
+        panel.page_range.set_range(2, 4)
+        panel.refresh_project_state()
+        self.assertEqual(panel.page_filter(), PAGE_NAMES[1:4])
+        project.directory, project.pages, project.current_img = "second", {"new.jpg": []}, "new.jpg"
+        panel.refresh_project_state()
+        self.assertIsNone(panel.page_filter())
+        self.assertEqual(panel._page_names, ["new.jpg"])
+
+    def test_workbench_run_stays_embedded_and_render_task_remains_available(self):
+        from types import SimpleNamespace
+        from qtpy.QtWidgets import QWidget
+        from ui.run_pipeline_dialog import PipelineWorkbench
+        parent = QWidget()
+        project = SimpleNamespace(directory="project", current_img="a.jpg",
+                                  pages={"a.jpg": []}, _image_info={})
+        panel = PipelineWorkbench(project, parent)
+        self.addCleanup(parent.deleteLater)
+        seen = []
+        panel.run_requested.connect(lambda: seen.append(panel.task_mode()))
+        panel.task_combo.setCurrentIndex(panel.task_combo.findData("render"))
+        panel.run_btn.click()
+        self.assertEqual(seen, ["render"])
+        self.assertFalse(panel.isWindow())
+        self.assertFalse(panel.isModal())
+        self.assertTrue(panel.is_render_only())
+
+    def test_mainwindow_run_opens_the_existing_workbench(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from ui.mainwindow import MainWindow
+        window = SimpleNamespace(refresh_module_selector_status=Mock(),
+                                 leftBar=SimpleNamespace(workbenchChecker=Mock()),
+                                 on_set_workbench_widget=Mock())
+        MainWindow.run_imgtrans(window)
+        window.leftBar.workbenchChecker.setChecked.assert_called_once_with(True)
+        window.on_set_workbench_widget.assert_called_once_with()
+
+    def test_workbench_engine_selector_fits_inside_its_stage_row(self):
+        from qtpy.QtWidgets import QWidget, QVBoxLayout
+        from ui.run_pipeline_dialog import WorkbenchStage
+        host = QWidget()
+        host.resize(340, 100)
+        row = WorkbenchStage("textdetector", "Detect text")
+        QVBoxLayout(host).addWidget(row)
+        self.addCleanup(host.deleteLater)
+        host.show()
+        self.app.processEvents()
+        self.assertLess(row.button.geometry().right(), row.selector.geometry().left())
+        self.assertLessEqual(row.selector.geometry().right(), row.width())
 
     def test_render_only_tab(self):
         self.assertFalse(self.dialog.is_render_only())

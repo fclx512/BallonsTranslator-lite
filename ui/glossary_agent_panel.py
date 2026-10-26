@@ -1,4 +1,8 @@
-"""泛用工作台（设计见 docs/技术实现/AI辅助功能_设计与实现.md 的「工作台」部分，本文件＝界面层）。
+"""菜单工具容器（设计见 docs/技术实现/AI辅助功能_设计与实现.md 的「菜单工具」部分）。
+
+桌面端由工具菜单打开单个工具，menu_mode 隐藏旧导航；管线工作台独立在
+ui/run_pipeline_dialog.py。这里保留任务、worker 草稿与批量事务；主窗口引用仍叫
+glossary_workbench。默认导航形态只供既有演练台与兼容调用，不再占左栏入口。
 
 **定位**：七项任务共用固定两行导航、任务页与可展开活动区。导航标签与数量分行，
 切换和计数更新不移动按钮。候选点行预览与勾选操作独立；任务说明可展开，
@@ -14,8 +18,8 @@
 不走这条路**：它们没有整批写回、没有版本，出口只有「跳画布」与「从列表
 移除／忽略」。
 
-**D25 单入口**：主窗口左栏只有一个「工作台」入口（``ui/mainwindowbars.py::LeftBar``
-的 workbenchChecker 槽位），任务切换全在本面板内完成。
+**入口**：主窗口工具菜单经 ``open_tool`` 选择任务，工具窗口是非模态的；
+跳画布时隐藏窗口，关闭时解除取色并收起审批预览，草稿仍保留。
 
 术语／剧情两页仍是原 ``GlossaryAgentWorker`` 的镜像：AI 产物只落 worker 草稿，
 落盘只经「应用草稿…」。**Chat 砍掉后 worker 日志落在本面板底部的日志条**
@@ -45,13 +49,13 @@ from qtpy.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QHeaderView,
-    QLayout,
     QLabel,
+    QLayout,
     QMessageBox,
     QPushButton,
-    QStackedWidget,
     QScrollArea,
     QSizePolicy,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -571,7 +575,6 @@ class GlossaryAgentWorker(QObject):
     # ── 内部:一次指令轮 ──────────────────────────────────────
 
     def _run_instruction(self, text: str):
-        from utils.config import pcfg
 
         translator = self._ensure_translator()
         api_key = translator._select_api_key()
@@ -711,7 +714,7 @@ class WorkbenchPages(QStackedWidget):
 
 
 class GlossaryAgentPanel(QWidget):
-    """主窗口左侧栏内嵌的泛用工作台（与全局搜索同槽位、更宽）。"""
+    """菜单工具共用的视图与草稿容器；menu_mode 保留单任务界面。"""
 
     # 队列 → 画布跳转（D26：界面不做翻页控件，交给主窗口的页链路）
     jump_requested = Signal(str, int)
@@ -721,10 +724,13 @@ class GlossaryAgentPanel(QWidget):
     # 撤回最近一次批量操作（D4／D35：整体一条撤回）
     rollback_requested = Signal(int)
 
-    def __init__(self, proj, parent=None):
+    def __init__(self, proj, parent=None, *, menu_mode=False):
         super().__init__(parent)
         _styled(self).setObjectName("WorkbenchRoot")
         self._proj = proj
+        self._owner = parent
+        self._menu_mode = menu_mode
+        self._worker_log_task = TRANSLATION_PREP
         self._syncing = False
         self._worker = None
         self._thread = None
@@ -777,6 +783,7 @@ class GlossaryAgentPanel(QWidget):
         self.nav = WorkbenchTaskNav(WORKBENCH_NAV_GROUPS, content_page)
         self.nav.task_selected.connect(self._on_task_selected)
         content_lay.addWidget(self.nav)
+        self.nav.setVisible(not menu_mode)
 
         # ②③ 候选列表 + 执行（每个任务自己一整页）
         self.pages = WorkbenchPages(content_page)
@@ -797,6 +804,10 @@ class GlossaryAgentPanel(QWidget):
         self._build_review_pages()
         self._build_palette_page()
         self._build_translation_prep_page()
+        if menu_mode:
+            palette_layout = self._palette_view.layout()
+            palette_layout.setStretch(palette_layout.indexOf(self._palette_view._empty_label), 1)
+            self._palette_view.findChild(QLabel, "WorkbenchPageTitle").setText(self.tr("Colors and speakers"))
 
         # 底部：批量撤回 + worker 日志落点（砍 Chat 后的新落点）
         content_lay.addWidget(self._build_bottom_row(content_page))
@@ -973,6 +984,8 @@ class GlossaryAgentPanel(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(12, 10, 12, 10)
         title = QLabel(_TASK_LABELS[TRANSLATION_PREP], page)
+        if self._menu_mode:
+            title.setText(self.tr("Translation materials"))
         title.setObjectName("WorkbenchPageTitle")
         layout.addWidget(title)
         layout.addWidget(
@@ -993,6 +1006,8 @@ class GlossaryAgentPanel(QWidget):
         layout.addWidget(self._prep_tabs, 1)
         # 两个「耗时/耗费」动作与唯一落盘出口属于整页：应用同时落术语与剧情
         self.prepare_btn = QPushButton(self.tr("Prepare for translation…"), page)
+        if self._menu_mode:
+            self.prepare_btn.setText(self.tr("Generate drafts…"))
         self.prepare_btn.setToolTip(
             self.tr(
                 "One-click warmup: scan existing translations, then ask the AI to fill in missing glossary entries and page summaries. A confirmation lists the steps (and API cost) first."
@@ -1003,6 +1018,8 @@ class GlossaryAgentPanel(QWidget):
         self.assign_speakers_btn = QPushButton(
             self.tr("Assign speaker names…"), page
         )
+        if self._menu_mode:
+            self.assign_speakers_btn.setText(self.tr("Suggest speaker names…"))
         self.assign_speakers_btn.setToolTip(
             self.tr(
                 "Ask the AI to propose real character names for the palette's placeholder speakers (Speaker A, …), using their lines and the glossary. Suggestions go to the log; edit the palette rows yourself."
@@ -1017,8 +1034,11 @@ class GlossaryAgentPanel(QWidget):
         )
         generate_row = AdaptiveWrapLayout(horizontal_spacing=6, vertical_spacing=6)
         generate_row.addWidget(self.prepare_btn)
-        generate_row.addWidget(self.assign_speakers_btn)
-        generate_row.addWidget(self.stop_btn)
+        if self._menu_mode:
+            self._palette_view.layout().addWidget(self.assign_speakers_btn)
+        else:
+            generate_row.addWidget(self.assign_speakers_btn)
+            generate_row.addWidget(self.stop_btn)
         self.stop_btn.hide()
         layout.addLayout(generate_row)
         apply_hint = _page_hint(self.tr("Apply submits both glossary and story drafts. Batch undo does not cover this action."), page)
@@ -1059,6 +1079,8 @@ class GlossaryAgentPanel(QWidget):
         self._activity_toggle.setCheckable(True)
         self._activity_toggle.setToolTip(self.tr("Show or hide recent activity (up to 200 lines)."))
         row.addWidget(self._activity_toggle)
+        if self._menu_mode:
+            row.addWidget(self.stop_btn)
         layout.addLayout(row)
         self._latest_status = WorkbenchStatusLabel(holder)
         self._latest_status.set_status(self.tr("No recent activity for this task."))
@@ -1093,7 +1115,7 @@ class GlossaryAgentPanel(QWidget):
 
     def _mainwindow(self):
         """主窗口（提供 D40 前置对齐、落盘、模块实例、批量回滚）。"""
-        window = self.window()
+        window = self._owner or self.window()
         if window is None or not hasattr(window, "_sync_block_data"):
             return None
         return window
@@ -1377,7 +1399,7 @@ class GlossaryAgentPanel(QWidget):
         self._on_preview_dismissed()  # 换了任务，上一页的审批图不再对应当前列表
         self._current_task = task_id
         self.pages.setCurrentIndex(self._page_index(task_id))
-        if task_id == TRANSLATION_PREP:
+        if task_id == TRANSLATION_PREP and self.has_project():
             # 术语／剧情的草稿在 worker 线程里（懒建、载入基底），与批量任务无关
             self._ensure_worker()
         else:
@@ -1414,7 +1436,7 @@ class GlossaryAgentPanel(QWidget):
           只在页内摘要里报数；
         - 翻译准备是探索性入口，没有"未处理条目"的概念，不计数。
         """
-        for task_id in WORKBENCH_ORDER:
+        for task_id in (() if self._menu_mode else WORKBENCH_ORDER):
             task = self._batch_tasks.get(task_id) or self._review_tasks.get(task_id)
             if task is None:
                 self.nav.set_count(task_id, 0)
@@ -1465,7 +1487,8 @@ class GlossaryAgentPanel(QWidget):
             self._current_task = WORKBENCH_ORDER[0]
             self.pages.setCurrentIndex(self._page_index(WORKBENCH_ORDER[0]))
             if self.isVisible():
-                self._ensure_worker()
+                if not self._menu_mode:
+                    self._ensure_worker()
                 # 标脏位只由 *它* 清（``_ensure_current_planned``）：面板不可见
                 # （打开项目时工作台通常还没开）就跳过规划，此处先前无条件清掉
                 # 会让首个任务"以为已规划过"，之后 showEvent 也不再补——列表
@@ -1497,8 +1520,27 @@ class GlossaryAgentPanel(QWidget):
         未打开项目时保持空态页,不建 worker。"""
         super().showEvent(event)
         if self.has_project():
-            self._ensure_worker()
+            if not self._menu_mode or self.current_task() == TRANSLATION_PREP:
+                self._ensure_worker()
             self._ensure_current_planned()
+
+    def hideEvent(self, event):
+        if self._menu_mode:
+            self._on_preview_dismissed()
+            self.set_palette_sampling(False)
+        super().hideEvent(event)
+
+    def open_tool(self, task_id):
+        """菜单选择一个工具；隐藏导航，保留任务与草稿的原有状态。"""
+        if task_id not in self._page_indices:
+            return
+        self.nav.select(task_id)
+        self._ensure_current_planned()
+
+    def tool_count(self, task_id):
+        """菜单只查询人工待办的便宜计数，不运行批量任务规划。"""
+        task = self._review_tasks.get(task_id)
+        return task.pending() if task is not None and self.has_project() else 0
 
     def eventFilter(self, obj, event):
         """synopsis 焦点离开时提交到 worker。"""
@@ -1527,7 +1569,7 @@ class GlossaryAgentPanel(QWidget):
         # 是跨任务共用的，草稿／会话的行不署名的话，在别的任务页读到
         # 「Draft loaded: …」会以为是当前任务的回执。
         worker.log_line.connect(
-            lambda text: self._append_log(text, TRANSLATION_PREP)
+            lambda text: self._append_log(text, self._worker_log_task)
         )
         worker.busy_changed.connect(self._on_busy_changed)
         worker.glossary_synced.connect(self._sync_glossary_table)
@@ -1561,6 +1603,7 @@ class GlossaryAgentPanel(QWidget):
         self._ensure_worker().request_stop()
 
     def _on_prefill(self):
+        self._worker_log_task = TRANSLATION_PREP
         self._ensure_worker().prefill_requested.emit()
 
     def _on_rollback(self):
@@ -1628,7 +1671,7 @@ class GlossaryAgentPanel(QWidget):
         才执行。勾选「不再提示」写入 pcfg.workbench_confirm_costly=False
         (立即落盘),可在设置面板「应用 → Workbench」重新开启——写入的同
         时回写那边的复选框,否则设置页会停在启动时的旧值。"""
-        from utils.config import pcfg, save_config
+        from utils.config import save_config
 
         if not pcfg.workbench_confirm_costly:
             return True
@@ -1673,9 +1716,8 @@ class GlossaryAgentPanel(QWidget):
         ``ConfigPanel.setupConfig`` only runs once at startup, so without this
         the settings checkbox would keep showing the value from launch time.
         """
-        from utils.config import pcfg
 
-        panel = getattr(self.window(), "configPanel", None)
+        panel = getattr(self._mainwindow(), "configPanel", None)
         checker = getattr(panel, "confirm_costly_checker", None)
         if checker is None:
             return
@@ -1690,6 +1732,7 @@ class GlossaryAgentPanel(QWidget):
             return
         if not self._prepare_confirmed():
             return
+        self._worker_log_task = TRANSLATION_PREP
         # 先词频提取(无 AI,秒回)再发 AI 指令:两信号同线程按序排队,
         # worker 依次执行。指令直接入队——D19 砍掉 Chat 后不再有用户气泡,
         # 但 instruction_requested 本身与 Chat 无关,原地保留。
@@ -1703,6 +1746,7 @@ class GlossaryAgentPanel(QWidget):
             return
         if self._worker is not None and self._worker._busy:
             return
+        self._worker_log_task = FG_PALETTE if self._menu_mode else TRANSLATION_PREP
         command = self._assign_speakers_command()
         if command is None:
             return
@@ -1714,10 +1758,12 @@ class GlossaryAgentPanel(QWidget):
         ):
             return
         self._ensure_worker().instruction_requested.emit(command)
+        if self._menu_mode:
+            self._activity_toggle.setChecked(True)
 
     def _costly_confirmed(self, title: str, text: str) -> bool:
         """耗时/耗费确认的通用壳（与 _prepare_confirmed 同一开关与落盘）。"""
-        from utils.config import pcfg, save_config
+        from utils.config import save_config
 
         if not pcfg.workbench_confirm_costly:
             return True
@@ -1734,6 +1780,7 @@ class GlossaryAgentPanel(QWidget):
         if dont_ask.isChecked():
             pcfg.workbench_confirm_costly = False
             save_config()
+            self._sync_confirm_costly_checkbox()
         return True
 
     def _assign_speakers_command(self) -> Optional[str]:
@@ -1761,7 +1808,7 @@ class GlossaryAgentPanel(QWidget):
                 self.tr(
                     "No placeholder speakers to assign: sample colors in the palette page first."
                 ),
-                TRANSLATION_PREP,
+                self._worker_log_task,
             )
             return None
 
@@ -1809,7 +1856,6 @@ class GlossaryAgentPanel(QWidget):
 
     def _glossary_snapshot_text(self) -> str:
         """已应用术语表的只读快照（内联进指令用，draft 候选不算）。"""
-        from utils.config import pcfg
 
         try:
             path = pcfg.module.llm_glossary_path or ""
@@ -1826,8 +1872,8 @@ class GlossaryAgentPanel(QWidget):
     # ── 术语/剧情：用户编辑与落盘 ──────────────────────────────
 
     def _on_apply(self):
+        self._worker_log_task = TRANSLATION_PREP
         worker = self._ensure_worker()
-        from utils.config import pcfg
 
         path = pcfg.module.llm_glossary_path or ""
         if not path:
@@ -1909,11 +1955,11 @@ class GlossaryAgentPanel(QWidget):
     def _on_round_finished(self, reply: str):
         if (reply or "").strip():
             self._append_log(
-                self.tr("Reply: %1").replace("%1", reply.strip()), TRANSLATION_PREP
+                self.tr("Reply: %1").replace("%1", reply.strip()), self._worker_log_task
             )
 
     def _on_round_failed(self, err: str):
-        self._append_log(err, TRANSLATION_PREP)
+        self._append_log(err, self._worker_log_task)
 
     # ── worker → UI 镜像同步 ─────────────────────────────────
 

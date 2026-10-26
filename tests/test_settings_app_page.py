@@ -12,6 +12,7 @@ import os
 import os.path as osp
 import sys
 import unittest
+from unittest.mock import patch
 
 APP_ROOT = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path.insert(0, APP_ROOT)
@@ -136,7 +137,7 @@ class SettingsAppPageTest(unittest.TestCase):
         ``ConfigPanel.setupConfig`` 只在启动跑一次，不回写的话复选框会停在
         启动时的旧值；回写还得屏蔽信号，否则 toggled 会把 pcfg 又翻回 True。
         """
-        from qtpy.QtWidgets import QWidget
+        from qtpy.QtWidgets import QDialog, QMessageBox, QWidget
 
         from ui.glossary_agent_panel import GlossaryAgentPanel
 
@@ -144,12 +145,32 @@ class SettingsAppPageTest(unittest.TestCase):
         # dropped it, Qt would destroy the child panel before cleanups run.
         self._fake_window = QWidget()
         self._fake_window.configPanel = self.panel
+        self._fake_window._sync_block_data = lambda: None
         workbench = GlossaryAgentPanel(None, self._fake_window)
+        self._tool_window = QDialog(self._fake_window)
+        workbench.setParent(self._tool_window)
 
         self.panel.confirm_costly_checker.setChecked(True)
         pcfg.workbench_confirm_costly = False  # what the glossary panel writes
         workbench._sync_confirm_costly_checkbox()
 
+        self.assertFalse(self.panel.confirm_costly_checker.isChecked())
+        self.assertFalse(pcfg.workbench_confirm_costly)
+
+        # The speaker-name confirmation shares this preference with prepare.
+        # Exercise its real writeback without opening a dialog or calling AI.
+        self.panel.confirm_costly_checker.setChecked(True)
+        with (
+            patch("ui.glossary_agent_panel.QMessageBox") as message_box,
+            patch("utils.config.save_config") as save,
+        ):
+            message_box.StandardButton = QMessageBox.StandardButton
+            message_box.return_value.exec.return_value = QMessageBox.StandardButton.Ok
+            message_box.return_value.setCheckBox.side_effect = (
+                lambda checker: checker.setChecked(True)
+            )
+            self.assertTrue(workbench._costly_confirmed("Test", "Test"))
+        save.assert_called_once_with()
         self.assertFalse(self.panel.confirm_costly_checker.isChecked())
         self.assertFalse(pcfg.workbench_confirm_costly)
 

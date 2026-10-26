@@ -1741,6 +1741,7 @@ Hide them all? You can move them back later.</source>
     </context>
     <context>
         <name>FontFormatPanel</name>
+        <message><source>Colors and speakers…</source><translation>取色与角色…</translation></message>
         <message>
             <source>Annotations</source>
             <translation>注解</translation>
@@ -2301,6 +2302,8 @@ No block parameters change; the styles just leave the list.</source>
     </context>
     <context>
         <name>MainWindow</name>
+        <message><source>Review source text…</source><translation>原文待校对…</translation></message>
+        <message><source>Retranslate…</source><translation>译文待重译…</translation></message>
         <message>
             <location filename="..\ui\mainwindow.py" line="622" />
             <source>Font Style Manager</source>
@@ -4238,6 +4241,17 @@ Orientation: {o}</source>
     </context>
     <context>
         <name>TitleBar</name>
+        <message><source>Batch processing</source><translation>批量处理</translation></message>
+        <message><source>Clean suspicious text blocks…</source><translation>清理可疑文本框…</translation></message>
+        <message><source>Colors and speakers…</source><translation>取色与角色…</translation></message>
+        <message><source>Fill simple backgrounds…</source><translation>简单背景填充…</translation></message>
+        <message><source>Merge adjacent text blocks…</source><translation>合并相邻文本框…</translation></message>
+        <message><source>Pages and images</source><translation>页面与图像</translation></message>
+        <message><source>Retranslate…</source><translation>译文待重译…</translation></message>
+        <message><source>Review source text…</source><translation>原文待校对…</translation></message>
+        <message><source>Text and styles</source><translation>文字与样式</translation></message>
+        <message><source>To-do</source><translation>待办</translation></message>
+        <message><source>Translation materials…</source><translation>翻译资料…</translation></message>
         <message>
             <location filename="..\ui\mainwindowbars.py" line="309" />
             <source>Edit</source>
@@ -5793,6 +5807,10 @@ Check the log above for details.</source>
     </context>
     <context>
         <name>GlossaryAgentPanel</name>
+        <message><source>Colors and speakers</source><translation>取色与角色</translation></message>
+        <message><source>Translation materials</source><translation>翻译资料</translation></message>
+        <message><source>Generate drafts…</source><translation>生成草稿…</translation></message>
+        <message><source>Suggest speaker names…</source><translation>建议角色名…</translation></message>
         <message>
             <source>AI</source>
             <translation>AI</translation>
@@ -8863,5 +8881,33 @@ Saved pages stay in the project. Unsaved results and revision candidates will be
             <source>Running</source>
             <translation>进行中</translation>
         </message>
+    </context>
+    <context>
+        <name>PipelineWorkbench</name>
+        <message><source>Start recognition</source><translation>开始识别</translation></message>
+        <message><source>Start translation</source><translation>开始翻译</translation></message>
+        <message><source>Start repair</source><translation>开始修复</translation></message>
+        <message><source>Generate images</source><translation>生成结果图</translation></message>
+        <message><source>%1 · %2 page(s)</source><translation>%1 · %2 页</translation></message>
+        <message><source>All pages</source><translation>全部页面</translation></message>
+        <message><source>Current page</source><translation>当前页</translation></message>
+        <message><source>Detect text</source><translation>检测文本</translation></message>
+        <message><source>Manage translation materials…</source><translation>管理翻译资料…</translation></message>
+        <message><source>More options</source><translation>更多选项</translation></message>
+        <message><source>Open a project to configure a task.</source><translation>打开项目后配置翻译任务。</translation></message>
+        <message><source>Page range</source><translation>指定范围</translation></message>
+        <message><source>Pages</source><translation>处理范围</translation></message>
+        <message><source>Recognize source text</source><translation>识别原文</translation></message>
+        <message><source>Recognize text</source><translation>识别原文</translation></message>
+        <message><source>Render result images</source><translation>生成结果图</translation></message>
+        <message><source>Render result images after processing</source><translation>完成后生成结果图</translation></message>
+        <message><source>Repair images</source><translation>修复图像</translation></message>
+        <message><source>Replace existing translations</source><translation>替换已有译文</translation></message>
+        <message><source>Run without update textstyle</source><translation>不更新文字样式</translation></message>
+        <message><source>Stages</source><translation>启用阶段</translation></message>
+        <message><source>Start task</source><translation>开始处理</translation></message>
+        <message><source>Task</source><translation>本次任务</translation></message>
+        <message><source>Translate text</source><translation>翻译文字</translation></message>
+        <message><source>Translation pipeline</source><translation>翻译管线</translation></message>
     </context>
 </TS>

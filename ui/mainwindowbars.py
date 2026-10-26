@@ -413,6 +413,7 @@ class TitleBar(Widget):
     closebtn_clicked = Signal()
     display_lang_changed = Signal(str)
     help_about_triggered = Signal()
+    workbench_tool_requested = Signal(str)
 
 
     def __init__(self, parent, *args, **kwargs) -> None:
@@ -542,15 +543,39 @@ class TitleBar(Widget):
         self.launch_notext_tool = noTextToolAction.triggered
 
         toolsMenu = QMenu(self.toolsToolBtn)
-        # 文字 / 样式工具
-        toolsMenu.addAction(self._styleMgrAction)
-        toolsMenu.addAction(advAlignAction)
-        toolsMenu.addAction(normalizeBreaksAction)
+        from .workbench_tasks import (
+            FG_PALETTE,
+            MERGE,
+            MISREAD,
+            OCR_REVIEW,
+            SIMPLE_INPAINT,
+            TRANS_REVIEW,
+            TRANSLATION_PREP,
+        )
+        self.workbench_tool_actions = {}
+
+        def tool(menu, label, task):
+            action = menu.addAction(label)
+            action.setData(task)
+            action.triggered.connect(
+                lambda _checked=False, task_id=task: self.workbench_tool_requested.emit(task_id)
+            )
+            self.workbench_tool_actions[task] = action
+
+        batch = toolsMenu.addMenu(self.tr("Batch processing"))
+        tool(batch, self.tr("Clean suspicious text blocks…"), MISREAD)
+        tool(batch, self.tr("Merge adjacent text blocks…"), MERGE)
+        tool(batch, self.tr("Fill simple backgrounds…"), SIMPLE_INPAINT)
+        pending = toolsMenu.addMenu(self.tr("To-do"))
+        tool(pending, self.tr("Review source text…"), OCR_REVIEW)
+        tool(pending, self.tr("Retranslate…"), TRANS_REVIEW)
+        tool(toolsMenu, self.tr("Translation materials…"), TRANSLATION_PREP)
+        tool(toolsMenu, self.tr("Colors and speakers…"), FG_PALETTE)
         toolsMenu.addSeparator()
-        # 页面 / 图像工具
-        toolsMenu.addAction(mergeToolAction)
-        toolsMenu.addAction(smartReorderAction)
-        toolsMenu.addAction(noTextToolAction)
+        text_tools = toolsMenu.addMenu(self.tr("Text and styles"))
+        text_tools.addActions([self._styleMgrAction, advAlignAction, normalizeBreaksAction])
+        page_tools = toolsMenu.addMenu(self.tr("Pages and images"))
+        page_tools.addActions([mergeToolAction, smartReorderAction, noTextToolAction])
         toolsMenu.addSeparator()
         # 视图型开关（响应类型与上面的触发式工具不同，单独分组）
         toolsMenu.addAction(quickSymbolAction)

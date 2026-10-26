@@ -169,15 +169,17 @@
 
 ---
 
-## Part II · 工作台
+## Part II · 菜单工具
 
-### 8. 容器与七个任务入口
+### 8. 容器与菜单入口
 
-容器＝`ui/glossary_agent_panel.py::GlossaryAgentPanel`。2026-10-15 统一为固定两行七项导航（`ui/glossary_agent_panel.py::WorkbenchTaskNav`）、当前任务页与底部活动区。第一行四项原文／图像任务，第二行三项翻译侧任务；选择或计数变化不改变按钮位置。标签与计数分行，过长标签只在绘制时省略，完整文本保留于 tooltip 和无障碍名称。各页采用标题／摘要／候选或草稿／操作区，长任务说明可展开，运行时的来源、跳过原因与过时提示继续直接显示。批量执行前仍走既有告知弹窗。
+容器＝`ui/glossary_agent_panel.py::GlossaryAgentPanel`。2026-10-22 起桌面端使用 `menu_mode`，隐藏旧七项导航，由 `ui/mainwindow.py::open_workbench_tool` 在持久的非模态工具窗口中选择单个任务。左栏工作台已归还给 `ui/run_pipeline_dialog.py::PipelineWorkbench`，只配置翻译管线；固定两行导航保留给兼容调用和旧演练台。各工具的标题、候选／草稿、操作区与活动记录仍保留，批量执行前仍走既有告知弹窗。关窗口会收起审批预览、解除取色，切工具与重开窗口不销毁草稿。
 「批处理与审批是同一任务的两端，不分家」——D20 定的就是这个。
 
-**默认顺序＝用户工作流顺序**（`ui/glossary_agent_panel.py::WORKBENCH_ORDER`）：
+**工具编号**（`ui/glossary_agent_panel.py::WORKBENCH_ORDER` 保留稳定编号，不再表示必做流程）：
 ① 可疑文本框清理 → ② 合并相邻文本框 → ③ 原文待校对 → ④ 简单背景修复 → ⑤ 取色调板 → ⑥ 翻译准备（术语 ＋ 剧情）→ ⑦ 译文待重译。
+
+菜单归属：①②④ 在“工具 → 批量处理”，③⑦ 在“工具 → 待办”，⑥ 是“翻译资料”，⑤ 是“取色与角色”。字体样式管理／整本对齐／整理换行归“文字与样式”，区域合并／路径重排／无字图配对归“页面与图像”，软键盘仍是同菜单下的开关。取色入口同时放在文字颜色旁，说话人赋名放在取色工具中，仍只生成建议。
 
 **两类队列的机制不同，别互相套用**：
 
@@ -189,13 +191,13 @@
 
 ③ 的分区（`ui/workbench_tasks.py::ReviewSection`）：**人工记下的**在前（用户明确承诺的工作，可取消记录），**程序低置信度建议**在后（可安全忽略，不冒充用户承诺）。程序建议只在真报分数的 OCR 引擎下出现——缺分数不编造 0.6，也不当"低"处理。⑦ 只列人工待办，**不假装能自动检测词不达意**，也不与长度比例混成 AI 判断。
 
-**计数口径**：导航钮缀任务自己的数量（块口径的三个队列**只报数字**——可疑框／原文待校对／译文待重译，标签已说清是什么，待办只数**人工记下的**条数；只有合并＝组、修复＝页的单位才是信息，故保留），见 `ui/workbench_tasks.py::count_label`；**不把块数／组数／页数混加成"未处理"总数**，程序建议也不计入待办计数。工作台与画布同屏，故``canvas.content_modified``（现场处理完一个框、或打了「稍后校对／稍后重译」）会顺手刷**便宜计数**——纯内存能数的三个队列立刻更新，要跑引擎 `plan` 的（合并／修复）保留旧值、只在切任务与重规划时算（`ui/glossary_agent_panel.py::_CHEAP_COUNT_TASKS`）。**运行时不门禁**：跳步弹窗与 `workbench_warn_skip_order` 已删除（2026-09-26）——顺序是推荐，导航顺序本身就是提示，不做跳步拦截。
+**计数口径**：桌面端在打开工具菜单时，经 `ui/glossary_agent_panel.py::tool_count` 只统计两类人工待办；程序建议不冒充人工承诺，也不混加块／组／页。批量候选数量在具体工具打开或刷新时由只读规划计算，菜单模式不为隐藏导航扫描整本。兼容导航仍通过 `ui/workbench_tasks.py::count_label` 和 `ui/glossary_agent_panel.py::_CHEAP_COUNT_TASKS` 保留原计数口径。`canvas.content_modified` 继续把已规划列表标为可能过时；工具没有执行顺序门禁。
 
 **队列刷新＝惰性查询**：面板持一个「标脏任务集」，切到某任务时才跑它的只读 `plan`；批量写回与回滚后把所有任务重新标脏。过时提示（「列表可能过时」）只在已规划过的页上亮灯，出口是各页刷新钮（`ui/workbench_review_view.py::ReviewQueueView` 与批量视图同款口径）。
 
 **空态与原因可见**（2026-09-26）：`plan` 除 `rows/summary/options_hint` 外可返回 `detail`，由 `ui/workbench_batch_view.py::BatchTaskView`（或 `ui/workbench_review_view.py::ReviewQueueView`）显示为页面上的独立说明行（原先藏在 summary 的 tooltip 里）；各引擎的 `skipped` 原因码经 `ui/workbench_tasks.py::_format_skipped` 聚合成"跳过：N 页 · 原因"文案（原因码仍是引擎常量、工作台层映射，不改码值）。可疑框队列的 `detail` 照实说明来源＝OCR 后处理规则、列表为空的四种可能（未跑 OCR／已关闭／none_ocr／无命中）——项目里没有"OCR 已运行"标记，不做伪判定。
 
-**入口＝左栏单入口**（`ui/mainwindowbars.py::LeftBar` 的 workbenchChecker），跳转走 `ui/mainwindow.py::MainWindow` 的 `on_workbench_jump`（复用具脏页惰性重渲的 pageList 链路）；面板宽度 `WORKBENCH_WIDTH = 460`（依据见 §16）。
+**入口＝工具菜单**（`ui/mainwindowbars.py::TitleBar`），跳转走 `ui/mainwindow.py::on_workbench_jump` 并隐藏工具窗口，继续复用含脏页惰性重渲的页链路。主窗口持有工具容器的 owner 引用，重挂到窗口后批量落盘、取色与审批预览仍寻址主窗口。管线侧栏宽度为 340；工具窗口初始尺寸 680×650，审批图仍以原比例显示在画布浮层。
 
 **空态限制**：判据 `ui/glossary_agent_panel.py::has_project`（`proj.directory` 非空）；面板根是 QStackedWidget，page 0 空态提示页（objectName `WorkbenchEmptyHint`）、page 1 内容页 ⇒ 空态时天然禁用全部交互。刷新点在 `ui/mainwindow.py::MainWindow` 的 `openDir`／`openJsonProj` 成功路径末尾。
 
@@ -399,8 +401,8 @@
 | 审批截图外扩量 | `ui/workbench_tasks.py` 的预览外扩比例＝短边 **0.5** | 组到邻框间隙中位 300+ px、p10 约 80~93 px、最小 0~1 px（相邻气泡会贴住）⇒ 取短边 50%（约 40 px）、硬上限「碰到邻框即停」。外扩后截图宽 min／中位／p90／max＝64／164／256／2063 px，**超 460 px 的只有 14/380（3.7%）**且都是跨栏大组（本就默认不勾选）。 |
 | 备份版本数 | 设置项 `batch_backup_versions`，默认 1、上限 5 | 即「可连续撤销的批量操作步数」。像素版只存前图，约 43 MB/版；`inpainted/` 全量 140.6 MB（1.53 MB/页）。 |
 | 队列规模基线 | 样本 94 页 → **128 块／51 页**（每页 1.36 块） | 子类型命中合计 163（无假名汉字 92／空文本 36／纯数字 20／纯符号 15，约 35 块跨类）。**合并前后队列不变**。换样本后先跑 `queue` 复核量级，再定列表信息密度。 |
-| 工作台宽度 | `ui/mainwindow.py::MainWindow` 的 `WORKBENCH_WIDTH = 460` | 判据＝能否 100% 全幅显示审批图（见上）。改宽度只改这个常量，面板内部自适应、零布局改动。 |
-| 导航高度预算 | 固定两行、总高 102 个逻辑像素；每个按钮高 44，标签与数量分行。不再有宽度补间或按活动项重排。标准工作台宽 460；长标签使用省略号与完整 tooltip。 |
+| 管线侧栏宽度 | `ui/mainwindow.py::MainWindow` 的 `WORKBENCH_WIDTH = 340` | 只配置翻译任务，候选与草稿使用独立工具窗口。 |
+| 菜单工具窗口 | 初始 680×650，可调整尺寸；旧导航隐藏 | 容器与活动记录保留，关闭不销毁草稿；审批预览仍在画布中以 100% 打开。 |
 | 置信度分档阈值 | **未落地**（无设置入口） | 见 §17。方向＝存分数做分档，不调高硬丢弃阈值。 |
 | 审批截图比例 | **硬约束、不是参数** | 必须 100% 原始比例：**打开与换图都回到 100%**，不自动缩到适应窗口；缩放／平移只能由用户显式发起（D44 的浮层满足这条——滚轮缩放是「看得更清」，不是「缩着看」）。 |
 | 单块 Alt 缩放 | `ui/texteditshapecontrol.py::TextBlkShapeControl` | 手动版**不套**「碰到邻框即停」（那是批量外扩的保护）。修改注意：reshape 走几何控制器，不能直接改 `xyxy`。批量框扩张已退役（D47），这里不再与它配套。 |
