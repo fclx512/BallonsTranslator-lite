@@ -173,10 +173,33 @@ class TestHybridDetector(unittest.TestCase):
         self.assertEqual(len(blk_list), 1)
         self.assertTrue(np.any(mask[10:31, 10:41]))
 
-    def test_ctd_params_reset_cached_model(self):
-        self.detector.ctd_model = object()
-        self.detector.updateParam("ctd detect size", 1024)
+    def test_ctd_params_update_in_place_without_reload(self):
+        self.detector.ctd_model = FakeCtdModel(None, [])
+        self.detector.updateParam("ctd detect size", "1152")
+        self.assertIsNotNone(self.detector.ctd_model)
+        self.assertEqual(self.detector.ctd_model.detect_size, 1152)
+        self.detector.updateParam("ctd det rearrange max batches", 8)
+        self.assertEqual(self.detector.ctd_model.det_rearrange_max_batches, 8)
+
+    def test_invalid_ctd_param_forces_reload(self):
+        self.detector.ctd_model = FakeCtdModel(None, [])
+        self.detector.updateParam("ctd detect size", "")
         self.assertIsNone(self.detector.ctd_model)
+
+    def test_no_valid_labels_returns_mask_first(self):
+        """无有效标签时父类必须回 (mask, blocks)。
+
+        旧实现返回 ``[], mask``，子类按 ``(mask, blocks)`` 解包后会在
+        ``if not blk_list`` 上对 ndarray 做布尔判断而抛 ValueError。
+        """
+        img = np.zeros((30, 40, 3), np.uint8)
+        self.detector.model = FakeYoloModel(np.array([[10, 10, 20, 20]], np.float32))
+        with mock.patch.object(self.detector, "get_valid_labels", return_value=[]):
+            mask, blk_list = self.detector._detect(img, None)
+
+        self.assertEqual(blk_list, [])
+        self.assertEqual(mask.shape, (30, 40))
+        self.assertEqual(mask.dtype, np.uint8)
 
     def test_provides_glyph_mask(self):
         self.assertTrue(YSGYoloCTDDetector.provides_glyph_mask)

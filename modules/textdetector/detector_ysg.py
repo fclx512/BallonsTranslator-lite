@@ -369,7 +369,9 @@ class YSGYoloDetector(TextDetectorBase):
 
         mask = np.zeros_like(img[..., 0])
         if not valid_ids:
-            return [], mask
+            # 返回顺序必须是 (mask, blk_list)：混合检测器子类在父类结果上解包，
+            # 顺序反了会让它把 ndarray 当 block 列表做布尔判断而抛 ValueError。
+            return mask, []
 
         im_h, im_w = img.shape[:2]
         detected_items = []
@@ -377,13 +379,16 @@ class YSGYoloDetector(TextDetectorBase):
         # Process standard boxes
         dets = result.boxes
         if dets is not None and len(dets.cls) > 0:
-            for i in range(len(dets.cls)):
-                cls_idx = int(dets.cls[i])
+            # 整批一次搬到 CPU：逐框 .cpu() 每项都要等一次 GPU 同步
+            # （上游 1.5.20 的 ysg_ctd 同款优化）。
+            cls_all = dets.cls.cpu().numpy()
+            xyxy_all = dets.xyxy.cpu().numpy().astype(int)
+            for i in range(len(cls_all)):
+                cls_idx = int(cls_all[i])
                 if cls_idx in valid_ids:
                     label_name = result.names[cls_idx]
 
-                    xyxy = dets.xyxy[i].cpu().numpy()
-                    x1, y1, x2, y2 = xyxy.astype(int)
+                    x1, y1, x2, y2 = xyxy_all[i]
                     cv2.rectangle(mask, (x1, y1), (x2, y2), 255, -1)
                     pts = (
                         xywh2xyxypoly(np.array([[x1, y1, x2 - x1, y2 - y1]]))
@@ -395,11 +400,13 @@ class YSGYoloDetector(TextDetectorBase):
         # Process oriented boxes
         dets = result.obb
         if dets is not None and len(dets.cls) > 0:
-            for i in range(len(dets.cls)):
-                cls_idx = int(dets.cls[i])
+            cls_all = dets.cls.cpu().numpy()
+            polys_all = dets.xyxyxyxy.cpu().numpy().astype(int)
+            for i in range(len(cls_all)):
+                cls_idx = int(cls_all[i])
                 if cls_idx in valid_ids:
                     label_name = result.names[cls_idx]
-                    pts = dets.xyxyxyxy[i].cpu().numpy().astype(int)
+                    pts = polys_all[i]
                     cv2.fillPoly(mask, [pts], 255)
                     detected_items.append({"pts": pts.tolist(), "label": label_name})
 
@@ -585,4 +592,17 @@ class YSGYoloCTDDetector(YSGYoloDetector):
                 if hasattr(self, key):
                     setattr(self, key, None)
         elif param_key in {"ctd detect size", "ctd det rearrange max batches"}:
-            self.ctd_model = None
+            # 两者都是 CTDModel 的构造参数，但可直接改运行中实例的属性——
+            # 为一次尺寸变化重载整套权重没有意义（上游 1.5.20 同款做法）。
+            if self.ctd_model is None:
+                return
+            try:
+                value = int(param_content)
+            except (TypeError, ValueError):
+                # 非法值留给下次加载重新校验，不要带着坏属性继续推理。
+                self.ctd_model = None
+                return
+            if param_key == "ctd detect size":
+                self.ctd_model.detect_size = value
+            else:
+                self.ctd_model.det_rearrange_max_batches = value
