@@ -916,10 +916,10 @@ class TextTransformRenderingTest(TextTransformTestBase):
                     item.geometry_controller.release_render_resources()
 
     def test_vertical_width_resize_translates_existing_layout(self):
-        # Local setMaxSize always re-layouts (no upstream width fast-path), so
-        # the ported lock is: a width-only resize must be a no-op for
-        # established lines — positions and pixels survive a second full
-        # reLayout, and a height resize still re-runs layoutBlock.
+        # Width-only resize translates settled columns; a full layout must
+        # reproduce the exact positions and pixels, including when decimal
+        # column spacing lands just below a Qt 26.6 coordinate boundary.
+        # Height changes still have to re-run layoutBlock.
         block = TextBlock([0, 0, 300, 600])
         block._bounding_rect = [0, 0, 300, 600]
         block.vertical = True

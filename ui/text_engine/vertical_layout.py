@@ -101,6 +101,16 @@ _LINE_INK_BOUNDS_CACHE: KeyedLruCache[tuple, QRectF] = KeyedLruCache(
     LINE_INK_BOUNDS_CACHE_MAX_ENTRIES
 )
 
+
+def _stable_column_x(value: float) -> float:
+    """Remove arithmetic noise at QTextLine's 26.6 coordinate boundaries."""
+    units = value * 64.0
+    nearest = round(units)
+    # A value such as 197.01562499999997 must reach Qt as 197.015625;
+    # otherwise Qt truncates a full layout one unit left of a resize.
+    return nearest / 64.0 if abs(units - nearest) < 1e-9 else value
+
+
 PUNSET_ROTATE_ALIGNL = {'」', '』', '”', '’', '〟', '″'}
 PUNSET_ROTATE_ALIGNR = {'「', '『', '“', '‘', '‶'}
 
@@ -1925,8 +1935,8 @@ class VerticalTextDocumentLayout(SceneTextLayout):
 
         layout_first_block = block == doc.firstBlock()
         if layout_first_block:
-            x_offset = self.max_width - doc_margin
-            self.x_offset_lst = [self.max_width - doc_margin]
+            x_offset = _stable_column_x(self.max_width - doc_margin)
+            self.x_offset_lst = [x_offset]
             self.y_offset_lst = []
         else:
             x_offset = self.x_offset_lst[-1]
@@ -2321,10 +2331,12 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                     })
                 line_char_ids = []
 
-                x_offset -= self.calculate_line_spacing(
-                    idea_line_width,
-                    line_spacing,
-                    block_line_spacing_type,
+                x_offset = _stable_column_x(
+                    x_offset - self.calculate_line_spacing(
+                        idea_line_width,
+                        line_spacing,
+                        block_line_spacing_type,
+                    )
                 )
 
                 for line, ypos in zip(line_not_set[:-1], ypos_list[:-1]):
@@ -2340,10 +2352,12 @@ class VerticalTextDocumentLayout(SceneTextLayout):
                             + end_metrics[2]
                         )
                         if not len(line_not_set) == 1:
-                            x_offset -= self.calculate_line_spacing(
-                                end_width,
-                                block_line_spacing,
-                                block_line_spacing_type,
+                            x_offset = _stable_column_x(
+                                x_offset - self.calculate_line_spacing(
+                                    end_width,
+                                    block_line_spacing,
+                                    block_line_spacing_type,
+                                )
                             )
                         end_line.setPosition(QPointF(x_offset, end_ypos))
                         char_records.setdefault(end_char_id, {}).update({

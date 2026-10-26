@@ -12,13 +12,44 @@
 >
 > 仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护）；被裁掉的日期节仍完整留在提交历史里，用 `git log --grep <关键词>`／`git log --follow -p -- docs/daily_log.md`／`git show <rev>:docs/daily_log.md` 回查。
 
-## 2026-10-18
+## 2026-10-26
 
-### ysg_ctd 混合检测器 + 「跳过简单情况」只填修复掩膜（`detector_ysg.py::YSGYoloCTDDetector` / `InpainterBase.inpaint` / `check_need_inpaint`）
+### 字形掩膜字号估计（`font_size_estimate` / `provides_glyph_mask` / `_glyph_font_metrics`）
 
-**摘要：** 从上游 1.5.19 更新包移植 PR #1365／#1364。① 新增 `ysg_ctd`：ysgyolo 出框、ComicTextDetector 在框内出精细字形掩膜，两者求交，框外拟声词像素仍被排除；恢复 `modules/textdetector/ctd/` 实现包与 `comictextdetector.pt(.onnx)` 权重，但不恢复 `ctd` 检测器注册。② 新增派生模块参数继承 `TEXTDETECTOR_PARAM_INHERITANCE`，`ysg_ctd` 首次建配置时从已保存的 `ysgyolo` 播种，避免回退到 OBB 权重；掩膜扩张尺寸例外（`TEXTDETECTOR_PARAM_INHERITANCE_EXCLUDE`）——字形掩膜需要盖住文字描边，默认 8px，矩形框仍是 2px。③ 「跳过简单情况」纯色填充改为只覆盖修复掩膜内像素（块路径用块局部掩膜），默认值改 `False`。④ 扩张后裁回 YOLO 框，避免污染框外背景。
-**涉及文件：** `modules/textdetector/detector_ysg.py`、`modules/textdetector/ctd/`、`modules/base.py`、`modules/__init__.py`、`modules/textdetector/__init__.py`、`ui/module_manager.py`、`modules/inpaint/base.py`、`ui/drawingpanel.py`、`utils/config.py`、`utils/lazy_registry.py`、`scripts/audit_registry.json`、`tests/test_ysg_ctd_detector.py`、`tests/test_textdetector_param_inheritance.py`、`tests/test_inpaint_mask_scope.py`
-**验证：** 真实工程「织姬嵌字【完成】」20 页／127 块：53 个简单块旧实现会填 2,042,425 px、新实现 1,510,757 px，越界涂平 531,668 px；修复后掩膜外 0 像素被改。`ysg_ctd` 三页实测块几何与 ysgyolo 完全一致、框外像素 0。复杂块用 `lama_large_512px` 实测：扩张 8px 时框内保留背景是矩形掩膜的约 3.8 倍；CTD 只认深色笔画，带粗描边的字需人工把扩张调到 12～20。
+**摘要：** ysg_ctd 检测阶段在掩膜合并**之前**对原始 CTD 字形掩膜把每行墨迹指标挂到块上（内存属性、不进工程 JSON），OCR 后整页管线写回 `font_size`／`_detected_font_size`；估计器纯 numpy/cv2（`em_short`×1.103 与 `em_len` 取小 + 逐页 KDE 规范字号吸附）。关键坑：合并后的页级掩膜会整行填充未精修行，直接量会跳过大量块，指标只认原始 fine_mask。仅 `provides_glyph_mask` 检测器生效；单框翻译、区域再检测不挂（有意）。
+**涉及文件：** `utils/font_size_estimate.py`、`modules/textdetector/detector_ysg.py`、`utils/textblock.py`、`ui/module_manager.py`、`ui/pipeline_runner.py`、`tests/test_font_size_estimate.py`、`docs/技术实现/字形掩膜字号估计_设计与实现.md`
+**验证：** 织姬工程 24 页：`em` 与人工成品字号之比中位 0.979；单测 22 项。
+
+---
+
+### 运行时收成「源码+完整包」唯一形态（`runtime_compatibility.json` / `bundled_runtime` / `install_cuda_bundle` / `check_bundle`）
+
+**摘要：** Windows 只支持 `ballontrans_pylibs_win` 完整包：`launch.bat` 只认包内解释器；`launch.py` 重定向进包并按根目录 `runtime_compatibility.json`（cpu/cu126/cu130/cu132 四档契约，入库）校验；`install_cuda.bat` 425 行砍成薄包装，逻辑移入 `scripts/install_cuda_bundle.py`——默认只读实测 torch/ORT，`--install` 才成对替换并支持回滚；依赖安装收口 `utils/package_installer.py`，更新链路统一预检；启动不再自动装依赖，联网修复须显式 `--repair-deps`。收尾小修：`launch.py` 解释器重定向加 `__name__` 守卫（`import launch` 不再 execve 劫持测试进程）、删除无引用的 `tests/cuda_sandbox.py`（audit 登记）、`out/` 探针产物整体 gitignore。
+**涉及文件：** `launch.py`、`launch.bat`、`install_cuda.bat`、`utils/bundled_runtime.py`、`utils/runtime_compatibility.py`、`runtime_compatibility.json`、`scripts/install_cuda_bundle.py`、`scripts/check_bundle.py`、`utils/package_installer.py`、`utils/updater.py`、`docs/技术实现/CUDA环境与索引_说明.md`、`docs/基础速查/依赖库说明.md`
+**验证：** cu132 本机全链路验收（安装/启动/包清单/全量 pytest 1802 通过/verify --full 全绿），产物在 `out/bundle-cu132-accept-20261023`（本机）。
+**遗留：** CPU 完整包、干净系统、其他 GPU 未实测；`pip check` 保留 7 条声明例外。
+
+---
+
+### pytest 配置沙箱（`install_config_sandbox` / `tests/conftest.py` / `_check_config_unchanged`）
+
+**摘要：** 全量测试不再写真实 `config/`：`tests/conftest.py` 收集前装 `scripts/test_config_sandbox.py::install_config_sandbox`（默认路径改临时目录 + `sys.addaudithook` 拒绝真实配置的写/改名/删除），`scripts/verify.py` 增加配置快照校验，`tests/test_global_styles.py` 改走 `tmp_path`。起因是 10-23 验收首次全量 verify 时 `test_global_styles` 写真实 `global_styles.json` 报 PermissionError。
+**涉及文件：** `tests/conftest.py`、`scripts/test_config_sandbox.py`、`tests/test_config_sandbox.py`、`scripts/verify.py`、`tests/test_global_styles.py`
+
+---
+
+### 工作台入口迁移（`PipelineWorkbench` / `menu_mode` / `workbench_tool_requested`）
+
+**摘要：** 左栏从术语面板换成管线常驻侧栏 `PipelineWorkbench`（继承 `RunPipelineDialog` 复用参数表单，340px 嵌入；原运行按钮只开侧栏，启动走 `start_pipeline_workbench`）；术语/批量工作台挪进非模态工具窗口（`GlossaryAgentPanel(menu_mode=True)`），Tools 菜单重组出批量处理／待办／翻译资料／取色与角色四组入口，右栏格式区加取色按钮。引擎与语言在底部栏、设置页、侧栏间双向同步；运行期统一禁用。顺手清掉 `_run_dialog` 死槽位并整理五个文件的 import。
+**涉及文件：** `ui/run_pipeline_dialog.py`、`ui/mainwindow.py`、`ui/mainwindowbars.py`、`ui/glossary_agent_panel.py`、`ui/pipeline_tasks.py`、`config/stylesheet.css`、`tests/test_run_pipeline_dialog.py`
+**验证：** `tests/test_run_pipeline_dialog.py` 5 个新用例（完成度轨/范围切换/嵌入式/入口/引擎行几何）。
+
+---
+
+### 竖排列坐标 1/64 网格稳定化（`_stable_column_x`）
+
+**摘要：** 宽度变化重排时，落在 QTextLine 26.6 定点边界附近的小数列距会向不同方向舍入，整篇列位置偏移 1 单位；首列 x、列间距累减与末列位置统一经 `_stable_column_x` 收到 1/64 网格。与 10-01 的「字体变换×描边双影」无关（那案仍未修）。
+**涉及文件：** `ui/text_engine/vertical_layout.py`、`tests/test_text_transform_engine.py`
 
 ---
 
