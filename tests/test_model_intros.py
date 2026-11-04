@@ -27,6 +27,7 @@ class ModelIntroTextTest(unittest.TestCase):
             "textdetector:none",
             "ocr:paddleocr_v6_onnx",
             "ocr:paddleocr_vl_manga",
+            "ocr:paddleocr_vl_1_6",
             "ocr:llm_ocr",
             "ocr:none_ocr",
             "inpainter:patchmatch",
@@ -76,6 +77,32 @@ class ModelIntroPanelTest(unittest.TestCase):
         self.assertEqual(
             self.panel.intro_label.text(), intro_for("textdetector", "ysg_ctd")
         )
+
+    def test_vl16_selection_mirror_and_output_length_control(self):
+        import modules
+        from ui.module_parse_widgets import OCRConfigPanel, ParamComboBox
+
+        modules.init_module_registries()
+        keys = ["paddleocr_vl_manga", "paddleocr_vl_1_6"]
+        panel = OCRConfigPanel("OCR", scrollWidget=None)
+        panel.addModulesParamWidgets({key: modules.OCR.get_spec(key).params_copy() for key in keys})
+        panel.setModule(keys[0])
+        mirror = panel.create_mirror_selector()
+        mirror.sync_items()
+        selected = []
+        panel.module_changed.connect(selected.append)
+        mirror.setCurrentText(keys[1])
+        mirror.activated.emit(mirror.currentIndex())
+        self.assertEqual(panel.module_combobox.currentText(), keys[1])
+        self.assertEqual(selected, [keys[1]])
+        self.assertEqual(panel.intro_label.text(), intro_for("ocr", keys[1]))
+        controls = panel.visibleWidget.findChildren(ParamComboBox)
+        limit = next(control for control in controls if control.param_key == "max_new_tokens")
+        edited = []
+        panel.paramwidget_edited.connect(lambda *args: edited.append(args))
+        limit.setCurrentText("512")
+        self.assertTrue(edited)
+        panel.deleteLater()
 
 
 if __name__ == "__main__":

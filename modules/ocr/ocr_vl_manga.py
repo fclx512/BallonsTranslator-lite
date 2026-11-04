@@ -51,9 +51,8 @@ from modules.base import BF16_SUPPORTED
 from modules.ocr.base import DEVICE_SELECTOR, OCRBase, TextBlock, register_OCR
 
 # ── Paths ────────────────────────────────────────────────────────────────────
-# 运行期用这个常量；download_file_list 里必须逐条写全字面量——惰性 AST 扫描
-# （utils/lazy_registry.py）不会求值 osp.join / f-string（同 ocr_onnx 的注释）。
-_MODEL_DIR = osp.join("data", "models", "paddleocr_vl_manga")
+# 运行期目录来自 model_package；download_file_list 必须逐条写全字面量，
+# 惰性 AST 扫描不会求值 osp.join / f-string（同 ocr_onnx 的注释）。
 
 # 必需文件（22 个仓库文件里排除 .gitattributes、README.md 与 5 张 examples/*.png）。
 # 其中 4 个 .py 是远端代码，trust_remote_code=True 时会被执行——来源就是这里的
@@ -187,7 +186,7 @@ class PaddleOCRVLManga(OCRBase):
                 "(pip install \"transformers>=4.57.1,<5\")."
             ) from e
 
-        model_dir = osp.abspath(_MODEL_DIR)
+        model_dir = osp.abspath(self.model_package["dir"])
         if not osp.isdir(model_dir):
             # 正常路径下 BaseModule._ensure_model_files 已经拦过一道
             raise FileNotFoundError(f"Model directory not found: {model_dir}")
@@ -201,10 +200,12 @@ class PaddleOCRVLManga(OCRBase):
                 trust_remote_code=True,
                 dtype=dtype,
                 attn_implementation="sdpa",
+                local_files_only=True,
             )
             .to(device)
             .eval()
         )
+        self._prepare_loaded_model()
         # add_prefix_space=None 是**必需**的，不是可有可无的调优：
         # 仓库 tokenizer_config.json 里写着 ``add_prefix_space: false``，而
         # transformers 的 LlamaTokenizerFast 一见到这个字段非 None，就会覆写
@@ -221,6 +222,7 @@ class PaddleOCRVLManga(OCRBase):
             trust_remote_code=True,
             use_fast=True,
             add_prefix_space=None,
+            local_files_only=True,
         )
         # 批量生成必须左 padding（右 padding + 贪心解码会跨样本串味）
         tokenizer = getattr(self.processor, "tokenizer", None)
@@ -228,8 +230,11 @@ class PaddleOCRVLManga(OCRBase):
             tokenizer.padding_side = "left"
         self._device = device
         self.logger.info(
-            f"PaddleOCR-VL-For-Manga loaded on {device} ({dtype})."
+            f"{self.model_package['name']} loaded on {device} ({dtype})."
         )
+
+    def _prepare_loaded_model(self):
+        """Hook for model-specific compatibility before processor loading."""
 
     def unload_model(self, empty_cache=False):
         self.model = None
@@ -346,7 +351,7 @@ class PaddleOCRVLManga(OCRBase):
             except Exception as e:
                 # 一块失败不该让整页 OCR 崩掉——记日志、跳过这一批
                 self.logger.error(
-                    f"PaddleOCR-VL inference failed for blocks {chunk_idx}: {e}"
+                    f"{self.model_package['name']} inference failed for blocks {chunk_idx}: {e}"
                 )
                 continue
             for blk_idx, lines in zip(chunk_idx, texts):

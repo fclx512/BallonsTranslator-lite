@@ -417,8 +417,10 @@ class BaseModule:
         # Ensure model files are downloaded before loading
         self._ensure_model_files()
         aquire_model_loading_lock()
-        self._load_model()
-        release_model_loading_lock()
+        try:
+            self._load_model()
+        finally:
+            release_model_loading_lock()
         return
 
     def _ensure_model_files(self):

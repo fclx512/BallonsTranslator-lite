@@ -3775,6 +3775,22 @@ Configure modules in Settings, then click Refresh to scan for model files.</sour
             <source>Mask dilation in pixels. Glyph masks only cover the dark ink; outlined lettering needs a larger value (typically 8-20)</source>
             <translation>掩膜向外扩张的像素数。字形掩膜只覆盖深色笔画，带描边的文字需要调大（通常 8～20）</translation>
         </message>
+        <message>
+            <source>Device</source>
+            <translation>运行设备</translation>
+        </message>
+        <message>
+            <source>Maximum output length</source>
+            <translation>最大输出长度</translation>
+        </message>
+        <message>
+            <source>Maximum output length per text block. Keep 256 for dialogue; try 512 or 1024 if dense text is cut off. Higher limits can take longer.</source>
+            <translation>每个文字框的最大输出长度。对话通常保持 256；密集文本被截断时可选 512 或 1024。上限越高，识别可能越慢。</translation>
+        </message>
+        <message>
+            <source>PaddleOCR-VL-1.6 — multilingual block recognition using local models; GPU recommended.</source>
+            <translation>PaddleOCR-VL-1.6：使用本地模型逐框识别多语种文字，建议使用 GPU。</translation>
+        </message>
     </context>
     <context>
         <name>RectPanel</name>
@@ -5012,10 +5028,10 @@ CPU 可跑、速度快，适合常规黑白漫画对白。</translation>
         </message>
         <message>
             <location filename="..\ui\model_intros.py" />
-            <source>Vision-language recognition for Japanese manga; autoregressive per block with quality first.
-GPU-only, the slowest option with high VRAM use.</source>
-            <translation>面向日文漫画的视觉语言模型识别，逐块自回归，质量优先。
-仅支持 GPU，速度最慢、显存占用高。</translation>
+            <source>Japanese manga specialist, recognizing one text block at a time.
+GPU recommended; about 1.9 GB of model files. Compare it with PaddleOCR-VL-1.6 on the same pages; neither is always more accurate.</source>
+            <translation>日文漫画专用模型，逐个文字框识别。
+建议使用 GPU，模型文件约 1.9 GB。可与 PaddleOCR-VL-1.6 在相同页面上对照，两者各有擅长。</translation>
         </message>
         <message>
             <location filename="..\ui\model_intros.py" />
@@ -5051,6 +5067,16 @@ GPU-only, the slowest option with high VRAM use.</source>
             <location filename="..\ui\model_intros.py" />
             <source>Single-turn translation straight through the LLM API: fast and cheap, but without global context or the review workflow; prefer the translation agent for new projects.</source>
             <translation>直接调用 LLM API 的单轮翻译：速度快、费用低，但没有全局上下文与审阅流程；新工程建议用翻译 agent。</translation>
+        </message>
+        <message>
+            <source>PaddleOCR-VL-1.6 multilingual recognition, one detected text block at a time.
+GPU recommended; about 1.9 GB of model files. Use a matching complete package for offline recognition.
+To compare results, open Run and select Recognize source text, disable Detect text and enable Recognize text. Switch OCR engines between runs. Save a project copy first because OCR replaces source text.
+Model files: Settings &gt; Models &gt; Model files. Keep the output limit at 256 for dialogue; raise it if dense text is cut off. Generative OCR does not provide reliable confidence scores.</source>
+            <translation>PaddleOCR-VL-1.6 多语种识别，逐个识别已检测的文字框。
+建议使用 GPU，模型文件约 1.9 GB；使用匹配的完整包即可离线识别。
+评测时打开“运行”选“识别原文”，关闭“检测文本”、开启“识别原文”，再切换 OCR 引擎对照。OCR 会覆盖原文，请先复制项目。
+模型文件位于“设置 → 模型 → 模型文件”。对话的最大输出长度保持 256；密集文字截断时再调高。生成式 OCR 不提供可靠的置信度。</translation>
         </message>
     </context>
     <context>

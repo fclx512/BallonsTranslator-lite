@@ -60,7 +60,7 @@ def inspect_imports(profile):
     return {"errors": errors, "imported_versions": loaded}
 
 
-def collect_models(contract, include_vl):
+def collect_models(contract, include_vl, include_vl16=False):
     from utils.core_requirements import check_declared_core_requirements
     from utils.lazy_registry import _scan_file, init_lazy_module_registries
     from utils.model_files import declared_save_files
@@ -72,6 +72,8 @@ def collect_models(contract, include_vl):
     selected = list(contract["required_models"])
     if include_vl:
         selected.append("ocr:paddleocr_vl_manga")
+    if include_vl16:
+        selected.append("ocr:paddleocr_vl_1_6")
     errors, files = [], {}
     for entry in selected:
         kind, key = entry.split(":", 1)
@@ -100,14 +102,14 @@ def collect_models(contract, include_vl):
     return errors, files
 
 
-def inspect_bundle(profile, include_vl=False, *, verify_manifest=True):
+def inspect_bundle(profile, include_vl=False, include_vl16=False, *, verify_manifest=True):
     from utils.core_requirements import check_declared_core_requirements
     from utils.runtime_compatibility import source_update_preflight
     contract = read_contract((ROOT / CONTRACT).read_text(encoding="utf-8"))
     errors = []
     if profile not in contract["profiles"]:
         errors.append(f"Unsupported profile: {profile}")
-    if profile == "cpu" and include_vl:
+    if profile == "cpu" and (include_vl or include_vl16):
         errors.append("PaddleOCR-VL requires a GPU profile")
     if platform.python_version_tuple()[:2] != tuple(contract["python_series"].split(".")) or platform.architecture()[0] != "64bit":
         errors.append("Python ABI does not match the source contract")
@@ -137,11 +139,11 @@ def inspect_bundle(profile, include_vl=False, *, verify_manifest=True):
         errors.extend(result["errors"])
     except (ValueError, IndexError, KeyError):
         errors.append(f"Import probe failed: {probe.stderr[-1000:]}")
-    model_errors, files = collect_models(contract, include_vl)
+    model_errors, files = collect_models(contract, include_vl, include_vl16)
     errors.extend(model_errors)
     manifest = {"schema": 1, "family": contract["family"], "profile": profile,
                 "python": platform.python_version(), "distributions": inventory,
-                "include_vl": include_vl, "model_files": files,
+                "include_vl": include_vl, "include_vl16": include_vl16, "model_files": files,
                 "requirements_sha256": digest(ROOT / "requirements.txt")}
     manifest_path = ROOT / MANIFEST
     if verify_manifest and manifest_path.exists():
@@ -149,6 +151,8 @@ def inspect_bundle(profile, include_vl=False, *, verify_manifest=True):
         for field in ("profile", "python", "distributions", "include_vl", "model_files"):
             if previous.get(field) != manifest[field]:
                 errors.append(f"Installed bundle differs from its release inventory: {field}")
+        if previous.get("include_vl16", False) != include_vl16:
+            errors.append("Installed bundle differs from its release inventory: include_vl16")
     return errors, manifest
 
 
@@ -156,6 +160,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", required=True, choices=("cpu", "cu126", "cu130", "cu132"))
     parser.add_argument("--include-vl", action="store_true")
+    parser.add_argument("--include-vl16", action="store_true",
+                        help="Include PaddleOCR-VL-1.6 files and its pinned dependencies")
     parser.add_argument("--write-manifest", action="store_true")
     parser.add_argument("--bundle-id")
     parser.add_argument("--probe-imports", action="store_true", help=argparse.SUPPRESS)
@@ -169,7 +175,8 @@ def main():
     if args.write_manifest and not args.bundle_id:
         parser.error("--write-manifest requires --bundle-id")
     try:
-        errors, manifest = inspect_bundle(args.profile, args.include_vl, verify_manifest=not args.write_manifest)
+        errors, manifest = inspect_bundle(args.profile, args.include_vl, args.include_vl16,
+                                          verify_manifest=not args.write_manifest)
     except Exception as exc:
         print(f"FAIL: {exc}")
         return 1

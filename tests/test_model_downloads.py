@@ -370,8 +370,9 @@ class TestEnsureModuleDeps(unittest.TestCase):
     def test_ocr_choice_is_saved_before_preparation_and_survives_restart(self):
         import json
         import tempfile
-        from types import SimpleNamespace
         from pathlib import Path
+        from types import SimpleNamespace
+
         from ui import module_manager
         from utils import config
 
@@ -440,6 +441,18 @@ class TestModuleMetadataQueries(unittest.TestCase):
         for name, save_path in zip(entry["files"], entry["save_files"]):
             self.assertEqual(osp.basename(save_path), name)
             self.assertTrue(save_path.startswith("data/models/paddleocr_vl_manga/"))
+
+    def test_vl16_is_available_to_download_ui_before_import(self):
+        info = modules.GET_MODULE_REQUIREMENTS("ocr", "paddleocr_vl_1_6")
+        self.assertTrue(info["requires_gpu"])
+        entry = info["download_file_list"][0]
+        self.assertIn("image_processing_paddleocr_vl.py", entry["files"])
+        self.assertIn("tokenizer.json", entry["files"])
+        self.assertEqual(len(entry["files"]), len(entry["save_files"]))
+        self.assertTrue(all(path.startswith("data/models/paddleocr_vl_1_6/") for path in entry["save_files"]))
+        packages = modules.GET_MODEL_PACKAGES()
+        package = next(p for p in packages if p["key"] == "paddleocr_vl_1_6")
+        self.assertEqual(package["display_name"], "PaddleOCR-VL-1.6")
 
 
 class TestLazyScanOfNewModule(unittest.TestCase):

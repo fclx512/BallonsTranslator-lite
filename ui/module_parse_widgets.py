@@ -159,6 +159,10 @@ def get_param_display_name(param_key: str, param_dict: dict = None):
     if param_dict is not None and isinstance(param_dict, dict):
         if "display_name" in param_dict:
             return param_dict["display_name"]
+    if param_key == "device":
+        return QCoreApplication.translate("ParamWidget", "Device")
+    if param_key == "max_new_tokens":
+        return QCoreApplication.translate("ParamWidget", "Maximum output length")
     return param_key
 
 

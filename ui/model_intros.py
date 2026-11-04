@@ -36,7 +36,11 @@ INTRO_TEXTS = {
     ),
     "ocr:paddleocr_vl_manga": QCoreApplication.translate(
         "ModelIntros",
-        "Vision-language recognition for Japanese manga; autoregressive per block with quality first.\nGPU-only, the slowest option with high VRAM use.",
+        "Japanese manga specialist, recognizing one text block at a time.\nGPU recommended; about 1.9 GB of model files. Compare it with PaddleOCR-VL-1.6 on the same pages; neither is always more accurate.",
+    ),
+    "ocr:paddleocr_vl_1_6": QCoreApplication.translate(
+        "ModelIntros",
+        "PaddleOCR-VL-1.6 multilingual recognition, one detected text block at a time.\nGPU recommended; about 1.9 GB of model files. Use a matching complete package for offline recognition.\nTo compare results, open Run and select Recognize source text, disable Detect text and enable Recognize text. Switch OCR engines between runs. Save a project copy first because OCR replaces source text.\nModel files: Settings > Models > Model files. Keep the output limit at 256 for dialogue; raise it if dense text is cut off. Generative OCR does not provide reliable confidence scores.",
     ),
     "ocr:llm_ocr": QCoreApplication.translate(
         "ModelIntros",
