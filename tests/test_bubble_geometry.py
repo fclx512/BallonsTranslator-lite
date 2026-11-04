@@ -168,6 +168,51 @@ class TailTest(unittest.TestCase):
             tail_path(body_path(self.rect), self.rect, BubbleStyle()).isEmpty()
         )
 
+    def test_tail_never_vanishes_at_rounded_corners(self):
+        """圆角矩形转到四个角时尾巴不许消失（2026-11-04 用户报告）。
+
+        旧实现把嘴沿线钳到直段端点，角度贴近对角线时可用半宽塌到 <1.5px
+        就整条不画：corner=20 时 40°~50°、corner=60 时 30°~60° 全灭。改成
+        沿轮廓取弦后，各方向都能画出等宽的嘴。
+        """
+        for w, h in ((200, 200), (200, 60), (400, 80)):
+            rect = QRectF(0, 0, w, h)
+            for corner in (0.0, 20.0, 60.0):
+                if corner * 2 > min(w, h):
+                    continue  # 圆角超过短边时 body_path 自己会钳，这里不比
+                for angle in range(0, 360, 5):
+                    style = BubbleStyle(
+                        shape=SHAPE_RECT,
+                        corner=corner,
+                        tail=BubbleTail(angle=float(angle)),
+                    )
+                    body = body_path(rect, style.shape, style.corner)
+                    self.assertFalse(
+                        tail_path(body, rect, style).isEmpty(),
+                        f"{w}x{h} corner={corner} angle={angle} 尾巴消失了",
+                    )
+
+    def test_tail_width_stays_consistent_across_angles(self):
+        """各方向嘴宽一致，不能被压扁成细刺。"""
+        rect = QRectF(0, 0, 200, 200)
+        base = 0.32 * 200.0  # 名义根部全宽 = width × min(w, h) = 64px
+        for corner in (0.0, 20.0, 60.0):
+            for angle in range(0, 360, 10):
+                style = BubbleStyle(
+                    shape=SHAPE_RECT,
+                    corner=corner,
+                    tail=BubbleTail(angle=float(angle), width=0.32, length=0.35),
+                )
+                body = body_path(rect, style.shape, style.corner)
+                bbox = tail_path(body, rect, style).boundingRect()
+                # 三角尾巴 bbox 的短边 ≈ 根部宽（斜边投影带来的偏差有限）
+                got = min(bbox.width(), bbox.height())
+                self.assertGreater(
+                    got,
+                    base * 0.8,
+                    f"corner={corner} angle={angle} 嘴被压窄到 {got:.1f}px",
+                )
+
 
 class StylePayloadTest(unittest.TestCase):
     def test_default_style_writes_nothing(self):

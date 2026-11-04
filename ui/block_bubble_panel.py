@@ -1,14 +1,21 @@
-"""块气泡参数面板：右栏窄栏浮层的内容控件（设计见 docs/技术实现/气泡绘制_设计方案.md）。
+"""气泡参数面板：右栏窄栏浮层的内容控件（设计见 docs/技术实现/气泡绘制_设计方案.md）。
 
-只管「控件 ↔ ``BubbleStyle``」的往返，不碰撤销栈、不碰项目数据：
-``bubble_changed`` 每次整份样式吐出，由 ``ui/text_panel.py`` 组装成
-``ui/textedit_commands.py::SetBlockBubbleCommand`` 入文本命令栈。
+只管「控件 ↔ ``BubbleSpec``（样式 + 可选自由区域）」的往返，不碰撤销栈、
+不碰项目数据：``bubble_changed`` 每次整份意图吐出，由 ``ui/text_panel.py``
+组装成 ``ui/textedit_commands.py::SetBlockBubbleCommand`` 入文本命令栈。
+
+**文本块气泡与自由气泡是同一份东西的两种区域模式**（2026-11-04 合并）：
+覆盖区域缺省跟随文本块轮廓，「自定义」时用偏移 + 尺寸盖到任意位置。原先
+绘图区那套独立的页面级气泡（bubbleLayer / BubbleTool / page_bubbles）已整体
+删除——同一件事两个入口，理解成本高于功能收益。
 
 控件布局一屏放下，不分折叠区（设计 §4）：
 
 | 行 | 控件 |
 |---|---|
-| 启用 | 复选框 |
+| 启用 | 复选框（取消 = 移除气泡） |
+| 区域 | 下拉：跟随文本块 / 自定义（自定义时显示下面四个数值格） |
+| 位置尺寸 | X / Y / 宽 / 高（相对块内容区左上角，页面像素） |
 | 形状 | 分段钮：矩形 / 椭圆 |
 | 圆角 | 滑块（椭圆时整行禁用） |
 | 填充 | 取色 + 透明度 |
@@ -16,10 +23,10 @@
 | 尾巴 | 开关 + 方向 + 长度 + 宽度（关闭时禁用） |
 """
 
-from qtpy.QtCore import Qt, Signal
+from qtpy.QtCore import QRectF, Qt, Signal
 from qtpy.QtWidgets import QHBoxLayout, QVBoxLayout
 
-from ui.bubble import SHAPE_ELLIPSE, SHAPE_RECT, BubbleStyle, BubbleTail
+from ui.bubble import SHAPE_ELLIPSE, SHAPE_RECT, BubbleSpec, BubbleStyle, BubbleTail
 from ui.custom_widget import (
     ColorPickerLabel,
     ConfigCheckBox,
@@ -30,11 +37,14 @@ from ui.custom_widget import (
     Widget,
 )
 
+REGION_FOLLOW = 0
+REGION_CUSTOM = 1
+
 
 class BlockBubblePanel(Widget):
-    """块气泡参数面板。
+    """气泡参数面板（块气泡与自由气泡共用）。
 
-    ``bubble_changed(style_or_none)``：启用时吐整份 ``BubbleStyle``，关闭时
+    ``bubble_changed(spec_or_none)``：启用时吐整份 ``BubbleSpec``，关闭时
     吐 ``None``。调用方据此建撤销命令——面板**不**自己推命令，也不缓存
     撤销基线。
     """
@@ -45,12 +55,15 @@ class BlockBubblePanel(Widget):
         super().__init__(*args, **kwargs)
         self._loading = False
         self._style = BubbleStyle()
+        self._region: QRectF | None = None
+        # 块内容区快照（供「自定义」起步尺寸兜底；随 _load_bubble_panel_from 刷新）
+        self._base_rect = QRectF()
 
         vlayout = QVBoxLayout(self)
         vlayout.setContentsMargins(6, 6, 6, 6)
         vlayout.setSpacing(8)
 
-        self.enable_checker = ConfigCheckBox(self.tr("Block background"), self)
+        self.enable_checker = ConfigCheckBox(self.tr("Bubble"), self)
         self.enable_checker.setToolTip(
             self.tr("Draw a bubble shape behind this text block")
         )
@@ -71,6 +84,49 @@ class BlockBubblePanel(Widget):
                 font.setBold(True)
                 label.setFont(font)
             return label
+
+        # ── 覆盖区域 ────────────────────────────────────────────────
+        self.region_box = SmallComboBox(self.params_widget)
+        self.region_box.addItem(self.tr("Follow text block"), REGION_FOLLOW)
+        self.region_box.addItem(self.tr("Custom area"), REGION_CUSTOM)
+        self.region_box.setToolTip(
+            self.tr("Follow the text block outline, or cover a custom area")
+        )
+        self.region_box.currentIndexChanged.connect(self._on_region_mode_changed)
+        params.addWidget(_label(self.tr("Area"), bold=True))
+        params.addWidget(self.region_box)
+
+        self.region_controls = Widget(self.params_widget)
+        region_layout = QVBoxLayout(self.region_controls)
+        region_layout.setContentsMargins(0, 0, 0, 0)
+        region_layout.setSpacing(6)
+        self.region_x_spin = NoArrowsDoubleSpinBox(self.region_controls)
+        self.region_y_spin = NoArrowsDoubleSpinBox(self.region_controls)
+        self.region_w_spin = NoArrowsDoubleSpinBox(self.region_controls)
+        self.region_h_spin = NoArrowsDoubleSpinBox(self.region_controls)
+        for spin, tip in (
+            (self.region_x_spin, self.tr("Offset X from the block's top-left")),
+            (self.region_y_spin, self.tr("Offset Y from the block's top-left")),
+            (self.region_w_spin, self.tr("Width")),
+            (self.region_h_spin, self.tr("Height")),
+        ):
+            spin.setRange(-100000.0, 100000.0)
+            spin.setSingleStep(1.0)
+            spin.setDecimals(1)
+            spin.setToolTip(tip)
+            spin.valueChanged.connect(self._emit)
+        region_grid = QHBoxLayout()
+        region_grid.setContentsMargins(0, 0, 0, 0)
+        region_grid.setSpacing(6)
+        for spin in (
+            self.region_x_spin,
+            self.region_y_spin,
+            self.region_w_spin,
+            self.region_h_spin,
+        ):
+            region_grid.addWidget(spin, 1)
+        region_layout.addLayout(region_grid)
+        params.addWidget(self.region_controls)
 
         # ── 形状 ────────────────────────────────────────────────────
         self.shape_box = SmallComboBox(self.params_widget)
@@ -203,22 +259,81 @@ class BlockBubblePanel(Widget):
             tail=tail,
         ).normalized()
 
+    def _ensure_region_size(self) -> None:
+        """「自定义」模式下宽高仍为 0 时，用块内容区尺寸补上（避免 1×1）。"""
+        base = self._base_rect
+        if base.isEmpty():
+            return
+        changed = False
+        self._loading = True
+        try:
+            if self.region_w_spin.value() <= 0:
+                self.region_w_spin.setValue(base.width())
+                changed = True
+            if self.region_h_spin.value() <= 0:
+                self.region_h_spin.setValue(base.height())
+                changed = True
+        finally:
+            self._loading = False
+        return changed
+
+    def current_region(self) -> QRectF | None:
+        """当前覆盖区域；「跟随文本块」返回 ``None``。"""
+        if self.region_box.currentData() != REGION_CUSTOM:
+            return None
+        w = max(1.0, float(self.region_w_spin.value()))
+        h = max(1.0, float(self.region_h_spin.value()))
+        return QRectF(
+            float(self.region_x_spin.value()),
+            float(self.region_y_spin.value()),
+            w,
+            h,
+        )
+
+    def current_spec(self) -> BubbleSpec | None:
+        """按控件状态组装意图；未启用返回 ``None``。"""
+        style = self.current_style()
+        if style is None:
+            return None
+        return BubbleSpec(style=style, region=self.current_region())
+
     @staticmethod
     def _hex_from_picker(picker) -> str:
         r, g, b = picker.rgb()
         return f"#{r:02x}{g:02x}{b:02x}"
 
-    # ── 写控件 ← BubbleStyle ───────────────────────────────────────
+    # ── 写控件 ← BubbleStyle / BubbleSpec ──────────────────────────
 
-    def set_from_style(self, style: BubbleStyle | None) -> None:
-        """回显样式；``None`` 表示该块没有气泡（开关关、参数区禁用）。"""
+    def set_from_style(
+        self, style: BubbleStyle | None, region: QRectF | None = None
+    ) -> None:
+        """回显；``None`` 表示该块没有气泡（开关关、参数区禁用）。
+
+        *region* 为 ``None`` 时区域回到「跟随文本块」。自定义区域回显时若
+        控件里的宽高还是 0（首次切到自定义），用块实际内容区尺寸兜底，避免
+        用户看到 0×0 的气泡。
+        """
         self._loading = True
         try:
             enabled = style is not None
             self._style = (style or BubbleStyle()).normalized()
             style = self._style
+            self._region = QRectF(region) if region is not None else None
             self.enable_checker.setChecked(enabled)
             self.params_widget.setEnabled(enabled)
+
+            region_index = self.region_box.findData(
+                REGION_CUSTOM if self._region is not None else REGION_FOLLOW
+            )
+            if region_index >= 0:
+                self.region_box.setCurrentIndex(region_index)
+            if self._region is not None:
+                self.region_x_spin.setValue(self._region.x())
+                self.region_y_spin.setValue(self._region.y())
+                if self.region_w_spin.value() <= 0:
+                    self.region_w_spin.setValue(self._region.width())
+                if self.region_h_spin.value() <= 0:
+                    self.region_h_spin.setValue(self._region.height())
 
             index = self.shape_box.findData(style.shape)
             if index >= 0:
@@ -241,12 +356,32 @@ class BlockBubblePanel(Widget):
             self._loading = False
         self._refresh_hint()
 
+    def seed_region(self, base: QRectF) -> None:
+        """记住块内容区，并在宽高还空着时用它兜底。
+
+        从「跟随块」切到「自定义」，最自然的起点就是块现在的大小（用户再改
+        差值），而不是 0×0——0 会被钳到 1×1，画出来是个点。
+        """
+        if base.isEmpty():
+            return
+        self._base_rect = QRectF(base)
+        self._loading = True
+        try:
+            if self.region_w_spin.value() <= 0:
+                self.region_w_spin.setValue(base.width())
+            if self.region_h_spin.value() <= 0:
+                self.region_h_spin.setValue(base.height())
+        finally:
+            self._loading = False
+
     # ── 内部 ────────────────────────────────────────────────────────
 
     def _sync_enabled_states(self) -> None:
         enabled = self.enable_checker.isChecked()
         is_rect = (self.shape_box.currentData() or SHAPE_RECT) == SHAPE_RECT
+        is_custom = self.region_box.currentData() == REGION_CUSTOM
         self.corner_row_widget.setEnabled(enabled and is_rect)
+        self.region_controls.setEnabled(enabled and is_custom)
         self.border_controls.setEnabled(enabled and self.border_checker.isChecked())
         self.tail_controls.setEnabled(enabled and self.tail_checker.isChecked())
 
@@ -275,6 +410,12 @@ class BlockBubblePanel(Widget):
         self.params_widget.setEnabled(checked)
         self._emit()
 
+    def _on_region_mode_changed(self, _index: int) -> None:
+        self._sync_enabled_states()
+        # 切到自定义：先把宽高从 0 补成块尺寸，否则 _emit 会写出一条 1×1 的区域
+        self._ensure_region_size()
+        self._emit()
+
     def _on_border_toggled(self, _checked: bool) -> None:
         self._sync_enabled_states()
         self._emit()
@@ -288,4 +429,4 @@ class BlockBubblePanel(Widget):
             return
         self._sync_enabled_states()
         self._refresh_hint()
-        self.bubble_changed.emit(self.current_style())
+        self.bubble_changed.emit(self.current_spec())

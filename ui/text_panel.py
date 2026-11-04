@@ -1593,7 +1593,7 @@ class FontFormatPanel(Widget):
 
         self.rail = rail
         self.bubble_launcher = RailLauncherButton("rail_bubble")
-        self.bubble_launcher.setToolTip(self.tr("Block Background (Bubble)"))
+        self.bubble_launcher.setToolTip(self.tr("Bubble"))
         self.bubble_launcher.toggled.connect(self._on_bubble_launcher_toggled)
         rail.add_launcher(self.bubble_launcher)
 
@@ -1610,7 +1610,7 @@ class FontFormatPanel(Widget):
             from ui.custom_widget import RailDockPanel
 
             self.bubble_dock = RailDockPanel(
-                self.tr("Block Background"),
+                self.tr("Bubble"),
                 self._ensure_bubble_panel(),
                 rail=self.rail,
                 config_open="bubble_dock_open",
@@ -1624,8 +1624,10 @@ class FontFormatPanel(Widget):
             return
         if checked:
             self._close_other_docks("bubble")
-            self._sync_bubble_controls()
+            # 先建 dock 再回显：面板首次打开时 self.bubble_panel 还是 None，
+            # 反过来的顺序会让面板停在「未启用」空态（2026-11-04 实测）
             self._ensure_bubble_dock().open_panel()
+            self._sync_bubble_controls()
         elif self.bubble_dock is not None:
             self.bubble_dock.close_panel()
 
@@ -1654,18 +1656,34 @@ class FontFormatPanel(Widget):
         if not items:
             panel.set_from_style(None)
         elif len(items) == 1:
-            panel.set_from_style(items[0].block_bubble())
+            self._load_bubble_panel_from(items[0])
         else:
             # 多选：全部同款才回显，否则显示第一条（改任一项即覆盖全体，
-            # 与格式面板的多选镜像语义一致）
-            first = items[0].block_bubble()
+            # 与格式面板的多选镜像语义一致）。区域也参与「同款」判定——
+            # 否则两块一个跟随、一个自定义时会显示成跟随，改一下就把自定义
+            # 区域冲掉。
+            first = items[0].block_bubble_payload()
             same = all(
-                (other.block_bubble() or BubbleStyle()).to_payload()
-                == (first or BubbleStyle()).to_payload()
+                (other.block_bubble_payload() or {}) == (first or {})
                 for other in items[1:]
             )
-            panel.set_from_style(first if same else None)
+            if same:
+                self._load_bubble_panel_from(items[0])
+            else:
+                panel.set_from_style(None)
         self._update_bubble_indicator()
+
+    def _load_bubble_panel_from(self, item) -> None:
+        """把某个块的载荷回显到面板（样式 + 自定义区域）。"""
+        from ui.bubble import block_bubble_region
+
+        payload = item.block_bubble_payload()
+        style = item.block_bubble()
+        # 基准尺寸无条件播种：即便当前还没有气泡，用户点开「自定义」也要从块的
+        # 实际大小起步，而不是 0×0（被钳成 1×1 就看不见了）
+        self.bubble_panel.seed_region(item.block_bubble_region_base())
+        region = block_bubble_region(payload) if style is not None else None
+        self.bubble_panel.set_from_style(style, region)
 
     def _update_bubble_indicator(self) -> None:
         items = self._bubble_scope_items()
@@ -1673,26 +1691,25 @@ class FontFormatPanel(Widget):
         if self.bubble_launcher is not None:
             self.bubble_launcher.set_dot(active)
         if self.bubble_dock is not None:
-            title = self.tr("Block Background")
+            title = self.tr("Bubble")
             if active:
                 title += " •"
             self.bubble_dock.set_title(title)
 
-    def _on_bubble_changed(self, style) -> None:
+    def _on_bubble_changed(self, spec) -> None:
         """面板改动 → SetBlockBubbleCommand 入文本命令栈。
 
         一次改动一条命令：滑块拖动会连发多次，靠 ``QUndoCommand`` 的
         ``mergeWith`` 合并（见命令类注释）；这里只保证「快照 → 下命令 →
-        让命令自己执行」的顺序。
+        让命令自己执行」的顺序。*spec* 同时携带样式与（可选）自定义区域。
         """
         items = self._bubble_scope_items()
         if not items:
             return
         from ui import shared_widget as SW
-        from ui.bubble import block_bubble_to_payload
         from ui.textedit_commands import SetBlockBubbleCommand
 
-        new_payload = block_bubble_to_payload(style)
+        new_payload = spec.to_payload() if spec is not None else None
         before = [item.blk.bubble if item.blk is not None else None for item in items]
         after = [copy.deepcopy(new_payload) for _ in items]
         command = SetBlockBubbleCommand.create(items, before, after)

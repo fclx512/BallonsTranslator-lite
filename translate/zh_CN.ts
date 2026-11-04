@@ -1874,12 +1874,8 @@ Hide them all? You can move them back later.</source>
             <translation>已选文本 · {0}</translation>
         </message>
         <message>
-            <source>Block Background</source>
-            <translation>块背景</translation>
-        </message>
-        <message>
-            <source>Block Background (Bubble)</source>
-            <translation>块背景（气泡）</translation>
+            <source>Bubble</source>
+            <translation>气泡</translation>
         </message>
     </context>
     <context>
@@ -9205,10 +9201,6 @@ Saved pages stay in the project. Unsaved results and revision candidates will be
             <translation>根部宽度（短边比例）</translation>
         </message>
         <message>
-            <source>Block background</source>
-            <translation>块背景</translation>
-        </message>
-        <message>
             <source>Border</source>
             <translation>描边</translation>
         </message>
@@ -9259,6 +9251,42 @@ Saved pages stay in the project. Unsaved results and revision candidates will be
         <message>
             <source>Border is thick relative to the tail width, the tail may be filled by the border.</source>
             <translation>描边相对尾巴宽度过粗，尾巴可能被描边填满。</translation>
+        </message>
+        <message>
+            <source>Area</source>
+            <translation>区域</translation>
+        </message>
+        <message>
+            <source>Bubble</source>
+            <translation>气泡</translation>
+        </message>
+        <message>
+            <source>Custom area</source>
+            <translation>自定义区域</translation>
+        </message>
+        <message>
+            <source>Follow text block</source>
+            <translation>跟随文本块</translation>
+        </message>
+        <message>
+            <source>Follow the text block outline, or cover a custom area</source>
+            <translation>跟随文本块轮廓，或覆盖一块自定义区域</translation>
+        </message>
+        <message>
+            <source>Height</source>
+            <translation>高</translation>
+        </message>
+        <message>
+            <source>Offset X from the block's top-left</source>
+            <translation>相对文本框左上角的 X 偏移</translation>
+        </message>
+        <message>
+            <source>Offset Y from the block's top-left</source>
+            <translation>相对文本框左上角的 Y 偏移</translation>
+        </message>
+        <message>
+            <source>Width</source>
+            <translation>宽</translation>
         </message>
     </context>
 </TS>

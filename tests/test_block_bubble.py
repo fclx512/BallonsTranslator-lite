@@ -34,11 +34,14 @@ except ImportError:  # pragma: no cover
     from qtpy.QtGui import QUndoStack  # noqa: E402
 
 from ui.bubble import (  # noqa: E402
+    REGION_KEY,
     SHAPE_ELLIPSE,
     SHAPE_RECT,
+    BubbleSpec,
     BubbleStyle,
     BubbleTail,
     block_bubble_from_payload,
+    block_bubble_region,
     block_bubble_to_payload,
 )
 from ui.block_bubble_panel import BlockBubblePanel  # noqa: E402
@@ -127,6 +130,39 @@ class PayloadTest(unittest.TestCase):
 
     def test_to_payload_none_for_missing_bubble(self):
         self.assertIsNone(block_bubble_to_payload(None))
+
+    def test_region_roundtrip(self):
+        """自定义覆盖区域：偏移 + 尺寸原样往返，没该键 = 跟随块。"""
+        region = QRectF(-20.0, -30.0, 260.0, 180.0)
+        payload = block_bubble_to_payload(BubbleStyle(fill="#123456"), region)
+        self.assertEqual(payload[REGION_KEY], [-20.0, -30.0, 260.0, 180.0])
+        back = block_bubble_region(payload)
+        self.assertEqual(
+            (back.x(), back.y(), back.width(), back.height()),
+            (-20.0, -30.0, 260.0, 180.0),
+        )
+        # 样式没被 region 键破坏（from_payload 宽进忽略未知键）
+        self.assertEqual(block_bubble_from_payload(payload).fill, "#123456")
+        # 不传 region = 跟随块
+        self.assertIsNone(block_bubble_region(block_bubble_to_payload(BubbleStyle())))
+
+    def test_legacy_payload_still_follows_block(self):
+        """没有 region 键的旧数据必须解析成「跟随块」，不能整条判无效。"""
+        legacy = {"fill": "#ff0000", "tail": {"angle": 90.0}}
+        self.assertIsNone(block_bubble_region(legacy))
+        self.assertIsNotNone(block_bubble_from_payload(legacy))
+
+    def test_bad_region_falls_back_to_follow(self):
+        """坏 region（宽高非正 / 长度不对 / NaN）一律回落跟随块，不画到原点。"""
+        for bad in ([1, 2, 0, 10], [1, 2, 10], "x", [1, 2, float("nan"), 10]):
+            self.assertIsNone(block_bubble_region({REGION_KEY: bad}), msg=str(bad))
+
+    def test_spec_roundtrip(self):
+        region = QRectF(5.0, 6.0, 120.0, 90.0)
+        spec = BubbleSpec(style=BubbleStyle(shape=SHAPE_ELLIPSE), region=region)
+        back = BubbleSpec.from_payload(spec.to_payload())
+        self.assertEqual(back.style.shape, SHAPE_ELLIPSE)
+        self.assertEqual(back.region, region)
 
 
 class TextBlockKeyTest(unittest.TestCase):
@@ -315,7 +351,31 @@ class PanelTest(unittest.TestCase):
         panel.bubble_changed.connect(got.append)
         panel.enable_checker.setChecked(True)
         self.assertTrue(got)
-        self.assertIsInstance(got[-1], BubbleStyle)
+        # 信号发的是 BubbleSpec（样式 + 可选自由区域），不再是裸 BubbleStyle
+        self.assertIsInstance(got[-1], BubbleSpec)
+        self.assertEqual(got[-1].style.shape, SHAPE_RECT)
+        self.assertIsNone(got[-1].region, "默认跟随块，不应带自定义区域")
+
+    def test_custom_region_emits_and_roundtrips(self):
+        """「自定义区域」模式：切过去带出基准尺寸，改数值即进 spec。"""
+        panel = BlockBubblePanel()
+        panel.seed_region(QRectF(0, 0, 300, 200))
+        panel.set_from_style(BubbleStyle(fill="#ff0000"))
+        panel.enable_checker.setChecked(True)
+        got = []
+        panel.bubble_changed.connect(got.append)
+        panel.region_box.setCurrentIndex(1)  # Custom area
+        self.assertTrue(panel.region_controls.isEnabled())
+        spec = got[-1]
+        self.assertIsNotNone(spec.region)
+        # 基准尺寸必须带出来，不能是 1×1（否则气泡画成一个点）
+        self.assertAlmostEqual(spec.region.width(), 300.0)
+        self.assertAlmostEqual(spec.region.height(), 200.0)
+        panel.region_x_spin.setValue(-25.0)
+        self.assertAlmostEqual(got[-1].region.x(), -25.0)
+        # 切回「跟随块」→ region 回到 None
+        panel.region_box.setCurrentIndex(0)
+        self.assertIsNone(got[-1].region)
 
     def test_roundtrip(self):
         panel = BlockBubblePanel()

@@ -33,6 +33,11 @@ SHAPES = (SHAPE_RECT, SHAPE_ELLIPSE)
 
 _HEX_COLOR = re.compile(r"#[0-9a-fA-F]{6}$")
 _BISECT_STEPS = 26
+# 嘴宽二分：每次迭代两次 pointAtPercent（圆角矩形约 35µs），22 步约 1.5ms，
+# 精度 < 0.5px，足够。调参是拖拽手势，不需要更快。
+_MOUTH_BISECT_STEPS = 22
+# 锚点定位先粗采样再三分收敛：圆角矩形 64 个采样点约 2ms，加收敛共约 3ms
+_RAY_SAMPLES = 64
 
 
 def _as_float(value, default: float) -> float:
@@ -227,44 +232,6 @@ def _ray_distance(
     return max_r
 
 
-def _edge_anchor(
-    rect: QRectF, corner: float, dx: float, dy: float
-) -> tuple[QPointF, bool, float, float]:
-    """射线打到哪条矩形边，以及该边的直段范围。
-
-    返回 ``(anchor, along_x, lo, hi)``：``along_x`` 为真表示嘴巴沿水平方向
-    展开（上/下边），否则沿竖直方向（左/右边）。锚点的沿边坐标由调用方
-    再钳到 ``[lo, hi]``。
-    """
-    center = rect.center()
-    half_w, half_h = rect.width() / 2.0, rect.height() / 2.0
-    tx = half_w / abs(dx) if abs(dx) > 1e-9 else math.inf
-    ty = half_h / abs(dy) if abs(dy) > 1e-9 else math.inf
-    if tx <= ty:
-        x = rect.right() if dx > 0 else rect.left()
-        lo, hi = rect.top() + corner, rect.bottom() - corner
-        return QPointF(x, center.y() + dy * tx), False, lo, hi
-    y = rect.bottom() if dy > 0 else rect.top()
-    lo, hi = rect.left() + corner, rect.right() - corner
-    return QPointF(center.x() + dx * ty, y), True, lo, hi
-
-
-def _boundary_point(
-    path: QPainterPath, center: QPointF, angle: float, max_r: float
-) -> QPointF:
-    dx, dy = math.cos(angle), math.sin(angle)
-    t = _ray_distance(path, center, dx, dy, max_r)
-    return QPointF(center.x() + dx * t, center.y() + dy * t)
-
-
-def _chord_width(
-    path: QPainterPath, center: QPointF, angle: float, delta: float, max_r: float
-) -> float:
-    p1 = _boundary_point(path, center, angle - delta, max_r)
-    p2 = _boundary_point(path, center, angle + delta, max_r)
-    return math.hypot(p2.x() - p1.x(), p2.y() - p1.y())
-
-
 def _pull_toward(point: QPointF, target: QPointF, distance: float) -> QPointF:
     dx, dy = target.x() - point.x(), target.y() - point.y()
     norm = math.hypot(dx, dy)
@@ -278,68 +245,50 @@ def _pull_toward(point: QPointF, target: QPointF, distance: float) -> QPointF:
 def _curve_mouth(
     body: QPainterPath,
     center: QPointF,
-    angle: float,
+    anchor_percent: float,
     width: float,
-    max_r: float,
     inset: float,
 ) -> tuple[QPointF, QPointF] | None:
-    """椭圆：在边界上取一段内接弦，两端各向心收 ``inset``。
+    """以轮廓上 ``anchor_percent`` 处为中心，取一段弦宽 ``width``，两端各向心收 ``inset``。
 
-    不能沿切线直接偏移——椭圆边界是向外弯的，偏出来的点都在体外，收回去后
-    嘴只剩几像素，尾巴会变成一根针。凸形体的内接弦必在体内，所以先找弦。
+    矩形（含圆角）与椭圆共用。不能沿切线直接偏移——边界向外弯时偏出来的点都在
+    体外，收回去后嘴只剩几像素，尾巴会变成一根针。凸形体的内接弦必在体内，所以
+    先找弦，再从锚点沿轮廓向两侧对称放出端点。
+
+    **沿轮廓量弧长距离，而不是按半径找边界点**（2026-11-04 重写）：圆角矩形的
+    角点附近，沿半径找出的两点会落到相邻两条边上，测出来的宽度骤变，嘴算不出宽
+    度就直接不画——这正是"尾巴转到四个直角区就消失"的成因（corner=20 时
+    40°~50° 全灭）。改为沿周长对称外扩并按**欧氏弦长**二分，角上取到的仍是等宽
+    的一段弧，尾巴在各方向粗细一致，不会压扁。
     """
-    cap = math.radians(85.0)
-    if _chord_width(body, center, angle, cap, max_r) <= width:
-        delta = cap
+    total = body.length()
+    if total <= 0.0:
+        return None
+    lo, hi = 0.0, total / 4.0
+
+    def chord(offset: float) -> tuple[QPointF, QPointF, float]:
+        a = body.pointAtPercent(((anchor_percent * total - offset) % total) / total)
+        b = body.pointAtPercent(((anchor_percent * total + offset) % total) / total)
+        return a, b, math.hypot(b.x() - a.x(), b.y() - a.y())
+
+    # 极端情形（嘴巴比轮廓半周还宽）：直接用半周那一对点，不再二分
+    edge_a, edge_b, edge_w = chord(hi)
+    if edge_w <= width:
+        left, right = edge_a, edge_b
     else:
-        lo, hi = 0.0, cap
-        for _ in range(28):
+        for _ in range(_MOUTH_BISECT_STEPS):
             mid = (lo + hi) / 2.0
-            if _chord_width(body, center, angle, mid, max_r) < width:
+            if chord(mid)[2] < width:
                 lo = mid
             else:
                 hi = mid
-        delta = lo
-    left = _boundary_point(body, center, angle - delta, max_r)
-    right = _boundary_point(body, center, angle + delta, max_r)
+        a, b, _ = chord(lo)
+        left, right = a, b
     if math.hypot(right.x() - left.x(), right.y() - left.y()) < 3.0:
         return None
     return (
         _pull_toward(left, center, inset),
         _pull_toward(right, center, inset),
-    )
-
-
-def _flat_mouth(
-    anchor: QPointF,
-    along_x: bool,
-    span: tuple[float, float],
-    half: float,
-    dx: float,
-    dy: float,
-    inset: float,
-) -> tuple[QPointF, QPointF] | None:
-    """矩形：嘴沿**边方向**展开（不是垂直于尾巴轴）。
-
-    轴与边成 45° 时若按垂直展开，一端会落到体外被收回，嘴就塌成细刺。
-    """
-    lo, hi = span
-    if lo > hi:
-        lo = hi = (lo + hi) / 2.0
-    base = QPointF(anchor.x() - dx * inset, anchor.y() - dy * inset)
-    center = _clamp(base.x() if along_x else base.y(), lo, hi)
-    # 贴到角上时对称收窄，而不是让一侧被直段截断（否则尾巴看着是歪的）
-    half = min(half, center - lo, hi - center)
-    if half < 1.5:
-        return None
-    if along_x:
-        return (
-            QPointF(center - half, base.y()),
-            QPointF(center + half, base.y()),
-        )
-    return (
-        QPointF(base.x(), center - half),
-        QPointF(base.x(), center + half),
     )
 
 
@@ -349,10 +298,14 @@ def tail_path(
     style: "BubbleStyle",
     limit_rect: QRectF | None = None,
 ) -> QPainterPath:
-    """三角尾巴。根部落在直边上并向体内收 2px，保证与主体并集相连。
+    """三角尾巴。根部落在轮廓上并向体内收 2px，保证与主体并集相连。
 
-    根部内收是必要的：椭圆边界处处是弧线，根点直接在弧上时，弦的中段可能
-    落在体外，并集只会得到一条细缝。内收后嘴巴在体内，并集出来的 V 形干净。
+    根部内收是必要的：轮廓处处是曲线，根点直接在轮廓上时，弦的中段可能落在
+    体外，并集只会得到一条细缝。内收后嘴巴在体内，并集出来的 V 形干净。
+
+    矩形与椭圆走**同一条**取值路径：从中心沿尾巴方向打到轮廓得到锚点，再沿
+    轮廓对称放出嘴宽（``_curve_mouth``）。旧实现给矩形单独走「沿边展开」，
+    在四个角上会把嘴压塌到不画；统一后各方向粗细一致。
     """
     path = QPainterPath()
     rect = QRectF(rect).normalized()
@@ -368,24 +321,12 @@ def tail_path(
     angle = math.radians(tail.angle)
     dx, dy = math.cos(angle), math.sin(angle)
     center = rect.center()
+    max_r = math.hypot(rect.width(), rect.height()) / 2.0 + 1.0
 
-    if style.shape == SHAPE_RECT:
-        corner = min(style.corner, unit / 2.0)
-        anchor, along_x, lo, hi = _edge_anchor(rect, corner, dx, dy)
-        if lo > hi:
-            lo = hi = (lo + hi) / 2.0
-        if along_x:
-            anchor = QPointF(_clamp(anchor.x(), lo, hi), anchor.y())
-        else:
-            anchor = QPointF(anchor.x(), _clamp(anchor.y(), lo, hi))
-        span = (lo, hi)
-        max_r = 0.0
-    else:
-        max_r = math.hypot(rect.width(), rect.height()) / 2.0 + 1.0
-        hit = _ray_distance(body, center, dx, dy, max_r)
-        anchor = QPointF(center.x() + dx * hit, center.y() + dy * hit)
-        along_x = None
-        span = (0.0, 0.0)
+    anchor_percent = _ray_hit_percent(body, center, dx, dy, max_r)
+    if anchor_percent is None:
+        return path
+    anchor = body.pointAtPercent(anchor_percent)
 
     tip = QPointF(anchor.x() + dx * length, anchor.y() + dy * length)
     if path_is_inside(body, tip):
@@ -396,16 +337,13 @@ def tail_path(
 
     inset = min(2.0, 0.06 * unit)
     half = max(1.0, tail.width * unit / 2.0)
-    if along_x is None:
-        mouth = _curve_mouth(body, center, angle, half * 2.0, max_r, inset)
-    else:
-        mouth = _flat_mouth(anchor, along_x, span, half, dx, dy, inset)
+    mouth = _curve_mouth(body, center, anchor_percent, half * 2.0, inset)
     if mouth is None:
         return path
     left, right = mouth
 
     if math.hypot(left.x() - right.x(), left.y() - right.y()) < 3.0:
-        # 根点被收得太窄（极端角度贴角）：宁可不要，也不画一根细刺
+        # 根点被收得太窄：宁可不要，也不画一根细刺
         return path
 
     path.moveTo(left)
@@ -413,6 +351,46 @@ def tail_path(
     path.lineTo(right)
     path.closeSubpath()
     return path
+
+
+def _ray_hit_percent(
+    body: QPainterPath, center: QPointF, dx: float, dy: float, max_r: float
+) -> float | None:
+    """从中心沿方向打到轮廓，返回命中点的百分比位置。
+
+    先按半径二分求交点，再在交点附近取最近的轮廓采样点换算成百分比——轮廓是
+    由 ``addRect``/``addEllipse`` 生成的，百分比与几何位置不是线性对应，直接拿
+    ``hit / 半周长`` 当百分比会偏。
+    """
+    t = _ray_distance(body, center, dx, dy, max_r)
+    hit = QPointF(center.x() + dx * t, center.y() + dy * t)
+    total = body.length()
+    if total <= 0.0:
+        return None
+    best_p, best_d = None, math.inf
+    samples = _RAY_SAMPLES
+    for i in range(samples):
+        p = i / samples
+        q = body.pointAtPercent(p)
+        d = (q.x() - hit.x()) ** 2 + (q.y() - hit.y()) ** 2
+        if d < best_d:
+            best_d, best_p = d, p
+    if best_p is None:
+        return None
+    # 粗采样定位后，在邻域内再收一轮，避免角点附近落偏到相邻边
+    step = 1.0 / samples
+    lo, hi = best_p - step, best_p + step
+    for _ in range(18):
+        m1 = lo + (hi - lo) / 3.0
+        m2 = hi - (hi - lo) / 3.0
+        q1, q2 = body.pointAtPercent(m1 % 1.0), body.pointAtPercent(m2 % 1.0)
+        d1 = (q1.x() - hit.x()) ** 2 + (q1.y() - hit.y()) ** 2
+        d2 = (q2.x() - hit.x()) ** 2 + (q2.y() - hit.y()) ** 2
+        if d1 < d2:
+            hi = m2
+        else:
+            lo = m1
+    return (((lo + hi) / 2.0) % 1.0)
 
 
 def path_is_inside(path: QPainterPath, point: QPointF) -> bool:
@@ -582,23 +560,94 @@ def bubble_from_payload(payload) -> tuple[QRectF, BubbleStyle] | None:
 # 本身就是一个有效可见的气泡，``to_payload()`` 对它返回 ``{}``。若拿
 # ``is_default()`` 判存在性，用户就永远画不出一个纯白矩形气泡。所以
 # ``None`` = 没气泡，``{}`` = 有气泡但全用默认值。
+#
+# **自定义覆盖区域**（2026-11-04）：同一份载荷里可带 ``"region": [dx, dy, w, h]``
+# ——相对块内容区左上角的偏移与尺寸（页面像素）。缺这个键 = 跟随文本块轮廓。
+# 它和样式放在同一个 dict 而不是包一层外壳，是刻意的：``BubbleStyle.from_payload``
+# 对未知键「宽进忽略」，所以旧数据（纯样式载荷）照原样解析，不需要迁移。
+
+REGION_KEY = "region"
+
+
+def _as_region(value) -> list | None:
+    """校验 ``[dx, dy, w, h]``；宽高必须为正，否则判无效（回落到跟随块）。"""
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        return None
+    try:
+        dx, dy, w, h = (float(v) for v in value)
+    except (TypeError, ValueError):
+        return None
+    # NaN/Inf 会让 QRectF 进半死状态（normalized 不报错但画不出东西），
+    # `v != v` 是 NaN 的标准判据
+    if any(v != v or v in (float("inf"), float("-inf")) for v in (dx, dy, w, h)):
+        return None
+    if w < 1.0 or h < 1.0:
+        return None
+    return [round(dx, 2), round(dy, 2), round(w, 2), round(h, 2)]
 
 
 def block_bubble_from_payload(payload) -> BubbleStyle | None:
-    """解析块气泡载荷。``None`` 表示没有气泡；``{}`` 是默认样式的气泡。"""
+    """解析块气泡样式。``None`` 表示没有气泡；``{}`` 是默认样式的气泡。"""
     if not isinstance(payload, dict):
         return None
     return BubbleStyle.from_payload(payload)
 
 
-def block_bubble_to_payload(style: BubbleStyle | None) -> dict | None:
+def block_bubble_region(payload) -> QRectF | None:
+    """解析自定义覆盖区域（相对块内容区的偏移 + 尺寸）；无该键返回 ``None``。"""
+    if not isinstance(payload, dict):
+        return None
+    region = _as_region(payload.get(REGION_KEY))
+    if region is None:
+        return None
+    return QRectF(region[0], region[1], region[2], region[3])
+
+
+def block_bubble_to_payload(
+    style: BubbleStyle | None, region: QRectF | None = None
+) -> dict | None:
     """把块气泡转成落盘形态；没有气泡（``None``）才返回 ``None``。
 
-    默认样式写成 ``{}``——它仍表示「有气泡」，只是参数全默认。
+    默认样式写成 ``{}``——它仍表示「有气泡」，只是参数全默认。*region* 为
+    ``None`` 时不写覆盖区域（跟随文本块轮廓）。
     """
     if style is None:
         return None
-    return BubbleStyle.from_payload(style).to_payload()
+    payload = BubbleStyle.from_payload(style).to_payload()
+    if region is not None:
+        rect = QRectF(region).normalized()
+        if rect.width() >= 1.0 and rect.height() >= 1.0:
+            payload[REGION_KEY] = [
+                round(rect.x(), 2),
+                round(rect.y(), 2),
+                round(rect.width(), 2),
+                round(rect.height(), 2),
+            ]
+    return payload
+
+
+@dataclass
+class BubbleSpec:
+    """面板 → 命令的完整意图：样式 + 可选的自由覆盖区域。
+
+    ``region`` 是相对块内容区左上角的矩形；``None`` = 跟随文本块轮廓。
+    面板只产出它，不碰撤销栈与工程数据（与改造前一致的分工）。
+    """
+
+    style: BubbleStyle
+    region: QRectF | None = None
+
+    def to_payload(self) -> dict:
+        return block_bubble_to_payload(self.style, self.region) or {}
+
+    @classmethod
+    def from_payload(cls, payload) -> "BubbleSpec | None":
+        if not isinstance(payload, dict):
+            return None
+        return cls(
+            style=BubbleStyle.from_payload(payload),
+            region=block_bubble_region(payload),
+        )
 
 
 class BubbleItem(QGraphicsPathItem):

@@ -365,6 +365,22 @@
                 "out/bundle-cu132-accept-20261023/followup-20261023/source-snapshot-current-before-config-isolation.json",
                 "out/bundle-cu132-accept-20261023/followup-20261023/source-snapshot-current.json"
             ]
+        },
+        "ui/bubble_layer.py": {
+            "note": "独立气泡合并（2026-11-04）：页面级气泡的图层/簿记/BubbleTool 入口整套删除——自由气泡改为块气泡载荷里的 region 键（数据挂在 TextBlock.bubble，撤销走文本命令栈）。旧实现六处缺陷（拖动不落盘、改参丢选中、取消勾选抛异常、面板首次不回显、退出绘图页仍抢文字块点击、数据跨页而撤销不跨页）见 docs/技术实现/气泡绘制_设计方案.md §3.1",
+            "allowed_mentions": []
+        },
+        "tests/test_page_bubble.py": {
+            "note": "独立气泡合并（2026-11-04）：页面级气泡删掉后，其图层/撤销/条目校验用例随之删除；等价契约改由 tests/test_block_bubble.py 的 region 用例覆盖",
+            "allowed_mentions": []
+        },
+        "icons/drawingtools_bubble.svg": {
+            "note": "独立气泡合并（2026-11-04）：绘图区气泡工具钮删除，图标随之删除",
+            "allowed_mentions": []
+        },
+        "icons/drawingtools_bubble_activate.svg": {
+            "note": "独立气泡合并（2026-11-04）：绘图区气泡工具钮删除，激活态图标随之删除",
+            "allowed_mentions": []
         }
     },
     "dormant_symbols": {

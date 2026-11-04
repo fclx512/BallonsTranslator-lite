@@ -39,6 +39,7 @@ from ui.bubble import (
     BubbleItem,
     BubbleStyle,
     block_bubble_from_payload,
+    block_bubble_region,
     block_bubble_to_payload,
 )
 from ui.text_engine.item import TextBlkItem as _EngineTextBlkItem
@@ -325,10 +326,15 @@ class TextBlkItem(_EngineTextBlkItem):
             return None
         return self._bubble_item.style()
 
-    def set_block_bubble(self, style: Optional[BubbleStyle]) -> None:
-        """设置块气泡（``None`` 表示移除）。数据与图元一起改，不推撤销命令。"""
+    def set_block_bubble(
+        self, style: Optional[BubbleStyle], region: Optional[QRectF] = None
+    ) -> None:
+        """设置块气泡（``None`` 表示移除）。数据与图元一起改，不推撤销命令。
+
+        *region* 是相对块内容区左上角的覆盖矩形；``None`` = 跟随块轮廓。
+        """
         if self.blk is not None:
-            self.blk.bubble = block_bubble_to_payload(style)
+            self.blk.bubble = block_bubble_to_payload(style, region)
         self.refresh_block_bubble()
 
     def refresh_block_bubble(self) -> None:
@@ -362,16 +368,44 @@ class TextBlkItem(_EngineTextBlkItem):
         self._sync_bubble_geometry()
 
     def _sync_bubble_geometry(self) -> None:
-        """气泡框跟随块的内容区（与选中框、描边框同一口径）。"""
+        """同步气泡框几何。
+
+        默认跟随块的内容区（与选中框、描边框同一口径）；载荷带 ``region`` 时
+        改用「块内容区左上角 + 偏移」与自定义尺寸——这就是自由气泡：不绑块轮廓，
+        可以盖到框外的任意区域（2026-11-04）。偏移是相对内容区的，所以块移动/
+        缩放时自定义气泡仍跟着块走，不会漂到别的格子上。
+        """
         item = self._bubble_item
         if item is None:
             return
-        rect = self.unpadRect(self.boundingRect())
-        if rect.isEmpty():
+        base = self.unpadRect(self.boundingRect())
+        if base.isEmpty():
             item.hide()
             return
+        region = None
+        if self.blk is not None:
+            region = block_bubble_region(self.blk.bubble)
+        if region is None:
+            rect = base
+        else:
+            rect = QRectF(
+                base.left() + region.x(),
+                base.top() + region.y(),
+                region.width(),
+                region.height(),
+            )
         item.show()
         item.set_rect(rect)
+
+    def block_bubble_payload(self) -> dict | None:
+        """当前块气泡的落盘载荷（含自定义区域）；无气泡返回 ``None``。"""
+        if self.blk is None:
+            return None
+        return self.blk.bubble
+
+    def block_bubble_region_base(self) -> QRectF:
+        """自定义区域所相对的基准矩形（块内容区），供面板换算绝对坐标。"""
+        return self.unpadRect(self.boundingRect())
 
     def itemChange(self, change, value):
         # 选中态同步必须走 itemChange（ItemSelectedHasChanged 通知总会派发）而非
