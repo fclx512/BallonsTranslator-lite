@@ -150,11 +150,10 @@ class LeftBar(Widget):
         self.globalSearchChecker.setToolTip(self.tr("Global Search (Ctrl+G)"))
         self.globalSearchChecker.setFixedSize(33, 33)
 
-        # 泛用工作台（规划 D25）：术语/剧情与「问题清理」四个批量任务共用
-        # 这一个入口，任务切换在面板内部完成
+        # 侧栏只处理翻译准备；批量任务与待办仍从工具菜单打开。
         self.workbenchChecker = QCheckBox()
         self.workbenchChecker.setObjectName("WorkbenchChecker")
-        self.workbenchChecker.setToolTip(self.tr("Workbench"))
+        self.workbenchChecker.setToolTip(self.tr("Translation preparation"))
         self.workbenchChecker.setFixedSize(33, 33)
 
         self.configChecker = StateChecker("config", uncheckable=True)

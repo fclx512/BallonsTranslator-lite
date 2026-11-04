@@ -10,12 +10,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pytest
-from qtpy.QtCore import QObject, Signal, QEvent, Qt
+from qtpy.QtCore import QEvent, QObject, Qt, Signal
 from qtpy.QtTest import QTest
 from qtpy.QtWidgets import QApplication, QPushButton, QWidget
 
 from ui.pipeline_progress_overlay import PipelineProgressOverlay
-from ui.pipeline_tasks import PipelineTasks, STOP_GRACE_SECONDS
+from ui.pipeline_tasks import STOP_GRACE_SECONDS, PipelineTasks
 
 
 @pytest.fixture(scope="module")
@@ -127,6 +127,13 @@ def test_watchdog_enters_unresponsive_without_force_exit(app):
 
 def test_start_failure_close_does_not_force_exit(app):
     controller, window = _controller(app)
+    window.centralStackWidget = window
+    window.run_pipeline_dialog = QWidget(window)
+    window.show()
+    window.run_pipeline_dialog.show()
+    assert window.run_pipeline_dialog.isVisible()
+    controller._show_overlay("translate")
+    assert not window.run_pipeline_dialog.isVisible()
     controller._controls = Mock()
     force = Mock()
     controller.overlay.stop_force_requested.connect(force)

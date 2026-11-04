@@ -2296,8 +2296,8 @@ No block parameters change; the styles just leave the list.</source>
             <translation>选择文件夹</translation>
         </message>
         <message>
-            <source>Workbench</source>
-            <translation>工作台</translation>
+            <source>Translation preparation</source>
+            <translation>翻译准备</translation>
         </message>
     </context>
     <context>
@@ -5028,13 +5028,6 @@ CPU 可跑、速度快，适合常规黑白漫画对白。</translation>
         </message>
         <message>
             <location filename="..\ui\model_intros.py" />
-            <source>Japanese manga specialist, recognizing one text block at a time.
-GPU recommended; about 1.9 GB of model files. Compare it with PaddleOCR-VL-1.6 on the same pages; neither is always more accurate.</source>
-            <translation>日文漫画专用模型，逐个文字框识别。
-建议使用 GPU，模型文件约 1.9 GB。可与 PaddleOCR-VL-1.6 在相同页面上对照，两者各有擅长。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\model_intros.py" />
             <source>Recognizes text with a multimodal model from your LLM profile. Suits stylized lettering and handwriting that regular OCR misses; requires a vision-capable API, with speed and cost set by the provider.</source>
             <translation>用 LLM Profile 里的多模态模型识别文字。适合艺术字、手写体等常规 OCR 认不出的内容；需要支持视觉的 API，速度与费用取决于服务商。</translation>
         </message>
@@ -5067,6 +5060,12 @@ GPU recommended; about 1.9 GB of model files. Compare it with PaddleOCR-VL-1.6 o
             <location filename="..\ui\model_intros.py" />
             <source>Single-turn translation straight through the LLM API: fast and cheap, but without global context or the review workflow; prefer the translation agent for new projects.</source>
             <translation>直接调用 LLM API 的单轮翻译：速度快、费用低，但没有全局上下文与审阅流程；新工程建议用翻译 agent。</translation>
+        </message>
+        <message>
+            <source>Japanese manga specialist, recognizing one text block at a time.
+GPU recommended; about 1.9 GB of model files. Compare it with PaddleOCR-VL-1.6 on the same pages; neither is always more accurate.</source>
+            <translation>日文漫画专用模型，逐个文字框识别。
+建议使用 GPU，模型文件约 1.9 GB。可与 PaddleOCR-VL-1.6 在相同页面上对照，两者各有擅长。</translation>
         </message>
         <message>
             <source>PaddleOCR-VL-1.6 multilingual recognition, one detected text block at a time.
@@ -5921,7 +5920,6 @@ Model files: Settings &gt; Models &gt; Model files. Keep the output limit at 256
     <context>
         <name>GlossaryAgentPanel</name>
         <message><source>Colors and speakers</source><translation>取色与角色</translation></message>
-        <message><source>Translation materials</source><translation>翻译资料</translation></message>
         <message><source>Generate drafts…</source><translation>生成草稿…</translation></message>
         <message><source>Suggest speaker names…</source><translation>建议角色名…</translation></message>
         <message>
@@ -8996,7 +8994,13 @@ Saved pages stay in the project. Unsaved results and revision candidates will be
         </message>
     </context>
     <context>
-        <name>PipelineWorkbench</name>
+        <name>PipelineRunDialog</name>
+        <message><source>Close</source><translation>关闭</translation></message>
+        <message><source>Engine</source><translation>引擎</translation></message>
+        <message><source>Only empty translations</source><translation>仅填充空译文</translation></message>
+        <message><source>Save project data only</source><translation>仅保存项目数据</translation></message>
+        <message><source>Current page: %1</source><translation>当前页：%1</translation></message>
+        <message><source>Page range: %1–%2</source><translation>第 %1–%2 页</translation></message>
         <message><source>Start recognition</source><translation>开始识别</translation></message>
         <message><source>Start translation</source><translation>开始翻译</translation></message>
         <message><source>Start repair</source><translation>开始修复</translation></message>
@@ -9022,5 +9026,11 @@ Saved pages stay in the project. Unsaved results and revision candidates will be
         <message><source>Task</source><translation>本次任务</translation></message>
         <message><source>Translate text</source><translation>翻译文字</translation></message>
         <message><source>Translation pipeline</source><translation>翻译管线</translation></message>
+    </context>
+    <context>
+        <name>TranslationPreparationPanel</name>
+        <message><source>Open a project to use the workbench.</source><translation>打开项目后即可使用工作台。</translation></message>
+        <message><source>Activity</source><translation>活动记录</translation></message>
+        <message><source>Stop</source><translation>停止</translation></message>
     </context>
 </TS>

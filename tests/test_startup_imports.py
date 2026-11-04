@@ -73,21 +73,23 @@ class TestStartupImports(unittest.TestCase):
         print("OK: ui.configpanel imports")
 
     def test_07_run_pipeline_dialog_init(self):
-        """RunPipelineDialog can be built (catches missing icons/imports).
+        """The desktop run configuration can be built without a MainWindow."""
+        from types import SimpleNamespace
 
-        The desktop run entry is the embedded PipelineWorkbench opened by
-        ``MainWindow.run_imgtrans``, which the smoke test cannot reach, so
-        build the base dialog here instead.
-        """
         import qtpy.QtWidgets as QW
+
+        from ui.run_pipeline_dialog import PipelineRunDialog
+
         app = QW.QApplication.instance() or QW.QApplication(
             sys.argv[:1] + ["--platform", "offscreen"]
         )
-        from ui.run_pipeline_dialog import RunPipelineDialog
 
-        d = RunPipelineDialog(None, page_names=["001.jpg", "002.jpg"])
+        project = SimpleNamespace(directory="project", current_img="001.jpg",
+                                  pages={"001.jpg": [], "002.jpg": []}, _image_info={})
+        d = PipelineRunDialog(project)
+        app.processEvents()
         n = len(d._stage_activators)
-        print(f"OK: RunPipelineDialog created ({d}, {n} stage activators)")
+        print(f"OK: PipelineRunDialog created ({d}, {n} stage activators)")
         d.deleteLater()
 
 

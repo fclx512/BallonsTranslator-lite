@@ -132,7 +132,8 @@ class PipelineTasks(QObject):
         w = self.window
         # 配置、模块选择、工作台共用引擎，运行期间必须停用；画布由覆盖层压住
         for widget in (w.configPanel, w.glossary_workbench,
-                       getattr(w, "pipeline_workbench", None),
+                       getattr(w, "translation_workbench", None),
+                       getattr(w, "run_pipeline_dialog", None),
                        w.bottomBar.textdet_selector, w.bottomBar.ocr_selector,
                        w.bottomBar.inpaint_selector, w.bottomBar.trans_selector):
             if widget is not None:
@@ -174,6 +175,10 @@ class PipelineTasks(QObject):
         host = getattr(self.window, "centralStackWidget", None)
         if host is None:
             return
+        # 非模态配置可能在菜单任务启动时仍打开，避免它压住进度或失败回执。
+        run_dialog = getattr(self.window, "run_pipeline_dialog", None)
+        if run_dialog is not None:
+            run_dialog.hide()
         self._teardown_overlay()
         self.overlay = PipelineProgressOverlay(host)
         self.overlay.stop_graceful_requested.connect(self.request_graceful_stop)
@@ -704,9 +709,9 @@ class PipelineTasks(QObject):
         if pcfg.module.empty_runcache:
             self.window.module_manager.unload_all_models()
         self.window.updatePageList()
-        workbench = getattr(self.window, "pipeline_workbench", None)
-        if workbench is not None:
-            workbench.refresh_project_state()
+        run_dialog = getattr(self.window, "run_pipeline_dialog", None)
+        if run_dialog is not None:
+            run_dialog.refresh_project_state()
         self._show_finished_report(report, errors)
         if self.close_when_done:
             self.window.close()

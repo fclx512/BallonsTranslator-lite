@@ -173,7 +173,7 @@
 
 ### 8. 容器与菜单入口
 
-容器＝`ui/glossary_agent_panel.py::GlossaryAgentPanel`。2026-10-22 起桌面端使用 `menu_mode`，隐藏旧七项导航，由 `ui/mainwindow.py::open_workbench_tool` 在持久的非模态工具窗口中选择单个任务。左栏工作台已归还给 `ui/run_pipeline_dialog.py::PipelineWorkbench`，只配置翻译管线；固定两行导航保留给兼容调用和旧演练台。各工具的标题、候选／草稿、操作区与活动记录仍保留，批量执行前仍走既有告知弹窗。关窗口会收起审批预览、解除取色，切工具与重开窗口不销毁草稿。
+容器＝`ui/glossary_agent_panel.py::GlossaryAgentPanel`。2026-10-22 起桌面端使用 `menu_mode`，隐藏旧七项导航，由 `ui/mainwindow.py::open_workbench_tool` 在持久的非模态工具窗口中选择单个任务。左栏工作台只呈现翻译准备，菜单“翻译资料”也打开这一侧栏；任务、范围和启动归底部“运行”的 `ui/run_pipeline_dialog.py::PipelineRunDialog`。准备页由 `ui/glossary_agent_panel.py::TranslationPreparationPanel` 固定承载，初始化后不再移动；工具容器唯一持有 worker 与草稿写入口，两个视图可同时可见，主窗口 owner 不变，固定两行导航保留给兼容调用和旧演练台。各工具的标题、候选／草稿、操作区与活动记录仍保留，批量执行前仍走既有告知弹窗。关窗口会收起审批预览、解除取色，切工具与重开窗口不销毁草稿。
 「批处理与审批是同一任务的两端，不分家」——D20 定的就是这个。
 
 **工具编号**（`ui/glossary_agent_panel.py::WORKBENCH_ORDER` 保留稳定编号，不再表示必做流程）：
@@ -197,7 +197,7 @@
 
 **空态与原因可见**（2026-09-26）：`plan` 除 `rows/summary/options_hint` 外可返回 `detail`，由 `ui/workbench_batch_view.py::BatchTaskView`（或 `ui/workbench_review_view.py::ReviewQueueView`）显示为页面上的独立说明行（原先藏在 summary 的 tooltip 里）；各引擎的 `skipped` 原因码经 `ui/workbench_tasks.py::_format_skipped` 聚合成"跳过：N 页 · 原因"文案（原因码仍是引擎常量、工作台层映射，不改码值）。可疑框队列的 `detail` 照实说明来源＝OCR 后处理规则、列表为空的四种可能（未跑 OCR／已关闭／none_ocr／无命中）——项目里没有"OCR 已运行"标记，不做伪判定。
 
-**入口＝工具菜单**（`ui/mainwindowbars.py::TitleBar`），跳转走 `ui/mainwindow.py::on_workbench_jump` 并隐藏工具窗口，继续复用含脏页惰性重渲的页链路。主窗口持有工具容器的 owner 引用，重挂到窗口后批量落盘、取色与审批预览仍寻址主窗口。管线侧栏宽度为 340；工具窗口初始尺寸 680×650，审批图仍以原比例显示在画布浮层。
+**入口＝工具菜单**（`ui/mainwindowbars.py::TitleBar`），跳转走 `ui/mainwindow.py::on_workbench_jump` 并隐藏工具窗口，继续复用含脏页惰性重渲的页链路。主窗口持有工具容器的 owner 引用，批量落盘、取色与审批预览始终寻址主窗口；准备侧栏的独立活动区只接收准备任务的日志，两个视图共用一个 worker 和停止口。翻译准备侧栏宽度为 340；其他工具窗口初始尺寸 680×650，审批图仍以原比例显示在画布浮层。
 
 **空态限制**：判据 `ui/glossary_agent_panel.py::has_project`（`proj.directory` 非空）；面板根是 QStackedWidget，page 0 空态提示页（objectName `WorkbenchEmptyHint`）、page 1 内容页 ⇒ 空态时天然禁用全部交互。刷新点在 `ui/mainwindow.py::MainWindow` 的 `openDir`／`openJsonProj` 成功路径末尾。
 
@@ -401,7 +401,7 @@
 | 审批截图外扩量 | `ui/workbench_tasks.py` 的预览外扩比例＝短边 **0.5** | 组到邻框间隙中位 300+ px、p10 约 80~93 px、最小 0~1 px（相邻气泡会贴住）⇒ 取短边 50%（约 40 px）、硬上限「碰到邻框即停」。外扩后截图宽 min／中位／p90／max＝64／164／256／2063 px，**超 460 px 的只有 14/380（3.7%）**且都是跨栏大组（本就默认不勾选）。 |
 | 备份版本数 | 设置项 `batch_backup_versions`，默认 1、上限 5 | 即「可连续撤销的批量操作步数」。像素版只存前图，约 43 MB/版；`inpainted/` 全量 140.6 MB（1.53 MB/页）。 |
 | 队列规模基线 | 样本 94 页 → **128 块／51 页**（每页 1.36 块） | 子类型命中合计 163（无假名汉字 92／空文本 36／纯数字 20／纯符号 15，约 35 块跨类）。**合并前后队列不变**。换样本后先跑 `queue` 复核量级，再定列表信息密度。 |
-| 管线侧栏宽度 | `ui/mainwindow.py::MainWindow` 的 `WORKBENCH_WIDTH = 340` | 只配置翻译任务，候选与草稿使用独立工具窗口。 |
+| 翻译准备侧栏宽度 | `ui/mainwindow.py::MainWindow` 的 `WORKBENCH_WIDTH = 340` | 准备页固定在侧栏；其他任务使用独立工具窗口，不隐藏或移动准备页。 |
 | 菜单工具窗口 | 初始 680×650，可调整尺寸；旧导航隐藏 | 容器与活动记录保留，关闭不销毁草稿；审批预览仍在画布中以 100% 打开。 |
 | 置信度分档阈值 | **未落地**（无设置入口） | 见 §17。方向＝存分数做分档，不调高硬丢弃阈值。 |
 | 审批截图比例 | **硬约束、不是参数** | 必须 100% 原始比例：**打开与换图都回到 100%**，不自动缩到适应窗口；缩放／平移只能由用户显式发起（D44 的浮层满足这条——滚轮缩放是「看得更清」，不是「缩着看」）。 |

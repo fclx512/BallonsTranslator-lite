@@ -63,6 +63,7 @@ class RunPipelineDialogTest(unittest.TestCase):
             "llm_prior_context_token_budget",
             "llm_glossary_path",
             "llm_glossary_mode",
+            "render_after_pipeline",
         )
         snapshot = {k: getattr(cfg, k) for k in keys}
         self.addCleanup(
@@ -237,26 +238,28 @@ class RunPipelineDialogTest(unittest.TestCase):
         dialog.tab_bar.setCurrentIndex(1)
         self.assertTrue(dialog.run_btn.isEnabled())
 
-    def test_workbench_refreshes_raw_stage_codes(self):
+    def test_run_dialog_refreshes_raw_stage_codes(self):
         from types import SimpleNamespace
-        from ui.run_pipeline_dialog import PipelineWorkbench
+
+        from ui.run_pipeline_dialog import PipelineRunDialog
         from utils.config import RunStatus
         project = SimpleNamespace(directory="project", current_img="a.png",
                                   pages={"a.png": [], "b.png": []},
                                   _image_info={"a.png": {"finish_code": RunStatus.FIN_ALL}})
-        panel = PipelineWorkbench(project)
+        panel = PipelineRunDialog(project)
         self.addCleanup(panel.deleteLater)
         self.assertEqual(panel._progress_codes, [RunStatus.FIN_ALL, 0])
         project._image_info["b.png"] = {"finish_code": RunStatus.FIN_ALL}
         panel.refresh_project_state()
         self.assertEqual(panel.page_range.range_bar.finished_count, 2)
 
-    def test_workbench_scope_and_project_switch_do_not_reuse_old_pages(self):
+    def test_run_dialog_scope_and_project_switch_do_not_reuse_old_pages(self):
         from types import SimpleNamespace
-        from ui.run_pipeline_dialog import PipelineWorkbench
+
+        from ui.run_pipeline_dialog import PipelineRunDialog
         project = SimpleNamespace(directory="first", current_img="002.jpg",
                                   pages=dict.fromkeys(PAGE_NAMES, []), _image_info={})
-        panel = PipelineWorkbench(project)
+        panel = PipelineRunDialog(project)
         self.addCleanup(panel.deleteLater)
         panel.set_scope("current")
         self.assertEqual(panel.page_filter(), ["002.jpg"])
@@ -271,37 +274,161 @@ class RunPipelineDialogTest(unittest.TestCase):
         self.assertIsNone(panel.page_filter())
         self.assertEqual(panel._page_names, ["new.jpg"])
 
-    def test_workbench_run_stays_embedded_and_render_task_remains_available(self):
+    def test_run_dialog_accepts_render_task_and_keeps_options_when_reopened(self):
         from types import SimpleNamespace
+
         from qtpy.QtWidgets import QWidget
-        from ui.run_pipeline_dialog import PipelineWorkbench
+
+        from ui.run_pipeline_dialog import PipelineRunDialog
         parent = QWidget()
         project = SimpleNamespace(directory="project", current_img="a.jpg",
                                   pages={"a.jpg": []}, _image_info={})
-        panel = PipelineWorkbench(project, parent)
+        panel = PipelineRunDialog(project, parent)
         self.addCleanup(parent.deleteLater)
         seen = []
-        panel.run_requested.connect(lambda: seen.append(panel.task_mode()))
+        panel.accepted.connect(lambda: seen.append(panel.task_mode()))
         panel.task_combo.setCurrentIndex(panel.task_combo.findData("render"))
+        panel.set_scope("current")
+        panel.show()
         panel.run_btn.click()
         self.assertEqual(seen, ["render"])
-        self.assertFalse(panel.isWindow())
-        self.assertFalse(panel.isModal())
+        self.assertTrue(panel.isWindow())
+        self.assertFalse(panel.isVisible())
         self.assertTrue(panel.is_render_only())
+        panel.show()
+        self.assertFalse(panel.isModal())
+        self.assertEqual(panel.page_filter(), ["a.jpg"])
+        panel.reject()
+        self.assertEqual(seen, ["render"])
 
-    def test_mainwindow_run_opens_the_existing_workbench(self):
+    def test_desktop_run_form_shows_task_options_after_one_expansion(self):
+        from types import SimpleNamespace
+
+        from ui.run_pipeline_dialog import PipelineRunDialog
+        project = SimpleNamespace(directory="project", current_img="a.jpg",
+                                  pages={"a.jpg": []}, _image_info={})
+        dialog = PipelineRunDialog(project)
+        self.addCleanup(dialog.deleteLater)
+        dialog.show()
+        dialog.more_btn.setChecked(True)
+        for mode, stages, option in (
+            ("translate", {self.STAGE_TRANSLATE}, dialog.history_cb),
+            ("inpaint", {self.STAGE_INPAINT}, dialog.skip_simple_cb),
+            ("recognize", {self.STAGE_DETECT, self.STAGE_OCR}, dialog.keep_lines_cb),
+            ("render", set(), None),
+        ):
+            with self.subTest(mode=mode):
+                dialog.task_combo.setCurrentIndex(dialog.task_combo.findData(mode))
+                self.assertFalse(dialog.isModal())
+                for stage, row in dialog._stage_activators.items():
+                    self.assertEqual(row.isVisibleTo(dialog), stage in stages)
+                if option is not None:
+                    self.assertTrue(option.isVisibleTo(dialog))
+                else:
+                    self.assertFalse(dialog.more_btn.isVisibleTo(dialog))
+        dialog.task_combo.setCurrentIndex(dialog.task_combo.findData("recognize"))
+        dialog._stage_activators[self.STAGE_DETECT].button.setChecked(False)
+        self.assertTrue(dialog.run_btn.isEnabled())
+        self.assertFalse(dialog.more_btn.isVisibleTo(dialog))
+        dialog.task_combo.setCurrentIndex(dialog.task_combo.findData("translate"))
+        dialog.task_combo.setCurrentIndex(dialog.task_combo.findData("recognize"))
+        self.assertFalse(dialog._stage_activators[self.STAGE_DETECT].button.isChecked())
+        self.assertTrue(dialog._stage_activators[self.STAGE_OCR].button.isChecked())
+        dialog.reject()
+
+    def test_mainwindow_run_opens_run_configuration_without_opening_sidebar(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
+
         from ui.mainwindow import MainWindow
         window = SimpleNamespace(refresh_module_selector_status=Mock(),
+                                 run_pipeline_dialog=Mock(isVisible=lambda: False),
+                                 _sync_run_dialog_translator=Mock(),
                                  leftBar=SimpleNamespace(workbenchChecker=Mock()),
                                  on_set_workbench_widget=Mock())
         MainWindow.run_imgtrans(window)
-        window.leftBar.workbenchChecker.setChecked.assert_called_once_with(True)
-        window.on_set_workbench_widget.assert_called_once_with()
+        window.run_pipeline_dialog.refresh_project_state.assert_called_once_with()
+        window.run_pipeline_dialog.sync_runtime_options.assert_called_once_with()
+        window._sync_run_dialog_translator.assert_called_once_with(window.run_pipeline_dialog)
+        window.run_pipeline_dialog.show.assert_called_once_with()
+        window.leftBar.workbenchChecker.setChecked.assert_not_called()
+        window.on_set_workbench_widget.assert_not_called()
+        window.run_pipeline_dialog.sync_runtime_options.reset_mock()
+        window.run_pipeline_dialog.isVisible = lambda: True
+        MainWindow.run_imgtrans(window)
+        window.run_pipeline_dialog.sync_runtime_options.assert_not_called()
+
+    def test_confirmed_run_uses_selected_task_scope_and_overwrite(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock, patch
+
+        from ui.mainwindow import MainWindow
+        from ui.run_pipeline_dialog import PipelineRunDialog
+        project = SimpleNamespace(directory="project", current_img="b.jpg", num_pages=2,
+                                  is_all_pages_no_text=True,
+                                  pages={"a.jpg": [], "b.jpg": []}, _image_info={})
+        dialog = PipelineRunDialog(project)
+        self.addCleanup(dialog.deleteLater)
+        window = SimpleNamespace(run_pipeline_dialog=dialog, imgtrans_proj=project,
+                                 pipeline_tasks=SimpleNamespace(guard=lambda: False, start=Mock()),
+                                 run_imgtrans_render_only=Mock(), tr=lambda source: source)
+        window.on_enable_module = lambda stage, enabled: MainWindow.on_enable_module(window, stage, enabled)
+        dialog.set_scope("current")
+        dialog.overwrite_cb.setChecked(True)
+        dialog.render_after_cb.setChecked(False)
+        with patch("ui.mainwindow.save_config"), \
+             patch("ui.mainwindow.GET_MISSING_MODEL_FILES", return_value=[]), \
+             patch("ui.mainwindow.GET_MISSING_PACKAGES", return_value=[]):
+            for mode in ("recognize", "translate", "inpaint", "render"):
+                with self.subTest(mode=mode):
+                    dialog.task_combo.setCurrentIndex(dialog.task_combo.findData(mode))
+                    window.pipeline_tasks.start.reset_mock()
+                    MainWindow.start_pipeline_task(window)
+                    if mode == "render":
+                        window.run_imgtrans_render_only.assert_called_once_with(["b.jpg"])
+                        window.pipeline_tasks.start.assert_not_called()
+                    else:
+                        window.pipeline_tasks.start.assert_called_once_with(mode, ["b.jpg"], overwrite=True)
+                        self.assertFalse(pcfg.module.render_after_pipeline)
+
+    def test_run_dialog_language_changes_still_sync_with_bottom_bar(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock, patch
+
+        from ui.custom_widget import ConfigComboBox
+        from ui.mainwindow import MainWindow
+        from ui.run_pipeline_dialog import PipelineRunDialog
+        project = SimpleNamespace(directory="project", current_img="a.jpg",
+                                  pages={"a.jpg": []}, _image_info={})
+        dialog = PipelineRunDialog(project)
+        self.addCleanup(dialog.deleteLater)
+        source, target = ConfigComboBox(), ConfigComboBox()
+        self.addCleanup(source.deleteLater)
+        self.addCleanup(target.deleteLater)
+        for combo in (source, target):
+            combo.addItems(["Japanese", "English", "Chinese"])
+        translator = SimpleNamespace(set_source=Mock(), set_target=Mock())
+        window = SimpleNamespace(run_pipeline_dialog=dialog, sender=lambda: None,
+                                 module_manager=SimpleNamespace(translator=translator),
+                                 bottomBar=SimpleNamespace(trans_selector=SimpleNamespace(
+                                     src_selector=source, tgt_selector=target)))
+        dialog.set_translator_metadata("Japanese", "Chinese", ["Japanese", "English"], ["English", "Chinese"])
+        dialog.translate_source_changed.connect(lambda value: MainWindow.on_trans_src_changed(window, value))
+        dialog.translate_target_changed.connect(lambda value: MainWindow.on_trans_tgt_changed(window, value))
+        with patch("ui.mainwindow.save_config"):
+            dialog.source_combobox.setCurrentText("English")
+            dialog.target_combobox.setCurrentText("English")
+            self.assertEqual((source.currentText(), target.currentText()), ("English", "English"))
+            translator.set_source.assert_called_with("English")
+            translator.set_target.assert_called_with("English")
+            MainWindow.on_trans_src_changed(window, "Japanese")
+            MainWindow.on_trans_tgt_changed(window, "Chinese")
+            self.assertEqual(dialog.source_combobox.currentText(), "Japanese")
+            self.assertEqual(dialog.target_combobox.currentText(), "Chinese")
 
     def test_workbench_engine_selector_fits_inside_its_stage_row(self):
-        from qtpy.QtWidgets import QWidget, QVBoxLayout
+        from qtpy.QtWidgets import QVBoxLayout, QWidget
+
         from ui.run_pipeline_dialog import WorkbenchStage
         host = QWidget()
         host.resize(340, 100)
@@ -324,15 +451,20 @@ class RunPipelineDialogTest(unittest.TestCase):
         self.assertTrue(self.dialog.run_without_textstyle_update())
 
     def test_render_option_follows_saved_preference_without_writing_on_cancel(self):
+        from types import SimpleNamespace
         from unittest.mock import patch
+
+        from ui.run_pipeline_dialog import PipelineRunDialog
+        project = SimpleNamespace(directory="project", current_img=PAGE_NAMES[0],
+                                  pages=dict.fromkeys(PAGE_NAMES, []), _image_info={})
         for enabled in (True, False):
             with patch.object(pcfg.module, "render_after_pipeline", enabled):
-                dialog = self.Dialog(page_names=PAGE_NAMES)
-                self.assertEqual(dialog.render_after_cb.isChecked(), enabled)
-                dialog.render_after_cb.setChecked(not enabled)
-                dialog.reject()
-                self.assertEqual(pcfg.module.render_after_pipeline, enabled)
-                dialog.deleteLater()
+                for dialog in (self.Dialog(page_names=PAGE_NAMES), PipelineRunDialog(project)):
+                    self.assertEqual(dialog.render_after_cb.isChecked(), enabled)
+                    dialog.render_after_cb.setChecked(not enabled)
+                    dialog.reject()
+                    self.assertEqual(pcfg.module.render_after_pipeline, enabled)
+                    dialog.deleteLater()
 
 
 if __name__ == "__main__":

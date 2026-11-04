@@ -1,8 +1,8 @@
 """菜单工具容器（设计见 docs/技术实现/AI辅助功能_设计与实现.md 的「菜单工具」部分）。
 
-桌面端由工具菜单打开单个工具，menu_mode 隐藏旧导航；管线工作台独立在
-ui/run_pipeline_dialog.py。这里保留任务、worker 草稿与批量事务；主窗口引用仍叫
-glossary_workbench。默认导航形态只供既有演练台与兼容调用，不再占左栏入口。
+桌面端翻译准备页固定挂到 TranslationPreparationPanel 侧栏，其他任务留在工具窗口。
+GlossaryAgentPanel 继续唯一持有 worker、草稿接线与批量事务；准备页只在初始化时
+从工具栈取出，不在入口切换时移动。运行配置独立在 ui/run_pipeline_dialog.py。
 
 **定位**：七项任务共用固定两行导航、任务页与可展开活动区。导航标签与数量分行，
 切换和计数更新不移动按钮。候选点行预览与勾选操作独立；任务说明可展开，
@@ -723,6 +723,8 @@ class GlossaryAgentPanel(QWidget):
     revision_requested = Signal(object, str)
     # 撤回最近一次批量操作（D4／D35：整体一条撤回）
     rollback_requested = Signal(int)
+    activity_logged = Signal(str, str)
+    worker_busy_changed = Signal(bool)
 
     def __init__(self, proj, parent=None, *, menu_mode=False):
         super().__init__(parent)
@@ -734,6 +736,7 @@ class GlossaryAgentPanel(QWidget):
         self._syncing = False
         self._worker = None
         self._thread = None
+        self._preparation_panel = None
         self._batch_tasks = {}
         self._batch_views = {}
         # 非删除待办队列（原文待校对／译文待重译）：数据侧与视图分开存
@@ -929,7 +932,7 @@ class GlossaryAgentPanel(QWidget):
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.glossary_table.verticalHeader().setVisible(False)
         layout.addWidget(self.glossary_table, 1)
-        button_row = QHBoxLayout()
+        button_row = AdaptiveWrapLayout(horizontal_spacing=6, vertical_spacing=6)
         self.prefill_btn = QPushButton(self.tr("Extract by frequency"), page)
         self.prefill_btn.setToolTip(
             self.tr(
@@ -938,7 +941,6 @@ class GlossaryAgentPanel(QWidget):
         )
         self.glossary_remove_btn = QPushButton(self.tr("Remove selected"), page)
         button_row.addWidget(self.prefill_btn)
-        button_row.addStretch(1)
         button_row.addWidget(self.glossary_remove_btn)
         layout.addLayout(button_row)
         self._glossary_page = page
@@ -984,8 +986,6 @@ class GlossaryAgentPanel(QWidget):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(12, 10, 12, 10)
         title = QLabel(_TASK_LABELS[TRANSLATION_PREP], page)
-        if self._menu_mode:
-            title.setText(self.tr("Translation materials"))
         title.setObjectName("WorkbenchPageTitle")
         layout.addWidget(title)
         layout.addWidget(
@@ -1365,6 +1365,7 @@ class GlossaryAgentPanel(QWidget):
         if follow:
             scrollbar.setValue(scrollbar.maximum())
         self._refresh_latest_status()
+        self.activity_logged.emit(text, task_id)
 
     def _refresh_latest_status(self):
         text = self._latest_activity.get(self.current_task(), "")
@@ -1389,7 +1390,7 @@ class GlossaryAgentPanel(QWidget):
         index = self._prep_tab_indices.get(task_id)
         if index is None:
             return
-        if self.current_task() != TRANSLATION_PREP:
+        if self._preparation_panel is None and self.current_task() != TRANSLATION_PREP:
             self.nav.select(TRANSLATION_PREP)
         self._prep_tabs.setCurrentIndex(index)
 
@@ -1483,11 +1484,13 @@ class GlossaryAgentPanel(QWidget):
         self._palette_view.refresh_state()  # 调板随项目走：色表重挂、开关归位
         if self.has_project():
             self._stack.setCurrentIndex(1)
-            self.nav.select(WORKBENCH_ORDER[0], emit=False)
-            self._current_task = WORKBENCH_ORDER[0]
-            self.pages.setCurrentIndex(self._page_index(WORKBENCH_ORDER[0]))
+            # 菜单模式也用于翻译准备侧栏，换项目不能把它切成批量清理页。
+            task_id = self.current_task() if self._menu_mode else WORKBENCH_ORDER[0]
+            self.nav.select(task_id, emit=False)
+            self._current_task = task_id
+            self.pages.setCurrentIndex(self._page_index(task_id))
             if self.isVisible():
-                if not self._menu_mode:
+                if not self._menu_mode or task_id == TRANSLATION_PREP:
                     self._ensure_worker()
                 # 标脏位只由 *它* 清（``_ensure_current_planned``）：面板不可见
                 # （打开项目时工作台通常还没开）就跳过规划，此处先前无条件清掉
@@ -1499,6 +1502,9 @@ class GlossaryAgentPanel(QWidget):
         else:
             self._stack.setCurrentIndex(0)
         self._update_rollback_scope()
+
+        if self._preparation_panel is not None:
+            self._preparation_panel.refresh_project_state(reset=True)
 
     # ── 信号接线 ────────────────────────────────────────────────
 
@@ -1532,6 +1538,11 @@ class GlossaryAgentPanel(QWidget):
 
     def open_tool(self, task_id):
         """菜单选择一个工具；隐藏导航，保留任务与草稿的原有状态。"""
+        if task_id == TRANSLATION_PREP and self._preparation_panel is not None:
+            window = self._mainwindow()
+            if window is not None:
+                window.open_translation_materials()
+            return
         if task_id not in self._page_indices:
             return
         self.nav.select(task_id)
@@ -1675,7 +1686,7 @@ class GlossaryAgentPanel(QWidget):
 
         if not pcfg.workbench_confirm_costly:
             return True
-        box = QMessageBox(self)
+        box = QMessageBox(self._preparation_panel or self)
         box.setWindowTitle(self.tr("Prepare for translation"))
         box.setIcon(QMessageBox.Icon.Information)
         box.setText(self.tr("This will do the following in order:"))
@@ -1878,7 +1889,7 @@ class GlossaryAgentPanel(QWidget):
         path = pcfg.module.llm_glossary_path or ""
         if not path:
             path, _ = QFileDialog.getSaveFileName(
-                self,
+                self._preparation_panel or self,
                 self.tr("Save glossary"),
                 "glossary.json",
                 "JSON (*.json)",
@@ -1951,6 +1962,7 @@ class GlossaryAgentPanel(QWidget):
         self.apply_btn.setEnabled(not busy)
         self.glossary_table.setEnabled(not busy)
         self.story_table.setEnabled(not busy)
+        self.worker_busy_changed.emit(busy)
 
     def _on_round_finished(self, reply: str):
         if (reply or "").strip():
@@ -2011,3 +2023,97 @@ class GlossaryAgentPanel(QWidget):
                     self.story_table.setItem(r, c, item)
         finally:
             self._syncing = False
+
+
+class TranslationPreparationPanel(QWidget):
+    """固定的翻译准备视图；控件与 worker 写入口仍由工具控制器唯一持有。"""
+
+    def __init__(self, controller: GlossaryAgentPanel, parent=None):
+        super().__init__(parent)
+        self._controller = controller
+        _styled(self).setObjectName("WorkbenchRoot")
+        controller._preparation_panel = self
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._stack = QStackedWidget(self)
+        layout.addWidget(self._stack, 1)
+        empty = QLabel(self.tr("Open a project to use the workbench."), self)
+        empty.setWordWrap(True)
+        empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._stack.addWidget(empty)
+        # 初始化时取出准备页，之后不再改它的父控件或工具页选择。
+        pages = {task: controller.pages.widget(index)
+                 for task, index in controller._page_indices.items()}
+        preparation = pages.pop(TRANSLATION_PREP)
+        controller.pages.removeWidget(preparation)
+        controller._page_indices = {task: controller.pages.indexOf(page)
+                                    for task, page in pages.items()}
+        self._scroll = QScrollArea(self)
+        self._scroll.setObjectName("WorkbenchPageScroll")
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        preparation.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self._scroll.setWidget(preparation)
+        self._stack.addWidget(self._scroll)
+        status = _styled(QWidget(self))
+        status.setObjectName("WorkbenchStatusBar")
+        footer = QVBoxLayout(status)
+        footer.setContentsMargins(12, 8, 12, 8)
+        row = QHBoxLayout()
+        activity = QPushButton(self.tr("Activity"), status)
+        activity.setCheckable(True)
+        row.addWidget(activity)
+        self.stop_btn = QPushButton(self.tr("Stop"), status)
+        self.stop_btn.clicked.connect(controller._on_stop)
+        self.stop_btn.hide()
+        row.addWidget(self.stop_btn)
+        self._latest_status = WorkbenchStatusLabel(status)
+        self._latest_status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self._latest_status.setTextFormat(Qt.TextFormat.PlainText)
+        row.addWidget(self._latest_status, 1)
+        footer.addLayout(row)
+        self._log_view = ConfigTextEdit(status)
+        self._log_view.setReadOnly(True)
+        self._log_view.setFixedHeight(156)
+        self._log_view.document().setMaximumBlockCount(200)
+        self._log_view.hide()
+        activity.toggled.connect(self._log_view.setVisible)
+        footer.addWidget(self._log_view)
+        layout.addWidget(status)
+        self._status = status
+        controller.activity_logged.connect(self._append_activity)
+        controller.worker_busy_changed.connect(self.stop_btn.setVisible)
+        self.refresh_project_state()
+
+    def _append_activity(self, text, task_id):
+        if task_id != TRANSLATION_PREP:
+            return
+        self._latest_status.set_status(text)
+        scrollbar = self._log_view.verticalScrollBar()
+        follow = scrollbar.value() >= scrollbar.maximum() - 2
+        cursor = QTextCursor(self._log_view.document())
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        if not self._log_view.document().isEmpty():
+            cursor.insertBlock()
+        cursor.insertText(text)
+        if follow:
+            scrollbar.setValue(scrollbar.maximum())
+
+    def refresh_project_state(self, *, reset=False):
+        controller = self._controller
+        has_project = controller.has_project()
+        self._stack.setCurrentIndex(1 if has_project else 0)
+        self._status.setVisible(has_project)
+        if reset:
+            self._log_view.clear()
+            self._latest_status.set_status("")
+            controller._sync_glossary_table([])
+            controller._sync_story_tab("", [])
+            controller._on_busy_changed(False)
+        if has_project and self.isVisible():
+            controller._ensure_worker()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.refresh_project_state()

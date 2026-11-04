@@ -308,6 +308,57 @@ class TaskAdapterTest(_WorkbenchTestCase):
 
 
 class PanelTest(_WorkbenchTestCase):
+    def test_preparation_sidebar_stays_in_place_while_tools_open(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from qtpy.QtGui import QAction
+        from qtpy.QtWidgets import QCheckBox, QDialog, QVBoxLayout
+
+        from ui.glossary_agent_panel import GlossaryAgentPanel, TranslationPreparationPanel
+        from ui.mainwindow import MainWindow
+        from ui.workbench_tasks import TRANSLATION_PREP
+
+        window = self.window
+        window.WORKBENCH_WIDTH = 340
+        window.imgtrans_proj = self.proj
+        window.pipeline_tasks = SimpleNamespace(guard=lambda: False)
+        window._workbench_tool_dialog = QDialog(window)
+        QVBoxLayout(window._workbench_tool_dialog)
+        window.glossary_workbench = panel = GlossaryAgentPanel(self.proj, window, menu_mode=True)
+        window._workbench_tool_dialog.layout().addWidget(panel)
+        self.addCleanup(panel._shutdown)
+        window.translation_workbench = sidebar = TranslationPreparationPanel(panel, window)
+        sidebar.hide()
+        window.leftBar = SimpleNamespace(workbenchChecker=QCheckBox())
+        window.titleBar = SimpleNamespace(workbench_tool_actions={MERGE: QAction("Merge", window)})
+        window._animate_panel_width = lambda widget, width: widget.setVisible(bool(width))
+        window.open_translation_materials = lambda: MainWindow._showWorkbenchPanel(window)
+        with patch.object(panel, "_ensure_worker"):
+            MainWindow._showWorkbenchPanel(window)
+            preparation = sidebar._scroll.widget()
+            parent = preparation.parentWidget()
+            panel._sync_glossary_table([("source", "draft", "note", "manual")])
+            panel._prep_tabs.setCurrentIndex(1)
+            MainWindow.open_workbench_tool(window, MERGE)
+            self.assertTrue(sidebar.isVisible())
+            self.assertIs(preparation.parentWidget(), parent)
+            self.assertIs(panel.parentWidget(), window._workbench_tool_dialog)
+            MainWindow.open_workbench_tool(window, TRANSLATION_PREP)
+            self.assertTrue(window._workbench_tool_dialog.isVisible())
+            self.assertEqual(panel.current_task(), MERGE)
+            self.assertEqual(panel._prep_tabs.currentIndex(), 1)
+            self.assertEqual(panel.glossary_table.item(0, 1).text(), "draft")
+            panel._append_log("prep activity", TRANSLATION_PREP)
+            panel._append_log("merge activity", MERGE)
+            self.assertEqual(sidebar._log_view.toPlainText(), "prep activity")
+            self.assertIs(panel._mainwindow(), window)
+            panel.refresh_project_state()
+            self.assertTrue(sidebar.isVisible())
+            self.assertEqual(panel.glossary_table.rowCount(), 0)
+            window._workbench_tool_dialog.hide()
+            sidebar.hide()
+
     def test_nav_order_and_default_task(self):
         """扁平七项导航：一行一个任务，顺序＝用户工作流顺序。"""
         from ui.glossary_agent_panel import WORKBENCH_ORDER

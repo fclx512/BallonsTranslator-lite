@@ -865,14 +865,14 @@ class RunPipelineDialog(QDialog):
 
 
 class WorkbenchStage(QWidget):
-    """侧栏中的阶段开关与引擎选择，沿用运行配置的模块接口。"""
+    """紧凑运行表单中的阶段开关与引擎选择。"""
 
     module_selected = Signal(str, str)
 
     def __init__(self, module_type, label, parent=None):
         super().__init__(parent)
         self.module_type = module_type
-        self.setObjectName("PipelineWorkbenchStage")
+        self.setObjectName("PipelineRunDialogStage")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 5, 0, 5)
@@ -885,7 +885,7 @@ class WorkbenchStage(QWidget):
         self.selector = ConfigComboBox(fix_size=False, options=options)
         self.selector.setMinimumWidth(0)
         self.selector.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self.selector.setFixedWidth(126)
+        self.selector.setFixedWidth(160)
         self.set_module(current)
         mark_module_selector_status(self.selector, module_type)
         self.selector.currentTextChanged.connect(
@@ -906,19 +906,16 @@ class WorkbenchStage(QWidget):
         self.selector.setEnabled(active)
 
 
-class PipelineWorkbench(RunPipelineDialog):
-    """画布旁的常驻任务配置；只发运行请求，执行与进度仍由主窗口负责。
+class PipelineRunDialog(RunPipelineDialog):
+    """底部运行入口的持久配置窗口；确认后由主窗口预检并启动任务。
 
-    复用运行配置的参数表单与公共 API，以 QWidget 标志嵌入侧栏，不调用 exec。
-    任务限制与 runner 模式一致；菜单工具、收费调用与批量写回不在这里执行。
+    复用各阶段参数表单，保留任务、范围与折叠状态；不承载翻译准备草稿。
     """
-
-    run_requested = Signal()
     materials_requested = Signal()
 
     def tr(self, source, disambiguation=None, n=-1):
-        # 共用表单仍使用原运行配置的翻译；本侧栏新增文案独立登记。
-        text = QCoreApplication.translate("PipelineWorkbench", source, disambiguation, n)
+        # 共用表单仍使用基类的翻译；桌面运行配置的文案独立登记。
+        text = QCoreApplication.translate("PipelineRunDialog", source, disambiguation, n)
         if text == source:
             text = QCoreApplication.translate("RunPipelineDialog", source, disambiguation, n)
         return text
@@ -928,14 +925,24 @@ class PipelineWorkbench(RunPipelineDialog):
         self._scope = "all"
         self._project_key = None
         self._current_page = None
+        has_recognition = pcfg.module.enable_detect or pcfg.module.enable_ocr
+        self._recognition_stages = {
+            STAGE_DETECT: bool(pcfg.module.enable_detect) if has_recognition else True,
+            STAGE_OCR: bool(pcfg.module.enable_ocr) if has_recognition else True,
+        }
+        self._changing_task = False
         super().__init__(parent)
-        self.setWindowFlags(Qt.WindowType.Widget)
-        self.setObjectName("PipelineWorkbench")
+        self.setObjectName("PipelineRunDialog")
+        self.setWindowModality(Qt.WindowModality.NonModal)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.tab_bar.hide()
         self.layout().setContentsMargins(14, 16, 14, 14)
         self.layout().setSpacing(12)
         self.layout().setStretch(1, 1)
+        self.setMinimumSize(380, 420)
+        screen = self.screen()
+        height = min(580, int(screen.availableGeometry().height() * 0.9)) if screen else 580
+        self.resize(480, height)
         self.refresh_project_state()
 
     def _build_pipeline_page(self):
@@ -943,7 +950,7 @@ class PipelineWorkbench(RunPipelineDialog):
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
         title = QLabel(self.tr("Translation pipeline"), page)
-        title.setObjectName("PipelineWorkbenchTitle")
+        title.setObjectName("PipelineRunDialogTitle")
         layout.addWidget(title)
         self.empty_hint = QLabel(self.tr("Open a project to configure a task."), page)
         self.empty_hint.setWordWrap(True)
@@ -953,7 +960,7 @@ class PipelineWorkbench(RunPipelineDialog):
         self._scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._scroll.setWidgetResizable(True)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._scroll.setObjectName("PipelineWorkbenchScroll")
+        self._scroll.setObjectName("PipelineRunDialogScroll")
         layout.addWidget(self._scroll, 1)
         self._form = QWidget()
         form = QVBoxLayout(self._form)
@@ -997,13 +1004,14 @@ class PipelineWorkbench(RunPipelineDialog):
         self.range_frame.hide()
         form.addWidget(self.range_frame)
 
-        form.addWidget(self._setting_label(self.tr("Stages")))
+        self.stages_label = self._setting_label(self.tr("Stages"))
+        form.addWidget(self.stages_label)
         form.addWidget(self._build_stage_grid())
         # 参数区沿用原运行表单，收在一个可滚动的高级选项区。
         self.more_btn = ExpandingToolButton(page)
         self.more_btn.setText(self.tr("More options"))
         self.more_btn.setCheckable(True)
-        self.more_btn.setObjectName("PipelineWorkbenchMore")
+        self.more_btn.setObjectName("PipelineRunDialogMore")
         self.more_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.more_btn.setIcon(QIcon(self._chevron_pixmap(False)))
         self.more_btn.toggled.connect(
@@ -1035,7 +1043,7 @@ class PipelineWorkbench(RunPipelineDialog):
         self.language_row = language_row
         form.addWidget(language_row)
 
-        # 将旧弹窗的宽行改为纵向，长路径也必须能在侧栏内换行。
+        # 长路径与低频选项保持纵向，较小屏幕也能滚动到全部控件。
         for control in (self.single_blk_combo, self.history_cb,
                         self.glossary_status, self.glossary_mode_combo):
             row_layout = control.parentWidget().layout()
@@ -1045,22 +1053,50 @@ class PipelineWorkbench(RunPipelineDialog):
         self.wo_update_cb = ConfigCheckBox(self.tr("Run without update textstyle"), page)
         self.wo_update_cb.hide()
         self.overwrite_cb = ConfigCheckBox(self.tr("Replace existing translations"), page)
+        self.overwrite_cb.toggled.connect(self._refresh_run_button)
         self.render_after_cb = ConfigCheckBox(self.tr("Render result images after processing"), page)
         self.render_after_cb.setChecked(pcfg.module.render_after_pipeline)
+        self.render_after_cb.toggled.connect(self._refresh_run_button)
         form.addWidget(self.overwrite_cb)
         form.addWidget(self.render_after_cb)
-        self.render_after_cb.toggled.connect(
-            lambda checked: setattr(pcfg.module, "render_after_pipeline", checked)
-        )
         form.addWidget(self.more_btn)
-        materials = QPushButton(self.tr("Manage translation materials…"), self.advanced)
-        materials.clicked.connect(self.materials_requested.emit)
-        advanced_layout.addWidget(materials)
+        self.materials_btn = QPushButton(self.tr("Manage translation materials…"), self.advanced)
+        self.materials_btn.clicked.connect(self.materials_requested.emit)
+        advanced_layout.addWidget(self.materials_btn)
         self.more_btn.toggled.connect(self.advanced.setVisible)
         self.advanced.hide()
         form.addWidget(self.advanced)
         form.addStretch(1)
         return page
+
+    def _add_settings_section(self, layout, stage, title):
+        """桌面运行表单只用外层“更多选项”，阶段正文不再嵌套折叠。"""
+        body = QWidget(self)
+        body.setObjectName("RunPipelineSettingsSection")
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(8)
+        self._stage_sections[stage] = body
+        self._stage_bodies[stage] = body
+        layout.addWidget(body)
+        return body_layout
+
+    def _build_ocr_options(self, layout):
+        # OCR 没有本次运行参数，不占一段空说明。
+        pass
+
+    def _on_stage_toggled(self, stage, checked):
+        if not self._changing_task and stage in self._recognition_stages:
+            self._recognition_stages[stage] = checked
+        super()._on_stage_toggled(stage, checked)
+
+    def _refresh_stage_sections(self):
+        super()._refresh_stage_sections()
+        if hasattr(self, "advanced"):
+            has_options = any(section.isVisibleTo(self.advanced)
+                              for section in self._stage_sections.values())
+            self.more_btn.setVisible(has_options)
+            self.advanced.setVisible(has_options and self.more_btn.isChecked())
 
     def _build_stage_grid(self):
         frame = QWidget(self)
@@ -1074,6 +1110,9 @@ class PipelineWorkbench(RunPipelineDialog):
             (STAGE_INPAINT, "inpainter", self.tr("Repair images")),
         ):
             row = WorkbenchStage(module_type, label, frame)
+            if stage not in {STAGE_DETECT, STAGE_OCR}:
+                row.button.hide()
+                row.layout().insertWidget(1, QLabel(self.tr("Engine"), row), 1)
             row.button.toggled.connect(lambda checked, s=stage: self._on_stage_toggled(s, checked))
             row.module_selected.connect(self.module_selected.emit)
             self._stage_activators[stage] = row
@@ -1083,26 +1122,38 @@ class PipelineWorkbench(RunPipelineDialog):
     def _build_button_row(self):
         layout = QVBoxLayout()
         self.run_summary = QLabel(self)
-        self.run_summary.setObjectName("PipelineWorkbenchSummary")
+        self.run_summary.setObjectName("PipelineRunDialogSummary")
         self.run_summary.setWordWrap(True)
         layout.addWidget(self.run_summary)
         self.run_btn = QPushButton(self.tr("Start task"), self)
-        self.run_btn.setObjectName("PipelineWorkbenchRun")
+        self.run_btn.setObjectName("PipelineRunDialogRun")
         self.run_btn.setMinimumHeight(34)
-        self.run_btn.clicked.connect(self.run_requested.emit)
-        layout.addWidget(self.run_btn)
+        self.run_btn.clicked.connect(self.accept)
+        buttons = QHBoxLayout()
+        close = QPushButton(self.tr("Close"), self)
+        close.clicked.connect(self.reject)
+        buttons.addStretch(1)
+        buttons.addWidget(self.run_btn)
+        buttons.addWidget(close)
+        layout.addLayout(buttons)
         return layout
 
     def activate_task_mode(self, *_):
         allowed = {"recognize": {STAGE_DETECT, STAGE_OCR},
                    "translate": {STAGE_TRANSLATE}, "inpaint": {STAGE_INPAINT},
                    "render": set()}[self.task_mode()]
+        self._changing_task = True
         for stage, row in self._stage_activators.items():
-            row.button.setEnabled(stage in allowed)
-            row.button.setChecked(stage in allowed)
-            row._refresh_active_state(stage in allowed)
+            row.setVisible(stage in allowed)
+            checked = stage in allowed and self._recognition_stages.get(stage, True)
+            row.button.setEnabled(stage in {STAGE_DETECT, STAGE_OCR})
+            row.button.setChecked(checked)
+            row._refresh_active_state(checked)
+        self._changing_task = False
+        self.stages_label.setVisible(self.task_mode() == "recognize")
         self.overwrite_cb.setVisible(self.task_mode() == "translate")
         self.language_row.setVisible(self.task_mode() == "translate")
+        self.materials_btn.setVisible(self.task_mode() == "translate")
         self.render_after_cb.setVisible(not self.is_render_only())
         self.more_btn.setVisible(not self.is_render_only())
         self.advanced.setVisible(not self.is_render_only() and self.more_btn.isChecked())
@@ -1119,6 +1170,20 @@ class PipelineWorkbench(RunPipelineDialog):
         self.run_btn.setText(labels[self.task_mode()])
         self.run_summary.setText(self.tr("%1 · %2 page(s)").replace(
             "%1", self.task_combo.currentText()).replace("%2", str(count)))
+        if self._scope == "current":
+            scope = self.tr("Current page: %1").replace("%1", self._project.current_img or "—")
+        elif self._scope == "range":
+            start, end = self.page_range.range_values()
+            scope = self.tr("Page range: %1–%2").replace("%1", str(start)).replace("%2", str(end))
+        else:
+            scope = self.tr("All pages")
+        self.run_summary.setText(self.run_summary.text() + " · " + scope)
+        if self.task_mode() == "translate":
+            policy = self.tr("Replace existing translations") if self.overwrite_cb.isChecked() else self.tr("Only empty translations")
+            self.run_summary.setText(self.run_summary.text() + " · " + policy)
+        if not self.is_render_only():
+            policy = self.tr("Render result images after processing") if self.render_after_cb.isChecked() else self.tr("Save project data only")
+            self.run_summary.setText(self.run_summary.text() + "\n" + policy)
 
     def _on_page_range_changed(self, start, end):
         super()._on_page_range_changed(start, end)
@@ -1174,7 +1239,7 @@ class PipelineWorkbench(RunPipelineDialog):
             combo.setMaximumWidth(16777215)
 
     def sync_runtime_options(self):
-        """侧栏常驻，打开时静默回显设置页改过的配置。"""
+        """打开窗口时静默回显设置页改过的配置，保留本次任务与范围。"""
         for control, value in ((self.keep_lines_cb, pcfg.module.keep_exist_textlines),
                                (self.skip_simple_cb, pcfg.module.check_need_inpaint),
                                (self.history_cb, pcfg.module.llm_translate_context),
@@ -1196,5 +1261,5 @@ class PipelineWorkbench(RunPipelineDialog):
         self._refresh_glossary()
 
     def _resize_to_fit(self):
-        # 嵌入控件由父布局决定大小；高级参数过长时在内容区滚动。
+        # 保留用户调整的窗口尺寸；高级参数过长时在内容区滚动。
         self.updateGeometry()
