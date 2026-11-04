@@ -35,6 +35,12 @@ from qtpy.QtWidgets import (
 )
 
 from ui.misc import get_theme_color
+from ui.bubble import (
+    BubbleItem,
+    BubbleStyle,
+    block_bubble_from_payload,
+    block_bubble_to_payload,
+)
 from ui.text_engine.item import TextBlkItem as _EngineTextBlkItem
 from utils.block_tags import TAG_REGISTRY, TagDef, sorted_tag_ids
 from utils.config import pcfg
@@ -184,8 +190,12 @@ class TextBlkItem(_EngineTextBlkItem):
         # 标签徽标（复刻 _OrderBadgeItem 模式，锚块轮廓右上角）
         self._tag_badge_item = _TagBadgeItem(self)
         self.visual_geometry_changed.connect(self._sync_tag_badge)
+        # 块气泡背景（ui/bubble.py）：懒建，只有块真开了气泡才建图元
+        self._bubble_item: Optional[BubbleItem] = None
+        self.visual_geometry_changed.connect(self._sync_bubble_geometry)
         self.refresh_seq_badge()
         self.refresh_tag_badge()
+        self.refresh_block_bubble()
 
     # ── 属性别名（fork 消费者读写 oldPos/oldRect，引擎内部用 _old_pos/_old_rect）──
 
@@ -306,6 +316,62 @@ class TextBlkItem(_EngineTextBlkItem):
         badge.hide()
         if was_visible:
             badge._repaint_views()
+
+    # ── 块气泡背景（ui/bubble.py）─────────────────────────────────────────
+
+    def block_bubble(self) -> Optional[BubbleStyle]:
+        """当前块气泡样式；``None`` = 没有气泡。"""
+        if self._bubble_item is None:
+            return None
+        return self._bubble_item.style()
+
+    def set_block_bubble(self, style: Optional[BubbleStyle]) -> None:
+        """设置块气泡（``None`` 表示移除）。数据与图元一起改，不推撤销命令。"""
+        if self.blk is not None:
+            self.blk.bubble = block_bubble_to_payload(style)
+        self.refresh_block_bubble()
+
+    def refresh_block_bubble(self) -> None:
+        """按 ``blk.bubble`` 重建/移除气泡图元，并同步几何。
+
+        载荷是「未变化就不重建」的唯一入口：撤销走同一条路（命令只改
+        ``blk.bubble`` 再调本方法），保证 redo/undo 与用户操作走同一份代码。
+        """
+        style = None
+        if self.blk is not None:
+            style = block_bubble_from_payload(self.blk.bubble)
+        if style is None:
+            if self._bubble_item is not None:
+                self._bubble_item.setParentItem(None)
+                if self.scene() is not None:
+                    self.scene().removeItem(self._bubble_item)
+                self._bubble_item = None
+            self.update()
+            return
+        if self._bubble_item is None:
+            self._bubble_item = BubbleItem(style, parent=self)
+            # 子项默认画在父项**之上**，气泡会把整段译文盖住；zValue(-1) 只排
+            # 兄弟序，对父子无效（2026-11-04 离屏实测确认）。ItemStacksBehindParent
+            # 才是 Qt 给「子项画在父项之下」的开关。
+            self._bubble_item.setFlag(
+                QGraphicsItem.GraphicsItemFlag.ItemStacksBehindParent, True
+            )
+            self._bubble_item.setZValue(-1.0)
+        else:
+            self._bubble_item.set_style(style)
+        self._sync_bubble_geometry()
+
+    def _sync_bubble_geometry(self) -> None:
+        """气泡框跟随块的内容区（与选中框、描边框同一口径）。"""
+        item = self._bubble_item
+        if item is None:
+            return
+        rect = self.unpadRect(self.boundingRect())
+        if rect.isEmpty():
+            item.hide()
+            return
+        item.show()
+        item.set_rect(rect)
 
     def itemChange(self, change, value):
         # 选中态同步必须走 itemChange（ItemSelectedHasChanged 通知总会派发）而非

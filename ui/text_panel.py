@@ -877,6 +877,10 @@ class FontFormatPanel(Widget):
         self.history_dock = None
         self.symbol_launcher = None
         self.symbol_dock = None
+        # 块气泡浮层（D46）：内容控件懒建，与其余 rail 浮层同构
+        self.bubble_launcher = None
+        self.bubble_dock = None
+        self.bubble_panel = None
         self._symbol_panel = None
 
         self.vlayout.setContentsMargins(0, 0, 0, 4)
@@ -1367,6 +1371,7 @@ class FontFormatPanel(Widget):
             self.effects_panel.set_effect_items(transform_items)
         self._update_appearance_indicator()
         self._sync_annotation_controls()
+        self._sync_bubble_controls()
 
     def _iter_docks(self):
         """Yield (key, launcher, dock) for the rail docks.
@@ -1377,7 +1382,7 @@ class FontFormatPanel(Widget):
         The soft keyboard is deliberately NOT in this list: it floats beside
         the focused editor and coexists with rail docks (no slot sharing).
         """
-        for key in ("annotation", "emphasis", "appearance", "history"):
+        for key in ("annotation", "emphasis", "appearance", "history", "bubble"):
             yield (
                 key,
                 getattr(self, f"{key}_launcher", None),
@@ -1574,6 +1579,132 @@ class FontFormatPanel(Widget):
             if active:
                 title += " •"
             self.emphasis_dock.set_title(title)
+
+    # ── 块气泡浮层（D46）─────────────────────────────────────────────
+
+    def install_bubble_launcher(self, rail) -> None:
+        """块气泡背景浮层入口（选中级作用域，同注解浮层模式）。
+
+        内容是 ``ui/block_bubble_panel.py::BlockBubblePanel``，只管控件 ↔
+        ``BubbleStyle``；写盘与撤销由本面板建 ``SetBlockBubbleCommand``
+        入文本命令栈（设计 §3.2：与块的其他属性同栈，不与绘制栈合并）。
+        """
+        from ui.panel_rail import RailLauncherButton
+
+        self.rail = rail
+        self.bubble_launcher = RailLauncherButton("rail_bubble")
+        self.bubble_launcher.setToolTip(self.tr("Block Background (Bubble)"))
+        self.bubble_launcher.toggled.connect(self._on_bubble_launcher_toggled)
+        rail.add_launcher(self.bubble_launcher)
+
+    def _ensure_bubble_panel(self):
+        if self.bubble_panel is None:
+            from ui.block_bubble_panel import BlockBubblePanel
+
+            self.bubble_panel = BlockBubblePanel()
+            self.bubble_panel.bubble_changed.connect(self._on_bubble_changed)
+        return self.bubble_panel
+
+    def _ensure_bubble_dock(self):
+        if self.bubble_dock is None:
+            from ui.custom_widget import RailDockPanel
+
+            self.bubble_dock = RailDockPanel(
+                self.tr("Block Background"),
+                self._ensure_bubble_panel(),
+                rail=self.rail,
+                config_open="bubble_dock_open",
+            )
+            self.bubble_dock.setMinimumSize(260, 300)
+            self.bubble_dock.closed.connect(self._on_bubble_dock_closed)
+        return self.bubble_dock
+
+    def _on_bubble_launcher_toggled(self, checked: bool) -> None:
+        if self.bubble_dock is None and not checked:
+            return
+        if checked:
+            self._close_other_docks("bubble")
+            self._sync_bubble_controls()
+            self._ensure_bubble_dock().open_panel()
+        elif self.bubble_dock is not None:
+            self.bubble_dock.close_panel()
+
+    def _on_bubble_dock_closed(self) -> None:
+        if self.bubble_launcher is not None and self.bubble_launcher.isChecked():
+            with QSignalBlocker(self.bubble_launcher):
+                self.bubble_launcher.setChecked(False)
+
+    def _bubble_scope_items(self):
+        """气泡作用域＝当前单选块或全部多选块（与格式面板同一口径）。"""
+        if self._active_multi_items:
+            return list(self._active_multi_items)
+        if self.textblk_item is not None:
+            return [self.textblk_item]
+        return []
+
+    def _sync_bubble_controls(self) -> None:
+        """按选中块回显面板；无选中或全局模式时整体禁用。"""
+        items = self._bubble_scope_items()
+        panel = self.bubble_panel
+        if self.bubble_launcher is not None:
+            self.bubble_launcher.setEnabled(bool(items))
+        if panel is None:
+            return
+        panel.setEnabled(bool(items))
+        if not items:
+            panel.set_from_style(None)
+        elif len(items) == 1:
+            panel.set_from_style(items[0].block_bubble())
+        else:
+            # 多选：全部同款才回显，否则显示第一条（改任一项即覆盖全体，
+            # 与格式面板的多选镜像语义一致）
+            first = items[0].block_bubble()
+            same = all(
+                (other.block_bubble() or BubbleStyle()).to_payload()
+                == (first or BubbleStyle()).to_payload()
+                for other in items[1:]
+            )
+            panel.set_from_style(first if same else None)
+        self._update_bubble_indicator()
+
+    def _update_bubble_indicator(self) -> None:
+        items = self._bubble_scope_items()
+        active = any(item.block_bubble() is not None for item in items)
+        if self.bubble_launcher is not None:
+            self.bubble_launcher.set_dot(active)
+        if self.bubble_dock is not None:
+            title = self.tr("Block Background")
+            if active:
+                title += " •"
+            self.bubble_dock.set_title(title)
+
+    def _on_bubble_changed(self, style) -> None:
+        """面板改动 → SetBlockBubbleCommand 入文本命令栈。
+
+        一次改动一条命令：滑块拖动会连发多次，靠 ``QUndoCommand`` 的
+        ``mergeWith`` 合并（见命令类注释）；这里只保证「快照 → 下命令 →
+        让命令自己执行」的顺序。
+        """
+        items = self._bubble_scope_items()
+        if not items:
+            return
+        from ui import shared_widget as SW
+        from ui.bubble import block_bubble_to_payload
+        from ui.textedit_commands import SetBlockBubbleCommand
+
+        new_payload = block_bubble_to_payload(style)
+        before = [item.blk.bubble if item.blk is not None else None for item in items]
+        after = [copy.deepcopy(new_payload) for _ in items]
+        command = SetBlockBubbleCommand.create(items, before, after)
+        if command is None:
+            return
+        canvas = SW.canvas
+        if canvas is not None:
+            canvas.push_text_command(command)
+        else:
+            # 无画布（离屏/测试）：直接执行，保证数据与画面一致
+            command.redo()
+        self._update_bubble_indicator()
 
     def install_history_launcher(self, rail) -> None:
         """撤销历史浮层入口（一期：仅文本栈，同注解浮层模式）。

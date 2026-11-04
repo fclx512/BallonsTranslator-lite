@@ -1377,3 +1377,57 @@ class ApplyBlockTextCommand(QUndoCommand):
             else:
                 remove_tag(self.blkitem.blk, tag_id)
         self.blkitem.refresh_tag_badge()
+
+
+class SetBlockBubbleCommand(QUndoCommand):
+    """块气泡背景的开关/改参（设计 §3.2：走文本命令栈，与块其他属性一致）。
+
+    快照命令：构造时记下 ``blk.bubble`` 的前后载荷，redo/undo 都只写载荷再
+    调 ``refresh_block_bubble()``——图元重建、几何同步、落盘键三条都由那一个
+    入口负责，redo 与用户操作走同一份代码，不会出现「撤销后画面对了、数据
+    没回去」的分叉。
+
+    ``after`` 为 ``None`` 表示移除气泡。多个块一起改时用 ``items`` 列表，
+    与 ``SetTextTransformCommand`` 同构。
+    """
+
+    def __init__(
+        self,
+        items,
+        before,
+        after,
+        parent=None,
+    ):
+        super().__init__(
+            QCoreApplication.translate("UndoCommand", "Block Bubble"),
+            parent,
+        )
+        self.items = tuple(items)
+        if len(self.items) != len(before) or len(self.items) != len(after):
+            raise ValueError("items, before, and after must have the same length")
+        self.before = tuple(copy.deepcopy(v) if v is not None else None for v in before)
+        self.after = tuple(copy.deepcopy(v) if v is not None else None for v in after)
+
+    @classmethod
+    def create(cls, items, before, after):
+        """构造命令；前后一致（含「都没气泡」）返回 ``None``，不污染撤销栈。"""
+        items = tuple(items)
+        before = tuple(before)
+        after = tuple(after)
+        if len(items) != len(before) or len(items) != len(after):
+            raise ValueError("items, before, and after must have the same length")
+        if before == after:
+            return None
+        return cls(items, before, after)
+
+    def _apply(self, payloads) -> None:
+        for item, payload in zip(self.items, payloads):
+            if item.blk is not None:
+                item.blk.bubble = copy.deepcopy(payload) if payload is not None else None
+            item.refresh_block_bubble()
+
+    def redo(self) -> None:
+        self._apply(self.after)
+
+    def undo(self) -> None:
+        self._apply(self.before)

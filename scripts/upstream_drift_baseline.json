@@ -8,6 +8,7 @@
           "text_alpha_mask"
         ],
         "only_fork": [
+          "bubble",
           "tags"
         ],
         "changed": {

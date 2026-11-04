@@ -556,6 +556,8 @@ class ProgramConfig(Config):
     emphasis_dock_open: bool = False
     transform_dock_open: bool = False
     history_dock_open: bool = False
+    # 块气泡背景浮层（左缘窄栏入口，BlockBubblePanel）开合记忆
+    bubble_dock_open: bool = False
     # 软键盘（左缘窄栏入口）功能开关与触发范围（默认仅原文框）
     symbol_keyboard_enabled: bool = False
     symbol_keyboard_source_only: bool = True

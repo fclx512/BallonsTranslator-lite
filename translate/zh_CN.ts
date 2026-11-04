@@ -1741,7 +1741,10 @@ Hide them all? You can move them back later.</source>
     </context>
     <context>
         <name>FontFormatPanel</name>
-        <message><source>Colors and speakers…</source><translation>取色与角色…</translation></message>
+        <message>
+            <source>Colors and speakers…</source>
+            <translation>取色与角色…</translation>
+        </message>
         <message>
             <source>Annotations</source>
             <translation>注解</translation>
@@ -1869,6 +1872,14 @@ Hide them all? You can move them back later.</source>
         <message>
             <source>Selected Text · {0}</source>
             <translation>已选文本 · {0}</translation>
+        </message>
+        <message>
+            <source>Block Background</source>
+            <translation>块背景</translation>
+        </message>
+        <message>
+            <source>Block Background (Bubble)</source>
+            <translation>块背景（气泡）</translation>
         </message>
     </context>
     <context>
@@ -2302,8 +2313,14 @@ No block parameters change; the styles just leave the list.</source>
     </context>
     <context>
         <name>MainWindow</name>
-        <message><source>Review source text…</source><translation>原文待校对…</translation></message>
-        <message><source>Retranslate…</source><translation>译文待重译…</translation></message>
+        <message>
+            <source>Review source text…</source>
+            <translation>原文待校对…</translation>
+        </message>
+        <message>
+            <source>Retranslate…</source>
+            <translation>译文待重译…</translation>
+        </message>
         <message>
             <location filename="..\ui\mainwindow.py" line="622" />
             <source>Font Style Manager</source>
@@ -4257,17 +4274,50 @@ Orientation: {o}</source>
     </context>
     <context>
         <name>TitleBar</name>
-        <message><source>Batch processing</source><translation>批量处理</translation></message>
-        <message><source>Clean suspicious text blocks…</source><translation>清理可疑文本框…</translation></message>
-        <message><source>Colors and speakers…</source><translation>取色与角色…</translation></message>
-        <message><source>Fill simple backgrounds…</source><translation>简单背景填充…</translation></message>
-        <message><source>Merge adjacent text blocks…</source><translation>合并相邻文本框…</translation></message>
-        <message><source>Pages and images</source><translation>页面与图像</translation></message>
-        <message><source>Retranslate…</source><translation>译文待重译…</translation></message>
-        <message><source>Review source text…</source><translation>原文待校对…</translation></message>
-        <message><source>Text and styles</source><translation>文字与样式</translation></message>
-        <message><source>To-do</source><translation>待办</translation></message>
-        <message><source>Translation materials…</source><translation>翻译资料…</translation></message>
+        <message>
+            <source>Batch processing</source>
+            <translation>批量处理</translation>
+        </message>
+        <message>
+            <source>Clean suspicious text blocks…</source>
+            <translation>清理可疑文本框…</translation>
+        </message>
+        <message>
+            <source>Colors and speakers…</source>
+            <translation>取色与角色…</translation>
+        </message>
+        <message>
+            <source>Fill simple backgrounds…</source>
+            <translation>简单背景填充…</translation>
+        </message>
+        <message>
+            <source>Merge adjacent text blocks…</source>
+            <translation>合并相邻文本框…</translation>
+        </message>
+        <message>
+            <source>Pages and images</source>
+            <translation>页面与图像</translation>
+        </message>
+        <message>
+            <source>Retranslate…</source>
+            <translation>译文待重译…</translation>
+        </message>
+        <message>
+            <source>Review source text…</source>
+            <translation>原文待校对…</translation>
+        </message>
+        <message>
+            <source>Text and styles</source>
+            <translation>文字与样式</translation>
+        </message>
+        <message>
+            <source>To-do</source>
+            <translation>待办</translation>
+        </message>
+        <message>
+            <source>Translation materials…</source>
+            <translation>翻译资料…</translation>
+        </message>
         <message>
             <location filename="..\ui\mainwindowbars.py" line="309" />
             <source>Edit</source>
@@ -5919,9 +5969,18 @@ Model files: Settings &gt; Models &gt; Model files. Keep the output limit at 256
     </context>
     <context>
         <name>GlossaryAgentPanel</name>
-        <message><source>Colors and speakers</source><translation>取色与角色</translation></message>
-        <message><source>Generate drafts…</source><translation>生成草稿…</translation></message>
-        <message><source>Suggest speaker names…</source><translation>建议角色名…</translation></message>
+        <message>
+            <source>Colors and speakers</source>
+            <translation>取色与角色</translation>
+        </message>
+        <message>
+            <source>Generate drafts…</source>
+            <translation>生成草稿…</translation>
+        </message>
+        <message>
+            <source>Suggest speaker names…</source>
+            <translation>建议角色名…</translation>
+        </message>
         <message>
             <source>AI</source>
             <translation>AI</translation>
@@ -6406,6 +6465,10 @@ Model files: Settings &gt; Models &gt; Model files. Keep the output limit at 256
         <message>
             <source>Whole-book Alignment</source>
             <translation>整本对齐</translation>
+        </message>
+        <message>
+            <source>Block Bubble</source>
+            <translation>块气泡</translation>
         </message>
     </context>
     <context>
@@ -8995,42 +9058,207 @@ Saved pages stay in the project. Unsaved results and revision candidates will be
     </context>
     <context>
         <name>PipelineRunDialog</name>
-        <message><source>Close</source><translation>关闭</translation></message>
-        <message><source>Engine</source><translation>引擎</translation></message>
-        <message><source>Only empty translations</source><translation>仅填充空译文</translation></message>
-        <message><source>Save project data only</source><translation>仅保存项目数据</translation></message>
-        <message><source>Current page: %1</source><translation>当前页：%1</translation></message>
-        <message><source>Page range: %1–%2</source><translation>第 %1–%2 页</translation></message>
-        <message><source>Start recognition</source><translation>开始识别</translation></message>
-        <message><source>Start translation</source><translation>开始翻译</translation></message>
-        <message><source>Start repair</source><translation>开始修复</translation></message>
-        <message><source>Generate images</source><translation>生成结果图</translation></message>
-        <message><source>%1 · %2 page(s)</source><translation>%1 · %2 页</translation></message>
-        <message><source>All pages</source><translation>全部页面</translation></message>
-        <message><source>Current page</source><translation>当前页</translation></message>
-        <message><source>Detect text</source><translation>检测文本</translation></message>
-        <message><source>Manage translation materials…</source><translation>管理翻译资料…</translation></message>
-        <message><source>More options</source><translation>更多选项</translation></message>
-        <message><source>Open a project to configure a task.</source><translation>打开项目后配置翻译任务。</translation></message>
-        <message><source>Page range</source><translation>指定范围</translation></message>
-        <message><source>Pages</source><translation>处理范围</translation></message>
-        <message><source>Recognize source text</source><translation>识别原文</translation></message>
-        <message><source>Recognize text</source><translation>识别原文</translation></message>
-        <message><source>Render result images</source><translation>生成结果图</translation></message>
-        <message><source>Render result images after processing</source><translation>完成后生成结果图</translation></message>
-        <message><source>Repair images</source><translation>修复图像</translation></message>
-        <message><source>Replace existing translations</source><translation>替换已有译文</translation></message>
-        <message><source>Run without update textstyle</source><translation>不更新文字样式</translation></message>
-        <message><source>Stages</source><translation>启用阶段</translation></message>
-        <message><source>Start task</source><translation>开始处理</translation></message>
-        <message><source>Task</source><translation>本次任务</translation></message>
-        <message><source>Translate text</source><translation>翻译文字</translation></message>
-        <message><source>Translation pipeline</source><translation>翻译管线</translation></message>
+        <message>
+            <source>Close</source>
+            <translation>关闭</translation>
+        </message>
+        <message>
+            <source>Engine</source>
+            <translation>引擎</translation>
+        </message>
+        <message>
+            <source>Only empty translations</source>
+            <translation>仅填充空译文</translation>
+        </message>
+        <message>
+            <source>Save project data only</source>
+            <translation>仅保存项目数据</translation>
+        </message>
+        <message>
+            <source>Current page: %1</source>
+            <translation>当前页：%1</translation>
+        </message>
+        <message>
+            <source>Page range: %1–%2</source>
+            <translation>第 %1–%2 页</translation>
+        </message>
+        <message>
+            <source>Start recognition</source>
+            <translation>开始识别</translation>
+        </message>
+        <message>
+            <source>Start translation</source>
+            <translation>开始翻译</translation>
+        </message>
+        <message>
+            <source>Start repair</source>
+            <translation>开始修复</translation>
+        </message>
+        <message>
+            <source>Generate images</source>
+            <translation>生成结果图</translation>
+        </message>
+        <message>
+            <source>%1 · %2 page(s)</source>
+            <translation>%1 · %2 页</translation>
+        </message>
+        <message>
+            <source>All pages</source>
+            <translation>全部页面</translation>
+        </message>
+        <message>
+            <source>Current page</source>
+            <translation>当前页</translation>
+        </message>
+        <message>
+            <source>Detect text</source>
+            <translation>检测文本</translation>
+        </message>
+        <message>
+            <source>Manage translation materials…</source>
+            <translation>管理翻译资料…</translation>
+        </message>
+        <message>
+            <source>More options</source>
+            <translation>更多选项</translation>
+        </message>
+        <message>
+            <source>Open a project to configure a task.</source>
+            <translation>打开项目后配置翻译任务。</translation>
+        </message>
+        <message>
+            <source>Page range</source>
+            <translation>指定范围</translation>
+        </message>
+        <message>
+            <source>Pages</source>
+            <translation>处理范围</translation>
+        </message>
+        <message>
+            <source>Recognize source text</source>
+            <translation>识别原文</translation>
+        </message>
+        <message>
+            <source>Recognize text</source>
+            <translation>识别原文</translation>
+        </message>
+        <message>
+            <source>Render result images</source>
+            <translation>生成结果图</translation>
+        </message>
+        <message>
+            <source>Render result images after processing</source>
+            <translation>完成后生成结果图</translation>
+        </message>
+        <message>
+            <source>Repair images</source>
+            <translation>修复图像</translation>
+        </message>
+        <message>
+            <source>Replace existing translations</source>
+            <translation>替换已有译文</translation>
+        </message>
+        <message>
+            <source>Run without update textstyle</source>
+            <translation>不更新文字样式</translation>
+        </message>
+        <message>
+            <source>Stages</source>
+            <translation>启用阶段</translation>
+        </message>
+        <message>
+            <source>Start task</source>
+            <translation>开始处理</translation>
+        </message>
+        <message>
+            <source>Task</source>
+            <translation>本次任务</translation>
+        </message>
+        <message>
+            <source>Translate text</source>
+            <translation>翻译文字</translation>
+        </message>
+        <message>
+            <source>Translation pipeline</source>
+            <translation>翻译管线</translation>
+        </message>
     </context>
     <context>
         <name>TranslationPreparationPanel</name>
-        <message><source>Open a project to use the workbench.</source><translation>打开项目后即可使用工作台。</translation></message>
-        <message><source>Activity</source><translation>活动记录</translation></message>
-        <message><source>Stop</source><translation>停止</translation></message>
+        <message>
+            <source>Open a project to use the workbench.</source>
+            <translation>打开项目后即可使用工作台。</translation>
+        </message>
+        <message>
+            <source>Activity</source>
+            <translation>活动记录</translation>
+        </message>
+        <message>
+            <source>Stop</source>
+            <translation>停止</translation>
+        </message>
+    </context>
+    <context>
+        <name>BlockBubblePanel</name>
+        <message>
+            <source>Base width (ratio of the shorter side)</source>
+            <translation>根部宽度（短边比例）</translation>
+        </message>
+        <message>
+            <source>Block background</source>
+            <translation>块背景</translation>
+        </message>
+        <message>
+            <source>Border</source>
+            <translation>描边</translation>
+        </message>
+        <message>
+            <source>Border width (px, drawn inward only)</source>
+            <translation>描边宽度（像素，只往内画）</translation>
+        </message>
+        <message>
+            <source>Corner radius</source>
+            <translation>圆角半径</translation>
+        </message>
+        <message>
+            <source>Direction (0 = right, clockwise)</source>
+            <translation>方向（0 = 正右，顺时针）</translation>
+        </message>
+        <message>
+            <source>Draw a bubble shape behind this text block</source>
+            <translation>在文字块后面画一个气泡形状</translation>
+        </message>
+        <message>
+            <source>Ellipse</source>
+            <translation>椭圆</translation>
+        </message>
+        <message>
+            <source>Fill</source>
+            <translation>填充</translation>
+        </message>
+        <message>
+            <source>Fill opacity</source>
+            <translation>填充不透明度</translation>
+        </message>
+        <message>
+            <source>Length (ratio of the shorter side)</source>
+            <translation>长度（短边比例）</translation>
+        </message>
+        <message>
+            <source>Rectangle</source>
+            <translation>矩形</translation>
+        </message>
+        <message>
+            <source>Shape</source>
+            <translation>形状</translation>
+        </message>
+        <message>
+            <source>Tail</source>
+            <translation>尾巴</translation>
+        </message>
+        <message>
+            <source>Border is thick relative to the tail width, the tail may be filled by the border.</source>
+            <translation>描边相对尾巴宽度过粗，尾巴可能被描边填满。</translation>
+        </message>
     </context>
 </TS>

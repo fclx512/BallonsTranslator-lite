@@ -54,6 +54,12 @@ class TextBlock:
     # 标签体系（utils/block_tags.py）：tag_id -> {"source": ..., ...}，随 to_dict 全量导出
     tags: Dict = field(default_factory=dict)
 
+    # 块气泡背景（ui/bubble.py::BubbleStyle 的落盘形态）。None = 无气泡；
+    # 只在用户真开过时写键，默认值键随 to_dict 剪掉（见 to_dict 的 bubble 分支）。
+    # 上游 loader 把未知 kwarg 塞进 deprecated_attributes 后丢弃，故上游打开不崩、
+    # 保存即丢气泡，符合 `docs/技术实现/上游兼容策略_长期规范.md` 的既定方针。
+    bubble: Dict = None
+
     fontformat: FontFormat = field(default_factory=lambda: FontFormat())
 
     # 字体识别相关属性
@@ -448,14 +454,16 @@ class TextBlock:
         return self.lines[idx]
 
     def to_dict(self, deep_copy=False):
-        blk_dict = vars(self)
+        # vars() 返回的是实例真实的 __dict__（不是副本），下面要 pop 键，
+        # 必须先浅拷贝，否则会从 TextBlock 实例上把属性删掉。
+        blk_dict = dict(vars(self))
         # 字形掩膜量出的字号指标只在本次管线内使用，不进入工程存档。
-        if "_glyph_font_metrics" in blk_dict:
-            blk_dict = {
-                key: value
-                for key, value in blk_dict.items()
-                if key != "_glyph_font_metrics"
-            }
+        blk_dict.pop("_glyph_font_metrics", None)
+        # 气泡是 fork 独有键（上游不认）：没有气泡就不写键，免得每个块都多一个
+        # `"bubble": null` 让上游侧多报一条 deprecated 告警。空 dict 是「有气泡、
+        # 参数全默认」，必须保留（否则画不出纯白矩形气泡）。
+        if blk_dict.get("bubble") is None:
+            blk_dict.pop("bubble", None)
         if deep_copy:
             blk_dict = copy.deepcopy(blk_dict)
         return blk_dict

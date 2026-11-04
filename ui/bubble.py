@@ -572,6 +572,35 @@ def bubble_from_payload(payload) -> tuple[QRectF, BubbleStyle] | None:
     return rect, BubbleStyle.from_payload(payload.get("style"))
 
 
+# ── 块气泡的存取（TextBlock.bubble 是「只有非默认值才写」的 style 载荷）──────
+#
+# 块气泡不带 rect：几何由块自身的 ``unpadRect(boundingRect())`` 现算，随块
+# 缩放/改字号自动跟随（设计 §3.2）。因此 ``bubble`` 直接存 ``BubbleStyle``
+# 的载荷，而不是 ``bubble_to_payload`` 那种带 rect 的页面条目形态。
+#
+# **「键存在」= 有气泡**，而不是「载荷非空」：默认样式（白色矩形、无描边）
+# 本身就是一个有效可见的气泡，``to_payload()`` 对它返回 ``{}``。若拿
+# ``is_default()`` 判存在性，用户就永远画不出一个纯白矩形气泡。所以
+# ``None`` = 没气泡，``{}`` = 有气泡但全用默认值。
+
+
+def block_bubble_from_payload(payload) -> BubbleStyle | None:
+    """解析块气泡载荷。``None`` 表示没有气泡；``{}`` 是默认样式的气泡。"""
+    if not isinstance(payload, dict):
+        return None
+    return BubbleStyle.from_payload(payload)
+
+
+def block_bubble_to_payload(style: BubbleStyle | None) -> dict | None:
+    """把块气泡转成落盘形态；没有气泡（``None``）才返回 ``None``。
+
+    默认样式写成 ``{}``——它仍表示「有气泡」，只是参数全默认。
+    """
+    if style is None:
+        return None
+    return BubbleStyle.from_payload(style).to_payload()
+
+
 class BubbleItem(QGraphicsPathItem):
     """矢量气泡图元。两个宿主共用：页面图层子项 / ``TextBlkItem`` 子项。
 

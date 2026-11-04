@@ -516,6 +516,8 @@ class TextPanel(Widget):
         self.formatpanel.install_emphasis_launcher(self.rail)
         self.rail.add_group_gap()
         self.formatpanel.install_appearance_launcher(self.rail)
+        # 块气泡背景与外观同属「块这一层画什么」，排在外观之后
+        self.formatpanel.install_bubble_launcher(self.rail)
         self.formatpanel.install_history_launcher(self.rail)
 
     def showEvent(self, event) -> None:
