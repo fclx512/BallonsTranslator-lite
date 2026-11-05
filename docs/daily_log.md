@@ -12,6 +12,29 @@
 >
 > 仅保留最近 3 天的记录（超出窗口的日期节由 `scripts/trim_daily_log.py` 在提交时经 pre-commit 钩子自动清理，无需手工维护）；被裁掉的日期节仍完整留在提交历史里，用 `git log --grep <关键词>`／`git log --follow -p -- docs/daily_log.md`／`git show <rev>:docs/daily_log.md` 回查。
 
+## 2026-11-05
+
+### 气泡面板重排：标签控件同行 + 参数按需出现（`_ShapeSegments` / 图标分段钮）
+
+**摘要：** 用户反馈气泡面板丑且效率低。实测 260 最小宽下旧排法每个组标题独占一行、区域四数值格挤一行无标签、W/H 显示被截断、英文 "Rectangle" 分段截成 "ectang"。重排为**标签与控件同行、参数只在相关时出现**：默认态 6 行、全展开 9 行；形状改自绘图标分段钮 `_ShapeSegments`（文案与语言无关放不下，名称走 tooltip）；X/Y/W/H 与长/宽用 spinbox 前缀内嵌；跟随态收起数值格、尾巴关闭收起长宽行。`ShapeFillPanel.sync_border_controls` 式「禁用占位」在主参数区改为「隐藏」。
+**涉及文件：** `ui/block_bubble_panel.py`、`tests/test_block_bubble.py`、`scripts/probes/render_bubble_panel.py`（新）、`translate/zh_CN.ts`、`docs/技术实现/气泡绘制_设计方案.md`
+**验证：** 中英双语 260/300 宽出图确认无截断（探针 `--lang en` 专门钉英文形态）；气泡 59 例全绿；`verify.py` 全绿（i18n 无孤儿）。
+**遗留：** 面板滑块连拖逐改动的合并问题照旧（前一日遗留项不变）。
+
+### 气泡面板展开自动长高 + 圆角/描边输入上限（`_grow_to_fit_content` / `_apply_limits`）
+
+**摘要：** 用户报勾上「尾巴」/切「自定义区域」后新行被压扁、要手动拖一下才回正，且圆角与描边能拖出没有意义的值。`RailDockPanel` 原来只在首次打开按 sizeHint 定一次尺寸，现监听内容区及后代的 `LayoutRequest`（动态子控件走 `ChildAdded` 补挂），内容 sizeHint 变大就单向长高——只长不缩，用户拖小的尺寸不会被抢回。面板侧按气泡短边收紧输入上限：圆角 ≤ 短边/2、描边 ≤ 短边/4（绝对上限仍保留 200/64），换块与改区域尺寸都重算；`params.addStretch(1)` 让多余高度留在底部。顺带修了切块时自定义区域 W/H 沿用上一块数值的问题。
+**涉及文件：** `ui/custom_widget/rail_dock_panel.py`、`ui/block_bubble_panel.py`、`ui/text_panel.py`、`ui/textitem.py`、`tests/test_block_bubble.py`、`tests/test_rail_docks.py`、`translate/zh_CN.ts`、`docs/技术实现/气泡绘制_设计方案.md`
+**验证：** 真控件离屏探针 260/300 宽全展开 9 行无截断；浮层长高、手动缩小不被长回、上下限四例新增用例；`pytest tests` 1780 通过；`verify.py` 全绿、ruff 通过。
+
+### 演练台默认接管模态弹窗 + 页列表用例补运行窗依赖（`_install_dialog_guard` / `run_pipeline_dialog`）
+
+**摘要：** `scripts/mw_repro.py` 无人值守跑真实主窗口时，错误框与原生静态弹窗会卡住等人点：新增默认弹窗守卫 `_install_dialog_guard`——内容打到 stdout 后立即返回肯定值，QMessageBox 静态方法一并替换（其内部走 C++ exec，类级 patch 拦不住），`--interactive-dialogs` 还原真实弹窗；同时置 `SEM_NOGPFAULTERRORBOX` 让崩溃静默快速失败。`tests/test_page_list_dirty_click.py` 的 harness 补上 `run_pipeline_dialog`——65786f34 起切页末尾会调用它，缺了会让全量 pytest 在 55% 处 exit 127。
+**涉及文件：** `scripts/mw_repro.py`、`scripts/README.md`、`tests/test_page_list_dirty_click.py`
+**验证：** 页列表用例单独跑 5 例通过；全量 `pytest tests` 1780 通过。
+
+---
+
 ## 2026-11-04
 
 ### 气泡合并为「块气泡 + 自定义区域」并修尾巴消失（`region` / `BubbleSpec` / `_curve_mouth`）

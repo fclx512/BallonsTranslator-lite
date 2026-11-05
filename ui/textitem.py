@@ -34,7 +34,6 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from ui.misc import get_theme_color
 from ui.bubble import (
     BubbleItem,
     BubbleStyle,
@@ -42,6 +41,7 @@ from ui.bubble import (
     block_bubble_region,
     block_bubble_to_payload,
 )
+from ui.misc import get_theme_color
 from ui.text_engine.item import TextBlkItem as _EngineTextBlkItem
 from utils.block_tags import TAG_REGISTRY, TagDef, sorted_tag_ids
 from utils.config import pcfg

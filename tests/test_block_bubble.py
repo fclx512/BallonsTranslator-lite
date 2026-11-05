@@ -396,12 +396,32 @@ class PanelTest(unittest.TestCase):
         self.assertTrue(got.border)
         self.assertAlmostEqual(got.tail.angle, 180.0)
 
-    def test_corner_row_disabled_for_ellipse(self):
+    def test_corner_disabled_for_ellipse(self):
         panel = BlockBubblePanel()
         panel.set_from_style(BubbleStyle(shape=SHAPE_ELLIPSE))
-        self.assertFalse(panel.corner_row_widget.isEnabled())
+        self.assertFalse(panel.corner_spin.isEnabled())
         panel.set_from_style(BubbleStyle(shape=SHAPE_RECT))
-        self.assertTrue(panel.corner_row_widget.isEnabled())
+        self.assertTrue(panel.corner_spin.isEnabled())
+
+    def test_corner_and_border_capped_by_block_size(self):
+        """圆角 ≤ 短边一半、描边 ≤ 短边四分之一（再大只是胶囊/实心块）。"""
+        panel = BlockBubblePanel()
+        panel.seed_region(QRectF(0, 0, 160, 100))
+        panel.set_from_style(BubbleStyle(border=True))
+        self.assertEqual(panel.corner_spin.maximum(), 50)
+        self.assertAlmostEqual(panel.border_width_spin.maximum(), 25.0)
+        # 自定义区域以区域尺寸为准
+        panel.set_from_style(BubbleStyle(border=True), QRectF(0, 0, 60, 40))
+        self.assertEqual(panel.corner_spin.maximum(), 20)
+        self.assertAlmostEqual(panel.border_width_spin.maximum(), 10.0)
+
+    def test_loaded_values_clamped_to_bubble_size(self):
+        """旧数据里的超大圆角/描边回显时就被收进合理范围。"""
+        panel = BlockBubblePanel()
+        panel.seed_region(QRectF(0, 0, 100, 80))
+        panel.set_from_style(BubbleStyle(corner=200, border=True, border_width=64))
+        self.assertEqual(panel.current_style().corner, 40)
+        self.assertAlmostEqual(panel.current_style().border_width, 20.0)
 
     def test_set_none_clears(self):
         panel = BlockBubblePanel()

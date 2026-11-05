@@ -1679,10 +1679,13 @@ class FontFormatPanel(Widget):
 
         payload = item.block_bubble_payload()
         style = item.block_bubble()
-        # 基准尺寸无条件播种：即便当前还没有气泡，用户点开「自定义」也要从块的
-        # 实际大小起步，而不是 0×0（被钳成 1×1 就看不见了）
-        self.bubble_panel.seed_region(item.block_bubble_region_base())
         region = block_bubble_region(payload) if style is not None else None
+        # 基准尺寸无条件播种：即便当前还没有气泡，用户点开「自定义」也要从块的
+        # 实际大小起步，而不是 0×0（被钳成 1×1 就看不见了）。新块没有自定义
+        # 区域时连宽高一起重置，避免沿用上一块留下的数值。
+        self.bubble_panel.seed_region(
+            item.block_bubble_region_base(), reset_size=region is None
+        )
         self.bubble_panel.set_from_style(style, region)
 
     def _update_bubble_indicator(self) -> None:

@@ -26,15 +26,26 @@ from qtpy.QtWidgets import (  # noqa: E402
     QApplication,
     QFrame,
     QGraphicsScene,
+    QVBoxLayout,
     QWidget,
 )
 
 from utils.textblock import TextBlock  # noqa: E402
-from qtpy.QtCore import Signal  # noqa: E402
+from qtpy.QtCore import QSize, Signal  # noqa: E402
 
 
 class _TransformContent(QFrame):
     content_geometry_changed = Signal()
+
+
+class _TallContent(QFrame):
+    """sizeHint 远大于最小尺寸：钉「用户拖小后不被自动长回」。"""
+
+    def sizeHint(self):
+        return QSize(200, 400)
+
+    def minimumSizeHint(self):
+        return QSize(100, 100)
 
 
 def _make_blk(xyxy=(100, 100, 300, 200), translation="测试文字"):
@@ -76,6 +87,9 @@ class RailDockLauncherTest(unittest.TestCase):
         # history dock（一期）也在 _iter_docks 清单里，未安装时同为 None
         panel.history_launcher = panel.history_dock = None
         panel.symbol_dock = None
+        # 气泡浮层也在 _iter_docks 清单里（未安装时同为 None；缺了这两行
+        # getattr 会落到 Qt 包装器上，抛 "super-class __init__ 从未调用"）
+        panel.bubble_launcher = panel.bubble_dock = None
         panel.install_annotation_launcher(rail)
         panel.install_emphasis_launcher(rail)
         panel.install_appearance_launcher(rail)
@@ -161,6 +175,49 @@ class RailDockLauncherTest(unittest.TestCase):
         panel.texttransform_panel.setMinimumHeight(300)
         self.app.processEvents()
         self.assertEqual(panel.appearance_dock.height(), old_height)
+        harness.host.close()
+
+    def test_dock_grows_when_a_hidden_row_unfolds(self):
+        """内容显隐改变 sizeHint 时浮层自动长高（气泡面板尾巴/自定义行）。"""
+        from ui.custom_widget import RailDockPanel
+
+        harness = self._panel_and_rail()
+        harness.host.resize(1000, 800)
+        harness.host.show()
+        content = QFrame()
+        layout = QVBoxLayout(content)
+        layout.addWidget(QFrame())
+        extra = QFrame()
+        extra.setFixedHeight(200)
+        extra.hide()
+        layout.addWidget(extra)
+        dock = RailDockPanel("t", content, harness.rail, config_open="")
+        dock.open_panel()
+        self.app.processEvents()
+        old_height = dock.height()
+        extra.show()
+        self.app.processEvents()
+        # 只长不缩：新行露出来后必须装得下，且不小于原高度
+        self.assertGreater(dock.height(), old_height)
+        self.assertGreaterEqual(
+            dock.height(), dock.layout().sizeHint().height()
+        )
+        harness.host.close()
+
+    def test_manual_shrink_below_hint_is_kept(self):
+        """用户把面板拖到小于内容 sizeHint 时，后续事件不能把它长回去。"""
+        from ui.custom_widget import RailDockPanel
+
+        harness = self._panel_and_rail()
+        harness.host.resize(1000, 800)
+        harness.host.show()
+        dock = RailDockPanel("t", _TallContent(), harness.rail, config_open="")
+        dock.open_panel()
+        self.app.processEvents()
+        self.assertGreaterEqual(dock.height(), 400)
+        dock.resize(dock.width(), 200)
+        self.app.processEvents()
+        self.assertEqual(dock.height(), 200)
         harness.host.close()
 
     def test_emphasis_dot_follows_block(self):

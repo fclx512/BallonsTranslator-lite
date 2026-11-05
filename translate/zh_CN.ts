@@ -9205,12 +9205,16 @@ Saved pages stay in the project. Unsaved results and revision candidates will be
             <translation>描边</translation>
         </message>
         <message>
-            <source>Border width (px, drawn inward only)</source>
-            <translation>描边宽度（像素，只往内画）</translation>
+            <source>Border width (px, drawn inward), at most a quarter of the shorter side</source>
+            <translation>描边宽度（像素，只往内画，最多短边四分之一）</translation>
         </message>
         <message>
-            <source>Corner radius</source>
-            <translation>圆角半径</translation>
+            <source>Corner</source>
+            <translation>圆角</translation>
+        </message>
+        <message>
+            <source>Corner radius (px), at most half the shorter side</source>
+            <translation>圆角半径（像素，最多短边一半）</translation>
         </message>
         <message>
             <source>Direction (0 = right, clockwise)</source>
@@ -9237,12 +9241,12 @@ Saved pages stay in the project. Unsaved results and revision candidates will be
             <translation>长度（短边比例）</translation>
         </message>
         <message>
-            <source>Rectangle</source>
-            <translation>矩形</translation>
+            <source>Length</source>
+            <translation>长</translation>
         </message>
         <message>
-            <source>Shape</source>
-            <translation>形状</translation>
+            <source>Rectangle</source>
+            <translation>矩形</translation>
         </message>
         <message>
             <source>Tail</source>

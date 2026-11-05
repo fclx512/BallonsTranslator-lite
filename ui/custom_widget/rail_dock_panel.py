@@ -10,7 +10,10 @@ draggable.  The size is user-adjustable via invisible edge handles along
 the left edge, bottom edge and bottom-left corner (no visible grip icon).  It re-anchors automatically when the host window is
 resized or the rail moves, so it never drifts to a stale position.  The
 resize floor comes from the content layout — the panel can not be
-squashed into a single line of controls.  It never closes itself: only
+squashed into a single line of controls.  When the content grows (a
+section unfolds, a hidden row appears) the panel follows it in one
+direction only: it grows to fit, never shrinks on its own, so a size the
+user dragged stays put.  It never closes itself: only
 the rail icon or the × button closes it.  The open state persists
 through a ``pcfg`` attribute; the position is always reset to the rail
 anchor.
@@ -80,6 +83,8 @@ class RailDockPanel(QFrame):
         self._press_size = None
         self._press_zone = None
         self._header = None
+        self._fitting = False  # 防 _grow_to_fit_content 与 resizeEvent 互相触发
+        self._fit_hint = QSize(-1, -1)  # 上次见过的内容 sizeHint（判断「内容变大了」）
 
         self.setMinimumSize(230, 140)
 
@@ -122,6 +127,10 @@ class RailDockPanel(QFrame):
         # 浮层按空布局定尺寸（本体仍随浮层隐藏，不会提前露出）
         content_widget.show()
         layout.addWidget(body, 1)
+        # 内容区显隐会改 sizeHint，但 Qt 不会替外层窗口调尺寸；装过滤器
+        # 后任何子控件触发的 LayoutRequest 都回来核对一次（见
+        # _grow_to_fit_content）。子控件此时都已建好（面板先于 dock 构造）。
+        self._watch_content_layout()
 
         # ── Invisible edge handles (left / bottom / bottom-left) ───
         self._handles = {
@@ -153,6 +162,8 @@ class RailDockPanel(QFrame):
     def open_panel(self) -> None:
         self._anchor_to_rail()
         self.show()
+        # 面板可能是上次拖小后关掉的，这次内容又多了几行：先长到装得下
+        self._grow_to_fit_content()
         self.raise_()
         self._set_open_state(True)
 
@@ -249,8 +260,72 @@ class RailDockPanel(QFrame):
             h = min(h, max(host.height() - self.y(), floor.height()))
         return QSize(w, h)
 
+    # ── 内容变高时自动跟进 ────────────────────────────────────────
+
+    def _watch_content_layout(self) -> None:
+        """内容区及其后代都装事件过滤器：谁改了布局都回来核尺寸。
+
+        ``setVisible()`` 只把 LayoutRequest 派给**持有该布局的父控件**
+        （气泡面板里是 ``params_widget``），所以不能只盯 ``_content``。
+        后加进来的子控件（动态卡片）靠 ChildAdded 补挂。
+        """
+        self._watch_widget_tree(self._content)
+
+    def _watch_widget_tree(self, widget: QWidget) -> None:
+        widget.installEventFilter(self)
+        for child in widget.findChildren(QWidget):
+            child.installEventFilter(self)
+
+    def _is_content_widget(self, obj) -> bool:
+        return obj is self._content or (
+            isinstance(obj, QWidget) and self._content.isAncestorOf(obj)
+        )
+
+    def _grow_to_fit_content(self) -> None:
+        """内容变大时单向长高/加宽（只长不缩，用户拖出来的尺寸保留）。
+
+        参数区按需显隐（气泡面板的「自定义区域」「尾巴长/宽」）会改变
+        内容 sizeHint，但 Qt 不会替外层窗口调尺寸——不主动跟进时新行被
+        挤压，得手动拖一下才回正。
+
+        只有 sizeHint **比上次见到的更大**才动尺寸：用户拖边缩小面板
+        同样会触发 LayoutRequest，不能把他的选择抢回来。
+        """
+        if self._fitting or not self._sized or not self.isVisible():
+            return
+        if self._press_pos is not None:  # 正在拖边，别插手
+            return
+        layout = self.layout()
+        if layout is None:
+            return
+        hint = layout.sizeHint()
+        previous = self._fit_hint
+        self._fit_hint = QSize(hint)
+        if hint.width() <= previous.width() and hint.height() <= previous.height():
+            return
+        target = self._clamp_size(
+            QSize(max(self.width(), hint.width()), max(self.height(), hint.height()))
+        )
+        if target.width() <= self.width() and target.height() <= self.height():
+            return
+        self._fitting = True
+        try:
+            self.resize(target)  # resizeEvent 会重锚到窄栏
+        finally:
+            self._fitting = False
+
     def eventFilter(self, obj, event) -> bool:
         et = event.type()
+        # 内容区/后代布局变化（显隐、文案、换行）→ 内容长高就跟着长
+        if et == QEvent.Type.LayoutRequest and self._is_content_widget(obj):
+            self._grow_to_fit_content()
+            return False
+        # 动态加进内容区的子控件补挂过滤器（静态面板构造期已挂满）
+        if et == QEvent.Type.ChildAdded and self._is_content_widget(obj):
+            child = event.child()
+            if isinstance(child, QWidget):
+                self._watch_widget_tree(child)
+            return False
         # 宿主缩放 / 窄栏移动 → 自动重锚（位置补偿）：面板不会错位，
         # 无需重新打开刷新位置
         if self._sized and self.isVisible():
