@@ -136,6 +136,10 @@ class TestPageListDirtyClick(unittest.TestCase):
         self.shim.save_on_page_changed = False
         self.shim.opening_dir = False
         self.shim.page_changing = False
+        # 运行配置窗在切页末尾刷新工程状态（65786f34 起）；harness 给个空实现
+        self.shim.run_pipeline_dialog = SimpleNamespace(
+            refresh_project_state=lambda: None
+        )
         self.save_calls = {"n": 0}
 
         def _save_result():

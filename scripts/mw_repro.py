@@ -63,10 +63,196 @@ def _parse_args():
         help="不显示主窗口（默认显示，走真实绘制路径）",
     )
     parser.add_argument(
+        "--interactive-dialogs", action="store_true",
+        help="不装弹窗守卫，模态弹窗照常弹出（group-undo 确认弹窗走延迟自动点击）",
+    )
+    parser.add_argument(
         "--watchdog", type=int, default=60,
         help="卡死看门狗秒数：到点打印全线程 Python 栈并退出",
     )
     return parser.parse_args()
+
+
+def _install_dialog_guard():
+    """默认接管所有模态弹窗：内容打印到 stdout 后立即返回肯定值。
+
+    背景（daily_log「演练台弹窗自动关闭」）：MainWindow 错误框走
+    err.exec() 模态嵌套事件循环，无人值守时脚本卡死等真人点掉。
+    注意静态便捷方法（QMessageBox.warning 等 56 处调用）内部走 C++
+    exec，类级 patch 拦不住（实测探针挂死验证），必须连静态方法
+    一起替换为 Python 版构造 + 受守卫的 exec。
+    """
+    from qtpy.QtWidgets import (
+        QColorDialog, QDialog, QFontDialog, QInputDialog, QMessageBox,
+    )
+
+    def _describe(box):
+        parts = []
+        for attr, label in (
+            ("windowTitle", "标题"),
+            ("text", "正文"),
+            ("informativeText", "补充"),
+            ("detailedText", "详细"),
+        ):
+            getter = getattr(box, attr, None)
+            if getter is None:
+                continue
+            try:
+                value = getter()
+            except Exception:
+                value = ""
+            if value:
+                parts.append(f"{label}={value}")
+        buttons = getattr(box, "buttons", None)
+        if buttons is not None:
+            try:
+                texts = [b.text() for b in buttons() if b.text()]
+            except Exception:
+                texts = []
+            if texts:
+                parts.append(f"按钮={texts}")
+        return " | ".join(parts)
+
+    def _positive_standard(box):
+        # 与真人会点的那颗按钮对齐：优先 YesRole/AcceptRole 的标准按钮
+        for button in box.buttons():
+            role = box.buttonRole(button)
+            if role in (box.ButtonRole.YesRole, box.ButtonRole.AcceptRole):
+                std = box.standardButton(button)
+                if std != box.StandardButton.NoButton:
+                    return std
+        return box.StandardButton.Ok
+
+    def _patch_exec(cls, name):
+        is_msg = cls is QMessageBox
+
+        def _exec(self):
+            print(
+                f"[mw_repro][dialog] {cls.__name__} 自动接受: "
+                f"{_describe(self)}",
+                flush=True,
+            )
+            if is_msg:
+                return _positive_standard(self)
+            return QDialog.DialogCode.Accepted
+
+        setattr(cls, name, _exec)
+
+    _patch_exec(QDialog, "exec")
+    _patch_exec(QMessageBox, "exec")
+    for cls in (QDialog, QMessageBox):
+        if hasattr(cls, "exec_"):
+            _patch_exec(cls, "exec_")
+
+    def _wrap_static(name, icon, default_buttons):
+        def _static(parent=None, title="", text="", buttons=None,
+                    defaultButton=None):
+            box = QMessageBox(parent)
+            box.setIcon(icon)
+            box.setWindowTitle(title)
+            box.setText(text)
+            box.setStandardButtons(
+                buttons if buttons is not None else default_buttons
+            )
+            if defaultButton is not None:
+                box.setDefaultButton(defaultButton)
+            return box.exec()  # 已被替换为守卫
+
+        return _static
+
+    _statics = {
+        "warning": (
+            QMessageBox.Icon.Warning, QMessageBox.StandardButton.Ok,
+        ),
+        "critical": (
+            QMessageBox.Icon.Critical, QMessageBox.StandardButton.Ok,
+        ),
+        "information": (
+            QMessageBox.Icon.Information, QMessageBox.StandardButton.Ok,
+        ),
+        "question": (
+            QMessageBox.Icon.Question,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        ),
+    }
+    for name, (icon, buttons) in _statics.items():
+        setattr(QMessageBox, name, _wrap_static(name, icon, buttons))
+
+    # 文件/输入/颜色/字体对话框的静态方法是原生 win32 弹窗，同样无人
+    # 能点；统一按「取消」作答让调用方走空结果分支
+    def _declined(name, value):
+        def _static(*_args, **_kwargs):
+            print(
+                f"[mw_repro][dialog] {name} 自动取消", flush=True,
+            )
+            return value
+
+        return _static
+
+    try:
+        from qtpy.QtWidgets import QFileDialog
+
+        for name, value in (
+            ("getOpenFileName", ("", "")),
+            ("getOpenFileNames", ([], "")),
+            ("getSaveFileName", ("", "")),
+        ):
+            setattr(QFileDialog, name, _declined(f"QFileDialog.{name}", value))
+    except Exception:
+        pass
+
+    for cls, names in (
+        (QInputDialog, {
+            "getText": ("", False),
+            "getMultiLineText": ("", False),
+            "getItem": ("", False),
+        }),
+    ):
+        for name, value in names.items():
+            setattr(cls, name, _declined(f"{cls.__name__}.{name}", value))
+    if hasattr(QInputDialog, "getInteger"):
+        QInputDialog.getInteger = _declined(
+            "QInputDialog.getInteger", (0, False)
+        )
+    if hasattr(QInputDialog, "getDouble"):
+        QInputDialog.getDouble = _declined(
+            "QInputDialog.getDouble", (0.0, False)
+        )
+
+    try:
+        from qtpy.QtGui import QColor
+
+        QColorDialog.getColor = _declined("QColorDialog.getColor", QColor())
+        if hasattr(QColorDialog, "getColorRgb"):
+            QColorDialog.getColorRgb = _declined(
+                "QColorDialog.getColorRgb", QColor()
+            )
+    except Exception:
+        pass
+
+    try:
+        from qtpy.QtGui import QFont
+
+        QFontDialog.getFont = _declined("QFontDialog.getFont", (QFont(), False))
+    except Exception:
+        pass
+
+
+def _suppress_win32_error_dialogs():
+    """真·win32 系统弹窗（崩溃后「已停止工作」等）由 WerFault 弹出，
+    Qt 层拦不住；置 SEM_NOGPFAULTERRORBOX 让崩溃静默快速失败，
+    faulthandler 仍会先把 Python 栈打到 stderr，退出码不丢。"""
+    if sys.platform != "win32":
+        return
+    import ctypes
+
+    mask = (
+        0x0001  # SEM_FAILCRITICALERRORS
+        | 0x0002  # SEM_NOGPFAULTERRORBOX
+        | 0x8000  # SEM_NOOPENFILEERRORBOX
+    )
+    old = ctypes.windll.kernel32.SetErrorMode(mask)
+    ctypes.windll.kernel32.SetErrorMode(old | mask)
 
 
 def _setup_qt(args):
@@ -74,7 +260,9 @@ def _setup_qt(args):
     from qtpy.QtWidgets import QApplication, QMessageBox
 
     app = QApplication([])
-    if args.scenario == "group-undo" or args.confirm_delay:
+    if not args.interactive_dialogs:
+        _install_dialog_guard()
+    elif args.scenario == "group-undo" or args.confirm_delay:
         # 自动点击真实确认弹窗的 AcceptRole 按钮（模拟真人手点节奏）
         original_exec = QMessageBox.exec
 
@@ -560,6 +748,7 @@ def _scenario_fmt_sync(window, app, args):
 
 def main():
     args = _parse_args()
+    _suppress_win32_error_dialogs()
     if args.project and args.scenario != "none":
         # 真实工程只读：改写场景会动并保存用户数据，一律拒绝
         print(
