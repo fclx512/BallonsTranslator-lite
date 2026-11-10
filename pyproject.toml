@@ -38,7 +38,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gpu = ["torch", "torchvision", "transformers", "diffusers", "ultralytics>=8.4.14"]
+gpu = ["torch", "torchvision", "transformers", "diffusers", "ultralytics>=8.4.0"]
 # 效果渲染加速（渐变/网格变换 numba 内核）；缺失时自动退回纯 NumPy 实现
 acc = ["numba>=0.58.1"]
 mcp = ["mcp>=1.0.0"]

@@ -1,6 +1,7 @@
 """ysg_ctd 混合检测器：CTD 精细掩膜 ∩ ysgyolo 文本框（PR #1365）。"""
 import unittest
 from copy import deepcopy
+from pathlib import Path
 from unittest import mock
 
 import numpy as np
@@ -8,9 +9,11 @@ import numpy as np
 from modules.textdetector.base import TEXTDETECTORS, TextBlock
 from modules.textdetector.detector_ysg import (
     YSGYoloCTDDetector,
+    YSGYoloDetector,
     _build_box_mask,
     _combine_refined_mask,
 )
+from utils.lazy_registry import _scan_file
 
 
 def _block(xyxy):
@@ -68,6 +71,18 @@ class FakeCtdModel:
 
     def __call__(self, img):
         return None, self.fine_mask, self.ctd_blocks
+
+
+class TestYsgDependencies(unittest.TestCase):
+    def test_lazy_and_runtime_requirements_match_the_yolo26_floor(self):
+        repo = Path(__file__).resolve().parents[1]
+        specs = _scan_file(str(repo / "modules/textdetector/detector_ysg.py"), "textdetector")
+        by_key = {spec.key: spec for spec in specs}
+        expected = ["ultralytics>=8.4.0"]
+        self.assertEqual(by_key["ysgyolo"].requires_packages, expected)
+        self.assertEqual(YSGYoloDetector.requires_packages, expected)
+        self.assertEqual(by_key["ysg_ctd"].requires_packages, expected + ["einops"])
+        self.assertEqual(YSGYoloCTDDetector.requires_packages, expected + ["einops"])
 
 
 class TestCombineRefinedMask(unittest.TestCase):

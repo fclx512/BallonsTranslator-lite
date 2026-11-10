@@ -31,6 +31,8 @@ from .base import DEVICE_SELECTOR, TextBlock, TextDetectorBase, register_textdet
 
 MODEL_DIR = "data/models"
 YSGYOLO_MODEL_PREFIXES = ("ysgyolo", "ultralyticsyolo")
+# YOLO26 权重在 8.3.253 缺少 E2ELoss，8.4.0 的 CPU 和 CUDA 推理均已验证。
+_YSG_ULTRALYTICS_REQUIREMENT = "ultralytics>=8.4.0"
 
 CTD_ONNX_PATH = "data/models/comictextdetector.pt.onnx"
 CTD_TORCH_PATH = "data/models/comictextdetector.pt"
@@ -307,7 +309,7 @@ class YSGYoloDetector(TextDetectorBase):
     # 选型依赖提示（ui/module_manager.py::_build_dep_notes）、后台下载判定
     # （modules/__init__.py::GET_MISSING_PACKAGES）与加载期自动安装
     # （modules/base.py::BaseModule.ensure_dependencies）三处都读同一个字段。
-    requires_packages = ["ultralytics"]
+    requires_packages = [_YSG_ULTRALYTICS_REQUIREMENT]
 
     _load_model_keys = {"model"}
     download_file_list = _YSGYOLO_DOWNLOAD_FILE_LIST
@@ -478,7 +480,7 @@ class YSGYoloCTDDetector(YSGYoloDetector):
     params below are hybrid-only.
     """
 
-    requires_packages = ["ultralytics", "einops"]
+    requires_packages = [_YSG_ULTRALYTICS_REQUIREMENT, "einops"]
 
     # 掩膜是字形级而非矩形级，OCR 之后可由 utils/font_size_estimate.py
     # 反推原文字号；其它检测器不声明该能力，保持原字号逻辑不变。
