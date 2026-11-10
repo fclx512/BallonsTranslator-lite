@@ -56,8 +56,7 @@ def render_page_image(project, page):
 
     view = copy.copy(project)
     view.set_current_img(page)
-    base = view.notext_array if view.notext_array is not None else view.inpainted_array
-    image = ndarray2pixmap(base, return_qimg=True).copy()
+    image = ndarray2pixmap(view.inpainted_array, return_qimg=True).copy()
     scene = QGraphicsScene()
     rect = QRectF(0, 0, image.width(), image.height())
     scene.setSceneRect(rect)

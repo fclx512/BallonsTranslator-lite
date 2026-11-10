@@ -88,6 +88,9 @@ class MockCanvas(QObject):
     def tr(self, s):
         return s
 
+    def save_config(self):
+        self.calls.append(("save_config", ()))
+
     def selected_text_items(self):
         return list(range(self._selected))
 
@@ -1278,7 +1281,7 @@ def main():
     editor._refresh_preview()
     check("preview toggle card paints", not pv.grab().isNull())
 
-    print(f"\n{PASS} passed, {len(FAIL)} failed")
+    print(f"\n{len(PASS)} passed, {len(FAIL)} failed")
     save_config()
     if os.path.exists(_TMP_CFG):
         os.remove(_TMP_CFG)

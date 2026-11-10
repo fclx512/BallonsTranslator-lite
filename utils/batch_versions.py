@@ -29,12 +29,16 @@
 用户在设置面板改「备份版本数」即时生效（每次 ``begin`` 现取）。
 """
 
+import copy
 import json
+import ntpath
 import os
 import os.path as osp
 import shutil
+import tempfile
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
 import numpy as np
@@ -77,7 +81,7 @@ class VersionMeta:
 
     def to_dict(self) -> dict:
         return {
-            "version": 1,
+            "version": 2,
             "seq": self.seq,
             "label": self.label,
             "created": self.created,
@@ -180,7 +184,8 @@ class BatchVersionStore:
     def root_dir(self) -> Optional[str]:
         if not self.proj or not self.proj.directory:
             return None
-        return osp.join(self.proj.directory, BACKUP_DIR_NAME)
+        root = Path(self.proj.directory).resolve() / BACKUP_DIR_NAME
+        return str(root) if root.resolve() == root else None
 
     def _version_dir(self, seq: int) -> str:
         return osp.join(self.root_dir(), f"v{int(seq):05d}")
@@ -203,7 +208,9 @@ class BatchVersionStore:
         for name in sorted(os.listdir(root)):
             vdir = osp.join(root, name)
             meta_path = osp.join(vdir, META_NAME)
-            if not osp.isdir(vdir) or not osp.exists(meta_path):
+            if (not osp.isdir(vdir) or not osp.exists(meta_path)
+                    or Path(vdir).resolve() != Path(vdir)
+                    or Path(meta_path).resolve() != Path(meta_path)):
                 continue
             try:
                 with open(meta_path, "r", encoding="utf8") as f:
@@ -249,8 +256,15 @@ class BatchVersionStore:
         versions = self.list_versions()
         seq = versions[-1].seq + 1 if versions else 1
         vdir = self._version_dir(seq)
+        while osp.lexists(vdir):
+            seq += 1
+            vdir = self._version_dir(seq)
         try:
-            os.makedirs(vdir, exist_ok=True)
+            os.makedirs(vdir)
+        except OSError as e:
+            LOGGER.error(f"Failed to create batch version: {e}")
+            return None
+        try:
             with open(osp.join(vdir, PROJ_NAME), "w", encoding="utf8") as f:
                 f.write(
                     json.dumps(
@@ -286,9 +300,10 @@ class BatchVersionStore:
         px_dir = osp.join(vdir, PIXEL_DIR_NAME)
         for i, (pagename, rects) in enumerate(pixel_regions.items()):
             src_path = _exact_inpainted_path(self.proj, pagename)
-            if not src_path or not osp.exists(src_path):
+            filename = osp.basename(src_path)
+            if not osp.exists(src_path):
                 # 操作前没有修复图：撤销＝把操作期间生成的这张图删掉
-                pixels[pagename] = {"file": src_path, "existed": False}
+                pixels[pagename] = {"filename": filename, "existed": False}
                 continue
             try:
                 img = imread(src_path)
@@ -298,12 +313,12 @@ class BatchVersionStore:
             if img is None:
                 # 修复图存在但读不出来：不记裁剪（还原时不动这个文件，避免
                 # 把用户既有的修复成果删掉）
-                pixels[pagename] = {"file": src_path, "existed": True, "rects": []}
+                pixels[pagename] = {"filename": filename, "existed": True, "rects": []}
                 continue
             h, w = img.shape[:2]
             norm = _normalize_rects(rects, w, h)
             if not norm:
-                pixels[pagename] = {"file": src_path, "existed": True, "rects": []}
+                pixels[pagename] = {"filename": filename, "existed": True, "rects": []}
                 continue
             strip = _stack_crops(
                 [img[y1:y2, x1:x2] for x1, y1, x2, y2 in norm]
@@ -314,7 +329,7 @@ class BatchVersionStore:
                 osp.join(vdir, rel)
             )
             pixels[pagename] = {
-                "file": src_path,
+                "filename": filename,
                 "existed": True,
                 "rects": norm,
                 "strip": rel,
@@ -350,25 +365,22 @@ class BatchVersionStore:
                 f"Latest batch version is v{meta.seq}, expected v{expect_seq}"
             )
         try:
-            with open(osp.join(meta.dir, PROJ_NAME), "r", encoding="utf8") as f:
+            snapshot = Path(meta.dir) / PROJ_NAME
+            if snapshot.resolve() != snapshot:
+                raise ValueError("Batch version snapshot must be in its version directory")
+            with snapshot.open(encoding="utf8") as f:
                 payload = json.load(f)
+            orig_page = self.proj.current_img
+            restored = copy.copy(self.proj)
+            restored.new_pages = list(self.proj.new_pages)
+            restored.load_from_dict(payload)
+            if orig_page and orig_page in restored.pages:
+                restored.set_current_img(orig_page)
+            pixel_pages = self._restore_pixels(meta, restored)
         except Exception as e:
-            raise ProjectLoadFailureException(e)
+            raise ProjectLoadFailureException(e) from e
 
-        orig_page = self.proj.current_img
-        self.proj.load_from_dict(payload)
-        if orig_page and orig_page in self.proj.pages:
-            self.proj.set_current_img(orig_page)
-
-        pixel_pages = self._restore_pixels(meta)
-        if (
-            pixel_pages
-            and self.proj.current_img in pixel_pages
-            and self.proj.current_img in self.proj.pages
-        ):
-            # 当前页像素被换回 → 内存缓冲必须重载，否则画布显示的还是撤销前
-            self.proj.set_current_img(self.proj.current_img)
-
+        self.proj.__dict__.update(restored.__dict__)
         for pagename in list(meta.dirty_pages) + pixel_pages:
             self.proj.mark_page_needs_rerender(pagename)
         dirty = [
@@ -379,53 +391,116 @@ class BatchVersionStore:
         shutil.rmtree(meta.dir, ignore_errors=True)
         return dirty
 
-    def _restore_pixels(self, meta: VersionMeta) -> List[str]:
-        """把版本里的像素前图贴回磁盘；返回实际动过的页。"""
-        done: List[str] = []
-        for pagename, rec in (meta.pixels or {}).items():
-            target = rec.get("file")
-            rects = rec.get("rects") or []
-            if not target:
-                continue
-            try:
-                if not rec.get("existed", True):
-                    # 操作前没有修复图：删掉操作期间生成的那张即还原
-                    if osp.exists(target):
-                        os.remove(target)
-                    done.append(pagename)
+    def _restore_target(self, pagename: str, filename: str) -> Path:
+        """Resolve an exact repair image name inside the current project."""
+        stem, ext = osp.splitext(filename)
+        if (ntpath.basename(pagename) != pagename or ntpath.basename(filename) != filename
+                or stem != osp.splitext(pagename)[0]
+                or ext not in {".png", ".jxl"}):
+            raise ValueError(f"Invalid pixel restore target for {pagename}")
+        project = Path(self.proj.directory).resolve()
+        target = project / osp.basename(self.proj.inpainted_dir()) / filename
+        if target.resolve() != target:
+            raise ValueError(f"Pixel restore target is redirected: {pagename}")
+        return target
+
+    def _stage_pixel_restore(self, meta, pagename, record, scratch):
+        filename = record.get("filename")
+        if filename is None:
+            # Version 1 wrote an absolute path. Never use its old directory.
+            filename = ntpath.basename(record["file"])
+        target = self._restore_target(pagename, filename)
+        if not record.get("existed", True):
+            # The operation created this exact file. Undo removes it.
+            return target, None
+        rects = record.get("rects") or []
+        if not rects:
+            return None
+        strip_path = (Path(meta.dir) / record["strip"]).resolve()
+        if strip_path.parent != Path(meta.dir) / PIXEL_DIR_NAME:
+            raise ValueError(f"Invalid pixel strip path for {pagename}")
+        strip = imread(str(strip_path), max_retry_limit=1)
+        base = imread(str(target), max_retry_limit=1)
+        if base is None:
+            base = imread(osp.join(self.proj.directory, pagename), max_retry_limit=1)
+        if strip is None or base is None:
+            raise ValueError(f"Missing image for pixel restore: {pagename}")
+
+        if strip.ndim == 3 and strip.shape[2] == 4:
+            base = _match_channels(base, strip)
+        row = 0
+        for x1, y1, x2, y2 in rects:
+            h, w = y2 - y1, x2 - x1
+            if (not (0 <= x1 < x2 <= base.shape[1] and 0 <= y1 < y2 <= base.shape[0])
+                    or row + h > strip.shape[0] or w > strip.shape[1]):
+                raise ValueError(f"Invalid pixel strip dimensions for {pagename}")
+            base[y1:y2, x1:x2] = _match_channels(strip[row:row + h, :w], base)
+            row += h
+        if row != strip.shape[0]:
+            raise ValueError(f"Invalid pixel strip height for {pagename}")
+
+        image = Image.fromarray(base.astype(np.uint8, copy=False))
+        staged = scratch / target.name
+        try:
+            options = {"lossless": True} if target.suffix == ".jxl" else {}
+            image.save(staged, **options)
+        except (OSError, ValueError):
+            if target.suffix != ".jxl":
+                raise
+            target = self._restore_target(pagename, target.with_suffix(".png").name)
+            staged = scratch / target.name
+            image.save(staged)
+        return target, staged
+
+    def _restore_pixels(self, meta: VersionMeta, restored: ProjImgTrans) -> List[str]:
+        """Validate and stage all pages before making any on-disk change."""
+        if not meta.pixels:
+            return []
+        scratch = Path(tempfile.mkdtemp(prefix="restore-", dir=meta.dir))
+        previous = scratch / "previous"
+        pending = {}
+        applied = []
+        rollback_failed = False
+        try:
+            previous.mkdir()
+            for pagename, record in meta.pixels.items():
+                if pagename not in restored.pages and pagename not in restored.not_found_pages:
+                    raise ValueError(f"Unknown pixel restore page: {pagename}")
+                change = self._stage_pixel_restore(meta, pagename, record, scratch)
+                if change is None:
                     continue
-                if not rects:
-                    continue
-                base = imread(target) if osp.exists(target) else None
-                if base is None:
-                    base = self.proj.read_img(pagename)
-                strip_path = osp.join(meta.dir, rec.get("strip") or "")
-                if base is None or not osp.exists(strip_path):
-                    LOGGER.warning(
-                        f"Skipping pixel restore for {pagename}: no base image"
-                    )
-                    continue
-                with Image.open(strip_path) as im:
-                    strip = np.array(im.convert("RGB"))
-                y = 0
-                for x1, y1, x2, y2 in rects:
-                    h, w = y2 - y1, x2 - x1
-                    crop = _match_channels(strip[y : y + h, :w], base)
-                    base[y1:y2, x1:x2] = crop
-                    y += h
+                target, staged = change
+                if target in pending:
+                    raise ValueError(f"Duplicate pixel restore target: {target.name}")
+                backup = None
+                if target.exists():
+                    backup = previous / target.name
+                    shutil.copy2(target, backup)
+                pending[target] = (pagename, staged, backup)
+            for target, (_, staged, backup) in pending.items():
+                if staged is None:
+                    target.unlink(missing_ok=True)
+                else:
+                    os.replace(staged, target)
+                applied.append((target, backup))
+            pages = [pagename for pagename, _, _ in pending.values()]
+            if restored.current_img in pages:
+                restored.set_current_img(restored.current_img)
+            return pages
+        except Exception:
+            for target, backup in reversed(applied):
                 try:
-                    Image.fromarray(base.astype(np.uint8, copy=False)).save(target)
-                except Exception:
-                    # 修复图可能是 PIL 写不了的后缀（如 .jxl）：换 PNG 落盘，
-                    # 应用侧的 get_inpainted_path(get_last_modified=True) 会
-                    # 取到这张更新的 PNG
-                    alt = osp.splitext(target)[0] + ".png"
-                    Image.fromarray(base.astype(np.uint8, copy=False)).save(alt)
-                    LOGGER.warning(f"Could not write {target}; wrote {alt} instead")
-                done.append(pagename)
-            except Exception as e:
-                LOGGER.error(f"Failed to restore pixels for {pagename}: {e}")
-        return done
+                    if backup is None:
+                        target.unlink(missing_ok=True)
+                    else:
+                        os.replace(backup, target)
+                except OSError as e:
+                    rollback_failed = True
+                    LOGGER.error(f"Could not roll back {target}: {e}. Recovery files: {previous}")
+            raise
+        finally:
+            if not rollback_failed:
+                shutil.rmtree(scratch, ignore_errors=True)
 
     def discard_latest(self, expect_seq: Optional[int] = None) -> bool:
         """丢弃最新一版、**不换数据**：给「已写版本、但最终没有改动」的路径用。

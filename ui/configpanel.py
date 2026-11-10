@@ -746,7 +746,6 @@ DEFAULT_SHORTCUTS = {
     "inpaint_tool": ["J"],
     # Temporarily unbound — the previous "A" collided with prev_page (also "A").
     "ai_tool": [],
-    "merge_tool": ["Ctrl+Shift+M"],
     "quick_symbol": [],
     "advanced_align": [],
     "merge_blks": [],
@@ -797,7 +796,6 @@ _ACTION_NAMES = {
     "rect_tool": QCoreApplication.translate("_ShortcutRow", "Rect Tool"),
     "inpaint_tool": QCoreApplication.translate("_ShortcutRow", "Inpaint Tool"),
     "ai_tool": QCoreApplication.translate("_ShortcutRow", "AI Inpaint"),
-    "merge_tool": QCoreApplication.translate("_ShortcutRow", "Merge Tool"),
     "quick_symbol": QCoreApplication.translate("_ShortcutRow", "Soft Keyboard"),
     "advanced_align": QCoreApplication.translate("_ShortcutRow", "Whole-book Alignment"),
     "merge_blks": QCoreApplication.translate("_ShortcutRow", "Merge Text Blocks"),
@@ -890,7 +888,6 @@ _SHORTCUT_GROUPS = [
             "rect_tool",
             "inpaint_tool",
             "ai_tool",
-            "merge_tool",
             "path_reorder",
             "space_inpaint",
             "quick_symbol",

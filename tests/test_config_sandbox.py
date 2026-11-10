@@ -2,6 +2,7 @@
 
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -59,3 +60,17 @@ def test_verify_rejects_config_changes_even_when_timestamp_is_preserved(tmp_path
     config.write_text("after", encoding="utf-8")
     os.utime(config, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
     assert verify._check_config_unchanged(before) is False
+
+
+def test_full_verify_fails_when_test_output_contains_an_import_error(monkeypatch):
+    from scripts import verify
+
+    def failed_pytest(command, **kwargs):
+        if "ruff" in command:
+            return subprocess.CompletedProcess(command, 0, "", "")
+        output = "FAILED test_assertion - AssertionError\nFAILED test_import - ModuleNotFoundError"
+        return subprocess.CompletedProcess(command, 1, output, "")
+
+    monkeypatch.setattr(verify, "_run", failed_pytest)
+    monkeypatch.setattr(verify, "find_spec", lambda name: object())
+    assert verify._run_full_steps(0) == 1

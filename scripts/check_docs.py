@@ -45,6 +45,7 @@ SKIP_DOCS = {
 # 运行时或 gitignore 才存在的路径，检查器视为合法缺失
 KNOWN_ABSENT = {
     "config/config.json",
+    "config/global_styles.json",
 }
 
 # 可识别的文件扩展名（小写）

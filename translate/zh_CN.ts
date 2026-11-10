@@ -187,11 +187,6 @@
             <source>Merge</source>
             <translation>合并</translation>
         </message>
-        <message>
-            <location filename="..\ui\canvas.py" line="348" />
-            <source>No-text BG</source>
-            <translation>无字图</translation>
-        </message>
         <message type="obsolete">
             <location filename="..\ui\canvas.py" line="1160" />
             <source>Normalize Breaks</source>
@@ -2409,11 +2404,6 @@ No block parameters change; the styles just leave the list.</source>
             <translation>没有当前文件</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindow.py" line="1267" />
-            <source>Current page data not found</source>
-            <translation>当前页面数据不存在</translation>
-        </message>
-        <message>
             <location filename="..\ui\mainwindow.py" line="1353" />
             <location filename="..\ui\mainwindow.py" line="1274" />
             <source>Notice</source>
@@ -2423,85 +2413,6 @@ No block parameters change; the styles just leave the list.</source>
             <location filename="..\ui\mainwindow.py" line="1274" />
             <source>No text blocks on current page</source>
             <translation>当前页面没有文本框</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1320" />
-            <source>Success</source>
-            <translation>成功</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1321" />
-            <source>Merge complete: {initial} -&gt; {final} (reduced by {delta})</source>
-            <translation>合并完成: 框数 {initial} -&gt; {final} (减少了 {delta} 个)</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1331" />
-            <source>No merge occurred.</source>
-            <translation>未发生任何合并。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1333" />
-            <source>Total text blocks: {count}</source>
-            <translation>共有 {count} 个文本框。</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1337" />
-            <source>Label types: {labels}</source>
-            <translation>标签类型: {labels}</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1338" />
-            <source>None</source>
-            <translation>无</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1342" />
-            <source>Suggestions:</source>
-            <translation>建议：</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1344" />
-            <source>1. Try increasing maximum gap (e.g., 100-200)</source>
-            <translation>1. 尝试增大最大间隙值（如 100-200）</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1347" />
-            <source>2. Lower the minimum overlap ratio (e.g., 50-70%)</source>
-            <translation>2. 降低最小重叠比例（如 50-70%）</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1350" />
-            <source>3. Uncheck 'Enable label exclusion (blacklist)'</source>
-            <translation>3. 取消勾选'启用排除合并的标签'</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1352" />
-            <source>4. Check if labels are in the blacklist</source>
-            <translation>4. 检查标签是否在黑名单中</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1359" />
-            <source>No images in project</source>
-            <translation>项目中没有图片</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1368" />
-            <source>Project JSON file not found: {path}</source>
-            <translation>找不到项目 JSON 文件: {path}</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1427" />
-            <source>Done</source>
-            <translation>完成</translation>
-        </message>
-        <message>
-            <location filename="..\ui\mainwindow.py" line="1428" />
-            <source>Region merge complete
-Success: {s}/{t}
-Failed: {f}/{t}</source>
-            <translation>区域合并完成
-成功: {s}/{t}
-失败: {f}/{t}</translation>
         </message>
         <message>
             <location filename="..\ui\mainwindow.py" line="1906" />
@@ -2785,6 +2696,10 @@ Set this file as the active glossary now?</source>
             <translation>回滚失败：备份版本已失效，或已被更晚的批量操作覆盖。</translation>
         </message>
         <message>
+            <source>Rollback failed. The backup was kept. See the log for details.</source>
+            <translation>回滚失败。备份已保留，详情请查看日志。</translation>
+        </message>
+        <message>
             <source>A pipeline or a background task is still running. Wait until it finishes, then release memory.</source>
             <translation>还有管线或后台任务在跑，等它结束之后再释放内存。</translation>
         </message>
@@ -2890,227 +2805,6 @@ What to expect next:
             <location filename="..\ui\glossary_extractor_dialog.py" />
             <source>Error: {}</source>
             <translation>错误：{}</translation>
-        </message>
-    </context>
-    <context>
-        <name>MergeDialog</name>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="28" />
-            <source>Region Merge Tool Settings</source>
-            <translation>区域合并工具设置</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="43" />
-            <source>Main Settings</source>
-            <translation>主要设置</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="49" />
-            <source>Vertical Merge</source>
-            <translation>垂直合并</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="50" />
-            <source>Horizontal Merge</source>
-            <translation>水平合并</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="52" />
-            <source>Vertical Then Horizontal</source>
-            <translation>先垂直后水平</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="55" />
-            <source>Horizontal Then Vertical</source>
-            <translation>先水平后垂直</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="57" />
-            <source>None</source>
-            <translation>无</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="58" />
-            <source>Merge Mode:</source>
-            <translation>合并模式:</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="62" />
-            <source>Text Reading Order (by Label)</source>
-            <translation>文本合并顺序 (按标签)</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="68" />
-            <source>label1,label2,...</source>
-            <translation>标签1,标签2,...</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="75" />
-            <source>Left-to-Right (LTR) labels:</source>
-            <translation>从左到右 (LTR) 标签:</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="78" />
-            <source>Right-to-Left (RTL) labels:</source>
-            <translation>从右到左 (RTL) 标签:</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="81" />
-            <source>Top-to-Bottom (TTB) labels:</source>
-            <translation>从上到下 (TTB) 标签:</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="87" />
-            <source>Label Merge Rules</source>
-            <translation>标签合并规则</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="94" />
-            <source>Prefer Shorter Label</source>
-            <translation>优先使用较短的标签</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="96" />
-            <source>Use First Block's Label</source>
-            <translation>使用第一个框的标签</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="98" />
-            <source>Combine Labels (label1+label2)</source>
-            <translation>组合标签 (label1+label2)</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="101" />
-            <source>Prefer Non-Default Label</source>
-            <translation>优先使用非默认标签</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="103" />
-            <source>Label Merge Strategy:</source>
-            <translation>标签合并策略:</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="106" />
-            <source>Enable label exclusion (blacklist)</source>
-            <translation>启用排除合并的标签 (黑名单)</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="113" />
-            <source>e.g., label1,label2</source>
-            <translation>例如: label1,label2</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="114" />
-            <source>Blacklist Labels:</source>
-            <translation>黑名单标签:</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="119" />
-            <source>Require identical labels to merge</source>
-            <translation>要求标签完全相同才合并</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="124" />
-            <source>Merge only within specific label groups</source>
-            <translation>仅在特定标签组内合并</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="128" />
-            <source>One group per line, labels separated by commas
-e.g.:
-balloon,balloon2
-qipao,qipao2</source>
-            <translation>每行一个分组，标签以逗号分隔
-例如：
-balloon,balloon2
-qipao,qipao2</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="149" />
-            <source>Geometric Merge Parameters</source>
-            <translation>几何合并参数</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="170" />
-            <source>&lt;b&gt;Vertical Merge (Up-Down)&lt;/b&gt;</source>
-            <translation>&lt;b&gt;垂直合并 (上下)&lt;/b&gt;</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="171" />
-            <source>Max Vertical Gap (px):</source>
-            <translation>最大垂直间隙 (像素):</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="173" />
-            <source>Min Horizontal Overlap Ratio:</source>
-            <translation>最小水平重叠比例:</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="175" />
-            <source>&lt;b&gt;Horizontal Merge (Left-Right)&lt;/b&gt;</source>
-            <translation>&lt;b&gt;水平合并 (左右)&lt;/b&gt;</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="176" />
-            <source>Max Horizontal Gap (px):</source>
-            <translation>最大水平间隙 (像素):</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="178" />
-            <source>Min Vertical Overlap Ratio:</source>
-            <translation>最小垂直重叠比例:</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="184" />
-            <source>Advanced Options</source>
-            <translation>高级选项</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="189" />
-            <source>Allow negative gap (overlapping blocks)</source>
-            <translation>允许负间隙 (即允许框本身有重叠)</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="197" />
-            <source>Merge Result Type</source>
-            <translation>合并结果类型</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="203" />
-            <source>Axis-Aligned Rectangle</source>
-            <translation>合并水平矩形</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="204" />
-            <source>Rotated Rectangle</source>
-            <translation>合并旋转矩形</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="218" />
-            <source>Run on Current File</source>
-            <translation>对当前文件运行</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="219" />
-            <source>Run on All Files</source>
-            <translation>对所有文件运行</translation>
-        </message>
-        <message>
-            <location filename="..\ui\merge_dialog.py" line="220" />
-            <source>Cancel</source>
-            <translation>取消</translation>
-        </message>
-    </context>
-    <context>
-        <name>MergeThread</name>
-        <message>
-            <location filename="..\ui\io_thread.py" line="130" />
-            <source>Region merge: </source>
-            <translation>区域合并: </translation>
-        </message>
-        <message>
-            <source>Region merge failed</source>
-            <translation>区域合并失败</translation>
         </message>
     </context>
     <context>
@@ -4390,11 +4084,6 @@ Orientation: {o}</source>
             <translation>工具</translation>
         </message>
         <message>
-            <location filename="..\ui\mainwindowbars.py" line="367" />
-            <source>Region Merge Tool</source>
-            <translation>区域合并工具</translation>
-        </message>
-        <message>
             <location filename="..\ui\mainwindowbars.py" />
             <source>Normalize Breaks…</source>
             <translation>整理换行…</translation>
@@ -4654,11 +4343,6 @@ Check the log above for details.</source>
             <location filename="..\\ui\\configpanel.py" line="808" />
             <source>AI Inpaint</source>
             <translation>AI 修图</translation>
-        </message>
-        <message>
-            <location filename="..\\ui\\configpanel.py" line="808" />
-            <source>Merge Tool</source>
-            <translation>合并工具</translation>
         </message>
         <message>
             <location filename="..\ui\configpanel.py" line="756" />

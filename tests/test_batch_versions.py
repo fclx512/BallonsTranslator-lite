@@ -8,11 +8,15 @@ Run:
     ./ballontrans_pylibs_win/python.exe -m pytest tests/test_batch_versions.py -q
 """
 
+import json
 import os
 import os.path as osp
+import shutil
 import sys
 import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 APP_ROOT = osp.dirname(osp.dirname(osp.abspath(__file__)))
 sys.path.insert(0, APP_ROOT)
@@ -29,6 +33,7 @@ from utils.batch_versions import (  # noqa: E402
 )
 from utils.config import pcfg  # noqa: E402
 from utils.exceptions import ProjectLoadFailureException  # noqa: E402
+from utils.io_utils import imread, imwrite  # noqa: E402
 from utils.proj_imgtrans import ProjImgTrans  # noqa: E402
 from utils.textblock import TextBlock  # noqa: E402
 
@@ -231,6 +236,106 @@ class BatchVersionStoreTest(unittest.TestCase):
         self._write_inpainted(200)  # 操作期间才生成修复图
         self.store.restore_latest()
         self.assertFalse(osp.exists(self._inpainted_path()))
+
+    def test_copy_undo_rebases_legacy_pixel_path(self):
+        meta = self.store.begin("fill", pixel_regions={"a.png": [[0, 0, 8, 8]]})
+        self.assertEqual(meta.pixels["a.png"]["filename"], "a.png")
+        meta_path = osp.join(meta.dir, "meta.json")
+        with open(meta_path, encoding="utf8") as stream:
+            data = json.load(stream)
+        data["version"] = 1
+        data["pixels"]["a.png"].pop("filename")
+        data["pixels"]["a.png"]["file"] = self._inpainted_path()
+        with open(meta_path, "w", encoding="utf8") as stream:
+            json.dump(data, stream)
+        self._write_inpainted(200)
+        with tempfile.TemporaryDirectory() as dest:
+            copied = osp.join(dest, "copy")
+            shutil.copytree(self.proj_dir, copied)
+            proj = ProjImgTrans()
+            proj.load(copied, osp.join(copied, osp.basename(self.proj.proj_path)))
+            BatchVersionStore(proj).restore_latest()
+            self.assertFalse(osp.exists(osp.join(proj.inpainted_dir(), "a.png")))
+        self.assertTrue((self._read_inpainted() == 200).all())
+        self.assertEqual(self.store.available_steps(), 1)
+
+    def test_undo_preserves_transparency_in_saved_crops(self):
+        before = np.full((32, 32, 4), 37, dtype=np.uint8)
+        after = np.full((32, 32, 4), 79, dtype=np.uint8)
+        Image.fromarray(before).save(self._inpainted_path())
+        self.store.begin("fill", pixel_regions={"a.png": [[0, 0, 8, 8]]})
+        Image.fromarray(after).save(self._inpainted_path())
+        self.store.restore_latest()
+        with Image.open(self._inpainted_path()) as result:
+            pixels = np.asarray(result)
+            np.testing.assert_array_equal(pixels[:8, :8], before[:8, :8])
+            np.testing.assert_array_equal(pixels[8:, 8:], after[8:, 8:])
+
+    def test_jxl_undo_preserves_pixels_inside_and_outside_the_crop(self):
+        if ".jxl" not in Image.registered_extensions():
+            self.skipTest("Pillow JXL codec unavailable")
+        generator = np.random.default_rng(86)
+        before = generator.integers(0, 256, (32, 32, 4), dtype=np.uint8)
+        after = generator.integers(0, 256, (32, 32, 4), dtype=np.uint8)
+        path = osp.join(self.proj.inpainted_dir(), "a.jxl")
+        expected = after.copy()
+        expected[:8, :8] = before[:8, :8]
+
+        imwrite(path, before, ext=".jxl")
+        np.testing.assert_array_equal(imread(path), before)
+        self.store.begin("fill", pixel_regions={"a.png": [[0, 0, 8, 8]]})
+        imwrite(path, after, ext=".jxl")
+        self.store.restore_latest()
+
+        np.testing.assert_array_equal(imread(path), expected)
+
+    def test_missing_pixel_strip_keeps_version_and_leaves_pages_unmodified(self):
+        self._write_inpainted(10)
+        self._write_inpainted(20, "b.png")
+        rects = {page: [[0, 0, 8, 8]] for page in ("a.png", "b.png")}
+        meta = self.store.begin("fill", pixel_regions=rects)
+        os.remove(osp.join(meta.dir, meta.pixels["b.png"]["strip"]))
+        self._write_inpainted(200)
+        self._write_inpainted(201, "b.png")
+        self.proj.pages["a.png"][0].translation = "new"
+
+        with self.assertRaises(ProjectLoadFailureException):
+            self.store.restore_latest()
+
+        self.assertEqual(self.proj.pages["a.png"][0].translation, "new")
+        self.assertTrue((self._read_inpainted() == 200).all())
+        self.assertTrue((self._read_inpainted("b.png") == 201).all())
+        self.assertEqual(self.store.available_steps(), 1)
+
+    def test_second_pixel_write_failure_rolls_back_and_can_retry(self):
+        self._write_inpainted(10)
+        self._write_inpainted(20, "b.png")
+        rects = {page: [[0, 0, 8, 8]] for page in ("a.png", "b.png")}
+        self.store.begin("fill", pixel_regions=rects)
+        self._write_inpainted(200)
+        self._write_inpainted(201, "b.png")
+        self.proj.pages["a.png"][0].translation = "new"
+
+        replace = os.replace
+
+        def fail_on_second_page(source, target):
+            if Path(target).name == "b.png":
+                raise PermissionError("simulated write failure")
+            replace(source, target)
+
+        with patch("utils.batch_versions.os.replace", side_effect=fail_on_second_page):
+            with self.assertRaises(ProjectLoadFailureException):
+                self.store.restore_latest()
+
+        self.assertEqual(self.proj.pages["a.png"][0].translation, "new")
+        self.assertTrue((self._read_inpainted() == 200).all())
+        self.assertTrue((self._read_inpainted("b.png") == 201).all())
+        self.assertEqual(self.store.available_steps(), 1)
+
+        self.store.restore_latest()
+        self.assertTrue((self._read_inpainted()[:8, :8] == 10).all())
+        self.assertTrue((self._read_inpainted("b.png")[:8, :8] == 20).all())
+        self.assertEqual(self.store.available_steps(), 0)
 
     def test_rects_are_clamped_to_image(self):
         self._write_inpainted(10)

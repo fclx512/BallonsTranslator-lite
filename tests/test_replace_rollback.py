@@ -250,6 +250,26 @@ class MainWindowRollbackGuardTest(_ReplaceFixture):
         self.assertEqual(self.proj.pages["a.png"][0].translation, "later")
         self.assertIsNone(self.w._replace_version_seq)
 
+    def test_failed_restore_keeps_matching_version_available(self):
+        meta = self._write_version()
+        self._show_strip()
+        snapshot = osp.join(meta.dir, "proj.json")
+        with open(snapshot, encoding="utf8") as stream:
+            original = stream.read()
+        with open(snapshot, "w", encoding="utf8") as stream:
+            stream.write("{broken")
+        self.proj.pages["a.png"][0].translation = "replaced"
+        shim = self._shim()
+
+        self.assertFalse(shim.on_batch_rollback(meta.seq))
+        self.assertEqual(self.w._replace_version_seq, meta.seq)
+        self.assertEqual(self.proj.pages["a.png"][0].translation, "replaced")
+
+        with open(snapshot, "w", encoding="utf8") as stream:
+            stream.write(original)
+        self.assertTrue(shim.on_batch_rollback(meta.seq))
+        self.assertIsNone(self.w._replace_version_seq)
+
     def test_preparing_writes_version_and_arms_the_strip(self):
         """替换前写版本＝归并后的核心落点：写一版 + 把版本号交给面板。"""
         from ui.mainwindow import MainWindow

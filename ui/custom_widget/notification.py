@@ -6,7 +6,7 @@
 语义，不经过本中心。
 
 锚点约定（调用方可用 anchor 参数覆盖，默认即统一显示逻辑）：
-- status()   默认 top-left    状态角标（无字图标识）
+- status()   默认 top-left    状态角标
 - activity() 默认 top-center  进行中指示（LLM 修复 spinner）
 - toast()    默认 top-center  短暂提示（修复完成 / 冲突提示）
 - 空状态提示用 kind="hint" + anchor="center"，保持大号灰字样式

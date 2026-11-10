@@ -74,10 +74,10 @@ class NotificationCenterTest(unittest.TestCase):
         self.assertEqual(len(self.center._items), 0)
 
     def test_status_none_removes(self):
-        self.center.status("notext", "No-text BG")
+        self.center.status("status", "Ready")
         self.assertEqual(len(self.center._items), 1)
         self.assertIsInstance(self.center._items[0], StatusBadge)
-        self.center.status("notext", None)
+        self.center.status("status", None)
         self.assertEqual(len(self.center._items), 0)
 
     def test_bottom_stack_flows_upward(self):

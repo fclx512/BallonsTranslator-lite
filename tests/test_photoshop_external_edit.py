@@ -45,7 +45,6 @@ class _FakeProj:
     img_valid = True
     inpainted_valid = True
     mask_valid = False
-    notext_array = None
 
     def __init__(self, directory):
         self.directory = directory

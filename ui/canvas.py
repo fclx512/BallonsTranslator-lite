@@ -789,9 +789,7 @@ class Canvas(QGraphicsScene):
                 # draw the yellow overflow border into the result image.
                 item.settle_overflow_state()
 
-        proj = self.imgtrans_proj
-        base = proj.notext_array if (proj.notext_array is not None) else proj.inpainted_array
-        result = ndarray2pixmap(base, return_qimg=True)
+        result = ndarray2pixmap(self.imgtrans_proj.inpainted_array, return_qimg=True)
         canvas_sz = self.img_window_size()
         painter = QPainter(result)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -856,11 +854,6 @@ class Canvas(QGraphicsScene):
 
         painter.end()
         self.inpaintLayer.setPixmap(pixmap)
-
-        if pcfg.use_notext_images and self.imgtrans_proj.notext_array is not None:
-            notification.status("notext-bg", self.tr("No-text BG"))
-        else:
-            notification.status("notext-bg", None)
 
     def setMaskTransparency(self, transparency: float):
         pcfg.mask_transparency = transparency

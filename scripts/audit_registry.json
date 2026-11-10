@@ -1,6 +1,14 @@
 {
     "_comment": "AI 审计登记表。机制见 .agents/skills/audit-docs/SKILL.md。deprecated = 已删待守（不得复活、残留引用必须清零或进 allowed_mentions）；suspended = 存在的休眠文件（不得被主 UI import）。删除文件前先在此登记。",
     "deprecated": {
+        "ui/merge_dialog.py": {
+            "note": "旧区域合并工具退役：全书操作直接覆写工程 JSON，日常合框由可预览、可撤回的合并相邻文本框工具承担。",
+            "allowed_mentions": []
+        },
+        "utils/merger.py": {
+            "note": "旧区域合并工具退役：该几何实现只服务已删除的旧入口。工作台批量合并使用独立引擎。",
+            "allowed_mentions": []
+        },
         "ui/text_engine/formatting/panel.py": {
             "note": "死代码清理（2026-10-07）：text_engine 内嵌 FontFormatPanel（1310 行）未接入主窗口，活实现是 ui/text_panel.py::FontFormatPanel；其引用的 shared.FONT_FAMILIES 恒为 None（TypeError 地雷），随删除一并移除",
             "allowed_mentions": []

@@ -4,7 +4,7 @@ import os
 import os.path as osp
 import string
 import traceback
-from dataclasses import field, fields
+from dataclasses import field, fields, is_dataclass
 from datetime import datetime
 from typing import Dict, List
 
@@ -442,7 +442,6 @@ class ProgramConfig(Config):
     # 描边色自动跟随文字反色（黑字白边/白字黑边）全局开关；关闭后未手动指定的
     # 块描边色按存档 srgb 渲染，不再随字体颜色联动。
     stroke_auto_follow: bool = True
-    use_notext_images: bool = True
     text_styles_path: str = osp.join(shared.DEFAULT_TEXTSTYLE_DIR, "default.json")
 
     # 撤销步数上限（Blender 式 Max Steps）：0=无限；文本/绘制两栈同时生效。
@@ -621,11 +620,13 @@ class ProgramConfig(Config):
 
         with open(cfg_path, "r", encoding="utf8") as f:
             config_dict = json.loads(f.read())
+        if not isinstance(config_dict, dict):
+            raise ValueError("Program configuration must be a JSON object")
 
         # for backward compatibility
         if "dl" in config_dict:
             dl = config_dict.pop("dl")
-            if "module" not in config_dict:
+            if "module" not in config_dict and isinstance(dl, dict):
                 if "textdetector_setup_params" in dl:
                     textdetector_params = dl.pop("textdetector_setup_params")
                     dl["textdetector_params"] = textdetector_params
@@ -645,12 +646,20 @@ class ProgramConfig(Config):
             if not isinstance(module_cfg, dict):
                 module_cfg = {}
                 config_dict["module"] = module_cfg
-            # Hand-edited / partially written configs may lack this key; the
-            # migration checks below must not turn that into a KeyError.
-            trans_params = module_cfg.get("translator_params")
-            if not isinstance(trans_params, dict):
-                trans_params = {}
-                module_cfg["translator_params"] = trans_params
+            for stage in ("textdetector", "ocr", "translator", "inpainter"):
+                if stage in module_cfg and not isinstance(module_cfg[stage], str):
+                    LOGGER.warning(f"Discard invalid module selection: {stage}")
+                    module_cfg.pop(stage)
+                key = f"{stage}_params"
+                params = module_cfg.get(key, {})
+                if not isinstance(params, dict):
+                    LOGGER.warning(f"Discard invalid module parameters: {key}")
+                    params = {}
+                module_cfg[key] = {
+                    name: values for name, values in params.items()
+                    if isinstance(values, dict)
+                }
+            trans_params = module_cfg["translator_params"]
             repl_pairs = {"chatgpt": "ChatGPT"}
             for k, i in repl_pairs.items():
                 if k in trans_params:
@@ -696,6 +705,15 @@ class ProgramConfig(Config):
                 "Discard invalid quick_insert_characters config: expected a string."
             )
             config_dict.pop("quick_insert_characters")
+
+        if "display_lang" in config_dict and not isinstance(config_dict["display_lang"], str):
+            LOGGER.warning("Discard invalid display_lang config: expected a string.")
+            config_dict.pop("display_lang")
+        for setting in fields(ProgramConfig):
+            if (is_dataclass(setting.type) and setting.name in config_dict
+                    and not isinstance(config_dict[setting.name], dict)):
+                LOGGER.warning(f"Discard invalid {setting.name} config: expected an object.")
+                config_dict.pop(setting.name)
 
         # Tolerate stale persisted keys: a field removed from ProgramConfig
         # (e.g. ``effects_dock_open`` after the effect panel moved into the
@@ -1021,7 +1039,7 @@ def save_text_styles(raise_exception=False):
 CONFIG_EXPORT_VERSION = 1
 
 # Keys whose values are always stripped during export when exclude_api_keys=True
-EXPORT_SENSITIVE_KEYS = {"api_key", "proxy"}
+EXPORT_SENSITIVE_KEYS = {"api_key", "multiple_keys", "proxy"}
 
 
 def _compare_export_schema(data, ref_obj, prefix=""):
@@ -1085,12 +1103,36 @@ def _get_app_version():
     return "unknown"
 
 
+def _redact_export_credentials(value, path, excluded):
+    """Scrub serialized module settings, including JSON-encoded profile stores."""
+    if isinstance(value, list):
+        for entry in value:
+            _redact_export_credentials(entry, path + "[]", excluded)
+    elif isinstance(value, dict):
+        for key, entry in value.items():
+            field_path = f"{path}.{key}"
+            if key in EXPORT_SENSITIVE_KEYS:
+                value[key] = ""
+                excluded.add(field_path)
+            elif key in {"model_profiles", "_profiles_storage"} and entry != "":
+                try:
+                    profiles = json.loads(entry)
+                except (ValueError, TypeError):
+                    raise ValueError(f"Cannot redact invalid profile storage at {field_path}") from None
+                if not isinstance(profiles, list) or not all(isinstance(p, dict) for p in profiles):
+                    raise ValueError(f"Cannot redact invalid profile list at {field_path}")
+                _redact_export_credentials(profiles, field_path, excluded)
+                value[key] = json.dumps(profiles, ensure_ascii=False)
+            else:
+                _redact_export_credentials(entry, field_path, excluded)
+
+
 def export_config(path, exclude_api_keys=True, exclude_recent_projects=False):
     """Export pcfg to a JSON file with optional filtering.
 
     Args:
         path: Target file path (should end in .json).
-        exclude_api_keys: Strip api_key and proxy from LLM profiles.
+        exclude_api_keys: Strip credentials from profiles and module parameters.
         exclude_recent_projects: Omit recent project list.
 
     Returns:
@@ -1110,24 +1152,9 @@ def export_config(path, exclude_api_keys=True, exclude_recent_projects=False):
 
         # Filter sensitive data
         if exclude_api_keys:
-            profiles_raw = data.get("module", {}).get("model_profiles", "[]")
-            try:
-                profiles = json.loads(profiles_raw) if profiles_raw else []
-                excluded_keys = set()
-                for p in profiles:
-                    for sk in EXPORT_SENSITIVE_KEYS:
-                        if sk in p:
-                            p[sk] = ""
-                            excluded_keys.add(
-                                "module.model_profiles[].%s" % sk
-                            )
-                if excluded_keys:
-                    data["module"]["model_profiles"] = json.dumps(
-                        profiles, ensure_ascii=False
-                    )
-                    export_meta["excluded"].extend(sorted(excluded_keys))
-            except (json.JSONDecodeError, TypeError):
-                LOGGER.warning("Failed to parse model_profiles for export filtering")
+            excluded_keys = set()
+            _redact_export_credentials(data["module"], "module", excluded_keys)
+            export_meta["excluded"].extend(sorted(excluded_keys))
 
         if exclude_recent_projects:
             data.pop("recent_proj_list", None)
@@ -1184,19 +1211,22 @@ def import_config(path):
     result["unknown_keys"] = schema_result["unknown_keys"]
     result["missing_keys"] = schema_result["missing_keys"]
 
+    previous = pcfg.copy()
     try:
-        constructed = ProgramConfig(**data)
-        pcfg.merge(constructed)
-        save_config()
-        result["success"] = True
-        LOGGER.info(
-            "Config imported from %s (unknown: %d, missing: %d)",
-            path,
-            len(result["unknown_keys"]),
-            len(result["missing_keys"]),
-        )
+        pcfg.merge(ProgramConfig(**data))
+        if not save_config():
+            raise OSError("Could not save imported configuration")
     except Exception as e:
+        pcfg.merge(previous)
         LOGGER.error("Failed to import config from %s: %s", path, e)
         LOGGER.error(traceback.format_exc())
+        return result
 
+    result["success"] = True
+    LOGGER.info(
+        "Config imported from %s (unknown: %d, missing: %d)",
+        path,
+        len(result["unknown_keys"]),
+        len(result["missing_keys"]),
+    )
     return result

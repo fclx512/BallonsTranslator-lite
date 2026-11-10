@@ -25,7 +25,7 @@
 | --- | --- | --- |
 | 1 | 工具协议 | **原生 function calling**(OpenAI tools API)。端点不支持时走回退链(§9) |
 | 2 | 跨页历史 | **自动注入 + 按需探索**:编排器按预算注入邻近已完成页,agent 可用工具深挖更早页 |
-| 3 | 旧实现处置 | **合一,删 beta**:AgentTranslator 成为唯一 LLM 翻译路径,beta 翻译器 `ContextBatchTranslator` 及 Run 对话框 beta 入口删除,`modules/translators/trans_llm_api.py::LLM_API_Translator` 的直译路径降级为回退 |
+| 3 | 旧实现处置 | 已删除 beta 翻译器和运行窗口的 beta 入口。引擎选择器可选 Agent 或直接 LLM API。 |
 | 4 | 单框翻译 | **可选策略**配置项:`plain`(单条直译)/ `context`(注入当前页上下文 + 限轮轻量 agent) |
 | 5 | 术语表提取 | 术语表供给改由会话式工作台承担(§8);人工介入编辑为最终裁决,agent 不直接写术语表 |
 
@@ -250,7 +250,7 @@ agent loop(任何失败:格式崩/轮数耗尽仍无有效提交/端点不支持
 
 | 现有物 | 处置 |
 | --- | --- |
-| `modules/translators/trans_llm_api.py::LLM_API_Translator` | profile 体系 / json_schema 基建 / 多 key 轮换 / RPM 限流 / 重试机制全保留;直译路径降为回退;历史散文注入被编排注入取代 |
+| `modules/translators/trans_llm_api.py::LLM_API_Translator` | 直接调用 LLM API，复用 profile、JSON schema、密钥轮换、限流和重试。Agent 的回退链也调用这套直译实现。 |
 | beta 翻译器 `ContextBatchTranslator` | **已删**(2026-08-23,删前在 `scripts/audit_registry.json` 登记 deprecated) |
 | Run 对话框 "Context Translation (beta)" 入口 | **已删**;"上下文翻译"从开关变为 agent 模式固有行为 |
 | `modules/context/history.py` 窗口状态机 | **已废弃**(HistoryWindow / eligible_history_for_request / recover_context_length 已删,仅留 `modules/context/history.py::RequestContext` 快照模式与 token 计数) |
@@ -273,7 +273,7 @@ agent loop(任何失败:格式崩/轮数耗尽仍无有效提交/端点不支持
 | `llm_translate_context` | 保留为历史注入开关,默认开 |
 | `translate_context` / `context_translation_debug_log` | 前者已删(死配置);后者已并入 `agent_translation_debug_log`(默认关) |
 | `llm_story_context` | 剧情梗概注入开关,默认开;仅影响翻译注入,不影响工作台本身 |
-| profile 全部字段(`return_json_schema`、`reasoning_effort` 等) | 语义不变;`return_json_schema` 只影响回退直译路径的 response_format(agent 轮次固定带 tools) |
+| profile 全部字段(`return_json_schema`、`reasoning_effort` 等) | `return_json_schema` 影响直译请求的 response_format，包含独立直译引擎和 Agent 回退。Agent 工具轮次固定带 tools。 |
 
 ---
 
@@ -283,7 +283,7 @@ agent loop(任何失败:格式崩/轮数耗尽仍无有效提交/端点不支持
 
 | 阶段 | 内容 | 现状 |
 | --- | --- | --- |
-| 1. 地基 | AgentTranslator 注册 + agent loop + `submit_translations` + 校验器(A/B/C 类护栏)+ 整页翻译接入;直译路径降为回退 | 已落地:`modules/translators/trans_agent.py`、`modules/translators/agent/loop.py` |
+| 1. 地基 | 注册 Agent、接入循环和提交校验，支持整页翻译与直译回退 | 已落地:`modules/translators/trans_agent.py`、`modules/translators/agent/loop.py` |
 | 2. 探索工具 | `read_pages`/`search_blocks`/`get_page_info`/`search_glossary` 接入 loop + 注入护栏(D 类)+ 强制收敛轮 | 已落地:`modules/translators/agent/tools.py`(§4.2/§4.3) |
 | 3. 单框策略 | 修 page_key + `single_blk_translate_mode` 配置 + UI 入口 | 已落地:page_key 已通,档位在 Run 对话框翻译区(§9) |
 | 4. 债务清理 | 删 beta / 窗口机制 / 死配置,修 glossary 时序 | 已销账,逐项见 §11 |

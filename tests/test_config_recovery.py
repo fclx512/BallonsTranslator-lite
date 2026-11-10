@@ -21,6 +21,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -100,6 +101,28 @@ class ConfigRecoveryTests(unittest.TestCase):
         # detector id still migrated by the compat block.
         self.assertEqual(program_config.pcfg.module.textdetector, "ysgyolo")
 
+    def test_bad_startup_fields_do_not_discard_other_settings(self):
+        cfg = self._write("config.json", json.dumps({
+            "display_lang": None,
+            "mirror": None,
+            "global_fontformat": [],
+            "darkmode": True,
+            "module": {
+                "translator": "LLM_API_Translator",
+                "translator_params": {"LLM_API_Translator": "invalid"},
+                "ocr_params": {"paddleocr_v6_onnx": {"device": "cpu"}},
+            },
+        }))
+        with patch.object(program_config, "pcfg", program_config.ProgramConfig()):
+            program_config.load_config(str(cfg))
+            loaded = program_config.pcfg
+            self.assertTrue(loaded.darkmode)
+            self.assertEqual(loaded.display_lang, program_config.ProgramConfig().display_lang)
+            self.assertIsInstance(loaded.mirror, program_config.MirrorConfig)
+            self.assertEqual(loaded.module.translator, "LLM_API_Translator")
+            self.assertEqual(loaded.module.translator_params, {})
+            self.assertEqual(loaded.module.ocr_params["paddleocr_v6_onnx"]["device"], "cpu")
+
     def test_unwritable_textstyle_dir_only_degrades(self):
         blocker = self.tmp / "styles_dir"
         blocker.write_text("not a dir", encoding="utf8")
@@ -111,6 +134,53 @@ class ConfigRecoveryTests(unittest.TestCase):
 
         # Must return normally instead of propagating the write failure.
         program_config.load_config(str(cfg))
+
+    def test_import_failure_restores_current_config(self):
+        original = program_config.ProgramConfig(display_lang="en_US")
+        original.module.enable_ocr = True
+        export = self._write(
+            "export.json", '{"display_lang": "简体中文", "module": {"enable_ocr": false}}'
+        )
+        with patch.object(program_config, "pcfg", original), patch.object(
+            program_config, "save_config", return_value=False
+        ):
+            result = program_config.import_config(str(export))
+
+        self.assertFalse(result["success"])
+        self.assertEqual(original.display_lang, "en_US")
+        self.assertTrue(original.module.enable_ocr)
+
+    def test_redacted_export_covers_current_and_legacy_credentials(self):
+        secret = "audit-placeholder-credential"
+        original = program_config.ProgramConfig()
+        original.module.model_profiles = json.dumps([
+            {"name": "test", "model": "example", "api_key": secret, "multiple_keys": secret}
+        ])
+        original.module.translator_params = {"LLM_API_Translator": {
+            "proxy": {"value": secret},
+            "_profiles_storage": {"value": json.dumps([{"name": "old", "proxy": secret}])},
+        }}
+        share = self.tmp / "share.json"
+        private = self.tmp / "private.json"
+        with patch.object(program_config, "pcfg", original):
+            self.assertTrue(program_config.export_config(str(share)))
+            self.assertTrue(program_config.export_config(str(private), exclude_api_keys=False))
+
+        data = share.read_text(encoding="utf8")
+        self.assertNotIn(secret, data)
+        self.assertIn(secret, private.read_text(encoding="utf8"))
+        self.assertIn(secret, original.module.model_profiles)
+        export = json.loads(data)
+        self.assertEqual(json.loads(export["module"]["model_profiles"])[0]["model"], "example")
+        self.assertIn("module.model_profiles[].multiple_keys", export["_export_meta"]["excluded"])
+
+    def test_redacted_export_with_bad_profile_storage_keeps_previous_file(self):
+        path = self._write("export.json", '{"previous": true}')
+        original = program_config.ProgramConfig()
+        original.module.model_profiles = "unparseable credential payload"
+        with patch.object(program_config, "pcfg", original):
+            self.assertFalse(program_config.export_config(str(path)))
+        self.assertEqual(json.loads(path.read_text(encoding="utf8")), {"previous": True})
 
 
 class AppVersionConsistencyTests(unittest.TestCase):

@@ -514,9 +514,6 @@ class TitleBar(Widget):
         self.toolsToolBtn = TitleBarToolBtn(self)
         self.toolsToolBtn.setText(self.tr("Tools"))
 
-        # 区域合并工具
-        mergeToolAction = QAction(self.tr("Region Merge Tool"), self)
-        self.merge_tool_trigger = mergeToolAction.triggered
 
         # 路径重排（替换原有的智能重排）
         smartReorderAction = QAction(self.tr("Path Reorder…"), self)
@@ -574,7 +571,7 @@ class TitleBar(Widget):
         text_tools = toolsMenu.addMenu(self.tr("Text and styles"))
         text_tools.addActions([self._styleMgrAction, advAlignAction, normalizeBreaksAction])
         page_tools = toolsMenu.addMenu(self.tr("Pages and images"))
-        page_tools.addActions([mergeToolAction, smartReorderAction, noTextToolAction])
+        page_tools.addActions([smartReorderAction, noTextToolAction])
         toolsMenu.addSeparator()
         # 视图型开关（响应类型与上面的触发式工具不同，单独分组）
         toolsMenu.addAction(quickSymbolAction)

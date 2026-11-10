@@ -522,7 +522,7 @@ class MergedBlockTest(_MergeTestCase):
         """有成员带注解（译文 HTML）→ 重建成一份，含两段文字（契约二）。"""
         from qtpy.QtWidgets import QApplication
 
-        QApplication.instance() or QApplication([])
+        self.app = QApplication.instance() or QApplication([])
         merged = self._merged([
             _row(10, ["a"], vertical=False, translation="AA", rich_text="<p>AA</p>"),
             _row(45, ["b"], vertical=False, translation="BB", rich_text="<p>BB</p>"),

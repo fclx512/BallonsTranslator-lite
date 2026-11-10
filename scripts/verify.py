@@ -28,7 +28,7 @@ Step activation:
   - qm     : only when a .ts file changed
   - smoke  : with --smoke, or automatically when a startup-chain file changed
   - ruff   : with --full (skipped when ruff is not installed)
-  - pytest : with --full (missing heavy deps like torch/cv2 skip gracefully)
+  - pytest : with --full (skipped when pytest is not installed)
 
 Usage:
   python scripts/verify.py              # syntax(diff) + i18n + qm(if ts changed)
@@ -43,6 +43,7 @@ import argparse
 import hashlib
 import subprocess
 import sys
+from importlib.util import find_spec
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -186,18 +187,16 @@ def _run_full_steps(failures):
         _dump(r)
 
     # ── pytest ───────────────────────────────────────────────────────────
-    r = _run([_py(), "-m", "pytest", "tests/", "-v", "--tb=short"], timeout=600)
-    if "No module named" in (r.stderr + r.stdout) and "pytest" not in r.stdout:
-        print("⏭  pytest: 未安装或依赖缺失，跳过")
-    elif r.returncode == 0:
-        print("✅ pytest: tests/ 全部通过")
-    elif "ModuleNotFoundError" in (r.stderr + r.stdout):
-        # Heavy optional deps (cv2, torch, numpy…) — same tolerance as发版门禁
-        print("! pytest: 部分测试因缺少 opencv/torch/numpy 等重依赖跳过，其余通过")
+    if find_spec("pytest") is None:
+        print("⏭  pytest: 未安装，跳过")
     else:
-        failures += 1
-        print("❌ pytest: 存在失败用例")
-        _dump(r)
+        r = _run([_py(), "-m", "pytest", "tests/", "-v", "--tb=short"], timeout=600)
+        if r.returncode == 0:
+            print("✅ pytest: tests/ 运行通过（可选项由用例显式跳过）")
+        else:
+            failures += 1
+            print("❌ pytest: 测试失败或未正常完成")
+            _dump(r)
 
     return failures
 

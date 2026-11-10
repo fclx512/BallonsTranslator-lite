@@ -71,6 +71,8 @@ def corpus_files():
     """全部可审计文件：(Path, 相对路径 posix)。"""
     for dirpath, dirnames, filenames in os.walk(ROOT):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        if Path(dirpath) == ROOT and "out" in dirnames:
+            dirnames.remove("out")  # .gitignore 中的本机验收产物和历史快照
         for fn in filenames:
             p = Path(dirpath) / fn
             rel = p.relative_to(ROOT).as_posix()

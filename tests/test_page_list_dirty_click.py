@@ -62,9 +62,6 @@ class _FakeProject:
     def set_current_img(self, name):
         self.current_img = name
 
-    def get_notext_path(self, name):
-        return None
-
 
 class _FakeCanvas:
     def __init__(self):

@@ -60,7 +60,7 @@ def freeze_project(project):
     snapshot = copy.copy(project)
     for key, value in project.__dict__.items():
         # Canvas image buffers are never used or changed by this worker.
-        if key in {"img_array", "mask_array", "inpainted_array", "notext_array"}:
+        if key in {"img_array", "mask_array", "inpainted_array"}:
             setattr(snapshot, key, None)
         else:
             setattr(snapshot, key, copy.deepcopy(value))

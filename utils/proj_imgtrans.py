@@ -277,7 +277,6 @@ class ProjImgTrans:
         self.img_array: np.ndarray = None
         self.mask_array: np.ndarray = None
         self.inpainted_array: np.ndarray = None
-        self.notext_array: np.ndarray = None
         if directory is not None:
             self.load(directory)
 
@@ -370,9 +369,6 @@ class ProjImgTrans:
 
     def inpainted_dir(self):
         return osp.join(self.directory, "inpainted")
-
-    def notext_dir(self):
-        return osp.join(self.directory, "notext")
 
     def result_dir(self):
         return osp.join(self.directory, "result")
@@ -575,16 +571,11 @@ class ProjImgTrans:
             self.inpainted_array = self.load_inpainted_by_imgname(imgname)
             if self.inpainted_array is None:
                 self.inpainted_array = np.copy(self.img_array)
-            if pcfg.use_notext_images:
-                self.notext_array = self.load_notext_by_imgname(imgname)
-            else:
-                self.notext_array = None
         else:
             self.current_img = None
             self.img_array = None
             self.mask_array = None
             self.inpainted_array = None
-            self.notext_array = None
 
     def current_has_alpha(self):
         if self.current_img is None:
@@ -775,45 +766,6 @@ class ProjImgTrans:
                     )
                     inpainted = np.array(inpainted)
         return inpainted
-
-    def get_notext_path(self, imgname: str = None) -> str:
-        """Return path to the no-text clean background image, or None if unavailable."""
-        if imgname is None:
-            imgname = self.current_img
-        ndir = self.notext_dir()
-        if not osp.exists(ndir):
-            return None
-        direct = osp.join(ndir, imgname)
-        if osp.exists(direct):
-            return direct
-        base = osp.splitext(imgname)[0]
-        for ext in (".png", ".jpg", ".jpeg", ".webp", ".bmp"):
-            candidate = osp.join(ndir, base + ext)
-            if osp.exists(candidate):
-                return candidate
-        return None
-
-    def load_notext_by_imgname(self, imgname: str) -> np.ndarray:
-        """Load the no-text clean image, resizing to match the original dimensions."""
-        path = self.get_notext_path(imgname)
-        if path is None:
-            return None
-        try:
-            notext = imread(path)
-        except Exception as e:
-            LOGGER.warning(f"Failed to read no-text image {path}: {e}")
-            return None
-        if notext is None:
-            return None
-        h, w = self.img_array.shape[:2]
-        ih, iw = notext.shape[:2]
-        if ih != h or iw != w:
-            from PIL import Image
-            notext = Image.fromarray(notext).resize(
-                (w, h), resample=Image.Resampling.LANCZOS
-            )
-            notext = np.array(notext)
-        return notext
 
     def get_result_ext(self, imgname: str) -> str:
         if pcfg is not None and pcfg.imgsave_auto_format:

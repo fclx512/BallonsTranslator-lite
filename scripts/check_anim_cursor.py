@@ -197,6 +197,9 @@ def verify_cursor_paint(scene, tag, frame, app, probes, *, clip_rect=None,
 
 
 def main():
+    from scripts.test_config_sandbox import install_config_sandbox
+
+    install_config_sandbox()
     try:
         import anim_kit as K
         from anim_kit import init_app

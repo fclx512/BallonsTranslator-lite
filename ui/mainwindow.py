@@ -281,33 +281,7 @@ class MainWindow(mainwindow_cls):
     create_errdialog = Signal(str, str, str)
     create_infodialog = Signal(dict)
 
-    _notext_dot_icon: "QIcon | None" = None
     _dirty_dot_icon: "QIcon | None" = None
-
-    @staticmethod
-    def _make_badged_icon(imgpath: str, thumb_size: int) -> "QIcon":
-        """Load an image at thumbnail size and add a green dot badge."""
-        reader = QImageReader(imgpath)
-        reader.setScaledSize(QSize(thumb_size, thumb_size))
-        img = reader.read()
-        if img.isNull():
-            return QIcon(imgpath)
-        pixmap = QPixmap.fromImage(img)
-        # Paint green dot badge at top-right corner
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(Qt.PenStyle.NoPen)
-        dot_size = 8
-        margin = 2
-        # White border ring for contrast
-        painter.setBrush(QColor(255, 255, 255))
-        r = QRect(pixmap.width() - dot_size - margin, margin, dot_size, dot_size)
-        painter.drawEllipse(r.adjusted(-1, -1, 1, 1))
-        # Green fill (matches canvas notextLabel)
-        painter.setBrush(QColor(39, 174, 96))
-        painter.drawEllipse(r)
-        painter.end()
-        return QIcon(pixmap)
 
     @staticmethod
     def _make_dirty_badged_icon(imgpath: str, thumb_size: int) -> "QIcon":
@@ -335,23 +309,6 @@ class MainWindow(mainwindow_cls):
         painter.drawEllipse(r)
         painter.end()
         return QIcon(pixmap)
-
-    @staticmethod
-    def _get_notext_dot_icon() -> "QIcon":
-        """Return a small green dot icon for text-only list items (cached)."""
-        if MainWindow._notext_dot_icon is None:
-            pixmap = QPixmap(14, 14)
-            pixmap.fill(Qt.GlobalColor.transparent)
-            painter = QPainter(pixmap)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(255, 255, 255))
-            painter.drawEllipse(0, 0, 14, 14)
-            painter.setBrush(QColor(39, 174, 96))
-            painter.drawEllipse(1, 1, 12, 12)
-            painter.end()
-            MainWindow._notext_dot_icon = QIcon(pixmap)
-        return MainWindow._notext_dot_icon
 
     @staticmethod
     def _get_dirty_dot_icon() -> "QIcon":
@@ -2067,10 +2024,6 @@ class MainWindow(mainwindow_cls):
         use_thumbnails = len(self.imgtrans_proj.pages) < shared.PAGELIST_THUMBNAIL_MAXNUM
 
         for imgname in self.imgtrans_proj.pages:
-            has_notext = (
-                pcfg.use_notext_images
-                and self.imgtrans_proj.get_notext_path(imgname) is not None
-            )
             is_dirty = self.imgtrans_proj.page_needs_rerender(imgname)
 
             if use_thumbnails:
@@ -2084,34 +2037,24 @@ class MainWindow(mainwindow_cls):
                     lstitem = QListWidgetItem(QIcon(imgpath), imgname)
                 else:
                     pixmap = QPixmap.fromImage(img)
-                    if has_notext or is_dirty:
+                    if is_dirty:
                         painter = QPainter(pixmap)
                         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
                         painter.setPen(Qt.PenStyle.NoPen)
                         ts = shared.PAGELIST_THUMBNAIL_SIZE
                         dot_size = 8
                         margin = 2
-                        if has_notext:
-                            # Green dot at top-right (same as _make_badged_icon)
-                            painter.setBrush(QColor(255, 255, 255))
-                            r = QRect(ts - dot_size - margin, margin, dot_size, dot_size)
-                            painter.drawEllipse(r.adjusted(-1, -1, 1, 1))
-                            painter.setBrush(QColor(39, 174, 96))
-                            painter.drawEllipse(r)
-                        if is_dirty:
-                            # Orange dot at bottom-right
-                            painter.setBrush(QColor(255, 255, 255))
-                            r = QRect(ts - dot_size - margin, ts - dot_size - margin,
-                                      dot_size, dot_size)
-                            painter.drawEllipse(r.adjusted(-1, -1, 1, 1))
-                            painter.setBrush(QColor(230, 126, 34))
-                            painter.drawEllipse(r)
+                        # Orange dot at bottom-right
+                        painter.setBrush(QColor(255, 255, 255))
+                        r = QRect(ts - dot_size - margin, ts - dot_size - margin,
+                                  dot_size, dot_size)
+                        painter.drawEllipse(r.adjusted(-1, -1, 1, 1))
+                        painter.setBrush(QColor(230, 126, 34))
+                        painter.drawEllipse(r)
                         painter.end()
                     lstitem = QListWidgetItem(QIcon(pixmap), imgname)
             else:
                 lstitem = QListWidgetItem(imgname)
-                if has_notext:
-                    lstitem.setIcon(self._get_notext_dot_icon())
                 if is_dirty:
                     font = lstitem.font()
                     font.setItalic(True)
@@ -2483,7 +2426,6 @@ class MainWindow(mainwindow_cls):
         self.titleBar.global_search_trigger.connect(self.on_global_search)
         self.titleBar.darkmode_trigger.connect(self.on_darkmode_triggered)
         self.titleBar.overflow_trigger.connect(self.on_overflow_triggered)
-        self.titleBar.merge_tool_trigger.connect(self.on_open_merge_tool)
         self.titleBar.smart_reorder_trigger.connect(self.on_path_reorder)
         self.titleBar.stylemgr_trigger.connect(self.on_open_fontstyle_manager)
 
@@ -2634,9 +2576,6 @@ class MainWindow(mainwindow_cls):
         )
         self.shortcut_registry["global_search"] = self._make_shortcuts(
             "global_search", self.on_global_search
-        )
-        self.shortcut_registry["merge_tool"] = self._make_shortcuts(
-            "merge_tool", self.on_open_merge_tool
         )
         self.shortcut_registry["quick_symbol"] = self._make_shortcuts(
             "quick_symbol", self.on_open_quick_symbol
@@ -2936,25 +2875,6 @@ class MainWindow(mainwindow_cls):
 
                 self.global_search_widget.commit_search()
 
-    def on_open_merge_tool(self):
-        """Open region merge tool dialog"""
-        if not hasattr(self, "merge_dialog") or self.merge_dialog is None:
-            from .merge_dialog import MergeDialog
-
-            self.merge_dialog = MergeDialog(self)
-            self.merge_dialog.run_current_clicked.connect(
-                lambda: self.run_merge_task(on_current=True)
-            )
-            self.merge_dialog.run_all_clicked.connect(
-                lambda: self.run_merge_task(on_current=False)
-            )
-
-        if self.merge_dialog.isVisible():
-            self.merge_dialog.raise_()
-            self.merge_dialog.activateWindow()
-        else:
-            self.merge_dialog.show()
-
     def on_open_quick_symbol(self):
         """Toggle the Quick Symbol rail dock (text panel format rail)."""
         self.textPanel.formatpanel.toggle_symbol_dock()
@@ -3136,144 +3056,6 @@ class MainWindow(mainwindow_cls):
         cmd = _PointAlignCommand(canvas, cmd_data, item_changes)
         canvas.push_undo_command(cmd)
 
-    def run_merge_task(self, on_current=False):
-        """Run region merge task"""
-        from qtpy.QtWidgets import QMessageBox
-
-        from utils import merger
-
-        if self.imgtrans_proj.is_empty:
-            QMessageBox.warning(
-                self, self.tr("Warning"), self.tr("Please open a project first")
-            )
-            return
-
-        config = self.merge_dialog.get_config()
-
-        if on_current:
-            # 对当前文件运行 - 直接在内存中操作，不读写文件
-            from utils.textblock import TextBlock
-
-            current_img = self.imgtrans_proj.current_img
-            if not current_img:
-                QMessageBox.warning(
-                    self, self.tr("Warning"), self.tr("No current file")
-                )
-                return
-
-            # 直接从内存获取当前页面的文本框
-            if current_img not in self.imgtrans_proj.pages:
-                QMessageBox.warning(
-                    self, self.tr("Warning"), self.tr("Current page data not found")
-                )
-                return
-
-            textblocks = self.imgtrans_proj.pages[current_img]
-            if not textblocks:
-                QMessageBox.warning(
-                    self, self.tr("Notice"), self.tr("No text blocks on current page")
-                )
-                return
-
-            # 将 TextBlock 对象转换为字典格式（merger 需要字典）
-            initial_shapes = [blk.to_dict() for blk in textblocks]
-
-            initial_count = len(initial_shapes)
-            mode = config.get("MERGE_MODE", "NONE")
-            total_merged = 0
-
-            # 在内存中执行合并
-            if mode == "VERTICAL":
-                final_shapes, count = merger.perform_merge(
-                    initial_shapes, "VERTICAL", config
-                )
-                total_merged += count
-            elif mode == "HORIZONTAL":
-                final_shapes, count = merger.perform_merge(
-                    initial_shapes, "HORIZONTAL", config
-                )
-                total_merged += count
-            elif mode == "VERTICAL_THEN_HORIZONTAL":
-                temp, count1 = merger.perform_merge(initial_shapes, "VERTICAL", config)
-                final_shapes, count2 = merger.perform_merge(temp, "HORIZONTAL", config)
-                total_merged += count1 + count2
-            elif mode == "HORIZONTAL_THEN_VERTICAL":
-                temp, count1 = merger.perform_merge(
-                    initial_shapes, "HORIZONTAL", config
-                )
-                final_shapes, count2 = merger.perform_merge(temp, "VERTICAL", config)
-                total_merged += count1 + count2
-            else:
-                final_shapes = initial_shapes
-
-            if total_merged > 0:
-                # 将字典转回 TextBlock 对象并更新内存
-                self.imgtrans_proj.pages[current_img] = [
-                    TextBlock(**blk_dict) for blk_dict in final_shapes
-                ]
-                # 刷新画布
-                self.canvas.updateCanvas()
-                self.st_manager.updateSceneTextitems()
-                final_count = len(final_shapes)
-                QMessageBox.information(
-                    self,
-                    self.tr("Success"),
-                    self.tr(
-                        "Merge complete: {initial} -> {final} (reduced by {delta})"
-                    ).format(
-                        initial=initial_count,
-                        final=final_count,
-                        delta=initial_count - final_count,
-                    ),
-                )
-            else:
-                labels = set(s.get("label", "") for s in initial_shapes)
-                detail_msg = self.tr("No merge occurred.") + "\n"
-                detail_msg += (
-                    self.tr("Total text blocks: {count}").format(count=initial_count)
-                    + "\n"
-                )
-                detail_msg += (
-                    self.tr("Label types: {labels}").format(
-                        labels=", ".join(labels) or self.tr("None")
-                    )
-                    + "\n\n"
-                )
-                detail_msg += self.tr("Suggestions:") + "\n"
-                detail_msg += (
-                    self.tr("1. Try increasing maximum gap (e.g., 100-200)") + "\n"
-                )
-                detail_msg += (
-                    self.tr("2. Lower the minimum overlap ratio (e.g., 50-70%)") + "\n"
-                )
-                detail_msg += (
-                    self.tr("3. Uncheck 'Enable label exclusion (blacklist)'") + "\n"
-                )
-                detail_msg += self.tr("4. Check if labels are in the blacklist")
-                QMessageBox.warning(self, self.tr("Notice"), detail_msg)
-        else:
-            # 对所有文件运行
-            img_list = list(self.imgtrans_proj.pages.keys())
-            if not img_list:
-                QMessageBox.warning(
-                    self, self.tr("Warning"), self.tr("No images in project")
-                )
-                return
-
-            json_path = self.imgtrans_proj.proj_path
-            if not json_path or not osp.exists(json_path):
-                QMessageBox.warning(
-                    self,
-                    self.tr("Warning"),
-                    self.tr("Project JSON file not found: {path}").format(
-                        path=json_path
-                    ),
-                )
-                return
-
-            # 使用后台线程执行合并
-            self.run_merge_all_async(json_path, img_list, config)
-
     # ── Smart Reorder ─────────────────────────────────────
 
     def on_path_reorder(self):
@@ -3366,62 +3148,6 @@ class MainWindow(mainwindow_cls):
             self.canvas.reorder_path_finished.connect(self._on_reorder_path_done)
         else:
             self.canvas.exitReorderMode()
-
-    def run_merge_all_async(self, json_path, img_list, config):
-        """Run merge async on all files"""
-        from .io_thread import MergeThread
-
-        # 创建合并线程（如果不存在）
-        if not hasattr(self, "merge_thread"):
-            self.merge_thread = MergeThread()
-            self.merge_thread.progress_changed.connect(self.on_merge_progress)
-            self.merge_thread.merge_finished.connect(self.on_merge_finished)
-            self.merge_thread.progress_bar.stop_clicked.connect(self.on_merge_stop)
-
-        # 启动合并
-        if self.merge_thread.runMerge(json_path, img_list, config):
-            # 显示进度对话框
-            self.merge_thread.progress_bar.zero_progress()
-            self.merge_thread.progress_bar.show()
-
-    def on_merge_progress(self, current, total):
-        """Merge progress update"""
-        progress = int(current / total * 100)
-        self.merge_thread.progress_bar.updateTaskProgress(
-            progress, f" {current}/{total}"
-        )
-
-    def on_merge_stop(self):
-        """Stop merge"""
-        if hasattr(self, "merge_thread"):
-            self.merge_thread.requestStop()
-            self.merge_thread.progress_bar.hide()
-
-    def on_merge_finished(self, success_count, fail_count):
-        """Merge complete"""
-        self.merge_thread.progress_bar.hide()
-
-        # 重新加载整个项目
-        try:
-            json_path = self.imgtrans_proj.proj_path
-            current_img = self.imgtrans_proj.current_img
-            self.imgtrans_proj.load_from_json(json_path)
-            if current_img and current_img in self.imgtrans_proj.pages:
-                self.imgtrans_proj.set_current_img(current_img)
-                self.canvas.updateCanvas()
-                self.st_manager.updateSceneTextitems()
-        except Exception:
-            pass
-
-        # 显示结果
-        total = success_count + fail_count
-        QMessageBox.information(
-            self,
-            self.tr("Done"),
-            self.tr("Region merge complete\nSuccess: {s}/{t}\nFailed: {f}/{t}").format(
-                s=success_count, f=fail_count, t=total
-            ),
-        )
 
     def on_req_update_pagetext(self):
         if self.canvas.text_change_unsaved():
@@ -4779,17 +4505,21 @@ class MainWindow(mainwindow_cls):
             store.restore_latest(expect_seq=version_seq)
         except Exception as e:
             LOGGER.error(f"Batch rollback failed: {e}")
-            self.global_search_widget.hide_rollback_strip()
+            latest = store.latest()
+            can_retry = latest is not None and (version_seq is None or latest.seq == version_seq)
+            if not can_retry:
+                self.global_search_widget.hide_rollback_strip()
             try:
-                notification.toast(
-                    self.tr(
+                if can_retry:
+                    message = self.tr("Rollback failed. The backup was kept. See the log for details.")
+                else:
+                    message = self.tr(
                         "Rollback failed: the backup version is missing or was superseded by a newer batch operation."
-                    ),
-                    anchor="bottom-left",
-                )
+                    )
+                notification.toast(message, anchor="bottom-left")
             except Exception as err:
                 LOGGER.error(f"rollback toast failed: {err}")
-            return
+            return False
         # 版本恢复是数据层的整体换入，与页栈中的任何命令都不再相干
         self.canvas.clear_undostack(update_saved_step=True)
         self.canvas.updateCanvas()
@@ -4804,6 +4534,7 @@ class MainWindow(mainwindow_cls):
         except Exception as e:
             LOGGER.error(f"rollback toast failed: {e}")
         self._ask_rerender_dirty_pages()
+        return True
 
     def on_revision_requested(self, targets, hint):
         self._workbench_tool_dialog.hide()
@@ -4863,8 +4594,12 @@ class MainWindow(mainwindow_cls):
         落盘 → 刷页列表 → 问是否重渲脏页），随后让工作台作废版本号并重跑
         当前队列的列表——数据整体换过了，旧列表全部失效。
         """
-        self.on_batch_rollback(version_seq)
-        self.glossary_workbench.clear_batch_version()
+        if self.on_batch_rollback(version_seq):
+            self.glossary_workbench.clear_batch_version()
+        else:
+            latest = BatchVersionStore(self.imgtrans_proj).latest()
+            if latest is None or latest.seq != version_seq:
+                self.glossary_workbench.clear_batch_version()
 
     def _on_group_undo_rerender_requested(self):
         """组化命令撤销确认弹窗勾选「同时重渲染」：重渲脏页但保留撤销历史。"""
