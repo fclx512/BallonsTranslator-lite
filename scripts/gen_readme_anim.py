@@ -58,6 +58,7 @@ from anim_kit import (
     iter_frames,
     move_progress,
     out_cubic,
+    save_storyboard,
     save_webp,
     widget_scene_center,
     widget_scene_rect,
@@ -538,6 +539,13 @@ def main():
             scene._dpr = dpr
             scene.ensurePolished()
             app.processEvents()
+            if args.storyboard:
+                out = osp.join(args.out_dir, f"{key}.png")
+                size_kb = save_storyboard(app, scene, out,
+                                          camera=scene.camera_rect)
+                print(f"OK {key}  小样 {out}  {size_kb:.1f} KB  "
+                      f"{scene.N_FRAMES} frames")
+                continue
             frames = iter_frames(
                 app, scene,
                 dump_dir=args.dump_frames,
@@ -565,6 +573,9 @@ def _parse_args():
     parser.add_argument("--fps", type=int, default=20)
     parser.add_argument("--lossy", action="store_true")
     parser.add_argument("--dump-frames", default=None)
+    parser.add_argument("--storyboard", action="store_true",
+                        help="只出风格帧小样（关键帧联络表 PNG，输出到 "
+                             "--out-dir 下 <key>.png），不编码 webp")
     parser.add_argument("--dpr", type=float, default=2.0)
     args = parser.parse_args()
     if not args.all and args.scene is None:

@@ -592,8 +592,48 @@ class CursorPlan:
 
 # ── 场景机制基类 ────────────────────────────────────────────────
 
+# ── 风格令牌 ─────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class AnimStyle:
+    """演示动画的共享视觉语言：跨场景复用的审美参数集中于此。
+
+    只收**观感语言**（颜色/圆角/字号/明暗口径），不收内容几何（格子尺寸、
+    块布局等由各场景自声明）与引擎镜像值（``TEXTRECT_SHOW_COLOR`` 等照抄
+    真实 UI 的常量——改它们等于改产品观感，不属于风格自由度）。字段值迁移
+    自 7 个弹层场景的既有手填值，数值不变、逐帧像素零漂移；新增场景一律
+    消费 ``AnimScene.style``（或覆写该类属性），禁止再手填同类散值。
+    """
+
+    ink_color: QColor          # 预览卡内演示文字墨迹基色（强调时向 accent 闪烁）
+    page_ink_color: QColor     # 示意漫画页内的小字墨迹
+    card_bg: QColor            # 预览卡底色
+    card_radius: float         # 预览卡/手绘弹层卡圆角
+    item_radius: float         # 手绘弹层列表项圆角
+    hover_alpha: int           # 手绘列表项 hover 底色 alpha
+    label_font_px: int         # 行标签/文案字号
+    caption_alpha_hi: int      # 文案全亮 alpha
+    caption_dim_ratio: float   # 明暗互换时未激活条的亮度比例
+
+
+DEFAULT_STYLE = AnimStyle(
+    ink_color=QColor(26, 26, 26),
+    page_ink_color=QColor(60, 60, 60),
+    card_bg=QColor(255, 255, 255),
+    card_radius=6.0,
+    item_radius=4.0,
+    hover_alpha=40,
+    label_font_px=12,
+    caption_alpha_hi=210,
+    caption_dim_ratio=0.35,
+)
+
+
 class AnimScene(QWidget):
     """演示场景机制基类：画布尺寸/时长场景自声明，覆盖层与光标统一驱动。
+
+    风格令牌经类属性 ``style``（默认 ``DEFAULT_STYLE``）下发，场景一律消费
+    ``self.style``，需要换风格时覆写该类属性。
 
     子类在 ``_build()`` 里搭自己的版式与控件（本基类不做任何版式假设——
     弹层的"设置行 + 预览卡 + 文案"只是 gen_help_anim.py 里的一个预设编排）；
@@ -604,6 +644,7 @@ class AnimScene(QWidget):
 
     SIZE = (460, 262)
     N_FRAMES = 20
+    style: AnimStyle = DEFAULT_STYLE
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -740,20 +781,21 @@ def caption_alpha(f: int, start: int, next_start: int, fade_in: float = 4.0,
     return min(a_in, a_out)
 
 
-def set_caption_emphasis(labels, k: float, color: QColor):
-    """两条常显文案的明暗互换：未激活一条降到约 35% 不透明度，激活的全亮。
+def set_caption_emphasis(labels, k: float, color: QColor,
+                         style: AnimStyle = DEFAULT_STYLE):
+    """两条常显文案的明暗互换：未激活一条降到暗档不透明度，激活的全亮。
 
     k=0 改前条全亮（改后条暗），k=1 反转；点击复选框/下拉项后用 out_cubic
-    约 5 帧交叉淡化互换，与预览过渡同步。
+    约 5 帧交叉淡化互换，与预览过渡同步。亮度口径取自 ``style``。
     """
-    hi = 210
-    lo = round(hi * 0.35)
+    hi = style.caption_alpha_hi
+    lo = round(hi * style.caption_dim_ratio)
     rgb = f"{color.red()},{color.green()},{color.blue()}"
     alphas = (hi + (lo - hi) * k, lo + (hi - lo) * k)
     for label, alpha in zip(labels, alphas):
         label.setStyleSheet(
             f"color: rgba({rgb},{round(alpha)});"
-            "background: transparent; font-size: 12px;"
+            f"background: transparent; font-size: {style.label_font_px}px;"
         )
 
 
@@ -779,7 +821,8 @@ def make_caption_labels(parent: QWidget, fg: QColor, captions,
 
 
 def make_single_caption(parent: QWidget, fg: QColor, text: str,
-                        x: float, y: float, w: float, h: float) -> QLabel:
+                        x: float, y: float, w: float, h: float,
+                        style: AnimStyle = DEFAULT_STYLE) -> QLabel:
     """外观展示类场景的**单条常显说明**（无改前/改后前缀、无明暗互换）。
 
     适用判据：开关只是「显示/不显示」某个装饰（无布局行为差异）时，改前条
@@ -795,8 +838,8 @@ def make_single_caption(parent: QWidget, fg: QColor, text: str,
     label.setGeometry(x, y, w, h)
     rgb = f"{fg.red()},{fg.green()},{fg.blue()}"
     label.setStyleSheet(
-        f"color: rgba({rgb},210);"
-        "background: transparent; font-size: 12px;"
+        f"color: rgba({rgb},{style.caption_alpha_hi});"
+        f"background: transparent; font-size: {style.label_font_px}px;"
     )
     label.setText(text)
     return label
@@ -944,6 +987,31 @@ def qimage_to_pil(img: QImage) -> Image.Image:
     return Image.frombytes("RGBA", (w, h), arr.tobytes())
 
 
+def _crop_frame(scene: AnimScene, frame, camera, f: int):
+    """``camera(f) -> QRectF|None`` 视口裁切（README 大画幅「镜头跟随光标」）。"""
+    if camera is None:
+        return frame
+    rect = camera(f)
+    if rect is None:
+        return frame
+    scale = frame.width / scene.width()
+    x0 = round(rect.x() * scale)
+    y0 = round(rect.y() * scale)
+    w = round(rect.width() * scale)
+    h = round(rect.height() * scale)
+    return frame.crop((
+        max(0, x0), max(0, y0),
+        min(frame.width, x0 + w), min(frame.height, y0 + h),
+    ))
+
+
+def _render_one(app: QApplication, scene: AnimScene, f: int, camera=None):
+    """单帧渲染（不 show；windows 平台下无闪窗），可选视口裁切。"""
+    scene.set_state(f)
+    app.processEvents()
+    return _crop_frame(scene, qimage_to_pil(scene.grab().toImage()), camera, f)
+
+
 def iter_frames(app: QApplication, scene: AnimScene, dump_dir: str = None,
                 camera=None):
     """按帧号确定性步进逐帧 grab（不 show，windows 平台下无闪窗）。
@@ -954,21 +1022,7 @@ def iter_frames(app: QApplication, scene: AnimScene, dump_dir: str = None,
     裁切在 grab 后立即做，迭代过程中至多持有当前一帧。
     """
     for f in range(scene.N_FRAMES):
-        scene.set_state(f)
-        app.processEvents()
-        frame = qimage_to_pil(scene.grab().toImage())
-        if camera is not None:
-            rect = camera(f)
-            if rect is not None:
-                scale = frame.width / scene.width()
-                x0 = round(rect.x() * scale)
-                y0 = round(rect.y() * scale)
-                w = round(rect.width() * scale)
-                h = round(rect.height() * scale)
-                frame = frame.crop((
-                    max(0, x0), max(0, y0),
-                    min(frame.width, x0 + w), min(frame.height, y0 + h),
-                ))
+        frame = _render_one(app, scene, f, camera)
         if dump_dir:
             os.makedirs(dump_dir, exist_ok=True)
             frame.save(osp.join(dump_dir, f"frame_{f:03d}.png"))
@@ -979,6 +1033,57 @@ def render_frames(app: QApplication, scene: AnimScene, dump_dir: str = None,
                   camera=None) -> list:
     """``iter_frames`` 的列表形态（弹层流程既有调用面保持不变）。"""
     return list(iter_frames(app, scene, dump_dir, camera))
+
+
+def storyboard_keyframes(scene: AnimScene) -> list:
+    """风格帧小样的关键帧号：场景声明的全部 ``F_*`` 拍点 + 首尾帧，升序去重。
+
+    ``F_*`` 是各场景时间轴的拍点（切换/过渡/拖拽起止），正是「拍点表」在代码
+    里的落点——小样把它们与首尾帧各渲一格，人只看这几格就能审出构图与节奏
+    问题，不必逐帧扫。
+    """
+    marks = {0, scene.N_FRAMES - 1}
+    for name in dir(type(scene)):
+        if name.startswith("F_"):
+            value = getattr(scene, name, None)
+            if isinstance(value, int):
+                marks.add(value)
+    return sorted(marks)
+
+
+def save_storyboard(app: QApplication, scene: AnimScene, out: str,
+                    camera=None, cell_w: int = 320) -> float:
+    """风格帧小样（第二道检查点）：关键帧渲成一张联络表 PNG，返回体积 KB。
+
+    流程位置：拍点表确认 → **本函数小样确认** → 整段生产（``save_webp``）。
+    输出是审查材料、不是产物，默认写 ``build/``（gitignore）、用完即弃。
+    """
+    indices = storyboard_keyframes(scene)
+    frames = [_render_one(app, scene, f, camera) for f in indices]
+    cell_h = max(round(fr.height * cell_w / fr.width) for fr in frames)
+    cols = min(len(frames), 4)
+    rows = (len(frames) + cols - 1) // cols
+    pad, label_h = 8, 22
+    sheet = Image.new(
+        "RGB", (cols * (cell_w + pad) + pad,
+                rows * (cell_h + label_h + pad) + pad), (34, 34, 34))
+    try:
+        from PIL import ImageDraw, ImageFont
+        draw = ImageDraw.Draw(sheet)
+        font = ImageFont.truetype("C:/Windows/Fonts/consola.ttf", 14)
+    except Exception:
+        draw, font = None, None
+    for i, (f, fr) in enumerate(zip(indices, frames)):
+        thumb = fr.resize((cell_w, round(fr.height * cell_w / fr.width)))
+        x = pad + (i % cols) * (cell_w + pad)
+        y = pad + (i // cols) * (cell_h + label_h + pad)
+        sheet.paste(thumb, (x, y + label_h))
+        if draw is not None:
+            draw.text((x + 2, y + 3), f"frame {f}", fill=(220, 220, 220),
+                      font=font)
+    os.makedirs(osp.dirname(out), exist_ok=True)
+    sheet.save(out)
+    return osp.getsize(out) / 1024
 
 
 def save_webp(frames, out: str, fps: int, lossless: bool = True) -> float:

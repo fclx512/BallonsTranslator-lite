@@ -2353,6 +2353,7 @@ class ConfigPanel(Widget):
                 "",
                 self.tag_toolbar_checker,
                 note=self.tr("<p>Shows the floating <b>tag toolbar</b> above the selected block. Disable to tag only via right-click menu, pie menu or shortcuts.</p>"),
+                anim="tag_toolbar",
             )
         )
 

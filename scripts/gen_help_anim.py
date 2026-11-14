@@ -73,7 +73,7 @@ from qtpy.QtGui import (
     QPainter,
     QPen,
 )
-from qtpy.QtWidgets import QLabel, QPushButton
+from qtpy.QtWidgets import QHBoxLayout, QLabel, QPushButton, QToolButton, QWidget
 
 from anim_kit import (
     BADGE_H_PAD,
@@ -84,6 +84,9 @@ from anim_kit import (
     RhythmProfile,
     CursorPlan,
     AnimScene,
+    activate_layout_tree,
+    save_storyboard,
+    widget_scene_center,
     HANDLE_BORDER_COLOR,
     HANDLE_FILL_COLOR,
     HANDLE_SIZE,
@@ -114,6 +117,8 @@ from anim_kit import (
     set_caption_emphasis,
 )
 from ui.custom_widget import ConfigCheckBox, ConfigComboBox
+from ui.tag_toolbar import COMPACT_BTN_SIZE
+from utils.block_tags import MANUAL_TAG_DEFS
 from utils.shared import CONFIG_COMBOBOX_HEIGHT, CONFIG_COMBOBOX_SHORT
 
 OPT_CENTER = "居中（繁体中文/日文）"
@@ -166,7 +171,7 @@ class PunctuationScene(AnimScene):
         label = QLabel("标点位置", self)
         label.setStyleSheet(
             f"color: rgb({self.fg.red()},{self.fg.green()},{self.fg.blue()});"
-            "background: transparent; font-size: 12px;"
+            f"background: transparent; font-size: {self.style.label_font_px}px;"
         )
         label.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
@@ -234,14 +239,15 @@ class PunctuationScene(AnimScene):
         px, py, pw, ph = self.PANEL
         path_rect = QRectF(px, py, pw, ph)
         p.setPen(QPen(self.border, 1))
-        p.setBrush(QColor(255, 255, 255))
-        p.drawRoundedRect(path_rect, 6, 6)
+        p.setBrush(self.style.card_bg)
+        p.drawRoundedRect(path_rect, self.style.card_radius,
+                          self.style.card_radius)
 
         font = preview_font(24)
         p.setFont(font)
         fm = QFontMetricsF(font)
 
-        ink_color = QColor(26, 26, 26)
+        ink_color = self.style.ink_color
         col_w = CELL
         total_w = col_w * len(COLUMNS) + COL_GAP * (len(COLUMNS) - 1)
         x0 = px + (pw - total_w) / 2  # 第一列在最右（竖排从右往左）
@@ -288,17 +294,19 @@ class PunctuationScene(AnimScene):
         rect = QRectF(full.x(), full.y(), full.width(), h)
         p.setPen(QPen(self.border, 1))
         p.setBrush(self.card)
-        p.drawRoundedRect(rect, 6, 6)
+        p.drawRoundedRect(rect, self.style.card_radius,
+                          self.style.card_radius)
 
         p.setClipRect(rect)
         for i, text in enumerate((OPT_CENTER, OPT_EDGE)):
             item = QRectF(full.x() + 4, full.y() + 8 + 30 * i, full.width() - 8, 30)
             if i == self._hover:
                 hover = QColor(self.accent)
-                hover.setAlpha(40)
+                hover.setAlpha(self.style.hover_alpha)
                 p.setPen(Qt.PenStyle.NoPen)
                 p.setBrush(hover)
-                p.drawRoundedRect(item, 4, 4)
+                p.drawRoundedRect(item, self.style.item_radius,
+                                  self.style.item_radius)
             fg = QColor(self.fg)
             if i == self.combo.currentIndex():
                 p.setPen(self.accent)
@@ -427,8 +435,9 @@ class CheckboxDemoScene(AnimScene):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         px, py, pw, ph = self.PANEL
         p.setPen(QPen(self.border, 1))
-        p.setBrush(QColor(255, 255, 255))
-        p.drawRoundedRect(QRectF(px, py, pw, ph), 6, 6)
+        p.setBrush(self.style.card_bg)
+        p.drawRoundedRect(QRectF(px, py, pw, ph), self.style.card_radius,
+                          self.style.card_radius)
         self._paint_content(p)
 
     def _demo_font(self, pixel_size: int) -> tuple:
@@ -437,7 +446,7 @@ class CheckboxDemoScene(AnimScene):
 
     def _ink_color(self, tint: float) -> QColor:
         """墨迹色：tint=0 常色，tint=1 主题强调色（切换过程做闪烁提示）。"""
-        base = QColor(26, 26, 26)
+        base = self.style.ink_color
         return QColor(
             int(base.red() + (self.accent.red() - base.red()) * tint),
             int(base.green() + (self.accent.green() - base.green()) * tint),
@@ -739,7 +748,7 @@ class _BadgePageScene(CheckboxDemoScene):
         total = cell * len(columns) + gap * (len(columns) - 1)
         right = rect.center().x() + total / 2 - cell / 2   # 竖排右起
         top = rect.top() + 4
-        ink = QColor(60, 60, 60)
+        ink = self.style.page_ink_color
         for index, text in enumerate(columns):
             cx = right - index * (cell + gap)
             for gi, ch in enumerate(text):
@@ -974,9 +983,200 @@ class ClipTextScene(CheckboxDemoScene):
         for ch in self.TEXT:
             cell = QRectF(rect.center().x() - self.CELL / 2, top,
                           self.CELL, self.CELL)
-            draw_ink_center(p, self._fm, ch, cell, QColor(26, 26, 26),
+            draw_ink_center(p, self._fm, ch, cell, self.style.ink_color,
                             font=self._font)
             top += self.CELL
+
+
+class TagToolbarScene(CheckboxDemoScene):
+    """「显示标签工具栏」三拍演示：开关打开 → 工具条浮入 → 点 ♪ 打标出徽标。
+
+    - 第一拍：块已选中（选中描边），工具条未出现（关闭态行为）；
+    - 第二拍：点开开关 → 紧凑工具条在选中块上方浮入（下滑入场）；
+    - 第三拍：光标点 ♪ 钮 → 钮变勾选态，块右上角浮出 ♪ 徽标
+      （照 ui/textitem.py::_TagBadgeItem，指示冷色）。
+
+    工具条再现口径（演示动画设计规范的「几何与落点同体」允许类）：真实
+    TagToolbar 挂主窗口、构造依赖真实 canvas，弹层场景无法存活——改用**真实
+    QToolButton + 真实 QSS** 按其真实结构组装：容器 objectName TagToolbar、
+    标签钮 objectName TagTagBtn（字形取 utils/block_tags.py::MANUAL_TAG_DEFS，
+    尺寸 ui/tag_toolbar.py::COMPACT_BTN_SIZE）、处理钮 objectName TagActionBtn
+    （短标签硬编码中文，译文即 translate/zh_CN.ts 的 BlockActions context），
+    间距/边距照 ui/tag_toolbar.py::TagToolbar.__init__；♪ 钮落点 = 按钮真实
+    几何中心。钮不带 toggled 接线（写标签行为不在演示范围）。
+
+    时间轴（RHYTHM_THREE_BEAT 给 F_ARRIVE=7/F_PRESS=8/F_CLICK=9/F_FADE=31/
+    N_FRAMES=36；拍内常量另填）@10fps：
+    F_TB_START=10 工具条浮入 / F_TB_END=14 / 光标 15 起步 18 到 ♪ /
+    F_TAG_PRESS=19 打标 / F_BADGE_END=23 徽标落定。
+    """
+
+    RHYTHM = RHYTHM_THREE_BEAT
+    CHECK_TEXT = "显示标签工具栏"
+    CAPTIONS = (
+        "<b>改前：</b>选中块后没有工具条，打标要走右键菜单或饼菜单",
+        "<b>改后：</b>选中块上方浮出工具条，点字形即挂标签",
+    )
+    # 拍内常量（骨架由档位算出，见类 docstring）
+    F_TB_START = 10            # 工具条开始浮入（明暗互换同期）
+    F_TB_END = 14              # 浮入落定
+    F_TAG_MOVE_START = 15      # 光标开始移向 ♪ 钮
+    F_TAG_PRESS = 19           # 按下 ♪ → 打标
+    F_BADGE_END = 23           # 徽标落定
+    EMPH_SEG = (F_TB_START, F_TB_END)   # 互换与工具条浮入同步
+    # 预览卡内块位（x, y, w, h, 竖排文字）；块 1 选中并挂 ♪，块 2 只是页面成员
+    BLOCKS = (
+        (60, 44, 58, 74, ("だめだよ", "！")),
+        (20, 104, 58, 66, ("あぶない", "…")),
+    )
+    TB_SLIDE = 8.0             # 浮入行程（px，自上而下）
+
+    def _build(self):
+        super()._build()
+        self._font_page, self._fm_page = self._demo_font(13)
+        self._badge_font = QFont(UI_FONT_FAMILY)
+        self._badge_font.setPixelSize(11)
+        self._badge_metrics = QFontMetrics(self._badge_font)
+
+        # 紧凑工具条：照 ui/tag_toolbar.py::TagToolbar 的真实结构组装
+        # （margins/spacing/按钮序列与其 __init__ 一致）
+        tb = QWidget(self)
+        tb.setObjectName("TagToolbar")
+        tb.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        row = QHBoxLayout(tb)
+        row.setContentsMargins(4, 3, 4, 3)
+        row.setSpacing(2)
+        self._tag_buttons = {}
+        for tag in MANUAL_TAG_DEFS:
+            btn = QToolButton(tb)
+            btn.setObjectName("TagTagBtn")
+            btn.setText(tag.glyph)
+            btn.setFixedSize(COMPACT_BTN_SIZE, COMPACT_BTN_SIZE)
+            btn.setCheckable(True)
+            row.addWidget(btn)
+            self._tag_buttons[tag.glyph] = btn
+        row.addSpacing(6)
+        # 短标签硬编码中文：译文即 translate/zh_CN.ts 的 BlockActions context
+        # （生成进程无翻译器，运行时取 short_label 只会得到英文源串）
+        for text in ("校正识别", "重译"):
+            action_btn = QToolButton(tb)
+            action_btn.setObjectName("TagActionBtn")
+            action_btn.setText(text)
+            action_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            row.addWidget(action_btn)
+        row.addStretch(1)
+        expand_btn = QToolButton(tb)
+        expand_btn.setObjectName("TagTagBtn")
+        expand_btn.setText("⋯")
+        expand_btn.setFixedSize(COMPACT_BTN_SIZE, COMPACT_BTN_SIZE)
+        row.addWidget(expand_btn)
+        tb.adjustSize()
+        self._toolbar = tb
+
+        # 定位照真实行为（ui/tag_toolbar.py::_reposition）：左对齐选区左缘、
+        # 上距 6px、钳进画布。块 1 = 选中的块
+        blk = self._block_rect(self.BLOCKS[0])
+        self._tb_x = max(0, min(round(blk.left()),
+                                self.width() - tb.width()))
+        self._tb_y = round(blk.top() - tb.height() - 6)
+        tb.move(self._tb_x, self._tb_y - int(self.TB_SLIDE))
+        tb.setVisible(False)
+        activate_layout_tree(tb)
+
+        self._note_btn = self._tag_buttons["♪"]
+
+        # 整体重建光标计划（基类只编到复选框）：入场 → 复选框 → ♪ 钮
+        #（浮入落定后才启程，落点 = 按钮真实几何中心）→ 打标 → 淡出
+        self.plan = (
+            CursorPlan(QPointF(self.width() - 30, self.height() - 26))
+            .go(QPointF(self.CHECK_X + 10,
+                        self.ROW_Y + CONFIG_COMBOBOX_HEIGHT / 2),
+                arrive=self.F_ARRIVE)
+            .press(self.F_PRESS)
+            .press(self.F_CLICK)
+            .go(widget_scene_center(self, self._note_btn),
+                arrive=self.F_TAG_PRESS - 1, start=self.F_TAG_MOVE_START - 1)
+            .press(self.F_TAG_PRESS)
+            .fade(self.F_FADE)
+        )
+
+    def _block_rect(self, block) -> QRectF:
+        dx, dy, w, h, _text = block
+        return QRectF(self.PANEL[0] + dx, self.PANEL[1] + dy, w, h)
+
+    def _build_captions(self):
+        # 文案下移避开工具条浮入区（工具条左段伸到 x<202 之外不与文案重叠，
+        # 但工具条右端在 y≈70-100 处逼近标准文案行首）
+        self.caption_labels = make_caption_labels(
+            self, self.fg, self.CAPTIONS, CAPTION_X, (104, 154),
+            CAPTION_W, CAPTION_H,
+        )
+
+    # ── 状态推进 ────────────────────────────────────────────────
+    def _advance(self, f: int):
+        visible = f >= self.F_TB_START
+        if self._toolbar.isVisible() != visible:
+            self._toolbar.setVisible(visible)
+        slide = out_cubic((f - self.F_TB_START + 1)
+                          / (self.F_TB_END - self.F_TB_START + 1))
+        self._toolbar.move(self._tb_x,
+                           self._tb_y - round(self.TB_SLIDE * (1.0 - slide)))
+        checked = f >= self.F_TAG_PRESS
+        if self._note_btn.isChecked() != checked:
+            self._note_btn.setChecked(checked)
+
+    # ── 绘制 ────────────────────────────────────────────────────
+    def _paint_content(self, p: QPainter):
+        for index, block in enumerate(self.BLOCKS):
+            rect = self._block_rect(block)
+            if index == 0:
+                # 选中的块：选中描边（照 ui/textitem.py 选中态，同 ClipTextScene）
+                draw_block_frame(p, rect, TEXTRECT_SELECTED_COLOR, 2.4,
+                                 dashed=True)
+            else:
+                draw_block_frame(p, rect, TEXTRECT_SHOW_COLOR, 2.4)
+            self._paint_block_text(p, rect, block[4])
+        # 徽标画在块图层（真实层级）：工具条浮层会盖住徽标上段，徽标从工具条
+        # 下缘探出——这正是产品里两件东西同屏的真实表现。锚点与尺寸照
+        # ui/textitem.py::_TagBadgeItem
+        t = out_cubic(clamp01(
+            (self._f - self.F_TAG_PRESS + 1)
+            / (self.F_BADGE_END - self.F_TAG_PRESS + 1)
+        )) if self._f >= self.F_TAG_PRESS else 0.0
+        if t > 0.01:
+            self._paint_badge(p, self._block_rect(self.BLOCKS[0]), "♪", t)
+
+    def _paint_block_text(self, p: QPainter, rect: QRectF, columns):
+        p.setFont(self._font_page)
+        cell, gap = 15.0, 4.0
+        total = cell * len(columns) + gap * (len(columns) - 1)
+        right = rect.center().x() + total / 2 - cell / 2   # 竖排右起
+        top = rect.top() + 4
+        for index, text in enumerate(columns):
+            cx = right - index * (cell + gap)
+            for gi, ch in enumerate(text):
+                place = QRectF(cx - cell / 2, top + gi * cell, cell, cell)
+                if not rect.contains(place.center()):
+                    continue
+                draw_ink_center(p, self._fm_page, ch, place,
+                                self.style.page_ink_color,
+                                font=self._font_page)
+
+    def _paint_badge(self, p: QPainter, block: QRectF, glyph: str, t: float):
+        """照 ui/textitem.py::_TagBadgeItem：锚块右上角外上方，指示冷色。"""
+        width = (self._badge_metrics.horizontalAdvance(glyph)
+                 + 2 * BADGE_H_PAD)
+        height = self._badge_metrics.height() + 2 * BADGE_V_PAD
+        rect = QRectF(block.right() - width,
+                      block.top() - height - 5.0 * (1.0 - t), width, height)
+        color = QColor(TAG_BADGE_DIRECTIVE_COLOR)
+        color.setAlpha(int(color.alpha() * t))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(color)
+        p.drawRoundedRect(rect, 3, 3)
+        p.setPen(QColor(255, 255, 255, int(255 * t)))
+        p.setFont(self._badge_font)
+        p.drawText(rect, Qt.AlignmentFlag.AlignCenter, glyph)
 
 
 @dataclass
@@ -1039,6 +1239,13 @@ SCENES = {
         title="溢出裁剪",
         description="文本超出框时裁切并显示黄框警告"
     ),
+    "tag_toolbar": SceneMetadata(
+        key="tag_toolbar",
+        scene_class=TagToolbarScene,
+        kind="behavior",
+        title="标签工具栏",
+        description="选中块上方浮出工具条，点字形即挂标签"
+    ),
 }
 
 
@@ -1053,6 +1260,9 @@ def get_scene_class(key: str) -> Type[AnimScene]:
 
 
 DEFAULT_OUT_DIR = osp.join(ROOT, "config", "help_anims")
+
+# 风格帧小样的默认输出目录（审查材料，gitignore，用完即弃）
+DEFAULT_STORYBOARD_DIR = osp.join(ROOT, "build", "anim_storyboard")
 
 # 入库产物的钉定 DPR：仓库默认目录的产物固定按 1.25 渲染（与既有固化产物
 # 同尺寸），不同工作机重出尺寸不漂；README 流程不受此约束
@@ -1095,6 +1305,10 @@ def _parse_args():
                          "本机真实 DPR，数字强制指定" % PINNED_DPR)
     ap.add_argument("--dump-frames", dest="dump_frames", default=None,
                     help="逐帧导出 PNG 目录（--all 时按 <目录>/<key> 分场景）")
+    ap.add_argument("--storyboard", action="store_true",
+                    help="只出风格帧小样（关键帧联络表 PNG，默认 "
+                         "build/anim_storyboard/<key>.png），不编码 webp——"
+                         "整段生产前的人工确认用")
     ap.add_argument("--platform", default=None, choices=["windows", "offscreen"],
                     help="Qt 平台插件，默认 windows（offscreen 仅供调试）")
     return ap.parse_args()
@@ -1135,6 +1349,14 @@ def main():
                 osp.join(args.dump_frames, key)
                 if args.dump_frames and args.all else args.dump_frames
             )
+            if args.storyboard:
+                out = args.out if (not args.all and args.out) else osp.join(
+                    args.out_dir or DEFAULT_STORYBOARD_DIR, f"{key}.png"
+                )
+                size_kb = save_storyboard(app, scene, out)
+                print(f"OK {key}  小样 {out}  {size_kb:.1f} KB  "
+                      f"{scene.N_FRAMES} frames")
+                continue
             frames = render_frames(app, scene, dump_dir)
             out = args.out if (not args.all and args.out) else osp.join(
                 args.out_dir or DEFAULT_OUT_DIR, f"{key}.webp"

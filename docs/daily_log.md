@@ -73,3 +73,17 @@
 
 ---
 
+---
+
+### 演示动画：风格令牌 AnimStyle + --storyboard 小样检查点 + 设计规范
+
+**摘要：** 弹层/README 动画的观感参数（颜色/圆角/字号/明暗口径）散在各场景手填、质量依赖临场发挥 → 收敛到 `scripts/anim_kit.py::AnimStyle`（经 `AnimScene.style` 下发），7 个既有场景迁移后逐帧像素 0 差异；两个生成器加 `--storyboard`（`storyboard_keyframes`/`save_storyboard`，关键帧联络表出 `build/anim_storyboard/`）作为整段生产前的人工确认点；流程与硬约束（真实控件引用、引擎镜像值不可改）成文 `docs/基础速查/演示动画设计规范.md`。
+**涉及文件：** `scripts/anim_kit.py`、`scripts/gen_help_anim.py`、`scripts/gen_readme_anim.py`、`scripts/README.md`、`docs/基础速查/演示动画设计规范.md`、`docs/基础速查/备注演示动画使用说明.md`
+
+---
+
+### 新弹层场景 tag_toolbar：备注演示「显示标签工具栏」（`TagToolbarScene`）
+
+**摘要：** 三拍叙事：开关打开 → 工具条浮入 → 点 ♪ 打标出徽标。真实 `ui/tag_toolbar.py::TagToolbar` 构造依赖 canvas 无法进场景，按设计规范「几何与落点同体」口径用真实 QToolButton+QSS 照其结构组装（字形取 `utils/block_tags.py::MANUAL_TAG_DEFS`，定位照 `_reposition`），♪ 落点＝按钮真实几何中心；徽标按 `_TagBadgeItem` 锚点画在块图层（真实层级：工具条遮其上段、徽标从下缘探出）。产物 `config/help_anims/tag_toolbar.webp`，挂载 `ui/configpanel.py`。
+**涉及文件：** `scripts/gen_help_anim.py`、`ui/configpanel.py`、`config/help_anims/tag_toolbar.webp`
+**验证：** 节奏/落点检查器 + `scripts/verify.py` 全绿；迁移回归 7 场景全帧 0 差异
